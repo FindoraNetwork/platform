@@ -1,7 +1,7 @@
-use crate::LedgerStateCommitment;
+use crate::{CliError, LedgerStateCommitment};
 use ledger::data_model::{b64enc, Asset, AssetType, AuthenticatedUtxo, TxoSID};
 use serde::de::DeserializeOwned;
-use snafu::{ensure, Backtrace, ResultExt, Snafu};
+use snafu::{ensure, Backtrace, GenerateBacktrace, ResultExt, Snafu};
 use std::process::exit;
 use std::time::Duration;
 use structopt::clap::{Error, ErrorKind};
@@ -16,13 +16,14 @@ fn get_client() -> Result<reqwest::blocking::Client, reqwest::Error> {
   Ok(client)
 }
 
-pub fn do_request_asset(query: &str) -> Result<Asset, Error> {
+pub fn do_request_asset(query: &str) -> Result<Asset, CliError> {
   // TODO Phlippe how to avoid code duplication for obtaining the http client?
   let client_res = get_client();
   let client: reqwest::blocking::Client;
   match client_res {
-    Err(_e) => {
-      return Err(Error::with_description("Unable to establish connection.", ErrorKind::Io))
+    Err(e) => {
+      return Err(CliError::Reqwest { source: e,
+                                     backtrace: Backtrace::generate() })
     }
     _ => client = client_res.unwrap(),
   }
@@ -30,13 +31,14 @@ pub fn do_request_asset(query: &str) -> Result<Asset, Error> {
   let resp = match client.get(query).send() {
     Err(e) => {
       eprintln!("Request `{}` failed: {}", query, e);
-      exit(-1);
+      return Err(CliError::Reqwest { source: e,
+                                     backtrace: Backtrace::generate() });
     }
     Ok(resp) => match resp.json::<AssetType>() {
       Err(e) => {
         eprintln!("Problem parsing response {}, {}", query, e);
-        return Err(Error::with_description("Problem parsing json", ErrorKind::Format));
-        // TODO find a more informative error
+        return Err(CliError::Reqwest { source: e,
+                                       backtrace: Backtrace::generate() });
       }
       Ok(v) => v.properties,
     },
@@ -77,13 +79,14 @@ pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, Error> {
 pub fn do_request_authenticated_utxo(query: &str,
                                      sid: u64,
                                      ledger_state: &LedgerStateCommitment)
-                                     -> Result<AuthenticatedUtxo, Error> {
+                                     -> Result<AuthenticatedUtxo, CliError> {
   // TODO: see above
   let client_res = get_client();
   let client: reqwest::blocking::Client;
   match client_res {
-    Err(_e) => {
-      return Err(Error::with_description("Unable to establish connection.", ErrorKind::Io))
+    Err(e) => {
+      return Err(CliError::Reqwest { source: e,
+                                     backtrace: Backtrace::generate() })
     }
     _ => client = client_res.unwrap(),
   }
@@ -91,45 +94,48 @@ pub fn do_request_authenticated_utxo(query: &str,
   let resp = match client.get(query).send() {
     Err(e) => {
       eprintln!("Request `{}` failed: {}", query, e);
-      exit(-1); // TODO Philippe
+      return Err(CliError::Reqwest { source: e,
+                                     backtrace: Backtrace::generate() });
     }
-    Ok(resp) => match resp.json::<AuthenticatedUtxo>() {
-      Err(e) => {
-        eprintln!("Problem parsing response {}, {}", query, e);
-        return Err(Error::with_description("Problem parsing json", ErrorKind::Io));
-        // TODO Philippe find a more informative error
-      }
-
-      Ok(v) => {
-        let resp_comm = HashOf::new(&Some(v.state_commitment_data.clone()));
-        let curr_comm = (ledger_state.0).0.clone();
-        if resp_comm != curr_comm {
-          eprintln!("Server responded with authentication relative to `{}`!",
-                    b64enc(&resp_comm.0.hash));
-          eprintln!("The most recent ledger state I have is `{}`.",
-                    b64enc(&curr_comm.0.hash));
-          eprintln!("Please run query-ledger-state then rerun this command.");
-          exit(-1); // TODO Philippe return some error
+    Ok(resp) => {
+      match resp.json::<AuthenticatedUtxo>() {
+        Err(e) => {
+          eprintln!("Problem parsing response {}, {}", query, e);
+          return Err(CliError::Reqwest { source: e,
+                                         backtrace: Backtrace::generate() });
         }
 
-        // TODO: this needs better direct authentication
-        if v.authenticated_spent_status.utxo_sid != TxoSID(sid) {
-          eprintln!("!!!!! ERROR !!!!!!");
-          eprintln!("The server responded with a different UTXO sid.");
-          eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
-          eprintln!("\nFor safety, refusing to update.");
-          exit(-1); // TODO  Philippe return some error
+        Ok(v) => {
+          let resp_comm = HashOf::new(&Some(v.state_commitment_data.clone()));
+          let curr_comm = (ledger_state.0).0.clone();
+          if resp_comm != curr_comm {
+            eprintln!("Server responded with authentication relative to `{}`!",
+                      b64enc(&resp_comm.0.hash));
+            eprintln!("The most recent ledger state I have is `{}`.",
+                      b64enc(&curr_comm.0.hash));
+            eprintln!("Please run query-ledger-state then rerun this command.");
+            return Err(CliError::FindoraPlatformError {msg: "Inconsistent state for ledger.".to_string()});
+          }
+
+          // TODO: this needs better direct authentication
+          if v.authenticated_spent_status.utxo_sid != TxoSID(sid) {
+            eprintln!("!!!!! ERROR !!!!!!");
+            eprintln!("The server responded with a different UTXO sid.");
+            eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
+            eprintln!("\nFor safety, refusing to update.");
+            return Err(CliError::FindoraPlatformError {msg: "Inconsistent state for ledger.".to_string()});
+          }
+          if !v.is_valid((ledger_state.0).0.clone()) {
+            eprintln!("!!!!! ERROR !!!!!!");
+            eprintln!("The server responded with an invalid authentication proof.");
+            eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
+            eprintln!("\nFor safety, refusing to update.");
+            return Err(CliError::FindoraPlatformError {msg: "Inconsistent state for ledger.".to_string()});
+          }
+          v
         }
-        if !v.is_valid((ledger_state.0).0.clone()) {
-          eprintln!("!!!!! ERROR !!!!!!");
-          eprintln!("The server responded with an invalid authentication proof.");
-          eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
-          eprintln!("\nFor safety, refusing to update.");
-          exit(-1); // TODO Philippe return some error
-        }
-        v
       }
-    },
+    }
   };
   Ok(resp)
 }
