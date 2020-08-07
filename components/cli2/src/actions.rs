@@ -863,9 +863,9 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
                                      asset_nick: String)
                                      -> Result<(), CliError> {
   let issuer_nick = KeypairName(issuer_nick);
-  let builder_opt =
-    Some(txn_nick).map(TxnBuilderName)
-                  .or_else(|| store.get_config().map(|v| v.active_txn).ok()?);
+  let config = store.get_config()?;
+  let builder_opt = Some(txn_nick).map(TxnBuilderName)
+                                  .or_else(|| config.active_txn);
 
   let builder_name;
   match builder_opt {
@@ -945,8 +945,9 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
                                     issue_seq_num: u64,
                                     amount: u64)
                                     -> Result<(), CliError> {
+  let config = store.get_config()?;
   let builder_opt = Some(txn_nick).map(TxnBuilderName)
-                                  .or_else(|| store.get_config().ok()?.active_txn);
+                                  .or_else(|| config.active_txn);
   let builder_nick;
   match builder_opt {
     None => {
@@ -1063,8 +1064,8 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
 pub fn transfer_assets<S: CliDataStore>(store: &mut S,
                                         builder: Option<String>)
                                         -> Result<(), CliError> {
-  let builder_opt = builder.map(TxnBuilderName)
-                           .or_else(|| store.get_config().ok()?.active_txn);
+  let config = store.get_config()?;
+  let builder_opt = builder.map(TxnBuilderName).or_else(|| config.active_txn);
   let builder_nick;
   match builder_opt {
     None => {
