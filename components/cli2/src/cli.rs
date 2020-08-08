@@ -201,9 +201,6 @@ pub enum CliError {
 
   #[snafu(display("The ledger is in an inconsistent state."))]
   InconsistentLedger,
-
-  #[snafu(display("Unknown error"))]
-  UnknownError,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
