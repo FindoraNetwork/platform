@@ -755,12 +755,8 @@ fn get_status<S: CliDataStore>(store: &mut S, txn: String) -> Result<TxnStatus, 
                       conf.submission_server,
                       SubmissionRoutes::TxnStatus.route(),
                       handle.0);
-  let resp = do_request::<TxnStatus>(&query);
-
-  match resp {
-    Ok(res) => Ok(res),
-    _ => Err(CliError::IOError { msg: format!("Error with http request to {}", query) }),
-  }
+  let resp = do_request::<TxnStatus>(&query).map_err(|_| CliError::IOError { msg: format!("Error with http request to {}", query) })?;
+  Ok(resp)
 }
 
 pub fn status_check<S: CliDataStore>(store: &mut S, txn_nick: String) -> Result<(), CliError> {
