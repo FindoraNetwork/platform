@@ -23,6 +23,7 @@ source "tests/common.sh"
   run $CLI2 list-public-key greg
   [ "$status" -eq 0 ]
   run $CLI2 list-public-key plato
+  debug_lines
   [ "$status" -eq 0 ]
   check_line 0 'No public key with name plato found'
 }

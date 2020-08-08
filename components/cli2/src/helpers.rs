@@ -1,7 +1,7 @@
-use crate::LedgerStateCommitment;
+use crate::{CliError, LedgerStateCommitment};
 use ledger::data_model::{b64enc, Asset, AssetType, AuthenticatedUtxo, TxoSID};
 use serde::de::DeserializeOwned;
-use snafu::{ensure, Backtrace, ResultExt, Snafu};
+use snafu::{ensure, Backtrace, GenerateBacktrace, ResultExt, Snafu};
 use std::process::exit;
 use std::time::Duration;
 use structopt::clap::{Error, ErrorKind};
@@ -16,19 +16,21 @@ fn get_client() -> Result<reqwest::blocking::Client, reqwest::Error> {
   Ok(client)
 }
 
-pub fn do_request_asset(query: &str) -> Result<Asset, Error> {
-  let client = get_client().unwrap();
+pub fn do_request_asset(query: &str) -> Result<Asset, CliError> {
+  let client = get_client().map_err(|e| CliError::Reqwest { source: e,
+                                                            backtrace: Backtrace::generate() })?;
 
   let resp = match client.get(query).send() {
     Err(e) => {
       eprintln!("Request `{}` failed: {}", query, e);
-      exit(-1);
+      return Err(CliError::Reqwest { source: e,
+                                     backtrace: Backtrace::generate() });
     }
     Ok(resp) => match resp.json::<AssetType>() {
       Err(e) => {
         eprintln!("Problem parsing response {}, {}", query, e);
-        return Err(Error::with_description("Problem parsing json", ErrorKind::Format));
-        // TODO find a more informative error
+        return Err(CliError::Reqwest { source: e,
+                                       backtrace: Backtrace::generate() });
       }
       Ok(v) => v.properties,
     },
@@ -38,7 +40,10 @@ pub fn do_request_asset(query: &str) -> Result<Asset, Error> {
 }
 
 pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, Error> {
-  let client = get_client().unwrap();
+  let client = get_client().map_err(|_| {
+                             Error::with_description("The http client failed being initialized.",
+                                                     ErrorKind::Io)
+                           })?;
 
   let resp: T = match client.get(query).send() {
     Err(e) => {
@@ -48,7 +53,7 @@ pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, Error> {
     Ok(resp) => match resp.json::<T>() {
       Err(e) => {
         eprintln!("Problem parsing response {}, {}", query, e);
-        return Err(Error::with_description("Problem parsing json", ErrorKind::Format));
+        return Err(Error::with_description("Problem parsing json", ErrorKind::Io));
         // TODO find a more informative error
       }
       Ok(v) => v,
@@ -61,51 +66,55 @@ pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, Error> {
 pub fn do_request_authenticated_utxo(query: &str,
                                      sid: u64,
                                      ledger_state: &LedgerStateCommitment)
-                                     -> Result<AuthenticatedUtxo, Error> {
-  let client = get_client().unwrap();
+                                     -> Result<AuthenticatedUtxo, CliError> {
+  let client = get_client().map_err(|e| CliError::Reqwest { source: e,
+                                                            backtrace: Backtrace::generate() })?;
 
-  let resp: AuthenticatedUtxo = match client.get(query).send() {
+  let resp = match client.get(query).send() {
     Err(e) => {
       eprintln!("Request `{}` failed: {}", query, e);
-      exit(-1);
+      return Err(CliError::Reqwest { source: e,
+                                     backtrace: Backtrace::generate() });
     }
-    Ok(resp) => match resp.json::<AuthenticatedUtxo>() {
-      Err(e) => {
-        eprintln!("Problem parsing response {}, {}", query, e);
-        return Err(Error::with_description("Problem parsing json", ErrorKind::Format));
-        // TODO find a more informative error
-      }
-
-      Ok(v) => {
-        let resp_comm = HashOf::new(&Some(v.state_commitment_data.clone()));
-        let curr_comm = (ledger_state.0).0.clone();
-        if resp_comm != curr_comm {
-          eprintln!("Server responded with authentication relative to `{}`!",
-                    b64enc(&resp_comm.0.hash));
-          eprintln!("The most recent ledger state I have is `{}`.",
-                    b64enc(&curr_comm.0.hash));
-          eprintln!("Please run query-ledger-state then rerun this command.");
-          exit(-1); // TODO return some error
+    Ok(resp) => {
+      match resp.json::<AuthenticatedUtxo>() {
+        Err(e) => {
+          eprintln!("Problem parsing response {}, {}", query, e);
+          return Err(CliError::Reqwest { source: e,
+                                         backtrace: Backtrace::generate() });
         }
 
-        // TODO: this needs better direct authentication
-        if v.authenticated_spent_status.utxo_sid != TxoSID(sid) {
-          eprintln!("!!!!! ERROR !!!!!!");
-          eprintln!("The server responded with a different UTXO sid.");
-          eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
-          eprintln!("\nFor safety, refusing to update.");
-          exit(-1); // TODO return some error
+        Ok(v) => {
+          let resp_comm = HashOf::new(&Some(v.state_commitment_data.clone()));
+          let curr_comm = (ledger_state.0).0.clone();
+          if resp_comm != curr_comm {
+            eprintln!("Server responded with authentication relative to `{}`!",
+                      b64enc(&resp_comm.0.hash));
+            eprintln!("The most recent ledger state I have is `{}`.",
+                      b64enc(&curr_comm.0.hash));
+            eprintln!("Please run query-ledger-state then rerun this command.");
+            return Err(CliError::InconsistentLedger);
+          }
+
+          // TODO: this needs better direct authentication
+          if v.authenticated_spent_status.utxo_sid != TxoSID(sid) {
+            eprintln!("!!!!! ERROR !!!!!!");
+            eprintln!("The server responded with a different UTXO sid.");
+            eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
+            eprintln!("\nFor safety, refusing to update.");
+            return Err(CliError::InconsistentLedger);
+          }
+          if !v.is_valid((ledger_state.0).0.clone()) {
+            eprintln!("!!!!! ERROR !!!!!!");
+            eprintln!("The server responded with an invalid authentication proof.");
+            eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
+            eprintln!("\nFor safety, refusing to update.");
+            return Err(CliError::InconsistentLedger);
+          }
+          v
         }
-        if !v.is_valid((ledger_state.0).0.clone()) {
-          eprintln!("!!!!! ERROR !!!!!!");
-          eprintln!("The server responded with an invalid authentication proof.");
-          eprintln!("This could indicate a faulty server, or a man-in-the-middle!");
-          eprintln!("\nFor safety, refusing to update.");
-          exit(-1); // TODO return some error
-        }
-        v
       }
-    },
+    }
   };
   Ok(resp)
 }

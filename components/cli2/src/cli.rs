@@ -1,5 +1,6 @@
 #![deny(warnings)]
 #![allow(clippy::type_complexity)]
+
 use ledger::data_model::*;
 use promptly::prompt_default;
 use serde::{Deserialize, Serialize};
@@ -8,9 +9,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-
 use structopt::StructOpt;
-
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::TransactionBuilder;
 use utils::{HashOf, SignatureOf};
@@ -24,6 +23,8 @@ pub mod kv;
 
 use crate::actions::*;
 use kv::{HasEncryptedTable, HasTable, KVError, KVStore};
+use ledger::data_model::errors::PlatformError;
+use zei::errors::ZeiError;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LedgerStateCommitment(pub  (HashOf<Option<StateCommitmentData>>,
@@ -184,8 +185,22 @@ pub enum CliError {
     source: helpers::PasswordReadError,
   },
 
-  #[snafu(display("Misc"))] // TODO remove that with something more informative
-  Misc,
+  #[snafu(display("Cannot handle None value"))]
+  NoneValue,
+
+  #[snafu(display("Platform error"))]
+  #[snafu(context(false))]
+  FindoraPlatformError { source: PlatformError },
+
+  #[snafu(display("Zei Error"))]
+  #[snafu(context(false))]
+  ZeiError { source: ZeiError },
+
+  #[snafu(display("IO error"))]
+  IOError { msg: String },
+
+  #[snafu(display("The ledger is in an inconsistent state."))]
+  InconsistentLedger,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -805,7 +820,7 @@ fn main() {
       println!("No config found at {:?} -- triggering first-time setup",
                &home);
       db.update_config(|conf| {
-          *conf = prompt_for_config(None).unwrap();
+          *conf = prompt_for_config(None)?;
           Ok(())
         })?;
 

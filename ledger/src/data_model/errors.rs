@@ -22,6 +22,12 @@ pub enum PlatformError {
   IoError(String),
 }
 
+impl From<ZeiError> for PlatformError {
+  fn from(err: ZeiError) -> Self {
+    PlatformError::ZeiError("zei error found".to_string(), err)
+  }
+}
+
 impl PlatformError {
   pub fn tag_message(self, tag: &str) -> Self {
     use PlatformError::*;
