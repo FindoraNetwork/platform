@@ -892,7 +892,7 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
          None => {
            let err_msg = format!("No key pair `{}` found.", issuer_nick.0);
            eprintln!("{}",err_msg);
-           return Err(PlatformError::IoError(err_msg));
+           Err(PlatformError::IoError(err_msg))
          }
          Some(kp) => {
            new_builder.builder
@@ -929,11 +929,12 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
                                             asset_nick: AssetTypeName(asset_nick.clone()) });
     println!("{}:", asset_nick);
 
-    Ok(display_asset_type(1,
+    display_asset_type(1,
                        builder.new_asset_types
                          .get(&AssetTypeName(asset_nick.clone()))
-                         .ok_or(PlatformError::InputsError(format!("Asset type with name {:?} is None.",
-                                                                   &AssetTypeName(asset_nick.clone()))))?))
+                         .ok_or_else(|| PlatformError::InputsError(format!("Asset type with name {:?} is None.",
+                                                                   &AssetTypeName(asset_nick.clone()))))?);
+    Ok(())
 
   })?;
   Ok(())
