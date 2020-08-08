@@ -755,7 +755,11 @@ fn get_status<S: CliDataStore>(store: &mut S, txn: String) -> Result<TxnStatus, 
                       conf.submission_server,
                       SubmissionRoutes::TxnStatus.route(),
                       handle.0);
-  let resp = do_request::<TxnStatus>(&query).map_err(|_| CliError::IOError { msg: format!("Error with http request to {}", query) })?;
+  let resp = do_request::<TxnStatus>(&query).map_err(|_| {
+                                              CliError::IOError { msg:
+                                                           format!("Error with http request to {}",
+                                                                   query) }
+                                            })?;
   Ok(resp)
 }
 
@@ -792,11 +796,7 @@ pub fn update_if_committed<S: CliDataStore>(store: &mut S,
       println!("Updating, status is {:?}", &metadata.status);
       for nick in metadata.spent_txos.iter() {
         println!("Spending TXO `{}`...", nick.0);
-        let txo = store.get_cached_txo(nick)?; //
-        if txo.is_none() {
-          return Err(CliError::FindoraPlatformError{ source: PlatformError::SubmissionServerError(format!("Problem trying to obtain txo with nick {:?}", nick)) });
-        }
-        let mut txo = txo.unwrap(); // Safe unwrap()
+        let mut txo = store.get_cached_txo(nick)?.ok_or_else(|| CliError::NoneValue)?;
         assert!(txo.unspent);
         txo.unspent = false;
         store.cache_txo(nick, txo)?;
