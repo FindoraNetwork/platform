@@ -24,6 +24,7 @@ pub mod kv;
 use crate::actions::*;
 use kv::{HasEncryptedTable, HasTable, KVError, KVStore};
 use ledger::data_model::errors::PlatformError;
+use zei::errors::ZeiError;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LedgerStateCommitment(pub  (HashOf<Option<StateCommitmentData>>,
@@ -190,6 +191,10 @@ pub enum CliError {
   #[snafu(display("Platform error"))]
   #[snafu(context(false))]
   FindoraPlatformError { source: PlatformError },
+
+  #[snafu(display("Zei Error"))]
+  #[snafu(context(false))]
+  ZeiError { source: ZeiError },
 
   #[snafu(display("IO error"))]
   IOError { msg: String },

@@ -1376,17 +1376,16 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
     {
       println!("Recipient `{}` is a local keypair.", receiver.0);
       if prompt_default("Unlock this output?", true)? {
-        store.with_keypair::<std::convert::Infallible, _>(
-                                                          // TODO Philippe Infallible => does this mean unwrap are ok in this code portion?
-                                                          &KeypairName(receiver.0.clone()),
-                                                          |kp| {
-                                                            let sk = kp.unwrap().get_sk_ref();
-                                                            txo.opened_record
-            = Some(open_blind_asset_record(&txo.record.0,
-                    &txo.owner_memo, sk).unwrap()); // TODO Philippe is this unwrap safe?
-                                                            Ok(())
-                                                          },
-        )?;
+        store.with_keypair::<CliError, _>(&KeypairName(receiver.0.clone()), |kp| {
+               let sk = kp.unwrap().get_sk_ref();
+               txo.opened_record =
+                                              Some(open_blind_asset_record(&txo.record.0,
+                                                                           &txo.owner_memo,
+                                                                           sk).map_err(|e| {
+                                                     CliError::ZeiError { source: e }
+                                                   })?);
+               Ok(())
+             })?;
       }
     }
 
