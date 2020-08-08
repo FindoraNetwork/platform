@@ -796,7 +796,8 @@ pub fn update_if_committed<S: CliDataStore>(store: &mut S,
       println!("Updating, status is {:?}", &metadata.status);
       for nick in metadata.spent_txos.iter() {
         println!("Spending TXO `{}`...", nick.0);
-        let mut txo = store.get_cached_txo(nick)?.ok_or_else(|| CliError::NoneValue)?;
+        let mut txo = store.get_cached_txo(nick)?
+                           .ok_or_else(|| CliError::NoneValue)?;
         assert!(txo.unspent);
         txo.unspent = false;
         store.cache_txo(nick, txo)?;
@@ -985,8 +986,10 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
   let issuer_nick;
   match asset.issuer_nick.as_ref() {
     None => {
+      let asset_issuer_key_str =
+        serde_json::to_string(&asset.asset.issuer.key).expect("The serialization of the asset issuer key failed.");
       eprintln!("I don't know an identity for public key `{}`",
-                serde_json::to_string(&asset.asset.issuer.key)?);
+                asset_issuer_key_str);
       exit(-1);
     }
     Some(nick) => {
