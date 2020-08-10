@@ -10,6 +10,6 @@ cargo build
 cargo test
 
 #  black box tests written in shell
-$BATS tests/advanced-cli.sh
-$BATS tests/simple-cli.sh
-$BATS tests/error-handling.sh
+bats tests/advanced-cli.sh
+bats tests/simple-cli.sh
+bats tests/error-handling.sh

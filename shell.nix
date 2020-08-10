@@ -31,9 +31,9 @@ stdenv.mkDerivation {
     pkgconfig openssl binutils-unwrapped
     protobuf
     sqlite
-    nodejs # This is because we use a shell testing framework https://github.com/bats-core/bats-core
     shellcheck
     wasm-pack
+    bats
 
   ] ++ stdenv.lib.optionals stdenv.isDarwin [
         darwin.apple_sdk.frameworks.Security
@@ -49,8 +49,6 @@ stdenv.mkDerivation {
   shellHook = ''
     export LOCAL=`pwd`;
     export CLI2="$LOCAL/target/debug/findora";
-    npm install bats
-    export BATS="$LOCAL/node_modules/bats/bin/bats"
   '';
 }
 

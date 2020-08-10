@@ -66,7 +66,6 @@ source "tests/common.sh"
   [ "$status" -eq 0 ]
 }
 
-MEMO_ALICE_WITH_SEVERAL_PROMPTS="echo -e 'password\nmemo_alice\npassword\npassword\npassword\nY\n'"
 @test "simple-define-asset" {
   run  bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice; \
                 $MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice AliceCoin;"
