@@ -6,7 +6,7 @@ echo "FINDORA_HOME: ${FINDORA_HOME}"
 # build the executable
 cargo build
 
-# cargo unittests
+# Run the tests
 cargo test
 
 #  black box tests written in shell

@@ -478,6 +478,9 @@ enum Actions {
     amount: u64,
   },
 
+  /// Display the amounts available for each asset types and key pair
+  Balances {},
+
   //////////////////// Advanced API  ///////////////////////////////////////////////////////////////
   /// List all the asset types
   ListAssetTypes {},
@@ -684,6 +687,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
                         asset_nick, } => simple_define_asset(store, issuer_nick, asset_nick),
 
     SimpleIssueAsset { asset_nick, amount } => simple_issue_asset(store, asset_nick, amount),
+
+    Balances {} => compute_balances(store),
 
     //////////////////// Advanced API  /////////////////////////////////////////////////////////////
     QueryLedgerState { forget_old_key } => query_ledger_state(store, forget_old_key),

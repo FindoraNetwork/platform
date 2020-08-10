@@ -239,6 +239,23 @@ pub fn list_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result<(
   Ok(())
 }
 
+pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
+  list_txos(store, true)?;
+
+  println!("=== Balances ===");
+
+  let kps = store.get_keypairs()?;
+  for kp in kps {
+    let kp_name = kp.0;
+    let public_key = store.get_pubkey(&PubkeyName(kp_name.to_string()))?;
+    let public_key = public_key.map(|x| serde_json::to_string(&x).unwrap())
+                               .unwrap_or(format!("No public key with name {} found", kp_name));
+    println!("[{}]: {}", kp_name, public_key);
+  }
+
+  Ok(())
+}
+
 //////////////////// Advanced API  /////////////////////////////////////////////////////////////////
 
 pub fn query_ledger_state<S: CliDataStore>(store: &mut S,

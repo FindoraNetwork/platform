@@ -144,3 +144,14 @@ source "tests/common.sh"
   check_line 29 "Successfully added to "
 }
 
+@test "balances" {
+  run bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice; \
+               $PASSWORD_PROMPT | $CLI2 key-gen bob;"
+  run bash -c "$MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice FindoraCoin;"
+  run bash -c "$MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset FindoraCoin 10000"
+  debug_lines
+  run $CLI2 balances
+
+  debug_lines
+  [ "$status" -eq 0 ]
+}
