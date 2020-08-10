@@ -1329,11 +1329,11 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
                                /* TODO: identity */ None, /* TODO: credential */ None)?;
 
         let txo_name = TxoName(format!("utxo{}", builder.new_txos.len() + out_tps.len()));
-        if !builder.new_txos
-                   .iter()
-                   .map(|(x, _)| x.clone())
-                   .chain(out_tps.iter().map(|(_, _, x)| x.0.clone()))
-                   .any(|x| x == txo_name.0)
+        if builder.new_txos
+                  .iter()
+                  .map(|(x, _)| x.clone())
+                  .chain(out_tps.iter().map(|(_, _, x)| x.0.clone()))
+                  .any(|x| x == txo_name.0)
         {
           return Err(CliError::FindoraPlatformError{ source: PlatformError::IoError ("Problem trying to build transaction for asset transfer.".to_string()) });
         };

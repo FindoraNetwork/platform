@@ -30,9 +30,11 @@ check_line() {
   [ "${lines[$line_number]:0:$command_str_length}" = "$command_str" ]
 }
 
-PASSWORD_PROMPT="echo -e 'password\npassword'"
-SIMPLE_CONFIRM_WITH_PROMPT="echo -e 'password\ny'"
-SIMPLE_PASSWORD_PROMPT="echo -e 'password'"
-DOUBLE_CONFIRM_WITH_PROMPT="echo -e 'password\npassword\n\nY'"
-MEMO_ALICE_WITH_PROMPT="echo -e 'password\nmemo_alice\n'"
-MEMO_ALICE_WITH_SEVERAL_PROMPTS="echo -e 'password\nmemo_alice\npassword\npassword\npassword\nY\n'"
+PASSWORD="password"
+PASSWORD_PROMPT="echo -e '$PASSWORD\n$PASSWORD'"
+SIMPLE_CONFIRM_WITH_PROMPT="echo -e '$PASSWORD\ny'"
+SIMPLE_PASSWORD_PROMPT="echo -e '$PASSWORD'"
+DOUBLE_CONFIRM_WITH_PROMPT="echo -e '$PASSWORD\n$PASSWORD\n\nY'"
+MEMO_ALICE_WITH_PROMPT="echo -e '$PASSWORD\nmemo_alice\n'"
+MEMO_ALICE_WITH_SEVERAL_PROMPTS="echo -e '$PASSWORD\nmemo_alice\n$PASSWORD\n$PASSWORD\n$PASSWORD\nY\n'"
+PROMPT_TRANSFER_ASSET="echo -e 'utxo0 \n 5000 \n n \n n \n bob \n n\n$PASSWORD\n'"

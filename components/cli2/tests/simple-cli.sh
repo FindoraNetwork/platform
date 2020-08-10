@@ -120,3 +120,27 @@ source "tests/common.sh"
   check_line 3 "Successfully added to"
 
 }
+
+@test "transfer-asset" {
+  # Alice key gen and AliceCoin asset definition
+  run  bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice; \
+                $MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice AliceCoin;"
+  # Issue the asset
+  run bash -c "$MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
+  # Load Bob's public key
+  run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
+
+  # Transfer the asset
+  run bash -c "$PROMPT_TRANSFER_ASSET | $CLI2 transfer-assets"
+
+  debug_lines
+  [ "$status" -eq 0 ]
+  check_line 8 " TransferAssets:"
+  check_line 10 "  utxo0 (Not finalized):"
+  check_line 14 "   Amount: 10000"
+  check_line 24 "   Record Type: \"NonConfidentialAmount_NonConfidentialAssetType\""
+  check_line 25 "   Amount: 5000"
+  check_line 21 "  utxo1 (Not finalized):"
+  check_line 29 "Successfully added to "
+}
+
