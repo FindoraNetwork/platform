@@ -245,10 +245,13 @@ pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<(), CliError> 
 
   println!("=== Balances ===");
 
+  // Build a map pubkey => pubkey=> name
+  let mut pub_key_to_name_map:  HashMap<String, String> = HashMap::new();
   let public_keys = store.get_pubkeys()?;
   for pk in public_keys {
     let pk_name = (pk.0).0;
     let pk_str = serde_json::to_string(&pk.1).unwrap();
+    pub_key_to_name_map.insert(pk_str.clone(),pk_name.clone());
     println!("[{}]: {}", pk_name, pk_str);
   }
 
@@ -265,8 +268,9 @@ pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<(), CliError> 
     let amount = txo.record.0.amount.get_amount().unwrap(); // TODO handle None
     let pk = txo.record.0.public_key;
     let pk_str = serde_json::to_string(&pk).unwrap();
+    let pk_name = pub_key_to_name_map.get(&pk_str).unwrap();
 
-    let the_balance = balances.entry(pk_str).or_insert(0);
+    let the_balance = balances.entry(pk_name.to_string()).or_insert(0);
     *the_balance += amount;
   }
 
