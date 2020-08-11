@@ -460,9 +460,25 @@ impl KVStore {
   }
   /// Performs general house keeping operations on the database, inducing:
   ///
-  /// 1. TODO(Nathan M): Find and remove duplicate entries
-  /// 2. Vacuum the database
+  /// 1. Find and remove duplicate entries
+  /// 2. Vaccum the database
   pub fn run_housekeeping(&self) -> Result<(), KVError> {
+    // Get the list of tables
+    let name_query = "select name from sqlite_master WHERE type='table';";
+    let mut stmt = self.db
+                       .prepare(name_query)
+                       .with_context(|| Prepare { statement: name_query.to_string() })?;
+    let mut rows = stmt.query(params![]).context(InternalSQL)?;
+    while let Some(table) = rows.next().context(InternalSQL)? {
+      let name: String = table.get_unwrap(0);
+      let query = format!("delete from {0} \
+                             where rowid not in \
+                             (select max(rowid) \
+                              from {0} \
+                              group by key)",
+                          name);
+      self.db.execute(&query, params![]).context(InternalSQL)?;
+    }
     self.db.execute("VACUUM;", params![]).context(InternalSQL)?;
     Ok(())
   }
@@ -726,6 +742,8 @@ mod tests {
     // Update the value
     let value2 = TypeA("Changed Value!".to_string());
     assert!(kv.set(&key1, value2.clone())? == Some(value1));
+    // Run house keeping to make sure we aren't deleting needed keys
+    kv.run_housekeeping()?;
     // Verify results
     assert!(kv.get(&key1)? == Some(value2));
 
@@ -737,9 +755,10 @@ mod tests {
     // This tests implicit table creation
     let key1 = TypeBKey("test_key_b".to_string());
     let value1 = TypeB("test_value_b".to_string());
+    // Run house keeping to make sure we aren't deleting needed keys
+    kv.run_housekeeping()?;
     assert!(kv.set(&key1, value1.clone())?.is_none());
     assert!(kv.get(&key1)? == Some(value1.clone()));
-    kv.run_housekeeping()?;
     Ok(())
   }
 
