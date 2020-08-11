@@ -506,7 +506,6 @@ impl CliDataStore for KVStore {
     k: &crate::KeypairName,
     f: F)
     -> Result<(), CliError> {
-    //TODO(Nathan M): Make less... Ugly. Needs some helpers inside KVStore
     let password = crate::helpers::prompt_password(Some(&k.0)).context(crate::Password)?;
     let mixed_pair = self.get_encrypted_raw::<zei::xfr::sig::XfrKeyPair>(k)
                          .map_err(|_| KVError::WithInvalidKey { backtrace: Backtrace::generate(),

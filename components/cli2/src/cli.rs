@@ -95,14 +95,9 @@ impl HasTable for AssetTypeEntry {
 #[derive(Ord, PartialOrd, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, Default)]
 pub struct KeypairName(pub String);
 
-// impl HasTable for XfrKeyPair {
-//   const TABLE_NAME: &'static str = "key_pairs";
-//   type Key = KeypairName;
-// }
-
-// TODO(Nathan M): I was unable to find a method in zei for recombining key pairs,
-// so this sort of doesn't take really advantage of the backend stuff mixed
-// plaintext/cleartext for now
+// NOTE(Nathan M): Due to zei not having (to my knowledge) a method for combining a
+// public and a private key back into a key pair, the encrypted section of the
+// MixedPair currently contains the entire key pair.
 impl HasEncryptedTable for XfrKeyPair {
   const TABLE_NAME: &'static str = "enc_key_pairs";
   type Key = KeypairName;
