@@ -229,13 +229,24 @@ impl KVStore {
     // Prepare the new key and value
     let key_string = serde_json::to_string(&key).expect("JSON Serialization failed");
     let value_string = serde_json::to_string(&value).expect("JSON Serialization failed");
-    // TODO(Nathan M): Use some conditional logic here to use an update when practical
-    let set_query = format!("insert into {} (key, value) values (?, ?)", T::TABLE_NAME);
-    let mut stmt = self.db
-                       .prepare(&set_query)
-                       .context(Prepare { statement: set_query })?;
-    stmt.execute(&[&key_string, &value_string])
-        .context(InternalSQL)?;
+    // If the value already exists, go ahead and update instead of insert.
+    if old_value.is_some() {
+      // Go ahead and apply the update to all the rows with the specified key.
+      // This will ensure that any duplicates rows have the same, correct value
+      let update_query = format!("update {} set value = (?) where key = (?);", T::TABLE_NAME);
+      let mut stmt = self.db
+                         .prepare(&update_query)
+                         .context(Prepare { statement: update_query })?;
+      stmt.execute(params![&value_string, &key_string])
+          .context(InternalSQL)?;
+    } else {
+      let set_query = format!("insert into {} (key, value) values (?, ?)", T::TABLE_NAME);
+      let mut stmt = self.db
+                         .prepare(&set_query)
+                         .context(Prepare { statement: set_query })?;
+      stmt.execute(&[&key_string, &value_string])
+          .context(InternalSQL)?;
+    }
     Ok(old_value)
   }
 
@@ -254,13 +265,24 @@ impl KVStore {
     // Prepare the new key and value
     let key_string = serde_json::to_string(&key).expect("JSON Serialization failed");
     let value_string = serde_json::to_string(&value).expect("JSON Serialization failed");
-    // TODO(Nathan M): Use some conditional logic here to use an update when practical
-    let set_query = format!("insert into {} (key, value) values (?, ?)", T::TABLE_NAME);
-    let mut stmt = self.db
-                       .prepare(&set_query)
-                       .context(Prepare { statement: set_query })?;
-    stmt.execute(&[&key_string, &value_string])
-        .context(InternalSQL)?;
+    // If the value already exists, go ahead and update instead of insert.
+    if old_value.is_some() {
+      // Go ahead and apply the update to all the rows with the specified key.
+      // This will ensure that any duplicates rows have the same, correct value
+      let update_query = format!("update {} set value = (?) where key = (?);", T::TABLE_NAME);
+      let mut stmt = self.db
+                         .prepare(&update_query)
+                         .context(Prepare { statement: update_query })?;
+      stmt.execute(params![&value_string, &key_string])
+          .context(InternalSQL)?;
+    } else {
+      let set_query = format!("insert into {} (key, value) values (?, ?)", T::TABLE_NAME);
+      let mut stmt = self.db
+                         .prepare(&set_query)
+                         .context(Prepare { statement: set_query })?;
+      stmt.execute(&[&key_string, &value_string])
+          .context(InternalSQL)?;
+    }
     Ok(old_value)
   }
 
