@@ -6,6 +6,7 @@ use crate::{
   CliError, FreshNamer, KeypairName, LedgerStateCommitment, NewPublicKeyFetch, OpMetadata,
   PubkeyName, TxnBuilderName, TxnMetadata, TxnName, TxoCacheEntry, TxoName,
 };
+use std::collections::HashMap;
 
 use ledger::data_model::*;
 use ledger_api_service::LedgerAccessRoutes;
@@ -249,6 +250,29 @@ pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<(), CliError> 
     let pk_name = (pk.0).0;
     let pk_str = serde_json::to_string(&pk.1).unwrap();
     println!("[{}]: {}", pk_name, pk_str);
+  }
+
+  let mut balances: HashMap<String, u64> = HashMap::new();
+
+  // Loop over the utxos to compute the balances
+  // TODO do something more efficient ?
+  for (_nick, txo) in store.get_cached_txos()?.into_iter() {
+    if !txo.unspent {
+      continue;
+    }
+
+    // TODO handle asset type
+    let amount = txo.record.0.amount.get_amount().unwrap(); // TODO handle None
+    let pk = txo.record.0.public_key;
+    let pk_str = serde_json::to_string(&pk).unwrap();
+
+    let the_balance = balances.entry(pk_str).or_insert(0);
+    *the_balance += amount;
+  }
+
+  // Print the balances
+  for (pk, amount) in balances {
+    println!("{}:{}", pk, amount);
   }
 
   Ok(())
