@@ -458,6 +458,14 @@ impl KVStore {
 
     Ok(current)
   }
+  /// Performs general house keeping operations on the database, inducing:
+  ///
+  /// 1. TODO(Nathan M): Find and remove duplicate entries
+  /// 2. Vacuum the database
+  pub fn run_housekeeping(&self) -> Result<(), KVError> {
+    self.db.execute("VACUUM;", params![]).context(InternalSQL)?;
+    Ok(())
+  }
 }
 
 impl CliDataStore for KVStore {
@@ -731,6 +739,7 @@ mod tests {
     let value1 = TypeB("test_value_b".to_string());
     assert!(kv.set(&key1, value1.clone())?.is_none());
     assert!(kv.get(&key1)? == Some(value1.clone()));
+    kv.run_housekeeping()?;
     Ok(())
   }
 
