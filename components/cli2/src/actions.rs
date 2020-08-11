@@ -246,13 +246,12 @@ pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<(), CliError> 
   println!("=== Balances ===");
 
   // Build a map pubkey => pubkey=> name
-  let mut pub_key_to_name_map:  HashMap<String, String> = HashMap::new();
+  let mut pub_key_to_name_map: HashMap<String, String> = HashMap::new();
   let public_keys = store.get_pubkeys()?;
   for pk in public_keys {
     let pk_name = (pk.0).0;
     let pk_str = serde_json::to_string(&pk.1).unwrap();
-    pub_key_to_name_map.insert(pk_str.clone(),pk_name.clone());
-    println!("[{}]: {}", pk_name, pk_str);
+    pub_key_to_name_map.insert(pk_str.clone(), pk_name.clone());
   }
 
   let mut balances: HashMap<String, u64> = HashMap::new();

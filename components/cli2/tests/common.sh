@@ -34,7 +34,15 @@ PASSWORD="password"
 PASSWORD_PROMPT="echo -e '$PASSWORD\n$PASSWORD'"
 SIMPLE_CONFIRM_WITH_PROMPT="echo -e '$PASSWORD\ny'"
 SIMPLE_PASSWORD_PROMPT="echo -e '$PASSWORD'"
-DOUBLE_CONFIRM_WITH_PROMPT="echo -e '$PASSWORD\n$PASSWORD\n\nY'"
+DOUBLE_CONFIRM_WITH_PROMPT="echo -e 'Y\nY\n'"
 MEMO_ALICE_WITH_PROMPT="echo -e '$PASSWORD\nmemo_alice\n'"
 MEMO_ALICE_WITH_SEVERAL_PROMPTS="echo -e '$PASSWORD\nmemo_alice\n$PASSWORD\n$PASSWORD\n$PASSWORD\nY\n'"
-PROMPT_TRANSFER_ASSET="echo -e 'utxo0 \n 2500 \n n \n n \n bob \n n\n$PASSWORD\n'"
+
+get_transfer_prompt_transfer_asset(){
+  amount=$1
+  utxo_name=$2
+  PROMPT_TRANSFER_ASSET="echo -e '$utxo_name \n $amount \n n \n n \n bob \n n\n$PASSWORD\n'"
+  echo $PROMPT_TRANSFER_ASSET
+}
+
+
