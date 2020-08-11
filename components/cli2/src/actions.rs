@@ -244,13 +244,11 @@ pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<(), CliError> 
 
   println!("=== Balances ===");
 
-  let kps = store.get_keypairs()?;
-  for kp in kps {
-    let kp_name = kp.0;
-    let public_key = store.get_pubkey(&PubkeyName(kp_name.to_string()))?;
-    let public_key = public_key.map(|x| serde_json::to_string(&x).unwrap())
-                               .unwrap_or(format!("No public key with name {} found", kp_name));
-    println!("[{}]: {}", kp_name, public_key);
+  let public_keys = store.get_pubkeys()?;
+  for pk in public_keys {
+    let pk_name = (pk.0).0;
+    let pk_str = serde_json::to_string(&pk.1).unwrap();
+    println!("[{}]: {}", pk_name, pk_str);
   }
 
   Ok(())
