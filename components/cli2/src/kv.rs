@@ -157,9 +157,6 @@ impl KVStore {
       return Ok(None);
     }
     // Stringify the key
-    // TODO(Nathan M): Should we handle the case where serialization fails? That should
-    // only really be possible in cases where the type being serialized contains a
-    // Mutex that is poisoned or the like.
     let key = serde_json::to_string(id).expect("JSON serialization failed");
     // Look up our key
     let get_query = format!("select * from {} where key = (?);", table);
@@ -193,9 +190,6 @@ impl KVStore {
       return Ok(None);
     }
     // Stringify the key
-    // TODO(Nathan M): Should we handle the case where serialization fails? That should
-    // only really be possible in cases where the type being serialized contains a
-    // Mutex that is poisoned or the like.
     let key = serde_json::to_string(id).expect("JSON serialization failed");
     // Look up our key
     let get_query = format!("select * from {} where key = (?);", table);
