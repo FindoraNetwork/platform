@@ -77,7 +77,7 @@ source "tests/common.sh"
   check_line 28 "   issuer nickname: alice"
   check_line 31 "   memo: `memo_alice`"
   check_line 32 "   issue_seq_number: 0"
-  check_line 39 "Submitted"
+  check_line 39 "Committed!" # TODO sometimes this fails because the http request does not work right away...
 
   run $CLI2 list-asset-type AliceCoin
 
@@ -110,8 +110,7 @@ source "tests/common.sh"
   [ "$status" -eq 0 ]
 
   # Issue the asset
-  run bash -c "$MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
-
+  run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
   debug_lines
 
   [ "$status" -eq 0 ]
@@ -128,14 +127,11 @@ transfer_assets(){
 
   PROMPT=`get_transfer_prompt_transfer_asset "$amount" "$utxo"`
   run bash -c "$PROMPT | $CLI2 transfer-assets"
-
   run bash -c "$PASSWORD_PROMPT | $CLI2 build-transaction"
-  debug_lines
 
   TX_ID="${lines[0]:10:-1}"
   echo $"Transaction ID: $TX_ID"
   run bash -c "$DOUBLE_CONFIRM_WITH_PROMPT | $CLI2 submit $TX_ID;"
-  debug_lines
 }
 
 # shellcheck disable=SC2030
@@ -171,8 +167,11 @@ transfer_assets(){
 #  run bash -c "$MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
 #  run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
 #
-#  transfer_assets "1000" "utxo0" "tx0"
-#  transfer_assets "2000" "utxo1" "tx1"
+#  transfer_assets "1000" "utxo0"
+#  [ "$status" -eq 0 ]
+#  debug_lines
+#  transfer_assets "2000" "utxo1"
+#  [ "$status" -eq 1 ]
 #
 #  run $CLI2 query-ledger-state
 #  # We show the balances of Alice and Bob

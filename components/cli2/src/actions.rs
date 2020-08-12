@@ -227,7 +227,11 @@ pub fn simple_issue_asset<S: CliDataStore>(store: &mut S,
 
   let seq_issue_number = query_asset_issuance_num(store, asset_nick.clone())?;
 
-  issue_asset(store, nick_tx, asset_nick, seq_issue_number, amount)?;
+  issue_asset(store, nick_tx.clone(), asset_nick, seq_issue_number, amount)?;
+
+  build_transaction(store)?;
+
+  submit(store, nick_tx)?;
 
   Ok(())
 }

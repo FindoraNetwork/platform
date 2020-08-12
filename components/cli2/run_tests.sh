@@ -3,7 +3,7 @@ set -euo pipefail
 export FINDORA_HOME=$(mktemp -d)
 echo "FINDORA_HOME: ${FINDORA_HOME}"
 
-# build the executable
+# Build the executable
 cargo build
 
 # Run the tests

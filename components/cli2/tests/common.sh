@@ -36,7 +36,8 @@ SIMPLE_CONFIRM_WITH_PROMPT="echo -e '$PASSWORD\ny'"
 SIMPLE_PASSWORD_PROMPT="echo -e '$PASSWORD'"
 DOUBLE_CONFIRM_WITH_PROMPT="echo -e 'Y\nY\n'"
 MEMO_ALICE_WITH_PROMPT="echo -e '$PASSWORD\nmemo_alice\n'"
-MEMO_ALICE_WITH_SEVERAL_PROMPTS="echo -e '$PASSWORD\nmemo_alice\n$PASSWORD\n$PASSWORD\n$PASSWORD\nY\n'"
+ALICE_WITH_SEVERAL_PROMPTS="echo -e '$PASSWORD\n$PASSWORD\nY\nY\n'"
+MEMO_ALICE_WITH_SEVERAL_PROMPTS="echo -e '$PASSWORD\nmemo_alice\n$PASSWORD\nY\nY\n'"
 
 get_transfer_prompt_transfer_asset(){
   amount=$1

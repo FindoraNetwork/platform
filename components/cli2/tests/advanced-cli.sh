@@ -93,9 +93,6 @@ DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS="$PASSWORD_PROMPT | $CLI2 key-gen alice; 
   check_line 27  ' - `alice`'
 }
 
-
-
-
 @test "define, publish and list asset type(s)" {
   run  bash -c "$DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS"
   debug_lines
