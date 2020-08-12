@@ -77,7 +77,7 @@ source "tests/common.sh"
   check_line 28 "   issuer nickname: alice"
   check_line 31 "   memo: `memo_alice`"
   check_line 32 "   issue_seq_number: 0"
-  check_line 39 "Committed!" # TODO sometimes this fails because the http request does not work right away...
+  check_line_err 39 "Committed!"
 
   run $CLI2 list-asset-type AliceCoin
 
@@ -123,15 +123,28 @@ source "tests/common.sh"
 
 transfer_assets(){
   amount=$1
-  utxo=$2
 
-  PROMPT=`get_transfer_prompt_transfer_asset "$amount" "$utxo"`
-  run bash -c "$PROMPT | $CLI2 transfer-assets"
+  tx_name=`random_string 16`
+
+  run bash -c "$CLI2 list-txos"
+
+  utxo_name=${lines[0]:5:16}
+  [ "$status" -eq 0 ]
+
+  run bash -c "$CLI2 initialize-transaction $tx_name"
+  PROMPT=`get_transfer_prompt_transfer_asset "$amount" "$utxo_name"`
+
+  run bash -c "$PROMPT | $CLI2 transfer-assets --builder=$tx_name"
+
+  [ "$status" -eq 0 ]
   run bash -c "$PASSWORD_PROMPT | $CLI2 build-transaction"
+  [ "$status" -eq 0 ]
 
   TX_ID="${lines[0]:10:-1}"
   echo $"Transaction ID: $TX_ID"
+
   run bash -c "$DOUBLE_CONFIRM_WITH_PROMPT | $CLI2 submit $TX_ID;"
+  [ "$status" -eq 0 ]
 }
 
 # shellcheck disable=SC2030
@@ -140,21 +153,24 @@ transfer_assets(){
   run  bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice; \
               $MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice AliceCoin;"
   # Issue the asset
-  run bash -c "$MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
+  run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
+
+  [ "$status" -eq 0 ]
   # Load Bob's public key
   run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
 
   # Transfer the asset
-  transfer_assets "5000" "utxo0"
-
+  amount="5000"
+  transfer_assets "$amount"
+  debug_lines
   [ "$status" -eq 0 ]
-  check_line 7 "  TransferAssets:"
-  check_line 9 "   utxo0 (Not finalized):"
-  check_line 13 "    Amount: 10000"
-  check_line 23 "    Record Type: \"NonConfidentialAmount_NonConfidentialAssetType\""
-  check_line 20 "   utxo1 (Not finalized):"
-  check_line 24 "    Amount: 5000"
-  check_line 53 "Committed!"
+
+  check_line 5 "  TransferAssets:"
+  check_line 10 "    Record Type: \"NonConfidentialAmount_NonConfidentialAssetType\""
+  check_line 11 "    Amount: 10000"
+  check_line 22 "    Amount: $amount"
+  check_line 31 "   Record Type: \"NonConfidentialAmount_NonConfidentialAssetType\""
+  check_line_err 40 "Committed!"
 
 }
 
@@ -164,19 +180,18 @@ transfer_assets(){
 #  # Then Alice transfers some AliceCoins to Bob
 #  run  bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice; \
 #                $MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice AliceCoin;"
-#  run bash -c "$MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
+#  run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
 #  run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
 #
-#  transfer_assets "1000" "utxo0"
+#  transfer_assets "1500" "utxo0"
 #  [ "$status" -eq 0 ]
 #  debug_lines
-#  transfer_assets "2000" "utxo1"
-#  [ "$status" -eq 1 ]
+#  transfer_assets "2000" "utxo0"
+#  [ "$status" -eq 0 ]
 #
 #  run $CLI2 query-ledger-state
 #  # We show the balances of Alice and Bob
 #
 #  run bash -c "$CLI2 balances"
-#  debug_lines
-#  [ "$status" -eq 1 ]
+#  [ "$status" -eq 0 ]
 #}

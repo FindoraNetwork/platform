@@ -149,7 +149,7 @@ DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS="$PASSWORD_PROMPT | $CLI2 key-gen alice; 
   check_line 45 "   Decrypted Amount: 10000"
   check_line 49 " Signers:"
   check_line 50 '  - `alice`'
-  check_line 54 "Committed!"
+  check_line_err 54 "Committed!"
 
   # We query the asset type to check the issue_seq_number has been incremented
   debug_lines
