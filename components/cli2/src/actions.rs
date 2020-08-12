@@ -258,7 +258,7 @@ pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<(), CliError> 
     pub_key_to_name_map.insert(pk_str.clone(), pk_name.clone());
   }
 
-  let mut balances: HashMap<String, u64> = HashMap::new();
+  let mut balances: BTreeMap<String, u64> = BTreeMap::new();
 
   // Loop over the utxos to compute the balances
   // TODO do something more efficient ?

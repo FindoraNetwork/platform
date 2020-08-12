@@ -159,7 +159,6 @@ DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS="$PASSWORD_PROMPT | $CLI2 key-gen alice; 
 
 }
 
-
 @test "list-txo(s)" {
   skip "TODO"
   $CLI2 run list-txo 11111

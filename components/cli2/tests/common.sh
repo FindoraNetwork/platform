@@ -3,7 +3,7 @@ FINDORA_STORE_FILE=${FINDORA_HOME:-${HOME}/.findora}/cli2_data.sqlite
 setup() {
   # Start from a fresh state
   echo "Deleting $FINDORA_STORE_FILE..."
-  rm  -f $FINDORA_STORE_FILE || true
+  rm -f $FINDORA_STORE_FILE || true
   bash -c '{ echo; echo; } | $CLI2 setup'
 }
 
@@ -12,21 +12,20 @@ debug_array() {
   echo "Debugging array..."
   arr=("$@")
   COUNTER=0
-  for i in "${arr[@]}";
-    do
-        echo "[$COUNTER]$i"
-        COUNTER=$((COUNTER+1))
-    done
+  for i in "${arr[@]}"; do
+    echo "[$COUNTER]$i"
+    COUNTER=$((COUNTER + 1))
+  done
 }
 
-debug_lines(){
+debug_lines() {
   debug_array "${lines[@]}"
 }
 
 check_line() {
   line_number="$1"
   command_str="$2"
-  command_str_length=`expr length "$command_str"`
+  command_str_length=$(expr length "$command_str")
   [ "${lines[$line_number]:0:$command_str_length}" = "$command_str" ]
 }
 
@@ -36,13 +35,12 @@ check_line_err() {
   line_number="$1"
   next_line_number=$line_number+1
   command_str="$2"
-  command_str_length=`expr length "$command_str"`
-  [[ ("${lines[$line_number]:0:$command_str_length}" = "$command_str" ) ||  ("${lines[$next_line_number]:0:$command_str_length}" = "$command_str") ]]
+  command_str_length=$(expr length "$command_str")
+  [[ ("${lines[$line_number]:0:$command_str_length}" == "$command_str") || ("${lines[$next_line_number]:0:$command_str_length}" == "$command_str") ]]
 }
 
-random_string()
-{
-    cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w ${1:-32} | head -n 1
+random_string() {
+  cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w ${1:-32} | head -n 1
 }
 
 PASSWORD="password"
@@ -54,10 +52,43 @@ MEMO_ALICE_WITH_PROMPT="echo -e '$PASSWORD\nmemo_alice\n'"
 ALICE_WITH_SEVERAL_PROMPTS="echo -e '$PASSWORD\n$PASSWORD\nY\nY\n'"
 MEMO_ALICE_WITH_SEVERAL_PROMPTS="echo -e '$PASSWORD\nmemo_alice\n$PASSWORD\nY\nY\n'"
 
-get_transfer_prompt_transfer_asset(){
+# Enables to create a transfer for some amount from Alice to Bob
+# Note that the change of the transfer is returned to Alice
+get_transfer_prompt_transfer_asset() {
   amount=$1
-  utxo_name=$2
-  PROMPT_TRANSFER_ASSET="echo -e '$utxo_name \n $amount \n n \n n \n bob \n n \n$PASSWORD\n'"
+  change_amount=$2
+  utxo_name=$3
+  PROMPT_TRANSFER_ASSET="echo -e '$utxo_name \n $amount \n n \n n \n bob \n Y \n $change_amount \n n \n n \n alice \n Y \n$PASSWORD\n$PASSWORD\n'"
   echo $PROMPT_TRANSFER_ASSET
 }
 
+transfer_assets() {
+  amount=$1
+  change_amount=$2
+  utxo_name=$3
+
+  tx_name=$(random_string 16)
+  echo "TX_NAME: $tx_name"
+  run bash -c "$CLI2 list-txos --unspent=true"
+
+  # TODO how to write this better?
+  utxo_name=${lines[0]:5:-6}$utxo_name
+
+  echo "UTXO_NAME=$utxo_name"
+  [ "$status" -eq 0 ]
+
+  run bash -c "$CLI2 initialize-transaction $tx_name"
+  PROMPT=`get_transfer_prompt_transfer_asset "$amount" "$change_amount" "$utxo_name"`
+
+  run bash -c "$PROMPT | $CLI2 transfer-assets --builder=$tx_name"
+  debug_lines
+  [ "$status" -eq 0 ]
+  run bash -c "$PASSWORD_PROMPT | $CLI2 build-transaction"
+  [ "$status" -eq 0 ]
+
+  TX_ID="${lines[0]:10:-1}"
+  echo $"Transaction ID: $TX_ID"
+
+  run bash -c "$DOUBLE_CONFIRM_WITH_PROMPT | $CLI2 submit $TX_ID;"
+  [ "$status" -eq 0 ]
+}

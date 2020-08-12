@@ -9,7 +9,7 @@ cargo build
 # Run the tests
 cargo test
 
-#  black box tests written in shell
-bats tests/advanced-cli.sh
+# Black box tests written in shell
 bats tests/simple-cli.sh
+bats tests/advanced-cli.sh
 bats tests/error-handling.sh

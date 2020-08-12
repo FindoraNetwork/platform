@@ -121,32 +121,6 @@ source "tests/common.sh"
 
 }
 
-transfer_assets(){
-  amount=$1
-
-  tx_name=`random_string 16`
-
-  run bash -c "$CLI2 list-txos"
-
-  utxo_name=${lines[0]:5:16}
-  [ "$status" -eq 0 ]
-
-  run bash -c "$CLI2 initialize-transaction $tx_name"
-  PROMPT=`get_transfer_prompt_transfer_asset "$amount" "$utxo_name"`
-
-  run bash -c "$PROMPT | $CLI2 transfer-assets --builder=$tx_name"
-
-  [ "$status" -eq 0 ]
-  run bash -c "$PASSWORD_PROMPT | $CLI2 build-transaction"
-  [ "$status" -eq 0 ]
-
-  TX_ID="${lines[0]:10:-1}"
-  echo $"Transaction ID: $TX_ID"
-
-  run bash -c "$DOUBLE_CONFIRM_WITH_PROMPT | $CLI2 submit $TX_ID;"
-  [ "$status" -eq 0 ]
-}
-
 # shellcheck disable=SC2030
 @test "transfer-asset" {
   # Alice key gen and AliceCoin asset definition
@@ -154,14 +128,15 @@ transfer_assets(){
               $MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice AliceCoin;"
   # Issue the asset
   run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
-
   [ "$status" -eq 0 ]
+
   # Load Bob's public key
   run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
 
   # Transfer the asset
   amount="5000"
-  transfer_assets "$amount"
+  change_amount="5000"
+  transfer_assets "$amount" "$change_amount" "utxo0"
   debug_lines
   [ "$status" -eq 0 ]
 
@@ -169,29 +144,37 @@ transfer_assets(){
   check_line 10 "    Record Type: \"NonConfidentialAmount_NonConfidentialAssetType\""
   check_line 11 "    Amount: 10000"
   check_line 22 "    Amount: $amount"
-  check_line 31 "   Record Type: \"NonConfidentialAmount_NonConfidentialAssetType\""
-  check_line_err 40 "Committed!"
+  check_line 29 "    Record Type: \"NonConfidentialAmount_NonConfidentialAssetType\""
+  check_line_err 60 "Committed!"
 
+  run bash -c "$CLI2 list-txos --unspent=true"
+  [ "$status" -eq 0 ]
+  debug_lines
+  check_line 2 " Owned by: \"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\" (bob)"
+  check_line 4 " Amount: 5000"
 }
 
-#@test "balances" {
-#
-#  # First we let Alice define and issue some asset AliceCoin
-#  # Then Alice transfers some AliceCoins to Bob
-#  run  bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice; \
-#                $MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice AliceCoin;"
-#  run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
-#  run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
-#
-#  transfer_assets "1500" "utxo0"
-#  [ "$status" -eq 0 ]
-#  debug_lines
-#  transfer_assets "2000" "utxo0"
-#  [ "$status" -eq 0 ]
-#
-#  run $CLI2 query-ledger-state
-#  # We show the balances of Alice and Bob
-#
-#  run bash -c "$CLI2 balances"
-#  [ "$status" -eq 0 ]
-#}
+@test "balances" {
+
+  # First we let Alice define and issue some asset AliceCoin
+  # Then Alice transfers some AliceCoins to Bob
+  run  bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice; \
+                $MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice AliceCoin;"
+  run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
+  run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
+
+  transfer_assets "5000" "5000" "utxo0"
+  [ "$status" -eq 0 ]
+
+  transfer_assets "1500" "3500" "utxo1"
+  [ "$status" -eq 0 ]
+
+  run bash -c "$CLI2 balances"
+  [ "$status" -eq  0 ]
+
+  debug_lines
+  check_line 28 "alice:3500"
+  check_line 29 "bob:6500"
+}
+
+
