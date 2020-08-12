@@ -170,11 +170,23 @@ source "tests/common.sh"
   [ "$status" -eq 0 ]
 
   run bash -c "$CLI2 balances"
+  debug_lines
   [ "$status" -eq  0 ]
 
+  check_line 1 "(alice,AliceCoin):3500"
+  check_line 2 "(bob,AliceCoin):6500"
+
+  # Now Alice creates another coin
+  run bash -c "$MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice YamCoin;"
+  run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset YamCoin 123456"
+
+  run bash -c "$CLI2 balances"
   debug_lines
-  check_line 28 "alice:3500"
-  check_line 29 "bob:6500"
+  [ "$status" -eq  0 ]
+  check_line 1 "(alice,AliceCoin):3500"
+  check_line 2 "(alice,YamCoin):123456"
+  check_line 3 "(bob,AliceCoin):6500"
+
 }
 
 

@@ -9,6 +9,9 @@ cargo build
 # Run the tests
 cargo test
 
+# Run clippy
+cargo clippy
+
 # Black box tests written in shell
 bats tests/simple-cli.sh
 bats tests/advanced-cli.sh

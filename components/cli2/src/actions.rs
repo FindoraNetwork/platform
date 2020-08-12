@@ -245,10 +245,6 @@ pub fn list_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result<(
 }
 
 pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
-  list_txos(store, true)?;
-
-  println!("=== Balances ===");
-
   // Build a map pubkey => pubkey=> name
   let mut pub_key_to_name_map: HashMap<String, String> = HashMap::new();
   let public_keys = store.get_pubkeys()?;
@@ -258,28 +254,37 @@ pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<(), CliError> 
     pub_key_to_name_map.insert(pk_str.clone(), pk_name.clone());
   }
 
-  let mut balances: BTreeMap<String, u64> = BTreeMap::new();
+  let mut balances: BTreeMap<(String, String), u64> = BTreeMap::new();
 
   // Loop over the utxos to compute the balances
-  // TODO do something more efficient ?
   for (_nick, txo) in store.get_cached_txos()?.into_iter() {
     if !txo.unspent {
       continue;
     }
 
-    // TODO handle asset type
-    let amount = txo.record.0.amount.get_amount().unwrap(); // TODO handle None
+    // Amounts should not be None
+    let amount = txo.record.0.amount.get_amount();
+    assert!(!amount.is_none());
+    let amount = amount.unwrap();
+
+    // Asset type names should not be None
+    let asset_type_name = txo.asset_type;
+    assert!(!asset_type_name.is_none());
+    let asset_type_name = asset_type_name.unwrap().0;
+
     let pk = txo.record.0.public_key;
     let pk_str = serde_json::to_string(&pk).unwrap();
     let pk_name = pub_key_to_name_map.get(&pk_str).unwrap();
 
-    let the_balance = balances.entry(pk_name.to_string()).or_insert(0);
+    let the_balance = balances.entry((pk_name.to_string(), asset_type_name.to_string()))
+                              .or_insert(0);
     *the_balance += amount;
   }
 
   // Print the balances
-  for (pk, amount) in balances {
-    println!("{}:{}", pk, amount);
+  println!("=== Balances ===");
+  for ((pk, asset_type), amount) in balances {
+    println!("({},{}):{}", pk, asset_type, amount);
   }
 
   Ok(())
