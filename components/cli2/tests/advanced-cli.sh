@@ -2,20 +2,6 @@
 set -euo pipefail
 source "tests/common.sh"
 
-DEFINE_AND_ISSUE_ASSET_TYPE_WITH_BUILD="$PASSWORD_PROMPT |$CLI2 key-gen alice; \
-                                     echo y | $CLI2 query-ledger-state; \
-                                     $CLI2 initialize-transaction 0;\
-                                     $MEMO_ALICE_WITH_PROMPT | $CLI2 define-asset 0 alice TheBestAliceCoinsOnEarthV2; \
-                                     $PASSWORD_PROMPT | $CLI2 issue-asset 0 TheBestAliceCoinsOnEarthV2 0 10000; \
-                                     $PASSWORD_PROMPT | $CLI2 build-transaction;"
-
-DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS="$PASSWORD_PROMPT | $CLI2 key-gen alice; \
-                              echo y | $CLI2 query-ledger-state; \
-                              $CLI2 initialize-transaction 0; \
-                              $MEMO_ALICE_WITH_PROMPT | $CLI2 define-asset 0 alice AliceCoin; \
-                              $PASSWORD_PROMPT | $CLI2 build-transaction; \
-                              $DOUBLE_CONFIRM_WITH_PROMPT | $CLI2 submit 0;"
-
 @test "list-config" {
   run $CLI2 list-config
   [ "$status" -eq 0 ]
@@ -109,17 +95,18 @@ DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS="$PASSWORD_PROMPT | $CLI2 key-gen alice; 
 @test "query-asset-type" {
   run  bash -c "  $DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS"
   debug_lines
-  run $CLI2 query-asset-type --replace=false AliceCoin kt2_x12-CiMz802pkydMrNsSqLEAplDUgKTgzLtprnk=
-  run $CLI2 query-asset-type --replace=false AliceCoin 1rF2RbRw4DQpssvXIRJmkf3F-87AjCiekBks6aEHS8E=
-  debug_lines
-  check_line 0 "issue_seq_number: 0"
   [ "$status" -eq 0 ]
+
+  run $CLI2 query-asset-type --replace=false AliceCoin PfUm5iKkKjiEDuBllekTa3bvxtOSKZy1PeUFLzef1JY=
+  debug_lines
+  [ "$status" -eq 0 ]
+
   run $CLI2 list-asset-types
   [ "$status" -eq 0 ]
   check_line 0 'Asset `AliceCoin`'
   check_line 1 " issuer nickname: <UNKNOWN>"
   check_line 2 " issuer public key:"
-  check_line 3 " code: 1rF2RbRw4DQpssvXIRJmkf3F-87AjCiekBks6aEHS8E="
+  check_line 3 " code: PfUm5iKkKjiEDuBllekTa3bvxtOSKZy1PeUFLzef1JY="
   check_line 4 ' memo: `memo_alice`'
   check_line 5 " issue_seq_number: 0"
 }
@@ -133,7 +120,6 @@ DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS="$PASSWORD_PROMPT | $CLI2 key-gen alice; 
                $PASSWORD_PROMPT | $CLI2 issue-asset 0 TheBestAliceCoinsOnEarthV2 0 10000; \
                $PASSWORD_PROMPT | $CLI2 build-transaction; \
                $DOUBLE_CONFIRM_WITH_PROMPT | $CLI2 submit 0;"
-
   debug_lines
   [ "$status" -eq 0 ]
   check_line 22 'Submitting to `https://testnet.findora.org:8669/submit_transaction`'
@@ -152,13 +138,12 @@ DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS="$PASSWORD_PROMPT | $CLI2 key-gen alice; 
   check_line_err 54 "Committed!"
 
   # We query the asset type to check the issue_seq_number has been incremented
+  run $CLI2 query-asset-type --replace=false TheBestAliceCoinsOnEarthV2 0nyMhQo3bZZDxEHN_isswne7Q3dbb6TP2Z_dbZOBoTc=
   debug_lines
-  run $CLI2 query-asset-type --replace=false TheBestAliceCoinsOnEarthV2 ItMNzAOgV0QUrJCiV4KoVIMEhqvRL1ZILurzNyubFlk=
   [ "$status" -eq 0 ]
   check_line 0 "issue_seq_number: 1"
 
 }
-
 @test "list-txo(s)" {
   skip "TODO"
   $CLI2 run list-txo 11111
