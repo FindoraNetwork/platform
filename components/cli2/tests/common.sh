@@ -75,6 +75,18 @@ get_transfer_prompt_transfer_asset() {
   echo $PROMPT_TRANSFER_ASSET
 }
 
+# TODO refactor with above
+# Enables to create a transfer for some amount from Alice to Bob
+# where the amount and the asset type are *confidential*.
+# Note that the change of the transfer is returned to Alice
+get_transfer_prompt_transfer_asset_conf() {
+  amount=$1
+  change_amount=$2
+  utxo_name=$3
+  PROMPT_TRANSFER_ASSET="echo -e '$utxo_name \n $amount \n Y \n Y \n bob \n Y \n $change_amount \n n \n n \n alice \n Y \n$PASSWORD\n$PASSWORD\n'"
+  echo $PROMPT_TRANSFER_ASSET
+}
+
 transfer_assets() {
   amount=$1
   change_amount=$2
@@ -96,6 +108,40 @@ transfer_assets() {
   run bash -c "$PROMPT | $CLI2 transfer-assets --builder=$tx_name"
 
   [ "$status" -eq 0 ]
+  run bash -c "$PASSWORD_PROMPT | $CLI2 build-transaction"
+  [ "$status" -eq 0 ]
+
+  TX_ID="${lines[0]:10:-1}"
+  echo $"Transaction ID: $TX_ID"
+
+  run bash -c "$DOUBLE_CONFIRM_WITH_PROMPT | $CLI2 submit $TX_ID;"
+  [ "$status" -eq 0 ]
+}
+
+# TODO refactor with above
+transfer_assets_conf() {
+  amount=$1
+  change_amount=$2
+  utxo_name=$3
+  tx0_index=$4
+
+  tx_name=$(random_string 16)
+  echo "TX_NAME: $tx_name"
+  run bash -c "$CLI2 list-txos --unspent=true"
+
+  # TODO how to write this better?
+  utxo_name=${lines[$tx0_index]:5:-6}$utxo_name
+
+  echo "UTXO_NAME=$utxo_name"
+  [ "$status" -eq 0 ]
+
+  run bash -c "$CLI2 initialize-transaction $tx_name"
+  PROMPT=`get_transfer_prompt_transfer_asset_conf "$amount" "$change_amount" "$utxo_name"`
+
+  run bash -c "$PROMPT | $CLI2 transfer-assets --builder=$tx_name"
+  debug_lines
+  [ "$status" -eq 0 ]
+
   run bash -c "$PASSWORD_PROMPT | $CLI2 build-transaction"
   [ "$status" -eq 0 ]
 
