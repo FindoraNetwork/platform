@@ -136,7 +136,7 @@ source "tests/common.sh"
   # Transfer the asset
   amount="5000"
   change_amount="5000"
-  transfer_assets "$amount" "$change_amount" "utxo0"
+  transfer_assets "$amount" "$change_amount" "0" "false"
   debug_lines
   [ "$status" -eq 0 ]
 
@@ -163,32 +163,32 @@ source "tests/common.sh"
   run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
   run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
 
-  transfer_assets "5000" "5000" "utxo0"
+  transfer_assets "5000" "5000" "0" "false"
   [ "$status" -eq 0 ]
 
-  transfer_assets "1500" "3500" "utxo1"
+  echo "LISTING UTXOs...."
+  run bash -c "$CLI2 list-txos --unspent=true"
+  echo "*************************LISTING UTXOs...."
+  [ "$status" -eq 0 ]
+
+  transfer_assets "1500" "3500" "8" "false"
   [ "$status" -eq 0 ]
 
   # Now Alice creates another coin
-#  run bash -c "$MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice YamCoin;"
-#  run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset YamCoin 15000"
-#
-#  run bash -c "$CLI2 list-txos --unspent=true"
+  run bash -c "$MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice YamCoin;"
+  run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset YamCoin 15000"
+
+#  # Alice makes a confidential transfer to Bob of some YamCoins
+#  transfer_assets "1500" "2000" "utxo1" "8" "true"
 #  debug_lines
 #  [ "$status" -eq 0 ]
-
-  # Alice makes a confidential transfer to Bob of some YamCoins
-  transfer_assets_conf "1500" "2000" "utxo1" "8"
-  debug_lines
-  [ "$status" -eq 0 ]
 
   run bash -c "$CLI2 balances"
   debug_lines
   [ "$status" -eq  0 ]
   check_line 1 "(alice,AliceCoin):3500"
-  check_line 2 "(alice,YamCoin):7000"
+  check_line 2 "(alice,YamCoin):15000"
   check_line 3 "(bob,AliceCoin):6500"
-  check_line 3 "(bob,YamCoin):N/A"
 }
 
 
