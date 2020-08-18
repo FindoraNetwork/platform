@@ -262,17 +262,20 @@ pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<(), CliError> 
       continue;
     }
 
-    // Amounts should not be None
+    // Fetch the amounts
     let amount = txo.record.0.amount.get_amount();
     let amount = match amount {
-      None => 0_u64, // TODO unlock txo here in case the recipient is the owner of the wallet
+      None => match txo.opened_record {
+        None => 0u64, // TODO shall not this trigger an error?
+        Some(oar) => oar.amount,
+      },
       Some(amt) => amt,
     };
 
     // Asset type names should not be None
     let asset_type = txo.asset_type;
     let asset_type_name = match asset_type {
-      None => String::from("---"), // TODO unlock txo here in case the recipient is the owner of the wallet
+      None => String::from("---"), // TODO Shall not this trigger an error?
       Some(asset_type) => asset_type.0,
     };
 
