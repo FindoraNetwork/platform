@@ -2206,6 +2206,7 @@ dependencies = [
  "air",
  "arrayref",
  "base64 0.10.1",
+ "bincode",
  "bitmap",
  "blake2",
  "bulletproofs",
@@ -2231,6 +2232,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha2",
+ "sliding_set",
  "sodiumoxide",
  "sparse_merkle_tree",
  "tempdir",
@@ -4486,6 +4488,18 @@ name = "slab"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c111b5bd5695e56cffe5129854aa230b39c93a305372fdbb2668ca2394eea9f8"
+
+[[package]]
+name = "sliding_set"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "cryptohash",
+ "rand 0.7.3",
+ "serde",
+ "serde_derive",
+ "serde_json",
+]
 
 [[package]]
 name = "smallvec"

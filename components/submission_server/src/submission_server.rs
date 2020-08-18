@@ -300,7 +300,7 @@ pub fn convert_tx(tx: &[u8]) -> Option<Transaction> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use ledger::data_model::{AssetRules, AssetTypeCode};
+  use ledger::data_model::{AssetRules, AssetTypeCode, NoReplayToken};
   use rand_core::SeedableRng;
   use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder};
   use zei::xfr::sig::XfrKeyPair;
@@ -386,7 +386,7 @@ mod tests {
     let block_capacity = 2;
     let mut ledger_state = LedgerState::test_ledger();
     let no_replay_token = ledger_state.get_no_replay_token();
-    let prng = rand_chacha::ChaChaRng::from_entropy();
+    let mut prng = rand_chacha::ChaChaRng::from_entropy();
     let mut submission_server =
       SubmissionServer::<_, _, NoTF>::new(prng,
                                           Arc::new(RwLock::new(ledger_state)),
@@ -415,7 +415,8 @@ mod tests {
 
     // Now test that invalid transactions show up as rejected
     // Provide the completely wrong sequence number
-    let bad_transaction = Transaction::from_seq_id(5000);
+    prng = rand_chacha::ChaChaRng::from_entropy();
+    let bad_transaction = Transaction::from_token(NoReplayToken::new(&mut prng, 666));
     let txn_handle = submission_server.handle_transaction(bad_transaction)
                                       .unwrap();
     let status = submission_server.txn_status
@@ -424,7 +425,12 @@ mod tests {
                                   .clone();
     match status {
       TxnStatus::Rejected(_) => {}
-      _ => assert!(false),
+      TxnStatus::Pending => {
+        panic!("txn pending");
+      }
+      TxnStatus::Committed((_sid, _txos)) => {
+        panic!("txn commited");
+      }
     }
   }
 }

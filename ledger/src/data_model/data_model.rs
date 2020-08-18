@@ -834,13 +834,10 @@ pub struct KVUpdate {
 pub type KVEntrySignature = SignatureOf<(Key, u64, Option<KVEntry>)>;
 
 impl KVUpdate {
-  pub fn new(creation_body: (Key, Option<KVHash>),
-             seq_number: u64,
-             keypair: &XfrKeyPair)
-             -> KVUpdate {
+  pub fn new(creation_body: (Key, Option<KVHash>), seq_num: u64, keypair: &XfrKeyPair) -> KVUpdate {
     let creation_body = match creation_body {
-      (k, None) => (k, seq_number, None),
-      (k, Some(data)) => (k, seq_number, Some(KVEntry(*keypair.get_pk_ref(), data))),
+      (k, None) => (k, seq_num, None),
+      (k, Some(data)) => (k, seq_num, Some(KVEntry(*keypair.get_pk_ref(), data))),
     };
     let signature = SignatureOf::new(&keypair, &creation_body);
     KVUpdate { body: creation_body,

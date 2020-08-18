@@ -431,7 +431,6 @@ impl TransactionBuilder {
 
   pub fn from_token(no_replay_token: NoReplayToken) -> Self {
     TransactionBuilder { txn: Transaction::from_token(no_replay_token),
-                         owner_records: Vec::new(),
                          outputs: 0 }
   }
 }

@@ -5,10 +5,10 @@ use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
 use crate::policy_script::{run_txn_check, TxnCheckInputs, TxnPolicyData};
 use crate::{error_location, inp_fail, inv_fail, zei_fail};
 use credentials::credential_verify_commitment;
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
 use cryptohash::sha256;
 use cryptohash::sha256::Digest as BitDigest;
+use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use serde::Serialize;
 use sparse_merkle_tree::Key;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -64,6 +64,14 @@ pub struct TxnEffect {
   pub op_digests: Vec<BitDigest>,
 }
 
+fn is_darp_protected_op(op: &Operation) -> bool {
+  match op {
+    Operation::UpdateMemo(_) => true,
+    Operation::AIRAssign(_) => true,
+    _ => false,
+  }
+}
+
 // Internally validates the transaction as well.
 // If the transaction is invalid, it is dropped, so if you need to inspect
 // the transaction in order to diagnose the error, clone it first!
@@ -79,7 +87,6 @@ impl TxnEffect {
     let mut op_digests = Vec::new();
     let mut new_asset_codes: HashMap<AssetTypeCode, AssetType> = HashMap::new();
     let mut cosig_keys = HashMap::new();
-    let mut memo_updates = Vec::new();
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
     let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
     let mut issuance_amounts = HashMap::new();
@@ -439,7 +446,7 @@ impl TxnEffect {
           let pok = &air_assign.body.pok;
           let pk = &air_assign.pubkey;
           if txn.body.no_replay_token != air_assign.body.no_replay_token {
-            return Err(inp_fail!());
+            return Err(inp_fail!("compute_effect: txn body token not equal to the token for this AIRAssign operation"));
           }
           // 1)
           air_assign.signature
@@ -459,7 +466,7 @@ impl TxnEffect {
         Operation::UpdateMemo(update_memo) => {
           let pk = update_memo.pubkey;
           if txn.body.no_replay_token != update_memo.body.no_replay_token {
-            return Err(inp_fail!());
+            return Err(inp_fail!("compute_effect: txn body token not equal to the token for this UpdateMemo operation"));
           }
           // 1)
           update_memo.signature
@@ -469,8 +476,10 @@ impl TxnEffect {
           memo_updates.push((update_memo.body.asset_type, pk, update_memo.body.new_memo.clone()));
         }
       } // end -- match op {
-      let op_hash = sha256::hash(&bincode::serialize(&op).unwrap());
-      op_digests.push(op_hash);
+      if is_darp_protected_op(&op) {
+        let op_hash = sha256::hash(&bincode::serialize(&op).unwrap());
+        op_digests.push(op_hash);
+      }
       op_idx += 1;
     } // end -- for op in txn.body.operations.iter() {
 
@@ -683,12 +692,6 @@ impl BlockEffect {
     for (type_code, amount) in txn_effect.issuance_amounts.iter() {
       let issuance_amount = self.issuance_amounts.entry(*type_code).or_insert(0);
       *issuance_amount += amount;
-    }
-
-    for (type_code, tracing_policy) in txn_effect.issuance_tracing_policies.iter() {
-      debug_assert!(!self.new_tracing_policies.contains_key(type_code));
-      self.new_tracing_policies
-          .insert(*type_code, tracing_policy.clone());
     }
 
     for (addr, data) in txn_effect.air_updates {

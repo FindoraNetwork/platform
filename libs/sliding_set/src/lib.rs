@@ -26,8 +26,13 @@ impl SlidingSet {
     self.map.contains_key(&key)
   }
 
+  pub fn get(&self, key: Digest) -> Option<&u64> {
+    self.map.get(&key)
+  }
+
   pub fn insert(&mut self, key: Digest, value: u64) {
     assert!(value <= self.current && value >= self.min);
+    assert!(!self.map.contains_key(&key));
     self.map.insert(key, value);
   }
 

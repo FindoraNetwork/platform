@@ -11,8 +11,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   let client = reqwest::blocking::Client::new();
 
-  let mut resp_gs = client.get(&format!("{}://{}:{}/no_replay_token", protocol, host, port))
-                          .send()?;
+  let resp_gs = client.get(&format!("{}://{}:{}/no_replay_token", protocol, host, port))
+                      .send()?;
   let no_replay_token: NoReplayToken = serde_json::from_str(&resp_gs.text()?[..]).unwrap();
 
   let mut prng = ChaChaRng::from_entropy();

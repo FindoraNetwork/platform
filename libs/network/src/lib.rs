@@ -2,8 +2,7 @@
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
   AssetType, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedUtxo, BlockSID,
-  FinalizedTransaction, KVBlind, NoReplayToken, StateCommitmentData, Transaction,
-  TxoSID, Utxo
+  FinalizedTransaction, KVBlind, NoReplayToken, StateCommitmentData, Transaction, TxoSID,
 };
 use ledger::store::LedgerState;
 use ledger_api_service::{
@@ -194,8 +193,8 @@ mod tests {
 
   #[test]
   fn test_mock_client() {
-    let tx = Transaction::from_token(NoReplayToken::default());
     let mut mock_rest_client = LedgerStandalone::new_mock(2);
+    let tx = Transaction::from_token(mock_rest_client.get_no_replay_token().unwrap());
     let handle = mock_rest_client.submit_transaction(&tx).unwrap();
     mock_rest_client.force_end_block().unwrap();
     let status = mock_rest_client.txn_status(&handle).unwrap();
@@ -213,10 +212,12 @@ mod tests {
     let mut prng = ChaChaRng::from_entropy();
     let creator = XfrKeyPair::generate(&mut prng);
     let memo_update = UpdateMemo::new(UpdateMemoBody { new_memo: new_memo.clone(),
-                                                       asset_type: code },
+                                                       asset_type: code,
+                                                       no_replay_token: NoReplayToken::default() },
                                       &creator);
-    let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update), 0);
     let mut mock_rest_client = LedgerStandalone::new_mock(2);
+    let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update),
+                                         mock_rest_client.get_no_replay_token().unwrap());
     let handle = mock_rest_client.submit_transaction(&tx).unwrap();
     let status = mock_rest_client.txn_status(&handle).unwrap();
     if let TxnStatus::Rejected(_) = status {

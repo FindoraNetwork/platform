@@ -401,7 +401,7 @@ mod tests {
     let alice = XfrKeyPair::generate(&mut prng);
     let bob = XfrKeyPair::generate(&mut prng);
     // Define asset
-    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
+    let mut builder = TransactionBuilder::from_token(ledger_state.get_no_replay_token());
     let define_tx = builder.add_operation_create_asset(&alice,
                                                        Some(token_code),
                                                        AssetRules::default(),
@@ -410,7 +410,7 @@ mod tests {
                            .unwrap()
                            .transaction();
 
-    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
+    let mut builder = TransactionBuilder::from_token(ledger_state.get_no_replay_token());
 
     //Issuance txn
     let amt = 1000;
@@ -450,7 +450,7 @@ mod tests {
                             .unwrap()
                             .sign(&alice)
                             .unwrap();
-    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
+    let mut builder = TransactionBuilder::from_token(ledger_state.get_no_replay_token());
     let xfr_txn = builder.add_operation(xfr_op.transaction().unwrap())
                          .transaction();
 
@@ -668,7 +668,7 @@ mod tests {
                                             &creator,
                                             AssetRules::default(),
                                             Some(Memo("test".to_string())),
-                                            ledger_state.get_block_commit_count()).unwrap();
+                                            ledger_state.get_no_replay_token()).unwrap();
     apply_transaction(&mut ledger_state, tx1);
     let block1 = ledger_state.get_block(BlockSID(0)).unwrap();
     query_server.add_new_block(&block1.block.txns).unwrap();
@@ -679,7 +679,7 @@ mod tests {
                                             &creator,
                                             AssetRules::default(),
                                             Some(Memo("test".to_string())),
-                                            ledger_state.get_block_commit_count()).unwrap();
+                                            ledger_state.get_no_replay_token()).unwrap();
     apply_transaction(&mut ledger_state, tx2);
     let block2 = ledger_state.get_block(BlockSID(1)).unwrap();
     query_server.add_new_block(&block2.block.txns).unwrap();

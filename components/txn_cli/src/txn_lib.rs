@@ -101,7 +101,7 @@ pub fn define_and_submit<T>(issuer_key_pair: &XfrKeyPair,
                             -> Result<(), PlatformError>
   where T: RestfulLedgerUpdate + RestfulLedgerAccess
 {
-  let no_replay_token = rest_client.get_no_replay_token().unwrap();
+  let no_replay_token = rest_client.get_no_replay_token()?;
   // Define the asset
   let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
   let txn = txn_builder.add_operation_create_asset(issuer_key_pair,
@@ -131,7 +131,6 @@ pub fn define_and_submit<T>(issuer_key_pair: &XfrKeyPair,
 /// * `tracing_policy`: asset tracing policy, if any.
 #[allow(clippy::too_many_arguments)]
 pub fn issue_and_transfer_asset(data_dir: &str,
-                                no_replay_token: NoReplayToken,
                                 issuer_key_pair: &XfrKeyPair,
                                 recipient_key_pair: &XfrKeyPair,
                                 amount: u64,
@@ -182,7 +181,7 @@ pub fn issue_and_transfer_asset(data_dir: &str,
                                    .transaction()?;
 
   // Issue and Transfer transaction
-  let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
+  let mut txn_builder = TransactionBuilder::from_token(NoReplayToken::default());
   txn_builder.add_operation_issue_asset(issuer_key_pair,
                                         &token_code,
                                         get_and_update_sequence_number(data_dir)?,
@@ -217,7 +216,10 @@ pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore, T>(
 {
   // Issue and transfer the asset
   let pc_gens = PublicParams::new().pc_gens;
-  let input_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, issuer_key_pair.get_pk());
+  let input_template = AssetRecordTemplate::with_no_asset_tracking(amount,
+                                                                   code.val,
+                                                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                                                   issuer_key_pair.get_pk());
   let input_blind_asset_record =
     build_blind_asset_record(&mut prng, &pc_gens, &input_template, vec![]).0;
   let output_template = AssetRecordTemplate::with_no_asset_tracking(amount,
@@ -239,7 +241,7 @@ pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore, T>(
                                                 .sign(issuer_key_pair)?
                                                 .transaction()?;
 
-  let no_replay_token = rest_client.get_no_replay_token().unwrap();
+  let no_replay_token = rest_client.get_no_replay_token()?;
 
   let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
   let txn = txn_builder.add_operation_issue_asset(issuer_key_pair,
@@ -254,7 +256,10 @@ pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore, T>(
   let status = rest_client.txn_status(&handle)?;
   let txos = match status {
     TxnStatus::Committed((_sid, txos)) => txos,
-    _ => panic!("Failed to fetch UTXO SIDs"),
+    TxnStatus::Rejected(s) =>
+      return Err(PlatformError::SubmissionServerError(s)),
+    TxnStatus::Pending =>
+      return Err(PlatformError::SubmissionServerError("Transaction pending, failed to fetch UTXO SIDs".to_owned())),
   };
   Ok((txos[0].0, blinds.0, blinds.1))
 }
@@ -455,10 +460,8 @@ mod tests {
     // Issue and transfer asset
     let code = AssetTypeCode::gen_random();
     let amount = 1000;
-    let no_replay_token = NoReplayToken::default();
     let res =
       issue_and_transfer_asset(data_dir,
-                               no_replay_token,
                                &issuer_key_pair,
                                &recipient_key_pair,
                                amount,

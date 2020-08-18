@@ -733,7 +733,7 @@ mod tests {
   fn test_query_state_commitment() {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let mut state = LedgerState::test_ledger();
-    let mut tx = Transaction::from_seq_id(state.get_block_commit_count());
+    let mut tx = Transaction::from_token(state.get_no_replay_token());
 
     let token_code1 = AssetTypeCode::from_identical_byte(1);
     let keypair = build_keys(&mut prng);
@@ -786,7 +786,7 @@ mod tests {
   fn test_query_public_key() {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let mut state = LedgerState::test_ledger();
-    let mut tx = Transaction::from_seq_id(state.get_block_commit_count());
+    let mut tx = Transaction::from_token(state.get_no_replay_token());
 
     let orig_key = state.public_key().clone();
 
@@ -839,7 +839,7 @@ mod tests {
   fn test_query_asset() {
     let mut prng = ChaChaRng::from_entropy();
     let mut state = LedgerState::test_ledger();
-    let mut tx = Transaction::from_seq_id(state.get_block_commit_count());
+    let mut tx = Transaction::from_token(state.get_no_replay_token());
 
     let token_code1 = AssetTypeCode::from_identical_byte(1);
     let keypair = build_keys(&mut prng);
