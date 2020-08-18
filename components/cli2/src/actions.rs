@@ -264,13 +264,17 @@ pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<(), CliError> 
 
     // Amounts should not be None
     let amount = txo.record.0.amount.get_amount();
-    assert!(!amount.is_none());
-    let amount = amount.unwrap();
+    let amount = match amount {
+      None => 0_u64, // TODO unlock txo here in case the recipient is the owner of the wallet
+      Some(amt) => amt,
+    };
 
     // Asset type names should not be None
-    let asset_type_name = txo.asset_type;
-    assert!(!asset_type_name.is_none());
-    let asset_type_name = asset_type_name.unwrap().0;
+    let asset_type = txo.asset_type;
+    let asset_type_name = match asset_type {
+      None => String::from("---"), // TODO unlock txo here in case the recipient is the owner of the wallet
+      Some(asset_type) => asset_type.0,
+    };
 
     let pk = txo.record.0.public_key;
     let pk_str = serde_json::to_string(&pk).unwrap();
@@ -376,6 +380,32 @@ pub fn list_txos<S: CliDataStore>(store: &mut S, unspent: bool) -> Result<(), Cl
     if !txo.unspent && unspent {
       continue;
     }
+    println!("TXO `{}`", nick.0);
+    display_txo_entry(1, &txo);
+  }
+  println!("Done.");
+  Ok(())
+}
+
+pub fn list_txos_filter_by_asset_name<S: CliDataStore>(store: &mut S,
+                                                       expected_asset_type_name: String)
+                                                       -> Result<(), CliError> {
+  for (nick, txo) in store.get_cached_txos()?.into_iter() {
+    if !txo.unspent {
+      continue;
+    }
+
+    match txo.asset_type.clone() {
+      None => {
+        continue;
+      }
+      Some(asset_type_name) => {
+        if asset_type_name.0 != expected_asset_type_name {
+          continue;
+        }
+      }
+    }
+
     println!("TXO `{}`", nick.0);
     display_txo_entry(1, &txo);
   }

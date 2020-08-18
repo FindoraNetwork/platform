@@ -610,6 +610,10 @@ enum Actions {
     unspent: bool,
   },
 
+  ListTxosFilterAssetTypeName {
+    expected_asset_type_name: String,
+  },
+
   // // TODO doc
   // ListOwnedUtxos {
   //   /// Whose UTXOs?
@@ -694,6 +698,10 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
     QueryLedgerState { forget_old_key } => query_ledger_state(store, forget_old_key),
 
     ListTxos { unspent } => list_txos(store, unspent),
+
+    ListTxosFilterAssetTypeName { expected_asset_type_name, } => {
+      list_txos_filter_by_asset_name(store, expected_asset_type_name)
+    }
 
     ListTxo { id } => list_txo(store, id),
 

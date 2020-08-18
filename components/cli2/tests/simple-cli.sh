@@ -166,27 +166,30 @@ source "tests/common.sh"
   transfer_assets "5000" "5000" "0" "false"
   [ "$status" -eq 0 ]
 
-  echo "LISTING UTXOs...."
-  run bash -c "$CLI2 list-txos --unspent=true"
-  echo "*************************LISTING UTXOs...."
+  transfer_assets "1500" "3500" "8" "false"
   [ "$status" -eq 0 ]
 
-  transfer_assets "1500" "3500" "8" "false"
+#  echo "********************LISTING UTXOs...."
+#  run bash -c "$CLI2 list-txos-filter-asset-type-name AliceCoin"
+#  echo "*************************END LISTING UTXOs...."
+#  [ "$status" -eq 0 ]
+
+  # Alice makes a confidential transfer to Bob of some YamCoins
+  transfer_assets "1000" "2500" "8" "true" "AliceCoin"
+  debug_lines
   [ "$status" -eq 0 ]
 
   # Now Alice creates another coin
   run bash -c "$MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice YamCoin;"
-  run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset YamCoin 15000"
+  [ "$status" -eq 0 ]
 
-#  # Alice makes a confidential transfer to Bob of some YamCoins
-#  transfer_assets "1500" "2000" "utxo1" "8" "true"
-#  debug_lines
-#  [ "$status" -eq 0 ]
+  run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset YamCoin 15000"
+  [ "$status" -eq 0 ]
 
   run bash -c "$CLI2 balances"
   debug_lines
   [ "$status" -eq  0 ]
-  check_line 1 "(alice,AliceCoin):3500"
+  check_line 1 "(alice,AliceCoin):2500"
   check_line 2 "(alice,YamCoin):15000"
   check_line 3 "(bob,AliceCoin):6500"
 }

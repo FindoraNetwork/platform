@@ -75,12 +75,12 @@ get_transfer_prompt_transfer_asset() {
 
   if [[ "$is_confidential" == "true" ]]
   then
-    ANSWER=y
+    ANSWER="Y"
   else
-    ANSWER=n
+    ANSWER="n"
   fi
 
-  PROMPT_TRANSFER_ASSET="echo -e '$utxo_name \n $amount \n $ANSWER \n $ANSWER \n bob \n Y \n $change_amount \n n \n n \n alice \n Y \n$PASSWORD\n$PASSWORD\n'"
+  PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$ANSWER\n$ANSWER\nbob\nY\n$change_amount\n n \n n \n alice \n Y \n$PASSWORD\n$PASSWORD\n'"
   echo $PROMPT_TRANSFER_ASSET
 }
 
@@ -89,10 +89,18 @@ transfer_assets() {
   change_amount=$2
   utxo_index=$3
   is_confidential=$4
+  asset_type_name=$5
 
   tx_name=$(random_string 16)
   echo "TX_NAME: $tx_name"
-  run bash -c "$CLI2 list-txos --unspent=true"
+
+  # If the asset_type_name is not provided list all the unspent txos
+  if [[ $asset_type_name == "" ]]
+  then
+    run bash -c "$CLI2 list-txos --unspent=true"
+  else
+    run bash -c "$CLI2 list-txos-filter-asset-type-name $asset_type_name"
+  fi
   [ "$status" -eq 0 ]
 
   # TODO how to write this better?
@@ -104,6 +112,7 @@ transfer_assets() {
   run bash -c "$CLI2 initialize-transaction $tx_name"
 
   PROMPT=`get_transfer_prompt_transfer_asset "$amount" "$change_amount" "$utxo_name" "$is_confidential"`
+  echo "The prompt $PROMPT"
 
   run bash -c "$PROMPT | $CLI2 transfer-assets --builder=$tx_name"
   debug_lines
