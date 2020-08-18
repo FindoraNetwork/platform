@@ -610,8 +610,8 @@ enum Actions {
     unspent: bool,
   },
 
-  ListTxosFilterAssetTypeName {
-    expected_asset_type_name: String,
+  ListTxosFilterOwner {
+    owner_name: String,
   },
 
   // // TODO doc
@@ -699,9 +699,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
 
     ListTxos { unspent } => list_txos(store, unspent),
 
-    ListTxosFilterAssetTypeName { expected_asset_type_name, } => {
-      list_txos_filter_by_asset_name(store, expected_asset_type_name)
-    }
+    ListTxosFilterOwner { owner_name } => list_txos_filter_by_owner(store, owner_name),
 
     ListTxo { id } => list_txo(store, id),
 

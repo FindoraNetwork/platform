@@ -72,6 +72,8 @@ get_transfer_prompt_transfer_asset() {
   change_amount=$2
   utxo_name=$3
   is_confidential=$4
+  sender=$5
+  receiver=$6
 
   if [[ "$is_confidential" == "true" ]]
   then
@@ -80,7 +82,7 @@ get_transfer_prompt_transfer_asset() {
     ANSWER="n"
   fi
 
-  PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$ANSWER\n$ANSWER\nbob\nY\n$change_amount\n n \n n \n alice \n Y \n$PASSWORD\n$PASSWORD\n'"
+  PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$ANSWER\n$ANSWER\n$receiver\nY\n$change_amount\n n \n n \n$sender\n Y \n$PASSWORD\n$PASSWORD\n'"
   echo $PROMPT_TRANSFER_ASSET
 }
 
@@ -90,6 +92,8 @@ transfer_assets() {
   utxo_index=$3
   is_confidential=$4
   asset_type_name=$5
+  sender=$6
+  receiver=$7
 
   tx_name=$(random_string 16)
   echo "TX_NAME: $tx_name"
@@ -99,7 +103,7 @@ transfer_assets() {
   then
     run bash -c "$CLI2 list-txos --unspent=true"
   else
-    run bash -c "$CLI2 list-txos-filter-asset-type-name $asset_type_name"
+    run bash -c "$CLI2 list-txos-filter-owner $sender"
   fi
   [ "$status" -eq 0 ]
 
@@ -111,7 +115,7 @@ transfer_assets() {
 
   run bash -c "$CLI2 initialize-transaction $tx_name"
 
-  PROMPT=`get_transfer_prompt_transfer_asset "$amount" "$change_amount" "$utxo_name" "$is_confidential"`
+  PROMPT=`get_transfer_prompt_transfer_asset "$amount" "$change_amount" "$utxo_name" "$is_confidential" "$sender" "$receiver"`
   echo "The prompt $PROMPT"
 
   run bash -c "$PROMPT | $CLI2 transfer-assets --builder=$tx_name"

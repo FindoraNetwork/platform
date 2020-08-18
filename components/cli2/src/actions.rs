@@ -387,20 +387,20 @@ pub fn list_txos<S: CliDataStore>(store: &mut S, unspent: bool) -> Result<(), Cl
   Ok(())
 }
 
-pub fn list_txos_filter_by_asset_name<S: CliDataStore>(store: &mut S,
-                                                       expected_asset_type_name: String)
-                                                       -> Result<(), CliError> {
+pub fn list_txos_filter_by_owner<S: CliDataStore>(store: &mut S,
+                                                  expected_owner_name: String)
+                                                  -> Result<(), CliError> {
   for (nick, txo) in store.get_cached_txos()?.into_iter() {
     if !txo.unspent {
       continue;
     }
 
-    match txo.asset_type.clone() {
+    match txo.owner.clone() {
       None => {
         continue;
       }
-      Some(asset_type_name) => {
-        if asset_type_name.0 != expected_asset_type_name {
+      Some(owner_name) => {
+        if owner_name.0 != expected_owner_name {
           continue;
         }
       }
