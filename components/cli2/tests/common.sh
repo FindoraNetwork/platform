@@ -74,6 +74,7 @@ get_transfer_prompt_transfer_asset() {
   is_confidential=$4
   sender=$5
   receiver=$6
+  receiver_local=$7
 
   if [[ "$is_confidential" == "true" ]]
   then
@@ -82,7 +83,12 @@ get_transfer_prompt_transfer_asset() {
     ANSWER="n"
   fi
 
-  PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$ANSWER\n$ANSWER\n$receiver\nY\n$change_amount\n n \n n \n$sender\n Y \n$PASSWORD\n$PASSWORD\n'"
+  if [[ "$receiver_local" == "true" ]]
+  then
+    PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$ANSWER\n$ANSWER\n$receiver\nY\n$change_amount\n $ANSWER \n $ANSWER \n$sender\n Y \n$PASSWORD\n Y\n$PASSWORD\n$PASSWORD\n Y \n Y\n'"
+  else
+    PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$ANSWER\n$ANSWER\n$receiver\nY\n$change_amount\n n \n n \n$sender\n Y \n$PASSWORD\n$PASSWORD\n'"
+  fi
   echo $PROMPT_TRANSFER_ASSET
 }
 
@@ -94,6 +100,7 @@ transfer_assets() {
   asset_type_name=$5
   sender=$6
   receiver=$7
+  receiver_local=$8 # Boolean: true if teh receiver is a local key
 
   tx_name=$(random_string 16)
   echo "TX_NAME: $tx_name"
@@ -115,7 +122,8 @@ transfer_assets() {
 
   run bash -c "$CLI2 initialize-transaction $tx_name"
 
-  PROMPT=`get_transfer_prompt_transfer_asset "$amount" "$change_amount" "$utxo_name" "$is_confidential" "$sender" "$receiver"`
+  PROMPT=`get_transfer_prompt_transfer_asset "$amount" "$change_amount" "$utxo_name" "$is_confidential" "$sender" "$receiver" "$receiver_local"`
+
   echo "The prompt $PROMPT"
 
   run bash -c "$PROMPT | $CLI2 transfer-assets --builder=$tx_name"
