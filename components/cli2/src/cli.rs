@@ -610,7 +610,7 @@ enum Actions {
     unspent: bool,
   },
 
-  ListTxosFilterOwner {
+  ListUtxosFilterOwner {
     owner_name: String,
   },
 
@@ -699,7 +699,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
 
     ListTxos { unspent } => list_txos(store, unspent),
 
-    ListTxosFilterOwner { owner_name } => list_txos_filter_by_owner(store, owner_name),
+    ListUtxosFilterOwner { owner_name } => list_utxos_filter_by_owner(store, owner_name),
 
     ListTxo { id } => list_txo(store, id),
 

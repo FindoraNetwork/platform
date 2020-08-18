@@ -136,7 +136,7 @@ source "tests/common.sh"
   # Transfer the asset
   amount="5000"
   change_amount="5000"
-  transfer_assets "$amount" "$change_amount" "0" "false" "AliceCoin" "alice" "bob"
+  transfer_assets "$amount" "$change_amount" "0" "false" "AliceCoin" "alice" "bob" "false"
   debug_lines
   [ "$status" -eq 0 ]
 
@@ -164,10 +164,10 @@ source "tests/common.sh"
   run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
   run bash -c "$PASSWORD_PROMPT | $CLI2 key-gen arturo;"
 
-  transfer_assets "5000" "5000" "0" "false" "AliceCoin" "alice" "bob"
+  transfer_assets "5000" "5000" "0" "false" "AliceCoin" "alice" "bob" "false"
   [ "$status" -eq 0 ]
 
-  transfer_assets "1500" "3500" "0" "false" "AliceCoin" "alice" "bob"
+  transfer_assets "1500" "3500" "0" "false" "AliceCoin" "alice" "bob" "false"
   [ "$status" -eq 0 ]
 
 #  echo "********************LISTING UTXOs...."
@@ -177,7 +177,7 @@ source "tests/common.sh"
 #  [ "$status" -eq 0 ]
 
   # Alice makes a confidential transfer to Bob of some AliceCoins
-  transfer_assets "1000" "2500" "0" "true" "AliceCoin" "alice" "bob"
+  transfer_assets "1000" "2500" "0" "true" "AliceCoin" "alice" "bob" "false"
   [ "$status" -eq 0 ]
 
   # Alice makes a confidential transfer to Arturo of some AliceCoins

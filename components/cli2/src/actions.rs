@@ -390,9 +390,9 @@ pub fn list_txos<S: CliDataStore>(store: &mut S, unspent: bool) -> Result<(), Cl
   Ok(())
 }
 
-pub fn list_txos_filter_by_owner<S: CliDataStore>(store: &mut S,
-                                                  expected_owner_name: String)
-                                                  -> Result<(), CliError> {
+pub fn list_utxos_filter_by_owner<S: CliDataStore>(store: &mut S,
+                                                   expected_owner_name: String)
+                                                   -> Result<(), CliError> {
   for (nick, txo) in store.get_cached_txos()?.into_iter() {
     if !txo.unspent {
       continue;

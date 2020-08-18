@@ -100,7 +100,7 @@ transfer_assets() {
   asset_type_name=$5
   sender=$6
   receiver=$7
-  receiver_local=$8 # Boolean: true if teh receiver is a local key
+  receiver_local=$8 # Boolean: true if the receiver's private key is stored locally
 
   tx_name=$(random_string 16)
   echo "TX_NAME: $tx_name"
@@ -110,7 +110,7 @@ transfer_assets() {
   then
     run bash -c "$CLI2 list-txos --unspent=true"
   else
-    run bash -c "$CLI2 list-txos-filter-owner $sender"
+    run bash -c "$CLI2 list-utxos-filter-owner $sender"
   fi
   [ "$status" -eq 0 ]
 
@@ -127,7 +127,6 @@ transfer_assets() {
   echo "The prompt $PROMPT"
 
   run bash -c "$PROMPT | $CLI2 transfer-assets --builder=$tx_name"
-  debug_lines
   [ "$status" -eq 0 ]
 
   run bash -c "$PASSWORD_PROMPT | $CLI2 build-transaction"

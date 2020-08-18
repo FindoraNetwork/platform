@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-set -euo pipefail
+
 source "tests/common.sh"
 
 @test "list-config" {
@@ -144,9 +144,38 @@ source "tests/common.sh"
   check_line 0 "issue_seq_number: 1"
 
 }
-@test "list-txo(s)" {
-  skip "TODO"
-  $CLI2 run list-txo 11111
+
+@test "list-txos" {
+
+  run  bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice; \
+                $MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice AliceCoin;"
+  run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
+  run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
+
+  transfer_assets "5000" "5000" "0" "false" "AliceCoin" "alice" "bob"
+  [ "$status" -eq 0 ]
+
+  run bash -c "$CLI2 list-txos"
+  [ "$status" -eq 0 ]
+  check_line 0 "TXO"
+  check_line 28 "Done."
+
+  run bash -c "$CLI2 list-txos --unspent=true"
+  [ "$status" -eq 0 ]
+  check_line 0 "TXO"
+  check_line 18 "Done." # There are less unspent transactions
+
+  run bash -c "$CLI2 list-utxos-filter-owner alice"
+  debug_lines
+  check_line 0 "TXO"
+  check_line 1 " sid:"
+  check_line 2 " Owned by: "
+  check_line 3 " Record Type: \"NonConfidentialAmount_NonConfidentialAssetType\""
+  check_line 4 " Amount: 5000"
+  check_line 5 " Type:"
+  check_line 8 " Spent? Unspent"
+  check_line 9 " Have owner memo? No"
+  check_line 10 "Done."
 }
 
 @test "status" {
