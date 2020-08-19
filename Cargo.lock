@@ -1042,6 +1042,7 @@ dependencies = [
  "clap",
  "cryptohash",
  "dirs",
+ "itertools 0.9.0",
  "ledger",
  "ledger_api_service",
  "network",

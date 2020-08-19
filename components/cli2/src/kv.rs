@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use rusqlite::{params, Connection};
 use serde::{de::DeserializeOwned, Serialize};
 use snafu::{Backtrace, GenerateBacktrace, OptionExt, ResultExt, Snafu};
@@ -6,7 +7,7 @@ use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 
-use crate::{AssetTypeEntry, AssetTypeName, CliDataStore, CliError, TxnBuilderEntry};
+use crate::{AssetTypeEntry, AssetTypeName, CliDataStore, CliError, PubkeyName, TxnBuilderEntry};
 
 pub mod crypto;
 pub use crypto::MixedPair;
@@ -518,6 +519,24 @@ impl CliDataStore for KVStore {
                  -> Result<BTreeMap<crate::PubkeyName, zei::xfr::sig::XfrPublicKey>, CliError> {
     Ok(self.get_all()?)
   }
+
+  fn get_local_pubkeys(
+    &self)
+    -> Result<BTreeMap<crate::PubkeyName, zei::xfr::sig::XfrPublicKey>, CliError> {
+    let key_pair_names = self.get_keypairs()?;
+    let public_keys =
+      key_pair_names.into_iter()
+                    .map(|kp| (kp.clone().0, self.get_keypair_pubkey(&kp).unwrap().unwrap()))
+                    .collect_vec();
+    let mut res: BTreeMap<crate::PubkeyName, zei::xfr::sig::XfrPublicKey> = BTreeMap::new();
+    for (kp_name, pk) in public_keys {
+      let pk_name = PubkeyName(kp_name);
+      res.insert(pk_name, pk);
+    }
+
+    Ok(res)
+  }
+
   fn get_pubkey(&self,
                 k: &crate::PubkeyName)
                 -> Result<Option<zei::xfr::sig::XfrPublicKey>, CliError> {

@@ -301,6 +301,9 @@ pub trait CliDataStore {
     f: F)
     -> Result<(), CliError>;
   fn get_pubkeys(&self) -> Result<BTreeMap<PubkeyName, XfrPublicKey>, CliError>;
+  fn get_local_pubkeys(
+    &self)
+    -> Result<BTreeMap<crate::PubkeyName, zei::xfr::sig::XfrPublicKey>, CliError>;
   fn get_pubkey(&self, k: &PubkeyName) -> Result<Option<XfrPublicKey>, CliError>;
   fn delete_pubkey(&mut self, k: &PubkeyName) -> Result<Option<XfrPublicKey>, CliError>;
   fn add_key_pair(&mut self, k: &KeypairName, kp: XfrKeyPair) -> Result<(), CliError>;

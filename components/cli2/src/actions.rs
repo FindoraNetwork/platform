@@ -247,7 +247,10 @@ pub fn list_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result<(
 pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
   // Build a map pubkey => pubkey=> name
   let mut pub_key_to_name_map: HashMap<String, String> = HashMap::new();
-  let public_keys = store.get_pubkeys()?;
+
+  // We only loop over local key pairs
+  let public_keys = store.get_local_pubkeys()?;
+
   for pk in public_keys {
     let pk_name = (pk.0).0;
     let pk_str = serde_json::to_string(&pk.1).unwrap();
@@ -262,30 +265,40 @@ pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<(), CliError> 
       continue;
     }
 
-    // Fetch the amounts
+    // Fetch the amount
     let amount = txo.record.0.amount.get_amount();
     let amount = match amount {
       None => match txo.opened_record {
-        None => 0u64, // TODO shall not this trigger an error?
+        None => 0_u64,
         Some(oar) => oar.amount,
       },
       Some(amt) => amt,
     };
 
-    // Asset type names should not be None
+    // Fetch the asset type
     let asset_type = txo.asset_type;
     let asset_type_name = match asset_type {
-      None => String::from("---"), // TODO Shall not this trigger an error?
+      None => return Err(CliError::NoneValue), // This should not happen
       Some(asset_type) => asset_type.0,
     };
 
+    // Compute and store the balances
     let pk = txo.record.0.public_key;
     let pk_str = serde_json::to_string(&pk).unwrap();
-    let pk_name = pub_key_to_name_map.get(&pk_str).unwrap();
+    let pk_name = pub_key_to_name_map.get(&pk_str);
 
-    let the_balance = balances.entry((pk_name.to_string(), asset_type_name.to_string()))
-                              .or_insert(0);
-    *the_balance += amount;
+    match pk_name {
+      Some(pk_name_content) => {
+        let the_balance = balances.entry((pk_name_content.to_string(),
+                                          asset_type_name.to_string()))
+                                  .or_insert(0);
+        *the_balance += amount;
+      }
+      None => {
+        // The public key does not correspond to some locally stored private key
+        continue;
+      }
+    }
   }
 
   // Print the balances

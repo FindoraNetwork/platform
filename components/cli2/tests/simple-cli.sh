@@ -170,12 +170,6 @@ source "tests/common.sh"
   transfer_assets "1500" "3500" "0" "false" "AliceCoin" "alice" "bob" "false"
   [ "$status" -eq 0 ]
 
-#  echo "********************LISTING UTXOs...."
-#  run bash -c "$CLI2 list-txos-filter-owner alice"
-#  debug_lines
-#  echo "*************************END LISTING UTXOs...."
-#  [ "$status" -eq 0 ]
-
   # Alice makes a confidential transfer to Bob of some AliceCoins
   transfer_assets "1000" "2500" "0" "true" "AliceCoin" "alice" "bob" "false"
   [ "$status" -eq 0 ]
@@ -183,10 +177,6 @@ source "tests/common.sh"
   # Alice makes a confidential transfer to Arturo of some AliceCoins
   transfer_assets "1300" "1200" "0" "true" "AliceCoin" "alice" "arturo" "true"
   [ "$status" -eq 0 ]
-
-  # Arturo returns some AliceCoins to Alice using a confidential transfer
-  #  transfer_assets "3000" "3500" "0" "true" "AliceCoin" "bob" "alice"
-  #  [ "$status" -eq 0 ]
 
   # Now Alice creates another coin
   run bash -c "$MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice YamCoin;"
@@ -201,7 +191,7 @@ source "tests/common.sh"
   check_line 1 "(alice,AliceCoin):1200"
   check_line 2 "(alice,YamCoin):15000"
   check_line 3 "(arturo,AliceCoin):1300"
-  check_line 4 "(bob,AliceCoin):6500"
+
 }
 
 
