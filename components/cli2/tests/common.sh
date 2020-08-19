@@ -71,23 +71,17 @@ get_transfer_prompt_transfer_asset() {
   amount=$1
   change_amount=$2
   utxo_name=$3
-  is_confidential=$4
-  sender=$5
-  receiver=$6
-  receiver_local=$7
-
-  if [[ "$is_confidential" == "true" ]]
-  then
-    ANSWER="Y"
-  else
-    ANSWER="n"
-  fi
+  amount_confidential=$4 # Must be 'Y' or 'n'
+  asset_confidential=$5 # Must be 'Y' or 'n'
+  sender=$6
+  receiver=$7
+  receiver_local=$8
 
   if [[ "$receiver_local" == "true" ]]
   then
-    PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$ANSWER\n$ANSWER\n$receiver\nY\n$change_amount\n $ANSWER \n $ANSWER \n$sender\n Y \n$PASSWORD\n Y\n$PASSWORD\n$PASSWORD\n Y \n Y\n'"
+    PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$amount_confidential\n$asset_confidential\n$receiver\nY\n$change_amount\n $amount_confidential \n $asset_confidential \n$sender\n Y \n$PASSWORD\n Y\n$PASSWORD\n$PASSWORD\n Y \n Y\n'"
   else
-    PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$ANSWER\n$ANSWER\n$receiver\nY\n$change_amount\n n \n n \n$sender\n Y \n$PASSWORD\n$PASSWORD\n'"
+    PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$amount_confidential\n$asset_confidential\n$receiver\nY\n$change_amount\n n \n n \n$sender\n Y \n$PASSWORD\n$PASSWORD\n'"
   fi
   echo $PROMPT_TRANSFER_ASSET
 }
@@ -95,8 +89,8 @@ get_transfer_prompt_transfer_asset() {
 transfer_assets() {
   amount=$1
   change_amount=$2
-  utxo_index=$3
-  is_confidential=$4
+  amount_confidential=$3
+  asset_confidential=$4
   asset_type_name=$5
   sender=$6
   receiver=$7
@@ -115,6 +109,7 @@ transfer_assets() {
   [ "$status" -eq 0 ]
 
   # TODO how to write this better?
+  utxo_index="0"
   utxo_name=${lines[$utxo_index]:5:-1}
 
   echo "UTXO_NAME=$utxo_name"
@@ -122,7 +117,7 @@ transfer_assets() {
 
   run bash -c "$CLI2 initialize-transaction $tx_name"
 
-  PROMPT=`get_transfer_prompt_transfer_asset "$amount" "$change_amount" "$utxo_name" "$is_confidential" "$sender" "$receiver" "$receiver_local"`
+  PROMPT=`get_transfer_prompt_transfer_asset "$amount" "$change_amount" "$utxo_name" "$amount_confidential" "$asset_confidential" "$sender" "$receiver" "$receiver_local"`
 
   echo "The prompt $PROMPT"
 

@@ -152,7 +152,7 @@ source "tests/common.sh"
   run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
   run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
 
-  transfer_assets "5000" "5000" "0" "false" "AliceCoin" "alice" "bob"
+  transfer_assets "5000" "5000" "n" "n" "AliceCoin" "alice" "bob"
   [ "$status" -eq 0 ]
 
   run bash -c "$CLI2 list-txos"
