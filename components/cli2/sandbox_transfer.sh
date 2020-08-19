@@ -11,6 +11,3 @@ $CLI2 transfer-assets --builder=tx1
 $CLI2 build-transaction
 $CLI2 submit "tx1"
 $CLI2 list-txos --unspent=true
-
-
-

@@ -1,46 +1,52 @@
 FINDORA_STORE_FILE=${FINDORA_HOME:-${HOME}/.findora}/cli2_data.sqlite
 
-setup() {
-  # Start from a fresh state
-  echo "Deleting $FINDORA_STORE_FILE..."
-  rm -f $FINDORA_STORE_FILE || true
-  bash -c '{ echo; echo; } | $CLI2 setup'
+setup()
+{
+    # Start from a fresh state
+    echo "Deleting $FINDORA_STORE_FILE..."
+    rm -f $FINDORA_STORE_FILE || true
+    bash -c '{ echo; echo; } | $CLI2 setup'
 }
 
-debug_array() {
+debug_array()
+{
 
-  echo "Debugging array..."
-  arr=("$@")
-  COUNTER=0
-  for i in "${arr[@]}"; do
-    echo "[$COUNTER]$i"
-    COUNTER=$((COUNTER + 1))
-  done
+    echo "Debugging array..."
+    arr=("$@")
+    COUNTER=0
+    for i in "${arr[@]}"; do
+        echo "[$COUNTER]$i"
+        COUNTER=$((COUNTER + 1))
+    done
 }
 
-debug_lines() {
-  debug_array "${lines[@]}"
+debug_lines()
+{
+    debug_array "${lines[@]}"
 }
 
-check_line() {
-  line_number="$1"
-  command_str="$2"
-  command_str_length=$(expr length "$command_str")
-  [ "${lines[$line_number]:0:$command_str_length}" = "$command_str" ]
+check_line()
+{
+    line_number="$1"
+    command_str="$2"
+    command_str_length=$(expr length "$command_str")
+    [ "${lines[$line_number]:0:$command_str_length}" = "$command_str" ]
 }
 
 # Similar to check_line above but verifies that either line "i" or line "i+1" has the expected value
 # The reason for that is that sometimes the http req fails the first time and thus an error message is written at line i
-check_line_err() {
-  line_number="$1"
-  next_line_number=$line_number+1
-  command_str="$2"
-  command_str_length=$(expr length "$command_str")
-  [[ ("${lines[$line_number]:0:$command_str_length}" == "$command_str") || ("${lines[$next_line_number]:0:$command_str_length}" == "$command_str") ]]
+check_line_err()
+{
+    line_number="$1"
+    next_line_number=$line_number+1
+    command_str="$2"
+    command_str_length=$(expr length "$command_str")
+    [[ ("${lines[$line_number]:0:$command_str_length}" == "$command_str") || ("${lines[$next_line_number]:0:$command_str_length}" == "$command_str") ]]
 }
 
-random_string() {
-  cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w ${1:-32} | head -n 1
+random_string()
+{
+    cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w ${1:-32} | head -n 1
 }
 
 PASSWORD="password"
@@ -67,70 +73,69 @@ DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS="$PASSWORD_PROMPT | $CLI2 key-gen alice; 
 
 # Enables to create a transfer for some amount from Alice to Bob
 # Note that the change of the transfer is returned to Alice
-get_transfer_prompt_transfer_asset() {
-  amount=$1
-  change_amount=$2
-  utxo_name=$3
-  amount_confidential=$4 # Must be 'Y' or 'n'
-  asset_confidential=$5 # Must be 'Y' or 'n'
-  sender=$6
-  receiver=$7
-  receiver_local=$8
+get_transfer_prompt_transfer_asset()
+{
+    amount=$1
+    change_amount=$2
+    utxo_name=$3
+    amount_confidential=$4 # Must be 'Y' or 'n'
+    asset_confidential=$5 # Must be 'Y' or 'n'
+    sender=$6
+    receiver=$7
+    receiver_local=$8
 
-  if [[ "$receiver_local" == "true" ]]
-  then
-    PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$amount_confidential\n$asset_confidential\n$receiver\nY\n$change_amount\n $amount_confidential \n $asset_confidential \n$sender\n Y \n$PASSWORD\n Y\n$PASSWORD\n$PASSWORD\n Y \n Y\n'"
-  else
-    PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$amount_confidential\n$asset_confidential\n$receiver\nY\n$change_amount\n n \n n \n$sender\n Y \n$PASSWORD\n$PASSWORD\n'"
-  fi
-  echo $PROMPT_TRANSFER_ASSET
+    if [[ "$receiver_local" == "true" ]]; then
+        PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$amount_confidential\n$asset_confidential\n$receiver\nY\n$change_amount\n $amount_confidential \n $asset_confidential \n$sender\n Y \n$PASSWORD\n Y\n$PASSWORD\n$PASSWORD\n Y \n Y\n'"
+    else
+        PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$amount_confidential\n$asset_confidential\n$receiver\nY\n$change_amount\n n \n n \n$sender\n Y \n$PASSWORD\n$PASSWORD\n'"
+    fi
+    echo $PROMPT_TRANSFER_ASSET
 }
 
-transfer_assets() {
-  amount=$1
-  change_amount=$2
-  amount_confidential=$3
-  asset_confidential=$4
-  asset_type_name=$5
-  sender=$6
-  receiver=$7
-  receiver_local=$8 # Boolean: true if the receiver's private key is stored locally
+transfer_assets()
+{
+    amount=$1
+    change_amount=$2
+    amount_confidential=$3
+    asset_confidential=$4
+    asset_type_name=$5
+    sender=$6
+    receiver=$7
+    receiver_local=$8 # Boolean: true if the receiver's private key is stored locally
 
-  tx_name=$(random_string 16)
-  echo "TX_NAME: $tx_name"
+    tx_name=$(random_string 16)
+    echo "TX_NAME: $tx_name"
 
-  # If the asset_type_name is not provided list all the unspent txos
-  if [[ $asset_type_name == "" ]]
-  then
-    run bash -c "$CLI2 list-txos --unspent=true"
-  else
-    run bash -c "$CLI2 list-utxos-filter-owner $sender"
-  fi
-  [ "$status" -eq 0 ]
+    # If the asset_type_name is not provided list all the unspent txos
+    if [[ $asset_type_name == "" ]]; then
+        run bash -c "$CLI2 list-txos --unspent=true"
+    else
+        run bash -c "$CLI2 list-utxos-filter-owner $sender"
+    fi
+    [ "$status" -eq 0 ]
 
-  # TODO how to write this better?
-  utxo_index="0"
-  utxo_name=${lines[$utxo_index]:5:-1}
+    # TODO how to write this better?
+    utxo_index="0"
+    utxo_name=${lines[$utxo_index]:5:-1}
 
-  echo "UTXO_NAME=$utxo_name"
-  [ "$status" -eq 0 ]
+    echo "UTXO_NAME=$utxo_name"
+    [ "$status" -eq 0 ]
 
-  run bash -c "$CLI2 initialize-transaction $tx_name"
+    run bash -c "$CLI2 initialize-transaction $tx_name"
 
-  PROMPT=`get_transfer_prompt_transfer_asset "$amount" "$change_amount" "$utxo_name" "$amount_confidential" "$asset_confidential" "$sender" "$receiver" "$receiver_local"`
+    PROMPT=$(get_transfer_prompt_transfer_asset "$amount" "$change_amount" "$utxo_name" "$amount_confidential" "$asset_confidential" "$sender" "$receiver" "$receiver_local")
 
-  echo "The prompt $PROMPT"
+    echo "The prompt $PROMPT"
 
-  run bash -c "$PROMPT | $CLI2 transfer-assets --builder=$tx_name"
-  [ "$status" -eq 0 ]
+    run bash -c "$PROMPT | $CLI2 transfer-assets --builder=$tx_name"
+    [ "$status" -eq 0 ]
 
-  run bash -c "$PASSWORD_PROMPT | $CLI2 build-transaction"
-  [ "$status" -eq 0 ]
+    run bash -c "$PASSWORD_PROMPT | $CLI2 build-transaction"
+    [ "$status" -eq 0 ]
 
-  TX_ID="${lines[0]:10:-1}"
-  echo $"Transaction ID: $TX_ID"
+    TX_ID="${lines[0]:10:-1}"
+    echo $"Transaction ID: $TX_ID"
 
-  run bash -c "$DOUBLE_CONFIRM_WITH_PROMPT | $CLI2 submit $TX_ID;"
-  [ "$status" -eq 0 ]
+    run bash -c "$DOUBLE_CONFIRM_WITH_PROMPT | $CLI2 submit $TX_ID;"
+    [ "$status" -eq 0 ]
 }
-
