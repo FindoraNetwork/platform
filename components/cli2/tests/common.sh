@@ -82,14 +82,30 @@ get_transfer_prompt_transfer_asset()
     asset_confidential=$5 # Must be 'Y' or 'n'
     sender=$6
     receiver=$7
-    receiver_local=$8
+    receiver_local=$8 # Must be 'Y' or 'n'
+    unlock=$9 # Must be 'Y' or 'n'
 
-    if [[ "$receiver_local" == "true" ]]; then
-        PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$amount_confidential\n$asset_confidential\n$receiver\nY\n$change_amount\n $amount_confidential \n $asset_confidential \n$sender\n Y \n$PASSWORD\n Y\n$PASSWORD\n$PASSWORD\n Y \n Y\n'"
+    if [[ $unlock == "Y" ]]
+    then
+        unlock_prompt_message="Y\n$PASSWORD"
     else
-        PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$amount_confidential\n$asset_confidential\n$receiver\nY\n$change_amount\n $amount_confidential \n $asset_confidential \n$sender\n Y \n$PASSWORD\n$PASSWORD\n'"
+        unlock_prompt_message="n"
+    fi
+
+    COMMON_PROMPT_STR="echo -e '$utxo_name\n$amount\n$amount_confidential\n$asset_confidential\n$receiver\nY\n$change_amount\n$amount_confidential\n$asset_confidential\n$sender\n$unlock_prompt_message\n"
+    if [[ "$receiver_local" == "true" ]]; then
+        PROMPT_TRANSFER_ASSET="${COMMON_PROMPT_STR}$unlock_prompt_message\n$PASSWORD\nY\nY\n'"
+    else
+        PROMPT_TRANSFER_ASSET="${COMMON_PROMPT_STR}$PASSWORD\nY\nY\n'"
     fi
     echo $PROMPT_TRANSFER_ASSET
+}
+
+get_utxo_name()
+{
+    utxo_index="0"
+    utxo_name=${lines[$utxo_index]:5:-1}
+    echo $utxo_name
 }
 
 transfer_assets()
@@ -102,6 +118,7 @@ transfer_assets()
     sender=$6
     receiver=$7
     receiver_local=$8 # Boolean: true if the receiver's private key is stored locally
+    unlock=$9
 
     tx_name=$(random_string 16)
     echo "TX_NAME: $tx_name"
@@ -114,20 +131,28 @@ transfer_assets()
     fi
     [ "$status" -eq 0 ]
 
-    # TODO how to write this better?
-    utxo_index="0"
-    utxo_name=${lines[$utxo_index]:5:-1}
+    utxo_name=$(get_utxo_name)
 
     echo "UTXO_NAME=$utxo_name"
     [ "$status" -eq 0 ]
 
     run bash -c "$CLI2 initialize-transaction $tx_name"
 
-    PROMPT=$(get_transfer_prompt_transfer_asset "$amount" "$change_amount" "$utxo_name" "$amount_confidential" "$asset_confidential" "$sender" "$receiver" "$receiver_local")
+    PROMPT=$(get_transfer_prompt_transfer_asset \
+                "$amount" \
+                "$change_amount" \
+                "$utxo_name" \
+                "$amount_confidential" \
+                "$asset_confidential" \
+                "$sender" \
+                "$receiver" \
+                "$receiver_local" \
+                 "$unlock")
 
     echo "The prompt $PROMPT"
 
     run bash -c "$PROMPT | $CLI2 transfer-assets --builder=$tx_name"
+    debug_lines
     [ "$status" -eq 0 ]
 
     run bash -c "$PASSWORD_PROMPT | $CLI2 build-transaction"

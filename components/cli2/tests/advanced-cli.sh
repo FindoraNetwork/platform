@@ -158,14 +158,15 @@ source "tests/common.sh"
   run bash -c "$CLI2 list-txos"
   [ "$status" -eq 0 ]
   check_line 0 "TXO"
-  check_line 28 "Done."
+  check_line 26 "Done."
 
   run bash -c "$CLI2 list-txos --unspent=true"
   [ "$status" -eq 0 ]
   check_line 0 "TXO"
-  check_line 18 "Done." # There are less unspent transactions
+  check_line 16 "Done." # There are less unspent transactions
 
   run bash -c "$CLI2 list-utxos-filter-owner alice"
+  [ "$status" -eq 0 ]
   debug_lines
   check_line 0 "TXO"
   check_line 1 " sid:"
@@ -173,9 +174,9 @@ source "tests/common.sh"
   check_line 3 " Record Type: \"NonConfidentialAmount_NonConfidentialAssetType\""
   check_line 4 " Amount: 5000"
   check_line 5 " Type:"
-  check_line 8 " Spent? Unspent"
-  check_line 9 " Have owner memo? No"
-  check_line 10 "Done."
+  check_line 6 " Spent? Unspent"
+  check_line 7 " Have owner memo? No"
+  check_line 8 "Done."
 }
 
 @test "status" {
