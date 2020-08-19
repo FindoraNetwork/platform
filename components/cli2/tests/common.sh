@@ -87,7 +87,7 @@ get_transfer_prompt_transfer_asset()
     if [[ "$receiver_local" == "true" ]]; then
         PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$amount_confidential\n$asset_confidential\n$receiver\nY\n$change_amount\n $amount_confidential \n $asset_confidential \n$sender\n Y \n$PASSWORD\n Y\n$PASSWORD\n$PASSWORD\n Y \n Y\n'"
     else
-        PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$amount_confidential\n$asset_confidential\n$receiver\nY\n$change_amount\n n \n n \n$sender\n Y \n$PASSWORD\n$PASSWORD\n'"
+        PROMPT_TRANSFER_ASSET="echo -e '$utxo_name\n$amount\n$amount_confidential\n$asset_confidential\n$receiver\nY\n$change_amount\n $amount_confidential \n $asset_confidential \n$sender\n Y \n$PASSWORD\n$PASSWORD\n'"
     fi
     echo $PROMPT_TRANSFER_ASSET
 }

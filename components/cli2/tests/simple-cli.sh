@@ -121,39 +121,6 @@ source "tests/common.sh"
 
 }
 
-# shellcheck disable=SC2030
-@test "transfer-asset" {
-  # Alice key gen and AliceCoin asset definition
-  run  bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice; \
-              $MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice AliceCoin;"
-  # Issue the asset
-  run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
-  [ "$status" -eq 0 ]
-
-  # Load Bob's public key
-  run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
-
-  # Transfer the asset
-  amount="5000"
-  change_amount="5000"
-  transfer_assets "$amount" "$change_amount" "n" "n" "AliceCoin" "alice" "bob" "false"
-  debug_lines
-  [ "$status" -eq 0 ]
-
-  check_line 5 "  TransferAssets:"
-  check_line 10 "    Record Type: \"NonConfidentialAmount_NonConfidentialAssetType\""
-  check_line 11 "    Amount: 10000"
-  check_line 22 "    Amount: $amount"
-  check_line 29 "    Record Type: \"NonConfidentialAmount_NonConfidentialAssetType\""
-  check_line_err 60 "Committed!"
-
-  run bash -c "$CLI2 list-txos --unspent=true"
-  [ "$status" -eq 0 ]
-  debug_lines
-  check_line 2 " Owned by: \"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\" (bob)"
-  check_line 4 " Amount: 5000"
-}
-
 @test "balances" {
 
   # First we let Alice define and issue some asset AliceCoin
