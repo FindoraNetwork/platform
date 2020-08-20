@@ -476,17 +476,20 @@ enum Actions {
     amount: u64,
   },
 
-  /// Display the amounts available for each asset types and key pair
+  /// Display the amounts available for each asset types and local key pair
   Balances {},
 
   //////////////////// Advanced API  ///////////////////////////////////////////////////////////////
   /// List all the asset types
   ListAssetTypes {},
 
+  /// Display the information about a specific asset type
   ListAssetType {
     /// Asset type nickname
     nick: String,
   },
+
+  /// Fetch information about an asset type from the blockchain
   QueryAssetType {
     /// Replace the existing asset type entry (if it exists)
     #[structopt(short, long)]
@@ -497,11 +500,6 @@ enum Actions {
     code: String,
   },
 
-  //   /// Query the asset issuance sequence number
-  //   QueryAssetIssuanceNum {
-  //     /// Asset type nickname
-  //     nick: String,
-  //   },
   /// Initialize a transaction builder
   InitializeTransaction {
     /// Optional transaction name
@@ -560,21 +558,21 @@ enum Actions {
     nick: String,
   },
 
-  /// Show the status of a submitted transaction
+  /// Fetch the status of a transaction from the blockchain
   Status {
     // TODO: how are we indexing in-flight transactions?
     /// Which txn?
     txn: String,
   },
 
-  // TODO doc
+  /// Fetch the status of a transaction from the blockchain and update the local store accordingly
   StatusCheck {
     // TODO: how are we indexing in-flight transactions?
     /// Which txn?
     txn: String,
   },
 
-  // TODO doc
+  /// Display information about a specific transaction output
   ListTxo {
     /// nickname
     id: String,
@@ -601,23 +599,17 @@ enum Actions {
     id: String,
   },
 
-  // TODO doc
+  /// Display the locally stored transaction outputs according to some filter
   ListTxos {
     /// Only unspent?
     #[structopt(short, long)]
     unspent: bool,
-
+    /// Filter by owner id
     #[structopt(short, long)]
     id: Option<String>,
   },
 
-  // // TODO doc
-  // ListOwnedUtxos {
-  //   /// Whose UTXOs?
-  //   id: String,
-  // },
-
-  // TODO doc
+  /// Fetch information of a transaction output from the blockchain
   QueryTxo {
     /// Local nickname?
     nick: String,
@@ -625,6 +617,7 @@ enum Actions {
     sid: Option<u64>,
   },
 
+  /// Fetch information of all locally stored transaction outputs from the blockchain
   QueryTxos {},
 }
 
@@ -705,6 +698,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
     LoadOwnerMemo { overwrite, id } => load_owner_memo(store, overwrite, id),
 
     QueryTxo { nick, sid } => query_txo(store, nick, sid),
+
     QueryTxos {} => query_txos(store),
 
     // ListTxnBuilders {} => list_txn_builders(store),
