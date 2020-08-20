@@ -141,7 +141,7 @@ Done caching TXOs.
 ```
 
 A transaction containing the description of the new asset has been created and submitted
-to the Findora blockchain. Now Alice can issue some *AliceCoin*.
+to the testnet blockchain. Now Alice can issue some *AliceCoin*.
 
 ```bash
 > findora simple-issue-asset AliceCoin 10000
@@ -220,8 +220,9 @@ Other TXOs:
  bibBlifyuN:utxo0 (SID 1854): 10000 (PUBLIC) of `AliceCoin` (PUBLIC) owned by `alice`
 Which input would you like?: 
 ```
-You are asked to pick a transaction output. In this case there is only one available and its identifier
-is **bibBlifyuN:utxo0**. So we copy this identifier and press enter.
+We are asked to pick a transaction output. 
+In this case there is only one available and its identifier is **bibBlifyuN:utxo0**. 
+So we copy this identifier and press enter.
 
 
 ```bash
@@ -243,8 +244,9 @@ We then tell the command line to pick 6000 coins for the transfer to Bob.
 Note that we chose a non-confidential transfer where the amount and the asset type (AliceCoin)
 will be visible by all on the blockchain.
 
-Next we are asked if we want to spend another output. Indeed if Alice does not send
-the change (1000-6000=4000) back to her address, she will loose 4000 *AliceCoin*!
+Next we are asked if we want to spend another output. 
+Indeed if Alice does not send the change (1000-6000=4000) back to her address, 
+she will loose thos 4000 *AliceCoin*!
 So we specify that we want to send the remaining *AliceCoin* back to Alice.
 
 ```bash
@@ -312,8 +314,8 @@ Adding Transfer:
 Successfully added to `1`
 ```
 
-The transaction has now all the information we need. Let us
-build it and submit it to the network.
+The transaction has now all the information we need. 
+Let us build it and submit it to the network.
 
 ```bash
 > findora build-transaction  
