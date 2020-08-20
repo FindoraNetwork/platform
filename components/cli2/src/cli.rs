@@ -606,10 +606,9 @@ enum Actions {
     /// Only unspent?
     #[structopt(short, long)]
     unspent: bool,
-  },
 
-  ListUtxosFilterOwner {
-    owner_name: String,
+    #[structopt(short, long)]
+    id: Option<String>,
   },
 
   // // TODO doc
@@ -695,9 +694,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
     //////////////////// Advanced API  /////////////////////////////////////////////////////////////
     QueryLedgerState { forget_old_key } => query_ledger_state(store, forget_old_key),
 
-    ListTxos { unspent } => list_txos(store, unspent),
-
-    ListUtxosFilterOwner { owner_name } => list_utxos_filter_by_owner(store, owner_name),
+    ListTxos { unspent, id } => list_txos(store, unspent, id),
 
     ListTxo { id } => list_txo(store, id),
 

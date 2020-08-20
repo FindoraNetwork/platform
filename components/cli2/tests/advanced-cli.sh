@@ -165,9 +165,8 @@ source "tests/common.sh"
   check_line 0 "TXO"
   check_line 16 "Done." # There are less unspent transactions
 
-  run bash -c "$CLI2 list-utxos-filter-owner alice"
+  run bash -c "$CLI2 list-txos --id=alice --unspent=true"
   [ "$status" -eq 0 ]
-  debug_lines
   check_line 0 "TXO"
   check_line 1 " sid:"
   check_line 2 " Owned by: "

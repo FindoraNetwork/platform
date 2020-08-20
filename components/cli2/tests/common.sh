@@ -117,7 +117,7 @@ transfer_assets()
     asset_type_name=$5
     sender=$6
     receiver=$7
-    receiver_local=$8 # Boolean: true if the receiver's private key is stored locally
+    receiver_local=$8
     unlock=$9
 
     tx_name=$(random_string 16)
@@ -127,7 +127,7 @@ transfer_assets()
     if [[ $asset_type_name == "" ]]; then
         run bash -c "$CLI2 list-txos --unspent=true"
     else
-        run bash -c "$CLI2 list-utxos-filter-owner $sender"
+        run bash -c "$CLI2 list-txos --unspent=true --id=$sender"
     fi
     [ "$status" -eq 0 ]
 

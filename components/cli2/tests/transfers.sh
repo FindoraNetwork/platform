@@ -49,7 +49,6 @@ check_transfer()
               $MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice AliceCoin;"
     # Issue the asset
     run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
-    debug_lines
     [ "$status" -eq 0 ]
 
     # Load Bob's public key
@@ -59,7 +58,6 @@ check_transfer()
     amount="5000"
     change_amount="5000"
     transfer_assets "$amount" "$change_amount" "$is_amount_confidential" "$is_asset_confidential" "AliceCoin" "alice" "bob" "false" "Y"
-    debug_lines
     [ "$status" -eq 0 ]
 
     check_line 5 "  TransferAssets:"
@@ -75,6 +73,7 @@ check_transfer()
     check_line_err 60 "Committed!"
 
     run bash -c "$CLI2 list-txos --unspent=true"
+    debug_lines
     [ "$status" -eq 0 ]
     debug_lines
     check_line 2 " Owned by: \"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\" (bob)"

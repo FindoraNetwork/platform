@@ -391,33 +391,24 @@ fn query_asset_issuance_num<S: CliDataStore>(store: &mut S, nick: String) -> Res
   Ok(resp)
 }
 
-pub fn list_txos<S: CliDataStore>(store: &mut S, unspent: bool) -> Result<(), CliError> {
+pub fn list_txos<S: CliDataStore>(store: &mut S,
+                                  unspent: bool,
+                                  id: Option<String>)
+                                  -> Result<(), CliError> {
   for (nick, txo) in store.get_cached_txos()?.into_iter() {
     if !txo.unspent && unspent {
       continue;
     }
-    println!("TXO `{}`", nick.0);
-    display_txo_entry(1, &txo);
-  }
-  println!("Done.");
-  Ok(())
-}
 
-pub fn list_utxos_filter_by_owner<S: CliDataStore>(store: &mut S,
-                                                   expected_owner_name: String)
-                                                   -> Result<(), CliError> {
-  for (nick, txo) in store.get_cached_txos()?.into_iter() {
-    if !txo.unspent {
-      continue;
-    }
-
-    match txo.owner.clone() {
-      None => {
-        continue;
-      }
-      Some(owner_name) => {
-        if owner_name.0 != expected_owner_name {
+    if id.clone().is_some() {
+      match txo.owner.clone() {
+        None => {
           continue;
+        }
+        Some(owner_name) => {
+          if owner_name.0 != id.clone().unwrap() {
+            continue;
+          }
         }
       }
     }
