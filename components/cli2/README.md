@@ -27,6 +27,7 @@ In order to build the executable we recommend to use [nix](https://nixos.org/dow
 ```
 
 * Run the command
+
 The executable can be found at `<some path>/findora/platform/target/debug/findora`.
 If you are inside the nix-shell simply type `findora`:
 
@@ -58,7 +59,7 @@ Now the executable is installed, let us see how to use the command line with a s
 First we will create two key pairs, one for Alice and one for Bob.
 Then Alice will define and issue a token called *AliceCoin*.
 Finally Alice will tranfer 1000 *AliceCoin* to Bob.
-Note that all the transaction will be stored on the testnet chain.
+Note that all the transactions will be stored on the testnet chain.
 
 * Key generation
 
@@ -74,7 +75,7 @@ Enter password again:
 New key pair added for `alice`
 ```
 
-Note that the first time you run the command line a configuration file
+Note that the first time one runs the command line a configuration file
 is created. By default the url of the testnet is provided.
 
 It is Bob's turn now to get his keys.
