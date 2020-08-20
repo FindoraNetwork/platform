@@ -49,6 +49,7 @@ stdenv.mkDerivation {
   shellHook = ''
     export LOCAL=`pwd`;
     export CLI2="$LOCAL/target/debug/findora";
+    export PATH="$PATH:$LOCAL/target/debug/";
   '';
 }
 
