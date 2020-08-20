@@ -11,7 +11,7 @@ use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::Serialize;
 use sparse_merkle_tree::Key;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use utils::{HasInvariants, HashOf, SignatureOf};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::verify_xfr_body;
@@ -563,7 +563,7 @@ pub struct BlockEffect {
   // All Transaction objects validated in this block
   pub txns: Vec<Transaction>,
   // Digests of Operation paired with per-transaction seq id (block commit count)
-  pub opseqs: BTreeMap<BitDigest, u64>,
+  pub opseqs: HashMap<BitDigest, u64>,
   // Identifiers within this block for each transaction
   // (currently just an index into `txns`)
   pub temp_sids: Vec<TxnTempSID>,

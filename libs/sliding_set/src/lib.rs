@@ -1,11 +1,11 @@
 #![feature(btree_drain_filter)]
 use cryptohash::sha256::Digest;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct SlidingSet {
-  map: BTreeMap<Digest, u64>,
+  map: HashMap<Digest, u64>,
   min: u64,
   current: u64,
   width: u64,
@@ -17,7 +17,7 @@ impl SlidingSet {
     SlidingSet { min,
                  current,
                  width,
-                 map: BTreeMap::new() }
+                 map: HashMap::new() }
   }
 }
 
@@ -40,10 +40,8 @@ impl SlidingSet {
     self.current += 1;
     let current = self.current;
     let width = self.width;
-    if self.current == self.min + self.width {
-      let _dicarded: BTreeMap<_, _> = self.map
-                                          .drain_filter(|_k, v| *v + width < current + 1)
-                                          .collect();
+    if self.current == self.min + width {
+      self.map.retain(|_k, v| *v + width >= current + 1);
       self.min += 1
     }
   }
