@@ -75,8 +75,10 @@ fn hmac_pair(clear: &[u8], encrypted: &[u8], nonce: &[u8], key: &Key) -> [u8; 64
 #[derive(Serialize, Deserialize)]
 pub struct MixedPair<Clear, Encrypted> {
   clear: String,
+  #[serde(skip)]
   clear_phantom: PhantomData<Clear>,
   encrypted: Vec<u8>,
+  #[serde(skip)]
   encrypted_phantom: PhantomData<Encrypted>,
   chacha_nonce: [u8; 12],
   salt: [u8; 32],
