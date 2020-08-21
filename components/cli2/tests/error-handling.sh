@@ -19,7 +19,6 @@ source "tests/common.sh"
                 echo y | $CLI2 query-ledger-state; \
                 $CLI2 initialize-transaction 0; \
                 $MEMO_ALICE_WITH_PROMPT | $CLI2 define-asset $wrong_tx_id alice TheBestAliceCoinsOnEarthV2"
-    debug_lines
     [ "$status" -eq 255 ]
     check_line 12 "Transaction builder \`1\` not found."
 
@@ -28,16 +27,22 @@ source "tests/common.sh"
                 echo y | $CLI2 query-ledger-state; \
                 $CLI2 initialize-transaction 0; \
                 $MEMO_ALICE_WITH_PROMPT | $CLI2 define-asset 0 $wrong_keypair_id TheBestAliceCoinsOnEarthV2"
-    #[ "$status" -eq 255 ] #TODO why does this not work?
-    check_line 10  "Enter password for arturo: Error: KV: Attempted to call KVStore::with on a key that doesn't exist: arturo"
+    check_line 10 "Enter password for arturo: Password was incorrect, please try again."
+    check_line 11 "Enter password for arturo: Password was incorrect, please try again."
+    check_line 12 "Enter password for arturo: Error: Failed to read password"
+    check_line 13 "   Caused by: The provided password was incorrect."
 }
 
 @test "delete-keypair" {
     run bash -c "$PASSWORD_PROMPT |$CLI2 key-gen alice"
     not_existing_user="arturo"
     run bash -c "$PASSWORD_PROMPT | $CLI2 delete-keypair $not_existing_user"
+    debug_lines
     [ "$status" -eq 1 ]
-    check_line 0 "Enter password for arturo: Error: KV: Attempted to call KVStore::with on a key that doesn't exist: arturo"
+    check_line 0 "Enter password for arturo: Password was incorrect, please try again."
+    check_line 1 "Enter password for arturo: Password was incorrect, please try again."
+    check_line 2 "Enter password for arturo: Error: Failed to read password"
+    check_line 3 "   Caused by: The provided password was incorrect."
 }
 
 @test "delete-public-key" {
@@ -198,7 +203,11 @@ source "tests/common.sh"
 
     # Bob's key has not been created
     run bash -c "$MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset bob BobCoin;"
-    check_line 10 "Enter password for bob: Error: KV: Attempted to call KVStore::with on a key that doesn't exist: bob"
+    debug_lines
+    check_line 10 "Enter password for bob: Password was incorrect, please try again."
+    check_line 11 "Enter password for bob: Password was incorrect, please try again."
+    check_line 12 "Enter password for bob: Error: Failed to read password"
+    check_line 13 "   Caused by: The provided password was incorrect."
 }
 
 @test "simple-issue-asset" {
