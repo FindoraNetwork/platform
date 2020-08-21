@@ -181,7 +181,7 @@ pub enum CliError {
   },
 
   #[snafu(display("Cannot handle None value"))]
-  NoneValue,
+  NoneValue { backtrace: Backtrace },
 
   #[snafu(display("Platform error"))]
   #[snafu(context(false))]

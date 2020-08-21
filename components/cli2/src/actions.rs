@@ -3,15 +3,15 @@ use crate::display_functions::{
 };
 use crate::{
   print_conf, prompt_for_config, serialize_or_str, AssetTypeEntry, AssetTypeName, CliDataStore,
-  CliError, FreshNamer, KeypairName, LedgerStateCommitment, NewPublicKeyFetch, OpMetadata,
-  PubkeyName, TxnBuilderName, TxnMetadata, TxnName, TxoCacheEntry, TxoName,
+  CliError, FreshNamer, KeypairName, LedgerStateCommitment, NewPublicKeyFetch, NoneValue,
+  OpMetadata, PubkeyName, TxnBuilderName, TxnMetadata, TxnName, TxoCacheEntry, TxoName,
 };
 use std::collections::HashMap;
 
 use ledger::data_model::*;
 use ledger_api_service::LedgerAccessRoutes;
 use promptly::{prompt, prompt_default, prompt_opt};
-use snafu::ResultExt;
+use snafu::{Backtrace, GenerateBacktrace, OptionExt, ResultExt};
 use std::collections::BTreeMap;
 use std::process::exit;
 use submission_api::SubmissionRoutes;
@@ -297,7 +297,7 @@ pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<(), CliError> 
     // Fetch the asset type
     let asset_type = txo.asset_type;
     let asset_type_name = match asset_type {
-      None => return Err(CliError::NoneValue), // This should not happen
+      None => return Err(CliError::NoneValue { backtrace: Backtrace::generate() }), // This should not happen
       Some(asset_type) => asset_type.0,
     };
 
@@ -617,12 +617,7 @@ pub fn query_txo<S: CliDataStore>(store: &mut S,
     ent.owner_memo = orig_ent.owner_memo;
     ent.opened_record = orig_ent.opened_record;
     if let Some(orig_state) = orig_ent.ledger_state {
-      assert!((orig_state.0).1
-              <= (ent.ledger_state
-                     .as_ref()
-                     .ok_or_else(|| CliError::NoneValue)?
-                     .0)
-                        .1);
+      assert!((orig_state.0).1 <= (ent.ledger_state.as_ref().context(NoneValue)?.0).1);
     }
     ent.owner = orig_ent.owner;
     ent.asset_type = orig_ent.asset_type;
@@ -783,9 +778,7 @@ pub fn prepare_transaction<S: CliDataStore>(store: &mut S, nick: String) -> Resu
 
 pub fn list_txn<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
   // Fetch the name of the current transaction
-  let nick = store.get_config()?
-                  .active_txn
-                  .ok_or_else(|| CliError::NoneValue)?;
+  let nick = store.get_config()?.active_txn.context(NoneValue)?;
 
   let builder = match store.get_txn_builder(&TxnBuilderName(nick.0.clone()))? {
     None => {
@@ -903,8 +896,7 @@ pub fn update_if_committed<S: CliDataStore>(store: &mut S,
       println!("Updating, status is {:?}", &metadata.status);
       for nick in metadata.spent_txos.iter() {
         println!("Spending TXO `{}`...", nick.0);
-        let mut txo = store.get_cached_txo(nick)?
-                           .ok_or_else(|| CliError::NoneValue)?;
+        let mut txo = store.get_cached_txo(nick)?.context(NoneValue)?;
         assert!(txo.unspent);
         txo.unspent = false;
         store.cache_txo(nick, txo)?;
@@ -1243,22 +1235,19 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
       for (k, v) in txn_utxos.iter() {
         println!(" {}: {} ({}) of `{}` ({}) owned by `{}`",
                  k,
-                 v.opened_record
-                  .as_ref()
-                  .ok_or_else(|| CliError::NoneValue)?
-                  .amount,
+                 v.opened_record.as_ref().context(NoneValue)?.amount,
                  if v.record.0.amount.is_confidential() {
                    "SECRET"
                  } else {
                    "PUBLIC"
                  },
-                 v.asset_type.as_ref().ok_or_else(|| CliError::NoneValue)?.0,
+                 v.asset_type.as_ref().context(NoneValue)?.0,
                  if v.record.0.asset_type.is_confidential() {
                    "SECRET"
                  } else {
                    "PUBLIC"
                  },
-                 v.owner.as_ref().ok_or_else(|| CliError::NoneValue)?.0);
+                 v.owner.as_ref().context(NoneValue)?.0);
       }
 
       println!("Other TXOs:");
@@ -1302,65 +1291,47 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
           let i = builder.new_txos
                          .iter()
                          .position(|(x, _)| x == &inp)
-                         .ok_or_else(|| CliError::NoneValue)?;
+                         .context(NoneValue)?;
           builder.new_txos[i].1.unspent = false;
           (TxoRef::Relative((builder.new_txos.len() - 1 - i) as u64),
-           txn_utxos.remove(&inp).ok_or_else(|| CliError::NoneValue)?)
+           txn_utxos.remove(&inp).context(NoneValue)?)
         } else {
           let inp_k = TxoName(inp.clone());
-          let (ent, sid, _, _, _) = utxos.remove(&inp_k).ok_or_else(|| CliError::NoneValue)?;
+          let (ent, sid, _, _, _) = utxos.remove(&inp_k).context(NoneValue)?;
           builder.spent_txos.push(inp_k);
           (TxoRef::Absolute(sid), ent)
         };
 
         println!(" Adding {}: {} ({}) of `{}` ({}) owned by `{}`",
                  inp,
-                 ent.opened_record
-                    .as_ref()
-                    .ok_or_else(|| CliError::NoneValue)?
-                    .amount,
+                 ent.opened_record.as_ref().context(NoneValue)?.amount,
                  if ent.record.0.amount.is_confidential() {
                    "SECRET"
                  } else {
                    "PUBLIC"
                  },
-                 ent.asset_type
-                    .as_ref()
-                    .ok_or_else(|| CliError::NoneValue)?
-                    .0,
+                 ent.asset_type.as_ref().context(NoneValue)?.0,
                  if ent.record.0.asset_type.is_confidential() {
                    "SECRET"
                  } else {
                    "PUBLIC"
                  },
-                 ent.owner.as_ref().ok_or_else(|| CliError::NoneValue)?.0);
+                 ent.owner.as_ref().context(NoneValue)?.0);
 
-        let tp = ent.asset_type
-                    .as_ref()
-                    .ok_or_else(|| CliError::NoneValue)?
-                    .0
-                    .clone();
-        let amt = ent.opened_record
-                     .as_ref()
-                     .ok_or_else(|| CliError::NoneValue)?
-                     .amount;
+        let tp = ent.asset_type.as_ref().context(NoneValue)?.0.clone();
+        let amt = ent.opened_record.as_ref().context(NoneValue)?.amount;
 
         *inp_amounts.entry(tp.clone()).or_insert(0) += amt;
         asset_types.insert(tp,
-                           (ent.asset_type.clone().ok_or_else(|| CliError::NoneValue)?,
-                            ent.opened_record
-                               .as_ref()
-                               .ok_or_else(|| CliError::NoneValue)?
-                               .asset_type));
+                           (ent.asset_type.clone().context(NoneValue)?,
+                            ent.opened_record.as_ref().context(NoneValue)?.asset_type));
 
         trn_inps.push((inp.clone(), ent.clone()));
 
-        trn_signers.push((ent.owner.clone().ok_or_else(|| CliError::NoneValue)?,
-                          inp.clone(),
-                          ent.clone()));
+        trn_signers.push((ent.owner.clone().context(NoneValue)?, inp.clone(), ent.clone()));
 
         trn_builder.add_input(txo_ref,
-                              ent.opened_record.ok_or_else(|| CliError::NoneValue)?,
+                              ent.opened_record.context(NoneValue)?,
                               /* TODO: tracing policies */ None,
                               /* TODO: identity */ None,
                               amt)?;
@@ -1384,11 +1355,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
       }
 
       if let Some(inp) = if inp_amounts.len() == 1 {
-        Some(inp_amounts.iter()
-                        .next()
-                        .ok_or_else(|| CliError::NoneValue)?
-                        .0
-                        .clone())
+        Some(inp_amounts.iter().next().context(NoneValue)?.0.clone())
       } else {
         prompt_opt::<String, _>("Which type of output?")?
       } {
@@ -1423,14 +1390,11 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
         };
 
         let art = AssetRecordType::from_booleans(conf_amt, conf_tp);
-        let template = AssetRecordTemplate::with_no_asset_tracking(amt,
-                                                                   asset_types.get(&inp)
-                                                                              .ok_or_else(|| {
-                                                                                CliError::NoneValue
-                                                                              })?
-                                                                              .1,
-                                                                   art,
-                                                                   pubkey);
+        let template =
+          AssetRecordTemplate::with_no_asset_tracking(amt,
+                                                      asset_types.get(&inp).context(NoneValue)?.1,
+                                                      art,
+                                                      pubkey);
 
         trn_builder.add_output(&template, /* TODO: tracing */ None,
                                /* TODO: identity */ None, /* TODO: credential */ None)?;
@@ -1507,25 +1471,19 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
     println!("Signing for input #{} ({}): {} ({}) of `{}` ({}) owned by `{}`",
              ix + 1,
              inp,
-             ent.opened_record
-                .as_ref()
-                .ok_or_else(|| CliError::NoneValue)?
-                .amount,
+             ent.opened_record.as_ref().context(NoneValue)?.amount,
              if ent.record.0.amount.is_confidential() {
                "SECRET"
              } else {
                "PUBLIC"
              },
-             ent.asset_type
-                .as_ref()
-                .ok_or_else(|| CliError::NoneValue)?
-                .0,
+             ent.asset_type.as_ref().context(NoneValue)?.0,
              if ent.record.0.asset_type.is_confidential() {
                "SECRET"
              } else {
                "PUBLIC"
              },
-             ent.owner.as_ref().ok_or_else(|| CliError::NoneValue)?.0);
+             ent.owner.as_ref().context(NoneValue)?.0);
 
     if sig_keys.contains(&s.0) {
       println!("`{}` has already signed.", s.0);
