@@ -130,7 +130,8 @@ source "tests/common.sh"
 }
 
 @test "list-txn" {
-     skip "Todo when bug #386 is fixed"
+     run bash -c "$CLI2 list-txn"
+     check_line 0 "Error: No transaction currently in progress"
 }
 
 @test "list-txo" {
@@ -143,7 +144,7 @@ source "tests/common.sh"
 }
 
 @test "load-keypair" {
-    skip "Todo when bug #386 is fixed"
+    skip "Todo when bug #387 is fixed"
 }
 
 @test "load-owner-memo" {
