@@ -182,6 +182,8 @@ pub enum CliError {
 
   #[snafu(display("Cannot handle None value"))]
   NoneValue { backtrace: Backtrace },
+  #[snafu(display("No transaction currently in progress"))]
+  NoTransactionInProgress,
 
   #[snafu(display("Platform error"))]
   #[snafu(context(false))]

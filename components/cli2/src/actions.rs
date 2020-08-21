@@ -3,8 +3,9 @@ use crate::display_functions::{
 };
 use crate::{
   print_conf, prompt_for_config, serialize_or_str, AssetTypeEntry, AssetTypeName, CliDataStore,
-  CliError, FreshNamer, KeypairName, LedgerStateCommitment, NewPublicKeyFetch, NoneValue,
-  OpMetadata, PubkeyName, TxnBuilderName, TxnMetadata, TxnName, TxoCacheEntry, TxoName,
+  CliError, FreshNamer, KeypairName, LedgerStateCommitment, NewPublicKeyFetch,
+  NoTransactionInProgress, NoneValue, OpMetadata, PubkeyName, TxnBuilderName, TxnMetadata, TxnName,
+  TxoCacheEntry, TxoName,
 };
 use std::collections::HashMap;
 
@@ -778,7 +779,9 @@ pub fn prepare_transaction<S: CliDataStore>(store: &mut S, nick: String) -> Resu
 
 pub fn list_txn<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
   // Fetch the name of the current transaction
-  let nick = store.get_config()?.active_txn.context(NoneValue)?;
+  let nick = store.get_config()?
+                  .active_txn
+                  .context(NoTransactionInProgress)?;
 
   let builder = match store.get_txn_builder(&TxnBuilderName(nick.0.clone()))? {
     None => {
