@@ -530,15 +530,18 @@ impl CliDataStore for KVStore {
     k: &crate::KeypairName,
     f: F)
     -> Result<(), CliError> {
-    let password = crate::helpers::prompt_password(Some(&k.0)).context(crate::Password)?;
-    let mixed_pair = self.get_encrypted_raw::<zei::xfr::sig::XfrKeyPair>(k)
-                         .map_err(|_| KVError::WithInvalidKey { backtrace: Backtrace::generate(),
-                                                                key: k.0.clone() })?;
+    let keypair =
+      crate::helpers::prompt_with_retries(3, Some(&k.0), |password| {
+        let mixed_pair =
+          self.get_encrypted_raw::<zei::xfr::sig::XfrKeyPair>(k)
+              .map_err(|_| KVError::WithInvalidKey { backtrace: Backtrace::generate(),
+                                                     key: k.0.clone() })?;
+        let mixed_pair = mixed_pair.with_context(|| WithInvalidKey { key: k.0.clone() })?;
 
-    let mixed_pair = mixed_pair.with_context(|| WithInvalidKey { key: k.0.clone() })?;
+        mixed_pair.encrypted(password.as_bytes())
+                  .with_context(|| KeyDecryptionError { name: k.0.clone() })
+      }).context(crate::Password)?;
 
-    let keypair = mixed_pair.encrypted(password.as_bytes())
-                            .with_context(|| KeyDecryptionError { name: k.0.clone() })?;
     let result = f(Some(&keypair));
 
     if let Err(e) = result {
@@ -598,7 +601,7 @@ impl CliDataStore for KVStore {
                   -> Result<(), CliError> {
     use super::Password;
     let pubkey = kp.get_pk();
-    let password = crate::helpers::prompt_password_confirming(Some(&k.0)).context(Password)?;
+    let password = crate::helpers::prompt_confirming_with_retries(3, Some(&k.0)).context(Password)?;
     let mixed_pair = MixedPair::pack(pubkey, &kp, password.as_bytes());
 
     Ok(self.set_encrypted_raw(k, mixed_pair).map(|_| ())?)

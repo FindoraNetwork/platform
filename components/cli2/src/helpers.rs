@@ -1,7 +1,7 @@
 use crate::{CliError, LedgerStateCommitment};
 use ledger::data_model::{b64enc, Asset, AssetType, AuthenticatedUtxo, TxoSID};
 use serde::de::DeserializeOwned;
-use snafu::{ensure, Backtrace, GenerateBacktrace, ResultExt, Snafu};
+use snafu::{ensure, Backtrace, GenerateBacktrace, OptionExt, ResultExt, Snafu};
 use std::process::exit;
 use std::time::Duration;
 use structopt::clap::{Error, ErrorKind};
@@ -128,12 +128,14 @@ pub enum PasswordReadError {
     source: std::io::Error,
     backtrace: Backtrace,
   },
+  #[snafu(display("The provided password was incorrect."))]
+  IncorrectPassword,
 }
 
 /// Reads a user's password without confirming
 ///
 /// Optionally takes a string describing what the password is for
-pub fn prompt_password(description: Option<&str>) -> Result<Zeroizing<String>, PasswordReadError> {
+fn prompt_password(description: Option<&str>) -> Result<Zeroizing<String>, PasswordReadError> {
   let prompt = if let Some(s) = description {
     format!("Enter password for {}: ", s)
   } else {
@@ -147,8 +149,8 @@ pub fn prompt_password(description: Option<&str>) -> Result<Zeroizing<String>, P
 /// Reads a password from the user twice, and confirms that they match
 ///
 /// Optionally takes a string describing what the password is for
-pub fn prompt_password_confirming(description: Option<&str>)
-                                  -> Result<Zeroizing<String>, PasswordReadError> {
+fn prompt_password_confirming(description: Option<&str>)
+                              -> Result<Zeroizing<String>, PasswordReadError> {
   let first_prompt = if let Some(s) = description {
     format!("Enter password for {}: ", s)
   } else {
@@ -163,4 +165,57 @@ pub fn prompt_password_confirming(description: Option<&str>)
   // Return an error if the entered passwords did not match
   ensure!(first == second, DidNotMatch);
   Ok(first)
+}
+
+/// Reads a password from the user twice, and confirms that they match
+///
+/// Optionally takes a string describing what the password is for
+pub fn prompt_confirming_with_retries(retries: u32,
+                                      description: Option<&str>)
+                                      -> Result<Zeroizing<String>, PasswordReadError> {
+  let mut ret = None;
+  for i in 0..retries {
+    let x = prompt_password_confirming(description);
+    match x {
+      Ok(x) => {
+        ret = Some(x);
+        break;
+      }
+      Err(e) => {
+        if matches!(e,PasswordReadError::DidNotMatch{..}) {
+          if i < retries - 1 {
+            println!("Passwords did not match, please try again.");
+          }
+        } else {
+          return Err(e);
+        }
+      }
+    }
+  }
+  ret.context(DidNotMatch)
+}
+
+/// Reads a password, provides it to the provided closure, and will re-attempt if the closure
+/// returns an error.
+///
+/// The provided closure will indicate the provided password is incorrect by returning an `Err`
+/// value. As a matter of correctness, this should be the only condition under which the closure
+/// will return an error
+pub fn prompt_with_retries<T, E: std::error::Error>(retries: u32,
+                                                    description: Option<&str>,
+                                                    closure: impl Fn(&str) -> Result<T, E>)
+                                                    -> Result<T, PasswordReadError> {
+  for i in 0..retries {
+    let password = prompt_password(description)?;
+    let x = closure(&password);
+    match x {
+      Ok(x) => return Ok(x),
+      Err(_) => {
+        if i < retries - 1 {
+          println!("Password was incorrect, please try again.");
+        }
+      }
+    }
+  }
+  Err(PasswordReadError::IncorrectPassword)
 }
