@@ -23,12 +23,13 @@ source "tests/common.sh"
     check_line 12 "Transaction builder \`1\` not found."
 
     wrong_keypair_id="arturo"
-    run bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice; \
+    run bash -c "$PASSWORD_PROMPT_YES | $CLI2 key-gen alice; \
                 echo y | $CLI2 query-ledger-state; \
                 $CLI2 initialize-transaction 0; \
                 $MEMO_ALICE_WITH_PROMPT | $CLI2 define-asset 0 $wrong_keypair_id TheBestAliceCoinsOnEarthV2"
+    debug_lines
     #[ "$status" -eq 255 ] #TODO why does this not work?
-    check_line 9  "Enter password for arturo: Error: KV: Attempted to call KVStore::with on a key that doesn't exist: arturo"
+    check_line 10  "Enter password for arturo: Error: KV: Attempted to call KVStore::with on a key that doesn't exist: arturo"
 }
 
 @test "delete-keypair" {
@@ -150,7 +151,7 @@ source "tests/common.sh"
 @test "load-public-key" {
     run bash -c "echo 'not_a_public_key' | $CLI2 load-public-key bob"
     [ "$status" -eq 255 ]
-    check_line 0 "Could not parse key pair: expected ident at line 1 column 2"
+    check_line 0 "Could not parse public key: expected ident at line 1 column 2"
 }
 
 @test "query-ledger-state" {

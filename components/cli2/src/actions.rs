@@ -144,7 +144,7 @@ pub fn load_key_pair<S: CliDataStore>(store: &mut S, nick: String) -> Result<(),
 pub fn load_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
   match serde_json::from_str(&prompt::<String,_>(format!("Please paste in the public key for `{}`",nick))?) {
     Err(e) => {
-      eprintln!("Could not parse key pair: {}",e);
+      eprintln!("Could not parse public key: {}",e);
       exit(-1);
     }
     Ok(pk) => {
