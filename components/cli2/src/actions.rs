@@ -53,9 +53,8 @@ pub fn list_config<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
   Ok(())
 }
 
-pub fn key_gen<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
-  // Check if the key already exists
-  let continue_key_gen = if store.exists_keypair(&nick)? {
+fn check_existing_key_pair<S: CliDataStore>(store: &mut S, nick: &str) -> Result<bool, CliError> {
+  let res = if store.exists_keypair(&nick)? {
     println!("Do you want to overwrite the existing key pair? CAUTION: this operation cannot be reverted. You may loose all your funds.");
     prompt_default("", // We use println! above to ensure stdout is flushed
                    false)?
@@ -63,17 +62,24 @@ pub fn key_gen<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliEr
     true
   };
 
+  Ok(res)
+}
+
+pub fn key_gen<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
+  // Check if the key already exists
+  let continue_key_gen = check_existing_key_pair(store, &nick)?;
+
   if continue_key_gen {
     let kp = XfrKeyPair::generate(&mut rand::thread_rng());
     let pk = *kp.get_pk_ref();
     store.add_key_pair(&KeypairName(nick.to_string()), kp)?;
     store.add_public_key(&PubkeyName(nick.to_string()), pk)?;
     println!("New key pair added for `{}`", nick);
-    Ok(())
   } else {
     println!("Operation aborted by the user.");
-    Ok(())
   }
+
+  Ok(())
 }
 
 pub fn list_keys<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
@@ -130,18 +136,24 @@ pub fn list_keypair<S: CliDataStore>(store: &mut S,
 }
 
 pub fn load_key_pair<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
-  match serde_json::from_str::<XfrKeyPair>(&prompt::<String,_>(format!("Please paste in the key pair for `{}`",nick))?) {
-    Err(e) => {
-      eprintln!("Could not parse key pair: {}",e);
-      exit(-1);
+  let continue_load_key_pair = check_existing_key_pair(store, &nick)?;
+
+  if continue_load_key_pair {
+    match serde_json::from_str::<XfrKeyPair>(&prompt::<String, _>(format!("Please paste in the key pair for `{}`", nick))?) {
+      Err(e) => {
+        eprintln!("Could not parse key pair: {}", e);
+        exit(-1);
+      }
+      Ok(kp) => {
+        store.add_public_key(&PubkeyName(nick.to_string()), *kp.get_pk_ref())
+          ?;
+        store.add_key_pair(&KeypairName(nick.to_string()), kp)
+          ?;
+        println!("New key pair added for `{}`", nick);
+      }
     }
-    Ok(kp) => {
-      store.add_public_key(&PubkeyName(nick.to_string()), *kp.get_pk_ref())
-        ?;
-      store.add_key_pair(&KeypairName(nick.to_string()), kp)
-        ?;
-      println!("New key pair added for `{}`", nick);
-    }
+  } else {
+    println!("Operation aborted by the user.");
   }
   Ok(())
 }

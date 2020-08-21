@@ -65,6 +65,16 @@ source "tests/common.sh"
   debug_lines
   [ "$status" -eq 0 ]
   check_line 0 'Enter password for bob: Enter password again:New key pair added for `bob`'
+
+  run bash -c "echo n | $CLI2 load-keypair bob"
+  check_line 0 "Do you want to overwrite the existing key pair? CAUTION: this operation cannot be reverted. You may loose all your funds."
+  check_line 1 "Operation aborted by the user."
+
+  run bash -c 'echo -e "y\n{\"pub_key\":\"iAnNs_n9HLzdpOYM1cxCOVapua-jS59j1j92lRPe64E=\",\"sec_key\":\"Au3s9u8TdPWX36X-j_9xvMud0DOKrYK1x39imArYI9g=\"}" | $CLI2 load-keypair bob'
+  debug_lines
+  check_line 0 "Do you want to overwrite the existing key pair? CAUTION: this operation cannot be reverted. You may loose all your funds."
+  check_line 1 'Enter password for bob: Enter password again:New key pair added for `bob`'
+
 }
 
 @test "delete key pair" {

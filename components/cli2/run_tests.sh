@@ -6,11 +6,11 @@ echo "FINDORA_HOME: ${FINDORA_HOME}"
 # Build the executable
 cargo build
 
-# Run the tests
-cargo test
-
 # Run clippy
 cargo clippy
+
+# Run the tests
+cargo test
 
 # Black box tests written in shell
 bats tests/balances.sh

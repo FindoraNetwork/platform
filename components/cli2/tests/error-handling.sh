@@ -144,7 +144,10 @@ source "tests/common.sh"
 }
 
 @test "load-keypair" {
-    skip "Todo when bug #387 is fixed"
+    run bash -c "echo not_a_key_pair | $CLI2 load-keypair alice"
+    debug_lines
+    [ "$status" -eq 255 ]
+    check_line 0 "Could not parse key pair: expected ident at line 1 column 2"
 }
 
 @test "load-owner-memo" {
