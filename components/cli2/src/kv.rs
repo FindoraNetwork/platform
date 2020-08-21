@@ -576,6 +576,12 @@ impl CliDataStore for KVStore {
     Ok(res)
   }
 
+  fn exists_keypair(&self, nick: &str) -> Result<bool, CliError> {
+    let key_pairs = self.get_keypairs()?;
+    let res = key_pairs.iter().any(|i| i.0 == *nick);
+    Ok(res)
+  }
+
   fn get_pubkey(&self,
                 k: &crate::PubkeyName)
                 -> Result<Option<zei::xfr::sig::XfrPublicKey>, CliError> {

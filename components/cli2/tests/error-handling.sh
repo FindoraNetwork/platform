@@ -19,6 +19,7 @@ source "tests/common.sh"
                 echo y | $CLI2 query-ledger-state; \
                 $CLI2 initialize-transaction 0; \
                 $MEMO_ALICE_WITH_PROMPT | $CLI2 define-asset $wrong_tx_id alice TheBestAliceCoinsOnEarthV2"
+    debug_lines
     [ "$status" -eq 255 ]
     check_line 12 "Transaction builder \`1\` not found."
 
@@ -27,7 +28,6 @@ source "tests/common.sh"
                 echo y | $CLI2 query-ledger-state; \
                 $CLI2 initialize-transaction 0; \
                 $MEMO_ALICE_WITH_PROMPT | $CLI2 define-asset 0 $wrong_keypair_id TheBestAliceCoinsOnEarthV2"
-    debug_lines
     #[ "$status" -eq 255 ] #TODO why does this not work?
     check_line 10  "Enter password for arturo: Error: KV: Attempted to call KVStore::with on a key that doesn't exist: arturo"
 }
@@ -114,7 +114,10 @@ source "tests/common.sh"
 }
 
 @test "list-keypair" {
-    skip "Todo when bug #385 is fixed"
+    run bash -c "$CLI2 list-keypair unknown"
+    debug_lines
+    [ "$status" -eq 255 ]
+    check_line 0 "No keypair with name \`unknown\` found"
 }
 
 @test "list-keys" {

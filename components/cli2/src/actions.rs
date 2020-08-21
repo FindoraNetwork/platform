@@ -54,8 +54,7 @@ pub fn list_config<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
 
 pub fn key_gen<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
   // Check if the key already exists
-  let key_pairs = store.get_keypairs()?;
-  let continue_key_gen = if key_pairs.iter().any(|i| i.0 == nick) {
+  let continue_key_gen = if store.exists_keypair(&nick)? {
     println!("Do you want to overwrite the existing key pair? CAUTION: this operation cannot be reverted. You may loose all your funds.");
     prompt_default("", // We use println! above to ensure stdout is flushed
                    false)?
@@ -105,6 +104,11 @@ pub fn list_keypair<S: CliDataStore>(store: &mut S,
                                      nick: String,
                                      show_secret: bool)
                                      -> Result<(), CliError> {
+  if !store.exists_keypair(&nick)? {
+    eprintln!("No keypair with name `{}` found", nick);
+    exit(-1);
+  }
+
   store.with_keypair::<CliError, _>(&KeypairName(nick.to_string()), |kp| match kp {
          None => {
            eprintln!("No keypair with name `{}` found", nick);
