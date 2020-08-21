@@ -1158,7 +1158,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
   match builder_opt {
     None => {
       eprintln!("I don't know which transaction to use!");
-      exit(-1);
+      exit(-1); // TODO return error
     }
     Some(t) => {
       builder_nick = t;
@@ -1170,7 +1170,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
   match builder_opt {
     None => {
       eprintln!("Transaction builder `{}` not found.", builder_nick.0);
-      exit(-1);
+      exit(-1); // TODO return error
     }
     Some(b) => {
       builder = b;

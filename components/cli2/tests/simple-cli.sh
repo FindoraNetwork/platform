@@ -106,19 +106,16 @@ source "tests/common.sh"
   # Define the asset
   run  bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice; \
                 $MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice AliceCoin;"
-  debug_lines
   [ "$status" -eq 0 ]
 
   # Issue the asset
   run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
-  debug_lines
 
   [ "$status" -eq 0 ]
   check_line 0 "Preparing transaction"
   check_line 1 "Done."
   check_line 2 "Enter password for alice: IssueAsset: 10000"
   check_line 3 "Successfully added to"
-
 }
 
 

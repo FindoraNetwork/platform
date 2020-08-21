@@ -123,6 +123,7 @@ transfer_assets()
     tx_name=$(random_string 16)
     echo "TX_NAME: $tx_name"
 
+    # TODO ambiguous => a boolean might be better, or query the utxos filtering with the sender name and the asset type
     # If the asset_type_name is not provided list all the unspent txos
     if [[ $asset_type_name == "" ]]; then
         run bash -c "$CLI2 list-txos --unspent=true"
