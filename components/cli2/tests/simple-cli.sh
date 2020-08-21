@@ -4,9 +4,19 @@ source "tests/common.sh"
 
 @test "key generation" {
   run bash -c "$PASSWORD_PROMPT |$CLI2 key-gen alice"
-  debug_lines
   [ "$status" -eq 0 ]
   check_line 0 'Enter password for alice: Enter password again:New key pair added for `alice`'
+  run bash -c "$PASSWORD_PROMPT |$CLI2 key-gen alice"
+
+  # When trying to generate a key pair with the same name the user is asked for confirmation.
+  run bash -c "echo 'n' | $CLI2 key-gen alice"
+  [ "$status" -eq 0 ]
+  check_line 0 'Do you want to overwrite the existing key pair? CAUTION: this operation cannot be reverted. You may loose all your funds.'
+  check_line 1 'Operation aborted by the user.'
+
+  run bash -c "$PASSWORD_PROMPT_YES |$CLI2 key-gen alice"
+  check_line 0 'Do you want to overwrite the existing key pair? CAUTION: this operation cannot be reverted. You may loose all your funds.'
+  check_line 1 'Enter password for alice: Enter password again:New key pair added for `alice`'
 }
 
 @test "add bob's public key" {

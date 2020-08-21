@@ -53,12 +53,27 @@ pub fn list_config<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
 }
 
 pub fn key_gen<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
-  let kp = XfrKeyPair::generate(&mut rand::thread_rng());
-  let pk = *kp.get_pk_ref();
-  store.add_key_pair(&KeypairName(nick.to_string()), kp)?;
-  store.add_public_key(&PubkeyName(nick.to_string()), pk)?;
-  println!("New key pair added for `{}`", nick);
-  Ok(())
+  // Check if the key already exists
+  let key_pairs = store.get_keypairs()?;
+  let continue_key_gen = if key_pairs.iter().any(|i| i.0 == nick) {
+    println!("Do you want to overwrite the existing key pair? CAUTION: this operation cannot be reverted. You may loose all your funds.");
+    prompt_default("", // We use println! above to ensure stdout is flushed
+                   false)?
+  } else {
+    true
+  };
+
+  if continue_key_gen {
+    let kp = XfrKeyPair::generate(&mut rand::thread_rng());
+    let pk = *kp.get_pk_ref();
+    store.add_key_pair(&KeypairName(nick.to_string()), kp)?;
+    store.add_public_key(&PubkeyName(nick.to_string()), pk)?;
+    println!("New key pair added for `{}`", nick);
+    Ok(())
+  } else {
+    println!("Operation aborted by the user.");
+    Ok(())
+  }
 }
 
 pub fn list_keys<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
