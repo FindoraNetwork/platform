@@ -1,49 +1,54 @@
 #![feature(btree_drain_filter)]
 use cryptohash::sha256::Digest;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct SlidingSet {
-  map: HashMap<Digest, u64>,
-  min: u64,
-  current: u64,
-  width: u64,
+  current: usize,
+  width: usize,
+  map: Vec<Vec<Digest>>,
 }
 
 impl SlidingSet {
-  pub fn new(min: u64, current: u64, width: u64) -> Self {
-    assert!(min <= current);
-    SlidingSet { min,
-                 current,
-                 width,
-                 map: HashMap::new() }
+  pub fn new(width: usize) -> Self {
+    let mut map = Vec::with_capacity(width as usize);
+    for _ in 0..width {
+      map.push(Vec::new());
+    }
+    let current = 0;
+    SlidingSet { current,
+                    width,
+                    map }
   }
 }
 
 impl SlidingSet {
   pub fn contains_key(&self, key: Digest) -> bool {
-    self.map.contains_key(&key)
+    self.get(key).is_some()
   }
 
-  pub fn get(&self, key: Digest) -> Option<&u64> {
-    self.map.get(&key)
+  pub fn get(&self, key: Digest) -> Option<usize> {
+    for (index, vec) in self.map.iter().enumerate() {
+      for k in vec.iter() {
+        if *k == key {
+          return Some(index)
+        }
+      }
+    }
+    None
   }
 
-  pub fn insert(&mut self, key: Digest, value: u64) {
-    assert!(value <= self.current && value >= self.min);
-    assert!(!self.map.contains_key(&key));
-    self.map.insert(key, value);
+  pub fn insert(&mut self, key: Digest, value: usize) {
+    assert!(value <= self.current && value + self.width >= (self.current + 1));
+    assert!(!self.contains_key(key));
+    
+    self.map[value % self.width].push(key);
   }
 
   pub fn incr_current(&mut self) {
     self.current += 1;
-    let current = self.current;
-    let width = self.width;
-    if self.current == self.min + width {
-      self.map.retain(|_k, v| *v + width >= current + 1);
-      self.min += 1
-    }
+    let current_index = self.current % self.width;
+    self.map[current_index].clear();
   }
 }
 
@@ -59,7 +64,7 @@ mod tests {
   fn test_basic() {
     let factor = 3;
     let width: usize = 4;
-    let mut ss = SlidingSet::new(0, 0, width as u64);
+    let mut ss = SlidingSet::new(width);
     let mut names = Vec::new();
     for _ in 0..width * factor {
       let rand_string: String = thread_rng().sample_iter(&Alphanumeric).take(16).collect();
@@ -73,7 +78,7 @@ mod tests {
     let mut n = 0;
     for i in 0..factor {
       for _ in 0..width {
-        ss.insert(digests[n], n as u64);
+        ss.insert(digests[n], n);
         assert!(ss.contains_key(digests[n]));
         ss.incr_current();
         n += 1;

@@ -439,7 +439,7 @@ impl LedgerStatus {
                                 air_path: air_path.to_owned(),
                                 txn_merkle_path: txn_merkle_path.to_owned(),
                                 air: LedgerState::init_air_log(air_path, true)?,
-                                ops_seen: SlidingSet::new(0, 0, TRANSACTION_WINDOW_WIDTH),
+                                ops_seen: SlidingSet::new(TRANSACTION_WINDOW_WIDTH),
                                 txn_path: txn_path.to_owned(),
                                 utxo_map_path: utxo_map_path.to_owned(),
                                 utxos: HashMap::new(),
@@ -488,7 +488,7 @@ impl LedgerStatus {
     if txn_effect.txn.body.no_replay_token.get_seq_id() > self.block_commit_count {
       return Err(PlatformError::InputsError(format!("Transaction seq_id ahead of block_count: {}",
                                                     error_location!())));
-    } else if txn_effect.txn.body.no_replay_token.get_seq_id() + TRANSACTION_WINDOW_WIDTH
+    } else if txn_effect.txn.body.no_replay_token.get_seq_id() + (TRANSACTION_WINDOW_WIDTH as u64)
               < self.block_commit_count
     {
       return Err(PlatformError::InputsError(format!("Transaction seq_id too far behind block_count: {}",
@@ -497,7 +497,7 @@ impl LedgerStatus {
       // None of the operations in the current transaction have been seen before in the window
       for op_digest in txn_effect.op_digests.iter() {
         if self.ops_seen.contains_key(*op_digest) {
-          let id = *self.ops_seen.get(*op_digest).unwrap();
+          let id = self.ops_seen.get(*op_digest).unwrap();
           return Err(PlatformError::InputsError(format!("Digest {:?} seen before at id {}, id, curr seq_id = {}, possible replay: {}",
                                                         *op_digest,
                                                         id,
@@ -800,7 +800,7 @@ impl LedgerStatus {
                          block: &mut BlockEffect)
                          -> HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)> {
     for (digest, seq_id) in block.opseqs.iter() {
-      self.ops_seen.insert(*digest, *seq_id);
+      self.ops_seen.insert(*digest, *seq_id as usize);
       // println!("apply_block_effects: {:?}, {:?} inserted into ops_seen", *digest, *seq_id);
     }
     block.opseqs.clear();

@@ -28,7 +28,7 @@ use zei::xfr::structs::{
   BlindAssetRecord, OwnerMemo, XfrBody, ASSET_TYPE_LENGTH,
 };
 
-pub const TRANSACTION_WINDOW_WIDTH: u64 = 128;
+pub const TRANSACTION_WINDOW_WIDTH: usize = 128;
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
   base64::encode_config(input, base64::URL_SAFE)
