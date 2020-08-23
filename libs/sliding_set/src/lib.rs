@@ -17,8 +17,8 @@ impl SlidingSet {
     }
     let current = 0;
     SlidingSet { current,
-                    width,
-                    map }
+                 width,
+                 map }
   }
 }
 
@@ -31,7 +31,7 @@ impl SlidingSet {
     for (index, vec) in self.map.iter().enumerate() {
       for k in vec.iter() {
         if *k == key {
-          return Some(index)
+          return Some(index);
         }
       }
     }
@@ -41,7 +41,7 @@ impl SlidingSet {
   pub fn insert(&mut self, key: Digest, value: usize) {
     assert!(value <= self.current && value + self.width >= (self.current + 1));
     assert!(!self.contains_key(key));
-    
+
     self.map[value % self.width].push(key);
   }
 
