@@ -840,26 +840,19 @@ fn main() {
   // user aware that this is a bug, direct them to the bug tracker, and display a
   // backtrace.
   std::panic::set_hook(Box::new(|panic_info| {
-                         // TODO(Nathan M): Add a link to the bug tracker with prefilled information
-
-                         println!("An unknown error occurred, this is a bug, please help us fix it by \
-                                   reporting it at: ");
-                         println!("https://bugtracker.findora.org/projects/testnet/issues/new");
-                         println!("Please copy and paste this entire error message, as well as any preceding \
-                                   output into the \ndescription field of the bug report.\n");
-                         println!("Here is what context is available:");
+                         println!("{}", PANIC_STRING);
                          let payload = panic_info.payload();
                          if let Some(s) = payload.downcast_ref::<&str>() {
-                           println!("  {}", s);
+                           println!("{}", s);
                          } else if let Some(s) = payload.downcast_ref::<String>() {
-                           println!("  {}", s);
+                           println!("{}", s);
                          }
 
                          if let Some(location) = panic_info.location() {
                            println!("Error occurred at: {}", location);
                          }
 
-                         println!("\n\n Information for Developers:");
+                         println!("\n\nInformation for Developers:");
                          println!("Version: {}", VERSION);
                          println!("Backtrace: ");
                          println!("{}", Backtrace::generate());
@@ -895,3 +888,26 @@ fn main() {
     std::process::exit(1);
   }
 }
+
+// TODO(Nathan M): Add a link to the bug tracker with prefilled information
+#[cfg(not(feature = "no-bugtracker"))]
+pub const PANIC_STRING: &'static str = "\
+An unknown error occurred, this is a bug. Please help us fix it by reporting it at: 
+https://bugtracker.findora.org/projects/testnet/issues/new
+
+
+Please copy and paste the entire error message, as well as any preceding output
+into the description field of the bug report.
+
+Here is what context is available:";
+
+// TODO(Nathan M): Add non-bugtracker contact information
+#[cfg(feature = "no-bugtracker")]
+pub const PANIC_STRING: &'static str = "\
+An unknown error occurred, this is a bug. Please help us fix it by reporting it to:
+(contact information here)
+
+Please copy and paste the entire error message, as well as any preceding output, at
+the bottom of the email.
+
+Here is what context is available:";
