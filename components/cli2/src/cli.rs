@@ -891,15 +891,17 @@ fn main() {
 
 // TODO(Nathan M): Add a link to the bug tracker with prefilled information
 #[cfg(not(feature = "no-bugtracker"))]
-pub const PANIC_STRING: &'static str = "\
-An unknown error occurred, this is a bug. Please help us fix it by reporting it at: 
-https://bugtracker.findora.org/projects/testnet/issues/new
-
-
-Please copy and paste the entire error message, as well as any preceding output
-into the description field of the bug report.
-
-Here is what context is available:";
+pub const PANIC_STRING: &'static str =
+    concat!(
+        "An unknown error occurred, this is a bug. Please help us fix it by reporting it at:\n",
+        "https://bugtracker.findora.org/projects/testnet/issues/new?issue[subject]=findora%20CLI%20(build%20",
+        env!("VERGEN_SHA_SHORT"),
+        ")%3A\n",
+        "\
+        Please copy and paste the entire error message, as well as any preceding output\
+        into the description field of the bug report.\n\
+        \
+        Here is what context is available:");
 
 // TODO(Nathan M): Add non-bugtracker contact information
 #[cfg(feature = "no-bugtracker")]
