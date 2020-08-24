@@ -1,4 +1,3 @@
-#![feature(btree_drain_filter)]
 use cryptohash::sha256::Digest;
 use serde::{Deserialize, Serialize};
 
