@@ -26,6 +26,16 @@ In order to build the executable we recommend to use [nix](https://nixos.org/dow
 > cargo build
 ```
 
+* Configure autocompletion
+
+It is possible to configure your shell so that the command line autocompletes the arguments / 
+options provided. Bash, elvish, fish and powershell are currently supported.
+For example if you run a bash shell do as follows:
+```
+> findora gen-completions --bash > fin-completion.sh
+> source fin-completion.sh
+```
+
 * Run the command
 
 The executable can be found at `<some path>/findora/platform/target/debug/findora`.
