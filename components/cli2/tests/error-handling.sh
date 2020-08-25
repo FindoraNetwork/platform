@@ -243,8 +243,15 @@ source "tests/common.sh"
 }
 
 @test "transfer-assets" {
+    run bash -c "echo y | $CLI2 query-ledger-state"
+    [ "$status" -eq 0 ]
 
-    skip "Todo when bug #389 is fixed"
+    run bash -c "$CLI2 initialize-transaction 0"
+    [ "$status" -eq 0 ]
+
+    run bash -c "$CLI2 transfer-assets --builder=0"
+    [ "$status" -eq 0 ]
+    check_line 0 "There is no input available for building the transaction. You need to issue some asset or receive some funds to your address."
 }
 
 @test "unlock-txo" {
