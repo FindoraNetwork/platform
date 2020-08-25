@@ -552,6 +552,14 @@ impl CliDataStore for KVStore {
       Ok(())
     }
   }
+  fn get_encrypted_keypair(
+    &self,
+    k: &crate::KeypairName)
+    -> Result<Option<MixedPair<zei::xfr::sig::XfrPublicKey, zei::xfr::sig::XfrKeyPair>>, CliError>
+  {
+    let mixed_pair = self.get_encrypted_raw::<zei::xfr::sig::XfrKeyPair>(k)?;
+    Ok(mixed_pair)
+  }
   fn delete_keypair(&mut self, k: &crate::KeypairName) -> Result<(), CliError> {
     self.delete_encrypted::<zei::xfr::sig::XfrKeyPair>(k)
         .map(|_| ())?;
@@ -633,8 +641,8 @@ impl CliDataStore for KVStore {
     -> Result<(ledger::data_model::Transaction, crate::TxnMetadata), CliError> {
     let builder = self.delete::<TxnBuilderEntry>(k_orig)?.ok_or_else(|| {
                                                             KVError::WithInvalidKey{
-              backtrace: Backtrace::generate(),
-              key: serde_json::to_string(k_orig).expect("JSON serialization failed")}
+                backtrace: Backtrace::generate(),
+                key: serde_json::to_string(k_orig).expect("JSON serialization failed")}
                                                           })?;
     let ret = (builder.builder.transaction().clone(), metadata);
     self.set(k_new, ret.clone())?;

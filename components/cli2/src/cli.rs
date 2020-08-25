@@ -22,7 +22,7 @@ pub mod helpers;
 pub mod kv;
 
 use crate::actions::*;
-use kv::{HasEncryptedTable, HasTable, KVError, KVStore};
+use kv::{HasEncryptedTable, HasTable, KVError, KVStore, MixedPair};
 use ledger::data_model::errors::PlatformError;
 use zei::errors::ZeiError;
 
@@ -297,6 +297,9 @@ pub trait CliDataStore {
     k: &KeypairName,
     f: F)
     -> Result<(), CliError>;
+  fn get_encrypted_keypair(&self,
+                           k: &KeypairName)
+                           -> Result<Option<MixedPair<XfrPublicKey, XfrKeyPair>>, CliError>;
   fn get_pubkeys(&self) -> Result<BTreeMap<PubkeyName, XfrPublicKey>, CliError>;
   fn get_local_pubkeys(
     &self)
