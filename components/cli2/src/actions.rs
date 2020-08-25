@@ -1710,3 +1710,16 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
   }
   Ok(())
 }
+
+pub fn export_keypair<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
+  let name = KeypairName(nick);
+  let mixed_pair = store.get_encrypted_keypair(&name)?;
+  if let Some(mixed_pair) = mixed_pair {
+    let key_pair = serde_json::to_string(&mixed_pair).unwrap();
+    println!("{}", key_pair);
+    Ok(())
+  } else {
+    println!("Error: No keypair found for {}", name.0);
+    exit(-1);
+  }
+}
