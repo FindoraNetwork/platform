@@ -2238,6 +2238,7 @@ dependencies = [
  "time 0.1.43",
  "tiny-keccak",
  "txn_builder",
+ "unicode-normalization",
  "utils",
  "vergen",
  "wasm-bindgen",

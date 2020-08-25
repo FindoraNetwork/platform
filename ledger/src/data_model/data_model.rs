@@ -1,4 +1,6 @@
 #![deny(warnings)]
+extern crate unicode_normalization;
+
 use super::errors;
 use crate::policy_script::{Policy, PolicyGlobals, TxnPolicyData};
 use crate::{error_location, zei_fail};
@@ -20,6 +22,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::hash::{Hash, Hasher};
+use unicode_normalization::UnicodeNormalization;
 use utils::{HashOf, ProofOf, Serialized, SignatureOf};
 use zei::xfr::lib::{gen_xfr_body, XfrNotePolicies};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
@@ -75,6 +78,25 @@ impl AssetTypeCode {
   pub fn gen_random_with_rng<R: Rng>(mut prng: R) -> Self {
     let val: [u8; ASSET_TYPE_LENGTH] = prng.gen();
     Self { val: ZeiAssetType(val) }
+  }
+  pub fn base64_from_utf8(s: &str) -> String {
+    let mut composed = s.to_string().nfc().collect::<String>().into_bytes();
+    composed.resize(ASSET_TYPE_LENGTH, 0u8);
+    let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(composed.as_slice()).unwrap();
+    b64enc(&buf)
+  }
+  pub fn utf8_from_base64(b64: &str) -> Result<String, PlatformError> {
+    match b64dec(b64) {
+      Ok(buf) => {
+        match std::str::from_utf8(&buf) {
+          Ok(s) => Ok(s.nfd().to_string()),
+          Err(_) => Err(PlatformError::DeserializationError(error_location!()))
+        }
+      }
+      _ => {
+        Err(PlatformError::DeserializationError(error_location!()))
+      }
+    }
   }
   pub fn new_from_str(s: &str) -> Self {
     let mut as_vec = s.to_string().into_bytes();
@@ -1364,6 +1386,20 @@ mod tests {
     println!("Average {}, stddev {}", average, stddev);
     assert!(average > 127.5 - 5.0 * stddev);
     assert!(average < 127.5 + 5.0 * stddev);
+  }
+
+  #[test]
+  fn test_base64_from_utf8() {
+    let utf8 = "My 资产 $";
+    let base64 = AssetTypeCode::base64_from_utf8(utf8);
+    assert_eq!(base64, "TXkg6LWE5LqnICQAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
+  }
+
+  #[test]
+  fn test_utf8_from_base64() {
+    let base64 = "TXkg6LWE5LqnICQAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    let utf8 = AssetTypeCode::utf8_from_base64(base64).unwrap();
+    assert_eq!(utf8, "My 资产 $");
   }
 
   #[test]
