@@ -889,7 +889,6 @@ fn main() {
   }
 }
 
-// TODO(Nathan M): Add a link to the bug tracker with prefilled information
 #[cfg(not(feature = "no-bugtracker"))]
 pub const PANIC_STRING: &'static str =
     concat!(
@@ -903,11 +902,10 @@ pub const PANIC_STRING: &'static str =
         \
         Here is what context is available:");
 
-// TODO(Nathan M): Add non-bugtracker contact information
 #[cfg(feature = "no-bugtracker")]
 pub const PANIC_STRING: &'static str = "\
 An unknown error occurred, this is a bug. Please help us fix it by reporting it to:
-(contact information here)
+testnet@findora.org
 
 Please copy and paste the entire error message, as well as any preceding output, at
 the bottom of the email.
