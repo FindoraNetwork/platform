@@ -77,13 +77,19 @@ pub struct MixedPair<Clear, Encrypted> {
   clear: String,
   #[serde(skip)]
   clear_phantom: PhantomData<Clear>,
+  #[serde(with = "b64")]
   encrypted: Vec<u8>,
   #[serde(skip)]
   encrypted_phantom: PhantomData<Encrypted>,
-  chacha_nonce: [u8; 12],
-  salt: [u8; 32],
+  #[serde(with = "b64")]
+  /// Must be 12 bytes long
+  chacha_nonce: Vec<u8>,
+  #[serde(with = "b64")]
+  /// Must be 32 bytes long
+  salt: Vec<u8>,
   /// Due to serde derive limitations, this needs to be a `Vec<u8>`, but it is
   /// effectively a `[u8;64]`.
+  #[serde(with = "b64")]
   hmac: Vec<u8>,
 }
 
@@ -121,8 +127,8 @@ impl<Clear, Encrypted> MixedPair<Clear, Encrypted>
                 clear_phantom: PhantomData,
                 encrypted,
                 encrypted_phantom: PhantomData,
-                chacha_nonce: nonce,
-                salt,
+                chacha_nonce: nonce.to_vec(),
+                salt: salt.to_vec(),
                 hmac: hmac.to_vec() }
   }
 
@@ -153,6 +159,23 @@ impl<Clear, Encrypted> MixedPair<Clear, Encrypted>
     } else {
       Err(CryptoError::HMACValidation)
     }
+  }
+}
+
+mod b64 {
+  use serde::{de, Deserialize, Deserializer, Serializer};
+
+  pub fn serialize<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer
+  {
+    serializer.serialize_str(&base64::encode(bytes))
+  }
+
+  pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+    where D: Deserializer<'de>
+  {
+    let s = <&str>::deserialize(deserializer)?;
+    base64::decode(s).map_err(de::Error::custom)
   }
 }
 

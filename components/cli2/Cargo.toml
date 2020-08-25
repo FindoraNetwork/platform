@@ -14,11 +14,13 @@ path = "src/cli.rs"
 no-bugtracker = []
 
 [dependencies]
+base64 = "0.12.3"
 blake2 = "0.9.0"
 chacha20poly1305 = "0.5.1"
 clap = { version = "2.33", default-features = false }
 cryptohash = { path = "../../libs/cryptohash" }
 dirs = "2.0.2"
+itertools = "0.9.0"
 ledger = { path = "../../ledger", features = ["TESTING"] }
 ledger_api_service = { path = "../ledger_api_service" }
 network = { path = "../../libs/network" }
@@ -40,7 +42,6 @@ txn_builder = { path = "../txn_builder" }
 utils = { path = "../../libs/utils" }
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-3" }
 zeroize = "1.1.0"
-itertools = "0.9.0"
 
 [build-dependencies]
 vergen = "3.1.0"
