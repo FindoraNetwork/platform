@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
 
 use crate::{AssetTypeEntry, AssetTypeName, CliDataStore, CliError, PubkeyName, TxnBuilderEntry};
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
 pub mod crypto;
 pub use crypto::MixedPair;
@@ -506,16 +507,14 @@ impl CliDataStore for KVStore {
     Ok(())
   }
   fn get_keypairs(&self) -> Result<Vec<crate::KeypairName>, CliError> {
-    let keys = self.get_all_encrypted_raw::<zei::xfr::sig::XfrKeyPair>()?
+    let keys = self.get_all_encrypted_raw::<XfrKeyPair>()?
                    .into_iter()
                    .map(|(x, _)| x)
                    .collect();
     Ok(keys)
   }
-  fn get_keypair_pubkey(&self,
-                        k: &crate::KeypairName)
-                        -> Result<Option<zei::xfr::sig::XfrPublicKey>, CliError> {
-    let mixed_pair = self.get_encrypted_raw::<zei::xfr::sig::XfrKeyPair>(k)?;
+  fn get_keypair_pubkey(&self, k: &crate::KeypairName) -> Result<Option<XfrPublicKey>, CliError> {
+    let mixed_pair = self.get_encrypted_raw::<XfrKeyPair>(k)?;
     if let Some(mixed_pair) = mixed_pair {
       let public = mixed_pair.clear_no_verify()
                              .with_context(|| PubKeyDeserialization { name: k.0.clone() })?;
@@ -525,7 +524,7 @@ impl CliDataStore for KVStore {
     }
   }
   fn with_keypair<E: std::error::Error + 'static,
-                    F: FnOnce(Option<&zei::xfr::sig::XfrKeyPair>) -> Result<(), E>>(
+                    F: FnOnce(Option<&XfrKeyPair>) -> Result<(), E>>(
     &mut self,
     k: &crate::KeypairName,
     f: F)
@@ -533,7 +532,7 @@ impl CliDataStore for KVStore {
     let keypair =
       crate::helpers::prompt_with_retries(3, Some(&k.0), |password| {
         let mixed_pair =
-          self.get_encrypted_raw::<zei::xfr::sig::XfrKeyPair>(k)
+          self.get_encrypted_raw::<XfrKeyPair>(k)
               .map_err(|_| KVError::WithInvalidKey { backtrace: Backtrace::generate(),
                                                      key: k.0.clone() })?;
         let mixed_pair = mixed_pair.with_context(|| WithInvalidKey { key: k.0.clone() })?;
@@ -552,33 +551,27 @@ impl CliDataStore for KVStore {
       Ok(())
     }
   }
-  fn get_encrypted_keypair(
-    &self,
-    k: &crate::KeypairName)
-    -> Result<Option<MixedPair<zei::xfr::sig::XfrPublicKey, zei::xfr::sig::XfrKeyPair>>, CliError>
-  {
-    let mixed_pair = self.get_encrypted_raw::<zei::xfr::sig::XfrKeyPair>(k)?;
+  fn get_encrypted_keypair(&self,
+                           k: &crate::KeypairName)
+                           -> Result<Option<MixedPair<XfrPublicKey, XfrKeyPair>>, CliError> {
+    let mixed_pair = self.get_encrypted_raw::<XfrKeyPair>(k)?;
     Ok(mixed_pair)
   }
   fn delete_keypair(&mut self, k: &crate::KeypairName) -> Result<(), CliError> {
-    self.delete_encrypted::<zei::xfr::sig::XfrKeyPair>(k)
-        .map(|_| ())?;
+    self.delete_encrypted::<XfrKeyPair>(k).map(|_| ())?;
     Ok(())
   }
-  fn get_pubkeys(&self)
-                 -> Result<BTreeMap<crate::PubkeyName, zei::xfr::sig::XfrPublicKey>, CliError> {
+  fn get_pubkeys(&self) -> Result<BTreeMap<crate::PubkeyName, XfrPublicKey>, CliError> {
     Ok(self.get_all()?)
   }
 
-  fn get_local_pubkeys(
-    &self)
-    -> Result<BTreeMap<crate::PubkeyName, zei::xfr::sig::XfrPublicKey>, CliError> {
+  fn get_local_pubkeys(&self) -> Result<BTreeMap<crate::PubkeyName, XfrPublicKey>, CliError> {
     let key_pair_names = self.get_keypairs()?;
     let public_keys =
       key_pair_names.into_iter()
                     .map(|kp| (kp.clone().0, self.get_keypair_pubkey(&kp).unwrap().unwrap()))
                     .collect_vec();
-    let mut res: BTreeMap<crate::PubkeyName, zei::xfr::sig::XfrPublicKey> = BTreeMap::new();
+    let mut res: BTreeMap<crate::PubkeyName, XfrPublicKey> = BTreeMap::new();
     for (kp_name, pk) in public_keys {
       let pk_name = PubkeyName(kp_name);
       res.insert(pk_name, pk);
@@ -593,20 +586,13 @@ impl CliDataStore for KVStore {
     Ok(res)
   }
 
-  fn get_pubkey(&self,
-                k: &crate::PubkeyName)
-                -> Result<Option<zei::xfr::sig::XfrPublicKey>, CliError> {
+  fn get_pubkey(&self, k: &crate::PubkeyName) -> Result<Option<XfrPublicKey>, CliError> {
     Ok(self.get(k)?)
   }
-  fn delete_pubkey(&mut self,
-                   k: &crate::PubkeyName)
-                   -> Result<Option<zei::xfr::sig::XfrPublicKey>, CliError> {
+  fn delete_pubkey(&mut self, k: &crate::PubkeyName) -> Result<Option<XfrPublicKey>, CliError> {
     Ok(self.delete(k)?)
   }
-  fn add_key_pair(&mut self,
-                  k: &crate::KeypairName,
-                  kp: zei::xfr::sig::XfrKeyPair)
-                  -> Result<(), CliError> {
+  fn add_key_pair(&mut self, k: &crate::KeypairName, kp: XfrKeyPair) -> Result<(), CliError> {
     use super::Password;
     let pubkey = kp.get_pk();
     let password = crate::helpers::prompt_confirming_with_retries(3, Some(&k.0)).context(Password)?;
@@ -614,10 +600,7 @@ impl CliDataStore for KVStore {
 
     Ok(self.set_encrypted_raw(k, mixed_pair).map(|_| ())?)
   }
-  fn add_public_key(&mut self,
-                    k: &crate::PubkeyName,
-                    pk: zei::xfr::sig::XfrPublicKey)
-                    -> Result<(), CliError> {
+  fn add_public_key(&mut self, k: &crate::PubkeyName, pk: XfrPublicKey) -> Result<(), CliError> {
     Ok(self.set(k, pk).map(|_| ())?)
   }
   fn get_built_transactions(
