@@ -115,7 +115,7 @@ transfer_assets()
     change_amount=$2
     amount_confidential=$3
     asset_confidential=$4
-    asset_type_name=$5
+    filter_by_sender=$5
     sender=$6
     receiver=$7
     receiver_local=$8
@@ -124,12 +124,12 @@ transfer_assets()
     tx_name=$(random_string 16)
     echo "TX_NAME: $tx_name"
 
-    # TODO ambiguous => a boolean might be better, or query the utxos filtering with the sender name and the asset type
-    # If the asset_type_name is not provided list all the unspent txos
-    if [[ $asset_type_name == "" ]]; then
-        run bash -c "$CLI2 list-txos --unspent=true"
-    else
+    # If the filter_by_sender is not provided list all the unspent txos
+    if [[ $filter_by_sender == "true" ]]; then
         run bash -c "$CLI2 list-txos --unspent=true --id=$sender"
+    else
+        run bash -c "$CLI2 list-txos --unspent=true"
+
     fi
     [ "$status" -eq 0 ]
 

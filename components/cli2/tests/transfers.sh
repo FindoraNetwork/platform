@@ -57,7 +57,7 @@ check_transfer()
     # Transfer the asset
     amount="5000"
     change_amount="5000"
-    transfer_assets "$amount" "$change_amount" "$is_amount_confidential" "$is_asset_confidential" "AliceCoin" "alice" "bob" "false" "Y"
+    transfer_assets "$amount" "$change_amount" "$is_amount_confidential" "$is_asset_confidential" "true" "alice" "bob" "false" "Y"
     [ "$status" -eq 0 ]
 
     check_line 5 "  TransferAssets:"

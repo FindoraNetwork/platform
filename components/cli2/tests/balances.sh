@@ -14,18 +14,18 @@ check_balances()
     run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
     run bash -c "$PASSWORD_PROMPT | $CLI2 key-gen arturo;"
 
-    transfer_assets "5000" "5000" "n" "n" "AliceCoin" "alice" "bob" "false" "Y"
+    transfer_assets "5000" "5000" "n" "n" "true" "alice" "bob" "false" "Y"
     [ "$status" -eq 0 ]
 
-    transfer_assets "1500" "3500" "n" "n" "AliceCoin" "alice" "bob" "false" "Y"
+    transfer_assets "1500" "3500" "n" "n" "true" "alice" "bob" "false" "Y"
     [ "$status" -eq 0 ]
 
     # Alice makes a confidential transfer to Bob of some AliceCoins
-    transfer_assets "1000" "2500" "Y" "Y" "AliceCoin" "alice" "bob" "false" $unlock
+    transfer_assets "1000" "2500" "Y" "Y" "true" "alice" "bob" "false" $unlock
     [ "$status" -eq 0 ]
 
     # Alice makes a confidential transfer to Arturo of some AliceCoins
-    transfer_assets "1300" "1200" "Y" "Y" "AliceCoin" "alice" "arturo" "true" $unlock
+    transfer_assets "1300" "1200" "Y" "Y" "true" "alice" "arturo" "true" $unlock
     [ "$status" -eq 0 ]
 
     # Now Alice creates another coin
