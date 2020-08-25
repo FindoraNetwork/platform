@@ -840,7 +840,7 @@ fn main() {
   // user aware that this is a bug, direct them to the bug tracker, and display a
   // backtrace.
   std::panic::set_hook(Box::new(|panic_info| {
-                         println!("{}", PANIC_STRING);
+                         println!("{}", messages::PANIC_STRING);
                          let payload = panic_info.payload();
                          if let Some(s) = payload.downcast_ref::<&str>() {
                            println!("{}", s);
@@ -890,7 +890,8 @@ fn main() {
 }
 
 #[cfg(not(feature = "no-bugtracker"))]
-pub const PANIC_STRING: &'static str =
+pub mod messages {
+  pub const PANIC_STRING: &'static str =
     concat!(
         "An unknown error occurred, this is a bug. Please help us fix it by reporting it at:\n",
         "https://bugtracker.findora.org/projects/testnet/issues/new?issue[subject]=findora%20CLI%20(build%20",
@@ -901,9 +902,11 @@ pub const PANIC_STRING: &'static str =
         into the description field of the bug report.\n\
         \
         Here is what context is available:");
+}
 
 #[cfg(feature = "no-bugtracker")]
-pub const PANIC_STRING: &'static str = "\
+pub mod messages {
+  pub const PANIC_STRING: &'static str = "\
 An unknown error occurred, this is a bug. Please help us fix it by reporting it to:
 testnet@findora.org
 
@@ -911,3 +914,4 @@ Please copy and paste the entire error message, as well as any preceding output,
 the bottom of the email.
 
 Here is what context is available:";
+}
