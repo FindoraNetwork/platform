@@ -13,6 +13,9 @@ let src = fetchFromGitHub {
        "clippy-preview"
        "rustfmt-preview"
      ];
+     targets = [
+       "wasm32-unknown-unknown"
+     ];
    };
 in
 with import "${src.out}/rust-overlay.nix" pkgs pkgs;
@@ -27,6 +30,9 @@ stdenv.mkDerivation {
     zlib
     pkgconfig openssl binutils-unwrapped
     protobuf
+
+    wasm-pack
+
   ] ++ stdenv.lib.optionals stdenv.isDarwin [
         darwin.apple_sdk.frameworks.Security
       ];

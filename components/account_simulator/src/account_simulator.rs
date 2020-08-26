@@ -2214,7 +2214,15 @@ mod test {
     normal.deep_invariant_check().unwrap();
   }
 
-  fn ledger_simulates_accounts(cmds: AccountsScenario, with_standalone: bool) {
+  fn ledger_simulates_accounts(cmds: AccountsScenario, with_standalone: bool, echo: bool) {
+    if echo {
+      println!("conf amts: {}, conf types: {}",
+               cmds.confidential_amounts, cmds.confidential_types);
+      for c in cmds.cmds.iter() {
+        println!("{:?}", c);
+      }
+    }
+
     let _ = if with_standalone {
       Some(LEDGER_STANDALONE_LOCK.lock().unwrap())
     } else {
@@ -2313,15 +2321,15 @@ mod test {
 
   #[allow(dead_code)]
   fn ledger_simulates_accounts_with_standalone(cmds: AccountsScenario) {
-    ledger_simulates_accounts(cmds, true)
+    ledger_simulates_accounts(cmds, true, false)
   }
 
   #[allow(dead_code)]
   fn ledger_simulates_accounts_no_standalone(cmds: AccountsScenario) {
-    ledger_simulates_accounts(cmds, false)
+    ledger_simulates_accounts(cmds, false, false)
   }
 
-  fn regression_quickcheck_found(with_standalone: bool) {
+  fn regression_quickcheck_found(with_standalone: bool, conf_amts: bool, conf_types: bool) {
     use AccountsCommand::*;
     for conf_amts in vec![false, true] {
       for conf_types in vec![false, true] {
@@ -2334,7 +2342,8 @@ mod test {
                                                                      UserName("".into()))],
                                                      confidential_types: conf_types,
                                                      confidential_amounts: conf_amts },
-                                  with_standalone);
+                                  with_standalone,
+                                  true);
         ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
                                                                 NewUnit(UnitName("".into()),
                                                                         UserName("".into())),
@@ -2345,7 +2354,8 @@ mod test {
                                                                      UserName("".into()))],
                                                      confidential_types: conf_types,
                                                      confidential_amounts: conf_amts },
-                                  with_standalone);
+                                  with_standalone,
+                                  true);
 
         ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
                                                                 NewUnit(UnitName("".into()),
@@ -2359,7 +2369,8 @@ mod test {
                                                                      UserName("".into()))],
                                                      confidential_types: conf_types,
                                                      confidential_amounts: conf_amts },
-                                  with_standalone);
+                                  with_standalone,
+                                  true);
 
         ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
                                                                 NewUnit(UnitName("".into()),
@@ -2371,7 +2382,8 @@ mod test {
                                                                      UserName("".into()))],
                                                      confidential_types: conf_types,
                                                      confidential_amounts: conf_amts },
-                                  with_standalone);
+                                  with_standalone,
+                                  true);
         ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
                                                                 NewUnit(UnitName("".into()),
                                                                         UserName("".into())),
@@ -2382,7 +2394,8 @@ mod test {
                                                                      UserName("".into()))],
                                                      confidential_types: conf_types,
                                                      confidential_amounts: conf_amts },
-                                  with_standalone);
+                                  with_standalone,
+                                  true);
 
         ledger_simulates_accounts(AccountsScenario { confidential_amounts: conf_types,
                                                      confidential_types: conf_amts,
@@ -2399,7 +2412,8 @@ mod test {
                                                                     1,
                                                                     UnitName("".into()),
                                                                     UserName("".into()))] },
-                                  with_standalone);
+                                  with_standalone,
+                                  true);
 
         ledger_simulates_accounts(AccountsScenario { confidential_amounts: conf_types,
                                                      confidential_types: conf_amts,
@@ -2416,7 +2430,8 @@ mod test {
                                                                     1,
                                                                     UnitName("".into()),
                                                                     UserName("".into()))] },
-                                  with_standalone);
+                                  with_standalone,
+                                  true);
 
         ledger_simulates_accounts(AccountsScenario { confidential_amounts: conf_types,
                                                      confidential_types: conf_amts,
@@ -2432,17 +2447,30 @@ mod test {
                                                                      2,
                                                                      UnitName("".into()),
                                                                      UserName("".into()))] },
-                                  with_standalone);
+                                  with_standalone,
+                                  true);
       }
     }
   }
 
   #[test]
-  // This test passes, but we ignore it since it's slow
-  // Redmine issue: #47
-  #[ignore]
-  fn regression_quickcheck_found_no_standalone() {
-    regression_quickcheck_found(false)
+  fn regression_quickcheck_found_no_standalone00() {
+    regression_quickcheck_found(false, false, false)
+  }
+
+  #[test]
+  fn regression_quickcheck_found_no_standalone01() {
+    regression_quickcheck_found(false, false, true)
+  }
+
+  #[test]
+  fn regression_quickcheck_found_no_standalone11() {
+    regression_quickcheck_found(false, true, true)
+  }
+
+  #[test]
+  fn regression_quickcheck_found_no_standalone10() {
+    regression_quickcheck_found(false, true, false)
   }
 
   #[test]
@@ -2450,7 +2478,10 @@ mod test {
   // Redmine issue: #47
   #[ignore]
   fn regression_quickcheck_found_with_standalone() {
-    regression_quickcheck_found(true)
+    regression_quickcheck_found(true, false, false);
+    regression_quickcheck_found(true, false, true);
+    regression_quickcheck_found(true, true, true);
+    regression_quickcheck_found(true, true, false);
   }
 
   #[test]

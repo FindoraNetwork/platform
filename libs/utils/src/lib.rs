@@ -47,12 +47,16 @@ pub const LEDGER_PORT: usize = 8668;
 /// Environment variables `PROTOCOL` and `SERVER_HOST` set the protocol and host,
 ///
 /// By default, the protocol is `http` and the host is `testnet.findora.org`.
-pub fn protocol_host() -> (&'static str, &'static str) {
-  (std::option_env!("PROTOCOL").unwrap_or(PROTOCOL),
-   std::option_env!("SERVER_HOST").unwrap_or(SERVER_HOST))
+pub fn protocol_host() -> (String, String) {
+  (std::env::var_os("PROTOCOL").filter(|x| !x.is_empty())
+                               .and_then(|x| x.into_string().ok())
+                               .unwrap_or_else(|| PROTOCOL.to_string()),
+   std::env::var_os("SERVER_HOST").filter(|x| !x.is_empty())
+                                  .and_then(|x| x.into_string().ok())
+                                  .unwrap_or_else(|| SERVER_HOST.to_string()))
 }
 #[cfg(not(target_arch = "wasm32"))]
-pub fn actix_post_request<T: Serialize>(client: &reqwest::Client,
+pub fn actix_post_request<T: Serialize>(client: &reqwest::blocking::Client,
                                         query: &str,
                                         body: Option<T>)
                                         -> Result<String, reqwest::Error> {
@@ -66,7 +70,9 @@ pub fn actix_post_request<T: Serialize>(client: &reqwest::Client,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn actix_get_request(client: &reqwest::Client, query: &str) -> Result<String, reqwest::Error> {
+pub fn actix_get_request(client: &reqwest::blocking::Client,
+                         query: &str)
+                         -> Result<String, reqwest::Error> {
   Ok(client.get(query).send()?.error_for_status()?.text()?)
 }
 

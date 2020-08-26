@@ -11,10 +11,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let host = "localhost";
   let port = "8668";
 
-  let client = reqwest::Client::new();
+  let client = reqwest::blocking::Client::new();
 
-  let mut resp_gs = client.get(&format!("{}://{}:{}/global_state", protocol, host, port))
-                          .send()?;
+  let resp_gs = client.get(&format!("{}://{}:{}/global_state", protocol, host, port))
+                      .send()?;
   let (_comm, seq_id, _sig): (BitDigest, u64, XfrSignature) =
     serde_json::from_str(&resp_gs.text()?[..]).unwrap();
 
@@ -39,8 +39,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let token_code_b64 = token_code1.to_base64();
   println!("\n\nQuery asset_token {:?}", &token_code1);
 
-  let mut res = reqwest::get(&format!("http://{}:{}/{}/{}",
-                                      &host, &port, "asset_token", &token_code_b64))?;
+  let mut res = reqwest::blocking::get(&format!("http://{}:{}/{}/{}",
+                                                &host, &port, "asset_token", &token_code_b64))?;
 
   println!("Status: {}", res.status());
   println!("Headers:\n{:?}", res.headers());
@@ -60,13 +60,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   std::io::copy(&mut res, &mut std::io::stdout())?;
 
   println!("\n\nQuery global_state {:?} again", &token_code1);
-  res = reqwest::get(&format!("http://{}:{}/{}/{}", &host, &port, "global_state", 0))?;
+  res = reqwest::blocking::get(&format!("http://{}:{}/{}/{}", &host, &port, "global_state", 0))?;
 
   println!("Status: {}", res.status());
   println!("Headers:\n{:?}", res.headers());
 
-  let mut res = reqwest::get(&format!("http://{}:{}/{}/{}",
-                                      &host, &port, "asset_token", &token_code_b64))?;
+  let mut res = reqwest::blocking::get(&format!("http://{}:{}/{}/{}",
+                                                &host, &port, "asset_token", &token_code_b64))?;
 
   println!("Status: {}", res.status());
   println!("Headers:\n{:?}", res.headers());

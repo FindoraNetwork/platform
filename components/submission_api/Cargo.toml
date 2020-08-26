@@ -3,6 +3,7 @@ name = "submission_api"
 version = "0.1.0"
 authors = ["Nathan Yospe <nathan@eian.io>"]
 edition = "2018"
+build = "build.rs"
 
 [lib]
 path = "src/submission_api.rs"
@@ -18,8 +19,11 @@ percent-encoding = "2.1.0"
 submission_server = {path = "../submission_server"}
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
 rand_chacha = "0.2.0"
-reqwest = "0.9.24"
+reqwest = { version = "0.10", features = ["blocking", "json"] }
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
 utils = { path = "../../libs/utils" }
+
+[build-dependencies]
+vergen = "3.1.0"

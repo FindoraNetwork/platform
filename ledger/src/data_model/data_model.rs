@@ -354,6 +354,7 @@ pub struct Asset {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+// Note: if the properties field of this struct is changed, update the comment for AssetType::from_json in wasm_data_model.rs as well.
 pub struct AssetType {
   pub properties: Asset,
   pub digest: [u8; 32],
@@ -655,13 +656,36 @@ impl TransferAsset {
   }
 
   pub fn sign(&mut self, keypair: &XfrKeyPair) {
-    self.body_signatures
-        .push(self.body.compute_body_signature(&keypair, None))
+    let sig = self.create_input_signature(keypair);
+    self.attach_signature(sig).unwrap()
   }
 
-  pub fn add_cosignature(&mut self, keypair: &XfrKeyPair, input_idx: usize) {
-    self.body_signatures
-        .push(self.body.compute_body_signature(&keypair, Some(input_idx)))
+  pub fn sign_cosignature(&mut self, keypair: &XfrKeyPair, input_idx: usize) {
+    let sig = self.create_cosignature(keypair, input_idx);
+    self.attach_signature(sig).unwrap()
+  }
+
+  pub fn attach_signature(&mut self,
+                          sig: IndexedSignature<TransferAssetBody>)
+                          -> Result<(), PlatformError> {
+    if !sig.verify(&self.body) {
+      return Err(PlatformError::InputsError(error_location!()));
+    }
+    self.body_signatures.push(sig);
+    Ok(())
+  }
+
+  pub fn create_input_signature(&self,
+                                keypair: &XfrKeyPair)
+                                -> IndexedSignature<TransferAssetBody> {
+    self.body.compute_body_signature(keypair, None)
+  }
+
+  pub fn create_cosignature(&self,
+                            keypair: &XfrKeyPair,
+                            input_idx: usize)
+                            -> IndexedSignature<TransferAssetBody> {
+    self.body.compute_body_signature(keypair, Some(input_idx))
   }
 
   pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
@@ -1070,6 +1094,7 @@ impl AuthenticatedAIRResult {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+// Note: if the utxo field of this struct is changed, update the comment for ClientAssetRecord::from_json in wasm_data_model.rs as well.
 pub struct AuthenticatedUtxo {
   pub utxo: Utxo,                                          // Utxo to authenticate
   pub authenticated_txn: AuthenticatedTransaction, // Merkle proof that transaction containing the utxo exists on the ledger
@@ -1424,6 +1449,9 @@ pub struct StateCommitmentData {
   pub transaction_merkle_commitment: HashValue, // The root hash of the transaction Merkle tree
   pub air_commitment: BitDigest, // The root hash of the AIR sparse Merkle tree
   pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  pub pulse_count: u64, // a consensus-specific counter; should be 0 unless consensus needs it.
   #[serde(default = "default_digest")]
   #[serde(skip_serializing_if = "is_default_digest")]
   pub kv_store: BitDigest, // The root hash of the KV Store SMT

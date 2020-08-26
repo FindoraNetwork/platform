@@ -39,6 +39,7 @@ impl fmt::Display for TxnHandle {
 // Indicates whether a transaction has been committed to the ledger
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TxnStatus {
+  Rejected(String),
   Committed((TxnSID, Vec<TxoSID>)),
   Pending,
 }
@@ -176,20 +177,50 @@ impl<RNG, LU, TF> SubmissionServer<RNG, LU, TF>
     Err(fail!("Cannot finish block because there are no pending txns"))
   }
 
-  pub fn cache_transaction(&mut self, txn: Transaction) -> Result<TxnHandle, PlatformError> {
-    if let Some(block) = &mut self.block {
-      if let Ok(ledger) = self.committed_state.read() {
-        let handle = TxnHandle::new(&txn);
-        let txn_effect = TxnEffect::compute_effect(txn.clone())?;
-        self.pending_txns
-            .push((ledger.apply_transaction(block, txn_effect)?, handle.clone(), txn));
-        self.txn_status.insert(handle.clone(), TxnStatus::Pending);
+  pub fn block_pulse_count(&self) -> u64 {
+    if let Some(block) = &self.block {
+      LU::block_pulse_count(&block)
+    } else {
+      0
+    }
+  }
 
-        return Ok(handle);
+  pub fn block_txn_count(&self) -> usize {
+    self.pending_txns.len()
+  }
+
+  pub fn pulse_block(&mut self) {
+    if let Some(block) = &mut self.block {
+      LU::pulse_block(block);
+    }
+  }
+
+  pub fn cache_transaction(&mut self, txn: Transaction) -> TxnHandle {
+    // Begin a block if the previous one has been commited
+    if self.all_commited() {
+      self.begin_block();
+    }
+
+    // The if statement above guarantees that we have a block.
+    let mut block = self.block.as_mut().unwrap();
+    let ledger = self.committed_state.read().unwrap();
+    let handle = TxnHandle::new(&txn);
+    let temp_sid = TxnEffect::compute_effect(txn.clone()).and_then(|txn_effect| {
+                                                           ledger.apply_transaction(&mut block,
+                                                                                    txn_effect)
+                                                         });
+    match temp_sid {
+      Ok(temp_sid) => {
+        self.pending_txns.push((temp_sid, handle.clone(), txn));
+        self.txn_status.insert(handle.clone(), TxnStatus::Pending);
+      }
+      Err(e) => {
+        self.txn_status
+            .insert(handle.clone(), TxnStatus::Rejected(format!("{}", e)));
       }
     }
 
-    Err(fail!("Transaction is invalid and cannot be added to pending txn list."))
+    handle
   }
 
   pub fn abort_block(&mut self) {
@@ -206,12 +237,7 @@ impl<RNG, LU, TF> SubmissionServer<RNG, LU, TF>
   pub fn handle_transaction(&mut self, txn: Transaction) -> Result<TxnHandle, PlatformError> {
     match self.txn_forwarder {
       None => {
-        // Begin a block if the previous one has been commited
-        if self.all_commited() {
-          self.begin_block();
-        }
-
-        let handle = self.cache_transaction(txn)?;
+        let handle = self.cache_transaction(txn);
         info!("Transaction added to cache and will be committed in the next block");
         // End the current block if it's eligible to commit
         if self.eligible_to_commit() {
@@ -327,10 +353,8 @@ mod tests {
                  .unwrap();
 
     // Cache transactions
-    submission_server.cache_transaction(txn_builder_0.transaction().clone())
-                     .unwrap();
-    submission_server.cache_transaction(txn_builder_1.transaction().clone())
-                     .unwrap();
+    submission_server.cache_transaction(txn_builder_0.transaction().clone());
+    submission_server.cache_transaction(txn_builder_1.transaction().clone());
 
     // Verify temp_sids
     let temp_sid_0 = submission_server.pending_txns.get(0).unwrap();
@@ -358,13 +382,12 @@ mod tests {
 
     // Verify that it's ineligible to commit if #transactions < BLOCK_CAPACITY
     for _i in 0..(block_capacity - 1) {
-      submission_server.cache_transaction(transaction.clone())
-                       .unwrap();
+      submission_server.cache_transaction(transaction.clone());
       assert!(!submission_server.eligible_to_commit());
     }
 
     // Verify that it's eligible to commit if #transactions == BLOCK_CAPACITY
-    submission_server.cache_transaction(transaction).unwrap();
+    submission_server.cache_transaction(transaction);
     assert!(submission_server.eligible_to_commit());
   }
 
@@ -391,7 +414,7 @@ mod tests {
 
     // Submit a second transaction and ensure that it is tracked as committed
     submission_server.handle_transaction(transaction.clone())
-                     .expect("Txn should be valid");
+                     .unwrap();
     // In this case, both transactions have the same handle. Because transactions are unique and
     // We are using a collision resistant hash function, this will not occur on a live ledger.
     let status = submission_server.txn_status
@@ -399,5 +422,19 @@ mod tests {
                                   .expect("handle should be in map")
                                   .clone();
     assert_eq!(status, TxnStatus::Committed((TxnSID(1), Vec::new())));
+
+    // Now test that invalid transactions show up as rejected
+    // Provide the completely wrong sequence number
+    let bad_transaction = Transaction::from_seq_id(5000);
+    let txn_handle = submission_server.handle_transaction(bad_transaction)
+                                      .unwrap();
+    let status = submission_server.txn_status
+                                  .get(&txn_handle)
+                                  .expect("The handle should be in map by now.")
+                                  .clone();
+    match status {
+      TxnStatus::Rejected(_) => {}
+      _ => assert!(false),
+    }
   }
 }

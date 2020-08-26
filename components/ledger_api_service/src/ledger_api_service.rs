@@ -6,8 +6,6 @@ extern crate serde_json;
 
 use actix_cors::Cors;
 use actix_web::{dev, error, middleware, test, web, App, HttpResponse, HttpServer};
-use cryptohash::sha256::Digest as BitDigest;
-use cryptohash::sha256::DIGESTBYTES;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerState};
@@ -27,6 +25,14 @@ pub struct RestfulApiService {
 // Ping route to check for liveness of API
 fn ping() -> actix_web::Result<String> {
   Ok("success".into())
+}
+
+/// Returns the git commit hash and commit date of this build
+fn version() -> actix_web::Result<String> {
+  Ok(concat!("Build: ",
+             env!("VERGEN_SHA_SHORT"),
+             " ",
+             env!("VERGEN_BUILD_DATE")).into())
 }
 
 // Future refactor:
@@ -171,15 +177,10 @@ pub fn query_kv<LA>(data: web::Data<Arc<RwLock<LA>>>,
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
-  let mut key = BitDigest { 0: [0u8; DIGESTBYTES] };
-  let key_str = b64dec(&addr.into_inner()).map_err(actix_web::error::ErrorBadRequest)?;
-  if key.0.len() != key_str.len() {
-    return Err(actix_web::error::ErrorBadRequest(format!("KV keys must be {} bytes.",
-                                                         key.0.len())));
-  }
-
-  key.0.clone_from_slice(&key_str);
-
+  let key =
+    Key::from_base64(&*addr).map_err(|_| {
+                              actix_web::error::ErrorBadRequest("Could not deserialize Key.")
+                            })?;
   let result = reader.get_kv_entry(key);
   Ok(web::Json(result))
 }
@@ -427,6 +428,7 @@ impl RestfulApiService {
                 .wrap(Cors::new().supports_credentials())
                 .data(ledger_access.clone())
                 .route("/ping", web::get().to(ping))
+                .route("/version", web::get().to(version))
                 .set_route::<LA>(ServiceInterface::LedgerAccess)
                 .set_route::<LA>(ServiceInterface::ArchiveAccess)
     }).bind(&format!("{}:{}", host, port))?
@@ -454,6 +456,8 @@ pub trait RestfulLedgerAccess {
                u64,
                SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>),
               PlatformError>;
+
+  // fn get_state_commitment_data(&self) -> Result<StateCommitmentData, PlatformError>;
 
   fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup, PlatformError>;
 
@@ -564,7 +568,7 @@ pub struct ActixLedgerClient {
   port: usize,
   host: String,
   protocol: String,
-  client: reqwest::Client,
+  client: reqwest::blocking::Client,
 }
 
 impl ActixLedgerClient {
@@ -572,7 +576,7 @@ impl ActixLedgerClient {
     ActixLedgerClient { port,
                         host: String::from(host),
                         protocol: String::from(protocol),
-                        client: reqwest::Client::new() }
+                        client: reqwest::blocking::Client::new() }
   }
 }
 
@@ -637,8 +641,8 @@ impl RestfulLedgerAccess for ActixLedgerClient {
                         self.host,
                         self.port,
                         LedgerAccessRoutes::GlobalState.route());
-    let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
-    Ok(serde_json::from_str::<_>(&text).map_err(|_| ser_fail!())?)
+    let text = actix_get_request(&self.client, &query).map_err(|e| inp_fail!(e))?;
+    Ok(serde_json::from_str::<_>(&text).map_err(|e| ser_fail!(e))?)
   }
 
   fn get_kv_entry(&self, _addr: Key) -> Result<AuthenticatedKVLookup, PlatformError> {
@@ -646,7 +650,13 @@ impl RestfulLedgerAccess for ActixLedgerClient {
   }
 
   fn public_key(&self) -> Result<XfrPublicKey, PlatformError> {
-    unimplemented!();
+    let query = format!("{}://{}:{}{}",
+                        self.protocol,
+                        self.host,
+                        self.port,
+                        LedgerAccessRoutes::PublicKey.route());
+    let text = actix_get_request(&self.client, &query).map_err(|e| inp_fail!(e))?;
+    Ok(serde_json::from_str::<_>(&text).map_err(|e| ser_fail!(e))?)
   }
 
   fn sign_message<T: Serialize + serde::de::DeserializeOwned>(

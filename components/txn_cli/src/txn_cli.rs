@@ -10,10 +10,10 @@ fn main() {
   let local = inputs.is_present("local");
   let config = {
     if local {
-      debug!("LOCAL");
+      debug!("Using standalone ledger at localhost");
       HttpStandaloneConfig::local()
     } else {
-      debug!("TESTNET");
+      debug!("Using testnet ledger");
       HttpStandaloneConfig::testnet()
     }
   };

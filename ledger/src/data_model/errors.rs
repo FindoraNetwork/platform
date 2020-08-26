@@ -15,13 +15,37 @@ pub enum PlatformError {
   InputsError(String),
   PolicyFailureError(String),
   CheckedReplayError(String),
-  // Option(String) so I (joe) can be lazy about error descriptions but also catch the laziness
-  // later by removing Option
   InvariantError(String),
   SubmissionServerError(String),
   QueryServerError(String),
   ZeiError(String, ZeiError),
   IoError(String),
+}
+
+impl PlatformError {
+  pub fn tag_message(self, tag: &str) -> Self {
+    use PlatformError::*;
+    let f = |s| format!("[{}]: {}", tag, s);
+    match self {
+      DeserializationError(s) => DeserializationError(f(s)),
+      SerializationError(s) => SerializationError(f(s)),
+      InputsError(s) => InputsError(f(s)),
+      PolicyFailureError(s) => PolicyFailureError(f(s)),
+      CheckedReplayError(s) => CheckedReplayError(f(s)),
+      InvariantError(s) => InvariantError(f(s)),
+      SubmissionServerError(s) => SubmissionServerError(f(s)),
+      QueryServerError(s) => QueryServerError(f(s)),
+      IoError(s) => IoError(f(s)),
+      ZeiError(s, ze) => ZeiError(f(s), ze),
+    }
+  }
+}
+
+#[macro_export]
+macro_rules! add_location {
+  () => {
+    |e| PlatformError::from(e).tag_message(&error_location!())
+  };
 }
 
 impl std::error::Error for PlatformError {}
@@ -69,6 +93,16 @@ macro_rules! inp_fail {
   };
   ($s:expr) => {
     PlatformError::InputsError(format!("[{}] {}", &error_location!(), &$s))
+  };
+}
+
+#[macro_export]
+macro_rules! sub_fail {
+  () => {
+    PlatformError::SubmissionServerError(error_location!())
+  };
+  ($s:expr) => {
+    PlatformError::SubmissionServerError(format!("[{}] {}", &error_location!(), &$s))
   };
 }
 
