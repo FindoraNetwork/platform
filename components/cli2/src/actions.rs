@@ -1211,11 +1211,6 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
 
   let txos = store.get_cached_txos()?;
 
-  if txos.is_empty() {
-    println!("There is no input available for building the transaction. You need to issue some asset or receive some funds to your address.");
-    return Ok(());
-  }
-
   let mut utxos = BTreeMap::new();
 
   for (n, ent) in txos.into_iter() {
@@ -1231,6 +1226,11 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
         continue;
       }
     }
+  }
+
+  if utxos.is_empty() {
+    println!("There is no input available for building the transaction. You need to issue some asset or receive some funds to your address.");
+    return Ok(());
   }
 
   let mut trn_builder = TransferOperationBuilder::new();

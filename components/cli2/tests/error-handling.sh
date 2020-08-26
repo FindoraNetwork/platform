@@ -242,7 +242,8 @@ source "tests/common.sh"
     check_line 0 "No transaction \`bad_tx_id\` found."
 }
 
-@test "transfer-assets" {
+@test "transfer-assets-empty-tx" {
+
     run bash -c "echo y | $CLI2 query-ledger-state"
     [ "$status" -eq 0 ]
 

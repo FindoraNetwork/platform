@@ -129,7 +129,6 @@ transfer_assets()
         run bash -c "$CLI2 list-txos --unspent=true --id=$sender"
     else
         run bash -c "$CLI2 list-txos --unspent=true"
-
     fi
     [ "$status" -eq 0 ]
 
@@ -149,9 +148,7 @@ transfer_assets()
                 "$sender" \
                 "$receiver" \
                 "$receiver_local" \
-                 "$unlock")
-
-    echo "The prompt $PROMPT"
+                "$unlock")
 
     run bash -c "$PROMPT | $CLI2 transfer-assets --builder=$tx_name"
     debug_lines

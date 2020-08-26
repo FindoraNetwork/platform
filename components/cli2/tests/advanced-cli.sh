@@ -185,3 +185,17 @@ source "tests/common.sh"
   [ "$status" -eq 0 ]
   check_line 0 "handle"
 }
+
+@test "transfer-assets-no-unlock" {
+    run  bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice; \
+                    $MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset alice AliceCoin;"
+    run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset AliceCoin 10000"
+    run bash -c 'echo "\"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\"" | $CLI2 load-public-key bob'
+    run bash -c "$PASSWORD_PROMPT | $CLI2 key-gen arturo;"
+
+    transfer_assets "5000" "5000" "n" "n" "true" "alice" "bob" "false" "n"
+    [ "$status" -eq 0 ]
+
+    transfer_assets "1500" "3500" "n" "n" "true" "alice" "bob" "false" "Y"
+    [ "$status" -eq 0 ]
+}

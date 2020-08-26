@@ -18,6 +18,7 @@ check_balances()
     [ "$status" -eq 0 ]
 
     transfer_assets "1500" "3500" "n" "n" "true" "alice" "bob" "false" "Y"
+    debug_lines
     [ "$status" -eq 0 ]
 
     # Alice makes a confidential transfer to Bob of some AliceCoins
@@ -43,10 +44,10 @@ check_balances()
     check_line 3 "(arturo,AliceCoin):1300"
 }
 
-@test "balances-without-unlock" {
+@test "balances-with-unlock" {
     check_balances "Y"
 }
 
-@test "balances-with-unlock" {
+@test "balances-without-unlock" {
     check_balances "n"
 }
