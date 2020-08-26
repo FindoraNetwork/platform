@@ -496,8 +496,7 @@ impl LedgerStatus {
     } else {
       // None of the operations in the current transaction have been seen before in the window
       for op_digest in txn_effect.op_digests.iter() {
-        if self.ops_seen.contains_key(*op_digest) {
-          let id = self.ops_seen.get(*op_digest).unwrap();
+        if let Some(id) = self.ops_seen.get(*op_digest) {
           return Err(PlatformError::InputsError(format!("Digest {:?} seen before at id {}, id, curr seq_id = {}, possible replay: {}",
                                                         *op_digest,
                                                         id,
@@ -3330,21 +3329,28 @@ mod tests {
                                            Some(Memo("test".to_string())),
                                            ledger.get_no_replay_token()).unwrap();
     apply_transaction(&mut ledger, tx);
+
     let mut block = ledger.start_block().unwrap();
     let new_memo = Memo("new_memo".to_string());
-    let mut memo_update = UpdateMemo::new(UpdateMemoBody { no_replay_token:
-                                                             ledger.get_no_replay_token(),
+    let mut no_replay_token = ledger.get_no_replay_token();
+    let mut memo_update = UpdateMemo::new(UpdateMemoBody { no_replay_token,
                                                            new_memo: new_memo.clone(),
                                                            asset_type: code },
                                           &creator);
     // Ensure that invalid signature fails
     memo_update.pubkey = adversary.get_pk();
-    let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update.clone()),
-                                         ledger.get_no_replay_token());
+    let tx =
+      Transaction::from_operation(Operation::UpdateMemo(memo_update.clone()), no_replay_token);
     assert!(TxnEffect::compute_effect(tx).is_err());
 
+    // Ensure that valid signature succeeds
+    memo_update.pubkey = creator.get_pk();
+    let tx =
+      Transaction::from_operation(Operation::UpdateMemo(memo_update.clone()), no_replay_token);
+    assert!(TxnEffect::compute_effect(tx).is_ok());
+
     // Only the asset creator can change the memo
-    let no_replay_token = ledger.get_no_replay_token();
+    no_replay_token = ledger.get_no_replay_token();
     let memo_update_wrong_creator = UpdateMemo::new(UpdateMemoBody { no_replay_token,
                                                                      new_memo: new_memo.clone(),
                                                                      asset_type: code },
@@ -3358,7 +3364,6 @@ mod tests {
     memo_update.pubkey = creator.get_pk();
     let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update.clone()),
                                          memo_update.body.no_replay_token);
-    let tx_clone = tx.clone();
     let effect = TxnEffect::compute_effect(tx).unwrap();
     ledger.apply_transaction(&mut block, effect.clone())
           .unwrap();
@@ -3367,12 +3372,61 @@ mod tests {
 
     // Ensure memo is updated
     assert!(ledger.get_asset_type(&code).unwrap().properties.memo == new_memo);
+  }
 
-    // Test replay defense
-    let mut block2 = ledger.start_block().unwrap();
-    let effect2 = TxnEffect::compute_effect(tx_clone).unwrap();
-    assert!(ledger.apply_transaction(&mut block2, effect2).is_err());
-    ledger.finish_block(block2).unwrap();
+  #[test]
+  pub fn test_update_memo_darp() {
+    let mut ledger = LedgerState::test_ledger();
+    let _params = PublicParams::new();
+
+    let creator = XfrKeyPair::generate(&mut ledger.get_prng());
+
+    // Define fiat token
+    let code = AssetTypeCode::from_identical_byte(1);
+    let tx = create_definition_transaction(&code,
+                                           &creator,
+                                           AssetRules::default().set_updatable(true).clone(),
+                                           Some(Memo("test".to_string())),
+                                           ledger.get_no_replay_token()).unwrap();
+    apply_transaction(&mut ledger, tx);
+
+    let mut block = ledger.start_block().expect("starting first block failed");
+    let new_memo = Memo("new_memo".to_string());
+    let no_replay_token = ledger.get_no_replay_token();
+    let mut memo_update = UpdateMemo::new(UpdateMemoBody { no_replay_token,
+                                                           new_memo: new_memo.clone(),
+                                                           asset_type: code },
+                                          &creator);
+
+    memo_update.pubkey = creator.get_pk();
+    let mut txn =
+      Transaction::from_operation(Operation::UpdateMemo(memo_update.clone()), no_replay_token);
+
+    let effect = TxnEffect::compute_effect(txn).expect("compute effect failed");
+
+    let temp_sid = ledger.apply_transaction(&mut block, effect.clone())
+                         .expect("apply transaction failed");
+    ledger.finish_block(block)
+          .unwrap()
+          .remove(&temp_sid)
+          .expect("finishing block failed");
+
+    // Test 1: replay the exact same txn, it should fail
+    block = ledger.start_block()
+                  .expect("starting replay exact txn block failed");
+    assert!(ledger.apply_transaction(&mut block, effect.clone())
+                  .is_err());
+
+    // Test 2: wrong NRPT
+    // copy the (signed, serialized) memo_update operation from the last successful block.
+    // start a new block
+    // block = ledger.start_block().expect("starting second block failed");
+    // create a new txn
+    txn = Transaction::from_token(ledger.get_no_replay_token()); // memo_update and txn should have different no_replay_token
+                                                                 // insert the copied operation (which will not match the NRPT of the txn) into the new txn
+    txn.unsafe_add_operation(Operation::UpdateMemo(memo_update.clone()));
+    assert!(ledger.apply_transaction(&mut block, effect.clone())
+                  .is_err());
   }
 
   #[test]

@@ -446,7 +446,7 @@ pub enum TxoRef {
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct NoReplayToken(pub u64, pub u64);
+pub struct NoReplayToken(u64, u64);
 
 impl NoReplayToken {
   pub fn new<R: RngCore>(prng: &mut R, seq_id: u64) -> Self {
@@ -1240,6 +1240,10 @@ impl Transaction {
     let mut mutable_op = op;
     set_no_replay_token(&mut mutable_op, self.body.no_replay_token);
     self.body.operations.push(mutable_op);
+  }
+
+  pub fn unsafe_add_operation(&mut self, op: Operation) {
+    self.body.operations.push(op);
   }
 
   pub fn sign(&mut self, keypair: &XfrKeyPair) {
