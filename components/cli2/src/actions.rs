@@ -26,7 +26,10 @@ use zei::xfr::asset_record::{open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::AssetRecordTemplate;
 
-use crate::helpers::{do_request, do_request_asset, do_request_authenticated_utxo};
+use crate::{
+  helpers::{do_request, do_request_asset, do_request_authenticated_utxo},
+  kv::MixedPair,
+};
 use ledger::data_model::errors::PlatformError;
 use ledger::{error_location, zei_fail};
 use rand::distributions::Alphanumeric;
@@ -1740,5 +1743,36 @@ pub fn change_keypair_password<S: CliDataStore>(store: &mut S,
   } else {
     println!("Error: No existing keypair found for {}", name.0);
     exit(-1);
+  }
+}
+
+pub fn import_encrypted_keypair<S: CliDataStore>(store: &mut S,
+                                                 nick: String)
+                                                 -> Result<(), CliError> {
+  // Check to make sure the user isn't about to override a key
+  if store.exists_keypair(&nick)? {
+    println!("Error: Database already contains a key for {}.", nick);
+    println!("Please delete the existing key first, or use a different nickname.");
+    exit(-1);
+  } else {
+    // Ask for the keypair
+    let serial: String = promptly::prompt("Please copy/paste exported, encrypted, keypair")?;
+    // Attempt to deserialize it
+    let pair: MixedPair<XfrPublicKey, XfrKeyPair> = if let Ok(pair) = serde_json::from_str(&serial)
+    {
+      pair
+    } else {
+      println!("Error: Unable to deserialize keypair.");
+      exit(-1);
+    };
+    // Ask the user to enter the password to verify that they know it
+    println!("Please verify the password for {}", nick);
+    let _ = crate::helpers::prompt_with_retries(3, None, |pass| {
+        pair.encrypted(pass.as_bytes())
+    }).context(crate::Password)?;
+    let nick = KeypairName(nick);
+    store.add_encrypted_keypair(&nick, pair)?;
+    println!("Key has been added to keystore as {}", nick.0);
+    Ok(())
   }
 }

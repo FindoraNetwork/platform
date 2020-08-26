@@ -600,6 +600,12 @@ impl CliDataStore for KVStore {
 
     Ok(self.set_encrypted_raw(k, mixed_pair).map(|_| ())?)
   }
+  fn add_encrypted_keypair(&mut self,
+                           k: &crate::KeypairName,
+                           kp: MixedPair<XfrPublicKey, XfrKeyPair>)
+                           -> Result<(), CliError> {
+    Ok(self.set_encrypted_raw(k, kp).map(|_| ())?)
+  }
   fn add_public_key(&mut self, k: &crate::PubkeyName, pk: XfrPublicKey) -> Result<(), CliError> {
     Ok(self.set(k, pk).map(|_| ())?)
   }

@@ -308,6 +308,10 @@ pub trait CliDataStore {
   fn exists_keypair(&self, k: &str) -> Result<bool, CliError>;
   fn delete_pubkey(&mut self, k: &PubkeyName) -> Result<Option<XfrPublicKey>, CliError>;
   fn add_key_pair(&mut self, k: &KeypairName, kp: XfrKeyPair) -> Result<(), CliError>;
+  fn add_encrypted_keypair(&mut self,
+                           k: &KeypairName,
+                           kp: MixedPair<XfrPublicKey, XfrKeyPair>)
+                           -> Result<(), CliError>;
   fn add_public_key(&mut self, k: &PubkeyName, pk: XfrPublicKey) -> Result<(), CliError>;
 
   fn get_built_transactions(&self)
@@ -475,6 +479,12 @@ enum Actions {
   /// Changes the keypair password for <nick>
   ChangeKeypairPassword {
     /// Identity nickname
+    nick: String,
+  },
+
+  /// Imports an encrypted keypair, setting the name to <nick>
+  ImportEncryptedKeypair {
+    /// Identity
     nick: String,
   },
 
@@ -760,6 +770,7 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
     ExportKeypair { nick } => export_keypair(store, nick),
 
     ChangeKeypairPassword { nick } => change_keypair_password(store, nick),
+    ImportEncryptedKeypair { nick } => import_encrypted_keypair(store, nick),
   };
   store.update_config(|conf| {
          // println!("Opened {} times before", conf.open_count);
