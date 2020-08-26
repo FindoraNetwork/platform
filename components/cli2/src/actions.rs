@@ -1723,3 +1723,22 @@ pub fn export_keypair<S: CliDataStore>(store: &mut S, nick: String) -> Result<()
     exit(-1);
   }
 }
+
+pub fn change_keypair_password<S: CliDataStore>(store: &mut S,
+                                                nick: String)
+                                                -> Result<(), CliError> {
+  let name = KeypairName(nick);
+  let mixed_pair = store.get_encrypted_keypair(&name)?;
+  if let Some(mixed_pair) = mixed_pair {
+    println!("Please enter current password for {}", name.0);
+    let keypair = crate::helpers::prompt_with_retries(3, None, |pass| {
+                    mixed_pair.encrypted(pass.as_bytes())
+                  }).context(crate::Password)?;
+    println!("Please select a new password for {}", name.0);
+    store.add_key_pair(&name, keypair)?;
+    Ok(())
+  } else {
+    println!("Error: No existing keypair found for {}", name.0);
+    exit(-1);
+  }
+}

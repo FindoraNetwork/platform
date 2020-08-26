@@ -472,6 +472,12 @@ enum Actions {
     nick: String,
   },
 
+  /// Changes the keypair password for <nick>
+  ChangeKeypairPassword {
+    /// Identity nickname
+    nick: String,
+  },
+
   /// Define an asset in a single step
   SimpleDefineAsset {
     /// Issuer key
@@ -752,6 +758,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
     Submit { nick } => submit(store, nick),
 
     ExportKeypair { nick } => export_keypair(store, nick),
+
+    ChangeKeypairPassword { nick } => change_keypair_password(store, nick),
   };
   store.update_config(|conf| {
          // println!("Opened {} times before", conf.open_count);
