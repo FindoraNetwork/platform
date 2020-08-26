@@ -422,12 +422,10 @@ pub struct BlockSID(pub usize);
 pub struct TxnTempSID(pub usize);
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct TxOutput {
-  pub record: BlindAssetRecord,
-  #[serde(default)]
-  #[serde(skip_serializing_if = "is_default")]
-  pub lien: Option<HashOf<Vec<TxOutput>>>,
-}
+pub struct TxOutput(pub BlindAssetRecord,
+                    #[serde(default)]
+                    #[serde(skip_serializing_if = "is_default")]
+                    pub Option<HashOf<Vec<TxOutput>>>);
 
 #[derive(Eq, Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum UtxoStatus {
@@ -509,18 +507,17 @@ impl TransferAssetBody {
       return Err(PlatformError::InputsError(error_location!()));
     }
 
-    let note = Box::new(gen_xfr_body(prng, input_records, output_records)
+    let transfer = Box::new(gen_xfr_body(prng, input_records, output_records)
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
-    let outputs = note.outputs
-                      .iter()
-                      .map(|rec| TxOutput { record: rec.clone(),
-                                            lien: None })
-                      .collect();
+    let outputs = transfer.outputs
+                          .iter()
+                          .map(|rec| TxOutput(rec.clone(), None))
+                          .collect();
     Ok(TransferAssetBody { inputs: input_refs,
                            outputs,
                            policies,
                            lien_assignments,
-                           transfer: note,
+                           transfer,
                            transfer_type })
   }
 
@@ -849,7 +846,7 @@ pub struct BindAssetsBody {
   pub input_liens: Vec<(usize, HashOf<Vec<TxOutput>>)>,
   // Note transferring the contract record & the inputs -- though with
   // only one output, which must be for the `contract`.
-  pub note: Box<XfrBody>,
+  pub transfer: Box<XfrBody>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -874,7 +871,7 @@ impl BindAssetsBody {
       return Err(PlatformError::InputsError(error_location!()));
     }
 
-    let note = Box::new(gen_xfr_body(prng, input_records, &[output_record.clone()])
+    let transfer = Box::new(gen_xfr_body(prng, input_records, &[output_record.clone()])
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
     let input_liens = input_refs.iter()
                                 .map(|(_l, r)| r)
@@ -885,7 +882,7 @@ impl BindAssetsBody {
     Ok(BindAssetsBody { contract: contract_ref,
                         inputs: input_refs,
                         input_liens,
-                        note })
+                        transfer })
   }
 
   /// Computes a body signature. A body signature represents consent to some part of the asset transfer. If an
@@ -917,7 +914,7 @@ pub struct ReleaseAssetsBody {
   // the input `inp_idx` gets assigned to the output `out_idx`
   // (an inp_idx of 0 is invalid)
   pub lien_assignments: Vec<(usize, usize, HashOf<Vec<TxOutput>>)>,
-  pub note: Box<XfrBody>, // Note transferrring the contract & the held assets
+  pub transfer: Box<XfrBody>, // Note transferrring the contract & the held assets
 }
 
 impl ReleaseAssetsBody {
@@ -933,13 +930,13 @@ impl ReleaseAssetsBody {
     if input_records.is_empty() {
       return Err(PlatformError::InputsError(error_location!()));
     }
-    let note = Box::new(gen_xfr_body(prng, input_records, output_records)
+    let transfer = Box::new(gen_xfr_body(prng, input_records, output_records)
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
     Ok(ReleaseAssetsBody { contract: input_ref,
                            lien,
                            num_outputs: output_records.len(),
                            lien_assignments,
-                           note })
+                           transfer })
   }
 
   /// Computes a body signature. A body signature represents consent to some part of the asset transfer. If an
@@ -1571,7 +1568,7 @@ mod tests {
     let asset_transfer_body = TransferAssetBody { inputs: Vec::new(),
                                                   outputs: Vec::new(),
                                                   policies,
-                                                  note: Box::new(xfr_note),
+                                                  transfer: Box::new(xfr_note),
                                                   lien_assignments: vec![],
                                                   transfer_type: TransferType::Standard };
 

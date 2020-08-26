@@ -233,24 +233,21 @@ impl TxnEffect {
           txos.reserve(iss.body.records.len());
           for (output, _) in iss.body.records.iter() {
             // (4)
-            if output.record.public_key != iss.pubkey.key {
+            if output.0.public_key != iss.pubkey.key {
               return Err(inp_fail!());
             }
 
             // ONLY SIMPLE TxOutputs!
-            if output
-               != &(TxOutput { record: output.record.clone(),
-                               lien: None })
-            {
+            if output != &(TxOutput(output.0.clone(), None)) {
               return Err(inp_fail!());
             }
 
             // (5)
-            if output.record.asset_type != XfrAssetType::NonConfidential(code.val) {
+            if output.0.asset_type != XfrAssetType::NonConfidential(code.val) {
               return Err(inp_fail!());
             }
 
-            if let XfrAmount::NonConfidential(amt) = output.record.amount {
+            if let XfrAmount::NonConfidential(amt) = output.0.amount {
               let issuance_amount = issuance_amounts.entry(code).or_insert(0);
               *issuance_amount += amt;
             } else {
@@ -292,7 +289,7 @@ impl TxnEffect {
                                      .iter()
                                      .zip(trn.body.transfer.outputs.iter())
           {
-            if output.record != *record {
+            if output.0 != *record {
               return Err(inp_fail!());
             }
           }
@@ -436,8 +433,7 @@ impl TxnEffect {
                     return Err(inp_fail!());
                   }
                   Some(txo) => {
-                    let TxOutput { record: inp_record,
-                                   lien: inp_lien, } = &txo;
+                    let TxOutput(inp_record, inp_lien) = &txo;
                     // (2).(b)
                     if inp_record != record || inp_lien != &lien.cloned() {
                       return Err(inp_fail!());
@@ -453,9 +449,7 @@ impl TxnEffect {
                   return Err(inp_fail!());
                 }
 
-                input_txos.insert(txo_sid,
-                                  TxOutput { record: record.clone(),
-                                             lien: lien.cloned() });
+                input_txos.insert(txo_sid, TxOutput(record.clone(), lien.cloned()));
               }
             }
           }
@@ -469,8 +463,7 @@ impl TxnEffect {
             if let Some(out_code) = out.asset_type.get_asset_type() {
               asset_types_involved.insert(AssetTypeCode { val: out_code });
             }
-            txos.push(Some(TxOutput { record: out.clone(),
-                                      lien: lien.cloned() }));
+            txos.push(Some(TxOutput(out.clone(), lien.cloned())));
             txo_count += 1;
           }
           // Until we can distinguish assets that have policies that invoke transfer restrictions
@@ -634,8 +627,8 @@ impl TxnEffect {
           //                              .inputs
           //                              .iter()
           //                              .zip(lien_inputs.iter())
-          //                              .map(|(ar, lien)| TxOutput { record: ar.clone(),
-          //                                                           lien: lien.cloned() })
+          //                              .map(|(ar, lien)| TxOutput(ar.clone(),
+          //                              lien.cloned()))
           //                              .collect::<Vec<_>>();
 
           //// (5) NOTE: the inputs are [contract] + inputs, and the contract is
@@ -668,8 +661,7 @@ impl TxnEffect {
           //          return Err(inp_fail!());
           //        }
           //        Some(txo) => {
-          //          let TxOutput { record: inp_record,
-          //                         lien: inp_lien, } = &txo;
+          //          let TxOutput(inp_record, inp_lien,) = &txo;
           //          // (2).(b)
           //          if inp_record != record || inp_lien != &lien.cloned() {
           //            return Err(inp_fail!());
@@ -686,8 +678,7 @@ impl TxnEffect {
           //      }
 
           //      input_txos.insert(txo_sid,
-          //                        TxOutput { record: record.clone(),
-          //                                   lien: lien.cloned() });
+          //                        TxOutput(record.clone(), lien.cloned()));
           //    }
           //  }
           //}
@@ -703,8 +694,7 @@ impl TxnEffect {
           //  asset_types_involved.insert(AssetTypeCode { val: out.asset_type
           //                                                      .get_asset_type()
           //                                                      .unwrap() });
-          //  txos.push(Some(TxOutput { record: out.clone(),
-          //                            lien }));
+          //  txos.push(Some(TxOutput(out.clone(), lien)));
           //  txo_count += 1;
           //}
 
@@ -840,8 +830,8 @@ impl TxnEffect {
           //                                 .zip(lien_inputs.iter().skip(1))
           //                                 // Skipping the contract
           //                                 .skip(1)
-          //                                 .map(|(ar, lien)| TxOutput { record: ar.clone(),
-          //                                                              lien: lien.cloned() })
+          //                                 .map(|(ar, lien)| TxOutput(ar.clone(),
+          //                                 lien.cloned()))
           //                                 .collect::<Vec<_>>();
 
           //let mut input_types = HashSet::new();
@@ -873,8 +863,7 @@ impl TxnEffect {
           //          return Err(inp_fail!());
           //        }
           //        Some(txo) => {
-          //          let TxOutput { record: inp_record,
-          //                         lien: inp_lien, } = &txo;
+          //          let TxOutput(inp_record, inp_lien,) = &txo;
           //          // (2).(b)
           //          if inp_record != record || inp_lien != &lien {
           //            return Err(inp_fail!());
@@ -891,8 +880,7 @@ impl TxnEffect {
           //      }
 
           //      input_txos.insert(txo_sid,
-          //                        TxOutput { record: record.clone(),
-          //                                   lien });
+          //                        TxOutput(record.clone(), lien));
           //    }
           //  }
           //}
@@ -906,8 +894,7 @@ impl TxnEffect {
           //  if let Some(out_code) = out.asset_type.get_asset_type() {
           //    asset_types_involved.insert(AssetTypeCode { val: out_code });
           //  }
-          //  txos.push(Some(TxOutput { record: out.clone(),
-          //                            lien: lien.cloned() }));
+          //  txos.push(Some(TxOutput(out.clone(), lien.cloned())));
           //  txo_count += 1;
           //}
           //// Until we can distinguish assets that have policies that invoke transfer restrictions
@@ -962,7 +949,7 @@ impl HasInvariants<PlatformError> for TxnEffect {
           for (ix, inp_record) in trn.body.inputs.iter().zip(trn.body.transfer.inputs.iter()) {
             if let TxoRef::Absolute(input_tid) = ix {
               if input_tid == txo_sid {
-                if inp_record != &record.record {
+                if inp_record != &record.0 {
                   return Err(inv_fail!());
                 }
                 if found {
@@ -970,7 +957,7 @@ impl HasInvariants<PlatformError> for TxnEffect {
                 }
                 found = true;
               }
-            } else if inp_record == &record.record {
+            } else if inp_record == &record.0 {
               // TODO(joe): is this a reasonable check? I don't think anything
               // guarantees that records are unique.
               // Right now nothing calls this, but I think it's wrong...

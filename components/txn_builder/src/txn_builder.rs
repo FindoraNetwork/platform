@@ -317,9 +317,7 @@ pub trait BuildsTransactions {
     self.add_operation_issue_asset(key_pair,
                                    token_code,
                                    seq_num,
-                                   &[(TxOutput { record: ba,
-                                                 lien: None },
-                                      owner_memo)])
+                                   &[(TxOutput(ba, None), owner_memo)])
   }
 
   #[allow(clippy::comparison_chain)]

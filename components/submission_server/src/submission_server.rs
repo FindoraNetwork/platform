@@ -258,8 +258,8 @@ pub fn txn_log_info(txn: &Transaction) {
       Operation::ReleaseAssets(release_assets_op) => {
         info!("Asset Release: Release of lien {:?} ({} inputs) into {} outputs",
               release_assets_op.body.lien,
-              release_assets_op.body.note.inputs.len(),
-              release_assets_op.body.note.outputs.len(),);
+              release_assets_op.body.transfer.inputs.len(),
+              release_assets_op.body.transfer.outputs.len(),);
       }
       Operation::AIRAssign(air_assign_op) => {
         info!("Assigning to AIR: AIR[{}] <- {:?}",
