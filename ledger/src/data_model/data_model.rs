@@ -87,34 +87,30 @@ impl AssetTypeCode {
   }
   pub fn utf8_from_base64(b64: &str) -> Result<String, PlatformError> {
     match b64dec(b64) {
-      Ok(buf) => {
-        match std::str::from_utf8(&buf) {
-          Ok(s) => {
-            let mut decomposed = s.nfd().collect::<String>().into_bytes();
-            let len = decomposed.len();
-            for i in 1..len {
-              if decomposed[len - i] == 0 {
-                continue;
-              } else {
-                decomposed.truncate(len - i + 1);
-                match std::str::from_utf8(&decomposed) {
-                  Ok(utf8_str) => {
-                    return Ok(utf8_str.to_string());
-                  }
-                  Err(_) => {
-                    return Err(PlatformError::SerializationError(error_location!()));
-                  }
-                };
-              }
+      Ok(buf) => match std::str::from_utf8(&buf) {
+        Ok(s) => {
+          let mut decomposed = s.nfd().collect::<String>().into_bytes();
+          let len = decomposed.len();
+          for i in 1..len {
+            if decomposed[len - i] == 0 {
+              continue;
+            } else {
+              decomposed.truncate(len - i + 1);
+              match std::str::from_utf8(&decomposed) {
+                Ok(utf8_str) => {
+                  return Ok(utf8_str.to_string());
+                }
+                Err(_) => {
+                  return Err(PlatformError::SerializationError(error_location!()));
+                }
+              };
             }
-            Ok("".to_string())
           }
-          Err(_) => Err(PlatformError::DeserializationError(error_location!()))
+          Ok("".to_string())
         }
-      }
-      _ => {
-        Err(PlatformError::DeserializationError(error_location!()))
-      }
+        Err(_) => Err(PlatformError::DeserializationError(error_location!())),
+      },
+      _ => Err(PlatformError::DeserializationError(error_location!())),
     }
   }
   pub fn new_from_str(s: &str) -> Self {
