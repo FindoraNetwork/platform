@@ -89,7 +89,26 @@ impl AssetTypeCode {
     match b64dec(b64) {
       Ok(buf) => {
         match std::str::from_utf8(&buf) {
-          Ok(s) => Ok(s.nfd().to_string()),
+          Ok(s) => {
+            let mut decomposed = s.nfd().collect::<String>().into_bytes();
+            let len = decomposed.len();
+            for i in 1..len {
+              if decomposed[len - i] == 0 {
+                continue;
+              } else {
+                decomposed.truncate(len - i + 1);
+                match std::str::from_utf8(&decomposed) {
+                  Ok(utf8_str) => {
+                    return Ok(utf8_str.to_string());
+                  }
+                  Err(_) => {
+                    return Err(PlatformError::SerializationError(error_location!()));
+                  }
+                };
+              }
+            }
+            Ok("".to_string())
+          }
           Err(_) => Err(PlatformError::DeserializationError(error_location!()))
         }
       }
@@ -1389,17 +1408,32 @@ mod tests {
   }
 
   #[test]
-  fn test_base64_from_utf8() {
-    let utf8 = "My 资产 $";
-    let base64 = AssetTypeCode::base64_from_utf8(utf8);
-    assert_eq!(base64, "TXkg6LWE5LqnICQAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
+  // Test that a customized asset code can be converted to and from base 64 correctly
+  fn test_base64_from_to_utf8() {
+    let customized_code = "❤️💰 My 资产 $";
+    let base64 = AssetTypeCode::base64_from_utf8(customized_code);
+    let expected_base64 = "4p2k77iP8J-SsCBNeSDotYTkuqcgJAAAAAAAAAAAAAA=";
+    assert_eq!(base64, expected_base64);
+
+    let utf8 = AssetTypeCode::utf8_from_base64(&base64).unwrap();
+    assert_eq!(utf8, customized_code);
   }
 
   #[test]
-  fn test_utf8_from_base64() {
-    let base64 = "TXkg6LWE5LqnICQAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-    let utf8 = AssetTypeCode::utf8_from_base64(base64).unwrap();
-    assert_eq!(utf8, "My 资产 $");
+  // Test that a customized asset code is truncated correctly if the lenght is greater than 32
+  fn test_utf8_truncate() {
+    let customized_code_short = "My 资产 $";
+    let customized_code_32_bytes = "My 资产 $$$$$$$$$$$$$$$$$$$$$$";
+    let customized_code_to_truncate = "My 资产 $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$";
+
+    let base64_short = AssetTypeCode::base64_from_utf8(customized_code_short);
+    let base64_32_bytes = AssetTypeCode::base64_from_utf8(customized_code_32_bytes);
+    let base64_to_truncate = AssetTypeCode::base64_from_utf8(customized_code_to_truncate);
+    assert_ne!(base64_short, base64_32_bytes);
+    assert_eq!(base64_32_bytes, base64_to_truncate);
+
+    let utf8 = AssetTypeCode::utf8_from_base64(&base64_32_bytes).unwrap();
+    assert_eq!(utf8, customized_code_32_bytes);
   }
 
   #[test]
