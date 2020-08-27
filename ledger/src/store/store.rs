@@ -1,4 +1,4 @@
-#![deny(warnings)]
+#![allow(warnings)]
 extern crate byteorder;
 extern crate tempdir;
 
@@ -271,7 +271,7 @@ pub struct LedgerStatus {
   air: AIR,
 
   // Sliding window of operations for replay attack prevention
-  ops_seen: SlidingSet,
+  sliding_set: SlidingSet<u64>,
 }
 
 pub struct LedgerState {
@@ -439,7 +439,7 @@ impl LedgerStatus {
                                 air_path: air_path.to_owned(),
                                 txn_merkle_path: txn_merkle_path.to_owned(),
                                 air: LedgerState::init_air_log(air_path, true)?,
-                                ops_seen: SlidingSet::new(TRANSACTION_WINDOW_WIDTH),
+                                sliding_set: SlidingSet::<u64>::new(TRANSACTION_WINDOW_WIDTH),
                                 txn_path: txn_path.to_owned(),
                                 utxo_map_path: utxo_map_path.to_owned(),
                                 utxos: HashMap::new(),
@@ -463,7 +463,7 @@ impl LedgerStatus {
 
   pub fn incr_block_commit_count(&mut self) {
     self.block_commit_count += 1;
-    self.ops_seen.incr_current();
+    self.sliding_set.incr_current();
   }
 
   #[cfg(feature = "TESTING")]
@@ -485,24 +485,21 @@ impl LedgerStatus {
   #[allow(clippy::cognitive_complexity)]
   fn check_txn_effects(&self, txn_effect: TxnEffect) -> Result<TxnEffect, PlatformError> {
     // The current transactions seq_id must be within the sliding window over seq_ids
-    if txn_effect.txn.body.no_replay_token.get_seq_id() > self.block_commit_count {
+    let (rand, seq_id) = (txn_effect.txn.body.no_replay_token.get_rand(),
+                          txn_effect.txn.body.no_replay_token.get_seq_id());
+    if seq_id > self.block_commit_count {
       return Err(PlatformError::InputsError(format!("Transaction seq_id ahead of block_count: {}",
                                                     error_location!())));
-    } else if txn_effect.txn.body.no_replay_token.get_seq_id() + (TRANSACTION_WINDOW_WIDTH as u64)
-              < self.block_commit_count
-    {
+    } else if seq_id + (TRANSACTION_WINDOW_WIDTH as u64) < self.block_commit_count {
       return Err(PlatformError::InputsError(format!("Transaction seq_id too far behind block_count: {}",
                                                     error_location!())));
     } else {
-      // None of the operations in the current transaction have been seen before in the window
-      for op_digest in txn_effect.op_digests.iter() {
-        if let Some(id) = self.ops_seen.get(*op_digest) {
-          return Err(PlatformError::InputsError(format!("Digest {:?} seen before at id {}, id, curr seq_id = {}, possible replay: {}",
-                                                        *op_digest,
-                                                        id,
-                                                        txn_effect.txn.body.no_replay_token.get_seq_id(),
-                                                        error_location!())));
-        }
+      // Check to see that this nrpt has not been seen before
+      if self.sliding_set.has_key_at(rand, seq_id as usize) {
+        return Err(PlatformError::InputsError(format!("No replay token ({}, {})seen before at  possible replay: {}",
+                                                      rand,
+                                                      seq_id,
+                                                      error_location!())));
       }
     }
 
@@ -798,11 +795,14 @@ impl LedgerStatus {
   fn apply_block_effects(&mut self,
                          block: &mut BlockEffect)
                          -> HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)> {
-    for (digest, seq_id) in block.opseqs.iter() {
-      self.ops_seen.insert(*digest, *seq_id as usize);
-      // println!("apply_block_effects: {:?}, {:?} inserted into ops_seen", *digest, *seq_id);
+    for no_replay_token in block.no_replay_tokens.iter() {
+      let (rand, seq_id) = (no_replay_token.get_rand(), no_replay_token.get_seq_id() as usize);
+      match self.sliding_set.insert(rand, seq_id) {
+        Ok(_) => (),
+        Err(s) => println!("Error inserting into window: {}", s),
+      }
     }
-    block.opseqs.clear();
+    block.no_replay_tokens.clear();
 
     // KV updates
     for (k, ent) in block.kv_updates.drain() {
@@ -3402,31 +3402,76 @@ mod tests {
     let mut txn =
       Transaction::from_operation(Operation::UpdateMemo(memo_update.clone()), no_replay_token);
 
-    let effect = TxnEffect::compute_effect(txn).expect("compute effect failed");
-
-    let temp_sid = ledger.apply_transaction(&mut block, effect.clone())
-                         .expect("apply transaction failed");
-    ledger.finish_block(block)
-          .unwrap()
-          .remove(&temp_sid)
-          .expect("finishing block failed");
+    let effect0 = TxnEffect::compute_effect(txn.clone()).expect("compute effect0 failed");
+    let temp_sid0 = ledger.apply_transaction(&mut block, effect0.clone())
+                          .expect("apply transaction0 failed");
 
     // Test 1: replay the exact same txn, it should fail
-    block = ledger.start_block()
-                  .expect("starting replay exact txn block failed");
+    let effect1 = TxnEffect::compute_effect(txn.clone()).expect("compute effect1 failed");
+    assert!(ledger.apply_transaction(&mut block, effect1.clone())
+                  .is_err());
+    ledger.finish_block(block)
+          .unwrap()
+          .remove(&temp_sid0)
+          .expect("finishing block failed");
+
+    let mut block = ledger.start_block()
+                          .expect("starting replay exact txn block failed");
+    let mut txn =
+      Transaction::from_operation(Operation::UpdateMemo(memo_update.clone()), no_replay_token);
+
+    let effect = TxnEffect::compute_effect(txn).expect("compute effect failed");
+
     assert!(ledger.apply_transaction(&mut block, effect.clone())
                   .is_err());
+
+    ledger.finish_block(block);
+
+    //assert!(ledger.apply_transaction(&mut block, effect.clone())
+    //              .is_err());
 
     // Test 2: wrong NRPT
     // copy the (signed, serialized) memo_update operation from the last successful block.
     // start a new block
-    // block = ledger.start_block().expect("starting second block failed");
+    let mut block = ledger.start_block()
+                          .expect("starting \"Wrong NRPT\" block failed");
     // create a new txn
-    txn = Transaction::from_token(ledger.get_no_replay_token()); // memo_update and txn should have different no_replay_token
-                                                                 // insert the copied operation (which will not match the NRPT of the txn) into the new txn
-    txn.unsafe_add_operation(Operation::UpdateMemo(memo_update.clone()));
+    let mut txn = Transaction::from_token(ledger.get_no_replay_token()); // memo_update and txn should have different no_replay_token
+                                                                         // insert the copied operation (which will not match the NRPT of the txn) into the new txn
+    txn.testonly_add_operation(Operation::UpdateMemo(memo_update.clone()));
     assert!(ledger.apply_transaction(&mut block, effect.clone())
                   .is_err());
+    ledger.finish_block(block);
+
+    // Test 3:
+    // Start a block;
+    // let mut block = ledger.start_block().expect("starting \"Wrong NRPT\" block failed");
+    // Add a valid memo_update; copy the op_digest from its NRPT
+    let no_replay_token = ledger.get_no_replay_token();
+    // assert apply_transaction succeeds.
+    let new_memo = Memo("foo_memo".to_string());
+    let mut memo_update = UpdateMemo::new(UpdateMemoBody { no_replay_token,
+                                                           new_memo: new_memo.clone(),
+                                                           asset_type: code },
+                                          &creator);
+    let mut txn =
+      Transaction::from_operation(Operation::UpdateMemo(memo_update.clone()), no_replay_token);
+    apply_transaction(&mut ledger, txn);
+
+    // Start a block;
+    let rand = no_replay_token.get_rand();
+    let seq_id = ledger.get_block_commit_count();
+    let no_replay_token = NoReplayToken::testonly_new(rand, seq_id);
+    // Add a valid memo_update with the new seq_id, but reuse the same rand.
+    //      assert applu_transaction still succeeds (this will currently fail)
+    let new_memo = Memo("bar_memo".to_string());
+    let mut memo_update = UpdateMemo::new(UpdateMemoBody { no_replay_token,
+                                                           new_memo: new_memo.clone(),
+                                                           asset_type: code },
+                                          &creator);
+    let mut txn =
+      Transaction::from_operation(Operation::UpdateMemo(memo_update.clone()), no_replay_token);
+    apply_transaction(&mut ledger, txn);
   }
 
   #[test]

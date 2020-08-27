@@ -1,14 +1,13 @@
-use cryptohash::sha256::Digest;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct SlidingSet {
+pub struct SlidingSet<T> {
   current: usize,
   width: usize,
-  map: Vec<Vec<Digest>>,
+  map: Vec<Vec<T>>,
 }
 
-impl SlidingSet {
+impl<T> SlidingSet<T> {
   pub fn new(width: usize) -> Self {
     let mut map = Vec::with_capacity(width as usize);
     for _ in 0..width {
@@ -19,30 +18,6 @@ impl SlidingSet {
                  width,
                  map }
   }
-}
-
-impl SlidingSet {
-  pub fn contains_key(&self, key: Digest) -> bool {
-    self.get(key).is_some()
-  }
-
-  pub fn get(&self, key: Digest) -> Option<usize> {
-    for (index, vec) in self.map.iter().enumerate() {
-      for k in vec.iter() {
-        if *k == key {
-          return Some(index);
-        }
-      }
-    }
-    None
-  }
-
-  pub fn insert(&mut self, key: Digest, value: usize) {
-    assert!(value <= self.current && value + self.width >= (self.current + 1));
-    assert!(!self.contains_key(key));
-
-    self.map[value % self.width].push(key);
-  }
 
   pub fn incr_current(&mut self) {
     self.current += 1;
@@ -51,10 +26,49 @@ impl SlidingSet {
   }
 }
 
+impl<T: Eq + Copy + std::fmt::Debug> SlidingSet<T> {
+  pub fn contains_key(&self, key: T) -> bool {
+    self.get(key).is_some()
+  }
+
+  pub fn has_key_at(&self, key: T, index: usize) -> bool {
+    if index > self.current || index + self.width < (self.current + 1) {
+      false
+    } else {
+      self.map[index % self.width].contains(&key)
+    }
+  }
+
+  pub fn get(&self, key: T) -> Option<usize> {
+    for (index, vec) in self.map.iter().enumerate() {
+      for k in vec.iter() {
+        if *k == key {
+          let offset = self.current / self.width;
+          return Some(offset + index);
+        }
+      }
+    }
+    None
+  }
+
+  pub fn insert(&mut self, key: T, index: usize) -> Result<(), String> {
+    if index <= self.current && index + self.width >= (self.current + 1) {
+      if self.map[index % self.width].contains(&key) {
+        Err(format!("SlidingSet::insert: ({:?}, {}) already in set", key, index))
+      } else {
+        self.map[index % self.width].push(key);
+        Ok(())
+      }
+    } else {
+      Err(format!("({:?}, {}) is out of range", key, index))
+    }
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
-  use cryptohash::sha256;
+  use cryptohash::sha256::{hash, Digest};
   use rand::distributions::Alphanumeric;
   use rand::{thread_rng, Rng};
 
@@ -63,14 +77,14 @@ mod tests {
   fn test_basic() {
     let factor = 3;
     let width: usize = 4;
-    let mut ss = SlidingSet::new(width);
+    let mut ss = SlidingSet::<Digest>::new(width);
     let mut names = Vec::new();
     for _ in 0..width * factor {
       let rand_string: String = thread_rng().sample_iter(&Alphanumeric).take(16).collect();
       names.push(rand_string);
     }
     let digests: Vec<Digest> = names.iter()
-                                    .map(|s| sha256::hash(&bincode::serialize(&s).unwrap()))
+                                    .map(|s| hash(&bincode::serialize(&s).unwrap()))
                                     .collect();
 
     // test the "sliding property".

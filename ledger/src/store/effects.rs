@@ -5,8 +5,6 @@ use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
 use crate::policy_script::{run_txn_check, TxnCheckInputs, TxnPolicyData};
 use crate::{error_location, inp_fail, inv_fail, zei_fail};
 use credentials::credential_verify_commitment;
-use cryptohash::sha256;
-use cryptohash::sha256::Digest as BitDigest;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::Serialize;
@@ -60,16 +58,6 @@ pub struct TxnEffect {
   pub kv_updates: HashMap<Key, Vec<(KVEntrySignature, u64, Option<KVEntry>)>>,
   // Memo updates
   pub memo_updates: Vec<(AssetTypeCode, XfrPublicKey, Memo)>,
-  // Cryptograhic hashes of operations in txn
-  pub op_digests: Vec<BitDigest>,
-}
-
-fn is_darp_protected_op(op: &Operation) -> bool {
-  match op {
-    Operation::UpdateMemo(_) => true,
-    Operation::AIRAssign(_) => true,
-    _ => false,
-  }
 }
 
 // Internally validates the transaction as well.
@@ -84,7 +72,6 @@ impl TxnEffect {
     let mut internally_spent_txos = Vec::new();
     let mut input_txos: HashMap<TxoSID, BlindAssetRecord> = HashMap::new();
     let mut memo_updates = Vec::new();
-    let mut op_digests = Vec::new();
     let mut new_asset_codes: HashMap<AssetTypeCode, AssetType> = HashMap::new();
     let mut cosig_keys = HashMap::new();
     let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
@@ -476,10 +463,6 @@ impl TxnEffect {
           memo_updates.push((update_memo.body.asset_type, pk, update_memo.body.new_memo.clone()));
         }
       } // end -- match op {
-      if is_darp_protected_op(&op) {
-        let op_hash = sha256::hash(&bincode::serialize(&op).unwrap());
-        op_digests.push(op_hash);
-      }
       op_idx += 1;
     } // end -- for op in txn.body.operations.iter() {
 
@@ -500,8 +483,7 @@ impl TxnEffect {
                    asset_types_involved,
                    custom_policy_asset_types,
                    air_updates,
-                   kv_updates,
-                   op_digests })
+                   kv_updates })
   }
 }
 
@@ -562,8 +544,8 @@ impl HasInvariants<PlatformError> for TxnEffect {
 pub struct BlockEffect {
   // All Transaction objects validated in this block
   pub txns: Vec<Transaction>,
-  // Digests of Operation paired with per-transaction seq id (block commit count)
-  pub opseqs: HashMap<BitDigest, u64>,
+  // All NoReplayTokens seen in this block
+  pub no_replay_tokens: Vec<NoReplayToken>,
   // Identifiers within this block for each transaction
   // (currently just an index into `txns`)
   pub temp_sids: Vec<TxnTempSID>,
@@ -609,14 +591,6 @@ impl BlockEffect {
   //   Otherwise, Err(...)
   #[allow(clippy::cognitive_complexity)]
   pub fn add_txn_effect(&mut self, txn_effect: TxnEffect) -> Result<TxnTempSID, PlatformError> {
-    // Check that no operations are duplicated as in a replay attack
-    // Note that we need to check here as well as in LedgerStatus::check_txn_effect
-    for digest in txn_effect.op_digests.iter() {
-      if self.opseqs.contains_key(&digest) {
-        return Err(PlatformError::InputsError(error_location!()));
-      }
-    }
-
     // Check that KV updates are independent
     for (k, _) in txn_effect.kv_updates.iter() {
       if self.kv_updates.contains_key(&k) {
@@ -662,13 +636,23 @@ impl BlockEffect {
       }
     }
 
+    let no_replay_token = txn_effect.txn.body.no_replay_token;
+    // Check that no operations are duplicated as in a replay attack
+    // Note that we need to check here as well as in LedgerStatus::check_txn_effect
+    for txn in self.txns.iter() {
+      if txn.body.no_replay_token == no_replay_token {
+        return Err(PlatformError::InputsError(error_location!()));
+      }
+    }
+
+    self.no_replay_tokens.push(no_replay_token); // By construction, no_replay_tokens entries are unique
+
     // == All validation done, apply `txn_effect` to this block ==
     for (k, update) in txn_effect.kv_updates {
       self.kv_updates.insert(k, update);
     }
 
     let temp_sid = TxnTempSID(self.txns.len());
-    let no_replay_token = txn_effect.txn.body.no_replay_token;
     self.txns.push(txn_effect.txn);
     self.temp_sids.push(temp_sid);
     self.txos.push(txn_effect.txos);
@@ -701,10 +685,6 @@ impl BlockEffect {
 
     for (code, _, memo) in txn_effect.memo_updates {
       self.memo_updates.insert(code, memo);
-    }
-
-    for digest in txn_effect.op_digests.iter() {
-      self.opseqs.insert(*digest, no_replay_token.get_seq_id());
     }
 
     Ok(temp_sid)
