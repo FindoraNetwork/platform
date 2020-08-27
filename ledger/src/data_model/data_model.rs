@@ -79,18 +79,26 @@ impl AssetTypeCode {
     let val: [u8; ASSET_TYPE_LENGTH] = prng.gen();
     Self { val: ZeiAssetType(val) }
   }
+  /// Converts an utf8 string to a base 64 representation of an asset type code.
+  /// Truncates the code if the length is greater than 32 bytes.
+  ///
+  /// Used to customize the asset type code.
   pub fn base64_from_utf8(s: &str) -> String {
     let mut composed = s.to_string().nfc().collect::<String>().into_bytes();
     composed.resize(ASSET_TYPE_LENGTH, 0u8);
     let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(composed.as_slice()).unwrap();
     b64enc(&buf)
   }
+  /// Converts a base 64 representation of an asset type code to the utf8 string.
+  ///
+  /// Used to display the customized asset type code.
   pub fn utf8_from_base64(b64: &str) -> Result<String, PlatformError> {
     match b64dec(b64) {
       Ok(buf) => match std::str::from_utf8(&buf) {
         Ok(s) => {
           let mut decomposed = s.nfd().collect::<String>().into_bytes();
           let len = decomposed.len();
+          // Find the last non-empty index
           for i in 1..len {
             if decomposed[len - i] == 0 {
               continue;
