@@ -921,7 +921,7 @@ fn main() {
 
 #[cfg(not(feature = "no-bugtracker"))]
 pub mod messages {
-  pub const PANIC_STRING: &'static str =
+  pub const PANIC_STRING: &str =
     concat!(
         "An unknown error occurred, this is a bug. Please help us fix it by reporting it at:\n",
         "https://bugtracker.findora.org/projects/testnet/issues/new?issue[subject]=findora%20CLI%20(build%20",
