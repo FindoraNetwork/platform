@@ -1,7 +1,10 @@
+use crate::HomeDir;
 use crate::{CliError, LedgerStateCommitment};
 use ledger::data_model::{b64enc, Asset, AssetType, AuthenticatedUtxo, TxoSID};
 use serde::de::DeserializeOwned;
 use snafu::{ensure, Backtrace, GenerateBacktrace, OptionExt, ResultExt, Snafu};
+use std::env;
+use std::path::PathBuf;
 use std::process::exit;
 use std::time::Duration;
 use structopt::clap::{Error, ErrorKind};
@@ -22,7 +25,7 @@ pub fn do_request_asset(query: &str) -> Result<Asset, CliError> {
 
   let resp = match client.get(query).send() {
     Err(e) => {
-      eprintln!("Request `{}` failed: {}", query, e);
+      eprintln!("Request '{}' failed: {}", query, e);
       return Err(CliError::Reqwest { source: e,
                                      backtrace: Backtrace::generate() });
     }
@@ -47,7 +50,7 @@ pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, Error> {
 
   let resp: T = match client.get(query).send() {
     Err(e) => {
-      eprintln!("Request `{}` failed: {}", query, e);
+      eprintln!("Request '{}' failed: {}", query, e);
       exit(-1);
     }
     Ok(resp) => match resp.json::<T>() {
@@ -72,7 +75,7 @@ pub fn do_request_authenticated_utxo(query: &str,
 
   let resp = match client.get(query).send() {
     Err(e) => {
-      eprintln!("Request `{}` failed: {}", query, e);
+      eprintln!("Request '{}' failed: {}", query, e);
       return Err(CliError::Reqwest { source: e,
                                      backtrace: Backtrace::generate() });
     }
@@ -88,9 +91,9 @@ pub fn do_request_authenticated_utxo(query: &str,
           let resp_comm = HashOf::new(&Some(v.state_commitment_data.clone()));
           let curr_comm = (ledger_state.0).0.clone();
           if resp_comm != curr_comm {
-            eprintln!("Server responded with authentication relative to `{}`!",
+            eprintln!("Server responded with authentication relative to '{}'!",
                       b64enc(&resp_comm.0.hash));
-            eprintln!("The most recent ledger state I have is `{}`.",
+            eprintln!("The most recent ledger state I have is '{}'.",
                       b64enc(&curr_comm.0.hash));
             eprintln!("Please run query-ledger-state then rerun this command.");
             return Err(CliError::InconsistentLedger);
@@ -198,7 +201,7 @@ pub fn prompt_confirming_with_retries(retries: u32,
 /// Reads a password, provides it to the provided closure, and will re-attempt if the closure
 /// returns an error.
 ///
-/// The provided closure will indicate the provided password is incorrect by returning an `Err`
+/// The provided closure will indicate the provided password is incorrect by returning an 'Err'
 /// value. As a matter of correctness, this should be the only condition under which the closure
 /// will return an error
 pub fn prompt_with_retries<T, E: std::error::Error>(retries: u32,
@@ -218,4 +221,18 @@ pub fn prompt_with_retries<T, E: std::error::Error>(retries: u32,
     }
   }
   Err(PasswordReadError::IncorrectPassword)
+}
+
+pub fn compute_findora_dir() -> Result<PathBuf, CliError> {
+  let mut home = PathBuf::new();
+  match env::var("FINDORA_HOME") {
+    Ok(fin_home) => {
+      home.push(fin_home);
+    }
+    Err(_) => {
+      home.push(dirs::home_dir().context(HomeDir)?);
+      home.push(".findora");
+    }
+  }
+  Ok(home)
 }

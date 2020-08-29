@@ -4,7 +4,7 @@
 use ledger::data_model::*;
 use promptly::prompt_default;
 use serde::{Deserialize, Serialize};
-use snafu::{Backtrace, GenerateBacktrace, OptionExt, ResultExt, Snafu};
+use snafu::{Backtrace, GenerateBacktrace, ResultExt, Snafu};
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
@@ -22,6 +22,7 @@ pub mod helpers;
 pub mod kv;
 
 use crate::actions::*;
+use crate::helpers::compute_findora_dir;
 use kv::{HasEncryptedTable, HasTable, KVError, KVStore, MixedPair};
 use ledger::data_model::errors::PlatformError;
 use zei::errors::ZeiError;
@@ -675,6 +676,10 @@ fn print_conf(conf: &CliConfig) {
                .as_ref()
                .map(|x| x.0.clone())
                .unwrap_or_else(|| "<NONE>".to_string()));
+
+  let path = compute_findora_dir().unwrap();
+
+  println!("Directory of wallet: {}", path.display());
 }
 
 fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), CliError> {
@@ -813,7 +818,7 @@ fn main() {
 
       if shells.is_empty() {
         println!("Please specify one or more shells to generate completions for.");
-        println!("See `findora gen-completions --help` for supported options.");
+        println!("See 'findora gen-completions --help' for supported options.");
         std::process::exit(-1);
       }
 
@@ -834,17 +839,8 @@ fn main() {
     }
 
     // use Actions::*;
+    let mut home = compute_findora_dir()?;
 
-    let mut home = PathBuf::new();
-    match env::var("FINDORA_HOME") {
-      Ok(fin_home) => {
-        home.push(fin_home);
-      }
-      Err(_) => {
-        home.push(dirs::home_dir().context(HomeDir)?);
-        home.push(".findora");
-      }
-    }
     fs::create_dir_all(&home).with_context(|| UserFile { file: home.clone() })?;
     home.push("cli2_data.sqlite");
     let first_time = !std::path::Path::exists(&home);
@@ -890,8 +886,8 @@ fn main() {
 
   // Custom error handler logic.
   //
-  // If the call to `inner_main` encountered an error, display the error it
-  // encountered, then make repeated calls to `Error::source` to walk the source
+  // If the call to 'inner_main' encountered an error, display the error it
+  // encountered, then make repeated calls to 'Error::source' to walk the source
   // list, displaying each error in the chain, in order.
   //
   // Finally, check to see if the error encountered has an associated backtrace, and,

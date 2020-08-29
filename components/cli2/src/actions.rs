@@ -77,7 +77,7 @@ pub fn key_gen<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliEr
     let pk = *kp.get_pk_ref();
     store.add_key_pair(&KeypairName(nick.to_string()), kp)?;
     store.add_public_key(&PubkeyName(nick.to_string()), pk)?;
-    println!("New key pair added for `{}`", nick);
+    println!("New key pair added for '{}'", nick);
   } else {
     println!("Operation aborted by the user.");
   }
@@ -102,7 +102,7 @@ pub fn list_keys<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
   }
   let kps = new_kps.into_iter().map(|(k, pk)| ((k.0, pk), true));
   for ((n, k), pair) in kps.chain(pks.into_iter()) {
-    println!("{} {}: `{}`",
+    println!("{} {}: '{}'",
              if pair { "keypair" } else { "public key" },
              n,
              serde_json::to_string(&k)?);
@@ -115,13 +115,13 @@ pub fn list_keypair<S: CliDataStore>(store: &mut S,
                                      show_secret: bool)
                                      -> Result<(), CliError> {
   if !store.exists_keypair(&nick)? {
-    eprintln!("No keypair with name `{}` found", nick);
+    eprintln!("No keypair with name '{}' found", nick);
     exit(-1);
   }
 
   store.with_keypair::<CliError, _>(&KeypairName(nick.to_string()), |kp| match kp {
          None => {
-           eprintln!("No keypair with name `{}` found", nick);
+           eprintln!("No keypair with name '{}' found", nick);
            exit(-1);
          }
          Some(kp) => {
@@ -142,7 +142,7 @@ pub fn load_key_pair<S: CliDataStore>(store: &mut S, nick: String) -> Result<(),
   let continue_load_key_pair = check_existing_key_pair(store, &nick)?;
 
   if continue_load_key_pair {
-    match serde_json::from_str::<XfrKeyPair>(&prompt::<String, _>(format!("Please paste in the key pair for `{}`", nick))?) {
+    match serde_json::from_str::<XfrKeyPair>(&prompt::<String, _>(format!("Please paste in the key pair for '{}'", nick))?) {
       Err(e) => {
         eprintln!("Could not parse key pair: {}", e);
         exit(-1);
@@ -152,7 +152,7 @@ pub fn load_key_pair<S: CliDataStore>(store: &mut S, nick: String) -> Result<(),
           ?;
         store.add_key_pair(&KeypairName(nick.to_string()), kp)
           ?;
-        println!("New key pair added for `{}`", nick);
+        println!("New key pair added for '{}'", nick);
       }
     }
   } else {
@@ -162,7 +162,7 @@ pub fn load_key_pair<S: CliDataStore>(store: &mut S, nick: String) -> Result<(),
 }
 
 pub fn load_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
-  match serde_json::from_str(&prompt::<String,_>(format!("Please paste in the public key for `{}`",nick))?) {
+  match serde_json::from_str(&prompt::<String,_>(format!("Please paste in the public key for '{}'",nick))?) {
     Err(e) => {
       eprintln!("Could not parse public key: {}",e);
       exit(-1);
@@ -170,13 +170,13 @@ pub fn load_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result<(
     Ok(pk) => {
       for (n,n_pk) in store.get_pubkeys()? {
         if pk == n_pk {
-          eprintln!("This public key is already registered as `{}`",n.0);
+          eprintln!("This public key is already registered as '{}'",n.0);
           exit(-1);
         }
       }
       store.add_public_key(&PubkeyName(nick.to_string()), pk)
         ?;
-      println!("New public key added for `{}`", nick);
+      println!("New public key added for '{}'", nick);
     }
   }
   Ok(())
@@ -185,18 +185,18 @@ pub fn load_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result<(
 pub fn delete_keypair<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
   store.with_keypair::<CliError, _>(&KeypairName(nick.to_string()), |kp| {
          if kp.is_none() {
-           eprintln!("No keypair with name `{}` found", nick);
+           eprintln!("No keypair with name '{}' found", nick);
            exit(-1);
          }
          Ok(())
        })?;
-  if prompt_default(format!("Are you sure you want to delete keypair `{}`?", nick),
+  if prompt_default(format!("Are you sure you want to delete keypair '{}'?", nick),
                     false)?
   {
     // TODO: do this atomically?
     store.delete_keypair(&KeypairName(nick.to_string()))?;
     store.delete_pubkey(&PubkeyName(nick.to_string()))?;
-    println!("Keypair `{}` deleted", nick);
+    println!("Keypair '{}' deleted", nick);
   }
   Ok(())
 }
@@ -207,20 +207,20 @@ pub fn delete_public_key<S: CliDataStore>(store: &mut S, nick: String) -> Result
                     .is_some();
   match (pk, has_kp) {
     (None, _) => {
-      eprintln!("No public key with name `{}` found", nick);
+      eprintln!("No public key with name '{}' found", nick);
       exit(-1);
     }
     (Some(_), true) => {
-      eprintln!("`{}` is a keypair. Please use delete-keypair instead.",
+      eprintln!("'{}' is a keypair. Please use delete-keypair instead.",
                 nick);
       exit(-1);
     }
     (Some(_), false) => {
-      if prompt_default(format!("Are you sure you want to delete public key `{}`?", nick),
+      if prompt_default(format!("Are you sure you want to delete public key '{}'?", nick),
                         false)?
       {
         store.delete_pubkey(&PubkeyName(nick.to_string()))?;
-        println!("Public key `{}` deleted", nick);
+        println!("Public key '{}' deleted", nick);
       }
     }
   }
@@ -353,7 +353,7 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
   store.update_config(|conf| {
          let mut new_key = forget_old_key;
          if !new_key && conf.ledger_sig_key.is_none() {
-           println!("No signature key found for `{}`.", conf.ledger_server);
+           println!("No signature key found for '{}'.", conf.ledger_server);
            new_key = new_key || prompt_default(" Retrieve a new one?", false)?;
            if !new_key {
              eprintln!("Cannot check ledger state validity without a signature key.");
@@ -367,7 +367,7 @@ pub fn query_ledger_state<S: CliDataStore>(store: &mut S,
                                LedgerAccessRoutes::PublicKey.route());
            let resp: XfrPublicKey = do_request::<XfrPublicKey>(&query).context(NewPublicKeyFetch)?;
 
-           println!("Saving ledger signing key `{}`",
+           println!("Saving ledger signing key '{}'",
                     serde_json::to_string(&resp)?);
            conf.ledger_sig_key = Some(resp);
          }
@@ -403,7 +403,7 @@ fn query_asset_issuance_num<S: CliDataStore>(store: &mut S, nick: String) -> Res
   let asset: AssetTypeEntry;
   match store.get_asset_type(&AssetTypeName(nick.clone()))? {
     None => {
-      eprintln!("No asset type with name `{}` found", nick);
+      eprintln!("No asset type with name '{}' found", nick);
       exit(-1);
     }
     Some(a) => {
@@ -448,7 +448,7 @@ pub fn list_txos<S: CliDataStore>(store: &mut S,
       }
     }
 
-    println!("TXO `{}`", nick.0);
+    println!("TXO '{}'", nick.0);
     display_txo_entry(1, &txo);
   }
   println!("Done.");
@@ -458,7 +458,7 @@ pub fn list_txos<S: CliDataStore>(store: &mut S,
 pub fn list_txo<S: CliDataStore>(store: &mut S, id: String) -> Result<(), CliError> {
   let txo = match store.get_cached_txo(&TxoName(id.clone()))? {
     None => {
-      eprintln!("No txo `{}` found.", id);
+      eprintln!("No txo '{}' found.", id);
       exit(-1);
     }
     Some(s) => s,
@@ -470,7 +470,7 @@ pub fn list_txo<S: CliDataStore>(store: &mut S, id: String) -> Result<(), CliErr
 pub fn show_owner_memo<S: CliDataStore>(store: &mut S, id: String) -> Result<(), CliError> {
   match store.get_cached_txo(&TxoName(id.clone()))? {
     None => {
-      eprintln!("No txo `{}` found.", id);
+      eprintln!("No txo '{}' found.", id);
       exit(-1);
     }
     Some(txo) => {
@@ -486,12 +486,12 @@ pub fn load_owner_memo<S: CliDataStore>(store: &mut S,
                                         -> Result<(), CliError> {
   match store.get_cached_txo(&TxoName(id.clone()))? {
     None => {
-      eprintln!("No txo `{}` found.", id);
+      eprintln!("No txo '{}' found.", id);
       exit(-1);
     }
     Some(mut txo) => {
       if !overwrite && txo.owner_memo.is_some() {
-        eprintln!("Txo `{}` already has an owner memo!", id);
+        eprintln!("Txo '{}' already has an owner memo!", id);
         exit(-1);
       }
       txo.owner_memo = serde_json::from_str(&prompt::<String, _>("Owner memo?")?)?;
@@ -504,19 +504,19 @@ pub fn load_owner_memo<S: CliDataStore>(store: &mut S,
 pub fn unlock_txo<S: CliDataStore>(store: &mut S, id: String) -> Result<(), CliError> {
   let mut txo = match store.get_cached_txo(&TxoName(id.clone()))? {
     None => {
-      eprintln!("No txo `{}` found.", id);
+      eprintln!("No txo '{}' found.", id);
       exit(-1);
     }
     Some(s) => s,
   };
   // if txo.opened_record.is_some() {
-  //   eprintln!("Txo `{}` is already open.", id);
+  //   eprintln!("Txo '{}' is already open.", id);
   //   return Ok(());
   // }
 
   match txo.owner.clone() {
     None => {
-      eprintln!("I don't know who owns `{}`!", id);
+      eprintln!("I don't know who owns '{}'!", id);
       exit(-1);
     }
     Some(owner) => {
@@ -524,7 +524,7 @@ pub fn unlock_txo<S: CliDataStore>(store: &mut S, id: String) -> Result<(), CliE
       let asset_types = store.get_asset_types()?.into_iter();
       store.with_keypair::<PlatformError, _>(&owner, |kp| match kp {
              None => {
-               eprintln!("No keypair found for `{}`.", owner.0);
+               eprintln!("No keypair found for '{}'.", owner.0);
                exit(-1);
              }
              Some(kp) => {
@@ -544,7 +544,7 @@ pub fn unlock_txo<S: CliDataStore>(store: &mut S, id: String) -> Result<(), CliE
                  }
                }
 
-               println!("Opened `{}`:", id);
+               println!("Opened '{}':", id);
                display_txo_entry(1, &txo);
                Ok(())
              }
@@ -577,12 +577,12 @@ pub fn query_txo<S: CliDataStore>(store: &mut S,
     if let Some(orig_sid) = orig_ent.sid {
       if let Some(new_sid) = sid {
         if orig_sid.0 != new_sid {
-          eprintln!("TXO nicknamed `{}` refers to SID {}, not {}",
+          eprintln!("TXO nicknamed '{}' refers to SID {}, not {}",
                     nick.0, orig_sid.0, new_sid);
           exit(-1);
         }
       } else {
-        println!("TXO nicknamed `{}` refers to SID {}.", nick.0, orig_sid.0);
+        println!("TXO nicknamed '{}' refers to SID {}.", nick.0, orig_sid.0);
         sid = Some(orig_sid.0);
       }
     }
@@ -590,7 +590,7 @@ pub fn query_txo<S: CliDataStore>(store: &mut S,
 
   let sid = match sid {
     None => {
-      eprintln!("No TXO nicknamed `{}` found and no SID given!", nick.0);
+      eprintln!("No TXO nicknamed '{}' found and no SID given!", nick.0);
       exit(-1);
     }
     Some(s) => s,
@@ -682,7 +682,7 @@ pub fn query_txo<S: CliDataStore>(store: &mut S,
 
 pub fn list_asset_types<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
   for (nick, a) in store.get_asset_types()?.into_iter() {
-    println!("Asset `{}`", nick.0);
+    println!("Asset '{}'", nick.0);
     display_asset_type(1, &a);
   }
   Ok(())
@@ -692,7 +692,7 @@ pub fn list_asset_type<S: CliDataStore>(store: &mut S, nick: String) -> Result<(
   let a = store.get_asset_type(&AssetTypeName(nick.clone()))?;
   match a {
     None => {
-      eprintln!("`{}` does not refer to any known asset type", nick);
+      eprintln!("'{}' does not refer to any known asset type", nick);
       exit(-1);
     }
     Some(a) => {
@@ -711,7 +711,7 @@ pub fn query_asset_type<S: CliDataStore>(store: &mut S,
      && store.get_asset_type(&AssetTypeName(nick.clone()))?
              .is_some()
   {
-    eprintln!("Asset type with the nickname `{}` already exists.", nick);
+    eprintln!("Asset type with the nickname '{}' already exists.", nick);
     exit(-1);
   }
 
@@ -742,7 +742,7 @@ pub fn query_asset_type<S: CliDataStore>(store: &mut S,
   store.add_asset_type(&AssetTypeName(nick.clone()), ret)?;
 
   let issue_seq_number = query_asset_issuance_num(store, nick.clone())?;
-  println!("issue_seq_number: {}", issue_seq_number);
+
   store.update_asset_type::<Infallible, _>(&AssetTypeName(nick.clone()), |a| {
          a.issue_seq_num = issue_seq_number;
          Ok(())
@@ -759,7 +759,7 @@ pub fn query_asset_type<S: CliDataStore>(store: &mut S,
     }
   }
 
-  println!("Asset type `{}` saved as `{}`", code_b64, nick);
+  println!("Asset type '{}' saved as '{}'", code_b64, nick);
   Ok(())
 }
 
@@ -776,12 +776,12 @@ pub fn prepare_transaction<S: CliDataStore>(store: &mut S, nick: String) -> Resu
   if store.get_txn_builder(&TxnBuilderName(nick.clone()))?
           .is_some()
   {
-    eprintln!("Transaction builder with the name `{}` already exists.",
+    eprintln!("Transaction builder with the name '{}' already exists.",
               nick);
     exit(-1);
   }
 
-  println!("Preparing transaction `{}` for block id `{}`...",
+  println!("Preparing transaction '{}' for block id '{}'...",
            nick, seq_id);
   store.prepare_transaction(&TxnBuilderName(nick.clone()), seq_id)?;
   store.update_config(|conf| {
@@ -800,7 +800,7 @@ pub fn list_txn<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
 
   let builder = match store.get_txn_builder(&TxnBuilderName(nick.0.clone()))? {
     None => {
-      eprintln!("No txn builder `{}` found.", nick.0);
+      eprintln!("No txn builder '{}' found.", nick.0);
       exit(-1);
     }
     Some(s) => s,
@@ -815,7 +815,7 @@ pub fn list_built_transaction<S: CliDataStore>(store: &mut S,
                                                -> Result<(), CliError> {
   let txn = match store.get_built_transaction(&TxnName(nick.clone()))? {
     None => {
-      eprintln!("No txn `{}` found.", nick);
+      eprintln!("No txn '{}' found.", nick);
       exit(-1);
     }
     Some(s) => s,
@@ -835,7 +835,7 @@ pub fn list_built_transactions<S: CliDataStore>(store: &mut S) -> Result<(), Cli
 pub fn status<S: CliDataStore>(store: &mut S, txn: String) -> Result<(), CliError> {
   let txn = match store.get_built_transaction(&TxnName(txn.clone()))? {
     None => {
-      eprintln!("No txn `{}` found.", txn);
+      eprintln!("No txn '{}' found.", txn);
       exit(-1);
     }
     Some(s) => s,
@@ -851,7 +851,7 @@ fn get_status<S: CliDataStore>(store: &mut S, txn: String) -> Result<TxnStatus, 
   let txn_nick = txn.clone();
   let txn = match store.get_built_transaction(&TxnName(txn.clone()))? {
     None => {
-      eprintln!("No txn `{}` found.", txn);
+      eprintln!("No txn '{}' found.", txn);
       exit(-1);
     }
     Some(s) => s,
@@ -860,7 +860,7 @@ fn get_status<S: CliDataStore>(store: &mut S, txn: String) -> Result<TxnStatus, 
   let handle;
   match txn.1.handle.as_ref() {
     None => {
-      eprintln!("No handle for txn `{}` found. Have you submitted it?",
+      eprintln!("No handle for txn '{}' found. Have you submitted it?",
                 txn_nick);
       exit(-1);
     }
@@ -887,7 +887,7 @@ pub fn status_check<S: CliDataStore>(store: &mut S, txn_nick: String) -> Result<
   println!("Got status: {}", serde_json::to_string(&resp)?);
   let txn = match store.get_built_transaction(&TxnName(txn_nick.clone()))? {
     None => {
-      eprintln!("No txn `{}` found.", txn_nick);
+      eprintln!("No txn '{}' found.", txn_nick);
       exit(-1);
     }
     Some(s) => s,
@@ -913,7 +913,7 @@ pub fn update_if_committed<S: CliDataStore>(store: &mut S,
     } else {
       println!("Updating, status is {:?}", &metadata.status);
       for nick in metadata.spent_txos.iter() {
-        println!("Spending TXO `{}`...", nick.0);
+        println!("Spending TXO '{}'...", nick.0);
         let mut txo = store.get_cached_txo(nick)?.context(NoneValue)?;
         assert!(txo.unspent);
         txo.unspent = false;
@@ -921,7 +921,7 @@ pub fn update_if_committed<S: CliDataStore>(store: &mut S,
       }
 
       for (nick, ent) in metadata.new_asset_types.iter() {
-        println!("New asset type `{}`...", nick.0);
+        println!("New asset type '{}'...", nick.0);
         store.add_asset_type(&nick, ent.clone())?;
       }
 
@@ -949,7 +949,7 @@ pub fn update_if_committed<S: CliDataStore>(store: &mut S,
         if !bad {
           let mut finalized = vec![];
           for (k, v) in entries {
-            println!("Caching TXO `{}`:", k.0);
+            println!("Caching TXO '{}':", k.0);
             display_txo_entry(1, &v);
             store.cache_txo(&k, v)?;
             finalized.push(k);
@@ -995,7 +995,7 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
   let mut new_builder;
   match store.get_txn_builder(&builder_name)? {
     None => {
-      eprintln!("Transaction builder `{}` not found.", builder_name.0);
+      eprintln!("Transaction builder '{}' not found.", builder_name.0);
       exit(-1);
     }
     Some(b) => {
@@ -1004,7 +1004,7 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
   }
   store.with_keypair::<PlatformError, _>(&issuer_nick, |kp| match kp {
          None => {
-           let err_msg = format!("No key pair `{}` found.", issuer_nick.0);
+           let err_msg = format!("No key pair '{}' found.", issuer_nick.0);
            eprintln!("{}",err_msg);
            Err(PlatformError::IoError(err_msg))
          }
@@ -1078,7 +1078,7 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
   let mut builder;
   match builder_opt {
     None => {
-      eprintln!("Transaction builder `{}` not found.", builder_nick.0);
+      eprintln!("Transaction builder '{}' not found.", builder_nick.0);
       exit(-1);
     }
     Some(b) => {
@@ -1092,7 +1092,7 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
              .or_else(|| builder.new_asset_types.get(&asset_nick).cloned())
   {
     None => {
-      eprintln!("No asset type with name `{}` found", asset_nick.0);
+      eprintln!("No asset type with name '{}' found", asset_nick.0);
       exit(-1);
     }
     Some(a) => {
@@ -1105,7 +1105,7 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
     None => {
       let asset_issuer_key_str =
         serde_json::to_string(&asset.asset.issuer.key).expect("The serialization of the asset issuer key failed.");
-      eprintln!("I don't know an identity for public key `{}`",
+      eprintln!("I don't know an identity for public key '{}'",
                 asset_issuer_key_str);
       exit(-1);
     }
@@ -1116,11 +1116,11 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
 
   store.with_keypair::<PlatformError, _>(&issuer_nick, |iss_kp| match iss_kp {
          None => {
-           eprintln!("No keypair nicknamed `{}` found.", issuer_nick.0);
+           eprintln!("No keypair nicknamed '{}' found.", issuer_nick.0);
            exit(-1);
          }
          Some(iss_kp) => {
-           println!("IssueAsset: {} of `{}` ({}), authorized by `{}`",
+           println!("IssueAsset: {} of '{}' ({}), authorized by '{}'",
                     amount,
                     asset.asset.code.to_base64(),
                     asset_nick.0,
@@ -1173,7 +1173,7 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
          Ok(())
        })?;
 
-  println!("Successfully added to `{}`", builder_nick.0);
+  println!("Successfully added to '{}'", builder_nick.0);
 
   Ok(())
 }
@@ -1198,7 +1198,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
   let mut builder;
   match builder_opt {
     None => {
-      eprintln!("Transaction builder `{}` not found.", builder_nick.0);
+      eprintln!("Transaction builder '{}' not found.", builder_nick.0);
       exit(-1); // TODO return error
     }
     Some(b) => {
@@ -1257,7 +1257,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
     {
       println!("TXOs from this transaction:");
       for (k, v) in txn_utxos.iter() {
-        println!(" {}: {} ({}) of `{}` ({}) owned by `{}`",
+        println!(" {}: {} ({}) of '{}' ({}) owned by '{}'",
                  k,
                  v.opened_record.as_ref().context(NoneValue)?.amount,
                  if v.record.0.amount.is_confidential() {
@@ -1275,10 +1275,9 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
       }
 
       println!("Other TXOs:");
-      for (k, (ent, sid, opened, owner, asset_type)) in utxos.iter() {
-        println!(" {} (SID {}): {} ({}) of `{}` ({}) owned by `{}`",
+      for (k, (ent, _sid, opened, owner, asset_type)) in utxos.iter() {
+        println!(" {}: {} ({}) of '{}' ({}) owned by '{}'",
                  k.0,
-                 sid.0,
                  opened.amount,
                  if ent.record.0.amount.is_confidential() {
                    "SECRET"
@@ -1301,12 +1300,12 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
           (true, false) => true,
           (false, true) => false,
           (true, true) => {
-            prompt_default(format!("`{}` is ambiguous -- choose the `{}` from this transaction?",
+            prompt_default(format!("'{}' is ambiguous -- choose the '{}' from this transaction?",
                                    inp, inp),
                            false)?
           }
           (false, false) => {
-            eprintln!("No TXO with name `{}` found", inp);
+            eprintln!("No TXO with name '{}' found", inp);
             continue;
           }
         };
@@ -1326,7 +1325,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
           (TxoRef::Absolute(sid), ent)
         };
 
-        println!(" Adding {}: {} ({}) of `{}` ({}) owned by `{}`",
+        println!(" Adding {}: {} ({}) of '{}' ({}) owned by '{}'",
                  inp,
                  ent.opened_record.as_ref().context(NoneValue)?.amount,
                  if ent.record.0.amount.is_confidential() {
@@ -1375,7 +1374,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
     {
       println!("Remaining to spend:");
       for (k, v) in inp_amounts.iter() {
-        println!(" {} of `{}`", v, k);
+        println!(" {} of '{}'", v, k);
       }
 
       if let Some(inp) = if inp_amounts.len() == 1 {
@@ -1385,12 +1384,12 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
       } {
         let amt_remaining = match inp_amounts.get_mut(&inp) {
           None => {
-            eprintln!("No asset type with name `{}` found", inp);
+            eprintln!("No asset type with name '{}' found", inp);
             continue;
           }
           Some(x) => x,
         };
-        let amt = prompt(format!("How much `{}`? ({} available)", inp, *amt_remaining))?;
+        let amt = prompt(format!("How much '{}'? ({} available)", inp, *amt_remaining))?;
         if amt == 0 {
           eprintln!("Amount must be nonzero.");
           continue;
@@ -1407,7 +1406,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
 
         let pubkey = match store.get_pubkey(&receiver)? {
           None => {
-            eprintln!("No public key with name `{}` found", receiver.0);
+            eprintln!("No public key with name '{}' found", receiver.0);
             continue;
           }
           Some(pk) => pk,
@@ -1469,7 +1468,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
     if store.get_keypairs()?
             .contains(&KeypairName(receiver.0.clone()))
     {
-      println!("Recipient `{}` is a local keypair.", receiver.0);
+      println!("Recipient '{}' is a local keypair.", receiver.0);
       if prompt_default("Unlock this output?", true)? {
         store.with_keypair::<CliError, _>(&KeypairName(receiver.0.clone()), |kp| {
                let sk = kp.unwrap().get_sk_ref();
@@ -1492,7 +1491,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
   let mut sigs = vec![];
   for (ix, (s, inp, ent)) in trn_signers.into_iter().enumerate() {
     assert_eq!(Some(s.clone()), ent.owner);
-    println!("Signing for input #{} ({}): {} ({}) of `{}` ({}) owned by `{}`",
+    println!("Signing for input #{} ({}): {} ({}) of '{}' ({}) owned by '{}'",
              ix + 1,
              inp,
              ent.opened_record.as_ref().context(NoneValue)?.amount,
@@ -1510,14 +1509,14 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
              ent.owner.as_ref().context(NoneValue)?.0);
 
     if sig_keys.contains(&s.0) {
-      println!("`{}` has already signed.", s.0);
+      println!("'{}' has already signed.", s.0);
       continue;
     }
     sig_keys.push(s.0.clone());
 
     store.with_keypair::<PlatformError, _>(&KeypairName(s.0.clone()), |kp| match kp {
            None => {
-             eprintln!("No keypair nicknamed `{}` found.", s.0);
+             eprintln!("No keypair nicknamed '{}' found.", s.0);
              exit(-1);
            }
            Some(kp) => {
@@ -1546,7 +1545,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
          Ok(())
        })?;
 
-  println!("Successfully added to `{}`", builder_nick.0);
+  println!("Successfully added to '{}'", builder_nick.0);
 
   Ok(())
 }
@@ -1568,15 +1567,15 @@ pub fn build_transaction<S: CliDataStore>(store: &mut S) -> Result<(), CliError>
   let txn_nick = TxnName(nick.0.clone());
 
   if store.get_built_transaction(&txn_nick)?.is_some() {
-    eprintln!("A txn with nickname `{}` already exists", txn_nick.0);
+    eprintln!("A txn with nickname '{}' already exists", txn_nick.0);
     exit(-1);
   }
-  println!("Building `{}`", nick.0);
+  println!("Building '{}'", nick.0);
 
   let mut metadata: TxnMetadata = Default::default();
   let builder = match store.get_txn_builder(&nick)? {
     None => {
-      eprintln!("No txn builder `{}` found.", nick.0); // TODO do we need this?
+      eprintln!("No txn builder '{}' found.", nick.0); // TODO do we need this?
       exit(-1);
     }
     Some(b) => b,
@@ -1587,7 +1586,7 @@ pub fn build_transaction<S: CliDataStore>(store: &mut S) -> Result<(), CliError>
     for kp_name in builder.signers.iter() {
       store.with_keypair::<std::convert::Infallible, _>(&kp_name, |kp| match kp {
              None => {
-               eprintln!("Could not find keypair for required signer `{}`.",
+               eprintln!("Could not find keypair for required signer '{}'.",
                          kp_name.0);
                exit(-1);
              }
@@ -1623,26 +1622,26 @@ pub fn build_transaction<S: CliDataStore>(store: &mut S) -> Result<(), CliError>
          Ok(())
        })?;
 
-  println!("Built transaction `{}`", txn_nick.0);
+  println!("Built transaction '{}'", txn_nick.0);
   Ok(())
 }
 
 pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
   let (txn, metadata) = store.get_built_transaction(&TxnName(nick.clone()))?
                              .unwrap_or_else(|| {
-                               eprintln!("No transaction `{}` found.", nick);
+                               eprintln!("No transaction '{}' found.", nick);
                                exit(-1);
                              });
 
   for (nick, _) in metadata.new_asset_types.iter() {
     if store.get_asset_type(&nick)?.is_some() {
-      eprintln!("Asset type `{}` already exists!", nick.0);
+      eprintln!("Asset type '{}' already exists!", nick.0);
       exit(-1);
     }
   }
 
   if let Some(h) = metadata.handle {
-    eprintln!("Transaction `{}` has already been submitted. Its handle is: `{}`",
+    eprintln!("Transaction '{}' has already been submitted. Its handle is: '{}'",
               nick, h.0);
     exit(-1);
   }
@@ -1652,7 +1651,7 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
                       conf.submission_server,
                       SubmissionRoutes::SubmitTransaction.route());
 
-  println!("Submitting to `{}`:", query);
+  println!("Submitting to '{}':", query);
   display_txn(1, &(txn.clone(), metadata.clone()));
 
   if !prompt_default("Is this correct?", true)? {
@@ -1672,7 +1671,7 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
          metadata.handle = Some(handle.clone());
          Ok(())
        })?;
-  println!("Submitted `{}`: got handle `{}`", nick, &handle.0);
+  println!("Submitted '{}': got handle '{}'", nick, &handle.0);
 
   // Wait for the transaction to be committed
   let mut committed = false;

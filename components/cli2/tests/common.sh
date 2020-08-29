@@ -151,7 +151,6 @@ transfer_assets()
                 "$unlock")
 
     run bash -c "$PROMPT | $CLI2 transfer-assets --builder=$tx_name"
-    debug_lines
     [ "$status" -eq 0 ]
 
     run bash -c "$PASSWORD_PROMPT | $CLI2 build-transaction"

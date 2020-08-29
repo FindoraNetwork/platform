@@ -4,6 +4,7 @@ source "tests/common.sh"
 
 @test "list-config" {
   run $CLI2 list-config
+  debug_lines
   [ "$status" -eq 0 ]
   check_line 0 'Submission server: https://testnet.findora.org:8669'
   check_line 1 'Ledger access server: https://testnet.findora.org:8668'
@@ -11,6 +12,7 @@ source "tests/common.sh"
   check_line 3 'Ledger state commitment:'
   check_line 4 'Ledger block idx:'
   check_line 5 'Current focused transaction builder: <NONE>'
+  check_line 6 'Directory of wallet:'
 }
 
 @test "query-ledger-state" {
@@ -29,28 +31,26 @@ source "tests/common.sh"
 }
 
 @test "initialize-transaction" {
-  run bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice;
+    run bash -c "$PASSWORD_PROMPT | $CLI2 key-gen alice;
                 echo y | $CLI2 query-ledger-state; \
                 $CLI2 initialize-transaction 0;
                 $CLI2 list-txn"
-  [ "$status" -eq 0 ]
-  check_line 0 "Enter password for alice: Enter password again:New key pair added for `alice`"
-  check_line 10 'Preparing transaction `0` for block id'
-  check_line 11 "Done."
-
+    [ "$status" -eq 0 ]
+    check_line 0 "Enter password for alice: Enter password again:New key pair added for 'alice'"
+    check_line 11 "Preparing transaction '0' for block id"
+    check_line 12 "Done."
 }
 
 
 @test "list-built-transactions" {
   run bash -c "$DEFINE_AND_ISSUE_ASSET_TYPE_WITH_BUILD"
-  debug_lines
   run $CLI2 list-built-transactions
-  debug_lines
+
   [ "$status" -eq 0 ]
 
   check_line 1 " seq_id:"
-  check_line 5 '  DefineAsset `TheBestAliceCoinsOnEarthV2`'
-  check_line 6 '   issued by `alice`'
+  check_line 5 "  DefineAsset 'TheBestAliceCoinsOnEarthV2'"
+  check_line 6 "   issued by 'alice'"
   check_line 17 "  utxo0 (Not finalized):"
 }
 
@@ -76,16 +76,16 @@ source "tests/common.sh"
   check_line 24 "  Spent? Unspent"
   check_line 25 "  Have owner memo? No"
   check_line 26 "Signers:"
-  check_line 27  ' - `alice`'
+  check_line 27 " - 'alice'"
 }
 
 @test "define, publish and list asset type(s)" {
   run  bash -c "$DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS"
-  debug_lines
+
   [ "$status" -eq 0 ]
   run $CLI2 list-asset-types
   [ "$status" -eq 0 ]
-  check_line 0 'Asset `AliceCoin`'
+  check_line 0 "Asset 'AliceCoin'"
   run $CLI2 list-asset-type AliceCoin
   [ "$status" -eq 0 ]
   check_line 0 'issuer nickname: alice'
@@ -94,20 +94,20 @@ source "tests/common.sh"
 
 @test "query-asset-type" {
   run  bash -c "  $DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS"
-  debug_lines
+
   [ "$status" -eq 0 ]
 
   run $CLI2 query-asset-type --replace=false AliceCoin PfUm5iKkKjiEDuBllekTa3bvxtOSKZy1PeUFLzef1JY=
-  debug_lines
+
   [ "$status" -eq 0 ]
 
   run $CLI2 list-asset-types
   [ "$status" -eq 0 ]
-  check_line 0 'Asset `AliceCoin`'
+  check_line 0 "Asset 'AliceCoin'"
   check_line 1 " issuer nickname: <UNKNOWN>"
   check_line 2 " issuer public key:"
   check_line 3 " code: PfUm5iKkKjiEDuBllekTa3bvxtOSKZy1PeUFLzef1JY="
-  check_line 4 ' memo: `memo_alice`'
+  check_line 4 " memo: 'memo_alice'"
   check_line 5 " issue_seq_number: 0"
 }
 
@@ -120,29 +120,27 @@ source "tests/common.sh"
                $PASSWORD_PROMPT | $CLI2 issue-asset 0 TheBestAliceCoinsOnEarthV2 0 10000; \
                $PASSWORD_PROMPT | $CLI2 build-transaction; \
                $DOUBLE_CONFIRM_WITH_PROMPT | $CLI2 submit 0;"
-  debug_lines
   [ "$status" -eq 0 ]
-  check_line 22 'Submitting to `https://testnet.findora.org:8669/submit_transaction`'
-  check_line 23 " seq_id:"
-  check_line 27 '  DefineAsset `TheBestAliceCoinsOnEarthV2`'
-  check_line 28 '   issued by `alice`'
-  check_line 29 '  IssueAsset 10000 of `TheBestAliceCoinsOnEarthV2`'
-  check_line 37 '   issue_seq_number: 0'
-  check_line 41 '   Owned by: "'
-  check_line 42 '   Record Type: "NonConfidentialAmount_NonConfidentialAssetType"'
-  check_line 43 '   Amount: 10000'
-  check_line 44 "   Type:"
-  check_line 45 "   Decrypted Amount: 10000"
-  check_line 49 " Signers:"
-  check_line 50 '  - `alice`'
-  check_line_err 54 "Committed!"
+  check_line 23 "Submitting to 'https://testnet.findora.org:8669/submit_transaction'"
+  check_line 24 " seq_id:"
+  check_line 28 "  DefineAsset 'TheBestAliceCoinsOnEarthV2'"
+  check_line 29 "   issued by 'alice'"
+  check_line 30 "  IssueAsset 10000 of 'TheBestAliceCoinsOnEarthV2'"
+  check_line 38 '   issue_seq_number: 0'
+  check_line 42 '   Owned by: "'
+  check_line 43 '   Record Type: "NonConfidentialAmount_NonConfidentialAssetType"'
+  check_line 44 '   Amount: 10000'
+  check_line 45 "   Type:"
+  check_line 46 "   Decrypted Amount: 10000"
+  check_line 50 " Signers:"
+  check_line 51 "  - 'alice'"
+  check_line_err 55 "Committed!"
 
   # We query the asset type to check the issue_seq_number has been incremented
   run $CLI2 query-asset-type --replace=false TheBestAliceCoinsOnEarthV2 0nyMhQo3bZZDxEHN_isswne7Q3dbb6TP2Z_dbZOBoTc=
-  debug_lines
-  [ "$status" -eq 0 ]
-  check_line 0 "issue_seq_number: 1"
 
+  [ "$status" -eq 0 ]
+  check_line 0 "Asset type"
 }
 
 @test "list-txos" {
@@ -181,7 +179,7 @@ source "tests/common.sh"
 @test "status" {
   run bash -c "$DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS"
   run $CLI2 status 0
-  debug_lines
+  
   [ "$status" -eq 0 ]
   check_line 0 "handle"
 }

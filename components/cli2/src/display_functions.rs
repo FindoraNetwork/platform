@@ -10,16 +10,16 @@ pub fn display_op_metadata(indent_level: u64, ent: &OpMetadata) {
   match ent {
     OpMetadata::DefineAsset { asset_nick,
                               issuer_nick, } => {
-      println!("{}DefineAsset `{}`", ind, asset_nick.0);
-      println!("{} issued by `{}`", ind, issuer_nick.0);
+      println!("{}DefineAsset '{}'", ind, asset_nick.0);
+      println!("{} issued by '{}'", ind, issuer_nick.0);
     }
     OpMetadata::IssueAsset { issuer_nick,
                              asset_nick,
                              output_name,
                              output_amt,
                              issue_seq_num, } => {
-      println!("{}IssueAsset {} of `{}`", ind, output_amt, asset_nick.0);
-      println!("{} issued to `{}` as issuance #{} named `{}`",
+      println!("{}IssueAsset {} of '{}'", ind, output_amt, asset_nick.0);
+      println!("{} issued to '{}' as issuance #{} named '{}'",
                ind, issuer_nick.0, issue_seq_num, output_name);
     }
     OpMetadata::TransferAssets { inputs, outputs } => {
@@ -126,7 +126,7 @@ pub fn display_txn_builder(indent_level: u64, ent: &TxnBuilderEntry) {
 
   println!("{}Signers:", ind);
   for nick in ent.signers.iter() {
-    println!("{} - `{}`", ind, nick.0);
+    println!("{} - '{}'", ind, nick.0);
   }
 
   print!("{}Consuming TXOs:", ind);
@@ -159,7 +159,7 @@ pub fn display_txn(indent_level: u64, ent: &(Transaction, TxnMetadata)) {
 
   println!("{}Signers:", ind);
   for nick in ent.1.signers.iter() {
-    println!("{} - `{}`", ind, nick.0);
+    println!("{} - '{}'", ind, nick.0);
   }
 
   print!("{}Consuming TXOs:", ind);
@@ -181,6 +181,6 @@ pub fn display_asset_type(indent_level: u64, ent: &AssetTypeEntry) {
            ind,
            serde_json::to_string(&ent.asset.issuer.key).unwrap());
   println!("{}code: {}", ind, ent.asset.code.to_base64());
-  println!("{}memo: `{}`", ind, ent.asset.memo.0);
+  println!("{}memo: '{}'", ind, ent.asset.memo.0);
   println!("{}issue_seq_number: {}", ind, ent.issue_seq_num);
 }
