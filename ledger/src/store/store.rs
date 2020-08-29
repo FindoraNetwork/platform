@@ -1363,9 +1363,9 @@ impl LedgerState {
         }
         Err(e) => {
           if l != "" {
-            return Err(PlatformError::DeserializationError(format!("[{}]: {:?}",
+            return Err(PlatformError::DeserializationError(format!("[{}]: {:?} (deserializing '{:?}')",
                                                                    &error_location!(),
-                                                                   e)));
+                                                                   e, &l)));
           }
         }
       }
