@@ -7,10 +7,10 @@ echo "FINDORA_HOME: ${FINDORA_HOME}"
 cargo build
 
 # Run clippy
-#cargo clippy
+cargo clippy
 
 # Run the tests
-#cargo test
+cargo test
 
 # Black box tests written in shell
 bats tests/balances.sh
