@@ -79,15 +79,33 @@ impl AssetTypeCode {
     let val: [u8; ASSET_TYPE_LENGTH] = prng.gen();
     Self { val: ZeiAssetType(val) }
   }
+  /// Returns whether the input is longer than 32 bytes, and thus will be truncated to construct an asset type code.
+  pub fn will_truncate(bytes: &Vec::<u8>) -> bool {
+    bytes.len() > ASSET_TYPE_LENGTH
+  }
+  /// Converts a vector to a base 64 representation of an asset type code.
+  pub fn base64_from_vec(mut bytes: Vec::<u8>) -> String {
+    bytes.resize(ASSET_TYPE_LENGTH, 0u8);
+    let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bytes.as_slice()).unwrap();
+    b64enc(&buf)
+  }
+  /// Converts an utf8 string to a base 64 representation of an asset type code.
+  ///
+  /// Returns an error if the length is greater than 32 bytes.
+  pub fn base64_from_utf8_safe(s: &str) -> Result<String, PlatformError> {
+    let composed = s.to_string().nfc().collect::<String>().into_bytes();
+    if AssetTypeCode::will_truncate(&composed) {
+      return Err(PlatformError::InputsError(error_location!()));
+    }
+    Ok(AssetTypeCode::base64_from_vec(composed))
+  }
   /// Converts an utf8 string to a base 64 representation of an asset type code.
   /// Truncates the code if the length is greater than 32 bytes.
   ///
   /// Used to customize the asset type code.
-  pub fn base64_from_utf8(s: &str) -> String {
-    let mut composed = s.to_string().nfc().collect::<String>().into_bytes();
-    composed.resize(ASSET_TYPE_LENGTH, 0u8);
-    let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(composed.as_slice()).unwrap();
-    b64enc(&buf)
+  pub fn base64_from_utf8_truncate(s: &str) -> String {
+    let composed = s.to_string().nfc().collect::<String>().into_bytes();
+    AssetTypeCode::base64_from_vec(composed)
   }
   /// Converts a base 64 representation of an asset type code to the utf8 string.
   ///
@@ -1412,10 +1430,21 @@ mod tests {
   }
 
   #[test]
+  // Test that an error is returned if the asset code is greater than 32 byts and a safe conversion is chosen
+  fn test_base64_from_to_utf8_safe() {
+    let code = "My 资产 $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$";
+    let result = AssetTypeCode::base64_from_utf8_safe(code);
+    match result {
+      Err(PlatformError::InputsError(_)) => {}
+      _ => panic!("InputsError expected.")
+    }
+  }
+
+  #[test]
   // Test that a customized asset code can be converted to and from base 64 correctly
-  fn test_base64_from_to_utf8() {
+  fn test_base64_from_to_utf8_truncate() {
     let customized_code = "❤️💰 My 资产 $";
-    let base64 = AssetTypeCode::base64_from_utf8(customized_code);
+    let base64 = AssetTypeCode::base64_from_utf8_truncate(customized_code);
     let expected_base64 = "4p2k77iP8J-SsCBNeSDotYTkuqcgJAAAAAAAAAAAAAA=";
     assert_eq!(base64, expected_base64);
 
@@ -1430,9 +1459,9 @@ mod tests {
     let customized_code_32_bytes = "My 资产 $$$$$$$$$$$$$$$$$$$$$$";
     let customized_code_to_truncate = "My 资产 $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$";
 
-    let base64_short = AssetTypeCode::base64_from_utf8(customized_code_short);
-    let base64_32_bytes = AssetTypeCode::base64_from_utf8(customized_code_32_bytes);
-    let base64_to_truncate = AssetTypeCode::base64_from_utf8(customized_code_to_truncate);
+    let base64_short = AssetTypeCode::base64_from_utf8_truncate(customized_code_short);
+    let base64_32_bytes = AssetTypeCode::base64_from_utf8_truncate(customized_code_32_bytes);
+    let base64_to_truncate = AssetTypeCode::base64_from_utf8_truncate(customized_code_to_truncate);
     assert_ne!(base64_short, base64_32_bytes);
     assert_eq!(base64_32_bytes, base64_to_truncate);
 
