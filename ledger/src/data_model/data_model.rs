@@ -80,11 +80,11 @@ impl AssetTypeCode {
     Self { val: ZeiAssetType(val) }
   }
   /// Returns whether the input is longer than 32 bytes, and thus will be truncated to construct an asset type code.
-  pub fn will_truncate(bytes: &Vec::<u8>) -> bool {
+  pub fn will_truncate(bytes: &[u8]) -> bool {
     bytes.len() > ASSET_TYPE_LENGTH
   }
   /// Converts a vector to a base 64 representation of an asset type code.
-  pub fn base64_from_vec(mut bytes: Vec::<u8>) -> String {
+  pub fn base64_from_vec(mut bytes: Vec<u8>) -> String {
     bytes.resize(ASSET_TYPE_LENGTH, 0u8);
     let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bytes.as_slice()).unwrap();
     b64enc(&buf)
@@ -1436,7 +1436,7 @@ mod tests {
     let result = AssetTypeCode::base64_from_utf8_safe(code);
     match result {
       Err(PlatformError::InputsError(_)) => {}
-      _ => panic!("InputsError expected.")
+      _ => panic!("InputsError expected."),
     }
   }
 
