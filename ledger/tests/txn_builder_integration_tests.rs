@@ -324,7 +324,8 @@ pub fn test_update_memo_orig() {
                                      Some(code),
                                      asset_rules,
                                      "test",
-                                     PolicyChoice::Fungible()).unwrap();
+                                     PolicyChoice::Fungible())
+         .unwrap();
   let tx = builder.transaction();
   apply_transaction(&mut ledger, tx.clone());
 
@@ -473,7 +474,8 @@ pub fn test_air_assign_operation() {
                                        cred_user_key.0.clone(),
                                        commitment,
                                        cred_issuer_key.0,
-                                       pok).unwrap();
+                                       pok)
+             .unwrap();
   let tx = txn_builder.transaction();
   let effect0 = TxnEffect::compute_effect(tx.clone()).expect("compute effect0 failed");
   let temp_sid0 = ledger.apply_transaction(&mut block, effect0.clone())
