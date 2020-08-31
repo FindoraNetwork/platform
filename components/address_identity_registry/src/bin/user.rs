@@ -3,13 +3,13 @@
 mod shared;
 
 use credentials::{credential_commit, credential_user_key_gen, CredSignature, Credential};
-use ledger::data_model::NoReplayToken;
+use ledger::data_model::StateCommitmentData;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 use shared::{PubCreds, UserCreds};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
-use utils::{protocol_host, urlencode, LEDGER_PORT, SUBMIT_PORT};
+use utils::{protocol_host, urlencode, GlobalState, LEDGER_PORT, SUBMIT_PORT};
 use warp::Filter;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrKeyPair;
@@ -73,12 +73,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (protocol, host) = protocol_host();
     let resp_gs =
-      reqwest::get(&format!("{}://{}:{}/no_replay_token", protocol, host, LEDGER_PORT)).await?
-                                                                                       .text()
-                                                                                       .await?;
-    let no_replay_token: NoReplayToken = serde_json::from_str(&resp_gs[..]).unwrap();
+      reqwest::get(&format!("{}://{}:{}/global_state", protocol, host, LEDGER_PORT)).await?
+                                                                                    .text()
+                                                                                    .await?;
+    let (_, seq_id, _): GlobalState<StateCommitmentData> =
+      serde_json::from_str(&resp_gs[..]).unwrap();
 
-    let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
+    let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
 
     txn_builder.add_operation_air_assign(&xfr_key_pair,
                                          user_pk.clone(),

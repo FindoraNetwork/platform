@@ -251,6 +251,8 @@ impl<T> HashOf<T> where T: Serialize + serde::de::DeserializeOwned
   }
 }
 
+pub type GlobalState<T> = (HashOf<Option<T>>, u64, SignatureOf<(HashOf<Option<T>>, u64)>);
+
 impl<T> AsRef<[u8]> for HashOf<T> {
   fn as_ref(&self) -> &[u8] {
     self.0.as_ref()

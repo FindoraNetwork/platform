@@ -1,8 +1,9 @@
 #![deny(warnings)]
-use ledger::data_model::{AssetRules, AssetTypeCode, NoReplayToken, Operation, Transaction};
+use ledger::data_model::{AssetRules, AssetTypeCode, Operation, StateCommitmentData, Transaction};
 use ledger::store::helpers::*;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
+use utils::GlobalState;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
   let protocol = "http";
@@ -11,12 +12,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   let client = reqwest::blocking::Client::new();
 
-  let resp_gs = client.get(&format!("{}://{}:{}/no_replay_token", protocol, host, port))
+  let resp_gs = client.get(&format!("{}://{}:{}/global_state", protocol, host, port))
                       .send()?;
-  let no_replay_token: NoReplayToken = serde_json::from_str(&resp_gs.text()?[..]).unwrap();
+  let (_, seq_id, _): GlobalState<StateCommitmentData> =
+    serde_json::from_str(&resp_gs.text()?[..]).unwrap();
 
   let mut prng = ChaChaRng::from_entropy();
-  let mut tx = Transaction::from_token(no_replay_token);
+  let mut tx = Transaction::from_seq_id(seq_id);
 
   let token_code1 = AssetTypeCode::from_identical_byte(1);
   let keypair = build_keys(&mut prng);

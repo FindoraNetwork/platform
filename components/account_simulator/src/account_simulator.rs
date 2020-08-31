@@ -417,9 +417,10 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let body = DefineAssetBody { asset: properties };
 
         let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap();
-
+        let seq_id = self.ledger.get_block_commit_count();
         let txn = Transaction { body: TransactionBody { no_replay_token:
-                                                          self.ledger.get_no_replay_token(),
+                                                          NoReplayToken::new(self.ledger.get_prng(),
+                                                                             seq_id),
                                                         operations:
                                                           vec![Operation::DefineAsset(op)],
                                                         credentials: vec![],
@@ -463,8 +464,8 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
              .unwrap()
              .get_mut(unit)
              .unwrap() += amt;
-
-        let mut tx = Transaction::from_token(self.ledger.get_no_replay_token());
+        let seq_id = self.ledger.get_block_commit_count();
+        let mut tx = Transaction::from_seq_id(seq_id);
 
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
         let params = PublicParams::new();
@@ -623,8 +624,10 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let transfer = TransferAsset { body: transfer_body,
                                        body_signatures: vec![transfer_sig] };
+        let seq_id = self.ledger.get_block_commit_count();
         let txn = Transaction { body: TransactionBody { no_replay_token:
-                                                          self.ledger.get_no_replay_token(),
+                                                          NoReplayToken::new(self.ledger.get_prng(),
+                                                                             seq_id),
                                                         operations:
                                                           vec![Operation::TransferAsset(transfer)],
                                                         credentials: vec![],
@@ -979,8 +982,8 @@ struct LedgerStandaloneAccounts<T>
 
 impl<T> LedgerStandaloneAccounts<T> where T: RestfulLedgerAccess + RestfulLedgerUpdate
 {
-  fn fetch_no_replay_token(&mut self) -> NoReplayToken {
-    self.client.get_no_replay_token().unwrap()
+  fn fetch_seq_id(&mut self) -> u64 {
+    self.client.get_block_commit_count().unwrap()
   }
 }
 
@@ -1024,10 +1027,11 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         let body = DefineAssetBody { asset: properties };
 
         let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap();
-
+        let mut prng = ChaChaRng::from_entropy();
         {
-          let no_replay_token = self.fetch_no_replay_token();
-          let txn = Transaction { body: TransactionBody { no_replay_token,
+          let seq_id = self.fetch_seq_id();
+          let txn = Transaction { body: TransactionBody { no_replay_token:
+                                                            NoReplayToken::new(&mut prng, seq_id),
                                                           operations:
                                                             vec![Operation::DefineAsset(op)],
                                                           credentials: vec![],
@@ -1049,7 +1053,7 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         }
       }
       AccountsCommand::Mint(amt, unit) => {
-        let no_replay_token = self.fetch_no_replay_token();
+        let seq_id = self.fetch_seq_id();
         let amt = *amt as u64;
         let (issuer, code) = self.units
                                  .get(unit)
@@ -1069,7 +1073,7 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
              .get_mut(unit)
              .unwrap() += amt;
 
-        let mut tx = Transaction::from_token(no_replay_token);
+        let mut tx = Transaction::from_seq_id(seq_id);
 
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
         let params = PublicParams::new();
@@ -1222,8 +1226,10 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
 
         let transfer = TransferAsset { body: transfer_body,
                                        body_signatures: vec![transfer_sig] };
-        let no_replay_token = self.fetch_no_replay_token();
-        let txn = Transaction { body: TransactionBody { no_replay_token,
+        let seq_id = self.fetch_seq_id();
+        let mut prng = ChaChaRng::from_entropy();
+        let txn = Transaction { body: TransactionBody { no_replay_token:
+                                                          NoReplayToken::new(&mut prng, seq_id),
                                                         operations:
                                                           vec![Operation::TransferAsset(transfer)],
                                                         credentials: vec![],
@@ -1699,16 +1705,16 @@ mod test {
                                                owner_memos: HashMap::new(),
                                                confidential_amounts: cmds.confidential_amounts,
                                                confidential_types: cmds.confidential_types });
-    let mut big_txn =
-      Box::new(OneBigTxnAccounts { base_ledger: LedgerState::test_ledger(),
-                                   txn: Transaction::from_token(NoReplayToken::default()), // Should be OK, starting with clean ledger
-                                   txos: Default::default(),
-                                   accounts: HashMap::new(),
-                                   utxos: HashMap::new(),
-                                   units: HashMap::new(),
-                                   balances: HashMap::new(),
-                                   confidential_amounts: cmds.confidential_amounts,
-                                   confidential_types: cmds.confidential_types });
+    let mut big_txn = Box::new(OneBigTxnAccounts { base_ledger: LedgerState::test_ledger(),
+                                                   txn: Transaction::from_seq_id(0), // Should be OK, starting with clean ledger
+                                                   txos: Default::default(),
+                                                   accounts: HashMap::new(),
+                                                   utxos: HashMap::new(),
+                                                   units: HashMap::new(),
+                                                   balances: HashMap::new(),
+                                                   confidential_amounts:
+                                                     cmds.confidential_amounts,
+                                                   confidential_types: cmds.confidential_types });
 
     let mut active_ledger = if !with_standalone {
       None

@@ -171,7 +171,7 @@ impl TxnEffect {
                           globals.rt_vars,
                           globals.amt_vars,
                           globals.frac_vars,
-                          &Transaction::from_token(txn.body.no_replay_token))?;
+                          &Transaction::from_seq_id(txn.body.no_replay_token.get_seq_id()))?;
           }
 
           issuance_keys.insert(code, token.properties.issuer);

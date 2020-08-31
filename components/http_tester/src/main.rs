@@ -4,13 +4,13 @@ use credentials::{
   credential_commit, credential_issuer_key_gen, credential_sign, credential_user_key_gen,
   CredCommitment, CredCommitmentKey, CredIssuerPublicKey, CredIssuerSecretKey, Credential,
 };
-use ledger::data_model::{NoReplayToken, Transaction};
+use ledger::data_model::{StateCommitmentData, Transaction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
-use utils::{protocol_host, LEDGER_PORT, SUBMIT_PORT};
+use utils::{protocol_host, GlobalState, LEDGER_PORT, SUBMIT_PORT};
 use zei::xfr::sig::XfrKeyPair;
 
 /// Represents a file that can be searched
@@ -67,10 +67,7 @@ impl AIR {
   }
 }
 
-fn run_txns(no_replay_token: NoReplayToken,
-            n: usize,
-            batch_size: usize)
-            -> Result<(), Box<dyn std::error::Error>> {
+fn run_txns(seq_id: u64, n: usize, batch_size: usize) -> Result<(), Box<dyn std::error::Error>> {
   let mut air = AIR::new();
   let client = reqwest::blocking::Client::new();
   let (protocol, host) = protocol_host();
@@ -78,7 +75,7 @@ fn run_txns(no_replay_token: NoReplayToken,
   let mut max: Duration = Duration::new(0, 0);
   let mut total: Duration = Duration::new(0, 0);
   for i in 0..n {
-    let mut builder = TransactionBuilder::from_token(no_replay_token);
+    let mut builder = TransactionBuilder::from_seq_id(seq_id);
     air.add_assign_txn(&mut builder);
     let txn = builder.transaction();
     let instant = Instant::now();
@@ -131,8 +128,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                        .map_or(1, |s| s.parse::<usize>().unwrap());
   let (protocol, host) = protocol_host();
   let client = reqwest::blocking::Client::new();
-  let resp_gs = client.get(&format!("{}://{}:{}/no_replay_token", protocol, host, LEDGER_PORT))
+  let resp_gs = client.get(&format!("{}://{}:{}/global_state", protocol, host, LEDGER_PORT))
                       .send()?;
-  let no_replay_token: NoReplayToken = serde_json::from_str(&resp_gs.text()?[..]).unwrap();
-  run_txns(no_replay_token, num_txns, batch_size)
+  let (_, seq_id, _): GlobalState<StateCommitmentData> =
+    serde_json::from_str(&resp_gs.text()?[..]).unwrap();
+  run_txns(seq_id, num_txns, batch_size)
 }

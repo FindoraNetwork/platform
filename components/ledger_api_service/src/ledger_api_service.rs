@@ -135,15 +135,6 @@ pub fn query_global_state<LA>(
   web::Json((hash, seq_id, sig))
 }
 
-#[allow(clippy::type_complexity)]
-pub fn query_no_replay_token<LA>(data: web::Data<Arc<RwLock<LA>>>) -> web::Json<NoReplayToken>
-  where LA: LedgerAccess
-{
-  let mut writer = data.write().unwrap();
-  let no_replay_token = writer.get_no_replay_token();
-  web::Json(no_replay_token)
-}
-
 pub fn query_global_state_version<AA>(data: web::Data<Arc<RwLock<AA>>>,
                                       version: web::Path<u64>)
                                       -> web::Json<Option<HashOf<Option<StateCommitmentData>>>>
@@ -315,7 +306,6 @@ pub enum LedgerAccessRoutes {
   AssetToken,
   PublicKey,
   GlobalState,
-  NoReplayToken,
   KVLookup,
 }
 
@@ -327,7 +317,6 @@ impl NetworkRoute for LedgerAccessRoutes {
       LedgerAccessRoutes::AssetToken => "asset_token",
       LedgerAccessRoutes::PublicKey => "public_key",
       LedgerAccessRoutes::GlobalState => "global_state",
-      LedgerAccessRoutes::NoReplayToken => "no_replay_token",
       LedgerAccessRoutes::KVLookup => "kv_lookup",
     };
     "/".to_owned() + endpoint
@@ -401,8 +390,6 @@ impl<T, B> Route for App<T, B>
                web::get().to(query_public_key::<LA>))
         .route(&LedgerAccessRoutes::GlobalState.route(),
                web::get().to(query_global_state::<LA>))
-        .route(&LedgerAccessRoutes::NoReplayToken.route(),
-               web::get().to(query_no_replay_token::<LA>))
         .route(&LedgerAccessRoutes::KVLookup.with_arg_template("addr"),
                web::get().to(query_kv::<LA>))
   }
@@ -470,8 +457,7 @@ pub trait RestfulLedgerAccess {
                SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>),
               PlatformError>;
 
-  #[allow(clippy::type_complexity)]
-  fn get_no_replay_token(&mut self) -> Result<NoReplayToken, PlatformError>;
+  fn get_block_commit_count(&self) -> Result<u64, PlatformError>;
 
   fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup, PlatformError>;
 
@@ -562,15 +548,8 @@ impl RestfulLedgerAccess for MockLedgerClient {
     Ok(test::read_response_json(&mut app, req))
   }
 
-  #[allow(clippy::type_complexity)]
-  fn get_no_replay_token(&mut self) -> Result<NoReplayToken, PlatformError> {
-    let mut app =
-      test::init_service(App::new().data(Arc::clone(&self.mock_ledger))
-                                   .route(&LedgerAccessRoutes::GlobalState.route(),
-                                          web::get().to(query_no_replay_token::<LedgerState>)));
-    let req = test::TestRequest::get().uri(&LedgerAccessRoutes::GlobalState.route())
-                                      .to_request();
-    Ok(test::read_response_json(&mut app, req))
+  fn get_block_commit_count(&self) -> Result<u64, PlatformError> {
+    unimplemented!();
   }
 
   fn get_kv_entry(&self, _addr: Key) -> Result<AuthenticatedKVLookup, PlatformError> {
@@ -670,15 +649,8 @@ impl RestfulLedgerAccess for ActixLedgerClient {
     Ok(serde_json::from_str::<_>(&text).map_err(|e| ser_fail!(e))?)
   }
 
-  #[allow(clippy::type_complexity)]
-  fn get_no_replay_token(&mut self) -> Result<NoReplayToken, PlatformError> {
-    let query = format!("{}://{}:{}{}",
-                        self.protocol,
-                        self.host,
-                        self.port,
-                        LedgerAccessRoutes::NoReplayToken.route());
-    let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
-    Ok(serde_json::from_str::<_>(&text).map_err(|_| ser_fail!())?)
+  fn get_block_commit_count(&self) -> Result<u64, PlatformError> {
+    unimplemented!();
   }
 
   fn get_kv_entry(&self, _addr: Key) -> Result<AuthenticatedKVLookup, PlatformError> {
@@ -733,7 +705,8 @@ mod tests {
   fn test_query_state_commitment() {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let mut state = LedgerState::test_ledger();
-    let mut tx = Transaction::from_token(state.get_no_replay_token());
+    let (_, seq_id) = state.get_state_commitment();
+    let mut tx = Transaction::from_seq_id(seq_id);
 
     let token_code1 = AssetTypeCode::from_identical_byte(1);
     let keypair = build_keys(&mut prng);
@@ -786,7 +759,8 @@ mod tests {
   fn test_query_public_key() {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let mut state = LedgerState::test_ledger();
-    let mut tx = Transaction::from_token(state.get_no_replay_token());
+    let (_, seq_id) = state.get_state_commitment();
+    let mut tx = Transaction::from_seq_id(seq_id);
 
     let orig_key = state.public_key().clone();
 
@@ -839,7 +813,8 @@ mod tests {
   fn test_query_asset() {
     let mut prng = ChaChaRng::from_entropy();
     let mut state = LedgerState::test_ledger();
-    let mut tx = Transaction::from_token(state.get_no_replay_token());
+    let (_, seq_id) = state.get_state_commitment();
+    let mut tx = Transaction::from_seq_id(seq_id);
 
     let token_code1 = AssetTypeCode::from_identical_byte(1);
     let keypair = build_keys(&mut prng);

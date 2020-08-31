@@ -418,6 +418,7 @@ pub trait BuildsTransactions {
 pub struct TransactionBuilder {
   txn: Transaction,
   outputs: u64,
+  no_replay_token: NoReplayToken,
 }
 
 impl TransactionBuilder {
@@ -429,9 +430,12 @@ impl TransactionBuilder {
     self.txn.get_outputs_ref(true)[idx]
   }
 
-  pub fn from_token(no_replay_token: NoReplayToken) -> Self {
-    TransactionBuilder { txn: Transaction::from_token(no_replay_token),
-                         outputs: 0 }
+  pub fn from_seq_id(seq_id: u64) -> Self {
+    let mut prng = ChaChaRng::from_entropy();
+    let no_replay_token = NoReplayToken::new(&mut prng, seq_id);
+    TransactionBuilder { txn: Transaction::from_seq_id(seq_id),
+                         outputs: 0,
+                         no_replay_token }
   }
 }
 
@@ -560,11 +564,12 @@ impl BuildsTransactions for TransactionBuilder {
                                new_memo: &str)
                                -> &mut Self {
     let new_memo = Memo(new_memo.into());
-    let memo_update =
-      UpdateMemo::new(UpdateMemoBody { new_memo,
-                                       asset_type: asset_code,
-                                       no_replay_token: self.txn.body.no_replay_token },
-                      auth_key_pair);
+    let mut memo_update = UpdateMemo::new(UpdateMemoBody { new_memo,
+                                                           asset_type: asset_code,
+                                                           no_replay_token:
+                                                             self.txn.body.no_replay_token },
+                                          auth_key_pair);
+    memo_update.pubkey = auth_key_pair.get_pk();
     let op = Operation::UpdateMemo(memo_update);
     self.txn.add_operation(op);
     self

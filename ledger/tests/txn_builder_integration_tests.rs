@@ -1,12 +1,19 @@
 #![deny(warnings)]
 /// Tests submission of transactions constructed by the txn_builder.  
 /// All P2P lending-related operations and transactions are tested.
+use credentials::{
+  credential_commit, credential_issuer_key_gen, credential_sign, credential_user_key_gen,
+  Credential,
+};
+
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  AssetRules, AssetTypeCode, Transaction, TransferType, TxOutput, TxnSID, TxoRef, TxoSID,
+  AssetRules, AssetTypeCode, Memo, NoReplayToken, Operation, Transaction, TransferType, TxOutput,
+  TxnSID, TxoRef, TxoSID,
 };
 use ledger::error_location;
 use ledger::policies::{calculate_fee, DebtMemo, Fraction};
+use ledger::store::helpers::create_definition_transaction;
 use ledger::store::LedgerState;
 use ledger::store::*;
 use rand_chacha::ChaChaRng;
@@ -37,7 +44,7 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let mut ledger = LedgerState::test_ledger();
   let code = AssetTypeCode::from_identical_byte(1);
   let keys = XfrKeyPair::generate(&mut prng);
-  let mut builder = TransactionBuilder::from_token(ledger.get_no_replay_token());
+  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let params = PublicParams::new();
 
   // Define
@@ -50,7 +57,7 @@ fn test_create_asset() -> Result<(), PlatformError> {
   apply_transaction(&mut ledger, tx.clone());
 
   // Issue
-  let mut builder = TransactionBuilder::from_token(ledger.get_no_replay_token());
+  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let tx =
     builder.add_basic_issue_asset(&keys,
                                   &code,
@@ -88,7 +95,7 @@ fn test_create_asset() -> Result<(), PlatformError> {
   builder.attach_signature(input_sig).unwrap();
   let op = builder.transaction()?;
 
-  let mut builder = TransactionBuilder::from_token(ledger.get_no_replay_token());
+  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let tx = builder.add_operation(op).transaction();
   apply_transaction(&mut ledger, tx.clone());
 
@@ -124,7 +131,7 @@ fn test_loan_repayment(loan_amount: u64,
                                           })?;
 
   // Define assets
-  let mut builder = TransactionBuilder::from_token(ledger.get_no_replay_token());
+  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let tx = builder.add_operation_create_asset(&fiat_issuer_keys,
                                               Some(fiat_code),
                                               AssetRules::default(),
@@ -162,7 +169,7 @@ fn test_loan_repayment(loan_amount: u64,
     open_blind_asset_record(&fiat_ba, &fiat_owner_memo, lender_keys.get_sk_ref()).unwrap();
 
   //  Mega transaction to do everything
-  let mut builder = TransactionBuilder::from_token(ledger.get_no_replay_token());
+  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let tx = builder.add_operation_issue_asset(&fiat_issuer_keys,
                                              &fiat_code,
                                              0,
@@ -269,13 +276,13 @@ fn test_update_memo() -> Result<(), PlatformError> {
   let mut ledger = LedgerState::test_ledger();
   let code = AssetTypeCode::from_identical_byte(1);
   let keys = XfrKeyPair::generate(&mut prng);
-  let mut builder = TransactionBuilder::from_token(ledger.get_no_replay_token());
+  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
 
   // Define the asset and verify
   let mut asset_rules = AssetRules::default();
   // The asset must be up updatable in order to change the memo later
   asset_rules.updatable = true;
-  // Cerate an asset with the memo defined as "test"
+  // Create an asset with the memo defined as "test"
   let tx = builder.add_operation_create_asset(&keys,
                                               Some(code),
                                               asset_rules,
@@ -286,8 +293,7 @@ fn test_update_memo() -> Result<(), PlatformError> {
   assert!(ledger.get_asset_type(&code).is_some());
 
   // Define a transaction to update the memo
-  let no_replay_token = ledger.get_no_replay_token();
-  let mut builder = TransactionBuilder::from_token(no_replay_token);
+  let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let tx = builder.add_operation_update_memo(&keys, code, "changed")
                   .transaction();
   apply_transaction(&mut ledger, tx.clone());
@@ -300,4 +306,205 @@ fn test_update_memo() -> Result<(), PlatformError> {
   assert_eq!(new_memo, "changed");
 
   Ok(())
+}
+
+#[test]
+pub fn test_update_memo_orig() {
+  let mut ledger = LedgerState::test_ledger();
+
+  let creator = XfrKeyPair::generate(&mut ledger.get_prng());
+  let adversary = XfrKeyPair::generate(&mut ledger.get_prng());
+
+  // Define fiat token
+  let code = AssetTypeCode::from_identical_byte(1);
+  let seq_id = ledger.get_block_commit_count();
+  let mut builder = TransactionBuilder::from_seq_id(seq_id);
+  let asset_rules = AssetRules::default().set_updatable(true).clone();
+  builder.add_operation_create_asset(&creator,
+                                     Some(code),
+                                     asset_rules,
+                                     "test",
+                                     PolicyChoice::Fungible()).unwrap();
+  let tx = builder.transaction();
+  apply_transaction(&mut ledger, tx.clone());
+
+  let mut block = ledger.start_block().unwrap();
+  let seq_id = ledger.get_block_commit_count();
+  let mut builder = TransactionBuilder::from_seq_id(seq_id);
+  builder.add_operation_update_memo(&creator, code, "test");
+  // Ensure that invalid signature fails
+  let mut tx_bad = builder.transaction().clone();
+  for i in 0..tx_bad.body.operations.len() {
+    let op = &mut tx_bad.body.operations[i];
+    match op {
+      Operation::UpdateMemo(ref mut memo_update) => {
+        memo_update.pubkey = adversary.get_pk();
+      }
+      _ => (),
+    }
+  }
+  assert!(TxnEffect::compute_effect(tx_bad.clone()).is_err());
+
+  // Ensure that valid signature succeeds
+  assert!(TxnEffect::compute_effect(tx.clone()).is_ok());
+
+  // Only the asset creator can change the memo
+  let seq_id = ledger.get_block_commit_count();
+  let mut builder = TransactionBuilder::from_seq_id(seq_id);
+  builder.add_operation_update_memo(&adversary, code, "new memo");
+  let tx = builder.transaction().clone();
+  let effect = TxnEffect::compute_effect(tx).unwrap();
+  assert!(ledger.apply_transaction(&mut block, effect).is_err());
+  ledger.finish_block(block).unwrap();
+
+  // Cant change memo more than once in the same block
+  let mut block = ledger.start_block().expect("starting block failed");
+  let seq_id = ledger.get_block_commit_count();
+  let mut builder = TransactionBuilder::from_seq_id(seq_id);
+  builder.add_operation_update_memo(&creator, code, "test");
+  let tx = builder.transaction();
+  let effect0 = TxnEffect::compute_effect(tx.clone()).expect("compute effect failed");
+  let temp_sid = ledger.apply_transaction(&mut block, effect0)
+                       .expect("apply transaction failed");
+  let effect1 = TxnEffect::compute_effect(tx.clone()).expect("compute effect failed");
+  assert!(ledger.apply_transaction(&mut block, effect1).is_err());
+  ledger.finish_block(block)
+        .unwrap()
+        .remove(&temp_sid)
+        .expect("finishing block failed");
+}
+
+#[test]
+pub fn test_update_memo_darp() {
+  let mut ledger = LedgerState::test_ledger();
+  let creator = XfrKeyPair::generate(&mut ledger.get_prng());
+
+  // Define fiat token
+  let code = AssetTypeCode::from_identical_byte(1);
+  let seq_id = ledger.get_block_commit_count();
+  let tx = create_definition_transaction(&code,
+                                         &creator,
+                                         AssetRules::default().set_updatable(true).clone(),
+                                         Some(Memo("test".to_string())),
+                                         seq_id).unwrap();
+  apply_transaction(&mut ledger, tx);
+
+  let mut block = ledger.start_block().expect("starting first block failed");
+  let _new_memo = Memo("new_memo".to_string());
+  let seq_id = ledger.get_block_commit_count();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
+  txn_builder.add_operation_update_memo(&creator, code, "new_memo");
+  let txn = txn_builder.transaction();
+  let effect0 = TxnEffect::compute_effect(txn.clone()).expect("compute effect0 failed");
+  let temp_sid0 = ledger.apply_transaction(&mut block, effect0.clone())
+                        .expect("apply transaction0 failed");
+
+  // Test 1: replay the exact same txn, it should fail
+  let effect1 = TxnEffect::compute_effect(txn.clone()).expect("compute effect1 failed");
+  assert!(ledger.apply_transaction(&mut block, effect1.clone())
+                .is_err());
+  ledger.finish_block(block)
+        .unwrap()
+        .remove(&temp_sid0)
+        .expect("finishing block failed");
+
+  let mut block = ledger.start_block()
+                        .expect("starting replay exact txn block failed");
+  let txn = txn_builder.transaction();
+  let effect = TxnEffect::compute_effect(txn.clone()).expect("compute effect failed");
+
+  assert!(ledger.apply_transaction(&mut block, effect.clone())
+                .is_err());
+
+  ledger.finish_block(block).unwrap();
+
+  //assert!(ledger.apply_transaction(&mut block, effect.clone())
+  //              .is_err());
+
+  // Test 2: wrong NRPT
+  // create a new txn
+  let seq_id = ledger.get_block_commit_count();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
+  // insert the copied operation (which will not match the NRPT of the txn) into the new txn
+  txn_builder.add_operation_update_memo(&creator, code, "new_memo");
+  let mut tx_bad = txn_builder.transaction().clone();
+  for i in 0..tx_bad.body.operations.len() {
+    let op = &mut tx_bad.body.operations[i];
+    match op {
+      Operation::UpdateMemo(ref mut memo_update) => {
+        let mut prng = ChaChaRng::from_entropy();
+        memo_update.body.no_replay_token = NoReplayToken::new(&mut prng, seq_id);
+      }
+      _ => (),
+    }
+  }
+  assert!(TxnEffect::compute_effect(tx_bad.clone()).is_err());
+}
+
+#[test]
+/// Tests that a valid AIR credential can be appended to the AIR with the air_assign operation.
+pub fn test_air_assign_operation() {
+  let mut ledger = LedgerState::test_ledger();
+  let dl = String::from("dl");
+  let cred_issuer_key = credential_issuer_key_gen(&mut ledger.get_prng(), &[(dl.clone(), 8)]);
+  let cred_user_key = credential_user_key_gen(&mut ledger.get_prng(), &cred_issuer_key.0);
+  let user_kp = XfrKeyPair::generate(&mut ledger.get_prng());
+
+  // Construct credential
+  let dl_attr = b"A1903479";
+  let attr_map = vec![(dl.clone(), dl_attr.to_vec())];
+  let attributes = [(dl.clone(), &dl_attr[..])];
+  let signature = credential_sign(&mut ledger.get_prng(),
+                                  &cred_issuer_key.1,
+                                  &cred_user_key.0,
+                                  &attributes).unwrap();
+  let credential = Credential { signature: signature.clone(),
+                                attributes: attr_map,
+                                issuer_pub_key: cred_issuer_key.0.clone() };
+  let (commitment, pok, _key) = credential_commit(&mut ledger.get_prng(),
+                                                  &cred_user_key.1,
+                                                  &credential,
+                                                  user_kp.get_pk_ref().as_bytes()).unwrap();
+
+  let mut block = ledger.start_block().expect("starting first block failed");
+  let seq_id = ledger.get_block_commit_count();
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
+  txn_builder.add_operation_air_assign(&user_kp,
+                                       cred_user_key.0.clone(),
+                                       commitment,
+                                       cred_issuer_key.0,
+                                       pok).unwrap();
+  let tx = txn_builder.transaction();
+  let effect0 = TxnEffect::compute_effect(tx.clone()).expect("compute effect0 failed");
+  let temp_sid0 = ledger.apply_transaction(&mut block, effect0.clone())
+                        .expect("apply transaction0 failed");
+
+  // Test 1: replay the exact same txn, it should fail
+  let effect1 = TxnEffect::compute_effect(tx.clone()).expect("compute effect1 failed");
+  assert!(ledger.apply_transaction(&mut block, effect1.clone())
+                .is_err());
+  ledger.finish_block(block)
+        .unwrap()
+        .remove(&temp_sid0)
+        .expect("finishing block failed");
+
+  /*
+    // apply_transaction(&mut ledger, tx.clone());
+
+    // Immediately replaying should fail
+    let air_assign_op2 = air_assign_op.clone();
+    let tx2 = Transaction::from_operation(Operation::AIRAssign(air_assign_op2), seq_id);
+    let effect = TxnEffect::compute_effect(tx2).unwrap();
+    assert!(ledger.status.check_txn_effects(effect).is_err());
+
+    // If we reset the key it should fail
+    let mut adversarial_op = air_assign_op.clone();
+    adversarial_op.pubkey = XfrKeyPair::generate(&mut ledger.get_prng()).get_pk();
+    let tx = Transaction::from_operation(Operation::AIRAssign(adversarial_op), seq_id);
+    let effect = TxnEffect::compute_effect(tx);
+    assert!(effect.is_err());
+    let authenticated_air_res =
+      ledger.get_air_data(&serde_json::to_string(&cred_user_key.0).unwrap());
+    assert!(authenticated_air_res.is_valid(ledger.get_state_commitment().0));
+  */
 }

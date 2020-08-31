@@ -49,7 +49,7 @@ pub fn build_id() -> String {
 /////////// TRANSACTION BUILDING ////////////////
 
 #[wasm_bindgen]
-pub struct NoReplayToken(ledger::data_model::NoReplayToken);
+pub struct SeqId(u64);
 
 //Random Helpers
 
@@ -207,9 +207,8 @@ impl TransactionBuilder {
 #[wasm_bindgen]
 impl TransactionBuilder {
   /// Create a new transaction builder.
-  pub fn new(no_replay_token: NoReplayToken) -> Self {
-    TransactionBuilder { transaction_builder:
-                           PlatformTransactionBuilder::from_token(no_replay_token.0) }
+  pub fn new(seq_id: SeqId) -> Self {
+    TransactionBuilder { transaction_builder: PlatformTransactionBuilder::from_seq_id(seq_id.0) }
   }
 
   /// Wraps around TransactionBuilder to add an asset definition operation to a transaction builder instance.

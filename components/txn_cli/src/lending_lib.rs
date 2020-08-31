@@ -5,7 +5,7 @@ use credentials::{
   credential_commit, credential_sign, credential_user_key_gen, Credential as WrapperCredential,
 };
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{AssetRules, AssetTypeCode, NoReplayToken, TransferType, TxoRef};
+use ledger::data_model::{AssetRules, AssetTypeCode, TransferType, TxoRef};
 use ledger::policies::{DebtMemo, Fraction};
 use ledger::{error_location, ser_fail};
 use ledger_api_service::RestfulLedgerAccess;
@@ -29,7 +29,7 @@ use zei::xfr::structs::{AssetRecordTemplate, AssetTracerMemo, BlindAssetRecord, 
 /// * `blind_asset_record2`: blind asset record of the second record.
 /// * `token_code`: asset token code of the two records.
 pub(crate) fn merge_records(key_pair: &XfrKeyPair,
-                            no_replay_token: NoReplayToken,
+                            seq_id: u64,
                             sid1: TxoRef,
                             sid2: TxoRef,
                             blind_asset_record1: (BlindAssetRecord, Option<OwnerMemo>),
@@ -67,7 +67,7 @@ pub(crate) fn merge_records(key_pair: &XfrKeyPair,
                                               .transaction()?;
 
   // Merge records
-  let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
+  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   txn_builder.add_operation(xfr_op).transaction();
   Ok(txn_builder)
 }
@@ -98,9 +98,8 @@ pub fn load_funds<T>(data_dir: &str,
     AssetTypeCode::new_from_base64(code)?
   } else {
     let fiat_code = AssetTypeCode::gen_random();
-    let no_replay_token = rest_client.get_no_replay_token()?;
     let txn_builder = define_asset(data_dir,
-                                   no_replay_token,
+                                   rest_client.get_block_commit_count()?,
                                    true,
                                    issuer_key_pair,
                                    fiat_code,
@@ -115,8 +114,10 @@ pub fn load_funds<T>(data_dir: &str,
   };
 
   // Issue and transfer asset
+  let seq_id = rest_client.get_block_commit_count()?;
   let txn_builder =
     issue_and_transfer_asset(data_dir,
+                             seq_id,
                              issuer_key_pair,
                              recipient_key_pair,
                              amount,
@@ -134,9 +135,8 @@ pub fn load_funds<T>(data_dir: &str,
   // Merge records
   let sid_merged = if let Some(sid_pre) = recipient.fiat_utxo {
     let blind_asset_record_pre = (rest_client.get_utxo(sid_pre).unwrap().utxo.0).0;
-    let no_replay_token = rest_client.get_no_replay_token()?;
     let txn_builder = merge_records(recipient_key_pair,
-                                    no_replay_token,
+                                    rest_client.get_block_commit_count()?,
                                     TxoRef::Absolute(sid_pre),
                                     TxoRef::Absolute(sid_new),
                                     (blind_asset_record_pre, None), // no associated owner memo with blind asset record
@@ -325,9 +325,9 @@ pub fn fulfill_loan<T>(data_dir: &str,
     AssetTypeCode::new_from_base64(&code)?
   } else {
     let fiat_code = AssetTypeCode::gen_random();
-    let no_replay_token = rest_client.get_no_replay_token()?;
+    let seq_id = rest_client.get_block_commit_count()?;
     let txn_builder = define_asset(data_dir,
-                                   no_replay_token,
+                                   seq_id,
                                    true,
                                    issuer_key_pair,
                                    fiat_code,
@@ -343,8 +343,10 @@ pub fn fulfill_loan<T>(data_dir: &str,
 
   // Issue and transfer fiat token
   let fiat_txn_file = &format!("{}/{}", data_dir, "fiat_txn_file");
+  let seq_id = rest_client.get_block_commit_count()?;
   let txn_builder =
     issue_and_transfer_asset(data_dir,
+                             seq_id,
                              issuer_key_pair,
                              lender_key_pair,
                              amount,
@@ -369,9 +371,8 @@ pub fn fulfill_loan<T>(data_dir: &str,
                         fiat_code,
                         loan_amount: amount };
   let memo_str = serde_json::to_string(&memo).map_err(|_| ser_fail!())?;
-  let no_replay_token = rest_client.get_no_replay_token()?;
   let txn_builder = define_asset(data_dir,
-                                 no_replay_token,
+                                 rest_client.get_block_commit_count()?,
                                  false,
                                  borrower_key_pair,
                                  debt_code,
@@ -384,8 +385,10 @@ pub fn fulfill_loan<T>(data_dir: &str,
 
   // Issue and transfer debt token
   let debt_txn_file = "debt_txn_file";
+  let seq_id = rest_client.get_block_commit_count()?;
   let txn_builder =
     issue_and_transfer_asset(data_dir,
+                             seq_id,
                              borrower_key_pair,
                              borrower_key_pair,
                              amount,
@@ -428,8 +431,7 @@ pub fn fulfill_loan<T>(data_dir: &str,
                                               .sign(borrower_key_pair)?
                                               .transaction()?;
 
-  let no_replay_token = rest_client.get_no_replay_token()?;
-  let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
+  let mut txn_builder = TransactionBuilder::from_seq_id(rest_client.get_block_commit_count()?);
   txn_builder.add_operation(xfr_op);
 
   // Submit transaction
@@ -439,9 +441,8 @@ pub fn fulfill_loan<T>(data_dir: &str,
   let fiat_sid_merged = if let Some(sid_pre) = borrower.fiat_utxo {
     let blind_asset_record_pre = (rest_client.get_utxo(sid_pre)?.utxo.0).0;
     let blind_asset_record_new = (rest_client.get_utxo(sids_new[1])?.utxo.0).0;
-    let no_replay_token = rest_client.get_no_replay_token()?;
     let txn_builder = merge_records(borrower_key_pair,
-                                    no_replay_token,
+                                    rest_client.get_block_commit_count()?,
                                     TxoRef::Absolute(sid_pre),
                                     TxoRef::Absolute(sids_new[1]),
                                     (blind_asset_record_pre, None),
@@ -609,8 +610,7 @@ AssetRecordTemplate::with_no_asset_tracking(borrower.balance - amount_to_spend,
                                           .sign(borrower_key_pair)?
                                           .transaction()?;
 
-  let no_replay_token = rest_client.get_no_replay_token()?;
-  let mut txn_builder = TransactionBuilder::from_token(no_replay_token);
+  let mut txn_builder = TransactionBuilder::from_seq_id(rest_client.get_block_commit_count()?);
   txn_builder.add_operation(op).transaction();
 
   // Submit transaction and update data
@@ -658,7 +658,7 @@ mod tests {
 
     // Merge records
     assert!(merge_records(&key_pair,
-                          NoReplayToken::default(), // OK to use default as this doesn't get submitted
+                          0, // OK to use default as this doesn't get submitted
                           TxoRef::Absolute(TxoSID(1)),
                           TxoRef::Absolute(TxoSID(2)),
                           (bar1, memo1),

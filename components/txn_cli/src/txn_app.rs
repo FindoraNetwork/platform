@@ -8,7 +8,7 @@ use clap::{App, Arg, SubCommand};
 use credentials::u8_slice_to_u32_vec;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  AccountAddress, AssetRules, AssetTypeCode, KVHash, NoReplayToken, SignatureRules, TxoRef, TxoSID,
+  AccountAddress, AssetRules, AssetTypeCode, KVHash, SignatureRules, TxoRef, TxoSID,
 };
 use ledger::{error_location, ser_fail};
 use ledger_api_service::RestfulLedgerAccess;
@@ -43,10 +43,12 @@ fn io_error(msg: &str) -> Result<(), PlatformError> {
 /// # Arguments
 /// * `asset_issuer_matches`: subcommands and arguments under the `asset_issuer` subcommand.
 /// * `txn_file`: path to store the transaction file.
-pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
-                                       data_dir: &str,
-                                       txn_file: Option<&str>)
-                                       -> Result<(), PlatformError> {
+pub(crate) fn process_asset_issuer_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
+  asset_issuer_matches: &clap::ArgMatches,
+  data_dir: &str,
+  txn_file: Option<&str>,
+  rest_client: &mut T)
+  -> Result<(), PlatformError> {
   match asset_issuer_matches.subcommand() {
     ("sign_up", Some(sign_up_matches)) => {
       let name = if let Some(name_arg) = sign_up_matches.value_of("name") {
@@ -205,8 +207,9 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                  asset_token.to_base64(),
                  asset_token.val);
       }
+      let seq_id = rest_client.get_block_commit_count()?;
       match define_asset(data_dir,
-                         NoReplayToken::default(),
+                         seq_id,
                          fiat_asset,
                          &issuer_key_pair,
                          asset_token,
@@ -230,7 +233,8 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
       let value = kv_matches.value_of("value")
                             .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
-      let mut txn_builder = TransactionBuilder::from_token(NoReplayToken::default());
+      let seq_id = rest_client.get_block_commit_count()?;
+      let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
       let hash = KVHash::new(&value, None);
       txn_builder.add_operation_kv_update(&key_pair, &key, gen, Some(&hash))?;
       println!("Hash of data will be stored at key {}", key.to_base64());
@@ -251,7 +255,8 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let gen = parse_to_u64(kv_matches.value_of("gen")
           .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
           .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
-      let mut txn_builder = TransactionBuilder::from_token(NoReplayToken::default());
+      let seq_id = rest_client.get_block_commit_count()?;
+      let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
 
       txn_builder.add_operation_kv_update(&key_pair, &key, gen, None)?;
       if let Some(txn_file) = txn_file {
@@ -286,7 +291,8 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         return Err(PlatformError::InputsError(error_location!()));
       };
       let confidential_amount = issue_asset_matches.is_present("confidential_amount");
-      let mut txn_builder = TransactionBuilder::from_token(NoReplayToken::default());
+      let seq_id = rest_client.get_block_commit_count()?;
+      let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
       let params = PublicParams::new();
       if let Err(e) =
         txn_builder.add_basic_issue_asset(&key_pair,
@@ -449,7 +455,8 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       }
 
       // Transfer asset
-      let mut txn_builder = TransactionBuilder::from_token(NoReplayToken::default());
+      let seq_id = rest_client.get_block_commit_count()?;
+      let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
       if let Err(e) = txn_builder.add_basic_transfer_asset(&issuer_key_pair,
                                                            &transfer_from[..],
                                                            input_tracing_policies,
@@ -501,8 +508,9 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let confidential_amount = issue_and_transfer_matches.is_present("confidential_amount");
       let record_type = AssetRecordType::from_booleans(confidential_amount, false);
       let memo_file = issue_and_transfer_matches.value_of("memo_file");
-
+      let seq_id = rest_client.get_block_commit_count()?;
       issue_and_transfer_asset(data_dir,
+                               seq_id,
                                &issuer_key_pair,
                                &recipient_key_pair,
                                amount,
@@ -1068,9 +1076,11 @@ pub(crate) fn process_borrower_cmd<T: RestfulQueryServerAccess
 /// # Arguments
 /// * `create_matches`: subcommands and arguments under the `create_txn_builder` subcommand.
 /// * `txn_file`: path to store the transaction file.
-pub(crate) fn process_create_txn_builder_cmd(create_matches: &clap::ArgMatches,
-                                             txn_file: &str)
-                                             -> Result<(), PlatformError> {
+pub(crate) fn process_create_txn_builder_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
+  create_matches: &clap::ArgMatches,
+  txn_file: &str,
+  rest_client: &mut T)
+  -> Result<(), PlatformError> {
   let name = create_matches.value_of("name");
   let overwrite = create_matches.is_present("overwrite");
   let file_str = if let Some(name) = name {
@@ -1080,7 +1090,8 @@ pub(crate) fn process_create_txn_builder_cmd(create_matches: &clap::ArgMatches,
   };
   let expand_str = shellexpand::tilde(&file_str).to_string();
   create_directory_and_rename_path(&expand_str, overwrite)?;
-  let txn_builder = TransactionBuilder::from_token(NoReplayToken::default());
+  let seq_id = rest_client.get_block_commit_count()?;
+  let txn_builder = TransactionBuilder::from_seq_id(seq_id);
   store_txn_to_file(&expand_str, &txn_builder)
 }
 
@@ -1198,7 +1209,7 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
   match inputs.subcommand() {
     ("asset_issuer", Some(asset_issuer_matches)) => {
       let txn_file_opt = inputs.value_of("txn");
-      process_asset_issuer_cmd(asset_issuer_matches, &dir, txn_file_opt)
+      process_asset_issuer_cmd(asset_issuer_matches, &dir, txn_file_opt, rest_client)
     }
     ("credential_issuer", Some(credential_issuer_matches)) => {
       process_credential_issuer_cmd(credential_issuer_matches, &dir)
@@ -1207,7 +1218,7 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
     ("borrower", Some(issuer_matches)) => process_borrower_cmd(issuer_matches, &dir, rest_client),
     ("create_txn_builder", Some(create_txn_builder_matches)) => {
       if let Some(txn_file) = create_txn_builder_matches.value_of("name") {
-        process_create_txn_builder_cmd(create_txn_builder_matches, &txn_file)
+        process_create_txn_builder_cmd(create_txn_builder_matches, &txn_file, rest_client)
       } else {
         eprintln!("Missing --name <filename>");
         inputs_error(&format!("Missing --name <filename> at {}", error_location!()))

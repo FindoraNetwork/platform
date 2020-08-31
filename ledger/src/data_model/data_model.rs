@@ -1229,13 +1229,15 @@ impl Transaction {
     HashOf::new(&(id, self.clone()))
   }
 
-  pub fn from_token(no_replay_token: NoReplayToken) -> Self {
+  pub fn from_seq_id(seq_id: u64) -> Self {
+    let mut prng = ChaChaRng::from_entropy();
+    let no_replay_token = NoReplayToken::new(&mut prng, seq_id);
     Transaction { body: TransactionBody::from_token(no_replay_token),
                   signatures: Vec::new() }
   }
 
-  pub fn from_operation(op: Operation, no_replay_token: NoReplayToken) -> Self {
-    let mut tx = Transaction::from_token(no_replay_token);
+  pub fn from_operation(op: Operation, seq_id: u64) -> Self {
+    let mut tx = Transaction::from_seq_id(seq_id);
     tx.add_operation(op);
     tx
   }
@@ -1464,7 +1466,7 @@ mod tests {
   fn test_add_operation() {
     // Create values to be used to instantiate operations. Just make up a seq_id, since
     // it will never be sent to a real ledger
-    let mut transaction: Transaction = Transaction::from_token(NoReplayToken::default());
+    let mut transaction: Transaction = Transaction::from_seq_id(666);
 
     let mut prng = rand_chacha::ChaChaRng::from_entropy();
 

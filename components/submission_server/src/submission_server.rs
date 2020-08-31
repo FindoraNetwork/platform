@@ -300,7 +300,7 @@ pub fn convert_tx(tx: &[u8]) -> Option<Transaction> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use ledger::data_model::{AssetRules, AssetTypeCode, NoReplayToken};
+  use ledger::data_model::{AssetRules, AssetTypeCode};
   use rand_core::SeedableRng;
   use txn_builder::{BuildsTransactions, PolicyChoice, TransactionBuilder};
   use zei::xfr::sig::XfrKeyPair;
@@ -309,9 +309,9 @@ mod tests {
   fn test_cache_transaction() {
     // Create a SubmissionServer
     let block_capacity = 8;
-    let mut ledger_state = LedgerState::test_ledger();
+    let ledger_state = LedgerState::test_ledger();
     let mut prng = rand_chacha::ChaChaRng::from_entropy();
-    let no_replay_token = ledger_state.get_no_replay_token();
+    let seq_id = ledger_state.get_block_commit_count();
     let mut submission_server =
       SubmissionServer::<_, _, NoTF>::new(prng.clone(),
                                           Arc::new(RwLock::new(ledger_state)),
@@ -325,8 +325,8 @@ mod tests {
     let asset_token = AssetTypeCode::new_from_base64(&token_code).unwrap();
 
     // Build transactions
-    let mut txn_builder_0 = TransactionBuilder::from_token(no_replay_token);
-    let mut txn_builder_1 = TransactionBuilder::from_token(no_replay_token);
+    let mut txn_builder_0 = TransactionBuilder::from_seq_id(seq_id);
+    let mut txn_builder_1 = TransactionBuilder::from_seq_id(seq_id);
 
     txn_builder_0.add_operation_create_asset(&keypair,
                                              Some(asset_token),
@@ -348,19 +348,19 @@ mod tests {
 
     // Verify temp_sids
     let temp_sid_0 = submission_server.pending_txns.get(0).unwrap();
-    let temp_sid_1 = submission_server.pending_txns.get(1);
+    let temp_sid_1 = submission_server.pending_txns.get(1).unwrap();
 
     assert_eq!(temp_sid_0.0, TxnTempSID(0));
-    assert!(temp_sid_1.is_none());
+    assert_eq!(temp_sid_1.0, TxnTempSID(1));
   }
 
   #[test]
   fn test_eligible_to_commit() {
     // Create a SubmissionServer
     let block_capacity = 8;
-    let mut ledger_state = LedgerState::test_ledger();
+    let ledger_state = LedgerState::test_ledger();
     let prng = rand_chacha::ChaChaRng::from_entropy();
-    let no_replay_token = ledger_state.get_no_replay_token();
+    let seq_id = ledger_state.get_block_commit_count();
     let mut submission_server =
       SubmissionServer::<_, _, NoTF>::new(prng,
                                           Arc::new(RwLock::new(ledger_state)),
@@ -368,7 +368,7 @@ mod tests {
 
     submission_server.begin_block();
 
-    let transaction = Transaction::from_token(no_replay_token);
+    let transaction = Transaction::from_seq_id(seq_id);
 
     // Verify that it's ineligible to commit if #transactions < BLOCK_CAPACITY
     for _i in 0..(block_capacity - 1) {
@@ -385,16 +385,16 @@ mod tests {
   #[test]
   fn test_txn_status() {
     let block_capacity = 2;
-    let mut ledger_state = LedgerState::test_ledger();
-    let no_replay_token = ledger_state.get_no_replay_token();
-    let mut prng = rand_chacha::ChaChaRng::from_entropy();
+    let ledger_state = LedgerState::test_ledger();
+    let prng = rand_chacha::ChaChaRng::from_entropy();
+    let seq_id = ledger_state.get_block_commit_count();
     let mut submission_server =
       SubmissionServer::<_, _, NoTF>::new(prng,
                                           Arc::new(RwLock::new(ledger_state)),
                                           block_capacity).unwrap();
 
     // Submit the first transcation. Ensure that the txn is pending.
-    let transaction = Transaction::from_token(no_replay_token);
+    let transaction = Transaction::from_seq_id(seq_id);
     let txn_handle = submission_server.handle_transaction(transaction.clone())
                                       .unwrap();
     let status = submission_server.txn_status
@@ -409,10 +409,10 @@ mod tests {
     // In this case, both transactions have the same handle. Because transactions are unique and
     // We are using a collision resistant hash function, this will not occur on a live ledger.
     let status = submission_server.txn_status
-      .get(&txn_handle)
-      .expect("handle should be in map")
-      .clone();
-    
+                                  .get(&txn_handle)
+                                  .expect("handle should be in map")
+                                  .clone();
+
     match status {
       TxnStatus::Rejected(_) => {} // No replay token
       TxnStatus::Pending => {
@@ -426,8 +426,7 @@ mod tests {
 
     // Now test that invalid transactions show up as rejected
     // Provide the completely wrong sequence number
-    prng = rand_chacha::ChaChaRng::from_entropy();
-    let bad_transaction = Transaction::from_token(NoReplayToken::new(&mut prng, 666));
+    let bad_transaction = Transaction::from_seq_id(666);
     let txn_handle = submission_server.handle_transaction(bad_transaction)
                                       .unwrap();
     let status = submission_server.txn_status

@@ -27,28 +27,12 @@ impl<T> SlidingSet<T> {
 }
 
 impl<T: Eq + Copy + std::fmt::Debug> SlidingSet<T> {
-  pub fn contains_key(&self, key: T) -> bool {
-    self.get(key).is_some()
-  }
-
-  pub fn has_key_at(&self, key: T, index: usize) -> bool {
-    if index > self.current || index + self.width < (self.current + 1) {
+  pub fn has_key_at(&self, index: usize, key: T) -> bool {
+    if index > self.current || index + self.width <= self.current {
       false
     } else {
       self.map[index % self.width].contains(&key)
     }
-  }
-
-  pub fn get(&self, key: T) -> Option<usize> {
-    for (index, vec) in self.map.iter().enumerate() {
-      for k in vec.iter() {
-        if *k == key {
-          let offset = self.current / self.width;
-          return Some(offset + index);
-        }
-      }
-    }
-    None
   }
 
   pub fn insert(&mut self, key: T, index: usize) -> Result<(), String> {
@@ -91,13 +75,13 @@ mod tests {
     let mut n = 0;
     for i in 0..factor {
       for _ in 0..width {
-        ss.insert(digests[n], n);
-        assert!(ss.contains_key(digests[n]));
+        ss.insert(digests[n], n).unwrap();
+        assert!(ss.has_key_at(n, digests[n]));
         ss.incr_current();
         n += 1;
       }
-      assert!(!ss.contains_key(digests[i * width]));
-      assert!(ss.contains_key(digests[(i + 1) * width - 1]));
+      assert!(!ss.has_key_at(i * width, digests[i * width]));
+      assert!(ss.has_key_at((i + 1) * width - 1, digests[(i + 1) * width - 1]));
     }
   }
 }
