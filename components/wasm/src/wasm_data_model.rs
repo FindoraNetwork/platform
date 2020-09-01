@@ -163,8 +163,8 @@ impl ClientAssetRecord {
   ///
   /// @see {@link module:Findora-Network~Network#getUtxo|Network.getUtxo} for information about how to
   /// fetch an asset record from the ledger server.
-  pub fn from_json(val: &JsValue) -> Self {
-    ClientAssetRecord { txo: val.into_serde().unwrap() }
+  pub fn from_json(val: &JsValue) -> Result<ClientAssetRecord, JsValue> {
+    Ok(ClientAssetRecord { txo: val.into_serde().map_err(error_to_jsvalue)? })
   }
 }
 
@@ -226,10 +226,10 @@ impl OwnerMemo {
   ///   "blind_share":[91,251,44,28,7,221,67,155,175,213,25,183,70,90,119,232,212,238,226,142,159,200,54,19,60,115,38,221,248,202,74,248],
   ///   "lock":{"ciphertext":[119,54,117,136,125,133,112,193],"encoded_rand":"8KDql2JphPB5WLd7-aYE1bxTQAcweFSmrqymLvPDntM="}
   /// }
-  pub fn from_json(val: &JsValue) -> Self {
-    let zei_owner_memo: ZeiOwnerMemo = val.into_serde().unwrap();
-    OwnerMemo { memo: ZeiOwnerMemo { blind_share: zei_owner_memo.blind_share,
-                                     lock: zei_owner_memo.lock } }
+  pub fn from_json(val: &JsValue) -> Result<OwnerMemo, JsValue> {
+    let zei_owner_memo: ZeiOwnerMemo = val.into_serde().map_err(error_to_jsvalue)?;
+    Ok(OwnerMemo { memo: ZeiOwnerMemo { blind_share: zei_owner_memo.blind_share,
+                                        lock: zei_owner_memo.lock } })
   }
 
   /// Creates a clone of the owner memo.
@@ -510,8 +510,8 @@ impl CredentialIssuerKeyPair {
     JsValue::from_serde(&self).unwrap()
   }
   /// Generate a key pair from a JSON-serialized JavaScript value.
-  pub fn from_json(val: &JsValue) -> Self {
-    val.into_serde().unwrap()
+  pub fn from_json(val: &JsValue) -> Result<CredentialIssuerKeyPair, JsValue> {
+    Ok(val.into_serde().map_err(error_to_jsvalue)?)
   }
 }
 
@@ -530,8 +530,8 @@ impl CredentialUserKeyPair {
     JsValue::from_serde(&self).unwrap()
   }
   /// Generate a key pair from a JSON-serialized JavaScript value.
-  pub fn from_json(val: &JsValue) -> Self {
-    val.into_serde().unwrap()
+  pub fn from_json(val: &JsValue) -> Result<CredentialUserKeyPair, JsValue> {
+    Ok(val.into_serde().map_err(error_to_jsvalue)?)
   }
 }
 
