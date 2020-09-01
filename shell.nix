@@ -25,6 +25,8 @@ stdenv.mkDerivation {
     # Note: to use use stable, just replace `nightly` with `stable`
     rustNightly
 
+    sccache
+
     # Add some extra dependencies from `pkgs`
     openssl
     zlib
@@ -42,5 +44,6 @@ stdenv.mkDerivation {
   LD_LIBRARY_PATH = "${zlib}/lib";
   PROTOC          = "${protobuf}/bin/protoc";
   PROTOC_INCLUDE  = "${protobuf}/include";
+  RUSTC_WRAPPER   = "${sccache}/bin/sccache";
 }
 

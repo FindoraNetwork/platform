@@ -1005,217 +1005,397 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
             None => { return Err(inp_fail!()); },
         };
 
-        let mut txn_txos = vec![];
-        let mut ops = vec![];
+        let sent_txo = {
+          let mut txn_txos = vec![];
+          let mut ops = vec![];
 
-        // release src records, get avail and get the index in txn_txos of
-        // the src contract
-        let (mut avail,new_src_ctrt_ix) = {
-          let ctrt_txo = src_ctrt.clone();
-          let ctrt_record = self.ledger.get_utxo(src_ctrt).unwrap().0.0.clone();
-          let mut avail = vec![];
-          let (rel_in_records,rel_out_records,new_ctrt) = {
-            let mut in_records = vec![];
-            let mut out_records = vec![];
-            let mut rel_txos = vec![];
+          // release src records, get avail and get the index in txn_txos of
+          // the src contract
+          let (mut avail,new_src_ctrt_ix) = {
+            let ctrt_txo = src_ctrt.clone();
+            let ctrt_record = self.ledger.get_utxo(src_ctrt).unwrap().0.0.clone();
+            let mut avail = vec![];
+            let (rel_in_records,rel_out_records,new_ctrt) = {
+              let mut in_records = vec![];
+              let mut out_records = vec![];
+              let mut rel_txos = vec![];
 
-            let new_ctrt_ix = { // contract
-              let blind_rec = ctrt_record.0;
-              let memo = self.owner_memos.get(&ctrt_txo).cloned();
+              let new_ctrt_ix = { // contract
+                let blind_rec = ctrt_record.0;
+                let memo = self.owner_memos.get(&ctrt_txo).cloned();
 
-              let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_privkey).unwrap();
+                let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_privkey).unwrap();
 
-              in_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(open_rec.clone()));
+                in_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(open_rec.clone()));
 
-              let amt = open_rec.get_amount();
-              let unit_code = open_rec.get_asset_type();
-              let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *pubkey);
-              let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
-              let ix = txn_txos.len();
-              out_records.push(ar.clone());
-              txn_txos.push(ar);
-              ix
+                let amt = open_rec.get_amount();
+                let unit_code = open_rec.get_asset_type();
+                let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *pubkey);
+                let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
+                let ix = txn_txos.len();
+                out_records.push(ar.clone());
+                txn_txos.push(ar);
+                ix
+              };
+
+              for (i,memo) in src_txos.iter() {
+                let blind_rec = i.0;
+
+                let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_privkey).unwrap();
+
+                in_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(open_rec.clone()));
+
+                let amt = open_rec.get_amount();
+                let unit_code = open_rec.get_asset_type();
+                let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *pubkey);
+                let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
+                let ix = txn_txos.len();
+                out_records.push(ar.clone());
+                txn_txos.push(ar);
+                avail.push(ix);
+              }
+
+              (in_records,out_records,new_ctrt_ix)
             };
 
-            for (i,memo) in src_txos.iter() {
-              let blind_rec = i.0;
+            let rel_op = {
+              let body = ReleaseAssetBody::new(self.ledger.get_prng(),
+                src_ctrt,
+                HashOf::new(src_txos.unwrap().iter().map(|(txo,_)| txo).collect::<Vec<_>>().clone()),
+                vec![],
+                &rel_in_records,
+                &rel_out_records).unwrap();
+              let sig = body.compute_body_signature(&src_keypair,None);
+              ReleaseAssets { body, body_signatures: vec![sig] }
+            };
 
-              let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_privkey).unwrap();
-
-              in_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(open_rec.clone()));
-
-              let amt = open_rec.get_amount();
-              let unit_code = open_rec.get_asset_type();
-              let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *pubkey);
-              let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
-              let ix = txn_txos.len();
-              out_records.push(ar.clone());
-              txn_txos.push(ar);
-              avail.push(ix);
-            }
-
-            (in_records,out_records,new_ctrt_ix)
+            ops.push(rel_op);
+            (avail,new_ctrt)
           };
 
-          let rel_op = {
-            let body = ReleaseAssetBody::new(self.ledger.get_prng(),
-              src_ctrt,
-              HashOf::new(src_txos.unwrap().iter().map(|(txo,_)| txo).collect::<Vec<_>>().clone()),
-              vec![],
-              &rel_in_records,
-              &rel_out_records).unwrap();
-            let sig = body.compute_body_signature(&src_keypair,None);
-            ReleaseAssets { body, body_signatures: vec![sig] }
-          };
+          // ================
+          // Now we have all src records in `txn_txos`, and a list of usable
+          // (ie, non-contract) indices in `avail`
 
-          ops.push(rel_op);
-          (avail,new_ctrt)
-        };
+          // Transfer
+          let sent_record = {
+            let mut total_sum = 0u64;
+            let mut src_records: Vec<OpenAssetRecord> = Vec::new();
+            let mut to_use = Vec::new();
+            let mut to_skip = Vec::new();
 
-        // ================
-        // Now we have all src records in `txn_txos`, and a list of usable
-        // (ie, non-contract) indices in `avail`
+            while total_sum < amt && !avail.is_empty() {
+              let txo_ix = avail.pop_front().unwrap();
+              let open_rec = txn_txos.get(txo_ix).unwrap().open_asset_record;
 
-        // Transfer
-        let (src_outputs,dst_outputs) = {
-          let mut total_sum = 0u64;
-          let mut src_records: Vec<OpenAssetRecord> = Vec::new();
-          let mut to_use = Vec::new();
-          let mut to_skip = Vec::new();
+              if *open_rec.get_asset_type() != unit_code.val {
+                to_skip.push(txo_ix);
+                continue;
+              }
 
-          while total_sum < amt && !avail.is_empty() {
-            let txo_ix = avail.pop_front().unwrap();
-            let open_rec = txn_txos.get(txo_ix).unwrap().open_asset_record;
+              debug_assert!(*open_rec.get_asset_type() == unit_code.val);
+              to_use.push(txo_ix);
+              total_sum += *open_rec.get_amount();
+              src_records.push(mem::replace(txn_txos.get_mut(txo_ix),None).unwrap());
+            }
+            avail.extend(to_skip);
 
-            if *open_rec.get_asset_type() != unit_code.val {
-              to_skip.push(txo_ix);
-              continue;
+            assert!(total_sum >= amt);
+
+            let mut src_outputs = Vec::new();
+            let mut dst_outputs = Vec::new();
+            let mut all_outputs: Vec<AssetRecord> = Vec::new();
+
+            {
+              // Simple output to dst
+              let template =
+                AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
+              let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
+                                                                      &template).unwrap();
+              dst_outputs.push(txn_txos.len());
+              txn_txos.push(Some(ar.clone()));
+
+              all_outputs.push(ar);
             }
 
-            debug_assert!(*open_rec.get_asset_type() == unit_code.val);
-            to_use.push(txo_ix);
-            total_sum += *open_rec.get_amount();
-            src_records.push(mem::replace(txn_txos.get_mut(txo_ix),None).unwrap());
-          }
-          avail.extend(to_skip);
+            if total_sum > amt {
+              // Extras left over go back to src
+              let template = AssetRecordTemplate::with_no_asset_tracking(total_sum - amt,
+                                                                        unit_code.val,
+                                                                        art,
+                                                                        *src_pub);
+              let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
+                                                                      &template).unwrap();
+              src_outputs.push(txn_txos.len());
+              txn_txos.push(Some(ar.clone()));
 
-          assert!(total_sum >= amt);
+              all_outputs.push(ar);
+            }
 
-          let mut src_outputs = Vec::new();
-          let mut dst_outputs = Vec::new();
-          let mut all_outputs: Vec<AssetRecord> = Vec::new();
+            let src_outputs = src_outputs;
+            let dst_outputs = dst_outputs;
+            let all_outputs = all_outputs;
+            assert!(!src_records.is_empty());
 
+            let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
+
+            for _ in to_use.iter() {
+              sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes()));
+            }
+
+            let transfer_body =
+              TransferAssetBody::new(self.ledger.get_prng(),
+                                    to_use.iter().cloned().map(TxoRef::Absolute).collect(),
+                                    src_records.as_slice(),
+                                    all_outputs.as_slice(),
+                                    None,
+                                    vec![],
+                                    TransferType::Standard).unwrap();
+
+            debug_assert!(transfer_body.transfer.outputs.len() <= 2);
+
+            assert_eq!(dst_outputs.len(),1);
+            avail.extend(src_outputs.iter());
+
+            // dbg!(&transfer_body);
+            let transfer_sig = transfer_body.compute_body_signature(&src_keypair, None);
+
+            let transfer = TransferAsset { body: transfer_body,
+                                          body_signatures: vec![transfer_sig] };
+
+            ops.push(transfer);
+            txn_txos[dst_outputs[0]].clone()
+          };
+
+          // sanity check `avail`:
           {
-            // Simple output to dst
-            let template =
-              AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *dst_pub);
-            let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
-                                                                    &template).unwrap();
-            dst_outputs.push(txn_txos.len());
-            txn_txos.push(Some(ar.clone()));
-
-            all_outputs.push(ar);
-          }
-
-          if total_sum > amt {
-            // Extras left over go back to src
-            let template = AssetRecordTemplate::with_no_asset_tracking(total_sum - amt,
-                                                                      unit_code.val,
-                                                                      art,
-                                                                      *src_pub);
-            let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(),
-                                                                    &template).unwrap();
-            src_outputs.push(txn_txos.len());
-            txn_txos.push(Some(ar.clone()));
-
-            all_outputs.push(ar);
-          }
-
-          let src_outputs = src_outputs;
-          let dst_outputs = dst_outputs;
-          let all_outputs = all_outputs;
-          assert!(!src_records.is_empty());
-
-          let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
-
-          for _ in to_use.iter() {
-            sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes()));
-          }
-
-          let transfer_body =
-            TransferAssetBody::new(self.ledger.get_prng(),
-                                  to_use.iter().cloned().map(TxoRef::Absolute).collect(),
-                                  src_records.as_slice(),
-                                  all_outputs.as_slice(),
-                                  None,
-                                  vec![],
-                                  TransferType::Standard).unwrap();
-
-          debug_assert!(transfer_body.transfer.outputs.len() <= 2);
-
-          assert_eq!(dst_outputs.len(),1);
-          avail.extend(src_outputs.iter());
-
-          // dbg!(&transfer_body);
-          let transfer_sig = transfer_body.compute_body_signature(&src_keypair, None);
-
-          let transfer = TransferAsset { body: transfer_body,
-                                        body_signatures: vec![transfer_sig] };
-
-          ops.push(transfer);
-          (dst_outputs,src_outputs)
-        };
-
-        // sanity check `avail`:
-        {
-          let mut avail_total = 0;
-          for ix in avail.iter() {
-            let rec = txn_txos.get(ix).unwrap().open_asset_record;
-            avail_total += rec.amount;
-            assert!(rec.blind_asset_record.public_key == src_pub);
-          }
-          if src == dst {
-            assert_eq!(avail_total + amt, *self.balances.get(src).unwrap().get(unit).unwrap());
-          } else {
+            let mut avail_total = 0;
+            for ix in avail.iter() {
+              let rec = txn_txos.get(ix).unwrap().open_asset_record;
+              avail_total += rec.amount;
+              assert!(rec.blind_asset_record.public_key == src_pub);
+            }
             assert_eq!(avail_total, *self.balances.get(src).unwrap().get(unit).unwrap());
           }
-        }
 
-        // bind src's stuff back together
-        let (new_src_ctrt_ix,new_src_ctrt,new_src_ctrt_memo) = {
-          let (bind_op,lien_ix,new_ctrt) = {
+          let mut lien_records = vec![];
+          let (sent_ix,lien_ix,src_ctrt) = if !avail.is_empty() {
+            // bind src's stuff back together
+            let (new_src_ctrt_ix,new_src_ctrt) = {
+              let (bind_op,lien_ix,new_ctrt) = {
+                let mut in_records = vec![];
+                let mut in_refs = vec![];
+                let mut lien = vec![];
+
+                let (contract_ref,out_record) = {
+                  let ix = new_src_ctrt_ix;
+                  let rec = mem::replace(txn_txos.get_mut(ix),None).unwrap();
+                  let open_rec = &rec.open_asset_record;
+                  let amt = open_rec.get_amount();
+                  let unit_code = open_rec.get_asset_type();
+
+                  in_records.push(rec);
+                  let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *pubkey);
+                  let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
+
+                  (TxoRef::Relative(txn_txos.len()-1-ix),ar)
+                };
+
+                for ix in avail {
+                  let rec = mem::replace(txn_txos.get_mut(ix),None).unwrap();
+
+                  lien.push(TxOutput(rec.open_asset_record.blind_asset_record.clone(),None));
+                  lien_records.push(rec.clone());
+                  in_refs.push((TxoRef::Relative(txn_txos.len()-1-ix),None));
+                  in_records.push(rec);
+                }
+
+                let lien_ix = txn_txos.len();
+                txn_txos.push(out_record.clone());
+                let new_ctrt = out_record.clone();
+
+                let body = BindAssetsBody::new(self.ledger.get_prng(),
+                  contract_ref,
+                  in_refs,
+                  in_records,
+                  out_record).unwrap();
+
+                let sig = body.compute_body_signature(&src_keypair,None);
+                (BindAssets { body, body_signatures: vec![sig] },
+                lien_ix, new_ctrt)
+              };
+
+              ops.push(bind_op);
+
+              (lien_ix,new_ctrt)
+            };
+
+            // we released the lien into [ctrt,entries...] then sent the
+            // entries into a single TXO, then rebound things together
+            // [None,None,None,...,None,dst_txo,lien]
+            // Thus the index lookup for the dst txo will be 0 and the ctrt
+            // will be 1
+            (0,1,new_src_ctrt)
+          } else {
+            let ix = new_src_ctrt_ix;
+            let rec = txn_txos.get(ix).cloned().unwrap();
+
+            // we released the lien into [ctrt,entries...] then sent the
+            // entries into a single TXO, so our final transaction will
+            // have TXOs:
+            // [ctrt,None,None,...,None,dst_txo]
+            // Thus the index lookup for the dst txo will be 1 and the ctrt
+            // will be 0
+            (1,0,rec)
+          };
+
+          // ========
+          // Now we should know:
+          //  - Src's stuff has been bound back together, and its record is
+          //    at new_src_ctrt_ix
+          //  - The only remaining live TXOs are the TXO sent to dst, and the
+          //    TXO for src's lien
+          //
+          // So the only thing we need to do is open dst's lien and rebind it
+          // together
+          // ========
+
+
+          // STRATEGY:
+          //  - submit this as a single transaction
+          //  - submit rebind of dst
+
+          let txn = Transaction { body: TransactionBody { operations: ops,
+                                                          credentials: vec![],
+                                                          memos: vec![],
+                                                          policy_options: None },
+                                  seq_id: self.ledger.get_block_commit_count(),
+                                  signatures: vec![] };
+
+          let effect = TxnEffect::compute_effect(txn).unwrap();
+
+          let mut block = self.ledger.start_block().unwrap();
+          let temp_sid = self.ledger.apply_transaction(&mut block, effect).unwrap();
+
+          let (_, txos) = self.ledger
+                              .finish_block(block)
+                              .unwrap()
+                              .remove(&temp_sid)
+                              .unwrap();
+          assert_eq!(txos.len(),2);
+
+          { // update src's entry in utxos
+            let sent_txo = txos[sent_ix];
+            let new_src_lien_txo = txos[lien_ix];
+
+            let lien_entry = lien_records.into_iter().map(|rec| {
+              (TxOutput(rec.open_asset_record.blind_asset_record,None),
+              rec.owner_memo)
+            }).collect::<Vec<_>>();
+            let lien_entry = if lien_entry.is_empty() { None } else { Some(lien_entry) };
+
+            self.utxos.insert(src,(new_src_lien_txo,lien_entry));
+            self.owner_memos.insert(new_src_lien_txo,src_ctrt.owner_memo);
+
+            (sent_txo,sent_record)
+          }
+        };
+
+        // We've pulled sent_txo out of src, wrap it back into dst.
+        *self.balances.get_mut(dst).unwrap().get_mut(unit).unwrap() += amt;
+
+        let (dst_ctrt,dst_txos) = self.utxos.remove(dst).unwrap();
+
+        //////// WRONG!!!!! ////////
+        // Need to handle dst_txos == None
+
+        {
+          let mut ops = vec![];
+          let ctrt_record = self.ledger.get_utxo(dst_ctrt).unwrap().0.0.clone();
+          let (dst_ctrt_ref,dst_ctrt,dst_txo_refs,dst_txos) = if let Some(dst_txos) = dst_txos {
+            let (rel_in_records,rel_out_records) = {
+              let mut in_records = vec![];
+              let mut out_records = vec![];
+              let mut rel_txos = vec![];
+
+              { // contract
+                let blind_rec = ctrt_record.0;
+                let memo = self.owner_memos.get(&ctrt_txo).cloned();
+
+                let open_rec = open_blind_asset_record(&blind_rec, &memo, &dst_privkey).unwrap();
+
+                in_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(open_rec.clone()));
+
+                let amt = open_rec.get_amount();
+                let unit_code = open_rec.get_asset_type();
+                let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *pubkey);
+                let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
+                out_records.push(ar.clone());
+              }
+
+              for (i,memo) in dst_txos.iter() {
+                let blind_rec = i.0;
+
+                let open_rec = open_blind_asset_record(&blind_rec, &memo, &dst_privkey).unwrap();
+
+                in_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(open_rec.clone()));
+
+                let amt = open_rec.get_amount();
+                let unit_code = open_rec.get_asset_type();
+                let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *pubkey);
+                let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
+                out_records.push(ar.clone());
+              }
+
+              (in_records,out_records)
+            };
+
+            let rel_op = {
+              let body = ReleaseAssetBody::new(self.ledger.get_prng(),
+                dst_ctrt,
+                HashOf::new(dst_txos.unwrap().iter().map(|(txo,_)| txo).collect::<Vec<_>>().clone()),
+                vec![],
+                &rel_in_records,
+                &rel_out_records).unwrap();
+              let sig = body.compute_body_signature(&dst_keypair,None);
+              ReleaseAssets { body, body_signatures: vec![sig] }
+            };
+
+            ops.push(rel_op);
+            (TxoRef::Relative(rel_out_records.len()-1),rel_out_records[0],
+             (1..rel_out_records.len()).map(|i| TxoRef::Relative(rel_out_records.len()-1-i)).collect(),
+             rel_out_records[1..].collect())
+          } else {
+            (TxoRef::Absolute(dst_ctrt),ctrt_record,vec![],vec![])
+          };
+
+          {
             let mut in_records = vec![];
             let mut in_refs = vec![];
-            let mut lien = vec![];
+            let mut lien_records = vec![];
 
             let (contract_ref,out_record) = {
-              let ix = new_src_ctrt_ix;
-              let rec = mem::replace(txn_txos.get_mut(ix),None).unwrap();
+              let rec = dst_ctrt;
               let open_rec = &rec.open_asset_record;
-              let amt = .open_rec.get_amount();
+              let amt = open_rec.get_amount();
               let unit_code = open_rec.get_asset_type();
 
-              in_records.push(rec);
+              in_records.push(rec.clone());
               let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *pubkey);
               let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
 
-              (TxoRef::Relative(txn_txos.len()-1-ix),ar)
+              (dst_ctrt_ref,ar)
             };
 
-            for ix in avail {
-              let rec = mem::replace(txn_txos.get_mut(ix),None).unwrap();
-
-              lien.push(TxOutput(rec.open_asset_record.blind_asset_record.clone(),None));
-              in_refs.push((TxoRef::Relative(txn_txos.len()-1-ix),None));
-              in_records.push(rec);
+            for (txo_ref,txo) in dst_txo_refs.into_iter().zip(dst_txos.into_iter()) {
+              in_refs.push(txo_ref);
+              lien_records.push(txo.clone());
+              in_records.push(txo.clone());
             }
 
-            let lien_ix = txn_txos.len();
-            txn_txos.push(out_record.clone());
-            let new_ctrt = (TxOutput(
-                  out_record.open_asset_record.blind_asset_record.clone(),
-                  HashOf::new(&lien)),
-                out_record.owner_memo.clone());
+            in_refs.push(TxoRef::Absolute(sent_txo));
+            lien_records.push(sent_record.clone());
+            in_records.push(sent_record);
 
             let body = BindAssetsBody::new(self.ledger.get_prng(),
               contract_ref,
@@ -1223,73 +1403,43 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
               in_records,
               out_record).unwrap();
 
-            let sig = body.compute_body_signature(&src_keypair,None);
-            (BindAssets { body, body_signatures: vec![sig] },
-             lien_ix, new_ctrt)
-          };
+            let sig = body.compute_body_signature(&dst_keypair,None);
+            ops.push(BindAssets { body, body_signatures: vec![sig] });
+          }
 
-          ops.push(bind_op);
+          let txn = Transaction { body: TransactionBody { operations: ops,
+                                                          credentials: vec![],
+                                                          memos: vec![],
+                                                          policy_options: None },
+                                  seq_id: self.ledger.get_block_commit_count(),
+                                  signatures: vec![] };
 
-          (lien_ix,new_ctrt.0,new_ctrt.1)
-        };
+          let effect = TxnEffect::compute_effect(txn).unwrap();
 
-        // ========
-        // Now we should know:
-        //  - Src's stuff has been bound back together, and its record is
-        //    at new_src_ctrt_ix
-        //  - The only remaining live TXOs are the TXO sent to dst, and the
-        //    TXO for src's lien
-        //
-        // So the only thing we need to do is open dst's lien and rebind it
-        // together
-        // ========
+          let mut block = self.ledger.start_block().unwrap();
+          let temp_sid = self.ledger.apply_transaction(&mut block, effect).unwrap();
 
+          let (_, txos) = self.ledger
+                              .finish_block(block)
+                              .unwrap()
+                              .remove(&temp_sid)
+                              .unwrap();
+          assert_eq!(txos.len(),1);
 
-        // STRATEGY:
-        //  - submit this as a single transaction
-        //  - submit rebind of dst
+          { // update dst's entry in utxos
+            let new_dst_lien_txo = txos[0];
 
-        //
-        *self.balances.get_mut(dst).unwrap().get_mut(unit).unwrap() += amt;
+            let lien_entry = lien_records.into_iter().map(|rec| {
+              (TxOutput(rec.open_asset_record.blind_asset_record,None),
+              rec.owner_memo)
+            }).collect::<Vec<_>>();
+            let lien_entry = if lien_entry.is_empty() { None } else { Some(lien_entry) };
 
-        unimplemented!();
-
-
-
-
-        let txn = Transaction { body: TransactionBody { operations:
-                                                          vec![Operation::TransferAsset(transfer)],
-                                                        credentials: vec![],
-                                                        memos: vec![],
-                                                        policy_options: None },
-                                seq_id: self.ledger.get_block_commit_count(),
-                                signatures: vec![] };
-
-        let effect = TxnEffect::compute_effect(txn).unwrap();
-
-        let mut block = self.ledger.start_block().unwrap();
-        let temp_sid = self.ledger.apply_transaction(&mut block, effect).unwrap();
-
-        let (_, txos) = self.ledger
-                            .finish_block(block)
-                            .unwrap()
-                            .remove(&temp_sid)
-                            .unwrap();
-
-        self.utxos
-            .get_mut(dst)
-            .unwrap()
-            .extend(&txos[..dst_outputs.len()]);
-        self.utxos
-            .get_mut(src)
-            .unwrap()
-            .extend(&txos[dst_outputs.len()..]);
-
-        for (txo_sid, owner_memo) in txos.iter().zip(owners_memos.into_iter()) {
-          if let Some(memo) = owner_memo {
-            self.owner_memos.insert(*txo_sid, memo);
+            self.utxos.insert(dst,(new_dst_lien_txo,lien_entry));
+            self.owner_memos.insert(new_dst_lien_txo,dst_ctrt.owner_memo);
           }
         }
+
       }
       AccountsCommand::ToggleConfAmts() => {
         self.confidential_amounts = !conf_amts;
