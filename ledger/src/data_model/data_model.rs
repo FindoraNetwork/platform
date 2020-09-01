@@ -1483,8 +1483,10 @@ mod tests {
     let customized_code_to_truncate = "My 资产 $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$";
 
     let base64_short = AssetTypeCode::base64_from_utf8_truncate(customized_code_short).unwrap();
-    let base64_32_bytes = AssetTypeCode::base64_from_utf8_truncate(customized_code_32_bytes).unwrap();
-    let base64_to_truncate = AssetTypeCode::base64_from_utf8_truncate(customized_code_to_truncate).unwrap();
+    let base64_32_bytes =
+      AssetTypeCode::base64_from_utf8_truncate(customized_code_32_bytes).unwrap();
+    let base64_to_truncate =
+      AssetTypeCode::base64_from_utf8_truncate(customized_code_to_truncate).unwrap();
     assert_ne!(base64_short, base64_32_bytes);
     assert_eq!(base64_32_bytes, base64_to_truncate);
 
