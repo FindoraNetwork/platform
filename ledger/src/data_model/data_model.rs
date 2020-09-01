@@ -79,11 +79,11 @@ impl AssetTypeCode {
     let val: [u8; ASSET_TYPE_LENGTH] = prng.gen();
     Self { val: ZeiAssetType(val) }
   }
-  /// Checks if the customized asset code is invalid, i.e., ends with "\u{0}".
+  /// Checks if the customized asset code is invalid, i.e., ends with '\u{0}'.
   ///
-  /// "\u{0}" at the end of the string will be ignored when converting back to utf8, so it's not allowed.
+  /// '\u{0}' at the end of the string will be ignored when converting back to utf8, so it's not allowed.
   pub fn invalid_customized_code(s: &str) -> bool {
-    s.ends_with("\u{0}")
+    s.ends_with('\u{0}')
   }
   /// Returns whether the input is longer than 32 bytes, and thus will be truncated to construct an asset type code.
   pub fn will_truncate(bytes: &[u8]) -> bool {
@@ -99,7 +99,7 @@ impl AssetTypeCode {
   ///
   /// Returns an error if the length is greater than 32 bytes.
   ///
-  /// Note: String ending with "\u{0}" isn't allowed, since "\u{0}" will be ignored when converting back to utf8.
+  /// Note: String ending with '\u{0}' isn't allowed, since '\u{0}' will be ignored when converting back to utf8.
   pub fn base64_from_utf8_safe(s: &str) -> Result<String, PlatformError> {
     if AssetTypeCode::invalid_customized_code(s) {
       return Err(PlatformError::InputsError(error_location!()));
@@ -115,7 +115,7 @@ impl AssetTypeCode {
   ///
   /// Used to customize the asset type code.
   ///
-  /// Note: String ending with "\u{0}" isn't allowed, since "\u{0}" will be ignored when converting back to utf8.
+  /// Note: String ending with '\u{0}' isn't allowed, since '\u{0}' will be ignored when converting back to utf8.
   pub fn base64_from_utf8_truncate(s: &str) -> Result<String, PlatformError> {
     if AssetTypeCode::invalid_customized_code(s) {
       return Err(PlatformError::InputsError(error_location!()));
