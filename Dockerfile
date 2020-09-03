@@ -14,7 +14,6 @@ COPY . /app/
 RUN cargo audit
 RUN cargo build --release
 WORKDIR /app/components/cli2
-RUN ls -laF
 RUN bash run_tests_local.sh
 WORKDIR /app/
 RUN cargo test --no-fail-fast --release
