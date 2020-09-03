@@ -779,6 +779,8 @@ mod tests {
   }
 
   #[test]
+  // #[ignore]
+  // FIXME read_response_json failed during deserialization
   fn test_prove_and_verify_solvency_complex_pass() {
     // Start the standalone ledger
     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
@@ -837,6 +839,8 @@ mod tests {
   }
 
   #[test]
+  // #[ignore]
+  // FIXME read_response_json failed during deserialization
   fn test_update_asset_and_verify_solvency_mixed() {
     // Start the standalone ledger
     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
@@ -927,6 +931,8 @@ mod tests {
   }
 
   #[test]
+  // #[ignore]
+  // FIXME read_response_json failed during deserialization
   fn test_update_liability_and_verify_solvency_fail() {
     // Start the standalone ledger
     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);

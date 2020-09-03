@@ -18,9 +18,8 @@ fn main() {
     }
   };
 
-  let seq_id = 0;
   let mut rest_client = LedgerStandalone::new_http(&config);
-  if let Err(error) = process_inputs(inputs, seq_id, &mut rest_client) {
+  if let Err(error) = process_inputs(inputs, &mut rest_client) {
     match_error_and_exit(error);
   }
 }

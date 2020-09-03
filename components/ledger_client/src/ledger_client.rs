@@ -1,10 +1,9 @@
 #![deny(warnings)]
-use cryptohash::sha256::Digest as BitDigest;
-use ledger::data_model::{AssetRules, AssetTypeCode, Operation, Transaction};
+use ledger::data_model::{AssetRules, AssetTypeCode, Operation, StateCommitmentData, Transaction};
 use ledger::store::helpers::*;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
-use zei::xfr::sig::XfrSignature;
+use utils::GlobalState;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
   let protocol = "http";
@@ -15,7 +14,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   let resp_gs = client.get(&format!("{}://{}:{}/global_state", protocol, host, port))
                       .send()?;
-  let (_comm, seq_id, _sig): (BitDigest, u64, XfrSignature) =
+  let (_, seq_id, _): GlobalState<StateCommitmentData> =
     serde_json::from_str(&resp_gs.text()?[..]).unwrap();
 
   let mut prng = ChaChaRng::from_entropy();

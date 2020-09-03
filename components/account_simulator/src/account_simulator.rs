@@ -418,13 +418,15 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let body = DefineAssetBody { asset: Box::new(properties) };
 
         let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap();
-
-        let txn = Transaction { body: TransactionBody { operations:
+        let seq_id = self.ledger.get_block_commit_count();
+        let txn = Transaction { body: TransactionBody { no_replay_token:
+                                                          NoReplayToken::new(self.ledger.get_prng(),
+                                                                             seq_id),
+                                                        operations:
                                                           vec![Operation::DefineAsset(op)],
                                                         credentials: vec![],
                                                         memos: vec![],
                                                         policy_options: None },
-                                seq_id: self.ledger.get_block_commit_count(),
                                 signatures: vec![] };
 
         let eff = TxnEffect::compute_effect(txn).unwrap();
@@ -459,8 +461,8 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
              .unwrap()
              .get_mut(unit)
              .unwrap() += amt;
-
-        let mut tx = Transaction::from_seq_id(self.ledger.get_block_commit_count());
+        let seq_id = self.ledger.get_block_commit_count();
+        let mut tx = Transaction::from_seq_id(seq_id);
 
         let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
         let params = PublicParams::new();
@@ -616,12 +618,15 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         let transfer = TransferAsset { body: transfer_body,
                                        body_signatures: vec![transfer_sig] };
-        let txn = Transaction { body: TransactionBody { operations:
+        let seq_id = self.ledger.get_block_commit_count();
+        let txn = Transaction { body: TransactionBody { no_replay_token:
+                                                          NoReplayToken::new(self.ledger.get_prng(),
+                                                                             seq_id),
+                                                        operations:
                                                           vec![Operation::TransferAsset(transfer)],
                                                         credentials: vec![],
                                                         memos: vec![],
                                                         policy_options: None },
-                                seq_id: self.ledger.get_block_commit_count(),
                                 signatures: vec![] };
 
         let effect = TxnEffect::compute_effect(txn).unwrap();
@@ -728,11 +733,15 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
             Operation::IssueAsset(asset_issuance_operation)
           };
 
-          let txn = Transaction { body: TransactionBody { operations: vec![op1, op2],
+          let seq_id = self.ledger.get_block_commit_count();
+          let txn = Transaction { body: TransactionBody { no_replay_token:
+                                                            NoReplayToken::new(self.ledger
+                                                                                   .get_prng(),
+                                                                               seq_id),
+                                                          operations: vec![op1, op2],
                                                           credentials: vec![],
                                                           memos: vec![],
                                                           policy_options: None },
-                                  seq_id: self.ledger.get_block_commit_count(),
                                   signatures: vec![] };
 
           let eff = TxnEffect::compute_effect(txn).unwrap();
@@ -781,12 +790,15 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
 
         let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
-        let txn = Transaction { body: TransactionBody { operations:
+        let seq_id = self.ledger.get_block_commit_count();
+        let txn = Transaction { body: TransactionBody { no_replay_token:
+                                                          NoReplayToken::new(self.ledger.get_prng(),
+                                                                             seq_id),
+                                                        operations:
                                                           vec![Operation::DefineAsset(op)],
                                                         credentials: vec![],
                                                         memos: vec![],
                                                         policy_options: None },
-                                seq_id: self.ledger.get_block_commit_count(),
                                 signatures: vec![] };
 
         let eff = TxnEffect::compute_effect(txn).unwrap();
@@ -1286,11 +1298,15 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
           //  - submit this as a single transaction
           //  - submit rebind of dst
 
-          let txn = Transaction { body: TransactionBody { operations: ops,
+          let seq_id = self.ledger.get_block_commit_count();
+          let txn = Transaction { body: TransactionBody { no_replay_token:
+                                                            NoReplayToken::new(self.ledger
+                                                                                   .get_prng(),
+                                                                               seq_id),
+                                                          operations: ops,
                                                           credentials: vec![],
                                                           memos: vec![],
                                                           policy_options: None },
-                                  seq_id: self.ledger.get_block_commit_count(),
                                   signatures: vec![] };
 
           let effect = TxnEffect::compute_effect(txn).unwrap();
@@ -1455,11 +1471,15 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                                                         body_signatures: vec![sig] }));
           }
 
-          let txn = Transaction { body: TransactionBody { operations: ops,
+          let seq_id = self.ledger.get_block_commit_count();
+          let txn = Transaction { body: TransactionBody { no_replay_token:
+                                                            NoReplayToken::new(self.ledger
+                                                                                   .get_prng(),
+                                                                               seq_id),
+                                                          operations: ops,
                                                           credentials: vec![],
                                                           memos: vec![],
                                                           policy_options: None },
-                                  seq_id: self.ledger.get_block_commit_count(),
                                   signatures: vec![] };
 
           let effect = TxnEffect::compute_effect(txn).unwrap();
@@ -1810,9 +1830,8 @@ struct LedgerStandaloneAccounts<T>
 
 impl<T> LedgerStandaloneAccounts<T> where T: RestfulLedgerAccess + RestfulLedgerUpdate
 {
-  fn fetch_seq_id(&self) -> u64 {
-    let (_, seq_id, _) = self.client.get_state_commitment().unwrap();
-    seq_id
+  fn fetch_seq_id(&mut self) -> u64 {
+    self.client.get_block_commit_count().unwrap()
   }
 }
 
@@ -1856,15 +1875,16 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         let body = DefineAssetBody { asset: Box::new(properties) };
 
         let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap();
-
+        let mut prng = ChaChaRng::from_entropy();
         {
           let seq_id = self.fetch_seq_id();
-          let txn = Transaction { body: TransactionBody { operations:
+          let txn = Transaction { body: TransactionBody { no_replay_token:
+                                                            NoReplayToken::new(&mut prng, seq_id),
+                                                          operations:
                                                             vec![Operation::DefineAsset(op)],
                                                           credentials: vec![],
                                                           memos: vec![],
                                                           policy_options: None },
-                                  seq_id,
                                   signatures: vec![] };
           let txn_handle = self.client.submit_transaction(&txn).unwrap();
           self.client.force_end_block().unwrap();
@@ -1881,11 +1901,11 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         }
       }
       AccountsCommand::Mint(amt, unit) => {
+        let seq_id = self.fetch_seq_id();
         let amt = *amt as u64;
         let (issuer, code) = self.units.get(unit).ok_or_else(|| inp_fail!())?;
 
         let new_seq_num = self.client.get_issuance_num(&code).unwrap();
-        let seq_id = self.fetch_seq_id();
 
         let keypair = self.accounts.get(issuer).ok_or_else(|| inp_fail!())?;
         let (pubkey, privkey) = (keypair.get_pk_ref(), keypair.get_sk_ref());
@@ -2042,12 +2062,14 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
                                        body_signatures: vec![transfer_sig] };
 
         let seq_id = self.fetch_seq_id();
-        let txn = Transaction { body: TransactionBody { operations:
+        let mut prng = ChaChaRng::from_entropy();
+        let txn = Transaction { body: TransactionBody { no_replay_token:
+                                                          NoReplayToken::new(&mut prng, seq_id),
+                                                        operations:
                                                           vec![Operation::TransferAsset(transfer)],
                                                         credentials: vec![],
                                                         memos: vec![],
                                                         policy_options: None },
-                                seq_id,
                                 signatures: vec![] };
 
         let txos = {

@@ -320,8 +320,7 @@ fn get_related_addresses(txn: &Transaction) -> HashSet<XfrAddress> {
 mod tests {
   use super::*;
   use ledger::data_model::{
-    AssetRules, AssetTypeCode, BlockSID, KVHash, KVUpdate, Memo, TransferType, UpdateMemo,
-    UpdateMemoBody,
+    AssetRules, AssetTypeCode, BlockSID, KVHash, KVUpdate, Memo, TransferType,
   };
   use ledger::store::helpers::{apply_transaction, create_definition_transaction};
   use ledger_api_service::MockLedgerClient;
@@ -355,7 +354,8 @@ mod tests {
     let key = Key::gen_random(&mut prng);
 
     // Add hash to ledger and update query server
-    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
+    let seq_id = ledger_state.get_block_commit_count();
+    let mut builder = TransactionBuilder::from_seq_id(seq_id);
     builder.add_operation_kv_update(&kp, &key, 0, Some(&hash))
            .unwrap();
     let update_kv_tx = builder.transaction();
@@ -378,7 +378,8 @@ mod tests {
 
     // Replace commitment
     let hash = KVHash::new(&String::from("new_data"), Some(&blind));
-    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
+    let seq_id = ledger_state.get_block_commit_count();
+    let mut builder = TransactionBuilder::from_seq_id(seq_id);
     builder.add_operation_kv_update(&kp, &key, 1, Some(&hash))
            .unwrap();
     let update_kv_tx = builder.transaction();
@@ -403,7 +404,8 @@ mod tests {
     let alice = XfrKeyPair::generate(&mut prng);
     let bob = XfrKeyPair::generate(&mut prng);
     // Define asset
-    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
+    let seq_id = ledger_state.get_block_commit_count();
+    let mut builder = TransactionBuilder::from_seq_id(seq_id);
     let define_tx = builder.add_operation_create_asset(&alice,
                                                        Some(token_code),
                                                        AssetRules::default(),
@@ -412,7 +414,8 @@ mod tests {
                            .unwrap()
                            .transaction();
 
-    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
+    let seq_id = ledger_state.get_block_commit_count();
+    let mut builder = TransactionBuilder::from_seq_id(seq_id);
 
     //Issuance txn
     let amt = 1000;
@@ -452,7 +455,8 @@ mod tests {
                             .unwrap()
                             .sign(&alice)
                             .unwrap();
-    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
+    let seq_id = ledger_state.get_block_commit_count();
+    let mut builder = TransactionBuilder::from_seq_id(seq_id);
     let xfr_txn = builder.add_operation(xfr_op.transaction().unwrap())
                          .transaction();
 
@@ -483,7 +487,8 @@ mod tests {
     let alice = XfrKeyPair::generate(&mut prng);
     let bob = XfrKeyPair::generate(&mut prng);
     // Define asset
-    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
+    let seq_id = ledger_state.get_block_commit_count();
+    let mut builder = TransactionBuilder::from_seq_id(seq_id);
     let define_tx = builder.add_operation_create_asset(&alice,
                                                        Some(token_code),
                                                        AssetRules::default(),
@@ -492,7 +497,8 @@ mod tests {
                            .unwrap()
                            .transaction();
 
-    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
+    let seq_id = ledger_state.get_block_commit_count();
+    let mut builder = TransactionBuilder::from_seq_id(seq_id);
 
     //Issuance txn
     let amt = 1000;
@@ -526,7 +532,8 @@ mod tests {
                             .unwrap()
                             .sign(&alice)
                             .unwrap();
-    let mut builder = TransactionBuilder::from_seq_id(ledger_state.get_block_commit_count());
+    let seq_id = ledger_state.get_block_commit_count();
+    let mut builder = TransactionBuilder::from_seq_id(seq_id);
     let xfr_txn = builder.add_operation(xfr_op.transaction().unwrap())
                          .transaction();
 
@@ -577,21 +584,24 @@ mod tests {
     let mut query_server = QueryServer::new(mock_ledger);
     let code = AssetTypeCode::from_identical_byte(1);
     let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
-    let tx = create_definition_transaction(&code,
-                                           &creator,
-                                           AssetRules::default().set_updatable(true).clone(),
-                                           Some(Memo("test".to_string())),
-                                           ledger_state.get_block_commit_count()).unwrap();
-    apply_transaction(&mut ledger_state, tx);
+    let seq_id = ledger_state.get_block_commit_count();
+    let mut builder = TransactionBuilder::from_seq_id(seq_id);
+    let asset_rules = AssetRules::default().set_updatable(true).clone();
+    builder.add_operation_create_asset(&creator,
+                                       Some(code),
+                                       asset_rules,
+                                       "test",
+                                       PolicyChoice::Fungible())
+           .unwrap();
+    let tx = builder.transaction();
+    apply_transaction(&mut ledger_state, tx.clone());
 
     // Change memo
-    let new_memo = Memo("new_memo".to_string());
-    let memo_update = UpdateMemo::new(UpdateMemoBody { new_memo: new_memo.clone(),
-                                                       asset_type: code },
-                                      &creator);
-    let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update),
-                                         ledger_state.get_block_commit_count());
-    apply_transaction(&mut ledger_state, tx);
+    let seq_id = ledger_state.get_block_commit_count();
+    let mut builder = TransactionBuilder::from_seq_id(seq_id);
+    builder.add_operation_update_memo(&creator, code, "new_memo");
+    let tx = builder.transaction();
+    apply_transaction(&mut ledger_state, tx.clone());
 
     let block0 = ledger_state.get_block(BlockSID(0)).unwrap();
     let block1 = ledger_state.get_block(BlockSID(1)).unwrap();
@@ -611,11 +621,12 @@ mod tests {
     let mut query_server = QueryServer::new(mock_ledger);
     let code = AssetTypeCode::from_identical_byte(1);
     let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
+    let seq_id = ledger_state.get_block_commit_count();
     let tx = create_definition_transaction(&code,
                                            &creator,
                                            AssetRules::default(),
                                            Some(Memo("test".to_string())),
-                                           ledger_state.get_block_commit_count()).unwrap();
+                                           seq_id).unwrap();
     apply_transaction(&mut ledger_state, tx);
     let block0 = ledger_state.get_block(BlockSID(0)).unwrap();
     query_server.add_new_block(&block0.block.txns).unwrap();
@@ -641,8 +652,8 @@ mod tests {
     let update = KVUpdate::new((key, Some(hash)), 0, &kp);
 
     // Submit
-    let tx = Transaction::from_operation(Operation::KVStoreUpdate(update.clone()),
-                                         ledger_state.get_block_commit_count());
+    let seq_id = ledger_state.get_block_commit_count();
+    let tx = Transaction::from_operation(Operation::KVStoreUpdate(update.clone()), seq_id);
     apply_transaction(&mut ledger_state, tx);
 
     // Check related txns
@@ -665,22 +676,24 @@ mod tests {
 
     // Create the first asset
     let code1 = AssetTypeCode::from_identical_byte(1);
+    let seq_id = ledger_state.get_block_commit_count();
     let tx1 = create_definition_transaction(&code1,
                                             &creator,
                                             AssetRules::default(),
                                             Some(Memo("test".to_string())),
-                                            ledger_state.get_block_commit_count()).unwrap();
+                                            seq_id).unwrap();
     apply_transaction(&mut ledger_state, tx1);
     let block1 = ledger_state.get_block(BlockSID(0)).unwrap();
     query_server.add_new_block(&block1.block.txns).unwrap();
 
     // Create the second asset
     let code2 = AssetTypeCode::from_identical_byte(2);
+    let seq_id = ledger_state.get_block_commit_count();
     let tx2 = create_definition_transaction(&code2,
                                             &creator,
                                             AssetRules::default(),
                                             Some(Memo("test".to_string())),
-                                            ledger_state.get_block_commit_count()).unwrap();
+                                            seq_id).unwrap();
     apply_transaction(&mut ledger_state, tx2);
     let block2 = ledger_state.get_block(BlockSID(1)).unwrap();
     query_server.add_new_block(&block2.block.txns).unwrap();
