@@ -8,7 +8,7 @@ use curve25519_dalek::ristretto::CompressedRistretto;
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{AssetRules, AssetTypeCode, TransferType, TxOutput, TxoRef, TxoSID};
-use ledger::{des_fail, error_location};
+use ledger::{error_location, inp_fail};
 use ledger_api_service::RestfulLedgerAccess;
 use log::info;
 use rand_core::{CryptoRng, RngCore};
@@ -99,7 +99,7 @@ pub fn define_and_submit<T>(issuer_key_pair: &XfrKeyPair,
                             -> Result<(), PlatformError>
   where T: RestfulLedgerUpdate + RestfulLedgerAccess
 {
-  let (_, seq_id, _) = rest_client.get_state_commitment().unwrap();
+  let seq_id = rest_client.get_block_commit_count()?;
   // Define the asset
   let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   let txn = txn_builder.add_operation_create_asset(issuer_key_pair,
@@ -215,7 +215,10 @@ pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore, T>(
 {
   // Issue and transfer the asset
   let pc_gens = PublicParams::new().pc_gens;
-  let input_template = AssetRecordTemplate::with_no_asset_tracking(amount, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, issuer_key_pair.get_pk());
+  let input_template = AssetRecordTemplate::with_no_asset_tracking(amount,
+                                                                   code.val,
+                                                                   AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                                                                   issuer_key_pair.get_pk());
   let input_blind_asset_record =
     build_blind_asset_record(&mut prng, &pc_gens, &input_template, vec![]).0;
   let output_template = AssetRecordTemplate::with_no_asset_tracking(amount,
@@ -237,8 +240,7 @@ pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore, T>(
                                                 .sign(issuer_key_pair)?
                                                 .transaction()?;
 
-  let (_, seq_id, _) = rest_client.get_state_commitment().unwrap();
-
+  let seq_id = rest_client.get_block_commit_count()?;
   let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
   let txn = txn_builder.add_operation_issue_asset(issuer_key_pair,
                                                   &code,
@@ -252,7 +254,10 @@ pub fn issue_transfer_and_get_utxo_and_blinds<R: CryptoRng + RngCore, T>(
   let status = rest_client.txn_status(&handle)?;
   let txos = match status {
     TxnStatus::Committed((_sid, txos)) => txos,
-    _ => panic!("Failed to fetch UTXO SIDs"),
+    TxnStatus::Rejected(s) =>
+      return Err(PlatformError::SubmissionServerError(s)),
+    TxnStatus::Pending =>
+      return Err(PlatformError::SubmissionServerError("Transaction pending, failed to fetch UTXO SIDs".to_owned())),
   };
   Ok((txos[0].0, blinds.0, blinds.1))
 }
@@ -335,7 +340,8 @@ pub fn submit_and_get_sids<T>(rest_client: &mut T,
   let status = rest_client.txn_status(&handle)?;
   match status {
     TxnStatus::Committed((_sid, txos)) => Ok(txos),
-    _ => Err(des_fail!()),
+    TxnStatus::Rejected(s) => Err(inp_fail!(format!("Rejected transaction: {}", s))),
+    TxnStatus::Pending => Err(inp_fail!("Pending transaction")),
   }
 }
 
@@ -425,9 +431,8 @@ mod tests {
     let issuer_key_pair = XfrKeyPair::generate(&mut prng);
 
     // Define asset
-    let seq_id = 0;
     let res = define_asset(data_dir,
-                           seq_id,
+                           0,
                            false,
                            &issuer_key_pair,
                            AssetTypeCode::gen_random(),

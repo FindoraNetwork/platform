@@ -147,6 +147,14 @@ impl<LU: RestfulLedgerUpdate,
     self.ledger_client.get_state_commitment()
   }
 
+  #[allow(clippy::type_complexity)]
+  fn get_block_commit_count(&self) -> Result<u64, PlatformError> {
+    match self.ledger_client.get_state_commitment() {
+      Ok((_, seq_id, _)) => Ok(seq_id),
+      Err(e) => Err(e),
+    }
+  }
+
   fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup, PlatformError> {
     self.ledger_client.get_kv_entry(addr)
   }
@@ -181,15 +189,16 @@ impl<LU: RestfulLedgerUpdate,
 #[cfg(test)]
 mod tests {
   use super::*;
-  use ledger::data_model::{Memo, Operation, UpdateMemo, UpdateMemoBody};
+  use ledger::data_model::{Memo, NoReplayToken, Operation, UpdateMemo, UpdateMemoBody};
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
   use zei::xfr::sig::XfrKeyPair;
 
   #[test]
   fn test_mock_client() {
-    let tx = Transaction::from_seq_id(0);
     let mut mock_rest_client = LedgerStandalone::new_mock(2);
+    //let seq_id = mock_rest_client.get_block_commit_count().unwrap()
+    let tx = Transaction::from_seq_id(0);
     let handle = mock_rest_client.submit_transaction(&tx).unwrap();
     mock_rest_client.force_end_block().unwrap();
     let status = mock_rest_client.txn_status(&handle).unwrap();
@@ -207,10 +216,11 @@ mod tests {
     let mut prng = ChaChaRng::from_entropy();
     let creator = XfrKeyPair::generate(&mut prng);
     let memo_update = UpdateMemo::new(UpdateMemoBody { new_memo: new_memo.clone(),
-                                                       asset_type: code },
+                                                       asset_type: code,
+                                                       no_replay_token: NoReplayToken::default() },
                                       &creator);
-    let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update), 0);
     let mut mock_rest_client = LedgerStandalone::new_mock(2);
+    let tx = Transaction::from_operation(Operation::UpdateMemo(memo_update), 0);
     let handle = mock_rest_client.submit_transaction(&tx).unwrap();
     let status = mock_rest_client.txn_status(&handle).unwrap();
     if let TxnStatus::Rejected(_) = status {
