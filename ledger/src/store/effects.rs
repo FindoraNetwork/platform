@@ -10,10 +10,10 @@ use rand_core::SeedableRng;
 use serde::Serialize;
 use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
-// use std::iter::once;
+use std::iter::once;
 use utils::{HasInvariants, HashOf, SignatureOf};
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::lib::verify_xfr_body;
+use zei::xfr::lib::{verify_xfr_body,XfrNotePolicies};
 use zei::xfr::sig::XfrPublicKey;
 // use zei::xfr::structs::{AssetTracingPolicies, BlindAssetRecord, XfrAmount, XfrAssetType};
 use zei::xfr::structs::{AssetTracingPolicies, XfrAmount, XfrAssetType};
@@ -529,179 +529,204 @@ impl TxnEffect {
         //          - Checked here (although the TxoSID <-> TxOutput match
         //            isn't checked until later)
         //
-        Operation::BindAssets(_bind_assets) => {
-          unimplemented!();
+        Operation::BindAssets(bind_assets) => {
 
-          //if 1 + bind_assets.body.inputs.len() != bind_assets.body.transfer.inputs.len() {
-          //  return Err(inp_fail!());
-          //}
-          //if bind_assets.body.transfer.outputs.len() != 1 {
-          //  return Err(inp_fail!());
-          //}
-          //assert!(1 + bind_assets.body.inputs.len() == bind_assets.body.transfer.inputs.len());
-          //assert!(1 == bind_assets.body.transfer.outputs.len());
+          // contract + bound inputs
+          if 1 + bind_assets.body.inputs.len() != bind_assets.body.transfer.inputs.len() {
+            return Err(inp_fail!());
+          }
 
-          //// 2(b)
-          //if bind_assets.body.transfer.inputs[0].asset_type
-          //                                  .get_asset_type()
-          //                                  .is_none()
-          //   || bind_assets.body.transfer.inputs[0].asset_type
-          //      != bind_assets.body.transfer.outputs[0].asset_type
-          //{
-          //  return Err(inp_fail!());
-          //}
+          // 1 output: the lien
+          if bind_assets.body.transfer.outputs.len() < 1 {
+            return Err(inp_fail!());
+          }
+          // // other outputs must have 0 amounts
+          // for o in bind_assets.body.transfer.outputs[1..].iter() {
+          //   if o.amount.get_amount() != Some(0) {
+          //     return Err(inp_fail!());
+          //   }
+          // }
 
-          //// setup for (3)
-          //// NOTE: `lien_inputs` doesn't include the contract
-          //let lien_inputs = {
-          //  let mut inps = bind_assets.body
-          //                            .transfer
-          //                            .inputs
-          //                            .iter()
-          //                            .skip(1)
-          //                            .map(|_| None)
-          //                            .collect::<Vec<_>>();
-          //  for (inp_ix, hash) in bind_assets.body.input_liens.iter() {
-          //    let inp_ix = *inp_ix;
-          //    match inps.get(inp_ix) {
-          //      Some(None) => {
-          //        inps[inp_ix] = Some(hash);
-          //      }
-          //      _ => {
-          //        return Err(inp_fail!());
-          //      }
-          //    }
-          //  }
-          //  inps
-          //};
+          assert!(1 + bind_assets.body.inputs.len() == bind_assets.body.transfer.inputs.len());
 
-          //assert!(lien_inputs.len() == bind_assets.body.inputs.len());
+          // 2(b)
+          if bind_assets.body.transfer.inputs[0].asset_type
+                                            .get_asset_type()
+                                            .is_none()
+             || bind_assets.body.transfer.inputs[0].asset_type
+                != bind_assets.body.transfer.outputs[0].asset_type
+          {
+            dbg!(&bind_assets.body.transfer.inputs[0].asset_type);
+            dbg!(&bind_assets.body.transfer.outputs[0].asset_type);
+            return Err(inp_fail!());
+          }
 
-          //let mut input_keys = HashSet::new();
-          //// (1a) all body signatures are valid
-          //for sig in &bind_assets.body_signatures {
-          //  if !bind_assets.body.verify_body_signature(sig) {
-          //    return Err(inp_fail!());
-          //  }
-          //  if let Some(input_idx) = sig.input_idx {
-          //    let sig_keys = cosig_keys.entry((op_idx, input_idx))
-          //                             .or_insert_with(HashSet::new);
-          //    (*sig_keys).insert(sig.address.key.zei_to_bytes());
-          //  } else {
-          //    input_keys.insert(sig.address.key.zei_to_bytes());
-          //  }
-          //}
+          // setup for (3)
+          // NOTE: `lien_inputs` includes `None` for the contract
+          let lien_inputs = {
+            let mut inps = bind_assets.body
+                                      .transfer
+                                      .inputs
+                                      .iter()
+                                      .map(|_| None)
+                                      .collect::<Vec<_>>();
+            for (inp_ix, hash) in bind_assets.body.input_liens.iter() {
+              let inp_ix = 1+*inp_ix;
+              match inps.get(inp_ix) {
+                Some(None) => {
+                  inps[inp_ix] = Some(hash);
+                }
+                _ => {
+                  return Err(inp_fail!());
+                }
+              }
+            }
+            inps
+          };
 
-          //// (1b) all input record owners (for non-custom-policy
-          ////      assets) have signed
-          //for (input_idx, record) in bind_assets.body.transfer.inputs.iter().enumerate() {
-          //  // skip signature checking for custom-policy assets
-          //  if let Some(inp_code) = record.asset_type.get_asset_type() {
-          //    if custom_policy_asset_types.get(&AssetTypeCode { val: inp_code })
-          //                                .is_some()
-          //    {
-          //      // (2)
-          //      if input_idx != 0 {
-          //        return Err(inp_fail!());
-          //      }
+          assert!(lien_inputs.len() == bind_assets.body.transfer.inputs.len());
 
-          //      continue;
-          //    }
-          //  }
-          //  if !input_keys.contains(&record.public_key.zei_to_bytes()) {
-          //    return Err(inp_fail!());
-          //  }
-          //  cosig_keys.entry((op_idx, input_idx))
-          //            .or_insert_with(HashSet::new);
-          //}
+          let mut input_keys = HashSet::new();
+          // (1a) all body signatures are valid
+          for sig in &bind_assets.body_signatures {
+            if !bind_assets.body.verify_body_signature(sig) {
+              return Err(inp_fail!());
+            }
+            if let Some(input_idx) = sig.input_idx {
+              let sig_keys = cosig_keys.entry((op_idx, input_idx))
+                                       .or_insert_with(HashSet::new);
+              (*sig_keys).insert(sig.address.key.zei_to_bytes());
+            } else {
+              input_keys.insert(sig.address.key.zei_to_bytes());
+            }
+          }
 
-          //// (3)
-          //// TODO(joe): support identity tracing in Bind/Release
-          //// TODO: implement real policies
-          //verify_xfr_body_no_policies(&mut prng, &bind_assets.body.transfer)
-          //  .map_err(|e| PlatformError::ZeiError(error_location!(),e))?;
+          // (1b) all input record owners (for non-custom-policy
+          //      assets) have signed
+          for (input_idx, record) in bind_assets.body.transfer.inputs.iter().enumerate() {
+            // skip signature checking for custom-policy assets
+            if let Some(inp_code) = record.asset_type.get_asset_type() {
+              if custom_policy_asset_types.get(&AssetTypeCode { val: inp_code })
+                                          .is_some()
+              {
+                // (2) (only contract is allowed a custom policy)
+                if input_idx != 0 {
+                  return Err(inp_fail!());
+                }
 
-          //// The vec of TxOutputs corresponding to the lien
-          //let bound_inputs = bind_assets.body
-          //                              .transfer
-          //                              .inputs
-          //                              .iter()
-          //                              .zip(lien_inputs.iter())
-          //                              .map(|(ar, lien)| TxOutput(ar.clone(),
-          //                              lien.cloned()))
-          //                              .collect::<Vec<_>>();
+                continue;
+              }
+            }
+            if !input_keys.contains(&record.public_key.zei_to_bytes()) {
+              return Err(inp_fail!());
+            }
+            cosig_keys.entry((op_idx, input_idx))
+                      .or_insert_with(HashSet::new);
+          }
 
-          //// (5) NOTE: the inputs are [contract] + inputs, and the contract is
-          //// not allowed to have a lien bound to it already (hence
-          //// once(None))
-          //let mut input_types = HashSet::new();
-          //for ((inp, record), lien) in
-          //  once(&bind_assets.body.contract).chain(bind_assets.body.inputs.iter())
-          //                                  .zip(bind_assets.body.transfer.inputs.iter())
-          //                                  .zip(once(None).chain(lien_inputs.into_iter()))
-          //{
-          //  // NOTE: We assume that any confidential-type asset records
-          //  // have no atypical transfer restrictions. Be careful!
-          //  if let Some(inp_code) = record.asset_type.get_asset_type() {
-          //    input_types.insert(AssetTypeCode { val: inp_code });
-          //    //asset_types_involved.insert(AssetTypeCode { val: inp_code });
-          //  }
+          // (3)
+          // TODO(joe): support identity tracing in Bind/Release
+          let policies = {
+            let num_inputs = bind_assets.body.transfer.inputs.len();
+            let num_outputs = bind_assets.body.transfer.outputs.len();
+            let no_policies = AssetTracingPolicies::new();
+            XfrNotePolicies::new(vec![no_policies.clone(); num_inputs],
+            vec![None; num_inputs],
+            vec![no_policies; num_outputs],
+            vec![None; num_outputs])
+          };
+          verify_xfr_body(&mut prng,
+                          &mut params,
+                          &bind_assets.body.transfer,
+                          &policies.to_ref()).map_err(|e| {
+                                      PlatformError::ZeiError(error_location!(), e)
+                                  })?;
 
-          //  // (2), checking within this transaction and recording
-          //  // external UTXOs
-          //  match *inp {
-          //    TxoRef::Relative(offs) => {
-          //      // (2).(a)
-          //      if offs as usize >= txo_count {
-          //        return Err(inp_fail!());
-          //      }
-          //      let ix = (txo_count - 1) - (offs as usize);
-          //      match &txos[ix] {
-          //        None => {
-          //          return Err(inp_fail!());
-          //        }
-          //        Some(txo) => {
-          //          let TxOutput(inp_record, inp_lien,) = &txo;
-          //          // (2).(b)
-          //          if inp_record != record || inp_lien != &lien.cloned() {
-          //            return Err(inp_fail!());
-          //          }
-          //          internally_spent_txos.push(txo.clone());
-          //        }
-          //      }
-          //      txos[ix] = None;
-          //    }
-          //    TxoRef::Absolute(txo_sid) => {
-          //      // (2).(a), partially
-          //      if input_txos.contains_key(&txo_sid) {
-          //        return Err(inp_fail!());
-          //      }
+          // The vec of TxOutputs corresponding to the lien
+          let bound_inputs = bind_assets.body
+                                        .transfer
+                                        .inputs
+                                        .iter()
+                                        .zip(lien_inputs.iter())
+                                        // Skipping the contract
+                                        .skip(1)
+                                        .map(|(ar, lien)| TxOutput(ar.clone(),
+                                        lien.cloned()))
+                                        .collect::<Vec<_>>();
 
-          //      input_txos.insert(txo_sid,
-          //                        TxOutput(record.clone(), lien.cloned()));
-          //    }
-          //  }
-          //}
+          dbg!(&bound_inputs);
 
-          //// A bind has exactly one output: the lien
-          //txos.reserve(1);
-          //assert_eq!(bind_assets.body.transfer.outputs.len(), 1);
+          // (5) NOTE: the inputs are [contract] + inputs, and the contract is
+          // not allowed to have a lien bound to it already (hence
+          // once(None))
+          let mut input_types = HashSet::new();
+          for ((inp, record), lien) in
+            once(&bind_assets.body.contract).chain(bind_assets.body.inputs.iter())
+                                            .zip(bind_assets.body.transfer.inputs.iter())
+                                            .zip(once(None).chain(lien_inputs.into_iter()))
+          {
+            // NOTE: We assume that any confidential-type asset records
+            // have no atypical transfer restrictions. Be careful!
+            if let Some(inp_code) = record.asset_type.get_asset_type() {
+              input_types.insert(AssetTypeCode { val: inp_code });
+              //asset_types_involved.insert(AssetTypeCode { val: inp_code });
+            }
 
-          //{
-          //  assert_eq!(bind_assets.body.transfer.inputs[0].asset_type,
-          //             bind_assets.body.transfer.outputs[0].asset_type);
-          //  let (out, lien) = (&bind_assets.body.transfer.outputs[0], Some(HashOf::new(&bound_inputs)));
-          //  asset_types_involved.insert(AssetTypeCode { val: out.asset_type
-          //                                                      .get_asset_type()
-          //                                                      .unwrap() });
-          //  txos.push(Some(TxOutput(out.clone(), lien)));
-          //  txo_count += 1;
-          //}
+            // (2), checking within this transaction and recording
+            // external UTXOs
+            match *inp {
+              TxoRef::Relative(offs) => {
+                // (2).(a)
+                if offs as usize >= txo_count {
+                  return Err(inp_fail!());
+                }
+                let ix = (txo_count - 1) - (offs as usize);
+                match &txos[ix] {
+                  None => {
+                    return Err(inp_fail!());
+                  }
+                  Some(txo) => {
+                    let TxOutput(inp_record, inp_lien,) = &txo;
+                    // (2).(b)
+                    if inp_record != record || inp_lien != &lien.cloned() {
+                      return Err(inp_fail!());
+                    }
+                    internally_spent_txos.push(txo.clone());
+                  }
+                }
+                txos[ix] = None;
+              }
+              TxoRef::Absolute(txo_sid) => {
+                // (2).(a), partially
+                if input_txos.contains_key(&txo_sid) {
+                  return Err(inp_fail!());
+                }
 
-          //// Until we can distinguish assets that have policies that invoke transfer restrictions
-          //// from those that don't, make note of all non-confidential inputs of confidential
-          //// transfers
-          //asset_types_involved.extend(&input_types);
+                input_txos.insert(txo_sid,
+                                  TxOutput(record.clone(), lien.cloned()));
+              }
+            }
+          }
+
+          // A bind has exactly one output: the lien
+          txos.reserve(1);
+          // assert_eq!(bind_assets.body.transfer.outputs.len(), 1);
+
+          {
+            assert_eq!(bind_assets.body.transfer.inputs[0].asset_type,
+                       bind_assets.body.transfer.outputs[0].asset_type);
+            let (out, lien) = (&bind_assets.body.transfer.outputs[0], Some(HashOf::new(&bound_inputs)));
+            asset_types_involved.insert(AssetTypeCode { val: out.asset_type
+                                                                .get_asset_type()
+                                                                .unwrap() });
+            txos.push(Some(TxOutput(out.clone(), lien)));
+            txo_count += 1;
+          }
+
+          // Until we can distinguish assets that have policies that invoke transfer restrictions
+          // from those that don't, make note of all non-confidential inputs of confidential
+          // transfers
+          asset_types_involved.extend(&input_types);
         }
 
         // A release is valid iff:
@@ -720,190 +745,198 @@ impl TxnEffect {
         //     3) The zei transaction is valid.
         //          - Fully checked here
         //
-        Operation::ReleaseAssets(_release_assets) => {
-          unimplemented!();
+        Operation::ReleaseAssets(release_assets) => {
 
-          //if release_assets.body.transfer.inputs.is_empty() {
-          //  return Err(inp_fail!());
-          //}
-          //if release_assets.body.num_outputs != release_assets.body.transfer.outputs.len() {
-          //  return Err(inp_fail!());
-          //}
-          //assert!(!release_assets.body.transfer.inputs.is_empty());
-          //assert!(release_assets.body.num_outputs == release_assets.body.transfer.outputs.len());
+          if release_assets.body.transfer.inputs.is_empty() {
+            return Err(inp_fail!());
+          }
+          if release_assets.body.num_outputs != release_assets.body.transfer.outputs.len() {
+            return Err(inp_fail!());
+          }
+          assert!(!release_assets.body.transfer.inputs.is_empty());
+          assert!(release_assets.body.num_outputs == release_assets.body.transfer.outputs.len());
 
-          //// setup for (2)
-          //let (lien_inputs, lien_outputs) = {
-          //  let mut inps = release_assets.body
-          //                               .transfer
-          //                               .inputs
-          //                               .iter()
-          //                               .map(|_| None)
-          //                               .collect::<Vec<_>>();
-          //  let mut outs = release_assets.body
-          //                               .transfer
-          //                               .outputs
-          //                               .iter()
-          //                               .map(|_| None)
-          //                               .collect::<Vec<_>>();
-          //  for (inp_ix, out_ix, hash) in release_assets.body.lien_assignments.iter() {
-          //    let (inp_ix, out_ix) = (*inp_ix, *out_ix);
-          //    // The contract input is a special case
-          //    if inp_ix == 0 {
-          //      return Err(inp_fail!());
-          //    }
-          //    match (inps.get(inp_ix), outs.get(out_ix)) {
-          //      (Some(None), Some(None)) => {
-          //        inps[inp_ix] = Some(hash);
-          //        outs[out_ix] = Some(hash);
-          //      }
-          //      _ => {
-          //        return Err(inp_fail!());
-          //      }
-          //    }
-          //  }
-          //  (inps, outs)
-          //};
+          // setup for (2)
+          let (lien_inputs, lien_outputs) = {
+            let mut inps = release_assets.body
+                                         .transfer
+                                         .inputs
+                                         .iter()
+                                         .map(|_| None)
+                                         .collect::<Vec<_>>();
+            let mut outs = release_assets.body
+                                         .transfer
+                                         .outputs
+                                         .iter()
+                                         .map(|_| None)
+                                         .collect::<Vec<_>>();
+            for (inp_ix, out_ix, hash) in release_assets.body.lien_assignments.iter() {
+              let (inp_ix, out_ix) = (*inp_ix, *out_ix);
+              // The contract input is a special case
+              if inp_ix == 0 {
+                return Err(inp_fail!());
+              }
+              match (inps.get(inp_ix), outs.get(out_ix)) {
+                (Some(None), Some(None)) => {
+                  inps[inp_ix] = Some(hash);
+                  outs[out_ix] = Some(hash);
+                }
+                _ => {
+                  return Err(inp_fail!());
+                }
+              }
+            }
+            (inps, outs)
+          };
 
-          //assert!(lien_inputs.len() == release_assets.body.transfer.inputs.len());
+          assert!(lien_inputs.len() == release_assets.body.transfer.inputs.len());
 
-          //// TODO(joe): Can this safely be removed?
-          ////  - It *SHOULD* be enforced by BindAssets validation
-          ////  - If there's a bug in BindAssets validation that allows a
-          ////    confidential asset type on the contract, what is the sane
-          ////    behavior?
-          ////  - Rejecting later transactions that use such a lien seems
-          ////    like a "fail-safe" option -- is that right?
-          //if release_assets.body.transfer.inputs[0].asset_type
-          //                                     .get_asset_type()
-          //                                     .is_none()
-          //{
-          //  return Err(inp_fail!());
-          //}
+          // TODO(joe): Can this safely be removed?
+          //  - It *SHOULD* be enforced by BindAssets validation
+          //  - If there's a bug in BindAssets validation that allows a
+          //    confidential asset type on the contract, what is the sane
+          //    behavior?
+          //  - Rejecting later transactions that use such a lien seems
+          //    like a "fail-safe" option -- is that right?
+          if release_assets.body.transfer.inputs[0].asset_type
+                                               .get_asset_type()
+                                               .is_none()
+          {
+            return Err(inp_fail!());
+          }
 
-          //let mut input_keys = HashSet::new();
-          //// (1a) all body signatures are valid
-          //for sig in &release_assets.body_signatures {
-          //  if !release_assets.body.verify_body_signature(sig) {
-          //    return Err(inp_fail!());
-          //  }
-          //  if let Some(input_idx) = sig.input_idx {
-          //    let sig_keys = cosig_keys.entry((op_idx, input_idx))
-          //                             .or_insert_with(HashSet::new);
-          //    (*sig_keys).insert(sig.address.key.zei_to_bytes());
-          //  } else {
-          //    input_keys.insert(sig.address.key.zei_to_bytes());
-          //  }
-          //}
+          let mut input_keys = HashSet::new();
+          // (1a) all body signatures are valid
+          for sig in &release_assets.body_signatures {
+            if !release_assets.body.verify_body_signature(sig) {
+              return Err(inp_fail!());
+            }
+            if let Some(input_idx) = sig.input_idx {
+              let sig_keys = cosig_keys.entry((op_idx, input_idx))
+                                       .or_insert_with(HashSet::new);
+              (*sig_keys).insert(sig.address.key.zei_to_bytes());
+            } else {
+              input_keys.insert(sig.address.key.zei_to_bytes());
+            }
+          }
 
-          //// (1b) the contract input record owners (for non-custom-policy
-          ////      assets) have signed
-          //for (input_idx, record) in once(&release_assets.body.transfer.inputs[0]).enumerate() {
-          //  // skip signature checking for custom-policy assets
-          //  if let Some(inp_code) = record.asset_type.get_asset_type() {
-          //    if custom_policy_asset_types.get(&AssetTypeCode { val: inp_code })
-          //                                .is_some()
-          //    {
-          //      continue;
-          //    }
-          //  } else {
-          //    panic!("{}", inp_fail!());
-          //  }
-          //  if !input_keys.contains(&record.public_key.zei_to_bytes()) {
-          //    return Err(inp_fail!());
-          //  }
-          //  cosig_keys.entry((op_idx, input_idx))
-          //            .or_insert_with(HashSet::new);
-          //}
+          // (1b) the contract input record owners (for non-custom-policy
+          //      assets) have signed
+          for (input_idx, record) in once(&release_assets.body.transfer.inputs[0]).enumerate() {
+            // skip signature checking for custom-policy assets
+            if let Some(inp_code) = record.asset_type.get_asset_type() {
+              if custom_policy_asset_types.get(&AssetTypeCode { val: inp_code })
+                                          .is_some()
+              {
+                continue;
+              }
+            } else {
+              panic!("{}", inp_fail!());
+            }
+            if !input_keys.contains(&record.public_key.zei_to_bytes()) {
+              return Err(inp_fail!());
+            }
+            cosig_keys.entry((op_idx, input_idx))
+                      .or_insert_with(HashSet::new);
+          }
 
-          //// (3)
-          //// TODO: implement real policies
-          //// patch for https://github.com/findoraorg/platform/issues/363
-          //verify_xfr_body_no_policies(&mut prng, &release_assets.body.transfer)
-          //  .map_err(|e| PlatformError::ZeiError(error_location!(),e))?;
+          // (3)
+          // TODO: implement real policies
+          let policies = {
+            let num_inputs = release_assets.body.transfer.inputs.len();
+            let num_outputs = release_assets.body.transfer.outputs.len();
+            let no_policies = AssetTracingPolicies::new();
+            XfrNotePolicies::new(vec![no_policies.clone(); num_inputs],
+            vec![None; num_inputs],
+            vec![no_policies; num_outputs],
+            vec![None; num_outputs])
+          };
+          verify_xfr_body(&mut prng, &mut params, &release_assets.body.transfer, &policies.to_ref())
+            .map_err(|e| PlatformError::ZeiError(error_location!(),e))?;
 
-          //// The vec of TxOutputs corresponding to the lien
-          //let bound_inputs = release_assets.body
-          //                                 .transfer
-          //                                 .inputs
-          //                                 .iter()
-          //                                 .zip(lien_inputs.iter().skip(1))
-          //                                 // Skipping the contract
-          //                                 .skip(1)
-          //                                 .map(|(ar, lien)| TxOutput(ar.clone(),
-          //                                 lien.cloned()))
-          //                                 .collect::<Vec<_>>();
+          // The vec of TxOutputs corresponding to the lien
+          let bound_inputs = release_assets.body
+                                           .transfer
+                                           .inputs
+                                           .iter()
+                                           .zip(lien_inputs.iter())
+                                           // Skipping the contract
+                                           .skip(1)
+                                           .map(|(ar, lien)| TxOutput(ar.clone(),
+                                           lien.cloned()))
+                                           .collect::<Vec<_>>();
+          dbg!(&bound_inputs);
 
-          //let mut input_types = HashSet::new();
-          //for record in release_assets.body.transfer.inputs.iter() {
-          //  // NOTE: We assume that any confidential-type asset records
-          //  // have no atypical transfer restrictions. Be careful!
-          //  if let Some(inp_code) = record.asset_type.get_asset_type() {
-          //    input_types.insert(AssetTypeCode { val: inp_code });
-          //    //asset_types_involved.insert(AssetTypeCode { val: inp_code });
-          //  }
-          //}
+          let mut input_types = HashSet::new();
+          for record in release_assets.body.transfer.inputs.iter() {
+            // NOTE: We assume that any confidential-type asset records
+            // have no atypical transfer restrictions. Be careful!
+            if let Some(inp_code) = record.asset_type.get_asset_type() {
+              input_types.insert(AssetTypeCode { val: inp_code });
+              //asset_types_involved.insert(AssetTypeCode { val: inp_code });
+            }
+          }
 
-          //{
-          //  let (inp, record) =
-          //    (&release_assets.body.contract, &release_assets.body.transfer.inputs[0]);
-          //  let lien = Some(HashOf::new(&bound_inputs));
+          {
+            let (inp, record) =
+              (&release_assets.body.contract, &release_assets.body.transfer.inputs[0]);
+            let lien = Some(HashOf::new(&bound_inputs));
 
-          //  // (2), checking within this transaction and recording
-          //  // external UTXOs
-          //  match *inp {
-          //    TxoRef::Relative(offs) => {
-          //      // (2).(a)
-          //      if offs as usize >= txo_count {
-          //        return Err(inp_fail!());
-          //      }
-          //      let ix = (txo_count - 1) - (offs as usize);
-          //      match &txos[ix] {
-          //        None => {
-          //          return Err(inp_fail!());
-          //        }
-          //        Some(txo) => {
-          //          let TxOutput(inp_record, inp_lien,) = &txo;
-          //          // (2).(b)
-          //          if inp_record != record || inp_lien != &lien {
-          //            return Err(inp_fail!());
-          //          }
-          //          internally_spent_txos.push(txo.clone());
-          //        }
-          //      }
-          //      txos[ix] = None;
-          //    }
-          //    TxoRef::Absolute(txo_sid) => {
-          //      // (2).(a), partially
-          //      if input_txos.contains_key(&txo_sid) {
-          //        return Err(inp_fail!());
-          //      }
+            // (2), checking within this transaction and recording
+            // external UTXOs
+            match *inp {
+              TxoRef::Relative(offs) => {
+                // (2).(a)
+                if offs as usize >= txo_count {
+                  return Err(inp_fail!());
+                }
+                let ix = (txo_count - 1) - (offs as usize);
+                match &txos[ix] {
+                  None => {
+                    return Err(inp_fail!());
+                  }
+                  Some(txo) => {
+                    let TxOutput(inp_record, inp_lien,) = &txo;
+                    // (2).(b)
+                    if inp_record != record || inp_lien != &lien {
+                      return Err(inp_fail!());
+                    }
+                    internally_spent_txos.push(txo.clone());
+                  }
+                }
+                txos[ix] = None;
+              }
+              TxoRef::Absolute(txo_sid) => {
+                // (2).(a), partially
+                if input_txos.contains_key(&txo_sid) {
+                  return Err(inp_fail!());
+                }
 
-          //      input_txos.insert(txo_sid,
-          //                        TxOutput(record.clone(), lien));
-          //    }
-          //  }
-          //}
+                input_txos.insert(txo_sid,
+                                  TxOutput(record.clone(), lien));
+              }
+            }
+          }
 
-          //txos.reserve(release_assets.body.transfer.outputs.len());
-          //let mut conf_transfer = false;
-          //for (out, lien) in release_assets.body.transfer.outputs.iter().zip(lien_outputs) {
-          //  if let XfrAssetType::Confidential(_) = out.asset_type {
-          //    conf_transfer = true;
-          //  }
-          //  if let Some(out_code) = out.asset_type.get_asset_type() {
-          //    asset_types_involved.insert(AssetTypeCode { val: out_code });
-          //  }
-          //  txos.push(Some(TxOutput(out.clone(), lien.cloned())));
-          //  txo_count += 1;
-          //}
-          //// Until we can distinguish assets that have policies that invoke transfer restrictions
-          //// from those that don't, make note of all non-confidential inputs of confidential
-          //// transfers
-          //asset_types_involved.extend(&input_types);
-          //if conf_transfer {
-          //  confidential_transfer_inputs.extend(&input_types);
-          //}
+          txos.reserve(release_assets.body.transfer.outputs.len());
+          let mut conf_transfer = false;
+          for (out, lien) in release_assets.body.transfer.outputs.iter().zip(lien_outputs) {
+            if let XfrAssetType::Confidential(_) = out.asset_type {
+              conf_transfer = true;
+            }
+            if let Some(out_code) = out.asset_type.get_asset_type() {
+              asset_types_involved.insert(AssetTypeCode { val: out_code });
+            }
+            txos.push(Some(TxOutput(out.clone(), lien.cloned())));
+            txo_count += 1;
+          }
+          // Until we can distinguish assets that have policies that invoke transfer restrictions
+          // from those that don't, make note of all non-confidential inputs of confidential
+          // transfers
+          asset_types_involved.extend(&input_types);
+          if conf_transfer {
+            confidential_transfer_inputs.extend(&input_types);
+          }
         }
       } // end -- match op {
       op_idx += 1;

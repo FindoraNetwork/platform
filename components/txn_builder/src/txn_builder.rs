@@ -428,8 +428,8 @@ impl TransactionBuilder {
     self.txn.get_owner_memos_ref()[idx]
   }
 
-  pub fn get_output_ref(&self, idx: usize) -> &TxOutput {
-    self.txn.get_outputs_ref(true)[idx]
+  pub fn get_output_ref(&self, idx: usize) -> TxOutput {
+    self.txn.get_outputs_ref(true)[idx].clone()
   }
 
   pub fn from_seq_id(seq_id: u64) -> Self {

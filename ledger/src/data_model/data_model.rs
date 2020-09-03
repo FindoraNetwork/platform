@@ -18,15 +18,17 @@ use sparse_merkle_tree::{check_merkle_proof, Key, MerkleProof};
 use std::boxed::Box;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
-use std::convert::TryInto;
+// use std::convert::TryInto;
 use std::hash::{Hash, Hasher};
 use utils::{HashOf, ProofOf, Serialized, SignatureOf};
 use zei::xfr::lib::{gen_xfr_body, XfrNotePolicies};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
-  AssetRecord, AssetTracingPolicies, AssetTracingPolicy, AssetType as ZeiAssetType,
+  AssetRecord, AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy, AssetType as ZeiAssetType,
   BlindAssetRecord, OwnerMemo, XfrBody, ASSET_TYPE_LENGTH,
 };
+// use zei::xfr::asset_record::{AssetRecordType};
+use crate::store::TxnEffect;
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
   base64::encode_config(input, base64::URL_SAFE)
@@ -895,7 +897,21 @@ impl BindAssetsBody {
       return Err(PlatformError::InputsError(error_location!()));
     }
 
-    let transfer = Box::new(gen_xfr_body(prng, input_records, &[output_record.clone()])
+    let out_pubkey = &output_record.open_asset_record.blind_asset_record.public_key;
+    let mut out_records = vec![output_record.clone()];
+    for i in input_records[1..].iter() {
+      let open_rec = i.open_asset_record.clone();
+
+      let amt = *open_rec.get_amount();
+      let unit_code = *open_rec.get_asset_type();
+
+      let art = open_rec.get_record_type();
+      let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *out_pubkey);
+      let ar = AssetRecord::from_template_no_identity_tracking(prng, &ar).unwrap();
+      out_records.push(ar);
+    }
+
+    let transfer = Box::new(gen_xfr_body(prng, input_records, &out_records)
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
     let input_liens = input_refs.iter()
                                 .map(|(_l, r)| r)
@@ -1140,7 +1156,7 @@ impl AuthenticatedUtxo {
       return false;
     }
 
-    if **output.unwrap() != self.utxo.0 {
+    if *output.unwrap() != self.utxo.0 {
       return false;
     }
 
@@ -1389,35 +1405,51 @@ impl Transaction {
 
   /// Returns the outputs of a transaction. Internally spent outputs can be optionally included.
   /// This will never panic on a well formed transaction, but may panic on a malformed one.
-  pub fn get_outputs_ref(&self, include_spent: bool) -> Vec<&TxOutput> {
-    let mut outputs = vec![];
-    let mut spent_indices = vec![];
-    for op in self.body.operations.iter() {
-      match op {
-        Operation::TransferAsset(xfr_asset) => {
-          for txo_ref in &xfr_asset.body.inputs {
-            match txo_ref {
-              TxoRef::Relative(offset) => {
-                let idx = (outputs.len() as u64) - *offset - 1;
-                spent_indices.push(idx);
-              }
-              TxoRef::Absolute(_) => {}
-            };
-          }
-          outputs.append(&mut xfr_asset.get_outputs_ref());
-        }
-        Operation::IssueAsset(issue_asset) => {
-          outputs.append(&mut issue_asset.get_outputs_ref());
-        }
-        _ => {}
-      }
-    }
+  pub fn get_outputs_ref(&self, include_spent: bool) -> Vec<TxOutput> {
+    let eff = TxnEffect::compute_effect(self.clone()).unwrap();
     if !include_spent {
-      for idx in spent_indices {
-        outputs.remove(idx.try_into().unwrap());
+      eff.txos.into_iter().filter_map(|x| x).collect()
+    } else {
+      let mut spent = eff.internally_spent_txos.into_iter();
+      let mut ret = vec![];
+      for txo in eff.txos.into_iter() {
+        if let Some(txo) = txo {
+          ret.push(txo);
+        } else {
+          ret.push(spent.next().unwrap());
+        }
       }
+      ret
     }
-    outputs
+
+    // let mut outputs = vec![];
+    // let mut spent_indices = vec![];
+    // for op in self.body.operations.iter() {
+    //   match op {
+    //     Operation::TransferAsset(xfr_asset) => {
+    //       for txo_ref in &xfr_asset.body.inputs {
+    //         match txo_ref {
+    //           TxoRef::Relative(offset) => {
+    //             let idx = (outputs.len() as u64) - *offset - 1;
+    //             spent_indices.push(idx);
+    //           }
+    //           TxoRef::Absolute(_) => {}
+    //         };
+    //       }
+    //       outputs.append(&mut xfr_asset.get_outputs_ref());
+    //     }
+    //     Operation::IssueAsset(issue_asset) => {
+    //       outputs.append(&mut issue_asset.get_outputs_ref());
+    //     }
+    //     _ => {}
+    //   }
+    // }
+    // if !include_spent {
+    //   for idx in spent_indices {
+    //     outputs.remove(idx.try_into().unwrap());
+    //   }
+    // }
+    // outputs
   }
 
   /// NOTE: this does *not* guarantee that a private key affiliated with

@@ -1,7 +1,7 @@
 #![deny(warnings)]
 #![allow(unused)]
 use quickcheck::{Arbitrary, Gen, QuickCheck, StdGen};
-use std::iter::repeat;
+use std::iter::{repeat,once};
 #[cfg(test)]
 #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
@@ -10,7 +10,6 @@ use cryptohash::sha256::Digest as BitDigest;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::{inp_fail,zei_fail,error_location};
-use ledger::error_location;
 use ledger::store::*;
 use ledger_api_service::RestfulLedgerAccess;
 use network::LedgerStandalone;
@@ -30,7 +29,7 @@ use submission_server::{TxnHandle, TxnStatus};
 use subprocess::Popen;
 #[cfg(test)]
 use subprocess::PopenConfig;
-use utils::HasInvariants;
+use utils::{HasInvariants,HashOf};
 use zei::api::anon_creds::ACCommitment;
 use zei::serialization::ZeiFromToBytes;
 use zei::setup::PublicParams;
@@ -39,6 +38,7 @@ use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 use zei::xfr::structs::{
   AssetRecord, AssetRecordTemplate, AssetTracingPolicy, OpenAssetRecord, OwnerMemo,
 };
+use std::mem;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct UserName(pub String);
@@ -695,9 +695,11 @@ struct LienAccounts {
 
 impl InterpretAccounts<PlatformError> for LienAccounts {
   fn run_account_command(&mut self, cmd: &AccountsCommand) -> Result<(), PlatformError> {
+    dbg!(&cmd);
     let conf_amts = self.confidential_amounts;
     let conf_types = self.confidential_types;
     let iss_art = AssetRecordType::from_booleans(conf_amts, false);
+    let ctrt_art = AssetRecordType::from_booleans(false, false);
     let art = AssetRecordType::from_booleans(conf_amts, conf_types);
     // dbg!(cmd);
     match cmd {
@@ -706,9 +708,9 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
 
         let ctrt_txo = { // lien contract asset type
             let (pubkey, privkey) = (keypair.get_pk_ref(), keypair.get_sk_ref());
-            let nmHash = HashOf::new(name).0.hash;
-            let amt = (hash.iter().fold(0,|x,y| x^y) % 999) + 1;
-            let code = AssetTypeCode::new_from_str(b64enc(hash.to_string()));
+            let hash = HashOf::new(name).0.hash;
+            let amt = ((hash.0.iter().fold(0,|x,y| (x as u64)^(*y as u64)) % 999) + 1);
+            let code = AssetTypeCode::new_from_str(&b64enc(&hash.0));
 
             let op1 = {
                 let mut properties: Asset = Default::default();
@@ -718,10 +720,10 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
 
                 let body = DefineAssetBody { asset: Box::new(properties) };
 
-                DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap();
+                Operation::DefineAsset(DefineAsset::new(body, &IssuerKeyPair { keypair: &keypair }).unwrap())
             };
             let op2 = {
-                let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
+                let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, ctrt_art, *pubkey);
                 let params = PublicParams::new();
                 let (ba, _, owner_memo) =
                     build_blind_asset_record(self.ledger.get_prng(), &params.pc_gens, &ar, vec![]);
@@ -750,13 +752,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
             {
               let mut block = self.ledger.start_block()?;
 
-              let temp_sid = match self.ledger.apply_transaction(&mut block, eff) {
-                Err(e) => {
-                  self.ledger.abort_block(block);
-                  Err(e)
-                },
-                Ok(temp_sid) => Ok(temp_sid)
-              }?;
+              let temp_sid = self.ledger.apply_transaction(&mut block, eff).unwrap();
 
               let (_, txos) = self.ledger
                                   .finish_block(block)
@@ -836,7 +832,13 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                           .ok_or_else(|| inp_fail!())?;
         let (pubkey, privkey) = (keypair.get_pk_ref(), keypair.get_sk_ref());
         let (ctrt_txo,already_bound) = self.utxos.get_mut(issuer).unwrap();
-        let ctrt_record = self.ledger.get_utxo(ctrt_txo).unwrap().0.0.clone();
+        let ctrt_record = {
+          let txo = (self.ledger.get_utxo(*ctrt_txo).unwrap().utxo.0).clone();
+          let memo = self.owner_memos.get(&ctrt_txo).cloned();
+          let open_rec = open_blind_asset_record(&txo.0, &memo, &privkey).unwrap();
+
+          AssetRecord::from_open_asset_record_no_asset_tracking(open_rec.clone())
+        };
 
         *self.balances
              .get_mut(issuer)
@@ -846,11 +848,11 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
 
         let mut tx = Transaction::from_seq_id(self.ledger.get_block_commit_count());
 
-        let (iss_txo,issue_op) = {
-          let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
+        let (iss_record,issue_op) = {
           let params = PublicParams::new();
-          let (ba, _, owner_memo) =
-            build_blind_asset_record(self.ledger.get_prng(), &params.pc_gens, &ar, vec![]);
+          let ar = AssetRecordTemplate::with_no_asset_tracking(amt, code.val, iss_art, *pubkey);
+          let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(), &ar).unwrap();
+          let (ba,owner_memo) = (ar.open_asset_record.blind_asset_record.clone(),ar.owner_memo.clone());
 
           let iss_txo = TxOutput(ba, None);
 
@@ -861,15 +863,15 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
           let asset_issuance_operation =
             IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
-          (iss_txo,Operation::IssueAsset(asset_issuance_operation))
+          (ar,Operation::IssueAsset(asset_issuance_operation))
         };
         tx.body.operations.push(issue_op);
 
-        let (lien_ops,new_lien) = {
+        let (lien_ops,new_lien,lien_record) = {
           let mut rel_ops = vec![];
-          let mut bind_ctrt = TxoRef::Absolute(ctrt_txo);
+          let mut bind_ctrt = TxoRef::Absolute(*ctrt_txo);
           let mut bind_inp_refs = vec![TxoRef::Relative(0)];
-          let mut bind_inps = vec![iss_txo];
+          let mut bind_inps = vec![iss_record];
           match already_bound {
             None => { }
             Some(inps) => {
@@ -879,80 +881,76 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                 let mut out_records = vec![];
 
                 { // contract
-                  let blind_rec = ctrt_record.0;
-                  let memo = self.owner_memos.get(&ctrt_txo).cloned();
+                  in_records.push(ctrt_record.clone());
+                  let open_rec = ctrt_record.open_asset_record.clone();
 
-                  let open_rec = open_blind_asset_record(&blind_rec, &memo, &privkey).unwrap();
-
-                  in_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(open_rec.clone()));
-
-                  let amt = open_rec.get_amount();
-                  let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code.val, art, *pubkey);
-                  let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
+                  let amt = *open_rec.get_amount();
+                  let unit_code = *open_rec.get_asset_type();
+                  let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, ctrt_art, *pubkey);
+                  let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(), &ar).unwrap();
                   out_records.push(ar);
                 }
 
-                for (i,memo) in inps.iter() {
-                  let blind_rec = i.0;
+                for (ix,(i,memo)) in inps.iter().enumerate() {
+                  let blind_rec = i.0.clone();
 
                   let open_rec = open_blind_asset_record(&blind_rec, &memo, &privkey).unwrap();
 
                   in_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(open_rec.clone()));
 
-                  let amt = open_rec.get_amount();
-                  let unit_code = open_rec.get_asset_type();
+                  let amt = *open_rec.get_amount();
+                  let unit_code = *open_rec.get_asset_type();
                   let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *pubkey);
-                  let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
+                  let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(), &ar).unwrap();
                   out_records.push(ar.clone());
                   bind_inps.push(ar);
+                  bind_inp_refs.push(TxoRef::Relative((inps.len()-1-ix) as u64))
                 }
 
                 (in_records,out_records)
               };
 
               let rel_op = {
-                let body = ReleaseAssetBody::new(self.ledger.get_prng(),
+                let body = ReleaseAssetsBody::new(self.ledger.get_prng(),
                   bind_ctrt,
-                  HashOf::new(already_bound.clone()),
+                  HashOf::new(&inps.iter().map(|(txo,_)| txo).cloned().collect()),
                   vec![],
                   &rel_in_records,
                   &rel_out_records).unwrap();
                 let sig = body.compute_body_signature(&keypair,None);
-                ReleaseAssets { body, body_signatures: vec![sig] }
+                Operation::ReleaseAssets(ReleaseAssets { body, body_signatures: vec![sig] })
               };
 
-              bind_inp_refs[0].0 += 1 /* contract */ + already_bound.len();
-              bind_ctrt = TxoRef::Relative(already_bound.len());
+              bind_inp_refs[0] = TxoRef::Relative((1 /* contract */ + inps.len()) as u64);
+              bind_ctrt = TxoRef::Relative(inps.len() as u64);
 
               rel_ops.push(rel_op);
             }
           }
 
-          let bind_op = {
+          let (bind_op,lien_record) = {
             let out_rec = { // contract
-              let blind_rec = ctrt_record.0;
-              let memo = self.owner_memos.get(&ctrt_txo).cloned();
+              let open_rec = ctrt_record.open_asset_record.clone();
 
-              let open_rec = open_blind_asset_record(&blind_rec, &memo, &privkey).unwrap();
-
-              let amt = open_rec.get_amount();
-              let unit_code = open_rec.get_asset_type();
-              let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *pubkey);
-              let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
+              let amt = *open_rec.get_amount();
+              let unit_code = *open_rec.get_asset_type();
+              let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, ctrt_art, *pubkey);
+              let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(), &ar).unwrap();
               ar
             };
 
+            dbg!(&bind_ctrt,&bind_inp_refs,&bind_inps);
             let body = BindAssetsBody::new(self.ledger.get_prng(),
               bind_ctrt,
-              bind_input_refs.iter().map(|x| (x,None)).collect(),
-              &(once(ctrt_record).chain(bind_inps.iter())).collect::<Vec<_>>(),
-              out_rec).unwrap();
+              bind_inp_refs.iter().map(|x| (x.clone(),None)).collect(),
+              &(once(ctrt_record).chain(bind_inps.iter().cloned()).collect::<Vec<_>>()),
+              &out_rec).unwrap();
             let sig = body.compute_body_signature(&keypair,None);
-            BindAssets { body, body_signatures: vec![sig] }
+            (Operation::BindAssets(BindAssets { body, body_signatures: vec![sig] }),out_rec)
           };
 
           rel_ops.push(bind_op);
-          (rel_ops,bind_inps)
+          (rel_ops,bind_inps,lien_record)
         };
 
         tx.body.operations.extend(lien_ops);
@@ -969,11 +967,11 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                             .unwrap();
 
         assert!(txos.len() == 1);
-        if let Some(memo) = owner_memo {
+        if let Some(memo) = lien_record.owner_memo {
           self.owner_memos.insert(txos[0], memo);
         }
-        ctrt_txo = txos[0];
-        already_bound = new_lien;
+        *ctrt_txo = txos[0];
+        *already_bound = Some(new_lien.into_iter().map(|x| (TxOutput(x.open_asset_record.blind_asset_record,None),x.owner_memo)).collect());
       }
       AccountsCommand::Send(src, amt, unit, dst) => {
         let amt = *amt as u64;
@@ -1005,7 +1003,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
             None => { return Err(inp_fail!()); },
         };
 
-        let sent_txo = {
+        let (sent_txo,sent_record) = {
           let mut txn_txos = vec![];
           let mut ops = vec![];
 
@@ -1013,60 +1011,61 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
           // the src contract
           let (mut avail,new_src_ctrt_ix) = {
             let ctrt_txo = src_ctrt.clone();
-            let ctrt_record = self.ledger.get_utxo(src_ctrt).unwrap().0.0.clone();
-            let mut avail = vec![];
+            let ctrt_record = {
+              let txo = (self.ledger.get_utxo(src_ctrt).unwrap().utxo.0).clone();
+              let memo = self.owner_memos.get(&src_ctrt).cloned();
+              let open_rec = open_blind_asset_record(&txo.0, &memo, &src_priv).unwrap();
+
+              AssetRecord::from_open_asset_record_no_asset_tracking(open_rec.clone())
+            };
+            let mut avail = VecDeque::new();
             let (rel_in_records,rel_out_records,new_ctrt) = {
               let mut in_records = vec![];
               let mut out_records = vec![];
-              let mut rel_txos = vec![];
 
               let new_ctrt_ix = { // contract
-                let blind_rec = ctrt_record.0;
-                let memo = self.owner_memos.get(&ctrt_txo).cloned();
+                let open_rec = ctrt_record.open_asset_record.clone();
+                in_records.push(ctrt_record.clone());
 
-                let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_privkey).unwrap();
-
-                in_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(open_rec.clone()));
-
-                let amt = open_rec.get_amount();
-                let unit_code = open_rec.get_asset_type();
-                let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *pubkey);
-                let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
+                let amt = *open_rec.get_amount();
+                let unit_code = *open_rec.get_asset_type();
+                let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, ctrt_art, *src_pub);
+                let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(), &ar).unwrap();
                 let ix = txn_txos.len();
                 out_records.push(ar.clone());
-                txn_txos.push(ar);
+                txn_txos.push(Some(ar));
                 ix
               };
 
               for (i,memo) in src_txos.iter() {
-                let blind_rec = i.0;
+                let blind_rec = i.0.clone();
 
-                let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_privkey).unwrap();
+                let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
 
                 in_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(open_rec.clone()));
 
-                let amt = open_rec.get_amount();
-                let unit_code = open_rec.get_asset_type();
-                let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *pubkey);
-                let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
+                let amt = *open_rec.get_amount();
+                let unit_code = *open_rec.get_asset_type();
+                let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *src_pub);
+                let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(), &ar).unwrap();
                 let ix = txn_txos.len();
                 out_records.push(ar.clone());
-                txn_txos.push(ar);
-                avail.push(ix);
+                txn_txos.push(Some(ar));
+                avail.push_back(ix);
               }
 
               (in_records,out_records,new_ctrt_ix)
             };
 
             let rel_op = {
-              let body = ReleaseAssetBody::new(self.ledger.get_prng(),
-                src_ctrt,
-                HashOf::new(src_txos.unwrap().iter().map(|(txo,_)| txo).collect::<Vec<_>>().clone()),
+              let body = ReleaseAssetsBody::new(self.ledger.get_prng(),
+                TxoRef::Absolute(src_ctrt),
+                HashOf::new(&src_txos.iter().map(|(txo,_)| txo).cloned().collect::<Vec<_>>()),
                 vec![],
                 &rel_in_records,
                 &rel_out_records).unwrap();
               let sig = body.compute_body_signature(&src_keypair,None);
-              ReleaseAssets { body, body_signatures: vec![sig] }
+              Operation::ReleaseAssets(ReleaseAssets { body, body_signatures: vec![sig] })
             };
 
             ops.push(rel_op);
@@ -1080,13 +1079,13 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
           // Transfer
           let sent_record = {
             let mut total_sum = 0u64;
-            let mut src_records: Vec<OpenAssetRecord> = Vec::new();
+            let mut src_records: Vec<AssetRecord> = Vec::new();
             let mut to_use = Vec::new();
             let mut to_skip = Vec::new();
 
             while total_sum < amt && !avail.is_empty() {
               let txo_ix = avail.pop_front().unwrap();
-              let open_rec = txn_txos.get(txo_ix).unwrap().open_asset_record;
+              let open_rec = txn_txos.get(txo_ix).unwrap().clone().unwrap().open_asset_record;
 
               if *open_rec.get_asset_type() != unit_code.val {
                 to_skip.push(txo_ix);
@@ -1096,10 +1095,11 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
               debug_assert!(*open_rec.get_asset_type() == unit_code.val);
               to_use.push(txo_ix);
               total_sum += *open_rec.get_amount();
-              src_records.push(mem::replace(txn_txos.get_mut(txo_ix),None).unwrap());
+              src_records.push(mem::replace(txn_txos.get_mut(txo_ix).unwrap(),None).unwrap());
             }
             avail.extend(to_skip);
 
+            let inp_txo_len = txn_txos.len();
             assert!(total_sum >= amt);
 
             let mut src_outputs = Vec::new();
@@ -1140,12 +1140,12 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
             let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
 
             for _ in to_use.iter() {
-              sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes()));
+              sig_keys.push(XfrKeyPair::zei_from_bytes(&src_keypair.zei_to_bytes()).unwrap());
             }
 
             let transfer_body =
               TransferAssetBody::new(self.ledger.get_prng(),
-                                    to_use.iter().cloned().map(TxoRef::Absolute).collect(),
+                                    to_use.iter().cloned().map(|i| TxoRef::Relative((inp_txo_len-1-i) as u64)).collect(),
                                     src_records.as_slice(),
                                     all_outputs.as_slice(),
                                     None,
@@ -1160,20 +1160,20 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
             // dbg!(&transfer_body);
             let transfer_sig = transfer_body.compute_body_signature(&src_keypair, None);
 
-            let transfer = TransferAsset { body: transfer_body,
-                                          body_signatures: vec![transfer_sig] };
+            let transfer = Operation::TransferAsset(TransferAsset { body: transfer_body,
+                                          body_signatures: vec![transfer_sig] });
 
             ops.push(transfer);
-            txn_txos[dst_outputs[0]].clone()
+            txn_txos[dst_outputs[0]].clone().unwrap()
           };
 
           // sanity check `avail`:
           {
             let mut avail_total = 0;
             for ix in avail.iter() {
-              let rec = txn_txos.get(ix).unwrap().open_asset_record;
+              let rec = txn_txos.get(*ix).unwrap().clone().unwrap().open_asset_record;
               avail_total += rec.amount;
-              assert!(rec.blind_asset_record.public_key == src_pub);
+              assert!(&rec.blind_asset_record.public_key == src_pub);
             }
             assert_eq!(avail_total, *self.balances.get(src).unwrap().get(unit).unwrap());
           }
@@ -1189,39 +1189,39 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
 
                 let (contract_ref,out_record) = {
                   let ix = new_src_ctrt_ix;
-                  let rec = mem::replace(txn_txos.get_mut(ix),None).unwrap();
+                  let rec = mem::replace(txn_txos.get_mut(ix).unwrap(),None).unwrap();
                   let open_rec = &rec.open_asset_record;
-                  let amt = open_rec.get_amount();
-                  let unit_code = open_rec.get_asset_type();
+                  let amt = *open_rec.get_amount();
+                  let unit_code = *open_rec.get_asset_type();
 
                   in_records.push(rec);
-                  let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *pubkey);
-                  let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
+                  let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, ctrt_art, *src_pub);
+                  let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(), &ar).unwrap();
 
-                  (TxoRef::Relative(txn_txos.len()-1-ix),ar)
+                  (TxoRef::Relative((txn_txos.len()-1-ix) as u64),ar)
                 };
 
                 for ix in avail {
-                  let rec = mem::replace(txn_txos.get_mut(ix),None).unwrap();
+                  let rec = mem::replace(txn_txos.get_mut(ix).unwrap(),None).unwrap();
 
                   lien.push(TxOutput(rec.open_asset_record.blind_asset_record.clone(),None));
                   lien_records.push(rec.clone());
-                  in_refs.push((TxoRef::Relative(txn_txos.len()-1-ix),None));
+                  in_refs.push((TxoRef::Relative((txn_txos.len()-1-ix) as u64),None));
                   in_records.push(rec);
                 }
 
                 let lien_ix = txn_txos.len();
-                txn_txos.push(out_record.clone());
+                txn_txos.push(Some(out_record.clone()));
                 let new_ctrt = out_record.clone();
 
                 let body = BindAssetsBody::new(self.ledger.get_prng(),
                   contract_ref,
                   in_refs,
-                  in_records,
-                  out_record).unwrap();
+                  &in_records,
+                  &out_record).unwrap();
 
                 let sig = body.compute_body_signature(&src_keypair,None);
-                (BindAssets { body, body_signatures: vec![sig] },
+                (Operation::BindAssets(BindAssets { body, body_signatures: vec![sig] }),
                 lien_ix, new_ctrt)
               };
 
@@ -1238,7 +1238,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
             (0,1,new_src_ctrt)
           } else {
             let ix = new_src_ctrt_ix;
-            let rec = txn_txos.get(ix).cloned().unwrap();
+            let rec = txn_txos.get(ix).unwrap().clone().unwrap();
 
             // we released the lien into [ctrt,entries...] then sent the
             // entries into a single TXO, so our final transaction will
@@ -1294,8 +1294,10 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
             }).collect::<Vec<_>>();
             let lien_entry = if lien_entry.is_empty() { None } else { Some(lien_entry) };
 
-            self.utxos.insert(src,(new_src_lien_txo,lien_entry));
-            self.owner_memos.insert(new_src_lien_txo,src_ctrt.owner_memo);
+            self.utxos.insert(src.clone(),(new_src_lien_txo,lien_entry));
+            if let Some(memo) = src_ctrt.owner_memo {
+              self.owner_memos.insert(new_src_lien_txo,memo);
+            }
 
             (sent_txo,sent_record)
           }
@@ -1311,39 +1313,41 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
 
         {
           let mut ops = vec![];
-          let ctrt_record = self.ledger.get_utxo(dst_ctrt).unwrap().0.0.clone();
+          let ctrt_record = {
+            let txo = (self.ledger.get_utxo(dst_ctrt).unwrap().utxo.0).clone();
+            let memo = self.owner_memos.get(&dst_ctrt).cloned();
+            let open_rec = open_blind_asset_record(&txo.0, &memo, &dst_priv).unwrap();
+
+            AssetRecord::from_open_asset_record_no_asset_tracking(open_rec.clone())
+          };
           let (dst_ctrt_ref,dst_ctrt,dst_txo_refs,dst_txos) = if let Some(dst_txos) = dst_txos {
             let (rel_in_records,rel_out_records) = {
               let mut in_records = vec![];
               let mut out_records = vec![];
-              let mut rel_txos = vec![];
 
               { // contract
-                let blind_rec = ctrt_record.0;
-                let memo = self.owner_memos.get(&ctrt_txo).cloned();
+                let open_rec = ctrt_record.open_asset_record.clone();
 
-                let open_rec = open_blind_asset_record(&blind_rec, &memo, &dst_privkey).unwrap();
+                in_records.push(ctrt_record.clone());
 
-                in_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(open_rec.clone()));
-
-                let amt = open_rec.get_amount();
-                let unit_code = open_rec.get_asset_type();
-                let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *pubkey);
-                let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
+                let amt = *open_rec.get_amount();
+                let unit_code = *open_rec.get_asset_type();
+                let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, ctrt_art, *dst_pub);
+                let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(), &ar).unwrap();
                 out_records.push(ar.clone());
               }
 
               for (i,memo) in dst_txos.iter() {
-                let blind_rec = i.0;
+                let blind_rec = i.0.clone();
 
-                let open_rec = open_blind_asset_record(&blind_rec, &memo, &dst_privkey).unwrap();
+                let open_rec = open_blind_asset_record(&blind_rec, &memo, &dst_priv).unwrap();
 
                 in_records.push(AssetRecord::from_open_asset_record_no_asset_tracking(open_rec.clone()));
 
-                let amt = open_rec.get_amount();
-                let unit_code = open_rec.get_asset_type();
-                let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *pubkey);
-                let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
+                let amt = *open_rec.get_amount();
+                let unit_code = *open_rec.get_asset_type();
+                let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *dst_pub);
+                let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(), &ar).unwrap();
                 out_records.push(ar.clone());
               }
 
@@ -1351,38 +1355,38 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
             };
 
             let rel_op = {
-              let body = ReleaseAssetBody::new(self.ledger.get_prng(),
-                dst_ctrt,
-                HashOf::new(dst_txos.unwrap().iter().map(|(txo,_)| txo).collect::<Vec<_>>().clone()),
+              let body = ReleaseAssetsBody::new(self.ledger.get_prng(),
+                TxoRef::Absolute(dst_ctrt),
+                HashOf::new(&dst_txos.iter().map(|(txo,_)| txo).cloned().collect::<Vec<_>>()),
                 vec![],
                 &rel_in_records,
                 &rel_out_records).unwrap();
               let sig = body.compute_body_signature(&dst_keypair,None);
-              ReleaseAssets { body, body_signatures: vec![sig] }
+              Operation::ReleaseAssets(ReleaseAssets { body, body_signatures: vec![sig] })
             };
 
             ops.push(rel_op);
-            (TxoRef::Relative(rel_out_records.len()-1),rel_out_records[0],
-             (1..rel_out_records.len()).map(|i| TxoRef::Relative(rel_out_records.len()-1-i)).collect(),
-             rel_out_records[1..].collect())
+            (TxoRef::Relative((rel_out_records.len()-1) as u64),rel_out_records[0].clone(),
+             (1..rel_out_records.len()).map(|i| TxoRef::Relative((rel_out_records.len()-1-i) as u64)).collect(),
+             rel_out_records[1..].into_iter().cloned().collect())
           } else {
             (TxoRef::Absolute(dst_ctrt),ctrt_record,vec![],vec![])
           };
 
+          let mut lien_records = vec![];
           {
             let mut in_records = vec![];
             let mut in_refs = vec![];
-            let mut lien_records = vec![];
 
             let (contract_ref,out_record) = {
-              let rec = dst_ctrt;
+              let rec = dst_ctrt.clone();
               let open_rec = &rec.open_asset_record;
-              let amt = open_rec.get_amount();
-              let unit_code = open_rec.get_asset_type();
+              let amt = *open_rec.get_amount();
+              let unit_code = *open_rec.get_asset_type();
 
               in_records.push(rec.clone());
-              let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *pubkey);
-              let ar = AssetRecord::from_template_no_identity_tracking(&mut self.prng, &ar).unwrap();
+              let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, ctrt_art, *dst_pub);
+              let ar = AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(), &ar).unwrap();
 
               (dst_ctrt_ref,ar)
             };
@@ -1399,12 +1403,12 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
 
             let body = BindAssetsBody::new(self.ledger.get_prng(),
               contract_ref,
-              in_refs,
-              in_records,
-              out_record).unwrap();
+              in_refs.into_iter().map(|x| (x,None)).collect(),
+              &in_records,
+              &out_record).unwrap();
 
             let sig = body.compute_body_signature(&dst_keypair,None);
-            ops.push(BindAssets { body, body_signatures: vec![sig] });
+            ops.push(Operation::BindAssets(BindAssets { body, body_signatures: vec![sig] }));
           }
 
           let txn = Transaction { body: TransactionBody { operations: ops,
@@ -1435,8 +1439,10 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
             }).collect::<Vec<_>>();
             let lien_entry = if lien_entry.is_empty() { None } else { Some(lien_entry) };
 
-            self.utxos.insert(dst,(new_dst_lien_txo,lien_entry));
-            self.owner_memos.insert(new_dst_lien_txo,dst_ctrt.owner_memo);
+            self.utxos.insert(dst.clone(),(new_dst_lien_txo,lien_entry));
+            if let Some(memo) = dst_ctrt.owner_memo {
+              self.owner_memos.insert(new_dst_lien_txo,memo);
+            }
           }
         }
 
@@ -1917,33 +1923,31 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         // Release the src lien, get a set of available records.
 
 
-        // pick which records we'll be sending
-
         let mut src_records: Vec<OpenAssetRecord> = Vec::new();
         let mut total_sum = 0u64;
-        let mut avail = self.utxos.get(src).1.unwrap();
-        let mut to_use: Vec<(TxOutput,OwnerMemo)> = Vec::new();
-        let mut to_skip: Vec<(TxOutput,OwnerMemo)> = Vec::new();
-
+        let avail = self.utxos.get_mut(src).unwrap();
+        let mut to_use: Vec<TxoSID> = Vec::new();
+        let mut to_skip: Vec<TxoSID> = Vec::new();
         while total_sum < amt && !avail.is_empty() {
-          let txo = avail.pop_front().unwrap();
-          let blind_rec = (txo.0).0;
-          let memo = txo.1;
+          let sid = avail.pop_front().unwrap();
+          let blind_rec = (self.client.get_utxo(sid).unwrap().utxo.0).0;
+          let memo = self.owner_memos.get(&sid).cloned();
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
+          // dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
           if *open_rec.get_asset_type() != unit_code.val {
-            to_skip.push(txo);
+            to_skip.push(sid);
             continue;
           }
 
           debug_assert!(*open_rec.get_asset_type() == unit_code.val);
-          to_use.push(txo);
+          to_use.push(sid);
           total_sum += *open_rec.get_amount();
           src_records.push(open_rec);
         }
+        // dbg!(&to_skip, &to_use);
+        avail.extend(to_skip.into_iter());
 
-        // We've selected our records, do the transfer to dst
-
-        assert!(total_sum >= amt);
+	assert!(total_sum >= amt);
 
         let mut src_outputs: Vec<AssetRecord> = Vec::new();
         let mut dst_outputs: Vec<AssetRecord> = Vec::new();
@@ -2497,6 +2501,15 @@ mod test {
                                                      cmds.confidential_amounts,
                                                    confidential_types: cmds.confidential_types });
 
+    let mut lien = Box::new(LienAccounts { ledger: LedgerState::test_ledger(),
+owner_memos: Default::default(),
+                                              accounts: HashMap::new(),
+                                              balances: HashMap::new(),
+                                              utxos: HashMap::new(),
+                                              units: HashMap::new(),
+                                              confidential_amounts: cmds.confidential_amounts,
+                                              confidential_types: cmds.confidential_types });
+
     let mut active_ledger = if !with_standalone {
       None
     } else {
@@ -2525,6 +2538,7 @@ mod test {
     simple.deep_invariant_check().unwrap();
     normal.deep_invariant_check().unwrap();
     ledger.ledger.deep_invariant_check().unwrap();
+    lien.ledger.deep_invariant_check().unwrap();
 
     for cmd in cmds {
       simple.fast_invariant_check().unwrap();
@@ -2535,6 +2549,8 @@ mod test {
       assert!(simple_res.is_ok() || normal_res.is_err());
       let ledger_res = ledger.run_account_command(&cmd);
       assert!(ledger_res.is_ok() == normal_res.is_ok());
+      let lien_res = lien.run_account_command(&cmd);
+      assert!(lien_res.is_ok() == normal_res.is_ok());
       let big_txn_res = if with_one_big_txn {
         let res = big_txn.run_account_command(&cmd);
         assert!(res.is_ok() == normal_res.is_ok());
@@ -2554,6 +2570,7 @@ mod test {
       } else if simple_res.is_ok() {
         prev_simple.run_account_command(&cmd).unwrap();
         ledger_res.unwrap();
+        lien_res.unwrap();
         if with_one_big_txn {
           big_txn_res.unwrap().unwrap();
         }
@@ -2576,127 +2593,123 @@ mod test {
   }
 
   fn regression_quickcheck_found(with_standalone: bool, conf_amts: bool, conf_types: bool) {
-    use AccountsCommand::*;
-    for conf_amts in vec![false, true] {
-      for conf_types in vec![false, true] {
-        ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
-                                                                NewUnit(UnitName("".into()),
-                                                                        UserName("".into())),
-                                                                Send(UserName("".into()),
-                                                                     0,
-                                                                     UnitName("".into()),
-                                                                     UserName("".into()))],
-                                                     confidential_types: conf_types,
-                                                     confidential_amounts: conf_amts },
-                                  with_standalone,
-                                  true);
-        ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
-                                                                NewUnit(UnitName("".into()),
-                                                                        UserName("".into())),
-                                                                Mint(1, UnitName("".into())),
-                                                                Send(UserName("".into()),
-                                                                     1,
-                                                                     UnitName("".into()),
-                                                                     UserName("".into()))],
-                                                     confidential_types: conf_types,
-                                                     confidential_amounts: conf_amts },
-                                  with_standalone,
-                                  true);
-
-        ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
-                                                                NewUnit(UnitName("".into()),
-                                                                        UserName("".into())),
-                                                                Mint(1, UnitName("".into())),
-                                                                // ToggleConfTypes(),
-                                                                Mint(1, UnitName("".into())),
-                                                                Send(UserName("".into()),
-                                                                     2,
-                                                                     UnitName("".into()),
-                                                                     UserName("".into()))],
-                                                     confidential_types: conf_types,
-                                                     confidential_amounts: conf_amts },
-                                  with_standalone,
-                                  true);
-
-        ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
-                                                                NewUnit(UnitName("".into()),
-                                                                        UserName("".into())),
-                                                                Mint(1, UnitName("".into())),
-                                                                Send(UserName("".into()),
-                                                                     1,
-                                                                     UnitName("".into()),
-                                                                     UserName("".into()))],
-                                                     confidential_types: conf_types,
-                                                     confidential_amounts: conf_amts },
-                                  with_standalone,
-                                  true);
-        ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
-                                                                NewUnit(UnitName("".into()),
-                                                                        UserName("".into())),
-                                                                Mint(1, UnitName("".into())),
-                                                                Send(UserName("".into()),
-                                                                     1,
-                                                                     UnitName("".into()),
-                                                                     UserName("".into()))],
-                                                     confidential_types: conf_types,
-                                                     confidential_amounts: conf_amts },
-                                  with_standalone,
-                                  true);
-
-        ledger_simulates_accounts(AccountsScenario { confidential_amounts: conf_types,
-                                                     confidential_types: conf_amts,
-                                                     cmds: vec![NewUser(UserName("".into())),
-                                                                NewUser(UserName("\u{0}".into())),
-                                                                NewUnit(UnitName("".into()),
-                                                                        UserName("\u{0}".into())),
-                                                                Mint(34, UnitName("".into())),
-                                                                Send(UserName("\u{0}".into()),
-                                                                    1,
-                                                                    UnitName("".into()),
+use AccountsCommand::*;
+    ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
+                                                            NewUnit(UnitName("".into()),
                                                                     UserName("".into())),
-                                                                Send(UserName("".into()),
-                                                                    1,
-                                                                    UnitName("".into()),
-                                                                    UserName("".into()))] },
-                                  with_standalone,
-                                  true);
-
-        ledger_simulates_accounts(AccountsScenario { confidential_amounts: conf_types,
-                                                     confidential_types: conf_amts,
-                                                     cmds: vec![NewUser(UserName("".into())),
-                                                                NewUser(UserName("\u{0}".into())),
-                                                                NewUnit(UnitName("".into()),
-                                                                        UserName("\u{0}".into())),
-                                                                Mint(34, UnitName("".into())),
-                                                                Send(UserName("\u{0}".into()),
-                                                                    1,
-                                                                    UnitName("".into()),
+                                                            Send(UserName("".into()),
+                                                                  0,
+                                                                  UnitName("".into()),
+                                                                  UserName("".into()))],
+                                                  confidential_types: conf_types,
+                                                  confidential_amounts: conf_amts },
+                              with_standalone,
+                              true);
+    ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
+                                                            NewUnit(UnitName("".into()),
                                                                     UserName("".into())),
-                                                                Send(UserName("".into()),
-                                                                    1,
-                                                                    UnitName("".into()),
-                                                                    UserName("".into()))] },
-                                  with_standalone,
-                                  true);
+                                                            Mint(1, UnitName("".into())),
+                                                            Send(UserName("".into()),
+                                                                  1,
+                                                                  UnitName("".into()),
+                                                                  UserName("".into()))],
+                                                  confidential_types: conf_types,
+                                                  confidential_amounts: conf_amts },
+                              with_standalone,
+                              true);
 
-        ledger_simulates_accounts(AccountsScenario { confidential_amounts: conf_types,
-                                                     confidential_types: conf_amts,
-                                                     cmds: vec![NewUser(UserName("".into())),
-                                                                NewUnit(UnitName("".into()),
-                                                                        UserName("".into())),
-                                                                Mint(32, UnitName("".into())),
-                                                                Send(UserName("".into()),
-                                                                     1,
-                                                                     UnitName("".into()),
-                                                                     UserName("".into())),
-                                                                Send(UserName("".into()),
-                                                                     2,
-                                                                     UnitName("".into()),
-                                                                     UserName("".into()))] },
-                                  with_standalone,
-                                  true);
-      }
-    }
+    ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
+                                                            NewUnit(UnitName("".into()),
+                                                                    UserName("".into())),
+                                                            Mint(1, UnitName("".into())),
+                                                            // ToggleConfTypes(),
+                                                            Mint(1, UnitName("".into())),
+                                                            Send(UserName("".into()),
+                                                                  2,
+                                                                  UnitName("".into()),
+                                                                  UserName("".into()))],
+                                                  confidential_types: conf_types,
+                                                  confidential_amounts: conf_amts },
+                              with_standalone,
+                              true);
+
+    ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
+                                                            NewUnit(UnitName("".into()),
+                                                                    UserName("".into())),
+                                                            Mint(1, UnitName("".into())),
+                                                            Send(UserName("".into()),
+                                                                  1,
+                                                                  UnitName("".into()),
+                                                                  UserName("".into()))],
+                                                  confidential_types: conf_types,
+                                                  confidential_amounts: conf_amts },
+                              with_standalone,
+                              true);
+    ledger_simulates_accounts(AccountsScenario { cmds: vec![NewUser(UserName("".into())),
+                                                            NewUnit(UnitName("".into()),
+                                                                    UserName("".into())),
+                                                            Mint(1, UnitName("".into())),
+                                                            Send(UserName("".into()),
+                                                                  1,
+                                                                  UnitName("".into()),
+                                                                  UserName("".into()))],
+                                                  confidential_types: conf_types,
+                                                  confidential_amounts: conf_amts },
+                              with_standalone,
+                              true);
+
+    ledger_simulates_accounts(AccountsScenario { confidential_amounts: conf_types,
+                                                  confidential_types: conf_amts,
+                                                  cmds: vec![NewUser(UserName("".into())),
+                                                            NewUser(UserName("\u{0}".into())),
+                                                            NewUnit(UnitName("".into()),
+                                                                    UserName("\u{0}".into())),
+                                                            Mint(34, UnitName("".into())),
+                                                            Send(UserName("\u{0}".into()),
+                                                                1,
+                                                                UnitName("".into()),
+                                                                UserName("".into())),
+                                                            Send(UserName("".into()),
+                                                                1,
+                                                                UnitName("".into()),
+                                                                UserName("".into()))] },
+                              with_standalone,
+                              true);
+
+    ledger_simulates_accounts(AccountsScenario { confidential_amounts: conf_types,
+                                                  confidential_types: conf_amts,
+                                                  cmds: vec![NewUser(UserName("".into())),
+                                                            NewUser(UserName("\u{0}".into())),
+                                                            NewUnit(UnitName("".into()),
+                                                                    UserName("\u{0}".into())),
+                                                            Mint(34, UnitName("".into())),
+                                                            Send(UserName("\u{0}".into()),
+                                                                1,
+                                                                UnitName("".into()),
+                                                                UserName("".into())),
+                                                            Send(UserName("".into()),
+                                                                1,
+                                                                UnitName("".into()),
+                                                                UserName("".into()))] },
+                              with_standalone,
+                              true);
+
+    ledger_simulates_accounts(AccountsScenario { confidential_amounts: conf_types,
+                                                  confidential_types: conf_amts,
+                                                  cmds: vec![NewUser(UserName("".into())),
+                                                            NewUnit(UnitName("".into()),
+                                                                    UserName("".into())),
+                                                            Mint(32, UnitName("".into())),
+                                                            Send(UserName("".into()),
+                                                                  1,
+                                                                  UnitName("".into()),
+                                                                  UserName("".into())),
+                                                            Send(UserName("".into()),
+                                                                  2,
+                                                                  UnitName("".into()),
+                                                                  UserName("".into()))] },
+                              with_standalone,
+                              true);
   }
 
   #[test]

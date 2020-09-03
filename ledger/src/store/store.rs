@@ -474,6 +474,7 @@ impl LedgerStatus {
   #[allow(clippy::clone_double_ref)]
   #[allow(clippy::cognitive_complexity)]
   fn check_txn_effects(&self, txn: TxnEffect) -> Result<TxnEffect, PlatformError> {
+    dbg!("entering check_txn_effects");
     // The current transactions seq_id must be within the sliding window over seq_ids
     if txn.txn.seq_id > self.block_commit_count {
       return Err(PlatformError::InputsError(format!("Transaction seq_id ahead of block_count: {}",
@@ -514,13 +515,14 @@ impl LedgerStatus {
     // 1. Each input must be unspent and correspond to the claimed record
     // 2. Inputs with transfer restrictions can only be owned by the asset issuer
     for (inp_sid, inp_record) in txn.input_txos.iter() {
+      dbg!((&inp_sid, &inp_record));
       // (1)
       let inp_utxo = self.utxos
                          .get(inp_sid)
                          .map_or(Err(PlatformError::InputsError(error_location!())), Ok)?;
       let record = &(inp_utxo.0);
       if record != inp_record {
-        return Err(PlatformError::InputsError(error_location!()));
+        return Err(inp_fail!(format!("{} != {}",serde_json::to_string(&record).unwrap(),serde_json::to_string(inp_record).unwrap())));
       }
       // (2)
       if let Some(code) = record.0
@@ -660,24 +662,48 @@ impl LedgerStatus {
     // Assets with cosignature requirements must have enough signatures
     for ((op_idx, input_idx), key_set) in txn.cosig_keys.iter() {
       let op = &txn.txn.body.operations[*op_idx];
-      if let Operation::TransferAsset(xfr) = op {
-        if let XfrAssetType::NonConfidential(val) = xfr.body.transfer.inputs[*input_idx].asset_type
-        {
-          let code = AssetTypeCode { val };
-          let signature_rules = &self.asset_types
-                                     .get(&code)
-                                     .or_else(|| txn.new_asset_codes.get(&code))
-                                     .ok_or_else(|| PlatformError::InputsError(error_location!()))?
-                                     .properties
-                                     .asset_rules
-                                     .transfer_multisig_rules;
-          if let Some(rules) = signature_rules {
-            rules.check_signature_set(key_set)
-                 .map_err(add_location!())?;
+
+      let sig_type = match op {
+        Operation::TransferAsset(xfr) => {
+          if let XfrAssetType::NonConfidential(val) = xfr.body.transfer.inputs[*input_idx].asset_type {
+            Some(AssetTypeCode { val })
+          } else {
+            None
           }
         }
-      } else {
-        return Err(inp_fail!());
+
+        Operation::BindAssets(bind) => {
+          if let XfrAssetType::NonConfidential(val) = bind.body.transfer.inputs[*input_idx].asset_type {
+            Some(AssetTypeCode { val })
+          } else {
+            None
+          }
+        }
+
+        Operation::ReleaseAssets(rel) => {
+          if let XfrAssetType::NonConfidential(val) = rel.body.transfer.inputs[*input_idx].asset_type {
+            Some(AssetTypeCode { val })
+          } else {
+            None
+          }
+        }
+
+        _ => { return Err(inp_fail!()); }
+      };
+
+      let signature_rules = if let Some(code) = sig_type {
+          self.asset_types
+            .get(&code)
+            .or_else(|| txn.new_asset_codes.get(&code))
+            .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+            .properties
+            .asset_rules
+            .transfer_multisig_rules.clone()
+      } else { None };
+
+      if let Some(rules) = signature_rules {
+        rules.check_signature_set(key_set)
+          .map_err(add_location!())?;
       }
     }
 
@@ -1010,8 +1036,9 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
                                              tx_id: txn_sid,
                                              merkle_id });
 
-        let outputs = txn.get_outputs_ref(false);
-        debug_assert!(txo_sids.len() == outputs.len());
+        // TODO(joe/noah): is this check important?
+        // let outputs = txn.get_outputs_ref(false);
+        // debug_assert!(txo_sids.len() == outputs.len());
 
         for (position, sid) in txo_sids.iter().enumerate() {
           self.status
@@ -1160,8 +1187,9 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
         let txn_sid = txo_sid_map.0;
         let txo_sids = &txo_sid_map.1;
 
-        let outputs = txn.get_outputs_ref(false);
-        debug_assert!(txo_sids.len() == outputs.len());
+        // TODO(joe/noah): is this check important?
+        // let outputs = txn.get_outputs_ref(false);
+        // debug_assert!(txo_sids.len() == outputs.len());
 
         for (position, sid) in txo_sids.iter().enumerate() {
           self.0
