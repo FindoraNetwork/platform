@@ -13,12 +13,13 @@ COPY --from=zei /src/bulletproofs /src/bulletproofs
 COPY . /app/
 RUN cargo audit
 RUN cargo build --release
-RUN cargo test --no-fail-fast --release
-RUN cargo test --no-fail-fast --release -- --ignored --test-threads=1
-RUN cargo fmt -- --check
 WORKDIR /app/components/cli2
 RUN ls -laF
 RUN bash run_tests_local.sh
+WORKDIR /app/
+RUN cargo test --no-fail-fast --release
+RUN cargo test --no-fail-fast --release -- --ignored --test-threads=1
+RUN cargo fmt -- --check
 #Disabled because it triggers a compile and also tests dependencies
 #RUN cargo clippy -- -D warnings
 WORKDIR /app/components/wasm
