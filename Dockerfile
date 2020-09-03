@@ -1,5 +1,9 @@
 FROM nexus.findora.org/zei:v0.0.3-3 as zei
 FROM nexus.findora.org/rust:2020-05-15 as builder
+RUN apt-get update
+RUN apt-get install -y bats
+# RUN apt-get install -y nodejs
+# RUN node install -y bats
 RUN cargo install cargo-audit
 RUN cargo install wasm-pack
 RUN mkdir /app
@@ -12,6 +16,8 @@ RUN cargo build --release
 RUN cargo test --no-fail-fast --release
 RUN cargo test --no-fail-fast --release -- --ignored --test-threads=1
 RUN cargo fmt -- --check
+WORKDIR /app/components/cli2
+RUN bash run_tests_local.sh
 #Disabled because it triggers a compile and also tests dependencies
 #RUN cargo clippy -- -D warnings
 WORKDIR /app/components/wasm
