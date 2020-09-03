@@ -690,7 +690,7 @@ struct LienAccounts {
 
 impl InterpretAccounts<PlatformError> for LienAccounts {
   fn run_account_command(&mut self, cmd: &AccountsCommand) -> Result<(), PlatformError> {
-    dbg!(&cmd);
+    // dbg!(&cmd);
     let conf_amts = self.confidential_amounts;
     let conf_types = self.confidential_types;
     let iss_art = AssetRecordType::from_booleans(conf_amts, false);
@@ -944,7 +944,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
               AssetRecord::from_template_no_identity_tracking(self.ledger.get_prng(), &ar).unwrap()
             };
 
-            dbg!(&bind_ctrt, &bind_inp_refs, &bind_inps);
+            // dbg!(&bind_ctrt, &bind_inp_refs, &bind_inps);
             let body = BindAssetsBody::new(self.ledger.get_prng(),
                                            bind_ctrt,
                                            bind_inp_refs.iter().map(|x| (*x, None)).collect(),
@@ -1201,7 +1201,9 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                                 .clone()
                                 .unwrap()
                                 .open_asset_record;
-              avail_total += rec.amount;
+              if *rec.get_asset_type() == unit_code.val {
+                avail_total += rec.amount;
+              }
               assert!(&rec.blind_asset_record.public_key == src_pub);
             }
             assert_eq!(avail_total,
@@ -2634,7 +2636,7 @@ mod test {
 
   #[allow(dead_code)]
   fn ledger_simulates_accounts_with_standalone(cmds: AccountsScenario) {
-    ledger_simulates_accounts(cmds, true, false)
+    ledger_simulates_accounts(cmds, true, true)
   }
 
   #[allow(dead_code)]

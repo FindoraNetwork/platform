@@ -561,8 +561,8 @@ impl TxnEffect {
              || bind_assets.body.transfer.inputs[0].asset_type
                 != bind_assets.body.transfer.outputs[0].asset_type
           {
-            dbg!(&bind_assets.body.transfer.inputs[0].asset_type);
-            dbg!(&bind_assets.body.transfer.outputs[0].asset_type);
+            // dbg!(&bind_assets.body.transfer.inputs[0].asset_type);
+            // dbg!(&bind_assets.body.transfer.outputs[0].asset_type);
             return Err(inp_fail!());
           }
 
@@ -658,7 +658,7 @@ impl TxnEffect {
                                         .map(|(ar, lien)| TxOutput(ar.clone(), lien.cloned()))
                                         .collect::<Vec<_>>();
 
-          dbg!(&bound_inputs);
+          // dbg!(&bound_inputs);
 
           // (5) NOTE: the inputs are [contract] + inputs, and the contract is
           // not allowed to have a lien bound to it already (hence
@@ -871,7 +871,7 @@ impl TxnEffect {
                                            .skip(1)
                                            .map(|(ar, lien)| TxOutput(ar.clone(), lien.cloned()))
                                            .collect::<Vec<_>>();
-          dbg!(&bound_inputs);
+          // dbg!(&bound_inputs);
 
           let mut input_types = HashSet::new();
           for record in release_assets.body.transfer.inputs.iter() {

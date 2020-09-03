@@ -636,6 +636,11 @@ fn test_define_asset_simple_policies() {
 
   // Define token code
   let token_code = AssetTypeCode::gen_random().to_base64();
+  let quoted_code = if token_code.chars().next() == Some('-') {
+    format!("\\{}", &token_code)
+  } else {
+    token_code
+  };
 
   // Define asset
   let app = get_cli_app();
@@ -649,14 +654,13 @@ fn test_define_asset_simple_policies() {
                         "0",
                         "define_asset",
                         "--token_code",
-                        &token_code,
+                        &quoted_code,
                         "--memo",
                         "Define an asset",
                         "--cosigners",
                         "1",
                         "--traceable",
                         "--non_transferable"];
-  // dbg!(&inputs_vec);
   let inputs = app.get_matches_from_safe(inputs_vec).unwrap();
   process_inputs(inputs, &mut ledger_standalone).expect("Failed to define asset");
 
