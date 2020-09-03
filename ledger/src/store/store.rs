@@ -30,8 +30,6 @@ use zei::xfr::lib::XfrNotePolicies;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{AssetTracingPolicies, AssetTracingPolicy, XfrAssetType};
 
-use super::effects::*;
-
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
 
 pub struct SnapshotId {
@@ -522,7 +520,9 @@ impl LedgerStatus {
                          .map_or(Err(PlatformError::InputsError(error_location!())), Ok)?;
       let record = &(inp_utxo.0);
       if record != inp_record {
-        return Err(inp_fail!(format!("{} != {}",serde_json::to_string(&record).unwrap(),serde_json::to_string(inp_record).unwrap())));
+        return Err(inp_fail!(format!("{} != {}",
+                                     serde_json::to_string(&record).unwrap(),
+                                     serde_json::to_string(inp_record).unwrap())));
       }
       // (2)
       if let Some(code) = record.0
@@ -665,7 +665,9 @@ impl LedgerStatus {
 
       let sig_type = match op {
         Operation::TransferAsset(xfr) => {
-          if let XfrAssetType::NonConfidential(val) = xfr.body.transfer.inputs[*input_idx].asset_type {
+          if let XfrAssetType::NonConfidential(val) =
+            xfr.body.transfer.inputs[*input_idx].asset_type
+          {
             Some(AssetTypeCode { val })
           } else {
             None
@@ -673,7 +675,9 @@ impl LedgerStatus {
         }
 
         Operation::BindAssets(bind) => {
-          if let XfrAssetType::NonConfidential(val) = bind.body.transfer.inputs[*input_idx].asset_type {
+          if let XfrAssetType::NonConfidential(val) =
+            bind.body.transfer.inputs[*input_idx].asset_type
+          {
             Some(AssetTypeCode { val })
           } else {
             None
@@ -681,29 +685,36 @@ impl LedgerStatus {
         }
 
         Operation::ReleaseAssets(rel) => {
-          if let XfrAssetType::NonConfidential(val) = rel.body.transfer.inputs[*input_idx].asset_type {
+          if let XfrAssetType::NonConfidential(val) =
+            rel.body.transfer.inputs[*input_idx].asset_type
+          {
             Some(AssetTypeCode { val })
           } else {
             None
           }
         }
 
-        _ => { return Err(inp_fail!()); }
+        _ => {
+          return Err(inp_fail!());
+        }
       };
 
       let signature_rules = if let Some(code) = sig_type {
-          self.asset_types
+        self.asset_types
             .get(&code)
             .or_else(|| txn.new_asset_codes.get(&code))
             .ok_or_else(|| PlatformError::InputsError(error_location!()))?
             .properties
             .asset_rules
-            .transfer_multisig_rules.clone()
-      } else { None };
+            .transfer_multisig_rules
+            .clone()
+      } else {
+        None
+      };
 
       if let Some(rules) = signature_rules {
         rules.check_signature_set(key_set)
-          .map_err(add_location!())?;
+             .map_err(add_location!())?;
       }
     }
 

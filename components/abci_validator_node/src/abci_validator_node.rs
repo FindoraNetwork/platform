@@ -1,7 +1,7 @@
 #![deny(warnings)]
 use abci::*;
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::Transaction;
+use ledger::data_model::{Transaction, TxnEffect};
 use ledger::store::*;
 use ledger::{error_location, sub_fail};
 use ledger_api_service::RestfulApiService;

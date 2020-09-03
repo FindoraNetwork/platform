@@ -1,9 +1,9 @@
 #![deny(warnings)]
-/// Tests submission of transactions constructed by the txn_builder.  
+/// Tests submission of transactions constructed by the txn_builder.
 /// All P2P lending-related operations and transactions are tested.
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-  AssetRules, AssetTypeCode, Transaction, TransferType, TxOutput, TxnSID, TxoRef, TxoSID,
+  AssetRules, AssetTypeCode, Transaction, TransferType, TxOutput, TxnEffect, TxnSID, TxoRef, TxoSID,
 };
 use ledger::error_location;
 use ledger::policies::{calculate_fee, DebtMemo, Fraction};

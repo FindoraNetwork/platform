@@ -1,6 +1,6 @@
 #![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{Operation, Transaction, TxnSID, TxnTempSID, TxoSID};
+use ledger::data_model::{Operation, Transaction, TxnEffect, TxnSID, TxnTempSID, TxoSID};
 use ledger::error_location;
 use ledger::store::*;
 use log::info;

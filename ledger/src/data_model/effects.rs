@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 use std::iter::once;
 use utils::{HasInvariants, HashOf, SignatureOf};
 use zei::serialization::ZeiFromToBytes;
-use zei::xfr::lib::{verify_xfr_body,XfrNotePolicies};
+use zei::xfr::lib::{verify_xfr_body, XfrNotePolicies};
 use zei::xfr::sig::XfrPublicKey;
 // use zei::xfr::structs::{AssetTracingPolicies, BlindAssetRecord, XfrAmount, XfrAssetType};
 use zei::xfr::structs::{AssetTracingPolicies, XfrAmount, XfrAssetType};
@@ -530,14 +530,13 @@ impl TxnEffect {
         //            isn't checked until later)
         //
         Operation::BindAssets(bind_assets) => {
-
           // contract + bound inputs
           if 1 + bind_assets.body.inputs.len() != bind_assets.body.transfer.inputs.len() {
             return Err(inp_fail!());
           }
 
           // 1 output: the lien
-          if bind_assets.body.transfer.outputs.len() < 1 {
+          if bind_assets.body.transfer.outputs.is_empty() {
             return Err(inp_fail!());
           }
           // // other outputs must have 0 amounts
@@ -551,8 +550,8 @@ impl TxnEffect {
 
           // 2(b)
           if bind_assets.body.transfer.inputs[0].asset_type
-                                            .get_asset_type()
-                                            .is_none()
+                                                .get_asset_type()
+                                                .is_none()
              || bind_assets.body.transfer.inputs[0].asset_type
                 != bind_assets.body.transfer.outputs[0].asset_type
           {
@@ -571,7 +570,7 @@ impl TxnEffect {
                                       .map(|_| None)
                                       .collect::<Vec<_>>();
             for (inp_ix, hash) in bind_assets.body.input_liens.iter() {
-              let inp_ix = 1+*inp_ix;
+              let inp_ix = 1 + *inp_ix;
               match inps.get(inp_ix) {
                 Some(None) => {
                   inps[inp_ix] = Some(hash);
@@ -631,16 +630,16 @@ impl TxnEffect {
             let num_outputs = bind_assets.body.transfer.outputs.len();
             let no_policies = AssetTracingPolicies::new();
             XfrNotePolicies::new(vec![no_policies.clone(); num_inputs],
-            vec![None; num_inputs],
-            vec![no_policies; num_outputs],
-            vec![None; num_outputs])
+                                 vec![None; num_inputs],
+                                 vec![no_policies; num_outputs],
+                                 vec![None; num_outputs])
           };
           verify_xfr_body(&mut prng,
                           &mut params,
                           &bind_assets.body.transfer,
                           &policies.to_ref()).map_err(|e| {
-                                      PlatformError::ZeiError(error_location!(), e)
-                                  })?;
+                                               PlatformError::ZeiError(error_location!(), e)
+                                             })?;
 
           // The vec of TxOutputs corresponding to the lien
           let bound_inputs = bind_assets.body
@@ -650,8 +649,7 @@ impl TxnEffect {
                                         .zip(lien_inputs.iter())
                                         // Skipping the contract
                                         .skip(1)
-                                        .map(|(ar, lien)| TxOutput(ar.clone(),
-                                        lien.cloned()))
+                                        .map(|(ar, lien)| TxOutput(ar.clone(), lien.cloned()))
                                         .collect::<Vec<_>>();
 
           dbg!(&bound_inputs);
@@ -686,7 +684,7 @@ impl TxnEffect {
                     return Err(inp_fail!());
                   }
                   Some(txo) => {
-                    let TxOutput(inp_record, inp_lien,) = &txo;
+                    let TxOutput(inp_record, inp_lien) = &txo;
                     // (2).(b)
                     if inp_record != record || inp_lien != &lien.cloned() {
                       return Err(inp_fail!());
@@ -702,8 +700,7 @@ impl TxnEffect {
                   return Err(inp_fail!());
                 }
 
-                input_txos.insert(txo_sid,
-                                  TxOutput(record.clone(), lien.cloned()));
+                input_txos.insert(txo_sid, TxOutput(record.clone(), lien.cloned()));
               }
             }
           }
@@ -715,7 +712,8 @@ impl TxnEffect {
           {
             assert_eq!(bind_assets.body.transfer.inputs[0].asset_type,
                        bind_assets.body.transfer.outputs[0].asset_type);
-            let (out, lien) = (&bind_assets.body.transfer.outputs[0], Some(HashOf::new(&bound_inputs)));
+            let (out, lien) =
+              (&bind_assets.body.transfer.outputs[0], Some(HashOf::new(&bound_inputs)));
             asset_types_involved.insert(AssetTypeCode { val: out.asset_type
                                                                 .get_asset_type()
                                                                 .unwrap() });
@@ -746,7 +744,6 @@ impl TxnEffect {
         //          - Fully checked here
         //
         Operation::ReleaseAssets(release_assets) => {
-
           if release_assets.body.transfer.inputs.is_empty() {
             return Err(inp_fail!());
           }
@@ -799,8 +796,8 @@ impl TxnEffect {
           //  - Rejecting later transactions that use such a lien seems
           //    like a "fail-safe" option -- is that right?
           if release_assets.body.transfer.inputs[0].asset_type
-                                               .get_asset_type()
-                                               .is_none()
+                                                   .get_asset_type()
+                                                   .is_none()
           {
             return Err(inp_fail!());
           }
@@ -847,12 +844,16 @@ impl TxnEffect {
             let num_outputs = release_assets.body.transfer.outputs.len();
             let no_policies = AssetTracingPolicies::new();
             XfrNotePolicies::new(vec![no_policies.clone(); num_inputs],
-            vec![None; num_inputs],
-            vec![no_policies; num_outputs],
-            vec![None; num_outputs])
+                                 vec![None; num_inputs],
+                                 vec![no_policies; num_outputs],
+                                 vec![None; num_outputs])
           };
-          verify_xfr_body(&mut prng, &mut params, &release_assets.body.transfer, &policies.to_ref())
-            .map_err(|e| PlatformError::ZeiError(error_location!(),e))?;
+          verify_xfr_body(&mut prng,
+                          &mut params,
+                          &release_assets.body.transfer,
+                          &policies.to_ref()).map_err(|e| {
+                                               PlatformError::ZeiError(error_location!(), e)
+                                             })?;
 
           // The vec of TxOutputs corresponding to the lien
           let bound_inputs = release_assets.body
@@ -862,8 +863,7 @@ impl TxnEffect {
                                            .zip(lien_inputs.iter())
                                            // Skipping the contract
                                            .skip(1)
-                                           .map(|(ar, lien)| TxOutput(ar.clone(),
-                                           lien.cloned()))
+                                           .map(|(ar, lien)| TxOutput(ar.clone(), lien.cloned()))
                                            .collect::<Vec<_>>();
           dbg!(&bound_inputs);
 
@@ -896,7 +896,7 @@ impl TxnEffect {
                     return Err(inp_fail!());
                   }
                   Some(txo) => {
-                    let TxOutput(inp_record, inp_lien,) = &txo;
+                    let TxOutput(inp_record, inp_lien) = &txo;
                     // (2).(b)
                     if inp_record != record || inp_lien != &lien {
                       return Err(inp_fail!());
@@ -912,15 +912,19 @@ impl TxnEffect {
                   return Err(inp_fail!());
                 }
 
-                input_txos.insert(txo_sid,
-                                  TxOutput(record.clone(), lien));
+                input_txos.insert(txo_sid, TxOutput(record.clone(), lien));
               }
             }
           }
 
           txos.reserve(release_assets.body.transfer.outputs.len());
           let mut conf_transfer = false;
-          for (out, lien) in release_assets.body.transfer.outputs.iter().zip(lien_outputs) {
+          for (out, lien) in release_assets.body
+                                           .transfer
+                                           .outputs
+                                           .iter()
+                                           .zip(lien_outputs)
+          {
             if let XfrAssetType::Confidential(_) = out.asset_type {
               conf_transfer = true;
             }

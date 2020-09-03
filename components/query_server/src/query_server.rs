@@ -1,10 +1,6 @@
 #![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{
-  b64enc, AssetTypeCode, BlockSID, DefineAsset, FinalizedTransaction, IssueAsset, IssuerPublicKey,
-  KVBlind, KVHash, KVUpdate, Operation, Transaction, TransferAsset, TxOutput, TxnSID, TxoRef,
-  TxoSID, XfrAddress,
-};
+use ledger::data_model::*;
 use ledger::error_location;
 use ledger::store::*;
 use ledger_api_service::RestfulArchiveAccess;

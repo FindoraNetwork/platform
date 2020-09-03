@@ -426,7 +426,7 @@ impl TransactionBuilder {
   /// Fetches a client record from a transaction.
   /// @param {number} idx - Record to fetch. Records are added to the transaction builder sequentially.
   pub fn get_owner_record(&self, idx: usize) -> ClientAssetRecord {
-    ClientAssetRecord { txo: self.get_builder().get_output_ref(idx).clone() }
+    ClientAssetRecord { txo: self.get_builder().get_output_ref(idx) }
   }
 
   /// Fetches an owner memo from a transaction

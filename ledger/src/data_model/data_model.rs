@@ -24,11 +24,11 @@ use utils::{HashOf, ProofOf, Serialized, SignatureOf};
 use zei::xfr::lib::{gen_xfr_body, XfrNotePolicies};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
-  AssetRecord, AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy, AssetType as ZeiAssetType,
-  BlindAssetRecord, OwnerMemo, XfrBody, ASSET_TYPE_LENGTH,
+  AssetRecord, AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy,
+  AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo, XfrBody, ASSET_TYPE_LENGTH,
 };
 // use zei::xfr::asset_record::{AssetRecordType};
-use crate::store::TxnEffect;
+use super::effects::*;
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
   base64::encode_config(input, base64::URL_SAFE)
@@ -897,7 +897,9 @@ impl BindAssetsBody {
       return Err(PlatformError::InputsError(error_location!()));
     }
 
-    let out_pubkey = &output_record.open_asset_record.blind_asset_record.public_key;
+    let out_pubkey = &output_record.open_asset_record
+                                   .blind_asset_record
+                                   .public_key;
     let mut out_records = vec![output_record.clone()];
     for i in input_records[1..].iter() {
       let open_rec = i.open_asset_record.clone();
