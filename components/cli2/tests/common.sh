@@ -1,11 +1,13 @@
 FINDORA_STORE_FILE=${FINDORA_HOME:-${HOME}/.findora}/cli2_data.sqlite
+export FINDORA_SUBMIT_URL=${FINDORA_SUBMIT_URL:-https://testnet.findora.org:8669}
+export FINDORA_ACCESS_URL=${FINDORA_ACCESS_URL:-https://testnet.findora.org:8668}
 
 setup()
 {
     # Start from a fresh state
     echo "Deleting $FINDORA_STORE_FILE..."
     rm -f $FINDORA_STORE_FILE || true
-    bash -c '{ echo; echo; } | $CLI2 setup'
+    bash -c '{ echo "$FINDORA_SUBMIT_URL"; echo "$FINDORA_ACCESS_URL"; } | $CLI2 setup'
 }
 
 debug_array()
