@@ -138,7 +138,7 @@ pub fn display_txn_builder(indent_level: u64, ent: &TxnBuilderEntry) {
 
 pub fn display_txn(indent_level: u64, ent: &(Transaction, TxnMetadata)) {
   let ind = indent_of(indent_level);
-  println!("{}seq_id: {}", ind, ent.0.seq_id);
+  println!("{}seq_id: {}", ind, ent.0.body.no_replay_token.get_seq_id());
   println!("{}Handle: {}",
            ind,
            serialize_or_str(&ent.1.handle, "<UNKNOWN>"));

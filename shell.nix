@@ -34,6 +34,7 @@ stdenv.mkDerivation {
     shellcheck
     wasm-pack
     bats
+    bc
     shfmt
   ] ++ stdenv.lib.optionals stdenv.isDarwin [
         darwin.apple_sdk.frameworks.Security
