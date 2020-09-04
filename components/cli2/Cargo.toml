@@ -3,6 +3,7 @@ name = "cli2"
 version = "0.1.0"
 authors = ["Engineering <engineering@findora.org>"]
 edition = "2018"
+description = "Findora CLI"
 build = "build.rs"
 
 [[bin]]
@@ -46,3 +47,16 @@ zeroize = "1.1.0"
 [build-dependencies]
 vergen = "3.1.0"
 
+[package.metadata.deb]
+name = "findora"
+maintainer = "Findora Engineering <engineering@findora.org>"
+copyright = "2020, Findora, All Rights Reserved"
+extended-description = """\
+The command line interface for interacting with the Findora ledger.\
+"""
+depends = "$auto"
+section = "utility"
+assets = [
+    ["target/release/findora", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/findora/README", "644"],
+]
