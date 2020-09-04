@@ -131,7 +131,7 @@ pub struct Credential {
   /// * `"attributes": ["630", null, "1"]` indicates:
   /// * Lower bound of the borrower's credit score is 630.
   /// * Lower bound of the borrower's income isn't provided.
-  /// * The country code of the borrower's citizenship is 1.
+  /// * The country code of the borrower's0 citizenship is 1.
   pub values: Vec<Option<String>>,
 }
 
@@ -650,7 +650,7 @@ pub(crate) fn load_blind_asset_record_and_owner_memo_from_file(
   debug!("Parsing builder from file contents: \"{}\"", &txn);
   match serde_json::from_str::<TransactionBuilder>(&txn) {
     Ok(builder) => {
-      Ok((builder.get_output_ref(0).0.clone(), builder.get_owner_memo_ref(0).cloned()))
+      Ok((builder.get_output_ref(0).record.clone(), builder.get_owner_memo_ref(0).cloned()))
     }
     Err(e) => Err(des_fail!(e)),
   }

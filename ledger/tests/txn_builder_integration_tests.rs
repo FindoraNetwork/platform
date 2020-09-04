@@ -78,8 +78,8 @@ fn test_create_asset() -> Result<(), PlatformError> {
   let state_comm1 = ledger.get_state_commitment().0;
   let bar1_proof = ledger.get_utxo(txos[0]).unwrap();
   let bar2_proof = ledger.get_utxo(txos[1]).unwrap();
-  let bar1 = (bar1_proof.utxo.0).0.clone();
-  let bar2 = (bar2_proof.utxo.0).0.clone();
+  let bar1 = (bar1_proof.utxo.0).record.clone();
+  let bar2 = (bar2_proof.utxo.0).record.clone();
   let oar1 = open_blind_asset_record(&bar1, &None, keys.get_sk_ref()).unwrap();
   let oar2 = open_blind_asset_record(&bar2, &None, keys.get_sk_ref()).unwrap();
   assert!(bar1_proof.is_valid(state_comm1.clone()));
@@ -170,14 +170,15 @@ fn test_loan_repayment(loan_amount: u64,
 
   //  Mega transaction to do everything
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
-  let tx = builder.add_operation_issue_asset(&fiat_issuer_keys,
-                                             &fiat_code,
-                                             0,
-                                             &[(TxOutput(fiat_ba.clone()), fiat_owner_memo)])?
-                  .add_operation_issue_asset(&borrower_keys,
-                                             &debt_code,
-                                             0,
-                                             &[(TxOutput(debt_ba.clone()), debt_owner_memo)])?;
+  let tx =
+    builder.add_operation_issue_asset(&fiat_issuer_keys,
+                                      &fiat_code,
+                                      0,
+                                      &[(TxOutput { record: fiat_ba.clone() }, fiat_owner_memo)])?
+           .add_operation_issue_asset(&borrower_keys,
+                                      &debt_code,
+                                      0,
+                                      &[(TxOutput { record: debt_ba.clone() }, debt_owner_memo)])?;
   let mut xfr_builder = TransferOperationBuilder::new();
   let output_template =
     AssetRecordTemplate::with_no_asset_tracking(loan_amount,
