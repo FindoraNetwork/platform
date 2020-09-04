@@ -264,11 +264,11 @@ pub fn txn_log_info(txn: &Transaction) {
                                                 &serde_json::to_string(update).unwrap()),
       Operation::DefineAsset(define_asset_op) => {
         info!("Asset Definition: New asset with code {} defined",
-              define_asset_op.body.asset.code.to_base64())
+              define_asset_op.body.asset.code.to_utf8().unwrap())
       }
       Operation::IssueAsset(issue_asset_op) => {
         info!("Asset Issuance: Issued asset {} with {} new outputs. Sequence number is {}.",
-              issue_asset_op.body.code.to_base64(),
+              issue_asset_op.body.code.to_utf8().unwrap(),
               issue_asset_op.body.num_outputs,
               issue_asset_op.body.seq_num);
       }
@@ -284,7 +284,7 @@ pub fn txn_log_info(txn: &Transaction) {
       }
       Operation::UpdateMemo(update_memo) => {
         info!("Updating memo of asset type {} to {}",
-              update_memo.body.asset_type.to_base64(),
+              update_memo.body.asset_type.to_utf8().unwrap(),
               update_memo.body.new_memo.0);
       }
     };
@@ -322,7 +322,7 @@ mod tests {
     // Create values to be used to build transactions
     let keypair = XfrKeyPair::generate(&mut prng);
     let token_code = "test";
-    let asset_token = AssetTypeCode::new_from_base64(&token_code).unwrap();
+    let asset_token = AssetTypeCode::new_from_utf8_safe(&token_code).unwrap();
 
     // Build transactions
     let mut txn_builder_0 = TransactionBuilder::from_seq_id(seq_id);

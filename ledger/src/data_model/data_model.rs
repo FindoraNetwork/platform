@@ -31,6 +31,7 @@ use zei::xfr::structs::{
   BlindAssetRecord, OwnerMemo, XfrBody, ASSET_TYPE_LENGTH,
 };
 
+pub const RANDOM_CODE_LENGTH: usize = 16;
 pub const TRANSACTION_WINDOW_WIDTH: usize = 128;
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
@@ -67,113 +68,92 @@ pub struct AssetTypeCode {
 }
 
 impl AssetTypeCode {
-  /// Helper function to generate an asset type with identical value in each byte
-  pub fn from_identical_byte(byte: u8) -> Self {
-    Self { val: ZeiAssetType::from_identical_byte(byte) }
+  /// Randomly generates a 16-byte data and encodes it with base64 to a utf8 string.
+  ///
+  /// The utf8 can then be converted to an asset type code using `new_from_utf8_safe` or `new_from_utf8_truncate`.
+  pub fn gen_utf8_random() -> String {
+    let mut rng = ChaChaRng::from_entropy();
+    let mut buf: [u8; RANDOM_CODE_LENGTH] = [0u8; RANDOM_CODE_LENGTH];
+    rng.fill_bytes(&mut buf);
+    b64enc(&buf)
   }
+
+  /// Randomly generates an asset type code
   pub fn gen_random() -> Self {
-    let mut small_rng = ChaChaRng::from_entropy();
-    let mut buf: [u8; ASSET_TYPE_LENGTH] = [0u8; ASSET_TYPE_LENGTH];
-    small_rng.fill_bytes(&mut buf);
-    Self { val: ZeiAssetType(buf) }
+    let s = AssetTypeCode::gen_utf8_random();
+    AssetTypeCode::new_from_utf8_truncate(&s)
   }
+
   pub fn gen_random_with_rng<R: Rng>(mut prng: R) -> Self {
     let val: [u8; ASSET_TYPE_LENGTH] = prng.gen();
     Self { val: ZeiAssetType(val) }
   }
-  /// Checks if the customized asset code is invalid, i.e., ends with '\u{0}'.
-  ///
-  /// '\u{0}' at the end of the string will be ignored when converting back to utf8, so it's not allowed.
-  pub fn invalid_customized_code(s: &str) -> bool {
-    s.ends_with('\u{0}')
-  }
+
   /// Returns whether the input is longer than 32 bytes, and thus will be truncated to construct an asset type code.
   pub fn will_truncate(bytes: &[u8]) -> bool {
     bytes.len() > ASSET_TYPE_LENGTH
   }
-  /// Converts a vector to a base 64 representation of an asset type code.
-  pub fn base64_from_vec(mut bytes: Vec<u8>) -> String {
+
+  /// Converts a vector to an asset type code.
+  fn new_from_vec(mut bytes: Vec<u8>) -> Self {
     bytes.resize(ASSET_TYPE_LENGTH, 0u8);
-    let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bytes.as_slice()).unwrap();
-    b64enc(&buf)
+    Self { val: ZeiAssetType(<[u8; ASSET_TYPE_LENGTH]>::try_from(bytes.as_slice()).unwrap()) }
   }
-  /// Converts an utf8 string to a base 64 representation of an asset type code.
+
+  /// Converts an utf8 string to an asset type code.
   ///
   /// Returns an error if the length is greater than 32 bytes.
   ///
   /// Note: String ending with '\u{0}' isn't allowed, since '\u{0}' will be ignored when converting back to utf8.
-  pub fn base64_from_utf8_safe(s: &str) -> Result<String, PlatformError> {
-    if AssetTypeCode::invalid_customized_code(s) {
-      return Err(PlatformError::InputsError(error_location!()));
-    }
+  pub fn new_from_utf8_safe(s: &str) -> Result<Self, PlatformError> {
     let composed = s.to_string().nfc().collect::<String>().into_bytes();
     if AssetTypeCode::will_truncate(&composed) {
       return Err(PlatformError::InputsError(error_location!()));
     }
-    Ok(AssetTypeCode::base64_from_vec(composed))
+    Ok(AssetTypeCode::new_from_vec(composed))
   }
-  /// Converts an utf8 string to a base 64 representation of an asset type code.
+
+  /// Converts an utf8 string to an asset type code.
   /// Truncates the code if the length is greater than 32 bytes.
   ///
   /// Used to customize the asset type code.
   ///
   /// Note: String ending with '\u{0}' isn't allowed, since '\u{0}' will be ignored when converting back to utf8.
-  pub fn base64_from_utf8_truncate(s: &str) -> Result<String, PlatformError> {
-    if AssetTypeCode::invalid_customized_code(s) {
-      return Err(PlatformError::InputsError(error_location!()));
-    }
+  pub fn new_from_utf8_truncate(s: &str) -> Self {
     let composed = s.to_string().nfc().collect::<String>().into_bytes();
-    Ok(AssetTypeCode::base64_from_vec(composed))
+    AssetTypeCode::new_from_vec(composed)
   }
-  /// Converts a base 64 representation of an asset type code to the utf8 string.
+
+  /// Converts the asset type code to an utf8 string.
   ///
-  /// Used to display the customized asset type code.
-  pub fn utf8_from_base64(b64: &str) -> Result<String, PlatformError> {
-    match b64dec(b64) {
-      Ok(buf) => match std::str::from_utf8(&buf) {
-        Ok(s) => {
-          let mut decomposed = s.nfd().collect::<String>().into_bytes();
-          let len = decomposed.len();
-          // Find the last non-empty index
-          for i in 1..len {
-            if decomposed[len - i] == 0 {
-              continue;
-            } else {
-              decomposed.truncate(len - i + 1);
-              match std::str::from_utf8(&decomposed) {
-                Ok(utf8_str) => {
-                  return Ok(utf8_str.to_string());
-                }
-                Err(_) => {
-                  return Err(PlatformError::SerializationError(error_location!()));
-                }
-              };
-            }
+  /// Used to display the asset type code.
+  pub fn to_utf8(&self) -> Result<String, PlatformError> {
+    let mut code = self.val.0.to_vec();
+    let len = code.len();
+    // Find the last non-empty index
+    for i in 1..len {
+      if code[len - i] == 0 {
+        continue;
+      } else {
+        code.truncate(len - i + 1);
+        match std::str::from_utf8(&code) {
+          Ok(utf8_str) => {
+            return Ok(utf8_str.to_string());
           }
-          Ok("".to_string())
-        }
-        Err(_) => Err(PlatformError::DeserializationError(error_location!())),
-      },
-      _ => Err(PlatformError::DeserializationError(error_location!())),
+          Err(_) => {
+            return Err(PlatformError::SerializationError(error_location!()));
+          }
+        };
+      }
     }
+    Ok("".to_string())
   }
+
   pub fn new_from_str(s: &str) -> Self {
     let mut as_vec = s.to_string().into_bytes();
     as_vec.resize(ASSET_TYPE_LENGTH, 0u8);
     let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(as_vec.as_slice()).unwrap();
     Self { val: ZeiAssetType(buf) }
-  }
-  pub fn new_from_base64(b64: &str) -> Result<Self, PlatformError> {
-    if let Ok(mut bin) = b64dec(b64) {
-      bin.resize(ASSET_TYPE_LENGTH, 0u8);
-      let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bin.as_slice()).unwrap();
-      Ok(Self { val: ZeiAssetType(buf) })
-    } else {
-      Err(PlatformError::DeserializationError(error_location!()))
-    }
-  }
-  pub fn to_base64(&self) -> String {
-    b64enc(&self.val.0)
   }
 }
 
@@ -1496,7 +1476,7 @@ mod tests {
   // Test that an error is returned if the asset code is greater than 32 byts and a safe conversion is chosen
   fn test_base64_from_to_utf8_safe() {
     let code = "My 资产 $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$";
-    let result = AssetTypeCode::base64_from_utf8_safe(code);
+    let result = AssetTypeCode::new_from_utf8_safe(code);
     match result {
       Err(PlatformError::InputsError(_)) => {}
       _ => panic!("InputsError expected."),
@@ -1504,21 +1484,11 @@ mod tests {
   }
 
   #[test]
-  // Test that a customized asset code can be converted to and from base 64 correctly if the code is with valid format
+  // Test that a customized asset code can be converted to and from base 64 correctly
   fn test_base64_from_to_utf8_truncate() {
-    let customized_code_invalid = "My 资产 \u{0}";
-    let result = AssetTypeCode::base64_from_utf8_safe(customized_code_invalid);
-    match result {
-      Err(PlatformError::InputsError(_)) => {}
-      _ => panic!("InputsError expected."),
-    }
-
     let customized_code = "❤️💰 My 资产 $";
-    let base64 = AssetTypeCode::base64_from_utf8_truncate(customized_code).unwrap();
-    let expected_base64 = "4p2k77iP8J-SsCBNeSDotYTkuqcgJAAAAAAAAAAAAAA=";
-    assert_eq!(base64, expected_base64);
-
-    let utf8 = AssetTypeCode::utf8_from_base64(&base64).unwrap();
+    let code = AssetTypeCode::new_from_utf8_truncate(customized_code);
+    let utf8 = AssetTypeCode::to_utf8(&code).unwrap();
     assert_eq!(utf8, customized_code);
   }
 
@@ -1529,15 +1499,13 @@ mod tests {
     let customized_code_32_bytes = "My 资产 $$$$$$$$$$$$$$$$$$$$$$";
     let customized_code_to_truncate = "My 资产 $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$";
 
-    let base64_short = AssetTypeCode::base64_from_utf8_truncate(customized_code_short).unwrap();
-    let base64_32_bytes =
-      AssetTypeCode::base64_from_utf8_truncate(customized_code_32_bytes).unwrap();
-    let base64_to_truncate =
-      AssetTypeCode::base64_from_utf8_truncate(customized_code_to_truncate).unwrap();
-    assert_ne!(base64_short, base64_32_bytes);
-    assert_eq!(base64_32_bytes, base64_to_truncate);
+    let code_short = AssetTypeCode::new_from_utf8_truncate(customized_code_short);
+    let code_32_bytes = AssetTypeCode::new_from_utf8_truncate(customized_code_32_bytes);
+    let code_to_truncate = AssetTypeCode::new_from_utf8_truncate(customized_code_to_truncate);
+    assert_ne!(code_short, code_32_bytes);
+    assert_eq!(code_32_bytes, code_to_truncate);
 
-    let utf8 = AssetTypeCode::utf8_from_base64(&base64_32_bytes).unwrap();
+    let utf8 = AssetTypeCode::to_utf8(&code_32_bytes).unwrap();
     assert_eq!(utf8, customized_code_32_bytes);
   }
 
@@ -1563,16 +1531,6 @@ mod tests {
       assert!(checked == code.val.0.len());
       input = input + &value;
     }
-  }
-
-  #[test]
-  fn test_new_from_base64() {
-    let base64 = "ZGVmZ2hpamtsbW5vcHFycw==";
-    let result = Code::new_from_base64(base64);
-
-    assert_eq!(result.ok(),
-               Some(Code { val: [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
-                                 112, 113, 114, 115] }));
   }
 
   #[test]

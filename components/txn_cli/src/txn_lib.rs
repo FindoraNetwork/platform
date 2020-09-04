@@ -84,7 +84,7 @@ pub fn define_asset(data_dir: &str,
   let mut data = load_data(data_dir)?;
 
   if fiat_asset {
-    data.fiat_code = Some(token_code.to_base64());
+    data.fiat_code = Some(token_code.to_utf8()?);
     store_data_to_file(data, data_dir)?;
   };
 
