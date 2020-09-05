@@ -58,7 +58,7 @@ use zei::xfr::lib::gen_xfr_note;
 pub fn make_xfr_note() -> XfrNote {
   let mut prng: ChaChaRng;
   prng = ChaChaRng::from_seed([0u8; 32]);
-  let asset_type = AssetTypeCode::from_identical_byte(0);
+  let asset_type = AssetTypeCode::gen_random();
   let inputs_amounts = [(10u64, asset_type),
                         (10u64, asset_type),
                         (10u64, asset_type)];

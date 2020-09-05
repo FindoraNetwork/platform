@@ -95,7 +95,7 @@ pub fn load_funds<T>(data_dir: &str,
 
   // Get or define fiat asset
   let token_code = if let Some(code) = &data.fiat_code {
-    AssetTypeCode::new_from_base64(code)?
+    AssetTypeCode::new_from_utf8_safe(code)?
   } else {
     let fiat_code = AssetTypeCode::gen_random();
     let txn_builder = define_asset(data_dir,
@@ -322,7 +322,7 @@ pub fn fulfill_loan<T>(data_dir: &str,
   // Get or define fiat asset
   let fiat_code = if let Some(code) = data.fiat_code.clone() {
     println!("Fiat code: {}", code);
-    AssetTypeCode::new_from_base64(&code)?
+    AssetTypeCode::new_from_utf8_safe(&code)?
   } else {
     let fiat_code = AssetTypeCode::gen_random();
     let seq_id = rest_client.get_block_commit_count()?;
@@ -458,9 +458,9 @@ pub fn fulfill_loan<T>(data_dir: &str,
   // Update data
   let mut data = load_data(data_dir)?;
   data.loans[loan_id as usize].issuer = Some(issuer_id);
-  data.fiat_code = Some(fiat_code.to_base64());
+  data.fiat_code = Some(fiat_code.to_utf8()?);
   data.loans[loan_id as usize].status = LoanStatus::Active;
-  data.loans[loan_id as usize].code = Some(debt_code.to_base64());
+  data.loans[loan_id as usize].code = Some(debt_code.to_utf8()?);
   data.loans[loan_id as usize].debt_utxo = Some(sids_new[0]);
   data.borrowers[borrower_id as usize].balance = borrower.balance + amount;
   data.borrowers[borrower_id as usize].fiat_utxo = Some(fiat_sid_merged);
@@ -555,13 +555,13 @@ pub fn pay_loan<T>(data_dir: &str,
 
   // Get fiat and debt codes
   let fiat_code = if let Some(code) = data.clone().fiat_code {
-    AssetTypeCode::new_from_base64(&code)?
+    AssetTypeCode::new_from_utf8_safe(&code)?
   } else {
     println!("Missing fiat code. Try --active_loan.");
     return Err(PlatformError::InputsError(error_location!()));
   };
   let debt_code = if let Some(code) = &loan.code {
-    AssetTypeCode::new_from_base64(&code)?
+    AssetTypeCode::new_from_utf8_safe(&code)?
   } else {
     println!("Missing debt code in the loan record. Try --fulfill_loan.");
     return Err(PlatformError::InputsError(error_location!()));

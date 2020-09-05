@@ -313,7 +313,7 @@ mod tests {
     let app_copy = Arc::clone(&submission_server);
     let mut tx = Transaction::from_seq_id(seq_id);
 
-    let token_code1 = AssetTypeCode::from_identical_byte(1);
+    let token_code1 = AssetTypeCode::gen_random();
     let keypair = build_keys(&mut prng);
 
     let asset_body = asset_creation_body(&token_code1,
