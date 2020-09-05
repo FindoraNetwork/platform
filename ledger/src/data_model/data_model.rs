@@ -103,8 +103,6 @@ impl AssetTypeCode {
   /// Converts an utf8 string to an asset type code.
   ///
   /// Returns an error if the length is greater than 32 bytes.
-  ///
-  /// Note: String ending with '\u{0}' isn't allowed, since '\u{0}' will be ignored when converting back to utf8.
   pub fn new_from_utf8_safe(s: &str) -> Result<Self, PlatformError> {
     let composed = s.to_string().nfc().collect::<String>().into_bytes();
     if AssetTypeCode::will_truncate(&composed) {
@@ -117,8 +115,6 @@ impl AssetTypeCode {
   /// Truncates the code if the length is greater than 32 bytes.
   ///
   /// Used to customize the asset type code.
-  ///
-  /// Note: String ending with '\u{0}' isn't allowed, since '\u{0}' will be ignored when converting back to utf8.
   pub fn new_from_utf8_truncate(s: &str) -> Self {
     let composed = s.to_string().nfc().collect::<String>().into_bytes();
     AssetTypeCode::new_from_vec(composed)
