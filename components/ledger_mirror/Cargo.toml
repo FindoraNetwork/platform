@@ -12,7 +12,7 @@ path = "src/ledger_mirror.rs"
 arrayref = "0.3.5"
 ledger = { path = "../../ledger" }
 flexi_logger = "0.15.2"
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-3" }
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-5" }
 ledger_api_service = { path = "../ledger_api_service" }
 ctrlc = "3.1.3"
 actix-rt = "0.2"

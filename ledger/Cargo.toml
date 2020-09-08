@@ -18,16 +18,16 @@ chrono = "0.4"
 cryptohash = { path = "../libs/cryptohash" }
 credentials = { path = "../libs/credentials"}
 curve25519-dalek = { version =  "2.0.0", features = ["serde"] }
-ed25519-dalek = "0.9.1"
+ed25519-dalek = "1.0.0-pre3"
 hex = "0.3.2"
 itertools = "0.8.0"
 lazy_static = { version = "1.2.0" }
 log = "0.4.8"
 merkle_tree = { path = "../libs/ads/merkle_tree" }
 quickcheck = "0.9.0"
-rand = "0.5"
-rand_chacha = "0.2"
-rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
+rand = "0.7"
+rand_chacha = "0.2.2"
+rand_core = { version = "0.5.1", default-features = false, features = ["alloc"] }
 schnorr = "0.0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_derive = "1.0"
@@ -38,9 +38,10 @@ tempdir = "0.3"
 tempfile = "3.1.0"
 time = "0.1"
 tiny-keccak = "1.4.2"
+unicode-normalization = "0.1.13"
 utils = { path = "../libs/utils" }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-3" }
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-5" }
 sparse_merkle_tree = { path = "../libs/ads/sparse_merkle_tree" }
 
 [features]
@@ -48,6 +49,8 @@ TESTING = []
 
 [dev-dependencies]
 txn_builder = { path = "../components/txn_builder" }
+quickcheck_macros = "0.9"
+quickcheck = "0.9"
 
 [dependencies.fixed]
 version = "0.4.6"
