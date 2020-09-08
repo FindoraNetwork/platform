@@ -32,9 +32,12 @@ stdenv.mkDerivation {
     zlib
     pkgconfig openssl binutils-unwrapped
     protobuf
-
+    sqlite
+    shellcheck
     wasm-pack
-
+    bats
+    bc
+    shfmt
   ] ++ stdenv.lib.optionals stdenv.isDarwin [
         darwin.apple_sdk.frameworks.Security
       ];
@@ -45,5 +48,12 @@ stdenv.mkDerivation {
   PROTOC          = "${protobuf}/bin/protoc";
   PROTOC_INCLUDE  = "${protobuf}/include";
   RUSTC_WRAPPER   = "${sccache}/bin/sccache";
+
+  # Environment variables for the CLI2
+  shellHook = ''
+    export LOCAL=`pwd`;
+    export CLI2="$LOCAL/target/debug/findora";
+    export PATH="$PATH:$LOCAL/target/debug/";
+  '';
 }
 
