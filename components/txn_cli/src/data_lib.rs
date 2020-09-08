@@ -131,7 +131,7 @@ pub struct Credential {
   /// * `"attributes": ["630", null, "1"]` indicates:
   /// * Lower bound of the borrower's credit score is 630.
   /// * Lower bound of the borrower's income isn't provided.
-  /// * The country code of the borrower's0 citizenship is 1.
+  /// * The country code of the borrower's citizenship is 1.
   pub values: Vec<Option<String>>,
 }
 
