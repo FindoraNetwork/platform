@@ -39,7 +39,7 @@ dependencies = [
  "submission_server",
  "utils",
  "vergen",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -68,7 +68,7 @@ dependencies = [
  "submission_server",
  "subprocess",
  "utils",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -370,7 +370,7 @@ dependencies = [
  "txn_builder",
  "utils",
  "warp",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -717,7 +717,7 @@ dependencies = [
  "tokio 0.2.22",
  "tokio-codec",
  "utils",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -1127,7 +1127,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "utils",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -1196,7 +1196,7 @@ dependencies = [
  "txn_builder",
  "utils",
  "vergen",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-3)",
+ "zei",
  "zeroize",
 ]
 
@@ -1327,7 +1327,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "wasm-bindgen",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -2337,7 +2337,7 @@ dependencies = [
  "time 0.2.18",
  "txn_builder",
  "utils",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -2594,7 +2594,7 @@ dependencies = [
  "utils",
  "vergen",
  "wasm-bindgen",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -2621,7 +2621,7 @@ dependencies = [
  "submission_server",
  "utils",
  "vergen",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -2641,7 +2641,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "utils",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -2664,7 +2664,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -2687,7 +2687,7 @@ dependencies = [
  "submission_api",
  "submission_server",
  "subprocess",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -3253,7 +3253,7 @@ dependencies = [
  "submission_server",
  "subprocess",
  "utils",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -3571,7 +3571,7 @@ dependencies = [
  "submission_api",
  "submission_server",
  "utils",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -4086,7 +4086,7 @@ dependencies = [
  "sparse_merkle_tree",
  "utils",
  "vergen",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -4105,7 +4105,7 @@ dependencies = [
  "serde_json",
  "sparse_merkle_tree",
  "txn_builder",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -5054,7 +5054,7 @@ dependencies = [
  "submission_server",
  "txn_builder",
  "txn_cli",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -5076,7 +5076,7 @@ dependencies = [
  "tempfile",
  "txn_cli",
  "vergen",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -5263,7 +5263,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "txn_builder",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -5858,7 +5858,7 @@ dependencies = [
  "sparse_merkle_tree",
  "utils",
  "wasm-bindgen",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -5897,7 +5897,7 @@ dependencies = [
  "utils",
  "vergen",
  "wasm",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -6052,7 +6052,7 @@ dependencies = [
  "serde",
  "serde_json",
  "time 0.1.44",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -6188,7 +6188,7 @@ dependencies = [
  "wasm-bindgen-futures 0.3.27",
  "wasm-bindgen-test",
  "web-sys",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -6382,7 +6382,7 @@ dependencies = [
  "serde_json",
  "txn_builder",
  "txn_cli",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -6402,7 +6402,7 @@ dependencies = [
  "txn_cli",
  "vergen",
  "whitelist",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -6513,7 +6513,7 @@ dependencies = [
  "serde_json",
  "tokio 0.2.22",
  "tokio-codec",
- "zei 0.0.3 (git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-5)",
+ "zei",
 ]
 
 [[package]]
@@ -6535,36 +6535,6 @@ name = "yansi"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9fc79f4a1e39857fc00c3f662cbf2651c771f00e9c15fe2abc341806bd46bd71"
-
-[[package]]
-name = "zei"
-version = "0.0.3"
-source = "git+ssh://git@github.com/findoraorg/zei?tag=v0.0.3-3#7318ac6028fd068d987f3cd178f221de0521d9ac"
-dependencies = [
- "aes-ctr",
- "base64 0.10.1",
- "bincode",
- "boolinator",
- "bulletproofs",
- "byteorder 1.3.4",
- "curve25519-dalek 2.1.0",
- "digest 0.8.1",
- "ed25519-dalek",
- "itertools 0.8.2",
- "lazy_static",
- "linear-map",
- "merlin",
- "pairing",
- "rand 0.4.6",
- "rand_chacha 0.2.2",
- "rand_core 0.5.1",
- "rmp-serde",
- "serde",
- "serde_derive",
- "serde_json",
- "sha2 0.8.2",
- "wasm-bindgen",
-]
 
 [[package]]
 name = "zei"
