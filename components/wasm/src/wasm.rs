@@ -54,7 +54,7 @@ pub struct SeqId(u64);
 //Random Helpers
 
 #[wasm_bindgen]
-/// Generates random base64 encoded asset type as an utf8 string. Used in asset definitions.
+/// Generates random base64 encoded asset type as a base64 string. Used in asset definitions.
 /// @see {@link
 /// module:Findora-Wasm~TransactionBuilder#add_operation_create_asset|add_operation_create_asset}
 /// for instructions on how to define an asset with a new
@@ -67,8 +67,7 @@ pub fn random_asset_type() -> String {
 /// Generates asset type as an utf8 string from a JSON-serialized JavaScript value.
 pub fn asset_type_from_jsvalue(val: &JsValue) -> Result<String, JsValue> {
   let code: [u8; ASSET_TYPE_LENGTH] = val.into_serde().map_err(error_to_jsvalue)?;
-  Ok(AssetTypeCode { val: ZeiAssetType(code) }.to_utf8()
-                                              .map_err(error_to_jsvalue)?)
+  Ok(AssetTypeCode { val: ZeiAssetType(code) }.to_base64())
 }
 
 #[wasm_bindgen]
@@ -149,7 +148,7 @@ pub fn create_default_policy_info() -> String {
 ///
 /// * `ir_numerator` - interest rate numerator
 /// * `ir_denominator`- interest rate denominator
-/// * `fiat_code` - utf8 string representing asset type used to pay off the loan
+/// * `fiat_code` - base64 string representing asset type used to pay off the loan
 /// * `amount` - loan amount
 /// @ignore
 // Testnet will not support Discret policies.
@@ -158,7 +157,7 @@ pub fn create_debt_policy_info(ir_numerator: u64,
                                fiat_code: String,
                                loan_amount: u64)
                                -> Result<String, JsValue> {
-  let fiat_code = AssetTypeCode::new_from_utf8_truncate(&fiat_code);
+  let fiat_code = AssetTypeCode::new_from_base64(&fiat_code).map_err(error_to_jsvalue)?;
 
   serde_json::to_string(&PolicyChoice::LoanToken(Fraction::new(ir_numerator, ir_denominator),
     fiat_code, loan_amount))
@@ -170,7 +169,7 @@ pub fn create_debt_policy_info(ir_numerator: u64,
 /// that all payment and fee amounts are correct.
 /// @param {BigInt} ir_numerator  - Interest rate numerator.
 /// @param {BigInt} ir_denominator - Interest rate denominator.
-/// @param {string} fiat_code - utf8 string representing asset type used to pay off the loan.
+/// @param {string} fiat_code - base64 string representing asset type used to pay off the loan.
 /// @param {BigInt} loan_amount - Loan amount.
 /// @throws Will throw an error if `fiat_code` fails to deserialize.
 /// @ignore
@@ -180,7 +179,7 @@ pub fn create_debt_memo(ir_numerator: u64,
                         fiat_code: String,
                         loan_amount: u64)
                         -> Result<String, JsValue> {
-  let fiat_code = AssetTypeCode::new_from_utf8_truncate(&fiat_code);
+  let fiat_code = AssetTypeCode::new_from_base64(&fiat_code).map_err(error_to_jsvalue)?;
   let memo = DebtMemo { interest_rate: Fraction::new(ir_numerator, ir_denominator),
                         fiat_code,
                         loan_amount };
@@ -249,7 +248,7 @@ impl TransactionBuilder {
     let asset_token = if token_code.is_empty() {
       AssetTypeCode::gen_random()
     } else {
-      AssetTypeCode::new_from_utf8_truncate(&token_code)
+      AssetTypeCode::new_from_base64(&token_code).map_err(error_to_jsvalue)?
     };
 
     let policy_choice = serde_json::from_str::<PolicyChoice>(&policy_choice).map_err(|e| {
@@ -271,7 +270,7 @@ impl TransactionBuilder {
                            token_code: String,
                            which_check: String)
                            -> Result<TransactionBuilder, JsValue> {
-    let token_code = AssetTypeCode::new_from_utf8_truncate(&token_code);
+    let token_code = AssetTypeCode::new_from_base64(&token_code).map_err(error_to_jsvalue)?;
 
     self.get_builder_mut()
         .add_policy_option(token_code, which_check);
@@ -284,7 +283,7 @@ impl TransactionBuilder {
   ///
   /// @param {XfrKeyPair} key_pair  - Issuer XfrKeyPair.
   /// and types of traced assets.
-  /// @param {string} code - utf8 string representing the token code of the asset to be issued.
+  /// @param {string} code - base64 string representing the token code of the asset to be issued.
   /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
   /// @param {BigInt} amount - Amount to be issued.
   /// @param {boolean} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
@@ -297,7 +296,7 @@ impl TransactionBuilder {
                                conf_amount: bool,
                                zei_params: &PublicParams)
                                -> Result<TransactionBuilder, JsValue> {
-    let asset_token = AssetTypeCode::new_from_utf8_truncate(&code);
+    let asset_token = AssetTypeCode::new_from_base64(&code).map_err(error_to_jsvalue)?;
 
     // TODO: (keyao/noah) enable client support for identity
     // tracking?
@@ -382,7 +381,7 @@ impl TransactionBuilder {
   /// Adds an operation to the transaction builder that adds a hash to the ledger's custom data
   /// store.
   /// @param {XfrKeyPair} auth_key_pair - Asset creator key pair.
-  /// @param {String} code - utf8 string representing token code of the asset whose memo will be updated.
+  /// @param {String} code - base64 string representing token code of the asset whose memo will be updated.
   /// transaction validates.
   /// @param {String} new_memo - The new asset memo.
   /// @see {@link module:Findora-Wasm~AssetRules#set_updatable|AssetRules.set_updatable} for more information about how
@@ -393,7 +392,7 @@ impl TransactionBuilder {
                                    new_memo: String)
                                    -> Result<TransactionBuilder, JsValue> {
     // First, decode the asset code
-    let code = AssetTypeCode::new_from_utf8_truncate(&code);
+    let code = AssetTypeCode::new_from_base64(&code).map_err(error_to_jsvalue)?;
 
     self.get_builder_mut()
         .add_operation_update_memo(auth_key_pair, code, &new_memo);
@@ -482,7 +481,7 @@ impl TransferOperationBuilder {
                     conf_amount: bool,
                     conf_type: bool)
                     -> Result<TransferOperationBuilder, JsValue> {
-    let code = AssetTypeCode::new_from_utf8_truncate(&code);
+    let code = AssetTypeCode::new_from_base64(&code).map_err(error_to_jsvalue)?;
 
     let asset_record_type = AssetRecordType::from_booleans(conf_amount, conf_type);
     // TODO (noah/keyao) support identity tracing (issue #298)
@@ -946,13 +945,13 @@ pub fn trace_assets(xfr_body: JsValue,
   let record_data = zei_trace_assets(&xfr_body,
                                      tracer_keypair.get_keys(),
                                      &candidate_assets).map_err(error_to_jsvalue)?;
-  let record_data: Vec<(u64, String)> =
-    record_data.iter()
-               .map(|(amt, asset_type, _, _)| {
-                 let asset_type_code = AssetTypeCode { val: *asset_type };
-                 (*amt, asset_type_code.to_utf8().map_err(error_to_jsvalue).unwrap())
-               })
-               .collect();
+  let record_data: Vec<(u64, String)> = record_data.iter()
+                                                   .map(|(amt, asset_type, _, _)| {
+                                                     let asset_type_code =
+                                                       AssetTypeCode { val: *asset_type };
+                                                     (*amt, asset_type_code.to_base64())
+                                                   })
+                                                   .collect();
   Ok(JsValue::from_serde(&record_data).unwrap())
 }
 

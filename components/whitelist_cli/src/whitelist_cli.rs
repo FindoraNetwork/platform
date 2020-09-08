@@ -60,7 +60,7 @@ fn process_inputs<T>(inputs: clap::ArgMatches, rest_client: &T) -> Result<(), Pl
   match inputs.subcommand() {
     ("add_member", Some(add_matches)) => {
       let code = if let Some(code_arg) = add_matches.value_of("code") {
-        AssetTypeCode::new_from_utf8_safe(code_arg)?
+        AssetTypeCode::new_from_base64(code_arg)?
       } else {
         println!("Missing asset type code. Use --code.");
         return Err(PlatformError::InputsError(error_location!()));
@@ -230,9 +230,9 @@ mod tests {
     }
 
     // Adds the assets to the whitelist
-    add_member_cmd(&codes[0].to_utf8().unwrap(), &mut ledger_standalone).expect("Failed to set conversion rate.");
-    add_member_cmd(&codes[1].to_utf8().unwrap(), &mut ledger_standalone).expect("Failed to set conversion rate.");
-    add_member_cmd(&codes[2].to_utf8().unwrap(), &mut ledger_standalone).expect("Failed to set conversion rate.");
+    add_member_cmd(&codes[0].to_base64(), &mut ledger_standalone).expect("Failed to set conversion rate.");
+    add_member_cmd(&codes[1].to_base64(), &mut ledger_standalone).expect("Failed to set conversion rate.");
+    add_member_cmd(&codes[2].to_base64(), &mut ledger_standalone).expect("Failed to set conversion rate.");
 
     // Prove and verify the whitelist membership with the incorrect index
     // catch unwind necessary because there is an unhandled panic in Zei

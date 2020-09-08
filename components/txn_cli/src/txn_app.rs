@@ -104,7 +104,7 @@ pub(crate) fn process_asset_issuer_cmd<T: RestfulLedgerAccess + RestfulLedgerUpd
       debug!("store_memos: about to get token code");
       let token_code = if let Some(token_code) = store_bar_and_memos_matches.value_of("token_code")
       {
-        AssetTypeCode::new_from_utf8_safe(token_code)?
+        AssetTypeCode::new_from_base64(token_code)?
       } else {
         eprintln!("Asset token code is required to store the tracer and owner memos. Use --token_code.");
         return Err(PlatformError::InputsError(error_location!()));
@@ -196,15 +196,15 @@ pub(crate) fn process_asset_issuer_cmd<T: RestfulLedgerAccess + RestfulLedgerUpd
       // Get token code
       let asset_token: AssetTypeCode;
       if let Some(token_code) = token_code {
-        asset_token = AssetTypeCode::new_from_utf8_safe(token_code)?;
+        asset_token = AssetTypeCode::new_from_base64(token_code)?;
         println!("Generating asset with token code {:?}: {:?} from {}",
-                 asset_token.to_utf8()?,
+                 asset_token.to_base64(),
                  asset_token.val,
                  token_code);
       } else {
         asset_token = AssetTypeCode::gen_random();
         println!("Creating asset with token code {:?}: {:?}",
-                 asset_token.to_utf8()?,
+                 asset_token.to_base64(),
                  asset_token.val);
       }
       let seq_id = rest_client.get_block_commit_count()?;
@@ -278,7 +278,7 @@ pub(crate) fn process_asset_issuer_cmd<T: RestfulLedgerAccess + RestfulLedgerUpd
       };
       debug!("issue_asset: key_pair={:?}", &key_pair);
       let token_code = if let Some(token_code_arg) = issue_asset_matches.value_of("token_code") {
-        AssetTypeCode::new_from_utf8_safe(token_code_arg)?
+        AssetTypeCode::new_from_base64(token_code_arg)?
       } else {
         eprintln!("Token code is required to issue asset. Use --token_code.");
         return Err(PlatformError::InputsError(error_location!()));
@@ -500,7 +500,7 @@ pub(crate) fn process_asset_issuer_cmd<T: RestfulLedgerAccess + RestfulLedgerUpd
       };
       let token_code =
         if let Some(token_code_arg) = issue_and_transfer_matches.value_of("token_code") {
-          AssetTypeCode::new_from_utf8_safe(token_code_arg)?
+          AssetTypeCode::new_from_base64(token_code_arg)?
         } else {
           eprintln!("Token code is required to issue asset. Use --token_code.");
           return Err(PlatformError::InputsError(error_location!()));

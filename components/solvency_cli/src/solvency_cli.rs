@@ -82,7 +82,7 @@ fn process_inputs<T: RestfulLedgerAccess>(inputs: clap::ArgMatches,
   match inputs.subcommand() {
     ("set_rate", Some(set_matches)) => {
       let code = if let Some(code_arg) = set_matches.value_of("code") {
-        AssetTypeCode::new_from_utf8_safe(code_arg)?
+        AssetTypeCode::new_from_base64(code_arg)?
       } else {
         println!("Missing asset code. Use --code.");
         return Err(PlatformError::InputsError(error_location!()));
@@ -113,7 +113,7 @@ fn process_inputs<T: RestfulLedgerAccess>(inputs: clap::ArgMatches,
         return Err(PlatformError::InputsError(error_location!()));
       };
       let code = if let Some(code_arg) = add_matches.value_of("code") {
-        AssetTypeCode::new_from_utf8_safe(code_arg)?
+        AssetTypeCode::new_from_base64(code_arg)?
       } else {
         println!("Missing asset code. Use --code.");
         return Err(PlatformError::InputsError(error_location!()));
@@ -519,9 +519,9 @@ mod tests {
                         AssetRules::default(),
                         &mut ledger_standalone).unwrap();
     }
-    let code_0 = &codes[0].to_utf8().unwrap();
-    let code_1 = &codes[1].to_utf8().unwrap();
-    let code_2 = &codes[2].to_utf8().unwrap();
+    let code_0 = &codes[0].to_base64();
+    let code_1 = &codes[1].to_base64();
+    let code_2 = &codes[2].to_base64();
     let (utxos, blinds) = issue_transfer_multiple(issuer_key_pair,
                                                   &recipient_key_pair,
                                                   codes.clone(),
