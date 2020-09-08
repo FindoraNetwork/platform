@@ -34,6 +34,17 @@ pipeline {
       }
     }
 
+    stage('Extract/Archive .deb') {
+      steps {
+        script {
+          dockerImage.inside() {
+            sh 'cp /app/debian/*.deb $WORKSPACE'
+          }
+          archiveArtifacts artifacts: '*.deb'
+        }
+      }
+    }
+
     stage('Push ECR') {
       when {
         not {
