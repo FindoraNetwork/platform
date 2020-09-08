@@ -535,7 +535,7 @@ impl LedgerStatus {
       let inp_utxo = self.utxos
                          .get(inp_sid)
                          .map_or(Err(PlatformError::InputsError(error_location!())), Ok)?;
-      let record = &(inp_utxo.0).0;
+      let record = &inp_utxo.0.record;
       if record != inp_record {
         return Err(PlatformError::InputsError(error_location!()));
       }
@@ -2185,7 +2185,7 @@ pub mod helpers {
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, vec![]);
 
     let asset_issuance_body =
-      IssueAssetBody::new(&code, seq_num, &[(TxOutput(ba.clone()), None)]).unwrap();
+      IssueAssetBody::new(&code, seq_num, &[(TxOutput { record: ba.clone() }, None)]).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body,
                       &IssuerKeyPair { keypair: &issuer_keys }).unwrap();
@@ -2233,7 +2233,7 @@ pub mod helpers {
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, vec![None]);
 
     let asset_issuance_body =
-      IssueAssetBody::new(&code, seq_num, &[(TxOutput(ba.clone()), None)]).unwrap();
+      IssueAssetBody::new(&code, seq_num, &[(TxOutput { record: ba.clone() }, None)]).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body,
                       &IssuerKeyPair { keypair: &issuer_keys }).unwrap();
@@ -2277,7 +2277,8 @@ TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
     let (ba, _tracer_memo, _owner_memo) =
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar_template, vec![]);
 
-    let asset_issuance_body = IssueAssetBody::new(&code, seq_num, &[(TxOutput(ba), None)]).unwrap();
+    let asset_issuance_body =
+      IssueAssetBody::new(&code, seq_num, &[(TxOutput { record: ba }, None)]).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body,
                       &IssuerKeyPair { keypair: &issuer_keys }).unwrap();
@@ -2517,7 +2518,7 @@ mod tests {
     let mut prng = ChaChaRng::from_entropy();
     let mut state = LedgerState::test_ledger();
 
-    let token_code1 = AssetTypeCode::from_identical_byte(1);
+    let token_code1 = AssetTypeCode::gen_random();
     let keypair = build_keys(&mut prng);
 
     let asset_body = asset_creation_body(&token_code1,
@@ -2614,7 +2615,7 @@ mod tests {
   #[test]
   fn test_asset_creation_invalid_public_key() {
     // Create a valid asset creation operation.
-    let token_code1 = AssetTypeCode::from_identical_byte(1);
+    let token_code1 = AssetTypeCode::gen_random();
     let mut prng = ChaChaRng::from_entropy();
     let keypair = build_keys(&mut prng);
     let asset_body = asset_creation_body(&token_code1,
@@ -2639,7 +2640,7 @@ mod tests {
     let mut ledger = LedgerState::test_ledger();
     let params = PublicParams::new();
 
-    let code = AssetTypeCode::from_identical_byte(1);
+    let code = AssetTypeCode::gen_random();
     let mut prng = ChaChaRng::from_entropy();
     let key_pair = XfrKeyPair::generate(&mut prng);
     let key_pair_adversary = XfrKeyPair::generate(ledger.get_prng());
@@ -2665,10 +2666,11 @@ mod tests {
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, vec![]);
     let second_ba = ba.clone();
 
-    let asset_issuance_body = IssueAssetBody::new(&code,
-                                                  0,
-                                                  &[(TxOutput(ba), None),
-                                                    (TxOutput(second_ba), None)]).unwrap();
+    let asset_issuance_body =
+      IssueAssetBody::new(&code,
+                          0,
+                          &[(TxOutput { record: ba }, None),
+                            (TxOutput { record: second_ba }, None)]).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &key_pair }).unwrap();
 
@@ -2701,7 +2703,7 @@ mod tests {
 
     // Construct transfer operation
     let input_bar_proof = ledger.get_utxo(txo_sid).unwrap();
-    let input_bar = (input_bar_proof.clone().utxo.0).0;
+    let input_bar = (input_bar_proof.clone().utxo.0).record;
     let input_oar = open_blind_asset_record(&input_bar, &None, &key_pair.get_sk_ref()).unwrap();
     assert!(input_bar_proof.is_valid(state_commitment.clone()));
 
@@ -2756,7 +2758,7 @@ mod tests {
   #[test]
   fn test_asset_creation_invalid_signature() {
     // Create a valid operation.
-    let token_code1 = AssetTypeCode::from_identical_byte(1);
+    let token_code1 = AssetTypeCode::gen_random();
 
     let mut prng = ChaChaRng::from_entropy();
     let keypair1 = build_keys(&mut prng);
@@ -2785,7 +2787,7 @@ mod tests {
     let params = PublicParams::new();
 
     assert!(ledger.get_state_commitment() == (HashOf::new(&None), 0));
-    let token_code1 = AssetTypeCode::from_identical_byte(1);
+    let token_code1 = AssetTypeCode::gen_random();
     let keypair = build_keys(&mut ledger.get_prng());
     let seq_id = ledger.get_block_commit_count();
     let tx = create_definition_transaction(&token_code1,
@@ -2807,7 +2809,7 @@ mod tests {
 
     let (ba, _, _) = build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, vec![]);
     let asset_issuance_body =
-      IssueAssetBody::new(&token_code1, 0, &[(TxOutput(ba), None)]).unwrap();
+      IssueAssetBody::new(&token_code1, 0, &[(TxOutput { record: ba }, None)]).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
 
@@ -2915,7 +2917,7 @@ mod tests {
     let bob = XfrKeyPair::generate(&mut ledger.get_prng());
 
     // Define fiat token
-    let code = AssetTypeCode::from_identical_byte(1);
+    let code = AssetTypeCode::gen_random();
     let seq_id = ledger.get_block_commit_count();
     let tx = create_definition_transaction(&code,
                                            &issuer,
@@ -2933,7 +2935,7 @@ mod tests {
     let (_, sids) = apply_transaction(&mut ledger, tx);
     let sid = sids[0];
 
-    let bar = ((ledger.get_utxo(sid).unwrap().utxo.0).0).clone();
+    let bar = ((ledger.get_utxo(sid).unwrap().utxo.0).record).clone();
 
     let transfer_template= AssetRecordTemplate::with_no_asset_tracking(100,
                                                                              code.val,
@@ -3024,7 +3026,7 @@ mod tests {
                                                         identity_tracking: None };
 
     // Define an asset without a tracing policy
-    let code = AssetTypeCode::from_identical_byte(0);
+    let code = AssetTypeCode::gen_random();
     let seq_id = ledger.get_block_commit_count();
     let tx = create_definition_transaction(&code,
                                            &issuer,
@@ -3045,7 +3047,7 @@ mod tests {
     apply_transaction(&mut ledger, tx);
 
     // Define an asset with the tracing policy
-    let code = AssetTypeCode::from_identical_byte(1);
+    let code = AssetTypeCode::gen_random();
     let seq_id = ledger.get_block_commit_count();
     let tx = create_definition_transaction(&code,
                                            &issuer,
@@ -3106,7 +3108,7 @@ mod tests {
     let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
 
     // Define fiat token
-    let code = AssetTypeCode::from_identical_byte(1);
+    let code = AssetTypeCode::gen_random();
     let seq_id = ledger.get_block_commit_count();
     let tx = create_definition_transaction(&code,
                                            &issuer,
@@ -3173,7 +3175,7 @@ mod tests {
     let mut ledger = LedgerState::test_ledger();
     let params = PublicParams::new();
 
-    let code = AssetTypeCode::from_identical_byte(1);
+    let code = AssetTypeCode::gen_random();
     let mut prng = ChaChaRng::from_entropy();
     let keys: Vec<XfrKeyPair> = (0..co_signers.len()).map(|_| XfrKeyPair::generate(&mut prng))
                                                      .collect();
@@ -3212,7 +3214,8 @@ mod tests {
     let (ba, _, _) =
       build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, vec![]);
 
-    let asset_issuance_body = IssueAssetBody::new(&code, 0, &[(TxOutput(ba), None)]).unwrap();
+    let asset_issuance_body =
+      IssueAssetBody::new(&code, 0, &[(TxOutput { record: ba }, None)]).unwrap();
     let asset_issuance_operation =
       IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &alice }).unwrap();
 
@@ -3235,7 +3238,7 @@ mod tests {
 
     // Construct transfer operation
     let mut block = ledger.start_block().unwrap();
-    let input_bar = ((ledger.get_utxo(txo_sid).unwrap().utxo.0).0).clone();
+    let input_bar = ((ledger.get_utxo(txo_sid).unwrap().utxo.0).record).clone();
     let input_oar = open_blind_asset_record(&input_bar, &None, &alice.get_sk_ref()).unwrap();
 
     let output_template =
@@ -3318,7 +3321,7 @@ mod tests {
     let lender_key_pair = XfrKeyPair::generate(&mut ledger.get_prng());
 
     // Define fiat token
-    let fiat_code = AssetTypeCode::from_identical_byte(1);
+    let fiat_code = AssetTypeCode::gen_random();
     let seq_id = ledger.get_block_commit_count();
     let tx = create_definition_transaction(&fiat_code,
                                            &fiat_issuer_key_pair,
@@ -3328,7 +3331,7 @@ mod tests {
     apply_transaction(&mut ledger, tx);
 
     // Define debt token
-    let debt_code = AssetTypeCode::from_identical_byte(2);
+    let debt_code = AssetTypeCode::gen_random();
     let debt_memo = DebtMemo { interest_rate,
                                fiat_code,
                                loan_amount: loan_amount as u64 };
@@ -3378,8 +3381,8 @@ mod tests {
     let fiat_transfer_record = AssetRecord::from_template_no_identity_tracking(
       ledger.get_prng(), &fiat_transfer_template).unwrap();
 
-    let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().utxo.0).0).clone();
-    let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().utxo.0).0).clone();
+    let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().utxo.0).record).clone();
+    let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().utxo.0).record).clone();
 
     let mut transfer = TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
                                           vec![TxoRef::Absolute(fiat_sid), TxoRef::Absolute(debt_sid)],
@@ -3400,8 +3403,8 @@ mod tests {
     // Attempt to pay off debt with correct interest payment
     let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32]).unwrap();
     let mut block = ledger.start_block().unwrap();
-    let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().utxo.0).0).clone();
-    let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().utxo.0).0).clone();
+    let fiat_bar = ((ledger.get_utxo(fiat_sid).unwrap().utxo.0).record).clone();
+    let debt_bar = ((ledger.get_utxo(debt_sid).unwrap().utxo.0).record).clone();
 
     let payment_template = AssetRecordTemplate::with_no_asset_tracking(
       payment_amount,

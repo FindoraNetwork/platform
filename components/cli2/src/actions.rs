@@ -301,7 +301,7 @@ pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<(), CliError> 
     }
 
     // Fetch the amount
-    let amount = txo.record.0.amount.get_amount();
+    let amount = txo.record.record.amount.get_amount();
     let amount = match amount {
       None => match txo.opened_record {
         None => 0_u64,
@@ -318,7 +318,7 @@ pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<(), CliError> 
     };
 
     // Compute and store the balances
-    let pk = txo.record.0.public_key;
+    let pk = txo.record.record.public_key;
     let pk_str = serde_json::to_string(&pk).unwrap();
     let pk_name = pub_key_to_name_map.get(&pk_str);
 
@@ -528,7 +528,7 @@ pub fn unlock_txo<S: CliDataStore>(store: &mut S, id: String) -> Result<(), CliE
                exit(-1);
              }
              Some(kp) => {
-               let open_rec = open_blind_asset_record(&txo.record.0,
+               let open_rec = open_blind_asset_record(&txo.record.record,
                                                       &txo.owner_memo,
                                                       kp.get_sk_ref()).map_err(|x| zei_fail!(x))?;
                let tp = open_rec.asset_type;
@@ -641,7 +641,7 @@ pub fn query_txo<S: CliDataStore>(store: &mut S,
 
   if ent.owner.is_none() {
     for (n, pk) in store.get_pubkeys()?.into_iter() {
-      if pk == ent.record.0.public_key {
+      if pk == ent.record.record.public_key {
         ent.owner = Some(n);
         break;
       }
@@ -649,7 +649,7 @@ pub fn query_txo<S: CliDataStore>(store: &mut S,
   }
 
   if ent.asset_type.is_none() {
-    if let Some(tp) = ent.record.0.asset_type.get_asset_type() {
+    if let Some(tp) = ent.record.record.asset_type.get_asset_type() {
       let tp = AssetTypeCode { val: tp };
       for (n, asset) in store.get_asset_types()?.into_iter() {
         if tp == asset.asset.code {
@@ -1137,7 +1137,7 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
              Some(Operation::IssueAsset(iss)) => {
                assert_eq!(iss.body.records.len(), 1);
                let (txo, memo) = iss.body.records[0].clone();
-               let oar = open_blind_asset_record(&txo.0, &memo, iss_kp.get_sk_ref())?;
+               let oar = open_blind_asset_record(&txo.record, &memo, iss_kp.get_sk_ref())?;
 
                builder.new_txos.push((out_name.clone(),
                                       TxoCacheEntry { sid: None,
@@ -1260,13 +1260,13 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
         println!(" {}: {} ({}) of '{}' ({}) owned by '{}'",
                  k,
                  v.opened_record.as_ref().context(NoneValue)?.amount,
-                 if v.record.0.amount.is_confidential() {
+                 if v.record.record.amount.is_confidential() {
                    "SECRET"
                  } else {
                    "PUBLIC"
                  },
                  v.asset_type.as_ref().context(NoneValue)?.0,
-                 if v.record.0.asset_type.is_confidential() {
+                 if v.record.record.asset_type.is_confidential() {
                    "SECRET"
                  } else {
                    "PUBLIC"
@@ -1279,13 +1279,13 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
         println!(" {}: {} ({}) of '{}' ({}) owned by '{}'",
                  k.0,
                  opened.amount,
-                 if ent.record.0.amount.is_confidential() {
+                 if ent.record.record.amount.is_confidential() {
                    "SECRET"
                  } else {
                    "PUBLIC"
                  },
                  asset_type.0,
-                 if ent.record.0.asset_type.is_confidential() {
+                 if ent.record.record.asset_type.is_confidential() {
                    "SECRET"
                  } else {
                    "PUBLIC"
@@ -1328,13 +1328,13 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
         println!(" Adding {}: {} ({}) of '{}' ({}) owned by '{}'",
                  inp,
                  ent.opened_record.as_ref().context(NoneValue)?.amount,
-                 if ent.record.0.amount.is_confidential() {
+                 if ent.record.record.amount.is_confidential() {
                    "SECRET"
                  } else {
                    "PUBLIC"
                  },
                  ent.asset_type.as_ref().context(NoneValue)?.0,
-                 if ent.record.0.asset_type.is_confidential() {
+                 if ent.record.record.asset_type.is_confidential() {
                    "SECRET"
                  } else {
                    "PUBLIC"
@@ -1473,7 +1473,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
         store.with_keypair::<CliError, _>(&KeypairName(receiver.0.clone()), |kp| {
                let sk = kp.unwrap().get_sk_ref();
                txo.opened_record =
-                                              Some(open_blind_asset_record(&txo.record.0,
+                                              Some(open_blind_asset_record(&txo.record.record,
                                                                            &txo.owner_memo,
                                                                            sk).map_err(|e| {
                                                      CliError::ZeiError { source: e }
@@ -1495,13 +1495,13 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
              ix + 1,
              inp,
              ent.opened_record.as_ref().context(NoneValue)?.amount,
-             if ent.record.0.amount.is_confidential() {
+             if ent.record.record.amount.is_confidential() {
                "SECRET"
              } else {
                "PUBLIC"
              },
              ent.asset_type.as_ref().context(NoneValue)?.0,
-             if ent.record.0.asset_type.is_confidential() {
+             if ent.record.record.asset_type.is_confidential() {
                "SECRET"
              } else {
                "PUBLIC"

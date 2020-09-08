@@ -600,9 +600,10 @@ pub fn load_data(data_dir: &str) -> Result<Data, PlatformError> {
 /// # Arguments
 /// * `file_path`: file path.
 pub fn load_txn_from_file(file_path: &str) -> Result<TransactionBuilder, PlatformError> {
-  let txn = fs::read_to_string(file_path).or_else(|_| {
-              Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
-            })?;
+  let txn = fs::read_to_string(file_path).map_err(|_| {
+                                           PlatformError::IoError(format!("Failed to read file: {}",
+                                                                  file_path))
+                                         })?;
   debug!("Parsing builder from file contents: \"{}\"", &txn);
   match serde_json::from_str(&txn) {
     Ok(builder) => Ok(builder),
@@ -650,7 +651,7 @@ pub(crate) fn load_blind_asset_record_and_owner_memo_from_file(
   debug!("Parsing builder from file contents: \"{}\"", &txn);
   match serde_json::from_str::<TransactionBuilder>(&txn) {
     Ok(builder) => {
-      Ok((builder.get_output_ref(0).0.clone(), builder.get_owner_memo_ref(0).cloned()))
+      Ok((builder.get_output_ref(0).record.clone(), builder.get_owner_memo_ref(0).cloned()))
     }
     Err(e) => Err(des_fail!(e)),
   }

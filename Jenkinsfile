@@ -1,8 +1,10 @@
 pipeline {
 
   environment {
-    dockerRepo = 'https://nexus.findora.org'
-    dockerCreds = 'nexus'
+    dockerRepo = 'https://563536162678.dkr.ecr.us-west-2.amazonaws.com'
+    dockerCreds = 'ecr:us-west-2:aws-jenkins'
+    oldDockerRepo = 'https://nexus.findora.org'
+    oldDockerCreds = 'nexus'
     dockerName = 'platform'
   }
 
@@ -43,13 +45,28 @@ pipeline {
       }
     }
 
-    stage('Push') {
+    stage('Push ECR') {
+      when {
+        not {
+          changeRequest()
+        }
+      }
+      steps {
+        script {
+          docker.withRegistry( dockerRepo, dockerCreds ) {
+            dockerImage.push()
+          }
+        }
+      }
+    }
+
+    stage('Push Nexus') {
       when {
         branch 'master'
       }
       steps {
         script {
-          docker.withRegistry( dockerRepo, dockerCreds ) {
+          docker.withRegistry( oldDockerRepo, oldDockerCreds ) {
             dockerImage.push()
           }
         }

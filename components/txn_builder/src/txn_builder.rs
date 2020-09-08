@@ -325,7 +325,10 @@ pub trait BuildsTransactions {
                                                          key_pair.get_pk());
 
     let (ba, _, owner_memo) = build_blind_asset_record(&mut prng, &zei_params.pc_gens, &ar, vec![]);
-    self.add_operation_issue_asset(key_pair, token_code, seq_num, &[(TxOutput(ba), owner_memo)])
+    self.add_operation_issue_asset(key_pair,
+                                   token_code,
+                                   seq_num,
+                                   &[(TxOutput { record: ba }, owner_memo)])
   }
 
   #[allow(clippy::comparison_chain)]

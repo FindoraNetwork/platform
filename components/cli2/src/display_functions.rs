@@ -51,7 +51,7 @@ pub fn display_txo_entry(indent_level: u64, txo: &TxoCacheEntry) {
   println!("{}sid: {}", ind, serialize_or_str(&txo.sid, "<UNKNOWN>"));
   println!("{}Owned by: {}{}",
            ind,
-           serde_json::to_string(&txo.record.0.public_key).unwrap(),
+           serde_json::to_string(&txo.record.record.public_key).unwrap(),
            if let Some(o) = txo.owner.as_ref() {
              format!(" ({})", o.0)
            } else {
@@ -59,11 +59,11 @@ pub fn display_txo_entry(indent_level: u64, txo: &TxoCacheEntry) {
            });
   println!("{}Record Type: {}",
            ind,
-           serde_json::to_string(&txo.record.0.get_record_type()).unwrap());
+           serde_json::to_string(&txo.record.record.get_record_type()).unwrap());
   println!("{}Amount: {}",
            ind,
            txo.record
-              .0
+              .record
               .amount
               .get_amount()
               .map(|x| format!("{}", x))
@@ -71,7 +71,7 @@ pub fn display_txo_entry(indent_level: u64, txo: &TxoCacheEntry) {
   println!("{}Type: {}{}",
            ind,
            txo.record
-              .0
+              .record
               .asset_type
               .get_asset_type()
               .map(|x| AssetTypeCode { val: x }.to_base64())
