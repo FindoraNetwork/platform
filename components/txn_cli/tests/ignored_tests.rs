@@ -636,7 +636,7 @@ fn test_define_asset_simple_policies() {
 
   // Define token code
   let token_code = AssetTypeCode::gen_random().to_base64();
-  let quoted_code = if token_code.chars().next() == Some('-') {
+  let token_code = if token_code.chars().next() == Some('-') {
     format!("\\{}", &token_code)
   } else {
     token_code
@@ -654,7 +654,7 @@ fn test_define_asset_simple_policies() {
                         "0",
                         "define_asset",
                         "--token_code",
-                        &quoted_code,
+                        &token_code,
                         "--memo",
                         "Define an asset",
                         "--cosigners",
@@ -688,6 +688,11 @@ fn test_define_issue_transfer_and_submit_with_args() {
 
   // Define asset
   let token_code = AssetTypeCode::gen_random().to_base64();
+  let token_code = if token_code.chars().next() == Some('-') {
+    format!("\\{}", &token_code)
+  } else {
+    token_code
+  };
   define_asset(dir,
                creation_txn_builder_file,
                "0",
@@ -746,7 +751,7 @@ fn test_issue_transfer_trace_and_submit_with_args() {
                                &mut ledger_standalone).expect("Failed to create transaction builder");
 
   // Define token code
-  let token_code = AssetTypeCode::gen_random().to_base64();
+  let token_code = AssetTypeCode::gen_utf8_random();
 
   // Define asset
   define_asset(dir,

@@ -469,10 +469,11 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
         let (ba, _, owner_memo) =
           build_blind_asset_record(self.ledger.get_prng(), &params.pc_gens, &ar, vec![]);
 
-        let asset_issuance_body =
-          IssueAssetBody::new(&code,
-                              new_seq_num,
-                              &[(TxOutput(ba, None), owner_memo.clone())]).unwrap();
+        let asset_issuance_body = IssueAssetBody::new(&code,
+                                                      new_seq_num,
+                                                      &[(TxOutput { record: ba,
+                                                                    lien: None },
+                                                         owner_memo.clone())]).unwrap();
 
         let asset_issuance_operation =
           IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
@@ -523,7 +524,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
         while total_sum < amt && !avail.is_empty() {
           let sid = avail.pop_front().unwrap();
-          let blind_rec = &(self.ledger.get_utxo(sid).unwrap().utxo.0).0;
+          let blind_rec = &(self.ledger.get_utxo(sid).unwrap().utxo.0).record;
           let memo = self.owner_memos.get(&sid).cloned();
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           // dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
@@ -724,8 +725,11 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
             let (ba, _, owner_memo) =
               build_blind_asset_record(self.ledger.get_prng(), &params.pc_gens, &ar, vec![]);
 
-            let asset_issuance_body =
-              IssueAssetBody::new(&code, 0, &[(TxOutput(ba, None), owner_memo)]).unwrap();
+            let asset_issuance_body = IssueAssetBody::new(&code,
+                                                          0,
+                                                          &[(TxOutput { record: ba,
+                                                                        lien: None },
+                                                             owner_memo)]).unwrap();
 
             let asset_issuance_operation =
               IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
@@ -830,7 +834,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
         let ctrt_record = {
           let txo = (self.ledger.get_utxo(*ctrt_txo).unwrap().utxo.0);
           let memo = self.owner_memos.get(&ctrt_txo).cloned();
-          let open_rec = open_blind_asset_record(&txo.0, &memo, &privkey).unwrap();
+          let open_rec = open_blind_asset_record(&txo.record, &memo, &privkey).unwrap();
 
           AssetRecord::from_open_asset_record_no_asset_tracking(open_rec)
         };
@@ -851,7 +855,8 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
           let (ba, owner_memo) =
             (ar.open_asset_record.blind_asset_record.clone(), ar.owner_memo.clone());
 
-          let iss_txo = TxOutput(ba, None);
+          let iss_txo = TxOutput { record: ba,
+                                   lien: None };
 
           let asset_issuance_body =
             IssueAssetBody::new(&code, new_seq_num, &[(iss_txo, owner_memo)]).unwrap();
@@ -890,7 +895,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                 }
 
                 for (ix, (i, memo)) in inps.iter().enumerate() {
-                  let blind_rec = i.0.clone();
+                  let blind_rec = i.record.clone();
 
                   let open_rec = open_blind_asset_record(&blind_rec, &memo, &privkey).unwrap();
 
@@ -981,7 +986,9 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
         *ctrt_txo = txos[0];
         *already_bound = Some(new_lien.into_iter()
                                       .map(|x| {
-                                        (TxOutput(x.open_asset_record.blind_asset_record, None),
+                                        (TxOutput { record: x.open_asset_record
+                                                             .blind_asset_record,
+                                                    lien: None },
                                          x.owner_memo)
                                       })
                                       .collect());
@@ -1023,7 +1030,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
             let ctrt_record = {
               let txo = (self.ledger.get_utxo(src_ctrt).unwrap().utxo.0);
               let memo = self.owner_memos.get(&src_ctrt).cloned();
-              let open_rec = open_blind_asset_record(&txo.0, &memo, &src_priv).unwrap();
+              let open_rec = open_blind_asset_record(&txo.record, &memo, &src_priv).unwrap();
 
               AssetRecord::from_open_asset_record_no_asset_tracking(open_rec)
             };
@@ -1050,7 +1057,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
               };
 
               for (i, memo) in src_txos.iter() {
-                let blind_rec = i.0.clone();
+                let blind_rec = i.record.clone();
 
                 let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
 
@@ -1238,7 +1245,8 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                 for ix in avail {
                   let rec = mem::replace(txn_txos.get_mut(ix).unwrap(), None).unwrap();
 
-                  lien.push(TxOutput(rec.open_asset_record.blind_asset_record.clone(), None));
+                  lien.push(TxOutput { record: rec.open_asset_record.blind_asset_record.clone(),
+                                       lien: None });
                   lien_records.push(rec.clone());
                   in_refs.push((TxoRef::Relative((txn_txos.len() - 1 - ix) as u64), None));
                   in_records.push(rec);
@@ -1330,8 +1338,9 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
 
             let lien_entry = lien_records.into_iter()
                                          .map(|rec| {
-                                           (TxOutput(rec.open_asset_record.blind_asset_record,
-                                                     None),
+                                           (TxOutput { record: rec.open_asset_record
+                                                                  .blind_asset_record,
+                                                       lien: None },
                                             rec.owner_memo)
                                          })
                                          .collect::<Vec<_>>();
@@ -1364,7 +1373,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
           let ctrt_record = {
             let txo = (self.ledger.get_utxo(dst_ctrt).unwrap().utxo.0);
             let memo = self.owner_memos.get(&dst_ctrt).cloned();
-            let open_rec = open_blind_asset_record(&txo.0, &memo, &dst_priv).unwrap();
+            let open_rec = open_blind_asset_record(&txo.record, &memo, &dst_priv).unwrap();
 
             AssetRecord::from_open_asset_record_no_asset_tracking(open_rec)
           };
@@ -1389,7 +1398,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
               }
 
               for (i, memo) in dst_txos.iter() {
-                let blind_rec = i.0.clone();
+                let blind_rec = i.record.clone();
 
                 let open_rec = open_blind_asset_record(&blind_rec, &memo, &dst_priv).unwrap();
 
@@ -1502,8 +1511,9 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
 
             let lien_entry = lien_records.into_iter()
                                          .map(|rec| {
-                                           (TxOutput(rec.open_asset_record.blind_asset_record,
-                                                     None),
+                                           (TxOutput { record: rec.open_asset_record
+                                                                  .blind_asset_record,
+                                                       lien: None },
                                             rec.owner_memo)
                                          })
                                          .collect::<Vec<_>>();
@@ -1623,10 +1633,11 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
         let (ba, _, owner_memo) =
           build_blind_asset_record(self.base_ledger.get_prng(), &params.pc_gens, &ar, vec![]);
 
-        let asset_issuance_body =
-          IssueAssetBody::new(&code,
-                              new_seq_num,
-                              &[(TxOutput(ba, None), owner_memo.clone())]).unwrap();
+        let asset_issuance_body = IssueAssetBody::new(&code,
+                                                      new_seq_num,
+                                                      &[(TxOutput { record: ba,
+                                                                    lien: None },
+                                                         owner_memo.clone())]).unwrap();
 
         let asset_issuance_operation =
           IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
@@ -1674,7 +1685,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
 
         while total_sum < amt && !avail.is_empty() {
           let sid = avail.pop_front().unwrap();
-          let blind_rec = &((self.txos.get(sid).unwrap().0).0);
+          let blind_rec = &((self.txos.get(sid).unwrap().0).record);
           let memo = &(self.txos.get(sid).unwrap().1);
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           // dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
@@ -1926,10 +1937,11 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         let (ba, _, owner_memo) =
           build_blind_asset_record(&mut self.prng, &params.pc_gens, &ar, vec![]);
 
-        let asset_issuance_body =
-          IssueAssetBody::new(&code,
-                              new_seq_num,
-                              &[(TxOutput(ba, None), owner_memo.clone())]).unwrap();
+        let asset_issuance_body = IssueAssetBody::new(&code,
+                                                      new_seq_num,
+                                                      &[(TxOutput { record: ba,
+                                                                    lien: None },
+                                                         owner_memo.clone())]).unwrap();
 
         let asset_issuance_operation =
           IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair }).unwrap();
@@ -1980,7 +1992,7 @@ impl<T> InterpretAccounts<PlatformError> for LedgerStandaloneAccounts<T>
         let mut to_skip: Vec<TxoSID> = Vec::new();
         while total_sum < amt && !avail.is_empty() {
           let sid = avail.pop_front().unwrap();
-          let blind_rec = (self.client.get_utxo(sid).unwrap().utxo.0).0;
+          let blind_rec = (self.client.get_utxo(sid).unwrap().utxo.0).record;
           let memo = self.owner_memos.get(&sid).cloned();
           let open_rec = open_blind_asset_record(&blind_rec, &memo, &src_priv).unwrap();
           // dbg!(sid, open_rec.get_amount(), open_rec.get_asset_type());
