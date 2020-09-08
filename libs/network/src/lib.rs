@@ -238,7 +238,7 @@ mod tests {
   #[test]
   fn test_define_asset(code: Vec<u8>) {
     let code = AssetTypeCode::new_from_vec(code);
-    let mut ledger = LedgerStandalone::new_mock(2);
+    let mut ledger = LedgerStandalone::new_mock(1);
     let mut prng = ChaChaRng::from_entropy();
     let creator = XfrKeyPair::generate(&mut prng);
     println!("{:?}", code);
