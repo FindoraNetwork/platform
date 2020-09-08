@@ -73,9 +73,9 @@ check_transfer()
     check_line_err 60 "Committed!"
 
     run bash -c "$CLI2 list-txos --unspent=true"
-    debug_lines
+    # debug_lines
     [ "$status" -eq 0 ]
-    debug_lines
+    # debug_lines
     check_line 2 " Owned by: \"i4-1NC50E4omcPdO4N28v7cBvp0pnPOFp6Jvyu4G3J4=\" (bob)"
     check_line 4 " Amount: $amount_displayed"
 

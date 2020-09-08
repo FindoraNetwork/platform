@@ -22,7 +22,7 @@ use zei::xfr::structs::{AssetRecordTemplate, AssetTracerMemo, BlindAssetRecord, 
 /// Merges two asset records.
 /// # Arguments
 /// * `key_pair`: key pair of the two records.
-/// * `seq_id`: seq_id, currently the block_commit_count
+/// * `no_replay_token`:
 /// * `sid1`: SID of the first record.
 /// * `sid2`: SID of the second record.
 /// * `blind_asset_record1`: blind asset record of the first record.
@@ -80,7 +80,6 @@ pub(crate) fn merge_records(key_pair: &XfrKeyPair,
 /// * `memo_file`: path to store the tracer and owner memos, optional.
 /// * `rest_client`: http client
 pub fn load_funds<T>(data_dir: &str,
-                     seq_id: u64,
                      issuer_id: u64,
                      recipient_id: u64,
                      amount: u64,
@@ -100,7 +99,7 @@ pub fn load_funds<T>(data_dir: &str,
   } else {
     let fiat_code = AssetTypeCode::gen_random();
     let txn_builder = define_asset(data_dir,
-                                   seq_id,
+                                   rest_client.get_block_commit_count()?,
                                    true,
                                    issuer_key_pair,
                                    fiat_code,
@@ -115,6 +114,7 @@ pub fn load_funds<T>(data_dir: &str,
   };
 
   // Issue and transfer asset
+  let seq_id = rest_client.get_block_commit_count()?;
   let txn_builder =
     issue_and_transfer_asset(data_dir,
                              seq_id,
@@ -136,7 +136,7 @@ pub fn load_funds<T>(data_dir: &str,
   let sid_merged = if let Some(sid_pre) = recipient.fiat_utxo {
     let blind_asset_record_pre = (rest_client.get_utxo(sid_pre).unwrap().utxo.0).0;
     let txn_builder = merge_records(recipient_key_pair,
-                                    seq_id,
+                                    rest_client.get_block_commit_count()?,
                                     TxoRef::Absolute(sid_pre),
                                     TxoRef::Absolute(sid_new),
                                     (blind_asset_record_pre, None), // no associated owner memo with blind asset record
@@ -161,7 +161,6 @@ pub fn load_funds<T>(data_dir: &str,
 /// * `issuer_id`: issuer ID.
 /// * `rest_client`: path to store the asset tracer memo and owner memo, optional.
 pub fn fulfill_loan<T>(data_dir: &str,
-                       seq_id: u64,
                        loan_id: u64,
                        issuer_id: u64,
                        memo_file: Option<&str>,
@@ -326,6 +325,7 @@ pub fn fulfill_loan<T>(data_dir: &str,
     AssetTypeCode::new_from_base64(&code)?
   } else {
     let fiat_code = AssetTypeCode::gen_random();
+    let seq_id = rest_client.get_block_commit_count()?;
     let txn_builder = define_asset(data_dir,
                                    seq_id,
                                    true,
@@ -343,6 +343,7 @@ pub fn fulfill_loan<T>(data_dir: &str,
 
   // Issue and transfer fiat token
   let fiat_txn_file = &format!("{}/{}", data_dir, "fiat_txn_file");
+  let seq_id = rest_client.get_block_commit_count()?;
   let txn_builder =
     issue_and_transfer_asset(data_dir,
                              seq_id,
@@ -371,7 +372,7 @@ pub fn fulfill_loan<T>(data_dir: &str,
                         loan_amount: amount };
   let memo_str = serde_json::to_string(&memo).map_err(|_| ser_fail!())?;
   let txn_builder = define_asset(data_dir,
-                                 seq_id,
+                                 rest_client.get_block_commit_count()?,
                                  false,
                                  borrower_key_pair,
                                  debt_code,
@@ -384,6 +385,7 @@ pub fn fulfill_loan<T>(data_dir: &str,
 
   // Issue and transfer debt token
   let debt_txn_file = "debt_txn_file";
+  let seq_id = rest_client.get_block_commit_count()?;
   let txn_builder =
     issue_and_transfer_asset(data_dir,
                              seq_id,
@@ -428,7 +430,8 @@ pub fn fulfill_loan<T>(data_dir: &str,
                                               .sign(lender_key_pair)?
                                               .sign(borrower_key_pair)?
                                               .transaction()?;
-  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
+
+  let mut txn_builder = TransactionBuilder::from_seq_id(rest_client.get_block_commit_count()?);
   txn_builder.add_operation(xfr_op);
 
   // Submit transaction
@@ -439,7 +442,7 @@ pub fn fulfill_loan<T>(data_dir: &str,
     let blind_asset_record_pre = (rest_client.get_utxo(sid_pre)?.utxo.0).0;
     let blind_asset_record_new = (rest_client.get_utxo(sids_new[1])?.utxo.0).0;
     let txn_builder = merge_records(borrower_key_pair,
-                                    seq_id,
+                                    rest_client.get_block_commit_count()?,
                                     TxoRef::Absolute(sid_pre),
                                     TxoRef::Absolute(sids_new[1]),
                                     (blind_asset_record_pre, None),
@@ -470,7 +473,6 @@ pub fn fulfill_loan<T>(data_dir: &str,
 /// * `amount`: amount to pay.
 /// * `rest_client`: http client
 pub fn pay_loan<T>(data_dir: &str,
-                   seq_id: u64,
                    loan_id: u64,
                    amount: u64,
                    rest_client: &mut T)
@@ -607,7 +609,8 @@ AssetRecordTemplate::with_no_asset_tracking(borrower.balance - amount_to_spend,
                                           .create(TransferType::DebtSwap)?
                                           .sign(borrower_key_pair)?
                                           .transaction()?;
-  let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
+
+  let mut txn_builder = TransactionBuilder::from_seq_id(rest_client.get_block_commit_count()?);
   txn_builder.add_operation(op).transaction();
 
   // Submit transaction and update data
@@ -655,7 +658,7 @@ mod tests {
 
     // Merge records
     assert!(merge_records(&key_pair,
-                          0, // OK to use 0 for seq_id as this doesn't get submitted
+                          0, // OK to use default as this doesn't get submitted
                           TxoRef::Absolute(TxoSID(1)),
                           TxoRef::Absolute(TxoSID(2)),
                           (bar1, memo1),
@@ -672,8 +675,7 @@ mod tests {
     let data_dir = tmp_dir.path().to_str().unwrap();
 
     let funds_amount = 1000;
-    let (_, seq_id, _) = ledger_standalone.get_state_commitment().unwrap();
-    load_funds(data_dir, seq_id, 0, 0, funds_amount, &mut ledger_standalone).unwrap();
+    load_funds(data_dir, 0, 0, funds_amount, &mut ledger_standalone).unwrap();
     let data = load_data(data_dir).unwrap();
 
     assert_eq!(data.borrowers[0].balance, funds_amount);
@@ -691,8 +693,7 @@ mod tests {
     assert_eq!(data.loans.len(), 1);
 
     // Fulfill the loan request
-    let seq_id = 0; // OK
-    fulfill_loan(data_dir, seq_id, 0, 0, None, &mut ledger_standalone).unwrap();
+    fulfill_loan(data_dir, 0, 0, None, &mut ledger_standalone).unwrap();
     data = load_data(data_dir).unwrap();
 
     assert_eq!(data.loans[0].status, LoanStatus::Active);
@@ -700,7 +701,7 @@ mod tests {
 
     // Pay loan
     let payment_amount = 200;
-    pay_loan(data_dir, seq_id, 0, payment_amount, &mut ledger_standalone).unwrap();
+    pay_loan(data_dir, 0, payment_amount, &mut ledger_standalone).unwrap();
     data = load_data(data_dir).unwrap();
 
     assert_eq!(data.loans[0].payments, 1);

@@ -28,6 +28,8 @@ use zei::xfr::structs::{
   BlindAssetRecord, OwnerMemo, XfrBody, ASSET_TYPE_LENGTH,
 };
 
+pub const TRANSACTION_WINDOW_WIDTH: usize = 128;
+
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
   base64::encode_config(input, base64::URL_SAFE)
 }
@@ -443,6 +445,27 @@ pub enum TxoRef {
   Absolute(TxoSID),
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NoReplayToken(u64, u64);
+
+impl NoReplayToken {
+  pub fn new<R: RngCore>(prng: &mut R, seq_id: u64) -> Self {
+    NoReplayToken(prng.next_u64(), seq_id)
+  }
+
+  pub fn testonly_new(rand: u64, seq_id: u64) -> Self {
+    NoReplayToken(rand, seq_id)
+  }
+
+  pub fn get_seq_id(&self) -> u64 {
+    self.1
+  }
+
+  pub fn get_rand(&self) -> u64 {
+    self.0
+  }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAssetBody {
   pub inputs: Vec<TxoRef>, // Ledger address of inputs
@@ -583,6 +606,7 @@ pub struct UpdateMemoBody {
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub asset_type: AssetTypeCode,
+  pub no_replay_token: NoReplayToken,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -591,18 +615,21 @@ pub struct AIRAssignBody {
   pub data: CredCommitment,
   pub issuer_pk: CredIssuerPublicKey,
   pub pok: CredPoK,
+  pub no_replay_token: NoReplayToken,
 }
 
 impl AIRAssignBody {
   pub fn new(addr: CredUserPublicKey,
              data: CredCommitment,
              issuer_pk: CredIssuerPublicKey,
-             pok: CredPoK)
+             pok: CredPoK,
+             no_replay_token: NoReplayToken)
              -> Result<AIRAssignBody, errors::PlatformError> {
     Ok(AIRAssignBody { addr,
                        data,
                        issuer_pk,
-                       pok })
+                       pok,
+                       no_replay_token })
   }
 }
 
@@ -811,13 +838,10 @@ pub struct KVUpdate {
 pub type KVEntrySignature = SignatureOf<(Key, u64, Option<KVEntry>)>;
 
 impl KVUpdate {
-  pub fn new(creation_body: (Key, Option<KVHash>),
-             seq_number: u64,
-             keypair: &XfrKeyPair)
-             -> KVUpdate {
+  pub fn new(creation_body: (Key, Option<KVHash>), seq_num: u64, keypair: &XfrKeyPair) -> KVUpdate {
     let creation_body = match creation_body {
-      (k, None) => (k, seq_number, None),
-      (k, Some(data)) => (k, seq_number, Some(KVEntry(*keypair.get_pk_ref(), data))),
+      (k, None) => (k, seq_num, None),
+      (k, Some(data)) => (k, seq_num, Some(KVEntry(*keypair.get_pk_ref(), data))),
     };
     let signature = SignatureOf::new(&keypair, &creation_body);
     KVUpdate { body: creation_body,
@@ -847,6 +871,14 @@ pub enum Operation {
   // ... etc...
 }
 
+fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
+  match op {
+    Operation::UpdateMemo(um) => um.body.no_replay_token = no_replay_token,
+    Operation::AIRAssign(aa) => aa.body.no_replay_token = no_replay_token,
+    _ => (),
+  }
+}
+
 #[derive(Clone, Debug)]
 pub struct TimeBounds {
   pub start: DateTime<Utc>,
@@ -855,6 +887,7 @@ pub struct TimeBounds {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, Default)]
 pub struct TransactionBody {
+  pub no_replay_token: NoReplayToken,
   pub operations: Vec<Operation>,
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
@@ -867,10 +900,17 @@ pub struct TransactionBody {
   pub memos: Vec<Memo>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)] //, Default
+impl TransactionBody {
+  fn from_token(no_replay_token: NoReplayToken) -> Self {
+    let mut result = TransactionBody::default();
+    result.no_replay_token = no_replay_token;
+    result
+  }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Transaction {
   pub body: TransactionBody,
-  pub seq_id: u64,
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub signatures: Vec<SignatureOf<TransactionBody>>,
@@ -1190,8 +1230,9 @@ impl Transaction {
   }
 
   pub fn from_seq_id(seq_id: u64) -> Self {
-    Transaction { body: TransactionBody::default(),
-                  seq_id,
+    let mut prng = ChaChaRng::from_entropy();
+    let no_replay_token = NoReplayToken::new(&mut prng, seq_id);
+    Transaction { body: TransactionBody::from_token(no_replay_token),
                   signatures: Vec::new() }
   }
 
@@ -1202,6 +1243,12 @@ impl Transaction {
   }
 
   pub fn add_operation(&mut self, op: Operation) {
+    let mut mutable_op = op;
+    set_no_replay_token(&mut mutable_op, self.body.no_replay_token);
+    self.body.operations.push(mutable_op);
+  }
+
+  pub fn testonly_add_operation(&mut self, op: Operation) {
     self.body.operations.push(op);
   }
 
@@ -1419,7 +1466,7 @@ mod tests {
   fn test_add_operation() {
     // Create values to be used to instantiate operations. Just make up a seq_id, since
     // it will never be sent to a real ledger
-    let mut transaction: Transaction = Transaction::from_seq_id(0);
+    let mut transaction: Transaction = Transaction::from_seq_id(666);
 
     let mut prng = rand_chacha::ChaChaRng::from_entropy();
 

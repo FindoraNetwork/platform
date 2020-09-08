@@ -18,7 +18,7 @@ check_balances()
     [ "$status" -eq 0 ]
 
     transfer_assets "1500" "3500" "n" "n" "true" "alice" "bob" "false" "Y"
-    debug_lines
+    # debug_lines
     [ "$status" -eq 0 ]
 
     # Alice makes a confidential transfer to Bob of some AliceCoins
@@ -37,7 +37,7 @@ check_balances()
     [ "$status" -eq 0 ]
 
     run bash -c "$CLI2 balances"
-    debug_lines
+    # debug_lines
     [ "$status" -eq  0 ]
     check_line 1 "(alice,AliceCoin):1200"
     check_line 2 "(alice,YamCoin):15000"

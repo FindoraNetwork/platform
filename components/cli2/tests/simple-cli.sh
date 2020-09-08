@@ -92,7 +92,7 @@ source "tests/common.sh"
   debug_lines
   [ "$status" -eq 0 ]
 
-  check_line 20 "Submitting to 'https://testnet.findora.org:8669/submit_transaction'"
+  check_line 20 "Submitting to '$FINDORA_SUBMIT_URL/submit_transaction'"
   check_line 25 "  DefineAsset 'AliceCoin'"
   check_line 29 "   issuer nickname: alice"
   check_line 32 "   memo: 'memo_alice'"

@@ -4,15 +4,14 @@ use credentials::{
   credential_commit, credential_issuer_key_gen, credential_sign, credential_user_key_gen,
   CredCommitment, CredCommitmentKey, CredIssuerPublicKey, CredIssuerSecretKey, Credential,
 };
-use cryptohash::sha256::Digest as BitDigest;
-use ledger::data_model::Transaction;
+use ledger::data_model::{StateCommitmentData, Transaction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use txn_builder::{BuildsTransactions, TransactionBuilder};
-use utils::{protocol_host, LEDGER_PORT, SUBMIT_PORT};
-use zei::xfr::sig::{XfrKeyPair, XfrSignature};
+use utils::{protocol_host, GlobalState, LEDGER_PORT, SUBMIT_PORT};
+use zei::xfr::sig::XfrKeyPair;
 
 /// Represents a file that can be searched
 
@@ -131,7 +130,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let client = reqwest::blocking::Client::new();
   let resp_gs = client.get(&format!("{}://{}:{}/global_state", protocol, host, LEDGER_PORT))
                       .send()?;
-  let (_comm, seq_id, _sig): (BitDigest, u64, XfrSignature) =
+  let (_, seq_id, _): GlobalState<StateCommitmentData> =
     serde_json::from_str(&resp_gs.text()?[..]).unwrap();
   run_txns(seq_id, num_txns, batch_size)
 }

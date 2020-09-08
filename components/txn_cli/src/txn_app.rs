@@ -43,11 +43,12 @@ fn io_error(msg: &str) -> Result<(), PlatformError> {
 /// # Arguments
 /// * `asset_issuer_matches`: subcommands and arguments under the `asset_issuer` subcommand.
 /// * `txn_file`: path to store the transaction file.
-pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
-                                       data_dir: &str,
-                                       txn_file: Option<&str>,
-                                       seq_id: u64)
-                                       -> Result<(), PlatformError> {
+pub(crate) fn process_asset_issuer_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
+  asset_issuer_matches: &clap::ArgMatches,
+  data_dir: &str,
+  txn_file: Option<&str>,
+  rest_client: &mut T)
+  -> Result<(), PlatformError> {
   match asset_issuer_matches.subcommand() {
     ("sign_up", Some(sign_up_matches)) => {
       let name = if let Some(name_arg) = sign_up_matches.value_of("name") {
@@ -206,6 +207,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
                  asset_token.to_base64(),
                  asset_token.val);
       }
+      let seq_id = rest_client.get_block_commit_count()?;
       match define_asset(data_dir,
                          seq_id,
                          fiat_asset,
@@ -231,6 +233,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
           .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
       let value = kv_matches.value_of("value")
                             .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+      let seq_id = rest_client.get_block_commit_count()?;
       let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
       let hash = KVHash::new(&value, None);
       txn_builder.add_operation_kv_update(&key_pair, &key, gen, Some(&hash))?;
@@ -252,6 +255,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let gen = parse_to_u64(kv_matches.value_of("gen")
           .ok_or_else(|| PlatformError::InputsError(error_location!()))?)
           .map_err(|e| PlatformError::InputsError(format!("{}:{}",e,error_location!())))?;
+      let seq_id = rest_client.get_block_commit_count()?;
       let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
 
       txn_builder.add_operation_kv_update(&key_pair, &key, gen, None)?;
@@ -287,6 +291,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
         return Err(PlatformError::InputsError(error_location!()));
       };
       let confidential_amount = issue_asset_matches.is_present("confidential_amount");
+      let seq_id = rest_client.get_block_commit_count()?;
       let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
       let params = PublicParams::new();
       if let Err(e) =
@@ -450,6 +455,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       }
 
       // Transfer asset
+      let seq_id = rest_client.get_block_commit_count()?;
       let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
       if let Err(e) = txn_builder.add_basic_transfer_asset(&issuer_key_pair,
                                                            &transfer_from[..],
@@ -502,7 +508,7 @@ pub(crate) fn process_asset_issuer_cmd(asset_issuer_matches: &clap::ArgMatches,
       let confidential_amount = issue_and_transfer_matches.is_present("confidential_amount");
       let record_type = AssetRecordType::from_booleans(confidential_amount, false);
       let memo_file = issue_and_transfer_matches.value_of("memo_file");
-
+      let seq_id = rest_client.get_block_commit_count()?;
       issue_and_transfer_asset(data_dir,
                                seq_id,
                                &issuer_key_pair,
@@ -656,7 +662,6 @@ pub(crate) fn process_credential_issuer_cmd(credential_issuer_matches: &clap::Ar
 pub(crate) fn process_lender_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
   lender_matches: &clap::ArgMatches,
   data_dir: &str,
-  seq_id: u64,
   rest_client: &mut T)
   -> Result<(), PlatformError> {
   let mut data = load_data(data_dir)?;
@@ -757,7 +762,7 @@ pub(crate) fn process_lender_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
         return Err(PlatformError::InputsError(error_location!()));
       };
       let memo_file = fulfill_loan_matches.value_of("memo_file");
-      fulfill_loan(data_dir, seq_id, loan_id, issuer_id, memo_file, rest_client)
+      fulfill_loan(data_dir, loan_id, issuer_id, memo_file, rest_client)
     }
     ("create_or_overwrite_requirement", Some(create_or_overwrite_requirement_matches)) => {
       let lender_id = if let Some(id_arg) = lender_matches.value_of("id") {
@@ -815,7 +820,6 @@ pub(crate) fn process_borrower_cmd<T: RestfulQueryServerAccess
                                      + RestfulLedgerUpdate>(
   borrower_matches: &clap::ArgMatches,
   data_dir: &str,
-  seq_id: u64,
   rest_client: &mut T)
   -> Result<(), PlatformError> {
   let mut data = load_data(data_dir)?;
@@ -836,11 +840,7 @@ pub(crate) fn process_borrower_cmd<T: RestfulQueryServerAccess
         eprintln!("Borrower id is required to load funds. Use borrower --id.");
         return Err(PlatformError::InputsError(error_location!()));
       };
-      process_load_funds_cmd(load_funds_matches,
-                             data_dir,
-                             borrower_id,
-                             seq_id,
-                             rest_client)
+      process_load_funds_cmd(load_funds_matches, data_dir, borrower_id, rest_client)
     }
     ("view_loan", Some(view_loan_matches)) => {
       let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
@@ -963,7 +963,7 @@ pub(crate) fn process_borrower_cmd<T: RestfulQueryServerAccess
         eprintln!("Loan id is required to pay the loan.");
         return Err(PlatformError::InputsError(error_location!()));
       }
-      process_pay_loan_cmd(pay_loan_matches, data_dir, seq_id, rest_client)
+      process_pay_loan_cmd(pay_loan_matches, data_dir, rest_client)
     }
     ("view_credential", Some(view_credential_matches)) => {
       let borrower_id = if let Some(id_arg) = borrower_matches.value_of("id") {
@@ -1076,10 +1076,11 @@ pub(crate) fn process_borrower_cmd<T: RestfulQueryServerAccess
 /// # Arguments
 /// * `create_matches`: subcommands and arguments under the `create_txn_builder` subcommand.
 /// * `txn_file`: path to store the transaction file.
-pub(crate) fn process_create_txn_builder_cmd(create_matches: &clap::ArgMatches,
-                                             seq_id: u64,
-                                             txn_file: &str)
-                                             -> Result<(), PlatformError> {
+pub(crate) fn process_create_txn_builder_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
+  create_matches: &clap::ArgMatches,
+  txn_file: &str,
+  rest_client: &mut T)
+  -> Result<(), PlatformError> {
   let name = create_matches.value_of("name");
   let overwrite = create_matches.is_present("overwrite");
   let file_str = if let Some(name) = name {
@@ -1089,6 +1090,7 @@ pub(crate) fn process_create_txn_builder_cmd(create_matches: &clap::ArgMatches,
   };
   let expand_str = shellexpand::tilde(&file_str).to_string();
   create_directory_and_rename_path(&expand_str, overwrite)?;
+  let seq_id = rest_client.get_block_commit_count()?;
   let txn_builder = TransactionBuilder::from_seq_id(seq_id);
   store_txn_to_file(&expand_str, &txn_builder)
 }
@@ -1132,7 +1134,6 @@ pub(crate) fn process_load_funds_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdat
   load_funds_matches: &clap::ArgMatches,
   data_dir: &str,
   borrower_id: u64,
-  seq_id: u64,
   rest_client: &mut T)
   -> Result<(), PlatformError> {
   let issuer_id = if let Some(issuer_arg) = load_funds_matches.value_of("issuer") {
@@ -1152,12 +1153,7 @@ pub(crate) fn process_load_funds_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdat
     eprintln!("Amount is required to load funds. Use --amount.");
     return Err(PlatformError::InputsError(error_location!()));
   };
-  load_funds(data_dir,
-             seq_id,
-             issuer_id,
-             borrower_id,
-             amount,
-             rest_client)
+  load_funds(data_dir, issuer_id, borrower_id, amount, rest_client)
 }
 
 /// Processes the `borrower pay_loan` subcommand.
@@ -1167,7 +1163,6 @@ pub(crate) fn process_load_funds_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdat
 pub(crate) fn process_pay_loan_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>(
   pay_loan_matches: &clap::ArgMatches,
   data_dir: &str,
-  seq_id: u64,
   rest_client: &mut T)
   -> Result<(), PlatformError> {
   let loan_id = if let Some(loan_arg) = pay_loan_matches.value_of("loan") {
@@ -1183,7 +1178,7 @@ pub(crate) fn process_pay_loan_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
     return Err(PlatformError::InputsError(error_location!()));
   };
 
-  pay_loan(data_dir, seq_id, loan_id, amount, rest_client)
+  pay_loan(data_dir, loan_id, amount, rest_client)
 }
 
 /// Processes input commands and arguments.
@@ -1191,7 +1186,6 @@ pub(crate) fn process_pay_loan_cmd<T: RestfulLedgerAccess + RestfulLedgerUpdate>
 /// * `inputs`: input subcommands and arguments.
 pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + RestfulLedgerUpdate>(
   inputs: clap::ArgMatches,
-  seq_id: u64,
   rest_client: &mut T)
   -> Result<(), PlatformError> {
   let dir = if let Some(dir) = inputs.value_of("dir") {
@@ -1215,20 +1209,16 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
   match inputs.subcommand() {
     ("asset_issuer", Some(asset_issuer_matches)) => {
       let txn_file_opt = inputs.value_of("txn");
-      process_asset_issuer_cmd(asset_issuer_matches, &dir, txn_file_opt, seq_id)
+      process_asset_issuer_cmd(asset_issuer_matches, &dir, txn_file_opt, rest_client)
     }
     ("credential_issuer", Some(credential_issuer_matches)) => {
       process_credential_issuer_cmd(credential_issuer_matches, &dir)
     }
-    ("lender", Some(issuer_matches)) => {
-      process_lender_cmd(issuer_matches, &dir, seq_id, rest_client)
-    }
-    ("borrower", Some(issuer_matches)) => {
-      process_borrower_cmd(issuer_matches, &dir, seq_id, rest_client)
-    }
+    ("lender", Some(issuer_matches)) => process_lender_cmd(issuer_matches, &dir, rest_client),
+    ("borrower", Some(issuer_matches)) => process_borrower_cmd(issuer_matches, &dir, rest_client),
     ("create_txn_builder", Some(create_txn_builder_matches)) => {
       if let Some(txn_file) = create_txn_builder_matches.value_of("name") {
-        process_create_txn_builder_cmd(create_txn_builder_matches, seq_id, &txn_file)
+        process_create_txn_builder_cmd(create_txn_builder_matches, &txn_file, rest_client)
       } else {
         eprintln!("Missing --name <filename>");
         inputs_error(&format!("Missing --name <filename> at {}", error_location!()))

@@ -6,8 +6,8 @@ source "tests/common.sh"
   run $CLI2 list-config
   debug_lines
   [ "$status" -eq 0 ]
-  check_line 0 'Submission server: https://testnet.findora.org:8669'
-  check_line 1 'Ledger access server: https://testnet.findora.org:8668'
+  check_line 0 'Submission server: '$FINDORA_SUBMIT_URL
+  check_line 1 'Ledger access server: '$FINDORA_ACCESS_URL
   check_line 2 'Ledger public signing key:'
   check_line 3 'Ledger state commitment:'
   check_line 4 'Ledger block idx:'
@@ -21,8 +21,8 @@ source "tests/common.sh"
   [ "$status" -eq 0 ]
   check_line 0  "Saving ledger signing key"
   check_line 1  'New state retrieved.'
-  check_line 2 'Submission server: https://testnet.findora.org:8669'
-  check_line 3 'Ledger access server: https://testnet.findora.org:8668'
+  check_line 2 'Submission server: '$FINDORA_SUBMIT_URL
+  check_line 3 'Ledger access server: '$FINDORA_ACCESS_URL
   check_line 4 'Ledger public signing key:'
   check_line 5 'Ledger state commitment:'
   check_line 6 'Ledger block idx:'
@@ -94,11 +94,22 @@ source "tests/common.sh"
 
 @test "query-asset-type" {
   run  bash -c "  $DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS"
+  debug_lines
 
   [ "$status" -eq 0 ]
 
-  run $CLI2 query-asset-type --replace=false AliceCoin PfUm5iKkKjiEDuBllekTa3bvxtOSKZy1PeUFLzef1JY=
+  run $CLI2 list-asset-type AliceCoin
+  debug_lines
 
+  alice_coin_code=$($CLI2 list-asset-type AliceCoin | sed -n 's/^\s*code:\s*\(\S*\)*$/\1/p')
+
+  setup
+
+  echo "code: $alice_coin_code"
+  run $CLI2 query-asset-type --replace=false AliceCoin "$alice_coin_code"
+
+  debug_lines
+  echo $status
   [ "$status" -eq 0 ]
 
   run $CLI2 list-asset-types
@@ -106,7 +117,7 @@ source "tests/common.sh"
   check_line 0 "Asset 'AliceCoin'"
   check_line 1 " issuer nickname: <UNKNOWN>"
   check_line 2 " issuer public key:"
-  check_line 3 " code: PfUm5iKkKjiEDuBllekTa3bvxtOSKZy1PeUFLzef1JY="
+  check_line 3 " code: $alice_coin_code"
   check_line 4 " memo: 'memo_alice'"
   check_line 5 " issue_seq_number: 0"
 }
@@ -121,7 +132,8 @@ source "tests/common.sh"
                $PASSWORD_PROMPT | $CLI2 build-transaction; \
                $DOUBLE_CONFIRM_WITH_PROMPT | $CLI2 submit 0;"
   [ "$status" -eq 0 ]
-  check_line 23 "Submitting to 'https://testnet.findora.org:8669/submit_transaction'"
+  debug_lines
+  check_line 23 "Submitting to '$FINDORA_SUBMIT_URL/submit_transaction'"
   check_line 24 " seq_id:"
   check_line 28 "  DefineAsset 'TheBestAliceCoinsOnEarthV2'"
   check_line 29 "   issued by 'alice'"
@@ -136,8 +148,10 @@ source "tests/common.sh"
   check_line 51 "  - 'alice'"
   check_line_err 55 "Committed!"
 
+  alice_coin_code=$($CLI2 list-asset-type TheBestAliceCoinsOnEarthV2 | sed -n 's/^\s*code:\s*\(\S*\)*$/\1/p')
+
   # We query the asset type to check the issue_seq_number has been incremented
-  run $CLI2 query-asset-type --replace=false TheBestAliceCoinsOnEarthV2 0nyMhQo3bZZDxEHN_isswne7Q3dbb6TP2Z_dbZOBoTc=
+  run $CLI2 query-asset-type --replace=false TheBestAliceCoinsOnEarthV2 $alice_coin_code
 
   [ "$status" -eq 0 ]
   check_line 0 "Asset type"
