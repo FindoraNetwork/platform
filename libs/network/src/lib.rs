@@ -17,6 +17,9 @@ use submission_server::{TxnHandle, TxnStatus};
 use utils::{HashOf, SignatureOf, LEDGER_PORT, QUERY_PORT, SUBMIT_PORT};
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::OwnerMemo;
+#[cfg(test)]
+#[macro_use(quickcheck)]
+extern crate quickcheck_macros;
 
 pub type MockLedgerStandalone =
   LedgerStandalone<MockLUClient, MockLedgerClient, MockQueryServerClient>;
@@ -189,7 +192,7 @@ impl<LU: RestfulLedgerUpdate,
 #[cfg(test)]
 mod tests {
   use super::*;
-  use ledger::data_model::{Memo, NoReplayToken, Operation, UpdateMemo, UpdateMemoBody};
+  use ledger::data_model::*;
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
   use zei::xfr::sig::XfrKeyPair;
@@ -228,5 +231,39 @@ mod tests {
     } else {
       assert!(false);
     }
+  }
+
+  #[quickcheck]
+  #[ignore]
+  #[test]
+  fn test_define_asset(code: Vec<u8>) {
+    let code = AssetTypeCode::new_from_vec(code);
+    let mut ledger = LedgerStandalone::new_mock(2);
+    let mut prng = ChaChaRng::from_entropy();
+    let creator = XfrKeyPair::generate(&mut prng);
+    println!("{:?}", code);
+
+    let mut properties: Asset = Default::default();
+    properties.code = code;
+    properties.issuer.key = *creator.get_pk_ref();
+
+    let body = DefineAssetBody { asset: properties.clone() };
+
+    let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &creator }).unwrap();
+    let seq_id = ledger.get_block_commit_count().unwrap();
+    let txn = Transaction { body: TransactionBody { no_replay_token:
+                                                      NoReplayToken::new(&mut prng, seq_id),
+                                                    operations:
+                                                      vec![Operation::DefineAsset(op)],
+                                                    credentials: vec![],
+                                                    memos: vec![],
+                                                    policy_options: None },
+                            signatures: vec![] };
+
+    let handle = ledger.submit_transaction(&txn).unwrap();
+    if let TxnStatus::Rejected(_) = ledger.txn_status(&handle).unwrap() {
+      panic!("A valid transaction failed!");
+    }
+    assert_eq!(ledger.get_asset_type(&code).unwrap().properties, properties);
   }
 }

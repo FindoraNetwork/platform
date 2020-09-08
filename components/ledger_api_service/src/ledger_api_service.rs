@@ -69,7 +69,7 @@ pub fn query_asset_issuance_num<LA>(data: web::Data<Arc<RwLock<LA>>>,
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
-  if let Ok(token_code) = AssetTypeCode::new_from_utf8_safe(&*info) {
+  if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
     if let Some(iss_num) = reader.get_issuance_num(&token_code) {
       Ok(web::Json(iss_num))
     } else {
@@ -86,7 +86,7 @@ pub fn query_asset<LA>(data: web::Data<Arc<RwLock<LA>>>,
   where LA: LedgerAccess
 {
   let reader = data.read().unwrap();
-  if let Ok(token_code) = AssetTypeCode::new_from_utf8_safe(&*info) {
+  if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
     if let Some(asset) = reader.get_asset_type(&token_code) {
       Ok(web::Json(asset.clone()))
     } else {
@@ -514,7 +514,7 @@ impl RestfulLedgerAccess for MockLedgerClient {
                                    .route(&LedgerAccessRoutes::AssetIssuanceNum.with_arg_template("code"),
                                           web::get().to(query_asset_issuance_num::<LedgerState>)));
     let req =
-      test::TestRequest::get().uri(&LedgerAccessRoutes::AssetIssuanceNum.with_arg(&code.to_utf8()?))
+      test::TestRequest::get().uri(&LedgerAccessRoutes::AssetIssuanceNum.with_arg(&code.to_base64()))
                               .to_request();
     Ok(test::read_response_json(&mut app, req))
   }
@@ -525,7 +525,7 @@ impl RestfulLedgerAccess for MockLedgerClient {
                                    .route(&LedgerAccessRoutes::AssetToken.with_arg_template("code"),
                                           web::get().to(query_asset::<LedgerState>)));
     let req =
-      test::TestRequest::get().uri(&LedgerAccessRoutes::AssetToken.with_arg(&code.to_utf8()?))
+      test::TestRequest::get().uri(&LedgerAccessRoutes::AssetToken.with_arg(&code.to_base64()))
                               .to_request();
     Ok(test::read_response_json(&mut app, req))
   }
@@ -616,7 +616,7 @@ impl RestfulLedgerAccess for ActixLedgerClient {
                         self.protocol,
                         self.host,
                         self.port,
-                        LedgerAccessRoutes::AssetIssuanceNum.with_arg(&code.to_utf8()?));
+                        LedgerAccessRoutes::AssetIssuanceNum.with_arg(&code.to_base64()));
     let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
     Ok(serde_json::from_str::<u64>(&text).map_err(|_| ser_fail!())?)
   }
@@ -626,7 +626,7 @@ impl RestfulLedgerAccess for ActixLedgerClient {
                         self.protocol,
                         self.host,
                         self.port,
-                        LedgerAccessRoutes::AssetToken.with_arg(&code.to_utf8()?));
+                        LedgerAccessRoutes::AssetToken.with_arg(&code.to_base64()));
     let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
     Ok(serde_json::from_str::<AssetType>(&text).map_err(|_| ser_fail!())?)
   }
@@ -838,8 +838,7 @@ mod tests {
                                                .route("/asset_token/{token}",
                                                       web::get().to(query_asset::<LedgerState>)));
 
-    let req = test::TestRequest::get().uri(&format!("/asset_token/{}",
-                                                    token_code1.to_utf8().unwrap()))
+    let req = test::TestRequest::get().uri(&format!("/asset_token/{}", token_code1.to_base64()))
                                       .to_request();
     let resp = test::block_on(app.call(req)).unwrap();
 

@@ -7,6 +7,10 @@ extern crate serde_derive;
 extern crate itertools;
 extern crate zei;
 
+#[cfg(test)]
+#[macro_use(quickcheck)]
+extern crate quickcheck_macros;
+
 #[macro_use]
 pub mod data_model;
 pub mod policies;
