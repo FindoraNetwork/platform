@@ -13,7 +13,7 @@ flexi_logger = "0.15.2"
 ledger = { path = "../../ledger" }
 log = "0.4.8"
 merkle_tree = { path = "../../libs/ads/merkle_tree" }
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-3" }
+zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-5" }
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"

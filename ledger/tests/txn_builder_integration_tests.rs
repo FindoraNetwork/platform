@@ -42,7 +42,7 @@ pub fn apply_transaction(ledger: &mut LedgerState, tx: Transaction) -> (TxnSID, 
 fn test_create_asset() -> Result<(), PlatformError> {
   let mut prng = ChaChaRng::from_entropy();
   let mut ledger = LedgerState::test_ledger();
-  let code = AssetTypeCode::from_identical_byte(1);
+  let code = AssetTypeCode::gen_random();
   let keys = XfrKeyPair::generate(&mut prng);
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
   let params = PublicParams::new();
@@ -112,8 +112,8 @@ fn test_loan_repayment(loan_amount: u64,
   let params = PublicParams::new();
 
   // Asset Info
-  let fiat_code = AssetTypeCode::from_identical_byte(0);
-  let debt_code = AssetTypeCode::from_identical_byte(1);
+  let fiat_code = AssetTypeCode::gen_random();
+  let debt_code = AssetTypeCode::gen_random();
   let interest_rate = Fraction::new(interest_num, interest_denom); // Interest rate interest_num/interest_denom
   let debt_memo = DebtMemo { interest_rate,
                              fiat_code,
@@ -275,7 +275,7 @@ fn test_update_memo() -> Result<(), PlatformError> {
   // Generate the ledger and the things we need to define an asset
   let mut prng = ChaChaRng::from_entropy();
   let mut ledger = LedgerState::test_ledger();
-  let code = AssetTypeCode::from_identical_byte(1);
+  let code = AssetTypeCode::gen_random();
   let keys = XfrKeyPair::generate(&mut prng);
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
 
@@ -317,7 +317,7 @@ pub fn test_update_memo_orig() {
   let adversary = XfrKeyPair::generate(&mut ledger.get_prng());
 
   // Define fiat token
-  let code = AssetTypeCode::from_identical_byte(1);
+  let code = AssetTypeCode::gen_random();
   let seq_id = ledger.get_block_commit_count();
   let mut builder = TransactionBuilder::from_seq_id(seq_id);
   let asset_rules = AssetRules::default().set_updatable(true).clone();
@@ -382,7 +382,7 @@ pub fn test_update_memo_darp() {
   let creator = XfrKeyPair::generate(&mut ledger.get_prng());
 
   // Define fiat token
-  let code = AssetTypeCode::from_identical_byte(1);
+  let code = AssetTypeCode::gen_random();
   let seq_id = ledger.get_block_commit_count();
   let tx = create_definition_transaction(&code,
                                          &creator,

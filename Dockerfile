@@ -1,4 +1,4 @@
-FROM 563536162678.dkr.ecr.us-west-2.amazonaws.com/zei:v0.0.3-3.1 as zei
+FROM 563536162678.dkr.ecr.us-west-2.amazonaws.com/zei:v0.0.3-5 as zei
 FROM 563536162678.dkr.ecr.us-west-2.amazonaws.com/rust:2020-05-15 as builder
 RUN cargo install cargo-audit
 RUN cargo install wasm-pack

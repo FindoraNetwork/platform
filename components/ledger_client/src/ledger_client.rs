@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let mut prng = ChaChaRng::from_entropy();
   let mut tx = Transaction::from_seq_id(seq_id);
 
-  let token_code1 = AssetTypeCode::from_identical_byte(1);
+  let token_code1 = AssetTypeCode::gen_random();
   let keypair = build_keys(&mut prng);
 
   let asset_body = asset_creation_body(&token_code1,
@@ -35,11 +35,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   // env_logger::init();
 
-  let token_code_b64 = token_code1.to_base64();
+  let token_code_base64 = token_code1.to_base64();
   println!("\n\nQuery asset_token {:?}", &token_code1);
 
   let mut res = reqwest::blocking::get(&format!("http://{}:{}/{}/{}",
-                                                &host, &port, "asset_token", &token_code_b64))?;
+                                                &host, &port, "asset_token", &token_code_base64))?;
 
   println!("Status: {}", res.status());
   println!("Headers:\n{:?}", res.headers());
@@ -65,7 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   println!("Headers:\n{:?}", res.headers());
 
   let mut res = reqwest::blocking::get(&format!("http://{}:{}/{}/{}",
-                                                &host, &port, "asset_token", &token_code_b64))?;
+                                                &host, &port, "asset_token", &token_code_base64))?;
 
   println!("Status: {}", res.status());
   println!("Headers:\n{:?}", res.headers());

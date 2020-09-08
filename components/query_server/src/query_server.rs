@@ -576,7 +576,7 @@ mod tests {
     // This isn't actually being used in the test, we just make a ledger client so we can compile
     let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
     let mut query_server = QueryServer::new(mock_ledger);
-    let code = AssetTypeCode::from_identical_byte(1);
+    let code = AssetTypeCode::gen_random();
     let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
     let seq_id = ledger_state.get_block_commit_count();
     let mut builder = TransactionBuilder::from_seq_id(seq_id);
@@ -613,7 +613,7 @@ mod tests {
     // This isn't actually being used in the test, we just make a ledger client so we can compile
     let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
     let mut query_server = QueryServer::new(mock_ledger);
-    let code = AssetTypeCode::from_identical_byte(1);
+    let code = AssetTypeCode::gen_random();
     let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
     let seq_id = ledger_state.get_block_commit_count();
     let tx = create_definition_transaction(&code,
@@ -669,7 +669,7 @@ mod tests {
     let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
 
     // Create the first asset
-    let code1 = AssetTypeCode::from_identical_byte(1);
+    let code1 = AssetTypeCode::gen_random();
     let seq_id = ledger_state.get_block_commit_count();
     let tx1 = create_definition_transaction(&code1,
                                             &creator,
@@ -681,7 +681,7 @@ mod tests {
     query_server.add_new_block(&block1.block.txns).unwrap();
 
     // Create the second asset
-    let code2 = AssetTypeCode::from_identical_byte(2);
+    let code2 = AssetTypeCode::gen_random();
     let seq_id = ledger_state.get_block_commit_count();
     let tx2 = create_definition_transaction(&code2,
                                             &creator,
