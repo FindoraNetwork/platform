@@ -600,9 +600,10 @@ pub fn load_data(data_dir: &str) -> Result<Data, PlatformError> {
 /// # Arguments
 /// * `file_path`: file path.
 pub fn load_txn_from_file(file_path: &str) -> Result<TransactionBuilder, PlatformError> {
-  let txn = fs::read_to_string(file_path).or_else(|_| {
-              Err(PlatformError::IoError(format!("Failed to read file: {}", file_path)))
-            })?;
+  let txn = fs::read_to_string(file_path).map_err(|_| {
+                                           PlatformError::IoError(format!("Failed to read file: {}",
+                                                                  file_path))
+                                         })?;
   debug!("Parsing builder from file contents: \"{}\"", &txn);
   match serde_json::from_str(&txn) {
     Ok(builder) => Ok(builder),
