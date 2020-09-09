@@ -4,7 +4,7 @@ extern crate unicode_normalization;
 
 use super::errors;
 use crate::policy_script::{Policy, PolicyGlobals, TxnPolicyData};
-use crate::{error_location, zei_fail};
+use crate::{des_fail, error_location, ser_fail, zei_fail};
 use air::{check_merkle_proof as air_check_merkle_proof, AIRResult};
 use bitmap::SparseMap;
 use chrono::prelude::*;
@@ -144,8 +144,8 @@ impl AssetTypeCode {
           Ok(utf8_str) => {
             return Ok(utf8_str.to_string());
           }
-          Err(_) => {
-            return Err(PlatformError::SerializationError(error_location!()));
+          Err(e) => {
+            return Err(ser_fail!(e));
           }
         };
       }
@@ -161,12 +161,13 @@ impl AssetTypeCode {
   }
 
   pub fn new_from_base64(b64: &str) -> Result<Self, PlatformError> {
-    if let Ok(mut bin) = b64dec(b64) {
-      bin.resize(ASSET_TYPE_LENGTH, 0u8);
-      let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bin.as_slice()).unwrap();
-      Ok(Self { val: ZeiAssetType(buf) })
-    } else {
-      Err(PlatformError::DeserializationError(error_location!()))
+    match b64dec(b64) {
+      Ok(mut bin) => {
+        bin.resize(ASSET_TYPE_LENGTH, 0u8);
+        let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bin.as_slice()).unwrap();
+        Ok(Self { val: ZeiAssetType(buf) })
+      }
+      Err(e) => Err(des_fail!(format!("Failed to deserialize base64 '{}': {}", b64, e))),
     }
   }
   pub fn to_base64(&self) -> String {
@@ -200,7 +201,7 @@ impl Code {
       let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
       Ok(Self { val: buf })
     } else {
-      Err(PlatformError::DeserializationError(error_location!()))
+      Err(des_fail!())
     }
   }
   pub fn to_base64(&self) -> String {
@@ -923,7 +924,7 @@ impl KVBlind {
       let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
       Ok(Self(buf))
     } else {
-      Err(PlatformError::DeserializationError(error_location!()))
+      Err(des_fail!())
     }
   }
 }
