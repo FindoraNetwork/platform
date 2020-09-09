@@ -52,27 +52,27 @@ random_string()
 }
 
 PASSWORD="password"
-PASSWORD_PROMPT="echo -e '$PASSWORD\n$PASSWORD'"
-PASSWORD_PROMPT_YES="echo -e 'Y\n$PASSWORD\n$PASSWORD'"
+PASSWORD_PROMPT="echo -e '$PASSWORD\n$PASSWORD\n'"
+PASSWORD_PROMPT_YES="echo -e 'Y\n$PASSWORD\n$PASSWORD\n'"
 SIMPLE_CONFIRM_WITH_PROMPT="echo -e '$PASSWORD\ny'"
 SIMPLE_PASSWORD_PROMPT="echo -e '$PASSWORD'"
 DOUBLE_CONFIRM_WITH_PROMPT="echo -e 'Y\nY\n'"
 MEMO_ALICE_WITH_PROMPT="echo -e '$PASSWORD\nmemo_alice\n'"
 ALICE_WITH_SEVERAL_PROMPTS="echo -e '$PASSWORD\n$PASSWORD\nY\nY\n'"
 MEMO_ALICE_WITH_SEVERAL_PROMPTS="echo -e '$PASSWORD\nmemo_alice\n$PASSWORD\nY\nY\n'"
-DEFINE_AND_ISSUE_ASSET_TYPE_WITH_BUILD="$PASSWORD_PROMPT |$CLI2 key-gen alice; \
-                                     echo y | $CLI2 query-ledger-state; \
-                                     $CLI2 initialize-transaction 0;\
-                                     $MEMO_ALICE_WITH_PROMPT | $CLI2 define-asset 0 alice TheBestAliceCoinsOnEarthV2; \
-                                     $PASSWORD_PROMPT | $CLI2 issue-asset 0 TheBestAliceCoinsOnEarthV2 0 10000; \
-                                     $PASSWORD_PROMPT | $CLI2 build-transaction;"
+DEFINE_AND_ISSUE_ASSET_TYPE_WITH_BUILD="{ $PASSWORD_PROMPT |$CLI2 key-gen alice; } && \
+                                     { echo y | $CLI2 query-ledger-state; } && \
+                                     { $CLI2 initialize-transaction 0; } && \
+                                     { $MEMO_ALICE_WITH_PROMPT | $CLI2 define-asset 0 alice TheBestAliceCoinsOnEarthV2; } && \
+                                     { $PASSWORD_PROMPT | $CLI2 issue-asset 0 TheBestAliceCoinsOnEarthV2 0 10000; } && \
+                                     { $PASSWORD_PROMPT | $CLI2 build-transaction; };"
 
-DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS="$PASSWORD_PROMPT | $CLI2 key-gen alice; \
-                              echo y | $CLI2 query-ledger-state; \
-                              $CLI2 initialize-transaction 0; \
-                              $MEMO_ALICE_WITH_PROMPT | $CLI2 define-asset 0 alice AliceCoin; \
-                              $PASSWORD_PROMPT | $CLI2 build-transaction; \
-                              $DOUBLE_CONFIRM_WITH_PROMPT | $CLI2 submit 0;"
+DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS="{ $PASSWORD_PROMPT | $CLI2 key-gen alice; } && \
+                              { echo y | $CLI2 query-ledger-state; } && \
+                              { $CLI2 initialize-transaction 0; } && \
+                              { $MEMO_ALICE_WITH_PROMPT | $CLI2 define-asset 0 alice AliceCoin; } && \
+                              { $PASSWORD_PROMPT | $CLI2 build-transaction; } && \
+                              { $DOUBLE_CONFIRM_WITH_PROMPT | $CLI2 submit 0; };"
 
 # Enables to create a transfer for some amount from Alice to Bob
 # Note that the change of the transfer is returned to Alice
