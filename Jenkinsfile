@@ -60,19 +60,6 @@ pipeline {
       }
     }
 
-    stage('Push Nexus') {
-      when {
-        branch 'master'
-      }
-      steps {
-        script {
-          docker.withRegistry( oldDockerRepo, oldDockerCreds ) {
-            dockerImage.push()
-          }
-        }
-      }
-    }
-
   }
 
 }
