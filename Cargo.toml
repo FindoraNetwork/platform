@@ -23,6 +23,7 @@ members = [
     "components/whitelist",
     "components/whitelist_cli",
     "components/xfrnote",
+    "components/cli2",
     "ledger",
     "libs/ads/air",
     "libs/ads/merkle_tree",

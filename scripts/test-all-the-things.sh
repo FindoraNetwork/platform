@@ -15,5 +15,8 @@ popd >/dev/null
 cargo test --no-run
 cargo test --release --no-run
 cargo test --no-fail-fast
+pushd ./components/cli2
+bash ./run_tests_local.sh
+popd
 cargo test --release --no-fail-fast -- --ignored
 

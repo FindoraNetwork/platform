@@ -125,9 +125,23 @@ fn run_log_against<LU, LA>(submit: &mut LU,
       match submit.txn_status(&h) {
         Ok(TxnStatus::Committed((_txnsid, txo_sids))) => {
           for txo in txo_sids {
-            assert!(access1.get_utxo(txo).unwrap().is_valid(new_comm.0.clone()));
+            assert!(access1.get_utxo(txo)
+                           .or_else(|e| {
+                             eprintln!("Got error: {:?}, waiting then retrying...", e);
+                             thread::sleep(wait_time);
+                             access1.get_utxo(txo)
+                           })
+                           .unwrap()
+                           .is_valid(new_comm.0.clone()));
             if let Some(access2) = access2 {
-              assert!(access2.get_utxo(txo).unwrap().is_valid(new_comm.0.clone()));
+              assert!(access2.get_utxo(txo)
+                             .or_else(|e| {
+                               eprintln!("Got error: {:?}, waiting then retrying...", e);
+                               thread::sleep(wait_time);
+                               access2.get_utxo(txo)
+                             })
+                             .unwrap()
+                             .is_valid(new_comm.0.clone()));
             }
           }
         }

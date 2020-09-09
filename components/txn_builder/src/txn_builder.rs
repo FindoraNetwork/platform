@@ -19,6 +19,7 @@ use rand_core::{CryptoRng, RngCore, SeedableRng};
 use sparse_merkle_tree::Key;
 use std::cmp::Ordering;
 use std::collections::HashSet;
+use utils::SignatureOf;
 use zei::api::anon_creds::{
   ac_confidential_open_commitment, ACCommitment, ACCommitmentKey, ConfidentialAC, Credential,
 };
@@ -255,6 +256,10 @@ fn policy_from_choice(code: &AssetTypeCode,
 pub trait BuildsTransactions {
   fn transaction(&self) -> &Transaction;
   fn sign(&mut self, kp: &XfrKeyPair) -> &mut Self;
+  fn add_signature(&mut self,
+                   pk: &XfrPublicKey,
+                   sig: SignatureOf<TransactionBody>)
+                   -> Result<&mut Self, PlatformError>;
   fn add_memo(&mut self, memo: Memo) -> &mut Self;
   fn add_policy_option(&mut self, token_code: AssetTypeCode, which_check: String) -> &mut Self;
   #[allow(clippy::too_many_arguments)]
@@ -419,7 +424,7 @@ pub trait BuildsTransactions {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionBuilder {
   txn: Transaction,
   outputs: u64,
@@ -591,6 +596,15 @@ impl BuildsTransactions for TransactionBuilder {
     self
   }
 
+  fn add_signature(&mut self,
+                   pk: &XfrPublicKey,
+                   sig: SignatureOf<TransactionBody>)
+                   -> Result<&mut Self, PlatformError> {
+    self.txn.check_signature(pk, &sig)?;
+    self.txn.signatures.push(sig);
+    Ok(self)
+  }
+
   fn serialize(&self) -> Vec<u8> {
     // Unwrap is safe beacuse the underlying transaction is guaranteed to be serializable.
     let j = serde_json::to_string(&self.txn).unwrap();
@@ -686,7 +700,7 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
 //                            .create(TransferType::Standard)?
 //                            .sign(&alice)?;
 //
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Clone, Serialize, Deserialize, Default)]
 pub struct TransferOperationBuilder {
   input_sids: Vec<TxoRef>,
   spend_amounts: Vec<u64>, // Amount of each input record to spend, the rest will be refunded if user calls balance
