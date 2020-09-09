@@ -2,6 +2,7 @@ FROM 563536162678.dkr.ecr.us-west-2.amazonaws.com/zei:v0.0.3-5 as zei
 FROM 563536162678.dkr.ecr.us-west-2.amazonaws.com/rust:2020-05-15 as builder
 RUN apt-get update
 RUN apt-get install -y bats
+RUN cargo install cargo-deb
 RUN cargo install cargo-audit
 RUN cargo install wasm-pack
 RUN mkdir /app
@@ -17,6 +18,7 @@ WORKDIR /app/
 RUN cargo test --no-fail-fast --release
 RUN cargo test --no-fail-fast --release -- --ignored --test-threads=1
 RUN cargo fmt -- --check
+RUN cargo deb -p cli2
 #Disabled because it triggers a compile and also tests dependencies
 #RUN cargo clippy -- -D warnings
 WORKDIR /app/components/wasm
@@ -25,8 +27,10 @@ RUN bash -c 'time /app/target/release/log_tester /app/components/log_tester/exam
 #Cleanup some big files in release directory
 RUN rm -r /app/target/release/build /app/target/release/deps
 
+
 FROM debian:buster
 COPY --from=builder /app/target/release /app
+COPY --from=builder /app/target/debian /app/debian
 COPY --from=builder /app/components/wasm/pkg /app/wasm
 WORKDIR /app/
 CMD ls /app
