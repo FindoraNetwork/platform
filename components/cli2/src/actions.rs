@@ -736,7 +736,7 @@ pub fn query_asset_type<S: CliDataStore>(store: &mut S,
   };
 
   let asset_code = resp.code.val;
-  let ret = AssetTypeEntry { asset: resp,
+  let ret = AssetTypeEntry { asset: Box::new(resp),
                              issuer_nick,
                              issue_seq_num: 0 };
   store.add_asset_type(&AssetTypeName(nick.clone()), ret)?;

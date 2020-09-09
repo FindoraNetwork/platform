@@ -2648,6 +2648,7 @@ mod test {
 
   #[allow(dead_code)]
   fn ledger_simulates_accounts_with_standalone(cmds: AccountsScenario) {
+    println!("{} commands...", cmds.cmds.len());
     ledger_simulates_accounts(cmds, true, true)
   }
 
