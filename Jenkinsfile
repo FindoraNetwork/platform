@@ -34,6 +34,17 @@ pipeline {
       }
     }
 
+    stage('Extract/Archive .deb') {
+      steps {
+        script {
+          dockerImage.inside() {
+            sh 'cp /app/debian/*.deb $WORKSPACE'
+          }
+          archiveArtifacts artifacts: '*.deb'
+        }
+      }
+    }
+
     stage('Push ECR') {
       when {
         not {
@@ -43,19 +54,6 @@ pipeline {
       steps {
         script {
           docker.withRegistry( dockerRepo, dockerCreds ) {
-            dockerImage.push()
-          }
-        }
-      }
-    }
-
-    stage('Push Nexus') {
-      when {
-        branch 'master'
-      }
-      steps {
-        script {
-          docker.withRegistry( oldDockerRepo, oldDockerCreds ) {
             dockerImage.push()
           }
         }

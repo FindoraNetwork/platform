@@ -13,6 +13,7 @@ echo "FINDORA_HOME: ${FINDORA_HOME}"
 # cargo test
 
 # Black box tests written in shell
+bats tests/asset-type-escape.sh
 bats tests/advanced-cli.sh
 bats tests/simple-cli.sh
 bats tests/error-handling.sh

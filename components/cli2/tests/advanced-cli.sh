@@ -106,7 +106,7 @@ source "tests/common.sh"
   setup
 
   echo "code: $alice_coin_code"
-  run $CLI2 query-asset-type --replace=false AliceCoin "$alice_coin_code"
+  run $CLI2 query-asset-type --replace=false AliceCoin -- "$alice_coin_code"
 
   debug_lines
   echo $status
@@ -151,7 +151,7 @@ source "tests/common.sh"
   alice_coin_code=$($CLI2 list-asset-type TheBestAliceCoinsOnEarthV2 | sed -n 's/^\s*code:\s*\(\S*\)*$/\1/p')
 
   # We query the asset type to check the issue_seq_number has been incremented
-  run $CLI2 query-asset-type --replace=false TheBestAliceCoinsOnEarthV2 $alice_coin_code
+  run $CLI2 query-asset-type --replace=false TheBestAliceCoinsOnEarthV2 -- $alice_coin_code
 
   [ "$status" -eq 0 ]
   check_line 0 "Asset type"

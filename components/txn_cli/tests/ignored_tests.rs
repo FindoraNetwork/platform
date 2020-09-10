@@ -3,6 +3,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::AssetTypeCode;
 #[cfg(test)]
 use network::MockLedgerStandalone;
+use std::iter::once;
 use tempfile::tempdir;
 use txn_cli::txn_app::{get_cli_app, process_inputs};
 
@@ -309,6 +310,7 @@ fn define_asset(dir: &str,
                 memo: &str,
                 rest_client: &mut MockLedgerStandalone)
                 -> Result<(), PlatformError> {
+  let token_arg = format!("--token_code={}", token_code);
   let args = vec!["Transaction Builder",
                   "--dir",
                   dir,
@@ -318,8 +320,7 @@ fn define_asset(dir: &str,
                   "--id",
                   issuer_id,
                   "define_asset",
-                  "--token_code",
-                  token_code,
+                  &token_arg,
                   "--memo",
                   memo];
   submit_command(args, rest_client)
@@ -333,6 +334,7 @@ fn issue_asset_with_confidential_amount(dir: &str,
                                         amount: &str,
                                         rest_client: &mut MockLedgerStandalone)
                                         -> Result<(), PlatformError> {
+  let token_arg = format!("--token_code={}", token_code);
   let args = vec!["Transaction Builder",
                   "--dir",
                   dir,
@@ -342,8 +344,7 @@ fn issue_asset_with_confidential_amount(dir: &str,
                   "--id",
                   id,
                   "issue_asset",
-                  "--token_code",
-                  token_code,
+                  &token_arg,
                   "--amount",
                   amount,
                   "--confidential_amount"];
@@ -636,14 +637,10 @@ fn test_define_asset_simple_policies() {
 
   // Define token code
   let token_code = AssetTypeCode::gen_random().to_base64();
-  let token_code = if token_code.chars().next() == Some('-') {
-    format!("\\{}", &token_code)
-  } else {
-    token_code
-  };
 
   // Define asset
   let app = get_cli_app();
+  let token_arg = format!("--token_code={}", token_code);
   let inputs_vec = vec!["Transaction Builder",
                         "--dir",
                         dir,
@@ -653,8 +650,7 @@ fn test_define_asset_simple_policies() {
                         "--id",
                         "0",
                         "define_asset",
-                        "--token_code",
-                        &token_code,
+                        &token_arg,
                         "--memo",
                         "Define an asset",
                         "--cosigners",
@@ -688,11 +684,71 @@ fn test_define_issue_transfer_and_submit_with_args() {
 
   // Define asset
   let token_code = AssetTypeCode::gen_random().to_base64();
-  let token_code = if token_code.chars().next() == Some('-') {
-    format!("\\{}", &token_code)
-  } else {
-    token_code
-  };
+  define_asset(dir,
+               creation_txn_builder_file,
+               "0",
+               &token_code,
+               "Define an asset",
+               &mut ledger_standalone).expect("Failed to define asset");
+
+  // Submit transaction
+  submit(creation_txn_builder_file, &mut ledger_standalone).expect("Failed to submit transaction");
+
+  // Issue asset
+  let amount_issue = "50";
+
+  issue_asset_with_confidential_amount(dir,
+                                       issuance_txn_builder_file,
+                                       "0",
+                                       &token_code,
+                                       amount_issue,
+                                       &mut ledger_standalone).expect("Failed to issue asset");
+
+  // Submit transaction
+
+  submit_and_store_sids(issuance_txn_builder_file, sids_file, &mut ledger_standalone).expect("Failed to submit transaction");
+
+  // Transfer asset
+  transfer_asset(dir,
+                 transfer_txn_builder_file,
+                 "0",
+                 "1,2",
+                 sids_file,
+                 issuance_txn_builder_file,
+                 "50",
+                 "30, 20",
+                 &mut ledger_standalone).expect("Failed to transfer asset");
+
+  // Submit transaction
+  submit(transfer_txn_builder_file, &mut ledger_standalone).expect("Failed to submit transaction");
+
+  tmp_dir.close().unwrap();
+}
+
+#[test]
+fn test_define_issue_transfer_and_submit_with_args_hyphen() {
+  // Create users and files
+  let tmp_dir = tempdir().unwrap();
+  let dir = tmp_dir.path().to_str().unwrap();
+  let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
+  sign_up_borrower(dir, "Borrower 1", &mut ledger_standalone).expect("Failed to create a borrower");
+  sign_up_borrower(dir, "Borrower 2", &mut ledger_standalone).expect("Failed to create a borrower");
+  let creation_txn_builder_buf = tmp_dir.path().join("tb_define_and_submit");
+  let issuance_txn_builder_buf = tmp_dir.path().join("tb_issue_submit");
+  let transfer_txn_builder_buf = tmp_dir.path().join("tb_transfer_submit");
+  let sids_buf = tmp_dir.path().join("sids_define_issue_transfer_and_submit");
+  let creation_txn_builder_file = creation_txn_builder_buf.to_str().unwrap();
+  let issuance_txn_builder_file = issuance_txn_builder_buf.to_str().unwrap();
+  let transfer_txn_builder_file = transfer_txn_builder_buf.to_str().unwrap();
+  let sids_file = sids_buf.to_str().unwrap();
+
+  // Define asset
+  let token_code =
+    AssetTypeCode::new_from_base64(&once('-').chain(AssetTypeCode::gen_random().to_base64()
+                                                                               .chars()
+                                                                               .skip(1))
+                                             .collect::<String>()).unwrap()
+                                                                  .to_base64();
   define_asset(dir,
                creation_txn_builder_file,
                "0",
@@ -751,7 +807,7 @@ fn test_issue_transfer_trace_and_submit_with_args() {
                                &mut ledger_standalone).expect("Failed to create transaction builder");
 
   // Define token code
-  let token_code = AssetTypeCode::gen_utf8_random();
+  let token_code = AssetTypeCode::gen_random().to_base64();
 
   // Define asset
   define_asset(dir,
