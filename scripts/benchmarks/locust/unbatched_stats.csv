@@ -1,6 +1,0 @@
-"Type","Name","# requests","# failures","Median response time","Average response time","Min response time","Max response time","Average Content Size","Requests/s","Requests Failed/s","50%","66%","75%","80%","90%","95%","98%","99%","99.9%","99.99%","99.999","100%"
-"POST","/force_end_block",20333,0,1,1,0,40,33,16.93,0.00,1,2,2,2,2,2,2,2,6,10,40,40
-"GET","/global_state",20411,0,1,1,0,29,213,16.99,0.00,1,1,1,1,1,1,2,2,4,8,30,30
-"GET","/public_key",20417,0,1,1,0,13,46,17.00,0.00,1,1,1,1,1,1,2,2,4,10,13,13
-"POST","/submit_transaction",20332,0,44,55,17,867,66,16.93,0.00,44,66,72,75,80,85,110,130,340,750,870,870
-"None","Aggregated",81493,0,1,14,0,867,89,67.85,0.00,1,2,6,38,55,75,81,90,160,540,870,870

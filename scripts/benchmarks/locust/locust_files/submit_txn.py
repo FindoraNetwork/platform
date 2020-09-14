@@ -1,11 +1,12 @@
 import os
 
 from json import dumps, loads
-from locust import HttpLocust, TaskSet, task, constant
+from locust import HttpUser, TaskSet, task, constant
 
 headers = {'content-type': 'application/json'}
 
-class UserBehavior(TaskSet):
+class QuickstartUser(HttpUser):
+    wait_time = constant(0)
     def on_start(self):
         """ on_start is called when a Locust start before any task is scheduled """
         self.js = []
@@ -30,7 +31,7 @@ class UserBehavior(TaskSet):
     def public_key(self):
         self.client.get(":8668/public_key")
 
-    @task(1)
+    @task(10)
     def txn_from_file(self):
         self.client.post(":8669/submit_transaction", data=self.js[self.curr], headers=headers)
         self.curr += 1
@@ -38,7 +39,3 @@ class UserBehavior(TaskSet):
             self.client.post(":8669/force_end_block")
         if self.curr >= self.count - 1:
             self.curr = 0
-
-class WebsiteUser(HttpLocust):
-    task_set = UserBehavior
-    wait_time = constant(0)
