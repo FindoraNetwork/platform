@@ -580,10 +580,10 @@ impl LedgerStatus {
     // New asset types must not already exist
     for (code, _asset_type) in txn_effect.new_asset_codes.iter() {
       if self.asset_types.contains_key(&code) {
-        return Err(inp_fail!("Asset types already contains the key"));
+        return Err(inp_fail!(&format!("Asset type {:?} already defined", &code)));
       }
       if self.issuance_num.contains_key(&code) {
-        return Err(inp_fail!("Issuance num already contains the key"));
+        return Err(inp_fail!(&format!("Asset type {:?} is being defined after issue", &code)));
       }
       debug_assert!(txn_effect.new_issuance_nums.contains_key(&code));
 
