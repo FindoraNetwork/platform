@@ -633,7 +633,7 @@ impl LedgerStatus {
                                      .unwrap();
         let min_seq_num = seq_nums.first().unwrap();
         if min_seq_num < curr_seq_num_limit {
-          return Err(inp_fail!("Minimum seq num is les than limit"));
+          return Err(inp_fail!("Minimum seq num is less than limit"));
         }
       }
     }
@@ -756,7 +756,6 @@ impl LedgerStatus {
                            .or_else(|| txn_effect.new_asset_codes.get(&code))
                            .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
       if asset_type.has_transfer_restrictions() {
-        // FIXME: This next line has no effect!
         return Err(inp_fail!("non-confidential assets with transfer restrictions can't become confidential"));
       }
     }
