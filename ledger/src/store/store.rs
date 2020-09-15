@@ -3209,7 +3209,7 @@ mod tests {
     let art = if let true = confidential {
       AssetRecordType::ConfidentialAmount_ConfidentialAssetType
     } else {
-      AssetRecordType::NonConfidentialAmount_ConfidentialAssetType
+      AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType
     };
     let template = AssetRecordTemplate::with_no_asset_tracking(100, code.val, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, alice.get_pk());
     let (ba, _, _) =
@@ -3266,7 +3266,6 @@ mod tests {
     ledger.apply_transaction(&mut block, effect).is_ok()
   }
 
-  /* FIXME
   #[test]
   pub fn test_cosignature_restrictions() {
     // Simple
@@ -3304,7 +3303,7 @@ mod tests {
                                           232323,
                                           false));
   }
-  */
+
   #[test]
   pub fn test_debt_transfer() {
     // Setup
