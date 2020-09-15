@@ -28,7 +28,7 @@ pipeline {
       steps {
         script {
           docker.withRegistry( dockerRepo, dockerCreds ) {
-            dockerImage = docker.build( dockerName + ":" + env.BRANCH_NAME, '--pull .')
+            dockerImage = docker.build( dockerName + ":" + env.BRANCH_NAME, '--network redis --pull .')
           }
         }
       }
