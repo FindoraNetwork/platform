@@ -1,7 +1,5 @@
 set -euo pipefail
 
-export FINDORA_HOME=$(mktemp -d)
-echo "FINDORA_HOME: ${FINDORA_HOME}"
 
 # Build the executable
 # cargo build
@@ -12,10 +10,40 @@ echo "FINDORA_HOME: ${FINDORA_HOME}"
 # Run the tests
 # cargo test
 
+children=()
+
 # Black box tests written in shell
-bats tests/asset-type-escape.sh
-bats tests/advanced-cli.sh
-bats tests/simple-cli.sh
-bats tests/error-handling.sh
-bats tests/balances.sh
-bats tests/transfers.sh
+FINDORA_HOME=$(mktemp -d) bats tests/asset-type-escape.sh &
+children+=($!)
+FINDORA_HOME=$(mktemp -d) bats tests/advanced-cli.sh &
+children+=($!)
+FINDORA_HOME=$(mktemp -d) bats tests/simple-cli.sh &
+children+=($!)
+FINDORA_HOME=$(mktemp -d) bats tests/error-handling.sh &
+children+=($!)
+FINDORA_HOME=$(mktemp -d) bats tests/balances.sh &
+children+=($!)
+FINDORA_HOME=$(mktemp -d) bats tests/transfers.sh &
+children+=($!)
+
+echo ${children[@]}
+count=${#children[@]}
+echo "$count children"
+
+for i in `seq 1 $count`; do
+  if wait -n ${children[@]}; then
+    echo 'SUCCESS'
+  else
+    echo 'FAILURE'
+    ret=$?
+    for c in ${children[@]}; do
+      echo "killing $c..."
+      kill $c || true
+      sleep 0.01s
+      kill -9 $c || true
+      echo "killed $c..."
+    done
+    exit $ret
+  fi
+done
+
