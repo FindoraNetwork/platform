@@ -113,9 +113,9 @@ pub enum QueryServerRoutes {
   GetCustomData,
   GetCreatedAssets,
   GetTracedAssets,
-  GetTracedTxns,
   GetIssuedRecords,
   GetRelatedTxns,
+  GetRelatedXfrs,
   Version,
 }
 
@@ -124,13 +124,13 @@ impl NetworkRoute for QueryServerRoutes {
     let endpoint = match *self {
       QueryServerRoutes::GetAddress => "get_address",
       QueryServerRoutes::GetRelatedTxns => "get_related_txns",
+      QueryServerRoutes::GetRelatedXfrs => "get_related_xfrs",
       QueryServerRoutes::GetOwnedUtxos => "get_owned_utxos",
       QueryServerRoutes::GetOwnerMemo => "get_owner_memo",
       QueryServerRoutes::StoreCustomData => "store_custom_data",
       QueryServerRoutes::GetCustomData => "get_custom_data",
       QueryServerRoutes::GetCreatedAssets => "get_created_assets",
       QueryServerRoutes::GetTracedAssets => "get_traced_assets",
-      QueryServerRoutes::GetRelatedTxns => "get_traced_transfers",
       QueryServerRoutes::GetIssuedRecords => "get_issued_records",
       QueryServerRoutes::Version => "version",
     };
@@ -211,17 +211,17 @@ fn get_related_txns<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
 }
 
 // Returns the list of transfer transations associated with a given asset
-fn get_related_transfers<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+fn get_related_xfrs<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
                             info: web::Path<String>)
                             -> actix_web::Result<web::Json<HashSet<TxnSID>>>
   where T: RestfulArchiveAccess + Sync + Send
 {
   let query_server = data.read().unwrap();
   if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
-    if let Some(records) = query_server.get_traced_transfers(&token_code) {
-      Ok(web::Json(records.cloned().unwrap_or_default()))
+    if let Some(records) = query_server.get_related_transfers(&token_code) {
+      Ok(web::Json(records.clone()))
     } else {
-      Err(actix_web::error::ErrorNotFound("Specified asset definition does not currently exist or the asset isn't traceable."))
+      Err(actix_web::error::ErrorNotFound("Specified asset definition does not currently exist."))
     }
   } else {
     Err(actix_web::error::ErrorBadRequest("Invalid asset definition encoding."))
@@ -253,8 +253,8 @@ impl QueryApi {
                        web::get().to(get_owner_memo::<T>))
                 .route(&QueryServerRoutes::GetRelatedTxns.with_arg_template("address"),
                        web::get().to(get_related_txns::<T>))
-                .route(&QueryServerRoutes::GetTracedTxns.with_arg_template("asset_token"),
-                       web::get().to(get_related_transfers::<T>))
+                .route(&QueryServerRoutes::GetRelatedXfrs.with_arg_template("asset_token"),
+                       web::get().to(get_related_xfrs::<T>))
                 .route(&QueryServerRoutes::GetCreatedAssets.with_arg_template("address"),
                        web::get().to(get_created_assets::<T>))
                 .route(&QueryServerRoutes::GetTracedAssets.with_arg_template("address"),

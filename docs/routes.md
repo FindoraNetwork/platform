@@ -88,8 +88,8 @@
 ``get_related_txns/``{*address*}
 : the transactions associated with the given Ledger *address*.
 
-``get_related_transfers/``{*asset_token*}
-: the transfer transactions associated with the given Ledger *asset_token*.
+``get_related_xfrs/``{*asset_token*}
+: the transfer transactions associated with the given *asset_token*.
 
 ``store_custom_data`` [POST]
 : Stores custom data at a given key.

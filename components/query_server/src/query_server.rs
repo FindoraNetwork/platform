@@ -716,7 +716,7 @@ mod tests {
   }
 
   #[test]
-  pub fn test_related_txns() {
+  pub fn test_related_xfrs() {
     let rest_client_ledger_state = Arc::new(RwLock::new(LedgerState::test_ledger()));
     let mut ledger_state = LedgerState::test_ledger();
     // This isn't actually being used in the test, we just make a ledger client so we can compile
@@ -787,9 +787,9 @@ mod tests {
     query_server.add_new_block(&block2.block.txns).unwrap();
 
     // Verify the related transfer
-    let related_transfer = query_server.get_related_transfers(&token_code).unwrap();
-    assert_eq!(related_transfer.len(), 1);
-    assert!(related_transfer.contains(&TxnSID(2)));
+    let related_xfr = query_server.get_related_transfers(&token_code).unwrap();
+    assert_eq!(related_xfr.len(), 1);
+    assert!(related_xfr.contains(&TxnSID(2)));
   }
 
   #[test]
