@@ -354,18 +354,12 @@ fn get_related_addresses(txn: &Transaction) -> HashSet<XfrAddress> {
 fn get_transferred_nonconfidential_assets(txn: &Transaction) -> HashSet<AssetTypeCode> {
   let mut transferred_assets = HashSet::new();
   for op in &txn.body.operations {
-    match op {
-      Operation::TransferAsset(transfer) => {
-        for input in transfer.body.transfer.inputs.iter() {
-          match input.asset_type.get_asset_type() {
-            Some(asset_type) => {
-              transferred_assets.insert(AssetTypeCode { val: asset_type});
-            }
-            None => {}
-          }
+    if let Operation::TransferAsset(transfer) = op {
+      for input in transfer.body.transfer.inputs.iter() {
+        if let Some(asset_type) = input.asset_type.get_asset_type() {
+          transferred_assets.insert(AssetTypeCode { val: asset_type });
         }
       }
-      _ => {}
     }
   }
   transferred_assets
@@ -393,7 +387,7 @@ mod tests {
   };
   use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
   use zei::xfr::sig::XfrKeyPair;
-  use zei::xfr::structs::{AssetTracingPolicy,AssetRecordTemplate};
+  use zei::xfr::structs::{AssetRecordTemplate, AssetTracingPolicy};
 
   #[test]
   pub fn test_custom_data_store() {
@@ -793,8 +787,7 @@ mod tests {
     query_server.add_new_block(&block2.block.txns).unwrap();
 
     // Verify the related transfer
-    let related_transfer = query_server.get_related_transfers(&token_code)
-                                 .unwrap();
+    let related_transfer = query_server.get_related_transfers(&token_code).unwrap();
     assert_eq!(related_transfer.len(), 1);
     assert!(related_transfer.contains(&TxnSID(2)));
   }
@@ -851,8 +844,8 @@ mod tests {
     // Set the tracing policy
     let tracer_kp = gen_asset_tracer_keypair(&mut ledger_state.get_prng());
     let tracing_policy = AssetTracingPolicy { enc_keys: tracer_kp.enc_key.clone(),
-      asset_tracking: true,
-      identity_tracking: None };
+                                              asset_tracking: true,
+                                              identity_tracking: None };
 
     // Create the first traceable asset
     let code1 = AssetTypeCode::gen_random();
@@ -867,11 +860,13 @@ mod tests {
 
     // Create the second traceable asset
     let code2 = AssetTypeCode::gen_random();
-    let tx2 = create_definition_transaction(&code2,
-                                            &creator,
-                                            AssetRules::default().add_tracing_policy(tracing_policy).clone(),
-                                            Some(Memo("test".to_string())),
-                                            ledger_state.get_block_commit_count()).unwrap();
+    let tx2 =
+      create_definition_transaction(&code2,
+                                    &creator,
+                                    AssetRules::default().add_tracing_policy(tracing_policy)
+                                                         .clone(),
+                                    Some(Memo("test".to_string())),
+                                    ledger_state.get_block_commit_count()).unwrap();
     apply_transaction(&mut ledger_state, tx2);
     let block2 = ledger_state.get_block(BlockSID(1)).unwrap();
     query_server.add_new_block(&block2.block.txns).unwrap();

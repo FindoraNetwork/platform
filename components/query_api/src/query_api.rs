@@ -158,20 +158,20 @@ fn get_created_assets<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
 
 // Returns the list of assets traced by a public key
 fn get_traced_assets<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
-  info: web::Path<String>)
-  -> actix_web::Result<web::Json<Vec<AssetTypeCode>>>
-where T: RestfulArchiveAccess + Sync + Send
+                        info: web::Path<String>)
+                        -> actix_web::Result<web::Json<Vec<AssetTypeCode>>>
+  where T: RestfulArchiveAccess + Sync + Send
 {
-// Convert from base64 representation
-let key: XfrPublicKey =
-XfrPublicKey::zei_from_bytes(&b64dec(&*info).map_err(|_| {
-             error::ErrorBadRequest("Could not deserialize public key")
-           })?).map_err(|_| {
-                 error::ErrorBadRequest("Could not deserialize public key")
-               })?;
-let query_server = data.read().unwrap();
-let assets = query_server.get_traced_assets(&IssuerPublicKey { key });
-Ok(web::Json(assets.cloned().unwrap_or_default()))
+  // Convert from base64 representation
+  let key: XfrPublicKey =
+    XfrPublicKey::zei_from_bytes(&b64dec(&*info).map_err(|_| {
+                                    error::ErrorBadRequest("Could not deserialize public key")
+                                  })?).map_err(|_| {
+                                        error::ErrorBadRequest("Could not deserialize public key")
+                                      })?;
+  let query_server = data.read().unwrap();
+  let assets = query_server.get_traced_assets(&IssuerPublicKey { key });
+  Ok(web::Json(assets.cloned().unwrap_or_default()))
 }
 
 // Returns the list of records issued by a public key
@@ -212,20 +212,20 @@ fn get_related_txns<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
 
 // Returns the list of transfer transations associated with a given asset
 fn get_related_transfers<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
-  info: web::Path<String>)
-  -> actix_web::Result<web::Json<HashSet<TxnSID>>>
-where T: RestfulArchiveAccess + Sync + Send
+                            info: web::Path<String>)
+                            -> actix_web::Result<web::Json<HashSet<TxnSID>>>
+  where T: RestfulArchiveAccess + Sync + Send
 {
-let query_server = data.read().unwrap();
-if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
-  if let Some(records) = query_server.get_traced_transfers(&token_code) {
-    Ok(web::Json(records.cloned().unwrap_or_default()))
+  let query_server = data.read().unwrap();
+  if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
+    if let Some(records) = query_server.get_traced_transfers(&token_code) {
+      Ok(web::Json(records.cloned().unwrap_or_default()))
+    } else {
+      Err(actix_web::error::ErrorNotFound("Specified asset definition does not currently exist or the asset isn't traceable."))
+    }
   } else {
-    Err(actix_web::error::ErrorNotFound("Specified asset definition does not currently exist or the asset isn't traceable."))
+    Err(actix_web::error::ErrorBadRequest("Invalid asset definition encoding."))
   }
-} else {
-  Err(actix_web::error::ErrorBadRequest("Invalid asset definition encoding."))
-}
 }
 
 pub struct QueryApi {
