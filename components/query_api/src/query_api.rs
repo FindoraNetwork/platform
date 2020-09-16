@@ -212,8 +212,8 @@ fn get_related_txns<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
 
 // Returns the list of transfer transations associated with a given asset
 fn get_related_xfrs<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
-                            info: web::Path<String>)
-                            -> actix_web::Result<web::Json<HashSet<TxnSID>>>
+                       info: web::Path<String>)
+                       -> actix_web::Result<web::Json<HashSet<TxnSID>>>
   where T: RestfulArchiveAccess + Sync + Send
 {
   let query_server = data.read().unwrap();
