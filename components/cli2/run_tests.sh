@@ -15,6 +15,8 @@ children=()
 # Black box tests written in shell
 FINDORA_HOME=$(mktemp -d) bats tests/asset-type-escape.sh &
 children+=($!)
+FINDORA_HOME=$(mktemp -d) bats tests/big-transaction.sh &
+children+=($!)
 FINDORA_HOME=$(mktemp -d) bats tests/advanced-cli.sh &
 children+=($!)
 FINDORA_HOME=$(mktemp -d) bats tests/simple-cli.sh &
