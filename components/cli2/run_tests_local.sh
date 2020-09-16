@@ -1,5 +1,7 @@
 #! /usr/bin/env bash
 
+set -euo pipefail
+
 pushd $(dirname $0)/../..
 export CLI2=`pwd`/target/release/findora
 
