@@ -70,6 +70,9 @@
 ``get_created_assets/``{*address*}
 : the created assets at the given *address*.
 
+``get_traced_assets/``{*address*}
+: the traced assets at the given *address*.
+
 ``get_custom_data/``{*key*}
 : the custom data at *key*.
 
@@ -84,6 +87,9 @@
 
 ``get_related_txns/``{*address*}
 : the transactions associated with the given Ledger *address*.
+
+``get_related_transfers/``{*asset_token*}
+: the transfer transactions associated with the given Ledger *asset_token*.
 
 ``store_custom_data`` [POST]
 : Stores custom data at a given key.
