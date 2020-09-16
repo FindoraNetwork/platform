@@ -68,7 +68,7 @@ source "tests/common.sh"
                { $CLI2 initialize-transaction 0; }"
   [ "$status" -eq 0 ]
   prev_code=""
-  codes=""
+  codes=()
 
   for found_i in `seq 1 300`; do # (1 - 1/64)^300 < 1/100
     asset_type="AliceCoin${found_i}"
@@ -87,7 +87,7 @@ source "tests/common.sh"
     [ "$alice_coin_code" != "$prev_code" ]
     prev_code="$alice_coin_code"
     # echo "$found_i ($asset_type): $alice_coin_code" >>hyphen-log.txt
-    codes="$codes $alice_coin_code"
+    codes+=("$alice_coin_code")
   done
 
   run bash -c "{ $PASSWORD_PROMPT | $CLI2 build-transaction; } && \
@@ -97,7 +97,7 @@ source "tests/common.sh"
 
   setup
 
-  for code in $(echo $codes); do
+  for code in ${codes[@]}; do
     asset_type="asset_$code"
     echo "code: $code"
     run $CLI2 query-asset-type --replace=false "$asset_type" -- "$code"
