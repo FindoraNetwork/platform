@@ -1,7 +1,7 @@
 FROM 563536162678.dkr.ecr.us-west-2.amazonaws.com/zei:v0.0.3-5 as zei
 FROM 563536162678.dkr.ecr.us-west-2.amazonaws.com/rust:2020-05-15 as builder
 RUN apt-get update
-RUN apt-get install -y bats
+RUN apt-get install -y bats parallel
 ENV RUSTC_WRAPPER='/usr/local/cargo/bin/sccache'
 ENV SCCACHE_REDIS='redis://redis/'
 RUN cargo install cargo-deb
@@ -17,8 +17,10 @@ RUN cargo build --release
 WORKDIR /app/components/cli2
 RUN bash run_tests_local.sh
 WORKDIR /app/
-RUN cargo test --no-fail-fast --release
-RUN cargo test --no-fail-fast --release -- --ignored
+RUN cargo test -- --list | sed -n 's/^\(.*\): test$/\1/p' | sed 's/::.*$/::/g' | sort | uniq | parallel cargo test --no-fail-fast --release {} -- --report-time
+RUN cargo test -- --list | sed -n 's/^\(.*\): test$/\1/p' | sed 's/::.*$/::/g' | sort | uniq | parallel cargo test --no-fail-fast --release {} -- --ignored --report-time
+# RUN cargo test --no-fail-fast --release -- --report-time
+# RUN cargo test --no-fail-fast --release -- --ignored --report-time
 RUN cargo fmt -- --check
 RUN cargo deb -p cli2
 #Disabled because it triggers a compile and also tests dependencies
