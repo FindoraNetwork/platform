@@ -1,5 +1,5 @@
 FROM 563536162678.dkr.ecr.us-west-2.amazonaws.com/zei:v0.0.3-5 as zei
-FROM 563536162678.dkr.ecr.us-west-2.amazonaws.com/rust:2020-05-15 as builder
+FROM 563536162678.dkr.ecr.us-west-2.amazonaws.com/rust:2020-09-15 as builder
 RUN apt-get update
 RUN apt-get install -y bats parallel
 ENV RUSTC_WRAPPER='/usr/local/cargo/bin/sccache'
