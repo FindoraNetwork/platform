@@ -112,8 +112,10 @@ pub enum QueryServerRoutes {
   StoreCustomData,
   GetCustomData,
   GetCreatedAssets,
+  GetTracedAssets,
   GetIssuedRecords,
   GetRelatedTxns,
+  GetRelatedXfrs,
   Version,
 }
 
@@ -122,11 +124,13 @@ impl NetworkRoute for QueryServerRoutes {
     let endpoint = match *self {
       QueryServerRoutes::GetAddress => "get_address",
       QueryServerRoutes::GetRelatedTxns => "get_related_txns",
+      QueryServerRoutes::GetRelatedXfrs => "get_related_xfrs",
       QueryServerRoutes::GetOwnedUtxos => "get_owned_utxos",
       QueryServerRoutes::GetOwnerMemo => "get_owner_memo",
       QueryServerRoutes::StoreCustomData => "store_custom_data",
       QueryServerRoutes::GetCustomData => "get_custom_data",
       QueryServerRoutes::GetCreatedAssets => "get_created_assets",
+      QueryServerRoutes::GetTracedAssets => "get_traced_assets",
       QueryServerRoutes::GetIssuedRecords => "get_issued_records",
       QueryServerRoutes::Version => "version",
     };
@@ -149,6 +153,24 @@ fn get_created_assets<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
                                       })?;
   let query_server = data.read().unwrap();
   let assets = query_server.get_created_assets(&IssuerPublicKey { key });
+  Ok(web::Json(assets.cloned().unwrap_or_default()))
+}
+
+// Returns the list of assets traced by a public key
+fn get_traced_assets<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+                        info: web::Path<String>)
+                        -> actix_web::Result<web::Json<Vec<AssetTypeCode>>>
+  where T: RestfulArchiveAccess + Sync + Send
+{
+  // Convert from base64 representation
+  let key: XfrPublicKey =
+    XfrPublicKey::zei_from_bytes(&b64dec(&*info).map_err(|_| {
+                                    error::ErrorBadRequest("Could not deserialize public key")
+                                  })?).map_err(|_| {
+                                        error::ErrorBadRequest("Could not deserialize public key")
+                                      })?;
+  let query_server = data.read().unwrap();
+  let assets = query_server.get_traced_assets(&IssuerPublicKey { key });
   Ok(web::Json(assets.cloned().unwrap_or_default()))
 }
 
@@ -188,6 +210,24 @@ fn get_related_txns<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
   Ok(web::Json(records.cloned().unwrap_or_default()))
 }
 
+// Returns the list of transfer transations associated with a given asset
+fn get_related_xfrs<T>(data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+                       info: web::Path<String>)
+                       -> actix_web::Result<web::Json<HashSet<TxnSID>>>
+  where T: RestfulArchiveAccess + Sync + Send
+{
+  let query_server = data.read().unwrap();
+  if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
+    if let Some(records) = query_server.get_related_transfers(&token_code) {
+      Ok(web::Json(records.clone()))
+    } else {
+      Err(actix_web::error::ErrorNotFound("Specified asset definition does not currently exist."))
+    }
+  } else {
+    Err(actix_web::error::ErrorBadRequest("Invalid asset definition encoding."))
+  }
+}
+
 pub struct QueryApi {
   web_runtime: actix_rt::SystemRunner,
 }
@@ -213,8 +253,12 @@ impl QueryApi {
                        web::get().to(get_owner_memo::<T>))
                 .route(&QueryServerRoutes::GetRelatedTxns.with_arg_template("address"),
                        web::get().to(get_related_txns::<T>))
+                .route(&QueryServerRoutes::GetRelatedXfrs.with_arg_template("asset_token"),
+                       web::get().to(get_related_xfrs::<T>))
                 .route(&QueryServerRoutes::GetCreatedAssets.with_arg_template("address"),
                        web::get().to(get_created_assets::<T>))
+                .route(&QueryServerRoutes::GetTracedAssets.with_arg_template("address"),
+                       web::get().to(get_traced_assets::<T>))
                 .route(&QueryServerRoutes::GetIssuedRecords.with_arg_template("address"),
                        web::get().to(get_issued_records::<T>))
                 .route(&QueryServerRoutes::StoreCustomData.route(),
