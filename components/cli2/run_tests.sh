@@ -36,8 +36,8 @@ for i in `seq 1 $count`; do
   if wait -n ${children[@]}; then
     echo 'SUCCESS'
   else
-    echo 'FAILURE'
     ret=$?
+    echo 'FAILURE'
     for c in ${children[@]}; do
       echo "killing $c..."
       kill $c || true
