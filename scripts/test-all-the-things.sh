@@ -12,9 +12,9 @@ pushd ./components/wasm >/dev/null
 wasm-pack build --target nodejs
 popd >/dev/null
 
-
-cargo test --no-run
-cargo test --release --no-run
+{ echo 'cargo build --release'; echo 'cargo test --release --no-run'; } | parallel -j2 {}
+# cargo test --no-run
+# cargo test --release --no-run
 
 # cargo test --no-fail-fast
 
