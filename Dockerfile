@@ -17,8 +17,9 @@ RUN cargo build --release
 WORKDIR /app/components/cli2
 RUN bash run_tests_local.sh
 WORKDIR /app/
-RUN cargo test -- --list | sed -n 's/^\(.*\): test$/\1/p' | sed 's/::.*$/::/g' | sort | uniq | parallel cargo test --no-fail-fast --release {} -- --report-time
-RUN cargo test -- --list | sed -n 's/^\(.*\): test$/\1/p' | sed 's/::.*$/::/g' | sort | uniq | parallel cargo test --no-fail-fast --release {} -- --ignored --report-time
+RUN cargo test --release --no-run
+RUN cargo test --release -- --list | sed -n 's/^\(.*\): test$/\1/p' | sed 's/::.*$/::/g' | sort | uniq | parallel cargo test --no-fail-fast --release {} --
+RUN cargo test --release -- --list | sed -n 's/^\(.*\): test$/\1/p' | sed 's/::.*$/::/g' | sort | uniq | parallel cargo test --no-fail-fast --release {} -- --ignored
 # RUN cargo test --no-fail-fast --release -- --report-time
 # RUN cargo test --no-fail-fast --release -- --ignored --report-time
 RUN cargo fmt -- --check
