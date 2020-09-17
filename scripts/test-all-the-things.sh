@@ -4,15 +4,14 @@ set -e
 
 ./scripts/incur fmt -- --check
 cargo clippy --workspace
-cargo build --workspace
-cargo build --release --workspace
 
 # Build under wasm as well, to catch any compilation differences
 pushd ./components/wasm >/dev/null
 wasm-pack build --target nodejs
 popd >/dev/null
 
-{ echo 'cargo build --release'; echo 'cargo test --release --no-run'; } | parallel -j2 {}
+
+{ echo 'cargo build --workspace'; echo 'cargo build --release --workspace'; echo 'cargo build --release'; echo 'cargo test --release --no-run'; } | parallel -j2 -u {}
 # cargo test --no-run
 # cargo test --release --no-run
 
