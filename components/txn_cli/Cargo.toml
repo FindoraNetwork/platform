@@ -40,7 +40,7 @@ ledger_api_service = { path = "../ledger_api_service" }
 query_api = { path = "../query_api" }
 tempfile = "3.1.0"
 txn_builder = { path = "../txn_builder" }
-utils = { path = "../../libs/utils" }
+utils = { path = "../../libs/utils", features = ["TESTING"] }
 wasm = { path = "../wasm" }
 zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-5" }
 

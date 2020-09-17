@@ -3,52 +3,52 @@ use std::fs;
 use std::io::{self, Write};
 use std::process::{Command, Output};
 use tempfile::tempdir;
+#[cfg(test)]
+use utils::TESTING_get_project_root;
 
 extern crate exitcode;
 
-// TODOs:
-// Derive path and command name from cwd
-// Figure out how to colorize stdout and stderr
-
-#[cfg(debug_assertions)]
-const COMMAND: &str = "../../target/debug/txn_cli";
-
-#[cfg(not(debug_assertions))]
-const COMMAND: &str = "../../target/release/txn_cli";
+#[cfg(test)]
+#[allow(non_snake_case)]
+fn COMMAND() -> String {
+  let mut root = TESTING_get_project_root();
+  root.push("target/release/txn_cli");
+  root.into_os_string().into_string().unwrap()
+}
 
 //
 // Helper functions: sign up an account
 //
 #[cfg(test)]
 fn sign_up_asset_issuer(dir: &str, name: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["asset_issuer", "sign_up"])
-                       .args(&["--name", name])
-                       .output()
+  Command::new(&COMMAND()).args(&["--dir", dir])
+                          .args(&["asset_issuer", "sign_up"])
+                          .args(&["--name", name])
+                          .output()
 }
 
 #[cfg(test)]
 fn sign_up_credential_issuer(dir: &str, name: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["credential_issuer", "sign_up"])
-                       .args(&["--name", name])
-                       .output()
+  Command::new(&COMMAND()).args(&["--dir", dir])
+                          .args(&["credential_issuer", "sign_up"])
+                          .args(&["--name", name])
+                          .output()
 }
 
 #[cfg(test)]
 fn sign_up_lender(dir: &str, name: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["lender", "sign_up"])
-                       .args(&["--name", name])
-                       .output()
+  Command::new(&COMMAND()).args(&["--dir", dir])
+                          .args(&["lender", "sign_up"])
+                          .args(&["--name", name])
+                          .output()
 }
 
 #[cfg(test)]
 fn sign_up_borrower(dir: &str, name: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["--dir", dir])
-                       .args(&["borrower", "sign_up"])
-                       .args(&["--name", name])
-                       .output()
+  Command::new(&COMMAND()).args(&["--dir", dir])
+                          .args(&["borrower", "sign_up"])
+                          .args(&["--name", name])
+                          .output()
 }
 
 //
@@ -56,7 +56,7 @@ fn sign_up_borrower(dir: &str, name: &str) -> io::Result<Output> {
 //
 #[cfg(test)]
 fn create_txn_builder_no_path() -> io::Result<Output> {
-  Command::new(COMMAND).arg("create_txn_builder").output()
+  Command::new(&COMMAND()).arg("create_txn_builder").output()
 }
 
 //
@@ -64,25 +64,25 @@ fn create_txn_builder_no_path() -> io::Result<Output> {
 //
 #[cfg(test)]
 fn create_txn_builder_with_path(path: &str) -> io::Result<Output> {
-  Command::new(COMMAND).arg("create_txn_builder")
-                       .args(&["--name", path])
-                       .output()
+  Command::new(&COMMAND()).arg("create_txn_builder")
+                          .args(&["--name", path])
+                          .output()
 }
 
 #[cfg(test)]
 fn create_txn_builder_overwrite_path(path: &str) -> io::Result<Output> {
-  Command::new(COMMAND).arg("create_txn_builder")
-                       .args(&["--name", path])
-                       .arg("--force")
-                       .output()
+  Command::new(&COMMAND()).arg("create_txn_builder")
+                          .args(&["--name", path])
+                          .arg("--force")
+                          .output()
 }
 
 #[cfg(test)]
 fn store_sids_with_path(file: &str, indices: &str) -> io::Result<Output> {
-  Command::new(COMMAND).args(&["asset_issuer", "store_sids"])
-                       .args(&["--file", file])
-                       .args(&["--indices", indices])
-                       .output()
+  Command::new(&COMMAND()).args(&["asset_issuer", "store_sids"])
+                          .args(&["--file", file])
+                          .args(&["--indices", indices])
+                          .output()
 }
 
 //
@@ -92,6 +92,7 @@ fn store_sids_with_path(file: &str, indices: &str) -> io::Result<Output> {
 fn test_create_users() {
   let tmp_dir = tempdir().unwrap();
   let dir = tmp_dir.path().to_str().unwrap();
+  println!("{:?}", COMMAND());
 
   // Create an asset issuer
   let output = sign_up_asset_issuer(dir, "Issuer AI").expect("Failed to create an asset issuer");
@@ -142,8 +143,8 @@ fn test_create_txn_builder_no_path() {
 //
 #[test]
 fn test_call_no_args() {
-  let output = Command::new(COMMAND).output()
-                                    .expect("failed to execute process");
+  let output = Command::new(&COMMAND()).output()
+                                       .expect("failed to execute process");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -157,9 +158,9 @@ fn test_call_no_args() {
 //
 #[test]
 fn test_call_with_help() {
-  let output = Command::new(COMMAND).arg("help")
-                                    .output()
-                                    .expect("failed to execute process");
+  let output = Command::new(&COMMAND()).arg("help")
+                                       .output()
+                                       .expect("failed to execute process");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -169,9 +170,9 @@ fn test_call_with_help() {
 
 #[test]
 fn test_create_txn_builder_with_help() {
-  let output = Command::new(COMMAND).args(&["create_txn_builder", "--help"])
-                                    .output()
-                                    .expect("failed to execute process");
+  let output = Command::new(&COMMAND()).args(&["create_txn_builder", "--help"])
+                                       .output()
+                                       .expect("failed to execute process");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -181,9 +182,9 @@ fn test_create_txn_builder_with_help() {
 
 #[test]
 fn test_define_asset_with_help() {
-  let output = Command::new(COMMAND).args(&["asset_issuer", "define_asset", "--help"])
-                                    .output()
-                                    .expect("failed to execute process");
+  let output = Command::new(&COMMAND()).args(&["asset_issuer", "define_asset", "--help"])
+                                       .output()
+                                       .expect("failed to execute process");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -193,9 +194,9 @@ fn test_define_asset_with_help() {
 
 #[test]
 fn test_issue_asset_with_help() {
-  let output = Command::new(COMMAND).args(&["asset_issuer", "issue_asset", "--help"])
-                                    .output()
-                                    .expect("failed to execute process");
+  let output = Command::new(&COMMAND()).args(&["asset_issuer", "issue_asset", "--help"])
+                                       .output()
+                                       .expect("failed to execute process");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -205,9 +206,9 @@ fn test_issue_asset_with_help() {
 
 #[test]
 fn test_transfer_asset_with_help() {
-  let output = Command::new(COMMAND).args(&["asset_issuer", "transfer_asset", "--help"])
-                                    .output()
-                                    .expect("failed to execute process");
+  let output = Command::new(&COMMAND()).args(&["asset_issuer", "transfer_asset", "--help"])
+                                       .output()
+                                       .expect("failed to execute process");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();
@@ -217,9 +218,9 @@ fn test_transfer_asset_with_help() {
 
 #[test]
 fn test_submit_with_help() {
-  let output = Command::new(COMMAND).args(&["submit", "--help"])
-                                    .output()
-                                    .expect("failed to execute process");
+  let output = Command::new(&COMMAND()).args(&["submit", "--help"])
+                                       .output()
+                                       .expect("failed to execute process");
 
   io::stdout().write_all(&output.stdout).unwrap();
   io::stdout().write_all(&output.stderr).unwrap();

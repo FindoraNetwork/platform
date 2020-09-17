@@ -18,8 +18,8 @@ WORKDIR /app/components/cli2
 RUN bash run_tests_local.sh
 WORKDIR /app/
 RUN cargo test --release --no-run
-RUN cargo test --release -- --list 2>&1 >/dev/null  | sed -n 's/^\s*Running \(\S*\)\s*$/\1/p' | parallel {}
-RUN cargo test --release -- --list 2>&1 >/dev/null  | sed -n 's/^\s*Running \(\S*\)\s*$/\1/p' | parallel {} --ignored
+RUN cargo test --release -- --list 2>&1 >/dev/null  | sed -n 's/^\s*Running \(\S*\)\s*$/\1/p' | FINDORA_TXN_CLI_DATA_SEARCH_PATH=`pwd`/components/txn_cli FINDORA___TEST___PROJECT___ROOT=`pwd` parallel {}
+RUN cargo test --release -- --list 2>&1 >/dev/null  | sed -n 's/^\s*Running \(\S*\)\s*$/\1/p' | FINDORA_TXN_CLI_DATA_SEARCH_PATH=`pwd`/components/txn_cli FINDORA___TEST___PROJECT___ROOT=`pwd` parallel {} --ignored
 # RUN cargo test --no-fail-fast --release -- --report-time
 # RUN cargo test --no-fail-fast --release -- --ignored --report-time
 RUN cargo fmt -- --check

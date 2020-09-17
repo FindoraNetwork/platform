@@ -16,17 +16,13 @@ popd >/dev/null
 cargo test --no-run
 cargo test --release --no-run
 
-function get_test_packages {
-  cargo test -- --list | sed -n 's/^\(.*\): test$/\1/p' | sed 's/::.*$/::/g' | sort | uniq
-}
-get_test_packages
-
 # cargo test --no-fail-fast
-get_test_packages | parallel cargo test --release --no-fail-fast {} -- --report-time
+cargo test --release -- --list 2>&1 >/dev/null  | sed -n 's/^\s*Running \(\S*\)\s*$/\1/p' | FINDORA_TXN_CLI_DATA_SEARCH_PATH=`pwd`/components/txn_cli FINDORA___TEST___PROJECT___ROOT=`pwd` parallel {}
 pushd ./components/cli2
 bash ./run_tests_local.sh
 popd
 # cargo test --release --no-fail-fast -- --ignored
-get_test_packages | parallel cargo test --release --no-fail-fast {} -- --ignored --report-time
+# cargo test --release -- --list 2>&1 >/dev/null  | sed -n 's/^\s*Running \(\S*\)\s*$/\1/p' | parallel {} --ignored
+cargo test --release -- --list 2>&1 >/dev/null  | sed -n 's/^\s*Running \(\S*\)\s*$/\1/p' | FINDORA_TXN_CLI_DATA_SEARCH_PATH=`pwd`/components/txn_cli FINDORA___TEST___PROJECT___ROOT=`pwd` parallel {} --ignored
 
 
