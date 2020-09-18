@@ -120,7 +120,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
   } else {
-    return Err("Commitment fails".into());
+    Err("Commitment fails".into())
   }
 }
 

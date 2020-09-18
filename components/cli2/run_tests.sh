@@ -10,42 +10,14 @@ set -euo pipefail
 # Run the tests
 # cargo test
 
-children=()
-
 # Black box tests written in shell
-FINDORA_HOME=$(mktemp -d) bats tests/asset-type-escape.sh &
-children+=($!)
-FINDORA_HOME=$(mktemp -d) bats tests/big-transaction.sh &
-children+=($!)
-FINDORA_HOME=$(mktemp -d) bats tests/advanced-cli.sh &
-children+=($!)
-FINDORA_HOME=$(mktemp -d) bats tests/simple-cli.sh &
-children+=($!)
-FINDORA_HOME=$(mktemp -d) bats tests/error-handling.sh &
-children+=($!)
-FINDORA_HOME=$(mktemp -d) bats tests/balances.sh &
-children+=($!)
-FINDORA_HOME=$(mktemp -d) bats tests/transfers.sh &
-children+=($!)
-
-echo ${children[@]}
-count=${#children[@]}
-echo "$count children"
-
-for i in `seq 1 $count`; do
-  if wait -n ${children[@]}; then
-    echo 'SUCCESS'
-  else
-    echo 'FAILURE'
-    ret=$?
-    for c in ${children[@]}; do
-      echo "killing $c..."
-      kill $c || true
-      sleep 0.01s
-      kill -9 $c || true
-      echo "killed $c..."
-    done
-    exit $ret
-  fi
-done
+{
+  echo tests/asset-type-escape.sh;
+  echo tests/big-transaction.sh;
+  echo tests/advanced-cli.sh;
+  echo tests/simple-cli.sh;
+  echo tests/error-handling.sh;
+  echo tests/balances.sh;
+  echo tests/transfers.sh;
+} | parallel bats {}
 

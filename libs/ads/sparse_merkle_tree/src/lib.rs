@@ -71,7 +71,7 @@ impl Key {
 
   // Method to create a Key from a base64-encoded string
   pub fn from_base64(input: &str) -> Result<Key, base64::DecodeError> {
-    let digest = Digest::from_slice(&base64::decode_config(input, base64::URL_SAFE)?).ok_or_else(|| base64::DecodeError::InvalidLength)?;
+    let digest = Digest::from_slice(&base64::decode_config(input, base64::URL_SAFE)?).ok_or(base64::DecodeError::InvalidLength)?;
     //.map_err(|_| base64::DecodeError::InvalidLength)?;
     Ok(Key(digest))
   }
