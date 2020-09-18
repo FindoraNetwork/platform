@@ -17,6 +17,8 @@ popd >/dev/null
 
 # cargo test --no-fail-fast
 
+export CLI2=`pwd`/target/release/findora
+
 { echo 'bash components/cli2/run_tests_local.sh'; cargo test --release -- --list 2>&1 >/dev/null  | sed -n 's/^\s*Running \(\S*\)\s*$/\1\n\1 --ignored/p'; } | FINDORA_TXN_CLI_DATA_SEARCH_PATH=`pwd`/components/txn_cli FINDORA___TEST___PROJECT___ROOT=`pwd` parallel {}
 
 

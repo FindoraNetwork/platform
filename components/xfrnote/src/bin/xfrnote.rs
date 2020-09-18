@@ -102,7 +102,7 @@ pub fn make_xfr_note() -> XfrNote {
   gen_xfr_note(&mut prng,
                inputs.as_slice(),
                outputs.as_slice(),
-               inkeys.iter().map(|x| x).collect_vec().as_slice()).unwrap()
+               inkeys.iter().collect_vec().as_slice()).unwrap()
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

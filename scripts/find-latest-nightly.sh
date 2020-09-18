@@ -8,7 +8,8 @@ while true; do
   sed -i 's/^\(\s*NIGHTLY_DATE="\)[^"]*\(";\)$/\1'$d'\2/' shell.nix
 
   ./scripts/clean_with_prejudice.sh
-  if nix-shell --command 'exec bash ./scripts/test-all-the-things.sh'; then
+  nix-shell --command 'cargo update'
+  if nix-shell --command 'RUSTC_WRAPPER= exec bash ./scripts/test-all-the-things.sh'; then
     # 8 extra characters on the banner bc of a 10-char date format in
     # $d
     echo "================================"
