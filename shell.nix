@@ -26,6 +26,7 @@ stdenv.mkDerivation {
     rustNightly
 
     sccache
+    parallel
 
     # Add some extra dependencies from `pkgs`
     openssl
@@ -52,7 +53,7 @@ stdenv.mkDerivation {
   # Environment variables for the CLI2
   shellHook = ''
     export LOCAL=`pwd`;
-    export CLI2="$LOCAL/target/debug/findora";
+    export CLI2="$LOCAL/target/release/findora";
     export PATH="$PATH:$LOCAL/target/debug/";
   '';
 }
