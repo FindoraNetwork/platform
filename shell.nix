@@ -28,8 +28,6 @@ stdenv.mkDerivation {
     sccache
     parallel
 
-    parallel
-
     # Add some extra dependencies from `pkgs`
     openssl
     zlib
