@@ -26,6 +26,7 @@ stdenv.mkDerivation {
     rustNightly
 
     sccache
+    parallel
 
     parallel
 
