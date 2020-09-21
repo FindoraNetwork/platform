@@ -247,7 +247,7 @@ mod tests {
     properties.code = code;
     properties.issuer.key = *creator.get_pk_ref();
 
-    let body = DefineAssetBody { asset: properties.clone() };
+    let body = DefineAssetBody { asset: Box::new(properties.clone()) };
 
     let op = DefineAsset::new(body, &IssuerKeyPair { keypair: &creator }).unwrap();
     let seq_id = ledger.get_block_commit_count().unwrap();

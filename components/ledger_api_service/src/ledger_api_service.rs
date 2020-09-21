@@ -678,9 +678,9 @@ mod tests {
   use super::*;
   use actix_web::dev::Service;
   use actix_web::{web, App};
-  use ledger::data_model::{Operation, Transaction};
+  use ledger::data_model::{Operation, Transaction, TxnEffect};
   use ledger::store::helpers::*;
-  use ledger::store::{LedgerState, LedgerUpdate, TxnEffect};
+  use ledger::store::{LedgerState, LedgerUpdate};
   use rand_chacha::ChaChaRng;
   use rand_core::SeedableRng;
 

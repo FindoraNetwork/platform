@@ -1,5 +1,5 @@
 #![deny(warnings)]
-/// Tests submission of transactions constructed by the txn_builder.  
+/// Tests submission of transactions constructed by the txn_builder.
 /// All P2P lending-related operations and transactions are tested.
 use credentials::{
   credential_commit, credential_issuer_key_gen, credential_sign, credential_user_key_gen,
@@ -9,7 +9,7 @@ use credentials::{
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
   AssetRules, AssetTypeCode, Memo, NoReplayToken, Operation, Transaction, TransferType, TxOutput,
-  TxnSID, TxoRef, TxoSID,
+  TxnEffect, TxnSID, TxoRef, TxoSID,
 };
 use ledger::error_location;
 use ledger::policies::{calculate_fee, DebtMemo, Fraction};
@@ -170,15 +170,18 @@ fn test_loan_repayment(loan_amount: u64,
 
   //  Mega transaction to do everything
   let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
-  let tx =
-    builder.add_operation_issue_asset(&fiat_issuer_keys,
-                                      &fiat_code,
-                                      0,
-                                      &[(TxOutput { record: fiat_ba.clone() }, fiat_owner_memo)])?
-           .add_operation_issue_asset(&borrower_keys,
-                                      &debt_code,
-                                      0,
-                                      &[(TxOutput { record: debt_ba.clone() }, debt_owner_memo)])?;
+  let tx = builder.add_operation_issue_asset(&fiat_issuer_keys,
+                                             &fiat_code,
+                                             0,
+                                             &[(TxOutput { record: fiat_ba.clone(),
+                                                           lien: None },
+                                                fiat_owner_memo)])?
+                  .add_operation_issue_asset(&borrower_keys,
+                                             &debt_code,
+                                             0,
+                                             &[(TxOutput { record: debt_ba.clone(),
+                                                           lien: None },
+                                                debt_owner_memo)])?;
   let mut xfr_builder = TransferOperationBuilder::new();
   let output_template =
     AssetRecordTemplate::with_no_asset_tracking(loan_amount,

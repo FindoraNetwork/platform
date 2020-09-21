@@ -1,10 +1,6 @@
 #![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{
-  b64enc, AssetTypeCode, BlockSID, DefineAsset, FinalizedTransaction, IssueAsset, IssuerPublicKey,
-  KVBlind, KVHash, KVUpdate, Operation, Transaction, TransferAsset, TxOutput, TxnSID, TxoRef,
-  TxoSID, XfrAddress,
-};
+use ledger::data_model::*;
 use ledger::error_location;
 use ledger::store::*;
 use ledger_api_service::RestfulArchiveAccess;
@@ -330,6 +326,12 @@ fn get_related_addresses(txn: &Transaction) -> HashSet<XfrAddress> {
       }
       Operation::IssueAsset(issue_asset) => {
         related_addresses.insert(XfrAddress { key: issue_asset.pubkey.key });
+      }
+      Operation::BindAssets(_bind_assets) => {
+        unimplemented!();
+      }
+      Operation::ReleaseAssets(_release_assets) => {
+        unimplemented!();
       }
       Operation::DefineAsset(define_asset) => {
         related_addresses.insert(XfrAddress { key: define_asset.pubkey.key });

@@ -485,7 +485,9 @@ pub fn run_txn_check(check: &TxnCheck,
                              .ok_or_else(|| fail!())?;
             asset_type = inp_txo.asset_type.get_asset_type().ok_or_else(|| fail!())?;
 
-            res_vars.insert(*inp, TxOutput { record: inp_txo.clone() });
+            res_vars.insert(*inp,
+                            TxOutput { record: inp_txo.clone(),
+                                       lien: None });
             res_totals.insert(*inp, vec![*amt]);
             res_var_inputs.insert(*inp);
 
@@ -515,7 +517,9 @@ pub fn run_txn_check(check: &TxnCheck,
                 return Err(fail!());
               }
 
-              res_vars.insert(*out_res, TxOutput { record: out_txo.clone() });
+              res_vars.insert(*out_res,
+                              TxOutput { record: out_txo.clone(),
+                                         lien: None });
               res_totals.insert(*out_res, vec![*amt]);
 
               out_ix += 1;
@@ -955,6 +959,11 @@ pub fn run_txn_check(check: &TxnCheck,
 
         for (_, rv) in outs.iter() {
           let txo = res_vars.get(rv).ok_or_else(|| fail!())?;
+
+          if txo.lien.is_some() {
+            return Err(fail!());
+          }
+
           // txo.record.asset_type should be established as non-None by the
           // first two checking loops.
           if *asset_type != txo.record.asset_type.get_asset_type().unwrap() {
@@ -969,6 +978,11 @@ pub fn run_txn_check(check: &TxnCheck,
           let inp_asset_type = resvar_types.get(inp).ok_or_else(|| fail!())?;
           let inp_asset_type = rt_vars.get(inp_asset_type.0 as usize)
                                       .ok_or_else(|| fail!())?;
+
+          if inp_txo.lien.is_some() {
+            return Err(fail!());
+          }
+
           // txo.record.asset_type should be established as non-None by the
           // first two checking loops.
           if *inp_asset_type != inp_txo.record.asset_type.get_asset_type().unwrap() {
@@ -980,6 +994,11 @@ pub fn run_txn_check(check: &TxnCheck,
             let out_asset_type = resvar_types.get(real_out).ok_or_else(|| fail!())?;
             let out_asset_type = rt_vars.get(out_asset_type.0 as usize)
                                         .ok_or_else(|| fail!())?;
+
+            if out_txo.lien.is_some() {
+              return Err(fail!());
+            }
+
             // txo.record.asset_type should be established as non-None by the
             // first two checking loops.
             if *out_asset_type != out_txo.record.asset_type.get_asset_type().unwrap() {

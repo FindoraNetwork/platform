@@ -1,6 +1,6 @@
 #![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{Operation, Transaction, TxnSID, TxnTempSID, TxoSID};
+use ledger::data_model::{Operation, Transaction, TxnEffect, TxnSID, TxnTempSID, TxoSID};
 use ledger::error_location;
 use ledger::store::*;
 use log::info;
@@ -276,6 +276,16 @@ pub fn txn_log_info(txn: &Transaction) {
         info!("Asset Transfer: Transfer with {} inputs and {} outputs",
               xfr_asset_op.body.inputs.len(),
               xfr_asset_op.body.outputs.len());
+      }
+      Operation::BindAssets(bind_assets_op) => {
+        info!("Asset Bind: Bind of {} inputs",
+              bind_assets_op.body.inputs.len());
+      }
+      Operation::ReleaseAssets(release_assets_op) => {
+        info!("Asset Release: Release of lien {:?} ({} inputs) into {} outputs",
+              release_assets_op.body.lien,
+              release_assets_op.body.transfer.inputs.len(),
+              release_assets_op.body.transfer.outputs.len(),);
       }
       Operation::AIRAssign(air_assign_op) => {
         info!("Assigning to AIR: AIR[{}] <- {:?}",

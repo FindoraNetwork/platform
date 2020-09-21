@@ -4,7 +4,7 @@ extern crate unicode_normalization;
 
 use super::errors;
 use crate::policy_script::{Policy, PolicyGlobals, TxnPolicyData};
-use crate::{error_location, zei_fail};
+use crate::{des_fail, error_location, ser_fail, zei_fail};
 use air::{check_merkle_proof as air_check_merkle_proof, AIRResult};
 use bitmap::SparseMap;
 use chrono::prelude::*;
@@ -22,16 +22,18 @@ use sparse_merkle_tree::{check_merkle_proof, Key, MerkleProof};
 use std::boxed::Box;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
-use std::convert::TryInto;
+// use std::convert::TryInto;
 use std::hash::{Hash, Hasher};
 use unicode_normalization::UnicodeNormalization;
 use utils::{HashOf, ProofOf, Serialized, SignatureOf};
 use zei::xfr::lib::{gen_xfr_body, XfrNotePolicies};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
-  AssetRecord, AssetTracingPolicies, AssetTracingPolicy, AssetType as ZeiAssetType,
-  BlindAssetRecord, OwnerMemo, XfrBody, ASSET_TYPE_LENGTH,
+  AssetRecord, AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy,
+  AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo, XfrBody, ASSET_TYPE_LENGTH,
 };
+// use zei::xfr::asset_record::{AssetRecordType};
+use super::effects::*;
 
 pub const RANDOM_CODE_LENGTH: usize = 16;
 pub const TRANSACTION_WINDOW_WIDTH: usize = 128;
@@ -142,8 +144,8 @@ impl AssetTypeCode {
           Ok(utf8_str) => {
             return Ok(utf8_str.to_string());
           }
-          Err(_) => {
-            return Err(PlatformError::SerializationError(error_location!()));
+          Err(e) => {
+            return Err(ser_fail!(e));
           }
         };
       }
@@ -159,12 +161,13 @@ impl AssetTypeCode {
   }
 
   pub fn new_from_base64(b64: &str) -> Result<Self, PlatformError> {
-    if let Ok(mut bin) = b64dec(b64) {
-      bin.resize(ASSET_TYPE_LENGTH, 0u8);
-      let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bin.as_slice()).unwrap();
-      Ok(Self { val: ZeiAssetType(buf) })
-    } else {
-      Err(PlatformError::DeserializationError(error_location!()))
+    match b64dec(b64) {
+      Ok(mut bin) => {
+        bin.resize(ASSET_TYPE_LENGTH, 0u8);
+        let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bin.as_slice()).unwrap();
+        Ok(Self { val: ZeiAssetType(buf) })
+      }
+      Err(e) => Err(des_fail!(format!("Failed to deserialize base64 '{}': {}", b64, e))),
     }
   }
   pub fn to_base64(&self) -> String {
@@ -198,7 +201,7 @@ impl Code {
       let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
       Ok(Self { val: buf })
     } else {
-      Err(PlatformError::DeserializationError(error_location!()))
+      Err(des_fail!())
     }
   }
   pub fn to_base64(&self) -> String {
@@ -305,16 +308,17 @@ pub struct AccountAddress {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct TransferBodySignature {
+pub struct IndexedSignature<T> {
   pub address: XfrAddress,
-  pub signature: SignatureOf<(TransferAssetBody, Option<usize>)>,
+  pub signature: SignatureOf<(T, Option<usize>)>,
   #[serde(default)]
   #[serde(skip_serializing_if = "is_default")]
   pub input_idx: Option<usize>, // Some(idx) if a co-signature, None otherwise
 }
 
-impl TransferBodySignature {
-  pub fn verify(&self, message: &TransferAssetBody) -> bool {
+impl<T> IndexedSignature<T> where T: Clone + Serialize + serde::de::DeserializeOwned
+{
+  pub fn verify(&self, message: &T) -> bool {
     self.signature
         .verify(&self.address.key, &(message.clone(), self.input_idx))
         .is_ok()
@@ -500,6 +504,9 @@ pub struct TxnTempSID(pub usize);
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TxOutput {
   pub record: BlindAssetRecord,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  pub lien: Option<HashOf<Vec<TxOutput>>>,
 }
 
 #[derive(Eq, Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -507,6 +514,11 @@ pub enum UtxoStatus {
   Spent,
   Unspent,
   Nonexistent,
+}
+
+pub enum LienEntry {
+  SimpleTxo(TxOutput),
+  Lien(TxOutput, Vec<LienEntry>),
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -549,6 +561,11 @@ pub struct TransferAssetBody {
   #[serde(skip_serializing_if = "is_default")]
   pub policies: XfrNotePolicies,
   pub outputs: Vec<TxOutput>,
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  // (inp_idx,out_idx,hash) triples signifying that the lien `hash` on
+  // the input `inp_idx` gets assigned to the output `out_idx`
+  pub lien_assignments: Vec<(usize, usize, HashOf<Vec<TxOutput>>)>,
   // TODO(joe): we probably don't need the whole XfrNote with input records
   // once it's on the chain
   pub transfer: Box<XfrBody>, // Encrypted transfer note
@@ -557,11 +574,15 @@ pub struct TransferAssetBody {
 }
 
 impl TransferAssetBody {
+  #[allow(clippy::too_many_arguments)]
   pub fn new<R: CryptoRng + RngCore>(prng: &mut R,
                                      input_refs: Vec<TxoRef>,
                                      input_records: &[AssetRecord],
                                      output_records: &[AssetRecord],
                                      policies: Option<XfrNotePolicies>,
+                                     lien_assignments: Vec<(usize,
+                                          usize,
+                                          HashOf<Vec<TxOutput>>)>,
                                      transfer_type: TransferType)
                                      -> Result<TransferAssetBody, errors::PlatformError> {
     let num_inputs = input_records.len();
@@ -589,16 +610,18 @@ impl TransferAssetBody {
       return Err(PlatformError::InputsError(error_location!()));
     }
 
-    let note = Box::new(gen_xfr_body(prng, input_records, output_records)
+    let transfer = Box::new(gen_xfr_body(prng, input_records, output_records)
         .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
-    let outputs = note.outputs
-                      .iter()
-                      .map(|rec| TxOutput { record: rec.clone() })
-                      .collect();
+    let outputs = transfer.outputs
+                          .iter()
+                          .map(|rec| TxOutput { record: rec.clone(),
+                                                lien: None })
+                          .collect();
     Ok(TransferAssetBody { inputs: input_refs,
                            outputs,
                            policies,
-                           transfer: note,
+                           lien_assignments,
+                           transfer,
                            transfer_type })
   }
 
@@ -607,15 +630,15 @@ impl TransferAssetBody {
   pub fn compute_body_signature(&self,
                                 keypair: &XfrKeyPair,
                                 input_idx: Option<usize>)
-                                -> TransferBodySignature {
+                                -> IndexedSignature<TransferAssetBody> {
     let public_key = keypair.get_pk_ref();
-    TransferBodySignature { signature: SignatureOf::new(keypair, &(self.clone(), input_idx)),
-                            address: XfrAddress { key: *public_key },
-                            input_idx }
+    IndexedSignature { signature: SignatureOf::new(keypair, &(self.clone(), input_idx)),
+                       address: XfrAddress { key: *public_key },
+                       input_idx }
   }
 
   /// Verifies a body signature
-  pub fn verify_body_signature(&self, signature: &TransferBodySignature) -> bool {
+  pub fn verify_body_signature(&self, signature: &IndexedSignature<TransferAssetBody>) -> bool {
     signature.verify(&self)
   }
 }
@@ -644,7 +667,7 @@ impl IssueAssetBody {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DefineAssetBody {
-  pub asset: Asset,
+  pub asset: Box<Asset>,
 }
 
 impl DefineAssetBody {
@@ -672,7 +695,7 @@ impl DefineAssetBody {
     } else {
       asset_def.confidential_memo = ConfidentialMemo {};
     }
-    Ok(DefineAssetBody { asset: asset_def })
+    Ok(DefineAssetBody { asset: Box::new(asset_def) })
   }
 }
 
@@ -730,7 +753,7 @@ pub enum OutputSpentStatus {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAsset {
   pub body: TransferAssetBody,
-  pub body_signatures: Vec<TransferBodySignature>,
+  pub body_signatures: Vec<IndexedSignature<TransferAssetBody>>,
 }
 
 impl TransferAsset {
@@ -749,7 +772,9 @@ impl TransferAsset {
     self.attach_signature(sig).unwrap()
   }
 
-  pub fn attach_signature(&mut self, sig: TransferBodySignature) -> Result<(), PlatformError> {
+  pub fn attach_signature(&mut self,
+                          sig: IndexedSignature<TransferAssetBody>)
+                          -> Result<(), PlatformError> {
     if !sig.verify(&self.body) {
       return Err(PlatformError::InputsError(error_location!()));
     }
@@ -757,14 +782,16 @@ impl TransferAsset {
     Ok(())
   }
 
-  pub fn create_input_signature(&self, keypair: &XfrKeyPair) -> TransferBodySignature {
+  pub fn create_input_signature(&self,
+                                keypair: &XfrKeyPair)
+                                -> IndexedSignature<TransferAssetBody> {
     self.body.compute_body_signature(keypair, None)
   }
 
   pub fn create_cosignature(&self,
                             keypair: &XfrKeyPair,
                             input_idx: usize)
-                            -> TransferBodySignature {
+                            -> IndexedSignature<TransferAssetBody> {
     self.body.compute_body_signature(keypair, Some(input_idx))
   }
 
@@ -849,7 +876,7 @@ impl UpdateMemo {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AIRAssign {
-  pub body: AIRAssignBody,
+  pub body: Box<AIRAssignBody>,
   pub pubkey: XfrPublicKey,
   pub signature: SignatureOf<AIRAssignBody>,
 }
@@ -859,7 +886,7 @@ impl AIRAssign {
              keypair: &XfrKeyPair)
              -> Result<AIRAssign, errors::PlatformError> {
     let signature = SignatureOf::new(keypair, &creation_body);
-    Ok(AIRAssign { body: creation_body,
+    Ok(AIRAssign { body: Box::new(creation_body),
                    pubkey: *keypair.get_pk_ref(),
                    signature })
   }
@@ -897,7 +924,7 @@ impl KVBlind {
       let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
       Ok(Self(buf))
     } else {
-      Err(PlatformError::DeserializationError(error_location!()))
+      Err(des_fail!())
     }
   }
 }
@@ -935,7 +962,151 @@ impl KVUpdate {
   }
 }
 
-#[allow(clippy::large_enum_variant)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindAssetsBody {
+  pub contract: TxoRef,    // UTXO representing the lien contract
+  pub inputs: Vec<TxoRef>, // the assets being held
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  // (inp_idx,hash) pairs signifying that there is a lien `hash` on the
+  // input `inp_idx`
+  // NOTE: `inp_idx` is relative to `inputs`, not `[contract] + inputs`
+  pub input_liens: Vec<(usize, HashOf<Vec<TxOutput>>)>,
+  // Note transferring the contract record & the inputs -- though with
+  // only one output, which must be for the `contract`.
+  pub transfer: Box<XfrBody>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindAssets {
+  pub body: BindAssetsBody,
+  // Signatures authorizing each of the inputs
+  pub body_signatures: Vec<IndexedSignature<BindAssetsBody>>,
+}
+
+impl BindAssetsBody {
+  pub fn new<R: CryptoRng + RngCore>(prng: &mut R,
+                                     contract_ref: TxoRef,
+                                     input_refs: Vec<(TxoRef, Option<HashOf<Vec<TxOutput>>>)>,
+                                     input_records: &[AssetRecord],
+                                     output_record: &AssetRecord)
+                                     -> Result<BindAssetsBody, errors::PlatformError> {
+    if input_records.is_empty() {
+      return Err(PlatformError::InputsError(error_location!()));
+    }
+
+    if 1 + input_refs.len() != input_records.len() {
+      return Err(PlatformError::InputsError(error_location!()));
+    }
+
+    let out_pubkey = &output_record.open_asset_record
+                                   .blind_asset_record
+                                   .public_key;
+    let mut out_records = vec![output_record.clone()];
+    for i in input_records[1..].iter() {
+      let open_rec = i.open_asset_record.clone();
+
+      let amt = *open_rec.get_amount();
+      let unit_code = *open_rec.get_asset_type();
+
+      let art = open_rec.get_record_type();
+      let ar = AssetRecordTemplate::with_no_asset_tracking(amt, unit_code, art, *out_pubkey);
+      let ar = AssetRecord::from_template_no_identity_tracking(prng, &ar).unwrap();
+      out_records.push(ar);
+    }
+
+    let transfer = Box::new(gen_xfr_body(prng, input_records, &out_records)
+        .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
+    let input_liens = input_refs.iter()
+                                .map(|(_l, r)| r)
+                                .enumerate()
+                                .filter_map(|(l, x)| x.clone().map(|x| (l, x)))
+                                .collect::<Vec<_>>();
+    let input_refs = input_refs.iter().map(|(l, _r)| l).cloned().collect();
+    Ok(BindAssetsBody { contract: contract_ref,
+                        inputs: input_refs,
+                        input_liens,
+                        transfer })
+  }
+
+  /// Computes a body signature. A body signature represents consent to some part of the asset transfer. If an
+  /// input_idx is specified, the signature is a co-signature.
+  pub fn compute_body_signature(&self,
+                                keypair: &XfrKeyPair,
+                                input_idx: Option<usize>)
+                                -> IndexedSignature<BindAssetsBody> {
+    let public_key = keypair.get_pk_ref();
+    IndexedSignature { signature: SignatureOf::new(keypair, &(self.clone(), input_idx)),
+                       address: XfrAddress { key: *public_key },
+                       input_idx }
+  }
+
+  /// Verifies a body signature
+  pub fn verify_body_signature(&self, signature: &IndexedSignature<BindAssetsBody>) -> bool {
+    signature.verify(&self)
+  }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReleaseAssetsBody {
+  pub contract: TxoRef,            // UTXO representing the lien contract
+  pub lien: HashOf<Vec<TxOutput>>, // which lien?
+  pub num_outputs: usize,          // how many UTXOs?
+  #[serde(default)]
+  #[serde(skip_serializing_if = "is_default")]
+  // (inp_idx,out_idx,hash) triples signifying that the lien `hash` on
+  // the input `inp_idx` gets assigned to the output `out_idx`
+  // (an inp_idx of 0 is invalid)
+  pub lien_assignments: Vec<(usize, usize, HashOf<Vec<TxOutput>>)>,
+  pub transfer: Box<XfrBody>, // Note transferrring the contract & the held assets
+}
+
+impl ReleaseAssetsBody {
+  pub fn new<R: CryptoRng + RngCore>(prng: &mut R,
+                                     input_ref: TxoRef,
+                                     lien: HashOf<Vec<TxOutput>>,
+                                     lien_assignments: Vec<(usize,
+                                          usize,
+                                          HashOf<Vec<TxOutput>>)>,
+                                     input_records: &[AssetRecord],
+                                     output_records: &[AssetRecord])
+                                     -> Result<ReleaseAssetsBody, errors::PlatformError> {
+    if input_records.is_empty() {
+      return Err(PlatformError::InputsError(error_location!()));
+    }
+    let transfer = Box::new(gen_xfr_body(prng, input_records, output_records)
+        .map_err(|e| PlatformError::ZeiError(error_location!(),e))?);
+    Ok(ReleaseAssetsBody { contract: input_ref,
+                           lien,
+                           num_outputs: output_records.len(),
+                           lien_assignments,
+                           transfer })
+  }
+
+  /// Computes a body signature. A body signature represents consent to some part of the asset transfer. If an
+  /// input_idx is specified, the signature is a co-signature.
+  pub fn compute_body_signature(&self,
+                                keypair: &XfrKeyPair,
+                                input_idx: Option<usize>)
+                                -> IndexedSignature<ReleaseAssetsBody> {
+    let public_key = keypair.get_pk_ref();
+    IndexedSignature { signature: SignatureOf::new(keypair, &(self.clone(), input_idx)),
+                       address: XfrAddress { key: *public_key },
+                       input_idx }
+  }
+
+  /// Verifies a body signature
+  pub fn verify_body_signature(&self, signature: &IndexedSignature<ReleaseAssetsBody>) -> bool {
+    signature.verify(&self)
+  }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReleaseAssets {
+  pub body: ReleaseAssetsBody,
+  pub body_signatures: Vec<IndexedSignature<ReleaseAssetsBody>>,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
   TransferAsset(TransferAsset),
@@ -944,6 +1115,8 @@ pub enum Operation {
   UpdateMemo(UpdateMemo),
   AIRAssign(AIRAssign),
   KVStoreUpdate(KVUpdate),
+  BindAssets(BindAssets),
+  ReleaseAssets(ReleaseAssets),
   // ... etc...
 }
 
@@ -1103,7 +1276,7 @@ impl AuthenticatedUtxo {
       return false;
     }
 
-    if **output.unwrap() != self.utxo.0 {
+    if *output.unwrap() != self.utxo.0 {
       return false;
     }
 
@@ -1359,35 +1532,51 @@ impl Transaction {
 
   /// Returns the outputs of a transaction. Internally spent outputs can be optionally included.
   /// This will never panic on a well formed transaction, but may panic on a malformed one.
-  pub fn get_outputs_ref(&self, include_spent: bool) -> Vec<&TxOutput> {
-    let mut outputs = vec![];
-    let mut spent_indices = vec![];
-    for op in self.body.operations.iter() {
-      match op {
-        Operation::TransferAsset(xfr_asset) => {
-          for txo_ref in &xfr_asset.body.inputs {
-            match txo_ref {
-              TxoRef::Relative(offset) => {
-                let idx = (outputs.len() as u64) - *offset - 1;
-                spent_indices.push(idx);
-              }
-              TxoRef::Absolute(_) => {}
-            };
-          }
-          outputs.append(&mut xfr_asset.get_outputs_ref());
-        }
-        Operation::IssueAsset(issue_asset) => {
-          outputs.append(&mut issue_asset.get_outputs_ref());
-        }
-        _ => {}
-      }
-    }
+  pub fn get_outputs_ref(&self, include_spent: bool) -> Vec<TxOutput> {
+    let eff = TxnEffect::compute_effect(self.clone()).unwrap();
     if !include_spent {
-      for idx in spent_indices {
-        outputs.remove(idx.try_into().unwrap());
+      eff.txos.into_iter().filter_map(|x| x).collect()
+    } else {
+      let mut spent = eff.internally_spent_txos.into_iter();
+      let mut ret = vec![];
+      for txo in eff.txos.into_iter() {
+        if let Some(txo) = txo {
+          ret.push(txo);
+        } else {
+          ret.push(spent.next().unwrap());
+        }
       }
+      ret
     }
-    outputs
+
+    // let mut outputs = vec![];
+    // let mut spent_indices = vec![];
+    // for op in self.body.operations.iter() {
+    //   match op {
+    //     Operation::TransferAsset(xfr_asset) => {
+    //       for txo_ref in &xfr_asset.body.inputs {
+    //         match txo_ref {
+    //           TxoRef::Relative(offset) => {
+    //             let idx = (outputs.len() as u64) - *offset - 1;
+    //             spent_indices.push(idx);
+    //           }
+    //           TxoRef::Absolute(_) => {}
+    //         };
+    //       }
+    //       outputs.append(&mut xfr_asset.get_outputs_ref());
+    //     }
+    //     Operation::IssueAsset(issue_asset) => {
+    //       outputs.append(&mut issue_asset.get_outputs_ref());
+    //     }
+    //     _ => {}
+    //   }
+    // }
+    // if !include_spent {
+    //   for idx in spent_indices {
+    //     outputs.remove(idx.try_into().unwrap());
+    //   }
+    // }
+    // outputs
   }
 
   /// NOTE: this does *not* guarantee that a private key affiliated with
@@ -1630,6 +1819,7 @@ mod tests {
                                                   outputs: Vec::new(),
                                                   policies,
                                                   transfer: Box::new(xfr_note),
+                                                  lien_assignments: vec![],
                                                   transfer_type: TransferType::Standard };
 
     let asset_transfer = {

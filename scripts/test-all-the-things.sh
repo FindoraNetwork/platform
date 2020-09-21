@@ -2,7 +2,7 @@
 
 set -e
 
-./scripts/incur fmt -- --check
+./scripts/incur fmt
 cargo clippy --workspace
 
 # Build under wasm as well, to catch any compilation differences

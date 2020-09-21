@@ -235,7 +235,7 @@ pub struct TxoCacheEntry {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AssetTypeEntry {
-  asset: Asset,
+  asset: Box<Asset>,
   issuer_nick: Option<PubkeyName>,
   issue_seq_num: u64,
 }

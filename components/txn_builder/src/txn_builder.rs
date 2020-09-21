@@ -328,7 +328,9 @@ pub trait BuildsTransactions {
     self.add_operation_issue_asset(key_pair,
                                    token_code,
                                    seq_num,
-                                   &[(TxOutput { record: ba }, owner_memo)])
+                                   &[(TxOutput { record: ba,
+                                                 lien: None },
+                                      owner_memo)])
   }
 
   #[allow(clippy::comparison_chain)]
@@ -434,8 +436,8 @@ impl TransactionBuilder {
     self.txn.get_owner_memos_ref()[idx]
   }
 
-  pub fn get_output_ref(&self, idx: usize) -> &TxOutput {
-    self.txn.get_outputs_ref(true)[idx]
+  pub fn get_output_ref(&self, idx: usize) -> TxOutput {
+    self.txn.get_outputs_ref(true)[idx].clone()
   }
 
   pub fn from_seq_id(seq_id: u64) -> Self {
@@ -533,6 +535,7 @@ impl BuildsTransactions for TransactionBuilder {
                                                             &input_asset_records[..],
                                                             output_records,
                                                             None,
+                                                            vec![],
                                                             TransferType::Standard)?)?;
     xfr.sign(&keys);
 
@@ -891,6 +894,7 @@ impl TransferOperationBuilder {
                                       &self.input_records,
                                       &self.output_records,
                                       Some(xfr_policies),
+                                      vec![],
                                       transfer_type)?;
     self.transfer = Some(TransferAsset::new(body)?);
     Ok(self)
@@ -917,7 +921,7 @@ impl TransferOperationBuilder {
 
   pub fn create_input_signature(&self,
                                 keypair: &XfrKeyPair)
-                                -> Result<TransferBodySignature, PlatformError> {
+                                -> Result<IndexedSignature<TransferAssetBody>, PlatformError> {
     let sig = self.transfer
                   .as_ref()
                   .ok_or_else(|| no_transfer_err!())?
@@ -928,7 +932,7 @@ impl TransferOperationBuilder {
   pub fn create_cosignature(&self,
                             keypair: &XfrKeyPair,
                             input_idx: usize)
-                            -> Result<TransferBodySignature, PlatformError> {
+                            -> Result<IndexedSignature<TransferAssetBody>, PlatformError> {
     let sig = self.transfer
                   .as_ref()
                   .ok_or_else(|| no_transfer_err!())?
@@ -937,7 +941,7 @@ impl TransferOperationBuilder {
   }
 
   pub fn attach_signature(&mut self,
-                          sig: TransferBodySignature)
+                          sig: IndexedSignature<TransferAssetBody>)
                           -> Result<&mut Self, PlatformError> {
     self.transfer
         .as_mut()
