@@ -179,6 +179,7 @@ fn run_log_against<LU, LA>(submit: &mut LU,
 }
 
 fn log_test(logfile: &Path, outfile: Option<&str>, expected_file: Option<&str>) {
+  dbg!(logfile, &outfile, &expected_file);
   let tmp_dir = utils::fresh_tmp_dir();
 
   let mut target_file = tmp_dir.clone();
@@ -226,9 +227,22 @@ fn log_test(logfile: &Path, outfile: Option<&str>, expected_file: Option<&str>) 
   std::fs::remove_dir_all(tmp_dir).unwrap();
 }
 
-#[test]
-fn test_example_log() {
-  log_test(Path::new("example_log"), None, Some("expected"));
+#[cfg(test)]
+mod tests {
+  use utils::TESTING_get_project_root;
+  #[test]
+  fn test_example_log() {
+    let root = TESTING_get_project_root();
+    super::log_test(&root.clone()
+                         .into_boxed_path()
+                         .join("components/log_tester/example_log"),
+                    None,
+                    Some(&root.into_boxed_path()
+                              .join("components/log_tester/expected")
+                              .into_os_string()
+                              .into_string()
+                              .unwrap()));
+  }
 }
 
 fn main() {

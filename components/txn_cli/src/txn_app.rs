@@ -1253,8 +1253,9 @@ pub fn process_inputs<T: RestfulQueryServerAccess + RestfulLedgerAccess + Restfu
         inputs_error(&format!("Missing --txn <filename> at {}", error_location!()))
       }
     }
-    _ => {
-      eprintln!("Subcommand missing or not recognized. Try \"txn_cli --help\"");
+    e => {
+      eprintln!("Subcommand {:?} missing or not recognized. Try \"txn_cli --help\"",
+                e);
       inputs_error(&format!("Subcommand missing or not recognized at {}",
                             error_location!()))
     }

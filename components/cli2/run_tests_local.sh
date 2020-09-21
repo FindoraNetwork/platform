@@ -3,7 +3,10 @@
 set -euo pipefail
 
 pushd $(dirname $0)/../..
-export CLI2=`pwd`/target/release/findora
+if [[ -z "$CLI2" ]]; then
+  export CLI2=`pwd`/target/release/findora
+fi
+export CLI2
 
 ./target/release/ledger_standalone &
 ledger_pid=$!

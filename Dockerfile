@@ -12,20 +12,16 @@ WORKDIR /app/
 COPY --from=zei /app /src/zei
 COPY --from=zei /src/bulletproofs /src/bulletproofs
 COPY . /app/
-RUN cargo audit
-RUN cargo build --release
-WORKDIR /app/components/cli2
-RUN bash run_tests_local.sh
-WORKDIR /app/
-RUN cargo test --no-fail-fast --release
-RUN cargo test --no-fail-fast --release -- --ignored
-RUN cargo fmt -- --check
-RUN cargo deb -p cli2
+RUN { echo 'cargo audit'; echo 'cargo fmt -- --check'; } | parallel {}
+RUN { echo 'cargo build --release'; echo 'cargo test --release --no-run'; } | parallel -j2 -u {}
+RUN cp target/release/findora findora_cli
+RUN { echo 'bash components/cli2/run_tests_local.sh'; echo 'cargo deb -p cli2'; cargo test --release -- --list 2>&1 >/dev/null  | sed -n 's/^\s*Running \(\S*\)\s*$/\1\n\1 --ignored/p'; } | CLI2=`pwd`/findora_cli FINDORA_TXN_CLI_DATA_SEARCH_PATH=`pwd`/components/txn_cli FINDORA___TEST___PROJECT___ROOT=`pwd` parallel {}
+# RUN cargo test --no-fail-fast --release -- --report-time
+# RUN cargo test --no-fail-fast --release -- --ignored --report-time
 #Disabled because it triggers a compile and also tests dependencies
 #RUN cargo clippy -- -D warnings
 WORKDIR /app/components/wasm
 RUN wasm-pack build --target nodejs
-RUN bash -c 'time /app/target/release/log_tester /app/components/log_tester/example_log - /app/components/log_tester/expected'
 #Cleanup some big files in release directory
 RUN rm -r /app/target/release/build /app/target/release/deps
 
