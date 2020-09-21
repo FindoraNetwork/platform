@@ -1,3 +1,6 @@
+#![deny(warnings)]
+// TODO: remove this when https://github.com/rust-lang/rust-clippy/issues/6066 gets fixed
+#![allow(clippy::needless_collect)]
 use crate::display_functions::{
   display_asset_type, display_op_metadata, display_txn, display_txn_builder, display_txo_entry,
 };
@@ -978,8 +981,7 @@ pub fn define_asset<S: CliDataStore>(store: &mut S,
                                      -> Result<(), CliError> {
   let issuer_nick = KeypairName(issuer_nick);
   let config = store.get_config()?;
-  let builder_opt = Some(txn_nick).map(TxnBuilderName)
-                                  .or_else(|| config.active_txn);
+  let builder_opt = Some(txn_nick).map(TxnBuilderName).or(config.active_txn);
 
   let builder_name;
   match builder_opt {
@@ -1061,8 +1063,7 @@ pub fn issue_asset<S: CliDataStore>(store: &mut S,
                                     amount: u64)
                                     -> Result<(), CliError> {
   let config = store.get_config()?;
-  let builder_opt = Some(txn_nick).map(TxnBuilderName)
-                                  .or_else(|| config.active_txn);
+  let builder_opt = Some(txn_nick).map(TxnBuilderName).or(config.active_txn);
   let builder_nick;
   match builder_opt {
     None => {
@@ -1182,7 +1183,7 @@ pub fn transfer_assets<S: CliDataStore>(store: &mut S,
                                         builder: Option<String>)
                                         -> Result<(), CliError> {
   let config = store.get_config()?;
-  let builder_opt = builder.map(TxnBuilderName).or_else(|| config.active_txn);
+  let builder_opt = builder.map(TxnBuilderName).or(config.active_txn);
   let builder_nick;
   match builder_opt {
     None => {
@@ -1679,10 +1680,7 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
     let txn_status = get_status(store, nick.clone());
 
     if let Ok(res) = txn_status {
-      committed = match res {
-        TxnStatus::Committed((_, _)) => true,
-        _ => false,
-      }
+      committed = matches!(res, TxnStatus::Committed((_, _)));
     }
   }
 

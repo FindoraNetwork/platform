@@ -24,7 +24,14 @@ use zei::xfr::structs::{
 // Make this data driven, not embedded in the Rust code.
 // The attribute names will be determined by the customer's application and will differ from customer to customer.
 // Or we'll develop a standard registry or dictionary of attributes.
-const INIT_DATA_PATH: &str = "init_data.json";
+#[allow(non_snake_case)]
+fn INIT_DATA_PATH() -> String {
+  let mut ret = PathBuf::new();
+  ret.push(std::env::var_os("FINDORA_TXN_CLI_DATA_SEARCH_PATH").filter(|x| !x.is_empty())
+                                                               .unwrap_or_else(|| ".".into()));
+  ret.push("init_data.json");
+  ret.into_os_string().into_string().unwrap()
+}
 /// Path to the data file.
 const DATA_FILE: &str = "data.json";
 /// Arbitrary choice of the maximum backup extension number.
@@ -584,14 +591,19 @@ pub fn load_data(data_dir: &str) -> Result<Data, PlatformError> {
   let data_file_path = format!("{}/{}", data_dir, DATA_FILE);
   match fs::read_to_string(&data_file_path) {
     Ok(data) => serde_json::from_str::<Data>(&data).map_err(|e| des_fail!(e)),
-    Err(_) => match fs::read_to_string(INIT_DATA_PATH) {
+    Err(e1) => match fs::read_to_string(&INIT_DATA_PATH()) {
       Ok(init_data) => {
         let data = serde_json::from_str::<Data>(&init_data).map_err(|e| des_fail!(e))?;
         store_data_to_file(data.clone(), data_dir)?;
         Ok(data)
       }
-      Err(_) => Err(PlatformError::IoError(format!("Failed to read both {} and {}",
-                                                   &data_file_path, INIT_DATA_PATH))),
+      Err(e2) => {
+        Err(PlatformError::IoError(format!("Failed to read both {} ({:?}) and {} ({:?})",
+                                           &data_file_path,
+                                           e1,
+                                           &INIT_DATA_PATH(),
+                                           e2)))
+      }
     },
   }
 }

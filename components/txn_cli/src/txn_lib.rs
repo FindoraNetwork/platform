@@ -445,7 +445,7 @@ mod tests {
                            AssetRules::default(),
                            None);
 
-    assert!(res.is_ok());
+    res.unwrap();
 
     tmp_dir.close().unwrap();
   }

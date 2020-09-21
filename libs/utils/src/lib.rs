@@ -453,6 +453,15 @@ pub trait NetworkRoute {
   }
 }
 
+#[cfg(feature = "TESTING")]
+#[allow(non_snake_case)]
+pub fn TESTING_get_project_root() -> PathBuf {
+  let mut ret = PathBuf::new();
+  ret.push(std::env::var_os("FINDORA___TEST___PROJECT___ROOT").filter(|x| !x.is_empty())
+                                                              .unwrap_or_else(|| "../..".into()));
+  ret
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

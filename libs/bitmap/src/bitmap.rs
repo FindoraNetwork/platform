@@ -687,9 +687,8 @@ impl BitMap {
     result.checksum_data.reserve(result.blocks.len());
 
     // Reserve space for the checksum operation cache.
-    for _ in 0..result.blocks.len() {
-      result.checksum_data.push(EMPTY_CHECKSUM);
-    }
+    result.checksum_data
+          .extend(vec![EMPTY_CHECKSUM; result.blocks.len()]);
 
     assert!(result.validate_all_counts());
     Ok(result)

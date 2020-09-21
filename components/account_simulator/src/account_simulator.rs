@@ -2801,11 +2801,32 @@ mod test {
   // This test passes, but we ignore it since it's slow
   // Redmine issue: #47
   #[ignore]
-  fn regression_quickcheck_found_with_standalone() {
-    regression_quickcheck_found(true, false, false);
-    regression_quickcheck_found(true, false, true);
-    regression_quickcheck_found(true, true, true);
-    regression_quickcheck_found(true, true, false);
+  fn regression_quickcheck_found_with_standalone00() {
+    regression_quickcheck_found(true, false, false)
+  }
+
+  #[test]
+  // This test passes, but we ignore it since it's slow
+  // Redmine issue: #47
+  #[ignore]
+  fn regression_quickcheck_found_with_standalone01() {
+    regression_quickcheck_found(true, false, true)
+  }
+
+  #[test]
+  // This test passes, but we ignore it since it's slow
+  // Redmine issue: #47
+  #[ignore]
+  fn regression_quickcheck_found_with_standalone11() {
+    regression_quickcheck_found(true, true, true)
+  }
+
+  #[test]
+  // This test passes, but we ignore it since it's slow
+  // Redmine issue: #47
+  #[ignore]
+  fn regression_quickcheck_found_with_standalone10() {
+    regression_quickcheck_found(true, true, false)
   }
 
   #[test]

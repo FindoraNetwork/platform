@@ -1,3 +1,4 @@
+export FINDORA_HOME=${FINDORA_HOME:-$(mktemp -d)}
 FINDORA_STORE_FILE=${FINDORA_HOME:-${HOME}/.findora}/cli2_data.sqlite
 export FINDORA_SUBMIT_URL=${FINDORA_SUBMIT_URL:-https://testnet.findora.org:8669}
 export FINDORA_ACCESS_URL=${FINDORA_ACCESS_URL:-https://testnet.findora.org:8668}
