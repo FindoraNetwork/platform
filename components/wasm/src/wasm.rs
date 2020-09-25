@@ -48,9 +48,6 @@ pub fn build_id() -> String {
 
 /////////// TRANSACTION BUILDING ////////////////
 
-#[wasm_bindgen]
-pub struct SeqId(u64);
-
 //Random Helpers
 
 #[wasm_bindgen]
@@ -60,7 +57,7 @@ pub struct SeqId(u64);
 /// for instructions on how to define an asset with a new
 /// asset type
 pub fn random_asset_type() -> String {
-  AssetTypeCode::gen_utf8_random()
+  AssetTypeCode::gen_random().to_base64()
 }
 
 #[wasm_bindgen]
@@ -205,8 +202,9 @@ impl TransactionBuilder {
 #[wasm_bindgen]
 impl TransactionBuilder {
   /// Create a new transaction builder.
-  pub fn new(seq_id: SeqId) -> Self {
-    TransactionBuilder { transaction_builder: PlatformTransactionBuilder::from_seq_id(seq_id.0) }
+  /// @param {BigInt} seq_id - Unique sequence ID to prevent replay attacks.
+  pub fn new(seq_id: u64) -> Self {
+    TransactionBuilder { transaction_builder: PlatformTransactionBuilder::from_seq_id(seq_id) }
   }
 
   /// Wraps around TransactionBuilder to add an asset definition operation to a transaction builder instance.
