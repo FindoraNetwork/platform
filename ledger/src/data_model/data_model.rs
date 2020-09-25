@@ -534,22 +534,22 @@ pub enum TxoRef {
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct NoReplayToken(u64, u64);
+pub struct NoReplayToken([u8; 8], u64);
 
 impl NoReplayToken {
   pub fn new<R: RngCore>(prng: &mut R, seq_id: u64) -> Self {
-    NoReplayToken(prng.next_u64(), seq_id)
+    NoReplayToken(prng.next_u64().to_be_bytes(), seq_id)
   }
 
   pub fn testonly_new(rand: u64, seq_id: u64) -> Self {
-    NoReplayToken(rand, seq_id)
+    NoReplayToken(rand.to_be_bytes(), seq_id)
   }
 
   pub fn get_seq_id(&self) -> u64 {
     self.1
   }
 
-  pub fn get_rand(&self) -> u64 {
+  pub fn get_rand(&self) -> [u8; 8] {
     self.0
   }
 }
