@@ -268,7 +268,7 @@ pub struct LedgerStatus {
   air: AIR,
 
   // Sliding window of operations for replay attack prevention
-  sliding_set: SlidingSet<u64>,
+  sliding_set: SlidingSet<[u8; 8]>,
 }
 
 pub struct LedgerState {
@@ -436,8 +436,8 @@ impl LedgerStatus {
                                 air_path: air_path.to_owned(),
                                 txn_merkle_path: txn_merkle_path.to_owned(),
                                 air: LedgerState::init_air_log(air_path, true)?,
-                                sliding_set: SlidingSet::<u64>::new(TRANSACTION_WINDOW_WIDTH
-                                                                    as usize),
+                                sliding_set: SlidingSet::<[u8; 8]>::new(TRANSACTION_WINDOW_WIDTH
+                                                                        as usize),
                                 txn_path: txn_path.to_owned(),
                                 utxo_map_path: utxo_map_path.to_owned(),
                                 utxos: HashMap::new(),
@@ -494,7 +494,7 @@ impl LedgerStatus {
     } else {
       // Check to see that this nrpt has not been seen before
       if self.sliding_set.has_key_at(seq_id as usize, rand) {
-        return Err(PlatformError::InputsError(format!("No replay token ({}, {})seen before at  possible replay: {}",
+        return Err(PlatformError::InputsError(format!("No replay token ({:?}, {})seen before at  possible replay: {}",
                                                       rand,
                                                       seq_id,
                                                       error_location!())));
