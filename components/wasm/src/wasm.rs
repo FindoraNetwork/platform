@@ -51,7 +51,7 @@ pub fn build_id() -> String {
 //Random Helpers
 
 #[wasm_bindgen]
-/// Generates random base64 encoded asset type as a base64 string. Used in asset definitions.
+/// Generates random Base64 encoded asset type as a Base64 string. Used in asset definitions.
 /// @see {@link
 /// module:Findora-Wasm~TransactionBuilder#add_operation_create_asset|add_operation_create_asset}
 /// for instructions on how to define an asset with a new
@@ -61,7 +61,7 @@ pub fn random_asset_type() -> String {
 }
 
 #[wasm_bindgen]
-/// Generates asset type as an utf8 string from a JSON-serialized JavaScript value.
+/// Generates asset type as a Base64 string from a JSON-serialized JavaScript value.
 pub fn asset_type_from_jsvalue(val: &JsValue) -> Result<String, JsValue> {
   let code: [u8; ASSET_TYPE_LENGTH] = val.into_serde().map_err(error_to_jsvalue)?;
   Ok(AssetTypeCode { val: ZeiAssetType(code) }.to_base64())
@@ -145,7 +145,7 @@ pub fn create_default_policy_info() -> String {
 ///
 /// * `ir_numerator` - interest rate numerator
 /// * `ir_denominator`- interest rate denominator
-/// * `fiat_code` - base64 string representing asset type used to pay off the loan
+/// * `fiat_code` - Base64 string representing asset type used to pay off the loan
 /// * `amount` - loan amount
 /// @ignore
 // Testnet will not support Discret policies.
@@ -166,7 +166,7 @@ pub fn create_debt_policy_info(ir_numerator: u64,
 /// that all payment and fee amounts are correct.
 /// @param {BigInt} ir_numerator  - Interest rate numerator.
 /// @param {BigInt} ir_denominator - Interest rate denominator.
-/// @param {string} fiat_code - base64 string representing asset type used to pay off the loan.
+/// @param {string} fiat_code - Base64 string representing asset type used to pay off the loan.
 /// @param {BigInt} loan_amount - Loan amount.
 /// @throws Will throw an error if `fiat_code` fails to deserialize.
 /// @ignore
