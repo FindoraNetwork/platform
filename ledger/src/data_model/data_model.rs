@@ -536,19 +536,9 @@ pub enum TxoRef {
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct NoReplayToken(u64, u64);
 
-// Numerical instability issues with JS. See redmine issue #.
-#[cfg(target_arch = "wasm32")]
-const WASM_MAX_SAFE_U64: u64 = 1 << 53 - 1;
-
 impl NoReplayToken {
-  #[cfg(not(target_arch = "wasm32"))]
   pub fn new<R: RngCore>(prng: &mut R, seq_id: u64) -> Self {
     NoReplayToken(prng.next_u64(), seq_id)
-  }
-
-  #[cfg(target_arch = "wasm32")]
-  pub fn new<R: RngCore>(prng: &mut R, seq_id: u64) -> Self {
-    NoReplayToken(prng.gen_range(0, WASM_MAX_SAFE_U64), seq_id)
   }
 
   pub fn testonly_new(rand: u64, seq_id: u64) -> Self {
