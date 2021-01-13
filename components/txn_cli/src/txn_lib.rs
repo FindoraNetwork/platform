@@ -312,7 +312,9 @@ where
     let status = rest_client.txn_status(&handle)?;
     let txos = match status {
         TxnStatus::Committed((_sid, txos)) => txos,
-        TxnStatus::Rejected(s) => return Err(PlatformError::SubmissionServerError(s)),
+        TxnStatus::Rejected(s) => {
+            return Err(PlatformError::SubmissionServerError(s));
+        }
         TxnStatus::Pending => {
             return Err(PlatformError::SubmissionServerError(
                 "Transaction pending, failed to fetch UTXO SIDs".to_owned(),

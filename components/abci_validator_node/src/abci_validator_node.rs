@@ -1,13 +1,15 @@
 #![deny(warnings)]
 use abci::*;
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{Transaction, TxnEffect};
+use ledger::data_model::{Operation, Transaction, TxnEffect};
 use ledger::store::*;
 use ledger::{error_location, sub_fail};
 use ledger_api_service::RestfulApiService;
 use log::info;
+use protobuf::RepeatedField;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
+use serde::Serialize;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
@@ -15,6 +17,8 @@ use std::thread;
 use submission_api::SubmissionApi;
 use submission_server::{convert_tx, SubmissionServer, TxnForward};
 use utils::HashOf;
+use zei::serialization::ZeiFromToBytes;
+use zei::xfr::structs::{XfrAmount, XfrAssetType};
 
 #[derive(Default)]
 pub struct TendermintForward {
@@ -133,9 +137,16 @@ impl abci::Application for ABCISubmissionServer {
             info!("converted: {:?}", tx);
             info!("locking for write: {}", error_location!());
             if let Ok(mut la) = self.la.write() {
+                // set attr(tags) if any
+                let attr = gen_tendermint_attr(&tx);
+                if 0 < attr.len() {
+                    resp.set_events(attr);
+                }
+
                 info!("locked for write");
                 la.cache_transaction(tx);
                 info!("unlocking for write: {}", error_location!());
+
                 return resp;
             }
         }
@@ -285,4 +296,108 @@ fn main() {
 
     println!("Starting ABCI service");
     abci::run(addr, app);
+}
+
+/////////////////////////////////////////////////////////////////////////////////
+
+/// generate attr(tags) for index-ops of tendermint
+///   - "tx.exist" => "y"
+///   - "addr.from" => "Json<TagAttr>"
+///   - "addr.to" => "Json<TagAttr>"
+///   - "addr.from.<addr>" => "y"
+///   - "addr.to.<addr>" => "y"
+fn gen_tendermint_attr(tx: &Transaction) -> RepeatedField<Event> {
+    let mut res = vec![];
+
+    // index txs without block info
+    let mut ev = Event::new();
+    ev.set_field_type("tx".to_owned());
+
+    let mut kv = vec![Pair::new()];
+    kv[0].set_key("exist".as_bytes().to_vec());
+    kv[0].set_value("y".as_bytes().to_vec());
+
+    ev.set_attributes(RepeatedField::from_vec(kv));
+    res.push(ev);
+
+    let (from, to) = gen_tendermint_attr_addr(tx);
+
+    // `from` maybe empty, but `to` must be **NOT**
+    if !to.is_empty() {
+        let mut ev = Event::new();
+        ev.set_field_type("addr".to_owned());
+
+        let mut kv = vec![Pair::new(), Pair::new()];
+        kv[0].set_key("from".as_bytes().to_vec());
+        kv[0].set_value(serde_json::to_vec(&from).unwrap());
+        kv[1].set_key("to".as_bytes().to_vec());
+        kv[1].set_value(serde_json::to_vec(&to).unwrap());
+
+        ev.set_attributes(RepeatedField::from_vec(kv));
+        res.push(ev);
+
+        macro_rules! index_addr {
+            ($attr: expr, $ty: expr) => {
+                let kv = $attr
+                    .into_iter()
+                    .map(|i| {
+                        let mut p = Pair::new();
+                        p.set_key(i.addr.into_bytes());
+                        p.set_value("y".as_bytes().to_vec());
+                        p
+                    })
+                    .collect::<Vec<_>>();
+
+                if !kv.is_empty() {
+                    let mut ev = Event::new();
+                    ev.set_field_type($ty.to_owned());
+                    ev.set_attributes(RepeatedField::from_vec(kv));
+                    res.push(ev);
+                }
+            };
+        }
+
+        index_addr!(from, "addr.from");
+        index_addr!(to, "addr.to");
+    }
+
+    RepeatedField::from_vec(res)
+}
+
+// collect informations of inputs and outputs
+fn gen_tendermint_attr_addr(tx: &Transaction) -> (Vec<TagAttr>, Vec<TagAttr>) {
+    tx.body
+        .operations
+        .iter()
+        .fold((vec![], vec![]), |mut base, new| {
+            if let Operation::TransferAsset(ta) = new {
+                macro_rules! append_attr {
+                    ($direction: tt, $idx: tt) => {
+                        ta.body.transfer.$direction.iter().for_each(|i| {
+                            let mut attr = TagAttr::default();
+                            attr.addr = hex::encode(&i.public_key.zei_to_bytes());
+                            if let XfrAssetType::NonConfidential(ty) = i.asset_type {
+                                attr.asset_type = Some(hex::encode(&ty.0[..]));
+                            }
+                            if let XfrAmount::NonConfidential(am) = i.amount {
+                                attr.asset_amount = Some(am);
+                            }
+                            base.$idx.push(attr);
+                        });
+                    };
+                }
+                append_attr!(inputs, 0);
+                append_attr!(outputs, 1);
+            }
+            base
+        })
+}
+
+#[derive(Serialize, Default)]
+struct TagAttr {
+    // hex.encode(pubkey)
+    addr: String,
+    // hex.encode(asset_type)
+    asset_type: Option<String>,
+    asset_amount: Option<u64>,
 }

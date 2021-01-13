@@ -1109,9 +1109,9 @@ impl TxnEffect {
                         confidential_transfer_inputs.extend(&input_types);
                     }
                 }
-            } // end -- match op {
+            } // end -- match op {...}
             op_idx += 1;
-        } // end -- for op in txn.body.operations.iter() {
+        } // end -- for op in txn.body.operations.iter() {...}
 
         Ok(TxnEffect {
             txn,

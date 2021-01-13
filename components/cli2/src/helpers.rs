@@ -223,7 +223,7 @@ pub fn prompt_confirming_with_retries(
                 break;
             }
             Err(e) => {
-                if matches!(e,PasswordReadError::DidNotMatch{..}) {
+                if matches!(e, PasswordReadError::DidNotMatch { .. }) {
                     if i < retries - 1 {
                         println!("Passwords did not match, please try again.");
                     }

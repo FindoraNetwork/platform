@@ -120,7 +120,9 @@ pub fn compute_debt_swap_effect(
                     return Err(PlatformError::InputsError(error_location!()));
                 }
             }
-            (_, _) => return Err(PlatformError::InputsError(error_location!())),
+            (_, _) => {
+                return Err(PlatformError::InputsError(error_location!()));
+            }
         }
     }
 
