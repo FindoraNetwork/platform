@@ -11,7 +11,7 @@ There are four roles implemented in the system:
 The Ledger holds the AIR, amongst other things. It must be able to add an (address, credentials) pair to an
 address and subsequently provide that address as well as a (Merkle) proof of inclusion or non-inclusion.
 
-There reader should be aware that in the discussion below, there are two kinds of signatures, **CredSignature** and 
+There reader should be aware that in the discussion below, there are two kinds of signatures, **CredSignature** and
 **CredRevealSig**. The latter, the result of calling reveal or commit functions, has three fields: sig, a randomized
 **CredSignature**, pok: a proof of knowledge, and rnd, the randomness used to generate it.
 
@@ -46,7 +46,7 @@ There reader should be aware that in the discussion below, there are two kinds o
    If neither the Merkle proof nor the **credential_verify** fail, the Verifier reports success, otherwise it reports failure.
 
 ## Remaining issues
-1. A given user has more than one set of credentials that need to be on AIR, say {passport, driver's license, bank 
+1. A given user has more than one set of credentials that need to be on AIR, say {passport, driver's license, bank
 accounts, etc.}. While it's easy enough to store anything (the SMT stores "blobs" of variable length data) I think
 it's better that every address only store one kind of credential, otherwise retrieving the data at an address would
 give all of the credentials. So I assume the user manages all of their credentials, and the address is something like

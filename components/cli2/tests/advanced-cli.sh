@@ -193,7 +193,7 @@ source "tests/common.sh"
 @test "status" {
   run bash -c "$DEFINE_ASSET_TYPE_WITH_SUBMIT_COMMANDS"
   run $CLI2 status 0
-  
+
   [ "$status" -eq 0 ]
   check_line 0 "handle"
 }

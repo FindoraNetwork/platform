@@ -5,7 +5,7 @@
           "args": [ [ "key_pair", "KeyPair" ],
                     [ "token_code", "String" ],
                     [ "updatable", "bool" ],
-                    [ "traceable", "bool" ] 
+                    [ "traceable", "bool" ]
                   ]
         },
         { "name": "issue_asset",
@@ -13,7 +13,7 @@
           "args": [ [ "key_pair", "KeyPair" ],
                     [ "token_code", "String" ],
                     [ "seq_num", "u64" ],
-                    [ "amount", "u64" ] 
+                    [ "amount", "u64" ]
                   ]
         },
         { "name": "transfer_asset",
@@ -21,7 +21,7 @@
           "args": [ [ "key_pair", "KeyPair" ],
                     [ "txo_sid", "u64" ],
                     [ "amount", "u64" ],
-                    [ "blind_asset_record_str", "String" ] 
+                    [ "blind_asset_record_str", "String" ]
                   ]
         }
     ]

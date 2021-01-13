@@ -206,7 +206,7 @@ source "tests/common.sh"
 
     # Bob's key has not been created
     run bash -c "$MEMO_ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-define-asset bob BobCoin;"
-    
+
     check_line 11 "Enter password for bob: Password was incorrect, please try again."
     check_line 12 "Enter password for bob: Password was incorrect, please try again."
     check_line 13 "Enter password for bob: Error: Failed to read password"
@@ -220,7 +220,7 @@ source "tests/common.sh"
 
     # Issue the asset
     run bash -c "$ALICE_WITH_SEVERAL_PROMPTS | $CLI2 simple-issue-asset BobCoin 10000"
-    
+
     [ "$status" -eq 255 ]
     check_line 2 "No asset type with name 'BobCoin' found"
 }
@@ -233,14 +233,14 @@ source "tests/common.sh"
 
 @test "status-check" {
     run bash -c "$CLI2 status-check bad_tx_id"
-    
+
     [ "$status" -eq 255 ]
     check_line 0 "No txn 'bad_tx_id' found."
 }
 
 @test "submit" {
     run bash -c "$CLI2 submit bad_tx_id"
-    
+
     [ "$status" -eq 255 ]
     check_line 0 "No transaction 'bad_tx_id' found."
 }
