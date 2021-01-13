@@ -1,8 +1,9 @@
-/release
-/target
+debug/
+release/
+
+target/
+
 **/*.rs.bk
-**/target
-**/release
 .DS_Store
 **/*~
 **/.vscode
@@ -15,3 +16,5 @@ stack.yaml.lock
 
 node_modules
 package-lock.json
+
+Cargo.lock
