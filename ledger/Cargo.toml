@@ -43,14 +43,17 @@ utils = { path = "../libs/utils" }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
 zei = { git = "ssh://git@github.com/FindoraNetwork/zei", branch = "fix-deps-v0.0.3-5" }
 sparse_merkle_tree = { path = "../libs/ads/sparse_merkle_tree" }
+rocksdb = "0.15.0"
 
 [features]
 TESTING = []
 
 [dev-dependencies]
+lazy_static = "1.4.0"
 txn_builder = { path = "../components/txn_builder" }
 quickcheck_macros = "0.9"
 quickcheck = "0.9"
+criterion = "0.3"
 
 [dependencies.fixed]
 version = "0.4.6"
@@ -63,3 +66,6 @@ fs2 = "0.4"
 [build-dependencies]
 vergen = "3.1.0"
 
+[[bench]]
+name = "block_cache_in_rocksdb"
+harness = false
