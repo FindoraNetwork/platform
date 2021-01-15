@@ -1,79 +1,95 @@
 #![deny(warnings)]
-use ledger::data_model::{AssetRules, AssetTypeCode, Operation, StateCommitmentData, Transaction};
+use ledger::data_model::{
+    AssetRules, AssetTypeCode, Operation, StateCommitmentData, Transaction,
+};
 use ledger::store::helpers::*;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use utils::GlobalState;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-  let protocol = "http";
-  let host = "localhost";
-  let port = "8668";
+    let protocol = "http";
+    let host = "localhost";
+    let port = "8668";
 
-  let client = reqwest::blocking::Client::new();
+    let client = reqwest::blocking::Client::new();
 
-  let resp_gs = client.get(&format!("{}://{}:{}/global_state", protocol, host, port))
-                      .send()?;
-  let (_, seq_id, _): GlobalState<StateCommitmentData> =
-    serde_json::from_str(&resp_gs.text()?[..]).unwrap();
+    let resp_gs = client
+        .get(&format!("{}://{}:{}/global_state", protocol, host, port))
+        .send()?;
+    let (_, seq_id, _): GlobalState<StateCommitmentData> =
+        serde_json::from_str(&resp_gs.text()?[..]).unwrap();
 
-  let mut prng = ChaChaRng::from_entropy();
-  let mut tx = Transaction::from_seq_id(seq_id);
+    let mut prng = ChaChaRng::from_entropy();
+    let mut tx = Transaction::from_seq_id(seq_id);
 
-  let token_code1 = AssetTypeCode::gen_random();
-  let keypair = build_keys(&mut prng);
+    let token_code1 = AssetTypeCode::gen_random();
+    let keypair = build_keys(&mut prng);
 
-  let asset_body = asset_creation_body(&token_code1,
-                                       keypair.get_pk_ref(),
-                                       AssetRules::default(),
-                                       None,
-                                       None);
-  let asset_create = asset_creation_operation(&asset_body, &keypair);
-  tx.body
-    .operations
-    .push(Operation::DefineAsset(asset_create));
+    let asset_body = asset_creation_body(
+        &token_code1,
+        keypair.get_pk_ref(),
+        AssetRules::default(),
+        None,
+        None,
+    );
+    let asset_create = asset_creation_operation(&asset_body, &keypair);
+    tx.body
+        .operations
+        .push(Operation::DefineAsset(asset_create));
 
-  // env_logger::init();
+    // env_logger::init();
 
-  let token_code_base64 = token_code1.to_base64();
-  println!("\n\nQuery asset_token {:?}", &token_code1);
+    let token_code_base64 = token_code1.to_base64();
+    println!("\n\nQuery asset_token {:?}", &token_code1);
 
-  let mut res = reqwest::blocking::get(&format!("http://{}:{}/{}/{}",
-                                                &host, &port, "asset_token", &token_code_base64))?;
+    let mut res = reqwest::blocking::get(&format!(
+        "http://{}:{}/{}/{}",
+        &host, &port, "asset_token", &token_code_base64
+    ))?;
 
-  println!("Status: {}", res.status());
-  println!("Headers:\n{:?}", res.headers());
+    println!("Status: {}", res.status());
+    println!("Headers:\n{:?}", res.headers());
 
-  // copy the response body directly to stdout
-  std::io::copy(&mut res, &mut std::io::stdout())?;
+    // copy the response body directly to stdout
+    std::io::copy(&mut res, &mut std::io::stdout())?;
 
-  println!("\n\nSubmit transaction");
+    println!("\n\nSubmit transaction");
 
-  res = client.post(&format!("http://{}:{}/{}", &host, &port, "submit_transaction"))
-              .json(&tx)
-              .send()?;
-  println!("Status: {}", res.status());
-  println!("Headers:\n{:?}", res.headers());
+    res = client
+        .post(&format!(
+            "http://{}:{}/{}",
+            &host, &port, "submit_transaction"
+        ))
+        .json(&tx)
+        .send()?;
+    println!("Status: {}", res.status());
+    println!("Headers:\n{:?}", res.headers());
 
-  // copy the response body directly to stdout
-  std::io::copy(&mut res, &mut std::io::stdout())?;
+    // copy the response body directly to stdout
+    std::io::copy(&mut res, &mut std::io::stdout())?;
 
-  println!("\n\nQuery global_state {:?} again", &token_code1);
-  res = reqwest::blocking::get(&format!("http://{}:{}/{}/{}", &host, &port, "global_state", 0))?;
+    println!("\n\nQuery global_state {:?} again", &token_code1);
+    res = reqwest::blocking::get(&format!(
+        "http://{}:{}/{}/{}",
+        &host, &port, "global_state", 0
+    ))?;
 
-  println!("Status: {}", res.status());
-  println!("Headers:\n{:?}", res.headers());
+    println!("Status: {}", res.status());
+    println!("Headers:\n{:?}", res.headers());
 
-  let mut res = reqwest::blocking::get(&format!("http://{}:{}/{}/{}",
-                                                &host, &port, "asset_token", &token_code_base64))?;
+    let mut res = reqwest::blocking::get(&format!(
+        "http://{}:{}/{}/{}",
+        &host, &port, "asset_token", &token_code_base64
+    ))?;
 
-  println!("Status: {}", res.status());
-  println!("Headers:\n{:?}", res.headers());
+    println!("Status: {}", res.status());
+    println!("Headers:\n{:?}", res.headers());
 
-  // copy the response body directly to stdout
-  std::io::copy(&mut res, &mut std::io::stdout())?;
+    // copy the response body directly to stdout
+    std::io::copy(&mut res, &mut std::io::stdout())?;
 
-  println!("\n\nDone.");
+    println!("\n\nDone.");
 
-  Ok(())
+    Ok(())
 }

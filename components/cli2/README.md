@@ -1,7 +1,7 @@
 # Findora command line tool
 
 Interacting with the Findora blockchain can be done in several ways.
-One of them is through the `findora` command line. 
+One of them is through the `findora` command line.
 
 ## Installation
 
@@ -17,7 +17,7 @@ In order to build the executable we recommend to use [nix](https://nixos.org/dow
 * Enter the nix shell
 ```bash
 > nix-shell
-> [nix-shell:<some path>/findora/platform]$ 
+> [nix-shell:<some path>/findora/platform]$
 ```
 
 * Build the command line executable
@@ -28,7 +28,7 @@ In order to build the executable we recommend to use [nix](https://nixos.org/dow
 
 * Configure autocompletion
 
-It is possible to configure your shell so that the command line autocompletes the arguments / 
+It is possible to configure your shell so that the command line autocompletes the arguments /
 options provided. Bash, elvish, fish and powershell are currently supported.
 For example if you run a bash shell do as follows:
 ```
@@ -42,7 +42,7 @@ The executable can be found at `<some path>/findora/platform/target/debug/findor
 If you are inside the nix-shell simply type `findora`:
 
 ```bash
-> [nix-shell:<some path>/findora/platform] findora$ 
+> [nix-shell:<some path>/findora/platform] findora$
 Build and manage transactions and assets on a findora ledger
 
 USAGE:
@@ -78,9 +78,9 @@ Let us create a key pair for Alice.
 ```bash
 > findora key-gen alice
 No config found at "/home/philippe/.findora/cli2_data.sqlite" -- triggering first-time setup
-Submission Server? (default=https://testnet.findora.org:8669): 
-Ledger Access Server? (default=https://testnet.findora.org:8668): 
-Enter password for alice: 
+Submission Server? (default=https://testnet.findora.org:8669):
+Ledger Access Server? (default=https://testnet.findora.org:8668):
+Enter password for alice:
 Enter password again:
 New key pair added for `alice`
 ```
@@ -92,7 +92,7 @@ It is Bob's turn now to get his keys.
 
 ```
 > findora key-gen bob
-Enter password for bob: 
+Enter password for bob:
 Enter password again:
 New key pair added for `bob`
 ```
@@ -110,7 +110,7 @@ Ledger block idx: 2001
 Current focused transaction builder: <NONE>
 Preparing transaction `vv2WwRwyA9` for block id `2001`...
 Done.
-Enter password for alice: 
+Enter password for alice:
 memo?: memo
 AliceCoin:
  issuer nickname: alice
@@ -119,7 +119,7 @@ AliceCoin:
  memo: `memo`
  issue_seq_number: 0
 Building `vv2WwRwyA9`
-Enter password for alice: 
+Enter password for alice:
 Built transaction `vv2WwRwyA9`
 Submitting to `https://testnet.findora.org:8669/submit_transaction`:
  seq_id: 2001
@@ -157,11 +157,11 @@ to the testnet blockchain. Now Alice can issue some *AliceCoin*.
 > findora simple-issue-asset AliceCoin 10000
 Preparing transaction `bibBlifyuN` for block id `2001`...
 Done.
-Enter password for alice: 
+Enter password for alice:
 IssueAsset: 10000 of `btf0k1_DvMJwib47h5A9IEQJtjx5qzVCE_i8h2hxC_c=` (AliceCoin), authorized by `alice`
 Successfully added to `bibBlifyuN`
 Building `bibBlifyuN`
-Enter password for alice: 
+Enter password for alice:
 Built transaction `bibBlifyuN`
 Submitting to `https://testnet.findora.org:8669/submit_transaction`:
  seq_id: 2001
@@ -209,7 +209,7 @@ Done caching TXOs.
 Alice now owns the coins she has issued. Next she will transfer some of these coins
 to Bob.
 
-A transfer of assets is made in three steps. 
+A transfer of assets is made in three steps.
 1. Create an empty transaction.
 1. Fill the transaction with the information of the transfer.
 1. Submit the transaction to the blockchain.
@@ -224,19 +224,19 @@ We assign the number *1* to the transaction so that we can reference it later.
 
 Now let us fill in this transaction.
 ```bash
-> findora transfer-assets --builder=1 
+> findora transfer-assets --builder=1
 TXOs from this transaction:
 Other TXOs:
  bibBlifyuN:utxo0 (SID 1854): 10000 (PUBLIC) of `AliceCoin` (PUBLIC) owned by `alice`
-Which input would you like?: 
+Which input would you like?:
 ```
-We are asked to pick a transaction output. 
-In this case there is only one available and its identifier is **bibBlifyuN:utxo0**. 
+We are asked to pick a transaction output.
+In this case there is only one available and its identifier is **bibBlifyuN:utxo0**.
 So we copy this identifier and press enter.
 
 
 ```bash
-> findora transfer-assets --builder=1 
+> findora transfer-assets --builder=1
 TXOs from this transaction:
 Other TXOs:
  bibBlifyuN:utxo0 (SID 1854): 10000 (PUBLIC) of `AliceCoin` (PUBLIC) owned by `alice`
@@ -254,8 +254,8 @@ We then tell the command line to pick 6000 coins for the transfer to Bob.
 Note that we chose a non-confidential transfer where the amount and the asset type (AliceCoin)
 will be visible by all on the blockchain.
 
-Next we are asked if we want to spend another output. 
-Indeed if Alice does not send the change (1000-6000=4000) back to her address, 
+Next we are asked if we want to spend another output.
+Indeed if Alice does not send the change (1000-6000=4000) back to her address,
 she will loose thos 4000 *AliceCoin*!
 So we specify that we want to send the remaining *AliceCoin* back to Alice.
 
@@ -281,12 +281,12 @@ Secret asset type? (Y/n): n
 For whom?: alice
 Recipient `bob` is a local keypair.
 Unlock this output? (Y/n): Y
-Enter password for bob: 
+Enter password for bob:
 Recipient `alice` is a local keypair.
 Unlock this output? (Y/n): Y
-Enter password for alice: 
+Enter password for alice:
 Signing for input #1 (bibBlifyuN:utxo0): 10000 (PUBLIC) of `AliceCoin` (PUBLIC) owned by `alice`
-Enter password for alice: 
+Enter password for alice:
 Adding Transfer:
  TransferAssets:
   Inputs:
@@ -324,11 +324,11 @@ Adding Transfer:
 Successfully added to `1`
 ```
 
-The transaction has now all the information we need. 
+The transaction has now all the information we need.
 Let us build it and submit it to the network.
 
 ```bash
-> findora build-transaction  
+> findora build-transaction
 Building `1`
 Built transaction `1`
 > findora submit 1

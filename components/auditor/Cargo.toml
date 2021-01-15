@@ -19,10 +19,10 @@ names = "0.11.0"
 rand_chacha = "0.2.0"
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
 reqwest = { version = "0.10", features = ["blocking", "json"] }
-serde = { version = "1.0.99", features = ["derive"] }
+serde = { version = "=1.0.118", features = ["derive"] }
 serde_derive = "1.0"
 serde_json = "1.0.40"
 tokio = { version = "0.2", features = ["full", "macros"] }
 tokio-codec = "0.1.2"
 utils = { path = "../../libs/utils" }
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-5" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", branch = "fix-deps-v0.0.3-5" }

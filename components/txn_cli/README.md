@@ -25,7 +25,7 @@
    4. [Lender](#lender)
        * [Lender sign up](#sign-up-a-lender-account)
        * [Lender fulfills the loan](#fulfill-a-loan)
-       * [Lender view all loans](#view-all-loans) 
+       * [Lender view all loans](#view-all-loans)
        * [Lender view a specific loan](#view-a-specific-loan)
 4. [Querying the ledger server](#querying-the-ledger-server)
 
@@ -96,7 +96,7 @@ We assume that the file `~/.findora/data.json` is the same as `init_data.json` i
 ```
 txn_cli asset_issuer sign_up --name Ian
 ```
-Note from the output that Ian's id is `1`: 
+Note from the output that Ian's id is `1`:
 ```
 Ian's id is 1.
 ```
@@ -178,7 +178,7 @@ txn_cli asset_issuer --id 1 trace_and_verify_asset --memo_file memo --expected_a
 ## Commands
 ### Asset Issuer
 #### Asset Issuer sign up
-In the initial data, there's one asset issuer, Izzie, with *id* = 0. If you wish to sign up (create) a new asset issuer account, you'd 
+In the initial data, there's one asset issuer, Izzie, with *id* = 0. If you wish to sign up (create) a new asset issuer account, you'd
 do:
 ```
 txn_cli asset_issuer sign_up --name 'AssetIssuer'
@@ -223,7 +223,7 @@ After an asset is defined and the transaction is submitted
 ```
 txn_cli create_txn_builder --name txn_issue
 ```
-2) Issue the asset 
+2) Issue the asset
 ```
 txn_cli --txn txn_issue asset_issuer --id 0 issue_asset --token_code <token_code> --amount 100
 ```
@@ -244,7 +244,7 @@ After an asset is defined and issued, transactions are submitted, and utxo sids 
 ```
 txn_cli create_txn_builder --name txn_transfer
 ```
-2) Transfer 
+2) Transfer
 After blind asset record and associated memos are stored:
 ```
 txn_cli --txn txn_transfer asset_issuer --id 0 transfer_asset --sids_file sids_file --recipients 0,1 --issuance_txn_files txn_issue --input_amounts 45 --output_amounts 10,35
@@ -460,7 +460,7 @@ $ curl https://testnet.findora.org:8668/blocks_since/0
 This looks nicer in a web browser that formats JSON nicely such as Firefox.
 ![Expanding outline](./doc/ledger_json.png)
 
-or by using the `jq` command, as 
+or by using the `jq` command, as
 ```
 $ curl https://testnet.findora.org:8668/blocks_since/0 | jq "."
 ```

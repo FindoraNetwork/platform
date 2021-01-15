@@ -10,7 +10,7 @@ name = "abci_validator_node"
 path = "src/abci_validator_node.rs"
 
 [dependencies]
-abci = "0.7.0"
+abci = "0.7.1"
 arrayref = "0.3.5"
 base64 = "0.12"
 cryptohash = { path = "../../libs/cryptohash" }
@@ -27,7 +27,11 @@ serde_json = "1.0.40"
 submission_api = { path = "../submission_api" }
 submission_server = { path = "../submission_server" }
 utils = { path = "../../libs/utils" }
-zei = { git = "ssh://git@github.com/findoraorg/zei", tag = "v0.0.3-5" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", branch = "fix-deps-v0.0.3-5" }
+
+hex = "0.4.2"
+protobuf = "2.15.1"
+myutil = { git = "https://gitee.com/kt10/myutil", branch = "master" }
 
 [build-dependencies]
 vergen = "3.1.0"

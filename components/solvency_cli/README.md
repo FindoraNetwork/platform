@@ -1,5 +1,5 @@
 # Solvency Command Line Interface
-The `solvency_cli` is a command line interface for querying asset and liability information from the ledger and proving the solvency. 
+The `solvency_cli` is a command line interface for querying asset and liability information from the ledger and proving the solvency.
 
 Note:
 * Examples below are assuming the current directory is `platform/target/debug` or `platform/target/release`. If not, change `./solvency_cli` to the path to `solvency_cli`.
@@ -21,7 +21,7 @@ See `add_asset_or_liability`. E.g.:
 * `--utxo` is the UTXO SID of the transfer transaction.
 
 ## Prove and verify the solvency
-See `prove_and_verify_solvency`. E.g.: 
+See `prove_and_verify_solvency`. E.g.:
 ```
 ./solvency_cli prove_and_verify_solvency
 ```
