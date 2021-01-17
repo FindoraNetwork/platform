@@ -72,3 +72,9 @@ test_status:
 
 fmt:
 	bash ./tools/fmt.sh
+
+reset:
+	@./scripts/stopnodes.sh
+	@./scripts/resetnodes.sh
+	@./scripts/startnodes.sh
+	
