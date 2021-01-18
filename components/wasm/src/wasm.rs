@@ -22,7 +22,7 @@ use txn_builder::{
     BuildsTransactions, PolicyChoice, TransactionBuilder as PlatformTransactionBuilder,
     TransferOperationBuilder as PlatformTransferOperationBuilder,
 };
-use util::{error_to_jsvalue, bech32enc};
+use util::{bech32enc, error_to_jsvalue};
 use utils::HashOf;
 use wasm_bindgen::prelude::*;
 
@@ -1072,7 +1072,9 @@ pub fn test() {
     dbg!(pk);
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////
+// Author: Chao Ma, github.com/chaosma. //
+//////////////////////////////////////////
 
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
@@ -1182,30 +1184,172 @@ pub fn create_keypair_from_secret(sk_str: String) -> Option<XfrKeyPair> {
     }
 }
 
-#[test]
-pub fn test_keypair_conversion() {
-    let kp = new_keypair();
-    let b64 = public_key_to_base64(kp.get_pk_ref());
-    let be32 = public_key_to_bech32(kp.get_pk_ref());
-    public_key_from_base64(b64).unwrap();
-    public_key_from_bech32(be32).unwrap();
+///////////////////////////////////////////
+// Author: FanHui(FH), github.com/ktmlm. //
+///////////////////////////////////////////
+
+use bip39::{Language, Mnemonic, MnemonicType, Seed};
+use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
+
+#[wasm_bindgen]
+pub fn generate_mnemonic() -> String {
+    Mnemonic::new(MnemonicType::Words12, Language::English).into_phrase()
 }
 
-#[test]
-pub fn test_keypair_encryption() {
-    let key_pair = "hello world".to_string();
-    let password = "12345".to_string();
-    let enc = encryption_pbkdf2_aes256gcm(key_pair.clone(), password.clone());
-    let dec_key_pair = decryption_pbkdf2_aes256gcm(enc, password);
-    assert_eq!(key_pair, dec_key_pair);
+#[wasm_bindgen]
+pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> Result<String, JsValue> {
+    let w = match wordslen {
+        12 => MnemonicType::Words12,
+        15 => MnemonicType::Words15,
+        18 => MnemonicType::Words18,
+        21 => MnemonicType::Words21,
+        24 => MnemonicType::Words24,
+        _ => {
+            return Err(JsValue::from_str(
+                "Invalid words length, only 12/15/18/21/24 can be accepted.",
+            ));
+        }
+    };
+
+    let l = check_lang(lang)?;
+
+    Ok(Mnemonic::new(w, l).into_phrase())
 }
 
-#[test]
-pub fn test_create_keypair_from_secret() {
-    let kp = new_keypair();
-    let sk_str = serde_json::to_string(&kp.get_sk()).unwrap();
-    let kp1 = create_keypair_from_secret(sk_str.clone()).unwrap();
-    let kp_str = serde_json::to_string(&kp).unwrap();
-    let kp1_str = serde_json::to_string(&kp1).unwrap();
-    assert_eq!(kp_str, kp1_str);
+macro_rules! restore_keypair_from_mnemonic {
+    ($phrase: expr, $lang: expr, $p: expr, $bip_version: tt) => {
+        check_lang($lang)
+            .and_then(|l| {
+                Mnemonic::from_phrase($phrase, l)
+                    .map_err(|e| JsValue::from_str(&e.to_string()))
+            })
+            .map(|m| Seed::new(&m, ""))
+            .and_then(|seed| {
+                DerivationPath::$bip_version($p.coin, $p.account, $p.change, $p.address)
+                    .map_err(|e| JsValue::from_str(&e.to_string()))
+                    .map(|dp| (seed, dp))
+            })
+            .and_then(|(seed, dp)| {
+                ExtendedSecretKey::from_seed(seed.as_bytes())
+                    .map_err(|e| JsValue::from_str(&e.to_string()))?
+                    .derive(&dp)
+                    .map_err(|e| JsValue::from_str(&e.to_string()))
+            })
+            .and_then(|kp| {
+                XfrSecretKey::zei_from_bytes(&kp.secret_key.to_bytes()[..])
+                    .map_err(|e| JsValue::from_str(&e.to_string()))
+            })
+            .map(|sk| sk.into_keypair())
+    };
+}
+
+#[wasm_bindgen]
+pub struct BipPath {
+    coin: u32,
+    account: u32,
+    change: u32,
+    address: u32,
+}
+
+#[wasm_bindgen]
+pub fn restore_keypair_from_mnemonic_bip44(
+    phrase: &str,
+    lang: &str,
+    path: &BipPath,
+) -> Result<XfrKeyPair, JsValue> {
+    restore_keypair_from_mnemonic!(phrase, lang, path, bip44)
+}
+
+#[wasm_bindgen]
+pub fn restore_keypair_from_mnemonic_bip49(
+    phrase: &str,
+    lang: &str,
+    path: &BipPath,
+) -> Result<XfrKeyPair, JsValue> {
+    restore_keypair_from_mnemonic!(phrase, lang, path, bip49)
+}
+
+#[inline(always)]
+fn check_lang(lang: &str) -> Result<Language, JsValue> {
+    match lang {
+        "en" => Ok(Language::English),
+        "zh" => Ok(Language::ChineseSimplified),
+        "zh_traditional" => Ok(Language::ChineseTraditional),
+        "fr" => Ok(Language::French),
+        "it" => Ok(Language::Italian),
+        "ko" => Ok(Language::Korean),
+        "sp" => Ok(Language::Spanish),
+        "jp" => Ok(Language::Japanese),
+        _ => Err(JsValue::from_str("Unsupported language.")),
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn t_keypair_conversion() {
+        let kp = new_keypair();
+        let b64 = public_key_to_base64(kp.get_pk_ref());
+        let be32 = public_key_to_bech32(kp.get_pk_ref());
+        public_key_from_base64(b64).unwrap();
+        public_key_from_bech32(be32).unwrap();
+    }
+
+    #[test]
+    fn t_keypair_encryption() {
+        let key_pair = "hello world".to_string();
+        let password = "12345".to_string();
+        let enc = encryption_pbkdf2_aes256gcm(key_pair.clone(), password.clone());
+        let dec_key_pair = decryption_pbkdf2_aes256gcm(enc, password);
+        assert_eq!(key_pair, dec_key_pair);
+    }
+
+    #[test]
+    fn t_create_keypair_from_secret() {
+        let kp = new_keypair();
+        let sk_str = serde_json::to_string(&kp.get_sk()).unwrap();
+        let kp1 = create_keypair_from_secret(sk_str.clone()).unwrap();
+        let kp_str = serde_json::to_string(&kp).unwrap();
+        let kp1_str = serde_json::to_string(&kp1).unwrap();
+        assert_eq!(kp_str, kp1_str);
+    }
+
+    #[test]
+    fn t_generate_mnemonic() {
+        ["en", "zh", "zh_traditional", "fr", "it", "ko", "sp", "jp"]
+            .iter()
+            .for_each(|lang| {
+                [12, 15, 18, 21, 24].iter().for_each(|wordslen| {
+                    let phrase = generate_mnemonic_custom(*wordslen, lang).unwrap();
+                    let path = BipPath {
+                        coin: 917,
+                        account: rand::random::<u32>(),
+                        change: rand::random::<u32>(),
+                        address: rand::random::<u32>(),
+                    };
+                    assert_eq!(
+                        *wordslen as usize,
+                        phrase.split(" ").collect::<Vec<_>>().len()
+                    );
+                    assert!(
+                        restore_keypair_from_mnemonic_bip44(&phrase, lang, &path)
+                            .is_ok()
+                    );
+                    assert!(
+                        restore_keypair_from_mnemonic_bip49(&phrase, lang, &path)
+                            .is_ok()
+                    );
+                })
+            });
+    }
+
+    #[test]
+    #[should_panic]
+    fn t_generate_mnemonic_bad() {
+        generate_mnemonic_custom(12, "xx").unwrap();
+        generate_mnemonic_custom(11, "zh").unwrap();
+        generate_mnemonic_custom(11, "xx").unwrap();
+    }
 }

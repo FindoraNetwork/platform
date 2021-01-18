@@ -36,6 +36,19 @@ members = [
     "libs/utils",
 ]
 
+[profile.dev]
+incremental = true
+overflow-checks = true
+
+[profile.release]
+lto = true
+incremental = false
+overflow-checks = false
+
+[profile.bench]
+codegen-units = 1
+overflow-checks = false
+
 [profile.dev.package.curve25519-dalek]
 opt-level = 1
 overflow-checks = false
