@@ -72,3 +72,7 @@ test_status:
 
 fmt:
 	bash ./tools/fmt.sh
+
+clean:
+	@ cargo clean
+	@ rm -rf debug release Cargo.lock

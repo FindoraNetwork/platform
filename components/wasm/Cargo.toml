@@ -36,6 +36,10 @@ ring = "0.16.19"
 aes-gcm = "0.8.0"
 bech32 = "0.7.2"
 
+# Must enable the "js"-feature,
+# OR the compiling will fail.
+getrandom = { version = "0.2", features = ["js"] }
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 path = "src/wasm.rs"
