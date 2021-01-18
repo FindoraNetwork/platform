@@ -32,6 +32,10 @@ wasm-bindgen-test = "0.2.50"
 zei = { git = "ssh://git@github.com/FindoraNetwork/zei", branch = "fix-deps-v0.0.3-5" }
 utils = { path = "../../libs/utils" }
 
+ring = "0.16.19"
+aes-gcm = "0.8.0"
+bech32 = "0.7.2"
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 path = "src/wasm.rs"

@@ -22,14 +22,14 @@ use txn_builder::{
     BuildsTransactions, PolicyChoice, TransactionBuilder as PlatformTransactionBuilder,
     TransferOperationBuilder as PlatformTransferOperationBuilder,
 };
-use util::error_to_jsvalue;
+use util::{error_to_jsvalue, bech32enc};
 use utils::HashOf;
 use wasm_bindgen::prelude::*;
 
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
 use zei::xfr::lib::trace_assets as zei_trace_assets;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 use zei::xfr::structs::{
     AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody, ASSET_TYPE_LENGTH,
 };
@@ -1070,4 +1070,142 @@ pub fn test() {
     let b64 = public_key_to_base64(kp.get_pk_ref());
     let pk = public_key_from_base64(b64).unwrap();
     dbg!(pk);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
+use aes_gcm::Aes256Gcm;
+use rand::{thread_rng, Rng};
+use ring::pbkdf2;
+use std::num::NonZeroU32;
+use std::str;
+
+#[wasm_bindgen]
+/// Returns bech32 encoded representation of an XfrPublicKey.
+pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
+    bech32enc(&XfrPublicKey::zei_to_bytes(&key))
+}
+
+#[wasm_bindgen]
+/// Converts a bech32 encoded public key string to a public key.
+pub fn public_key_from_bech32(key_pair: String) -> Result<XfrPublicKey, JsValue> {
+    util::public_key_from_bech32(key_pair)
+}
+
+#[wasm_bindgen]
+pub fn bech32_to_base64(key_pair: String) -> Result<String, JsValue> {
+    let pub_key = public_key_from_bech32(key_pair)?;
+    Ok(public_key_to_base64(&pub_key))
+}
+
+#[wasm_bindgen]
+pub fn base64_to_bech32(key_pair: String) -> Result<String, JsValue> {
+    let pub_key = public_key_from_base64(key_pair)?;
+    Ok(public_key_to_bech32(&pub_key))
+}
+
+#[wasm_bindgen]
+pub fn encryption_pbkdf2_aes256gcm(key_pair: String, password: String) -> Vec<u8> {
+    const CREDENTIAL_LEN: usize = 32;
+    const IV_LEN: usize = 12;
+    let n_iter = NonZeroU32::new(32).unwrap();
+    let mut rng = thread_rng();
+
+    let mut salt = [0u8; CREDENTIAL_LEN];
+    rng.fill(&mut salt);
+    let mut derived_key = [0u8; CREDENTIAL_LEN];
+    pbkdf2::derive(
+        pbkdf2::PBKDF2_HMAC_SHA512,
+        n_iter,
+        &salt,
+        password.as_bytes(),
+        &mut derived_key,
+    );
+
+    let mut iv = [0u8; IV_LEN];
+    rng.fill(&mut iv);
+
+    let cipher = Aes256Gcm::new(GenericArray::from_slice(&derived_key));
+    let ciphertext = cipher
+        .encrypt(GenericArray::from_slice(&iv), key_pair.as_ref())
+        .unwrap_or(Vec::<u8>::new());
+
+    // this is a hack, wasm-bindgen not support tuple of vectors
+    let mut res: Vec<u8> = Vec::new();
+    res.append(&mut salt.to_vec());
+    res.append(&mut iv.to_vec());
+    res.append(&mut ciphertext.to_vec());
+    return res;
+}
+
+#[wasm_bindgen]
+pub fn decryption_pbkdf2_aes256gcm(enc_key_pair: Vec<u8>, password: String) -> String {
+    const CREDENTIAL_LEN: usize = 32;
+    const IV_LEN: usize = 12;
+    let n_iter = NonZeroU32::new(32).unwrap();
+
+    if enc_key_pair.len() <= CREDENTIAL_LEN + IV_LEN {
+        return "".to_string();
+    }
+
+    let salt = &enc_key_pair[0..CREDENTIAL_LEN];
+    let iv = &enc_key_pair[CREDENTIAL_LEN..(CREDENTIAL_LEN + IV_LEN)];
+    let ciphertext = &enc_key_pair[(CREDENTIAL_LEN + IV_LEN)..];
+
+    let mut derived_key = [0u8; CREDENTIAL_LEN];
+    pbkdf2::derive(
+        pbkdf2::PBKDF2_HMAC_SHA512,
+        n_iter,
+        salt,
+        password.as_bytes(),
+        &mut derived_key,
+    );
+    let cipher = Aes256Gcm::new(GenericArray::from_slice(&derived_key));
+    let plaintext = cipher
+        .decrypt(GenericArray::from_slice(iv), ciphertext.as_ref())
+        .unwrap_or(Vec::<u8>::new());
+
+    return String::from_utf8(plaintext).unwrap_or("".to_string());
+}
+
+#[wasm_bindgen]
+pub fn create_keypair_from_secret(sk_str: String) -> Option<XfrKeyPair> {
+    let secret_key = serde_json::from_str::<XfrSecretKey>(&sk_str);
+    match secret_key {
+        Ok(sk) => {
+            return Some(sk.into_keypair());
+        }
+        _ => {
+            return None;
+        }
+    }
+}
+
+#[test]
+pub fn test_keypair_conversion() {
+    let kp = new_keypair();
+    let b64 = public_key_to_base64(kp.get_pk_ref());
+    let be32 = public_key_to_bech32(kp.get_pk_ref());
+    public_key_from_base64(b64).unwrap();
+    public_key_from_bech32(be32).unwrap();
+}
+
+#[test]
+pub fn test_keypair_encryption() {
+    let key_pair = "hello world".to_string();
+    let password = "12345".to_string();
+    let enc = encryption_pbkdf2_aes256gcm(key_pair.clone(), password.clone());
+    let dec_key_pair = decryption_pbkdf2_aes256gcm(enc, password);
+    assert_eq!(key_pair, dec_key_pair);
+}
+
+#[test]
+pub fn test_create_keypair_from_secret() {
+    let kp = new_keypair();
+    let sk_str = serde_json::to_string(&kp.get_sk()).unwrap();
+    let kp1 = create_keypair_from_secret(sk_str.clone()).unwrap();
+    let kp_str = serde_json::to_string(&kp).unwrap();
+    let kp1_str = serde_json::to_string(&kp1).unwrap();
+    assert_eq!(kp_str, kp1_str);
 }
