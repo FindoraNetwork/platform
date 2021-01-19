@@ -1193,7 +1193,7 @@ use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
 
 /// Randomly generate a 12words-length mnemonic.
 #[wasm_bindgen]
-pub fn generate_mnemonic() -> String {
+pub fn generate_mnemonic_default() -> String {
     Mnemonic::new(MnemonicType::Words12, Language::English).into_phrase()
 }
 
@@ -1257,8 +1257,9 @@ pub struct BipPath {
     address: u32,
 }
 
+#[wasm_bindgen]
 impl BipPath {
-    fn new(coin: u32, account: u32, change: u32, address: u32) -> Self {
+    pub fn new(coin: u32, account: u32, change: u32, address: u32) -> Self {
         BipPath {
             coin,
             account,
