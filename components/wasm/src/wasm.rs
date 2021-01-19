@@ -1191,11 +1191,15 @@ pub fn create_keypair_from_secret(sk_str: String) -> Option<XfrKeyPair> {
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
 
+/// Randomly generate a 12words-length mnemonic.
 #[wasm_bindgen]
 pub fn generate_mnemonic() -> String {
     Mnemonic::new(MnemonicType::Words12, Language::English).into_phrase()
 }
 
+/// Generate mnemonic with custom length and language.
+/// - @param `wordslen`: acceptable value are one of [ 12, 15, 18, 21, 24 ]
+/// - @param `lang`: acceptable value are one of [ "en", "zh", "zh_traditional", "fr", "it", "ko", "sp", "jp" ]
 #[wasm_bindgen]
 pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> Result<String, JsValue> {
     let w = match wordslen {
@@ -1216,16 +1220,17 @@ pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> Result<String, JsVa
     Ok(Mnemonic::new(w, l).into_phrase())
 }
 
+// do the real restore operation.
 macro_rules! restore_keypair_from_mnemonic {
-    ($phrase: expr, $lang: expr, $p: expr, $bip_version: tt) => {
-        check_lang($lang)
+    ($phrase: expr, $l: expr, $p: expr, $bip: tt) => {
+        check_lang($l)
             .and_then(|l| {
                 Mnemonic::from_phrase($phrase, l)
                     .map_err(|e| JsValue::from_str(&e.to_string()))
             })
             .map(|m| Seed::new(&m, ""))
             .and_then(|seed| {
-                DerivationPath::$bip_version($p.coin, $p.account, $p.change, $p.address)
+                DerivationPath::$bip($p.coin, $p.account, $p.change, $p.address)
                     .map_err(|e| JsValue::from_str(&e.to_string()))
                     .map(|dp| (seed, dp))
             })
@@ -1243,6 +1248,7 @@ macro_rules! restore_keypair_from_mnemonic {
     };
 }
 
+/// Use this struct to express a Bip44/Bip49 path.
 #[wasm_bindgen]
 pub struct BipPath {
     coin: u32,
@@ -1251,6 +1257,29 @@ pub struct BipPath {
     address: u32,
 }
 
+impl BipPath {
+    fn new(coin: u32, account: u32, change: u32, address: u32) -> Self {
+        BipPath {
+            coin,
+            account,
+            change,
+            address,
+        }
+    }
+}
+
+/// Restore the XfrKeyPair from a mnemonic with a default bip44-path,
+/// that is "m/44'/917'/0'/0/0" ("m/44'/coin'/account'/change/address").
+#[wasm_bindgen]
+pub fn restore_keypair_from_mnemonic_default(
+    phrase: &str,
+) -> Result<XfrKeyPair, JsValue> {
+    const FRA: u32 = 917;
+    restore_keypair_from_mnemonic!(phrase, "en", BipPath::new(FRA, 0, 0, 0), bip44)
+}
+
+/// Restore the XfrKeyPair from a mnemonic with custom params,
+/// in bip44 form.
 #[wasm_bindgen]
 pub fn restore_keypair_from_mnemonic_bip44(
     phrase: &str,
@@ -1260,6 +1289,8 @@ pub fn restore_keypair_from_mnemonic_bip44(
     restore_keypair_from_mnemonic!(phrase, lang, path, bip44)
 }
 
+/// Restore the XfrKeyPair from a mnemonic with custom params,
+/// in bip49 form.
 #[wasm_bindgen]
 pub fn restore_keypair_from_mnemonic_bip49(
     phrase: &str,
@@ -1269,6 +1300,7 @@ pub fn restore_keypair_from_mnemonic_bip49(
     restore_keypair_from_mnemonic!(phrase, lang, path, bip49)
 }
 
+// check and generate a Language object from its string value.
 #[inline(always)]
 fn check_lang(lang: &str) -> Result<Language, JsValue> {
     match lang {
@@ -1333,10 +1365,14 @@ mod test {
                         *wordslen as usize,
                         phrase.split(" ").collect::<Vec<_>>().len()
                     );
+
+                    // TODO: will panic
                     assert!(
                         restore_keypair_from_mnemonic_bip44(&phrase, lang, &path)
                             .is_ok()
                     );
+
+                    // TODO: will panic
                     assert!(
                         restore_keypair_from_mnemonic_bip49(&phrase, lang, &path)
                             .is_ok()
@@ -1345,11 +1381,11 @@ mod test {
             });
     }
 
+    // TODO: will panic
     #[test]
-    #[should_panic]
     fn t_generate_mnemonic_bad() {
-        generate_mnemonic_custom(12, "xx").unwrap();
-        generate_mnemonic_custom(11, "zh").unwrap();
-        generate_mnemonic_custom(11, "xx").unwrap();
+        assert!(generate_mnemonic_custom(12, "xx").is_err());
+        assert!(generate_mnemonic_custom(11, "zh").is_err());
+        assert!(generate_mnemonic_custom(11, "xx").is_err());
     }
 }
