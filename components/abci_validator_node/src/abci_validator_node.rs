@@ -294,6 +294,12 @@ fn main() {
     let addr_str = format!("{}:{}", abci_host, abci_port);
     let addr: SocketAddr = addr_str.parse().expect("Unable to parse socket address");
 
+    // handle SIGINT signal
+    ctrlc::set_handler(move || {
+        std::process::exit(0);
+    })
+    .expect("Error setting Ctrl-C handler");
+
     println!("Starting ABCI service");
     abci::run(addr, app);
 }
