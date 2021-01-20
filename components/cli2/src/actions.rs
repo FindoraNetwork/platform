@@ -19,6 +19,7 @@ use promptly::{prompt, prompt_default, prompt_opt};
 use snafu::{Backtrace, GenerateBacktrace, OptionExt, ResultExt};
 use std::collections::BTreeMap;
 use std::process::exit;
+use std::{thread, time};
 use submission_api::SubmissionRoutes;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::PolicyChoice;
@@ -1900,6 +1901,7 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
     // Wait for the transaction to be committed
     let mut committed = false;
     while !committed {
+        thread::sleep(time::Duration::from_secs(2));
         let txn_status = get_status(store, nick.clone());
 
         if let Ok(res) = txn_status {
