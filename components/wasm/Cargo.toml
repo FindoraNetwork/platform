@@ -40,8 +40,7 @@ bech32 = "0.7.2"
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
 
-tiny-bip39 = "0.8.0"
-ed25519-dalek-bip32 = "0.1.1"
+wallet = { path = "../wallet" }
 
 [lib]
 crate-type = ["cdylib", "rlib"]

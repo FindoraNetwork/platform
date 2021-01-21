@@ -1188,13 +1188,10 @@ pub fn create_keypair_from_secret(sk_str: String) -> Option<XfrKeyPair> {
 // Author: FanHui(FH), github.com/ktmlm. //
 ///////////////////////////////////////////
 
-use bip39::{Language, Mnemonic, MnemonicType, Seed};
-use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
-
 /// Randomly generate a 12words-length mnemonic.
 #[wasm_bindgen]
 pub fn generate_mnemonic_default() -> String {
-    Mnemonic::new(MnemonicType::Words12, Language::English).into_phrase()
+    wallet::generate_mnemonic_default()
 }
 
 /// Generate mnemonic with custom length and language.
@@ -1202,50 +1199,7 @@ pub fn generate_mnemonic_default() -> String {
 /// - @param `lang`: acceptable value are one of [ "en", "zh", "zh_traditional", "fr", "it", "ko", "sp", "jp" ]
 #[wasm_bindgen]
 pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> Result<String, JsValue> {
-    let w = match wordslen {
-        12 => MnemonicType::Words12,
-        15 => MnemonicType::Words15,
-        18 => MnemonicType::Words18,
-        21 => MnemonicType::Words21,
-        24 => MnemonicType::Words24,
-        _ => {
-            return Err(JsValue::from_str(
-                "Invalid words length, only 12/15/18/21/24 can be accepted.",
-            ));
-        }
-    };
-
-    let l = check_lang(lang)?;
-
-    Ok(Mnemonic::new(w, l).into_phrase())
-}
-
-// do the real restore operation.
-macro_rules! restore_keypair_from_mnemonic {
-    ($phrase: expr, $l: expr, $p: expr, $bip: tt) => {
-        check_lang($l)
-            .and_then(|l| {
-                Mnemonic::from_phrase($phrase, l)
-                    .map_err(|e| JsValue::from_str(&e.to_string()))
-            })
-            .map(|m| Seed::new(&m, ""))
-            .and_then(|seed| {
-                DerivationPath::$bip($p.coin, $p.account, $p.change, $p.address)
-                    .map_err(|e| JsValue::from_str(&e.to_string()))
-                    .map(|dp| (seed, dp))
-            })
-            .and_then(|(seed, dp)| {
-                ExtendedSecretKey::from_seed(seed.as_bytes())
-                    .map_err(|e| JsValue::from_str(&e.to_string()))?
-                    .derive(&dp)
-                    .map_err(|e| JsValue::from_str(&e.to_string()))
-            })
-            .and_then(|kp| {
-                XfrSecretKey::zei_from_bytes(&kp.secret_key.to_bytes()[..])
-                    .map_err(|e| JsValue::from_str(&e.to_string()))
-            })
-            .map(|sk| sk.into_keypair())
-    };
+    wallet::generate_mnemonic_custom(wordslen, lang).map_err(|e| JsValue::from_str(&e))
 }
 
 /// Use this struct to express a Bip44/Bip49 path.
@@ -1269,14 +1223,20 @@ impl BipPath {
     }
 }
 
+impl From<&BipPath> for wallet::BipPath {
+    fn from(p: &BipPath) -> Self {
+        wallet::BipPath::new(p.coin, p.account, p.change, p.address)
+    }
+}
+
 /// Restore the XfrKeyPair from a mnemonic with a default bip44-path,
 /// that is "m/44'/917'/0'/0/0" ("m/44'/coin'/account'/change/address").
 #[wasm_bindgen]
 pub fn restore_keypair_from_mnemonic_default(
     phrase: &str,
 ) -> Result<XfrKeyPair, JsValue> {
-    const FRA: u32 = 917;
-    restore_keypair_from_mnemonic!(phrase, "en", BipPath::new(FRA, 0, 0, 0), bip44)
+    wallet::restore_keypair_from_mnemonic_default(phrase)
+        .map_err(|e| JsValue::from_str(&e))
 }
 
 /// Restore the XfrKeyPair from a mnemonic with custom params,
@@ -1287,7 +1247,8 @@ pub fn restore_keypair_from_mnemonic_bip44(
     lang: &str,
     path: &BipPath,
 ) -> Result<XfrKeyPair, JsValue> {
-    restore_keypair_from_mnemonic!(phrase, lang, path, bip44)
+    wallet::restore_keypair_from_mnemonic_bip44(phrase, lang, &path.into())
+        .map_err(|e| JsValue::from_str(&e))
 }
 
 /// Restore the XfrKeyPair from a mnemonic with custom params,
@@ -1298,23 +1259,8 @@ pub fn restore_keypair_from_mnemonic_bip49(
     lang: &str,
     path: &BipPath,
 ) -> Result<XfrKeyPair, JsValue> {
-    restore_keypair_from_mnemonic!(phrase, lang, path, bip49)
-}
-
-// check and generate a Language object from its string value.
-#[inline(always)]
-fn check_lang(lang: &str) -> Result<Language, JsValue> {
-    match lang {
-        "en" => Ok(Language::English),
-        "zh" => Ok(Language::ChineseSimplified),
-        "zh_traditional" => Ok(Language::ChineseTraditional),
-        "fr" => Ok(Language::French),
-        "it" => Ok(Language::Italian),
-        "ko" => Ok(Language::Korean),
-        "sp" => Ok(Language::Spanish),
-        "jp" => Ok(Language::Japanese),
-        _ => Err(JsValue::from_str("Unsupported language.")),
-    }
+    wallet::restore_keypair_from_mnemonic_bip49(phrase, lang, &path.into())
+        .map_err(|e| JsValue::from_str(&e))
 }
 
 #[cfg(test)]
@@ -1347,46 +1293,5 @@ mod test {
         let kp_str = serde_json::to_string(&kp).unwrap();
         let kp1_str = serde_json::to_string(&kp1).unwrap();
         assert_eq!(kp_str, kp1_str);
-    }
-
-    #[test]
-    fn t_generate_mnemonic() {
-        ["en", "zh", "zh_traditional", "fr", "it", "ko", "sp", "jp"]
-            .iter()
-            .for_each(|lang| {
-                [12, 15, 18, 21, 24].iter().for_each(|wordslen| {
-                    let phrase = generate_mnemonic_custom(*wordslen, lang).unwrap();
-                    let path = BipPath {
-                        coin: 917,
-                        account: rand::random::<u32>(),
-                        change: rand::random::<u32>(),
-                        address: rand::random::<u32>(),
-                    };
-                    assert_eq!(
-                        *wordslen as usize,
-                        phrase.split(" ").collect::<Vec<_>>().len()
-                    );
-
-                    // TODO: will panic
-                    assert!(
-                        restore_keypair_from_mnemonic_bip44(&phrase, lang, &path)
-                            .is_ok()
-                    );
-
-                    // TODO: will panic
-                    assert!(
-                        restore_keypair_from_mnemonic_bip49(&phrase, lang, &path)
-                            .is_ok()
-                    );
-                })
-            });
-    }
-
-    // TODO: will panic
-    #[test]
-    fn t_generate_mnemonic_bad() {
-        assert!(generate_mnemonic_custom(12, "xx").is_err());
-        assert!(generate_mnemonic_custom(11, "zh").is_err());
-        assert!(generate_mnemonic_custom(11, "xx").is_err());
     }
 }
