@@ -435,8 +435,8 @@ impl HasInvariants<PlatformError> for LedgerState {
             status2.utxo_map_path = self.status.utxo_map_path.clone();
             status2.utxo_map_versions = self.status.utxo_map_versions.clone();
 
-            dbg!(&status2);
-            dbg!(&self.status);
+            // dbg!(&status2);
+            // dbg!(&self.status);
             assert!(*status2 == self.status);
 
             std::fs::remove_dir_all(tmp_dir).unwrap();
@@ -4303,7 +4303,9 @@ pub mod block_cache {
 
     use crate::data_model::FinalizedBlock;
     use lazy_static::lazy_static;
+    use rand::random;
     use rocksdb::{DBIterator, IteratorMode, Options, DB};
+    use ruc::{err::*, *};
     use std::{
         env, fs,
         iter::Iterator,
@@ -4314,24 +4316,23 @@ pub mod block_cache {
     // when the envronment-VAR with the same name is not set.
     //
     // Is it necessary to be compatible with the Windows operating system?
-    const ROCKSDB_LEDGER_STATE_BLOCKS: &str = "/tmp/.ledger_state_block";
-
-    #[cfg(test)]
-    fn get_data_path() -> String {
-        format!("{}_{}", ROCKSDB_LEDGER_STATE_BLOCKS, rand::random::<u128>())
-    }
-
-    #[cfg(not(test))]
-    #[inline(always)]
-    fn get_data_path() -> String {
-        // Each time the program is started, a new database is created here.
-        env::var(stringify!(ROCKSDB_LEDGER_STATE_BLOCKS))
-            .unwrap_or(ROCKSDB_LEDGER_STATE_BLOCKS.to_owned())
-    }
+    const ROCKS_CACHE_DIR: &str = "/tmp/.ledger_state_block";
 
     lazy_static! {
         // A counter of the number of blocks in the current ledger.
-        static ref BLOCK_CNT: AtomicUsize = AtomicUsize::new(0);
+        static ref BLOCK_CNT: AtomicUsize = {
+            // Borrow this place a while...
+            {
+                // Remove all possible rubbish(remove their topdir).
+                omit!(fs::remove_dir_all(ROCKS_CACHE_DIR));
+
+                // Is this necessary? To delete
+                // a possiable file with the same name.
+                omit!(fs::remove_file(ROCKS_CACHE_DIR));
+            }
+
+            AtomicUsize::new(0)
+        };
     }
 
     /// To solve the problem of unlimited memory usage,
@@ -4345,21 +4346,21 @@ pub mod block_cache {
         iter: DBIterator<'a>,
     }
 
+    #[inline(always)]
+    fn get_datadir() -> String {
+        // Use random subdir to make unit-tests pass.
+        format!("{}/{}", ROCKS_CACHE_DIR, random::<u64>())
+    }
+
     impl Rocks {
         /// Create an instance.
         pub fn new() -> Self {
             let mut opts = Options::default();
             opts.create_if_missing(true);
-
-            // try to remove all possible rubbish
-            // before creating the new one.
-            let data_path = get_data_path();
-            let _ = fs::remove_file(&data_path);
-            let _ = fs::remove_dir_all(&data_path);
-            let _ = DB::destroy(&opts, &data_path);
-
             Rocks {
-                db: DB::open(&opts, &data_path).unwrap(),
+                // Each time the program is started,
+                // a new database is created here.
+                db: pnk!(DB::open(&opts, &get_datadir())),
             }
         }
 
@@ -4407,7 +4408,7 @@ pub mod block_cache {
         fn next(&mut self) -> Option<Self::Item> {
             self.iter
                 .next()
-                .map(|(_, bytes)| serde_json::from_slice(&bytes).unwrap())
+                .map(|(_, bytes)| serde_json::from_slice(&bytes[..]).unwrap())
         }
     }
 
