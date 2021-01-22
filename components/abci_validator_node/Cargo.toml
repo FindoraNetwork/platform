@@ -33,5 +33,7 @@ hex = "0.4.2"
 protobuf = "2.15.1"
 myutil = { git = "https://gitee.com/kt10/myutil", branch = "master" }
 
+ctrlc = "3.1.7"
+
 [build-dependencies]
 vergen = "3.1.0"

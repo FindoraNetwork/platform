@@ -76,3 +76,8 @@ fmt:
 clean:
 	@ cargo clean
 	@ rm -rf debug release Cargo.lock
+
+reset:
+	@./scripts/stopnodes.sh
+	@./scripts/resetnodes.sh
+	@./scripts/startnodes.sh
