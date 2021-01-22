@@ -1010,7 +1010,7 @@ impl LedgerStatus {
             let mut def: BlockEffect = Default::default();
             def.txns = block.txns.clone();
             def.temp_sids = block.temp_sids.clone();
-
+            def.pulse_count = block.pulse_count;
             def
         });
 
