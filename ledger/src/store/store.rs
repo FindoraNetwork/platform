@@ -297,7 +297,11 @@ pub struct LedgerState {
     // The `FinalizedTransaction`s consist of a Transaction and an index into
     // `merkle` representing its hash.
     // TODO(joe): should this be in-memory?
-    blocks: Vec<FinalizedBlock>,
+    ////////////////////////////////////////////////////////////////////
+    // Comments above is left by the previous development team.
+    ////////////////////////////////////////////////////////////////////
+    // use rocksdb to cache the tx data.
+    blocks: block_cache::Rocks,
 
     // Bitmap tracking all the live TXOs
     utxo_map: BitMap,
@@ -431,8 +435,8 @@ impl HasInvariants<PlatformError> for LedgerState {
             status2.utxo_map_path = self.status.utxo_map_path.clone();
             status2.utxo_map_versions = self.status.utxo_map_versions.clone();
 
-            dbg!(&status2);
-            dbg!(&self.status);
+            // dbg!(&status2);
+            // dbg!(&self.status);
             assert!(*status2 == self.status);
 
             std::fs::remove_dir_all(tmp_dir).unwrap();
@@ -1757,7 +1761,7 @@ impl LedgerState {
             signing_key,
             block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)?,
             txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
-            blocks: Vec::new(),
+            blocks: block_cache::Rocks::new(),
             utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
             txn_log: Some((
                 txn_path.into(),
@@ -1844,7 +1848,7 @@ impl LedgerState {
                 .map_err(add_location!())?,
             txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, false)
                 .map_err(add_location!())?,
-            blocks: Vec::new(),
+            blocks: block_cache::Rocks::new(),
             utxo_map: LedgerState::init_utxo_map(utxo_map_path, false)
                 .map_err(add_location!())?,
             txn_log: None,
@@ -1973,7 +1977,7 @@ impl LedgerState {
                 .map_err(add_location!())?,
             txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)
                 .map_err(add_location!())?,
-            blocks: Vec::new(),
+            blocks: block_cache::Rocks::new(),
             utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)
                 .map_err(add_location!())?,
             txn_log: None,
@@ -4279,5 +4283,166 @@ mod tests {
         let effect = TxnEffect::compute_effect(tx).unwrap();
         let result = ledger.apply_transaction(&mut block, effect);
         assert!(result.is_ok());
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub mod block_cache {
+    //!
+    //! # block_cache
+    //!
+    //! [**related issue**](https://github.com/FindoraNetwork/platform/issues/7)
+    //!
+    //! This module is almost non-invasive to external code.
+    //!
+    //! Warning:
+    //!     Because of the embedded rocksdb,
+    //!     the compilation time will be extended a lot !
+    //!
+
+    use crate::data_model::FinalizedBlock;
+    use lazy_static::lazy_static;
+    use rand::random;
+    use rocksdb::{DBIterator, IteratorMode, Options, DB};
+    use ruc::{err::*, *};
+    use std::{
+        env, fs,
+        iter::Iterator,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+
+    // The default path to store the runtime blocks data,
+    // when the envronment-VAR with the same name is not set.
+    //
+    // Is it necessary to be compatible with the Windows operating system?
+    const ROCKS_CACHE_DIR: &str = "/tmp/.ledger_state_block";
+
+    lazy_static! {
+        // A counter of the number of blocks in the current ledger.
+        static ref BLOCK_CNT: AtomicUsize = {
+            // Borrow this place a while...
+            {
+                // Remove all possible rubbish(remove their topdir).
+                omit!(fs::remove_dir_all(ROCKS_CACHE_DIR));
+
+                // Is this necessary? To delete
+                // a possiable file with the same name.
+                omit!(fs::remove_file(ROCKS_CACHE_DIR));
+            }
+
+            AtomicUsize::new(0)
+        };
+    }
+
+    /// To solve the problem of unlimited memory usage,
+    /// use this to replace the original in-memory `Vec<_>`.
+    pub struct Rocks {
+        db: DB,
+    }
+
+    /// Iter over [Rocks](self::Rocks).
+    pub struct RocksIter<'a> {
+        iter: DBIterator<'a>,
+    }
+
+    #[inline(always)]
+    fn get_datadir() -> String {
+        // Use random subdir to make unit-tests pass.
+        format!("{}/{}", ROCKS_CACHE_DIR, random::<u64>())
+    }
+
+    impl Rocks {
+        /// Create an instance.
+        pub fn new() -> Self {
+            let mut opts = Options::default();
+            opts.create_if_missing(true);
+            Rocks {
+                // Each time the program is started,
+                // a new database is created here.
+                db: pnk!(DB::open(&opts, &get_datadir())),
+            }
+        }
+
+        /// Imitate the behavior of 'Vec<_>.get(...)'
+        ///
+        /// Any faster/better choice other than JSON ?
+        pub fn get(&self, idx: usize) -> Option<FinalizedBlock> {
+            self.db
+                .get(&idx.to_ne_bytes()[..])
+                .ok()
+                .flatten()
+                .map(|bytes| serde_json::from_slice(&bytes).unwrap())
+        }
+
+        /// Imitate the behavior of 'Vec<_>.len()'
+        ///
+        /// `merkle_id`(aka `block_id`), its implementation
+        /// is a monotonically increasing integer from zero,
+        /// so this operation will get the correct value.
+        pub fn len(&self) -> usize {
+            BLOCK_CNT.load(Ordering::Relaxed)
+        }
+
+        /// Imitate the behavior of 'Vec<_>.push(...)'
+        pub fn push(&self, b: FinalizedBlock) {
+            let idx = b.merkle_id as usize;
+            let value = serde_json::to_vec(&b).unwrap();
+            self.db.put(usize::to_ne_bytes(idx), value);
+
+            // increase the number of blocks
+            BLOCK_CNT.fetch_add(1, Ordering::Relaxed);
+        }
+
+        /// Imitate the behavior of '.iter()'
+        pub fn iter(&self) -> RocksIter {
+            RocksIter {
+                iter: self.db.iterator(IteratorMode::Start),
+            }
+        }
+    }
+
+    impl<'a> Iterator for RocksIter<'a> {
+        type Item = FinalizedBlock;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            self.iter
+                .next()
+                .map(|(_, bytes)| serde_json::from_slice(&bytes[..]).unwrap())
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+
+        fn gen_sample(merkle_id: u64) -> FinalizedBlock {
+            FinalizedBlock {
+                txns: vec![],
+                merkle_id,
+            }
+        }
+
+        #[test]
+        fn t_all() {
+            let mut db = Rocks::new();
+
+            assert_eq!(0, db.len());
+            (0..100).for_each(|i| {
+                assert!(db.get(i).is_none());
+            });
+
+            (0..100).map(|i| (i, gen_sample(i))).for_each(|(i, b)| {
+                db.push(b);
+                assert_eq!(1 + i as usize, db.len());
+                assert!(db.get(i as usize).is_some());
+            });
+
+            (0..100).zip(db.iter()).for_each(|(i, b)| {
+                assert_eq!(i, b.merkle_id);
+            });
+
+            assert_eq!(100, db.len());
+        }
     }
 }

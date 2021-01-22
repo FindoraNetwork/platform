@@ -64,6 +64,13 @@ else
 	$(call pack,$(target_dir))
 endif
 
+test:
+	cargo test --lib --workspace -- --test-threads=1 --nocapture
+	cargo test --workspace -- --test-threads=1 --nocapture
+
+bench:
+	cargo bench --workspace
+
 test_status:
 	scripts/incur build
 	scripts/incur build --release
