@@ -32,6 +32,16 @@ wasm-bindgen-test = "0.2.50"
 zei = { git = "ssh://git@github.com/FindoraNetwork/zei", branch = "fix-deps-v0.0.3-5" }
 utils = { path = "../../libs/utils" }
 
+ring = "0.16.19"
+aes-gcm = "0.8.0"
+bech32 = "0.7.2"
+
+# Must enable the "js"-feature,
+# OR the compiling will fail.
+getrandom = { version = "0.2", features = ["js"] }
+
+wallet = { path = "../wallet" }
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 path = "src/wasm.rs"
@@ -54,4 +64,7 @@ serde_json = "1.0.41"
 vergen = "3.1.0"
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
 
-#features = ["stdweb", "wasm-bindgen"]
+[dev-dependencies]
+# Must enable the "js"-feature,
+# OR the compiling will fail.
+getrandom = { version = "0.2", features = ["js"] }
