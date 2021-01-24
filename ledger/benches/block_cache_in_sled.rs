@@ -5,8 +5,8 @@ use ledger::{data_model::FinalizedBlock, store::block_cache};
 const NUM: u64 = 1;
 
 lazy_static! {
-    static ref DB: block_cache::Rocks = {
-        let db = block_cache::Rocks::new();
+    static ref DB: block_cache::Sled = {
+        let db = block_cache::Sled::new();
         (0..NUM).for_each(|i| {
             db.push(gen_sample(i));
         });
@@ -33,15 +33,15 @@ fn read() {
     });
 }
 
-pub fn rocks_write(c: &mut Criterion) {
+pub fn sled_write(c: &mut Criterion) {
     // make lazy_static to do its work
     assert_eq!(DB.len(), NUM as usize);
-    c.bench_function("rocks_write", |b| b.iter(|| write()));
+    c.bench_function("sled_write", |b| b.iter(|| write()));
 }
 
-pub fn rocks_read(c: &mut Criterion) {
-    c.bench_function("rocks_read", |b| b.iter(|| read()));
+pub fn sled_read(c: &mut Criterion) {
+    c.bench_function("sled_read", |b| b.iter(|| read()));
 }
 
-criterion_group!(benches, rocks_write, rocks_read);
+criterion_group!(benches, sled_write, sled_read);
 criterion_main!(benches);

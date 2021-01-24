@@ -44,7 +44,7 @@ utils = { path = "../libs/utils" }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
 zei = { git = "ssh://git@github.com/FindoraNetwork/zei", branch = "fix-deps-v0.0.3-5" }
 sparse_merkle_tree = { path = "../libs/ads/sparse_merkle_tree" }
-rocksdb = "0.15.0"
+sled = "0.34.6"
 
 [features]
 TESTING = []
@@ -68,5 +68,5 @@ fs2 = "0.4"
 vergen = "3.1.0"
 
 [[bench]]
-name = "block_cache_in_rocksdb"
+name = "block_cache_in_sled"
 harness = false

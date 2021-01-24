@@ -669,7 +669,7 @@ pub fn run_txn_check(
         enum FracAmtPhase {
             Frac,
             Amt,
-        };
+        }
         let mut phase = FracAmtPhase::Amt;
 
         while frac_ix < check.fraction_ops.len() || amt_ix < check.amount_ops.len() {

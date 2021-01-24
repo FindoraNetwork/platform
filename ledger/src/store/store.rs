@@ -300,8 +300,8 @@ pub struct LedgerState {
     ////////////////////////////////////////////////////////////////////
     // Comments above is left by the previous development team.
     ////////////////////////////////////////////////////////////////////
-    // use rocksdb to cache the tx data.
-    blocks: block_cache::Rocks,
+    // use sled(DB) to cache the tx data.
+    blocks: block_cache::Sled,
 
     // Bitmap tracking all the live TXOs
     utxo_map: BitMap,
@@ -1761,7 +1761,7 @@ impl LedgerState {
             signing_key,
             block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)?,
             txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
-            blocks: block_cache::Rocks::new(),
+            blocks: block_cache::Sled::new(),
             utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
             txn_log: Some((
                 txn_path.into(),
@@ -1848,7 +1848,7 @@ impl LedgerState {
                 .map_err(add_location!())?,
             txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, false)
                 .map_err(add_location!())?,
-            blocks: block_cache::Rocks::new(),
+            blocks: block_cache::Sled::new(),
             utxo_map: LedgerState::init_utxo_map(utxo_map_path, false)
                 .map_err(add_location!())?,
             txn_log: None,
@@ -1977,7 +1977,7 @@ impl LedgerState {
                 .map_err(add_location!())?,
             txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)
                 .map_err(add_location!())?,
-            blocks: block_cache::Rocks::new(),
+            blocks: block_cache::Sled::new(),
             utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)
                 .map_err(add_location!())?,
             txn_log: None,
@@ -4296,15 +4296,10 @@ pub mod block_cache {
     //!
     //! This module is almost non-invasive to external code.
     //!
-    //! Warning:
-    //!     Because of the embedded rocksdb,
-    //!     the compilation time will be extended a lot !
-    //!
 
     use crate::data_model::FinalizedBlock;
     use lazy_static::lazy_static;
     use rand::random;
-    use rocksdb::{DBIterator, IteratorMode, Options, DB};
     use ruc::{err::*, *};
     use std::{
         env, fs,
@@ -4316,7 +4311,7 @@ pub mod block_cache {
     // when the envronment-VAR with the same name is not set.
     //
     // Is it necessary to be compatible with the Windows operating system?
-    const ROCKS_CACHE_DIR: &str = "/tmp/.ledger_state_block";
+    const SLED_CACHE_DIR: &str = "/tmp/.ledger_state_block";
 
     lazy_static! {
         // A counter of the number of blocks in the current ledger.
@@ -4324,11 +4319,11 @@ pub mod block_cache {
             // Borrow this place a while...
             {
                 // Remove all possible rubbish(remove their topdir).
-                omit!(fs::remove_dir_all(ROCKS_CACHE_DIR));
+                omit!(fs::remove_dir_all(SLED_CACHE_DIR));
 
                 // Is this necessary? To delete
                 // a possiable file with the same name.
-                omit!(fs::remove_file(ROCKS_CACHE_DIR));
+                omit!(fs::remove_file(SLED_CACHE_DIR));
             }
 
             AtomicUsize::new(0)
@@ -4337,30 +4332,29 @@ pub mod block_cache {
 
     /// To solve the problem of unlimited memory usage,
     /// use this to replace the original in-memory `Vec<_>`.
-    pub struct Rocks {
-        db: DB,
+    pub struct Sled {
+        db: sled::Db,
     }
 
-    /// Iter over [Rocks](self::Rocks).
-    pub struct RocksIter<'a> {
-        iter: DBIterator<'a>,
+    /// Iter over [Sled](self::Sled).
+    pub struct SledIter {
+        iter: sled::Iter,
     }
 
     #[inline(always)]
     fn get_datadir() -> String {
         // Use random subdir to make unit-tests pass.
-        format!("{}/{}", ROCKS_CACHE_DIR, random::<u64>())
+        format!("{}/{}", SLED_CACHE_DIR, random::<u64>())
     }
 
-    impl Rocks {
+    impl Sled {
         /// Create an instance.
+        #[inline(always)]
         pub fn new() -> Self {
-            let mut opts = Options::default();
-            opts.create_if_missing(true);
-            Rocks {
+            Sled {
                 // Each time the program is started,
                 // a new database is created here.
-                db: pnk!(DB::open(&opts, &get_datadir())),
+                db: pnk!(sled::open(&get_datadir())),
             }
         }
 
@@ -4388,26 +4382,28 @@ pub mod block_cache {
         pub fn push(&self, b: FinalizedBlock) {
             let idx = b.merkle_id as usize;
             let value = serde_json::to_vec(&b).unwrap();
-            self.db.put(usize::to_ne_bytes(idx), value);
+            self.db.insert(usize::to_ne_bytes(idx), value);
 
             // increase the number of blocks
             BLOCK_CNT.fetch_add(1, Ordering::Relaxed);
         }
 
         /// Imitate the behavior of '.iter()'
-        pub fn iter(&self) -> RocksIter {
-            RocksIter {
-                iter: self.db.iterator(IteratorMode::Start),
+        pub fn iter(&self) -> SledIter {
+            SledIter {
+                iter: self.db.iter(),
             }
         }
     }
 
-    impl<'a> Iterator for RocksIter<'a> {
+    impl Iterator for SledIter {
         type Item = FinalizedBlock;
 
         fn next(&mut self) -> Option<Self::Item> {
             self.iter
                 .next()
+                .map(|v| v.ok())
+                .flatten()
                 .map(|(_, bytes)| serde_json::from_slice(&bytes[..]).unwrap())
         }
     }
@@ -4425,7 +4421,7 @@ pub mod block_cache {
 
         #[test]
         fn t_all() {
-            let mut db = Rocks::new();
+            let mut db = Sled::new();
 
             assert_eq!(0, db.len());
             (0..100).for_each(|i| {
