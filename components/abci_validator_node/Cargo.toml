@@ -31,7 +31,7 @@ zei = { git = "ssh://git@github.com/FindoraNetwork/zei", branch = "fix-deps-v0.0
 
 hex = "0.4.2"
 protobuf = "2.15.1"
-myutil = { git = "https://gitee.com/kt10/myutil", branch = "master" }
+ruc = "0.4"
 
 ctrlc = "3.1.7"
 
