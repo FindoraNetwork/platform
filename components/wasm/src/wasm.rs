@@ -2,7 +2,6 @@
 // Allows web clients to issue transactions from a browser contexts.
 // For now, forwards transactions to a ledger hosted locally.
 // To compile wasm package, run wasm-pack build in the wasm directory;
-#![deny(warnings)]
 use crate::wasm_data_model::*;
 use credentials::{
     credential_commit, credential_issuer_key_gen, credential_open_commitment,
@@ -12,7 +11,7 @@ use credentials::{
 };
 use cryptohash::sha256;
 use ledger::data_model::{
-    b64enc, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedTransaction, Operation,
+    AssetTypeCode, AuthenticatedKVLookup, AuthenticatedTransaction, Operation,
     TransferType,
 };
 use ledger::policies::{DebtMemo, Fraction};
@@ -22,7 +21,7 @@ use txn_builder::{
     BuildsTransactions, PolicyChoice, TransactionBuilder as PlatformTransactionBuilder,
     TransferOperationBuilder as PlatformTransferOperationBuilder,
 };
-use util::{bech32enc, error_to_jsvalue};
+use util::error_to_jsvalue;
 use utils::HashOf;
 use wasm_bindgen::prelude::*;
 
@@ -796,13 +795,13 @@ pub fn new_keypair_from_seed(seed_str: String, name: Option<String>) -> XfrKeyPa
 #[wasm_bindgen]
 /// Returns base64 encoded representation of an XfrPublicKey.
 pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
-    b64enc(&XfrPublicKey::zei_to_bytes(&key))
+    wallet::public_key_to_base64(key)
 }
 
 #[wasm_bindgen]
 /// Converts a base64 encoded public key string to a public key.
-pub fn public_key_from_base64(key_pair: String) -> Result<XfrPublicKey, JsValue> {
-    util::public_key_from_base64(key_pair)
+pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey, JsValue> {
+    wallet::public_key_from_base64(pk).map_err(error_to_jsvalue)
 }
 
 #[wasm_bindgen]
@@ -997,7 +996,7 @@ pub fn wasm_credential_reveal(
             credential.get_cred_ref(),
             &reveal_fields[..],
         )
-        .map_err(|e| error_to_jsvalue(e))?,
+        .map_err(error_to_jsvalue)?,
     })
 }
 
@@ -1068,7 +1067,7 @@ pub fn trace_assets(
 pub fn test() {
     let kp = new_keypair();
     let b64 = public_key_to_base64(kp.get_pk_ref());
-    let pk = public_key_from_base64(b64).unwrap();
+    let pk = public_key_from_base64(&b64).unwrap();
     dbg!(pk);
 }
 
@@ -1086,24 +1085,24 @@ use std::str;
 #[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.
 pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
-    bech32enc(&XfrPublicKey::zei_to_bytes(&key))
+    wallet::public_key_to_bech32(key)
 }
 
 #[wasm_bindgen]
 /// Converts a bech32 encoded public key string to a public key.
-pub fn public_key_from_bech32(key_pair: String) -> Result<XfrPublicKey, JsValue> {
-    util::public_key_from_bech32(key_pair)
+pub fn public_key_from_bech32(addr: &str) -> Result<XfrPublicKey, JsValue> {
+    wallet::public_key_from_bech32(addr).map_err(error_to_jsvalue)
 }
 
 #[wasm_bindgen]
-pub fn bech32_to_base64(key_pair: String) -> Result<String, JsValue> {
-    let pub_key = public_key_from_bech32(key_pair)?;
+pub fn bech32_to_base64(pk: &str) -> Result<String, JsValue> {
+    let pub_key = public_key_from_bech32(pk)?;
     Ok(public_key_to_base64(&pub_key))
 }
 
 #[wasm_bindgen]
-pub fn base64_to_bech32(key_pair: String) -> Result<String, JsValue> {
-    let pub_key = public_key_from_base64(key_pair)?;
+pub fn base64_to_bech32(pk: &str) -> Result<String, JsValue> {
+    let pub_key = public_key_from_base64(pk)?;
     Ok(public_key_to_bech32(&pub_key))
 }
 
@@ -1131,14 +1130,14 @@ pub fn encryption_pbkdf2_aes256gcm(key_pair: String, password: String) -> Vec<u8
     let cipher = Aes256Gcm::new(GenericArray::from_slice(&derived_key));
     let ciphertext = cipher
         .encrypt(GenericArray::from_slice(&iv), key_pair.as_ref())
-        .unwrap_or(Vec::<u8>::new());
+        .unwrap_or_default();
 
     // this is a hack, wasm-bindgen not support tuple of vectors
     let mut res: Vec<u8> = Vec::new();
     res.append(&mut salt.to_vec());
     res.append(&mut iv.to_vec());
     res.append(&mut ciphertext.to_vec());
-    return res;
+    res
 }
 
 #[wasm_bindgen]
@@ -1166,22 +1165,16 @@ pub fn decryption_pbkdf2_aes256gcm(enc_key_pair: Vec<u8>, password: String) -> S
     let cipher = Aes256Gcm::new(GenericArray::from_slice(&derived_key));
     let plaintext = cipher
         .decrypt(GenericArray::from_slice(iv), ciphertext.as_ref())
-        .unwrap_or(Vec::<u8>::new());
+        .unwrap_or_default();
 
-    return String::from_utf8(plaintext).unwrap_or("".to_string());
+    String::from_utf8(plaintext).unwrap_or_else(|_| "".to_string())
 }
 
 #[wasm_bindgen]
 pub fn create_keypair_from_secret(sk_str: String) -> Option<XfrKeyPair> {
-    let secret_key = serde_json::from_str::<XfrSecretKey>(&sk_str);
-    match secret_key {
-        Ok(sk) => {
-            return Some(sk.into_keypair());
-        }
-        _ => {
-            return None;
-        }
-    }
+    serde_json::from_str::<XfrSecretKey>(&sk_str)
+        .map(|sk| sk.into_keypair())
+        .ok()
 }
 
 ///////////////////////////////////////////
@@ -1272,8 +1265,8 @@ mod test {
         let kp = new_keypair();
         let b64 = public_key_to_base64(kp.get_pk_ref());
         let be32 = public_key_to_bech32(kp.get_pk_ref());
-        public_key_from_base64(b64).unwrap();
-        public_key_from_bech32(be32).unwrap();
+        public_key_from_base64(&b64).unwrap();
+        public_key_from_bech32(&be32).unwrap();
     }
 
     #[test]
@@ -1289,7 +1282,7 @@ mod test {
     fn t_create_keypair_from_secret() {
         let kp = new_keypair();
         let sk_str = serde_json::to_string(&kp.get_sk()).unwrap();
-        let kp1 = create_keypair_from_secret(sk_str.clone()).unwrap();
+        let kp1 = create_keypair_from_secret(sk_str).unwrap();
         let kp_str = serde_json::to_string(&kp).unwrap();
         let kp1_str = serde_json::to_string(&kp1).unwrap();
         assert_eq!(kp_str, kp1_str);

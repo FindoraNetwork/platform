@@ -19,7 +19,6 @@
 //! can be downloaded. The serialize and serialize_partial
 //! methods, q.v., produce a Vec<u8> that can be sent over the
 //! network. This Vec can be converted to a SparseMap structure.
-#![deny(warnings)]
 //! The SparseMap structure allows various queries on the contents
 //! of the map.
 

@@ -1,7 +1,7 @@
-#![deny(warnings)]
+#![allow(clippy::field_reassign_with_default)]
 use abci::*;
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{Operation, Transaction, TxnEffect};
+use ledger::data_model::{Operation, Transaction, TxnEffect, TxnSID};
 use ledger::store::*;
 use ledger::{error_location, sub_fail};
 use ledger_api_service::RestfulApiService;
@@ -17,7 +17,6 @@ use std::thread;
 use submission_api::SubmissionApi;
 use submission_server::{convert_tx, SubmissionServer, TxnForward};
 use utils::HashOf;
-use zei::serialization::ZeiFromToBytes;
 use zei::xfr::structs::{XfrAmount, XfrAssetType};
 
 #[derive(Default)]
@@ -320,8 +319,8 @@ fn gen_tendermint_attr(tx: &Transaction) -> RepeatedField<Event> {
     ev.set_field_type("tx".to_owned());
 
     let mut kv = vec![Pair::new()];
-    kv[0].set_key("exist".as_bytes().to_vec());
-    kv[0].set_value("y".as_bytes().to_vec());
+    kv[0].set_key("prehash".as_bytes().to_vec());
+    kv[0].set_value(hex::encode(tx.hash(TxnSID(0))).into_bytes());
 
     ev.set_attributes(RepeatedField::from_vec(kv));
     res.push(ev);
@@ -381,7 +380,7 @@ fn gen_tendermint_attr_addr(tx: &Transaction) -> (Vec<TagAttr>, Vec<TagAttr>) {
                     ($direction: tt, $idx: tt) => {
                         ta.body.transfer.$direction.iter().for_each(|i| {
                             let mut attr = TagAttr::default();
-                            attr.addr = hex::encode(&i.public_key.zei_to_bytes());
+                            attr.addr = wallet::public_key_to_bech32(&i.public_key);
                             if let XfrAssetType::NonConfidential(ty) = i.asset_type {
                                 attr.asset_type = Some(hex::encode(&ty.0[..]));
                             }

@@ -1,4 +1,3 @@
-#![deny(warnings)]
 #![allow(unused)]
 use quickcheck::{Arbitrary, Gen, QuickCheck, StdGen};
 use std::iter::{once, repeat};
@@ -3116,7 +3115,7 @@ mod test {
             }
         }
 
-        let _ = if with_standalone {
+        let _x = if with_standalone {
             Some(LEDGER_STANDALONE_LOCK.lock().unwrap())
         } else {
             None

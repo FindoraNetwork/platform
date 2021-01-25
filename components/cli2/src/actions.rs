@@ -1,4 +1,3 @@
-#![deny(warnings)]
 // TODO: remove this when https://github.com/rust-lang/rust-clippy/issues/6066 gets fixed
 #![allow(clippy::needless_collect)]
 use crate::display_functions::{

@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use ledger::data_model::{
     AssetRules, AssetTypeCode, Operation, StateCommitmentData, Transaction,
 };

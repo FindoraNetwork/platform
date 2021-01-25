@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
 use ledger::data_model::errors::PlatformError;

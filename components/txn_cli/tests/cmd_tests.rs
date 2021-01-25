@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use std::fs;
 use std::io::{self, Write};
 use std::process::{Command, Output};

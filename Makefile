@@ -71,6 +71,10 @@ test:
 bench:
 	cargo bench --workspace
 
+lint:
+	cargo clippy --workspace
+	cargo clippy --workspace --tests
+
 test_status:
 	scripts/incur build
 	scripts/incur build --release

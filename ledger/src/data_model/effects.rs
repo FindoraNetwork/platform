@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
