@@ -7,6 +7,7 @@ use ledger_api_service::RestfulArchiveAccess;
 use log::{error, info};
 use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use zei::xfr::structs::OwnerMemo;
 
 macro_rules! fail {
@@ -26,9 +27,10 @@ where
     addresses_to_utxos: HashMap<XfrAddress, HashSet<TxoSID>>,
     related_transactions: HashMap<XfrAddress, HashSet<TxnSID>>, // Set of transactions related to a ledger address
     related_transfers: HashMap<AssetTypeCode, HashSet<TxnSID>>, // Set of transfer transactions related to an asset code
-    created_assets: HashMap<IssuerPublicKey, Vec<AssetTypeCode>>,
+    created_assets: HashMap<IssuerPublicKey, Vec<DefineAsset>>,
     traced_assets: HashMap<IssuerPublicKey, Vec<AssetTypeCode>>, // List of assets traced by a ledger address
-    issuances: HashMap<IssuerPublicKey, Vec<TxOutput>>,
+    issuances: HashMap<IssuerPublicKey, Vec<Arc<TxOutput>>>, // issuance mapped by public key
+    token_code_issuances: HashMap<AssetTypeCode, Vec<Arc<TxOutput>>>, // issuance mapped by token code
     owner_memos: HashMap<TxoSID, OwnerMemo>,
     utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
     custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
@@ -49,6 +51,7 @@ where
             created_assets: HashMap::new(),
             traced_assets: HashMap::new(),
             issuances: HashMap::new(),
+            token_code_issuances: HashMap::new(),
             utxos_to_map_index: HashMap::new(),
             custom_data_store: HashMap::new(),
             rest_client,
@@ -64,14 +67,34 @@ where
     pub fn get_issued_records(
         &self,
         issuer: &IssuerPublicKey,
-    ) -> Option<&Vec<TxOutput>> {
-        self.issuances.get(issuer)
+    ) -> Option<Vec<TxOutput>> {
+        self.issuances
+            .get(issuer)
+            .map(|recs|
+                recs.iter()
+                    .map(|rec| TxOutput::clone(&*rec))
+                    .collect()
+            )
+    }
+
+    // Returns the set of records issued by a certain token code.
+    pub fn get_issued_records_by_code(
+        &self,
+        code: &AssetTypeCode,
+    ) -> Option<Vec<TxOutput>> {
+        self.token_code_issuances
+            .get(code)
+            .map(|recs|
+                recs.iter()
+                    .map(|rec| TxOutput::clone(&*rec))
+                    .collect()
+            )
     }
 
     pub fn get_created_assets(
         &self,
         issuer: &IssuerPublicKey,
-    ) -> Option<&Vec<AssetTypeCode>> {
+    ) -> Option<&Vec<DefineAsset>> {
         self.created_assets.get(issuer)
     }
 
@@ -154,11 +177,10 @@ where
     // Add created asset
     pub fn add_created_asset(&mut self, creation: &DefineAsset) {
         let issuer = creation.pubkey;
-        let new_asset_code = creation.body.asset.code;
         self.created_assets
             .entry(issuer)
             .or_insert_with(Vec::new)
-            .push(new_asset_code);
+            .push(creation.clone());
     }
 
     // Add traced asset
@@ -176,19 +198,27 @@ where
 
     // Cache issuance records
     pub fn cache_issuance(&mut self, issuance: &IssueAsset) {
-        let issuer = issuance.pubkey;
-        let mut new_records = issuance
+        let new_records: Vec<Arc<TxOutput>> = issuance
             .body
             .records
             .iter()
-            .map(|(rec, _)| rec.clone())
+            .map(|(rec, _)| Arc::new(rec.clone()))
             .collect();
-        let records = self.issuances.entry(issuer).or_insert_with(Vec::new);
-        info!(
-            "Issuance record cached for asset issuer key {}",
-            b64enc(&issuer.key.as_bytes())
-        );
-        records.append(&mut new_records);
+
+        macro_rules! save_issuance {
+            ($maps: tt, $key: tt) => {
+                let records = $maps.entry($key).or_insert_with(Vec::new);
+                records.extend_from_slice(&new_records);
+            };
+        }
+
+        let key_issuances = &mut self.issuances;
+        let pubkey = issuance.pubkey;
+        save_issuance!(key_issuances, pubkey);
+
+        let token_issuances = &mut self.token_code_issuances;
+        let token_code = issuance.body.code;
+        save_issuance!(token_issuances, token_code);
     }
 
     // Remove data that may be outdated based on this kv_update
@@ -991,7 +1021,13 @@ mod tests {
                 key: *creator.get_pk_ref(),
             })
             .unwrap();
-        assert_eq!(created_assets, &vec![code1, code2]);
+
+        // Check if the created assets have two asset
+        let asset_found = |code: &AssetTypeCode| -> bool {
+            created_assets.iter().any(|ca| ca.body.asset.code == *code)
+        };
+        assert!(asset_found(&code1));
+        assert!(asset_found(&code2));
     }
 
     #[test]

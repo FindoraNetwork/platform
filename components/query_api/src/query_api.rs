@@ -3,8 +3,8 @@ use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
-    b64dec, AssetTypeCode, IssuerPublicKey, KVBlind, KVHash, TxOutput, TxnSID, TxoSID,
-    XfrAddress,
+    b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, KVBlind, KVHash, TxOutput,
+    TxnSID, TxoSID, XfrAddress,
 };
 use ledger::{error_location, inp_fail, ser_fail};
 use ledger_api_service::RestfulArchiveAccess;
@@ -127,6 +127,7 @@ pub enum QueryServerRoutes {
     GetCreatedAssets,
     GetTracedAssets,
     GetIssuedRecords,
+    GetIssuedRecordsByCode,
     GetRelatedTxns,
     GetRelatedXfrs,
     Version,
@@ -145,6 +146,7 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetCreatedAssets => "get_created_assets",
             QueryServerRoutes::GetTracedAssets => "get_traced_assets",
             QueryServerRoutes::GetIssuedRecords => "get_issued_records",
+            QueryServerRoutes::GetIssuedRecordsByCode => "get_issued_records_by_code",
             QueryServerRoutes::Version => "version",
         };
         "/".to_owned() + endpoint
@@ -155,7 +157,7 @@ impl NetworkRoute for QueryServerRoutes {
 fn get_created_assets<T>(
     data: web::Data<Arc<RwLock<QueryServer<T>>>>,
     info: web::Path<String>,
-) -> actix_web::Result<web::Json<Vec<AssetTypeCode>>>
+) -> actix_web::Result<web::Json<Vec<DefineAsset>>>
 where
     T: RestfulArchiveAccess + Sync + Send,
 {
@@ -205,7 +207,31 @@ where
     .map_err(|_| error::ErrorBadRequest("Could not deserialize public key"))?;
     let query_server = data.read().unwrap();
     let records = query_server.get_issued_records(&IssuerPublicKey { key });
-    Ok(web::Json(records.cloned().unwrap_or_default()))
+    Ok(web::Json(records.unwrap_or_default()))
+}
+
+// Returns the list of records issued by a token code
+fn get_issued_records_by_code<T>(
+    data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+    info: web::Path<String>,
+) -> actix_web::Result<web::Json<Vec<TxOutput>>>
+where
+    T: RestfulArchiveAccess + Sync + Send,
+{
+    let query_server = data.read().unwrap();
+    if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
+        if let Some(records) = query_server.get_issued_records_by_code(&token_code) {
+            Ok(web::Json(records))
+        } else {
+            Err(actix_web::error::ErrorNotFound(
+                "Specified asset definition does not currently exist.",
+            ))
+        }
+    } else {
+        Err(actix_web::error::ErrorBadRequest(
+            "Invalid asset definition encoding.",
+        ))
+    }
 }
 
 // Returns the list of transations associated with a given ledger address
@@ -302,6 +328,11 @@ impl QueryApi {
                 .route(
                     &QueryServerRoutes::GetIssuedRecords.with_arg_template("address"),
                     web::get().to(get_issued_records::<T>),
+                )
+                .route(
+                    &QueryServerRoutes::GetIssuedRecordsByCode
+                        .with_arg_template("asset_token"),
+                    web::get().to(get_issued_records_by_code::<T>),
                 )
                 .route(
                     &QueryServerRoutes::StoreCustomData.route(),
