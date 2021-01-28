@@ -84,7 +84,12 @@ clean:
 	@ cargo clean
 	@ rm -rf debug release Cargo.lock
 
-reset:
-	@./scripts/stopnodes.sh
-	@./scripts/resetnodes.sh
-	@./scripts/startnodes.sh
+single:
+	@./scripts/devnet/stopnodes.sh
+	@./scripts/devnet/resetsingle.sh
+	@./scripts/devnet/startsingle.sh
+
+devnet:
+	@./scripts/devnet/stopnodes.sh
+	@./scripts/devnet/resetnodes.sh
+	@./scripts/devnet/startnodes.sh
