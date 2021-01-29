@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use ledger::data_model::{FinalizedTransaction, TxnEffect};
 use ledger::store::*;
 use ledger_api_service::RestfulApiService;

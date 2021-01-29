@@ -31,7 +31,6 @@
 //!
 //! The two nodes then connect.
 
-#![deny(warnings)]
 use async_std::{io, task};
 use futures::{future, prelude::*};
 use itertools::Itertools;

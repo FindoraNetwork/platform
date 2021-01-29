@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use ledger::store::LedgerState;
 use ledger_api_service::RestfulApiService;
 use rand_chacha::ChaChaRng;

@@ -1,4 +1,3 @@
-#![deny(warnings)]
 /// Tests submission of transactions constructed by the txn_builder.
 /// All P2P lending-related operations and transactions are tested.
 use credentials::{

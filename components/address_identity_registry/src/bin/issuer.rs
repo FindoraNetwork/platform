@@ -1,4 +1,3 @@
-#![deny(warnings)]
 
 use std::env;
 use warp::Filter;

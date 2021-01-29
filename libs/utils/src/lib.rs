@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use cryptohash::sha256::Digest;
 use cryptohash::{sha256, Proof};
 use percent_encoding::{percent_decode, utf8_percent_encode, AsciiSet, CONTROLS};

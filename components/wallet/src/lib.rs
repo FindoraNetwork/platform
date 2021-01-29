@@ -4,16 +4,18 @@
 //! Separating mnemonic to a standalone library is needed by tests.
 //!
 
+use bech32::{self, FromBase32, ToBase32};
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
 use ruc::{err::*, *};
 use std::result::Result as Res;
 use zei::{
     serialization::ZeiFromToBytes,
-    xfr::sig::{XfrKeyPair, XfrSecretKey},
+    xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
 
 /// Randomly generate a 12words-length mnemonic.
+#[inline(always)]
 pub fn generate_mnemonic_default() -> String {
     Mnemonic::new(MnemonicType::Words12, Language::English).into_phrase()
 }
@@ -21,6 +23,7 @@ pub fn generate_mnemonic_default() -> String {
 /// Generate mnemonic with custom length and language.
 /// - @param `wordslen`: acceptable value are one of [ 12, 15, 18, 21, 24 ]
 /// - @param `lang`: acceptable value are one of [ "en", "zh", "zh_traditional", "fr", "it", "ko", "sp", "jp" ]
+#[inline(always)]
 pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> Res<String, String> {
     let w = match wordslen {
         12 => MnemonicType::Words12,
@@ -75,6 +78,7 @@ pub struct BipPath {
 }
 
 impl BipPath {
+    #[inline(always)]
     pub fn new(coin: u32, account: u32, change: u32, address: u32) -> Self {
         BipPath {
             coin,
@@ -95,6 +99,7 @@ pub fn restore_keypair_from_mnemonic_default(phrase: &str) -> Res<XfrKeyPair, St
 
 /// Restore the XfrKeyPair from a mnemonic with custom params,
 /// in bip44 form.
+#[inline(always)]
 pub fn restore_keypair_from_mnemonic_bip44(
     phrase: &str,
     lang: &str,
@@ -114,6 +119,7 @@ fn restore_keypair_from_mnemonic_bip44_inner(
 
 /// Restore the XfrKeyPair from a mnemonic with custom params,
 /// in bip49 form.
+#[inline(always)]
 pub fn restore_keypair_from_mnemonic_bip49(
     phrase: &str,
     lang: &str,
@@ -147,9 +153,50 @@ fn check_lang(lang: &str) -> Result<Language> {
     }
 }
 
+/////////////////////////////////////////////////////////////////
+
+#[inline(always)]
+pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
+    base64::encode_config(&ZeiFromToBytes::zei_to_bytes(key), base64::URL_SAFE)
+}
+
+#[inline(always)]
+pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey> {
+    base64::decode_config(pk, base64::URL_SAFE)
+        .c(d!())
+        .and_then(|bytes| XfrPublicKey::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
+    bech32enc(&XfrPublicKey::zei_to_bytes(key))
+}
+
+#[inline(always)]
+pub fn public_key_from_bech32(addr: &str) -> Result<XfrPublicKey> {
+    bech32dec(addr)
+        .c(d!())
+        .and_then(|bytes| XfrPublicKey::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+fn bech32enc<T: AsRef<[u8]> + ToBase32>(input: &T) -> String {
+    bech32::encode("fra", input.to_base32()).unwrap()
+}
+
+#[inline(always)]
+fn bech32dec(input: &str) -> Result<Vec<u8>> {
+    bech32::decode(input)
+        .c(d!())
+        .and_then(|(_, data)| Vec::<u8>::from_base32(&data).c(d!()))
+}
+
+/////////////////////////////////////////////////////////////////
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use rand_core::SeedableRng;
 
     #[test]
     fn t_generate_mnemonic() {
@@ -164,10 +211,7 @@ mod test {
                         change: rand::random::<u32>() % 100,
                         address: rand::random::<u32>() % 100,
                     };
-                    assert_eq!(
-                        *wordslen as usize,
-                        phrase.split(" ").collect::<Vec<_>>().len()
-                    );
+                    assert_eq!(*wordslen as usize, phrase.split(' ').count());
 
                     pnk!(restore_keypair_from_mnemonic_bip44_inner(
                         &phrase, lang, &path
@@ -184,5 +228,17 @@ mod test {
         assert!(generate_mnemonic_custom(12, "xx").is_err());
         assert!(generate_mnemonic_custom(11, "zh").is_err());
         assert!(generate_mnemonic_custom(11, "xx").is_err());
+    }
+
+    fn new_keypair() -> XfrKeyPair {
+        let mut small_rng = rand_chacha::ChaChaRng::from_entropy();
+        XfrKeyPair::generate(&mut small_rng)
+    }
+
+    #[test]
+    fn t_converts() {
+        let pk = new_keypair().get_pk();
+        assert_eq!(pk, pnk!(public_key_from_base64(&public_key_to_base64(&pk))));
+        assert_eq!(pk, pnk!(public_key_from_bech32(&public_key_to_bech32(&pk))));
     }
 }

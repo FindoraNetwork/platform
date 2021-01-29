@@ -1,4 +1,3 @@
-#![deny(warnings)]
 //! # An authenticated key value store mapping SHA-256 keys to values implemented
 //! # as a Sparse Merkle Tree
 //!

@@ -1,4 +1,3 @@
-#![deny(warnings)]
 #![allow(clippy::type_complexity)]
 
 use ledger::data_model::*;

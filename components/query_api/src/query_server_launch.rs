@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use ledger_api_service::ActixLedgerClient;
 use log::{error, info};
 use query_api::QueryApi;

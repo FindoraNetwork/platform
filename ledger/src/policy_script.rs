@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use crate::data_model::errors::PlatformError;
 use crate::data_model::{Asset, AssetTypeCode, Operation, Transaction, TxOutput};
 use crate::error_location;

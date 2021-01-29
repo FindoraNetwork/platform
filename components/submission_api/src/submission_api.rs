@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use actix_cors::Cors;
 use actix_web::test::TestRequest;
 use actix_web::{error, middleware, test, web, App, HttpServer};

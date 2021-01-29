@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use crate::util::error_to_jsvalue;
 use credentials::{
     CredCommitment, CredCommitmentKey, CredIssuerPublicKey, CredIssuerSecretKey,
@@ -538,7 +537,7 @@ impl CredentialIssuerKeyPair {
     }
     /// Generate a key pair from a JSON-serialized JavaScript value.
     pub fn from_json(val: &JsValue) -> Result<CredentialIssuerKeyPair, JsValue> {
-        Ok(val.into_serde().map_err(error_to_jsvalue)?)
+        val.into_serde().map_err(error_to_jsvalue)
     }
 }
 
@@ -558,7 +557,7 @@ impl CredentialUserKeyPair {
     }
     /// Generate a key pair from a JSON-serialized JavaScript value.
     pub fn from_json(val: &JsValue) -> Result<CredentialUserKeyPair, JsValue> {
-        Ok(val.into_serde().map_err(error_to_jsvalue)?)
+        val.into_serde().map_err(error_to_jsvalue)
     }
 }
 
@@ -583,11 +582,9 @@ impl SignatureRules {
         let weights: Vec<(XfrPublicKey, u64)> = weights
             .iter()
             .map(|(b64_key, weight)| {
-                let parsed = crate::util::public_key_from_base64(b64_key.clone());
-                match parsed {
-                    Err(err) => Err(err),
-                    Ok(pk) => Ok((pk, *weight)),
-                }
+                wallet::public_key_from_base64(&b64_key)
+                    .map(|pk| (pk, *weight))
+                    .map_err(error_to_jsvalue)
             })
             .collect::<Result<Vec<(XfrPublicKey, u64)>, JsValue>>()?;
         let sig_rules = PlatformSignatureRules { threshold, weights };

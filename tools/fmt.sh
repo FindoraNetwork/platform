@@ -16,6 +16,7 @@ cd $EXEC_PATH || exit 1
 #################################################
 
 export LC_ALL=en_US.UTF-8 # perl
+export LANGUAGE=en_US.UTF-8 # perl
 
 for file in $(find .. -type f \
     -name "*.rs" \

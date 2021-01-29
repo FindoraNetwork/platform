@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use crate::data_lib::*;
 use credentials::{
     CredCommitment, CredCommitmentKey, CredIssuerPublicKey, CredPoK, CredUserPublicKey,

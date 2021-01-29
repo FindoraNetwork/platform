@@ -1,4 +1,3 @@
-#![deny(warnings)]
 //
 //  Runs a long test on the AppendOnlyMerkle tree implementation.
 //  It just inserts hashes and invokes consistency tests.
@@ -50,7 +49,7 @@ fn main() -> Result<(), std::io::Error> {
         hash: Default::default(),
     };
     let mut countdown = 256;
-    let mut range = 256 * 1024 as u64;
+    let mut range = 256 * 1024u64;
 
     if skip_checks {
         countdown = std::u64::MAX;

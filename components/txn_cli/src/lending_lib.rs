@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use crate::data_lib::*;
 use crate::txn_lib::*;
 use credentials::{

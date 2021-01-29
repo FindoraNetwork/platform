@@ -1,4 +1,4 @@
-#![deny(warnings)]
+#![allow(clippy::field_reassign_with_default)]
 #![allow(clippy::assertions_on_constants)]
 extern crate unicode_normalization;
 
@@ -1820,7 +1820,7 @@ mod tests {
         // from the standard deviation of uniform(0, 1), sqrt(1/12). The
         // expected average (mu) is 127.5 if the random number generator
         // is unbiased.
-        let uniform_stddev = 1.0 / (12.0 as f64).sqrt();
+        let uniform_stddev = 1.0 / (12.0f64).sqrt();
         let average = sum as f64 / sample_size as f64;
         let stddev = (uniform_stddev * 255.0) / (sample_size as f64).sqrt();
         println!("Average {}, stddev {}", average, stddev);
@@ -1886,16 +1886,16 @@ mod tests {
 
             for j in 0..min(i, code.val.0.len()) {
                 assert!(code.val.0[j] == value.as_bytes()[0]);
-                checked = checked + 1;
+                checked += 1;
             }
 
             for j in i..code.val.0.len() {
                 assert!(code.val.0[j] == 0);
-                checked = checked + 1;
+                checked += 1;
             }
 
             assert!(checked == code.val.0.len());
-            input = input + &value;
+            input += value;
         }
     }
 

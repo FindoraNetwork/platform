@@ -30,6 +30,7 @@ utils = { path = "../../libs/utils" }
 zei = { git = "ssh://git@github.com/FindoraNetwork/zei", branch = "fix-deps-v0.0.3-5" }
 
 hex = "0.4.2"
+wallet = { path = "../wallet" }
 protobuf = "2.15.1"
 ruc = "0.4"
 
