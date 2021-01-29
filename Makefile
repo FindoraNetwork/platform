@@ -65,8 +65,10 @@ else
 endif
 
 test:
-	cargo test --lib --workspace -- --test-threads=1 --nocapture
-	cargo test --workspace -- --test-threads=1 --nocapture
+	cargo test --lib --workspace
+	cargo test --workspace
+	# cargo test --lib --workspace -- --test-threads=1 --nocapture
+	# cargo test --workspace -- --test-threads=1 --nocapture
 
 bench:
 	cargo bench --workspace
