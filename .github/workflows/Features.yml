@@ -1,0 +1,56 @@
+name: Features
+on:
+  push:
+    branches:
+      - feature/*
+  pull_request:
+    branches:
+      - feature/*
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  build:
+    strategy:
+      matrix:
+        platform: [aws]
+    runs-on: ${{ matrix.platform }}
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        override: true
+        components: rustfmt
+    - name: check fmt
+      shell: bash
+      run: |
+        cargo fmt -- --check
+    # - name: test_status
+    #   env:
+    #     DBG: true
+    #   shell: bash
+    #   run: |
+    #     curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+    #     make test_status
+    - name: lint
+      shell: bash
+      run: |
+        make lint
+    - name: test
+      shell: bash
+      run: |
+        make test
+    # - name: Build
+    #   env:
+    #     DBG: true
+    #   shell: bash
+    #   run: |
+    #     make build
+    # - name: build release
+    #   shell: bash
+    #   run: |
+    #     make build_release
+    # - name: release
+    #   shell: bash
+    #   run: |
+    #     echo "TBD"
