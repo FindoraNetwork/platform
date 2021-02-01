@@ -370,37 +370,70 @@ fn gen_tendermint_attr(tx: &Transaction) -> RepeatedField<Event> {
 }
 
 // collect informations of inputs and outputs
+// # return: ([from ...], [to ...])
 fn gen_tendermint_attr_addr(tx: &Transaction) -> (Vec<TagAttr>, Vec<TagAttr>) {
     tx.body
         .operations
         .iter()
         .fold((vec![], vec![]), |mut base, new| {
-            if let Operation::TransferAsset(ta) = new {
-                macro_rules! append_attr {
-                    ($direction: tt, $idx: tt) => {
-                        ta.body.transfer.$direction.iter().for_each(|i| {
-                            let mut attr = TagAttr::default();
-                            attr.addr = wallet::public_key_to_bech32(&i.public_key);
-                            if let XfrAssetType::NonConfidential(ty) = i.asset_type {
-                                attr.asset_type = Some(hex::encode(&ty.0[..]));
-                            }
-                            if let XfrAmount::NonConfidential(am) = i.amount {
-                                attr.asset_amount = Some(am);
-                            }
-                            base.$idx.push(attr);
-                        });
-                    };
-                }
-                append_attr!(inputs, 0);
-                append_attr!(outputs, 1);
+            macro_rules! append_attr {
+                // trasfer\bind\release
+                ($data: expr, $direction: tt, $idx: tt) => {
+                    $data.body.transfer.$direction.iter().for_each(|i| {
+                        let mut attr = TagAttr::default();
+                        attr.addr = wallet::public_key_to_bech32(&i.public_key);
+                        if let XfrAssetType::NonConfidential(ty) = i.asset_type {
+                            attr.asset_type = Some(hex::encode(&ty.0[..]));
+                        }
+                        if let XfrAmount::NonConfidential(am) = i.amount {
+                            attr.asset_amount = Some(am);
+                        }
+                        base.$idx.push(attr);
+                    });
+                };
+                // define\issue\AIR\memo
+                ($data: expr) => {
+                    let mut attr = TagAttr::default();
+                    attr.addr = wallet::public_key_to_bech32(&$data.pubkey);
+                    base.0.push(attr);
+                };
             }
+
+            match new {
+                Operation::TransferAsset(d) => {
+                    append_attr!(d, inputs, 0);
+                    append_attr!(d, outputs, 1);
+                }
+                Operation::BindAssets(d) => {
+                    append_attr!(d, inputs, 0);
+                    append_attr!(d, outputs, 1);
+                }
+                Operation::ReleaseAssets(d) => {
+                    append_attr!(d, inputs, 0);
+                    append_attr!(d, outputs, 1);
+                }
+                Operation::DefineAsset(d) => {
+                    append_attr!(d);
+                }
+                Operation::IssueAsset(d) => {
+                    append_attr!(d);
+                }
+                Operation::AIRAssign(d) => {
+                    append_attr!(d);
+                }
+                Operation::UpdateMemo(d) => {
+                    append_attr!(d);
+                }
+                Operation::KVStoreUpdate(_) => {}
+            }
+
             base
         })
 }
 
 #[derive(Serialize, Default)]
 struct TagAttr {
-    // hex.encode(pubkey)
+    // FRA address
     addr: String,
     // hex.encode(asset_type)
     asset_type: Option<String>,

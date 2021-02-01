@@ -63,17 +63,10 @@ where
     }
 
     // Returns the set of records issued by a certain key.
-    pub fn get_issued_records(
-        &self,
-        issuer: &IssuerPublicKey,
-    ) -> Option<Vec<TxOutput>> {
+    pub fn get_issued_records(&self, issuer: &IssuerPublicKey) -> Option<Vec<TxOutput>> {
         self.issuances
             .get(issuer)
-            .map(|recs|
-                recs.iter()
-                    .map(|rec| TxOutput::clone(&*rec))
-                    .collect()
-            )
+            .map(|recs| recs.iter().map(|rec| TxOutput::clone(&*rec)).collect())
     }
 
     // Returns the set of records issued by a certain token code.
@@ -83,11 +76,7 @@ where
     ) -> Option<Vec<TxOutput>> {
         self.token_code_issuances
             .get(code)
-            .map(|recs|
-                recs.iter()
-                    .map(|rec| TxOutput::clone(&*rec))
-                    .collect()
-            )
+            .map(|recs| recs.iter().map(|rec| TxOutput::clone(&*rec)).collect())
     }
 
     pub fn get_created_assets(

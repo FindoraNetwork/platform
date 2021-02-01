@@ -34,6 +34,7 @@ use zei::xfr::structs::{
 };
 // use zei::xfr::asset_record::{AssetRecordType};
 use super::effects::*;
+use std::ops::Deref;
 
 pub const RANDOM_CODE_LENGTH: usize = 16;
 pub const TRANSACTION_WINDOW_WIDTH: usize = 128;
@@ -316,6 +317,13 @@ pub struct IssuerPublicKey {
 impl Hash for IssuerPublicKey {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.key.as_bytes().hash(state);
+    }
+}
+
+impl Deref for IssuerPublicKey {
+    type Target = XfrPublicKey;
+    fn deref(&self) -> &Self::Target {
+        &self.key
     }
 }
 
