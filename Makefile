@@ -26,6 +26,7 @@ release_subdirs = $(bin_dir) $(lib_dir)
 
 bin_files =                             \
         ./$(pick)/abci_validator_node   \
+        ./$(pick)/query_server          \
         ./$(pick)/check_merkle          \
 		./$(pick)/solvency_cli       	\
 	   	./$(pick)/txn_cli       		\
