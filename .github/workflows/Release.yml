@@ -32,6 +32,14 @@ jobs:
     #   run: |
     #     curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
     #     make test_status
+    - name: install rustwasm
+      shell: bash
+      run: |
+        curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+    - name: add go
+      shell: bash
+      run: |
+        mkdir $(pwd)/opt && cd $(pwd)/opt && wget https://golang.google.cn/dl/go1.15.7.linux-amd64.tar.gz && tar -xpf go1.15.7.linux-amd64.tar.gz && echo "$(pwd)/go/bin" >> $GITHUB_PATH
     - name: lint
       shell: bash
       run: |
