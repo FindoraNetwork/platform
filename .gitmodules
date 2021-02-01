@@ -1,0 +1,3 @@
+[submodule "tools/tendermint"]
+	path = tools/tendermint
+	url = https://gitee.com/kt10/tendermint.git

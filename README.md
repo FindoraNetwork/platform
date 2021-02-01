@@ -1,4 +1,5 @@
 # Findora Platform
+
 Top level targets: executable and plug-in components of the Findora platform
 * Application library for performing validation and maintaining a ledger
 * Binding executables/shared libraries for compatible consensus layers (e.x. Tendermint ABCI binding execuatable)
@@ -26,4 +27,40 @@ Top level targets: executable and plug-in components of the Findora platform
 | ...
 +-- <targetN>/
 
+```
+
+## build
+
+```
+$ make
+$ tree -F ./release
+
+./release
+|-- bin/
+|   |-- abci_validator_node*
+|   |-- check_merkle
+|   |-- findora
+|   |-- query_server*
+|   |-- solvency_cli
+|   |-- tendermint*
+|   `-- txn_cli
+`-- lib/
+    `-- wasm.tar.gz
+```
+
+```
+$ make build DBG=1
+$ tree -F ./debug
+
+./debug
+|-- bin/
+|   |-- abci_validator_node*
+|   |-- check_merkle
+|   |-- findora
+|   |-- query_server*
+|   |-- solvency_cli
+|   |-- tendermint*
+|   `-- txn_cli
+`-- lib/
+    `-- wasm.tar.gz
 ```

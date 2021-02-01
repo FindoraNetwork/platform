@@ -29,7 +29,7 @@ for file in $(find .. -type f \
     -o -name "rc.local"\
     | grep -v "$(basename $0)" \
     | grep -v 'target/' \
-    | grep -v 'postgres'); do
+    | grep -v '^../tools'); do
 
     perl -p -i -e 's/　/ /g' $file
     perl -p -i -e 's/！/!/g' $file
