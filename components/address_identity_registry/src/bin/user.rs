@@ -1,4 +1,3 @@
-
 mod shared;
 
 use credentials::{
