@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::error_location;
