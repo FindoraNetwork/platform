@@ -1,3 +1,4 @@
+#![deny(warnings)]
 use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
 use ledger::data_model::errors::PlatformError;
@@ -194,7 +195,7 @@ where
 fn get_issued_records<T>(
     data: web::Data<Arc<RwLock<QueryServer<T>>>>,
     info: web::Path<String>,
-) -> actix_web::Result<web::Json<Vec<TxOutput>>>
+) -> actix_web::Result<web::Json<Vec<(TxOutput, Option<OwnerMemo>)>>>
 where
     T: RestfulArchiveAccess + Sync + Send,
 {
@@ -213,7 +214,7 @@ where
 fn get_issued_records_by_code<T>(
     data: web::Data<Arc<RwLock<QueryServer<T>>>>,
     info: web::Path<String>,
-) -> actix_web::Result<web::Json<Vec<TxOutput>>>
+) -> actix_web::Result<web::Json<Vec<(TxOutput, Option<OwnerMemo>)>>>
 where
     T: RestfulArchiveAccess + Sync + Send,
 {
