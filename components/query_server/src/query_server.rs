@@ -6,6 +6,7 @@ use ledger_api_service::RestfulArchiveAccess;
 use log::{error, info};
 use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
+use std::ops::Deref;
 use std::sync::Arc;
 use zei::xfr::structs::OwnerMemo;
 
@@ -28,8 +29,9 @@ where
     related_transfers: HashMap<AssetTypeCode, HashSet<TxnSID>>, // Set of transfer transactions related to an asset code
     created_assets: HashMap<IssuerPublicKey, Vec<DefineAsset>>,
     traced_assets: HashMap<IssuerPublicKey, Vec<AssetTypeCode>>, // List of assets traced by a ledger address
-    issuances: HashMap<IssuerPublicKey, Vec<Arc<TxOutput>>>, // issuance mapped by public key
-    token_code_issuances: HashMap<AssetTypeCode, Vec<Arc<TxOutput>>>, // issuance mapped by token code
+    issuances: HashMap<IssuerPublicKey, Vec<Arc<(TxOutput, Option<OwnerMemo>)>>>, // issuance mapped by public key
+    token_code_issuances:
+        HashMap<AssetTypeCode, Vec<Arc<(TxOutput, Option<OwnerMemo>)>>>, // issuance mapped by token code
     owner_memos: HashMap<TxoSID, OwnerMemo>,
     utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
     custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
@@ -63,20 +65,23 @@ where
     }
 
     // Returns the set of records issued by a certain key.
-    pub fn get_issued_records(&self, issuer: &IssuerPublicKey) -> Option<Vec<TxOutput>> {
+    pub fn get_issued_records(
+        &self,
+        issuer: &IssuerPublicKey,
+    ) -> Option<Vec<(TxOutput, Option<OwnerMemo>)>> {
         self.issuances
             .get(issuer)
-            .map(|recs| recs.iter().map(|rec| TxOutput::clone(&*rec)).collect())
+            .map(|recs| recs.iter().map(|rec| rec.deref().clone()).collect())
     }
 
     // Returns the set of records issued by a certain token code.
     pub fn get_issued_records_by_code(
         &self,
         code: &AssetTypeCode,
-    ) -> Option<Vec<TxOutput>> {
+    ) -> Option<Vec<(TxOutput, Option<OwnerMemo>)>> {
         self.token_code_issuances
             .get(code)
-            .map(|recs| recs.iter().map(|rec| TxOutput::clone(&*rec)).collect())
+            .map(|recs| recs.iter().map(|rec| rec.deref().clone()).collect())
     }
 
     pub fn get_created_assets(
@@ -186,11 +191,11 @@ where
 
     // Cache issuance records
     pub fn cache_issuance(&mut self, issuance: &IssueAsset) {
-        let new_records: Vec<Arc<TxOutput>> = issuance
+        let new_records: Vec<Arc<(TxOutput, Option<OwnerMemo>)>> = issuance
             .body
             .records
             .iter()
-            .map(|(rec, _)| Arc::new(rec.clone()))
+            .map(|rec| Arc::new(rec.clone()))
             .collect();
 
         macro_rules! save_issuance {
@@ -757,6 +762,9 @@ mod tests {
                 key: alice.get_pk().clone(),
             })
             .unwrap();
+        let token_records = query_server
+            .get_issued_records_by_code(&token_code)
+            .unwrap();
         let alice_related_txns = query_server
             .get_related_transactions(&XfrAddress {
                 key: *alice.get_pk_ref(),
@@ -764,6 +772,7 @@ mod tests {
             .unwrap();
 
         assert!(issuer_records.len() == 3);
+        assert!(token_records.len() == 3);
         assert!(!alice_sids.contains(&TxoSID(0)));
         assert!(alice_related_txns.contains(&TxnSID(0)));
         assert!(bob_sids.contains(&TxoSID(3)));
