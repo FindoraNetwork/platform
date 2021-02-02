@@ -8,7 +8,7 @@ abcis=`pgrep -f abci_validator_node`
 if ! [ -z "$abcis" ]
 then
     echo -n "killed abci: "
-	for pid in $abcis
+    for pid in $abcis
     do
         kill -9 $pid
         echo -en "${RED}$pid${NC} "
