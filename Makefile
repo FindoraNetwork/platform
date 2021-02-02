@@ -24,20 +24,17 @@ lib_dir         = lib
 pick            = target/$(target_dir)
 release_subdirs = $(bin_dir) $(lib_dir)
 
-bin_files =                             \
-        ./$(pick)/abci_validator_node   \
-        ./$(pick)/query_server          \
-        ./$(pick)/check_merkle          \
-		./$(pick)/solvency_cli       	\
-	   	./$(pick)/txn_cli       		\
+bin_files = \
+		./$(pick)/abci_validator_node \
+		./$(pick)/query_server \
+		./$(pick)/check_merkle \
+		./$(pick)/solvency_cli \
+		./$(pick)/txn_cli \
+		./$(pick)/findora \
+		$(shell go env GOPATH)/bin/tendermint
 
-lib_files =                                    \
-        ./$(pick)/libledger.rlib               \
-        ./$(pick)/libledger_api_service.rlib   \
-		./$(pick)/libsolvency.rlib       	   \
-        ./$(pick)/libtxn_builder.rlib          \
-		./$(pick)/libtxn_cli.rlib              \
-		./$(pick)/libwhitelist.rlib            \
+WASM_PKG = wasm.tar.gz
+lib_files = ./$(WASM_PKG)
 
 define pack
 	-@ rm -rf $(target_dir)
@@ -47,21 +44,21 @@ define pack
 	cp $(lib_files) $(target_dir)/$(lib_dir)
 endef
 
-build:
+build: tendermint wasm
 ifdef DBG
-	cargo build
+	cargo build --workspace --exclude wasm --exclude http_tester --exclude log_tester
 	$(call pack,$(target_dir))
 else
 	@ echo -e "\x1b[31;01m\$$(DBG) must be defined !\x1b[00m"
 	@ exit 1
 endif
 
-build_release:
+build_release: tendermint wasm
 ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
 else
-	cargo build --release
+	cargo build --release --workspace --exclude wasm --exclude http_tester --exclude log_tester
 	$(call pack,$(target_dir))
 endif
 
@@ -88,6 +85,14 @@ fmt:
 clean:
 	@ cargo clean
 	@ rm -rf debug release Cargo.lock
+
+tendermint:
+	git submodule update --init --recursive
+	cd tools/tendermint && make install
+
+wasm:
+	cd components/wasm && wasm-pack build
+	tar -zcpf $(WASM_PKG) components/wasm/pkg
 
 single:
 	@./scripts/devnet/stopnodes.sh
