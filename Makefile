@@ -86,11 +86,6 @@ clean:
 	@ cargo clean
 	@ rm -rf debug release Cargo.lock
 
-reset:
-	@./scripts/stopnodes.sh
-	@./scripts/resetnodes.sh
-	@./scripts/startnodes.sh
-
 tendermint:
 	git submodule update --init --recursive
 	cd tools/tendermint && make install
@@ -98,3 +93,13 @@ tendermint:
 wasm:
 	cd components/wasm && wasm-pack build
 	tar -zcpf $(WASM_PKG) components/wasm/pkg
+
+single:
+	@./scripts/devnet/stopnodes.sh
+	@./scripts/devnet/resetsingle.sh
+	@./scripts/devnet/startsingle.sh
+
+devnet:
+	@./scripts/devnet/stopnodes.sh
+	@./scripts/devnet/resetnodes.sh
+	@./scripts/devnet/startnodes.sh
