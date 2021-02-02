@@ -46,8 +46,8 @@ curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 cd /opt && \
     sudo wget https://golang.google.cn/dl/go1.15.7.linux-amd64.tar.gz && \
     sudo tar -xpf go1.15.7.linux-amd64.tar.gz && \
-    echo "PATH=/opt/go/bin:$PATH" >> ~/.bashrc && \
-    source ~/.bashrc
+    echo "export PATH=/opt/go/bin:$PATH" >> /etc/profile && \
+    source /etc/profile
 
 # install system-deps
 sudo apt install libc-dev libssl-dev make git curl wget
