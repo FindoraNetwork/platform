@@ -311,8 +311,7 @@ fn gen_tendermint_attr(tx: &Transaction) -> RepeatedField<Event> {
 
     let (from, to) = gen_tendermint_attr_addr(tx);
 
-    // `from` maybe empty, but `to` must be **NOT**
-    if !to.is_empty() {
+    if !from.is_empty() || !to.is_empty() {
         let mut ev = Event::new();
         ev.set_field_type("addr".to_owned());
 
