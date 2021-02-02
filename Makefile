@@ -87,7 +87,12 @@ clean:
 	@ rm -rf debug release Cargo.lock
 
 tendermint:
-	git submodule update --init --recursive
+	if [ -d ".git" ]; then \
+		git submodule update --init --recursive; \
+	else \
+		if [ -d "tools/tendermint" ]; then rm -rf tools/tendermint; fi; \
+		git clone -b v0.33.5 --depth=1 https://gitee.com/kt10/tendermint.git tools/tendermint; \
+	fi
 	cd tools/tendermint && make install
 
 wasm:
