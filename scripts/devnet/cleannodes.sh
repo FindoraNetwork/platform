@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-RED='\e[31m'
-GRN="\e[32m"
+RED='\033[31m'
+GRN="\033[32m"
 NC='\033[0m'
 
 # paths

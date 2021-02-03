@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-RED='\e[31m'
-GRN="\e[32m"
+RED='\033[31m'
+GRN="\033[32m"
 NC='\033[0m'
 
 # paths
@@ -30,7 +30,7 @@ done
 # config nodes and abcis
 script_config=$(dirname "$0")/confignodes.py
 echo -n "setting $(($V+$N)) nodes: "
-python $script_config
+python3 $script_config
 if [ $? -ne 0 ]; then
     echo -en "${RED}failed${NC}"
 else
