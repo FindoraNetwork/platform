@@ -19,9 +19,14 @@ macro_rules! fail {
     };
 }
 
-pub struct QueryServer<T>
+pub trait MetricsRenderer {
+    fn rendered(&self) -> String;
+}
+
+pub struct QueryServer<T, U>
 where
     T: RestfulArchiveAccess,
+    U: MetricsRenderer
 {
     committed_state: LedgerState,
     addresses_to_utxos: HashMap<XfrAddress, HashSet<TxoSID>>,
@@ -36,13 +41,15 @@ where
     utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
     custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
     rest_client: T,
+    metrics_renderer: U
 }
 
-impl<T> QueryServer<T>
+impl<T, U> QueryServer<T, U>
 where
     T: RestfulArchiveAccess,
+    U: MetricsRenderer
 {
-    pub fn new(rest_client: T) -> QueryServer<T> {
+    pub fn new(rest_client: T, metrics_renderer: U) -> QueryServer<T, U> {
         QueryServer {
             committed_state: LedgerState::test_ledger(),
             addresses_to_utxos: HashMap::new(),
@@ -56,7 +63,12 @@ where
             utxos_to_map_index: HashMap::new(),
             custom_data_store: HashMap::new(),
             rest_client,
+            metrics_renderer
         }
+    }
+
+    pub fn render(&self) -> String {
+        self.metrics_renderer.rendered()
     }
 
     // Fetch custom data at a given key.

@@ -1,5 +1,7 @@
 use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
+use actix_service::Service;
+use futures::Future;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
     b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, KVBlind, KVHash, TxOutput,
@@ -8,16 +10,20 @@ use ledger::data_model::{
 use ledger::{error_location, inp_fail, ser_fail};
 use ledger_api_service::RestfulArchiveAccess;
 use log::info;
-use query_server::QueryServer;
+use metrics::{Unit, KeyData, Key as MetricsKey, IntoF64, Recorder};
+use query_server::{QueryServer, MetricsRenderer};
 use sparse_merkle_tree::Key;
 use std::collections::HashSet;
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
+use std::time::Instant;
 use utils::{actix_get_request, actix_post_request, NetworkRoute};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::OwnerMemo;
+use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
+use std::ops::Deref;
 
 /// Returns the git commit hash and commit date of this build
 fn version() -> actix_web::Result<String> {
@@ -32,12 +38,13 @@ fn version() -> actix_web::Result<String> {
 
 // Queries the status of a transaction by its handle. Returns either a not committed message or a
 // serialized TxnStatus.
-fn get_address<T>(
-    data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+fn get_address<T, U>(
+    data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<u64>,
 ) -> Result<String, actix_web::error::Error>
 where
     T: RestfulArchiveAccess,
+    U: MetricsRenderer
 {
     let query_server = data.read().unwrap();
     let address_res = query_server.get_address_of_sid(TxoSID(*info));
@@ -53,12 +60,13 @@ where
 type CustomDataResult = (Vec<u8>, KVHash);
 
 // Returns custom data at a given location
-fn get_custom_data<T>(
-    data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+fn get_custom_data<T, U>(
+    data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Option<CustomDataResult>>, actix_web::error::Error>
 where
     T: RestfulArchiveAccess,
+    U: MetricsRenderer
 {
     let query_server = data.read().unwrap();
     let key = Key::from_base64(&*info)
@@ -67,12 +75,13 @@ where
 }
 
 // Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
-fn get_owner_memo<T>(
-    data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+fn get_owner_memo<T, U>(
+    data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<u64>,
 ) -> actix_web::Result<web::Json<Option<OwnerMemo>>, actix_web::error::Error>
 where
     T: RestfulArchiveAccess,
+    U: MetricsRenderer
 {
     let query_server = data.read().unwrap();
     Ok(web::Json(
@@ -82,12 +91,13 @@ where
 
 // Submits custom data to be stored by the query server. The request will fail if the hash of the
 // data doesn't match the commitment stored by the ledger.
-fn store_custom_data<T>(
-    data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+fn store_custom_data<T, U>(
+    data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     body: web::Json<(String, Vec<u8>, Option<KVBlind>)>,
 ) -> actix_web::Result<(), actix_web::error::Error>
 where
     T: RestfulArchiveAccess + Sync + Send,
+    U: MetricsRenderer
 {
     let (key, custom_data, blind) = body.into_inner();
     let key = Key::from_base64(&key)
@@ -99,12 +109,13 @@ where
     Ok(())
 }
 // Returns an array of the utxo sids currently spendable by a given address
-fn get_owned_utxos<T>(
-    data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+fn get_owned_utxos<T, U>(
+    data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxoSID>>>
 where
     T: RestfulArchiveAccess + Sync + Send,
+    U: MetricsRenderer
 {
     // Convert from basee64 representation
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
@@ -115,6 +126,20 @@ where
     let query_server = data.read().unwrap();
     let sids = query_server.get_owned_utxo_sids(&XfrAddress { key });
     Ok(web::Json(sids.cloned().unwrap_or_default()))
+}
+
+// Returns rendered metrics
+fn get_metrics<T, U>(
+    data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
+    info: web::Path<()>,
+) -> actix_web::Result<String>
+    where
+        T: RestfulArchiveAccess + Sync + Send,
+        U: MetricsRenderer
+{
+    let query_server= data.read().unwrap();
+
+    Ok(query_server.render())
 }
 
 pub enum QueryServerRoutes {
@@ -153,12 +178,13 @@ impl NetworkRoute for QueryServerRoutes {
 }
 
 // Returns the list of assets created by a public key
-fn get_created_assets<T>(
-    data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+fn get_created_assets<T, U>(
+    data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<DefineAsset>>>
 where
     T: RestfulArchiveAccess + Sync + Send,
+    U: MetricsRenderer
 {
     // Convert from base64 representation
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
@@ -172,12 +198,13 @@ where
 }
 
 // Returns the list of assets traced by a public key
-fn get_traced_assets<T>(
-    data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+fn get_traced_assets<T, U>(
+    data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<AssetTypeCode>>>
 where
     T: RestfulArchiveAccess + Sync + Send,
+    U: MetricsRenderer
 {
     // Convert from base64 representation
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
@@ -191,12 +218,13 @@ where
 }
 
 // Returns the list of records issued by a public key
-fn get_issued_records<T>(
-    data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+fn get_issued_records<T, U>(
+    data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<(TxOutput, Option<OwnerMemo>)>>>
 where
     T: RestfulArchiveAccess + Sync + Send,
+    U: MetricsRenderer
 {
     // Convert from base64 representation
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
@@ -210,12 +238,13 @@ where
 }
 
 // Returns the list of records issued by a token code
-fn get_issued_records_by_code<T>(
-    data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+fn get_issued_records_by_code<T, U>(
+    data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<(TxOutput, Option<OwnerMemo>)>>>
 where
     T: RestfulArchiveAccess + Sync + Send,
+    U: MetricsRenderer
 {
     let query_server = data.read().unwrap();
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
@@ -234,12 +263,13 @@ where
 }
 
 // Returns the list of transations associated with a given ledger address
-fn get_related_txns<T>(
-    data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+fn get_related_txns<T, U>(
+    data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxnSID>>>
 where
     T: RestfulArchiveAccess + Sync + Send,
+    U: MetricsRenderer
 {
     // Convert from base64 representation
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
@@ -253,12 +283,13 @@ where
 }
 
 // Returns the list of transfer transations associated with a given asset
-fn get_related_xfrs<T>(
-    data: web::Data<Arc<RwLock<QueryServer<T>>>>,
+fn get_related_xfrs<T, U>(
+    data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxnSID>>>
 where
     T: RestfulArchiveAccess + Sync + Send,
+    U: MetricsRenderer
 {
     let query_server = data.read().unwrap();
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
@@ -281,13 +312,14 @@ pub struct QueryApi {
 }
 
 impl QueryApi {
-    pub fn create<T>(
-        query_server: Arc<RwLock<QueryServer<T>>>,
+    pub fn create<T, U>(
+        query_server: Arc<RwLock<QueryServer<T, U>>>,
         host: &str,
         port: &str,
     ) -> io::Result<QueryApi>
     where
         T: 'static + RestfulArchiveAccess + Sync + Send,
+        U: 'static + MetricsRenderer + Sync + Send
     {
         let web_runtime = actix_rt::System::new("findora API");
 
@@ -296,52 +328,74 @@ impl QueryApi {
                 .wrap(middleware::Logger::default())
                 .wrap(Cors::new().supports_credentials())
                 .data(query_server.clone())
+                .wrap_fn(|req, srv| {
+                    let start = Instant::now();
+                    srv.call(req).map(move |res| {
+                        // TODO: parse req and get route name for key_data to be req specific
+                        let recorder = metrics::recorder();
+                        let duration = start.elapsed();
+                        let key_data = KeyData::from_name("query.histogram");
+                        let key = MetricsKey::from(key_data);
+                        recorder.record_histogram(key, duration.into_f64());
+
+                        // let h = handle.render();
+                        // let h: PrometheusHandle = recorder.into();
+                        // println!("{}", handle.render());
+
+                        // println!("{}", handle.render());
+                        println!("{}", duration.as_micros());
+                        // println!("{}", h);
+
+                        res
+                    })
+                })
                 .route(
                     &QueryServerRoutes::GetAddress.with_arg_template("txo_sid"),
-                    web::get().to(get_address::<T>),
+                    web::get().to(get_address::<T, U>),
                 )
                 .route(
                     &QueryServerRoutes::GetOwnedUtxos.with_arg_template("address"),
-                    web::get().to(get_owned_utxos::<T>),
+                    web::get().to(get_owned_utxos::<T, U>),
                 )
                 .route(
                     &QueryServerRoutes::GetOwnerMemo.with_arg_template("txo_sid"),
-                    web::get().to(get_owner_memo::<T>),
+                    web::get().to(get_owner_memo::<T, U>),
                 )
                 .route(
                     &QueryServerRoutes::GetRelatedTxns.with_arg_template("address"),
-                    web::get().to(get_related_txns::<T>),
+                    web::get().to(get_related_txns::<T, U>),
                 )
                 .route(
                     &QueryServerRoutes::GetRelatedXfrs.with_arg_template("asset_token"),
-                    web::get().to(get_related_xfrs::<T>),
+                    web::get().to(get_related_xfrs::<T, U>),
                 )
                 .route(
                     &QueryServerRoutes::GetCreatedAssets.with_arg_template("address"),
-                    web::get().to(get_created_assets::<T>),
+                    web::get().to(get_created_assets::<T, U>),
                 )
                 .route(
                     &QueryServerRoutes::GetTracedAssets.with_arg_template("address"),
-                    web::get().to(get_traced_assets::<T>),
+                    web::get().to(get_traced_assets::<T, U>),
                 )
                 .route(
                     &QueryServerRoutes::GetIssuedRecords.with_arg_template("address"),
-                    web::get().to(get_issued_records::<T>),
+                    web::get().to(get_issued_records::<T, U>),
                 )
                 .route(
                     &QueryServerRoutes::GetIssuedRecordsByCode
                         .with_arg_template("asset_token"),
-                    web::get().to(get_issued_records_by_code::<T>),
+                    web::get().to(get_issued_records_by_code::<T, U>),
                 )
                 .route(
                     &QueryServerRoutes::StoreCustomData.route(),
-                    web::post().to(store_custom_data::<T>),
+                    web::post().to(store_custom_data::<T, U>),
                 )
                 .route(
                     &QueryServerRoutes::GetCustomData.with_arg_template("key"),
-                    web::get().to(get_custom_data::<T>),
+                    web::get().to(get_custom_data::<T, U>),
                 )
                 .route(&QueryServerRoutes::Version.route(), web::get().to(version))
+                .route(&String::from("/metrics"), web::get().to(get_metrics::<T, U>))
         })
         .bind(&format!("{}:{}", host, port))?
         .start();
