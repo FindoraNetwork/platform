@@ -10,7 +10,7 @@ use ledger::data_model::{
 use ledger::{error_location, inp_fail, ser_fail};
 use ledger_api_service::RestfulArchiveAccess;
 use log::info;
-use metrics::{Unit, KeyData, Key as MetricsKey, IntoF64, Recorder};
+use metrics::{KeyData, Key as MetricsKey};
 use query_server::QueryServer;
 use sparse_merkle_tree::Key;
 use std::collections::HashSet;
@@ -22,8 +22,6 @@ use utils::{actix_get_request, actix_post_request, NetworkRoute, MetricsRenderer
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::OwnerMemo;
-use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
-use std::ops::Deref;
 
 /// Returns the git commit hash and commit date of this build
 fn version() -> actix_web::Result<String> {
@@ -131,14 +129,13 @@ where
 // Returns rendered metrics
 fn get_metrics<T, U>(
     data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
-    info: web::Path<()>,
+    _info: web::Path<()>,
 ) -> actix_web::Result<String>
     where
         T: RestfulArchiveAccess + Sync + Send,
         U: MetricsRenderer
 {
     let query_server= data.read().unwrap();
-
     Ok(query_server.render())
 }
 
@@ -332,12 +329,12 @@ impl QueryApi {
                     let start = Instant::now();
                     srv.call(req).map(move |res| {
                         // TODO: parse req and get route name for key_data to be req specific
-                        let recorder = metrics::recorder();
+                        // let metric_name = [String::from("query"), &req.path()[1..].to_string()].join(".");
+                        // let route_name = &req.path()[1..];
                         let duration = start.elapsed();
                         let key_data = KeyData::from_name("query.histogram");
                         let key = MetricsKey::from(key_data);
-                        recorder.record_histogram(key, duration.into_f64());
-
+                        metrics::recorder().record_histogram(key, duration.as_millis() as f64);
                         res
                     })
                 })

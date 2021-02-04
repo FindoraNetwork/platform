@@ -59,8 +59,9 @@ fn main() {
     let handle = PromHandle::new(recorder.handle());
 
     // Register recorder
-    metrics::set_boxed_recorder(Box::new(recorder));
+    let _ = metrics::set_boxed_recorder(Box::new(recorder));
 
+    // Create query api
     let query_server = QueryServer::new(rest_client, handle);
     let wrapped_server = Arc::new(RwLock::new(query_server));
     let query_api = QueryApi::create(
