@@ -451,6 +451,11 @@ impl AssetRules {
         self.transfer_multisig_rules = multisig_rules;
         self
     }
+
+    pub fn set_decimals(&mut self, decimals: u8) -> &mut Self {
+        self.decimals = decimals;
+        self
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
