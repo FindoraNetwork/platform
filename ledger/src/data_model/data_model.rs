@@ -452,6 +452,7 @@ impl AssetRules {
         self
     }
 
+    #[inline(always)]
     pub fn set_decimals(&mut self, decimals: u8) -> &mut Self {
         self.decimals = decimals;
         self
