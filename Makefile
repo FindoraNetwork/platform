@@ -106,5 +106,9 @@ single:
 
 devnet:
 	@./scripts/devnet/stopnodes.sh
-	@./scripts/devnet/resetnodes.sh
+	@./scripts/devnet/resetnodes.sh 3 1
 	@./scripts/devnet/startnodes.sh
+
+####@./scripts/devnet/snapshot.sh <user_nick> <password> <token_name> <max_units> <genesis_issuance> <memo> <memo_updatable>
+snapshot:
+	@./scripts/devnet/snapshot.sh Findora my_pass FRA 21210000000000000 21000000000000000 my_memo Y

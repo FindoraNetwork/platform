@@ -1136,10 +1136,17 @@ pub fn define_asset<S: CliDataStore>(
             Err(PlatformError::IoError(err_msg))
         }
         Some(kp) => {
+            let mut asset_rules: AssetRules = Default::default();
+            let max_units = prompt::<u64, _>("max units? (default=unlimited)").unwrap();
+            if max_units > 0 {
+                asset_rules.set_max_units(Some(max_units));
+            }
+            let updatable = prompt_default("memo updatable?", false).unwrap();
+            asset_rules.set_updatable(updatable);
             new_builder.builder.add_operation_create_asset(
                 &kp,
                 None,
-                Default::default(),
+                asset_rules,
                 &prompt::<String, _>("memo?").map_err(|_| {
                     PlatformError::IoError(String::from(
                         "It was not possible to read the memo.",

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-RED='\e[31m'
-GRN="\e[32m"
+RED='\033[31m'
+GRN="\033[32m"
 NC='\033[0m'
 
 # paths
@@ -25,6 +25,8 @@ for node in $nodes
 do
     echo -n "$node: "
     abci=`pgrep -f "abci_validator_node $DEVNET/$node" | tr "\n" " " | xargs echo -n`
+    echo -en "abci(${GRN}$abci${NC}) <---> "
+    sleep 1
     node=`pgrep -f "tendermint node --home $DEVNET/$node.*" | tr "\n" " " | xargs echo -n`
-    echo -e "${GRN}abci($abci) <---> node($node)${NC}"
+    echo -e "node(${GRN}$node${NC})"
 done
