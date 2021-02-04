@@ -25,8 +25,8 @@ for node in $nodes
 do
     echo -n "$node: "
     abci=`pgrep -f "abci_validator_node $DEVNET/$node" | tr "\n" " " | xargs echo -n`
-    echo -en "${GRN}abci($abci) <---> "
+    echo -en "abci(${GRN}$abci${NC}) <---> "
     sleep 1
     node=`pgrep -f "tendermint node --home $DEVNET/$node.*" | tr "\n" " " | xargs echo -n`
-    echo -e "node($node)${NC}"
+    echo -e "node(${GRN}$node${NC})"
 done

@@ -11,7 +11,7 @@ then
     for pid in $abcis
     do
         kill -9 $pid
-        echo -en "${RED}$pid${NC} "
+        echo -en "$pid "
     done
     echo
 fi
@@ -24,7 +24,7 @@ then
     for pid in $nodes
     do
         kill -9 $pid
-        echo -en "${RED}$pid${NC} "
+        echo -en "$pid "
     done
     echo
 fi

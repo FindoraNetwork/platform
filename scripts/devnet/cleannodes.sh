@@ -16,7 +16,7 @@ echo -n "cleaned: "
 for node in $nodes
 do
 
-echo -en "${GRN}$node ${NC}"
+echo -en "$node "
 # abcis
 rm -rf $DEVNET/$node/abci/utxo_map
 rm -rf $DEVNET/$node/abci/txn_merkle
