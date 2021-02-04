@@ -498,6 +498,24 @@ pub trait NetworkRoute {
     }
 }
 
+pub trait MetricsRenderer {
+    fn rendered(&self) -> String;
+}
+
+pub struct MockMetricsRenderer;
+
+impl MockMetricsRenderer {
+    pub fn new() -> Self {
+        MockMetricsRenderer{}
+    }
+}
+
+impl MetricsRenderer for MockMetricsRenderer {
+    fn rendered(&self) -> String {
+        String::from("rendered")
+    }
+}
+
 #[cfg(feature = "TESTING")]
 #[allow(non_snake_case)]
 pub fn TESTING_get_project_root() -> PathBuf {

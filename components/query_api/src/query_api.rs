@@ -11,14 +11,14 @@ use ledger::{error_location, inp_fail, ser_fail};
 use ledger_api_service::RestfulArchiveAccess;
 use log::info;
 use metrics::{Unit, KeyData, Key as MetricsKey, IntoF64, Recorder};
-use query_server::{QueryServer, MetricsRenderer};
+use query_server::QueryServer;
 use sparse_merkle_tree::Key;
 use std::collections::HashSet;
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
-use utils::{actix_get_request, actix_post_request, NetworkRoute};
+use utils::{actix_get_request, actix_post_request, NetworkRoute, MetricsRenderer};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::OwnerMemo;
@@ -337,14 +337,6 @@ impl QueryApi {
                         let key_data = KeyData::from_name("query.histogram");
                         let key = MetricsKey::from(key_data);
                         recorder.record_histogram(key, duration.into_f64());
-
-                        // let h = handle.render();
-                        // let h: PrometheusHandle = recorder.into();
-                        // println!("{}", handle.render());
-
-                        // println!("{}", handle.render());
-                        println!("{}", duration.as_micros());
-                        // println!("{}", h);
 
                         res
                     })

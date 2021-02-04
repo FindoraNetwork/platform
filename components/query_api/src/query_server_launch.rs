@@ -2,13 +2,13 @@ use ledger_api_service::ActixLedgerClient;
 use log::{error, info};
 use query_api::QueryApi;
 use query_server::QueryServer;
-use query_server::MetricsRenderer;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time;
 use metrics_exporter_prometheus;
 use metrics_exporter_prometheus::PrometheusHandle;
+use utils::MetricsRenderer;
 
 pub struct PromHandle(metrics_exporter_prometheus::PrometheusHandle);
 
@@ -19,7 +19,7 @@ impl PromHandle {
     }
 }
 
-impl query_server::MetricsRenderer for PromHandle {
+impl MetricsRenderer for PromHandle {
     fn rendered(&self) -> String {
         self.0.render()
     }
