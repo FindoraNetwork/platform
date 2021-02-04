@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-RED='\e[31m'
-GRN="\e[32m"
+RED='\033[31m'
+GRN="\033[32m"
 NC='\033[0m'
 
 # paths
@@ -18,4 +18,4 @@ tendermint node --home $SINGLE >> $SINGLE/consensus.log 2>&1  &
 # show pids
 abci=`pgrep -f abci_validator_node | tr "\n" " " | xargs echo -n`
 node=`pgrep -f "tendermint node --home.*" | tr "\n" " " | xargs echo -n`
-echo -e "${GRN}abci($abci) <---> node($node)${NC}"
+echo -e "abci(${GRN}$abci${NC}) <---> node(${GRN}$node${NC})"

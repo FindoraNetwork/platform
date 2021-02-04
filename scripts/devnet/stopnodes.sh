@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-RED='\e[31m'
-GRN="\e[32m"
+RED='\033[31m'
+GRN="\033[32m"
 NC='\033[0m'
 
 # stop all abci nodes
@@ -11,7 +11,7 @@ then
     for pid in $abcis
     do
         kill -9 $pid
-        echo -en "${RED}$pid${NC} "
+        echo -en "$pid "
     done
     echo
 fi
@@ -24,7 +24,7 @@ then
     for pid in $nodes
     do
         kill -9 $pid
-        echo -en "${RED}$pid${NC} "
+        echo -en "$pid "
     done
     echo
 fi
