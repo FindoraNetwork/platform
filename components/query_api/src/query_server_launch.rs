@@ -14,8 +14,7 @@ pub struct PromHandle(metrics_exporter_prometheus::PrometheusHandle);
 
 impl PromHandle {
     pub fn new(h: PrometheusHandle) -> PromHandle {
-        let p = PromHandle(h);
-        p
+        PromHandle(h)
     }
 }
 

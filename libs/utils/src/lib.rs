@@ -510,6 +510,12 @@ impl MockMetricsRenderer {
     }
 }
 
+impl Default for MockMetricsRenderer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MetricsRenderer for MockMetricsRenderer {
     fn rendered(&self) -> String {
         String::from("rendered")
