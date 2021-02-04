@@ -1,3 +1,5 @@
+#![feature(str_split_as_str)]
+
 use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
 use actix_service::Service;
@@ -327,14 +329,18 @@ impl QueryApi {
                 .data(query_server.clone())
                 .wrap_fn(|req, srv| {
                     let start = Instant::now();
+
+                    // Get route name without url params
+                    let split: Vec<_> = req.path().split('/').collect();
+                    let metric_name = format!("{}_{}", "query", &split[1]);
+
                     srv.call(req).map(move |res| {
-                        // TODO: parse req and get route name for key_data to be req specific
-                        // let metric_name = [String::from("query"), &req.path()[1..].to_string()].join(".");
-                        // let route_name = &req.path()[1..];
-                        let duration = start.elapsed();
-                        let key_data = KeyData::from_name("query.histogram");
+                        let key_data = KeyData::from_name(metric_name);
                         let key = MetricsKey::from(key_data);
+
+                        let duration = start.elapsed();
                         metrics::recorder().record_histogram(key, duration.as_millis() as f64);
+
                         res
                     })
                 })
