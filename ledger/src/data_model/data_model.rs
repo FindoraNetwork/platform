@@ -408,6 +408,7 @@ pub struct AssetRules {
     #[serde(skip_serializing_if = "is_default")]
     pub tracing_policies: AssetTracingPolicies,
     pub max_units: Option<u64>,
+    pub decimals: u8,
 }
 impl Default for AssetRules {
     fn default() -> Self {
@@ -417,6 +418,7 @@ impl Default for AssetRules {
             updatable: false,
             max_units: None,
             transfer_multisig_rules: None,
+            decimals: 0,
         }
     }
 }
