@@ -9,7 +9,7 @@ use ledger::data_model::{
     AuthenticatedAIRResult as PlatformAuthenticatedAIRResult, AuthenticatedUtxo,
     KVBlind as PlatformKVBlind, KVHash as PlatformKVHash,
     SignatureRules as PlatformSignatureRules, TxOutput, TxoRef as PlatformTxoRef,
-    TxoSID, MAX_DECIMALS_LENGTH,
+    TxoSID,
 };
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
@@ -682,14 +682,14 @@ impl AssetRules {
     /// Adds an asset tracing policy.
     /// @param {TracingPolicy} policy - Tracing policy for the new asset.
     pub fn add_tracing_policy(mut self, policy: &TracingPolicy) -> AssetRules {
-        self.rules.tracing_policies.add(policy.get_ref().clone());
+        self.rules.add_tracing_policy(policy.get_ref().clone());
         self
     }
 
     /// Set a cap on the number of units of this asset that can be issued.
     /// @param {BigInt} max_units - Maximum number of units that can be issued.
     pub fn set_max_units(mut self, max_units: u64) -> AssetRules {
-        self.rules.max_units = Some(max_units);
+        self.rules.set_max_units(Some(max_units));
         self
     }
 
@@ -697,7 +697,7 @@ impl AssetRules {
     /// issuer.
     /// @param {boolean} transferable - Boolean indicating whether asset can be transferred.
     pub fn set_transferable(mut self, transferable: bool) -> AssetRules {
-        self.rules.transferable = transferable;
+        self.rules.set_transferable(transferable);
         self
     }
 
@@ -706,7 +706,7 @@ impl AssetRules {
     /// @see {@link module:Findora-Wasm~TransactionBuilder#add_operation_update_memo|add_operation_update_memo} for more information about how to add
     /// a memo update operation to a transaction.
     pub fn set_updatable(mut self, updatable: bool) -> AssetRules {
-        self.rules.updatable = updatable;
+        self.rules.set_updatable(updatable);
         self
     }
 
@@ -717,7 +717,8 @@ impl AssetRules {
         mut self,
         multisig_rules: SignatureRules,
     ) -> AssetRules {
-        self.rules.transfer_multisig_rules = Some(multisig_rules.sig_rules);
+        self.rules
+            .set_transfer_multisig_rules(Some(multisig_rules.sig_rules));
         self
     }
 
@@ -725,11 +726,7 @@ impl AssetRules {
     /// #param {Number} decimals - The number of decimals used to set its user representation.
     /// Decimals should be 0 ~ 255.
     pub fn set_decimals(mut self, decimals: u8) -> AssetRules {
-        assert!(
-            decimals <= MAX_DECIMALS_LENGTH,
-            "asset decimals should be less than 20"
-        );
-        self.rules.decimals = decimals;
+        self.rules.set_decimals(decimals);
         self
     }
 }
