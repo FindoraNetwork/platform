@@ -720,6 +720,14 @@ impl AssetRules {
         self.rules.transfer_multisig_rules = Some(multisig_rules.sig_rules);
         self
     }
+
+    /// The decimal number of asset.
+    /// #param {Number} decimals - The number of decimals used to set its user representation.
+    /// Decimals should be 0 ~ 255.
+    pub fn set_decimals(mut self, decimals: u8) -> AssetRules {
+        self.rules.decimals = decimals;
+        self
+    }
 }
 
 #[wasm_bindgen]
