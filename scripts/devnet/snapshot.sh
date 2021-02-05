@@ -83,7 +83,7 @@ echo
 echo -e "${GRN}step-6: restart mainnet---------------------------------------------${NC}"
 ./$cleannodes
 ./$startnodes
-sleep 5
+sleep 1
 echo
 
 # submit genesis transaction

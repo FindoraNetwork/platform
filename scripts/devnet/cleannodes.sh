@@ -11,7 +11,7 @@ script_stop=$(dirname "$0")/stopnodes.sh
 bash "$script_stop"
 
 # clean nodes
-nodes=`ls -l $DEVNET | grep node | awk '(NR>0){print $9}'`
+nodes=`ls -l $DEVNET | grep node | awk '(NR>0){print $9}' | sort -V`
 echo -n "cleaned: "
 for node in $nodes
 do

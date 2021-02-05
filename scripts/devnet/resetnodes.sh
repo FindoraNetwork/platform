@@ -21,7 +21,7 @@ rm -rf $DEVNET/*
 tendermint testnet --v $V --n $N --o $DEVNET > /dev/null
 
 # create abci dirs
-nodes=`ls -l $DEVNET | grep node  | awk '(NR>0){print $9}'`
+nodes=`ls -l $DEVNET | grep node  | awk '(NR>0){print $9}' | sort -V`
 for node in $nodes
 do
     mkdir -p $DEVNET/$node/abci
