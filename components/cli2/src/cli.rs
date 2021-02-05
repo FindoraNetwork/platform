@@ -562,6 +562,9 @@ enum Actions {
         issuer_nick: String,
         /// Name for the asset type
         asset_nick: String,
+        /// When define FRA, set this field to true
+        #[structopt(long)]
+        is_fra: bool,
     },
 
     /// Issue an asset in a single step
@@ -616,6 +619,9 @@ enum Actions {
         issuer_nick: String,
         /// Name for the asset type
         asset_nick: String,
+        /// When define FRA, set this field to true
+        #[structopt(long)]
+        is_fra: bool,
     },
 
     /// Create a transaction part corresponding to the issuance of an asset
@@ -788,7 +794,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
         SimpleDefineAsset {
             issuer_nick,
             asset_nick,
-        } => simple_define_asset(store, issuer_nick, asset_nick),
+            is_fra,
+        } => simple_define_asset(store, issuer_nick, asset_nick, is_fra),
 
         SimpleIssueAsset { asset_nick, amount } => {
             simple_issue_asset(store, asset_nick, amount)
@@ -842,7 +849,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
             txn_nick,
             issuer_nick,
             asset_nick,
-        } => define_asset(store, txn_nick, issuer_nick, asset_nick),
+            is_fra,
+        } => define_asset(store, txn_nick, issuer_nick, asset_nick, is_fra),
 
         IssueAsset {
             txn_nick: builder,

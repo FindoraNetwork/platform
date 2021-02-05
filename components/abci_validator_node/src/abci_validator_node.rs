@@ -114,7 +114,7 @@ impl abci::Application for ABCISubmissionServer {
 
         if let Some(tx) = convert_tx(req.get_tx()) {
             info!("converted: {:?}", tx);
-            if TxnEffect::compute_effect(tx).is_err() {
+            if !tx.check_fee() || TxnEffect::compute_effect(tx).is_err() {
                 resp.set_code(1);
                 resp.set_log(String::from("Check failed"));
             }
@@ -137,21 +137,25 @@ impl abci::Application for ABCISubmissionServer {
         let mut resp = ResponseDeliverTx::new();
         if let Some(tx) = convert_tx(req.get_tx()) {
             info!("converted: {:?}", tx);
-            info!("locking for write: {}", error_location!());
-            if let Ok(mut la) = self.la.write() {
-                // set attr(tags) if any
-                let attr = gen_tendermint_attr(&tx);
-                if 0 < attr.len() {
-                    resp.set_events(attr);
+
+            if tx.check_fee() {
+                info!("locking for write: {}", error_location!());
+                if let Ok(mut la) = self.la.write() {
+                    // set attr(tags) if any
+                    let attr = gen_tendermint_attr(&tx);
+                    if 0 < attr.len() {
+                        resp.set_events(attr);
+                    }
+
+                    info!("locked for write");
+                    la.cache_transaction(tx);
+                    info!("unlocking for write: {}", error_location!());
+
+                    return resp;
                 }
-
-                info!("locked for write");
-                la.cache_transaction(tx);
-                info!("unlocking for write: {}", error_location!());
-
-                return resp;
             }
         }
+
         resp.set_code(1);
         resp.set_log(String::from("Failed to deliver transaction!"));
         resp

@@ -223,6 +223,13 @@ impl TransactionBuilder {
 
 #[wasm_bindgen]
 impl TransactionBuilder {
+    /// A simple fee checker for mainnet v1.0.
+    ///
+    /// SEE [check_fee](ledger::data_model::Transaction::check_fee)
+    pub fn check_fee(&self) -> bool {
+        self.transaction_builder.check_fee()
+    }
+
     /// Create a new transaction builder.
     /// @param {BigInt} seq_id - Unique sequence ID to prevent replay attacks.
     pub fn new(seq_id: u64) -> Self {

@@ -279,6 +279,7 @@ pub fn simple_define_asset<S: CliDataStore>(
     store: &mut S,
     issuer_nick: String,
     asset_nick: String,
+    is_fra: bool,
 ) -> Result<(), CliError> {
     query_ledger_state(store, true)?; // TODO Why true?
 
@@ -286,7 +287,7 @@ pub fn simple_define_asset<S: CliDataStore>(
 
     prepare_transaction(store, nick_tx.clone())?;
 
-    define_asset(store, nick_tx.clone(), issuer_nick, asset_nick)?;
+    define_asset(store, nick_tx.clone(), issuer_nick, asset_nick, is_fra)?;
 
     build_transaction(store)?;
 
@@ -1103,6 +1104,29 @@ pub fn define_asset<S: CliDataStore>(
     txn_nick: String,
     issuer_nick: String,
     asset_nick: String,
+    is_fra: bool,
+) -> Result<(), CliError> {
+    if is_fra {
+        define_asset_x(
+            store,
+            txn_nick,
+            issuer_nick,
+            asset_nick,
+            Some(AssetTypeCode::new_from_vec(
+                ASSET_TYPE_FRA_BYTES[..].to_vec(),
+            )),
+        )
+    } else {
+        define_asset_x(store, txn_nick, issuer_nick, asset_nick, None)
+    }
+}
+
+pub fn define_asset_x<S: CliDataStore>(
+    store: &mut S,
+    txn_nick: String,
+    issuer_nick: String,
+    asset_nick: String,
+    asset_code: Option<AssetTypeCode>,
 ) -> Result<(), CliError> {
     let issuer_nick = KeypairName(issuer_nick);
     let config = store.get_config()?;
@@ -1129,6 +1153,7 @@ pub fn define_asset<S: CliDataStore>(
             new_builder = b;
         }
     }
+
     store.with_keypair::<PlatformError, _>(&issuer_nick, |kp| match kp {
         None => {
             let err_msg = format!("No key pair '{}' found.", issuer_nick.0);
@@ -1145,7 +1170,7 @@ pub fn define_asset<S: CliDataStore>(
             asset_rules.set_updatable(updatable);
             new_builder.builder.add_operation_create_asset(
                 &kp,
-                None,
+                asset_code,
                 asset_rules,
                 &prompt::<String, _>("memo?").map_err(|_| {
                     PlatformError::IoError(String::from(
