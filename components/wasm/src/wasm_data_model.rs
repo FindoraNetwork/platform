@@ -9,7 +9,7 @@ use ledger::data_model::{
     AuthenticatedAIRResult as PlatformAuthenticatedAIRResult, AuthenticatedUtxo,
     KVBlind as PlatformKVBlind, KVHash as PlatformKVHash,
     SignatureRules as PlatformSignatureRules, TxOutput, TxoRef as PlatformTxoRef,
-    TxoSID,
+    TxoSID, MAX_DECIMALS_LENGTH,
 };
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
@@ -725,6 +725,10 @@ impl AssetRules {
     /// #param {Number} decimals - The number of decimals used to set its user representation.
     /// Decimals should be 0 ~ 255.
     pub fn set_decimals(mut self, decimals: u8) -> AssetRules {
+        assert!(
+            decimals <= MAX_DECIMALS_LENGTH,
+            "asset decimals should be less than 20"
+        );
         self.rules.decimals = decimals;
         self
     }

@@ -38,6 +38,7 @@ use std::ops::Deref;
 
 pub const RANDOM_CODE_LENGTH: usize = 16;
 pub const TRANSACTION_WINDOW_WIDTH: usize = 128;
+pub const MAX_DECIMALS_LENGTH: u8 = 19;
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
     base64::encode_config(input, base64::URL_SAFE)
@@ -454,6 +455,10 @@ impl AssetRules {
 
     #[inline(always)]
     pub fn set_decimals(&mut self, decimals: u8) -> &mut Self {
+        assert!(
+            decimals <= MAX_DECIMALS_LENGTH,
+            "asset decimals should be less than 20"
+        );
         self.decimals = decimals;
         self
     }
