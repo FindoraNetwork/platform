@@ -2750,6 +2750,9 @@ TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
 mod tests {
     use super::helpers::*;
     use super::*;
+    use crate::data_model::{
+        ASSET_TYPE_FRA, ASSET_TYPE_FRA_BYTES, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+    };
     use crate::policies::{calculate_fee, Fraction};
     use credentials::{
         credential_commit, credential_issuer_key_gen, credential_sign,
@@ -4283,6 +4286,147 @@ mod tests {
         let effect = TxnEffect::compute_effect(tx).unwrap();
         let result = ledger.apply_transaction(&mut block, effect);
         assert!(result.is_ok());
+    }
+
+    // Define and Issue FRA.
+    // return: (Transaction, FraOwnerKeyPair)
+    fn fra_define_and_issue(l: &mut LedgerState) -> (Transaction, XfrKeyPair) {
+        /*
+         * Define FRA
+         **/
+
+        let fra_code = AssetTypeCode {
+            val: ASSET_TYPE_FRA,
+        };
+
+        let mut prng = ChaChaRng::from_entropy();
+        let fra_owner_kp = XfrKeyPair::generate(&mut prng);
+
+        let mut tx = create_definition_transaction(
+            &fra_code,
+            &fra_owner_kp,
+            AssetRules::default(),
+            Some(Memo("FRA".to_owned())),
+            0,
+        )
+        .unwrap();
+
+        /*
+         * Issue FRA
+         **/
+
+        let template = AssetRecordTemplate::with_no_asset_tracking(
+            21000000000,
+            fra_code.val,
+            AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+            fra_owner_kp.get_pk(),
+        );
+
+        let params = PublicParams::new();
+        let (ba, _, _) =
+            build_blind_asset_record(l.get_prng(), &params.pc_gens, &template, vec![]);
+
+        let asset_issuance_body = IssueAssetBody::new(
+            &fra_code,
+            0,
+            &[(
+                TxOutput {
+                    record: ba,
+                    lien: None,
+                },
+                None,
+            )],
+        )
+        .unwrap();
+
+        let asset_issuance_operation = IssueAsset::new(
+            asset_issuance_body,
+            &IssuerKeyPair {
+                keypair: &fra_owner_kp,
+            },
+        )
+        .unwrap();
+
+        tx.add_operation(Operation::IssueAsset(asset_issuance_operation));
+
+        (tx, fra_owner_kp)
+    }
+
+    fn gen_fee_operation(
+        l: &mut LedgerState,
+        txo_sid: TxoSID,
+        fra_owner_kp: &XfrKeyPair,
+    ) -> Operation {
+        let fra_code = &AssetTypeCode {
+            val: ASSET_TYPE_FRA,
+        };
+
+        let input_bar_proof = l.get_utxo(txo_sid).unwrap();
+        let input_bar = (input_bar_proof.clone().utxo.0).record;
+        let input_oar =
+            open_blind_asset_record(&input_bar, &None, fra_owner_kp.get_sk_ref())
+                .unwrap();
+
+        let output_template = AssetRecordTemplate::with_no_asset_tracking(
+            TX_FEE_MIN,
+            fra_code.val,
+            AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+            *BLACK_HOLE_PUBKEY,
+        );
+        let output_ar = AssetRecord::from_template_no_identity_tracking(
+            l.get_prng(),
+            &output_template,
+        )
+        .unwrap();
+        let input_ar =
+            AssetRecord::from_open_asset_record_no_asset_tracking(input_oar.clone());
+
+        let mut transfer = TransferAsset::new(
+            TransferAssetBody::new(
+                l.get_prng(),
+                vec![TxoRef::Absolute(txo_sid)],
+                &[input_ar],
+                &[output_ar],
+                None,
+                vec![],
+                TransferType::Standard,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        transfer.sign(&fra_owner_kp);
+
+        Operation::TransferAsset(transfer)
+    }
+
+    #[test]
+    fn test_check_fee_with_ledger() {
+        let mut ledger = LedgerState::test_ledger();
+
+        let (mut tx, fra_owner_kp) = fra_define_and_issue(&mut ledger);
+        assert!(tx.check_fee());
+
+        let effect = TxnEffect::compute_effect(tx).unwrap();
+        let mut block = ledger.start_block().unwrap();
+        let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
+        let txo_sid = ledger
+            .finish_block(block)
+            .unwrap()
+            .remove(&tmp_sid)
+            .unwrap()
+            .1[0];
+
+        let tx = Transaction::from_operation(
+            gen_fee_operation(&mut ledger, txo_sid, &fra_owner_kp),
+            1,
+        );
+        assert!(tx.check_fee());
+
+        let effect = TxnEffect::compute_effect(tx).unwrap();
+        let mut block = ledger.start_block().unwrap();
+        ledger.apply_transaction(&mut block, effect).unwrap();
+        ledger.finish_block(block).unwrap();
     }
 }
 

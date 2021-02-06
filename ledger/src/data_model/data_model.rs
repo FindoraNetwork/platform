@@ -1655,49 +1655,67 @@ lazy_static! {
 }
 
 // TODO: a formal definition.
-const TX_FEE_MIN: u64 = 1;
+pub(crate) const TX_FEE_MIN: u64 = 1;
 
 impl Transaction {
     /// A simple fee checker for mainnet v1.0.
     ///
     /// The check logic is as follows:
-    /// - only NonConfidential Operation can be used as FEE
+    /// - Only `NonConfidential Operation` can be used as fee
     /// - FRA code == [0; ASSET_TYPE_LENGTH]
-    /// - FEE destination == [0; ed25519_dalek::PUBLIC_KEY_LENGTH]
+    /// - Fee destination == [0; ed25519_dalek::PUBLIC_KEY_LENGTH]
+    /// - A transaction with an `Operation` of defining FRA need NOT any fee
     ///
     /// > Is this function compatible with the process of
     /// > defining and issuing FRA in the genesis block ?
     /// >
     /// > Yes, I think so. But please note:
     /// >
-    /// > Your should put all Operations related to FRA into a same transaction.
+    /// > - Your should put all Operations related to
+    /// > the defination and issuing of FRA into a same transaction.
     /// > Because the basic unit of `check_fee` is a whole transaction, and
     /// > there can be many Operations inside this transaction, such as:
-    /// > defining assets, issuing assets, transfers, etc.,
+    /// > defining assets, issuing assets, etc.
     /// > as long as the order of these operations is correct.
+    /// > - `TransferAsset` operations of FRA can NOT be placed
+    /// > in the same transaction with its defination and issuing,
+    /// > or the transaction can NOT pass the check of `apply_transaction(...)`
     pub fn check_fee(&self) -> bool {
         self.body
             .operations
             .iter()
             .find_map(|o| {
                 if let Operation::TransferAsset(ref x) = o {
-                    x.body.outputs.iter().find(|o| {
-                        if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
-                            if ty == ASSET_TYPE_FRA
-                                && *BLACK_HOLE_PUBKEY == o.record.public_key
+                    return x
+                        .body
+                        .outputs
+                        .iter()
+                        .find(|o| {
+                            if let XfrAssetType::NonConfidential(ty) =
+                                o.record.asset_type
                             {
-                                if let XfrAmount::NonConfidential(am) = o.record.amount {
-                                    if am > (TX_FEE_MIN - 1) {
-                                        return true;
+                                if ty == ASSET_TYPE_FRA
+                                    && *BLACK_HOLE_PUBKEY == o.record.public_key
+                                {
+                                    if let XfrAmount::NonConfidential(am) =
+                                        o.record.amount
+                                    {
+                                        if am > (TX_FEE_MIN - 1) {
+                                            return true;
+                                        }
                                     }
                                 }
                             }
-                        }
-                        false
-                    })
-                } else {
-                    None
+                            false
+                        })
+                        .map(|_| ());
+                } else if let Operation::DefineAsset(ref x) = o {
+                    if x.body.asset.code.val == ASSET_TYPE_FRA {
+                        return Some(());
+                    }
                 }
+
+                None
             })
             .is_some()
     }
@@ -2089,7 +2107,7 @@ mod tests {
 
         // Instantiate an IssueAsset operation
         let asset_issuance_body = IssueAssetBody {
-            code: Default::default(),
+            code: AssetTypeCode::gen_random(),
             seq_num: 0,
             num_outputs: 0,
             records: Vec::new(),
@@ -2102,7 +2120,8 @@ mod tests {
         let issuance_operation = Operation::IssueAsset(asset_issuance.clone());
 
         // Instantiate an DefineAsset operation
-        let asset = Default::default();
+        let mut asset = Box::new(Asset::default());
+        asset.code = AssetTypeCode::gen_random();
 
         let asset_creation = DefineAsset::new(
             DefineAssetBody { asset },
