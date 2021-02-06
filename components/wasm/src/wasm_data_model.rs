@@ -722,12 +722,14 @@ impl AssetRules {
         self
     }
 
-    /// The decimal number of asset.
+    /// Set the decimal number of asset. Return error string if failed, otherwise return changed asset.
     /// #param {Number} decimals - The number of decimals used to set its user representation.
     /// Decimals should be 0 ~ 255.
-    pub fn set_decimals(mut self, decimals: u8) -> AssetRules {
-        self.rules.set_decimals(decimals);
-        self
+    pub fn set_decimals(mut self, decimals: u8) -> Result<AssetRules, JsValue> {
+        self.rules
+            .set_decimals(decimals)
+            .map_err(error_to_jsvalue)?;
+        Ok(self)
     }
 }
 

@@ -32,8 +32,9 @@ use zei::xfr::structs::{
     AssetRecord, AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy,
     AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo, XfrBody, ASSET_TYPE_LENGTH,
 };
-// use zei::xfr::asset_record::{AssetRecordType};
+
 use super::effects::*;
+use std::error::Error;
 use std::ops::Deref;
 
 pub const RANDOM_CODE_LENGTH: usize = 16;
@@ -454,13 +455,12 @@ impl AssetRules {
     }
 
     #[inline(always)]
-    pub fn set_decimals(&mut self, decimals: u8) -> &mut Self {
-        assert!(
-            decimals <= MAX_DECIMALS_LENGTH,
-            "asset decimals should be less than 20"
-        );
+    pub fn set_decimals(&mut self, decimals: u8) -> Result<&mut Self, Box<dyn Error>> {
+        if decimals > MAX_DECIMALS_LENGTH {
+            return Err("asset decimals should be less than 20".into());
+        }
         self.decimals = decimals;
-        self
+        Ok(self)
     }
 }
 
