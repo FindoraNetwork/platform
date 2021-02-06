@@ -2,6 +2,7 @@ use cryptohash::sha256::Digest;
 use cryptohash::{sha256, Proof};
 use percent_encoding::{percent_decode, utf8_percent_encode, AsciiSet, CONTROLS};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fs;
 use std::io::{Error, ErrorKind};
 use std::marker::PhantomData;
 use std::path::PathBuf;
@@ -87,10 +88,11 @@ pub fn fresh_tmp_dir() -> PathBuf {
     let mut i = 0;
     let mut dirname = None;
     while dirname.is_none() {
-        assert!(i < 10240); // TODO(joe): fail more gracefully
-        let name = std::format!("{}_{}", base_dirname, i);
+        assert!(i < 4); // TODO(joe): fail more gracefully
+        let name = std::format!("{}_{}", base_dirname, rand::random::<u64>());
         let path = base_dir.join(name);
-        match std::fs::create_dir(&path) {
+        let _ = fs::remove_dir_all(&path);
+        match fs::create_dir(&path) {
             Ok(()) => {
                 dirname = Some(path);
             }
