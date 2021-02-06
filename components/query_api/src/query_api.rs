@@ -1,8 +1,8 @@
 #![feature(str_split_as_str)]
 
 use actix_cors::Cors;
-use actix_web::{error, middleware, web, App, HttpServer};
 use actix_service::Service;
+use actix_web::{error, middleware, web, App, HttpServer};
 use futures::Future;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
@@ -12,7 +12,7 @@ use ledger::data_model::{
 use ledger::{error_location, inp_fail, ser_fail};
 use ledger_api_service::RestfulArchiveAccess;
 use log::info;
-use metrics::{KeyData, Key as MetricsKey};
+use metrics::{Key as MetricsKey, KeyData};
 use query_server::QueryServer;
 use sparse_merkle_tree::Key;
 use std::collections::HashSet;
@@ -20,7 +20,7 @@ use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
-use utils::{actix_get_request, actix_post_request, NetworkRoute, MetricsRenderer};
+use utils::{actix_get_request, actix_post_request, MetricsRenderer, NetworkRoute};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::OwnerMemo;
@@ -44,7 +44,7 @@ fn get_address<T, U>(
 ) -> Result<String, actix_web::error::Error>
 where
     T: RestfulArchiveAccess,
-    U: MetricsRenderer
+    U: MetricsRenderer,
 {
     let query_server = data.read().unwrap();
     let address_res = query_server.get_address_of_sid(TxoSID(*info));
@@ -66,7 +66,7 @@ fn get_custom_data<T, U>(
 ) -> actix_web::Result<web::Json<Option<CustomDataResult>>, actix_web::error::Error>
 where
     T: RestfulArchiveAccess,
-    U: MetricsRenderer
+    U: MetricsRenderer,
 {
     let query_server = data.read().unwrap();
     let key = Key::from_base64(&*info)
@@ -81,7 +81,7 @@ fn get_owner_memo<T, U>(
 ) -> actix_web::Result<web::Json<Option<OwnerMemo>>, actix_web::error::Error>
 where
     T: RestfulArchiveAccess,
-    U: MetricsRenderer
+    U: MetricsRenderer,
 {
     let query_server = data.read().unwrap();
     Ok(web::Json(
@@ -97,7 +97,7 @@ fn store_custom_data<T, U>(
 ) -> actix_web::Result<(), actix_web::error::Error>
 where
     T: RestfulArchiveAccess + Sync + Send,
-    U: MetricsRenderer
+    U: MetricsRenderer,
 {
     let (key, custom_data, blind) = body.into_inner();
     let key = Key::from_base64(&key)
@@ -115,7 +115,7 @@ fn get_owned_utxos<T, U>(
 ) -> actix_web::Result<web::Json<HashSet<TxoSID>>>
 where
     T: RestfulArchiveAccess + Sync + Send,
-    U: MetricsRenderer
+    U: MetricsRenderer,
 {
     // Convert from basee64 representation
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
@@ -133,11 +133,11 @@ fn get_metrics<T, U>(
     data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     _info: web::Path<()>,
 ) -> actix_web::Result<String>
-    where
-        T: RestfulArchiveAccess + Sync + Send,
-        U: MetricsRenderer
+where
+    T: RestfulArchiveAccess + Sync + Send,
+    U: MetricsRenderer,
 {
-    let query_server= data.read().unwrap();
+    let query_server = data.read().unwrap();
     Ok(query_server.render())
 }
 
@@ -183,7 +183,7 @@ fn get_created_assets<T, U>(
 ) -> actix_web::Result<web::Json<Vec<DefineAsset>>>
 where
     T: RestfulArchiveAccess + Sync + Send,
-    U: MetricsRenderer
+    U: MetricsRenderer,
 {
     // Convert from base64 representation
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
@@ -203,7 +203,7 @@ fn get_traced_assets<T, U>(
 ) -> actix_web::Result<web::Json<Vec<AssetTypeCode>>>
 where
     T: RestfulArchiveAccess + Sync + Send,
-    U: MetricsRenderer
+    U: MetricsRenderer,
 {
     // Convert from base64 representation
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
@@ -223,7 +223,7 @@ fn get_issued_records<T, U>(
 ) -> actix_web::Result<web::Json<Vec<(TxOutput, Option<OwnerMemo>)>>>
 where
     T: RestfulArchiveAccess + Sync + Send,
-    U: MetricsRenderer
+    U: MetricsRenderer,
 {
     // Convert from base64 representation
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
@@ -243,7 +243,7 @@ fn get_issued_records_by_code<T, U>(
 ) -> actix_web::Result<web::Json<Vec<(TxOutput, Option<OwnerMemo>)>>>
 where
     T: RestfulArchiveAccess + Sync + Send,
-    U: MetricsRenderer
+    U: MetricsRenderer,
 {
     let query_server = data.read().unwrap();
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
@@ -268,7 +268,7 @@ fn get_related_txns<T, U>(
 ) -> actix_web::Result<web::Json<HashSet<TxnSID>>>
 where
     T: RestfulArchiveAccess + Sync + Send,
-    U: MetricsRenderer
+    U: MetricsRenderer,
 {
     // Convert from base64 representation
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
@@ -288,7 +288,7 @@ fn get_related_xfrs<T, U>(
 ) -> actix_web::Result<web::Json<HashSet<TxnSID>>>
 where
     T: RestfulArchiveAccess + Sync + Send,
-    U: MetricsRenderer
+    U: MetricsRenderer,
 {
     let query_server = data.read().unwrap();
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
@@ -318,7 +318,7 @@ impl QueryApi {
     ) -> io::Result<QueryApi>
     where
         T: 'static + RestfulArchiveAccess + Sync + Send,
-        U: 'static + MetricsRenderer + Sync + Send
+        U: 'static + MetricsRenderer + Sync + Send,
     {
         let web_runtime = actix_rt::System::new("findora API");
 
@@ -339,7 +339,8 @@ impl QueryApi {
                         let key = MetricsKey::from(key_data);
 
                         let duration = start.elapsed();
-                        metrics::recorder().record_histogram(key, duration.as_millis() as f64);
+                        metrics::recorder()
+                            .record_histogram(key, duration.as_millis() as f64);
 
                         res
                     })
@@ -390,7 +391,10 @@ impl QueryApi {
                     web::get().to(get_custom_data::<T, U>),
                 )
                 .route(&QueryServerRoutes::Version.route(), web::get().to(version))
-                .route(&String::from("/metrics"), web::get().to(get_metrics::<T, U>))
+                .route(
+                    &String::from("/metrics"),
+                    web::get().to(get_metrics::<T, U>),
+                )
         })
         .bind(&format!("{}:{}", host, port))?
         .start();

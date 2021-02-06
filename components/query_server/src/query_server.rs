@@ -2,13 +2,13 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::error_location;
 use ledger::store::*;
-use utils::MetricsRenderer;
 use ledger_api_service::RestfulArchiveAccess;
 use log::{error, info};
 use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use std::sync::Arc;
+use utils::MetricsRenderer;
 use zei::xfr::structs::OwnerMemo;
 
 macro_rules! fail {
@@ -23,7 +23,7 @@ macro_rules! fail {
 pub struct QueryServer<T, U>
 where
     T: RestfulArchiveAccess,
-    U: MetricsRenderer
+    U: MetricsRenderer,
 {
     committed_state: LedgerState,
     addresses_to_utxos: HashMap<XfrAddress, HashSet<TxoSID>>,
@@ -38,13 +38,13 @@ where
     utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
     custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
     rest_client: T,
-    metrics_renderer: U
+    metrics_renderer: U,
 }
 
 impl<T, U> QueryServer<T, U>
 where
     T: RestfulArchiveAccess,
-    U: MetricsRenderer
+    U: MetricsRenderer,
 {
     pub fn new(rest_client: T, metrics_renderer: U) -> QueryServer<T, U> {
         QueryServer {
@@ -60,7 +60,7 @@ where
             utxos_to_map_index: HashMap::new(),
             custom_data_store: HashMap::new(),
             rest_client,
-            metrics_renderer
+            metrics_renderer,
         }
     }
 
@@ -462,7 +462,6 @@ mod tests {
     };
     use ledger::store::helpers::{apply_transaction, create_definition_transaction};
     use ledger_api_service::MockLedgerClient;
-    use utils::MockMetricsRenderer;
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
     use std::str;
@@ -470,6 +469,7 @@ mod tests {
     use txn_builder::{
         BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder,
     };
+    use utils::MockMetricsRenderer;
     use zei::setup::PublicParams;
     use zei::xfr::asset_record::open_blind_asset_record;
     use zei::xfr::asset_record::AssetRecordType::{
@@ -486,8 +486,10 @@ mod tests {
         let client_ledger_state = Arc::new(RwLock::new(LedgerState::test_ledger()));
         let mut ledger_state = LedgerState::test_ledger();
         let mut prng = ChaChaRng::from_entropy();
-        let mut query_server =
-            QueryServer::new(MockLedgerClient::new(&client_ledger_state), MockMetricsRenderer::new());
+        let mut query_server = QueryServer::new(
+            MockLedgerClient::new(&client_ledger_state),
+            MockMetricsRenderer::new(),
+        );
         let kp = XfrKeyPair::generate(&mut prng);
 
         let data = "some_data";
