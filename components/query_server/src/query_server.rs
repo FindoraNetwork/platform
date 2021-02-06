@@ -2,6 +2,7 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::error_location;
 use ledger::store::*;
+use utils::MetricsRenderer;
 use ledger_api_service::RestfulArchiveAccess;
 use log::{error, info};
 use sparse_merkle_tree::Key;
@@ -19,9 +20,10 @@ macro_rules! fail {
     };
 }
 
-pub struct QueryServer<T>
+pub struct QueryServer<T, U>
 where
     T: RestfulArchiveAccess,
+    U: MetricsRenderer
 {
     committed_state: LedgerState,
     addresses_to_utxos: HashMap<XfrAddress, HashSet<TxoSID>>,
@@ -36,13 +38,15 @@ where
     utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
     custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
     rest_client: T,
+    metrics_renderer: U
 }
 
-impl<T> QueryServer<T>
+impl<T, U> QueryServer<T, U>
 where
     T: RestfulArchiveAccess,
+    U: MetricsRenderer
 {
-    pub fn new(rest_client: T) -> QueryServer<T> {
+    pub fn new(rest_client: T, metrics_renderer: U) -> QueryServer<T, U> {
         QueryServer {
             committed_state: LedgerState::test_ledger(),
             addresses_to_utxos: HashMap::new(),
@@ -56,7 +60,12 @@ where
             utxos_to_map_index: HashMap::new(),
             custom_data_store: HashMap::new(),
             rest_client,
+            metrics_renderer
         }
+    }
+
+    pub fn render(&self) -> String {
+        self.metrics_renderer.rendered()
     }
 
     // Fetch custom data at a given key.
@@ -453,6 +462,7 @@ mod tests {
     };
     use ledger::store::helpers::{apply_transaction, create_definition_transaction};
     use ledger_api_service::MockLedgerClient;
+    use utils::MockMetricsRenderer;
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
     use std::str;
@@ -477,7 +487,7 @@ mod tests {
         let mut ledger_state = LedgerState::test_ledger();
         let mut prng = ChaChaRng::from_entropy();
         let mut query_server =
-            QueryServer::new(MockLedgerClient::new(&client_ledger_state));
+            QueryServer::new(MockLedgerClient::new(&client_ledger_state), MockMetricsRenderer::new());
         let kp = XfrKeyPair::generate(&mut prng);
 
         let data = "some_data";
@@ -532,7 +542,7 @@ mod tests {
         let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
         let params = PublicParams::new();
         let mut prng = ChaChaRng::from_entropy();
-        let mut query_server = QueryServer::new(mock_ledger);
+        let mut query_server = QueryServer::new(mock_ledger, MockMetricsRenderer::new());
         let token_code = AssetTypeCode::gen_random();
         // Define keys
         let alice = XfrKeyPair::generate(&mut prng);
@@ -637,7 +647,7 @@ mod tests {
         // This isn't actually being used in the test, we just make a ledger client so we can compile
         let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
         let mut prng = ChaChaRng::from_entropy();
-        let mut query_server = QueryServer::new(mock_ledger);
+        let mut query_server = QueryServer::new(mock_ledger, MockMetricsRenderer::new());
         let params = PublicParams::new();
         let token_code = AssetTypeCode::gen_random();
         // Define keys
@@ -783,7 +793,7 @@ mod tests {
         let mut ledger_state = LedgerState::test_ledger();
         // This isn't actually being used in the test, we just make a ledger client so we can compile
         let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
-        let mut query_server = QueryServer::new(mock_ledger);
+        let mut query_server = QueryServer::new(mock_ledger, MockMetricsRenderer::new());
         let code = AssetTypeCode::gen_random();
         let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
         let seq_id = ledger_state.get_block_commit_count();
@@ -825,7 +835,7 @@ mod tests {
         let mut ledger_state = LedgerState::test_ledger();
         // This isn't actually being used in the test, we just make a ledger client so we can compile
         let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
-        let mut query_server = QueryServer::new(mock_ledger);
+        let mut query_server = QueryServer::new(mock_ledger, MockMetricsRenderer::new());
         let code = AssetTypeCode::gen_random();
         let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
         let seq_id = ledger_state.get_block_commit_count();
@@ -855,7 +865,7 @@ mod tests {
         let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
         let mut prng = ChaChaRng::from_entropy();
         let kp = XfrKeyPair::generate(&mut prng);
-        let mut query_server = QueryServer::new(mock_ledger);
+        let mut query_server = QueryServer::new(mock_ledger, MockMetricsRenderer::new());
 
         // KV update txn
         let data = [0u8, 16];
@@ -889,7 +899,7 @@ mod tests {
         // This isn't actually being used in the test, we just make a ledger client so we can compile
         let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
         let mut prng = ChaChaRng::from_entropy();
-        let mut query_server = QueryServer::new(mock_ledger);
+        let mut query_server = QueryServer::new(mock_ledger, MockMetricsRenderer::new());
         let params = PublicParams::new();
         let token_code = AssetTypeCode::gen_random();
         // Define keys
@@ -979,7 +989,7 @@ mod tests {
         let mut ledger_state = LedgerState::test_ledger();
         // This isn't actually being used in the test, we just make a ledger client so we can compile
         let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
-        let mut query_server = QueryServer::new(mock_ledger);
+        let mut query_server = QueryServer::new(mock_ledger, MockMetricsRenderer::new());
         let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
 
         // Create the first asset
@@ -1033,7 +1043,7 @@ mod tests {
         let mut ledger_state = LedgerState::test_ledger();
         // This isn't actually being used in the test, we just make a ledger client so we can compile
         let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
-        let mut query_server = QueryServer::new(mock_ledger);
+        let mut query_server = QueryServer::new(mock_ledger, MockMetricsRenderer::new());
         let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
 
         // Set the tracing policy

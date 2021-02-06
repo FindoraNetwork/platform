@@ -264,10 +264,10 @@ fn main() {
     let ledger_host = config.ledger_host.clone();
     let ledger_port = config.ledger_port.clone();
     thread::spawn(move || {
-        let query_service =
+        let ledger_service =
             RestfulApiService::create(cloned_lock, &ledger_host, &ledger_port).unwrap();
         println!("Starting ledger service");
-        match query_service.run() {
+        match ledger_service.run() {
             Ok(_) => println!("Successfully ran validator"),
             Err(_) => println!("Error running validator"),
         }

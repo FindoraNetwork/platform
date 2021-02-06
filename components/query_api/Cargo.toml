@@ -19,8 +19,11 @@ actix-rt = "0.2"
 actix-service = "0.4.2"
 actix-web = "1.0.5"
 ledger = { path = "../../ledger" }
+futures = "0.1"
 ledger_api_service = { path = "../ledger_api_service"}
 log = "0.4.8"
+metrics = "0.13.1"
+metrics-exporter-prometheus = "0.2.0"
 query_server = {path = "../query_server"}
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
 rand_chacha = "0.2.0"
