@@ -508,7 +508,7 @@ pub struct MockMetricsRenderer;
 
 impl MockMetricsRenderer {
     pub fn new() -> Self {
-        MockMetricsRenderer{}
+        MockMetricsRenderer {}
     }
 }
 
