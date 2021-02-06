@@ -4362,7 +4362,7 @@ mod tests {
         };
 
         let input_bar_proof = l.get_utxo(txo_sid).unwrap();
-        let input_bar = (input_bar_proof.clone().utxo.0).record;
+        let input_bar = (input_bar_proof.utxo.0).record;
         let input_oar =
             open_blind_asset_record(&input_bar, &None, fra_owner_kp.get_sk_ref())
                 .unwrap();

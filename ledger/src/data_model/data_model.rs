@@ -1654,8 +1654,8 @@ lazy_static! {
             .unwrap();
 }
 
-// TODO: a formal definition.
-pub(crate) const TX_FEE_MIN: u64 = 1;
+/// TODO: a better value ?
+pub const TX_FEE_MIN: u64 = 1;
 
 impl Transaction {
     /// A simple fee checker for mainnet v1.0.
