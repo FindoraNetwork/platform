@@ -20,7 +20,7 @@ impl Default for ABCIConfig {
         let abci_host = std::env::var_os("ABCI_HOST")
             .filter(|x| !x.is_empty())
             .and_then(|x| x.into_string().ok())
-            .unwrap_or_else(|| "127.0.0.1".into());
+            .unwrap_or_else(|| "0.0.0.0".into());
         let abci_port = std::env::var_os("ABCI_PORT")
             .filter(|x| !x.is_empty())
             .and_then(|x| x.into_string().ok())
