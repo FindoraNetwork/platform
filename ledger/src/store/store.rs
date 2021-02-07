@@ -26,9 +26,15 @@ use std::path::PathBuf;
 use std::u64;
 use utils::HasInvariants;
 use utils::{HashOf, ProofOf, Serialized, SignatureOf};
+use zei::setup::PublicParams;
 use zei::xfr::lib::XfrNotePolicies;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{AssetTracingPolicies, AssetTracingPolicy, XfrAssetType};
+use zei::xfr::{
+    asset_record::{build_blind_asset_record, AssetRecordType},
+    structs::{
+        AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy, XfrAssetType,
+    },
+};
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
 
@@ -2746,6 +2752,79 @@ TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
     }
 }
 
+/// Define and Issue FRA.
+/// Currently this should only be used for tests.
+pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
+    const FRA_DECIMAL: u8 = 6;
+    const FRA_AMOUNT: u64 = 21000000000000000;
+
+    /*
+     * Define FRA
+     **/
+
+    let fra_code = AssetTypeCode {
+        val: ASSET_TYPE_FRA,
+    };
+
+    let mut tx = helpers::create_definition_transaction(
+        &fra_code,
+        fra_owner_kp,
+        AssetRules {
+            transferable: true,
+            updatable: true,
+            decimals: FRA_DECIMAL,
+            ..AssetRules::default()
+        },
+        Some(Memo("FRA".to_owned())),
+        0,
+    )
+    .unwrap();
+
+    /*
+     * Issue FRA
+     **/
+
+    let template = AssetRecordTemplate::with_no_asset_tracking(
+        FRA_AMOUNT,
+        fra_code.val,
+        AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+        fra_owner_kp.get_pk(),
+    );
+
+    let params = PublicParams::new();
+    let (ba, _, _) = build_blind_asset_record(
+        &mut ChaChaRng::from_entropy(),
+        &params.pc_gens,
+        &template,
+        vec![],
+    );
+
+    let asset_issuance_body = IssueAssetBody::new(
+        &fra_code,
+        0,
+        &[(
+            TxOutput {
+                record: ba,
+                lien: None,
+            },
+            None,
+        )],
+    )
+    .unwrap();
+
+    let asset_issuance_operation = IssueAsset::new(
+        asset_issuance_body,
+        &IssuerKeyPair {
+            keypair: fra_owner_kp,
+        },
+    )
+    .unwrap();
+
+    tx.add_operation(Operation::IssueAsset(asset_issuance_operation));
+
+    tx
+}
+
 #[cfg(test)]
 mod tests {
     use super::helpers::*;
@@ -4288,70 +4367,6 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    // Define and Issue FRA.
-    // return: (Transaction, FraOwnerKeyPair)
-    fn fra_define_and_issue(l: &mut LedgerState) -> (Transaction, XfrKeyPair) {
-        /*
-         * Define FRA
-         **/
-
-        let fra_code = AssetTypeCode {
-            val: ASSET_TYPE_FRA,
-        };
-
-        let mut prng = ChaChaRng::from_entropy();
-        let fra_owner_kp = XfrKeyPair::generate(&mut prng);
-
-        let mut tx = create_definition_transaction(
-            &fra_code,
-            &fra_owner_kp,
-            AssetRules::default(),
-            Some(Memo("FRA".to_owned())),
-            0,
-        )
-        .unwrap();
-
-        /*
-         * Issue FRA
-         **/
-
-        let template = AssetRecordTemplate::with_no_asset_tracking(
-            21000000000,
-            fra_code.val,
-            AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-            fra_owner_kp.get_pk(),
-        );
-
-        let params = PublicParams::new();
-        let (ba, _, _) =
-            build_blind_asset_record(l.get_prng(), &params.pc_gens, &template, vec![]);
-
-        let asset_issuance_body = IssueAssetBody::new(
-            &fra_code,
-            0,
-            &[(
-                TxOutput {
-                    record: ba,
-                    lien: None,
-                },
-                None,
-            )],
-        )
-        .unwrap();
-
-        let asset_issuance_operation = IssueAsset::new(
-            asset_issuance_body,
-            &IssuerKeyPair {
-                keypair: &fra_owner_kp,
-            },
-        )
-        .unwrap();
-
-        tx.add_operation(Operation::IssueAsset(asset_issuance_operation));
-
-        (tx, fra_owner_kp)
-    }
-
     fn gen_fee_operation(
         l: &mut LedgerState,
         txo_sid: TxoSID,
@@ -4403,11 +4418,12 @@ mod tests {
     #[test]
     fn test_check_fee_with_ledger() {
         let mut ledger = LedgerState::test_ledger();
+        let fra_owner_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
 
-        let (mut tx, fra_owner_kp) = fra_define_and_issue(&mut ledger);
+        let mut tx = fra_gen_initial_tx(&fra_owner_kp);
         assert!(tx.check_fee());
 
-        let effect = TxnEffect::compute_effect(tx).unwrap();
+        let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
         let mut block = ledger.start_block().unwrap();
         let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
         let txo_sid = ledger
@@ -4417,16 +4433,22 @@ mod tests {
             .unwrap()
             .1[0];
 
-        let tx = Transaction::from_operation(
+        let tx2 = Transaction::from_operation(
             gen_fee_operation(&mut ledger, txo_sid, &fra_owner_kp),
             1,
         );
-        assert!(tx.check_fee());
+        assert!(tx2.check_fee());
 
-        let effect = TxnEffect::compute_effect(tx).unwrap();
+        let effect = TxnEffect::compute_effect(tx2).unwrap();
         let mut block = ledger.start_block().unwrap();
         ledger.apply_transaction(&mut block, effect).unwrap();
         ledger.finish_block(block).unwrap();
+
+        // Ensure that FRA can only be defined only once.
+        let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
+        let mut block = ledger.start_block().unwrap();
+        assert!(ledger.apply_transaction(&mut block, effect).is_err());
+        ledger.abort_block(block);
     }
 }
 
