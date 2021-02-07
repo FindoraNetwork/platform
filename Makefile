@@ -24,23 +24,30 @@ lib_dir         = lib
 pick            = target/$(target_dir)
 release_subdirs = $(bin_dir) $(lib_dir)
 
-bin_files = \
+bin_files_minimal = \
 		./$(pick)/abci_validator_node \
 		./$(pick)/query_server \
+		$(shell go env GOPATH)/bin/tendermint
+
+bin_files_other = \
 		./$(pick)/check_merkle \
 		./$(pick)/solvency_cli \
 		./$(pick)/txn_cli \
-		./$(pick)/findora \
-		$(shell go env GOPATH)/bin/tendermint
+		./$(pick)/findora
 
 WASM_PKG = wasm.tar.gz
 lib_files = ./$(WASM_PKG)
 
 define pack
+	$(call pack_minimal,$(target_dir))
+	cp $(bin_files_other) $(target_dir)/$(bin_dir)
+endef
+
+define pack_minimal
 	-@ rm -rf $(target_dir)
 	mkdir $(target_dir)
 	cd $(target_dir); for i in $(release_subdirs); do mkdir $$i; done
-	cp $(bin_files) $(target_dir)/$(bin_dir)
+	cp $(bin_files_minimal) $(target_dir)/$(bin_dir)
 	cp $(lib_files) $(target_dir)/$(lib_dir)
 endef
 
@@ -60,6 +67,15 @@ ifdef DBG
 else
 	cargo build --release --workspace --exclude wasm --exclude http_tester --exclude log_tester
 	$(call pack,$(target_dir))
+endif
+
+build_release_minimal: tendermint wasm
+ifdef DBG
+	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
+	@ exit 1
+else
+	cargo build --release --bins -p abci_validator_node -p query_api
+	$(call pack_minimal,$(target_dir))
 endif
 
 test:
