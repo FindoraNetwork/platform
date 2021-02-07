@@ -110,9 +110,15 @@ devnet:
 	@./scripts/devnet/startnodes.sh
 
 ci_build_image:
+ifneq ($(ENV),release)
+	mkdir -p release/bin/
+	cp debug/bin/abci_validator_node debug/bin/query_server debug/bin/tendermint release/bin/
+endif
+
 	docker build -t $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG) -f container/Dockerfile-CI-abci_validator_node .
 	docker build -t $(ECR_URL)/$(ENV)/query_server:$(IMAGE_TAG) -f container/Dockerfile-CI-query_server .
 	docker build -t $(ECR_URL)/$(ENV)/tendermint:$(IMAGE_TAG) -f container/Dockerfile-CI-tendermint .
+
 ifeq ($(ENV),release)
 	docker tag $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG) $(ECR_URL)/$(ENV)/abci_validator_node:latest
 	docker tag $(ECR_URL)/$(ENV)/query_server:$(IMAGE_TAG) $(ECR_URL)/$(ENV)/query_server:latest
@@ -120,9 +126,9 @@ ifeq ($(ENV),release)
 endif
 
 ci_push_image:
-    docker push $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG)
-    docker push $(ECR_URL)/$(ENV)/query_server:$(IMAGE_TAG)
-    docker push $(ECR_URL)/$(ENV)/tendermint:$(IMAGE_TAG)
+	docker push $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG)
+	docker push $(ECR_URL)/$(ENV)/query_server:$(IMAGE_TAG)
+	docker push $(ECR_URL)/$(ENV)/tendermint:$(IMAGE_TAG)
 ifeq ($(ENV),release)
 	docker push $(ECR_URL)/$(ENV)/abci_validator_node:latest
 	docker push $(ECR_URL)/$(ENV)/query_server:latest
