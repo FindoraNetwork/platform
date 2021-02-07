@@ -1681,43 +1681,49 @@ impl Transaction {
     /// > in the same transaction with its defination and issuing,
     /// > or the transaction can NOT pass the check of `apply_transaction(...)`
     pub fn check_fee(&self) -> bool {
-        self.body
-            .operations
-            .iter()
-            .find_map(|o| {
-                if let Operation::TransferAsset(ref x) = o {
-                    return x
-                        .body
-                        .outputs
-                        .iter()
-                        .find(|o| {
-                            if let XfrAssetType::NonConfidential(ty) =
-                                o.record.asset_type
-                            {
-                                if ty == ASSET_TYPE_FRA
-                                    && *BLACK_HOLE_PUBKEY == o.record.public_key
-                                {
-                                    if let XfrAmount::NonConfidential(am) =
-                                        o.record.amount
-                                    {
-                                        if am > (TX_FEE_MIN - 1) {
-                                            return true;
-                                        }
-                                    }
+        self.body.operations.iter().any(|o| {
+            if let Operation::TransferAsset(ref x) = o {
+                return x.body.outputs.iter().any(|o| {
+                    if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
+                        if ty == ASSET_TYPE_FRA
+                            && *BLACK_HOLE_PUBKEY == o.record.public_key
+                        {
+                            if let XfrAmount::NonConfidential(am) = o.record.amount {
+                                if am > (TX_FEE_MIN - 1) {
+                                    return true;
                                 }
                             }
-                            false
-                        })
-                        .map(|_| ());
-                } else if let Operation::DefineAsset(ref x) = o {
-                    if x.body.asset.code.val == ASSET_TYPE_FRA {
-                        return Some(());
+                        }
                     }
+                    false
+                });
+            } else if let Operation::DefineAsset(ref x) = o {
+                if x.body.asset.code.val == ASSET_TYPE_FRA {
+                    return true;
                 }
+            }
 
-                None
-            })
-            .is_some()
+            false
+        })
+    }
+
+    /// Issuing FRA is denied except in the genesis block.
+    pub fn check_fra_no_illegal_issuance(&self, tendermint_block_height: i64) -> bool {
+        // **mainnet v1.0**
+        //
+        // FRA is defined and issued in genesis block.
+        if 2 > tendermint_block_height {
+            return true;
+        }
+
+        !self.body.operations.iter().any(|o| {
+            if let Operation::IssueAsset(ref x) = o {
+                if ASSET_TYPE_FRA == x.body.code.val {
+                    return true;
+                }
+            }
+            false
+        })
     }
 
     pub fn hash(&self, id: TxnSID) -> HashOf<(TxnSID, Transaction)> {

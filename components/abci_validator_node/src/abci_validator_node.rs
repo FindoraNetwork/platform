@@ -12,7 +12,10 @@ use rand_core::SeedableRng;
 use serde::Serialize;
 use std::net::SocketAddr;
 use std::path::Path;
-use std::sync::{Arc, RwLock};
+use std::sync::{
+    atomic::{AtomicI64, Ordering},
+    Arc, RwLock,
+};
 use std::thread;
 use submission_api::SubmissionApi;
 use submission_server::{convert_tx, SubmissionServer, TxnForward};
@@ -21,6 +24,8 @@ use zei::xfr::structs::{XfrAmount, XfrAssetType};
 
 mod abci_config;
 use abci_config::ABCIConfig;
+
+static TendermintBlockHeight: AtomicI64 = AtomicI64::new(0);
 
 #[derive(Default)]
 pub struct TendermintForward {
@@ -114,7 +119,12 @@ impl abci::Application for ABCISubmissionServer {
 
         if let Some(tx) = convert_tx(req.get_tx()) {
             info!("converted: {:?}", tx);
-            if !tx.check_fee() || TxnEffect::compute_effect(tx).is_err() {
+            if !tx.check_fee()
+                || !tx.check_fra_no_illegal_issuance(
+                    TendermintBlockHeight.load(Ordering::Relaxed),
+                )
+                || TxnEffect::compute_effect(tx).is_err()
+            {
                 resp.set_code(1);
                 resp.set_log(String::from("Check failed"));
             }
@@ -138,7 +148,11 @@ impl abci::Application for ABCISubmissionServer {
         if let Some(tx) = convert_tx(req.get_tx()) {
             info!("converted: {:?}", tx);
 
-            if tx.check_fee() {
+            if tx.check_fee()
+                && tx.check_fra_no_illegal_issuance(
+                    TendermintBlockHeight.load(Ordering::Relaxed),
+                )
+            {
                 info!("locking for write: {}", error_location!());
                 if let Ok(mut la) = self.la.write() {
                     // set attr(tags) if any
@@ -161,7 +175,10 @@ impl abci::Application for ABCISubmissionServer {
         resp
     }
 
-    fn begin_block(&mut self, _req: &RequestBeginBlock) -> ResponseBeginBlock {
+    fn begin_block(&mut self, req: &RequestBeginBlock) -> ResponseBeginBlock {
+        TendermintBlockHeight
+            .swap(req.header.as_ref().unwrap().height, Ordering::Relaxed);
+
         info!("locking for write: {}", error_location!());
         if let Ok(mut la) = self.la.write() {
             if !la.all_commited() {
