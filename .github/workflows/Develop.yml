@@ -54,7 +54,7 @@ jobs:
     - name: Build images
       env:
         REF_NAME: ${CI_ACTION_REF_NAME}
-        HASH: ${CI_SHA::8}
+        HASH: ${CI_SHA::7}
         ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
         ENV: dev
       shell: bash
@@ -67,7 +67,7 @@ jobs:
     - name: Push images
       env:
         REF_NAME: ${CI_ACTION_REF_NAME}
-        HASH: ${CI_SHA::8}
+        HASH: ${CI_SHA::7}
         ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
         ENV: dev
       shell: bash
