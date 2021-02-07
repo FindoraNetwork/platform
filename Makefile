@@ -109,6 +109,34 @@ devnet:
 	@./scripts/devnet/resetnodes.sh 3 1
 	@./scripts/devnet/startnodes.sh
 
+ci_build_image:
+ifeq ($(ENV),release)
+	docker build -t $(ECR_URL)/$(ENV)/abci_validator_node:$(REF_NAME) -f container/Dockerfile-CI-abci_validator_node .
+	docker tag $(ECR_URL)/$(ENV)/abci_validator_node:$(REF_NAME) $(ECR_URL)/$(ENV)/abci_validator_node:latest
+	docker build -t $(ECR_URL)/$(ENV)/query_server:$(REF_NAME) -f container/Dockerfile-CI-query_server .
+	docker tag $(ECR_URL)/$(ENV)/query_server:$(REF_NAME) $(ECR_URL)/$(ENV)/query_server:latest
+	docker build -t $(ECR_URL)/$(ENV)/tendermint:$(REF_NAME) -f container/Dockerfile-CI-tendermint .
+	docker tag $(ECR_URL)/$(ENV)/tendermint:$(REF_NAME) $(ECR_URL)/$(ENV)/tendermint:latest
+else
+	docker build -t $(ECR_URL)/$(ENV)/abci_validator_node:$(REF_NAME)-$(HASH) -f container/Dockerfile-CI-abci_validator_node .
+	docker build -t $(ECR_URL)/$(ENV)/query_server:$(REF_NAME)-$(HASH) -f container/Dockerfile-CI-query_server .
+	docker build -t $(ECR_URL)/$(ENV)/tendermint:$(REF_NAME)-$(HASH) -f container/Dockerfile-CI-tendermint .
+endif
+
+ci_push_image:
+ifeq ($(ENV),release)
+    docker push $(ECR_URL)/$(ENV)/abci_validator_node:$(REF_NAME)
+	docker push $(ECR_URL)/$(ENV)/abci_validator_node:latest
+    docker push $(ECR_URL)/$(ENV)/query_server:$(REF_NAME)
+	docker push $(ECR_URL)/$(ENV)/query_server:latest
+    docker push $(ECR_URL)/$(ENV)/tendermint:$(REF_NAME)
+	docker push $(ECR_URL)/$(ENV)/tendermint:latest
+else
+	docker push $(ECR_URL)/$(ENV)/abci_validator_node:$(REF_NAME)-$(HASH)
+	docker push $(ECR_URL)/$(ENV)/query_server:$(REF_NAME)-$(HASH)
+	docker push $(ECR_URL)/$(ENV)/tendermint:$(REF_NAME)-$(HASH)
+endif
+
 ####@./scripts/devnet/resetnodes.sh <num_of_validator_nodes> <num_of_normal_nodes>
 ####@./scripts/devnet/snapshot.sh <user_nick> <password> <token_name> <max_units> <genesis_issuance> <memo> <memo_updatable>
 snapshot:
