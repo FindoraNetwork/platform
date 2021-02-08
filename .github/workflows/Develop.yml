@@ -18,10 +18,10 @@ jobs:
         toolchain: nightly-2021-01-24
         override: true
         components: rustfmt
-    # - name: check fmt
-    #   shell: bash
-    #   run: |
-    #     cargo fmt -- --check
+    - name: check fmt
+      shell: bash
+      run: |
+        cargo fmt -- --check
     # - name: test_status
     #   env:
     #     DBG: true
