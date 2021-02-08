@@ -64,8 +64,9 @@ jobs:
         ENV: release
       shell: bash
       run: |
-        TAGS="${GITHUB_REF#refs/tags/}"
-        export IMAGE_TAG="${TAGS:-master}"
+        TAGS=$(echo $GITHUB_REF | grep refs/tags)
+        TAGV="${TAGS#refs/tags/}"
+        export IMAGE_TAG="${TAGV:-master}"
         make ci_build_image
     - name: Login ECR
       shell: bash
@@ -77,8 +78,9 @@ jobs:
         ENV: release
       shell: bash
       run: |
-        TAGS="${GITHUB_REF#refs/tags/}"
-        export IMAGE_TAG="${TAGS:-master}"
+        TAGS=$(echo $GITHUB_REF | grep refs/tags)
+        TAGV="${TAGS#refs/tags/}"
+        export IMAGE_TAG="${TAGV:-master}"
         make ci_push_image
     # - name: release
     #   shell: bash
