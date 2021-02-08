@@ -12,7 +12,10 @@ use rand_core::SeedableRng;
 use serde::Serialize;
 use std::net::SocketAddr;
 use std::path::Path;
-use std::sync::{Arc, RwLock};
+use std::sync::{
+    atomic::{AtomicI64, Ordering},
+    Arc, RwLock,
+};
 use std::thread;
 use submission_api::SubmissionApi;
 use submission_server::{convert_tx, SubmissionServer, TxnForward};
@@ -21,6 +24,8 @@ use zei::xfr::structs::{XfrAmount, XfrAssetType};
 
 mod abci_config;
 use abci_config::ABCIConfig;
+
+static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
 
 #[derive(Default)]
 pub struct TendermintForward {
@@ -114,7 +119,12 @@ impl abci::Application for ABCISubmissionServer {
 
         if let Some(tx) = convert_tx(req.get_tx()) {
             info!("converted: {:?}", tx);
-            if TxnEffect::compute_effect(tx).is_err() {
+            if !tx.check_fee()
+                || !tx.check_fra_no_illegal_issuance(
+                    TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed),
+                )
+                || TxnEffect::compute_effect(tx).is_err()
+            {
                 resp.set_code(1);
                 resp.set_log(String::from("Check failed"));
             }
@@ -137,27 +147,38 @@ impl abci::Application for ABCISubmissionServer {
         let mut resp = ResponseDeliverTx::new();
         if let Some(tx) = convert_tx(req.get_tx()) {
             info!("converted: {:?}", tx);
-            info!("locking for write: {}", error_location!());
-            if let Ok(mut la) = self.la.write() {
-                // set attr(tags) if any
-                let attr = gen_tendermint_attr(&tx);
-                if 0 < attr.len() {
-                    resp.set_events(attr);
+
+            if tx.check_fee()
+                && tx.check_fra_no_illegal_issuance(
+                    TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed),
+                )
+            {
+                info!("locking for write: {}", error_location!());
+                if let Ok(mut la) = self.la.write() {
+                    // set attr(tags) if any
+                    let attr = gen_tendermint_attr(&tx);
+                    if 0 < attr.len() {
+                        resp.set_events(attr);
+                    }
+
+                    info!("locked for write");
+                    la.cache_transaction(tx);
+                    info!("unlocking for write: {}", error_location!());
+
+                    return resp;
                 }
-
-                info!("locked for write");
-                la.cache_transaction(tx);
-                info!("unlocking for write: {}", error_location!());
-
-                return resp;
             }
         }
+
         resp.set_code(1);
         resp.set_log(String::from("Failed to deliver transaction!"));
         resp
     }
 
-    fn begin_block(&mut self, _req: &RequestBeginBlock) -> ResponseBeginBlock {
+    fn begin_block(&mut self, req: &RequestBeginBlock) -> ResponseBeginBlock {
+        TENDERMINT_BLOCK_HEIGHT
+            .swap(req.header.as_ref().unwrap().height, Ordering::Relaxed);
+
         info!("locking for write: {}", error_location!());
         if let Ok(mut la) = self.la.write() {
             if !la.all_commited() {

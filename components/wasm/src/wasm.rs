@@ -12,7 +12,7 @@ use credentials::{
 use cryptohash::sha256;
 use ledger::data_model::{
     AssetTypeCode, AuthenticatedKVLookup, AuthenticatedTransaction, Operation,
-    TransferType,
+    TransferType, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
 };
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
@@ -223,6 +223,13 @@ impl TransactionBuilder {
 
 #[wasm_bindgen]
 impl TransactionBuilder {
+    /// A simple fee checker for mainnet v1.0.
+    ///
+    /// SEE [check_fee](ledger::data_model::Transaction::check_fee)
+    pub fn check_fee(&self) -> bool {
+        self.transaction_builder.check_fee()
+    }
+
     /// Create a new transaction builder.
     /// @param {BigInt} seq_id - Unique sequence ID to prevent replay attacks.
     pub fn new(seq_id: u64) -> Self {
@@ -1254,6 +1261,27 @@ pub fn restore_keypair_from_mnemonic_bip49(
 ) -> Result<XfrKeyPair, JsValue> {
     wallet::restore_keypair_from_mnemonic_bip49(phrase, lang, &path.into())
         .map_err(|e| JsValue::from_str(&e))
+}
+
+/// ID of FRA, in `String` format.
+#[wasm_bindgen]
+pub fn fra_get_asset_code() -> String {
+    AssetTypeCode {
+        val: ASSET_TYPE_FRA,
+    }
+    .to_base64()
+}
+
+/// Fee smaller than this value will be denied.
+#[wasm_bindgen]
+pub fn fra_get_minimal_fee() -> u64 {
+    TX_FEE_MIN
+}
+
+/// The destination for fee to be transfered to.
+#[wasm_bindgen]
+pub fn fra_get_dest_pubkey() -> XfrPublicKey {
+    *BLACK_HOLE_PUBKEY
 }
 
 #[cfg(test)]

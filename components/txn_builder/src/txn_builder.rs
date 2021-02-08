@@ -459,6 +459,12 @@ pub struct TransactionBuilder {
 }
 
 impl TransactionBuilder {
+    /// SEE [check_fee](leder::data_model::Transaction::check_fee)
+    #[inline(always)]
+    pub fn check_fee(&self) -> bool {
+        self.txn.check_fee()
+    }
+
     pub fn get_owner_memo_ref(&self, idx: usize) -> Option<&OwnerMemo> {
         self.txn.get_owner_memos_ref()[idx]
     }

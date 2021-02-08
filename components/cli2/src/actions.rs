@@ -12,7 +12,7 @@ use crate::{
 };
 use std::collections::HashMap;
 
-use ledger::data_model::*;
+use ledger::{data_model::*, store::fra_gen_initial_tx};
 use ledger_api_service::LedgerAccessRoutes;
 use promptly::{prompt, prompt_default, prompt_opt};
 use snafu::{Backtrace, GenerateBacktrace, OptionExt, ResultExt};
@@ -32,7 +32,7 @@ use zei::xfr::structs::AssetRecordTemplate;
 
 use crate::{
     helpers::{do_request, do_request_asset, do_request_authenticated_utxo},
-    kv::MixedPair,
+    kv::{MixedPair, NICK_FEE},
 };
 use ledger::data_model::errors::PlatformError;
 use ledger::{error_location, zei_fail};
@@ -82,6 +82,12 @@ fn check_existing_key_pair<S: CliDataStore>(
 }
 
 pub fn key_gen<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
+    if NICK_FEE == nick {
+        return Err(CliError::NickName {
+            msg: NICK_FEE.to_owned() + " is a nick name reserved by the system!",
+        });
+    }
+
     // Check if the key already exists
     let continue_key_gen = check_existing_key_pair(store, &nick)?;
 
@@ -279,6 +285,7 @@ pub fn simple_define_asset<S: CliDataStore>(
     store: &mut S,
     issuer_nick: String,
     asset_nick: String,
+    is_fra: bool,
 ) -> Result<(), CliError> {
     query_ledger_state(store, true)?; // TODO Why true?
 
@@ -286,7 +293,7 @@ pub fn simple_define_asset<S: CliDataStore>(
 
     prepare_transaction(store, nick_tx.clone())?;
 
-    define_asset(store, nick_tx.clone(), issuer_nick, asset_nick)?;
+    define_asset(store, nick_tx.clone(), issuer_nick, asset_nick, is_fra)?;
 
     build_transaction(store)?;
 
@@ -1103,6 +1110,29 @@ pub fn define_asset<S: CliDataStore>(
     txn_nick: String,
     issuer_nick: String,
     asset_nick: String,
+    is_fra: bool,
+) -> Result<(), CliError> {
+    if is_fra {
+        define_asset_x(
+            store,
+            txn_nick,
+            issuer_nick,
+            asset_nick,
+            Some(AssetTypeCode::new_from_vec(
+                ASSET_TYPE_FRA_BYTES[..].to_vec(),
+            )),
+        )
+    } else {
+        define_asset_x(store, txn_nick, issuer_nick, asset_nick, None)
+    }
+}
+
+pub fn define_asset_x<S: CliDataStore>(
+    store: &mut S,
+    txn_nick: String,
+    issuer_nick: String,
+    asset_nick: String,
+    asset_code: Option<AssetTypeCode>,
 ) -> Result<(), CliError> {
     let issuer_nick = KeypairName(issuer_nick);
     let config = store.get_config()?;
@@ -1129,6 +1159,7 @@ pub fn define_asset<S: CliDataStore>(
             new_builder = b;
         }
     }
+
     store.with_keypair::<PlatformError, _>(&issuer_nick, |kp| match kp {
         None => {
             let err_msg = format!("No key pair '{}' found.", issuer_nick.0);
@@ -1145,7 +1176,7 @@ pub fn define_asset<S: CliDataStore>(
             asset_rules.set_updatable(updatable);
             new_builder.builder.add_operation_create_asset(
                 &kp,
-                None,
+                asset_code,
                 asset_rules,
                 &prompt::<String, _>("memo?").map_err(|_| {
                     PlatformError::IoError(String::from(
@@ -1946,6 +1977,40 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
         }
     }
     Ok(())
+}
+
+/// Currently only used for effect verification of negative scenes.
+pub fn init_fra<S: CliDataStore>(
+    store: &mut S,
+    issuer_nick: String,
+) -> Result<(), CliError> {
+    let query = format!(
+        "{}{}",
+        store.get_config()?.submission_server,
+        SubmissionRoutes::SubmitTransaction.route()
+    );
+
+    let name = KeypairName(issuer_nick);
+    if let Some(mixed_pair) = store.get_encrypted_keypair(&name)? {
+        println!("Please enter current password for {}", name.0);
+        let kp = crate::helpers::prompt_with_retries(3, None, |pass| {
+            mixed_pair.encrypted(pass.as_bytes())
+        })
+        .context(crate::Password)?;
+
+        reqwest::blocking::Client::builder()
+            .build()?
+            .post(&query)
+            .json(&fra_gen_initial_tx(&kp))
+            .send()?
+            .error_for_status()
+            .map(|_| ())
+            .map_err(|e| dbg!(e).into())
+    } else {
+        Err(CliError::NickName {
+            msg: "Name not found".to_owned(),
+        })
+    }
 }
 
 pub fn export_keypair<S: CliDataStore>(

@@ -65,6 +65,9 @@ pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, Error> {
         Ok(resp) => match resp.json::<T>() {
             Err(e) => {
                 eprintln!("Problem parsing response {}, {}", query, e);
+                if let Ok(Ok(msg)) = client.get(query).send().map(|r| r.text()) {
+                    println!("\x1b[31;1m{}\x1b[0m", msg);
+                }
                 return Err(Error::with_description(
                     "Problem parsing json",
                     ErrorKind::Io,
