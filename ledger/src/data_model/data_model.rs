@@ -1664,7 +1664,7 @@ impl Transaction {
     /// - Only `NonConfidential Operation` can be used as fee
     /// - FRA code == [0; ASSET_TYPE_LENGTH]
     /// - Fee destination == [0; ed25519_dalek::PUBLIC_KEY_LENGTH]
-    /// - A transaction with an `Operation` of defining FRA need NOT any fee
+    /// - A transaction with an `Operation` of defining/issuing FRA need NOT fee
     ///
     /// > Is this function compatible with the process of
     /// > defining and issuing FRA in the genesis block ?
@@ -1701,6 +1701,10 @@ impl Transaction {
                 if x.body.asset.code.val == ASSET_TYPE_FRA {
                     return true;
                 }
+            } else if let Operation::IssueAsset(ref x) = o {
+                if x.body.code.val == ASSET_TYPE_FRA {
+                    return true;
+                }
             }
 
             false
@@ -1709,10 +1713,15 @@ impl Transaction {
 
     /// Issuing FRA is denied except in the genesis block.
     pub fn check_fra_no_illegal_issuance(&self, tendermint_block_height: i64) -> bool {
-        // **mainnet v1.0**
-        //
+        #[cfg(debug_assertions)]
+        const HEIGHT_LIMIT: i64 = 2000;
+
+        #[cfg(not(debug_assertions))]
+        const HEIGHT_LIMIT: i64 = 2;
+
+        // **mainnet v1.0**:
         // FRA is defined and issued in genesis block.
-        if 2 > tendermint_block_height {
+        if HEIGHT_LIMIT > tendermint_block_height {
             return true;
         }
 
