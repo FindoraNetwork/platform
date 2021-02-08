@@ -15,6 +15,8 @@ use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 pub mod crypto;
 pub use crypto::MixedPair;
 
+pub const NICK_FEE: &str = "fee";
+
 /// Possible errors encountered when dealing with a KVStore
 #[derive(Debug, Snafu)]
 pub enum KVError {
@@ -664,7 +666,11 @@ impl CliDataStore for KVStore {
         &self,
         k: &crate::PubkeyName,
     ) -> Result<Option<XfrPublicKey>, CliError> {
-        Ok(self.get(k)?)
+        if NICK_FEE == k.0 {
+            Ok(Some(*ledger::data_model::BLACK_HOLE_PUBKEY))
+        } else {
+            Ok(self.get(k)?)
+        }
     }
     fn delete_pubkey(
         &mut self,

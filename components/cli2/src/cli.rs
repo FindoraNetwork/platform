@@ -159,6 +159,8 @@ pub enum CliError {
         #[snafu(backtrace)]
         source: KVError,
     },
+    #[snafu(display("Error invalid nick name"))]
+    NickName { msg: String },
     #[snafu(context(false))]
     #[snafu(display("Error performing HTTP request"))]
     Reqwest {
@@ -455,6 +457,13 @@ enum Actions {
     //////////////////// Simple API  /////////////////////////////////////////////////////////////////
     /// Initialize or change your local database configuration
     Setup {},
+
+    /// Define and issue FRA
+    InitFra {
+        /// The nick name of issuer
+        #[structopt(long)]
+        nick: String,
+    },
 
     /// Generate bash/zsh/fish/powershell completion files for this CLI
     GenCompletions {
@@ -770,6 +779,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
     let ret = match action {
         //////////////////// Simple API  ///////////////////////////////////////////////////////////////
         Setup {} => setup(store),
+
+        InitFra { nick } => init_fra(store, nick),
 
         GenCompletions { .. } => panic!("GenCompletions should've been handle already!"),
 

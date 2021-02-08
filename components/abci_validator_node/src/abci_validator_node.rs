@@ -25,7 +25,7 @@ use zei::xfr::structs::{XfrAmount, XfrAssetType};
 mod abci_config;
 use abci_config::ABCIConfig;
 
-static TendermintBlockHeight: AtomicI64 = AtomicI64::new(0);
+static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
 
 #[derive(Default)]
 pub struct TendermintForward {
@@ -121,7 +121,7 @@ impl abci::Application for ABCISubmissionServer {
             info!("converted: {:?}", tx);
             if !tx.check_fee()
                 || !tx.check_fra_no_illegal_issuance(
-                    TendermintBlockHeight.load(Ordering::Relaxed),
+                    TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed),
                 )
                 || TxnEffect::compute_effect(tx).is_err()
             {
@@ -150,7 +150,7 @@ impl abci::Application for ABCISubmissionServer {
 
             if tx.check_fee()
                 && tx.check_fra_no_illegal_issuance(
-                    TendermintBlockHeight.load(Ordering::Relaxed),
+                    TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed),
                 )
             {
                 info!("locking for write: {}", error_location!());
@@ -176,7 +176,7 @@ impl abci::Application for ABCISubmissionServer {
     }
 
     fn begin_block(&mut self, req: &RequestBeginBlock) -> ResponseBeginBlock {
-        TendermintBlockHeight
+        TENDERMINT_BLOCK_HEIGHT
             .swap(req.header.as_ref().unwrap().height, Ordering::Relaxed);
 
         info!("locking for write: {}", error_location!());
