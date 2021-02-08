@@ -32,6 +32,12 @@ jobs:
     #   run: |
     #     curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
     #     make test_status
+    ## It need to install protobuf-compiler for build environment.
+    ## Enable this when build by container.
+    # - name: Install protobuf-compiler
+    #   shell: bash
+    #   run: |
+    #     apt install protobuf-compiler
     - name: install rustwasm
       shell: bash
       run: |
