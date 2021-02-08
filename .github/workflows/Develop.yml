@@ -63,7 +63,9 @@ jobs:
         ENV: dev
       shell: bash
       run: |
+        echo "REF: ${GITHUB_REF}"
         export IMAGE_TAG="${GITHUB_SHA::7}"
+        echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image
     - name: Login ECR
       shell: bash
@@ -75,7 +77,9 @@ jobs:
         ENV: dev
       shell: bash
       run: |
+        echo "REF: ${GITHUB_REF}"
         export IMAGE_TAG="${GITHUB_SHA::7}"
+        echo "Image tag: ${IMAGE_TAG}"
         make ci_push_image
     # - name: build release
     #   shell: bash
