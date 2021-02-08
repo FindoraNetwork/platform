@@ -58,28 +58,6 @@ jobs:
       shell: bash
       run: |
         make build_release
-    - name: Build images
-      env:
-        ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
-        ENV: release
-      shell: bash
-      run: |
-        TAGS="${GITHUB_REF#refs/tags/}"
-        export IMAGE_TAG="${TAGS:-master}"
-        make ci_build_image
-    - name: Login ECR
-      shell: bash
-      run: |
-        $(aws ecr get-login --region us-west-2 --no-include-email)
-    - name: Push images
-      env:
-        ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
-        ENV: release
-      shell: bash
-      run: |
-        TAGS="${GITHUB_REF#refs/tags/}"
-        export IMAGE_TAG="${TAGS:-master}"
-        make ci_push_image
     # - name: release
     #   shell: bash
     #   run: |
