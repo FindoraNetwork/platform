@@ -14,7 +14,7 @@ use sparse_merkle_tree::Key;
 use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
-use utils::{actix_get_request, HashOf, NetworkRoute, SignatureOf};
+use utils::{http_get_request, HashOf, NetworkRoute, SignatureOf};
 use zei::xfr::sig::XfrPublicKey;
 
 pub struct RestfulApiService {
@@ -680,7 +680,6 @@ pub struct ActixLedgerClient {
     port: usize,
     host: String,
     protocol: String,
-    client: reqwest::blocking::Client,
 }
 
 impl ActixLedgerClient {
@@ -689,7 +688,6 @@ impl ActixLedgerClient {
             port,
             host: String::from(host),
             protocol: String::from(protocol),
-            client: reqwest::blocking::Client::new(),
         }
     }
 }
@@ -706,7 +704,7 @@ impl RestfulArchiveAccess for ActixLedgerClient {
             self.port,
             LedgerArchiveRoutes::BlocksSince.with_arg(&addr.0)
         );
-        let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
+        let text = http_get_request(&query).map_err(|_| inp_fail!())?;
         Ok(
             serde_json::from_str::<Vec<(usize, Vec<FinalizedTransaction>)>>(&text)
                 .map_err(|_| ser_fail!())?,
@@ -727,7 +725,7 @@ impl RestfulLedgerAccess for ActixLedgerClient {
             self.port,
             LedgerAccessRoutes::UtxoSid.with_arg(&addr.0)
         );
-        let text = actix_get_request(&self.client, &query).map_err(|e| inp_fail!(e))?;
+        let text = http_get_request(&query).map_err(|e| inp_fail!(e))?;
         Ok(serde_json::from_str::<AuthenticatedUtxo>(&text).map_err(|_| ser_fail!())?)
     }
 
@@ -739,7 +737,7 @@ impl RestfulLedgerAccess for ActixLedgerClient {
             self.port,
             LedgerAccessRoutes::AssetIssuanceNum.with_arg(&code.to_base64())
         );
-        let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
+        let text = http_get_request(&query).map_err(|_| inp_fail!())?;
         Ok(serde_json::from_str::<u64>(&text).map_err(|_| ser_fail!())?)
     }
 
@@ -751,7 +749,7 @@ impl RestfulLedgerAccess for ActixLedgerClient {
             self.port,
             LedgerAccessRoutes::AssetToken.with_arg(&code.to_base64())
         );
-        let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
+        let text = http_get_request(&query).map_err(|_| inp_fail!())?;
         Ok(serde_json::from_str::<AssetType>(&text).map_err(|_| ser_fail!())?)
     }
 
@@ -773,7 +771,7 @@ impl RestfulLedgerAccess for ActixLedgerClient {
             self.port,
             LedgerAccessRoutes::GlobalState.route()
         );
-        let text = actix_get_request(&self.client, &query).map_err(|e| inp_fail!(e))?;
+        let text = http_get_request(&query).map_err(|e| inp_fail!(e))?;
         Ok(serde_json::from_str::<_>(&text).map_err(|e| ser_fail!(e))?)
     }
 
@@ -793,7 +791,7 @@ impl RestfulLedgerAccess for ActixLedgerClient {
             self.port,
             LedgerAccessRoutes::PublicKey.route()
         );
-        let text = actix_get_request(&self.client, &query).map_err(|e| inp_fail!(e))?;
+        let text = http_get_request(&query).map_err(|e| inp_fail!(e))?;
         Ok(serde_json::from_str::<_>(&text).map_err(|e| ser_fail!(e))?)
     }
 

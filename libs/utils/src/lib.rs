@@ -59,27 +59,25 @@ pub fn protocol_host() -> (String, String) {
             .unwrap_or_else(|| SERVER_HOST.to_string()),
     )
 }
+
 #[cfg(not(target_arch = "wasm32"))]
-pub fn actix_post_request<T: Serialize>(
-    client: &reqwest::blocking::Client,
+pub fn http_post_request<T: Serialize>(
     query: &str,
     body: Option<T>,
-) -> Result<String, reqwest::Error> {
-    let mut req = client.post(query);
+) -> Result<String, attohttpc::Error> {
+    let req = attohttpc::post(query);
 
     if let Some(body) = body {
-        req = req.json(&body);
+        req.json(&body)?.send()?.error_for_status()?.text()
+    } else {
+        req.send()?.error_for_status()?.text()
     }
-
-    Ok(req.send()?.error_for_status()?.text()?)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn actix_get_request(
-    client: &reqwest::blocking::Client,
-    query: &str,
-) -> Result<String, reqwest::Error> {
-    Ok(client.get(query).send()?.error_for_status()?.text()?)
+#[inline(always)]
+pub fn http_get_request(query: &str) -> Result<String, attohttpc::Error> {
+    attohttpc::get(query).send()?.error_for_status()?.text()
 }
 
 pub fn fresh_tmp_dir() -> PathBuf {
