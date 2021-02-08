@@ -21,10 +21,10 @@ jobs:
         toolchain: nightly-2021-01-24
         override: true
         components: rustfmt
-    # - name: check fmt
-    #   shell: bash
-    #   run: |
-    #     cargo fmt -- --check
+    - name: check fmt
+      shell: bash
+      run: |
+        cargo fmt -- --check
     # - name: test_status
     #   env:
     #     DBG: true
@@ -32,6 +32,12 @@ jobs:
     #   run: |
     #     curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
     #     make test_status
+    ## It need to install protobuf-compiler for build environment.
+    ## Enable this when build by container.
+    # - name: Install protobuf-compiler
+    #   shell: bash
+    #   run: |
+    #     apt install protobuf-compiler
     - name: install rustwasm
       shell: bash
       run: |
