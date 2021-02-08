@@ -1,5 +1,0 @@
-FROM debian:10.7-slim
-COPY release/bin/tendermint /usr/local/sbin/tendermint
-COPY container/docker-entrypoint-tendermint.sh /docker-entrypoint.sh
-WORKDIR /
-ENTRYPOINT ["/docker-entrypoint.sh"]
