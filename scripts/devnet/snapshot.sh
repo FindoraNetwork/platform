@@ -40,6 +40,7 @@ stopnodes=$(dirname "$0")/stopnodes.sh
 
 # clean wallet if exists
 rm -rf $WALLET/cli2_data.sqlite
+rm -rf $WALLET/*_passphrase
 rm -rf $WALLET/snapshot.tar.gz
 
 # clean and restart nodes
@@ -72,7 +73,7 @@ findora initialize-transaction genesis
 
 # define asset
 echo -e "        step-5-1: define genesis asset------------------------------"
-printf "$pswd\n$max_units\n$memo_updatable\n$memo\n" | findora define-asset genesis $nick $token
+printf "$pswd\n$max_units\n$memo_updatable\n$memo\n" | findora define-asset --is-fra genesis $nick $token
 
 # issue asset
 echo -e "        step-5-2: issue genesis asset-------------------------------"
