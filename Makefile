@@ -12,6 +12,7 @@
 all: build_release
 
 export CARGO_NET_GIT_FETCH_WITH_CLI = true
+export PROTOC = $(shell which protoc)
 
 ifdef DBG
 target_dir = debug

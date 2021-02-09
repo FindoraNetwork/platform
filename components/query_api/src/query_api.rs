@@ -20,7 +20,7 @@ use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
-use utils::{actix_get_request, actix_post_request, MetricsRenderer, NetworkRoute};
+use utils::{http_get_request, http_post_request, MetricsRenderer, NetworkRoute};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::OwnerMemo;
@@ -451,7 +451,6 @@ pub struct ActixQueryServerClient {
     port: usize,
     host: String,
     protocol: String,
-    client: reqwest::blocking::Client,
 }
 
 impl ActixQueryServerClient {
@@ -460,7 +459,6 @@ impl ActixQueryServerClient {
             port,
             host: String::from(host),
             protocol: String::from(protocol),
-            client: reqwest::blocking::Client::new(),
         }
     }
 }
@@ -479,12 +477,8 @@ impl RestfulQueryServerAccess for ActixQueryServerClient {
             self.port,
             QueryServerRoutes::StoreCustomData.route()
         );
-        actix_post_request(
-            &self.client,
-            &query,
-            Some(&(key, data.as_ref().to_vec(), blind)),
-        )
-        .map_err(|_| inp_fail!())?;
+        http_post_request(&query, Some(&(key, data.as_ref().to_vec(), blind)))
+            .map_err(|_| inp_fail!())?;
         Ok(())
     }
 
@@ -497,8 +491,8 @@ impl RestfulQueryServerAccess for ActixQueryServerClient {
             self.port,
             QueryServerRoutes::GetCustomData.with_arg(&b64key)
         );
-        let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
-        Ok(serde_json::from_str::<Vec<u8>>(&text).map_err(|_| ser_fail!())?)
+        let text = http_get_request(&query).map_err(|_| inp_fail!())?;
+        serde_json::from_str::<Vec<u8>>(&text).map_err(|_| ser_fail!())
     }
 
     fn get_owner_memo(&self, txo_sid: u64) -> Result<Option<OwnerMemo>, PlatformError> {
@@ -509,7 +503,7 @@ impl RestfulQueryServerAccess for ActixQueryServerClient {
             self.port,
             QueryServerRoutes::GetOwnerMemo.with_arg(&txo_sid)
         );
-        let text = actix_get_request(&self.client, &query).map_err(|_| inp_fail!())?;
-        Ok(serde_json::from_str::<Option<OwnerMemo>>(&text).map_err(|_| ser_fail!())?)
+        let text = http_get_request(&query).map_err(|_| inp_fail!())?;
+        serde_json::from_str::<Option<OwnerMemo>>(&text).map_err(|_| ser_fail!())
     }
 }
