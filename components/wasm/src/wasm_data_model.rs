@@ -54,6 +54,7 @@ impl PublicParams {
 
 #[wasm_bindgen]
 /// Indicates whether the TXO ref is an absolute or relative value.
+#[derive(Copy, Clone)]
 pub struct TxoRef {
     pub(crate) txo_ref: PlatformTxoRef,
 }
@@ -140,6 +141,7 @@ impl AuthenticatedAssetRecord {
 /// This object represents an asset record owned by a ledger key pair.
 /// @see {@link module:Findora-Wasm.open_client_asset_record|open_client_asset_record} for information about how to decrypt an encrypted asset
 /// record.
+#[derive(Clone)]
 pub struct ClientAssetRecord {
     pub(crate) txo: TxOutput,
 }

@@ -17,6 +17,7 @@ use ledger::data_model::{
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
+use std::cmp::Ordering;
 use txn_builder::{
     BuildsTransactions, PolicyChoice, TransactionBuilder as PlatformTransactionBuilder,
     TransferOperationBuilder as PlatformTransferOperationBuilder,
@@ -30,7 +31,8 @@ use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordTyp
 use zei::xfr::lib::trace_assets as zei_trace_assets;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 use zei::xfr::structs::{
-    AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody, ASSET_TYPE_LENGTH,
+    AssetRecordTemplate, AssetType as ZeiAssetType, XfrAssetType, XfrBody,
+    ASSET_TYPE_LENGTH,
 };
 
 mod util;
@@ -221,8 +223,96 @@ impl TransactionBuilder {
     }
 }
 
+struct FeeInput {
+    // Amount
+    am: u64,
+    // Index of txo
+    tr: TxoRef,
+    // Input body
+    ar: ClientAssetRecord,
+    // Owner of this txo
+    kp: XfrKeyPair,
+}
+
+#[wasm_bindgen]
+#[derive(Default)]
+pub struct FeeInputs {
+    inner: Vec<FeeInput>,
+}
+
+#[wasm_bindgen]
+impl FeeInputs {
+    pub fn new() -> Self {
+        FeeInputs::default()
+    }
+
+    pub fn append(
+        &mut self,
+        am: u64,
+        tr: TxoRef,
+        ar: ClientAssetRecord,
+        kp: XfrKeyPair,
+    ) {
+        self.inner.push(FeeInput { am, tr, ar, kp })
+    }
+}
+
 #[wasm_bindgen]
 impl TransactionBuilder {
+    /// As the last operation of any transaction,
+    /// add a static fee to the transaction.
+    pub fn add_fee(self, inputs: FeeInputs) -> Result<TransactionBuilder, JsValue> {
+        let mut kps = vec![];
+
+        inputs
+            .inner
+            .into_iter()
+            .filter(|i| {
+                if let XfrAssetType::NonConfidential(ty) = i.ar.txo.record.asset_type {
+                    if ASSET_TYPE_FRA == ty {
+                        return true;
+                    }
+                }
+                false
+            })
+            .fold(Ok(TransferOperationBuilder::default()), |base, new| {
+                base.and_then(|b| {
+                    b.add_input_no_tracking(new.tr, &new.ar, None, &new.kp, new.am)
+                        .map(|b| {
+                            kps.push(new.kp);
+                            b
+                        })
+                })
+            })
+            .and_then(|op| {
+                op.add_output_no_tracking(
+                    TX_FEE_MIN,
+                    &*BLACK_HOLE_PUBKEY,
+                    AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    }
+                    .to_base64(),
+                    false,
+                    false,
+                )
+            })
+            .and_then(|op| op.balance())
+            .and_then(|op| op.create())
+            .and_then(|mut op| {
+                let cmp = |a: &XfrKeyPair, b: &XfrKeyPair| {
+                    a.get_pk().as_bytes().cmp(b.get_pk().as_bytes())
+                };
+                kps.sort_by(cmp);
+                kps.dedup_by(|a, b| matches!(cmp(a, b), Ordering::Equal));
+                for i in kps.iter() {
+                    op = op.sign(i)?;
+                }
+                Ok(op)
+            })
+            .and_then(|op| op.transaction())
+            .and_then(|op_str| self.add_transfer_operation(op_str))
+    }
+
     /// A simple fee checker for mainnet v1.0.
     ///
     /// SEE [check_fee](ledger::data_model::Transaction::check_fee)
@@ -507,7 +597,7 @@ impl TransferOperationBuilder {
     pub fn add_input(
         mut self,
         txo_ref: TxoRef,
-        asset_record: ClientAssetRecord,
+        asset_record: &ClientAssetRecord,
         owner_memo: Option<OwnerMemo>,
         tracing_policies: Option<&TracingPolicies>,
         key: &XfrKeyPair,
@@ -610,7 +700,7 @@ impl TransferOperationBuilder {
     ) -> Result<TransferOperationBuilder, JsValue> {
         self.add_input(
             txo_ref,
-            asset_record,
+            &asset_record,
             owner_memo,
             Some(tracing_policies),
             key,
@@ -633,7 +723,7 @@ impl TransferOperationBuilder {
     pub fn add_input_no_tracking(
         self,
         txo_ref: TxoRef,
-        asset_record: ClientAssetRecord,
+        asset_record: &ClientAssetRecord,
         owner_memo: Option<OwnerMemo>,
         key: &XfrKeyPair,
         amount: u64,
