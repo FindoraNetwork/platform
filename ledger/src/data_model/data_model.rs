@@ -76,9 +76,20 @@ fn is_default<T: Default + PartialEq>(x: &T) -> bool {
 
 const UTF8_ASSET_TYPES_WORK: bool = false;
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct AssetTypeCode {
     pub val: ZeiAssetType,
+}
+
+// The code of FRA is [0;  ASSET_TYPE_LENGTH],
+// exactly equal to the derived `default value`,
+// so we implement a custom `Default` for it.
+impl Default for AssetTypeCode {
+    fn default() -> Self {
+        AssetTypeCode {
+            val: ZeiAssetType([255; ASSET_TYPE_LENGTH]),
+        }
+    }
 }
 
 impl AssetTypeCode {
