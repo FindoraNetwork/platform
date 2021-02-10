@@ -5,31 +5,36 @@ use crate::display_functions::{
     display_txo_entry,
 };
 use crate::{
+    helpers::{
+        compute_findora_dir, do_request, do_request_asset,
+        do_request_authenticated_utxo, prompt_mnemonic,
+    },
+    kv::{MixedPair, NICK_FEE},
+};
+use crate::{
     print_conf, prompt_for_config, serialize_or_str, AssetTypeEntry, AssetTypeName,
     CliDataStore, CliError, FreshNamer, KeypairName, LedgerStateCommitment,
     NewPublicKeyFetch, NoTransactionInProgress, NoneValue, OpMetadata, PubkeyName,
     TxnBuilderName, TxnMetadata, TxnName, TxoCacheEntry, TxoName,
 };
-use crate::{
-    helpers::{do_request, do_request_asset, do_request_authenticated_utxo, compute_findora_dir, prompt_mnemonic},
-    kv::{MixedPair, NICK_FEE},
-};
 
-use std::collections::HashMap;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::convert::Infallible;
+use std::fs::File;
+use std::io::prelude::*;
 use std::process::exit;
 use std::{thread, time};
-use std::io::prelude::*;
-use std::fs::File;
-use std::convert::Infallible;
 
-use ledger::{data_model::*, store::fra_gen_initial_tx};
 use ledger::data_model::errors::PlatformError;
+use ledger::{data_model::*, store::fra_gen_initial_tx};
 use ledger::{error_location, zei_fail};
 use ledger_api_service::LedgerAccessRoutes;
 use promptly::{prompt, prompt_default, prompt_opt};
 use snafu::{Backtrace, GenerateBacktrace, OptionExt, ResultExt};
 
+use rand::distributions::Alphanumeric;
+use rand::Rng;
 use submission_api::SubmissionRoutes;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::PolicyChoice;
@@ -40,8 +45,6 @@ use zei::setup::PublicParams;
 use zei::xfr::asset_record::{open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::AssetRecordTemplate;
-use rand::distributions::Alphanumeric;
-use rand::Rng;
 
 type GlobalState = (
     HashOf<Option<StateCommitmentData>>,
@@ -101,7 +104,9 @@ pub fn key_gen<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliEr
         let mut name = compute_findora_dir()?;
         name.push(format!("{}_passphrase", &nick));
         let mut pass_file = File::create(name).unwrap();
-        pass_file.write(phrase.as_ref()).expect("Failed to save passphrase");
+        pass_file
+            .write(phrase.as_ref())
+            .expect("Failed to save passphrase");
 
         // add keys to store
         let pk = *kp.get_pk_ref();
