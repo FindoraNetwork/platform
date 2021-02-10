@@ -5,7 +5,7 @@
 //!
 
 use bech32::{self, FromBase32, ToBase32};
-use bip39::{Language, Mnemonic, MnemonicType, Seed};
+use bip0039::{Count, Language, Mnemonic};
 use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
 use ruc::{err::*, *};
 use std::result::Result as Res;
@@ -17,7 +17,7 @@ use zei::{
 /// Randomly generate a 12words-length mnemonic.
 #[inline(always)]
 pub fn generate_mnemonic_default() -> String {
-    Mnemonic::new(MnemonicType::Words12, Language::English).into_phrase()
+    Mnemonic::generate_in(Language::English, Count::Words12).into_phrase()
 }
 
 /// Generate mnemonic with custom length and language.
@@ -26,11 +26,11 @@ pub fn generate_mnemonic_default() -> String {
 #[inline(always)]
 pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> Res<String, String> {
     let w = match wordslen {
-        12 => MnemonicType::Words12,
-        15 => MnemonicType::Words15,
-        18 => MnemonicType::Words18,
-        21 => MnemonicType::Words21,
-        24 => MnemonicType::Words24,
+        12 => Count::Words12,
+        15 => Count::Words15,
+        18 => Count::Words18,
+        21 => Count::Words21,
+        24 => Count::Words24,
         _ => {
             return Err(
                 "Invalid words length, only 12/15/18/21/24 can be accepted.".to_owned()
@@ -40,7 +40,7 @@ pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> Res<String, String>
 
     let l = check_lang(lang).map_err(|e| genlog(e))?;
 
-    Ok(Mnemonic::new(w, l).into_phrase())
+    Ok(Mnemonic::generate_in(l, w).into_phrase())
 }
 
 // do the real restore operation.
@@ -48,15 +48,15 @@ macro_rules! restore_keypair_from_mnemonic {
     ($phrase: expr, $l: expr, $p: expr, $bip: tt) => {
         check_lang($l)
             .c(d!())
-            .and_then(|l| Mnemonic::from_phrase($phrase, l).map_err(|e| eg!(1, e)))
-            .map(|m| Seed::new(&m, ""))
+            .and_then(|l| Mnemonic::from_phrase_in(l, $phrase).map_err(|e| eg!(1, e)))
+            .map(|m| m.to_seed(""))
             .and_then(|seed| {
                 DerivationPath::$bip($p.coin, $p.account, $p.change, $p.address)
                     .map_err(|e| eg!(2, e))
                     .map(|dp| (seed, dp))
             })
             .and_then(|(seed, dp)| {
-                ExtendedSecretKey::from_seed(seed.as_bytes())
+                ExtendedSecretKey::from_seed(&seed)
                     .map_err(|e| eg!(3, e))?
                     .derive(&dp)
                     .map_err(|e| eg!(4, e))
@@ -142,8 +142,8 @@ fn restore_keypair_from_mnemonic_bip49_inner(
 fn check_lang(lang: &str) -> Result<Language> {
     match lang {
         "en" => Ok(Language::English),
-        "zh" => Ok(Language::ChineseSimplified),
-        "zh_traditional" => Ok(Language::ChineseTraditional),
+        "zh" => Ok(Language::SimplifiedChinese),
+        "zh_traditional" => Ok(Language::TraditionalChinese),
         "fr" => Ok(Language::French),
         "it" => Ok(Language::Italian),
         "ko" => Ok(Language::Korean),
