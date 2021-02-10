@@ -105,7 +105,7 @@ pub fn key_gen<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliEr
         name.push(format!("{}_passphrase", &nick));
         let mut pass_file = File::create(name).unwrap();
         pass_file
-            .write(phrase.as_ref())
+            .write_all(phrase.as_ref())
             .expect("Failed to save passphrase");
 
         // add keys to store
