@@ -169,6 +169,23 @@ pub enum PasswordReadError {
     IncorrectPassword,
 }
 
+/// Reads a user's mnemonic
+///
+/// Optionally takes a string describing what the mnemonic is for
+pub fn prompt_mnemonic(
+    description: Option<&str>,
+) -> Result<Zeroizing<String>, PasswordReadError> {
+    let prompt = if let Some(s) = description {
+        format!("Enter menonic for {}: ", s)
+    } else {
+        "Enter menonic: ".to_string()
+    };
+
+    rpassword::prompt_password_stdout(&prompt)
+        .context(UserInput)
+        .map(Zeroizing::new)
+}
+
 /// Reads a user's password without confirming
 ///
 /// Optionally takes a string describing what the password is for

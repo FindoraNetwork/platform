@@ -516,6 +516,12 @@ enum Actions {
         nick: String,
     },
 
+    /// Restore keypair from passphrase bip44, setting the name to <nick>
+    RestoreFromMnemonicBip44 {
+        /// Identity
+        nick: String,
+    },
+
     /// List all the key pairs present in the database.
     ListKeys {},
 
@@ -801,6 +807,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
         DeleteKeypair { nick } => delete_keypair(store, nick),
 
         DeletePublicKey { nick } => delete_public_key(store, nick),
+
+        RestoreFromMnemonicBip44 { nick } => restore_from_mnemonic_bip44(store, nick),
 
         SimpleDefineAsset {
             issuer_nick,

@@ -5,20 +5,36 @@ use crate::display_functions::{
     display_txo_entry,
 };
 use crate::{
+    helpers::{
+        compute_findora_dir, do_request, do_request_asset,
+        do_request_authenticated_utxo, prompt_mnemonic,
+    },
+    kv::{MixedPair, NICK_FEE},
+};
+use crate::{
     print_conf, prompt_for_config, serialize_or_str, AssetTypeEntry, AssetTypeName,
     CliDataStore, CliError, FreshNamer, KeypairName, LedgerStateCommitment,
     NewPublicKeyFetch, NoTransactionInProgress, NoneValue, OpMetadata, PubkeyName,
     TxnBuilderName, TxnMetadata, TxnName, TxoCacheEntry, TxoName,
 };
-use std::collections::HashMap;
 
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::convert::Infallible;
+use std::fs::File;
+use std::io::prelude::*;
+use std::process::exit;
+use std::{thread, time};
+
+use ledger::data_model::errors::PlatformError;
 use ledger::{data_model::*, store::fra_gen_initial_tx};
+use ledger::{error_location, zei_fail};
 use ledger_api_service::LedgerAccessRoutes;
 use promptly::{prompt, prompt_default, prompt_opt};
 use snafu::{Backtrace, GenerateBacktrace, OptionExt, ResultExt};
-use std::collections::BTreeMap;
-use std::process::exit;
-use std::{thread, time};
+
+use rand::distributions::Alphanumeric;
+use rand::Rng;
 use submission_api::SubmissionRoutes;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::PolicyChoice;
@@ -29,16 +45,6 @@ use zei::setup::PublicParams;
 use zei::xfr::asset_record::{open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::AssetRecordTemplate;
-
-use crate::{
-    helpers::{do_request, do_request_asset, do_request_authenticated_utxo},
-    kv::{MixedPair, NICK_FEE},
-};
-use ledger::data_model::errors::PlatformError;
-use ledger::{error_location, zei_fail};
-use rand::distributions::Alphanumeric;
-use rand::Rng;
-use std::convert::Infallible;
 
 type GlobalState = (
     HashOf<Option<StateCommitmentData>>,
@@ -92,7 +98,17 @@ pub fn key_gen<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliEr
     let continue_key_gen = check_existing_key_pair(store, &nick)?;
 
     if continue_key_gen {
-        let kp = XfrKeyPair::generate(&mut rand::thread_rng());
+        // temporary solution, save passphrase here
+        let phrase = wallet::generate_mnemonic_custom(24, "en").unwrap();
+        let kp = wallet::restore_keypair_from_mnemonic_default(&phrase).unwrap();
+        let mut name = compute_findora_dir()?;
+        name.push(format!("{}_passphrase", &nick));
+        let mut pass_file = File::create(name).unwrap();
+        pass_file
+            .write_all(phrase.as_ref())
+            .expect("Failed to save passphrase");
+
+        // add keys to store
         let pk = *kp.get_pk_ref();
         store.add_key_pair(&KeypairName(nick.to_string()), kp)?;
         store.add_public_key(&PubkeyName(nick.to_string()), pk)?;
@@ -269,6 +285,32 @@ pub fn delete_public_key<S: CliDataStore>(
                 store.delete_pubkey(&PubkeyName(nick.to_string()))?;
                 println!("Public key '{}' deleted", nick);
             }
+        }
+    }
+    Ok(())
+}
+
+pub fn restore_from_mnemonic_bip44<S: CliDataStore>(
+    store: &mut S,
+    nick: String,
+) -> Result<(), CliError> {
+    let continue_restore = check_existing_key_pair(store, &nick)?;
+    if !continue_restore {
+        println!("Error: Database already contains a key for {}.", nick);
+        println!("Please delete the existing key first, or use a different nickname.");
+        exit(-1);
+    }
+
+    let phrase = prompt_mnemonic(Some(&nick)).expect("Failed to read mnemonic");
+    match wallet::restore_keypair_from_mnemonic_default(&phrase) {
+        Ok(kp) => {
+            store.add_public_key(&PubkeyName(nick.to_string()), *kp.get_pk_ref())?;
+            store.add_key_pair(&KeypairName(nick.to_string()), kp)?;
+            println!("New key pair added for '{}'", nick);
+        }
+        Err(e) => {
+            eprintln!("Could not restore key pair: {}", e);
+            exit(-1);
         }
     }
     Ok(())

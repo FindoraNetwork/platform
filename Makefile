@@ -152,9 +152,11 @@ ifeq ($(ENV),release)
 	docker push $(ECR_URL)/$(ENV)/tendermint:latest
 endif
 
-####@./scripts/devnet/resetnodes.sh <num_of_validator_nodes> <num_of_normal_nodes>
 ####@./scripts/devnet/snapshot.sh <user_nick> <password> <token_name> <max_units> <genesis_issuance> <memo> <memo_updatable>
 snapshot:
+	@./scripts/devnet/snapshot.sh Findora my_pass FRA 21210000000000000 21000000000000000 my_memo Y
+
+####@./scripts/devnet/resetnodes.sh <num_of_validator_nodes> <num_of_normal_nodes>
+mainnet:
 	@./scripts/devnet/stopnodes.sh
 	@./scripts/devnet/resetnodes.sh 4 1
-	@./scripts/devnet/snapshot.sh Findora my_pass FRA 21210000000000000 21000000000000000 my_memo Y
