@@ -806,7 +806,7 @@ impl BitMap {
                     let set_count = count_bits(&block.bits, map);
                     count += block.header.count as usize;
                     blocks.push(block);
-                    dirty.push(0 as i64);
+                    dirty.push(0_i64);
                     checksum_valid.push(false);
                     set.push(set_count);
                 }
