@@ -81,6 +81,25 @@ jobs:
         export IMAGE_TAG="${GITHUB_SHA::7}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_push_image
+    - name: Push wasm-js-bindings
+      shell: bash
+      run: |
+        export WASM_VERSION="${GITHUB_SHA::7}"
+        export BRANCH_NAME="develop"
+        export WASM_DIR="/tmp/wasm-js-bindings"
+        if [ ! -d "${WASM_DIR}" ]; then git clone git@github.com:FindoraNetwork/wasm-js-bindings.git "${WASM_DIR}"; fi
+        cp wasm.tar.gz /tmp/wasm.tar.gz
+        pushd "${WASM_DIR}"
+        git checkout "${BRANCH_NAME}" || git checkout -b "${BRANCH_NAME}"
+        git pull origin "${BRANCH_NAME}" || true
+        tar -C "${WASM_DIR}" -zxf /tmp/wasm.tar.gz
+        mv "${WASM_DIR}"/components/wasm/pkg/* "${WASM_DIR}"
+        if [ "$(git diff)" != "" ]; then
+            git add .
+            git commit -m "version: ${WASM_VERSION}"
+            git push origin "${BRANCH_NAME}"
+        fi
+        popd
     # - name: build release
     #   shell: bash
     #   run: |

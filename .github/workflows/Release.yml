@@ -73,7 +73,7 @@ jobs:
         echo "REF: ${GITHUB_REF}"
         TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
         TAGV="${TAGS#refs/tags/}"
-        export IMAGE_TAG="${TAGV:-master}"
+        export IMAGE_TAG="${TAGV:-main}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image
     - name: Login ECR
@@ -89,9 +89,34 @@ jobs:
         echo "REF: ${GITHUB_REF}"
         TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
         TAGV="${TAGS#refs/tags/}"
-        export IMAGE_TAG="${TAGV:-master}"
+        export IMAGE_TAG="${TAGV:-main}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_push_image
+    - name: Push wasm-js-bindings
+      shell: bash
+      run: |
+        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+        TAGV="${TAGS#refs/tags/}"
+        export WASM_VERSION="${TAGV:-main}"
+        export BRANCH_NAME="main"
+        export WASM_DIR="/tmp/wasm-js-bindings"
+        if [ ! -d "${WASM_DIR}" ]; then git clone git@github.com:FindoraNetwork/wasm-js-bindings.git "${WASM_DIR}"; fi
+        cp wasm.tar.gz /tmp/wasm.tar.gz
+        pushd "${WASM_DIR}"
+        git checkout "${BRANCH_NAME}" || git checkout -b "${BRANCH_NAME}"
+        git pull origin "${BRANCH_NAME}" || true
+        tar -C "${WASM_DIR}" -zxf /tmp/wasm.tar.gz
+        mv "${WASM_DIR}"/components/wasm/pkg/* "${WASM_DIR}"
+        if [ "$(git diff)" != "" ]; then
+            git add .
+            git commit -m "version: ${WASM_VERSION}"
+            git push origin "${BRANCH_NAME}"
+        fi
+        if [ "${WASM_VERSION}" != "main" ]; then
+            git tag "${WASM_VERSION}"
+            git push origin "${WASM_VERSION}"
+        fi
+        popd
     # - name: release
     #   shell: bash
     #   run: |
