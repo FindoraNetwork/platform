@@ -54,7 +54,7 @@ endef
 
 build: tendermint wasm
 ifdef DBG
-	cargo build --workspace --exclude wasm --exclude http_tester --exclude log_tester
+	cargo build --frozen --workspace --exclude wasm --exclude http_tester --exclude log_tester
 	$(call pack,$(target_dir))
 else
 	@ echo -e "\x1b[31;01m\$$(DBG) must be defined !\x1b[00m"
@@ -66,7 +66,7 @@ ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
 else
-	cargo build --release --workspace --exclude wasm --exclude http_tester --exclude log_tester
+	cargo build --frozen --release --workspace --exclude wasm --exclude http_tester --exclude log_tester
 	$(call pack,$(target_dir))
 endif
 
@@ -75,7 +75,7 @@ ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
 else
-	cargo build --release --bins -p abci_validator_node -p query_api
+	cargo build --frozen --release --bins -p abci_validator_node -p query_api
 	$(call pack_minimal,$(target_dir))
 endif
 
