@@ -38,7 +38,7 @@ members = [
 ]
 
 [profile.dev]
-incremental = true
+incremental = false
 overflow-checks = true
 
 [profile.release]
