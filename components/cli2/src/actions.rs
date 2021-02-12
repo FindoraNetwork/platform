@@ -490,15 +490,6 @@ pub fn query_ledger_state<S: CliDataStore>(
             do_request::<GlobalState>(&query).map_err(|_| CliError::IOError {
                 msg: format!("Error with http request to {}", query),
             })?;
-        if let Err(e) = resp.2.verify(
-            &conf.ledger_sig_key.ok_or_else(|| {
-                PlatformError::IoError("ledger signing key not available.".to_string())
-            })?,
-            &(resp.0.clone(), resp.1),
-        ) {
-            eprintln!("Ledger responded with invalid signature: {}", e);
-            exit(-1);
-        }
 
         conf.ledger_state = Some(LedgerStateCommitment(resp));
 
