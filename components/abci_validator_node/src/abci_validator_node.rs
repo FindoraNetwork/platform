@@ -323,9 +323,18 @@ fn gen_tendermint_attr(tx: &Transaction) -> RepeatedField<Event> {
     let mut ev = Event::new();
     ev.set_field_type("tx".to_owned());
 
-    let mut kv = vec![Pair::new()];
+    let mut kv = vec![Pair::new(), Pair::new()];
     kv[0].set_key("prehash".as_bytes().to_vec());
     kv[0].set_value(hex::encode(tx.hash(TxnSID(0))).into_bytes());
+    kv[1].set_key("timestamp".as_bytes().to_vec());
+    kv[1].set_value(
+        std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            .to_string()
+            .into_bytes(),
+    );
 
     ev.set_attributes(RepeatedField::from_vec(kv));
     res.push(ev);

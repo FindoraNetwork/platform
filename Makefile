@@ -25,30 +25,36 @@ lib_dir         = lib
 pick            = target/$(target_dir)
 release_subdirs = $(bin_dir) $(lib_dir)
 
-bin_files_minimal = \
+bin_files = \
+		./$(pick)/check_merkle \
+		./$(pick)/solvency_cli \
+		./$(pick)/txn_cli \
+		./$(pick)/findora \
 		./$(pick)/abci_validator_node \
 		./$(pick)/query_server \
 		$(shell go env GOPATH)/bin/tendermint
 
-bin_files_other = \
-		./$(pick)/check_merkle \
-		./$(pick)/solvency_cli \
-		./$(pick)/txn_cli \
-		./$(pick)/findora
+bin_files_minimal_test_musl = \
+		./target/x86_64-unknown-linux-musl/$(target_dir)/abci_validator_node \
+		./target/x86_64-unknown-linux-musl/$(target_dir)/query_server \
+		$(shell go env GOPATH)/bin/tendermint
 
 WASM_PKG = wasm.tar.gz
 lib_files = ./$(WASM_PKG)
 
 define pack
-	$(call pack_minimal,$(target_dir))
-	cp $(bin_files_other) $(target_dir)/$(bin_dir)
-endef
-
-define pack_minimal
 	-@ rm -rf $(target_dir)
 	mkdir $(target_dir)
 	cd $(target_dir); for i in $(release_subdirs); do mkdir $$i; done
-	cp $(bin_files_minimal) $(target_dir)/$(bin_dir)
+	cp $(bin_files) $(target_dir)/$(bin_dir)
+	cp $(lib_files) $(target_dir)/$(lib_dir)
+endef
+
+define pack_minimal_test_musl
+	-@ rm -rf $(target_dir)
+	mkdir $(target_dir)
+	cd $(target_dir); for i in $(release_subdirs); do mkdir $$i; done
+	cp $(bin_files_minimal_test_musl) $(target_dir)/$(bin_dir)
 	cp $(lib_files) $(target_dir)/$(lib_dir)
 endef
 
@@ -70,18 +76,20 @@ else
 	$(call pack,$(target_dir))
 endif
 
-build_release_minimal: tendermint wasm
+build_release_minimal_test: tendermint wasm
 ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
 else
-	cargo build --frozen --release --bins -p abci_validator_node -p query_api
-	$(call pack_minimal,$(target_dir))
+	cargo build --target=x86_64-unknown-linux-musl --features=debugenv --frozen --release --bins -p abci_validator_node -p query_api
+	$(call pack_minimal_test_musl,$(target_dir))
 endif
 
 test:
 	cargo test --lib --workspace -- --test-threads=1
+	cargo test --features=debugenv --lib --workspace -- --test-threads=1
 	cargo test --workspace -- --test-threads=1
+	cargo test --features=debugenv --workspace -- --test-threads=1
 
 bench:
 	cargo bench --workspace
