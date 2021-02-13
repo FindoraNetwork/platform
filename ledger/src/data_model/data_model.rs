@@ -1724,10 +1724,10 @@ impl Transaction {
 
     /// Issuing FRA is denied except in the genesis block.
     pub fn check_fra_no_illegal_issuance(&self, tendermint_block_height: i64) -> bool {
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "debugenv")]
         const HEIGHT_LIMIT: i64 = 2000;
 
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(feature = "debugenv"))]
         const HEIGHT_LIMIT: i64 = 2;
 
         // **mainnet v1.0**:

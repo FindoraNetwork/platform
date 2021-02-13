@@ -48,6 +48,7 @@ sled = "0.34.6"
 
 [features]
 TESTING = []
+debugenv = []
 
 [dev-dependencies]
 lazy_static = "1.4.0"

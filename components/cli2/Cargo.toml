@@ -27,7 +27,7 @@ ledger_api_service = { path = "../ledger_api_service" }
 network = { path = "../../libs/network" }
 promptly = "0.3.0"
 rand = "0.7.3"
-reqwest = { version = "0.10", features = ["blocking", "json"] }
+reqwest = { version = "0.10", default-features = false, features = ["rustls-tls", "blocking", "json"] }
 rpassword = "4.0.5"
 rusqlite = { version = "0.23.1", features = ["bundled"] }
 rust-argon2 = "0.8.2"
