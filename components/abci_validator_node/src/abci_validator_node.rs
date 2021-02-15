@@ -1,7 +1,7 @@
-#![deny(warnings)]
+#![allow(clippy::field_reassign_with_default)]
 use abci::*;
 use ledger::data_model::errors::PlatformError;
-use ledger::data_model::{Operation, Transaction, TxnEffect};
+use ledger::data_model::{Operation, Transaction, TxnEffect, TxnSID};
 use ledger::store::*;
 use ledger::{error_location, sub_fail};
 use ledger_api_service::RestfulApiService;
@@ -12,13 +12,20 @@ use rand_core::SeedableRng;
 use serde::Serialize;
 use std::net::SocketAddr;
 use std::path::Path;
-use std::sync::{Arc, RwLock};
+use std::sync::{
+    atomic::{AtomicI64, Ordering},
+    Arc, RwLock,
+};
 use std::thread;
 use submission_api::SubmissionApi;
 use submission_server::{convert_tx, SubmissionServer, TxnForward};
 use utils::HashOf;
-use zei::serialization::ZeiFromToBytes;
 use zei::xfr::structs::{XfrAmount, XfrAssetType};
+
+mod abci_config;
+use abci_config::ABCIConfig;
+
+static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
 
 #[derive(Default)]
 pub struct TendermintForward {
@@ -112,7 +119,12 @@ impl abci::Application for ABCISubmissionServer {
 
         if let Some(tx) = convert_tx(req.get_tx()) {
             info!("converted: {:?}", tx);
-            if TxnEffect::compute_effect(tx).is_err() {
+            if !tx.check_fee()
+                || !tx.check_fra_no_illegal_issuance(
+                    TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed),
+                )
+                || TxnEffect::compute_effect(tx).is_err()
+            {
                 resp.set_code(1);
                 resp.set_log(String::from("Check failed"));
             }
@@ -135,27 +147,38 @@ impl abci::Application for ABCISubmissionServer {
         let mut resp = ResponseDeliverTx::new();
         if let Some(tx) = convert_tx(req.get_tx()) {
             info!("converted: {:?}", tx);
-            info!("locking for write: {}", error_location!());
-            if let Ok(mut la) = self.la.write() {
-                // set attr(tags) if any
-                let attr = gen_tendermint_attr(&tx);
-                if 0 < attr.len() {
-                    resp.set_events(attr);
+
+            if tx.check_fee()
+                && tx.check_fra_no_illegal_issuance(
+                    TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed),
+                )
+            {
+                info!("locking for write: {}", error_location!());
+                if let Ok(mut la) = self.la.write() {
+                    // set attr(tags) if any
+                    let attr = gen_tendermint_attr(&tx);
+                    if 0 < attr.len() {
+                        resp.set_events(attr);
+                    }
+
+                    info!("locked for write");
+                    la.cache_transaction(tx);
+                    info!("unlocking for write: {}", error_location!());
+
+                    return resp;
                 }
-
-                info!("locked for write");
-                la.cache_transaction(tx);
-                info!("unlocking for write: {}", error_location!());
-
-                return resp;
             }
         }
+
         resp.set_code(1);
         resp.set_log(String::from("Failed to deliver transaction!"));
         resp
     }
 
-    fn begin_block(&mut self, _req: &RequestBeginBlock) -> ResponseBeginBlock {
+    fn begin_block(&mut self, req: &RequestBeginBlock) -> ResponseBeginBlock {
+        TENDERMINT_BLOCK_HEIGHT
+            .swap(req.header.as_ref().unwrap().height, Ordering::Relaxed);
+
         info!("locking for write: {}", error_location!());
         if let Ok(mut la) = self.la.write() {
             if !la.all_commited() {
@@ -222,44 +245,36 @@ fn main() {
         " ",
         env!("VERGEN_BUILD_DATE")
     ));
+
+    // LEDGER_DIR is default working dir
     let base_dir = std::env::var_os("LEDGER_DIR").filter(|x| !x.is_empty());
-    let base_dir = base_dir.as_ref().map(Path::new);
+    let mut base_dir = base_dir.as_ref().map(Path::new);
 
-    let tendermint_port = std::env::var_os("TENDERMINT_PORT").filter(|x| !x.is_empty());
-    let tendermint_port = tendermint_port
-        .and_then(|x| x.into_string().ok())
-        .unwrap_or_else(|| "26657".into());
-
-    let tendermint_host = std::env::var_os("TENDERMINT_HOST").filter(|x| !x.is_empty());
-    let tendermint_host = tendermint_host
-        .and_then(|x| x.into_string().ok())
-        .unwrap_or_else(|| "localhost".into());
+    // use config file if specified
+    let mut config = Default::default();
+    let mut args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 {
+        let (config_abci, got) = ABCIConfig::from_file(&mut args);
+        if got {
+            config = config_abci;
+        }
+        base_dir = Some(Path::new(&args[1]));
+    }
 
     let app = ABCISubmissionServer::new(
         base_dir,
-        format!("{}:{}", tendermint_host, tendermint_port),
+        format!("{}:{}", config.tendermint_host, config.tendermint_port),
     )
     .unwrap();
     let submission_server = Arc::clone(&app.la);
     let cloned_lock = { submission_server.read().unwrap().borrowable_ledger_state() };
 
-    let host = std::env::var_os("SERVER_HOST")
-        .filter(|x| !x.is_empty())
-        .unwrap_or_else(|| "localhost".into());
-    let host2 = host.clone();
-    let submission_port = std::env::var_os("SUBMISSION_PORT")
-        .filter(|x| !x.is_empty())
-        .unwrap_or_else(|| "8669".into());
-    let ledger_port = std::env::var_os("LEDGER_PORT")
-        .filter(|x| !x.is_empty())
-        .unwrap_or_else(|| "8668".into());
+    let submission_host = config.submission_host.clone();
+    let submission_port = config.submission_port.clone();
     thread::spawn(move || {
-        let submission_api = SubmissionApi::create(
-            submission_server,
-            host.to_str().unwrap(),
-            submission_port.to_str().unwrap(),
-        )
-        .unwrap();
+        let submission_api =
+            SubmissionApi::create(submission_server, &submission_host, &submission_port)
+                .unwrap();
         println!("Starting submission service");
         match submission_api.run() {
             Ok(_) => println!("Successfully ran submission service"),
@@ -267,32 +282,27 @@ fn main() {
         }
     });
 
+    let ledger_host = config.ledger_host.clone();
+    let ledger_port = config.ledger_port.clone();
     thread::spawn(move || {
-        let query_service = RestfulApiService::create(
-            cloned_lock,
-            host2.to_str().unwrap(),
-            ledger_port.to_str().unwrap(),
-        )
-        .unwrap();
+        let ledger_service =
+            RestfulApiService::create(cloned_lock, &ledger_host, &ledger_port).unwrap();
         println!("Starting ledger service");
-        match query_service.run() {
+        match ledger_service.run() {
             Ok(_) => println!("Successfully ran validator"),
             Err(_) => println!("Error running validator"),
         }
     });
 
-    let abci_host = std::env::var_os("ABCI_HOST").filter(|x| !x.is_empty());
-    let abci_host = abci_host
-        .and_then(|x| x.into_string().ok())
-        .unwrap_or_else(|| "0.0.0.0".into());
-    let abci_port = std::env::var_os("ABCI_PORT").filter(|x| !x.is_empty());
-    let abci_port = abci_port
-        .and_then(|x| x.into_string().ok())
-        .unwrap_or_else(|| "26658".into());
-
     // TODO: pass the address and port in on the command line
-    let addr_str = format!("{}:{}", abci_host, abci_port);
+    let addr_str = format!("{}:{}", config.abci_host, config.abci_port);
     let addr: SocketAddr = addr_str.parse().expect("Unable to parse socket address");
+
+    // handle SIGINT signal
+    ctrlc::set_handler(move || {
+        std::process::exit(0);
+    })
+    .expect("Error setting Ctrl-C handler");
 
     println!("Starting ABCI service");
     abci::run(addr, app);
@@ -313,17 +323,25 @@ fn gen_tendermint_attr(tx: &Transaction) -> RepeatedField<Event> {
     let mut ev = Event::new();
     ev.set_field_type("tx".to_owned());
 
-    let mut kv = vec![Pair::new()];
-    kv[0].set_key("exist".as_bytes().to_vec());
-    kv[0].set_value("y".as_bytes().to_vec());
+    let mut kv = vec![Pair::new(), Pair::new()];
+    kv[0].set_key("prehash".as_bytes().to_vec());
+    kv[0].set_value(hex::encode(tx.hash(TxnSID(0))).into_bytes());
+    kv[1].set_key("timestamp".as_bytes().to_vec());
+    kv[1].set_value(
+        std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            .to_string()
+            .into_bytes(),
+    );
 
     ev.set_attributes(RepeatedField::from_vec(kv));
     res.push(ev);
 
     let (from, to) = gen_tendermint_attr_addr(tx);
 
-    // `from` maybe empty, but `to` must be **NOT**
-    if !to.is_empty() {
+    if !from.is_empty() || !to.is_empty() {
         let mut ev = Event::new();
         ev.set_field_type("addr".to_owned());
 
@@ -365,37 +383,70 @@ fn gen_tendermint_attr(tx: &Transaction) -> RepeatedField<Event> {
 }
 
 // collect informations of inputs and outputs
+// # return: ([from ...], [to ...])
 fn gen_tendermint_attr_addr(tx: &Transaction) -> (Vec<TagAttr>, Vec<TagAttr>) {
     tx.body
         .operations
         .iter()
         .fold((vec![], vec![]), |mut base, new| {
-            if let Operation::TransferAsset(ta) = new {
-                macro_rules! append_attr {
-                    ($direction: tt, $idx: tt) => {
-                        ta.body.transfer.$direction.iter().for_each(|i| {
-                            let mut attr = TagAttr::default();
-                            attr.addr = hex::encode(&i.public_key.zei_to_bytes());
-                            if let XfrAssetType::NonConfidential(ty) = i.asset_type {
-                                attr.asset_type = Some(hex::encode(&ty.0[..]));
-                            }
-                            if let XfrAmount::NonConfidential(am) = i.amount {
-                                attr.asset_amount = Some(am);
-                            }
-                            base.$idx.push(attr);
-                        });
-                    };
-                }
-                append_attr!(inputs, 0);
-                append_attr!(outputs, 1);
+            macro_rules! append_attr {
+                // trasfer\bind\release
+                ($data: expr, $direction: tt, $idx: tt) => {
+                    $data.body.transfer.$direction.iter().for_each(|i| {
+                        let mut attr = TagAttr::default();
+                        attr.addr = wallet::public_key_to_bech32(&i.public_key);
+                        if let XfrAssetType::NonConfidential(ty) = i.asset_type {
+                            attr.asset_type = Some(hex::encode(&ty.0[..]));
+                        }
+                        if let XfrAmount::NonConfidential(am) = i.amount {
+                            attr.asset_amount = Some(am);
+                        }
+                        base.$idx.push(attr);
+                    });
+                };
+                // define\issue\AIR\memo
+                ($data: expr) => {
+                    let mut attr = TagAttr::default();
+                    attr.addr = wallet::public_key_to_bech32(&$data.pubkey);
+                    base.0.push(attr);
+                };
             }
+
+            match new {
+                Operation::TransferAsset(d) => {
+                    append_attr!(d, inputs, 0);
+                    append_attr!(d, outputs, 1);
+                }
+                Operation::BindAssets(d) => {
+                    append_attr!(d, inputs, 0);
+                    append_attr!(d, outputs, 1);
+                }
+                Operation::ReleaseAssets(d) => {
+                    append_attr!(d, inputs, 0);
+                    append_attr!(d, outputs, 1);
+                }
+                Operation::DefineAsset(d) => {
+                    append_attr!(d);
+                }
+                Operation::IssueAsset(d) => {
+                    append_attr!(d);
+                }
+                Operation::AIRAssign(d) => {
+                    append_attr!(d);
+                }
+                Operation::UpdateMemo(d) => {
+                    append_attr!(d);
+                }
+                Operation::KVStoreUpdate(_) => {}
+            }
+
             base
         })
 }
 
 #[derive(Serialize, Default)]
 struct TagAttr {
-    // hex.encode(pubkey)
+    // FRA address
     addr: String,
     // hex.encode(asset_type)
     asset_type: Option<String>,

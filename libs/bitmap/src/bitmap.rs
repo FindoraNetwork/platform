@@ -19,7 +19,6 @@
 //! can be downloaded. The serialize and serialize_partial
 //! methods, q.v., produce a Vec<u8> that can be sent over the
 //! network. This Vec can be converted to a SparseMap structure.
-#![deny(warnings)]
 //! The SparseMap structure allows various queries on the contents
 //! of the map.
 
@@ -807,7 +806,7 @@ impl BitMap {
                     let set_count = count_bits(&block.bits, map);
                     count += block.header.count as usize;
                     blocks.push(block);
-                    dirty.push(0 as i64);
+                    dirty.push(0_i64);
                     checksum_valid.push(false);
                     set.push(set_count);
                 }

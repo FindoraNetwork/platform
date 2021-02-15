@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use crate::data_model::errors::PlatformError;
 use crate::data_model::{Asset, AssetTypeCode, Operation, Transaction, TxOutput};
 use crate::error_location;
@@ -669,7 +668,7 @@ pub fn run_txn_check(
         enum FracAmtPhase {
             Frac,
             Amt,
-        };
+        }
         let mut phase = FracAmtPhase::Amt;
 
         while frac_ix < check.fraction_ops.len() || amt_ix < check.amount_ops.len() {

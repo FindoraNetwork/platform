@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use curve25519_dalek::ristretto::CompressedRistretto;
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;

@@ -2,7 +2,6 @@
 // Allows web clients to issue transactions from a browser contexts.
 // For now, forwards transactions to a ledger hosted locally.
 // To compile wasm package, run wasm-pack build in the wasm directory;
-#![deny(warnings)]
 use crate::wasm_data_model::*;
 use credentials::{
     credential_commit, credential_issuer_key_gen, credential_open_commitment,
@@ -12,12 +11,13 @@ use credentials::{
 };
 use cryptohash::sha256;
 use ledger::data_model::{
-    b64enc, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedTransaction, Operation,
-    TransferType,
+    AssetTypeCode, AuthenticatedKVLookup, AuthenticatedTransaction, Operation,
+    TransferType, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
 };
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
+use std::cmp::Ordering;
 use txn_builder::{
     BuildsTransactions, PolicyChoice, TransactionBuilder as PlatformTransactionBuilder,
     TransferOperationBuilder as PlatformTransferOperationBuilder,
@@ -29,9 +29,10 @@ use wasm_bindgen::prelude::*;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
 use zei::xfr::lib::trace_assets as zei_trace_assets;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 use zei::xfr::structs::{
-    AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody, ASSET_TYPE_LENGTH,
+    AssetRecordTemplate, AssetType as ZeiAssetType, XfrAssetType, XfrBody,
+    ASSET_TYPE_LENGTH,
 };
 
 mod util;
@@ -222,8 +223,103 @@ impl TransactionBuilder {
     }
 }
 
+struct FeeInput {
+    // Amount
+    am: u64,
+    // Index of txo
+    tr: TxoRef,
+    // Input body
+    ar: ClientAssetRecord,
+    // Owner of this txo
+    kp: XfrKeyPair,
+}
+
+#[wasm_bindgen]
+#[derive(Default)]
+pub struct FeeInputs {
+    inner: Vec<FeeInput>,
+}
+
+#[wasm_bindgen]
+impl FeeInputs {
+    pub fn new() -> Self {
+        FeeInputs::default()
+    }
+
+    pub fn append(
+        &mut self,
+        am: u64,
+        tr: TxoRef,
+        ar: ClientAssetRecord,
+        kp: XfrKeyPair,
+    ) {
+        self.inner.push(FeeInput { am, tr, ar, kp })
+    }
+}
+
 #[wasm_bindgen]
 impl TransactionBuilder {
+    /// As the last operation of any transaction,
+    /// add a static fee to the transaction.
+    pub fn add_fee(self, inputs: FeeInputs) -> Result<TransactionBuilder, JsValue> {
+        let mut kps = vec![];
+
+        inputs
+            .inner
+            .into_iter()
+            .filter(|i| {
+                if let XfrAssetType::NonConfidential(ty) = i.ar.txo.record.asset_type {
+                    if ASSET_TYPE_FRA == ty {
+                        return true;
+                    }
+                }
+                false
+            })
+            .fold(Ok(TransferOperationBuilder::default()), |base, new| {
+                base.and_then(|b| {
+                    b.add_input_no_tracking(new.tr, &new.ar, None, &new.kp, new.am)
+                        .map(|b| {
+                            kps.push(new.kp);
+                            b
+                        })
+                })
+            })
+            .and_then(|op| {
+                op.add_output_no_tracking(
+                    TX_FEE_MIN,
+                    &*BLACK_HOLE_PUBKEY,
+                    AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    }
+                    .to_base64(),
+                    false,
+                    false,
+                )
+            })
+            .and_then(|op| op.balance())
+            .and_then(|op| op.create())
+            .and_then(|mut op| {
+                let cmp = |a: &XfrKeyPair, b: &XfrKeyPair| {
+                    a.get_pk().as_bytes().cmp(b.get_pk().as_bytes())
+                };
+                kps.sort_by(cmp);
+                kps.dedup_by(|a, b| matches!(cmp(a, b), Ordering::Equal));
+                for i in kps.iter() {
+                    op = op.sign(i)?;
+                }
+                Ok(op)
+            })
+            .and_then(|op| op.transaction())
+            .and_then(|op_str| self.add_transfer_operation(op_str))
+    }
+
+    /// A simple fee checker for mainnet v1.0.
+    ///
+    /// SEE [check_fee](ledger::data_model::Transaction::check_fee)
+    pub fn check_fee(&self) -> bool {
+        self.transaction_builder.check_fee()
+    }
+
     /// Create a new transaction builder.
     /// @param {BigInt} seq_id - Unique sequence ID to prevent replay attacks.
     pub fn new(seq_id: u64) -> Self {
@@ -501,7 +597,7 @@ impl TransferOperationBuilder {
     pub fn add_input(
         mut self,
         txo_ref: TxoRef,
-        asset_record: ClientAssetRecord,
+        asset_record: &ClientAssetRecord,
         owner_memo: Option<OwnerMemo>,
         tracing_policies: Option<&TracingPolicies>,
         key: &XfrKeyPair,
@@ -604,7 +700,7 @@ impl TransferOperationBuilder {
     ) -> Result<TransferOperationBuilder, JsValue> {
         self.add_input(
             txo_ref,
-            asset_record,
+            &asset_record,
             owner_memo,
             Some(tracing_policies),
             key,
@@ -627,7 +723,7 @@ impl TransferOperationBuilder {
     pub fn add_input_no_tracking(
         self,
         txo_ref: TxoRef,
-        asset_record: ClientAssetRecord,
+        asset_record: &ClientAssetRecord,
         owner_memo: Option<OwnerMemo>,
         key: &XfrKeyPair,
         amount: u64,
@@ -796,13 +892,13 @@ pub fn new_keypair_from_seed(seed_str: String, name: Option<String>) -> XfrKeyPa
 #[wasm_bindgen]
 /// Returns base64 encoded representation of an XfrPublicKey.
 pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
-    b64enc(&XfrPublicKey::zei_to_bytes(&key))
+    wallet::public_key_to_base64(key)
 }
 
 #[wasm_bindgen]
 /// Converts a base64 encoded public key string to a public key.
-pub fn public_key_from_base64(key_pair: String) -> Result<XfrPublicKey, JsValue> {
-    util::public_key_from_base64(key_pair)
+pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey, JsValue> {
+    wallet::public_key_from_base64(pk).map_err(error_to_jsvalue)
 }
 
 #[wasm_bindgen]
@@ -997,7 +1093,7 @@ pub fn wasm_credential_reveal(
             credential.get_cred_ref(),
             &reveal_fields[..],
         )
-        .map_err(|e| error_to_jsvalue(e))?,
+        .map_err(error_to_jsvalue)?,
     })
 }
 
@@ -1068,6 +1164,245 @@ pub fn trace_assets(
 pub fn test() {
     let kp = new_keypair();
     let b64 = public_key_to_base64(kp.get_pk_ref());
-    let pk = public_key_from_base64(b64).unwrap();
+    let pk = public_key_from_base64(&b64).unwrap();
     dbg!(pk);
+}
+
+//////////////////////////////////////////
+// Author: Chao Ma, github.com/chaosma. //
+//////////////////////////////////////////
+
+use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
+use aes_gcm::Aes256Gcm;
+use rand::{thread_rng, Rng};
+use ring::pbkdf2;
+use std::num::NonZeroU32;
+use std::str;
+
+#[wasm_bindgen]
+/// Returns bech32 encoded representation of an XfrPublicKey.
+pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
+    wallet::public_key_to_bech32(key)
+}
+
+#[wasm_bindgen]
+/// Converts a bech32 encoded public key string to a public key.
+pub fn public_key_from_bech32(addr: &str) -> Result<XfrPublicKey, JsValue> {
+    wallet::public_key_from_bech32(addr).map_err(error_to_jsvalue)
+}
+
+#[wasm_bindgen]
+pub fn bech32_to_base64(pk: &str) -> Result<String, JsValue> {
+    let pub_key = public_key_from_bech32(pk)?;
+    Ok(public_key_to_base64(&pub_key))
+}
+
+#[wasm_bindgen]
+pub fn base64_to_bech32(pk: &str) -> Result<String, JsValue> {
+    let pub_key = public_key_from_base64(pk)?;
+    Ok(public_key_to_bech32(&pub_key))
+}
+
+#[wasm_bindgen]
+pub fn encryption_pbkdf2_aes256gcm(key_pair: String, password: String) -> Vec<u8> {
+    const CREDENTIAL_LEN: usize = 32;
+    const IV_LEN: usize = 12;
+    let n_iter = NonZeroU32::new(32).unwrap();
+    let mut rng = thread_rng();
+
+    let mut salt = [0u8; CREDENTIAL_LEN];
+    rng.fill(&mut salt);
+    let mut derived_key = [0u8; CREDENTIAL_LEN];
+    pbkdf2::derive(
+        pbkdf2::PBKDF2_HMAC_SHA512,
+        n_iter,
+        &salt,
+        password.as_bytes(),
+        &mut derived_key,
+    );
+
+    let mut iv = [0u8; IV_LEN];
+    rng.fill(&mut iv);
+
+    let cipher = Aes256Gcm::new(GenericArray::from_slice(&derived_key));
+    let ciphertext = cipher
+        .encrypt(GenericArray::from_slice(&iv), key_pair.as_ref())
+        .unwrap_or_default();
+
+    // this is a hack, wasm-bindgen not support tuple of vectors
+    let mut res: Vec<u8> = Vec::new();
+    res.append(&mut salt.to_vec());
+    res.append(&mut iv.to_vec());
+    res.append(&mut ciphertext.to_vec());
+    res
+}
+
+#[wasm_bindgen]
+pub fn decryption_pbkdf2_aes256gcm(enc_key_pair: Vec<u8>, password: String) -> String {
+    const CREDENTIAL_LEN: usize = 32;
+    const IV_LEN: usize = 12;
+    let n_iter = NonZeroU32::new(32).unwrap();
+
+    if enc_key_pair.len() <= CREDENTIAL_LEN + IV_LEN {
+        return "".to_string();
+    }
+
+    let salt = &enc_key_pair[0..CREDENTIAL_LEN];
+    let iv = &enc_key_pair[CREDENTIAL_LEN..(CREDENTIAL_LEN + IV_LEN)];
+    let ciphertext = &enc_key_pair[(CREDENTIAL_LEN + IV_LEN)..];
+
+    let mut derived_key = [0u8; CREDENTIAL_LEN];
+    pbkdf2::derive(
+        pbkdf2::PBKDF2_HMAC_SHA512,
+        n_iter,
+        salt,
+        password.as_bytes(),
+        &mut derived_key,
+    );
+    let cipher = Aes256Gcm::new(GenericArray::from_slice(&derived_key));
+    let plaintext = cipher
+        .decrypt(GenericArray::from_slice(iv), ciphertext.as_ref())
+        .unwrap_or_default();
+
+    String::from_utf8(plaintext).unwrap_or_else(|_| "".to_string())
+}
+
+#[wasm_bindgen]
+pub fn create_keypair_from_secret(sk_str: String) -> Option<XfrKeyPair> {
+    serde_json::from_str::<XfrSecretKey>(&sk_str)
+        .map(|sk| sk.into_keypair())
+        .ok()
+}
+
+///////////////////////////////////////////
+// Author: FanHui(FH), github.com/ktmlm. //
+///////////////////////////////////////////
+
+/// Randomly generate a 12words-length mnemonic.
+#[wasm_bindgen]
+pub fn generate_mnemonic_default() -> String {
+    wallet::generate_mnemonic_default()
+}
+
+/// Generate mnemonic with custom length and language.
+/// - @param `wordslen`: acceptable value are one of [ 12, 15, 18, 21, 24 ]
+/// - @param `lang`: acceptable value are one of [ "en", "zh", "zh_traditional", "fr", "it", "ko", "sp", "jp" ]
+#[wasm_bindgen]
+pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> Result<String, JsValue> {
+    wallet::generate_mnemonic_custom(wordslen, lang).map_err(|e| JsValue::from_str(&e))
+}
+
+/// Use this struct to express a Bip44/Bip49 path.
+#[wasm_bindgen]
+pub struct BipPath {
+    coin: u32,
+    account: u32,
+    change: u32,
+    address: u32,
+}
+
+#[wasm_bindgen]
+impl BipPath {
+    pub fn new(coin: u32, account: u32, change: u32, address: u32) -> Self {
+        BipPath {
+            coin,
+            account,
+            change,
+            address,
+        }
+    }
+}
+
+impl From<&BipPath> for wallet::BipPath {
+    fn from(p: &BipPath) -> Self {
+        wallet::BipPath::new(p.coin, p.account, p.change, p.address)
+    }
+}
+
+/// Restore the XfrKeyPair from a mnemonic with a default bip44-path,
+/// that is "m/44'/917'/0'/0/0" ("m/44'/coin'/account'/change/address").
+#[wasm_bindgen]
+pub fn restore_keypair_from_mnemonic_default(
+    phrase: &str,
+) -> Result<XfrKeyPair, JsValue> {
+    wallet::restore_keypair_from_mnemonic_default(phrase)
+        .map_err(|e| JsValue::from_str(&e))
+}
+
+/// Restore the XfrKeyPair from a mnemonic with custom params,
+/// in bip44 form.
+#[wasm_bindgen]
+pub fn restore_keypair_from_mnemonic_bip44(
+    phrase: &str,
+    lang: &str,
+    path: &BipPath,
+) -> Result<XfrKeyPair, JsValue> {
+    wallet::restore_keypair_from_mnemonic_bip44(phrase, lang, &path.into())
+        .map_err(|e| JsValue::from_str(&e))
+}
+
+/// Restore the XfrKeyPair from a mnemonic with custom params,
+/// in bip49 form.
+#[wasm_bindgen]
+pub fn restore_keypair_from_mnemonic_bip49(
+    phrase: &str,
+    lang: &str,
+    path: &BipPath,
+) -> Result<XfrKeyPair, JsValue> {
+    wallet::restore_keypair_from_mnemonic_bip49(phrase, lang, &path.into())
+        .map_err(|e| JsValue::from_str(&e))
+}
+
+/// ID of FRA, in `String` format.
+#[wasm_bindgen]
+pub fn fra_get_asset_code() -> String {
+    AssetTypeCode {
+        val: ASSET_TYPE_FRA,
+    }
+    .to_base64()
+}
+
+/// Fee smaller than this value will be denied.
+#[wasm_bindgen]
+pub fn fra_get_minimal_fee() -> u64 {
+    TX_FEE_MIN
+}
+
+/// The destination for fee to be transfered to.
+#[wasm_bindgen]
+pub fn fra_get_dest_pubkey() -> XfrPublicKey {
+    *BLACK_HOLE_PUBKEY
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn t_keypair_conversion() {
+        let kp = new_keypair();
+        let b64 = public_key_to_base64(kp.get_pk_ref());
+        let be32 = public_key_to_bech32(kp.get_pk_ref());
+        public_key_from_base64(&b64).unwrap();
+        public_key_from_bech32(&be32).unwrap();
+    }
+
+    #[test]
+    fn t_keypair_encryption() {
+        let key_pair = "hello world".to_string();
+        let password = "12345".to_string();
+        let enc = encryption_pbkdf2_aes256gcm(key_pair.clone(), password.clone());
+        let dec_key_pair = decryption_pbkdf2_aes256gcm(enc, password);
+        assert_eq!(key_pair, dec_key_pair);
+    }
+
+    #[test]
+    fn t_create_keypair_from_secret() {
+        let kp = new_keypair();
+        let sk_str = serde_json::to_string(&kp.get_sk()).unwrap();
+        let kp1 = create_keypair_from_secret(sk_str).unwrap();
+        let kp_str = serde_json::to_string(&kp).unwrap();
+        let kp1_str = serde_json::to_string(&kp1).unwrap();
+        assert_eq!(kp_str, kp1_str);
+    }
 }

@@ -64,7 +64,11 @@ pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, Error> {
         }
         Ok(resp) => match resp.json::<T>() {
             Err(e) => {
-                eprintln!("Problem parsing response {}, {}", query, e);
+                if let Ok(Ok(msg)) = client.get(query).send().map(|r| r.text()) {
+                    println!("\x1b[31;1m{}\x1b[0m", msg);
+                } else {
+                    eprintln!("Problem parsing response {}, {}", query, e);
+                }
                 return Err(Error::with_description(
                     "Problem parsing json",
                     ErrorKind::Io,
@@ -164,6 +168,23 @@ pub enum PasswordReadError {
     },
     #[snafu(display("The provided password was incorrect."))]
     IncorrectPassword,
+}
+
+/// Reads a user's mnemonic
+///
+/// Optionally takes a string describing what the mnemonic is for
+pub fn prompt_mnemonic(
+    description: Option<&str>,
+) -> Result<Zeroizing<String>, PasswordReadError> {
+    let prompt = if let Some(s) = description {
+        format!("Enter menonic for {}: ", s)
+    } else {
+        "Enter menonic: ".to_string()
+    };
+
+    rpassword::prompt_password_stdout(&prompt)
+        .context(UserInput)
+        .map(Zeroizing::new)
 }
 
 /// Reads a user's password without confirming

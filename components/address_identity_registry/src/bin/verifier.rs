@@ -1,5 +1,3 @@
-#![deny(warnings)]
-
 mod shared;
 
 use air::{check_merkle_proof, AIRResult};

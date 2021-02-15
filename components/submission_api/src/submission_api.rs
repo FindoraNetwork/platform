@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use actix_cors::Cors;
 use actix_web::test::TestRequest;
 use actix_web::{error, middleware, test, web, App, HttpServer};
@@ -15,7 +14,7 @@ use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
 use submission_server::{NoTF, SubmissionServer, TxnForward, TxnHandle, TxnStatus};
-use utils::{actix_get_request, actix_post_request, NetworkRoute};
+use utils::{http_get_request, http_post_request, NetworkRoute};
 
 // Ping route to check for liveness of API
 fn ping() -> actix_web::Result<String> {
@@ -293,7 +292,6 @@ pub struct ActixLUClient {
     port: usize,
     host: String,
     protocol: String,
-    client: reqwest::blocking::Client,
 }
 
 impl ActixLUClient {
@@ -302,7 +300,6 @@ impl ActixLUClient {
             port,
             host: String::from(host),
             protocol: String::from(protocol),
-            client: reqwest::blocking::Client::builder().build().unwrap(),
         }
     }
 }
@@ -319,8 +316,7 @@ impl RestfulLedgerUpdate for ActixLUClient {
             self.port,
             SubmissionRoutes::SubmitTransaction.route()
         );
-        let text = actix_post_request(&self.client, &query, Some(&txn))
-            .map_err(|e| inp_fail!(e))?;
+        let text = http_post_request(&query, Some(&txn)).map_err(|e| inp_fail!(e))?;
         let handle =
             serde_json::from_str::<TxnHandle>(&text).map_err(|e| des_fail!(e))?;
         info!("Transaction submitted successfully");
@@ -336,7 +332,7 @@ impl RestfulLedgerUpdate for ActixLUClient {
             SubmissionRoutes::ForceEndBlock.route()
         );
         let opt: Option<u64> = None;
-        actix_post_request(&self.client, &query, opt).map_err(|e| inp_fail!(e))?;
+        http_post_request(&query, opt).map_err(|e| inp_fail!(e))?;
         Ok(())
     }
 
@@ -348,7 +344,7 @@ impl RestfulLedgerUpdate for ActixLUClient {
             self.port,
             SubmissionRoutes::TxnStatus.with_arg(&handle.0)
         );
-        let text = actix_get_request(&self.client, &query).map_err(|e| inp_fail!(e))?;
+        let text = http_get_request(&query).map_err(|e| inp_fail!(e))?;
         Ok(serde_json::from_str::<TxnStatus>(&text).map_err(|e| des_fail!(e))?)
     }
 }

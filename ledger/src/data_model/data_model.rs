@@ -1,4 +1,4 @@
-#![deny(warnings)]
+#![allow(clippy::field_reassign_with_default)]
 #![allow(clippy::assertions_on_constants)]
 extern crate unicode_normalization;
 
@@ -13,6 +13,7 @@ use cryptohash::sha256::Digest as BitDigest;
 use cryptohash::sha256::DIGESTBYTES;
 use cryptohash::HashValue;
 use errors::PlatformError;
+use lazy_static::lazy_static;
 use rand::Rng;
 use rand_chacha::rand_core;
 use rand_chacha::ChaChaRng;
@@ -26,17 +27,22 @@ use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 use unicode_normalization::UnicodeNormalization;
 use utils::{HashOf, ProofOf, Serialized, SignatureOf};
+use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::{gen_xfr_body, XfrNotePolicies};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
     AssetRecord, AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy,
-    AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo, XfrBody, ASSET_TYPE_LENGTH,
+    AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo, XfrAmount, XfrAssetType,
+    XfrBody, ASSET_TYPE_LENGTH,
 };
-// use zei::xfr::asset_record::{AssetRecordType};
+
 use super::effects::*;
+use std::error::Error;
+use std::ops::Deref;
 
 pub const RANDOM_CODE_LENGTH: usize = 16;
 pub const TRANSACTION_WINDOW_WIDTH: usize = 128;
+pub const MAX_DECIMALS_LENGTH: u8 = 19;
 
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
     base64::encode_config(input, base64::URL_SAFE)
@@ -70,9 +76,20 @@ fn is_default<T: Default + PartialEq>(x: &T) -> bool {
 
 const UTF8_ASSET_TYPES_WORK: bool = false;
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct AssetTypeCode {
     pub val: ZeiAssetType,
+}
+
+// The code of FRA is [0;  ASSET_TYPE_LENGTH],
+// exactly equal to the derived `default value`,
+// so we implement a custom `Default` for it.
+impl Default for AssetTypeCode {
+    fn default() -> Self {
+        AssetTypeCode {
+            val: ZeiAssetType([255; ASSET_TYPE_LENGTH]),
+        }
+    }
 }
 
 impl AssetTypeCode {
@@ -319,6 +336,13 @@ impl Hash for IssuerPublicKey {
     }
 }
 
+impl Deref for IssuerPublicKey {
+    type Target = XfrPublicKey;
+    fn deref(&self) -> &Self::Target {
+        &self.key
+    }
+}
+
 #[derive(Debug)]
 pub struct IssuerKeyPair<'a> {
     pub keypair: &'a XfrKeyPair,
@@ -400,6 +424,7 @@ pub struct AssetRules {
     #[serde(skip_serializing_if = "is_default")]
     pub tracing_policies: AssetTracingPolicies,
     pub max_units: Option<u64>,
+    pub decimals: u8,
 }
 impl Default for AssetRules {
     fn default() -> Self {
@@ -409,6 +434,7 @@ impl Default for AssetRules {
             updatable: false,
             max_units: None,
             transfer_multisig_rules: None,
+            decimals: 0,
         }
     }
 }
@@ -440,6 +466,15 @@ impl AssetRules {
     ) -> &mut Self {
         self.transfer_multisig_rules = multisig_rules;
         self
+    }
+
+    #[inline(always)]
+    pub fn set_decimals(&mut self, decimals: u8) -> Result<&mut Self, Box<dyn Error>> {
+        if decimals > MAX_DECIMALS_LENGTH {
+            return Err("asset decimals should be less than 20".into());
+        }
+        self.decimals = decimals;
+        Ok(self)
     }
 }
 
@@ -1617,7 +1652,100 @@ impl FinalizedTransaction {
     }
 }
 
+/// Will be used by `cli2`.
+pub const ASSET_TYPE_FRA_BYTES: [u8; ASSET_TYPE_LENGTH] = [0; ASSET_TYPE_LENGTH];
+/// Use pure zero bytes(aka [0, 0, ... , 0]) to express FRA.
+pub const ASSET_TYPE_FRA: ZeiAssetType = ZeiAssetType(ASSET_TYPE_FRA_BYTES);
+
+lazy_static! {
+    /// The destination of Fee is an black hole,
+    /// all token transfered to it will be burned.
+    pub static ref BLACK_HOLE_PUBKEY: XfrPublicKey =
+        XfrPublicKey::zei_from_bytes(&[0; ed25519_dalek::PUBLIC_KEY_LENGTH][..])
+            .unwrap();
+}
+
+/// TODO: a better value ?
+pub const TX_FEE_MIN: u64 = 1;
+
 impl Transaction {
+    /// A simple fee checker for mainnet v1.0.
+    ///
+    /// The check logic is as follows:
+    /// - Only `NonConfidential Operation` can be used as fee
+    /// - FRA code == [0; ASSET_TYPE_LENGTH]
+    /// - Fee destination == [0; ed25519_dalek::PUBLIC_KEY_LENGTH]
+    /// - A transaction with an `Operation` of defining/issuing FRA need NOT fee
+    ///
+    /// > Is this function compatible with the process of
+    /// > defining and issuing FRA in the genesis block ?
+    /// >
+    /// > Yes, I think so. But please note:
+    /// >
+    /// > - Your should put all Operations related to
+    /// > the defination and issuing of FRA into a same transaction.
+    /// > Because the basic unit of `check_fee` is a whole transaction, and
+    /// > there can be many Operations inside this transaction, such as:
+    /// > defining assets, issuing assets, etc.
+    /// > as long as the order of these operations is correct.
+    /// > - `TransferAsset` operations of FRA can NOT be placed
+    /// > in the same transaction with its defination and issuing,
+    /// > or the transaction can NOT pass the check of `apply_transaction(...)`
+    pub fn check_fee(&self) -> bool {
+        self.body.operations.iter().any(|o| {
+            if let Operation::TransferAsset(ref x) = o {
+                return x.body.outputs.iter().any(|o| {
+                    if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
+                        if ty == ASSET_TYPE_FRA
+                            && *BLACK_HOLE_PUBKEY == o.record.public_key
+                        {
+                            if let XfrAmount::NonConfidential(am) = o.record.amount {
+                                if am > (TX_FEE_MIN - 1) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                    false
+                });
+            } else if let Operation::DefineAsset(ref x) = o {
+                if x.body.asset.code.val == ASSET_TYPE_FRA {
+                    return true;
+                }
+            } else if let Operation::IssueAsset(ref x) = o {
+                if x.body.code.val == ASSET_TYPE_FRA {
+                    return true;
+                }
+            }
+
+            false
+        })
+    }
+
+    /// Issuing FRA is denied except in the genesis block.
+    pub fn check_fra_no_illegal_issuance(&self, tendermint_block_height: i64) -> bool {
+        #[cfg(feature = "debugenv")]
+        const HEIGHT_LIMIT: i64 = 2000;
+
+        #[cfg(not(feature = "debugenv"))]
+        const HEIGHT_LIMIT: i64 = 2;
+
+        // **mainnet v1.0**:
+        // FRA is defined and issued in genesis block.
+        if HEIGHT_LIMIT > tendermint_block_height {
+            return true;
+        }
+
+        !self.body.operations.iter().any(|o| {
+            if let Operation::IssueAsset(ref x) = o {
+                if ASSET_TYPE_FRA == x.body.code.val {
+                    return true;
+                }
+            }
+            false
+        })
+    }
+
     pub fn hash(&self, id: TxnSID) -> HashOf<(TxnSID, Transaction)> {
         HashOf::new(&(id, self.clone()))
     }
@@ -1787,6 +1915,7 @@ pub struct Account {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use curve25519_dalek::ristretto::CompressedRistretto;
     use rand_core::SeedableRng;
     use std::cmp::min;
     use zei::xfr::structs::{AssetTypeAndAmountProof, XfrBody, XfrProofs};
@@ -1820,7 +1949,7 @@ mod tests {
         // from the standard deviation of uniform(0, 1), sqrt(1/12). The
         // expected average (mu) is 127.5 if the random number generator
         // is unbiased.
-        let uniform_stddev = 1.0 / (12.0 as f64).sqrt();
+        let uniform_stddev = 1.0 / (12.0f64).sqrt();
         let average = sum as f64 / sample_size as f64;
         let stddev = (uniform_stddev * 255.0) / (sample_size as f64).sqrt();
         println!("Average {}, stddev {}", average, stddev);
@@ -1886,16 +2015,16 @@ mod tests {
 
             for j in 0..min(i, code.val.0.len()) {
                 assert!(code.val.0[j] == value.as_bytes()[0]);
-                checked = checked + 1;
+                checked += 1;
             }
 
             for j in i..code.val.0.len() {
                 assert!(code.val.0[j] == 0);
-                checked = checked + 1;
+                checked += 1;
             }
 
             assert!(checked == code.val.0.len());
-            input = input + &value;
+            input += value;
         }
     }
 
@@ -1956,8 +2085,7 @@ mod tests {
     //   TransferAsset::new
     //   IssueAsset::new
     //   DefineAsset::new
-    #[test]
-    fn test_add_operation() {
+    fn gen_sample_tx() -> Transaction {
         // Create values to be used to instantiate operations. Just make up a seq_id, since
         // it will never be sent to a real ledger
         let mut transaction: Transaction = Transaction::from_seq_id(666);
@@ -2005,7 +2133,7 @@ mod tests {
 
         // Instantiate an IssueAsset operation
         let asset_issuance_body = IssueAssetBody {
-            code: Default::default(),
+            code: AssetTypeCode::gen_random(),
             seq_num: 0,
             num_outputs: 0,
             records: Vec::new(),
@@ -2018,7 +2146,8 @@ mod tests {
         let issuance_operation = Operation::IssueAsset(asset_issuance.clone());
 
         // Instantiate an DefineAsset operation
-        let asset = Default::default();
+        let mut asset = Box::new(Asset::default());
+        asset.code = AssetTypeCode::gen_random();
 
         let asset_creation = DefineAsset::new(
             DefineAssetBody { asset },
@@ -2048,6 +2177,132 @@ mod tests {
             transaction.body.operations.get(2),
             Some(&Operation::DefineAsset(asset_creation))
         );
+
+        transaction
+    }
+
+    #[test]
+    fn test_add_operation() {
+        gen_sample_tx();
+    }
+
+    fn gen_fee_operation(
+        amount: Option<u64>,
+        asset_type: Option<ZeiAssetType>,
+        dest_pubkey: XfrPublicKey,
+    ) -> Operation {
+        Operation::TransferAsset(TransferAsset {
+            body: TransferAssetBody {
+                inputs: Vec::new(),
+                policies: XfrNotePolicies::default(),
+                outputs: vec![TxOutput {
+                    record: BlindAssetRecord {
+                        amount: amount
+                            .map(|am| XfrAmount::NonConfidential(am))
+                            .unwrap_or(XfrAmount::Confidential((
+                                CompressedRistretto([0; 32]),
+                                CompressedRistretto([0; 32]),
+                            ))),
+                        asset_type: asset_type
+                            .map(|at| XfrAssetType::NonConfidential(at))
+                            .unwrap_or(XfrAssetType::Confidential(CompressedRistretto(
+                                [0; 32],
+                            ))),
+                        public_key: dest_pubkey,
+                    },
+                    lien: None,
+                }],
+                lien_assignments: Vec::new(),
+                transfer: Box::new(XfrBody {
+                    inputs: Vec::new(),
+                    outputs: Vec::new(),
+                    proofs: XfrProofs {
+                        asset_type_and_amount_proof: AssetTypeAndAmountProof::NoProof,
+                        asset_tracking_proof: Default::default(),
+                    },
+                    asset_tracing_memos: Vec::new(),
+                    owners_memos: Vec::new(),
+                }),
+                transfer_type: TransferType::Standard,
+            },
+            body_signatures: Vec::new(),
+        })
+    }
+
+    #[test]
+    fn test_check_fee() {
+        let mut tx = gen_sample_tx();
+        assert!(!tx.check_fee());
+
+        let invalid_confidential_type =
+            gen_fee_operation(Some(TX_FEE_MIN), None, *BLACK_HOLE_PUBKEY);
+        let invalid_confidential_amount = gen_fee_operation(
+            None,
+            Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
+            *BLACK_HOLE_PUBKEY,
+        );
+        let invalid_nonconfidential_not_fra_code = gen_fee_operation(
+            Some(TX_FEE_MIN),
+            Some(ZeiAssetType([9; ASSET_TYPE_LENGTH])),
+            *BLACK_HOLE_PUBKEY,
+        );
+        let invalid_nonconfidential_fee_too_little = gen_fee_operation(
+            Some(TX_FEE_MIN - 1),
+            Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
+            *BLACK_HOLE_PUBKEY,
+        );
+        let invalid_destination_not_black_hole = gen_fee_operation(
+            Some(TX_FEE_MIN),
+            Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
+            XfrPublicKey::zei_from_bytes(&[9; ed25519_dalek::PUBLIC_KEY_LENGTH][..])
+                .unwrap(),
+        );
+        let valid = gen_fee_operation(
+            Some(TX_FEE_MIN),
+            Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
+            *BLACK_HOLE_PUBKEY,
+        );
+        let valid2 = gen_fee_operation(
+            Some(TX_FEE_MIN + 999),
+            Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
+            *BLACK_HOLE_PUBKEY,
+        );
+
+        tx.add_operation(invalid_confidential_type.clone());
+        assert!(!tx.check_fee());
+
+        tx.add_operation(invalid_confidential_amount.clone());
+        assert!(!tx.check_fee());
+
+        tx.add_operation(invalid_nonconfidential_not_fra_code.clone());
+        assert!(!tx.check_fee());
+
+        tx.add_operation(invalid_nonconfidential_fee_too_little.clone());
+        assert!(!tx.check_fee());
+
+        tx.add_operation(invalid_destination_not_black_hole.clone());
+        assert!(!tx.check_fee());
+
+        tx.add_operation(valid);
+        assert!(tx.check_fee());
+
+        tx.add_operation(invalid_confidential_type);
+        assert!(tx.check_fee());
+
+        tx.add_operation(invalid_confidential_amount);
+        assert!(tx.check_fee());
+
+        tx.add_operation(valid2);
+        assert!(tx.check_fee());
+
+        tx.add_operation(invalid_nonconfidential_not_fra_code);
+        assert!(tx.check_fee());
+
+        tx.add_operation(invalid_nonconfidential_fee_too_little);
+        assert!(tx.check_fee());
+
+        tx.add_operation(invalid_destination_not_black_hole);
+        assert!(tx.check_fee());
     }
 
     // Verify that the hash values of two transactions:

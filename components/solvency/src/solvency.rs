@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use bulletproofs::r1cs::R1CSProof;
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;

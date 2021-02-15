@@ -1,4 +1,3 @@
-#![deny(warnings)]
 // TODO: remove this when https://github.com/rust-lang/rust-clippy/issues/6066 gets fixed
 #![allow(clippy::needless_collect)]
 use crate::display_functions::{
@@ -6,19 +5,36 @@ use crate::display_functions::{
     display_txo_entry,
 };
 use crate::{
+    helpers::{
+        compute_findora_dir, do_request, do_request_asset,
+        do_request_authenticated_utxo, prompt_mnemonic,
+    },
+    kv::{MixedPair, NICK_FEE},
+};
+use crate::{
     print_conf, prompt_for_config, serialize_or_str, AssetTypeEntry, AssetTypeName,
     CliDataStore, CliError, FreshNamer, KeypairName, LedgerStateCommitment,
     NewPublicKeyFetch, NoTransactionInProgress, NoneValue, OpMetadata, PubkeyName,
     TxnBuilderName, TxnMetadata, TxnName, TxoCacheEntry, TxoName,
 };
-use std::collections::HashMap;
 
-use ledger::data_model::*;
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::convert::Infallible;
+use std::fs::File;
+use std::io::prelude::*;
+use std::process::exit;
+use std::{thread, time};
+
+use ledger::data_model::errors::PlatformError;
+use ledger::{data_model::*, store::fra_gen_initial_tx};
+use ledger::{error_location, zei_fail};
 use ledger_api_service::LedgerAccessRoutes;
 use promptly::{prompt, prompt_default, prompt_opt};
 use snafu::{Backtrace, GenerateBacktrace, OptionExt, ResultExt};
-use std::collections::BTreeMap;
-use std::process::exit;
+
+use rand::distributions::Alphanumeric;
+use rand::Rng;
 use submission_api::SubmissionRoutes;
 use submission_server::{TxnHandle, TxnStatus};
 use txn_builder::PolicyChoice;
@@ -29,16 +45,6 @@ use zei::setup::PublicParams;
 use zei::xfr::asset_record::{open_blind_asset_record, AssetRecordType};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::AssetRecordTemplate;
-
-use crate::{
-    helpers::{do_request, do_request_asset, do_request_authenticated_utxo},
-    kv::MixedPair,
-};
-use ledger::data_model::errors::PlatformError;
-use ledger::{error_location, zei_fail};
-use rand::distributions::Alphanumeric;
-use rand::Rng;
-use std::convert::Infallible;
 
 type GlobalState = (
     HashOf<Option<StateCommitmentData>>,
@@ -82,11 +88,27 @@ fn check_existing_key_pair<S: CliDataStore>(
 }
 
 pub fn key_gen<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliError> {
+    if NICK_FEE == nick {
+        return Err(CliError::NickName {
+            msg: NICK_FEE.to_owned() + " is a nick name reserved by the system!",
+        });
+    }
+
     // Check if the key already exists
     let continue_key_gen = check_existing_key_pair(store, &nick)?;
 
     if continue_key_gen {
-        let kp = XfrKeyPair::generate(&mut rand::thread_rng());
+        // temporary solution, save passphrase here
+        let phrase = wallet::generate_mnemonic_custom(24, "en").unwrap();
+        let kp = wallet::restore_keypair_from_mnemonic_default(&phrase).unwrap();
+        let mut name = compute_findora_dir()?;
+        name.push(format!("{}_passphrase", &nick));
+        let mut pass_file = File::create(name).unwrap();
+        pass_file
+            .write_all(phrase.as_ref())
+            .expect("Failed to save passphrase");
+
+        // add keys to store
         let pk = *kp.get_pk_ref();
         store.add_key_pair(&KeypairName(nick.to_string()), kp)?;
         store.add_public_key(&PubkeyName(nick.to_string()), pk)?;
@@ -268,6 +290,32 @@ pub fn delete_public_key<S: CliDataStore>(
     Ok(())
 }
 
+pub fn restore_from_mnemonic_bip44<S: CliDataStore>(
+    store: &mut S,
+    nick: String,
+) -> Result<(), CliError> {
+    let continue_restore = check_existing_key_pair(store, &nick)?;
+    if !continue_restore {
+        println!("Error: Database already contains a key for {}.", nick);
+        println!("Please delete the existing key first, or use a different nickname.");
+        exit(-1);
+    }
+
+    let phrase = prompt_mnemonic(Some(&nick)).expect("Failed to read mnemonic");
+    match wallet::restore_keypair_from_mnemonic_default(&phrase) {
+        Ok(kp) => {
+            store.add_public_key(&PubkeyName(nick.to_string()), *kp.get_pk_ref())?;
+            store.add_key_pair(&KeypairName(nick.to_string()), kp)?;
+            println!("New key pair added for '{}'", nick);
+        }
+        Err(e) => {
+            eprintln!("Could not restore key pair: {}", e);
+            exit(-1);
+        }
+    }
+    Ok(())
+}
+
 pub fn pic_random_txn_number() -> String {
     rand::thread_rng()
         .sample_iter(&Alphanumeric)
@@ -279,6 +327,7 @@ pub fn simple_define_asset<S: CliDataStore>(
     store: &mut S,
     issuer_nick: String,
     asset_nick: String,
+    is_fra: bool,
 ) -> Result<(), CliError> {
     query_ledger_state(store, true)?; // TODO Why true?
 
@@ -286,7 +335,7 @@ pub fn simple_define_asset<S: CliDataStore>(
 
     prepare_transaction(store, nick_tx.clone())?;
 
-    define_asset(store, nick_tx.clone(), issuer_nick, asset_nick)?;
+    define_asset(store, nick_tx.clone(), issuer_nick, asset_nick, is_fra)?;
 
     build_transaction(store)?;
 
@@ -441,15 +490,6 @@ pub fn query_ledger_state<S: CliDataStore>(
             do_request::<GlobalState>(&query).map_err(|_| CliError::IOError {
                 msg: format!("Error with http request to {}", query),
             })?;
-        if let Err(e) = resp.2.verify(
-            &conf.ledger_sig_key.ok_or_else(|| {
-                PlatformError::IoError("ledger signing key not available.".to_string())
-            })?,
-            &(resp.0.clone(), resp.1),
-        ) {
-            eprintln!("Ledger responded with invalid signature: {}", e);
-            exit(-1);
-        }
 
         conf.ledger_state = Some(LedgerStateCommitment(resp));
 
@@ -1103,6 +1143,29 @@ pub fn define_asset<S: CliDataStore>(
     txn_nick: String,
     issuer_nick: String,
     asset_nick: String,
+    is_fra: bool,
+) -> Result<(), CliError> {
+    if is_fra {
+        define_asset_x(
+            store,
+            txn_nick,
+            issuer_nick,
+            asset_nick,
+            Some(AssetTypeCode::new_from_vec(
+                ASSET_TYPE_FRA_BYTES[..].to_vec(),
+            )),
+        )
+    } else {
+        define_asset_x(store, txn_nick, issuer_nick, asset_nick, None)
+    }
+}
+
+pub fn define_asset_x<S: CliDataStore>(
+    store: &mut S,
+    txn_nick: String,
+    issuer_nick: String,
+    asset_nick: String,
+    asset_code: Option<AssetTypeCode>,
 ) -> Result<(), CliError> {
     let issuer_nick = KeypairName(issuer_nick);
     let config = store.get_config()?;
@@ -1129,6 +1192,7 @@ pub fn define_asset<S: CliDataStore>(
             new_builder = b;
         }
     }
+
     store.with_keypair::<PlatformError, _>(&issuer_nick, |kp| match kp {
         None => {
             let err_msg = format!("No key pair '{}' found.", issuer_nick.0);
@@ -1136,10 +1200,17 @@ pub fn define_asset<S: CliDataStore>(
             Err(PlatformError::IoError(err_msg))
         }
         Some(kp) => {
+            let mut asset_rules: AssetRules = Default::default();
+            let max_units = prompt::<u64, _>("max units? (default=unlimited)").unwrap();
+            if max_units > 0 {
+                asset_rules.set_max_units(Some(max_units));
+            }
+            let updatable = prompt_default("memo updatable?", false).unwrap();
+            asset_rules.set_updatable(updatable);
             new_builder.builder.add_operation_create_asset(
                 &kp,
-                None,
-                Default::default(),
+                asset_code,
+                asset_rules,
                 &prompt::<String, _>("memo?").map_err(|_| {
                     PlatformError::IoError(String::from(
                         "It was not possible to read the memo.",
@@ -1900,6 +1971,7 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
     // Wait for the transaction to be committed
     let mut committed = false;
     while !committed {
+        thread::sleep(time::Duration::from_secs(2));
         let txn_status = get_status(store, nick.clone());
 
         if let Ok(res) = txn_status {
@@ -1938,6 +2010,40 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliErr
         }
     }
     Ok(())
+}
+
+/// Currently only used for effect verification of negative scenes.
+pub fn init_fra<S: CliDataStore>(
+    store: &mut S,
+    issuer_nick: String,
+) -> Result<(), CliError> {
+    let query = format!(
+        "{}{}",
+        store.get_config()?.submission_server,
+        SubmissionRoutes::SubmitTransaction.route()
+    );
+
+    let name = KeypairName(issuer_nick);
+    if let Some(mixed_pair) = store.get_encrypted_keypair(&name)? {
+        println!("Please enter current password for {}", name.0);
+        let kp = crate::helpers::prompt_with_retries(3, None, |pass| {
+            mixed_pair.encrypted(pass.as_bytes())
+        })
+        .context(crate::Password)?;
+
+        reqwest::blocking::Client::builder()
+            .build()?
+            .post(&query)
+            .json(&fra_gen_initial_tx(&kp))
+            .send()?
+            .error_for_status()
+            .map(|_| ())
+            .map_err(|e| dbg!(e).into())
+    } else {
+        Err(CliError::NickName {
+            msg: "Name not found".to_owned(),
+        })
+    }
 }
 
 pub fn export_keypair<S: CliDataStore>(

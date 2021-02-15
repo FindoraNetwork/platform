@@ -24,6 +24,7 @@ members = [
     "components/whitelist_cli",
     "components/xfrnote",
     "components/cli2",
+    "components/wallet",
     "ledger",
     "libs/ads/air",
     "libs/ads/merkle_tree",
@@ -35,6 +36,19 @@ members = [
     "libs/network",
     "libs/utils",
 ]
+
+[profile.dev]
+incremental = false
+overflow-checks = true
+
+[profile.release]
+codegen-units = 1
+incremental = false
+overflow-checks = false
+
+[profile.bench]
+codegen-units = 1
+overflow-checks = false
 
 [profile.dev.package.curve25519-dalek]
 opt-level = 1

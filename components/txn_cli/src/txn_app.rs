@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use crate::data_lib::*;
 use crate::lending_lib::{fulfill_loan, load_funds, pay_loan};
 use crate::txn_lib::{

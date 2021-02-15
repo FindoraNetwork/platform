@@ -1,0 +1,26 @@
+name: Others
+on:
+  push:
+    branches-ignore:
+      - master
+      - develop
+      - feature/*
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  build:
+    strategy:
+      matrix:
+        platform: [aws]
+    runs-on: ${{ matrix.platform }}
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly-2021-01-24
+        override: true
+        components: rustfmt
+    - name: check fmt
+      shell: bash
+      run: |
+        cargo fmt -- --check

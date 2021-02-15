@@ -1,4 +1,3 @@
-#![deny(warnings)]
 use clap::{App, Arg, ArgMatches};
 use credentials::{
     credential_commit, credential_issuer_key_gen, credential_sign,

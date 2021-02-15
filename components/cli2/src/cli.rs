@@ -1,4 +1,3 @@
-#![deny(warnings)]
 #![allow(clippy::type_complexity)]
 
 use ledger::data_model::*;
@@ -160,6 +159,8 @@ pub enum CliError {
         #[snafu(backtrace)]
         source: KVError,
     },
+    #[snafu(display("Error invalid nick name"))]
+    NickName { msg: String },
     #[snafu(context(false))]
     #[snafu(display("Error performing HTTP request"))]
     Reqwest {
@@ -457,6 +458,13 @@ enum Actions {
     /// Initialize or change your local database configuration
     Setup {},
 
+    /// Define and issue FRA
+    InitFra {
+        /// The nick name of issuer
+        #[structopt(long)]
+        nick: String,
+    },
+
     /// Generate bash/zsh/fish/powershell completion files for this CLI
     GenCompletions {
         /// Output directory
@@ -505,6 +513,12 @@ enum Actions {
     /// Load a public key for <nick>
     LoadPublicKey {
         /// Identity nickname
+        nick: String,
+    },
+
+    /// Restore keypair from passphrase bip44, setting the name to <nick>
+    RestoreFromMnemonicBip44 {
+        /// Identity
         nick: String,
     },
 
@@ -563,6 +577,9 @@ enum Actions {
         issuer_nick: String,
         /// Name for the asset type
         asset_nick: String,
+        /// When define FRA, set this field to true
+        #[structopt(long)]
+        is_fra: bool,
     },
 
     /// Issue an asset in a single step
@@ -617,6 +634,9 @@ enum Actions {
         issuer_nick: String,
         /// Name for the asset type
         asset_nick: String,
+        /// When define FRA, set this field to true
+        #[structopt(long)]
+        is_fra: bool,
     },
 
     /// Create a transaction part corresponding to the issuance of an asset
@@ -766,6 +786,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
         //////////////////// Simple API  ///////////////////////////////////////////////////////////////
         Setup {} => setup(store),
 
+        InitFra { nick } => init_fra(store, nick),
+
         GenCompletions { .. } => panic!("GenCompletions should've been handle already!"),
 
         ListConfig {} => list_config(store),
@@ -786,10 +808,13 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
 
         DeletePublicKey { nick } => delete_public_key(store, nick),
 
+        RestoreFromMnemonicBip44 { nick } => restore_from_mnemonic_bip44(store, nick),
+
         SimpleDefineAsset {
             issuer_nick,
             asset_nick,
-        } => simple_define_asset(store, issuer_nick, asset_nick),
+            is_fra,
+        } => simple_define_asset(store, issuer_nick, asset_nick, is_fra),
 
         SimpleIssueAsset { asset_nick, amount } => {
             simple_issue_asset(store, asset_nick, amount)
@@ -843,7 +868,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
             txn_nick,
             issuer_nick,
             asset_nick,
-        } => define_asset(store, txn_nick, issuer_nick, asset_nick),
+            is_fra,
+        } => define_asset(store, txn_nick, issuer_nick, asset_nick, is_fra),
 
         IssueAsset {
             txn_nick: builder,

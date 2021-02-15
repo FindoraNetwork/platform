@@ -1,12 +1,28 @@
-#![deny(warnings)]
 use ledger_api_service::ActixLedgerClient;
 use log::{error, info};
+use metrics_exporter_prometheus;
+use metrics_exporter_prometheus::PrometheusHandle;
 use query_api::QueryApi;
 use query_server::QueryServer;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time;
+use utils::MetricsRenderer;
+
+pub struct PromHandle(metrics_exporter_prometheus::PrometheusHandle);
+
+impl PromHandle {
+    pub fn new(h: PrometheusHandle) -> PromHandle {
+        PromHandle(h)
+    }
+}
+
+impl MetricsRenderer for PromHandle {
+    fn rendered(&self) -> String {
+        self.0.render()
+    }
+}
 
 fn main() {
     let running = Arc::new(AtomicBool::new(true));
@@ -35,7 +51,17 @@ fn main() {
         ledger_host.to_str().unwrap(),
         ledger_protocol.to_str().unwrap(),
     );
-    let query_server = QueryServer::new(rest_client);
+
+    // Extract prometheus handle
+    let builder = metrics_exporter_prometheus::PrometheusBuilder::new();
+    let recorder = builder.build();
+    let handle = PromHandle::new(recorder.handle());
+
+    // Register recorder
+    let _ = metrics::set_boxed_recorder(Box::new(recorder));
+
+    // Create query api
+    let query_server = QueryServer::new(rest_client, handle);
     let wrapped_server = Arc::new(RwLock::new(query_server));
     let query_api = QueryApi::create(
         wrapped_server.clone(),

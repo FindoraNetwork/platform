@@ -1,8 +1,8 @@
-#![deny(warnings)]
 use cryptohash::sha256::Digest;
 use cryptohash::{sha256, Proof};
 use percent_encoding::{percent_decode, utf8_percent_encode, AsciiSet, CONTROLS};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fs;
 use std::io::{Error, ErrorKind};
 use std::marker::PhantomData;
 use std::path::PathBuf;
@@ -59,27 +59,25 @@ pub fn protocol_host() -> (String, String) {
             .unwrap_or_else(|| SERVER_HOST.to_string()),
     )
 }
+
 #[cfg(not(target_arch = "wasm32"))]
-pub fn actix_post_request<T: Serialize>(
-    client: &reqwest::blocking::Client,
+pub fn http_post_request<T: Serialize>(
     query: &str,
     body: Option<T>,
-) -> Result<String, reqwest::Error> {
-    let mut req = client.post(query);
+) -> Result<String, attohttpc::Error> {
+    let req = attohttpc::post(query);
 
     if let Some(body) = body {
-        req = req.json(&body);
+        req.json(&body)?.send()?.error_for_status()?.text()
+    } else {
+        req.send()?.error_for_status()?.text()
     }
-
-    Ok(req.send()?.error_for_status()?.text()?)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn actix_get_request(
-    client: &reqwest::blocking::Client,
-    query: &str,
-) -> Result<String, reqwest::Error> {
-    Ok(client.get(query).send()?.error_for_status()?.text()?)
+#[inline(always)]
+pub fn http_get_request(query: &str) -> Result<String, attohttpc::Error> {
+    attohttpc::get(query).send()?.error_for_status()?.text()
 }
 
 pub fn fresh_tmp_dir() -> PathBuf {
@@ -88,10 +86,11 @@ pub fn fresh_tmp_dir() -> PathBuf {
     let mut i = 0;
     let mut dirname = None;
     while dirname.is_none() {
-        assert!(i < 10240); // TODO(joe): fail more gracefully
-        let name = std::format!("{}_{}", base_dirname, i);
+        assert!(i < 4); // TODO(joe): fail more gracefully
+        let name = std::format!("{}_{}", base_dirname, rand::random::<u64>());
         let path = base_dir.join(name);
-        match std::fs::create_dir(&path) {
+        let _ = fs::remove_dir_all(&path);
+        match fs::create_dir(&path) {
             Ok(()) => {
                 dirname = Some(path);
             }
@@ -496,6 +495,30 @@ pub trait NetworkRoute {
         let mut endpoint = self.route();
         endpoint += &("/".to_owned() + &"{".to_owned() + arg + &"}".to_owned());
         endpoint
+    }
+}
+
+pub trait MetricsRenderer {
+    fn rendered(&self) -> String;
+}
+
+pub struct MockMetricsRenderer;
+
+impl MockMetricsRenderer {
+    pub fn new() -> Self {
+        MockMetricsRenderer {}
+    }
+}
+
+impl Default for MockMetricsRenderer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MetricsRenderer for MockMetricsRenderer {
+    fn rendered(&self) -> String {
+        String::from("rendered")
     }
 }
 

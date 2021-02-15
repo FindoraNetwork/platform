@@ -1,0 +1,76 @@
+name: Features
+on:
+  push:
+    branches:
+      - feature/*
+  pull_request:
+    branches:
+      - feature/*
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  build:
+    strategy:
+      matrix:
+        platform: [aws]
+    runs-on: ${{ matrix.platform }}
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly-2021-01-24
+        override: true
+        components: rustfmt
+    - name: check fmt
+      shell: bash
+      run: |
+        cargo fmt -- --check
+    # - name: test_status
+    #   env:
+    #     DBG: true
+    #   shell: bash
+    #   run: |
+    #     curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+    #     make test_status
+    ## It need to install protobuf-compiler for build environment.
+    ## Enable this when build by container.
+    # - name: Install protobuf-compiler
+    #   shell: bash
+    #   run: |
+    #     apt install protobuf-compiler
+    - name: install rustwasm
+      shell: bash
+      run: |
+        curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+    - name: add go
+      shell: bash
+      run: |
+        mkdir $(pwd)/opt && cd $(pwd)/opt && wget https://golang.google.cn/dl/go1.15.7.linux-amd64.tar.gz && tar -xpf go1.15.7.linux-amd64.tar.gz && echo "$(pwd)/go/bin" >> $GITHUB_PATH
+    - name: go test
+      shell: bash
+      run: |
+        echo "${GITHUB_PATH}"
+        echo "${PATH}"
+        go version
+    - name: lint
+      shell: bash
+      run: |
+        make lint
+    - name: test
+      shell: bash
+      run: |
+        make test
+    # - name: Build
+    #   env:
+    #     DBG: true
+    #   shell: bash
+    #   run: |
+    #     make build
+    # - name: build release
+    #   shell: bash
+    #   run: |
+    #     make build_release
+    # - name: release
+    #   shell: bash
+    #   run: |
+    #     echo "TBD"

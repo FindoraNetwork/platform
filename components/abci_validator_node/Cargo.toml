@@ -20,7 +20,7 @@ ledger = { path = "../../ledger" }
 log = "0.4.8"
 rand_chacha = "0.2.0"
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
-reqwest = { version = "0.10", features = ["blocking", "json"] }
+reqwest = { version = "0.10", default-features = false, features = ["rustls-tls", "blocking", "json"] }
 serde = { version = "1.0.99", features = ["derive"] }
 serde_derive = "1.0"
 serde_json = "1.0.40"
@@ -30,8 +30,15 @@ utils = { path = "../../libs/utils" }
 zei = { git = "ssh://git@github.com/FindoraNetwork/zei", branch = "fix-deps-v0.0.3-5" }
 
 hex = "0.4.2"
+wallet = { path = "../wallet" }
 protobuf = "2.15.1"
-myutil = { git = "https://gitee.com/kt10/myutil", branch = "master" }
+ruc = "0.4"
+
+ctrlc = "3.1.7"
+toml = "0.5.8"
 
 [build-dependencies]
 vergen = "3.1.0"
+
+[features]
+debugenv = [ "ledger/debugenv" ]

@@ -15,7 +15,7 @@ EXEC_PATH=$(echo ${EXEC_PATH} | sed 's@/\./@/@g' | sed 's@/\.*$@@')
 cd $EXEC_PATH || exit 1
 #################################################
 
-export LC_ALL=en_US.UTF-8 # perl
+tmp_suffix="${RANDOM}la134jflahglakjflajlgal${RANDOM}"
 
 for file in $(find .. -type f \
     -name "*.rs" \
@@ -28,23 +28,25 @@ for file in $(find .. -type f \
     -o -name "rc.local"\
     | grep -v "$(basename $0)" \
     | grep -v 'target/' \
-    | grep -v 'postgres'); do
+    | grep -v 'tendermint'); do
 
-    perl -p -i -e 's/　/ /g' $file
-    perl -p -i -e 's/！/!/g' $file
-    perl -p -i -e 's/（/(/g' $file
-    perl -p -i -e 's/）/)/g' $file
+    sed -ri.${tmp_suffix} 's/　/ /g' $file
+    sed -ri.${tmp_suffix} 's/！/!/g' $file
+    sed -ri.${tmp_suffix} 's/（/(/g' $file
+    sed -ri.${tmp_suffix} 's/）/)/g' $file
 
-    perl -p -i -e 's/：/: /g' $file
-    perl -p -i -e 's/， */, /g' $file
-    perl -p -i -e 's/。 */. /g' $file
-    perl -p -i -e 's/、 +/、/g' $file
+    sed -ri.${tmp_suffix} 's/：/: /g' $file
+    sed -ri.${tmp_suffix} 's/， */, /g' $file
+    sed -ri.${tmp_suffix} 's/。 */. /g' $file
+    sed -ri.${tmp_suffix} 's/、 +/、/g' $file
 
-    perl -p -i -e 's/, +/, /g' $file
-    perl -p -i -e 's/\. +/. /g' $file
+    sed -ri.${tmp_suffix} 's/, +/, /g' $file
+    sed -ri.${tmp_suffix} 's/\. +/. /g' $file
 
-    perl -p -i -e 's/\t/    /g' $file
-    perl -p -i -e 's/ +$//g' $file
+    sed -ri.${tmp_suffix} 's/\t/    /g' $file
+    sed -ri.${tmp_suffix} 's/ +$//g' $file
+
+    rm -f ${file}.${tmp_suffix}
 done
 
-cd .. && cargo +nightly fmt
+cargo fmt --all

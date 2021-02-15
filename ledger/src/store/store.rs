@@ -26,9 +26,15 @@ use std::path::PathBuf;
 use std::u64;
 use utils::HasInvariants;
 use utils::{HashOf, ProofOf, Serialized, SignatureOf};
+use zei::setup::PublicParams;
 use zei::xfr::lib::XfrNotePolicies;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::{AssetTracingPolicies, AssetTracingPolicy, XfrAssetType};
+use zei::xfr::{
+    asset_record::{build_blind_asset_record, AssetRecordType},
+    structs::{
+        AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy, XfrAssetType,
+    },
+};
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
 
@@ -297,7 +303,11 @@ pub struct LedgerState {
     // The `FinalizedTransaction`s consist of a Transaction and an index into
     // `merkle` representing its hash.
     // TODO(joe): should this be in-memory?
-    blocks: Vec<FinalizedBlock>,
+    ////////////////////////////////////////////////////////////////////
+    // Comments above is left by the previous development team.
+    ////////////////////////////////////////////////////////////////////
+    // use sled(DB) to cache the tx data.
+    blocks: block_cache::Sled,
 
     // Bitmap tracking all the live TXOs
     utxo_map: BitMap,
@@ -431,8 +441,8 @@ impl HasInvariants<PlatformError> for LedgerState {
             status2.utxo_map_path = self.status.utxo_map_path.clone();
             status2.utxo_map_versions = self.status.utxo_map_versions.clone();
 
-            dbg!(&status2);
-            dbg!(&self.status);
+            // dbg!(&status2);
+            // dbg!(&self.status);
             assert!(*status2 == self.status);
 
             std::fs::remove_dir_all(tmp_dir).unwrap();
@@ -1010,7 +1020,7 @@ impl LedgerStatus {
             let mut def: BlockEffect = Default::default();
             def.txns = block.txns.clone();
             def.temp_sids = block.temp_sids.clone();
-
+            def.pulse_count = block.pulse_count;
             def
         });
 
@@ -1757,7 +1767,7 @@ impl LedgerState {
             signing_key,
             block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)?,
             txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)?,
-            blocks: Vec::new(),
+            blocks: block_cache::Sled::new(),
             utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)?,
             txn_log: Some((
                 txn_path.into(),
@@ -1844,7 +1854,7 @@ impl LedgerState {
                 .map_err(add_location!())?,
             txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, false)
                 .map_err(add_location!())?,
-            blocks: Vec::new(),
+            blocks: block_cache::Sled::new(),
             utxo_map: LedgerState::init_utxo_map(utxo_map_path, false)
                 .map_err(add_location!())?,
             txn_log: None,
@@ -1973,7 +1983,7 @@ impl LedgerState {
                 .map_err(add_location!())?,
             txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)
                 .map_err(add_location!())?,
-            blocks: Vec::new(),
+            blocks: block_cache::Sled::new(),
             utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)
                 .map_err(add_location!())?,
             txn_log: None,
@@ -2742,10 +2752,86 @@ TransferAsset::new(TransferAssetBody::new(ledger.get_prng(),
     }
 }
 
+/// Define and Issue FRA.
+/// Currently this should only be used for tests.
+pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
+    const FRA_DECIMAL: u8 = 6;
+    const FRA_AMOUNT: u64 = 21000000000000000;
+
+    /*
+     * Define FRA
+     **/
+
+    let fra_code = AssetTypeCode {
+        val: ASSET_TYPE_FRA,
+    };
+
+    let mut tx = helpers::create_definition_transaction(
+        &fra_code,
+        fra_owner_kp,
+        AssetRules {
+            transferable: true,
+            updatable: true,
+            decimals: FRA_DECIMAL,
+            ..AssetRules::default()
+        },
+        Some(Memo("FRA".to_owned())),
+        0,
+    )
+    .unwrap();
+
+    /*
+     * Issue FRA
+     **/
+
+    let template = AssetRecordTemplate::with_no_asset_tracking(
+        FRA_AMOUNT,
+        fra_code.val,
+        AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+        fra_owner_kp.get_pk(),
+    );
+
+    let params = PublicParams::new();
+    let (ba, _, _) = build_blind_asset_record(
+        &mut ChaChaRng::from_entropy(),
+        &params.pc_gens,
+        &template,
+        vec![],
+    );
+
+    let asset_issuance_body = IssueAssetBody::new(
+        &fra_code,
+        0,
+        &[(
+            TxOutput {
+                record: ba,
+                lien: None,
+            },
+            None,
+        )],
+    )
+    .unwrap();
+
+    let asset_issuance_operation = IssueAsset::new(
+        asset_issuance_body,
+        &IssuerKeyPair {
+            keypair: fra_owner_kp,
+        },
+    )
+    .unwrap();
+
+    tx.add_operation(Operation::IssueAsset(asset_issuance_operation));
+
+    tx
+}
+
 #[cfg(test)]
 mod tests {
     use super::helpers::*;
     use super::*;
+    use crate::data_model::{
+        ASSET_TYPE_FRA, ASSET_TYPE_FRA_BYTES, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+    };
     use crate::policies::{calculate_fee, Fraction};
     use credentials::{
         credential_commit, credential_issuer_key_gen, credential_sign,
@@ -4279,5 +4365,246 @@ mod tests {
         let effect = TxnEffect::compute_effect(tx).unwrap();
         let result = ledger.apply_transaction(&mut block, effect);
         assert!(result.is_ok());
+    }
+
+    fn gen_fee_operation(
+        l: &mut LedgerState,
+        txo_sid: TxoSID,
+        fra_owner_kp: &XfrKeyPair,
+    ) -> Operation {
+        let fra_code = &AssetTypeCode {
+            val: ASSET_TYPE_FRA,
+        };
+
+        let input_bar_proof = l.get_utxo(txo_sid).unwrap();
+        let input_bar = (input_bar_proof.utxo.0).record;
+        let input_oar =
+            open_blind_asset_record(&input_bar, &None, fra_owner_kp.get_sk_ref())
+                .unwrap();
+
+        let output_template = AssetRecordTemplate::with_no_asset_tracking(
+            TX_FEE_MIN,
+            fra_code.val,
+            AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+            *BLACK_HOLE_PUBKEY,
+        );
+        let output_ar = AssetRecord::from_template_no_identity_tracking(
+            l.get_prng(),
+            &output_template,
+        )
+        .unwrap();
+        let input_ar =
+            AssetRecord::from_open_asset_record_no_asset_tracking(input_oar.clone());
+
+        let mut transfer = TransferAsset::new(
+            TransferAssetBody::new(
+                l.get_prng(),
+                vec![TxoRef::Absolute(txo_sid)],
+                &[input_ar],
+                &[output_ar],
+                None,
+                vec![],
+                TransferType::Standard,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        transfer.sign(&fra_owner_kp);
+
+        Operation::TransferAsset(transfer)
+    }
+
+    #[test]
+    fn test_check_fee_with_ledger() {
+        let mut ledger = LedgerState::test_ledger();
+        let fra_owner_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+
+        let mut tx = fra_gen_initial_tx(&fra_owner_kp);
+        assert!(tx.check_fee());
+
+        let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
+        let mut block = ledger.start_block().unwrap();
+        let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
+        let txo_sid = ledger
+            .finish_block(block)
+            .unwrap()
+            .remove(&tmp_sid)
+            .unwrap()
+            .1[0];
+
+        let tx2 = Transaction::from_operation(
+            gen_fee_operation(&mut ledger, txo_sid, &fra_owner_kp),
+            1,
+        );
+        assert!(tx2.check_fee());
+
+        let effect = TxnEffect::compute_effect(tx2).unwrap();
+        let mut block = ledger.start_block().unwrap();
+        ledger.apply_transaction(&mut block, effect).unwrap();
+        ledger.finish_block(block).unwrap();
+
+        // Ensure that FRA can only be defined only once.
+        let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
+        let mut block = ledger.start_block().unwrap();
+        assert!(ledger.apply_transaction(&mut block, effect).is_err());
+        ledger.abort_block(block);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub mod block_cache {
+    //!
+    //! # block_cache
+    //!
+    //! [**related issue**](https://github.com/FindoraNetwork/platform/issues/7)
+    //!
+    //! This module is almost non-invasive to external code.
+    //!
+
+    use crate::data_model::FinalizedBlock;
+    use lazy_static::lazy_static;
+    use rand::random;
+    use ruc::{err::*, *};
+    use std::{
+        env, fs,
+        iter::Iterator,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+
+    // The default path to store the runtime blocks data,
+    // when the envronment-VAR with the same name is not set.
+    //
+    // Is it necessary to be compatible with the Windows operating system?
+    const SLED_CACHE_DIR: &str = "/tmp/.ledger_state_block";
+
+    lazy_static! {
+        // A counter of the number of blocks in the current ledger.
+        static ref BLOCK_CNT: AtomicUsize = {
+            // Borrow this place a while...
+            {
+                // Remove all possible rubbish(remove their topdir).
+                omit!(fs::remove_dir_all(SLED_CACHE_DIR));
+
+                // Is this necessary? To delete
+                // a possiable file with the same name.
+                omit!(fs::remove_file(SLED_CACHE_DIR));
+            }
+
+            AtomicUsize::new(0)
+        };
+    }
+
+    /// To solve the problem of unlimited memory usage,
+    /// use this to replace the original in-memory `Vec<_>`.
+    pub struct Sled {
+        db: sled::Db,
+    }
+
+    /// Iter over [Sled](self::Sled).
+    pub struct SledIter {
+        iter: sled::Iter,
+    }
+
+    #[inline(always)]
+    fn get_datadir() -> String {
+        // Use random subdir to make unit-tests pass.
+        format!("{}/{}", SLED_CACHE_DIR, random::<u64>())
+    }
+
+    impl Sled {
+        /// Create an instance.
+        #[inline(always)]
+        pub fn new() -> Self {
+            Sled {
+                // Each time the program is started,
+                // a new database is created here.
+                db: pnk!(sled::open(&get_datadir())),
+            }
+        }
+
+        /// Imitate the behavior of 'Vec<_>.get(...)'
+        ///
+        /// Any faster/better choice other than JSON ?
+        pub fn get(&self, idx: usize) -> Option<FinalizedBlock> {
+            self.db
+                .get(&idx.to_ne_bytes()[..])
+                .ok()
+                .flatten()
+                .map(|bytes| serde_json::from_slice(&bytes).unwrap())
+        }
+
+        /// Imitate the behavior of 'Vec<_>.len()'
+        ///
+        /// `merkle_id`(aka `block_id`), its implementation
+        /// is a monotonically increasing integer from zero,
+        /// so this operation will get the correct value.
+        pub fn len(&self) -> usize {
+            BLOCK_CNT.load(Ordering::Relaxed)
+        }
+
+        /// Imitate the behavior of 'Vec<_>.push(...)'
+        pub fn push(&self, b: FinalizedBlock) {
+            let idx = b.merkle_id as usize;
+            let value = serde_json::to_vec(&b).unwrap();
+            self.db.insert(usize::to_ne_bytes(idx), value);
+
+            // increase the number of blocks
+            BLOCK_CNT.fetch_add(1, Ordering::Relaxed);
+        }
+
+        /// Imitate the behavior of '.iter()'
+        pub fn iter(&self) -> SledIter {
+            SledIter {
+                iter: self.db.iter(),
+            }
+        }
+    }
+
+    impl Iterator for SledIter {
+        type Item = FinalizedBlock;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            self.iter
+                .next()
+                .map(|v| v.ok())
+                .flatten()
+                .map(|(_, bytes)| serde_json::from_slice(&bytes[..]).unwrap())
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+
+        fn gen_sample(merkle_id: u64) -> FinalizedBlock {
+            FinalizedBlock {
+                txns: vec![],
+                merkle_id,
+            }
+        }
+
+        #[test]
+        fn t_all() {
+            let mut db = Sled::new();
+
+            assert_eq!(0, db.len());
+            (0..100).for_each(|i| {
+                assert!(db.get(i).is_none());
+            });
+
+            (0..100).map(|i| (i, gen_sample(i))).for_each(|(i, b)| {
+                db.push(b);
+                assert_eq!(1 + i as usize, db.len());
+                assert!(db.get(i as usize).is_some());
+            });
+
+            (0..100).zip(db.iter()).for_each(|(i, b)| {
+                assert_eq!(i, b.merkle_id);
+            });
+
+            assert_eq!(100, db.len());
+        }
     }
 }

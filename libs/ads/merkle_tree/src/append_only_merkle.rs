@@ -3577,7 +3577,7 @@ mod tests {
         let result = std::fs::remove_file(&fake);
 
         if let Ok(_) = result {
-            panic!("File {} should have been moved.");
+            panic!("File ... should have been moved.");
         }
 
         let fake_ext = fake + &ext;
