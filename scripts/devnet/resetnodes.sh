@@ -15,7 +15,7 @@ if [ ! -z "$1" ] && [ ! -z "$2" ]; then
 fi
 
 # clean nodes
-rm -rf $DEVNET/*
+rm -rf $DEVNET/
 
 # setup nodes
 tendermint testnet --v $V --n $N --o $DEVNET > /dev/null

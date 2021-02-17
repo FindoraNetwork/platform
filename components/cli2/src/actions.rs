@@ -438,7 +438,7 @@ pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<(), CliError> 
     }
 
     // Print the balances
-    println!("=== Balances ===");
+    println!("======= Balances =======");
     for ((pk, asset_type), amount) in balances {
         println!("({},{}):{}", pk, asset_type, amount);
     }
@@ -1647,18 +1647,24 @@ pub fn transfer_assets<S: CliDataStore>(
                     eprintln!("Only {} available.", *amt_remaining);
                     continue;
                 }
-                let conf_amt = prompt_default("Secret amount?", true)?;
+                let conf_amt = prompt_default("Secret amount?", false)?;
 
-                let conf_tp = prompt_default("Secret asset type?", true)?;
+                let conf_tp = prompt_default("Secret asset type?", false)?;
                 let receiver = prompt::<String, _>("For whom?")?;
+                let maybe_pubkey = format!("\"{}\"", receiver);
                 let receiver = PubkeyName(receiver);
 
-                let pubkey = match store.get_pubkey(&receiver)? {
-                    None => {
-                        eprintln!("No public key with name '{}' found", receiver.0);
-                        continue;
+                let pubkey = match serde_json::from_str::<XfrPublicKey>(&maybe_pubkey) {
+                    Ok(pk) => pk,
+                    Err(_) => {
+                        match store.get_pubkey(&receiver)? {
+                            None => {
+                                eprintln!("No public key with name '{}' found", receiver.0);
+                                continue;
+                            }
+                            Some(pk) => pk,
+                        }
                     }
-                    Some(pk) => pk,
                 };
 
                 let art = AssetRecordType::from_booleans(conf_amt, conf_tp);
