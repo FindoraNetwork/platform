@@ -3,10 +3,6 @@
 Interacting with the Findora blockchain can be done in several ways.
 One of them is through the `findora` command line.
 
-> **SEE ALSO**
->
-> - [**Another Example**](./sample.md), may be clearer and easier to read
-
 ## Installation
 
 * Go to the root of this project
@@ -60,10 +56,14 @@ SUBCOMMANDS:
 
 ## Example
 
+> **SEE ALSO**
+>
+> - [**Another Example**](./sample.md), may be clearer and easier to read
+
 Now the executable is installed, let us see how to use the command line with a simple example.
 First we will create two key pairs, one for Alice and one for Bob.
 Then Alice will define and issue a token called *AliceCoin*.
-Finally Alice will tranfer 1000 *AliceCoin* to Bob.
+Finally Alice will tranfer some *AliceCoin* to Bob.
 
 * Set server address
 
