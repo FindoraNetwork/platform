@@ -208,7 +208,10 @@ where
         }
     }
 
-    pub fn cache_transaction(&mut self, txn: Transaction) -> TxnHandle {
+    pub fn cache_transaction(
+        &mut self,
+        txn: Transaction,
+    ) -> Result<TxnHandle, TxnHandle> {
         // Begin a block if the previous one has been commited
         if self.all_commited() {
             self.begin_block();
@@ -224,14 +227,14 @@ where
             Ok(temp_sid) => {
                 self.pending_txns.push((temp_sid, handle.clone(), txn));
                 self.txn_status.insert(handle.clone(), TxnStatus::Pending);
+                Ok(handle)
             }
             Err(e) => {
                 self.txn_status
                     .insert(handle.clone(), TxnStatus::Rejected(format!("{}", e)));
+                Err(handle)
             }
         }
-
-        handle
     }
 
     pub fn abort_block(&mut self) {
@@ -251,7 +254,10 @@ where
     ) -> Result<TxnHandle, PlatformError> {
         match self.txn_forwarder {
             None => {
-                let handle = self.cache_transaction(txn);
+                let handle = match self.cache_transaction(txn) {
+                    Ok(h) => h,
+                    Err(h) => h,
+                };
                 info!(
                     "Transaction added to cache and will be committed in the next block"
                 );

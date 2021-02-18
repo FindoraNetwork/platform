@@ -161,11 +161,9 @@ impl abci::Application for ABCISubmissionServer {
                         resp.set_events(attr);
                     }
 
-                    info!("locked for write");
-                    la.cache_transaction(tx);
-                    info!("unlocking for write: {}", error_location!());
-
-                    return resp;
+                    if la.cache_transaction(tx).is_ok() {
+                        return resp;
+                    }
                 }
             }
         }
