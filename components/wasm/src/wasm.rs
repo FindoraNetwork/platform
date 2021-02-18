@@ -257,6 +257,12 @@ impl FeeInputs {
     }
 }
 
+/// Compare two public-key[s].
+#[inline(always)]
+fn cmp_pk(a: &XfrKeyPair, b: &XfrKeyPair) -> Ordering {
+    a.get_pk().as_bytes().cmp(b.get_pk().as_bytes())
+}
+
 #[wasm_bindgen]
 impl TransactionBuilder {
     /// @param am: amount to pay
@@ -401,11 +407,8 @@ impl TransactionBuilder {
             .and_then(|op| op.balance())
             .and_then(|op| op.create())
             .and_then(|mut op| {
-                let cmp = |a: &XfrKeyPair, b: &XfrKeyPair| {
-                    a.get_pk().as_bytes().cmp(b.get_pk().as_bytes())
-                };
-                kps.sort_by(cmp);
-                kps.dedup_by(|a, b| matches!(cmp(a, b), Ordering::Equal));
+                kps.sort_by(cmp_pk);
+                kps.dedup_by(|a, b| matches!(cmp_pk(a, b), Ordering::Equal));
                 for i in kps.iter() {
                     op = op.sign(i)?;
                 }
