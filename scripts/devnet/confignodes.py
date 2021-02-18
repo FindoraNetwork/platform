@@ -98,7 +98,8 @@ def gen_abci_toml(abci_toml, contents, i):
 
 if __name__ == "__main__":
     # list nodes in devnet
-    nodes = os.listdir(devnet)
+    dirs = os.listdir(devnet)
+    nodes = list(filter(lambda d : d.startswith('node'), dirs))
     nodes.sort()
 
     # modify config.toml in each node
