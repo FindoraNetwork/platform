@@ -12,7 +12,7 @@ use credentials::{
 use cryptohash::sha256;
 use ledger::data_model::{
     AssetTypeCode, AuthenticatedKVLookup, AuthenticatedTransaction, Operation,
-    TransferType, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+    TransferType, TxOutput, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
 };
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
@@ -31,7 +31,7 @@ use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordTyp
 use zei::xfr::lib::trace_assets as zei_trace_assets;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 use zei::xfr::structs::{
-    AssetRecordTemplate, AssetType as ZeiAssetType, XfrAssetType, XfrBody,
+    AssetRecordTemplate, AssetType as ZeiAssetType, XfrAmount, XfrAssetType, XfrBody,
     ASSET_TYPE_LENGTH,
 };
 
@@ -257,8 +257,116 @@ impl FeeInputs {
     }
 }
 
+/// Compare two public-key[s].
+#[inline(always)]
+fn cmp_pk(a: &XfrKeyPair, b: &XfrKeyPair) -> Ordering {
+    a.get_pk().as_bytes().cmp(b.get_pk().as_bytes())
+}
+
 #[wasm_bindgen]
 impl TransactionBuilder {
+    /// @param am: amount to pay
+    /// @param kp: owner's XfrKeyPair
+    pub fn add_fee_relative_auto(
+        self,
+        mut am: u64,
+        kp: XfrKeyPair,
+    ) -> Result<TransactionBuilder, JsValue> {
+        // lien outputs can NOT be used as fee
+        macro_rules! seek {
+            ($d: expr) => {
+                $d.body
+                    .transfer
+                    .outputs
+                    .iter()
+                    .map(|r| ClientAssetRecord {
+                        txo: TxOutput {
+                            record: r.clone(),
+                            lien: None,
+                        },
+                    })
+                    .collect()
+            };
+        }
+
+        self.get_builder()
+            .get_transaction()
+            .body
+            .operations
+            .iter()
+            .rev()
+            .map(|new| match new {
+                Operation::TransferAsset(d) => {
+                    seek!(d)
+                }
+                Operation::IssueAsset(d) => d
+                    .body
+                    .records
+                    .iter()
+                    .map(|(o, _)| ClientAssetRecord { txo: o.clone() })
+                    .collect(),
+                Operation::BindAssets(d) => {
+                    seek!(d)
+                }
+                Operation::ReleaseAssets(d) => {
+                    seek!(d)
+                }
+                _ => Vec::new(),
+            })
+            .flatten()
+            .enumerate()
+            .fold(Ok(TransferOperationBuilder::default()), |base, (idx, o)| {
+                base.and_then(|b| {
+                    if 0 < am {
+                        if let XfrAmount::NonConfidential(total) = o.txo.record.amount {
+                            if let XfrAssetType::NonConfidential(ty) =
+                                o.txo.record.asset_type
+                            {
+                                if ASSET_TYPE_FRA == ty
+                                    && kp.get_pk_ref().as_bytes()
+                                        == o.txo.record.public_key.as_bytes()
+                                {
+                                    let n = if total > am {
+                                        am = 0;
+                                        am
+                                    } else {
+                                        am -= total;
+                                        total
+                                    };
+
+                                    return b.add_input_no_tracking(
+                                        TxoRef::relative(idx as u64),
+                                        &o,
+                                        None,
+                                        &kp,
+                                        n,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    Ok(b)
+                })
+            })
+            .and_then(|op| {
+                op.add_output_no_tracking(
+                    TX_FEE_MIN,
+                    &*BLACK_HOLE_PUBKEY,
+                    AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    }
+                    .to_base64(),
+                    false,
+                    false,
+                )
+            })
+            .and_then(|op| op.balance())
+            .and_then(|op| op.create())
+            .and_then(|op| op.sign(&kp))
+            .and_then(|op| op.transaction())
+            .and_then(|op_str| self.add_transfer_operation(op_str))
+    }
+
     /// As the last operation of any transaction,
     /// add a static fee to the transaction.
     pub fn add_fee(self, inputs: FeeInputs) -> Result<TransactionBuilder, JsValue> {
@@ -299,11 +407,8 @@ impl TransactionBuilder {
             .and_then(|op| op.balance())
             .and_then(|op| op.create())
             .and_then(|mut op| {
-                let cmp = |a: &XfrKeyPair, b: &XfrKeyPair| {
-                    a.get_pk().as_bytes().cmp(b.get_pk().as_bytes())
-                };
-                kps.sort_by(cmp);
-                kps.dedup_by(|a, b| matches!(cmp(a, b), Ordering::Equal));
+                kps.sort_by(cmp_pk);
+                kps.dedup_by(|a, b| matches!(cmp_pk(a, b), Ordering::Equal));
                 for i in kps.iter() {
                     op = op.sign(i)?;
                 }

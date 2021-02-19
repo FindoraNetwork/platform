@@ -489,6 +489,10 @@ impl TransactionBuilder {
         self.txn
     }
 
+    pub fn get_transaction(&self) -> &Transaction {
+        &self.txn
+    }
+
     /// As the last operation of any transaction,
     /// add a static fee to the transaction.
     pub fn add_fee(
