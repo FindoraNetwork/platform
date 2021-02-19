@@ -127,11 +127,7 @@ pub fn list_addresses<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
         .map(|(k, pk)| (k.0, pk))
         .collect::<Vec<_>>();
     for (nick, pk) in pub_keys {
-        println!(
-            "{}: {}",
-            nick,
-            wallet::public_key_to_bech32(&pk)
-        );
+        println!("{}: {}", nick, wallet::public_key_to_bech32(&pk));
     }
     Ok(())
 }
@@ -1668,19 +1664,19 @@ pub fn transfer_assets<S: CliDataStore>(
                 let conf_tp = prompt_default("Secret asset type?", false)?;
                 let receiver = prompt::<String, _>("For whom/address?")?;
                 let receiver = PubkeyName(receiver);
-                
+
                 // receiver can be an bech32 address
                 let pubkey = match wallet::public_key_from_bech32(&receiver.0) {
                     Ok(pk) => pk,
-                    Err(_) => {
-                        match store.get_pubkey(&receiver)? {
-                            None => {
-                                eprintln!("Receiver must either be a nick name or an address");
-                                continue;
-                            }
-                            Some(pk) => pk,
+                    Err(_) => match store.get_pubkey(&receiver)? {
+                        None => {
+                            eprintln!(
+                                "Receiver must either be a nick name or an address"
+                            );
+                            continue;
                         }
-                    }
+                        Some(pk) => pk,
+                    },
                 };
 
                 let art = AssetRecordType::from_booleans(conf_amt, conf_tp);
