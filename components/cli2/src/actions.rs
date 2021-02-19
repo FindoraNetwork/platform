@@ -120,6 +120,22 @@ pub fn key_gen<S: CliDataStore>(store: &mut S, nick: String) -> Result<(), CliEr
     Ok(())
 }
 
+pub fn list_addresses<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
+    let pub_keys = store
+        .get_pubkeys()?
+        .into_iter()
+        .map(|(k, pk)| (k.0, pk))
+        .collect::<Vec<_>>();
+    for (nick, pk) in pub_keys {
+        println!(
+            "{}: {}",
+            nick,
+            wallet::public_key_to_bech32(&pk)
+        );
+    }
+    Ok(())
+}
+
 pub fn list_keys<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
     let kps = store.get_keypairs()?;
     let pks = store
@@ -140,7 +156,7 @@ pub fn list_keys<S: CliDataStore>(store: &mut S) -> Result<(), CliError> {
     let kps = new_kps.into_iter().map(|(k, pk)| ((k.0, pk), true));
     for ((n, k), pair) in kps.chain(pks.into_iter()) {
         println!(
-            "{} {}: '{}'",
+            "{} {}: {}",
             if pair { "keypair" } else { "public key" },
             n,
             serde_json::to_string(&k)?
@@ -1650,16 +1666,16 @@ pub fn transfer_assets<S: CliDataStore>(
                 let conf_amt = prompt_default("Secret amount?", false)?;
 
                 let conf_tp = prompt_default("Secret asset type?", false)?;
-                let receiver = prompt::<String, _>("For whom?")?;
-                let maybe_pubkey = format!("\"{}\"", receiver);
+                let receiver = prompt::<String, _>("For whom/address?")?;
                 let receiver = PubkeyName(receiver);
-
-                let pubkey = match serde_json::from_str::<XfrPublicKey>(&maybe_pubkey) {
+                
+                // receiver can be an bech32 address
+                let pubkey = match wallet::public_key_from_bech32(&receiver.0) {
                     Ok(pk) => pk,
                     Err(_) => {
                         match store.get_pubkey(&receiver)? {
                             None => {
-                                eprintln!("No public key with name '{}' found", receiver.0);
+                                eprintln!("Receiver must either be a nick name or an address");
                                 continue;
                             }
                             Some(pk) => pk,

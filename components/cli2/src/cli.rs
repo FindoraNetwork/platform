@@ -522,6 +522,9 @@ enum Actions {
         nick: String,
     },
 
+    /// List all the addresses present in the database.
+    ListAddresses {},
+
     /// List all the key pairs present in the database.
     ListKeys {},
 
@@ -793,6 +796,8 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
         ListConfig {} => list_config(store),
 
         KeyGen { nick } => key_gen(store, nick),
+
+        ListAddresses {} => list_addresses(store),
 
         ListKeys {} => list_keys(store),
 
