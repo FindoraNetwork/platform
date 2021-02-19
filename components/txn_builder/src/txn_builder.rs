@@ -33,7 +33,7 @@ use zei::xfr::lib::XfrNotePolicies;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
     AssetRecord, AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy,
-    BlindAssetRecord, OpenAssetRecord, OwnerMemo, XfrAmount, XfrAssetType,
+    BlindAssetRecord, OpenAssetRecord, OwnerMemo,
 };
 
 macro_rules! no_transfer_err {
@@ -493,11 +493,17 @@ impl TransactionBuilder {
         &self.txn
     }
 
-    pub fn get_relative_outputs(&self) -> Vec<BlindAssetRecord> {
+    pub fn get_relative_outputs(&self) -> Vec<(BlindAssetRecord, Option<OwnerMemo>)> {
         // lien outputs can NOT be used as fee
         macro_rules! seek {
             ($d: expr) => {
-                $d.body.transfer.outputs.iter().map(|r| r.clone()).collect()
+                $d.body
+                    .transfer
+                    .outputs
+                    .iter()
+                    .zip($d.body.transfer.owners_memos.iter())
+                    .map(|(r, om)| (r.clone(), om.clone()))
+                    .collect()
             };
         }
 
@@ -513,7 +519,7 @@ impl TransactionBuilder {
                     .body
                     .records
                     .iter()
-                    .map(|(o, _)| o.record.clone())
+                    .map(|(o, om)| (o.record.clone(), om.clone()))
                     .collect(),
                 Operation::BindAssets(d) => {
                     seek!(d)
@@ -528,8 +534,6 @@ impl TransactionBuilder {
             .collect()
     }
 
-    /// In this function, only `NonConfidential FRA` be used to pay fee
-    ///
     /// @param am: amount to pay
     /// @param kp: owner's XfrKeyPair
     pub fn add_fee_relative_auto(
@@ -540,34 +544,22 @@ impl TransactionBuilder {
         let mut opb = TransferOperationBuilder::default();
         let outputs = self.get_relative_outputs();
 
-        for (idx, o) in outputs.into_iter().enumerate() {
+        for (idx, (o, om)) in outputs.into_iter().enumerate() {
             if 0 < am {
-                if let XfrAmount::NonConfidential(total) = o.amount {
-                    if let XfrAssetType::NonConfidential(ty) = o.asset_type {
-                        if ASSET_TYPE_FRA == ty
-                            && kp.get_pk_ref().as_bytes() == o.public_key.as_bytes()
-                        {
-                            let n = if total > am {
-                                let n = am;
-                                am = 0;
-                                n
-                            } else {
-                                am -= total;
-                                total
-                            };
+                if let Ok(oar) = open_blind_asset_record(&o, &om, kp.get_sk_ref()) {
+                    if ASSET_TYPE_FRA == oar.asset_type
+                        && kp.get_pk_ref().as_bytes() == o.public_key.as_bytes()
+                    {
+                        let n = if oar.amount > am {
+                            let n = am;
+                            am = 0;
+                            n
+                        } else {
+                            am -= oar.amount;
+                            oar.amount
+                        };
 
-                            open_blind_asset_record(&o, &None, kp.get_sk_ref())
-                                .map_err(|e| e.into())
-                                .and_then(|oar| {
-                                    opb.add_input(
-                                        TxoRef::Relative(idx as u64),
-                                        oar,
-                                        None,
-                                        None,
-                                        n,
-                                    )
-                                })?;
-                        }
+                        opb.add_input(TxoRef::Relative(idx as u64), oar, None, None, n)?;
                     }
                 }
             }
