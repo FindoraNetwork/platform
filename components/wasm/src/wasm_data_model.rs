@@ -178,6 +178,13 @@ impl ClientAssetRecord {
             txo: val.into_serde().map_err(error_to_jsvalue)?,
         })
     }
+
+    /// ClientAssetRecord ==> JsValue
+    pub fn to_json(&self) -> Result<JsValue, JsValue> {
+        serde_json::to_string(&self.txo)
+            .map(|s| JsValue::from_str(&s))
+            .map_err(error_to_jsvalue)
+    }
 }
 
 #[wasm_bindgen]

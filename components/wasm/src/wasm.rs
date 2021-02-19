@@ -12,7 +12,7 @@ use credentials::{
 use cryptohash::sha256;
 use ledger::data_model::{
     AssetTypeCode, AuthenticatedKVLookup, AuthenticatedTransaction, Operation,
-    TransferType, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+    TransferType, TxOutput, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
 };
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
@@ -31,8 +31,7 @@ use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordTyp
 use zei::xfr::lib::trace_assets as zei_trace_assets;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 use zei::xfr::structs::{
-    AssetRecordTemplate, AssetType as ZeiAssetType, XfrAssetType, XfrBody,
-    ASSET_TYPE_LENGTH,
+    AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody, ASSET_TYPE_LENGTH,
 };
 
 mod util;
@@ -278,6 +277,29 @@ impl TransactionBuilder {
         Ok(self)
     }
 
+    /// Use this func to get the necessary infomations for generating `Relative Inputs`
+    ///
+    /// - TxoRef::Relative("Element index of the result")
+    /// - ClientAssetRecord::from_json("Element of the result")
+    pub fn get_relative_outputs(&self) -> Vec<JsValue> {
+        self.transaction_builder
+            .get_relative_outputs()
+            .into_iter()
+            .fold(vec![], |mut base, new| {
+                base.push(
+                    ClientAssetRecord {
+                        txo: TxOutput {
+                            record: new,
+                            lien: None,
+                        },
+                    }
+                    .to_json()
+                    .unwrap(),
+                );
+                base
+            })
+    }
+
     /// As the last operation of any transaction,
     /// add a static fee to the transaction.
     pub fn add_fee(self, inputs: FeeInputs) -> Result<TransactionBuilder, JsValue> {
@@ -286,14 +308,6 @@ impl TransactionBuilder {
         inputs
             .inner
             .into_iter()
-            .filter(|i| {
-                if let XfrAssetType::NonConfidential(ty) = i.ar.txo.record.asset_type {
-                    if ASSET_TYPE_FRA == ty {
-                        return true;
-                    }
-                }
-                false
-            })
             .fold(Ok(TransferOperationBuilder::default()), |base, new| {
                 base.and_then(|b| {
                     b.add_input_no_tracking(new.tr, &new.ar, None, &new.kp, new.am)

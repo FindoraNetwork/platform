@@ -493,13 +493,7 @@ impl TransactionBuilder {
         &self.txn
     }
 
-    /// @param am: amount to pay
-    /// @param kp: owner's XfrKeyPair
-    pub fn add_fee_relative_auto(
-        &mut self,
-        mut am: u64,
-        kp: &XfrKeyPair,
-    ) -> Result<&mut TransactionBuilder, PlatformError> {
+    pub fn get_relative_outputs(&self) -> Vec<BlindAssetRecord> {
         // lien outputs can NOT be used as fee
         macro_rules! seek {
             ($d: expr) => {
@@ -507,9 +501,7 @@ impl TransactionBuilder {
             };
         }
 
-        let mut opb = TransferOperationBuilder::default();
-        let outputs = self
-            .get_transaction()
+        self.get_transaction()
             .body
             .operations
             .iter()
@@ -532,9 +524,23 @@ impl TransactionBuilder {
                 _ => Vec::new(),
             })
             .flatten()
-            .rev();
+            .rev()
+            .collect()
+    }
 
-        for (idx, o) in outputs.enumerate() {
+    /// In this function, only `NonConfidential FRA` be used to pay fee
+    ///
+    /// @param am: amount to pay
+    /// @param kp: owner's XfrKeyPair
+    pub fn add_fee_relative_auto(
+        &mut self,
+        mut am: u64,
+        kp: &XfrKeyPair,
+    ) -> Result<&mut TransactionBuilder, PlatformError> {
+        let mut opb = TransferOperationBuilder::default();
+        let outputs = self.get_relative_outputs();
+
+        for (idx, o) in outputs.into_iter().enumerate() {
             if 0 < am {
                 if let XfrAmount::NonConfidential(total) = o.amount {
                     if let XfrAssetType::NonConfidential(ty) = o.asset_type {
@@ -594,14 +600,7 @@ impl TransactionBuilder {
         let mut kps = vec![];
         let mut opb = TransferOperationBuilder::default();
 
-        for i in inputs.inner.into_iter().filter(|i| {
-            if let XfrAssetType::NonConfidential(ty) = i.ar.record.asset_type {
-                if ASSET_TYPE_FRA == ty {
-                    return true;
-                }
-            }
-            false
-        }) {
+        for i in inputs.inner.into_iter() {
             open_blind_asset_record(&i.ar.record, &None, i.kp.get_sk_ref())
                 .map_err(|e| e.into())
                 .and_then(|oar| {
