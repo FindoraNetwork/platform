@@ -33,7 +33,7 @@ use zei::xfr::lib::XfrNotePolicies;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
     AssetRecord, AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy,
-    BlindAssetRecord, OpenAssetRecord, OwnerMemo, XfrAssetType,
+    BlindAssetRecord, OpenAssetRecord, OwnerMemo, XfrAmount, XfrAssetType,
 };
 
 macro_rules! no_transfer_err {
@@ -491,6 +491,98 @@ impl TransactionBuilder {
 
     pub fn get_transaction(&self) -> &Transaction {
         &self.txn
+    }
+
+    /// @param am: amount to pay
+    /// @param kp: owner's XfrKeyPair
+    pub fn add_fee_relative_auto(
+        &mut self,
+        mut am: u64,
+        kp: &XfrKeyPair,
+    ) -> Result<&mut TransactionBuilder, PlatformError> {
+        // lien outputs can NOT be used as fee
+        macro_rules! seek {
+            ($d: expr) => {
+                $d.body.transfer.outputs.iter().map(|r| r.clone()).collect()
+            };
+        }
+
+        let mut opb = TransferOperationBuilder::default();
+        let outputs = self
+            .get_transaction()
+            .body
+            .operations
+            .iter()
+            .map(|new| match new {
+                Operation::TransferAsset(d) => {
+                    seek!(d)
+                }
+                Operation::IssueAsset(d) => d
+                    .body
+                    .records
+                    .iter()
+                    .map(|(o, _)| o.record.clone())
+                    .collect(),
+                Operation::BindAssets(d) => {
+                    seek!(d)
+                }
+                Operation::ReleaseAssets(d) => {
+                    seek!(d)
+                }
+                _ => Vec::new(),
+            })
+            .flatten()
+            .rev();
+
+        for (idx, o) in outputs.enumerate() {
+            if 0 < am {
+                if let XfrAmount::NonConfidential(total) = o.amount {
+                    if let XfrAssetType::NonConfidential(ty) = o.asset_type {
+                        if ASSET_TYPE_FRA == ty
+                            && kp.get_pk_ref().as_bytes() == o.public_key.as_bytes()
+                        {
+                            let n = if total > am {
+                                let n = am;
+                                am = 0;
+                                n
+                            } else {
+                                am -= total;
+                                total
+                            };
+
+                            open_blind_asset_record(&o, &None, kp.get_sk_ref())
+                                .map_err(|e| e.into())
+                                .and_then(|oar| {
+                                    opb.add_input(
+                                        TxoRef::Relative(idx as u64),
+                                        oar,
+                                        None,
+                                        None,
+                                        n,
+                                    )
+                                })?;
+                        }
+                    }
+                }
+            }
+        }
+
+        opb.add_output(
+            &AssetRecordTemplate::with_no_asset_tracking(
+                TX_FEE_MIN,
+                ASSET_TYPE_FRA,
+                AssetRecordType::from_booleans(false, false),
+                *BLACK_HOLE_PUBKEY,
+            ),
+            None,
+            None,
+            None,
+        )
+        .and_then(|o| o.balance())
+        .and_then(|o| o.create(TransferType::Standard))
+        .and_then(|o| o.sign(&kp))
+        .and_then(|o| o.transaction())
+        .map(move |op| self.add_operation(op))
     }
 
     /// As the last operation of any transaction,
@@ -1407,8 +1499,9 @@ mod tests {
     fn test_check_fee_with_ledger() {
         let mut ledger = LedgerState::test_ledger();
         let fra_owner_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+        let bob_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
 
-        let tx = fra_gen_initial_tx(&fra_owner_kp);
+        let mut tx = fra_gen_initial_tx(&fra_owner_kp);
         assert!(tx.check_fee());
 
         let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
@@ -1421,23 +1514,71 @@ mod tests {
             .unwrap()
             .1[0];
 
-        let mut fi = FeeInputs::new();
-        fi.append(
-            1,
-            TxoRef::Absolute(txo_sid),
-            ledger.get_utxo(txo_sid).unwrap().utxo.0,
-            fra_owner_kp,
-        );
         let mut tx2 = TransactionBuilder::from_seq_id(1);
-        tx2.add_fee(fi).unwrap();
+        let output_bob_fra_template = AssetRecordTemplate::with_no_asset_tracking(
+            5,
+            ASSET_TYPE_FRA,
+            NonConfidentialAmount_NonConfidentialAssetType,
+            bob_kp.get_pk(),
+        );
+        let to_bob = TransferOperationBuilder::new()
+            .add_input(
+                TxoRef::Absolute(txo_sid),
+                open_blind_asset_record(
+                    &ledger.get_utxo(txo_sid).unwrap().utxo.0.record,
+                    &None,
+                    fra_owner_kp.get_sk_ref(),
+                )
+                .unwrap(),
+                None,
+                None,
+                5,
+            )
+            .unwrap()
+            .add_output(&output_bob_fra_template, None, None, None)
+            .unwrap()
+            .balance()
+            .unwrap()
+            .create(TransferType::Standard)
+            .unwrap()
+            .sign(&fra_owner_kp)
+            .unwrap()
+            .transaction()
+            .unwrap();
+        tx2.add_operation(to_bob)
+            .add_fee_relative_auto(TX_FEE_MIN, &fra_owner_kp)
+            .unwrap();
         assert!(tx2.check_fee());
 
         let effect = TxnEffect::compute_effect(tx2.into_transaction()).unwrap();
+        let mut block = ledger.start_block().unwrap();
+        let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
+        let txo_sid = ledger
+            .finish_block(block)
+            .unwrap()
+            .remove(&tmp_sid)
+            .unwrap()
+            .1[0];
+
+        let mut fi = FeeInputs::new();
+        fi.append(
+            TX_FEE_MIN,
+            TxoRef::Absolute(txo_sid),
+            ledger.get_utxo(txo_sid).unwrap().utxo.0,
+            bob_kp,
+        );
+        let mut tx3 = TransactionBuilder::from_seq_id(2);
+        tx3.add_fee(fi).unwrap();
+        assert!(tx3.check_fee());
+
+        let effect = TxnEffect::compute_effect(tx3.into_transaction()).unwrap();
         let mut block = ledger.start_block().unwrap();
         ledger.apply_transaction(&mut block, effect).unwrap();
         ledger.finish_block(block).unwrap();
 
         // Ensure that FRA can only be defined only once.
+        tx.body.no_replay_token =
+            NoReplayToken::new(&mut ChaChaRng::from_entropy(), 100);
         let effect = TxnEffect::compute_effect(tx).unwrap();
         let mut block = ledger.start_block().unwrap();
         assert!(ledger.apply_transaction(&mut block, effect).is_err());
