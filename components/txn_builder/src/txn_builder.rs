@@ -458,6 +458,7 @@ struct FeeInput {
     tr: TxoRef,
     // Input body
     ar: TxOutput,
+    om: Option<OwnerMemo>,
     // Owner of this txo
     kp: XfrKeyPair,
 }
@@ -472,8 +473,15 @@ impl FeeInputs {
         FeeInputs::default()
     }
 
-    pub fn append(&mut self, am: u64, tr: TxoRef, ar: TxOutput, kp: XfrKeyPair) {
-        self.inner.push(FeeInput { am, tr, ar, kp })
+    pub fn append(
+        &mut self,
+        am: u64,
+        tr: TxoRef,
+        ar: TxOutput,
+        om: Option<OwnerMemo>,
+        kp: XfrKeyPair,
+    ) {
+        self.inner.push(FeeInput { am, tr, ar, om, kp })
     }
 }
 
@@ -593,7 +601,7 @@ impl TransactionBuilder {
         let mut opb = TransferOperationBuilder::default();
 
         for i in inputs.inner.into_iter() {
-            open_blind_asset_record(&i.ar.record, &None, i.kp.get_sk_ref())
+            open_blind_asset_record(&i.ar.record, &i.om, i.kp.get_sk_ref())
                 .map_err(|e| e.into())
                 .and_then(|oar| {
                     opb.add_input(i.tr, oar, None, None, i.am).map(|_| {
@@ -1552,10 +1560,16 @@ mod tests {
             .1[0];
 
         let mut fi = FeeInputs::new();
+        let utxo = ledger.get_utxo(txo_sid).unwrap();
         fi.append(
             TX_FEE_MIN,
             TxoRef::Absolute(txo_sid),
-            ledger.get_utxo(txo_sid).unwrap().utxo.0,
+            utxo.utxo.0,
+            utxo.authenticated_txn
+                .finalized_txn
+                .txn
+                .get_owner_memos_ref()[utxo.utxo_location.0]
+                .map(|om| om.clone()),
             bob_kp,
         );
         let mut tx3 = TransactionBuilder::from_seq_id(2);
