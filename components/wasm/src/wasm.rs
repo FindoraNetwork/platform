@@ -229,6 +229,8 @@ struct FeeInput {
     tr: TxoRef,
     // Input body
     ar: ClientAssetRecord,
+    // the owner_memo of `ar` for `Confidential` asset
+    om: Option<OwnerMemo>,
     // Owner of this txo
     kp: XfrKeyPair,
 }
@@ -250,9 +252,10 @@ impl FeeInputs {
         am: u64,
         tr: TxoRef,
         ar: ClientAssetRecord,
+        om: Option<OwnerMemo>,
         kp: XfrKeyPair,
     ) {
-        self.inner.push(FeeInput { am, tr, ar, kp })
+        self.inner.push(FeeInput { am, tr, ar, om, kp })
     }
 }
 
@@ -303,18 +306,24 @@ impl TransactionBuilder {
     /// As the last operation of any transaction,
     /// add a static fee to the transaction.
     pub fn add_fee(self, inputs: FeeInputs) -> Result<TransactionBuilder, JsValue> {
-        let mut kps = vec![];
+        let mut kps = Vec::new();
 
         inputs
             .inner
             .into_iter()
-            .fold(Ok(TransferOperationBuilder::default()), |base, new| {
+            .fold(Ok(TransferOperationBuilder::default()), |base, mut new| {
                 base.and_then(|b| {
-                    b.add_input_no_tracking(new.tr, &new.ar, None, &new.kp, new.am)
-                        .map(|b| {
-                            kps.push(new.kp);
-                            b
-                        })
+                    b.add_input_no_tracking(
+                        new.tr,
+                        &new.ar,
+                        new.om.take(),
+                        &new.kp,
+                        new.am,
+                    )
+                    .map(|b| {
+                        kps.push(new.kp);
+                        b
+                    })
                 })
             })
             .and_then(|op| {
