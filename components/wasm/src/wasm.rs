@@ -264,10 +264,23 @@ impl From<FeeInputs> for PlatformFeeInputs {
 #[wasm_bindgen]
 impl FeeInputs {
     pub fn new() -> Self {
-        FeeInputs::default()
+        FeeInputs {
+            inner: Vec::with_capacity(1),
+        }
     }
 
     pub fn append(
+        &mut self,
+        am: u64,
+        tr: TxoRef,
+        ar: ClientAssetRecord,
+        om: Option<OwnerMemo>,
+        kp: XfrKeyPair,
+    ) {
+        self.inner.push(FeeInput { am, tr, ar, om, kp })
+    }
+
+    pub fn append2(
         mut self,
         am: u64,
         tr: TxoRef,
