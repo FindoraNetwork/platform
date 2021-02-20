@@ -17,9 +17,9 @@ use ledger::data_model::{
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
-use std::cmp::Ordering;
 use txn_builder::{
-    BuildsTransactions, PolicyChoice, TransactionBuilder as PlatformTransactionBuilder,
+    BuildsTransactions, FeeInput as PlatformFeeInput, FeeInputs as PlatformFeeInputs,
+    PolicyChoice, TransactionBuilder as PlatformTransactionBuilder,
     TransferOperationBuilder as PlatformTransferOperationBuilder,
 };
 use util::error_to_jsvalue;
@@ -235,10 +235,30 @@ struct FeeInput {
     kp: XfrKeyPair,
 }
 
+impl From<FeeInput> for PlatformFeeInput {
+    fn from(fi: FeeInput) -> Self {
+        PlatformFeeInput {
+            am: fi.am,
+            tr: fi.tr.txo_ref,
+            ar: fi.ar.txo,
+            om: fi.om.map(|om| om.memo),
+            kp: fi.kp,
+        }
+    }
+}
+
 #[wasm_bindgen]
 #[derive(Default)]
 pub struct FeeInputs {
     inner: Vec<FeeInput>,
+}
+
+impl From<FeeInputs> for PlatformFeeInputs {
+    fn from(fi: FeeInputs) -> Self {
+        PlatformFeeInputs {
+            inner: fi.inner.into_iter().map(|i| i.into()).collect(),
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -248,21 +268,16 @@ impl FeeInputs {
     }
 
     pub fn append(
-        &mut self,
+        mut self,
         am: u64,
         tr: TxoRef,
         ar: ClientAssetRecord,
         om: Option<OwnerMemo>,
         kp: XfrKeyPair,
-    ) {
-        self.inner.push(FeeInput { am, tr, ar, om, kp })
+    ) -> Self {
+        self.inner.push(FeeInput { am, tr, ar, om, kp });
+        self
     }
-}
-
-/// Compare two public-key[s].
-#[inline(always)]
-fn cmp_pk(a: &XfrKeyPair, b: &XfrKeyPair) -> Ordering {
-    a.get_pk().as_bytes().cmp(b.get_pk().as_bytes())
 }
 
 #[wasm_bindgen]
@@ -305,51 +320,11 @@ impl TransactionBuilder {
 
     /// As the last operation of any transaction,
     /// add a static fee to the transaction.
-    pub fn add_fee(self, inputs: FeeInputs) -> Result<TransactionBuilder, JsValue> {
-        let mut kps = Vec::new();
-
-        inputs
-            .inner
-            .into_iter()
-            .fold(Ok(TransferOperationBuilder::default()), |base, mut new| {
-                base.and_then(|b| {
-                    b.add_input_no_tracking(
-                        new.tr,
-                        &new.ar,
-                        new.om.take(),
-                        &new.kp,
-                        new.am,
-                    )
-                    .map(|b| {
-                        kps.push(new.kp);
-                        b
-                    })
-                })
-            })
-            .and_then(|op| {
-                op.add_output_no_tracking(
-                    TX_FEE_MIN,
-                    &*BLACK_HOLE_PUBKEY,
-                    AssetTypeCode {
-                        val: ASSET_TYPE_FRA,
-                    }
-                    .to_base64(),
-                    false,
-                    false,
-                )
-            })
-            .and_then(|op| op.balance())
-            .and_then(|op| op.create())
-            .and_then(|mut op| {
-                kps.sort_by(cmp_pk);
-                kps.dedup_by(|a, b| matches!(cmp_pk(a, b), Ordering::Equal));
-                for i in kps.iter() {
-                    op = op.sign(i)?;
-                }
-                Ok(op)
-            })
-            .and_then(|op| op.transaction())
-            .and_then(|op_str| self.add_transfer_operation(op_str))
+    pub fn add_fee(mut self, inputs: FeeInputs) -> Result<TransactionBuilder, JsValue> {
+        self.transaction_builder
+            .add_fee(inputs.into())
+            .map_err(error_to_jsvalue)?;
+        Ok(self)
     }
 
     /// A simple fee checker for mainnet v1.0.
