@@ -451,21 +451,22 @@ pub trait BuildsTransactions {
     }
 }
 
-struct FeeInput {
-    // Amount
-    am: u64,
-    // Index of txo
-    tr: TxoRef,
-    // Input body
-    ar: TxOutput,
-    om: Option<OwnerMemo>,
-    // Owner of this txo
-    kp: XfrKeyPair,
+pub struct FeeInput {
+    /// Amount
+    pub am: u64,
+    /// Index of txo
+    pub tr: TxoRef,
+    /// Input body
+    pub ar: TxOutput,
+    /// responce to `ar`
+    pub om: Option<OwnerMemo>,
+    /// Owner of this txo
+    pub kp: XfrKeyPair,
 }
 
 #[derive(Default)]
 pub struct FeeInputs {
-    inner: Vec<FeeInput>,
+    pub inner: Vec<FeeInput>,
 }
 
 impl FeeInputs {
@@ -1499,6 +1500,10 @@ mod tests {
         let mut ledger = LedgerState::test_ledger();
         let fra_owner_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
         let bob_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+        assert_eq!(
+            bob_kp.get_sk().into_keypair().zei_to_bytes(),
+            bob_kp.zei_to_bytes()
+        );
 
         let mut tx = fra_gen_initial_tx(&fra_owner_kp);
         assert!(tx.check_fee());
@@ -1513,38 +1518,44 @@ mod tests {
             .unwrap()
             .1[0];
 
+        macro_rules! transfer_to_bob {
+            ($txo_sid: expr, $bob_pk: expr) => {{
+                let output_bob_fra_template =
+                    AssetRecordTemplate::with_no_asset_tracking(
+                        5,
+                        ASSET_TYPE_FRA,
+                        NonConfidentialAmount_NonConfidentialAssetType,
+                        $bob_pk,
+                    );
+                TransferOperationBuilder::new()
+                    .add_input(
+                        TxoRef::Absolute($txo_sid),
+                        open_blind_asset_record(
+                            &ledger.get_utxo($txo_sid).unwrap().utxo.0.record,
+                            &None,
+                            fra_owner_kp.get_sk_ref(),
+                        )
+                        .unwrap(),
+                        None,
+                        None,
+                        5,
+                    )
+                    .unwrap()
+                    .add_output(&output_bob_fra_template, None, None, None)
+                    .unwrap()
+                    .balance()
+                    .unwrap()
+                    .create(TransferType::Standard)
+                    .unwrap()
+                    .sign(&fra_owner_kp)
+                    .unwrap()
+                    .transaction()
+                    .unwrap()
+            }};
+        }
+
         let mut tx2 = TransactionBuilder::from_seq_id(1);
-        let output_bob_fra_template = AssetRecordTemplate::with_no_asset_tracking(
-            5,
-            ASSET_TYPE_FRA,
-            NonConfidentialAmount_NonConfidentialAssetType,
-            bob_kp.get_pk(),
-        );
-        let to_bob = TransferOperationBuilder::new()
-            .add_input(
-                TxoRef::Absolute(txo_sid),
-                open_blind_asset_record(
-                    &ledger.get_utxo(txo_sid).unwrap().utxo.0.record,
-                    &None,
-                    fra_owner_kp.get_sk_ref(),
-                )
-                .unwrap(),
-                None,
-                None,
-                5,
-            )
-            .unwrap()
-            .add_output(&output_bob_fra_template, None, None, None)
-            .unwrap()
-            .balance()
-            .unwrap()
-            .create(TransferType::Standard)
-            .unwrap()
-            .sign(&fra_owner_kp)
-            .unwrap()
-            .transaction()
-            .unwrap();
-        tx2.add_operation(to_bob)
+        tx2.add_operation(transfer_to_bob!(txo_sid, bob_kp.get_pk()))
             .add_fee_relative_auto(TX_FEE_MIN, &fra_owner_kp)
             .unwrap();
         assert!(tx2.check_fee());
@@ -1552,31 +1563,71 @@ mod tests {
         let effect = TxnEffect::compute_effect(tx2.into_transaction()).unwrap();
         let mut block = ledger.start_block().unwrap();
         let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
+        // txo_sid[0]: fra_owner to bob
+        // txo_sid[1]: fra_owner to fee
+        // txo_sid[2]: balance to fra_owner
         let txo_sid = ledger
             .finish_block(block)
             .unwrap()
             .remove(&tmp_sid)
             .unwrap()
-            .1[0];
+            .1;
 
+        // (0) transfer first time
         let mut fi = FeeInputs::new();
-        let utxo = ledger.get_utxo(txo_sid).unwrap();
+        let utxo = ledger.get_utxo(txo_sid[0]).unwrap();
         fi.append(
             TX_FEE_MIN,
-            TxoRef::Absolute(txo_sid),
+            TxoRef::Absolute(txo_sid[0]),
             utxo.utxo.0,
             utxo.authenticated_txn
                 .finalized_txn
                 .txn
                 .get_owner_memos_ref()[utxo.utxo_location.0]
                 .map(|om| om.clone()),
-            bob_kp,
+            bob_kp.get_sk().into_keypair(),
         );
         let mut tx3 = TransactionBuilder::from_seq_id(2);
-        tx3.add_fee(fi).unwrap();
+        tx3.add_operation(transfer_to_bob!(txo_sid[2], bob_kp.get_pk()))
+            .add_fee(fi)
+            .unwrap();
         assert!(tx3.check_fee());
 
         let effect = TxnEffect::compute_effect(tx3.into_transaction()).unwrap();
+        let mut block = ledger.start_block().unwrap();
+        let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
+        // txo_sid[0]: fra_owner to bob
+        // txo_sid[1]: balance to fra_owner
+        // txo_sid[2]: bob to fee
+        // txo_sid[3]: balance to bob
+        let txo_sid = ledger
+            .finish_block(block)
+            .unwrap()
+            .remove(&tmp_sid)
+            .unwrap()
+            .1;
+
+        // (2) transfer second time
+        let mut fi = FeeInputs::new();
+        let utxo = ledger.get_utxo(txo_sid[0]).unwrap();
+        fi.append(
+            TX_FEE_MIN,
+            TxoRef::Absolute(txo_sid[0]),
+            utxo.utxo.0,
+            utxo.authenticated_txn
+                .finalized_txn
+                .txn
+                .get_owner_memos_ref()[utxo.utxo_location.0]
+                .map(|om| om.clone()),
+            bob_kp.get_sk().into_keypair(),
+        );
+        let mut tx4 = TransactionBuilder::from_seq_id(3);
+        tx4.add_operation(transfer_to_bob!(txo_sid[1], bob_kp.get_pk()))
+            .add_fee(fi)
+            .unwrap();
+        assert!(tx4.check_fee());
+
+        let effect = TxnEffect::compute_effect(tx4.into_transaction()).unwrap();
         let mut block = ledger.start_block().unwrap();
         ledger.apply_transaction(&mut block, effect).unwrap();
         ledger.finish_block(block).unwrap();
