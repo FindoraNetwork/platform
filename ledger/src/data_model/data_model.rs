@@ -523,6 +523,7 @@ impl AssetType {
             ret.confidential_memo = asset.confidential_memo;
             // Only relevant for issue operations
             ret.asset_rules.max_units = asset.asset_rules.max_units;
+            ret.asset_rules.decimals = asset.asset_rules.decimals;
 
             ret
         };
