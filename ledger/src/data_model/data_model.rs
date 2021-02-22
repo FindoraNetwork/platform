@@ -66,14 +66,6 @@ fn default_digest() -> BitDigest {
     ZERO_DIGEST
 }
 
-fn is_default_digest(x: &BitDigest) -> bool {
-    x == &ZERO_DIGEST
-}
-
-fn is_default<T: Default + PartialEq>(x: &T) -> bool {
-    x == &T::default()
-}
-
 const UTF8_ASSET_TYPES_WORK: bool = false;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -358,7 +350,6 @@ pub struct IndexedSignature<T> {
     pub address: XfrAddress,
     pub signature: SignatureOf<(T, Option<usize>)>,
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     pub input_idx: Option<usize>, // Some(idx) if a co-signature, None otherwise
 }
 
@@ -421,7 +412,6 @@ pub struct AssetRules {
     pub updatable: bool,
     pub transfer_multisig_rules: Option<SignatureRules>,
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     pub tracing_policies: AssetTracingPolicies,
     pub max_units: Option<u64>,
     pub decimals: u8,
@@ -481,20 +471,15 @@ impl AssetRules {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Asset {
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     pub code: AssetTypeCode,
     pub issuer: IssuerPublicKey,
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     pub memo: Memo,
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     pub confidential_memo: ConfidentialMemo,
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     pub asset_rules: AssetRules,
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     pub policy: Option<(Box<Policy>, PolicyGlobals)>,
 }
 
@@ -572,7 +557,6 @@ pub struct TxnTempSID(pub usize);
 pub struct TxOutput {
     pub record: BlindAssetRecord,
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     pub lien: Option<HashOf<Vec<TxOutput>>>,
 }
 
@@ -625,11 +609,9 @@ impl NoReplayToken {
 pub struct TransferAssetBody {
     pub inputs: Vec<TxoRef>, // Ledger address of inputs
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     pub policies: XfrNotePolicies,
     pub outputs: Vec<TxOutput>,
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     // (inp_idx,out_idx,hash) triples signifying that the lien `hash` on
     // the input `inp_idx` gets assigned to the output `out_idx`
     pub lien_assignments: Vec<(usize, usize, HashOf<Vec<TxOutput>>)>,
@@ -727,7 +709,6 @@ impl TransferAssetBody {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IssueAssetBody {
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     pub code: AssetTypeCode,
     pub seq_num: u64,
     pub num_outputs: usize,
@@ -790,7 +771,6 @@ impl DefineAssetBody {
 pub struct UpdateMemoBody {
     pub new_memo: Memo,
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     pub asset_type: AssetTypeCode,
     pub no_replay_token: NoReplayToken,
 }
@@ -1091,7 +1071,6 @@ pub struct BindAssetsBody {
     pub contract: TxoRef,    // UTXO representing the lien contract
     pub inputs: Vec<TxoRef>, // the assets being held
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     // (inp_idx,hash) pairs signifying that there is a lien `hash` on the
     // input `inp_idx`
     // NOTE: `inp_idx` is relative to `inputs`, not `[contract] + inputs`
@@ -1195,7 +1174,6 @@ pub struct ReleaseAssetsBody {
     pub lien: HashOf<Vec<TxOutput>>, // which lien?
     pub num_outputs: usize, // how many UTXOs?
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     // (inp_idx,out_idx,hash) triples signifying that the lien `hash` on
     // the input `inp_idx` gets assigned to the output `out_idx`
     // (an inp_idx of 0 is invalid)
@@ -1290,13 +1268,10 @@ pub struct TransactionBody {
     pub no_replay_token: NoReplayToken,
     pub operations: Vec<Operation>,
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     pub credentials: Vec<CredentialProof>,
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     pub policy_options: Option<TxnPolicyData>,
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     pub memos: Vec<Memo>,
 }
 
@@ -1312,7 +1287,6 @@ impl TransactionBody {
 pub struct Transaction {
     pub body: TransactionBody,
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     pub signatures: Vec<SignatureOf<TransactionBody>>,
 }
 
@@ -1888,10 +1862,8 @@ pub struct StateCommitmentData {
     pub air_commitment: BitDigest, // The root hash of the AIR sparse Merkle tree
     pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     pub pulse_count: u64, // a consensus-specific counter; should be 0 unless consensus needs it.
     #[serde(default = "default_digest")]
-    #[serde(skip_serializing_if = "is_default_digest")]
     pub kv_store: BitDigest, // The root hash of the KV Store SMT
 }
 
