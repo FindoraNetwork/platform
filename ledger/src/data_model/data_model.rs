@@ -424,7 +424,7 @@ impl Default for AssetRules {
             updatable: false,
             max_units: None,
             transfer_multisig_rules: None,
-            decimals: 0,
+            decimals: FRA_DECIMALS,
         }
     }
 }
@@ -1631,6 +1631,8 @@ impl FinalizedTransaction {
 pub const ASSET_TYPE_FRA_BYTES: [u8; ASSET_TYPE_LENGTH] = [0; ASSET_TYPE_LENGTH];
 /// Use pure zero bytes(aka [0, 0, ... , 0]) to express FRA.
 pub const ASSET_TYPE_FRA: ZeiAssetType = ZeiAssetType(ASSET_TYPE_FRA_BYTES);
+/// FRA decimals
+pub const FRA_DECIMALS: u8 = 6;
 
 lazy_static! {
     /// The destination of Fee is an black hole,
