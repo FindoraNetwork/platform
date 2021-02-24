@@ -114,7 +114,7 @@ jobs:
         wasm-pack build --target web --out-dir "${WASM_DIR}/web"
         rm "${WASM_DIR}/web/.gitignore"
         wasm-pack build --target bundler --out-dir "${WASM_DIR}/bundler"
-        rm "${WASM_DIR}/bundler/.gitignore
+        rm "${WASM_DIR}/bundler/.gitignore"
         popd
         pushd "${WASM_DIR}"
         if [ "$(git diff)" != "" ]; then
