@@ -88,15 +88,22 @@ jobs:
         export BRANCH_NAME="develop"
         export WASM_DIR="/tmp/wasm-js-bindings"
         if [ ! -d "${WASM_DIR}" ]; then git clone git@github.com:FindoraNetwork/wasm-js-bindings.git "${WASM_DIR}"; fi
-        cp wasm.tar.gz /tmp/wasm.tar.gz
         pushd "${WASM_DIR}"
         git checkout "${BRANCH_NAME}" || git checkout -b "${BRANCH_NAME}"
         git pull origin "${BRANCH_NAME}" || true
-        tar -C "${WASM_DIR}" -zxf /tmp/wasm.tar.gz
-        mv "${WASM_DIR}"/components/wasm/pkg/* "${WASM_DIR}"
+        if [ ! -d "${WASM_DIR}/nodejs" ]; then mkdir "${WASM_DIR}/nodejs"; fi
+        if [ ! -d "${WASM_DIR}/web" ]; then mkdir "${WASM_DIR}/web"; fi
+        popd
+        pushd components/wasm
+        wasm-pack build --target nodejs --out-dir "${WASM_DIR}/nodejs"
+        rm "${WASM_DIR}/nodejs/.gitignore"
+        wasm-pack build --target web --out-dir "${WASM_DIR}/web"
+        rm "${WASM_DIR}/web/.gitignore"
+        popd
+        pushd "${WASM_DIR}"
         if [ "$(git diff)" != "" ]; then
             git add .
-            git commit -m "version: ${WASM_VERSION}"
+            git commit -m "version: ${WASM_VERSION} at $(date +"%Y%m%d")"
             git push origin "${BRANCH_NAME}"
         fi
         popd
