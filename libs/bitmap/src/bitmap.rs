@@ -1011,7 +1011,7 @@ impl BitMap {
 
             if self.blocks[block].header.count == BLOCK_BITS as u32 {
                 if let Err(e) = self.write_block(block) {
-                    info!("Error writing block {}:  {}", block, e);
+                    info!("Error writing block {}:  {}", block, genlog(&*e));
                 }
             }
         }

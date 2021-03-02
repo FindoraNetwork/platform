@@ -206,8 +206,8 @@ impl abci::Application for ABCISubmissionServer {
                 la.pulse_block();
             } else if !la.all_commited() {
                 info!("end_block: ending block");
-                if let Err(e) = la.end_block() {
-                    info!("end_block failure: {:?}", e);
+                if let Err(e) = la.end_block().c(d!()) {
+                    info!("end_block failure: {:?}", genlog(&*e));
                 }
             }
         }
