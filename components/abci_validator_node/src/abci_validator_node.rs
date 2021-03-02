@@ -10,6 +10,7 @@ use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ruc::{err::*, *};
 use serde::Serialize;
+use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::{
@@ -22,8 +23,8 @@ use submission_server::{convert_tx, SubmissionServer, TxnForward};
 use utils::HashOf;
 use zei::xfr::structs::{XfrAmount, XfrAssetType};
 
-mod abci_config;
-use abci_config::ABCIConfig;
+mod config;
+use config::ABCIConfig;
 
 static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
 
@@ -250,7 +251,10 @@ fn main() {
 
     // LEDGER_DIR is default working dir
     let base_dir = std::env::var_os("LEDGER_DIR").filter(|x| !x.is_empty());
-    let mut base_dir = base_dir.as_ref().map(Path::new);
+    let mut base_dir = base_dir.as_ref().map(|d| {
+        pnk!(fs::create_dir_all(d));
+        Path::new(d)
+    });
 
     // use config file if specified
     let mut config = Default::default();
