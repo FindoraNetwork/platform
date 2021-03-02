@@ -50,8 +50,8 @@ where
         .handle_transaction(tx)
         .map(|h| web::Json(h))
         .map_err(|e| {
-            p(e.as_ref());
-            error::ErrorBadRequest(genlog(e.as_ref()))
+            ruc::print(e.as_ref());
+            error::ErrorBadRequest(ruc::genlog(e.as_ref()))
         })
 }
 

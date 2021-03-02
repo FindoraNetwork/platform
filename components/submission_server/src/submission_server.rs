@@ -235,9 +235,11 @@ where
                 Ok(handle)
             }
             Err(e) => {
-                p(e.as_ref());
-                self.txn_status
-                    .insert(handle.clone(), TxnStatus::Rejected(genlog(e.as_ref())));
+                ruc::print(e.as_ref());
+                self.txn_status.insert(
+                    handle.clone(),
+                    TxnStatus::Rejected(ruc::genlog(e.as_ref())),
+                );
                 Err(handle)
             }
         }

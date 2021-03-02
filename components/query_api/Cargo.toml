@@ -14,7 +14,7 @@ name = "query_server"
 path = "src/query_server_launch.rs"
 
 [dependencies]
-ruc = "0.5.1"
+ruc = "0.5.5"
 actix-cors = "0.1.0"
 actix-rt = "0.2"
 actix-service = "0.4.2"

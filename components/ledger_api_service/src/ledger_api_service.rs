@@ -218,7 +218,7 @@ where
     let reader = data.read().unwrap();
     let key = Key::from_base64(&*addr)
         .c(d!())
-        .map_err(|e| actix_web::error::ErrorBadRequest(genlog(e.as_ref())))?;
+        .map_err(|e| actix_web::error::ErrorBadRequest(ruc::genlog(e.as_ref())))?;
     let result = reader.get_kv_entry(key);
     Ok(web::Json(result))
 }

@@ -8,7 +8,7 @@ edition = "2018"
 path = "src/query_server.rs"
 
 [dependencies]
-ruc = "0.5.1"
+ruc = "0.5.5"
 ledger = { path = "../../ledger" }
 ledger_standalone = {path = "../ledger_standalone"}
 log = "0.4.8"

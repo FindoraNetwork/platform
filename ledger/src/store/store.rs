@@ -1940,7 +1940,10 @@ impl LedgerState {
             None,
         )
         .or_else(|e| {
-            log::info!("Replaying without merkle trees failed: {}", genlog(&*e));
+            log::info!(
+                "Replaying without merkle trees failed: {}",
+                ruc::genlog(&*e)
+            );
             LedgerState::load_checked_from_log(
                 &block_merkle,
                 &air,
@@ -1952,7 +1955,10 @@ impl LedgerState {
             )
         })
         .or_else(|e| {
-            log::info!("Checking log against merkle trees failed: {}", genlog(&*e));
+            log::info!(
+                "Checking log against merkle trees failed: {}",
+                ruc::genlog(&*e)
+            );
             let ret = LedgerState::new(
                 &block_merkle,
                 &air,

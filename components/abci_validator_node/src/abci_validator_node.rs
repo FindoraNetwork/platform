@@ -207,7 +207,7 @@ impl abci::Application for ABCISubmissionServer {
             } else if !la.all_commited() {
                 info!("end_block: ending block");
                 if let Err(e) = la.end_block().c(d!()) {
-                    info!("end_block failure: {:?}", genlog(&*e));
+                    info!("end_block failure: {:?}", ruc::genlog(&*e));
                 }
             }
         }

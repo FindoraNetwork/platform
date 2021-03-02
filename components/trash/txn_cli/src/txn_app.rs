@@ -741,7 +741,9 @@ pub(crate) fn process_asset_issuer_cmd<T: RestfulLedgerAccess + RestfulLedgerUpd
                     }
                     Ok(())
                 }
-                Err(e) => Err(eg!(PlatformError::ZeiError(Some(genlog(e.as_ref()))))),
+                Err(e) => {
+                    Err(eg!(PlatformError::ZeiError(Some(ruc::genlog(e.as_ref())))))
+                }
             }
         }
         _ => {
