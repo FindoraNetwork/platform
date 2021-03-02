@@ -9,6 +9,7 @@ build = "build.rs"
 path = "src/submission_api.rs"
 
 [dependencies]
+ruc = "0.5.1"
 actix-cors = "0.1.0"
 actix-rt = "0.2"
 actix-service = "0.4.2"

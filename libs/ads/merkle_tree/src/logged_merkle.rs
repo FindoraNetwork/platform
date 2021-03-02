@@ -27,14 +27,13 @@ use super::append_only_merkle::AppendOnlyMerkle;
 
 use cryptohash::{sha256, HashValue, Proof};
 use log::{debug, info};
+use ruc::{err::*, *};
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 use std::fs::File;
-use std::io;
 use std::io::BufWriter;
-use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Read;
 use std::io::Seek;
@@ -44,9 +43,10 @@ use std::io::SeekFrom::Start;
 use std::io::Write;
 use std::mem::MaybeUninit;
 use std::ptr::copy_nonoverlapping;
+use std::result::Result as StdResult;
 use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
-use utils::{er, Commas};
+use utils::Commas;
 
 const BUFFER_SIZE: usize = 4 * 1024;
 const CHECK_SIZE: usize = 16;
@@ -87,7 +87,7 @@ struct LogBuffer {
 }
 
 // Provide the serialization help for the array of hashes in a buffer.
-fn serialize_array<S, T>(array: &[T], serializer: S) -> Result<S::Ok, S::Error>
+fn serialize_array<S, T>(array: &[T], serializer: S) -> StdResult<S::Ok, S::Error>
 where
     S: Serializer,
     T: Serialize,
@@ -98,7 +98,7 @@ where
 // Provide the deserialization helper for the hash array in a buffer.
 fn deserialize_array<'de, D>(
     deserializer: D,
-) -> Result<[HashValue; BUFFER_ENTRIES as usize], D::Error>
+) -> StdResult<[HashValue; BUFFER_ENTRIES as usize], D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -180,32 +180,35 @@ impl LogBuffer {
 
     // Check that a buffer has reasonable contents. Return an
     // error if it does not.
-    fn validate(&self) -> Result<(), Error> {
+    fn validate(&self) -> Result<()> {
         if self.marker != BUFFER_MARKER {
-            return er(format!("The buffer marker ({:x} was invalid.", self.marker));
+            return Err(eg!(format!(
+                "The buffer marker ({:x} was invalid.",
+                self.marker
+            )));
         }
 
         if self.entry_count != BUFFER_ENTRIES {
-            return er(format!(
+            return Err(eg!(format!(
                 "The entry count ({}) in a log buffer was invalid.",
                 self.entry_count
-            ));
+            )));
         }
 
         if self.valid == 0 || self.valid > self.entry_count {
-            return er(format!(
+            return Err(eg!(format!(
                 "The valid count ({}) in a log buffer was invalid.",
                 self.valid
-            ));
+            )));
         }
 
         let checksum = self.checksum();
 
         if checksum != self.check {
-            return er(format!(
+            return Err(eg!(format!(
                 "The checksum ({:?}) in a log buffer was invalid.",
                 self.check
-            ));
+            )));
         }
 
         Ok(())
@@ -275,17 +278,17 @@ impl LoggedMerkle {
     /// let merkle_id =
     ///   match logged_merkle.append(&hash) {
     ///     Ok(id) => { id }
-    ///     Err(x) => { return Err(x); }
+    ///     Err(x) => { return Err(eg!(x)); }
     ///   };
-    pub fn append(&mut self, hash: &HashValue) -> Result<u64, Error> {
+    pub fn append(&mut self, hash: &HashValue) -> Result<u64> {
         if self.closed {
-            return er("This LoggedMerkle object is closed.".to_string());
+            return Err(eg!("This LoggedMerkle object is closed."));
         }
 
-        let id = self.tree.append_hash(hash)?;
+        let id = self.tree.append_hash(hash).c(d!())?;
 
         if id != self.next_id {
-            return er("id != self.next_id".to_string());
+            return Err(eg!("id != self.next_id"));
         }
 
         self.next_id += 1;
@@ -295,12 +298,12 @@ impl LoggedMerkle {
 
         // If this buffer is full, give it to the BufWriter code.
         if self.buffer.valid == self.buffer.entry_count {
-            self.write()?;
+            self.write().c(d!())?;
             if self.buffer.id != self.next_id {
-                return er("self.buffer.id != self.next_id".to_string());
+                return Err(eg!("self.buffer.id != self.next_id"));
             }
             if self.buffer.valid != 0 {
-                return er("self.buffer.valid != 0".to_string());
+                return Err(eg!("self.buffer.valid != 0"));
             }
         }
 
@@ -310,11 +313,10 @@ impl LoggedMerkle {
     /// Flush the current state to disk, generally for a snapshot. It's
     /// valid to call this at any time, though. The log and the tree will
     /// be preserved on disk with the state as of the current point in time.
-    pub fn flush(&mut self) -> io::Result<()> {
-        self.tree.write()?;
-        self.write()?;
-        self.writer.flush()?;
-        Ok(())
+    pub fn flush(&mut self) -> Result<()> {
+        self.tree.write().c(d!())?;
+        self.write().c(d!())?;
+        self.writer.flush().c(d!())
     }
 
     /// Get a proof for the given transaction id from the underlying
@@ -325,7 +327,7 @@ impl LoggedMerkle {
     /// * `transaction` - the Merkle tree id for the transaction
     /// * `state` - the Merkle tree state for which the proof is wanted,
     ///              or zero, for the current state.
-    pub fn get_proof(&self, transaction: u64, state: u64) -> io::Result<Proof> {
+    pub fn get_proof(&self, transaction: u64, state: u64) -> Result<Proof> {
         let proof_state = if state != 0 {
             state
         } else {
@@ -333,15 +335,18 @@ impl LoggedMerkle {
         };
 
         if transaction >= proof_state {
-            return er(format!(
+            return Err(eg!(format!(
                 "That id ({}) is not valid for state {}.",
                 transaction.commas(),
                 state
-            ));
+            )));
         }
 
         if !self.tree.validate_transaction_id(transaction) {
-            return er(format!("That id ({}) is not valid.", transaction.commas()));
+            return Err(eg!(format!(
+                "That id ({}) is not valid.",
+                transaction.commas()
+            )));
         }
 
         self.tree.generate_proof(transaction, proof_state)
@@ -353,8 +358,8 @@ impl LoggedMerkle {
     /// # Argument
     ///
     /// * `file` - a file to which to write the log
-    pub fn snapshot(&mut self, file: File) -> io::Result<()> {
-        self.flush()?;
+    pub fn snapshot(&mut self, file: File) -> Result<()> {
+        self.flush().c(d!())?;
         self.buffer = LogBuffer::new(self.next_id);
         self.writer = BufWriter::new(file);
         Ok(())
@@ -372,7 +377,7 @@ impl LoggedMerkle {
     /// applied in order, from the oldest to the newest. A log
     /// file that contains only transactions too new to append
     /// (beyond the end of the tree + 1)  will cause an error.
-    pub fn apply_log(&mut self, mut file: File) -> io::Result<u64> {
+    pub fn apply_log(&mut self, mut file: File) -> Result<u64> {
         let mut state = self.tree.total_size();
         let mut buffer = LogBuffer::new(0);
         let mut processed = 0;
@@ -392,20 +397,20 @@ impl LoggedMerkle {
                     break;
                 }
 
-                return Err(x);
+                return Err(eg!(x));
             }
 
             // Check that the buffer is well-formed.
-            buffer.validate()?;
+            buffer.validate().c(d!())?;
 
             // A buffer always should have some valid entries, but let such
             // errors pass for now.
             if buffer.valid == 0 {
-                return er("The buffer should have some valid entries".to_string());
+                return Err(eg!("The buffer should have some valid entries"));
             }
 
             if buffer.id > self.state() {
-                return er("This log file starts too far in the future.".to_string());
+                return Err(eg!("This log file starts too far in the future."));
             }
 
             // If there are entries in the current buffer that are not in
@@ -427,7 +432,7 @@ impl LoggedMerkle {
                             assert!(n == current);
                         }
                         Err(x) => {
-                            return Err(x);
+                            return Err(eg!(x));
                         }
                     }
 
@@ -448,20 +453,20 @@ impl LoggedMerkle {
     }
 
     /// Close the LoggedMerkle object.
-    pub fn close(&mut self) -> io::Result<()> {
-        self.flush()?;
+    pub fn close(&mut self) -> Result<()> {
+        self.flush().c(d!())?;
         self.closed = true;
         Ok(())
     }
 
     // Find a buffer in the log file that has records just past
     // the end of the tree, if possible.
-    fn find_relevant(&mut self, file: &mut File) -> io::Result<()> {
+    fn find_relevant(&mut self, file: &mut File) -> Result<()> {
         // Get the state of the tree and the number of complete
         // buffers in the file. Ignore any partial write at the
         // end of the file.
         let state = self.tree.total_size();
-        let buffer_count = self.buffer_count(file)?;
+        let buffer_count = self.buffer_count(file).c(d!())?;
 
         if buffer_count == 0 {
             return Ok(());
@@ -479,8 +484,8 @@ impl LoggedMerkle {
         // interpolation, but it doesn't seem worth the complexity.
         loop {
             // Read the file and check that the buffer is well-formed.
-            file.read_exact(buffer.as_mut_bytes())?;
-            buffer.validate()?;
+            file.read_exact(buffer.as_mut_bytes()).c(d!())?;
+            buffer.validate().c(d!())?;
 
             debug!(
                 "current: {}, id: {}, state {}",
@@ -518,19 +523,19 @@ impl LoggedMerkle {
                 break;
             }
 
-            file.seek(Start(current * BUFFER_SIZE as u64))?;
+            file.seek(Start(current * BUFFER_SIZE as u64)).c(d!())?;
         }
 
         debug!("find_relevant:  return {}", current);
-        file.seek(Start(current * BUFFER_SIZE as u64))?;
+        file.seek(Start(current * BUFFER_SIZE as u64)).c(d!())?;
         Ok(())
     }
 
     // Get the size of the given file.
-    fn file_size(&self, file: &mut File) -> io::Result<u64> {
-        let start = file.seek(Current(0))?;
-        let size = file.seek(End(0))?;
-        file.seek(Start(start))?;
+    fn file_size(&self, file: &mut File) -> Result<u64> {
+        let start = file.seek(Current(0)).c(d!())?;
+        let size = file.seek(End(0)).c(d!())?;
+        file.seek(Start(start)).c(d!())?;
         Ok(size)
     }
 
@@ -542,7 +547,7 @@ impl LoggedMerkle {
 
     // Write the log buffer to the file, returning errors as needed.
     // When the write is done, create a new buffer.
-    fn write(&mut self) -> Result<(), Error> {
+    fn write(&mut self) -> Result<()> {
         if self.buffer.valid == 0 {
             return Ok(());
         }
@@ -551,7 +556,7 @@ impl LoggedMerkle {
 
         if let Err(x) = self.writer.write_all(self.buffer.as_bytes()) {
             self.io_errors += 1;
-            return Err(x);
+            return Err(eg!(x));
         }
 
         self.buffer = LogBuffer::new(self.next_id);
@@ -559,8 +564,8 @@ impl LoggedMerkle {
     }
 
     // Compute the number of complete log buffers in a file.
-    fn buffer_count(&self, file: &mut File) -> Result<u64, Error> {
-        let file_size = self.file_size(file)?;
+    fn buffer_count(&self, file: &mut File) -> Result<u64> {
+        let file_size = self.file_size(file).c(d!())?;
         Ok(file_size / BUFFER_SIZE as u64)
     }
 
@@ -582,6 +587,7 @@ mod tests {
     use crate::logged_merkle::LogBuffer;
     use crate::logged_merkle::LoggedMerkle;
     use cryptohash::HashValue;
+    use ruc::*;
     use std::cmp::max;
     use std::fs::OpenOptions;
 
@@ -753,7 +759,9 @@ mod tests {
 
             match new_logged.apply_log(log_file) {
                 Err(x) => {
-                    if x.to_string() != "This log file starts too far in the future." {
+                    if !x.eq_any(
+                        eg!("This log file starts too far in the future.").as_ref(),
+                    ) {
                         panic!("apply_log failed:  {}", x);
                     }
                 }

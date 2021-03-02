@@ -4,11 +4,11 @@
 //!
 use cryptohash::sha256;
 use rand::Rng;
+use ruc::{err::*, *};
 use serde::{Deserialize, Serialize};
 use sha256::DIGESTBYTES;
 use std::collections::HashMap;
 use std::fs;
-use std::io::Error;
 
 pub use sha256::Digest;
 
@@ -71,11 +71,11 @@ impl Key {
     }
 
     // Method to create a Key from a base64-encoded string
-    pub fn from_base64(input: &str) -> Result<Key, base64::DecodeError> {
+    pub fn from_base64(input: &str) -> Result<Key> {
         let digest =
-            Digest::from_slice(&base64::decode_config(input, base64::URL_SAFE)?)
-                .ok_or(base64::DecodeError::InvalidLength)?;
-        //.map_err(|_| base64::DecodeError::InvalidLength)?;
+            Digest::from_slice(&base64::decode_config(input, base64::URL_SAFE).c(d!())?)
+                .c(d!(base64::DecodeError::InvalidLength))?;
+        //.c(d!( base64::DecodeError::InvalidLength))?;
         Ok(Key(digest))
     }
 
@@ -307,12 +307,11 @@ pub fn check_merkle_proof<Value: AsRef<[u8]>>(
     iter.next() == None && hash == *merkle_root
 }
 
-pub fn open(path: &str) -> Result<SmtMap256<String>, Error> {
-    let contents: String = fs::read_to_string(path)?;
+pub fn open(path: &str) -> Result<SmtMap256<String>> {
+    let contents: String = fs::read_to_string(path).c(d!())?;
 
     // Deserialize and print Rust data structure.
-    let result: SmtMap256<String> = serde_json::from_str(&contents)?;
-    Ok(result)
+    serde_json::from_str(&contents).c(d!())
 }
 
 pub mod helpers {

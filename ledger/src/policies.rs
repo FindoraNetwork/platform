@@ -1,7 +1,7 @@
 use crate::data_model::errors::PlatformError;
 use crate::data_model::AssetTypeCode;
-use crate::error_location;
 use fixed::types::I20F12;
+use ruc::{err::*, *};
 use serde::{Deserialize, Serialize};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
@@ -67,43 +67,43 @@ pub fn calculate_fee(principal: u64, interest_rate: Fraction) -> u64 {
 // The function also computes internal consistency checks that do not rely on external information
 pub fn compute_debt_swap_effect(
     transfer: &XfrBody,
-) -> Result<(AssetTypeCode, DebtSwapEffect), PlatformError> {
+) -> Result<(AssetTypeCode, DebtSwapEffect)> {
     let fiat_output = &transfer
         .outputs
         .get(DebtOutputIndices::Fiat as usize)
-        .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+        .c(d!(PlatformError::InputsError(None)))?;
 
     let burned_debt_output = &transfer
         .outputs
         .get(DebtOutputIndices::BurnedDebt as usize)
-        .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+        .c(d!(PlatformError::InputsError(None)))?;
     let returned_debt_output = &transfer
         .outputs
         .get(DebtOutputIndices::ReturnedDebt as usize);
     let debt_input = &transfer
         .inputs
         .get(DebtInputIndices::Debt as usize)
-        .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+        .c(d!(PlatformError::InputsError(None)))?;
 
     if transfer.inputs.len() > 2 {
-        return Err(PlatformError::InputsError(error_location!()));
+        return Err(eg!(PlatformError::InputsError(None)));
     }
 
     // TODO: (noah) figure out how to safely increment lender public key for null pk
-    let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32])
-        .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
+    let null_public_key =
+        XfrPublicKey::zei_from_bytes(&[0; 32]).c(d!(PlatformError::ZeiError(None)))?;
 
     // Debt tokens must be burned and payment must go to owner of the debt
     if burned_debt_output.public_key != null_public_key
         || debt_input.public_key != fiat_output.public_key
     {
-        return Err(PlatformError::InputsError(error_location!()));
+        return Err(eg!(PlatformError::InputsError(None)));
     }
 
     if let Some(returned_debt_output) = returned_debt_output {
         // Ensure that payment and debt tokens are going to the same place
         if fiat_output.public_key != returned_debt_output.public_key {
-            return Err(PlatformError::InputsError(error_location!()));
+            return Err(eg!(PlatformError::InputsError(None)));
         }
 
         // Ensure that debt output types are consistent
@@ -116,11 +116,11 @@ pub fn compute_debt_swap_effect(
                 XfrAssetType::NonConfidential(type_b),
             ) => {
                 if type_a != type_b {
-                    return Err(PlatformError::InputsError(error_location!()));
+                    return Err(eg!(PlatformError::InputsError(None)));
                 }
             }
             (_, _) => {
-                return Err(PlatformError::InputsError(error_location!()));
+                return Err(eg!(PlatformError::InputsError(None)));
             }
         }
     }
@@ -152,6 +152,6 @@ pub fn compute_debt_swap_effect(
                 },
             ))
         }
-        (_, _, _, _, _) => Err(PlatformError::InputsError(error_location!())),
+        (_, _, _, _, _) => Err(eg!(PlatformError::InputsError(None))),
     }
 }

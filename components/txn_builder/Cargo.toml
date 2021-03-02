@@ -8,6 +8,7 @@ edition = "2018"
 path = "src/txn_builder.rs"
 
 [dependencies]
+ruc = "0.5.1"
 ledger = { path = "../../ledger" }
 credentials = { path = "../../libs/credentials" }
 sparse_merkle_tree = { path = "../../libs/ads/sparse_merkle_tree" }
@@ -19,7 +20,7 @@ serde_json = "1.0"
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
 rand_chacha = "0.2.0"
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", branch = "fix-deps-v0.0.3-5" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0" }
 
 [dev-dependencies]
 quickcheck = "0.8"

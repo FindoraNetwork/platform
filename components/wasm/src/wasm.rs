@@ -456,9 +456,9 @@ impl TransactionBuilder {
             AssetTypeCode::new_from_base64(&code).map_err(error_to_jsvalue)?;
 
         // TODO: (keyao/noah) enable client support for identity
-        // tracking?
+        // tracing?
         // Redmine issue: #44
-        let confidentiality_flags = AssetRecordType::from_booleans(conf_amount, false);
+        let confidentiality_flags = AssetRecordType::from_flags(conf_amount, false);
         self.get_builder_mut()
             .add_basic_issue_asset(
                 &key_pair,
@@ -633,7 +633,7 @@ impl TransferOperationBuilder {
         let oar = open_bar(
             asset_record.get_bar_ref(),
             &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-            key.get_sk_ref(),
+            &key,
         )
         .map_err(|_e| JsValue::from_str("Could not open asset record"))?;
         self.get_builder_mut()
@@ -659,10 +659,10 @@ impl TransferOperationBuilder {
     ) -> Result<TransferOperationBuilder, JsValue> {
         let code = AssetTypeCode::new_from_base64(&code).map_err(error_to_jsvalue)?;
 
-        let asset_record_type = AssetRecordType::from_booleans(conf_amount, conf_type);
+        let asset_record_type = AssetRecordType::from_flags(conf_amount, conf_type);
         // TODO (noah/keyao) support identity tracing (issue #298)
         let template = if let Some(policies) = tracing_policies {
-            AssetRecordTemplate::with_asset_tracking(
+            AssetRecordTemplate::with_asset_tracing(
                 amount,
                 code.val,
                 asset_record_type,
@@ -670,7 +670,7 @@ impl TransferOperationBuilder {
                 policies.get_policies_ref().clone(),
             )
         } else {
-            AssetRecordTemplate::with_no_asset_tracking(
+            AssetRecordTemplate::with_no_asset_tracing(
                 amount,
                 code.val,
                 asset_record_type,
@@ -716,7 +716,7 @@ impl TransferOperationBuilder {
     /// references.
     /// @see {@link module:Findora-Network~Network#getUtxo|Network.getUtxo} for details on fetching blind asset records.
     /// @throws Will throw an error if `oar` or `txo_ref` fail to deserialize.
-    pub fn add_input_with_tracking(
+    pub fn add_input_with_tracing(
         self,
         txo_ref: TxoRef,
         asset_record: ClientAssetRecord,
@@ -747,7 +747,7 @@ impl TransferOperationBuilder {
     /// @throws Will throw an error if `oar` or `txo_ref` fail to deserialize.
     // Note: these two functions are necessary because Wasm cannot handle optional references and I
     // don't want any of the functions to take ownership of the tracing key.
-    pub fn add_input_no_tracking(
+    pub fn add_input_no_tracing(
         self,
         txo_ref: TxoRef,
         asset_record: &ClientAssetRecord,
@@ -768,7 +768,7 @@ impl TransferOperationBuilder {
     /// @param conf_amount {boolean} - `true` means the output's asset amount is confidential, and `false` means it's nonconfidential.
     /// @param conf_type {boolean} - `true` means the output's asset type is confidential, and `false` means it's nonconfidential.
     /// @throws Will throw an error if `code` fails to deserialize.
-    pub fn add_output_with_tracking(
+    pub fn add_output_with_tracing(
         self,
         amount: u64,
         recipient: &XfrPublicKey,
@@ -795,7 +795,7 @@ impl TransferOperationBuilder {
     /// @param conf_amount {boolean} - `true` means the output's asset amount is confidential, and `false` means it's nonconfidential.
     /// @param conf_type {boolean} - `true` means the output's asset type is confidential, and `false` means it's nonconfidential.
     /// @throws Will throw an error if `code` fails to deserialize.
-    pub fn add_output_no_tracking(
+    pub fn add_output_no_tracing(
         self,
         amount: u64,
         recipient: &XfrPublicKey,
@@ -881,7 +881,7 @@ pub fn open_client_asset_record(
         &open_bar(
             record.get_bar_ref(),
             &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-            keypair.get_sk_ref(),
+            &keypair,
         )
         .map_err(|_e| JsValue::from_str("Could not open asset record"))?,
     )
@@ -1163,20 +1163,19 @@ pub fn wasm_credential_verify(
 pub fn trace_assets(
     xfr_body: JsValue,
     tracer_keypair: &AssetTracerKeyPair,
-    candidate_assets: JsValue,
+    _candidate_assets: JsValue,
 ) -> Result<JsValue, JsValue> {
-    let candidate_assets: Vec<String> =
-        candidate_assets.into_serde().map_err(error_to_jsvalue)?;
+    // let candidate_assets: Vec<String> =
+    //     candidate_assets.into_serde().map_err(error_to_jsvalue)?;
     let xfr_body: XfrBody = xfr_body.into_serde().map_err(error_to_jsvalue)?;
-    let candidate_assets: Vec<ZeiAssetType> = candidate_assets
-        .iter()
-        .map(|asset_type_str| {
-            AssetTypeCode::new_from_str(&asset_type_str.to_string()).val
-        })
-        .collect();
-    let record_data =
-        zei_trace_assets(&xfr_body, tracer_keypair.get_keys(), &candidate_assets)
-            .map_err(error_to_jsvalue)?;
+    // let candidate_assets: Vec<ZeiAssetType> = candidate_assets
+    //     .iter()
+    //     .map(|asset_type_str| {
+    //         AssetTypeCode::new_from_str(&asset_type_str.to_string()).val
+    //     })
+    //     .collect();
+    let record_data = zei_trace_assets(&xfr_body, tracer_keypair.get_keys())
+        .map_err(error_to_jsvalue)?;
     let record_data: Vec<(u64, String)> = record_data
         .iter()
         .map(|(amt, asset_type, _, _)| {
@@ -1299,6 +1298,11 @@ pub fn create_keypair_from_secret(sk_str: String) -> Option<XfrKeyPair> {
     serde_json::from_str::<XfrSecretKey>(&sk_str)
         .map(|sk| sk.into_keypair())
         .ok()
+}
+
+#[wasm_bindgen]
+pub fn get_pk_from_keypair(kp: &XfrKeyPair) -> XfrPublicKey {
+    kp.get_pk()
 }
 
 ///////////////////////////////////////////

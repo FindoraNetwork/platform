@@ -8,7 +8,7 @@ use bech32::{self, FromBase32, ToBase32};
 use bip0039::{Count, Language, Mnemonic};
 use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
 use ruc::{err::*, *};
-use std::result::Result as Res;
+use std::result::Result as StdResult;
 use zei::{
     serialization::ZeiFromToBytes,
     xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
@@ -24,7 +24,7 @@ pub fn generate_mnemonic_default() -> String {
 /// - @param `wordslen`: acceptable value are one of [ 12, 15, 18, 21, 24 ]
 /// - @param `lang`: acceptable value are one of [ "en", "zh", "zh_traditional", "fr", "it", "ko", "sp", "jp" ]
 #[inline(always)]
-pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> Res<String, String> {
+pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> StdResult<String, String> {
     let w = match wordslen {
         12 => Count::Words12,
         15 => Count::Words15,
@@ -38,7 +38,7 @@ pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> Res<String, String>
         }
     };
 
-    let l = check_lang(lang).map_err(|e| genlog(e))?;
+    let l = check_lang(lang).map_err(|e| genlog(e.as_ref()))?;
 
     Ok(Mnemonic::generate_in(l, w).into_phrase())
 }
@@ -48,22 +48,22 @@ macro_rules! restore_keypair_from_mnemonic {
     ($phrase: expr, $l: expr, $p: expr, $bip: tt) => {
         check_lang($l)
             .c(d!())
-            .and_then(|l| Mnemonic::from_phrase_in(l, $phrase).map_err(|e| eg!(1, e)))
+            .and_then(|l| Mnemonic::from_phrase_in(l, $phrase).map_err(|e| eg!(e)))
             .map(|m| m.to_seed(""))
             .and_then(|seed| {
                 DerivationPath::$bip($p.coin, $p.account, $p.change, $p.address)
-                    .map_err(|e| eg!(2, e))
+                    .map_err(|e| eg!(e))
                     .map(|dp| (seed, dp))
             })
             .and_then(|(seed, dp)| {
                 ExtendedSecretKey::from_seed(&seed)
-                    .map_err(|e| eg!(3, e))?
+                    .map_err(|e| eg!(e))?
                     .derive(&dp)
-                    .map_err(|e| eg!(4, e))
+                    .map_err(|e| eg!(e))
             })
             .and_then(|kp| {
                 XfrSecretKey::zei_from_bytes(&kp.secret_key.to_bytes()[..])
-                    .map_err(|e| eg!(5, e))
+                    .map_err(|e| eg!(e))
             })
             .map(|sk| sk.into_keypair())
     };
@@ -91,10 +91,12 @@ impl BipPath {
 
 /// Restore the XfrKeyPair from a mnemonic with a default bip44-path,
 /// that is "m/44'/917'/0'/0/0" ("m/44'/coin'/account'/change/address").
-pub fn restore_keypair_from_mnemonic_default(phrase: &str) -> Res<XfrKeyPair, String> {
+pub fn restore_keypair_from_mnemonic_default(
+    phrase: &str,
+) -> StdResult<XfrKeyPair, String> {
     const FRA: u32 = 917;
     restore_keypair_from_mnemonic!(phrase, "en", BipPath::new(FRA, 0, 0, 0), bip44)
-        .map_err(|e| genlog(e))
+        .map_err(|e| genlog(e.as_ref()))
 }
 
 /// Restore the XfrKeyPair from a mnemonic with custom params,
@@ -104,8 +106,9 @@ pub fn restore_keypair_from_mnemonic_bip44(
     phrase: &str,
     lang: &str,
     path: &BipPath,
-) -> Res<XfrKeyPair, String> {
-    restore_keypair_from_mnemonic_bip44_inner(phrase, lang, path).map_err(|e| genlog(e))
+) -> StdResult<XfrKeyPair, String> {
+    restore_keypair_from_mnemonic_bip44_inner(phrase, lang, path)
+        .map_err(|e| genlog(e.as_ref()))
 }
 
 #[inline(always)]
@@ -124,8 +127,9 @@ pub fn restore_keypair_from_mnemonic_bip49(
     phrase: &str,
     lang: &str,
     path: &BipPath,
-) -> Res<XfrKeyPair, String> {
-    restore_keypair_from_mnemonic_bip49_inner(phrase, lang, path).map_err(|e| genlog(e))
+) -> StdResult<XfrKeyPair, String> {
+    restore_keypair_from_mnemonic_bip49_inner(phrase, lang, path)
+        .map_err(|e| genlog(e.as_ref()))
 }
 
 #[inline(always)]

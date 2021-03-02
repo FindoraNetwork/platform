@@ -18,12 +18,11 @@ use sparse_merkle_tree::Key as SmtKey;
 use utils::HashOf;
 use wasm_bindgen::prelude::*;
 use zei::setup::PublicParams as ZeiPublicParams;
-use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{
     AssetTracerDecKeys, AssetTracerEncKeys, AssetTracerKeyPair as ZeiAssetTracerKeyPair,
-    AssetTracingPolicies, AssetTracingPolicy, BlindAssetRecord, IdentityRevealPolicy,
-    OwnerMemo as ZeiOwnerMemo,
+    BlindAssetRecord, IdentityRevealPolicy, OwnerMemo as ZeiOwnerMemo,
+    TracingPolicies as ZeiTracingPolicies, TracingPolicy as ZeiTracingPolicy,
 };
 
 #[wasm_bindgen]
@@ -41,7 +40,7 @@ impl PublicParams {
     /// Generates a new set of parameters.
     pub fn new() -> PublicParams {
         PublicParams {
-            params: ZeiPublicParams::new(),
+            params: ZeiPublicParams::default(),
         }
     }
 }
@@ -204,7 +203,7 @@ impl AssetTracerKeyPair {
     pub fn new() -> Self {
         let mut small_rng = ChaChaRng::from_entropy();
         AssetTracerKeyPair {
-            keypair: gen_asset_tracer_keypair(&mut small_rng),
+            keypair: ZeiAssetTracerKeyPair::generate(&mut small_rng),
         }
     }
 }
@@ -605,11 +604,11 @@ impl SignatureRules {
 /// A collection of tracing policies. Use this object when constructing asset transfers to generate
 /// the correct tracing proofs for traceable assets.
 pub struct TracingPolicies {
-    pub(crate) policies: AssetTracingPolicies,
+    pub(crate) policies: ZeiTracingPolicies,
 }
 
 impl TracingPolicies {
-    pub fn get_policies_ref(&self) -> &AssetTracingPolicies {
+    pub fn get_policies_ref(&self) -> &ZeiTracingPolicies {
         &self.policies
     }
 }
@@ -618,42 +617,42 @@ impl TracingPolicies {
 /// Tracing policy for asset transfers. Can be configured to track credentials, the asset type and
 /// amount, or both.
 pub struct TracingPolicy {
-    pub(crate) policy: AssetTracingPolicy,
+    pub(crate) policy: ZeiTracingPolicy,
 }
 
 #[wasm_bindgen]
 impl TracingPolicy {
-    pub fn new_with_tracking(tracing_key: &AssetTracerKeyPair) -> Self {
-        let policy = AssetTracingPolicy {
+    pub fn new_with_tracing(tracing_key: &AssetTracerKeyPair) -> Self {
+        let policy = ZeiTracingPolicy {
             enc_keys: tracing_key.get_enc_key().clone(),
-            asset_tracking: true,
-            identity_tracking: None,
+            asset_tracing: true,
+            identity_tracing: None,
         };
         TracingPolicy { policy }
     }
 
-    pub fn new_with_identity_tracking(
+    pub fn new_with_identity_tracing(
         tracing_key: &AssetTracerKeyPair,
         cred_issuer_key: &CredIssuerPublicKey,
         reveal_map: JsValue,
-        tracking: bool,
+        tracing: bool,
     ) -> Result<TracingPolicy, JsValue> {
         let reveal_map: Vec<bool> = reveal_map.into_serde().map_err(error_to_jsvalue)?;
         let identity_policy = IdentityRevealPolicy {
             cred_issuer_pub_key: cred_issuer_key.get_ref().clone(),
             reveal_map,
         };
-        let policy = AssetTracingPolicy {
+        let policy = ZeiTracingPolicy {
             enc_keys: tracing_key.get_enc_key().clone(),
-            asset_tracking: tracking,
-            identity_tracking: Some(identity_policy),
+            asset_tracing: tracing,
+            identity_tracing: Some(identity_policy),
         };
         Ok(TracingPolicy { policy })
     }
 }
 
 impl TracingPolicy {
-    pub fn get_ref(&self) -> &AssetTracingPolicy {
+    pub fn get_ref(&self) -> &ZeiTracingPolicy {
         &self.policy
     }
 }
@@ -662,7 +661,7 @@ impl TracingPolicy {
 #[derive(Default)]
 /// When an asset is defined, several options governing the assets must be
 /// specified:
-/// 1. **Traceable**: Records and identities of traceable assets can be decrypted by a provided tracking key. By defaults, assets do not have
+/// 1. **Traceable**: Records and identities of traceable assets can be decrypted by a provided tracing key. By defaults, assets do not have
 /// any tracing policies.
 /// 2. **Transferable**: Non-transferable assets can only be transferred once from the issuer to another user. By default, assets are transferable.
 /// 3. **Updatable**: Whether the asset memo can be updated. By default, assets are not updatable.

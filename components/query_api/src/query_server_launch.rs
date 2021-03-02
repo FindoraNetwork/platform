@@ -1,6 +1,5 @@
 use ledger_api_service::ActixLedgerClient;
 use log::{error, info};
-use metrics_exporter_prometheus;
 use metrics_exporter_prometheus::PrometheusHandle;
 use query_api::QueryApi;
 use query_server::QueryServer;

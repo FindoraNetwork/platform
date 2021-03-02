@@ -1,5 +1,6 @@
 use linear_map::LinearMap;
 use rand_core::{CryptoRng, RngCore};
+use ruc::{err::*, *};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use zei::api::anon_creds::{
@@ -48,10 +49,10 @@ impl CredIssuerPublicKey {
         &self.ac_pub_key
     }
 
-    pub fn get_len(&self, key: &str) -> Result<usize, ZeiError> {
+    pub fn get_len(&self, key: &str) -> Result<usize> {
         match self.map.get(key) {
             Some(((_, len), _)) => Ok(*len),
-            None => Err(ZeiError::ParameterError),
+            None => Err(eg!(ZeiError::ParameterError)),
         }
     }
 }
@@ -82,14 +83,14 @@ pub struct Credential {
 }
 
 impl Credential {
-    pub fn to_ac_credential(&self) -> Result<ZeiCredential, ZeiError> {
+    pub fn to_ac_credential(&self) -> Result<ZeiCredential> {
         let mut u32_attrs = vec![0u32; self.issuer_pub_key.num_internal_attrs];
         for (key, attr) in &self.attributes {
             let ((pos, len), _) = self
                 .issuer_pub_key
                 .map
                 .get(key)
-                .ok_or(ZeiError::ParameterError)?;
+                .c(d!(ZeiError::ParameterError))?;
             let u32_vec = u8_slice_to_u32_vec(attr, *len);
             u32_attrs[*pos..*pos + *len].clone_from_slice(&u32_vec);
         }
@@ -144,12 +145,12 @@ pub fn credential_sign<R: CryptoRng + RngCore>(
     issuer_sec_key: &CredIssuerSecretKey,
     user_pub_key: &CredUserPublicKey,
     attributes: &[(String, &[u8])],
-) -> Result<CredSignature, ZeiError> {
+) -> Result<CredSignature> {
     // A. check that attributes fields to sign matches the attribute list
     // A.1 lengths matches
     let keys: Vec<&String> = attributes.iter().map(|(x, _)| x).collect();
     if keys.len() != issuer_sec_key.map.len() {
-        return Err(ZeiError::ParameterError);
+        return Err(eg!(ZeiError::ParameterError));
     }
 
     // B build list of u32 parameters
@@ -159,10 +160,10 @@ pub fn credential_sign<R: CryptoRng + RngCore>(
         let ((index, u32_len), byte_len) = issuer_sec_key
             .map
             .get(attr_key)
-            .ok_or(ZeiError::ParameterError)?; // A.2 field is contained in secret key
+            .c(d!(ZeiError::ParameterError))?; // A.2 field is contained in secret key
         // C. check that attribute length matches secret key parameters
         if attr_value.len() != *byte_len {
-            return Err(ZeiError::ParameterError);
+            return Err(eg!(ZeiError::ParameterError));
         }
 
         let u32_attrs = u8_slice_to_u32_vec(attr_value, *u32_len); // attr_to_u32_array(*attr, *len);
@@ -174,6 +175,7 @@ pub fn credential_sign<R: CryptoRng + RngCore>(
         &user_pub_key.get_ref(),
         &attrs,
     )
+    .c(d!())
 }
 
 pub fn credential_keygen_commitment<R: CryptoRng + RngCore>(
@@ -187,9 +189,12 @@ pub fn credential_commit<R: CryptoRng + RngCore>(
     user_sec_key: &CredUserSecretKey,
     credential: &Credential,
     msg: &[u8],
-) -> Result<(CredCommitment, CredPoK, CredCommitmentKey), ZeiError> {
-    let ac_credential = credential.to_ac_credential()?;
-    ac_commit(prng, user_sec_key.get_ref(), &ac_credential, msg)
+) -> Result<(CredCommitment, CredPoK, CredCommitmentKey)> {
+    let ac_credential = credential.to_ac_credential().c(d!())?;
+    match ac_commit(prng, user_sec_key.get_ref(), &ac_credential, msg).c(d!())? {
+        (acc, acp, Some(ack)) => Ok((acc, acp, ack)),
+        _ => Err(eg!(ZeiError::ParameterError)),
+    }
 }
 
 pub fn credential_commit_with_key<R: CryptoRng + RngCore>(
@@ -198,9 +203,11 @@ pub fn credential_commit_with_key<R: CryptoRng + RngCore>(
     credential: &Credential,
     key: &CredCommitmentKey,
     msg: &[u8],
-) -> Result<(CredCommitment, CredPoK), ZeiError> {
-    let ac_credential = credential.to_ac_credential()?;
+) -> Result<(CredCommitment, CredPoK)> {
+    let ac_credential = credential.to_ac_credential().c(d!())?;
     ac_commit_with_key(prng, user_sk.get_ref(), &ac_credential, key, msg)
+        .c(d!())
+        .map(|(acc, acp, _)| (acc, acp))
 }
 
 pub fn credential_verify_commitment(
@@ -208,8 +215,8 @@ pub fn credential_verify_commitment(
     sig_commitment: &CredCommitment,
     sok: &CredPoK,
     msg: &[u8],
-) -> Result<(), ZeiError> {
-    ac_verify_commitment(&issuer_pub_key.ac_pub_key, sig_commitment, sok, msg)
+) -> Result<()> {
+    ac_verify_commitment(&issuer_pub_key.ac_pub_key, sig_commitment, sok, msg).c(d!())
 }
 
 pub fn credential_open_commitment<R: CryptoRng + RngCore>(
@@ -218,10 +225,11 @@ pub fn credential_open_commitment<R: CryptoRng + RngCore>(
     credential: &Credential,
     key: &CredCommitmentKey,
     reveal_fields: &[String],
-) -> Result<CredPoK, ZeiError> {
-    let reveal_map = reveal_field_to_bitmap(&credential.issuer_pub_key, reveal_fields)?;
-    let ac_credential = credential.to_ac_credential()?;
-    ac_open_commitment(prng, user_sk.get_ref(), &ac_credential, key, &reveal_map)
+) -> Result<CredPoK> {
+    let reveal_map =
+        reveal_field_to_bitmap(&credential.issuer_pub_key, reveal_fields).c(d!())?;
+    let ac_credential = credential.to_ac_credential().c(d!())?;
+    ac_open_commitment(prng, user_sk.get_ref(), &ac_credential, key, &reveal_map).c(d!())
 }
 
 pub fn credential_reveal<R: CryptoRng + RngCore>(
@@ -229,10 +237,11 @@ pub fn credential_reveal<R: CryptoRng + RngCore>(
     user_sk: &CredUserSecretKey,
     credential: &Credential,
     reveal_fields: &[String],
-) -> Result<CredRevealSig, ZeiError> {
-    let reveal_map = reveal_field_to_bitmap(&credential.issuer_pub_key, reveal_fields)?;
-    let ac_credential = credential.to_ac_credential()?;
-    ac_reveal(prng, user_sk.get_ref(), &ac_credential, &reveal_map)
+) -> Result<CredRevealSig> {
+    let reveal_map =
+        reveal_field_to_bitmap(&credential.issuer_pub_key, reveal_fields).c(d!())?;
+    let ac_credential = credential.to_ac_credential().c(d!())?;
+    ac_reveal(prng, user_sk.get_ref(), &ac_credential, &reveal_map).c(d!())
 }
 
 pub fn credential_verify(
@@ -240,13 +249,13 @@ pub fn credential_verify(
     attrs: &[(String, &[u8])],
     sig_commitment: &CredCommitment,
     reveal_proof: &ACRevealProof,
-) -> Result<(), ZeiError> {
+) -> Result<()> {
     let mut u32_attrs = vec![None; issuer_pub_key.num_internal_attrs];
     for (field, attr) in attrs {
         let ((pos, len), _byte_len) = issuer_pub_key
             .map
             .get(field)
-            .ok_or(ZeiError::ParameterError)?;
+            .c(d!(ZeiError::ParameterError))?;
         let u32_vec = u8_slice_to_u32_vec(attr, *len);
         let u32_vec_option: Vec<Option<u32>> =
             u32_vec.iter().map(|x| Some(*x)).collect();
@@ -258,16 +267,17 @@ pub fn credential_verify(
         sig_commitment,
         reveal_proof,
     )
+    .c(d!())
 }
 
 fn reveal_field_to_bitmap(
     issuer_pub_key: &CredIssuerPublicKey,
     reveal_fields: &[String],
-) -> Result<Vec<bool>, ZeiError> {
+) -> Result<Vec<bool>> {
     // 1. check fields are in public key
     for field in reveal_fields {
         if !issuer_pub_key.map.contains_key(field) {
-            return Err(ZeiError::ParameterError);
+            return Err(eg!(ZeiError::ParameterError));
         }
     }
     let mut reveal_map = vec![false; issuer_pub_key.num_internal_attrs];

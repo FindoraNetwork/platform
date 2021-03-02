@@ -2,21 +2,22 @@ use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
     Operation, Transaction, TxnEffect, TxnSID, TxnTempSID, TxoSID,
 };
-use ledger::error_location;
 use ledger::store::*;
 use log::info;
 use rand_core::{CryptoRng, RngCore};
+use ruc::{err::*, *};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
+use std::result::Result as StdResult;
 use std::sync::{Arc, RwLock};
 
 macro_rules! fail {
     () => {
-        PlatformError::SubmissionServerError(error_location!())
+        PlatformError::SubmissionServerError(None)
     };
     ($s:expr) => {
-        PlatformError::SubmissionServerError(format!("[{}] {}", &error_location!(), &$s))
+        PlatformError::SubmissionServerError(Some(format!("{}", &$s)))
     };
 }
 
@@ -52,14 +53,14 @@ pub enum CommitMode {
 }
 
 pub trait TxnForward {
-    fn forward_txn(&self, txn: Transaction) -> Result<(), PlatformError>;
+    fn forward_txn(&self, txn: Transaction) -> Result<()>;
 }
 
 /// Don't forward transactions; handle them in the default way.
 pub struct NoTF;
 
 impl TxnForward for NoTF {
-    fn forward_txn(&self, _: Transaction) -> Result<(), PlatformError> {
+    fn forward_txn(&self, _: Transaction) -> Result<()> {
         // Need implementation for the None case even though never used.
         unimplemented!();
     }
@@ -91,7 +92,7 @@ where
         prng: RNG,
         ledger_state: Arc<RwLock<LU>>,
         block_capacity: usize,
-    ) -> Result<SubmissionServer<RNG, LU, TF>, PlatformError> {
+    ) -> Result<SubmissionServer<RNG, LU, TF>> {
         Ok(SubmissionServer {
             committed_state: ledger_state,
             block: None,
@@ -107,7 +108,7 @@ where
         prng: RNG,
         ledger_state: Arc<RwLock<LU>>,
         txn_forwarder: Option<TF>,
-    ) -> Result<SubmissionServer<RNG, LU, TF>, PlatformError> {
+    ) -> Result<SubmissionServer<RNG, LU, TF>> {
         Ok(SubmissionServer {
             committed_state: ledger_state,
             block: None,
@@ -161,7 +162,7 @@ where
         } // What should happen in failure? -joe
     }
 
-    pub fn end_block(&mut self) -> Result<(), PlatformError> {
+    pub fn end_block(&mut self) -> Result<()> {
         let mut block = None;
         std::mem::swap(&mut self.block, &mut block);
         if let Some(block) = block {
@@ -185,9 +186,9 @@ where
             assert!(self.block.is_none());
             return Ok(());
         }
-        Err(fail!(
+        Err(eg!(fail!(
             "Cannot finish block because there are no pending txns"
-        ))
+        )))
     }
 
     pub fn block_pulse_count(&self) -> u64 {
@@ -211,7 +212,7 @@ where
     pub fn cache_transaction(
         &mut self,
         txn: Transaction,
-    ) -> Result<TxnHandle, TxnHandle> {
+    ) -> StdResult<TxnHandle, TxnHandle> {
         // Begin a block if the previous one has been commited
         if self.all_commited() {
             self.begin_block();
@@ -221,8 +222,12 @@ where
         let mut block = self.block.as_mut().unwrap();
         let ledger = self.committed_state.read().unwrap();
         let handle = TxnHandle::new(&txn);
-        let temp_sid = TxnEffect::compute_effect(txn.clone())
-            .and_then(|txn_effect| ledger.apply_transaction(&mut block, txn_effect));
+        let temp_sid =
+            TxnEffect::compute_effect(txn.clone())
+                .c(d!())
+                .and_then(|txn_effect| {
+                    ledger.apply_transaction(&mut block, txn_effect).c(d!())
+                });
         match temp_sid {
             Ok(temp_sid) => {
                 self.pending_txns.push((temp_sid, handle.clone(), txn));
@@ -230,8 +235,9 @@ where
                 Ok(handle)
             }
             Err(e) => {
+                p(e.as_ref());
                 self.txn_status
-                    .insert(handle.clone(), TxnStatus::Rejected(format!("{}", e)));
+                    .insert(handle.clone(), TxnStatus::Rejected(genlog(e.as_ref())));
                 Err(handle)
             }
         }
@@ -248,10 +254,7 @@ where
     }
 
     // Handle the whole process when there's a new transaction
-    pub fn handle_transaction(
-        &mut self,
-        txn: Transaction,
-    ) -> Result<TxnHandle, PlatformError> {
+    pub fn handle_transaction(&mut self, txn: Transaction) -> Result<TxnHandle> {
         match self.txn_forwarder {
             None => {
                 let handle = match self.cache_transaction(txn) {
@@ -272,7 +275,7 @@ where
             }
             Some(ref forwarder) => {
                 let txn_handle = TxnHandle::new(&txn);
-                forwarder.forward_txn(txn)?;
+                forwarder.forward_txn(txn).c(d!())?;
                 Ok(txn_handle)
             }
         }
@@ -397,8 +400,12 @@ mod tests {
             .unwrap();
 
         // Cache transactions
-        submission_server.cache_transaction(txn_builder_0.transaction().clone());
-        submission_server.cache_transaction(txn_builder_1.transaction().clone());
+        submission_server
+            .cache_transaction(txn_builder_0.transaction().clone())
+            .unwrap();
+        submission_server
+            .cache_transaction(txn_builder_1.transaction().clone())
+            .unwrap();
 
         // Verify temp_sids
         let temp_sid_0 = submission_server.pending_txns.get(0).unwrap();
@@ -428,12 +435,12 @@ mod tests {
 
         // Verify that it's ineligible to commit if #transactions < BLOCK_CAPACITY
         for _i in 0..(block_capacity - 1) {
-            submission_server.cache_transaction(transaction.clone());
+            omit!(submission_server.cache_transaction(transaction.clone()));
             assert!(!submission_server.eligible_to_commit());
         }
 
         // Verify that it's eligible to commit if #transactions == BLOCK_CAPACITY
-        submission_server.cache_transaction(transaction);
+        omit!(submission_server.cache_transaction(transaction));
         // Need to consider replay prevention
         assert!(!submission_server.eligible_to_commit());
     }
@@ -464,9 +471,7 @@ mod tests {
         assert_eq!(status, TxnStatus::Pending);
 
         // Submit a second transaction and ensure that it is tracked as committed
-        submission_server
-            .handle_transaction(transaction.clone())
-            .unwrap();
+        submission_server.handle_transaction(transaction).unwrap();
         // In this case, both transactions have the same handle. Because transactions are unique and
         // We are using a collision resistant hash function, this will not occur on a live ledger.
         let status = submission_server

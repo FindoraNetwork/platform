@@ -8,6 +8,7 @@ use cryptohash::HashValue;
 use merkle_tree::append_only_merkle::AppendOnlyMerkle;
 use rand::prelude::thread_rng;
 use rand::Rng;
+use ruc::{err::*, *};
 use std::env;
 use utils::Commas;
 
@@ -15,13 +16,13 @@ fn usage(arguments: Vec<String>, no_checks: &str) {
     println!("Usage:  {} [ {} ]", arguments[0], no_checks);
 }
 
-fn main() -> Result<(), std::io::Error> {
+fn main() {
     let arguments: Vec<String> = env::args().collect();
     let skip_checks_arg = "--no-checks";
 
     if arguments.len() > 2 {
         usage(arguments, skip_checks_arg);
-        return Ok(());
+        return;
     }
 
     let mut skip_checks = false;
@@ -30,7 +31,7 @@ fn main() -> Result<(), std::io::Error> {
         skip_checks = true;
     } else if arguments.len() == 2 {
         usage(arguments, skip_checks_arg);
-        return Ok(());
+        return;
     }
 
     println!("Running the long test.");
@@ -38,12 +39,7 @@ fn main() -> Result<(), std::io::Error> {
     // Create a tree for testing.
     let path = "long_test";
 
-    let mut tree = match AppendOnlyMerkle::create(&path) {
-        Ok(tree) => tree,
-        Err(x) => {
-            panic!("create failed:  {}", x);
-        }
-    };
+    let mut tree = pnk!(AppendOnlyMerkle::create(&path));
 
     let mut hash = HashValue {
         hash: Default::default(),
@@ -76,14 +72,7 @@ fn main() -> Result<(), std::io::Error> {
         }
 
         // Try the insertion.
-        match tree.append_hash(&hash) {
-            Ok(id) => {
-                assert!(id == tid);
-            }
-            Err(x) => {
-                panic!("append_hash failed:  {}", x);
-            }
-        }
+        assert_eq!(tid, pnk!(tree.append_hash(&hash)));
 
         countdown -= 1;
 
@@ -115,9 +104,7 @@ fn main() -> Result<(), std::io::Error> {
                 println!("    Rechecking the disk.");
                 check_disk_tree(&mut tree, true);
 
-                if let Err(x) = AppendOnlyMerkle::open(&path) {
-                    panic!("open failed:  {}", x);
-                }
+                pnk!(AppendOnlyMerkle::open(&path));
 
                 reset_tree(&mut tree);
                 check_disk_tree(&mut tree, false);
@@ -136,10 +123,9 @@ fn main() -> Result<(), std::io::Error> {
         }
     }
 
-    tree.write()?;
+    pnk!(tree.write());
     println!("Done with {} entries.", tree.total_size().commas());
     println!("The test passed.");
-    Ok(())
 }
 
 fn check_tree(tree: &AppendOnlyMerkle) {

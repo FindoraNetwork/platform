@@ -25,12 +25,12 @@
 use cryptohash::sha256;
 use cryptohash::sha256::{Digest, DIGESTBYTES};
 use log::{debug, info};
+use ruc::{err::*, *};
 use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::Read;
-use std::io::Result;
 use std::io::Seek;
 use std::io::SeekFrom::End;
 use std::io::SeekFrom::Start;
@@ -38,7 +38,7 @@ use std::io::Write;
 use std::mem;
 use std::slice::from_raw_parts;
 use std::slice::from_raw_parts_mut;
-use utils::{er, Commas};
+use utils::Commas;
 
 // Constants for calling serialize_block.
 // const HEADER_ONLY: bool = false;
@@ -92,15 +92,15 @@ pub struct BlockInfo {
 impl BlockInfo {
     fn validate(&self) -> Result<()> {
         if self.magic != HEADER_MAGIC {
-            return er(format!("Invalid magic value {:x}", self.magic));
+            return Err(eg!(format!("Invalid magic value {:x}", self.magic)));
         }
 
         if self.count > BLOCK_BITS as u32 {
-            return er(format!("Invalid count {}", self.count));
+            return Err(eg!(format!("Invalid count {}", self.count)));
         }
 
         if self.list_size as usize > BITS_SIZE / INDEX_SIZE {
-            return er(format!("Invalid list size {}", self.list_size));
+            return Err(eg!(format!("Invalid list size {}", self.list_size)));
         }
 
         Ok(())
@@ -154,7 +154,7 @@ impl SparseMap {
         let (version, checksum, headers, map) = match BitMap::deserialize(bytes) {
             Ok((version, checksum, headers, map)) => (version, checksum, headers, map),
             Err(x) => {
-                return Err(x);
+                return Err(eg!(x));
             }
         };
 
@@ -186,22 +186,22 @@ impl SparseMap {
         let mask = 1 << shift;
 
         if block >= self.headers.len() {
-            return er(format!(
+            return Err(eg!(format!(
                 "Bit {} in block {} is not present.",
                 id,
                 block.commas()
-            ));
+            )));
         }
 
         let info = &self.headers[block];
         debug!("query:  block_index {}, info {:?}", block_index, info);
 
         if block_index >= info.count as usize {
-            return er(format!(
+            return Err(eg!(format!(
                 "Bit {} in block {} is not present.",
                 id,
                 block.commas()
-            ));
+            )));
         }
 
         match self.map.get(&(block as u64)) {
@@ -213,11 +213,11 @@ impl SparseMap {
             }
         }
 
-        er(format!(
+        Err(eg!(format!(
             "Bit {} in block {} is not present.",
             id,
             block.commas()
-        ))
+        )))
     }
 
     /// Validate that the tree actually matches the checksum
@@ -322,10 +322,10 @@ impl BlockHeader {
             && block_contents != BIT_DESC_CLEAR
             && block_contents != BIT_HEADER
         {
-            return er(format!(
+            return Err(eg!(format!(
                 "That content type ({}) is invalid.",
                 block_contents
-            ));
+            )));
         }
 
         let result = BlockHeader {
@@ -346,52 +346,52 @@ impl BlockHeader {
     // the checksum, which might not be set yet.
     fn validate(&self, contents: u16, id: u64) -> Result<()> {
         if self.magic != HEADER_MAGIC {
-            return er(format!(
+            return Err(eg!(format!(
                 "Block {} has a bad magic number:  {:x}",
                 id.commas(),
                 self.magic
-            ));
+            )));
         }
 
         if self.count > BLOCK_BITS as u32 {
-            return er(format!(
+            return Err(eg!(format!(
                 "Block {} has a bad count:  {} vs {}",
                 id.commas(),
                 self.count,
                 BLOCK_BITS
-            ));
+            )));
         }
 
         if self.bit_id != id * BLOCK_BITS as u64 {
-            return er(format!(
+            return Err(eg!(format!(
                 "Block {} has a bad id:  the disk said {}.",
                 id.commas(),
                 self.bit_id
-            ));
+            )));
         }
 
         if self.contents != contents {
-            return er(format!(
+            return Err(eg!(format!(
                 "Block {} has a bad contents type:  {}",
                 id.commas(),
                 self.contents
-            ));
+            )));
         }
 
         if self.pad_1 != 0 {
-            return er(format!(
+            return Err(eg!(format!(
                 "Block {} has an invalid pad_1:  {}",
                 id.commas(),
                 self.pad_1
-            ));
+            )));
         }
 
         if self.pad_2 != 0 {
-            return er(format!(
+            return Err(eg!(format!(
                 "Block {} has an invalid pad_2:  {}",
                 id.commas(),
                 self.pad_2
-            ));
+            )));
         }
 
         Ok(())
@@ -427,7 +427,7 @@ impl BitBlock {
     // Create a new block header structure.
     fn new(block_contents: u16, block_id: u64) -> Result<BitBlock> {
         let result = BitBlock {
-            header: BlockHeader::new(block_contents, block_id)?,
+            header: BlockHeader::new(block_contents, block_id).c(d!())?,
             bits: [0_u8; BITS_SIZE],
         };
 
@@ -483,12 +483,12 @@ impl BitBlock {
     // we validate the checksum, since it should be set when
     // a block is sent to disk.
     fn validate(&self, contents: u16, id: u64) -> Result<()> {
-        self.header.validate(contents, id)?;
+        self.header.validate(contents, id).c(d!())?;
 
         let checksum = self.compute_checksum();
 
         if self.header.checksum.bytes != checksum {
-            return er(format!("Block {} has a bad checksum.", id.commas()));
+            return Err(eg!(format!("Block {} has a bad checksum.", id.commas())));
         }
 
         Ok(())
@@ -662,10 +662,10 @@ impl BitMap {
     /// # let _ = std::fs::remove_file(&path);
     ///````
     pub fn create(mut data: File) -> Result<BitMap> {
-        let file_size = data.seek(End(0))?;
+        let file_size = data.seek(End(0)).c(d!())?;
 
         if file_size != 0 {
-            return er("The file contains data!".to_string());
+            return Err(eg!("The file contains data!".to_string()));
         }
 
         let result = BitMap {
@@ -730,7 +730,7 @@ impl BitMap {
     ///````
     pub fn open(mut data: File) -> Result<BitMap> {
         let (count, block_vector, state_vector, checksum_vector, set_vector) =
-            BitMap::read_file(&mut data)?;
+            BitMap::read_file(&mut data).c(d!())?;
 
         let mut result = BitMap {
             file: data,
@@ -771,13 +771,13 @@ impl BitMap {
         let map = create_map();
 
         // Compute the number of blocks in the file.
-        let file_size = file.seek(End(0))?;
+        let file_size = file.seek(End(0)).c(d!())?;
 
         if file_size % BLOCK_SIZE as u64 != 0 {
-            return er(format!("That file size ({}) is invalid.", file_size));
+            return Err(eg!(format!("That file size ({}) is invalid.", file_size)));
         }
 
-        file.seek(Start(0))?;
+        file.seek(Start(0)).c(d!())?;
         let total_blocks = file_size / BLOCK_SIZE as u64;
 
         // Reserve space in our vectors.
@@ -792,15 +792,15 @@ impl BitMap {
 
             match file.read_exact(block.as_mut()) {
                 Ok(_) => {
-                    block.validate(BIT_ARRAY, index)?;
+                    block.validate(BIT_ARRAY, index).c(d!())?;
 
                     if index != total_blocks - 1
                         && block.header.count != BLOCK_BITS as u32
                     {
-                        return er(format!(
+                        return Err(eg!(format!(
                             "Block {} is not full:  count {}",
                             index, block.header.count
-                        ));
+                        )));
                     }
 
                     let set_count = count_bits(&block.bits, map);
@@ -811,7 +811,7 @@ impl BitMap {
                     set.push(set_count);
                 }
                 Err(e) => {
-                    return Err(e);
+                    return Err(eg!(e));
                 }
             }
         }
@@ -887,10 +887,10 @@ impl BitMap {
     /// Query the value of a bit in the bitmap.
     pub fn query(&self, bit: usize) -> Result<bool> {
         if bit >= self.size {
-            return er(format!(
+            return Err(eg!(format!(
                 "That index is out of range ({} vs {}).",
                 bit, self.size
-            ));
+            )));
         }
 
         let block = bit / BLOCK_BITS;
@@ -911,7 +911,7 @@ impl BitMap {
         let bit = self.size;
 
         if let Err(e) = self.mutate(bit, 1, true) {
-            return Err(e);
+            return Err(eg!(e));
         }
 
         Ok(bit as u64)
@@ -921,10 +921,10 @@ impl BitMap {
     /// append a bit to the bitmap.
     pub fn set(&mut self, bit: usize) -> Result<()> {
         if bit > self.size {
-            return er(format!(
+            return Err(eg!(format!(
                 "That index is too large to set ({} vs {}).",
                 bit, self.size
-            ));
+            )));
         }
 
         self.mutate(bit, 1, true)
@@ -933,10 +933,10 @@ impl BitMap {
     /// Clear the given bit.
     pub fn clear(&mut self, bit: usize) -> Result<()> {
         if bit >= self.size {
-            return er(format!(
+            return Err(eg!(format!(
                 "That index is too large to clear ({} vs {}).",
                 bit, self.size
-            ));
+            )));
         }
 
         self.mutate(bit, 0, false)
@@ -946,10 +946,10 @@ impl BitMap {
     // Bitmap extensions happen here, too.
     fn mutate(&mut self, bit: usize, value: u8, extend: bool) -> Result<()> {
         if !extend && bit >= self.size {
-            return er(format!(
+            return Err(eg!(format!(
                 "That index ({}) is out of the range [0, {}).",
                 bit, self.size
-            ));
+            )));
         }
 
         // Compute the various indices.
@@ -976,7 +976,8 @@ impl BitMap {
         // We might need to create a new block. If so,
         // push the new block and all the metadata entries.
         if block >= self.blocks.len() {
-            self.blocks.push(BitBlock::new(BIT_ARRAY, block as u64)?);
+            self.blocks
+                .push(BitBlock::new(BIT_ARRAY, block as u64).c(d!())?);
             self.checksum_data.push(EMPTY_CHECKSUM);
             self.dirty.push(time());
             self.checksum_valid.push(false);
@@ -1326,7 +1327,7 @@ impl BitMap {
 
         // First, retrieve the global data, if possible.
         if bytes.len() < DESCRIPTOR_SIZE {
-            return er("The input did not contain a descriptor.".to_string());
+            return Err(eg!("The input did not contain a descriptor.".to_string()));
         }
 
         let (next, version, checksum) = BitMap::decode_descriptor(bytes, index);
@@ -1337,14 +1338,14 @@ impl BitMap {
             if bytes.len() == index {
                 break;
             } else if bytes.len() - index < BLOCK_INFO_SIZE {
-                return er("The input was too short.".to_string());
+                return Err(eg!("The input was too short.".to_string()));
             }
 
             // Get the next BlockInfo structure from the stream.
             let mut info = BlockInfo::default();
             BitMap::clone_info(info.as_mut(), bytes, index);
             index += BLOCK_INFO_SIZE;
-            info.validate()?;
+            info.validate().c(d!())?;
 
             let block = info.bit_id / BLOCK_BITS as u64;
             let mut bits: BlockBits;
@@ -1363,7 +1364,8 @@ impl BitMap {
                     debug!("deserialize:  insert map block {}", block);
                 }
                 BIT_DESC_SET => {
-                    let (next, ids) = BitMap::decode(info.list_size, bytes, index)?;
+                    let (next, ids) =
+                        BitMap::decode(info.list_size, bytes, index).c(d!())?;
                     bits = [0_u8; BITS_SIZE];
 
                     for id in ids.iter() {
@@ -1376,7 +1378,8 @@ impl BitMap {
                     index = next;
                 }
                 BIT_DESC_CLEAR => {
-                    let (next, ids) = BitMap::decode(info.list_size, bytes, index)?;
+                    let (next, ids) =
+                        BitMap::decode(info.list_size, bytes, index).c(d!())?;
                     bits = [0xff_u8; BITS_SIZE];
 
                     for id in ids.iter() {
@@ -1389,10 +1392,10 @@ impl BitMap {
                     index = next;
                 }
                 _ => {
-                    return er(format!(
+                    return Err(eg!(format!(
                         "Invalid info contents type:  {}",
                         info.contents
-                    ));
+                    )));
                 }
             }
 
@@ -1400,10 +1403,10 @@ impl BitMap {
         }
 
         if index != bytes.len() {
-            return er(format!(
+            return Err(eg!(format!(
                 "The vector contained {} extra bytes.",
                 bytes.len() - index
-            ));
+            )));
         }
 
         Ok((version, checksum, info_vec, bits_map))
@@ -1450,7 +1453,7 @@ impl BitMap {
         let bytes_consumed = list_size as usize * INDEX_SIZE;
 
         if index + bytes_consumed > bytes.len() {
-            return er(format!("An index list was too long:  {}", list_size));
+            return Err(eg!(format!("An index list was too long:  {}", list_size)));
         }
 
         for _ in 0..list_size {
@@ -1492,11 +1495,11 @@ impl BitMap {
     pub fn write(&mut self) -> Result<()> {
         for i in 0..self.blocks.len() {
             if self.dirty[i] != 0 {
-                self.write_block(i)?;
+                self.write_block(i).c(d!())?;
             }
         }
 
-        self.file.sync_all()?;
+        self.file.sync_all().c(d!())?;
         Ok(())
     }
 
@@ -1509,7 +1512,7 @@ impl BitMap {
 
         for i in 0..self.blocks.len() {
             if self.dirty[i] <= now - age {
-                self.write_block(i)?;
+                self.write_block(i).c(d!())?;
             }
         }
 
@@ -1524,8 +1527,8 @@ impl BitMap {
     fn write_block(&mut self, index: usize) -> Result<()> {
         self.blocks[index].set_checksum();
         let offset = index as u64 * BLOCK_SIZE as u64;
-        self.file.seek(Start(offset))?;
-        self.file.write_all(self.blocks[index].as_ref())?;
+        self.file.seek(Start(offset)).c(d!())?;
+        self.file.write_all(self.blocks[index].as_ref()).c(d!())?;
         self.dirty[index] = 0;
         Ok(())
     }

@@ -1,11 +1,13 @@
 #![allow(clippy::type_complexity)]
+#![allow(clippy::field_reassign_with_default)]
 
 use ledger::data_model::*;
 use promptly::prompt_default;
+use ruc::{err::*, *};
 use serde::{Deserialize, Serialize};
-use snafu::{Backtrace, GenerateBacktrace, ResultExt, Snafu};
 use std::collections::BTreeMap;
 use std::env;
+use std::fmt;
 use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -22,9 +24,7 @@ pub mod kv;
 
 use crate::actions::*;
 use crate::helpers::compute_findora_dir;
-use kv::{HasEncryptedTable, HasTable, KVError, KVStore, MixedPair};
-use ledger::data_model::errors::PlatformError;
-use zei::errors::ZeiError;
+use kv::{HasEncryptedTable, HasTable, KVStore, MixedPair};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LedgerStateCommitment(
@@ -152,70 +152,64 @@ impl HasTable for TxoCacheEntry {
     type Key = TxoName;
 }
 
-#[derive(Snafu, Debug)]
+#[derive(Debug)]
 pub enum CliError {
-    #[snafu(context(false))]
-    KV {
-        #[snafu(backtrace)]
-        source: KVError,
-    },
-    #[snafu(display("Error invalid nick name"))]
-    NickName { msg: String },
-    #[snafu(context(false))]
-    #[snafu(display("Error performing HTTP request"))]
-    Reqwest {
-        source: reqwest::Error,
-        backtrace: Backtrace,
-    },
-    #[snafu(context(false))]
-    #[snafu(display("Error during (de)serialization"))]
-    Serialization {
-        source: serde_json::error::Error,
-        backtrace: Backtrace,
-    },
-    #[snafu(context(false))]
-    #[snafu(display("Error reading user input"))]
-    RustyLine {
-        source: rustyline::error::ReadlineError,
-        backtrace: Backtrace,
-    },
-    #[snafu(display("Error creating user directory or file at {}", file.display()))]
-    UserFile {
-        source: std::io::Error,
-        file: std::path::PathBuf,
-        backtrace: Backtrace,
-    },
-    #[snafu(display("Failed to locate user's home directory"))]
+    KV,
+    NickName(String),
+    Reqwest,
+    Serialization,
+    RustyLine,
+    UserFile(PathBuf),
     HomeDir,
-    #[snafu(display("Failed to fetch new public key from server"))]
-    NewPublicKeyFetch {
-        source: structopt::clap::Error,
-        backtrace: Backtrace,
-    },
-    #[snafu(display("Failed to read password"))]
-    Password {
-        #[snafu(backtrace)]
-        source: helpers::PasswordReadError,
-    },
-
-    #[snafu(display("Cannot handle None value"))]
-    NoneValue { backtrace: Backtrace },
-    #[snafu(display("No transaction currently in progress"))]
+    NewPublicKeyFetch,
+    Password,
+    NoneValue,
     NoTransactionInProgress,
-
-    #[snafu(display("Platform error"))]
-    #[snafu(context(false))]
-    FindoraPlatformError { source: PlatformError },
-
-    #[snafu(display("Zei Error"))]
-    #[snafu(context(false))]
-    ZeiError { source: ZeiError },
-
-    #[snafu(display("IO error"))]
-    IOError { msg: String },
-
-    #[snafu(display("The ledger is in an inconsistent state."))]
+    FindoraPlatformError,
+    ZeiError,
+    IOError(String),
     InconsistentLedger,
+}
+
+impl fmt::Display for CliError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CliError::KV => write!(f, "{}", stringify!(CliError::KV)),
+            CliError::NickName(n) => {
+                write!(f, "{}: {}", stringify!(CliError::NickName), n)
+            }
+            CliError::Reqwest => write!(f, "{}", stringify!(CliError::Reqwest)),
+            CliError::Serialization => {
+                write!(f, "{}", stringify!(CliError::Serialization))
+            }
+            CliError::RustyLine => write!(f, "{}", stringify!(CliError::RustyLine)),
+            CliError::UserFile(n) => write!(
+                f,
+                "{}: {}",
+                stringify!(CliError::UserFile),
+                n.to_string_lossy()
+            ),
+            CliError::HomeDir => write!(f, "{}", stringify!(CliError::HomeDir)),
+            CliError::NewPublicKeyFetch => {
+                write!(f, "{}", stringify!(CliError::NewPublicKeyFetch))
+            }
+            CliError::Password => write!(f, "{}", stringify!(CliError::Password)),
+            CliError::NoneValue => write!(f, "{}", stringify!(CliError::NoneValue)),
+            CliError::NoTransactionInProgress => {
+                write!(f, "{}", stringify!(CliError::NoTransactionInProgress))
+            }
+            CliError::FindoraPlatformError => {
+                write!(f, "{}", stringify!(CliError::FindoraPlatformError))
+            }
+            CliError::ZeiError => write!(f, "{}", stringify!(CliError::ZeiError)),
+            CliError::IOError(n) => {
+                write!(f, "{}: {}", stringify!(CliError::IoError), n)
+            }
+            CliError::InconsistentLedger => {
+                write!(f, "{}", stringify!(CliError::InconsistentLedger))
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -302,127 +296,84 @@ pub struct TxnBuilderEntry {
 }
 
 pub trait CliDataStore {
-    fn get_config(&self) -> Result<CliConfig, CliError>;
-    fn update_config<F: FnOnce(&mut CliConfig) -> Result<(), CliError>>(
+    fn get_config(&self) -> Result<CliConfig>;
+    fn update_config<F: FnOnce(&mut CliConfig) -> Result<()>>(
         &mut self,
         f: F,
-    ) -> Result<(), CliError>;
+    ) -> Result<()>;
 
-    fn get_keypairs(&self) -> Result<Vec<KeypairName>, CliError>;
-    fn get_keypair_pubkey(
-        &self,
-        k: &KeypairName,
-    ) -> Result<Option<XfrPublicKey>, CliError>;
-    fn delete_keypair(&mut self, k: &KeypairName) -> Result<(), CliError>;
-    fn with_keypair<
-        E: std::error::Error + 'static,
-        F: FnOnce(Option<&XfrKeyPair>) -> Result<(), E>,
-    >(
+    fn get_keypairs(&self) -> Result<Vec<KeypairName>>;
+    fn get_keypair_pubkey(&self, k: &KeypairName) -> Result<Option<XfrPublicKey>>;
+    fn delete_keypair(&mut self, k: &KeypairName) -> Result<()>;
+    fn with_keypair<F: FnOnce(Option<&XfrKeyPair>) -> Result<()>>(
         &mut self,
         k: &KeypairName,
         f: F,
-    ) -> Result<(), CliError>;
+    ) -> Result<()>;
     fn get_encrypted_keypair(
         &self,
         k: &KeypairName,
-    ) -> Result<Option<MixedPair<XfrPublicKey, XfrKeyPair>>, CliError>;
-    fn get_pubkeys(&self) -> Result<BTreeMap<PubkeyName, XfrPublicKey>, CliError>;
+    ) -> Result<Option<MixedPair<XfrPublicKey, XfrKeyPair>>>;
+    fn get_pubkeys(&self) -> Result<BTreeMap<PubkeyName, XfrPublicKey>>;
     fn get_local_pubkeys(
         &self,
-    ) -> Result<BTreeMap<crate::PubkeyName, zei::xfr::sig::XfrPublicKey>, CliError>;
-    fn get_pubkey(&self, k: &PubkeyName) -> Result<Option<XfrPublicKey>, CliError>;
-    fn exists_keypair(&self, k: &str) -> Result<bool, CliError>;
-    fn delete_pubkey(
-        &mut self,
-        k: &PubkeyName,
-    ) -> Result<Option<XfrPublicKey>, CliError>;
-    fn add_key_pair(&mut self, k: &KeypairName, kp: XfrKeyPair) -> Result<(), CliError>;
+    ) -> Result<BTreeMap<crate::PubkeyName, zei::xfr::sig::XfrPublicKey>>;
+    fn get_pubkey(&self, k: &PubkeyName) -> Result<Option<XfrPublicKey>>;
+    fn exists_keypair(&self, k: &str) -> Result<bool>;
+    fn delete_pubkey(&mut self, k: &PubkeyName) -> Result<Option<XfrPublicKey>>;
+    fn add_key_pair(&mut self, k: &KeypairName, kp: XfrKeyPair) -> Result<()>;
     fn add_encrypted_keypair(
         &mut self,
         k: &KeypairName,
         kp: MixedPair<XfrPublicKey, XfrKeyPair>,
-    ) -> Result<(), CliError>;
-    fn add_public_key(
-        &mut self,
-        k: &PubkeyName,
-        pk: XfrPublicKey,
-    ) -> Result<(), CliError>;
+    ) -> Result<()>;
+    fn add_public_key(&mut self, k: &PubkeyName, pk: XfrPublicKey) -> Result<()>;
 
     fn get_built_transactions(
         &self,
-    ) -> Result<BTreeMap<TxnName, (Transaction, TxnMetadata)>, CliError>;
+    ) -> Result<BTreeMap<TxnName, (Transaction, TxnMetadata)>>;
     fn get_built_transaction(
         &self,
         k: &TxnName,
-    ) -> Result<Option<(Transaction, TxnMetadata)>, CliError>;
+    ) -> Result<Option<(Transaction, TxnMetadata)>>;
     fn build_transaction(
         &mut self,
         k_orig: &TxnBuilderName,
         k_new: &TxnName,
         metadata: TxnMetadata,
-    ) -> Result<(Transaction, TxnMetadata), CliError>;
-    fn update_txn_metadata<
-        E: std::error::Error + 'static,
-        F: FnOnce(&mut TxnMetadata) -> Result<(), E>,
-    >(
+    ) -> Result<(Transaction, TxnMetadata)>;
+    fn update_txn_metadata<F: FnOnce(&mut TxnMetadata) -> Result<()>>(
         &mut self,
         k: &TxnName,
         f: F,
-    ) -> Result<(), CliError>;
+    ) -> Result<()>;
 
-    fn prepare_transaction(
-        &mut self,
-        k: &TxnBuilderName,
-        seq_id: u64,
-    ) -> Result<(), CliError>;
-    fn get_txn_builder(
-        &self,
-        k: &TxnBuilderName,
-    ) -> Result<Option<TxnBuilderEntry>, CliError>;
-    fn get_txn_builders(
-        &self,
-    ) -> Result<BTreeMap<TxnBuilderName, TxnBuilderEntry>, CliError>;
-    fn with_txn_builder<
-        E: std::error::Error + 'static,
-        F: FnOnce(&mut TxnBuilderEntry) -> Result<(), E>,
-    >(
+    fn prepare_transaction(&mut self, k: &TxnBuilderName, seq_id: u64) -> Result<()>;
+    fn get_txn_builder(&self, k: &TxnBuilderName) -> Result<Option<TxnBuilderEntry>>;
+    fn get_txn_builders(&self) -> Result<BTreeMap<TxnBuilderName, TxnBuilderEntry>>;
+    fn with_txn_builder<F: FnOnce(&mut TxnBuilderEntry) -> Result<()>>(
         &mut self,
         k: &TxnBuilderName,
         f: F,
-    ) -> Result<(), CliError>;
+    ) -> Result<()>;
 
-    fn get_cached_txos(&self) -> Result<BTreeMap<TxoName, TxoCacheEntry>, CliError>;
-    fn get_cached_txo(&self, k: &TxoName) -> Result<Option<TxoCacheEntry>, CliError>;
-    fn delete_cached_txo(&mut self, k: &TxoName) -> Result<(), CliError>;
-    fn cache_txo(&mut self, k: &TxoName, ent: TxoCacheEntry) -> Result<(), CliError>;
+    fn get_cached_txos(&self) -> Result<BTreeMap<TxoName, TxoCacheEntry>>;
+    fn get_cached_txo(&self, k: &TxoName) -> Result<Option<TxoCacheEntry>>;
+    fn delete_cached_txo(&mut self, k: &TxoName) -> Result<()>;
+    fn cache_txo(&mut self, k: &TxoName, ent: TxoCacheEntry) -> Result<()>;
 
-    fn get_asset_types(
-        &self,
-    ) -> Result<BTreeMap<AssetTypeName, AssetTypeEntry>, CliError>;
-    fn get_asset_type(
-        &self,
-        k: &AssetTypeName,
-    ) -> Result<Option<AssetTypeEntry>, CliError>;
-    fn update_asset_type<
-        E: std::error::Error + 'static,
-        F: FnOnce(&mut AssetTypeEntry) -> Result<(), E>,
-    >(
+    fn get_asset_types(&self) -> Result<BTreeMap<AssetTypeName, AssetTypeEntry>>;
+    fn get_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>>;
+    fn update_asset_type<F: FnOnce(&mut AssetTypeEntry) -> Result<()>>(
         &mut self,
         k: &AssetTypeName,
         f: F,
-    ) -> Result<(), CliError>;
-    fn delete_asset_type(
-        &self,
-        k: &AssetTypeName,
-    ) -> Result<Option<AssetTypeEntry>, CliError>;
-    fn add_asset_type(
-        &self,
-        k: &AssetTypeName,
-        ent: AssetTypeEntry,
-    ) -> Result<(), CliError>;
+    ) -> Result<()>;
+    fn delete_asset_type(&self, k: &AssetTypeName) -> Result<Option<AssetTypeEntry>>;
+    fn add_asset_type(&self, k: &AssetTypeName, ent: AssetTypeEntry) -> Result<()>;
 }
 
-fn prompt_for_config(prev_conf: Option<CliConfig>) -> Result<CliConfig, CliError> {
+fn prompt_for_config(prev_conf: Option<CliConfig>) -> Result<CliConfig> {
     let default_sub_server = prev_conf
         .as_ref()
         .map(|x| x.submission_server.clone())
@@ -432,8 +383,10 @@ fn prompt_for_config(prev_conf: Option<CliConfig>) -> Result<CliConfig, CliError
         .map(|x| x.ledger_server.clone())
         .unwrap_or_else(default_ledger_server);
     Ok(CliConfig {
-        submission_server: prompt_default("Submission Server?", default_sub_server)?,
-        ledger_server: prompt_default("Ledger Access Server?", default_ledger_server)?,
+        submission_server: prompt_default("Submission Server?", default_sub_server)
+            .c(d!())?,
+        ledger_server: prompt_default("Ledger Access Server?", default_ledger_server)
+            .c(d!())?,
         open_count: 0,
         ledger_sig_key: prev_conf.as_ref().and_then(|x| x.ledger_sig_key),
         ledger_state: prev_conf.as_ref().and_then(|x| x.ledger_state.clone()),
@@ -781,7 +734,7 @@ fn print_conf(conf: &CliConfig) {
     println!("Directory of wallet: {}", path.display());
 }
 
-fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), CliError> {
+fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<()> {
     // println!("{:?}", action);
 
     use Actions::*;
@@ -894,16 +847,18 @@ fn run_action<S: CliDataStore>(action: Actions, store: &mut S) -> Result<(), Cli
         ChangeKeypairPassword { nick } => change_keypair_password(store, nick),
         ImportEncryptedKeypair { nick } => import_encrypted_keypair(store, nick),
     };
-    store.update_config(|conf| {
-        // println!("Opened {} times before", conf.open_count);
-        conf.open_count += 1;
-        Ok(())
-    })?;
+    store
+        .update_config(|conf| {
+            // println!("Opened {} times before", conf.open_count);
+            conf.open_count += 1;
+            Ok(())
+        })
+        .c(d!())?;
     ret
 }
 
 fn main() {
-    fn inner_main() -> Result<(), CliError> {
+    fn inner_main() -> Result<()> {
         let action = Actions::from_args();
 
         if let Actions::GenCompletions {
@@ -944,9 +899,7 @@ fn main() {
             }
 
             if let Some(outdir) = outdir {
-                fs::create_dir_all(&outdir).with_context(|| UserFile {
-                    file: outdir.clone(),
-                })?;
+                fs::create_dir_all(&outdir).c(d!(CliError::UserFile(outdir.clone())))?;
 
                 for s in shells {
                     Actions::clap().gen_completions(&bin_name, s, &outdir);
@@ -968,52 +921,31 @@ fn main() {
         }
 
         // use Actions::*;
-        let mut home = compute_findora_dir()?;
+        let mut home = compute_findora_dir().c(d!())?;
 
-        fs::create_dir_all(&home).with_context(|| UserFile { file: home.clone() })?;
+        fs::create_dir_all(&home).c(d!(CliError::UserFile(home.clone())))?;
         home.push("cli2_data.sqlite");
         let first_time = !std::path::Path::exists(&home);
-        let mut db = KVStore::open(home.clone())?;
+        let mut db = KVStore::open(home.clone()).c(d!())?;
         if first_time {
             println!(
                 "No config found at {:?} -- triggering first-time setup",
                 &home
             );
             db.update_config(|conf| {
-                *conf = prompt_for_config(None)?;
+                *conf = prompt_for_config(None).c(d!())?;
                 Ok(())
-            })?;
+            })
+            .c(d!())?;
 
             if let Actions::Setup { .. } = action {
                 return Ok(());
             }
         }
 
-        run_action(action, &mut db)?;
+        run_action(action, &mut db).c(d!())?;
         Ok(())
     }
-
-    // Provide a bit of a prettier error message in the event a panic occurs, make the
-    // user aware that this is a bug, direct them to the bug tracker, and display a
-    // backtrace.
-    std::panic::set_hook(Box::new(|panic_info| {
-        println!("{}", messages::PANIC_STRING);
-        let payload = panic_info.payload();
-        if let Some(s) = payload.downcast_ref::<&str>() {
-            println!("{}", s);
-        } else if let Some(s) = payload.downcast_ref::<String>() {
-            println!("{}", s);
-        }
-
-        if let Some(location) = panic_info.location() {
-            println!("Error occurred at: {}", location);
-        }
-
-        println!("\n\nInformation for Developers:");
-        println!("Version: {}", VERSION);
-        println!("Backtrace: ");
-        println!("{}", Backtrace::generate());
-    }));
 
     // Custom error handler logic.
     //
@@ -1023,27 +955,7 @@ fn main() {
     //
     // Finally, check to see if the error encountered has an associated backtrace, and,
     // if so, display it.
-    let ret = inner_main();
-    if let Err(x) = ret {
-        use snafu::ErrorCompat;
-        use std::error::Error;
-        let backtrace = ErrorCompat::backtrace(&x);
-        println!("Error: {}", x);
-        let mut current = &x as &dyn Error;
-        while let Some(next) = current.source() {
-            println!("   Caused by: {}", next);
-            current = next;
-        }
-        if let Some(backtrace) = backtrace {
-            // On a normal error, only print the backtrace if RUST_BACKTRACE is setup
-            if std::env::var("RUST_BACKTRACE") == Ok("1".to_string()) {
-                println!("Backtrace: \n{}", backtrace);
-            } else {
-                println!("Rerun with \"env RUST_BACKTRACE=1\" to print a backtrace.");
-            }
-        }
-        std::process::exit(1);
-    }
+    pnk!(inner_main());
 }
 
 #[cfg(not(feature = "no-bugtracker"))]

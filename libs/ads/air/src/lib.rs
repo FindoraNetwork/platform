@@ -1,10 +1,10 @@
 #![allow(dead_code)]
+use ruc::{err::*, *};
 use serde::{Deserialize, Serialize};
 use sparse_merkle_tree::{
     check_merkle_proof as smt_check_proof, Key, MerkleProof, SmtMap256,
 };
 use std::fs;
-use std::io::Error;
 
 pub use sparse_merkle_tree::Digest;
 
@@ -80,10 +80,9 @@ pub fn check_merkle_proof<String: AsRef<[u8]>>(
     smt_check_proof(merkle_root, &hashed_key, value, proof)
 }
 
-pub fn open(path: &str) -> Result<AIR, Error> {
-    let contents = fs::read_to_string(path)?;
+pub fn open(path: &str) -> Result<AIR> {
+    let contents = fs::read_to_string(path).c(d!())?;
 
     // Deserialize and print Rust data structure.
-    let result: AIR = serde_json::from_str(&contents)?;
-    Ok(result)
+    serde_json::from_str(&contents).c(d!())
 }

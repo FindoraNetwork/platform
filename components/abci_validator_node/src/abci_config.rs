@@ -1,6 +1,5 @@
 use serde_derive::Deserialize;
 use std::path::Path;
-use toml;
 
 #[derive(Deserialize)]
 pub struct ABCIConfig {
@@ -78,9 +77,9 @@ impl ABCIConfig {
         if abci_toml.is_file() {
             let contents = std::fs::read_to_string(abci_toml.to_str().unwrap()).unwrap();
             let config: ABCIConfig = toml::from_str(&contents).unwrap();
-            return (config, true);
+            (config, true)
         } else {
-            return (Default::default(), false);
+            (Default::default(), false)
         }
     }
 }
