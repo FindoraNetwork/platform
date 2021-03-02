@@ -799,7 +799,11 @@ impl AppendOnlyMerkle {
                     block = b;
                 }
                 Err(x) => {
-                    info!("Error reading block {}:  {}", block_id.commas(), x);
+                    info!(
+                        "Error reading block {}:  {}",
+                        block_id.commas(),
+                        genlog(&*x)
+                    );
                     info!(
                         "I will discard the following {} blocks.",
                         (block_count - block_id - 1).commas()

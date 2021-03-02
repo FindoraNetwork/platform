@@ -384,7 +384,7 @@ impl LoggedMerkle {
 
         // Try to seek to a relevant part of the log file.
         if let Err(e) = self.find_relevant(&mut file) {
-            info!("Seek operations failed:  {}", e);
+            info!("Seek operations failed:  {}", genlog(&*e));
             info!("Reverting to sequential I/O");
         }
 
