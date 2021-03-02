@@ -5,7 +5,7 @@ authors = ["Brian Rogoff <brian@findora.org>"]
 edition = "2018"
 
 [dependencies]
-ruc = "0.5.1"
+ruc = "0.5.5"
 air = { path = "../../../libs/ads/air" }
 clap = "2.33.0"
 credentials = { path = "../../../libs/credentials" }

@@ -802,7 +802,7 @@ impl AppendOnlyMerkle {
                     info!(
                         "Error reading block {}:  {}",
                         block_id.commas(),
-                        genlog(&*x)
+                        ruc::genlog(&*x)
                     );
                     info!(
                         "I will discard the following {} blocks.",

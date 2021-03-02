@@ -9,7 +9,7 @@ name = "ledger_mirror"
 path = "src/ledger_mirror.rs"
 
 [dependencies]
-ruc = "0.5.1"
+ruc = "0.5.5"
 arrayref = "0.3.5"
 ledger = { path = "../../ledger" }
 flexi_logger = "0.15.2"

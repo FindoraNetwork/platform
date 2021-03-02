@@ -8,7 +8,7 @@ edition = "2018"
 path = "src/lib.rs"
 
 [dependencies]
-ruc = "0.5.1"
+ruc = "0.5.5"
 arrayref = "0.3.5"
 base64 = "0.10"
 byteorder = "1.0.0"

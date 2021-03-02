@@ -8,7 +8,7 @@ edition = "2018"
 path = "src/txn_builder.rs"
 
 [dependencies]
-ruc = "0.5.1"
+ruc = "0.5.5"
 ledger = { path = "../../ledger" }
 credentials = { path = "../../libs/credentials" }
 sparse_merkle_tree = { path = "../../libs/ads/sparse_merkle_tree" }

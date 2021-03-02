@@ -9,7 +9,7 @@ name = "log_tester"
 path = "src/log_tester.rs"
 
 [dependencies]
-ruc = "0.5.1"
+ruc = "0.5.5"
 cryptohash = { path = "../../../libs/cryptohash" }
 flexi_logger = "0.15.2"
 log = "0.4.8"

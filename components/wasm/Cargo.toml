@@ -10,7 +10,7 @@ build = "build.rs"
 wasm-opt = false
 
 [dependencies]
-ruc = "0.5.1"
+ruc = "0.5.5"
 base64 = "0.10"
 credentials = { path = "../../libs/credentials" }
 cryptohash = { path = "../../libs/cryptohash" }

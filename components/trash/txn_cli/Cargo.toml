@@ -31,7 +31,7 @@ rand_chacha = "0.2.0"
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
 reqwest = { version = "0.10", default-features = false, features = ["rustls-tls", "blocking", "json"] }
 serde = "1.0"
-ruc = "0.5.1"
+ruc = "0.5.5"
 serde_derive = "1.0"
 serde_json = "1.0"
 shellexpand = "1.0.0"

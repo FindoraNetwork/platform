@@ -6,7 +6,7 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-ruc = "0.5.1"
+ruc = "0.5.5"
 arrayref = "0.3.5"
 air = { path = "../libs/ads/air" }
 base64 = "0.10"

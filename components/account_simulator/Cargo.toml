@@ -9,7 +9,7 @@ name = "account_simulator"
 path = "src/account_simulator.rs"
 
 [dependencies]
-ruc = "0.5.1"
+ruc = "0.5.5"
 actix-rt = "0.2"
 actix-service = "0.4.2"
 actix-web = "1.0.8"
