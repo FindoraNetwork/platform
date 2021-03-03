@@ -73,7 +73,7 @@ jobs:
     - name: Build images
       env:
         ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
-        ENV: release
+        ENV: dev
       shell: bash
       run: |
         if echo "${GITHUB_REF}" | grep "refs/pull" >/dev/null; then
@@ -93,7 +93,7 @@ jobs:
     - name: Push images
       env:
         ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
-        ENV: release
+        ENV: dev
       shell: bash
       run: |
         if echo "${GITHUB_REF}" | grep "refs/pull" >/dev/null; then
@@ -109,7 +109,7 @@ jobs:
     - name: Clean images
       env:
         ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
-        ENV: release
+        ENV: dev
       shell: bash
       run: |
         if echo "${GITHUB_REF}" | grep "refs/pull" >/dev/null; then
