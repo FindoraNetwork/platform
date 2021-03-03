@@ -156,6 +156,16 @@ ifeq ($(ENV),release)
 	docker push $(ECR_URL)/$(ENV)/tendermint:latest
 endif
 
+clean_image:
+	docker rmi $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG)
+	docker rmi $(ECR_URL)/$(ENV)/query_server:$(IMAGE_TAG)
+	docker rmi $(ECR_URL)/$(ENV)/tendermint:$(IMAGE_TAG)
+ifeq ($(ENV),release)
+	docker rmi $(ECR_URL)/$(ENV)/abci_validator_node:latest
+	docker rmi $(ECR_URL)/$(ENV)/query_server:latest
+	docker rmi $(ECR_URL)/$(ENV)/tendermint:latest
+endif
+
 ####@./scripts/devnet/snapshot.sh <user_nick> <password> <token_name> <max_units> <genesis_issuance> <memo> <memo_updatable>
 snapshot:
 	@./scripts/devnet/snapshot.sh Findora my_pass FRA 21210000000000000 21000000000000000 my_memo N

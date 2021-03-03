@@ -3,9 +3,6 @@ on:
   push:
     tags:
       - '*'
-  pull_request:
-    branches:
-      - master
 env:
   CARGO_TERM_COLOR: always
 jobs:
@@ -63,6 +60,12 @@ jobs:
     - name: build release
       shell: bash
       run: |
+        echo "REF: ${GITHUB_REF}"
+        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+        TAGV="${TAGS#refs/tags/}"
+        export IMAGE_TAG="${TAGV:-main}"
+        export VERGEN_SHA_SHORT_EXTERN="${IMAGE_TAG}"
+        echo "VERGEN_SHA_SHORT_EXTERN: ${VERGEN_SHA_SHORT_EXTERN}"
         make build_release
     - name: Build images
       env:
@@ -92,6 +95,18 @@ jobs:
         export IMAGE_TAG="${TAGV:-main}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_push_image
+    - name: Clean images
+      env:
+        ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
+        ENV: release
+      shell: bash
+      run: |
+        echo "REF: ${GITHUB_REF}"
+        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+        TAGV="${TAGS#refs/tags/}"
+        export IMAGE_TAG="${TAGV:-main}"
+        echo "Image tag: ${IMAGE_TAG}"
+        make clean_image
     - name: Push wasm-js-bindings
       shell: bash
       run: |
@@ -121,8 +136,14 @@ jobs:
             git add .
             git commit -m "version: ${WASM_VERSION} at $(date +"%Y%m%d")"
             git push origin "${BRANCH_NAME}"
+            git tag "${WASM_VERSION}"
+            git push origin "${WASM_VERSION}"
         fi
         popd
+    - name: Clean garbage
+      shell: bash
+      run: |
+        rm -rf /tmp/*>/dev/null 2>&1 || true
     # - name: release
     #   shell: bash
     #   run: |
