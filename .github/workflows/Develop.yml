@@ -102,6 +102,22 @@ jobs:
         export IMAGE_TAG="${TOBRANCH}-${PR}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_push_image
+    - name: Clean images
+      env:
+        ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
+        ENV: dev
+      shell: bash
+      run: |
+        if echo "${GITHUB_REF}" | grep "refs/pull" >/dev/null; then
+            export PR=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
+            export BRANCH="${GITHUB_HEAD_REF}"
+            export TOBRANCH="${GITHUB_BASE_REF}"
+        else
+            export BRANCH=$(echo ${GITHUB_REF} | sed "s#refs/heads/##g")
+        fi
+        export IMAGE_TAG="${TOBRANCH}-${PR}"
+        echo "Image tag: ${IMAGE_TAG}"
+        make clean_image
     - name: Push wasm-js-bindings
       shell: bash
       run: |
@@ -137,11 +153,7 @@ jobs:
             git push origin "${BRANCH_NAME}"
         fi
         popd
-    # - name: build release
-    #   shell: bash
-    #   run: |
-    #     make build_release
-    # - name: release
-    #   shell: bash
-    #   run: |
-    #     echo "TBD"
+    - name: Clean garbage
+      shell: bash
+      run: |
+        rm -rf /tmp/*>/dev/null 2>&1 || true

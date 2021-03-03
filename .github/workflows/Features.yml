@@ -92,17 +92,7 @@ jobs:
       shell: bash
       run: |
         make test
-    # - name: Build
-    #   env:
-    #     DBG: true
-    #   shell: bash
-    #   run: |
-    #     make build
-    # - name: build release
-    #   shell: bash
-    #   run: |
-    #     make build_release
-    # - name: release
-    #   shell: bash
-    #   run: |
-    #     echo "TBD"
+    - name: Clean garbage
+      shell: bash
+      run: |
+        rm -rf /tmp/*>/dev/null 2>&1 || true
