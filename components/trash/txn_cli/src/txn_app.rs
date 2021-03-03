@@ -1470,7 +1470,7 @@ pub fn process_inputs<
                 )
             } else {
                 eprintln!("Missing --name <filename>");
-                inputs_error(&format!("Missing --name <filename>"))
+                inputs_error(&"Missing --name <filename>".to_string())
             }
         }
         ("serialize", Some(_serialize_matches)) => {
@@ -1491,7 +1491,7 @@ pub fn process_inputs<
                 }
             } else {
                 eprintln!("Missing --txn <filename>");
-                inputs_error(&format!("Missing --txn <filename>"))
+                inputs_error(&"Missing --txn <filename>".to_string())
             }
         }
         ("submit", Some(submit_matches)) => {
@@ -1499,7 +1499,7 @@ pub fn process_inputs<
                 process_submit_cmd(submit_matches, &txn_file, rest_client)
             } else {
                 eprintln!("Missing --txn <filename>");
-                inputs_error(&format!("Missing --txn <filename>"))
+                inputs_error(&"Missing --txn <filename>".to_string())
             }
         }
         e => {
@@ -1507,7 +1507,7 @@ pub fn process_inputs<
                 "Subcommand {:?} missing or not recognized. Try \"txn_cli --help\"",
                 e
             );
-            inputs_error(&format!("Subcommand missing or not recognized"))
+            inputs_error(&"Subcommand missing or not recognized".to_string())
         }
     }
 }

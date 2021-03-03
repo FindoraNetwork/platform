@@ -46,7 +46,7 @@ where
 
     submission_server
         .handle_transaction(tx)
-        .map(|h| web::Json(h))
+        .map(web::Json)
         .map_err(|e| {
             ruc::print(e.as_ref());
             error::ErrorBadRequest(ruc::genlog(e.as_ref()))

@@ -11,6 +11,8 @@ use std::sync::Arc;
 use utils::MetricsRenderer;
 use zei::xfr::structs::OwnerMemo;
 
+type Issuances = Vec<Arc<(TxOutput, Option<OwnerMemo>)>>;
+
 macro_rules! fail {
     () => {
         PlatformError::QueryServerError(None)
@@ -31,9 +33,8 @@ where
     related_transfers: HashMap<AssetTypeCode, HashSet<TxnSID>>, // Set of transfer transactions related to an asset code
     created_assets: HashMap<IssuerPublicKey, Vec<DefineAsset>>,
     traced_assets: HashMap<IssuerPublicKey, Vec<AssetTypeCode>>, // List of assets traced by a ledger address
-    issuances: HashMap<IssuerPublicKey, Vec<Arc<(TxOutput, Option<OwnerMemo>)>>>, // issuance mapped by public key
-    token_code_issuances:
-        HashMap<AssetTypeCode, Vec<Arc<(TxOutput, Option<OwnerMemo>)>>>, // issuance mapped by token code
+    issuances: HashMap<IssuerPublicKey, Issuances>, // issuance mapped by public key
+    token_code_issuances: HashMap<AssetTypeCode, Issuances>, // issuance mapped by token code
     owner_memos: HashMap<TxoSID, OwnerMemo>,
     utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
     custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,

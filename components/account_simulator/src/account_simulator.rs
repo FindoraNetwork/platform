@@ -433,8 +433,10 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
 
                 // dbg!("New unit", &name, &issuer, &code);
 
-                let mut properties: Asset = Default::default();
-                properties.code = code;
+                let mut properties: Asset = Asset {
+                    code,
+                    ..Default::default()
+                };
                 properties.issuer.key = *pubkey;
                 properties.memo.0 =
                     format!("asset '{:?}' issued by '{:?}'", name, issuer);
@@ -805,8 +807,10 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                     let code = AssetTypeCode::new_from_str(&b64enc(&hash.0));
 
                     let op1 = {
-                        let mut properties: Asset = Default::default();
-                        properties.code = code;
+                        let mut properties: Asset = Asset {
+                            code,
+                            ..Default::default()
+                        };
                         properties.issuer.key = *pubkey;
                         properties.memo.0 = format!("lien contract for '{:?}'", name);
 
@@ -903,8 +907,10 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
 
                 let code = AssetTypeCode::gen_random();
 
-                let mut properties: Asset = Default::default();
-                properties.code = code;
+                let mut properties: Asset = Asset {
+                    code,
+                    ..Default::default()
+                };
                 properties.issuer.key = *pubkey;
                 properties.memo.0 =
                     format!("asset '{:?}' issued by '{:?}'", name, issuer);
@@ -1941,8 +1947,10 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
 
                 // dbg!("New unit", &name, &issuer, &code);
 
-                let mut properties: Asset = Default::default();
-                properties.code = code;
+                let mut properties: Asset = Asset {
+                    code,
+                    ..Default::default()
+                };
                 properties.issuer.key = *pubkey;
                 properties.memo.0 =
                     format!("asset '{:?}' issued by '{:?}'", name, issuer);
@@ -2304,8 +2312,10 @@ where
 
                 // dbg!("New unit", &name, &issuer, &code);
 
-                let mut properties: Asset = Default::default();
-                properties.code = code;
+                let mut properties: Asset = Asset {
+                    code,
+                    ..Default::default()
+                };
                 properties.issuer.key = *pubkey;
                 properties.memo.0 =
                     format!("asset '{:?}' issued by '{:?}'", name, issuer);
@@ -2754,7 +2764,7 @@ impl Arbitrary for AccountsScenario {
         let conf_types = self.confidential_types;
 
         let quarters = if self.cmds.len() > 10 {
-            Box::new((0..(4 as usize)).rev()) as Box<dyn Iterator<Item = usize>>
+            Box::new((0..(4_usize)).rev()) as Box<dyn Iterator<Item = usize>>
         } else {
             Box::new(std::iter::empty()) as Box<dyn Iterator<Item = usize>>
         };
