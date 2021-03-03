@@ -60,6 +60,15 @@ jobs:
     - name: build release
       shell: bash
       run: |
+        if echo "${GITHUB_REF}" | grep "refs/pull" >/dev/null; then
+            export PR=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
+            export BRANCH="${GITHUB_HEAD_REF}"
+            export TOBRANCH="${GITHUB_BASE_REF}"
+        else
+            export BRANCH=$(echo ${GITHUB_REF} | sed "s#refs/heads/##g")
+        fi
+        export VERGEN_SHA_SHORT_EXTERN="${TOBRANCH}-${PR}"
+        echo "VERGEN_SHA_SHORT_EXTERN: ${VERGEN_SHA_SHORT_EXTERN}"
         make build_release
     - name: Build images
       env:
@@ -67,10 +76,14 @@ jobs:
         ENV: release
       shell: bash
       run: |
-        echo "REF: ${GITHUB_REF}"
-        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-        TAGV="${TAGS#refs/tags/}"
-        export IMAGE_TAG="${TAGV:-main}"
+        if echo "${GITHUB_REF}" | grep "refs/pull" >/dev/null; then
+            export PR=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
+            export BRANCH="${GITHUB_HEAD_REF}"
+            export TOBRANCH="${GITHUB_BASE_REF}"
+        else
+            export BRANCH=$(echo ${GITHUB_REF} | sed "s#refs/heads/##g")
+        fi
+        export IMAGE_TAG="${TOBRANCH}-${PR}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image
     - name: Login ECR
@@ -83,10 +96,14 @@ jobs:
         ENV: release
       shell: bash
       run: |
-        echo "REF: ${GITHUB_REF}"
-        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-        TAGV="${TAGS#refs/tags/}"
-        export IMAGE_TAG="${TAGV:-main}"
+        if echo "${GITHUB_REF}" | grep "refs/pull" >/dev/null; then
+            export PR=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
+            export BRANCH="${GITHUB_HEAD_REF}"
+            export TOBRANCH="${GITHUB_BASE_REF}"
+        else
+            export BRANCH=$(echo ${GITHUB_REF} | sed "s#refs/heads/##g")
+        fi
+        export IMAGE_TAG="${TOBRANCH}-${PR}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_push_image
     - name: Push wasm-js-bindings
