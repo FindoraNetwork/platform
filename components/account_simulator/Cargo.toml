@@ -31,7 +31,7 @@ submission_api = { path = "../submission_api" }
 submission_server = { path = "../submission_server" }
 subprocess = "0.1.18"
 utils = { path = "../../libs/utils" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0a" }
 
 [dev-dependencies]
 quickcheck_macros = "0.9"

@@ -24,7 +24,7 @@ submission_server = { path = "../../submission_server" }
 txn_builder = { path = "../../txn_builder" }
 txn_cli = { path = "../../trash/txn_cli" }
 ruc = "0.5.5"
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0" }
-crypto = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0" }
-zeiutils = { package = "utils", git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0" }
-algebra = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0a" }
+crypto = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0a" }
+zeiutils = { package = "utils", git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0a" }
+algebra = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0a" }
