@@ -25,13 +25,11 @@ fn ping() -> actix_web::Result<String> {
 /// Returns the git commit hash and commit date of this build
 #[allow(clippy::unnecessary_wraps)]
 fn version() -> actix_web::Result<String> {
-    Ok(concat!(
-        "Build: ",
-        env!("VERGEN_SHA_SHORT"),
-        " ",
+    Ok(format!(
+        "Build: {} {}",
+        option_env!("VERGEN_SHA_SHORT_EXTERN").unwrap_or(env!("VERGEN_SHA_SHORT")),
         env!("VERGEN_BUILD_DATE")
-    )
-    .into())
+    ))
 }
 
 pub fn submit_transaction<RNG, LU, TF>(
