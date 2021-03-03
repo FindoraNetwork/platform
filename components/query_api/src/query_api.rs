@@ -27,13 +27,11 @@ use zei::xfr::structs::OwnerMemo;
 /// Returns the git commit hash and commit date of this build
 #[allow(clippy::unnecessary_wraps)]
 fn version() -> actix_web::Result<String> {
-    Ok(concat!(
-        "Build: ",
-        env!("VERGEN_SHA_SHORT"),
-        " ",
+    Ok(format!(
+        "Build: {} {}",
+        option_env!("VERGEN_SHA_SHORT_EXTERN").unwrap_or(env!("VERGEN_SHA_SHORT")),
         env!("VERGEN_BUILD_DATE")
-    )
-    .into())
+    ))
 }
 
 // Queries the status of a transaction by its handle. Returns either a not committed message or a
