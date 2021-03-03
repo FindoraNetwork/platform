@@ -10,7 +10,7 @@ rand = "0.8"
 bip0039 = "0.7.3"
 
 ed25519-dalek-bip32 = { git = "https://github.com/ktmlm/ed25519-dalek-bip32", branch = "feat-allow-nohardened" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0a" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0b" }
 
 bech32 = "0.7.2"
 base64 = "0.10"

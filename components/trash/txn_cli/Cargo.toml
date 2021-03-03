@@ -43,8 +43,8 @@ tempfile = "3.1.0"
 txn_builder = { path = "../../txn_builder" }
 utils = { path = "../../../libs/utils", features = ["TESTING"] }
 wasm = { path = "../../wasm" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0a" }
-crypto = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0a" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0b" }
+crypto = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0b" }
 
 [dev-dependencies]
 quickcheck = "0.8"
