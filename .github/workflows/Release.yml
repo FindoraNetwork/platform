@@ -118,6 +118,8 @@ jobs:
             git add .
             git commit -m "version: ${WASM_VERSION} at $(date +"%Y%m%d")"
             git push origin "${BRANCH_NAME}"
+            git tag "${WASM_VERSION}"
+            git push origin "${WASM_VERSION}"
         fi
         popd
     # - name: release
