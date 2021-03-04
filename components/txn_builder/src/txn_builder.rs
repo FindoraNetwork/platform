@@ -1624,8 +1624,7 @@ mod tests {
             utxo.authenticated_txn
                 .finalized_txn
                 .txn
-                .get_owner_memos_ref()[utxo.utxo_location.0]
-                .map(|om| om.clone()),
+                .get_owner_memos_ref()[utxo.utxo_location.0].cloned(),
             bob_kp.get_sk().into_keypair(),
         );
         let mut tx3 = TransactionBuilder::from_seq_id(2);
@@ -1658,8 +1657,7 @@ mod tests {
             utxo.authenticated_txn
                 .finalized_txn
                 .txn
-                .get_owner_memos_ref()[utxo.utxo_location.0]
-                .map(|om| om.clone()),
+                .get_owner_memos_ref()[utxo.utxo_location.0].cloned(),
             bob_kp.get_sk().into_keypair(),
         );
         let mut tx4 = TransactionBuilder::from_seq_id(3);

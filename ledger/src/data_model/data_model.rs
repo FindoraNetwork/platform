@@ -2191,7 +2191,7 @@ mod tests {
                 outputs: vec![TxOutput {
                     record: BlindAssetRecord {
                         amount: amount
-                            .map(|am| XfrAmount::NonConfidential(am))
+                            .map(XfrAmount::NonConfidential)
                             .unwrap_or(XfrAmount::Confidential((
                                 ristretto::CompressedRistretto(CompressedRistretto(
                                     [0; 32],
@@ -2201,7 +2201,7 @@ mod tests {
                                 )),
                             ))),
                         asset_type: asset_type
-                            .map(|at| XfrAssetType::NonConfidential(at))
+                            .map(XfrAssetType::NonConfidential)
                             .unwrap_or(XfrAssetType::Confidential(
                                 ristretto::CompressedRistretto(CompressedRistretto(
                                     [0; 32],

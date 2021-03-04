@@ -54,7 +54,7 @@ fn test_create_asset() {
         &keys,
         Some(code),
         AssetRules::default(),
-        "test".into(),
+        "test",
         PolicyChoice::Fungible(),
     ))
     .transaction();
@@ -96,7 +96,7 @@ fn test_create_asset() {
     let oar1 = pnk!(open_blind_asset_record(&bar1, &None, &keys));
     let oar2 = pnk!(open_blind_asset_record(&bar2, &None, &keys));
     assert!(bar1_proof.is_valid(state_comm1.clone()));
-    assert!(bar2_proof.is_valid(state_comm1.clone()));
+    assert!(bar2_proof.is_valid(state_comm1));
 
     let mut builder = TransferOperationBuilder::new();
     let builder_ref = builder
@@ -169,7 +169,7 @@ fn test_loan_repayment(
             &fiat_issuer_keys,
             Some(fiat_code),
             AssetRules::default(),
-            "fiat".into(),
+            "fiat",
             PolicyChoice::Fungible(),
         )
         .c(d!())?
@@ -218,7 +218,7 @@ fn test_loan_repayment(
             0,
             &[(
                 TxOutput {
-                    record: fiat_ba.clone(),
+                    record: fiat_ba,
                     lien: None,
                 },
                 fiat_owner_memo,
@@ -231,7 +231,7 @@ fn test_loan_repayment(
             0,
             &[(
                 TxOutput {
-                    record: debt_ba.clone(),
+                    record: debt_ba,
                     lien: None,
                 },
                 debt_owner_memo,
@@ -370,15 +370,14 @@ fn test_update_memo() {
     let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
 
     // Define the asset and verify
-    let mut asset_rules = AssetRules::default();
     // The asset must be up updatable in order to change the memo later
-    asset_rules.updatable = true;
+    let mut asset_rules = AssetRules { updatable: true, ..AssetRules::default() };
     // Create an asset with the memo defined as "test"
     let tx = pnk!(builder.add_operation_create_asset(
         &keys,
         Some(code),
         asset_rules,
-        "test".into(),
+        "test",
         PolicyChoice::Fungible(),
     ))
     .transaction();
@@ -429,14 +428,11 @@ pub fn test_update_memo_orig() {
     let mut tx_bad = builder.transaction().clone();
     for i in 0..tx_bad.body.operations.len() {
         let op = &mut tx_bad.body.operations[i];
-        match op {
-            Operation::UpdateMemo(ref mut memo_update) => {
-                memo_update.pubkey = adversary.get_pk();
-            }
-            _ => (),
+        if let Operation::UpdateMemo(ref mut memo_update) = op {
+            memo_update.pubkey = adversary.get_pk();
         }
     }
-    assert!(TxnEffect::compute_effect(tx_bad.clone()).is_err());
+    assert!(TxnEffect::compute_effect(tx_bad).is_err());
 
     // Ensure that valid signature succeeds
     pnk!(TxnEffect::compute_effect(tx.clone()));
@@ -492,13 +488,13 @@ pub fn test_update_memo_darp() {
     txn_builder.add_operation_update_memo(&creator, code, "new_memo");
     let txn = txn_builder.transaction();
     let effect0 = pnk!(TxnEffect::compute_effect(txn.clone()));
-    let temp_sid0 = pnk!(ledger.apply_transaction(&mut block, effect0.clone()));
+    let temp_sid0 = pnk!(ledger.apply_transaction(&mut block, effect0));
 
     // Test 1: replay the exact same txn, it should fail
     let effect1 = pnk!(TxnEffect::compute_effect(txn.clone()));
     assert!(
         ledger
-            .apply_transaction(&mut block, effect1.clone())
+            .apply_transaction(&mut block, effect1)
             .is_err()
     );
     ledger
@@ -515,7 +511,7 @@ pub fn test_update_memo_darp() {
 
     assert!(
         ledger
-            .apply_transaction(&mut block, effect.clone())
+            .apply_transaction(&mut block, effect)
             .is_err()
     );
 
@@ -533,15 +529,12 @@ pub fn test_update_memo_darp() {
     let mut tx_bad = txn_builder.transaction().clone();
     for i in 0..tx_bad.body.operations.len() {
         let op = &mut tx_bad.body.operations[i];
-        match op {
-            Operation::UpdateMemo(ref mut memo_update) => {
-                let mut prng = ChaChaRng::from_entropy();
-                memo_update.body.no_replay_token = NoReplayToken::new(&mut prng, seq_id);
-            }
-            _ => (),
+        if let Operation::UpdateMemo(ref mut memo_update) = op {
+            let mut prng = ChaChaRng::from_entropy();
+            memo_update.body.no_replay_token = NoReplayToken::new(&mut prng, seq_id);
         }
     }
-    assert!(TxnEffect::compute_effect(tx_bad.clone()).is_err());
+    assert!(TxnEffect::compute_effect(tx_bad).is_err());
 }
 
 #[test]
@@ -558,7 +551,7 @@ pub fn test_air_assign_operation() {
     // Construct credential
     let dl_attr = b"A1903479";
     let attr_map = vec![(dl.clone(), dl_attr.to_vec())];
-    let attributes = [(dl.clone(), &dl_attr[..])];
+    let attributes = [(dl, &dl_attr[..])];
     let signature = pnk!(credential_sign(
         &mut ledger.get_prng(),
         &cred_issuer_key.1,
@@ -566,7 +559,7 @@ pub fn test_air_assign_operation() {
         &attributes,
     ));
     let credential = Credential {
-        signature: signature.clone(),
+        signature: signature,
         attributes: attr_map,
         issuer_pub_key: cred_issuer_key.0.clone(),
     };
@@ -582,20 +575,20 @@ pub fn test_air_assign_operation() {
     let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
     pnk!(txn_builder.add_operation_air_assign(
         &user_kp,
-        cred_user_key.0.clone(),
+        cred_user_key.0,
         commitment,
         cred_issuer_key.0,
         pok,
     ));
     let tx = txn_builder.transaction();
     let effect0 = pnk!(TxnEffect::compute_effect(tx.clone()));
-    let temp_sid0 = pnk!(ledger.apply_transaction(&mut block, effect0.clone()));
+    let temp_sid0 = pnk!(ledger.apply_transaction(&mut block, effect0));
 
     // Test 1: replay the exact same txn, it should fail
     let effect1 = pnk!(TxnEffect::compute_effect(tx.clone()));
     assert!(
         ledger
-            .apply_transaction(&mut block, effect1.clone())
+            .apply_transaction(&mut block, effect1)
             .is_err()
     );
 
