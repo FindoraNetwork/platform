@@ -8,7 +8,6 @@ use bech32::{self, FromBase32, ToBase32};
 use bip0039::{Count, Language, Mnemonic};
 use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
 use ruc::*;
-use std::result::Result as StdResult;
 use zei::{
     serialization::ZeiFromToBytes,
     xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
@@ -24,7 +23,7 @@ pub fn generate_mnemonic_default() -> String {
 /// - @param `wordslen`: acceptable value are one of [ 12, 15, 18, 21, 24 ]
 /// - @param `lang`: acceptable value are one of [ "en", "zh", "zh_traditional", "fr", "it", "ko", "sp", "jp" ]
 #[inline(always)]
-pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> StdResult<String, String> {
+pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> Result<String> {
     let w = match wordslen {
         12 => Count::Words12,
         15 => Count::Words15,
@@ -32,13 +31,13 @@ pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> StdResult<String, S
         21 => Count::Words21,
         24 => Count::Words24,
         _ => {
-            return Err(
-                "Invalid words length, only 12/15/18/21/24 can be accepted.".to_owned()
-            );
+            return Err(eg!(
+                "Invalid words length, only 12/15/18/21/24 can be accepted."
+            ));
         }
     };
 
-    let l = check_lang(lang).map_err(|e| e.generate_log())?;
+    let l = check_lang(lang).c(d!())?;
 
     Ok(Mnemonic::generate_in(l, w).into_phrase())
 }
@@ -91,12 +90,10 @@ impl BipPath {
 
 /// Restore the XfrKeyPair from a mnemonic with a default bip44-path,
 /// that is "m/44'/917'/0'/0/0" ("m/44'/coin'/account'/change/address").
-pub fn restore_keypair_from_mnemonic_default(
-    phrase: &str,
-) -> StdResult<XfrKeyPair, String> {
+pub fn restore_keypair_from_mnemonic_default(phrase: &str) -> Result<XfrKeyPair> {
     const FRA: u32 = 917;
     restore_keypair_from_mnemonic!(phrase, "en", BipPath::new(FRA, 0, 0, 0), bip44)
-        .map_err(|e| e.generate_log())
+        .c(d!())
 }
 
 /// Restore the XfrKeyPair from a mnemonic with custom params,
@@ -106,9 +103,8 @@ pub fn restore_keypair_from_mnemonic_bip44(
     phrase: &str,
     lang: &str,
     path: &BipPath,
-) -> StdResult<XfrKeyPair, String> {
-    restore_keypair_from_mnemonic_bip44_inner(phrase, lang, path)
-        .map_err(|e| e.generate_log())
+) -> Result<XfrKeyPair> {
+    restore_keypair_from_mnemonic_bip44_inner(phrase, lang, path).c(d!())
 }
 
 #[inline(always)]
@@ -127,9 +123,8 @@ pub fn restore_keypair_from_mnemonic_bip49(
     phrase: &str,
     lang: &str,
     path: &BipPath,
-) -> StdResult<XfrKeyPair, String> {
-    restore_keypair_from_mnemonic_bip49_inner(phrase, lang, path)
-        .map_err(|e| e.generate_log())
+) -> Result<XfrKeyPair> {
+    restore_keypair_from_mnemonic_bip49_inner(phrase, lang, path).c(d!())
 }
 
 #[inline(always)]
