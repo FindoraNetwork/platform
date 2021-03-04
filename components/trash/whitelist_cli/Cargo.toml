@@ -23,7 +23,7 @@ serde_json = "1.0"
 txn_cli = { path = "../../trash/txn_cli" }
 ruc = "0.5.5"
 whitelist = { path = "../../trash/whitelist" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0b" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0c" }
 
 [build-dependencies]
 vergen = "3.1.0"
