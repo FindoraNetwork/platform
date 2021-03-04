@@ -25,7 +25,7 @@
 use cryptohash::sha256;
 use cryptohash::sha256::{Digest, DIGESTBYTES};
 use log::{debug, info};
-use ruc::{err::*, *};
+use ruc::*;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -1011,7 +1011,7 @@ impl BitMap {
 
             if self.blocks[block].header.count == BLOCK_BITS as u32 {
                 if let Err(e) = self.write_block(block) {
-                    info!("Error writing block {}:  {}", block, ruc::genlog(&*e));
+                    info!("Error writing block {}:  {}", block, e.generate_log());
                 }
             }
         }

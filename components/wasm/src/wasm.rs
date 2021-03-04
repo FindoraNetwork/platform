@@ -23,7 +23,7 @@ use txn_builder::{
     PolicyChoice, TransactionBuilder as PlatformTransactionBuilder,
     TransferOperationBuilder as PlatformTransferOperationBuilder,
 };
-use util::ruc_to_jsvalue;
+use util::error_to_jsvalue;
 use utils::HashOf;
 use wasm_bindgen::prelude::*;
 
@@ -66,7 +66,7 @@ pub fn random_asset_type() -> String {
 /// Generates asset type as a Base64 string from a JSON-serialized JavaScript value.
 pub fn asset_type_from_jsvalue(val: &JsValue) -> Result<String, JsValue> {
     let code: [u8; ASSET_TYPE_LENGTH] =
-        val.into_serde().c(d!()).map_err(ruc_to_jsvalue)?;
+        val.into_serde().c(d!()).map_err(error_to_jsvalue)?;
     Ok(AssetTypeCode {
         val: ZeiAssetType(code),
     }
@@ -173,7 +173,7 @@ pub fn create_debt_policy_info(
 ) -> Result<String, JsValue> {
     let fiat_code = AssetTypeCode::new_from_base64(&fiat_code)
         .c(d!())
-        .map_err(ruc_to_jsvalue)?;
+        .map_err(error_to_jsvalue)?;
 
     serde_json::to_string(&PolicyChoice::LoanToken(
         Fraction::new(ir_numerator, ir_denominator),
@@ -201,7 +201,7 @@ pub fn create_debt_memo(
 ) -> Result<String, JsValue> {
     let fiat_code = AssetTypeCode::new_from_base64(&fiat_code)
         .c(d!())
-        .map_err(ruc_to_jsvalue)?;
+        .map_err(error_to_jsvalue)?;
     let memo = DebtMemo {
         interest_rate: Fraction::new(ir_numerator, ir_denominator),
         fiat_code,
@@ -309,7 +309,7 @@ impl TransactionBuilder {
         self.transaction_builder
             .add_fee_relative_auto(am, &kp)
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
         Ok(self)
     }
 
@@ -342,7 +342,7 @@ impl TransactionBuilder {
         self.transaction_builder
             .add_fee(inputs.into())
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
         Ok(self)
     }
 
@@ -406,7 +406,7 @@ impl TransactionBuilder {
         } else {
             AssetTypeCode::new_from_base64(&token_code)
                 .c(d!())
-                .map_err(ruc_to_jsvalue)?
+                .map_err(error_to_jsvalue)?
         };
 
         let policy_choice = serde_json::from_str::<PolicyChoice>(&policy_choice)
@@ -422,7 +422,7 @@ impl TransactionBuilder {
                 policy_choice,
             )
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
         Ok(self)
     }
 
@@ -435,7 +435,7 @@ impl TransactionBuilder {
     ) -> Result<TransactionBuilder, JsValue> {
         let token_code = AssetTypeCode::new_from_base64(&token_code)
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
 
         self.get_builder_mut()
             .add_policy_option(token_code, which_check);
@@ -464,7 +464,7 @@ impl TransactionBuilder {
     ) -> Result<TransactionBuilder, JsValue> {
         let asset_token = AssetTypeCode::new_from_base64(&code)
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
 
         // TODO: (keyao/noah) enable client support for identity
         // tracing?
@@ -480,7 +480,7 @@ impl TransactionBuilder {
                 zei_params.get_ref(),
             )
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
         Ok(self)
     }
 
@@ -510,7 +510,7 @@ impl TransactionBuilder {
                 pok.get_ref().clone(),
             )
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
         Ok(self)
     }
 
@@ -530,7 +530,7 @@ impl TransactionBuilder {
         self.get_builder_mut()
             .add_operation_kv_update(auth_key_pair, key.get_ref(), seq_num, None)
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
         Ok(self)
     }
 
@@ -553,7 +553,7 @@ impl TransactionBuilder {
         self.get_builder_mut()
             .add_operation_kv_update(auth_key_pair, key.get_ref(), seq_num, Some(&hash))
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
         Ok(self)
     }
 
@@ -574,7 +574,7 @@ impl TransactionBuilder {
         // First, decode the asset code
         let code = AssetTypeCode::new_from_base64(&code)
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
 
         self.get_builder_mut()
             .add_operation_update_memo(auth_key_pair, code, &new_memo);
@@ -591,7 +591,7 @@ impl TransactionBuilder {
     ) -> Result<TransactionBuilder, JsValue> {
         let op = serde_json::from_str::<Operation>(&op)
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
         self.get_builder_mut().add_operation(op);
         Ok(self)
     }
@@ -664,7 +664,7 @@ impl TransferOperationBuilder {
                 amount,
             )
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
         Ok(self)
     }
 
@@ -679,7 +679,7 @@ impl TransferOperationBuilder {
     ) -> Result<TransferOperationBuilder, JsValue> {
         let code = AssetTypeCode::new_from_base64(&code)
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
 
         let asset_record_type = AssetRecordType::from_flags(conf_amount, conf_type);
         // TODO (noah/keyao) support identity tracing (issue #298)
@@ -707,7 +707,7 @@ impl TransferOperationBuilder {
                 None,
             )
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
         Ok(self)
     }
 }
@@ -847,7 +847,7 @@ impl TransferOperationBuilder {
         self.get_builder_mut()
             .create(TransferType::Standard)
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
         Ok(self)
     }
 
@@ -860,7 +860,7 @@ impl TransferOperationBuilder {
         self.get_builder_mut()
             .sign(&kp)
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
         Ok(self)
     }
 
@@ -875,7 +875,7 @@ impl TransferOperationBuilder {
         self.get_builder_mut()
             .sign_cosignature(kp, input_idx)
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
         Ok(self)
     }
 
@@ -889,7 +889,7 @@ impl TransferOperationBuilder {
             .get_builder()
             .transaction()
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
         Ok(serde_json::to_string(&op).unwrap())
     }
 }
@@ -959,7 +959,7 @@ pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
 pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey, JsValue> {
     wallet::public_key_from_base64(pk)
         .c(d!())
-        .map_err(ruc_to_jsvalue)
+        .map_err(error_to_jsvalue)
 }
 
 #[wasm_bindgen]
@@ -1018,7 +1018,7 @@ pub fn wasm_credential_verify_commitment(
         xfr_pk.as_bytes(),
     )
     .c(d!())
-    .map_err(ruc_to_jsvalue)
+    .map_err(error_to_jsvalue)
 }
 
 /// Generates a new reveal proof from a credential commitment key.
@@ -1045,7 +1045,7 @@ pub fn wasm_credential_open_commitment(
         &reveal_fields,
     )
     .c(d!())
-    .map_err(ruc_to_jsvalue)?;
+    .map_err(error_to_jsvalue)?;
     Ok(CredentialPoK { pok })
 }
 
@@ -1082,7 +1082,7 @@ pub fn wasm_credential_sign(
     let sig =
         credential_sign(&mut prng, &issuer_secret_key, &user_public_key, &attributes)
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
     Ok(CredentialSignature { sig })
 }
 
@@ -1130,7 +1130,7 @@ pub fn wasm_credential_commit(
         &user_public_key.as_bytes(),
     )
     .c(d!())
-    .map_err(ruc_to_jsvalue)?;
+    .map_err(error_to_jsvalue)?;
     Ok(CredentialCommitmentData {
         commitment: CredentialCommitment { commitment },
         pok: CredentialPoK { pok },
@@ -1159,7 +1159,7 @@ pub fn wasm_credential_reveal(
             &reveal_fields[..],
         )
         .c(d!())
-        .map_err(ruc_to_jsvalue)?,
+        .map_err(error_to_jsvalue)?,
     })
 }
 
@@ -1189,7 +1189,7 @@ pub fn wasm_credential_verify(
         pok.get_ref(),
     )
     .c(d!())
-    .map_err(ruc_to_jsvalue)?;
+    .map_err(error_to_jsvalue)?;
     Ok(())
 }
 
@@ -1206,8 +1206,8 @@ pub fn trace_assets(
     _candidate_assets: JsValue,
 ) -> Result<JsValue, JsValue> {
     // let candidate_assets: Vec<String> =
-    //     candidate_assets.into_serde().map_err(ruc_to_jsvalue)?;
-    let xfr_body: XfrBody = xfr_body.into_serde().c(d!()).map_err(ruc_to_jsvalue)?;
+    //     candidate_assets.into_serde().map_err(error_to_jsvalue)?;
+    let xfr_body: XfrBody = xfr_body.into_serde().c(d!()).map_err(error_to_jsvalue)?;
     // let candidate_assets: Vec<ZeiAssetType> = candidate_assets
     //     .iter()
     //     .map(|asset_type_str| {
@@ -1216,7 +1216,7 @@ pub fn trace_assets(
     //     .collect();
     let record_data = zei_trace_assets(&xfr_body, tracer_keypair.get_keys())
         .c(d!())
-        .map_err(ruc_to_jsvalue)?;
+        .map_err(error_to_jsvalue)?;
     let record_data: Vec<(u64, String)> = record_data
         .iter()
         .map(|(amt, asset_type, _, _)| {
@@ -1257,7 +1257,7 @@ pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
 pub fn public_key_from_bech32(addr: &str) -> Result<XfrPublicKey, JsValue> {
     wallet::public_key_from_bech32(addr)
         .c(d!())
-        .map_err(ruc_to_jsvalue)
+        .map_err(error_to_jsvalue)
 }
 
 #[wasm_bindgen]

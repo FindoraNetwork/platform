@@ -44,7 +44,7 @@ use libp2p::{
 };
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
-use ruc::{err::*, *};
+use ruc::*;
 use std::task::{Context, Poll};
 use zei::xfr::sig::XfrKeyPair;
 use zei::xfr::structs::{AssetRecord, AssetRecordTemplate, XfrNote};

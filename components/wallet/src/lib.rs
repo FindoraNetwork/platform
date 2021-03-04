@@ -7,7 +7,7 @@
 use bech32::{self, FromBase32, ToBase32};
 use bip0039::{Count, Language, Mnemonic};
 use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
-use ruc::{err::*, *};
+use ruc::*;
 use std::result::Result as StdResult;
 use zei::{
     serialization::ZeiFromToBytes,
@@ -38,7 +38,7 @@ pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> StdResult<String, S
         }
     };
 
-    let l = check_lang(lang).map_err(|e| ruc::genlog(e.as_ref()))?;
+    let l = check_lang(lang).map_err(|e| e.generate_log())?;
 
     Ok(Mnemonic::generate_in(l, w).into_phrase())
 }
@@ -96,7 +96,7 @@ pub fn restore_keypair_from_mnemonic_default(
 ) -> StdResult<XfrKeyPair, String> {
     const FRA: u32 = 917;
     restore_keypair_from_mnemonic!(phrase, "en", BipPath::new(FRA, 0, 0, 0), bip44)
-        .map_err(|e| ruc::genlog(e.as_ref()))
+        .map_err(|e| e.generate_log())
 }
 
 /// Restore the XfrKeyPair from a mnemonic with custom params,
@@ -108,7 +108,7 @@ pub fn restore_keypair_from_mnemonic_bip44(
     path: &BipPath,
 ) -> StdResult<XfrKeyPair, String> {
     restore_keypair_from_mnemonic_bip44_inner(phrase, lang, path)
-        .map_err(|e| ruc::genlog(e.as_ref()))
+        .map_err(|e| e.generate_log())
 }
 
 #[inline(always)]
@@ -129,7 +129,7 @@ pub fn restore_keypair_from_mnemonic_bip49(
     path: &BipPath,
 ) -> StdResult<XfrKeyPair, String> {
     restore_keypair_from_mnemonic_bip49_inner(phrase, lang, path)
-        .map_err(|e| ruc::genlog(e.as_ref()))
+        .map_err(|e| e.generate_log())
 }
 
 #[inline(always)]

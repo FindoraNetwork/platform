@@ -14,7 +14,7 @@ use log::info;
 use merkle_tree::append_only_merkle::AppendOnlyMerkle;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
-use ruc::{err::*, *};
+use ruc::*;
 use serde::{Deserialize, Serialize};
 use sliding_set::SlidingSet;
 use sparse_merkle_tree::{Key, SmtMap256};
@@ -1942,7 +1942,7 @@ impl LedgerState {
         .or_else(|e| {
             log::info!(
                 "Replaying without merkle trees failed: {}",
-                ruc::genlog(&*e)
+                e.generate_log()
             );
             LedgerState::load_checked_from_log(
                 &block_merkle,
@@ -1957,7 +1957,7 @@ impl LedgerState {
         .or_else(|e| {
             log::info!(
                 "Checking log against merkle trees failed: {}",
-                ruc::genlog(&*e)
+                e.generate_log()
             );
             let ret = LedgerState::new(
                 &block_merkle,
@@ -4340,7 +4340,7 @@ pub mod block_cache {
     use crate::data_model::FinalizedBlock;
     use lazy_static::lazy_static;
     use rand::random;
-    use ruc::{err::*, *};
+    use ruc::*;
     use std::{
         env, fs,
         iter::Iterator,

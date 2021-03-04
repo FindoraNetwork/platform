@@ -3,7 +3,7 @@ use ledger::data_model::*;
 use ledger::store::*;
 use ledger_api_service::RestfulArchiveAccess;
 use log::{error, info};
-use ruc::{err::*, *};
+use ruc::*;
 use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;

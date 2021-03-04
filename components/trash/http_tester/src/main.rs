@@ -7,7 +7,7 @@ use credentials::{
 use ledger::data_model::{StateCommitmentData, Transaction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
-use ruc::{err::*, *};
+use ruc::*;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use txn_builder::{BuildsTransactions, TransactionBuilder};

@@ -1,6 +1,6 @@
 use crate::{CliError, LedgerStateCommitment};
 use ledger::data_model::{b64enc, Asset, AssetType, AuthenticatedUtxo, TxoSID};
-use ruc::{err::*, *};
+use ruc::*;
 use serde::de::DeserializeOwned;
 use std::env;
 use std::fmt;

@@ -9,7 +9,7 @@ name = "account_simulator"
 path = "src/account_simulator.rs"
 
 [dependencies]
-ruc = "0.5.5"
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 actix-rt = "0.2"
 actix-service = "0.4.2"
 actix-web = "1.0.8"
@@ -31,7 +31,7 @@ submission_api = { path = "../submission_api" }
 submission_server = { path = "../submission_server" }
 subprocess = "0.1.18"
 utils = { path = "../../libs/utils" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0c" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
 
 [dev-dependencies]
 quickcheck_macros = "0.9"

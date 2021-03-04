@@ -1,4 +1,4 @@
-use crate::util::ruc_to_jsvalue;
+use crate::util::error_to_jsvalue;
 use credentials::{
     CredCommitment, CredCommitmentKey, CredIssuerPublicKey, CredIssuerSecretKey,
     CredPoK, CredRevealSig, CredSignature, CredUserPublicKey, CredUserSecretKey,
@@ -13,7 +13,7 @@ use ledger::data_model::{
 };
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
-use ruc::{err::RucResult, *};
+use ruc::{d, err::RucResult};
 use serde::{Deserialize, Serialize};
 use sparse_merkle_tree::Key as SmtKey;
 use utils::HashOf;
@@ -132,7 +132,10 @@ impl AuthenticatedAssetRecord {
         record: &JsValue,
     ) -> Result<AuthenticatedAssetRecord, JsValue> {
         Ok(AuthenticatedAssetRecord {
-            authenticated_record: record.into_serde().c(d!()).map_err(ruc_to_jsvalue)?,
+            authenticated_record: record
+                .into_serde()
+                .c(d!())
+                .map_err(error_to_jsvalue)?,
         })
     }
 }
@@ -175,7 +178,7 @@ impl ClientAssetRecord {
     /// fetch an asset record from the ledger server.
     pub fn from_json(val: &JsValue) -> Result<ClientAssetRecord, JsValue> {
         Ok(ClientAssetRecord {
-            txo: val.into_serde().c(d!()).map_err(ruc_to_jsvalue)?,
+            txo: val.into_serde().c(d!()).map_err(error_to_jsvalue)?,
         })
     }
 
@@ -184,7 +187,7 @@ impl ClientAssetRecord {
         serde_json::to_string(&self.txo)
             .map(|s| JsValue::from_str(&s))
             .c(d!())
-            .map_err(ruc_to_jsvalue)
+            .map_err(error_to_jsvalue)
     }
 }
 
@@ -250,7 +253,7 @@ impl OwnerMemo {
     /// }
     pub fn from_json(val: &JsValue) -> Result<OwnerMemo, JsValue> {
         let zei_owner_memo: ZeiOwnerMemo =
-            val.into_serde().c(d!()).map_err(ruc_to_jsvalue)?;
+            val.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         Ok(OwnerMemo {
             memo: ZeiOwnerMemo {
                 blind_share: zei_owner_memo.blind_share,
@@ -459,7 +462,7 @@ impl AssetType {
     /// fetch an asset type from the ledger server.
     pub fn from_json(json: &JsValue) -> Result<AssetType, JsValue> {
         let asset_type: PlatformAssetType =
-            json.into_serde().c(d!()).map_err(ruc_to_jsvalue)?;
+            json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         Ok(AssetType { asset_type })
     }
 
@@ -483,7 +486,7 @@ impl AuthenticatedAIRResult {
     /// value from the address identity registry.
     pub fn from_json(json: &JsValue) -> Result<AuthenticatedAIRResult, JsValue> {
         let result: PlatformAuthenticatedAIRResult =
-            json.into_serde().c(d!()).map_err(ruc_to_jsvalue)?;
+            json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         Ok(AuthenticatedAIRResult { result })
     }
 
@@ -548,7 +551,7 @@ impl CredentialIssuerKeyPair {
     }
     /// Generate a key pair from a JSON-serialized JavaScript value.
     pub fn from_json(val: &JsValue) -> Result<CredentialIssuerKeyPair, JsValue> {
-        val.into_serde().c(d!()).map_err(ruc_to_jsvalue)
+        val.into_serde().c(d!()).map_err(error_to_jsvalue)
     }
 }
 
@@ -568,7 +571,7 @@ impl CredentialUserKeyPair {
     }
     /// Generate a key pair from a JSON-serialized JavaScript value.
     pub fn from_json(val: &JsValue) -> Result<CredentialUserKeyPair, JsValue> {
-        val.into_serde().c(d!()).map_err(ruc_to_jsvalue)
+        val.into_serde().c(d!()).map_err(error_to_jsvalue)
     }
 }
 
@@ -589,14 +592,14 @@ impl SignatureRules {
     /// associated weight.
     pub fn new(threshold: u64, weights: JsValue) -> Result<SignatureRules, JsValue> {
         let weights: Vec<(String, u64)> =
-            weights.into_serde().c(d!()).map_err(ruc_to_jsvalue)?;
+            weights.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         let weights: Vec<(XfrPublicKey, u64)> = weights
             .iter()
             .map(|(b64_key, weight)| {
                 wallet::public_key_from_base64(&b64_key)
                     .map(|pk| (pk, *weight))
                     .c(d!())
-                    .map_err(ruc_to_jsvalue)
+                    .map_err(error_to_jsvalue)
             })
             .collect::<Result<Vec<(XfrPublicKey, u64)>, JsValue>>()?;
         let sig_rules = PlatformSignatureRules { threshold, weights };
@@ -642,7 +645,7 @@ impl TracingPolicy {
         tracing: bool,
     ) -> Result<TracingPolicy, JsValue> {
         let reveal_map: Vec<bool> =
-            reveal_map.into_serde().c(d!()).map_err(ruc_to_jsvalue)?;
+            reveal_map.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         let identity_policy = IdentityRevealPolicy {
             cred_issuer_pub_key: cred_issuer_key.get_ref().clone(),
             reveal_map,
@@ -742,7 +745,7 @@ impl AssetRules {
         self.rules
             .set_decimals(decimals)
             .c(d!())
-            .map_err(ruc_to_jsvalue)?;
+            .map_err(error_to_jsvalue)?;
         Ok(self)
     }
 }
@@ -774,7 +777,8 @@ impl KVBlind {
 
     /// Create a KVBlind from a JSON-encoded value.
     pub fn from_json(val: &JsValue) -> Result<KVBlind, JsValue> {
-        let blind: PlatformKVBlind = val.into_serde().c(d!()).map_err(ruc_to_jsvalue)?;
+        let blind: PlatformKVBlind =
+            val.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         Ok(KVBlind { blind })
     }
 }
@@ -808,7 +812,7 @@ impl Key {
     pub fn from_base64(string: &str) -> Result<Key, JsValue> {
         Ok(Key(SmtKey::from_base64(string)
             .c(d!())
-            .map_err(ruc_to_jsvalue)?))
+            .map_err(error_to_jsvalue)?))
     }
 }
 
@@ -830,7 +834,7 @@ impl KVHash {
     /// Generate a new custom data hash without a blinding factor.
     /// @param {JsValue} data - Data to hash. Must be an array of bytes.
     pub fn new_no_blind(data: &JsValue) -> Result<KVHash, JsValue> {
-        let data = data.into_serde().c(d!()).map_err(ruc_to_jsvalue)?;
+        let data = data.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         Ok(KVHash {
             hash: PlatformKVHash(HashOf::new(&(data, None))),
         })
@@ -843,7 +847,7 @@ impl KVHash {
         data: &JsValue,
         kv_blind: &KVBlind,
     ) -> Result<KVHash, JsValue> {
-        let data = data.into_serde().c(d!()).map_err(ruc_to_jsvalue)?;
+        let data = data.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         Ok(KVHash {
             hash: PlatformKVHash(HashOf::new(&(
                 data,

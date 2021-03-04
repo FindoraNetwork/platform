@@ -6,7 +6,7 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-ruc = "0.5.5"
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 arrayref = "0.3.5"
 air = { path = "../libs/ads/air" }
 base64 = "0.10"
@@ -42,8 +42,8 @@ tiny-keccak = "1.4.2"
 unicode-normalization = "0.1.13"
 utils = { path = "../libs/utils" }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0c" }
-zeiutils = { package = "utils", git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0c" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
+zeiutils = { package = "utils", git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
 sparse_merkle_tree = { path = "../libs/ads/sparse_merkle_tree" }
 sled = "0.34.6"
 

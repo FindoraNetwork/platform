@@ -14,7 +14,7 @@ name = "query_server"
 path = "src/query_server_launch.rs"
 
 [dependencies]
-ruc = "0.5.5"
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 actix-cors = "0.1.0"
 actix-rt = "0.2"
 actix-service = "0.4.2"
@@ -33,7 +33,7 @@ serde_derive = "1.0"
 serde_json = "1.0"
 sparse_merkle_tree = { path = "../../libs/ads/sparse_merkle_tree" }
 utils = { path = "../../libs/utils" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0c" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
 
 [build-dependencies]
 vergen = "3.1.0"

@@ -9,7 +9,7 @@ name = "ledger_client"
 path = "src/ledger_client.rs"
 
 [dependencies]
-ruc = "0.5.5"
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 arrayref = "0.3.5"
 cryptohash = { path = "../../libs/cryptohash" }
 ledger = { path = "../../ledger" }
@@ -21,7 +21,7 @@ serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
 utils = { path = "../../libs/utils" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0c" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
 
 [dev-dependencies]
 quickcheck = "0.8"
