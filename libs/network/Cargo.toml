@@ -8,7 +8,7 @@ edition = "2018"
 path = "src/lib.rs"
 
 [dependencies]
-ruc = "0.5.5"
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 actix-web = "1.0.5"
 actix-service = "0.4.2"
 actix-http = "0.2.3"
@@ -26,7 +26,7 @@ ledger_api_service = {path = "../../components/ledger_api_service"}
 submission_api = {path = "../../components/submission_api"}
 submission_server = {path = "../../components/submission_server"}
 utils = { path = "../utils" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0c" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
 
 [dev-dependencies]
 quickcheck_macros = "0.9"

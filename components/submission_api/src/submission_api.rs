@@ -9,7 +9,7 @@ use log::info;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use rand_core::{CryptoRng, RngCore};
-use ruc::{err::*, *};
+use ruc::*;
 use std::marker::{Send, Sync};
 use std::result::Result as StdResult;
 use std::sync::{Arc, RwLock};
@@ -48,8 +48,8 @@ where
         .handle_transaction(tx)
         .map(|h| web::Json(h))
         .map_err(|e| {
-            ruc::print(e.as_ref());
-            error::ErrorBadRequest(ruc::genlog(e.as_ref()))
+            e.print();
+            error::ErrorBadRequest(e.generate_log())
         })
 }
 

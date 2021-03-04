@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use ruc::{err::*, *};
+use ruc::*;
 use rusqlite::{params, Connection};
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::BTreeMap;

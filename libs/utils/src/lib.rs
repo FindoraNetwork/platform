@@ -1,7 +1,7 @@
 use cryptohash::sha256::Digest;
 use cryptohash::{sha256, Proof};
 use percent_encoding::{percent_decode, utf8_percent_encode, AsciiSet, CONTROLS};
-use ruc::{err::*, *};
+use ruc::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fs;
 use std::io::{Error, ErrorKind};

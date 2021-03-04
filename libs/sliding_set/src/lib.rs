@@ -1,4 +1,4 @@
-use ruc::{err::*, *};
+use ruc::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, Eq, PartialEq)]

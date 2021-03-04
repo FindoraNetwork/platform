@@ -13,7 +13,7 @@ use ledger::ser_fail;
 use ledger_api_service::RestfulLedgerAccess;
 use log::debug;
 use query_api::RestfulQueryServerAccess;
-use ruc::{err::*, *};
+use ruc::*;
 use sparse_merkle_tree::Key;
 use std::env;
 use submission_api::RestfulLedgerUpdate;
@@ -741,9 +741,7 @@ pub(crate) fn process_asset_issuer_cmd<T: RestfulLedgerAccess + RestfulLedgerUpd
                     }
                     Ok(())
                 }
-                Err(e) => {
-                    Err(eg!(PlatformError::ZeiError(Some(ruc::genlog(e.as_ref())))))
-                }
+                Err(e) => Err(eg!(PlatformError::ZeiError(Some(e.generate_log())))),
             }
         }
         _ => {

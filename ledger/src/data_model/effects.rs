@@ -15,7 +15,7 @@ use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::{verify_xfr_body, XfrNotePolicies};
 use zei::xfr::sig::XfrPublicKey;
 // use zei::xfr::structs::{TracingPolicies, BlindAssetRecord, XfrAmount, XfrAssetType};
-use ruc::{err::*, *};
+use ruc::*;
 use zei::xfr::structs::{TracingPolicies, XfrAmount, XfrAssetType};
 
 #[derive(Debug, Clone, Eq, PartialEq)]

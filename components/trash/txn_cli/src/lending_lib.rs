@@ -12,7 +12,7 @@ use ledger::ser_fail;
 use ledger_api_service::RestfulLedgerAccess;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
-use ruc::{err::*, *};
+use ruc::*;
 use submission_api::RestfulLedgerUpdate;
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
 use zei::api::anon_creds::ac_confidential_open_commitment;

@@ -2,7 +2,7 @@ use crate::data_model::errors::PlatformError;
 use crate::data_model::{Asset, AssetTypeCode, Operation, Transaction, TxOutput};
 use crate::policies::Fraction;
 use fixed::types::I20F12;
-use ruc::{err::*, *};
+use ruc::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use zei::serialization::ZeiFromToBytes;

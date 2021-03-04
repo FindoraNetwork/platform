@@ -5,7 +5,7 @@ authors = ["Brian Rogoff <brian@findora.org>"]
 edition = "2018"
 
 [dependencies]
-ruc = "0.5.5"
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 cryptohash = { path = "../../cryptohash" }
 hex = "0.3.2"
 itertools = "0.8.0"

@@ -9,7 +9,7 @@ use ledger::data_model::AssetTypeCode;
 use ledger::des_fail;
 use ledger_api_service::RestfulLedgerAccess;
 use linear_map::LinearMap;
-use ruc::{err::*, *};
+use ruc::*;
 use serde::{Deserialize, Serialize};
 use txn_cli::txn_lib::query_utxo_and_get_amount;
 use zei::ristretto::{CompressedRistretto as ZeiCompressedRistretto, RistrettoScalar};

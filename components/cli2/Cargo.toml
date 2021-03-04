@@ -15,7 +15,7 @@ path = "src/cli.rs"
 no-bugtracker = []
 
 [dependencies]
-ruc = "0.5.5"
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 base64 = "0.12.3"
 blake2 = "0.9.0"
 chacha20poly1305 = "0.5.1"
@@ -41,7 +41,7 @@ submission_api = { path = "../submission_api" }
 submission_server = { path = "../submission_server" }
 txn_builder = { path = "../txn_builder" }
 utils = { path = "../../libs/utils" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0c" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
 zeroize = "1.1.0"
 wallet = { path = "../wallet" }
 

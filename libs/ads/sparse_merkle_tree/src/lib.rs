@@ -4,7 +4,7 @@
 //!
 use cryptohash::sha256;
 use rand::Rng;
-use ruc::{err::*, *};
+use ruc::*;
 use serde::{Deserialize, Serialize};
 use sha256::DIGESTBYTES;
 use std::collections::HashMap;

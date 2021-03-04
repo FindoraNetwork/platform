@@ -8,7 +8,7 @@ use actix_web::{dev, error, middleware, test, web, App, HttpResponse, HttpServer
 use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerState};
 use ledger::{inp_fail, ser_fail};
-use ruc::{err::*, *};
+use ruc::*;
 use serde::Serialize;
 use sparse_merkle_tree::Key;
 use std::marker::{Send, Sync};
@@ -216,7 +216,7 @@ where
     let reader = data.read().unwrap();
     let key = Key::from_base64(&*addr)
         .c(d!())
-        .map_err(|e| actix_web::error::ErrorBadRequest(ruc::genlog(e.as_ref())))?;
+        .map_err(|e| actix_web::error::ErrorBadRequest(e.generate_log()))?;
     let result = reader.get_kv_entry(key);
     Ok(web::Json(result))
 }

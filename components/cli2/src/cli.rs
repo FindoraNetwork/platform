@@ -3,7 +3,7 @@
 
 use ledger::data_model::*;
 use promptly::prompt_default;
-use ruc::{err::*, *};
+use ruc::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::env;

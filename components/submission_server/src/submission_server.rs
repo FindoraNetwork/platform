@@ -5,7 +5,7 @@ use ledger::data_model::{
 use ledger::store::*;
 use log::info;
 use rand_core::{CryptoRng, RngCore};
-use ruc::{err::*, *};
+use ruc::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -235,11 +235,9 @@ where
                 Ok(handle)
             }
             Err(e) => {
-                ruc::print(e.as_ref());
-                self.txn_status.insert(
-                    handle.clone(),
-                    TxnStatus::Rejected(ruc::genlog(e.as_ref())),
-                );
+                e.print();
+                self.txn_status
+                    .insert(handle.clone(), TxnStatus::Rejected(e.generate_log()));
                 Err(handle)
             }
         }

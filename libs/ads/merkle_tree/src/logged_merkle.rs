@@ -27,7 +27,7 @@ use super::append_only_merkle::AppendOnlyMerkle;
 
 use cryptohash::{sha256, HashValue, Proof};
 use log::{debug, info};
-use ruc::{err::*, *};
+use ruc::*;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -384,7 +384,7 @@ impl LoggedMerkle {
 
         // Try to seek to a relevant part of the log file.
         if let Err(e) = self.find_relevant(&mut file) {
-            info!("Seek operations failed:  {}", ruc::genlog(&*e));
+            info!("Seek operations failed:  {}", e.generate_log());
             info!("Reverting to sequential I/O");
         }
 

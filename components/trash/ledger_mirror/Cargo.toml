@@ -9,11 +9,11 @@ name = "ledger_mirror"
 path = "src/ledger_mirror.rs"
 
 [dependencies]
-ruc = "0.5.5"
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 arrayref = "0.3.5"
 ledger = { path = "../../ledger" }
 flexi_logger = "0.15.2"
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0c" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
 ledger_api_service = { path = "../ledger_api_service" }
 ctrlc = "3.1.3"
 actix-rt = "0.2"

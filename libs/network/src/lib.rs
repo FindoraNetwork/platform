@@ -11,7 +11,7 @@ use ledger_api_service::{
 use query_api::{
     ActixQueryServerClient, MockQueryServerClient, RestfulQueryServerAccess,
 };
-use ruc::{err::*, *};
+use ruc::*;
 use serde::Serialize;
 use sparse_merkle_tree::Key;
 use std::sync::{Arc, RwLock};

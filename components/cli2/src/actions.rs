@@ -17,7 +17,7 @@ use crate::{
     CliDataStore, FreshNamer, KeypairName, LedgerStateCommitment, OpMetadata,
     PubkeyName, TxnBuilderName, TxnMetadata, TxnName, TxoCacheEntry, TxoName,
 };
-use ruc::{err::*, *};
+use ruc::*;
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;

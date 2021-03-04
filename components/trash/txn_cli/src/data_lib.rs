@@ -5,7 +5,7 @@ use ledger::{des_fail, ser_fail};
 use log::{debug, trace}; // Other options: debug, info, warn
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
-use ruc::{err::*, *};
+use ruc::*;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
