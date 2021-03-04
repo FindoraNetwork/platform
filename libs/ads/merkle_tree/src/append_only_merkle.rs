@@ -2410,7 +2410,7 @@ mod tests {
 
         header.header_mark ^= 1;
 
-        if  header.check(3, 5).is_ok() {
+        if header.check(3, 5).is_ok() {
             panic!("check didn't detect an invalid header.");
         }
 
@@ -2798,7 +2798,7 @@ mod tests {
     // Test a larger tree.
     #[test]
     #[ignore]
-    #[warn(clippy::mut_range_bound)]
+    #[allow(clippy::mut_range_bound)]
     // This test runs takes a long time to run. Run it with `cargo test -- --ignored`
     fn test_tree() {
         let path = "test_tree".to_string();

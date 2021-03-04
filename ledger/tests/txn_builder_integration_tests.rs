@@ -371,7 +371,10 @@ fn test_update_memo() {
 
     // Define the asset and verify
     // The asset must be up updatable in order to change the memo later
-    let mut asset_rules = AssetRules { updatable: true, ..AssetRules::default() };
+    let mut asset_rules = AssetRules {
+        updatable: true,
+        ..AssetRules::default()
+    };
     // Create an asset with the memo defined as "test"
     let tx = pnk!(builder.add_operation_create_asset(
         &keys,
@@ -492,11 +495,7 @@ pub fn test_update_memo_darp() {
 
     // Test 1: replay the exact same txn, it should fail
     let effect1 = pnk!(TxnEffect::compute_effect(txn.clone()));
-    assert!(
-        ledger
-            .apply_transaction(&mut block, effect1)
-            .is_err()
-    );
+    assert!(ledger.apply_transaction(&mut block, effect1).is_err());
     ledger
         .finish_block(block)
         .unwrap()
@@ -509,11 +508,7 @@ pub fn test_update_memo_darp() {
     let txn = txn_builder.transaction();
     let effect = pnk!(TxnEffect::compute_effect(txn.clone()));
 
-    assert!(
-        ledger
-            .apply_transaction(&mut block, effect)
-            .is_err()
-    );
+    assert!(ledger.apply_transaction(&mut block, effect).is_err());
 
     pnk!(ledger.finish_block(block));
 
@@ -586,11 +581,7 @@ pub fn test_air_assign_operation() {
 
     // Test 1: replay the exact same txn, it should fail
     let effect1 = pnk!(TxnEffect::compute_effect(tx.clone()));
-    assert!(
-        ledger
-            .apply_transaction(&mut block, effect1)
-            .is_err()
-    );
+    assert!(ledger.apply_transaction(&mut block, effect1).is_err());
 
     pnk!(ledger.finish_block(block))
         .remove(&temp_sid0)

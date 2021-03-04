@@ -1648,7 +1648,7 @@ mod tests {
 
         block.header.checksum.bytes[0] ^= 1;
 
-        if  block.validate(BIT_DESC_CLEAR, 32).is_ok() {
+        if block.validate(BIT_DESC_CLEAR, 32).is_ok() {
             panic!(
                 "Block validation didn't detect a bad checksum: {:?} vs {:?}.",
                 block.header.checksum.bytes,

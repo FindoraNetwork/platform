@@ -2190,16 +2190,16 @@ mod tests {
                 policies: XfrNotePolicies::default(),
                 outputs: vec![TxOutput {
                     record: BlindAssetRecord {
-                        amount: amount
-                            .map(XfrAmount::NonConfidential)
-                            .unwrap_or(XfrAmount::Confidential((
+                        amount: amount.map(XfrAmount::NonConfidential).unwrap_or(
+                            XfrAmount::Confidential((
                                 ristretto::CompressedRistretto(CompressedRistretto(
                                     [0; 32],
                                 )),
                                 ristretto::CompressedRistretto(CompressedRistretto(
                                     [0; 32],
                                 )),
-                            ))),
+                            )),
+                        ),
                         asset_type: asset_type
                             .map(XfrAssetType::NonConfidential)
                             .unwrap_or(XfrAssetType::Confidential(
