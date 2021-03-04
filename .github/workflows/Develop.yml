@@ -128,7 +128,7 @@ jobs:
         else
             export BRANCH=$(echo ${GITHUB_REF} | sed "s#refs/heads/##g")
         fi
-        export BRANCH_NAME="develop"
+        export BRANCH_NAME="test"
         export WASM_DIR="/tmp/wasm-js-bindings"
         if [ ! -d "${WASM_DIR}" ]; then git clone git@github.com:FindoraNetwork/wasm-js-bindings.git "${WASM_DIR}"; fi
         pushd "${WASM_DIR}"
