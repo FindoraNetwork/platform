@@ -2986,7 +2986,6 @@ fn main() {
 mod test {
     use super::*;
     use lazy_static::lazy_static;
-    use quickcheck;
 
     use std::sync::Mutex;
 
@@ -3067,11 +3066,9 @@ mod test {
             if simple_res.is_err() != normal_res.is_err() {
                 simple = prev_simple.clone();
                 normal = prev_normal.clone();
-            } else {
-                if simple_res.is_ok() {
-                    prev_simple.run_account_command(&cmd).unwrap();
-                    prev_normal.run_account_command(&cmd).unwrap();
-                }
+            } else if simple_res.is_ok() {
+                prev_simple.run_account_command(&cmd).unwrap();
+                prev_normal.run_account_command(&cmd).unwrap();
             }
         }
 

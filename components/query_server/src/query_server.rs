@@ -551,7 +551,7 @@ mod tests {
                 &alice,
                 Some(token_code),
                 AssetRules::default(),
-                "test".into(),
+                "test",
                 PolicyChoice::Fungible(),
             )
             .unwrap()
@@ -655,7 +655,7 @@ mod tests {
                 &alice,
                 Some(token_code),
                 AssetRules::default(),
-                "fiat".into(),
+                "fiat",
                 PolicyChoice::Fungible(),
             )
             .unwrap()
@@ -763,7 +763,7 @@ mod tests {
             .unwrap();
         let issuer_records = query_server
             .get_issued_records(&IssuerPublicKey {
-                key: alice.get_pk().clone(),
+                key: alice.get_pk(),
             })
             .unwrap();
         let token_records = query_server
@@ -869,10 +869,7 @@ mod tests {
 
         // Submit
         let seq_id = ledger_state.get_block_commit_count();
-        let tx = Transaction::from_operation(
-            Operation::KVStoreUpdate(update.clone()),
-            seq_id,
-        );
+        let tx = Transaction::from_operation(Operation::KVStoreUpdate(update), seq_id);
         apply_transaction(&mut ledger_state, tx);
 
         // Check related txns
@@ -907,7 +904,7 @@ mod tests {
                 &alice,
                 Some(token_code),
                 AssetRules::default(),
-                "fiat".into(),
+                "fiat",
                 PolicyChoice::Fungible(),
             )
             .unwrap()
@@ -1043,7 +1040,7 @@ mod tests {
         // Set the tracing policy
         let tracer_kp = AssetTracerKeyPair::generate(&mut ledger_state.get_prng());
         let tracing_policy = TracingPolicy {
-            enc_keys: tracer_kp.enc_key.clone(),
+            enc_keys: tracer_kp.enc_key,
             asset_tracing: true,
             identity_tracing: None,
         };

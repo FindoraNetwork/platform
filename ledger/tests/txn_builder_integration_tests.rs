@@ -371,7 +371,7 @@ fn test_update_memo() {
 
     // Define the asset and verify
     // The asset must be up updatable in order to change the memo later
-    let mut asset_rules = AssetRules {
+    let asset_rules = AssetRules {
         updatable: true,
         ..AssetRules::default()
     };
@@ -554,7 +554,7 @@ pub fn test_air_assign_operation() {
         &attributes,
     ));
     let credential = Credential {
-        signature: signature,
+        signature,
         attributes: attr_map,
         issuer_pub_key: cred_issuer_key.0.clone(),
     };
