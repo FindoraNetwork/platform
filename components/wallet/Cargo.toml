@@ -5,12 +5,12 @@ authors = ["FanHui <kt71@qq.com>"]
 edition = "2018"
 
 [dependencies]
-ruc = "0.5.5"
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 rand = "0.8"
 bip0039 = "0.7.3"
 
 ed25519-dalek-bip32 = { git = "https://github.com/ktmlm/ed25519-dalek-bip32", branch = "feat-allow-nohardened" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
 
 bech32 = "0.7.2"
 base64 = "0.10"

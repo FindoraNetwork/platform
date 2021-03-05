@@ -6,7 +6,7 @@ use credentials::{
 use ledger::data_model::StateCommitmentData;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
-use ruc::{err::*, *};
+use ruc::*;
 use serde::{Deserialize, Serialize};
 use shared::{PubCreds, UserCreds};
 use txn_builder::{BuildsTransactions, TransactionBuilder};

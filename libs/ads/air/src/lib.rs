@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use ruc::{err::*, *};
+use ruc::*;
 use serde::{Deserialize, Serialize};
 use sparse_merkle_tree::{
     check_merkle_proof as smt_check_proof, Key, MerkleProof, SmtMap256,

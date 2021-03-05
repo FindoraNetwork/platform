@@ -4,7 +4,7 @@ use blake2::Blake2b;
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{ChaCha20Poly1305, Nonce}; // Or `XChaCha20Poly1305`
 use rand::{thread_rng, Rng};
-use ruc::{err::*, *};
+use ruc::*;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt;
 use std::marker::PhantomData;

@@ -17,6 +17,7 @@ use ledger::data_model::{
 use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
+use ruc::{d, err::RucResult};
 use txn_builder::{
     BuildsTransactions, FeeInput as PlatformFeeInput, FeeInputs as PlatformFeeInputs,
     PolicyChoice, TransactionBuilder as PlatformTransactionBuilder,
@@ -64,7 +65,8 @@ pub fn random_asset_type() -> String {
 #[wasm_bindgen]
 /// Generates asset type as a Base64 string from a JSON-serialized JavaScript value.
 pub fn asset_type_from_jsvalue(val: &JsValue) -> Result<String, JsValue> {
-    let code: [u8; ASSET_TYPE_LENGTH] = val.into_serde().map_err(error_to_jsvalue)?;
+    let code: [u8; ASSET_TYPE_LENGTH] =
+        val.into_serde().c(d!()).map_err(error_to_jsvalue)?;
     Ok(AssetTypeCode {
         val: ZeiAssetType(code),
     }
@@ -86,9 +88,15 @@ pub fn verify_authenticated_txn(
 ) -> Result<bool, JsValue> {
     let authenticated_txn =
         serde_json::from_str::<AuthenticatedTransaction>(&authenticated_txn)
-            .map_err(|_e| JsValue::from_str("Could not deserialize transaction"))?;
+            .c(d!())
+            .map_err(|e| {
+                JsValue::from_str(&format!("Could not deserialize transaction: {}", e))
+            })?;
     let state_commitment = serde_json::from_str::<HashOf<_>>(&state_commitment)
-        .map_err(|_e| JsValue::from_str("Could not deserialize state commitment"))?;
+        .c(d!())
+        .map_err(|e| {
+            JsValue::from_str(&format!("Could not deserialize state commitment: {}", e))
+        })?;
     Ok(authenticated_txn.is_valid(state_commitment))
 }
 
@@ -104,13 +112,17 @@ pub fn verify_authenticated_custom_data_result(
     authenticated_res: JsValue,
 ) -> Result<bool, JsValue> {
     let authenticated_res: AuthenticatedKVLookup =
-        authenticated_res.into_serde().map_err(|_| {
-            JsValue::from_str(
-                "couldn't deserialize the authenticated custom data lookup",
-            )
+        authenticated_res.into_serde().c(d!()).map_err(|e| {
+            JsValue::from_str(&format!(
+                "couldn't deserialize the authenticated custom data lookup: {}",
+                e
+            ))
         })?;
     let state_commitment = serde_json::from_str::<HashOf<_>>(&state_commitment)
-        .map_err(|_e| JsValue::from_str("Could not deserialize state commitment"))?;
+        .c(d!())
+        .map_err(|e| {
+            JsValue::from_str(&format!("Could not deserialize state commitment: {}", e))
+        })?;
     Ok(authenticated_res.is_valid(state_commitment))
 }
 
@@ -169,14 +181,16 @@ pub fn create_debt_policy_info(
     fiat_code: String,
     loan_amount: u64,
 ) -> Result<String, JsValue> {
-    let fiat_code =
-        AssetTypeCode::new_from_base64(&fiat_code).map_err(error_to_jsvalue)?;
+    let fiat_code = AssetTypeCode::new_from_base64(&fiat_code)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
 
     serde_json::to_string(&PolicyChoice::LoanToken(
         Fraction::new(ir_numerator, ir_denominator),
         fiat_code,
         loan_amount,
     ))
+    .c(d!())
     .map_err(|e| JsValue::from_str(&format!("Could not serialize PolicyChoice: {}", e)))
 }
 
@@ -196,8 +210,9 @@ pub fn create_debt_memo(
     fiat_code: String,
     loan_amount: u64,
 ) -> Result<String, JsValue> {
-    let fiat_code =
-        AssetTypeCode::new_from_base64(&fiat_code).map_err(error_to_jsvalue)?;
+    let fiat_code = AssetTypeCode::new_from_base64(&fiat_code)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
     let memo = DebtMemo {
         interest_rate: Fraction::new(ir_numerator, ir_denominator),
         fiat_code,
@@ -304,6 +319,7 @@ impl TransactionBuilder {
     ) -> Result<TransactionBuilder, JsValue> {
         self.transaction_builder
             .add_fee_relative_auto(am, &kp)
+            .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
     }
@@ -336,6 +352,7 @@ impl TransactionBuilder {
     pub fn add_fee(mut self, inputs: FeeInputs) -> Result<TransactionBuilder, JsValue> {
         self.transaction_builder
             .add_fee(inputs.into())
+            .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
     }
@@ -398,10 +415,13 @@ impl TransactionBuilder {
         let asset_token = if token_code.is_empty() {
             AssetTypeCode::gen_random()
         } else {
-            AssetTypeCode::new_from_base64(&token_code).map_err(error_to_jsvalue)?
+            AssetTypeCode::new_from_base64(&token_code)
+                .c(d!())
+                .map_err(error_to_jsvalue)?
         };
 
         let policy_choice = serde_json::from_str::<PolicyChoice>(&policy_choice)
+            .c(d!())
             .map_err(|e| {
                 JsValue::from_str(&format!("Could not deserialize PolicyChoice: {}", e))
             })?;
@@ -413,6 +433,7 @@ impl TransactionBuilder {
                 &memo,
                 policy_choice,
             )
+            .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
     }
@@ -424,8 +445,9 @@ impl TransactionBuilder {
         token_code: String,
         which_check: String,
     ) -> Result<TransactionBuilder, JsValue> {
-        let token_code =
-            AssetTypeCode::new_from_base64(&token_code).map_err(error_to_jsvalue)?;
+        let token_code = AssetTypeCode::new_from_base64(&token_code)
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
 
         self.get_builder_mut()
             .add_policy_option(token_code, which_check);
@@ -452,8 +474,9 @@ impl TransactionBuilder {
         conf_amount: bool,
         zei_params: &PublicParams,
     ) -> Result<TransactionBuilder, JsValue> {
-        let asset_token =
-            AssetTypeCode::new_from_base64(&code).map_err(error_to_jsvalue)?;
+        let asset_token = AssetTypeCode::new_from_base64(&code)
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
 
         // TODO: (keyao/noah) enable client support for identity
         // tracing?
@@ -468,6 +491,7 @@ impl TransactionBuilder {
                 confidentiality_flags,
                 zei_params.get_ref(),
             )
+            .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
     }
@@ -497,6 +521,7 @@ impl TransactionBuilder {
                 issuer_public_key.clone(),
                 pok.get_ref().clone(),
             )
+            .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
     }
@@ -516,6 +541,7 @@ impl TransactionBuilder {
     ) -> Result<TransactionBuilder, JsValue> {
         self.get_builder_mut()
             .add_operation_kv_update(auth_key_pair, key.get_ref(), seq_num, None)
+            .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
     }
@@ -538,6 +564,7 @@ impl TransactionBuilder {
         let hash = kv_hash.get_hash().clone();
         self.get_builder_mut()
             .add_operation_kv_update(auth_key_pair, key.get_ref(), seq_num, Some(&hash))
+            .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
     }
@@ -557,7 +584,9 @@ impl TransactionBuilder {
         new_memo: String,
     ) -> Result<TransactionBuilder, JsValue> {
         // First, decode the asset code
-        let code = AssetTypeCode::new_from_base64(&code).map_err(error_to_jsvalue)?;
+        let code = AssetTypeCode::new_from_base64(&code)
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
 
         self.get_builder_mut()
             .add_operation_update_memo(auth_key_pair, code, &new_memo);
@@ -572,7 +601,9 @@ impl TransactionBuilder {
         mut self,
         op: String,
     ) -> Result<TransactionBuilder, JsValue> {
-        let op = serde_json::from_str::<Operation>(&op).map_err(error_to_jsvalue)?;
+        let op = serde_json::from_str::<Operation>(&op)
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
         self.get_builder_mut().add_operation(op);
         Ok(self)
     }
@@ -635,7 +666,10 @@ impl TransferOperationBuilder {
             &owner_memo.map(|memo| memo.get_memo_ref().clone()),
             &key,
         )
-        .map_err(|_e| JsValue::from_str("Could not open asset record"))?;
+        .c(d!())
+        .map_err(|e| {
+            JsValue::from_str(&format!("Could not open asset record: {}", e))
+        })?;
         self.get_builder_mut()
             .add_input(
                 *txo_ref.get_txo(),
@@ -644,6 +678,7 @@ impl TransferOperationBuilder {
                 None,
                 amount,
             )
+            .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
     }
@@ -657,7 +692,9 @@ impl TransferOperationBuilder {
         conf_amount: bool,
         conf_type: bool,
     ) -> Result<TransferOperationBuilder, JsValue> {
-        let code = AssetTypeCode::new_from_base64(&code).map_err(error_to_jsvalue)?;
+        let code = AssetTypeCode::new_from_base64(&code)
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
 
         let asset_record_type = AssetRecordType::from_flags(conf_amount, conf_type);
         // TODO (noah/keyao) support identity tracing (issue #298)
@@ -684,6 +721,7 @@ impl TransferOperationBuilder {
                 None,
                 None,
             )
+            .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
     }
@@ -812,7 +850,8 @@ impl TransferOperationBuilder {
     pub fn balance(mut self) -> Result<TransferOperationBuilder, JsValue> {
         self.get_builder_mut()
             .balance()
-            .map_err(|_e| JsValue::from_str("Error balancing txn"))?;
+            .c(d!())
+            .map_err(|e| JsValue::from_str(&format!("Error balancing txn: {}", e)))?;
         Ok(self)
     }
 
@@ -823,6 +862,7 @@ impl TransferOperationBuilder {
     pub fn create(mut self) -> Result<TransferOperationBuilder, JsValue> {
         self.get_builder_mut()
             .create(TransferType::Standard)
+            .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
     }
@@ -833,7 +873,10 @@ impl TransferOperationBuilder {
     ///
     /// @param {XfrKeyPair} kp - key pair of one of the input owners.
     pub fn sign(mut self, kp: &XfrKeyPair) -> Result<TransferOperationBuilder, JsValue> {
-        self.get_builder_mut().sign(&kp).map_err(error_to_jsvalue)?;
+        self.get_builder_mut()
+            .sign(&kp)
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
         Ok(self)
     }
 
@@ -847,6 +890,7 @@ impl TransferOperationBuilder {
     ) -> Result<TransferOperationBuilder, JsValue> {
         self.get_builder_mut()
             .sign_cosignature(kp, input_idx)
+            .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
     }
@@ -857,7 +901,11 @@ impl TransferOperationBuilder {
 
     /// Wraps around TransferOperationBuilder to extract an operation expression as JSON.
     pub fn transaction(&self) -> Result<String, JsValue> {
-        let op = self.get_builder().transaction().map_err(error_to_jsvalue)?;
+        let op = self
+            .get_builder()
+            .transaction()
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
         Ok(serde_json::to_string(&op).unwrap())
     }
 }
@@ -877,15 +925,14 @@ pub fn open_client_asset_record(
     owner_memo: Option<OwnerMemo>,
     keypair: &XfrKeyPair,
 ) -> Result<JsValue, JsValue> {
-    Ok(JsValue::from_serde(
-        &open_bar(
-            record.get_bar_ref(),
-            &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-            &keypair,
-        )
-        .map_err(|_e| JsValue::from_str("Could not open asset record"))?,
+    open_bar(
+        record.get_bar_ref(),
+        &owner_memo.map(|memo| memo.get_memo_ref().clone()),
+        &keypair,
     )
-    .unwrap())
+    .c(d!())
+    .map_err(|e| JsValue::from_str(&format!("Could not open asset record: {}", e)))
+    .and_then(|oa| JsValue::from_serde(&oa).c(d!()).map_err(error_to_jsvalue))
 }
 
 #[wasm_bindgen]
@@ -925,7 +972,9 @@ pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
 #[wasm_bindgen]
 /// Converts a base64 encoded public key string to a public key.
 pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey, JsValue> {
-    wallet::public_key_from_base64(pk).map_err(error_to_jsvalue)
+    wallet::public_key_from_base64(pk)
+        .c(d!())
+        .map_err(error_to_jsvalue)
 }
 
 #[wasm_bindgen]
@@ -983,6 +1032,7 @@ pub fn wasm_credential_verify_commitment(
         pok.get_ref(),
         xfr_pk.as_bytes(),
     )
+    .c(d!())
     .map_err(error_to_jsvalue)
 }
 
@@ -1001,7 +1051,7 @@ pub fn wasm_credential_open_commitment(
     reveal_fields: JsValue,
 ) -> Result<CredentialPoK, JsValue> {
     let mut prng = ChaChaRng::from_entropy();
-    let reveal_fields: Vec<String> = reveal_fields.into_serde().map_err(|_e| JsValue::from("Could not deserialize reveal fields. Please ensure that reveal fields are of the form [String]"))?;
+    let reveal_fields: Vec<String> = reveal_fields.into_serde().c(d!()).map_err(|e| JsValue::from(&format!("Could not deserialize reveal fields. Please ensure that reveal fields are of the form [String]: {}", e)))?;
     let pok = credential_open_commitment(
         &mut prng,
         user_secret_key,
@@ -1009,6 +1059,7 @@ pub fn wasm_credential_open_commitment(
         key.get_ref(),
         &reveal_fields,
     )
+    .c(d!())
     .map_err(error_to_jsvalue)?;
     Ok(CredentialPoK { pok })
 }
@@ -1038,13 +1089,14 @@ pub fn wasm_credential_sign(
     attributes: JsValue,
 ) -> Result<CredentialSignature, JsValue> {
     let mut prng = ChaChaRng::from_entropy();
-    let attributes: Vec<AttributeAssignment> = attributes.into_serde().map_err(|_e| JsValue::from("Could not deserialize attributes. Please ensure that attribute definition is of the form [{name: string, val: string}]"))?;
+    let attributes: Vec<AttributeAssignment> = attributes.into_serde().c(d!()).map_err(|e| JsValue::from(&format!("Could not deserialize attributes. Please ensure that attribute definition is of the form [{{name: string, val: string}}]: {}", e)))?;
     let attributes: Vec<(String, &[u8])> = attributes
         .iter()
         .map(|attr| (attr.name.clone(), attr.val.as_bytes()))
         .collect();
     let sig =
         credential_sign(&mut prng, &issuer_secret_key, &user_public_key, &attributes)
+            .c(d!())
             .map_err(error_to_jsvalue)?;
     Ok(CredentialSignature { sig })
 }
@@ -1092,6 +1144,7 @@ pub fn wasm_credential_commit(
         credential.get_cred_ref(),
         &user_public_key.as_bytes(),
     )
+    .c(d!())
     .map_err(error_to_jsvalue)?;
     Ok(CredentialCommitmentData {
         commitment: CredentialCommitment { commitment },
@@ -1120,6 +1173,7 @@ pub fn wasm_credential_reveal(
             credential.get_cred_ref(),
             &reveal_fields[..],
         )
+        .c(d!())
         .map_err(error_to_jsvalue)?,
     })
 }
@@ -1149,6 +1203,7 @@ pub fn wasm_credential_verify(
         commitment.get_ref(),
         pok.get_ref(),
     )
+    .c(d!())
     .map_err(error_to_jsvalue)?;
     Ok(())
 }
@@ -1166,8 +1221,8 @@ pub fn trace_assets(
     _candidate_assets: JsValue,
 ) -> Result<JsValue, JsValue> {
     // let candidate_assets: Vec<String> =
-    //     candidate_assets.into_serde().map_err(error_to_jsvalue)?;
-    let xfr_body: XfrBody = xfr_body.into_serde().map_err(error_to_jsvalue)?;
+    //     candidate_assets.into_serde().c(d!()).map_err(error_to_jsvalue)?;
+    let xfr_body: XfrBody = xfr_body.into_serde().c(d!()).map_err(error_to_jsvalue)?;
     // let candidate_assets: Vec<ZeiAssetType> = candidate_assets
     //     .iter()
     //     .map(|asset_type_str| {
@@ -1175,6 +1230,7 @@ pub fn trace_assets(
     //     })
     //     .collect();
     let record_data = zei_trace_assets(&xfr_body, tracer_keypair.get_keys())
+        .c(d!())
         .map_err(error_to_jsvalue)?;
     let record_data: Vec<(u64, String)> = record_data
         .iter()
@@ -1183,7 +1239,10 @@ pub fn trace_assets(
             (*amt, asset_type_code.to_base64())
         })
         .collect();
-    Ok(JsValue::from_serde(&record_data).unwrap())
+
+    JsValue::from_serde(&record_data)
+        .c(d!())
+        .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 #[test]
@@ -1214,7 +1273,9 @@ pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
 #[wasm_bindgen]
 /// Converts a bech32 encoded public key string to a public key.
 pub fn public_key_from_bech32(addr: &str) -> Result<XfrPublicKey, JsValue> {
-    wallet::public_key_from_bech32(addr).map_err(error_to_jsvalue)
+    wallet::public_key_from_bech32(addr)
+        .c(d!())
+        .map_err(error_to_jsvalue)
 }
 
 #[wasm_bindgen]
@@ -1320,7 +1381,9 @@ pub fn generate_mnemonic_default() -> String {
 /// - @param `lang`: acceptable value are one of [ "en", "zh", "zh_traditional", "fr", "it", "ko", "sp", "jp" ]
 #[wasm_bindgen]
 pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> Result<String, JsValue> {
-    wallet::generate_mnemonic_custom(wordslen, lang).map_err(|e| JsValue::from_str(&e))
+    wallet::generate_mnemonic_custom(wordslen, lang)
+        .c(d!())
+        .map_err(error_to_jsvalue)
 }
 
 /// Use this struct to express a Bip44/Bip49 path.
@@ -1357,7 +1420,8 @@ pub fn restore_keypair_from_mnemonic_default(
     phrase: &str,
 ) -> Result<XfrKeyPair, JsValue> {
     wallet::restore_keypair_from_mnemonic_default(phrase)
-        .map_err(|e| JsValue::from_str(&e))
+        .c(d!())
+        .map_err(error_to_jsvalue)
 }
 
 /// Restore the XfrKeyPair from a mnemonic with custom params,
@@ -1369,7 +1433,8 @@ pub fn restore_keypair_from_mnemonic_bip44(
     path: &BipPath,
 ) -> Result<XfrKeyPair, JsValue> {
     wallet::restore_keypair_from_mnemonic_bip44(phrase, lang, &path.into())
-        .map_err(|e| JsValue::from_str(&e))
+        .c(d!())
+        .map_err(error_to_jsvalue)
 }
 
 /// Restore the XfrKeyPair from a mnemonic with custom params,
@@ -1381,7 +1446,8 @@ pub fn restore_keypair_from_mnemonic_bip49(
     path: &BipPath,
 ) -> Result<XfrKeyPair, JsValue> {
     wallet::restore_keypair_from_mnemonic_bip49(phrase, lang, &path.into())
-        .map_err(|e| JsValue::from_str(&e))
+        .c(d!())
+        .map_err(error_to_jsvalue)
 }
 
 /// ID of FRA, in `String` format.

@@ -1,6 +1,6 @@
 use log::debug;
 use network::{HttpStandaloneConfig, LedgerStandalone};
-use ruc::{err::*, *};
+use ruc::*;
 use txn_cli::txn_app::{get_cli_app, process_inputs};
 use txn_cli::txn_lib::init_logging;
 

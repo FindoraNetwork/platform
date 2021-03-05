@@ -8,7 +8,7 @@ edition = "2018"
 path = "src/query_server.rs"
 
 [dependencies]
-ruc = "0.5.5"
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 ledger = { path = "../../ledger" }
 ledger_standalone = {path = "../ledger_standalone"}
 log = "0.4.8"
@@ -22,4 +22,4 @@ serde_json = "1.0"
 sparse_merkle_tree = { path = "../../libs/ads/sparse_merkle_tree" }
 txn_builder = {path = "../txn_builder"}
 utils = { path = "../../libs/utils" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }

@@ -41,7 +41,7 @@ use libp2p::{
     Multiaddr, NetworkBehaviour, PeerId, Swarm,
 };
 use log::{error, info, warn};
-use ruc::{err::*, *};
+use ruc::*;
 use serde_derive::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},

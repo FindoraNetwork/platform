@@ -11,7 +11,7 @@
 use chrono::Utc;
 use cryptohash::{hash_pair, hash_partial, sha256, HashValue, Proof, HASH_SIZE};
 use log::{debug, info};
-use ruc::{err::*, *};
+use ruc::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
@@ -794,15 +794,18 @@ impl AppendOnlyMerkle {
         for block_id in 0..block_count {
             let block;
 
-            match self.read_block(0, block_id, block_id == block_count - 1) {
+            match self
+                .read_block(0, block_id, block_id == block_count - 1)
+                .c(d!())
+            {
                 Ok(b) => {
                     block = b;
                 }
-                Err(x) => {
+                Err(e) => {
                     info!(
                         "Error reading block {}:  {}",
                         block_id.commas(),
-                        ruc::genlog(&*x)
+                        e.generate_log()
                     );
                     info!(
                         "I will discard the following {} blocks.",

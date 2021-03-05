@@ -2,7 +2,7 @@
 use ledger::data_model::AssetTypeCode;
 #[cfg(test)]
 use network::MockLedgerStandalone;
-use ruc::{err::*, *};
+use ruc::*;
 use tempfile::tempdir;
 use txn_cli::txn_app::{get_cli_app, process_inputs};
 

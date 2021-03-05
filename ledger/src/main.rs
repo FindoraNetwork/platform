@@ -8,7 +8,7 @@ use cryptohash::HashValue;
 use merkle_tree::append_only_merkle::AppendOnlyMerkle;
 use rand::prelude::thread_rng;
 use rand::Rng;
-use ruc::{err::*, *};
+use ruc::*;
 use std::env;
 use utils::Commas;
 

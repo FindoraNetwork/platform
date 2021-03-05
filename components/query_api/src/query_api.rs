@@ -13,7 +13,7 @@ use ledger_api_service::RestfulArchiveAccess;
 use log::info;
 use metrics::{Key as MetricsKey, KeyData};
 use query_server::QueryServer;
-use ruc::{err::*, *};
+use ruc::*;
 use sparse_merkle_tree::Key;
 use std::collections::HashSet;
 use std::marker::{Send, Sync};
@@ -69,7 +69,7 @@ where
     let query_server = data.read().unwrap();
     let key = Key::from_base64(&*info)
         .c(d!())
-        .map_err(|e| actix_web::error::ErrorBadRequest(ruc::genlog(e.as_ref())))?;
+        .map_err(|e| actix_web::error::ErrorBadRequest(e.generate_log()))?;
     Ok(web::Json(query_server.get_custom_data(&key).cloned()))
 }
 
@@ -102,12 +102,12 @@ where
     let (key, custom_data, blind) = body.into_inner();
     let key = Key::from_base64(&key)
         .c(d!())
-        .map_err(|e| actix_web::error::ErrorBadRequest(ruc::genlog(e.as_ref())))?;
+        .map_err(|e| actix_web::error::ErrorBadRequest(e.generate_log()))?;
     let mut query_server = data.write().unwrap();
     query_server
         .add_to_data_store(&key, &custom_data, blind.as_ref())
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(ruc::genlog(e.as_ref())))
+        .map_err(|e| error::ErrorBadRequest(e.generate_log()))
         .map(|_| ())
 }
 // Returns an array of the utxo sids currently spendable by a given address
@@ -123,10 +123,10 @@ where
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
             .c(d!())
-            .map_err(|e| error::ErrorBadRequest(ruc::genlog(e.as_ref())))?,
+            .map_err(|e| error::ErrorBadRequest(e.generate_log()))?,
     )
     .c(d!())
-    .map_err(|e| error::ErrorBadRequest(ruc::genlog(e.as_ref())))?;
+    .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
     let query_server = data.read().unwrap();
     let sids = query_server.get_owned_utxo_sids(&XfrAddress { key });
     Ok(web::Json(sids.cloned().unwrap_or_default()))
@@ -194,9 +194,9 @@ where
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
             .c(d!())
-            .map_err(|e| error::ErrorBadRequest(ruc::genlog(e.as_ref())))?,
+            .map_err(|e| error::ErrorBadRequest(e.generate_log()))?,
     )
-    .map_err(|e| error::ErrorBadRequest(ruc::genlog(e.as_ref())))?;
+    .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
     let query_server = data.read().unwrap();
     let assets = query_server.get_created_assets(&IssuerPublicKey { key });
     Ok(web::Json(assets.cloned().unwrap_or_default()))
@@ -215,9 +215,9 @@ where
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
             .c(d!())
-            .map_err(|e| error::ErrorBadRequest(ruc::genlog(e.as_ref())))?,
+            .map_err(|e| error::ErrorBadRequest(e.generate_log()))?,
     )
-    .map_err(|e| error::ErrorBadRequest(ruc::genlog(e.as_ref())))?;
+    .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
     let query_server = data.read().unwrap();
     let assets = query_server.get_traced_assets(&IssuerPublicKey { key });
     Ok(web::Json(assets.cloned().unwrap_or_default()))
@@ -237,9 +237,9 @@ where
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
             .c(d!())
-            .map_err(|e| error::ErrorBadRequest(ruc::genlog(e.as_ref())))?,
+            .map_err(|e| error::ErrorBadRequest(e.generate_log()))?,
     )
-    .map_err(|e| error::ErrorBadRequest(ruc::genlog(e.as_ref())))?;
+    .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
     let query_server = data.read().unwrap();
     let records = query_server.get_issued_records(&IssuerPublicKey { key });
     Ok(web::Json(records.unwrap_or_default()))
@@ -267,7 +267,7 @@ where
                 ))
             }
         }
-        Err(e) => Err(actix_web::error::ErrorBadRequest(ruc::genlog(e.as_ref()))),
+        Err(e) => Err(actix_web::error::ErrorBadRequest(e.generate_log())),
     }
 }
 
@@ -284,10 +284,10 @@ where
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
             .c(d!())
-            .map_err(|e| error::ErrorBadRequest(ruc::genlog(e.as_ref())))?,
+            .map_err(|e| error::ErrorBadRequest(e.generate_log()))?,
     )
     .c(d!())
-    .map_err(|e| error::ErrorBadRequest(ruc::genlog(e.as_ref())))?;
+    .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
     let query_server = data.read().unwrap();
     let records = query_server.get_related_transactions(&XfrAddress { key });
     Ok(web::Json(records.cloned().unwrap_or_default()))

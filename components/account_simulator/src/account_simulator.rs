@@ -14,7 +14,7 @@ use ledger_api_service::RestfulLedgerAccess;
 use network::LedgerStandalone;
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
-use ruc::{err::*, *};
+use ruc::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 #[cfg(test)]

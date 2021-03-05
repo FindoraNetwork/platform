@@ -12,7 +12,7 @@ use ledger::data_model::{
 use ledger::inp_fail;
 use ledger_api_service::RestfulLedgerAccess;
 use rand_core::{CryptoRng, RngCore};
-use ruc::{err::*, *};
+use ruc::*;
 use submission_api::RestfulLedgerUpdate;
 use submission_server::TxnStatus;
 use txn_builder::{

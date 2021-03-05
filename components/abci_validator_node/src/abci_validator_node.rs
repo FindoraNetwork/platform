@@ -8,7 +8,7 @@ use log::info;
 use protobuf::RepeatedField;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
-use ruc::{err::*, *};
+use ruc::*;
 use serde::Serialize;
 use std::fs;
 use std::net::SocketAddr;
@@ -208,7 +208,7 @@ impl abci::Application for ABCISubmissionServer {
             } else if !la.all_commited() {
                 info!("end_block: ending block");
                 if let Err(e) = la.end_block().c(d!()) {
-                    info!("end_block failure: {:?}", ruc::genlog(&*e));
+                    info!("end_block failure: {:?}", e.generate_log());
                 }
             }
         }

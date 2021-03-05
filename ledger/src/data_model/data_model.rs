@@ -38,7 +38,7 @@ use zei::xfr::structs::{
 };
 
 use super::effects::*;
-use ruc::{err::*, *};
+use ruc::*;
 use std::ops::Deref;
 
 pub const RANDOM_CODE_LENGTH: usize = 16;

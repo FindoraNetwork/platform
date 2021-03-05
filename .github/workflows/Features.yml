@@ -59,8 +59,14 @@ jobs:
     # - name: Push wasm-js-bindings
     #   shell: bash
     #   run: |
-    #     export WASM_VERSION="${GITHUB_SHA::7}"
-    #     export BRANCH_NAME="test"
+    #     if echo "${GITHUB_REF}" | grep "refs/pull" >/dev/null; then
+    #         export PR=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
+    #         export BRANCH="${GITHUB_HEAD_REF}"
+    #         export TOBRANCH="${GITHUB_BASE_REF}"
+    #     else
+    #         export BRANCH=$(echo ${GITHUB_REF} | sed "s#refs/heads/##g")
+    #     fi
+    #     export BRANCH_NAME="test-ci"
     #     export WASM_DIR="/tmp/wasm-js-bindings"
     #     if [ ! -d "${WASM_DIR}" ]; then git clone git@github.com:FindoraNetwork/wasm-js-bindings.git "${WASM_DIR}"; fi
     #     pushd "${WASM_DIR}"
@@ -78,7 +84,7 @@ jobs:
     #     pushd "${WASM_DIR}"
     #     if [ "$(git diff)" != "" ]; then
     #         git add .
-    #         git commit -m "version: ${WASM_VERSION}"
+    #         git commit -m "From platform PR ${PR}(${BRANCH} to ${TOBRANCH}), build date: $(date +"%Y%m%d")"
     #         git push origin "${BRANCH_NAME}"
     #     fi
     #     popd
@@ -86,17 +92,7 @@ jobs:
       shell: bash
       run: |
         make test
-    # - name: Build
-    #   env:
-    #     DBG: true
-    #   shell: bash
-    #   run: |
-    #     make build
-    # - name: build release
-    #   shell: bash
-    #   run: |
-    #     make build_release
-    # - name: release
-    #   shell: bash
-    #   run: |
-    #     echo "TBD"
+    - name: Clean garbage
+      shell: bash
+      run: |
+        rm -rf /tmp/*>/dev/null 2>&1 || true

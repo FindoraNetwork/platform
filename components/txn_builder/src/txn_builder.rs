@@ -15,7 +15,7 @@ use ledger::policies::Fraction;
 use ledger::policy_script::{Policy, PolicyGlobals, TxnCheckInputs, TxnPolicyData};
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
-use ruc::{err::*, *};
+use ruc::*;
 use sparse_merkle_tree::Key;
 use std::cmp::Ordering;
 use std::collections::HashSet;

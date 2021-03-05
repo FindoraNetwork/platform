@@ -1,6 +1,6 @@
 use linear_map::LinearMap;
 use rand_core::{CryptoRng, RngCore};
-use ruc::{err::*, *};
+use ruc::*;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use zei::api::anon_creds::{

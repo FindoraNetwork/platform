@@ -5,7 +5,7 @@ authors = ["Engineering <engineering@findora.org>"]
 edition = "2018"
 
 [dependencies]
-ruc = "0.5.5"
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 async-std = "1.5.0"
 clap = "2.33.0"
 cryptohash = { path = "../../../libs/cryptohash" }
@@ -26,4 +26,4 @@ serde_json = "1.0.40"
 tokio = { version = "0.2", features = ["full", "macros"] }
 tokio-codec = "0.1.2"
 utils = { path = "../../../libs/utils" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
