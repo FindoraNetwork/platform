@@ -419,7 +419,7 @@ pub struct AssetRules {
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
     pub tracing_policies: TracingPolicies,
-    #[serde(with = "serde_str::emp", default)]
+    #[serde(with = "serde_strz::emp", default)]
     pub max_units: Option<u64>,
     pub decimals: u8,
 }
