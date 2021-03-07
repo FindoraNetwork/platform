@@ -54,32 +54,36 @@ jobs:
     - name: Build
       env:
         DBG: true
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
       shell: bash
       run: |
-        if echo "${GITHUB_REF}" | grep "refs/pull" >/dev/null; then
-            export PR=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
-            export BRANCH="${GITHUB_HEAD_REF}"
-            export TOBRANCH="${GITHUB_BASE_REF}"
+        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+        if [ "${COMMIT_HASH}" == "null" ]; then
+          export COMMIT_HASH="${GITHUB_SHA::7}"
         else
-            export BRANCH=$(echo ${GITHUB_REF} | sed "s#refs/heads/##g")
+          export COMMIT_HASH=${COMMIT_HASH::7}
         fi
-        export VERGEN_SHA_SHORT_EXTERN="${TOBRANCH}-${PR}"
+        export BRANCH="${GITHUB_HEAD_REF}"
+        export TOBRANCH="${GITHUB_BASE_REF}"
+        export VERGEN_SHA_SHORT_EXTERN="${TOBRANCH}-${COMMIT_HASH}"
         echo "VERGEN_SHA_SHORT_EXTERN: ${VERGEN_SHA_SHORT_EXTERN}"
         make build
     - name: Build images
       env:
         ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
         ENV: dev
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
       shell: bash
       run: |
-        if echo "${GITHUB_REF}" | grep "refs/pull" >/dev/null; then
-            export PR=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
-            export BRANCH="${GITHUB_HEAD_REF}"
-            export TOBRANCH="${GITHUB_BASE_REF}"
+        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+        if [ "${COMMIT_HASH}" == "null" ]; then
+          export COMMIT_HASH="${GITHUB_SHA::7}"
         else
-            export BRANCH=$(echo ${GITHUB_REF} | sed "s#refs/heads/##g")
+          export COMMIT_HASH=${COMMIT_HASH::7}
         fi
-        export IMAGE_TAG="${TOBRANCH}-${PR}"
+        export BRANCH="${GITHUB_HEAD_REF}"
+        export TOBRANCH="${GITHUB_BASE_REF}"
+        export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image
     - name: Login ECR
@@ -90,44 +94,52 @@ jobs:
       env:
         ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
         ENV: dev
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
       shell: bash
       run: |
-        if echo "${GITHUB_REF}" | grep "refs/pull" >/dev/null; then
-            export PR=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
-            export BRANCH="${GITHUB_HEAD_REF}"
-            export TOBRANCH="${GITHUB_BASE_REF}"
+        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+        if [ "${COMMIT_HASH}" == "null" ]; then
+          export COMMIT_HASH="${GITHUB_SHA::7}"
         else
-            export BRANCH=$(echo ${GITHUB_REF} | sed "s#refs/heads/##g")
+          export COMMIT_HASH=${COMMIT_HASH::7}
         fi
-        export IMAGE_TAG="${TOBRANCH}-${PR}"
+        export BRANCH="${GITHUB_HEAD_REF}"
+        export TOBRANCH="${GITHUB_BASE_REF}"
+        export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_push_image
     - name: Clean images
       env:
         ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
         ENV: dev
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
       shell: bash
       run: |
-        if echo "${GITHUB_REF}" | grep "refs/pull" >/dev/null; then
-            export PR=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
-            export BRANCH="${GITHUB_HEAD_REF}"
-            export TOBRANCH="${GITHUB_BASE_REF}"
+        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+        if [ "${COMMIT_HASH}" == "null" ]; then
+          export COMMIT_HASH="${GITHUB_SHA::7}"
         else
-            export BRANCH=$(echo ${GITHUB_REF} | sed "s#refs/heads/##g")
+          export COMMIT_HASH=${COMMIT_HASH::7}
         fi
-        export IMAGE_TAG="${TOBRANCH}-${PR}"
+        export BRANCH="${GITHUB_HEAD_REF}"
+        export TOBRANCH="${GITHUB_BASE_REF}"
+        export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
         make clean_image
     - name: Push wasm-js-bindings
+      env:
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
       shell: bash
       run: |
-        if echo "${GITHUB_REF}" | grep "refs/pull" >/dev/null; then
-            export PR=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
-            export BRANCH="${GITHUB_HEAD_REF}"
-            export TOBRANCH="${GITHUB_BASE_REF}"
+        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+        if [ "${COMMIT_HASH}" == "null" ]; then
+          export COMMIT_HASH="${GITHUB_SHA::7}"
         else
-            export BRANCH=$(echo ${GITHUB_REF} | sed "s#refs/heads/##g")
+          export COMMIT_HASH=${COMMIT_HASH::7}
         fi
+        export PR=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
+        export BRANCH="${GITHUB_HEAD_REF}"
+        export TOBRANCH="${GITHUB_BASE_REF}"
         export BRANCH_NAME="test"
         export WASM_DIR="/tmp/wasm-js-bindings"
         if [ ! -d "${WASM_DIR}" ]; then git clone git@github.com:FindoraNetwork/wasm-js-bindings.git "${WASM_DIR}"; fi
@@ -149,9 +161,12 @@ jobs:
         pushd "${WASM_DIR}"
         if [ "$(git diff)" != "" ]; then
             git add .
-            git commit -m "From platform PR ${PR}(${BRANCH} to ${TOBRANCH}), build date: $(date +"%Y%m%d")"
+            git commit -m "From platform PR ${PR}(${BRANCH} to ${TOBRANCH}), commit hash: ${COMMIT_HASH} , build date: $(date +"%Y%m%d")"
             git push origin "${BRANCH_NAME}"
         fi
+        git tag "${TOBRANCH}-${COMMIT_HASH}"
+        git push origin "${TOBRANCH}-${COMMIT_HASH}"
+        git tag -d "${TOBRANCH}-${COMMIT_HASH}"
         popd
     - name: Clean garbage
       shell: bash
