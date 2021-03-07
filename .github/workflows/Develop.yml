@@ -61,7 +61,7 @@ jobs:
         if [ "${COMMIT_HASH}" == "null" ]; then
           export COMMIT_HASH="${GITHUB_SHA::7}"
         else
-          export COMMIT_HASH=${COMMIT_HASH::7}
+          export COMMIT_HASH=${COMMIT_HASH:1:7}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
         export TOBRANCH="${GITHUB_BASE_REF}"
@@ -79,7 +79,7 @@ jobs:
         if [ "${COMMIT_HASH}" == "null" ]; then
           export COMMIT_HASH="${GITHUB_SHA::7}"
         else
-          export COMMIT_HASH=${COMMIT_HASH::7}
+          export COMMIT_HASH=${COMMIT_HASH:1:7}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
         export TOBRANCH="${GITHUB_BASE_REF}"
@@ -101,7 +101,7 @@ jobs:
         if [ "${COMMIT_HASH}" == "null" ]; then
           export COMMIT_HASH="${GITHUB_SHA::7}"
         else
-          export COMMIT_HASH=${COMMIT_HASH::7}
+          export COMMIT_HASH=${COMMIT_HASH:1:7}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
         export TOBRANCH="${GITHUB_BASE_REF}"
@@ -119,7 +119,7 @@ jobs:
         if [ "${COMMIT_HASH}" == "null" ]; then
           export COMMIT_HASH="${GITHUB_SHA::7}"
         else
-          export COMMIT_HASH=${COMMIT_HASH::7}
+          export COMMIT_HASH=${COMMIT_HASH:1:7}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
         export TOBRANCH="${GITHUB_BASE_REF}"
@@ -135,7 +135,7 @@ jobs:
         if [ "${COMMIT_HASH}" == "null" ]; then
           export COMMIT_HASH="${GITHUB_SHA::7}"
         else
-          export COMMIT_HASH=${COMMIT_HASH::7}
+          export COMMIT_HASH=${COMMIT_HASH:1:7}
         fi
         export PR=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
         export BRANCH="${GITHUB_HEAD_REF}"
