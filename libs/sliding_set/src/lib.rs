@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use ruc::*;
 use serde::{Deserialize, Serialize};
 

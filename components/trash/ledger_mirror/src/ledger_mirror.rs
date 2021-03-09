@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use ledger::data_model::{FinalizedTransaction, TxnEffect};
 use ledger::store::*;
 use ledger_api_service::RestfulApiService;
@@ -19,10 +21,10 @@ fn main() {
 
     let base_dir = std::env::var_os("LEDGER_DIR").filter(|x| !x.is_empty());
     let base_dir = base_dir.as_ref().map(Path::new);
-    flexi_logger::Logger::with_env().start().unwrap();
+    flexi_logger::Logger::with_env().start().c(d!())?;
     let ledger_state = match base_dir {
         None => LedgerState::test_ledger(),
-        Some(base_dir) => LedgerState::load_or_init(base_dir).unwrap(),
+        Some(base_dir) => LedgerState::load_or_init(base_dir).c(d!())?,
     };
     let state_lock = Arc::new(RwLock::new(ledger_state));
     let cloned_lock = Arc::clone(&state_lock);
@@ -41,10 +43,10 @@ fn main() {
     thread::spawn(move || {
         let query_service = RestfulApiService::create(
             cloned_lock,
-            host.to_str().unwrap(),
-            query_port.to_str().unwrap(),
+            host.to_str().c(d!())?,
+            query_port.to_str().c(d!())?,
         )
-        .unwrap();
+        .c(d!())?;
         println!("Starting query service");
         match query_service.run() {
             Ok(_) => println!("Successfully ran mirror"),
@@ -56,12 +58,12 @@ fn main() {
         let poll_time = time::Duration::from_millis(1000);
         thread::sleep(poll_time);
         let latest_block = {
-            let ledger = state_lock.read().unwrap();
+            let ledger = state_lock.read().c(d!())?;
             (*ledger).get_block_count()
         };
         let new_blocks = match reqwest::blocking::get(&format!(
             "http://{}/{}/{}",
-            ledger_url.to_str().unwrap(),
+            ledger_url.to_str().c(d!())?,
             "blocks_since",
             &latest_block
         )) {
@@ -79,16 +81,16 @@ fn main() {
             },
         };
 
-        let mut ledger = state_lock.write().unwrap();
+        let mut ledger = state_lock.write().c(d!())?;
         for (bid, block) in new_blocks {
             info!("Received block {}", bid);
-            let mut block_builder = ledger.start_block().unwrap();
+            let mut block_builder = ledger.start_block().c(d!())?;
             for txn in block {
                 let txn = txn.txn;
-                let eff = TxnEffect::compute_effect(txn).unwrap();
-                ledger.apply_transaction(&mut block_builder, eff).unwrap();
+                let eff = TxnEffect::compute_effect(txn).c(d!())?;
+                ledger.apply_transaction(&mut block_builder, eff).c(d!())?;
             }
-            ledger.finish_block(block_builder).unwrap();
+            ledger.finish_block(block_builder).c(d!())?;
         }
     }
 }

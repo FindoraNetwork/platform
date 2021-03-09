@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use cryptohash::sha256::Digest;
 use cryptohash::{sha256, Proof};
 use percent_encoding::{percent_decode, utf8_percent_encode, AsciiSet, CONTROLS};
@@ -87,7 +89,7 @@ pub fn fresh_tmp_dir() -> PathBuf {
     let mut i = 0;
     let mut dirname = None;
     while dirname.is_none() {
-        assert!(i < 4); // TODO(joe): fail more gracefully
+        debug_assert!(i < 4); // TODO(joe): fail more gracefully
         let name = std::format!("{}_{}", base_dirname, rand::random::<u64>());
         let path = base_dir.join(name);
         let _ = fs::remove_dir_all(&path);

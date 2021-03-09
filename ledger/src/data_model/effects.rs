@@ -126,7 +126,7 @@ impl TxnEffect {
         // exist unspent in the ledger and correspond to the correct
         // TxOutput).
         for op in txn.body.operations.iter() {
-            assert!(txo_count == txos.len());
+            debug_assert!(txo_count == txos.len());
 
             match op {
                 Operation::KVStoreUpdate(update) => {
@@ -222,7 +222,7 @@ impl TxnEffect {
                         return Err(eg!(inp_fail!()));
                     }
 
-                    assert!(iss.body.num_outputs == iss.body.records.len());
+                    debug_assert!(iss.body.num_outputs == iss.body.records.len());
 
                     let code = iss.body.code;
                     let seq_num = iss.body.seq_num;
@@ -313,8 +313,12 @@ impl TxnEffect {
                     if trn.body.outputs.len() != trn.body.transfer.outputs.len() {
                         return Err(eg!(inp_fail!()));
                     }
-                    assert!(trn.body.inputs.len() == trn.body.transfer.inputs.len());
-                    assert!(trn.body.outputs.len() == trn.body.transfer.outputs.len());
+                    debug_assert!(
+                        trn.body.inputs.len() == trn.body.transfer.inputs.len()
+                    );
+                    debug_assert!(
+                        trn.body.outputs.len() == trn.body.transfer.outputs.len()
+                    );
 
                     // Transfer outputs must match outputs zei transaction
                     for (output, record) in trn
@@ -452,7 +456,7 @@ impl TxnEffect {
 
                                     // Tracing policies must be consistent w.r.t asset type (cant change)
                                     if prev_policies.is_some()
-                                        && prev_policies.unwrap() != *input_policies
+                                        && prev_policies.c(d!())? != *input_policies
                                     {
                                         return Err(eg!(inp_fail!()));
                                     }
@@ -638,7 +642,7 @@ impl TxnEffect {
                     //   }
                     // }
 
-                    assert!(
+                    debug_assert!(
                         1 + bind_assets.body.inputs.len()
                             == bind_assets.body.transfer.inputs.len()
                     );
@@ -680,7 +684,9 @@ impl TxnEffect {
                         inps
                     };
 
-                    assert!(lien_inputs.len() == bind_assets.body.transfer.inputs.len());
+                    debug_assert!(
+                        lien_inputs.len() == bind_assets.body.transfer.inputs.len()
+                    );
 
                     let mut input_keys = HashSet::new();
                     // (1a) all body signatures are valid
@@ -839,7 +845,7 @@ impl TxnEffect {
                             Some(HashOf::new(&bound_inputs)),
                         );
                         asset_types_involved.insert(AssetTypeCode {
-                            val: out.asset_type.get_asset_type().unwrap(),
+                            val: out.asset_type.get_asset_type().c(d!())?,
                         });
                         txos.push(Some(TxOutput {
                             record: out.clone(),
@@ -879,8 +885,8 @@ impl TxnEffect {
                     {
                         return Err(eg!(inp_fail!()));
                     }
-                    assert!(!release_assets.body.transfer.inputs.is_empty());
-                    assert!(
+                    debug_assert!(!release_assets.body.transfer.inputs.is_empty());
+                    debug_assert!(
                         release_assets.body.num_outputs
                             == release_assets.body.transfer.outputs.len()
                     );
@@ -922,7 +928,7 @@ impl TxnEffect {
                         (inps, outs)
                     };
 
-                    assert!(
+                    debug_assert!(
                         lien_inputs.len() == release_assets.body.transfer.inputs.len()
                     );
 

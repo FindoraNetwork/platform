@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use ledger::data_model::{
     AssetRules, AssetTypeCode, Operation, StateCommitmentData, Transaction,
 };
@@ -17,7 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get(&format!("{}://{}:{}/global_state", protocol, host, port))
         .send()?;
     let (_, seq_id, _): GlobalState<StateCommitmentData> =
-        serde_json::from_str(&resp_gs.text()?[..]).unwrap();
+        serde_json::from_str(&resp_gs.text()?[..]).c(d!())?;
 
     let mut prng = ChaChaRng::from_entropy();
     let mut tx = Transaction::from_seq_id(seq_id);

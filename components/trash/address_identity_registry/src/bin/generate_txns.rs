@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use clap::{App, Arg, ArgMatches};
 use credentials::{
     credential_commit, credential_issuer_key_gen, credential_sign,
@@ -58,7 +60,7 @@ impl AIR {
                 .collect(),
             issuer_pub_key: self.issuer_pk.clone(),
         };
-        // let xfr_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(KEY_PAIR_STR).unwrap());
+        // let xfr_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(KEY_PAIR_STR).c(d!())?);
         let xfr_key_pair = XfrKeyPair::generate(&mut self.prng);
         let (commitment, proof, key) = credential_commit(
             &mut self.prng,

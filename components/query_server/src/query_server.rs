@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::store::*;
@@ -10,6 +12,8 @@ use std::ops::Deref;
 use std::sync::Arc;
 use utils::MetricsRenderer;
 use zei::xfr::structs::OwnerMemo;
+
+type Issuances = Vec<Arc<(TxOutput, Option<OwnerMemo>)>>;
 
 macro_rules! fail {
     () => {
@@ -31,9 +35,8 @@ where
     related_transfers: HashMap<AssetTypeCode, HashSet<TxnSID>>, // Set of transfer transactions related to an asset code
     created_assets: HashMap<IssuerPublicKey, Vec<DefineAsset>>,
     traced_assets: HashMap<IssuerPublicKey, Vec<AssetTypeCode>>, // List of assets traced by a ledger address
-    issuances: HashMap<IssuerPublicKey, Vec<Arc<(TxOutput, Option<OwnerMemo>)>>>, // issuance mapped by public key
-    token_code_issuances:
-        HashMap<AssetTypeCode, Vec<Arc<(TxOutput, Option<OwnerMemo>)>>>, // issuance mapped by token code
+    issuances: HashMap<IssuerPublicKey, Issuances>, // issuance mapped by public key
+    token_code_issuances: HashMap<AssetTypeCode, Issuances>, // issuance mapped by token code
     owner_memos: HashMap<TxoSID, OwnerMemo>,
     utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
     custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
@@ -279,7 +282,7 @@ where
         // Next, update ownership status
         for (_, (txn_sid, txo_sids)) in finalized_block.iter() {
             let ledger = &mut self.committed_state;
-            let curr_txn = ledger.get_transaction(*txn_sid).unwrap().finalized_txn.txn;
+            let curr_txn = ledger.get_transaction(*txn_sid).c(d!())?.finalized_txn.txn;
             // get the transaction, ownership addresses, and memos associated with each transaction
             let (addresses, owner_memos) = {
                 let addresses: Vec<XfrAddress> = txo_sids
@@ -550,7 +553,7 @@ mod tests {
                 &alice,
                 Some(token_code),
                 AssetRules::default(),
-                "test".into(),
+                "test",
                 PolicyChoice::Fungible(),
             )
             .unwrap()
@@ -654,7 +657,7 @@ mod tests {
                 &alice,
                 Some(token_code),
                 AssetRules::default(),
-                "fiat".into(),
+                "fiat",
                 PolicyChoice::Fungible(),
             )
             .unwrap()
@@ -734,7 +737,7 @@ mod tests {
         // Query server will now fetch new blocks
         query_server.add_new_block(&block0.block.txns).unwrap();
         query_server.add_new_block(&block1.block.txns).unwrap();
-        //query_server.poll_new_blocks().unwrap();
+        //query_server.poll_new_blocks().c(d!())?;
 
         // Ensure that query server is aware of issuances
         let alice_sids = query_server
@@ -762,7 +765,7 @@ mod tests {
             .unwrap();
         let issuer_records = query_server
             .get_issued_records(&IssuerPublicKey {
-                key: alice.get_pk().clone(),
+                key: alice.get_pk(),
             })
             .unwrap();
         let token_records = query_server
@@ -868,10 +871,7 @@ mod tests {
 
         // Submit
         let seq_id = ledger_state.get_block_commit_count();
-        let tx = Transaction::from_operation(
-            Operation::KVStoreUpdate(update.clone()),
-            seq_id,
-        );
+        let tx = Transaction::from_operation(Operation::KVStoreUpdate(update), seq_id);
         apply_transaction(&mut ledger_state, tx);
 
         // Check related txns
@@ -906,7 +906,7 @@ mod tests {
                 &alice,
                 Some(token_code),
                 AssetRules::default(),
-                "fiat".into(),
+                "fiat",
                 PolicyChoice::Fungible(),
             )
             .unwrap()
@@ -1042,7 +1042,7 @@ mod tests {
         // Set the tracing policy
         let tracer_kp = AssetTracerKeyPair::generate(&mut ledger_state.get_prng());
         let tracing_policy = TracingPolicy {
-            enc_keys: tracer_kp.enc_key.clone(),
+            enc_keys: tracer_kp.enc_key,
             asset_tracing: true,
             identity_tracing: None,
         };

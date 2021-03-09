@@ -97,11 +97,9 @@ impl CredentialIndex {
     /// Gets the attribute name and length.
     pub(crate) fn get_name_and_length(self) -> (String, usize) {
         match self {
-            CredentialIndex::MinCreditScore => {
-                ("min_credit_score".to_string(), 3 as usize)
-            }
-            CredentialIndex::MinIncome => ("min_income".to_string(), 4 as usize),
-            _ => ("citizenship".to_string(), 3 as usize),
+            CredentialIndex::MinCreditScore => ("min_credit_score".to_string(), 3_usize),
+            CredentialIndex::MinIncome => ("min_income".to_string(), 4_usize),
+            _ => ("citizenship".to_string(), 3_usize),
         }
     }
 
@@ -689,7 +687,7 @@ pub fn load_sids_from_file(file_path: &str) -> Result<Vec<u64>> {
 
     let mut sids = Vec::new();
     for sid_str in split_arg(&sids_str) {
-        if sid_str == "" {
+        if sid_str.is_empty() {
             break;
         }
         sids.push(parse_to_u64(sid_str).c(d!())?);

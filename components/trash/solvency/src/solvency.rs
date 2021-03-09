@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use algebra::groups::Scalar as ZeiScalar;
 use bulletproofs::r1cs::R1CSProof;
 use crypto::bp_circuits::cloak::{CloakCommitment, CloakValue};
@@ -55,7 +57,7 @@ pub fn get_amount_and_code_scalars(
 ) -> AmountAndCodeScalar {
     CloakValue::new(
         RistrettoScalar::from_u64(amount),
-        RistrettoScalar::from_bytes(&code.val.0).unwrap(),
+        RistrettoScalar::from_bytes(&code.val.0).c(d!())?,
     )
 }
 
@@ -135,7 +137,7 @@ impl AssetAndLiabilityAccount {
         // Remove existing proof
         self.proof = None;
 
-        let code_scalar = RistrettoScalar::from_bytes(&code.val.0).unwrap();
+        let code_scalar = RistrettoScalar::from_bytes(&code.val.0).c(d!())?;
         match query_utxo_and_get_amount(utxo, rest_client).c(d!())? {
             XfrAmount::NonConfidential(fetched_amount) => {
                 if fetched_amount != amount {
@@ -214,7 +216,7 @@ impl SolvencyAudit {
     /// Sets conversion rate for the asset.
     pub fn set_rate(&mut self, code: AssetTypeCode, rate: u64) {
         self.conversion_rates.push((
-            RistrettoScalar::from_bytes(&code.val.0).unwrap().0,
+            RistrettoScalar::from_bytes(&code.val.0).c(d!())?.0,
             Scalar::from(rate),
         ));
     }
@@ -334,7 +336,7 @@ mod tests {
                 AssetRules::default(),
                 ledger_standalone,
             )
-            .unwrap();
+            .c(d!())?;
         }
         (key_pair, codes)
     }
@@ -475,7 +477,7 @@ mod tests {
                 ledger_standalone,
             )
             .c(d!())?
-            .unwrap();
+            .c(d!())?;
         let (asset_1, blinds_1) = account
             .update(
                 AmountType::Asset,
@@ -486,7 +488,7 @@ mod tests {
                 ledger_standalone,
             )
             .c(d!())?
-            .unwrap();
+            .c(d!())?;
         let (asset_2, blinds_2) = account
             .update(
                 AmountType::Asset,
@@ -497,7 +499,7 @@ mod tests {
                 ledger_standalone,
             )
             .c(d!())?
-            .unwrap();
+            .c(d!())?;
 
         Ok((
             vec![asset_0, asset_1, asset_2],
@@ -641,7 +643,7 @@ mod tests {
                 ledger_standalone,
             )
             .c(d!())?
-            .unwrap();
+            .c(d!())?;
         let (asset_1, blinds_1) = account
             .update(
                 AmountType::Liability,
@@ -652,7 +654,7 @@ mod tests {
                 ledger_standalone,
             )
             .c(d!())?
-            .unwrap();
+            .c(d!())?;
         let (asset_2, blinds_2) = account
             .update(
                 AmountType::Liability,
@@ -663,7 +665,7 @@ mod tests {
                 ledger_standalone,
             )
             .c(d!())?
-            .unwrap();
+            .c(d!())?;
 
         Ok((
             vec![asset_0, asset_1, asset_2],
@@ -727,7 +729,7 @@ mod tests {
                 ledger_standalone,
             )
             .c(d!())?
-            .unwrap();
+            .c(d!())?;
         let (asset_1, blinds_1) = account
             .update(
                 AmountType::Liability,
@@ -738,7 +740,7 @@ mod tests {
                 ledger_standalone,
             )
             .c(d!())?
-            .unwrap();
+            .c(d!())?;
         let (asset_2, blinds_2) = account
             .update(
                 AmountType::Liability,
@@ -749,7 +751,7 @@ mod tests {
                 ledger_standalone,
             )
             .c(d!())?
-            .unwrap();
+            .c(d!())?;
 
         Ok((
             vec![asset_0, asset_1, asset_2],
@@ -962,7 +964,7 @@ mod tests {
             utxo,
             &mut ledger_standalone,
         ))
-        .unwrap();
+        .c(d!())?;
 
         // Prove the solvency
         pnk!(audit.prove_solvency_and_store(
@@ -1148,8 +1150,8 @@ mod tests {
                 &mut hidden_liabilities,
                 &mut hidden_liabilities_blinds,
             )
-            .unwrap();
-        audit.verify_solvency(&account).unwrap();
+            .c(d!())?;
+        audit.verify_solvency(&account).c(d!())?;
     }
 
     #[test]
@@ -1238,7 +1240,7 @@ mod tests {
             utxo,
             &mut ledger_standalone,
         ))
-        .unwrap();
+        .c(d!())?;
 
         // Prove the solvency again
         hidden_liabilities.push(asset);
