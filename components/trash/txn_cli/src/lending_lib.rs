@@ -153,11 +153,11 @@ where
 
     // Submit transaction and get the new record
     let sid_new = submit_and_get_sids(rest_client, txn_builder).c(d!())?[0];
-    let blind_asset_record_new = (rest_client.get_utxo(sid_new).unwrap().utxo.0).record;
+    let blind_asset_record_new = (rest_client.get_utxo(sid_new).c(d!())?.utxo.0).record;
     // Merge records
     let sid_merged = if let Some(sid_pre) = recipient.fiat_utxo {
         let blind_asset_record_pre =
-            (rest_client.get_utxo(sid_pre).unwrap().utxo.0).record;
+            (rest_client.get_utxo(sid_pre).c(d!())?.utxo.0).record;
         let txn_builder = merge_records(
             recipient_key_pair,
             rest_client.get_block_commit_count().c(d!())?,
@@ -338,7 +338,7 @@ where
         &user_pk,
         &attributes,
     )
-    .unwrap();
+    .c(d!())?;
     let wrapper_credential = WrapperCredential {
         attributes: attibutes_with_value_as_vec,
         issuer_pub_key: credential_issuer_public_key,
@@ -349,7 +349,7 @@ where
         .c(d!(PlatformError::ZeiError(None)))?;
     let (_, _, commitment_key) =
         credential_commit(&mut prng, &user_secret_key, &wrapper_credential, b"")
-            .unwrap();
+            .c(d!())?;
 
     // Store the tracer memo to file
     if let Some(file) = memo_file {
@@ -769,8 +769,6 @@ where
 mod tests {
     use super::*;
     use ledger::data_model::TxoSID;
-    use network::MockLedgerStandalone;
-    use tempfile::tempdir;
     #[test]
     fn test_merge_records() {
         // Create key pair
@@ -820,41 +818,41 @@ mod tests {
     //     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 
     //     // Load funds
-    //     let tmp_dir = tempdir().unwrap();
-    //     let data_dir = tmp_dir.path().to_str().unwrap();
+    //     let tmp_dir = tempdir().c(d!())?;
+    //     let data_dir = tmp_dir.path().to_str().c(d!())?;
 
     //     let funds_amount = 1000;
-    //     load_funds(data_dir, 0, 0, funds_amount, &mut ledger_standalone).unwrap();
-    //     let data = load_data(data_dir).unwrap();
+    //     load_funds(data_dir, 0, 0, funds_amount, &mut ledger_standalone).c(d!())?;
+    //     let data = load_data(data_dir).c(d!())?;
 
     //     assert_eq!(data.borrowers[0].balance, funds_amount);
 
-    //     tmp_dir.close().unwrap();
+    //     tmp_dir.close().c(d!())?;
 
     //     // Request a loan
-    //     let tmp_dir = tempdir().unwrap();
-    //     let data_dir = tmp_dir.path().to_str().unwrap();
+    //     let tmp_dir = tempdir().c(d!())?;
+    //     let data_dir = tmp_dir.path().to_str().c(d!())?;
 
     //     let loan_amount = 1200;
-    //     let mut data = load_data(data_dir).unwrap();
-    //     data.add_loan(data_dir, 0, 0, loan_amount, 100, 8).unwrap();
+    //     let mut data = load_data(data_dir).c(d!())?;
+    //     data.add_loan(data_dir, 0, 0, loan_amount, 100, 8).c(d!())?;
 
     //     assert_eq!(data.loans.len(), 1);
 
     //     // Fulfill the loan request
-    //     fulfill_loan(data_dir, 0, 0, None, &mut ledger_standalone).unwrap();
-    //     data = load_data(data_dir).unwrap();
+    //     fulfill_loan(data_dir, 0, 0, None, &mut ledger_standalone).c(d!())?;
+    //     data = load_data(data_dir).c(d!())?;
 
     //     assert_eq!(data.loans[0].status, LoanStatus::Active);
     //     assert_eq!(data.loans[0].balance, loan_amount);
 
     //     // Pay loan
     //     let payment_amount = 200;
-    //     pay_loan(data_dir, 0, payment_amount, &mut ledger_standalone).unwrap();
-    //     data = load_data(data_dir).unwrap();
+    //     pay_loan(data_dir, 0, payment_amount, &mut ledger_standalone).c(d!())?;
+    //     data = load_data(data_dir).c(d!())?;
 
     //     assert_eq!(data.loans[0].payments, 1);
 
-    //     tmp_dir.close().unwrap();
+    //     tmp_dir.close().c(d!())?;
     // }
 }

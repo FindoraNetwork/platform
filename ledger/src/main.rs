@@ -2,6 +2,7 @@
 //  Runs a long test on the AppendOnlyMerkle tree implementation.
 //  It just inserts hashes and invokes consistency tests.
 //
+#![deny(warnings)]
 
 extern crate rand;
 use cryptohash::HashValue;

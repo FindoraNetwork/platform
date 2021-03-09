@@ -190,7 +190,7 @@ impl Entry {
     // this block, and so on up the tree.
     //
     pub fn push(&self, hashes: &mut Vec<HashValue>, id: usize, check: &[usize]) {
-        assert!(id < LEAVES_IN_BLOCK);
+        debug_assert!(id < LEAVES_IN_BLOCK);
         let mut index = id;
         let mut base = 0;
         let mut interval = LEAVES_IN_BLOCK;
@@ -215,7 +215,7 @@ impl Entry {
             hashes.push(self.hashes[partner]);
 
             if !check.is_empty() {
-                assert!(partner == check[i] + 1);
+                debug_assert!(partner == check[i] + 1);
             }
 
             index /= 2;
@@ -238,7 +238,7 @@ impl Entry {
     pub fn root(&self) -> HashValue {
         let empty_hash = HashValue::new();
         let last = HASHES_IN_BLOCK - 1;
-        assert!(self.hashes[last] != empty_hash);
+        debug_assert!(self.hashes[last] != empty_hash);
         self.hashes[last]
     }
 }
@@ -506,8 +506,8 @@ impl Block {
     // Add the subtree for the given block into the proof. This code
     // handles full blocks. Here, "id" is the index within the block.
     fn push(&self, hashes: &mut Vec<HashValue>, id: usize, check: &[usize]) {
-        assert!(self.full());
-        assert!(id < LEAVES_IN_BLOCK);
+        debug_assert!(self.full());
+        debug_assert!(id < LEAVES_IN_BLOCK);
         let mut index = id;
         let mut base = 0;
         let mut interval = LEAVES_IN_BLOCK;
@@ -536,7 +536,7 @@ impl Block {
             hashes.push(hash);
 
             if !check.is_empty() {
-                assert!(partner == check[i] + 1);
+                debug_assert!(partner == check[i] + 1);
             }
 
             index /= 2;
@@ -548,7 +548,7 @@ impl Block {
     }
 
     pub fn root(&self) -> HashValue {
-        assert!(self.full());
+        debug_assert!(self.full());
         let last = HASHES_IN_BLOCK - 1;
         self.hashes[last]
     }
@@ -563,8 +563,8 @@ impl Block {
 
 // Implement covered division, that is, round up fractions when dividing.
 fn covered(numerator: u64, denominator: u64) -> u64 {
-    assert!(numerator <= std::u64::MAX - denominator);
-    assert!(denominator > 0);
+    debug_assert!(numerator <= std::u64::MAX - denominator);
+    debug_assert!(denominator > 0);
     (numerator + denominator - 1) / denominator
 }
 
@@ -918,7 +918,7 @@ impl AppendOnlyMerkle {
         let block_id = index / LEAVES_IN_BLOCK;
         let block_index = index % LEAVES_IN_BLOCK;
 
-        self.blocks[0][block_id].hashes[block_index].clone()
+        self.blocks[0][block_id].hashes[block_index]
     }
 
     /// Make a deserialized tree ready for use. The derived
@@ -929,12 +929,13 @@ impl AppendOnlyMerkle {
     /// # Example
     ///````
     /// use merkle_tree::append_only_merkle::AppendOnlyMerkle;
+    /// use ruc::*;
     ///
     /// let path       = "deserialize";
     /// # let _ = std::fs::remove_file(&path);
-    /// let mut sample = AppendOnlyMerkle::create(&path).unwrap();
+    /// let mut sample = pnk!(AppendOnlyMerkle::create(&path));
     /// let _          = sample.append_str(&"test");
-    /// let encoded    = serde_json::to_string(&sample).unwrap();
+    /// let encoded    = pnk!(serde_json::to_string(&sample));
     ///
     /// drop(sample);
     /// let _ = std::fs::remove_file(&path);
@@ -1392,7 +1393,7 @@ impl AppendOnlyMerkle {
             let items = {
                 let block_list = &mut self.blocks[level];
 
-                if block_list.last().unwrap().full() {
+                if block_list.last().c(d!())?.full() {
                     let block_id = block_list.len() as u64;
                     let block = Block::new(level as u32, block_id);
 
@@ -1439,7 +1440,7 @@ impl AppendOnlyMerkle {
             // this block without adding a lot of logic, so just wait
             // for the next tree.write invocation.
             if block.full() && self.blocks_on_disk[level] >= block.id() as u64 {
-                assert!(self.blocks_on_disk[level] <= block.id() as u64 + 1);
+                debug_assert!(self.blocks_on_disk[level] <= block.id() as u64 + 1);
 
                 let se = self.files[level].seek(Start((block.id() * BLOCK_SIZE) as u64));
 
@@ -1459,8 +1460,8 @@ impl AppendOnlyMerkle {
             }
 
             // Okay, we have another hash to add to the tree. Compute it.
-            let left = &prev.unwrap();
-            let right = block.top_hash().unwrap();
+            let left = &prev.c(d!())?;
+            let right = block.top_hash().c(d!())?;
 
             current_hash = hash_pair(left, right);
         }
@@ -1487,7 +1488,7 @@ impl AppendOnlyMerkle {
         self.push_file(file);
 
         self.blocks[level].push(Block::new(level as u32, 0));
-        assert!(self.blocks[level].len() == 1 && self.blocks.len() == level + 1);
+        debug_assert!(self.blocks[level].len() == 1 && self.blocks.len() == level + 1);
         Ok(())
     }
 
@@ -1501,7 +1502,7 @@ impl AppendOnlyMerkle {
     ///
     /// # Example
     ///
-    /// let encoded = serde_json::to_string(&transaction).unwrap();
+    /// let encoded = serde_json::to_string(&transaction).c(d!())?;
     ///
     /// let transaction_id =
     ///     match tree.append_str(&encoded) {
@@ -1674,7 +1675,7 @@ impl AppendOnlyMerkle {
 
         match dictionary.get(level, block_id) {
             Some(entry) => {
-                assert!(entry.root() != empty_hash);
+                debug_assert!(entry.root() != empty_hash);
                 entry.root()
             }
             None => {
@@ -1685,11 +1686,11 @@ impl AppendOnlyMerkle {
                         block_id,
                         self.blocks[level].len()
                     );
-                    assert!(block_id == self.blocks[level].len());
+                    debug_assert!(block_id == self.blocks[level].len());
                     empty_hash
                 } else {
                     let block = &self.blocks[level][block_id];
-                    assert!(block.full());
+                    debug_assert!(block.full());
                     block.root()
                 }
             }
@@ -1810,7 +1811,7 @@ impl AppendOnlyMerkle {
                 // blocks below this are paired, recursively.
                 for i in 0..=level {
                     let length = self.blocks[level - i].len();
-                    assert!(length % (1 << (i + 1)) == 0);
+                    debug_assert!(length % (1 << (i + 1)) == 0);
                 }
 
                 solitary_block = length == 1;
@@ -1844,7 +1845,7 @@ impl AppendOnlyMerkle {
             dictionary.insert(level, entry);
         } else {
             let check_size = self.entry_count as isize;
-            assert!((check_size & -check_size) == check_size);
+            debug_assert!((check_size & -check_size) == check_size);
         }
 
         dictionary
@@ -1877,7 +1878,7 @@ impl AppendOnlyMerkle {
 
         match dictionary.get(level, block_id) {
             Some(entry) => {
-                assert!(entry.level == level);
+                debug_assert!(entry.level == level);
                 entry.push(hashes, block_index, &[]);
                 block_root_hash = entry.hashes[last];
             }
@@ -1953,7 +1954,7 @@ impl AppendOnlyMerkle {
                 )));
             }
 
-            assert!(total_blocks >= self.blocks_on_disk[level]);
+            debug_assert!(total_blocks >= self.blocks_on_disk[level]);
 
             // Set the block at which to start writing. Always rewrite the
             // last disk block at this level (if any) because it might have
@@ -2413,21 +2414,21 @@ mod tests {
 
         header.header_mark ^= 1;
 
-        if let Ok(_) = header.check(3, 5) {
+        if header.check(3, 5).is_ok() {
             panic!("check didn't detect an invalid header.");
         }
 
         header = BlockHeader::new(3, 5);
         header.level += 1;
 
-        if let Ok(_) = header.check(3, 5) {
+        if header.check(3, 5).is_ok() {
             panic!("check didn't detect an invalid level.");
         }
 
         header = BlockHeader::new(3, 5);
         header.id += 1;
 
-        if let Ok(_) = header.check(3, 5) {
+        if header.check(3, 5).is_ok() {
             panic!("check didn't detect an invalid id.");
         }
 
@@ -2485,11 +2486,11 @@ mod tests {
             // that are set to HashBlock::new. Pick one of them and corrupt
             // it.
             if !block.full() {
-                let saved_hash = block.hashes[i + 1].clone();
+                let saved_hash = block.hashes[i + 1];
                 block.hashes[i + 1].hash[0] ^= 1;
                 block.set_checksum();
 
-                if let Ok(_) = block.check(1, 2, false) {
+                if block.check(1, 2, false).is_ok() {
                     panic!(
                         "check didn't see a corrupted empty hash:  {:?}",
                         block.hashes[i + 1].hash
@@ -2511,7 +2512,7 @@ mod tests {
             block.hashes[index] = HashValue::new();
             block.set_checksum();
 
-            if let Ok(_) = block.check(1, 2, false) {
+            if block.check(1, 2, false).is_ok() {
                 panic!("check didn't see a corrupted full hash");
             }
 
@@ -2540,7 +2541,7 @@ mod tests {
             }
         }
 
-        if let None = block.top_hash() {
+        if block.top_hash().is_none() {
             panic!("top_hash failed on a full block.");
         }
 
@@ -2550,18 +2551,18 @@ mod tests {
             panic!("The block was corrupted by set_hash:  {}", e);
         }
 
-        if let Ok(_) = block.check(0, 2, false) {
+        if block.check(0, 2, false).is_ok() {
             panic!("Bad block id passed");
         }
 
-        if let Ok(_) = block.check(1, 3, false) {
+        if block.check(1, 3, false).is_ok() {
             panic!("Bad level passed");
         }
 
         // Corrupt checksum[0] and see whether that's caught.
         block.header.check_bits.bits[0] ^= 1;
 
-        if let Ok(_) = block.check(1, 2, false) {
+        if block.check(1, 2, false).is_ok() {
             panic!("Bad hash[0] passed");
         }
 
@@ -2574,7 +2575,7 @@ mod tests {
         // Now corrupt checksum[last] and do the checks.
         block.header.check_bits.bits[CHECK_SIZE - 1] ^= 1;
 
-        if let Ok(_) = block.check(1, 2, false) {
+        if block.check(1, 2, false).is_ok() {
             panic!("Bad hash[last] passed");
         }
 
@@ -2587,14 +2588,14 @@ mod tests {
         // Okay, corrupt a hash in the subtree.
         block.hashes[LEAVES_IN_BLOCK].hash[0] ^= 1;
 
-        if let Ok(_) = block.check(1, 2, true) {
+        if block.check(1, 2, true).is_ok() {
             panic!("A corrupted subtree passed");
         }
 
         // Try redoing an insertion...
         block.header.valid_leaves = 0;
 
-        if let Ok(_) = block.set_hash(&hash) {
+        if block.set_hash(&hash).is_ok() {
             panic!("set_hash overwrote a full hash");
         }
     }
@@ -2603,8 +2604,8 @@ mod tests {
     fn test_hash_pair() {
         let mut a = [0; 2 * HASH_SIZE];
 
-        for i in 0..2 * HASH_SIZE {
-            a[i] = i as u8;
+        for (i, sa) in a.iter_mut().enumerate().take(2 * HASH_SIZE) {
+            *sa = i as u8;
         }
 
         let digest = sha256::hash(&a[0..2 * HASH_SIZE]);
@@ -2746,8 +2747,8 @@ mod tests {
         let mut buffer = [0_u8; HASH_SIZE - 1];
         let mut hash_value = HashValue::new();
 
-        for i in 0..buffer.len() {
-            buffer[i] = 0xfe;
+        for buf in &mut buffer {
+            *buf = 0xfe;
         }
 
         buffer
@@ -2801,12 +2802,13 @@ mod tests {
     // Test a larger tree.
     #[test]
     #[ignore]
+    #[allow(clippy::mut_range_bound)]
     // This test runs takes a long time to run. Run it with `cargo test -- --ignored`
     fn test_tree() {
         let path = "test_tree".to_string();
         let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(&(path.clone() + &".1-base"));
-        let _ = std::fs::remove_file(&(path.clone() + &".2-base"));
+        let _ = std::fs::remove_file(&(path.clone() + ".1-base"));
+        let _ = std::fs::remove_file(&(path.clone() + ".2-base"));
         let result = AppendOnlyMerkle::create(&path);
 
         let mut tree = match result {
@@ -3554,9 +3556,7 @@ mod tests {
         let _ = std::fs::remove_file(path.to_owned() + ".1");
         let _ = std::fs::remove_file(path.to_owned() + ".1" + &ext);
 
-        let result = std::fs::remove_file(&fake);
-
-        if let Ok(_) = result {
+        if std::fs::remove_file(&fake).is_ok() {
             panic!("File ... should have been moved.");
         }
 

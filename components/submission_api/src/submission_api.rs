@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use actix_cors::Cors;
 use actix_web::test::TestRequest;
 use actix_web::{error, middleware, test, web, App, HttpServer};
@@ -46,7 +48,7 @@ where
 
     submission_server
         .handle_transaction(tx)
-        .map(|h| web::Json(h))
+        .map(web::Json)
         .map_err(|e| {
             e.print();
             error::ErrorBadRequest(e.generate_log())
@@ -220,11 +222,11 @@ impl RestfulLedgerUpdate for MockLUClient {
         let resp = test::call_service(&mut app, req);
         let status = resp.status();
         let body = test::read_body(resp);
-        let result = std::str::from_utf8(&body).unwrap();
+        let result = std::str::from_utf8(&body).c(d!())?;
         if status != 200 {
             Err(eg!(inp_fail!(result)))
         } else {
-            let handle = serde_json::from_str(&result).unwrap();
+            let handle = serde_json::from_str(&result).c(d!())?;
             Ok(handle)
         }
     }
@@ -247,7 +249,7 @@ impl RestfulLedgerUpdate for MockLUClient {
         let resp = test::call_service(&mut app, req);
         let status = resp.status();
         let body = test::read_body(resp);
-        let result = std::str::from_utf8(&body).unwrap();
+        let result = std::str::from_utf8(&body).c(d!())?;
         if status != 200 {
             Err(eg!(inp_fail!(result)))
         } else {
@@ -271,11 +273,11 @@ impl RestfulLedgerUpdate for MockLUClient {
         let resp = test::call_service(&mut app, req);
         let status = resp.status();
         let body = test::read_body(resp);
-        let result = std::str::from_utf8(&body).unwrap();
+        let result = std::str::from_utf8(&body).c(d!())?;
         if status != 200 {
             Err(eg!(inp_fail!(result)))
         } else {
-            let handle = serde_json::from_str(&result).unwrap();
+            let handle = serde_json::from_str(&result).c(d!())?;
             Ok(handle)
         }
     }

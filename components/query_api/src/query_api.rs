@@ -1,12 +1,13 @@
 #![feature(str_split_as_str)]
+#![deny(warnings)]
 
 use actix_cors::Cors;
 use actix_service::Service;
 use actix_web::{error, middleware, web, App, HttpServer};
 use futures::Future;
 use ledger::data_model::{
-    b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, KVBlind, KVHash, TxOutput,
-    TxnSID, TxoSID, XfrAddress,
+    b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, KVHash, TxOutput, TxnSID,
+    TxoSID, XfrAddress,
 };
 use ledger::{inp_fail, ser_fail};
 use ledger_api_service::RestfulArchiveAccess;
@@ -19,7 +20,7 @@ use std::collections::HashSet;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
-use utils::{http_get_request, http_post_request, MetricsRenderer, NetworkRoute};
+use utils::{http_get_request, MetricsRenderer, NetworkRoute};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::OwnerMemo;

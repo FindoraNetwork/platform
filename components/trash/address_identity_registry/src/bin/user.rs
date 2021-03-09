@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 mod shared;
 
 use credentials::{
@@ -40,7 +42,7 @@ async fn main_inner() -> Result<()> {
         .c(d!())?;
     println!(
         "Response from issuer for public credential info is:\n{}",
-        serde_json::to_string(&resp1).unwrap()
+        serde_json::to_string(&resp1).c(d!())?
     );
 
     // Step 2: generate user key pair for this credential
@@ -68,7 +70,7 @@ async fn main_inner() -> Result<()> {
 
     println!("Response from issuer for signature is:\n{:?}", &resp_text);
     let sig: CredSignature =
-        serde_json::from_str(std::str::from_utf8(resp_text).unwrap()).unwrap();
+        serde_json::from_str(std::str::from_utf8(resp_text).c(d!())?).unwrap();
 
     let mut map = vec![];
     for attr in attrs {
@@ -102,7 +104,7 @@ async fn main_inner() -> Result<()> {
         .await
         .c(d!())?;
         let (_, seq_id, _): GlobalState<StateCommitmentData> =
-            serde_json::from_str(&resp_gs[..]).unwrap();
+            serde_json::from_str(&resp_gs[..]).c(d!())?;
 
         let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
 
@@ -136,7 +138,7 @@ async fn main_inner() -> Result<()> {
             Ok(_res) => {
                 println!(
                     "User: ledger submission succeeded, addr = {}",
-                    serde_json::to_string(&user_pk).unwrap()
+                    serde_json::to_string(&user_pk).c(d!())?
                 );
             }
             Err(err) => {

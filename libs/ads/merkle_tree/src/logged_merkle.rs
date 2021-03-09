@@ -123,7 +123,7 @@ impl LogBuffer {
     // Create a new buffer that start with the given Merkle
     // transaction id.
     fn new(next_id: u64) -> LogBuffer {
-        assert!(std::mem::size_of::<LogBuffer>() == BUFFER_SIZE);
+        debug_assert!(std::mem::size_of::<LogBuffer>() == BUFFER_SIZE);
 
         LogBuffer {
             marker: BUFFER_MARKER,
@@ -239,14 +239,15 @@ impl LoggedMerkle {
     /// use merkle_tree::append_only_merkle::AppendOnlyMerkle;
     /// use merkle_tree::logged_merkle::LoggedMerkle;
     /// use std::fs::OpenOptions;
+    /// use ruc::*;
     ///
     /// let tree_path = "new_logged";
     /// let log_path = "new_logged-log.1";
     ///
     /// # let _ = std::fs::remove_file(&tree_path);
     /// # let _ = std::fs::remove_file(&log_path);
-    /// let tree = AppendOnlyMerkle::create(&tree_path).unwrap();
-    /// let file = OpenOptions::new().write(true).create(true).open(log_path).unwrap();
+    /// let tree = pnk!(AppendOnlyMerkle::create(&tree_path));
+    /// let file = pnk!(OpenOptions::new().write(true).create(true).open(log_path));
     /// let logged = LoggedMerkle::new(tree, file);
     /// println!("The tree state is {}", logged.state());
     /// # drop(logged);
@@ -429,7 +430,7 @@ impl LoggedMerkle {
                 for index in start_offset..buffer.valid as usize {
                     match self.tree.append_hash(&buffer.hashes[index]) {
                         Ok(n) => {
-                            assert!(n == current);
+                            debug_assert!(n == current);
                         }
                         Err(x) => {
                             return Err(eg!(x));
@@ -441,7 +442,7 @@ impl LoggedMerkle {
                 }
 
                 state = self.tree.total_size();
-                assert!(state == current);
+                debug_assert!(state == current);
             }
         }
 
@@ -657,7 +658,7 @@ mod tests {
             panic!("close failed:  {}", x);
         }
 
-        if let Ok(_) = logged.append(&test_hash(1)) {
+        if logged.append(&test_hash(1)).is_ok() {
             panic!("append after close worked");
         }
 

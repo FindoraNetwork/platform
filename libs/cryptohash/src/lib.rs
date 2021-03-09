@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use serde::{Deserialize, Serialize};
 pub const HASH_SIZE: usize = 32;
 #[cfg(target_arch = "wasm32")]
@@ -186,7 +188,7 @@ pub fn hash_partial(left: &HashValue, right: &HashValue) -> HashValue {
     } else if left_present {
         hash_single(left)
     } else {
-        assert!(!right_present);
+        debug_assert!(!right_present);
         empty_hash
     }
 }

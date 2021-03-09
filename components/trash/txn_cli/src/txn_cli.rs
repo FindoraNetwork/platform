@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use log::debug;
 use network::{HttpStandaloneConfig, LedgerStandalone};
 use ruc::*;

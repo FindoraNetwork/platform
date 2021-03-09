@@ -1,8 +1,9 @@
 #![allow(clippy::field_reassign_with_default)]
+#![deny(warnings)]
 
 use ledger::data_model::{
     AssetType, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedUtxo, BlockSID,
-    FinalizedTransaction, KVBlind, StateCommitmentData, Transaction, TxoSID,
+    FinalizedTransaction, StateCommitmentData, Transaction, TxoSID,
 };
 use ledger::store::LedgerState;
 use ledger_api_service::{
@@ -232,7 +233,7 @@ mod tests {
     #[test]
     fn test_mock_client() {
         let mut mock_rest_client = LedgerStandalone::new_mock(2);
-        //let seq_id = mock_rest_client.get_block_commit_count().unwrap()
+        //let seq_id = mock_rest_client.get_block_commit_count().c(d!())?
         let tx = Transaction::from_seq_id(0);
         let handle = mock_rest_client.submit_transaction(&tx).unwrap();
         mock_rest_client.force_end_block().unwrap();

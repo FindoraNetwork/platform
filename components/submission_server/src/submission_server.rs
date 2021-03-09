@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
     Operation, Transaction, TxnEffect, TxnSID, TxnTempSID, TxoSID,
@@ -27,8 +29,7 @@ pub struct TxnHandle(pub String);
 
 impl TxnHandle {
     pub fn new(txn: &Transaction) -> Self {
-        let digest = txn.hash(TxnSID(0));
-        TxnHandle(hex::encode(digest))
+        TxnHandle(txn.handle())
     }
 }
 
@@ -154,7 +155,7 @@ where
     pub fn end_commit(&mut self) {}
 
     pub fn begin_block(&mut self) {
-        assert!(self.block.is_none());
+        debug_assert!(self.block.is_none());
         if let Ok(mut ledger) = self.committed_state.write() {
             self.block =
                 Some(ledger.start_block().expect("Ledger could not start block"));
@@ -166,13 +167,13 @@ where
         let mut block = None;
         std::mem::swap(&mut self.block, &mut block);
         if let Some(block) = block {
-            let mut ledger = self.committed_state.write().unwrap();
+            let mut ledger = self.committed_state.write().c(d!())?;
             let finalized_txns = ledger
                 .finish_block(block)
                 .expect("Ledger could not finish block");
             // Update status of all committed transactions
             for (txn_temp_sid, handle, txn) in self.pending_txns.drain(..) {
-                let committed_txn_info = finalized_txns.get(&txn_temp_sid).unwrap();
+                let committed_txn_info = finalized_txns.get(&txn_temp_sid).c(d!())?;
                 self.txn_status
                     .insert(handle, TxnStatus::Committed(committed_txn_info.clone()));
 
@@ -183,7 +184,7 @@ where
             // If begin_commit or end_commit is no longer empty, move this line to the end of end_commit
             self.pending_txns = Vec::new();
             // Finally, return the finalized txn sids
-            assert!(self.block.is_none());
+            debug_assert!(self.block.is_none());
             return Ok(());
         }
         Err(eg!(fail!(
@@ -267,7 +268,7 @@ where
                 // End the current block if it's eligible to commit
                 if self.eligible_to_commit() {
                     // If the ledger is eligible for a commit, end block will not return an error
-                    self.end_block().unwrap();
+                    self.end_block().c(d!())?;
 
                     // If begin_commit and end_commit are no longer empty, call them here
                 }

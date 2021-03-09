@@ -133,7 +133,7 @@ impl AssetTypeCode {
     ///
     /// Returns an error if the length is greater than 32 bytes.
     pub fn new_from_utf8_safe(s: &str) -> Result<Self> {
-        assert!(UTF8_ASSET_TYPES_WORK);
+        debug_assert!(UTF8_ASSET_TYPES_WORK);
         let composed = s.to_string().nfc().collect::<String>().into_bytes();
         if AssetTypeCode::will_truncate(&composed) {
             return Err(eg!(PlatformError::InputsError(None)));
@@ -146,7 +146,7 @@ impl AssetTypeCode {
     ///
     /// Used to customize the asset type code.
     pub fn new_from_utf8_truncate(s: &str) -> Self {
-        assert!(UTF8_ASSET_TYPES_WORK);
+        debug_assert!(UTF8_ASSET_TYPES_WORK);
         let composed = s.to_string().nfc().collect::<String>().into_bytes();
         AssetTypeCode::new_from_vec(composed)
     }
@@ -155,7 +155,7 @@ impl AssetTypeCode {
     ///
     /// Used to display the asset type code.
     pub fn to_utf8(&self) -> Result<String> {
-        assert!(UTF8_ASSET_TYPES_WORK);
+        debug_assert!(UTF8_ASSET_TYPES_WORK);
         let mut code = self.val.0.to_vec();
         let len = code.len();
         // Find the last non-empty index
@@ -190,7 +190,7 @@ impl AssetTypeCode {
         match b64dec(b64) {
             Ok(mut bin) => {
                 bin.resize(ASSET_TYPE_LENGTH, 0u8);
-                let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bin.as_slice()).unwrap();
+                let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bin.as_slice()).c(d!())?;
                 Ok(Self {
                     val: ZeiAssetType(buf),
                 })
@@ -229,7 +229,7 @@ impl Code {
     pub fn new_from_base64(b64: &str) -> Result<Self> {
         if let Ok(mut bin) = b64dec(b64) {
             bin.resize(16, 0u8);
-            let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
+            let buf = <[u8; 16]>::try_from(bin.as_slice()).c(d!())?;
             Ok(Self { val: buf })
         } else {
             Err(eg!(des_fail!()))
@@ -1026,7 +1026,7 @@ impl KVBlind {
     pub fn from_base64(b64: &str) -> Result<Self> {
         if let Ok(mut bin) = b64dec(b64) {
             bin.resize(16, 0u8);
-            let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
+            let buf = <[u8; 16]>::try_from(bin.as_slice()).c(d!())?;
             Ok(Self(buf))
         } else {
             Err(eg!(des_fail!()))
@@ -1129,7 +1129,8 @@ impl BindAssetsBody {
                 art,
                 *out_pubkey,
             );
-            let ar = AssetRecord::from_template_no_identity_tracing(prng, &ar).unwrap();
+            let ar =
+                AssetRecord::from_template_no_identity_tracing(prng, &ar).c(d!())?;
             out_records.push(ar);
         }
 
@@ -1651,12 +1652,11 @@ lazy_static! {
     /// The destination of Fee is an black hole,
     /// all token transfered to it will be burned.
     pub static ref BLACK_HOLE_PUBKEY: XfrPublicKey =
-        XfrPublicKey::zei_from_bytes(&[0; ed25519_dalek::PUBLIC_KEY_LENGTH][..])
-            .unwrap();
+        pnk!(XfrPublicKey::zei_from_bytes(&[0; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
 }
 
-/// TODO: a better value ?
-pub const TX_FEE_MIN: u64 = 1;
+/// see [**mainnet-v1.0 defination**](https://www.notion.so/findora/Transaction-Fees-Analysis-d657247b70f44a699d50e1b01b8a2287)
+pub const TX_FEE_MIN: u64 = 10_000;
 
 impl Transaction {
     /// A simple fee checker for mainnet v1.0.
@@ -1738,6 +1738,11 @@ impl Transaction {
 
     pub fn hash(&self, id: TxnSID) -> HashOf<(TxnSID, Transaction)> {
         HashOf::new(&(id, self.clone()))
+    }
+
+    pub fn handle(&self) -> String {
+        let digest = self.hash(TxnSID(0));
+        hex::encode(digest)
     }
 
     pub fn from_seq_id(seq_id: u64) -> Self {
@@ -1837,7 +1842,7 @@ impl Transaction {
         // }
         // if !include_spent {
         //   for idx in spent_indices {
-        //     outputs.remove(idx.try_into().unwrap());
+        //     outputs.remove(idx.try_into().c(d!())?);
         //   }
         // }
         // outputs
@@ -2190,18 +2195,18 @@ mod tests {
                 policies: XfrNotePolicies::default(),
                 outputs: vec![TxOutput {
                     record: BlindAssetRecord {
-                        amount: amount
-                            .map(|am| XfrAmount::NonConfidential(am))
-                            .unwrap_or(XfrAmount::Confidential((
+                        amount: amount.map(XfrAmount::NonConfidential).unwrap_or(
+                            XfrAmount::Confidential((
                                 ristretto::CompressedRistretto(CompressedRistretto(
                                     [0; 32],
                                 )),
                                 ristretto::CompressedRistretto(CompressedRistretto(
                                     [0; 32],
                                 )),
-                            ))),
+                            )),
+                        ),
                         asset_type: asset_type
-                            .map(|at| XfrAssetType::NonConfidential(at))
+                            .map(XfrAssetType::NonConfidential)
                             .unwrap_or(XfrAssetType::Confidential(
                                 ristretto::CompressedRistretto(CompressedRistretto(
                                     [0; 32],

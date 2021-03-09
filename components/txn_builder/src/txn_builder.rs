@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 extern crate ledger;
 extern crate serde;
 extern crate zei;
@@ -898,7 +900,7 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
     // - if policy but no identity tracing, then no identity proof is needed
     // TODO (fernando) this code does not handle more than one policy, hence the following assert
     // REDMINE #104
-    assert!(template.asset_tracing_policies.len() <= 1);
+    debug_assert!(template.asset_tracing_policies.len() <= 1);
     let asset_tracing = !template.asset_tracing_policies.is_empty();
     if !asset_tracing && identity_proof.is_some()
         || asset_tracing
@@ -906,7 +908,7 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
                 .asset_tracing_policies
                 .get_policy(0)
                 .as_ref()
-                .unwrap()
+                .c(d!())?
                 .identity_tracing
                 .is_some()
                 && identity_proof.is_none()
@@ -969,11 +971,11 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
 //    let alice = XfrKeyPair::generate(&mut prng);
 //    let bob = XfrKeyPair::generate(&mut prng);
 //
-//    let ar = AssetRecord::new(1000, code_1.val, *alice.get_pk_ref()).unwrap();
+//    let ar = AssetRecord::new(1000, code_1.val, *alice.get_pk_ref()).c(d!())?;
 //    let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_1, false, false, &None);
 //
 //    let builder = TransferOperationBuilder::new()..add_input(TxoRef::Relative(1),
-//                                       open_blind_asset_record(&ba, &alice).unwrap(),
+//                                       open_blind_asset_record(&ba, &alice).c(d!())?,
 //                                       None,
 //                                       20)?
 //                            .add_output(20, bob.get_pk_ref(), code_1)?
@@ -1056,10 +1058,10 @@ impl TransferOperationBuilder {
                 credential,
                 commitment_key,
             )
-            .unwrap()
+            .c(d!())?
         } else {
             AssetRecord::from_template_no_identity_tracing(prng, asset_record_template)
-                .unwrap()
+                .c(d!())?
         };
         self.output_records.push(ar);
         self.outputs_tracing_policies.push(policies);
@@ -1172,7 +1174,7 @@ impl TransferOperationBuilder {
                         &mut prng,
                         &ar_template,
                     )
-                    .unwrap();
+                    .c(d!())?;
                     partially_consumed_inputs.push(ar);
                     self.outputs_tracing_policies.push(policies.clone());
                     self.output_identity_commitments.push(None);
@@ -1232,7 +1234,7 @@ impl TransferOperationBuilder {
         if self.transfer.is_none() {
             return Err(eg!(no_transfer_err!()));
         }
-        self.transfer.as_mut().unwrap().sign(&kp);
+        self.transfer.as_mut().c(d!())?.sign(&kp);
         Ok(self)
     }
 
@@ -1289,7 +1291,7 @@ impl TransferOperationBuilder {
         if self.transfer.is_none() {
             return Err(eg!(no_transfer_err!()));
         }
-        Ok(Operation::TransferAsset(self.transfer.clone().unwrap()))
+        Ok(Operation::TransferAsset(self.transfer.clone().c(d!())?))
     }
 
     // Checks to see whether all necessary signatures are present and valid
@@ -1298,7 +1300,7 @@ impl TransferOperationBuilder {
             return Err(eg!(no_transfer_err!()));
         }
 
-        let trn = self.transfer.as_ref().unwrap();
+        let trn = self.transfer.as_ref().c(d!())?;
         let mut sig_keys = HashSet::new();
         for sig in &trn.body_signatures {
             if !sig.verify(&trn.body) {
@@ -1391,7 +1393,7 @@ mod tests {
         let res = invalid_outputs_transfer_op
             .add_input(
                 TxoRef::Relative(1),
-                open_blind_asset_record(&ba_1, &memo1, &alice).unwrap(),
+                open_blind_asset_record(&ba_1, &memo1, &alice).c(d!())?,
                 None,
                 None,
                 20,
@@ -1414,7 +1416,7 @@ mod tests {
         let res = invalid_sig_op
             .add_input(
                 TxoRef::Relative(1),
-                open_blind_asset_record(&ba_1, &memo1, &alice).unwrap(),
+                open_blind_asset_record(&ba_1, &memo1, &alice).c(d!())?,
                 None,
                 None,
                 20,
@@ -1442,7 +1444,7 @@ mod tests {
         let res = missing_sig_op
             .add_input(
                 TxoRef::Relative(1),
-                open_blind_asset_record(&ba_1, &memo1, &alice).unwrap(),
+                open_blind_asset_record(&ba_1, &memo1, &alice).c(d!())?,
                 None,
                 None,
                 20,
@@ -1498,7 +1500,7 @@ mod tests {
         let _valid_transfer_op = TransferOperationBuilder::new()
             .add_input(
                 TxoRef::Relative(1),
-                open_blind_asset_record(&ba_1, &memo1, &alice).unwrap(),
+                open_blind_asset_record(&ba_1, &memo1, &alice).c(d!())?,
                 None,
                 None,
                 20,
@@ -1506,7 +1508,7 @@ mod tests {
             .c(d!())?
             .add_input(
                 TxoRef::Relative(2),
-                open_blind_asset_record(&ba_2, &memo2, &bob).unwrap(),
+                open_blind_asset_record(&ba_2, &memo2, &bob).c(d!())?,
                 None,
                 None,
                 20,
@@ -1563,7 +1565,7 @@ mod tests {
         macro_rules! transfer_to_bob {
             ($txo_sid: expr, $bob_pk: expr) => {{
                 let output_bob_fra_template = AssetRecordTemplate::with_no_asset_tracing(
-                    5,
+                    100 * TX_FEE_MIN,
                     ASSET_TYPE_FRA,
                     NonConfidentialAmount_NonConfidentialAssetType,
                     $bob_pk,
@@ -1579,7 +1581,7 @@ mod tests {
                         .unwrap(),
                         None,
                         None,
-                        5,
+                        100 * TX_FEE_MIN,
                     )
                     .unwrap()
                     .add_output(&output_bob_fra_template, None, None, None)
@@ -1625,13 +1627,14 @@ mod tests {
                 .finalized_txn
                 .txn
                 .get_owner_memos_ref()[utxo.utxo_location.0]
-                .map(|om| om.clone()),
+                .cloned(),
             bob_kp.get_sk().into_keypair(),
         );
         let mut tx3 = TransactionBuilder::from_seq_id(2);
-        tx3.add_operation(transfer_to_bob!(txo_sid[2], bob_kp.get_pk()))
-            .add_fee(fi)
-            .unwrap();
+        pnk!(
+            tx3.add_operation(transfer_to_bob!(txo_sid[2], bob_kp.get_pk()))
+                .add_fee(fi)
+        );
         assert!(tx3.check_fee());
 
         let effect = TxnEffect::compute_effect(tx3.into_transaction()).unwrap();
@@ -1659,7 +1662,7 @@ mod tests {
                 .finalized_txn
                 .txn
                 .get_owner_memos_ref()[utxo.utxo_location.0]
-                .map(|om| om.clone()),
+                .cloned(),
             bob_kp.get_sk().into_keypair(),
         );
         let mut tx4 = TransactionBuilder::from_seq_id(3);

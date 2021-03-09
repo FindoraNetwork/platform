@@ -2,6 +2,8 @@
 // Allows web clients to issue transactions from a browser contexts.
 // For now, forwards transactions to a ledger hosted locally.
 // To compile wasm package, run wasm-pack build in the wasm directory;
+#![deny(warnings)]
+
 use crate::wasm_data_model::*;
 use credentials::{
     credential_commit, credential_issuer_key_gen, credential_open_commitment,
@@ -616,6 +618,11 @@ impl TransactionBuilder {
     /// Extracts the serialized form of a transaction.
     pub fn transaction(&self) -> String {
         self.get_builder().serialize_str()
+    }
+
+    /// Calculates transaction handle.
+    pub fn transaction_handle(&self) -> String {
+        self.get_builder().transaction().handle()
     }
 
     /// Fetches a client record from a transaction.

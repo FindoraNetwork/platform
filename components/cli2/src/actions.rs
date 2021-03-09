@@ -98,11 +98,11 @@ pub fn key_gen<S: CliDataStore>(store: &mut S, nick: String) -> Result<()> {
 
     if continue_key_gen {
         // temporary solution, save passphrase here
-        let phrase = wallet::generate_mnemonic_custom(24, "en").unwrap();
-        let kp = wallet::restore_keypair_from_mnemonic_default(&phrase).unwrap();
+        let phrase = wallet::generate_mnemonic_custom(24, "en").c(d!())?;
+        let kp = wallet::restore_keypair_from_mnemonic_default(&phrase).c(d!())?;
         let mut name = compute_findora_dir().c(d!())?;
         name.push(format!("{}_passphrase", &nick));
-        let mut pass_file = File::create(name).unwrap();
+        let mut pass_file = File::create(name).c(d!())?;
         pass_file
             .write_all(phrase.as_ref())
             .expect("Failed to save passphrase");
@@ -407,7 +407,7 @@ pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<()> {
 
     for pk in public_keys {
         let pk_name = (pk.0).0;
-        let pk_str = serde_json::to_string(&pk.1).unwrap();
+        let pk_str = serde_json::to_string(&pk.1).c(d!())?;
         pub_key_to_name_map.insert(pk_str.clone(), pk_name.clone());
     }
 
@@ -440,7 +440,7 @@ pub fn compute_balances<S: CliDataStore>(store: &mut S) -> Result<()> {
 
         // Compute and store the balances
         let pk = txo.record.record.public_key;
-        let pk_str = serde_json::to_string(&pk).unwrap();
+        let pk_str = serde_json::to_string(&pk).c(d!())?;
         let pk_name = pub_key_to_name_map.get(&pk_str);
 
         match pk_name {
@@ -575,7 +575,7 @@ pub fn list_txos<S: CliDataStore>(
                     continue;
                 }
                 Some(owner_name) => {
-                    if owner_name.0 != id.clone().unwrap() {
+                    if owner_name.0 != id.clone().c(d!())? {
                         continue;
                     }
                 }
@@ -1243,11 +1243,11 @@ pub fn define_asset_x<S: CliDataStore>(
             Some(kp) => {
                 let mut asset_rules: AssetRules = Default::default();
                 let max_units =
-                    prompt::<u64, _>("max units? (default=unlimited)").unwrap();
+                    prompt::<u64, _>("max units? (default=unlimited)").c(d!())?;
                 if max_units > 0 {
                     asset_rules.set_max_units(Some(max_units));
                 }
-                let updatable = prompt_default("memo updatable?", false).unwrap();
+                let updatable = prompt_default("memo updatable?", false).c(d!())?;
                 asset_rules.set_updatable(updatable);
                 new_builder
                     .builder
@@ -1376,59 +1376,57 @@ pub fn issue_asset<S: CliDataStore>(
         }
     }
 
-    store.with_keypair(&issuer_nick, |iss_kp| match iss_kp {
-         None => {
-           eprintln!("No keypair nicknamed '{}' found.", issuer_nick.0);
-           exit(-1);
-         }
-         Some(iss_kp) => {
-           println!("IssueAsset: {} of '{}' ({}), authorized by '{}'",
-                    amount,
-                    asset.asset.code.to_base64(),
-                    asset_nick.0,
-                    issuer_nick.0);
+    store
+        .with_keypair(&issuer_nick, |iss_kp| match iss_kp {
+            None => {
+                eprintln!("No keypair nicknamed '{}' found.", issuer_nick.0);
+                exit(-1);
+            }
+            Some(iss_kp) => {
+                println!("IssueAsset: {} of '{}' ({}), authorized by '{}'", amount, asset.asset.code.to_base64(), asset_nick.0, issuer_nick.0);
 
-           builder.builder.add_basic_issue_asset(
-        iss_kp, &asset.asset.code, issue_seq_num, amount,
-        AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        &PublicParams::default()).c(d!())?;
+                builder.builder.add_basic_issue_asset(iss_kp, &asset.asset.code, issue_seq_num, amount, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType, &PublicParams::default()).c(d!())?;
 
-           let out_name = format!("utxo{}", builder.new_txos.len());
+                let out_name = format!("utxo{}", builder.new_txos.len());
 
-           match builder.builder.transaction().body.operations.last() {
-             Some(Operation::IssueAsset(iss)) => {
-               assert_eq!(iss.body.records.len(), 1);
-               let (txo, memo) = iss.body.records[0].clone();
-               let oar = open_blind_asset_record(&txo.record, &memo, &iss_kp).c(d!())?;
+                match builder.builder.transaction().body.operations.last() {
+                    Some(Operation::IssueAsset(iss)) => {
+                        assert_eq!(iss.body.records.len(), 1);
+                        let (txo, memo) = iss.body.records[0].clone();
+                        let oar = open_blind_asset_record(&txo.record, &memo, &iss_kp).c(d!())?;
 
-               builder.new_txos.push((out_name.clone(),
-                                      TxoCacheEntry { sid: None,
-                                                      asset_type: Some(asset_nick.clone()),
-                                                      record: txo,
-                                                      owner_memo: memo,
-                                                      ledger_state: None,
-                                                      owner:
-                                                        Some(PubkeyName(issuer_nick.0.clone())),
-                                                      opened_record: Some(oar),
-                                                      unspent: true }));
-             }
-             x => {
-               panic!("The transaction builder doesn't include our operation! Got {:?}",
-                      x);
-             }
-           }
-           if !builder.signers.contains(&issuer_nick) {
-             builder.signers.push(issuer_nick.clone());
-           }
-           builder.operations
-                  .push(OpMetadata::IssueAsset { issuer_nick: PubkeyName(issuer_nick.0.clone()),
-                                                 asset_nick: asset_nick.clone(),
-                                                 output_name: out_name,
-                                                 output_amt: amount,
-                                                 issue_seq_num });
-           Ok(())
-         }
-       }).c(d!())?;
+                        builder.new_txos.push((
+                            out_name.clone(),
+                            TxoCacheEntry {
+                                sid: None,
+                                asset_type: Some(asset_nick.clone()),
+                                record: txo,
+                                owner_memo: memo,
+                                ledger_state: None,
+                                owner: Some(PubkeyName(issuer_nick.0.clone())),
+                                opened_record: Some(oar),
+                                unspent: true,
+                            },
+                        ));
+                    }
+                    x => {
+                        panic!("The transaction builder doesn't include our operation! Got {:?}", x);
+                    }
+                }
+                if !builder.signers.contains(&issuer_nick) {
+                    builder.signers.push(issuer_nick.clone());
+                }
+                builder.operations.push(OpMetadata::IssueAsset {
+                    issuer_nick: PubkeyName(issuer_nick.0.clone()),
+                    asset_nick: asset_nick.clone(),
+                    output_name: out_name,
+                    output_amt: amount,
+                    issue_seq_num,
+                });
+                Ok(())
+            }
+        })
+        .c(d!())?;
 
     store
         .with_txn_builder(&builder_nick, |the_builder| {
@@ -1574,19 +1572,10 @@ pub fn transfer_assets<S: CliDataStore>(
             if let Some(inp) =
                 prompt_opt::<String, _>("Which input would you like?").c(d!())?
             {
-                let local_val = match (
-                    txn_utxos.contains_key(&inp),
-                    utxos.contains_key(&TxoName(inp.clone())),
-                ) {
+                let local_val = match (txn_utxos.contains_key(&inp), utxos.contains_key(&TxoName(inp.clone()))) {
                     (true, false) => true,
                     (false, true) => false,
-                    (true, true) => prompt_default(
-                        format!(
-                            "'{}' is ambiguous -- choose the '{}' from this transaction?",
-                            inp, inp
-                        ),
-                        false,
-                    ).c(d!())?,
+                    (true, true) => prompt_default(format!("'{}' is ambiguous -- choose the '{}' from this transaction?", inp, inp), false).c(d!())?,
                     (false, false) => {
                         eprintln!("No TXO with name '{}' found", inp);
                         continue;
@@ -2142,7 +2131,7 @@ pub fn export_keypair<S: CliDataStore>(store: &mut S, nick: String) -> Result<()
     let name = KeypairName(nick);
     let mixed_pair = store.get_encrypted_keypair(&name).c(d!())?;
     if let Some(mixed_pair) = mixed_pair {
-        let key_pair = serde_json::to_string(&mixed_pair).unwrap();
+        let key_pair = serde_json::to_string(&mixed_pair).c(d!())?;
         println!("{}", key_pair);
         Ok(())
     } else {

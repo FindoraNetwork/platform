@@ -54,7 +54,7 @@ fn test_create_asset() {
         &keys,
         Some(code),
         AssetRules::default(),
-        "test".into(),
+        "test",
         PolicyChoice::Fungible(),
     ))
     .transaction();
@@ -96,7 +96,7 @@ fn test_create_asset() {
     let oar1 = pnk!(open_blind_asset_record(&bar1, &None, &keys));
     let oar2 = pnk!(open_blind_asset_record(&bar2, &None, &keys));
     assert!(bar1_proof.is_valid(state_comm1.clone()));
-    assert!(bar2_proof.is_valid(state_comm1.clone()));
+    assert!(bar2_proof.is_valid(state_comm1));
 
     let mut builder = TransferOperationBuilder::new();
     let builder_ref = builder
@@ -169,7 +169,7 @@ fn test_loan_repayment(
             &fiat_issuer_keys,
             Some(fiat_code),
             AssetRules::default(),
-            "fiat".into(),
+            "fiat",
             PolicyChoice::Fungible(),
         )
         .c(d!())?
@@ -177,7 +177,7 @@ fn test_loan_repayment(
             &borrower_keys,
             Some(debt_code),
             AssetRules::default(),
-            &serde_json::to_string(&debt_memo).unwrap(),
+            &serde_json::to_string(&debt_memo).c(d!())?,
             PolicyChoice::Fungible(),
         )
         .c(d!())?
@@ -218,7 +218,7 @@ fn test_loan_repayment(
             0,
             &[(
                 TxOutput {
-                    record: fiat_ba.clone(),
+                    record: fiat_ba,
                     lien: None,
                 },
                 fiat_owner_memo,
@@ -231,7 +231,7 @@ fn test_loan_repayment(
             0,
             &[(
                 TxOutput {
-                    record: debt_ba.clone(),
+                    record: debt_ba,
                     lien: None,
                 },
                 debt_owner_memo,
@@ -255,7 +255,7 @@ fn test_loan_repayment(
         .sign(&fiat_issuer_keys)
         .c(d!())?;
 
-    let fiat_to_borrower_input_ba = fiat_to_lender_op.get_output_record(0).unwrap();
+    let fiat_to_borrower_input_ba = fiat_to_lender_op.get_output_record(0).c(d!())?;
     let fiat_to_borrower_input_oar =
         open_blind_asset_record(&fiat_to_borrower_input_ba, &None, &lender_keys)
             .c(d!())?;
@@ -295,12 +295,13 @@ fn test_loan_repayment(
         .sign(&borrower_keys)
         .c(d!())?;
 
-    let debt_burned_input_ba = debt_initiation_op.get_output_record(1).unwrap();
+    let debt_burned_input_ba = debt_initiation_op.get_output_record(1).c(d!())?;
     let debt_burned_input_oar =
-        open_blind_asset_record(&debt_burned_input_ba, &None, &lender_keys).unwrap();
-    let fiat_payment_input_ba = debt_initiation_op.get_output_record(0).unwrap();
+        open_blind_asset_record(&debt_burned_input_ba, &None, &lender_keys).c(d!())?;
+    let fiat_payment_input_ba = debt_initiation_op.get_output_record(0).c(d!())?;
     let fiat_payment_input_oar =
-        open_blind_asset_record(&fiat_payment_input_ba, &None, &borrower_keys).unwrap();
+        open_blind_asset_record(&fiat_payment_input_ba, &None, &borrower_keys)
+            .c(d!())?;
 
     let mut xfr_builder = TransferOperationBuilder::new();
     let loan_repayment_template = AssetRecordTemplate::with_no_asset_tracing(
@@ -370,15 +371,17 @@ fn test_update_memo() {
     let mut builder = TransactionBuilder::from_seq_id(ledger.get_block_commit_count());
 
     // Define the asset and verify
-    let mut asset_rules = AssetRules::default();
     // The asset must be up updatable in order to change the memo later
-    asset_rules.updatable = true;
+    let asset_rules = AssetRules {
+        updatable: true,
+        ..AssetRules::default()
+    };
     // Create an asset with the memo defined as "test"
     let tx = pnk!(builder.add_operation_create_asset(
         &keys,
         Some(code),
         asset_rules,
-        "test".into(),
+        "test",
         PolicyChoice::Fungible(),
     ))
     .transaction();
@@ -429,14 +432,11 @@ pub fn test_update_memo_orig() {
     let mut tx_bad = builder.transaction().clone();
     for i in 0..tx_bad.body.operations.len() {
         let op = &mut tx_bad.body.operations[i];
-        match op {
-            Operation::UpdateMemo(ref mut memo_update) => {
-                memo_update.pubkey = adversary.get_pk();
-            }
-            _ => (),
+        if let Operation::UpdateMemo(ref mut memo_update) = op {
+            memo_update.pubkey = adversary.get_pk();
         }
     }
-    assert!(TxnEffect::compute_effect(tx_bad.clone()).is_err());
+    assert!(TxnEffect::compute_effect(tx_bad).is_err());
 
     // Ensure that valid signature succeeds
     pnk!(TxnEffect::compute_effect(tx.clone()));
@@ -492,15 +492,11 @@ pub fn test_update_memo_darp() {
     txn_builder.add_operation_update_memo(&creator, code, "new_memo");
     let txn = txn_builder.transaction();
     let effect0 = pnk!(TxnEffect::compute_effect(txn.clone()));
-    let temp_sid0 = pnk!(ledger.apply_transaction(&mut block, effect0.clone()));
+    let temp_sid0 = pnk!(ledger.apply_transaction(&mut block, effect0));
 
     // Test 1: replay the exact same txn, it should fail
     let effect1 = pnk!(TxnEffect::compute_effect(txn.clone()));
-    assert!(
-        ledger
-            .apply_transaction(&mut block, effect1.clone())
-            .is_err()
-    );
+    assert!(ledger.apply_transaction(&mut block, effect1).is_err());
     ledger
         .finish_block(block)
         .unwrap()
@@ -513,11 +509,7 @@ pub fn test_update_memo_darp() {
     let txn = txn_builder.transaction();
     let effect = pnk!(TxnEffect::compute_effect(txn.clone()));
 
-    assert!(
-        ledger
-            .apply_transaction(&mut block, effect.clone())
-            .is_err()
-    );
+    assert!(ledger.apply_transaction(&mut block, effect).is_err());
 
     pnk!(ledger.finish_block(block));
 
@@ -533,15 +525,12 @@ pub fn test_update_memo_darp() {
     let mut tx_bad = txn_builder.transaction().clone();
     for i in 0..tx_bad.body.operations.len() {
         let op = &mut tx_bad.body.operations[i];
-        match op {
-            Operation::UpdateMemo(ref mut memo_update) => {
-                let mut prng = ChaChaRng::from_entropy();
-                memo_update.body.no_replay_token = NoReplayToken::new(&mut prng, seq_id);
-            }
-            _ => (),
+        if let Operation::UpdateMemo(ref mut memo_update) = op {
+            let mut prng = ChaChaRng::from_entropy();
+            memo_update.body.no_replay_token = NoReplayToken::new(&mut prng, seq_id);
         }
     }
-    assert!(TxnEffect::compute_effect(tx_bad.clone()).is_err());
+    assert!(TxnEffect::compute_effect(tx_bad).is_err());
 }
 
 #[test]
@@ -558,7 +547,7 @@ pub fn test_air_assign_operation() {
     // Construct credential
     let dl_attr = b"A1903479";
     let attr_map = vec![(dl.clone(), dl_attr.to_vec())];
-    let attributes = [(dl.clone(), &dl_attr[..])];
+    let attributes = [(dl, &dl_attr[..])];
     let signature = pnk!(credential_sign(
         &mut ledger.get_prng(),
         &cred_issuer_key.1,
@@ -566,7 +555,7 @@ pub fn test_air_assign_operation() {
         &attributes,
     ));
     let credential = Credential {
-        signature: signature.clone(),
+        signature,
         attributes: attr_map,
         issuer_pub_key: cred_issuer_key.0.clone(),
     };
@@ -582,22 +571,18 @@ pub fn test_air_assign_operation() {
     let mut txn_builder = TransactionBuilder::from_seq_id(seq_id);
     pnk!(txn_builder.add_operation_air_assign(
         &user_kp,
-        cred_user_key.0.clone(),
+        cred_user_key.0,
         commitment,
         cred_issuer_key.0,
         pok,
     ));
     let tx = txn_builder.transaction();
     let effect0 = pnk!(TxnEffect::compute_effect(tx.clone()));
-    let temp_sid0 = pnk!(ledger.apply_transaction(&mut block, effect0.clone()));
+    let temp_sid0 = pnk!(ledger.apply_transaction(&mut block, effect0));
 
     // Test 1: replay the exact same txn, it should fail
     let effect1 = pnk!(TxnEffect::compute_effect(tx.clone()));
-    assert!(
-        ledger
-            .apply_transaction(&mut block, effect1.clone())
-            .is_err()
-    );
+    assert!(ledger.apply_transaction(&mut block, effect1).is_err());
 
     pnk!(ledger.finish_block(block))
         .remove(&temp_sid0)
@@ -609,7 +594,7 @@ pub fn test_air_assign_operation() {
       // Immediately replaying should fail
       let air_assign_op2 = air_assign_op.clone();
       let tx2 = Transaction::from_operation(Operation::AIRAssign(air_assign_op2), seq_id);
-      let effect = TxnEffect::compute_effect(tx2).unwrap();
+      let effect = TxnEffect::compute_effect(tx2).c(d!())?;
       assert!(ledger.status.check_txn_effects(effect).is_err());
 
       // If we reset the key it should fail
@@ -619,7 +604,7 @@ pub fn test_air_assign_operation() {
       let effect = TxnEffect::compute_effect(tx);
       assert!(effect.is_err());
       let authenticated_air_res =
-        ledger.get_air_data(&serde_json::to_string(&cred_user_key.0).unwrap());
+        ledger.get_air_data(&serde_json::to_string(&cred_user_key.0).c(d!())?);
       assert!(authenticated_air_res.is_valid(ledger.get_state_commitment().0));
     */
 }
