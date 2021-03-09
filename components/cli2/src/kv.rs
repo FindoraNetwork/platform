@@ -89,7 +89,7 @@ impl KVStore {
     /// Opens up an in-memory store. Primarily intended for testing
     pub fn open_in_memory() -> Result<KVStore> {
         let conn = Connection::open_in_memory()
-            .c(d!(KVError::Open(PathBuf::from_str("In Memory").unwrap())))?;
+            .c(d!(KVError::Open(PathBuf::from_str("In Memory").c(d!())?)))?;
         Ok(KVStore { db: conn })
     }
 

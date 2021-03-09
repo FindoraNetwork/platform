@@ -28,6 +28,7 @@
 //! ```
 //!
 //! The two nodes then connect.
+#![deny(warnings)]
 
 use async_std::{io, task};
 use clap::{App, Arg, ArgMatches};
@@ -97,7 +98,7 @@ struct ConsensusState {
 }
 
 fn main() -> Result<()> {
-    flexi_logger::Logger::with_env().start().unwrap();
+    flexi_logger::Logger::with_env().start().c(d!())?;
 
     let args = parse_args();
     // Creating an identity Keypair for the local node, obtaining the local PeerId from the PublicKey.
@@ -129,7 +130,7 @@ fn main() -> Result<()> {
         .send()
         .c(d!())?;
     let (comm, idx, sig): (BitDigest, u64, XfrSignature) =
-        serde_json::from_str(&resp_gs.text().c(d!())?[..]).unwrap();
+        serde_json::from_str(&resp_gs.text().c(d!())?[..]).c(d!())?;
     let idx = if args.is_present("poison") {
         poison(idx)
     } else {
@@ -144,10 +145,10 @@ fn main() -> Result<()> {
         ))
         .send()
         .c(d!())?;
-    let pk: XfrPublicKey = serde_json::from_str(&resp_pk.text().c(d!())?[..]).unwrap();
+    let pk: XfrPublicKey = serde_json::from_str(&resp_pk.text().c(d!())?[..]).c(d!())?;
     info!("Got {:?} from public_key", pk);
 
-    match pk.verify(&serde_json::to_vec(&(comm, idx)).unwrap(), &sig) {
+    match pk.verify(&serde_json::to_vec(&(comm, idx)).c(d!())?, &sig) {
         Ok(()) => info!("Verification succeeded"),
         Err(zei_err) => error!("Verification failed with error = {}", zei_err),
     };
@@ -156,7 +157,7 @@ fn main() -> Result<()> {
         public_key: pk,
         global_state: (comm, idx, sig),
     };
-    let ks_str = serde_json::to_string(&key_and_state).unwrap();
+    let ks_str = serde_json::to_string(&key_and_state).c(d!())?;
     let consensus_state = ConsensusState {
         this_state: key_and_state,
         matches: HashSet::new(),

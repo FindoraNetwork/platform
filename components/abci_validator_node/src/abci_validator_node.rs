@@ -1,4 +1,6 @@
 #![allow(clippy::field_reassign_with_default)]
+#![deny(warnings)]
+
 use abci::*;
 use ledger::data_model::{Operation, Transaction, TxnEffect, TxnSID};
 use ledger::store::*;
@@ -47,7 +49,7 @@ impl TxnForward for TendermintForward {
         let client = reqwest::blocking::Client::builder()
             .timeout(None)
             .build()
-            .unwrap();
+            .c(d!())?;
         let tendermint_reply = format!("http://{}", self.tendermint_reply);
         thread::spawn(move || {
             ruc::info_omit!(
@@ -185,7 +187,7 @@ impl abci::Application for ABCISubmissionServer {
         info!("locking for write");
         if let Ok(mut la) = self.la.write() {
             if !la.all_commited() {
-                assert!(la.block_pulse_count() > 0);
+                debug_assert!(la.block_pulse_count() > 0);
                 info!(
                     "begin_block: continuation, block pulse count is {}",
                     la.block_pulse_count()

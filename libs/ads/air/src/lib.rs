@@ -1,4 +1,6 @@
 #![allow(dead_code)]
+#![deny(warnings)]
+
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use sparse_merkle_tree::{

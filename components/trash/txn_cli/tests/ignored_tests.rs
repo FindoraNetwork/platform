@@ -1,9 +1,8 @@
-use ledger::data_model::errors::PlatformError;
+#![allow(unused)]
 use ledger::data_model::AssetTypeCode;
 #[cfg(test)]
 use network::MockLedgerStandalone;
 use ruc::*;
-use std::iter::once;
 use tempfile::tempdir;
 use txn_cli::txn_app::{get_cli_app, process_inputs};
 
@@ -15,7 +14,7 @@ fn submit_command(
     rest_client: &mut MockLedgerStandalone,
 ) -> Result<()> {
     let app = get_cli_app();
-    let inputs = app.get_matches_from_safe(cmd_vec).unwrap();
+    let inputs = app.get_matches_from_safe(cmd_vec).c(d!())?;
     process_inputs(inputs, rest_client).c(d!())
 }
 
@@ -390,6 +389,7 @@ fn issue_asset_with_confidential_amount(
 }
 
 #[cfg(test)]
+#[allow(clippy::too_many_arguments)]
 fn transfer_asset(
     dir: &str,
     txn_builder_path: &str,
@@ -625,8 +625,8 @@ fn test_create_or_overwrite_credentials() {
 // //
 // #[test]
 // fn test_view() {
-//     let tmp_dir = tempdir().unwrap();
-//     let dir = tmp_dir.path().to_str().unwrap();
+//     let tmp_dir = tempdir().c(d!())?;
+//     let dir = tmp_dir.path().to_str().c(d!())?;
 //
 //     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 //
@@ -712,7 +712,7 @@ fn test_create_or_overwrite_credentials() {
 //     view_credential_attribute("0", "min_income", &mut ledger_standalone)
 //         .expect("Failed to view the attribute");
 //
-//     tmp_dir.close().unwrap();
+//     tmp_dir.close().c(d!())?;
 // }
 
 //
@@ -729,12 +729,13 @@ fn test_define_asset_simple_policies() {
         .expect("Failed to create a borrower");
 
     // Create txn builder and key pairs
-    create_txn_builder_with_path(txn_builder_file, &mut ledger_standalone).expect(
-        &format!(
-            "Failed to create transaction builder at file {}",
-            txn_builder_file
-        ),
-    );
+    create_txn_builder_with_path(txn_builder_file, &mut ledger_standalone)
+        .unwrap_or_else(|_| {
+            panic!(
+                "Failed to create transaction builder at file {}",
+                txn_builder_file
+            )
+        });
 
     // Define token code
     let token_code = AssetTypeCode::gen_random().to_base64();
@@ -774,8 +775,8 @@ fn test_define_asset_simple_policies() {
 // #[test]
 // fn test_define_issue_transfer_and_submit_with_args() {
 //     // Create users and files
-//     let tmp_dir = tempdir().unwrap();
-//     let dir = tmp_dir.path().to_str().unwrap();
+//     let tmp_dir = tempdir().c(d!())?;
+//     let dir = tmp_dir.path().to_str().c(d!())?;
 //     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 //     sign_up_borrower(dir, "Borrower 1", &mut ledger_standalone)
 //         .expect("Failed to create a borrower");
@@ -785,10 +786,10 @@ fn test_define_asset_simple_policies() {
 //     let issuance_txn_builder_buf = tmp_dir.path().join("tb_issue_submit");
 //     let transfer_txn_builder_buf = tmp_dir.path().join("tb_transfer_submit");
 //     let sids_buf = tmp_dir.path().join("sids_define_issue_transfer_and_submit");
-//     let creation_txn_builder_file = creation_txn_builder_buf.to_str().unwrap();
-//     let issuance_txn_builder_file = issuance_txn_builder_buf.to_str().unwrap();
-//     let transfer_txn_builder_file = transfer_txn_builder_buf.to_str().unwrap();
-//     let sids_file = sids_buf.to_str().unwrap();
+//     let creation_txn_builder_file = creation_txn_builder_buf.to_str().c(d!())?;
+//     let issuance_txn_builder_file = issuance_txn_builder_buf.to_str().c(d!())?;
+//     let transfer_txn_builder_file = transfer_txn_builder_buf.to_str().c(d!())?;
+//     let sids_file = sids_buf.to_str().c(d!())?;
 //
 //     // Define asset
 //     let token_code = AssetTypeCode::gen_random().to_base64();
@@ -842,7 +843,7 @@ fn test_define_asset_simple_policies() {
 //     submit(transfer_txn_builder_file, &mut ledger_standalone)
 //         .expect("Failed to submit transaction");
 //
-//     tmp_dir.close().unwrap();
+//     tmp_dir.close().c(d!())?;
 // }
 
 // TODO: update `init_data.json`, and uncomment this case
@@ -850,8 +851,8 @@ fn test_define_asset_simple_policies() {
 // #[test]
 // fn test_define_issue_transfer_and_submit_with_args_hyphen() {
 //     // Create users and files
-//     let tmp_dir = tempdir().unwrap();
-//     let dir = tmp_dir.path().to_str().unwrap();
+//     let tmp_dir = tempdir().c(d!())?;
+//     let dir = tmp_dir.path().to_str().c(d!())?;
 //     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
 //     sign_up_borrower(dir, "Borrower 1", &mut ledger_standalone)
 //         .expect("Failed to create a borrower");
@@ -861,10 +862,10 @@ fn test_define_asset_simple_policies() {
 //     let issuance_txn_builder_buf = tmp_dir.path().join("tb_issue_submit");
 //     let transfer_txn_builder_buf = tmp_dir.path().join("tb_transfer_submit");
 //     let sids_buf = tmp_dir.path().join("sids_define_issue_transfer_and_submit");
-//     let creation_txn_builder_file = creation_txn_builder_buf.to_str().unwrap();
-//     let issuance_txn_builder_file = issuance_txn_builder_buf.to_str().unwrap();
-//     let transfer_txn_builder_file = transfer_txn_builder_buf.to_str().unwrap();
-//     let sids_file = sids_buf.to_str().unwrap();
+//     let creation_txn_builder_file = creation_txn_builder_buf.to_str().c(d!())?;
+//     let issuance_txn_builder_file = issuance_txn_builder_buf.to_str().c(d!())?;
+//     let transfer_txn_builder_file = transfer_txn_builder_buf.to_str().c(d!())?;
+//     let sids_file = sids_buf.to_str().c(d!())?;
 //
 //     // Define asset
 //     let token_code = AssetTypeCode::new_from_base64(
@@ -872,7 +873,7 @@ fn test_define_asset_simple_policies() {
 //             .chain(AssetTypeCode::gen_random().to_base64().chars().skip(1))
 //             .collect::<String>(),
 //     )
-//     .unwrap()
+//     .c(d!())?
 //     .to_base64();
 //     define_asset(
 //         dir,
@@ -924,20 +925,20 @@ fn test_define_asset_simple_policies() {
 //     submit(transfer_txn_builder_file, &mut ledger_standalone)
 //         .expect("Failed to submit transaction");
 //
-//     tmp_dir.close().unwrap();
+//     tmp_dir.close().c(d!())?;
 // }
 
 /* This test causes a CI failure. It is a riddle, wrapped in a mystery, inside an enigma; but perhaps there is a key.
 #[test]
 #[ignore]
 fn test_issue_transfer_trace_and_submit_with_args() {
-  let tmp_dir = tempdir().unwrap();
-  let dir = tmp_dir.path().to_str().unwrap();
+  let tmp_dir = tempdir().c(d!())?;
+  let dir = tmp_dir.path().to_str().c(d!())?;
   let txn_builder_buf = tmp_dir.path().join("tb_issue_transfer_args");
-  let txn_builder_file = txn_builder_buf.to_str().unwrap();
+  let txn_builder_file = txn_builder_buf.to_str().c(d!())?;
   let memo_buf = tmp_dir.path().join("memos_issue_transfer_and_submit");
   let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
-  let memo_file = memo_buf.to_str().unwrap();
+  let memo_file = memo_buf.to_str().c(d!())?;
 
   // Create txn builder and key pairs
   create_txn_builder_with_path(txn_builder_file,
@@ -984,14 +985,13 @@ fn test_issue_transfer_trace_and_submit_with_args() {
 
   submit(txn_builder_file, &mut ledger_standalone).expect("Failed to submit transaction");
 
-  tmp_dir.close().unwrap();
+  tmp_dir.close().c(d!())?;
 }
 */
 // Redmine #70
 // #[test]
 // #[ignore]
 #[cfg(test)]
-#[allow(unused)]
 fn test_air_assign() {
     // Create txn builder and key pair
     let tmp_dir = tempdir().unwrap();
@@ -1027,11 +1027,11 @@ fn test_air_assign() {
 // #[test]
 // #[ignore]
 // fn test_request_fulfill_and_pay_loan_with_args() {
-//     let tmp_dir = tempdir().unwrap();
-//     let dir = tmp_dir.path().to_str().unwrap();
+//     let tmp_dir = tempdir().c(d!())?;
+//     let dir = tmp_dir.path().to_str().c(d!())?;
 //     let memo_buf = tmp_dir.path().join("memo_fulfill_loan_args");
 //     let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
-//     let memo_file = memo_buf.to_str().unwrap();
+//     let memo_file = memo_buf.to_str().c(d!())?;
 //
 //     // Load funds
 //
@@ -1098,5 +1098,5 @@ fn test_air_assign() {
 //     // 3. Third time:
 //     //    Should fail because the loan has been paid off
 //     assert!(pay_loan(dir, "0", "0", "3000", &mut ledger_standalone).is_err());
-//     tmp_dir.close().unwrap();
+//     tmp_dir.close().c(d!())?;
 // }

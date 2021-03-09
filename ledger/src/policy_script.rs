@@ -486,11 +486,12 @@ pub fn run_txn_check(
                         } else {
                             true
                         });
-                        res_totals.get_mut(inp).as_mut().unwrap().push(*amt);
+                        res_totals.get_mut(inp).as_mut().c(d!())?.push(*amt);
 
                         debug_assert!(!inp_txo.record.asset_type.is_confidential());
 
-                        asset_type = inp_txo.record.asset_type.get_asset_type().unwrap();
+                        asset_type =
+                            inp_txo.record.asset_type.get_asset_type().c(d!())?;
                     } else {
                         debug_assert!(!res_totals.contains_key(inp));
 
@@ -515,12 +516,12 @@ pub fn run_txn_check(
                     if let Some(out_res) = out {
                         if let Some(out_txo) = res_vars.get(out_res) {
                             debug_assert!(!res_vars.contains_key(inp));
-                            res_totals.get_mut(out_res).as_mut().unwrap().push(*amt);
+                            res_totals.get_mut(out_res).as_mut().c(d!())?.push(*amt);
 
                             debug_assert!(!out_txo.record.asset_type.is_confidential());
 
                             if asset_type
-                                != out_txo.record.asset_type.get_asset_type().unwrap()
+                                != out_txo.record.asset_type.get_asset_type().c(d!())?
                             {
                                 return Err(eg!(fail!()));
                             }
@@ -1019,7 +1020,7 @@ pub fn run_txn_check(
 
                     // txo.record.asset_type should be established as non-None by the
                     // first two checking loops.
-                    if *asset_type != txo.record.asset_type.get_asset_type().unwrap() {
+                    if *asset_type != txo.record.asset_type.get_asset_type().c(d!())? {
                         return Err(eg!(fail!()));
                     }
                 }
@@ -1039,7 +1040,7 @@ pub fn run_txn_check(
                     // txo.record.asset_type should be established as non-None by the
                     // first two checking loops.
                     if *inp_asset_type
-                        != inp_txo.record.asset_type.get_asset_type().unwrap()
+                        != inp_txo.record.asset_type.get_asset_type().c(d!())?
                     {
                         return Err(eg!(fail!()));
                     }
@@ -1058,7 +1059,7 @@ pub fn run_txn_check(
                         // txo.record.asset_type should be established as non-None by the
                         // first two checking loops.
                         if *out_asset_type
-                            != out_txo.record.asset_type.get_asset_type().unwrap()
+                            != out_txo.record.asset_type.get_asset_type().c(d!())?
                         {
                             return Err(eg!(fail!()));
                         }

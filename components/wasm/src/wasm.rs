@@ -2,6 +2,8 @@
 // Allows web clients to issue transactions from a browser contexts.
 // For now, forwards transactions to a ledger hosted locally.
 // To compile wasm package, run wasm-pack build in the wasm directory;
+#![deny(warnings)]
+
 use crate::wasm_data_model::*;
 use credentials::{
     credential_commit, credential_issuer_key_gen, credential_open_commitment,

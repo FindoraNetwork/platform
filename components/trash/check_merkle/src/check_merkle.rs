@@ -23,6 +23,8 @@
 //!  If the file cannot be opened, the program invokes the tree
 //!  rebuild method, and returns the result of that procedure.
 //!
+#![deny(warnings)]
+
 extern crate ledger;
 
 use log::info;

@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use clap::{App, Arg, SubCommand};
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
@@ -182,7 +184,7 @@ mod tests {
         rest_client: &MockLedgerStandalone,
     ) -> Result<(), PlatformError> {
         let app = get_cli_app();
-        let inputs = app.get_matches_from_safe(cmd_vec).unwrap();
+        let inputs = app.get_matches_from_safe(cmd_vec).c(d!())?;
         process_inputs(inputs, rest_client)
     }
 
@@ -248,11 +250,11 @@ mod tests {
                 &mut ledger_standalone,
                 &mut ChaChaRng::from_entropy(),
             )
-            .unwrap();
+            .c(d!())?;
             let utxo_str = format!("{}", utxo);
             let blind_str = serde_json::to_string(&code_blind)
                 .map_err(|e| ser_fail!(e))
-                .unwrap();
+                .c(d!())?;
             utxos.push(utxo_str);
             blinds.push(blind_str);
         }
@@ -294,6 +296,6 @@ mod tests {
         prove_and_verify_membership("2", &utxos[2], &blinds[2], &ledger_standalone)
             .expect("Failed to prove and verify the whitelist membership.");
 
-        fs::remove_file(WHITELIST_FILE).unwrap();
+        fs::remove_file(WHITELIST_FILE).c(d!())?;
     }
 }
