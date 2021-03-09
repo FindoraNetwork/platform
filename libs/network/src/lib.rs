@@ -3,7 +3,7 @@
 
 use ledger::data_model::{
     AssetType, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedUtxo, BlockSID,
-    FinalizedTransaction, KVBlind, StateCommitmentData, Transaction, TxoSID,
+    FinalizedTransaction, StateCommitmentData, Transaction, TxoSID,
 };
 use ledger::store::LedgerState;
 use ledger_api_service::{
