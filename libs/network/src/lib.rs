@@ -130,16 +130,16 @@ impl<
     Q: RestfulQueryServerAccess,
 > RestfulQueryServerAccess for LedgerStandalone<LU, LA, Q>
 {
-    fn store_custom_data(
-        &mut self,
-        data: &dyn AsRef<[u8]>,
-        key: &Key,
-        blind: Option<KVBlind>,
-    ) -> Result<()> {
-        self.query_server_client
-            .store_custom_data(data, key, blind)
-            .c(d!())
-    }
+    // fn store_custom_data(
+    //     &mut self,
+    //     data: &dyn AsRef<[u8]>,
+    //     key: &Key,
+    //     blind: Option<KVBlind>,
+    // ) -> Result<()> {
+    //     self.query_server_client
+    //         .store_custom_data(data, key, blind)
+    //         .c(d!())
+    // }
 
     fn fetch_custom_data(&self, key: &Key) -> Result<Vec<u8>> {
         self.query_server_client.fetch_custom_data(key).c(d!())
