@@ -47,7 +47,7 @@ impl TxnForward for TendermintForward {
         let client = reqwest::blocking::Client::builder()
             .timeout(None)
             .build()
-            .unwrap();
+            .c(d!())?;
         let tendermint_reply = format!("http://{}", self.tendermint_reply);
         thread::spawn(move || {
             ruc::info_omit!(

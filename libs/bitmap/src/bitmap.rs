@@ -646,7 +646,7 @@ impl BitMap {
     ///     .write(true)
     ///     .create_new(true)
     ///     .open(&path)
-    ///     .unwrap();
+    ///     .c(d!())?;
     ///
     /// let mut bitmap =
     ///   match BitMap::create(file) {
@@ -703,14 +703,14 @@ impl BitMap {
     /// #     .write(true)
     /// #     .create_new(true)
     /// #     .open(&path)
-    /// #     .unwrap();
+    /// #     .c(d!())?;
     /// # drop(file);
     /// let file =
     ///   OpenOptions::new()
     ///     .read(true)
     ///     .write(true)
     ///     .open(&path)
-    ///     .unwrap();
+    ///     .c(d!())?;
     ///
     /// let mut bitmap =
     ///   match BitMap::open(file) {
@@ -786,7 +786,7 @@ impl BitMap {
 
         // Read each block.
         for index in 0..total_blocks {
-            let mut block = BitBlock::new(BIT_ARRAY, 0).unwrap();
+            let mut block = BitBlock::new(BIT_ARRAY, 0).c(d!())?;
 
             block.header.contents = BIT_INVALID;
 

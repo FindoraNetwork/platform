@@ -177,7 +177,7 @@ fn test_loan_repayment(
             &borrower_keys,
             Some(debt_code),
             AssetRules::default(),
-            &serde_json::to_string(&debt_memo).unwrap(),
+            &serde_json::to_string(&debt_memo).c(d!())?,
             PolicyChoice::Fungible(),
         )
         .c(d!())?
@@ -255,7 +255,7 @@ fn test_loan_repayment(
         .sign(&fiat_issuer_keys)
         .c(d!())?;
 
-    let fiat_to_borrower_input_ba = fiat_to_lender_op.get_output_record(0).unwrap();
+    let fiat_to_borrower_input_ba = fiat_to_lender_op.get_output_record(0).c(d!())?;
     let fiat_to_borrower_input_oar =
         open_blind_asset_record(&fiat_to_borrower_input_ba, &None, &lender_keys)
             .c(d!())?;
@@ -295,12 +295,13 @@ fn test_loan_repayment(
         .sign(&borrower_keys)
         .c(d!())?;
 
-    let debt_burned_input_ba = debt_initiation_op.get_output_record(1).unwrap();
+    let debt_burned_input_ba = debt_initiation_op.get_output_record(1).c(d!())?;
     let debt_burned_input_oar =
-        open_blind_asset_record(&debt_burned_input_ba, &None, &lender_keys).unwrap();
-    let fiat_payment_input_ba = debt_initiation_op.get_output_record(0).unwrap();
+        open_blind_asset_record(&debt_burned_input_ba, &None, &lender_keys).c(d!())?;
+    let fiat_payment_input_ba = debt_initiation_op.get_output_record(0).c(d!())?;
     let fiat_payment_input_oar =
-        open_blind_asset_record(&fiat_payment_input_ba, &None, &borrower_keys).unwrap();
+        open_blind_asset_record(&fiat_payment_input_ba, &None, &borrower_keys)
+            .c(d!())?;
 
     let mut xfr_builder = TransferOperationBuilder::new();
     let loan_repayment_template = AssetRecordTemplate::with_no_asset_tracing(
@@ -609,7 +610,7 @@ pub fn test_air_assign_operation() {
       // Immediately replaying should fail
       let air_assign_op2 = air_assign_op.clone();
       let tx2 = Transaction::from_operation(Operation::AIRAssign(air_assign_op2), seq_id);
-      let effect = TxnEffect::compute_effect(tx2).unwrap();
+      let effect = TxnEffect::compute_effect(tx2).c(d!())?;
       assert!(ledger.status.check_txn_effects(effect).is_err());
 
       // If we reset the key it should fail
@@ -619,7 +620,7 @@ pub fn test_air_assign_operation() {
       let effect = TxnEffect::compute_effect(tx);
       assert!(effect.is_err());
       let authenticated_air_res =
-        ledger.get_air_data(&serde_json::to_string(&cred_user_key.0).unwrap());
+        ledger.get_air_data(&serde_json::to_string(&cred_user_key.0).c(d!())?);
       assert!(authenticated_air_res.is_valid(ledger.get_state_commitment().0));
     */
 }

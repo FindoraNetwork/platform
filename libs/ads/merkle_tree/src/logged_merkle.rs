@@ -245,8 +245,8 @@ impl LoggedMerkle {
     ///
     /// # let _ = std::fs::remove_file(&tree_path);
     /// # let _ = std::fs::remove_file(&log_path);
-    /// let tree = AppendOnlyMerkle::create(&tree_path).unwrap();
-    /// let file = OpenOptions::new().write(true).create(true).open(log_path).unwrap();
+    /// let tree = AppendOnlyMerkle::create(&tree_path).c(d!())?;
+    /// let file = OpenOptions::new().write(true).create(true).open(log_path).c(d!())?;
     /// let logged = LoggedMerkle::new(tree, file);
     /// println!("The tree state is {}", logged.state());
     /// # drop(logged);

@@ -166,13 +166,13 @@ where
         let mut block = None;
         std::mem::swap(&mut self.block, &mut block);
         if let Some(block) = block {
-            let mut ledger = self.committed_state.write().unwrap();
+            let mut ledger = self.committed_state.write().c(d!())?;
             let finalized_txns = ledger
                 .finish_block(block)
                 .expect("Ledger could not finish block");
             // Update status of all committed transactions
             for (txn_temp_sid, handle, txn) in self.pending_txns.drain(..) {
-                let committed_txn_info = finalized_txns.get(&txn_temp_sid).unwrap();
+                let committed_txn_info = finalized_txns.get(&txn_temp_sid).c(d!())?;
                 self.txn_status
                     .insert(handle, TxnStatus::Committed(committed_txn_info.clone()));
 
@@ -267,7 +267,7 @@ where
                 // End the current block if it's eligible to commit
                 if self.eligible_to_commit() {
                     // If the ledger is eligible for a commit, end block will not return an error
-                    self.end_block().unwrap();
+                    self.end_block().c(d!())?;
 
                     // If begin_commit and end_commit are no longer empty, call them here
                 }

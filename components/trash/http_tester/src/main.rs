@@ -59,7 +59,7 @@ impl AIR {
                 .collect(),
             issuer_pub_key: self.issuer_pk.clone(),
         };
-        // let xfr_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(KEY_PAIR_STR).unwrap());
+        // let xfr_key_pair = XfrKeyPair::zei_from_bytes(&hex::decode(KEY_PAIR_STR).c(d!())?);
         let xfr_key_pair = XfrKeyPair::generate(&mut self.prng);
         let (commitment, proof, key) = credential_commit(
             &mut self.prng,
@@ -158,7 +158,7 @@ fn main() {
 }
 
 fn main_inner() -> Result<()> {
-    flexi_logger::Logger::with_env().start().unwrap();
+    flexi_logger::Logger::with_env().start().c(d!())?;
     let args = parse_args();
     let num_txns = args
         .value_of("num_txns")
@@ -176,6 +176,6 @@ fn main_inner() -> Result<()> {
         .send()
         .c(d!())?;
     let (_, seq_id, _): GlobalState<StateCommitmentData> =
-        serde_json::from_str(&resp_gs.text().c(d!())?[..]).unwrap();
+        serde_json::from_str(&resp_gs.text().c(d!())?[..]).c(d!())?;
     run_txns(seq_id, num_txns, batch_size)
 }

@@ -95,15 +95,15 @@ mod tests {
             &mut ledger_standalone,
             prng,
         )
-        .unwrap();
+        .c(d!())?;
         let commitment_1 =
-            query_utxo_and_get_type_commitment(utxo_1, &ledger_standalone).unwrap();
+            query_utxo_and_get_type_commitment(utxo_1, &ledger_standalone).c(d!())?;
 
         // Prove the whitelist memberships of the second asset with the incorrect index
         // Should panic
         whitelist
             .prove_membership(0, commitment_1, blind_1)
-            .unwrap();
+            .c(d!())?;
     }
 
     #[should_panic(expected = "assertion failed: com_elem == *elem")]
@@ -132,9 +132,9 @@ mod tests {
             &mut ledger_standalone,
             prng,
         )
-        .unwrap();
+        .c(d!())?;
         let commitment_0 =
-            query_utxo_and_get_type_commitment(utxo_0, &ledger_standalone).unwrap();
+            query_utxo_and_get_type_commitment(utxo_0, &ledger_standalone).c(d!())?;
         let (_, _, blind_1) = define_issue_transfer_and_get_utxo_and_blinds(
             &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
             &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
@@ -145,13 +145,13 @@ mod tests {
             &mut ledger_standalone,
             prng,
         )
-        .unwrap();
+        .c(d!())?;
 
         // Prove the whitelist memberships of the second asset with the incorrect UTXO SID
         // Should panic
         whitelist
             .prove_membership(1, commitment_0, blind_1)
-            .unwrap();
+            .c(d!())?;
     }
 
     #[should_panic(expected = "assertion failed: com_elem == *elem")]
@@ -180,7 +180,7 @@ mod tests {
             &mut ledger_standalone,
             prng,
         )
-        .unwrap();
+        .c(d!())?;
         let (utxo_1, _, _) = define_issue_transfer_and_get_utxo_and_blinds(
             &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
             &XfrKeyPair::generate(&mut ChaChaRng::from_entropy()),
@@ -191,15 +191,15 @@ mod tests {
             &mut ledger_standalone,
             prng,
         )
-        .unwrap();
+        .c(d!())?;
         let commitment_1 =
-            query_utxo_and_get_type_commitment(utxo_1, &ledger_standalone).unwrap();
+            query_utxo_and_get_type_commitment(utxo_1, &ledger_standalone).c(d!())?;
 
         // Prove the whitelist memberships of the second asset with the incorrect UTXO SID
         // Should panic
         whitelist
             .prove_membership(1, commitment_1, blind_0)
-            .unwrap();
+            .c(d!())?;
     }
 
     #[test]
@@ -238,9 +238,9 @@ mod tests {
             &mut ledger_standalone,
             prng,
         )
-        .unwrap();
+        .c(d!())?;
         let commitment_1 =
-            query_utxo_and_get_type_commitment(utxo_1, &ledger_standalone).unwrap();
+            query_utxo_and_get_type_commitment(utxo_1, &ledger_standalone).c(d!())?;
 
         let (utxo_2, _, blind_2) = define_issue_transfer_and_get_utxo_and_blinds(
             &issuer_key_pair,
@@ -252,9 +252,9 @@ mod tests {
             &mut ledger_standalone,
             prng,
         )
-        .unwrap();
+        .c(d!())?;
         let commitment_2 =
-            query_utxo_and_get_type_commitment(utxo_2, &ledger_standalone).unwrap();
+            query_utxo_and_get_type_commitment(utxo_2, &ledger_standalone).c(d!())?;
 
         // Prove the whitelist memberships of the second and third assets
         let proof_1 = whitelist.prove_membership(1, commitment_1, blind_1);
@@ -265,12 +265,12 @@ mod tests {
         // Verify the whitelist memberships of the second and third assets
         assert!(
             whitelist
-                .verify_membership(commitment_1, proof_1.unwrap())
+                .verify_membership(commitment_1, proof_1.c(d!())?)
                 .is_ok()
         );
         assert!(
             whitelist
-                .verify_membership(commitment_2, proof_2.unwrap())
+                .verify_membership(commitment_2, proof_2.c(d!())?)
                 .is_ok()
         );
     }

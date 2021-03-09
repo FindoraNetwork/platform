@@ -330,7 +330,7 @@ where
     // TODO(joe?): Implement this
     Err(actix_web::error::ErrorBadRequest("unimplemented"))
     // if let Some(block_list) = parse_blocks(info.to_string()) {
-    //   let mut reader = data.write().unwrap();
+    //   let mut reader = data.write().c(d!())?;
 
     //   if let Some(vec) = reader.get_utxos(block_list) {
     //     Ok(serde_json::to_string(&vec)?)

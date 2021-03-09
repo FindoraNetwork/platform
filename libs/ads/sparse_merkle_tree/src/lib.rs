@@ -768,63 +768,54 @@ mod tests {
         assert!(smt.check_merkle_proof(&key, v, &p));
         // Negative cases of merkle proof verification:
         assert!(!smt.check_merkle_proof(
-      &key,
-      value.as_ref(),
-      &MerkleProof {
-        bitmap: b256("0200000000000000000000000000000000000000000000000000000000000080").0,
-        hashes: vec![
-          b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"),
-          b256("5a7ef746ad33334b4fbd7406a1a4ffa5c5f959199448d5ae6ed39b4a9d6ebe5a"),
-          ZERO_DIGEST, // extra hash
-        ],
-      }
-    ));
+            &key,
+            value.as_ref(),
+            &MerkleProof {
+                bitmap: b256("0200000000000000000000000000000000000000000000000000000000000080").0,
+                hashes: vec![
+                    b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"),
+                    b256("5a7ef746ad33334b4fbd7406a1a4ffa5c5f959199448d5ae6ed39b4a9d6ebe5a"),
+                    ZERO_DIGEST, // extra hash
+                ],
+            }
+        ));
         assert!(!smt.check_merkle_proof(
-      &key,
-      value.as_ref(),
-      &MerkleProof {
-        bitmap: b256("0200000000000000000000000000000000000000000000000000000000000080").0,
-        hashes: vec![
-          b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"),
-          // missing hash
-        ],
-      }
-    ));
+            &key,
+            value.as_ref(),
+            &MerkleProof {
+                bitmap: b256("0200000000000000000000000000000000000000000000000000000000000080").0,
+                hashes: vec![
+                    b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"),
+                    // missing hash
+                ],
+            }
+        ));
         assert!(!smt.check_merkle_proof(
-      &key,
-      value.as_ref(),
-      &MerkleProof {
-        // wrong bitmap - missing bit
-        bitmap: b256("0200000000000000000000000000000000000000000000000000000000000000").0,
-        hashes: vec![
-          b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"),
-          b256("5a7ef746ad33334b4fbd7406a1a4ffa5c5f959199448d5ae6ed39b4a9d6ebe5a"),
-        ],
-      }
-    ));
+            &key,
+            value.as_ref(),
+            &MerkleProof {
+                // wrong bitmap - missing bit
+                bitmap: b256("0200000000000000000000000000000000000000000000000000000000000000").0,
+                hashes: vec![b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"), b256("5a7ef746ad33334b4fbd7406a1a4ffa5c5f959199448d5ae6ed39b4a9d6ebe5a"),],
+            }
+        ));
         assert!(!smt.check_merkle_proof(
-      &key,
-      value.as_ref(),
-      &MerkleProof {
-        // wrong bitmap - extra bit
-        bitmap: b256("0200010000000000000000000000000000000000000000000000000000000080").0,
-        hashes: vec![
-          b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"),
-          b256("5a7ef746ad33334b4fbd7406a1a4ffa5c5f959199448d5ae6ed39b4a9d6ebe5a"),
-        ],
-      }
-    ));
+            &key,
+            value.as_ref(),
+            &MerkleProof {
+                // wrong bitmap - extra bit
+                bitmap: b256("0200010000000000000000000000000000000000000000000000000000000080").0,
+                hashes: vec![b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"), b256("5a7ef746ad33334b4fbd7406a1a4ffa5c5f959199448d5ae6ed39b4a9d6ebe5a"),],
+            }
+        ));
         assert!(!smt.check_merkle_proof(
-      &key,
-      value.as_ref(),
-      &MerkleProof {
-        // wrong bitmap - wrong bit
-        bitmap: b256("0400000000000000000000000000000000000000000000000000000000000080").0,
-        hashes: vec![
-          b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"),
-          b256("5a7ef746ad33334b4fbd7406a1a4ffa5c5f959199448d5ae6ed39b4a9d6ebe5a"),
-        ],
-      }
-    ));
+            &key,
+            value.as_ref(),
+            &MerkleProof {
+                // wrong bitmap - wrong bit
+                bitmap: b256("0400000000000000000000000000000000000000000000000000000000000080").0,
+                hashes: vec![b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"), b256("5a7ef746ad33334b4fbd7406a1a4ffa5c5f959199448d5ae6ed39b4a9d6ebe5a"),],
+            }
+        ));
     }
 }

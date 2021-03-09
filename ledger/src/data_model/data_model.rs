@@ -190,7 +190,7 @@ impl AssetTypeCode {
         match b64dec(b64) {
             Ok(mut bin) => {
                 bin.resize(ASSET_TYPE_LENGTH, 0u8);
-                let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bin.as_slice()).unwrap();
+                let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bin.as_slice()).c(d!())?;
                 Ok(Self {
                     val: ZeiAssetType(buf),
                 })
@@ -229,7 +229,7 @@ impl Code {
     pub fn new_from_base64(b64: &str) -> Result<Self> {
         if let Ok(mut bin) = b64dec(b64) {
             bin.resize(16, 0u8);
-            let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
+            let buf = <[u8; 16]>::try_from(bin.as_slice()).c(d!())?;
             Ok(Self { val: buf })
         } else {
             Err(eg!(des_fail!()))
@@ -1026,7 +1026,7 @@ impl KVBlind {
     pub fn from_base64(b64: &str) -> Result<Self> {
         if let Ok(mut bin) = b64dec(b64) {
             bin.resize(16, 0u8);
-            let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
+            let buf = <[u8; 16]>::try_from(bin.as_slice()).c(d!())?;
             Ok(Self(buf))
         } else {
             Err(eg!(des_fail!()))
@@ -1129,7 +1129,8 @@ impl BindAssetsBody {
                 art,
                 *out_pubkey,
             );
-            let ar = AssetRecord::from_template_no_identity_tracing(prng, &ar).unwrap();
+            let ar =
+                AssetRecord::from_template_no_identity_tracing(prng, &ar).c(d!())?;
             out_records.push(ar);
         }
 
@@ -1651,8 +1652,7 @@ lazy_static! {
     /// The destination of Fee is an black hole,
     /// all token transfered to it will be burned.
     pub static ref BLACK_HOLE_PUBKEY: XfrPublicKey =
-        XfrPublicKey::zei_from_bytes(&[0; ed25519_dalek::PUBLIC_KEY_LENGTH][..])
-            .unwrap();
+        pnk!(XfrPublicKey::zei_from_bytes(&[0; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
 }
 
 /// see [**mainnet-v1.0 defination**](https://www.notion.so/findora/Transaction-Fees-Analysis-d657247b70f44a699d50e1b01b8a2287)
@@ -1837,7 +1837,7 @@ impl Transaction {
         // }
         // if !include_spent {
         //   for idx in spent_indices {
-        //     outputs.remove(idx.try_into().unwrap());
+        //     outputs.remove(idx.try_into().c(d!())?);
         //   }
         // }
         // outputs

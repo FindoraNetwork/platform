@@ -456,7 +456,7 @@ impl TxnEffect {
 
                                     // Tracing policies must be consistent w.r.t asset type (cant change)
                                     if prev_policies.is_some()
-                                        && prev_policies.unwrap() != *input_policies
+                                        && prev_policies.c(d!())? != *input_policies
                                     {
                                         return Err(eg!(inp_fail!()));
                                     }
@@ -845,7 +845,7 @@ impl TxnEffect {
                             Some(HashOf::new(&bound_inputs)),
                         );
                         asset_types_involved.insert(AssetTypeCode {
-                            val: out.asset_type.get_asset_type().unwrap(),
+                            val: out.asset_type.get_asset_type().c(d!())?,
                         });
                         txos.push(Some(TxOutput {
                             record: out.clone(),

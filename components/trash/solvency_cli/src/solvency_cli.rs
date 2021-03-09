@@ -331,7 +331,7 @@ mod tests {
         rest_client: &mut MockLedgerStandalone,
     ) -> Result<(), PlatformError> {
         let app = get_cli_app();
-        let inputs = app.get_matches_from_safe(cmd_vec).unwrap();
+        let inputs = app.get_matches_from_safe(cmd_vec).c(d!())?;
         process_inputs(inputs, rest_client)
     }
 
@@ -377,7 +377,7 @@ mod tests {
             prng,
             ledger_standalone,
         )
-        .unwrap();
+        .c(d!())?;
         utxos.push(format!("{}", utxo_0));
         let (utxo_1, amount_blinds_1, code_blind_1) =
             issue_transfer_and_get_utxo_and_blinds(
@@ -390,9 +390,9 @@ mod tests {
                 prng,
                 ledger_standalone,
             )
-            .unwrap();
+            .c(d!())?;
         utxos.push(format!("{}", utxo_1));
-        blinds.push(serde_json::to_string(&(amount_blinds_1, code_blind_1)).unwrap());
+        blinds.push(serde_json::to_string(&(amount_blinds_1, code_blind_1)).c(d!())?);
         let (utxo_2, amount_blinds_2, code_blind_2) =
             issue_transfer_and_get_utxo_and_blinds(
                 issuer_key_pair,
@@ -404,9 +404,9 @@ mod tests {
                 prng,
                 ledger_standalone,
             )
-            .unwrap();
+            .c(d!())?;
         utxos.push(format!("{}", utxo_2));
-        blinds.push(serde_json::to_string(&(amount_blinds_2, code_blind_2)).unwrap());
+        blinds.push(serde_json::to_string(&(amount_blinds_2, code_blind_2)).c(d!())?);
         let (utxo_3, _, _) = issue_transfer_and_get_utxo_and_blinds(
             issuer_key_pair,
             recipient_key_pair,
@@ -417,7 +417,7 @@ mod tests {
             prng,
             ledger_standalone,
         )
-        .unwrap();
+        .c(d!())?;
         utxos.push(format!("{}", utxo_3));
         let (utxo_4, amount_blinds_4, code_blind_4) =
             issue_transfer_and_get_utxo_and_blinds(
@@ -430,9 +430,9 @@ mod tests {
                 prng,
                 ledger_standalone,
             )
-            .unwrap();
+            .c(d!())?;
         utxos.push(format!("{}", utxo_4));
-        blinds.push(serde_json::to_string(&(amount_blinds_4, code_blind_4)).unwrap());
+        blinds.push(serde_json::to_string(&(amount_blinds_4, code_blind_4)).c(d!())?);
         let (utxo_5, amount_blinds_5, code_blind_5) =
             issue_transfer_and_get_utxo_and_blinds(
                 issuer_key_pair,
@@ -444,9 +444,9 @@ mod tests {
                 prng,
                 ledger_standalone,
             )
-            .unwrap();
+            .c(d!())?;
         utxos.push(format!("{}", utxo_5));
-        blinds.push(serde_json::to_string(&(amount_blinds_5, code_blind_5)).unwrap());
+        blinds.push(serde_json::to_string(&(amount_blinds_5, code_blind_5)).c(d!())?);
         let (utxo_6, _, _) = issue_transfer_and_get_utxo_and_blinds(
             issuer_key_pair,
             recipient_key_pair,
@@ -457,7 +457,7 @@ mod tests {
             prng,
             ledger_standalone,
         )
-        .unwrap();
+        .c(d!())?;
         utxos.push(format!("{}", utxo_6));
         (utxos, blinds)
     }
@@ -528,12 +528,12 @@ mod tests {
         hidden_liabilities_blinds: Vec<AmountAndCodeBlinds>,
         rest_client: &mut MockLedgerStandalone,
     ) -> Result<(), PlatformError> {
-        let hidden_assets_str = serde_json::to_string(&hidden_assets).unwrap();
+        let hidden_assets_str = serde_json::to_string(&hidden_assets).c(d!())?;
         let hidden_assets_blinds_str =
-            serde_json::to_string(&hidden_assets_blinds).unwrap();
-        let hidden_liabilities_str = serde_json::to_string(&hidden_liabilities).unwrap();
+            serde_json::to_string(&hidden_assets_blinds).c(d!())?;
+        let hidden_liabilities_str = serde_json::to_string(&hidden_liabilities).c(d!())?;
         let hidden_liabilities_blinds_str =
-            serde_json::to_string(&hidden_liabilities_blinds).unwrap();
+            serde_json::to_string(&hidden_liabilities_blinds).c(d!())?;
 
         let args = vec![
             "Solvency Proof",
@@ -558,8 +558,8 @@ mod tests {
     // This test fails a clean build on master
     // See https://bugtracker.findora.org/issues/130
     fn test_cmd() {
-        let tmp_dir = tempdir().unwrap();
-        let dir = tmp_dir.path().to_str().unwrap();
+        let tmp_dir = tempdir().c(d!())?;
+        let dir = tmp_dir.path().to_str().c(d!())?;
 
         // Start the standalone ledger
         let mut ledger_standalone = MockLedgerStandalone::new_mock(1);
@@ -581,7 +581,7 @@ mod tests {
                 AssetRules::default(),
                 &mut ledger_standalone,
             )
-            .unwrap();
+            .c(d!())?;
         }
         let code_0 = &codes[0].to_base64();
         let code_1 = &codes[1].to_base64();
@@ -663,12 +663,12 @@ mod tests {
 
         // Prove and verify solvency
         hidden_assets.push(get_amount_and_code_scalars(200, codes[1]));
-        hidden_assets_blinds.push(calculate_amount_and_code_blinds(&blinds[0]).unwrap());
+        hidden_assets_blinds.push(calculate_amount_and_code_blinds(&blinds[0]).c(d!())?);
         hidden_assets.push(get_amount_and_code_scalars(3, codes[2]));
-        hidden_assets_blinds.push(calculate_amount_and_code_blinds(&blinds[1]).unwrap());
+        hidden_assets_blinds.push(calculate_amount_and_code_blinds(&blinds[1]).c(d!())?);
         hidden_liabilities.push(get_amount_and_code_scalars(50, codes[1]));
         hidden_liabilities_blinds
-            .push(calculate_amount_and_code_blinds(&blinds[2]).unwrap());
+            .push(calculate_amount_and_code_blinds(&blinds[2]).c(d!())?);
         prove_and_verify_solvency_cmd(
             dir,
             hidden_assets.to_vec(),
@@ -694,7 +694,7 @@ mod tests {
         // Should fail since total asset amount < total liabiliity amount
         hidden_liabilities.push(get_amount_and_code_scalars(150, codes[1]));
         hidden_liabilities_blinds
-            .push(calculate_amount_and_code_blinds(&blinds[3]).unwrap());
+            .push(calculate_amount_and_code_blinds(&blinds[3]).c(d!())?);
         let res = prove_and_verify_solvency_cmd(
             dir,
             hidden_assets.to_vec(),
@@ -726,6 +726,6 @@ mod tests {
         )
         .expect("Failed to prove and verify solvency.");
 
-        tmp_dir.close().unwrap();
+        tmp_dir.close().c(d!())?;
     }
 }

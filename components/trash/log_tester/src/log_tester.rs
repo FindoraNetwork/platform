@@ -130,7 +130,7 @@ fn run_log_against<LU, LA>(
             new_comm.1 == prev_count
         } {
             info!("Waiting for block end: {:?}", new_comm);
-            // submit.force_end_block().unwrap();
+            // submit.force_end_block().c(d!())?;
             thread::sleep(wait_time);
         }
 

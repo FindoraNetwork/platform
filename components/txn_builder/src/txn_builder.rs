@@ -906,7 +906,7 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
                 .asset_tracing_policies
                 .get_policy(0)
                 .as_ref()
-                .unwrap()
+                .c(d!())?
                 .identity_tracing
                 .is_some()
                 && identity_proof.is_none()
@@ -969,11 +969,11 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
 //    let alice = XfrKeyPair::generate(&mut prng);
 //    let bob = XfrKeyPair::generate(&mut prng);
 //
-//    let ar = AssetRecord::new(1000, code_1.val, *alice.get_pk_ref()).unwrap();
+//    let ar = AssetRecord::new(1000, code_1.val, *alice.get_pk_ref()).c(d!())?;
 //    let ba = build_blind_asset_record(&mut prng, &params.pc_gens, &ar_1, false, false, &None);
 //
 //    let builder = TransferOperationBuilder::new()..add_input(TxoRef::Relative(1),
-//                                       open_blind_asset_record(&ba, &alice).unwrap(),
+//                                       open_blind_asset_record(&ba, &alice).c(d!())?,
 //                                       None,
 //                                       20)?
 //                            .add_output(20, bob.get_pk_ref(), code_1)?
@@ -1056,10 +1056,10 @@ impl TransferOperationBuilder {
                 credential,
                 commitment_key,
             )
-            .unwrap()
+            .c(d!())?
         } else {
             AssetRecord::from_template_no_identity_tracing(prng, asset_record_template)
-                .unwrap()
+                .c(d!())?
         };
         self.output_records.push(ar);
         self.outputs_tracing_policies.push(policies);
@@ -1172,7 +1172,7 @@ impl TransferOperationBuilder {
                         &mut prng,
                         &ar_template,
                     )
-                    .unwrap();
+                    .c(d!())?;
                     partially_consumed_inputs.push(ar);
                     self.outputs_tracing_policies.push(policies.clone());
                     self.output_identity_commitments.push(None);
@@ -1232,7 +1232,7 @@ impl TransferOperationBuilder {
         if self.transfer.is_none() {
             return Err(eg!(no_transfer_err!()));
         }
-        self.transfer.as_mut().unwrap().sign(&kp);
+        self.transfer.as_mut().c(d!())?.sign(&kp);
         Ok(self)
     }
 
@@ -1289,7 +1289,7 @@ impl TransferOperationBuilder {
         if self.transfer.is_none() {
             return Err(eg!(no_transfer_err!()));
         }
-        Ok(Operation::TransferAsset(self.transfer.clone().unwrap()))
+        Ok(Operation::TransferAsset(self.transfer.clone().c(d!())?))
     }
 
     // Checks to see whether all necessary signatures are present and valid
@@ -1298,7 +1298,7 @@ impl TransferOperationBuilder {
             return Err(eg!(no_transfer_err!()));
         }
 
-        let trn = self.transfer.as_ref().unwrap();
+        let trn = self.transfer.as_ref().c(d!())?;
         let mut sig_keys = HashSet::new();
         for sig in &trn.body_signatures {
             if !sig.verify(&trn.body) {
@@ -1391,7 +1391,7 @@ mod tests {
         let res = invalid_outputs_transfer_op
             .add_input(
                 TxoRef::Relative(1),
-                open_blind_asset_record(&ba_1, &memo1, &alice).unwrap(),
+                open_blind_asset_record(&ba_1, &memo1, &alice).c(d!())?,
                 None,
                 None,
                 20,
@@ -1414,7 +1414,7 @@ mod tests {
         let res = invalid_sig_op
             .add_input(
                 TxoRef::Relative(1),
-                open_blind_asset_record(&ba_1, &memo1, &alice).unwrap(),
+                open_blind_asset_record(&ba_1, &memo1, &alice).c(d!())?,
                 None,
                 None,
                 20,
@@ -1442,7 +1442,7 @@ mod tests {
         let res = missing_sig_op
             .add_input(
                 TxoRef::Relative(1),
-                open_blind_asset_record(&ba_1, &memo1, &alice).unwrap(),
+                open_blind_asset_record(&ba_1, &memo1, &alice).c(d!())?,
                 None,
                 None,
                 20,
@@ -1498,7 +1498,7 @@ mod tests {
         let _valid_transfer_op = TransferOperationBuilder::new()
             .add_input(
                 TxoRef::Relative(1),
-                open_blind_asset_record(&ba_1, &memo1, &alice).unwrap(),
+                open_blind_asset_record(&ba_1, &memo1, &alice).c(d!())?,
                 None,
                 None,
                 20,
@@ -1506,7 +1506,7 @@ mod tests {
             .c(d!())?
             .add_input(
                 TxoRef::Relative(2),
-                open_blind_asset_record(&ba_2, &memo2, &bob).unwrap(),
+                open_blind_asset_record(&ba_2, &memo2, &bob).c(d!())?,
                 None,
                 None,
                 20,
