@@ -133,7 +133,7 @@ impl AssetTypeCode {
     ///
     /// Returns an error if the length is greater than 32 bytes.
     pub fn new_from_utf8_safe(s: &str) -> Result<Self> {
-        assert!(UTF8_ASSET_TYPES_WORK);
+        debug_assert!(UTF8_ASSET_TYPES_WORK);
         let composed = s.to_string().nfc().collect::<String>().into_bytes();
         if AssetTypeCode::will_truncate(&composed) {
             return Err(eg!(PlatformError::InputsError(None)));
@@ -146,7 +146,7 @@ impl AssetTypeCode {
     ///
     /// Used to customize the asset type code.
     pub fn new_from_utf8_truncate(s: &str) -> Self {
-        assert!(UTF8_ASSET_TYPES_WORK);
+        debug_assert!(UTF8_ASSET_TYPES_WORK);
         let composed = s.to_string().nfc().collect::<String>().into_bytes();
         AssetTypeCode::new_from_vec(composed)
     }
@@ -155,7 +155,7 @@ impl AssetTypeCode {
     ///
     /// Used to display the asset type code.
     pub fn to_utf8(&self) -> Result<String> {
-        assert!(UTF8_ASSET_TYPES_WORK);
+        debug_assert!(UTF8_ASSET_TYPES_WORK);
         let mut code = self.val.0.to_vec();
         let len = code.len();
         // Find the last non-empty index

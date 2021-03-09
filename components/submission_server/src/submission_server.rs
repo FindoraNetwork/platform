@@ -154,7 +154,7 @@ where
     pub fn end_commit(&mut self) {}
 
     pub fn begin_block(&mut self) {
-        assert!(self.block.is_none());
+        debug_assert!(self.block.is_none());
         if let Ok(mut ledger) = self.committed_state.write() {
             self.block =
                 Some(ledger.start_block().expect("Ledger could not start block"));
@@ -183,7 +183,7 @@ where
             // If begin_commit or end_commit is no longer empty, move this line to the end of end_commit
             self.pending_txns = Vec::new();
             // Finally, return the finalized txn sids
-            assert!(self.block.is_none());
+            debug_assert!(self.block.is_none());
             return Ok(());
         }
         Err(eg!(fail!(

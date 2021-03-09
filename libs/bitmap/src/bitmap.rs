@@ -194,7 +194,7 @@ impl SparseMap {
         }
 
         let info = &self.headers[block];
-        debug!("query:  block_index {}, info {:?}", block_index, info);
+        // debug!("query:  block_index {}, info {:?}", block_index, info);
 
         if block_index >= info.count as usize {
             return Err(eg!(format!(
@@ -209,7 +209,7 @@ impl SparseMap {
                 return Ok(bits[index] & mask != 0);
             }
             None => {
-                debug!("query:  no map for block {}", block.commas());
+                // debug!("query:  no map for block {}", block.commas());
             }
         }
 
@@ -246,7 +246,7 @@ impl SparseMap {
                     let checksum = block.compute_checksum();
 
                     if checksum != info.checksum.bytes {
-                        debug!("validate_checksum:  header {:?}", block.header);
+                        // debug!("validate_checksum:  header {:?}", block.header);
                         info!(
                             "Invalid checksum for block {}",
                             (info.bit_id / BLOCK_BITS as u64).commas()
@@ -254,35 +254,35 @@ impl SparseMap {
                         return false;
                     }
 
-                    debug!("validate_checksum:  Block {} verifies.", i.commas());
+                    // debug!("validate_checksum:  Block {} verifies.", i.commas());
                 }
                 None => {
-                    debug!("validate_checksum:  phantom data");
+                    // debug!("validate_checksum:  phantom data");
                 }
             }
 
             checksum_data[0..CHECK_SIZE]
                 .clone_from_slice(&info.checksum.bytes[0..CHECK_SIZE]);
             digest = sha256::hash(&checksum_data);
-            debug!(
-                "validate_checksum:  checksum at block {} is {:?}",
-                i.commas(),
-                info.checksum
-            );
-            debug!(
-                "validate_checksum:  checksum_data at block {} is {:?}",
-                i.commas(),
-                show(&checksum_data)
-            );
-            debug!(
-                "validate_checksum:  digest at block {} is {:?}",
-                i.commas(),
-                digest
-            );
+            // debug!(
+            //     "validate_checksum:  checksum at block {} is {:?}",
+            //     i.commas(),
+            //     info.checksum
+            // );
+            // debug!(
+            //     "validate_checksum:  checksum_data at block {} is {:?}",
+            //     i.commas(),
+            //     show(&checksum_data)
+            // );
+            // debug!(
+            //     "validate_checksum:  digest at block {} is {:?}",
+            //     i.commas(),
+            //     digest
+            // );
             checksum_data[CHECK_SIZE..].clone_from_slice(&digest.0[0..]);
         }
 
-        debug!("validate_checksum:  got final digest {:?}", digest);
+        // debug!("validate_checksum:  got final digest {:?}", digest);
         digest == self.checksum
     }
 }
@@ -754,7 +754,7 @@ impl BitMap {
             .checksum_data
             .extend(vec![EMPTY_CHECKSUM; result.blocks.len()]);
 
-        assert!(result.validate_all_counts());
+        debug_assert!(result.validate_all_counts());
         Ok(result)
     }
 
@@ -898,10 +898,10 @@ impl BitMap {
         let index = bit_id / 8;
         let mask = 1 << (bit_id % 8);
 
-        debug!(
-            "query({}) -> block {}, index {}, mask {}",
-            bit, block, index, mask
-        );
+        // debug!(
+        //     "query({}) -> block {}, index {}, mask {}",
+        //     bit, block, index, mask
+        // );
         let value = self.blocks[block].bits[index] & mask;
         Ok(value != 0)
     }
@@ -1038,7 +1038,7 @@ impl BitMap {
     ///
     pub fn compute_checksum(&mut self) -> Digest {
         if self.first_invalid >= self.blocks.len() {
-            debug!("compute_checksum:  cached");
+            // debug!("compute_checksum:  cached");
             return self.checksum;
         }
 
@@ -1062,7 +1062,7 @@ impl BitMap {
             // it into our checksum_data.
             //
             if !self.checksum_valid[i] {
-                debug!("compute_checksum:  fixing block {}", i);
+                // debug!("compute_checksum:  fixing block {}", i);
                 self.blocks[i].set_checksum();
                 let checksum = &self.blocks[i].header.checksum.bytes;
                 self.checksum_data[i][0..CHECK_SIZE].clone_from_slice(checksum);
@@ -1072,20 +1072,20 @@ impl BitMap {
             // Compute the next sha256 digest.
             digest = sha256::hash(&self.checksum_data[i]);
 
-            debug!(
-                "compute_checksum:  checksum at block {} is {:?}",
-                i, self.blocks[i].header.checksum
-            );
-            debug!(
-                "compute_checksum:  checksum_data at block {} is {:?}",
-                i,
-                show(&self.checksum_data[i])
-            );
-            debug!("compute_checksum:  digest at block {} is {:?}", i, digest);
+            // debug!(
+            //     "compute_checksum:  checksum at block {} is {:?}",
+            //     i, self.blocks[i].header.checksum
+            // );
+            // debug!(
+            //     "compute_checksum:  checksum_data at block {} is {:?}",
+            //     i,
+            //     show(&self.checksum_data[i])
+            // );
+            // debug!("compute_checksum:  digest at block {} is {:?}", i, digest);
         }
 
         self.first_invalid = self.blocks.len();
-        debug!("compute_checksum:  got final digest {:?}", digest);
+        // debug!("compute_checksum:  got final digest {:?}", digest);
         self.checksum = digest;
         digest
     }
@@ -1114,10 +1114,10 @@ impl BitMap {
     /// Will panic if the cached checksum can not be used, such as if the Bitmap has
     /// been modified since the last checksum-updating operation
     pub fn serialize(&self, version: usize) -> Vec<u8> {
-        assert!(self.validate(false));
+        debug_assert!(self.validate(false));
         // Verify usability of cached checksum
         // Borrowing the logic from the compute_checksum method
-        assert!(
+        debug_assert!(
             self.first_invalid >= self.blocks.len(),
             "Bitmap::serialize was called on a bitmap whose checksum was not up to date.\
              Ensure that the bitmap has not been changed since the last checksum updating operation."
@@ -1142,7 +1142,7 @@ impl BitMap {
             self.serialize_block(i, &mut result, INCLUDE_BITS);
         }
 
-        assert!(result.len() == bytes);
+        debug_assert!(result.len() == bytes);
         result
     }
 
@@ -1155,7 +1155,7 @@ impl BitMap {
         bit_list: Vec<usize>,
         version: usize,
     ) -> Vec<u8> {
-        assert!(self.validate(false));
+        debug_assert!(self.validate(false));
         // Reserve space for the version number as a u64.
         let mut bytes = DESCRIPTOR_SIZE;
         let mut set = HashSet::new();
@@ -1181,7 +1181,7 @@ impl BitMap {
             self.serialize_block(i, &mut result, set.contains(&i));
         }
 
-        assert!(result.len() == bytes);
+        debug_assert!(result.len() == bytes);
         result
     }
 
@@ -1234,10 +1234,10 @@ impl BitMap {
         size: u32,
         result: &mut Vec<u8>,
     ) {
-        debug!(
-            "append_header({}, {}, {}, ...)",
-            index, block_contents, size
-        );
+        // debug!(
+        //     "append_header({}, {}, {}, ...)",
+        //     index, block_contents, size
+        // );
         let info = BlockInfo {
             magic: HEADER_MAGIC,
             checksum: self.blocks[index].header.checksum,
@@ -1248,7 +1248,7 @@ impl BitMap {
             contents: block_contents,
         };
 
-        assert!(self.checksum_valid[index]);
+        debug_assert!(self.checksum_valid[index]);
         result.extend_from_slice(info.as_ref());
     }
 
@@ -1280,13 +1280,13 @@ impl BitMap {
             }
         }
 
-        assert!(count == set_bits);
-        debug!(
-            "append_set: {} bits -> {} bytes ({} set)",
-            self.set_bits[index],
-            self.set_bits[index] * INDEX_SIZE as u32 + BLOCK_INFO_SIZE as u32,
-            set_bits
-        );
+        debug_assert!(count == set_bits);
+        // debug!(
+        //     "append_set: {} bits -> {} bytes ({} set)",
+        //     self.set_bits[index],
+        //     self.set_bits[index] * INDEX_SIZE as u32 + BLOCK_INFO_SIZE as u32,
+        //     set_bits
+        // );
     }
 
     // Append a list of the clear bits to the serialization
@@ -1306,14 +1306,14 @@ impl BitMap {
             }
         }
 
-        assert!(count == clear_bits);
-        debug!(
-            "append_clear:  {} bits -> {} bytes ({} clear)",
-            self.set_bits[index],
-            (BLOCK_BITS - self.set_bits[index] as usize) * INDEX_SIZE
-                + BLOCK_INFO_SIZE as usize,
-            clear_bits
-        );
+        debug_assert!(count == clear_bits);
+        // debug!(
+        //     "append_clear:  {} bits -> {} bytes ({} clear)",
+        //     self.set_bits[index],
+        //     (BLOCK_BITS - self.set_bits[index] as usize) * INDEX_SIZE
+        //         + BLOCK_INFO_SIZE as usize,
+        //     clear_bits
+        // );
     }
 
     // Convert a serialized bitmap back into structured data.
@@ -1354,14 +1354,14 @@ impl BitMap {
             // restore them to bitmaps.
             match info.contents {
                 BIT_HEADER => {
-                    debug!("No contents for block {}", block);
+                    // debug!("No contents for block {}", block);
                 }
                 BIT_ARRAY => {
                     bits = [0_u8; BITS_SIZE];
                     bits.clone_from_slice(&bytes[index..index + BITS_SIZE]);
                     index += BITS_SIZE;
                     bits_map.insert(block, bits);
-                    debug!("deserialize:  insert map block {}", block);
+                    // debug!("deserialize:  insert map block {}", block);
                 }
                 BIT_DESC_SET => {
                     let (next, ids) =
@@ -1369,12 +1369,12 @@ impl BitMap {
                     bits = [0_u8; BITS_SIZE];
 
                     for id in ids.iter() {
-                        assert!(*id < info.count as usize);
+                        debug_assert!(*id < info.count as usize);
                         BitMap::mutate_bit(&mut bits, *id, true);
                     }
 
                     bits_map.insert(block, bits);
-                    debug!("deserialize:  insert set block {}", block);
+                    // debug!("deserialize:  insert set block {}", block);
                     index = next;
                 }
                 BIT_DESC_CLEAR => {
@@ -1383,12 +1383,12 @@ impl BitMap {
                     bits = [0xff_u8; BITS_SIZE];
 
                     for id in ids.iter() {
-                        assert!(*id < info.count as usize);
+                        debug_assert!(*id < info.count as usize);
                         BitMap::mutate_bit(&mut bits, *id, false);
                     }
 
                     bits_map.insert(block, bits);
-                    debug!("deserialize:  insert clear block {}", block);
+                    // debug!("deserialize:  insert clear block {}", block);
                     index = next;
                 }
                 _ => {
@@ -1467,7 +1467,7 @@ impl BitMap {
             ids.push(id);
         }
 
-        debug!("decode() -> ({}, {:?})", index, ids);
+        // debug!("decode() -> ({}, {:?})", index, ids);
         Ok((index, ids))
     }
 

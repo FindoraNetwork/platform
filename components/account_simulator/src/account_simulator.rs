@@ -542,7 +542,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                     .remove(&temp_sid)
                     .unwrap();
 
-                assert!(txos.len() == 1);
+                debug_assert!(txos.len() == 1);
                 if let Some(memo) = owner_memo {
                     self.owner_memos.insert(txos[0], memo);
                 }
@@ -595,7 +595,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                 // dbg!(&to_skip, &to_use);
                 avail.extend(to_skip.into_iter());
 
-                assert!(total_sum >= amt);
+                debug_assert!(total_sum >= amt);
 
                 let mut src_outputs: Vec<AssetRecord> = Vec::new();
                 let mut dst_outputs: Vec<AssetRecord> = Vec::new();
@@ -661,7 +661,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                 let src_outputs = src_outputs;
                 let dst_outputs = dst_outputs;
                 let all_outputs = all_outputs;
-                assert!(!src_records.is_empty());
+                debug_assert!(!src_records.is_empty());
                 // dbg!(unit_code.val);
                 // for (ix, rec) in src_records.iter().enumerate() {
                 // dbg!(ix,
@@ -734,7 +734,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                     .remove(&temp_sid)
                     .unwrap();
 
-                assert!(txos.len() == src_outputs.len() + dst_outputs.len());
+                debug_assert!(txos.len() == src_outputs.len() + dst_outputs.len());
 
                 self.utxos
                     .get_mut(dst)
@@ -883,7 +883,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                             .remove(&temp_sid)
                             .unwrap();
 
-                        assert!(txos.len() == 1);
+                        debug_assert!(txos.len() == 1);
 
                         txos[0]
                     }
@@ -1163,7 +1163,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                     .remove(&temp_sid)
                     .unwrap();
 
-                assert!(txos.len() == 1);
+                debug_assert!(txos.len() == 1);
                 if let Some(memo) = lien_record.owner_memo {
                     self.owner_memos.insert(txos[0], memo);
                 }
@@ -1357,7 +1357,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                         avail.extend(to_skip);
 
                         let inp_txo_len = txn_txos.len();
-                        assert!(total_sum >= amt);
+                        debug_assert!(total_sum >= amt);
 
                         let mut src_outputs = Vec::new();
                         let mut dst_outputs = Vec::new();
@@ -1404,7 +1404,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                         let src_outputs = src_outputs;
                         let dst_outputs = dst_outputs;
                         let all_outputs = all_outputs;
-                        assert!(!src_records.is_empty());
+                        debug_assert!(!src_records.is_empty());
 
                         let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
 
@@ -1461,7 +1461,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                             if *rec.get_asset_type() == unit_code.val {
                                 avail_total += rec.amount;
                             }
-                            assert!(&rec.blind_asset_record.public_key == src_pub);
+                            debug_assert!(&rec.blind_asset_record.public_key == src_pub);
                         }
                         assert_eq!(
                             avail_total,
@@ -2029,8 +2029,8 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                     .unwrap();
                 self.txn = effect.txn;
 
-                assert!(effect.txos.last().unwrap().is_some());
-                assert!(effect.txos.len() == self.txos.len() + 1);
+                debug_assert!(effect.txos.last().unwrap().is_some());
+                debug_assert!(effect.txos.len() == self.txos.len() + 1);
                 utxos.push_back(effect.txos.len() - 1);
 
                 self.txos.push((
@@ -2084,7 +2084,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                 // dbg!(&to_skip, &to_use);
                 avail.extend(to_skip.into_iter());
 
-                assert!(total_sum >= amt);
+                debug_assert!(total_sum >= amt);
 
                 let mut src_outputs: Vec<AssetRecord> = Vec::new();
                 let mut dst_outputs: Vec<AssetRecord> = Vec::new();
@@ -2151,7 +2151,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                 let src_outputs = src_outputs;
                 let dst_outputs = dst_outputs;
                 let all_outputs = all_outputs;
-                assert!(!src_records.is_empty());
+                debug_assert!(!src_records.is_empty());
                 // dbg!(unit_code.val);
                 // for (ix, rec) in src_records.iter().enumerate() {
                 // dbg!(ix,
@@ -2218,7 +2218,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                     .cloned()
                     .map(|x| x.unwrap())
                     .collect::<Vec<TxOutput>>();
-                assert!(txos.len() == src_outputs.len() + dst_outputs.len());
+                debug_assert!(txos.len() == src_outputs.len() + dst_outputs.len());
 
                 let txo_sids = (0..txos.len())
                     .map(|x| x + self.txos.len())
@@ -2406,7 +2406,7 @@ where
                     }
                 };
 
-                assert!(txos.len() == 1);
+                debug_assert!(txos.len() == 1);
                 if let Some(memo) = owner_memo {
                     self.owner_memos.insert(txos[0], memo);
                 }
@@ -2459,7 +2459,7 @@ where
                 // dbg!(&to_skip, &to_use);
                 avail.extend(to_skip.into_iter());
 
-                assert!(total_sum >= amt);
+                debug_assert!(total_sum >= amt);
 
                 let mut src_outputs: Vec<AssetRecord> = Vec::new();
                 let mut dst_outputs: Vec<AssetRecord> = Vec::new();
@@ -2526,7 +2526,7 @@ where
                 let src_outputs = src_outputs;
                 let dst_outputs = dst_outputs;
                 let all_outputs = all_outputs;
-                assert!(!src_records.is_empty());
+                debug_assert!(!src_records.is_empty());
 
                 let mut sig_keys: Vec<XfrKeyPair> = Vec::new();
 
@@ -2586,7 +2586,7 @@ where
                     }
                 };
 
-                assert!(txos.len() == src_outputs.len() + dst_outputs.len());
+                debug_assert!(txos.len() == src_outputs.len() + dst_outputs.len());
 
                 self.utxos
                     .get_mut(dst)

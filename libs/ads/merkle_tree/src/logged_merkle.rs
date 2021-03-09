@@ -123,7 +123,7 @@ impl LogBuffer {
     // Create a new buffer that start with the given Merkle
     // transaction id.
     fn new(next_id: u64) -> LogBuffer {
-        assert!(std::mem::size_of::<LogBuffer>() == BUFFER_SIZE);
+        debug_assert!(std::mem::size_of::<LogBuffer>() == BUFFER_SIZE);
 
         LogBuffer {
             marker: BUFFER_MARKER,
@@ -429,7 +429,7 @@ impl LoggedMerkle {
                 for index in start_offset..buffer.valid as usize {
                     match self.tree.append_hash(&buffer.hashes[index]) {
                         Ok(n) => {
-                            assert!(n == current);
+                            debug_assert!(n == current);
                         }
                         Err(x) => {
                             return Err(eg!(x));
@@ -441,7 +441,7 @@ impl LoggedMerkle {
                 }
 
                 state = self.tree.total_size();
-                assert!(state == current);
+                debug_assert!(state == current);
             }
         }
 

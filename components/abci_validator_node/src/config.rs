@@ -69,7 +69,7 @@ impl ABCIConfig {
     pub fn from_file(args: &mut Vec<String>) -> (ABCIConfig, bool) {
         // ensure that 'abci' dir exists
         let abci_path = Path::new(&args[1]).join("abci");
-        assert!(abci_path.is_dir(), "directory abci not found");
+        debug_assert!(abci_path.is_dir(), "directory abci not found");
         args[1] = abci_path.as_path().to_str().unwrap().to_owned();
 
         // use abci.toml if it exists

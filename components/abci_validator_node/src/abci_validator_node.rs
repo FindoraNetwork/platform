@@ -185,7 +185,7 @@ impl abci::Application for ABCISubmissionServer {
         info!("locking for write");
         if let Ok(mut la) = self.la.write() {
             if !la.all_commited() {
-                assert!(la.block_pulse_count() > 0);
+                debug_assert!(la.block_pulse_count() > 0);
                 info!(
                     "begin_block: continuation, block pulse count is {}",
                     la.block_pulse_count()

@@ -898,7 +898,7 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
     // - if policy but no identity tracing, then no identity proof is needed
     // TODO (fernando) this code does not handle more than one policy, hence the following assert
     // REDMINE #104
-    assert!(template.asset_tracing_policies.len() <= 1);
+    debug_assert!(template.asset_tracing_policies.len() <= 1);
     let asset_tracing = !template.asset_tracing_policies.is_empty();
     if !asset_tracing && identity_proof.is_some()
         || asset_tracing

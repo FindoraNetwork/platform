@@ -440,7 +440,7 @@ impl HasInvariants for LedgerState {
 
             // dbg!(&status2);
             // dbg!(&self.status);
-            assert!(*status2 == self.status);
+            debug_assert!(*status2 == self.status);
 
             std::fs::remove_dir_all(tmp_dir).c(d!())?;
         }
@@ -691,7 +691,7 @@ impl LedgerStatus {
                     // However, if there is a bug elsewhere in validation, panicking
                     // is better than allowing incorrect issuances to pass through.
                     .or_else(|| {
-                        assert!(txn_effect.new_asset_codes.contains_key(&code));
+                        debug_assert!(txn_effect.new_asset_codes.contains_key(&code));
                         Some(&0)
                     })
                     .unwrap();
@@ -2027,7 +2027,7 @@ impl LedgerState {
         //                            utxo_map,
         //                            txn_log,
         //                            block_ctx: Some(BlockEffect::new()) };
-        // assert!(ledger.txs.len() == ledger.status.next_txn.0);
+        // debug_assert!(ledger.txs.len() == ledger.status.next_txn.0);
         // Ok(ledger)
     }
 

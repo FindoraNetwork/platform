@@ -186,7 +186,7 @@ pub fn hash_partial(left: &HashValue, right: &HashValue) -> HashValue {
     } else if left_present {
         hash_single(left)
     } else {
-        assert!(!right_present);
+        debug_assert!(!right_present);
         empty_hash
     }
 }

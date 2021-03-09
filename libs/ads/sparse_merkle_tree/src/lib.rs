@@ -151,7 +151,7 @@ impl TreeNodeIndex {
 
     /// Change `self` to the index of its parent node. Panics if `self` is the root.
     fn move_up(&mut self) {
-        assert!(self.depth > 0, "Cannot move up from the root");
+        debug_assert!(self.depth > 0, "Cannot move up from the root");
         clear_bit(&mut self.bit_path.get_digest_mut().0, self.depth - 1);
         self.depth -= 1;
     }
@@ -327,7 +327,7 @@ pub mod helpers {
 
     // `hex` is the first a few bytes of the desired 32 bytes (the rest bytes are zeros).
     pub fn l256(hex: &str) -> Digest {
-        assert!(hex.len() % 2 == 0 && hex.len() <= 64);
+        debug_assert!(hex.len() % 2 == 0 && hex.len() <= 64);
         let hex = hex.to_string() + &"0".repeat(64 - hex.len());
         Digest {
             0: <[u8; 32]>::from_hex(&hex).unwrap(),
@@ -336,7 +336,7 @@ pub mod helpers {
 
     // `hex` is the last a few bytes of the desired 32 bytes (the rest bytes are zeros).
     pub fn r256(hex: &str) -> Digest {
-        assert!(hex.len() % 2 == 0 && hex.len() <= 64);
+        debug_assert!(hex.len() % 2 == 0 && hex.len() <= 64);
         let hex = "0".repeat(64 - hex.len()) + hex;
         Digest {
             0: <[u8; 32]>::from_hex(&hex).unwrap(),
