@@ -1533,10 +1533,9 @@ mod test {
         let expected_serialized_json = r#"{"transferable":true,"updatable":false,"transfer_multisig_rules":null,"max_units":"10000000000","decimals":6}"#.to_string();
         assert_eq!(actual_serialized_json, expected_serialized_json);
 
-        let res: PlatformAssetRules = serde_json::from_str::<PlatformAssetRules>(
-            &expected_serialized_json,
-        )
-        .unwrap();
+        let res: PlatformAssetRules =
+            serde_json::from_str::<PlatformAssetRules>(&expected_serialized_json)
+                .unwrap();
         assert_eq!(res.max_units.unwrap(), amt);
     }
 
@@ -1551,8 +1550,7 @@ mod test {
         let actual_serialized_json = r#"{"transferable":true,"updatable":false,"transfer_multisig_rules":null,"max_units":null,"decimals":6}"#.to_string();
 
         let res: PlatformAssetRules =
-            serde_json::from_str::<PlatformAssetRules>(&actual_serialized_json)
-                .unwrap();
+            serde_json::from_str::<PlatformAssetRules>(&actual_serialized_json).unwrap();
         assert_eq!(res.max_units, None);
     }
 }
