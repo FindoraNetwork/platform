@@ -1530,4 +1530,18 @@ mod test {
         let res: PlatformAssetRules = serde_json::from_str::<PlatformAssetRules>(&expected_serialized_json.to_string()).unwrap();
         assert_eq!(res.max_units.unwrap(), amt);
     }
+
+    #[test]
+    fn test_asset_rules_from_str_null_max_units() {
+        use ledger::data_model::AssetRules as PlatformAssetRules;
+        let mut ar = AssetRules {
+            rules: Default::default()
+        };
+        let amt = 10000000000 as u64;
+        ar.rules.max_units = Some(amt);
+        let actual_serialized_json = r#"{"transferable":true,"updatable":false,"transfer_multisig_rules":null,"max_units":null,"decimals":6}"#.to_string();
+
+        let res: PlatformAssetRules = serde_json::from_str::<PlatformAssetRules>(&actual_serialized_json.clone()).unwrap();
+        assert_eq!(res.max_units, None);
+    }
 }
