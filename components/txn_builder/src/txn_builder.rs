@@ -1563,7 +1563,7 @@ mod tests {
         macro_rules! transfer_to_bob {
             ($txo_sid: expr, $bob_pk: expr) => {{
                 let output_bob_fra_template = AssetRecordTemplate::with_no_asset_tracing(
-                    5,
+                    100 * TX_FEE_MIN,
                     ASSET_TYPE_FRA,
                     NonConfidentialAmount_NonConfidentialAssetType,
                     $bob_pk,
@@ -1579,7 +1579,7 @@ mod tests {
                         .unwrap(),
                         None,
                         None,
-                        5,
+                        100 * TX_FEE_MIN,
                     )
                     .unwrap()
                     .add_output(&output_bob_fra_template, None, None, None)
@@ -1629,9 +1629,10 @@ mod tests {
             bob_kp.get_sk().into_keypair(),
         );
         let mut tx3 = TransactionBuilder::from_seq_id(2);
-        tx3.add_operation(transfer_to_bob!(txo_sid[2], bob_kp.get_pk()))
-            .add_fee(fi)
-            .unwrap();
+        pnk!(
+            tx3.add_operation(transfer_to_bob!(txo_sid[2], bob_kp.get_pk()))
+                .add_fee(fi)
+        );
         assert!(tx3.check_fee());
 
         let effect = TxnEffect::compute_effect(tx3.into_transaction()).unwrap();
