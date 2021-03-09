@@ -929,12 +929,13 @@ impl AppendOnlyMerkle {
     /// # Example
     ///````
     /// use merkle_tree::append_only_merkle::AppendOnlyMerkle;
+    /// use ruc::*;
     ///
     /// let path       = "deserialize";
     /// # let _ = std::fs::remove_file(&path);
-    /// let mut sample = AppendOnlyMerkle::create(&path).c(d!())?;
+    /// let mut sample = pnk!(AppendOnlyMerkle::create(&path));
     /// let _          = sample.append_str(&"test");
-    /// let encoded    = serde_json::to_string(&sample).c(d!())?;
+    /// let encoded    = pnk!(serde_json::to_string(&sample));
     ///
     /// drop(sample);
     /// let _ = std::fs::remove_file(&path);
