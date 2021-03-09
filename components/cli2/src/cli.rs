@@ -1,5 +1,6 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::field_reassign_with_default)]
+#![deny(warnings)]
 
 use ledger::data_model::*;
 use promptly::prompt_default;

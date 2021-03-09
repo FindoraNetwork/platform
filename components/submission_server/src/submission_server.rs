@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::{
     Operation, Transaction, TxnEffect, TxnSID, TxnTempSID, TxoSID,

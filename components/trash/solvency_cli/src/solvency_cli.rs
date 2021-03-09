@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use clap::{App, Arg, SubCommand};
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;

@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use algebra::groups::Scalar as ZeiScalar;
 use bulletproofs::r1cs::R1CSProof;
 use crypto::bp_circuits::cloak::{CloakCommitment, CloakValue};

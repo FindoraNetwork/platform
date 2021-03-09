@@ -1,4 +1,5 @@
 #![feature(str_split_as_str)]
+#![deny(warnings)]
 
 use actix_cors::Cors;
 use actix_service::Service;

@@ -1,5 +1,6 @@
 #![allow(stable_features)]
 #![feature(slice_patterns)]
+#![deny(warnings)]
 // Copyright 2019 © Findora. All rights reserved.
 /// Command line executable to exercise functions related to credentials
 #[macro_use]

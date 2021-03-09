@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 extern crate ledger;
 extern crate serde;
 extern crate zei;

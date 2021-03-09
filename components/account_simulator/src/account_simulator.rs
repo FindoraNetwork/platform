@@ -1,4 +1,6 @@
 #![allow(unused)]
+#![deny(warnings)]
+
 use quickcheck::{Arbitrary, Gen, QuickCheck, StdGen};
 use std::iter::{once, repeat};
 #[cfg(test)]

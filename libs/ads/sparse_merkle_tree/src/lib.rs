@@ -2,6 +2,8 @@
 //! # as a Sparse Merkle Tree
 //!
 //!
+#![deny(warnings)]
+
 use cryptohash::sha256;
 use rand::Rng;
 use ruc::*;

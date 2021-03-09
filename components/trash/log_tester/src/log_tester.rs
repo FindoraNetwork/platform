@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use ledger::data_model::errors::PlatformError;
 use ledger::store::LoggedBlock;
 use ledger::store::{LedgerAccess, LedgerState};

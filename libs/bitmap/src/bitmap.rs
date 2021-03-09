@@ -21,6 +21,7 @@
 //! network. This Vec can be converted to a SparseMap structure.
 //! The SparseMap structure allows various queries on the contents
 //! of the map.
+#![deny(warnings)]
 
 use cryptohash::sha256;
 use cryptohash::sha256::{Digest, DIGESTBYTES};

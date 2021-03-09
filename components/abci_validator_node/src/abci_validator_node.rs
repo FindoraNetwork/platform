@@ -1,4 +1,6 @@
 #![allow(clippy::field_reassign_with_default)]
+#![deny(warnings)]
+
 use abci::*;
 use ledger::data_model::{Operation, Transaction, TxnEffect, TxnSID};
 use ledger::store::*;
