@@ -147,7 +147,7 @@ impl Dictionary {
 
     // Add an entry to the dictionary.
     pub fn insert(&mut self, level: usize, entry: Entry) {
-        // debug!("add dictionary block {} at level {}", entry.id, level);
+        debug!("add dictionary block {} at level {}", entry.id, level);
         self.map.insert(level, entry);
 
         if level > self.max_level {
@@ -205,13 +205,13 @@ impl Entry {
                 hash_partial(&self.hashes[block], &self.hashes[partner])
             };
 
-            // debug!(
-            //     "entry  push hashes[{:3}] = {}, pair = {}, combine = {}",
-            //     partner,
-            //     self.hashes[partner].desc(),
-            //     self.hashes[block].desc(),
-            //     combine.desc()
-            // );
+            debug!(
+                "entry  push hashes[{:3}] = {}, pair = {}, combine = {}",
+                partner,
+                self.hashes[partner].desc(),
+                self.hashes[block].desc(),
+                combine.desc()
+            );
             hashes.push(self.hashes[partner]);
 
             if !check.is_empty() {
@@ -512,7 +512,7 @@ impl Block {
         let mut base = 0;
         let mut interval = LEAVES_IN_BLOCK;
 
-        // debug!("Subtree for id {} (from a full block)", id);
+        debug!("Subtree for id {} (from a full block)", id);
 
         for i in 0..LEVELS_IN_BLOCK - 1 {
             let block = base + index;
@@ -525,13 +525,13 @@ impl Block {
                 hash_partial(&self.hashes[block], &self.hashes[partner])
             };
 
-            // debug!(
-            //     "block  push hashes[{:3}] = {}, pair = {}, combine = {}",
-            //     partner,
-            //     hash.desc(),
-            //     self.hashes[block].desc(),
-            //     combine.desc()
-            // );
+            debug!(
+                "block  push hashes[{:3}] = {}, pair = {}, combine = {}",
+                partner,
+                hash.desc(),
+                self.hashes[block].desc(),
+                combine.desc()
+            );
 
             hashes.push(hash);
 
@@ -544,7 +544,7 @@ impl Block {
             interval /= 2;
         }
 
-        // debug!("hashes now has {} elements.", hashes.len());
+        debug!("hashes now has {} elements.", hashes.len());
     }
 
     pub fn root(&self) -> HashValue {
@@ -1057,7 +1057,7 @@ impl AppendOnlyMerkle {
 
         // Read the file for each level of the tree.
         for level in 0..self.files.len() {
-            // debug!("Reading level {}.", level);
+            debug!("Reading level {}.", level);
             state.level = level;
             self.read_level(&mut state).c(d!())?;
         }
@@ -1131,13 +1131,13 @@ impl AppendOnlyMerkle {
             match self.read_block(level, i, last_block) {
                 Ok(block) => {
                     last_block_full = block.full();
-                    // debug!(
-                    //     "Block {}/{} at level {}: {} valid leaves",
-                    //     i,
-                    //     block_count,
-                    //     level,
-                    //     block.valid_leaves()
-                    // );
+                    debug!(
+                        "Block {}/{} at level {}: {} valid leaves",
+                        i,
+                        block_count,
+                        level,
+                        block.valid_leaves()
+                    );
                     entries += block.valid_leaves();
 
                     // If we are above level zero, check that the hashes we
@@ -1554,10 +1554,10 @@ impl AppendOnlyMerkle {
             return Err(eg!("Versioning is not yet supported."));
         }
 
-        // debug!(
-        //     "Generate proof for tid {} at state {}",
-        //     transaction_id, self.entry_count
-        // );
+        debug!(
+            "Generate proof for tid {} at state {}",
+            transaction_id, self.entry_count
+        );
 
         // Generate a dictionary of all the blocks that
         // would change or be added to make a complete
@@ -1650,15 +1650,15 @@ impl AppendOnlyMerkle {
             hash_partial(&block_hash, &partner_hash)
         };
 
-        // debug!(
-        //     "partner push level {}, block {} = {}, partner {} = {}, combine = {}",
-        //     level,
-        //     block_id,
-        //     block_hash.desc(),
-        //     partner_id,
-        //     partner_hash.desc(),
-        //     combine.desc()
-        // );
+        debug!(
+            "partner push level {}, block {} = {}, partner {} = {}, combine = {}",
+            level,
+            block_id,
+            block_hash.desc(),
+            partner_id,
+            partner_hash.desc(),
+            combine.desc()
+        );
         hashes.push(partner_hash);
     }
 
@@ -1671,7 +1671,7 @@ impl AppendOnlyMerkle {
         block_id: usize,
     ) -> HashValue {
         let empty_hash = HashValue::new();
-        // debug!("find_block_root(level {}, id {})", level, block_id);
+        debug!("find_block_root(level {}, id {})", level, block_id);
 
         match dictionary.get(level, block_id) {
             Some(entry) => {
@@ -1680,12 +1680,12 @@ impl AppendOnlyMerkle {
             }
             None => {
                 if level >= self.blocks.len() || block_id >= self.blocks[level].len() {
-                    // debug!(
-                    //     "find_block_root(level {}, id {}) -> len {}",
-                    //     level,
-                    //     block_id,
-                    //     self.blocks[level].len()
-                    // );
+                    debug!(
+                        "find_block_root(level {}, id {}) -> len {}",
+                        level,
+                        block_id,
+                        self.blocks[level].len()
+                    );
                     debug_assert!(block_id == self.blocks[level].len());
                     empty_hash
                 } else {
@@ -1708,7 +1708,7 @@ impl AppendOnlyMerkle {
     // created) by this rippling.
     //
     fn generate_tree_completion(&self) -> Dictionary {
-        // debug!("Generating a tree completion");
+        debug!("Generating a tree completion");
         let empty_hash = HashValue::new();
 
         let mut dictionary = Dictionary::new();
@@ -1741,13 +1741,13 @@ impl AppendOnlyMerkle {
             //      root of the last block in this chain.
             //
             if count != LEAVES_IN_BLOCK {
-                // debug!(
-                //     "Level {}:  partial block {} ({} entries), carried_hash = {}",
-                //     level,
-                //     last_block.id(),
-                //     count,
-                //     carried_hash.desc()
-                // );
+                debug!(
+                    "Level {}:  partial block {} ({} entries), carried_hash = {}",
+                    level,
+                    last_block.id(),
+                    count,
+                    carried_hash.desc()
+                );
                 let mut entry = Entry::new(level, last_id);
 
                 entry.hashes[0..count].clone_from_slice(&last_block.hashes[0..count]);
@@ -1770,11 +1770,11 @@ impl AppendOnlyMerkle {
                     carried_hash = hash_partial(&left, &carried_hash);
                 }
             } else if carried_hash != empty_hash {
-                // debug!(
-                //     "Level {}:  full block, carried_hash = {}",
-                //     level,
-                //     carried_hash.desc()
-                // );
+                debug!(
+                    "Level {}:  full block, carried_hash = {}",
+                    level,
+                    carried_hash.desc()
+                );
                 let mut entry = Entry::new(level, length);
                 let new_block_id = length;
 
@@ -1794,18 +1794,18 @@ impl AppendOnlyMerkle {
                     carried_hash = hash_partial(&left, &carried_hash);
                 }
             } else if !carried && length % 2 == 1 {
-                // debug!(
-                //     "Level {}:  full block, create carry, size {}",
-                //     level, self.entry_count
-                // );
+                debug!(
+                    "Level {}:  full block, create carry, size {}",
+                    level, self.entry_count
+                );
                 carried = true;
                 carried_hash = hash_partial(&last_block.root(), &empty_hash);
                 solitary_block = false;
             } else if !carried {
-                // debug!(
-                //     "Level {}:  full block, no carry, size {}",
-                //     level, self.entry_count
-                // );
+                debug!(
+                    "Level {}:  full block, no carry, size {}",
+                    level, self.entry_count
+                );
 
                 // This should happen only if this block is paired and all the
                 // blocks below this are paired, recursively.
@@ -1834,11 +1834,11 @@ impl AppendOnlyMerkle {
             // to do. The hash of the root of this block is the
             // hash of the completed tree.
         } else if carried_hash != empty_hash {
-            // debug!(
-            //     "Level {}:  create block 0 with {}",
-            //     level,
-            //     carried_hash.desc()
-            // );
+            debug!(
+                "Level {}:  create block 0 with {}",
+                level,
+                carried_hash.desc()
+            );
             let mut entry = Entry::new(level, 0);
             entry.hashes[0] = carried_hash;
             entry.fill();
@@ -1874,7 +1874,7 @@ impl AppendOnlyMerkle {
         let last = HASHES_IN_BLOCK - 1;
         let block_root_hash;
 
-        // debug!("Appending hashes for level {}, id {}", level, id);
+        debug!("Appending hashes for level {}, id {}", level, id);
 
         match dictionary.get(level, block_id) {
             Some(entry) => {
@@ -3081,7 +3081,7 @@ mod tests {
         // on up the list.
         //
         let mut result = tree.leaf(tx_id as usize);
-        // debug!("Leaf hash is {}", result.desc());
+        debug!("Leaf hash is {}", result.desc());
 
         for i in 0..proof.hash_array.len() {
             if id & 1 == 0 {
@@ -3090,18 +3090,18 @@ mod tests {
                 result = hash_partial(&proof.hash_array[i], &result);
             }
 
-            // debug!(
-            //     "check_proof:  result at {:3} = {} from {}",
-            //     i,
-            //     result.desc(),
-            //     proof.hash_array[i].desc()
-            // );
+            debug!(
+                "check_proof:  result at {:3} = {} from {}",
+                i,
+                result.desc(),
+                proof.hash_array[i].desc()
+            );
 
             id /= 2;
         }
 
-        // debug!("result = {}", result.desc());
-        // debug!("root   = {}", proof.root_hash.desc());
+        debug!("result = {}", result.desc());
+        debug!("root   = {}", proof.root_hash.desc());
 
         // The result now had better match the root of the tree
         // at the time the proof was generated.
