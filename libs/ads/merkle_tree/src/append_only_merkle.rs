@@ -929,12 +929,13 @@ impl AppendOnlyMerkle {
     /// # Example
     ///````
     /// use merkle_tree::append_only_merkle::AppendOnlyMerkle;
+    /// use ruc::*;
     ///
     /// let path       = "deserialize";
     /// # let _ = std::fs::remove_file(&path);
-    /// let mut sample = AppendOnlyMerkle::create(&path).unwrap();
+    /// let mut sample = pnk!(AppendOnlyMerkle::create(&path));
     /// let _          = sample.append_str(&"test");
-    /// let encoded    = serde_json::to_string(&sample).unwrap();
+    /// let encoded    = pnk!(serde_json::to_string(&sample));
     ///
     /// drop(sample);
     /// let _ = std::fs::remove_file(&path);
@@ -1392,7 +1393,7 @@ impl AppendOnlyMerkle {
             let items = {
                 let block_list = &mut self.blocks[level];
 
-                if block_list.last().unwrap().full() {
+                if block_list.last().c(d!())?.full() {
                     let block_id = block_list.len() as u64;
                     let block = Block::new(level as u32, block_id);
 
@@ -1459,8 +1460,8 @@ impl AppendOnlyMerkle {
             }
 
             // Okay, we have another hash to add to the tree. Compute it.
-            let left = &prev.unwrap();
-            let right = block.top_hash().unwrap();
+            let left = &prev.c(d!())?;
+            let right = block.top_hash().c(d!())?;
 
             current_hash = hash_pair(left, right);
         }
@@ -1501,7 +1502,7 @@ impl AppendOnlyMerkle {
     ///
     /// # Example
     ///
-    /// let encoded = serde_json::to_string(&transaction).unwrap();
+    /// let encoded = serde_json::to_string(&transaction).c(d!())?;
     ///
     /// let transaction_id =
     ///     match tree.append_str(&encoded) {

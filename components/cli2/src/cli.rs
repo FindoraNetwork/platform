@@ -870,8 +870,8 @@ fn main() {
             elvish,
         } = action
         {
-            let bin_path = PathBuf::from(std::env::args().next().unwrap());
-            let bin_name = String::from(bin_path.file_name().unwrap().to_string_lossy());
+            let bin_path = PathBuf::from(std::env::args().next().c(d!())?);
+            let bin_name = String::from(bin_path.file_name().c(d!())?.to_string_lossy());
 
             let mut shells = vec![];
             if bash {

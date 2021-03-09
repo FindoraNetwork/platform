@@ -119,7 +119,7 @@ pub fn make_xfr_note() -> XfrNote {
 }
 
 fn main() -> Result<()> {
-    flexi_logger::Logger::with_env().start().unwrap();
+    flexi_logger::Logger::with_env().start().c(d!())?;
 
     // Creating an identity Keypair for the local node, obtaining the local PeerId from the PublicKey.
     // Create a random PeerId
@@ -225,7 +225,7 @@ fn main() -> Result<()> {
     let mut listening = false;
     // Create an xfr note
     let xfr_note = make_xfr_note();
-    let xfr_note_string = serde_json::to_string(&xfr_note).unwrap();
+    let xfr_note_string = serde_json::to_string(&xfr_note).c(d!())?;
 
     task::block_on(future::poll_fn(move |cx: &mut Context| {
         loop {

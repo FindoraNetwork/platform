@@ -239,14 +239,15 @@ impl LoggedMerkle {
     /// use merkle_tree::append_only_merkle::AppendOnlyMerkle;
     /// use merkle_tree::logged_merkle::LoggedMerkle;
     /// use std::fs::OpenOptions;
+    /// use ruc::*;
     ///
     /// let tree_path = "new_logged";
     /// let log_path = "new_logged-log.1";
     ///
     /// # let _ = std::fs::remove_file(&tree_path);
     /// # let _ = std::fs::remove_file(&log_path);
-    /// let tree = AppendOnlyMerkle::create(&tree_path).unwrap();
-    /// let file = OpenOptions::new().write(true).create(true).open(log_path).unwrap();
+    /// let tree = pnk!(AppendOnlyMerkle::create(&tree_path));
+    /// let file = pnk!(OpenOptions::new().write(true).create(true).open(log_path));
     /// let logged = LoggedMerkle::new(tree, file);
     /// println!("The tree state is {}", logged.state());
     /// # drop(logged);

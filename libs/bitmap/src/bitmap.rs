@@ -636,17 +636,17 @@ impl BitMap {
     ///````
     /// use std::fs::OpenOptions;
     /// use bitmap::BitMap;
+    /// use ruc::*;
     ///
     /// let path = "sample_create_name";
     ///
     /// # let _ = std::fs::remove_file(&path);
     /// let file =
-    ///   OpenOptions::new()
+    ///   pnk!(OpenOptions::new()
     ///     .read(true)
     ///     .write(true)
     ///     .create_new(true)
-    ///     .open(&path)
-    ///     .unwrap();
+    ///     .open(&path));
     ///
     /// let mut bitmap =
     ///   match BitMap::create(file) {
@@ -690,27 +690,27 @@ impl BitMap {
     /// for opening the file.
     ///
     /// # Example
-    ///````
+    ///
+    ///```
     /// use std::fs::OpenOptions;
     /// use bitmap::BitMap;
+    /// use ruc::*;
     ///
     /// let path = "sample_open_name";
     ///
     /// # let _ = std::fs::remove_file(&path);
     /// # let file =
-    /// #   OpenOptions::new()
+    /// #   pnk!(OpenOptions::new()
     /// #     .read(true)
     /// #     .write(true)
     /// #     .create_new(true)
-    /// #     .open(&path)
-    /// #     .unwrap();
+    /// #     .open(&path));
     /// # drop(file);
     /// let file =
-    ///   OpenOptions::new()
+    ///   pnk!(OpenOptions::new()
     ///     .read(true)
     ///     .write(true)
-    ///     .open(&path)
-    ///     .unwrap();
+    ///     .open(&path));
     ///
     /// let mut bitmap =
     ///   match BitMap::open(file) {
@@ -786,7 +786,7 @@ impl BitMap {
 
         // Read each block.
         for index in 0..total_blocks {
-            let mut block = BitBlock::new(BIT_ARRAY, 0).unwrap();
+            let mut block = BitBlock::new(BIT_ARRAY, 0).c(d!())?;
 
             block.header.contents = BIT_INVALID;
 

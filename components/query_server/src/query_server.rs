@@ -279,7 +279,7 @@ where
         // Next, update ownership status
         for (_, (txn_sid, txo_sids)) in finalized_block.iter() {
             let ledger = &mut self.committed_state;
-            let curr_txn = ledger.get_transaction(*txn_sid).unwrap().finalized_txn.txn;
+            let curr_txn = ledger.get_transaction(*txn_sid).c(d!())?.finalized_txn.txn;
             // get the transaction, ownership addresses, and memos associated with each transaction
             let (addresses, owner_memos) = {
                 let addresses: Vec<XfrAddress> = txo_sids
@@ -734,7 +734,7 @@ mod tests {
         // Query server will now fetch new blocks
         query_server.add_new_block(&block0.block.txns).unwrap();
         query_server.add_new_block(&block1.block.txns).unwrap();
-        //query_server.poll_new_blocks().unwrap();
+        //query_server.poll_new_blocks().c(d!())?;
 
         // Ensure that query server is aware of issuances
         let alice_sids = query_server
