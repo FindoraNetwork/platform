@@ -27,8 +27,7 @@ pub struct TxnHandle(pub String);
 
 impl TxnHandle {
     pub fn new(txn: &Transaction) -> Self {
-        let digest = txn.hash(TxnSID(0));
-        TxnHandle(hex::encode(digest))
+        TxnHandle(txn.handle())
     }
 }
 

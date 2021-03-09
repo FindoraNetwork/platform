@@ -618,6 +618,11 @@ impl TransactionBuilder {
         self.get_builder().serialize_str()
     }
 
+    /// Calculates transaction handle.
+    pub fn transaction_handle(&self) -> String {
+        self.get_builder().transaction().handle()
+    }
+
     /// Fetches a client record from a transaction.
     /// @param {number} idx - Record to fetch. Records are added to the transaction builder sequentially.
     pub fn get_owner_record(&self, idx: usize) -> ClientAssetRecord {

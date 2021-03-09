@@ -1740,6 +1740,11 @@ impl Transaction {
         HashOf::new(&(id, self.clone()))
     }
 
+    pub fn handle(&self) -> String {
+        let digest = self.hash(TxnSID(0));
+        hex::encode(digest)
+    }
+
     pub fn from_seq_id(seq_id: u64) -> Self {
         let mut prng = ChaChaRng::from_entropy();
         let no_replay_token = NoReplayToken::new(&mut prng, seq_id);
