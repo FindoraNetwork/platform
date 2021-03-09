@@ -91,8 +91,5 @@
 ``get_related_xfrs/``{*asset_token*}
 : the transfer transactions associated with the given *asset_token*.
 
-``store_custom_data`` [POST]
-: Stores custom data at a given key.
-
 ``version``
 : the Query Server version.
