@@ -151,7 +151,6 @@ pub enum QueryServerRoutes {
     GetAddress,
     GetOwnerMemo,
     GetOwnedUtxos,
-  //StoreCustomData,
     GetCustomData,
     GetCreatedAssets,
     GetTracedAssets,
