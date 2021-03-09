@@ -1,4 +1,5 @@
 #![allow(clippy::field_reassign_with_default)]
+#![deny(warnings)]
 
 use ledger::data_model::{
     AssetType, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedUtxo, BlockSID,

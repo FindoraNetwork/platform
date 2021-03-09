@@ -3,6 +3,7 @@
 //!
 //! Separating mnemonic to a standalone library is needed by tests.
 //!
+#![deny(warnings)]
 
 use bech32::{self, FromBase32, ToBase32};
 use bip0039::{Count, Language, Mnemonic};

@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use actix_cors::Cors;
 use actix_web::test::TestRequest;
 use actix_web::{error, middleware, test, web, App, HttpServer};
@@ -46,7 +48,7 @@ where
 
     submission_server
         .handle_transaction(tx)
-        .map(|h| web::Json(h))
+        .map(web::Json)
         .map_err(|e| {
             e.print();
             error::ErrorBadRequest(e.generate_log())

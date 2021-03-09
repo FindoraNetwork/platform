@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use serde::{Deserialize, Serialize};
 pub const HASH_SIZE: usize = 32;
 #[cfg(target_arch = "wasm32")]

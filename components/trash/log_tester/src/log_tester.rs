@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use ledger::data_model::errors::PlatformError;
 use ledger::store::LoggedBlock;
 use ledger::store::{LedgerAccess, LedgerState};
@@ -48,7 +50,7 @@ fn run_log_against<LU, LA>(
                     v.push(next_block);
                 }
                 Err(e) => {
-                    if l != "" {
+                    if !l.is_empty() {
                         return Err(PlatformError::DeserializationError(Some(format!(
                             "[{}:{}:{}]: {:?}",
                             std::file!(),

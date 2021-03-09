@@ -21,6 +21,7 @@
 //! network. This Vec can be converted to a SparseMap structure.
 //! The SparseMap structure allows various queries on the contents
 //! of the map.
+#![deny(warnings)]
 
 use cryptohash::sha256;
 use cryptohash::sha256::{Digest, DIGESTBYTES};
@@ -1571,7 +1572,7 @@ mod tests {
 
         header.magic ^= 1;
 
-        if let Ok(_) = header.validate(BIT_ARRAY, id) {
+        if header.validate(BIT_ARRAY, id).is_ok() {
             panic!("Validation failed to detect a bad magic number.");
         }
 
@@ -1580,7 +1581,7 @@ mod tests {
 
         header.count = (BLOCK_BITS + 1) as u32;
 
-        if let Ok(_) = header.validate(BIT_ARRAY, id) {
+        if header.validate(BIT_ARRAY, id).is_ok() {
             panic!("Validation failed to detect a bad count.");
         }
 
@@ -1588,14 +1589,14 @@ mod tests {
         assert!(header.validate(BIT_ARRAY, id).is_ok());
         header.bit_id ^= 1;
 
-        if let Ok(_) = header.validate(BIT_ARRAY, id) {
+        if header.validate(BIT_ARRAY, id).is_ok() {
             panic!("Validation failed to detect a bad id.");
         }
 
         header.bit_id ^= 1;
         header.contents = BIT_INVALID;
 
-        if let Ok(_) = header.validate(BIT_ARRAY, id) {
+        if header.validate(BIT_ARRAY, id).is_ok() {
             panic!("Validation failed to detect a bad contents type.");
         }
 
@@ -1603,7 +1604,7 @@ mod tests {
         assert!(header.validate(BIT_ARRAY, id).is_ok());
         header.pad_1 = 1;
 
-        if let Ok(_) = header.validate(BIT_ARRAY, id) {
+        if header.validate(BIT_ARRAY, id).is_ok() {
             panic!("Validation failed to detect a bad pad_1.");
         }
 
@@ -1611,7 +1612,7 @@ mod tests {
         assert!(header.validate(BIT_ARRAY, id).is_ok());
         header.pad_2 = 1;
 
-        if let Ok(_) = header.validate(BIT_ARRAY, id) {
+        if header.validate(BIT_ARRAY, id).is_ok() {
             panic!("Validation failed to detect a bad pad_2.");
         }
 
@@ -1625,7 +1626,7 @@ mod tests {
         assert!(header.count == 0);
         assert!(header.checksum == CheckBlock::new());
 
-        if let Ok(_) = BlockHeader::new(BIT_INVALID, 0) {
+        if BlockHeader::new(BIT_INVALID, 0).is_ok() {
             panic!("An invalid block type was accepted.");
         }
     }
@@ -1636,23 +1637,19 @@ mod tests {
         println!("The header size is {}.", mem::size_of::<BlockHeader>());
         assert!(mem::size_of::<BlockHeader>() == HEADER_SIZE);
         assert!(mem::size_of::<BitBlock>() == BLOCK_SIZE);
-        assert!(BLOCK_SIZE == BITS_SIZE + HEADER_SIZE);
-        assert!(BLOCK_SIZE == BLOCK_BITS / 8 + HEADER_SIZE);
-        assert!(BLOCK_INFO_SIZE == 24 + CHECK_SIZE);
-
         let mut block = BitBlock::new(BIT_DESC_CLEAR, 32).unwrap();
         assert!(block.header.contents == BIT_DESC_CLEAR);
         assert!(block.header.bit_id == 32 * BLOCK_BITS as u64);
 
         block.set_checksum();
 
-        if let Err(_) = block.validate(BIT_DESC_CLEAR, 32) {
+        if block.validate(BIT_DESC_CLEAR, 32).is_err() {
             panic!("Block validation failed.");
         }
 
         block.header.checksum.bytes[0] ^= 1;
 
-        if let Ok(_) = block.validate(BIT_DESC_CLEAR, 32) {
+        if block.validate(BIT_DESC_CLEAR, 32).is_ok() {
             panic!(
                 "Block validation didn't detect a bad checksum: {:?} vs {:?}.",
                 block.header.checksum.bytes,
@@ -1691,7 +1688,7 @@ mod tests {
             panic!("compute_checksum() failed on an empty tree");
         }
 
-        if let Ok(_) = bitmap.set(1) {
+        if bitmap.set(1).is_ok() {
             panic!("set worked with an invalid index.");
         }
 
@@ -1712,11 +1709,11 @@ mod tests {
         // Set some bits in the map.
         for i in 0..2 * BLOCK_BITS + 2 {
             bitmap.set(i).unwrap();
-            assert!(bitmap.query(i).unwrap() == true);
+            assert!(bitmap.query(i).unwrap());
             assert!(bitmap.size() == i + 1);
 
             // Check a query beyond the end of the bitmap.
-            if let Ok(_) = bitmap.query(i + 1) {
+            if bitmap.query(i + 1).is_ok() {
                 panic!("Index {} should be out of range.", i + 1);
             }
 
@@ -1793,15 +1790,15 @@ mod tests {
             }
         }
 
-        if let Ok(_) = bitmap.query(bitmap.size()) {
+        if bitmap.query(bitmap.size()).is_ok() {
             panic!("bitmap query at size passed.");
         }
 
-        if let Ok(_) = sparse_map.query(bitmap.size() as u64) {
+        if sparse_map.query(bitmap.size() as u64).is_ok() {
             panic!("sparse_map query at size passed.");
         }
 
-        if let Ok(_) = partial_map.query(bitmap.size() as u64) {
+        if partial_map.query(bitmap.size() as u64).is_ok() {
             panic!("partial_map query at size passed.");
         }
 
@@ -1809,7 +1806,7 @@ mod tests {
         for i in 0..bitmap.size() {
             if i & 1 == 0 {
                 bitmap.clear(i).unwrap();
-                assert!(bitmap.query(i).unwrap() == false);
+                assert!(!bitmap.query(i).unwrap());
 
                 if i % 273 == 0 {
                     assert!(bitmap.validate(false));
@@ -1822,10 +1819,10 @@ mod tests {
         }
 
         for i in 0..bitmap.size() {
-            assert!(bitmap.query(i).unwrap() == !(i & 1 == 0));
+            assert!(bitmap.query(i).unwrap() != (i & 1 == 0));
         }
 
-        if let Err(_) = bitmap.write() {
+        if bitmap.write().is_err() {
             panic!("write failed.");
         }
 
@@ -1855,7 +1852,7 @@ mod tests {
         validate_checksum(&mut bitmap, "reopen".to_owned());
 
         for i in 0..bits_initialized {
-            assert!(bitmap.query(i).unwrap() == !(i & 1 == 0));
+            assert!(bitmap.query(i).unwrap() != (i & 1 == 0));
 
             if i % BLOCK_BITS == 0 {
                 assert!(bitmap.validate(false));

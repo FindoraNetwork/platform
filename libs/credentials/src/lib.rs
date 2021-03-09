@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use linear_map::LinearMap;
 use rand_core::{CryptoRng, RngCore};
 use ruc::*;

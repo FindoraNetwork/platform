@@ -918,7 +918,7 @@ impl AppendOnlyMerkle {
         let block_id = index / LEAVES_IN_BLOCK;
         let block_index = index % LEAVES_IN_BLOCK;
 
-        self.blocks[0][block_id].hashes[block_index].clone()
+        self.blocks[0][block_id].hashes[block_index]
     }
 
     /// Make a deserialized tree ready for use. The derived
@@ -2414,21 +2414,21 @@ mod tests {
 
         header.header_mark ^= 1;
 
-        if let Ok(_) = header.check(3, 5) {
+        if header.check(3, 5).is_ok() {
             panic!("check didn't detect an invalid header.");
         }
 
         header = BlockHeader::new(3, 5);
         header.level += 1;
 
-        if let Ok(_) = header.check(3, 5) {
+        if header.check(3, 5).is_ok() {
             panic!("check didn't detect an invalid level.");
         }
 
         header = BlockHeader::new(3, 5);
         header.id += 1;
 
-        if let Ok(_) = header.check(3, 5) {
+        if header.check(3, 5).is_ok() {
             panic!("check didn't detect an invalid id.");
         }
 
@@ -2486,11 +2486,11 @@ mod tests {
             // that are set to HashBlock::new. Pick one of them and corrupt
             // it.
             if !block.full() {
-                let saved_hash = block.hashes[i + 1].clone();
+                let saved_hash = block.hashes[i + 1];
                 block.hashes[i + 1].hash[0] ^= 1;
                 block.set_checksum();
 
-                if let Ok(_) = block.check(1, 2, false) {
+                if block.check(1, 2, false).is_ok() {
                     panic!(
                         "check didn't see a corrupted empty hash:  {:?}",
                         block.hashes[i + 1].hash
@@ -2512,7 +2512,7 @@ mod tests {
             block.hashes[index] = HashValue::new();
             block.set_checksum();
 
-            if let Ok(_) = block.check(1, 2, false) {
+            if block.check(1, 2, false).is_ok() {
                 panic!("check didn't see a corrupted full hash");
             }
 
@@ -2541,7 +2541,7 @@ mod tests {
             }
         }
 
-        if let None = block.top_hash() {
+        if block.top_hash().is_none() {
             panic!("top_hash failed on a full block.");
         }
 
@@ -2551,18 +2551,18 @@ mod tests {
             panic!("The block was corrupted by set_hash:  {}", e);
         }
 
-        if let Ok(_) = block.check(0, 2, false) {
+        if block.check(0, 2, false).is_ok() {
             panic!("Bad block id passed");
         }
 
-        if let Ok(_) = block.check(1, 3, false) {
+        if block.check(1, 3, false).is_ok() {
             panic!("Bad level passed");
         }
 
         // Corrupt checksum[0] and see whether that's caught.
         block.header.check_bits.bits[0] ^= 1;
 
-        if let Ok(_) = block.check(1, 2, false) {
+        if block.check(1, 2, false).is_ok() {
             panic!("Bad hash[0] passed");
         }
 
@@ -2575,7 +2575,7 @@ mod tests {
         // Now corrupt checksum[last] and do the checks.
         block.header.check_bits.bits[CHECK_SIZE - 1] ^= 1;
 
-        if let Ok(_) = block.check(1, 2, false) {
+        if block.check(1, 2, false).is_ok() {
             panic!("Bad hash[last] passed");
         }
 
@@ -2588,14 +2588,14 @@ mod tests {
         // Okay, corrupt a hash in the subtree.
         block.hashes[LEAVES_IN_BLOCK].hash[0] ^= 1;
 
-        if let Ok(_) = block.check(1, 2, true) {
+        if block.check(1, 2, true).is_ok() {
             panic!("A corrupted subtree passed");
         }
 
         // Try redoing an insertion...
         block.header.valid_leaves = 0;
 
-        if let Ok(_) = block.set_hash(&hash) {
+        if block.set_hash(&hash).is_ok() {
             panic!("set_hash overwrote a full hash");
         }
     }
@@ -2604,8 +2604,8 @@ mod tests {
     fn test_hash_pair() {
         let mut a = [0; 2 * HASH_SIZE];
 
-        for i in 0..2 * HASH_SIZE {
-            a[i] = i as u8;
+        for (i, sa) in a.iter_mut().enumerate().take(2 * HASH_SIZE) {
+            *sa = i as u8;
         }
 
         let digest = sha256::hash(&a[0..2 * HASH_SIZE]);
@@ -2747,8 +2747,8 @@ mod tests {
         let mut buffer = [0_u8; HASH_SIZE - 1];
         let mut hash_value = HashValue::new();
 
-        for i in 0..buffer.len() {
-            buffer[i] = 0xfe;
+        for buf in &mut buffer {
+            *buf = 0xfe;
         }
 
         buffer
@@ -2802,12 +2802,13 @@ mod tests {
     // Test a larger tree.
     #[test]
     #[ignore]
+    #[allow(clippy::mut_range_bound)]
     // This test runs takes a long time to run. Run it with `cargo test -- --ignored`
     fn test_tree() {
         let path = "test_tree".to_string();
         let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(&(path.clone() + &".1-base"));
-        let _ = std::fs::remove_file(&(path.clone() + &".2-base"));
+        let _ = std::fs::remove_file(&(path.clone() + ".1-base"));
+        let _ = std::fs::remove_file(&(path.clone() + ".2-base"));
         let result = AppendOnlyMerkle::create(&path);
 
         let mut tree = match result {
@@ -3555,9 +3556,7 @@ mod tests {
         let _ = std::fs::remove_file(path.to_owned() + ".1");
         let _ = std::fs::remove_file(path.to_owned() + ".1" + &ext);
 
-        let result = std::fs::remove_file(&fake);
-
-        if let Ok(_) = result {
+        if std::fs::remove_file(&fake).is_ok() {
             panic!("File ... should have been moved.");
         }
 

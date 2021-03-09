@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use ledger_api_service::ActixLedgerClient;
 use log::{error, info};
 use metrics_exporter_prometheus::PrometheusHandle;

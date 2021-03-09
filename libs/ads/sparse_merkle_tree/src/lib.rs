@@ -2,6 +2,8 @@
 //! # as a Sparse Merkle Tree
 //!
 //!
+#![deny(warnings)]
+
 use cryptohash::sha256;
 use rand::Rng;
 use ruc::*;
@@ -398,12 +400,12 @@ mod tests {
     }
 
     fn mask_u8(x: u64, shift: usize) -> u8 {
-        (x >> shift) as u8 & 0xffu8
+        (x >> shift) as u8
     }
 
     fn u64_into_byteslice(slice: &mut [u8], u: u64) {
-        for n in 0..8 {
-            slice[n] = mask_u8(u, n * 8);
+        for (n, s) in slice.iter_mut().enumerate().take(8) {
+            *s = mask_u8(u, n * 8);
         }
     }
 
@@ -411,10 +413,10 @@ mod tests {
         let args: [u64; 4] = [x0, x1, x2, x3];
         let mut result: [u8; 32] = [0u8; 32];
 
-        for i in 0..4 {
+        for (i, arg) in args.iter().enumerate() {
             let l = i * 8;
             let r = l + 8;
-            u64_into_byteslice(&mut result[l..r], args[i]);
+            u64_into_byteslice(&mut result[l..r], *arg);
         }
 
         Digest { 0: result }

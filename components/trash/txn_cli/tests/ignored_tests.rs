@@ -1,9 +1,8 @@
-use ledger::data_model::errors::PlatformError;
+#![allow(unused)]
 use ledger::data_model::AssetTypeCode;
 #[cfg(test)]
 use network::MockLedgerStandalone;
 use ruc::*;
-use std::iter::once;
 use tempfile::tempdir;
 use txn_cli::txn_app::{get_cli_app, process_inputs};
 
@@ -390,6 +389,7 @@ fn issue_asset_with_confidential_amount(
 }
 
 #[cfg(test)]
+#[allow(clippy::too_many_arguments)]
 fn transfer_asset(
     dir: &str,
     txn_builder_path: &str,
@@ -729,12 +729,13 @@ fn test_define_asset_simple_policies() {
         .expect("Failed to create a borrower");
 
     // Create txn builder and key pairs
-    create_txn_builder_with_path(txn_builder_file, &mut ledger_standalone).expect(
-        &format!(
-            "Failed to create transaction builder at file {}",
-            txn_builder_file
-        ),
-    );
+    create_txn_builder_with_path(txn_builder_file, &mut ledger_standalone)
+        .unwrap_or_else(|_| {
+            panic!(
+                "Failed to create transaction builder at file {}",
+                txn_builder_file
+            )
+        });
 
     // Define token code
     let token_code = AssetTypeCode::gen_random().to_base64();
@@ -991,7 +992,6 @@ fn test_issue_transfer_trace_and_submit_with_args() {
 // #[test]
 // #[ignore]
 #[cfg(test)]
-#[allow(unused)]
 fn test_air_assign() {
     // Create txn builder and key pair
     let tmp_dir = tempdir().unwrap();

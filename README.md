@@ -53,6 +53,8 @@ cd /opt && \
 sudo apt install libc-dev libssl-dev make git curl wget
 ```
 
+After clone code, you should do a `make githook` to finish githooks settings that used to check code's format.
+
 #### compile
 
 dynamic linked for online env(docker):

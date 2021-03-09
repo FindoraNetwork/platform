@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 extern crate actix_rt;
 extern crate actix_web;
 extern crate ledger;

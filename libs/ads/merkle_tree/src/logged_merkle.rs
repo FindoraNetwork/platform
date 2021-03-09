@@ -658,7 +658,7 @@ mod tests {
             panic!("close failed:  {}", x);
         }
 
-        if let Ok(_) = logged.append(&test_hash(1)) {
+        if logged.append(&test_hash(1)).is_ok() {
             panic!("append after close worked");
         }
 

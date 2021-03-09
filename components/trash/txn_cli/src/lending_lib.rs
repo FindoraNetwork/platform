@@ -769,8 +769,6 @@ where
 mod tests {
     use super::*;
     use ledger::data_model::TxoSID;
-    use network::MockLedgerStandalone;
-    use tempfile::tempdir;
     #[test]
     fn test_merge_records() {
         // Create key pair
