@@ -50,13 +50,11 @@ impl TxnForward for TendermintForward {
         thread::spawn(move || {
             ruc::info_omit!(
                 attohttpc::post(&tendermint_reply)
-                    .json(&json_rpc)
-                    .c(d!())
-                    .and_then(|d| d
-                        .header(attohttpc::header::CONTENT_TYPE, "application/json")
-                        .send()
-                        .c(d!(sub_fail!())))
-            );
+                    .header(attohttpc::header::CONTENT_TYPE, "application/json")
+                    .text(json_rpc)
+                    .send()
+                    .c(d!(sub_fail!()))
+            )
         });
         info!("forward_txn call complete");
         Ok(())
