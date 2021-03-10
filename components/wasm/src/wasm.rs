@@ -1509,4 +1509,63 @@ mod test {
         let kp1_str = serde_json::to_string(&kp1).unwrap();
         assert_eq!(kp_str, kp1_str);
     }
+
+    #[test]
+    fn test_asset_rules_to_str() {
+        let mut ar = AssetRules {
+            rules: Default::default(),
+        };
+        ar.rules.max_units = Some(10000000000_u64);
+        let actual_serialized_json = serde_json::to_string(&ar.rules).unwrap();
+        let expected_serialized_json = r#"{"transferable":true,"updatable":false,"transfer_multisig_rules":null,"max_units":"10000000000","decimals":6}"#.to_string();
+        assert_eq!(actual_serialized_json, expected_serialized_json);
+    }
+
+    #[test]
+    fn test_asset_rules_from_str() {
+        use ledger::data_model::AssetRules as PlatformAssetRules;
+        let mut ar = AssetRules {
+            rules: Default::default(),
+        };
+        let amt = 10000000000_u64;
+        ar.rules.max_units = Some(amt);
+        let actual_serialized_json = serde_json::to_string(&ar.rules).unwrap();
+        let expected_serialized_json = r#"{"transferable":true,"updatable":false,"transfer_multisig_rules":null,"max_units":"10000000000","decimals":6}"#.to_string();
+        assert_eq!(actual_serialized_json, expected_serialized_json);
+
+        let res: PlatformAssetRules =
+            serde_json::from_str::<PlatformAssetRules>(&expected_serialized_json)
+                .unwrap();
+        assert_eq!(res.max_units.unwrap(), amt);
+    }
+
+    #[test]
+    fn test_asset_rules_from_str_null_max_units() {
+        use ledger::data_model::AssetRules as PlatformAssetRules;
+        let mut ar = AssetRules {
+            rules: Default::default(),
+        };
+        let amt = 10000000000_u64;
+        ar.rules.max_units = Some(amt);
+        let actual_serialized_json = r#"{"transferable":true,"updatable":false,"transfer_multisig_rules":null,"max_units":null,"decimals":6}"#.to_string();
+
+        let res: PlatformAssetRules =
+            serde_json::from_str::<PlatformAssetRules>(&actual_serialized_json).unwrap();
+        assert_eq!(res.max_units, None);
+    }
+
+    #[test]
+    fn test_asset_rules_from_str_empty_str_max_units() {
+        use ledger::data_model::AssetRules as PlatformAssetRules;
+        let mut ar = AssetRules {
+            rules: Default::default(),
+        };
+        let amt = 10000000000_u64;
+        ar.rules.max_units = Some(amt);
+        let actual_serialized_json = r#"{"transferable":true,"updatable":false,"transfer_multisig_rules":null,"max_units":"","decimals":6}"#.to_string();
+
+        let res: PlatformAssetRules =
+            serde_json::from_str::<PlatformAssetRules>(&actual_serialized_json).unwrap();
+        assert_eq!(res.max_units, None);
+    }
 }

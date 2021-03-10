@@ -33,6 +33,7 @@ schnorr = "0.0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_derive = "1.0"
 serde_json = "1.0"
+serde-strz = "1.1.1"
 sha2 = "0.8.0"
 sliding_set = { path = "../libs/sliding_set" }
 tempdir = "0.3"
