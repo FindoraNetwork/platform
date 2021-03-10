@@ -61,7 +61,7 @@ fn main() {
             let ledger = state_lock.read().c(d!())?;
             (*ledger).get_block_count()
         };
-        let new_blocks = match reqwest::blocking::get(&format!(
+        let new_blocks = match attohttpc::get(&format!(
             "http://{}/{}/{}",
             ledger_url.to_str().c(d!())?,
             "blocks_since",

@@ -562,15 +562,15 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                     (dst_keypair.get_pk_ref(), dst_keypair.get_sk_ref());
                 let (_, unit_code) = self.units.get(unit).c(d!(inp_fail!()))?;
 
-                if *self.balances.get(src).c(d!())?.get(unit).unwrap() < amt {
+                if *self.balances.get(src).c(d!())?.get(unit).c(d!())? < amt {
                     return Err(eg!(inp_fail!()));
                 }
                 if amt == 0 {
                     return Ok(());
                 }
 
-                *self.balances.get_mut(src).c(d!())?.get_mut(unit).unwrap() -= amt;
-                *self.balances.get_mut(dst).c(d!())?.get_mut(unit).unwrap() += amt;
+                *self.balances.get_mut(src).c(d!())?.get_mut(unit).c(d!())? -= amt;
+                *self.balances.get_mut(dst).c(d!())?.get_mut(unit).c(d!())? += amt;
 
                 let mut src_records: Vec<OpenAssetRecord> = Vec::new();
                 let mut total_sum = 0u64;
@@ -1201,14 +1201,14 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                     (dst_keypair.get_pk_ref(), dst_keypair.get_sk_ref());
                 let (_, unit_code) = self.units.get(unit).c(d!(inp_fail!()))?;
 
-                if *self.balances.get(src).c(d!())?.get(unit).unwrap() < amt {
+                if *self.balances.get(src).c(d!())?.get(unit).c(d!())? < amt {
                     return Err(eg!(inp_fail!()));
                 }
                 if amt == 0 {
                     return Ok(());
                 }
 
-                *self.balances.get_mut(src).c(d!())?.get_mut(unit).unwrap() -= amt;
+                *self.balances.get_mut(src).c(d!())?.get_mut(unit).c(d!())? -= amt;
 
                 let (src_ctrt, src_txos) = self.utxos.remove(src).c(d!())?;
 
@@ -1473,7 +1473,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                         }
                         assert_eq!(
                             avail_total,
-                            *self.balances.get(src).c(d!())?.get(unit).unwrap()
+                            *self.balances.get(src).c(d!())?.get(unit).c(d!())?
                         );
                     }
 
@@ -1578,7 +1578,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                         (0, 1, new_src_ctrt)
                     } else {
                         let ix = new_src_ctrt_ix;
-                        let rec = txn_txos.get(ix).c(d!())?.clone().unwrap();
+                        let rec = txn_txos.get(ix).c(d!())?.clone().c(d!())?;
 
                         // we released the lien into [ctrt,entries...] then sent the
                         // entries into a single TXO, so our final transaction will
@@ -1667,7 +1667,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                 };
 
                 // We've pulled sent_txo out of src, wrap it back into dst.
-                *self.balances.get_mut(dst).c(d!())?.get_mut(unit).unwrap() += amt;
+                *self.balances.get_mut(dst).c(d!())?.get_mut(unit).c(d!())? += amt;
 
                 let (dst_ctrt, dst_txos) = self.utxos.remove(dst).c(d!())?;
 
@@ -2057,15 +2057,15 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                 let (dst_pub, _) = (dst_keypair.get_pk_ref(), dst_keypair.get_sk_ref());
                 let (_, unit_code, _) = self.units.get(unit).c(d!(inp_fail!()))?;
 
-                if *self.balances.get(src).c(d!())?.get(unit).unwrap() < amt {
+                if *self.balances.get(src).c(d!())?.get(unit).c(d!())? < amt {
                     return Err(eg!(inp_fail!()));
                 }
                 if amt == 0 {
                     return Ok(());
                 }
 
-                *self.balances.get_mut(src).c(d!())?.get_mut(unit).unwrap() -= amt;
-                *self.balances.get_mut(dst).c(d!())?.get_mut(unit).unwrap() += amt;
+                *self.balances.get_mut(src).c(d!())?.get_mut(unit).c(d!())? -= amt;
+                *self.balances.get_mut(dst).c(d!())?.get_mut(unit).c(d!())? += amt;
 
                 let mut src_records: Vec<OpenAssetRecord> = Vec::new();
                 let mut total_sum = 0u64;
@@ -2433,15 +2433,15 @@ where
                 let (dst_pub, _) = (dst_keypair.get_pk_ref(), dst_keypair.get_sk_ref());
                 let (_, unit_code) = self.units.get(unit).c(d!(inp_fail!()))?;
 
-                if *self.balances.get(src).c(d!())?.get(unit).unwrap() < amt {
+                if *self.balances.get(src).c(d!())?.get(unit).c(d!())? < amt {
                     return Err(eg!(inp_fail!()));
                 }
                 if amt == 0 {
                     return Ok(());
                 }
 
-                *self.balances.get_mut(src).c(d!())?.get_mut(unit).unwrap() -= amt;
-                *self.balances.get_mut(dst).c(d!())?.get_mut(unit).unwrap() += amt;
+                *self.balances.get_mut(src).c(d!())?.get_mut(unit).c(d!())? -= amt;
+                *self.balances.get_mut(dst).c(d!())?.get_mut(unit).c(d!())? += amt;
 
                 // Release the src lien, get a set of available records.
 

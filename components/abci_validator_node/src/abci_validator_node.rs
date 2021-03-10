@@ -46,19 +46,16 @@ impl TxnForward for TendermintForward {
         );
 
         info!("forward_txn: \'{}\'", &json_rpc);
-        let client = reqwest::blocking::Client::builder()
-            .timeout(None)
-            .build()
-            .c(d!())?;
         let tendermint_reply = format!("http://{}", self.tendermint_reply);
         thread::spawn(move || {
             ruc::info_omit!(
-                client
-                    .post(&tendermint_reply)
-                    .body(json_rpc)
-                    .header(reqwest::header::CONTENT_TYPE, "application/json")
-                    .send()
-                    .c(d!(sub_fail!()))
+                attohttpc::post(&tendermint_reply)
+                    .json(&json_rpc)
+                    .c(d!())
+                    .and_then(|d| d
+                        .header(attohttpc::header::CONTENT_TYPE, "application/json")
+                        .send()
+                        .c(d!(sub_fail!())))
             );
         });
         info!("forward_txn call complete");

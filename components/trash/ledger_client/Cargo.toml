@@ -16,7 +16,7 @@ ledger = { path = "../../ledger" }
 percent-encoding = "2.1.0"
 rand_chacha = "0.2.0"
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
-reqwest = { version = "0.10", default-features = false, features = ["rustls-tls", "blocking", "json"] }
+attohttpc = { version = "0.16.1", default-features = false, features = ["compress", "json", "tls-rustls"] }
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"

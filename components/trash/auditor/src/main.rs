@@ -116,19 +116,17 @@ fn main() -> Result<()> {
     // Set up a an encrypted DNS-enabled TCP Transport over the Mplex and Yamux protocols
     let transport = libp2p::build_development_transport(local_key).c(d!())?;
 
-    let client = reqwest::blocking::Client::new();
     // Create a Floodsub topic
     let floodsub_topic = floodsub::Topic::new("ledger auditor");
 
     // Read signed commitment from ledger
     let (protocol, host) = protocol_host();
-    let resp_gs = client
-        .get(&format!(
-            "{}://{}:{}/global_state",
-            protocol, host, LEDGER_PORT
-        ))
-        .send()
-        .c(d!())?;
+    let resp_gs = attohttpc::get(&format!(
+        "{}://{}:{}/global_state",
+        protocol, host, LEDGER_PORT
+    ))
+    .send()
+    .c(d!())?;
     let (comm, idx, sig): (BitDigest, u64, XfrSignature) =
         serde_json::from_str(&resp_gs.text().c(d!())?[..]).c(d!())?;
     let idx = if args.is_present("poison") {
@@ -138,13 +136,12 @@ fn main() -> Result<()> {
     };
     info!("Got ({:?}, {}, {:?}) from global_state", comm, idx, sig);
     // Read signed commitment from ledger
-    let resp_pk = client
-        .get(&format!(
-            "{}://{}:{}/public_key",
-            protocol, host, LEDGER_PORT
-        ))
-        .send()
-        .c(d!())?;
+    let resp_pk = attohttpc::get(&format!(
+        "{}://{}:{}/public_key",
+        protocol, host, LEDGER_PORT
+    ))
+    .send()
+    .c(d!())?;
     let pk: XfrPublicKey = serde_json::from_str(&resp_pk.text().c(d!())?[..]).c(d!())?;
     info!("Got {:?} from public_key", pk);
 

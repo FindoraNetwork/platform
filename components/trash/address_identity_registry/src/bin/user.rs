@@ -34,12 +34,12 @@ async fn main_inner() -> Result<()> {
     // Setup: At the outset, the User is a client of the Issuer
     // Step 1: Get the issuer_pk for the credential of interest
     let credname = urlencode("passport");
-    let resp1 = reqwest::get(&format!("http://localhost:3030/issuer_pk/{}", &credname))
-        .await
-        .c(d!())?
-        .json::<PubCreds>()
-        .await
-        .c(d!())?;
+    let resp1 =
+        attohttpc::get(&format!("http://localhost:3030/issuer_pk/{}", &credname))
+            .send()
+            .c(d!())?
+            .json::<PubCreds>()
+            .c(d!())?;
     println!(
         "Response from issuer for public credential info is:\n{}",
         serde_json::to_string(&resp1).c(d!())?
@@ -58,19 +58,17 @@ async fn main_inner() -> Result<()> {
         user_pk: user_pk.clone(),
         attrs: attrs.clone(),
     };
-    let client = reqwest::Client::new();
-    let resp2 = client
-        .put("http://localhost:3030/sign/passport")
+    let resp2 = attohttpc::put("http://localhost:3030/sign/passport")
         .json::<UserCreds>(&user_creds)
+        .c(d!())?
         .send()
-        .await
         .c(d!())?;
 
-    let resp_text = &resp2.bytes().await.c(d!())?;
+    let resp_text = &resp2.bytes().c(d!())?;
 
     println!("Response from issuer for signature is:\n{:?}", &resp_text);
     let sig: CredSignature =
-        serde_json::from_str(std::str::from_utf8(resp_text).c(d!())?).unwrap();
+        serde_json::from_str(std::str::from_utf8(resp_text).c(d!())?).c(d!())?;
 
     let mut map = vec![];
     for attr in attrs {
@@ -94,14 +92,13 @@ async fn main_inner() -> Result<()> {
         // Build the transaction
 
         let (protocol, host) = protocol_host();
-        let resp_gs = reqwest::get(&format!(
+        let resp_gs = attohttpc::get(&format!(
             "{}://{}:{}/global_state",
             protocol, host, LEDGER_PORT
         ))
-        .await
+        .send()
         .c(d!())?
         .text()
-        .await
         .c(d!())?;
         let (_, seq_id, _): GlobalState<StateCommitmentData> =
             serde_json::from_str(&resp_gs[..]).c(d!())?;
@@ -124,15 +121,14 @@ async fn main_inner() -> Result<()> {
             "User: submitting air_assign txn to ledger at {}://{}:{}/submit_transaction",
             protocol, host, SUBMIT_PORT
         );
-        let res = client
-            .post(&format!(
-                "{}://{}:{}/submit_transaction",
-                protocol, host, SUBMIT_PORT
-            ))
-            .json(&txn)
-            .send()
-            .await
-            .c(d!())?;
+        let res = attohttpc::post(&format!(
+            "{}://{}:{}/submit_transaction",
+            protocol, host, SUBMIT_PORT
+        ))
+        .json(&txn)
+        .c(d!())?
+        .send()
+        .c(d!())?;
 
         match res.error_for_status() {
             Ok(_res) => {

@@ -2032,10 +2032,9 @@ pub fn submit<S: CliDataStore>(store: &mut S, nick: String) -> Result<()> {
         return Ok(());
     }
 
-    let client = reqwest::blocking::Client::builder().build().c(d!())?;
-    let resp = client
-        .post(&query)
+    let resp = attohttpc::post(&query)
         .json(&txn)
+        .c(d!())?
         .send()
         .c(d!())?
         .error_for_status()
@@ -2112,11 +2111,9 @@ pub fn init_fra<S: CliDataStore>(store: &mut S, issuer_nick: String) -> Result<(
         })
         .c(d!(CliError::Password))?;
 
-        reqwest::blocking::Client::builder()
-            .build()
-            .c(d!())?
-            .post(&query)
+        attohttpc::post(&query)
             .json(&fra_gen_initial_tx(&kp))
+            .c(d!())?
             .send()
             .c(d!())?
             .error_for_status()
