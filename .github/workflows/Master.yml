@@ -1,0 +1,178 @@
+name: Master
+on:
+  pull_request:
+    branches:
+      - master
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  build:
+    strategy:
+      matrix:
+        platform: [aws]
+    runs-on: ${{ matrix.platform }}
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly-2021-01-24
+        override: true
+        components: rustfmt
+    - name: check fmt
+      shell: bash
+      run: |
+        cargo fmt -- --check
+    # - name: test_status
+    #   env:
+    #     DBG: true
+    #   shell: bash
+    #   run: |
+    #     curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+    #     make test_status
+    ## It need to install protobuf-compiler for build environment.
+    ## Enable this when build by container.
+    # - name: Install protobuf-compiler
+    #   shell: bash
+    #   run: |
+    #     apt install protobuf-compiler
+    - name: install rustwasm
+      shell: bash
+      run: |
+        curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+    - name: add go
+      shell: bash
+      run: |
+        mkdir $(pwd)/opt && cd $(pwd)/opt && wget https://golang.google.cn/dl/go1.15.7.linux-amd64.tar.gz && tar -xpf go1.15.7.linux-amd64.tar.gz && echo "$(pwd)/go/bin" >> $GITHUB_PATH
+    - name: lint
+      shell: bash
+      run: |
+        make lint
+    - name: test
+      shell: bash
+      run: |
+        make test
+    # - name: Build
+    #   env:
+    #     DBG: true
+    #   shell: bash
+    #   run: |
+    #     make build
+    - name: build release
+      env:
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
+      shell: bash
+      run: |
+        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+        if [ "${COMMIT_HASH}" == "null" ]; then
+          export COMMIT_HASH="${GITHUB_SHA::7}"
+        else
+          export COMMIT_HASH=${COMMIT_HASH:1:7}
+        fi
+        export BRANCH="${GITHUB_HEAD_REF}"
+        export TOBRANCH="${GITHUB_BASE_REF}"
+        export VERGEN_SHA_SHORT_EXTERN="${TOBRANCH}-${COMMIT_HASH}"
+        echo "VERGEN_SHA_SHORT_EXTERN: ${VERGEN_SHA_SHORT_EXTERN}"
+        make build_release
+    - name: Build images
+      env:
+        ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
+        ENV: dev
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
+      shell: bash
+      run: |
+        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+        if [ "${COMMIT_HASH}" == "null" ]; then
+          export COMMIT_HASH="${GITHUB_SHA::7}"
+        else
+          export COMMIT_HASH=${COMMIT_HASH:1:7}
+        fi
+        export BRANCH="${GITHUB_HEAD_REF}"
+        export TOBRANCH="${GITHUB_BASE_REF}"
+        export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
+        echo "Image tag: ${IMAGE_TAG}"
+        make ci_build_image
+    - name: Login ECR
+      shell: bash
+      run: |
+        $(aws ecr get-login --region us-west-2 --no-include-email)
+    - name: Push images
+      env:
+        ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
+        ENV: dev
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
+      shell: bash
+      run: |
+        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+        if [ "${COMMIT_HASH}" == "null" ]; then
+          export COMMIT_HASH="${GITHUB_SHA::7}"
+        else
+          export COMMIT_HASH=${COMMIT_HASH:1:7}
+        fi
+        export BRANCH="${GITHUB_HEAD_REF}"
+        export TOBRANCH="${GITHUB_BASE_REF}"
+        export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
+        echo "Image tag: ${IMAGE_TAG}"
+        make ci_push_image
+    - name: Clean images
+      env:
+        ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
+        ENV: dev
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
+      shell: bash
+      run: |
+        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+        if [ "${COMMIT_HASH}" == "null" ]; then
+          export COMMIT_HASH="${GITHUB_SHA::7}"
+        else
+          export COMMIT_HASH=${COMMIT_HASH:1:7}
+        fi
+        export BRANCH="${GITHUB_HEAD_REF}"
+        export TOBRANCH="${GITHUB_BASE_REF}"
+        export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
+        echo "Image tag: ${IMAGE_TAG}"
+        make clean_image
+    - name: Push wasm-js-bindings
+      shell: bash
+      env:
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
+      run: |
+        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+        if [ "${COMMIT_HASH}" == "null" ]; then
+          export COMMIT_HASH="${GITHUB_SHA::7}"
+        else
+          export COMMIT_HASH=${COMMIT_HASH:1:7}
+        fi
+        export BRANCH="${GITHUB_HEAD_REF}"
+        export TOBRANCH="${GITHUB_BASE_REF}"
+        export BRANCH_NAME="develop"
+        export WASM_DIR="/tmp/wasm-js-bindings"
+        if [ ! -d "${WASM_DIR}" ]; then git clone git@github.com:FindoraNetwork/wasm-js-bindings.git "${WASM_DIR}"; fi
+        pushd "${WASM_DIR}"
+        git checkout "${BRANCH_NAME}" || git checkout -b "${BRANCH_NAME}"
+        git pull origin "${BRANCH_NAME}" || true
+        if [ ! -d "${WASM_DIR}/nodejs" ]; then mkdir "${WASM_DIR}/nodejs"; fi
+        if [ ! -d "${WASM_DIR}/web" ]; then mkdir "${WASM_DIR}/web"; fi
+        if [ ! -d "${WASM_DIR}/bundler" ]; then mkdir "${WASM_DIR}/bundler"; fi
+        popd
+        pushd components/wasm
+        wasm-pack build --target nodejs --out-dir "${WASM_DIR}/nodejs"
+        rm "${WASM_DIR}/nodejs/.gitignore"
+        wasm-pack build --target web --out-dir "${WASM_DIR}/web"
+        rm "${WASM_DIR}/web/.gitignore"
+        wasm-pack build --target bundler --out-dir "${WASM_DIR}/bundler"
+        rm "${WASM_DIR}/bundler/.gitignore"
+        popd
+        pushd "${WASM_DIR}"
+        if [ "$(git diff)" != "" ]; then
+            git add .
+            git commit -m "From platform PR ${PR}(${BRANCH} to ${TOBRANCH}), commit hash: ${COMMIT_HASH}, build date: $(date +"%Y%m%d")"
+            git push origin "${BRANCH_NAME}"
+        fi
+        git tag "${TOBRANCH}-${COMMIT_HASH}"
+        git push origin "${TOBRANCH}-${COMMIT_HASH}"
+        git tag -d "${TOBRANCH}-${COMMIT_HASH}"
+        popd
+    - name: Clean garbage
+      shell: bash
+      run: |
+        rm -rf /tmp/*>/dev/null 2>&1 || true

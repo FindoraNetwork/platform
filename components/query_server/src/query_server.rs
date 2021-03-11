@@ -1,9 +1,11 @@
+#![deny(warnings)]
+
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
-use ledger::error_location;
 use ledger::store::*;
 use ledger_api_service::RestfulArchiveAccess;
 use log::{error, info};
+use ruc::*;
 use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
@@ -11,12 +13,14 @@ use std::sync::Arc;
 use utils::MetricsRenderer;
 use zei::xfr::structs::OwnerMemo;
 
+type Issuances = Vec<Arc<(TxOutput, Option<OwnerMemo>)>>;
+
 macro_rules! fail {
     () => {
-        PlatformError::QueryServerError(error_location!())
+        PlatformError::QueryServerError(None)
     };
     ($s:expr) => {
-        PlatformError::QueryServerError(format!("[{}] {}", &error_location!(), &$s))
+        PlatformError::QueryServerError(Some($s.to_string()))
     };
 }
 
@@ -31,9 +35,8 @@ where
     related_transfers: HashMap<AssetTypeCode, HashSet<TxnSID>>, // Set of transfer transactions related to an asset code
     created_assets: HashMap<IssuerPublicKey, Vec<DefineAsset>>,
     traced_assets: HashMap<IssuerPublicKey, Vec<AssetTypeCode>>, // List of assets traced by a ledger address
-    issuances: HashMap<IssuerPublicKey, Vec<Arc<(TxOutput, Option<OwnerMemo>)>>>, // issuance mapped by public key
-    token_code_issuances:
-        HashMap<AssetTypeCode, Vec<Arc<(TxOutput, Option<OwnerMemo>)>>>, // issuance mapped by token code
+    issuances: HashMap<IssuerPublicKey, Issuances>, // issuance mapped by public key
+    token_code_issuances: HashMap<AssetTypeCode, Issuances>, // issuance mapped by token code
     owner_memos: HashMap<TxoSID, OwnerMemo>,
     utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
     custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
@@ -154,20 +157,20 @@ where
         key: &Key,
         data: &dyn AsRef<[u8]>,
         blind: Option<&KVBlind>,
-    ) -> Result<(), PlatformError> {
+    ) -> Result<()> {
         let hash = KVHash::new(data, blind);
         let auth_entry = self.committed_state.get_kv_entry(*key);
 
-        let result = auth_entry.result.ok_or_else(|| {
-            fail!("Nothing found in the custom data store at this key")
-        })?;
-        let entry_hash = result.deserialize().1.ok_or_else(|| fail!("Nothing found in the custom data store at this key. A hash was once here, but has been removed"))?.1;
+        let result = auth_entry.result.c(d!(fail!(
+            "Nothing found in the custom data store at this key"
+        )))?;
+        let entry_hash = result.deserialize().1.c(d!(fail!("Nothing found in the custom data store at this key. A hash was once here, but has been removed")))?.1;
 
         // Ensure that hash matches
         if hash != entry_hash {
-            return Err(fail!(
+            return Err(eg!(fail!(
                 "The hash of the data supplied does not match the hash stored by the ledger"
-            ));
+            )));
         }
 
         // Hash matches, store data
@@ -239,24 +242,21 @@ where
         }
     }
 
-    fn remove_spent_utxos(
-        &mut self,
-        transfer: &TransferAsset,
-    ) -> Result<(), PlatformError> {
+    fn remove_spent_utxos(&mut self, transfer: &TransferAsset) -> Result<()> {
         for input in &transfer.body.inputs {
             match input {
                 TxoRef::Relative(_) => {} // Relative utxos were never cached so no need to do anything here
                 TxoRef::Absolute(txo_sid) => {
-                    let address = self.utxos_to_map_index
-                            .get(&txo_sid)
-                            .ok_or_else(|| fail!("Attempting to remove owned txo of address that isn't cached"))?;
+                    let address = self.utxos_to_map_index.get(&txo_sid).c(d!(fail!(
+                        "Attempting to remove owned txo of address that isn't cached"
+                    )))?;
                     let hash_set = self
                         .addresses_to_utxos
                         .get_mut(&address)
-                        .ok_or_else(|| fail!("No txos stored for this address"))?;
+                        .c(d!(fail!("No txos stored for this address")))?;
                     let removed = hash_set.remove(&txo_sid);
                     if !removed {
-                        return Err(fail!("Input txo not found"));
+                        return Err(eg!(fail!("Input txo not found")));
                     }
                 }
             }
@@ -266,26 +266,23 @@ where
 
     // Updates query server cache with new transactions from a block.
     // Each new block must be consistent with the state of the cached ledger up until this point
-    pub fn add_new_block(
-        &mut self,
-        block: &[FinalizedTransaction],
-    ) -> Result<(), PlatformError> {
+    pub fn add_new_block(&mut self, block: &[FinalizedTransaction]) -> Result<()> {
         // First, we add block to local ledger state
         let finalized_block = {
-            let mut block_builder = self.committed_state.start_block().unwrap();
+            let mut block_builder = self.committed_state.start_block().c(d!())?;
             for txn in block {
-                let eff = TxnEffect::compute_effect(txn.txn.clone()).unwrap();
+                let eff = TxnEffect::compute_effect(txn.txn.clone()).c(d!())?;
                 self.committed_state
                     .apply_transaction(&mut block_builder, eff)
-                    .unwrap();
+                    .c(d!())?;
             }
 
-            self.committed_state.finish_block(block_builder).unwrap()
+            self.committed_state.finish_block(block_builder).c(d!())?
         };
         // Next, update ownership status
         for (_, (txn_sid, txo_sids)) in finalized_block.iter() {
             let ledger = &mut self.committed_state;
-            let curr_txn = ledger.get_transaction(*txn_sid).unwrap().finalized_txn.txn;
+            let curr_txn = ledger.get_transaction(*txn_sid).c(d!())?.finalized_txn.txn;
             // get the transaction, ownership addresses, and memos associated with each transaction
             let (addresses, owner_memos) = {
                 let addresses: Vec<XfrAddress> = txo_sids
@@ -329,7 +326,7 @@ where
                         self.cache_issuance(&issue_asset)
                     }
                     Operation::TransferAsset(transfer_asset) => {
-                        self.remove_spent_utxos(&transfer_asset)?
+                        self.remove_spent_utxos(&transfer_asset).c(d!())?
                     }
                     Operation::KVStoreUpdate(kv_update) => {
                         self.remove_stale_data(&kv_update)
@@ -356,7 +353,7 @@ where
         Ok(())
     }
 
-    pub fn poll_new_blocks(&mut self) -> Result<(), PlatformError> {
+    pub fn poll_new_blocks(&mut self) -> Result<()> {
         let latest_block = self.committed_state.get_block_count();
         let new_blocks = match self.rest_client.get_blocks_since(BlockSID(latest_block))
         {
@@ -365,7 +362,7 @@ where
                     "Could not connect to ledger at {}",
                     self.rest_client.get_source()
                 );
-                return Err(fail!("Cannot connect to ledger server"));
+                return Err(eg!(fail!("Cannot connect to ledger server")));
             }
 
             Ok(blocks_and_sid) => blocks_and_sid,
@@ -373,7 +370,7 @@ where
 
         for (bid, block) in new_blocks {
             info!("Received block {}", bid);
-            self.add_new_block(&block)?;
+            self.add_new_block(&block).c(d!())?;
         }
 
         Ok(())
@@ -476,9 +473,8 @@ mod tests {
         ConfidentialAmount_NonConfidentialAssetType,
         NonConfidentialAmount_NonConfidentialAssetType,
     };
-    use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
     use zei::xfr::sig::XfrKeyPair;
-    use zei::xfr::structs::{AssetRecordTemplate, AssetTracingPolicy};
+    use zei::xfr::structs::{AssetRecordTemplate, AssetTracerKeyPair, TracingPolicy};
 
     #[test]
     pub fn test_custom_data_store() {
@@ -542,7 +538,7 @@ mod tests {
         let rest_client_ledger_state = Arc::new(RwLock::new(LedgerState::test_ledger()));
         let mut ledger_state = LedgerState::test_ledger();
         let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
-        let params = PublicParams::new();
+        let params = PublicParams::default();
         let mut prng = ChaChaRng::from_entropy();
         let mut query_server = QueryServer::new(mock_ledger, MockMetricsRenderer::new());
         let token_code = AssetTypeCode::gen_random();
@@ -557,7 +553,7 @@ mod tests {
                 &alice,
                 Some(token_code),
                 AssetRules::default(),
-                "test".into(),
+                "test",
                 PolicyChoice::Fungible(),
             )
             .unwrap()
@@ -604,11 +600,9 @@ mod tests {
         let transfer_sid = TxoSID(0);
         let bar = &(ledger_state.get_utxo(transfer_sid).unwrap().utxo.0).record;
         let alice_memo = query_server.get_owner_memo(TxoSID(0));
-        let oar =
-            open_blind_asset_record(&bar, &alice_memo.cloned(), alice.get_sk_ref())
-                .unwrap();
+        let oar = open_blind_asset_record(&bar, &alice_memo.cloned(), &alice).unwrap();
         let mut xfr_builder = TransferOperationBuilder::new();
-        let out_template = AssetRecordTemplate::with_no_asset_tracking(
+        let out_template = AssetRecordTemplate::with_no_asset_tracing(
             amt,
             token_code.val,
             oar.get_record_type(),
@@ -639,7 +633,7 @@ mod tests {
         // Ensure that query server returns correct memos
         let bob_memo = query_server.get_owner_memo(TxoSID(2));
         let bar = &(ledger_state.get_utxo(TxoSID(2)).unwrap().utxo.0).record;
-        open_blind_asset_record(&bar, &bob_memo.cloned(), alice.get_sk_ref()).unwrap();
+        open_blind_asset_record(&bar, &bob_memo.cloned(), &alice).unwrap();
     }
 
     #[test]
@@ -650,7 +644,7 @@ mod tests {
         let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
         let mut prng = ChaChaRng::from_entropy();
         let mut query_server = QueryServer::new(mock_ledger, MockMetricsRenderer::new());
-        let params = PublicParams::new();
+        let params = PublicParams::default();
         let token_code = AssetTypeCode::gen_random();
         // Define keys
         let alice = XfrKeyPair::generate(&mut prng);
@@ -663,7 +657,7 @@ mod tests {
                 &alice,
                 Some(token_code),
                 AssetRules::default(),
-                "fiat".into(),
+                "fiat",
                 PolicyChoice::Fungible(),
             )
             .unwrap()
@@ -711,9 +705,9 @@ mod tests {
         // Transfer to Bob
         let transfer_sid = TxoSID(0);
         let bar = &(ledger_state.get_utxo(transfer_sid).unwrap().utxo.0).record;
-        let oar = open_blind_asset_record(&bar, &None, alice.get_sk_ref()).unwrap();
+        let oar = open_blind_asset_record(&bar, &None, &alice).unwrap();
         let mut xfr_builder = TransferOperationBuilder::new();
-        let out_template = AssetRecordTemplate::with_no_asset_tracking(
+        let out_template = AssetRecordTemplate::with_no_asset_tracing(
             amt,
             token_code.val,
             oar.get_record_type(),
@@ -743,7 +737,7 @@ mod tests {
         // Query server will now fetch new blocks
         query_server.add_new_block(&block0.block.txns).unwrap();
         query_server.add_new_block(&block1.block.txns).unwrap();
-        //query_server.poll_new_blocks().unwrap();
+        //query_server.poll_new_blocks().c(d!())?;
 
         // Ensure that query server is aware of issuances
         let alice_sids = query_server
@@ -771,7 +765,7 @@ mod tests {
             .unwrap();
         let issuer_records = query_server
             .get_issued_records(&IssuerPublicKey {
-                key: alice.get_pk().clone(),
+                key: alice.get_pk(),
             })
             .unwrap();
         let token_records = query_server
@@ -877,10 +871,7 @@ mod tests {
 
         // Submit
         let seq_id = ledger_state.get_block_commit_count();
-        let tx = Transaction::from_operation(
-            Operation::KVStoreUpdate(update.clone()),
-            seq_id,
-        );
+        let tx = Transaction::from_operation(Operation::KVStoreUpdate(update), seq_id);
         apply_transaction(&mut ledger_state, tx);
 
         // Check related txns
@@ -902,7 +893,7 @@ mod tests {
         let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
         let mut prng = ChaChaRng::from_entropy();
         let mut query_server = QueryServer::new(mock_ledger, MockMetricsRenderer::new());
-        let params = PublicParams::new();
+        let params = PublicParams::default();
         let token_code = AssetTypeCode::gen_random();
         // Define keys
         let alice = XfrKeyPair::generate(&mut prng);
@@ -915,7 +906,7 @@ mod tests {
                 &alice,
                 Some(token_code),
                 AssetRules::default(),
-                "fiat".into(),
+                "fiat",
                 PolicyChoice::Fungible(),
             )
             .unwrap()
@@ -945,9 +936,9 @@ mod tests {
         // Transfer to Bob
         let transfer_sid = TxoSID(0);
         let bar = &(ledger_state.get_utxo(transfer_sid).unwrap().utxo.0).record;
-        let oar = open_blind_asset_record(&bar, &None, alice.get_sk_ref()).unwrap();
+        let oar = open_blind_asset_record(&bar, &None, &alice).unwrap();
         let mut xfr_builder = TransferOperationBuilder::new();
-        let out_template = AssetRecordTemplate::with_no_asset_tracking(
+        let out_template = AssetRecordTemplate::with_no_asset_tracing(
             amt,
             token_code.val,
             oar.get_record_type(),
@@ -1049,11 +1040,11 @@ mod tests {
         let creator = XfrKeyPair::generate(&mut ledger_state.get_prng());
 
         // Set the tracing policy
-        let tracer_kp = gen_asset_tracer_keypair(&mut ledger_state.get_prng());
-        let tracing_policy = AssetTracingPolicy {
-            enc_keys: tracer_kp.enc_key.clone(),
-            asset_tracking: true,
-            identity_tracking: None,
+        let tracer_kp = AssetTracerKeyPair::generate(&mut ledger_state.get_prng());
+        let tracing_policy = TracingPolicy {
+            enc_keys: tracer_kp.enc_key,
+            asset_tracing: true,
+            identity_tracing: None,
         };
 
         // Create the first traceable asset

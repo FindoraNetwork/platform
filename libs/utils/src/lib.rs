@@ -1,12 +1,15 @@
+#![deny(warnings)]
+
 use cryptohash::sha256::Digest;
 use cryptohash::{sha256, Proof};
 use percent_encoding::{percent_decode, utf8_percent_encode, AsciiSet, CONTROLS};
+use ruc::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fs;
 use std::io::{Error, ErrorKind};
 use std::marker::PhantomData;
 use std::path::PathBuf;
-use zei::errors::ZeiError;
+use std::result::Result as StdResult;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 
 pub const TRANSACTION_WINDOW_WIDTH: u64 = 100;
@@ -64,7 +67,7 @@ pub fn protocol_host() -> (String, String) {
 pub fn http_post_request<T: Serialize>(
     query: &str,
     body: Option<T>,
-) -> Result<String, attohttpc::Error> {
+) -> StdResult<String, attohttpc::Error> {
     let req = attohttpc::post(query);
 
     if let Some(body) = body {
@@ -76,7 +79,7 @@ pub fn http_post_request<T: Serialize>(
 
 #[cfg(not(target_arch = "wasm32"))]
 #[inline(always)]
-pub fn http_get_request(query: &str) -> Result<String, attohttpc::Error> {
+pub fn http_get_request(query: &str) -> StdResult<String, attohttpc::Error> {
     attohttpc::get(query).send()?.error_for_status()?.text()
 }
 
@@ -86,7 +89,7 @@ pub fn fresh_tmp_dir() -> PathBuf {
     let mut i = 0;
     let mut dirname = None;
     while dirname.is_none() {
-        assert!(i < 4); // TODO(joe): fail more gracefully
+        debug_assert!(i < 4); // TODO(joe): fail more gracefully
         let name = std::format!("{}_{}", base_dirname, rand::random::<u64>());
         let path = base_dir.join(name);
         let _ = fs::remove_dir_all(&path);
@@ -108,16 +111,16 @@ pub fn se(s: String) -> Option<Error> {
     Some(Error::new(ErrorKind::Other, s))
 }
 
-pub fn er<T>(s: String) -> Result<T, Error> {
+pub fn er<T>(s: String) -> StdResult<T, Error> {
     Err(Error::new(ErrorKind::Other, s))
 }
 
-pub trait HasInvariants<ErrT> {
+pub trait HasInvariants {
     // Simple sanity checks, preferably constant-time. Could be toggled in a production environment
     // without jeopardizing moderate performance requirements.
-    fn fast_invariant_check(&self) -> Result<(), ErrT>;
+    fn fast_invariant_check(&self) -> Result<()>;
     // Computationally intensive checks, intended for a testing environment.
-    fn deep_invariant_check(&self) -> Result<(), ErrT>;
+    fn deep_invariant_check(&self) -> Result<()>;
 }
 
 /// Convert a u64 into a string with commas.
@@ -243,8 +246,8 @@ where
         Self(SignatureOfBytes::new(xfr, &Serialized::new(to_sign)))
     }
 
-    pub fn verify(&self, pubkey: &XfrPublicKey, val: &T) -> Result<(), ZeiError> {
-        self.0.verify(pubkey, &Serialized::new(val))
+    pub fn verify(&self, pubkey: &XfrPublicKey, val: &T) -> Result<()> {
+        self.0.verify(pubkey, &Serialized::new(val)).c(d!())
     }
 }
 
@@ -358,7 +361,7 @@ impl<T> Serialize for Serialized<T>
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> StdResult<S::Ok, S::Error> {
         self.deserialize().serialize(serializer)
     }
 }
@@ -367,7 +370,7 @@ impl<'a, T> Deserialize<'a> for Serialized<T>
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
-    fn deserialize<D: Deserializer<'a>>(deserializer: D) -> Result<Self, D::Error> {
+    fn deserialize<D: Deserializer<'a>>(deserializer: D) -> StdResult<Self, D::Error> {
         T::deserialize(deserializer).map(|x| Self::new(&x))
     }
 }
@@ -402,13 +405,13 @@ impl<T> AsRef<[u8]> for HashOfBytes<T> {
 }
 
 impl<T> Serialize for HashOfBytes<T> {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> StdResult<S::Ok, S::Error> {
         self.hash.serialize(serializer)
     }
 }
 
 impl<'a, T> Deserialize<'a> for HashOfBytes<T> {
-    fn deserialize<D: Deserializer<'a>>(deserializer: D) -> Result<Self, D::Error> {
+    fn deserialize<D: Deserializer<'a>>(deserializer: D) -> StdResult<Self, D::Error> {
         // NOTE: doesn't guarantee that there *is* a T that has this hash
         Digest::deserialize(deserializer).map(|hash| Self {
             hash,
@@ -434,13 +437,13 @@ where
 }
 
 impl<T> Serialize for ProofOfBytes<T> {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> StdResult<S::Ok, S::Error> {
         self.proof.serialize(serializer)
     }
 }
 
 impl<'a, T> Deserialize<'a> for ProofOfBytes<T> {
-    fn deserialize<D: Deserializer<'a>>(deserializer: D) -> Result<Self, D::Error> {
+    fn deserialize<D: Deserializer<'a>>(deserializer: D) -> StdResult<Self, D::Error> {
         // NOTE: doesn't guarantee that there *is* a T that has this proof
         Proof::deserialize(deserializer).map(|proof| Self {
             proof,
@@ -460,19 +463,19 @@ where
         }
     }
 
-    pub fn verify(&self, pubkey: &XfrPublicKey, val: &T) -> Result<(), ZeiError> {
-        pubkey.verify(val.as_ref(), &self.sig)
+    pub fn verify(&self, pubkey: &XfrPublicKey, val: &T) -> Result<()> {
+        pubkey.verify(val.as_ref(), &self.sig).c(d!())
     }
 }
 
 impl<T> Serialize for SignatureOfBytes<T> {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> StdResult<S::Ok, S::Error> {
         self.sig.serialize(serializer)
     }
 }
 
 impl<'a, T> Deserialize<'a> for SignatureOfBytes<T> {
-    fn deserialize<D: Deserializer<'a>>(deserializer: D) -> Result<Self, D::Error> {
+    fn deserialize<D: Deserializer<'a>>(deserializer: D) -> StdResult<Self, D::Error> {
         // NOTE: doesn't guarantee that there *is* a T that this is a signature for
         XfrSignature::deserialize(deserializer).map(|sig| Self {
             sig,
@@ -529,7 +532,7 @@ pub fn TESTING_get_project_root() -> PathBuf {
     ret.push(
         std::env::var_os("FINDORA___TEST___PROJECT___ROOT")
             .filter(|x| !x.is_empty())
-            .unwrap_or_else(|| "../..".into()),
+            .unwrap_or_else(|| "../../..".into()),
     );
     ret
 }

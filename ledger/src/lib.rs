@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 extern crate arrayref;
 extern crate base64;
 extern crate serde;

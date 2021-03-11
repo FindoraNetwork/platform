@@ -26,15 +26,13 @@ pick            = target/$(target_dir)
 release_subdirs = $(bin_dir) $(lib_dir)
 
 bin_files = \
-		./$(pick)/check_merkle \
-		./$(pick)/solvency_cli \
-		./$(pick)/txn_cli \
 		./$(pick)/findora \
 		./$(pick)/abci_validator_node \
 		./$(pick)/query_server \
 		$(shell go env GOPATH)/bin/tendermint
 
-bin_files_minimal_test_musl = \
+bin_files_musl_debug = \
+		./target/x86_64-unknown-linux-musl/$(target_dir)/findora \
 		./target/x86_64-unknown-linux-musl/$(target_dir)/abci_validator_node \
 		./target/x86_64-unknown-linux-musl/$(target_dir)/query_server \
 		$(shell go env GOPATH)/bin/tendermint
@@ -50,17 +48,17 @@ define pack
 	cp $(lib_files) $(target_dir)/$(lib_dir)
 endef
 
-define pack_minimal_test_musl
+define pack_musl_debug
 	-@ rm -rf $(target_dir)
 	mkdir $(target_dir)
 	cd $(target_dir); for i in $(release_subdirs); do mkdir $$i; done
-	cp $(bin_files_minimal_test_musl) $(target_dir)/$(bin_dir)
+	cp $(bin_files_musl_debug) $(target_dir)/$(bin_dir)
 	cp $(lib_files) $(target_dir)/$(lib_dir)
 endef
 
 build: tendermint wasm
 ifdef DBG
-	cargo build --frozen --workspace --exclude wasm --exclude http_tester --exclude log_tester
+	cargo build --frozen --bins -p abci_validator_node -p query_api -p cli2
 	$(call pack,$(target_dir))
 else
 	@ echo -e "\x1b[31;01m\$$(DBG) must be defined !\x1b[00m"
@@ -72,24 +70,22 @@ ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
 else
-	cargo build --frozen --release --workspace --exclude wasm --exclude http_tester --exclude log_tester
+	cargo build --frozen --release --bins -p abci_validator_node -p query_api -p cli2
 	$(call pack,$(target_dir))
 endif
 
-build_release_minimal_test: tendermint wasm
+build_release_musl_debug: tendermint wasm
 ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
 else
-	cargo build --target=x86_64-unknown-linux-musl --features=debugenv --frozen --release --bins -p abci_validator_node -p query_api
-	$(call pack_minimal_test_musl,$(target_dir))
+	cargo build --target=x86_64-unknown-linux-musl --features=debugenv --frozen --release --bins -p abci_validator_node -p query_api -p cli2
+	$(call pack_musl_debug,$(target_dir))
 endif
 
 test:
-	cargo test --lib --workspace -- --test-threads=1
-	cargo test --features=debugenv --lib --workspace -- --test-threads=1
-	cargo test --workspace -- --test-threads=1
-	cargo test --features=debugenv --workspace -- --test-threads=1
+	cargo test --release --workspace -- --test-threads=1
+	cargo test --release --workspace -- --ignored
 
 bench:
 	cargo bench --workspace
@@ -105,7 +101,10 @@ test_status:
 	make build_release
 
 fmt:
-	bash ./tools/fmt.sh
+	@ bash ./tools/fmt.sh
+
+githook:
+	@ git config --local core.hooksPath .githooks/
 
 clean:
 	@ cargo clean
@@ -116,7 +115,7 @@ tendermint:
 		git submodule update --init --recursive; \
 	else \
 		if [ -d "tools/tendermint" ]; then rm -rf tools/tendermint; fi; \
-		git clone -b v0.33.5 --depth=1 https://gitee.com/kt10/tendermint.git tools/tendermint; \
+		git clone -b v0.33.5 --depth=1 https://github.com/tendermint/tendermint.git tools/tendermint; \
 	fi
 	cd tools/tendermint && make install
 
@@ -135,15 +134,13 @@ devnet:
 	@./scripts/devnet/startnodes.sh
 
 ci_build_image:
-ifneq ($(ENV),release)
-	mkdir -p release/bin/
-	cp debug/bin/abci_validator_node debug/bin/query_server debug/bin/tendermint release/bin/
-endif
-
+	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \
+		mkdir -p release/bin/; \
+		cp debug/bin/abci_validator_node debug/bin/query_server debug/bin/tendermint release/bin/; \
+	fi
 	docker build -t $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG) -f container/Dockerfile-CI-abci_validator_node .
 	docker build -t $(ECR_URL)/$(ENV)/query_server:$(IMAGE_TAG) -f container/Dockerfile-CI-query_server .
 	docker build -t $(ECR_URL)/$(ENV)/tendermint:$(IMAGE_TAG) -f container/Dockerfile-CI-tendermint .
-
 ifeq ($(ENV),release)
 	docker tag $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG) $(ECR_URL)/$(ENV)/abci_validator_node:latest
 	docker tag $(ECR_URL)/$(ENV)/query_server:$(IMAGE_TAG) $(ECR_URL)/$(ENV)/query_server:latest
@@ -160,9 +157,19 @@ ifeq ($(ENV),release)
 	docker push $(ECR_URL)/$(ENV)/tendermint:latest
 endif
 
+clean_image:
+	docker rmi $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG)
+	docker rmi $(ECR_URL)/$(ENV)/query_server:$(IMAGE_TAG)
+	docker rmi $(ECR_URL)/$(ENV)/tendermint:$(IMAGE_TAG)
+ifeq ($(ENV),release)
+	docker rmi $(ECR_URL)/$(ENV)/abci_validator_node:latest
+	docker rmi $(ECR_URL)/$(ENV)/query_server:latest
+	docker rmi $(ECR_URL)/$(ENV)/tendermint:latest
+endif
+
 ####@./scripts/devnet/snapshot.sh <user_nick> <password> <token_name> <max_units> <genesis_issuance> <memo> <memo_updatable>
 snapshot:
-	@./scripts/devnet/snapshot.sh Findora my_pass FRA 21210000000000000 21000000000000000 my_memo Y
+	@./scripts/devnet/snapshot.sh Findora my_pass FRA 21210000000000000 21000000000000000 my_memo N
 
 ####@./scripts/devnet/resetnodes.sh <num_of_validator_nodes> <num_of_normal_nodes>
 mainnet:

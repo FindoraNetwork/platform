@@ -8,6 +8,7 @@ edition = "2018"
 path = "src/lib.rs"
 
 [dependencies]
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 arrayref = "0.3.5"
 base64 = "0.10"
 byteorder = "1.0.0"

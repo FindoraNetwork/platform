@@ -9,6 +9,7 @@ name = "ledger_standalone"
 path = "src/ledger_standalone.rs"
 
 [dependencies]
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 cryptohash = { path = "../../libs/cryptohash" }
 flexi_logger = "0.15.2"
 ledger_api_service = { path = "../ledger_api_service" }
@@ -23,7 +24,7 @@ serde_json = "1.0"
 subprocess = "0.1.18"
 submission_api = { path = "../submission_api" }
 submission_server = { path = "../submission_server" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", branch = "fix-deps-v0.0.3-5" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
 
 [dev-dependencies]
 quickcheck = "0.8"

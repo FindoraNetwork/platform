@@ -10,6 +10,7 @@ build = "build.rs"
 wasm-opt = false
 
 [dependencies]
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 base64 = "0.10"
 credentials = { path = "../../libs/credentials" }
 cryptohash = { path = "../../libs/cryptohash" }
@@ -29,7 +30,7 @@ txn_builder = {path = "../txn_builder"}
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
 wasm-bindgen-futures = "0.3.27"
 wasm-bindgen-test = "0.2.50"
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", branch = "fix-deps-v0.0.3-5" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
 utils = { path = "../../libs/utils" }
 
 ring = "0.16.19"

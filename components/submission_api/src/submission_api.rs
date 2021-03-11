@@ -1,41 +1,43 @@
+#![deny(warnings)]
+
 use actix_cors::Cors;
 use actix_web::test::TestRequest;
 use actix_web::{error, middleware, test, web, App, HttpServer};
-use ledger::data_model::errors::PlatformError;
 use ledger::data_model::Transaction;
-use ledger::{des_fail, error_location, inp_fail};
+use ledger::{des_fail, inp_fail};
 
 use ledger::store::{LedgerState, LedgerUpdate};
-use log::{error, info};
+use log::info;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use rand_core::{CryptoRng, RngCore};
-use std::io;
+use ruc::*;
 use std::marker::{Send, Sync};
+use std::result::Result as StdResult;
 use std::sync::{Arc, RwLock};
 use submission_server::{NoTF, SubmissionServer, TxnForward, TxnHandle, TxnStatus};
 use utils::{http_get_request, http_post_request, NetworkRoute};
 
 // Ping route to check for liveness of API
+#[allow(clippy::unnecessary_wraps)]
 fn ping() -> actix_web::Result<String> {
     Ok("success".into())
 }
 
 /// Returns the git commit hash and commit date of this build
+#[allow(clippy::unnecessary_wraps)]
 fn version() -> actix_web::Result<String> {
-    Ok(concat!(
-        "Build: ",
-        env!("VERGEN_SHA_SHORT"),
-        " ",
+    Ok(format!(
+        "Build: {} {}",
+        option_env!("VERGEN_SHA_SHORT_EXTERN").unwrap_or(env!("VERGEN_SHA_SHORT")),
         env!("VERGEN_BUILD_DATE")
-    )
-    .into())
+    ))
 }
 
 pub fn submit_transaction<RNG, LU, TF>(
     data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>,
     body: web::Json<Transaction>,
-) -> Result<web::Json<TxnHandle>, actix_web::error::Error>
+) -> StdResult<web::Json<TxnHandle>, actix_web::error::Error>
 where
     RNG: RngCore + CryptoRng,
     LU: LedgerUpdate<RNG> + Sync + Send,
@@ -44,15 +46,13 @@ where
     let mut submission_server = data.write().unwrap();
     let tx = body.into_inner();
 
-    let handle_res = submission_server.handle_transaction(tx);
-
-    match handle_res {
-        Ok(handle) => Ok(web::Json(handle)),
-        Err(e) => {
-            error!("Transaction invalid: {}", e);
-            Err(error::ErrorBadRequest(format!("{}", e)))
-        }
-    }
+    submission_server
+        .handle_transaction(tx)
+        .map(web::Json)
+        .map_err(|e| {
+            e.print();
+            error::ErrorBadRequest(e.generate_log())
+        })
 }
 
 // Force the validator node to end the block. Useful for testing when it is desirable to commmit
@@ -61,7 +61,7 @@ where
 // When a block is successfully finalized, returns HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)>
 pub fn force_end_block<RNG, LU, TF>(
     data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>,
-) -> Result<String, actix_web::error::Error>
+) -> StdResult<String, actix_web::error::Error>
 where
     RNG: RngCore + CryptoRng,
     LU: LedgerUpdate<RNG> + Sync + Send,
@@ -80,7 +80,7 @@ where
 pub fn txn_status<RNG, LU, TF>(
     data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>,
     info: web::Path<String>,
-) -> Result<String, actix_web::error::Error>
+) -> StdResult<String, actix_web::error::Error>
 where
     RNG: RngCore + CryptoRng,
     LU: LedgerUpdate<RNG> + Sync + Send,
@@ -135,7 +135,7 @@ impl SubmissionApi {
         submission_server: Arc<RwLock<SubmissionServer<RNG, LU, TF>>>,
         host: &str,
         port: &str,
-    ) -> io::Result<SubmissionApi> {
+    ) -> Result<SubmissionApi> {
         let web_runtime = actix_rt::System::new("findora API");
 
         HttpServer::new(move || {
@@ -159,7 +159,8 @@ impl SubmissionApi {
                     web::post().to(force_end_block::<RNG, LU, TF>),
                 )
         })
-        .bind(&format!("{}:{}", host, port))?
+        .bind(&format!("{}:{}", host, port))
+        .c(d!())?
         .start();
 
         info!("Submission server started");
@@ -168,23 +169,20 @@ impl SubmissionApi {
     }
 
     // call from a thread; this will block.
-    pub fn run(self) -> io::Result<()> {
-        self.web_runtime.run()
+    pub fn run(self) -> Result<()> {
+        self.web_runtime.run().c(d!())
     }
 }
 
 // Trait for rest clients that can submit transactions
 pub trait RestfulLedgerUpdate {
     // Forward transaction to a transaction submission server, returning a handle to the transaction
-    fn submit_transaction(
-        &mut self,
-        txn: &Transaction,
-    ) -> Result<TxnHandle, PlatformError>;
+    fn submit_transaction(&mut self, txn: &Transaction) -> Result<TxnHandle>;
     // Forces the the validator to end the block. Useful for testing when it is desirable to commit
     // txns to the ledger as soon as possible
-    fn force_end_block(&mut self) -> Result<(), PlatformError>;
+    fn force_end_block(&mut self) -> Result<()>;
     // Get txn status from a handle
-    fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus, PlatformError>;
+    fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus>;
 }
 
 pub struct MockLUClient {
@@ -205,10 +203,7 @@ impl MockLUClient {
 }
 
 impl RestfulLedgerUpdate for MockLUClient {
-    fn submit_transaction(
-        &mut self,
-        txn: &Transaction,
-    ) -> Result<TxnHandle, PlatformError> {
+    fn submit_transaction(&mut self, txn: &Transaction) -> Result<TxnHandle> {
         let route = SubmissionRoutes::SubmitTransaction.route();
         let mut app = test::init_service(
             App::new()
@@ -227,16 +222,16 @@ impl RestfulLedgerUpdate for MockLUClient {
         let resp = test::call_service(&mut app, req);
         let status = resp.status();
         let body = test::read_body(resp);
-        let result = std::str::from_utf8(&body).unwrap();
+        let result = std::str::from_utf8(&body).c(d!())?;
         if status != 200 {
-            Err(PlatformError::InputsError(result.to_string()))
+            Err(eg!(inp_fail!(result)))
         } else {
-            let handle = serde_json::from_str(&result).unwrap();
+            let handle = serde_json::from_str(&result).c(d!())?;
             Ok(handle)
         }
     }
 
-    fn force_end_block(&mut self) -> Result<(), PlatformError> {
+    fn force_end_block(&mut self) -> Result<()> {
         let route = SubmissionRoutes::ForceEndBlock.route();
         let mut app = test::init_service(
             App::new()
@@ -254,15 +249,15 @@ impl RestfulLedgerUpdate for MockLUClient {
         let resp = test::call_service(&mut app, req);
         let status = resp.status();
         let body = test::read_body(resp);
-        let result = std::str::from_utf8(&body).unwrap();
+        let result = std::str::from_utf8(&body).c(d!())?;
         if status != 200 {
-            Err(PlatformError::InputsError(result.to_string()))
+            Err(eg!(inp_fail!(result)))
         } else {
             Ok(())
         }
     }
 
-    fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus, PlatformError> {
+    fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus> {
         let mut app = test::init_service(
             App::new()
                 .data(Arc::clone(&self.mock_submission_server))
@@ -278,11 +273,11 @@ impl RestfulLedgerUpdate for MockLUClient {
         let resp = test::call_service(&mut app, req);
         let status = resp.status();
         let body = test::read_body(resp);
-        let result = std::str::from_utf8(&body).unwrap();
+        let result = std::str::from_utf8(&body).c(d!())?;
         if status != 200 {
-            Err(PlatformError::InputsError(result.to_string()))
+            Err(eg!(inp_fail!(result)))
         } else {
-            let handle = serde_json::from_str(&result).unwrap();
+            let handle = serde_json::from_str(&result).c(d!())?;
             Ok(handle)
         }
     }
@@ -305,10 +300,7 @@ impl ActixLUClient {
 }
 
 impl RestfulLedgerUpdate for ActixLUClient {
-    fn submit_transaction(
-        &mut self,
-        txn: &Transaction,
-    ) -> Result<TxnHandle, PlatformError> {
+    fn submit_transaction(&mut self, txn: &Transaction) -> Result<TxnHandle> {
         let query = format!(
             "{}://{}:{}{}",
             self.protocol,
@@ -316,14 +308,13 @@ impl RestfulLedgerUpdate for ActixLUClient {
             self.port,
             SubmissionRoutes::SubmitTransaction.route()
         );
-        let text = http_post_request(&query, Some(&txn)).map_err(|e| inp_fail!(e))?;
-        let handle =
-            serde_json::from_str::<TxnHandle>(&text).map_err(|e| des_fail!(e))?;
+        let text = http_post_request(&query, Some(&txn)).c(d!(inp_fail!()))?;
+        let handle = serde_json::from_str::<TxnHandle>(&text).c(d!(des_fail!()))?;
         info!("Transaction submitted successfully");
         Ok(handle)
     }
 
-    fn force_end_block(&mut self) -> Result<(), PlatformError> {
+    fn force_end_block(&mut self) -> Result<()> {
         let query = format!(
             "{}://{}:{}{}",
             self.protocol,
@@ -332,11 +323,11 @@ impl RestfulLedgerUpdate for ActixLUClient {
             SubmissionRoutes::ForceEndBlock.route()
         );
         let opt: Option<u64> = None;
-        http_post_request(&query, opt).map_err(|e| inp_fail!(e))?;
+        http_post_request(&query, opt).c(d!(inp_fail!()))?;
         Ok(())
     }
 
-    fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus, PlatformError> {
+    fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus> {
         let query = format!(
             "{}://{}:{}{}",
             self.protocol,
@@ -344,8 +335,8 @@ impl RestfulLedgerUpdate for ActixLUClient {
             self.port,
             SubmissionRoutes::TxnStatus.with_arg(&handle.0)
         );
-        let text = http_get_request(&query).map_err(|e| inp_fail!(e))?;
-        Ok(serde_json::from_str::<TxnStatus>(&text).map_err(|e| des_fail!(e))?)
+        let text = http_get_request(&query).c(d!(inp_fail!()))?;
+        serde_json::from_str::<TxnStatus>(&text).c(d!(des_fail!()))
     }
 }
 

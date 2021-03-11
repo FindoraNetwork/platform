@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 extern crate actix_rt;
 extern crate actix_web;
 extern crate ledger;
@@ -5,13 +7,12 @@ extern crate serde_json;
 
 use actix_cors::Cors;
 use actix_web::{dev, error, middleware, test, web, App, HttpResponse, HttpServer};
-use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerState};
-use ledger::{error_location, inp_fail, ser_fail};
+use ledger::{inp_fail, ser_fail};
+use ruc::*;
 use serde::Serialize;
 use sparse_merkle_tree::Key;
-use std::io;
 use std::marker::{Send, Sync};
 use std::sync::{Arc, RwLock};
 use utils::{http_get_request, HashOf, NetworkRoute, SignatureOf};
@@ -22,19 +23,19 @@ pub struct RestfulApiService {
 }
 
 // Ping route to check for liveness of API
+#[allow(clippy::unnecessary_wraps)]
 fn ping() -> actix_web::Result<String> {
     Ok("success".into())
 }
 
 /// Returns the git commit hash and commit date of this build
+#[allow(clippy::unnecessary_wraps)]
 fn version() -> actix_web::Result<String> {
-    Ok(concat!(
-        "Build: ",
-        env!("VERGEN_SHA_SHORT"),
-        " ",
+    Ok(format!(
+        "Build: {} {}",
+        option_env!("VERGEN_SHA_SHORT_EXTERN").unwrap_or(env!("VERGEN_SHA_SHORT")),
         env!("VERGEN_BUILD_DATE")
-    )
-    .into())
+    ))
 }
 
 // Future refactor:
@@ -216,7 +217,8 @@ where
 {
     let reader = data.read().unwrap();
     let key = Key::from_base64(&*addr)
-        .map_err(|_| actix_web::error::ErrorBadRequest("Could not deserialize Key."))?;
+        .c(d!())
+        .map_err(|e| actix_web::error::ErrorBadRequest(e.generate_log()))?;
     let result = reader.get_kv_entry(key);
     Ok(web::Json(result))
 }
@@ -330,7 +332,7 @@ where
     // TODO(joe?): Implement this
     Err(actix_web::error::ErrorBadRequest("unimplemented"))
     // if let Some(block_list) = parse_blocks(info.to_string()) {
-    //   let mut reader = data.write().unwrap();
+    //   let mut reader = data.write().c(d!())?;
 
     //   if let Some(vec) = reader.get_utxos(block_list) {
     //     Ok(serde_json::to_string(&vec)?)
@@ -508,7 +510,7 @@ impl RestfulApiService {
         ledger_access: Arc<RwLock<LA>>,
         host: &str,
         port: &str,
-    ) -> io::Result<RestfulApiService> {
+    ) -> Result<RestfulApiService> {
         let web_runtime = actix_rt::System::new("findora API");
 
         HttpServer::new(move || {
@@ -521,53 +523,51 @@ impl RestfulApiService {
                 .set_route::<LA>(ServiceInterface::LedgerAccess)
                 .set_route::<LA>(ServiceInterface::ArchiveAccess)
         })
-        .bind(&format!("{}:{}", host, port))?
+        .bind(&format!("{}:{}", host, port))
+        .c(d!())?
         .start();
 
         Ok(RestfulApiService { web_runtime })
     }
     // call from a thread; this will block.
-    pub fn run(self) -> io::Result<()> {
-        self.web_runtime.run()
+    pub fn run(self) -> Result<()> {
+        self.web_runtime.run().c(d!())
     }
 }
 
 pub trait RestfulLedgerAccess {
-    fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo, PlatformError>;
+    fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo>;
 
-    fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64, PlatformError>;
+    fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64>;
 
-    fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType, PlatformError>;
+    fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType>;
 
     #[allow(clippy::type_complexity)]
     fn get_state_commitment(
         &self,
-    ) -> Result<
-        (
-            HashOf<Option<StateCommitmentData>>,
-            u64,
-            SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
-        ),
-        PlatformError,
-    >;
+    ) -> Result<(
+        HashOf<Option<StateCommitmentData>>,
+        u64,
+        SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
+    )>;
 
-    fn get_block_commit_count(&self) -> Result<u64, PlatformError>;
+    fn get_block_commit_count(&self) -> Result<u64>;
 
-    fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup, PlatformError>;
+    fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup>;
 
-    fn public_key(&self) -> Result<XfrPublicKey, PlatformError>;
+    fn public_key(&self) -> Result<XfrPublicKey>;
 
     fn sign_message<T: Serialize + serde::de::DeserializeOwned>(
         &self,
         msg: &T,
-    ) -> Result<SignatureOf<T>, PlatformError>;
+    ) -> Result<SignatureOf<T>>;
 }
 
 pub trait RestfulArchiveAccess {
     fn get_blocks_since(
         &self,
         addr: BlockSID,
-    ) -> Result<Vec<(usize, Vec<FinalizedTransaction>)>, PlatformError>;
+    ) -> Result<Vec<(usize, Vec<FinalizedTransaction>)>>;
     // For debug purposes. Returns the location of ledger being communicated with.
     fn get_source(&self) -> String;
 }
@@ -576,7 +576,7 @@ impl RestfulArchiveAccess for MockLedgerClient {
     fn get_blocks_since(
         &self,
         _addr: BlockSID,
-    ) -> Result<Vec<(usize, Vec<FinalizedTransaction>)>, PlatformError> {
+    ) -> Result<Vec<(usize, Vec<FinalizedTransaction>)>> {
         unimplemented!();
     }
 
@@ -598,7 +598,7 @@ impl MockLedgerClient {
 }
 
 impl RestfulLedgerAccess for MockLedgerClient {
-    fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo, PlatformError> {
+    fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo> {
         let mut app =
             test::init_service(App::new().data(Arc::clone(&self.mock_ledger)).route(
                 &LedgerAccessRoutes::UtxoSid.with_arg_template("sid"),
@@ -610,7 +610,7 @@ impl RestfulLedgerAccess for MockLedgerClient {
         Ok(test::read_response_json(&mut app, req))
     }
 
-    fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64, PlatformError> {
+    fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64> {
         let mut app =
             test::init_service(App::new().data(Arc::clone(&self.mock_ledger)).route(
                 &LedgerAccessRoutes::AssetIssuanceNum.with_arg_template("code"),
@@ -622,7 +622,7 @@ impl RestfulLedgerAccess for MockLedgerClient {
         Ok(test::read_response_json(&mut app, req))
     }
 
-    fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType, PlatformError> {
+    fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType> {
         let mut app =
             test::init_service(App::new().data(Arc::clone(&self.mock_ledger)).route(
                 &LedgerAccessRoutes::AssetToken.with_arg_template("code"),
@@ -637,14 +637,11 @@ impl RestfulLedgerAccess for MockLedgerClient {
     #[allow(clippy::type_complexity)]
     fn get_state_commitment(
         &self,
-    ) -> Result<
-        (
-            HashOf<Option<StateCommitmentData>>,
-            u64,
-            SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
-        ),
-        PlatformError,
-    > {
+    ) -> Result<(
+        HashOf<Option<StateCommitmentData>>,
+        u64,
+        SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
+    )> {
         let mut app =
             test::init_service(App::new().data(Arc::clone(&self.mock_ledger)).route(
                 &LedgerAccessRoutes::GlobalState.route(),
@@ -656,22 +653,22 @@ impl RestfulLedgerAccess for MockLedgerClient {
         Ok(test::read_response_json(&mut app, req))
     }
 
-    fn get_block_commit_count(&self) -> Result<u64, PlatformError> {
+    fn get_block_commit_count(&self) -> Result<u64> {
         unimplemented!();
     }
 
-    fn get_kv_entry(&self, _addr: Key) -> Result<AuthenticatedKVLookup, PlatformError> {
+    fn get_kv_entry(&self, _addr: Key) -> Result<AuthenticatedKVLookup> {
         unimplemented!();
     }
 
-    fn public_key(&self) -> Result<XfrPublicKey, PlatformError> {
+    fn public_key(&self) -> Result<XfrPublicKey> {
         unimplemented!();
     }
 
     fn sign_message<T: Serialize + serde::de::DeserializeOwned>(
         &self,
         _msg: &T,
-    ) -> Result<SignatureOf<T>, PlatformError> {
+    ) -> Result<SignatureOf<T>> {
         unimplemented!();
     }
 }
@@ -696,7 +693,7 @@ impl RestfulArchiveAccess for ActixLedgerClient {
     fn get_blocks_since(
         &self,
         addr: BlockSID,
-    ) -> Result<Vec<(usize, Vec<FinalizedTransaction>)>, PlatformError> {
+    ) -> Result<Vec<(usize, Vec<FinalizedTransaction>)>> {
         let query = format!(
             "{}://{}:{}{}",
             self.protocol,
@@ -704,11 +701,9 @@ impl RestfulArchiveAccess for ActixLedgerClient {
             self.port,
             LedgerArchiveRoutes::BlocksSince.with_arg(&addr.0)
         );
-        let text = http_get_request(&query).map_err(|_| inp_fail!())?;
-        Ok(
-            serde_json::from_str::<Vec<(usize, Vec<FinalizedTransaction>)>>(&text)
-                .map_err(|_| ser_fail!())?,
-        )
+        let text = http_get_request(&query).c(d!(inp_fail!()))?;
+        serde_json::from_str::<Vec<(usize, Vec<FinalizedTransaction>)>>(&text)
+            .c(d!(ser_fail!()))
     }
 
     fn get_source(&self) -> String {
@@ -717,7 +712,7 @@ impl RestfulArchiveAccess for ActixLedgerClient {
 }
 
 impl RestfulLedgerAccess for ActixLedgerClient {
-    fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo, PlatformError> {
+    fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo> {
         let query = format!(
             "{}://{}:{}{}",
             self.protocol,
@@ -725,11 +720,11 @@ impl RestfulLedgerAccess for ActixLedgerClient {
             self.port,
             LedgerAccessRoutes::UtxoSid.with_arg(&addr.0)
         );
-        let text = http_get_request(&query).map_err(|e| inp_fail!(e))?;
-        Ok(serde_json::from_str::<AuthenticatedUtxo>(&text).map_err(|_| ser_fail!())?)
+        let text = http_get_request(&query).c(d!(inp_fail!()))?;
+        serde_json::from_str::<AuthenticatedUtxo>(&text).c(d!(ser_fail!()))
     }
 
-    fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64, PlatformError> {
+    fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64> {
         let query = format!(
             "{}://{}:{}{}",
             self.protocol,
@@ -737,11 +732,11 @@ impl RestfulLedgerAccess for ActixLedgerClient {
             self.port,
             LedgerAccessRoutes::AssetIssuanceNum.with_arg(&code.to_base64())
         );
-        let text = http_get_request(&query).map_err(|_| inp_fail!())?;
-        Ok(serde_json::from_str::<u64>(&text).map_err(|_| ser_fail!())?)
+        let text = http_get_request(&query).c(d!(inp_fail!()))?;
+        serde_json::from_str::<u64>(&text).c(d!(ser_fail!()))
     }
 
-    fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType, PlatformError> {
+    fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType> {
         let query = format!(
             "{}://{}:{}{}",
             self.protocol,
@@ -749,21 +744,18 @@ impl RestfulLedgerAccess for ActixLedgerClient {
             self.port,
             LedgerAccessRoutes::AssetToken.with_arg(&code.to_base64())
         );
-        let text = http_get_request(&query).map_err(|_| inp_fail!())?;
-        Ok(serde_json::from_str::<AssetType>(&text).map_err(|_| ser_fail!())?)
+        let text = http_get_request(&query).c(d!(inp_fail!()))?;
+        serde_json::from_str::<AssetType>(&text).c(d!(ser_fail!()))
     }
 
     #[allow(clippy::type_complexity)]
     fn get_state_commitment(
         &self,
-    ) -> Result<
-        (
-            HashOf<Option<StateCommitmentData>>,
-            u64,
-            SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
-        ),
-        PlatformError,
-    > {
+    ) -> Result<(
+        HashOf<Option<StateCommitmentData>>,
+        u64,
+        SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
+    )> {
         let query = format!(
             "{}://{}:{}{}",
             self.protocol,
@@ -771,19 +763,19 @@ impl RestfulLedgerAccess for ActixLedgerClient {
             self.port,
             LedgerAccessRoutes::GlobalState.route()
         );
-        let text = http_get_request(&query).map_err(|e| inp_fail!(e))?;
-        Ok(serde_json::from_str::<_>(&text).map_err(|e| ser_fail!(e))?)
+        let text = http_get_request(&query).c(d!(inp_fail!()))?;
+        serde_json::from_str::<_>(&text).c(d!(ser_fail!()))
     }
 
-    fn get_block_commit_count(&self) -> Result<u64, PlatformError> {
+    fn get_block_commit_count(&self) -> Result<u64> {
         unimplemented!();
     }
 
-    fn get_kv_entry(&self, _addr: Key) -> Result<AuthenticatedKVLookup, PlatformError> {
+    fn get_kv_entry(&self, _addr: Key) -> Result<AuthenticatedKVLookup> {
         unimplemented!();
     }
 
-    fn public_key(&self) -> Result<XfrPublicKey, PlatformError> {
+    fn public_key(&self) -> Result<XfrPublicKey> {
         let query = format!(
             "{}://{}:{}{}",
             self.protocol,
@@ -791,14 +783,14 @@ impl RestfulLedgerAccess for ActixLedgerClient {
             self.port,
             LedgerAccessRoutes::PublicKey.route()
         );
-        let text = http_get_request(&query).map_err(|e| inp_fail!(e))?;
-        Ok(serde_json::from_str::<_>(&text).map_err(|e| ser_fail!(e))?)
+        let text = http_get_request(&query).c(d!(inp_fail!()))?;
+        serde_json::from_str::<_>(&text).c(d!(ser_fail!()))
     }
 
     fn sign_message<T: Serialize + serde::de::DeserializeOwned>(
         &self,
         _msg: &T,
-    ) -> Result<SignatureOf<T>, PlatformError> {
+    ) -> Result<SignatureOf<T>> {
         unimplemented!();
     }
 }
@@ -830,6 +822,7 @@ mod tests {
     fn test_query_contract() {}
 
     #[test]
+    #[allow(clippy::type_complexity)]
     fn test_query_state_commitment() {
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
         let mut state = LedgerState::test_ledger();
@@ -873,12 +866,10 @@ mod tests {
                 ),
         );
 
-        let req = test::TestRequest::get()
-            .uri("/global_state".into())
-            .to_request();
+        let req = test::TestRequest::get().uri("/global_state").to_request();
 
         let second_req = test::TestRequest::get()
-            .uri("/global_state_version/1".into())
+            .uri("/global_state_version/1")
             .to_request();
 
         let state_reader = state_lock.read().unwrap();
@@ -897,13 +888,14 @@ mod tests {
     //  (a) responds with the same public key across a transaction
     //  (b) responds to /global_state with a response signed by the public
     //      key from /public_key
+    #[allow(clippy::type_complexity)]
     fn test_query_public_key() {
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
         let mut state = LedgerState::test_ledger();
         let (_, seq_id) = state.get_state_commitment();
         let mut tx = Transaction::from_seq_id(seq_id);
 
-        let orig_key = state.public_key().clone();
+        let orig_key = *state.public_key();
 
         let token_code1 = AssetTypeCode::gen_random();
         let keypair = build_keys(&mut prng);
@@ -942,12 +934,8 @@ mod tests {
                 ),
         );
 
-        let req_pk = test::TestRequest::get()
-            .uri("/public_key".into())
-            .to_request();
-        let req_comm = test::TestRequest::get()
-            .uri("/global_state".into())
-            .to_request();
+        let req_pk = test::TestRequest::get().uri("/public_key").to_request();
+        let req_comm = test::TestRequest::get().uri("/global_state").to_request();
 
         let state_reader = state_lock.read().unwrap();
         let k: XfrPublicKey = test::read_response_json(&mut app, req_pk);
@@ -958,7 +946,7 @@ mod tests {
         ) = test::read_response_json(&mut app, req_comm);
         sig.verify(&k, &(comm, idx)).unwrap();
         assert!(k == orig_key);
-        assert!(k == state_reader.public_key().clone());
+        assert!(k == *state_reader.public_key());
     }
 
     #[test]

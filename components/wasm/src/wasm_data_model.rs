@@ -13,17 +13,17 @@ use ledger::data_model::{
 };
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
+use ruc::{d, err::RucResult};
 use serde::{Deserialize, Serialize};
 use sparse_merkle_tree::Key as SmtKey;
 use utils::HashOf;
 use wasm_bindgen::prelude::*;
 use zei::setup::PublicParams as ZeiPublicParams;
-use zei::xfr::asset_tracer::gen_asset_tracer_keypair;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{
     AssetTracerDecKeys, AssetTracerEncKeys, AssetTracerKeyPair as ZeiAssetTracerKeyPair,
-    AssetTracingPolicies, AssetTracingPolicy, BlindAssetRecord, IdentityRevealPolicy,
-    OwnerMemo as ZeiOwnerMemo,
+    BlindAssetRecord, IdentityRevealPolicy, OwnerMemo as ZeiOwnerMemo,
+    TracingPolicies as ZeiTracingPolicies, TracingPolicy as ZeiTracingPolicy,
 };
 
 #[wasm_bindgen]
@@ -41,7 +41,7 @@ impl PublicParams {
     /// Generates a new set of parameters.
     pub fn new() -> PublicParams {
         PublicParams {
-            params: ZeiPublicParams::new(),
+            params: ZeiPublicParams::default(),
         }
     }
 }
@@ -132,7 +132,10 @@ impl AuthenticatedAssetRecord {
         record: &JsValue,
     ) -> Result<AuthenticatedAssetRecord, JsValue> {
         Ok(AuthenticatedAssetRecord {
-            authenticated_record: record.into_serde().map_err(error_to_jsvalue)?,
+            authenticated_record: record
+                .into_serde()
+                .c(d!())
+                .map_err(error_to_jsvalue)?,
         })
     }
 }
@@ -175,8 +178,16 @@ impl ClientAssetRecord {
     /// fetch an asset record from the ledger server.
     pub fn from_json(val: &JsValue) -> Result<ClientAssetRecord, JsValue> {
         Ok(ClientAssetRecord {
-            txo: val.into_serde().map_err(error_to_jsvalue)?,
+            txo: val.into_serde().c(d!()).map_err(error_to_jsvalue)?,
         })
+    }
+
+    /// ClientAssetRecord ==> JsValue
+    pub fn to_json(&self) -> Result<JsValue, JsValue> {
+        serde_json::to_string(&self.txo)
+            .map(|s| JsValue::from_str(&s))
+            .c(d!())
+            .map_err(error_to_jsvalue)
     }
 }
 
@@ -197,7 +208,7 @@ impl AssetTracerKeyPair {
     pub fn new() -> Self {
         let mut small_rng = ChaChaRng::from_entropy();
         AssetTracerKeyPair {
-            keypair: gen_asset_tracer_keypair(&mut small_rng),
+            keypair: ZeiAssetTracerKeyPair::generate(&mut small_rng),
         }
     }
 }
@@ -241,7 +252,8 @@ impl OwnerMemo {
     ///   "lock":{"ciphertext":[119,54,117,136,125,133,112,193],"encoded_rand":"8KDql2JphPB5WLd7-aYE1bxTQAcweFSmrqymLvPDntM="}
     /// }
     pub fn from_json(val: &JsValue) -> Result<OwnerMemo, JsValue> {
-        let zei_owner_memo: ZeiOwnerMemo = val.into_serde().map_err(error_to_jsvalue)?;
+        let zei_owner_memo: ZeiOwnerMemo =
+            val.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         Ok(OwnerMemo {
             memo: ZeiOwnerMemo {
                 blind_share: zei_owner_memo.blind_share,
@@ -450,7 +462,7 @@ impl AssetType {
     /// fetch an asset type from the ledger server.
     pub fn from_json(json: &JsValue) -> Result<AssetType, JsValue> {
         let asset_type: PlatformAssetType =
-            json.into_serde().map_err(error_to_jsvalue)?;
+            json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         Ok(AssetType { asset_type })
     }
 
@@ -474,7 +486,7 @@ impl AuthenticatedAIRResult {
     /// value from the address identity registry.
     pub fn from_json(json: &JsValue) -> Result<AuthenticatedAIRResult, JsValue> {
         let result: PlatformAuthenticatedAIRResult =
-            json.into_serde().map_err(error_to_jsvalue)?;
+            json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         Ok(AuthenticatedAIRResult { result })
     }
 
@@ -539,7 +551,7 @@ impl CredentialIssuerKeyPair {
     }
     /// Generate a key pair from a JSON-serialized JavaScript value.
     pub fn from_json(val: &JsValue) -> Result<CredentialIssuerKeyPair, JsValue> {
-        val.into_serde().map_err(error_to_jsvalue)
+        val.into_serde().c(d!()).map_err(error_to_jsvalue)
     }
 }
 
@@ -559,7 +571,7 @@ impl CredentialUserKeyPair {
     }
     /// Generate a key pair from a JSON-serialized JavaScript value.
     pub fn from_json(val: &JsValue) -> Result<CredentialUserKeyPair, JsValue> {
-        val.into_serde().map_err(error_to_jsvalue)
+        val.into_serde().c(d!()).map_err(error_to_jsvalue)
     }
 }
 
@@ -580,12 +592,13 @@ impl SignatureRules {
     /// associated weight.
     pub fn new(threshold: u64, weights: JsValue) -> Result<SignatureRules, JsValue> {
         let weights: Vec<(String, u64)> =
-            weights.into_serde().map_err(error_to_jsvalue)?;
+            weights.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         let weights: Vec<(XfrPublicKey, u64)> = weights
             .iter()
             .map(|(b64_key, weight)| {
                 wallet::public_key_from_base64(&b64_key)
                     .map(|pk| (pk, *weight))
+                    .c(d!())
                     .map_err(error_to_jsvalue)
             })
             .collect::<Result<Vec<(XfrPublicKey, u64)>, JsValue>>()?;
@@ -598,11 +611,11 @@ impl SignatureRules {
 /// A collection of tracing policies. Use this object when constructing asset transfers to generate
 /// the correct tracing proofs for traceable assets.
 pub struct TracingPolicies {
-    pub(crate) policies: AssetTracingPolicies,
+    pub(crate) policies: ZeiTracingPolicies,
 }
 
 impl TracingPolicies {
-    pub fn get_policies_ref(&self) -> &AssetTracingPolicies {
+    pub fn get_policies_ref(&self) -> &ZeiTracingPolicies {
         &self.policies
     }
 }
@@ -611,42 +624,43 @@ impl TracingPolicies {
 /// Tracing policy for asset transfers. Can be configured to track credentials, the asset type and
 /// amount, or both.
 pub struct TracingPolicy {
-    pub(crate) policy: AssetTracingPolicy,
+    pub(crate) policy: ZeiTracingPolicy,
 }
 
 #[wasm_bindgen]
 impl TracingPolicy {
-    pub fn new_with_tracking(tracing_key: &AssetTracerKeyPair) -> Self {
-        let policy = AssetTracingPolicy {
+    pub fn new_with_tracing(tracing_key: &AssetTracerKeyPair) -> Self {
+        let policy = ZeiTracingPolicy {
             enc_keys: tracing_key.get_enc_key().clone(),
-            asset_tracking: true,
-            identity_tracking: None,
+            asset_tracing: true,
+            identity_tracing: None,
         };
         TracingPolicy { policy }
     }
 
-    pub fn new_with_identity_tracking(
+    pub fn new_with_identity_tracing(
         tracing_key: &AssetTracerKeyPair,
         cred_issuer_key: &CredIssuerPublicKey,
         reveal_map: JsValue,
-        tracking: bool,
+        tracing: bool,
     ) -> Result<TracingPolicy, JsValue> {
-        let reveal_map: Vec<bool> = reveal_map.into_serde().map_err(error_to_jsvalue)?;
+        let reveal_map: Vec<bool> =
+            reveal_map.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         let identity_policy = IdentityRevealPolicy {
             cred_issuer_pub_key: cred_issuer_key.get_ref().clone(),
             reveal_map,
         };
-        let policy = AssetTracingPolicy {
+        let policy = ZeiTracingPolicy {
             enc_keys: tracing_key.get_enc_key().clone(),
-            asset_tracking: tracking,
-            identity_tracking: Some(identity_policy),
+            asset_tracing: tracing,
+            identity_tracing: Some(identity_policy),
         };
         Ok(TracingPolicy { policy })
     }
 }
 
 impl TracingPolicy {
-    pub fn get_ref(&self) -> &AssetTracingPolicy {
+    pub fn get_ref(&self) -> &ZeiTracingPolicy {
         &self.policy
     }
 }
@@ -655,7 +669,7 @@ impl TracingPolicy {
 #[derive(Default)]
 /// When an asset is defined, several options governing the assets must be
 /// specified:
-/// 1. **Traceable**: Records and identities of traceable assets can be decrypted by a provided tracking key. By defaults, assets do not have
+/// 1. **Traceable**: Records and identities of traceable assets can be decrypted by a provided tracing key. By defaults, assets do not have
 /// any tracing policies.
 /// 2. **Transferable**: Non-transferable assets can only be transferred once from the issuer to another user. By default, assets are transferable.
 /// 3. **Updatable**: Whether the asset memo can be updated. By default, assets are not updatable.
@@ -730,6 +744,7 @@ impl AssetRules {
     pub fn set_decimals(mut self, decimals: u8) -> Result<AssetRules, JsValue> {
         self.rules
             .set_decimals(decimals)
+            .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
     }
@@ -762,7 +777,8 @@ impl KVBlind {
 
     /// Create a KVBlind from a JSON-encoded value.
     pub fn from_json(val: &JsValue) -> Result<KVBlind, JsValue> {
-        let blind: PlatformKVBlind = val.into_serde().map_err(error_to_jsvalue)?;
+        let blind: PlatformKVBlind =
+            val.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         Ok(KVBlind { blind })
     }
 }
@@ -794,7 +810,9 @@ impl Key {
 
     /// Generates a Key from a base64-encoded String.
     pub fn from_base64(string: &str) -> Result<Key, JsValue> {
-        Ok(Key(SmtKey::from_base64(string).map_err(error_to_jsvalue)?))
+        Ok(Key(SmtKey::from_base64(string)
+            .c(d!())
+            .map_err(error_to_jsvalue)?))
     }
 }
 
@@ -816,7 +834,7 @@ impl KVHash {
     /// Generate a new custom data hash without a blinding factor.
     /// @param {JsValue} data - Data to hash. Must be an array of bytes.
     pub fn new_no_blind(data: &JsValue) -> Result<KVHash, JsValue> {
-        let data = data.into_serde().map_err(error_to_jsvalue)?;
+        let data = data.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         Ok(KVHash {
             hash: PlatformKVHash(HashOf::new(&(data, None))),
         })
@@ -829,7 +847,7 @@ impl KVHash {
         data: &JsValue,
         kv_blind: &KVBlind,
     ) -> Result<KVHash, JsValue> {
-        let data = data.into_serde().map_err(error_to_jsvalue)?;
+        let data = data.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         Ok(KVHash {
             hash: PlatformKVHash(HashOf::new(&(
                 data,

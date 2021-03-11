@@ -1,7 +1,9 @@
-use ledger::data_model::errors::PlatformError;
+#![allow(clippy::field_reassign_with_default)]
+#![deny(warnings)]
+
 use ledger::data_model::{
     AssetType, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedUtxo, BlockSID,
-    FinalizedTransaction, KVBlind, StateCommitmentData, Transaction, TxoSID,
+    FinalizedTransaction, StateCommitmentData, Transaction, TxoSID,
 };
 use ledger::store::LedgerState;
 use ledger_api_service::{
@@ -10,6 +12,7 @@ use ledger_api_service::{
 use query_api::{
     ActixQueryServerClient, MockQueryServerClient, RestfulQueryServerAccess,
 };
+use ruc::*;
 use serde::Serialize;
 use sparse_merkle_tree::Key;
 use std::sync::{Arc, RwLock};
@@ -112,8 +115,8 @@ impl<
     fn get_blocks_since(
         &self,
         addr: BlockSID,
-    ) -> Result<Vec<(usize, Vec<FinalizedTransaction>)>, PlatformError> {
-        self.ledger_client.get_blocks_since(addr)
+    ) -> Result<Vec<(usize, Vec<FinalizedTransaction>)>> {
+        self.ledger_client.get_blocks_since(addr).c(d!())
     }
 
     fn get_source(&self) -> String {
@@ -127,21 +130,23 @@ impl<
     Q: RestfulQueryServerAccess,
 > RestfulQueryServerAccess for LedgerStandalone<LU, LA, Q>
 {
-    fn store_custom_data(
-        &mut self,
-        data: &dyn AsRef<[u8]>,
-        key: &Key,
-        blind: Option<KVBlind>,
-    ) -> Result<(), PlatformError> {
-        self.query_server_client.store_custom_data(data, key, blind)
+    // fn store_custom_data(
+    //     &mut self,
+    //     data: &dyn AsRef<[u8]>,
+    //     key: &Key,
+    //     blind: Option<KVBlind>,
+    // ) -> Result<()> {
+    //     self.query_server_client
+    //         .store_custom_data(data, key, blind)
+    //         .c(d!())
+    // }
+
+    fn fetch_custom_data(&self, key: &Key) -> Result<Vec<u8>> {
+        self.query_server_client.fetch_custom_data(key).c(d!())
     }
 
-    fn fetch_custom_data(&self, key: &Key) -> Result<Vec<u8>, PlatformError> {
-        self.query_server_client.fetch_custom_data(key)
-    }
-
-    fn get_owner_memo(&self, txo_sid: u64) -> Result<Option<OwnerMemo>, PlatformError> {
-        self.query_server_client.get_owner_memo(txo_sid)
+    fn get_owner_memo(&self, txo_sid: u64) -> Result<Option<OwnerMemo>> {
+        self.query_server_client.get_owner_memo(txo_sid).c(d!())
     }
 }
 
@@ -151,53 +156,50 @@ impl<
     Q: RestfulQueryServerAccess,
 > RestfulLedgerAccess for LedgerStandalone<LU, LA, Q>
 {
-    fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo, PlatformError> {
-        self.ledger_client.get_utxo(addr)
+    fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo> {
+        self.ledger_client.get_utxo(addr).c(d!())
     }
 
-    fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64, PlatformError> {
-        self.ledger_client.get_issuance_num(code)
+    fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64> {
+        self.ledger_client.get_issuance_num(code).c(d!())
     }
 
-    fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType, PlatformError> {
-        self.ledger_client.get_asset_type(code)
+    fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType> {
+        self.ledger_client.get_asset_type(code).c(d!())
     }
 
     #[allow(clippy::type_complexity)]
     fn get_state_commitment(
         &self,
-    ) -> Result<
-        (
-            HashOf<Option<StateCommitmentData>>,
-            u64,
-            SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
-        ),
-        PlatformError,
-    > {
-        self.ledger_client.get_state_commitment()
+    ) -> Result<(
+        HashOf<Option<StateCommitmentData>>,
+        u64,
+        SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
+    )> {
+        self.ledger_client.get_state_commitment().c(d!())
     }
 
     #[allow(clippy::type_complexity)]
-    fn get_block_commit_count(&self) -> Result<u64, PlatformError> {
+    fn get_block_commit_count(&self) -> Result<u64> {
         match self.ledger_client.get_state_commitment() {
             Ok((_, seq_id, _)) => Ok(seq_id),
-            Err(e) => Err(e),
+            Err(e) => Err(eg!(e)),
         }
     }
 
-    fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup, PlatformError> {
-        self.ledger_client.get_kv_entry(addr)
+    fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup> {
+        self.ledger_client.get_kv_entry(addr).c(d!())
     }
 
-    fn public_key(&self) -> Result<XfrPublicKey, PlatformError> {
-        self.ledger_client.public_key()
+    fn public_key(&self) -> Result<XfrPublicKey> {
+        self.ledger_client.public_key().c(d!())
     }
 
     fn sign_message<T: Serialize + serde::de::DeserializeOwned>(
         &self,
         msg: &T,
-    ) -> Result<SignatureOf<T>, PlatformError> {
-        self.ledger_client.sign_message(msg)
+    ) -> Result<SignatureOf<T>> {
+        self.ledger_client.sign_message(msg).c(d!())
     }
 }
 
@@ -207,17 +209,16 @@ impl<
     Q: RestfulQueryServerAccess,
 > RestfulLedgerUpdate for LedgerStandalone<LU, LA, Q>
 {
-    fn submit_transaction(
-        &mut self,
-        txn: &Transaction,
-    ) -> Result<TxnHandle, PlatformError> {
-        self.submission_server_client.submit_transaction(txn)
+    fn submit_transaction(&mut self, txn: &Transaction) -> Result<TxnHandle> {
+        self.submission_server_client
+            .submit_transaction(txn)
+            .c(d!())
     }
-    fn force_end_block(&mut self) -> Result<(), PlatformError> {
-        self.submission_server_client.force_end_block()
+    fn force_end_block(&mut self) -> Result<()> {
+        self.submission_server_client.force_end_block().c(d!())
     }
-    fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus, PlatformError> {
-        self.submission_server_client.txn_status(handle)
+    fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus> {
+        self.submission_server_client.txn_status(handle).c(d!())
     }
 }
 
@@ -232,15 +233,14 @@ mod tests {
     #[test]
     fn test_mock_client() {
         let mut mock_rest_client = LedgerStandalone::new_mock(2);
-        //let seq_id = mock_rest_client.get_block_commit_count().unwrap()
+        //let seq_id = mock_rest_client.get_block_commit_count().c(d!())?
         let tx = Transaction::from_seq_id(0);
         let handle = mock_rest_client.submit_transaction(&tx).unwrap();
         mock_rest_client.force_end_block().unwrap();
         let status = mock_rest_client.txn_status(&handle).unwrap();
         if let TxnStatus::Committed(_comm) = status {
-            assert!(true);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -252,7 +252,7 @@ mod tests {
         let creator = XfrKeyPair::generate(&mut prng);
         let memo_update = UpdateMemo::new(
             UpdateMemoBody {
-                new_memo: new_memo.clone(),
+                new_memo,
                 asset_type: code,
                 no_replay_token: NoReplayToken::default(),
             },
@@ -263,9 +263,8 @@ mod tests {
         let handle = mock_rest_client.submit_transaction(&tx).unwrap();
         let status = mock_rest_client.txn_status(&handle).unwrap();
         if let TxnStatus::Rejected(_) = status {
-            assert!(true);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 

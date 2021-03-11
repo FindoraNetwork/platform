@@ -6,7 +6,7 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-ruc = "0.4"
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 arrayref = "0.3.5"
 air = { path = "../libs/ads/air" }
 base64 = "0.10"
@@ -33,6 +33,7 @@ schnorr = "0.0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_derive = "1.0"
 serde_json = "1.0"
+serde-strz = "1.1.1"
 sha2 = "0.8.0"
 sliding_set = { path = "../libs/sliding_set" }
 tempdir = "0.3"
@@ -42,7 +43,8 @@ tiny-keccak = "1.4.2"
 unicode-normalization = "0.1.13"
 utils = { path = "../libs/utils" }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", branch = "fix-deps-v0.0.3-5" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
+zeiutils = { package = "utils", git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
 sparse_merkle_tree = { path = "../libs/ads/sparse_merkle_tree" }
 sled = "0.34.6"
 

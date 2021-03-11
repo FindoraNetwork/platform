@@ -1,0 +1,29 @@
+[package]
+name = "whitelist_cli"
+version = "0.1.0"
+authors = ["Engineering <engineering@findora.org>"]
+edition = "2018"
+build = "build.rs"
+
+[[bin]]
+name = "whitelist_cli"
+path = "src/whitelist_cli.rs"
+
+[dependencies]
+clap = "2.33.0"
+curve25519-dalek = { version =  "2.0.0", features = ["serde"] }
+ledger = { path = "../../../ledger" }
+ledger_api_service = { path = "../../ledger_api_service" }
+ledger_standalone = { path = "../../ledger_standalone" }
+network = { path = "../../../libs/network" }
+rand_chacha = "0.2"
+rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
+serde = "1.0"
+serde_json = "1.0"
+txn_cli = { path = "../../trash/txn_cli" }
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+whitelist = { path = "../../trash/whitelist" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
+
+[build-dependencies]
+vergen = "3.1.0"

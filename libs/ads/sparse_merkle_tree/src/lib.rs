@@ -2,13 +2,15 @@
 //! # as a Sparse Merkle Tree
 //!
 //!
+#![deny(warnings)]
+
 use cryptohash::sha256;
 use rand::Rng;
+use ruc::*;
 use serde::{Deserialize, Serialize};
 use sha256::DIGESTBYTES;
 use std::collections::HashMap;
 use std::fs;
-use std::io::Error;
 
 pub use sha256::Digest;
 
@@ -71,11 +73,11 @@ impl Key {
     }
 
     // Method to create a Key from a base64-encoded string
-    pub fn from_base64(input: &str) -> Result<Key, base64::DecodeError> {
+    pub fn from_base64(input: &str) -> Result<Key> {
         let digest =
-            Digest::from_slice(&base64::decode_config(input, base64::URL_SAFE)?)
-                .ok_or(base64::DecodeError::InvalidLength)?;
-        //.map_err(|_| base64::DecodeError::InvalidLength)?;
+            Digest::from_slice(&base64::decode_config(input, base64::URL_SAFE).c(d!())?)
+                .c(d!(base64::DecodeError::InvalidLength))?;
+        //.c(d!( base64::DecodeError::InvalidLength))?;
         Ok(Key(digest))
     }
 
@@ -151,7 +153,7 @@ impl TreeNodeIndex {
 
     /// Change `self` to the index of its parent node. Panics if `self` is the root.
     fn move_up(&mut self) {
-        assert!(self.depth > 0, "Cannot move up from the root");
+        debug_assert!(self.depth > 0, "Cannot move up from the root");
         clear_bit(&mut self.bit_path.get_digest_mut().0, self.depth - 1);
         self.depth -= 1;
     }
@@ -307,12 +309,11 @@ pub fn check_merkle_proof<Value: AsRef<[u8]>>(
     iter.next() == None && hash == *merkle_root
 }
 
-pub fn open(path: &str) -> Result<SmtMap256<String>, Error> {
-    let contents: String = fs::read_to_string(path)?;
+pub fn open(path: &str) -> Result<SmtMap256<String>> {
+    let contents: String = fs::read_to_string(path).c(d!())?;
 
     // Deserialize and print Rust data structure.
-    let result: SmtMap256<String> = serde_json::from_str(&contents)?;
-    Ok(result)
+    serde_json::from_str(&contents).c(d!())
 }
 
 pub mod helpers {
@@ -328,7 +329,7 @@ pub mod helpers {
 
     // `hex` is the first a few bytes of the desired 32 bytes (the rest bytes are zeros).
     pub fn l256(hex: &str) -> Digest {
-        assert!(hex.len() % 2 == 0 && hex.len() <= 64);
+        debug_assert!(hex.len() % 2 == 0 && hex.len() <= 64);
         let hex = hex.to_string() + &"0".repeat(64 - hex.len());
         Digest {
             0: <[u8; 32]>::from_hex(&hex).unwrap(),
@@ -337,7 +338,7 @@ pub mod helpers {
 
     // `hex` is the last a few bytes of the desired 32 bytes (the rest bytes are zeros).
     pub fn r256(hex: &str) -> Digest {
-        assert!(hex.len() % 2 == 0 && hex.len() <= 64);
+        debug_assert!(hex.len() % 2 == 0 && hex.len() <= 64);
         let hex = "0".repeat(64 - hex.len()) + hex;
         Digest {
             0: <[u8; 32]>::from_hex(&hex).unwrap(),
@@ -399,12 +400,12 @@ mod tests {
     }
 
     fn mask_u8(x: u64, shift: usize) -> u8 {
-        (x >> shift) as u8 & 0xffu8
+        (x >> shift) as u8
     }
 
     fn u64_into_byteslice(slice: &mut [u8], u: u64) {
-        for n in 0..8 {
-            slice[n] = mask_u8(u, n * 8);
+        for (n, s) in slice.iter_mut().enumerate().take(8) {
+            *s = mask_u8(u, n * 8);
         }
     }
 
@@ -412,10 +413,10 @@ mod tests {
         let args: [u64; 4] = [x0, x1, x2, x3];
         let mut result: [u8; 32] = [0u8; 32];
 
-        for i in 0..4 {
+        for (i, arg) in args.iter().enumerate() {
             let l = i * 8;
             let r = l + 8;
-            u64_into_byteslice(&mut result[l..r], args[i]);
+            u64_into_byteslice(&mut result[l..r], *arg);
         }
 
         Digest { 0: result }
@@ -769,63 +770,54 @@ mod tests {
         assert!(smt.check_merkle_proof(&key, v, &p));
         // Negative cases of merkle proof verification:
         assert!(!smt.check_merkle_proof(
-      &key,
-      value.as_ref(),
-      &MerkleProof {
-        bitmap: b256("0200000000000000000000000000000000000000000000000000000000000080").0,
-        hashes: vec![
-          b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"),
-          b256("5a7ef746ad33334b4fbd7406a1a4ffa5c5f959199448d5ae6ed39b4a9d6ebe5a"),
-          ZERO_DIGEST, // extra hash
-        ],
-      }
-    ));
+            &key,
+            value.as_ref(),
+            &MerkleProof {
+                bitmap: b256("0200000000000000000000000000000000000000000000000000000000000080").0,
+                hashes: vec![
+                    b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"),
+                    b256("5a7ef746ad33334b4fbd7406a1a4ffa5c5f959199448d5ae6ed39b4a9d6ebe5a"),
+                    ZERO_DIGEST, // extra hash
+                ],
+            }
+        ));
         assert!(!smt.check_merkle_proof(
-      &key,
-      value.as_ref(),
-      &MerkleProof {
-        bitmap: b256("0200000000000000000000000000000000000000000000000000000000000080").0,
-        hashes: vec![
-          b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"),
-          // missing hash
-        ],
-      }
-    ));
+            &key,
+            value.as_ref(),
+            &MerkleProof {
+                bitmap: b256("0200000000000000000000000000000000000000000000000000000000000080").0,
+                hashes: vec![
+                    b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"),
+                    // missing hash
+                ],
+            }
+        ));
         assert!(!smt.check_merkle_proof(
-      &key,
-      value.as_ref(),
-      &MerkleProof {
-        // wrong bitmap - missing bit
-        bitmap: b256("0200000000000000000000000000000000000000000000000000000000000000").0,
-        hashes: vec![
-          b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"),
-          b256("5a7ef746ad33334b4fbd7406a1a4ffa5c5f959199448d5ae6ed39b4a9d6ebe5a"),
-        ],
-      }
-    ));
+            &key,
+            value.as_ref(),
+            &MerkleProof {
+                // wrong bitmap - missing bit
+                bitmap: b256("0200000000000000000000000000000000000000000000000000000000000000").0,
+                hashes: vec![b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"), b256("5a7ef746ad33334b4fbd7406a1a4ffa5c5f959199448d5ae6ed39b4a9d6ebe5a"),],
+            }
+        ));
         assert!(!smt.check_merkle_proof(
-      &key,
-      value.as_ref(),
-      &MerkleProof {
-        // wrong bitmap - extra bit
-        bitmap: b256("0200010000000000000000000000000000000000000000000000000000000080").0,
-        hashes: vec![
-          b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"),
-          b256("5a7ef746ad33334b4fbd7406a1a4ffa5c5f959199448d5ae6ed39b4a9d6ebe5a"),
-        ],
-      }
-    ));
+            &key,
+            value.as_ref(),
+            &MerkleProof {
+                // wrong bitmap - extra bit
+                bitmap: b256("0200010000000000000000000000000000000000000000000000000000000080").0,
+                hashes: vec![b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"), b256("5a7ef746ad33334b4fbd7406a1a4ffa5c5f959199448d5ae6ed39b4a9d6ebe5a"),],
+            }
+        ));
         assert!(!smt.check_merkle_proof(
-      &key,
-      value.as_ref(),
-      &MerkleProof {
-        // wrong bitmap - wrong bit
-        bitmap: b256("0400000000000000000000000000000000000000000000000000000000000080").0,
-        hashes: vec![
-          b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"),
-          b256("5a7ef746ad33334b4fbd7406a1a4ffa5c5f959199448d5ae6ed39b4a9d6ebe5a"),
-        ],
-      }
-    ));
+            &key,
+            value.as_ref(),
+            &MerkleProof {
+                // wrong bitmap - wrong bit
+                bitmap: b256("0400000000000000000000000000000000000000000000000000000000000080").0,
+                hashes: vec![b256("d6f751104ddfead9549c96fabdbd4d2fc6876c8cd9a49ea4a821de938f71a011"), b256("5a7ef746ad33334b4fbd7406a1a4ffa5c5f959199448d5ae6ed39b4a9d6ebe5a"),],
+            }
+        ));
     }
 }

@@ -54,17 +54,36 @@ jobs:
     - name: Build
       env:
         DBG: true
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
       shell: bash
       run: |
+        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+        if [ "${COMMIT_HASH}" == "null" ]; then
+          export COMMIT_HASH="${GITHUB_SHA::7}"
+        else
+          export COMMIT_HASH=${COMMIT_HASH:1:7}
+        fi
+        export BRANCH="${GITHUB_HEAD_REF}"
+        export TOBRANCH="${GITHUB_BASE_REF}"
+        export VERGEN_SHA_SHORT_EXTERN="${TOBRANCH}-${COMMIT_HASH}"
+        echo "VERGEN_SHA_SHORT_EXTERN: ${VERGEN_SHA_SHORT_EXTERN}"
         make build
     - name: Build images
       env:
         ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
         ENV: dev
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
       shell: bash
       run: |
-        echo "REF: ${GITHUB_REF}"
-        export IMAGE_TAG="${GITHUB_SHA::7}"
+        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+        if [ "${COMMIT_HASH}" == "null" ]; then
+          export COMMIT_HASH="${GITHUB_SHA::7}"
+        else
+          export COMMIT_HASH=${COMMIT_HASH:1:7}
+        fi
+        export BRANCH="${GITHUB_HEAD_REF}"
+        export TOBRANCH="${GITHUB_BASE_REF}"
+        export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image
     - name: Login ECR
@@ -75,36 +94,81 @@ jobs:
       env:
         ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
         ENV: dev
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
       shell: bash
       run: |
-        echo "REF: ${GITHUB_REF}"
-        export IMAGE_TAG="${GITHUB_SHA::7}"
+        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+        if [ "${COMMIT_HASH}" == "null" ]; then
+          export COMMIT_HASH="${GITHUB_SHA::7}"
+        else
+          export COMMIT_HASH=${COMMIT_HASH:1:7}
+        fi
+        export BRANCH="${GITHUB_HEAD_REF}"
+        export TOBRANCH="${GITHUB_BASE_REF}"
+        export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_push_image
-    - name: Push wasm-js-bindings
+    - name: Clean images
+      env:
+        ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
+        ENV: dev
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
       shell: bash
       run: |
-        export WASM_VERSION="${GITHUB_SHA::7}"
-        export BRANCH_NAME="develop"
+        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+        if [ "${COMMIT_HASH}" == "null" ]; then
+          export COMMIT_HASH="${GITHUB_SHA::7}"
+        else
+          export COMMIT_HASH=${COMMIT_HASH:1:7}
+        fi
+        export BRANCH="${GITHUB_HEAD_REF}"
+        export TOBRANCH="${GITHUB_BASE_REF}"
+        export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
+        echo "Image tag: ${IMAGE_TAG}"
+        make clean_image
+    - name: Push wasm-js-bindings
+      env:
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
+      shell: bash
+      run: |
+        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+        if [ "${COMMIT_HASH}" == "null" ]; then
+          export COMMIT_HASH="${GITHUB_SHA::7}"
+        else
+          export COMMIT_HASH=${COMMIT_HASH:1:7}
+        fi
+        export PR=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
+        export BRANCH="${GITHUB_HEAD_REF}"
+        export TOBRANCH="${GITHUB_BASE_REF}"
+        export BRANCH_NAME="test"
         export WASM_DIR="/tmp/wasm-js-bindings"
         if [ ! -d "${WASM_DIR}" ]; then git clone git@github.com:FindoraNetwork/wasm-js-bindings.git "${WASM_DIR}"; fi
-        cp wasm.tar.gz /tmp/wasm.tar.gz
         pushd "${WASM_DIR}"
         git checkout "${BRANCH_NAME}" || git checkout -b "${BRANCH_NAME}"
         git pull origin "${BRANCH_NAME}" || true
-        tar -C "${WASM_DIR}" -zxf /tmp/wasm.tar.gz
-        mv "${WASM_DIR}"/components/wasm/pkg/* "${WASM_DIR}"
+        if [ ! -d "${WASM_DIR}/nodejs" ]; then mkdir "${WASM_DIR}/nodejs"; fi
+        if [ ! -d "${WASM_DIR}/web" ]; then mkdir "${WASM_DIR}/web"; fi
+        if [ ! -d "${WASM_DIR}/bundler" ]; then mkdir "${WASM_DIR}/bundler"; fi
+        popd
+        pushd components/wasm
+        wasm-pack build --target nodejs --out-dir "${WASM_DIR}/nodejs"
+        rm "${WASM_DIR}/nodejs/.gitignore"
+        wasm-pack build --target web --out-dir "${WASM_DIR}/web"
+        rm "${WASM_DIR}/web/.gitignore"
+        wasm-pack build --target bundler --out-dir "${WASM_DIR}/bundler"
+        rm "${WASM_DIR}/bundler/.gitignore"
+        popd
+        pushd "${WASM_DIR}"
         if [ "$(git diff)" != "" ]; then
             git add .
-            git commit -m "version: ${WASM_VERSION}"
+            git commit -m "From platform PR ${PR}(${BRANCH} to ${TOBRANCH}), commit hash: ${COMMIT_HASH} , build date: $(date +"%Y%m%d")"
             git push origin "${BRANCH_NAME}"
         fi
+        git tag "${TOBRANCH}-${COMMIT_HASH}"
+        git push origin "${TOBRANCH}-${COMMIT_HASH}"
+        git tag -d "${TOBRANCH}-${COMMIT_HASH}"
         popd
-    # - name: build release
-    #   shell: bash
-    #   run: |
-    #     make build_release
-    # - name: release
-    #   shell: bash
-    #   run: |
-    #     echo "TBD"
+    - name: Clean garbage
+      shell: bash
+      run: |
+        rm -rf /tmp/*>/dev/null 2>&1 || true

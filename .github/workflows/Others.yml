@@ -24,3 +24,30 @@ jobs:
       shell: bash
       run: |
         cargo fmt -- --check
+    # - name: get env
+    #   env:
+    #     DBG: true
+    #     GITHUB_CONTEXT: ${{ toJSON(github) }}
+    #   shell: bash
+    #   run: |
+    #     PR=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
+    #     BRANCH="${GITHUB_HEAD_REF}"
+    #     TOBRANCH="${GITHUB_BASE_REF}"
+    #     REF=${GITHUB_REF}
+    #     COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+    #     if [ "${COMMIT_HASH}" == "null" ]; then
+    #       COMMIT_HASH="${GITHUB_SHA::7}"
+    #     else
+    #       COMMIT_HASH=${COMMIT_HASH:1:7}
+    #     fi
+    #     echo "GITHUB_SHA: ${GITHUB_SHA}"
+    #     echo "PR: ${PR}"
+    #     echo "BRANCH: ${BRANCH}"
+    #     echo "TOBRANCH: ${TOBRANCH}"
+    #     echo "REF: ${REF}"
+    #     echo "TOBRANCH: ${TOBRANCH}"
+    #     echo "COMMIT_HASH: ${COMMIT_HASH}"
+    - name: Clean garbage
+      shell: bash
+      run: |
+        rm -rf /tmp/*>/dev/null 2>&1 || true

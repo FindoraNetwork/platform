@@ -1,21 +1,20 @@
 use crate::data_model::errors::PlatformError;
 use crate::data_model::{Asset, AssetTypeCode, Operation, Transaction, TxOutput};
-use crate::error_location;
 use crate::policies::Fraction;
 use fixed::types::I20F12;
+use ruc::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::convert::TryInto;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::AssetType;
 
 macro_rules! fail {
     () => {
-        PlatformError::PolicyFailureError(error_location!())
+        PlatformError::PolicyFailureError(None)
     };
     ($s:expr) => {
-        PlatformError::PolicyFailureError(format!("[{}] {}", &error_location!(), &$s))
+        PlatformError::PolicyFailureError(Some(format!("{}", &$s)))
     };
 }
 
@@ -145,15 +144,15 @@ pub struct PolicyGlobals {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TxnPolicyData(pub Vec<(AssetTypeCode, TxnCheckInputs)>);
 
-pub fn policy_get_globals(asset: &Asset) -> Result<PolicyGlobals, PlatformError> {
+pub fn policy_get_globals(asset: &Asset) -> Result<PolicyGlobals> {
     let (pol, mem) = asset
         .policy
         .as_ref()
-        .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+        .c(d!(PlatformError::InputsError(None)))?;
 
     let ret = mem.clone();
 
-    // let ret = serde_json::from_str::<PolicyGlobals>(&mem.0).map_err(|_| PlatformError::InputsError)?;
+    // let ret = serde_json::from_str::<PolicyGlobals>(&mem.0).c(d!( PlatformError::InputsError))?;
 
     if ret.id_vars.len() != pol.num_id_globals
         || ret.rt_vars.len() != pol.num_rt_globals
@@ -162,17 +161,17 @@ pub fn policy_get_globals(asset: &Asset) -> Result<PolicyGlobals, PlatformError>
         || ret
             .id_vars
             .first()
-            .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+            .c(d!(PlatformError::InputsError(None)))?
             != &asset.issuer.key
         || ret
             .rt_vars
             .first()
-            .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+            .c(d!(PlatformError::InputsError(None)))?
             != &asset.code.val
     {
-        Err(fail!(
+        Err(eg!(fail!(
             "Incorrect number of variables for policy".to_string()
-        ))
+        )))
     } else {
         Ok(ret)
     }
@@ -183,12 +182,12 @@ pub fn policy_check_txn(
     globals: PolicyGlobals,
     pol: &Policy,
     txn: &Transaction,
-) -> Result<(), PlatformError> {
+) -> Result<()> {
     let pol_data = txn
         .body
         .policy_options
         .as_ref()
-        .ok_or_else(|| PlatformError::InputsError(error_location!()))?
+        .c(d!(PlatformError::InputsError(None)))?
         .0
         .iter()
         .cloned()
@@ -196,10 +195,10 @@ pub fn policy_check_txn(
 
     let inputs = pol_data
         .get(type_code)
-        .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+        .c(d!(PlatformError::InputsError(None)))?;
 
     let the_check = {
-        let mut check = Err(PlatformError::InputsError(error_location!()));
+        let mut check = Err(eg!(PlatformError::InputsError(None)));
         for c in pol.txn_choices.iter() {
             if c.name == inputs.which_check {
                 check = Ok(c);
@@ -207,7 +206,8 @@ pub fn policy_check_txn(
             }
         }
         check
-    }?;
+    }
+    .c(d!())?;
 
     run_txn_check(
         the_check,
@@ -217,6 +217,7 @@ pub fn policy_check_txn(
         globals.frac_vars,
         txn,
     )
+    .c(d!())
 }
 
 /*
@@ -230,7 +231,7 @@ pub fn run_txn_check(
     mut amt_vars: Vec<u64>,
     mut frac_vars: Vec<Fraction>,
     txn: &Transaction,
-) -> Result<(), PlatformError> {
+) -> Result<()> {
     // dbg!(check);
     // dbg!(&id_vars);
     // dbg!(&rt_vars);
@@ -289,7 +290,7 @@ pub fn run_txn_check(
             TxnOp::Issue(amt, rt, res) => {
                 // If it's already accounted for, error.
                 if used_resources.contains(res) || pending_outputs.contains(res) {
-                    return Err(fail!());
+                    return Err(eg!(fail!()));
                 }
 
                 // // record its type as a requirement
@@ -326,11 +327,11 @@ pub fn run_txn_check(
             TxnOp::Transfer(amt, inp, out) => {
                 // If inp or out are already accounted for, error.
                 if used_resources.contains(inp) {
-                    return Err(fail!());
+                    return Err(eg!(fail!()));
                 }
                 if let Some(out_res) = out {
                     if used_resources.contains(out_res) {
-                        return Err(fail!());
+                        return Err(eg!(fail!()));
                     }
 
                     // // record type equality as a requirement
@@ -341,11 +342,11 @@ pub fn run_txn_check(
                     match pending {
                         RealTxnOp::Issue(_, _) => {
                             if pending_outputs.contains(inp) {
-                                return Err(fail!());
+                                return Err(eg!(fail!()));
                             }
                             if let Some(out_res) = out {
                                 if pending_outputs.contains(out_res) {
-                                    return Err(fail!());
+                                    return Err(eg!(fail!()));
                                 }
                             }
                             real_ops.push(pending.clone());
@@ -359,11 +360,11 @@ pub fn run_txn_check(
                             // if an input gets used as an output or
                             // vice-versa, error.
                             if pending_outputs.contains(inp) {
-                                return Err(fail!());
+                                return Err(eg!(fail!()));
                             }
                             if let Some(out_res) = out {
                                 if pending_inputs.contains(out_res) {
-                                    return Err(fail!());
+                                    return Err(eg!(fail!()));
                                 }
                             }
 
@@ -377,7 +378,7 @@ pub fn run_txn_check(
                             if pending_inputs.contains(inp) {
                                 if let Some(out_res) = out {
                                     if pending_outputs.contains(out_res) {
-                                        return Err(fail!());
+                                        return Err(eg!(fail!()));
                                     }
                                 }
                             }
@@ -417,14 +418,14 @@ pub fn run_txn_check(
     if num_inputs != check.in_params.len() as u64
         || num_outputs != check.out_params.len() as u64
     {
-        return Err(fail!());
+        return Err(eg!(fail!()));
     }
 
     // dbg!("Resource check");
     // check that all resources in the index range are used
-    for ix in 0..used_resources.len().try_into().map_err(|_| fail!())? {
+    for ix in 0..(used_resources.len() as u64) {
         if !used_resources.contains(&ResourceVar(ix)) {
-            return Err(fail!());
+            return Err(eg!(fail!()));
         }
     }
 
@@ -433,7 +434,7 @@ pub fn run_txn_check(
      */
 
     if real_ops.len() != txn.body.operations.len() {
-        return Err(fail!());
+        return Err(eg!(fail!()));
     }
 
     // freeze real_ops
@@ -462,7 +463,7 @@ pub fn run_txn_check(
                 // NOTE: This relies on the no-repeated-outputs invariant
                 // from before
                 if outs.len() != iss.body.records.len() {
-                    return Err(fail!());
+                    return Err(eg!(fail!()));
                 }
 
                 res_vars.extend(
@@ -485,24 +486,19 @@ pub fn run_txn_check(
                         } else {
                             true
                         });
-                        res_totals.get_mut(inp).as_mut().unwrap().push(*amt);
+                        res_totals.get_mut(inp).as_mut().c(d!())?.push(*amt);
 
                         debug_assert!(!inp_txo.record.asset_type.is_confidential());
 
-                        asset_type = inp_txo.record.asset_type.get_asset_type().unwrap();
+                        asset_type =
+                            inp_txo.record.asset_type.get_asset_type().c(d!())?;
                     } else {
                         debug_assert!(!res_totals.contains_key(inp));
 
-                        let inp_txo = trn
-                            .body
-                            .transfer
-                            .inputs
-                            .get(inp_ix)
-                            .ok_or_else(|| fail!())?;
-                        asset_type = inp_txo
-                            .asset_type
-                            .get_asset_type()
-                            .ok_or_else(|| fail!())?;
+                        let inp_txo =
+                            trn.body.transfer.inputs.get(inp_ix).c(d!(fail!()))?;
+                        asset_type =
+                            inp_txo.asset_type.get_asset_type().c(d!(fail!()))?;
 
                         res_vars.insert(
                             *inp,
@@ -520,32 +516,25 @@ pub fn run_txn_check(
                     if let Some(out_res) = out {
                         if let Some(out_txo) = res_vars.get(out_res) {
                             debug_assert!(!res_vars.contains_key(inp));
-                            res_totals.get_mut(out_res).as_mut().unwrap().push(*amt);
+                            res_totals.get_mut(out_res).as_mut().c(d!())?.push(*amt);
 
                             debug_assert!(!out_txo.record.asset_type.is_confidential());
 
                             if asset_type
-                                != out_txo.record.asset_type.get_asset_type().unwrap()
+                                != out_txo.record.asset_type.get_asset_type().c(d!())?
                             {
-                                return Err(fail!());
+                                return Err(eg!(fail!()));
                             }
                         } else {
                             debug_assert!(!res_totals.contains_key(out_res));
 
-                            let out_txo = trn
-                                .body
-                                .transfer
-                                .outputs
-                                .get(out_ix)
-                                .ok_or_else(|| fail!())?;
+                            let out_txo =
+                                trn.body.transfer.outputs.get(out_ix).c(d!(fail!()))?;
 
                             if asset_type
-                                != out_txo
-                                    .asset_type
-                                    .get_asset_type()
-                                    .ok_or_else(|| fail!())?
+                                != out_txo.asset_type.get_asset_type().c(d!(fail!()))?
                             {
-                                return Err(fail!());
+                                return Err(eg!(fail!()));
                             }
 
                             res_vars.insert(
@@ -561,25 +550,19 @@ pub fn run_txn_check(
                         }
                     } else {
                         let null_public_key = XfrPublicKey::zei_from_bytes(&[0; 32])
-                            .map_err(|e| {
-                                PlatformError::ZeiError(error_location!(), e)
-                            })?;
-                        let out_txo = trn
-                            .body
-                            .transfer
-                            .outputs
-                            .get(out_ix)
-                            .ok_or_else(|| fail!())?;
+                            .c(d!(PlatformError::ZeiError(None)))?;
+                        let out_txo =
+                            trn.body.transfer.outputs.get(out_ix).c(d!(fail!()))?;
 
                         // TODO(joe): maybe move this later?
-                        if out_txo.asset_type.get_asset_type().ok_or_else(|| fail!())?
+                        if out_txo.asset_type.get_asset_type().c(d!(fail!()))?
                             != asset_type
                         {
-                            return Err(fail!());
+                            return Err(eg!(fail!()));
                         }
 
                         if out_txo.public_key != null_public_key {
-                            return Err(fail!());
+                            return Err(eg!(fail!()));
                         }
 
                         out_ix += 1;
@@ -587,14 +570,14 @@ pub fn run_txn_check(
                 }
 
                 if inp_ix < trn.body.transfer.inputs.len() {
-                    return Err(fail!());
+                    return Err(eg!(fail!()));
                 }
                 if out_ix < trn.body.transfer.outputs.len() {
-                    return Err(fail!());
+                    return Err(eg!(fail!()));
                 }
             }
             _ => {
-                return Err(fail!());
+                return Err(eg!(fail!()));
             }
         }
     }
@@ -623,17 +606,17 @@ pub fn run_txn_check(
         // dbg!("RT op");
         rt_vars.push(match rt_op {
             ResourceTypeOp::Var(rv) => {
-                let ix: usize = rv.0.try_into().map_err(|_| fail!())?;
-                let asset_type: &AssetType = rt_vars.get(ix).ok_or_else(|| fail!())?;
+                let ix = rv.0 as usize;
+                let asset_type: &AssetType = rt_vars.get(ix).c(d!(fail!()))?;
                 *asset_type
             }
             ResourceTypeOp::TypeOfResource(res_var) => res_vars
                 .get(res_var)
-                .ok_or_else(|| fail!())?
+                .c(d!(fail!()))?
                 .record
                 .asset_type
                 .get_asset_type()
-                .ok_or_else(|| fail!())?,
+                .c(d!(fail!()))?,
         });
         // dbg!(rt_vars.len());
         // dbg!(rt_vars.last());
@@ -644,16 +627,12 @@ pub fn run_txn_check(
         // dbg!("ID op");
         id_vars.push(match id_op {
             IdOp::Var(iv) => {
-                let ix: usize = iv.0.try_into().map_err(|_| fail!())?;
-                let id: &XfrPublicKey = id_vars.get(ix).ok_or_else(|| fail!())?;
+                let ix = iv.0 as usize;
+                let id: &XfrPublicKey = id_vars.get(ix).c(d!(fail!()))?;
                 *id
             }
             IdOp::OwnerOf(res_var) => {
-                res_vars
-                    .get(res_var)
-                    .ok_or_else(|| fail!())?
-                    .record
-                    .public_key
+                res_vars.get(res_var).c(d!(fail!()))?.record.public_key
             }
         })
     }
@@ -704,8 +683,8 @@ pub fn run_txn_check(
                             continue;
                         }
                         Some(AmountOp::Var(ix)) => {
-                            let ix: usize = ix.0.try_into().map_err(|_| fail!())?;
-                            amt_vars.push(*(amt_vars.get(ix).ok_or_else(|| fail!())?));
+                            let ix: usize = ix.0 as usize;
+                            amt_vars.push(*(amt_vars.get(ix).c(d!(fail!()))?));
                             amt_ix += 1;
                         }
                         Some(AmountOp::Const(n)) => {
@@ -714,45 +693,45 @@ pub fn run_txn_check(
                         }
                         Some(AmountOp::AmountOf(res_var)) => {
                             if !res_var_inputs.contains(res_var) {
-                                return Err(fail!());
+                                return Err(eg!(fail!()));
                             }
 
                             let n = res_vars
                                 .get(res_var)
-                                .ok_or_else(|| fail!())?
+                                .c(d!(fail!()))?
                                 .record
                                 .amount
                                 .get_amount()
-                                .ok_or_else(|| fail!())?;
+                                .c(d!(fail!()))?;
                             amt_vars.push(n);
                             amt_ix += 1;
                         }
                         Some(AmountOp::Plus(l, r)) => {
-                            let l: usize = l.0.try_into().map_err(|_| fail!())?;
-                            let r: usize = r.0.try_into().map_err(|_| fail!())?;
-                            let lv: u64 = *(amt_vars.get(l).ok_or_else(|| fail!())?);
-                            let rv: u64 = *(amt_vars.get(r).ok_or_else(|| fail!())?);
-                            amt_vars.push(lv.checked_add(rv).ok_or_else(|| fail!())?);
+                            let l: usize = l.0 as usize;
+                            let r: usize = r.0 as usize;
+                            let lv: u64 = *(amt_vars.get(l).c(d!(fail!()))?);
+                            let rv: u64 = *(amt_vars.get(r).c(d!(fail!()))?);
+                            amt_vars.push(lv.checked_add(rv).c(d!(fail!()))?);
                             amt_ix += 1;
                         }
                         Some(AmountOp::Minus(l, r)) => {
-                            let l: usize = l.0.try_into().map_err(|_| fail!())?;
-                            let r: usize = r.0.try_into().map_err(|_| fail!())?;
-                            let lv: u64 = *(amt_vars.get(l).ok_or_else(|| fail!())?);
-                            let rv: u64 = *(amt_vars.get(r).ok_or_else(|| fail!())?);
-                            amt_vars.push(lv.checked_sub(rv).ok_or_else(|| fail!())?);
+                            let l: usize = l.0 as usize;
+                            let r: usize = r.0 as usize;
+                            let lv: u64 = *(amt_vars.get(l).c(d!(fail!()))?);
+                            let rv: u64 = *(amt_vars.get(r).c(d!(fail!()))?);
+                            amt_vars.push(lv.checked_sub(rv).c(d!(fail!()))?);
                             amt_ix += 1;
                         }
                         Some(AmountOp::Times(l, r)) => {
-                            let l: usize = l.0.try_into().map_err(|_| fail!())?;
-                            let r: usize = r.0.try_into().map_err(|_| fail!())?;
-                            let lv: u64 = *(amt_vars.get(l).ok_or_else(|| fail!())?);
-                            let rv: u64 = *(amt_vars.get(r).ok_or_else(|| fail!())?);
-                            amt_vars.push(lv.checked_mul(rv).ok_or_else(|| fail!())?);
+                            let l: usize = l.0 as usize;
+                            let r: usize = r.0 as usize;
+                            let lv: u64 = *(amt_vars.get(l).c(d!(fail!()))?);
+                            let rv: u64 = *(amt_vars.get(r).c(d!(fail!()))?);
+                            amt_vars.push(lv.checked_mul(rv).c(d!(fail!()))?);
                             amt_ix += 1;
                         }
                         Some(AmountOp::Round(round_ix)) => {
-                            let round_ix = round_ix.0.try_into().map_err(|_| fail!())?;
+                            let round_ix = round_ix.0 as usize;
                             // dbg!(&round_ix);
                             // dbg!(frac_vars.get(round_ix));
                             match frac_vars.get(round_ix) {
@@ -760,9 +739,7 @@ pub fn run_txn_check(
                                     let fv: &Fraction = fv;
                                     let fv: I20F12 = fv.0;
                                     amt_vars.push(
-                                        fv.round()
-                                            .checked_to_num()
-                                            .ok_or_else(|| fail!())?,
+                                        fv.round().checked_to_num().c(d!(fail!()))?,
                                     );
                                     amt_ix += 1;
                                 }
@@ -772,7 +749,7 @@ pub fn run_txn_check(
                                     // there's a circular dependency.
                                     // Error.
                                     if amt_vars.get(needed_amt_ix).is_none() {
-                                        return Err(fail!());
+                                        return Err(eg!(fail!()));
                                     }
 
                                     // If the needed fraction index can't
@@ -781,7 +758,7 @@ pub fn run_txn_check(
                                         >= frac_vars.len()
                                             + (check.fraction_ops.len() - frac_ix)
                                     {
-                                        return Err(fail!());
+                                        return Err(eg!(fail!()));
                                     }
 
                                     needed_frac_ix = round_ix;
@@ -802,8 +779,8 @@ pub fn run_txn_check(
                             continue;
                         }
                         Some(FractionOp::Var(ix)) => {
-                            let ix: usize = ix.0.try_into().map_err(|_| fail!())?;
-                            frac_vars.push(*(frac_vars.get(ix).ok_or_else(|| fail!())?));
+                            let ix: usize = ix.0 as usize;
+                            frac_vars.push(*(frac_vars.get(ix).c(d!(fail!()))?));
                             frac_ix += 1;
                         }
                         Some(FractionOp::Const(v)) => {
@@ -811,32 +788,26 @@ pub fn run_txn_check(
                             frac_ix += 1;
                         }
                         Some(FractionOp::Plus(l, r)) => {
-                            let l: usize = l.0.try_into().map_err(|_| fail!())?;
-                            let r: usize = r.0.try_into().map_err(|_| fail!())?;
-                            let lv: Fraction =
-                                *(frac_vars.get(l).ok_or_else(|| fail!())?);
-                            let rv: Fraction =
-                                *(frac_vars.get(r).ok_or_else(|| fail!())?);
-                            frac_vars.push(Fraction(
-                                lv.0.checked_add(rv.0).ok_or_else(|| fail!())?,
-                            ));
+                            let l: usize = l.0 as usize;
+                            let r: usize = r.0 as usize;
+                            let lv: Fraction = *(frac_vars.get(l).c(d!(fail!()))?);
+                            let rv: Fraction = *(frac_vars.get(r).c(d!(fail!()))?);
+                            frac_vars
+                                .push(Fraction(lv.0.checked_add(rv.0).c(d!(fail!()))?));
                             frac_ix += 1;
                         }
                         Some(FractionOp::Times(l, r)) => {
-                            let l: usize = l.0.try_into().map_err(|_| fail!())?;
-                            let r: usize = r.0.try_into().map_err(|_| fail!())?;
-                            let lv: Fraction =
-                                *(frac_vars.get(l).ok_or_else(|| fail!())?);
-                            let rv: Fraction =
-                                *(frac_vars.get(r).ok_or_else(|| fail!())?);
-                            frac_vars.push(Fraction(
-                                lv.0.checked_mul(rv.0).ok_or_else(|| fail!())?,
-                            ));
+                            let l: usize = l.0 as usize;
+                            let r: usize = r.0 as usize;
+                            let lv: Fraction = *(frac_vars.get(l).c(d!(fail!()))?);
+                            let rv: Fraction = *(frac_vars.get(r).c(d!(fail!()))?);
+                            frac_vars
+                                .push(Fraction(lv.0.checked_mul(rv.0).c(d!(fail!()))?));
                             frac_ix += 1;
                         }
                         Some(FractionOp::AmtTimes(a, f)) => {
-                            let a: usize = a.0.try_into().map_err(|_| fail!())?;
-                            let f: usize = f.0.try_into().map_err(|_| fail!())?;
+                            let a: usize = a.0 as usize;
+                            let f: usize = f.0 as usize;
                             match amt_vars.get(a) {
                                 None => {
                                     // if the amount ops are waiting on a
@@ -844,7 +815,7 @@ pub fn run_txn_check(
                                     // there's a circular dependency.
                                     // Error.
                                     if frac_vars.get(needed_frac_ix).is_none() {
-                                        return Err(fail!());
+                                        return Err(eg!(fail!()));
                                     }
                                     // If the needed amount index can't
                                     // possibly be available, error.
@@ -852,7 +823,7 @@ pub fn run_txn_check(
                                         >= amt_vars.len()
                                             + (check.amount_ops.len() - amt_ix)
                                     {
-                                        return Err(fail!());
+                                        return Err(eg!(fail!()));
                                     }
 
                                     needed_amt_ix = a;
@@ -860,21 +831,21 @@ pub fn run_txn_check(
                                 }
                                 Some(amt_val) => {
                                     let fv: Fraction =
-                                        *(frac_vars.get(f).ok_or_else(|| fail!())?);
+                                        *(frac_vars.get(f).c(d!(fail!()))?);
                                     let fv: I20F12 = fv.0;
                                     let av: I20F12 = Fraction::checked_new(*amt_val, 1)
-                                        .ok_or_else(|| fail!())?
+                                        .c(d!(fail!()))?
                                         .0;
                                     frac_vars.push(Fraction(
-                                        av.checked_mul(fv).ok_or_else(|| fail!())?,
+                                        av.checked_mul(fv).c(d!(fail!()))?,
                                     ));
                                     frac_ix += 1;
                                 }
                             }
                         }
                         Some(FractionOp::TimesAmt(f, a)) => {
-                            let a: usize = a.0.try_into().map_err(|_| fail!())?;
-                            let f: usize = f.0.try_into().map_err(|_| fail!())?;
+                            let a: usize = a.0 as usize;
+                            let f: usize = f.0 as usize;
                             match amt_vars.get(a) {
                                 None => {
                                     // if the amount ops are waiting on a
@@ -882,7 +853,7 @@ pub fn run_txn_check(
                                     // there's a circular dependency.
                                     // Error.
                                     if frac_vars.get(needed_frac_ix).is_none() {
-                                        return Err(fail!());
+                                        return Err(eg!(fail!()));
                                     }
                                     // If the needed amount index can't
                                     // possibly be available, error.
@@ -890,7 +861,7 @@ pub fn run_txn_check(
                                         >= amt_vars.len()
                                             + (check.amount_ops.len() - amt_ix)
                                     {
-                                        return Err(fail!());
+                                        return Err(eg!(fail!()));
                                     }
 
                                     needed_amt_ix = a;
@@ -898,13 +869,13 @@ pub fn run_txn_check(
                                 }
                                 Some(amt_val) => {
                                     let fv: Fraction =
-                                        *(frac_vars.get(f).ok_or_else(|| fail!())?);
+                                        *(frac_vars.get(f).c(d!(fail!()))?);
                                     let fv: I20F12 = fv.0;
                                     let av: I20F12 = Fraction::checked_new(*amt_val, 1)
-                                        .ok_or_else(|| fail!())?
+                                        .c(d!(fail!()))?
                                         .0;
                                     frac_vars.push(Fraction(
-                                        fv.checked_mul(av).ok_or_else(|| fail!())?,
+                                        fv.checked_mul(av).c(d!(fail!()))?,
                                     ));
                                     frac_ix += 1;
                                 }
@@ -936,68 +907,65 @@ pub fn run_txn_check(
                 bool_vars.push(*v);
             }
             BoolOp::IdEq(l, r) => {
-                let l: usize = l.0.try_into().map_err(|_| fail!())?;
-                let r: usize = r.0.try_into().map_err(|_| fail!())?;
+                let l: usize = l.0 as usize;
+                let r: usize = r.0 as usize;
                 bool_vars.push(
-                    id_vars.get(l).ok_or_else(|| fail!())?
-                        == id_vars.get(r).ok_or_else(|| fail!())?,
+                    id_vars.get(l).c(d!(fail!()))? == id_vars.get(r).c(d!(fail!()))?,
                 );
             }
             BoolOp::AmtEq(l, r) => {
-                let l: usize = l.0.try_into().map_err(|_| fail!())?;
-                let r: usize = r.0.try_into().map_err(|_| fail!())?;
+                let l: usize = l.0 as usize;
+                let r: usize = r.0 as usize;
                 bool_vars.push(
-                    amt_vars.get(l).ok_or_else(|| fail!())?
-                        == amt_vars.get(r).ok_or_else(|| fail!())?,
+                    amt_vars.get(l).c(d!(fail!()))? == amt_vars.get(r).c(d!(fail!()))?,
                 );
             }
             BoolOp::FracEq(l, r) => {
-                let l: usize = l.0.try_into().map_err(|_| fail!())?;
-                let r: usize = r.0.try_into().map_err(|_| fail!())?;
+                let l: usize = l.0 as usize;
+                let r: usize = r.0 as usize;
                 bool_vars.push(
-                    frac_vars.get(l).ok_or_else(|| fail!())?
-                        == frac_vars.get(r).ok_or_else(|| fail!())?,
+                    frac_vars.get(l).c(d!(fail!()))?
+                        == frac_vars.get(r).c(d!(fail!()))?,
                 );
             }
             BoolOp::ResourceTypeEq(l, r) => {
-                let l: usize = l.0.try_into().map_err(|_| fail!())?;
-                let r: usize = r.0.try_into().map_err(|_| fail!())?;
+                let l: usize = l.0 as usize;
+                let r: usize = r.0 as usize;
                 bool_vars.push(
-                    rt_vars.get(l).ok_or_else(|| fail!())?
-                        == rt_vars.get(r).ok_or_else(|| fail!())?,
+                    rt_vars.get(l).c(d!(fail!()))? == rt_vars.get(r).c(d!(fail!()))?,
                 );
             }
             BoolOp::Not(bv) => {
-                let bv: usize = bv.0.try_into().map_err(|_| fail!())?;
-                let v: bool = *(bool_vars.get(bv).ok_or_else(|| fail!())?);
+                let bv: usize = bv.0 as usize;
+                let v: bool = *(bool_vars.get(bv).c(d!(fail!()))?);
                 bool_vars.push(!v);
             }
             BoolOp::And(l, r) => {
-                let l: usize = l.0.try_into().map_err(|_| fail!())?;
-                let r: usize = r.0.try_into().map_err(|_| fail!())?;
-                let lv = *(bool_vars.get(l).ok_or_else(|| fail!())?);
-                let rv = *(bool_vars.get(r).ok_or_else(|| fail!())?);
+                let l: usize = l.0 as usize;
+                let r: usize = r.0 as usize;
+                let lv = *(bool_vars.get(l).c(d!(fail!()))?);
+                let rv = *(bool_vars.get(r).c(d!(fail!()))?);
                 bool_vars.push(lv && rv);
             }
             BoolOp::Or(l, r) => {
-                let l: usize = l.0.try_into().map_err(|_| fail!())?;
-                let r: usize = r.0.try_into().map_err(|_| fail!())?;
-                let lv = *(bool_vars.get(l).ok_or_else(|| fail!())?);
-                let rv = *(bool_vars.get(r).ok_or_else(|| fail!())?);
+                let l: usize = l.0 as usize;
+                let r: usize = r.0 as usize;
+                let lv = *(bool_vars.get(l).c(d!(fail!()))?);
+                let rv = *(bool_vars.get(r).c(d!(fail!()))?);
                 bool_vars.push(lv || rv);
             }
             BoolOp::AmtGe(l, r) => {
-                let l: usize = l.0.try_into().map_err(|_| fail!())?;
-                let r: usize = r.0.try_into().map_err(|_| fail!())?;
-                let lv = *(amt_vars.get(l).ok_or_else(|| fail!())?);
-                let rv = *(amt_vars.get(r).ok_or_else(|| fail!())?);
+                let l: usize = l.0 as usize;
+                let r: usize = r.0 as usize;
+                let lv = *(amt_vars.get(l).c(d!(fail!()))?);
+                let rv = *(amt_vars.get(r).c(d!(fail!()))?);
                 bool_vars.push(lv >= rv);
             }
             BoolOp::FracGe(l, r) => {
-                let l: usize = l.0.try_into().map_err(|_| fail!())?;
-                let r: usize = r.0.try_into().map_err(|_| fail!())?;
-                let lv = *(frac_vars.get(l).ok_or_else(|| fail!())?);
-                let rv = *(frac_vars.get(r).ok_or_else(|| fail!())?);
+                let l: usize = l.0 as usize;
+                let r: usize = r.0 as usize;
+                let lv = *(frac_vars.get(l).c(d!(fail!()))?);
+                let rv = *(frac_vars.get(r).c(d!(fail!()))?);
                 bool_vars.push(lv.0 >= rv.0);
             }
         }
@@ -1006,21 +974,21 @@ pub fn run_txn_check(
     /* Step 5: check assertions */
     for bv in check.assertions.iter() {
         // dbg!("assertion");
-        let bv: usize = bv.0.try_into().map_err(|_| fail!())?;
-        let v: &bool = bool_vars.get(bv).ok_or_else(|| fail!())?;
+        let bv: usize = bv.0 as usize;
+        let v: &bool = bool_vars.get(bv).c(d!(fail!()))?;
         if !*v {
-            return Err(fail!());
+            return Err(eg!(fail!()));
         }
     }
 
     /* Step 6: check for signatures */
     for iv in check.required_signatures.iter() {
         // dbg!("signature");
-        let iv: usize = iv.0.try_into().map_err(|_| fail!())?;
-        let v: &XfrPublicKey = id_vars.get(iv).ok_or_else(|| fail!())?;
+        let iv: usize = iv.0 as usize;
+        let v: &XfrPublicKey = id_vars.get(iv).c(d!(fail!()))?;
         // dbg!("has signature?");
         // dbg!(v);
-        txn.check_has_signature(v).map_err(|_| fail!())?;
+        txn.check_has_signature(v).c(d!(fail!()))?;
     }
 
     /* Step 7: consistency checks with asset records.
@@ -1037,65 +1005,63 @@ pub fn run_txn_check(
             RealTxnOp::Issue(rt_ix, outs) => {
                 // should never happen
                 if outs.is_empty() {
-                    return Err(fail!());
+                    return Err(eg!(fail!()));
                 }
 
-                let rt_ix: usize = rt_ix.0.try_into().map_err(|_| fail!())?;
-                let asset_type = rt_vars.get(rt_ix).ok_or_else(|| fail!())?;
+                let rt_ix: usize = rt_ix.0 as usize;
+                let asset_type = rt_vars.get(rt_ix).c(d!(fail!()))?;
 
                 for (_, rv) in outs.iter() {
-                    let txo = res_vars.get(rv).ok_or_else(|| fail!())?;
+                    let txo = res_vars.get(rv).c(d!(fail!()))?;
 
                     if txo.lien.is_some() {
-                        return Err(fail!());
+                        return Err(eg!(fail!()));
                     }
 
                     // txo.record.asset_type should be established as non-None by the
                     // first two checking loops.
-                    if *asset_type != txo.record.asset_type.get_asset_type().unwrap() {
-                        return Err(fail!());
+                    if *asset_type != txo.record.asset_type.get_asset_type().c(d!())? {
+                        return Err(eg!(fail!()));
                     }
                 }
             }
             // (b)
             RealTxnOp::Transfer(transfers) => {
                 for (_, inp, out) in transfers {
-                    let inp_txo = res_vars.get(inp).ok_or_else(|| fail!())?;
-                    let inp_asset_type = resvar_types.get(inp).ok_or_else(|| fail!())?;
-                    let inp_asset_type = rt_vars
-                        .get(inp_asset_type.0 as usize)
-                        .ok_or_else(|| fail!())?;
+                    let inp_txo = res_vars.get(inp).c(d!(fail!()))?;
+                    let inp_asset_type = resvar_types.get(inp).c(d!(fail!()))?;
+                    let inp_asset_type =
+                        rt_vars.get(inp_asset_type.0 as usize).c(d!(fail!()))?;
 
                     if inp_txo.lien.is_some() {
-                        return Err(fail!());
+                        return Err(eg!(fail!()));
                     }
 
                     // txo.record.asset_type should be established as non-None by the
                     // first two checking loops.
                     if *inp_asset_type
-                        != inp_txo.record.asset_type.get_asset_type().unwrap()
+                        != inp_txo.record.asset_type.get_asset_type().c(d!())?
                     {
-                        return Err(fail!());
+                        return Err(eg!(fail!()));
                     }
 
                     if let Some(real_out) = out {
-                        let out_txo = res_vars.get(real_out).ok_or_else(|| fail!())?;
+                        let out_txo = res_vars.get(real_out).c(d!(fail!()))?;
                         let out_asset_type =
-                            resvar_types.get(real_out).ok_or_else(|| fail!())?;
-                        let out_asset_type = rt_vars
-                            .get(out_asset_type.0 as usize)
-                            .ok_or_else(|| fail!())?;
+                            resvar_types.get(real_out).c(d!(fail!()))?;
+                        let out_asset_type =
+                            rt_vars.get(out_asset_type.0 as usize).c(d!(fail!()))?;
 
                         if out_txo.lien.is_some() {
-                            return Err(fail!());
+                            return Err(eg!(fail!()));
                         }
 
                         // txo.record.asset_type should be established as non-None by the
                         // first two checking loops.
                         if *out_asset_type
-                            != out_txo.record.asset_type.get_asset_type().unwrap()
+                            != out_txo.record.asset_type.get_asset_type().c(d!())?
                         {
-                            return Err(fail!());
+                            return Err(eg!(fail!()));
                         }
                     }
                 }
@@ -1107,26 +1073,26 @@ pub fn run_txn_check(
     for (rv, tot_vars) in res_totals.iter() {
         // dbg!("total check");
         if tot_vars.is_empty() {
-            return Err(fail!());
+            return Err(eg!(fail!()));
         }
         let mut total: u64 = 0;
 
         for av in tot_vars.iter() {
-            let av: usize = av.0.try_into().map_err(|_| fail!())?;
-            let val: u64 = *(amt_vars.get(av).ok_or_else(|| fail!())?);
-            total = total.checked_add(val).ok_or_else(|| fail!())?;
+            let av: usize = av.0 as usize;
+            let val: u64 = *(amt_vars.get(av).c(d!(fail!()))?);
+            total = total.checked_add(val).c(d!(fail!()))?;
         }
 
         if total
             != res_vars
                 .get(rv)
-                .ok_or_else(|| fail!())?
+                .c(d!(fail!()))?
                 .record
                 .amount
                 .get_amount()
-                .ok_or_else(|| fail!())?
+                .c(d!(fail!()))?
         {
-            return Err(fail!());
+            return Err(eg!(fail!()));
         }
     }
 

@@ -1,3 +1,6 @@
+#![deny(warnings)]
+
+use ruc::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -37,19 +40,19 @@ impl<T: Eq + Copy + std::fmt::Debug> SlidingSet<T> {
         }
     }
 
-    pub fn insert(&mut self, key: T, index: usize) -> Result<(), String> {
+    pub fn insert(&mut self, key: T, index: usize) -> Result<()> {
         if index <= self.current && index + self.width >= (self.current + 1) {
             if self.map[index % self.width].contains(&key) {
-                Err(format!(
+                Err(eg!(format!(
                     "SlidingSet::insert: ({:?}, {}) already in set",
                     key, index
-                ))
+                )))
             } else {
                 self.map[index % self.width].push(key);
                 Ok(())
             }
         } else {
-            Err(format!("({:?}, {}) is out of range", key, index))
+            Err(eg!(format!("({:?}, {}) is out of range", key, index)))
         }
     }
 }

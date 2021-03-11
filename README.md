@@ -53,38 +53,38 @@ cd /opt && \
 sudo apt install libc-dev libssl-dev make git curl wget
 ```
 
+After clone code, you should do a `make githook` to finish githooks settings that used to check code's format.
+
 #### compile
+
+dynamic linked for online env(docker):
 
 ```
 $ make
-$ tree -F ./release
+$ tree -F release
 
-./release
-|-- bin/
-|   |-- abci_validator_node*
-|   |-- check_merkle
-|   |-- findora
-|   |-- query_server*
-|   |-- solvency_cli
-|   |-- tendermint*
-|   `-- txn_cli
-`-- lib/
-    `-- wasm.tar.gz
+release
+├── bin
+│   ├── abci_validator_node
+│   ├── findora
+│   ├── query_server
+│   └── tendermint
+└── lib
+    └── wasm.tar.gz
 ```
 
-```
-$ make build DBG=1
-$ tree -F ./debug
+static linked binary, that can run on most linux hosts, for development env:
 
-./debug
-|-- bin/
-|   |-- abci_validator_node*
-|   |-- check_merkle
-|   |-- findora
-|   |-- query_server*
-|   |-- solvency_cli
-|   |-- tendermint*
-|   `-- txn_cli
-`-- lib/
-    `-- wasm.tar.gz
+```
+$ make build_release_musl_debug
+$ tree -F release
+
+release
+├── bin
+│   ├── abci_validator_node
+│   ├── findora
+│   ├── query_server
+│   └── tendermint
+└── lib
+    └── wasm.tar.gz
 ```

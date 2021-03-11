@@ -4,7 +4,7 @@ extern crate unicode_normalization;
 
 use super::errors;
 use crate::policy_script::{Policy, PolicyGlobals, TxnPolicyData};
-use crate::{des_fail, error_location, ser_fail, zei_fail};
+use crate::{des_fail, ser_fail, zei_fail};
 use air::{check_merkle_proof as air_check_merkle_proof, AIRResult};
 use bitmap::SparseMap;
 use chrono::prelude::*;
@@ -23,6 +23,7 @@ use sparse_merkle_tree::{check_merkle_proof, Key, MerkleProof};
 use std::boxed::Box;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
+use std::result::Result as StdResult;
 // use std::convert::TryInto;
 use std::hash::{Hash, Hasher};
 use unicode_normalization::UnicodeNormalization;
@@ -31,13 +32,13 @@ use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::{gen_xfr_body, XfrNotePolicies};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
-    AssetRecord, AssetRecordTemplate, AssetTracingPolicies, AssetTracingPolicy,
-    AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo, XfrAmount, XfrAssetType,
-    XfrBody, ASSET_TYPE_LENGTH,
+    AssetRecord, AssetRecordTemplate, AssetType as ZeiAssetType, BlindAssetRecord,
+    OwnerMemo, TracingPolicies, TracingPolicy, XfrAmount, XfrAssetType, XfrBody,
+    ASSET_TYPE_LENGTH,
 };
 
 use super::effects::*;
-use std::error::Error;
+use ruc::*;
 use std::ops::Deref;
 
 pub const RANDOM_CODE_LENGTH: usize = 16;
@@ -47,10 +48,8 @@ pub const MAX_DECIMALS_LENGTH: u8 = 19;
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
     base64::encode_config(input, base64::URL_SAFE)
 }
-pub fn b64dec<T: ?Sized + AsRef<[u8]>>(
-    input: &T,
-) -> Result<Vec<u8>, base64::DecodeError> {
-    base64::decode_config(input, base64::URL_SAFE)
+pub fn b64dec<T: ?Sized + AsRef<[u8]>>(input: &T) -> Result<Vec<u8>> {
+    base64::decode_config(input, base64::URL_SAFE).c(d!())
 }
 
 // Unique Identifier for ledger objects
@@ -133,11 +132,11 @@ impl AssetTypeCode {
     /// Converts an utf8 string to an asset type code.
     ///
     /// Returns an error if the length is greater than 32 bytes.
-    pub fn new_from_utf8_safe(s: &str) -> Result<Self, PlatformError> {
-        assert!(UTF8_ASSET_TYPES_WORK);
+    pub fn new_from_utf8_safe(s: &str) -> Result<Self> {
+        debug_assert!(UTF8_ASSET_TYPES_WORK);
         let composed = s.to_string().nfc().collect::<String>().into_bytes();
         if AssetTypeCode::will_truncate(&composed) {
-            return Err(PlatformError::InputsError(error_location!()));
+            return Err(eg!(PlatformError::InputsError(None)));
         }
         Ok(AssetTypeCode::new_from_vec(composed))
     }
@@ -147,7 +146,7 @@ impl AssetTypeCode {
     ///
     /// Used to customize the asset type code.
     pub fn new_from_utf8_truncate(s: &str) -> Self {
-        assert!(UTF8_ASSET_TYPES_WORK);
+        debug_assert!(UTF8_ASSET_TYPES_WORK);
         let composed = s.to_string().nfc().collect::<String>().into_bytes();
         AssetTypeCode::new_from_vec(composed)
     }
@@ -155,8 +154,8 @@ impl AssetTypeCode {
     /// Converts the asset type code to an utf8 string.
     ///
     /// Used to display the asset type code.
-    pub fn to_utf8(&self) -> Result<String, PlatformError> {
-        assert!(UTF8_ASSET_TYPES_WORK);
+    pub fn to_utf8(&self) -> Result<String> {
+        debug_assert!(UTF8_ASSET_TYPES_WORK);
         let mut code = self.val.0.to_vec();
         let len = code.len();
         // Find the last non-empty index
@@ -170,7 +169,7 @@ impl AssetTypeCode {
                         return Ok(utf8_str.to_string());
                     }
                     Err(e) => {
-                        return Err(ser_fail!(e));
+                        return Err(eg!(ser_fail!(e)));
                     }
                 };
             }
@@ -187,19 +186,19 @@ impl AssetTypeCode {
         }
     }
 
-    pub fn new_from_base64(b64: &str) -> Result<Self, PlatformError> {
+    pub fn new_from_base64(b64: &str) -> Result<Self> {
         match b64dec(b64) {
             Ok(mut bin) => {
                 bin.resize(ASSET_TYPE_LENGTH, 0u8);
-                let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bin.as_slice()).unwrap();
+                let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bin.as_slice()).c(d!())?;
                 Ok(Self {
                     val: ZeiAssetType(buf),
                 })
             }
-            Err(e) => Err(des_fail!(format!(
+            Err(e) => Err(eg!(des_fail!(format!(
                 "Failed to deserialize base64 '{}': {}",
                 b64, e
-            ))),
+            )))),
         }
     }
     pub fn to_base64(&self) -> String {
@@ -227,13 +226,13 @@ impl Code {
         let buf = <[u8; 16]>::try_from(as_vec.as_slice()).unwrap();
         Self { val: buf }
     }
-    pub fn new_from_base64(b64: &str) -> Result<Self, PlatformError> {
+    pub fn new_from_base64(b64: &str) -> Result<Self> {
         if let Ok(mut bin) = b64dec(b64) {
             bin.resize(16, 0u8);
-            let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
+            let buf = <[u8; 16]>::try_from(bin.as_slice()).c(d!())?;
             Ok(Self { val: buf })
         } else {
-            Err(des_fail!())
+            Err(eg!(des_fail!()))
         }
     }
     pub fn to_base64(&self) -> String {
@@ -242,7 +241,7 @@ impl Code {
 }
 
 impl Serialize for Code {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> StdResult<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -255,7 +254,7 @@ impl Serialize for Code {
 }
 
 impl<'de> Deserialize<'de> for Code {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> StdResult<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -267,11 +266,11 @@ impl<'de> Deserialize<'de> for Code {
             fn expecting(
                 &self,
                 formatter: &mut ::core::fmt::Formatter,
-            ) -> ::core::fmt::Result {
+            ) -> core::fmt::Result {
                 formatter.write_str("an array of 16 bytes")
             }
 
-            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+            fn visit_bytes<E>(self, v: &[u8]) -> StdResult<Self::Value, E>
             where
                 E: serde::de::Error,
             {
@@ -284,7 +283,7 @@ impl<'de> Deserialize<'de> for Code {
                     Err(serde::de::Error::invalid_length(v.len(), &self))
                 }
             }
-            fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+            fn visit_str<E>(self, s: &str) -> StdResult<Self::Value, E>
             where
                 E: serde::de::Error,
             {
@@ -383,10 +382,7 @@ pub struct SignatureRules {
 impl SignatureRules {
     /// Returns Ok(()) if the sum of weights of the keys in keyset reaches the threshold.
     /// Keyset must store XfrPublicKeys in byte form.
-    pub fn check_signature_set(
-        &self,
-        keyset: &HashSet<Vec<u8>>,
-    ) -> Result<(), PlatformError> {
+    pub fn check_signature_set(&self, keyset: &HashSet<Vec<u8>>) -> Result<()> {
         let mut sum: u64 = 0;
         let mut weight_map = HashMap::new();
         // Convert to map
@@ -397,11 +393,11 @@ impl SignatureRules {
         for key in keyset.iter() {
             sum = sum
                 .checked_add(*weight_map.get(&key[..]).unwrap_or(&0))
-                .ok_or_else(|| PlatformError::InputsError(error_location!()))?;
+                .c(d!(PlatformError::InputsError(None)))?;
         }
 
         if sum < self.threshold {
-            return Err(PlatformError::InputsError(error_location!()));
+            return Err(eg!(PlatformError::InputsError(None)));
         }
         Ok(())
     }
@@ -422,25 +418,26 @@ pub struct AssetRules {
     pub transfer_multisig_rules: Option<SignatureRules>,
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
-    pub tracing_policies: AssetTracingPolicies,
+    pub tracing_policies: TracingPolicies,
+    #[serde(with = "serde_strz::emp", default)]
     pub max_units: Option<u64>,
     pub decimals: u8,
 }
 impl Default for AssetRules {
     fn default() -> Self {
         AssetRules {
-            tracing_policies: AssetTracingPolicies::new(),
+            tracing_policies: TracingPolicies::new(),
             transferable: true,
             updatable: false,
             max_units: None,
             transfer_multisig_rules: None,
-            decimals: 0,
+            decimals: FRA_DECIMALS,
         }
     }
 }
 
 impl AssetRules {
-    pub fn add_tracing_policy(&mut self, policy: AssetTracingPolicy) -> &mut Self {
+    pub fn add_tracing_policy(&mut self, policy: TracingPolicy) -> &mut Self {
         self.tracing_policies.add(policy);
         self
     }
@@ -469,9 +466,9 @@ impl AssetRules {
     }
 
     #[inline(always)]
-    pub fn set_decimals(&mut self, decimals: u8) -> Result<&mut Self, Box<dyn Error>> {
+    pub fn set_decimals(&mut self, decimals: u8) -> Result<&mut Self> {
         if decimals > MAX_DECIMALS_LENGTH {
-            return Err("asset decimals should be less than 20".into());
+            return Err(eg!("asset decimals should be less than 20"));
         }
         self.decimals = decimals;
         Ok(self)
@@ -491,7 +488,6 @@ pub struct Asset {
     #[serde(skip_serializing_if = "is_default")]
     pub confidential_memo: ConfidentialMemo,
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
     pub asset_rules: AssetRules,
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
@@ -523,13 +519,14 @@ impl AssetType {
             ret.confidential_memo = asset.confidential_memo;
             // Only relevant for issue operations
             ret.asset_rules.max_units = asset.asset_rules.max_units;
+            ret.asset_rules.decimals = asset.asset_rules.decimals;
 
             ret
         };
         self.properties != simple_asset
     }
 
-    pub fn get_tracing_policies_ref(&self) -> &AssetTracingPolicies {
+    pub fn get_tracing_policies_ref(&self) -> &TracingPolicies {
         &self.properties.asset_rules.tracing_policies
     }
 }
@@ -649,17 +646,17 @@ impl TransferAssetBody {
         policies: Option<XfrNotePolicies>,
         lien_assignments: Vec<(usize, usize, HashOf<Vec<TxOutput>>)>,
         transfer_type: TransferType,
-    ) -> Result<TransferAssetBody, errors::PlatformError> {
+    ) -> Result<TransferAssetBody> {
         let num_inputs = input_records.len();
         let num_outputs = output_records.len();
 
         if num_inputs == 0 {
-            return Err(PlatformError::InputsError(error_location!()));
+            return Err(eg!(PlatformError::InputsError(None)));
         }
 
         // If no policies specified, construct set of empty policies
         let policies = policies.unwrap_or_else(|| {
-            let no_policies = AssetTracingPolicies::new();
+            let no_policies = TracingPolicies::new();
             XfrNotePolicies::new(
                 vec![no_policies.clone(); num_inputs],
                 vec![None; num_inputs],
@@ -669,17 +666,17 @@ impl TransferAssetBody {
         });
 
         // Verify that for each input and output, there is a corresponding policy and credential commitment
-        if num_inputs != policies.inputs_tracking_policies.len()
+        if num_inputs != policies.inputs_tracing_policies.len()
             || num_inputs != policies.inputs_sig_commitments.len()
-            || num_outputs != policies.outputs_tracking_policies.len()
+            || num_outputs != policies.outputs_tracing_policies.len()
             || num_outputs != policies.outputs_sig_commitments.len()
         {
-            return Err(PlatformError::InputsError(error_location!()));
+            return Err(eg!(PlatformError::InputsError(None)));
         }
 
         let transfer = Box::new(
             gen_xfr_body(prng, input_records, output_records)
-                .map_err(|e| PlatformError::ZeiError(error_location!(), e))?,
+                .c(d!(PlatformError::ZeiError(None)))?,
         );
         let outputs = transfer
             .outputs
@@ -738,7 +735,7 @@ impl IssueAssetBody {
         token_code: &AssetTypeCode,
         seq_num: u64,
         records: &[(TxOutput, Option<OwnerMemo>)],
-    ) -> Result<IssueAssetBody, PlatformError> {
+    ) -> Result<IssueAssetBody> {
         Ok(IssueAssetBody {
             code: *token_code,
             seq_num,
@@ -761,7 +758,7 @@ impl DefineAssetBody {
         memo: Option<Memo>,
         confidential_memo: Option<ConfidentialMemo>,
         policy: Option<(Box<Policy>, PolicyGlobals)>,
-    ) -> Result<DefineAssetBody, PlatformError> {
+    ) -> Result<DefineAssetBody> {
         let mut asset_def: Asset = Default::default();
         asset_def.code = *token_code;
         asset_def.issuer = *issuer_key;
@@ -810,7 +807,7 @@ impl AIRAssignBody {
         issuer_pk: CredIssuerPublicKey,
         pok: CredPoK,
         no_replay_token: NoReplayToken,
-    ) -> Result<AIRAssignBody, errors::PlatformError> {
+    ) -> Result<AIRAssignBody> {
         Ok(AIRAssignBody {
             addr,
             data,
@@ -846,9 +843,7 @@ pub struct TransferAsset {
 }
 
 impl TransferAsset {
-    pub fn new(
-        transfer_body: TransferAssetBody,
-    ) -> Result<TransferAsset, PlatformError> {
+    pub fn new(transfer_body: TransferAssetBody) -> Result<TransferAsset> {
         Ok(TransferAsset {
             body: transfer_body,
             body_signatures: Vec::new(),
@@ -868,9 +863,9 @@ impl TransferAsset {
     pub fn attach_signature(
         &mut self,
         sig: IndexedSignature<TransferAssetBody>,
-    ) -> Result<(), PlatformError> {
+    ) -> Result<()> {
         if !sig.verify(&self.body) {
-            return Err(PlatformError::InputsError(error_location!()));
+            return Err(eg!(PlatformError::InputsError(None)));
         }
         self.body_signatures.push(sig);
         Ok(())
@@ -916,7 +911,7 @@ impl IssueAsset {
     pub fn new(
         issuance_body: IssueAssetBody,
         keypair: &IssuerKeyPair,
-    ) -> Result<IssueAsset, PlatformError> {
+    ) -> Result<IssueAsset> {
         let signature = SignatureOf::new(&keypair.keypair, &issuance_body);
         Ok(IssueAsset {
             body: issuance_body,
@@ -952,7 +947,7 @@ impl DefineAsset {
     pub fn new(
         creation_body: DefineAssetBody,
         keypair: &IssuerKeyPair,
-    ) -> Result<DefineAsset, PlatformError> {
+    ) -> Result<DefineAsset> {
         let signature = SignatureOf::new(&keypair.keypair, &creation_body);
         Ok(DefineAsset {
             body: creation_body,
@@ -993,10 +988,7 @@ pub struct AIRAssign {
 }
 
 impl AIRAssign {
-    pub fn new(
-        creation_body: AIRAssignBody,
-        keypair: &XfrKeyPair,
-    ) -> Result<AIRAssign, errors::PlatformError> {
+    pub fn new(creation_body: AIRAssignBody, keypair: &XfrKeyPair) -> Result<AIRAssign> {
         let signature = SignatureOf::new(keypair, &creation_body);
         Ok(AIRAssign {
             body: Box::new(creation_body),
@@ -1032,13 +1024,13 @@ impl KVBlind {
         b64enc(&self.0)
     }
 
-    pub fn from_base64(b64: &str) -> Result<Self, PlatformError> {
+    pub fn from_base64(b64: &str) -> Result<Self> {
         if let Ok(mut bin) = b64dec(b64) {
             bin.resize(16, 0u8);
-            let buf = <[u8; 16]>::try_from(bin.as_slice()).unwrap();
+            let buf = <[u8; 16]>::try_from(bin.as_slice()).c(d!())?;
             Ok(Self(buf))
         } else {
-            Err(des_fail!())
+            Err(eg!(des_fail!()))
         }
     }
 }
@@ -1075,13 +1067,10 @@ impl KVUpdate {
         &self.body.2
     }
 
-    pub fn check_signature(
-        &self,
-        public_key: &XfrPublicKey,
-    ) -> Result<(), PlatformError> {
+    pub fn check_signature(&self, public_key: &XfrPublicKey) -> Result<()> {
         self.signature
             .verify(public_key, &self.body)
-            .map_err(|e| zei_fail!(e))
+            .c(d!(zei_fail!()))
     }
 }
 
@@ -1114,13 +1103,13 @@ impl BindAssetsBody {
         input_refs: Vec<(TxoRef, Option<HashOf<Vec<TxOutput>>>)>,
         input_records: &[AssetRecord],
         output_record: &AssetRecord,
-    ) -> Result<BindAssetsBody, errors::PlatformError> {
+    ) -> Result<BindAssetsBody> {
         if input_records.is_empty() {
-            return Err(PlatformError::InputsError(error_location!()));
+            return Err(eg!(PlatformError::InputsError(None)));
         }
 
         if 1 + input_refs.len() != input_records.len() {
-            return Err(PlatformError::InputsError(error_location!()));
+            return Err(eg!(PlatformError::InputsError(None)));
         }
 
         let out_pubkey = &output_record
@@ -1135,19 +1124,20 @@ impl BindAssetsBody {
             let unit_code = *open_rec.get_asset_type();
 
             let art = open_rec.get_record_type();
-            let ar = AssetRecordTemplate::with_no_asset_tracking(
+            let ar = AssetRecordTemplate::with_no_asset_tracing(
                 amt,
                 unit_code,
                 art,
                 *out_pubkey,
             );
-            let ar = AssetRecord::from_template_no_identity_tracking(prng, &ar).unwrap();
+            let ar =
+                AssetRecord::from_template_no_identity_tracing(prng, &ar).c(d!())?;
             out_records.push(ar);
         }
 
         let transfer = Box::new(
             gen_xfr_body(prng, input_records, &out_records)
-                .map_err(|e| PlatformError::ZeiError(error_location!(), e))?,
+                .c(d!(PlatformError::ZeiError(None)))?,
         );
         let input_liens = input_refs
             .iter()
@@ -1210,13 +1200,13 @@ impl ReleaseAssetsBody {
         lien_assignments: Vec<(usize, usize, HashOf<Vec<TxOutput>>)>,
         input_records: &[AssetRecord],
         output_records: &[AssetRecord],
-    ) -> Result<ReleaseAssetsBody, errors::PlatformError> {
+    ) -> Result<ReleaseAssetsBody> {
         if input_records.is_empty() {
-            return Err(PlatformError::InputsError(error_location!()));
+            return Err(eg!(PlatformError::InputsError(None)));
         }
         let transfer = Box::new(
             gen_xfr_body(prng, input_records, output_records)
-                .map_err(|e| PlatformError::ZeiError(error_location!(), e))?,
+                .c(d!(PlatformError::ZeiError(None)))?,
         );
         Ok(ReleaseAssetsBody {
             contract: input_ref,
@@ -1656,17 +1646,18 @@ impl FinalizedTransaction {
 pub const ASSET_TYPE_FRA_BYTES: [u8; ASSET_TYPE_LENGTH] = [0; ASSET_TYPE_LENGTH];
 /// Use pure zero bytes(aka [0, 0, ... , 0]) to express FRA.
 pub const ASSET_TYPE_FRA: ZeiAssetType = ZeiAssetType(ASSET_TYPE_FRA_BYTES);
+/// FRA decimals
+pub const FRA_DECIMALS: u8 = 6;
 
 lazy_static! {
     /// The destination of Fee is an black hole,
     /// all token transfered to it will be burned.
     pub static ref BLACK_HOLE_PUBKEY: XfrPublicKey =
-        XfrPublicKey::zei_from_bytes(&[0; ed25519_dalek::PUBLIC_KEY_LENGTH][..])
-            .unwrap();
+        pnk!(XfrPublicKey::zei_from_bytes(&[0; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
 }
 
-/// TODO: a better value ?
-pub const TX_FEE_MIN: u64 = 1;
+/// see [**mainnet-v1.0 defination**](https://www.notion.so/findora/Transaction-Fees-Analysis-d657247b70f44a699d50e1b01b8a2287)
+pub const TX_FEE_MIN: u64 = 10_000;
 
 impl Transaction {
     /// A simple fee checker for mainnet v1.0.
@@ -1750,6 +1741,11 @@ impl Transaction {
         HashOf::new(&(id, self.clone()))
     }
 
+    pub fn handle(&self) -> String {
+        let digest = self.hash(TxnSID(0));
+        hex::encode(digest)
+    }
+
     pub fn from_seq_id(seq_id: u64) -> Self {
         let mut prng = ChaChaRng::from_entropy();
         let no_replay_token = NoReplayToken::new(&mut prng, seq_id);
@@ -1783,10 +1779,9 @@ impl Transaction {
         &self,
         public_key: &XfrPublicKey,
         sig: &SignatureOf<TransactionBody>,
-    ) -> Result<(), PlatformError> {
+    ) -> Result<()> {
         sig.verify(public_key, &self.body)
-            .map_err(|e| PlatformError::ZeiError(error_location!(), e))?;
-        Ok(())
+            .c(d!(PlatformError::ZeiError(None)))
     }
 
     pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
@@ -1848,7 +1843,7 @@ impl Transaction {
         // }
         // if !include_spent {
         //   for idx in spent_indices {
-        //     outputs.remove(idx.try_into().unwrap());
+        //     outputs.remove(idx.try_into().c(d!())?);
         //   }
         // }
         // outputs
@@ -1859,10 +1854,7 @@ impl Transaction {
     /// from `self` somehow, then it is infeasible for someone to forge a
     /// passing signature, but it is plausible for someone to generate an
     /// unrelated `public_key` which can pass this signature check!
-    pub fn check_has_signature(
-        &self,
-        public_key: &XfrPublicKey,
-    ) -> Result<(), PlatformError> {
+    pub fn check_has_signature(&self, public_key: &XfrPublicKey) -> Result<()> {
         let serialized = Serialized::new(&self.body);
         for sig in self.signatures.iter() {
             match sig.0.verify(public_key, &serialized) {
@@ -1872,7 +1864,7 @@ impl Transaction {
                 }
             }
         }
-        Err(PlatformError::InputsError(error_location!()))
+        Err(eg!(PlatformError::InputsError(None)))
     }
 }
 
@@ -1918,7 +1910,9 @@ mod tests {
     use curve25519_dalek::ristretto::CompressedRistretto;
     use rand_core::SeedableRng;
     use std::cmp::min;
+    use zei::ristretto;
     use zei::xfr::structs::{AssetTypeAndAmountProof, XfrBody, XfrProofs};
+    use zeiutils::err_eq;
 
     // This test may fail as it is a statistical test that sometimes fails (but very rarely)
     // It uses the central limit theorem, but essentially testing the rand crate
@@ -1964,7 +1958,9 @@ mod tests {
             let code = "My 资产 $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$";
             let result = AssetTypeCode::new_from_utf8_safe(code);
             match result {
-                Err(PlatformError::InputsError(_)) => {}
+                Err(e) => {
+                    err_eq!(PlatformError::InputsError(None), e);
+                }
                 _ => panic!("InputsError expected."),
             }
         }
@@ -2033,7 +2029,10 @@ mod tests {
     #[test]
     fn test_to_from_base64(bytes: Vec<u8>) {
         let code = AssetTypeCode::new_from_vec(bytes);
-        assert_eq!(Ok(code), AssetTypeCode::new_from_base64(&code.to_base64()));
+        assert_eq!(
+            code,
+            pnk!(AssetTypeCode::new_from_base64(&code.to_base64()))
+        );
     }
 
     #[quickcheck]
@@ -2044,8 +2043,8 @@ mod tests {
             let code = AssetTypeCode::new_from_vec(bytes);
             println!("{:?}", code.to_utf8());
             assert_eq!(
-                Ok(code),
-                AssetTypeCode::new_from_utf8_safe(&code.to_utf8().unwrap())
+                code,
+                pnk!(AssetTypeCode::new_from_utf8_safe(&code.to_utf8().unwrap()))
             );
         }
     }
@@ -2099,13 +2098,13 @@ mod tests {
             outputs: Vec::new(),
             proofs: XfrProofs {
                 asset_type_and_amount_proof: AssetTypeAndAmountProof::NoProof,
-                asset_tracking_proof: Default::default(),
+                asset_tracing_proof: Default::default(),
             },
             asset_tracing_memos: vec![],
             owners_memos: vec![],
         };
 
-        let no_policies = AssetTracingPolicies::new();
+        let no_policies = TracingPolicies::new();
 
         let policies = XfrNotePolicies::new(
             vec![no_policies.clone()],
@@ -2197,17 +2196,23 @@ mod tests {
                 policies: XfrNotePolicies::default(),
                 outputs: vec![TxOutput {
                     record: BlindAssetRecord {
-                        amount: amount
-                            .map(|am| XfrAmount::NonConfidential(am))
-                            .unwrap_or(XfrAmount::Confidential((
-                                CompressedRistretto([0; 32]),
-                                CompressedRistretto([0; 32]),
-                            ))),
+                        amount: amount.map(XfrAmount::NonConfidential).unwrap_or(
+                            XfrAmount::Confidential((
+                                ristretto::CompressedRistretto(CompressedRistretto(
+                                    [0; 32],
+                                )),
+                                ristretto::CompressedRistretto(CompressedRistretto(
+                                    [0; 32],
+                                )),
+                            )),
+                        ),
                         asset_type: asset_type
-                            .map(|at| XfrAssetType::NonConfidential(at))
-                            .unwrap_or(XfrAssetType::Confidential(CompressedRistretto(
-                                [0; 32],
-                            ))),
+                            .map(XfrAssetType::NonConfidential)
+                            .unwrap_or(XfrAssetType::Confidential(
+                                ristretto::CompressedRistretto(CompressedRistretto(
+                                    [0; 32],
+                                )),
+                            )),
                         public_key: dest_pubkey,
                     },
                     lien: None,
@@ -2218,7 +2223,7 @@ mod tests {
                     outputs: Vec::new(),
                     proofs: XfrProofs {
                         asset_type_and_amount_proof: AssetTypeAndAmountProof::NoProof,
-                        asset_tracking_proof: Default::default(),
+                        asset_tracing_proof: Default::default(),
                     },
                     asset_tracing_memos: Vec::new(),
                     owners_memos: Vec::new(),

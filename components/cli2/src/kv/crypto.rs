@@ -4,26 +4,38 @@ use blake2::Blake2b;
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{ChaCha20Poly1305, Nonce}; // Or `XChaCha20Poly1305`
 use rand::{thread_rng, Rng};
+use ruc::*;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use snafu::{ResultExt, Snafu};
+use std::fmt;
 use std::marker::PhantomData;
 use zeroize::{Zeroize, Zeroizing};
 
-#[derive(Snafu, Debug)]
+#[derive(Debug)]
 pub enum CryptoError {
-    #[snafu(display("Failed decrypting key. Check provided password."))]
     KeyDecryptionError,
-    #[snafu(display("Failed decrypting ciphertext component."))]
     DecryptionError,
-    #[snafu(display("HMAC Validation Failed"))]
     HMACValidation,
-    #[snafu(display("Deserilization of {} component failed", component))]
-    Deserialization {
-        source: serde_json::error::Error,
-        component: &'static str,
-    },
+    Deserialization(&'static str),
 }
-type Result<T, E = CryptoError> = std::result::Result<T, E>;
+
+impl fmt::Display for CryptoError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CryptoError::KeyDecryptionError => {
+                write!(f, "{}", stringify!(CryptoError::KeyDecryptionError))
+            }
+            CryptoError::DecryptionError => {
+                write!(f, "{}", stringify!(CryptoError::DecryptionError))
+            }
+            CryptoError::HMACValidation => {
+                write!(f, "{}", stringify!(CryptoError::HMACValidation))
+            }
+            CryptoError::Deserialization(n) => {
+                write!(f, "{}: {}", stringify!(CryptoError::Deserialization), n)
+            }
+        }
+    }
+}
 
 #[derive(Zeroize)]
 #[zeroize(drop)]
@@ -142,9 +154,8 @@ where
 
     /// Returns the clear-text component, without verifying the hmac
     pub fn clear_no_verify(&self) -> Result<Clear> {
-        serde_json::from_str(&self.clear).context(Deserialization {
-            component: "cleartext",
-        })
+        serde_json::from_str(&self.clear)
+            .c(d!(CryptoError::Deserialization("cleartext")))
     }
 
     /// Returns the clear-text component, while verifying the hmac
@@ -152,7 +163,7 @@ where
         if self.verify(password) {
             self.clear_no_verify()
         } else {
-            Err(CryptoError::HMACValidation)
+            Err(eg!(CryptoError::HMACValidation))
         }
     }
 
@@ -168,13 +179,13 @@ where
                         Nonce::from_slice(&self.chacha_nonce[..]),
                         &self.encrypted[..],
                     )
-                    .map_err(|_| CryptoError::DecryptionError)?,
+                    .map_err(|e| eg!(e))
+                    .c(d!(CryptoError::DecryptionError))?,
             );
-            serde_json::from_slice(&plaintext[..]).context(Deserialization {
-                component: "ciphertext",
-            })
+            serde_json::from_slice(&plaintext[..])
+                .c(d!(CryptoError::Deserialization("ciphertext")))
         } else {
-            Err(CryptoError::HMACValidation)
+            Err(eg!(CryptoError::HMACValidation))
         }
     }
 }
@@ -216,8 +227,8 @@ mod tests {
         let encrypted = "Encrypted".to_string();
         let pair = MixedPair::pack(clear.clone(), &encrypted, "password".as_bytes());
 
-        assert!(pair.clear("password".as_bytes())? == clear);
-        assert!(pair.encrypted("password".as_bytes())? == encrypted);
+        assert!(pair.clear("password".as_bytes()).c(d!())? == clear);
+        assert!(pair.encrypted("password".as_bytes()).c(d!())? == encrypted);
         Ok(())
     }
 }

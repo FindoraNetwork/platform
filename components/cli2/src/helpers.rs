@@ -1,9 +1,9 @@
-use crate::HomeDir;
 use crate::{CliError, LedgerStateCommitment};
 use ledger::data_model::{b64enc, Asset, AssetType, AuthenticatedUtxo, TxoSID};
+use ruc::*;
 use serde::de::DeserializeOwned;
-use snafu::{ensure, Backtrace, GenerateBacktrace, OptionExt, ResultExt, Snafu};
 use std::env;
+use std::fmt;
 use std::path::PathBuf;
 use std::process::exit;
 use std::time::Duration;
@@ -12,35 +12,27 @@ use utils::HashOf;
 use zeroize::Zeroizing;
 
 /// Computes a http client with a specific timeout
-fn get_client() -> Result<reqwest::blocking::Client, reqwest::Error> {
+fn get_client() -> Result<reqwest::blocking::Client> {
     const TIMEOUT: u64 = 20;
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(TIMEOUT))
-        .build()?;
+        .build()
+        .c(d!())?;
     Ok(client)
 }
 
-pub fn do_request_asset(query: &str) -> Result<Asset, CliError> {
-    let client = get_client().map_err(|e| CliError::Reqwest {
-        source: e,
-        backtrace: Backtrace::generate(),
-    })?;
+pub fn do_request_asset(query: &str) -> Result<Asset> {
+    let client = get_client().c(d!(CliError::Reqwest))?;
 
     let resp = match client.get(query).send() {
         Err(e) => {
             eprintln!("Request '{}' failed: {}", query, e);
-            return Err(CliError::Reqwest {
-                source: e,
-                backtrace: Backtrace::generate(),
-            });
+            return Err(eg!(CliError::Reqwest));
         }
         Ok(resp) => match resp.json::<AssetType>() {
             Err(e) => {
                 eprintln!("Problem parsing response {}, {}", query, e);
-                return Err(CliError::Reqwest {
-                    source: e,
-                    backtrace: Backtrace::generate(),
-                });
+                return Err(eg!(CliError::Reqwest));
             }
             Ok(v) => v.properties,
         },
@@ -49,13 +41,15 @@ pub fn do_request_asset(query: &str) -> Result<Asset, CliError> {
     Ok(resp)
 }
 
-pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, Error> {
-    let client = get_client().map_err(|_| {
-        Error::with_description(
-            "The http client failed being initialized.",
-            ErrorKind::Io,
-        )
-    })?;
+pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T> {
+    let client = get_client()
+        .map_err(|_| {
+            Error::with_description(
+                "The http client failed being initialized.",
+                ErrorKind::Io,
+            )
+        })
+        .c(d!())?;
 
     let resp: T = match client.get(query).send() {
         Err(e) => {
@@ -69,10 +63,10 @@ pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T, Error> {
                 } else {
                     eprintln!("Problem parsing response {}, {}", query, e);
                 }
-                return Err(Error::with_description(
+                return Err(eg!(Error::with_description(
                     "Problem parsing json",
                     ErrorKind::Io,
-                ));
+                )));
                 // TODO find a more informative error
             }
             Ok(v) => v,
@@ -86,28 +80,19 @@ pub fn do_request_authenticated_utxo(
     query: &str,
     sid: u64,
     ledger_state: &LedgerStateCommitment,
-) -> Result<AuthenticatedUtxo, CliError> {
-    let client = get_client().map_err(|e| CliError::Reqwest {
-        source: e,
-        backtrace: Backtrace::generate(),
-    })?;
+) -> Result<AuthenticatedUtxo> {
+    let client = get_client().c(d!(CliError::Reqwest))?;
 
     let resp = match client.get(query).send() {
         Err(e) => {
             eprintln!("Request '{}' failed: {}", query, e);
-            return Err(CliError::Reqwest {
-                source: e,
-                backtrace: Backtrace::generate(),
-            });
+            return Err(eg!(CliError::Reqwest));
         }
         Ok(resp) => {
             match resp.json::<AuthenticatedUtxo>() {
                 Err(e) => {
                     eprintln!("Problem parsing response {}, {}", query, e);
-                    return Err(CliError::Reqwest {
-                        source: e,
-                        backtrace: Backtrace::generate(),
-                    });
+                    return Err(eg!(CliError::Reqwest));
                 }
 
                 Ok(v) => {
@@ -125,7 +110,7 @@ pub fn do_request_authenticated_utxo(
                         eprintln!(
                             "Please run query-ledger-state then rerun this command."
                         );
-                        return Err(CliError::InconsistentLedger);
+                        return Err(eg!(CliError::InconsistentLedger));
                     }
 
                     // TODO: this needs better direct authentication
@@ -136,7 +121,7 @@ pub fn do_request_authenticated_utxo(
                             "This could indicate a faulty server, or a man-in-the-middle!"
                         );
                         eprintln!("\nFor safety, refusing to update.");
-                        return Err(CliError::InconsistentLedger);
+                        return Err(eg!(CliError::InconsistentLedger));
                     }
                     if !v.is_valid((ledger_state.0).0.clone()) {
                         eprintln!("!!!!! ERROR !!!!!!");
@@ -147,7 +132,7 @@ pub fn do_request_authenticated_utxo(
                             "This could indicate a faulty server, or a man-in-the-middle!"
                         );
                         eprintln!("\nFor safety, refusing to update.");
-                        return Err(CliError::InconsistentLedger);
+                        return Err(eg!(CliError::InconsistentLedger));
                     }
                     v
                 }
@@ -157,25 +142,33 @@ pub fn do_request_authenticated_utxo(
     Ok(resp)
 }
 
-#[derive(Snafu, Debug)]
+#[derive(Debug)]
 pub enum PasswordReadError {
-    #[snafu(display("Entered passwords did not match."))]
-    DidNotMatch { backtrace: Backtrace },
-    #[snafu(display("Failed getting user input."))]
-    UserInput {
-        source: std::io::Error,
-        backtrace: Backtrace,
-    },
-    #[snafu(display("The provided password was incorrect."))]
+    DidNotMatch,
+    UserInput,
     IncorrectPassword,
+}
+
+impl fmt::Display for PasswordReadError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PasswordReadError::DidNotMatch => {
+                write!(f, "{}", stringify!(PasswordReadError::DidNotMatch))
+            }
+            PasswordReadError::UserInput => {
+                write!(f, "{}", stringify!(PasswordReadError::UserInput))
+            }
+            PasswordReadError::IncorrectPassword => {
+                write!(f, "{}", stringify!(PasswordReadError::IncorrectPassword))
+            }
+        }
+    }
 }
 
 /// Reads a user's mnemonic
 ///
 /// Optionally takes a string describing what the mnemonic is for
-pub fn prompt_mnemonic(
-    description: Option<&str>,
-) -> Result<Zeroizing<String>, PasswordReadError> {
+pub fn prompt_mnemonic(description: Option<&str>) -> Result<Zeroizing<String>> {
     let prompt = if let Some(s) = description {
         format!("Enter menonic for {}: ", s)
     } else {
@@ -183,16 +176,14 @@ pub fn prompt_mnemonic(
     };
 
     rpassword::prompt_password_stdout(&prompt)
-        .context(UserInput)
+        .c(d!(PasswordReadError::UserInput))
         .map(Zeroizing::new)
 }
 
 /// Reads a user's password without confirming
 ///
 /// Optionally takes a string describing what the password is for
-fn prompt_password(
-    description: Option<&str>,
-) -> Result<Zeroizing<String>, PasswordReadError> {
+fn prompt_password(description: Option<&str>) -> Result<Zeroizing<String>> {
     let prompt = if let Some(s) = description {
         format!("Enter password for {}: ", s)
     } else {
@@ -200,16 +191,14 @@ fn prompt_password(
     };
 
     rpassword::prompt_password_stdout(&prompt)
-        .context(UserInput)
+        .c(d!(PasswordReadError::UserInput))
         .map(Zeroizing::new)
 }
 
 /// Reads a password from the user twice, and confirms that they match
 ///
 /// Optionally takes a string describing what the password is for
-fn prompt_password_confirming(
-    description: Option<&str>,
-) -> Result<Zeroizing<String>, PasswordReadError> {
+fn prompt_password_confirming(description: Option<&str>) -> Result<Zeroizing<String>> {
     let first_prompt = if let Some(s) = description {
         format!("Enter password for {}: ", s)
     } else {
@@ -217,14 +206,17 @@ fn prompt_password_confirming(
     };
 
     let first = rpassword::prompt_password_stdout(&first_prompt)
-        .context(UserInput)
-        .map(Zeroizing::new)?;
+        .c(d!(PasswordReadError::UserInput))
+        .map(Zeroizing::new)
+        .c(d!())?;
 
     let second = rpassword::prompt_password_stdout("Enter password again:")
-        .context(UserInput)
-        .map(Zeroizing::new)?;
+        .c(d!(PasswordReadError::UserInput))
+        .map(Zeroizing::new)
+        .c(d!())?;
     // Return an error if the entered passwords did not match
-    ensure!(first == second, DidNotMatch);
+    assert_eq!(first, second);
+
     Ok(first)
 }
 
@@ -234,7 +226,7 @@ fn prompt_password_confirming(
 pub fn prompt_confirming_with_retries(
     retries: u32,
     description: Option<&str>,
-) -> Result<Zeroizing<String>, PasswordReadError> {
+) -> Result<Zeroizing<String>> {
     let mut ret = None;
     for i in 0..retries {
         let x = prompt_password_confirming(description);
@@ -244,17 +236,17 @@ pub fn prompt_confirming_with_retries(
                 break;
             }
             Err(e) => {
-                if matches!(e, PasswordReadError::DidNotMatch { .. }) {
+                if e.eq_any(eg!(PasswordReadError::DidNotMatch).as_ref()) {
                     if i < retries - 1 {
                         println!("Passwords did not match, please try again.");
                     }
                 } else {
-                    return Err(e);
+                    return Err(eg!(e));
                 }
             }
         }
     }
-    ret.context(DidNotMatch)
+    ret.c(d!(PasswordReadError::DidNotMatch))
 }
 
 /// Reads a password, provides it to the provided closure, and will re-attempt if the closure
@@ -263,13 +255,13 @@ pub fn prompt_confirming_with_retries(
 /// The provided closure will indicate the provided password is incorrect by returning an 'Err'
 /// value. As a matter of correctness, this should be the only condition under which the closure
 /// will return an error
-pub fn prompt_with_retries<T, E: std::error::Error>(
+pub fn prompt_with_retries<T>(
     retries: u32,
     description: Option<&str>,
-    closure: impl Fn(&str) -> Result<T, E>,
-) -> Result<T, PasswordReadError> {
+    closure: impl Fn(&str) -> Result<T>,
+) -> Result<T> {
     for i in 0..retries {
-        let password = prompt_password(description)?;
+        let password = prompt_password(description).c(d!())?;
         let x = closure(&password);
         match x {
             Ok(x) => return Ok(x),
@@ -280,17 +272,17 @@ pub fn prompt_with_retries<T, E: std::error::Error>(
             }
         }
     }
-    Err(PasswordReadError::IncorrectPassword)
+    Err(eg!(PasswordReadError::IncorrectPassword))
 }
 
-pub fn compute_findora_dir() -> Result<PathBuf, CliError> {
+pub fn compute_findora_dir() -> Result<PathBuf> {
     let mut home = PathBuf::new();
     match env::var("FINDORA_HOME") {
         Ok(fin_home) => {
             home.push(fin_home);
         }
         Err(_) => {
-            home.push(dirs::home_dir().context(HomeDir)?);
+            home.push(dirs::home_dir().c(d!(CliError::HomeDir))?);
             home.push(".findora");
         }
     }

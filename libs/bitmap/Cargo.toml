@@ -8,6 +8,7 @@ edition = "2018"
 path = "src/bitmap.rs"
 
 [dependencies]
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 arrayref = "0.3.5"
 cryptohash = { path = "../cryptohash" }
 itertools = "0.8.0"

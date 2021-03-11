@@ -9,6 +9,7 @@ build = "build.rs"
 path = "src/submission_api.rs"
 
 [dependencies]
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 actix-cors = "0.1.0"
 actix-rt = "0.2"
 actix-service = "0.4.2"
