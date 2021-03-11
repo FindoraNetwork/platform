@@ -116,19 +116,17 @@ fn main() -> Result<()> {
     // Set up a an encrypted DNS-enabled TCP Transport over the Mplex and Yamux protocols
     let transport = libp2p::build_development_transport(local_key).c(d!())?;
 
-    let client = reqwest::blocking::Client::new();
     // Create a Floodsub topic
     let floodsub_topic = floodsub::Topic::new("ledger auditor");
 
     // Read signed commitment from ledger
     let (protocol, host) = protocol_host();
-    let resp_gs = client
-        .get(&format!(
-            "{}://{}:{}/global_state",
-            protocol, host, LEDGER_PORT
-        ))
-        .send()
-        .c(d!())?;
+    let resp_gs = attohttpc::get(&format!(
+        "{}://{}:{}/global_state",
+        protocol, host, LEDGER_PORT
+    ))
+    .send()
+    .c(d!())?;
     let (comm, idx, sig): (BitDigest, u64, XfrSignature) =
         serde_json::from_str(&resp_gs.text().c(d!())?[..]).c(d!())?;
     let idx = if args.is_present("poison") {
@@ -138,13 +136,12 @@ fn main() -> Result<()> {
     };
     info!("Got ({:?}, {}, {:?}) from global_state", comm, idx, sig);
     // Read signed commitment from ledger
-    let resp_pk = client
-        .get(&format!(
-            "{}://{}:{}/public_key",
-            protocol, host, LEDGER_PORT
-        ))
-        .send()
-        .c(d!())?;
+    let resp_pk = attohttpc::get(&format!(
+        "{}://{}:{}/public_key",
+        protocol, host, LEDGER_PORT
+    ))
+    .send()
+    .c(d!())?;
     let pk: XfrPublicKey = serde_json::from_str(&resp_pk.text().c(d!())?[..]).c(d!())?;
     info!("Got {:?} from public_key", pk);
 
@@ -191,9 +188,7 @@ fn main() -> Result<()> {
                     Ok(ks) => {
                         if ks == self.consensus_state.this_state {
                             if !self.consensus_state.matches.contains(&message.source) {
-                                self.consensus_state
-                                    .matches
-                                    .insert(message.source.clone());
+                                self.consensus_state.matches.insert(message.source);
                                 info!(
                                     "Received matching signed commitment from {:?}",
                                     message.source
@@ -216,7 +211,7 @@ fn main() -> Result<()> {
                                         {
                                             self.consensus_state
                                                 .valid
-                                                .insert(message.source.clone(), ks);
+                                                .insert(message.source, ks);
                                             info!(
                                                 "Received valid non-matching signed commitment from {:?}",
                                                 message.source
@@ -229,10 +224,9 @@ fn main() -> Result<()> {
                                             .invalid
                                             .contains_key(&message.source)
                                         {
-                                            self.consensus_state.invalid.insert(
-                                                message.source.clone(),
-                                                ks.clone(),
-                                            );
+                                            self.consensus_state
+                                                .invalid
+                                                .insert(message.source, ks.clone());
                                             info!(
                                                 "Received invalid signed commitment {:?} from {}, err = {:?}",
                                                 ks, message.source, zei_err
@@ -247,7 +241,7 @@ fn main() -> Result<()> {
                             {
                                 self.consensus_state
                                     .invalid
-                                    .insert(message.source.clone(), ks.clone());
+                                    .insert(message.source, ks.clone());
                                 warn!(
                                     "Received invalid signed commitment \n{:?}\nfrom {:?}",
                                     ks, message.source
@@ -287,9 +281,9 @@ fn main() -> Result<()> {
 
     // Create a Swarm to manage peers and events
     let mut swarm = {
-        let mdns = Mdns::new().c(d!())?;
+        let mdns = async_std::task::block_on(Mdns::new()).c(d!())?;
         let mut behaviour = AuditorBehaviour {
-            floodsub: Floodsub::new(local_peer_id.clone()),
+            floodsub: Floodsub::new(local_peer_id),
             mdns,
             consensus_state,
         };

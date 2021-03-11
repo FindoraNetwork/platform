@@ -11,20 +11,11 @@ use structopt::clap::{Error, ErrorKind};
 use utils::HashOf;
 use zeroize::Zeroizing;
 
-/// Computes a http client with a specific timeout
-fn get_client() -> Result<reqwest::blocking::Client> {
-    const TIMEOUT: u64 = 20;
-    let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(TIMEOUT))
-        .build()
-        .c(d!())?;
-    Ok(client)
-}
+// http timeout
+const TIMEOUT: Duration = Duration::from_secs(20);
 
 pub fn do_request_asset(query: &str) -> Result<Asset> {
-    let client = get_client().c(d!(CliError::Reqwest))?;
-
-    let resp = match client.get(query).send() {
+    let resp = match attohttpc::get(query).timeout(TIMEOUT).send() {
         Err(e) => {
             eprintln!("Request '{}' failed: {}", query, e);
             return Err(eg!(CliError::Reqwest));
@@ -42,23 +33,18 @@ pub fn do_request_asset(query: &str) -> Result<Asset> {
 }
 
 pub fn do_request<T: DeserializeOwned>(query: &str) -> Result<T> {
-    let client = get_client()
-        .map_err(|_| {
-            Error::with_description(
-                "The http client failed being initialized.",
-                ErrorKind::Io,
-            )
-        })
-        .c(d!())?;
-
-    let resp: T = match client.get(query).send() {
+    let resp: T = match attohttpc::get(query).timeout(TIMEOUT).send() {
         Err(e) => {
             eprintln!("Request '{}' failed: {}", query, e);
             exit(-1);
         }
         Ok(resp) => match resp.json::<T>() {
             Err(e) => {
-                if let Ok(Ok(msg)) = client.get(query).send().map(|r| r.text()) {
+                if let Ok(Ok(msg)) = attohttpc::get(query)
+                    .timeout(TIMEOUT)
+                    .send()
+                    .map(|r| r.text())
+                {
                     println!("\x1b[31;1m{}\x1b[0m", msg);
                 } else {
                     eprintln!("Problem parsing response {}, {}", query, e);
@@ -81,9 +67,7 @@ pub fn do_request_authenticated_utxo(
     sid: u64,
     ledger_state: &LedgerStateCommitment,
 ) -> Result<AuthenticatedUtxo> {
-    let client = get_client().c(d!(CliError::Reqwest))?;
-
-    let resp = match client.get(query).send() {
+    let resp = match attohttpc::get(query).timeout(TIMEOUT).send() {
         Err(e) => {
             eprintln!("Request '{}' failed: {}", query, e);
             return Err(eg!(CliError::Reqwest));
