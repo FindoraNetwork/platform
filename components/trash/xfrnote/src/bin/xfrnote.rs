@@ -194,9 +194,9 @@ fn main() -> Result<()> {
 
     // Create a Swarm to manage peers and events
     let mut swarm = {
-        let mdns = Mdns::new().c(d!())?;
+        let mdns = async_std::task::block_on(Mdns::new()).c(d!())?;
         let mut behaviour = MyBehaviour {
-            floodsub: Floodsub::new(local_peer_id.clone()),
+            floodsub: Floodsub::new(local_peer_id),
             mdns,
             ignored_member: false,
         };

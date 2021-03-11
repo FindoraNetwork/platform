@@ -188,9 +188,7 @@ fn main() -> Result<()> {
                     Ok(ks) => {
                         if ks == self.consensus_state.this_state {
                             if !self.consensus_state.matches.contains(&message.source) {
-                                self.consensus_state
-                                    .matches
-                                    .insert(message.source.clone());
+                                self.consensus_state.matches.insert(message.source);
                                 info!(
                                     "Received matching signed commitment from {:?}",
                                     message.source
@@ -213,7 +211,7 @@ fn main() -> Result<()> {
                                         {
                                             self.consensus_state
                                                 .valid
-                                                .insert(message.source.clone(), ks);
+                                                .insert(message.source, ks);
                                             info!(
                                                 "Received valid non-matching signed commitment from {:?}",
                                                 message.source
@@ -226,10 +224,9 @@ fn main() -> Result<()> {
                                             .invalid
                                             .contains_key(&message.source)
                                         {
-                                            self.consensus_state.invalid.insert(
-                                                message.source.clone(),
-                                                ks.clone(),
-                                            );
+                                            self.consensus_state
+                                                .invalid
+                                                .insert(message.source, ks.clone());
                                             info!(
                                                 "Received invalid signed commitment {:?} from {}, err = {:?}",
                                                 ks, message.source, zei_err
@@ -244,7 +241,7 @@ fn main() -> Result<()> {
                             {
                                 self.consensus_state
                                     .invalid
-                                    .insert(message.source.clone(), ks.clone());
+                                    .insert(message.source, ks.clone());
                                 warn!(
                                     "Received invalid signed commitment \n{:?}\nfrom {:?}",
                                     ks, message.source
@@ -284,9 +281,9 @@ fn main() -> Result<()> {
 
     // Create a Swarm to manage peers and events
     let mut swarm = {
-        let mdns = Mdns::new().c(d!())?;
+        let mdns = async_std::task::block_on(Mdns::new()).c(d!())?;
         let mut behaviour = AuditorBehaviour {
-            floodsub: Floodsub::new(local_peer_id.clone()),
+            floodsub: Floodsub::new(local_peer_id),
             mdns,
             consensus_state,
         };
