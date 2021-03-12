@@ -10,10 +10,11 @@ path = "src/ledger_api_service.rs"
 
 [dependencies]
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
-actix-cors = "0.1.0"
-actix-rt = "0.2"
-actix-service = "0.4.2"
-actix-web = "1.0.5"
+actix-cors = "0.5.4"
+actix-rt = "2.1.0"
+actix-service = "1.0.6"
+actix-web = "3.3.2"
+futures = "0.3"
 cryptohash = { path = "../../libs/cryptohash" }
 air = { path = "../../libs/ads/air" }
 ledger = { path = "../../ledger" }
