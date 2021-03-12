@@ -6,13 +6,14 @@ use ledger::data_model::{
 };
 use ledger::store::*;
 use log::info;
+use parking_lot::RwLock;
 use rand_core::{CryptoRng, RngCore};
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use std::result::Result as StdResult;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 macro_rules! fail {
     () => {
@@ -156,18 +157,20 @@ where
 
     pub fn begin_block(&mut self) {
         debug_assert!(self.block.is_none());
-        if let Ok(mut ledger) = self.committed_state.write() {
-            self.block =
-                Some(ledger.start_block().expect("Ledger could not start block"));
-            info!("New block started");
-        } // What should happen in failure? -joe
+        self.block = Some(
+            self.committed_state
+                .write()
+                .start_block()
+                .expect("Ledger could not start block"),
+        );
+        info!("New block started");
     }
 
     pub fn end_block(&mut self) -> Result<()> {
         let mut block = None;
         std::mem::swap(&mut self.block, &mut block);
         if let Some(block) = block {
-            let mut ledger = self.committed_state.write().c(d!())?;
+            let mut ledger = self.committed_state.write();
             let finalized_txns = ledger
                 .finish_block(block)
                 .expect("Ledger could not finish block");
@@ -221,7 +224,7 @@ where
 
         // The if statement above guarantees that we have a block.
         let mut block = self.block.as_mut().unwrap();
-        let ledger = self.committed_state.read().unwrap();
+        let ledger = self.committed_state.read();
         let handle = TxnHandle::new(&txn);
         let temp_sid =
             TxnEffect::compute_effect(txn.clone())
@@ -248,9 +251,7 @@ where
         let mut block = None;
         std::mem::swap(&mut self.block, &mut block);
         if let Some(block) = block {
-            if let Ok(mut ledger) = self.committed_state.write() {
-                ledger.abort_block(block);
-            }
+            self.committed_state.write().abort_block(block);
         }
     }
 

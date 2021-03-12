@@ -2989,7 +2989,7 @@ mod test {
     use super::*;
     use lazy_static::lazy_static;
 
-    use std::sync::Mutex;
+    use parking_lot::Mutex;
 
     lazy_static! {
         static ref LEDGER_STANDALONE_LOCK: Mutex<()> = Mutex::new(());
@@ -3094,7 +3094,7 @@ mod test {
         }
 
         let _x = if with_standalone {
-            Some(LEDGER_STANDALONE_LOCK.lock().unwrap())
+            Some(LEDGER_STANDALONE_LOCK.lock())
         } else {
             None
         };

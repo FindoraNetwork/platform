@@ -6,7 +6,8 @@ use ledger_api_service::RestfulApiService;
 use log::{error, info};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use parking_lot::RwLock;
 use std::thread;
 use std::time;
 

@@ -15,6 +15,8 @@ path = "src/query_server_launch.rs"
 
 [dependencies]
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+parking_lot = "0.11.1"
+
 actix-cors = "0.1.0"
 actix-rt = "0.2"
 actix-service = "0.4.2"

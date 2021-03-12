@@ -11,6 +11,8 @@ path = "src/abci_validator_node.rs"
 
 [dependencies]
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+parking_lot = "0.11.1"
+
 abci = "0.7.1"
 arrayref = "0.3.5"
 base64 = "0.12"
