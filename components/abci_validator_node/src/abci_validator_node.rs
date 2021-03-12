@@ -268,23 +268,21 @@ fn main() {
     let submission_host = config.submission_host.clone();
     let submission_port = config.submission_port.clone();
     thread::spawn(move || {
-        let submission_api = pnk!(SubmissionApi::create(
+        pnk!(SubmissionApi::create(
             submission_server,
             &submission_host,
             &submission_port
         ));
-        pnk!(submission_api.run())
     });
 
     let ledger_host = config.ledger_host.clone();
     let ledger_port = config.ledger_port.clone();
     thread::spawn(move || {
-        let ledger_service = pnk!(RestfulApiService::create(
+        pnk!(RestfulApiService::create(
             cloned_lock,
             &ledger_host,
             &ledger_port
         ));
-        pnk!(ledger_service.run());
     });
 
     // TODO: pass the address and port in on the command line
