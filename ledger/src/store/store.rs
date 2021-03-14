@@ -2066,9 +2066,9 @@ impl LedgerState {
         self.save_utxo_map_version();
         let merkle_id = self.compute_and_append_txns_hash(&block);
         self.compute_and_save_state_commitment_data();
-        self.utxo_map.write().unwrap();
-        self.txn_merkle.write().unwrap();
-        self.block_merkle.write().unwrap();
+        self.utxo_map.write();
+        self.txn_merkle.write();
+        self.block_merkle.write();
         // TODO: START https://github.com/findoraorg/platform/issues/307
         // self.txn_merkle.flush().c(d!())?;
         // self.block_merkle.flush().c(d!())?;

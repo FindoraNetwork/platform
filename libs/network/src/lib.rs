@@ -9,13 +9,14 @@ use ledger::store::LedgerState;
 use ledger_api_service::{
     ActixLedgerClient, MockLedgerClient, RestfulArchiveAccess, RestfulLedgerAccess,
 };
+use parking_lot::RwLock;
 use query_api::{
     ActixQueryServerClient, MockQueryServerClient, RestfulQueryServerAccess,
 };
 use ruc::*;
 use serde::Serialize;
 use sparse_merkle_tree::Key;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use submission_api::{ActixLUClient, MockLUClient, RestfulLedgerUpdate};
 use submission_server::{TxnHandle, TxnStatus};
 use utils::{HashOf, SignatureOf, LEDGER_PORT, QUERY_PORT, SUBMIT_PORT};

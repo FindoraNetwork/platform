@@ -10,11 +10,12 @@ use actix_web::{dev, error, middleware, test, web, App, HttpResponse, HttpServer
 use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerState};
 use ledger::{inp_fail, ser_fail};
+use parking_lot::RwLock;
 use ruc::*;
 use serde::Serialize;
 use sparse_merkle_tree::Key;
 use std::marker::{Send, Sync};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use utils::{http_get_request, HashOf, NetworkRoute, SignatureOf};
 use zei::xfr::sig::XfrPublicKey;
 
@@ -56,7 +57,7 @@ where
 {
     // TODO noah figure out how to make bitmap serialization not require a mutable ref
     // https://bugtracker.findora.org/issues/165
-    let mut writer = data.write().unwrap();
+    let mut writer = data.write();
     if let Ok(txo_sid) = info.parse::<u64>() {
         if let Some(txo) = writer.get_utxo(TxoSID(txo_sid)) {
             Ok(web::Json(txo))
@@ -79,7 +80,7 @@ pub fn query_asset_issuance_num<LA>(
 where
     LA: LedgerAccess,
 {
-    let reader = data.read().unwrap();
+    let reader = data.read();
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
         if let Some(iss_num) = reader.get_issuance_num(&token_code) {
             Ok(web::Json(iss_num))
@@ -102,7 +103,7 @@ pub fn query_asset<LA>(
 where
     LA: LedgerAccess,
 {
-    let reader = data.read().unwrap();
+    let reader = data.read();
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
         if let Some(asset) = reader.get_asset_type(&token_code) {
             Ok(web::Json(asset.clone()))
@@ -125,7 +126,7 @@ pub fn query_txn<AA>(
 where
     AA: ArchiveAccess,
 {
-    let reader = data.read().unwrap();
+    let reader = data.read();
     if let Ok(txn_sid) = info.parse::<usize>() {
         if let Some(txn) = reader.get_transaction(TxnSID(txn_sid)) {
             Ok(serde_json::to_string(&txn)?)
@@ -145,7 +146,7 @@ pub fn query_public_key<LA>(data: web::Data<Arc<RwLock<LA>>>) -> web::Json<XfrPu
 where
     LA: LedgerAccess,
 {
-    let reader = data.read().unwrap();
+    let reader = data.read();
     web::Json(*reader.public_key())
 }
 
@@ -160,7 +161,7 @@ pub fn query_global_state<LA>(
 where
     LA: LedgerAccess,
 {
-    let reader = data.read().unwrap();
+    let reader = data.read();
     let (hash, seq_id) = reader.get_state_commitment();
     let sig = reader.sign_message(&(hash.clone(), seq_id));
     web::Json((hash, seq_id, sig))
@@ -173,7 +174,7 @@ pub fn query_global_state_version<AA>(
 where
     AA: ArchiveAccess,
 {
-    let reader = data.read().unwrap();
+    let reader = data.read();
     let hash = reader.get_state_commitment_at_block_height(*version);
     web::Json(hash)
 }
@@ -185,7 +186,7 @@ fn query_blocks_since<AA>(
 where
     AA: ArchiveAccess,
 {
-    let reader = data.read().unwrap();
+    let reader = data.read();
     let mut ret = Vec::new();
     for ix in block_id.into_inner()..reader.get_block_count() {
         let sid = BlockSID(ix);
@@ -202,7 +203,7 @@ pub fn query_air<AA>(
 where
     AA: ArchiveAccess,
 {
-    let reader = data.read().unwrap();
+    let reader = data.read();
     let key = addr.into_inner();
     let air_result = reader.get_air_data(&key);
     Ok(web::Json(air_result))
@@ -215,7 +216,7 @@ pub fn query_kv<LA>(
 where
     LA: LedgerAccess,
 {
-    let reader = data.read().unwrap();
+    let reader = data.read();
     let key = Key::from_base64(&*addr)
         .c(d!())
         .map_err(|e| actix_web::error::ErrorBadRequest(e.generate_log()))?;
@@ -227,7 +228,7 @@ fn query_block_log<AA>(data: web::Data<Arc<RwLock<AA>>>) -> impl actix_web::Resp
 where
     AA: ArchiveAccess,
 {
-    let reader = data.read().unwrap();
+    let reader = data.read();
     let mut res = String::new();
     res.push_str("<html><head><META HTTP-EQUIV=\"Pragma\" CONTENT=\"no-cache\"></head><body><table border=\"1\">");
     res.push_str("<tr>");
@@ -275,7 +276,7 @@ fn query_utxo_map<AA>(data: web::Data<Arc<RwLock<AA>>>) -> actix_web::Result<Str
 where
     AA: ArchiveAccess,
 {
-    let mut reader = data.write().unwrap();
+    let mut reader = data.write();
 
     let vec = reader.serialize_utxo_map();
     Ok(serde_json::to_string(&vec)?)
@@ -289,7 +290,7 @@ where
     AA: ArchiveAccess,
 {
     if let Ok(version) = info.parse::<u64>() {
-        let reader = data.read().unwrap();
+        let reader = data.read();
 
         if let Some(vec) = reader.get_utxo_checksum(version) {
             Ok(serde_json::to_string(&vec)?)
@@ -872,7 +873,7 @@ mod tests {
             .uri("/global_state_version/1")
             .to_request();
 
-        let state_reader = state_lock.read().unwrap();
+        let state_reader = state_lock.read();
         let (comm1, idx, _sig): (
             _,
             _,
@@ -937,7 +938,7 @@ mod tests {
         let req_pk = test::TestRequest::get().uri("/public_key").to_request();
         let req_comm = test::TestRequest::get().uri("/global_state").to_request();
 
-        let state_reader = state_lock.read().unwrap();
+        let state_reader = state_lock.read();
         let k: XfrPublicKey = test::read_response_json(&mut app, req_pk);
         let (comm, idx, sig): (
             HashOf<Option<StateCommitmentData>>,

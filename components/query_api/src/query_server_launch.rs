@@ -3,10 +3,11 @@
 use ledger_api_service::ActixLedgerClient;
 use log::{error, info};
 use metrics_exporter_prometheus::PrometheusHandle;
+use parking_lot::RwLock;
 use query_api::QueryApi;
 use query_server::QueryServer;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::thread;
 use std::time;
 use utils::MetricsRenderer;
@@ -74,7 +75,7 @@ fn main() {
     while running.load(Ordering::SeqCst) {
         let poll_time = time::Duration::from_millis(1000);
         thread::sleep(poll_time);
-        let mut server = wrapped_server.write().unwrap();
+        let mut server = wrapped_server.write();
         match server.poll_new_blocks() {
             Ok(_) => info!("Block successfuly polled"),
             Err(_) => error!("Error fetching blocks"),
