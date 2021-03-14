@@ -18,15 +18,17 @@ use std::sync::{Arc, RwLock};
 use submission_server::{NoTF, SubmissionServer, TxnForward, TxnHandle, TxnStatus};
 use utils::{http_get_request, http_post_request, NetworkRoute};
 
+use futures::executor;
+
 // Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]
-fn ping() -> actix_web::Result<String> {
+async fn ping() -> actix_web::Result<String> {
     Ok("success".into())
 }
 
 /// Returns the git commit hash and commit date of this build
 #[allow(clippy::unnecessary_wraps)]
-fn version() -> actix_web::Result<String> {
+async fn version() -> actix_web::Result<String> {
     Ok(format!(
         "Build: {} {}",
         option_env!("VERGEN_SHA_SHORT_EXTERN").unwrap_or(env!("VERGEN_SHA_SHORT")),
@@ -34,7 +36,7 @@ fn version() -> actix_web::Result<String> {
     ))
 }
 
-pub fn submit_transaction<RNG, LU, TF>(
+pub async fn submit_transaction<RNG, LU, TF>(
     data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>,
     body: web::Json<Transaction>,
 ) -> StdResult<web::Json<TxnHandle>, actix_web::error::Error>
@@ -59,7 +61,7 @@ where
 // txns to the ledger as soon as possible.
 //
 // When a block is successfully finalized, returns HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)>
-pub fn force_end_block<RNG, LU, TF>(
+pub async fn force_end_block<RNG, LU, TF>(
     data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>,
 ) -> StdResult<String, actix_web::error::Error>
 where
@@ -77,7 +79,7 @@ where
 
 // Queries the status of a transaction by its handle. Returns either a not committed message or a
 // serialized TxnStatus.
-pub fn txn_status<RNG, LU, TF>(
+pub async fn txn_status<RNG, LU, TF>(
     data: web::Data<Arc<RwLock<SubmissionServer<RNG, LU, TF>>>>,
     info: web::Path<String>,
 ) -> StdResult<String, actix_web::error::Error>
@@ -136,12 +138,12 @@ impl SubmissionApi {
         host: &str,
         port: &str,
     ) -> Result<SubmissionApi> {
-        let web_runtime = actix_rt::System::new("findora API");
+        let web_runtime = actix_rt::System::new();
 
         HttpServer::new(move || {
             App::new()
                 .wrap(middleware::Logger::default())
-                .wrap(Cors::new().supports_credentials())
+                .wrap(Cors::default().supports_credentials())
                 .data(web::JsonConfig::default().limit(1024 * 1024 * 50))
                 .data(submission_server.clone())
                 .route(
@@ -160,8 +162,7 @@ impl SubmissionApi {
                 )
         })
         .bind(&format!("{}:{}", host, port))
-        .c(d!())?
-        .start();
+        .c(d!())?;
 
         info!("Submission server started");
 
@@ -205,7 +206,7 @@ impl MockLUClient {
 impl RestfulLedgerUpdate for MockLUClient {
     fn submit_transaction(&mut self, txn: &Transaction) -> Result<TxnHandle> {
         let route = SubmissionRoutes::SubmitTransaction.route();
-        let mut app = test::init_service(
+        let mut app = executor::block_on(test::init_service(
             App::new()
                 .data(Arc::clone(&self.mock_submission_server))
                 .route(
@@ -216,12 +217,12 @@ impl RestfulLedgerUpdate for MockLUClient {
                         NoTF,
                     >),
                 ),
-        );
+        ));
         let req = TestRequest::post().uri(&route).set_json(&txn);
         let req = req.to_request();
-        let resp = test::call_service(&mut app, req);
+        let resp = executor::block_on(test::call_service(&mut app, req));
         let status = resp.status();
-        let body = test::read_body(resp);
+        let body = executor::block_on(test::read_body(resp));
         let result = std::str::from_utf8(&body).c(d!())?;
         if status != 200 {
             Err(eg!(inp_fail!(result)))
@@ -233,7 +234,7 @@ impl RestfulLedgerUpdate for MockLUClient {
 
     fn force_end_block(&mut self) -> Result<()> {
         let route = SubmissionRoutes::ForceEndBlock.route();
-        let mut app = test::init_service(
+        let mut app = executor::block_on(test::init_service(
             App::new()
                 .data(Arc::clone(&self.mock_submission_server))
                 .route(
@@ -244,11 +245,11 @@ impl RestfulLedgerUpdate for MockLUClient {
                         NoTF,
                     >),
                 ),
-        );
+        ));
         let req = TestRequest::post().uri(&route).to_request();
-        let resp = test::call_service(&mut app, req);
+        let resp = executor::block_on(test::call_service(&mut app, req));
         let status = resp.status();
-        let body = test::read_body(resp);
+        let body = executor::block_on(test::read_body(resp));
         let result = std::str::from_utf8(&body).c(d!())?;
         if status != 200 {
             Err(eg!(inp_fail!(result)))
@@ -258,7 +259,7 @@ impl RestfulLedgerUpdate for MockLUClient {
     }
 
     fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus> {
-        let mut app = test::init_service(
+        let mut app = executor::block_on(test::init_service(
             App::new()
                 .data(Arc::clone(&self.mock_submission_server))
                 .route(
@@ -266,13 +267,13 @@ impl RestfulLedgerUpdate for MockLUClient {
                     web::get()
                         .to(txn_status::<rand_chacha::ChaChaRng, LedgerState, NoTF>),
                 ),
-        );
+        ));
         let req = test::TestRequest::get()
             .uri(&SubmissionRoutes::TxnStatus.with_arg(&handle.0))
             .to_request();
-        let resp = test::call_service(&mut app, req);
+        let resp = executor::block_on(test::call_service(&mut app, req));
         let status = resp.status();
-        let body = test::read_body(resp);
+        let body = executor::block_on(test::read_body(resp));
         let result = std::str::from_utf8(&body).c(d!())?;
         if status != 200 {
             Err(eg!(inp_fail!(result)))
@@ -343,8 +344,7 @@ impl RestfulLedgerUpdate for ActixLUClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::dev::Service;
-    use actix_web::{test, web, App};
+    use actix_web::{dev::Service, test, web, App};
     use ledger::data_model::{AssetRules, AssetTypeCode, Operation, Transaction};
     use ledger::store::helpers::*;
     use ledger::store::{LedgerAccess, LedgerState};
@@ -382,7 +382,7 @@ mod tests {
             .operations
             .push(Operation::DefineAsset(asset_create));
 
-        let mut app = test::init_service(
+        let mut app = executor::block_on(test::init_service(
             App::new()
                 .data(submission_server)
                 .route(
@@ -401,20 +401,20 @@ mod tests {
                         NoTF,
                     >),
                 ),
-        );
+        ));
 
         let req = test::TestRequest::post()
             .uri("/submit_transaction")
             .set_json(&tx)
             .to_request();
 
-        let submit_resp = test::block_on(app.call(req)).unwrap();
+        let submit_resp = executor::block_on(app.call(req)).unwrap();
 
         assert!(submit_resp.status().is_success());
         let req = test::TestRequest::post()
             .uri("/force_end_block")
             .to_request();
-        let submit_resp = test::block_on(app.call(req)).unwrap();
+        let submit_resp = executor::block_on(app.call(req)).unwrap();
         assert!(submit_resp.status().is_success());
         assert!(
             app_copy

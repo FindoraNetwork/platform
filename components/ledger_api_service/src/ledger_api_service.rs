@@ -810,6 +810,7 @@ impl RestfulLedgerAccess for ActixLedgerClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use actix_service::Service;
     use actix_web::{web, App};
     use ledger::data_model::{Operation, Transaction, TxnEffect};
     use ledger::store::helpers::*;
@@ -1000,8 +1001,6 @@ mod tests {
         let req = test::TestRequest::get()
             .uri(&format!("/asset_token/{}", token_code1.to_base64()))
             .to_request();
-
-        use actix_service::Service;
         let resp = executor::block_on(app.call(req)).unwrap();
 
         assert!(resp.status().is_success());
