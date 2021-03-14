@@ -4,7 +4,7 @@
 use actix_cors::Cors;
 use actix_service::Service;
 use actix_web::{error, middleware, web, App, HttpServer};
-use futures::Future;
+use futures::FutureExt;
 use ledger::data_model::{
     b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, KVHash, TxOutput, TxnSID,
     TxoSID, XfrAddress,
@@ -27,7 +27,7 @@ use zei::xfr::structs::OwnerMemo;
 
 /// Returns the git commit hash and commit date of this build
 #[allow(clippy::unnecessary_wraps)]
-fn version() -> actix_web::Result<String> {
+async fn version() -> actix_web::Result<String> {
     Ok(format!(
         "Build: {} {}",
         option_env!("VERGEN_SHA_SHORT_EXTERN").unwrap_or(env!("VERGEN_SHA_SHORT")),
@@ -37,7 +37,7 @@ fn version() -> actix_web::Result<String> {
 
 // Queries the status of a transaction by its handle. Returns either a not committed message or a
 // serialized TxnStatus.
-fn get_address<T, U>(
+async fn get_address<T, U>(
     data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<u64>,
 ) -> actix_web::Result<String, actix_web::error::Error>
@@ -59,7 +59,7 @@ where
 type CustomDataResult = (Vec<u8>, KVHash);
 
 // Returns custom data at a given location
-fn get_custom_data<T, U>(
+async fn get_custom_data<T, U>(
     data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Option<CustomDataResult>>, actix_web::error::Error>
@@ -76,7 +76,7 @@ where
 
 // Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
 #[allow(clippy::unnecessary_wraps)]
-fn get_owner_memo<T, U>(
+async fn get_owner_memo<T, U>(
     data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<u64>,
 ) -> actix_web::Result<web::Json<Option<OwnerMemo>>, actix_web::error::Error>
@@ -112,7 +112,7 @@ where
 //         .map(|_| ())
 // }
 // Returns an array of the utxo sids currently spendable by a given address
-fn get_owned_utxos<T, U>(
+async fn get_owned_utxos<T, U>(
     data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxoSID>>>
@@ -135,7 +135,7 @@ where
 
 // Returns rendered metrics
 #[allow(clippy::unnecessary_wraps)]
-fn get_metrics<T, U>(
+async fn get_metrics<T, U>(
     data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     _info: web::Path<()>,
 ) -> actix_web::Result<String>
@@ -182,7 +182,7 @@ impl NetworkRoute for QueryServerRoutes {
 }
 
 // Returns the list of assets created by a public key
-fn get_created_assets<T, U>(
+async fn get_created_assets<T, U>(
     data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<DefineAsset>>>
@@ -203,7 +203,7 @@ where
 }
 
 // Returns the list of assets traced by a public key
-fn get_traced_assets<T, U>(
+async fn get_traced_assets<T, U>(
     data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<AssetTypeCode>>>
@@ -225,7 +225,7 @@ where
 
 // Returns the list of records issued by a public key
 #[allow(clippy::type_complexity)]
-fn get_issued_records<T, U>(
+async fn get_issued_records<T, U>(
     data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<(TxOutput, Option<OwnerMemo>)>>>
@@ -247,7 +247,7 @@ where
 
 // Returns the list of records issued by a token code
 #[allow(clippy::type_complexity)]
-fn get_issued_records_by_code<T, U>(
+async fn get_issued_records_by_code<T, U>(
     data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<(TxOutput, Option<OwnerMemo>)>>>
@@ -272,7 +272,7 @@ where
 }
 
 // Returns the list of transations associated with a given ledger address
-fn get_related_txns<T, U>(
+async fn get_related_txns<T, U>(
     data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxnSID>>>
@@ -294,7 +294,7 @@ where
 }
 
 // Returns the list of transfer transations associated with a given asset
-fn get_related_xfrs<T, U>(
+async fn get_related_xfrs<T, U>(
     data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxnSID>>>
@@ -332,12 +332,12 @@ impl QueryApi {
         T: 'static + RestfulArchiveAccess + Sync + Send,
         U: 'static + MetricsRenderer + Sync + Send,
     {
-        let web_runtime = actix_rt::System::new("findora API");
+        let web_runtime = actix_rt::System::new();
 
         HttpServer::new(move || {
             App::new()
                 .wrap(middleware::Logger::default())
-                .wrap(Cors::new().supports_credentials())
+                .wrap(Cors::default().supports_credentials())
                 .data(query_server.clone())
                 .wrap_fn(|req, srv| {
                     let start = Instant::now();
@@ -409,8 +409,7 @@ impl QueryApi {
                 )
         })
         .bind(&format!("{}:{}", host, port))
-        .c(d!())?
-        .start();
+        .c(d!())?;
 
         info!("Query server started");
 
