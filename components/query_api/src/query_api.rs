@@ -337,7 +337,7 @@ impl QueryApi {
         HttpServer::new(move || {
             App::new()
                 .wrap(middleware::Logger::default())
-                .wrap(Cors::default().supports_credentials())
+                .wrap(Cors::permissive().supports_credentials())
                 .data(query_server.clone())
                 .wrap_fn(|req, srv| {
                     let start = Instant::now();

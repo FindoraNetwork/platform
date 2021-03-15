@@ -524,7 +524,7 @@ impl RestfulApiService {
         HttpServer::new(move || {
             App::new()
                 .wrap(middleware::Logger::default())
-                .wrap(Cors::default().supports_credentials())
+                .wrap(Cors::permissive().supports_credentials())
                 .data(ledger_access.clone())
                 .route("/ping", web::get().to(ping))
                 .route("/version", web::get().to(version))
