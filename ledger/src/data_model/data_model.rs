@@ -1737,8 +1737,14 @@ impl Transaction {
         })
     }
 
+    // findora hash
     pub fn hash(&self, id: TxnSID) -> HashOf<(TxnSID, Transaction)> {
         HashOf::new(&(id, self.clone()))
+    }
+
+    // tendermint hash
+    pub fn hash_tm(&self) -> HashOf<Transaction> {
+        HashOf::new(&self.clone())
     }
 
     pub fn handle(&self) -> String {

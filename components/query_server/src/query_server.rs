@@ -13,6 +13,7 @@ use std::sync::Arc;
 use utils::MetricsRenderer;
 use zei::xfr::structs::OwnerMemo;
 
+pub type TxnIDHash = (TxnSID, String);
 type Issuances = Vec<Arc<(TxOutput, Option<OwnerMemo>)>>;
 
 macro_rules! fail {
@@ -39,6 +40,7 @@ where
     token_code_issuances: HashMap<AssetTypeCode, Issuances>, // issuance mapped by token code
     owner_memos: HashMap<TxoSID, OwnerMemo>,
     utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
+    txo_to_txnid: HashMap<TxoSID, TxnIDHash>, // txo(spent, unspent) to authenticated txn (sid, hash)
     custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
     rest_client: T,
     metrics_renderer: U,
@@ -61,6 +63,7 @@ where
             issuances: HashMap::new(),
             token_code_issuances: HashMap::new(),
             utxos_to_map_index: HashMap::new(),
+            txo_to_txnid: HashMap::new(),
             custom_data_store: HashMap::new(),
             rest_client,
             metrics_renderer,
@@ -142,6 +145,11 @@ where
     // Returns the owner of a given txo_sid.
     pub fn get_address_of_sid(&self, txo_sid: TxoSID) -> Option<&XfrAddress> {
         self.utxos_to_map_index.get(&txo_sid)
+    }
+
+    // Returns the authenticated txn (id, hash) of a given txo_sid.
+    pub fn get_authenticated_txnid(&self, txo_sid: TxoSID) -> Option<&TxnIDHash> {
+        self.txo_to_txnid.get(&txo_sid)
     }
 
     // Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
@@ -345,6 +353,8 @@ where
                     .or_insert_with(HashSet::new)
                     .insert(*txo_sid);
                 self.utxos_to_map_index.insert(*txo_sid, *address);
+                self.txo_to_txnid
+                    .insert(*txo_sid, (*txn_sid, curr_txn.hash_tm().hex()));
                 if let Some(owner_memo) = owner_memo {
                     self.owner_memos.insert(*txo_sid, (*owner_memo).clone());
                 }

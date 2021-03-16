@@ -261,6 +261,10 @@ where
     pub fn new(to_hash: &T) -> Self {
         Self(HashOfBytes::new(&Serialized::new(to_hash)))
     }
+
+    pub fn hex(&self) -> String {
+        hex::encode(self)
+    }
 }
 
 pub type GlobalState<T> = (

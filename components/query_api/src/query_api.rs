@@ -14,7 +14,7 @@ use ledger_api_service::RestfulArchiveAccess;
 use log::info;
 use metrics::{Key as MetricsKey, KeyData};
 use parking_lot::RwLock;
-use query_server::QueryServer;
+use query_server::{QueryServer, TxnIDHash};
 use ruc::*;
 use sparse_merkle_tree::Key;
 use std::collections::HashSet;
@@ -159,6 +159,7 @@ pub enum QueryServerRoutes {
     GetIssuedRecordsByCode,
     GetRelatedTxns,
     GetRelatedXfrs,
+    GetAuthencatedTxnIDHash,
     Version,
 }
 
@@ -176,6 +177,7 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetTracedAssets => "get_traced_assets",
             QueryServerRoutes::GetIssuedRecords => "get_issued_records",
             QueryServerRoutes::GetIssuedRecordsByCode => "get_issued_records_by_code",
+            QueryServerRoutes::GetAuthencatedTxnIDHash => "get_authencated_txnid_hash",
             QueryServerRoutes::Version => "version",
         };
         "/".to_owned() + endpoint
@@ -269,6 +271,24 @@ where
             }
         }
         Err(e) => Err(actix_web::error::ErrorBadRequest(e.generate_log())),
+    }
+}
+
+// Returns authenticated txn sid and hash
+fn get_authenticated_txnid_hash<T, U>(
+    data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
+    info: web::Path<u64>,
+) -> actix_web::Result<web::Json<TxnIDHash>>
+where
+    T: RestfulArchiveAccess + Sync + Send,
+    U: MetricsRenderer,
+{
+    let query_server = data.read();
+    match query_server.get_authenticated_txnid(TxoSID(*info)) {
+        Some(txnid) => Ok(web::Json(txnid.clone())),
+        None => Err(actix_web::error::ErrorNotFound(
+            "No authenticated transaction found. Please retry with correct sid.",
+        )),
     }
 }
 
@@ -394,6 +414,11 @@ impl QueryApi {
                     &QueryServerRoutes::GetIssuedRecordsByCode
                         .with_arg_template("asset_token"),
                     web::get().to(get_issued_records_by_code::<T, U>),
+                )
+                .route(
+                    &QueryServerRoutes::GetAuthencatedTxnIDHash
+                        .with_arg_template("txo_sid"),
+                    web::get().to(get_authenticated_txnid_hash::<T, U>),
                 )
                 // .route(
                 //     &QueryServerRoutes::StoreCustomData.route(),
