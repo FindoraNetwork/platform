@@ -9,6 +9,7 @@ path = "src/submission_server.rs"
 
 [dependencies]
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+parking_lot = "0.11.1"
 hex = "0.3.2"
 cryptohash = { path = "../../libs/cryptohash" }
 ledger = { path = "../../ledger" }

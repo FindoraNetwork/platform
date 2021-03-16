@@ -10,6 +10,8 @@ path = "src/ledger_standalone.rs"
 
 [dependencies]
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+parking_lot = "0.11.1"
+
 cryptohash = { path = "../../libs/cryptohash" }
 flexi_logger = "0.15.2"
 ledger_api_service = { path = "../ledger_api_service" }

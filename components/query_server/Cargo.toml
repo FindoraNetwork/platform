@@ -9,6 +9,8 @@ path = "src/query_server.rs"
 
 [dependencies]
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+parking_lot = "0.11.1"
+
 ledger = { path = "../../ledger" }
 ledger_standalone = {path = "../ledger_standalone"}
 log = "0.4.8"

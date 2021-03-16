@@ -7,6 +7,7 @@ use ledger::store::*;
 use ledger::sub_fail;
 use ledger_api_service::RestfulApiService;
 use log::info;
+use parking_lot::RwLock;
 use protobuf::RepeatedField;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -17,12 +18,11 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::{
     atomic::{AtomicI64, Ordering},
-    Arc, RwLock,
+    Arc,
 };
 use std::thread;
 use submission_api::SubmissionApi;
 use submission_server::{convert_tx, SubmissionServer, TxnForward};
-use utils::HashOf;
 use zei::xfr::structs::{XfrAmount, XfrAssetType};
 
 mod config;
@@ -93,21 +93,21 @@ impl ABCISubmissionServer {
 impl abci::Application for ABCISubmissionServer {
     fn info(&mut self, _req: &RequestInfo) -> ResponseInfo {
         let mut resp = ResponseInfo::new();
-        info!("locking for read");
-        if let Ok(la) = self.la.read() {
-            info!("locking state for read");
-            if let Ok(state) = la.get_committed_state().read() {
-                let commitment = state.get_state_commitment();
-                if commitment.1 > 0 {
-                    let tendermint_height = commitment.1 + state.get_pulse_count();
-                    resp.set_last_block_height(tendermint_height as i64);
-                    resp.set_last_block_app_hash(commitment.0.as_ref().to_vec());
-                }
-                info!("app hash: {:?}", resp.get_last_block_app_hash());
-                info!("unlocking state for read");
+        info!("locking state for read");
+        {
+            let la = self.la.read();
+            let state = la.get_committed_state().read();
+            let commitment = state.get_state_commitment();
+            if commitment.1 > 0 {
+                let tendermint_height = commitment.1 + state.get_pulse_count();
+                resp.set_last_block_height(tendermint_height as i64);
+                resp.set_last_block_app_hash(commitment.0.as_ref().to_vec());
             }
-            info!("unlocking for read");
+            info!("app hash: {:?}", resp.get_last_block_app_hash());
+            info!("unlocking state for read");
         }
+        info!("unlocking for read");
+
         resp
     }
 
@@ -155,17 +155,15 @@ impl abci::Application for ABCISubmissionServer {
                     TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed),
                 )
             {
-                info!("locking for write");
-                if let Ok(mut la) = self.la.write() {
-                    // set attr(tags) if any
-                    let attr = gen_tendermint_attr(&tx);
-                    if 0 < attr.len() {
-                        resp.set_events(attr);
-                    }
+                // set attr(tags) if any
+                let attr = gen_tendermint_attr(&tx);
+                if 0 < attr.len() {
+                    resp.set_events(attr);
+                }
 
-                    if la.cache_transaction(tx).is_ok() {
-                        return resp;
-                    }
+                info!("locking for write");
+                if self.la.write().cache_transaction(tx).is_ok() {
+                    return resp;
                 }
             }
         }
@@ -180,7 +178,8 @@ impl abci::Application for ABCISubmissionServer {
             .swap(req.header.as_ref().unwrap().height, Ordering::Relaxed);
 
         info!("locking for write");
-        if let Ok(mut la) = self.la.write() {
+        {
+            let mut la = self.la.write();
             if !la.all_commited() {
                 debug_assert!(la.block_pulse_count() > 0);
                 info!(
@@ -191,14 +190,16 @@ impl abci::Application for ABCISubmissionServer {
                 info!("begin_block: new block");
                 la.begin_block();
             }
-            info!("unlocking for write");
         }
+        info!("unlocking for write");
+
         ResponseBeginBlock::new()
     }
 
     fn end_block(&mut self, _req: &RequestEndBlock) -> ResponseEndBlock {
         // TODO: this should propagate errors instead of panicking
-        if let Ok(mut la) = self.la.write() {
+        {
+            let mut la = self.la.write();
             if la.block_txn_count() == 0 {
                 info!("end_block: pulsing block");
                 la.pulse_block();
@@ -213,20 +214,13 @@ impl abci::Application for ABCISubmissionServer {
     }
 
     fn commit(&mut self, _req: &RequestCommit) -> ResponseCommit {
-        // Tendermint does not accept an error return type here.
-        let error_commitment = (HashOf::new(&None), 0);
         let mut r = ResponseCommit::new();
         info!("locking for read");
-        if let Ok(la) = self.la.read() {
+        {
+            let la = self.la.read();
             // la.begin_commit();
             info!("locking state for read");
-            let commitment = if let Ok(state) = la.get_committed_state().read() {
-                let ret = state.get_state_commitment();
-                info!("unlocking state for read");
-                ret
-            } else {
-                error_commitment
-            };
+            let commitment = la.get_committed_state().read().get_state_commitment();
             // la.end_commit();
             info!("commit: hash is {:?}", commitment.0.as_ref());
             r.set_data(commitment.0.as_ref().to_vec());
@@ -269,28 +263,26 @@ fn main() {
         format!("{}:{}", config.tendermint_host, config.tendermint_port),
     ));
     let submission_server = Arc::clone(&app.la);
-    let cloned_lock = { submission_server.read().unwrap().borrowable_ledger_state() };
+    let cloned_lock = { submission_server.read().borrowable_ledger_state() };
 
     let submission_host = config.submission_host.clone();
     let submission_port = config.submission_port.clone();
     thread::spawn(move || {
-        let submission_api = pnk!(SubmissionApi::create(
+        pnk!(SubmissionApi::create(
             submission_server,
             &submission_host,
             &submission_port
         ));
-        pnk!(submission_api.run())
     });
 
     let ledger_host = config.ledger_host.clone();
     let ledger_port = config.ledger_port.clone();
     thread::spawn(move || {
-        let ledger_service = pnk!(RestfulApiService::create(
+        pnk!(RestfulApiService::create(
             cloned_lock,
             &ledger_host,
             &ledger_port
         ));
-        pnk!(ledger_service.run());
     });
 
     // TODO: pass the address and port in on the command line

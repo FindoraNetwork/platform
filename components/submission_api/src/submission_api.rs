@@ -8,13 +8,14 @@ use ledger::{des_fail, inp_fail};
 
 use ledger::store::{LedgerState, LedgerUpdate};
 use log::info;
+use parking_lot::RwLock;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use rand_core::{CryptoRng, RngCore};
 use ruc::*;
 use std::marker::{Send, Sync};
 use std::result::Result as StdResult;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use submission_server::{NoTF, SubmissionServer, TxnForward, TxnHandle, TxnStatus};
 use utils::{http_get_request, http_post_request, NetworkRoute};
 
@@ -45,7 +46,7 @@ where
     LU: LedgerUpdate<RNG> + Sync + Send,
     TF: TxnForward + Sync + Send,
 {
-    let mut submission_server = data.write().unwrap();
+    let mut submission_server = data.write();
     let tx = body.into_inner();
 
     submission_server
@@ -69,7 +70,7 @@ where
     LU: LedgerUpdate<RNG> + Sync + Send,
     TF: TxnForward + Sync + Send,
 {
-    let mut submission_server = data.write().unwrap();
+    let mut submission_server = data.write();
     if submission_server.end_block().is_ok() {
         Ok("Block successfully ended. All previously valid pending transactions are now committed".to_string())
     } else {
@@ -88,7 +89,7 @@ where
     LU: LedgerUpdate<RNG> + Sync + Send,
     TF: TxnForward + Sync + Send,
 {
-    let submission_server = data.write().unwrap();
+    let submission_server = data.write();
     let txn_status = submission_server.get_txn_status(&TxnHandle(info.clone()));
     let res;
     if let Some(status) = txn_status {
@@ -419,10 +420,8 @@ mod tests {
         assert!(
             app_copy
                 .read()
-                .unwrap()
                 .borrowable_ledger_state()
                 .read()
-                .unwrap()
                 .get_asset_type(&token_code1)
                 .is_some()
         );

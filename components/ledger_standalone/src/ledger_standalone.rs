@@ -2,10 +2,11 @@
 
 use ledger::store::LedgerState;
 use ledger_api_service::RestfulApiService;
+use parking_lot::RwLock;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::path::Path;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::thread;
 use submission_api::SubmissionApi;
 use submission_server::{NoTF, SubmissionServer};

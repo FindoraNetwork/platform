@@ -10,6 +10,8 @@ path = "src/ledger_mirror.rs"
 
 [dependencies]
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+parking_lot = "0.11.1"
+
 arrayref = "0.3.5"
 ledger = { path = "../../ledger" }
 flexi_logger = "0.15.2"

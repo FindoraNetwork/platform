@@ -13,12 +13,13 @@ use ledger::{inp_fail, ser_fail};
 use ledger_api_service::RestfulArchiveAccess;
 use log::info;
 use metrics::{Key as MetricsKey, KeyData};
+use parking_lot::RwLock;
 use query_server::QueryServer;
 use ruc::*;
 use sparse_merkle_tree::Key;
 use std::collections::HashSet;
 use std::marker::{Send, Sync};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::Instant;
 use utils::{http_get_request, MetricsRenderer, NetworkRoute};
 use zei::serialization::ZeiFromToBytes;
@@ -45,7 +46,7 @@ where
     T: RestfulArchiveAccess,
     U: MetricsRenderer,
 {
-    let query_server = data.read().unwrap();
+    let query_server = data.read();
     let address_res = query_server.get_address_of_sid(TxoSID(*info));
     let res;
     if let Some(address) = address_res {
@@ -67,7 +68,7 @@ where
     T: RestfulArchiveAccess,
     U: MetricsRenderer,
 {
-    let query_server = data.read().unwrap();
+    let query_server = data.read();
     let key = Key::from_base64(&*info)
         .c(d!())
         .map_err(|e| actix_web::error::ErrorBadRequest(e.generate_log()))?;
@@ -84,7 +85,7 @@ where
     T: RestfulArchiveAccess,
     U: MetricsRenderer,
 {
-    let query_server = data.read().unwrap();
+    let query_server = data.read();
     Ok(web::Json(
         query_server.get_owner_memo(TxoSID(*info)).cloned(),
     ))
@@ -104,7 +105,7 @@ where
 //     let key = Key::from_base64(&key)
 //         .c(d!())
 //         .map_err(|e| actix_web::error::ErrorBadRequest(e.generate_log()))?;
-//     let mut query_server = data.write().unwrap();
+//     let mut query_server = data.write();
 //     query_server
 //         .add_to_data_store(&key, &custom_data, blind.as_ref())
 //         .c(d!())
@@ -128,7 +129,7 @@ where
     )
     .c(d!())
     .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
-    let query_server = data.read().unwrap();
+    let query_server = data.read();
     let sids = query_server.get_owned_utxo_sids(&XfrAddress { key });
     Ok(web::Json(sids.cloned().unwrap_or_default()))
 }
@@ -143,7 +144,7 @@ where
     T: RestfulArchiveAccess + Sync + Send,
     U: MetricsRenderer,
 {
-    let query_server = data.read().unwrap();
+    let query_server = data.read();
     Ok(query_server.render())
 }
 
@@ -197,7 +198,7 @@ where
             .map_err(|e| error::ErrorBadRequest(e.generate_log()))?,
     )
     .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
-    let query_server = data.read().unwrap();
+    let query_server = data.read();
     let assets = query_server.get_created_assets(&IssuerPublicKey { key });
     Ok(web::Json(assets.cloned().unwrap_or_default()))
 }
@@ -218,7 +219,7 @@ where
             .map_err(|e| error::ErrorBadRequest(e.generate_log()))?,
     )
     .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
-    let query_server = data.read().unwrap();
+    let query_server = data.read();
     let assets = query_server.get_traced_assets(&IssuerPublicKey { key });
     Ok(web::Json(assets.cloned().unwrap_or_default()))
 }
@@ -240,7 +241,7 @@ where
             .map_err(|e| error::ErrorBadRequest(e.generate_log()))?,
     )
     .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
-    let query_server = data.read().unwrap();
+    let query_server = data.read();
     let records = query_server.get_issued_records(&IssuerPublicKey { key });
     Ok(web::Json(records.unwrap_or_default()))
 }
@@ -255,7 +256,7 @@ where
     T: RestfulArchiveAccess + Sync + Send,
     U: MetricsRenderer,
 {
-    let query_server = data.read().unwrap();
+    let query_server = data.read();
 
     match AssetTypeCode::new_from_base64(&*info).c(d!()) {
         Ok(token_code) => {
@@ -288,7 +289,7 @@ where
     )
     .c(d!())
     .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
-    let query_server = data.read().unwrap();
+    let query_server = data.read();
     let records = query_server.get_related_transactions(&XfrAddress { key });
     Ok(web::Json(records.cloned().unwrap_or_default()))
 }
@@ -302,7 +303,7 @@ where
     T: RestfulArchiveAccess + Sync + Send,
     U: MetricsRenderer,
 {
-    let query_server = data.read().unwrap();
+    let query_server = data.read();
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
         if let Some(records) = query_server.get_related_transfers(&token_code) {
             Ok(web::Json(records.clone()))

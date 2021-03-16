@@ -459,10 +459,11 @@ mod tests {
     };
     use ledger::store::helpers::{apply_transaction, create_definition_transaction};
     use ledger_api_service::MockLedgerClient;
+    use parking_lot::RwLock;
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
     use std::str;
-    use std::sync::{Arc, RwLock};
+    use std::sync::Arc;
     use txn_builder::{
         BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder,
     };

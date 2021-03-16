@@ -19,6 +19,7 @@ actix-cors = "0.5.4"
 actix-rt = "2.1.0"
 actix-service = "1.0.6"
 actix-web = "3.3.2"
+parking_lot = "0.11.1"
 ledger = { path = "../../ledger" }
 futures = "0.3"
 ledger_api_service = { path = "../ledger_api_service"}
