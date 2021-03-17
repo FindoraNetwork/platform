@@ -1,10 +1,7 @@
 #![allow(clippy::field_reassign_with_default)]
 #![deny(warnings)]
 
-use ledger::data_model::{
-    AssetType, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedUtxo, BlockSID,
-    FinalizedTransaction, StateCommitmentData, Transaction, TxoSID,
-};
+use ledger::data_model::{AssetType, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedUtxo, BlockSID, FinalizedTransaction, StateCommitmentData, Transaction, TxoSID, TxoSIDList};
 use ledger::store::LedgerState;
 use ledger_api_service::{
     ActixLedgerClient, MockLedgerClient, RestfulArchiveAccess, RestfulLedgerAccess,
@@ -159,6 +156,9 @@ impl<
 {
     fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo> {
         self.ledger_client.get_utxo(addr).c(d!())
+    }
+    fn get_utxos(&self, addr: TxoSIDList) -> Result<Vec<Option<AuthenticatedUtxo>>> {
+        self.ledger_client.get_utxos(addr).c(d!())
     }
 
     fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64> {
