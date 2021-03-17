@@ -1701,11 +1701,12 @@ mod tests {
             .unwrap()
             .1;
 
-
         let mut count: u16 = 0;
         let utxos = ledger.get_utxos(TxoSIDList(txo_sid));
         for u in utxos.iter() {
-            if let Some(_x) = u { count += 1 }
+            if let Some(_x) = u {
+                count += 1
+            }
         }
         assert_eq!(count, 1);
     }
