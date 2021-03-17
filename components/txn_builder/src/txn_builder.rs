@@ -1703,12 +1703,12 @@ mod tests {
 
         let utxos = ledger.get_utxos(TxoSIDList(txo_sid.clone()));
         let mut count: u16 = 0;
-        for u in utxos.iter(){
+        for u in utxos.iter() {
             match u {
                 Some(_x) => count = count + 1,
                 _ => (),
             }
         }
-        assert_eq!(count,1);
+        assert_eq!(count, 1);
     }
 }

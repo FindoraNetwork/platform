@@ -2136,7 +2136,7 @@ impl LedgerAccess for LedgerState {
         }
     }
     fn get_utxos(&mut self, sid_list: TxoSIDList) -> Vec<Option<AuthenticatedUtxo>> {
-        let mut utxos:Vec<Option<AuthenticatedUtxo>> = Vec::new();
+        let mut utxos: Vec<Option<AuthenticatedUtxo>> = Vec::new();
         for sid in sid_list.0.iter() {
             let utxo = self.status.get_utxo(*sid);
             if let Some(utxo) = utxo.cloned() {
@@ -2154,7 +2154,9 @@ impl LedgerAccess for LedgerState {
                     utxo_location,
                 };
                 utxos.push(Some(authUtxo))
-            }else { utxos.push(None)}  // Should we just change this to return  Vec<AuthenticatedUtxo> ? and not return None for unknown utxos.
+            } else {
+                utxos.push(None)
+            } // Should we just change this to return  Vec<AuthenticatedUtxo> ? and not return None for unknown utxos.
         }
         utxos
     }

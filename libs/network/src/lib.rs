@@ -1,7 +1,10 @@
 #![allow(clippy::field_reassign_with_default)]
 #![deny(warnings)]
 
-use ledger::data_model::{AssetType, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedUtxo, BlockSID, FinalizedTransaction, StateCommitmentData, Transaction, TxoSID, TxoSIDList};
+use ledger::data_model::{
+    AssetType, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedUtxo, BlockSID,
+    FinalizedTransaction, StateCommitmentData, Transaction, TxoSID, TxoSIDList,
+};
 use ledger::store::LedgerState;
 use ledger_api_service::{
     ActixLedgerClient, MockLedgerClient, RestfulArchiveAccess, RestfulLedgerAccess,

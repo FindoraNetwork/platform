@@ -38,12 +38,11 @@ use zei::xfr::structs::{
 };
 
 use super::effects::*;
+use itertools::Itertools;
 use ruc::*;
+use std::fmt;
 use std::ops::Deref;
 use std::str::FromStr;
-use itertools::Itertools;
-use std::fmt;
-
 
 pub const RANDOM_CODE_LENGTH: usize = 16;
 pub const TRANSACTION_WINDOW_WIDTH: usize = 128;
@@ -558,15 +557,15 @@ pub struct TxoSID(pub u64);
 pub struct TxoSIDList(pub Vec<TxoSID>);
 
 impl FromStr for TxoSIDList {
-    type Err =  Box<(dyn ruc::RucError + 'static)>;
+    type Err = Box<(dyn ruc::RucError + 'static)>;
 
     fn from_str(s: &str) -> Result<Self> {
         let s_string = s.to_string();
         let list_of_txostr = s_string.split(",").collect_vec();
-        let mut txolist : Vec<TxoSID>  = Vec::new();
+        let mut txolist: Vec<TxoSID> = Vec::new();
 
-        for (idx,str_txo) in list_of_txostr.iter().enumerate(){
-            if let Ok(txu) = str_txo.parse::<u64>(){
+        for (idx, str_txo) in list_of_txostr.iter().enumerate() {
+            if let Ok(txu) = str_txo.parse::<u64>() {
                 txolist[idx] = TxoSID(txu);
             }
         }
@@ -587,7 +586,6 @@ impl fmt::Display for TxoSIDList {
         Ok(())
     }
 }
-
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct OutputPosition(pub usize);

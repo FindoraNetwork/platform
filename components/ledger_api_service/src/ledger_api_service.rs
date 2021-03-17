@@ -77,20 +77,18 @@ pub fn query_utxos<LA>(
     data: web::Data<Arc<RwLock<LA>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<Option<AuthenticatedUtxo>>>>
-    where
-        LA: LedgerAccess,
+where
+    LA: LedgerAccess,
 {
     let mut writer = data.write();
-    if let Ok(txo_sid_list) = info.parse::<TxoSIDList>(){
-        return Ok(web::Json(writer.get_utxos(txo_sid_list)))
-    }else {
+    if let Ok(txo_sid_list) = info.parse::<TxoSIDList>() {
+        return Ok(web::Json(writer.get_utxos(txo_sid_list)));
+    } else {
         Err(actix_web::error::ErrorBadRequest(
             "Invalid txo sid encoding for list of sid",
         ))
     }
 }
-
-
 
 pub fn query_asset_issuance_num<LA>(
     data: web::Data<Arc<RwLock<LA>>>,
@@ -774,7 +772,6 @@ impl RestfulLedgerAccess for ActixLedgerClient {
         let text = http_get_request(&query).c(d!(inp_fail!()))?;
         serde_json::from_str::<Vec<Option<AuthenticatedUtxo>>>(&text).c(d!(ser_fail!()))
     }
-
 
     fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64> {
         let query = format!(
