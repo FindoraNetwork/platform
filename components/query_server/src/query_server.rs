@@ -353,8 +353,8 @@ where
                     .or_insert_with(HashSet::new)
                     .insert(*txo_sid);
                 self.utxos_to_map_index.insert(*txo_sid, *address);
-                self.txo_to_txnid
-                    .insert(*txo_sid, (*txn_sid, curr_txn.hash_tm().hex()));
+                let hash = curr_txn.hash_tm().hex().to_uppercase();
+                self.txo_to_txnid.insert(*txo_sid, (*txn_sid, hash));
                 if let Some(owner_memo) = owner_memo {
                     self.owner_memos.insert(*txo_sid, (*owner_memo).clone());
                 }
