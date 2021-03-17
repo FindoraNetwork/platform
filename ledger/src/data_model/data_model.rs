@@ -23,9 +23,9 @@ use sparse_merkle_tree::{check_merkle_proof, Key, MerkleProof};
 use std::boxed::Box;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
-use std::result::Result as StdResult;
-// use std::convert::TryInto;
+use std::env;
 use std::hash::{Hash, Hasher};
+use std::result::Result as StdResult;
 use unicode_normalization::UnicodeNormalization;
 use utils::{HashOf, ProofOf, Serialized, SignatureOf};
 use zei::serialization::ZeiFromToBytes;
@@ -1683,6 +1683,16 @@ impl Transaction {
     /// > in the same transaction with its defination and issuing,
     /// > or the transaction can NOT pass the check of `apply_transaction(...)`
     pub fn check_fee(&self) -> bool {
+        lazy_static! {
+            static ref MAX_OPS_PER_TX: usize = env::var("MAX_OPS_PER_TX")
+                .map(|n| pnk!(n.parse::<usize>()))
+                .unwrap_or(100);
+        }
+
+        if self.body.operations.len() > *MAX_OPS_PER_TX {
+            return false;
+        }
+
         self.body.operations.iter().any(|o| {
             if let Operation::TransferAsset(ref x) = o {
                 return x.body.outputs.iter().any(|o| {
