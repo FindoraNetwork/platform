@@ -561,7 +561,7 @@ impl FromStr for TxoSIDList {
 
     fn from_str(s: &str) -> Result<Self> {
         let s_string = s.to_string();
-        let list_of_txostr = s_string.split(",").collect_vec();
+        let list_of_txostr = s_string.split(',').collect_vec();
         let mut txolist: Vec<TxoSID> = Vec::new();
 
         for (idx, str_txo) in list_of_txostr.iter().enumerate() {
@@ -579,7 +579,7 @@ impl fmt::Display for TxoSID {
 }
 impl fmt::Display for TxoSIDList {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Values:\n")?;
+        write!(f, "Values:")?;
         for v in &self.0 {
             write!(f, "\t{}", v.0)?;
         }

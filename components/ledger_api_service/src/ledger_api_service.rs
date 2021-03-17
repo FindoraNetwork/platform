@@ -82,7 +82,7 @@ where
 {
     let mut writer = data.write();
     if let Ok(txo_sid_list) = info.parse::<TxoSIDList>() {
-        return Ok(web::Json(writer.get_utxos(txo_sid_list)));
+        Ok(web::Json(writer.get_utxos(txo_sid_list)))
     } else {
         Err(actix_web::error::ErrorBadRequest(
             "Invalid txo sid encoding for list of sid",

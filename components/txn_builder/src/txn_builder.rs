@@ -1691,7 +1691,7 @@ mod tests {
         let tx = fra_gen_initial_tx(&fra_owner_kp);
         assert!(tx.check_fee());
 
-        let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
+        let effect = TxnEffect::compute_effect(tx).unwrap();
         let mut block = ledger.start_block().unwrap();
         let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
         let txo_sid = ledger
@@ -1701,13 +1701,11 @@ mod tests {
             .unwrap()
             .1;
 
-        let utxos = ledger.get_utxos(TxoSIDList(txo_sid.clone()));
+
         let mut count: u16 = 0;
+        let utxos = ledger.get_utxos(TxoSIDList(txo_sid));
         for u in utxos.iter() {
-            match u {
-                Some(_x) => count = count + 1,
-                _ => (),
-            }
+            if let Some(_x) = u { count += 1 }
         }
         assert_eq!(count, 1);
     }
