@@ -1689,6 +1689,11 @@ impl Transaction {
                 .unwrap_or(100);
         }
 
+        // This method can not completely solve the DOS risk,
+        // we should further limit the number of txo[s] in every operation.
+        //
+        // But it seems enough for v1.0 when we combined it with limiting
+        // the payload size of submission-server's http-requests.
         if self.body.operations.len() > *MAX_OPS_PER_TX {
             return false;
         }
