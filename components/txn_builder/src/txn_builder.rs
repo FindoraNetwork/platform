@@ -1684,4 +1684,31 @@ mod tests {
         assert!(ledger.apply_transaction(&mut block, effect).is_err());
         ledger.abort_block(block);
     }
+    #[test]
+    fn test_get_utxos() {
+        let mut ledger = LedgerState::test_ledger();
+        let fra_owner_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+        let tx = fra_gen_initial_tx(&fra_owner_kp);
+        assert!(tx.check_fee());
+
+        let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
+        let mut block = ledger.start_block().unwrap();
+        let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
+        let txo_sid = ledger
+            .finish_block(block)
+            .unwrap()
+            .remove(&tmp_sid)
+            .unwrap()
+            .1;
+
+        let utxos = ledger.get_utxos(TxoSIDList(txo_sid.clone()));
+        let mut count: u16 = 0;
+        for u in utxos.iter(){
+            match u {
+                Some(_x) => count = count + 1,
+                _ => (),
+            }
+        }
+        assert_eq!(count,1);
+    }
 }
