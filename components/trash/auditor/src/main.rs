@@ -98,7 +98,7 @@ struct ConsensusState {
 }
 
 fn main() -> Result<()> {
-    flexi_logger::Logger::with_env().start().c(d!())?;
+    env_logger::init();
 
     let args = parse_args();
     // Creating an identity Keypair for the local node, obtaining the local PeerId from the PublicKey.

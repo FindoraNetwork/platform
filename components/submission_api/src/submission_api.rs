@@ -139,7 +139,7 @@ impl SubmissionApi {
         host: &str,
         port: &str,
     ) -> Result<SubmissionApi> {
-        let web_runtime = actix_rt::System::new();
+        let web_runtime = actix_rt::System::new("findora API");
 
         HttpServer::new(move || {
             App::new()
@@ -163,7 +163,8 @@ impl SubmissionApi {
                 )
         })
         .bind(&format!("{}:{}", host, port))
-        .c(d!())?;
+        .c(d!())?
+        .run();
 
         info!("Submission server started");
 

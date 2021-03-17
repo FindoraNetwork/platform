@@ -22,7 +22,7 @@ fn main() {
 
     let base_dir = std::env::var_os("LEDGER_DIR").filter(|x| !x.is_empty());
     let base_dir = base_dir.as_ref().map(Path::new);
-    flexi_logger::Logger::with_env().start().c(d!())?;
+    env_logger::init();
     let ledger_state = match base_dir {
         None => LedgerState::test_ledger(),
         Some(base_dir) => LedgerState::load_or_init(base_dir).c(d!())?,

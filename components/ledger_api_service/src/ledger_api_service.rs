@@ -20,6 +20,7 @@ use utils::{http_get_request, HashOf, NetworkRoute, SignatureOf};
 use zei::xfr::sig::XfrPublicKey;
 
 use futures::executor;
+use log::info;
 
 pub struct RestfulApiService {
     web_runtime: actix_rt::SystemRunner,
@@ -520,7 +521,7 @@ impl RestfulApiService {
         host: &str,
         port: &str,
     ) -> Result<RestfulApiService> {
-        let web_runtime = actix_rt::System::new();
+        let web_runtime = actix_rt::System::new("findora API");
 
         HttpServer::new(move || {
             App::new()
@@ -533,7 +534,10 @@ impl RestfulApiService {
                 .set_route::<LA>(ServiceInterface::ArchiveAccess)
         })
         .bind(&format!("{}:{}", host, port))
-        .c(d!())?;
+        .c(d!())?
+        .run();
+
+        info!("RestfulApi server started");
 
         Ok(RestfulApiService { web_runtime })
     }

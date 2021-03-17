@@ -10,7 +10,7 @@ path = "src/account_simulator.rs"
 
 [dependencies]
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
-actix-rt = "2.1.0"
+actix-rt = "1.1.0"
 actix-service = "1.0.6"
 actix-web = "3.3.2"
 parking_lot = "0.11.1"

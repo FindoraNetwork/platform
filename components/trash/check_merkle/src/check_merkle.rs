@@ -35,7 +35,7 @@ use std::process::exit;
 
 fn main() {
     let (path, do_repairs) = parse_arguments();
-    flexi_logger::Logger::with_env().start().unwrap();
+    env_logger::init();
     info!("Opening the Merkle tree at \"{}\".", path);
 
     let mut tree = match AppendOnlyMerkle::open(&path) {

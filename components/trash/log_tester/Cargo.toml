@@ -11,7 +11,7 @@ path = "src/log_tester.rs"
 [dependencies]
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 cryptohash = { path = "../../../libs/cryptohash" }
-flexi_logger = "0.15.2"
+env_logger = "0.8.3"
 log = "0.4.8"
 ledger_api_service = { path = "../../ledger_api_service" }
 ledger = { path = "../../../ledger" }

@@ -333,7 +333,7 @@ impl QueryApi {
         T: 'static + RestfulArchiveAccess + Sync + Send,
         U: 'static + MetricsRenderer + Sync + Send,
     {
-        let web_runtime = actix_rt::System::new();
+        let web_runtime = actix_rt::System::new("findora API");
 
         HttpServer::new(move || {
             App::new()
