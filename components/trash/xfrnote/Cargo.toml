@@ -11,7 +11,7 @@ path = "src/bin/xfrnote.rs"
 [dependencies]
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 async-std = "1.9"
-flexi_logger = "0.15.2"
+env_logger = "0.8.3"
 futures = "0.3"
 itertools = "0.8.0"
 json = "0.12.4"

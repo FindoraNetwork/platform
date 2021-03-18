@@ -10,6 +10,7 @@ use actix_web::{dev, error, middleware, test, web, App, HttpResponse, HttpServer
 use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerState};
 use ledger::{inp_fail, ser_fail};
+use log::warn;
 use parking_lot::RwLock;
 use ruc::*;
 use serde::Serialize;
@@ -19,19 +20,22 @@ use std::sync::Arc;
 use utils::{http_get_request, HashOf, NetworkRoute, SignatureOf};
 use zei::xfr::sig::XfrPublicKey;
 
+use futures::executor;
+use log::info;
+
 pub struct RestfulApiService {
     web_runtime: actix_rt::SystemRunner,
 }
 
 // Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]
-fn ping() -> actix_web::Result<String> {
+async fn ping() -> actix_web::Result<String> {
     Ok("success".into())
 }
 
 /// Returns the git commit hash and commit date of this build
 #[allow(clippy::unnecessary_wraps)]
-fn version() -> actix_web::Result<String> {
+async fn version() -> actix_web::Result<String> {
     Ok(format!(
         "Build: {} {}",
         option_env!("VERGEN_SHA_SHORT_EXTERN").unwrap_or(env!("VERGEN_SHA_SHORT")),
@@ -48,7 +52,7 @@ fn version() -> actix_web::Result<String> {
 //   query_contract
 // If we add more functions with the similar pattern, it will be good to merge them
 
-pub fn query_utxo<LA>(
+pub async fn query_utxo<LA>(
     data: web::Data<Arc<RwLock<LA>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<AuthenticatedUtxo>>
@@ -73,24 +77,7 @@ where
     }
 }
 
-pub fn query_utxos<LA>(
-    data: web::Data<Arc<RwLock<LA>>>,
-    info: web::Path<String>,
-) -> actix_web::Result<web::Json<Vec<Option<AuthenticatedUtxo>>>>
-where
-    LA: LedgerAccess,
-{
-    let mut writer = data.write();
-    if let Ok(txo_sid_list) = info.parse::<TxoSIDList>() {
-        Ok(web::Json(writer.get_utxos(txo_sid_list)))
-    } else {
-        Err(actix_web::error::ErrorBadRequest(
-            "Invalid txo sid encoding for list of sid",
-        ))
-    }
-}
-
-pub fn query_asset_issuance_num<LA>(
+pub async fn query_asset_issuance_num<LA>(
     data: web::Data<Arc<RwLock<LA>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<u64>>
@@ -113,7 +100,24 @@ where
     }
 }
 
-pub fn query_asset<LA>(
+pub async fn query_utxos<LA>(
+    data: web::Data<Arc<RwLock<LA>>>,
+    info: web::Path<String>,
+) -> actix_web::Result<web::Json<Vec<Option<AuthenticatedUtxo>>>>
+    where
+        LA: LedgerAccess,
+{
+    let mut writer = data.write();
+    if let Ok(txo_sid_list) = info.parse::<TxoSIDList>() {
+        Ok(web::Json(writer.get_utxos(txo_sid_list)))
+    } else {
+        Err(actix_web::error::ErrorBadRequest(
+            "Invalid txo sid encoding for list of sid",
+        ))
+    }
+}
+
+pub async fn query_asset<LA>(
     data: web::Data<Arc<RwLock<LA>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<AssetType>>
@@ -136,7 +140,7 @@ where
     }
 }
 
-pub fn query_txn<AA>(
+pub async fn query_txn<AA>(
     data: web::Data<Arc<RwLock<AA>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<String>
@@ -159,7 +163,9 @@ where
     }
 }
 
-pub fn query_public_key<LA>(data: web::Data<Arc<RwLock<LA>>>) -> web::Json<XfrPublicKey>
+pub async fn query_public_key<LA>(
+    data: web::Data<Arc<RwLock<LA>>>,
+) -> web::Json<XfrPublicKey>
 where
     LA: LedgerAccess,
 {
@@ -168,7 +174,7 @@ where
 }
 
 #[allow(clippy::type_complexity)]
-pub fn query_global_state<LA>(
+pub async fn query_global_state<LA>(
     data: web::Data<Arc<RwLock<LA>>>,
 ) -> web::Json<(
     HashOf<Option<StateCommitmentData>>,
@@ -184,7 +190,7 @@ where
     web::Json((hash, seq_id, sig))
 }
 
-pub fn query_global_state_version<AA>(
+pub async fn query_global_state_version<AA>(
     data: web::Data<Arc<RwLock<AA>>>,
     version: web::Path<u64>,
 ) -> web::Json<Option<HashOf<Option<StateCommitmentData>>>>
@@ -196,7 +202,7 @@ where
     web::Json(hash)
 }
 
-fn query_blocks_since<AA>(
+async fn query_blocks_since<AA>(
     data: web::Data<Arc<RwLock<AA>>>,
     block_id: web::Path<usize>,
 ) -> web::Json<Vec<(usize, Vec<FinalizedTransaction>)>>
@@ -205,15 +211,21 @@ where
 {
     let reader = data.read();
     let mut ret = Vec::new();
-    for ix in block_id.into_inner()..reader.get_block_count() {
+    let blk_cnt = reader.get_block_count();
+    for ix in block_id.into_inner()..blk_cnt {
         let sid = BlockSID(ix);
-        let authenticated_block = reader.get_block(sid).unwrap();
-        ret.push((sid.0, authenticated_block.block.txns.clone()));
+        if let Some(authenticated_block) = reader.get_block(sid) {
+            ret.push((sid.0, authenticated_block.block.txns.clone()));
+        } else {
+            warn!("query_blocks_since failed, range= [{}, {})", ix, blk_cnt);
+            ret.clear();
+            break;
+        }
     }
     web::Json(ret)
 }
 
-pub fn query_air<AA>(
+pub async fn query_air<AA>(
     data: web::Data<Arc<RwLock<AA>>>,
     addr: web::Path<String>,
 ) -> actix_web::Result<web::Json<AuthenticatedAIRResult>>
@@ -226,7 +238,7 @@ where
     Ok(web::Json(air_result))
 }
 
-pub fn query_kv<LA>(
+pub async fn query_kv<LA>(
     data: web::Data<Arc<RwLock<LA>>>,
     addr: web::Path<String>,
 ) -> actix_web::Result<web::Json<AuthenticatedKVLookup>>
@@ -241,7 +253,9 @@ where
     Ok(web::Json(result))
 }
 
-fn query_block_log<AA>(data: web::Data<Arc<RwLock<AA>>>) -> impl actix_web::Responder
+async fn query_block_log<AA>(
+    data: web::Data<Arc<RwLock<AA>>>,
+) -> impl actix_web::Responder
 where
     AA: ArchiveAccess,
 {
@@ -289,7 +303,9 @@ where
         .body(res)
 }
 
-fn query_utxo_map<AA>(data: web::Data<Arc<RwLock<AA>>>) -> actix_web::Result<String>
+async fn query_utxo_map<AA>(
+    data: web::Data<Arc<RwLock<AA>>>,
+) -> actix_web::Result<String>
 where
     AA: ArchiveAccess,
 {
@@ -299,7 +315,7 @@ where
     Ok(serde_json::to_string(&vec)?)
 }
 
-fn query_utxo_map_checksum<AA>(
+async fn query_utxo_map_checksum<AA>(
     data: web::Data<Arc<RwLock<AA>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<String>
@@ -340,7 +356,7 @@ fn parse_blocks(block_input: String) -> Option<Vec<usize>> {
 }
 
 #[allow(unused)]
-fn query_utxo_partial_map<AA>(
+async fn query_utxo_partial_map<AA>(
     data: web::Data<Arc<RwLock<AA>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<String>
@@ -437,7 +453,7 @@ trait Route {
 impl<T, B> Route for App<T, B>
 where
     B: actix_web::dev::MessageBody,
-    T: actix_service::NewService<
+    T: actix_service::ServiceFactory<
         Config = (),
         Request = dev::ServiceRequest,
         Response = dev::ServiceResponse<B>,
@@ -540,7 +556,7 @@ impl RestfulApiService {
         HttpServer::new(move || {
             App::new()
                 .wrap(middleware::Logger::default())
-                .wrap(Cors::new().supports_credentials())
+                .wrap(Cors::permissive().supports_credentials())
                 .data(ledger_access.clone())
                 .route("/ping", web::get().to(ping))
                 .route("/version", web::get().to(version))
@@ -549,7 +565,9 @@ impl RestfulApiService {
         })
         .bind(&format!("{}:{}", host, port))
         .c(d!())?
-        .start();
+        .run();
+
+        info!("RestfulApi server started");
 
         Ok(RestfulApiService { web_runtime })
     }
@@ -625,50 +643,54 @@ impl MockLedgerClient {
 
 impl RestfulLedgerAccess for MockLedgerClient {
     fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo> {
-        let mut app =
-            test::init_service(App::new().data(Arc::clone(&self.mock_ledger)).route(
+        let mut app = executor::block_on(test::init_service(
+            App::new().data(Arc::clone(&self.mock_ledger)).route(
                 &LedgerAccessRoutes::UtxoSid.with_arg_template("sid"),
                 web::get().to(query_utxo::<LedgerState>),
-            ));
+            ),
+        ));
         let req = test::TestRequest::get()
             .uri(&LedgerAccessRoutes::UtxoSid.with_arg(&addr.0))
             .to_request();
-        Ok(test::read_response_json(&mut app, req))
+
+        Ok(executor::block_on(test::read_response_json(&mut app, req)))
     }
     fn get_utxos(&self, addr: TxoSIDList) -> Result<Vec<Option<AuthenticatedUtxo>>> {
         let mut app =
-            test::init_service(App::new().data(Arc::clone(&self.mock_ledger)).route(
+            App::new().data(Arc::clone(&self.mock_ledger)).route(
                 &LedgerAccessRoutes::UtxoSidList.with_arg_template("sid_list"),
                 web::get().to(query_utxos::<LedgerState>),
-            ));
+            );
         let req = test::TestRequest::get()
             .uri(&LedgerAccessRoutes::UtxoSidList.with_arg(&addr))
             .to_request();
-        Ok(test::read_response_json(&mut app, req))
+        Ok(executor::block_on(test::read_response_json(&mut app, req)))
     }
 
     fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64> {
-        let mut app =
-            test::init_service(App::new().data(Arc::clone(&self.mock_ledger)).route(
+        let mut app = executor::block_on(test::init_service(
+            App::new().data(Arc::clone(&self.mock_ledger)).route(
                 &LedgerAccessRoutes::AssetIssuanceNum.with_arg_template("code"),
                 web::get().to(query_asset_issuance_num::<LedgerState>),
-            ));
+            ),
+        ));
         let req = test::TestRequest::get()
             .uri(&LedgerAccessRoutes::AssetIssuanceNum.with_arg(&code.to_base64()))
             .to_request();
-        Ok(test::read_response_json(&mut app, req))
+        Ok(executor::block_on(test::read_response_json(&mut app, req)))
     }
 
     fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType> {
-        let mut app =
-            test::init_service(App::new().data(Arc::clone(&self.mock_ledger)).route(
+        let mut app = executor::block_on(test::init_service(
+            App::new().data(Arc::clone(&self.mock_ledger)).route(
                 &LedgerAccessRoutes::AssetToken.with_arg_template("code"),
                 web::get().to(query_asset::<LedgerState>),
-            ));
+            ),
+        ));
         let req = test::TestRequest::get()
             .uri(&LedgerAccessRoutes::AssetToken.with_arg(&code.to_base64()))
             .to_request();
-        Ok(test::read_response_json(&mut app, req))
+        Ok(executor::block_on(test::read_response_json(&mut app, req)))
     }
 
     #[allow(clippy::type_complexity)]
@@ -679,15 +701,16 @@ impl RestfulLedgerAccess for MockLedgerClient {
         u64,
         SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
     )> {
-        let mut app =
-            test::init_service(App::new().data(Arc::clone(&self.mock_ledger)).route(
+        let mut app = executor::block_on(test::init_service(
+            App::new().data(Arc::clone(&self.mock_ledger)).route(
                 &LedgerAccessRoutes::GlobalState.route(),
                 web::get().to(query_global_state::<LedgerState>),
-            ));
+            ),
+        ));
         let req = test::TestRequest::get()
             .uri(&LedgerAccessRoutes::GlobalState.route())
             .to_request();
-        Ok(test::read_response_json(&mut app, req))
+        Ok(executor::block_on(test::read_response_json(&mut app, req)))
     }
 
     fn get_block_commit_count(&self) -> Result<u64> {
@@ -847,7 +870,7 @@ impl RestfulLedgerAccess for ActixLedgerClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::dev::Service;
+    use actix_service::Service;
     use actix_web::{web, App};
     use ledger::data_model::{Operation, Transaction, TxnEffect};
     use ledger::store::helpers::*;
@@ -902,7 +925,7 @@ mod tests {
 
         let state_lock = Arc::new(RwLock::new(state));
 
-        let mut app = test::init_service(
+        let mut app = executor::block_on(test::init_service(
             App::new()
                 .data(state_lock.clone())
                 .route(
@@ -913,7 +936,7 @@ mod tests {
                     "/global_state_version/{version}",
                     web::get().to(query_global_state_version::<LedgerState>),
                 ),
-        );
+        ));
 
         let req = test::TestRequest::get().uri("/global_state").to_request();
 
@@ -926,8 +949,8 @@ mod tests {
             _,
             _,
             SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
-        ) = test::read_response_json(&mut app, req);
-        let comm2 = test::read_response_json(&mut app, second_req);
+        ) = executor::block_on(test::read_response_json(&mut app, req));
+        let comm2 = executor::block_on(test::read_response_json(&mut app, second_req));
         assert!((comm1, idx) == state_reader.get_state_commitment());
         assert!((comm2, idx) == state_reader.get_state_commitment());
     }
@@ -970,7 +993,7 @@ mod tests {
 
         let state_lock = Arc::new(RwLock::new(state));
 
-        let mut app = test::init_service(
+        let mut app = executor::block_on(test::init_service(
             App::new()
                 .data(state_lock.clone())
                 .route(
@@ -981,18 +1004,19 @@ mod tests {
                     "/public_key",
                     web::get().to(query_public_key::<LedgerState>),
                 ),
-        );
+        ));
 
         let req_pk = test::TestRequest::get().uri("/public_key").to_request();
         let req_comm = test::TestRequest::get().uri("/global_state").to_request();
 
         let state_reader = state_lock.read();
-        let k: XfrPublicKey = test::read_response_json(&mut app, req_pk);
+        let k: XfrPublicKey =
+            executor::block_on(test::read_response_json(&mut app, req_pk));
         let (comm, idx, sig): (
             HashOf<Option<StateCommitmentData>>,
             u64,
             SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
-        ) = test::read_response_json(&mut app, req_comm);
+        ) = executor::block_on(test::read_response_json(&mut app, req_comm));
         sig.verify(&k, &(comm, idx)).unwrap();
         assert!(k == orig_key);
         assert!(k == *state_reader.public_key());
@@ -1027,16 +1051,17 @@ mod tests {
             state.finish_block(block).unwrap();
         }
 
-        let mut app =
-            test::init_service(App::new().data(Arc::new(RwLock::new(state))).route(
+        let mut app = executor::block_on(test::init_service(
+            App::new().data(Arc::new(RwLock::new(state))).route(
                 "/asset_token/{token}",
                 web::get().to(query_asset::<LedgerState>),
-            ));
+            ),
+        ));
 
         let req = test::TestRequest::get()
             .uri(&format!("/asset_token/{}", token_code1.to_base64()))
             .to_request();
-        let resp = test::block_on(app.call(req)).unwrap();
+        let resp = executor::block_on(app.call(req)).unwrap();
 
         assert!(resp.status().is_success());
     }

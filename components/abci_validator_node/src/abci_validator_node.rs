@@ -232,7 +232,7 @@ impl abci::Application for ABCISubmissionServer {
 
 fn main() {
     // Tendermint ABCI port
-    flexi_logger::Logger::with_env().start().unwrap();
+    env_logger::init();
     info!(concat!(
         "Build: ",
         env!("VERGEN_SHA_SHORT"),

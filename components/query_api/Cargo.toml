@@ -15,14 +15,13 @@ path = "src/query_server_launch.rs"
 
 [dependencies]
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+actix-cors = "0.5.4"
+actix-rt = "1.1.0"
+actix-service = "1.0.6"
+actix-web = "3.3.2"
 parking_lot = "0.11.1"
-
-actix-cors = "0.1.0"
-actix-rt = "0.2"
-actix-service = "0.4.2"
-actix-web = "1.0.5"
 ledger = { path = "../../ledger" }
-futures = "0.1"
+futures = "0.3"
 ledger_api_service = { path = "../ledger_api_service"}
 log = "0.4.8"
 metrics = "0.13.1"

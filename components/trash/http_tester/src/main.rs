@@ -159,7 +159,7 @@ fn main() {
 }
 
 fn main_inner() -> Result<()> {
-    flexi_logger::Logger::with_env().start().c(d!())?;
+    env_logger::init();
     let args = parse_args();
     let num_txns = args
         .value_of("num_txns")

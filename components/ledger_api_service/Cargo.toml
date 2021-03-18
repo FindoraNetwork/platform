@@ -10,12 +10,12 @@ path = "src/ledger_api_service.rs"
 
 [dependencies]
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+actix-cors = "0.5.4"
+actix-rt = "1.1.1"
+actix-service = "1.0.6"
+actix-web = "3.3.2"
+futures = "0.3"
 parking_lot = "0.11.1"
-
-actix-cors = "0.1.0"
-actix-rt = "0.2"
-actix-service = "0.4.2"
-actix-web = "1.0.5"
 cryptohash = { path = "../../libs/cryptohash" }
 air = { path = "../../libs/ads/air" }
 ledger = { path = "../../ledger" }
@@ -29,7 +29,7 @@ serde_json = "1.0"
 sparse_merkle_tree = { path = "../../libs/ads/sparse_merkle_tree" }
 zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
 utils = { path = "../../libs/utils" }
-
+log = "0.4.8"
 [dev-dependencies]
 quickcheck = "0.8"
 quickcheck_macros = "0.8"

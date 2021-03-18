@@ -21,7 +21,7 @@ async fn main() {
         env::set_var("RUST_LOG", "issuer=info");
     }
 
-    flexi_logger::Logger::with_env().start().unwrap();
+    env_logger::init();
 
     let db = models::make_db();
 

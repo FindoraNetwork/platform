@@ -307,7 +307,7 @@ pub struct LedgerState {
     // Comments above is left by the previous development team.
     ////////////////////////////////////////////////////////////////////
     // use sled(DB) to cache the tx data.
-    blocks: block_cache::Sled,
+    blocks: Vec<FinalizedBlock>,
 
     // Bitmap tracing all the live TXOs
     utxo_map: BitMap,
@@ -1682,7 +1682,7 @@ impl LedgerState {
             block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)
                 .c(d!())?,
             txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true).c(d!())?,
-            blocks: block_cache::Sled::new(),
+            blocks: Vec::new(),
             utxo_map: LedgerState::init_utxo_map(utxo_map_path, true).c(d!())?,
             txn_log: Some((
                 txn_path.into(),
@@ -1765,7 +1765,7 @@ impl LedgerState {
                 .c(d!(PlatformError::Unknown))?,
             txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, false)
                 .c(d!(PlatformError::Unknown))?,
-            blocks: block_cache::Sled::new(),
+            blocks: Vec::new(),
             utxo_map: LedgerState::init_utxo_map(utxo_map_path, false)
                 .c(d!(PlatformError::Unknown))?,
             txn_log: None,
@@ -1882,7 +1882,7 @@ impl LedgerState {
                 .c(d!(PlatformError::Unknown))?,
             txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true)
                 .c(d!(PlatformError::Unknown))?,
-            blocks: block_cache::Sled::new(),
+            blocks: Vec::new(),
             utxo_map: LedgerState::init_utxo_map(utxo_map_path, true)
                 .c(d!(PlatformError::Unknown))?,
             txn_log: None,
@@ -4339,163 +4339,5 @@ mod tests {
         let mut block = ledger.start_block().unwrap();
         assert!(ledger.apply_transaction(&mut block, effect).is_err());
         ledger.abort_block(block);
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub mod block_cache {
-    //!
-    //! # block_cache
-    //!
-    //! [**related issue**](https://github.com/FindoraNetwork/platform/issues/7)
-    //!
-    //! This module is almost non-invasive to external code.
-    //!
-
-    use crate::data_model::FinalizedBlock;
-    use lazy_static::lazy_static;
-    use rand::random;
-    use ruc::*;
-    use std::{
-        env, fs,
-        iter::Iterator,
-        sync::atomic::{AtomicUsize, Ordering},
-    };
-    use zeiutils::err_eq;
-
-    // The default path to store the runtime blocks data,
-    // when the envronment-VAR with the same name is not set.
-    //
-    // Is it necessary to be compatible with the Windows operating system?
-    const SLED_CACHE_DIR: &str = "/tmp/.ledger_state_block";
-
-    lazy_static! {
-        // A counter of the number of blocks in the current ledger.
-        static ref BLOCK_CNT: AtomicUsize = {
-            // Borrow this place a while...
-            {
-                // Remove all possible rubbish(remove their topdir).
-                omit!(fs::remove_dir_all(SLED_CACHE_DIR));
-
-                // Is this necessary? To delete
-                // a possiable file with the same name.
-                omit!(fs::remove_file(SLED_CACHE_DIR));
-            }
-
-            AtomicUsize::new(0)
-        };
-    }
-
-    /// To solve the problem of unlimited memory usage,
-    /// use this to replace the original in-memory `Vec<_>`.
-    pub struct Sled {
-        db: sled::Db,
-    }
-
-    /// Iter over [Sled](self::Sled).
-    pub struct SledIter {
-        iter: sled::Iter,
-    }
-
-    #[inline(always)]
-    fn get_datadir() -> String {
-        // Use random subdir to make unit-tests pass.
-        format!("{}/{}", SLED_CACHE_DIR, random::<u64>())
-    }
-
-    impl Sled {
-        /// Create an instance.
-        #[inline(always)]
-        pub fn new() -> Self {
-            Sled {
-                // Each time the program is started,
-                // a new database is created here.
-                db: pnk!(sled::open(&get_datadir())),
-            }
-        }
-
-        /// Imitate the behavior of 'Vec<_>.get(...)'
-        ///
-        /// Any faster/better choice other than JSON ?
-        pub fn get(&self, idx: usize) -> Option<FinalizedBlock> {
-            self.db
-                .get(&idx.to_ne_bytes()[..])
-                .ok()
-                .flatten()
-                .map(|bytes| serde_json::from_slice(&bytes).unwrap())
-        }
-
-        /// Imitate the behavior of 'Vec<_>.len()'
-        ///
-        /// `merkle_id`(aka `block_id`), its implementation
-        /// is a monotonically increasing integer from zero,
-        /// so this operation will get the correct value.
-        pub fn len(&self) -> usize {
-            BLOCK_CNT.load(Ordering::Relaxed)
-        }
-
-        /// Imitate the behavior of 'Vec<_>.push(...)'
-        pub fn push(&self, b: FinalizedBlock) {
-            let idx = b.merkle_id as usize;
-            let value = serde_json::to_vec(&b).unwrap();
-            self.db.insert(usize::to_ne_bytes(idx), value);
-
-            // increase the number of blocks
-            BLOCK_CNT.fetch_add(1, Ordering::Relaxed);
-        }
-
-        /// Imitate the behavior of '.iter()'
-        pub fn iter(&self) -> SledIter {
-            SledIter {
-                iter: self.db.iter(),
-            }
-        }
-    }
-
-    impl Iterator for SledIter {
-        type Item = FinalizedBlock;
-
-        fn next(&mut self) -> Option<Self::Item> {
-            self.iter
-                .next()
-                .map(|v| v.ok())
-                .flatten()
-                .map(|(_, bytes)| serde_json::from_slice(&bytes[..]).unwrap())
-        }
-    }
-
-    #[cfg(test)]
-    mod test {
-        use super::*;
-
-        fn gen_sample(merkle_id: u64) -> FinalizedBlock {
-            FinalizedBlock {
-                txns: vec![],
-                merkle_id,
-            }
-        }
-
-        #[test]
-        fn t_cache_on_disk() {
-            let mut db = Sled::new();
-
-            assert_eq!(0, db.len());
-            (0..100).for_each(|i| {
-                assert!(db.get(i).is_none());
-            });
-
-            (0..100).map(|i| (i, gen_sample(i))).for_each(|(i, b)| {
-                db.push(b);
-                assert_eq!(1 + i as usize, db.len());
-                assert!(db.get(i as usize).is_some());
-            });
-
-            (0..100).zip(db.iter()).for_each(|(i, b)| {
-                assert_eq!(i, b.merkle_id);
-            });
-
-            assert_eq!(100, db.len());
-        }
     }
 }
