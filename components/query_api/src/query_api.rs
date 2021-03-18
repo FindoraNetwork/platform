@@ -435,7 +435,8 @@ impl QueryApi {
                 )
         })
         .bind(&format!("{}:{}", host, port))
-        .c(d!())?;
+        .c(d!())?
+        .run();
 
         info!("Query server started");
 
