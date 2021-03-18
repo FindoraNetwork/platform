@@ -10,7 +10,7 @@ air = { path = "../../../libs/ads/air" }
 clap = "2.33.0"
 credentials = { path = "../../../libs/credentials" }
 cryptohash = { path = "../../../libs/cryptohash" }
-flexi_logger = "0.15.2"
+env_logger = "0.8.3"
 ledger = { path = "../../../ledger" }
 log = "0.4.8"
 rand_chacha = "0.2.0"

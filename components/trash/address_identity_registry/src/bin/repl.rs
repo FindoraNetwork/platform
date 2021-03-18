@@ -532,7 +532,7 @@ fn exec_line(mut global_state: &mut GlobalState, line: &str) -> Result<(), Strin
 }
 
 fn main() -> Result<(), rustyline::error::ReadlineError> {
-    flexi_logger::Logger::with_env().start().unwrap();
+    env_logger::init();
 
     let args = parse_args();
     let _registry_path =

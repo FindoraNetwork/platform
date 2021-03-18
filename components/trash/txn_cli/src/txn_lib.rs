@@ -450,9 +450,7 @@ where
 /// # Examples
 /// RUST_LOG="info,txn_cli=trace" ../../target/debug/txn_cli create_txn_builder
 pub fn init_logging() {
-    flexi_logger::Logger::with_env_or_str("trace")
-        .start()
-        .unwrap();
+    env_logger::init();
 }
 
 /// Matches the PlatformError with an exitcode and exits.

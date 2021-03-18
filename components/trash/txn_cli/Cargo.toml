@@ -19,7 +19,7 @@ curve25519-dalek = { version =  "2.0.0", features = ["serde"] }
 cryptohash = { path = "../../../libs/cryptohash" }
 dirs = "2.0.2"
 exitcode = "1.1.2"
-flexi_logger = "0.15.2"
+env_logger = "0.8.3"
 hex = "0.3.2"
 ledger = { path = "../../../ledger" }
 ledger_standalone = { path = "../../ledger_standalone" }
