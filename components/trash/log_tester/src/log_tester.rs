@@ -297,7 +297,7 @@ fn log_test(logfile: &Path, outfile: Option<&str>, expected_file: Option<&str>) 
 // }
 
 fn main() {
-    flexi_logger::Logger::with_env().start().unwrap();
+    env_logger::init();
 
     let args = std::env::args().collect::<Vec<_>>();
     match args.len() {

@@ -11,6 +11,7 @@ use utils::{protocol_host, urlencode, LEDGER_PORT};
 #[tokio::main]
 async fn main() -> Result<()> {
     // Step 1: Retrieve the address and pok from user
+    env_logger::init();
     let credname = urlencode("passport");
     let issuer_resp =
         attohttpc::get(&format!("http://localhost:3030/issuer_pk/{}", &credname))
