@@ -72,13 +72,15 @@ fn main() {
     )
     .unwrap();
 
+    // polling blocks
+    const SECS_PER_BLOCK: u64 = 15;
+    let poll_time = time::Duration::from_millis(SECS_PER_BLOCK / 2 * 1000);
     loop {
-        let poll_time = time::Duration::from_millis(1000);
-        thread::sleep(poll_time);
         let mut server = wrapped_server.write();
         match server.poll_new_blocks() {
             Ok(_) => info!("Block successfuly polled"),
             Err(_) => error!("Error fetching blocks"),
         }
+        thread::sleep(poll_time);
     }
 }

@@ -10,6 +10,7 @@ use actix_web::{dev, error, middleware, test, web, App, HttpResponse, HttpServer
 use ledger::data_model::*;
 use ledger::store::{ArchiveAccess, LedgerAccess, LedgerState};
 use ledger::{inp_fail, ser_fail};
+use log::warn;
 use parking_lot::RwLock;
 use ruc::*;
 use serde::Serialize;
@@ -188,10 +189,16 @@ where
 {
     let reader = data.read();
     let mut ret = Vec::new();
-    for ix in block_id.into_inner()..reader.get_block_count() {
+    let blk_cnt = reader.get_block_count();
+    for ix in block_id.into_inner()..blk_cnt {
         let sid = BlockSID(ix);
-        let authenticated_block = reader.get_block(sid).unwrap();
-        ret.push((sid.0, authenticated_block.block.txns.clone()));
+        if let Some(authenticated_block) = reader.get_block(sid) {
+            ret.push((sid.0, authenticated_block.block.txns.clone()));
+        } else {
+            warn!("query_blocks_since failed, range= [{}, {})", ix, blk_cnt);
+            ret.clear();
+            break;
+        }
     }
     web::Json(ret)
 }
