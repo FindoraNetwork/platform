@@ -41,6 +41,7 @@ where
     owner_memos: HashMap<TxoSID, OwnerMemo>,
     utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
     txo_to_txnid: HashMap<TxoSID, TxnIDHash>, // txo(spent, unspent) to authenticated txn (sid, hash)
+    txn_sid_to_hash: HashMap<TxnSID, String>, // txn sid to txn hash
     custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
     rest_client: T,
     metrics_renderer: U,
@@ -64,6 +65,7 @@ where
             token_code_issuances: HashMap::new(),
             utxos_to_map_index: HashMap::new(),
             txo_to_txnid: HashMap::new(),
+            txn_sid_to_hash: HashMap::new(),
             custom_data_store: HashMap::new(),
             rest_client,
             metrics_renderer,
@@ -150,6 +152,16 @@ where
     // Returns the authenticated txn (id, hash) of a given txo_sid.
     pub fn get_authenticated_txnid(&self, txo_sid: TxoSID) -> Option<&TxnIDHash> {
         self.txo_to_txnid.get(&txo_sid)
+    }
+
+    // Returns the transaction hash of a given txn_sid.
+    pub fn get_transaction_hash(&self, txn_sid: TxnSID) -> Option<&String> {
+        self.txn_sid_to_hash.get(&txn_sid)
+    }
+
+    // Returns most recent commits at query_server side.
+    pub fn get_commits(&self) -> u64 {
+        self.committed_state.get_block_commit_count()
     }
 
     // Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
@@ -354,7 +366,8 @@ where
                     .insert(*txo_sid);
                 self.utxos_to_map_index.insert(*txo_sid, *address);
                 let hash = curr_txn.hash_tm().hex().to_uppercase();
-                self.txo_to_txnid.insert(*txo_sid, (*txn_sid, hash));
+                self.txo_to_txnid.insert(*txo_sid, (*txn_sid, hash.clone()));
+                self.txn_sid_to_hash.insert(*txn_sid, hash.clone());
                 if let Some(owner_memo) = owner_memo {
                     self.owner_memos.insert(*txo_sid, (*owner_memo).clone());
                 }

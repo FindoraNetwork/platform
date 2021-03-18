@@ -160,6 +160,8 @@ pub enum QueryServerRoutes {
     GetRelatedTxns,
     GetRelatedXfrs,
     GetAuthencatedTxnIDHash,
+    GetTransactionHash,
+    GetCommits,
     Version,
 }
 
@@ -178,6 +180,8 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetIssuedRecords => "get_issued_records",
             QueryServerRoutes::GetIssuedRecordsByCode => "get_issued_records_by_code",
             QueryServerRoutes::GetAuthencatedTxnIDHash => "get_authencated_txnid_hash",
+            QueryServerRoutes::GetTransactionHash => "get_transaction_hash",
+            QueryServerRoutes::GetCommits => "get_commits",
             QueryServerRoutes::Version => "version",
         };
         "/".to_owned() + endpoint
@@ -290,6 +294,37 @@ where
             "No authenticated transaction found. Please retry with correct sid.",
         )),
     }
+}
+
+// Returns authenticated txn hash
+async fn get_transaction_hash<T, U>(
+    data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
+    info: web::Path<usize>,
+) -> actix_web::Result<web::Json<String>>
+where
+    T: RestfulArchiveAccess + Sync + Send,
+    U: MetricsRenderer,
+{
+    let query_server = data.read();
+    match query_server.get_transaction_hash(TxnSID(*info)) {
+        Some(hash) => Ok(web::Json(hash.clone())),
+        None => Err(actix_web::error::ErrorNotFound(
+            "No transaction found. Please retry with correct sid.",
+        )),
+    }
+}
+
+// Returns most recent commit count at query_server side
+// Check this number to make sure query_server is in sync
+async fn get_commits<T, U>(
+    data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
+) -> actix_web::Result<web::Json<u64>>
+where
+    T: RestfulArchiveAccess + Sync + Send,
+    U: MetricsRenderer,
+{
+    let query_server = data.read();
+    Ok(web::Json(query_server.get_commits()))
 }
 
 // Returns the list of transations associated with a given ledger address
@@ -419,6 +454,14 @@ impl QueryApi {
                     &QueryServerRoutes::GetAuthencatedTxnIDHash
                         .with_arg_template("txo_sid"),
                     web::get().to(get_authenticated_txnid_hash::<T, U>),
+                )
+                .route(
+                    &QueryServerRoutes::GetTransactionHash.with_arg_template("txn_sid"),
+                    web::get().to(get_transaction_hash::<T, U>),
+                )
+                .route(
+                    &QueryServerRoutes::GetCommits.route(),
+                    web::get().to(get_commits::<T, U>),
                 )
                 // .route(
                 //     &QueryServerRoutes::StoreCustomData.route(),
