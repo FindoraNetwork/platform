@@ -87,7 +87,6 @@ impl AIR {
 
 fn run_txns(seq_id: u64, n: usize, batch_size: usize) -> Result<()> {
     let mut air = AIR::new();
-    let client = reqwest::blocking::Client::new();
     let (protocol, host) = protocol_host();
     let mut min: Duration = Duration::new(1_000_000_000, 999_999_999);
     let mut max: Duration = Duration::new(0, 0);
@@ -97,22 +96,22 @@ fn run_txns(seq_id: u64, n: usize, batch_size: usize) -> Result<()> {
         air.add_assign_txn(&mut builder);
         let txn = builder.transaction();
         let instant = Instant::now();
-        let _ = client
-            .post(&format!(
-                "{}://{}:{}/submit_transaction",
-                protocol, host, SUBMIT_PORT
-            ))
-            .json::<Transaction>(&txn)
-            .send()
-            .c(d!())?;
+        let _ = attohttpc::post(&format!(
+            "{}://{}:{}/submit_transaction",
+            protocol, host, SUBMIT_PORT
+        ))
+        .json::<Transaction>(&txn)
+        .c(d!())?
+        .send()
+        .c(d!())?;
 
         if (i + 1) % batch_size == 0 {
-            let _resp = client
-                .post(&format!(
-                    "{}://{}:{}/force_end_block",
-                    protocol, host, SUBMIT_PORT
-                ))
-                .send();
+            let _resp = attohttpc::post(&format!(
+                "{}://{}:{}/force_end_block",
+                protocol, host, SUBMIT_PORT
+            ))
+            .send()
+            .c(d!())?;
         }
 
         total += instant.elapsed();
@@ -160,7 +159,7 @@ fn main() {
 }
 
 fn main_inner() -> Result<()> {
-    flexi_logger::Logger::with_env().start().c(d!())?;
+    env_logger::init();
     let args = parse_args();
     let num_txns = args
         .value_of("num_txns")
@@ -169,14 +168,12 @@ fn main_inner() -> Result<()> {
         .value_of("batch_size")
         .map_or(1, |s| s.parse::<usize>().unwrap());
     let (protocol, host) = protocol_host();
-    let client = reqwest::blocking::Client::new();
-    let resp_gs = client
-        .get(&format!(
-            "{}://{}:{}/global_state",
-            protocol, host, LEDGER_PORT
-        ))
-        .send()
-        .c(d!())?;
+    let resp_gs = attohttpc::get(&format!(
+        "{}://{}:{}/global_state",
+        protocol, host, LEDGER_PORT
+    ))
+    .send()
+    .c(d!())?;
     let (_, seq_id, _): GlobalState<StateCommitmentData> =
         serde_json::from_str(&resp_gs.text().c(d!())?[..]).c(d!())?;
     run_txns(seq_id, num_txns, batch_size)

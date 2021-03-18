@@ -120,7 +120,7 @@ pub fn make_xfr_note() -> XfrNote {
 }
 
 fn main() -> Result<()> {
-    flexi_logger::Logger::with_env().start().c(d!())?;
+    env_logger::init();
 
     // Creating an identity Keypair for the local node, obtaining the local PeerId from the PublicKey.
     // Create a random PeerId
@@ -194,9 +194,9 @@ fn main() -> Result<()> {
 
     // Create a Swarm to manage peers and events
     let mut swarm = {
-        let mdns = Mdns::new().c(d!())?;
+        let mdns = async_std::task::block_on(Mdns::new()).c(d!())?;
         let mut behaviour = MyBehaviour {
-            floodsub: Floodsub::new(local_peer_id.clone()),
+            floodsub: Floodsub::new(local_peer_id),
             mdns,
             ignored_member: false,
         };

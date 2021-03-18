@@ -10,12 +10,12 @@ path = "src/check_merkle.rs"
 
 [dependencies]
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
-flexi_logger = "0.15.2"
+env_logger = "0.8.3"
 ledger = { path = "../../../ledger" }
 log = "0.4.8"
 merkle_tree = { path = "../../../libs/ads/merkle_tree" }
 zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
-serde = "1.0"
+serde = "1.0.124"
 serde_derive = "1.0"
 serde_json = "1.0"
 utils = { path = "../../../libs/utils" }

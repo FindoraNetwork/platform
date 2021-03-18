@@ -13,10 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let host = "localhost";
     let port = "8668";
 
-    let client = reqwest::blocking::Client::new();
-
-    let resp_gs = client
-        .get(&format!("{}://{}:{}/global_state", protocol, host, port))
+    let resp_gs = attohttpc::get(&format!("{}://{}:{}/global_state", protocol, host, port))
         .send()?;
     let (_, seq_id, _): GlobalState<StateCommitmentData> =
         serde_json::from_str(&resp_gs.text()?[..]).c(d!())?;
@@ -44,7 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let token_code_base64 = token_code1.to_base64();
     println!("\n\nQuery asset_token {:?}", &token_code1);
 
-    let mut res = reqwest::blocking::get(&format!(
+    let mut res = attohttpc::get(&format!(
         "http://{}:{}/{}/{}",
         &host, &port, "asset_token", &token_code_base64
     ))?;
@@ -57,13 +54,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("\n\nSubmit transaction");
 
-    res = client
-        .post(&format!(
+    res = attohttpc::post(&format!(
             "http://{}:{}/{}",
             &host, &port, "submit_transaction"
         ))
         .json(&tx)
-        .send()?;
+        .c(d!())?
+        .send()
+        .c(d!())?;
     println!("Status: {}", res.status());
     println!("Headers:\n{:?}", res.headers());
 
@@ -71,7 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::io::copy(&mut res, &mut std::io::stdout())?;
 
     println!("\n\nQuery global_state {:?} again", &token_code1);
-    res = reqwest::blocking::get(&format!(
+    res = attohttpc::get(&format!(
         "http://{}:{}/{}/{}",
         &host, &port, "global_state", 0
     ))?;
@@ -79,7 +77,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Status: {}", res.status());
     println!("Headers:\n{:?}", res.headers());
 
-    let mut res = reqwest::blocking::get(&format!(
+    let mut res = attohttpc::get(&format!(
         "http://{}:{}/{}/{}",
         &host, &port, "asset_token", &token_code_base64
     ))?;

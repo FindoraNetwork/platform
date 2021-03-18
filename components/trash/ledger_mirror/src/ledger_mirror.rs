@@ -6,7 +6,8 @@ use ledger_api_service::RestfulApiService;
 use log::{error, info};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use parking_lot::RwLock;
 use std::thread;
 use std::time;
 
@@ -21,7 +22,7 @@ fn main() {
 
     let base_dir = std::env::var_os("LEDGER_DIR").filter(|x| !x.is_empty());
     let base_dir = base_dir.as_ref().map(Path::new);
-    flexi_logger::Logger::with_env().start().c(d!())?;
+    env_logger::init();
     let ledger_state = match base_dir {
         None => LedgerState::test_ledger(),
         Some(base_dir) => LedgerState::load_or_init(base_dir).c(d!())?,
@@ -61,7 +62,7 @@ fn main() {
             let ledger = state_lock.read().c(d!())?;
             (*ledger).get_block_count()
         };
-        let new_blocks = match reqwest::blocking::get(&format!(
+        let new_blocks = match attohttpc::get(&format!(
             "http://{}/{}/{}",
             ledger_url.to_str().c(d!())?,
             "blocks_since",

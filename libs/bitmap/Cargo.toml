@@ -9,6 +9,8 @@ path = "src/bitmap.rs"
 
 [dependencies]
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+parking_lot = "0.11.1"
+
 arrayref = "0.3.5"
 cryptohash = { path = "../cryptohash" }
 itertools = "0.8.0"
@@ -16,7 +18,7 @@ log = "0.4.8"
 quickcheck = "0.9.0"
 rand = "0.7"
 rand_chacha = "0.1.1"
-serde = "1.0"
+serde = "1.0.124"
 serde_json = "1.0"
 time = "0.1"
 utils = { path = "../utils" }

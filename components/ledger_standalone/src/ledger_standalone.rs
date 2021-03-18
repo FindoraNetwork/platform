@@ -2,10 +2,11 @@
 
 use ledger::store::LedgerState;
 use ledger_api_service::RestfulApiService;
+use parking_lot::RwLock;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::path::Path;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::thread;
 use submission_api::SubmissionApi;
 use submission_server::{NoTF, SubmissionServer};
@@ -13,7 +14,7 @@ use submission_server::{NoTF, SubmissionServer};
 fn main() {
     let base_dir = std::env::var_os("LEDGER_DIR").filter(|x| !x.is_empty());
     let base_dir = base_dir.as_ref().map(Path::new);
-    flexi_logger::Logger::with_env().start().unwrap();
+    env_logger::init();
     // dbg!(&base_dir);
     let ledger_state = match base_dir {
         None => LedgerState::test_ledger(),

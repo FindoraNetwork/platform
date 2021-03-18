@@ -10,9 +10,10 @@ path = "src/account_simulator.rs"
 
 [dependencies]
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
-actix-rt = "0.2"
-actix-service = "0.4.2"
-actix-web = "1.0.8"
+actix-rt = "1.1.0"
+actix-service = "1.0.6"
+actix-web = "3.3.2"
+parking_lot = "0.11.1"
 cryptohash = { path = "../../libs/cryptohash" }
 lazy_static = "1.4.0"
 ledger = { path = "../../ledger", features = ["TESTING"] }
@@ -22,8 +23,7 @@ percent-encoding = "2.1.0"
 quickcheck = "0.9"
 rand_chacha = "0.2.0"
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
-reqwest = { version = "0.10", default-features = false, features = ["rustls-tls", "blocking", "json"] }
-serde = "1.0"
+serde = "1.0.124"
 serde_derive = "1.0"
 serde_json = "1.0"
 structopt = { version = "0.3" }

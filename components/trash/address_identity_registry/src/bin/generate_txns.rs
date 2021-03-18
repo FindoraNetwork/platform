@@ -110,13 +110,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let num_str = args.value_of("num_txns");
     let mut air = AIR::new();
     let (protocol, host) = protocol_host();
-    let client = reqwest::blocking::Client::new();
-    let resp_gs = client
-        .get(&format!(
-            "{}://{}:{}/global_state",
-            protocol, host, LEDGER_PORT
-        ))
-        .send()?;
+    let resp_gs = attohttpc::get(&format!(
+        "{}://{}:{}/global_state",
+        protocol, host, LEDGER_PORT
+    ))
+    .send()?;
     let (_, seq_id, _): GlobalState<StateCommitmentData> =
         serde_json::from_str(&resp_gs.text()?[..]).unwrap();
 
