@@ -104,8 +104,8 @@ pub async fn query_utxos<LA>(
     data: web::Data<Arc<RwLock<LA>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<Option<AuthenticatedUtxo>>>>
-    where
-        LA: LedgerAccess,
+where
+    LA: LedgerAccess,
 {
     let mut writer = data.write();
     if let Ok(txo_sid_list) = info.parse::<TxoSIDList>() {
@@ -656,14 +656,16 @@ impl RestfulLedgerAccess for MockLedgerClient {
         Ok(executor::block_on(test::read_response_json(&mut app, req)))
     }
     fn get_utxos(&self, addr: TxoSIDList) -> Result<Vec<Option<AuthenticatedUtxo>>> {
-        let mut app =
+        let mut app = executor::block_on(test::init_service(
             App::new().data(Arc::clone(&self.mock_ledger)).route(
                 &LedgerAccessRoutes::UtxoSidList.with_arg_template("sid_list"),
                 web::get().to(query_utxos::<LedgerState>),
-            );
+            ),
+        ));
         let req = test::TestRequest::get()
             .uri(&LedgerAccessRoutes::UtxoSidList.with_arg(&addr))
             .to_request();
+
         Ok(executor::block_on(test::read_response_json(&mut app, req)))
     }
 
