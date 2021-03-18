@@ -275,7 +275,7 @@ where
 }
 
 // Returns authenticated txn sid and hash
-fn get_authenticated_txnid_hash<T, U>(
+async fn get_authenticated_txnid_hash<T, U>(
     data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<u64>,
 ) -> actix_web::Result<web::Json<TxnIDHash>>
