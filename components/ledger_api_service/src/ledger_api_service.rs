@@ -100,6 +100,23 @@ where
     }
 }
 
+pub async fn query_utxos<LA>(
+    data: web::Data<Arc<RwLock<LA>>>,
+    info: web::Path<String>,
+) -> actix_web::Result<web::Json<Vec<Option<AuthenticatedUtxo>>>>
+where
+    LA: LedgerAccess,
+{
+    let mut writer = data.write();
+    if let Ok(txo_sid_list) = info.parse::<TxoSIDList>() {
+        Ok(web::Json(writer.get_utxos(txo_sid_list)))
+    } else {
+        Err(actix_web::error::ErrorBadRequest(
+            "Invalid txo sid encoding for list of sid",
+        ))
+    }
+}
+
 pub async fn query_asset<LA>(
     data: web::Data<Arc<RwLock<LA>>>,
     info: web::Path<String>,
@@ -195,13 +212,22 @@ where
     let reader = data.read();
     let mut ret = Vec::new();
     let blk_cnt = reader.get_block_count();
+
+    // upper limit: 1000 txns of blocks per query
+    const TXNS_TO_CUTOFF: usize = 1000;
+    let mut txn_cnt = 0;
     for ix in block_id.into_inner()..blk_cnt {
         let sid = BlockSID(ix);
         if let Some(authenticated_block) = reader.get_block(sid) {
+            txn_cnt += authenticated_block.block.txns.len();
             ret.push((sid.0, authenticated_block.block.txns.clone()));
         } else {
             warn!("query_blocks_since failed, range= [{}, {})", ix, blk_cnt);
             ret.clear();
+            break;
+        }
+        // stop adding more blocks when reaches upper limit
+        if txn_cnt >= TXNS_TO_CUTOFF {
             break;
         }
     }
@@ -368,6 +394,7 @@ enum ServiceInterface {
 
 pub enum LedgerAccessRoutes {
     UtxoSid,
+    UtxoSidList,
     AssetIssuanceNum,
     AssetToken,
     PublicKey,
@@ -379,6 +406,7 @@ impl NetworkRoute for LedgerAccessRoutes {
     fn route(&self) -> String {
         let endpoint = match *self {
             LedgerAccessRoutes::UtxoSid => "utxo_sid",
+            LedgerAccessRoutes::UtxoSidList => "utxo_sid_list",
             LedgerAccessRoutes::AssetIssuanceNum => "asset_issuance_num",
             LedgerAccessRoutes::AssetToken => "asset_token",
             LedgerAccessRoutes::PublicKey => "public_key",
@@ -460,6 +488,10 @@ where
         self.route(
             &LedgerAccessRoutes::UtxoSid.with_arg_template("sid"),
             web::get().to(query_utxo::<LA>),
+        )
+        .route(
+            &LedgerAccessRoutes::UtxoSidList.with_arg_template("sid_list"),
+            web::get().to(query_utxos::<LA>),
         )
         .route(
             &LedgerAccessRoutes::AssetIssuanceNum.with_arg_template("code"),
@@ -557,6 +589,8 @@ impl RestfulApiService {
 pub trait RestfulLedgerAccess {
     fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo>;
 
+    fn get_utxos(&self, addr: TxoSIDList) -> Result<Vec<Option<AuthenticatedUtxo>>>;
+
     fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64>;
 
     fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType>;
@@ -626,6 +660,19 @@ impl RestfulLedgerAccess for MockLedgerClient {
         ));
         let req = test::TestRequest::get()
             .uri(&LedgerAccessRoutes::UtxoSid.with_arg(&addr.0))
+            .to_request();
+
+        Ok(executor::block_on(test::read_response_json(&mut app, req)))
+    }
+    fn get_utxos(&self, addr: TxoSIDList) -> Result<Vec<Option<AuthenticatedUtxo>>> {
+        let mut app = executor::block_on(test::init_service(
+            App::new().data(Arc::clone(&self.mock_ledger)).route(
+                &LedgerAccessRoutes::UtxoSidList.with_arg_template("sid_list"),
+                web::get().to(query_utxos::<LedgerState>),
+            ),
+        ));
+        let req = test::TestRequest::get()
+            .uri(&LedgerAccessRoutes::UtxoSidList.with_arg(&addr))
             .to_request();
 
         Ok(executor::block_on(test::read_response_json(&mut app, req)))
@@ -746,6 +793,18 @@ impl RestfulLedgerAccess for ActixLedgerClient {
         );
         let text = http_get_request(&query).c(d!(inp_fail!()))?;
         serde_json::from_str::<AuthenticatedUtxo>(&text).c(d!(ser_fail!()))
+    }
+
+    fn get_utxos(&self, addr: TxoSIDList) -> Result<Vec<Option<AuthenticatedUtxo>>> {
+        let query = format!(
+            "{}://{}:{}{}",
+            self.protocol,
+            self.host,
+            self.port,
+            LedgerAccessRoutes::UtxoSidList.with_arg(&addr)
+        );
+        let text = http_get_request(&query).c(d!(inp_fail!()))?;
+        serde_json::from_str::<Vec<Option<AuthenticatedUtxo>>>(&text).c(d!(ser_fail!()))
     }
 
     fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64> {
