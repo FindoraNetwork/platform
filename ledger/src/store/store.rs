@@ -44,6 +44,7 @@ pub struct SnapshotId {
 pub trait LedgerAccess {
     // Look up a currently unspent TXO
     fn get_utxo(&mut self, addr: TxoSID) -> Option<AuthenticatedUtxo>;
+    fn get_utxos(&mut self, address_list: TxoSIDList) -> Vec<Option<AuthenticatedUtxo>>;
 
     // The most recently-issued sequence number for the `code`-labelled asset
     // type
@@ -2133,6 +2134,31 @@ impl LedgerAccess for LedgerState {
         } else {
             None
         }
+    }
+    fn get_utxos(&mut self, sid_list: TxoSIDList) -> Vec<Option<AuthenticatedUtxo>> {
+        let mut utxos: Vec<Option<AuthenticatedUtxo>> = Vec::new();
+        for sid in sid_list.0.iter() {
+            let utxo = self.status.get_utxo(*sid);
+            if let Some(utxo) = utxo.cloned() {
+                let txn_location = *self.status.txo_to_txn_location.get(sid).unwrap();
+                let authenticated_txn = self.get_transaction(txn_location.0).unwrap();
+                let authenticated_spent_status = self.get_utxo_status(*sid);
+                let state_commitment_data =
+                    self.status.state_commitment_data.as_ref().unwrap().clone();
+                let utxo_location = txn_location.1;
+                let authUtxo = AuthenticatedUtxo {
+                    utxo,
+                    authenticated_txn,
+                    authenticated_spent_status,
+                    state_commitment_data,
+                    utxo_location,
+                };
+                utxos.push(Some(authUtxo))
+            } else {
+                utxos.push(None)
+            } // Should we just change this to return  Vec<AuthenticatedUtxo> ? and not return None for unknown utxos.
+        }
+        utxos
     }
 
     fn get_issuance_num(&self, code: &AssetTypeCode) -> Option<u64> {
