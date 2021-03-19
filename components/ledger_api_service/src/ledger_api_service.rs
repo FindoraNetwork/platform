@@ -195,13 +195,22 @@ where
     let reader = data.read();
     let mut ret = Vec::new();
     let blk_cnt = reader.get_block_count();
+
+    // upper limit: 1000 txns of blocks per query
+    const TXNS_TO_CUTOFF: usize = 1000;
+    let mut txn_cnt = 0;
     for ix in block_id.into_inner()..blk_cnt {
         let sid = BlockSID(ix);
         if let Some(authenticated_block) = reader.get_block(sid) {
+            txn_cnt += authenticated_block.block.txns.len();
             ret.push((sid.0, authenticated_block.block.txns.clone()));
         } else {
             warn!("query_blocks_since failed, range= [{}, {})", ix, blk_cnt);
             ret.clear();
+            break;
+        }
+        // stop adding more blocks when reaches upper limit
+        if txn_cnt >= TXNS_TO_CUTOFF {
             break;
         }
     }
