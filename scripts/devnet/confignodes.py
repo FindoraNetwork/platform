@@ -7,8 +7,8 @@ import toml
 devnet = os.path.join(os.environ['LEDGER_DIR'], "devnet")
 localhost = "127.0.0.1"
 base_url = "tcp://127.0.0.1:"
-base_port_node = 26000
-base_port_abci = 8600
+base_port_node = 26610
+base_port_abci = 8620
 blocks_interval = "0s"
 timeout_commit = "15s"
 toml_string = """
