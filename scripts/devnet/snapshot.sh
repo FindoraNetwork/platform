@@ -51,7 +51,7 @@ echo
 
 # run findora cli2
 echo -e "${GRN}step-2: key gen----------------------------------------------------${NC}"
-printf "http://localhost:8609\nhttp://localhost:8608\n$pswd\n$pswd\n" | findora key-gen $nick
+printf "http://localhost:8629\nhttp://localhost:8628\n$pswd\n$pswd\n" | findora key-gen $nick
 
 # show genesis key
 findora list-keys
