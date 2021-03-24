@@ -149,7 +149,8 @@ where
 {
     let reader = data.read();
     if let Ok(txn_sid) = info.parse::<usize>() {
-        if let Some(txn) = reader.get_transaction(TxnSID(txn_sid)) {
+        if let Some(mut txn) = reader.get_transaction(TxnSID(txn_sid)) {
+            txn.finalized_txn.set_txo_id();
             Ok(serde_json::to_string(&txn)?)
         } else {
             Err(actix_web::error::ErrorNotFound(

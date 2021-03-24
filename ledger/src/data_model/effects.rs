@@ -265,6 +265,7 @@ impl TxnEffect {
                         // ONLY SIMPLE TxOutputs!
                         if output
                             != &(TxOutput {
+                                id: None,
                                 record: output.record.clone(),
                                 lien: None,
                             })
@@ -514,6 +515,7 @@ impl TxnEffect {
                                 input_txos.insert(
                                     txo_sid,
                                     TxOutput {
+                                        id: None,
                                         record: record.clone(),
                                         lien: lien.cloned(),
                                     },
@@ -533,6 +535,7 @@ impl TxnEffect {
                             asset_types_involved.insert(AssetTypeCode { val: out_code });
                         }
                         txos.push(Some(TxOutput {
+                            id: None,
                             record: out.clone(),
                             lien: lien.cloned(),
                         }));
@@ -762,6 +765,7 @@ impl TxnEffect {
                         // Skipping the contract
                         .skip(1)
                         .map(|(ar, lien)| TxOutput {
+                            id: None,
                             record: ar.clone(),
                             lien: lien.cloned(),
                         })
@@ -800,6 +804,7 @@ impl TxnEffect {
                                     }
                                     Some(txo) => {
                                         let TxOutput {
+                                            id: _,
                                             record: inp_record,
                                             lien: inp_lien,
                                         } = &txo;
@@ -823,6 +828,7 @@ impl TxnEffect {
                                 input_txos.insert(
                                     txo_sid,
                                     TxOutput {
+                                        id: None,
                                         record: record.clone(),
                                         lien: lien.cloned(),
                                     },
@@ -848,6 +854,7 @@ impl TxnEffect {
                             val: out.asset_type.get_asset_type().c(d!())?,
                         });
                         txos.push(Some(TxOutput {
+                            id: None,
                             record: out.clone(),
                             lien,
                         }));
@@ -1018,6 +1025,7 @@ impl TxnEffect {
                         // Skipping the contract
                         .skip(1)
                         .map(|(ar, lien)| TxOutput {
+                            id: None,
                             record: ar.clone(),
                             lien: lien.cloned(),
                         })
@@ -1056,6 +1064,7 @@ impl TxnEffect {
                                     }
                                     Some(txo) => {
                                         let TxOutput {
+                                            id: _,
                                             record: inp_record,
                                             lien: inp_lien,
                                         } = &txo;
@@ -1077,6 +1086,7 @@ impl TxnEffect {
                                 input_txos.insert(
                                     txo_sid,
                                     TxOutput {
+                                        id: None,
                                         record: record.clone(),
                                         lien,
                                     },
@@ -1101,6 +1111,7 @@ impl TxnEffect {
                             asset_types_involved.insert(AssetTypeCode { val: out_code });
                         }
                         txos.push(Some(TxOutput {
+                            id: None,
                             record: out.clone(),
                             lien: lien.cloned(),
                         }));

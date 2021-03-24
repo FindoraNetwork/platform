@@ -218,6 +218,7 @@ pub fn issue_and_transfer_asset(
             get_and_update_sequence_number(data_dir).c(d!())?,
             &[(
                 TxOutput {
+                    id: None,
                     record: blind_asset_record,
                     lien: None,
                 },
@@ -303,6 +304,7 @@ where
             sequence_number,
             &[(
                 TxOutput {
+                    id: None,
                     record: input_blind_asset_record,
                     lien: None,
                 },

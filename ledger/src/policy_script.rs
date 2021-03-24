@@ -503,6 +503,7 @@ pub fn run_txn_check(
                         res_vars.insert(
                             *inp,
                             TxOutput {
+                                id: None,
                                 record: inp_txo.clone(),
                                 lien: None,
                             },
@@ -540,6 +541,7 @@ pub fn run_txn_check(
                             res_vars.insert(
                                 *out_res,
                                 TxOutput {
+                                    id: None,
                                     record: out_txo.clone(),
                                     lien: None,
                                 },

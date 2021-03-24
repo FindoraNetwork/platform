@@ -23,9 +23,9 @@ use sparse_merkle_tree::{check_merkle_proof, Key, MerkleProof};
 use std::boxed::Box;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
-use std::env;
 use std::hash::{Hash, Hasher};
 use std::result::Result as StdResult;
+use std::{env, mem};
 use unicode_normalization::UnicodeNormalization;
 use utils::{HashOf, ProofOf, Serialized, SignatureOf};
 use zei::serialization::ZeiFromToBytes;
@@ -603,6 +603,7 @@ pub struct TxnTempSID(pub usize);
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TxOutput {
+    pub id: Option<TxoSID>,
     pub record: BlindAssetRecord,
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
@@ -719,6 +720,7 @@ impl TransferAssetBody {
             .outputs
             .iter()
             .map(|rec| TxOutput {
+                id: None,
                 record: rec.clone(),
                 lien: None,
             })
@@ -1346,6 +1348,7 @@ pub struct Transaction {
 pub struct FinalizedTransaction {
     pub txn: Transaction,
     pub tx_id: TxnSID,
+    pub txo_ids: Vec<TxoSID>,
 
     pub merkle_id: u64,
 }
@@ -1676,6 +1679,52 @@ pub struct FinalizedBlock {
 impl FinalizedTransaction {
     pub fn hash(&self) -> HashOf<(TxnSID, Transaction)> {
         self.txn.hash(self.tx_id)
+    }
+
+    pub fn set_txo_id(&mut self) {
+        enum SS<'a> {
+            Output(&'a mut TxOutput),
+            Raw,
+        }
+
+        macro_rules! seek {
+            ($d: expr) => {
+                $d.body.transfer.outputs.iter().map(|_| SS::Raw).collect()
+            };
+        }
+
+        let ids = mem::take(&mut self.txo_ids);
+        self.txn
+            .body
+            .operations
+            .iter_mut()
+            .map(|new| match new {
+                Operation::TransferAsset(d) => {
+                    d.body.outputs.iter_mut().map(|o| SS::Output(o)).collect()
+                }
+                Operation::IssueAsset(d) => d
+                    .body
+                    .records
+                    .iter_mut()
+                    .map(|(o, _)| SS::Output(o))
+                    .collect(),
+                Operation::BindAssets(d) => {
+                    seek!(d)
+                }
+                Operation::ReleaseAssets(d) => {
+                    seek!(d)
+                }
+                _ => Vec::new(),
+            })
+            .flatten()
+            .zip(ids.iter())
+            .for_each(|(ss, id)| {
+                if let SS::Output(o) = ss {
+                    o.id = Some(*id);
+                }
+            });
+
+        self.txo_ids = ids;
     }
 }
 
@@ -2253,6 +2302,7 @@ mod tests {
                 inputs: Vec::new(),
                 policies: XfrNotePolicies::default(),
                 outputs: vec![TxOutput {
+                    id: None,
                     record: BlindAssetRecord {
                         amount: amount.map(XfrAmount::NonConfidential).unwrap_or(
                             XfrAmount::Confidential((

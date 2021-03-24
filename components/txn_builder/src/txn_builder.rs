@@ -347,6 +347,7 @@ pub trait BuildsTransactions {
             seq_num,
             &[(
                 TxOutput {
+                    id: None,
                     record: ba,
                     lien: None,
                 },

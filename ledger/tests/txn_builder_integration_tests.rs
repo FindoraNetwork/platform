@@ -218,6 +218,7 @@ fn test_loan_repayment(
             0,
             &[(
                 TxOutput {
+                    id: None,
                     record: fiat_ba,
                     lien: None,
                 },
@@ -231,6 +232,7 @@ fn test_loan_repayment(
             0,
             &[(
                 TxOutput {
+                    id: None,
                     record: debt_ba,
                     lien: None,
                 },

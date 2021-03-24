@@ -338,6 +338,7 @@ impl TransactionBuilder {
                 base.push(
                     ClientAssetRecord {
                         txo: TxOutput {
+                            id: None,
                             record: new.0,
                             lien: None,
                         },

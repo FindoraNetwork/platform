@@ -516,6 +516,7 @@ impl InterpretAccounts<PlatformError> for LedgerAccounts {
                     new_seq_num,
                     &[(
                         TxOutput {
+                            id: None,
                             record: ba,
                             lien: None,
                         },
@@ -842,6 +843,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                             0,
                             &[(
                                 TxOutput {
+                                    id: None,
                                     record: ba,
                                     lien: None,
                                 },
@@ -1000,6 +1002,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                     );
 
                     let iss_txo = TxOutput {
+                        id: None,
                         record: ba,
                         lien: None,
                     };
@@ -1182,6 +1185,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                         .map(|x| {
                             (
                                 TxOutput {
+                                    id: None,
                                     record: x.open_asset_record.blind_asset_record,
                                     lien: None,
                                 },
@@ -1524,6 +1528,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                                     .unwrap();
 
                                     lien.push(TxOutput {
+                                        id: None,
                                         record: rec
                                             .open_asset_record
                                             .blind_asset_record
@@ -1643,6 +1648,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                             .map(|rec| {
                                 (
                                     TxOutput {
+                                        id: None,
                                         record: rec.open_asset_record.blind_asset_record,
                                         lien: None,
                                     },
@@ -1875,6 +1881,7 @@ impl InterpretAccounts<PlatformError> for LienAccounts {
                             .map(|rec| {
                                 (
                                     TxOutput {
+                                        id: None,
                                         record: rec.open_asset_record.blind_asset_record,
                                         lien: None,
                                     },
@@ -2014,6 +2021,7 @@ impl InterpretAccounts<PlatformError> for OneBigTxnAccounts {
                     new_seq_num,
                     &[(
                         TxOutput {
+                            id: None,
                             record: ba,
                             lien: None,
                         },
@@ -2391,6 +2399,7 @@ where
                     new_seq_num,
                     &[(
                         TxOutput {
+                            id: None,
                             record: ba,
                             lien: None,
                         },

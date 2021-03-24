@@ -1168,6 +1168,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
                 tx_block.push(FinalizedTransaction {
                     txn: txn.clone(),
                     tx_id: txn_sid,
+                    txo_ids: txo_sids.clone(),
                     merkle_id,
                 });
 
@@ -1342,6 +1343,7 @@ impl LedgerUpdate<ChaChaRng> for LedgerStateChecker {
                 tx_block.push(FinalizedTransaction {
                     txn,
                     tx_id: txn_sid,
+                    txo_ids: txo_sids.clone(),
                     merkle_id: txn_sid.0 as u64,
                 });
             }
@@ -2477,6 +2479,7 @@ pub mod helpers {
             seq_num,
             &[(
                 TxOutput {
+                    id: None,
                     record: ba.clone(),
                     lien: None,
                 },
@@ -2563,6 +2566,7 @@ pub mod helpers {
             seq_num,
             &[(
                 TxOutput {
+                    id: None,
                     record: ba.clone(),
                     lien: None,
                 },
@@ -2651,6 +2655,7 @@ pub mod helpers {
             seq_num,
             &[(
                 TxOutput {
+                    id: None,
                     record: ba,
                     lien: None,
                 },
@@ -2724,6 +2729,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
         0,
         &[(
             TxOutput {
+                id: None,
                 record: ba,
                 lien: None,
             },
@@ -3184,6 +3190,7 @@ mod tests {
             &[
                 (
                     TxOutput {
+                        id: None,
                         record: ba,
                         lien: None,
                     },
@@ -3191,6 +3198,7 @@ mod tests {
                 ),
                 (
                     TxOutput {
+                        id: None,
                         record: second_ba,
                         lien: None,
                     },
@@ -3373,6 +3381,7 @@ mod tests {
             0,
             &[(
                 TxOutput {
+                    id: None,
                     record: ba,
                     lien: None,
                 },
@@ -3906,6 +3915,7 @@ mod tests {
             0,
             &[(
                 TxOutput {
+                    id: None,
                     record: ba,
                     lien: None,
                 },
