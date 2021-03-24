@@ -31,6 +31,9 @@ submission_server = { path = "../submission_server" }
 utils = { path = "../../libs/utils" }
 zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
 
+lazy_static = "1.4.0"
+futures = { version = "0.3.13", features = ["thread-pool"] }
+
 hex = "0.4.2"
 wallet = { path = "../wallet" }
 protobuf = "2.15.1"

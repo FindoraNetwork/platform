@@ -174,4 +174,4 @@ snapshot:
 ####@./scripts/devnet/resetnodes.sh <num_of_validator_nodes> <num_of_normal_nodes>
 mainnet:
 	@./scripts/devnet/stopnodes.sh
-	@./scripts/devnet/resetnodes.sh 4 1
+	@./scripts/devnet/resetnodes.sh 4 4

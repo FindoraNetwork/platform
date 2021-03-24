@@ -2,6 +2,8 @@
 #![deny(warnings)]
 
 use abci::*;
+use futures::executor::{ThreadPool, ThreadPoolBuilder};
+use lazy_static::lazy_static;
 use ledger::data_model::{Operation, Transaction, TxnEffect, TxnSID};
 use ledger::store::*;
 use ledger::sub_fail;
@@ -17,7 +19,7 @@ use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::{
-    atomic::{AtomicI64, Ordering},
+    atomic::{AtomicI64, AtomicU16, Ordering},
     Arc,
 };
 use std::thread;
@@ -28,7 +30,12 @@ use zei::xfr::structs::{XfrAmount, XfrAssetType};
 mod config;
 use config::ABCIConfig;
 
+static TX_PENDING_CNT: AtomicU16 = AtomicU16::new(0);
 static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
+
+lazy_static! {
+    static ref POOL: ThreadPool = pnk!(ThreadPoolBuilder::new().pool_size(2).create());
+}
 
 #[derive(Default)]
 pub struct TendermintForward {
@@ -41,21 +48,27 @@ impl TxnForward for TendermintForward {
         info!("raw txn: {}", &txn_json);
         let txn_b64 = base64::encode_config(&txn_json.as_str(), base64::URL_SAFE);
         let json_rpc = format!(
-            "{{\"jsonrpc\":\"2.0\",\"id\":\"anything\",\"method\":\"broadcast_tx_async\",\"params\": {{\"tx\": \"{}\"}}}}",
+            "{{\"jsonrpc\":\"2.0\",\"id\":\"anything\",\"method\":\"broadcast_tx_sync\",\"params\": {{\"tx\": \"{}\"}}}}",
             &txn_b64
         );
 
         info!("forward_txn: \'{}\'", &json_rpc);
         let tendermint_reply = format!("http://{}", self.tendermint_reply);
-        thread::spawn(move || {
-            ruc::info_omit!(
-                attohttpc::post(&tendermint_reply)
-                    .header(attohttpc::header::CONTENT_TYPE, "application/json")
-                    .text(json_rpc)
-                    .send()
-                    .c(d!(sub_fail!()))
-            )
-        });
+        if 15 > TX_PENDING_CNT.fetch_add(1, Ordering::Relaxed) {
+            POOL.spawn_ok(async move {
+                ruc::info_omit!(
+                    attohttpc::post(&tendermint_reply)
+                        .header(attohttpc::header::CONTENT_TYPE, "application/json")
+                        .text(json_rpc)
+                        .send()
+                        .c(d!(sub_fail!()))
+                );
+                TX_PENDING_CNT.fetch_sub(1, Ordering::Relaxed);
+            });
+        } else {
+            TX_PENDING_CNT.fetch_sub(1, Ordering::Relaxed);
+            return Err(eg!("Too many pending tasks"));
+        }
         info!("forward_txn call complete");
         Ok(())
     }
