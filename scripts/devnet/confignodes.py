@@ -9,7 +9,7 @@ localhost = "127.0.0.1"
 base_url = "tcp://127.0.0.1:"
 base_port_node = 26000
 base_port_abci = 8600
-blocks_interval = "10s"
+blocks_interval = "0s"
 timeout_commit = "15s"
 toml_string = """
 abci_host = "127.0.0.1"
@@ -71,6 +71,9 @@ def set_commit_timeout(config_toml, contents):
              blocks_interval)
     set_toml(config_toml, "consensus.timeout_commit", timeout_commit)
 
+# set time out
+def set_tx_index(config_toml, contents):
+    set_toml(config_toml, "tx_index.index_all_keys", "True")
 
 # gen abci.toml
 def gen_abci_toml(abci_toml, contents, i):
@@ -116,6 +119,9 @@ if __name__ == "__main__":
 
         # modify commit timeout
         set_commit_timeout(config_toml, contents)
+
+        # modify tx indexing
+        set_tx_index(config_toml, contents)
 
         # create abci.toml
         abci_toml = os.path.join(devnet, node, "abci", "abci.toml")
