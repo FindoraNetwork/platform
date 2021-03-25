@@ -1788,8 +1788,6 @@ impl Transaction {
         if self.body.operations.len() > *MAX_OPS_PER_TX {
             return false;
         }
-        let outputs = self.get_outputs_ref(false);
-        if outputs.len() > 10 {return false;}
 
         self.body.operations.iter().any(|o| {
             if let Operation::TransferAsset(ref x) = o {
