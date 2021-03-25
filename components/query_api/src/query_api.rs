@@ -161,6 +161,7 @@ pub enum QueryServerRoutes {
     GetRelatedXfrs,
     GetAuthencatedTxnIDHash,
     GetTransactionHash,
+    GetTransactionSid,
     GetCommits,
     Version,
 }
@@ -181,6 +182,7 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetIssuedRecordsByCode => "get_issued_records_by_code",
             QueryServerRoutes::GetAuthencatedTxnIDHash => "get_authencated_txnid_hash",
             QueryServerRoutes::GetTransactionHash => "get_transaction_hash",
+            QueryServerRoutes::GetTransactionSid => "get_transaction_sid",
             QueryServerRoutes::GetCommits => "get_commits",
             QueryServerRoutes::Version => "version",
         };
@@ -296,7 +298,7 @@ where
     }
 }
 
-// Returns authenticated txn hash
+// Returns txn hash by sid
 async fn get_transaction_hash<T, U>(
     data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
     info: web::Path<usize>,
@@ -310,6 +312,24 @@ where
         Some(hash) => Ok(web::Json(hash.clone())),
         None => Err(actix_web::error::ErrorNotFound(
             "No transaction found. Please retry with correct sid.",
+        )),
+    }
+}
+
+// Returns txn sid by hash
+async fn get_transaction_sid<T, U>(
+    data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
+    info: web::Path<String>,
+) -> actix_web::Result<web::Json<usize>>
+where
+    T: RestfulArchiveAccess + Sync + Send,
+    U: MetricsRenderer,
+{
+    let query_server = data.read();
+    match query_server.get_transaction_sid((*info).clone()) {
+        Some(sid) => Ok(web::Json(sid.0)),
+        None => Err(actix_web::error::ErrorNotFound(
+            "No transaction found. Please retry with correct hash.",
         )),
     }
 }
@@ -458,6 +478,10 @@ impl QueryApi {
                 .route(
                     &QueryServerRoutes::GetTransactionHash.with_arg_template("txn_sid"),
                     web::get().to(get_transaction_hash::<T, U>),
+                )
+                .route(
+                    &QueryServerRoutes::GetTransactionSid.with_arg_template("txn_hash"),
+                    web::get().to(get_transaction_sid::<T, U>),
                 )
                 .route(
                     &QueryServerRoutes::GetCommits.route(),

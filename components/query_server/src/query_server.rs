@@ -42,6 +42,7 @@ where
     utxos_to_map_index: HashMap<TxoSID, XfrAddress>,
     txo_to_txnid: HashMap<TxoSID, TxnIDHash>, // txo(spent, unspent) to authenticated txn (sid, hash)
     txn_sid_to_hash: HashMap<TxnSID, String>, // txn sid to txn hash
+    txn_hash_to_sid: HashMap<String, TxnSID>, // txn hash to txn sid
     custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
     rest_client: T,
     metrics_renderer: U,
@@ -66,6 +67,7 @@ where
             utxos_to_map_index: HashMap::new(),
             txo_to_txnid: HashMap::new(),
             txn_sid_to_hash: HashMap::new(),
+            txn_hash_to_sid: HashMap::new(),
             custom_data_store: HashMap::new(),
             rest_client,
             metrics_renderer,
@@ -157,6 +159,11 @@ where
     // Returns the transaction hash of a given txn_sid.
     pub fn get_transaction_hash(&self, txn_sid: TxnSID) -> Option<&String> {
         self.txn_sid_to_hash.get(&txn_sid)
+    }
+
+    // Returns the transaction sid of a given txn_hash.
+    pub fn get_transaction_sid(&self, txn_hash: String) -> Option<&TxnSID> {
+        self.txn_hash_to_sid.get(&txn_hash)
     }
 
     // Returns most recent commits at query_server side.
@@ -368,6 +375,7 @@ where
                 let hash = curr_txn.hash_tm().hex().to_uppercase();
                 self.txo_to_txnid.insert(*txo_sid, (*txn_sid, hash.clone()));
                 self.txn_sid_to_hash.insert(*txn_sid, hash.clone());
+                self.txn_hash_to_sid.insert(hash.clone(), *txn_sid);
                 if let Some(owner_memo) = owner_memo {
                     self.owner_memos.insert(*txo_sid, (*owner_memo).clone());
                 }
