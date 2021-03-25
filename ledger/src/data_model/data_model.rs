@@ -1772,7 +1772,7 @@ impl Transaction {
         lazy_static! {
             static ref MAX_OPS_PER_TX: usize = env::var("MAX_OPS_PER_TX")
                 .map(|n| pnk!(n.parse::<usize>()))
-                .unwrap_or(1);
+                .unwrap_or(10);
         }
         lazy_static! {
             static ref MAX_OUTPUTS_PER_TX: usize = env::var("MAX_OUTPUTS_PER_TX")
