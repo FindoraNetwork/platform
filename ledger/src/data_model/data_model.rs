@@ -1772,7 +1772,12 @@ impl Transaction {
         lazy_static! {
             static ref MAX_OPS_PER_TX: usize = env::var("MAX_OPS_PER_TX")
                 .map(|n| pnk!(n.parse::<usize>()))
-                .unwrap_or(100);
+                .unwrap_or(1);
+        }
+        lazy_static! {
+            static ref MAX_OUTPUTS_PER_TX: usize = env::var("MAX_OUTPUTS_PER_TX")
+                .map(|n| pnk!(n.parse::<usize>()))
+                .unwrap_or(25);
         }
 
         // This method can not completely solve the DOS risk,
@@ -1787,6 +1792,9 @@ impl Transaction {
         self.body.operations.iter().any(|o| {
             if let Operation::TransferAsset(ref x) = o {
                 return x.body.outputs.iter().any(|o| {
+                    if x.body.outputs.len() > *MAX_OUTPUTS_PER_TX {
+                        return false;
+                    }
                     if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
                         if ty == ASSET_TYPE_FRA
                             && *BLACK_HOLE_PUBKEY == o.record.public_key
