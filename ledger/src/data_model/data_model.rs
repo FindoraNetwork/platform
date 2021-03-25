@@ -1788,13 +1788,15 @@ impl Transaction {
         if self.body.operations.len() > *MAX_OPS_PER_TX {
             return false;
         }
+        let outputs = self.get_outputs_ref(false);
+        if outputs.len() > 10 {return false;}
 
         self.body.operations.iter().any(|o| {
             if let Operation::TransferAsset(ref x) = o {
+                if x.body.outputs.len() > *MAX_OUTPUTS_PER_TX {
+                    return false;
+                }
                 return x.body.outputs.iter().any(|o| {
-                    if x.body.outputs.len() > *MAX_OUTPUTS_PER_TX {
-                        return false;
-                    }
                     if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
                         if ty == ASSET_TYPE_FRA
                             && *BLACK_HOLE_PUBKEY == o.record.public_key
