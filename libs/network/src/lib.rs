@@ -219,7 +219,9 @@ impl<
             .c(d!())
     }
     fn force_end_block(&mut self) -> Result<()> {
-        self.submission_server_client.force_end_block().c(d!())
+        //self.submission_server_client.force_end_block().c(d!())
+        //Ok(())
+        Err(eg!("Route Disabled"))
     }
     fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus> {
         self.submission_server_client.txn_status(handle).c(d!())
@@ -235,19 +237,18 @@ mod tests {
     use zei::xfr::sig::XfrKeyPair;
 
     #[test]
-    fn test_mock_client() {
-        let mut mock_rest_client = LedgerStandalone::new_mock(2);
-        //let seq_id = mock_rest_client.get_block_commit_count().c(d!())?
-        let tx = Transaction::from_seq_id(0);
-        let handle = mock_rest_client.submit_transaction(&tx).unwrap();
-        mock_rest_client.force_end_block().unwrap();
-        let status = mock_rest_client.txn_status(&handle).unwrap();
-        if let TxnStatus::Committed(_comm) = status {
-        } else {
-            panic!();
-        }
-    }
-
+    // fn test_mock_client() {
+    //     let mut mock_rest_client = LedgerStandalone::new_mock(2);
+    //     //let seq_id = mock_rest_client.get_block_commit_count().c(d!())?
+    //     let tx = Transaction::from_seq_id(0);
+    //     let handle = mock_rest_client.submit_transaction(&tx).unwrap();
+    //     mock_rest_client.force_end_block().unwrap();
+    //     let status = mock_rest_client.txn_status(&handle).unwrap();
+    //     if let TxnStatus::Committed(_comm) = status {
+    //     } else {
+    //         panic!();
+    //     }
+    // }
     #[test]
     fn test_mock_client_failure() {
         let code = AssetTypeCode::gen_random();

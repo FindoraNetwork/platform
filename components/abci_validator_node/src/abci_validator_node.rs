@@ -54,7 +54,7 @@ impl TxnForward for TendermintForward {
 
         info!("forward_txn: \'{}\'", &json_rpc);
         let tendermint_reply = format!("http://{}", self.tendermint_reply);
-        if 15 > TX_PENDING_CNT.fetch_add(1, Ordering::Relaxed) {
+        if 2 > TX_PENDING_CNT.fetch_add(1, Ordering::Relaxed) {
             POOL.spawn_ok(async move {
                 ruc::info_omit!(
                     attohttpc::post(&tendermint_reply)

@@ -157,10 +157,10 @@ impl SubmissionApi {
                     &SubmissionRoutes::TxnStatus.with_arg_template("handle"),
                     web::get().to(txn_status::<RNG, LU, TF>),
                 )
-                .route(
-                    &SubmissionRoutes::ForceEndBlock.route(),
-                    web::post().to(force_end_block::<RNG, LU, TF>),
-                )
+            // .route(
+            //     &SubmissionRoutes::ForceEndBlock.route(),
+            //     web::post().to(force_end_block::<RNG, LU, TF>),
+            // )
         })
         .bind(&format!("{}:{}", host, port))
         .c(d!())?
@@ -235,29 +235,30 @@ impl RestfulLedgerUpdate for MockLUClient {
     }
 
     fn force_end_block(&mut self) -> Result<()> {
-        let route = SubmissionRoutes::ForceEndBlock.route();
-        let mut app = executor::block_on(test::init_service(
-            App::new()
-                .data(Arc::clone(&self.mock_submission_server))
-                .route(
-                    &route,
-                    web::post().to(force_end_block::<
-                        rand_chacha::ChaChaRng,
-                        LedgerState,
-                        NoTF,
-                    >),
-                ),
-        ));
-        let req = TestRequest::post().uri(&route).to_request();
-        let resp = executor::block_on(test::call_service(&mut app, req));
-        let status = resp.status();
-        let body = executor::block_on(test::read_body(resp));
-        let result = std::str::from_utf8(&body).c(d!())?;
-        if status != 200 {
-            Err(eg!(inp_fail!(result)))
-        } else {
-            Ok(())
-        }
+        Err(eg!(inp_fail!("Route Disabled")))
+        // let route = SubmissionRoutes::ForceEndBlock.route();
+        // let mut app = executor::block_on(test::init_service(
+        //     App::new()
+        //         .data(Arc::clone(&self.mock_submission_server))
+        //         .route(
+        //             &route,
+        //             web::post().to(force_end_block::<
+        //                 rand_chacha::ChaChaRng,
+        //                 LedgerState,
+        //                 NoTF,
+        //             >),
+        //         ),
+        // ));
+        // let req = TestRequest::post().uri(&route).to_request();
+        // let resp = executor::block_on(test::call_service(&mut app, req));
+        // let status = resp.status();
+        // let body = executor::block_on(test::read_body(resp));
+        // let result = std::str::from_utf8(&body).c(d!())?;
+        // if status != 200 {
+        //     Err(eg!(inp_fail!(result)))
+        // } else {
+        //     Ok(())
+        // }
     }
 
     fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus> {
@@ -318,16 +319,17 @@ impl RestfulLedgerUpdate for ActixLUClient {
     }
 
     fn force_end_block(&mut self) -> Result<()> {
-        let query = format!(
-            "{}://{}:{}{}",
-            self.protocol,
-            self.host,
-            self.port,
-            SubmissionRoutes::ForceEndBlock.route()
-        );
-        let opt: Option<u64> = None;
-        http_post_request(&query, opt).c(d!(inp_fail!()))?;
-        Ok(())
+        // let query = format!(
+        //     "{}://{}:{}{}",
+        //     self.protocol,
+        //     self.host,
+        //     self.port,
+        //     SubmissionRoutes::ForceEndBlock.route()
+        // );
+        // let opt: Option<u64> = None;
+        // http_post_request(&query, opt).c(d!(inp_fail!()))?;
+        //Ok(())
+        Err(eg!(inp_fail!("Route Disabled")))
     }
 
     fn txn_status(&self, handle: &TxnHandle) -> Result<TxnStatus> {
