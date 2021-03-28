@@ -80,8 +80,8 @@ impl LedgerStandalone<MockLUClient, MockLedgerClient, MockQueryServerClient> {
 
         LedgerStandalone {
             submission_server_client,
-            query_server_client,
             ledger_client,
+            query_server_client,
         }
     }
 }
@@ -101,8 +101,8 @@ impl LedgerStandalone<ActixLUClient, ActixLedgerClient, ActixQueryServerClient> 
 
         LedgerStandalone {
             submission_server_client,
-            query_server_client,
             ledger_client,
+            query_server_client,
         }
     }
 }

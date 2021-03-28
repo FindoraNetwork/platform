@@ -1956,7 +1956,7 @@ impl Transaction {
     pub fn get_outputs_ref(&self, include_spent: bool) -> Vec<TxOutput> {
         let eff = TxnEffect::compute_effect(self.clone()).unwrap();
         if !include_spent {
-            eff.txos.into_iter().filter_map(|x| x).collect()
+            eff.txos.into_iter().flatten().collect()
         } else {
             let mut spent = eff.internally_spent_txos.into_iter();
             let mut ret = vec![];
