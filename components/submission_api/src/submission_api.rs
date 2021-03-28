@@ -145,7 +145,7 @@ impl SubmissionApi {
             App::new()
                 .wrap(middleware::Logger::default())
                 .wrap(Cors::permissive().supports_credentials())
-                .data(web::JsonConfig::default().limit(1024 * 1024 * 50))
+                .data(web::JsonConfig::default().limit(1024 * 512))
                 .data(submission_server.clone())
                 .route(
                     &SubmissionRoutes::SubmitTransaction.route(),
