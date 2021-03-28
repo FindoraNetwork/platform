@@ -117,7 +117,7 @@ tendermint:
 		if [ -d "tools/tendermint" ]; then rm -rf tools/tendermint; fi; \
 		git clone -b v0.33.5 --depth=1 https://github.com/tendermint/tendermint.git tools/tendermint; \
 	fi
-	cd tools/tendermint && make install
+	cd tools/tendermint && make install TENDERMINT_BUILD_OPTIONS=cleveldb
 
 wasm:
 	cd components/wasm && wasm-pack build
