@@ -2702,6 +2702,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
             transferable: true,
             updatable: true,
             decimals: FRA_DECIMAL,
+            max_units: Some(100 + FRA_AMOUNT),
             ..AssetRules::default()
         },
         Some(Memo("FRA".to_owned())),

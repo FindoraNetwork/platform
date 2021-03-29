@@ -283,7 +283,8 @@ impl TxnEffect {
                         if let XfrAmount::NonConfidential(amt) = output.record.amount {
                             let issuance_amount =
                                 issuance_amounts.entry(code).or_insert(0);
-                            (*issuance_amount).checked_add(amt).c(d!())?;
+                            *issuance_amount =
+                                (*issuance_amount).checked_add(amt).c(d!())?;
                         } else {
                             confidential_issuance_types.insert(code);
                         }
