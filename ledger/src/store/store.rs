@@ -2139,6 +2139,9 @@ impl LedgerAccess for LedgerState {
     }
     fn get_utxos(&mut self, sid_list: TxoSIDList) -> Vec<Option<AuthenticatedUtxo>> {
         let mut utxos: Vec<Option<AuthenticatedUtxo>> = Vec::new();
+        if sid_list.0.len() > 10 || sid_list.0.len() == 0 {
+            return utxos;
+        }
         for sid in sid_list.0.iter() {
             let utxo = self.status.get_utxo(*sid);
             if let Some(utxo) = utxo.cloned() {

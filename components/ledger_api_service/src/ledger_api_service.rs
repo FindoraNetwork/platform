@@ -109,6 +109,9 @@ where
 {
     let mut writer = data.write();
     if let Ok(txo_sid_list) = info.parse::<TxoSIDList>() {
+        if txo_sid_list.0.len() > 10 || txo_sid_list.0.len() == 0 {
+            return Err(actix_web::error::ErrorBadRequest("Invalid Query List"));
+        }
         Ok(web::Json(writer.get_utxos(txo_sid_list)))
     } else {
         Err(actix_web::error::ErrorBadRequest(
