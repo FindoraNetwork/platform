@@ -78,7 +78,7 @@ impl TxnEffect {
         let mut cosig_keys = HashMap::new();
         let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
         let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
-        let mut issuance_amounts = HashMap::new();
+        let mut issuance_amounts: HashMap<AssetTypeCode, u64> = HashMap::new();
         let mut debt_effects: HashMap<AssetTypeCode, DebtSwapEffect> = HashMap::new();
         let mut tracing_policies: HashMap<AssetTypeCode, TracingPolicies> =
             HashMap::new();
@@ -283,7 +283,7 @@ impl TxnEffect {
                         if let XfrAmount::NonConfidential(amt) = output.record.amount {
                             let issuance_amount =
                                 issuance_amounts.entry(code).or_insert(0);
-                            *issuance_amount += amt;
+                            (*issuance_amount).checked_add(amt).c(d!())?;
                         } else {
                             confidential_issuance_types.insert(code);
                         }
