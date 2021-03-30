@@ -1701,7 +1701,6 @@ mod tests {
             .remove(&tmp_sid)
             .unwrap()
             .1;
-
         let mut count: u16 = 0;
         let utxos = ledger.get_utxos(TxoSIDList(txo_sid));
         for _ in utxos.iter().flatten() {

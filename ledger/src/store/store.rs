@@ -2139,7 +2139,7 @@ impl LedgerAccess for LedgerState {
     }
     fn get_utxos(&mut self, sid_list: TxoSIDList) -> Vec<Option<AuthenticatedUtxo>> {
         let mut utxos: Vec<Option<AuthenticatedUtxo>> = Vec::new();
-        if sid_list.0.len() > 10 || sid_list.0.len() == 0 {
+        if sid_list.0.len() > 10 || sid_list.0.is_empty() {
             return utxos;
         }
         for sid in sid_list.0.iter() {

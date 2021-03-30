@@ -563,10 +563,9 @@ impl FromStr for TxoSIDList {
         let s_string = s.to_string();
         let list_of_txostr = s_string.split(',').collect_vec();
         let mut txolist: Vec<TxoSID> = Vec::new();
-
-        for (idx, str_txo) in list_of_txostr.iter().enumerate() {
+        for (_, str_txo) in list_of_txostr.iter().enumerate() {
             if let Ok(txu) = str_txo.parse::<u64>() {
-                txolist[idx] = TxoSID(txu);
+                txolist.push(TxoSID(txu));
             }
         }
         Ok(TxoSIDList(txolist))
