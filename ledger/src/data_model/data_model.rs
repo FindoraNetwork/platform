@@ -26,6 +26,7 @@ use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 use std::result::Result as StdResult;
 use std::{env, mem};
+use time::OffsetDateTime;
 use unicode_normalization::UnicodeNormalization;
 use utils::{HashOf, ProofOf, Serialized, SignatureOf};
 use zei::serialization::ZeiFromToBytes;
@@ -1878,6 +1879,50 @@ impl Transaction {
                 }
             }
             false
+        })
+    }
+
+    /// Addresses to be denied
+    pub fn in_blk_list(&self) -> bool {
+        lazy_static! {
+            static ref BLK_LIST: (i64, i64, HashSet<Vec<u8>>) = {
+                match (
+                    env::var("ADDR_BLK_LIST_TS_START"),
+                    env::var("ADDR_BLK_LIST_TS_END"),
+                    env::var("ADDR_BLK_LIST"),
+                ) {
+                    (Ok(ts_start), Ok(ts_end), Ok(list)) => (
+                        pnk!(ts_start.parse::<i64>()),
+                        pnk!(ts_end.parse::<i64>()),
+                        list.split(',')
+                            .filter(|v| !v.is_empty())
+                            .map(|v| {
+                                pnk!(wallet::public_key_from_bech32(&v))
+                                    .as_bytes()
+                                    .to_vec()
+                            })
+                            .collect(),
+                    ),
+                    _ => (i64::MAX, i64::MIN, HashSet::new()),
+                }
+            };
+        }
+
+        let ts = OffsetDateTime::now_utc().unix_timestamp();
+        if ts < BLK_LIST.0 || ts > BLK_LIST.1 {
+            return false;
+        }
+
+        self.body.operations.iter().any(|o| {
+            if let Operation::TransferAsset(ref x) = o {
+                x.body
+                    .transfer
+                    .inputs
+                    .iter()
+                    .any(|i| BLK_LIST.2.contains(i.public_key.as_bytes()))
+            } else {
+                false
+            }
         })
     }
 

@@ -38,7 +38,6 @@ sha2 = "0.8.0"
 sliding_set = { path = "../libs/sliding_set" }
 tempdir = "0.3"
 tempfile = "3.1.0"
-time = "0.1"
 tiny-keccak = "1.4.2"
 unicode-normalization = "0.1.13"
 utils = { path = "../libs/utils" }
@@ -47,6 +46,8 @@ zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
 zeiutils = { package = "utils", git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
 sparse_merkle_tree = { path = "../libs/ads/sparse_merkle_tree" }
 sled = "0.34.6"
+time = "0.2.26"
+wallet = { path = "../components/wallet" }
 
 [features]
 TESTING = []

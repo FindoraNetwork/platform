@@ -134,7 +134,8 @@ impl abci::Application for ABCISubmissionServer {
 
         if let Some(tx) = convert_tx(req.get_tx()) {
             info!("converted: {:?}", tx);
-            if !tx.check_fee()
+            if tx.in_blk_list()
+                || !tx.check_fee()
                 || !tx.check_fra_no_illegal_issuance(
                     TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed),
                 )
@@ -163,7 +164,8 @@ impl abci::Application for ABCISubmissionServer {
         if let Some(tx) = convert_tx(req.get_tx()) {
             info!("converted: {:?}", tx);
 
-            if tx.check_fee()
+            if !tx.in_blk_list()
+                && tx.check_fee()
                 && tx.check_fra_no_illegal_issuance(
                     TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed),
                 )
