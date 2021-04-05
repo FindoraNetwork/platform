@@ -46,9 +46,13 @@ where
     LU: LedgerUpdate<RNG> + Sync + Send,
     TF: TxnForward + Sync + Send,
 {
-    let mut submission_server = data.write();
     let tx = body.into_inner();
 
+    if tx.in_blk_list() {
+        return Err(error::ErrorBadRequest("in black list"));
+    }
+
+    let mut submission_server = data.write();
     submission_server
         .handle_transaction(tx)
         .map(web::Json)
