@@ -54,4 +54,4 @@ tokio = { version = "1.3.0", features = ["full", "macros"] }
 txn_builder = { path = "../../txn_builder" }
 utils = { path = "../../../libs/utils" }
 warp = "0.2"
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.1" }

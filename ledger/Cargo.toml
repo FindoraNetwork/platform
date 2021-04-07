@@ -42,8 +42,8 @@ tiny-keccak = "1.4.2"
 unicode-normalization = "0.1.13"
 utils = { path = "../libs/utils" }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
-zeiutils = { package = "utils", git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.0d" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.1" }
+zeiutils = { package = "utils", git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.1" }
 sparse_merkle_tree = { path = "../libs/ads/sparse_merkle_tree" }
 sled = "0.34.6"
 time = "0.2.26"
