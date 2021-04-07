@@ -1838,6 +1838,9 @@ impl Transaction {
                 if x.body.inputs.len() > *MAX_INPUTS_PER_OP {
                     return false;
                 }
+                if !x.body.policies.valid {
+                    return false;
+                }
                 continue;
             } else if let Operation::DefineAsset(ref x) = o {
                 if x.body.asset.memo.0.len() > *MAX_MEMO_LEN {
