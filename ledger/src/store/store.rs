@@ -746,35 +746,31 @@ impl LedgerStatus {
         for ((op_idx, input_idx), key_set) in txn_effect.cosig_keys.iter() {
             let op = &txn_effect.txn.body.operations[*op_idx];
 
+            macro_rules! extract_asset_type {
+                ($asset: expr) => {
+                    match $asset.body.transfer.inputs.get(*input_idx) {
+                        Some(record) => match record.asset_type {
+                            XfrAssetType::NonConfidential(val) => {
+                                Some(AssetTypeCode { val })
+                            }
+                            _ => None,
+                        },
+                        _ => None,
+                    }
+                };
+            }
+
             let sig_type = match op {
                 Operation::TransferAsset(xfr) => {
-                    if let XfrAssetType::NonConfidential(val) =
-                        xfr.body.transfer.inputs[*input_idx].asset_type
-                    {
-                        Some(AssetTypeCode { val })
-                    } else {
-                        None
-                    }
+                    extract_asset_type!(xfr)
                 }
 
                 Operation::BindAssets(bind) => {
-                    if let XfrAssetType::NonConfidential(val) =
-                        bind.body.transfer.inputs[*input_idx].asset_type
-                    {
-                        Some(AssetTypeCode { val })
-                    } else {
-                        None
-                    }
+                    extract_asset_type!(bind)
                 }
 
                 Operation::ReleaseAssets(rel) => {
-                    if let XfrAssetType::NonConfidential(val) =
-                        rel.body.transfer.inputs[*input_idx].asset_type
-                    {
-                        Some(AssetTypeCode { val })
-                    } else {
-                        None
-                    }
+                    extract_asset_type!(rel)
                 }
 
                 _ => {

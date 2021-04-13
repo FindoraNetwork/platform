@@ -357,10 +357,10 @@ impl TxnEffect {
                             .collect::<Vec<_>>();
                         for (inp_ix, out_ix, hash) in trn.body.lien_assignments.iter() {
                             let (inp_ix, out_ix) = (*inp_ix, *out_ix);
-                            match (inps.get(inp_ix), outs.get(out_ix)) {
-                                (Some(None), Some(None)) => {
-                                    inps[inp_ix] = Some(hash);
-                                    outs[out_ix] = Some(hash);
+                            match (inps.get_mut(inp_ix), outs.get_mut(out_ix)) {
+                                (Some(ele_in), Some(ele_out)) => {
+                                    *ele_in = Some(hash);
+                                    *ele_out = Some(hash);
                                 }
                                 _ => {
                                     return Err(eg!(inp_fail!()));
