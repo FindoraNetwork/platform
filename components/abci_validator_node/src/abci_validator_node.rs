@@ -422,27 +422,15 @@ fn gen_tendermint_attr_addr(tx: &Transaction) -> (Vec<TagAttr>, Vec<TagAttr>) {
                     append_attr!(d, inputs, 0);
                     append_attr!(d, outputs, 1);
                 }
-                Operation::BindAssets(d) => {
-                    append_attr!(d, inputs, 0);
-                    append_attr!(d, outputs, 1);
-                }
-                Operation::ReleaseAssets(d) => {
-                    append_attr!(d, inputs, 0);
-                    append_attr!(d, outputs, 1);
-                }
                 Operation::DefineAsset(d) => {
                     append_attr!(d);
                 }
                 Operation::IssueAsset(d) => {
                     append_attr!(d);
                 }
-                Operation::AIRAssign(d) => {
-                    append_attr!(d);
-                }
                 Operation::UpdateMemo(d) => {
                     append_attr!(d);
                 }
-                Operation::KVStoreUpdate(_) => {}
             }
 
             base

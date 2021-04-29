@@ -2,8 +2,8 @@
 #![deny(warnings)]
 
 use ledger::data_model::{
-    AssetType, AssetTypeCode, AuthenticatedKVLookup, AuthenticatedUtxo, BlockSID,
-    FinalizedTransaction, StateCommitmentData, Transaction, TxoSID, TxoSIDList,
+    AssetType, AssetTypeCode, AuthenticatedUtxo, BlockSID, FinalizedTransaction,
+    StateCommitmentData, Transaction, TxoSID, TxoSIDList,
 };
 use ledger::store::LedgerState;
 use ledger_api_service::{
@@ -15,7 +15,6 @@ use query_api::{
 };
 use ruc::*;
 use serde::Serialize;
-use sparse_merkle_tree::Key;
 use std::sync::Arc;
 use submission_api::{ActixLUClient, MockLUClient, RestfulLedgerUpdate};
 use submission_server::{TxnHandle, TxnStatus};
@@ -131,21 +130,6 @@ impl<
     Q: RestfulQueryServerAccess,
 > RestfulQueryServerAccess for LedgerStandalone<LU, LA, Q>
 {
-    // fn store_custom_data(
-    //     &mut self,
-    //     data: &dyn AsRef<[u8]>,
-    //     key: &Key,
-    //     blind: Option<KVBlind>,
-    // ) -> Result<()> {
-    //     self.query_server_client
-    //         .store_custom_data(data, key, blind)
-    //         .c(d!())
-    // }
-
-    fn fetch_custom_data(&self, key: &Key) -> Result<Vec<u8>> {
-        self.query_server_client.fetch_custom_data(key).c(d!())
-    }
-
     fn get_owner_memo(&self, txo_sid: u64) -> Result<Option<OwnerMemo>> {
         self.query_server_client.get_owner_memo(txo_sid).c(d!())
     }
@@ -189,10 +173,6 @@ impl<
             Ok((_, seq_id, _)) => Ok(seq_id),
             Err(e) => Err(eg!(e)),
         }
-    }
-
-    fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup> {
-        self.ledger_client.get_kv_entry(addr).c(d!())
     }
 
     fn public_key(&self) -> Result<XfrPublicKey> {

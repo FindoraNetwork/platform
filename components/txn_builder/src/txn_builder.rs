@@ -6,9 +6,7 @@ extern crate zei;
 #[macro_use]
 extern crate serde_derive;
 
-use credentials::{
-    CredCommitment, CredIssuerPublicKey, CredPoK, CredUserPublicKey, CredUserSecretKey,
-};
+use credentials::CredUserSecretKey;
 use curve25519_dalek::scalar::Scalar;
 use ledger::data_model::errors::PlatformError;
 use ledger::data_model::*;
@@ -18,7 +16,6 @@ use ledger::policy_script::{Policy, PolicyGlobals, TxnCheckInputs, TxnPolicyData
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use ruc::*;
-use sparse_merkle_tree::Key;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use utils::SignatureOf;
@@ -295,21 +292,6 @@ pub trait BuildsTransactions {
         output_records: &[AssetRecord],
         output_identity_commitments: Vec<Option<ACCommitment>>,
     ) -> Result<&mut Self>;
-    fn add_operation_air_assign(
-        &mut self,
-        key_pair: &XfrKeyPair,
-        addr: CredUserPublicKey,
-        data: CredCommitment,
-        issuer_pk: CredIssuerPublicKey,
-        pok: CredPoK,
-    ) -> Result<&mut Self>;
-    fn add_operation_kv_update(
-        &mut self,
-        auth_key_pair: &XfrKeyPair,
-        index: &Key,
-        seq_num: u64,
-        data: Option<&KVHash>,
-    ) -> Result<&mut Self>;
     fn add_operation_update_memo(
         &mut self,
         auth_key_pair: &XfrKeyPair,
@@ -535,12 +517,6 @@ impl TransactionBuilder {
                     .iter()
                     .map(|(o, om)| (o.record.clone(), om.clone()))
                     .collect(),
-                Operation::BindAssets(d) => {
-                    seek!(d)
-                }
-                Operation::ReleaseAssets(d) => {
-                    seek!(d)
-                }
                 _ => Vec::new(),
             })
             .flatten()
@@ -798,40 +774,6 @@ impl BuildsTransactions for TransactionBuilder {
         xfr.sign(&keys);
 
         self.txn.add_operation(Operation::TransferAsset(xfr));
-        Ok(self)
-    }
-    fn add_operation_kv_update(
-        &mut self,
-        auth_key_pair: &XfrKeyPair,
-        index: &Key,
-        seq_num: u64,
-        hash: Option<&KVHash>,
-    ) -> Result<&mut Self> {
-        let update = KVUpdate::new((*index, hash.cloned()), seq_num, auth_key_pair);
-        self.txn.add_operation(Operation::KVStoreUpdate(update));
-        Ok(self)
-    }
-    fn add_operation_air_assign(
-        &mut self,
-        key_pair: &XfrKeyPair,
-        addr: CredUserPublicKey,
-        data: CredCommitment,
-        issuer_pk: CredIssuerPublicKey,
-        pok: CredPoK,
-    ) -> Result<&mut Self> {
-        let xfr = AIRAssign::new(
-            AIRAssignBody::new(
-                addr,
-                data,
-                issuer_pk,
-                pok,
-                self.txn.body.no_replay_token,
-            )
-            .c(d!())?,
-            key_pair,
-        )
-        .c(d!())?;
-        self.txn.add_operation(Operation::AIRAssign(xfr));
         Ok(self)
     }
 

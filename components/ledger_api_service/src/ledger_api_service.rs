@@ -14,7 +14,6 @@ use log::warn;
 use parking_lot::RwLock;
 use ruc::*;
 use serde::Serialize;
-use sparse_merkle_tree::Key;
 use std::marker::{Send, Sync};
 use std::sync::Arc;
 use utils::{http_get_request, HashOf, NetworkRoute, SignatureOf};
@@ -238,34 +237,6 @@ where
     web::Json(ret)
 }
 
-pub async fn query_air<AA>(
-    data: web::Data<Arc<RwLock<AA>>>,
-    addr: web::Path<String>,
-) -> actix_web::Result<web::Json<AuthenticatedAIRResult>>
-where
-    AA: ArchiveAccess,
-{
-    let reader = data.read();
-    let key = addr.into_inner();
-    let air_result = reader.get_air_data(&key);
-    Ok(web::Json(air_result))
-}
-
-pub async fn query_kv<LA>(
-    data: web::Data<Arc<RwLock<LA>>>,
-    addr: web::Path<String>,
-) -> actix_web::Result<web::Json<AuthenticatedKVLookup>>
-where
-    LA: LedgerAccess,
-{
-    let reader = data.read();
-    let key = Key::from_base64(&*addr)
-        .c(d!())
-        .map_err(|e| actix_web::error::ErrorBadRequest(e.generate_log()))?;
-    let result = reader.get_kv_entry(key);
-    Ok(web::Json(result))
-}
-
 async fn query_block_log<AA>(
     data: web::Data<Arc<RwLock<AA>>>,
 ) -> impl actix_web::Responder
@@ -403,7 +374,6 @@ pub enum LedgerAccessRoutes {
     AssetToken,
     PublicKey,
     GlobalState,
-    KVLookup,
 }
 
 impl NetworkRoute for LedgerAccessRoutes {
@@ -415,7 +385,6 @@ impl NetworkRoute for LedgerAccessRoutes {
             LedgerAccessRoutes::AssetToken => "asset_token",
             LedgerAccessRoutes::PublicKey => "public_key",
             LedgerAccessRoutes::GlobalState => "global_state",
-            LedgerAccessRoutes::KVLookup => "kv_lookup",
         };
         "/".to_owned() + endpoint
     }
@@ -513,10 +482,6 @@ where
             &LedgerAccessRoutes::GlobalState.route(),
             web::get().to(query_global_state::<LA>),
         )
-        .route(
-            &LedgerAccessRoutes::KVLookup.with_arg_template("addr"),
-            web::get().to(query_kv::<LA>),
-        )
     }
 
     // Set routes for the ArchiveAccess interface
@@ -526,10 +491,6 @@ where
         self.route(
             &LedgerArchiveRoutes::TxnSid.with_arg_template("sid"),
             web::get().to(query_txn::<AA>),
-        )
-        .route(
-            &LedgerArchiveRoutes::AirAddress.with_arg_template("key"),
-            web::get().to(query_air::<AA>),
         )
         .route(
             &LedgerArchiveRoutes::BlockLog.route(),
@@ -609,8 +570,6 @@ pub trait RestfulLedgerAccess {
     )>;
 
     fn get_block_commit_count(&self) -> Result<u64>;
-
-    fn get_kv_entry(&self, addr: Key) -> Result<AuthenticatedKVLookup>;
 
     fn public_key(&self) -> Result<XfrPublicKey>;
 
@@ -729,10 +688,6 @@ impl RestfulLedgerAccess for MockLedgerClient {
     }
 
     fn get_block_commit_count(&self) -> Result<u64> {
-        unimplemented!();
-    }
-
-    fn get_kv_entry(&self, _addr: Key) -> Result<AuthenticatedKVLookup> {
         unimplemented!();
     }
 
@@ -855,10 +810,6 @@ impl RestfulLedgerAccess for ActixLedgerClient {
     }
 
     fn get_block_commit_count(&self) -> Result<u64> {
-        unimplemented!();
-    }
-
-    fn get_kv_entry(&self, _addr: Key) -> Result<AuthenticatedKVLookup> {
         unimplemented!();
     }
 

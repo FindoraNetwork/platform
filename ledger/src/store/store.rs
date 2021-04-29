@@ -7,7 +7,6 @@ use crate::data_model::*;
 use crate::policies::{calculate_fee, DebtMemo};
 use crate::policy_script::policy_check_txn;
 use crate::{inp_fail, inv_fail};
-use air::{AIRResult, AIR};
 use bitmap::{BitMap, SparseMap};
 use cryptohash::sha256::Digest as BitDigest;
 use log::info;
@@ -61,9 +60,6 @@ pub trait LedgerAccess {
 
     // Get the authenticated status of a UTXO (Spent, Unspent, NonExistent).
     fn get_utxo_status(&mut self, addr: TxoSID) -> AuthenticatedUtxoStatus;
-
-    // Get the authenticated KV entry
-    fn get_kv_entry(&self, addr: Key) -> AuthenticatedKVLookup;
 
     // The public signing key this ledger provides
     fn public_key(&self) -> &XfrPublicKey;
@@ -181,9 +177,6 @@ pub trait ArchiveAccess {
         &self,
         height: u64,
     ) -> Option<HashOf<Option<StateCommitmentData>>>;
-
-    // Key-value lookup in AIR
-    fn get_air_data(&self, address: &str) -> AuthenticatedAIRResult;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -200,7 +193,6 @@ const MAX_VERSION: usize = 100;
 pub struct LedgerStatus {
     // Paths to archival logs for the merkle tree and transaction history
     block_merkle_path: String,
-    air_path: String,
     txn_merkle_path: String,
     txn_path: String,
     utxo_map_path: String,
@@ -224,9 +216,6 @@ pub struct LedgerStatus {
 
     // State commitment history. The BitDigest at index i is the state commitment of the ledger at block height  i + 1.
     state_commitment_versions: Vec<HashOf<Option<StateCommitmentData>>>,
-
-    // Arbitrary custom data
-    custom_data: SmtMap256<Serialized<(u64, Option<KVEntry>)>>,
 
     // TODO(joe): This field should probably exist, but since it is not
     // currently used by anything I'm leaving it commented out. We should
@@ -275,9 +264,6 @@ pub struct LedgerStatus {
 
     // Hash of the transactions in the most recent block
     txns_in_block_hash: Option<HashOf<Vec<Transaction>>>,
-
-    // Sparse Merkle Tree for Address Identity Registry
-    air: AIR,
 
     // Sliding window of operations for replay attack prevention
     sliding_set: SlidingSet<[u8; 8]>,
@@ -397,9 +383,6 @@ impl HasInvariants for LedgerState {
             let other_block_merkle_buf = tmp_dir.join("test_block_merkle");
             let other_block_merkle_path = other_block_merkle_buf.to_str().c(d!())?;
 
-            let other_air_buf = tmp_dir.join("test_air");
-            let other_air_path = other_air_buf.to_str().c(d!())?;
-
             let other_txn_merkle_buf = tmp_dir.join("test_txn_merkle");
             let other_txn_merkle_path = other_txn_merkle_buf.to_str().c(d!())?;
 
@@ -422,7 +405,6 @@ impl HasInvariants for LedgerState {
             let state2 = Box::new(
                 LedgerState::load_checked_from_log(
                     &other_block_merkle_path,
-                    &other_air_path,
                     &other_txn_merkle_path,
                     &other_txn_path,
                     &other_utxo_map_path,
@@ -434,7 +416,6 @@ impl HasInvariants for LedgerState {
 
             let mut status2 = Box::new(state2.status);
             status2.block_merkle_path = self.status.block_merkle_path.clone();
-            status2.air_path = self.status.air_path.clone();
             status2.txn_merkle_path = self.status.txn_merkle_path.clone();
             status2.txn_path = self.status.txn_path.clone();
             status2.utxo_map_path = self.status.utxo_map_path.clone();
@@ -453,7 +434,6 @@ impl HasInvariants for LedgerState {
 impl LedgerStatus {
     pub fn new(
         block_merkle_path: &str,
-        air_path: &str,
         txn_merkle_path: &str,
         txn_path: &str,
         // TODO(joe): should this do something?
@@ -462,14 +442,11 @@ impl LedgerStatus {
     ) -> Result<LedgerStatus> {
         let ledger = LedgerStatus {
             block_merkle_path: block_merkle_path.to_owned(),
-            air_path: air_path.to_owned(),
             txn_merkle_path: txn_merkle_path.to_owned(),
-            air: LedgerState::init_air_log(air_path, true).c(d!())?,
             sliding_set: SlidingSet::<[u8; 8]>::new(TRANSACTION_WINDOW_WIDTH as usize),
             txn_path: txn_path.to_owned(),
             utxo_map_path: utxo_map_path.to_owned(),
             utxos: HashMap::new(),
-            custom_data: SmtMap256::new(),
             txo_to_txn_location: HashMap::new(),
             issuance_amounts: HashMap::new(),
             utxo_map_versions: VecDeque::new(),
@@ -529,41 +506,6 @@ impl LedgerStatus {
                     "No replay token ({:?}, {})seen before at  possible replay",
                     rand, seq_id
                 )))));
-            }
-        }
-
-        // Key-Value updates must be
-        // 1. Signed by the previous owner of that key, if one exists
-        // 2. The generation number starts at 0 or increments
-        // 3. Signed by the new owner of that key, if one exists
-        // (2) is checked for all but the first value in local validation
-        // (3) is already handled in local validation
-        for (k, update) in txn_effect.kv_updates.iter() {
-            let (sig, gen_num, update) = update.first().c(d!())?;
-            if let Some(ent) = self.custom_data.get(&k) {
-                let (prev_gen_num, ent) = ent.deserialize();
-                // (2)
-                if prev_gen_num + 1 != *gen_num {
-                    return Err(eg!(inp_fail!(
-                        "Generation number must be one more than the last one"
-                    )));
-                }
-                if let Some(ent) = ent {
-                    // (1)
-                    KVUpdate {
-                        body: (*k, *gen_num, update.clone()),
-                        signature: sig.clone(),
-                    }
-                    .check_signature(&ent.0)
-                    .c(d!(PlatformError::Unknown))?;
-                }
-            } else {
-                // (2)
-                if *gen_num != 0 {
-                    return Err(eg!(inp_fail!(
-                        "Generation number must start at zero (0)"
-                    )));
-                }
             }
         }
 
@@ -764,15 +706,6 @@ impl LedgerStatus {
                 Operation::TransferAsset(xfr) => {
                     extract_asset_type!(xfr)
                 }
-
-                Operation::BindAssets(bind) => {
-                    extract_asset_type!(bind)
-                }
-
-                Operation::ReleaseAssets(rel) => {
-                    extract_asset_type!(rel)
-                }
-
                 _ => {
                     return Err(eg!(inp_fail!()));
                 }
@@ -922,27 +855,11 @@ impl LedgerStatus {
         }
         block.no_replay_tokens.clear();
 
-        // KV updates
-        for (k, ent) in block.kv_updates.drain() {
-            // safe unwrap since entries in kv_updates should be non-empty
-            let final_val = ent.last().unwrap();
-            self.custom_data.set(
-                &k,
-                Some(Serialized::new(&(final_val.1, final_val.2.clone()))),
-            );
-        }
-
         // Remove consumed UTXOs
         for (inp_sid, _) in block.input_txos.drain() {
             // Remove from ledger status
             debug_assert!(self.utxos.contains_key(&inp_sid));
             self.utxos.remove(&inp_sid);
-        }
-
-        // Apply AIR updates
-        for (addr, data) in block.air_updates.drain() {
-            debug_assert!(self.air.get(&addr).is_none());
-            self.air.set(&addr, Some(data));
         }
 
         // Apply memo updates
@@ -1055,7 +972,6 @@ impl LedgerUpdate<ChaChaRng> for LedgerState {
         block.new_asset_codes.clear();
         block.new_issuance_nums.clear();
         block.issuance_keys.clear();
-        block.air_updates.clear();
 
         debug_assert_eq!(block.clone(), Default::default());
 
@@ -1466,9 +1382,6 @@ impl LedgerState {
         let block_merkle_buf = tmp_dir.join("test_block_merkle");
         let block_merkle_path = block_merkle_buf.to_str().unwrap();
 
-        let air_buf = tmp_dir.join("test_air");
-        let air_path = air_buf.to_str().unwrap();
-
         let txn_merkle_buf = tmp_dir.join("test_txn_merkle");
         let txn_merkle_path = txn_merkle_buf.to_str().unwrap();
 
@@ -1483,7 +1396,6 @@ impl LedgerState {
 
         let ret = LedgerState::new(
             &block_merkle_path,
-            &air_path,
             &txn_merkle_path,
             &txn_path,
             &utxo_map_path,
@@ -1578,7 +1490,6 @@ impl LedgerState {
             bitmap: self.utxo_map.compute_checksum(),
             block_merkle: self.block_merkle.get_root_hash(),
             transaction_merkle_commitment: self.txn_merkle.get_root_hash(),
-            air_commitment: *self.status.air.merkle_root(),
             txns_in_block_hash: self
                 .status
                 .txns_in_block_hash
@@ -1588,7 +1499,6 @@ impl LedgerState {
             previous_state_commitment: prev_commitment,
             txo_count: self.status.next_txo.0,
             pulse_count: self.status.pulse_count,
-            kv_store: *self.status.custom_data.merkle_root(),
         });
         self.status.state_commitment_versions.push(
             self.status
@@ -1623,19 +1533,6 @@ impl LedgerState {
         // Ok(LoggedMerkle::new(tree, writer))
     }
 
-    fn init_air_log(path: &str, create: bool) -> Result<AIR> {
-        // Create a merkle tree or open an existing one.
-        let tree = if create {
-            AIR::default()
-        } else {
-            air::open(path).c(d!())?
-        };
-
-        info!("Using path {} for the Address Identity Registry.", path);
-
-        Ok(tree)
-    }
-
     // Initialize a bitmap to track the unspent utxos.
     fn init_utxo_map(path: &str, create: bool) -> Result<BitMap> {
         let file = OpenOptions::new()
@@ -1655,7 +1552,6 @@ impl LedgerState {
     // Initialize a new Ledger structure.
     pub fn new(
         block_merkle_path: &str,
-        air_path: &str,
         txn_merkle_path: &str,
         txn_path: &str,
         utxo_map_path: &str,
@@ -1669,7 +1565,6 @@ impl LedgerState {
         let ledger = LedgerState {
             status: LedgerStatus::new(
                 block_merkle_path,
-                air_path,
                 txn_merkle_path,
                 txn_path,
                 utxo_map_path,
@@ -1700,7 +1595,6 @@ impl LedgerState {
 
     pub fn load_checked_from_log(
         block_merkle_path: &str,
-        air_path: &str,
         txn_merkle_path: &str,
         txn_path: &str,
         utxo_map_path: &str,
@@ -1751,7 +1645,6 @@ impl LedgerState {
         let mut ledger = LedgerStateChecker(LedgerState {
             status: LedgerStatus::new(
                 block_merkle_path,
-                air_path,
                 txn_merkle_path,
                 txn_path,
                 utxo_map_path,
@@ -1816,7 +1709,6 @@ impl LedgerState {
 
     pub fn load_from_log(
         block_merkle_path: &str,
-        air_path: &str,
         txn_merkle_path: &str,
         txn_path: &str,
         utxo_map_path: &str,
@@ -1868,7 +1760,6 @@ impl LedgerState {
         let mut ledger = LedgerState {
             status: LedgerStatus::new(
                 block_merkle_path,
-                air_path,
                 txn_merkle_path,
                 txn_path,
                 utxo_map_path,
@@ -1913,9 +1804,6 @@ impl LedgerState {
         let block_buf = base_dir.join("block_merkle");
         let block_merkle = block_buf.to_str().c(d!())?;
 
-        let air_buf = base_dir.join("air");
-        let air = air_buf.to_str().c(d!())?;
-
         let txn_merkle_buf = base_dir.join("txn_merkle");
         let txn_merkle = txn_merkle_buf.to_str().c(d!())?;
 
@@ -1932,7 +1820,6 @@ impl LedgerState {
         // and it being corrupted
         LedgerState::load_from_log(
             &block_merkle,
-            &air,
             &txn_merkle,
             &txn_log,
             &utxo_map,
@@ -1946,7 +1833,6 @@ impl LedgerState {
             );
             LedgerState::load_checked_from_log(
                 &block_merkle,
-                &air,
                 &txn_merkle,
                 &txn_log,
                 &utxo_map,
@@ -1961,7 +1847,6 @@ impl LedgerState {
             );
             let ret = LedgerState::new(
                 &block_merkle,
-                &air,
                 &txn_merkle,
                 &txn_log,
                 &utxo_map,
@@ -2222,18 +2107,6 @@ impl LedgerAccess for LedgerState {
             utxo_map_bytes,
         }
     }
-
-    fn get_kv_entry(&self, addr: Key) -> AuthenticatedKVLookup {
-        let (result, proof) = self.status.custom_data.get_with_proof(&addr);
-        AuthenticatedKVLookup {
-            key: addr,
-            result: result.cloned(),
-            state_commitment_data: self.status.state_commitment_data.clone(),
-            merkle_root: *self.status.custom_data.merkle_root(),
-            merkle_proof: proof,
-            state_commitment: self.get_state_commitment().0,
-        }
-    }
 }
 
 impl ArchiveAccess for LedgerState {
@@ -2328,22 +2201,6 @@ impl ArchiveAccess for LedgerState {
             .state_commitment_versions
             .get((block_height - 1) as usize)
             .cloned()
-    }
-
-    fn get_air_data(&self, key: &str) -> AuthenticatedAIRResult {
-        let merkle_root = self.status.air.merkle_root();
-        let (value, merkle_proof) = self.status.air.get_with_proof(key);
-        let air_result = AIRResult {
-            merkle_root: *merkle_root,
-            key: key.to_string(),
-            value: value.map(|s| s.to_string()),
-            merkle_proof,
-        };
-        AuthenticatedAIRResult {
-            air_result,
-            state_commitment_data: self.status.state_commitment_data.clone(),
-            state_commitment: self.get_state_commitment().0,
-        }
     }
 }
 
@@ -2822,8 +2679,6 @@ mod tests {
             txns_in_block_hash: HashOf::new(&vec![]),
             previous_state_commitment: HashOf::new(&None),
             transaction_merkle_commitment: ledger_state.txn_merkle.get_root_hash(),
-            air_commitment: *ledger_state.status.air.merkle_root(),
-            kv_store: *ledger_state.status.custom_data.merkle_root(),
             txo_count: 0,
             pulse_count: 0,
         };
@@ -3039,81 +2894,6 @@ mod tests {
         );
 
         assert_eq!(0, state.get_asset_type(&token_code1).unwrap().units);
-    }
-
-    #[test]
-    fn test_kv_store() {
-        let mut prng = ChaChaRng::from_entropy();
-        let mut ledger = LedgerState::test_ledger();
-        let kp1 = XfrKeyPair::generate(&mut prng);
-        let kp2 = XfrKeyPair::generate(&mut prng);
-
-        let data1 = [0u8, 16];
-
-        let key1 = Key::gen_random(&mut prng);
-
-        let hash = KVHash::new(&data1, None);
-        let update = KVUpdate::new((key1, Some(hash)), 0, &kp1);
-        let seq_id = ledger.get_block_commit_count();
-        let tx = Transaction::from_operation(
-            Operation::KVStoreUpdate(update.clone()),
-            seq_id,
-        );
-        {
-            let effect = TxnEffect::compute_effect(tx).unwrap();
-            let mut block = ledger.start_block().unwrap();
-            ledger.apply_transaction(&mut block, effect).unwrap();
-            ledger.finish_block(block).unwrap();
-        }
-
-        let auth_entry = ledger.get_kv_entry(key1);
-        assert!(auth_entry.is_valid(ledger.get_state_commitment().0));
-
-        let entry = auth_entry.result.unwrap().deserialize().1;
-        assert!(&entry == update.get_entry());
-
-        // Assert that nobody else can update that key and that reply isn't possible
-        let bad_seq_update = KVUpdate::new((key1, None), 0, &kp1);
-        let bad_seq_tx = Transaction::from_operation(
-            Operation::KVStoreUpdate(bad_seq_update.clone()),
-            ledger.get_block_commit_count(),
-        );
-        let wrong_key_update = KVUpdate::new((key1, None), 1, &kp2);
-        let wrong_key_tx = Transaction::from_operation(
-            Operation::KVStoreUpdate(wrong_key_update.clone()),
-            ledger.get_block_commit_count(),
-        );
-
-        let mut block = ledger.start_block().unwrap();
-        {
-            let effect = TxnEffect::compute_effect(bad_seq_tx).unwrap();
-            let res = ledger.apply_transaction(&mut block, effect);
-            assert!(res.is_err());
-
-            let effect = TxnEffect::compute_effect(wrong_key_tx).unwrap();
-            let res = ledger.apply_transaction(&mut block, effect);
-            assert!(res.is_err());
-        }
-
-        // Now update, this time with a blind
-        let data2 = [0u8, 16];
-        let hash = KVHash::new(&data2, Some(&KVBlind::gen_random()));
-        let update = KVUpdate::new((key1, Some(hash)), 1, &kp1);
-        let tx = Transaction::from_operation(
-            Operation::KVStoreUpdate(update.clone()),
-            ledger.get_block_commit_count(),
-        );
-        {
-            let effect = TxnEffect::compute_effect(tx).unwrap();
-            ledger.apply_transaction(&mut block, effect).unwrap();
-            ledger.finish_block(block).unwrap();
-        }
-
-        let auth_entry = ledger.get_kv_entry(key1);
-        assert!(auth_entry.is_valid(ledger.get_state_commitment().0));
-
-        let entry = auth_entry.result.unwrap().deserialize().1;
-        assert!(&entry == update.get_entry());
     }
 
     // Change the signature to have the wrong public key

@@ -4,13 +4,10 @@ extern crate unicode_normalization;
 
 use super::errors;
 use crate::policy_script::{Policy, PolicyGlobals, TxnPolicyData};
-use crate::{des_fail, ser_fail, zei_fail};
-use air::{check_merkle_proof as air_check_merkle_proof, AIRResult};
+use crate::{des_fail, ser_fail};
 use bitmap::SparseMap;
 use chrono::prelude::*;
-use credentials::{CredCommitment, CredIssuerPublicKey, CredPoK, CredUserPublicKey};
 use cryptohash::sha256::Digest as BitDigest;
-use cryptohash::sha256::DIGESTBYTES;
 use cryptohash::HashValue;
 use errors::PlatformError;
 use lazy_static::lazy_static;
@@ -19,7 +16,6 @@ use rand_chacha::rand_core;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
-use sparse_merkle_tree::{check_merkle_proof, Key, MerkleProof};
 use std::boxed::Box;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
@@ -33,9 +29,8 @@ use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::{gen_xfr_body, XfrNotePolicies};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::{
-    AssetRecord, AssetRecordTemplate, AssetType as ZeiAssetType, BlindAssetRecord,
-    OwnerMemo, TracingPolicies, TracingPolicy, XfrAmount, XfrAssetType, XfrBody,
-    ASSET_TYPE_LENGTH,
+    AssetRecord, AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo,
+    TracingPolicies, TracingPolicy, XfrAmount, XfrAssetType, XfrBody, ASSET_TYPE_LENGTH,
 };
 
 use super::effects::*;
@@ -60,17 +55,6 @@ pub fn b64dec<T: ?Sized + AsRef<[u8]>>(input: &T) -> Result<Vec<u8>> {
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct Code {
     pub val: [u8; 16],
-}
-
-const ZERO_256: [u8; DIGESTBYTES] = [0; DIGESTBYTES];
-const ZERO_DIGEST: BitDigest = BitDigest { 0: ZERO_256 };
-
-fn default_digest() -> BitDigest {
-    ZERO_DIGEST
-}
-
-fn is_default_digest(x: &BitDigest) -> bool {
-    x == &ZERO_DIGEST
 }
 
 fn is_default<T: Default + PartialEq>(x: &T) -> bool {
@@ -830,33 +814,6 @@ pub struct UpdateMemoBody {
     pub no_replay_token: NoReplayToken,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct AIRAssignBody {
-    pub addr: CredUserPublicKey,
-    pub data: CredCommitment,
-    pub issuer_pk: CredIssuerPublicKey,
-    pub pok: CredPoK,
-    pub no_replay_token: NoReplayToken,
-}
-
-impl AIRAssignBody {
-    pub fn new(
-        addr: CredUserPublicKey,
-        data: CredCommitment,
-        issuer_pk: CredIssuerPublicKey,
-        pok: CredPoK,
-        no_replay_token: NoReplayToken,
-    ) -> Result<AIRAssignBody> {
-        Ok(AIRAssignBody {
-            addr,
-            data,
-            issuer_pk,
-            pok,
-            no_replay_token,
-        })
-    }
-}
-
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TransferType {
     Standard,
@@ -1020,290 +977,17 @@ impl UpdateMemo {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct AIRAssign {
-    pub body: Box<AIRAssignBody>,
-    pub pubkey: XfrPublicKey,
-    pub signature: SignatureOf<AIRAssignBody>,
-}
-
-impl AIRAssign {
-    pub fn new(creation_body: AIRAssignBody, keypair: &XfrKeyPair) -> Result<AIRAssign> {
-        let signature = SignatureOf::new(keypair, &creation_body);
-        Ok(AIRAssign {
-            body: Box::new(creation_body),
-            pubkey: *keypair.get_pk_ref(),
-            signature,
-        })
-    }
-}
-
-// pub const KV_BLOCK_SIZE: usize = 4*(1<<10);
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct KVHash(pub HashOf<(Vec<u8>, Option<KVBlind>)>);
-
-impl KVHash {
-    pub fn new(data: &dyn AsRef<[u8]>, blind: Option<&KVBlind>) -> Self {
-        KVHash(HashOf::new(&(data.as_ref().to_vec(), blind.cloned())))
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct KVBlind(pub [u8; 16]);
-
-impl KVBlind {
-    pub fn gen_random() -> Self {
-        let mut small_rng = ChaChaRng::from_entropy();
-        let mut buf: [u8; 16] = [0u8; 16];
-        small_rng.fill_bytes(&mut buf);
-        Self(buf)
-    }
-
-    pub fn to_base64(&self) -> String {
-        b64enc(&self.0)
-    }
-
-    pub fn from_base64(b64: &str) -> Result<Self> {
-        if let Ok(mut bin) = b64dec(b64) {
-            bin.resize(16, 0u8);
-            let buf = <[u8; 16]>::try_from(bin.as_slice()).c(d!())?;
-            Ok(Self(buf))
-        } else {
-            Err(eg!(des_fail!()))
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct KVEntry(pub XfrPublicKey, pub KVHash);
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct KVUpdate {
-    pub body: (Key, u64, Option<KVEntry>),
-    pub signature: SignatureOf<(Key, u64, Option<KVEntry>)>,
-}
-
-pub type KVEntrySignature = SignatureOf<(Key, u64, Option<KVEntry>)>;
-
-impl KVUpdate {
-    pub fn new(
-        creation_body: (Key, Option<KVHash>),
-        seq_num: u64,
-        keypair: &XfrKeyPair,
-    ) -> KVUpdate {
-        let creation_body = match creation_body {
-            (k, None) => (k, seq_num, None),
-            (k, Some(data)) => (k, seq_num, Some(KVEntry(*keypair.get_pk_ref(), data))),
-        };
-        let signature = SignatureOf::new(&keypair, &creation_body);
-        KVUpdate {
-            body: creation_body,
-            signature,
-        }
-    }
-
-    pub fn get_entry(&self) -> &Option<KVEntry> {
-        &self.body.2
-    }
-
-    pub fn check_signature(&self, public_key: &XfrPublicKey) -> Result<()> {
-        self.signature
-            .verify(public_key, &self.body)
-            .c(d!(zei_fail!()))
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct BindAssetsBody {
-    pub contract: TxoRef,    // UTXO representing the lien contract
-    pub inputs: Vec<TxoRef>, // the assets being held
-    #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
-    // (inp_idx,hash) pairs signifying that there is a lien `hash` on the
-    // input `inp_idx`
-    // NOTE: `inp_idx` is relative to `inputs`, not `[contract] + inputs`
-    pub input_liens: Vec<(usize, HashOf<Vec<TxOutput>>)>,
-    // Note transferring the contract record & the inputs -- though with
-    // only one output, which must be for the `contract`.
-    pub transfer: Box<XfrBody>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct BindAssets {
-    pub body: BindAssetsBody,
-    // Signatures authorizing each of the inputs
-    pub body_signatures: Vec<IndexedSignature<BindAssetsBody>>,
-}
-
-impl BindAssetsBody {
-    pub fn new<R: CryptoRng + RngCore>(
-        prng: &mut R,
-        contract_ref: TxoRef,
-        input_refs: Vec<(TxoRef, Option<HashOf<Vec<TxOutput>>>)>,
-        input_records: &[AssetRecord],
-        output_record: &AssetRecord,
-    ) -> Result<BindAssetsBody> {
-        if input_records.is_empty() {
-            return Err(eg!(PlatformError::InputsError(None)));
-        }
-
-        if 1 + input_refs.len() != input_records.len() {
-            return Err(eg!(PlatformError::InputsError(None)));
-        }
-
-        let out_pubkey = &output_record
-            .open_asset_record
-            .blind_asset_record
-            .public_key;
-        let mut out_records = vec![output_record.clone()];
-        for i in input_records[1..].iter() {
-            let open_rec = i.open_asset_record.clone();
-
-            let amt = *open_rec.get_amount();
-            let unit_code = *open_rec.get_asset_type();
-
-            let art = open_rec.get_record_type();
-            let ar = AssetRecordTemplate::with_no_asset_tracing(
-                amt,
-                unit_code,
-                art,
-                *out_pubkey,
-            );
-            let ar =
-                AssetRecord::from_template_no_identity_tracing(prng, &ar).c(d!())?;
-            out_records.push(ar);
-        }
-
-        let transfer = Box::new(
-            gen_xfr_body(prng, input_records, &out_records)
-                .c(d!(PlatformError::ZeiError(None)))?,
-        );
-        let input_liens = input_refs
-            .iter()
-            .map(|(_l, r)| r)
-            .enumerate()
-            .filter_map(|(l, x)| x.clone().map(|x| (l, x)))
-            .collect::<Vec<_>>();
-        let input_refs = input_refs.iter().map(|(l, _r)| l).cloned().collect();
-        Ok(BindAssetsBody {
-            contract: contract_ref,
-            inputs: input_refs,
-            input_liens,
-            transfer,
-        })
-    }
-
-    /// Computes a body signature. A body signature represents consent to some part of the asset transfer. If an
-    /// input_idx is specified, the signature is a co-signature.
-    pub fn compute_body_signature(
-        &self,
-        keypair: &XfrKeyPair,
-        input_idx: Option<usize>,
-    ) -> IndexedSignature<BindAssetsBody> {
-        let public_key = keypair.get_pk_ref();
-        IndexedSignature {
-            signature: SignatureOf::new(keypair, &(self.clone(), input_idx)),
-            address: XfrAddress { key: *public_key },
-            input_idx,
-        }
-    }
-
-    /// Verifies a body signature
-    pub fn verify_body_signature(
-        &self,
-        signature: &IndexedSignature<BindAssetsBody>,
-    ) -> bool {
-        signature.verify(&self)
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ReleaseAssetsBody {
-    pub contract: TxoRef, // UTXO representing the lien contract
-    pub lien: HashOf<Vec<TxOutput>>, // which lien?
-    pub num_outputs: usize, // how many UTXOs?
-    #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
-    // (inp_idx,out_idx,hash) triples signifying that the lien `hash` on
-    // the input `inp_idx` gets assigned to the output `out_idx`
-    // (an inp_idx of 0 is invalid)
-    pub lien_assignments: Vec<(usize, usize, HashOf<Vec<TxOutput>>)>,
-    pub transfer: Box<XfrBody>, // Note transferrring the contract & the held assets
-}
-
-impl ReleaseAssetsBody {
-    pub fn new<R: CryptoRng + RngCore>(
-        prng: &mut R,
-        input_ref: TxoRef,
-        lien: HashOf<Vec<TxOutput>>,
-        lien_assignments: Vec<(usize, usize, HashOf<Vec<TxOutput>>)>,
-        input_records: &[AssetRecord],
-        output_records: &[AssetRecord],
-    ) -> Result<ReleaseAssetsBody> {
-        if input_records.is_empty() {
-            return Err(eg!(PlatformError::InputsError(None)));
-        }
-        let transfer = Box::new(
-            gen_xfr_body(prng, input_records, output_records)
-                .c(d!(PlatformError::ZeiError(None)))?,
-        );
-        Ok(ReleaseAssetsBody {
-            contract: input_ref,
-            lien,
-            num_outputs: output_records.len(),
-            lien_assignments,
-            transfer,
-        })
-    }
-
-    /// Computes a body signature. A body signature represents consent to some part of the asset transfer. If an
-    /// input_idx is specified, the signature is a co-signature.
-    pub fn compute_body_signature(
-        &self,
-        keypair: &XfrKeyPair,
-        input_idx: Option<usize>,
-    ) -> IndexedSignature<ReleaseAssetsBody> {
-        let public_key = keypair.get_pk_ref();
-        IndexedSignature {
-            signature: SignatureOf::new(keypair, &(self.clone(), input_idx)),
-            address: XfrAddress { key: *public_key },
-            input_idx,
-        }
-    }
-
-    /// Verifies a body signature
-    pub fn verify_body_signature(
-        &self,
-        signature: &IndexedSignature<ReleaseAssetsBody>,
-    ) -> bool {
-        signature.verify(&self)
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ReleaseAssets {
-    pub body: ReleaseAssetsBody,
-    pub body_signatures: Vec<IndexedSignature<ReleaseAssetsBody>>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
     TransferAsset(TransferAsset),
     IssueAsset(IssueAsset),
     DefineAsset(DefineAsset),
     UpdateMemo(UpdateMemo),
-    AIRAssign(AIRAssign),
-    KVStoreUpdate(KVUpdate),
-    BindAssets(BindAssets),
-    ReleaseAssets(ReleaseAssets),
     // ... etc...
 }
 
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
-    match op {
-        Operation::UpdateMemo(um) => um.body.no_replay_token = no_replay_token,
-        Operation::AIRAssign(aa) => aa.body.no_replay_token = no_replay_token,
-        _ => (),
+    if let Operation::UpdateMemo(um) = op {
+        um.body.no_replay_token = no_replay_token
     }
 }
 
@@ -1351,65 +1035,6 @@ pub struct FinalizedTransaction {
     pub txo_ids: Vec<TxoSID>,
 
     pub merkle_id: u64,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct AuthenticatedAIRResult {
-    pub state_commitment_data: Option<StateCommitmentData>,
-    pub state_commitment: HashOf<Option<StateCommitmentData>>,
-    pub air_result: AIRResult,
-}
-
-impl AuthenticatedAIRResult {
-    // An authenticated air result is valid if
-    // 1) State commitment data hashes to the provided state commitment
-    // 2) The air root matches the root in state commitment data.
-    // 3) The air proof is valid.
-    pub fn is_valid(
-        &self,
-        state_commitment: HashOf<Option<StateCommitmentData>>,
-    ) -> bool {
-        let root = self.air_result.merkle_root;
-        match &self.state_commitment_data {
-            None => {
-                if self.air_result.value.is_some() {
-                    return false;
-                }
-                if state_commitment != HashOf::new(&None) {
-                    return false;
-                }
-                if root != ZERO_DIGEST {
-                    return false;
-                }
-            }
-            Some(comm_data) => {
-                if self.state_commitment != comm_data.compute_commitment() {
-                    return false;
-                }
-
-                if comm_data.air_commitment != root {
-                    return false;
-                }
-            }
-        }
-        if state_commitment != self.state_commitment {
-            return false;
-        }
-        let key = &self.air_result.key;
-        let value = self.air_result.value.as_ref();
-        let proof = &self.air_result.merkle_proof;
-
-        air_check_merkle_proof(&root, key, value, proof)
-    }
-
-    // Extract the credential commitment stored in this AIRResult
-    pub fn get_credential_commitment(&self) -> Option<CredCommitment> {
-        // This unwrap is safe because by design, AIR values can only be credential commitments
-        self.air_result
-            .value
-            .as_ref()
-            .map(|cred_str| serde_json::from_str(&cred_str).unwrap())
-    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -1561,59 +1186,6 @@ impl AuthenticatedBlock {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct AuthenticatedKVLookup {
-    pub key: Key,
-    pub result: Option<Serialized<(u64, Option<KVEntry>)>>,
-    pub state_commitment_data: Option<StateCommitmentData>,
-    pub merkle_root: BitDigest,
-    pub merkle_proof: MerkleProof,
-    pub state_commitment: HashOf<Option<StateCommitmentData>>,
-}
-
-impl AuthenticatedKVLookup {
-    pub fn is_valid(
-        &self,
-        state_commitment: HashOf<Option<StateCommitmentData>>,
-    ) -> bool {
-        match &self.state_commitment_data {
-            None => {
-                if self.result.is_some() {
-                    return false;
-                }
-                if state_commitment != HashOf::new(&None) {
-                    return false;
-                }
-                if self.merkle_root
-                    != (BitDigest {
-                        0: [0_u8; DIGESTBYTES],
-                    })
-                {
-                    return false;
-                }
-            }
-            Some(comm_data) => {
-                if self.state_commitment != comm_data.compute_commitment() {
-                    return false;
-                }
-
-                if comm_data.kv_store != self.merkle_root {
-                    return false;
-                }
-            }
-        }
-        if state_commitment != self.state_commitment {
-            return false;
-        }
-        check_merkle_proof(
-            &self.merkle_root,
-            &self.key,
-            self.result.as_ref(),
-            &self.merkle_proof,
-        )
-    }
-}
-
 pub type SparseMapBytes = Vec<u8>;
 
 #[derive(Serialize, Clone, Deserialize)]
@@ -1684,13 +1256,6 @@ impl FinalizedTransaction {
     pub fn set_txo_id(&mut self) {
         enum SS<'a> {
             Output(&'a mut TxOutput),
-            Raw,
-        }
-
-        macro_rules! seek {
-            ($d: expr) => {
-                $d.body.transfer.outputs.iter().map(|_| SS::Raw).collect()
-            };
         }
 
         let ids = mem::take(&mut self.txo_ids);
@@ -1708,20 +1273,13 @@ impl FinalizedTransaction {
                     .iter_mut()
                     .map(|(o, _)| SS::Output(o))
                     .collect(),
-                Operation::BindAssets(d) => {
-                    seek!(d)
-                }
-                Operation::ReleaseAssets(d) => {
-                    seek!(d)
-                }
                 _ => Vec::new(),
             })
             .flatten()
             .zip(ids.iter())
             .for_each(|(ss, id)| {
-                if let SS::Output(o) = ss {
-                    o.id = Some(*id);
-                }
+                let SS::Output(o) = ss;
+                o.id = Some(*id);
             });
 
         self.txo_ids = ids;
@@ -2071,14 +1629,10 @@ pub struct StateCommitmentData {
     pub txns_in_block_hash: HashOf<Vec<Transaction>>, // The hash of the transactions in the block
     pub previous_state_commitment: HashOf<Option<StateCommitmentData>>, // The prior global block hash
     pub transaction_merkle_commitment: HashValue, // The root hash of the transaction Merkle tree
-    pub air_commitment: BitDigest, // The root hash of the AIR sparse Merkle tree
     pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
     pub pulse_count: u64, // a consensus-specific counter; should be 0 unless consensus needs it.
-    #[serde(default = "default_digest")]
-    #[serde(skip_serializing_if = "is_default_digest")]
-    pub kv_store: BitDigest, // The root hash of the KV Store SMT
 }
 
 impl StateCommitmentData {

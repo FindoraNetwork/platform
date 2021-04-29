@@ -287,10 +287,6 @@ where
 pub fn txn_log_info(txn: &Transaction) {
     for op in &txn.body.operations {
         match op {
-            Operation::KVStoreUpdate(update) => info!(
-                "Key-Value store update: {}",
-                &serde_json::to_string(update).unwrap()
-            ),
             Operation::DefineAsset(define_asset_op) => info!(
                 "Asset Definition: New asset with code {} defined",
                 define_asset_op.body.asset.code.to_base64()
@@ -308,27 +304,6 @@ pub fn txn_log_info(txn: &Transaction) {
                     "Asset Transfer: Transfer with {} inputs and {} outputs",
                     xfr_asset_op.body.inputs.len(),
                     xfr_asset_op.body.outputs.len()
-                );
-            }
-            Operation::BindAssets(bind_assets_op) => {
-                info!(
-                    "Asset Bind: Bind of {} inputs",
-                    bind_assets_op.body.inputs.len()
-                );
-            }
-            Operation::ReleaseAssets(release_assets_op) => {
-                info!(
-                    "Asset Release: Release of lien {:?} ({} inputs) into {} outputs",
-                    release_assets_op.body.lien,
-                    release_assets_op.body.transfer.inputs.len(),
-                    release_assets_op.body.transfer.outputs.len(),
-                );
-            }
-            Operation::AIRAssign(air_assign_op) => {
-                info!(
-                    "Assigning to AIR: AIR[{}] <- {:?}",
-                    serde_json::to_string(&air_assign_op.body.addr).unwrap(),
-                    air_assign_op.body.data
                 );
             }
             Operation::UpdateMemo(update_memo) => {
