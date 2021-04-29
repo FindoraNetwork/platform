@@ -6,8 +6,8 @@ use actix_service::Service;
 use actix_web::{error, middleware, web, App, HttpServer};
 use futures::FutureExt;
 use ledger::data_model::{
-    b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, KVHash, TxOutput, TxnSID,
-    TxoSID, XfrAddress,
+    b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, TxOutput, TxnSID, TxoSID,
+    XfrAddress,
 };
 use ledger::{inp_fail, ser_fail};
 use ledger_api_service::RestfulArchiveAccess;
@@ -16,7 +16,6 @@ use metrics::{Key as MetricsKey, KeyData};
 use parking_lot::RwLock;
 use query_server::{QueryServer, TxnIDHash};
 use ruc::*;
-use sparse_merkle_tree::Key;
 use std::collections::HashSet;
 use std::marker::{Send, Sync};
 use std::sync::Arc;
@@ -57,24 +56,6 @@ where
     Ok(res)
 }
 
-type CustomDataResult = (Vec<u8>, KVHash);
-
-// Returns custom data at a given location
-async fn get_custom_data<T, U>(
-    data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
-    info: web::Path<String>,
-) -> actix_web::Result<web::Json<Option<CustomDataResult>>, actix_web::error::Error>
-where
-    T: RestfulArchiveAccess,
-    U: MetricsRenderer,
-{
-    let query_server = data.read();
-    let key = Key::from_base64(&*info)
-        .c(d!())
-        .map_err(|e| actix_web::error::ErrorBadRequest(e.generate_log()))?;
-    Ok(web::Json(query_server.get_custom_data(&key).cloned()))
-}
-
 // Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
 #[allow(clippy::unnecessary_wraps)]
 async fn get_owner_memo<T, U>(
@@ -91,27 +72,6 @@ where
     ))
 }
 
-// Submits custom data to be stored by the query server. The request will fail if the hash of the
-// data doesn't match the commitment stored by the ledger.
-// fn store_custom_data<T, U>(
-//     data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
-//     body: web::Json<(String, Vec<u8>, Option<KVBlind>)>,
-// ) -> actix_web::Result<(), actix_web::error::Error>
-// where
-//     T: RestfulArchiveAccess + Sync + Send,
-//     U: MetricsRenderer,
-// {
-//     let (key, custom_data, blind) = body.into_inner();
-//     let key = Key::from_base64(&key)
-//         .c(d!())
-//         .map_err(|e| actix_web::error::ErrorBadRequest(e.generate_log()))?;
-//     let mut query_server = data.write();
-//     query_server
-//         .add_to_data_store(&key, &custom_data, blind.as_ref())
-//         .c(d!())
-//         .map_err(|e| error::ErrorBadRequest(e.generate_log()))
-//         .map(|_| ())
-// }
 // Returns an array of the utxo sids currently spendable by a given address
 async fn get_owned_utxos<T, U>(
     data: web::Data<Arc<RwLock<QueryServer<T, U>>>>,
@@ -152,7 +112,6 @@ pub enum QueryServerRoutes {
     GetAddress,
     GetOwnerMemo,
     GetOwnedUtxos,
-    GetCustomData,
     GetCreatedAssets,
     GetTracedAssets,
     GetIssuedRecords,
@@ -174,8 +133,6 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetRelatedXfrs => "get_related_xfrs",
             QueryServerRoutes::GetOwnedUtxos => "get_owned_utxos",
             QueryServerRoutes::GetOwnerMemo => "get_owner_memo",
-            // QueryServerRoutes::StoreCustomData => "store_custom_data",
-            QueryServerRoutes::GetCustomData => "get_custom_data",
             QueryServerRoutes::GetCreatedAssets => "get_created_assets",
             QueryServerRoutes::GetTracedAssets => "get_traced_assets",
             QueryServerRoutes::GetIssuedRecords => "get_issued_records",
@@ -487,14 +444,6 @@ impl QueryApi {
                     &QueryServerRoutes::GetCommits.route(),
                     web::get().to(get_commits::<T, U>),
                 )
-                // .route(
-                //     &QueryServerRoutes::StoreCustomData.route(),
-                //     web::post().to(store_custom_data::<T, U>),
-                // )
-                .route(
-                    &QueryServerRoutes::GetCustomData.with_arg_template("key"),
-                    web::get().to(get_custom_data::<T, U>),
-                )
                 .route(&QueryServerRoutes::Version.route(), web::get().to(version))
                 .route(
                     &String::from("/metrics"),
@@ -518,15 +467,6 @@ impl QueryApi {
 
 // Trait for rest clients that can access the query server
 pub trait RestfulQueryServerAccess {
-    // fn store_custom_data(
-    //     &mut self,
-    //     data: &dyn AsRef<[u8]>,
-    //     key: &Key,
-    //     blind: Option<KVBlind>,
-    // ) -> Result<()>;
-
-    fn fetch_custom_data(&self, key: &Key) -> Result<Vec<u8>>;
-
     fn get_owner_memo(&self, txo_sid: u64) -> Result<Option<OwnerMemo>>;
 }
 
@@ -535,19 +475,6 @@ pub trait RestfulQueryServerAccess {
 pub struct MockQueryServerClient();
 
 impl RestfulQueryServerAccess for MockQueryServerClient {
-    // fn store_custom_data(
-    //     &mut self,
-    //     _data: &dyn AsRef<[u8]>,
-    //     _key: &Key,
-    //     _blind: Option<KVBlind>,
-    // ) -> Result<()> {
-    //     unimplemented!();
-    // }
-
-    fn fetch_custom_data(&self, _key: &Key) -> Result<Vec<u8>> {
-        unimplemented!();
-    }
-
     fn get_owner_memo(&self, _txo_sid: u64) -> Result<Option<OwnerMemo>> {
         unimplemented!();
     }
@@ -570,38 +497,6 @@ impl ActixQueryServerClient {
 }
 
 impl RestfulQueryServerAccess for ActixQueryServerClient {
-    // fn store_custom_data(
-    //     &mut self,
-    //     data: &dyn AsRef<[u8]>,
-    //     key: &Key,
-    //     blind: Option<KVBlind>,
-    // ) -> Result<()> {
-    //     let query = format!(
-    //         "{}://{}:{}{}",
-    //         self.protocol,
-    //         self.host,
-    //         self.port,
-    //         QueryServerRoutes::StoreCustomData.route()
-    //     );
-    //     http_post_request(&query, Some(&(key, data.as_ref().to_vec(), blind)))
-    //         .c(d!(inp_fail!()))
-    //         .map(|_| ())
-    // }
-
-    fn fetch_custom_data(&self, key: &Key) -> Result<Vec<u8>> {
-        let b64key = key.to_base64();
-        let query = format!(
-            "{}://{}:{}{}",
-            self.protocol,
-            self.host,
-            self.port,
-            QueryServerRoutes::GetCustomData.with_arg(&b64key)
-        );
-        let text = http_get_request(&query).c(d!(inp_fail!()))?;
-
-        serde_json::from_str::<Vec<u8>>(&text).c(d!(ser_fail!()))
-    }
-
     fn get_owner_memo(&self, txo_sid: u64) -> Result<Option<OwnerMemo>> {
         let query = format!(
             "{}://{}:{}{}",

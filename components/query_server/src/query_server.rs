@@ -6,7 +6,6 @@ use ledger::store::*;
 use ledger_api_service::RestfulArchiveAccess;
 use log::{error, info};
 use ruc::*;
-use sparse_merkle_tree::Key;
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use std::sync::Arc;
@@ -43,7 +42,6 @@ where
     txo_to_txnid: HashMap<TxoSID, TxnIDHash>, // txo(spent, unspent) to authenticated txn (sid, hash)
     txn_sid_to_hash: HashMap<TxnSID, String>, // txn sid to txn hash
     txn_hash_to_sid: HashMap<String, TxnSID>, // txn hash to txn sid
-    custom_data_store: HashMap<Key, (Vec<u8>, KVHash)>,
     rest_client: T,
     metrics_renderer: U,
 }
@@ -68,7 +66,6 @@ where
             txo_to_txnid: HashMap::new(),
             txn_sid_to_hash: HashMap::new(),
             txn_hash_to_sid: HashMap::new(),
-            custom_data_store: HashMap::new(),
             rest_client,
             metrics_renderer,
         }
@@ -76,11 +73,6 @@ where
 
     pub fn render(&self) -> String {
         self.metrics_renderer.rendered()
-    }
-
-    // Fetch custom data at a given key.
-    pub fn get_custom_data(&self, key: &Key) -> Option<&(Vec<u8>, KVHash)> {
-        self.custom_data_store.get(key)
     }
 
     // Returns the set of records issued by a certain key.
@@ -176,36 +168,6 @@ where
         self.owner_memos.get(&txo_sid)
     }
 
-    // Attempt to add to data store at a given location
-    // Returns an error if the hash of the data doesn't match the hash stored by the
-    // ledger's arbitrary data store at the given key
-    pub fn add_to_data_store(
-        &mut self,
-        key: &Key,
-        data: &dyn AsRef<[u8]>,
-        blind: Option<&KVBlind>,
-    ) -> Result<()> {
-        let hash = KVHash::new(data, blind);
-        let auth_entry = self.committed_state.get_kv_entry(*key);
-
-        let result = auth_entry.result.c(d!(fail!(
-            "Nothing found in the custom data store at this key"
-        )))?;
-        let entry_hash = result.deserialize().1.c(d!(fail!("Nothing found in the custom data store at this key. A hash was once here, but has been removed")))?.1;
-
-        // Ensure that hash matches
-        if hash != entry_hash {
-            return Err(eg!(fail!(
-                "The hash of the data supplied does not match the hash stored by the ledger"
-            )));
-        }
-
-        // Hash matches, store data
-        self.custom_data_store
-            .insert(*key, (data.as_ref().into(), hash));
-        Ok(())
-    }
-
     // Add created asset
     pub fn add_created_asset(&mut self, creation: &DefineAsset) {
         let issuer = creation.pubkey;
@@ -251,22 +213,6 @@ where
         let token_issuances = &mut self.token_code_issuances;
         let token_code = issuance.body.code;
         save_issuance!(token_issuances, token_code);
-    }
-
-    // Remove data that may be outdated based on this kv_update
-    fn remove_stale_data(&mut self, kv_update: &KVUpdate) {
-        let key = kv_update.body.0;
-        let entry = kv_update.body.2.as_ref();
-        if let Some((_, curr_hash)) = self.custom_data_store.get(&key) {
-            // If hashes don't match, data is stale
-            if let Some(entry) = entry {
-                if entry.1 != *curr_hash {
-                    self.custom_data_store.remove(&key);
-                }
-            } else {
-                self.custom_data_store.remove(&key);
-            }
-        }
     }
 
     fn remove_spent_utxos(&mut self, transfer: &TransferAsset) -> Result<()> {
@@ -355,9 +301,6 @@ where
                     Operation::TransferAsset(transfer_asset) => {
                         self.remove_spent_utxos(&transfer_asset).c(d!())?
                     }
-                    Operation::KVStoreUpdate(kv_update) => {
-                        self.remove_stale_data(&kv_update)
-                    }
                     _ => {}
                 };
             }
@@ -436,12 +379,6 @@ fn get_related_addresses(txn: &Transaction) -> HashSet<XfrAddress> {
                     key: issue_asset.pubkey.key,
                 });
             }
-            Operation::BindAssets(_bind_assets) => {
-                unimplemented!();
-            }
-            Operation::ReleaseAssets(_release_assets) => {
-                unimplemented!();
-            }
             Operation::DefineAsset(define_asset) => {
                 related_addresses.insert(XfrAddress {
                     key: define_asset.pubkey.key,
@@ -451,16 +388,6 @@ fn get_related_addresses(txn: &Transaction) -> HashSet<XfrAddress> {
                 related_addresses.insert(XfrAddress {
                     key: update_memo.pubkey,
                 });
-            }
-            Operation::AIRAssign(air_assign) => {
-                related_addresses.insert(XfrAddress {
-                    key: air_assign.pubkey,
-                });
-            }
-            Operation::KVStoreUpdate(kv_store_update) => {
-                if let Some(entry) = &kv_store_update.body.2 {
-                    related_addresses.insert(XfrAddress { key: entry.0 });
-                }
             }
         }
     }
@@ -485,15 +412,12 @@ fn get_transferred_nonconfidential_assets(txn: &Transaction) -> HashSet<AssetTyp
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ledger::data_model::{
-        AssetRules, AssetTypeCode, BlockSID, KVHash, KVUpdate, Memo, TransferType,
-    };
+    use ledger::data_model::{AssetRules, AssetTypeCode, BlockSID, Memo, TransferType};
     use ledger::store::helpers::{apply_transaction, create_definition_transaction};
     use ledger_api_service::MockLedgerClient;
     use parking_lot::RwLock;
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
-    use std::str;
     use std::sync::Arc;
     use txn_builder::{
         BuildsTransactions, PolicyChoice, TransactionBuilder, TransferOperationBuilder,
@@ -507,63 +431,6 @@ mod tests {
     };
     use zei::xfr::sig::XfrKeyPair;
     use zei::xfr::structs::{AssetRecordTemplate, AssetTracerKeyPair, TracingPolicy};
-
-    #[test]
-    pub fn test_custom_data_store() {
-        // This isn't actually being used in the test, we just make a ledger client so we can compile
-        let client_ledger_state = Arc::new(RwLock::new(LedgerState::test_ledger()));
-        let mut ledger_state = LedgerState::test_ledger();
-        let mut prng = ChaChaRng::from_entropy();
-        let mut query_server = QueryServer::new(
-            MockLedgerClient::new(&client_ledger_state),
-            MockMetricsRenderer::new(),
-        );
-        let kp = XfrKeyPair::generate(&mut prng);
-
-        let data = "some_data";
-        let blind = KVBlind::gen_random();
-        let hash = KVHash::new(&data, Some(&blind));
-        let key = Key::gen_random(&mut prng);
-
-        // Add hash to ledger and update query server
-        let seq_id = ledger_state.get_block_commit_count();
-        let mut builder = TransactionBuilder::from_seq_id(seq_id);
-        builder
-            .add_operation_kv_update(&kp, &key, 0, Some(&hash))
-            .unwrap();
-        let update_kv_tx = builder.transaction();
-        apply_transaction(&mut ledger_state, update_kv_tx.clone());
-        let block = ledger_state.get_block(BlockSID(0)).unwrap();
-        query_server.add_new_block(&block.block.txns).unwrap();
-
-        // Add data to query server
-        let res = query_server.add_to_data_store(&key, &data, Some(&blind));
-        assert!(res.is_ok());
-
-        // Make sure data is there
-        let fetched_data = query_server.get_custom_data(&key).unwrap();
-        assert_eq!(str::from_utf8(&fetched_data.0).unwrap(), data);
-
-        // Add incorrect  data to query server
-        let wrong_data = "wrong_data";
-        let res = query_server.add_to_data_store(&key, &wrong_data, Some(&blind));
-        assert!(res.is_err());
-
-        // Replace commitment
-        let hash = KVHash::new(&String::from("new_data"), Some(&blind));
-        let seq_id = ledger_state.get_block_commit_count();
-        let mut builder = TransactionBuilder::from_seq_id(seq_id);
-        builder
-            .add_operation_kv_update(&kp, &key, 1, Some(&hash))
-            .unwrap();
-        let update_kv_tx = builder.transaction();
-        apply_transaction(&mut ledger_state, update_kv_tx.clone());
-        let block = ledger_state.get_block(BlockSID(1)).unwrap();
-        query_server.add_new_block(&block.block.txns).unwrap();
-
-        // Ensure stale data is removed
-        assert!(query_server.get_custom_data(&key).is_none());
-    }
 
     #[test]
     pub fn test_owner_memo_storage() {
@@ -881,37 +748,6 @@ mod tests {
         let related_txns = query_server
             .get_related_transactions(&XfrAddress {
                 key: *creator.get_pk_ref(),
-            })
-            .unwrap();
-        assert!(related_txns.contains(&TxnSID(0)));
-    }
-    #[test]
-    fn test_related_txns_kv_store_update() {
-        let rest_client_ledger_state = Arc::new(RwLock::new(LedgerState::test_ledger()));
-        let mut ledger_state = LedgerState::test_ledger();
-        // This isn't actually being used in the test, we just make a ledger client so we can compile
-        let mock_ledger = MockLedgerClient::new(&Arc::clone(&rest_client_ledger_state));
-        let mut prng = ChaChaRng::from_entropy();
-        let kp = XfrKeyPair::generate(&mut prng);
-        let mut query_server = QueryServer::new(mock_ledger, MockMetricsRenderer::new());
-
-        // KV update txn
-        let data = [0u8, 16];
-        let key = Key::gen_random(&mut prng);
-        let hash = KVHash::new(&data, None);
-        let update = KVUpdate::new((key, Some(hash)), 0, &kp);
-
-        // Submit
-        let seq_id = ledger_state.get_block_commit_count();
-        let tx = Transaction::from_operation(Operation::KVStoreUpdate(update), seq_id);
-        apply_transaction(&mut ledger_state, tx);
-
-        // Check related txns
-        let block0 = ledger_state.get_block(BlockSID(0)).unwrap();
-        query_server.add_new_block(&block0.block.txns).unwrap();
-        let related_txns = query_server
-            .get_related_transactions(&XfrAddress {
-                key: *kp.get_pk_ref(),
             })
             .unwrap();
         assert!(related_txns.contains(&TxnSID(0)));

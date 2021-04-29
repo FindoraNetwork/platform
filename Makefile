@@ -103,9 +103,6 @@ test_status:
 fmt:
 	@ bash ./tools/fmt.sh
 
-githook:
-	@ git config --local core.hooksPath .githooks/
-
 clean:
 	@ cargo clean
 	@ rm -rf debug release Cargo.lock
