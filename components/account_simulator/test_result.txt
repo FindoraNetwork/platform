@@ -1,7 +1,0 @@
-[0m[0m[1m[32m    Finished[0m release [optimized] target(s) in 0.09s
-[0m[0m[1m[32m     Running[0m target/release/deps/api_service-9d4c8d53077ce4e1
-
-running 3 tests
-test test::SimpleAccounts_simplifies ... ok
-test test::SimpleAccounts_simplifies_with_amounts ... ok
-test test::quickcheck_ledger_simulates ... test test::quickcheck_ledger_simulates has been running for over 60 seconds

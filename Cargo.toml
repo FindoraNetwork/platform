@@ -11,14 +11,6 @@ members = [
     "components/txn_builder",
     "components/wasm",
     "components/wallet",
-    "components/account_simulator",
-    # "components/trash/auditor",
-    # "components/trash/xfrnote",
-    # "components/trash/check_merkle",
-    # "components/trash/http_tester",
-    # "components/trash/txn_cli",
-    # "components/trash/address_identity_registry",
-    # "components/trash/log_tester",
     "ledger",
     "libs/ads/air",
     "libs/ads/merkle_tree",
@@ -29,13 +21,6 @@ members = [
     "libs/sliding_set",
     "libs/network",
     "libs/utils",
-
-    # "components/trash/solvency",
-    # "components/trash/solvency_cli",
-    # "components/trash/whitelist_cli",
-    # "components/trash/whitelist",
-    # "components/trash/ledger_client",
-    # "components/trash/ledger_mirror",
 ]
 
 [profile.dev]
