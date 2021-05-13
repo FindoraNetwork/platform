@@ -85,7 +85,7 @@ jobs:
     #     if [ "$(git diff)" != "" ]; then
     #         git add .
     #         git commit -m "From platform PR ${PR}(${BRANCH} to ${TOBRANCH}), build date: $(date +"%Y%m%d")"
-    #         git push origin "${BRANCH_NAME}"
+    #         git push -f origin "${BRANCH_NAME}"
     #     fi
     #     popd
     - name: test

@@ -53,7 +53,39 @@ cd /opt && \
 sudo apt install libc-dev libssl-dev make git curl wget
 ```
 
+
+For MacOS
+- Install XCode
+- Install Developer tools
+```shell
+# install rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh 
+
+# install wasm-pack
+curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+# install homebrew
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# install golang
+brew install golang
+
+# install system-deps
+brew install gawk glibc openssl wget leveldb
+
+# create directory for binaries
+mkdir ~/go/bin
+
+```
+
 After clone code, you should do a `make githook` to finish githooks settings that used to check code's format.
+
+#### install toml CLI
+    pip3 install toml-cli
+
+#### ssh git login 
+`cargo` needs a ssh login to fetch git repos. Generate a ssh key if you don't have one already  with `ssh-keygen` and it to your
+Github account at `https://github.com/settings/keys`
 
 #### compile
 

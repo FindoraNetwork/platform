@@ -162,10 +162,10 @@ jobs:
         if [ "$(git diff)" != "" ]; then
             git add .
             git commit -m "From platform PR ${PR}(${BRANCH} to ${TOBRANCH}), commit hash: ${COMMIT_HASH} , build date: $(date +"%Y%m%d")"
-            git push origin "${BRANCH_NAME}"
+            git push -f origin "${BRANCH_NAME}"
         fi
-        git tag "${TOBRANCH}-${COMMIT_HASH}"
-        git push origin "${TOBRANCH}-${COMMIT_HASH}"
+        git tag -f "${TOBRANCH}-${COMMIT_HASH}"
+        git push -f origin "${TOBRANCH}-${COMMIT_HASH}"
         git tag -d "${TOBRANCH}-${COMMIT_HASH}"
         popd
     - name: Clean garbage

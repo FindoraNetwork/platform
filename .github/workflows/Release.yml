@@ -136,10 +136,10 @@ jobs:
         if [ "$(git diff)" != "" ]; then
             git add .
             git commit -m "version: ${WASM_VERSION}, hash: ${COMMIT_HASH}, build date: $(date +"%Y%m%d")"
-            git push origin "${BRANCH_NAME}"
+            git push -f origin "${BRANCH_NAME}"
         fi
-        git tag "${WASM_VERSION}"
-        git push origin "${WASM_VERSION}"
+        git tag -f "${WASM_VERSION}"
+        git push -f origin "${WASM_VERSION}"
         popd
     - name: Clean garbage
       shell: bash
