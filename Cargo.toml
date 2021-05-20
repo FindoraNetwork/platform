@@ -12,6 +12,7 @@ members = [
     "components/wasm",
     "components/wallet",
     "ledger",
+    "storage",
     "libs/ads/air",
     "libs/ads/merkle_tree",
     "libs/ads/sparse_merkle_tree",

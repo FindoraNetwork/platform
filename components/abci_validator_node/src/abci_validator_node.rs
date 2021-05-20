@@ -1,7 +1,7 @@
 #![allow(clippy::field_reassign_with_default)]
 #![deny(warnings)]
-
 use abci::*;
+use context::{generate_hash, Context, Hash};
 use futures::executor::{ThreadPool, ThreadPoolBuilder};
 use lazy_static::lazy_static;
 use ledger::data_model::{Operation, Transaction, TxnEffect, TxnSID};
@@ -74,8 +74,9 @@ impl TxnForward for TendermintForward {
     }
 }
 
-struct ABCISubmissionServer {
-    la: Arc<RwLock<SubmissionServer<ChaChaRng, LedgerState, TendermintForward>>>,
+pub struct ABCISubmissionServer {
+    la: Arc<RwLock<SubmissionServer<ChaChaRng, LedgerState, TendermintForward>>>, // In memory ledger
+    context: Context<ChaChaRng>,
 }
 
 impl ABCISubmissionServer {
@@ -88,16 +89,25 @@ impl ABCISubmissionServer {
             None => LedgerState::test_ledger(),
             Some(base_dir) => pnk!(LedgerState::load_or_init(base_dir)),
         };
+
         let prng = rand_chacha::ChaChaRng::from_entropy();
+        let ctx = match base_dir {
+            None => {
+                let tmp_dir = utils::fresh_tmp_dir();
+                Context::new(tmp_dir.as_path(), prng.clone())
+            }
+            Some(base_dir) => Context::new(base_dir, prng.clone()),
+        };
         Ok(ABCISubmissionServer {
             la: Arc::new(RwLock::new(
                 SubmissionServer::new_no_auto_commit(
-                    prng,
+                    prng, // do we need to move prng ?
                     Arc::new(RwLock::new(ledger_state)),
                     Some(TendermintForward { tendermint_reply }),
                 )
                 .c(d!())?,
             )),
+            context: ctx.c(d!())?,
         })
     }
 }
@@ -235,10 +245,23 @@ impl abci::Application for ABCISubmissionServer {
             let la = self.la.read();
             // la.begin_commit();
             info!("locking state for read");
-            let commitment = la.get_committed_state().read().get_state_commitment();
+            // Collect height
+            let height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+            // Get Hash of chainstate
+            let mut cs_hash: Hash = vec![];
+            if let Ok(res) = self.context.commit_deliver_state(height as u64) {
+                //cs_hash, height
+                cs_hash = res.0;
+            }
+            // Get Hash pf ledgerAccess
+            let ledgeraccess_commitment =
+                la.get_committed_state().read().get_state_commitment();
+            let la_hash = ledgeraccess_commitment.0.as_ref().to_vec();
+            // Create new hash from chainstate hash + ledgerAccess hash
+            let root_hash = generate_hash(cs_hash, la_hash);
             // la.end_commit();
-            info!("commit: hash is {:?}", commitment.0.as_ref());
-            r.set_data(commitment.0.as_ref().to_vec());
+            info!("commit: hash is {:?}", root_hash);
+            r.set_data(root_hash);
             info!("unlocking for read");
         }
         r
@@ -444,4 +467,88 @@ struct TagAttr {
     // hex.encode(asset_type)
     asset_type: Option<String>,
     asset_amount: Option<u64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use context::HASH_LENGTH;
+
+    #[test]
+    fn test_hash() {
+        let tmp_dir = utils::fresh_tmp_dir();
+        let config: ABCIConfig = Default::default();
+        let mut app = ABCISubmissionServer::new(
+            Some(tmp_dir.as_path()),
+            format!("{}:{}", config.tendermint_host, config.tendermint_port),
+        )
+        .unwrap();
+        let state = app.context.get_mutable_deliver();
+        state.set(b"findora_key", b"findora_value".to_vec());
+        let (cs_hash, _height) = app.context.commit_deliver_state(1).unwrap();
+        let ledgeraccess_commitment = app
+            .la
+            .read()
+            .get_committed_state()
+            .read()
+            .get_state_commitment();
+        let la_hash = ledgeraccess_commitment.0.as_ref().to_vec();
+        let root_hash = generate_hash(cs_hash, la_hash);
+        assert_eq!(root_hash.len(), HASH_LENGTH)
+    }
+
+    #[test]
+    fn test_immutable_read() {
+        let tmp_dir = utils::fresh_tmp_dir();
+        let config: ABCIConfig = Default::default();
+        let mut app = ABCISubmissionServer::new(
+            Some(tmp_dir.as_path()),
+            format!("{}:{}", config.tendermint_host, config.tendermint_port),
+        )
+        .unwrap();
+        let state = app.context.get_mutable_deliver();
+        state.set(b"findora_key", b"findora_value".to_vec());
+        let state_immutable = app.context.get_immutable_deliver();
+        assert_eq!(
+            state_immutable.get(b"findora_key").unwrap(),
+            Some(b"findora_value".to_vec())
+        );
+        assert_ne!(
+            state_immutable.get(b"findora_key2").unwrap(),
+            Some(b"findora_value".to_vec())
+        );
+    }
+    #[test]
+    fn test_discard() {
+        let tmp_dir = utils::fresh_tmp_dir();
+        let config: ABCIConfig = Default::default();
+        let mut app = ABCISubmissionServer::new(
+            Some(tmp_dir.as_path()),
+            format!("{}:{}", config.tendermint_host, config.tendermint_port),
+        )
+        .unwrap();
+        let state = app.context.get_mutable_deliver();
+        state.set(b"findora_key", b"findora_value".to_vec());
+        state.discard_session();
+        let state_immutable = app.context.get_immutable_deliver();
+        assert_ne!(
+            state_immutable.get(b"findora_key").unwrap(),
+            Some(b"findora_value".to_vec())
+        );
+        assert_eq!(state_immutable.get(b"findora_key").unwrap(), None)
+    }
+    #[test]
+    fn test_touched() {
+        let tmp_dir = utils::fresh_tmp_dir();
+        let config: ABCIConfig = Default::default();
+        let mut app = ABCISubmissionServer::new(
+            Some(tmp_dir.as_path()),
+            format!("{}:{}", config.tendermint_host, config.tendermint_port),
+        )
+        .unwrap();
+        let state = app.context.get_mutable_deliver();
+        state.set(b"findora_key", b"findora_value".to_vec());
+        let state_immutable = app.context.get_immutable_deliver();
+        assert!(state_immutable.touched(b"findora_key"));
+    }
 }
