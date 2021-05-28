@@ -622,7 +622,7 @@ impl TransactionBuilder {
         .map(move |op| self.add_operation(op))
     }
 
-    /// SEE [check_fee](leder::data_model::Transaction::check_fee)
+    /// SEE [check_fee](ledger::data_model::Transaction::check_fee)
     #[inline(always)]
     pub fn check_fee(&self) -> bool {
         self.txn.check_fee()
