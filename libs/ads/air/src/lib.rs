@@ -1,6 +1,7 @@
+#![deny(warnings)]
 #![allow(clippy::upper_case_acronyms)]
 #![allow(dead_code)]
-#![deny(warnings)]
+#![allow(clippy::needless_borrow)]
 
 use ruc::*;
 use serde::{Deserialize, Serialize};

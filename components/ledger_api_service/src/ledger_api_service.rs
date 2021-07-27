@@ -1,4 +1,5 @@
 #![deny(warnings)]
+#![allow(clippy::needless_borrow)]
 
 extern crate actix_rt;
 extern crate actix_web;
@@ -6,21 +7,21 @@ extern crate ledger;
 extern crate serde_json;
 
 use actix_cors::Cors;
-use actix_web::{dev, error, middleware, test, web, App, HttpResponse, HttpServer};
-use ledger::data_model::*;
-use ledger::store::{ArchiveAccess, LedgerAccess, LedgerState};
-use ledger::{inp_fail, ser_fail};
+use actix_web::{dev, error, middleware, web, App, HttpResponse, HttpServer};
+use ledger::staking::{DelegationRwdDetail, TendermintAddr};
+use ledger::{
+    data_model::*,
+    staking::{DelegationState, Staking, UNBOND_BLOCK_CNT},
+    store::LedgerAccess,
+};
+use log::info;
 use log::warn;
 use parking_lot::RwLock;
 use ruc::*;
-use serde::Serialize;
-use std::marker::{Send, Sync};
-use std::sync::Arc;
-use utils::{http_get_request, HashOf, NetworkRoute, SignatureOf};
-use zei::xfr::sig::XfrPublicKey;
-
-use futures::executor;
-use log::info;
+use serde_derive::Deserialize;
+use std::{collections::BTreeMap, mem, sync::Arc};
+use utils::{HashOf, NetworkRoute, SignatureOf};
+use zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo};
 
 pub struct RestfulApiService {
     web_runtime: actix_rt::SystemRunner,
@@ -37,7 +38,7 @@ async fn ping() -> actix_web::Result<String> {
 async fn version() -> actix_web::Result<String> {
     Ok(format!(
         "Build: {} {}",
-        option_env!("VERGEN_SHA_SHORT_EXTERN").unwrap_or(env!("VERGEN_SHA_SHORT")),
+        option_env!("VERGEN_SHA_EXTERN").unwrap_or(env!("VERGEN_SHA")),
         env!("VERGEN_BUILD_DATE")
     ))
 }
@@ -58,11 +59,9 @@ pub async fn query_utxo<LA>(
 where
     LA: LedgerAccess,
 {
-    // TODO noah figure out how to make bitmap serialization not require a mutable ref
-    // https://bugtracker.findora.org/issues/165
-    let mut writer = data.write();
+    let reader = data.read();
     if let Ok(txo_sid) = info.parse::<u64>() {
-        if let Some(txo) = writer.get_utxo(TxoSID(txo_sid)) {
+        if let Some(txo) = reader.get_utxo(TxoSID(txo_sid)) {
             Ok(web::Json(txo))
         } else {
             Err(actix_web::error::ErrorNotFound(
@@ -106,17 +105,23 @@ pub async fn query_utxos<LA>(
 where
     LA: LedgerAccess,
 {
-    let mut writer = data.write();
-    if let Ok(txo_sid_list) = info.parse::<TxoSIDList>() {
-        if txo_sid_list.0.len() > 10 || txo_sid_list.0.is_empty() {
-            return Err(actix_web::error::ErrorBadRequest("Invalid Query List"));
-        }
-        Ok(web::Json(writer.get_utxos(txo_sid_list)))
-    } else {
-        Err(actix_web::error::ErrorBadRequest(
-            "Invalid txo sid encoding for list of sid",
-        ))
+    let sid_list = info
+        .as_ref()
+        .split(',')
+        .map(|i| {
+            i.parse::<u64>()
+                .map(TxoSID)
+                .map_err(actix_web::error::ErrorBadRequest)
+        })
+        .collect::<actix_web::Result<Vec<_>, actix_web::error::Error>>()?;
+
+    let reader = data.read();
+
+    if sid_list.len() > 10 || sid_list.is_empty() {
+        return Err(actix_web::error::ErrorBadRequest("Invalid Query List"));
     }
+
+    Ok(web::Json(reader.get_utxos(sid_list.as_slice())))
 }
 
 pub async fn query_asset<LA>(
@@ -142,12 +147,12 @@ where
     }
 }
 
-pub async fn query_txn<AA>(
-    data: web::Data<Arc<RwLock<AA>>>,
+pub async fn query_txn<LA>(
+    data: web::Data<Arc<RwLock<LA>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<String>
 where
-    AA: ArchiveAccess,
+    LA: LedgerAccess,
 {
     let reader = data.read();
     if let Ok(txn_sid) = info.parse::<usize>() {
@@ -193,24 +198,24 @@ where
     web::Json((hash, seq_id, sig))
 }
 
-pub async fn query_global_state_version<AA>(
-    data: web::Data<Arc<RwLock<AA>>>,
+pub async fn query_global_state_version<LA>(
+    data: web::Data<Arc<RwLock<LA>>>,
     version: web::Path<u64>,
 ) -> web::Json<Option<HashOf<Option<StateCommitmentData>>>>
 where
-    AA: ArchiveAccess,
+    LA: LedgerAccess,
 {
     let reader = data.read();
     let hash = reader.get_state_commitment_at_block_height(*version);
     web::Json(hash)
 }
 
-async fn query_blocks_since<AA>(
-    data: web::Data<Arc<RwLock<AA>>>,
+async fn query_blocks_since<LA>(
+    data: web::Data<Arc<RwLock<LA>>>,
     block_id: web::Path<usize>,
 ) -> web::Json<Vec<(usize, Vec<FinalizedTransaction>)>>
 where
-    AA: ArchiveAccess,
+    LA: LedgerAccess,
 {
     let reader = data.read();
     let mut ret = Vec::new();
@@ -237,11 +242,11 @@ where
     web::Json(ret)
 }
 
-async fn query_block_log<AA>(
-    data: web::Data<Arc<RwLock<AA>>>,
+async fn query_block_log<LA>(
+    data: web::Data<Arc<RwLock<LA>>>,
 ) -> impl actix_web::Responder
 where
-    AA: ArchiveAccess,
+    LA: LedgerAccess,
 {
     let reader = data.read();
     let mut res = String::new();
@@ -287,11 +292,11 @@ where
         .body(res)
 }
 
-async fn query_utxo_map<AA>(
-    data: web::Data<Arc<RwLock<AA>>>,
+async fn query_utxo_map<LA>(
+    data: web::Data<Arc<RwLock<LA>>>,
 ) -> actix_web::Result<String>
 where
-    AA: ArchiveAccess,
+    LA: LedgerAccess,
 {
     let mut reader = data.write();
 
@@ -299,12 +304,12 @@ where
     Ok(serde_json::to_string(&vec)?)
 }
 
-async fn query_utxo_map_checksum<AA>(
-    data: web::Data<Arc<RwLock<AA>>>,
+async fn query_utxo_map_checksum<LA>(
+    data: web::Data<Arc<RwLock<LA>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<String>
 where
-    AA: ArchiveAccess,
+    LA: LedgerAccess,
 {
     if let Ok(version) = info.parse::<u64>() {
         let reader = data.read();
@@ -339,32 +344,352 @@ fn parse_blocks(block_input: String) -> Option<Vec<usize>> {
     Some(result)
 }
 
+// query current validator list,
+// validtors who have not completed self-deletagion will be filtered out.
 #[allow(unused)]
-async fn query_utxo_partial_map<AA>(
-    data: web::Data<Arc<RwLock<AA>>>,
-    info: web::Path<String>,
-) -> actix_web::Result<String>
+async fn query_validators<LA>(
+    data: web::Data<Arc<RwLock<LA>>>,
+) -> actix_web::Result<web::Json<ValidatorList>>
 where
-    AA: ArchiveAccess,
+    LA: LedgerAccess,
 {
-    // TODO(joe?): Implement this
-    Err(actix_web::error::ErrorBadRequest("unimplemented"))
-    // if let Some(block_list) = parse_blocks(info.to_string()) {
-    //   let mut reader = data.write().c(d!())?;
+    let read = data.read();
+    let staking = read.get_staking();
 
-    //   if let Some(vec) = reader.get_utxos(block_list) {
-    //     Ok(serde_json::to_string(&vec)?)
-    //   } else {
-    //     Err(actix_web::error::ErrorNotFound("The map is unavailable."))
-    //   }
-    // } else {
-    //   Err(actix_web::error::ErrorBadRequest("Invalid block list encoding."))
-    // }
+    if let Some(validator_data) = staking.validator_get_current() {
+        let validators = validator_data.get_validator_addr_map();
+        let validators_list = validators
+            .iter()
+            .flat_map(|(tendermint_addr, pk)| {
+                validator_data.get_powered_validator_by_id(pk).map(|v| {
+                    let rank = if v.td_power == 0 {
+                        validator_data.body.len()
+                    } else {
+                        let mut power_list = validator_data
+                            .body
+                            .values()
+                            .map(|v| v.td_power)
+                            .collect::<Vec<_>>();
+                        power_list.sort_unstable();
+                        power_list.len() - power_list.binary_search(&v.td_power).unwrap()
+                    };
+                    Validator::new(
+                        tendermint_addr.clone(),
+                        Staking::get_block_rewards_rate(&*read),
+                        rank as u64,
+                        staking.delegation_has_addr(&pk),
+                        &v,
+                    )
+                })
+            })
+            .collect();
+        return Ok(web::Json(ValidatorList::new(
+            staking.cur_height() as u64,
+            validators_list,
+        )));
+    };
+
+    Ok(web::Json(ValidatorList::new(0, vec![])))
 }
 
-enum ServiceInterface {
-    LedgerAccess,
-    ArchiveAccess,
+#[derive(Deserialize, Debug)]
+struct DelegationRwdQueryParams {
+    address: String,
+    height: u64,
+}
+
+async fn get_delegation_reward<SA>(
+    data: web::Data<Arc<RwLock<SA>>>,
+    web::Query(info): web::Query<DelegationRwdQueryParams>,
+) -> actix_web::Result<web::Json<Vec<DelegationRwdDetail>>>
+where
+    SA: LedgerAccess,
+{
+    // Convert from base64 representation
+    let key: XfrPublicKey = wallet::public_key_from_base64(&info.address)
+        .c(d!())
+        .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
+
+    let read = data.read();
+    let staking = read.get_staking();
+
+    let di = staking
+        .delegation_get(&key)
+        .c(d!())
+        .map_err(error::ErrorBadRequest)?;
+
+    Ok(web::Json(
+        (0..=info.height)
+            .into_iter()
+            .rev()
+            .filter_map(|i| di.rwd_detail.get(&i))
+            .take(1)
+            .cloned()
+            .collect(),
+    ))
+}
+
+#[derive(Deserialize, Debug)]
+struct DelegatorQueryParams {
+    address: String,
+    page: usize,
+    per_page: usize,
+    order: OrderOption,
+}
+
+#[derive(Deserialize, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
+enum OrderOption {
+    Desc,
+    Asc,
+}
+
+async fn get_delegators_with_params<SA>(
+    data: web::Data<Arc<RwLock<SA>>>,
+    web::Query(info): web::Query<DelegatorQueryParams>,
+) -> actix_web::Result<web::Json<DelegatorList>>
+where
+    SA: LedgerAccess,
+{
+    let read = data.read();
+    let staking = read.get_staking();
+
+    if info.page == 0 || info.order == OrderOption::Asc {
+        return Ok(web::Json(DelegatorList::new(vec![])));
+    }
+
+    let start = (info.page - 1)
+        .checked_mul(info.per_page)
+        .c(d!())
+        .map_err(error::ErrorBadRequest)?;
+    let end = start
+        .checked_add(info.per_page)
+        .c(d!())
+        .map_err(error::ErrorBadRequest)?;
+
+    let list = staking
+        .validator_get_delegator_list(info.address.as_ref(), start, end)
+        .c(d!())
+        .map_err(error::ErrorNotFound)?;
+
+    let list: Vec<DelegatorInfo> = list
+        .iter()
+        .map(|(key, am)| DelegatorInfo::new(wallet::public_key_to_base64(key), **am))
+        .collect();
+
+    Ok(web::Json(DelegatorList::new(list)))
+}
+
+async fn query_delegator_list<SA>(
+    data: web::Data<Arc<RwLock<SA>>>,
+    addr: web::Path<TendermintAddr>,
+) -> actix_web::Result<web::Json<DelegatorList>>
+where
+    SA: LedgerAccess,
+{
+    let read = data.read();
+    let staking = read.get_staking();
+
+    let list = staking
+        .validator_get_delegator_list(addr.as_ref(), 0, usize::MAX)
+        .c(d!())
+        .map_err(error::ErrorNotFound)?;
+
+    let list: Vec<DelegatorInfo> = list
+        .iter()
+        .map(|(key, am)| DelegatorInfo::new(wallet::public_key_to_base64(key), **am))
+        .collect();
+
+    Ok(web::Json(DelegatorList::new(list)))
+}
+
+async fn query_validator_detail<SA>(
+    data: web::Data<Arc<RwLock<SA>>>,
+    addr: web::Path<TendermintAddr>,
+) -> actix_web::Result<web::Json<ValidatorDetail>>
+where
+    SA: LedgerAccess,
+{
+    let read = data.read();
+    let staking = read.get_staking();
+
+    let v_id = staking
+        .validator_td_addr_to_app_pk(addr.as_ref())
+        .c(d!())
+        .map_err(error::ErrorBadRequest)?;
+    let v_self_delegation = staking
+        .delegation_get(&v_id)
+        .ok_or_else(|| error::ErrorBadRequest("not exists"))?;
+
+    if let Some(vd) = staking.validator_get_current() {
+        if let Some(v) = vd.body.get(&v_id) {
+            if 0 < v.td_power {
+                let mut power_list =
+                    vd.body.values().map(|v| v.td_power).collect::<Vec<_>>();
+                power_list.sort_unstable();
+                let voting_power_rank =
+                    power_list.len() - power_list.binary_search(&v.td_power).unwrap();
+                let realtime_rate = Staking::get_block_rewards_rate(&*read);
+                let expected_annualization = [
+                    realtime_rate[0] as u128
+                        * v_self_delegation.proposer_rwd_cnt as u128,
+                    realtime_rate[1] as u128
+                        * (1 + staking.cur_height() - v_self_delegation.start_height)
+                            as u128,
+                ];
+                let resp = ValidatorDetail {
+                    addr: addr.into_inner(),
+                    is_online: v.signed_last_block,
+                    voting_power: v.td_power,
+                    voting_power_rank,
+                    commission_rate: v.get_commission_rate(),
+                    self_staking: v_self_delegation
+                        .entries
+                        .iter()
+                        .filter(|(k, _)| **k == v_id)
+                        .map(|(_, n)| n)
+                        .sum(),
+                    fra_rewards: v_self_delegation.rwd_amount,
+                    memo: v.memo.clone().unwrap_or_default(),
+                    start_height: v_self_delegation.start_height,
+                    cur_height: staking.cur_height(),
+                    block_signed_cnt: v.signed_cnt,
+                    block_proposed_cnt: v_self_delegation.proposer_rwd_cnt,
+                    expected_annualization,
+                    kind: v.kind(),
+                };
+                return Ok(web::Json(resp));
+            }
+        }
+    }
+
+    Err(error::ErrorNotFound("not exists"))
+}
+
+async fn query_delegation_info<SA>(
+    data: web::Data<Arc<RwLock<SA>>>,
+    address: web::Path<String>,
+) -> actix_web::Result<web::Json<DelegationInfo>>
+where
+    SA: LedgerAccess,
+{
+    let pk = wallet::public_key_from_base64(address.as_str())
+        .c(d!())
+        .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
+
+    let read = data.read();
+    let staking = read.get_staking();
+
+    let block_rewards_rate = Staking::get_block_rewards_rate(&*read);
+    let global_staking = staking.validator_global_power();
+    let global_delegation = staking.delegation_info_global_amount();
+
+    let (
+        bond_amount,
+        bond_entries,
+        unbond_amount,
+        rwd_amount,
+        start_height,
+        end_height,
+        delegation_rwd_cnt,
+        proposer_rwd_cnt,
+    ) = staking
+        .delegation_get(&pk)
+        .map(|d| {
+            let mut bond_amount = d.amount();
+            let bond_entries: Vec<(String, u64)> = d
+                .entries
+                .iter()
+                .filter_map(|(pk, am)| {
+                    staking
+                        .validator_app_pk_to_td_addr(pk)
+                        .ok()
+                        .map(|addr| (addr, *am))
+                })
+                .collect();
+            let mut unbond_amount = 0;
+            match d.state {
+                DelegationState::Paid => {
+                    bond_amount = 0;
+                }
+                DelegationState::Free => {
+                    mem::swap(&mut bond_amount, &mut unbond_amount);
+                }
+                DelegationState::Bond => {
+                    if staking.cur_height()
+                        > d.end_height().saturating_sub(UNBOND_BLOCK_CNT)
+                    {
+                        mem::swap(&mut bond_amount, &mut unbond_amount);
+                    }
+                }
+            }
+            (
+                bond_amount,
+                bond_entries,
+                unbond_amount,
+                d.rwd_amount,
+                d.start_height(),
+                d.end_height(),
+                d.delegation_rwd_cnt,
+                d.proposer_rwd_cnt,
+            )
+        })
+        .unwrap_or((0, vec![], 0, 0, 0, 0, 0, 0));
+
+    let mut resp = DelegationInfo::new(
+        bond_amount,
+        bond_entries,
+        unbond_amount,
+        rwd_amount,
+        block_rewards_rate,
+        global_delegation,
+        global_staking,
+    );
+    resp.start_height = start_height;
+    resp.current_height = staking.cur_height();
+    resp.end_height = end_height;
+    resp.delegation_rwd_cnt = delegation_rwd_cnt;
+    resp.proposer_rwd_cnt = proposer_rwd_cnt;
+
+    Ok(web::Json(resp))
+}
+
+async fn query_owned_utxos<LA>(
+    data: web::Data<Arc<RwLock<LA>>>,
+    owner: web::Path<String>,
+) -> actix_web::Result<web::Json<BTreeMap<TxoSID, (Utxo, Option<OwnerMemo>)>>>
+where
+    LA: LedgerAccess,
+{
+    wallet::public_key_from_base64(owner.as_str())
+        .c(d!())
+        .map_err(|e| error::ErrorBadRequest(e.generate_log()))
+        .map(|pk| web::Json(data.read().get_owned_utxos(&pk)))
+}
+
+enum AccessApi {
+    Ledger,
+    Archive,
+    Staking,
+}
+
+pub enum StakingAccessRoutes {
+    ValidatorList,
+    DelegationInfo,
+    DelegatorList,
+    ValidatorDetail,
+}
+
+impl NetworkRoute for StakingAccessRoutes {
+    fn route(&self) -> String {
+        let endpoint = match *self {
+            StakingAccessRoutes::ValidatorList => "validator_list",
+            StakingAccessRoutes::DelegationInfo => "delegation_info",
+            StakingAccessRoutes::DelegatorList => "delegator_list",
+            StakingAccessRoutes::ValidatorDetail => "validator_detail",
+        };
+        "/".to_owned() + endpoint
+    }
 }
 
 pub enum LedgerAccessRoutes {
@@ -399,6 +724,7 @@ pub enum LedgerArchiveRoutes {
     UtxoMap,
     UtxoMapChecksum,
     UtxoPartialMap,
+    OwnedUtxos,
 }
 
 impl NetworkRoute for LedgerArchiveRoutes {
@@ -412,22 +738,27 @@ impl NetworkRoute for LedgerArchiveRoutes {
             LedgerArchiveRoutes::UtxoMap => "utxo_map",
             LedgerArchiveRoutes::UtxoMapChecksum => "utxo_map_checksum",
             LedgerArchiveRoutes::UtxoPartialMap => "utxo_partial_map",
+            LedgerArchiveRoutes::OwnedUtxos => "owned_utxos",
         };
         "/".to_owned() + endpoint
     }
 }
 
 trait Route {
-    fn set_route<LA: 'static + LedgerAccess + ArchiveAccess + Sync + Send>(
+    fn set_route<LA: 'static + LedgerAccess + LedgerAccess + Sync + Send>(
         self,
-        service_interface: ServiceInterface,
+        service_interface: AccessApi,
     ) -> Self;
 
     fn set_route_for_ledger_access<LA: 'static + LedgerAccess + Sync + Send>(
         self,
     ) -> Self;
 
-    fn set_route_for_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(
+    fn set_route_for_archive_access<LA: 'static + LedgerAccess + Sync + Send>(
+        self,
+    ) -> Self;
+
+    fn set_route_for_staking_access<LA: 'static + LedgerAccess + Sync + Send>(
         self,
     ) -> Self;
 }
@@ -444,13 +775,14 @@ where
     >,
 {
     // Call the appropraite function depending on the interface
-    fn set_route<LA: 'static + LedgerAccess + ArchiveAccess + Sync + Send>(
+    fn set_route<LA: 'static + LedgerAccess + Sync + Send>(
         self,
-        service_interface: ServiceInterface,
+        service_interface: AccessApi,
     ) -> Self {
         match service_interface {
-            ServiceInterface::LedgerAccess => self.set_route_for_ledger_access::<LA>(),
-            ServiceInterface::ArchiveAccess => self.set_route_for_archive_access::<LA>(),
+            AccessApi::Ledger => self.set_route_for_ledger_access::<LA>(),
+            AccessApi::Archive => self.set_route_for_archive_access::<LA>(),
+            AccessApi::Staking => self.set_route_for_staking_access::<LA>(),
         }
     }
 
@@ -484,46 +816,75 @@ where
         )
     }
 
-    // Set routes for the ArchiveAccess interface
-    fn set_route_for_archive_access<AA: 'static + ArchiveAccess + Sync + Send>(
+    // Set routes for the LedgerAccess interface
+    fn set_route_for_archive_access<LA: 'static + LedgerAccess + Sync + Send>(
         self,
     ) -> Self {
         self.route(
             &LedgerArchiveRoutes::TxnSid.with_arg_template("sid"),
-            web::get().to(query_txn::<AA>),
+            web::get().to(query_txn::<LA>),
         )
         .route(
             &LedgerArchiveRoutes::BlockLog.route(),
-            web::get().to(query_block_log::<AA>),
+            web::get().to(query_block_log::<LA>),
         )
         .route(
             &LedgerArchiveRoutes::GlobalStateVersion.with_arg_template("version"),
-            web::get().to(query_global_state_version::<AA>),
+            web::get().to(query_global_state_version::<LA>),
         )
         .route(
             &LedgerArchiveRoutes::BlocksSince.with_arg_template("block_sid"),
-            web::get().to(query_blocks_since::<AA>),
+            web::get().to(query_blocks_since::<LA>),
         )
         .route(
             &LedgerArchiveRoutes::UtxoMap.route(),
-            web::get().to(query_utxo_map::<AA>),
+            web::get().to(query_utxo_map::<LA>),
         )
         .route(
             &LedgerArchiveRoutes::UtxoMapChecksum.route(),
-            web::get().to(query_utxo_map_checksum::<AA>),
+            web::get().to(query_utxo_map_checksum::<LA>),
         )
         .route(
-            &LedgerArchiveRoutes::UtxoPartialMap.with_arg_template("sidlist"),
-            web::get().to(query_utxo_partial_map::<AA>),
+            &LedgerArchiveRoutes::OwnedUtxos.with_arg_template("owner"),
+            web::get().to(query_owned_utxos::<LA>),
+        )
+    }
+
+    fn set_route_for_staking_access<SA: 'static + LedgerAccess + Sync + Send>(
+        self,
+    ) -> Self {
+        self.route(
+            &StakingAccessRoutes::ValidatorList.route(),
+            web::get().to(query_validators::<SA>),
+        )
+        .route(
+            &StakingAccessRoutes::DelegationInfo.with_arg_template("XfrPublicKey"),
+            web::get().to(query_delegation_info::<SA>),
+        )
+        .route(
+            &StakingAccessRoutes::DelegatorList.with_arg_template("NodeAddress"),
+            web::get().to(query_delegator_list::<SA>),
+        )
+        .service(
+            web::resource("/delegator_list")
+                .route(web::get().to(get_delegators_with_params::<SA>)),
+        )
+        .service(
+            web::resource("/delegation_rewards")
+                .route(web::get().to(get_delegation_reward::<SA>)),
+        )
+        .route(
+            &StakingAccessRoutes::ValidatorDetail.with_arg_template("NodeAddress"),
+            web::get().to(query_validator_detail::<SA>),
         )
     }
 }
 
 impl RestfulApiService {
-    pub fn create<LA: 'static + LedgerAccess + ArchiveAccess + Sync + Send>(
+    pub fn create<LA: 'static + LedgerAccess + Sync + Send>(
         ledger_access: Arc<RwLock<LA>>,
         host: &str,
-        port: &str,
+        port: u16,
     ) -> Result<RestfulApiService> {
         let web_runtime = actix_rt::System::new("findora API");
 
@@ -534,8 +895,9 @@ impl RestfulApiService {
                 .data(ledger_access.clone())
                 .route("/ping", web::get().to(ping))
                 .route("/version", web::get().to(version))
-                .set_route::<LA>(ServiceInterface::LedgerAccess)
-                .set_route::<LA>(ServiceInterface::ArchiveAccess)
+                .set_route::<LA>(AccessApi::Ledger)
+                .set_route::<LA>(AccessApi::Archive)
+                .set_route::<LA>(AccessApi::Staking)
         })
         .bind(&format!("{}:{}", host, port))
         .c(d!())?
@@ -551,296 +913,14 @@ impl RestfulApiService {
     }
 }
 
-pub trait RestfulLedgerAccess {
-    fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo>;
-
-    fn get_utxos(&self, addr: TxoSIDList) -> Result<Vec<Option<AuthenticatedUtxo>>>;
-
-    fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64>;
-
-    fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType>;
-
-    #[allow(clippy::type_complexity)]
-    fn get_state_commitment(
-        &self,
-    ) -> Result<(
-        HashOf<Option<StateCommitmentData>>,
-        u64,
-        SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
-    )>;
-
-    fn get_block_commit_count(&self) -> Result<u64>;
-
-    fn public_key(&self) -> Result<XfrPublicKey>;
-
-    fn sign_message<T: Serialize + serde::de::DeserializeOwned>(
-        &self,
-        msg: &T,
-    ) -> Result<SignatureOf<T>>;
-}
-
-pub trait RestfulArchiveAccess {
-    fn get_blocks_since(
-        &self,
-        addr: BlockSID,
-    ) -> Result<Vec<(usize, Vec<FinalizedTransaction>)>>;
-    // For debug purposes. Returns the location of ledger being communicated with.
-    fn get_source(&self) -> String;
-}
-
-impl RestfulArchiveAccess for MockLedgerClient {
-    fn get_blocks_since(
-        &self,
-        _addr: BlockSID,
-    ) -> Result<Vec<(usize, Vec<FinalizedTransaction>)>> {
-        unimplemented!();
-    }
-
-    fn get_source(&self) -> String {
-        unimplemented!();
-    }
-}
-
-pub struct MockLedgerClient {
-    mock_ledger: Arc<RwLock<LedgerState>>,
-}
-
-impl MockLedgerClient {
-    pub fn new(state: &Arc<RwLock<LedgerState>>) -> Self {
-        MockLedgerClient {
-            mock_ledger: Arc::clone(state),
-        }
-    }
-}
-
-impl RestfulLedgerAccess for MockLedgerClient {
-    fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo> {
-        let mut app = executor::block_on(test::init_service(
-            App::new().data(Arc::clone(&self.mock_ledger)).route(
-                &LedgerAccessRoutes::UtxoSid.with_arg_template("sid"),
-                web::get().to(query_utxo::<LedgerState>),
-            ),
-        ));
-        let req = test::TestRequest::get()
-            .uri(&LedgerAccessRoutes::UtxoSid.with_arg(&addr.0))
-            .to_request();
-
-        Ok(executor::block_on(test::read_response_json(&mut app, req)))
-    }
-    fn get_utxos(&self, addr: TxoSIDList) -> Result<Vec<Option<AuthenticatedUtxo>>> {
-        let mut app = executor::block_on(test::init_service(
-            App::new().data(Arc::clone(&self.mock_ledger)).route(
-                &LedgerAccessRoutes::UtxoSidList.with_arg_template("sid_list"),
-                web::get().to(query_utxos::<LedgerState>),
-            ),
-        ));
-        let req = test::TestRequest::get()
-            .uri(&LedgerAccessRoutes::UtxoSidList.with_arg(&addr))
-            .to_request();
-
-        Ok(executor::block_on(test::read_response_json(&mut app, req)))
-    }
-
-    fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64> {
-        let mut app = executor::block_on(test::init_service(
-            App::new().data(Arc::clone(&self.mock_ledger)).route(
-                &LedgerAccessRoutes::AssetIssuanceNum.with_arg_template("code"),
-                web::get().to(query_asset_issuance_num::<LedgerState>),
-            ),
-        ));
-        let req = test::TestRequest::get()
-            .uri(&LedgerAccessRoutes::AssetIssuanceNum.with_arg(&code.to_base64()))
-            .to_request();
-        Ok(executor::block_on(test::read_response_json(&mut app, req)))
-    }
-
-    fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType> {
-        let mut app = executor::block_on(test::init_service(
-            App::new().data(Arc::clone(&self.mock_ledger)).route(
-                &LedgerAccessRoutes::AssetToken.with_arg_template("code"),
-                web::get().to(query_asset::<LedgerState>),
-            ),
-        ));
-        let req = test::TestRequest::get()
-            .uri(&LedgerAccessRoutes::AssetToken.with_arg(&code.to_base64()))
-            .to_request();
-        Ok(executor::block_on(test::read_response_json(&mut app, req)))
-    }
-
-    #[allow(clippy::type_complexity)]
-    fn get_state_commitment(
-        &self,
-    ) -> Result<(
-        HashOf<Option<StateCommitmentData>>,
-        u64,
-        SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
-    )> {
-        let mut app = executor::block_on(test::init_service(
-            App::new().data(Arc::clone(&self.mock_ledger)).route(
-                &LedgerAccessRoutes::GlobalState.route(),
-                web::get().to(query_global_state::<LedgerState>),
-            ),
-        ));
-        let req = test::TestRequest::get()
-            .uri(&LedgerAccessRoutes::GlobalState.route())
-            .to_request();
-        Ok(executor::block_on(test::read_response_json(&mut app, req)))
-    }
-
-    fn get_block_commit_count(&self) -> Result<u64> {
-        unimplemented!();
-    }
-
-    fn public_key(&self) -> Result<XfrPublicKey> {
-        unimplemented!();
-    }
-
-    fn sign_message<T: Serialize + serde::de::DeserializeOwned>(
-        &self,
-        _msg: &T,
-    ) -> Result<SignatureOf<T>> {
-        unimplemented!();
-    }
-}
-
-pub struct ActixLedgerClient {
-    port: usize,
-    host: String,
-    protocol: String,
-}
-
-impl ActixLedgerClient {
-    pub fn new(port: usize, host: &str, protocol: &str) -> Self {
-        ActixLedgerClient {
-            port,
-            host: String::from(host),
-            protocol: String::from(protocol),
-        }
-    }
-}
-
-impl RestfulArchiveAccess for ActixLedgerClient {
-    fn get_blocks_since(
-        &self,
-        addr: BlockSID,
-    ) -> Result<Vec<(usize, Vec<FinalizedTransaction>)>> {
-        let query = format!(
-            "{}://{}:{}{}",
-            self.protocol,
-            self.host,
-            self.port,
-            LedgerArchiveRoutes::BlocksSince.with_arg(&addr.0)
-        );
-        let text = http_get_request(&query).c(d!(inp_fail!()))?;
-        serde_json::from_str::<Vec<(usize, Vec<FinalizedTransaction>)>>(&text)
-            .c(d!(ser_fail!()))
-    }
-
-    fn get_source(&self) -> String {
-        format!("{}://{}:{}", self.protocol, self.host, self.port)
-    }
-}
-
-impl RestfulLedgerAccess for ActixLedgerClient {
-    fn get_utxo(&self, addr: TxoSID) -> Result<AuthenticatedUtxo> {
-        let query = format!(
-            "{}://{}:{}{}",
-            self.protocol,
-            self.host,
-            self.port,
-            LedgerAccessRoutes::UtxoSid.with_arg(&addr.0)
-        );
-        let text = http_get_request(&query).c(d!(inp_fail!()))?;
-        serde_json::from_str::<AuthenticatedUtxo>(&text).c(d!(ser_fail!()))
-    }
-
-    fn get_utxos(&self, addr: TxoSIDList) -> Result<Vec<Option<AuthenticatedUtxo>>> {
-        let query = format!(
-            "{}://{}:{}{}",
-            self.protocol,
-            self.host,
-            self.port,
-            LedgerAccessRoutes::UtxoSidList.with_arg(&addr)
-        );
-        let text = http_get_request(&query).c(d!(inp_fail!()))?;
-        serde_json::from_str::<Vec<Option<AuthenticatedUtxo>>>(&text).c(d!(ser_fail!()))
-    }
-
-    fn get_issuance_num(&self, code: &AssetTypeCode) -> Result<u64> {
-        let query = format!(
-            "{}://{}:{}{}",
-            self.protocol,
-            self.host,
-            self.port,
-            LedgerAccessRoutes::AssetIssuanceNum.with_arg(&code.to_base64())
-        );
-        let text = http_get_request(&query).c(d!(inp_fail!()))?;
-        serde_json::from_str::<u64>(&text).c(d!(ser_fail!()))
-    }
-
-    fn get_asset_type(&self, code: &AssetTypeCode) -> Result<AssetType> {
-        let query = format!(
-            "{}://{}:{}{}",
-            self.protocol,
-            self.host,
-            self.port,
-            LedgerAccessRoutes::AssetToken.with_arg(&code.to_base64())
-        );
-        let text = http_get_request(&query).c(d!(inp_fail!()))?;
-        serde_json::from_str::<AssetType>(&text).c(d!(ser_fail!()))
-    }
-
-    #[allow(clippy::type_complexity)]
-    fn get_state_commitment(
-        &self,
-    ) -> Result<(
-        HashOf<Option<StateCommitmentData>>,
-        u64,
-        SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
-    )> {
-        let query = format!(
-            "{}://{}:{}{}",
-            self.protocol,
-            self.host,
-            self.port,
-            LedgerAccessRoutes::GlobalState.route()
-        );
-        let text = http_get_request(&query).c(d!(inp_fail!()))?;
-        serde_json::from_str::<_>(&text).c(d!(ser_fail!()))
-    }
-
-    fn get_block_commit_count(&self) -> Result<u64> {
-        unimplemented!();
-    }
-
-    fn public_key(&self) -> Result<XfrPublicKey> {
-        let query = format!(
-            "{}://{}:{}{}",
-            self.protocol,
-            self.host,
-            self.port,
-            LedgerAccessRoutes::PublicKey.route()
-        );
-        let text = http_get_request(&query).c(d!(inp_fail!()))?;
-        serde_json::from_str::<_>(&text).c(d!(ser_fail!()))
-    }
-
-    fn sign_message<T: Serialize + serde::de::DeserializeOwned>(
-        &self,
-        _msg: &T,
-    ) -> Result<SignatureOf<T>> {
-        unimplemented!();
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use actix_service::Service;
-    use actix_web::{web, App};
+    use actix_web::{test, web, App};
+    use futures::executor;
     use ledger::data_model::{Operation, Transaction, TxnEffect};
-    use ledger::store::helpers::*;
-    use ledger::store::{LedgerState, LedgerUpdate};
+    use ledger::store::{helpers::*, LedgerState, LedgerUpdate};
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
 
@@ -885,7 +965,7 @@ mod tests {
         let effect = TxnEffect::compute_effect(tx).unwrap();
         {
             let mut block = state.start_block().unwrap();
-            state.apply_transaction(&mut block, effect).unwrap();
+            state.apply_transaction(&mut block, effect, false).unwrap();
             state.finish_block(block).unwrap();
         }
 
@@ -953,7 +1033,7 @@ mod tests {
         let effect = TxnEffect::compute_effect(tx).unwrap();
         {
             let mut block = state.start_block().unwrap();
-            state.apply_transaction(&mut block, effect).unwrap();
+            state.apply_transaction(&mut block, effect, false).unwrap();
             state.finish_block(block).unwrap();
         }
 
@@ -1013,7 +1093,7 @@ mod tests {
         let effect = TxnEffect::compute_effect(tx).unwrap();
         {
             let mut block = state.start_block().unwrap();
-            state.apply_transaction(&mut block, effect).unwrap();
+            state.apply_transaction(&mut block, effect, false).unwrap();
             state.finish_block(block).unwrap();
         }
 

@@ -31,7 +31,7 @@ pub fn apply_transaction(
     let effect = pnk!(TxnEffect::compute_effect(tx));
 
     let mut block = pnk!(ledger.start_block());
-    let temp_sid = pnk!(ledger.apply_transaction(&mut block, effect));
+    let temp_sid = pnk!(ledger.apply_transaction(&mut block, effect, false));
     pnk!(ledger.finish_block(block)).remove(&temp_sid)
 }
 
@@ -444,7 +444,7 @@ pub fn test_update_memo_orig() {
     builder.add_operation_update_memo(&adversary, code, "new memo");
     let tx = builder.transaction().clone();
     let effect = pnk!(TxnEffect::compute_effect(tx));
-    assert!(ledger.apply_transaction(&mut block, effect).is_err());
+    assert!(ledger.apply_transaction(&mut block, effect, false).is_err());
     pnk!(ledger.finish_block(block));
 
     // Cant change memo more than once in the same block
@@ -455,10 +455,14 @@ pub fn test_update_memo_orig() {
     let tx = builder.transaction();
     let effect0 = pnk!(TxnEffect::compute_effect(tx.clone()));
     let temp_sid = ledger
-        .apply_transaction(&mut block, effect0)
+        .apply_transaction(&mut block, effect0, false)
         .expect("apply transaction failed");
     let effect1 = pnk!(TxnEffect::compute_effect(tx.clone()));
-    assert!(ledger.apply_transaction(&mut block, effect1).is_err());
+    assert!(
+        ledger
+            .apply_transaction(&mut block, effect1, false)
+            .is_err()
+    );
     pnk!(ledger.finish_block(block))
         .remove(&temp_sid)
         .expect("finishing block failed");
@@ -489,11 +493,15 @@ pub fn test_update_memo_darp() {
     txn_builder.add_operation_update_memo(&creator, code, "new_memo");
     let txn = txn_builder.transaction();
     let effect0 = pnk!(TxnEffect::compute_effect(txn.clone()));
-    let temp_sid0 = pnk!(ledger.apply_transaction(&mut block, effect0));
+    let temp_sid0 = pnk!(ledger.apply_transaction(&mut block, effect0, false));
 
     // Test 1: replay the exact same txn, it should fail
     let effect1 = pnk!(TxnEffect::compute_effect(txn.clone()));
-    assert!(ledger.apply_transaction(&mut block, effect1).is_err());
+    assert!(
+        ledger
+            .apply_transaction(&mut block, effect1, false)
+            .is_err()
+    );
     ledger
         .finish_block(block)
         .unwrap()
@@ -506,7 +514,7 @@ pub fn test_update_memo_darp() {
     let txn = txn_builder.transaction();
     let effect = pnk!(TxnEffect::compute_effect(txn.clone()));
 
-    assert!(ledger.apply_transaction(&mut block, effect).is_err());
+    assert!(ledger.apply_transaction(&mut block, effect, false).is_err());
 
     pnk!(ledger.finish_block(block));
 

@@ -1,4 +1,5 @@
 #![deny(warnings)]
+#![allow(clippy::needless_borrow)]
 
 extern crate ledger;
 extern crate serde;
@@ -13,11 +14,25 @@ use ledger::data_model::*;
 use ledger::inv_fail;
 use ledger::policies::Fraction;
 use ledger::policy_script::{Policy, PolicyGlobals, TxnCheckInputs, TxnPolicyData};
+use ledger::staking::{
+    is_valid_tendermint_addr,
+    ops::{
+        claim::ClaimOps,
+        delegation::DelegationOps,
+        fra_distribution::FraDistributionOps,
+        governance::{ByzantineKind, GovernanceOps},
+        undelegation::UnDelegationOps,
+        update_validator::UpdateValidatorOps,
+    },
+    td_addr_to_string, BlockHeight, PartialUnDelegation, StakerMemo, TendermintAddr,
+    Validator,
+};
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use ruc::*;
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
+use tendermint::PrivateKey;
 use utils::SignatureOf;
 use zei::api::anon_creds::{
     ac_confidential_open_commitment, ACCommitment, ACCommitmentKey, ConfidentialAC,
@@ -253,6 +268,7 @@ fn policy_from_choice(
 
 pub trait BuildsTransactions {
     fn transaction(&self) -> &Transaction;
+    fn take_transaction(self) -> Transaction;
     fn sign(&mut self, kp: &XfrKeyPair) -> &mut Self;
     fn add_signature(
         &mut self,
@@ -298,6 +314,47 @@ pub trait BuildsTransactions {
         asset_code: AssetTypeCode,
         new_memo: &str,
     ) -> &mut Self;
+    fn add_operation_delegation(
+        &mut self,
+        keypair: &XfrKeyPair,
+        validator: TendermintAddr,
+    ) -> &mut Self;
+    fn add_operation_staking(
+        &mut self,
+        keypair: &XfrKeyPair,
+        vltor_key: &PrivateKey,
+        td_pubkey: Vec<u8>,
+        commission_rate: [u64; 2],
+        memo: Option<StakerMemo>,
+    ) -> Result<&mut Self>;
+    fn add_operation_undelegation(
+        &mut self,
+        keypair: &XfrKeyPair,
+        pu: Option<PartialUnDelegation>,
+    ) -> &mut Self;
+    fn add_operation_claim(
+        &mut self,
+        keypair: &XfrKeyPair,
+        am: Option<u64>,
+    ) -> &mut Self;
+    fn add_operation_fra_distribution(
+        &mut self,
+        kps: &[&XfrKeyPair],
+        alloc_table: BTreeMap<XfrPublicKey, u64>,
+    ) -> Result<&mut Self>;
+    fn add_operation_governance(
+        &mut self,
+        kps: &[&XfrKeyPair],
+        byzantine_id: XfrPublicKey,
+        kind: ByzantineKind,
+        custom_amount: Option<[u64; 2]>,
+    ) -> Result<&mut Self>;
+    fn add_operation_update_validator(
+        &mut self,
+        kps: &[&XfrKeyPair],
+        h: BlockHeight,
+        v_set: Vec<Validator>,
+    ) -> Result<&mut Self>;
 
     fn serialize(&self) -> Vec<u8>;
     fn serialize_str(&self) -> String;
@@ -477,7 +534,7 @@ impl FeeInputs {
 pub struct TransactionBuilder {
     txn: Transaction,
     outputs: u64,
-    no_replay_token: NoReplayToken,
+    pub no_replay_token: NoReplayToken,
 }
 
 impl TransactionBuilder {
@@ -528,27 +585,20 @@ impl TransactionBuilder {
     /// @param kp: owner's XfrKeyPair
     pub fn add_fee_relative_auto(
         &mut self,
-        mut am: u64,
         kp: &XfrKeyPair,
     ) -> Result<&mut TransactionBuilder> {
         let mut opb = TransferOperationBuilder::default();
         let outputs = self.get_relative_outputs();
 
+        let mut am = TX_FEE_MIN;
         for (idx, (o, om)) in outputs.into_iter().enumerate() {
             if 0 < am {
                 if let Ok(oar) = open_blind_asset_record(&o, &om, &kp) {
                     if ASSET_TYPE_FRA == oar.asset_type
                         && kp.get_pk_ref().as_bytes() == o.public_key.as_bytes()
                     {
-                        let n = if oar.amount > am {
-                            let n = am;
-                            am = 0;
-                            n
-                        } else {
-                            am -= oar.amount;
-                            oar.amount
-                        };
-
+                        let n = alt!(oar.amount > am, am, oar.amount);
+                        am = am.saturating_sub(oar.amount);
                         opb.add_input(TxoRef::Relative(idx as u64), oar, None, None, n)
                             .c(d!())?;
                     }
@@ -645,12 +695,21 @@ impl TransactionBuilder {
             no_replay_token,
         }
     }
+
+    pub fn get_seq_id(&self) -> u64 {
+        self.no_replay_token.get_seq_id()
+    }
 }
 
 impl BuildsTransactions for TransactionBuilder {
     fn transaction(&self) -> &Transaction {
         &self.txn
     }
+
+    fn take_transaction(self) -> Transaction {
+        self.txn
+    }
+
     fn add_memo(&mut self, memo: Memo) -> &mut Self {
         self.txn.body.memos.push(memo);
         self
@@ -796,6 +855,106 @@ impl BuildsTransactions for TransactionBuilder {
         let op = Operation::UpdateMemo(memo_update);
         self.txn.add_operation(op);
         self
+    }
+
+    fn add_operation_delegation(
+        &mut self,
+        keypair: &XfrKeyPair,
+        validator: TendermintAddr,
+    ) -> &mut Self {
+        let op = DelegationOps::new(
+            keypair,
+            None,
+            validator,
+            None,
+            self.txn.body.no_replay_token,
+        );
+        self.add_operation(Operation::Delegation(op))
+    }
+
+    fn add_operation_staking(
+        &mut self,
+        keypair: &XfrKeyPair,
+        vltor_key: &PrivateKey,
+        td_pubkey: Vec<u8>,
+        commission_rate: [u64; 2],
+        memo: Option<StakerMemo>,
+    ) -> Result<&mut Self> {
+        let v_id = keypair.get_pk();
+
+        let v = Validator::new_staker(td_pubkey, v_id, commission_rate, memo).c(d!())?;
+        let vaddr = td_addr_to_string(&v.td_addr);
+
+        if !is_valid_tendermint_addr(&vaddr) {
+            return Err(eg!("invalid pubkey, invalid address"));
+        }
+
+        let op = DelegationOps::new(
+            keypair,
+            Some(vltor_key),
+            vaddr,
+            Some(v),
+            self.txn.body.no_replay_token,
+        );
+
+        Ok(self.add_operation(Operation::Delegation(op)))
+    }
+
+    fn add_operation_undelegation(
+        &mut self,
+        keypair: &XfrKeyPair,
+        pu: Option<PartialUnDelegation>,
+    ) -> &mut Self {
+        let op = UnDelegationOps::new(keypair, self.txn.body.no_replay_token, pu);
+        self.add_operation(Operation::UnDelegation(Box::new(op)))
+    }
+
+    fn add_operation_claim(
+        &mut self,
+        keypair: &XfrKeyPair,
+        am: Option<u64>,
+    ) -> &mut Self {
+        let op = ClaimOps::new(keypair, am, self.txn.body.no_replay_token);
+        self.add_operation(Operation::Claim(op))
+    }
+
+    fn add_operation_fra_distribution(
+        &mut self,
+        kps: &[&XfrKeyPair],
+        alloc_table: BTreeMap<XfrPublicKey, u64>,
+    ) -> Result<&mut Self> {
+        FraDistributionOps::new(kps, alloc_table, self.txn.body.no_replay_token)
+            .c(d!())
+            .map(move |op| self.add_operation(Operation::FraDistribution(op)))
+    }
+
+    fn add_operation_governance(
+        &mut self,
+        kps: &[&XfrKeyPair],
+        byzantine_id: XfrPublicKey,
+        kind: ByzantineKind,
+        custom_amount: Option<[u64; 2]>,
+    ) -> Result<&mut Self> {
+        GovernanceOps::new(
+            kps,
+            byzantine_id,
+            kind,
+            custom_amount,
+            self.txn.body.no_replay_token,
+        )
+        .c(d!())
+        .map(move |op| self.add_operation(Operation::Governance(op)))
+    }
+
+    fn add_operation_update_validator(
+        &mut self,
+        kps: &[&XfrKeyPair],
+        h: BlockHeight,
+        v_set: Vec<Validator>,
+    ) -> Result<&mut Self> {
+        UpdateValidatorOps::new(kps, h, v_set, self.txn.body.no_replay_token)
+            .c(d!())
+            .map(move |op| self.add_operation(Operation::UpdateValidator(op)))
     }
 
     fn add_operation(&mut self, op: Operation) -> &mut Self {
@@ -1089,16 +1248,22 @@ impl TransferOperationBuilder {
                 "Cannot mutate a transfer that has been signed".to_string()
             )));
         }
+
+        // for: repeated/idempotent balance
+        let mut amt_cache = vec![];
+
         let spend_total: u64 = self.spend_amounts.iter().sum();
         let mut partially_consumed_inputs = Vec::new();
-        for ((spend_amount, ar), policies) in self
+
+        for (idx, ((spend_amount, ar), policies)) in self
             .spend_amounts
             .iter()
             .zip(self.input_records.iter())
             .zip(self.inputs_tracing_policies.iter())
+            .enumerate()
         {
             let amt = ar.open_asset_record.get_amount();
-            match spend_amount.cmp(&amt) {
+            match spend_amount.cmp(amt) {
                 Ordering::Greater => {
                     return Err(eg!(PlatformError::InputsError(None)));
                 }
@@ -1121,10 +1286,14 @@ impl TransferOperationBuilder {
                     partially_consumed_inputs.push(ar);
                     self.outputs_tracing_policies.push(policies.clone());
                     self.output_identity_commitments.push(None);
+
+                    // for: repeated/idempotent balance
+                    amt_cache.push((idx, *amt));
                 }
                 _ => {}
             }
         }
+
         let output_total = self
             .output_records
             .iter()
@@ -1133,12 +1302,20 @@ impl TransferOperationBuilder {
             return Err(eg!(PlatformError::InputsError(None)));
         }
         self.output_records.append(&mut partially_consumed_inputs);
+
+        // for: repeated/idempotent balance
+        amt_cache.into_iter().for_each(|(idx, am)| {
+            self.spend_amounts[idx] = am;
+        });
+
         Ok(self)
     }
 
     // Finalize the transaction and prepare for signing. Once called, the transaction cannot be
     // modified.
     pub fn create(&mut self, transfer_type: TransferType) -> Result<&mut Self> {
+        self.balance().c(d!())?;
+
         let mut prng = ChaChaRng::from_entropy();
         let num_inputs = self.input_records.len();
         let num_outputs = self.output_records.len();
@@ -1247,14 +1424,14 @@ impl TransferOperationBuilder {
         let mut sig_keys = HashSet::new();
         for sig in &trn.body_signatures {
             if !sig.verify(&trn.body) {
-                return Err(eg!(inv_fail!("Invalid signature".to_string())));
+                return Err(eg!(inv_fail!("Invalid signature")));
             }
             sig_keys.insert(sig.address.key.zei_to_bytes());
         }
 
         for record in &trn.body.transfer.inputs {
             if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
-                return Err(eg!(inv_fail!("Not all signatures present".to_string())));
+                return Err(eg!(inv_fail!("Not all signatures present")));
             }
         }
         Ok(self)
@@ -1497,7 +1674,7 @@ mod tests {
 
         let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
         let mut block = ledger.start_block().unwrap();
-        let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
+        let tmp_sid = ledger.apply_transaction(&mut block, effect, false).unwrap();
         let txo_sid = ledger
             .finish_block(block)
             .unwrap()
@@ -1542,13 +1719,13 @@ mod tests {
 
         let mut tx2 = TransactionBuilder::from_seq_id(1);
         tx2.add_operation(transfer_to_bob!(txo_sid, bob_kp.get_pk()))
-            .add_fee_relative_auto(TX_FEE_MIN, &fra_owner_kp)
+            .add_fee_relative_auto(&fra_owner_kp)
             .unwrap();
         assert!(tx2.check_fee());
 
         let effect = TxnEffect::compute_effect(tx2.into_transaction()).unwrap();
         let mut block = ledger.start_block().unwrap();
-        let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
+        let tmp_sid = ledger.apply_transaction(&mut block, effect, false).unwrap();
         // txo_sid[0]: fra_owner to bob
         // txo_sid[1]: fra_owner to fee
         // txo_sid[2]: balance to fra_owner
@@ -1582,7 +1759,7 @@ mod tests {
 
         let effect = TxnEffect::compute_effect(tx3.into_transaction()).unwrap();
         let mut block = ledger.start_block().unwrap();
-        let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
+        let tmp_sid = ledger.apply_transaction(&mut block, effect, false).unwrap();
         // txo_sid[0]: fra_owner to bob
         // txo_sid[1]: balance to fra_owner
         // txo_sid[2]: bob to fee
@@ -1616,7 +1793,7 @@ mod tests {
 
         let effect = TxnEffect::compute_effect(tx4.into_transaction()).unwrap();
         let mut block = ledger.start_block().unwrap();
-        ledger.apply_transaction(&mut block, effect).unwrap();
+        ledger.apply_transaction(&mut block, effect, false).unwrap();
         ledger.finish_block(block).unwrap();
 
         // Ensure that FRA can only be defined only once.
@@ -1624,30 +1801,7 @@ mod tests {
             NoReplayToken::new(&mut ChaChaRng::from_entropy(), 100);
         let effect = TxnEffect::compute_effect(tx).unwrap();
         let mut block = ledger.start_block().unwrap();
-        assert!(ledger.apply_transaction(&mut block, effect).is_err());
+        assert!(ledger.apply_transaction(&mut block, effect, false).is_err());
         ledger.abort_block(block);
-    }
-    #[test]
-    fn test_get_utxos() {
-        let mut ledger = LedgerState::test_ledger();
-        let fra_owner_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
-        let tx = fra_gen_initial_tx(&fra_owner_kp);
-        assert!(tx.check_fee());
-
-        let effect = TxnEffect::compute_effect(tx).unwrap();
-        let mut block = ledger.start_block().unwrap();
-        let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
-        let txo_sid = ledger
-            .finish_block(block)
-            .unwrap()
-            .remove(&tmp_sid)
-            .unwrap()
-            .1;
-        let mut count: u16 = 0;
-        let utxos = ledger.get_utxos(TxoSIDList(txo_sid));
-        for _ in utxos.iter().flatten() {
-            count += 1
-        }
-        assert_eq!(count, 1);
     }
 }

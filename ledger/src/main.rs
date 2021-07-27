@@ -3,6 +3,7 @@
 //  It just inserts hashes and invokes consistency tests.
 //
 #![deny(warnings)]
+#![allow(clippy::needless_borrow)]
 
 extern crate rand;
 use cryptohash::HashValue;

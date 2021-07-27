@@ -14,6 +14,20 @@ all: build_release
 export CARGO_NET_GIT_FETCH_WITH_CLI = true
 export PROTOC = $(shell which protoc)
 
+export STAKING_INITIAL_VALIDATOR_CONFIG = $(shell pwd)/ledger/src/staking/init/staking_config.json
+export STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV = $(shell pwd)/ledger/src/staking/init/staking_config_debug_env.json
+export STAKING_INITIAL_VALIDATOR_CONFIG_ABCI_MOCK = $(shell pwd)/ledger/src/staking/init/staking_config_abci_mock.json
+
+export LEDGER_DIR=/tmp/findora
+export ENABLE_LEDGER_SERVICE = true
+export ENABLE_QUERY_SERVICE = true
+
+ifndef CARGO_TARGET_DIR
+	export CARGO_TARGET_DIR=target
+endif
+
+$(info ====== Build root is "$(CARGO_TARGET_DIR)" ======)
+
 ifdef DBG
 target_dir = debug
 else
@@ -22,19 +36,21 @@ endif
 
 bin_dir         = bin
 lib_dir         = lib
-pick            = target/$(target_dir)
+pick            = ${CARGO_TARGET_DIR}/$(target_dir)
 release_subdirs = $(bin_dir) $(lib_dir)
 
 bin_files = \
-		./$(pick)/findora \
 		./$(pick)/abci_validator_node \
-		./$(pick)/query_server \
+		./$(pick)/fns \
+		./$(pick)/stt \
+		./$(pick)/staking_cfg_generator \
 		$(shell go env GOPATH)/bin/tendermint
 
 bin_files_musl_debug = \
-		./target/x86_64-unknown-linux-musl/$(target_dir)/findora \
-		./target/x86_64-unknown-linux-musl/$(target_dir)/abci_validator_node \
-		./target/x86_64-unknown-linux-musl/$(target_dir)/query_server \
+		./${CARGO_TARGET_DIR}/x86_64-unknown-linux-musl/$(target_dir)/abci_validator_node \
+		./${CARGO_TARGET_DIR}/x86_64-unknown-linux-musl/$(target_dir)/fns \
+		./${CARGO_TARGET_DIR}/x86_64-unknown-linux-musl/$(target_dir)/stt \
+		./${CARGO_TARGET_DIR}/x86_64-unknown-linux-musl/$(target_dir)/staking_cfg_generator \
 		$(shell go env GOPATH)/bin/tendermint
 
 WASM_PKG = wasm.tar.gz
@@ -45,7 +61,7 @@ define pack
 	mkdir $(target_dir)
 	cd $(target_dir); for i in $(release_subdirs); do mkdir $$i; done
 	cp $(bin_files) $(target_dir)/$(bin_dir)
-	cp $(lib_files) $(target_dir)/$(lib_dir)
+	cp $(target_dir)/$(bin_dir)/* ~/.cargo/bin/
 endef
 
 define pack_musl_debug
@@ -53,39 +69,66 @@ define pack_musl_debug
 	mkdir $(target_dir)
 	cd $(target_dir); for i in $(release_subdirs); do mkdir $$i; done
 	cp $(bin_files_musl_debug) $(target_dir)/$(bin_dir)
-	cp $(lib_files) $(target_dir)/$(lib_dir)
+	cp $(target_dir)/$(bin_dir)/* ~/.cargo/bin/
 endef
 
-build: tendermint wasm
+build: tendermint
 ifdef DBG
-	cargo build --frozen --bins -p abci_validator_node -p query_api -p cli2
+	cargo build --bins -p abciapp -p fintools
 	$(call pack,$(target_dir))
 else
 	@ echo -e "\x1b[31;01m\$$(DBG) must be defined !\x1b[00m"
 	@ exit 1
 endif
 
-build_release: tendermint wasm
+build_release: tendermint
 ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
 else
-	cargo build --frozen --release --bins -p abci_validator_node -p query_api -p cli2
+	cargo build --release --bins -p abciapp -p fintools
 	$(call pack,$(target_dir))
 endif
 
-build_release_musl_debug: tendermint wasm
+build_release_musl: tendermint
 ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
 else
-	cargo build --target=x86_64-unknown-linux-musl --features=debugenv --frozen --release --bins -p abci_validator_node -p query_api -p cli2
+	cargo build --release --bins -p abciapp -p fintools --target=x86_64-unknown-linux-musl
+	$(call pack_musl_debug,$(target_dir))
+endif
+
+build_release_debug: tendermint
+ifdef DBG
+	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
+	@ exit 1
+else
+	cargo build --features="debug_env" --release --bins -p abciapp -p fintools
+	$(call pack,$(target_dir))
+endif
+
+build_release_musl_debug: tendermint
+ifdef DBG
+	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
+	@ exit 1
+else
+	cargo build --features="debug_env" --release --bins -p abciapp -p fintools --target=x86_64-unknown-linux-musl
 	$(call pack_musl_debug,$(target_dir))
 endif
 
 test:
 	cargo test --release --workspace -- --test-threads=1
+	cargo test --release --features="abci_mock" abci_mock -- --test-threads=1
 	cargo test --release --workspace -- --ignored
+
+staking_test:
+	$(unset LEDGER_DIR)
+	cargo test --release staking -- --test-threads=1 --nocapture
+	cargo test --release staking --features="abci_mock" -- --test-threads=1 --nocapture
+
+staking_cfg:
+	cargo run --bin staking_cfg_generator
 
 bench:
 	cargo bench --workspace
@@ -93,28 +136,34 @@ bench:
 lint:
 	cargo clippy --workspace
 	cargo clippy --workspace --tests
+	cargo clippy --features="abci_mock" --workspace --tests
+
+update:
+	cargo update
 
 test_status:
 	scripts/incur build
 	scripts/incur build --release
 	scripts/incur test
-	make build_release
+	$(MAKE) build_release
 
 fmt:
+	@ cargo fmt
+
+fmtall:
 	@ bash ./tools/fmt.sh
 
 clean:
 	@ cargo clean
+	@ rm -rf tools/tendermint .git/modules/tools/tendermint
 	@ rm -rf debug release Cargo.lock
 
 tendermint:
-	if [ -d ".git" ]; then \
-		git submodule update --init --recursive; \
-	else \
-		if [ -d "tools/tendermint" ]; then rm -rf tools/tendermint; fi; \
-		git clone -b v0.33.5 --depth=1 https://github.com/tendermint/tendermint.git tools/tendermint; \
-	fi
-	cd tools/tendermint && make build TENDERMINT_BUILD_OPTIONS=cleveldb && cp build/tendermint ~/go/bin/
+	bash -x tools/download_tendermint.sh 'tools/tendermint'
+	# cd tools/tendermint && $(MAKE) install
+	cd tools/tendermint \
+		&& $(MAKE) build TENDERMINT_BUILD_OPTIONS=cleveldb \
+		&& cp build/tendermint ~/go/bin/
 
 wasm:
 	cd components/wasm && wasm-pack build
@@ -127,46 +176,59 @@ single:
 
 devnet:
 	@./scripts/devnet/stopnodes.sh
-	@./scripts/devnet/resetnodes.sh 3 1
+	@./scripts/devnet/resetnodes.sh 20 1
 	@./scripts/devnet/startnodes.sh
+
+debug_env: stop_debug_env build_release_debug
+	@- rm -rf $(LEDGER_DIR)
+	@ mkdir $(LEDGER_DIR)
+	@ cp tools/debug_env.tar.gz $(LEDGER_DIR)/
+	@ cd $(LEDGER_DIR) && tar -xpf debug_env.tar.gz && mv debug_env devnet
+	@ ./scripts/devnet/startnodes.sh
+
+run_staking_demo:
+	bash -x tools/staking/demo.sh
+
+start_debug_env:
+	./scripts/devnet/startnodes.sh
+
+stop_debug_env:
+	@./scripts/devnet/stopnodes.sh
 
 ci_build_image:
 	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \
 		mkdir -p release/bin/; \
-		cp debug/bin/abci_validator_node debug/bin/query_server debug/bin/tendermint release/bin/; \
+		cp debug/bin/abci_validator_node debug/bin/tendermint release/bin/; \
 	fi
 	docker build -t $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG) -f container/Dockerfile-CI-abci_validator_node .
-	docker build -t $(ECR_URL)/$(ENV)/query_server:$(IMAGE_TAG) -f container/Dockerfile-CI-query_server .
 	docker build -t $(ECR_URL)/$(ENV)/tendermint:$(IMAGE_TAG) -f container/Dockerfile-CI-tendermint .
 ifeq ($(ENV),release)
 	docker tag $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG) $(ECR_URL)/$(ENV)/abci_validator_node:latest
-	docker tag $(ECR_URL)/$(ENV)/query_server:$(IMAGE_TAG) $(ECR_URL)/$(ENV)/query_server:latest
 	docker tag $(ECR_URL)/$(ENV)/tendermint:$(IMAGE_TAG) $(ECR_URL)/$(ENV)/tendermint:latest
 endif
 
 ci_push_image:
 	docker push $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG)
-	docker push $(ECR_URL)/$(ENV)/query_server:$(IMAGE_TAG)
 	docker push $(ECR_URL)/$(ENV)/tendermint:$(IMAGE_TAG)
 ifeq ($(ENV),release)
 	docker push $(ECR_URL)/$(ENV)/abci_validator_node:latest
-	docker push $(ECR_URL)/$(ENV)/query_server:latest
 	docker push $(ECR_URL)/$(ENV)/tendermint:latest
 endif
 
 clean_image:
 	docker rmi $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG)
-	docker rmi $(ECR_URL)/$(ENV)/query_server:$(IMAGE_TAG)
 	docker rmi $(ECR_URL)/$(ENV)/tendermint:$(IMAGE_TAG)
 ifeq ($(ENV),release)
 	docker rmi $(ECR_URL)/$(ENV)/abci_validator_node:latest
-	docker rmi $(ECR_URL)/$(ENV)/query_server:latest
 	docker rmi $(ECR_URL)/$(ENV)/tendermint:latest
 endif
 
 ####@./scripts/devnet/snapshot.sh <user_nick> <password> <token_name> <max_units> <genesis_issuance> <memo> <memo_updatable>
 snapshot:
 	@./scripts/devnet/snapshot.sh Findora my_pass FRA 21210000000000000 21000000000000000 my_memo N
+
+network:
+	@./scripts/devnet/startnetwork.sh Findora my_pass FRA 21210000000000000 21000000000000000 my_memo N
 
 ####@./scripts/devnet/resetnodes.sh <num_of_validator_nodes> <num_of_normal_nodes>
 mainnet:

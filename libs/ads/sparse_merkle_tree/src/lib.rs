@@ -2,7 +2,9 @@
 //! # as a Sparse Merkle Tree
 //!
 //!
+
 #![deny(warnings)]
+#![allow(clippy::needless_borrow)]
 
 use cryptohash::sha256;
 use rand::Rng;
@@ -68,7 +70,7 @@ impl Key {
     }
 
     // Method to convert the Key to a base64-encoded string
-    pub fn to_base64(&self) -> String {
+    pub fn to_base64(self) -> String {
         base64::encode_config(&self.0, base64::URL_SAFE)
     }
 
@@ -208,9 +210,9 @@ impl<Value: AsRef<[u8]>> SmtMap256<Value> {
             let sibling_hash = self.get_hash(&index.sibling().unwrap());
 
             hash = if index.is_left() {
-                hash_pair(&hash, &sibling_hash)
+                hash_pair(&hash, sibling_hash)
             } else {
-                hash_pair(&sibling_hash, &hash)
+                hash_pair(sibling_hash, &hash)
             };
             index.move_up();
             self.update_hash(&index, &hash);
@@ -820,4 +822,43 @@ mod tests {
             }
         ));
     }
+}
+
+#[test]
+fn test_nullfier() {
+    use bls12_381::Scalar;
+
+    // Common value used for all nullifiers
+    let value = Some("nullifier");
+
+    //Generate a nullifier
+    let nullifier = Scalar::from(10);
+    let spent_token_key = Key::hash(nullifier.to_bytes());
+
+    let mut smt = SmtMap256::new();
+    let merkle_root: Digest = *(&smt).merkle_root();
+    // Spend the nullifier
+    assert_eq!(smt.set(&spent_token_key, value), None);
+    assert!(merkle_root != *(&smt).merkle_root());
+    assert_eq!(smt.get(&spent_token_key), value.as_ref());
+
+    // Generate a new unspent nullifier
+    let unspent_nullifier = Scalar::from(11);
+
+    let unspent_token_key = Key::hash(unspent_nullifier.to_bytes());
+
+    // Generate unspent merkle proof (user side )
+    assert_eq!(smt.get(&unspent_token_key), None);
+
+    let (_, unspent_proof) = smt.get_with_proof(&unspent_token_key);
+
+    // Verify unspent merkle proof (ledger side )
+    assert!(smt.check_merkle_proof(&unspent_token_key, None, &unspent_proof));
+
+    // Spend the token
+    assert_eq!(smt.set(&unspent_token_key, value), None);
+    assert!(merkle_root != *(&smt).merkle_root());
+
+    let (_, spent_proof) = smt.get_with_proof(&unspent_token_key);
+    assert!(!smt.check_merkle_proof(&unspent_token_key, None, &spent_proof));
 }

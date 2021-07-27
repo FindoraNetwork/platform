@@ -3,6 +3,7 @@
 // For now, forwards transactions to a ledger hosted locally.
 // To compile wasm package, run wasm-pack build in the wasm directory;
 #![deny(warnings)]
+#![allow(clippy::needless_borrow)]
 
 use crate::wasm_data_model::*;
 use credentials::{
@@ -12,11 +13,17 @@ use credentials::{
     CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
 };
 use cryptohash::sha256;
-use ledger::data_model::{
-    AssetTypeCode, AuthenticatedTransaction, Operation, TransferType, TxOutput,
-    ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+use ledger::{
+    data_model::{
+        AssetTypeCode, AuthenticatedTransaction, Operation, TransferType, TxOutput,
+        ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
+    },
+    policies::{DebtMemo, Fraction},
+    staking::{
+        gen_random_keypair, td_addr_to_bytes, PartialUnDelegation, TendermintAddr,
+        MAX_DELEGATION_AMOUNT, MIN_DELEGATION_AMOUNT,
+    },
 };
-use ledger::policies::{DebtMemo, Fraction};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ruc::{d, err::RucResult};
@@ -290,11 +297,10 @@ impl TransactionBuilder {
     /// @param kp: owner's XfrKeyPair
     pub fn add_fee_relative_auto(
         mut self,
-        am: u64,
         kp: XfrKeyPair,
     ) -> Result<TransactionBuilder, JsValue> {
         self.transaction_builder
-            .add_fee_relative_auto(am, &kp)
+            .add_fee_relative_auto(&kp)
             .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
@@ -494,6 +500,69 @@ impl TransactionBuilder {
 
         self.get_builder_mut()
             .add_operation_update_memo(auth_key_pair, code, &new_memo);
+        Ok(self)
+    }
+
+    #[allow(missing_docs)]
+    pub fn add_operation_delegate(
+        mut self,
+        keypair: &XfrKeyPair,
+        validator: TendermintAddr,
+    ) -> Result<TransactionBuilder, JsValue> {
+        self.get_builder_mut()
+            .add_operation_delegation(keypair, validator);
+        Ok(self)
+    }
+
+    #[allow(missing_docs)]
+    pub fn add_operation_undelegate(
+        mut self,
+        keypair: &XfrKeyPair,
+    ) -> Result<TransactionBuilder, JsValue> {
+        self.get_builder_mut()
+            .add_operation_undelegation(keypair, None);
+        Ok(self)
+    }
+
+    #[allow(missing_docs)]
+    pub fn add_operation_undelegate_partially(
+        mut self,
+        keypair: &XfrKeyPair,
+        am: u64,
+        target_validator: TendermintAddr,
+    ) -> Result<TransactionBuilder, JsValue> {
+        let middle_pk = gen_random_keypair().get_pk();
+        self.get_builder_mut().add_operation_undelegation(
+            keypair,
+            Some(PartialUnDelegation::new(
+                am,
+                middle_pk,
+                td_addr_to_bytes(&target_validator).map_err(error_to_jsvalue)?,
+            )),
+        );
+        Ok(self)
+    }
+
+    #[allow(missing_docs)]
+    pub fn add_operation_claim(
+        mut self,
+        keypair: &XfrKeyPair,
+    ) -> Result<TransactionBuilder, JsValue> {
+        self.get_builder_mut().add_operation_claim(keypair, None);
+        Ok(self)
+    }
+
+    #[allow(missing_docs)]
+    pub fn add_operation_claim_custom(
+        mut self,
+        keypair: &XfrKeyPair,
+        am: u64,
+    ) -> Result<TransactionBuilder, JsValue> {
+        if 0 == am {
+            return Err(error_to_jsvalue("Amount can not be zero"));
+        }
+        self.get_builder_mut()
+            .add_operation_claim(keypair, Some(am));
         Ok(self)
     }
 
@@ -859,8 +928,7 @@ pub fn get_priv_key_str(key_pair: &XfrKeyPair) -> String {
 #[wasm_bindgen]
 /// Creates a new transfer key pair.
 pub fn new_keypair() -> XfrKeyPair {
-    let mut small_rng = rand::thread_rng();
-    XfrKeyPair::generate(&mut small_rng)
+    gen_random_keypair()
 }
 
 #[wasm_bindgen]
@@ -1378,6 +1446,36 @@ pub fn fra_get_minimal_fee() -> u64 {
 #[wasm_bindgen]
 pub fn fra_get_dest_pubkey() -> XfrPublicKey {
     *BLACK_HOLE_PUBKEY
+}
+
+/// The system address used to reveive delegation principals.
+#[wasm_bindgen]
+pub fn get_delegation_target_address() -> String {
+    get_coinbase_principal_address()
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn get_coinbase_address() -> String {
+    wallet::public_key_to_base64(&BLACK_HOLE_PUBKEY_STAKING)
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn get_coinbase_principal_address() -> String {
+    wallet::public_key_to_base64(&BLACK_HOLE_PUBKEY_STAKING)
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn get_delegation_min_amount() -> u64 {
+    MIN_DELEGATION_AMOUNT
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn get_delegation_max_amount() -> u64 {
+    MAX_DELEGATION_AMOUNT
 }
 
 #[cfg(test)]

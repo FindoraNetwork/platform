@@ -64,14 +64,14 @@ jobs:
       run: |
         COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
         if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA::7}"
+          export COMMIT_HASH="${GITHUB_SHA}"
         else
-          export COMMIT_HASH=${COMMIT_HASH:1:7}
+          export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
         export TOBRANCH="${GITHUB_BASE_REF}"
-        export VERGEN_SHA_SHORT_EXTERN="${TOBRANCH}-${COMMIT_HASH}"
-        echo "VERGEN_SHA_SHORT_EXTERN: ${VERGEN_SHA_SHORT_EXTERN}"
+        export VERGEN_SHA_EXTERN="${TOBRANCH}-${COMMIT_HASH}"
+        echo "VERGEN_SHA_EXTERN: ${VERGEN_SHA_EXTERN}"
         make build_release
     - name: Build images
       env:
@@ -82,9 +82,9 @@ jobs:
       run: |
         COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
         if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA::7}"
+          export COMMIT_HASH="${GITHUB_SHA}"
         else
-          export COMMIT_HASH=${COMMIT_HASH:1:7}
+          export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
         export TOBRANCH="${GITHUB_BASE_REF}"
@@ -104,9 +104,9 @@ jobs:
       run: |
         COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
         if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA::7}"
+          export COMMIT_HASH="${GITHUB_SHA}"
         else
-          export COMMIT_HASH=${COMMIT_HASH:1:7}
+          export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
         export TOBRANCH="${GITHUB_BASE_REF}"
@@ -122,9 +122,9 @@ jobs:
       run: |
         COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
         if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA::7}"
+          export COMMIT_HASH="${GITHUB_SHA}"
         else
-          export COMMIT_HASH=${COMMIT_HASH:1:7}
+          export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
         export TOBRANCH="${GITHUB_BASE_REF}"
@@ -138,9 +138,9 @@ jobs:
       run: |
         COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
         if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA::7}"
+          export COMMIT_HASH="${GITHUB_SHA}"
         else
-          export COMMIT_HASH=${COMMIT_HASH:1:7}
+          export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
         export TOBRANCH="${GITHUB_BASE_REF}"

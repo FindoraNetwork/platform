@@ -1,34 +1,5 @@
 # Findora Platform
 
-Top level targets: executable and plug-in components of the Findora platform
-* Application library for performing validation and maintaining a ledger
-* Binding executables/shared libraries for compatible consensus layers (e.x. Tendermint ABCI binding execuatable)
-* Command line executable for generating transactions, managing local cryptographic keys, etc.
-* WASM interface (exposes the same functionality as CLI, for single page browser apps).
-* any future executable and distributable components
-
-```
-+
-+-- core/ - shared libraries providing common application support components
-|    +-- data_model/ - common types
-|    +== store/ = common resource lookup & retrieval
-|    +== <module1>/
-|    | ...
-|    +== <moduleK>/
-|
-+-- components/ - capabilities that can be incorporated into one or more top level targets
-|    +-- ledger_app/ - provides a ledger interface with transaction validation and post-transaction state updates.
-|    +== <component1>/
-|    | ...
-|    +-- <componentM>
-|
-+-- <target1>/
-+-- <target2>/
-| ...
-+-- <targetN>/
-
-```
-
 ## build
 
 #### prepare
@@ -53,37 +24,37 @@ cd /opt && \
 sudo apt install libc-dev libssl-dev make git curl wget
 ```
 
-
-For MacOS
-- Install XCode
-- Install Developer tools
-```shell
-# install rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh 
-
-# install wasm-pack
-curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-
-# install homebrew
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# install golang
-brew install golang
-
-# install system-deps
-brew install gawk glibc openssl wget leveldb
-
-# create directory for binaries
-mkdir ~/go/bin
-
-```
-
-After clone code, you should do a `make githook` to finish githooks settings that used to check code's format.
+> For MacOS
+>
+> - Install XCode
+> - Install Developer tools
+>
+> ```shell
+> # install rust
+> curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+>
+> # install wasm-pack
+> curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+>
+> # install homebrew
+> /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+>
+> # install golang
+> brew install golang
+>
+> # install system-deps
+> brew install gawk glibc openssl wget leveldb
+>
+> # create directory for binaries
+> mkdir ~/go/bin
+> ```
 
 #### install toml CLI
-    pip3 install toml-cli
 
-#### ssh git login 
+`pip3 install toml-cli`
+
+#### ssh git login
+
 `cargo` needs a ssh login to fetch git repos. Generate a ssh key if you don't have one already  with `ssh-keygen` and it to your
 Github account at `https://github.com/settings/keys`
 

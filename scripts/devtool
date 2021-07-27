@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+set -e
+
+OPT=$1
+GITBRANCH=`git rev-parse --abbrev-ref HEAD`
+CARGO_TARGET_DIR=../target-${GITBRANCH}-${OPT}
+export CARGO_TARGET_DIR
+
+if [[ ${OPT} == "build" ]]; then
+  export CARGO_TARGET_DIR=${CARGO_TARGET_DIR}_DBG
+elif [[ ${OPT} == "" ]]; then
+  export CARGO_TARGET_DIR=../target-${GITBRANCH}
+fi
+make $@
+
+if [[ ${OPT} == "debug_env" ]]; then
+  echo "Initializing local devnet..."
+  fns setup -S http://127.0.0.1
+  stt init
+  echo "Initialized."
+fi

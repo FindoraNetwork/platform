@@ -150,7 +150,7 @@ pub fn credential_sign<R: CryptoRng + RngCore>(
 ) -> Result<CredSignature> {
     // A. check that attributes fields to sign matches the attribute list
     // A.1 lengths matches
-    let keys: Vec<&String> = attributes.iter().map(|(x, _)| x).collect();
+    let keys = attributes.iter().map(|(x, _)| x);
     if keys.len() != issuer_sec_key.map.len() {
         return Err(eg!(ZeiError::ParameterError));
     }
@@ -174,7 +174,7 @@ pub fn credential_sign<R: CryptoRng + RngCore>(
     ac_sign(
         prng,
         &issuer_sec_key.ac_sec_key,
-        &user_pub_key.get_ref(),
+        user_pub_key.get_ref(),
         &attrs,
     )
     .c(d!())

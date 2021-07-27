@@ -1,8 +1,7 @@
 [workspace]
 members = [
     "components/cli2",
-    "components/abci_validator_node",
-    "components/ledger_standalone",
+    "components/abciapp",
     "components/ledger_api_service",
     "components/query_api",
     "components/query_server",
@@ -11,6 +10,7 @@ members = [
     "components/txn_builder",
     "components/wasm",
     "components/wallet",
+    "components/fintools",
     "ledger",
     "libs/ads/air",
     "libs/ads/merkle_tree",
@@ -19,7 +19,6 @@ members = [
     "libs/cryptohash",
     "libs/credentials",
     "libs/sliding_set",
-    "libs/network",
     "libs/utils",
 ]
 
@@ -28,7 +27,6 @@ incremental = false
 overflow-checks = true
 
 [profile.release]
-codegen-units = 1
 incremental = false
 overflow-checks = false
 

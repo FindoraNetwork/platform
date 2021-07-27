@@ -64,8 +64,8 @@ jobs:
         TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
         TAGV="${TAGS#refs/tags/}"
         export IMAGE_TAG="${TAGV:-main}"
-        export VERGEN_SHA_SHORT_EXTERN="${IMAGE_TAG}"
-        echo "VERGEN_SHA_SHORT_EXTERN: ${VERGEN_SHA_SHORT_EXTERN}"
+        export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
+        echo "VERGEN_SHA_EXTERN: ${VERGEN_SHA_EXTERN}"
         make build_release
     - name: Build images
       env:

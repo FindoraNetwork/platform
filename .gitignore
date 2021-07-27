@@ -20,3 +20,7 @@ package-lock.json
 Cargo.lock
 *.tar.gz
 nohup.out
+
+*.keys
+
+tools/tendermint

@@ -2,6 +2,14 @@ use crate::data_model::errors::PlatformError;
 use crate::data_model::*;
 use crate::policies::{compute_debt_swap_effect, DebtSwapEffect};
 use crate::policy_script::{run_txn_check, TxnCheckInputs, TxnPolicyData};
+use crate::staking::{
+    self,
+    ops::{
+        claim::ClaimOps, delegation::DelegationOps,
+        fra_distribution::FraDistributionOps, governance::GovernanceOps,
+        undelegation::UnDelegationOps, update_validator::UpdateValidatorOps,
+    },
+};
 use crate::{inp_fail, inv_fail, zei_fail};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -15,7 +23,7 @@ use zei::xfr::sig::XfrPublicKey;
 use ruc::*;
 use zei::xfr::structs::{TracingPolicies, XfrAmount, XfrAssetType};
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
     // The Transaction object this represents
     pub txn: Transaction,
@@ -53,6 +61,13 @@ pub struct TxnEffect {
     pub custom_policy_asset_types: HashMap<AssetTypeCode, TxnCheckInputs>,
     // Memo updates
     pub memo_updates: Vec<(AssetTypeCode, XfrPublicKey, Memo)>,
+
+    pub delegations: Vec<DelegationOps>,
+    pub undelegations: Vec<UnDelegationOps>,
+    pub claims: Vec<ClaimOps>,
+    pub update_validators: HashMap<staking::BlockHeight, UpdateValidatorOps>,
+    pub governances: Vec<GovernanceOps>,
+    pub fra_distributions: Vec<FraDistributionOps>,
 }
 
 // Internally validates the transaction as well.
@@ -78,6 +93,12 @@ impl TxnEffect {
         let mut asset_types_involved: HashSet<AssetTypeCode> = HashSet::new();
         let mut confidential_issuance_types = HashSet::new();
         let mut confidential_transfer_inputs = HashSet::new();
+        let mut delegations = vec![];
+        let mut undelegations = vec![];
+        let mut claims = vec![];
+        let mut update_validators = map! {};
+        let mut governances = vec![];
+        let mut fra_distributions = vec![];
 
         let custom_policy_asset_types = txn
             .body
@@ -112,7 +133,52 @@ impl TxnEffect {
         for op in txn.body.operations.iter() {
             debug_assert!(txo_count == txos.len());
 
+            macro_rules! check_nonce {
+                ($i: expr) => {
+                    if $i.get_nonce() != txn.body.no_replay_token {
+                        return Err(eg!(inp_fail!("nonce does not match")));
+                    }
+                };
+            }
+
             match op {
+                Operation::Delegation(i) => {
+                    check_nonce!(i);
+                    i.verify().c(d!())?;
+                    delegations.push(i.clone());
+                }
+                Operation::UnDelegation(i) => {
+                    check_nonce!(i);
+                    i.verify().c(d!())?;
+                    undelegations.push(i.as_ref().clone());
+                }
+                Operation::Claim(i) => {
+                    check_nonce!(i);
+                    i.verify().c(d!())?;
+                    claims.push(i.clone());
+                }
+                Operation::UpdateValidator(i) => {
+                    check_nonce!(i);
+                    // Only one update is allowed at the same height.
+                    if update_validators.insert(i.data.height, i.clone()).is_some() {
+                        return Err(eg!("dup entries"));
+                    }
+                }
+                Operation::Governance(i) => {
+                    check_nonce!(i);
+                    governances.push(i.clone());
+                }
+                Operation::FraDistribution(i) => {
+                    check_nonce!(i);
+                    fra_distributions.push(i.clone());
+                }
+                Operation::MintFra(i) => {
+                    i.entries.iter().for_each(|et| {
+                        txos.push(Some(et.utxo.clone()));
+                        txo_count += 1;
+                    });
+                }
+
                 // An asset creation is valid iff:
                 //     1) The signature is valid.
                 //         - Fully checked here
@@ -535,7 +601,7 @@ impl TxnEffect {
             op_idx += 1;
         } // end -- for op in txn.body.operations.iter() {...}
 
-        Ok(TxnEffect {
+        let txn_effect = TxnEffect {
             txn,
             txos,
             input_txos,
@@ -552,7 +618,15 @@ impl TxnEffect {
             asset_types_involved,
             custom_policy_asset_types,
             memo_updates,
-        })
+            delegations,
+            undelegations,
+            claims,
+            update_validators,
+            governances,
+            fra_distributions,
+        };
+
+        Ok(txn_effect)
     }
 }
 
@@ -642,6 +716,14 @@ pub struct BlockEffect {
     pub memo_updates: HashMap<AssetTypeCode, Memo>,
     // counter for consensus integration; will add to a running count when applied.
     pub pulse_count: u64,
+
+    pub staking_simulator: staking::Staking,
+}
+
+impl StakingUpdate for BlockEffect {
+    fn get_staking_simulator_mut(&mut self) -> &mut staking::Staking {
+        &mut self.staking_simulator
+    }
 }
 
 impl BlockEffect {
@@ -660,7 +742,11 @@ impl BlockEffect {
     //       new temp SID representing the transaction.
     //   Otherwise, Err(...)
     #[allow(clippy::cognitive_complexity)]
-    pub fn add_txn_effect(&mut self, txn_effect: TxnEffect) -> Result<TxnTempSID> {
+    pub fn add_txn_effect(
+        &mut self,
+        txn_effect: TxnEffect,
+        is_loading: bool,
+    ) -> Result<TxnTempSID> {
         // Check that no inputs are consumed twice
         for (input_sid, _) in txn_effect.input_txos.iter() {
             if self.input_txos.contains_key(&input_sid) {
@@ -708,7 +794,17 @@ impl BlockEffect {
             }
         }
 
-        self.no_replay_tokens.push(no_replay_token); // By construction, no_replay_tokens entries are unique
+        // NOTE: set at the last position
+        if !is_loading {
+            self.check_staking(&txn_effect).c(d!())?;
+        }
+
+        ///////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////
+
+        // By construction, no_replay_tokens entries are unique
+        self.no_replay_tokens.push(no_replay_token);
 
         let temp_sid = TxnTempSID(self.txns.len());
         self.txns.push(txn_effect.txn);
@@ -716,18 +812,14 @@ impl BlockEffect {
         self.txos.push(txn_effect.txos);
 
         for (input_sid, record) in txn_effect.input_txos {
-            // dbg!(&input_sid);
-            debug_assert!(!self.input_txos.contains_key(&input_sid));
             self.input_txos.insert(input_sid, record);
         }
 
         for (type_code, asset_type) in txn_effect.new_asset_codes {
-            debug_assert!(!self.new_asset_codes.contains_key(&type_code));
             self.new_asset_codes.insert(type_code, asset_type);
         }
 
         for (type_code, issuance_nums) in txn_effect.new_issuance_nums {
-            debug_assert!(!self.new_issuance_nums.contains_key(&type_code));
             self.new_issuance_nums.insert(type_code, issuance_nums);
         }
 
@@ -741,6 +833,37 @@ impl BlockEffect {
         }
 
         Ok(temp_sid)
+    }
+
+    fn check_staking(&mut self, txn_effect: &TxnEffect) -> Result<()> {
+        for i in txn_effect.delegations.iter() {
+            i.check_run(&mut self.staking_simulator, &txn_effect.txn)
+                .c(d!())?;
+        }
+
+        for i in txn_effect.undelegations.iter() {
+            i.check_run(&mut self.staking_simulator, &txn_effect.txn)
+                .c(d!())?;
+        }
+
+        for i in txn_effect.claims.iter() {
+            i.check_run(&mut self.staking_simulator).c(d!())?;
+        }
+
+        for i in txn_effect.update_validators.values() {
+            i.check_run(&mut self.staking_simulator).c(d!())?;
+        }
+
+        for i in txn_effect.governances.iter() {
+            i.check_run(&mut self.staking_simulator).c(d!())?;
+        }
+
+        for i in txn_effect.fra_distributions.iter() {
+            i.check_run(&mut self.staking_simulator, &txn_effect.txn)
+                .c(d!())?;
+        }
+
+        Ok(())
     }
 
     pub fn get_pulse_count(&self) -> u64 {

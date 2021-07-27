@@ -28,3 +28,5 @@ then
     done
     echo
 fi
+
+exit 0

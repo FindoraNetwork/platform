@@ -25,7 +25,6 @@ dirs = "2.0.2"
 itertools = "0.9.0"
 ledger = { path = "../../ledger", features = ["TESTING"] }
 ledger_api_service = { path = "../ledger_api_service" }
-network = { path = "../../libs/network" }
 promptly = "0.3.0"
 rand = "0.7.3"
 attohttpc = { version = "0.16.3", default-features = false, features = ["compress", "json", "tls-rustls"] }
@@ -41,12 +40,12 @@ submission_api = { path = "../submission_api" }
 submission_server = { path = "../submission_server" }
 txn_builder = { path = "../txn_builder" }
 utils = { path = "../../libs/utils" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.1" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.3a" }
 zeroize = "1.1.0"
 wallet = { path = "../wallet" }
 
 [build-dependencies]
-vergen = "3.1.0"
+vergen = "=3.1.0"
 
 [package.metadata.deb]
 name = "findora"
