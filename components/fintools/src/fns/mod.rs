@@ -267,13 +267,31 @@ pub fn setup(
 ) -> Result<()> {
     fs::create_dir_all(&*CFG_PATH).c(d!("fail to create config path"))?;
 
+    let mut pwd = ruc::info!(
+        env::current_dir(),
+        "Cannot abtain current work directory, default to relative path"
+    )
+    .unwrap_or_default();
+
     if let Some(sa) = serv_addr {
         fs::write(&*SERV_ADDR_FILE, sa).c(d!("fail to cache 'serv-addr'"))?;
     }
     if let Some(mp) = owner_mnemonic_path {
+        let mp = if mp.starts_with('/') {
+            mp
+        } else {
+            pwd.push(mp);
+            pwd.to_str().c(d!("Invalid path"))?
+        };
         fs::write(&*MNEMONIC_FILE, mp).c(d!("fail to cache 'owner-mnemonic-path'"))?;
     }
     if let Some(kp) = validator_key_path {
+        let kp = if kp.starts_with('/') {
+            kp
+        } else {
+            pwd.push(kp);
+            pwd.to_str().c(d!("Invalid path"))?
+        };
         fs::write(&*TD_KEY_FILE, kp).c(d!("fail to cache 'validator-key-path'"))?;
     }
     Ok(())
