@@ -506,7 +506,7 @@ fn gen_new_validators(n: u8) -> (Vec<StakingValidator>, Vec<XfrKeyPair>) {
                 INITIAL_POWER,
                 kp.get_pk(),
                 [50, 100],
-                None,
+                Default::default(),
                 ValidatorKind::Staker
             ))
         })
@@ -1427,7 +1427,7 @@ fn staking_scene_3() -> Result<()> {
             let tx_hash =
                 delegate(kp, td_pubkey_to_td_addr(&v_set[i].td_pubkey), 3_0000 * FRA)
                     .c(d!())?;
-            wait_one_block();
+            wait_n_block(5);
             assert!(is_successful(&tx_hash));
         }
     }
@@ -1537,7 +1537,7 @@ fn staking_scene_4() -> Result<()> {
         assert!(is_successful(&tx_hash));
 
         let tx_hash = transfer(&ROOT_KEYPAIR, &v_set[i].id, 100 * FRA).c(d!())?;
-        wait_one_block();
+        wait_n_block(5);
         assert!(is_successful(&tx_hash));
 
         let tx_hash = delegate(kp, td_pubkey_to_td_addr(&v_set[i].td_pubkey), 100 * FRA)

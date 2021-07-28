@@ -644,7 +644,7 @@ where
                         .map(|(_, n)| n)
                         .sum(),
                     fra_rewards: v_self_delegation.rwd_amount,
-                    memo: v.memo.clone().unwrap_or_default(),
+                    memo: v.memo.clone(),
                     start_height: v_self_delegation.start_height,
                     cur_height: staking.cur_height(),
                     block_signed_cnt: v.signed_cnt,

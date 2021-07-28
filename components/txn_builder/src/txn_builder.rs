@@ -14,6 +14,7 @@ use ledger::data_model::*;
 use ledger::inv_fail;
 use ledger::policies::Fraction;
 use ledger::policy_script::{Policy, PolicyGlobals, TxnCheckInputs, TxnPolicyData};
+use ledger::staking::ops::update_staker::UpdateStakerOps;
 use ledger::staking::{
     is_valid_tendermint_addr,
     ops::{
@@ -319,13 +320,21 @@ pub trait BuildsTransactions {
         keypair: &XfrKeyPair,
         validator: TendermintAddr,
     ) -> &mut Self;
+    fn add_operation_update_staker(
+        &mut self,
+        keypair: &XfrKeyPair,
+        vltor_key: &PrivateKey,
+        td_pubkey: Vec<u8>,
+        commission_rate: [u64; 2],
+        memo: StakerMemo,
+    ) -> Result<&mut Self>;
     fn add_operation_staking(
         &mut self,
         keypair: &XfrKeyPair,
         vltor_key: &PrivateKey,
         td_pubkey: Vec<u8>,
         commission_rate: [u64; 2],
-        memo: Option<StakerMemo>,
+        memo: Option<String>,
     ) -> Result<&mut Self>;
     fn add_operation_undelegation(
         &mut self,
@@ -872,15 +881,49 @@ impl BuildsTransactions for TransactionBuilder {
         self.add_operation(Operation::Delegation(op))
     }
 
+    fn add_operation_update_staker(
+        &mut self,
+        keypair: &XfrKeyPair,
+        vltor_key: &PrivateKey,
+        td_pubkey: Vec<u8>,
+        commission_rate: [u64; 2],
+        memo: StakerMemo,
+    ) -> Result<&mut Self> {
+        let v_id = keypair.get_pk();
+
+        let v = Validator::new_staker(td_pubkey, v_id, commission_rate, memo).c(d!())?;
+        let vaddr = td_addr_to_string(&v.td_addr);
+
+        if !is_valid_tendermint_addr(&vaddr) {
+            return Err(eg!("invalid pubkey, invalid address"));
+        }
+
+        let op = UpdateStakerOps::new(
+            keypair,
+            vltor_key,
+            vaddr,
+            v,
+            self.txn.body.no_replay_token,
+        );
+
+        Ok(self.add_operation(Operation::UpdateStaker(op)))
+    }
+
     fn add_operation_staking(
         &mut self,
         keypair: &XfrKeyPair,
         vltor_key: &PrivateKey,
         td_pubkey: Vec<u8>,
         commission_rate: [u64; 2],
-        memo: Option<StakerMemo>,
+        memo: Option<String>,
     ) -> Result<&mut Self> {
         let v_id = keypair.get_pk();
+
+        let memo = if memo.is_some() {
+            serde_json::from_str(memo.unwrap().as_str()).c(d!())?
+        } else {
+            Default::default()
+        };
 
         let v = Validator::new_staker(td_pubkey, v_id, commission_rate, memo).c(d!())?;
         let vaddr = td_addr_to_string(&v.td_addr);

@@ -54,6 +54,10 @@ fn run() -> Result<()> {
         .arg_from_usage("-A, --validator-td-addr=[TendermintAddr] 'stake FRAs to a custom validator'")
         .about("Stake tokens (i.e. bond tokens) from a Findora account to a Validator ")
         .group(subcmd_stake_arggrp);
+    let subcmd_staker_update = SubCommand::with_name("staker-update")
+        .arg_from_usage("-R, --commission-rate=[Rate] 'the commission rate of your node, a float number from 0.0 to 1.0'")
+        .arg_from_usage("-M, --validator-memo=[Memo] 'the description of your node, optional'")
+        .about("Update information of a validator ");
     let subcmd_unstake = SubCommand::with_name("unstake")
         .arg_from_usage("-S, --staker-priv-key=[SecretKey] 'the private key of proposer, in base64 format'")
         .arg_from_usage("-A, --validator-td-addr=[TendermintAddr] 'unstake FRAs from a custom validator'")
@@ -100,6 +104,7 @@ fn run() -> Result<()> {
         .subcommand(subcmd_show)
         .subcommand(subcmd_setup)
         .subcommand(subcmd_transfer)
+        .subcommand(subcmd_staker_update)
         //.subcommand(subcmd_set_initial_validators)
         .get_matches();
 
@@ -107,6 +112,17 @@ fn run() -> Result<()> {
         println!("{}", env!("VERGEN_SHA"));
     } else if matches.is_present("genkey") {
         fns::gen_key_and_print();
+    } else if let Some(m) = matches.subcommand_matches("staker-update") {
+        let cr = m.value_of("commission-rate");
+        let vm = m.value_of("validator-memo");
+        if vm.is_none() && cr.is_none() {
+            println!("{}", m.usage());
+            println!(
+                "Tips: to update the information of your node, please specify commission-rate or memo"
+            );
+        } else {
+            fns::staker_update(cr, vm).c(d!())?;
+        }
     } else if let Some(m) = matches.subcommand_matches("stake") {
         let am = m.value_of("amount");
         if m.is_present("append") {

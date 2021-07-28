@@ -45,7 +45,9 @@ impl TryFrom<ValidatorStr> for Validator {
             td_power: v.td_power.unwrap_or(DEFAULT_POWER),
             commission_rate: v.commission_rate.unwrap_or([1, 100]),
             id: wallet::public_key_from_base64(&v.id).c(d!())?,
-            memo: v.memo,
+            memo: v.memo.map_or(Default::default(), |s| {
+                serde_json::from_str(s.as_str()).unwrap_or_default()
+            }),
             kind: v.kind.unwrap_or(ValidatorKind::Initor),
             signed_last_block: false,
             signed_cnt: 0,

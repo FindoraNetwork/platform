@@ -6,7 +6,7 @@
 //! This module is the library part of FNS.
 //!
 
-use crate::fns::utils::parse_td_validator_keys;
+use crate::fns::utils::{get_validator_detail, parse_td_validator_keys};
 use lazy_static::lazy_static;
 use ledger::{
     data_model::BLACK_HOLE_PUBKEY_STAKING,
@@ -35,6 +35,38 @@ lazy_static! {
     static ref TD_KEY_FILE: String = format!("{}/tendermint_keys", &*CFG_PATH);
     static ref SERV_ADDR: Option<String> = fs::read_to_string(&*SERV_ADDR_FILE).ok();
     static ref SERV_ADDR_FILE: String = format!("{}/serv_addr", &*CFG_PATH);
+}
+
+pub fn staker_update(cr: Option<&str>, memo: Option<&str>) -> Result<()> {
+    let addr = get_td_pubkey().map(|i| td_pubkey_to_td_addr(&i)).c(d!())?;
+    let vd = get_validator_detail(&addr).c(d!())?;
+
+    let cr = cr
+        .map_or(Ok(vd.commission_rate), |s| {
+            s.parse::<f64>()
+                .c(d!("commission rate must be a float number"))
+                .and_then(convert_commission_rate)
+        })
+        .c(d!())?;
+    let memo = memo
+        .map_or(Ok(vd.memo), |s| serde_json::from_str(s))
+        .c(d!())?;
+
+    let td_pubkey = get_td_pubkey().c(d!())?;
+
+    let kp = get_keypair().c(d!())?;
+    let vkp = get_td_privkey().c(d!())?;
+
+    let mut builder = utils::new_tx_builder().c(d!())?;
+
+    builder
+        .add_operation_update_staker(&kp, &vkp, td_pubkey, cr, memo)
+        .c(d!())?;
+    utils::gen_fee_op(&kp)
+        .c(d!())
+        .map(|op| builder.add_operation(op))?;
+
+    utils::send_tx(&builder.take_transaction()).c(d!())
 }
 
 pub fn stake(amount: &str, commission_rate: &str, memo: Option<&str>) -> Result<()> {
@@ -150,6 +182,15 @@ pub fn claim(am: Option<&str>) -> Result<()> {
     })?;
 
     utils::send_tx(&builder.take_transaction()).c(d!())
+}
+
+pub fn show_staker() -> Result<()> {
+    let addr = get_td_pubkey().map(|i| td_pubkey_to_td_addr(&i))?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&get_validator_detail(&addr).c(d!())?).c(d!())?
+    );
+    Ok(())
 }
 
 pub fn show() -> Result<()> {

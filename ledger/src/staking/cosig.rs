@@ -246,7 +246,7 @@ mod test {
                     999,
                     kp.get_pk(),
                     [1, 5],
-                    None,
+                    Default::default(),
                     ValidatorKind::Initor,
                 )
             })

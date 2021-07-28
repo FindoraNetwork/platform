@@ -493,6 +493,7 @@ where
     for op in &txn.body.operations {
         classify(op);
         match op {
+            Operation::UpdateStaker(i) => staking_gen!(i),
             Operation::Delegation(i) => staking_gen!(i),
             Operation::UnDelegation(i) => staking_gen!(i),
             Operation::Claim(i) => staking_gen!(i),

@@ -13,4 +13,5 @@ pub mod fra_distribution;
 pub mod governance;
 pub mod mint_fra;
 pub mod undelegation;
+pub mod update_staker;
 pub mod update_validator;

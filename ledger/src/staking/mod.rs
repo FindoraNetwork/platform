@@ -317,6 +317,26 @@ impl Staking {
     }
 
     #[inline(always)]
+    /// update staker
+    pub fn update_staker(&mut self, new: &Validator) -> Result<()> {
+        let vd = self.validator_get_current_mut().c(d!())?;
+        let res = vd.body.values_mut().any(|v| {
+            if v.id == new.id {
+                v.memo = new.memo.clone();
+                v.commission_rate = new.commission_rate;
+                return true;
+            }
+            false
+        });
+
+        if res {
+            Ok(())
+        } else {
+            Err(eg!("Cannot update staker"))
+        }
+    }
+
+    #[inline(always)]
     #[allow(missing_docs)]
     pub fn validator_check_power_x(
         &self,
@@ -1440,7 +1460,29 @@ pub(crate) const VALIDATORS_MIN: usize = 6;
 pub const COSIG_THRESHOLD_DEFAULT: [u64; 2] = [2, 3];
 
 /// self-description of staker
-pub type StakerMemo = String;
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct StakerMemo {
+    /// Name of the Staker, like "FastNode"
+    pub name: String,
+    /// Description of the Staker
+    pub desc: String,
+    /// URL of the Staker
+    pub website: String,
+    /// Logo image url of the Staker
+    pub logo: String,
+}
+
+impl Default for StakerMemo {
+    fn default() -> Self {
+        StakerMemo {
+            name: "Example Name".to_owned(),
+            desc: "This is a example node".to_owned(),
+            website: "https://www.example-name.com".to_owned(),
+            logo: "https://www.example-name.com/ValidatorLogo/examplenode.png"
+                .to_owned(),
+        }
+    }
+}
 
 /// block height of tendermint
 pub type BlockHeight = u64;
@@ -1619,7 +1661,7 @@ pub struct Validator {
     // for helping FRA owners stake their tokens.
     commission_rate: [u64; 2],
     /// optional descriptive information
-    pub memo: Option<StakerMemo>,
+    pub memo: StakerMemo,
     kind: ValidatorKind,
     /// use this field to mark
     /// if this validator signed last block
@@ -1635,7 +1677,7 @@ impl Validator {
         td_power: Amount,
         id: XfrPublicKey,
         commission_rate: [u64; 2],
-        memo: Option<StakerMemo>,
+        memo: StakerMemo,
         kind: ValidatorKind,
     ) -> Result<Self> {
         if 0 == commission_rate[1] || commission_rate[0] > commission_rate[1] {
@@ -1660,7 +1702,7 @@ impl Validator {
         td_pubkey: Vec<u8>,
         id: XfrPublicKey,
         commission_rate: [u64; 2],
-        memo: Option<StakerMemo>,
+        memo: StakerMemo,
     ) -> Result<Self> {
         Self::new(
             td_pubkey,

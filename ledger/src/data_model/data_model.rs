@@ -48,6 +48,7 @@ use zei::xfr::structs::{
 };
 
 use super::effects::*;
+use crate::staking::ops::update_staker::UpdateStakerOps;
 use ruc::*;
 use std::ops::Deref;
 
@@ -985,6 +986,7 @@ pub enum Operation {
     IssueAsset(IssueAsset),
     DefineAsset(DefineAsset),
     UpdateMemo(UpdateMemo),
+    UpdateStaker(UpdateStakerOps),
     Delegation(DelegationOps),
     UnDelegation(Box<UnDelegationOps>),
     Claim(ClaimOps),
@@ -996,6 +998,9 @@ pub enum Operation {
 
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
     match op {
+        Operation::UpdateStaker(i) => {
+            i.set_nonce(no_replay_token);
+        }
         Operation::Delegation(i) => {
             i.set_nonce(no_replay_token);
         }
@@ -1114,7 +1119,7 @@ impl Validator {
             return_rate,
             rank,
             block_signed_cnt: v.signed_cnt,
-            extra: v.memo.clone().unwrap_or_default(),
+            extra: v.memo.clone(),
         }
     }
 }
@@ -1130,7 +1135,7 @@ pub struct ValidatorDetail {
     pub commission_rate: [u64; 2],
     pub self_staking: u64,
     pub fra_rewards: u64,
-    pub memo: String,
+    pub memo: StakerMemo,
     pub start_height: u64,
     pub cur_height: u64,
     pub block_signed_cnt: u64,

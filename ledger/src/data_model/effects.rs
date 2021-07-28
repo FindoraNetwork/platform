@@ -20,6 +20,7 @@ use zei::serialization::ZeiFromToBytes;
 use zei::xfr::lib::verify_xfr_body;
 use zei::xfr::sig::XfrPublicKey;
 // use zei::xfr::structs::{TracingPolicies, BlindAssetRecord, XfrAmount, XfrAssetType};
+use crate::staking::ops::update_staker::UpdateStakerOps;
 use ruc::*;
 use zei::xfr::structs::{TracingPolicies, XfrAmount, XfrAssetType};
 
@@ -62,6 +63,7 @@ pub struct TxnEffect {
     // Memo updates
     pub memo_updates: Vec<(AssetTypeCode, XfrPublicKey, Memo)>,
 
+    pub update_stakers: Vec<UpdateStakerOps>,
     pub delegations: Vec<DelegationOps>,
     pub undelegations: Vec<UnDelegationOps>,
     pub claims: Vec<ClaimOps>,
@@ -93,6 +95,7 @@ impl TxnEffect {
         let mut asset_types_involved: HashSet<AssetTypeCode> = HashSet::new();
         let mut confidential_issuance_types = HashSet::new();
         let mut confidential_transfer_inputs = HashSet::new();
+        let mut update_stakers = vec![];
         let mut delegations = vec![];
         let mut undelegations = vec![];
         let mut claims = vec![];
@@ -142,6 +145,11 @@ impl TxnEffect {
             }
 
             match op {
+                Operation::UpdateStaker(i) => {
+                    check_nonce!(i);
+                    i.verify().c(d!())?;
+                    update_stakers.push(i.clone());
+                }
                 Operation::Delegation(i) => {
                     check_nonce!(i);
                     i.verify().c(d!())?;
@@ -618,6 +626,7 @@ impl TxnEffect {
             asset_types_involved,
             custom_policy_asset_types,
             memo_updates,
+            update_stakers,
             delegations,
             undelegations,
             claims,
@@ -836,6 +845,10 @@ impl BlockEffect {
     }
 
     fn check_staking(&mut self, txn_effect: &TxnEffect) -> Result<()> {
+        for i in txn_effect.update_stakers.iter() {
+            i.check_run(&mut self.staking_simulator, &txn_effect.txn)
+                .c(d!())?;
+        }
         for i in txn_effect.delegations.iter() {
             i.check_run(&mut self.staking_simulator, &txn_effect.txn)
                 .c(d!())?;
