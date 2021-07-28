@@ -85,6 +85,18 @@ impl Staking {
         self.cur_height
     }
 
+    #[inline(always)]
+    /// record block reward rate aka return_rate of current block height
+    pub fn record_block_rewards_rate(&mut self, rate: &[u128; 2]) {
+        self.di.block_rewards_rate.insert(self.cur_height, *rate);
+    }
+
+    #[inline(always)]
+    /// retrieve block reward rate at specified block height
+    pub fn query_block_rewards_rate(&self, height: &BlockHeight) -> Option<&[u128; 2]> {
+        self.di.block_rewards_rate.get(height)
+    }
+
     ///get the delegationInfo
     pub fn delegation_info_global_amount(&self) -> Amount {
         self.di.global_amount
@@ -400,7 +412,9 @@ impl Staking {
         let h = self.cur_height;
         let new = || Delegation {
             entries: map! {B validator => 0},
+            self_delegation_detail: map! {B},
             delegators: indexmap::IndexMap::new(),
+            delegation_amount: map! {B},
             id: owner,
             receiver_pk: None,
             start_height: h,
@@ -426,12 +440,19 @@ impl Staking {
         d.state = DelegationState::Bond;
 
         *d.entries.entry(validator).or_insert(0) += am;
+        // record self-delegation amount for a validator
+        if owner == validator {
+            d.self_delegation_detail
+                .insert(self.cur_height, d.entries.values().sum());
+        }
 
         // update delegator entries for this validator
         if let Some(vd) = self.di.addr_map.get_mut(&validator) {
             if owner != validator {
                 *vd.delegators.entry(owner).or_insert(0) += am;
                 vd.delegators.sort_by(|_, v1, _, v2| v2.cmp(&v1));
+                vd.delegation_amount
+                    .insert(self.cur_height, vd.delegators.values().sum());
             }
         }
 
@@ -583,7 +604,9 @@ impl Staking {
                 *am = am.saturating_sub(pu.am);
                 new_tmp_delegator = Delegation {
                     entries: map! {B target_validator => actual_am},
+                    self_delegation_detail: map! {B},
                     delegators: indexmap::IndexMap::new(),
+                    delegation_amount: map! {B},
                     id: pu.new_delegator_id,
                     receiver_pk: Some(d.id),
                     start_height: d.start_height,
@@ -594,6 +617,11 @@ impl Staking {
                     delegation_rwd_cnt: 0,
                     proposer_rwd_cnt: 0,
                 };
+                // record per-block-height self-delegation amount for a validator
+                if target_validator == *addr {
+                    d.self_delegation_detail
+                        .insert(self.cur_height, d.entries.values().sum());
+                }
             } else {
                 return Err(eg!("delegator is out of bond"));
             }
@@ -621,6 +649,8 @@ impl Staking {
                 *am -= pu.am;
             }
             vd.delegators.sort_by(|_, v1, _, v2| v2.cmp(&v1));
+            vd.delegation_amount
+                .insert(self.cur_height, vd.delegators.values().sum());
         }
 
         Ok(())
@@ -828,6 +858,8 @@ impl Staking {
                         if let Some(vd) = self.di.addr_map.get_mut(&v) {
                             vd.delegators.remove(&addr);
                             vd.delegators.sort_by(|_, v1, _, v2| v2.cmp(&v1));
+                            vd.delegation_amount
+                                .insert(self.cur_height, vd.delegators.values().sum());
                         }
                     });
                 }
@@ -1128,6 +1160,8 @@ impl Staking {
 
         let me = la.get_staking_mut();
         let pk = me.validator_td_addr_to_app_pk(addr).c(d!())?;
+
+        me.record_block_rewards_rate(&return_rate);
 
         let commission_rate = if let Some(Some(v)) =
             me.validator_get_current().map(|vd| vd.body.get(&pk))
@@ -1533,6 +1567,7 @@ struct DelegationInfo {
     global_amount: Amount,
     addr_map: BTreeMap<XfrPublicKey, Delegation>,
     end_height_map: BTreeMap<BlockHeight, BTreeSet<XfrPublicKey>>,
+    block_rewards_rate: BTreeMap<BlockHeight, [u128; 2]>,
 }
 
 impl DelegationInfo {
@@ -1541,6 +1576,7 @@ impl DelegationInfo {
             global_amount: 0,
             addr_map: BTreeMap::new(),
             end_height_map: BTreeMap::new(),
+            block_rewards_rate: BTreeMap::new(),
         }
     }
 }
@@ -1667,9 +1703,16 @@ pub struct Delegation {
     /// - `NonConfidential` FRAs amount
     pub entries: BTreeMap<XfrPublicKey, Amount>,
 
-    /// - delegator entries
+    /// - per-block-height self-delegation amount for a validator
+    /// - `NonConfidential` FRAs amount
+    pub self_delegation_detail: BTreeMap<BlockHeight, Amount>,
+
+    /// - delegator entries on current block height
     /// - only valid for a validator
     pub delegators: indexmap::IndexMap<XfrPublicKey, Amount>,
+    /// - delegation amount per block height
+    /// - only valid for a validator
+    pub delegation_amount: BTreeMap<BlockHeight, Amount>,
 
     /// delegation rewards will be paid to this pk by default
     pub id: XfrPublicKey,
