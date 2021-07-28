@@ -106,7 +106,7 @@ fn run() -> Result<()> {
     if matches.is_present("version") {
         println!("{}", env!("VERGEN_SHA"));
     } else if matches.is_present("genkey") {
-        gen_key_and_print();
+        fns::gen_key_and_print();
     } else if let Some(m) = matches.subcommand_matches("stake") {
         let am = m.value_of("amount");
         if m.is_present("append") {
@@ -185,22 +185,5 @@ fn tip_fail(e: impl fmt::Display) {
 fn tip_success() {
     println!(
         "\x1b[35;01mNote\x1b[01m:\n\tYour operations has been executed without local error,\n\tbut the final result may need an asynchronous query.\x1b[00m"
-    );
-}
-
-fn gen_key_and_print() {
-    let (m, k) = loop {
-        let mnemonic = pnk!(wallet::generate_mnemonic_custom(24, "en"));
-        let key = wallet::restore_keypair_from_mnemonic_default(&mnemonic)
-            .c(d!())
-            .and_then(|kp| serde_json::to_string_pretty(&kp).c(d!()));
-        let k = pnk!(key);
-        if !k.contains('-') {
-            break (mnemonic, k);
-        }
-    };
-    println!(
-        "\x1b[31;01mMnemonic:\x1b[00m {}\n\x1b[31;01mKey:\x1b[00m {}\n",
-        m, k
     );
 }

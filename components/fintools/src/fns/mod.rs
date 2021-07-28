@@ -326,6 +326,24 @@ fn convert_commission_rate(cr: f64) -> Result<[u64; 2]> {
     Ok([(cr * 10000.0) as u64, 10000])
 }
 
+pub fn gen_key_and_print() {
+    let (m, k) = loop {
+        let mnemonic = pnk!(wallet::generate_mnemonic_custom(24, "en"));
+        if let Some(key) = wallet::restore_keypair_from_mnemonic_default(&mnemonic)
+            .c(d!())
+            .and_then(|kp| serde_json::to_string_pretty(&kp).c(d!()))
+            .ok()
+            .filter(|s| s.matches("\": \"-").next().is_none())
+        {
+            break (mnemonic, key);
+        }
+    };
+    println!(
+        "\x1b[31;01mMnemonic:\x1b[00m {}\n\x1b[31;01mKey:\x1b[00m {}\n",
+        m, k
+    );
+}
+
 /// Return the built version.
 pub fn version() -> &'static str {
     concat!(env!("VERGEN_SHA"), " ", env!("VERGEN_BUILD_DATE"))
