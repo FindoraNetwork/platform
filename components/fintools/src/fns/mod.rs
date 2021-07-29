@@ -6,7 +6,10 @@
 //! This module is the library part of FNS.
 //!
 
-use crate::fns::utils::{get_validator_detail, parse_td_validator_keys};
+use crate::fns::utils::{
+    get_block_height, get_local_block_height, get_validator_detail,
+    parse_td_validator_keys,
+};
 use lazy_static::lazy_static;
 use ledger::{
     data_model::BLACK_HOLE_PUBKEY_STAKING,
@@ -69,7 +72,12 @@ pub fn staker_update(cr: Option<&str>, memo: Option<&str>) -> Result<()> {
     utils::send_tx(&builder.take_transaction()).c(d!())
 }
 
-pub fn stake(amount: &str, commission_rate: &str, memo: Option<&str>) -> Result<()> {
+pub fn stake(
+    amount: &str,
+    commission_rate: &str,
+    memo: Option<&str>,
+    force: bool,
+) -> Result<()> {
     let am = amount.parse::<u64>().c(d!("'amount' must be an integer"))?;
     check_delegation_amount(am, false).c(d!())?;
     let cr = commission_rate
@@ -80,6 +88,28 @@ pub fn stake(amount: &str, commission_rate: &str, memo: Option<&str>) -> Result<
 
     let kp = get_keypair().c(d!())?;
     let vkp = get_td_privkey().c(d!())?;
+
+    macro_rules! diff {
+        ($l:expr, $r:expr) => {
+            if $l > $r { $l - $r } else { $r - $l }
+        };
+    }
+
+    let network_height = get_block_height(get_serv_addr().unwrap());
+    let local_height = get_local_block_height();
+    if (network_height == 0 || local_height == 0)
+        || diff!(network_height, local_height) > 3
+    {
+        println!(
+            "The difference in block height of your node and the remote network is too big: \n remote / local: {} / {}",
+            network_height, local_height
+        );
+        if !force {
+            println!("Append option --force to ignore this warning.");
+            return Ok(());
+        }
+        println!("Continue to stake now...");
+    }
 
     let mut builder = utils::new_tx_builder().c(d!())?;
     builder

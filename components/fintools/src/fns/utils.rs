@@ -8,7 +8,7 @@ use ledger::{
     staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
 };
 use ruc::*;
-use serde::{Deserialize, Serialize};
+use serde::{self, Deserialize, Serialize};
 use std::collections::HashMap;
 use tendermint::{PrivateKey, PublicKey};
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
@@ -202,7 +202,115 @@ pub fn gen_fee_op(owner_kp: &XfrKeyPair) -> Result<Operation> {
 // Part 2: utils for query infomations //
 /////////////////////////////////////////
 
+#[derive(Serialize, Deserialize, Debug)]
+// tendermint status repsonse, "Tm" is short for "tendermint"
+// see also: https://docs.tendermint.com/master/rpc/#/Info/status
+struct TmStatusResp {
+    jsonrpc: String,
+    id: i32,
+    result: TmStatus,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+// The protocol version of current tendermint node
+struct TmProtoVersion {
+    p2p: String,
+    block: String,
+    app: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+// The extra info of current tendermint node
+//     tx_index - if enable indexer for transaction, on or off
+//     rpc_address - the TCP or UNIX socket for the rpc server to listen on
+struct TmOtherInfo {
+    tx_index: String,
+    rpc_address: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+// The info of current tendermint node
+struct TmNodeInfo {
+    protocol_version: TmProtoVersion,
+    id: String,
+    // P2P listen address
+    listen_addr: String,
+    network: String,
+    version: String,
+    channels: String,
+    moniker: String,
+    other: TmOtherInfo,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+// The syncing info of current tendermint node
+struct TmSyncInfo {
+    latest_block_hash: String,
+    latest_app_hash: String,
+    latest_block_height: String,
+    latest_block_time: String,
+    earliest_block_hash: String,
+    earliest_app_hash: String,
+    earliest_block_height: String,
+    earliest_block_time: String,
+    catching_up: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+// The Validator public key of current tendermint node
+struct TmValidatorPubKey {
+    #[serde(rename = "type")]
+    pk_type: String,
+    value: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+// The Validator info of current tendermint node
+struct TmValidatorInfo {
+    // Tendermint Address
+    address: String,
+    pub_key: TmValidatorPubKey,
+    voting_power: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[allow(missing_docs)]
+struct TmStatus {
+    node_info: TmNodeInfo,
+    sync_info: TmSyncInfo,
+    validator_info: TmValidatorInfo,
+}
+
 #[inline(always)]
+/// retrieve tendermint status and node info
+fn get_network_status(addr: &str) -> Result<TmStatus> {
+    let url = format!("{}:26657/status", addr);
+
+    attohttpc::get(&url)
+        .send()
+        .c(d!())?
+        .error_for_status()
+        .c(d!())?
+        .bytes()
+        .c(d!())
+        .and_then(|b| {
+            serde_json::from_slice::<TmStatusResp>(&b)
+                .map(|r| r.result)
+                .c(d!())
+        })
+}
+
+pub fn get_block_height(addr: &str) -> u64 {
+    get_network_status(addr)
+        .map(|ts| ts.sync_info.latest_block_height.parse::<u64>().unwrap())
+        .unwrap_or(0)
+}
+
+pub fn get_local_block_height() -> u64 {
+    let addr = "http://127.0.0.1";
+    get_block_height(addr)
+}
+
 #[allow(missing_docs)]
 pub fn get_balance(kp: &XfrKeyPair) -> Result<u64> {
     let balance = get_owned_utxos(kp.get_pk_ref())

@@ -52,6 +52,7 @@ fn run() -> Result<()> {
         .arg_from_usage("-a, --append 'stake more FRAs to your node'")
         .arg_from_usage("-S, --staker-priv-key=[SecretKey] 'the private key of proposer, in base64 format'")
         .arg_from_usage("-A, --validator-td-addr=[TendermintAddr] 'stake FRAs to a custom validator'")
+        .arg_from_usage("--force 'ignore warning and stake FRAs to your node'")
         .about("Stake tokens (i.e. bond tokens) from a Findora account to a Validator ")
         .group(subcmd_stake_arggrp);
     let subcmd_staker_update = SubCommand::with_name("staker-update")
@@ -136,13 +137,14 @@ fn run() -> Result<()> {
         } else {
             let cr = m.value_of("commission-rate");
             let vm = m.value_of("validator-memo");
+            let force = m.is_present("force");
             if am.is_none() || cr.is_none() {
                 println!("{}", m.usage());
                 println!(
                     "Tips: if you want to raise the power of your node, please use `fns stake --append [OPTIONS]`"
                 );
             } else {
-                fns::stake(am.unwrap(), cr.unwrap(), vm).c(d!())?;
+                fns::stake(am.unwrap(), cr.unwrap(), vm, force).c(d!())?;
             }
         }
     } else if let Some(m) = matches.subcommand_matches("unstake") {

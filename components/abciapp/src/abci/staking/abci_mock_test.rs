@@ -795,7 +795,7 @@ fn staking_scene_1() -> Result<()> {
     let tx = fra_gen_initial_tx(&ROOT_KEYPAIR);
     let tx_hash = gen_tx_hash(&tx);
     send_tx(tx).c(d!())?;
-    wait_one_block();
+    wait_n_block(5);
     assert!(is_successful(&tx_hash));
 
     // 1. update validators
@@ -840,12 +840,12 @@ fn staking_scene_1() -> Result<()> {
 
     let tx_hash =
         delegate(&x_kp, td_pubkey_to_td_addr(&v_set[0].td_pubkey), 32 * FRA).c(d!())?;
-    wait_one_block();
+    wait_n_block(5);
     assert!(is_failed(&tx_hash));
 
     // undelegation will fail
     let tx_hash = undelegate(&x_kp).c(d!())?;
-    wait_one_block();
+    wait_n_block(5);
     assert!(is_failed(&tx_hash));
 
     // 5. make validators to finish their self-delegations
@@ -1182,7 +1182,7 @@ fn staking_scene_1() -> Result<()> {
         32_0000 * FRA,
     )
     .c(d!())?;
-    wait_one_block();
+    wait_n_block(5);
     assert!(is_failed(&tx_hash));
 
     // 30. make sure that user can NOT sent `MintFra` transactions
@@ -1279,7 +1279,7 @@ fn staking_scene_2() -> Result<()> {
         assert!(is_successful(&tx_hash));
 
         let tx_hash = transfer(&ROOT_KEYPAIR, &v_set[i].id, 100 * FRA).c(d!())?;
-        wait_one_block();
+        wait_n_block(5);
         assert!(is_successful(&tx_hash));
 
         let tx_hash = delegate(kp, td_pubkey_to_td_addr(&v_set[i].td_pubkey), 100 * FRA)

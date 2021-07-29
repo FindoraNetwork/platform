@@ -1214,7 +1214,7 @@ impl Staking {
         Ok(())
     }
 
-    /// Return rate defination for delegation rewards.
+    /// Return rate definition for delegation rewards.
     #[inline(always)]
     pub fn get_block_rewards_rate(la: &impl LedgerAccess) -> [u128; 2] {
         let p = Self::get_global_delegation_percent(la);
