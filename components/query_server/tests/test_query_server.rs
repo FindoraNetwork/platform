@@ -235,13 +235,12 @@ fn test_scene_1() -> Result<()> {
     }));
     assert_eq!(records[0].0.record.public_key, x_kp.pub_key.clone());
 
-    let atc_vec = pnk!(
-        QS.read()
-            .get_traced_assets(&IssuerPublicKey {
-                key: x_kp.pub_key.clone()
-            })
-            .cloned()
-    );
+    let atc_vec = pnk!(QS
+        .read()
+        .get_traced_assets(&IssuerPublicKey {
+            key: x_kp.pub_key.clone()
+        })
+        .cloned());
     assert_eq!(atc_vec[0], code);
 
     let (_, result) = QS

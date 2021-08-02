@@ -1,4 +1,3 @@
-#![feature(str_split_as_str)]
 #![deny(warnings)]
 
 use actix_cors::Cors;
@@ -692,15 +691,13 @@ pub mod service {
             .c(d!())
             .map(|_| {
                 let qs1 = Arc::clone(&qs);
-                thread::spawn(move || {
-                    loop {
-                        let mut created = BLOCK_CREATED.0.lock();
-                        if !*created {
-                            BLOCK_CREATED.1.wait(&mut created);
-                        }
-                        qs1.write().update();
-                        *created = false;
+                thread::spawn(move || loop {
+                    let mut created = BLOCK_CREATED.0.lock();
+                    if !*created {
+                        BLOCK_CREATED.1.wait(&mut created);
                     }
+                    qs1.write().update();
+                    *created = false;
                 });
                 qs
             })

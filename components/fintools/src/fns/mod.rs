@@ -91,7 +91,11 @@ pub fn stake(
 
     macro_rules! diff {
         ($l:expr, $r:expr) => {
-            if $l > $r { $l - $r } else { $r - $l }
+            if $l > $r {
+                $l - $r
+            } else {
+                $r - $l
+            }
         };
     }
 

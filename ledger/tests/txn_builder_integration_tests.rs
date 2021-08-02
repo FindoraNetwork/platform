@@ -458,11 +458,9 @@ pub fn test_update_memo_orig() {
         .apply_transaction(&mut block, effect0, false)
         .expect("apply transaction failed");
     let effect1 = pnk!(TxnEffect::compute_effect(tx.clone()));
-    assert!(
-        ledger
-            .apply_transaction(&mut block, effect1, false)
-            .is_err()
-    );
+    assert!(ledger
+        .apply_transaction(&mut block, effect1, false)
+        .is_err());
     pnk!(ledger.finish_block(block))
         .remove(&temp_sid)
         .expect("finishing block failed");
@@ -497,11 +495,9 @@ pub fn test_update_memo_darp() {
 
     // Test 1: replay the exact same txn, it should fail
     let effect1 = pnk!(TxnEffect::compute_effect(txn.clone()));
-    assert!(
-        ledger
-            .apply_transaction(&mut block, effect1, false)
-            .is_err()
-    );
+    assert!(ledger
+        .apply_transaction(&mut block, effect1, false)
+        .is_err());
     ledger
         .finish_block(block)
         .unwrap()

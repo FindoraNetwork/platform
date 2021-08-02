@@ -34,7 +34,7 @@ txn_builder = {path = "../txn_builder"}
 wasm-bindgen = { version = "=0.2.62", features = ["serde-serialize"]  }
 wasm-bindgen-futures = "0.3.27"
 wasm-bindgen-test = "0.2.50"
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.3a" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4" }
 utils = { path = "../../libs/utils" }
 
 ring = "0.16.19"

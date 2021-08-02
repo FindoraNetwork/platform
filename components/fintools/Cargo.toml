@@ -30,7 +30,7 @@ wallet = { path = "../wallet" }
 ledger = { path = "../../ledger" }
 utils = { path = "../../libs/utils" }
 txn_builder = { path = "../txn_builder" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.3a" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4" }
 tendermint = "0.19.0"
 
 hex = "0.4.2"

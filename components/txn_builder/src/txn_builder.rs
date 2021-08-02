@@ -1101,8 +1101,8 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
             asset_tracers_memos: asset_tracing_memos,
         },
         (
-            open_asset_record.amount_blinds.0.0,
-            open_asset_record.amount_blinds.1.0,
+            open_asset_record.amount_blinds.0 .0,
+            open_asset_record.amount_blinds.1 .0,
         ),
         open_asset_record.type_blind.0,
     ))
@@ -1794,10 +1794,9 @@ mod tests {
             bob_kp.get_sk().into_keypair(),
         );
         let mut tx3 = TransactionBuilder::from_seq_id(2);
-        pnk!(
-            tx3.add_operation(transfer_to_bob!(txo_sid[2], bob_kp.get_pk()))
-                .add_fee(fi)
-        );
+        pnk!(tx3
+            .add_operation(transfer_to_bob!(txo_sid[2], bob_kp.get_pk()))
+            .add_fee(fi));
         assert!(tx3.check_fee());
 
         let effect = TxnEffect::compute_effect(tx3.into_transaction()).unwrap();

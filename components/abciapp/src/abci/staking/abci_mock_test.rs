@@ -340,11 +340,9 @@ pub struct TendermintMocker {
 
 impl TendermintMocker {
     fn new() -> TendermintMocker {
-        thread::spawn(move || {
-            loop {
-                thread::sleep(Duration::from_millis(ITV));
-                ABCI_MOCKER.write().produce_block();
-            }
+        thread::spawn(move || loop {
+            thread::sleep(Duration::from_millis(ITV));
+            ABCI_MOCKER.write().produce_block();
         });
 
         TendermintMocker {
@@ -1119,11 +1117,9 @@ fn staking_scene_1() -> Result<()> {
 
     // 23. make sure the result is correct
 
-    assert!(
-        alloc_table
-            .iter()
-            .all(|(pk, am)| *am == ABCI_MOCKER.read().get_owned_balance(pk))
-    );
+    assert!(alloc_table
+        .iter()
+        .all(|(pk, am)| *am == ABCI_MOCKER.read().get_owned_balance(pk)));
 
     // 24. use these addrs to delegate to different validators
 

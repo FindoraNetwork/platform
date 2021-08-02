@@ -62,13 +62,11 @@ mod real {
         let tendermint_reply = format!("http://{}", url);
         if 100 > TX_PENDING_CNT.fetch_add(1, Ordering::Relaxed) {
             POOL.spawn_ok(async move {
-                ruc::info_omit!(
-                    attohttpc::post(&tendermint_reply)
-                        .header(attohttpc::header::CONTENT_TYPE, "application/json")
-                        .text(json_rpc)
-                        .send()
-                        .c(d!())
-                );
+                ruc::info_omit!(attohttpc::post(&tendermint_reply)
+                    .header(attohttpc::header::CONTENT_TYPE, "application/json")
+                    .text(json_rpc)
+                    .send()
+                    .c(d!()));
                 TX_PENDING_CNT.fetch_sub(1, Ordering::Relaxed);
             });
         } else {

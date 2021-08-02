@@ -163,7 +163,7 @@ pub fn credential_sign<R: CryptoRng + RngCore>(
             .map
             .get(attr_key)
             .c(d!(ZeiError::ParameterError))?; // A.2 field is contained in secret key
-        // C. check that attribute length matches secret key parameters
+                                               // C. check that attribute length matches secret key parameters
         if attr_value.len() != *byte_len {
             return Err(eg!(ZeiError::ParameterError));
         }

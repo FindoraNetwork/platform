@@ -19,7 +19,7 @@ byteorder = "1.0.0"
 chrono = "0.4"
 cryptohash = { path = "../libs/cryptohash" }
 credentials = { path = "../libs/credentials"}
-curve25519-dalek = { version =  "2.0.0", features = ["serde"] }
+curve25519-dalek = { version =  "3", features = ["serde"] }
 ed25519-dalek = "1.0.0-pre3"
 hex = "0.3.2"
 lazy_static = { version = "1.2.0" }
@@ -42,8 +42,8 @@ tiny-keccak = "1.4.2"
 unicode-normalization = "0.1.13"
 utils = { path = "../libs/utils" }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.3a" }
-zeiutils = { package = "utils", git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.3a" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4" }
+zeiutils = { package = "utils", git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4" }
 sparse_merkle_tree = { path = "../libs/ads/sparse_merkle_tree" }
 time = "0.2.26"
 wallet = { path = "../components/wallet" }

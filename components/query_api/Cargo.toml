@@ -27,7 +27,7 @@ serde_derive = "1.0"
 serde_json = "1.0"
 sparse_merkle_tree = { path = "../../libs/ads/sparse_merkle_tree" }
 utils = { path = "../../libs/utils" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.3a" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4" }
 
 [build-dependencies]
 vergen = "=3.1.0"
