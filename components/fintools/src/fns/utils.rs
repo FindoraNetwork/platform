@@ -37,7 +37,9 @@ pub fn send_tx(tx: &Transaction) -> Result<()> {
         .header(attohttpc::header::CONTENT_TYPE, "application/json")
         .bytes(&serde_json::to_vec(tx).c(d!())?)
         .send()
-        .c(d!("fail to send transaction"))
+        .c(d!("fail to send transaction"))?
+        .error_for_status()
+        .c(d!())
         .map(|_| ())
 }
 

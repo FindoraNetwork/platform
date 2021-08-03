@@ -221,14 +221,13 @@ where
         let mut block = self.block.as_mut().unwrap();
         let ledger = self.committed_state.read();
         let handle = TxnHandle::new(&txn);
-        let temp_sid =
-            TxnEffect::compute_effect(txn.clone())
-                .c(d!())
-                .and_then(|txn_effect| {
-                    ledger
-                        .apply_transaction(&mut block, txn_effect, false)
-                        .c(d!())
-                });
+        let temp_sid = TxnEffect::compute_effect(txn.clone())
+            .c(d!("Failed to compute txn effect"))
+            .and_then(|txn_effect| {
+                ledger
+                    .apply_transaction(&mut block, txn_effect, false)
+                    .c(d!("Failed to apply transaction"))
+            });
         match temp_sid {
             Ok(temp_sid) => {
                 self.pending_txns.push((temp_sid, handle.clone(), txn));

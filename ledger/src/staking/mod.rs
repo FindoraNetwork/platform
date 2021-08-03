@@ -281,7 +281,7 @@ impl Staking {
         }
 
         self.validator_get_effective_at_height_mut(self.cur_height)
-            .c(d!())
+            .c(d!("failed to get effective validators at current height"))
             .and_then(|cur| {
                 cur.body
                     .get_mut(validator)
@@ -312,8 +312,11 @@ impl Staking {
         vldtor: &XfrPublicKey,
     ) -> Result<()> {
         self.validator_get_power(vldtor)
-            .c(d!())
-            .and_then(|power| self.validator_check_power_x(new_power, power).c(d!()))
+            .c(d!("Failed to get validator power"))
+            .and_then(|power| {
+                self.validator_check_power_x(new_power, power)
+                    .c(d!("validator power check failed"))
+            })
     }
 
     #[inline(always)]
@@ -1019,8 +1022,13 @@ impl Staking {
         addr: TendermintAddrRef,
     ) -> Result<XfrPublicKey> {
         self.validator_get_current()
-            .c(d!())
-            .and_then(|vd| vd.addr_td_to_app.get(addr).copied().c(d!()))
+            .c(d!("No validators at current height"))
+            .and_then(|vd| {
+                vd.addr_td_to_app
+                    .get(addr)
+                    .copied()
+                    .c(d!(format!("Failed to get pk {}", addr)))
+            })
     }
 
     /// Lookup up the 'tendermint node address' by the 'XfrPublicKey'
@@ -1453,7 +1461,7 @@ pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
 pub const UNBOND_BLOCK_CNT: u64 = 5;
 
 // minimal number of validators
-pub(crate) const VALIDATORS_MIN: usize = 6;
+pub(crate) const VALIDATORS_MIN: usize = 5;
 
 /// The minimum weight threshold required
 /// when updating validator information, 2/3.
