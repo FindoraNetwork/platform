@@ -88,8 +88,8 @@ fn run() -> Result<()> {
             "-t, --to-pubkey=<PubKey> 'base64-formated `XfrPublicKey` of the receiver'",
         )
         .arg_from_usage("-n, --amount=<Amount> 'how much FRA units to transfer'")
-        .arg_from_usage("--confidential-amount 'amounts of your TXO outputs will be confidential'")
-        .arg_from_usage("--confidential-type 'asset types of your TXO outputs confidential'")
+        .arg_from_usage("--confidential-amount 'mask the amount sent on the transaction log'")
+        .arg_from_usage("--confidential-type 'mask the asset type sent on the transaction log'")
         .about("Transfer tokens from one address to another");
     //let subcmd_set_initial_validators = SubCommand::with_name("set-initial-validators");
 

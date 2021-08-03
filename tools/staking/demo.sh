@@ -109,7 +109,7 @@ check() {
     println "There are 20 initial validators..."
 
     # at least 88_8888 FRAs
-    fns stake -n $((888888 * 1000000)) -R 0.2 -M demo || exit 1
+    fns stake -n $((888888 * 1000000)) -R 0.2 || exit 1
     sleep 30
     curl ${SERVER_HOST}:26657/validators | grep -A 5 ${SELF_ADDR} 2>/dev/null || exit 1
     println "Our validator appears in the validator list after staking..."
