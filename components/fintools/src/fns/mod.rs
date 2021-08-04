@@ -420,20 +420,20 @@ fn convert_commission_rate(cr: f64) -> Result<[u64; 2]> {
 }
 
 pub fn gen_key_and_print() {
-    let (m, k) = loop {
+    let (m, k, kp) = loop {
         let mnemonic = pnk!(wallet::generate_mnemonic_custom(24, "en"));
-        if let Some(key) = wallet::restore_keypair_from_mnemonic_default(&mnemonic)
-            .c(d!())
-            .and_then(|kp| serde_json::to_string_pretty(&kp).c(d!()))
+        let kp = pnk!(wallet::restore_keypair_from_mnemonic_default(&mnemonic));
+        if let Some(key) = serde_json::to_string_pretty(&kp)
             .ok()
             .filter(|s| s.matches("\": \"-").next().is_none())
         {
-            break (mnemonic, key);
+            break (mnemonic, key, kp);
         }
     };
+    let wallet_addr = wallet::public_key_to_bech32(kp.get_pk_ref());
     println!(
-        "\x1b[31;01mMnemonic:\x1b[00m {}\n\x1b[31;01mKey:\x1b[00m {}\n",
-        m, k
+        "\n\x1b[31;01mWallet Address:\x1b[00m {}\n\x1b[31;01mMnemonic:\x1b[00m {}\n\x1b[31;01mKey:\x1b[00m {}\n",
+        wallet_addr, m, k
     );
 }
 

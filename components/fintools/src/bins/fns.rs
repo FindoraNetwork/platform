@@ -25,7 +25,7 @@
 
 #![deny(warnings)]
 
-use clap::{crate_authors, App, ArgGroup, SubCommand};
+use clap::{crate_authors, App, Arg, ArgGroup, SubCommand};
 use fintools::fns;
 use ruc::*;
 use std::fmt;
@@ -85,8 +85,17 @@ fn run() -> Result<()> {
             "-f, --from-seckey=[SecKey] 'base64-formated `XfrPrivateKey` of the receiver'",
         )
         .arg_from_usage(
-            "-t, --to-pubkey=<PubKey> 'base64-formated `XfrPublicKey` of the receiver'",
+            "-t, --to-pubkey=[PubKey] 'base64-formated `XfrPublicKey` of the receiver'",
         )
+        .arg(
+            Arg::with_name("to-wallet-address")
+            .short("T")
+            .long("to-wallet-address")
+            .takes_value(true)
+            .value_name("Wallet Address")
+            .help("fra prefixed address of FindoraNetwork")
+            .conflicts_with("to-pubkey")
+            )
         .arg_from_usage("-n, --amount=<Amount> 'how much FRA units to transfer'")
         .arg_from_usage("--confidential-amount 'mask the amount sent on the transaction log'")
         .arg_from_usage("--confidential-type 'mask the asset type sent on the transaction log'")
@@ -168,15 +177,27 @@ fn run() -> Result<()> {
         }
     } else if let Some(m) = matches.subcommand_matches("transfer") {
         let f = m.value_of("from-seckey");
-        let t = m.value_of("to-pubkey");
+        let t = m
+            .value_of("to-pubkey")
+            .map(|pk_str| pk_str.to_owned())
+            .c(d!())
+            .or_else(|_| {
+                m.value_of("to-wallet-address")
+                    .c(d!())
+                    .and_then(|addr| {
+                        wallet::public_key_from_bech32(addr)
+                            .c(d!("invalid wallet address"))
+                    })
+                    .map(|pk| wallet::public_key_to_base64(&pk))
+            })?;
         let am = m.value_of("amount");
 
-        if t.is_none() || am.is_none() {
+        if am.is_none() {
             println!("{}", m.usage());
         } else {
             fns::transfer_fra(
                 f,
-                t.unwrap(),
+                &t,
                 am.unwrap(),
                 m.is_present("confidential-amount"),
                 m.is_present("confidential-type"),
