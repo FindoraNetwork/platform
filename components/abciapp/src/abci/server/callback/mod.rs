@@ -1,5 +1,4 @@
 use crate::abci::{server::ABCISubmissionServer, staking};
-use abci::*;
 use lazy_static::lazy_static;
 use ledger::{
     data_model::TxnEffect,
@@ -7,7 +6,6 @@ use ledger::{
     store::{LedgerAccess, LedgerUpdate},
 };
 use parking_lot::Mutex;
-use protobuf::RepeatedField;
 use query_server::BLOCK_CREATED;
 use ruc::*;
 use std::sync::{
@@ -15,6 +13,7 @@ use std::sync::{
     Arc,
 };
 use submission_server::convert_tx;
+use tm_protos::abci::*;
 
 mod pulse_cache;
 mod utils;
@@ -24,11 +23,11 @@ pub static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
 
 lazy_static! {
     static ref REQ_BEGIN_BLOCK: Arc<Mutex<RequestBeginBlock>> =
-        Arc::new(Mutex::new(RequestBeginBlock::new()));
+        Arc::new(Mutex::new(RequestBeginBlock::default()));
 }
 
-pub fn info(s: &mut ABCISubmissionServer, _req: &RequestInfo) -> ResponseInfo {
-    let mut resp = ResponseInfo::new();
+pub fn info(s: &mut ABCISubmissionServer, _req: RequestInfo) -> ResponseInfo {
+    let mut resp = ResponseInfo::default();
 
     let mut la = s.la.write();
 
@@ -36,12 +35,12 @@ pub fn info(s: &mut ABCISubmissionServer, _req: &RequestInfo) -> ResponseInfo {
     let commitment = state.get_state_commitment();
     if commitment.1 > 0 {
         let tendermint_height = commitment.1 + state.get_pulse_count();
-        resp.set_last_block_height(tendermint_height as i64);
-        resp.set_last_block_app_hash(commitment.0.as_ref().to_vec());
+        resp.last_block_height = tendermint_height as i64;
+        resp.last_block_app_hash = commitment.0.as_ref().to_vec();
     }
 
     if let Ok(h) = ruc::info!(pulse_cache::read_height()) {
-        resp.set_last_block_height(h);
+        resp.last_block_height = h;
     }
 
     if let Ok(s) = ruc::info!(pulse_cache::read_staking()) {
@@ -59,21 +58,21 @@ pub fn info(s: &mut ABCISubmissionServer, _req: &RequestInfo) -> ResponseInfo {
     resp
 }
 
-pub fn check_tx(_s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseCheckTx {
+pub fn check_tx(_s: &mut ABCISubmissionServer, req: RequestCheckTx) -> ResponseCheckTx {
     // Get the Tx [u8] and convert to u64
-    let mut resp = ResponseCheckTx::new();
+    let mut resp = ResponseCheckTx::default();
 
-    if let Some(tx) = convert_tx(req.get_tx()) {
+    if let Some(tx) = convert_tx(&req.tx) {
         if is_coinbase_tx(&tx)
             || !tx.is_basic_valid(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed))
             || ruc::info!(TxnEffect::compute_effect(tx)).is_err()
         {
-            resp.set_code(1);
-            resp.set_log(String::from("Check failed"));
+            resp.code = 1;
+            resp.log = String::from("Check failed");
         }
     } else {
-        resp.set_code(1);
-        resp.set_log(String::from("Could not unpack transaction"));
+        resp.code = 1;
+        resp.log = String::from("Could not unpack transaction");
     }
 
     resp
@@ -81,17 +80,17 @@ pub fn check_tx(_s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> Response
 
 pub fn deliver_tx(
     s: &mut ABCISubmissionServer,
-    req: &RequestDeliverTx,
+    req: RequestDeliverTx,
 ) -> ResponseDeliverTx {
-    let mut resp = ResponseDeliverTx::new();
-    if let Some(tx) = convert_tx(req.get_tx()) {
+    let mut resp = ResponseDeliverTx::default();
+    if let Some(tx) = convert_tx(&req.tx) {
         if !is_coinbase_tx(&tx)
             && tx.is_basic_valid(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed))
         {
             // set attr(tags) if any
             let attr = utils::gen_tendermint_attr(&tx);
-            if 0 < attr.len() {
-                resp.set_events(attr);
+            if !attr.is_empty() {
+                resp.events = attr;
             }
 
             if s.la.write().cache_transaction(tx).is_ok() {
@@ -99,15 +98,14 @@ pub fn deliver_tx(
             }
         }
     }
-
-    resp.set_code(1);
-    resp.set_log(String::from("Failed to deliver transaction!"));
+    resp.code = 1;
+    resp.log = String::from("Failed to deliver transaction!");
     resp
 }
 
 pub fn begin_block(
     s: &mut ABCISubmissionServer,
-    req: &RequestBeginBlock,
+    req: RequestBeginBlock,
 ) -> ResponseBeginBlock {
     let header = pnk!(req.header.as_ref());
     TENDERMINT_BLOCK_HEIGHT.swap(header.height, Ordering::Relaxed);
@@ -128,15 +126,16 @@ pub fn begin_block(
     } else {
         pnk!(la.update_staking_simulator());
     }
+    drop(la);
 
-    ResponseBeginBlock::new()
+    ResponseBeginBlock::default()
 }
 
 pub fn end_block(
     s: &mut ABCISubmissionServer,
-    _req: &RequestEndBlock,
+    _req: RequestEndBlock,
 ) -> ResponseEndBlock {
-    let mut resp = ResponseEndBlock::new();
+    let mut resp = ResponseEndBlock::default();
 
     let begin_block_req = REQ_BEGIN_BLOCK.lock();
     let header = pnk!(begin_block_req.header.as_ref());
@@ -169,7 +168,7 @@ pub fn end_block(
         la.get_committed_state().read().get_staking(),
         begin_block_req.last_commit_info.as_ref()
     )) {
-        resp.set_validator_updates(RepeatedField::from_vec(vs));
+        resp.validator_updates = vs;
     }
 
     staking::system_ops(
@@ -182,8 +181,8 @@ pub fn end_block(
     resp
 }
 
-pub fn commit(s: &mut ABCISubmissionServer, _req: &RequestCommit) -> ResponseCommit {
-    let mut r = ResponseCommit::new();
+pub fn commit(s: &mut ABCISubmissionServer) -> ResponseCommit {
+    let mut r = ResponseCommit::default();
     let la = s.la.read();
 
     // la.begin_commit();
@@ -193,7 +192,7 @@ pub fn commit(s: &mut ABCISubmissionServer, _req: &RequestCommit) -> ResponseCom
 
     // la.end_commit();
 
-    r.set_data(commitment.0.as_ref().to_vec());
+    r.data = commitment.0.as_ref().to_vec();
 
     pnk!(pulse_cache::write_height(
         TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed)

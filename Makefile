@@ -9,7 +9,7 @@
 #  some chance of being in reasonable shape.
 #
 
-all: build_release
+all: build_release_goleveldb
 
 export CARGO_NET_GIT_FETCH_WITH_CLI = true
 export PROTOC = $(shell which protoc)
@@ -40,18 +40,16 @@ pick            = ${CARGO_TARGET_DIR}/$(target_dir)
 release_subdirs = $(bin_dir) $(lib_dir)
 
 bin_files = \
-		./$(pick)/abci_validator_node \
+		./$(pick)/findorad \
 		./$(pick)/fns \
 		./$(pick)/stt \
-		./$(pick)/staking_cfg_generator \
-		$(shell go env GOPATH)/bin/tendermint
+		./$(pick)/staking_cfg_generator
 
 bin_files_musl_debug = \
-		./${CARGO_TARGET_DIR}/x86_64-unknown-linux-musl/$(target_dir)/abci_validator_node \
+		./${CARGO_TARGET_DIR}/x86_64-unknown-linux-musl/$(target_dir)/findorad \
 		./${CARGO_TARGET_DIR}/x86_64-unknown-linux-musl/$(target_dir)/fns \
 		./${CARGO_TARGET_DIR}/x86_64-unknown-linux-musl/$(target_dir)/stt \
-		./${CARGO_TARGET_DIR}/x86_64-unknown-linux-musl/$(target_dir)/staking_cfg_generator \
-		$(shell go env GOPATH)/bin/tendermint
+		./${CARGO_TARGET_DIR}/x86_64-unknown-linux-musl/$(target_dir)/staking_cfg_generator
 
 WASM_PKG = wasm.tar.gz
 lib_files = ./$(WASM_PKG)
@@ -72,7 +70,28 @@ define pack_musl_debug
 	cp $(target_dir)/$(bin_dir)/* ~/.cargo/bin/
 endef
 
-build: tendermint
+# Build for cleveldb
+build:
+ifdef DBG
+	cargo build --bins -p abciapp -p fintools --no-default-features --features "cleveldb"
+	$(call pack,$(target_dir))
+else
+	@ echo -e "\x1b[31;01m\$$(DBG) must be defined !\x1b[00m"
+	@ exit 1
+endif
+
+# Build for cleveldb
+build_release:
+ifdef DBG
+	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
+	@ exit 1
+else
+	cargo build --release --bins -p abciapp -p fintools --no-default-features --features "cleveldb"
+	$(call pack,$(target_dir))
+endif
+
+# Build for goleveldb
+build_goleveldb:
 ifdef DBG
 	cargo build --bins -p abciapp -p fintools
 	$(call pack,$(target_dir))
@@ -81,7 +100,8 @@ else
 	@ exit 1
 endif
 
-build_release: tendermint
+# Build for goleveldb
+build_release_goleveldb:
 ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
@@ -90,7 +110,7 @@ else
 	$(call pack,$(target_dir))
 endif
 
-build_release_musl: tendermint
+build_release_musl:
 ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
@@ -99,7 +119,7 @@ else
 	$(call pack_musl_debug,$(target_dir))
 endif
 
-build_release_debug: tendermint
+build_release_debug:
 ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
@@ -108,7 +128,7 @@ else
 	$(call pack,$(target_dir))
 endif
 
-build_release_musl_debug: tendermint
+build_release_musl_debug:
 ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
@@ -119,7 +139,7 @@ endif
 
 test:
 	cargo test --release --workspace -- --test-threads=1
-	cargo test --release --features="abci_mock" abci_mock -- --test-threads=1
+	cargo test --release --features="abci_mock" node -- --test-threads=1
 	cargo test --release --workspace -- --ignored
 
 staking_test:
@@ -158,13 +178,6 @@ clean:
 	@ rm -rf tools/tendermint .git/modules/tools/tendermint
 	@ rm -rf debug release Cargo.lock
 
-tendermint:
-	bash -x tools/download_tendermint.sh 'tools/tendermint'
-	# cd tools/tendermint && $(MAKE) install
-	cd tools/tendermint \
-		&& $(MAKE) build TENDERMINT_BUILD_OPTIONS=cleveldb \
-		&& cp build/tendermint ~/go/bin/
-
 wasm:
 	cd components/wasm && wasm-pack build
 	tar -zcpf $(WASM_PKG) components/wasm/pkg
@@ -187,7 +200,7 @@ debug_env: stop_debug_env build_release_debug
 	@ ./scripts/devnet/startnodes.sh
 
 run_staking_demo:
-	bash -x tools/staking/demo.sh
+	bash tools/staking/demo.sh
 
 start_debug_env:
 	./scripts/devnet/startnodes.sh
@@ -198,29 +211,23 @@ stop_debug_env:
 ci_build_image:
 	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \
 		mkdir -p release/bin/; \
-		cp debug/bin/abci_validator_node debug/bin/tendermint release/bin/; \
+		cp debug/bin/findorad release/bin/; \
 	fi
 	docker build -t $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG) -f container/Dockerfile-CI-abci_validator_node .
-	docker build -t $(ECR_URL)/$(ENV)/tendermint:$(IMAGE_TAG) -f container/Dockerfile-CI-tendermint .
 ifeq ($(ENV),release)
-	docker tag $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG) $(ECR_URL)/$(ENV)/abci_validator_node:latest
-	docker tag $(ECR_URL)/$(ENV)/tendermint:$(IMAGE_TAG) $(ECR_URL)/$(ENV)/tendermint:latest
+	docker tag $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG) $(ECR_URL)/$(ENV)/findorad:latest
 endif
 
 ci_push_image:
 	docker push $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG)
-	docker push $(ECR_URL)/$(ENV)/tendermint:$(IMAGE_TAG)
 ifeq ($(ENV),release)
 	docker push $(ECR_URL)/$(ENV)/abci_validator_node:latest
-	docker push $(ECR_URL)/$(ENV)/tendermint:latest
 endif
 
 clean_image:
 	docker rmi $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG)
-	docker rmi $(ECR_URL)/$(ENV)/tendermint:$(IMAGE_TAG)
 ifeq ($(ENV),release)
 	docker rmi $(ECR_URL)/$(ENV)/abci_validator_node:latest
-	docker rmi $(ECR_URL)/$(ENV)/tendermint:latest
 endif
 
 ####@./scripts/devnet/snapshot.sh <user_nick> <password> <token_name> <max_units> <genesis_issuance> <memo> <memo_updatable>

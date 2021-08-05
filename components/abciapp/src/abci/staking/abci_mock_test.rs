@@ -8,7 +8,6 @@ use crate::abci::server::{
     tx_sender::{forward_txn_with_mode, CHAN},
     ABCISubmissionServer,
 };
-use abci::*;
 use cryptohash::sha256::{self, Digest};
 use lazy_static::lazy_static;
 use ledger::staking::STAKING_VALIDATOR_MIN_POWER;
@@ -47,6 +46,8 @@ use std::{
     thread,
     time::Duration,
 };
+use tendermint_sys::SyncApplication;
+use tm_protos::abci::*;
 use txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder};
 use zei::xfr::{
     asset_record::{open_blind_asset_record, AssetRecordType},
@@ -113,13 +114,13 @@ impl AbciMocker {
             &TD_MOCKER.read().validators.keys().next().unwrap()
         ));
 
-        self.0.begin_block(&gen_req_begin_block(h, proposer));
+        self.0.begin_block(gen_req_begin_block(h, proposer));
 
         let mut failed_txs = FAILED_TXS.write();
         let mut successful_txs = SUCCESS_TXS.write();
         for tx in txs.into_iter() {
             let key = gen_tx_hash(&tx);
-            if 0 == self.0.deliver_tx(&gen_req_deliver_tx(tx.clone())).code {
+            if 0 == self.0.deliver_tx(gen_req_deliver_tx(tx.clone())).code {
                 assert!(successful_txs.insert(key, tx).is_none());
             } else {
                 assert!(failed_txs.insert(key, tx).is_none());
@@ -128,22 +129,22 @@ impl AbciMocker {
         drop(failed_txs);
         drop(successful_txs);
 
-        let resp = self.0.end_block(&gen_req_end_block(h.saturating_sub(20)));
+        let resp = self.0.end_block(gen_req_end_block(h.saturating_sub(20)));
         if 0 < resp.validator_updates.len() {
             TD_MOCKER.write().validators = resp
                 .validator_updates
-                .into_vec()
+                .to_vec()
                 .into_iter()
                 .filter(|v| 0 < v.power)
                 .filter_map(|v| {
                     v.pub_key
                         .as_ref()
-                        .map(|pk| (td_pubkey_to_td_addr(pk.get_data()), v.power as u64))
+                        .map(|pk| (td_pubkey_to_td_addr(&pk.data), v.power as u64))
                 })
                 .collect();
         }
 
-        self.0.commit(&gen_req_commit());
+        self.0.commit();
     }
 
     fn get_owned_utxos(
@@ -364,30 +365,26 @@ fn gen_initial_keypair_list() -> Result<Vec<XfrKeyPair>> {
 }
 
 fn gen_req_begin_block(h: i64, proposer: Vec<u8>) -> RequestBeginBlock {
-    let mut header = Header::new();
-    header.set_height(h);
-    header.set_proposer_address(proposer);
+    let mut header = Header::default();
+    header.height = h;
+    header.proposer_address = proposer;
 
-    let mut res = RequestBeginBlock::new();
-    res.set_header(header);
+    let mut res = RequestBeginBlock::default();
+    res.header = Some(header);
 
     res
 }
 
 fn gen_req_deliver_tx(tx: Transaction) -> RequestDeliverTx {
-    let mut res = RequestDeliverTx::new();
-    res.set_tx(pnk!(serde_json::to_vec(&tx)));
+    let mut res = RequestDeliverTx::default();
+    res.tx = pnk!(serde_json::to_vec(&tx));
     res
 }
 
 fn gen_req_end_block(h: i64) -> RequestEndBlock {
-    let mut req = RequestEndBlock::new();
+    let mut req = RequestEndBlock::default();
     req.height = h;
     req
-}
-
-fn gen_req_commit() -> RequestCommit {
-    RequestCommit::new()
 }
 
 fn gen_tx_hash(tx: &Transaction) -> Digest {

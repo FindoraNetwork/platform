@@ -3,11 +3,11 @@ RED='\033[31m'
 GRN="\033[32m"
 NC='\033[0m'
 
-# stop all abci nodes
-abcis=`pgrep -f abci_validator_node`
+# stop all nodes
+abcis=`pgrep -f findorad`
 if ! [ -z "$abcis" ]
 then
-    echo -n "killed abci: "
+    echo -n "killed nodes: "
     for pid in $abcis
     do
         kill -9 $pid
@@ -15,18 +15,4 @@ then
     done
     echo
 fi
-
-# stop all tendermint nodes
-nodes=`pgrep -f "tendermint node.*"`
-if ! [ -z "$abcis" ]
-then
-    echo -n "killed node: "
-    for pid in $nodes
-    do
-        kill -9 $pid
-        echo -en "$pid "
-    done
-    echo
-fi
-
 exit 0

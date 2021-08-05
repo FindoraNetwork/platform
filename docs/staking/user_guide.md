@@ -44,22 +44,28 @@
 #   - <NODE ID>@https://prod-mainnet-us-west-2-sentry-001-public.prod.findora.org:<PORT>
 #
 rm -rf /tmp/findora ~/.tendermint
-tendermint init
+findorad init
 
 curl https://dev-qa01.dev.findora.org:26657/genesis \
     | jq -c '.result.genesis' \
     | jq > ~/.tendermint/config/genesis.json
+
+toml unset --toml-path ~/.tendermint/config/config.toml tx_index.index_keys
+toml set   --toml-path ~/.tendermint/config/config.toml tx_index.index_all_keys true
+toml set   --toml-path ~/.tendermint/config/config.toml rpc.laddr tcp://0.0.0.0:26657
 
 toml set   --toml-path ~/.tendermint/config/config.toml consensus.create_empty_blocks_interval 15s
 toml set   --toml-path ~/.tendermint/config/config.toml p2p.persistent_peers \
 "b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@dev-qa01-us-west-2-sentry-000-public.dev.findora.org:26656,\
 d0c6e3e1589695ae6d650b288caf2efe9a998a50@dev-qa01-us-west-2-sentry-001-public.dev.findora.org:26656"
 
-TD_NODE_SELF_ADDR=$(jq --raw-output '.address' ~/.tendermint/config/priv_validator_key.json) \
-    LEDGER_DIR=/tmp/findora \
-    abci_validator_node >/tmp/log 2>&1 &
 
-nohup tendermint node > /tmp/td.log 2>&1 &
+ENABLE_QUERY_SERVICE=true \
+ENABLE_LEDGER_SERVICE=true \
+findorad node \
+  --ledger-dir /tmp/findora \
+  --tendermint-node-key-config-path ~/.tendermint/config/priv_validator_key.json \
+  >> abci_validator.log 2>&1  &
 
 # set the server address,
 # should be the address of an existing node
@@ -89,7 +95,8 @@ fns show
 ```
 
 ```shell
-fns 0.1.0
+$ fns -h
+fns faddf8dd984b1ea5bbefa60c67e5c1980b913c89 2021-07-28
 FindoraNetwork
 A command line tool for staking in findora network.
 
@@ -98,22 +105,23 @@ USAGE:
 
 FLAGS:
     -h, --help       Prints help information
-    -V, --version    Prints version information
+    -v, --version
 
 SUBCOMMANDS:
-    claim
-    contribute
-    help                      Prints this message or the help of the given subcommand(s)
-    set-initial-validators
-    setup
-    show
-    stake
-    transfer
-    unstake
+    claim       Claim accumulated FRA rewards
+    genkey      Generate a random Findora public key/private key Pair
+    help        Prints this message or the help of the given subcommand(s)
+    setup       Setup environment variables for staking transactions
+    show        View Validator status and accumulated rewards
+    stake       Stake tokens (i.e. bond tokens) from a Findora account to a Validator
+    transfer    Transfer tokens from one address to another
+    unstake     Unstake tokens (i.e. unbond tokens) from a Validator
 ```
 
 ```shell
+$ fns stake  -h
 fns-stake
+Stake tokens (i.e. bond tokens) from a Findora account to a Validator
 
 USAGE:
     fns stake [FLAGS] [OPTIONS] --amount <Amount>
@@ -124,7 +132,9 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -n, --amount <Amount>           how much `FRA unit`s you want to stake
-    -R, --commission-rate <Rate>    the commission rate for your delegators, should be a float numbe
-    -M, --validator-memo <Memo>     the description of your validator node, optional
+    -n, --amount <Amount>                       how much `FRA unit`s you want to stake
+    -R, --commission-rate <Rate>                the commission rate of your node, a float number from 0.0 to 1.0
+    -S, --staker-priv-key <SecretKey>           the private key of proposer, in base64 format
+    -M, --validator-memo <Memo>                 the description of your node, optional
+    -A, --validator-td-addr <TendermintAddr>    stake FRAs to a custom validator
 ```

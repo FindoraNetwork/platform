@@ -1,8 +1,6 @@
 #![deny(warnings)]
 #![allow(clippy::field_reassign_with_default)]
 
-use ruc::*;
-
 pub mod abci;
 
 fn main() {
@@ -14,5 +12,5 @@ fn main() {
         env!("VERGEN_BUILD_DATE")
     ));
 
-    pnk!(abci::run());
+    abci::run().unwrap();
 }

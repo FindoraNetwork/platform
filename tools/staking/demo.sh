@@ -21,10 +21,11 @@ if [[ "FreeBSD" == $OS ]]; then
     MAKE=gmake
 fi
 
+TD_HOME=${HOME}/.tendermint
 SERVER_HOST=http://localhost
 RWD_KEY_PATH=/tmp/staking_rwd.key
-TD_NODE_KEY="${HOME}/.tendermint/config/priv_validator_key.json"
-FRA_TOTAL_AMOUNT=21000000000000000
+TD_NODE_KEY="${TD_HOME}/config/priv_validator_key.json"
+FRA_TOTAL_AMOUNT=$[210 * 10000 * 10000 * 1000000]
 
 export __LEDGER_DIR__=/tmp/xx
 export __TENDERMINT_PORT__=20000
@@ -32,7 +33,7 @@ export __ABCI_PORT__=10000
 export __SUBMISSION_PORT__=$((9000 + $RANDOM % 1000))
 export __LEDGER_PORT__=$((8000 + $RANDOM % 1000))
 export __TENDERMINT_NODE_KEY_CONFIG_PATH__=${TD_NODE_KEY}
-export SELF_ADDR=8DB4CBD00D8E6621826BE6A840A98C28D7F27CD9
+export SELF_ADDR=$(grep -Eo '[A-Z0-9]{40,40}' ${TD_NODE_KEY})
 
 println() {
     echo -e "\n\x1b[31;01m*===> ${1}\x1b[0m"
@@ -53,7 +54,7 @@ stop_node() {
 }
 
 start_node() {
-    abci_validator_node \
+    nohup findorad node \
         --enable-ledger-service \
         --enable-query-service \
         --abci-host="0.0.0.0" \
@@ -64,17 +65,13 @@ start_node() {
         --tendermint-node-key-config-path=${__TENDERMINT_NODE_KEY_CONFIG_PATH__} \
         --tendermint-host="127.0.0.1" \
         --tendermint-port=${__TENDERMINT_PORT__} \
-    > /tmp/log 2>&1 &
-
-    find ~/.tendermint -name LOCK | xargs rm -f
-    nohup tendermint node &
+        --base-dir=${TD_HOME} &
 }
 
 init() {
     stop_node
     ${MAKE} -C ../.. stop_debug_env
-    pkill -9 tendermint
-    pkill -9 abci_validator_node
+    pkill -9 findorad
 
     ${MAKE} -C ../.. debug_env || exit 1
 
@@ -94,11 +91,10 @@ add_new_validator() {
     # so we can act as a new joined validator node
     sleep 15
 
-    rm -rf ${__LEDGER_DIR__}
-    tendermint unsafe_reset_all || exit 1
-    tendermint init || exit 1
+    rm -rf ${__LEDGER_DIR__} ${TD_HOME}
+    findorad init --base-dir=${TD_HOME} || exit 1
     tar -xpf demo_config.tar.gz || exit 1
-    mv config.toml genesis.json node_key.json priv_validator_key.json ~/.tendermint/config/ || exit 1
+    mv config.toml genesis.json node_key.json priv_validator_key.json ${TD_HOME}/config/ || exit 1
     rm nohup.out 2>/dev/null
 
     start_node
@@ -108,14 +104,14 @@ check() {
     curl ${SERVER_HOST}:26657/validators | tail || exit 1
     println "There are 20 initial validators..."
 
-    # at least 88_8888 FRAs
+    # At least 88_8888 FRAs
     fns stake -n $((888888 * 1000000)) -R 0.2 || exit 1
-    sleep 30
+    sleep 40
     curl ${SERVER_HOST}:26657/validators | grep -A 5 ${SELF_ADDR} 2>/dev/null || exit 1
     println "Our validator appears in the validator list after staking..."
 
     fns stake --append -n $((222222 * 1000000)) || exit 1
-    sleep 30
+    sleep 40
     curl ${SERVER_HOST}:26657/validators | grep -A 5 ${SELF_ADDR} 2>/dev/null || exit 1
     println "Its vote power has been raised after appending a new staking..."
 

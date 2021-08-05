@@ -3,12 +3,13 @@
 
 use ledger_api_service::RestfulApiService;
 use ruc::*;
+use std::env;
 use std::fs;
-use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 use std::thread;
 use submission_api::SubmissionApi;
+use tendermint_sys::Node;
 
 mod config;
 mod server;
@@ -16,7 +17,7 @@ pub mod staking;
 
 use config::{global_cfg::CFG, ABCIConfig};
 
-pub fn run() -> Result<()> {
+pub fn node_command() -> Result<()> {
     let base_dir = if let Some(d) = CFG.ledger_dir.as_ref() {
         fs::create_dir_all(d).c(d!())?;
         Some(Path::new(d))
@@ -61,6 +62,7 @@ pub fn run() -> Result<()> {
 
     let submission_host = config.abci_host.clone();
     let submission_port = config.submission_port;
+
     thread::spawn(move || {
         pnk!(SubmissionApi::create(
             submission_service_hdr,
@@ -69,15 +71,36 @@ pub fn run() -> Result<()> {
         ));
     });
 
-    let addr_str = format!("{}:{}", config.abci_host, config.abci_port);
-    let addr = addr_str.parse::<SocketAddr>().c(d!())?;
-
     // handle SIGINT signal
     ctrlc::set_handler(move || {
         std::process::exit(0);
     })
     .c(d!())?;
 
-    abci::run(addr, app);
+    let config_path = if let Some(path) = CFG.tendermint_config {
+        String::from(path)
+    } else {
+        env::var("HOME").unwrap() + "/.tendermint/config/config.toml"
+    };
+
+    let node = Node::new(&config_path, app).unwrap();
+    node.start().unwrap();
+    std::thread::park();
     Ok(())
+}
+
+pub fn run() -> Result<()> {
+    match CFG.command {
+        "init" => {
+            let home_path = if let Some(home_path) = CFG.tendermint_home {
+                String::from(home_path)
+            } else {
+                env::var("HOME").unwrap() + "/.tendermint"
+            };
+            tendermint_sys::init_home(&home_path).unwrap();
+            Ok(())
+        }
+        "node" => node_command(),
+        _ => Err(eg!("Must use command is node or init")),
+    }
 }

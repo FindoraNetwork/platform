@@ -1,6 +1,6 @@
 FROM debian:10.7-slim
 RUN apt update && apt install libssl1.1 && rm -rf /var/lib/apt/lists/*
-COPY release/bin/abci_validator_node /usr/local/sbin/abci_validator_node
+COPY release/bin/findorad /usr/local/sbin/findorad
 COPY container/docker-entrypoint-abci_validator_node.sh /docker-entrypoint.sh
 WORKDIR /
 ENTRYPOINT ["/docker-entrypoint.sh"]

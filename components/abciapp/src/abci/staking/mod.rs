@@ -5,7 +5,6 @@
 //!
 
 use crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT;
-use abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate};
 use lazy_static::lazy_static;
 use ledger::{
     data_model::{Operation, Transaction, ASSET_TYPE_FRA},
@@ -25,6 +24,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::atomic::Ordering,
 };
+use tm_protos::abci::*;
 
 mod whoami;
 
@@ -126,12 +126,13 @@ pub fn get_validators(
         vs.iter()
             .filter(|(_, power)| -1 < *power)
             .map(|(pubkey, power)| {
-                let mut vu = ValidatorUpdate::new();
-                let mut pk = PubKey::new();
-                pk.set_field_type("ed25519".to_owned());
-                pk.set_data(pubkey.to_vec());
-                vu.set_power(*power);
-                vu.set_pub_key(pk);
+                let mut vu = ValidatorUpdate::default();
+                let pk = PubKey {
+                    r#type: String::from("ed25519"),
+                    data: pubkey.to_vec(),
+                };
+                vu.power = *power;
+                vu.pub_key = Some(pk);
                 vu
             })
             .collect(),
@@ -165,7 +166,7 @@ pub fn system_ops<RNG: RngCore + CryptoRng>(
             let v = ev.validator.as_ref().unwrap();
             let bz = ByzantineInfo {
                 addr: &td_addr_to_string(&v.address),
-                kind: ev.field_type.as_str(),
+                kind: ev.r#type.as_str(),
             };
 
             ruc::info_omit!(system_governance(la.get_staking_mut(), &bz));
