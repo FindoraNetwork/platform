@@ -374,9 +374,24 @@ where
                         power_list.sort_unstable();
                         power_list.len() - power_list.binary_search(&v.td_power).unwrap()
                     };
+                    let return_rate = Staking::get_block_rewards_rate(&*read);
+                    let expected_annualization =
+                        if let Some(v_self_delegation) = staking.delegation_get(pk) {
+                            [
+                                return_rate[0] as u128
+                                    * v_self_delegation.proposer_rwd_cnt as u128,
+                                return_rate[1] as u128
+                                    * (1 + staking.cur_height()
+                                        - v_self_delegation.start_height)
+                                        as u128,
+                            ]
+                        } else {
+                            [0, 100]
+                        };
                     Validator::new(
                         tendermint_addr.clone(),
-                        Staking::get_block_rewards_rate(&*read),
+                        return_rate,
+                        expected_annualization,
                         rank as u64,
                         staking.delegation_has_addr(&pk),
                         &v,

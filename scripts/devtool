@@ -10,7 +10,16 @@ export CARGO_TARGET_DIR
 if [[ ${OPT} == "build" ]]; then
   export CARGO_TARGET_DIR=${CARGO_TARGET_DIR}_DBG
 elif [[ ${OPT} == "" ]]; then
-  export CARGO_TARGET_DIR=../target-${GITBRANCH}
+  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release
+elif [[ ${OPT} == "prcheck" ]]; then
+  export CARGO_TARGET_DIR=../target-${GITBRANCH}-prcheck
+  make fmt
+  make lint
+  make test
+  make run_staking_demo
+  exit 0
+elif [[ ${OPT} == "debug_env" ]]; then
+  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release_debug
 fi
 make $@
 
