@@ -24,7 +24,10 @@ use crate::{
 use cosig::CoSigRule;
 use cryptohash::sha256::{self, Digest};
 use lazy_static::lazy_static;
-use ops::{fra_distribution::FraDistributionOps, mint_fra::MintKind};
+use ops::{
+    fra_distribution::FraDistributionOps,
+    mint_fra::{MintKind, MINT_AMOUNT_LIMIT},
+};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use rand_core::{CryptoRng, RngCore};
@@ -1417,7 +1420,7 @@ pub const VALIDATOR_UPDATE_BLOCK_ITV: i64 = 4;
 pub const FRA: Amount = 10_u64.pow(FRA_DECIMALS as u32);
 
 /// Total amount of FRA-units issuance.
-pub const FRA_TOTAL_AMOUNT: Amount = 210_0000_0000 * FRA;
+pub const FRA_TOTAL_AMOUNT: Amount = 210_0000_0000 * FRA + MINT_AMOUNT_LIMIT;
 
 /// Minimum allowable delegation amount.
 pub const MIN_DELEGATION_AMOUNT: Amount = 1;
