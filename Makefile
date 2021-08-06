@@ -208,27 +208,53 @@ start_debug_env:
 stop_debug_env:
 	@./scripts/devnet/stopnodes.sh
 
+# ci_build_image:
+# 	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \
+# 		mkdir -p release/bin/; \
+# 		cp debug/bin/findorad release/bin/; \
+# 	fi
+# 	docker build -t $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG) -f container/Dockerfile-CI-abci_validator_node .
+# ifeq ($(ENV),release)
+# 	docker tag $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG) $(ECR_URL)/$(ENV)/findorad:latest
+# endif
+
+# ci_push_image:
+# 	docker push $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG)
+# ifeq ($(ENV),release)
+# 	docker push $(ECR_URL)/$(ENV)/abci_validator_node:latest
+# endif
+
+# clean_image:
+# 	docker rmi $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG)
+# ifeq ($(ENV),release)
+# 	docker rmi $(ECR_URL)/$(ENV)/abci_validator_node:latest
+# endif
+
+
 ci_build_image:
 	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \
 		mkdir -p release/bin/; \
-		cp debug/bin/findorad release/bin/; \
+		cp debug/bin/abci_validator_node debug/bin/tendermint release/bin/; \
 	fi
-	docker build -t $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG) -f container/Dockerfile-CI-abci_validator_node .
+	docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-CI .
 ifeq ($(ENV),release)
-	docker tag $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG) $(ECR_URL)/$(ENV)/findorad:latest
+	docker tag $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) $(PRIVATE_ECR_URL)/$(ENV)/findorad:latest
 endif
 
 ci_push_image:
-	docker push $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG)
+
+	docker push $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG)
 ifeq ($(ENV),release)
-	docker push $(ECR_URL)/$(ENV)/abci_validator_node:latest
+	docker push $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
 endif
 
 clean_image:
-	docker rmi $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG)
+
+	docker rmi $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG)
 ifeq ($(ENV),release)
-	docker rmi $(ECR_URL)/$(ENV)/abci_validator_node:latest
+	docker rmi $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
 endif
+
 
 ####@./scripts/devnet/snapshot.sh <user_nick> <password> <token_name> <max_units> <genesis_issuance> <memo> <memo_updatable>
 snapshot:
