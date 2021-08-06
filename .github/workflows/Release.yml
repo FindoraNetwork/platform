@@ -11,6 +11,10 @@ jobs:
       matrix:
         platform: [aws]
     runs-on: ${{ matrix.platform }}
+    env:
+      ENV: release
+      PRIVATE_ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
+      PUBLIC_ECR_URL: public.ecr.aws/k6m5b6e2
     steps:
     - uses: actions/checkout@v2
     - uses: actions-rs/toolchain@v1
@@ -66,10 +70,11 @@ jobs:
         export IMAGE_TAG="${TAGV:-main}"
         export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
         echo "VERGEN_SHA_EXTERN: ${VERGEN_SHA_EXTERN}"
-        make build_release
+        make build_release_goleveldb
     - name: Build images
       env:
-        ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
+        PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
         ENV: release
       shell: bash
       run: |
@@ -83,9 +88,11 @@ jobs:
       shell: bash
       run: |
         $(aws ecr get-login --region us-west-2 --no-include-email)
+        $(aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin $(PUBLIC_ECR_URL))
     - name: Push images
       env:
-        ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
+        PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
         ENV: release
       shell: bash
       run: |
@@ -97,7 +104,8 @@ jobs:
         make ci_push_image
     - name: Clean images
       env:
-        ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
+        PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
         ENV: release
       shell: bash
       run: |
