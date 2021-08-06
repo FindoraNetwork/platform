@@ -85,6 +85,8 @@ jobs:
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image
     - name: Login ECR
+      env:
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
       shell: bash
       run: |
         $(aws ecr get-login --region us-west-2 --no-include-email)

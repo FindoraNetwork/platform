@@ -94,7 +94,6 @@ jobs:
         make ci_build_image
     - name: Login ECR
       env:
-        PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
         PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
       shell: bash
       run: |
