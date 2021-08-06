@@ -234,7 +234,7 @@ stop_debug_env:
 ci_build_image:
 	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \
 		mkdir -p release/bin/; \
-		cp debug/bin/abci_validator_node debug/bin/tendermint release/bin/; \
+		cp debug/bin/findorad release/bin/; \
 	fi
 	docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-CI .
 ifeq ($(ENV),release)
