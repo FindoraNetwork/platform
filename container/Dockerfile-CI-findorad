@@ -1,5 +1,6 @@
 FROM debian:10.7-slim
-RUN apt update && apt install libssl1.1 && rm -rf /var/lib/apt/lists/*
+RUN apt update && apt install libssl1.1 && apt install -y libleveldb-dev=1.20-2.1 && rm -rf /var/lib/apt/lists/*
+RUN ln -s /usr/lib/x86_64-linux-gnu/libleveldb.so.1d.20 /usr/lib/x86_64-linux-gnu/libleveldb.so.1
 COPY release/bin/findorad /usr/local/sbin/findorad
 COPY container/docker-entrypoint-findorad.sh /docker-entrypoint.sh
 WORKDIR /
