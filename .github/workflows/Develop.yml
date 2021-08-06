@@ -50,12 +50,11 @@ jobs:
     - name: lint
       shell: bash
       run: |
-        make lint
-    # skip the test 
-    # - name: test
-    #   shell: bash
-    #   run: |
-    #     make test
+        make lint 
+    - name: test
+      shell: bash
+      run: |
+        make test
     - name: Build
       env:
         DBG: true
