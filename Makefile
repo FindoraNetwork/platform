@@ -236,7 +236,7 @@ ci_build_image:
 		mkdir -p release/bin/; \
 		cp debug/bin/findorad release/bin/; \
 	fi
-	docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-CI .
+	docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-CI-findorad .
 ifeq ($(ENV),release)
 	docker tag $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) $(PRIVATE_ECR_URL)/$(ENV)/findorad:latest
 endif
