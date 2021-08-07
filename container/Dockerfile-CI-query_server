@@ -1,6 +1,0 @@
-FROM debian:10.7-slim
-RUN apt update && apt install libssl1.1 && rm -rf /var/lib/apt/lists/*
-COPY release/bin/query_server /usr/local/sbin/query_server
-COPY container/docker-entrypoint-query_server.sh /docker-entrypoint.sh
-WORKDIR /
-ENTRYPOINT ["/docker-entrypoint.sh"]
