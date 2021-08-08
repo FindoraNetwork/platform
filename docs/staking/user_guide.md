@@ -2,7 +2,7 @@
 
 1. Get the address of one or more nodes in FindoraNetwork
 2. Set them in the `config.toml` of your node
-3. Start your own node (ABCI Application + Tendermint Core)
+3. Start your own node (findorad Application)
 4. Stake your node to FindoraNetwork
     - It will become a candidate validator at once after a successful staking
     - It will become an official validator if the staking amount is sufficient
@@ -25,7 +25,7 @@
 **Or compile from scratch**:
 
 # use `make` directly in production env
-# switch to the `feat-staking-v2-DebugEnv` branch
+# switch to the `feat-testnet` branch
 - make build DBG=1
 
 # you should set up a cluster
@@ -86,9 +86,19 @@ fns setup -O $(pwd)/mnemonic.key
 # set the tendermint public key of your node
 fns setup -K "${HOME}/.tendermint/config/priv_validator_key.json"
 
+# copy a staker_memo.example to current directory and change it.
+cp tools/staking/staker_memo.example staker_memo
+cat staker_memo
+{
+  "name": "ExampleNode",
+  "desc": "I am just a example description, please change me.",
+  "website": "https://www.example.com",
+  "logo": "https://www.example.com/logo"
+}
+
 # stake your node to FindoraNetwork,
 # at least 1000000 FRAs are needed
-fns stake -n $((100 * 10000 * 1000000)) -R 0.2 -M "my node"
+fns stake -n $((100 * 10000 * 1000000)) -R 0.2 -M "$(cat staker_memo)"
 
 # query your staking state after 10 minutes
 fns show
@@ -119,7 +129,7 @@ SUBCOMMANDS:
 ```
 
 ```shell
-$ fns stake  -h
+$ fns stake -h
 fns-stake
 Stake tokens (i.e. bond tokens) from a Findora account to a Validator
 
@@ -128,6 +138,7 @@ USAGE:
 
 FLAGS:
     -a, --append     stake more FRAs to your node
+        --force      ignore warning and stake FRAs to your node
     -h, --help       Prints help information
     -V, --version    Prints version information
 
