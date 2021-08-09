@@ -12,6 +12,7 @@ use submission_api::SubmissionApi;
 use tendermint_sys::Node;
 
 mod config;
+mod init;
 mod server;
 pub mod staking;
 
@@ -89,17 +90,27 @@ pub fn node_command() -> Result<()> {
     Ok(())
 }
 
+fn init_command() -> Result<()> {
+    let home_path = if let Some(home_path) = CFG.tendermint_home {
+        String::from(home_path)
+    } else {
+        env::var("HOME").unwrap() + "/.tendermint"
+    };
+    tendermint_sys::init_home(&home_path).unwrap();
+    init::init_genesis(
+        CFG.init_mode.unwrap_or(init::InitMode::Dev),
+        &(home_path.clone() + "/config/genesis.json"),
+    )?;
+    init::generate_tendermint_config(
+        CFG.init_mode.unwrap_or(init::InitMode::Dev),
+        &(home_path + "/config/config.toml"),
+    )?;
+    Ok(())
+}
+
 pub fn run() -> Result<()> {
     match CFG.command {
-        "init" => {
-            let home_path = if let Some(home_path) = CFG.tendermint_home {
-                String::from(home_path)
-            } else {
-                env::var("HOME").unwrap() + "/.tendermint"
-            };
-            tendermint_sys::init_home(&home_path).unwrap();
-            Ok(())
-        }
+        "init" => init_command(),
         "node" => node_command(),
         _ => Err(eg!("Must use command is node or init")),
     }

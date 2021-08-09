@@ -82,10 +82,12 @@ impl ABCIConfig {
 pub(crate) mod global_cfg {
     #![deny(warnings)]
 
-    use clap::{crate_authors, App, Arg, ArgMatches, SubCommand};
+    use clap::{crate_authors, App, Arg, ArgGroup, ArgMatches, SubCommand};
     use lazy_static::lazy_static;
     use ruc::*;
     use std::{env, process};
+
+    use crate::abci::init::InitMode;
 
     lazy_static! {
         /// Global config.
@@ -115,8 +117,6 @@ pub(crate) mod global_cfg {
                 .arg_from_usage("-c, --config=[FILE] 'Path to $TMHOM/config/config.toml'")
                 .arg_from_usage("-H, --tendermint-host=[Tendermint Node IP]")
                 .arg_from_usage("-P, --tendermint-port=[Tendermint Node Port]")
-                .arg_from_usage("--abci-host=[ABCI IP]")
-                .arg_from_usage("--abci-port=[ABCI Port]")
                 .arg_from_usage("--submission-service-port=[Submission Service Port]")
                 .arg_from_usage("--ledger-service-port=[Ledger Service Port]")
                 .arg_from_usage("-l, --enable-ledger-service")
@@ -134,6 +134,11 @@ pub(crate) mod global_cfg {
 
             let init = SubCommand::with_name("init")
                 .about("Init findora node config file and tendermint config file")
+                .arg_from_usage("--dev-net 'Inital findora development net configuration.'")
+                .arg_from_usage("--test-net 'Inital findora testnet configuration.'")
+                .arg_from_usage("--main-net 'Inital findora mainnet configuration.'")
+                .arg_from_usage("--qa01-net 'Inital findora qa01 configuration.'")
+                .group(ArgGroup::with_name("environment").args(&["dev-net", "test-net", "main-net", "qa01-net"]))
                 .arg_from_usage(
                     "-b, --base-dir=[DIR] 'Base directory for tendermint config, aka $TMHOME'",
                 );
@@ -163,6 +168,7 @@ pub(crate) mod global_cfg {
         pub tendermint_home: Option<&'static str>,
         pub tendermint_config: Option<&'static str>,
         pub command: &'static str,
+        pub init_mode: Option<InitMode>,
     }
 
     fn get_config() -> Result<Config> {
@@ -231,6 +237,18 @@ pub(crate) mod global_cfg {
             .value_of("base-dir")
             .or_else(|| TENDERMINT_HOME.as_deref());
 
+        let init_mode = if m.is_present("dev-net") {
+            InitMode::Dev
+        } else if m.is_present("test-net") {
+            InitMode::Testnet
+        } else if m.is_present("main-net") {
+            InitMode::Mainnet
+        } else if m.is_present("qa01-net") {
+            InitMode::Qa01
+        } else {
+            InitMode::Dev
+        };
+
         let res = Config {
             tendermint_host: th,
             tendermint_port: tp,
@@ -246,6 +264,7 @@ pub(crate) mod global_cfg {
             command,
             tendermint_config,
             tendermint_home,
+            init_mode: Some(init_mode),
         };
         Ok(res)
     }
