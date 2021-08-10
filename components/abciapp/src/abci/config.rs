@@ -7,8 +7,6 @@ use std::{convert::TryFrom, fs, path::Path};
 pub struct ABCIConfig {
     pub tendermint_host: String,
     pub tendermint_port: u16,
-    pub abci_host: String,
-    pub abci_port: u16,
     pub submission_port: u16,
     pub ledger_port: u16,
     pub query_port: u16,
@@ -18,8 +16,6 @@ pub struct ABCIConfig {
 pub struct ABCIConfigStr {
     pub tendermint_host: String,
     pub tendermint_port: String,
-    pub abci_host: String,
-    pub abci_port: String,
     pub submission_port: String,
     pub ledger_port: String,
 }
@@ -32,8 +28,6 @@ impl TryFrom<ABCIConfigStr> for ABCIConfig {
         Ok(ABCIConfig {
             tendermint_host: cfg.tendermint_host,
             tendermint_port: cfg.tendermint_port.parse::<u16>().c(d!())?,
-            abci_host: cfg.abci_host,
-            abci_port: cfg.abci_port.parse::<u16>().c(d!())?,
             submission_port: cfg.submission_port.parse::<u16>().c(d!())?,
             ledger_port,
             query_port,
@@ -43,13 +37,8 @@ impl TryFrom<ABCIConfigStr> for ABCIConfig {
 
 impl ABCIConfig {
     pub fn from_env() -> Result<ABCIConfig> {
-        // abci ----> tendermint(host, port)
         let tendermint_host = CFG.tendermint_host.to_owned();
         let tendermint_port = CFG.tendermint_port;
-
-        // tendermint -------> abci(host, port)
-        let abci_host = CFG.abci_host.to_owned();
-        let abci_port = CFG.abci_port;
 
         // client ------> abci(host, port, for submission)
         let submission_port = CFG.submission_service_port;
@@ -62,8 +51,6 @@ impl ABCIConfig {
         Ok(ABCIConfig {
             tendermint_host,
             tendermint_port,
-            abci_host,
-            abci_port,
             submission_port,
             ledger_port,
             query_port,
@@ -156,8 +143,6 @@ pub(crate) mod global_cfg {
     pub struct Config {
         pub tendermint_host: &'static str,
         pub tendermint_port: u16,
-        pub abci_host: &'static str,
-        pub abci_port: u16,
         pub submission_service_port: u16,
         pub ledger_service_port: u16,
         pub enable_ledger_service: bool,
@@ -194,16 +179,6 @@ pub(crate) mod global_cfg {
             .value_of("tendermint-port")
             .or_else(|| TENDERMINT_PORT.as_deref())
             .unwrap_or("26657")
-            .parse::<u16>()
-            .c(d!())?;
-        let ah = m
-            .value_of("abci-host")
-            .or_else(|| ABCI_HOST.as_deref())
-            .unwrap_or("0.0.0.0");
-        let ap = m
-            .value_of("abci-port")
-            .or_else(|| ABCI_PORT.as_deref())
-            .unwrap_or("26658")
             .parse::<u16>()
             .c(d!())?;
         let ssp = m
@@ -252,8 +227,6 @@ pub(crate) mod global_cfg {
         let res = Config {
             tendermint_host: th,
             tendermint_port: tp,
-            abci_host: ah,
-            abci_port: ap,
             submission_service_port: ssp,
             ledger_service_port: lsp,
             enable_ledger_service: els,

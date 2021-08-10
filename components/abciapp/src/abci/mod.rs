@@ -39,7 +39,7 @@ pub fn node_command() -> Result<()> {
     if CFG.enable_ledger_service {
         let ledger_api_service_hdr =
             submission_service_hdr.read().borrowable_ledger_state();
-        let ledger_host = config.abci_host.clone();
+        let ledger_host = config.tendermint_host.clone();
         let ledger_port = config.ledger_port;
         thread::spawn(move || {
             pnk!(RestfulApiService::create(
@@ -54,14 +54,14 @@ pub fn node_command() -> Result<()> {
         let query_service_hdr = submission_service_hdr.read().borrowable_ledger_state();
         pnk!(query_api::service::start_query_server(
             query_service_hdr,
-            &config.abci_host,
+            &config.tendermint_host,
             config.query_port,
         ))
         .write()
         .update();
     }
 
-    let submission_host = config.abci_host.clone();
+    let submission_host = config.tendermint_host.clone();
     let submission_port = config.submission_port;
 
     thread::spawn(move || {

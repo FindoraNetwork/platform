@@ -57,8 +57,6 @@ start_node() {
     nohup findorad node \
         --enable-ledger-service \
         --enable-query-service \
-        --abci-host="0.0.0.0" \
-        --abci-port=${__ABCI_PORT__} \
         --ledger-dir=${__LEDGER_DIR__} \
         --ledger-service-port=${__LEDGER_PORT__} \
         --submission-service-port=${__SUBMISSION_PORT__} \
