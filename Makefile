@@ -1,12 +1,5 @@
 #
-#  The default target for this Makefile creates the "release"
-#  subdirectory, which is a start at collecting the files that
-#  will be needed for a release.
 #
-#  The "test_status" target performs the standard and release
-#  builds, and then runs the test.  The final step is making
-#  the release target.  If all that succeeds, the source has
-#  some chance of being in reasonable shape.
 #
 
 all: build_release_goleveldb
@@ -73,7 +66,7 @@ endef
 # Build for cleveldb
 build:
 ifdef DBG
-	cargo build --bins -p abciapp -p fintools --no-default-features --features "cleveldb"
+	cargo build --bins -p abciapp -p finutils --no-default-features --features "cleveldb"
 	$(call pack,$(target_dir))
 else
 	@ echo -e "\x1b[31;01m\$$(DBG) must be defined !\x1b[00m"
@@ -86,14 +79,14 @@ ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
 else
-	cargo build --release --bins -p abciapp -p fintools --no-default-features --features "cleveldb"
+	cargo build --release --bins -p abciapp -p finutils --no-default-features --features "cleveldb"
 	$(call pack,$(target_dir))
 endif
 
 # Build for goleveldb
 build_goleveldb:
 ifdef DBG
-	cargo build --bins -p abciapp -p fintools
+	cargo build --bins -p abciapp -p finutils
 	$(call pack,$(target_dir))
 else
 	@ echo -e "\x1b[31;01m\$$(DBG) must be defined !\x1b[00m"
@@ -106,7 +99,7 @@ ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
 else
-	cargo build --release --bins -p abciapp -p fintools
+	cargo build --release --bins -p abciapp -p finutils
 	$(call pack,$(target_dir))
 endif
 
@@ -115,7 +108,7 @@ ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
 else
-	cargo build --release --bins -p abciapp -p fintools --target=x86_64-unknown-linux-musl
+	cargo build --release --bins -p abciapp -p finutils --target=x86_64-unknown-linux-musl
 	$(call pack_musl_debug,$(target_dir))
 endif
 
@@ -124,7 +117,7 @@ ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
 else
-	cargo build --features="debug_env" --release --bins -p abciapp -p fintools
+	cargo build --features="debug_env" --release --bins -p abciapp -p finutils
 	$(call pack,$(target_dir))
 endif
 
@@ -133,19 +126,14 @@ ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
 else
-	cargo build --features="debug_env" --release --bins -p abciapp -p fintools --target=x86_64-unknown-linux-musl
+	cargo build --features="debug_env" --release --bins -p abciapp -p finutils --target=x86_64-unknown-linux-musl
 	$(call pack_musl_debug,$(target_dir))
 endif
 
 test:
 	cargo test --release --workspace -- --test-threads=1
-	cargo test --release --features="abci_mock" node -- --test-threads=1
+	cargo test --release --features="abci_mock" -- --test-threads=1
 	cargo test --release --workspace -- --ignored
-
-staking_test:
-	$(unset LEDGER_DIR)
-	cargo test --release staking -- --test-threads=1 --nocapture
-	cargo test --release staking --features="abci_mock" -- --test-threads=1 --nocapture
 
 staking_cfg:
 	cargo run --bin staking_cfg_generator
@@ -161,12 +149,6 @@ lint:
 update:
 	cargo update
 
-test_status:
-	scripts/incur build
-	scripts/incur build --release
-	scripts/incur test
-	$(MAKE) build_release
-
 fmt:
 	@ cargo fmt
 
@@ -178,9 +160,12 @@ clean:
 	@ rm -rf tools/tendermint .git/modules/tools/tendermint
 	@ rm -rf debug release Cargo.lock
 
+cleanall: clean
+	@ git clean -fdx
+
 wasm:
-	cd components/wasm && wasm-pack build
-	tar -zcpf $(WASM_PKG) components/wasm/pkg
+	cd src/components/wasm && wasm-pack build
+	tar -zcpf $(WASM_PKG) src/components/wasm/pkg
 
 single:
 	@./scripts/devnet/stopnodes.sh

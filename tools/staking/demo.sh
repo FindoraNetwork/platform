@@ -21,10 +21,10 @@ if [[ "FreeBSD" == $OS ]]; then
     MAKE=gmake
 fi
 
-TD_HOME=${HOME}/.tendermint
+TENDERMINT_HOME=${HOME}/.tendermint
 SERVER_HOST=http://localhost
 RWD_KEY_PATH=/tmp/staking_rwd.key
-TD_NODE_KEY="${TD_HOME}/config/priv_validator_key.json"
+TD_NODE_KEY="${TENDERMINT_HOME}/config/priv_validator_key.json"
 FRA_TOTAL_AMOUNT=$[210 * 10000 * 10000 * 1000000]
 
 export __LEDGER_DIR__=/tmp/xx
@@ -63,7 +63,7 @@ start_node() {
         --tendermint-node-key-config-path=${__TENDERMINT_NODE_KEY_CONFIG_PATH__} \
         --tendermint-host="127.0.0.1" \
         --tendermint-port=${__TENDERMINT_PORT__} \
-        --base-dir=${TD_HOME} &
+        --base-dir=${TENDERMINT_HOME} &
 }
 
 init() {
@@ -89,10 +89,10 @@ add_new_validator() {
     # so we can act as a new joined validator node
     sleep 15
 
-    rm -rf ${__LEDGER_DIR__} ${TD_HOME}
-    findorad init --base-dir=${TD_HOME} || exit 1
+    rm -rf ${__LEDGER_DIR__} ${TENDERMINT_HOME}
+    findorad init --base-dir=${TENDERMINT_HOME} || exit 1
     tar -xpf demo_config.tar.gz || exit 1
-    mv config.toml genesis.json node_key.json priv_validator_key.json ${TD_HOME}/config/ || exit 1
+    mv config.toml genesis.json node_key.json priv_validator_key.json ${TENDERMINT_HOME}/config/ || exit 1
     rm nohup.out 2>/dev/null
 
     start_node

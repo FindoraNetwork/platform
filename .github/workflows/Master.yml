@@ -164,7 +164,7 @@ jobs:
         if [ ! -d "${WASM_DIR}/web" ]; then mkdir "${WASM_DIR}/web"; fi
         if [ ! -d "${WASM_DIR}/bundler" ]; then mkdir "${WASM_DIR}/bundler"; fi
         popd
-        pushd components/wasm
+        pushd src/components/wasm
         wasm-pack build --target nodejs --out-dir "${WASM_DIR}/nodejs"
         rm "${WASM_DIR}/nodejs/.gitignore"
         wasm-pack build --target web --out-dir "${WASM_DIR}/web"
