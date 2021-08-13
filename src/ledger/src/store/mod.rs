@@ -485,9 +485,9 @@ impl LedgerStatus {
                 .or_else(|| txn_effect.new_asset_codes.get(&code))
                 .c(d!())?;
             if asset_type.has_transfer_restrictions() {
-                return Err(eg!((
-                    "non-confidential assets with transfer restrictions can't become confidential"
-                )));
+                return Err(eg!(
+                    ("non-confidential assets with transfer restrictions can't become confidential")
+                ));
             }
         }
 

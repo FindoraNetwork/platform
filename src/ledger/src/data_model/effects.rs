@@ -532,9 +532,9 @@ impl TxnEffect {
                 Operation::UpdateMemo(update_memo) => {
                     let pk = update_memo.pubkey;
                     if txn.body.no_replay_token != update_memo.body.no_replay_token {
-                        return Err(eg!((
-                            "compute_effect: txn body token not equal to the token for this UpdateMemo operation"
-                        )));
+                        return Err(eg!(
+                            ("compute_effect: txn body token not equal to the token for this UpdateMemo operation")
+                        ));
                     }
                     // 1)
                     update_memo

@@ -1990,7 +1990,6 @@ impl CoinBase {
         CoinBase {
             distribution_hist: BTreeSet::new(),
             distribution_plan: BTreeMap::new(),
-
             balance: ops::mint_fra::MINT_AMOUNT_LIMIT,
             principal_balance: 0,
         }

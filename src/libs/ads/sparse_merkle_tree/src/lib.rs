@@ -640,7 +640,7 @@ mod tests {
                 bitmap: l256("02").0,
                 hashes: vec![b256(
                     "5031918db6776a678116ebe3352a3283f28983dbec4df0783c4988a7be461922"
-                )],
+                )]
             },
         );
         assert_eq!(
@@ -718,7 +718,7 @@ mod tests {
                 .0,
                 hashes: vec![b256(
                     "09e975535684248aafbf0d00824aadd496879c9e375e298fdd33e7adc09c5067"
-                ),],
+                ),]
             },
         );
         assert_eq!(
