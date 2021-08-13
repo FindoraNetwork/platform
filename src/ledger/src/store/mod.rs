@@ -1191,8 +1191,8 @@ impl LedgerStatus {
             .collect()
     }
 
-    fn get_utxo(&self, addr: TxoSID) -> Option<&Utxo> {
-        self.utxos.get(&addr)
+    fn get_utxo(&self, id: TxoSID) -> Option<&Utxo> {
+        self.utxos.get(&id)
     }
 
     #[inline(always)]
@@ -1210,12 +1210,12 @@ impl LedgerStatus {
 }
 
 impl LedgerState {
-    pub fn get_utxo(&self, addr: TxoSID) -> Option<AuthenticatedUtxo> {
-        let utxo = self.status.get_utxo(addr);
+    pub fn get_utxo(&self, id: TxoSID) -> Option<AuthenticatedUtxo> {
+        let utxo = self.status.get_utxo(id);
         if let Some(utxo) = utxo.cloned() {
-            let txn_location = *self.status.txo_to_txn_location.get(&addr).unwrap();
+            let txn_location = *self.status.txo_to_txn_location.get(&id).unwrap();
             let authenticated_txn = self.get_transaction(txn_location.0).unwrap();
-            let authenticated_spent_status = self.get_utxo_status(addr);
+            let authenticated_spent_status = self.get_utxo_status(id);
             let state_commitment_data =
                 self.status.state_commitment_data.as_ref().unwrap().clone();
             let utxo_location = txn_location.1;
