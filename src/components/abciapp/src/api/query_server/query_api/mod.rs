@@ -13,7 +13,6 @@ use ledger::{
         b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
         TxnSID, TxoSID, XfrAddress,
     },
-    inp_fail, ser_fail,
     staking::ops::mint_fra::MintEntry,
 };
 use log::info;
@@ -646,7 +645,7 @@ impl RestfulQueryServerAccess for ActixQueryServerClient {
             self.port,
             QueryServerRoutes::GetOwnerMemo.with_arg(&txo_sid)
         );
-        let text = http_get_request(&query).c(d!(inp_fail!()))?;
-        serde_json::from_str::<Option<OwnerMemo>>(&text).c(d!(ser_fail!()))
+        let text = http_get_request(&query).c(d!())?;
+        serde_json::from_str::<Option<OwnerMemo>>(&text).c(d!())
     }
 }

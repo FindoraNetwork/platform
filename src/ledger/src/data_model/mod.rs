@@ -1,30 +1,24 @@
 #![allow(clippy::field_reassign_with_default)]
 #![allow(clippy::assertions_on_constants)]
 
-pub mod errors;
-
+mod __trash__;
 mod effects;
-mod policy_structs;
 
 pub use effects::*;
 
-use crate::{
-    des_fail, ser_fail,
-    staking::{
-        is_coinbase_tx,
-        ops::{
-            claim::ClaimOps, delegation::DelegationOps,
-            fra_distribution::FraDistributionOps, governance::GovernanceOps,
-            mint_fra::MintFraOps, undelegation::UnDelegationOps,
-            update_staker::UpdateStakerOps, update_validator::UpdateValidatorOps,
-        },
+use crate::staking::{
+    is_coinbase_tx,
+    ops::{
+        claim::ClaimOps, delegation::DelegationOps,
+        fra_distribution::FraDistributionOps, governance::GovernanceOps,
+        mint_fra::MintFraOps, undelegation::UnDelegationOps,
+        update_staker::UpdateStakerOps, update_validator::UpdateValidatorOps,
     },
 };
+use __trash__::{Policy, PolicyGlobals, TxnPolicyData};
 use bitmap::SparseMap;
 use cryptohash::{sha256::Digest as BitDigest, HashValue};
-use errors::PlatformError;
 use lazy_static::lazy_static;
-use policy_structs::{Policy, PolicyGlobals, TxnPolicyData};
 use rand::Rng;
 use rand_chacha::{rand_core, ChaChaRng};
 use rand_core::{CryptoRng, RngCore, SeedableRng};
@@ -141,7 +135,7 @@ impl AssetTypeCode {
         debug_assert!(UTF8_ASSET_TYPES_WORK);
         let composed = s.to_string().nfc().collect::<String>().into_bytes();
         if AssetTypeCode::will_truncate(&composed) {
-            return Err(eg!(PlatformError::InputsError(None)));
+            return Err(eg!());
         }
         Ok(AssetTypeCode::new_from_vec(composed))
     }
@@ -174,7 +168,7 @@ impl AssetTypeCode {
                         return Ok(utf8_str.to_string());
                     }
                     Err(e) => {
-                        return Err(eg!(ser_fail!(e)));
+                        return Err(eg!((e)));
                     }
                 };
             }
@@ -200,7 +194,7 @@ impl AssetTypeCode {
                     val: ZeiAssetType(buf),
                 })
             }
-            Err(e) => Err(eg!(des_fail!(format!(
+            Err(e) => Err(eg!((format!(
                 "Failed to deserialize base64 '{}': {}",
                 b64, e
             )))),
@@ -237,7 +231,7 @@ impl Code {
             let buf = <[u8; 16]>::try_from(bin.as_slice()).c(d!())?;
             Ok(Self { val: buf })
         } else {
-            Err(eg!(des_fail!()))
+            Err(eg!())
         }
     }
     pub fn to_base64(self) -> String {
@@ -400,11 +394,11 @@ impl SignatureRules {
         for key in keyset.iter() {
             sum = sum
                 .checked_add(*weight_map.get(&key[..]).unwrap_or(&0))
-                .c(d!(PlatformError::InputsError(None)))?;
+                .c(d!())?;
         }
 
         if sum < self.threshold {
-            return Err(eg!(PlatformError::InputsError(None)));
+            return Err(eg!());
         }
         Ok(())
     }
@@ -680,7 +674,7 @@ impl TransferAssetBody {
         let num_outputs = output_records.len();
 
         if num_inputs == 0 {
-            return Err(eg!(PlatformError::InputsError(None)));
+            return Err(eg!());
         }
 
         // If no policies specified, construct set of empty policies
@@ -700,13 +694,11 @@ impl TransferAssetBody {
             || num_outputs != policies.outputs_tracing_policies.len()
             || num_outputs != policies.outputs_sig_commitments.len()
         {
-            return Err(eg!(PlatformError::InputsError(None)));
+            return Err(eg!());
         }
 
-        let transfer = Box::new(
-            gen_xfr_body(prng, input_records, output_records)
-                .c(d!(PlatformError::ZeiError(None)))?,
-        );
+        let transfer =
+            Box::new(gen_xfr_body(prng, input_records, output_records).c(d!())?);
         let outputs = transfer
             .outputs
             .iter()
@@ -867,7 +859,7 @@ impl TransferAsset {
         sig: IndexedSignature<TransferAssetBody>,
     ) -> Result<()> {
         if !sig.verify(&self.body) {
-            return Err(eg!(PlatformError::InputsError(None)));
+            return Err(eg!());
         }
         self.body_signatures.push(sig);
         Ok(())
@@ -1504,8 +1496,7 @@ impl Transaction {
         public_key: &XfrPublicKey,
         sig: &SignatureOf<TransactionBody>,
     ) -> Result<()> {
-        sig.verify(public_key, &self.body)
-            .c(d!(PlatformError::ZeiError(None)))
+        sig.verify(public_key, &self.body).c(d!())
     }
 
     pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
@@ -1562,7 +1553,7 @@ impl Transaction {
                 }
             }
         }
-        Err(eg!(PlatformError::InputsError(None)))
+        Err(eg!())
     }
 }
 
@@ -1654,7 +1645,7 @@ mod tests {
             let result = AssetTypeCode::new_from_utf8_safe(code);
             match result {
                 Err(e) => {
-                    err_eq!(PlatformError::InputsError(None), e);
+                    err_eq!("...", e);
                 }
                 _ => panic!("InputsError expected."),
             }

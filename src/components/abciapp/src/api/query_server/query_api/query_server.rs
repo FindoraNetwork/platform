@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 use ledger::{
-    data_model::{errors::PlatformError, *},
+    data_model::*,
     staking::{ops::mint_fra::MintEntry, BlockHeight},
     store::*,
 };
@@ -21,15 +21,6 @@ lazy_static! {
 
 pub type TxnIDHash = (TxnSID, String);
 type Issuances = Vec<Arc<(TxOutput, Option<OwnerMemo>)>>;
-
-macro_rules! fail {
-    () => {
-        PlatformError::QueryServerError(None)
-    };
-    ($s:expr) => {
-        PlatformError::QueryServerError(Some($s.to_string()))
-    };
-}
 
 pub struct QueryServer<U>
 where
@@ -319,13 +310,13 @@ where
             match input {
                 TxoRef::Relative(_) => {} // Relative utxos were never cached so no need to do anything here
                 TxoRef::Absolute(txo_sid) => {
-                    let address = self.utxos_to_map_index.get(&txo_sid).c(d!(fail!(
+                    let address = self.utxos_to_map_index.get(&txo_sid).c(d!(
                         "Attempting to remove owned txo of address that isn't cached"
-                    )))?;
+                    ))?;
                     let hash_set = self
                         .addresses_to_utxos
                         .get_mut(&address)
-                        .c(d!(fail!("No txos stored for this address")))?;
+                        .c(d!("No txos stored for this address"))?;
                     hash_set.remove(&txo_sid);
                 }
             }

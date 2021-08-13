@@ -1,6 +1,5 @@
 use crate::{
-    data_model::{errors::PlatformError, *},
-    inp_fail,
+    data_model::*,
     staking::{
         self,
         ops::{
@@ -10,7 +9,6 @@ use crate::{
             update_validator::UpdateValidatorOps,
         },
     },
-    zei_fail,
 };
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -126,7 +124,7 @@ impl TxnEffect {
             macro_rules! check_nonce {
                 ($i: expr) => {
                     if $i.get_nonce() != txn.body.no_replay_token {
-                        return Err(eg!(inp_fail!("nonce does not match")));
+                        return Err(eg!(("nonce does not match")));
                     }
                 };
             }
@@ -183,9 +181,7 @@ impl TxnEffect {
                     // (1)
                     // TODO(joe?): like the note in data_model, should the public key
                     // used here match `def.body.asset.issuer`?
-                    def.signature
-                        .verify(&def.pubkey.key, &def.body)
-                        .c(d!(zei_fail!()))?;
+                    def.signature.verify(&def.pubkey.key, &def.body).c(d!())?;
 
                     let code = def.body.asset.code;
                     let token = AssetType {
@@ -197,7 +193,7 @@ impl TxnEffect {
                     if new_asset_codes.contains_key(&code)
                         || new_issuance_nums.contains_key(&code)
                     {
-                        return Err(eg!(inp_fail!()));
+                        return Err(eg!());
                     }
 
                     issuance_keys.insert(code, token.properties.issuer);
@@ -219,7 +215,7 @@ impl TxnEffect {
                 //          - Fully checked here
                 Operation::IssueAsset(iss) => {
                     if iss.body.num_outputs != iss.body.records.len() {
-                        return Err(eg!(inp_fail!()));
+                        return Err(eg!());
                     }
 
                     debug_assert!(iss.body.num_outputs == iss.body.records.len());
@@ -236,20 +232,18 @@ impl TxnEffect {
 
                     if let Some(last_num) = iss_nums.last() {
                         if seq_num <= *last_num {
-                            return Err(eg!(inp_fail!()));
+                            return Err(eg!());
                         }
                     }
                     iss_nums.push(seq_num);
 
                     // (2)
-                    iss.signature
-                        .verify(&iss.pubkey.key, &iss.body)
-                        .c(d!(zei_fail!()))?;
+                    iss.signature.verify(&iss.pubkey.key, &iss.body).c(d!())?;
 
                     // (3)
                     if let Some(prior_key) = issuance_keys.get(&code) {
                         if iss.pubkey != *prior_key {
-                            return Err(eg!(inp_fail!()));
+                            return Err(eg!());
                         }
                     } else {
                         issuance_keys.insert(code, iss.pubkey);
@@ -259,7 +253,7 @@ impl TxnEffect {
                     for (output, _) in iss.body.records.iter() {
                         // (4)
                         if output.record.public_key != iss.pubkey.key {
-                            return Err(eg!(inp_fail!()));
+                            return Err(eg!());
                         }
 
                         // ONLY SIMPLE TxOutputs!
@@ -270,14 +264,14 @@ impl TxnEffect {
                                 lien: None,
                             })
                         {
-                            return Err(eg!(inp_fail!()));
+                            return Err(eg!());
                         }
 
                         // (5)
                         if output.record.asset_type
                             != XfrAssetType::NonConfidential(code.val)
                         {
-                            return Err(eg!(inp_fail!()));
+                            return Err(eg!());
                         }
 
                         if let XfrAmount::NonConfidential(amt) = output.record.amount {
@@ -310,10 +304,10 @@ impl TxnEffect {
                 //            to have lien assignments
                 Operation::TransferAsset(trn) => {
                     if trn.body.inputs.len() != trn.body.transfer.inputs.len() {
-                        return Err(eg!(inp_fail!()));
+                        return Err(eg!());
                     }
                     if trn.body.outputs.len() != trn.body.transfer.outputs.len() {
-                        return Err(eg!(inp_fail!()));
+                        return Err(eg!());
                     }
                     debug_assert!(
                         trn.body.inputs.len() == trn.body.transfer.inputs.len()
@@ -330,7 +324,7 @@ impl TxnEffect {
                         .zip(trn.body.transfer.outputs.iter())
                     {
                         if output.record != *record {
-                            return Err(eg!(inp_fail!()));
+                            return Err(eg!());
                         }
                     }
 
@@ -338,7 +332,7 @@ impl TxnEffect {
                     if !trn.body.lien_assignments.is_empty()
                         && trn.body.transfer_type != TransferType::Standard
                     {
-                        return Err(eg!(inp_fail!()));
+                        return Err(eg!());
                     }
                     let (lien_inputs, lien_outputs) = {
                         let mut inps = trn
@@ -363,7 +357,7 @@ impl TxnEffect {
                                     *ele_out = Some(hash);
                                 }
                                 _ => {
-                                    return Err(eg!(inp_fail!()));
+                                    return Err(eg!());
                                 }
                             }
                         }
@@ -377,7 +371,7 @@ impl TxnEffect {
                             // (1a) all body signatures are valid
                             for sig in &trn.body_signatures {
                                 if !trn.body.verify_body_signature(sig) {
-                                    return Err(eg!(inp_fail!()));
+                                    return Err(eg!());
                                 }
                                 if let Some(input_idx) = sig.input_idx {
                                     let sig_keys = cosig_keys
@@ -396,7 +390,7 @@ impl TxnEffect {
                                 if !input_keys
                                     .contains(&record.public_key.zei_to_bytes())
                                 {
-                                    return Err(eg!(inp_fail!()));
+                                    return Err(eg!());
                                 }
                                 cosig_keys
                                     .entry((op_idx, input_idx))
@@ -410,7 +404,7 @@ impl TxnEffect {
                                 &trn.body.transfer,
                                 &policies,
                             )
-                            .c(d!(PlatformError::ZeiError(None)))?;
+                            .c(d!())?;
 
                             // Track policies that each asset was validated under
                             for (input_policies, record) in trn
@@ -440,7 +434,7 @@ impl TxnEffect {
                                     if prev_policies.is_some()
                                         && prev_policies.c(d!())? != *input_policies
                                     {
-                                        return Err(eg!(inp_fail!()));
+                                        return Err(eg!());
                                     }
                                 }
                             }
@@ -468,19 +462,19 @@ impl TxnEffect {
                             TxoRef::Relative(offs) => {
                                 // (2).(a)
                                 if offs as usize >= txo_count {
-                                    return Err(eg!(inp_fail!()));
+                                    return Err(eg!());
                                 }
                                 let ix = (txo_count - 1) - (offs as usize);
                                 match &txos[ix] {
                                     None => {
-                                        return Err(eg!(inp_fail!()));
+                                        return Err(eg!());
                                     }
                                     Some(txo) => {
                                         // (2).(b)
                                         if &txo.record != record
                                             || txo.lien != lien.cloned()
                                         {
-                                            return Err(eg!(inp_fail!()));
+                                            return Err(eg!());
                                         }
                                         internally_spent_txos.push(txo.clone());
                                     }
@@ -490,7 +484,7 @@ impl TxnEffect {
                             TxoRef::Absolute(txo_sid) => {
                                 // (2).(a), partially
                                 if input_txos.contains_key(&txo_sid) {
-                                    return Err(eg!(inp_fail!()));
+                                    return Err(eg!());
                                 }
 
                                 input_txos.insert(
@@ -538,7 +532,7 @@ impl TxnEffect {
                 Operation::UpdateMemo(update_memo) => {
                     let pk = update_memo.pubkey;
                     if txn.body.no_replay_token != update_memo.body.no_replay_token {
-                        return Err(eg!(inp_fail!(
+                        return Err(eg!((
                             "compute_effect: txn body token not equal to the token for this UpdateMemo operation"
                         )));
                     }
@@ -546,7 +540,7 @@ impl TxnEffect {
                     update_memo
                         .signature
                         .verify(&pk, &update_memo.body)
-                        .c(d!(zei_fail!()))?;
+                        .c(d!())?;
 
                     memo_updates.push((
                         update_memo.body.asset_type,
@@ -647,7 +641,7 @@ impl BlockEffect {
         // Check that no inputs are consumed twice
         for (input_sid, _) in txn_effect.input_txos.iter() {
             if self.input_txos.contains_key(&input_sid) {
-                return Err(eg!(inp_fail!()));
+                return Err(eg!());
             }
         }
 
@@ -658,7 +652,7 @@ impl BlockEffect {
                 if self.new_asset_codes.contains_key(&type_code)
                     || self.new_issuance_nums.contains_key(&type_code)
                 {
-                    return Err(eg!(inp_fail!()));
+                    return Err(eg!());
                 }
             }
 
@@ -666,7 +660,7 @@ impl BlockEffect {
                 if self.new_asset_codes.contains_key(&type_code)
                     || self.new_issuance_nums.contains_key(&type_code)
                 {
-                    return Err(eg!(inp_fail!()));
+                    return Err(eg!());
                 }
 
                 // Debug-check that issued assets are registered in `issuance_keys`
@@ -677,7 +671,7 @@ impl BlockEffect {
             // Ensure that each asset's memo can only be updated once per block
             for (type_code, _, _) in txn_effect.memo_updates.iter() {
                 if self.memo_updates.contains_key(&type_code) {
-                    return Err(eg!(inp_fail!()));
+                    return Err(eg!());
                 }
             }
         }
@@ -687,7 +681,7 @@ impl BlockEffect {
         // Note that we need to check here as well as in LedgerStatus::check_txn_effect
         for txn in self.txns.iter() {
             if txn.body.no_replay_token == no_replay_token {
-                return Err(eg!(PlatformError::InputsError(None)));
+                return Err(eg!());
             }
         }
 
