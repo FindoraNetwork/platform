@@ -26,7 +26,6 @@ use std::{
     collections::{BTreeMap, HashSet},
     sync::Arc,
 };
-use utils::MetricsRenderer;
 use zei::{
     api::anon_creds::ACCommitment,
     setup::PublicParams,
@@ -45,30 +44,14 @@ use zei::{
 lazy_static! {
     static ref LEDGER: Arc<RwLock<LedgerState>> =
         Arc::new(RwLock::new(LedgerState::test_ledger()));
-    static ref QS: Arc<RwLock<QueryServer<PromHandle>>> =
-        Arc::new(RwLock::new(create_server()));
+    static ref QS: Arc<RwLock<QueryServer>> = Arc::new(RwLock::new(create_server()));
 }
 
-struct PromHandle(metrics_exporter_prometheus::PrometheusHandle);
-
-impl PromHandle {
-    pub fn new(h: PrometheusHandle) -> PromHandle {
-        PromHandle(h)
-    }
-}
-
-impl MetricsRenderer for PromHandle {
-    fn rendered(&self) -> String {
-        self.0.render()
-    }
-}
-
-fn create_server() -> QueryServer<PromHandle> {
+fn create_server() -> QueryServer {
     let builder = metrics_exporter_prometheus::PrometheusBuilder::new();
     let recorder = builder.build();
-    let handle = PromHandle::new(recorder.handle());
 
-    let mut qs = QueryServer::new(LEDGER.clone(), handle);
+    let mut qs = QueryServer::new(LEDGER.clone());
     qs
 }
 

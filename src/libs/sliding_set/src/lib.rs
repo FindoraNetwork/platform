@@ -1,4 +1,5 @@
 #![deny(warnings)]
+// #![deny(missing_docs)]
 
 use ruc::*;
 use serde::{Deserialize, Serialize};

@@ -64,8 +64,11 @@ pub fn generate_tendermint_config(mode: InitMode, path: &str) -> Result<()> {
                 "create_empty_blocks_interval = \"0s\"",
                 "create_empty_blocks_interval = \"15s\"",
             );
-            str::replace(&cebi, "persistent_peers = \"\"",
-                "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@prod-testnet-us-west-2-sentry-000-public.prod.findora.org:26656\"")
+            str::replace(
+                &cebi,
+                "persistent_peers = \"\"",
+                "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@prod-testnet-us-west-2-sentry-000-public.prod.findora.org:26656\"",
+            )
         }
         InitMode::Mainnet => {
             let cebi = str::replace(
@@ -73,8 +76,11 @@ pub fn generate_tendermint_config(mode: InitMode, path: &str) -> Result<()> {
                 "create_empty_blocks_interval = \"0s\"",
                 "create_empty_blocks_interval = \"15s\"",
             );
-            str::replace(&cebi, "persistent_peers = \"\"",
-                "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@prod-mainnet-us-west-2-sentry-000-public.prod.findora.org:26656\"")
+            str::replace(
+                &cebi,
+                "persistent_peers = \"\"",
+                "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@prod-mainnet-us-west-2-sentry-000-public.prod.findora.org:26656\"",
+            )
         }
         InitMode::Qa01 => {
             let cebi = str::replace(
@@ -82,8 +88,11 @@ pub fn generate_tendermint_config(mode: InitMode, path: &str) -> Result<()> {
                 "create_empty_blocks_interval = \"0s\"",
                 "create_empty_blocks_interval = \"15s\"",
             );
-            str::replace(&cebi, "persistent_peers = \"\"",
-                "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@dev-qa01-us-west-2-sentry-000-public.dev.findora.org:26656\"")
+            str::replace(
+                &cebi,
+                "persistent_peers = \"\"",
+                "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@dev-qa01-us-west-2-sentry-000-public.dev.findora.org:26656\"",
+            )
         }
         InitMode::Dev => rpc_laddr,
     };

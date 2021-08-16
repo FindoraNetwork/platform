@@ -3,40 +3,16 @@ use super::{
     QueryApi,
 };
 use ledger::store::LedgerState;
-use metrics_exporter_prometheus::PrometheusHandle;
 use parking_lot::RwLock;
 use ruc::*;
 use std::{sync::Arc, thread};
-use utils::MetricsRenderer;
-
-pub struct PromHandle(metrics_exporter_prometheus::PrometheusHandle);
-
-impl PromHandle {
-    pub fn new(h: PrometheusHandle) -> PromHandle {
-        PromHandle(h)
-    }
-}
-
-impl MetricsRenderer for PromHandle {
-    fn rendered(&self) -> String {
-        self.0.render()
-    }
-}
 
 pub fn start_query_server(
     ledger: Arc<RwLock<LedgerState>>,
     host: &str,
     port: u16,
-) -> Result<Arc<RwLock<QueryServer<PromHandle>>>> {
-    // Extract prometheus handle
-    let builder = metrics_exporter_prometheus::PrometheusBuilder::new();
-    let recorder = builder.build();
-    let handle = PromHandle::new(recorder.handle());
-
-    // Register recorder
-    let _ = metrics::set_boxed_recorder(Box::new(recorder));
-
-    let qs = Arc::new(RwLock::new(QueryServer::new(ledger, handle)));
+) -> Result<Arc<RwLock<QueryServer>>> {
+    let qs = Arc::new(RwLock::new(QueryServer::new(ledger)));
     QueryApi::create(Arc::clone(&qs), host, port)
         .c(d!())
         .map(|_| {

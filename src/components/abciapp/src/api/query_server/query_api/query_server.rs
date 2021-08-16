@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 use ledger::{
-    data_model::{errors::PlatformError, *},
+    data_model::*,
     staking::{ops::mint_fra::MintEntry, BlockHeight},
     store::*,
 };
@@ -11,7 +11,6 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
-use utils::MetricsRenderer;
 use zei::xfr::structs::OwnerMemo;
 
 lazy_static! {
@@ -22,19 +21,7 @@ lazy_static! {
 pub type TxnIDHash = (TxnSID, String);
 type Issuances = Vec<Arc<(TxOutput, Option<OwnerMemo>)>>;
 
-macro_rules! fail {
-    () => {
-        PlatformError::QueryServerError(None)
-    };
-    ($s:expr) => {
-        PlatformError::QueryServerError(Some($s.to_string()))
-    };
-}
-
-pub struct QueryServer<U>
-where
-    U: MetricsRenderer,
-{
+pub struct QueryServer {
     committed_state: Arc<RwLock<LedgerState>>,
     addresses_to_utxos: HashMap<XfrAddress, HashSet<TxoSID>>,
     related_transactions: HashMap<XfrAddress, HashSet<TxnSID>>, // Set of transactions related to a ledger address
@@ -50,15 +37,11 @@ where
     txo_to_txnid: HashMap<TxoSID, TxnIDHash>, // txo(spent, unspent) to authenticated txn (sid, hash)
     txn_sid_to_hash: HashMap<TxnSID, String>, // txn sid to txn hash
     txn_hash_to_sid: HashMap<String, TxnSID>, // txn hash to txn sid
-    metrics_renderer: U,
     app_block_cnt: usize,
 }
 
-impl<U> QueryServer<U>
-where
-    U: MetricsRenderer,
-{
-    pub fn new(ledger: Arc<RwLock<LedgerState>>, metrics_renderer: U) -> QueryServer<U> {
+impl QueryServer {
+    pub fn new(ledger: Arc<RwLock<LedgerState>>) -> QueryServer {
         QueryServer {
             committed_state: ledger,
             addresses_to_utxos: map! {},
@@ -75,13 +58,8 @@ where
             txo_to_txnid: map! {},
             txn_sid_to_hash: map! {},
             txn_hash_to_sid: map! {},
-            metrics_renderer,
             app_block_cnt: 0,
         }
-    }
-
-    pub fn render(&self) -> String {
-        self.metrics_renderer.rendered()
     }
 
     // Returns the set of records issued by a certain key.
@@ -319,13 +297,13 @@ where
             match input {
                 TxoRef::Relative(_) => {} // Relative utxos were never cached so no need to do anything here
                 TxoRef::Absolute(txo_sid) => {
-                    let address = self.utxos_to_map_index.get(&txo_sid).c(d!(fail!(
+                    let address = self.utxos_to_map_index.get(&txo_sid).c(d!(
                         "Attempting to remove owned txo of address that isn't cached"
-                    )))?;
+                    ))?;
                     let hash_set = self
                         .addresses_to_utxos
                         .get_mut(&address)
-                        .c(d!(fail!("No txos stored for this address")))?;
+                        .c(d!("No txos stored for this address"))?;
                     hash_set.remove(&txo_sid);
                 }
             }

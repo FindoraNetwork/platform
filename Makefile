@@ -168,30 +168,30 @@ wasm:
 	tar -zcpf $(WASM_PKG) src/components/wasm/pkg
 
 single:
-	@./scripts/devnet/stopnodes.sh
-	@./scripts/devnet/resetsingle.sh
-	@./scripts/devnet/startsingle.sh
+	@./tools/devnet/stopnodes.sh
+	@./tools/devnet/resetsingle.sh
+	@./tools/devnet/startsingle.sh
 
 devnet:
-	@./scripts/devnet/stopnodes.sh
-	@./scripts/devnet/resetnodes.sh 20 1
-	@./scripts/devnet/startnodes.sh
+	@./tools/devnet/stopnodes.sh
+	@./tools/devnet/resetnodes.sh 20 1
+	@./tools/devnet/startnodes.sh
 
 debug_env: stop_debug_env build_release_debug
 	@- rm -rf $(LEDGER_DIR)
 	@ mkdir $(LEDGER_DIR)
 	@ cp tools/debug_env.tar.gz $(LEDGER_DIR)/
 	@ cd $(LEDGER_DIR) && tar -xpf debug_env.tar.gz && mv debug_env devnet
-	@ ./scripts/devnet/startnodes.sh
+	@ ./tools/devnet/startnodes.sh
 
 run_staking_demo:
 	bash tools/staking/demo.sh
 
 start_debug_env:
-	./scripts/devnet/startnodes.sh
+	./tools/devnet/startnodes.sh
 
 stop_debug_env:
-	@./scripts/devnet/stopnodes.sh
+	@./tools/devnet/stopnodes.sh
 
 # ci_build_image:
 # 	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \
@@ -241,14 +241,14 @@ ifeq ($(ENV),release)
 endif
 
 
-####@./scripts/devnet/snapshot.sh <user_nick> <password> <token_name> <max_units> <genesis_issuance> <memo> <memo_updatable>
+####@./tools/devnet/snapshot.sh <user_nick> <password> <token_name> <max_units> <genesis_issuance> <memo> <memo_updatable>
 snapshot:
-	@./scripts/devnet/snapshot.sh Findora my_pass FRA 21210000000000000 21000000000000000 my_memo N
+	@./tools/devnet/snapshot.sh Findora my_pass FRA 21210000000000000 21000000000000000 my_memo N
 
 network:
-	@./scripts/devnet/startnetwork.sh Findora my_pass FRA 21210000000000000 21000000000000000 my_memo N
+	@./tools/devnet/startnetwork.sh Findora my_pass FRA 21210000000000000 21000000000000000 my_memo N
 
-####@./scripts/devnet/resetnodes.sh <num_of_validator_nodes> <num_of_normal_nodes>
+####@./tools/devnet/resetnodes.sh <num_of_validator_nodes> <num_of_normal_nodes>
 mainnet:
-	@./scripts/devnet/stopnodes.sh
-	@./scripts/devnet/resetnodes.sh 4 4
+	@./tools/devnet/stopnodes.sh
+	@./tools/devnet/resetnodes.sh 4 4

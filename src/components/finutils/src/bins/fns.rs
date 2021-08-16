@@ -70,32 +70,22 @@ fn run() -> Result<()> {
     let subcmd_show = SubCommand::with_name("show")
         .about("View Validator status and accumulated rewards");
     let subcmd_setup = SubCommand::with_name("setup")
-        .arg_from_usage(
-            "-S, --serv-addr=[URL/IP] 'a fullnode address of Findora Network'",
-        )
-        .arg_from_usage(
-            "-O, --owner-mnemonic-path=[Path], 'storage path of your mnemonic words'",
-        )
-        .arg_from_usage(
-            "-K, --validator-key=[Path], 'path to the tendermint keys of your validator node'",
-        )
+        .arg_from_usage("-S, --serv-addr=[URL/IP] 'a fullnode address of Findora Network'")
+        .arg_from_usage("-O, --owner-mnemonic-path=[Path], 'storage path of your mnemonic words'")
+        .arg_from_usage("-K, --validator-key=[Path], 'path to the tendermint keys of your validator node'")
         .about("Setup environment variables for staking transactions ");
     let subcmd_transfer = SubCommand::with_name("transfer")
-        .arg_from_usage(
-            "-f, --from-seckey=[SecKey] 'base64-formated `XfrPrivateKey` of the receiver'",
-        )
-        .arg_from_usage(
-            "-t, --to-pubkey=[PubKey] 'base64-formated `XfrPublicKey` of the receiver'",
-        )
+        .arg_from_usage("-f, --from-seckey=[SecKey] 'base64-formated `XfrPrivateKey` of the receiver'")
+        .arg_from_usage("-t, --to-pubkey=[PubKey] 'base64-formated `XfrPublicKey` of the receiver'")
         .arg(
             Arg::with_name("to-wallet-address")
-            .short("T")
-            .long("to-wallet-address")
-            .takes_value(true)
-            .value_name("Wallet Address")
-            .help("fra prefixed address of FindoraNetwork")
-            .conflicts_with("to-pubkey")
-            )
+                .short("T")
+                .long("to-wallet-address")
+                .takes_value(true)
+                .value_name("Wallet Address")
+                .help("fra prefixed address of FindoraNetwork")
+                .conflicts_with("to-pubkey")
+        )
         .arg_from_usage("-n, --amount=<Amount> 'how much FRA units to transfer'")
         .arg_from_usage("--confidential-amount 'mask the amount sent on the transaction log'")
         .arg_from_usage("--confidential-type 'mask the asset type sent on the transaction log'")

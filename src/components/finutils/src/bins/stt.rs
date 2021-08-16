@@ -20,6 +20,7 @@ use ledger::{
     },
     store::fra_gen_initial_tx,
 };
+use libutils::wallet;
 use ruc::*;
 use serde::Serialize;
 use std::{collections::BTreeMap, env};
@@ -28,9 +29,8 @@ use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 lazy_static! {
     static ref USER_LIST: BTreeMap<Name, User> = gen_user_list();
     static ref VALIDATOR_LIST: BTreeMap<Name, Validator> = gen_valiator_list();
-    static ref ROOT_KP: XfrKeyPair = pnk!(
-        libutils::wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC)
-    );
+    static ref ROOT_KP: XfrKeyPair =
+        pnk!(wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC));
 }
 
 const ROOT_MNEMONIC: &str = "zoo nerve assault talk depend approve mercy surge bicycle ridge dismiss satoshi boring opera next fat cinnamon valley office actor above spray alcohol giant";
@@ -148,9 +148,7 @@ fn run() -> Result<()> {
                 let target_pk = search_kp(receiver)
                     .c(d!())
                     .map(|kp| kp.get_pk())
-                    .or_else(|e| {
-                        libutils::wallet::public_key_from_base64(receiver).c(d!(e))
-                    })?;
+                    .or_else(|e| wallet::public_key_from_base64(receiver).c(d!(e)))?;
                 common::utils::transfer(owner_kp, &target_pk, am, false, false)
                     .c(d!())?;
             }
@@ -181,8 +179,7 @@ mod init {
 
     pub fn init() -> Result<()> {
         let root_kp =
-            libutils::wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC)
-                .c(d!())?;
+            wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC).c(d!())?;
 
         println!(">>> define and issue FRA...");
         common::utils::send_tx(&fra_gen_initial_tx(&root_kp)).c(d!())?;
@@ -246,8 +243,7 @@ mod issue {
 
     fn gen_issue_tx() -> Result<Transaction> {
         let root_kp =
-            libutils::wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC)
-                .c(d!())?;
+            wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC).c(d!())?;
 
         let mut builder = common::utils::new_tx_builder().c(d!())?;
 
@@ -388,8 +384,7 @@ fn print_info(
     user: Option<NameRef>,
 ) -> Result<()> {
     if show_root_mnemonic {
-        let kp = libutils::wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC)
-            .c(d!())?;
+        let kp = wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC).c(d!())?;
         println!(
             "\x1b[31;01mROOT MNEMONIC:\x1b[00m\n{}\nKeys: {}",
             ROOT_MNEMONIC,
@@ -454,7 +449,7 @@ fn gen_user_list() -> BTreeMap<Name, User> {
 
     (0..MNEMONIC_LIST.len())
         .map(|i| {
-            let keypair = pnk!(libutils::wallet::restore_keypair_from_mnemonic_default(
+            let keypair = pnk!(wallet::restore_keypair_from_mnemonic_default(
                 MNEMONIC_LIST[i]
             ));
             let pubkey = keypair.get_pk();
@@ -556,7 +551,7 @@ fn gen_valiator_list() -> BTreeMap<Name, Validator> {
     (0..NUM)
         .map(|i| {
             let td_addr = TD_ADDR_LIST[i].to_owned();
-            let keypair = pnk!(libutils::wallet::restore_keypair_from_mnemonic_default(
+            let keypair = pnk!(wallet::restore_keypair_from_mnemonic_default(
                 MNEMONIC_LIST[i]
             ));
             let pubkey = keypair.get_pk();
