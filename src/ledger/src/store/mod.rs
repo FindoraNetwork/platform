@@ -13,7 +13,7 @@ use ruc::*;
 use serde::{Deserialize, Serialize};
 use sliding_set::SlidingSet;
 use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     fs::{self, File, OpenOptions},
     io::{BufRead, BufReader, BufWriter, Write},
     mem,
@@ -56,6 +56,8 @@ pub struct LedgerStatus {
 
     // All currently-unspent TXOs
     utxos: BTreeMap<TxoSID, Utxo>,
+
+    owned_utxos: HashMap<XfrPublicKey, HashSet<TxoSID>>,
 
     // All spent TXOs
     pub spent_utxos: HashMap<TxoSID, Utxo>,
@@ -197,6 +199,7 @@ impl LedgerStatus {
             txn_path: txn_path.to_owned(),
             utxo_map_path: utxo_map_path.to_owned(),
             utxos: BTreeMap::new(),
+            owned_utxos: map! {},
             spent_utxos: map! {},
             txo_to_txn_location: map! {},
             issuance_amounts: map! {},
@@ -516,8 +519,10 @@ impl LedgerStatus {
         block.no_replay_tokens.clear();
 
         // Remove consumed UTXOs
-        for (inp_sid, _) in block.input_txos.drain() {
-            // Remove from ledger status
+        for (inp_sid, utxo) in block.input_txos.drain() {
+            if let Some(v) = self.owned_utxos.get_mut(&utxo.record.public_key) {
+                v.remove(&inp_sid);
+            }
             if let Some(v) = self.utxos.remove(&inp_sid) {
                 self.spent_utxos.insert(inp_sid, v);
             }
@@ -553,6 +558,10 @@ impl LedgerStatus {
                     let txo_sid = *next_txo;
                     next_txo.0 += 1;
                     if let Some(tx_output) = txo {
+                        self.owned_utxos
+                            .entry(tx_output.record.public_key)
+                            .or_insert_with(HashSet::new)
+                            .insert(txo_sid);
                         self.utxos.insert(txo_sid, Utxo(tx_output));
                         txn_utxo_sids.push(txo_sid);
                     }
@@ -1182,11 +1191,10 @@ impl LedgerState {
 impl LedgerStatus {
     #[allow(missing_docs)]
     pub fn get_owned_utxos(&self, addr: &XfrPublicKey) -> Vec<TxoSID> {
-        self.utxos
-            .iter()
-            .filter(|(_, utxo)| &utxo.0.record.public_key == addr)
-            .map(|(sid, _)| *sid)
-            .collect()
+        self.owned_utxos
+            .get(addr)
+            .map(|v| v.iter().cloned().collect())
+            .unwrap_or_default()
     }
 
     fn get_utxo(&self, id: TxoSID) -> Option<&Utxo> {
