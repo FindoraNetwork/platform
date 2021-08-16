@@ -1,4 +1,5 @@
 #![deny(warnings)]
+// #![deny(missing_docs)]
 
 use linear_map::LinearMap;
 use rand_core::{CryptoRng, RngCore};

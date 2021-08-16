@@ -4,6 +4,7 @@
 //!
 
 #![deny(warnings)]
+// #![deny(missing_docs)]
 #![allow(clippy::needless_borrow)]
 
 use cryptohash::sha256;

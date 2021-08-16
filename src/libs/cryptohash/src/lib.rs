@@ -1,4 +1,5 @@
 #![deny(warnings)]
+// #![deny(missing_docs)]
 
 use serde::{Deserialize, Serialize};
 pub const HASH_SIZE: usize = 32;

@@ -2,8 +2,11 @@
 //! # Old Policy Logics
 //!
 //! Keep this moduler for compatible reasons,
-//! **do NOT use any codes of this moduler** !!!
 //!
+//! **DO NOT USE any code of this moduler** !!!
+//!
+
+#![allow(missing_docs)]
 
 use crate::data_model::AssetTypeCode;
 use fixed::types::I20F12;

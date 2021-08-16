@@ -1,4 +1,5 @@
 #![deny(warnings)]
+// #![deny(missing_docs)]
 
 use cryptohash::sha256::Digest;
 use cryptohash::{sha256, Proof};

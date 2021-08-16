@@ -1,4 +1,5 @@
 #![deny(warnings)]
+// #![deny(missing_docs)]
 #![allow(clippy::upper_case_acronyms)]
 #![allow(dead_code)]
 #![allow(clippy::needless_borrow)]
