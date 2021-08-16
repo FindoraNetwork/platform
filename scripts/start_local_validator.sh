@@ -16,6 +16,20 @@ fi
 
 pkill -9 findorad || echo "no findorad found"
 
+rm -rf ${ROOTDIR}/findora ${ROOTDIR}/tendermint
+mkdir -p ${ROOTDIR}/findora ${ROOTDIR}/tendermint
+findorad init --${NET} --base-dir ${ROOTDIR}/tendermint
+echo \ '
+abci_host = "0.0.0.0"
+abci_port = "26658"
+tendermint_host = "0.0.0.0"
+tendermint_port = "26657"
+submission_host = "0.0.0.0"
+submission_port = "8669"
+ledger_host = "0.0.0.0"
+ledger_port = "8668"
+' > ${ROOTDIR}/findora/abci.toml
+
 findorad node \
   --base-dir ${ROOTDIR}/tendermint \
   --config ${ROOTDIR}/tendermint/config/config.toml \
