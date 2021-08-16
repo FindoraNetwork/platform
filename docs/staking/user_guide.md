@@ -32,40 +32,31 @@
 # instead of a raw node in production env
 # according to the official guidance of tendermint.
 
-# Many popular linux distribution such as Ubuntu 20.04 and MacOs ship with Python pre-installed.
-# To install `toml` tool, you need install pip first, a tool that install and manage software packages
-# for Python. To install toml, run in your shell:
+export ROOTDIR=/tmp/qa01-node
+rm -rf ${ROOTDIR}/findora ${ROOTDIR}/tendermint
+mkdir -p ${ROOTDIR}/findora ${ROOTDIR}/tendermint
+findorad init --qa01-net --base-dir ${ROOTDIR}/tendermint
+echo \
+'
+abci_host = "0.0.0.0"
+abci_port = "26658"
+tendermint_host = "0.0.0.0"
+tendermint_port = "26657"
+submission_host = "0.0.0.0"
+submission_port = "8669"
+ledger_host = "0.0.0.0"
+ledger_port = "8668"
+' > ${ROOTDIR}/findora/abci.toml
 
-- pip install toml-cli
-
-#
-# add addresses of some existing nodes
-#   - <NODE ID>@https://prod-mainnet-us-west-2-sentry-000-public.prod.findora.org:<PORT>
-#   - <NODE ID>@https://prod-mainnet-us-west-2-sentry-001-public.prod.findora.org:<PORT>
-#
-rm -rf /tmp/findora ~/.tendermint
-findorad init
-
-curl https://dev-qa01.dev.findora.org:26657/genesis \
-    | jq -c '.result.genesis' \
-    | jq > ~/.tendermint/config/genesis.json
-
-toml unset --toml-path ~/.tendermint/config/config.toml tx_index.index_keys
-toml set   --toml-path ~/.tendermint/config/config.toml tx_index.index_all_keys true
-toml set   --toml-path ~/.tendermint/config/config.toml rpc.laddr tcp://0.0.0.0:26657
-
-toml set   --toml-path ~/.tendermint/config/config.toml consensus.create_empty_blocks_interval 15s
-toml set   --toml-path ~/.tendermint/config/config.toml p2p.persistent_peers \
-"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@dev-qa01-us-west-2-sentry-000-public.dev.findora.org:26656,\
-d0c6e3e1589695ae6d650b288caf2efe9a998a50@dev-qa01-us-west-2-sentry-001-public.dev.findora.org:26656"
-
-
-ENABLE_QUERY_SERVICE=true \
-ENABLE_LEDGER_SERVICE=true \
 findorad node \
-  --ledger-dir /tmp/findora \
-  --tendermint-node-key-config-path ~/.tendermint/config/priv_validator_key.json \
-  >> abci_validator.log 2>&1  &
+  --base-dir ${ROOTDIR}/tendermint \
+  --config ${ROOTDIR}/tendermint/config/config.toml \
+  --ledger-dir ${ROOTDIR}/findora \
+  --tendermint-host 0.0.0.0 \
+  --enable-ledger-service \
+  --enable-query-service \
+  --tendermint-node-key-config-path ${ROOTDIR}/tendermint/config/priv_validator_key.json \
+  >> findorad.log 2>&1 &
 
 # set the server address,
 # should be the address of an existing node
@@ -79,15 +70,14 @@ fns setup -S https://dev-qa01.dev.findora.org
 # NOTE:
 # you should use an existing key file instead of `echo` for security in your production env
 #
-# echo "[Your private mnemonic]" > $(pwd)/mnemonic.key
+# echo "[Your private mnemonic]" > ${ROOTDIR}/mnemonic.key
 #
-fns setup -O $(pwd)/mnemonic.key
+fns setup -O ${ROOTDIR}/mnemonic.key
 
 # set the tendermint public key of your node
-fns setup -K "${HOME}/.tendermint/config/priv_validator_key.json"
+fns setup -K "${ROOTDIR}/tendermint/config/priv_validator_key.json"
 
-# copy a staker_memo.example to current directory and change it.
-cp tools/staking/staker_memo.example staker_memo
+# save a `staker_memo` file to current directory, for example.
 cat staker_memo
 {
   "name": "ExampleNode",
