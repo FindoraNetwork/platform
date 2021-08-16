@@ -1,5 +1,3 @@
-pub mod errors;
-
 use crate::{
     data_model::*,
     staking::{Staking, FRA_TOTAL_AMOUNT},
