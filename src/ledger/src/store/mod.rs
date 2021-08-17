@@ -148,6 +148,8 @@ pub struct LedgerState {
     // `merkle` representing its hash.
     // TODO(joe): should this be in-memory?
     pub blocks: Vec<FinalizedBlock>,
+    // <tx id> => [<block id>, <tx idx in block>]
+    pub tx_to_block_location: HashMap<TxnSID, [usize; 2]>,
 
     // Bitmap tracing all the live TXOs
     utxo_map: BitMap,
@@ -788,6 +790,11 @@ impl LedgerState {
                 txn_log_fd.sync_data().c(d!())?;
             }
 
+            let block_idx = self.blocks.len();
+            tx_block.iter().enumerate().for_each(|(tx_idx, tx)| {
+                self.tx_to_block_location
+                    .insert(tx.tx_id, [block_idx, tx_idx]);
+            });
             self.blocks.push(FinalizedBlock {
                 txns: tx_block,
                 merkle_id: block_merkle_id,
@@ -1020,6 +1027,7 @@ impl LedgerState {
                 .c(d!())?,
             txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true).c(d!())?,
             blocks: Vec::new(),
+            tx_to_block_location: map! {},
             utxo_map: LedgerState::init_utxo_map(utxo_map_path, true).c(d!())?,
             txn_log: Some((
                 txn_path.into(),
@@ -1097,6 +1105,7 @@ impl LedgerState {
                 .c(d!())?,
             txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true).c(d!())?,
             blocks: Vec::new(),
+            tx_to_block_location: map! {},
             utxo_map: LedgerState::init_utxo_map(utxo_map_path, true).c(d!())?,
             txn_log: None,
             block_ctx: Some(BlockEffect::new()),
@@ -1376,23 +1385,18 @@ impl LedgerState {
         &self.status.staking
     }
 
-    pub fn get_transaction(&self, addr: TxnSID) -> Option<AuthenticatedTransaction> {
-        let mut ix: usize = addr.0;
-        for b in self.blocks.iter() {
-            match b.txns.get(ix) {
-                None => {
-                    ix -= b.txns.len();
-                }
-                v => {
+    pub fn get_transaction(&self, id: TxnSID) -> Option<AuthenticatedTransaction> {
+        if let Some([block_idx, tx_idx]) = self.tx_to_block_location.get(&id).copied() {
+            if let Some(b) = self.blocks.get(block_idx) {
+                if let Some(tx) = b.txns.get(tx_idx) {
                     // Unwrap is safe because if transaction is on ledger there must be a state commitment
                     let state_commitment_data =
                         self.status.state_commitment_data.as_ref().unwrap().clone();
                     let merkle = &self.txn_merkle;
                     // TODO log error and recover?
-                    let proof =
-                        ProofOf::new(merkle.get_proof(v.unwrap().merkle_id, 0).unwrap());
+                    let proof = ProofOf::new(merkle.get_proof(tx.merkle_id, 0).unwrap());
                     return Some(AuthenticatedTransaction {
-                        finalized_txn: v.unwrap().clone(),
+                        finalized_txn: tx.clone(),
                         txn_inclusion_proof: proof,
                         state_commitment_data: state_commitment_data.clone(),
                         state_commitment: state_commitment_data.compute_commitment(),
@@ -1402,6 +1406,7 @@ impl LedgerState {
         }
         None
     }
+
     pub fn get_block(&self, addr: BlockSID) -> Option<AuthenticatedBlock> {
         match self.blocks.get(addr.0) {
             None => None,
