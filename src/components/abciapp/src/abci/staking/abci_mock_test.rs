@@ -154,12 +154,13 @@ impl AbciMocker {
         &self,
         addr: &XfrPublicKey,
     ) -> BTreeMap<TxoSID, (Utxo, Option<OwnerMemo>)> {
-        self.0
+        pnk!(self
+            .0
             .la
             .read()
             .get_committed_state()
             .read()
-            .get_owned_utxos(addr)
+            .get_owned_utxos(addr))
     }
 
     fn get_owned_balance(&self, addr: &XfrPublicKey) -> u64 {

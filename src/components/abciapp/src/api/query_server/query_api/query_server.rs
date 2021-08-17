@@ -172,8 +172,8 @@ impl QueryServer {
                 return Ok(slice
                     .iter()
                     .map(|h| {
-                        if let Some(txn) = ledger.get_transaction(*h) {
-                            Some(txn.finalized_txn.txn)
+                        if let Ok(tx) = ruc::info!(ledger.get_transaction_light(*h)) {
+                            Some(tx.txn)
                         } else {
                             None
                         }
@@ -331,16 +331,15 @@ impl QueryServer {
             for (txn_sid, txo_sids) in
                 block.txns.iter().map(|v| (v.tx_id, v.txo_ids.as_slice()))
             {
-                let curr_txn =
-                    ledger.get_transaction(txn_sid).c(d!())?.finalized_txn.txn;
+                let curr_txn = ledger.get_transaction_light(txn_sid).c(d!())?.txn;
                 // get the transaction, ownership addresses, and memos associated with each transaction
                 let (addresses, owner_memos) = {
                     let addresses: Vec<XfrAddress> = txo_sids
                         .iter()
                         .map(|sid| XfrAddress {
                             key: ((ledger
-                                .get_utxo(*sid)
-                                .or_else(|| ledger.get_spent_utxo(*sid))
+                                .get_utxo_light(*sid)
+                                .or_else(|| ledger.get_spent_utxo_light(*sid))
                                 .unwrap()
                                 .utxo)
                                 .0)

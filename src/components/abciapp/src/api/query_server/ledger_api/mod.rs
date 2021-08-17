@@ -10,7 +10,7 @@ use finutils::api::{
 use ledger::{
     data_model::{
         AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData, TxnSID,
-        TxoSID, Utxo,
+        TxoSID, UnAuthenticatedUtxo, Utxo,
     },
     staking::{
         DelegationRwdDetail, DelegationState, Staking, TendermintAddr, UNBOND_BLOCK_CNT,
@@ -50,6 +50,26 @@ pub async fn query_utxo(
     let reader = data.read();
     if let Ok(txo_sid) = info.parse::<u64>() {
         if let Some(txo) = reader.get_utxo(TxoSID(txo_sid)) {
+            Ok(web::Json(txo))
+        } else {
+            Err(actix_web::error::ErrorNotFound(
+                "Specified txo does not currently exist.",
+            ))
+        }
+    } else {
+        Err(actix_web::error::ErrorBadRequest(
+            "Invalid txo sid encoding",
+        ))
+    }
+}
+
+pub async fn query_utxo_light(
+    data: web::Data<Arc<RwLock<LedgerState>>>,
+    info: web::Path<String>,
+) -> actix_web::Result<web::Json<UnAuthenticatedUtxo>> {
+    let reader = data.read();
+    if let Ok(txo_sid) = info.parse::<u64>() {
+        if let Some(txo) = reader.get_utxo_light(TxoSID(txo_sid)) {
             Ok(web::Json(txo))
         } else {
             Err(actix_web::error::ErrorNotFound(
@@ -132,8 +152,29 @@ pub async fn query_txn(
 ) -> actix_web::Result<String> {
     let reader = data.read();
     if let Ok(txn_sid) = info.parse::<usize>() {
-        if let Some(mut txn) = reader.get_transaction(TxnSID(txn_sid)) {
+        if let Ok(mut txn) = ruc::info!(reader.get_transaction(TxnSID(txn_sid))) {
             txn.finalized_txn.set_txo_id();
+            Ok(serde_json::to_string(&txn)?)
+        } else {
+            Err(actix_web::error::ErrorNotFound(
+                "Specified transaction does not exist.",
+            ))
+        }
+    } else {
+        Err(actix_web::error::ErrorBadRequest(
+            "Invalid txn sid encoding.",
+        ))
+    }
+}
+
+pub async fn query_txn_light(
+    data: web::Data<Arc<RwLock<LedgerState>>>,
+    info: web::Path<String>,
+) -> actix_web::Result<String> {
+    let reader = data.read();
+    if let Ok(txn_sid) = info.parse::<usize>() {
+        if let Ok(mut txn) = ruc::info!(reader.get_transaction_light(TxnSID(txn_sid))) {
+            txn.set_txo_id();
             Ok(serde_json::to_string(&txn)?)
         } else {
             Err(actix_web::error::ErrorNotFound(
@@ -585,17 +626,19 @@ async fn query_owned_utxos(
     utils::wallet::public_key_from_base64(owner.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log()))
-        .map(|pk| web::Json(data.read().get_owned_utxos(&pk)))
+        .map(|pk| web::Json(pnk!(data.read().get_owned_utxos(&pk))))
 }
 
 pub enum ApiRoutes {
     UtxoSid,
+    UtxoSidLight,
     UtxoSidList,
     AssetIssuanceNum,
     AssetToken,
     PublicKey,
     GlobalState,
     TxnSid,
+    TxnSidLight,
     GlobalStateVersion,
     OwnedUtxos,
     ValidatorList,
@@ -608,12 +651,14 @@ impl NetworkRoute for ApiRoutes {
     fn route(&self) -> String {
         let endpoint = match *self {
             ApiRoutes::UtxoSid => "utxo_sid",
+            ApiRoutes::UtxoSidLight => "utxo_sid_light",
             ApiRoutes::UtxoSidList => "utxo_sid_list",
             ApiRoutes::AssetIssuanceNum => "asset_issuance_num",
             ApiRoutes::AssetToken => "asset_token",
             ApiRoutes::PublicKey => "public_key",
             ApiRoutes::GlobalState => "global_state",
             ApiRoutes::TxnSid => "txn_sid",
+            ApiRoutes::TxnSidLight => "txn_sid_light",
             ApiRoutes::GlobalStateVersion => "global_state_version",
             ApiRoutes::OwnedUtxos => "owned_utxos",
             ApiRoutes::ValidatorList => "validator_list",
@@ -648,6 +693,10 @@ where
                 web::get().to(query_utxo),
             )
             .route(
+                &ApiRoutes::UtxoSidLight.with_arg_template("sid"),
+                web::get().to(query_utxo_light),
+            )
+            .route(
                 &ApiRoutes::UtxoSidList.with_arg_template("sid_list"),
                 web::get().to(query_utxos),
             )
@@ -670,6 +719,10 @@ where
             .route(
                 &ApiRoutes::TxnSid.with_arg_template("sid"),
                 web::get().to(query_txn),
+            )
+            .route(
+                &ApiRoutes::TxnSidLight.with_arg_template("sid"),
+                web::get().to(query_txn_light),
             )
             .route(
                 &ApiRoutes::GlobalStateVersion.with_arg_template("version"),
