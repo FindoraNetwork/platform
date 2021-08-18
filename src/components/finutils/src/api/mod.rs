@@ -28,10 +28,7 @@ pub struct Validator {
     power: u64,
     commission_rate: [u64; 2],
     accept_delegation: bool,
-    return_rate: [u128; 2],
-    expected_annualization: [u128; 2],
     rank: u64,
-    block_signed_cnt: u64,
     extra: StakerMemo,
 }
 
@@ -40,8 +37,6 @@ impl Validator {
     #[allow(missing_docs)]
     pub fn new(
         addr: TendermintAddr,
-        return_rate: [u128; 2],
-        expected_annualization: [u128; 2],
         rank: u64,
         accept_delegation: bool,
         v: &staking::Validator,
@@ -51,10 +46,7 @@ impl Validator {
             power: v.td_power,
             commission_rate: v.get_commission_rate(),
             accept_delegation,
-            return_rate,
-            expected_annualization,
             rank,
-            block_signed_cnt: v.signed_cnt,
             extra: v.memo.clone(),
         }
     }
