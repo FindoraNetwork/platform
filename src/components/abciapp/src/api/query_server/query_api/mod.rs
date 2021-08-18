@@ -59,9 +59,7 @@ async fn get_owner_memo(
     info: web::Path<u64>,
 ) -> actix_web::Result<web::Json<Option<OwnerMemo>>, actix_web::error::Error> {
     let query_server = data.read();
-    Ok(web::Json(
-        query_server.get_owner_memo(TxoSID(*info)).cloned(),
-    ))
+    Ok(web::Json(query_server.get_owner_memo(TxoSID(*info))))
 }
 
 #[allow(clippy::unnecessary_wraps)]
@@ -77,7 +75,7 @@ async fn get_owner_memo_batch(
     let hdr = data.read();
     let resp = ids
         .into_iter()
-        .map(|i| hdr.get_owner_memo(TxoSID(i)).cloned())
+        .map(|i| hdr.get_owner_memo(TxoSID(i)))
         .collect();
     Ok(web::Json(resp))
 }
@@ -97,7 +95,7 @@ async fn get_owned_utxos(
     .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
     let query_server = data.read();
     let sids = query_server.get_owned_utxo_sids(&XfrAddress { key });
-    Ok(web::Json(sids.cloned().unwrap_or_default()))
+    Ok(web::Json(sids.unwrap_or_default()))
 }
 
 pub enum QueryServerRoutes {
@@ -155,7 +153,7 @@ async fn get_created_assets(
     .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
     let query_server = data.read();
     let assets = query_server.get_created_assets(&IssuerPublicKey { key });
-    Ok(web::Json(assets.cloned().unwrap_or_default()))
+    Ok(web::Json(assets.unwrap_or_default()))
 }
 
 // Returns the list of assets traced by a public key
@@ -172,7 +170,7 @@ async fn get_traced_assets(
     .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
     let query_server = data.read();
     let assets = query_server.get_traced_assets(&IssuerPublicKey { key });
-    Ok(web::Json(assets.cloned().unwrap_or_default()))
+    Ok(web::Json(assets.unwrap_or_default()))
 }
 
 // Returns the list of records issued by a public key
@@ -222,7 +220,7 @@ async fn get_authenticated_txnid_hash(
 ) -> actix_web::Result<web::Json<TxnIDHash>> {
     let query_server = data.read();
     match query_server.get_authenticated_txnid(TxoSID(*info)) {
-        Some(txnid) => Ok(web::Json(txnid.clone())),
+        Some(txnid) => Ok(web::Json(txnid)),
         None => Err(actix_web::error::ErrorNotFound(
             "No authenticated transaction found. Please retry with correct sid.",
         )),
@@ -236,7 +234,7 @@ async fn get_transaction_hash(
 ) -> actix_web::Result<web::Json<String>> {
     let query_server = data.read();
     match query_server.get_transaction_hash(TxnSID(*info)) {
-        Some(hash) => Ok(web::Json(hash.clone())),
+        Some(hash) => Ok(web::Json(hash)),
         None => Err(actix_web::error::ErrorNotFound(
             "No transaction found. Please retry with correct sid.",
         )),
@@ -396,7 +394,7 @@ async fn get_related_txns(
     .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
     let query_server = data.read();
     let records = query_server.get_related_transactions(&XfrAddress { key });
-    Ok(web::Json(records.cloned().unwrap_or_default()))
+    Ok(web::Json(records.unwrap_or_default()))
 }
 
 // Returns the list of transfer transations associated with a given asset
@@ -407,7 +405,7 @@ async fn get_related_xfrs(
     let query_server = data.read();
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
         if let Some(records) = query_server.get_related_transfers(&token_code) {
-            Ok(web::Json(records.clone()))
+            Ok(web::Json(records))
         } else {
             Err(actix_web::error::ErrorNotFound(
                 "Specified asset definition does not currently exist.",

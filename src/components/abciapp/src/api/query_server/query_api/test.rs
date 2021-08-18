@@ -23,6 +23,7 @@ use ruc::*;
 use std::{
     borrow::BorrowMut,
     collections::{BTreeMap, HashSet},
+    path::Path,
     sync::Arc,
 };
 use zei::{
@@ -47,7 +48,8 @@ lazy_static! {
 }
 
 fn create_server() -> QueryServer {
-    let mut qs = QueryServer::new(LEDGER.clone());
+    let mut qs =
+        QueryServer::new(LEDGER.clone(), Some(utils::fresh_tmp_dir().as_path()));
     qs
 }
 
@@ -174,19 +176,19 @@ fn test_scene_1() -> Result<()> {
     assert_eq!(3, seq_id); // define,issue,mint_fra
 
     if let Some(issue_tx_hash) = QS.read().get_transaction_hash(issue_txns) {
-        assert_eq!(issue_tx_hash, &issue_tx.hash_tm().hex().to_uppercase());
+        assert_eq!(issue_tx_hash, issue_tx.hash_tm().hex().to_uppercase());
 
         if let Some(issue_txn_sid) = QS.read().get_transaction_sid(issue_tx_hash.clone())
         {
-            assert_eq!(issue_txn_sid, &issue_txns);
+            assert_eq!(issue_txn_sid, issue_txns);
         }
     }
 
     if let Some(mint_tx_hash) = QS.read().get_transaction_hash(mint_txns) {
-        assert_eq!(mint_tx_hash, &mint_tx.hash_tm().hex().to_uppercase());
+        assert_eq!(mint_tx_hash, mint_tx.hash_tm().hex().to_uppercase());
 
         if let Some(mint_txn_sid) = QS.read().get_transaction_sid(mint_tx_hash.clone()) {
-            assert_eq!(mint_txn_sid, &mint_txns);
+            assert_eq!(mint_txn_sid, mint_txns);
         }
     }
 
@@ -225,7 +227,7 @@ fn test_scene_1() -> Result<()> {
         .get_traced_assets(&IssuerPublicKey {
             key: x_kp.pub_key.clone()
         })
-        .cloned());
+        .clone());
     assert_eq!(atc_vec[0], code);
 
     let (_, result) = QS
@@ -247,16 +249,13 @@ fn test_scene_1() -> Result<()> {
     judgement_mint_result(result, vec![100, 900]);
 
     for (_, ts) in issue_txos.iter().chain(mint_txos.iter()).enumerate() {
-        let op = QS.read().get_address_of_sid(*ts).cloned();
+        let op = QS.read().get_address_of_sid(*ts);
         assert_eq!(Some(XfrAddress { key: x_kp.pub_key }), op);
     }
 
-    let op = QS
-        .read()
-        .get_owned_utxo_sids(&XfrAddress {
-            key: x_kp.pub_key.clone(),
-        })
-        .cloned();
+    let op = QS.read().get_owned_utxo_sids(&XfrAddress {
+        key: x_kp.pub_key.clone(),
+    });
 
     let map = pnk!(LEDGER.read().get_owned_utxos(&x_kp.get_pk()));
     let judgement_get_utxo_sids_result =

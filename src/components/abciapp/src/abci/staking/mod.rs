@@ -23,6 +23,7 @@ use ruc::*;
 use serde::Serialize;
 use std::{
     collections::{HashMap, HashSet},
+    ops::{Deref, DerefMut},
     sync::atomic::Ordering,
 };
 use tm_protos::abci::*;
@@ -168,7 +169,7 @@ pub fn system_ops(
                 kind: ev.r#type.as_str(),
             };
 
-            ruc::info_omit!(system_governance(la.get_staking_mut(), &bz));
+            ruc::info_omit!(system_governance(la.get_staking_mut().deref_mut(), &bz));
         });
 
     // application custom governances
@@ -180,10 +181,8 @@ pub fn system_ops(
             .flat_map(|info| info.validator.as_ref().map(|v| &v.address))
             .collect::<HashSet<_>>();
 
-        let staking = la.get_staking_mut();
-
         // mark if a validator is online at last block
-        if let Ok(vd) = ruc::info!(staking.validator_get_current_mut()) {
+        if let Ok(vd) = ruc::info!(la.get_staking_mut().validator_get_current_mut()) {
             vd.body.values_mut().for_each(|v| {
                 if online_list.contains(&v.td_addr) {
                     v.signed_last_block = true;
@@ -195,17 +194,24 @@ pub fn system_ops(
         }
 
         if online_list.len() != lci.votes.len() {
-            if let Ok(pl) = ruc::info!(gen_offline_punish_list(staking, &online_list)) {
+            if let Ok(pl) = ruc::info!(gen_offline_punish_list(
+                la.get_staking().deref(),
+                &online_list
+            )) {
                 pl.into_iter().for_each(|v| {
                     let bz = ByzantineInfo {
                         addr: &td_addr_to_string(&v),
                         kind: "OFF_LINE",
                     };
-                    ruc::info_omit!(system_governance(la.get_staking_mut(), &bz));
+                    ruc::info_omit!(system_governance(
+                        la.get_staking_mut().deref_mut(),
+                        &bz
+                    ));
                 });
             }
         }
     }
+    la.flush_staking();
 }
 
 // Get the actual voted power of last block.

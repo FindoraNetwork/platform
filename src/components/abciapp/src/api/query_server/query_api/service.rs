@@ -5,14 +5,15 @@ use super::{
 use ledger::store::LedgerState;
 use parking_lot::RwLock;
 use ruc::*;
-use std::{sync::Arc, thread};
+use std::{path::Path, sync::Arc, thread};
 
 pub fn start_query_server(
     ledger: Arc<RwLock<LedgerState>>,
     host: &str,
     port: u16,
+    base_dir: Option<&Path>,
 ) -> Result<Arc<RwLock<QueryServer>>> {
-    let qs = Arc::new(RwLock::new(QueryServer::new(ledger)));
+    let qs = Arc::new(RwLock::new(QueryServer::new(ledger, base_dir)));
     QueryApi::create(Arc::clone(&qs), host, port)
         .c(d!())
         .map(|_| {

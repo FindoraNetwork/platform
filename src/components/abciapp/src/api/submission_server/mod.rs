@@ -9,7 +9,9 @@ use parking_lot::RwLock;
 use rand_core::{CryptoRng, RngCore};
 use ruc::*;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt, result::Result as StdResult, sync::Arc};
+use std::{
+    collections::HashMap, fmt, ops::Deref, result::Result as StdResult, sync::Arc,
+};
 
 // Query handle for user
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Serialize, Deserialize)]
@@ -100,7 +102,7 @@ where
     }
 
     pub fn get_txn_status(&self, txn_handle: &TxnHandle) -> Option<TxnStatus> {
-        self.txn_status.get(&txn_handle).cloned()
+        self.txn_status.get(txn_handle).cloned()
     }
 
     pub fn all_commited(&self) -> bool {
@@ -136,7 +138,7 @@ where
     }
 
     pub fn update_staking_simulator(&mut self) -> Result<()> {
-        let staking = self.committed_state.read().get_staking().clone();
+        let staking = self.committed_state.read().get_staking().deref().clone();
         self.block
             .as_mut()
             .map(|b| {
@@ -166,28 +168,8 @@ where
         Err(eg!("Cannot finish block because there are no pending txns"))
     }
 
-    pub fn block_pulse_count(&self) -> u64 {
-        if let Some(block) = &self.block {
-            LedgerState::block_pulse_count(&block)
-        } else {
-            0
-        }
-    }
-
     pub fn block_txn_count(&self) -> usize {
         self.pending_txns.len()
-    }
-
-    pub fn pulse_block(&mut self) -> Option<u64> {
-        self.block.as_mut().map(|b| LedgerState::pulse_block(b))
-    }
-
-    pub fn restore_block_pulse(&mut self, cnt: u64) {
-        if let Some(b) = self.block.as_mut() {
-            (0..cnt.saturating_sub(LedgerState::block_pulse_count(b))).for_each(|_| {
-                LedgerState::pulse_block(b);
-            })
-        }
     }
 
     pub fn cache_transaction(

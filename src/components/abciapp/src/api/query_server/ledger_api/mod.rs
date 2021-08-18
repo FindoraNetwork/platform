@@ -133,7 +133,7 @@ pub async fn query_asset(
     let reader = data.read();
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
         if let Some(asset) = reader.get_asset_type(&token_code) {
-            Ok(web::Json(asset.clone()))
+            Ok(web::Json(asset))
         } else {
             Err(actix_web::error::ErrorNotFound(
                 "Specified asset definition does not currently exist.",

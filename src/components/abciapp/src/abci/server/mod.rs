@@ -1,10 +1,14 @@
+use crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT;
 use crate::api::submission_server::SubmissionServer;
 use ledger::store::LedgerState;
 use parking_lot::RwLock;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ruc::*;
-use std::{path::Path, sync::Arc};
+use std::{
+    path::Path,
+    sync::{atomic::Ordering, Arc},
+};
 use tendermint_sys::SyncApplication;
 use tm_protos::abci::*;
 use tx_sender::TendermintForward;
@@ -27,6 +31,9 @@ impl ABCISubmissionServer {
             None => LedgerState::test_ledger(),
             Some(base_dir) => pnk!(LedgerState::load_or_init(base_dir)),
         };
+        let tendermint_height = ledger_state.get_staking().cur_height();
+        TENDERMINT_BLOCK_HEIGHT.swap(tendermint_height as i64, Ordering::Relaxed);
+
         let prng = rand_chacha::ChaChaRng::from_entropy();
         Ok(ABCISubmissionServer {
             la: Arc::new(RwLock::new(

@@ -39,8 +39,9 @@ zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4" }
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 tendermint-sys = { git = "ssh://git@github.com/FindoraNetwork/tendermint-sys.git", branch = "findora-0.33.6", default-features = false, features = ["sync"] }
 tm-protos = { git = "ssh://git@github.com/FindoraNetwork/tendermint-sys.git", branch = "findora-0.33.6" }
+bnc = { git = "https://github.com/FindoraNetwork/BNC.git", branch = "master" }
 
-ledger = { path = "../../ledger" }
+ledger = { path = "../../ledger" ,features = ["compress"] }
 air = { path = "../../libs/ads/air" }
 cryptohash = { path = "../../libs/cryptohash" }
 sparse_merkle_tree = { path = "../../libs/ads/sparse_merkle_tree" }

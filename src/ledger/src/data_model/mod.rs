@@ -1270,10 +1270,11 @@ impl AuthenticatedUtxoStatus {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct FinalizedBlock {
     pub txns: Vec<FinalizedTransaction>,
     pub merkle_id: u64,
+    pub state: StateCommitmentData,
 }
 
 impl FinalizedTransaction {

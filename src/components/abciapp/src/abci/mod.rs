@@ -51,6 +51,7 @@ pub fn node_command() -> Result<()> {
             query_service_hdr,
             &config.tendermint_host,
             config.query_port,
+            base_dir,
         ))
         .write()
         .update();

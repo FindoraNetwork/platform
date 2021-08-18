@@ -6,13 +6,15 @@ use lazy_static::lazy_static;
 use ledger::{data_model::TxnEffect, staking::is_coinbase_tx};
 use parking_lot::Mutex;
 use ruc::*;
-use std::sync::{
-    atomic::{AtomicI64, Ordering},
-    Arc,
+use std::{
+    ops::Deref,
+    sync::{
+        atomic::{AtomicI64, Ordering},
+        Arc,
+    },
 };
 use tm_protos::abci::*;
 
-mod pulse_cache;
 mod utils;
 
 /// current block height
@@ -28,28 +30,20 @@ pub fn info(s: &mut ABCISubmissionServer, _req: RequestInfo) -> ResponseInfo {
 
     let mut la = s.la.write();
 
-    let mut state = la.get_committed_state().write();
+    let state = la.get_committed_state().write();
     let commitment = state.get_state_commitment();
+
     if commitment.1 > 0 {
-        let tendermint_height = commitment.1 + state.get_pulse_count();
-        resp.last_block_height = tendermint_height as i64;
         resp.last_block_app_hash = commitment.0.as_ref().to_vec();
     }
 
-    if let Ok(h) = ruc::info!(pulse_cache::read_height()) {
-        resp.last_block_height = h;
-    }
+    let h = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
 
-    if let Ok(s) = ruc::info!(pulse_cache::read_staking()) {
-        *state.get_staking_mut() = s;
-    }
+    resp.last_block_height = h;
 
-    if let Ok(cnt) = ruc::info!(pulse_cache::read_block_pulse()) {
-        drop(state);
-        if la.all_commited() {
-            la.begin_block();
-        }
-        la.restore_block_pulse(cnt);
+    drop(state);
+    if la.all_commited() {
+        la.begin_block();
     }
 
     resp
@@ -149,9 +143,7 @@ pub fn end_block(
         }
     }
 
-    if la.block_txn_count() == 0 {
-        la.pulse_block();
-    } else if !la.all_commited() {
+    if !la.all_commited() && la.block_txn_count() != 0 {
         pnk!(la.end_block());
 
         {
@@ -162,7 +154,7 @@ pub fn end_block(
     }
 
     if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
-        la.get_committed_state().read().get_staking(),
+        la.get_committed_state().read().get_staking().deref(),
         begin_block_req.last_commit_info.as_ref()
     )) {
         resp.validator_updates = vs;
@@ -180,24 +172,16 @@ pub fn end_block(
 
 pub fn commit(s: &mut ABCISubmissionServer) -> ResponseCommit {
     let mut r = ResponseCommit::default();
-    let la = s.la.read();
+    let la = s.la.write();
 
     // la.begin_commit();
 
-    let state = la.get_committed_state().read();
+    let mut state = la.get_committed_state().write();
     let commitment = state.get_state_commitment();
+    state.set_tendermint_commit(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed) as u64);
 
     // la.end_commit();
-
+    state.flush_data();
     r.data = commitment.0.as_ref().to_vec();
-
-    pnk!(pulse_cache::write_height(
-        TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed)
-    ));
-
-    pnk!(pulse_cache::write_staking(state.get_staking()));
-
-    pnk!(pulse_cache::write_block_pulse(la.block_pulse_count()));
-
     r
 }

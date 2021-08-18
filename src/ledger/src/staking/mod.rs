@@ -1188,21 +1188,23 @@ impl Staking {
         let gdp = Self::get_global_delegation_percent(la);
         let return_rate = Self::get_block_rewards_rate(la);
 
-        let me = la.get_staking_mut();
-        let pk = me.validator_td_addr_to_app_pk(addr).c(d!())?;
+        let pk = la.get_staking().validator_td_addr_to_app_pk(addr).c(d!())?;
 
-        me.record_block_rewards_rate(&return_rate);
+        la.get_staking_mut().record_block_rewards_rate(&return_rate);
 
-        let commission_rate = if let Some(Some(v)) =
-            me.validator_get_current().map(|vd| vd.body.get(&pk))
+        let commission_rate = if let Some(Some(v)) = la
+            .get_staking()
+            .validator_get_current()
+            .map(|vd| vd.body.get(&pk))
         {
             v.commission_rate
         } else {
             return Err(eg!("not validator"));
         };
 
-        let h = me.cur_height;
-        let commissions = me
+        let h = la.get_staking().cur_height;
+        let commissions = la
+            .get_staking_mut()
             .di
             .addr_map
             .values_mut()
@@ -1213,12 +1215,14 @@ impl Staking {
             .collect::<Result<Vec<_>>>()
             .c(d!())?;
 
-        if let Some(v) = me.delegation_get_mut(&pk) {
+        if let Some(v) = la.get_staking_mut().delegation_get_mut(&pk) {
             v.rwd_amount = v.rwd_amount.saturating_add(commissions.into_iter().sum());
         }
 
         if let Some(vote_percent) = block_vote_percent {
-            me.set_proposer_rewards(&pk, vote_percent).c(d!())?;
+            la.get_staking_mut()
+                .set_proposer_rewards(&pk, vote_percent)
+                .c(d!())?;
         }
 
         Ok(())
