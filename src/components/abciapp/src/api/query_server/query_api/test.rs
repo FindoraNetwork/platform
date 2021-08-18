@@ -262,7 +262,7 @@ fn test_scene_1() -> Result<()> {
         })
         .cloned();
 
-    let map = LEDGER.read().get_owned_utxos(&x_kp.get_pk());
+    let map = pnk!(LEDGER.read().get_owned_utxos(&x_kp.get_pk()));
     let judgement_get_utxo_sids_result =
         move |set: HashSet<TxoSID>, map: BTreeMap<TxoSID, (Utxo, Option<OwnerMemo>)>| {
             for txo_sid in set.iter() {

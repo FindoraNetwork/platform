@@ -1500,7 +1500,7 @@ mod tests {
                     .add_input(
                         TxoRef::Absolute($txo_sid),
                         open_blind_asset_record(
-                            &ledger.get_utxo($txo_sid).unwrap().utxo.0.record,
+                            &ledger.get_utxo_light($txo_sid).unwrap().utxo.0.record,
                             &None,
                             &fra_owner_kp,
                         )
@@ -1544,16 +1544,12 @@ mod tests {
 
         // (0) transfer first time
         let mut fi = FeeInputs::new();
-        let utxo = ledger.get_utxo(txo_sid[0]).unwrap();
+        let utxo = ledger.get_utxo_light(txo_sid[0]).unwrap();
         fi.append(
             TX_FEE_MIN,
             TxoRef::Absolute(txo_sid[0]),
             utxo.utxo.0,
-            utxo.authenticated_txn
-                .finalized_txn
-                .txn
-                .get_owner_memos_ref()[utxo.utxo_location.0]
-                .cloned(),
+            utxo.txn.txn.get_owner_memos_ref()[utxo.utxo_location.0].cloned(),
             bob_kp.get_sk().into_keypair(),
         );
         let mut tx3 = TransactionBuilder::from_seq_id(2);
@@ -1578,16 +1574,12 @@ mod tests {
 
         // (2) transfer second time
         let mut fi = FeeInputs::new();
-        let utxo = ledger.get_utxo(txo_sid[0]).unwrap();
+        let utxo = ledger.get_utxo_light(txo_sid[0]).unwrap();
         fi.append(
             TX_FEE_MIN,
             TxoRef::Absolute(txo_sid[0]),
             utxo.utxo.0,
-            utxo.authenticated_txn
-                .finalized_txn
-                .txn
-                .get_owner_memos_ref()[utxo.utxo_location.0]
-                .cloned(),
+            utxo.txn.txn.get_owner_memos_ref()[utxo.utxo_location.0].cloned(),
             bob_kp.get_sk().into_keypair(),
         );
         let mut tx4 = TransactionBuilder::from_seq_id(3);

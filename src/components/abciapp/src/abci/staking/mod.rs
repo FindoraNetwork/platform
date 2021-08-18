@@ -448,7 +448,10 @@ mod test {
 
         let mut am = target_list.iter().map(|(_, am)| *am).sum();
         let mut i_am;
-        let utxos = la.get_owned_utxos(owner_kp.get_pk_ref()).into_iter();
+        let utxos = la
+            .get_owned_utxos(owner_kp.get_pk_ref())
+            .c(d!())?
+            .into_iter();
 
         for (sid, (utxo, owner_memo)) in utxos {
             if let XfrAmount::NonConfidential(n) = utxo.0.record.amount {

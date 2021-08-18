@@ -2096,7 +2096,7 @@ pub fn gen_random_keypair() -> XfrKeyPair {
 }
 
 fn get_nonconfidential_balance(la: &LedgerState, addr: &XfrPublicKey) -> u64 {
-    la.get_owned_utxos(addr)
+    pnk!(la.get_owned_utxos(addr))
         .values()
         .map(|(utxo, _)| {
             if let XfrAmount::NonConfidential(am) = utxo.0.record.amount {

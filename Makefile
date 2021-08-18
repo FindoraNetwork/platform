@@ -131,9 +131,9 @@ else
 endif
 
 test:
-	cargo test --release --workspace -- --test-threads=1
-	cargo test --release --features="abci_mock" -- --test-threads=1
-	cargo test --release --workspace -- --ignored
+	cargo test --release --workspace -- --test-threads=1 # --nocapture
+	cargo test --release --features="abci_mock" -- --test-threads=1 # --nocapture
+	cargo test --release --workspace -- --ignored # --nocapture
 
 staking_cfg:
 	cargo run --bin staking_cfg_generator

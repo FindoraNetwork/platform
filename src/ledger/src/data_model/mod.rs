@@ -1068,6 +1068,13 @@ pub struct AuthenticatedUtxo {
     pub state_commitment_data: StateCommitmentData,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+pub struct UnAuthenticatedUtxo {
+    pub utxo: Utxo,
+    pub txn: FinalizedTransaction,
+    pub utxo_location: OutputPosition,
+}
+
 impl AuthenticatedUtxo {
     // An authenticated utxo result is valid iff
     // 1) The state commitment data used during verification hashes to the provided state commitment
