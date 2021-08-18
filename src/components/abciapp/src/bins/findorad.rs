@@ -1,4 +1,5 @@
 use abciapp::abci;
+use ruc::*;
 
 fn main() {
     env_logger::init();
@@ -9,5 +10,5 @@ fn main() {
         env!("VERGEN_BUILD_DATE")
     ));
 
-    abci::run().unwrap();
+    pnk!(abci::run());
 }
