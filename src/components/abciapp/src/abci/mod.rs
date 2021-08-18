@@ -8,7 +8,7 @@ use crate::api::{
     submission_server::submission_api::SubmissionApi,
 };
 use ruc::*;
-use std::{env, fs, path::Path, sync::Arc, thread};
+use std::{env, fs, path::Path, sync::mpsc::channel, sync::Arc, thread};
 use tendermint_sys::Node;
 
 use config::{global_cfg::CFG, ABCIConfig};
@@ -67,12 +67,6 @@ pub fn node_command() -> Result<()> {
         ));
     });
 
-    // handle SIGINT signal
-    ctrlc::set_handler(move || {
-        std::process::exit(0);
-    })
-    .c(d!())?;
-
     let config_path = if let Some(path) = CFG.tendermint_config {
         String::from(path)
     } else {
@@ -81,7 +75,10 @@ pub fn node_command() -> Result<()> {
 
     let node = Node::new(&config_path, app).unwrap();
     node.start().unwrap();
+
     std::thread::park();
+
+    node.stop().unwrap();
     Ok(())
 }
 
@@ -106,7 +103,26 @@ fn init_command() -> Result<()> {
 pub fn run() -> Result<()> {
     match CFG.command {
         "init" => init_command(),
-        "node" => node_command(),
+        "node" => {
+            let thread = thread::Builder::new()
+                .spawn(|| node_command().unwrap())
+                .unwrap();
+
+            let (tx, rx) = channel();
+
+            ctrlc::set_handler(move || {
+                tx.send(()).expect("Could not send signal.");
+            })
+            .c(d!())?;
+
+            rx.recv().expect("Could not receive signal.");
+
+            thread.thread().unpark();
+
+            thread.join().unwrap();
+
+            Ok(())
+        }
         _ => Err(eg!("Must use command is node or init")),
     }
 }
