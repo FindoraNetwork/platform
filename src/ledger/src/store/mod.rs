@@ -5,9 +5,7 @@ use crate::{
 use aoko::std_ext::KtStd;
 use bitmap::{BitMap, SparseMap};
 use bnc::{
-    helper::Value,
-    mapx::{Mapx, ValueMut},
-    new_mapx, new_vecx,
+    helper::Value, mapx::Mapx, new_mapx, new_vecx, vecx::ValueMut as VecxValueMut,
     vecx::Vecx,
 };
 use cryptohash::sha256::Digest as BitDigest;
@@ -92,9 +90,9 @@ pub struct LedgerStatus {
     issuance_amounts: Mapx<AssetTypeCode, u64>,
 
     // Should be equal to the count of transactions
-    next_txn: Mapx<u8, TxnSID>,
+    next_txn: Vecx<TxnSID>,
     // Should be equal to the count of TXOs
-    next_txo: Mapx<u8, TxoSID>,
+    next_txo: Vecx<TxoSID>,
 
     // Hash and sequence number of the most recent "full checkpoint" of the
     // ledger -- committing to the whole ledger history up to the most recent
@@ -114,15 +112,12 @@ pub struct LedgerStatus {
     // Sliding window of operations for replay attack prevention
     sliding_set: SlidingSet<[u8; 8]>,
 
-    // only one
-    staking: Mapx<u8, Staking>,
+    staking: Vecx<Staking>,
 
     //staking of effective trading blocks
-    backup_staking: Mapx<u8, Staking>,
-
+    backup_staking: Vecx<Staking>,
     // tendermint commit height
-    td_commit_height: Mapx<u8, u64>,
-
+    td_commit_height: Vecx<u64>,
     // flags that can be flush when a block has a tx
     is_effective_block: bool,
 }
@@ -228,14 +223,14 @@ impl LedgerStatus {
             asset_types: new_mapx!(asset_types_path.as_str()),
             tracing_policies: new_mapx!(tracing_policies_path.as_str()),
             issuance_num: new_mapx!(issuance_num_path.as_str()),
-            next_txn: new_mapx!(next_txn_path.as_str(), Some(1)),
-            next_txo: new_mapx!(next_txo_path.as_str(), Some(1)),
+            next_txn: new_vecx!(next_txn_path.as_str(), 1),
+            next_txo: new_vecx!(next_txo_path.as_str(), 1),
             txns_in_block_hash: None,
             state_commitment_data: None,
             block_commit_count: 0,
-            staking: new_mapx!(staking_path.as_str(), Some(1)),
-            backup_staking: new_mapx!(backup_staking_path.as_str(), Some(1)),
-            td_commit_height: new_mapx!(tendermint_commit_path.as_str(), Some(1)),
+            staking: new_vecx!(staking_path.as_str(), 1),
+            backup_staking: new_vecx!(backup_staking_path.as_str(), 1),
+            td_commit_height: new_vecx!(tendermint_commit_path.as_str(), 1),
             is_effective_block: false,
         };
 
@@ -593,8 +588,8 @@ impl LedgerStatus {
         // the transaction.
         let mut new_utxo_sids: HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)> = map! {};
         {
-            let mut next_txn = pnk!(self.next_txn.get(&0).c(d!())).0;
-            let mut next_txo = pnk!(self.next_txo.get(&0).c(d!())).0;
+            let mut next_txn = pnk!(self.next_txn.get(0).c(d!())).0;
+            let mut next_txo = pnk!(self.next_txo.get(0).c(d!())).0;
 
             for (ix, txos) in block.temp_sids.iter().zip(block.txos.drain(..)) {
                 let txn_sid = next_txn;
@@ -837,8 +832,8 @@ impl LedgerState {
         Ok(temp_sid_map)
     }
 
-    pub fn get_staking_mut(&mut self) -> ValueMut<u8, Staking> {
-        pnk!(self.status.staking.get_mut(&0).c(d!()))
+    pub fn get_staking_mut(&mut self) -> VecxValueMut<Staking> {
+        pnk!(self.status.staking.get_mut(0).c(d!()))
     }
 
     pub fn flush_data(&mut self) {
@@ -873,11 +868,11 @@ impl LedgerState {
 
 impl LedgerState {
     pub fn get_next_txn(&self) -> Value<TxnSID> {
-        pnk!(self.status.next_txn.get(&0).c(d!()))
+        pnk!(self.status.next_txn.get(0).c(d!()))
     }
 
     pub fn get_next_txo(&self) -> Value<TxoSID> {
-        pnk!(self.status.next_txo.get(&0).c(d!()))
+        pnk!(self.status.next_txo.get(0).c(d!()))
     }
 
     pub fn get_status(&self) -> &LedgerStatus {
@@ -938,7 +933,7 @@ impl LedgerState {
         }
 
         self.status.utxo_map_versions.push_back((
-            *pnk!(self.status.next_txn.get(&0).c(d!())),
+            *pnk!(self.status.next_txn.get(0).c(d!())),
             self.utxo_map.compute_checksum(),
         ));
     }
@@ -1240,11 +1235,11 @@ impl LedgerState {
             }
         }
 
-        let td_commit_height = pnk!(ledger.status.td_commit_height.get(&0));
+        let td_commit_height = pnk!(ledger.status.td_commit_height.get(0));
         let staking_tendermint_height = ledger.get_staking().cur_height();
 
         if td_commit_height != staking_tendermint_height {
-            let backup_staking = pnk!(ledger.status.backup_staking.get(&0));
+            let backup_staking = pnk!(ledger.status.backup_staking.get(0));
 
             if backup_staking.cur_height() == 0 && staking_tendermint_height > 0 {
                 panic!("backup staking is wrong data");
@@ -1574,7 +1569,7 @@ impl LedgerState {
     }
 
     pub fn get_staking(&self) -> Value<Staking> {
-        pnk!(self.status.staking.get(&0).c(d!()))
+        pnk!(self.status.staking.get(0).c(d!()))
     }
 
     pub fn get_transaction(&self, id: TxnSID) -> Result<AuthenticatedTransaction> {
@@ -2112,7 +2107,7 @@ mod tests {
         assert_eq!(
             back,
             Some(&(
-                TxnSID(ledger_state.status.next_txn.get(&0).unwrap().0),
+                TxnSID(ledger_state.status.next_txn.get(0).unwrap().0),
                 ledger_state.utxo_map.compute_checksum()
             ))
         );
@@ -2243,7 +2238,7 @@ mod tests {
         assert_eq!(
             back,
             Some(&(
-                TxnSID(ledger_state.status.next_txn.get(&0).unwrap().0),
+                TxnSID(ledger_state.status.next_txn.get(0).unwrap().0),
                 ledger_state.utxo_map.compute_checksum()
             ))
         );
@@ -2681,7 +2676,7 @@ mod tests {
                 )
         );
         let query_result = ledger
-            .get_utxo_checksum(pnk!(ledger.status.next_txn.get(&0).c(d!())).0 as u64)
+            .get_utxo_checksum(pnk!(ledger.status.next_txn.get(0).c(d!())).0 as u64)
             .unwrap();
         let compute_result = ledger.utxo_map.compute_checksum();
         println!(

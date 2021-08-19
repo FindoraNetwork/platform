@@ -35,7 +35,7 @@ actix-service = "1.0.6"
 actix-web = "3.3.2"
 percent-encoding = "2.1.0"
 
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4a" }
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 tendermint-sys = { git = "ssh://git@github.com/FindoraNetwork/tendermint-sys.git", branch = "findora-0.33.6", default-features = false, features = ["sync"] }
 tm-protos = { git = "ssh://git@github.com/FindoraNetwork/tendermint-sys.git", branch = "findora-0.33.6" }

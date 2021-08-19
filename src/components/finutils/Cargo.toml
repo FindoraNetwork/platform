@@ -23,7 +23,7 @@ async-std = "1.9.0"
 curve25519-dalek = { version = "3", features = ["serde"] }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
 
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4a" }
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 
 ledger = { path = "../../ledger" }
