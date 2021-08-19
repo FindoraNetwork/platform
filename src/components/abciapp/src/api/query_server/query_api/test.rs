@@ -16,7 +16,6 @@ use ledger::{
     staking::ops::mint_fra::{MintEntry, MintFraOps, MintKind},
     store::LedgerState,
 };
-use metrics_exporter_prometheus::PrometheusHandle;
 use parking_lot::RwLock;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -48,9 +47,6 @@ lazy_static! {
 }
 
 fn create_server() -> QueryServer {
-    let builder = metrics_exporter_prometheus::PrometheusBuilder::new();
-    let recorder = builder.build();
-
     let mut qs = QueryServer::new(LEDGER.clone());
     qs
 }

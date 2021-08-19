@@ -28,8 +28,6 @@ hex = "0.4.2"
 ctrlc = { version = "3.0", features = ["termination"] }
 toml = "0.5.8"
 clap = "2.33.3"
-metrics = "0.13.1"
-metrics-exporter-prometheus = "0.2.0"
 
 actix-cors = "0.5.4"
 actix-rt = "1.1.0"
