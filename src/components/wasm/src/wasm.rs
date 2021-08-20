@@ -1,11 +1,17 @@
-// Interface for issuing transactions that can be compiled to Wasm.
-// Allows web clients to issue transactions from a browser contexts.
-// For now, forwards transactions to a ledger hosted locally.
-// To compile wasm package, run wasm-pack build in the wasm directory;
+//!
+//! Interface for issuing transactions that can be compiled to Wasm.
+//!
+//! Allows web clients to issue transactions from a browser contexts.
+//!
+//! For now, forwards transactions to a ledger hosted locally.
+//!
+//! To compile wasm package, run wasm-pack build in the wasm directory.
+//!
+
 #![deny(warnings)]
 #![allow(clippy::needless_borrow)]
 
-use crate::wasm_data_model::*;
+use crate::{util::error_to_jsvalue, wasm_data_model::*};
 use credentials::{
     credential_commit, credential_issuer_key_gen, credential_open_commitment,
     credential_reveal, credential_sign, credential_user_key_gen, credential_verify,
@@ -18,6 +24,7 @@ use finutils::txn_builder::{
     TransactionBuilder as PlatformTransactionBuilder,
     TransferOperationBuilder as PlatformTransferOperationBuilder,
 };
+use globutils::{wallet, HashOf};
 use ledger::{
     data_model::{
         AssetTypeCode, AuthenticatedTransaction, Operation, TransferType, TxOutput,
@@ -31,16 +38,17 @@ use ledger::{
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ruc::{d, err::RucResult};
-use util::error_to_jsvalue;
-use utils::HashOf;
 use wasm_bindgen::prelude::*;
-
-use zei::serialization::ZeiFromToBytes;
-use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
-use zei::xfr::lib::trace_assets as zei_trace_assets;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
-use zei::xfr::structs::{
-    AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody, ASSET_TYPE_LENGTH,
+use zei::{
+    serialization::ZeiFromToBytes,
+    xfr::{
+        asset_record::{open_blind_asset_record as open_bar, AssetRecordType},
+        lib::trace_assets as zei_trace_assets,
+        sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+        structs::{
+            AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody, ASSET_TYPE_LENGTH,
+        },
+    },
 };
 
 mod util;
@@ -831,13 +839,13 @@ pub fn new_keypair_from_seed(seed_str: String, name: Option<String>) -> XfrKeyPa
 #[wasm_bindgen]
 /// Returns base64 encoded representation of an XfrPublicKey.
 pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
-    utils::wallet::public_key_to_base64(key)
+    wallet::public_key_to_base64(key)
 }
 
 #[wasm_bindgen]
 /// Converts a base64 encoded public key string to a public key.
 pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey, JsValue> {
-    utils::wallet::public_key_from_base64(pk)
+    wallet::public_key_from_base64(pk)
         .c(d!())
         .map_err(error_to_jsvalue)
 }
@@ -1132,13 +1140,13 @@ use std::str;
 #[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.
 pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
-    utils::wallet::public_key_to_bech32(key)
+    wallet::public_key_to_bech32(key)
 }
 
 #[wasm_bindgen]
 /// Converts a bech32 encoded public key string to a public key.
 pub fn public_key_from_bech32(addr: &str) -> Result<XfrPublicKey, JsValue> {
-    utils::wallet::public_key_from_bech32(addr)
+    wallet::public_key_from_bech32(addr)
         .c(d!())
         .map_err(error_to_jsvalue)
 }
@@ -1238,7 +1246,7 @@ pub fn get_pk_from_keypair(kp: &XfrKeyPair) -> XfrPublicKey {
 /// Randomly generate a 12words-length mnemonic.
 #[wasm_bindgen]
 pub fn generate_mnemonic_default() -> String {
-    utils::wallet::generate_mnemonic_default()
+    wallet::generate_mnemonic_default()
 }
 
 /// Generate mnemonic with custom length and language.
@@ -1246,7 +1254,7 @@ pub fn generate_mnemonic_default() -> String {
 /// - @param `lang`: acceptable value are one of [ "en", "zh", "zh_traditional", "fr", "it", "ko", "sp", "jp" ]
 #[wasm_bindgen]
 pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> Result<String, JsValue> {
-    utils::wallet::generate_mnemonic_custom(wordslen, lang)
+    wallet::generate_mnemonic_custom(wordslen, lang)
         .c(d!())
         .map_err(error_to_jsvalue)
 }
@@ -1272,9 +1280,9 @@ impl BipPath {
     }
 }
 
-impl From<&BipPath> for utils::wallet::BipPath {
+impl From<&BipPath> for wallet::BipPath {
     fn from(p: &BipPath) -> Self {
-        utils::wallet::BipPath::new(p.coin, p.account, p.change, p.address)
+        wallet::BipPath::new(p.coin, p.account, p.change, p.address)
     }
 }
 
@@ -1284,7 +1292,7 @@ impl From<&BipPath> for utils::wallet::BipPath {
 pub fn restore_keypair_from_mnemonic_default(
     phrase: &str,
 ) -> Result<XfrKeyPair, JsValue> {
-    utils::wallet::restore_keypair_from_mnemonic_default(phrase)
+    wallet::restore_keypair_from_mnemonic_default(phrase)
         .c(d!())
         .map_err(error_to_jsvalue)
 }
@@ -1297,7 +1305,7 @@ pub fn restore_keypair_from_mnemonic_bip44(
     lang: &str,
     path: &BipPath,
 ) -> Result<XfrKeyPair, JsValue> {
-    utils::wallet::restore_keypair_from_mnemonic_bip44(phrase, lang, &path.into())
+    wallet::restore_keypair_from_mnemonic_bip44(phrase, lang, &path.into())
         .c(d!())
         .map_err(error_to_jsvalue)
 }
@@ -1310,7 +1318,7 @@ pub fn restore_keypair_from_mnemonic_bip49(
     lang: &str,
     path: &BipPath,
 ) -> Result<XfrKeyPair, JsValue> {
-    utils::wallet::restore_keypair_from_mnemonic_bip49(phrase, lang, &path.into())
+    wallet::restore_keypair_from_mnemonic_bip49(phrase, lang, &path.into())
         .c(d!())
         .map_err(error_to_jsvalue)
 }
@@ -1345,13 +1353,13 @@ pub fn get_delegation_target_address() -> String {
 #[wasm_bindgen]
 #[allow(missing_docs)]
 pub fn get_coinbase_address() -> String {
-    utils::wallet::public_key_to_base64(&BLACK_HOLE_PUBKEY_STAKING)
+    wallet::public_key_to_base64(&BLACK_HOLE_PUBKEY_STAKING)
 }
 
 #[wasm_bindgen]
 #[allow(missing_docs)]
 pub fn get_coinbase_principal_address() -> String {
-    utils::wallet::public_key_to_base64(&BLACK_HOLE_PUBKEY_STAKING)
+    wallet::public_key_to_base64(&BLACK_HOLE_PUBKEY_STAKING)
 }
 
 #[wasm_bindgen]

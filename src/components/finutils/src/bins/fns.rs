@@ -175,10 +175,10 @@ fn run() -> Result<()> {
                 m.value_of("to-wallet-address")
                     .c(d!())
                     .and_then(|addr| {
-                        libutils::wallet::public_key_from_bech32(addr)
+                        globutils::wallet::public_key_from_bech32(addr)
                             .c(d!("invalid wallet address"))
                     })
-                    .map(|pk| libutils::wallet::public_key_to_base64(&pk))
+                    .map(|pk| globutils::wallet::public_key_to_base64(&pk))
             })?;
         let am = m.value_of("amount");
 

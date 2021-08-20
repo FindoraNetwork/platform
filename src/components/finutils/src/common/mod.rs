@@ -9,6 +9,7 @@
 pub mod utils;
 
 use crate::txn_builder::BuildsTransactions;
+use globutils::wallet;
 use lazy_static::lazy_static;
 use ledger::{
     data_model::BLACK_HOLE_PUBKEY_STAKING,
@@ -142,9 +143,7 @@ pub fn stake_append(
 
     let kp = staker
         .c(d!())
-        .and_then(|sk| {
-            libutils::wallet::restore_keypair_from_mnemonic_default(sk).c(d!())
-        })
+        .and_then(|sk| wallet::restore_keypair_from_mnemonic_default(sk).c(d!()))
         .or_else(|_| get_keypair().c(d!()))?;
 
     let mut builder = utils::new_tx_builder().c(d!())?;
@@ -169,9 +168,7 @@ pub fn unstake(
 
     let kp = staker
         .c(d!())
-        .and_then(|sk| {
-            libutils::wallet::restore_keypair_from_mnemonic_default(sk).c(d!())
-        })
+        .and_then(|sk| wallet::restore_keypair_from_mnemonic_default(sk).c(d!()))
         .or_else(|_| get_keypair().c(d!()))?;
     let td_addr_bytes = td_addr
         .c(d!())
@@ -241,11 +238,11 @@ pub fn show() -> Result<()> {
     let xfr_account = ruc::info!(get_keypair()).map(|i| {
         println!(
             "\x1b[31;01mFindora Address:\x1b[00m\n{}\n",
-            libutils::wallet::public_key_to_bech32(&i.get_pk())
+            wallet::public_key_to_bech32(&i.get_pk())
         );
         println!(
             "\x1b[31;01mFindora Public Key:\x1b[00m\n{}\n",
-            libutils::wallet::public_key_to_base64(&i.get_pk())
+            wallet::public_key_to_base64(&i.get_pk())
         );
     });
 
@@ -350,8 +347,8 @@ pub fn transfer_fra(
                 .map(|sk| sk.into_keypair())
         })
         .or_else(|_| get_keypair().c(d!()))?;
-    let to = libutils::wallet::public_key_from_base64(target_addr)
-        .c(d!("invalid 'target-addr'"))?;
+    let to =
+        wallet::public_key_from_base64(target_addr).c(d!("invalid 'target-addr'"))?;
     let am = am.parse::<u64>().c(d!("'amount' must be an integer"))?;
 
     utils::transfer(&from, &to, am, confidential_am, confidential_ty).c(d!())
@@ -378,7 +375,7 @@ fn get_keypair() -> Result<XfrKeyPair> {
         fs::read_to_string(m_path)
             .c(d!("can not read mnemonic from 'owner-mnemonic-path'"))
             .and_then(|m| {
-                libutils::wallet::restore_keypair_from_mnemonic_default(m.trim())
+                wallet::restore_keypair_from_mnemonic_default(m.trim())
                     .c(d!("invalid 'owner-mnemonic'"))
             })
     } else {
@@ -425,10 +422,8 @@ fn convert_commission_rate(cr: f64) -> Result<[u64; 2]> {
 
 pub fn gen_key_and_print() {
     let (m, k, kp) = loop {
-        let mnemonic = pnk!(libutils::wallet::generate_mnemonic_custom(24, "en"));
-        let kp = pnk!(libutils::wallet::restore_keypair_from_mnemonic_default(
-            &mnemonic
-        ));
+        let mnemonic = pnk!(wallet::generate_mnemonic_custom(24, "en"));
+        let kp = pnk!(wallet::restore_keypair_from_mnemonic_default(&mnemonic));
         if let Some(key) = serde_json::to_string_pretty(&kp)
             .ok()
             .filter(|s| s.matches("\": \"-").next().is_none())
@@ -436,7 +431,7 @@ pub fn gen_key_and_print() {
             break (mnemonic, key, kp);
         }
     };
-    let wallet_addr = libutils::wallet::public_key_to_bech32(kp.get_pk_ref());
+    let wallet_addr = wallet::public_key_to_bech32(kp.get_pk_ref());
     println!(
         "\n\x1b[31;01mWallet Address:\x1b[00m {}\n\x1b[31;01mMnemonic:\x1b[00m {}\n\x1b[31;01mKey:\x1b[00m {}\n",
         wallet_addr, m, k

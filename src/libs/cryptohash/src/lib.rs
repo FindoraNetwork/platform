@@ -2,7 +2,9 @@
 // #![deny(missing_docs)]
 
 use serde::{Deserialize, Serialize};
+
 pub const HASH_SIZE: usize = 32;
+
 #[cfg(target_arch = "wasm32")]
 pub mod sha256 {
     use arrayref::array_ref;

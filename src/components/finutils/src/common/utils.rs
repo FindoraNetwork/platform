@@ -3,6 +3,8 @@ use crate::{
     common::get_serv_addr,
     txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder},
 };
+use globutils::wallet;
+use globutils::{HashOf, SignatureOf};
 use ledger::{
     data_model::{
         Operation, StateCommitmentData, Transaction, TransferType, TxoRef, TxoSID, Utxo,
@@ -10,7 +12,6 @@ use ledger::{
     },
     staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
 };
-use libutils::{HashOf, SignatureOf};
 use ruc::*;
 use serde::{self, Deserialize, Serialize};
 use std::collections::HashMap;
@@ -339,7 +340,7 @@ fn get_owned_utxos(
     let url = format!(
         "{}:8668/owned_utxos/{}",
         get_serv_addr().c(d!())?,
-        libutils::wallet::public_key_to_base64(addr)
+        wallet::public_key_to_base64(addr)
     );
 
     attohttpc::get(&url)
@@ -405,7 +406,7 @@ pub fn get_delegation_info(pk: &XfrPublicKey) -> Result<DelegationInfo> {
     let url = format!(
         "{}:8668/delegation_info/{}",
         get_serv_addr().c(d!())?,
-        libutils::wallet::public_key_to_base64(pk)
+        wallet::public_key_to_base64(pk)
     );
 
     attohttpc::get(&url)

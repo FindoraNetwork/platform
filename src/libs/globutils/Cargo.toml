@@ -1,5 +1,5 @@
 [package]
-name = "utils"
+name = "globutils"
 version = "0.1.0"
 authors = ["FindoraNetwork"]
 edition = "2018"

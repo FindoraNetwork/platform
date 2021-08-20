@@ -1,5 +1,7 @@
-use crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT;
-use crate::api::submission_server::SubmissionServer;
+use crate::{
+    abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
+    api::submission_server::SubmissionServer,
+};
 use ledger::store::LedgerState;
 use parking_lot::RwLock;
 use rand_chacha::ChaChaRng;

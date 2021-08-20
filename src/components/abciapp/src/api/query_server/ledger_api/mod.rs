@@ -4,9 +4,10 @@ mod test;
 use actix_cors::Cors;
 use actix_web::{dev, error, middleware, web, App, HttpServer};
 use finutils::api::{
-    DelegationInfo, DelegatorInfo, DelegatorList, Validator, ValidatorDetail,
-    ValidatorList,
+    DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
+    ValidatorDetail, ValidatorList,
 };
+use globutils::{HashOf, SignatureOf};
 use ledger::{
     data_model::{
         AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData, TxnSID,
@@ -22,7 +23,6 @@ use parking_lot::RwLock;
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, mem, sync::Arc};
-use utils::{HashOf, NetworkRoute, SignatureOf};
 use zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo};
 
 pub struct RestfulApiService;
@@ -273,7 +273,7 @@ async fn get_delegation_reward(
     web::Query(info): web::Query<DelegationRwdQueryParams>,
 ) -> actix_web::Result<web::Json<Vec<DelegationRwdDetail>>> {
     // Convert from base64 representation
-    let key: XfrPublicKey = utils::wallet::public_key_from_base64(&info.address)
+    let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
 
@@ -428,7 +428,7 @@ async fn get_delegators_with_params(
     let list: Vec<DelegatorInfo> = list
         .iter()
         .map(|(key, am)| {
-            DelegatorInfo::new(utils::wallet::public_key_to_base64(key), **am)
+            DelegatorInfo::new(globutils::wallet::public_key_to_base64(key), **am)
         })
         .collect();
 
@@ -450,7 +450,7 @@ async fn query_delegator_list(
     let list: Vec<DelegatorInfo> = list
         .iter()
         .map(|(key, am)| {
-            DelegatorInfo::new(utils::wallet::public_key_to_base64(key), **am)
+            DelegatorInfo::new(globutils::wallet::public_key_to_base64(key), **am)
         })
         .collect();
 
@@ -522,7 +522,7 @@ async fn query_delegation_info(
     data: web::Data<Arc<RwLock<LedgerState>>>,
     address: web::Path<String>,
 ) -> actix_web::Result<web::Json<DelegationInfo>> {
-    let pk = utils::wallet::public_key_from_base64(address.as_str())
+    let pk = globutils::wallet::public_key_from_base64(address.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
 
@@ -607,7 +607,7 @@ async fn query_owned_utxos(
     data: web::Data<Arc<RwLock<LedgerState>>>,
     owner: web::Path<String>,
 ) -> actix_web::Result<web::Json<BTreeMap<TxoSID, (Utxo, Option<OwnerMemo>)>>> {
-    utils::wallet::public_key_from_base64(owner.as_str())
+    globutils::wallet::public_key_from_base64(owner.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log()))
         .map(|pk| web::Json(pnk!(data.read().get_owned_utxos(&pk))))

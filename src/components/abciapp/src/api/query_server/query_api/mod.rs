@@ -6,6 +6,8 @@ mod test;
 
 use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
+use finutils::api::NetworkRoute;
+use globutils::http_get_request;
 use ledger::{
     data_model::{
         b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
@@ -19,7 +21,6 @@ use query_server::{QueryServer, TxnIDHash};
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, sync::Arc};
-use utils::{http_get_request, NetworkRoute};
 use zei::{
     serialization::ZeiFromToBytes,
     xfr::{sig::XfrPublicKey, structs::OwnerMemo},
@@ -296,7 +297,7 @@ async fn get_coinbase_oper_list(
     web::Query(info): web::Query<WalletQueryParams>,
 ) -> actix_web::Result<web::Json<CoinbaseOperInfo>> {
     // Convert from base64 representation
-    let key: XfrPublicKey = utils::wallet::public_key_from_base64(&info.address)
+    let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
 
@@ -347,7 +348,7 @@ async fn get_claim_txns(
     web::Query(info): web::Query<WalletQueryParams>,
 ) -> actix_web::Result<web::Json<Vec<Option<Transaction>>>> {
     // Convert from base64 representation
-    let key: XfrPublicKey = utils::wallet::public_key_from_base64(&info.address)
+    let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
 
