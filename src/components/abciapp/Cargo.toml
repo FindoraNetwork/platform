@@ -42,7 +42,6 @@ tm-protos = { git = "ssh://git@github.com/FindoraNetwork/tendermint-sys.git", br
 bnc = { git = "https://github.com/FindoraNetwork/BNC.git", branch = "master" }
 
 ledger = { path = "../../ledger" ,features = ["compress"] }
-air = { path = "../../libs/ads/air" }
 cryptohash = { path = "../../libs/cryptohash" }
 sparse_merkle_tree = { path = "../../libs/ads/sparse_merkle_tree" }
 utils = { path = "../../libs/utils" }

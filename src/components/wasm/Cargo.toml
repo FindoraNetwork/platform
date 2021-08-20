@@ -44,7 +44,6 @@ credentials = { path = "../../libs/credentials" }
 cryptohash = { path = "../../libs/cryptohash" }
 sparse_merkle_tree = { path = "../../libs/ads/sparse_merkle_tree" }
 ledger = { path = "../../ledger" }
-air = { path = "../../libs/ads/air" }
 
 [lib]
 crate-type = ["cdylib", "rlib"]

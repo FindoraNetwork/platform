@@ -4,7 +4,6 @@ members = [
     "src/components/wasm",
     "src/components/finutils",
     "src/ledger",
-    "src/libs/ads/air",
     "src/libs/ads/merkle_tree",
     "src/libs/ads/sparse_merkle_tree",
     "src/libs/bitmap",

@@ -2,7 +2,6 @@ use crate::{
     data_model::*,
     staking::{Staking, FRA_TOTAL_AMOUNT},
 };
-use aoko::std_ext::KtStd;
 use bitmap::{BitMap, SparseMap};
 use bnc::{
     helper::Value, mapx::Mapx, new_mapx, new_vecx, vecx::ValueMut as VecxValueMut,
@@ -1701,11 +1700,12 @@ pub mod helpers {
         memo: Option<Memo>,
         confidential_memo: Option<ConfidentialMemo>,
     ) -> DefineAssetBody {
-        let mut token = Asset::default().also_mut(|t| {
-            t.code = *token_code;
-            t.issuer = IssuerPublicKey { key: *issuer_key };
-            t.asset_rules = asset_rules;
-        });
+        let mut token = Asset {
+            code: *token_code,
+            issuer: IssuerPublicKey { key: *issuer_key },
+            asset_rules,
+            ..Default::default()
+        };
 
         if let Some(memo) = memo {
             token.memo = memo;
