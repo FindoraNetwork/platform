@@ -1,6 +1,7 @@
 use super::{SubmissionServer, TxnForward, TxnHandle};
 use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
+use finutils::api::NetworkRoute;
 use ledger::data_model::Transaction;
 use log::info;
 use parking_lot::RwLock;
@@ -8,7 +9,6 @@ use rand_core::{CryptoRng, RngCore};
 use ruc::*;
 use std::result::Result as StdResult;
 use std::sync::Arc;
-use utils::NetworkRoute;
 
 // Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]

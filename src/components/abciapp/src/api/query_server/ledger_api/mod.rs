@@ -4,8 +4,8 @@ mod test;
 use actix_cors::Cors;
 use actix_web::{dev, error, middleware, web, App, HttpServer};
 use finutils::api::{
-    DelegationInfo, DelegatorInfo, DelegatorList, Validator, ValidatorDetail,
-    ValidatorList,
+    DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
+    ValidatorDetail, ValidatorList,
 };
 use ledger::{
     data_model::{
@@ -22,7 +22,7 @@ use parking_lot::RwLock;
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, mem, sync::Arc};
-use utils::{HashOf, NetworkRoute, SignatureOf};
+use utils::{HashOf, SignatureOf};
 use zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo};
 
 pub struct RestfulApiService;

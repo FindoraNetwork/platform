@@ -6,6 +6,7 @@ mod test;
 
 use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
+use finutils::api::NetworkRoute;
 use ledger::{
     data_model::{
         b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
@@ -19,7 +20,7 @@ use query_server::{QueryServer, TxnIDHash};
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, sync::Arc};
-use utils::{http_get_request, NetworkRoute};
+use utils::http_get_request;
 use zei::{
     serialization::ZeiFromToBytes,
     xfr::{sig::XfrPublicKey, structs::OwnerMemo},

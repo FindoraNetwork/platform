@@ -3,7 +3,6 @@
 
 use cryptohash::sha256::Digest;
 use cryptohash::{sha256, Proof};
-use percent_encoding::{percent_decode, utf8_percent_encode, AsciiSet, CONTROLS};
 use ruc::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fs;
@@ -14,55 +13,6 @@ use std::result::Result as StdResult;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 
 pub const TRANSACTION_WINDOW_WIDTH: u64 = 100;
-
-pub fn string_of_type<T>(_: &T) -> String {
-    std::any::type_name::<T>().to_string()
-}
-
-pub fn print_type_of<T>(msg: &str, _: &T) {
-    println!("type of {}: {}", msg, std::any::type_name::<T>())
-}
-
-/// https://url.spec.whatwg.org/#fragment-percent-encode-set
-const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
-
-pub fn urldecode(s: &str) -> String {
-    let iter = percent_decode(s.as_bytes());
-    iter.decode_utf8().unwrap().to_string()
-}
-
-pub fn urlencode(input: &str) -> String {
-    let iter = utf8_percent_encode(input, FRAGMENT);
-    iter.collect()
-}
-
-const PROTOCOL: &str = "http";
-const SERVER_HOST: &str = "localhost";
-
-/// Query server port
-pub const QUERY_PORT: usize = 8667;
-/// Port for submitting transactions.
-pub const SUBMIT_PORT: usize = 8669;
-/// Ledger port
-pub const LEDGER_PORT: usize = 8668;
-
-/// Sets the protocol and host.
-///
-/// Environment variables `PROTOCOL` and `SERVER_HOST` set the protocol and host,
-///
-/// By default, the protocol is `http` and the host is `testnet.findora.org`.
-pub fn protocol_host() -> (String, String) {
-    (
-        std::env::var_os("PROTOCOL")
-            .filter(|x| !x.is_empty())
-            .and_then(|x| x.into_string().ok())
-            .unwrap_or_else(|| PROTOCOL.to_string()),
-        std::env::var_os("SERVER_HOST")
-            .filter(|x| !x.is_empty())
-            .and_then(|x| x.into_string().ok())
-            .unwrap_or_else(|| SERVER_HOST.to_string()),
-    )
-}
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn http_post_request<T: Serialize>(
@@ -87,24 +37,15 @@ pub fn http_get_request(query: &str) -> StdResult<String, attohttpc::Error> {
 pub fn fresh_tmp_dir() -> PathBuf {
     let base_dir = std::env::temp_dir();
     let base_dirname = "findora_ledger";
-    let mut i = 0;
     let mut dirname = None;
     while dirname.is_none() {
-        debug_assert!(i < 4); // TODO(joe): fail more gracefully
         let name = std::format!("{}_{}", base_dirname, rand::random::<u64>());
         let path = base_dir.join(name);
         let _ = fs::remove_dir_all(&path);
-        match fs::create_dir(&path) {
-            Ok(()) => {
-                dirname = Some(path);
-            }
-            Err(_) => {
-                i += 1;
-            }
+        if fs::create_dir(&path).is_ok() {
+            dirname = Some(path);
         }
     }
-
-    // Safe unwrap -- the loop would never terminate if it stayed None
     dirname.unwrap()
 }
 
@@ -478,23 +419,6 @@ impl<'a, T> Deserialize<'a> for SignatureOfBytes<T> {
             sig,
             phantom: PhantomData,
         })
-    }
-}
-
-pub trait NetworkRoute {
-    fn route(&self) -> String;
-
-    fn with_arg(&self, arg: &dyn std::fmt::Display) -> String {
-        let mut endpoint = self.route();
-        endpoint += &("/".to_owned() + &arg.to_string());
-        endpoint
-    }
-
-    // e.g. SubmissionRoutes::TxnStatus.with_arg_template("str") = "/submit_transaction/{str}"
-    fn with_arg_template(&self, arg: &str) -> String {
-        let mut endpoint = self.route();
-        endpoint += &("/".to_owned() + &"{".to_owned() + arg + &"}".to_owned());
-        endpoint
     }
 }
 
