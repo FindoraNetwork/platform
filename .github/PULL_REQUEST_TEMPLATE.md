@@ -3,15 +3,10 @@
   - [ ] make lint
   - [ ] make test
 
-
-* **The issue corresponding to this PR**
-
-
-
 * **The main content of this PR change**
 
 
 
-* **Whether the documentation、the test are complete, and the related web links**
+* **Documentation? Tests? Web links?**
 
 
