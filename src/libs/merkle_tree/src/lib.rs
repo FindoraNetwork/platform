@@ -642,7 +642,7 @@ impl AppendOnlyMerkle {
     ///
     /// # Example
     ///````
-    /// use merkle_tree::append_only_merkle::AppendOnlyMerkle;
+    /// use merkle_tree::AppendOnlyMerkle;
     ///
     /// let path = "public_ledger".to_string();
     ///
@@ -686,7 +686,7 @@ impl AppendOnlyMerkle {
     ///
     /// # Example
     ///````
-    /// use merkle_tree::append_only_merkle::AppendOnlyMerkle;
+    /// use merkle_tree::AppendOnlyMerkle;
     ///
     /// let path = "new_ledger";
     /// # let _ = std::fs::remove_file(&path);
@@ -930,7 +930,7 @@ impl AppendOnlyMerkle {
     ///
     /// # Example
     ///````
-    /// use merkle_tree::append_only_merkle::AppendOnlyMerkle;
+    /// use merkle_tree::AppendOnlyMerkle;
     /// use ruc::*;
     ///
     /// let path       = "deserialize";

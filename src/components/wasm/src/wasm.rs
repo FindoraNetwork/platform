@@ -24,7 +24,7 @@ use finutils::txn_builder::{
     TransactionBuilder as PlatformTransactionBuilder,
     TransferOperationBuilder as PlatformTransferOperationBuilder,
 };
-use globutils::HashOf;
+use globutils::{wallet, HashOf};
 use ledger::{
     data_model::{
         AssetTypeCode, AuthenticatedTransaction, Operation, TransferType, TxOutput,
@@ -839,13 +839,13 @@ pub fn new_keypair_from_seed(seed_str: String, name: Option<String>) -> XfrKeyPa
 #[wasm_bindgen]
 /// Returns base64 encoded representation of an XfrPublicKey.
 pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
-    globutils::wallet::public_key_to_base64(key)
+    wallet::public_key_to_base64(key)
 }
 
 #[wasm_bindgen]
 /// Converts a base64 encoded public key string to a public key.
 pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey, JsValue> {
-    globutils::wallet::public_key_from_base64(pk)
+    wallet::public_key_from_base64(pk)
         .c(d!())
         .map_err(error_to_jsvalue)
 }
@@ -1140,13 +1140,13 @@ use std::str;
 #[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.
 pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
-    globutils::wallet::public_key_to_bech32(key)
+    wallet::public_key_to_bech32(key)
 }
 
 #[wasm_bindgen]
 /// Converts a bech32 encoded public key string to a public key.
 pub fn public_key_from_bech32(addr: &str) -> Result<XfrPublicKey, JsValue> {
-    globutils::wallet::public_key_from_bech32(addr)
+    wallet::public_key_from_bech32(addr)
         .c(d!())
         .map_err(error_to_jsvalue)
 }
@@ -1246,7 +1246,7 @@ pub fn get_pk_from_keypair(kp: &XfrKeyPair) -> XfrPublicKey {
 /// Randomly generate a 12words-length mnemonic.
 #[wasm_bindgen]
 pub fn generate_mnemonic_default() -> String {
-    globutils::wallet::generate_mnemonic_default()
+    wallet::generate_mnemonic_default()
 }
 
 /// Generate mnemonic with custom length and language.
@@ -1254,7 +1254,7 @@ pub fn generate_mnemonic_default() -> String {
 /// - @param `lang`: acceptable value are one of [ "en", "zh", "zh_traditional", "fr", "it", "ko", "sp", "jp" ]
 #[wasm_bindgen]
 pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> Result<String, JsValue> {
-    globutils::wallet::generate_mnemonic_custom(wordslen, lang)
+    wallet::generate_mnemonic_custom(wordslen, lang)
         .c(d!())
         .map_err(error_to_jsvalue)
 }
@@ -1280,9 +1280,9 @@ impl BipPath {
     }
 }
 
-impl From<&BipPath> for globutils::wallet::BipPath {
+impl From<&BipPath> for wallet::BipPath {
     fn from(p: &BipPath) -> Self {
-        globutils::wallet::BipPath::new(p.coin, p.account, p.change, p.address)
+        wallet::BipPath::new(p.coin, p.account, p.change, p.address)
     }
 }
 
@@ -1292,7 +1292,7 @@ impl From<&BipPath> for globutils::wallet::BipPath {
 pub fn restore_keypair_from_mnemonic_default(
     phrase: &str,
 ) -> Result<XfrKeyPair, JsValue> {
-    globutils::wallet::restore_keypair_from_mnemonic_default(phrase)
+    wallet::restore_keypair_from_mnemonic_default(phrase)
         .c(d!())
         .map_err(error_to_jsvalue)
 }
@@ -1305,7 +1305,7 @@ pub fn restore_keypair_from_mnemonic_bip44(
     lang: &str,
     path: &BipPath,
 ) -> Result<XfrKeyPair, JsValue> {
-    globutils::wallet::restore_keypair_from_mnemonic_bip44(phrase, lang, &path.into())
+    wallet::restore_keypair_from_mnemonic_bip44(phrase, lang, &path.into())
         .c(d!())
         .map_err(error_to_jsvalue)
 }
@@ -1318,7 +1318,7 @@ pub fn restore_keypair_from_mnemonic_bip49(
     lang: &str,
     path: &BipPath,
 ) -> Result<XfrKeyPair, JsValue> {
-    globutils::wallet::restore_keypair_from_mnemonic_bip49(phrase, lang, &path.into())
+    wallet::restore_keypair_from_mnemonic_bip49(phrase, lang, &path.into())
         .c(d!())
         .map_err(error_to_jsvalue)
 }
@@ -1353,13 +1353,13 @@ pub fn get_delegation_target_address() -> String {
 #[wasm_bindgen]
 #[allow(missing_docs)]
 pub fn get_coinbase_address() -> String {
-    globutils::wallet::public_key_to_base64(&BLACK_HOLE_PUBKEY_STAKING)
+    wallet::public_key_to_base64(&BLACK_HOLE_PUBKEY_STAKING)
 }
 
 #[wasm_bindgen]
 #[allow(missing_docs)]
 pub fn get_coinbase_principal_address() -> String {
-    globutils::wallet::public_key_to_base64(&BLACK_HOLE_PUBKEY_STAKING)
+    wallet::public_key_to_base64(&BLACK_HOLE_PUBKEY_STAKING)
 }
 
 #[wasm_bindgen]

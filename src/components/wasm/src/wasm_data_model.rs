@@ -4,7 +4,7 @@ use credentials::{
     CredPoK, CredRevealSig, CredSignature, CredUserPublicKey, CredUserSecretKey,
     Credential as PlatformCredential,
 };
-use globutils::HashOf;
+use globutils::{wallet, HashOf};
 use ledger::data_model::{
     AssetRules as PlatformAssetRules, AssetType as PlatformAssetType, AuthenticatedUtxo,
     SignatureRules as PlatformSignatureRules, TxOutput, TxoRef as PlatformTxoRef,
@@ -558,7 +558,7 @@ impl SignatureRules {
         let weights: Vec<(XfrPublicKey, u64)> = weights
             .iter()
             .map(|(b64_key, weight)| {
-                globutils::wallet::public_key_from_base64(&b64_key)
+                wallet::public_key_from_base64(&b64_key)
                     .map(|pk| (pk, *weight))
                     .c(d!())
                     .map_err(error_to_jsvalue)

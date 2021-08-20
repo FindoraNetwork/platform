@@ -3,6 +3,7 @@ use crate::{
     common::get_serv_addr,
     txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder},
 };
+use globutils::wallet;
 use globutils::{HashOf, SignatureOf};
 use ledger::{
     data_model::{
@@ -339,7 +340,7 @@ fn get_owned_utxos(
     let url = format!(
         "{}:8668/owned_utxos/{}",
         get_serv_addr().c(d!())?,
-        globutils::wallet::public_key_to_base64(addr)
+        wallet::public_key_to_base64(addr)
     );
 
     attohttpc::get(&url)
@@ -405,7 +406,7 @@ pub fn get_delegation_info(pk: &XfrPublicKey) -> Result<DelegationInfo> {
     let url = format!(
         "{}:8668/delegation_info/{}",
         get_serv_addr().c(d!())?,
-        globutils::wallet::public_key_to_base64(pk)
+        wallet::public_key_to_base64(pk)
     );
 
     attohttpc::get(&url)
