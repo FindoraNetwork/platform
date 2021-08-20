@@ -38,12 +38,11 @@ time = "0.2.26"
 tendermint = "0.19.0"
 indexmap = { version = "1.6.2", features = ["serde"] }
 
-sparse_merkle_tree = { path = "../libs/ads/sparse_merkle_tree" }
-utils = { path = "../libs/utils" }
+globutils = { path = "../libs/globutils" }
 bitmap = { path = "../libs/bitmap" }
 cryptohash = { path = "../libs/cryptohash" }
 credentials = { path = "../libs/credentials"}
-merkle_tree = { path = "../libs/ads/merkle_tree" }
+merkle_tree = { path = "../libs/merkle_tree" }
 sliding_set = { path = "../libs/sliding_set" }
 
 [features]

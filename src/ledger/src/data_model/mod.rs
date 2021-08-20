@@ -18,6 +18,7 @@ use crate::staking::{
 use __trash__::{Policy, PolicyGlobals, TxnPolicyData};
 use bitmap::SparseMap;
 use cryptohash::{sha256::Digest as BitDigest, HashValue};
+use globutils::{HashOf, ProofOf, Serialized, SignatureOf};
 use lazy_static::lazy_static;
 use rand::Rng;
 use rand_chacha::{rand_core, ChaChaRng};
@@ -35,7 +36,6 @@ use std::{
 };
 use time::OffsetDateTime;
 use unicode_normalization::UnicodeNormalization;
-use utils::{HashOf, ProofOf, Serialized, SignatureOf};
 use zei::{
     serialization::ZeiFromToBytes,
     xfr::{
@@ -1415,7 +1415,7 @@ impl Transaction {
                         list.split(',')
                             .filter(|v| !v.is_empty())
                             .map(|v| {
-                                pnk!(utils::wallet::public_key_from_bech32(&v))
+                                pnk!(globutils::wallet::public_key_from_bech32(&v))
                                     .as_bytes()
                                     .to_vec()
                             })

@@ -13,12 +13,12 @@ fn gen() -> Result<()> {
 
     let mnemonics = (0..cfg_template.valiators.len())
         .map(|_| {
-            libutils::wallet::generate_mnemonic_custom(24, "en")
+            globutils::wallet::generate_mnemonic_custom(24, "en")
                 .c(d!())
                 .and_then(|m| {
-                    libutils::wallet::restore_keypair_from_mnemonic_default(&m)
+                    globutils::wallet::restore_keypair_from_mnemonic_default(&m)
                         .c(d!())
-                        .map(|kp| libutils::wallet::public_key_to_base64(&kp.get_pk()))
+                        .map(|kp| globutils::wallet::public_key_to_base64(&kp.get_pk()))
                         .map(|pk| (m, pk))
                 })
         })

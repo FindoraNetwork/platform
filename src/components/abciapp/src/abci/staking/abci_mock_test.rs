@@ -14,6 +14,7 @@ use finutils::{
     api::DelegationInfo,
     txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder},
 };
+use globutils::{fresh_tmp_dir, se, wallet};
 use lazy_static::lazy_static;
 use ledger::staking::STAKING_VALIDATOR_MIN_POWER;
 use ledger::{
@@ -57,7 +58,6 @@ use std::{
 };
 use tendermint_sys::SyncApplication;
 use tm_protos::abci::*;
-use utils::se;
 use zei::xfr::{
     asset_record::{open_blind_asset_record, AssetRecordType},
     sig::{XfrKeyPair, XfrPublicKey},
@@ -375,7 +375,7 @@ impl TendermintMocker {
 fn gen_initial_keypair_list() -> Result<Vec<XfrKeyPair>> {
     INITIAL_MNEMONIC
         .iter()
-        .map(|m| utils::wallet::restore_keypair_from_mnemonic_default(m).c(d!()))
+        .map(|m| wallet::restore_keypair_from_mnemonic_default(m).c(d!()))
         .collect::<Result<Vec<_>>>()
 }
 
@@ -1673,7 +1673,7 @@ fn staking_scene_5() -> Result<()> {
     const VALIDATORS_NUM: u8 = 11;
 
     // addresses are guaranteed to remain unchanged when test reloading
-    let path_str = utils::fresh_tmp_dir().to_str().unwrap().to_string();
+    let path_str = fresh_tmp_dir().to_str().unwrap().to_string();
 
     env_refresh_with_path(VALIDATORS_NUM, path_str.clone());
 

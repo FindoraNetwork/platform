@@ -4,13 +4,12 @@ members = [
     "src/components/wasm",
     "src/components/finutils",
     "src/ledger",
-    "src/libs/ads/merkle_tree",
-    "src/libs/ads/sparse_merkle_tree",
+    "src/libs/merkle_tree",
     "src/libs/bitmap",
     "src/libs/cryptohash",
     "src/libs/credentials",
     "src/libs/sliding_set",
-    "src/libs/utils",
+    "src/libs/globutils",
 ]
 
 [profile.dev]

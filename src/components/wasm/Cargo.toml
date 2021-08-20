@@ -39,10 +39,9 @@ zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4a" }
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 
 finutils = { path = "../finutils" }
-utils = { path = "../../libs/utils" }
+globutils = { path = "../../libs/globutils" }
 credentials = { path = "../../libs/credentials" }
 cryptohash = { path = "../../libs/cryptohash" }
-sparse_merkle_tree = { path = "../../libs/ads/sparse_merkle_tree" }
 ledger = { path = "../../ledger" }
 
 [lib]

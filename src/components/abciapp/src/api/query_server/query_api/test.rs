@@ -49,7 +49,7 @@ lazy_static! {
 
 fn create_server() -> QueryServer {
     let mut qs =
-        QueryServer::new(LEDGER.clone(), Some(utils::fresh_tmp_dir().as_path()));
+        QueryServer::new(LEDGER.clone(), Some(globutils::fresh_tmp_dir().as_path()));
     qs
 }
 

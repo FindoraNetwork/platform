@@ -11,6 +11,7 @@
 
 use clap::{crate_authors, App, SubCommand};
 use finutils::{common, txn_builder::BuildsTransactions};
+use globutils::wallet;
 use lazy_static::lazy_static;
 use ledger::{
     data_model::{Transaction, BLACK_HOLE_PUBKEY_STAKING},
@@ -20,7 +21,6 @@ use ledger::{
     },
     store::fra_gen_initial_tx,
 };
-use libutils::wallet;
 use ruc::*;
 use serde::Serialize;
 use std::{collections::BTreeMap, env};

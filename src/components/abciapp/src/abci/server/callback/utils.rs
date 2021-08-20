@@ -11,8 +11,7 @@ mod real {
     use ledger::data_model::{Operation, Transaction, TxnSID};
     use serde::Serialize;
     use std::time::SystemTime;
-    use tm_protos::abci::*;
-    use tm_protos::libs::kv::*;
+    use tm_protos::{abci::*, libs::kv::*};
     use zei::xfr::structs::{XfrAmount, XfrAssetType};
 
     /// generate attr(tags) for index-ops of tendermint
@@ -98,7 +97,7 @@ mod real {
                         $data.body.transfer.$direction.iter().for_each(|i| {
                             let mut attr = TagAttr::default();
                             attr.addr =
-                                utils::wallet::public_key_to_bech32(&i.public_key);
+                                globutils::wallet::public_key_to_bech32(&i.public_key);
                             if let XfrAssetType::NonConfidential(ty) = i.asset_type {
                                 attr.asset_type = Some(hex::encode(&ty.0[..]));
                             }
@@ -111,7 +110,8 @@ mod real {
                     // define\issue\AIR\memo
                     ($data: expr) => {
                         let mut attr = TagAttr::default();
-                        attr.addr = utils::wallet::public_key_to_bech32(&$data.pubkey);
+                        attr.addr =
+                            globutils::wallet::public_key_to_bech32(&$data.pubkey);
                         base.0.push(attr);
                     };
                 }

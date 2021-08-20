@@ -25,9 +25,8 @@ zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4a" }
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 
 ledger = { path = "../../ledger" }
-libutils = { package = "utils", path = "../../libs/utils" }
+globutils = { path = "../../libs/globutils" }
 credentials = { path = "../../libs/credentials" }
-sparse_merkle_tree = { path = "../../libs/ads/sparse_merkle_tree" }
 
 [dev-dependencies]
 quickcheck = "0.8"

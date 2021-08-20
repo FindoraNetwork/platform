@@ -4,6 +4,7 @@ use credentials::{
     CredPoK, CredRevealSig, CredSignature, CredUserPublicKey, CredUserSecretKey,
     Credential as PlatformCredential,
 };
+use globutils::HashOf;
 use ledger::data_model::{
     AssetRules as PlatformAssetRules, AssetType as PlatformAssetType, AuthenticatedUtxo,
     SignatureRules as PlatformSignatureRules, TxOutput, TxoRef as PlatformTxoRef,
@@ -13,15 +14,18 @@ use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ruc::{d, err::RucResult};
 use serde::{Deserialize, Serialize};
-use sparse_merkle_tree::Key as SmtKey;
-use utils::HashOf;
 use wasm_bindgen::prelude::*;
-use zei::setup::PublicParams as ZeiPublicParams;
-use zei::xfr::sig::XfrPublicKey;
-use zei::xfr::structs::{
-    AssetTracerDecKeys, AssetTracerEncKeys, AssetTracerKeyPair as ZeiAssetTracerKeyPair,
-    BlindAssetRecord, IdentityRevealPolicy, OwnerMemo as ZeiOwnerMemo,
-    TracingPolicies as ZeiTracingPolicies, TracingPolicy as ZeiTracingPolicy,
+use zei::{
+    setup::PublicParams as ZeiPublicParams,
+    xfr::{
+        sig::XfrPublicKey,
+        structs::{
+            AssetTracerDecKeys, AssetTracerEncKeys,
+            AssetTracerKeyPair as ZeiAssetTracerKeyPair, BlindAssetRecord,
+            IdentityRevealPolicy, OwnerMemo as ZeiOwnerMemo,
+            TracingPolicies as ZeiTracingPolicies, TracingPolicy as ZeiTracingPolicy,
+        },
+    },
 };
 
 #[wasm_bindgen]
@@ -554,7 +558,7 @@ impl SignatureRules {
         let weights: Vec<(XfrPublicKey, u64)> = weights
             .iter()
             .map(|(b64_key, weight)| {
-                utils::wallet::public_key_from_base64(&b64_key)
+                globutils::wallet::public_key_from_base64(&b64_key)
                     .map(|pk| (pk, *weight))
                     .c(d!())
                     .map_err(error_to_jsvalue)
@@ -705,38 +709,5 @@ impl AssetRules {
             .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
-    }
-}
-
-#[wasm_bindgen]
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-/// Key for hashes in the ledger's custom data store.
-pub struct Key(SmtKey);
-
-#[wasm_bindgen]
-impl Key {
-    /// Generate a random key.
-    /// Figure out how to store prng ref in browser: https://bugtracker.findora.org/issues/63
-    pub fn gen_random() -> Self {
-        let mut small_rng = ChaChaRng::from_entropy();
-        Key(SmtKey::gen_random(&mut small_rng))
-    }
-
-    /// Returns a base64 encoded version of the Key.
-    pub fn to_base64(&self) -> String {
-        self.0.to_base64()
-    }
-
-    /// Generates a Key from a base64-encoded String.
-    pub fn from_base64(string: &str) -> Result<Key, JsValue> {
-        Ok(Key(SmtKey::from_base64(string)
-            .c(d!())
-            .map_err(error_to_jsvalue)?))
-    }
-}
-
-impl Key {
-    pub fn get_ref(&self) -> &SmtKey {
-        &self.0
     }
 }

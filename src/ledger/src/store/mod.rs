@@ -8,8 +8,9 @@ use bnc::{
     vecx::Vecx,
 };
 use cryptohash::sha256::Digest as BitDigest;
+use globutils::{HashOf, ProofOf, SignatureOf};
 use log::info;
-use merkle_tree::append_only_merkle::AppendOnlyMerkle;
+use merkle_tree::AppendOnlyMerkle;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use ruc::*;
@@ -23,7 +24,6 @@ use std::{
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
 };
-use utils::{HashOf, ProofOf, SignatureOf};
 use zei::{
     setup::PublicParams,
     xfr::{
@@ -880,7 +880,7 @@ impl LedgerState {
 
     // Create a ledger for use by a unit test.
     pub fn test_ledger() -> LedgerState {
-        let tmp_dir = utils::fresh_tmp_dir();
+        let tmp_dir = globutils::fresh_tmp_dir();
 
         let ret =
             LedgerState::new(tmp_dir.clone(), None, None, Some(String::from("test")))

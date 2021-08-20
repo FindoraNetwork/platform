@@ -25,23 +25,17 @@
 #![deny(warnings)]
 // #![deny(missing_docs)]
 
-use cryptohash::sha256;
-use cryptohash::sha256::{Digest, DIGESTBYTES};
+use cryptohash::sha256::{self, Digest, DIGESTBYTES};
+use globutils::Commas;
 use log::{debug, info};
 use ruc::*;
-use std::cmp::min;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::fs::File;
-use std::io::Read;
-use std::io::Seek;
-use std::io::SeekFrom::End;
-use std::io::SeekFrom::Start;
-use std::io::Write;
-use std::mem;
-use std::slice::from_raw_parts;
-use std::slice::from_raw_parts_mut;
-use utils::Commas;
+use std::{
+    cmp,
+    collections::{HashMap, HashSet},
+    fs::File,
+    io::{Read, Seek, SeekFrom, Write},
+    mem, slice,
+};
 
 // Constants for calling serialize_block.
 // const HEADER_ONLY: bool = false;
@@ -111,7 +105,7 @@ impl BlockInfo {
 
     fn as_ref(&self) -> &[u8] {
         unsafe {
-            from_raw_parts(
+            slice::from_raw_parts(
                 (self as *const BlockInfo) as *const u8,
                 mem::size_of::<BlockInfo>(),
             )
@@ -120,7 +114,7 @@ impl BlockInfo {
 
     fn as_mut(&mut self) -> &mut [u8] {
         unsafe {
-            from_raw_parts_mut(
+            slice::from_raw_parts_mut(
                 (self as *mut BlockInfo) as *mut u8,
                 mem::size_of::<BlockInfo>(),
             )
@@ -454,7 +448,7 @@ impl BitBlock {
     // Create a slice for writing a block to disk.
     fn as_ref(&self) -> &[u8] {
         unsafe {
-            from_raw_parts(
+            slice::from_raw_parts(
                 (self as *const BitBlock) as *const u8,
                 mem::size_of::<BitBlock>(),
             )
@@ -464,7 +458,7 @@ impl BitBlock {
     // Create a mutable slice for reading a block from disk.
     fn as_mut(&mut self) -> &mut [u8] {
         unsafe {
-            from_raw_parts_mut(
+            slice::from_raw_parts_mut(
                 (self as *mut BitBlock) as *mut u8,
                 mem::size_of::<BitBlock>(),
             )
@@ -475,7 +469,7 @@ impl BitBlock {
     // that is checksummed.
     fn as_checksummed_region(&self) -> &[u8] {
         unsafe {
-            from_raw_parts(
+            slice::from_raw_parts(
                 (&self.header.magic as *const u32) as *const u8,
                 mem::size_of::<BitBlock>() - mem::size_of::<CheckBlock>(),
             )
@@ -665,7 +659,7 @@ impl BitMap {
     /// # let _ = std::fs::remove_file(&path);
     ///````
     pub fn create(mut data: File) -> Result<BitMap> {
-        let file_size = data.seek(End(0)).c(d!())?;
+        let file_size = data.seek(SeekFrom::End(0)).c(d!())?;
 
         if file_size != 0 {
             return Err(eg!("The file contains data!".to_string()));
@@ -774,13 +768,13 @@ impl BitMap {
         let map = create_map();
 
         // Compute the number of blocks in the file.
-        let file_size = file.seek(End(0)).c(d!())?;
+        let file_size = file.seek(SeekFrom::End(0)).c(d!())?;
 
         if file_size % BLOCK_SIZE as u64 != 0 {
             return Err(eg!(format!("That file size ({}) is invalid.", file_size)));
         }
 
-        file.seek(Start(0)).c(d!())?;
+        file.seek(SeekFrom::Start(0)).c(d!())?;
         let total_blocks = file_size / BLOCK_SIZE as u64;
 
         // Reserve space in our vectors.
@@ -991,7 +985,7 @@ impl BitMap {
         }
 
         // Update the first invalid spot in the checksum.
-        self.first_invalid = min(self.first_invalid, block);
+        self.first_invalid = cmp::min(self.first_invalid, block);
 
         // Change the actual value in the block. Also,
         // update the population count.
@@ -1530,7 +1524,7 @@ impl BitMap {
     fn write_block(&mut self, index: usize) -> Result<()> {
         self.blocks[index].set_checksum();
         let offset = index as u64 * BLOCK_SIZE as u64;
-        self.file.seek(Start(offset)).c(d!())?;
+        self.file.seek(SeekFrom::Start(offset)).c(d!())?;
         self.file.write_all(self.blocks[index].as_ref()).c(d!())?;
         self.dirty[index] = 0;
         Ok(())

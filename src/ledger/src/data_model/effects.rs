@@ -10,12 +10,12 @@ use crate::{
         },
     },
 };
+use globutils::HashOf;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ruc::*;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
-use utils::HashOf;
 use zei::{
     serialization::ZeiFromToBytes,
     xfr::{

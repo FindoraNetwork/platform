@@ -3,6 +3,7 @@
 
 use credentials::CredUserSecretKey;
 use curve25519_dalek::scalar::Scalar;
+use globutils::SignatureOf;
 use ledger::{
     data_model::*,
     staking::{
@@ -20,7 +21,6 @@ use ledger::{
         Validator,
     },
 };
-use libutils::SignatureOf;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use ruc::*;

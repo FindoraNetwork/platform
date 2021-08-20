@@ -8,24 +8,26 @@
 //!  to disk as needed.
 //!
 
+#![deny(warnings)]
+// #![deny(missing_docs)]
+#![allow(clippy::needless_borrow)]
+
 use chrono::Utc;
 use cryptohash::{hash_pair, hash_partial, sha256, HashValue, Proof, HASH_SIZE};
+use globutils::Commas;
 use log::{debug, info};
 use ruc::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::HashMap;
-use std::fmt;
-use std::fs::File;
-use std::fs::OpenOptions;
-use std::io::{Error, ErrorKind, Read, Seek, Write};
-use std::io::{SeekFrom::End, SeekFrom::Start};
-use std::mem;
-use std::mem::MaybeUninit;
-use std::ptr::copy_nonoverlapping;
-use std::result::Result as StdResult;
-use std::slice::from_raw_parts;
-use std::slice::from_raw_parts_mut;
-use utils::Commas;
+use std::fs::{File, OpenOptions};
+use std::{
+    collections::HashMap,
+    fmt,
+    io::{ErrorKind, Read, Seek, SeekFrom, Write},
+    mem::{self, MaybeUninit},
+    ptr::copy_nonoverlapping,
+    result::Result as StdResult,
+    slice,
+};
 
 const BLOCK_SHIFT: u16 = 9;
 const LEVELS_IN_BLOCK: usize = BLOCK_SHIFT as usize;
@@ -327,14 +329,11 @@ impl Block {
         let index = self.header.valid_leaves as usize;
 
         if index >= LEAVES_IN_BLOCK {
-            return Err(eg!(Error::new(ErrorKind::NotFound, "This block is full.")));
+            return Err(eg!("This block is full."));
         }
 
         if self.hashes[index] != HashValue::new() {
-            return Err(eg!(Error::new(
-                ErrorKind::NotFound,
-                "That hash block is not empty.",
-            )));
+            return Err(eg!("That hash block is not empty."));
         }
 
         self.hashes[index] = *hash_value;
@@ -397,7 +396,7 @@ impl Block {
     // checksummed, i.e., everything but the checksum area itself.
     fn as_checksummed_region(&self) -> &[u8] {
         unsafe {
-            from_raw_parts(
+            slice::from_raw_parts(
                 (&self.header.header_mark as *const u32) as *const u8,
                 mem::size_of::<Block>() - mem::size_of::<CheckBits>(),
             )
@@ -556,7 +555,10 @@ impl Block {
     // Return a pointer to the raw bytes of the block for I/O.
     fn as_bytes(&self) -> &[u8] {
         unsafe {
-            from_raw_parts((self as *const Block) as *const u8, mem::size_of::<Block>())
+            slice::from_raw_parts(
+                (self as *const Block) as *const u8,
+                mem::size_of::<Block>(),
+            )
         }
     }
 }
@@ -780,10 +782,10 @@ impl AppendOnlyMerkle {
     // the work of recreating all the blocks for all the files.
     fn rebuild_internal(&mut self, mut input: File) -> Result<()> {
         // Compute the number of complete blocks there.
-        let file_size = input.seek(End(0)).c(d!())?;
+        let file_size = input.seek(SeekFrom::End(0)).c(d!())?;
         let block_count = file_size / BLOCK_SIZE as u64;
 
-        input.seek(Start(0)).c(d!())?;
+        input.seek(SeekFrom::Start(0)).c(d!())?;
         self.files[0] = input;
 
         let mut entries = 0;
@@ -1078,7 +1080,7 @@ impl AppendOnlyMerkle {
     fn read_level(&mut self, state: &mut LevelState) -> Result<()> {
         let level = state.level;
 
-        let file_size = match self.files[level].seek(End(0)) {
+        let file_size = match self.files[level].seek(SeekFrom::End(0)) {
             Ok(n) => n,
             Err(x) => {
                 info!("seek failed:  {}", x);
@@ -1094,7 +1096,7 @@ impl AppendOnlyMerkle {
             return self.recover_file(level);
         }
 
-        if let Err(x) = self.files[level].seek(Start(0)) {
+        if let Err(x) = self.files[level].seek(SeekFrom::Start(0)) {
             info!("Seek failed:  {}", x);
             return self.recover_file(level);
         }
@@ -1273,7 +1275,7 @@ impl AppendOnlyMerkle {
         let level = block.level();
 
         // Seek to the offset to which we will write.
-        match self.files[level].seek(Start(offset)) {
+        match self.files[level].seek(SeekFrom::Start(offset)) {
             Ok(n) => {
                 if n != offset {
                     // Log error.
@@ -1442,7 +1444,8 @@ impl AppendOnlyMerkle {
             if block.full() && self.blocks_on_disk[level] >= block.id() as u64 {
                 debug_assert!(self.blocks_on_disk[level] <= block.id() as u64 + 1);
 
-                let se = self.files[level].seek(Start((block.id() * BLOCK_SIZE) as u64));
+                let se = self.files[level]
+                    .seek(SeekFrom::Start((block.id() * BLOCK_SIZE) as u64));
 
                 if se.is_ok() {
                     let we = self.files[level].write_all(block.as_bytes());
@@ -1972,7 +1975,7 @@ impl AppendOnlyMerkle {
             // transient disk error.
             let start_offset = start_block as u64 * BLOCK_SIZE as u64;
 
-            match self.files[level].seek(Start(start_offset)) {
+            match self.files[level].seek(SeekFrom::Start(start_offset)) {
                 Err(x) => {
                     return Err(eg!(x));
                 }
@@ -2055,7 +2058,7 @@ impl AppendOnlyMerkle {
         // Check the blocks at each level.
         for level in 0..self.blocks.len() {
             // First, get the file size check it against expectations.
-            let disk_bytes = self.files[level].seek(End(0)).c(d!())?;
+            let disk_bytes = self.files[level].seek(SeekFrom::End(0)).c(d!())?;
 
             let blocks_on_disk = self.blocks_on_disk[level];
             let expected_size = blocks_on_disk * BLOCK_SIZE as u64;
@@ -2078,7 +2081,7 @@ impl AppendOnlyMerkle {
                 )));
             }
 
-            if let Err(x) = self.files[level].seek(Start(0)) {
+            if let Err(x) = self.files[level].seek(SeekFrom::Start(0)) {
                 return Err(eg!(format!("check_disk:  The read seek failed:  {}", x)));
             }
 
@@ -2156,20 +2159,14 @@ impl AppendOnlyMerkle {
         };
 
         if let Err(x) = block.check(level, id, true) {
-            return Err(eg!(Error::new(
-                ErrorKind::Other,
-                format!("Invalid disk block {}:  {}", id.commas(), x),
-            )));
+            return Err(eg!(format!("Invalid disk block {}:  {}", id.commas(), x)));
         }
 
         if !last && !block.full() {
-            return Err(eg!(Error::new(
-                ErrorKind::Other,
-                format!(
-                    "Block {} at level {} from disk is not full.",
-                    id.commas(),
-                    level
-                ),
+            return Err(eg!(format!(
+                "Block {} at level {} from disk is not full.",
+                id.commas(),
+                level
             )));
         }
 
@@ -2182,7 +2179,8 @@ impl AppendOnlyMerkle {
         unsafe {
             let mut s: MaybeUninit<Block> = MaybeUninit::uninit();
 
-            let buffer = from_raw_parts_mut(s.as_mut_ptr() as *mut u8, BLOCK_SIZE);
+            let buffer =
+                slice::from_raw_parts_mut(s.as_mut_ptr() as *mut u8, BLOCK_SIZE);
 
             match self.files[level].read_exact(buffer) {
                 Ok(()) => Ok(mem::transmute::<_, Block>(s)),
@@ -2390,11 +2388,9 @@ impl AppendOnlyMerkle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use byteorder::LittleEndian;
-    use byteorder::WriteBytesExt;
+    use byteorder::{LittleEndian, WriteBytesExt};
     use cryptohash::sha256;
-    use rand::prelude::thread_rng;
-    use rand::Rng;
+    use rand::{prelude::thread_rng, Rng};
 
     #[test]
     fn test_info() {

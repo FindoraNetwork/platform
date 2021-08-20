@@ -1393,7 +1393,7 @@ lazy_static! {
     /// Reserved accounts of Findora Foundation or System.
     pub static ref FF_PK_LIST: Vec<XfrPublicKey> = FF_ADDR_LIST
         .iter()
-        .map(|addr| pnk!(utils::wallet::public_key_from_bech32(addr)))
+        .map(|addr| pnk!(globutils::wallet::public_key_from_bech32(addr)))
         .collect();
 }
 

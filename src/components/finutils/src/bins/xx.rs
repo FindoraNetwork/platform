@@ -28,7 +28,7 @@ use ledger::data_model::{
     TxoRef, TxoSID, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
     TX_FEE_MIN,
 };
-use libutils::{HashOf, SignatureOf};
+use globutils::{HashOf, SignatureOf};
 use parking_lot::{Condvar, Mutex};
 use rand::random;
 use rand_chacha::rand_core::SeedableRng;
@@ -583,7 +583,7 @@ fn get_cosignature_fee_op() -> Result<Operation> {
     let key = env::var("COSIG_FEE_MNEMONIC")
         .c(d!())
         .and_then(|m| {
-            libutils::wallet::restore_keypair_from_mnemonic_default(&m).c(d!())
+            globutils::wallet::restore_keypair_from_mnemonic_default(&m).c(d!())
         })
         .or_else(|_| {
             env::var("COSIG_FEE_KEY").c(d!()).and_then(|k| {
@@ -592,7 +592,7 @@ fn get_cosignature_fee_op() -> Result<Operation> {
                     .c(d!())
             })
         })?;
-    let pk_b64 = libutils::wallet::public_key_to_base64(&key.get_pk());
+    let pk_b64 = globutils::wallet::public_key_to_base64(&key.get_pk());
 
     // Assume the test user has only FRA
     let sid = task::block_on(
