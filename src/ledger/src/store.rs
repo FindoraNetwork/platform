@@ -1,6 +1,6 @@
 use crate::{
     data_model::*,
-    staking::{Staking, FRA_TOTAL_AMOUNT},
+    staking::{Staking, FRA_PRE_ISSUE_AMOUNT},
 };
 use bitmap::{BitMap, SparseMap};
 use bnc::{
@@ -2005,7 +2005,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
         &fra_code,
         fra_owner_kp,
         AssetRules {
-            max_units: Some(1000 + FRA_TOTAL_AMOUNT),
+            max_units: Some(1000 + FRA_PRE_ISSUE_AMOUNT),
             decimals: FRA_DECIMALS,
             ..AssetRules::default()
         },
@@ -2018,7 +2018,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
      **/
 
     let template = AssetRecordTemplate::with_no_asset_tracing(
-        FRA_TOTAL_AMOUNT / 2,
+        FRA_PRE_ISSUE_AMOUNT / 2,
         fra_code.val,
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         fra_owner_kp.get_pk(),

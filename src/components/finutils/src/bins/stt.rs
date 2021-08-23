@@ -17,7 +17,7 @@ use ledger::{
     data_model::{Transaction, BLACK_HOLE_PUBKEY_STAKING},
     staking::{
         check_delegation_amount, gen_random_keypair, td_addr_to_bytes, BLOCK_INTERVAL,
-        FRA, FRA_TOTAL_AMOUNT,
+        FRA, FRA_PRE_ISSUE_AMOUNT,
     },
     store::fra_gen_initial_tx,
 };
@@ -197,7 +197,7 @@ mod init {
             .values()
             .map(|u| &u.pubkey)
             .chain(VALIDATOR_LIST.values().map(|v| &v.pubkey))
-            .map(|pk| (pk, FRA_TOTAL_AMOUNT / 10000))
+            .map(|pk| (pk, FRA_PRE_ISSUE_AMOUNT / 10000))
             .collect::<Vec<_>>();
 
         println!(">>> transfer FRAs to validators...");
@@ -225,7 +225,7 @@ mod issue {
             AssetTypeCode, IssueAsset, IssueAssetBody, IssuerKeyPair, Operation,
             TxOutput, ASSET_TYPE_FRA,
         },
-        staking::FRA_TOTAL_AMOUNT,
+        staking::FRA_PRE_ISSUE_AMOUNT,
     };
     use rand_chacha::rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
@@ -248,7 +248,7 @@ mod issue {
         let mut builder = common::utils::new_tx_builder().c(d!())?;
 
         let template = AssetRecordTemplate::with_no_asset_tracing(
-            FRA_TOTAL_AMOUNT / 2,
+            FRA_PRE_ISSUE_AMOUNT / 2,
             ASSET_TYPE_FRA,
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
             root_kp.get_pk(),

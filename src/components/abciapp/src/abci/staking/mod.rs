@@ -353,7 +353,7 @@ mod test {
             Transaction, TransferType, TxnEffect, TxoRef, ASSET_TYPE_FRA,
             BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
-        staking::{Staking, FF_PK_LIST, FRA_TOTAL_AMOUNT},
+        staking::{Staking, FF_PK_LIST, FRA_PRE_ISSUE_AMOUNT},
         store::{fra_gen_initial_tx, LedgerState},
     };
     use rand::random;
@@ -390,7 +390,7 @@ mod test {
 
         // set a fake delegation amount
         *ledger.get_staking_mut().get_global_delegation_amount_mut() =
-            FRA_TOTAL_AMOUNT / 200;
+            FRA_PRE_ISSUE_AMOUNT / 200;
 
         let mut seq_id = 1;
         let mut prev_rate = [2, 1];
@@ -399,7 +399,7 @@ mod test {
                 &ledger,
                 &root_kp,
                 &FF_PK_LIST[random::<usize>() % FF_PK_LIST.len()],
-                FRA_TOTAL_AMOUNT / 200,
+                FRA_PRE_ISSUE_AMOUNT / 200,
                 seq_id,
             )
             .c(d!())?;
