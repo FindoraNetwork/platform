@@ -912,6 +912,7 @@ impl AppendOnlyMerkle {
     //
     // This function currently is only for testing.
     #[cfg(test)]
+    #[allow(missing_docs)]
     pub fn leaf(&self, index: usize) -> HashValue {
         if index as u64 > self.entry_count {
             return HashValue::new();
@@ -2386,6 +2387,7 @@ impl AppendOnlyMerkle {
 }
 
 #[cfg(test)]
+#[allow(missing_docs)]
 mod tests {
     use super::*;
     use byteorder::{LittleEndian, WriteBytesExt};

@@ -429,6 +429,7 @@ impl<'a, T> Deserialize<'a> for SignatureOfBytes<T> {
 }
 
 #[cfg(test)]
+#[allow(missing_docs)]
 mod tests {
     use super::*;
 

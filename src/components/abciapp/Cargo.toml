@@ -1,6 +1,6 @@
 [package]
 name = "abciapp"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["FindoraNetwork"]
 build = "build.rs"
 edition = "2018"
@@ -47,8 +47,6 @@ globutils = { path = "../../libs/globutils" }
 finutils = { path = "../finutils" }
 
 [dev-dependencies]
-quickcheck = "0.8"
-quickcheck_macros = "0.8"
 
 [build-dependencies]
 vergen = "=3.1.0"

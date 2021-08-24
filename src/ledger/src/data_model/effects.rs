@@ -21,60 +21,63 @@ use zei::{
     xfr::{
         lib::verify_xfr_body,
         sig::XfrPublicKey,
-        structs::{TracingPolicies, XfrAmount, XfrAssetType},
+        structs::{XfrAmount, XfrAssetType},
     },
 };
 
+/// Check operations in the context of a tx, partially.
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub struct TxnEffect {
-    // The Transaction object this represents
+    /// The Transaction object this represents
     pub txn: Transaction,
-    // Internally-spent TXOs are None, UTXOs are Some(...)
+    /// Internally-spent TXOs are None, UTXOs are Some(...)
     pub txos: Vec<Option<TxOutput>>,
-    // Which TXOs this consumes
+    /// Which TXOs this consumes
     pub input_txos: HashMap<TxoSID, TxOutput>,
-    // List of internally-spent TXOs. This does not include input txos;
+    /// List of internally-spent TXOs. This does not include input txos;
     pub internally_spent_txos: Vec<TxOutput>,
-    // Which new asset types this defines
+    /// Which new asset types this defines
     pub new_asset_codes: HashMap<AssetTypeCode, AssetType>,
-    // Which new TXO issuance sequence numbers are used, in sorted order
-    // The vec should be nonempty unless this asset code is being created in
-    // this transaction.
+    /// Which new TXO issuance sequence numbers are used, in sorted order
+    /// The vec should be nonempty unless this asset code is being created in
+    /// this transaction.
     pub new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>>,
-    // Which public key is being used to issue each asset type
+    /// Which public key is being used to issue each asset type
     pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
-    // New issuance amounts
+    /// New issuance amounts
     pub issuance_amounts: HashMap<AssetTypeCode, u64>,
-    // Asset types that have issuances with confidential outputs. Issuances cannot be confidential
-    // if there is an issuance cap
+    /// Asset types that have issuances with confidential outputs. Issuances cannot be confidential
+    /// if there is an issuance cap
     pub confidential_issuance_types: HashSet<AssetTypeCode>,
-    // Mapping of (op index, xfr input idx) tuples to set of valid signature keys
-    // i.e. (2, 1) -> { AlicePk, BobPk } means that Alice and Bob both have valid signatures on the 2nd input of the 1st
-    // operation
-    pub cosig_keys: HashMap<(usize, usize), HashSet<Vec<u8>>>,
-    // Non-confidential asset types involved in confidential transfers
+    /// Non-confidential asset types involved in confidential transfers
     pub confidential_transfer_inputs: HashSet<AssetTypeCode>,
-    // Tracing policies that input/outputs types were validated under
-    pub tracing_policies: HashMap<AssetTypeCode, TracingPolicies>,
 
+    /// Asset types involved in this tx
     pub asset_types_involved: HashSet<AssetTypeCode>,
-    // Memo updates
+    /// Memo updates
     pub memo_updates: Vec<(AssetTypeCode, XfrPublicKey, Memo)>,
 
-    pub update_stakers: Vec<UpdateStakerOps>,
+    /// Staking operations
     pub delegations: Vec<DelegationOps>,
+    /// Staking operations
     pub undelegations: Vec<UnDelegationOps>,
+    /// Staking operations
     pub claims: Vec<ClaimOps>,
-    pub update_validators: HashMap<staking::BlockHeight, UpdateValidatorOps>,
+    /// Staking operations
     pub governances: Vec<GovernanceOps>,
+    /// Staking operations
+    pub update_validators: HashMap<staking::BlockHeight, UpdateValidatorOps>,
+    /// Staking operations
     pub fra_distributions: Vec<FraDistributionOps>,
+    /// Staking operations
+    pub update_stakers: Vec<UpdateStakerOps>,
 }
 
-// Internally validates the transaction as well.
-// If the transaction is invalid, it is dropped, so if you need to inspect
-// the transaction in order to diagnose the error, clone it first!
 #[allow(clippy::cognitive_complexity)]
 impl TxnEffect {
+    /// Internally validates the transaction as well.
+    /// If the transaction is invalid, it is dropped, so if you need to inspect
+    /// the transaction in order to diagnose the error, clone it first!
     pub fn compute_effect(txn: Transaction) -> Result<TxnEffect> {
         let mut txo_count: usize = 0;
         let mut txos: Vec<Option<TxOutput>> = Vec::new();
@@ -82,12 +85,9 @@ impl TxnEffect {
         let mut input_txos: HashMap<TxoSID, TxOutput> = HashMap::new();
         let mut memo_updates = Vec::new();
         let mut new_asset_codes: HashMap<AssetTypeCode, AssetType> = HashMap::new();
-        let mut cosig_keys = HashMap::new();
         let mut new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>> = HashMap::new();
         let mut issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey> = HashMap::new();
         let mut issuance_amounts: HashMap<AssetTypeCode, u64> = HashMap::new();
-        let mut tracing_policies: HashMap<AssetTypeCode, TracingPolicies> =
-            HashMap::new();
         let mut asset_types_involved: HashSet<AssetTypeCode> = HashSet::new();
         let mut confidential_issuance_types = HashSet::new();
         let mut confidential_transfer_inputs = HashSet::new();
@@ -120,7 +120,7 @@ impl TxnEffect {
         // `input_txos` and that Transfer should be valid if all those TXO SIDs
         // exist unspent in the ledger and correspond to the correct
         // TxOutput).
-        for (op_idx, op) in txn.body.operations.iter().enumerate() {
+        for op in txn.body.operations.iter() {
             macro_rules! check_nonce {
                 ($i: expr) => {
                     if $i.get_nonce() != txn.body.no_replay_token {
@@ -373,71 +373,25 @@ impl TxnEffect {
                                 if !trn.body.verify_body_signature(sig) {
                                     return Err(eg!());
                                 }
-                                if let Some(input_idx) = sig.input_idx {
-                                    let sig_keys = cosig_keys
-                                        .entry((op_idx, input_idx))
-                                        .or_insert_with(HashSet::new);
-                                    (*sig_keys).insert(sig.address.key.zei_to_bytes());
-                                } else {
-                                    input_keys.insert(sig.address.key.zei_to_bytes());
-                                }
+                                input_keys.insert(sig.address.key.zei_to_bytes());
                             }
 
                             // (1b) all input record owners have signed
-                            for (input_idx, record) in
-                                trn.body.transfer.inputs.iter().enumerate()
-                            {
+                            for record in trn.body.transfer.inputs.iter() {
                                 if !input_keys
                                     .contains(&record.public_key.zei_to_bytes())
                                 {
                                     return Err(eg!());
                                 }
-                                cosig_keys
-                                    .entry((op_idx, input_idx))
-                                    .or_insert_with(HashSet::new);
                             }
 
-                            let policies = trn.body.policies.to_ref();
                             verify_xfr_body(
                                 &mut prng,
                                 &mut params,
                                 &trn.body.transfer,
-                                &policies,
+                                &trn.body.policies.to_ref(),
                             )
                             .c(d!())?;
-
-                            // Track policies that each asset was validated under
-                            for (input_policies, record) in trn
-                                .body
-                                .policies
-                                .inputs_tracing_policies
-                                .iter()
-                                .zip(trn.body.transfer.inputs.iter())
-                                .chain(
-                                    trn.body
-                                        .policies
-                                        .outputs_tracing_policies
-                                        .iter()
-                                        .zip(trn.body.transfer.outputs.iter()),
-                                )
-                            {
-                                // Only non-confidential assets can be traced
-                                if let Some(inp_code) =
-                                    record.asset_type.get_asset_type()
-                                {
-                                    let prev_policies = tracing_policies.insert(
-                                        AssetTypeCode { val: inp_code },
-                                        input_policies.clone(),
-                                    );
-
-                                    // Tracing policies must be consistent w.r.t asset type (cant change)
-                                    if prev_policies.is_some()
-                                        && prev_policies.c(d!())? != *input_policies
-                                    {
-                                        return Err(eg!());
-                                    }
-                                }
-                            }
                         }
                     }
                     // (3)
@@ -561,141 +515,77 @@ impl TxnEffect {
             issuance_keys,
             issuance_amounts,
             confidential_issuance_types,
-            cosig_keys,
             confidential_transfer_inputs,
-            tracing_policies,
             asset_types_involved,
             memo_updates,
-            update_stakers,
             delegations,
             undelegations,
             claims,
-            update_validators,
             governances,
+            update_validators,
             fra_distributions,
+            update_stakers,
         };
 
         Ok(txn_effect)
     }
 }
 
+/// Check tx in the context of a block, partially.
 #[derive(Debug, Clone, Eq, PartialEq, Default, Serialize)]
 pub struct BlockEffect {
-    // All Transaction objects validated in this block
+    /// All Transaction objects validated in this block
     pub txns: Vec<Transaction>,
-    // All NoReplayTokens seen in this block
+    /// All NoReplayTokens seen in this block
     pub no_replay_tokens: Vec<NoReplayToken>,
-    // Identifiers within this block for each transaction
-    // (currently just an index into `txns`)
+    /// Identifiers within this block for each transaction
+    /// (currently just an index into `txns`)
     pub temp_sids: Vec<TxnTempSID>,
-    // Internally-spent TXOs are None, UTXOs are Some(...)
-    // Should line up element-wise with `txns`
+    /// Internally-spent TXOs are None, UTXOs are Some(...)
+    /// Should line up element-wise with `txns`
     pub txos: Vec<Vec<Option<TxOutput>>>,
-    // Which TXOs this consumes
+    /// Which TXOs this consumes
     pub input_txos: HashMap<TxoSID, TxOutput>,
-    // Which new asset types this defines
+    /// Which new asset types this defines
     pub new_asset_codes: HashMap<AssetTypeCode, AssetType>,
-    // Which new TXO issuance sequence numbers are used, in sorted order
-    // The vec should be nonempty unless this asset code is being created in
-    // this transaction.
+    /// Which new TXO issuance sequence numbers are used, in sorted order
+    /// The vec should be nonempty unless this asset code is being created in
+    /// this transaction.
     pub new_issuance_nums: HashMap<AssetTypeCode, Vec<u64>>,
-    // New issuance amounts
+    /// New issuance amounts
     pub issuance_amounts: HashMap<AssetTypeCode, u64>,
-    // Which public key is being used to issue each asset type
+    /// Which public key is being used to issue each asset type
     pub issuance_keys: HashMap<AssetTypeCode, IssuerPublicKey>,
-    // Memo updates
+    /// Memo updates
     pub memo_updates: HashMap<AssetTypeCode, Memo>,
-    // counter for consensus integration; will add to a running count when applied.
+    /// counter for consensus integration; will add to a running count when applied.
     pub pulse_count: u64,
-
+    /// simulator for safety
     pub staking_simulator: staking::Staking,
 }
 
 impl BlockEffect {
-    pub fn get_staking_simulator_mut(&mut self) -> &mut staking::Staking {
-        &mut self.staking_simulator
-    }
-}
-
-impl BlockEffect {
-    pub fn new() -> BlockEffect {
-        Default::default()
-    }
-
-    // Combine a TxnEffect into this block.
-    //
-    // NOTE: this does not check the TxnEffect against the rest of the ledger
-    // state, so each TxnEffect should be passed through
-    // LedgerStatus::check_txn_effects *first*.
-    //
-    // Returns:
-    //   if `txn` would not interfere with any transaction in the block, the
-    //       new temp SID representing the transaction.
-    //   Otherwise, Err(...)
+    /// Combine a TxnEffect into this block.
+    ///
+    /// NOTE: this does not check the TxnEffect against the rest of the ledger
+    /// state, so each TxnEffect should be passed through
+    /// LedgerStatus::check_txn_effects *first*.
+    ///
+    /// Returns:
+    ///   if `txn` would not interfere with any transaction in the block, the
+    ///       new temp SID representing the transaction.
+    ///   Otherwise, Err(...)
     #[allow(clippy::cognitive_complexity)]
     pub fn add_txn_effect(
         &mut self,
         txn_effect: TxnEffect,
         is_loading: bool,
     ) -> Result<TxnTempSID> {
-        // Check that no inputs are consumed twice
-        for (input_sid, _) in txn_effect.input_txos.iter() {
-            if self.input_txos.contains_key(&input_sid) {
-                return Err(eg!());
-            }
-        }
-
-        // Check that no AssetType is affected by both the block so far and
-        // this transaction
-        {
-            for (type_code, _) in txn_effect.new_asset_codes.iter() {
-                if self.new_asset_codes.contains_key(&type_code)
-                    || self.new_issuance_nums.contains_key(&type_code)
-                {
-                    return Err(eg!());
-                }
-            }
-
-            for (type_code, nums) in txn_effect.new_issuance_nums.iter() {
-                if self.new_asset_codes.contains_key(&type_code)
-                    || self.new_issuance_nums.contains_key(&type_code)
-                {
-                    return Err(eg!());
-                }
-
-                // Debug-check that issued assets are registered in `issuance_keys`
-                if !nums.is_empty() {
-                    debug_assert!(txn_effect.issuance_keys.contains_key(&type_code));
-                }
-            }
-            // Ensure that each asset's memo can only be updated once per block
-            for (type_code, _, _) in txn_effect.memo_updates.iter() {
-                if self.memo_updates.contains_key(&type_code) {
-                    return Err(eg!());
-                }
-            }
-        }
-
-        let no_replay_token = txn_effect.txn.body.no_replay_token;
-        // Check that no operations are duplicated as in a replay attack
-        // Note that we need to check here as well as in LedgerStatus::check_txn_effect
-        for txn in self.txns.iter() {
-            if txn.body.no_replay_token == no_replay_token {
-                return Err(eg!());
-            }
-        }
-
-        // NOTE: set at the last position
-        if !is_loading {
-            self.check_staking(&txn_effect).c(d!())?;
-        }
-
-        ///////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////
+        self.check_txn_effect(&txn_effect, is_loading).c(d!())?;
 
         // By construction, no_replay_tokens entries are unique
-        self.no_replay_tokens.push(no_replay_token);
+        self.no_replay_tokens
+            .push(txn_effect.txn.body.no_replay_token);
 
         let temp_sid = TxnTempSID(self.txns.len());
         self.txns.push(txn_effect.txn);
@@ -724,6 +614,66 @@ impl BlockEffect {
         }
 
         Ok(temp_sid)
+    }
+
+    fn check_txn_effect(
+        &mut self,
+        txn_effect: &TxnEffect,
+        is_loading: bool,
+    ) -> Result<()> {
+        // Check that no inputs are consumed twice
+        for (input_sid, _) in txn_effect.input_txos.iter() {
+            if self.input_txos.contains_key(&input_sid) {
+                return Err(eg!());
+            }
+        }
+
+        // Check that no AssetType is affected by both the block so far and
+        // this transaction
+        {
+            for (type_code, _) in txn_effect.new_asset_codes.iter() {
+                if self.new_asset_codes.contains_key(&type_code)
+                    || self.new_issuance_nums.contains_key(&type_code)
+                {
+                    return Err(eg!());
+                }
+            }
+
+            for (type_code, nums) in txn_effect.new_issuance_nums.iter() {
+                if self.new_asset_codes.contains_key(&type_code)
+                    || self.new_issuance_nums.contains_key(&type_code)
+                {
+                    return Err(eg!());
+                }
+
+                // Debug-check that issued assets are registered in `issuance_keys`
+                if !nums.is_empty() && !txn_effect.issuance_keys.contains_key(&type_code)
+                {
+                    return Err(eg!());
+                }
+            }
+            // Ensure that each asset's memo can only be updated once per block
+            for (type_code, _, _) in txn_effect.memo_updates.iter() {
+                if self.memo_updates.contains_key(&type_code) {
+                    return Err(eg!());
+                }
+            }
+        }
+
+        // Check that no operations are duplicated as in a replay attack
+        // Note that we need to check here as well as in LedgerStatus::check_txn_effect
+        for txn in self.txns.iter() {
+            if txn.body.no_replay_token == txn_effect.txn.body.no_replay_token {
+                return Err(eg!());
+            }
+        }
+
+        // NOTE: set at the last position
+        if !is_loading {
+            self.check_staking(&txn_effect).c(d!())?;
+        }
+
+        Ok(())
     }
 
     fn check_staking(&mut self, txn_effect: &TxnEffect) -> Result<()> {
@@ -761,15 +711,13 @@ impl BlockEffect {
         Ok(())
     }
 
-    pub fn get_pulse_count(&self) -> u64 {
-        self.pulse_count
-    }
-
-    pub fn add_pulse(&mut self) -> u64 {
-        self.pulse_count += 1;
-        self.pulse_count
-    }
+    #[allow(missing_docs)]
     pub fn compute_txns_in_block_hash(&self) -> HashOf<Vec<Transaction>> {
         HashOf::new(&self.txns)
+    }
+
+    #[allow(missing_docs)]
+    pub fn get_staking_simulator_mut(&mut self) -> &mut staking::Staking {
+        &mut self.staking_simulator
     }
 }

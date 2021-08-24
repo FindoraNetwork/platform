@@ -1423,7 +1423,10 @@ pub const VALIDATOR_UPDATE_BLOCK_ITV: i64 = 4;
 pub const FRA: Amount = 10_u64.pow(FRA_DECIMALS as u32);
 
 /// Total amount of FRA-units issuance.
-pub const FRA_TOTAL_AMOUNT: Amount = 210_0000_0000 * FRA + MINT_AMOUNT_LIMIT;
+pub const FRA_PRE_ISSUE_AMOUNT: Amount = 210_0000_0000 * FRA;
+
+/// <Total amount of FRA-units issuance> + <token pool of CoinBase>.
+pub const FRA_TOTAL_AMOUNT: Amount = FRA_PRE_ISSUE_AMOUNT + MINT_AMOUNT_LIMIT;
 
 /// Minimum allowable delegation amount.
 pub const MIN_DELEGATION_AMOUNT: Amount = 1;
@@ -1451,12 +1454,7 @@ pub const MAX_TOTAL_POWER: Amount = Amount::MAX / 8;
 pub const MAX_POWER_PERCENT_PER_VALIDATOR: [u128; 2] = [1, 5];
 
 /// Block time interval, in seconds.
-#[cfg(not(any(feature = "debug_env", feature = "abci_mock")))]
 pub const BLOCK_INTERVAL: u64 = 15 + 1;
-
-/// used in test/mock env
-#[cfg(any(feature = "debug_env", feature = "abci_mock"))]
-pub const BLOCK_INTERVAL: u64 = 5 + 1;
 
 /// The lock time after the delegation expires, about 21 days.
 #[cfg(not(any(feature = "debug_env", feature = "abci_mock")))]
@@ -2113,6 +2111,7 @@ fn get_nonconfidential_balance(la: &LedgerState, addr: &XfrPublicKey) -> u64 {
 }
 
 #[cfg(test)]
+#[allow(missing_docs)]
 mod test {
     use super::*;
     use rand::random;

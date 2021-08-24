@@ -36,10 +36,6 @@ where
 {
     let tx = body.into_inner();
 
-    if tx.in_blk_list() {
-        return Err(error::ErrorBadRequest(""));
-    }
-
     let mut submission_server = data.write();
     submission_server
         .handle_transaction(tx)

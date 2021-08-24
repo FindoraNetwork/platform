@@ -1532,6 +1532,7 @@ impl BitMap {
 }
 
 #[cfg(test)]
+#[allow(missing_docs)]
 mod tests {
     use super::*;
     use cryptohash::sha256::{Digest, DIGESTBYTES};

@@ -3,6 +3,7 @@
 
 mod __trash__;
 mod effects;
+mod test;
 
 pub use effects::*;
 
@@ -28,13 +29,12 @@ use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
-    env, fmt,
+    fmt,
     hash::{Hash, Hasher},
     mem,
     ops::Deref,
     result::Result as StdResult,
 };
-use time::OffsetDateTime;
 use unicode_normalization::UnicodeNormalization;
 use zei::{
     serialization::ZeiFromToBytes,
@@ -849,11 +849,6 @@ impl TransferAsset {
         self.attach_signature(sig).unwrap()
     }
 
-    pub fn sign_cosignature(&mut self, keypair: &XfrKeyPair, input_idx: usize) {
-        let sig = self.create_cosignature(keypair, input_idx);
-        self.attach_signature(sig).unwrap()
-    }
-
     pub fn attach_signature(
         &mut self,
         sig: IndexedSignature<TransferAssetBody>,
@@ -870,14 +865,6 @@ impl TransferAsset {
         keypair: &XfrKeyPair,
     ) -> IndexedSignature<TransferAssetBody> {
         self.body.compute_body_signature(keypair, None)
-    }
-
-    pub fn create_cosignature(
-        &self,
-        keypair: &XfrKeyPair,
-        input_idx: usize,
-    ) -> IndexedSignature<TransferAssetBody> {
-        self.body.compute_body_signature(keypair, Some(input_idx))
     }
 
     pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
@@ -1214,30 +1201,29 @@ impl AuthenticatedBlock {
     }
 }
 
-pub type SparseMapBytes = Vec<u8>;
-
 #[derive(Serialize, Clone, Deserialize)]
 pub struct AuthenticatedUtxoStatus {
     pub status: UtxoStatus,
     pub utxo_sid: TxoSID,
     pub state_commitment_data: StateCommitmentData,
-    pub utxo_map_bytes: Option<SparseMapBytes>, // BitMap only needed for proof if the txo_sid exists
+    pub utxo_map_bytes: Option<Vec<u8>>, // BitMap only needed for proof if the txo_sid exists
     pub state_commitment: HashOf<Option<StateCommitmentData>>,
 }
 
 impl AuthenticatedUtxoStatus {
-    // An authenticated utxo status is valid (for txos that exist) if
-    // 1) The state commitment of the proof matches the state commitment passed in
-    // 2) The state commitment data hashes to the state commitment
-    // 3) For txos that don't exist, simply show that the utxo_sid greater than max_sid
-    // 4) The status matches the bit stored in the bitmap
-    // 5) The bitmap checksum matches digest in state commitment data
+    /// An authenticated utxo status is valid (for txos that exist) if
+    /// 1) The state commitment of the proof matches the state commitment passed in
+    /// 2) The state commitment data hashes to the state commitment
+    /// 3) For txos that don't exist, simply show that the utxo_sid greater than max_sid
+    /// 4) The status matches the bit stored in the bitmap
+    /// 5) The bitmap checksum matches digest in state commitment data
     pub fn is_valid(
         &self,
         state_commitment: HashOf<Option<StateCommitmentData>>,
     ) -> bool {
         let state_commitment_data = &self.state_commitment_data;
         let utxo_sid = self.utxo_sid.0;
+
         // 1, 2) First, validate the state commitment
         if state_commitment != self.state_commitment
             || self.state_commitment != state_commitment_data.compute_commitment()
@@ -1245,13 +1231,14 @@ impl AuthenticatedUtxoStatus {
             return false;
         }
 
+        // 3)
         if self.status == UtxoStatus::Nonexistent {
-            // 3)
             return utxo_sid >= state_commitment_data.txo_count;
         }
 
         // If the txo exists, the proof must also contain a bitmap
         let utxo_map = SparseMap::new(&self.utxo_map_bytes.as_ref().unwrap()).unwrap();
+
         // 4) The status matches the bit stored in the bitmap
         let spent = !utxo_map.query(utxo_sid).unwrap();
 
@@ -1260,6 +1247,7 @@ impl AuthenticatedUtxoStatus {
         {
             return false;
         }
+
         // 5)
         if utxo_map.checksum() != self.state_commitment_data.bitmap {
             println!("failed at bitmap checksum");
@@ -1309,10 +1297,9 @@ impl FinalizedTransaction {
     }
 }
 
-/// Will be used by `cli2`.
-pub const ASSET_TYPE_FRA_BYTES: [u8; ASSET_TYPE_LENGTH] = [0; ASSET_TYPE_LENGTH];
 /// Use pure zero bytes(aka [0, 0, ... , 0]) to express FRA.
-pub const ASSET_TYPE_FRA: ZeiAssetType = ZeiAssetType(ASSET_TYPE_FRA_BYTES);
+pub const ASSET_TYPE_FRA: ZeiAssetType = ZeiAssetType([0; ASSET_TYPE_LENGTH]);
+
 /// FRA decimals
 pub const FRA_DECIMALS: u8 = 6;
 
@@ -1324,18 +1311,17 @@ lazy_static! {
     pub static ref BLACK_HOLE_PUBKEY_STAKING: XfrPublicKey = pnk!(XfrPublicKey::zei_from_bytes(&[1; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
 }
 
-/// see [**mainnet-v1.0 defination**](https://www.notion.so/findora/Transaction-Fees-Analysis-d657247b70f44a699d50e1b01b8a2287)
+/// see [**mainnet-v0.1 defination**](https://www.notion.so/findora/Transaction-Fees-Analysis-d657247b70f44a699d50e1b01b8a2287)
 pub const TX_FEE_MIN: u64 = 1_0000;
 
 impl Transaction {
     /// All-in-one checker
+    #[inline(always)]
     pub fn is_basic_valid(&self, td_height: i64) -> bool {
-        !self.in_blk_list()
-            && self.check_fee()
-            && self.fra_no_illegal_issuance(td_height)
+        self.check_fee() && self.fra_no_illegal_issuance(td_height)
     }
 
-    /// A simple fee checker for mainnet v1.0.
+    /// A simple fee checker for mainnet v0.1.
     ///
     /// The check logic is as follows:
     /// - Only `NonConfidential Operation` can be used as fee
@@ -1400,56 +1386,12 @@ impl Transaction {
         })
     }
 
-    /// Addresses to be denied
-    pub fn in_blk_list(&self) -> bool {
-        lazy_static! {
-            static ref BLK_LIST: (i64, i64, HashSet<Vec<u8>>) = {
-                match (
-                    env::var("ADDR_BLK_LIST_TS_START"),
-                    env::var("ADDR_BLK_LIST_TS_END"),
-                    env::var("ADDR_BLK_LIST"),
-                ) {
-                    (Ok(ts_start), Ok(ts_end), Ok(list)) => (
-                        pnk!(ts_start.parse::<i64>()),
-                        pnk!(ts_end.parse::<i64>()),
-                        list.split(',')
-                            .filter(|v| !v.is_empty())
-                            .map(|v| {
-                                pnk!(globutils::wallet::public_key_from_bech32(&v))
-                                    .as_bytes()
-                                    .to_vec()
-                            })
-                            .collect(),
-                    ),
-                    _ => (i64::MAX, i64::MIN, HashSet::new()),
-                }
-            };
-        }
-
-        let ts = OffsetDateTime::now_utc().unix_timestamp();
-        if ts < BLK_LIST.0 || ts > BLK_LIST.1 {
-            return false;
-        }
-
-        self.body.operations.iter().any(|o| {
-            if let Operation::TransferAsset(ref x) = o {
-                x.body
-                    .transfer
-                    .inputs
-                    .iter()
-                    .any(|i| BLK_LIST.2.contains(i.public_key.as_bytes()))
-            } else {
-                false
-            }
-        })
-    }
-
-    // findora hash
+    /// findora hash
     pub fn hash(&self, id: TxnSID) -> HashOf<(TxnSID, Transaction)> {
         HashOf::new(&(id, self.clone()))
     }
 
-    // tendermint hash
+    /// tendermint hash
     pub fn hash_tm(&self) -> HashOf<Transaction> {
         HashOf::new(&self.clone())
     }
@@ -1488,10 +1430,6 @@ impl Transaction {
 
     pub fn add_operation(&mut self, mut op: Operation) {
         set_no_replay_token(&mut op, self.body.no_replay_token);
-        self.body.operations.push(op);
-    }
-
-    pub fn testonly_add_operation(&mut self, op: Operation) {
         self.body.operations.push(op);
     }
 
@@ -1583,400 +1521,5 @@ pub struct StateCommitmentData {
 impl StateCommitmentData {
     pub fn compute_commitment(&self) -> HashOf<Option<Self>> {
         HashOf::new(&Some(self).cloned())
-    }
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct AccountID {
-    pub val: String,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Account {
-    pub id: AccountID,
-    pub access_control_list: Vec<AccountAddress>,
-    pub key_value: HashMap<String, String>, //key value storage...
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use curve25519_dalek::ristretto::CompressedRistretto;
-    use rand_core::SeedableRng;
-    use std::cmp::min;
-    use zei::ristretto;
-    use zei::xfr::structs::{AssetTypeAndAmountProof, XfrBody, XfrProofs};
-    use zeiutils::err_eq;
-
-    // This test may fail as it is a statistical test that sometimes fails (but very rarely)
-    // It uses the central limit theorem, but essentially testing the rand crate
-    #[test]
-    fn test_gen_random_with_rng() {
-        let mut sum: u64 = 0;
-        let mut sample_size = 0;
-
-        let mut rng = rand::thread_rng();
-        for _ in 0..1000 {
-            let code = AssetTypeCode::gen_random_with_rng(&mut rng);
-            let mut failed = true;
-
-            for byte in code.val.0.iter() {
-                if *byte != 0 {
-                    failed = false;
-                }
-
-                sum += *byte as u64;
-                sample_size += 1;
-            }
-
-            assert!(!failed);
-        }
-
-        // Use the central limit theorem. The standard deviation of the
-        // sample mean should be normal(127.5, uniform variance). Work
-        // from the standard deviation of uniform(0, 1), sqrt(1/12). The
-        // expected average (mu) is 127.5 if the random number generator
-        // is unbiased.
-        let uniform_stddev = 1.0 / (12.0f64).sqrt();
-        let average = sum as f64 / sample_size as f64;
-        let stddev = (uniform_stddev * 255.0) / (sample_size as f64).sqrt();
-        println!("Average {}, stddev {}", average, stddev);
-        assert!(average > 127.5 - 5.0 * stddev);
-        assert!(average < 127.5 + 5.0 * stddev);
-    }
-
-    #[test]
-    // Test that an error is returned if the asset code is greater than 32 byts and a safe conversion is chosen
-    fn test_base64_from_to_utf8_safe() {
-        if UTF8_ASSET_TYPES_WORK {
-            let code = "My 资产 $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$";
-            let result = AssetTypeCode::new_from_utf8_safe(code);
-            match result {
-                Err(e) => {
-                    err_eq!("...", e);
-                }
-                _ => panic!("InputsError expected."),
-            }
-        }
-    }
-
-    #[test]
-    // Test that a customized asset code can be converted to and from base 64 correctly
-    fn test_base64_from_to_utf8_truncate() {
-        if UTF8_ASSET_TYPES_WORK {
-            let customized_code = "❤️💰 My 资产 $";
-            let code = AssetTypeCode::new_from_utf8_truncate(customized_code);
-            let utf8 = AssetTypeCode::to_utf8(code).unwrap();
-            assert_eq!(utf8, customized_code);
-        }
-    }
-
-    #[test]
-    // Test that a customized asset code is truncated correctly if the lenght is greater than 32
-    fn test_utf8_truncate() {
-        if UTF8_ASSET_TYPES_WORK {
-            let customized_code_short = "My 资产 $";
-            let customized_code_32_bytes = "My 资产 $$$$$$$$$$$$$$$$$$$$$$";
-            let customized_code_to_truncate =
-                "My 资产 $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$";
-
-            let code_short =
-                AssetTypeCode::new_from_utf8_truncate(customized_code_short);
-            let code_32_bytes =
-                AssetTypeCode::new_from_utf8_truncate(customized_code_32_bytes);
-            let code_to_truncate =
-                AssetTypeCode::new_from_utf8_truncate(customized_code_to_truncate);
-            assert_ne!(code_short, code_32_bytes);
-            assert_eq!(code_32_bytes, code_to_truncate);
-
-            let utf8 = AssetTypeCode::to_utf8(code_32_bytes).unwrap();
-            assert_eq!(utf8, customized_code_32_bytes);
-        }
-    }
-
-    #[test]
-    fn test_new_from_str() {
-        let value = "1";
-        let mut input = "".to_string();
-
-        for i in 0..64 {
-            let code = AssetTypeCode::new_from_str(&input);
-            let mut checked = 0;
-
-            for j in 0..min(i, code.val.0.len()) {
-                assert!(code.val.0[j] == value.as_bytes()[0]);
-                checked += 1;
-            }
-
-            for j in i..code.val.0.len() {
-                assert!(code.val.0[j] == 0);
-                checked += 1;
-            }
-
-            assert!(checked == code.val.0.len());
-            input += value;
-        }
-    }
-
-    #[test]
-    fn test_new_from_base64() {
-        let base64 = "ZGVmZ2hpamtsbW5vcHFycw==";
-        let result = Code::new_from_base64(base64);
-
-        assert_eq!(
-            result.ok(),
-            Some(Code {
-                val: [
-                    100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112,
-                    113, 114, 115
-                ]
-            })
-        );
-    }
-
-    #[test]
-    fn test_code_to_base64() {
-        let code = Code {
-            val: [
-                100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113,
-                114, 115,
-            ],
-        };
-        assert_eq!(code.to_base64(), "ZGVmZ2hpamtsbW5vcHFycw==");
-    }
-
-    // Test Transaction::add_operation
-    // Below are not directly tested but called:
-    //   TransferAssetBody::new
-    //   IssueAssetBody::new
-    //   DefineAssetBody::new
-    //   TransferAsset::new
-    //   IssueAsset::new
-    //   DefineAsset::new
-    fn gen_sample_tx() -> Transaction {
-        // Create values to be used to instantiate operations. Just make up a seq_id, since
-        // it will never be sent to a real ledger
-        let mut transaction: Transaction = Transaction::from_seq_id(666);
-
-        let mut prng = rand_chacha::ChaChaRng::from_entropy();
-
-        let keypair = XfrKeyPair::generate(&mut prng);
-
-        let xfr_note = XfrBody {
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            proofs: XfrProofs {
-                asset_type_and_amount_proof: AssetTypeAndAmountProof::NoProof,
-                asset_tracing_proof: Default::default(),
-            },
-            asset_tracing_memos: Vec::new(),
-            owners_memos: Vec::new(),
-        };
-
-        let no_policies = TracingPolicies::new();
-
-        let policies = XfrNotePolicies::new(
-            vec![no_policies.clone()],
-            vec![None],
-            vec![no_policies],
-            vec![None],
-        );
-
-        let asset_transfer_body = TransferAssetBody {
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            policies,
-            transfer: Box::new(xfr_note),
-            lien_assignments: Vec::new(),
-            transfer_type: TransferType::Standard,
-        };
-
-        let asset_transfer = {
-            let mut ret = TransferAsset::new(asset_transfer_body).unwrap();
-            ret.sign(&keypair);
-            ret
-        };
-
-        let transfer_operation = Operation::TransferAsset(asset_transfer.clone());
-
-        // Instantiate an IssueAsset operation
-        let asset_issuance_body = IssueAssetBody {
-            code: AssetTypeCode::gen_random(),
-            seq_num: 0,
-            num_outputs: 0,
-            records: Vec::new(),
-        };
-
-        let asset_issuance =
-            IssueAsset::new(asset_issuance_body, &IssuerKeyPair { keypair: &keypair })
-                .unwrap();
-
-        let issuance_operation = Operation::IssueAsset(asset_issuance.clone());
-
-        // Instantiate an DefineAsset operation
-        let mut asset = Box::new(Asset::default());
-        asset.code = AssetTypeCode::gen_random();
-
-        let asset_creation = DefineAsset::new(
-            DefineAssetBody { asset },
-            &IssuerKeyPair { keypair: &keypair },
-        )
-        .unwrap();
-
-        let creation_operation = Operation::DefineAsset(asset_creation.clone());
-
-        // Add operations to the transaction
-        transaction.add_operation(transfer_operation);
-        transaction.add_operation(issuance_operation);
-        transaction.add_operation(creation_operation);
-
-        // Verify operatoins
-        assert_eq!(transaction.body.operations.len(), 3);
-
-        assert_eq!(
-            transaction.body.operations.get(0),
-            Some(&Operation::TransferAsset(asset_transfer))
-        );
-        assert_eq!(
-            transaction.body.operations.get(1),
-            Some(&Operation::IssueAsset(asset_issuance))
-        );
-        assert_eq!(
-            transaction.body.operations.get(2),
-            Some(&Operation::DefineAsset(asset_creation))
-        );
-
-        transaction
-    }
-
-    #[test]
-    fn test_add_operation() {
-        gen_sample_tx();
-    }
-
-    fn gen_fee_operation(
-        amount: Option<u64>,
-        asset_type: Option<ZeiAssetType>,
-        dest_pubkey: XfrPublicKey,
-    ) -> Operation {
-        Operation::TransferAsset(TransferAsset {
-            body: TransferAssetBody {
-                inputs: Vec::new(),
-                policies: XfrNotePolicies::default(),
-                outputs: vec![TxOutput {
-                    id: None,
-                    record: BlindAssetRecord {
-                        amount: amount.map(XfrAmount::NonConfidential).unwrap_or(
-                            XfrAmount::Confidential((
-                                ristretto::CompressedRistretto(CompressedRistretto(
-                                    [0; 32],
-                                )),
-                                ristretto::CompressedRistretto(CompressedRistretto(
-                                    [0; 32],
-                                )),
-                            )),
-                        ),
-                        asset_type: asset_type
-                            .map(XfrAssetType::NonConfidential)
-                            .unwrap_or(XfrAssetType::Confidential(
-                                ristretto::CompressedRistretto(CompressedRistretto(
-                                    [0; 32],
-                                )),
-                            )),
-                        public_key: dest_pubkey,
-                    },
-                    lien: None,
-                }],
-                lien_assignments: Vec::new(),
-                transfer: Box::new(XfrBody {
-                    inputs: Vec::new(),
-                    outputs: Vec::new(),
-                    proofs: XfrProofs {
-                        asset_type_and_amount_proof: AssetTypeAndAmountProof::NoProof,
-                        asset_tracing_proof: Default::default(),
-                    },
-                    asset_tracing_memos: Vec::new(),
-                    owners_memos: Vec::new(),
-                }),
-                transfer_type: TransferType::Standard,
-            },
-            body_signatures: Vec::new(),
-        })
-    }
-
-    #[test]
-    fn test_check_fee() {
-        let mut tx = gen_sample_tx();
-        assert!(!tx.check_fee());
-
-        let invalid_confidential_type =
-            gen_fee_operation(Some(TX_FEE_MIN), None, *BLACK_HOLE_PUBKEY);
-        let invalid_confidential_amount = gen_fee_operation(
-            None,
-            Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
-            *BLACK_HOLE_PUBKEY,
-        );
-        let invalid_nonconfidential_not_fra_code = gen_fee_operation(
-            Some(TX_FEE_MIN),
-            Some(ZeiAssetType([9; ASSET_TYPE_LENGTH])),
-            *BLACK_HOLE_PUBKEY,
-        );
-        let invalid_nonconfidential_fee_too_little = gen_fee_operation(
-            Some(TX_FEE_MIN - 1),
-            Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
-            *BLACK_HOLE_PUBKEY,
-        );
-        let invalid_destination_not_black_hole = gen_fee_operation(
-            Some(TX_FEE_MIN),
-            Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
-            XfrPublicKey::zei_from_bytes(&[9; ed25519_dalek::PUBLIC_KEY_LENGTH][..])
-                .unwrap(),
-        );
-        let valid = gen_fee_operation(
-            Some(TX_FEE_MIN),
-            Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
-            *BLACK_HOLE_PUBKEY,
-        );
-        let valid2 = gen_fee_operation(
-            Some(TX_FEE_MIN + 999),
-            Some(ZeiAssetType([0; ASSET_TYPE_LENGTH])),
-            *BLACK_HOLE_PUBKEY,
-        );
-
-        // tx.add_operation(invalid_confidential_type.clone());
-        // assert!(!tx.check_fee());
-        //
-        // tx.add_operation(invalid_confidential_amount.clone());
-        // assert!(!tx.check_fee());
-        //
-        // tx.add_operation(invalid_nonconfidential_not_fra_code.clone());
-        // assert!(!tx.check_fee());
-
-        // tx.add_operation(invalid_nonconfidential_fee_too_little.clone());
-        // assert!(!tx.check_fee());
-
-        // tx.add_operation(invalid_destination_not_black_hole.clone());
-        // assert!(!tx.check_fee());
-
-        tx.add_operation(valid);
-        assert!(tx.check_fee());
-
-        tx.add_operation(invalid_confidential_type);
-        assert!(tx.check_fee());
-
-        tx.add_operation(invalid_confidential_amount);
-        assert!(tx.check_fee());
-
-        tx.add_operation(valid2);
-        assert!(tx.check_fee());
-
-        tx.add_operation(invalid_nonconfidential_not_fra_code);
-        assert!(tx.check_fee());
-
-        tx.add_operation(invalid_nonconfidential_fee_too_little);
-        assert!(tx.check_fee());
-
-        tx.add_operation(invalid_destination_not_black_hole);
-        assert!(tx.check_fee());
     }
 }

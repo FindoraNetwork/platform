@@ -207,14 +207,6 @@ where
         }
     }
 
-    pub fn abort_block(&mut self) {
-        let mut block = None;
-        std::mem::swap(&mut self.block, &mut block);
-        if let Some(block) = block {
-            self.committed_state.write().abort_block(block);
-        }
-    }
-
     // Handle the whole process when there's a new transaction
     pub fn handle_transaction(&mut self, txn: Transaction) -> Result<TxnHandle> {
         let txn_handle = TxnHandle::new(&txn);

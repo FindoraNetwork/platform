@@ -3,6 +3,7 @@
 //!
 
 #![allow(warnings)]
+#![allow(missing_docs)]
 
 use crate::api::query_server::query_api::QueryServer;
 use finutils::txn_builder::{BuildsTransactions, TransactionBuilder};
