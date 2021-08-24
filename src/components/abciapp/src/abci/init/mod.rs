@@ -45,56 +45,38 @@ pub fn init_genesis(mode: InitMode, path: &str) -> Result<()> {
 }
 
 pub fn generate_tendermint_config(mode: InitMode, path: &str) -> Result<()> {
-    let config_str = fs::read_to_string(path).c(d!())?;
-    let rp_tx_ak = str::replace(
-        &config_str,
-        "index_all_keys = false",
-        "index_all_keys = true",
-    );
-    let rpc_laddr = str::replace(
-        &rp_tx_ak,
+    let config = fs::read_to_string(path).c(d!())?;
+    let config =
+        str::replace(&config, "index_all_keys = false", "index_all_keys = true");
+    let config = str::replace(
+        &config,
         "laddr = \"tcp://127.0.0.1:26657\"",
         "laddr = \"tcp://0.0.0.0:26657\"",
     );
 
     let result = match mode {
         InitMode::Testnet => {
-            let cebi = str::replace(
-                &rpc_laddr,
-                "create_empty_blocks_interval = \"0s\"",
-                "create_empty_blocks_interval = \"15s\"",
-            );
             str::replace(
-                &cebi,
+                &config,
                 "persistent_peers = \"\"",
                 "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@prod-testnet-us-west-2-sentry-000-public.prod.findora.org:26656\"",
             )
         }
         InitMode::Mainnet => {
-            let cebi = str::replace(
-                &rpc_laddr,
-                "create_empty_blocks_interval = \"0s\"",
-                "create_empty_blocks_interval = \"15s\"",
-            );
             str::replace(
-                &cebi,
+                &config,
                 "persistent_peers = \"\"",
                 "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@prod-mainnet-us-west-2-sentry-000-public.prod.findora.org:26656\"",
             )
         }
         InitMode::Qa01 => {
-            let cebi = str::replace(
-                &rpc_laddr,
-                "create_empty_blocks_interval = \"0s\"",
-                "create_empty_blocks_interval = \"15s\"",
-            );
             str::replace(
-                &cebi,
+                &config,
                 "persistent_peers = \"\"",
                 "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@dev-qa01-us-west-2-sentry-000-public.dev.findora.org:26656\"",
             )
         }
-        InitMode::Dev => rpc_laddr,
+        InitMode::Dev => config,
     };
     fs::write(path, result).c(d!())?;
     Ok(())

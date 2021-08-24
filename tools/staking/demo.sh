@@ -27,6 +27,8 @@ RWD_KEY_PATH=/tmp/staking_rwd.key
 TD_NODE_KEY="${TENDERMINT_HOME}/config/priv_validator_key.json"
 FRA_TOTAL_AMOUNT=$[210 * 10000 * 10000 * 1000000]
 
+BLOCK_ITV=16
+
 export __LEDGER_DIR__=/tmp/xx
 export __TENDERMINT_PORT__=20000
 export __ABCI_PORT__=10000
@@ -87,7 +89,7 @@ add_new_validator() {
 
     # waiting cluster to produce some blocks
     # so we can act as a new joined validator node
-    sleep 15
+    sleep $[3 * $BLOCK_ITV]
 
     rm -rf ${__LEDGER_DIR__} ${TENDERMINT_HOME}
     findorad init --base-dir=${TENDERMINT_HOME} || exit 1
@@ -104,32 +106,32 @@ check() {
 
     # At least 88_8888 FRAs
     fns stake -n $((888888 * 1000000)) -R 0.2 || exit 1
-    sleep 40
+    sleep $[6 * $BLOCK_ITV]
     curl ${SERVER_HOST}:26657/validators | grep -A 5 ${SELF_ADDR} 2>/dev/null || exit 1
     println "Our validator appears in the validator list after staking..."
 
     fns stake --append -n $((222222 * 1000000)) || exit 1
-    sleep 40
+    sleep $[6 * $BLOCK_ITV]
     curl ${SERVER_HOST}:26657/validators | grep -A 5 ${SELF_ADDR} 2>/dev/null || exit 1
     println "Its vote power has been raised after appending a new staking..."
 
     println "Now we stop it..."
     stop_node
-    println "Wait 50s..."
-    sleep 50
+    println "Wait  $[2 * $BLOCK_ITV]s..."
+    sleep $[2 * $BLOCK_ITV]
 
     println "Now we restart it..."
     start_node
-    println "Wait 10s..."
-    sleep 10
+    println "Wait $[2 * $BLOCK_ITV]s..."
+    sleep $[2 * $BLOCK_ITV]
 
     grep ${SELF_ADDR} nohup.out
     println "Pay attention to its power change..."
 
     println "Now we unstake..."
     fns unstake
-    println "Wait 30s..."
-    sleep 30
+    println "Wait $[5 * $BLOCK_ITV]s..."
+    sleep $[5 * $BLOCK_ITV]
 
     curl ${SERVER_HOST}:26657/validators || exit 1
     println "Our validator has been removed from the validator set..."
@@ -147,7 +149,7 @@ check() {
     println "Wait 10s..."
     sleep 2
     start_node
-    sleep 8
+    sleep 18
 
     tail nohup.out
     println "Pay attention to its current state..."
