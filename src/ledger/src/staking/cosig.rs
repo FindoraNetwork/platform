@@ -210,6 +210,7 @@ impl fmt::Display for CoSigErr {
 }
 
 #[cfg(test)]
+#[allow(missing_docs)]
 mod test {
     use super::*;
     use crate::staking::{Validator, ValidatorKind};

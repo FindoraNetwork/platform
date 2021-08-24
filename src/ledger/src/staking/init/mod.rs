@@ -103,6 +103,7 @@ pub fn get_cfg_path() -> Option<&'static str> {
 }
 
 #[cfg(test)]
+#[allow(missing_docs)]
 mod test {
     use super::*;
     use crate::staking::td_pubkey_to_td_addr;

@@ -193,6 +193,7 @@ fn bech32dec(input: &str) -> Result<Vec<u8>> {
 /////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
+#[allow(missing_docs)]
 mod test {
     use super::*;
     use rand_core::SeedableRng;

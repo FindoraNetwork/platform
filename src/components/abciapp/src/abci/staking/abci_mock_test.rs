@@ -3,6 +3,7 @@
 //!
 
 #![allow(warnings)]
+#![allow(missing_docs)]
 
 use crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT;
 use crate::abci::server::{
@@ -33,7 +34,7 @@ use ledger::{
         Validator as StakingValidator, ValidatorKind, BLOCK_HEIGHT_MAX, FRA,
         FRA_TOTAL_AMOUNT, UNBOND_BLOCK_CNT,
     },
-    store::fra_gen_initial_tx,
+    store::utils::fra_gen_initial_tx,
 };
 use parking_lot::{Mutex, RwLock};
 use rand_chacha::ChaChaRng;

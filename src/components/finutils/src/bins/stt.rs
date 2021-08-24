@@ -19,7 +19,7 @@ use ledger::{
         check_delegation_amount, gen_random_keypair, td_addr_to_bytes, BLOCK_INTERVAL,
         FRA, FRA_PRE_ISSUE_AMOUNT,
     },
-    store::fra_gen_initial_tx,
+    store::utils::fra_gen_initial_tx,
 };
 use ruc::*;
 use serde::Serialize;

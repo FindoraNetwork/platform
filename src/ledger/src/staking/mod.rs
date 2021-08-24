@@ -2111,6 +2111,7 @@ fn get_nonconfidential_balance(la: &LedgerState, addr: &XfrPublicKey) -> u64 {
 }
 
 #[cfg(test)]
+#[allow(missing_docs)]
 mod test {
     use super::*;
     use rand::random;

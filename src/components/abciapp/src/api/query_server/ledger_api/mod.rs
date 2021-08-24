@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(missing_docs)]
 mod test;
 
 use actix_cors::Cors;

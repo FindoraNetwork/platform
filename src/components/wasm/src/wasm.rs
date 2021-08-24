@@ -754,21 +754,6 @@ impl TransferOperationBuilder {
         Ok(self)
     }
 
-    /// Co-sign an input index
-    /// @param {XfrKeyPair} kp - Co-signature key.
-    /// @params {Number} input_idx - Input index to apply co-signature to.
-    pub fn add_cosignature(
-        mut self,
-        kp: &XfrKeyPair,
-        input_idx: usize,
-    ) -> Result<TransferOperationBuilder, JsValue> {
-        self.get_builder_mut()
-            .sign_cosignature(kp, input_idx)
-            .c(d!())
-            .map_err(error_to_jsvalue)?;
-        Ok(self)
-    }
-
     pub fn builder(&self) -> String {
         serde_json::to_string(self.get_builder()).unwrap()
     }
@@ -1118,14 +1103,6 @@ pub fn trace_assets(
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-#[test]
-pub fn test() {
-    let kp = new_keypair();
-    let b64 = public_key_to_base64(kp.get_pk_ref());
-    let pk = public_key_from_base64(&b64).unwrap();
-    dbg!(pk);
-}
-
 //////////////////////////////////////////
 // Author: Chao Ma, github.com/chaosma. //
 //////////////////////////////////////////
@@ -1375,6 +1352,7 @@ pub fn get_delegation_max_amount() -> u64 {
 }
 
 #[cfg(test)]
+#[allow(missing_docs)]
 mod test {
     use super::*;
 

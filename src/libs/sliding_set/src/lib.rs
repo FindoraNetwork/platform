@@ -59,6 +59,7 @@ impl<T: Eq + Copy + std::fmt::Debug> SlidingSet<T> {
 }
 
 #[cfg(test)]
+#[allow(missing_docs)]
 mod tests {
     use super::*;
     use cryptohash::sha256::{hash, Digest};

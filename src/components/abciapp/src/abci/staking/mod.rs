@@ -340,10 +340,12 @@ fn gen_offline_punish_list(
 }
 
 #[cfg(test)]
+#[allow(missing_docs)]
 #[cfg(feature = "abci_mock")]
 pub mod abci_mock_test;
 
 #[cfg(test)]
+#[allow(missing_docs)]
 mod test {
     use finutils::txn_builder::{
         BuildsTransactions, TransactionBuilder, TransferOperationBuilder,
@@ -354,7 +356,7 @@ mod test {
             BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
         staking::{Staking, FF_PK_LIST, FRA_PRE_ISSUE_AMOUNT},
-        store::{fra_gen_initial_tx, LedgerState},
+        store::{utils::fra_gen_initial_tx, LedgerState},
     };
     use rand::random;
     use rand_chacha::ChaChaRng;

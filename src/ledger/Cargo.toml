@@ -53,8 +53,6 @@ compress = ["bnc/compress"]
 
 [dev-dependencies]
 lazy_static = "1.4.0"
-quickcheck_macros = "0.9"
-quickcheck = "0.9"
 
 [dependencies.fixed]
 version = "0.4.6"

@@ -1176,19 +1176,6 @@ impl TransferOperationBuilder {
         Ok(sig)
     }
 
-    pub fn create_cosignature(
-        &self,
-        keypair: &XfrKeyPair,
-        input_idx: usize,
-    ) -> Result<IndexedSignature<TransferAssetBody>> {
-        let sig = self
-            .transfer
-            .as_ref()
-            .c(d!(no_transfer_err!()))?
-            .create_cosignature(keypair, input_idx);
-        Ok(sig)
-    }
-
     pub fn attach_signature(
         &mut self,
         sig: IndexedSignature<TransferAssetBody>,
@@ -1198,17 +1185,6 @@ impl TransferOperationBuilder {
             .c(d!(no_transfer_err!()))?
             .attach_signature(sig)
             .c(d!())?;
-        Ok(self)
-    }
-
-    // Add a co-signature for an input.
-    pub fn sign_cosignature(
-        &mut self,
-        kp: &XfrKeyPair,
-        input_idx: usize,
-    ) -> Result<&mut Self> {
-        let mut new_transfer = self.transfer.as_mut().c(d!(no_transfer_err!()))?.clone();
-        new_transfer.sign_cosignature(&kp, input_idx);
         Ok(self)
     }
 
@@ -1245,10 +1221,11 @@ impl TransferOperationBuilder {
 }
 
 #[cfg(test)]
+#[allow(missing_docs)]
 mod tests {
     use super::*;
     use ledger::data_model::TxoRef;
-    use ledger::store::{fra_gen_initial_tx, LedgerState};
+    use ledger::store::{utils::fra_gen_initial_tx, LedgerState};
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
     use zei::setup::PublicParams;
@@ -1599,6 +1576,5 @@ mod tests {
         let effect = TxnEffect::compute_effect(tx).unwrap();
         let mut block = ledger.start_block().unwrap();
         assert!(ledger.apply_transaction(&mut block, effect, false).is_err());
-        ledger.abort_block(block);
     }
 }

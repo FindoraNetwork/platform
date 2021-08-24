@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use super::*;
 use actix_service::Service;
 use actix_web::{test, web, App};
