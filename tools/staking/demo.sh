@@ -157,6 +157,11 @@ check() {
     println "Enjoy..."
 }
 
-init
-add_new_validator
-check
+if [[ $1 == "" ]];then
+    init
+    add_new_validator
+    check
+else
+    stop_node
+    start_node
+fi
