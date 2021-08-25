@@ -1,3 +1,7 @@
+//!
+//! # query ledger interface
+//!
+
 #[cfg(test)]
 #[allow(missing_docs)]
 mod test;
@@ -26,15 +30,16 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, mem, sync::Arc};
 use zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo};
 
+/// Structures exposed to the outside world
 pub struct RestfulApiService;
 
-// Ping route to check for liveness of API
+/// Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]
 async fn ping() -> actix_web::Result<String> {
     Ok("success".into())
 }
 
-// Returns the git commit hash and commit date of this build
+/// Returns the git commit hash and commit date of this build
 #[allow(clippy::unnecessary_wraps)]
 async fn version() -> actix_web::Result<String> {
     Ok(format!(
@@ -44,6 +49,7 @@ async fn version() -> actix_web::Result<String> {
     ))
 }
 
+/// query utxo according to `TxoSID` return Authenticated Utxo
 pub async fn query_utxo(
     data: web::Data<Arc<RwLock<LedgerState>>>,
     info: web::Path<String>,
@@ -64,6 +70,7 @@ pub async fn query_utxo(
     }
 }
 
+/// query utxo according to `TxoSID` return UnAuthenticated Utxo
 pub async fn query_utxo_light(
     data: web::Data<Arc<RwLock<LedgerState>>>,
     info: web::Path<String>,
@@ -84,6 +91,7 @@ pub async fn query_utxo_light(
     }
 }
 
+/// query issuance num according to `AssetTypeCode`
 pub async fn query_asset_issuance_num(
     data: web::Data<Arc<RwLock<LedgerState>>>,
     info: web::Path<String>,
@@ -104,6 +112,7 @@ pub async fn query_asset_issuance_num(
     }
 }
 
+/// Separate a string of `TxoSID` by ',' and query the corresponding Authenticated utxo
 pub async fn query_utxos(
     data: web::Data<Arc<RwLock<LedgerState>>>,
     info: web::Path<String>,
@@ -127,6 +136,7 @@ pub async fn query_utxos(
     Ok(web::Json(reader.get_utxos(sid_list.as_slice())))
 }
 
+/// query asset according to `AssetType`
 pub async fn query_asset(
     data: web::Data<Arc<RwLock<LedgerState>>>,
     info: web::Path<String>,
@@ -147,6 +157,7 @@ pub async fn query_asset(
     }
 }
 
+/// query tx according to `TxnSID`
 pub async fn query_txn(
     data: web::Data<Arc<RwLock<LedgerState>>>,
     info: web::Path<String>,
@@ -168,6 +179,7 @@ pub async fn query_txn(
     }
 }
 
+/// query tx according to `TxnSID`, lighter and faster version
 pub async fn query_txn_light(
     data: web::Data<Arc<RwLock<LedgerState>>>,
     info: web::Path<String>,
@@ -189,6 +201,7 @@ pub async fn query_txn_light(
     }
 }
 
+/// query `LedgerState` public key
 pub async fn query_public_key(
     data: web::Data<Arc<RwLock<LedgerState>>>,
 ) -> web::Json<XfrPublicKey> {
@@ -196,6 +209,7 @@ pub async fn query_public_key(
     web::Json(*reader.public_key())
 }
 
+/// query global state, return (apphash, block count, apphash and block count signatures)
 #[allow(clippy::type_complexity)]
 pub async fn query_global_state(
     data: web::Data<Arc<RwLock<LedgerState>>>,
@@ -210,6 +224,7 @@ pub async fn query_global_state(
     web::Json((hash, seq_id, sig))
 }
 
+/// query global state version according to `block_height`
 pub async fn query_global_state_version(
     data: web::Data<Arc<RwLock<LedgerState>>>,
     version: web::Path<u64>,
@@ -219,8 +234,8 @@ pub async fn query_global_state_version(
     web::Json(hash)
 }
 
-// Query current validator list,
-// validtors who have not completed self-deletagion will be filtered out.
+/// Query current validator list,
+/// validtors who have not completed self-deletagion will be filtered out.
 #[allow(unused)]
 async fn query_validators(
     data: web::Data<Arc<RwLock<LedgerState>>>,
@@ -269,6 +284,7 @@ struct DelegationRwdQueryParams {
     height: u64,
 }
 
+/// get delegation reward according to `DelegationRwdQueryParams`
 async fn get_delegation_reward(
     data: web::Data<Arc<RwLock<LedgerState>>>,
     web::Query(info): web::Query<DelegationRwdQueryParams>,
@@ -311,6 +327,7 @@ struct ValidatorDelegation {
     delegated: u64,
 }
 
+/// get history according to `ValidatorDelegationQueryParams`
 async fn get_validator_delegation_history(
     data: web::Data<Arc<RwLock<LedgerState>>>,
     web::Query(info): web::Query<ValidatorDelegationQueryParams>,
@@ -401,6 +418,7 @@ enum OrderOption {
     Asc,
 }
 
+/// paging Query delegators according to `DelegatorQueryParams`
 async fn get_delegators_with_params(
     data: web::Data<Arc<RwLock<LedgerState>>>,
     web::Query(info): web::Query<DelegatorQueryParams>,
@@ -436,6 +454,7 @@ async fn get_delegators_with_params(
     Ok(web::Json(DelegatorList::new(list)))
 }
 
+/// query delegator list according to `TendermintAddr`
 async fn query_delegator_list(
     data: web::Data<Arc<RwLock<LedgerState>>>,
     addr: web::Path<TendermintAddr>,
@@ -458,6 +477,7 @@ async fn query_delegator_list(
     Ok(web::Json(DelegatorList::new(list)))
 }
 
+/// query validator detail according to `TendermintAddr`
 async fn query_validator_detail(
     data: web::Data<Arc<RwLock<LedgerState>>>,
     addr: web::Path<TendermintAddr>,
@@ -519,6 +539,7 @@ async fn query_validator_detail(
     Err(error::ErrorNotFound("not exists"))
 }
 
+/// query delegation info according to `public_key`
 async fn query_delegation_info(
     data: web::Data<Arc<RwLock<LedgerState>>>,
     address: web::Path<String>,
@@ -604,6 +625,7 @@ async fn query_delegation_info(
     Ok(web::Json(resp))
 }
 
+/// query utxos according `public_key`
 async fn query_owned_utxos(
     data: web::Data<Arc<RwLock<LedgerState>>>,
     owner: web::Path<String>,
@@ -614,6 +636,8 @@ async fn query_owned_utxos(
         .map(|pk| web::Json(pnk!(data.read().get_owned_utxos(&pk))))
 }
 
+/// Define interface type
+#[allow(missing_docs)]
 pub enum ApiRoutes {
     UtxoSid,
     UtxoSidLight,
@@ -749,6 +773,7 @@ where
 }
 
 impl RestfulApiService {
+    /// create ledger api
     pub fn create(
         ledger_access: Arc<RwLock<LedgerState>>,
         host: &str,

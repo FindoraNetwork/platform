@@ -43,17 +43,21 @@ use zei::{
 };
 
 lazy_static! {
+    /// global ledgerState
     static ref LEDGER: Arc<RwLock<LedgerState>> =
         Arc::new(RwLock::new(LedgerState::test_ledger()));
+    /// global query server
     static ref QS: Arc<RwLock<QueryServer>> = Arc::new(RwLock::new(create_server()));
 }
 
+/// create server
 fn create_server() -> QueryServer {
     let mut qs =
         QueryServer::new(LEDGER.clone(), Some(globutils::fresh_tmp_dir().as_path()));
     qs
 }
 
+/// apply transaction
 fn apply_transaction(tx: Transaction) -> Option<(TxnSID, Vec<TxoSID>)> {
     let effect = pnk!(TxnEffect::compute_effect(tx));
     let mut ledger = LEDGER.write();

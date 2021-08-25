@@ -1,3 +1,7 @@
+//!
+//! # interface of operating tx
+//!
+
 use super::{SubmissionServer, TxnForward, TxnHandle};
 use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
@@ -10,7 +14,7 @@ use ruc::*;
 use std::result::Result as StdResult;
 use std::sync::Arc;
 
-// Ping route to check for liveness of API
+/// Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]
 async fn ping() -> actix_web::Result<String> {
     Ok("success".into())
@@ -26,6 +30,7 @@ async fn version() -> actix_web::Result<String> {
     ))
 }
 
+/// Sending transactions to tendermint
 pub async fn submit_transaction<RNG, TF>(
     data: web::Data<Arc<RwLock<SubmissionServer<RNG, TF>>>>,
     body: web::Json<Transaction>,
@@ -46,8 +51,8 @@ where
         })
 }
 
-// Queries the status of a transaction by its handle. Returns either a not committed message or a
-// serialized TxnStatus.
+/// Queries the status of a transaction by its handle. Returns either a not committed message or a
+/// serialized TxnStatus.
 pub async fn txn_status<RNG, TF>(
     data: web::Data<Arc<RwLock<SubmissionServer<RNG, TF>>>>,
     info: web::Path<String>,
@@ -71,8 +76,11 @@ where
     Ok(res)
 }
 
+/// Structures exposed to the outside world
 pub struct SubmissionApi;
 
+/// Define interface
+#[allow(missing_docs)]
 pub enum SubmissionRoutes {
     SubmitTransaction,
     TxnStatus,
@@ -95,6 +103,7 @@ impl NetworkRoute for SubmissionRoutes {
 }
 
 impl SubmissionApi {
+    /// Create submission api
     pub fn create<
         RNG: 'static + RngCore + CryptoRng + Sync + Send,
         TF: 'static + TxnForward + Sync + Send,

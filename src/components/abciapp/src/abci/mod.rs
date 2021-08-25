@@ -1,3 +1,7 @@
+//!
+//! # abci init and startup methods
+//!
+
 mod config;
 mod init;
 mod server;
@@ -13,6 +17,7 @@ use tendermint_sys::Node;
 
 use config::{global_cfg::CFG, ABCIConfig};
 
+/// run node
 pub fn node_command() -> Result<()> {
     let base_dir = if let Some(d) = CFG.ledger_dir.as_ref() {
         fs::create_dir_all(d).c(d!())?;
@@ -83,6 +88,7 @@ pub fn node_command() -> Result<()> {
     Ok(())
 }
 
+/// init abci
 fn init_command() -> Result<()> {
     let home_path = if let Some(home_path) = CFG.tendermint_home {
         String::from(home_path)
@@ -101,6 +107,7 @@ fn init_command() -> Result<()> {
     Ok(())
 }
 
+/// run abci
 pub fn run() -> Result<()> {
     match CFG.command {
         "init" => init_command(),

@@ -1,3 +1,7 @@
+//!
+//! # send the transaction to tendermint or abci_mock
+//!
+
 #[cfg(not(feature = "abci_mock"))]
 pub use real::{forward_txn_with_mode, TendermintForward};
 
@@ -91,17 +95,21 @@ mod mocker {
     };
 
     lazy_static! {
+        /// global channel
         pub static ref CHAN: ChanPair = {
             let (s, r) = channel();
             (Arc::new(Mutex::new(s)), Arc::new(Mutex::new(r)))
         };
     }
 
+    /// define channel type
     type ChanPair = (
         Arc<Mutex<Sender<Transaction>>>,
         Arc<Mutex<Receiver<Transaction>>>,
     );
 
+    /// define the tendermint of the simulation,forwarding messages
+    /// use when creating ABCISubmissionServer
     pub struct TendermintForward {
         pub tendermint_reply: String,
     }
@@ -113,11 +121,13 @@ mod mocker {
     }
 
     impl TxnForward for TendermintForward {
+        /// impl submission_server `TxnForward` trait
         fn forward_txn(&self, txn: Transaction) -> Result<()> {
             forward_txn_with_mode(self.as_ref(), txn, false)
         }
     }
 
+    /// send message
     pub fn forward_txn_with_mode(
         _url: &str,
         tx: Transaction,

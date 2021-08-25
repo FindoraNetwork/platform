@@ -1,3 +1,7 @@
+//!
+//! need to transform the data in ledgerState to store
+//!
+
 pub mod query_server;
 pub mod service;
 
@@ -37,8 +41,8 @@ async fn version() -> actix_web::Result<String> {
     ))
 }
 
-// Queries the status of a transaction by its handle. Returns either a not committed message or a
-// serialized TxnStatus.
+/// Queries the status of a transaction by its handle. Returns either a not committed message or a
+/// serialized TxnStatus.
 async fn get_address(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<u64>,
@@ -54,7 +58,7 @@ async fn get_address(
     Ok(res)
 }
 
-// Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
+/// Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
 #[allow(clippy::unnecessary_wraps)]
 async fn get_owner_memo(
     data: web::Data<Arc<RwLock<QueryServer>>>,
@@ -64,6 +68,7 @@ async fn get_owner_memo(
     Ok(web::Json(query_server.get_owner_memo(TxoSID(*info))))
 }
 
+/// Separate a string of `TxoSID` by ',' and query the corresponding memo
 #[allow(clippy::unnecessary_wraps)]
 async fn get_owner_memo_batch(
     data: web::Data<Arc<RwLock<QueryServer>>>,
@@ -82,7 +87,7 @@ async fn get_owner_memo_batch(
     Ok(web::Json(resp))
 }
 
-// Returns an array of the utxo sids currently spendable by a given address
+/// Returns an array of the utxo sids currently spendable by a given address
 async fn get_owned_utxos(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
@@ -100,6 +105,8 @@ async fn get_owned_utxos(
     Ok(web::Json(sids.unwrap_or_default()))
 }
 
+/// Define interface type
+#[allow(missing_docs)]
 pub enum QueryServerRoutes {
     GetAddress,
     GetOwnerMemo,
@@ -141,7 +148,7 @@ impl NetworkRoute for QueryServerRoutes {
     }
 }
 
-// Returns the list of assets created by a public key
+/// Returns the list of assets created by a public key
 async fn get_created_assets(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
@@ -158,7 +165,7 @@ async fn get_created_assets(
     Ok(web::Json(assets.unwrap_or_default()))
 }
 
-// Returns the list of assets traced by a public key
+/// Returns the list of assets traced by a public key
 async fn get_traced_assets(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
@@ -175,7 +182,7 @@ async fn get_traced_assets(
     Ok(web::Json(assets.unwrap_or_default()))
 }
 
-// Returns the list of records issued by a public key
+/// Returns the list of records issued by a public key
 #[allow(clippy::type_complexity)]
 async fn get_issued_records(
     data: web::Data<Arc<RwLock<QueryServer>>>,
@@ -193,7 +200,7 @@ async fn get_issued_records(
     Ok(web::Json(records.unwrap_or_default()))
 }
 
-// Returns the list of records issued by a token code
+/// Returns the list of records issued by a token code
 #[allow(clippy::type_complexity)]
 async fn get_issued_records_by_code(
     data: web::Data<Arc<RwLock<QueryServer>>>,
@@ -215,7 +222,7 @@ async fn get_issued_records_by_code(
     }
 }
 
-// Returns authenticated txn sid and hash
+/// Returns authenticated txn sid and hash
 async fn get_authenticated_txnid_hash(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<u64>,
@@ -229,7 +236,7 @@ async fn get_authenticated_txnid_hash(
     }
 }
 
-// Returns txn hash by sid
+/// Returns txn hash by sid
 async fn get_transaction_hash(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<usize>,
@@ -243,7 +250,7 @@ async fn get_transaction_hash(
     }
 }
 
-// Returns txn sid by hash
+/// Returns txn sid by hash
 async fn get_transaction_sid(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
@@ -257,8 +264,8 @@ async fn get_transaction_sid(
     }
 }
 
-// Returns most recent commit count at query_server side
-// Check this number to make sure query_server is in sync
+/// Returns most recent commit count at query_server side
+/// Check this number to make sure query_server is in sync
 async fn get_commits(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> actix_web::Result<web::Json<u64>> {
@@ -266,6 +273,7 @@ async fn get_commits(
     Ok(web::Json(query_server.get_commits()))
 }
 
+#[allow(missing_docs)]
 #[derive(Debug, Deserialize)]
 pub struct WalletQueryParams {
     address: String,
@@ -274,6 +282,7 @@ pub struct WalletQueryParams {
     order: OrderOption,
 }
 
+#[allow(missing_docs)]
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 enum OrderOption {
@@ -281,18 +290,21 @@ enum OrderOption {
     Asc,
 }
 
+#[allow(missing_docs)]
 #[derive(Debug, Deserialize, Serialize)]
 struct CoinbaseTxnBody {
     height: u64,
     data: MintEntry,
 }
 
+#[allow(missing_docs)]
 #[derive(Debug, Deserialize, Serialize)]
 struct CoinbaseOperInfo {
     total_count: u64,
     txs: Vec<CoinbaseTxnBody>,
 }
 
+/// paging Query delegators according to `WalletQueryParams`
 async fn get_coinbase_oper_list(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     web::Query(info): web::Query<WalletQueryParams>,
@@ -343,7 +355,7 @@ async fn get_coinbase_oper_list(
     }))
 }
 
-// Returns the list of claim transations of a given ledger address
+/// Returns the list of claim transations of a given ledger address
 async fn get_claim_txns(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     web::Query(info): web::Query<WalletQueryParams>,
@@ -381,7 +393,7 @@ async fn get_claim_txns(
     Ok(web::Json(records))
 }
 
-// Returns the list of transations associated with a given ledger address
+/// Returns the list of transations associated with a given ledger address
 async fn get_related_txns(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
@@ -399,7 +411,7 @@ async fn get_related_txns(
     Ok(web::Json(records.unwrap_or_default()))
 }
 
-// Returns the list of transfer transations associated with a given asset
+/// Returns the list of transfer transations associated with a given asset
 async fn get_related_xfrs(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
@@ -420,9 +432,11 @@ async fn get_related_xfrs(
     }
 }
 
+/// Structures exposed to the outside world
 pub struct QueryApi;
 
 impl QueryApi {
+    /// create query api
     pub fn create(
         query_server: Arc<RwLock<QueryServer>>,
         host: &str,
@@ -513,27 +527,30 @@ impl QueryApi {
     }
 }
 
-// Trait for rest clients that can access the query server
+#[allow(missing_docs)]
 pub trait RestfulQueryServerAccess {
     fn get_owner_memo(&self, txo_sid: u64) -> Result<Option<OwnerMemo>>;
 }
 
-// Unimplemented until I can figure out a way to force the mock server to get new data (we can do
-// this with a new endpoint)
+/// Unimplemented until I can figure out a way to force the mock server to get new data (we can do
+/// this with a new endpoint)
 pub struct MockQueryServerClient();
 
+#[allow(missing_docs)]
 impl RestfulQueryServerAccess for MockQueryServerClient {
     fn get_owner_memo(&self, _txo_sid: u64) -> Result<Option<OwnerMemo>> {
         unimplemented!();
     }
 }
 
+#[allow(missing_docs)]
 pub struct ActixQueryServerClient {
     port: usize,
     host: String,
     protocol: String,
 }
 
+#[allow(missing_docs)]
 impl ActixQueryServerClient {
     pub fn new(port: usize, host: &str, protocol: &str) -> Self {
         ActixQueryServerClient {
@@ -544,7 +561,9 @@ impl ActixQueryServerClient {
     }
 }
 
+#[allow(missing_docs)]
 impl RestfulQueryServerAccess for ActixQueryServerClient {
+    /// query memo based on `RestfulQueryServerAccess` implementation
     fn get_owner_memo(&self, txo_sid: u64) -> Result<Option<OwnerMemo>> {
         let query = format!(
             "{}://{}:{}{}",

@@ -1,3 +1,7 @@
+//!
+//! # binary process
+//!
+
 use abciapp::abci;
 use ruc::*;
 

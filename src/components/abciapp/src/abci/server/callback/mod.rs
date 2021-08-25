@@ -1,3 +1,7 @@
+//!
+//! # impl function of tendermint abci
+//!
+
 use crate::{
     abci::{server::ABCISubmissionServer, staking},
     api::{query_server::BLOCK_CREATED, submission_server::convert_tx},
@@ -21,10 +25,12 @@ mod utils;
 pub static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
 
 lazy_static! {
+    /// save the request parameters from the begin_block for use in the end_block
     static ref REQ_BEGIN_BLOCK: Arc<Mutex<RequestBeginBlock>> =
         Arc::new(Mutex::new(RequestBeginBlock::default()));
 }
 
+/// tell tendermint the height of the current abci
 pub fn info(s: &mut ABCISubmissionServer, _req: RequestInfo) -> ResponseInfo {
     let mut resp = ResponseInfo::default();
 
@@ -49,6 +55,7 @@ pub fn info(s: &mut ABCISubmissionServer, _req: RequestInfo) -> ResponseInfo {
     resp
 }
 
+/// called when a trade is entered into the pool but not yet confirmed
 pub fn check_tx(_s: &mut ABCISubmissionServer, req: RequestCheckTx) -> ResponseCheckTx {
     // Get the Tx [u8] and convert to u64
     let mut resp = ResponseCheckTx::default();
@@ -69,6 +76,7 @@ pub fn check_tx(_s: &mut ABCISubmissionServer, req: RequestCheckTx) -> ResponseC
     resp
 }
 
+/// called between begin_block and end_block
 pub fn deliver_tx(
     s: &mut ABCISubmissionServer,
     req: RequestDeliverTx,
@@ -94,6 +102,7 @@ pub fn deliver_tx(
     resp
 }
 
+/// create block
 pub fn begin_block(
     s: &mut ABCISubmissionServer,
     req: RequestBeginBlock,
@@ -122,6 +131,7 @@ pub fn begin_block(
     ResponseBeginBlock::default()
 }
 
+/// putting block in the ledgerState
 pub fn end_block(
     s: &mut ABCISubmissionServer,
     _req: RequestEndBlock,
@@ -170,6 +180,7 @@ pub fn end_block(
     resp
 }
 
+/// tell tendermint that the block is already in the chain and apphash of the block
 pub fn commit(s: &mut ABCISubmissionServer) -> ResponseCommit {
     let mut r = ResponseCommit::default();
     let la = s.la.write();

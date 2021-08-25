@@ -1,3 +1,7 @@
+//!
+//! new query server
+//!
+
 use super::{
     query_server::{QueryServer, BLOCK_CREATED},
     QueryApi,
@@ -7,6 +11,7 @@ use parking_lot::RwLock;
 use ruc::*;
 use std::{path::Path, sync::Arc, thread};
 
+/// create query server
 pub fn start_query_server(
     ledger: Arc<RwLock<LedgerState>>,
     host: &str,

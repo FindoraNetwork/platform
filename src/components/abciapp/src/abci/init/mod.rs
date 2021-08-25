@@ -1,3 +1,7 @@
+//!
+//! init of different networks based on findora
+//!
+
 use ruc::*;
 use std::{fs, str};
 

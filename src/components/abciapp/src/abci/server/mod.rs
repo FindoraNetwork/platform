@@ -1,3 +1,7 @@
+//!
+//! # define abci and impl tendermint abci
+//!
+
 use crate::{
     abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
     api::submission_server::SubmissionServer,
@@ -20,11 +24,13 @@ pub use tx_sender::forward_txn_with_mode;
 pub mod callback;
 pub mod tx_sender;
 
+/// findora impl of tendermint abci
 pub struct ABCISubmissionServer {
     pub la: Arc<RwLock<SubmissionServer<ChaChaRng, TendermintForward>>>,
 }
 
 impl ABCISubmissionServer {
+    /// create ABCISubmissionServer
     pub fn new(
         base_dir: Option<&Path>,
         tendermint_reply: String,

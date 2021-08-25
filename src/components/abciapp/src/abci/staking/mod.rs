@@ -139,10 +139,10 @@ pub fn get_validators(
     ))
 }
 
-// Call this function in `EndBlock`,
-// - pay delegation rewards
-// - pay proposer rewards(traditional block rewards)
-// - do governance operations
+/// Call this function in `EndBlock`,
+/// - pay delegation rewards
+/// - pay proposer rewards(traditional block rewards)
+/// - do governance operations
 pub fn system_ops(
     la: &mut LedgerState,
     header: &Header,
@@ -214,7 +214,7 @@ pub fn system_ops(
     la.flush_staking();
 }
 
-// Get the actual voted power of last block.
+/// Get the actual voted power of last block.
 fn get_last_vote_percent(last_commit_info: &LastCommitInfo) -> [u64; 2] {
     last_commit_info
         .votes
@@ -232,7 +232,7 @@ fn get_last_vote_percent(last_commit_info: &LastCommitInfo) -> [u64; 2] {
         })
 }
 
-// Set delegation rewards and proposer rewards
+/// Set delegation rewards and proposer rewards
 fn set_rewards(
     la: &mut LedgerState,
     proposer: &[u8],
@@ -251,7 +251,7 @@ struct ByzantineInfo<'a> {
     kind: &'a str,
 }
 
-// Auto governance.
+/// Auto governance.
 fn system_governance(staking: &mut Staking, bz: &ByzantineInfo) -> Result<()> {
     ruc::pd!(serde_json::to_string(&bz).unwrap());
     let kind = match bz.kind {
@@ -311,6 +311,7 @@ pub fn system_mint_pay(la: &LedgerState) -> Option<Transaction> {
     }
 }
 
+/// filtering online lists from staking's validators
 fn gen_offline_punish_list(
     staking: &Staking,
     online_list: &HashSet<&Vec<u8>>,

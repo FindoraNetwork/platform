@@ -1,3 +1,7 @@
+//!
+//! data sources for the query api
+//!
+
 use bnc::{mapx::Mapx, new_mapx};
 use lazy_static::lazy_static;
 use ledger::{
@@ -11,13 +15,18 @@ use std::{collections::HashSet, ops::Deref, path::Path, sync::Arc};
 use zei::xfr::structs::OwnerMemo;
 
 lazy_static! {
+    /// the query_server will be notified every time
+    /// a block is added to the ledgerState to update the data
     pub static ref BLOCK_CREATED: Arc<(Mutex<bool>, Condvar)> =
         Arc::new((Mutex::new(false), Condvar::new()));
 }
 
+/// (sid, hash)
 pub type TxnIDHash = (TxnSID, String);
+
 type Issuances = Vec<(TxOutput, Option<OwnerMemo>)>;
 
+/// data from ledgerState
 pub struct QueryServer {
     committed_state: Arc<RwLock<LedgerState>>,
     addresses_to_utxos: Mapx<XfrAddress, HashSet<TxoSID>>,
@@ -38,6 +47,7 @@ pub struct QueryServer {
 }
 
 impl QueryServer {
+    /// create query server
     pub fn new(
         ledger: Arc<RwLock<LedgerState>>,
         base_dir: Option<&Path>,
@@ -94,7 +104,7 @@ impl QueryServer {
         }
     }
 
-    // Returns the set of records issued by a certain key.
+    /// Returns the set of records issued by a certain key.
     pub fn get_issued_records(
         &self,
         issuer: &IssuerPublicKey,
@@ -104,7 +114,7 @@ impl QueryServer {
             .map(|recs| recs.deref().iter().map(|rec| rec.deref().clone()).collect())
     }
 
-    // Returns the set of records issued by a certain token code.
+    /// Returns the set of records issued by a certain token code.
     pub fn get_issued_records_by_code(
         &self,
         code: &AssetTypeCode,
@@ -114,6 +124,7 @@ impl QueryServer {
             .map(|recs| recs.deref().iter().map(|rec| rec.deref().clone()).collect())
     }
 
+    /// return `DefineAsset` according to `IssuerPublicKey`
     pub fn get_created_assets(
         &self,
         issuer: &IssuerPublicKey,
@@ -121,7 +132,7 @@ impl QueryServer {
         self.created_assets.get(issuer).map(|v| v.deref().clone())
     }
 
-    // Returns the list of assets traced by a certain key.
+    /// Returns the list of assets traced by a certain key.
     pub fn get_traced_assets(
         &self,
         issuer: &IssuerPublicKey,
@@ -129,6 +140,7 @@ impl QueryServer {
         self.traced_assets.get(issuer).map(|v| v.deref().clone())
     }
 
+    /// get coinbase based on address and sorting rules and start and end position
     pub fn get_coinbase_entries(
         &self,
         address: &XfrAddress,
@@ -168,7 +180,7 @@ impl QueryServer {
         Ok((0, vec![]))
     }
 
-    // Returns a list of claim transactions of a given ledger address
+    /// Returns a list of claim transactions of a given ledger address
     pub fn get_claim_transactions(
         &self,
         address: &XfrAddress,
@@ -217,13 +229,13 @@ impl QueryServer {
         Err(eg!("Record not found"))
     }
 
-    // Returns the set of transactions that are in some way related to a given ledger address.
-    // An xfr address is related to a transaction if it is one of the following:
-    // 1. Owner of a transfer output
-    // 2. Transfer signer (owner of input or co-signer)
-    // 3. Signer of a an issuance txn
-    // 4. Signer of a kv_update txn
-    // 5. Signer of a memo_update txn
+    /// Returns the set of transactions that are in some way related to a given ledger address.
+    /// An xfr address is related to a transaction if it is one of the following:
+    /// 1. Owner of a transfer output
+    /// 2. Transfer signer (owner of input or co-signer)
+    /// 3. Signer of a an issuance txn
+    /// 4. Signer of a kv_update txn
+    /// 5. Signer of a memo_update txn
     pub fn get_related_transactions(
         &self,
         address: &XfrAddress,
@@ -233,8 +245,8 @@ impl QueryServer {
             .map(|v| v.deref().clone())
     }
 
-    // Returns the set of transfer transactions that are associated with a given asset.
-    // The asset type must be nonconfidential.
+    /// Returns the set of transfer transactions that are associated with a given asset.
+    /// The asset type must be nonconfidential.
     pub fn get_related_transfers(
         &self,
         code: &AssetTypeCode,
@@ -242,46 +254,46 @@ impl QueryServer {
         self.related_transfers.get(&code).map(|v| v.deref().clone())
     }
 
-    // Returns the set of TxoSIDs that are the indices of records owned by a given address.
+    /// Returns the set of TxoSIDs that are the indices of records owned by a given address.
     pub fn get_owned_utxo_sids(&self, address: &XfrAddress) -> Option<HashSet<TxoSID>> {
         self.addresses_to_utxos
             .get(&address)
             .map(|v| v.deref().clone())
     }
 
-    // Returns the owner of a given txo_sid.
+    /// Returns the owner of a given txo_sid.
     pub fn get_address_of_sid(&self, txo_sid: TxoSID) -> Option<XfrAddress> {
         self.utxos_to_map_index.get(&txo_sid).map(|v| *v.clone())
     }
 
-    // Returns the authenticated txn (id, hash) of a given txo_sid.
+    /// Returns the authenticated txn (id, hash) of a given txo_sid.
     pub fn get_authenticated_txnid(&self, txo_sid: TxoSID) -> Option<TxnIDHash> {
         self.txo_to_txnid.get(&txo_sid).map(|v| v.deref().clone())
     }
 
-    // Returns the transaction hash of a given txn_sid.
+    /// Returns the transaction hash of a given txn_sid.
     pub fn get_transaction_hash(&self, txn_sid: TxnSID) -> Option<String> {
         self.txn_sid_to_hash
             .get(&txn_sid)
             .map(|v| v.deref().clone())
     }
 
-    // Returns the transaction sid of a given txn_hash.
+    /// Returns the transaction sid of a given txn_hash.
     pub fn get_transaction_sid(&self, txn_hash: String) -> Option<TxnSID> {
         self.txn_hash_to_sid.get(&txn_hash).map(|v| *v.clone())
     }
 
-    // Returns most recent commits at query_server side.
+    /// Returns most recent commits at query_server side.
     pub fn get_commits(&self) -> u64 {
         self.committed_state.read().get_block_commit_count()
     }
 
-    // Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
+    /// Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
     pub fn get_owner_memo(&self, txo_sid: TxoSID) -> Option<OwnerMemo> {
         self.owner_memos.get(&txo_sid).map(|v| v.deref().clone())
     }
 
-    // Add created asset
+    /// Add created asset
     pub fn add_created_asset(&mut self, creation: &DefineAsset) {
         let issuer = creation.pubkey;
         let mut set = self.created_assets.entry(issuer).or_insert_with(Vec::new);
@@ -291,7 +303,7 @@ impl QueryServer {
         set.dedup_by_key(|i| i.body.asset.code);
     }
 
-    // Add traced asset
+    /// Add traced asset
     pub fn add_traced_asset(&mut self, creation: &DefineAsset) {
         let tracing_policies = &creation.body.asset.asset_rules.tracing_policies;
         if !tracing_policies.is_empty() {
@@ -305,7 +317,7 @@ impl QueryServer {
         }
     }
 
-    // Cache issuance records
+    /// Cache issuance records
     pub fn cache_issuance(&mut self, issuance: &IssueAsset) {
         let new_records = issuance.body.records.to_vec();
 
@@ -344,8 +356,8 @@ impl QueryServer {
         Ok(())
     }
 
-    // Updates query server cache with new transactions from a block.
-    // Each new block must be consistent with the state of the cached ledger up until this point
+    /// Updates query server cache with new transactions from a block.
+    /// Each new block must be consistent with the state of the cached ledger up until this point
     fn apply_new_blocks(&mut self) -> Result<()> {
         let ledger = Arc::clone(&self.committed_state);
         let ledger = ledger.read();
@@ -476,6 +488,7 @@ impl QueryServer {
         Ok(())
     }
 
+    /// flush data on disk
     fn flush(&self) {
         self.addresses_to_utxos.flush_data();
         self.claim_hist_txns.flush_data();
@@ -493,16 +506,19 @@ impl QueryServer {
         self.token_code_issuances.flush_data();
     }
 
+    /// update data of query server
+    /// call update when the block into end_block and commit to ledgerState
     pub fn update(&mut self) {
         pnk!(self.apply_new_blocks());
     }
 }
-// An xfr address is related to a transaction if it is one of the following:
-// 1. Owner of a transfer output
-// 2. Transfer signer (owner of input or co-signer)
-// 3. Signer of a an issuance txn
-// 4. Signer of a kv_update txn
-// 5. Signer of a memo_update txn
+
+/// An xfr address is related to a transaction if it is one of the following:
+/// 1. Owner of a transfer output
+/// 2. Transfer signer (owner of input or co-signer)
+/// 3. Signer of a an issuance txn
+/// 4. Signer of a kv_update txn
+/// 5. Signer of a memo_update txn
 fn get_related_addresses<F>(txn: &Transaction, mut classify: F) -> HashSet<XfrAddress>
 where
     F: FnMut(&Operation),
@@ -562,7 +578,7 @@ where
     related_addresses
 }
 
-// Returns the set of nonconfidential assets transferred in a transaction.
+/// Returns the set of nonconfidential assets transferred in a transaction.
 fn get_transferred_nonconfidential_assets(txn: &Transaction) -> HashSet<AssetTypeCode> {
     let mut transferred_assets = HashSet::new();
     for op in &txn.body.operations {

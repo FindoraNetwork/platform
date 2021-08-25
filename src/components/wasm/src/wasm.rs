@@ -9,6 +9,7 @@
 //!
 
 #![deny(warnings)]
+#![deny(missing_docs)]
 #![allow(clippy::needless_borrow)]
 
 use crate::{util::error_to_jsvalue, wasm_data_model::*};
@@ -129,10 +130,12 @@ pub struct TransactionBuilder {
 }
 
 impl TransactionBuilder {
+    #[allow(missing_docs)]
     pub fn get_builder(&self) -> &PlatformTransactionBuilder {
         &self.transaction_builder
     }
 
+    #[allow(missing_docs)]
     pub fn get_builder_mut(&mut self) -> &mut PlatformTransactionBuilder {
         &mut self.transaction_builder
     }
@@ -165,6 +168,7 @@ impl From<FeeInput> for PlatformFeeInput {
 
 #[wasm_bindgen]
 #[derive(Default)]
+#[allow(missing_docs)]
 pub struct FeeInputs {
     inner: Vec<FeeInput>,
 }
@@ -179,12 +183,14 @@ impl From<FeeInputs> for PlatformFeeInputs {
 
 #[wasm_bindgen]
 impl FeeInputs {
+    #[allow(missing_docs)]
     pub fn new() -> Self {
         FeeInputs {
             inner: Vec::with_capacity(1),
         }
     }
 
+    #[allow(missing_docs)]
     pub fn append(
         &mut self,
         am: u64,
@@ -196,6 +202,7 @@ impl FeeInputs {
         self.inner.push(FeeInput { am, tr, ar, om, kp })
     }
 
+    #[allow(missing_docs)]
     pub fn append2(
         mut self,
         am: u64,
@@ -477,6 +484,7 @@ impl TransactionBuilder {
         Ok(self)
     }
 
+    #[allow(missing_docs)]
     pub fn sign(mut self, kp: &XfrKeyPair) -> Result<TransactionBuilder, JsValue> {
         self.get_builder_mut().sign(kp);
         Ok(self)
@@ -516,16 +524,19 @@ pub struct TransferOperationBuilder {
 }
 
 impl TransferOperationBuilder {
+    #[allow(missing_docs)]
     pub fn get_builder(&self) -> &PlatformTransferOperationBuilder {
         &self.op_builder
     }
 
+    #[allow(missing_docs)]
     pub fn get_builder_mut(&mut self) -> &mut PlatformTransferOperationBuilder {
         &mut self.op_builder
     }
 }
 
 impl TransferOperationBuilder {
+    #[allow(missing_docs)]
     pub fn add_input(
         mut self,
         txo_ref: TxoRef,
@@ -557,6 +568,7 @@ impl TransferOperationBuilder {
         Ok(self)
     }
 
+    #[allow(missing_docs)]
     pub fn add_output(
         mut self,
         amount: u64,
@@ -754,6 +766,7 @@ impl TransferOperationBuilder {
         Ok(self)
     }
 
+    #[allow(missing_docs)]
     pub fn builder(&self) -> String {
         serde_json::to_string(self.get_builder()).unwrap()
     }
@@ -1129,18 +1142,21 @@ pub fn public_key_from_bech32(addr: &str) -> Result<XfrPublicKey, JsValue> {
 }
 
 #[wasm_bindgen]
+#[allow(missing_docs)]
 pub fn bech32_to_base64(pk: &str) -> Result<String, JsValue> {
     let pub_key = public_key_from_bech32(pk)?;
     Ok(public_key_to_base64(&pub_key))
 }
 
 #[wasm_bindgen]
+#[allow(missing_docs)]
 pub fn base64_to_bech32(pk: &str) -> Result<String, JsValue> {
     let pub_key = public_key_from_base64(pk)?;
     Ok(public_key_to_bech32(&pub_key))
 }
 
 #[wasm_bindgen]
+#[allow(missing_docs)]
 pub fn encryption_pbkdf2_aes256gcm(key_pair: String, password: String) -> Vec<u8> {
     const CREDENTIAL_LEN: usize = 32;
     const IV_LEN: usize = 12;
@@ -1175,6 +1191,7 @@ pub fn encryption_pbkdf2_aes256gcm(key_pair: String, password: String) -> Vec<u8
 }
 
 #[wasm_bindgen]
+#[allow(missing_docs)]
 pub fn decryption_pbkdf2_aes256gcm(enc_key_pair: Vec<u8>, password: String) -> String {
     const CREDENTIAL_LEN: usize = 32;
     const IV_LEN: usize = 12;
@@ -1205,6 +1222,7 @@ pub fn decryption_pbkdf2_aes256gcm(enc_key_pair: Vec<u8>, password: String) -> S
 }
 
 #[wasm_bindgen]
+#[allow(missing_docs)]
 pub fn create_keypair_from_secret(sk_str: String) -> Option<XfrKeyPair> {
     serde_json::from_str::<XfrSecretKey>(&sk_str)
         .map(|sk| sk.into_keypair())
@@ -1212,6 +1230,7 @@ pub fn create_keypair_from_secret(sk_str: String) -> Option<XfrKeyPair> {
 }
 
 #[wasm_bindgen]
+#[allow(missing_docs)]
 pub fn get_pk_from_keypair(kp: &XfrKeyPair) -> XfrPublicKey {
     kp.get_pk()
 }
@@ -1247,6 +1266,7 @@ pub struct BipPath {
 
 #[wasm_bindgen]
 impl BipPath {
+    #[allow(missing_docs)]
     pub fn new(coin: u32, account: u32, change: u32, address: u32) -> Self {
         BipPath {
             coin,
