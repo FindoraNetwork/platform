@@ -229,17 +229,37 @@ ifeq ($(ENV),release)
 endif
 
 ci_push_image:
-
 	docker push $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG)
 ifeq ($(ENV),release)
 	docker push $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
 endif
 
 clean_image:
-
 	docker rmi $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG)
 ifeq ($(ENV),release)
 	docker rmi $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
+endif
+
+ci_build_image_dockerhub:
+	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \
+		mkdir -p release/bin/; \
+		cp debug/bin/findorad release/bin/; \
+	fi
+	docker build -t $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) -f container/Dockerfile-CI-findorad .
+ifeq ($(ENV),release)
+	docker tag $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) $(DOCKERHUB_URL)/findorad:latest
+endif
+
+ci_push_image_dockerhub:
+	docker push $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG)
+ifeq ($(ENV),release)
+	docker push $(DOCKERHUB_URL)/findorad:latest
+endif
+
+clean_image_dockerhub:
+	docker rmi $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG)
+ifeq ($(ENV),release)
+	docker rmi $(DOCKERHUB_URL)/findorad:latest
 endif
 
 
