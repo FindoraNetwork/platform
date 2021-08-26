@@ -107,8 +107,6 @@ pub struct LedgerStatus {
 
     staking: Vecx<Staking>,
 
-    //staking of effective trading blocks
-    backup_staking: Vecx<Staking>,
     // tendermint commit height
     td_commit_height: Vecx<u64>,
     // flags that can be flush when a block has a tx
@@ -197,7 +195,6 @@ impl LedgerStatus {
         let next_txn_path = states_data_path.to_string() + "/next_txn";
         let next_txo_path = states_data_path.to_string() + "/next_txo";
         let staking_path = states_data_path.to_string() + "/staking";
-        let backup_staking_path = states_data_path.to_string() + "/backup_staking";
         let tendermint_commit_path = states_data_path.to_string() + "/tendermint_commit";
         let owned_utxos_path = states_data_path.to_string() + "/owned_utxos";
 
@@ -222,17 +219,12 @@ impl LedgerStatus {
             state_commitment_data: None,
             block_commit_count: 0,
             staking: new_vecx!(staking_path.as_str(), 1),
-            backup_staking: new_vecx!(backup_staking_path.as_str(), 1),
             td_commit_height: new_vecx!(tendermint_commit_path.as_str(), 1),
             is_effective_block: false,
         };
 
         if ledger.staking.is_empty() {
             ledger.staking.set_value(0, Staking::new());
-        }
-
-        if ledger.backup_staking.is_empty() {
-            ledger.backup_staking.set_value(0, Staking::new());
         }
 
         if ledger.next_txn.is_empty() {
@@ -725,9 +717,6 @@ impl LedgerState {
                 state: self.status.state_commitment_data.clone().c(d!())?,
             });
         }
-        self.status
-            .backup_staking
-            .set_value(0, block.staking_simulator.clone());
 
         mem::swap(
             &mut block.staking_simulator,
@@ -744,32 +733,31 @@ impl LedgerState {
     }
 
     pub fn flush_data(&mut self) {
-        if self.status.is_effective_block {
-            self.status.is_effective_block = false;
-            self.blocks.flush_data();
-            self.status.txo_to_txn_location.flush_data();
-            self.status.state_commitment_versions.flush_data();
-            self.status.utxos.flush_data();
-            self.status.asset_types.flush_data();
-            self.status.issuance_amounts.flush_data();
-            self.status.issuance_num.flush_data();
-            self.status.spent_utxos.flush_data();
-            self.status.tracing_policies.flush_data();
-            self.status.staking.flush_data();
-            self.status.next_txn.flush_data();
-            self.status.next_txo.flush_data();
-            self.status.backup_staking.flush_data();
-            self.status.owned_utxos.flush_data();
-        }
+        // if self.status.is_effective_block {
+        //     self.status.is_effective_block = false;
+        //     self.blocks.flush_data();
+        //     self.status.txo_to_txn_location.flush_data();
+        //     self.status.state_commitment_versions.flush_data();
+        //     self.status.utxos.flush_data();
+        //     self.status.asset_types.flush_data();
+        //     self.status.issuance_amounts.flush_data();
+        //     self.status.issuance_num.flush_data();
+        //     self.status.spent_utxos.flush_data();
+        //     self.status.tracing_policies.flush_data();
+        //     self.status.staking.flush_data();
+        //     self.status.next_txn.flush_data();
+        //     self.status.next_txo.flush_data();
+        //     self.status.owned_utxos.flush_data();
+        // }
     }
 
     pub fn flush_staking(&self) {
-        self.status.staking.flush_data();
+        // self.status.staking.flush_data();
     }
 
     pub fn set_tendermint_commit(&mut self, tendermint_commit: u64) {
         self.status.td_commit_height.set_value(0, tendermint_commit);
-        self.status.td_commit_height.flush_data();
+        // self.status.td_commit_height.flush_data();
     }
 }
 
@@ -1122,7 +1110,8 @@ impl LedgerState {
                         old_td_height = pulse_count + (commit_count as u64) + 1;
                     }
                 }
-                ledger.flush_data();
+
+                // ledger.flush_data();
 
                 ledger.status.td_commit_height.set_value(0, old_td_height);
                 ledger
@@ -1133,22 +1122,6 @@ impl LedgerState {
 
                 return Ok(ledger);
             }
-        }
-
-        let td_commit_height = pnk!(ledger.status.td_commit_height.get(0));
-        let staking_tendermint_height = ledger.get_staking().cur_height();
-
-        if td_commit_height != staking_tendermint_height {
-            let backup_staking = pnk!(ledger.status.backup_staking.get(0));
-
-            if backup_staking.cur_height() == 0 && staking_tendermint_height > 0 {
-                panic!("backup staking is wrong data");
-            }
-
-            ledger
-                .status
-                .staking
-                .set_value(0, backup_staking.deref().clone());
         }
 
         omit!(ledger.utxo_map.compute_checksum());

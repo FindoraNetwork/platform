@@ -55,7 +55,7 @@ pub fn info(s: &mut ABCISubmissionServer, _req: RequestInfo) -> ResponseInfo {
     resp
 }
 
-/// called when a trade is entered into the pool but not yet confirmed
+/// any new tx will trigger this callback before it can enter the mem-pool of tendermint
 pub fn check_tx(_s: &mut ABCISubmissionServer, req: RequestCheckTx) -> ResponseCheckTx {
     // Get the Tx [u8] and convert to u64
     let mut resp = ResponseCheckTx::default();
