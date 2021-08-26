@@ -1839,7 +1839,6 @@ pub mod helpers {
         .unwrap();
 
         transfer.sign(&issuer_keys);
-        // FIXME: `from_operation` takes a no_replay_token, but only two operations need them.
         // IssueAsset does not, so we use a default
         let seq_id = ledger.get_block_commit_count();
         let mut tx = Transaction::from_operation(issue_op, seq_id);

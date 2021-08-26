@@ -113,24 +113,23 @@ pub fn run() -> Result<()> {
         "init" => init_command(),
         "node" => {
             let thread = thread::Builder::new()
-                .spawn(|| node_command().unwrap())
+                .spawn(|| pnk!(node_command()))
                 .unwrap();
 
             let (tx, rx) = channel();
 
             ctrlc::set_handler(move || {
-                tx.send(()).expect("Could not send signal.");
+                pnk!(tx.send(()));
             })
             .c(d!())?;
 
-            rx.recv().expect("Could not receive signal.");
+            pnk!(rx.recv());
 
             thread.thread().unpark();
-
             thread.join().unwrap();
 
             Ok(())
         }
-        _ => Err(eg!("Must use command is node or init")),
+        _ => Err(eg!("The available options are 'node' / 'init'")),
     }
 }
