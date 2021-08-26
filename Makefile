@@ -133,10 +133,13 @@ endif
 test:
 	# cargo test --release --workspace -- --test-threads=1 # --nocapture
 	cargo test --release --workspace -- --ignored # --nocapture
-	# cargo test --release --features="abci_mock" -- --test-threads=1 # --nocapture
+	cargo test --release --features="abci_mock" -- --test-threads=1 # --nocapture
+
+coverage:
 	cargo tarpaulin --timeout=900 --branch --workspace --release --ignored --features="abci_mock" \
 		|| cargo install cargo-tarpaulin \
 		&& cargo tarpaulin --timeout=900 --branch --workspace --release --ignored --features="abci_mock"
+
 staking_cfg:
 	cargo run --bin staking_cfg_generator
 
