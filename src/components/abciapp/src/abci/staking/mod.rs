@@ -211,6 +211,7 @@ pub fn system_ops(
             }
         }
     }
+
     la.flush_staking();
 }
 

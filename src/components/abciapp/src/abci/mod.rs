@@ -11,11 +11,27 @@ use crate::api::{
     query_server::{ledger_api::RestfulApiService, query_api},
     submission_server::submission_api::SubmissionApi,
 };
+use lazy_static::lazy_static;
 use ruc::*;
-use std::{env, fs, path::Path, sync::mpsc::channel, sync::Arc, thread};
+use std::{
+    env, fs,
+    path::Path,
+    sync::mpsc::channel,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
+};
 use tendermint_sys::Node;
 
 use config::{global_cfg::CFG, ABCIConfig};
+
+lazy_static! {
+    /// if `true`,
+    /// we can exit safely without the risk of breaking data
+    pub static ref IN_SAFE_ITV: AtomicBool = AtomicBool::new(false);
+}
 
 /// run node
 pub fn node_command() -> Result<()> {
@@ -119,6 +135,9 @@ pub fn run() -> Result<()> {
             let (tx, rx) = channel();
 
             ctrlc::set_handler(move || {
+                while !IN_SAFE_ITV.load(Ordering::SeqCst) {
+                    sleep_ms!(1);
+                }
                 pnk!(tx.send(()));
             })
             .c(d!())?;

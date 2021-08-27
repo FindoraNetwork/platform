@@ -10,7 +10,7 @@ then
     echo -n "killed nodes: "
     for pid in $abcis
     do
-        kill -9 $pid
+        kill $pid
         echo -en "$pid "
     done
     echo

@@ -3,7 +3,7 @@
 //!
 
 use crate::{
-    abci::{server::ABCISubmissionServer, staking},
+    abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV},
     api::{query_server::BLOCK_CREATED, submission_server::convert_tx},
 };
 use lazy_static::lazy_static;
@@ -82,6 +82,8 @@ pub fn begin_block(
     s: &mut ABCISubmissionServer,
     req: RequestBeginBlock,
 ) -> ResponseBeginBlock {
+    IN_SAFE_ITV.swap(true, Ordering::SeqCst);
+
     let header = pnk!(req.header.as_ref());
     TENDERMINT_BLOCK_HEIGHT.swap(header.height, Ordering::Relaxed);
 
@@ -142,6 +144,7 @@ pub fn end_block(
     let begin_block_req = REQ_BEGIN_BLOCK.lock();
     let header = pnk!(begin_block_req.header.as_ref());
 
+    IN_SAFE_ITV.swap(false, Ordering::SeqCst);
     let mut la = s.la.write();
 
     // mint coinbase, cache system transactions to ledger
@@ -195,5 +198,6 @@ pub fn commit(s: &mut ABCISubmissionServer) -> ResponseCommit {
     // la.end_commit();
     state.flush_data();
     r.data = commitment.0.as_ref().to_vec();
+
     r
 }
