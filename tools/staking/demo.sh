@@ -106,24 +106,24 @@ check() {
 
     # At least 88_8888 FRAs
     fns stake -n $((888888 * 1000000)) -R 0.2 || exit 1
-    sleep $[6 * $BLOCK_ITV]
+    sleep $[8 * $BLOCK_ITV]
     curl ${SERVER_HOST}:26657/validators | grep -A 5 ${SELF_ADDR} 2>/dev/null || exit 1
     println "Our validator appears in the validator list after staking..."
 
     fns stake --append -n $((222222 * 1000000)) || exit 1
-    sleep $[6 * $BLOCK_ITV]
+    sleep $[8 * $BLOCK_ITV]
     curl ${SERVER_HOST}:26657/validators | grep -A 5 ${SELF_ADDR} 2>/dev/null || exit 1
     println "Its vote power has been raised after appending a new staking..."
 
     println "Now we stop it..."
     stop_node
-    println "Wait  $[2 * $BLOCK_ITV]s..."
-    sleep $[2 * $BLOCK_ITV]
+    println "Wait  $[3 * $BLOCK_ITV]s..."
+    sleep $[3 * $BLOCK_ITV]
 
     println "Now we restart it..."
     start_node
-    println "Wait $[2 * $BLOCK_ITV]s..."
-    sleep $[2 * $BLOCK_ITV]
+    println "Wait $[3 * $BLOCK_ITV]s..."
+    sleep $[3 * $BLOCK_ITV]
 
     grep ${SELF_ADDR} nohup.out
     println "Pay attention to its power change..."

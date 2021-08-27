@@ -9,7 +9,6 @@ use bnc::{
 };
 use cryptohash::sha256::Digest as BitDigest;
 use globutils::{HashOf, ProofOf, SignatureOf};
-use log::info;
 use merkle_tree::AppendOnlyMerkle;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
@@ -18,8 +17,9 @@ use serde::{Deserialize, Serialize};
 use sliding_set::SlidingSet;
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
+    env,
     fs::{self, File, OpenOptions},
-    io::{BufRead, BufReader, BufWriter},
+    io::{BufRead, BufReader, BufWriter, ErrorKind},
     mem,
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
@@ -46,7 +46,7 @@ const MAX_VERSION: usize = 100;
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub struct LedgerStatus {
-    // Paths to archival logs for the merkle tree and transaction history
+    snapshot_path: String,
     block_merkle_path: String,
     txn_merkle_path: String,
     utxo_map_path: String,
@@ -56,16 +56,13 @@ pub struct LedgerStatus {
 
     owned_utxos: Mapx<XfrPublicKey, HashSet<TxoSID>>,
 
-    // All spent TXOs
-    // pub spent_utxos: HashMap<TxoSID, Utxo>,
+    /// All spent TXOs
     pub spent_utxos: Mapx<TxoSID, Utxo>,
 
     // Map a TXO to its output position in a transaction
     txo_to_txn_location: Mapx<TxoSID, (TxnSID, OutputPosition)>,
 
-    // Digests of the UTXO bitmap to (I think -joe) track recent states of
-    // the UTXO map
-    // TODO(joe): should this be an ordered map of some sort?
+    // Digests of the UTXO bitmap to track recent states of the UTXO map
     utxo_map_versions: VecDeque<(TxnSID, BitDigest)>,
 
     // State commitment history. The BitDigest at index i is the state commitment of the ledger at block height  i + 1.
@@ -91,6 +88,7 @@ pub struct LedgerStatus {
     // ledger -- committing to the whole ledger history up to the most recent
     // such checkpoint.
     state_commitment_data: Option<StateCommitmentData>,
+
     block_commit_count: u64,
 
     // cumulative consensus specific counter, up to the current block.
@@ -120,8 +118,7 @@ pub struct LedgerState {
     // PRNG used for transaction validation
     prng: ChaChaRng,
 
-    // Key pair used for signing the state commitment
-    // TODO(joe): update this to the generic zei signing API when it exists
+    // Useless, ignore this field
     signing_key: XfrKeyPair,
 
     // Merkle tree tracing the sequence of transaction hashes in the block
@@ -133,7 +130,6 @@ pub struct LedgerState {
 
     // The `FinalizedTransaction`s consist of a Transaction and an index into
     // `merkle` representing its hash.
-    // TODO(joe): should this be in-memory?
     pub blocks: Vecx<FinalizedBlock>,
 
     // <tx id> => [<block id>, <tx idx in block>]
@@ -178,28 +174,56 @@ impl LedgerState {
 
 impl LedgerStatus {
     pub fn new(
+        snapshot_path: &str,
         block_merkle_path: &str,
         txn_merkle_path: &str,
         utxo_map_path: &str,
         states_data_path: &str,
     ) -> Result<LedgerStatus> {
-        let utxos_path = states_data_path.to_string() + "/utxo";
-        let spent_utxos_path = states_data_path.to_string() + "/spent_utxos";
+        match fs::read_to_string(snapshot_path) {
+            Ok(s) => serde_json::from_str(&s).c(d!()),
+            Err(e) => {
+                if ErrorKind::NotFound != e.kind() {
+                    Err(eg!(e))
+                } else {
+                    Self::create(
+                        snapshot_path,
+                        block_merkle_path,
+                        txn_merkle_path,
+                        utxo_map_path,
+                        states_data_path,
+                    )
+                    .c(d!())
+                }
+            }
+        }
+    }
+
+    fn create(
+        snapshot_path: &str,
+        block_merkle_path: &str,
+        txn_merkle_path: &str,
+        utxo_map_path: &str,
+        states_data_path: &str,
+    ) -> Result<LedgerStatus> {
+        let utxos_path = states_data_path.to_owned() + "/utxo";
+        let spent_utxos_path = states_data_path.to_owned() + "/spent_utxos";
         let txo_to_txn_location_path =
-            states_data_path.to_string() + "/txo_to_txn_location";
-        let issuance_amounts_path = states_data_path.to_string() + "/issuance_amounts";
+            states_data_path.to_owned() + "/txo_to_txn_location";
+        let issuance_amounts_path = states_data_path.to_owned() + "/issuance_amounts";
         let state_commitment_versions_path =
-            states_data_path.to_string() + "/state_commitment_versions";
-        let asset_types_path = states_data_path.to_string() + "/asset_types";
-        let tracing_policies_path = states_data_path.to_string() + "/tracing_policies";
-        let issuance_num_path = states_data_path.to_string() + "/issuance_num";
-        let next_txn_path = states_data_path.to_string() + "/next_txn";
-        let next_txo_path = states_data_path.to_string() + "/next_txo";
-        let staking_path = states_data_path.to_string() + "/staking";
-        let tendermint_commit_path = states_data_path.to_string() + "/tendermint_commit";
-        let owned_utxos_path = states_data_path.to_string() + "/owned_utxos";
+            states_data_path.to_owned() + "/state_commitment_versions";
+        let asset_types_path = states_data_path.to_owned() + "/asset_types";
+        let tracing_policies_path = states_data_path.to_owned() + "/tracing_policies";
+        let issuance_num_path = states_data_path.to_owned() + "/issuance_num";
+        let next_txn_path = states_data_path.to_owned() + "/next_txn";
+        let next_txo_path = states_data_path.to_owned() + "/next_txo";
+        let staking_path = states_data_path.to_owned() + "/staking";
+        let tendermint_commit_path = states_data_path.to_owned() + "/tendermint_commit";
+        let owned_utxos_path = states_data_path.to_owned() + "/owned_utxos";
 
         let mut ledger = LedgerStatus {
+            snapshot_path: snapshot_path.to_owned(),
             block_merkle_path: block_merkle_path.to_owned(),
             txn_merkle_path: txn_merkle_path.to_owned(),
             sliding_set: SlidingSet::<[u8; 8]>::new(TRANSACTION_WINDOW_WIDTH as usize),
@@ -237,7 +261,7 @@ impl LedgerStatus {
         }
 
         if ledger.td_commit_height.is_empty() {
-            ledger.td_commit_height.set_value(0, 0);
+            ledger.td_commit_height.set_value(0, 1);
         }
 
         Ok(ledger)
@@ -726,7 +750,11 @@ impl LedgerState {
 
         self.block_ctx = Some(block);
         self.status.is_effective_block = true;
-        Ok(temp_sid_map)
+
+        serde_json::to_vec(&self.status)
+            .c(d!())
+            .and_then(|s| fs::write(&self.status.snapshot_path, s).c(d!()))
+            .map(|_| temp_sid_map)
     }
 
     pub fn get_staking_mut(&mut self) -> VecxValueMut<Staking> {
@@ -763,8 +791,13 @@ impl LedgerState {
 }
 
 impl LedgerState {
-    pub fn get_tendermint_height(&self) -> i64 {
-        self.status.td_commit_height.len() as i64
+    pub fn get_tendermint_height(&self) -> u64 {
+        self.status
+            .td_commit_height
+            .get(0)
+            .unwrap()
+            .into_inner()
+            .into_owned()
     }
 
     pub fn get_next_txn(&self) -> Value<TxnSID> {
@@ -783,9 +816,7 @@ impl LedgerState {
     pub fn test_ledger() -> LedgerState {
         let tmp_dir = globutils::fresh_tmp_dir();
 
-        let ret =
-            LedgerState::new(tmp_dir.clone(), None, None, Some(String::from("test")))
-                .unwrap();
+        let ret = LedgerState::new(tmp_dir.clone(), Some(String::from("test"))).unwrap();
 
         let key_buf = tmp_dir.join("test_sig_key");
         let key_path = key_buf.to_str().unwrap();
@@ -887,99 +918,69 @@ impl LedgerState {
         self.status.incr_block_commit_count();
     }
 
-    // Initialize a logged Merkle tree for the ledger. We might
-    // be creating a new tree or opening an existing one. We
-    // always start a new log file.
-    fn init_merkle_log(path: &str, create: bool) -> Result<AppendOnlyMerkle> {
-        // Create a merkle tree or open an existing one.
-        let tree = if create {
-            ruc::omit!(fs::remove_file(path));
-            AppendOnlyMerkle::create(path).c(d!())?
-        } else {
-            AppendOnlyMerkle::open(path).c(d!())?
-        };
-
-        info!("Using path {} for the Merkle tree.", path);
-
-        Ok(tree)
+    // Initialize a logged Merkle tree for the ledger.
+    // We might be creating a new tree or opening an existing one.
+    #[inline(always)]
+    fn init_merkle_log(path: &str) -> Result<AppendOnlyMerkle> {
+        AppendOnlyMerkle::open(path)
+            .c(d!())
+            .or_else(|e| AppendOnlyMerkle::create(path).c(d!(e)))
     }
 
     // Initialize a bitmap to track the unspent utxos.
-    fn init_utxo_map(path: &str, create: bool) -> Result<BitMap> {
+    #[inline(always)]
+    fn init_utxo_map(path: &str) -> Result<BitMap> {
         let mut file = OpenOptions::new();
         let f = file.read(true).write(true);
 
-        if create {
-            f.create(true)
-                .truncate(true)
-                .open(path)
-                .c(d!())
-                .and_then(|f| BitMap::create(f).c(d!()))
-        } else {
-            f.open(path).c(d!()).and_then(|f| BitMap::open(f).c(d!()))
-        }
+        f.open(path)
+            .c(d!())
+            .or_else(|e| f.create(true).truncate(true).open(path).c(d!(e)))
+            .and_then(|f| BitMap::open(f).c(d!()))
     }
 
-    // Initialize a new Ledger structure.
-    pub fn new(
-        base_dir: PathBuf,
-        keypair: Option<XfrKeyPair>,
-        prng_seed: Option<[u8; 32]>,
-        prefix: Option<String>,
-    ) -> Result<LedgerState> {
-        let (var1, var2, var3, var4, var5, var6) = match prefix {
-            None => (
-                "block_merkle".to_string(),
-                "txn_merkle".to_string(),
-                "utxo_map".to_string(),
-                "states_data".to_string(),
-                "blocks".to_string(),
-                "tx_to_block_location".to_string(),
-            ),
-            Some(s) => {
-                let block_merkle = s.clone() + "_block_merkle";
-                let txn_merkle = s.clone() + "_txn_merkle";
-                let utxo_map = s.clone() + "_utxo_map";
-                let states_data = s.clone() + "_states_data";
-                let blocks = s.clone() + "_blocks";
-                let tx_to_block_location = s + "_tx_to_block_location";
+    /// Initialize a new Ledger structure.
+    pub fn new(base_dir: PathBuf, prefix: Option<String>) -> Result<LedgerState> {
+        let prefix = prefix.unwrap_or_default();
 
-                (
-                    block_merkle,
-                    txn_merkle,
-                    utxo_map,
-                    states_data,
-                    blocks,
-                    tx_to_block_location,
-                )
-            }
-        };
+        let ledger_status = prefix.clone() + "_ledger_status";
+        let block_merkle = prefix.clone() + "_block_merkle";
+        let txn_merkle = prefix.clone() + "_txn_merkle";
+        let utxo_map = prefix.clone() + "_utxo_map";
+        let states_data = prefix.clone() + "_states_data";
+        let blocks = prefix.clone() + "_blocks";
+        let tx_to_block_location = prefix + "_tx_to_block_location";
 
-        let block_merkle_buf = base_dir.join(var1);
+        let ledger_status_buf = base_dir.join(ledger_status);
+        let ledger_status_path = ledger_status_buf.to_str().unwrap();
+
+        let block_merkle_buf = base_dir.join(block_merkle);
         let block_merkle_path = block_merkle_buf.to_str().unwrap();
 
-        let txn_merkle_buf = base_dir.join(var2);
+        let txn_merkle_buf = base_dir.join(txn_merkle);
         let txn_merkle_path = txn_merkle_buf.to_str().unwrap();
 
-        let utxo_map_buf = base_dir.join(var3);
+        let utxo_map_buf = base_dir.join(utxo_map);
         let utxo_map_path = utxo_map_buf.to_str().unwrap();
 
-        let states_data_buf = base_dir.join(var4);
+        let states_data_buf = base_dir.join(states_data);
         let states_data_path = states_data_buf.to_str().unwrap();
 
-        let blocks_buf = base_dir.join(var5);
+        let blocks_buf = base_dir.join(blocks);
         let blocks_path = blocks_buf.to_str().unwrap();
 
-        let tx_to_block_location_buf = base_dir.join(var6);
+        let tx_to_block_location_buf = base_dir.join(tx_to_block_location);
         let tx_to_block_location_path =
             tx_to_block_location_buf.to_str().map(String::from).unwrap();
 
-        let mut prng = prng_seed
-            .map(rand_chacha::ChaChaRng::from_seed)
-            .unwrap_or_else(ChaChaRng::from_entropy);
-        let signing_key = keypair.unwrap_or_else(|| XfrKeyPair::generate(&mut prng));
+        let mut prng = ChaChaRng::from_entropy();
+
+        // useless, ignore this key
+        let signing_key = XfrKeyPair::generate(&mut prng);
+
         let ledger = LedgerState {
             status: LedgerStatus::new(
+                ledger_status_path,
                 block_merkle_path,
                 txn_merkle_path,
                 utxo_map_path,
@@ -988,203 +989,54 @@ impl LedgerState {
             .c(d!())?,
             prng,
             signing_key,
-            block_merkle: LedgerState::init_merkle_log(block_merkle_path, true)
-                .c(d!())?,
-            txn_merkle: LedgerState::init_merkle_log(txn_merkle_path, true).c(d!())?,
-            blocks: pnk!(Vecx::new(blocks_path, None, false)),
+            block_merkle: LedgerState::init_merkle_log(block_merkle_path).c(d!())?,
+            txn_merkle: LedgerState::init_merkle_log(txn_merkle_path).c(d!())?,
+            blocks: new_vecx!(blocks_path),
             tx_to_block_location: new_mapx!(tx_to_block_location_path.as_str()),
-            utxo_map: LedgerState::init_utxo_map(utxo_map_path, true).c(d!())?,
+            utxo_map: LedgerState::init_utxo_map(utxo_map_path).c(d!())?,
             block_ctx: Some(BlockEffect::default()),
         };
 
         Ok(ledger)
     }
 
-    pub fn load_from_log(
-        base_dir: &Path,
-        prng_seed: Option<[u8; 32]>,
-    ) -> Result<LedgerState> {
-        let sig_key_file_buf = base_dir.join("sig_key");
-        let signing_key_path = sig_key_file_buf.to_str().c(d!())?;
+    // Load an existing one OR create a new one.
+    fn load_from_log(base_dir: &Path) -> Result<LedgerState> {
+        let mut ledger = LedgerState::new(base_dir.to_path_buf(), None).c(d!())?;
 
-        let block_buf = base_dir.join("block_merkle");
-        let block_merkle_path = block_buf.to_str().c(d!())?;
-
-        let txn_merkle_buf = base_dir.join("txn_merkle");
-        let txn_merkle_path = txn_merkle_buf.to_str().c(d!())?;
-
-        let utxo_map_buf = base_dir.join("utxo_map");
-        let utxo_map_path = utxo_map_buf.to_str().c(d!())?;
-
-        let states_data_buf = base_dir.join("states_data");
-        let states_data_path = states_data_buf.to_str().c(d!())?;
-
-        let blocks_buf = base_dir.join("blocks");
-        let blocks_path = blocks_buf.to_str().c(d!())?;
-
-        let txn_log_buf = base_dir.join("txn_log");
-        let txn_log_path = txn_log_buf.to_str().c(d!())?;
-
-        let tx_to_block_location_buf = base_dir.join("tx_to_block_location");
-        let tx_to_block_location_path =
-            tx_to_block_location_buf.to_str().map(String::from).unwrap();
-
-        let mut prng = prng_seed
-            .map(rand_chacha::ChaChaRng::from_seed)
-            .unwrap_or_else(ChaChaRng::from_entropy);
-        let signing_key = {
-            let ret = File::open(signing_key_path).c(d!()).and_then(|file| {
-                let mut reader = BufReader::new(file);
-                serde_json::from_reader::<&mut BufReader<File>, XfrKeyPair>(&mut reader)
-                    .c(d!())
-            });
-            ret.or_else(|_| {
-                let key = XfrKeyPair::generate(&mut prng);
-                File::create(signing_key_path)
-                    .c(d!())
-                    .and_then(|file| {
-                        let mut writer = BufWriter::new(file);
-
-                        serde_json::to_writer::<&mut BufWriter<File>, XfrKeyPair>(
-                            &mut writer,
-                            &key,
-                        )
-                        .c(d!())
-                        .map(|_| key)
-                    })
-                    .c(d!())
-            })
-            .c(d!())?
-        };
-
-        let mut ledger = LedgerState {
-            status: LedgerStatus::new(
-                block_merkle_path,
-                txn_merkle_path,
-                utxo_map_path,
-                states_data_path,
-            )
-            .c(d!())?,
-            prng,
-            signing_key,
-            block_merkle: LedgerState::init_merkle_log(
-                block_merkle_path,
-                !Path::new(block_merkle_path).is_file(),
-            )
-            .c(d!())?,
-            txn_merkle: LedgerState::init_merkle_log(
-                txn_merkle_path,
-                !Path::new(txn_merkle_path).is_file(),
-            )
-            .c(d!())?,
-            blocks: pnk!(Vecx::new(blocks_path, None, false)),
-            tx_to_block_location: new_mapx!(tx_to_block_location_path.as_str()),
-            utxo_map: LedgerState::init_utxo_map(
-                utxo_map_path,
-                !Path::new(utxo_map_path).is_file(),
-            )
-            .c(d!())?,
-            block_ctx: Some(BlockEffect::default()),
-        };
-
-        let blocks_len = ledger.blocks.len();
-
-        if let Ok(old_blocks) = LedgerState::load_transaction_log(txn_log_path).c(d!()) {
-            let old_blocks_len = old_blocks.len();
-            if old_blocks_len > blocks_len {
-                let mut old_td_height = blocks_len as u64;
-
-                for (commit_count, logged_block) in old_blocks.into_iter().enumerate() {
-                    let block = logged_block.block;
-                    let mut block_builder = ledger.start_block().c(d!())?;
-                    for txn in block {
-                        let eff = TxnEffect::compute_effect(txn).c(d!())?;
-                        ledger
-                            .apply_transaction(&mut block_builder, eff, true)
-                            .c(d!())?;
-                    }
-
-                    let pulse_count = logged_block.state.pulse_count;
-                    block_builder
-                        .staking_simulator
-                        .set_custom_block_height(pulse_count + commit_count as u64 + 1);
-
-                    ledger.finish_block(block_builder).c(d!())?;
-
-                    if commit_count == old_blocks_len - 1 {
-                        old_td_height = pulse_count + (commit_count as u64) + 1;
-                    }
-                }
-
-                ledger.flush_data();
-
-                ledger.status.td_commit_height.set_value(0, old_td_height);
-                ledger
-                    .get_staking_mut()
-                    .set_custom_block_height(old_td_height);
-
-                ledger.fast_invariant_check().c(d!())?;
-
-                return Ok(ledger);
-            }
-        }
-
-        omit!(ledger.utxo_map.compute_checksum());
-
-        // this var is used in query_server to determine how many blocks to cross when restarting
-        std::env::set_var("LOAD_BLOCKS_LEN", ledger.blocks.len().to_string());
-
-        if let Some(v) = ledger.blocks.iter().last() {
-            let block_builder = &mut pnk!(ledger.start_block().c(d!()));
-            for finalized_tx in v.txns.iter() {
-                let f_tx = finalized_tx.clone();
-                let eff = pnk!(TxnEffect::compute_effect(f_tx.txn).c(d!()));
-                pnk!(block_builder.add_txn_effect(eff, true).c(d!()));
-            }
-
-            let txns_in_block_hash = block_builder.compute_txns_in_block_hash();
-            ledger.status.txns_in_block_hash = Some(txns_in_block_hash);
-
-            let mut block_builder = BlockEffect::default();
-
-            block_builder
-                .staking_simulator
-                .set_custom_block_height(ledger.get_staking().cur_height());
-
-            ledger.block_ctx = Some(block_builder);
-            ledger.status.state_commitment_data = Some(v.state);
-        }
-
-        (0..blocks_len).for_each(|_| {
-            ledger.status.incr_block_commit_count();
-        });
-        pnk!(ledger.fast_invariant_check().c(d!()));
-
-        Ok(ledger)
-    }
-
-    pub fn load_or_init(base_dir: &Path) -> Result<LedgerState> {
-        LedgerState::load_from_log(base_dir, None).or_else(|e| {
-            e.print();
-            let ret =
-                LedgerState::new(base_dir.to_path_buf(), None, None, None).c(d!())?;
-
+        if ledger.blocks.is_empty() {
+            let txn_log_buf = base_dir.join("txn_log");
+            let txn_log_path = txn_log_buf.to_str().c(d!())?;
+            if let Ok(old_blocks) =
+                LedgerState::load_transaction_log(txn_log_path).c(d!())
             {
-                let sig_key_file_buf = base_dir.join("sig_key");
-                let signing_key_path = sig_key_file_buf.to_str().c(d!())?;
-
-                let file = File::create(signing_key_path).c(d!())?;
-                let mut writer = BufWriter::new(file);
-
-                serde_json::to_writer::<&mut BufWriter<File>, XfrKeyPair>(
-                    &mut writer,
-                    &ret.signing_key,
-                )
-                .c(d!())?;
+                for logged_block in old_blocks.into_iter() {
+                    let mut be = ledger.start_block().c(d!())?;
+                    for txn in logged_block.block {
+                        let te = TxnEffect::compute_effect(txn).c(d!())?;
+                        ledger.apply_transaction(&mut be, te, true).c(d!())?;
+                    }
+                    ledger.finish_block(be).c(d!())?;
+                }
             }
+        }
 
-            Ok(ret)
-        })
+        let h = ledger.get_tendermint_height() as u64;
+        ledger.get_staking_mut().set_custom_block_height(h);
+        omit!(ledger.utxo_map.compute_checksum());
+        ledger.fast_invariant_check().c(d!())?;
+        ledger.flush_data();
+
+        // this var is used in `query_server` to determine
+        // how many blocks to cross when restarting
+        env::set_var("LOAD_BLOCKS_LEN", ledger.blocks.len().to_string());
+
+        Ok(ledger)
+    }
+
+    #[inline(always)]
+    pub fn load_or_init(base_dir: &Path) -> Result<LedgerState> {
+        LedgerState::load_from_log(base_dir)
     }
 
     pub fn checkpoint(&mut self, block: &BlockEffect) -> Result<u64> {

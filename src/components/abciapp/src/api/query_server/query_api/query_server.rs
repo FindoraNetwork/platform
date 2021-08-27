@@ -11,7 +11,7 @@ use ledger::{
 };
 use parking_lot::{Condvar, Mutex, RwLock};
 use ruc::*;
-use std::{collections::HashSet, ops::Deref, path::Path, sync::Arc};
+use std::{collections::HashSet, env, ops::Deref, path::Path, sync::Arc};
 use zei::xfr::structs::OwnerMemo;
 
 lazy_static! {
@@ -79,7 +79,7 @@ impl QueryServer {
         let txn_sid_to_hash_path = query_server_path.to_string() + "/txn_sid_to_hash";
         let txn_hash_to_sid_path = query_server_path + "/txn_hash_to_sid";
 
-        let app_block_cnt = std::env::var("LOAD_BLOCKS_LEN")
+        let app_block_cnt = env::var("LOAD_BLOCKS_LEN")
             .unwrap_or_else(|_| "0".to_string())
             .parse::<u64>()
             .unwrap() as usize;

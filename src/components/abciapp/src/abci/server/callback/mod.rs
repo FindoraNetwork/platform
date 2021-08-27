@@ -39,7 +39,7 @@ pub fn info(s: &mut ABCISubmissionServer, _req: RequestInfo) -> ResponseInfo {
     let state = la.get_committed_state().write();
     let commitment = state.get_state_commitment();
 
-    let h = state.get_tendermint_height();
+    let h = state.get_tendermint_height() as i64;
     TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
 
     if 1 < h {
