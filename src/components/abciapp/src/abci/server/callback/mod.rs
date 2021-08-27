@@ -39,11 +39,12 @@ pub fn info(s: &mut ABCISubmissionServer, _req: RequestInfo) -> ResponseInfo {
     let state = la.get_committed_state().write();
     let commitment = state.get_state_commitment();
 
-    if commitment.1 > 0 {
+    let h = state.get_tendermint_height();
+    TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
+
+    if 1 < h {
         resp.last_block_app_hash = commitment.0.as_ref().to_vec();
     }
-
-    let h = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
 
     resp.last_block_height = h;
 
@@ -76,32 +77,6 @@ pub fn check_tx(_s: &mut ABCISubmissionServer, req: RequestCheckTx) -> ResponseC
     resp
 }
 
-/// called between begin_block and end_block
-pub fn deliver_tx(
-    s: &mut ABCISubmissionServer,
-    req: RequestDeliverTx,
-) -> ResponseDeliverTx {
-    let mut resp = ResponseDeliverTx::default();
-    if let Some(tx) = convert_tx(&req.tx) {
-        if !is_coinbase_tx(&tx)
-            && tx.is_basic_valid(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed))
-        {
-            // set attr(tags) if any
-            let attr = utils::gen_tendermint_attr(&tx);
-            if !attr.is_empty() {
-                resp.events = attr;
-            }
-
-            if s.la.write().cache_transaction(tx).is_ok() {
-                return resp;
-            }
-        }
-    }
-    resp.code = 1;
-    resp.log = String::from("Failed to deliver transaction!");
-    resp
-}
-
 /// create block
 pub fn begin_block(
     s: &mut ABCISubmissionServer,
@@ -129,6 +104,32 @@ pub fn begin_block(
     drop(la);
 
     ResponseBeginBlock::default()
+}
+
+/// called between begin_block and end_block
+pub fn deliver_tx(
+    s: &mut ABCISubmissionServer,
+    req: RequestDeliverTx,
+) -> ResponseDeliverTx {
+    let mut resp = ResponseDeliverTx::default();
+    if let Some(tx) = convert_tx(&req.tx) {
+        if !is_coinbase_tx(&tx)
+            && tx.is_basic_valid(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed))
+        {
+            // set attr(tags) if any
+            let attr = utils::gen_tendermint_attr(&tx);
+            if !attr.is_empty() {
+                resp.events = attr;
+            }
+
+            if s.la.write().cache_transaction(tx).is_ok() {
+                return resp;
+            }
+        }
+    }
+    resp.code = 1;
+    resp.log = String::from("Failed to deliver transaction!");
+    resp
 }
 
 /// putting block in the ledgerState

@@ -109,6 +109,7 @@ pub struct LedgerStatus {
 
     // tendermint commit height
     td_commit_height: Vecx<u64>,
+
     // flags that can be flush when a block has a tx
     is_effective_block: bool,
 }
@@ -733,35 +734,39 @@ impl LedgerState {
     }
 
     pub fn flush_data(&mut self) {
-        // if self.status.is_effective_block {
-        //     self.status.is_effective_block = false;
-        //     self.blocks.flush_data();
-        //     self.status.txo_to_txn_location.flush_data();
-        //     self.status.state_commitment_versions.flush_data();
-        //     self.status.utxos.flush_data();
-        //     self.status.asset_types.flush_data();
-        //     self.status.issuance_amounts.flush_data();
-        //     self.status.issuance_num.flush_data();
-        //     self.status.spent_utxos.flush_data();
-        //     self.status.tracing_policies.flush_data();
-        //     self.status.staking.flush_data();
-        //     self.status.next_txn.flush_data();
-        //     self.status.next_txo.flush_data();
-        //     self.status.owned_utxos.flush_data();
-        // }
+        if self.status.is_effective_block {
+            self.status.is_effective_block = false;
+            self.blocks.flush_data();
+            self.status.txo_to_txn_location.flush_data();
+            self.status.state_commitment_versions.flush_data();
+            self.status.utxos.flush_data();
+            self.status.asset_types.flush_data();
+            self.status.issuance_amounts.flush_data();
+            self.status.issuance_num.flush_data();
+            self.status.spent_utxos.flush_data();
+            self.status.tracing_policies.flush_data();
+            self.status.staking.flush_data();
+            self.status.next_txn.flush_data();
+            self.status.next_txo.flush_data();
+            self.status.owned_utxos.flush_data();
+        }
     }
 
     pub fn flush_staking(&self) {
-        // self.status.staking.flush_data();
+        self.status.staking.flush_data();
     }
 
     pub fn set_tendermint_commit(&mut self, tendermint_commit: u64) {
         self.status.td_commit_height.set_value(0, tendermint_commit);
-        // self.status.td_commit_height.flush_data();
+        self.status.td_commit_height.flush_data();
     }
 }
 
 impl LedgerState {
+    pub fn get_tendermint_height(&self) -> i64 {
+        self.status.td_commit_height.len() as i64
+    }
+
     pub fn get_next_txn(&self) -> Value<TxnSID> {
         pnk!(self.status.next_txn.get(0).c(d!()))
     }
@@ -1111,7 +1116,7 @@ impl LedgerState {
                     }
                 }
 
-                // ledger.flush_data();
+                ledger.flush_data();
 
                 ledger.status.td_commit_height.set_value(0, old_td_height);
                 ledger
