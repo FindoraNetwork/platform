@@ -1035,7 +1035,6 @@ impl BitMap {
     ///
     pub fn compute_checksum(&mut self) -> Digest {
         if self.first_invalid >= self.blocks.len() {
-            debug!("compute_checksum:  cached");
             return self.checksum;
         }
 
@@ -1059,7 +1058,6 @@ impl BitMap {
             // it into our checksum_data.
             //
             if !self.checksum_valid[i] {
-                debug!("compute_checksum:  fixing block {}", i);
                 self.blocks[i].set_checksum();
                 let checksum = &self.blocks[i].header.checksum.bytes;
                 self.checksum_data[i][0..CHECK_SIZE].clone_from_slice(checksum);
@@ -1068,21 +1066,9 @@ impl BitMap {
 
             // Compute the next sha256 digest.
             digest = sha256::hash(&self.checksum_data[i]);
-
-            debug!(
-                "compute_checksum:  checksum at block {} is {:?}",
-                i, self.blocks[i].header.checksum
-            );
-            debug!(
-                "compute_checksum:  checksum_data at block {} is {:?}",
-                i,
-                show(&self.checksum_data[i])
-            );
-            debug!("compute_checksum:  digest at block {} is {:?}", i, digest);
         }
 
         self.first_invalid = self.blocks.len();
-        debug!("compute_checksum:  got final digest {:?}", digest);
         self.checksum = digest;
         digest
     }

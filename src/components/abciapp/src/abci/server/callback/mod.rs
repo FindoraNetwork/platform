@@ -3,7 +3,7 @@
 //!
 
 use crate::{
-    abci::{server::ABCISubmissionServer, staking},
+    abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV},
     api::{query_server::BLOCK_CREATED, submission_server::convert_tx},
 };
 use lazy_static::lazy_static;
@@ -39,11 +39,12 @@ pub fn info(s: &mut ABCISubmissionServer, _req: RequestInfo) -> ResponseInfo {
     let state = la.get_committed_state().write();
     let commitment = state.get_state_commitment();
 
-    if commitment.1 > 0 {
+    let h = state.get_tendermint_height() as i64;
+    TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
+
+    if 1 < h {
         resp.last_block_app_hash = commitment.0.as_ref().to_vec();
     }
-
-    let h = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
 
     resp.last_block_height = h;
 
@@ -55,7 +56,7 @@ pub fn info(s: &mut ABCISubmissionServer, _req: RequestInfo) -> ResponseInfo {
     resp
 }
 
-/// called when a trade is entered into the pool but not yet confirmed
+/// any new tx will trigger this callback before it can enter the mem-pool of tendermint
 pub fn check_tx(_s: &mut ABCISubmissionServer, req: RequestCheckTx) -> ResponseCheckTx {
     // Get the Tx [u8] and convert to u64
     let mut resp = ResponseCheckTx::default();
@@ -74,6 +75,37 @@ pub fn check_tx(_s: &mut ABCISubmissionServer, req: RequestCheckTx) -> ResponseC
     }
 
     resp
+}
+
+/// create block
+pub fn begin_block(
+    s: &mut ABCISubmissionServer,
+    req: RequestBeginBlock,
+) -> ResponseBeginBlock {
+    IN_SAFE_ITV.swap(true, Ordering::SeqCst);
+
+    let header = pnk!(req.header.as_ref());
+    TENDERMINT_BLOCK_HEIGHT.swap(header.height, Ordering::Relaxed);
+
+    *REQ_BEGIN_BLOCK.lock() = req.clone();
+
+    let mut la = s.la.write();
+
+    // set height first
+    la.get_committed_state()
+        .write()
+        .get_staking_mut()
+        .set_custom_block_height(header.height as u64);
+
+    // then create new block or update simulator
+    if la.all_commited() {
+        la.begin_block();
+    } else {
+        pnk!(la.update_staking_simulator());
+    }
+    drop(la);
+
+    ResponseBeginBlock::default()
 }
 
 /// called between begin_block and end_block
@@ -102,35 +134,6 @@ pub fn deliver_tx(
     resp
 }
 
-/// create block
-pub fn begin_block(
-    s: &mut ABCISubmissionServer,
-    req: RequestBeginBlock,
-) -> ResponseBeginBlock {
-    let header = pnk!(req.header.as_ref());
-    TENDERMINT_BLOCK_HEIGHT.swap(header.height, Ordering::Relaxed);
-
-    *REQ_BEGIN_BLOCK.lock() = req.clone();
-
-    let mut la = s.la.write();
-
-    // set height first
-    la.get_committed_state()
-        .write()
-        .get_staking_mut()
-        .set_custom_block_height(header.height as u64);
-
-    // then create new block or update simulator
-    if la.all_commited() {
-        la.begin_block();
-    } else {
-        pnk!(la.update_staking_simulator());
-    }
-    drop(la);
-
-    ResponseBeginBlock::default()
-}
-
 /// putting block in the ledgerState
 pub fn end_block(
     s: &mut ABCISubmissionServer,
@@ -141,6 +144,7 @@ pub fn end_block(
     let begin_block_req = REQ_BEGIN_BLOCK.lock();
     let header = pnk!(begin_block_req.header.as_ref());
 
+    IN_SAFE_ITV.swap(false, Ordering::SeqCst);
     let mut la = s.la.write();
 
     // mint coinbase, cache system transactions to ledger
@@ -194,5 +198,6 @@ pub fn commit(s: &mut ABCISubmissionServer) -> ResponseCommit {
     // la.end_commit();
     state.flush_data();
     r.data = commitment.0.as_ref().to_vec();
+
     r
 }

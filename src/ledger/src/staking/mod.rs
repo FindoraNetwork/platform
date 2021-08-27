@@ -53,7 +53,7 @@ use zei::xfr::{
 /// Usage:
 /// - validator_change_power ...
 /// - validator_apply_at_height
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Staking {
     // the main logic when updating:
     // - the new validator inherits the original vote power, if any
@@ -65,6 +65,12 @@ pub struct Staking {
     cur_height: BlockHeight,
     // FRA CoinBase.
     coinbase: CoinBase,
+}
+
+impl Default for Staking {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Staking {

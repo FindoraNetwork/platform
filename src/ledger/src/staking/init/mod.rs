@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
 // The initial power of an initor.
-const DEFAULT_POWER: Power = STAKING_VALIDATOR_MIN_POWER;
+const DEFAULT_POWER: Power = 1000 * STAKING_VALIDATOR_MIN_POWER;
 
 /// Generate config during compiling time.
 #[derive(Serialize, Deserialize)]

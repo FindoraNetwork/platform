@@ -220,7 +220,10 @@ pub async fn query_global_state(
 )> {
     let reader = data.read();
     let (hash, seq_id) = reader.get_state_commitment();
+
+    // useless, do NOT use this sig
     let sig = reader.sign_message(&(hash.clone(), seq_id));
+
     web::Json((hash, seq_id, sig))
 }
 

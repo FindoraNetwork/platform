@@ -4,7 +4,6 @@
 use super::{helpers::*, *};
 use crate::data_model::{ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN};
 use rand_core::SeedableRng;
-use tempfile::tempdir;
 use zei::{
     setup::PublicParams,
     xfr::{
@@ -109,56 +108,6 @@ fn test_compute_and_save_block_hash() {
         first_hash
     );
     assert_eq!(ledger_state.status.block_commit_count, count_original + 1);
-}
-
-#[test]
-fn test_init_merkle_log() {
-    let tmp_dir = tempdir().unwrap();
-    let buf = tmp_dir.path().join("test_merkle");
-    let path = buf.to_str().unwrap();
-
-    // Verify that opening a non-existing Merkle tree fails
-    let result_open_err = LedgerState::init_merkle_log(path, false);
-    assert!(result_open_err.is_err());
-
-    // Verify that creating a non-existing Merkle tree succeeds
-    let result_create_ok = LedgerState::init_merkle_log(path, true);
-    assert!(result_create_ok.is_ok());
-
-    // Verify that opening an existing Merkle tree succeeds
-    let result_open_ok = LedgerState::init_merkle_log(path, false);
-    assert!(result_open_ok.is_ok());
-
-    // // Verify that creating an existing Merkle tree fails
-    // let result_create_err = LedgerState::init_merkle_log(path, true);
-    // assert!(result_create_err.is_err());
-
-    tmp_dir.close().unwrap();
-}
-
-#[test]
-fn test_init_utxo_map() {
-    let tmp_dir = tempdir().unwrap();
-    let buf = tmp_dir.path().join("test_init_bitmap");
-    let path = buf.to_str().unwrap();
-
-    // Verify that opening a non-existing bitmap fails
-    let result_open_err = LedgerState::init_utxo_map(path, false);
-    assert!(result_open_err.is_err());
-
-    // Verify that creating a non-existing bitmap succeeds
-    let result_create_ok = LedgerState::init_utxo_map(path, true);
-    assert!(result_create_ok.is_ok());
-
-    // Verify that creating an existing bitmap succeeds
-    let result_open_ok = LedgerState::init_utxo_map(path, false);
-    assert!(result_open_ok.is_ok());
-
-    // // Verify that opening an existing bitmap fails
-    // let result_create_err = LedgerState::init_utxo_map(path, true);
-    // assert!(result_create_err.is_err());
-
-    tmp_dir.close().unwrap();
 }
 
 #[test]
