@@ -1493,10 +1493,10 @@ pub struct StakerMemo {
 impl Default for StakerMemo {
     fn default() -> Self {
         StakerMemo {
-            name: "Example Name".to_owned(),
-            desc: "This is a example node".to_owned(),
-            website: "https://www.example-name.com".to_owned(),
-            logo: "https://www.example-name.com/ValidatorLogo/examplenode.png"
+            name: "Findora Network".to_owned(),
+            desc: "A `findorad` node".to_owned(),
+            website: "https://www.findora.org".to_owned(),
+            logo: "https://mk0findorallrhx93ixi.kinstacdn.com/wp-content/uploads/2020/08/about-1600x1600.png"
                 .to_owned(),
         }
     }
