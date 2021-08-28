@@ -15,12 +15,7 @@ pub mod cosig;
 pub mod init;
 pub mod ops;
 
-use crate::{
-    data_model::{
-        Operation, Transaction, TransferAsset, TxoRef, BLACK_HOLE_PUBKEY, FRA_DECIMALS,
-    },
-    store::LedgerState,
-};
+use crate::data_model::{Operation, Transaction, TransferAsset, TxoRef, FRA_DECIMALS};
 use cosig::CoSigRule;
 use cryptohash::sha256::{self, Digest};
 use lazy_static::lazy_static;
@@ -39,10 +34,7 @@ use std::{
     iter::FromIterator,
     mem,
 };
-use zei::xfr::{
-    sig::{XfrKeyPair, XfrPublicKey},
-    structs::XfrAmount,
-};
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
 /// Staking entry
 ///
@@ -60,9 +52,9 @@ pub struct Staking {
     vi: ValidatorInfo,
     // when the end-time of delegations arrived,
     // we will try to paid the rewards until all is successful.
-    di: DelegationInfo,
+    pub(crate) di: DelegationInfo,
     // current block height in the context of tendermint.
-    cur_height: BlockHeight,
+    pub(crate) cur_height: BlockHeight,
     // FRA CoinBase.
     coinbase: CoinBase,
 }
@@ -1185,79 +1177,8 @@ impl Staking {
         &self.coinbase.distribution_plan
     }
 
-    /// A helper for setting block rewards in ABCI.
-    pub fn set_last_block_rewards(
-        la: &mut LedgerState,
-        addr: TendermintAddrRef,
-        block_vote_percent: Option<[Power; 2]>,
-    ) -> Result<()> {
-        let gdp = Self::get_global_delegation_percent(la);
-        let return_rate = Self::get_block_rewards_rate(la);
-
-        let pk = la.get_staking().validator_td_addr_to_app_pk(addr).c(d!())?;
-
-        la.get_staking_mut().record_block_rewards_rate(&return_rate);
-
-        let commission_rate = if let Some(Some(v)) = la
-            .get_staking()
-            .validator_get_current()
-            .map(|vd| vd.body.get(&pk))
-        {
-            v.commission_rate
-        } else {
-            return Err(eg!("not validator"));
-        };
-
-        let h = la.get_staking().cur_height;
-        let commissions = la
-            .get_staking_mut()
-            .di
-            .addr_map
-            .values_mut()
-            .filter(|d| d.validator_entry_exists(&pk))
-            .map(|d| {
-                d.set_delegation_rewards(&pk, h, return_rate, commission_rate, gdp, true)
-            })
-            .collect::<Result<Vec<_>>>()
-            .c(d!())?;
-
-        if let Some(v) = la.get_staking_mut().delegation_get_mut(&pk) {
-            v.rwd_amount = v.rwd_amount.saturating_add(commissions.into_iter().sum());
-        }
-
-        if let Some(vote_percent) = block_vote_percent {
-            la.get_staking_mut()
-                .set_proposer_rewards(&pk, vote_percent)
-                .c(d!())?;
-        }
-
-        Ok(())
-    }
-
-    /// Return rate definition for delegation rewards.
-    #[inline(always)]
-    pub fn get_block_rewards_rate(la: &LedgerState) -> [u128; 2] {
-        let p = Self::get_global_delegation_percent(la);
-        let p = [p[0] as u128, p[1] as u128];
-
-        // This is an equal conversion of `1 / p% * 0.0201`
-        let mut a0 = p[1] * 201;
-        let mut a1 = p[0] * 10000;
-
-        if a0 * 100 > a1 * 105 {
-            // max value: 105%
-            a0 = 105;
-            a1 = 100;
-        } else if a0 * 50 < a1 {
-            // min value: 2%
-            a0 = 2;
-            a1 = 100;
-        }
-
-        [a0, a1]
-    }
-
-    fn set_proposer_rewards(
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn set_proposer_rewards(
         &mut self,
         proposer: &XfrPublicKey,
         vote_percent: [u64; 2],
@@ -1273,6 +1194,7 @@ impl Staking {
             .map(|_| ())
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn get_proposer_rewards_rate(vote_percent: [u64; 2]) -> Result<[u128; 2]> {
         let p = [vote_percent[0] as u128, vote_percent[1] as u128];
         if p[0] > p[1] || 0 == p[1] {
@@ -1344,27 +1266,6 @@ impl Staking {
     #[allow(missing_docs)]
     pub fn coinbase_principal_balance(&self) -> Amount {
         self.coinbase.principal_balance
-    }
-
-    // Total amount of all freed FRAs, aka 'are not being locked in any way'.
-    #[inline(always)]
-    fn get_global_unlocked_amount(la: &LedgerState) -> Amount {
-        FRA_TOTAL_AMOUNT
-            - FF_PK_LIST
-                .iter()
-                .chain([*BLACK_HOLE_PUBKEY].iter())
-                .map(|pk| get_nonconfidential_balance(la, pk))
-                .sum::<Amount>()
-            - la.get_staking().coinbase_balance()
-    }
-
-    #[inline(always)]
-    #[allow(missing_docs)]
-    pub fn get_global_delegation_percent(la: &LedgerState) -> [u64; 2] {
-        [
-            la.get_staking().get_global_delegation_amount(),
-            Self::get_global_unlocked_amount(la),
-        ]
     }
 
     #[inline(always)]
@@ -1505,8 +1406,8 @@ impl Default for StakerMemo {
 /// block height of tendermint
 pub type BlockHeight = u64;
 
-type Amount = u64;
-type Power = u64;
+pub(crate) type Amount = u64;
+pub(crate) type Power = u64;
 
 /// Node PubKey in base64 format
 pub type TendermintPubKey = String;
@@ -1623,11 +1524,11 @@ impl ValidatorData {
 // the same address is not allowed to delegate twice at the same time,
 // so it is feasible to use `XfrPublicKey` as the map key.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]
-struct DelegationInfo {
-    global_amount: Amount,
-    addr_map: BTreeMap<XfrPublicKey, Delegation>,
-    end_height_map: BTreeMap<BlockHeight, BTreeSet<XfrPublicKey>>,
-    block_rewards_rate: BTreeMap<BlockHeight, [u128; 2]>,
+pub(crate) struct DelegationInfo {
+    pub(crate) global_amount: Amount,
+    pub(crate) addr_map: BTreeMap<XfrPublicKey, Delegation>,
+    pub(crate) end_height_map: BTreeMap<BlockHeight, BTreeSet<XfrPublicKey>>,
+    pub(crate) block_rewards_rate: BTreeMap<BlockHeight, [u128; 2]>,
 }
 
 impl DelegationInfo {
@@ -1672,12 +1573,12 @@ pub struct Validator {
     pub td_addr: Vec<u8>,
     /// vote power in the context of Staking
     pub td_power: Amount,
-    // During registration the Validator,
-    // Candidate/Validator will specifiy a % commission which will be publicly recorded on the blockchain,
-    // so FRA owners can make an informed choice on which validator to use;
-    // % commision is the % of FRA incentives the validator will take out as a commission fee
-    // for helping FRA owners stake their tokens.
-    commission_rate: [u64; 2],
+    /// During registration the Validator,
+    /// Candidate/Validator will specifiy a % commission which will be publicly recorded on the blockchain,
+    /// so FRA owners can make an informed choice on which validator to use;
+    /// % commision is the % of FRA incentives the validator will take out as a commission fee
+    /// for helping FRA owners stake their tokens.
+    pub(crate) commission_rate: [u64; 2],
     /// optional descriptive information
     pub memo: StakerMemo,
     kind: ValidatorKind,
@@ -1830,12 +1731,13 @@ impl Delegation {
     }
 
     #[inline(always)]
+    #[cfg(not(target_arch = "wasm32"))]
     fn validator_entry(&self, validator: &XfrPublicKey) -> Result<Amount> {
         self.entries.get(validator).copied().c(d!())
     }
 
     #[inline(always)]
-    fn validator_entry_exists(&self, validator: &XfrPublicKey) -> bool {
+    pub(crate) fn validator_entry_exists(&self, validator: &XfrPublicKey) -> bool {
         self.entries.contains_key(validator)
     }
 
@@ -1854,7 +1756,8 @@ impl Delegation {
     // > **NOTE:**
     // > use 'AssignAdd' instead of 'Assign'
     // > to keep compatible with the logic of governance penalty.
-    fn set_delegation_rewards(
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn set_delegation_rewards(
         &mut self,
         validator: &XfrPublicKey,
         cur_height: BlockHeight,
@@ -2101,19 +2004,6 @@ pub fn is_coinbase_tx(tx: &Transaction) -> bool {
 #[allow(missing_docs)]
 pub fn gen_random_keypair() -> XfrKeyPair {
     XfrKeyPair::generate(&mut ChaChaRng::from_entropy())
-}
-
-fn get_nonconfidential_balance(la: &LedgerState, addr: &XfrPublicKey) -> u64 {
-    pnk!(la.get_owned_utxos(addr))
-        .values()
-        .map(|(utxo, _)| {
-            if let XfrAmount::NonConfidential(am) = utxo.0.record.amount {
-                am
-            } else {
-                0
-            }
-        })
-        .sum()
 }
 
 #[cfg(test)]

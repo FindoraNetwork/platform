@@ -239,7 +239,7 @@ fn set_rewards(
     proposer: &[u8],
     last_vote_percent: Option<[u64; 2]>,
 ) -> Result<()> {
-    Staking::set_last_block_rewards(la, &td_addr_to_string(proposer), last_vote_percent)
+    la.staking_set_last_block_rewards(&td_addr_to_string(proposer), last_vote_percent)
         .c(d!())
 }
 
@@ -357,7 +357,7 @@ mod test {
             Transaction, TransferType, TxnEffect, TxoRef, ASSET_TYPE_FRA,
             BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
-        staking::{Staking, FF_PK_LIST, FRA_PRE_ISSUE_AMOUNT},
+        staking::{FF_PK_LIST, FRA_PRE_ISSUE_AMOUNT},
         store::{utils::fra_gen_initial_tx, LedgerState},
     };
     use rand::random;
@@ -416,7 +416,7 @@ mod test {
             ledger.finish_block(block).c(d!())?;
 
             {
-                let rate = Staking::get_block_rewards_rate(&ledger);
+                let rate = ledger.staking_get_block_rewards_rate();
                 let rate = [rate[0] as u128, rate[1] as u128];
                 // max value: 105%
                 assert!(rate[0] * 100 <= rate[1] * 105);

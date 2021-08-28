@@ -1,7 +1,10 @@
 mod test;
 pub mod utils;
 
-use crate::{data_model::*, staking::Staking};
+use crate::{
+    data_model::*,
+    staking::{Amount, Power, Staking, TendermintAddrRef, FF_PK_LIST, FRA_TOTAL_AMOUNT},
+};
 use bitmap::{BitMap, SparseMap};
 use bnc::{
     helper::Value, mapx::Mapx, new_mapx, new_vecx, vecx::ValueMut as VecxValueMut,
@@ -27,7 +30,7 @@ use std::{
 use zei::xfr::{
     lib::XfrNotePolicies,
     sig::{XfrKeyPair, XfrPublicKey},
-    structs::{OwnerMemo, TracingPolicies, TracingPolicy},
+    structs::{OwnerMemo, TracingPolicies, TracingPolicy, XfrAmount},
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
@@ -1052,6 +1055,116 @@ impl LedgerState {
         self.block_merkle.write().c(d!())?;
 
         Ok(merkle_id)
+    }
+
+    /// A helper for setting block rewards in ABCI.
+    pub fn staking_set_last_block_rewards(
+        &mut self,
+        addr: TendermintAddrRef,
+        block_vote_percent: Option<[Power; 2]>,
+    ) -> Result<()> {
+        let gdp = self.staking_get_global_delegation_percent();
+        let return_rate = self.staking_get_block_rewards_rate();
+
+        let pk = self
+            .get_staking()
+            .validator_td_addr_to_app_pk(addr)
+            .c(d!())?;
+
+        self.get_staking_mut()
+            .record_block_rewards_rate(&return_rate);
+
+        let commission_rate = if let Some(Some(v)) = self
+            .get_staking()
+            .validator_get_current()
+            .map(|vd| vd.body.get(&pk))
+        {
+            v.commission_rate
+        } else {
+            return Err(eg!("not validator"));
+        };
+
+        let h = self.get_staking().cur_height;
+        let commissions = self
+            .get_staking_mut()
+            .di
+            .addr_map
+            .values_mut()
+            .filter(|d| d.validator_entry_exists(&pk))
+            .map(|d| {
+                d.set_delegation_rewards(&pk, h, return_rate, commission_rate, gdp, true)
+            })
+            .collect::<Result<Vec<_>>>()
+            .c(d!())?;
+
+        if let Some(v) = self.get_staking_mut().delegation_get_mut(&pk) {
+            v.rwd_amount = v.rwd_amount.saturating_add(commissions.into_iter().sum());
+        }
+
+        if let Some(vote_percent) = block_vote_percent {
+            self.get_staking_mut()
+                .set_proposer_rewards(&pk, vote_percent)
+                .c(d!())?;
+        }
+
+        Ok(())
+    }
+
+    /// Return rate definition for delegation rewards.
+    #[inline(always)]
+    pub fn staking_get_block_rewards_rate(&self) -> [u128; 2] {
+        let p = self.staking_get_global_delegation_percent();
+        let p = [p[0] as u128, p[1] as u128];
+
+        // This is an equal conversion of `1 / p% * 0.0201`
+        let mut a0 = p[1] * 201;
+        let mut a1 = p[0] * 10000;
+
+        if a0 * 100 > a1 * 105 {
+            // max value: 105%
+            a0 = 105;
+            a1 = 100;
+        } else if a0 * 50 < a1 {
+            // min value: 2%
+            a0 = 2;
+            a1 = 100;
+        }
+
+        [a0, a1]
+    }
+
+    // Total amount of all freed FRAs, aka 'are not being locked in any way'.
+    #[inline(always)]
+    fn staking_get_global_unlocked_amount(&self) -> Amount {
+        FRA_TOTAL_AMOUNT
+            - FF_PK_LIST
+                .iter()
+                .chain([*BLACK_HOLE_PUBKEY].iter())
+                .map(|pk| self.staking_get_nonconfidential_balance(pk))
+                .sum::<Amount>()
+            - self.get_staking().coinbase_balance()
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn staking_get_global_delegation_percent(&self) -> [u64; 2] {
+        [
+            self.get_staking().get_global_delegation_amount(),
+            self.staking_get_global_unlocked_amount(),
+        ]
+    }
+
+    fn staking_get_nonconfidential_balance(&self, addr: &XfrPublicKey) -> u64 {
+        pnk!(self.get_owned_utxos(addr))
+            .values()
+            .map(|(utxo, _)| {
+                if let XfrAmount::NonConfidential(am) = utxo.0.record.amount {
+                    am
+                } else {
+                    0
+                }
+            })
+            .sum()
     }
 }
 

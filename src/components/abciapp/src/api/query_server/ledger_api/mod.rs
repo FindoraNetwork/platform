@@ -18,9 +18,7 @@ use ledger::{
         AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData, TxnSID,
         TxoSID, UnAuthenticatedUtxo, Utxo,
     },
-    staking::{
-        DelegationRwdDetail, DelegationState, Staking, TendermintAddr, UNBOND_BLOCK_CNT,
-    },
+    staking::{DelegationRwdDetail, DelegationState, TendermintAddr, UNBOND_BLOCK_CNT},
     store::LedgerState,
 };
 use log::info;
@@ -357,7 +355,7 @@ async fn get_validator_delegation_history(
     let delegated = v_self_delegation.delegators.values().sum::<u64>();
 
     history.push(ValidatorDelegation {
-        return_rate: Staking::get_block_rewards_rate(&*read),
+        return_rate: read.staking_get_block_rewards_rate(),
         delegated,
         self_delegation,
     });
@@ -504,7 +502,7 @@ async fn query_validator_detail(
                 power_list.sort_unstable();
                 let voting_power_rank =
                     power_list.len() - power_list.binary_search(&v.td_power).unwrap();
-                let realtime_rate = Staking::get_block_rewards_rate(&*read);
+                let realtime_rate = read.staking_get_block_rewards_rate();
                 let expected_annualization = [
                     realtime_rate[0] as u128
                         * v_self_delegation.proposer_rwd_cnt as u128,
@@ -554,7 +552,7 @@ async fn query_delegation_info(
     let read = data.read();
     let staking = read.get_staking();
 
-    let block_rewards_rate = Staking::get_block_rewards_rate(&*read);
+    let block_rewards_rate = read.staking_get_block_rewards_rate();
     let global_staking = staking.validator_global_power();
     let global_delegation = staking.delegation_info_global_amount();
 

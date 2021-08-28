@@ -30,7 +30,7 @@ use ledger::{
             mint_fra::{MintEntry, MintFraOps, MintKind},
         },
         td_addr_to_bytes, td_addr_to_string, td_pubkey_to_td_addr, Delegation,
-        DelegationState, PartialUnDelegation, Staking, TendermintAddr,
+        DelegationState, PartialUnDelegation, TendermintAddr,
         Validator as StakingValidator, ValidatorKind, BLOCK_HEIGHT_MAX, FRA,
         FRA_TOTAL_AMOUNT, UNBOND_BLOCK_CNT,
     },
@@ -222,7 +222,7 @@ impl AbciMocker {
     fn get_current_rate(&self) -> [u128; 2] {
         let sub = self.0.la.read();
         let la = sub.get_committed_state().read();
-        Staking::get_block_rewards_rate(&*la)
+        la.staking_get_block_rewards_rate()
     }
 
     fn get_current_rate_str(&self) -> String {
