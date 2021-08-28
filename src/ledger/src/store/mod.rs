@@ -50,9 +50,6 @@ const MAX_VERSION: usize = 100;
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub struct LedgerStatus {
     snapshot_path: String,
-    block_merkle_path: String,
-    txn_merkle_path: String,
-    utxo_map_path: String,
 
     // All currently-unspent TXOs
     utxos: Mapx<TxoSID, Utxo>,
@@ -176,61 +173,42 @@ impl LedgerState {
 }
 
 impl LedgerStatus {
-    pub fn new(
-        snapshot_path: &str,
-        block_merkle_path: &str,
-        txn_merkle_path: &str,
-        utxo_map_path: &str,
-        states_data_path: &str,
-    ) -> Result<LedgerStatus> {
+    pub fn new(snapshot_path: &str, snapshot_entries_dir: &str) -> Result<LedgerStatus> {
         match fs::read_to_string(snapshot_path) {
             Ok(s) => serde_json::from_str(&s).c(d!()),
             Err(e) => {
                 if ErrorKind::NotFound != e.kind() {
                     Err(eg!(e))
                 } else {
-                    Self::create(
-                        snapshot_path,
-                        block_merkle_path,
-                        txn_merkle_path,
-                        utxo_map_path,
-                        states_data_path,
-                    )
-                    .c(d!())
+                    Self::create(snapshot_path, snapshot_entries_dir).c(d!())
                 }
             }
         }
     }
 
-    fn create(
-        snapshot_path: &str,
-        block_merkle_path: &str,
-        txn_merkle_path: &str,
-        utxo_map_path: &str,
-        states_data_path: &str,
-    ) -> Result<LedgerStatus> {
-        let utxos_path = states_data_path.to_owned() + "/utxo";
-        let spent_utxos_path = states_data_path.to_owned() + "/spent_utxos";
+    fn create(snapshot_path: &str, snapshot_entries_dir: &str) -> Result<LedgerStatus> {
+        let utxos_path = snapshot_entries_dir.to_owned() + "/utxo";
+        let spent_utxos_path = snapshot_entries_dir.to_owned() + "/spent_utxos";
         let txo_to_txn_location_path =
-            states_data_path.to_owned() + "/txo_to_txn_location";
-        let issuance_amounts_path = states_data_path.to_owned() + "/issuance_amounts";
+            snapshot_entries_dir.to_owned() + "/txo_to_txn_location";
+        let issuance_amounts_path =
+            snapshot_entries_dir.to_owned() + "/issuance_amounts";
         let state_commitment_versions_path =
-            states_data_path.to_owned() + "/state_commitment_versions";
-        let asset_types_path = states_data_path.to_owned() + "/asset_types";
-        let tracing_policies_path = states_data_path.to_owned() + "/tracing_policies";
-        let issuance_num_path = states_data_path.to_owned() + "/issuance_num";
-        let next_txn_path = states_data_path.to_owned() + "/next_txn";
-        let next_txo_path = states_data_path.to_owned() + "/next_txo";
-        let staking_path = states_data_path.to_owned() + "/staking";
-        let tendermint_commit_path = states_data_path.to_owned() + "/tendermint_commit";
-        let owned_utxos_path = states_data_path.to_owned() + "/owned_utxos";
+            snapshot_entries_dir.to_owned() + "/state_commitment_versions";
+        let asset_types_path = snapshot_entries_dir.to_owned() + "/asset_types";
+        let tracing_policies_path =
+            snapshot_entries_dir.to_owned() + "/tracing_policies";
+        let issuance_num_path = snapshot_entries_dir.to_owned() + "/issuance_num";
+        let next_txn_path = snapshot_entries_dir.to_owned() + "/next_txn";
+        let next_txo_path = snapshot_entries_dir.to_owned() + "/next_txo";
+        let staking_path = snapshot_entries_dir.to_owned() + "/staking";
+        let tendermint_commit_path =
+            snapshot_entries_dir.to_owned() + "/tendermint_commit";
+        let owned_utxos_path = snapshot_entries_dir.to_owned() + "/owned_utxos";
 
         let mut ledger = LedgerStatus {
             snapshot_path: snapshot_path.to_owned(),
-            block_merkle_path: block_merkle_path.to_owned(),
-            txn_merkle_path: txn_merkle_path.to_owned(),
             sliding_set: SlidingSet::<[u8; 8]>::new(TRANSACTION_WINDOW_WIDTH as usize),
-            utxo_map_path: utxo_map_path.to_owned(),
             utxos: new_mapx!(utxos_path.as_str()),
             owned_utxos: new_mapx!(owned_utxos_path.as_str()),
             spent_utxos: new_mapx!(spent_utxos_path.as_str()),
@@ -955,7 +933,7 @@ impl LedgerState {
         let tx_to_block_location = prefix + "_tx_to_block_location";
 
         let ledger_status_buf = base_dir.join(ledger_status);
-        let ledger_status_path = ledger_status_buf.to_str().unwrap();
+        let snapshot_path = ledger_status_buf.to_str().unwrap();
 
         let block_merkle_buf = base_dir.join(block_merkle);
         let block_merkle_path = block_merkle_buf.to_str().unwrap();
@@ -967,7 +945,7 @@ impl LedgerState {
         let utxo_map_path = utxo_map_buf.to_str().unwrap();
 
         let states_data_buf = base_dir.join(states_data);
-        let states_data_path = states_data_buf.to_str().unwrap();
+        let snapshot_entries_dir = states_data_buf.to_str().unwrap();
 
         let blocks_buf = base_dir.join(blocks);
         let blocks_path = blocks_buf.to_str().unwrap();
@@ -982,14 +960,7 @@ impl LedgerState {
         let signing_key = XfrKeyPair::generate(&mut prng);
 
         let ledger = LedgerState {
-            status: LedgerStatus::new(
-                ledger_status_path,
-                block_merkle_path,
-                txn_merkle_path,
-                utxo_map_path,
-                states_data_path,
-            )
-            .c(d!())?,
+            status: LedgerStatus::new(snapshot_path, snapshot_entries_dir).c(d!())?,
             prng,
             signing_key,
             block_merkle: LedgerState::init_merkle_log(block_merkle_path).c(d!())?,
