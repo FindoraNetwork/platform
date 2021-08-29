@@ -138,6 +138,7 @@ fn unpack() -> Result<()> {
         .and_then(|_| abcid_reader.fill_buf().c(d!()))?;
     let mut abcid_writer = OpenOptions::new()
         .create(true)
+        .truncate(true)
         .write(true)
         .open("abcid")
         .c(d!())?;
@@ -153,6 +154,7 @@ fn unpack() -> Result<()> {
         .and_then(|_| tendermint_reader.fill_buf().c(d!()))?;
     let mut tendermint_writer = OpenOptions::new()
         .create(true)
+        .truncate(true)
         .write(true)
         .open("tendermint")
         .c(d!())?;

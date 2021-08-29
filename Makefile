@@ -105,9 +105,10 @@ endif
 
 tendermint_cleveldb:
 	bash -x tools/download_tendermint.sh 'tools/tendermint'
+	mkdir -p $(shell go env GOPATH)/bin
 	cd tools/tendermint \
 		&& $(MAKE) build TENDERMINT_BUILD_OPTIONS=cleveldb \
-		&& cp build/tendermint ~/go/bin/
+		&& cp build/tendermint $(shell go env GOPATH)/bin/
 
 tendermint_goleveldb:
 	bash -x tools/download_tendermint.sh 'tools/tendermint'
