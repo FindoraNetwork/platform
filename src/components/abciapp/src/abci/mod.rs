@@ -14,7 +14,7 @@ use crate::api::{
 use lazy_static::lazy_static;
 use ruc::*;
 use std::{
-    env, fs,
+    fs,
     path::Path,
     sync::mpsc::channel,
     sync::{
@@ -35,11 +35,9 @@ lazy_static! {
 
 /// run node
 pub fn node_command() -> Result<()> {
-    let base_dir = if let Some(d) = CFG.ledger_dir.as_ref() {
-        fs::create_dir_all(d).c(d!())?;
-        Some(Path::new(d))
-    } else {
-        None
+    let base_dir = {
+        fs::create_dir_all(&CFG.ledger_dir).c(d!())?;
+        Some(Path::new(&CFG.ledger_dir))
     };
 
     let config = ruc::info!(ABCIConfig::from_file())
@@ -89,10 +87,10 @@ pub fn node_command() -> Result<()> {
         ));
     });
 
-    let config_path = if let Some(path) = CFG.tendermint_config {
-        String::from(path)
+    let config_path = if let Some(path) = CFG.tendermint_config.as_ref() {
+        path.clone()
     } else {
-        env::var("HOME").unwrap() + "/.tendermint/config/config.toml"
+        CFG.tendermint_home.clone() + "/config/config.toml"
     };
 
     let node = Node::new(&config_path, app).unwrap();
@@ -106,26 +104,21 @@ pub fn node_command() -> Result<()> {
 
 /// init abci
 fn init_command() -> Result<()> {
-    let home_path = if let Some(home_path) = CFG.tendermint_home {
-        String::from(home_path)
-    } else {
-        env::var("HOME").unwrap() + "/.tendermint"
-    };
-    tendermint_sys::init_home(&home_path).unwrap();
+    tendermint_sys::init_home(&CFG.tendermint_home).unwrap();
     init::init_genesis(
-        CFG.init_mode.unwrap_or(init::InitMode::Dev),
-        &(home_path.clone() + "/config/genesis.json"),
+        CFG.init_mode,
+        &(CFG.tendermint_home.clone() + "/config/genesis.json"),
     )?;
     init::generate_tendermint_config(
-        CFG.init_mode.unwrap_or(init::InitMode::Dev),
-        &(home_path + "/config/config.toml"),
+        CFG.init_mode,
+        &(CFG.tendermint_home.clone() + "/config/config.toml"),
     )?;
     Ok(())
 }
 
 /// run abci
 pub fn run() -> Result<()> {
-    match CFG.command {
+    match CFG.command.as_str() {
         "init" => init_command(),
         "node" => {
             let thread = thread::Builder::new()

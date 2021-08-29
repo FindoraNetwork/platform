@@ -17,16 +17,19 @@ pub fn get_self_addr() -> Result<Vec<u8>> {
 
 fn from_env() -> Result<Vec<u8>> {
     CFG.tendermint_node_self_addr
+        .as_ref()
         .c(d!())
-        .and_then(|td_addr| td_addr_to_bytes(&td_addr).c(d!()))
+        .and_then(|td_addr| td_addr_to_bytes(td_addr).c(d!()))
 }
 
 fn from_config_file() -> Result<Vec<u8>> {
     // the config path in the abci container
     const CFG_PATH_FF: &str = "/root/.tendermint/config/priv_validator_key.json";
     lazy_static! {
-        static ref CFG_PATH: &'static str =
-            CFG.tendermint_node_key_config_path.unwrap_or(CFG_PATH_FF);
+        static ref CFG_PATH: &'static str = CFG
+            .tendermint_node_key_config_path
+            .as_deref()
+            .unwrap_or(CFG_PATH_FF);
     }
 
     fs::read_to_string(&*CFG_PATH)

@@ -55,7 +55,7 @@ impl QueryServer {
         let query_server_path = if let Some(path) = base_dir {
             path.to_str().unwrap().to_string() + "/query_server"
         } else {
-            pnk!(std::env::var("tmp_dir").c(d!())) + "/test_query_server"
+            pnk!(env::var("tmp_dir").c(d!())) + "/test_query_server"
         };
 
         let addresses_to_utxos_path =

@@ -49,6 +49,12 @@ pub fn info(s: &mut ABCISubmissionServer, _req: RequestInfo) -> ResponseInfo {
 
     resp.last_block_height = h;
 
+    println!("\n\n");
+    println!("==========================================");
+    println!("======== Starting from height: {} ========", h);
+    println!("==========================================");
+    println!("\n\n");
+
     drop(state);
     if la.all_commited() {
         la.begin_block();

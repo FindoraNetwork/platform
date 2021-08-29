@@ -884,7 +884,7 @@ impl LedgerState {
         let block_merkle = prefix.clone() + "_block_merkle";
         let txn_merkle = prefix.clone() + "_txn_merkle";
         let utxo_map = prefix.clone() + "_utxo_map";
-        let states_data = prefix.clone() + "_states_data";
+        let ledger_status_subdata = prefix.clone() + "_ledger_status_subdata";
         let blocks = prefix.clone() + "_blocks";
         let tx_to_block_location = prefix + "_tx_to_block_location";
 
@@ -900,8 +900,8 @@ impl LedgerState {
         let utxo_map_buf = base_dir.join(utxo_map);
         let utxo_map_path = utxo_map_buf.to_str().unwrap();
 
-        let states_data_buf = base_dir.join(states_data);
-        let snapshot_entries_dir = states_data_buf.to_str().unwrap();
+        let ledger_status_subdata_buf = base_dir.join(ledger_status_subdata);
+        let snapshot_entries_dir = ledger_status_subdata_buf.to_str().unwrap();
 
         let blocks_buf = base_dir.join(blocks);
         let blocks_path = blocks_buf.to_str().unwrap();
