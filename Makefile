@@ -7,11 +7,11 @@ all: build_release_goleveldb
 export CARGO_NET_GIT_FETCH_WITH_CLI = true
 export PROTOC = $(shell which protoc)
 
-export STAKING_INITIAL_VALIDATOR_CONFIG = $(shell pwd)/ledger/src/staking/init/staking_config.json
-export STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV = $(shell pwd)/ledger/src/staking/init/staking_config_debug_env.json
-export STAKING_INITIAL_VALIDATOR_CONFIG_ABCI_MOCK = $(shell pwd)/ledger/src/staking/init/staking_config_abci_mock.json
+export STAKING_INITIAL_VALIDATOR_CONFIG = $(shell pwd)/src/ledger/src/staking/init/staking_config.json
+export STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV = $(shell pwd)/src/ledger/src/staking/init/staking_config_debug_env.json
+export STAKING_INITIAL_VALIDATOR_CONFIG_ABCI_MOCK = $(shell pwd)/src/ledger/src/staking/init/staking_config_abci_mock.json
 
-export LEDGER_DIR=/tmp/findora
+export DEBUG_DIR=/tmp/findora
 export ENABLE_LEDGER_SERVICE = true
 export ENABLE_QUERY_SERVICE = true
 
@@ -34,15 +34,11 @@ release_subdirs = $(bin_dir) $(lib_dir)
 
 bin_files = \
 		./$(pick)/findorad \
+		./$(pick)/abcid \
+		$(shell go env GOPATH)/bin/tendermint \
 		./$(pick)/fns \
 		./$(pick)/stt \
 		./$(pick)/staking_cfg_generator
-
-bin_files_musl_debug = \
-		./${CARGO_TARGET_DIR}/x86_64-unknown-linux-musl/$(target_dir)/findorad \
-		./${CARGO_TARGET_DIR}/x86_64-unknown-linux-musl/$(target_dir)/fns \
-		./${CARGO_TARGET_DIR}/x86_64-unknown-linux-musl/$(target_dir)/stt \
-		./${CARGO_TARGET_DIR}/x86_64-unknown-linux-musl/$(target_dir)/staking_cfg_generator
 
 WASM_PKG = wasm.tar.gz
 lib_files = ./$(WASM_PKG)
@@ -53,20 +49,15 @@ define pack
 	cd $(target_dir); for i in $(release_subdirs); do mkdir $$i; done
 	cp $(bin_files) $(target_dir)/$(bin_dir)
 	cp $(target_dir)/$(bin_dir)/* ~/.cargo/bin/
-endef
-
-define pack_musl_debug
-	-@ rm -rf $(target_dir)
-	mkdir $(target_dir)
-	cd $(target_dir); for i in $(release_subdirs); do mkdir $$i; done
-	cp $(bin_files_musl_debug) $(target_dir)/$(bin_dir)
-	cp $(target_dir)/$(bin_dir)/* ~/.cargo/bin/
+	cd $(target_dir)/$(bin_dir)/ && findorad pack
+	cp -f /tmp/findorad $(target_dir)/$(bin_dir)/
+	cp -f /tmp/findorad ~/.cargo/bin/
 endef
 
 # Build for cleveldb
-build:
+build: tendermint_cleveldb
 ifdef DBG
-	cargo build --bins -p abciapp -p finutils --no-default-features --features "cleveldb"
+	cargo build --bins -p abciapp -p finutils
 	$(call pack,$(target_dir))
 else
 	@ echo -e "\x1b[31;01m\$$(DBG) must be defined !\x1b[00m"
@@ -74,17 +65,17 @@ else
 endif
 
 # Build for cleveldb
-build_release:
+build_release: tendermint_cleveldb
 ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
 else
-	cargo build --release --bins -p abciapp -p finutils --no-default-features --features "cleveldb"
+	cargo build --release --bins -p abciapp -p finutils
 	$(call pack,$(target_dir))
 endif
 
 # Build for goleveldb
-build_goleveldb:
+build_goleveldb: tendermint_goleveldb
 ifdef DBG
 	cargo build --bins -p abciapp -p finutils
 	$(call pack,$(target_dir))
@@ -94,7 +85,7 @@ else
 endif
 
 # Build for goleveldb
-build_release_goleveldb:
+build_release_goleveldb: tendermint_goleveldb
 ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
@@ -103,16 +94,7 @@ else
 	$(call pack,$(target_dir))
 endif
 
-build_release_musl:
-ifdef DBG
-	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
-	@ exit 1
-else
-	cargo build --release --bins -p abciapp -p finutils --target=x86_64-unknown-linux-musl
-	$(call pack_musl_debug,$(target_dir))
-endif
-
-build_release_debug:
+build_release_debug: tendermint_goleveldb
 ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
@@ -121,14 +103,15 @@ else
 	$(call pack,$(target_dir))
 endif
 
-build_release_musl_debug:
-ifdef DBG
-	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
-	@ exit 1
-else
-	cargo build --features="debug_env" --release --bins -p abciapp -p finutils --target=x86_64-unknown-linux-musl
-	$(call pack_musl_debug,$(target_dir))
-endif
+tendermint_cleveldb:
+	bash -x tools/download_tendermint.sh 'tools/tendermint'
+	cd tools/tendermint \
+		&& $(MAKE) build TENDERMINT_BUILD_OPTIONS=cleveldb \
+		&& cp build/tendermint ~/go/bin/
+
+tendermint_goleveldb:
+	bash -x tools/download_tendermint.sh 'tools/tendermint'
+	cd tools/tendermint && $(MAKE) install
 
 test:
 	# cargo test --release --workspace -- --test-threads=1 # --nocapture
@@ -183,13 +166,13 @@ devnet:
 	@./tools/devnet/startnodes.sh
 
 debug_env: stop_debug_env build_release_debug
-	@- rm -rf $(LEDGER_DIR)
-	@ mkdir $(LEDGER_DIR)
-	@ cp tools/debug_env.tar.gz $(LEDGER_DIR)/
-	@ cd $(LEDGER_DIR) && tar -xpf debug_env.tar.gz && mv debug_env devnet
+	@- rm -rf $(DEBUG_DIR)
+	@ mkdir $(DEBUG_DIR)
+	@ cp tools/debug_env.tar.gz $(DEBUG_DIR)/
+	@ cd $(DEBUG_DIR) && tar -xpf debug_env.tar.gz && mv debug_env devnet
 	@ ./tools/devnet/startnodes.sh
 
-run_staking_demo:
+run_staking_demo: stop_debug_env
 	bash tools/staking/demo.sh
 
 start_debug_env:
@@ -197,6 +180,18 @@ start_debug_env:
 
 stop_debug_env:
 	bash ./tools/devnet/stopnodes.sh
+
+join_qa01: stop_debug_env
+	bash tools/node_init.sh qa01
+
+join_qa02: stop_debug_env
+	bash tools/node_init.sh qa02
+
+join_testnet: stop_debug_env
+	bash tools/node_init.sh testnet
+
+join_mainnet: stop_debug_env
+	bash tools/node_init.sh mainnet
 
 # ci_build_image:
 # 	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \

@@ -14,9 +14,9 @@ else
   exit 0
 fi
 
-pkill -9 findorad || echo "no findorad found"
+pkill -9 abcid || echo "no abcid found"
 
-findorad node \
+abcid node \
   --base-dir ${ROOTDIR}/tendermint \
   --config ${ROOTDIR}/tendermint/config/config.toml \
   --ledger-dir ${ROOTDIR}/findora \
@@ -24,4 +24,4 @@ findorad node \
   --enable-ledger-service \
   --enable-query-service \
   --tendermint-node-key-config-path ${ROOTDIR}/tendermint/config/priv_validator_key.json \
-  >> ${ROOTDIR}/findorad.log 2>&1 &
+  >> ${ROOTDIR}/abcid.log 2>&1 &

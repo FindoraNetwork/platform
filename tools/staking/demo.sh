@@ -22,7 +22,7 @@ if [[ "FreeBSD" == $OS ]]; then
 fi
 
 TENDERMINT_HOME=${HOME}/.tendermint
-SERVER_HOST=http://localhost
+SERVER_HOST="http://localhost"
 RWD_KEY_PATH=/tmp/staking_rwd.key
 TD_NODE_KEY="${TENDERMINT_HOME}/config/priv_validator_key.json"
 FRA_TOTAL_AMOUNT=$[210 * 10000 * 10000 * 1000000]
@@ -57,22 +57,26 @@ stop_node() {
 }
 
 start_node() {
-    nohup findorad node \
+    abcid \
         --enable-ledger-service \
         --enable-query-service \
         --ledger-dir=${__LEDGER_DIR__} \
         --ledger-service-port=${__LEDGER_PORT__} \
         --submission-service-port=${__SUBMISSION_PORT__} \
         --tendermint-node-key-config-path=${__TENDERMINT_NODE_KEY_CONFIG_PATH__} \
-        --tendermint-host="127.0.0.1" \
         --tendermint-port=${__TENDERMINT_PORT__} \
-        --base-dir=${TENDERMINT_HOME} &
+        --abcid-port=${__ABCI_PORT__} \
+    > /tmp/log 2>&1 &
+
+    find ~/.tendermint -name LOCK | xargs rm -f
+    nohup tendermint node &
 }
 
 init() {
     stop_node
     ${MAKE} -C ../.. stop_debug_env
-    pkill -9 findorad
+    pkill -9 tendermint
+    pkill -9 abcid
 
     ${MAKE} -C ../.. debug_env || exit 1
 
@@ -90,10 +94,11 @@ add_new_validator() {
 
     # waiting cluster to produce some blocks
     # so we can act as a new joined validator node
-    sleep $[3 * $BLOCK_ITV]
+    sleep $[3 * ${BLOCK_ITV}]
 
-    rm -rf ${__LEDGER_DIR__} ${TENDERMINT_HOME}
-    findorad init --base-dir=${TENDERMINT_HOME} || exit 1
+    rm -rf ${__LEDGER_DIR__}
+    tendermint unsafe_reset_all || exit 1
+    tendermint init || exit 1
     tar -xpf demo_config.tar.gz || exit 1
     mv config.toml genesis.json node_key.json priv_validator_key.json ${TENDERMINT_HOME}/config/ || exit 1
     rm nohup.out 2>/dev/null
@@ -107,34 +112,34 @@ check() {
 
     # At least 88_8888 FRAs
     fns stake -n $((888888 * 1000000)) -R 0.2 || exit 1
-    sleep $[8 * $BLOCK_ITV]
-    curl ${SERVER_HOST}:26657/validators | grep -A 5 ${SELF_ADDR} 2>/dev/null || exit 1
+    sleep $[6 * ${BLOCK_ITV}]
+    curl ${SERVER_HOST}:26657/validators | grep -A 5 ${SELF_ADDR}
     println "Our validator appears in the validator list after staking..."
 
     fns stake --append -n $((222222 * 1000000)) || exit 1
-    sleep $[8 * $BLOCK_ITV]
-    curl ${SERVER_HOST}:26657/validators | grep -A 5 ${SELF_ADDR} 2>/dev/null || exit 1
+    sleep $[6 * ${BLOCK_ITV}]
+    curl ${SERVER_HOST}:26657/validators | grep -A 5 ${SELF_ADDR}
     println "Its vote power has been raised after appending a new staking..."
 
     println "Now we stop it..."
     stop_node
-    println "Wait  $[3 * $BLOCK_ITV]s..."
-    sleep $[3 * $BLOCK_ITV]
+    println "Wait  $[3 * ${BLOCK_ITV}]s..."
+    sleep $[3 * ${BLOCK_ITV}]
 
     println "Now we restart it..."
     start_node
-    println "Wait $[3 * $BLOCK_ITV]s..."
-    sleep $[3 * $BLOCK_ITV]
+    println "Wait $[3 * ${BLOCK_ITV}]s..."
+    sleep $[3 * ${BLOCK_ITV}]
 
     grep ${SELF_ADDR} nohup.out
     println "Pay attention to its power change..."
 
     println "Now we unstake..."
     fns unstake
-    println "Wait $[5 * $BLOCK_ITV]s..."
-    sleep $[5 * $BLOCK_ITV]
+    println "Wait $[5 * ${BLOCK_ITV}]s..."
+    sleep $[5 * ${BLOCK_ITV}]
 
-    curl ${SERVER_HOST}:26657/validators || exit 1
+    curl ${SERVER_HOST}:26657/validators | tail || exit 1
     println "Our validator has been removed from the validator set..."
     println "The validator set has been restored to its original state..."
 

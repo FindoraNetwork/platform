@@ -1,23 +1,30 @@
 use global_cfg::CFG;
 use ruc::*;
 use serde::Deserialize;
-use std::{convert::TryFrom, fs, path::Path};
+use std::{convert::TryFrom, env, fs, path::Path};
 
 #[derive(Debug)]
 pub struct ABCIConfig {
+    pub abci_host: String,
+    pub abci_port: u16,
     pub tendermint_host: String,
     pub tendermint_port: u16,
     pub submission_port: u16,
     pub ledger_port: u16,
     pub query_port: u16,
+    pub ledger_dir: String,
 }
 
 #[derive(Deserialize)]
 pub struct ABCIConfigStr {
+    pub abci_host: String,
+    pub abci_port: String,
     pub tendermint_host: String,
     pub tendermint_port: String,
     pub submission_port: String,
     pub ledger_port: String,
+    #[serde(skip)]
+    pub ledger_dir: Option<String>,
 }
 
 impl TryFrom<ABCIConfigStr> for ABCIConfig {
@@ -26,17 +33,23 @@ impl TryFrom<ABCIConfigStr> for ABCIConfig {
         let ledger_port = cfg.ledger_port.parse::<u16>().c(d!())?;
         let query_port = ledger_port - 1;
         Ok(ABCIConfig {
+            abci_host: cfg.abci_host,
+            abci_port: cfg.abci_port.parse::<u16>().c(d!())?,
             tendermint_host: cfg.tendermint_host,
             tendermint_port: cfg.tendermint_port.parse::<u16>().c(d!())?,
             submission_port: cfg.submission_port.parse::<u16>().c(d!())?,
             ledger_port,
             query_port,
+            ledger_dir: cfg.ledger_dir.unwrap_or(pnk!(env::var("LEDGER_DIR"))),
         })
     }
 }
 
 impl ABCIConfig {
     pub fn from_env() -> Result<ABCIConfig> {
+        let abci_host = CFG.abci_host.to_owned();
+        let abci_port = CFG.abci_port;
+
         let tendermint_host = CFG.tendermint_host.to_owned();
         let tendermint_port = CFG.tendermint_port;
 
@@ -49,11 +62,14 @@ impl ABCIConfig {
         let query_port = ledger_port - 1;
 
         Ok(ABCIConfig {
+            abci_host,
+            abci_port,
             tendermint_host,
             tendermint_port,
             submission_port,
             ledger_port,
             query_port,
+            ledger_dir: CFG.ledger_dir.clone(),
         })
     }
 
@@ -68,13 +84,11 @@ impl ABCIConfig {
 
 pub(crate) mod global_cfg {
     #[cfg(not(test))]
-    use clap::{crate_authors, App, Arg, ArgGroup, ArgMatches, SubCommand};
+    use clap::{crate_authors, App, Arg, ArgMatches};
     use lazy_static::lazy_static;
     use ruc::*;
     #[cfg(not(test))]
     use std::env;
-
-    use crate::abci::init::InitMode;
 
     lazy_static! {
         /// Global config.
@@ -83,6 +97,8 @@ pub(crate) mod global_cfg {
 
     #[derive(Default)]
     pub struct Config {
+        pub abci_host: String,
+        pub abci_port: u16,
         pub tendermint_host: String,
         pub tendermint_port: u16,
         pub submission_service_port: u16,
@@ -92,10 +108,6 @@ pub(crate) mod global_cfg {
         pub tendermint_node_self_addr: Option<String>,
         pub tendermint_node_key_config_path: Option<String>,
         pub ledger_dir: String,
-        pub tendermint_home: String,
-        pub tendermint_config: Option<String>,
-        pub command: String,
-        pub init_mode: InitMode,
     }
 
     #[cfg(test)]
@@ -105,12 +117,14 @@ pub(crate) mod global_cfg {
 
     #[cfg(not(test))]
     fn get_config() -> Result<Config> {
-        let matches = {
-            let node = SubCommand::with_name("node")
-                .about("Start findora node.")
-                .arg_from_usage("-c, --config=[FILE] 'Path to $TMHOM/config/config.toml'")
-                .arg_from_usage("-H, --tendermint-host=[Tendermint Node IP]")
-                .arg_from_usage("-P, --tendermint-port=[Tendermint Node Port]")
+        let m = App::new("findorad")
+                .version(env!("VERGEN_SHA"))
+                .author(crate_authors!())
+                .about("An ABCI node implementation of FindoraNetwork.")
+                .arg_from_usage("--findorad-host=[Findorad IP]")
+                .arg_from_usage("--findorad-port=[Findorad Port]")
+                .arg_from_usage("--tendermint-host=[Tendermint IP]")
+                .arg_from_usage("--tendermint-port=[Tendermint Port]")
                 .arg_from_usage("--submission-service-port=[Submission Service Port]")
                 .arg_from_usage("--ledger-service-port=[Ledger Service Port]")
                 .arg_from_usage("-l, --enable-ledger-service")
@@ -118,66 +132,31 @@ pub(crate) mod global_cfg {
                 .arg_from_usage("--tendermint-node-self-addr=[Address] 'the address of your tendermint node, in upper-hex format'")
                 .arg_from_usage("--tendermint-node-key-config-path=[Path] 'such as: ${HOME}/.tendermint/config/priv_validator_key.json'")
                 .arg_from_usage("-d, --ledger-dir=[Path]")
-                .arg_from_usage(
-                    "-b, --base-dir=[DIR] 'The root directory for tendermint config, aka $TENDERMINT_HOME'",
-                );
-
-            let init = SubCommand::with_name("init")
-                .about("Initialize the configurations of findorad")
-                .arg_from_usage("--dev-net 'Initialize for Findora Local DevNet.'")
-                .arg_from_usage("--test-net 'Initialize for Findora TestNet.'")
-                .arg_from_usage("--main-net 'Initialize for Findora MainNet.'")
-                .arg_from_usage("--qa01-net 'Initialize for Findora QA01.'")
-                .group(ArgGroup::with_name("environment").args(&["dev-net", "test-net", "main-net", "qa01-net"]))
-                .arg_from_usage(
-                    "-b, --base-dir=[DIR] 'The root directory for tendermint config, aka $TENDERMINT_HOME'",
-                );
-
-            App::new("findorad")
-                .version(env!("VERGEN_SHA"))
-                .author(crate_authors!())
-                .about("An ABCI node implementation of FindoraNetwork.")
-                .subcommand(node)
-                .subcommand(init)
                 .arg(Arg::with_name("_a").long("ignored").hidden(true))
                 .arg(Arg::with_name("_b").long("nocapture").hidden(true))
                 .arg(Arg::with_name("_c").long("test-threads").hidden(true))
                 .arg(Arg::with_name("INPUT").multiple(true).hidden(true))
-                .get_matches()
-        };
+                .get_matches();
 
-        let (cmd, sub_matches) = matches.subcommand();
+        print_version(&m);
 
-        if sub_matches.is_none() {
-            print_version(matches);
-            return Err(eg!("no this command"));
-        }
-
-        let m = if let Some(m) = sub_matches {
-            m
-        } else {
-            print_version(matches);
-            return Err(eg!("no this command"));
-        };
-
-        let tcfg = m
-            .value_of("config")
+        let fh = m
+            .value_of("findorad-host")
             .map(|v| v.to_owned())
-            .or_else(|| env::var("TENDERMINT_CONFIG").ok());
-        let tdir = m
-            .value_of("base-dir")
+            .or_else(|| env::var("ABCI_HOST").ok())
+            .unwrap_or_else(|| "0.0.0.0".to_owned());
+        let fp = m
+            .value_of("findorad-port")
             .map(|v| v.to_owned())
-            .unwrap_or_else(|| {
-                env::var("TENDERMINT_HOME").unwrap_or_else(|_| {
-                    format!("{}/.tendermint", pnk!(env::var("HOME")))
-                })
-            });
-
+            .or_else(|| env::var("ABCI_PORT").ok())
+            .unwrap_or_else(|| "26658".to_owned())
+            .parse::<u16>()
+            .c(d!())?;
         let th = m
             .value_of("tendermint-host")
             .map(|v| v.to_owned())
             .or_else(|| env::var("TENDERMINT_HOST").ok())
-            .unwrap_or_else(|| "localhost".to_owned());
+            .unwrap_or_else(|| "0.0.0.0".to_owned());
         let tp = m
             .value_of("tendermint-port")
             .map(|v| v.to_owned())
@@ -215,23 +194,14 @@ pub(crate) mod global_cfg {
             .value_of("ledger-dir")
             .map(|v| v.to_owned())
             .unwrap_or_else(|| {
-                env::var("LEDGER_DIR")
-                    .unwrap_or_else(|_| format!("{}/__findora__", &tdir))
+                env::var("LEDGER_DIR").unwrap_or_else(|_| {
+                    format!("{}/.__findora__", pnk!(env::var("HOME")))
+                })
             });
 
-        let init_mode = if m.is_present("dev-net") {
-            InitMode::Dev
-        } else if m.is_present("test-net") {
-            InitMode::Testnet
-        } else if m.is_present("main-net") {
-            InitMode::Mainnet
-        } else if m.is_present("qa01-net") {
-            InitMode::Qa01
-        } else {
-            InitMode::Dev
-        };
-
         let res = Config {
+            abci_host: fh,
+            abci_port: fp,
             tendermint_host: th,
             tendermint_port: tp,
             submission_service_port: ssp,
@@ -241,17 +211,13 @@ pub(crate) mod global_cfg {
             tendermint_node_self_addr: tnsa,
             tendermint_node_key_config_path: tnkcp,
             ledger_dir: ld,
-            command: cmd.to_owned(),
-            tendermint_config: tcfg,
-            tendermint_home: tdir,
-            init_mode,
         };
 
         Ok(res)
     }
 
     #[cfg(not(test))]
-    fn print_version(m: ArgMatches) {
+    fn print_version(m: &ArgMatches) {
         if m.is_present("version") {
             println!("{}", env!("VERGEN_SHA"));
             std::process::exit(0);

@@ -8,10 +8,11 @@ pub use mocker::gen_tendermint_attr;
 
 #[cfg(not(feature = "abci_mock"))]
 mod real {
+    use abci::{Event, Pair};
     use ledger::data_model::{Operation, Transaction, TxnSID};
+    use protobuf::RepeatedField;
     use serde::Serialize;
     use std::time::SystemTime;
-    use tm_protos::{abci::*, libs::kv::*};
     use zei::xfr::structs::{XfrAmount, XfrAssetType};
 
     /// generate attr(tags) for index-ops of tendermint
@@ -20,40 +21,42 @@ mod real {
     ///   - "addr.to" => "Json<TagAttr>"
     ///   - "addr.from.<addr>" => "y"
     ///   - "addr.to.<addr>" => "y"
-    pub fn gen_tendermint_attr(tx: &Transaction) -> Vec<Event> {
+    pub fn gen_tendermint_attr(tx: &Transaction) -> RepeatedField<Event> {
         let mut res = vec![];
 
         // index txs without block info
-        let mut ev = Event::default();
-        ev.r#type = String::from("tx");
+        let mut ev = Event::new();
+        ev.set_field_type("tx".to_owned());
 
-        let mut kv = vec![Pair::default(), Pair::default()];
-        kv[0].key = "prehash".as_bytes().to_vec();
-        kv[0].value = hex::encode(tx.hash(TxnSID(0))).into_bytes();
-        kv[1].key = "timestamp".as_bytes().to_vec();
-        kv[1].value = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-            .to_string()
-            .into_bytes();
+        let mut kv = vec![Pair::new(), Pair::new()];
+        kv[0].set_key("prehash".as_bytes().to_vec());
+        kv[0].set_value(hex::encode(tx.hash(TxnSID(0))).into_bytes());
+        kv[1].set_key("timestamp".as_bytes().to_vec());
+        kv[1].set_value(
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                .to_string()
+                .into_bytes(),
+        );
 
-        ev.attributes = kv;
+        ev.set_attributes(RepeatedField::from_vec(kv));
         res.push(ev);
 
         let (from, to) = gen_tendermint_attr_addr(tx);
 
         if !from.is_empty() || !to.is_empty() {
-            let mut ev = Event::default();
-            ev.r#type = String::from("addr");
+            let mut ev = Event::new();
+            ev.set_field_type("addr".to_owned());
 
-            let mut kv = vec![Pair::default(), Pair::default()];
-            kv[0].key = "from".as_bytes().to_vec();
-            kv[0].value = serde_json::to_vec(&from).unwrap();
-            kv[1].key = "to".as_bytes().to_vec();
-            kv[1].value = serde_json::to_vec(&to).unwrap();
+            let mut kv = vec![Pair::new(), Pair::new()];
+            kv[0].set_key("from".as_bytes().to_vec());
+            kv[0].set_value(serde_json::to_vec(&from).unwrap());
+            kv[1].set_key("to".as_bytes().to_vec());
+            kv[1].set_value(serde_json::to_vec(&to).unwrap());
 
-            ev.attributes = kv;
+            ev.set_attributes(RepeatedField::from_vec(kv));
             res.push(ev);
 
             macro_rules! index_addr {
@@ -61,17 +64,17 @@ mod real {
                     let kv = $attr
                         .into_iter()
                         .map(|i| {
-                            let mut p = Pair::default();
-                            p.key = i.addr.into_bytes();
-                            p.value = "y".as_bytes().to_vec();
+                            let mut p = Pair::new();
+                            p.set_key(i.addr.into_bytes());
+                            p.set_value("y".as_bytes().to_vec());
                             p
                         })
                         .collect::<Vec<_>>();
 
                     if !kv.is_empty() {
-                        let mut ev = Event::default();
-                        ev.r#type = String::from($ty);
-                        ev.attributes = kv;
+                        let mut ev = Event::new();
+                        ev.set_field_type($ty.to_owned());
+                        ev.set_attributes(RepeatedField::from_vec(kv));
                         res.push(ev);
                     }
                 };
@@ -81,7 +84,7 @@ mod real {
             index_addr!(to, "addr.to");
         }
 
-        res
+        RepeatedField::from_vec(res)
     }
 
     // collect informations of inputs and outputs
@@ -149,10 +152,11 @@ mod real {
 
 #[cfg(feature = "abci_mock")]
 mod mocker {
+    use abci::Event;
     use ledger::data_model::Transaction;
-    use tm_protos::abci::Event;
+    use protobuf::RepeatedField;
 
-    pub fn gen_tendermint_attr(_tx: &Transaction) -> Vec<Event> {
-        vec![Event::default()]
+    pub fn gen_tendermint_attr(_tx: &Transaction) -> RepeatedField<Event> {
+        RepeatedField::from_vec(vec![Event::new()])
     }
 }

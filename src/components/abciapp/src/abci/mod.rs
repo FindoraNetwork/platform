@@ -1,9 +1,11 @@
 //!
-//! # abci init and startup methods
+//! Business Logics of Findora Network
 //!
 
+#![deny(warnings)]
+#![allow(clippy::needless_borrow)]
+
 mod config;
-mod init;
 mod server;
 pub mod staking;
 
@@ -15,26 +17,22 @@ use lazy_static::lazy_static;
 use ruc::*;
 use std::{
     fs,
+    net::SocketAddr,
     path::Path,
-    sync::mpsc::channel,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::{atomic::AtomicBool, Arc},
     thread,
 };
-use tendermint_sys::Node;
 
 use config::{global_cfg::CFG, ABCIConfig};
 
 lazy_static! {
     /// if `true`,
     /// we can exit safely without the risk of breaking data
-    pub static ref IN_SAFE_ITV: AtomicBool = AtomicBool::new(false);
+    pub static ref IN_SAFE_ITV: AtomicBool = AtomicBool::new(true);
 }
 
-/// run node
-pub fn node_command() -> Result<()> {
+/// Starting findorad
+pub fn run() -> Result<()> {
     let base_dir = {
         fs::create_dir_all(&CFG.ledger_dir).c(d!())?;
         Some(Path::new(&CFG.ledger_dir))
@@ -53,7 +51,7 @@ pub fn node_command() -> Result<()> {
     if CFG.enable_ledger_service {
         let ledger_api_service_hdr =
             submission_service_hdr.read().borrowable_ledger_state();
-        let ledger_host = config.tendermint_host.clone();
+        let ledger_host = config.abci_host.clone();
         let ledger_port = config.ledger_port;
         thread::spawn(move || {
             pnk!(RestfulApiService::create(
@@ -68,17 +66,16 @@ pub fn node_command() -> Result<()> {
         let query_service_hdr = submission_service_hdr.read().borrowable_ledger_state();
         pnk!(query_api::service::start_query_server(
             query_service_hdr,
-            &config.tendermint_host,
+            &config.abci_host,
             config.query_port,
-            base_dir,
+            Some(Path::new(&config.ledger_dir)),
         ))
         .write()
         .update();
     }
 
-    let submission_host = config.tendermint_host.clone();
+    let submission_host = config.abci_host.clone();
     let submission_port = config.submission_port;
-
     thread::spawn(move || {
         pnk!(SubmissionApi::create(
             submission_service_hdr,
@@ -87,61 +84,9 @@ pub fn node_command() -> Result<()> {
         ));
     });
 
-    let config_path = if let Some(path) = CFG.tendermint_config.as_ref() {
-        path.clone()
-    } else {
-        CFG.tendermint_home.clone() + "/config/config.toml"
-    };
+    let addr_str = format!("{}:{}", config.abci_host, config.abci_port);
+    let addr = addr_str.parse::<SocketAddr>().c(d!())?;
 
-    let node = Node::new(&config_path, app).unwrap();
-    node.start().unwrap();
-
-    std::thread::park();
-
-    node.stop().unwrap();
+    abci::run(addr, app);
     Ok(())
-}
-
-/// init abci
-fn init_command() -> Result<()> {
-    tendermint_sys::init_home(&CFG.tendermint_home).unwrap();
-    init::init_genesis(
-        CFG.init_mode,
-        &(CFG.tendermint_home.clone() + "/config/genesis.json"),
-    )?;
-    init::generate_tendermint_config(
-        CFG.init_mode,
-        &(CFG.tendermint_home.clone() + "/config/config.toml"),
-    )?;
-    Ok(())
-}
-
-/// run abci
-pub fn run() -> Result<()> {
-    match CFG.command.as_str() {
-        "init" => init_command(),
-        "node" => {
-            let thread = thread::Builder::new()
-                .spawn(|| pnk!(node_command()))
-                .unwrap();
-
-            let (tx, rx) = channel();
-
-            ctrlc::set_handler(move || {
-                while !IN_SAFE_ITV.load(Ordering::SeqCst) {
-                    sleep_ms!(1);
-                }
-                pnk!(tx.send(()));
-            })
-            .c(d!())?;
-
-            pnk!(rx.recv());
-
-            thread.thread().unpark();
-            thread.join().unwrap();
-
-            Ok(())
-        }
-        _ => Err(eg!("The available options are 'node' / 'init'")),
-    }
 }

@@ -9,6 +9,10 @@ edition = "2018"
 name = "findorad"
 path = "src/bins/findorad.rs"
 
+[[bin]]
+name = "abcid"
+path = "src/bins/abcid.rs"
+
 [dependencies]
 parking_lot = "0.11.1"
 arrayref = "0.3.5"
@@ -26,6 +30,7 @@ lazy_static = "1.4.0"
 futures = { version = "0.3.13", features = ["thread-pool"] }
 hex = "0.4.2"
 ctrlc = { version = "3.0", features = ["termination"] }
+protobuf = "2.23"
 toml = "0.5.8"
 clap = "2.33.3"
 
@@ -35,11 +40,15 @@ actix-service = "1.0.6"
 actix-web = "3.3.2"
 percent-encoding = "2.1.0"
 
+nix = "0.22.1"
+
 zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4b" }
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+abci = { git = "https://github.com/FindoraNetwork/rust-abci.git", branch = "feat-findora" }
+bnc = { git = "https://github.com/FindoraNetwork/BNC.git", branch = "feat-rocksdb" }
+
 tendermint-sys = { git = "ssh://git@github.com/FindoraNetwork/tendermint-sys.git", branch = "findora-0.33.6", default-features = false, features = ["sync"] }
 tm-protos = { git = "ssh://git@github.com/FindoraNetwork/tendermint-sys.git", branch = "findora-0.33.6" }
-bnc = { git = "https://github.com/FindoraNetwork/BNC.git", branch = "feat-rocksdb" }
 
 ledger = { path = "../../ledger" ,features = ["compress"] }
 cryptohash = { path = "../../libs/cryptohash" }
@@ -52,8 +61,5 @@ finutils = { path = "../finutils" }
 vergen = "=3.1.0"
 
 [features]
-default = ["goleveldb"]
 abci_mock = [ "ledger/abci_mock" ]
 debug_env = [ "ledger/debug_env" ]
-cleveldb = ["tendermint-sys/cleveldb"]
-goleveldb = ["tendermint-sys/goleveldb"]

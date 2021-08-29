@@ -6,6 +6,7 @@ use crate::{
     abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
     api::submission_server::SubmissionServer,
 };
+use abci::*;
 use ledger::store::LedgerState;
 use parking_lot::RwLock;
 use rand_chacha::ChaChaRng;
@@ -15,8 +16,6 @@ use std::{
     path::Path,
     sync::{atomic::Ordering, Arc},
 };
-use tendermint_sys::SyncApplication;
-use tm_protos::abci::*;
 use tx_sender::TendermintForward;
 
 pub use tx_sender::forward_txn_with_mode;
@@ -56,34 +55,34 @@ impl ABCISubmissionServer {
     }
 }
 
-impl SyncApplication for ABCISubmissionServer {
+impl abci::Application for ABCISubmissionServer {
     #[inline(always)]
-    fn info(&mut self, req: RequestInfo) -> ResponseInfo {
+    fn info(&mut self, req: &RequestInfo) -> ResponseInfo {
         callback::info(self, req)
     }
 
     #[inline(always)]
-    fn check_tx(&mut self, req: RequestCheckTx) -> ResponseCheckTx {
+    fn check_tx(&mut self, req: &RequestCheckTx) -> ResponseCheckTx {
         callback::check_tx(self, req)
     }
 
     #[inline(always)]
-    fn deliver_tx(&mut self, req: RequestDeliverTx) -> ResponseDeliverTx {
+    fn deliver_tx(&mut self, req: &RequestDeliverTx) -> ResponseDeliverTx {
         callback::deliver_tx(self, req)
     }
 
     #[inline(always)]
-    fn begin_block(&mut self, req: RequestBeginBlock) -> ResponseBeginBlock {
+    fn begin_block(&mut self, req: &RequestBeginBlock) -> ResponseBeginBlock {
         callback::begin_block(self, req)
     }
 
     #[inline(always)]
-    fn end_block(&mut self, req: RequestEndBlock) -> ResponseEndBlock {
+    fn end_block(&mut self, req: &RequestEndBlock) -> ResponseEndBlock {
         callback::end_block(self, req)
     }
 
     #[inline(always)]
-    fn commit(&mut self) -> ResponseCommit {
-        callback::commit(self)
+    fn commit(&mut self, req: &RequestCommit) -> ResponseCommit {
+        callback::commit(self, req)
     }
 }
