@@ -17,7 +17,6 @@ use finutils::{
 };
 use globutils::{fresh_tmp_dir, se, wallet};
 use lazy_static::lazy_static;
-use ledger::staking::STAKING_VALIDATOR_MIN_POWER;
 use ledger::{
     data_model::{
         Operation, Transaction, TransferType, TxoRef, TxoSID, Utxo, ASSET_TYPE_FRA,
@@ -1692,11 +1691,7 @@ fn staking_scene_5() -> Result<()> {
     let mut root_keypair = gen_keypair();
 
     // store v_set and kps
-    let mut m = pnk!(bnc::mapx::Mapx::<u64, String>::new(
-        (path_str.to_string() + "/test_key_pair").as_str(),
-        None,
-        false
-    ));
+    let mut m = map! {};
 
     if seq_id == 0 {
         let root_keypair_str = pnk!(serde_json::to_string(&root_keypair));
@@ -1709,8 +1704,7 @@ fn staking_scene_5() -> Result<()> {
         assert!(is_successful(&tx_hash));
     } else {
         m.get(&0).c(d!()).map(|v| {
-            let kp: XfrKeyPair =
-                serde_json::from_str(v.deref().clone().as_str()).unwrap();
+            let kp: XfrKeyPair = serde_json::from_str(v.as_str()).unwrap();
             root_keypair = kp;
         });
     }
@@ -1731,14 +1725,12 @@ fn staking_scene_5() -> Result<()> {
         m.insert(2, kps_str);
     } else {
         m.get(&1).c(d!()).map(|v| {
-            let va: Vec<ledger::staking::Validator> =
-                serde_json::from_str(v.deref().clone().as_str()).unwrap();
+            let va: Vec<StakingValidator> = serde_json::from_str(v.as_str()).unwrap();
             v_set = va.clone();
         });
 
         m.get(&2).c(d!()).map(|v| {
-            let va: Vec<XfrKeyPair> =
-                serde_json::from_str(v.deref().clone().as_str()).unwrap();
+            let va: Vec<XfrKeyPair> = serde_json::from_str(v.as_str()).unwrap();
             kps = va.clone();
         });
     }

@@ -190,13 +190,13 @@ debug_env: stop_debug_env build_release_debug
 	@ ./tools/devnet/startnodes.sh
 
 run_staking_demo:
-	bash tools/staking/demo.sh
+	bash -x tools/staking/demo.sh
 
 start_debug_env:
-	./tools/devnet/startnodes.sh
+	bash -x ./tools/devnet/startnodes.sh
 
 stop_debug_env:
-	@./tools/devnet/stopnodes.sh
+	bash -x ./tools/devnet/stopnodes.sh
 
 # ci_build_image:
 # 	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \

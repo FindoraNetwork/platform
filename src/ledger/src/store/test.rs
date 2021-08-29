@@ -64,7 +64,7 @@ fn test_save_utxo_map_version() {
     assert_eq!(
         back,
         Some(&(
-            TxnSID(ledger_state.status.next_txn.get(0).unwrap().0),
+            TxnSID(ledger_state.status.next_txn.0),
             ledger_state.utxo_map.compute_checksum()
         ))
     );
@@ -141,7 +141,7 @@ fn test_checkpoint() {
     assert_eq!(
         back,
         Some(&(
-            TxnSID(ledger_state.status.next_txn.get(0).unwrap().0),
+            TxnSID(ledger_state.status.next_txn.0),
             ledger_state.utxo_map.compute_checksum()
         ))
     );
@@ -568,7 +568,7 @@ fn asset_issued() {
             )
     );
     let query_result = ledger
-        .get_utxo_checksum(pnk!(ledger.status.next_txn.get(0).c(d!())).0 as u64)
+        .get_utxo_checksum(ledger.status.next_txn.0 as u64)
         .unwrap();
     let compute_result = ledger.utxo_map.compute_checksum();
     println!(

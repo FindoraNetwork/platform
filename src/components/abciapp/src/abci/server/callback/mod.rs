@@ -11,6 +11,7 @@ use ledger::{data_model::TxnEffect, staking::is_coinbase_tx};
 use parking_lot::Mutex;
 use ruc::*;
 use std::{
+    fs,
     ops::Deref,
     sync::{
         atomic::{AtomicI64, Ordering},
@@ -180,6 +181,11 @@ pub fn end_block(
         begin_block_req.last_commit_info.as_ref(),
         &begin_block_req.byzantine_validators.as_slice(),
     );
+
+    let laa = la.get_committed_state().write();
+    pnk!(serde_json::to_vec(&laa.get_status())
+        .c(d!())
+        .and_then(|s| fs::write(&laa.get_status().snapshot_path, s).c(d!())));
 
     resp
 }

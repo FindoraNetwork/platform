@@ -6,10 +6,7 @@ use crate::{
     staking::{Amount, Power, Staking, TendermintAddrRef, FF_PK_LIST, FRA_TOTAL_AMOUNT},
 };
 use bitmap::{BitMap, SparseMap};
-use bnc::{
-    helper::Value, mapx::Mapx, new_mapx, new_vecx, vecx::ValueMut as VecxValueMut,
-    vecx::Vecx,
-};
+use bnc::{helper::Value, mapx::Mapx, new_mapx, new_vecx, vecx::Vecx};
 use cryptohash::sha256::Digest as BitDigest;
 use globutils::{HashOf, ProofOf, SignatureOf};
 use merkle_tree::AppendOnlyMerkle;
@@ -49,7 +46,7 @@ const MAX_VERSION: usize = 100;
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub struct LedgerStatus {
-    snapshot_path: String,
+    pub snapshot_path: String,
 
     // All currently-unspent TXOs
     utxos: Mapx<TxoSID, Utxo>,
@@ -74,15 +71,15 @@ pub struct LedgerStatus {
     // sequential.
     asset_types: Mapx<AssetTypeCode, AssetType>,
     // Tracing policy for each asset type
-    tracing_policies: Mapx<AssetTypeCode, TracingPolicy>,
+    tracing_policies: HashMap<AssetTypeCode, TracingPolicy>,
     issuance_num: Mapx<AssetTypeCode, u64>,
     // Issuance amounts for assets with limits
     issuance_amounts: Mapx<AssetTypeCode, u64>,
 
     // Should be equal to the count of transactions
-    next_txn: Vecx<TxnSID>,
+    next_txn: TxnSID,
     // Should be equal to the count of TXOs
-    next_txo: Vecx<TxoSID>,
+    next_txo: TxoSID,
 
     // Hash and sequence number of the most recent "full checkpoint" of the
     // ledger -- committing to the whole ledger history up to the most recent
@@ -103,10 +100,10 @@ pub struct LedgerStatus {
     // Sliding window of operations for replay attack prevention
     sliding_set: SlidingSet<[u8; 8]>,
 
-    staking: Vecx<Staking>,
+    staking: Staking,
 
     // tendermint commit height
-    td_commit_height: Vecx<u64>,
+    td_commit_height: u64,
 
     // flags that can be flush when a block has a tx
     is_effective_block: bool,
@@ -196,17 +193,10 @@ impl LedgerStatus {
         let state_commitment_versions_path =
             snapshot_entries_dir.to_owned() + "/state_commitment_versions";
         let asset_types_path = snapshot_entries_dir.to_owned() + "/asset_types";
-        let tracing_policies_path =
-            snapshot_entries_dir.to_owned() + "/tracing_policies";
         let issuance_num_path = snapshot_entries_dir.to_owned() + "/issuance_num";
-        let next_txn_path = snapshot_entries_dir.to_owned() + "/next_txn";
-        let next_txo_path = snapshot_entries_dir.to_owned() + "/next_txo";
-        let staking_path = snapshot_entries_dir.to_owned() + "/staking";
-        let tendermint_commit_path =
-            snapshot_entries_dir.to_owned() + "/tendermint_commit";
         let owned_utxos_path = snapshot_entries_dir.to_owned() + "/owned_utxos";
 
-        let mut ledger = LedgerStatus {
+        let ledger = LedgerStatus {
             snapshot_path: snapshot_path.to_owned(),
             sliding_set: SlidingSet::<[u8; 8]>::new(TRANSACTION_WINDOW_WIDTH as usize),
             utxos: new_mapx!(utxos_path.as_str()),
@@ -217,33 +207,17 @@ impl LedgerStatus {
             utxo_map_versions: VecDeque::new(),
             state_commitment_versions: new_vecx!(state_commitment_versions_path.as_str()),
             asset_types: new_mapx!(asset_types_path.as_str()),
-            tracing_policies: new_mapx!(tracing_policies_path.as_str()),
+            tracing_policies: map! {},
             issuance_num: new_mapx!(issuance_num_path.as_str()),
-            next_txn: new_vecx!(next_txn_path.as_str(), 1),
-            next_txo: new_vecx!(next_txo_path.as_str(), 1),
+            next_txn: TxnSID(0),
+            next_txo: TxoSID(0),
             txns_in_block_hash: None,
             state_commitment_data: None,
             block_commit_count: 0,
-            staking: new_vecx!(staking_path.as_str(), 1),
-            td_commit_height: new_vecx!(tendermint_commit_path.as_str(), 1),
+            staking: Staking::new(),
+            td_commit_height: 1,
             is_effective_block: false,
         };
-
-        if ledger.staking.is_empty() {
-            ledger.staking.set_value(0, Staking::new());
-        }
-
-        if ledger.next_txn.is_empty() {
-            ledger.next_txn.set_value(0, TxnSID(0));
-        }
-
-        if ledger.next_txo.is_empty() {
-            ledger.next_txo.set_value(0, TxoSID(0));
-        }
-
-        if ledger.td_commit_height.is_empty() {
-            ledger.td_commit_height.set_value(0, 1);
-        }
 
         Ok(ledger)
     }
@@ -511,8 +485,8 @@ impl LedgerStatus {
         // the transaction.
         let mut new_utxo_sids: HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)> = map! {};
         {
-            let mut next_txn = pnk!(self.next_txn.get(0).c(d!())).0;
-            let mut next_txo = pnk!(self.next_txo.get(0).c(d!())).0;
+            let mut next_txn = self.next_txn.0;
+            let mut next_txo = self.next_txo.0;
 
             for (ix, txos) in block.temp_sids.iter().zip(block.txos.drain(..)) {
                 let txn_sid = next_txn;
@@ -535,8 +509,8 @@ impl LedgerStatus {
 
                 new_utxo_sids.insert(*ix, (TxnSID(txn_sid), txn_utxo_sids));
             }
-            self.next_txn.set_value(0, TxnSID(next_txn));
-            self.next_txo.set_value(0, TxoSID(next_txo));
+            self.next_txn = TxnSID(next_txn);
+            self.next_txo = TxoSID(next_txo);
         }
 
         // Update issuance sequence number limits
@@ -732,14 +706,11 @@ impl LedgerState {
         self.block_ctx = Some(block);
         self.status.is_effective_block = true;
 
-        serde_json::to_vec(&self.status)
-            .c(d!())
-            .and_then(|s| fs::write(&self.status.snapshot_path, s).c(d!()))
-            .map(|_| temp_sid_map)
+        Ok(temp_sid_map)
     }
 
-    pub fn get_staking_mut(&mut self) -> VecxValueMut<Staking> {
-        pnk!(self.status.staking.get_mut(0).c(d!()))
+    pub fn get_staking_mut(&mut self) -> &mut Staking {
+        &mut self.status.staking
     }
 
     pub fn flush_data(&mut self) {
@@ -753,40 +724,26 @@ impl LedgerState {
             self.status.issuance_amounts.flush_data();
             self.status.issuance_num.flush_data();
             self.status.spent_utxos.flush_data();
-            self.status.tracing_policies.flush_data();
-            self.status.staking.flush_data();
-            self.status.next_txn.flush_data();
-            self.status.next_txo.flush_data();
             self.status.owned_utxos.flush_data();
         }
     }
 
-    pub fn flush_staking(&self) {
-        self.status.staking.flush_data();
-    }
-
-    pub fn set_tendermint_commit(&mut self, tendermint_commit: u64) {
-        self.status.td_commit_height.set_value(0, tendermint_commit);
-        self.status.td_commit_height.flush_data();
+    pub fn set_tendermint_commit(&mut self, tendermint_h: u64) {
+        self.status.td_commit_height = tendermint_h;
     }
 }
 
 impl LedgerState {
     pub fn get_tendermint_height(&self) -> u64 {
-        self.status
-            .td_commit_height
-            .get(0)
-            .unwrap()
-            .into_inner()
-            .into_owned()
+        self.status.td_commit_height
     }
 
-    pub fn get_next_txn(&self) -> Value<TxnSID> {
-        pnk!(self.status.next_txn.get(0).c(d!()))
+    pub fn get_next_txn(&self) -> TxnSID {
+        self.status.next_txn
     }
 
-    pub fn get_next_txo(&self) -> Value<TxoSID> {
-        pnk!(self.status.next_txo.get(0).c(d!()))
+    pub fn get_next_txo(&self) -> TxoSID {
+        self.status.next_txo
     }
 
     pub fn get_status(&self) -> &LedgerStatus {
@@ -844,10 +801,9 @@ impl LedgerState {
             self.status.utxo_map_versions.pop_front();
         }
 
-        self.status.utxo_map_versions.push_back((
-            *pnk!(self.status.next_txn.get(0).c(d!())),
-            self.utxo_map.compute_checksum(),
-        ));
+        self.status
+            .utxo_map_versions
+            .push_back((self.status.next_txn, self.utxo_map.compute_checksum()));
     }
 
     // In this functionn:
@@ -1382,8 +1338,8 @@ impl LedgerState {
         }
     }
 
-    pub fn get_staking(&self) -> Value<Staking> {
-        pnk!(self.status.staking.get(0).c(d!()))
+    pub fn get_staking(&self) -> &Staking {
+        &self.status.staking
     }
 
     pub fn get_transaction(&self, id: TxnSID) -> Result<AuthenticatedTransaction> {

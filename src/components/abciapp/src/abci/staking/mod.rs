@@ -211,8 +211,6 @@ pub fn system_ops(
             }
         }
     }
-
-    la.flush_staking();
 }
 
 /// Get the actual voted power of last block.

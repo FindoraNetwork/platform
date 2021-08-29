@@ -5,14 +5,14 @@ NC='\033[0m'
 
 # stop all nodes
 abcis=`pgrep -f findorad`
-if ! [ -z "$abcis" ]
-then
+
+if [ ! -z "$abcis" ]; then
     echo -n "killed nodes: "
-    for pid in $abcis
-    do
+    for pid in $abcis; do
         kill -9 $pid
         echo -en "$pid "
     done
     echo
 fi
+
 exit 0

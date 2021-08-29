@@ -52,6 +52,7 @@ stop_node() {
         echo "Unsupported operating system!"
         exit 1
     fi
+
     kill -9 $pid_abci $pid_tendermint 2>/dev/null
 }
 

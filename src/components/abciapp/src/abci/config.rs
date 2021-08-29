@@ -110,18 +110,18 @@ pub(crate) mod global_cfg {
                 .arg_from_usage("--tendermint-node-key-config-path=[Path] 'such as: ${HOME}/.tendermint/config/priv_validator_key.json'")
                 .arg_from_usage("-d, --ledger-dir=[Path]")
                 .arg_from_usage(
-                    "-b, --base-dir=[DIR] 'Base directory for tendermint config, aka $TMHOME'",
+                    "-b, --base-dir=[DIR] 'The root directory for tendermint config, aka $TENDERMINT_HOME'",
                 );
 
             let init = SubCommand::with_name("init")
-                .about("Init findora node config file and tendermint config file")
-                .arg_from_usage("--dev-net 'Inital findora development net configuration.'")
-                .arg_from_usage("--test-net 'Inital findora testnet configuration.'")
-                .arg_from_usage("--main-net 'Inital findora mainnet configuration.'")
-                .arg_from_usage("--qa01-net 'Inital findora qa01 configuration.'")
+                .about("Initialize the configurations of findorad")
+                .arg_from_usage("--dev-net 'Initialize for Findora Local DevNet.'")
+                .arg_from_usage("--test-net 'Initialize for Findora TestNet.'")
+                .arg_from_usage("--main-net 'Initialize for Findora MainNet.'")
+                .arg_from_usage("--qa01-net 'Initialize for Findora QA01.'")
                 .group(ArgGroup::with_name("environment").args(&["dev-net", "test-net", "main-net", "qa01-net"]))
                 .arg_from_usage(
-                    "-b, --base-dir=[DIR] 'Base directory for tendermint config, aka $TMHOME'",
+                    "-b, --base-dir=[DIR] 'The root directory for tendermint config, aka $TENDERMINT_HOME'",
                 );
 
             App::new("findorad")
