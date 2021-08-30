@@ -1,15 +1,16 @@
 [workspace]
 members = [
+    "src/ledger",
+    "src/components/finutils",
     "src/components/abciapp",
     "src/components/wasm",
-    "src/components/finutils",
-    "src/ledger",
-    "src/libs/merkle_tree",
+    "src/components/bugchecker",
     "src/libs/bitmap",
+    "src/libs/merkle_tree",
+    "src/libs/globutils",
     "src/libs/cryptohash",
     "src/libs/credentials",
     "src/libs/sliding_set",
-    "src/libs/globutils",
 ]
 
 [profile.dev]

@@ -259,6 +259,7 @@ mod init {
             "timeout_precommit = \"1s\"",
             "timeout_precommit_delta = \"500ms\"",
             "timeout_commit = \"1s\"",
+            "recheck = true",
         ];
 
         let target_cfg = [
@@ -271,6 +272,7 @@ mod init {
             "timeout_precommit = \"4s\"",
             "timeout_precommit_delta = \"100ms\"",
             "timeout_commit = \"15s\"",
+            "recheck = false",
         ];
 
         let config = orig_cfg

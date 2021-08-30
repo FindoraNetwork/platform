@@ -1321,7 +1321,7 @@ impl Transaction {
         self.check_fee() && self.fra_no_illegal_issuance(td_height)
     }
 
-    /// A simple fee checker for mainnet v0.1.
+    /// A simple fee checker
     ///
     /// The check logic is as follows:
     /// - Only `NonConfidential Operation` can be used as fee
@@ -1333,7 +1333,7 @@ impl Transaction {
         // This method can not completely solve the DOS risk,
         // we should further limit the number of txo[s] in every operation.
         //
-        // But it seems enough for v1.0 when we combined it with limiting
+        // But it seems enough when we combine it with limiting
         // the payload size of submission-server's http-requests.
         is_coinbase_tx(self)
             || self.body.operations.iter().any(|ops| {

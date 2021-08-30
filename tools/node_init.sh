@@ -46,13 +46,14 @@ set_env() {
         perl -pi -e "s/^(persistent_peers = ).*/\$1 \"${sentry_peers}\"/" $tc
     fi
 
-    perl -pi -e 's/^(timeout_propose = ).*/$1 "8s"/' $tc
-    perl -pi -e 's/^(timeout_propose_delta = ).*/$1 "100ms"/' $tc
-    perl -pi -e 's/^(timeout_prevote = ).*/$1 "4s"/' $tc
-    perl -pi -e 's/^(timeout_prevote_delta = ).*/$1 "100ms"/' $tc
-    perl -pi -e 's/^(timeout_precommit = ).*/$1 "4s"/' $tc
-    perl -pi -e 's/^(timeout_precommit_delta = ).*/$1 "100ms"/' $tc
-    perl -pi -e 's/^(timeout_commit = ).*/$1 "15s"/' $tc
+    perl -pi -e 's/^(timeout_propose =).*/$1 "8s"/' $tc
+    perl -pi -e 's/^(timeout_propose_delta =).*/$1 "100ms"/' $tc
+    perl -pi -e 's/^(timeout_prevote =).*/$1 "4s"/' $tc
+    perl -pi -e 's/^(timeout_prevote_delta =).*/$1 "100ms"/' $tc
+    perl -pi -e 's/^(timeout_precommit =).*/$1 "4s"/' $tc
+    perl -pi -e 's/^(timeout_precommit_delta =).*/$1 "100ms"/' $tc
+    perl -pi -e 's/^(timeout_commit =).*/$1 "15s"/' $tc
+    perl -pi -e 's/^(recheck =).*/$1 false/' $tc
 
     curl ${serv_url}:26657/genesis \
         | jq -c '.result.genesis' \

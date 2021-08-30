@@ -36,6 +36,7 @@ bin_files = \
 		./$(pick)/findorad \
 		./$(pick)/abcid \
 		$(shell go env GOPATH)/bin/tendermint \
+		./$(pick)/xx \
 		./$(pick)/fns \
 		./$(pick)/stt \
 		./$(pick)/staking_cfg_generator
@@ -57,7 +58,7 @@ endef
 # Build for cleveldb
 build: tendermint_cleveldb
 ifdef DBG
-	cargo build --bins -p abciapp -p finutils
+	cargo build --bins -p abciapp -p bugchecker -p finutils
 	$(call pack,$(target_dir))
 else
 	@ echo -e "\x1b[31;01m\$$(DBG) must be defined !\x1b[00m"
@@ -70,14 +71,14 @@ ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
 else
-	cargo build --release --bins -p abciapp -p finutils
+	cargo build --release --bins -p abciapp -p bugchecker -p finutils
 	$(call pack,$(target_dir))
 endif
 
 # Build for goleveldb
 build_goleveldb: tendermint_goleveldb
 ifdef DBG
-	cargo build --bins -p abciapp -p finutils
+	cargo build --bins -p abciapp -p bugchecker -p finutils
 	$(call pack,$(target_dir))
 else
 	@ echo -e "\x1b[31;01m\$$(DBG) must be defined !\x1b[00m"
@@ -90,7 +91,7 @@ ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
 else
-	cargo build --release --bins -p abciapp -p finutils
+	cargo build --release --bins -p abciapp -p bugchecker -p finutils
 	$(call pack,$(target_dir))
 endif
 
@@ -99,7 +100,7 @@ ifdef DBG
 	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
 	@ exit 1
 else
-	cargo build --features="debug_env" --release --bins -p abciapp -p finutils
+	cargo build --features="debug_env" --release --bins -p abciapp -p bugchecker -p finutils
 	$(call pack,$(target_dir))
 endif
 
