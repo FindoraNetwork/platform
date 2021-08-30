@@ -193,12 +193,23 @@ mod init {
         println!(">>> wait 4 blocks...");
         sleep_n_block!(4);
 
-        let target_list = USER_LIST
+        let mut target_list = USER_LIST
             .values()
             .map(|u| &u.pubkey)
             .chain(VALIDATOR_LIST.values().map(|v| &v.pubkey))
-            .map(|pk| (pk, FRA_PRE_ISSUE_AMOUNT / 10000))
+            .map(|pk| (pk, FRA_PRE_ISSUE_AMOUNT / 2_0000))
             .collect::<Vec<_>>();
+
+        // Wallet Address: fra18xkez3fum44jq0zhvwq380rfme7u624cccn3z56fjeex6uuhpq6qv9e4g5
+        // Mnemonic: field ranch pencil chest effort coyote april move injury illegal forest amount bid sound mixture use second pet embrace twice total essay valve loan
+        // Key: {
+        //   "pub_key": "Oa2RRTzdayA8V2OBE7xp3n3NKrjGJxFTSZZybXOXCDQ=",
+        //   "sec_key": "Ew9fMaryTL44ZXnEhcF7hQ-AB-fxgaC8vyCH-hCGtzg="
+        // }
+        let bank = pnk!(wallet::public_key_from_base64(
+            "Oa2RRTzdayA8V2OBE7xp3n3NKrjGJxFTSZZybXOXCDQ="
+        ));
+        target_list.push((&bank, FRA_PRE_ISSUE_AMOUNT / 100 * 99));
 
         println!(">>> transfer FRAs to validators...");
         common::utils::transfer_batch(&root_kp, target_list, false, false).c(d!())?;
