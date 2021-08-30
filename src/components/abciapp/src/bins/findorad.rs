@@ -28,8 +28,6 @@ const U64L: usize = size_of::<u64>();
 const PAD_SIZE: usize = 128;
 
 fn node_command() -> Result<()> {
-    unpack().c(d!())?;
-
     let mut abcid = Command::new("/tmp/abcid__");
 
     abcid
@@ -84,7 +82,17 @@ fn node_command() -> Result<()> {
 }
 
 fn init_command() -> Result<()> {
-    tendermint_sys::init_home(&CFG.tendermint_home).unwrap();
+    Command::new("/tmp/tendermint__")
+        .arg("init")
+        .arg("validator")
+        .arg("--home")
+        .arg(&CFG.tendermint_home)
+        .stdin(Stdio::null())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .output()
+        .c(d!())?;
+    sleep_ms!(200);
     init::init_genesis(
         CFG.init_mode,
         &(CFG.tendermint_home.clone() + "/config/genesis.json"),
@@ -179,12 +187,14 @@ fn get_bin_path() -> Result<PathBuf> {
 }
 
 fn main() {
-    match CFG.command.as_str() {
-        "init" => pnk!(init_command()),
-        "node" => pnk!(node_command()),
-        "pack" => pnk!(pack()),
-        _ => pnk!(Err(eg!("The available options are 'node'/'init'"))),
-    }
+    let res = match CFG.command.as_str() {
+        "init" => unpack().c(d!()).and_then(|_| init_command().c(d!())),
+        "node" => unpack().c(d!()).and_then(|_| node_command().c(d!())),
+        "pack" => pack().c(d!()),
+        _ => Err(eg!("The available options are 'node'/'init'")),
+    };
+
+    pnk!(res);
 }
 
 mod init {
@@ -238,32 +248,51 @@ mod init {
 
     pub fn generate_tendermint_config(mode: InitMode, path: &str) -> Result<()> {
         let config = fs::read_to_string(path).c(d!())?;
-        let config =
-            str::replace(&config, "index_all_keys = false", "index_all_keys = true");
-        let config = str::replace(
-            &config,
+
+        let orig_cfg = [
+            "index_all_keys = false",
             "laddr = \"tcp://127.0.0.1:26657\"",
+            "timeout_propose = \"3s\"",
+            "timeout_propose_delta = \"500ms\"",
+            "timeout_prevote = \"1s\"",
+            "timeout_prevote_delta = \"500ms\"",
+            "timeout_precommit = \"1s\"",
+            "timeout_precommit_delta = \"500ms\"",
+            "timeout_commit = \"1s\"",
+        ];
+
+        let target_cfg = [
+            "index_all_keys = true",
             "laddr = \"tcp://0.0.0.0:26657\"",
-        );
+            "timeout_propose = \"8s\"",
+            "timeout_propose_delta = \"100ms\"",
+            "timeout_prevote = \"4s\"",
+            "timeout_prevote_delta = \"100ms\"",
+            "timeout_precommit = \"4s\"",
+            "timeout_precommit_delta = \"100ms\"",
+            "timeout_commit = \"15s\"",
+        ];
+
+        let config = orig_cfg
+            .iter()
+            .zip(target_cfg.iter())
+            .fold(config, |acc, pair| acc.replace(pair.0, pair.1));
 
         let result = match mode {
             InitMode::Testnet => {
-                str::replace(
-                    &config,
+                config.replace(
                     "persistent_peers = \"\"",
                     "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@prod-testnet-us-west-2-sentry-000-public.prod.findora.org:26656\"",
                 )
             }
             InitMode::Mainnet => {
-                str::replace(
-                    &config,
+                config.replace(
                     "persistent_peers = \"\"",
                     "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@prod-mainnet-us-west-2-sentry-000-public.prod.findora.org:26656\"",
                 )
             }
             InitMode::Qa01 => {
-                str::replace(
-                    &config,
+                config.replace(
                     "persistent_peers = \"\"",
                     "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@dev-qa01-us-west-2-sentry-000-public.dev.findora.org:26656\"",
                 )
