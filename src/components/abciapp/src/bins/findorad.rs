@@ -49,11 +49,11 @@ fn node_command() -> Result<()> {
     }
 
     if CFG.enable_ledger_service {
-        abcid.arg("--enable_ledger_service");
+        abcid.arg("--enable-ledger-service");
     }
 
     if CFG.enable_query_service {
-        abcid.arg("--enable_query_service");
+        abcid.arg("--enable-query-service");
     }
 
     let mut abcid_child = abcid
