@@ -186,7 +186,8 @@ pub fn end_block(
     let laa = la.get_committed_state().write();
     pnk!(serde_json::to_vec(&laa.get_status())
         .c(d!())
-        .and_then(|s| fs::write(&laa.get_status().snapshot_path, s).c(d!())));
+        .and_then(|s| fs::write(&laa.get_status().snapshot_path, s)
+            .c(d!(laa.get_status().snapshot_path.clone()))));
 
     resp
 }

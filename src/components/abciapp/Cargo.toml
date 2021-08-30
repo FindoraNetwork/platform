@@ -48,7 +48,6 @@ abci = { git = "https://github.com/FindoraNetwork/rust-abci.git", branch = "feat
 bnc = { git = "https://github.com/FindoraNetwork/BNC.git", branch = "feat-rocksdb" }
 
 tendermint-sys = { git = "ssh://git@github.com/FindoraNetwork/tendermint-sys.git", branch = "findora-0.33.6", default-features = false, features = ["sync"] }
-tm-protos = { git = "ssh://git@github.com/FindoraNetwork/tendermint-sys.git", branch = "findora-0.33.6" }
 
 ledger = { path = "../../ledger" ,features = ["compress"] }
 cryptohash = { path = "../../libs/cryptohash" }

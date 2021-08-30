@@ -30,7 +30,7 @@ const PAD_SIZE: usize = 128;
 fn node_command() -> Result<()> {
     unpack().c(d!())?;
 
-    let mut abcid = Command::new("abcid");
+    let mut abcid = Command::new("/tmp/abcid__");
 
     abcid
         .arg("--submission-service-port")
@@ -63,7 +63,7 @@ fn node_command() -> Result<()> {
         .spawn()
         .c(d!())?;
 
-    let mut tendermint_child = Command::new("tendermint")
+    let mut tendermint_child = Command::new("/tmp/tendermint__")
         .arg("node")
         .arg("--home")
         .arg(&CFG.tendermint_home)
@@ -140,11 +140,13 @@ fn unpack() -> Result<()> {
         .create(true)
         .truncate(true)
         .write(true)
-        .open("abcid")
+        .open("/tmp/abcid__")
         .c(d!())?;
     io::copy(&mut abcid_reader, &mut abcid_writer)
         .c(d!())
-        .and_then(|_| set_permissions("abcid", Permissions::from_mode(0o755)).c(d!()))?;
+        .and_then(|_| {
+            set_permissions("/tmp/abcid__", Permissions::from_mode(0o755)).c(d!())
+        })?;
 
     let mut tendermint_reader =
         BufReader::with_capacity(tendermint_len, abcid_reader.into_inner());
@@ -156,15 +158,15 @@ fn unpack() -> Result<()> {
         .create(true)
         .truncate(true)
         .write(true)
-        .open("tendermint")
+        .open("/tmp/tendermint__")
         .c(d!())?;
     io::copy(&mut tendermint_reader, &mut tendermint_writer)
         .c(d!())
         .and_then(|_| {
-            set_permissions("tendermint", Permissions::from_mode(0o755)).c(d!())
+            set_permissions("/tmp/tendermint__", Permissions::from_mode(0o755)).c(d!())
         })?;
 
-    truncate("tendermint", tendermint_len as i64).c(d!())
+    truncate("/tmp/tendermint__", tendermint_len as i64).c(d!())
 }
 
 fn get_bin_path() -> Result<PathBuf> {
