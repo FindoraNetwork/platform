@@ -121,8 +121,8 @@ pub(crate) mod global_cfg {
                 .version(env!("VERGEN_SHA"))
                 .author(crate_authors!())
                 .about("An ABCI node implementation of FindoraNetwork.")
-                .arg_from_usage("--findorad-host=[Findorad IP]")
-                .arg_from_usage("--findorad-port=[Findorad Port]")
+                .arg_from_usage("--abcid-host=[ABCId IP]")
+                .arg_from_usage("--abcid-port=[ABCId Port]")
                 .arg_from_usage("--tendermint-host=[Tendermint IP]")
                 .arg_from_usage("--tendermint-port=[Tendermint Port]")
                 .arg_from_usage("--submission-service-port=[Submission Service Port]")
@@ -140,13 +140,13 @@ pub(crate) mod global_cfg {
 
         print_version(&m);
 
-        let fh = m
-            .value_of("findorad-host")
+        let ah = m
+            .value_of("abcid-host")
             .map(|v| v.to_owned())
             .or_else(|| env::var("ABCI_HOST").ok())
             .unwrap_or_else(|| "0.0.0.0".to_owned());
-        let fp = m
-            .value_of("findorad-port")
+        let ap = m
+            .value_of("abcid-port")
             .map(|v| v.to_owned())
             .or_else(|| env::var("ABCI_PORT").ok())
             .unwrap_or_else(|| "26658".to_owned())
@@ -200,8 +200,8 @@ pub(crate) mod global_cfg {
             });
 
         let res = Config {
-            abci_host: fh,
-            abci_port: fp,
+            abci_host: ah,
+            abci_port: ap,
             tendermint_host: th,
             tendermint_port: tp,
             submission_service_port: ssp,
