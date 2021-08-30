@@ -44,6 +44,7 @@ merkle_tree = { path = "../libs/merkle_tree" }
 sliding_set = { path = "../libs/sliding_set" }
 
 [features]
+default = ["compress"]
 TESTING = []
 debug_env = []
 abci_mock = []
