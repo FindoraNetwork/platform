@@ -27,8 +27,9 @@
 
 use clap::{crate_authors, App, Arg, ArgGroup, SubCommand};
 use finutils::common;
+use globutils::wallet;
 use ruc::*;
-use std::fmt;
+use std::{fmt, fs};
 
 fn main() {
     if let Err(e) = run() {
@@ -90,6 +91,20 @@ fn run() -> Result<()> {
         .arg_from_usage("--confidential-amount 'mask the amount sent on the transaction log'")
         .arg_from_usage("--confidential-type 'mask the asset type sent on the transaction log'")
         .about("Transfer tokens from one address to another");
+    let subcmd_transfer_batch = SubCommand::with_name("transfer-batch")
+        .arg_from_usage("-f, --from-seckey=[SecKey] 'base64-formated `XfrPrivateKey` of the receiver'")
+        .arg_from_usage("-t, --to-pubkey-file=[File Path]")
+        .arg(
+            Arg::with_name("to-wallet-address-file")
+                .short("T")
+                .long("to-wallet-address-file")
+                .takes_value(true)
+                .conflicts_with("to-pubkey-file")
+        )
+        .arg_from_usage("-n, --amount=<Amount> 'how much FRA units to transfer'")
+        .arg_from_usage("--confidential-amount 'mask the amount sent on the transaction log'")
+        .arg_from_usage("--confidential-type 'mask the asset type sent on the transaction log'")
+        .about("Transfer tokens from one address to many others");
     //let subcmd_set_initial_validators = SubCommand::with_name("set-initial-validators");
 
     let matches = App::new("fns")
@@ -104,6 +119,7 @@ fn run() -> Result<()> {
         .subcommand(subcmd_show)
         .subcommand(subcmd_setup)
         .subcommand(subcmd_transfer)
+        .subcommand(subcmd_transfer_batch)
         .subcommand(subcmd_staker_update)
         //.subcommand(subcmd_set_initial_validators)
         .get_matches();
@@ -169,16 +185,12 @@ fn run() -> Result<()> {
         let f = m.value_of("from-seckey");
         let t = m
             .value_of("to-pubkey")
-            .map(|pk_str| pk_str.to_owned())
             .c(d!())
+            .and_then(|pk| wallet::public_key_from_base64(pk).c(d!()))
             .or_else(|_| {
-                m.value_of("to-wallet-address")
-                    .c(d!())
-                    .and_then(|addr| {
-                        globutils::wallet::public_key_from_bech32(addr)
-                            .c(d!("invalid wallet address"))
-                    })
-                    .map(|pk| globutils::wallet::public_key_to_base64(&pk))
+                m.value_of("to-wallet-address").c(d!()).and_then(|addr| {
+                    wallet::public_key_from_bech32(addr).c(d!("invalid wallet address"))
+                })
             })?;
         let am = m.value_of("amount");
 
@@ -186,6 +198,44 @@ fn run() -> Result<()> {
             println!("{}", m.usage());
         } else {
             common::transfer_fra(
+                f,
+                t,
+                am.unwrap(),
+                m.is_present("confidential-amount"),
+                m.is_present("confidential-type"),
+            )
+            .c(d!())?;
+        }
+    } else if let Some(m) = matches.subcommand_matches("transfer-batch") {
+        let f = m.value_of("from-seckey");
+        let t = m
+            .value_of("to-pubkey-file")
+            .c(d!())
+            .and_then(|f| {
+                fs::read_to_string(f).c(d!()).and_then(|pks| {
+                    pks.lines()
+                        .map(|pk| wallet::public_key_from_base64(pk.trim()))
+                        .collect::<Result<Vec<_>>>()
+                        .c(d!("invalid file"))
+                })
+            })
+            .or_else(|_| {
+                m.value_of("to-wallet-address-file").c(d!()).and_then(|f| {
+                    fs::read_to_string(f).c(d!()).and_then(|addrs| {
+                        addrs
+                            .lines()
+                            .map(|addr| wallet::public_key_from_bech32(addr.trim()))
+                            .collect::<Result<Vec<_>>>()
+                            .c(d!("invalid file"))
+                    })
+                })
+            })?;
+        let am = m.value_of("amount");
+
+        if am.is_none() || t.is_empty() {
+            println!("{}", m.usage());
+        } else {
+            common::transfer_fra_batch(
                 f,
                 &t,
                 am.unwrap(),

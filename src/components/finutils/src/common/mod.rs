@@ -26,7 +26,7 @@ use utils::{
     get_block_height, get_local_block_height, get_validator_detail,
     parse_td_validator_keys,
 };
-use zei::xfr::sig::{XfrKeyPair, XfrSecretKey};
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 
 lazy_static! {
     static ref CFG_PATH: String = format!(
@@ -334,7 +334,24 @@ pub fn setup(
 
 pub fn transfer_fra(
     owner_sk: Option<&str>,
-    target_addr: &str,
+    target_addr: XfrPublicKey,
+    am: &str,
+    confidential_am: bool,
+    confidential_ty: bool,
+) -> Result<()> {
+    transfer_fra_batch(
+        owner_sk,
+        &[target_addr],
+        am,
+        confidential_am,
+        confidential_ty,
+    )
+    .c(d!())
+}
+
+pub fn transfer_fra_batch(
+    owner_sk: Option<&str>,
+    target_addr: &[XfrPublicKey],
     am: &str,
     confidential_am: bool,
     confidential_ty: bool,
@@ -347,11 +364,15 @@ pub fn transfer_fra(
                 .map(|sk| sk.into_keypair())
         })
         .or_else(|_| get_keypair().c(d!()))?;
-    let to =
-        wallet::public_key_from_base64(target_addr).c(d!("invalid 'target-addr'"))?;
     let am = am.parse::<u64>().c(d!("'amount' must be an integer"))?;
 
-    utils::transfer(&from, &to, am, confidential_am, confidential_ty).c(d!())
+    utils::transfer_batch(
+        &from,
+        target_addr.iter().map(|addr| (addr, am)).collect(),
+        confidential_am,
+        confidential_ty,
+    )
+    .c(d!())
 }
 
 /// Mainly for official usage,

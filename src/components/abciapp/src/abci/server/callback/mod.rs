@@ -193,15 +193,13 @@ pub fn end_block(
 }
 
 pub fn commit(s: &mut ABCISubmissionServer, _req: &RequestCommit) -> ResponseCommit {
-    let mut r = ResponseCommit::new();
     let la = s.la.write();
-
     let mut state = la.get_committed_state().write();
-    let commitment = state.get_state_commitment();
+
     state.set_tendermint_commit(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed) as u64);
-
     state.flush_data();
-    r.set_data(commitment.0.as_ref().to_vec());
 
+    let mut r = ResponseCommit::new();
+    r.set_data(state.get_state_commitment().0.as_ref().to_vec());
     r
 }
