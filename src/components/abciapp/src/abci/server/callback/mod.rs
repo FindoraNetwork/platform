@@ -10,7 +10,7 @@ use crate::{
 };
 use abci::*;
 use lazy_static::lazy_static;
-use ledger::{data_model::TxnEffect, staking::is_coinbase_tx};
+use ledger::staking::is_coinbase_tx;
 use parking_lot::Mutex;
 use protobuf::RepeatedField;
 use ruc::*;
@@ -64,22 +64,12 @@ pub fn info(s: &mut ABCISubmissionServer, _req: &RequestInfo) -> ResponseInfo {
 }
 
 /// any new tx will trigger this callback before it can enter the mem-pool of tendermint
-pub fn check_tx(_s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseCheckTx {
-    // Get the Tx [u8] and convert to u64
-    let mut resp = ResponseCheckTx::new();
-
-    if let Some(tx) = convert_tx(req.get_tx()) {
-        if is_coinbase_tx(&tx)
-            || !tx.is_basic_valid(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed))
-            || ruc::info!(TxnEffect::compute_effect(tx)).is_err()
-        {
-            resp.set_code(1);
-        }
-    } else {
-        resp.set_code(1);
-    }
-
-    resp
+#[inline(always)]
+pub fn check_tx(
+    _s: &mut ABCISubmissionServer,
+    _req: &RequestCheckTx,
+) -> ResponseCheckTx {
+    ResponseCheckTx::new()
 }
 
 pub fn begin_block(
