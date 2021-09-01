@@ -63,6 +63,7 @@ fn node_command() -> Result<()> {
 
     let mut tendermint_child = Command::new("/tmp/tendermint__")
         .arg("node")
+        .arg("--fast_sync=false")
         .arg("--home")
         .arg(&CFG.tendermint_home)
         .stdin(Stdio::null())
@@ -260,6 +261,7 @@ mod init {
             "timeout_precommit_delta = \"500ms\"",
             "timeout_commit = \"1s\"",
             "recheck = true",
+            "fast_sync = true",
         ];
 
         let target_cfg = [
@@ -273,6 +275,7 @@ mod init {
             "timeout_precommit_delta = \"100ms\"",
             "timeout_commit = \"15s\"",
             "recheck = false",
+            "fast_sync = false",
         ];
 
         let config = orig_cfg
