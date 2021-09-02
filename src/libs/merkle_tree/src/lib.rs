@@ -824,6 +824,13 @@ impl AppendOnlyMerkle {
 
         if entries == 0 {
             let _ = std::fs::remove_file(self.file_path(0));
+
+            // Level 0 file contails no valid leaves, then release level 0 initial resources:
+            // self.files / self.blocks / self.blocks_on_disk
+            self.files.remove(0);
+            self.blocks.remove(0);
+            self.blocks_on_disk.remove(0);
+
             return Err(eg!("The level 0 file contains no valid leaves."));
         }
 

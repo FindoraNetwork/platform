@@ -216,6 +216,7 @@ mod test {
     use crate::staking::{Validator, ValidatorKind};
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
+    use ruc::pnk;
 
     #[derive(Default, Debug, Deserialize, Serialize)]
     struct Data {

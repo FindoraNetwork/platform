@@ -107,6 +107,7 @@ pub fn get_cfg_path() -> Option<&'static str> {
 mod test {
     use super::*;
     use crate::staking::td_pubkey_to_td_addr;
+    use ruc::pnk;
 
     #[test]
     fn staking_tendermint_addr_conversion() {

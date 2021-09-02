@@ -5,9 +5,12 @@
 use bnc::{mapx::Mapx, new_mapx};
 use lazy_static::lazy_static;
 use ledger::{
-    data_model::*,
+    data_model::{
+        AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Operation, Transaction,
+        TransferAsset, TxOutput, TxnSID, TxoRef, TxoSID, XfrAddress,
+    },
     staking::{ops::mint_fra::MintEntry, BlockHeight},
-    store::*,
+    store::LedgerState,
 };
 use parking_lot::{Condvar, Mutex, RwLock};
 use ruc::*;

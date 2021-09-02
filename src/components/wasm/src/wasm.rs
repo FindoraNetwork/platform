@@ -12,7 +12,16 @@
 #![deny(missing_docs)]
 #![allow(clippy::needless_borrow)]
 
-use crate::{util::error_to_jsvalue, wasm_data_model::*};
+use crate::{
+    util::error_to_jsvalue,
+    wasm_data_model::{
+        AssetRules, AssetTracerKeyPair, AttributeAssignment, AttributeDefinition,
+        ClientAssetRecord, Credential, CredentialCommitment, CredentialCommitmentData,
+        CredentialCommitmentKey, CredentialIssuerKeyPair, CredentialPoK,
+        CredentialRevealSig, CredentialSignature, CredentialUserKeyPair, OwnerMemo,
+        PublicParams, TracingPolicies, TxoRef,
+    },
+};
 use credentials::{
     credential_commit, credential_issuer_key_gen, credential_open_commitment,
     credential_reveal, credential_sign, credential_user_key_gen, credential_verify,

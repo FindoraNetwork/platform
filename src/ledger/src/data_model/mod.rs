@@ -5,7 +5,7 @@ mod __trash__;
 mod effects;
 mod test;
 
-pub use effects::*;
+pub use effects::{BlockEffect, TxnEffect};
 
 use crate::staking::{
     is_coinbase_tx,

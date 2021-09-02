@@ -5,7 +5,13 @@ use credentials::CredUserSecretKey;
 use curve25519_dalek::scalar::Scalar;
 use globutils::SignatureOf;
 use ledger::{
-    data_model::*,
+    data_model::{
+        AccountAddress, AssetRules, AssetTypeCode, ConfidentialMemo, DefineAsset,
+        DefineAssetBody, IndexedSignature, IssueAsset, IssueAssetBody, IssuerKeyPair,
+        IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction, TransactionBody,
+        TransferAsset, TransferAssetBody, TransferType, TxOutput, TxoRef, UpdateMemo,
+        UpdateMemoBody, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+    },
     staking::{
         is_valid_tendermint_addr,
         ops::{
@@ -1224,7 +1230,7 @@ impl TransferOperationBuilder {
 #[allow(missing_docs)]
 mod tests {
     use super::*;
-    use ledger::data_model::TxoRef;
+    use ledger::data_model::{TxnEffect, TxoRef};
     use ledger::store::{utils::fra_gen_initial_tx, LedgerState};
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;

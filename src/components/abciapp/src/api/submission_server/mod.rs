@@ -6,7 +6,7 @@ pub mod submission_api;
 
 use ledger::{
     data_model::{BlockEffect, Transaction, TxnEffect, TxnSID, TxnTempSID, TxoSID},
-    store::*,
+    store::LedgerState,
 };
 use log::info;
 use parking_lot::RwLock;
