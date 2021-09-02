@@ -1,5 +1,8 @@
+//!
+//! # Used to resist playback attack
+//!
+
 #![deny(warnings)]
-// #![deny(missing_docs)]
 
 use ruc::*;
 use serde::{Deserialize, Serialize};
@@ -12,6 +15,7 @@ pub struct SlidingSet<T> {
 }
 
 impl<T> SlidingSet<T> {
+    #[inline(always)]
     pub fn new(width: usize) -> Self {
         let mut map = Vec::with_capacity(width as usize);
         for _ in 0..width {
@@ -25,6 +29,7 @@ impl<T> SlidingSet<T> {
         }
     }
 
+    #[inline(always)]
     pub fn incr_current(&mut self) {
         self.current += 1;
         let current_index = self.current % self.width;
@@ -33,6 +38,7 @@ impl<T> SlidingSet<T> {
 }
 
 impl<T: Eq + Copy + std::fmt::Debug> SlidingSet<T> {
+    #[inline(always)]
     pub fn has_key_at(&self, index: usize, key: T) -> bool {
         if index > self.current || index + self.width <= self.current {
             false
@@ -41,6 +47,7 @@ impl<T: Eq + Copy + std::fmt::Debug> SlidingSet<T> {
         }
     }
 
+    #[inline(always)]
     pub fn insert(&mut self, key: T, index: usize) -> Result<()> {
         if index <= self.current && index + self.width >= (self.current + 1) {
             if self.map[index % self.width].contains(&key) {
@@ -66,7 +73,6 @@ mod tests {
     use rand::distributions::Alphanumeric;
     use rand::{thread_rng, Rng};
 
-    //
     #[test]
     fn test_basic() {
         let factor = 3;

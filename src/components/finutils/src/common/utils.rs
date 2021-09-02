@@ -1,7 +1,7 @@
 use crate::{
     api::{DelegationInfo, ValidatorDetail},
     common::get_serv_addr,
-    txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder},
+    txn_builder::{TransactionBuilder, TransferOperationBuilder},
 };
 use globutils::wallet;
 use globutils::{HashOf, SignatureOf};

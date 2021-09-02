@@ -117,13 +117,12 @@ tendermint_goleveldb:
 
 test:
 	# cargo test --release --workspace -- --test-threads=1 # --nocapture
-	cargo test --release --workspace -- --ignored # --nocapture
 	cargo test --release --features="abci_mock" -- --test-threads=1 # --nocapture
 
 coverage:
-	cargo tarpaulin --timeout=900 --branch --workspace --release --ignored --features="abci_mock" \
+	cargo tarpaulin --timeout=900 --branch --workspace --release --features="abci_mock" \
 		|| cargo install cargo-tarpaulin \
-		&& cargo tarpaulin --timeout=900 --branch --workspace --release --ignored --features="abci_mock"
+		&& cargo tarpaulin --timeout=900 --branch --workspace --release --features="abci_mock"
 
 staking_cfg:
 	cargo run --bin staking_cfg_generator
@@ -184,16 +183,16 @@ stop_debug_env:
 	bash ./tools/devnet/stopnodes.sh
 
 join_qa01: stop_debug_env
-	bash tools/node_init.sh qa01
+	bash -x tools/node_init.sh qa01
 
 join_qa02: stop_debug_env
-	bash tools/node_init.sh qa02
+	bash -x tools/node_init.sh qa02
 
 join_testnet: stop_debug_env
-	bash tools/node_init.sh testnet
+	bash -x tools/node_init.sh testnet
 
 join_mainnet: stop_debug_env
-	bash tools/node_init.sh mainnet
+	bash -x tools/node_init.sh mainnet
 
 # ci_build_image:
 # 	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \

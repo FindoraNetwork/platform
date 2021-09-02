@@ -12,15 +12,14 @@
 #![deny(missing_docs)]
 #![allow(clippy::needless_borrow)]
 
-use crate::{
-    util::error_to_jsvalue,
-    wasm_data_model::{
-        AssetRules, AssetTracerKeyPair, AttributeAssignment, AttributeDefinition,
-        ClientAssetRecord, Credential, CredentialCommitment, CredentialCommitmentData,
-        CredentialCommitmentKey, CredentialIssuerKeyPair, CredentialPoK,
-        CredentialRevealSig, CredentialSignature, CredentialUserKeyPair, OwnerMemo,
-        PublicParams, TracingPolicies, TxoRef,
-    },
+mod wasm_data_model;
+
+use crate::wasm_data_model::{
+    error_to_jsvalue, AssetRules, AssetTracerKeyPair, AttributeAssignment,
+    AttributeDefinition, ClientAssetRecord, Credential, CredentialCommitment,
+    CredentialCommitmentData, CredentialCommitmentKey, CredentialIssuerKeyPair,
+    CredentialPoK, CredentialRevealSig, CredentialSignature, CredentialUserKeyPair,
+    OwnerMemo, PublicParams, TracingPolicies, TxoRef,
 };
 use credentials::{
     credential_commit, credential_issuer_key_gen, credential_open_commitment,
@@ -30,7 +29,7 @@ use credentials::{
 };
 use cryptohash::sha256;
 use finutils::txn_builder::{
-    BuildsTransactions, FeeInput as PlatformFeeInput, FeeInputs as PlatformFeeInputs,
+    FeeInput as PlatformFeeInput, FeeInputs as PlatformFeeInputs,
     TransactionBuilder as PlatformTransactionBuilder,
     TransferOperationBuilder as PlatformTransferOperationBuilder,
 };
@@ -60,9 +59,6 @@ use zei::{
         },
     },
 };
-
-mod util;
-mod wasm_data_model;
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
 /// against.
@@ -627,12 +623,6 @@ impl TransferOperationBuilder {
     /// Create a new transfer operation builder.
     pub fn new() -> Self {
         Self::default()
-    }
-
-    // Debug function that does not need to go into the docs.
-    /// @ignore
-    pub fn debug(&self) -> String {
-        serde_json::to_string(&self.op_builder).unwrap()
     }
 
     /// Wraps around TransferOperationBuilder to add an input to a transfer operation builder.

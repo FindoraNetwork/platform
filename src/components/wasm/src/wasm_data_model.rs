@@ -1,4 +1,4 @@
-use crate::util::error_to_jsvalue;
+use core::fmt::Display;
 use credentials::{
     CredCommitment, CredCommitmentKey, CredIssuerPublicKey, CredIssuerSecretKey,
     CredPoK, CredRevealSig, CredSignature, CredUserPublicKey, CredUserSecretKey,
@@ -710,4 +710,9 @@ impl AssetRules {
             .map_err(error_to_jsvalue)?;
         Ok(self)
     }
+}
+
+#[inline(always)]
+pub(crate) fn error_to_jsvalue<T: Display>(e: T) -> JsValue {
+    JsValue::from_str(&e.to_string())
 }

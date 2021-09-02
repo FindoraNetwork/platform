@@ -29,6 +29,7 @@ pub mod sha256 {
     )]
     pub struct Digest(pub [u8; DIGESTBYTES]);
 
+    #[inline(always)]
     pub fn hash(m: &[u8]) -> Digest {
         let temp = Sha256::digest(m);
         Digest {
@@ -37,6 +38,7 @@ pub mod sha256 {
     }
 
     impl AsRef<[u8]> for Digest {
+        #[inline(always)]
         fn as_ref(&self) -> &[u8] {
             &self.0
         }
@@ -44,6 +46,8 @@ pub mod sha256 {
 
     impl Index<Range<usize>> for Digest {
         type Output = [u8];
+
+        #[inline(always)]
         fn index(&self, _index: std::ops::Range<usize>) -> &[u8] {
             self.0.index(_index)
         }
@@ -51,12 +55,15 @@ pub mod sha256 {
 
     impl Index<RangeFrom<usize>> for Digest {
         type Output = [u8];
+
+        #[inline(always)]
         fn index(&self, _index: RangeFrom<usize>) -> &[u8] {
             self.0.index(_index)
         }
     }
 
     impl Digest {
+        #[inline(always)]
         pub fn from_slice(slice: &[u8]) -> Option<Self> {
             let mut buf = [0_u8; DIGESTBYTES];
             buf[0..DIGESTBYTES].clone_from_slice(slice);
@@ -70,6 +77,8 @@ pub mod sha256 {
     use sodiumoxide::crypto::hash::sha256;
     pub const DIGESTBYTES: usize = sha256::DIGESTBYTES;
     pub type Digest = sha256::Digest;
+
+    #[inline(always)]
     pub fn hash(m: &[u8]) -> Digest {
         sha256::hash(m)
     }
@@ -89,12 +98,14 @@ pub struct HashValue {
 }
 
 impl HashValue {
+    #[inline(always)]
     pub fn new() -> HashValue {
         HashValue {
             hash: [0; HASH_SIZE],
         }
     }
 
+    #[inline(always)]
     pub fn desc(&self) -> String {
         format!(
             "[ {:3}, {:3}, {:3}, {:3} ]",
@@ -104,6 +115,7 @@ impl HashValue {
 }
 
 impl From<sha256::Digest> for HashValue {
+    #[inline(always)]
     fn from(d: sha256::Digest) -> Self {
         Self { hash: d.0 }
     }
@@ -169,6 +181,7 @@ pub fn hash_pair(left: &HashValue, right: &HashValue) -> HashValue {
 // Compute the hash of a single hash value. This function is used
 // when generating proofs. Partially-filled nodes are constructed
 // using hashes of hashes.
+#[inline(always)]
 pub fn hash_single(hash: &HashValue) -> HashValue {
     let digest = sha256::hash(&hash.hash[0..HASH_SIZE]);
 
@@ -181,6 +194,7 @@ pub fn hash_single(hash: &HashValue) -> HashValue {
 // Compute a hash value for a node in a partially-filled block. The
 // right-hand side might not exist, in which case the value is just
 // the hash of the left side.
+#[inline(always)]
 pub fn hash_partial(left: &HashValue, right: &HashValue) -> HashValue {
     let empty_hash = HashValue::new();
     let left_present = *left != empty_hash;
@@ -191,7 +205,6 @@ pub fn hash_partial(left: &HashValue, right: &HashValue) -> HashValue {
     } else if left_present {
         hash_single(left)
     } else {
-        debug_assert!(!right_present);
         empty_hash
     }
 }

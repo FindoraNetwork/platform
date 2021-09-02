@@ -90,6 +90,7 @@ impl BipPath {
 
 /// Restore the XfrKeyPair from a mnemonic with a default bip44-path,
 /// that is "m/44'/917'/0'/0/0" ("m/44'/coin'/account'/change/address").
+#[inline(always)]
 pub fn restore_keypair_from_mnemonic_default(phrase: &str) -> Result<XfrKeyPair> {
     const FRA: u32 = 917;
     restore_keypair_from_mnemonic!(phrase, "en", BipPath::new(FRA, 0, 0, 0), bip44)

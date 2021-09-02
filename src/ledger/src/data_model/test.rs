@@ -10,6 +10,8 @@ use zei::{
 };
 use zeiutils::err_eq;
 
+const UTF8_ASSET_TYPES_WORK: bool = false;
+
 // This test may fail as it is a statistical test that sometimes fails (but very rarely)
 // It uses the central limit theorem, but essentially testing the rand crate
 #[test]

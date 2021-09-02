@@ -39,7 +39,7 @@ impl ABCISubmissionServer {
         tendermint_reply: String,
     ) -> Result<ABCISubmissionServer> {
         let ledger_state = match base_dir {
-            None => LedgerState::test_ledger(),
+            None => LedgerState::tmp_ledger(),
             Some(base_dir) => pnk!(LedgerState::load_or_init(base_dir)),
         };
         let tendermint_height = ledger_state.get_staking().cur_height();

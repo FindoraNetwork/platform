@@ -15,7 +15,7 @@ use rand_core::SeedableRng;
 #[allow(clippy::type_complexity)]
 fn test_query_state_commitment() {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
-    let mut state = LedgerState::test_ledger();
+    let mut state = LedgerState::tmp_ledger();
     let (_, seq_id) = state.get_state_commitment();
     let mut tx = Transaction::from_seq_id(seq_id);
 
@@ -78,7 +78,7 @@ fn test_query_state_commitment() {
 #[allow(clippy::type_complexity)]
 fn test_query_public_key() {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
-    let mut state = LedgerState::test_ledger();
+    let mut state = LedgerState::tmp_ledger();
     let (_, seq_id) = state.get_state_commitment();
     let mut tx = Transaction::from_seq_id(seq_id);
 
@@ -133,7 +133,7 @@ fn test_query_public_key() {
 #[test]
 fn test_query_asset() {
     let mut prng = ChaChaRng::from_entropy();
-    let mut state = LedgerState::test_ledger();
+    let mut state = LedgerState::tmp_ledger();
     let (_, seq_id) = state.get_state_commitment();
     let mut tx = Transaction::from_seq_id(seq_id);
 

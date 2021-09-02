@@ -50,10 +50,12 @@ pub struct CredUserPublicKey(ACUserPublicKey);
 pub struct CredUserSecretKey(ACUserSecretKey);
 
 impl CredIssuerPublicKey {
+    #[inline(always)]
     pub fn get_ref(&self) -> &ACIssuerPublicKey {
         &self.ac_pub_key
     }
 
+    #[inline(always)]
     pub fn get_len(&self, key: &str) -> Result<usize> {
         match self.map.get(key) {
             Some(((_, len), _)) => Ok(*len),
@@ -63,18 +65,21 @@ impl CredIssuerPublicKey {
 }
 
 impl CredIssuerSecretKey {
+    #[inline(always)]
     pub fn get_ref(&self) -> &ACIssuerSecretKey {
         &self.ac_sec_key
     }
 }
 
 impl CredUserPublicKey {
+    #[inline(always)]
     pub fn get_ref(&self) -> &ACUserPublicKey {
         &self.0
     }
 }
 
 impl CredUserSecretKey {
+    #[inline(always)]
     pub fn get_ref(&self) -> &ACUserSecretKey {
         &self.0
     }
@@ -137,6 +142,7 @@ pub fn credential_issuer_key_gen<R: CryptoRng + RngCore>(
     )
 }
 
+#[inline(always)]
 pub fn credential_user_key_gen<R: CryptoRng + RngCore>(
     prng: &mut R,
     issuer_pub_key: &CredIssuerPublicKey,
@@ -183,12 +189,14 @@ pub fn credential_sign<R: CryptoRng + RngCore>(
     .c(d!())
 }
 
+#[inline(always)]
 pub fn credential_keygen_commitment<R: CryptoRng + RngCore>(
     prng: &mut R,
 ) -> CredCommitmentKey {
     ac_keygen_commitment(prng)
 }
 
+#[inline(always)]
 pub fn credential_commit<R: CryptoRng + RngCore>(
     prng: &mut R,
     user_sec_key: &CredUserSecretKey,
@@ -202,6 +210,7 @@ pub fn credential_commit<R: CryptoRng + RngCore>(
     }
 }
 
+#[inline(always)]
 pub fn credential_commit_with_key<R: CryptoRng + RngCore>(
     prng: &mut R,
     user_sk: &CredUserSecretKey,
@@ -215,6 +224,7 @@ pub fn credential_commit_with_key<R: CryptoRng + RngCore>(
         .map(|(acc, acp, _)| (acc, acp))
 }
 
+#[inline(always)]
 pub fn credential_verify_commitment(
     issuer_pub_key: &CredIssuerPublicKey,
     sig_commitment: &CredCommitment,
@@ -224,6 +234,7 @@ pub fn credential_verify_commitment(
     ac_verify_commitment(&issuer_pub_key.ac_pub_key, sig_commitment, sok, msg).c(d!())
 }
 
+#[inline(always)]
 pub fn credential_open_commitment<R: CryptoRng + RngCore>(
     prng: &mut R,
     user_sk: &CredUserSecretKey,
@@ -237,6 +248,7 @@ pub fn credential_open_commitment<R: CryptoRng + RngCore>(
     ac_open_commitment(prng, user_sk.get_ref(), &ac_credential, key, &reveal_map).c(d!())
 }
 
+#[inline(always)]
 pub fn credential_reveal<R: CryptoRng + RngCore>(
     prng: &mut R,
     user_sk: &CredUserSecretKey,
@@ -296,6 +308,7 @@ fn reveal_field_to_bitmap(
 }
 
 // How many u32 are required to hold num_u8 u8s?
+#[inline(always)]
 fn num_u32_per_u8(num_u8: usize) -> usize {
     if num_u8 == 0 {
         0usize
@@ -304,9 +317,9 @@ fn num_u32_per_u8(num_u8: usize) -> usize {
     }
 }
 
-/* Use the contents of u8 slice to fill a vector of u32 */
+// Use the contents of u8 slice to fill a vector of u32
+#[inline(always)]
 pub fn u8_slice_to_u32_vec(attr: &[u8], len: usize) -> Vec<u32> {
-    debug_assert!(len >= num_u32_per_u8(attr.len()));
     let mut res = vec![0u32; len];
     for (i, byte) in attr.iter().enumerate() {
         res[i / 4] |= (*byte as u32) << (8 * (i as u32 % 4));

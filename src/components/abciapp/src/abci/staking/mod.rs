@@ -346,9 +346,7 @@ pub mod abci_mock_test;
 #[cfg(test)]
 #[allow(missing_docs)]
 mod test {
-    use finutils::txn_builder::{
-        BuildsTransactions, TransactionBuilder, TransferOperationBuilder,
-    };
+    use finutils::txn_builder::{TransactionBuilder, TransferOperationBuilder};
     use ledger::{
         data_model::{
             Transaction, TransferType, TxnEffect, TxoRef, ASSET_TYPE_FRA,
@@ -377,7 +375,7 @@ mod test {
     // 3. transfer to some addresses of the 9 reserved accounts looply
     // 4. check if the block rewards rate is correct per loop
     fn check_block_rewards_rate() -> Result<()> {
-        let mut ledger = LedgerState::test_ledger();
+        let mut ledger = LedgerState::tmp_ledger();
         let root_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
 
         let tx = fra_gen_initial_tx(&root_kp);

@@ -1,5 +1,8 @@
+//!
+//! # Global common utils
+//!
+
 #![deny(warnings)]
-// #![deny(missing_docs)]
 
 pub mod wallet;
 
@@ -9,17 +12,12 @@ use cryptohash::{
 };
 use ruc::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::{
-    fs,
-    io::{Error, ErrorKind},
-    marker::PhantomData,
-    path::PathBuf,
-    result::Result as StdResult,
-};
+use std::{fs, marker::PhantomData, path::PathBuf, result::Result as StdResult};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 
 pub const TRANSACTION_WINDOW_WIDTH: u64 = 100;
 
+#[inline(always)]
 #[cfg(not(target_arch = "wasm32"))]
 pub fn http_post_request<T: Serialize>(
     query: &str,
@@ -34,8 +32,8 @@ pub fn http_post_request<T: Serialize>(
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 #[inline(always)]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn http_get_request(query: &str) -> StdResult<String, attohttpc::Error> {
     attohttpc::get(query).send()?.error_for_status()?.text()
 }
@@ -53,14 +51,6 @@ pub fn fresh_tmp_dir() -> PathBuf {
         }
     }
     dirname.unwrap()
-}
-
-pub fn se(s: String) -> Option<Error> {
-    Some(Error::new(ErrorKind::Other, s))
-}
-
-pub fn er<T>(s: String) -> StdResult<T, Error> {
-    Err(Error::new(ErrorKind::Other, s))
 }
 
 /// Convert a u64 into a string with commas.
@@ -114,59 +104,26 @@ pub trait Commas {
     fn commas(self) -> String;
 }
 
-impl Commas for u64 {
-    fn commas(self) -> String {
-        crate::commas_u64(self)
-    }
+macro_rules! impl_commas {
+    ($ty_s: ty, $ty_t: ty, $func: tt) => {
+        impl Commas for $ty_s {
+            #[inline(always)]
+            fn commas(self) -> String {
+                crate::$func(self as $ty_t)
+            }
+        }
+    };
 }
 
-impl Commas for u32 {
-    fn commas(self) -> String {
-        crate::commas_u64(self as u64)
-    }
-}
-
-impl Commas for u16 {
-    fn commas(self) -> String {
-        crate::commas_u64(self as u64)
-    }
-}
-
-impl Commas for u8 {
-    fn commas(self) -> String {
-        crate::commas_u64(self as u64)
-    }
-}
-
-impl Commas for usize {
-    fn commas(self) -> String {
-        crate::commas_u64(self as u64)
-    }
-}
-
-impl Commas for i64 {
-    fn commas(self) -> String {
-        crate::commas_i64(self)
-    }
-}
-
-impl Commas for i32 {
-    fn commas(self) -> String {
-        crate::commas_i64(self as i64)
-    }
-}
-
-impl Commas for i16 {
-    fn commas(self) -> String {
-        crate::commas_i64(self as i64)
-    }
-}
-
-impl Commas for i8 {
-    fn commas(self) -> String {
-        crate::commas_i64(self as i64)
-    }
-}
+impl_commas!(u64, u64, commas_u64);
+impl_commas!(u32, u64, commas_u64);
+impl_commas!(u16, u64, commas_u64);
+impl_commas!(u8, u64, commas_u64);
+impl_commas!(usize, u64, commas_u64);
+impl_commas!(i64, i64, commas_i64);
+impl_commas!(i32, i64, commas_i64);
+impl_commas!(i16, i64, commas_i64);
+impl_commas!(i8, i64, commas_i64);
 
 // Wrapper around a serialized variable that maintains type semantics.
 #[derive(Clone, Debug)]
@@ -182,10 +139,12 @@ impl<T> SignatureOf<T>
 where
     T: Serialize + serde::de::DeserializeOwned,
 {
+    #[inline(always)]
     pub fn new(xfr: &XfrKeyPair, to_sign: &T) -> Self {
         Self(SignatureOfBytes::new(xfr, &Serialized::new(to_sign)))
     }
 
+    #[inline(always)]
     pub fn verify(&self, pubkey: &XfrPublicKey, val: &T) -> Result<()> {
         self.0.verify(pubkey, &Serialized::new(val)).c(d!())
     }
@@ -198,10 +157,12 @@ impl<T> HashOf<T>
 where
     T: Serialize + serde::de::DeserializeOwned,
 {
+    #[inline(always)]
     pub fn new(to_hash: &T) -> Self {
         Self(HashOfBytes::new(&Serialized::new(to_hash)))
     }
 
+    #[inline(always)]
     pub fn hex(&self) -> String {
         hex::encode(self)
     }
@@ -214,6 +175,7 @@ pub type GlobalState<T> = (
 );
 
 impl<T> AsRef<[u8]> for HashOf<T> {
+    #[inline(always)]
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
     }
@@ -226,10 +188,12 @@ impl<T> ProofOf<T>
 where
     T: Serialize + serde::de::DeserializeOwned,
 {
+    #[inline(always)]
     pub fn new(proof: Proof) -> Self {
         Self(ProofOfBytes::new(proof))
     }
 
+    #[inline(always)]
     pub fn verify(&self, leaf: &T) -> bool {
         self.0.verify(HashOf::new(leaf).0)
     }
@@ -271,6 +235,7 @@ impl<T> Serialized<T>
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
+    #[inline(always)]
     pub fn new(to_serialize: &T) -> Self {
         Serialized {
             val: serde_json::to_string(&to_serialize).unwrap(),
@@ -278,6 +243,7 @@ where
         }
     }
 
+    #[inline(always)]
     pub fn deserialize(&self) -> T {
         serde_json::from_str(&self.val).unwrap()
     }
@@ -287,6 +253,7 @@ impl<T> AsRef<[u8]> for Serialized<T>
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
+    #[inline(always)]
     fn as_ref(&self) -> &[u8] {
         self.val.as_ref()
     }
@@ -296,6 +263,7 @@ impl<T> Default for Serialized<T>
 where
     T: Default + serde::Serialize + serde::de::DeserializeOwned,
 {
+    #[inline(always)]
     fn default() -> Self {
         Self::new(&T::default())
     }
@@ -305,6 +273,7 @@ impl<T> Serialize for Serialized<T>
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
+    #[inline(always)]
     fn serialize<S: Serializer>(&self, serializer: S) -> StdResult<S::Ok, S::Error> {
         self.deserialize().serialize(serializer)
     }
@@ -314,6 +283,7 @@ impl<'a, T> Deserialize<'a> for Serialized<T>
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
+    #[inline(always)]
     fn deserialize<D: Deserializer<'a>>(deserializer: D) -> StdResult<Self, D::Error> {
         T::deserialize(deserializer).map(|x| Self::new(&x))
     }
@@ -323,6 +293,7 @@ impl<T> PartialEq for Serialized<T>
 where
     T: PartialEq + serde::Serialize + serde::de::DeserializeOwned,
 {
+    #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
         self.deserialize() == other.deserialize()
     }
@@ -334,6 +305,7 @@ impl<T> HashOfBytes<T>
 where
     T: AsRef<[u8]>,
 {
+    #[inline(always)]
     pub fn new(to_hash: &T) -> Self {
         Self {
             hash: sha256::hash(to_hash.as_ref()),
@@ -343,18 +315,21 @@ where
 }
 
 impl<T> AsRef<[u8]> for HashOfBytes<T> {
+    #[inline(always)]
     fn as_ref(&self) -> &[u8] {
         self.hash.as_ref()
     }
 }
 
 impl<T> Serialize for HashOfBytes<T> {
+    #[inline(always)]
     fn serialize<S: Serializer>(&self, serializer: S) -> StdResult<S::Ok, S::Error> {
         self.hash.serialize(serializer)
     }
 }
 
 impl<'a, T> Deserialize<'a> for HashOfBytes<T> {
+    #[inline(always)]
     fn deserialize<D: Deserializer<'a>>(deserializer: D) -> StdResult<Self, D::Error> {
         // NOTE: doesn't guarantee that there *is* a T that has this hash
         Digest::deserialize(deserializer).map(|hash| Self {
@@ -368,6 +343,7 @@ impl<T> ProofOfBytes<T>
 where
     T: AsRef<[u8]>,
 {
+    #[inline(always)]
     pub fn new(proof: Proof) -> Self {
         Self {
             proof,
@@ -375,18 +351,21 @@ where
         }
     }
 
+    #[inline(always)]
     pub fn verify(&self, leaf: HashOfBytes<T>) -> bool {
         self.proof.is_valid_proof(leaf.hash.into())
     }
 }
 
 impl<T> Serialize for ProofOfBytes<T> {
+    #[inline(always)]
     fn serialize<S: Serializer>(&self, serializer: S) -> StdResult<S::Ok, S::Error> {
         self.proof.serialize(serializer)
     }
 }
 
 impl<'a, T> Deserialize<'a> for ProofOfBytes<T> {
+    #[inline(always)]
     fn deserialize<D: Deserializer<'a>>(deserializer: D) -> StdResult<Self, D::Error> {
         // NOTE: doesn't guarantee that there *is* a T that has this proof
         Proof::deserialize(deserializer).map(|proof| Self {
@@ -400,6 +379,7 @@ impl<T> SignatureOfBytes<T>
 where
     T: AsRef<[u8]>,
 {
+    #[inline(always)]
     pub fn new(xfr: &XfrKeyPair, to_sign: &T) -> Self {
         Self {
             sig: xfr.get_sk_ref().sign(to_sign.as_ref(), xfr.get_pk_ref()),
@@ -407,18 +387,21 @@ where
         }
     }
 
+    #[inline(always)]
     pub fn verify(&self, pubkey: &XfrPublicKey, val: &T) -> Result<()> {
         pubkey.verify(val.as_ref(), &self.sig).c(d!())
     }
 }
 
 impl<T> Serialize for SignatureOfBytes<T> {
+    #[inline(always)]
     fn serialize<S: Serializer>(&self, serializer: S) -> StdResult<S::Ok, S::Error> {
         self.sig.serialize(serializer)
     }
 }
 
 impl<'a, T> Deserialize<'a> for SignatureOfBytes<T> {
+    #[inline(always)]
     fn deserialize<D: Deserializer<'a>>(deserializer: D) -> StdResult<Self, D::Error> {
         // NOTE: doesn't guarantee that there *is* a T that this is a signature for
         XfrSignature::deserialize(deserializer).map(|sig| Self {

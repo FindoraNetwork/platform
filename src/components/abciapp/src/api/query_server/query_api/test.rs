@@ -6,13 +6,12 @@
 #![allow(missing_docs)]
 
 use crate::api::query_server::query_api::QueryServer;
-use finutils::txn_builder::{BuildsTransactions, TransactionBuilder};
+use finutils::txn_builder::TransactionBuilder;
 use lazy_static::lazy_static;
 use ledger::{
     data_model::{
-        AccountAddress, AssetRules, AssetTypeCode, IssuerPublicKey, Operation,
-        Transaction, TxOutput, TxnEffect, TxnSID, TxoRef, TxoSID, Utxo, XfrAddress,
-        ASSET_TYPE_FRA,
+        AssetRules, AssetTypeCode, IssuerPublicKey, Operation, Transaction, TxOutput,
+        TxnEffect, TxnSID, TxoRef, TxoSID, Utxo, XfrAddress, ASSET_TYPE_FRA,
     },
     staking::ops::mint_fra::{MintEntry, MintFraOps, MintKind},
     store::LedgerState,
@@ -45,7 +44,7 @@ use zei::{
 lazy_static! {
     /// global ledgerState
     static ref LEDGER: Arc<RwLock<LedgerState>> =
-        Arc::new(RwLock::new(LedgerState::test_ledger()));
+        Arc::new(RwLock::new(LedgerState::tmp_ledger()));
     /// global query server
     static ref QS: Arc<RwLock<QueryServer>> = Arc::new(RwLock::new(create_server()));
 }

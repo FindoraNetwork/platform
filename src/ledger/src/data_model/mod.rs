@@ -53,24 +53,26 @@ pub const RANDOM_CODE_LENGTH: usize = 16;
 pub const TRANSACTION_WINDOW_WIDTH: usize = 128;
 pub const MAX_DECIMALS_LENGTH: u8 = 19;
 
+#[inline(always)]
 pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
     base64::encode_config(input, base64::URL_SAFE)
 }
+
+#[inline(always)]
 pub fn b64dec<T: ?Sized + AsRef<[u8]>>(input: &T) -> Result<Vec<u8>> {
     base64::decode_config(input, base64::URL_SAFE).c(d!())
 }
 
-// Unique Identifier for ledger objects
+/// Unique Identifier for ledger objects
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct Code {
     pub val: [u8; 16],
 }
 
+#[inline(always)]
 fn is_default<T: Default + PartialEq>(x: &T) -> bool {
     x == &T::default()
 }
-
-const UTF8_ASSET_TYPES_WORK: bool = false;
 
 #[derive(
     Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Ord, PartialOrd, Serialize,
@@ -83,6 +85,7 @@ pub struct AssetTypeCode {
 // exactly equal to the derived `default value`,
 // so we implement a custom `Default` for it.
 impl Default for AssetTypeCode {
+    #[inline(always)]
     fn default() -> Self {
         AssetTypeCode {
             val: ZeiAssetType([255; ASSET_TYPE_LENGTH]),
@@ -94,6 +97,7 @@ impl AssetTypeCode {
     /// Randomly generates a 16-byte data and encodes it with base64 to a utf8 string.
     ///
     /// The utf8 can then be converted to an asset type code using `new_from_utf8_safe` or `new_from_utf8_truncate`.
+    #[inline(always)]
     pub fn gen_utf8_random() -> String {
         let mut rng = ChaChaRng::from_entropy();
         let mut buf: [u8; RANDOM_CODE_LENGTH] = [0u8; RANDOM_CODE_LENGTH];
@@ -102,10 +106,12 @@ impl AssetTypeCode {
     }
 
     /// Randomly generates an asset type code
+    #[inline(always)]
     pub fn gen_random() -> Self {
         Self::gen_random_with_rng(&mut ChaChaRng::from_entropy())
     }
 
+    #[inline(always)]
     pub fn gen_random_with_rng<R: RngCore + CryptoRng>(prng: &mut R) -> Self {
         let val: [u8; ASSET_TYPE_LENGTH] = prng.gen();
         Self {
@@ -114,11 +120,13 @@ impl AssetTypeCode {
     }
 
     /// Returns whether the input is longer than 32 bytes, and thus will be truncated to construct an asset type code.
+    #[inline(always)]
     pub fn will_truncate(bytes: &[u8]) -> bool {
         bytes.len() > ASSET_TYPE_LENGTH
     }
 
     /// Converts a vector to an asset type code.
+    #[inline(always)]
     pub fn new_from_vec(mut bytes: Vec<u8>) -> Self {
         bytes.resize(ASSET_TYPE_LENGTH, 0u8);
         Self {
@@ -131,8 +139,8 @@ impl AssetTypeCode {
     /// Converts an utf8 string to an asset type code.
     ///
     /// Returns an error if the length is greater than 32 bytes.
+    #[inline(always)]
     pub fn new_from_utf8_safe(s: &str) -> Result<Self> {
-        debug_assert!(UTF8_ASSET_TYPES_WORK);
         let composed = s.to_string().nfc().collect::<String>().into_bytes();
         if AssetTypeCode::will_truncate(&composed) {
             return Err(eg!());
@@ -144,8 +152,8 @@ impl AssetTypeCode {
     /// Truncates the code if the length is greater than 32 bytes.
     ///
     /// Used to customize the asset type code.
+    #[inline(always)]
     pub fn new_from_utf8_truncate(s: &str) -> Self {
-        debug_assert!(UTF8_ASSET_TYPES_WORK);
         let composed = s.to_string().nfc().collect::<String>().into_bytes();
         AssetTypeCode::new_from_vec(composed)
     }
@@ -153,8 +161,8 @@ impl AssetTypeCode {
     /// Converts the asset type code to an utf8 string.
     ///
     /// Used to display the asset type code.
+    #[inline(always)]
     pub fn to_utf8(self) -> Result<String> {
-        debug_assert!(UTF8_ASSET_TYPES_WORK);
         let mut code = self.val.0.to_vec();
         let len = code.len();
         // Find the last non-empty index
@@ -176,6 +184,7 @@ impl AssetTypeCode {
         Ok("".to_string())
     }
 
+    #[inline(always)]
     pub fn new_from_str(s: &str) -> Self {
         let mut as_vec = s.to_string().into_bytes();
         as_vec.resize(ASSET_TYPE_LENGTH, 0u8);
@@ -200,6 +209,8 @@ impl AssetTypeCode {
             )))),
         }
     }
+
+    #[inline(always)]
     pub fn to_base64(self) -> String {
         b64enc(&self.val.0)
     }
@@ -209,22 +220,29 @@ pub type AssetPolicyKey = Code;
 pub type SmartContractKey = Code;
 
 impl Code {
+    #[inline(always)]
     pub fn gen_random() -> Self {
         let mut small_rng = ChaChaRng::from_entropy();
         let mut buf: [u8; 16] = [0u8; 16];
         small_rng.fill_bytes(&mut buf);
         Self { val: buf }
     }
+
+    #[inline(always)]
     pub fn gen_random_with_rng<R: Rng>(mut prng: R) -> Self {
         let val: [u8; 16] = prng.gen();
         Self { val }
     }
+
+    #[inline(always)]
     pub fn new_from_str(s: &str) -> Self {
         let mut as_vec = s.to_string().into_bytes();
         as_vec.resize(16, 0u8);
         let buf = <[u8; 16]>::try_from(as_vec.as_slice()).unwrap();
         Self { val: buf }
     }
+
+    #[inline(always)]
     pub fn new_from_base64(b64: &str) -> Result<Self> {
         if let Ok(mut bin) = b64dec(b64) {
             bin.resize(16, 0u8);
@@ -234,12 +252,15 @@ impl Code {
             Err(eg!())
         }
     }
+
+    #[inline(always)]
     pub fn to_base64(self) -> String {
         b64enc(&self.val)
     }
 }
 
 impl Serialize for Code {
+    #[inline(always)]
     fn serialize<S>(&self, serializer: S) -> StdResult<S::Ok, S::Error>
     where
         S: Serializer,
@@ -262,6 +283,7 @@ impl<'de> Deserialize<'de> for Code {
         impl<'de> Visitor<'de> for CodeVisitor {
             type Value = Code;
 
+            #[inline(always)]
             fn expecting(
                 &self,
                 formatter: &mut ::core::fmt::Formatter,
@@ -269,6 +291,7 @@ impl<'de> Deserialize<'de> for Code {
                 formatter.write_str("an array of 16 bytes")
             }
 
+            #[inline(always)]
             fn visit_bytes<E>(self, v: &[u8]) -> StdResult<Self::Value, E>
             where
                 E: serde::de::Error,
@@ -282,6 +305,8 @@ impl<'de> Deserialize<'de> for Code {
                     Err(serde::de::Error::invalid_length(v.len(), &self))
                 }
             }
+
+            #[inline(always)]
             fn visit_str<E>(self, s: &str) -> StdResult<Self::Value, E>
             where
                 E: serde::de::Error,
@@ -289,6 +314,7 @@ impl<'de> Deserialize<'de> for Code {
                 self.visit_bytes(&b64dec(s).map_err(serde::de::Error::custom)?)
             }
         }
+
         if deserializer.is_human_readable() {
             deserializer.deserialize_str(CodeVisitor)
         } else {
@@ -305,8 +331,10 @@ pub struct AssetDigest {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Memo(pub String);
+
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct ConfidentialMemo;
+
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Commitment([u8; 32]);
 
@@ -317,6 +345,7 @@ pub struct XfrAddress {
 
 #[allow(clippy::derive_hash_xor_eq)]
 impl Hash for XfrAddress {
+    #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.key.as_bytes().hash(state);
     }
@@ -331,6 +360,7 @@ pub struct IssuerPublicKey {
 
 #[allow(clippy::derive_hash_xor_eq)]
 impl Hash for IssuerPublicKey {
+    #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.key.as_bytes().hash(state);
     }
@@ -338,6 +368,8 @@ impl Hash for IssuerPublicKey {
 
 impl Deref for IssuerPublicKey {
     type Target = XfrPublicKey;
+
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.key
     }
@@ -349,7 +381,7 @@ pub struct IssuerKeyPair<'a> {
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct AccountAddress {
+struct AccountAddress {
     pub key: XfrPublicKey,
 }
 
@@ -366,6 +398,7 @@ impl<T> IndexedSignature<T>
 where
     T: Clone + Serialize + serde::de::DeserializeOwned,
 {
+    #[inline(always)]
     pub fn verify(&self, message: &T) -> bool {
         self.signature
             .verify(&self.address.key, &(message.clone(), self.input_idx))
@@ -373,8 +406,8 @@ where
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 /// Stores threshold and weights for a multisignature requirement.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SignatureRules {
     pub threshold: u64,
     pub weights: Vec<(XfrPublicKey, u64)>, // Stored as a vector so that serialization is deterministic
@@ -404,7 +437,6 @@ impl SignatureRules {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 /// Simple asset rules:
 /// 1) Transferable: Non-transferable assets can only be transferred once from the issuer to
 ///    another user.
@@ -413,6 +445,7 @@ impl SignatureRules {
 /// 4) Asset tracing policies: A bundle of tracing policies specifying the tracing proofs that
 ///    constitute a valid transfer.
 /// 5) Max units: Optional limit on total issuance amount.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AssetRules {
     pub transferable: bool,
     pub updatable: bool,
@@ -425,6 +458,7 @@ pub struct AssetRules {
     pub decimals: u8,
 }
 impl Default for AssetRules {
+    #[inline(always)]
     fn default() -> Self {
         AssetRules {
             tracing_policies: TracingPolicies::new(),
@@ -438,26 +472,31 @@ impl Default for AssetRules {
 }
 
 impl AssetRules {
+    #[inline(always)]
     pub fn add_tracing_policy(&mut self, policy: TracingPolicy) -> &mut Self {
         self.tracing_policies.add(policy);
         self
     }
 
+    #[inline(always)]
     pub fn set_max_units(&mut self, max_units: Option<u64>) -> &mut Self {
         self.max_units = max_units;
         self
     }
 
+    #[inline(always)]
     pub fn set_transferable(&mut self, transferable: bool) -> &mut Self {
         self.transferable = transferable;
         self
     }
 
+    #[inline(always)]
     pub fn set_updatable(&mut self, updatable: bool) -> &mut Self {
         self.updatable = updatable;
         self
     }
 
+    #[inline(always)]
     pub fn set_transfer_multisig_rules(
         &mut self,
         multisig_rules: Option<SignatureRules>,
@@ -505,10 +544,12 @@ pub struct AssetType {
 }
 
 impl AssetType {
+    #[inline(always)]
     pub fn has_issuance_restrictions(&self) -> bool {
         self.properties.asset_rules.max_units.is_some()
     }
 
+    #[inline(always)]
     pub fn has_transfer_restrictions(&self) -> bool {
         let simple_asset: Asset = {
             let mut ret: Asset = Default::default();
@@ -527,6 +568,7 @@ impl AssetType {
         self.properties != simple_asset
     }
 
+    #[inline(always)]
     pub fn get_tracing_policies_ref(&self) -> &TracingPolicies {
         &self.properties.asset_rules.tracing_policies
     }
@@ -573,6 +615,7 @@ pub struct OutputPosition(pub usize);
 pub struct TxnSID(pub usize);
 
 impl fmt::Display for TxoSID {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -623,18 +666,22 @@ pub enum TxoRef {
 pub struct NoReplayToken([u8; 8], u64);
 
 impl NoReplayToken {
+    #[inline(always)]
     pub fn new<R: RngCore>(prng: &mut R, seq_id: u64) -> Self {
         NoReplayToken(prng.next_u64().to_be_bytes(), seq_id)
     }
 
+    #[inline(always)]
     pub fn unsafe_new(rand: u64, seq_id: u64) -> Self {
         NoReplayToken(rand.to_be_bytes(), seq_id)
     }
 
+    #[inline(always)]
     pub fn get_seq_id(&self) -> u64 {
         self.1
     }
 
+    #[inline(always)]
     pub fn get_rand(&self) -> [u8; 8] {
         self.0
     }
@@ -720,6 +767,7 @@ impl TransferAssetBody {
 
     /// Computes a body signature. A body signature represents consent to some part of the asset transfer. If an
     /// input_idx is specified, the signature is a co-signature.
+    #[inline(always)]
     pub fn compute_body_signature(
         &self,
         keypair: &XfrKeyPair,
@@ -734,6 +782,7 @@ impl TransferAssetBody {
     }
 
     /// Verifies a body signature
+    #[inline(always)]
     pub fn verify_body_signature(
         &self,
         signature: &IndexedSignature<TransferAssetBody>,
@@ -753,6 +802,7 @@ pub struct IssueAssetBody {
 }
 
 impl IssueAssetBody {
+    #[inline(always)]
     pub fn new(
         token_code: &AssetTypeCode,
         seq_num: u64,
@@ -819,6 +869,7 @@ pub enum TransferType {
 }
 
 impl Default for TransferType {
+    #[inline(always)]
     fn default() -> Self {
         Self::Standard
     }
@@ -837,6 +888,7 @@ pub struct TransferAsset {
 }
 
 impl TransferAsset {
+    #[inline(always)]
     pub fn new(transfer_body: TransferAssetBody) -> Result<TransferAsset> {
         Ok(TransferAsset {
             body: transfer_body,
@@ -844,11 +896,13 @@ impl TransferAsset {
         })
     }
 
+    #[inline(always)]
     pub fn sign(&mut self, keypair: &XfrKeyPair) {
         let sig = self.create_input_signature(keypair);
         self.attach_signature(sig).unwrap()
     }
 
+    #[inline(always)]
     pub fn attach_signature(
         &mut self,
         sig: IndexedSignature<TransferAssetBody>,
@@ -860,6 +914,7 @@ impl TransferAsset {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn create_input_signature(
         &self,
         keypair: &XfrKeyPair,
@@ -867,6 +922,7 @@ impl TransferAsset {
         self.body.compute_body_signature(keypair, None)
     }
 
+    #[inline(always)]
     pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
         self.body
             .transfer
@@ -876,6 +932,7 @@ impl TransferAsset {
             .collect()
     }
 
+    #[inline(always)]
     pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
         self.body.outputs.iter().collect()
     }
@@ -889,6 +946,7 @@ pub struct IssueAsset {
 }
 
 impl IssueAsset {
+    #[inline(always)]
     pub fn new(
         issuance_body: IssueAssetBody,
         keypair: &IssuerKeyPair,
@@ -903,6 +961,7 @@ impl IssueAsset {
         })
     }
 
+    #[inline(always)]
     pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
         self.body
             .records
@@ -910,6 +969,8 @@ impl IssueAsset {
             .map(|(_, memo)| memo.as_ref())
             .collect()
     }
+
+    #[inline(always)]
     pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
         self.body.records.iter().map(|rec| &rec.0).collect()
     }
@@ -925,6 +986,7 @@ pub struct DefineAsset {
 }
 
 impl DefineAsset {
+    #[inline(always)]
     pub fn new(
         creation_body: DefineAssetBody,
         keypair: &IssuerKeyPair,
@@ -948,6 +1010,7 @@ pub struct UpdateMemo {
 }
 
 impl UpdateMemo {
+    #[inline(always)]
     pub fn new(
         update_memo_body: UpdateMemoBody,
         signing_key: &XfrKeyPair,
@@ -1021,6 +1084,7 @@ pub struct TransactionBody {
 }
 
 impl TransactionBody {
+    #[inline(always)]
     fn from_token(no_replay_token: NoReplayToken) -> Self {
         let mut result = TransactionBody::default();
         result.no_replay_token = no_replay_token;
@@ -1266,6 +1330,7 @@ pub struct FinalizedBlock {
 }
 
 impl FinalizedTransaction {
+    #[inline(always)]
     pub fn hash(&self) -> HashOf<(TxnSID, Transaction)> {
         self.txn.hash(self.tx_id)
     }
@@ -1366,6 +1431,7 @@ impl Transaction {
     }
 
     /// Issuing FRA is denied except in the genesis block.
+    #[inline(always)]
     pub fn fra_no_illegal_issuance(&self, tendermint_block_height: i64) -> bool {
         // block height of mainnet has been higher than this value
         const HEIGHT_LIMIT: i64 = 10_0000;
@@ -1387,20 +1453,24 @@ impl Transaction {
     }
 
     /// findora hash
+    #[inline(always)]
     pub fn hash(&self, id: TxnSID) -> HashOf<(TxnSID, Transaction)> {
         HashOf::new(&(id, self.clone()))
     }
 
     /// tendermint hash
+    #[inline(always)]
     pub fn hash_tm(&self) -> HashOf<Transaction> {
         HashOf::new(&self.clone())
     }
 
+    #[inline(always)]
     pub fn handle(&self) -> String {
         let digest = self.hash(TxnSID(0));
         hex::encode(digest)
     }
 
+    #[inline(always)]
     pub fn from_seq_id(seq_id: u64) -> Self {
         let mut prng = ChaChaRng::from_entropy();
         let no_replay_token = NoReplayToken::new(&mut prng, seq_id);
@@ -1410,12 +1480,14 @@ impl Transaction {
         }
     }
 
+    #[inline(always)]
     pub fn from_operation(op: Operation, seq_id: u64) -> Self {
         let mut tx = Transaction::from_seq_id(seq_id);
         tx.add_operation(op);
         tx
     }
 
+    #[inline(always)]
     pub fn from_operation_coinbase_mint(op: Operation, seq_id: u64) -> Self {
         let mut tx = Transaction {
             body: TransactionBody::from_token(NoReplayToken::unsafe_new(
@@ -1428,15 +1500,18 @@ impl Transaction {
         tx
     }
 
+    #[inline(always)]
     pub fn add_operation(&mut self, mut op: Operation) {
         set_no_replay_token(&mut op, self.body.no_replay_token);
         self.body.operations.push(op);
     }
 
+    #[inline(always)]
     pub fn sign(&mut self, keypair: &XfrKeyPair) {
         self.signatures.push(SignatureOf::new(keypair, &self.body));
     }
 
+    #[inline(always)]
     pub fn check_signature(
         &self,
         public_key: &XfrPublicKey,
@@ -1445,6 +1520,7 @@ impl Transaction {
         sig.verify(public_key, &self.body).c(d!())
     }
 
+    #[inline(always)]
     pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
         let mut memos = Vec::new();
         for op in self.body.operations.iter() {
@@ -1466,6 +1542,7 @@ impl Transaction {
 
     /// Returns the outputs of a transaction. Internally spent outputs can be optionally included.
     /// This will never panic on a well formed transaction, but may panic on a malformed one.
+    #[inline(always)]
     pub fn get_outputs_ref(&self, include_spent: bool) -> Vec<TxOutput> {
         let eff = TxnEffect::compute_effect(self.clone()).unwrap();
         if !include_spent {
@@ -1489,6 +1566,7 @@ impl Transaction {
     /// from `self` somehow, then it is infeasible for someone to forge a
     /// passing signature, but it is plausible for someone to generate an
     /// unrelated `public_key` which can pass this signature check!
+    #[inline(always)]
     pub fn check_has_signature(&self, public_key: &XfrPublicKey) -> Result<()> {
         let serialized = Serialized::new(&self.body);
         for sig in self.signatures.iter() {
@@ -1519,6 +1597,7 @@ pub struct StateCommitmentData {
 }
 
 impl StateCommitmentData {
+    #[inline(always)]
     pub fn compute_commitment(&self) -> HashOf<Option<Self>> {
         HashOf::new(&Some(self).cloned())
     }

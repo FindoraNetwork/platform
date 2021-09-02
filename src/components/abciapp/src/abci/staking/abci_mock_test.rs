@@ -5,8 +5,8 @@
 #![allow(warnings)]
 #![allow(missing_docs)]
 
-use crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT;
 use crate::abci::server::{
+    callback::TENDERMINT_BLOCK_HEIGHT,
     tx_sender::{forward_txn_with_mode, CHAN},
     ABCISubmissionServer,
 };
@@ -14,9 +14,9 @@ use abci::*;
 use cryptohash::sha256::{self, Digest};
 use finutils::{
     api::DelegationInfo,
-    txn_builder::{BuildsTransactions, TransactionBuilder, TransferOperationBuilder},
+    txn_builder::{TransactionBuilder, TransferOperationBuilder},
 };
-use globutils::{fresh_tmp_dir, se, wallet};
+use globutils::{fresh_tmp_dir, wallet};
 use lazy_static::lazy_static;
 use ledger::{
     data_model::{

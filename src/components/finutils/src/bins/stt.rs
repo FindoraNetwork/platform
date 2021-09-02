@@ -10,7 +10,7 @@
 #![deny(warnings)]
 
 use clap::{crate_authors, App, SubCommand};
-use finutils::{common, txn_builder::BuildsTransactions};
+use finutils::common;
 use globutils::wallet;
 use lazy_static::lazy_static;
 use ledger::{

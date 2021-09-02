@@ -44,7 +44,7 @@ fn test_load_fake_transaction_log() {
 
 #[test]
 fn test_save_utxo_map_version() {
-    let mut ledger_state = LedgerState::test_ledger();
+    let mut ledger_state = LedgerState::tmp_ledger();
     let digest = BitDigest { 0: [0_u8; 32] };
     ledger_state.status.utxo_map_versions = vec![(TxnSID(0), digest); MAX_VERSION - 1]
         .into_iter()
@@ -76,7 +76,7 @@ fn test_save_utxo_map_version() {
 
 #[test]
 fn test_compute_and_save_block_hash() {
-    let mut ledger_state = LedgerState::test_ledger();
+    let mut ledger_state = LedgerState::tmp_ledger();
     let mut data = StateCommitmentData {
         bitmap: ledger_state.utxo_map.compute_checksum(),
         block_merkle: ledger_state.block_merkle.get_root_hash(),
@@ -116,7 +116,7 @@ fn test_compute_and_save_block_hash() {
 
 #[test]
 fn test_checkpoint() {
-    let mut ledger_state = LedgerState::test_ledger();
+    let mut ledger_state = LedgerState::tmp_ledger();
 
     let digest = BitDigest { 0: [0_u8; 32] };
     ledger_state.status.utxo_map_versions = vec![(TxnSID(0), digest); MAX_VERSION - 1]
@@ -191,7 +191,7 @@ fn test_checkpoint() {
 #[test]
 fn test_asset_creation_valid() {
     let mut prng = ChaChaRng::from_entropy();
-    let mut state = LedgerState::test_ledger();
+    let mut state = LedgerState::tmp_ledger();
 
     let token_code1 = AssetTypeCode::gen_random();
     let keypair = build_keys(&mut prng);
@@ -251,7 +251,7 @@ fn test_asset_creation_invalid_public_key() {
 
 #[test]
 fn test_asset_transfer() {
-    let mut ledger = LedgerState::test_ledger();
+    let mut ledger = LedgerState::tmp_ledger();
     let params = PublicParams::default();
 
     let code = AssetTypeCode::gen_random();
@@ -442,7 +442,7 @@ fn test_asset_creation_invalid_signature() {
 
 #[test]
 fn asset_issued() {
-    let mut ledger = LedgerState::test_ledger();
+    let mut ledger = LedgerState::tmp_ledger();
 
     let params = PublicParams::default();
 
@@ -585,7 +585,7 @@ fn asset_issued() {
 
 #[test]
 pub fn test_transferable() {
-    let mut ledger = LedgerState::test_ledger();
+    let mut ledger = LedgerState::tmp_ledger();
     let params = PublicParams::default();
     let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
     let alice = XfrKeyPair::generate(&mut ledger.get_prng());
@@ -736,7 +736,7 @@ pub fn test_transferable() {
 
 #[test]
 pub fn test_max_units() {
-    let mut ledger = LedgerState::test_ledger();
+    let mut ledger = LedgerState::tmp_ledger();
     let params = PublicParams::default();
 
     let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
@@ -867,7 +867,7 @@ fn gen_fee_operation(
 
 #[test]
 fn test_check_fee_with_ledger() {
-    let mut ledger = LedgerState::test_ledger();
+    let mut ledger = LedgerState::tmp_ledger();
     let fra_owner_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
 
     let tx = utils::fra_gen_initial_tx(&fra_owner_kp);

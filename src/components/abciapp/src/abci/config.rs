@@ -195,7 +195,7 @@ pub(crate) mod global_cfg {
             .map(|v| v.to_owned())
             .unwrap_or_else(|| {
                 env::var("LEDGER_DIR").unwrap_or_else(|_| {
-                    format!("{}/.__findora__", pnk!(env::var("HOME")))
+                    format!("{}/.tendermint/__findora__", pnk!(env::var("HOME")))
                 })
             });
 
