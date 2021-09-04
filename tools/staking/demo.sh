@@ -45,9 +45,12 @@ stop_node() {
     if [[ "FreeBSD" == $OS ]]; then
         pid_abci=$(sockstat -4 | grep ":${__ABCI_PORT__} " | sed -r 's/ +/ /g' | cut -d ' ' -f 3)
         pid_tendermint=$(sockstat -4 | grep ${__TENDERMINT_PORT__} | sed -r 's/ +/ /g' | cut -d ' ' -f 3)
-    elif [[ "Linux" == $OS || "Darwin" == $OS ]]; then
+    elif [[ "Linux" == $OS ]]; then
         pid_abci=$(ss -ntlp | grep ${__ABCI_PORT__} | grep -o 'pid=[0-9]\+' | grep -o '[0-9]\+')
         pid_tendermint=$(ss -ntlp | grep ${__TENDERMINT_PORT__} | grep -o 'pid=[0-9]\+' | grep -o '[0-9]\+')
+    elif [[ "Darwin" == $OS ]]; then
+        pid_abci=$(lsof -n -P -i TCP -s TCP:LISTEN | grep ${__ABCI_PORT__} | grep 26657 | sed -r 's/ +/ /g' | cut -d ' ' -f 2)
+        pid_tendermint=$(lsof -n -P -i TCP -s TCP:LISTEN | grep ${__TENDERMINT_PORT__} | grep 26657 | sed -r 's/ +/ /g' | cut -d ' ' -f 2)
     else
         echo "Unsupported operating system!"
         exit 1

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+ulimit -n 60000
+
 RED='\033[31m'
 GRN="\033[32m"
 NC='\033[0m'
