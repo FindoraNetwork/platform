@@ -1,41 +1,16 @@
 [workspace]
 members = [
-    "components/cli2",
-    "components/abci_validator_node",
-    "components/ledger_standalone",
-    "components/ledger_api_service",
-    "components/query_api",
-    "components/query_server",
-    "components/submission_api",
-    "components/submission_server",
-    "components/txn_builder",
-    "components/wasm",
-    "components/wallet",
-    "components/account_simulator",
-    # "components/trash/auditor",
-    # "components/trash/xfrnote",
-    # "components/trash/check_merkle",
-    # "components/trash/http_tester",
-    # "components/trash/txn_cli",
-    # "components/trash/address_identity_registry",
-    # "components/trash/log_tester",
-    "ledger",
-    "libs/ads/air",
-    "libs/ads/merkle_tree",
-    "libs/ads/sparse_merkle_tree",
-    "libs/bitmap",
-    "libs/cryptohash",
-    "libs/credentials",
-    "libs/sliding_set",
-    "libs/network",
-    "libs/utils",
-
-    # "components/trash/solvency",
-    # "components/trash/solvency_cli",
-    # "components/trash/whitelist_cli",
-    # "components/trash/whitelist",
-    # "components/trash/ledger_client",
-    # "components/trash/ledger_mirror",
+    "src/ledger",
+    "src/components/finutils",
+    "src/components/abciapp",
+    "src/components/wasm",
+    "src/components/bugchecker",
+    "src/libs/bitmap",
+    "src/libs/merkle_tree",
+    "src/libs/globutils",
+    "src/libs/cryptohash",
+    "src/libs/credentials",
+    "src/libs/sliding_set",
 ]
 
 [profile.dev]
@@ -43,7 +18,6 @@ incremental = false
 overflow-checks = true
 
 [profile.release]
-codegen-units = 1
 incremental = false
 overflow-checks = false
 

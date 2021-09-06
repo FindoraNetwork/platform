@@ -1,0 +1,20 @@
+[package]
+name = "bitmap"
+version = "0.2.0"
+authors = ["FindoraNetwork"]
+edition = "2018"
+
+[dependencies]
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+parking_lot = "0.11.1"
+
+arrayref = "0.3.5"
+cryptohash = { path = "../cryptohash" }
+itertools = "0.8.0"
+log = "0.4.8"
+rand = "0.7"
+rand_chacha = "0.1.1"
+serde = "1.0.124"
+serde_json = "1.0"
+time = "0.1"
+globutils = { path = "../globutils" }

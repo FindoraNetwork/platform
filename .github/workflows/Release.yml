@@ -11,11 +11,17 @@ jobs:
       matrix:
         platform: [aws]
     runs-on: ${{ matrix.platform }}
+    env:
+      ENV: release
+      PRIVATE_ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
+      PUBLIC_ECR_URL: public.ecr.aws/k6m5b6e2
+      DOCKERHUB_URL: findoranetwork
+      DOCKERHUB_TOKEN: b838371e-dcf4-47f4-bc17-11adf4b2e9df
     steps:
     - uses: actions/checkout@v2
     - uses: actions-rs/toolchain@v1
       with:
-        toolchain: nightly-2021-03-24
+        toolchain: stable
         override: true
         components: rustfmt
     - name: check fmt
@@ -57,19 +63,23 @@ jobs:
     #   shell: bash
     #   run: |
     #     make build
-    - name: build release
+
+
+    # ========= build the cleveldb and push to public ECR ===
+    - name: build cleveldb-version release
       shell: bash
       run: |
         echo "REF: ${GITHUB_REF}"
         TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
         TAGV="${TAGS#refs/tags/}"
         export IMAGE_TAG="${TAGV:-main}"
-        export VERGEN_SHA_SHORT_EXTERN="${IMAGE_TAG}"
-        echo "VERGEN_SHA_SHORT_EXTERN: ${VERGEN_SHA_SHORT_EXTERN}"
+        export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
+        echo "VERGEN_SHA_EXTERN: ${VERGEN_SHA_EXTERN}"
         make build_release
     - name: Build images
       env:
-        ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
+        PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
         ENV: release
       shell: bash
       run: |
@@ -80,12 +90,16 @@ jobs:
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image
     - name: Login ECR
+      env:
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
       shell: bash
       run: |
         $(aws ecr get-login --region us-west-2 --no-include-email)
+        aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${PUBLIC_ECR_URL}
     - name: Push images
       env:
-        ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
+        PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
         ENV: release
       shell: bash
       run: |
@@ -97,7 +111,8 @@ jobs:
         make ci_push_image
     - name: Clean images
       env:
-        ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
+        PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
         ENV: release
       shell: bash
       run: |
@@ -107,6 +122,64 @@ jobs:
         export IMAGE_TAG="${TAGV:-main}"
         echo "Image tag: ${IMAGE_TAG}"
         make clean_image
+    # ========= END build the cleveldb and push to public ECR ===
+
+    # ========= build the goleveldb and push to dockerhub ===
+    - name: build goleveldb-version release
+      shell: bash
+      run: |
+        echo "REF: ${GITHUB_REF}"
+        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+        TAGV="${TAGS#refs/tags/}"
+        export IMAGE_TAG="${TAGV:-main}"
+        export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
+        echo "VERGEN_SHA_EXTERN: ${VERGEN_SHA_EXTERN}"
+        make build_release_goleveldb
+    - name: Login Dockerhub
+      env: 
+        DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
+        DOCKERHUB_TOKEN: ${{env.DOCKERHUB_TOKEN}}
+      shell: bash
+      run: |
+        docker login -u ${DOCKERHUB_URL} -p ${DOCKERHUB_TOKEN}
+    - name: Build images dockerhub
+      env:
+        DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
+        ENV: ${{ env.ENV }}
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
+      shell: bash
+      run: |
+        echo "REF: ${GITHUB_REF}"
+        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+        TAGV="${TAGS#refs/tags/}"
+        export IMAGE_TAG="${TAGV:-main}"
+        echo "Image tag: ${IMAGE_TAG}"
+        make ci_build_image_dockerhub
+    - name: Push images to dockerhub
+      env:
+        DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
+        ENV: release
+      shell: bash
+      run: |
+        echo "REF: ${GITHUB_REF}"
+        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+        TAGV="${TAGS#refs/tags/}"
+        export IMAGE_TAG="${TAGV:-main}"
+        echo "Image tag: ${IMAGE_TAG}"
+        make ci_push_image_dockerhub
+    - name: Clean images
+      env:
+        DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
+        ENV: release
+      shell: bash
+      run: |
+        echo "REF: ${GITHUB_REF}"
+        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+        TAGV="${TAGS#refs/tags/}"
+        export IMAGE_TAG="${TAGV:-main}"
+        echo "Image tag: ${IMAGE_TAG}"
+        make clean_image_dockerhub
+    #  # =========END build the goleveldb and push to dockerhub ===
     - name: Push wasm-js-bindings
       shell: bash
       run: |
@@ -124,7 +197,7 @@ jobs:
         if [ ! -d "${WASM_DIR}/web" ]; then mkdir "${WASM_DIR}/web"; fi
         if [ ! -d "${WASM_DIR}/bundler" ]; then mkdir "${WASM_DIR}/bundler"; fi
         popd
-        pushd components/wasm
+        pushd src/components/wasm
         wasm-pack build --target nodejs --out-dir "${WASM_DIR}/nodejs"
         rm "${WASM_DIR}/nodejs/.gitignore"
         wasm-pack build --target web --out-dir "${WASM_DIR}/web"
@@ -136,10 +209,10 @@ jobs:
         if [ "$(git diff)" != "" ]; then
             git add .
             git commit -m "version: ${WASM_VERSION}, hash: ${COMMIT_HASH}, build date: $(date +"%Y%m%d")"
-            git push origin "${BRANCH_NAME}"
+            git push -f origin "${BRANCH_NAME}"
         fi
-        git tag "${WASM_VERSION}"
-        git push origin "${WASM_VERSION}"
+        git tag -f "${WASM_VERSION}"
+        git push -f origin "${WASM_VERSION}"
         popd
     - name: Clean garbage
       shell: bash

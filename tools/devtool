@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+
+set -e
+
+OPT=$1
+if [ -d .git ]; then
+    GITBRANCH=$(git branch --show-current)
+    if [ -z "${GITBRANCH}" ]; then
+      GITBRANCH=$(git describe --tags)
+    fi
+else
+  GITBRANCH=$(basename "$(pwd)")
+fi
+CARGO_TARGET_DIR=../target-${GITBRANCH}-${OPT}
+export CARGO_TARGET_DIR
+
+if [[ ${OPT} == "help" ]]; then
+  echo "  $0 -h"
+  echo "  $0 help"
+  echo "  $0 DBG, build with debug features"
+  echo "  $0 release, build release binary"
+  echo "  $0 cli, build cli tools only"
+  echo "  $0 ltchk, lightweight check, such as fmt, lint"
+  echo "  $0 prchk, make a pre-check before creating new pull request"
+  echo "  $0 debug_env, build and start a new local devnet"
+  echo "  $0 staking_demo, run a staking_demo"
+  exit 0
+elif [[ ${OPT} == "-h" ]]; then
+  $0 help
+  exit 0
+elif [[ ${OPT} == "cli" ]]; then
+  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release
+	cargo build --release --bins -p finutils --no-default-features
+	cp "${CARGO_TARGET_DIR}"/release/fn                     ~/.cargo/bin
+	cp "${CARGO_TARGET_DIR}"/release/stt                    ~/.cargo/bin
+	cp "${CARGO_TARGET_DIR}"/release/staking_cfg_generator  ~/.cargo/bin
+	exit 0
+elif [[ ${OPT} == "prchk" ]]; then
+  export CARGO_TARGET_DIR=../target-${GITBRANCH}-prchk
+  echo "======make fmt======"
+  make fmt
+  echo "======make lint======"
+  make lint
+  echo "======make test======"
+  CURRENT=`ulimit -n`
+  if [ "${CURRENT}" -lt 102400 ]; then
+    ulimit -n 102400
+  fi
+  make test
+  echo "======make run_staking_demo======"
+  make run_staking_demo
+  ulimit -n ${CURRENT}
+  exit 0
+elif [[ ${OPT} = "ltchk" ]]; then
+  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release
+  echo "======make fmt======"
+  make fmt
+  echo "======make lint======"
+  make lint
+  exit 0
+elif [[ ${OPT} = "staking_demo" ]]; then
+  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release_debug
+  make run_staking_demo
+  exit 0
+elif [[ ${OPT} == "DBG" ]]; then
+  export CARGO_TARGET_DIR=${CARGO_TARGET_DIR}_DBG
+  make build DBG=1
+  exit 0
+elif [[ ${OPT} == "release" ]]; then
+  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release
+  make
+  exit 0
+elif [[ ${OPT} == "debug_env" ]]; then
+  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release_debug
+  make debug_env
+else
+  echo "Invalid command"
+  $0 help
+  exit 0
+fi
+
+if [[ ${OPT} == "debug_env" ]]; then
+  echo "Initializing local devnet..."
+  fn setup -S http://127.0.0.1
+  stt init
+  echo "Initialized."
+fi

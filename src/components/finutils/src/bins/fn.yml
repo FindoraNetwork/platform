@@ -1,0 +1,394 @@
+name: fn
+version: "1.0"
+author: develop@FindoraNetwork.org
+about: A command line tool in Findora network
+
+args:
+  - version:
+      short: v
+      long: version
+
+subcommands:
+  - genkey:
+      about: Generate a random Findora public key/private key Pair
+  - show:
+      about: View Validator status and accumulated rewards
+  - setup:
+      about: Setup environment variables for staking transactions
+      args:
+        - serv-addr:
+            help: a node address of Findora Network
+            short: S
+            long: serv-addr
+            takes_value: true
+            value_name: URL/IP
+        - owner-mnemonic-path:
+            help: storage path of your mnemonic words
+            short: O
+            long: owner-mnemonic-path
+            takes_value: true
+            value_name: Path
+        - validator-key:
+            help: path to the tendermint keys of your validator node
+            short: K
+            long: validator-key
+            takes_value: true
+            value_name: Path
+  - stake:
+      about: Stake tokens (i.e. bond tokens) from a Findora account to a Validator
+      args:
+        - amount:
+            help: how much `FRA unit`s you want to stake
+            short: n
+            long: amount
+            takes_value: true
+            value_name: Amount
+            required: true
+        - commission-rate:
+            help: the commission rate of your node, a float number from 0.0 to 1.0
+            short: R
+            long: commission-rate
+            takes_value: true
+            value_name: Rate
+        - validator-memo:
+            help: the description of your node, optional
+            short: M
+            long: validator-memo
+            takes_value: true
+            value_name: Memo
+        - append:
+            help: stake more FRAs to your node
+            short: a
+            long: append
+        - staker-priv-key:
+            help: the file which contains private key (in base64 format) of proposer
+            short: S
+            long: staker-priv-key
+            takes_value: true
+            value_name: SecretKey
+        - validator-td-addr:
+            help: stake FRAs to a custom validator
+            short: A
+            long: validator-td-addr
+            takes_value: true
+            value_name: TendermintAddr
+        - force:
+            help: ignore warning and stake FRAs to your target node
+            long: force
+      groups:
+        - staking-flags:
+            args:
+              - commission-rate
+              - validator-memo
+            multiple: true
+            conflicts_with:
+              - append
+  - staker-update:
+      about: Update information of a validator
+      args:
+        - commission-rate:
+            help: the commission rate of your node, a float number from 0.0 to 1.0, optional
+            short: R
+            long: commission-rate
+            takes_value: true
+            value_name: Rate
+        - validator-memo:
+            help: the description of your node, optional
+            short: M
+            long: validator-memo
+            takes_value: true
+            value_name: Memo
+  - unstake:
+      about: Unstake tokens (i.e. unbond tokens) from a Validator
+      args:
+        - staker-priv-key:
+            help: the file which contains private key (in base64 format) of proposer
+            short: S
+            long: staker-priv-key
+            takes_value: true
+            value_name: SecretKey
+        - validator-td-addr:
+            help: unstake FRAs to a custom validator
+            short: A
+            long: validator-td-addr
+            takes_value: true
+            value_name: TendermintAddr
+        - amount:
+            help: how much FRA to unstake, needed for partial undelegation
+            short: n
+            long: amount
+            takes_value: true
+            value_name: Amount
+  - claim:
+      about: Claim accumulated FRA rewards
+      args:
+        - amount:
+            help: how much `FRA unit`s to claim
+            short: n
+            long: amount
+            takes_value: true
+            value_name: Amount
+        - seckey:
+            help: the file which contains base64-formated `XfrPrivateKey` of an existing wallet
+            long: seckey
+            takes_value: true
+            value_name: SECRET KEY
+  - delegate:
+      about: Delegating operations
+      args:
+        - amount:
+            help: how much FRA units to be delegated
+            short: n
+            long: amount
+            takes_value: true
+            value_name: AMOUNT
+        - seckey:
+            help: the file which contains base64-formated `XfrPrivateKey` of an existing wallet
+            long: seckey
+            takes_value: true
+            value_name: SECRET KEY
+        - validator:
+            help: the address of a validator
+            long: validator
+            takes_value: true
+            value_name: VALIDATOR ADDRESS
+        - info:
+            help: show delegation info
+            long: info
+            conflicts_with:
+              - amount
+              - validator
+  - undelegate:
+      about: Undelegating operations
+      args:
+        - amount:
+            help: how much FRA units to be delegated
+            short: n
+            long: amount
+            takes_value: true
+            value_name: AMOUNT
+        - seckey:
+            help: the file which contains base64-formated `XfrPrivateKey` of an existing wallet
+            long: seckey
+            takes_value: true
+            value_name: SECRET KEY
+        - validator:
+            help: the address of a validator
+            long: validator
+            takes_value: true
+            value_name: VALIDATOR ADDRESS
+  - transfer:
+      about: Transfer tokens from one address to another
+      args:
+        - asset:
+            help: asset code which you want to tansfer
+            long: asset
+            takes_value: true
+            value_name: ASSET
+        - from-seckey:
+            help: the file which contains base64-formated `XfrPrivateKey` of the receiver
+            short: f
+            long: from-seckey
+            takes_value: true
+            value_name: SecKey
+        - to-pubkey:
+            help: base64-formated `XfrPublicKey` of the receiver
+            short: t
+            long: to-pubkey
+            takes_value: true
+            value_name: PubKey
+        - to-wallet-address:
+            help: fra prefixed address of FindoraNetwork
+            short: T
+            long: to-wallet-address
+            takes_value: true
+            value_name: Wallet Address
+            conflicts_with:
+              - to-pubkey
+        - amount:
+            help: how much units to transfer
+            short: n
+            long: amount
+            takes_value: true
+            value_name: Amount
+            required: true
+        - confidential-amount:
+            help: mask the amount sent on the transaction log
+            long: confidential-amount
+        - confidential-type:
+            help: mask the asset type sent on the transaction log
+            long: confidential-type
+  - transfer-batch:
+      about: Transfer tokens from one address to many others
+      args:
+        - from-seckey:
+            help: the file which contains base64-formated `XfrPrivateKey` of the receiver
+            short: f
+            long: from-seckey
+            takes_value: true
+            value_name: SecKey
+        - to-pubkey-file:
+            short: t
+            long: to-pubkey-file
+            takes_value: true
+            value_name: File Path
+        - to-wallet-address-file:
+            short: T
+            long: to-wallet-address-file
+            takes_value: true
+            value_name: File Path
+            conflicts_with:
+              - to-pubkey-file
+        - amount:
+            help: how much FRA units to transfer
+            short: n
+            long: amount
+            takes_value: true
+            value_name: Amount
+            required: true
+        - confidential-amount:
+            help: mask the amount sent on the transaction log
+            long: confidential-amount
+        - confidential-type:
+            help: mask the asset type sent on the transaction log
+            long: confidential-type
+  - wallet:
+      about: manipulates a findora wallet
+      args:
+        - create:
+            help: create a new findora wallet
+            long: create
+        - show:
+            help: show information of a findora wallet
+            long: show
+            conflicts_with:
+              - create
+        - asset:
+            help: code of asset, such as `fra`
+            long: asset
+            takes_value: true
+            value_name: ASSET
+            conflicts_with:
+              - create
+        - seckey:
+            help: the file which contains base64-formated `XfrPrivateKey` of an existing wallet
+            long: seckey
+            takes_value: true
+            value_name: SECRET KEY
+            conflicts_with:
+              - create
+  - asset:
+      about: manipulate custom asset
+      groups:
+        - create-flags:
+            args:
+              - create
+            conflicts_with:
+              - issue
+              - show
+              - amount
+              - hidden
+              - addr
+              - maximum
+        - issue-flags:
+            args:
+              - issue
+            conflicts_with:
+              - create
+              - show
+              - decimal
+              - memo
+              - transferable
+              - addr
+        - show-flags:
+            args:
+              - show
+            conflicts_with:
+              - create
+              - issue
+              - seckey
+              - decimal
+              - transferable
+              - maximum
+              - memo
+              - amount
+              - hidden
+              - code
+      args:
+        - create:
+            help: create a new asset
+            long: create
+            conflicts_with:
+              - issue
+              - show
+        - issue:
+            help: issue a asset on ledger
+            long: issue
+            conflicts_with:
+              - create
+              - show
+        - show:
+            help: show list of assets
+            long: show
+            conflicts_with:
+              - create
+              - issue
+        - code:
+            help: Custom asset type code
+            long: code
+            takes_value: true
+            value_name: ASSET CODE
+        - addr:
+            help: Findora wallet address
+            long: addr
+            takes_value: true
+            value_name: WALLET ADDRESS
+        - seckey:
+            help: the file which contains base64-formated `XfrPrivateKey` of findora account
+            long: seckey
+            takes_value: true
+            value_name: SECRET KEY
+        - decimal:
+            help: asset decimals of a new asset
+            long: decimal
+            takes_value: true
+            value_name: DECIMAL
+        - transferable:
+            help: transferability type of a new asset
+            long: transferable
+        - maximum:
+            help: maximum amount of a new asset
+            long: maximum
+            takes_value: true
+            value_name: MAXIMUM AMOUNT
+        - memo:
+            help: asset memo of a new asset
+            long: memo
+            takes_value: true
+            value_name: MEMO
+        - amount:
+            help: amount when issuing a asset
+            long: amount
+            takes_value: true
+            value_name: AMOUNT
+        - hidden:
+            help: hidden asset amount when issuing asset on ledger
+            long: hidden
+  #- history
+  #    about: query operating history
+  #    args:
+  #      - coinbase:
+  #          help: show coinbase history
+  #          long: coinbase
+  #          conflicts_with:
+  #            - transaction
+  #      - transaction:
+  #          help: show transaction history
+  #          conflicts_with:
+  #            - coinbase
+  #      - wallet:
+  #          help: wallet nick name
+  #          long: wallet
+  #          takes_value: true
+  #          value_name: WALLET
+  #          required: true

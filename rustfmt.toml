@@ -1,4 +1,3 @@
 max_width = 89
-version = "Two"
-comment_width = 89
-# error_on_line_overflow = true
+# version = "Two"
+# comment_width = 89

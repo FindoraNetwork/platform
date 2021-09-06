@@ -1,6 +1,7 @@
 name: Develop
 on:
   pull_request:
+    # types: [closed]
     branches:
       - develop
 env:
@@ -11,11 +12,15 @@ jobs:
       matrix:
         platform: [aws]
     runs-on: ${{ matrix.platform }}
+    env:
+      ENV: dev
+      PRIVATE_ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
+      PUBLIC_ECR_URL: public.ecr.aws/k6m5b6e2
     steps:
     - uses: actions/checkout@v2
     - uses: actions-rs/toolchain@v1
       with:
-        toolchain: nightly-2021-03-24
+        toolchain: stable
         override: true
         components: rustfmt
     - name: check fmt
@@ -46,7 +51,7 @@ jobs:
     - name: lint
       shell: bash
       run: |
-        make lint
+        make lint 
     - name: test
       shell: bash
       run: |
@@ -59,27 +64,28 @@ jobs:
       run: |
         COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
         if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA::7}"
+          export COMMIT_HASH="${GITHUB_SHA}"
         else
-          export COMMIT_HASH=${COMMIT_HASH:1:7}
+          export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
         export TOBRANCH="${GITHUB_BASE_REF}"
-        export VERGEN_SHA_SHORT_EXTERN="${TOBRANCH}-${COMMIT_HASH}"
-        echo "VERGEN_SHA_SHORT_EXTERN: ${VERGEN_SHA_SHORT_EXTERN}"
+        export VERGEN_SHA_EXTERN="${TOBRANCH}-${COMMIT_HASH}"
+        echo "VERGEN_SHA_EXTERN: ${VERGEN_SHA_EXTERN}"
         make build
     - name: Build images
       env:
-        ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
-        ENV: dev
+        PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
+        ENV: ${{ env.ENV }}
         GITHUB_CONTEXT: ${{ toJSON(github) }}
       shell: bash
       run: |
         COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
         if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA::7}"
+          export COMMIT_HASH="${GITHUB_SHA}"
         else
-          export COMMIT_HASH=${COMMIT_HASH:1:7}
+          export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
         export TOBRANCH="${GITHUB_BASE_REF}"
@@ -87,21 +93,26 @@ jobs:
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image
     - name: Login ECR
+      env:
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
       shell: bash
       run: |
         $(aws ecr get-login --region us-west-2 --no-include-email)
+        aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${PUBLIC_ECR_URL}
+    
     - name: Push images
       env:
-        ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
-        ENV: dev
+        PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
+        ENV: ${{ env.ENV }}
         GITHUB_CONTEXT: ${{ toJSON(github) }}
       shell: bash
       run: |
         COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
         if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA::7}"
+          export COMMIT_HASH="${GITHUB_SHA}"
         else
-          export COMMIT_HASH=${COMMIT_HASH:1:7}
+          export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
         export TOBRANCH="${GITHUB_BASE_REF}"
@@ -110,16 +121,17 @@ jobs:
         make ci_push_image
     - name: Clean images
       env:
-        ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
-        ENV: dev
+        PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
+        ENV: ${{ env.ENV }}
         GITHUB_CONTEXT: ${{ toJSON(github) }}
       shell: bash
       run: |
         COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
         if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA::7}"
+          export COMMIT_HASH="${GITHUB_SHA}"
         else
-          export COMMIT_HASH=${COMMIT_HASH:1:7}
+          export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
         export TOBRANCH="${GITHUB_BASE_REF}"
@@ -133,9 +145,9 @@ jobs:
       run: |
         COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
         if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA::7}"
+          export COMMIT_HASH="${GITHUB_SHA}"
         else
-          export COMMIT_HASH=${COMMIT_HASH:1:7}
+          export COMMIT_HASH=${COMMIT_HASH}
         fi
         export PR=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
         export BRANCH="${GITHUB_HEAD_REF}"
@@ -150,7 +162,7 @@ jobs:
         if [ ! -d "${WASM_DIR}/web" ]; then mkdir "${WASM_DIR}/web"; fi
         if [ ! -d "${WASM_DIR}/bundler" ]; then mkdir "${WASM_DIR}/bundler"; fi
         popd
-        pushd components/wasm
+        pushd src/components/wasm
         wasm-pack build --target nodejs --out-dir "${WASM_DIR}/nodejs"
         rm "${WASM_DIR}/nodejs/.gitignore"
         wasm-pack build --target web --out-dir "${WASM_DIR}/web"
@@ -162,10 +174,10 @@ jobs:
         if [ "$(git diff)" != "" ]; then
             git add .
             git commit -m "From platform PR ${PR}(${BRANCH} to ${TOBRANCH}), commit hash: ${COMMIT_HASH} , build date: $(date +"%Y%m%d")"
-            git push origin "${BRANCH_NAME}"
+            git push -f origin "${BRANCH_NAME}"
         fi
-        git tag "${TOBRANCH}-${COMMIT_HASH}"
-        git push origin "${TOBRANCH}-${COMMIT_HASH}"
+        git tag -f "${TOBRANCH}-${COMMIT_HASH}"
+        git push -f origin "${TOBRANCH}-${COMMIT_HASH}"
         git tag -d "${TOBRANCH}-${COMMIT_HASH}"
         popd
     - name: Clean garbage

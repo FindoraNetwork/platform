@@ -18,7 +18,7 @@ jobs:
     - uses: actions/checkout@v2
     - uses: actions-rs/toolchain@v1
       with:
-        toolchain: nightly-2021-03-24
+        toolchain: stable
         override: true
         components: rustfmt
     - name: check fmt
@@ -75,7 +75,7 @@ jobs:
     #     if [ ! -d "${WASM_DIR}/nodejs" ]; then mkdir "${WASM_DIR}/nodejs"; fi
     #     if [ ! -d "${WASM_DIR}/web" ]; then mkdir "${WASM_DIR}/web"; fi
     #     popd
-    #     pushd components/wasm
+    #     pushd src/components/wasm
     #     wasm-pack build --target nodejs --out-dir "${WASM_DIR}/nodejs"
     #     rm "${WASM_DIR}/nodejs/.gitignore"
     #     wasm-pack build --target web --out-dir "${WASM_DIR}/web"
@@ -85,7 +85,7 @@ jobs:
     #     if [ "$(git diff)" != "" ]; then
     #         git add .
     #         git commit -m "From platform PR ${PR}(${BRANCH} to ${TOBRANCH}), build date: $(date +"%Y%m%d")"
-    #         git push origin "${BRANCH_NAME}"
+    #         git push -f origin "${BRANCH_NAME}"
     #     fi
     #     popd
     - name: test

@@ -1,17 +1,12 @@
-* **make sure that you have executed all the following process and no errors are reported:**
+* **make sure that you have executed all the following process and no errors occur**
   - [ ] make fmt
-  - [ ] make lint 
+  - [ ] make lint
   - [ ] make test
 
-
-* **The issue corresponding to this PR** 
-
-
-
-* **The main content of this PR change** 
+* **The major changes of this PR**
 
 
 
-* **Whether the documentation、 the test are complete, and the related web links**
+* **Extra documentations**
 
 

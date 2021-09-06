@@ -1,0 +1,62 @@
+[package]
+name = "abciapp"
+version = "0.2.0"
+authors = ["FindoraNetwork"]
+build = "build.rs"
+edition = "2018"
+
+[[bin]]
+name = "findorad"
+path = "src/bins/findorad.rs"
+
+[[bin]]
+name = "abcid"
+path = "src/bins/abcid.rs"
+
+[dependencies]
+parking_lot = "0.11.1"
+arrayref = "0.3.5"
+base64 = "0.12"
+bincode = "1.3.1"
+log = "0.4.8"
+env_logger = "0.8.3"
+rand = "0.8"
+rand_chacha = "0.2.0"
+rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
+attohttpc = { version = "0.16.3", default-features = false, features = ["compress", "json", "tls-rustls"] }
+serde = { version = "1.0.124", features = ["derive"] }
+serde_json = "1.0.40"
+lazy_static = "1.4.0"
+futures = { version = "0.3.13", features = ["thread-pool"] }
+hex = "0.4.2"
+ctrlc = { version = "3.0", features = ["termination"] }
+protobuf = "2.16"
+toml = "0.5.8"
+clap = "2.33.3"
+
+actix-cors = "0.5.4"
+actix-rt = "1.1.0"
+actix-service = "1.0.6"
+actix-web = "3.3.2"
+percent-encoding = "2.1.0"
+
+nix = "0.22.1"
+
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4b" }
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
+bnc = { git = "https://github.com/FindoraNetwork/BNC.git", branch = "feat-rocksdb" }
+
+ledger = { path = "../../ledger" }
+cryptohash = { path = "../../libs/cryptohash" }
+globutils = { path = "../../libs/globutils" }
+finutils = { path = "../finutils" }
+
+[dev-dependencies]
+
+[build-dependencies]
+vergen = "=3.1.0"
+
+[features]
+abci_mock = [ "ledger/abci_mock" ]
+debug_env = [ "ledger/debug_env" ]
