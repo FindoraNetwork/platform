@@ -1,3 +1,10 @@
+//!
+//! # Findora ledger store implementation
+//!
+//!
+
+#![deny(missing_docs)]
+
 pub mod helpers;
 mod test;
 pub mod utils;
@@ -43,6 +50,7 @@ const MAX_VERSION: usize = 100;
 
 type TmpSidMap = HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)>;
 
+/// The findora ledger in-memory representative.
 pub struct LedgerState {
     // major part of State
     status: LedgerStatus,
@@ -52,10 +60,10 @@ pub struct LedgerState {
     // Merkle tree tracing the sequence of all transaction hashes
     // Each appended hash is the hash of a transaction
     txn_merkle: AppendOnlyMerkle,
-    // The `FinalizedTransaction`s consist of a Transaction and an index into
-    // `merkle` representing its hash.
+    /// The `FinalizedTransaction`s consist of a Transaction and an index into
+    /// `merkle` representing its hash.
     pub blocks: Vecx<FinalizedBlock>,
-    // <tx id> => [<block id>, <tx idx in block>]
+    /// <tx id> => [<block id>, <tx idx in block>]
     pub tx_to_block_location: Mapx<TxnSID, [usize; 2]>,
     // Bitmap tracing all the live TXOs
     utxo_map: BitMap,
@@ -74,10 +82,12 @@ impl LedgerState {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_prng(&mut self) -> &mut ChaChaRng {
         &mut self.prng
     }
 
+    /// Consume a block context and assemble a BlockEffect
     #[inline(always)]
     pub fn start_block(&mut self) -> Result<BlockEffect> {
         self.block_ctx
@@ -89,6 +99,7 @@ impl LedgerState {
             .c(d!())
     }
 
+    /// Check tx of a block context, and apply it to current block
     pub fn apply_transaction(
         &self,
         block: &mut BlockEffect,
@@ -226,6 +237,10 @@ impl LedgerState {
         Ok(())
     }
 
+    /// Finish current block, peform following operations:
+    ///    Invalid current input utxos
+    ///    Apply current block to ledger status
+    ///    Update Utxo map
     pub fn finish_block(&mut self, mut block: BlockEffect) -> Result<TmpSidMap> {
         for (inp_sid, _) in block.input_txos.iter() {
             self.utxo_map.clear(inp_sid.0 as usize).c(d!())?;
@@ -240,10 +255,12 @@ impl LedgerState {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_staking_mut(&mut self) -> &mut Staking {
         &mut self.status.staking
     }
 
+    /// Flush in-memory data to back-end storage
     pub fn flush_data(&mut self) {
         if self.status.is_effective_block {
             self.status.is_effective_block = false;
@@ -260,26 +277,31 @@ impl LedgerState {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn set_tendermint_commit(&mut self, tendermint_h: u64) {
         self.status.td_commit_height = tendermint_h;
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_tendermint_height(&self) -> u64 {
         self.status.td_commit_height
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_next_txn(&self) -> TxnSID {
         self.status.next_txn
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_next_txo(&self) -> TxoSID {
         self.status.next_txo
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_status(&self) -> &LedgerStatus {
         &self.status
     }
@@ -473,10 +495,12 @@ impl LedgerState {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn load_or_init(base_dir: &Path) -> Result<LedgerState> {
         LedgerState::load_from_log(base_dir)
     }
 
+    /// Perform checkpoint of current ledger state
     pub fn checkpoint(&mut self, block: &BlockEffect) -> Result<u64> {
         self.save_utxo_map_version();
         let merkle_id = self.compute_and_append_txns_hash(&block);
@@ -602,6 +626,7 @@ impl LedgerState {
             .sum()
     }
 
+    /// Get a utxo along with the transaction, spent status and commitment data which it belongs
     pub fn get_utxo(&self, id: TxoSID) -> Option<AuthenticatedUtxo> {
         let utxo = self.status.get_utxo(id);
         if let Some(utxo) = utxo {
@@ -623,6 +648,8 @@ impl LedgerState {
         }
     }
 
+    /// Get a utxo along with the transaction which it belongs
+    /// Avoid ledger query operation to reduce latency
     pub fn get_utxo_light(&self, id: TxoSID) -> Option<UnAuthenticatedUtxo> {
         let utxo = self.status.get_utxo(id);
         if let Some(utxo) = utxo {
@@ -639,6 +666,7 @@ impl LedgerState {
         }
     }
 
+    /// Get a spent utxo along with the transaction, spent status and commitment data which it belongs
     pub fn get_spent_utxo(&self, addr: TxoSID) -> Option<AuthenticatedUtxo> {
         let utxo = self.status.get_spent_utxo(addr);
         if let Some(utxo) = utxo {
@@ -660,6 +688,8 @@ impl LedgerState {
         }
     }
 
+    /// Get a spent utxo along with the transaction which it belongs
+    /// Avoid ledger query operation to reduce latency
     pub fn get_spent_utxo_light(&self, addr: TxoSID) -> Option<UnAuthenticatedUtxo> {
         let utxo = self.status.get_spent_utxo(addr);
         if let Some(utxo) = utxo {
@@ -676,6 +706,7 @@ impl LedgerState {
         }
     }
 
+    #[allow(missing_docs)]
     pub fn get_utxos(&self, sid_list: &[TxoSID]) -> Vec<Option<AuthenticatedUtxo>> {
         let mut utxos = vec![];
         for sid in sid_list.iter() {
@@ -703,6 +734,7 @@ impl LedgerState {
         utxos
     }
 
+    #[allow(missing_docs)]
     pub fn get_utxos_light(
         &self,
         sid_list: &[TxoSID],
@@ -727,6 +759,7 @@ impl LedgerState {
         Ok(utxos)
     }
 
+    /// Get unspent utxos owned by a findora account
     pub fn get_owned_utxos(
         &self,
         addr: &XfrPublicKey,
@@ -758,21 +791,25 @@ impl LedgerState {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_issuance_num(&self, code: &AssetTypeCode) -> Option<u64> {
         self.status.get_issuance_num(code)
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_asset_type(&self, code: &AssetTypeCode) -> Option<AssetType> {
         self.status.get_asset_type(code).map(|v| v.deref().clone())
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_block_commit_count(&self) -> u64 {
         self.status.block_commit_count
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_state_commitment(&self) -> (HashOf<Option<StateCommitmentData>>, u64) {
         let block_count = self.status.block_commit_count;
         let commitment = self
@@ -785,11 +822,13 @@ impl LedgerState {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn public_key(&self) -> &XfrPublicKey {
         self.signing_key.get_pk_ref()
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn sign_message<T: Serialize + serde::de::DeserializeOwned>(
         &self,
         msg: &T,
@@ -797,6 +836,7 @@ impl LedgerState {
         SignatureOf::new(&self.signing_key, msg)
     }
 
+    /// Get utxo status and its proof data
     pub fn get_utxo_status(&self, addr: TxoSID) -> AuthenticatedUtxoStatus {
         let state_commitment_data = self.status.state_commitment_data.as_ref().unwrap();
         let utxo_map_bytes;
@@ -825,10 +865,12 @@ impl LedgerState {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_staking(&self) -> &Staking {
         &self.status.staking
     }
 
+    /// Query the transaction by a TxnSID along with its proof data
     pub fn get_transaction(&self, id: TxnSID) -> Result<AuthenticatedTransaction> {
         self.get_transaction_light(id).c(d!()).and_then(|tx| {
             let state_commitment_data =
@@ -845,6 +887,7 @@ impl LedgerState {
         })
     }
 
+    /// Query the transaction by a TxnSID without its proof data to reduce latency
     pub fn get_transaction_light(&self, id: TxnSID) -> Result<FinalizedTransaction> {
         self.tx_to_block_location
             .get(&id)
@@ -858,6 +901,7 @@ impl LedgerState {
             })
     }
 
+    /// Query the Block by a BlockSID along with its proof data
     pub fn get_block(&self, addr: BlockSID) -> Option<AuthenticatedBlock> {
         match self.blocks.get(addr.0) {
             None => None,
@@ -880,26 +924,31 @@ impl LedgerState {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_block_count(&self) -> usize {
         self.blocks.len()
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_transaction_count(&self) -> usize {
         self.get_next_txn().0
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_utxo_map(&self) -> &BitMap {
         &self.utxo_map
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn serialize_utxo_map(&mut self) -> Vec<u8> {
         self.utxo_map.serialize(self.get_transaction_count())
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest> {
         for pair in self.status.utxo_map_versions.iter() {
             if (pair.0).0 as u64 == version {
@@ -910,6 +959,7 @@ impl LedgerState {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_state_commitment_at_block_height(
         &self,
         block_height: u64,
@@ -921,8 +971,10 @@ impl LedgerState {
     }
 }
 
+/// The main LedgerStatus of findora ledger
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub struct LedgerStatus {
+    /// the file path of the snapshot
     pub snapshot_path: String,
     utxos: Mapx<TxoSID, Utxo>, // all currently-unspent TXOs
     owned_utxos: Mapx<XfrPublicKey, HashSet<TxoSID>>,
@@ -975,21 +1027,25 @@ impl LedgerStatus {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     fn get_utxo(&self, id: TxoSID) -> Option<Value<Utxo>> {
         self.utxos.get(&id)
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     fn get_spent_utxo(&self, addr: TxoSID) -> Option<Value<Utxo>> {
         self.spent_utxos.get(&addr)
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     fn get_issuance_num(&self, code: &AssetTypeCode) -> Option<u64> {
         self.issuance_num.get(code).map(|v| *v.deref())
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     fn get_asset_type(&self, code: &AssetTypeCode) -> Option<Value<AssetType>> {
         self.asset_types.get(code)
     }
@@ -1017,6 +1073,7 @@ impl LedgerStatus {
         }
     }
 
+    /// Load or init LedgerStatus from snapshot
     #[inline(always)]
     pub fn new(snapshot_path: &str, snapshot_entries_dir: &str) -> Result<LedgerStatus> {
         match fs::read_to_string(snapshot_path) {
@@ -1071,6 +1128,7 @@ impl LedgerStatus {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn incr_block_commit_count(&mut self) {
         self.block_commit_count += 1;
         self.sliding_set.incr_current();
@@ -1130,7 +1188,7 @@ impl LedgerStatus {
                     .or_else(|| txn_effect.new_asset_codes.get(&code).map(Value::from))
                     .c(d!())?;
                 if !asset_type.properties.asset_rules.transferable
-                    && asset_type.properties.issuer.key != record.record.public_key
+                    && asset_type.properties.issuer.deref() != &record.record.public_key
                 {
                     return Err(eg!(
                         ("Non-transferable asset type must be owned by asset issuer")
@@ -1153,7 +1211,7 @@ impl LedgerStatus {
                     .or_else(|| txn_effect.new_asset_codes.get(&code).map(Value::from))
                     .c(d!())?;
                 if !asset_type.properties.asset_rules.transferable
-                    && asset_type.properties.issuer.key != record.record.public_key
+                    && asset_type.properties.issuer.deref() != &record.record.public_key
                 {
                     return Err(eg!(
                         ("Non-transferable asset type must be owned by asset issuer")
@@ -1382,6 +1440,7 @@ impl LedgerStatus {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct LoggedBlock {
     pub block: Vec<Transaction>,

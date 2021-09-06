@@ -1,10 +1,17 @@
+//!
+//! # A Cryptohash Implementation
+//!
+//!
+
 #![deny(warnings)]
-// #![deny(missing_docs)]
+#![deny(missing_docs)]
 
 use serde::{Deserialize, Serialize};
 
+/// HashValue size in byte
 pub const HASH_SIZE: usize = 32;
 
+#[allow(missing_docs)]
 #[cfg(target_arch = "wasm32")]
 pub mod sha256 {
     use arrayref::array_ref;
@@ -72,6 +79,7 @@ pub mod sha256 {
     }
 }
 
+#[allow(missing_docs)]
 #[cfg(not(target_arch = "wasm32"))]
 pub mod sha256 {
     use sodiumoxide::crypto::hash::sha256;
@@ -79,6 +87,7 @@ pub mod sha256 {
     pub type Digest = sha256::Digest;
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn hash(m: &[u8]) -> Digest {
         sha256::hash(m)
     }
@@ -92,6 +101,7 @@ pub mod sha256 {
 ///
 
 #[repr(C)]
+#[allow(missing_docs)]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
 pub struct HashValue {
     pub hash: [u8; HASH_SIZE],
@@ -99,6 +109,7 @@ pub struct HashValue {
 
 impl HashValue {
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn new() -> HashValue {
         HashValue {
             hash: [0; HASH_SIZE],
@@ -106,6 +117,7 @@ impl HashValue {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn desc(&self) -> String {
         format!(
             "[ {:3}, {:3}, {:3}, {:3} ]",
@@ -135,6 +147,7 @@ impl From<sha256::Digest> for HashValue {
 /// * hashes    the set of hashes up the tree
 ///
 
+#[allow(missing_docs)]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Proof {
     pub version: u64,
@@ -147,6 +160,7 @@ pub struct Proof {
 }
 
 impl Proof {
+    /// Check if this leaf is a valid proof
     pub fn is_valid_proof(&self, leaf: HashValue) -> bool {
         let mut result = leaf;
         let mut id = self.tx_id;
@@ -164,8 +178,8 @@ impl Proof {
     }
 }
 
-// Compute the hash of two hashes. This Merkle tree is a binary
-// representation, so this is a common operation.
+/// Compute the hash of two hashes. This Merkle tree is a binary
+/// representation, so this is a common operation.
 pub fn hash_pair(left: &HashValue, right: &HashValue) -> HashValue {
     let mut data = [0_u8; 2 * HASH_SIZE];
 
@@ -178,9 +192,9 @@ pub fn hash_pair(left: &HashValue, right: &HashValue) -> HashValue {
     result
 }
 
-// Compute the hash of a single hash value. This function is used
-// when generating proofs. Partially-filled nodes are constructed
-// using hashes of hashes.
+/// Compute the hash of a single hash value. This function is used
+/// when generating proofs. Partially-filled nodes are constructed
+/// using hashes of hashes.
 #[inline(always)]
 pub fn hash_single(hash: &HashValue) -> HashValue {
     let digest = sha256::hash(&hash.hash[0..HASH_SIZE]);
@@ -191,9 +205,9 @@ pub fn hash_single(hash: &HashValue) -> HashValue {
     result
 }
 
-// Compute a hash value for a node in a partially-filled block. The
-// right-hand side might not exist, in which case the value is just
-// the hash of the left side.
+/// Compute a hash value for a node in a partially-filled block. The
+/// right-hand side might not exist, in which case the value is just
+/// the hash of the left side.
 #[inline(always)]
 pub fn hash_partial(left: &HashValue, right: &HashValue) -> HashValue {
     let empty_hash = HashValue::new();

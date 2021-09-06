@@ -1,12 +1,17 @@
 //!
 //! # Used to resist playback attack
 //!
+//! This module implements a sliding window mechanism. The module user can keep recent received
+//! operations for replay attack prevention
+//!
 
 #![deny(warnings)]
+#![deny(missing_docs)]
 
 use ruc::*;
 use serde::{Deserialize, Serialize};
 
+/// Define a sliding window
 #[derive(Clone, Default, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct SlidingSet<T> {
     current: usize,
@@ -15,6 +20,7 @@ pub struct SlidingSet<T> {
 }
 
 impl<T> SlidingSet<T> {
+    /// Create a new sliding window start with 0
     #[inline(always)]
     pub fn new(width: usize) -> Self {
         let mut map = Vec::with_capacity(width as usize);
@@ -29,6 +35,8 @@ impl<T> SlidingSet<T> {
         }
     }
 
+    /// Advance current window index by 1
+    /// and clear the sliding window
     #[inline(always)]
     pub fn incr_current(&mut self) {
         self.current += 1;
@@ -38,6 +46,7 @@ impl<T> SlidingSet<T> {
 }
 
 impl<T: Eq + Copy + std::fmt::Debug> SlidingSet<T> {
+    /// Check if a key with user-defined-type exists at specified index in current window
     #[inline(always)]
     pub fn has_key_at(&self, index: usize, key: T) -> bool {
         if index > self.current || index + self.width <= self.current {
@@ -47,6 +56,8 @@ impl<T: Eq + Copy + std::fmt::Debug> SlidingSet<T> {
         }
     }
 
+    /// Insert a key to current window.
+    /// Insertion should be failed if key has already existed at specified index.
     #[inline(always)]
     pub fn insert(&mut self, key: T, index: usize) -> Result<()> {
         if index <= self.current && index + self.width >= (self.current + 1) {

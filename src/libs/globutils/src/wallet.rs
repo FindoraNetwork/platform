@@ -78,6 +78,7 @@ pub struct BipPath {
 
 impl BipPath {
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn new(coin: u32, account: u32, change: u32, address: u32) -> Self {
         BipPath {
             coin,
@@ -155,11 +156,13 @@ fn check_lang(lang: &str) -> Result<Language> {
 
 /////////////////////////////////////////////////////////////////
 
+/// Convert a XfrPublicKey to base64 human-readable address
 #[inline(always)]
 pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
     base64::encode_config(&ZeiFromToBytes::zei_to_bytes(key), base64::URL_SAFE)
 }
 
+/// Restore a XfrPublicKey from base64 human-readable address
 #[inline(always)]
 pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey> {
     base64::decode_config(pk, base64::URL_SAFE)
@@ -167,11 +170,13 @@ pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey> {
         .and_then(|bytes| XfrPublicKey::zei_from_bytes(&bytes).c(d!()))
 }
 
+/// Convert a XfrPublicKey to bech32 human-readable address
 #[inline(always)]
 pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
     bech32enc(&XfrPublicKey::zei_to_bytes(key))
 }
 
+/// Restore a XfrPublicKey to bech32 human-readable address
 #[inline(always)]
 pub fn public_key_from_bech32(addr: &str) -> Result<XfrPublicKey> {
     bech32dec(addr)

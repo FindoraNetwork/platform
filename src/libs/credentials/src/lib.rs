@@ -1,5 +1,9 @@
+//!
+//! # A Credentials Implementation
+//!
+
 #![deny(warnings)]
-// #![deny(missing_docs)]
+#![deny(missing_docs)]
 
 use linear_map::LinearMap;
 use rand_core::{CryptoRng, RngCore};
@@ -26,35 +30,40 @@ pub struct CredIssuerSecretKey {
     num_internal_attrs: usize,
 }
 
+/// Public key of a credential issuer.
 #[wasm_bindgen]
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
-/// Public key of a credential issuer.
 pub struct CredIssuerPublicKey {
     ac_pub_key: ACIssuerPublicKey,
     map: LinearMap<String, ((usize, usize), usize)>, // key: (index, len in u32), len in bytes
     num_internal_attrs: usize,
 }
 
+#[allow(missing_docs)]
 pub type CredSignature = ACSignature;
+#[allow(missing_docs)]
 pub type CredCommitmentKey = ACCommitmentKey;
+#[allow(missing_docs)]
 pub type CredCommitment = ACCommitment;
 
+/// Public key of a credential user.
 #[wasm_bindgen]
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
-/// Public key of a credential user.
 pub struct CredUserPublicKey(ACUserPublicKey);
 
+/// Secret key of a credential user.
 #[wasm_bindgen]
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
-/// Secret key of a credential user.
 pub struct CredUserSecretKey(ACUserSecretKey);
 
 impl CredIssuerPublicKey {
+    /// Return a reference of inner data structure
     #[inline(always)]
     pub fn get_ref(&self) -> &ACIssuerPublicKey {
         &self.ac_pub_key
     }
 
+    /// Calculate data size
     #[inline(always)]
     pub fn get_len(&self, key: &str) -> Result<usize> {
         match self.map.get(key) {
@@ -65,6 +74,7 @@ impl CredIssuerPublicKey {
 }
 
 impl CredIssuerSecretKey {
+    /// Return a reference of inner data structure
     #[inline(always)]
     pub fn get_ref(&self) -> &ACIssuerSecretKey {
         &self.ac_sec_key
@@ -72,6 +82,7 @@ impl CredIssuerSecretKey {
 }
 
 impl CredUserPublicKey {
+    /// Return a reference of inner data structure
     #[inline(always)]
     pub fn get_ref(&self) -> &ACUserPublicKey {
         &self.0
@@ -79,12 +90,14 @@ impl CredUserPublicKey {
 }
 
 impl CredUserSecretKey {
+    /// Return a reference of inner data structure
     #[inline(always)]
     pub fn get_ref(&self) -> &ACUserSecretKey {
         &self.0
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Credential {
     pub attributes: Vec<(String, Vec<u8>)>,
@@ -93,6 +106,7 @@ pub struct Credential {
 }
 
 impl Credential {
+    #[allow(missing_docs)]
     pub fn to_ac_credential(&self) -> Result<ZeiCredential> {
         let mut u32_attrs = vec![0u32; self.issuer_pub_key.num_internal_attrs];
         for (key, attr) in &self.attributes {
@@ -111,10 +125,14 @@ impl Credential {
         })
     }
 }
+#[allow(missing_docs)]
 pub type CredPoK = ACPoK;
+#[allow(missing_docs)]
 pub type CredRevealSig = ACRevealSig;
+#[allow(missing_docs)]
 pub type CredRevealProof = ACRevealProof;
 
+#[allow(missing_docs)]
 pub fn credential_issuer_key_gen<R: CryptoRng + RngCore>(
     prng: &mut R,
     attributes: &[(String, usize)],
@@ -143,6 +161,7 @@ pub fn credential_issuer_key_gen<R: CryptoRng + RngCore>(
 }
 
 #[inline(always)]
+#[allow(missing_docs)]
 pub fn credential_user_key_gen<R: CryptoRng + RngCore>(
     prng: &mut R,
     issuer_pub_key: &CredIssuerPublicKey,
@@ -151,6 +170,7 @@ pub fn credential_user_key_gen<R: CryptoRng + RngCore>(
     (CredUserPublicKey(pk), CredUserSecretKey(sk))
 }
 
+#[allow(missing_docs)]
 pub fn credential_sign<R: CryptoRng + RngCore>(
     prng: &mut R,
     issuer_sec_key: &CredIssuerSecretKey,
@@ -190,6 +210,7 @@ pub fn credential_sign<R: CryptoRng + RngCore>(
 }
 
 #[inline(always)]
+#[allow(missing_docs)]
 pub fn credential_keygen_commitment<R: CryptoRng + RngCore>(
     prng: &mut R,
 ) -> CredCommitmentKey {
@@ -197,6 +218,7 @@ pub fn credential_keygen_commitment<R: CryptoRng + RngCore>(
 }
 
 #[inline(always)]
+#[allow(missing_docs)]
 pub fn credential_commit<R: CryptoRng + RngCore>(
     prng: &mut R,
     user_sec_key: &CredUserSecretKey,
@@ -211,6 +233,7 @@ pub fn credential_commit<R: CryptoRng + RngCore>(
 }
 
 #[inline(always)]
+#[allow(missing_docs)]
 pub fn credential_commit_with_key<R: CryptoRng + RngCore>(
     prng: &mut R,
     user_sk: &CredUserSecretKey,
@@ -225,6 +248,7 @@ pub fn credential_commit_with_key<R: CryptoRng + RngCore>(
 }
 
 #[inline(always)]
+#[allow(missing_docs)]
 pub fn credential_verify_commitment(
     issuer_pub_key: &CredIssuerPublicKey,
     sig_commitment: &CredCommitment,
@@ -235,6 +259,7 @@ pub fn credential_verify_commitment(
 }
 
 #[inline(always)]
+#[allow(missing_docs)]
 pub fn credential_open_commitment<R: CryptoRng + RngCore>(
     prng: &mut R,
     user_sk: &CredUserSecretKey,
@@ -249,6 +274,7 @@ pub fn credential_open_commitment<R: CryptoRng + RngCore>(
 }
 
 #[inline(always)]
+#[allow(missing_docs)]
 pub fn credential_reveal<R: CryptoRng + RngCore>(
     prng: &mut R,
     user_sk: &CredUserSecretKey,
@@ -261,6 +287,7 @@ pub fn credential_reveal<R: CryptoRng + RngCore>(
     ac_reveal(prng, user_sk.get_ref(), &ac_credential, &reveal_map).c(d!())
 }
 
+#[allow(missing_docs)]
 pub fn credential_verify(
     issuer_pub_key: &CredIssuerPublicKey,
     attrs: &[(String, &[u8])],
@@ -319,7 +346,7 @@ fn num_u32_per_u8(num_u8: usize) -> usize {
 
 // Use the contents of u8 slice to fill a vector of u32
 #[inline(always)]
-pub fn u8_slice_to_u32_vec(attr: &[u8], len: usize) -> Vec<u32> {
+fn u8_slice_to_u32_vec(attr: &[u8], len: usize) -> Vec<u32> {
     let mut res = vec![0u32; len];
     for (i, byte) in attr.iter().enumerate() {
         res[i / 4] |= (*byte as u32) << (8 * (i as u32 % 4));

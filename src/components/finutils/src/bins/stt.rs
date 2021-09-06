@@ -149,7 +149,7 @@ fn run() -> Result<()> {
                     .c(d!())
                     .map(|kp| kp.get_pk())
                     .or_else(|e| wallet::public_key_from_base64(receiver).c(d!(e)))?;
-                common::utils::transfer(owner_kp, &target_pk, am, false, false)
+                common::utils::transfer(owner_kp, &target_pk, am, None, false, false)
                     .c(d!())?;
             }
             _ => {
@@ -212,7 +212,8 @@ mod init {
         target_list.push((&bank, FRA_PRE_ISSUE_AMOUNT / 100 * 99));
 
         println!(">>> transfer FRAs to validators...");
-        common::utils::transfer_batch(&root_kp, target_list, false, false).c(d!())?;
+        common::utils::transfer_batch(&root_kp, target_list, None, false, false)
+            .c(d!())?;
 
         println!(">>> wait 6 blocks ...");
         sleep_n_block!(6);
@@ -321,6 +322,7 @@ mod delegate {
         common::utils::gen_transfer_op(
             owner_kp,
             vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
+            None,
             false,
             false,
         )

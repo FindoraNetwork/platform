@@ -1,3 +1,7 @@
+//!
+//! utils for findora transaction
+//!
+
 #![deny(warnings)]
 #![allow(clippy::needless_borrow)]
 
@@ -63,6 +67,7 @@ macro_rules! no_transfer_err {
     };
 }
 
+/// Definition of a fee operation, as a inner data structure of FeeInputs
 pub struct FeeInput {
     /// Amount
     pub am: u64,
@@ -77,15 +82,18 @@ pub struct FeeInput {
 }
 
 #[derive(Default)]
+#[allow(missing_docs)]
 pub struct FeeInputs {
     pub inner: Vec<FeeInput>,
 }
 
 impl FeeInputs {
+    #[allow(missing_docs)]
     pub fn new() -> Self {
         FeeInputs::default()
     }
 
+    #[allow(missing_docs)]
     pub fn append(
         &mut self,
         am: u64,
@@ -98,22 +106,27 @@ impl FeeInputs {
     }
 }
 
+/// An simple builder for findora transaction
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionBuilder {
     txn: Transaction,
     outputs: u64,
+    #[allow(missing_docs)]
     pub no_replay_token: NoReplayToken,
 }
 
 impl TransactionBuilder {
+    /// Convert builder to it's inner transaction
     pub fn into_transaction(self) -> Transaction {
         self.txn
     }
 
+    /// Get reference of it's inner transaction
     pub fn get_transaction(&self) -> &Transaction {
         &self.txn
     }
 
+    /// Get the outputs of asset `transfer` and `issue` operation in transaction
     pub fn get_relative_outputs(&self) -> Vec<(BlindAssetRecord, Option<OwnerMemo>)> {
         // lien outputs can NOT be used as fee
         macro_rules! seek {
@@ -246,14 +259,17 @@ impl TransactionBuilder {
         self.txn.check_fee()
     }
 
+    #[allow(missing_docs)]
     pub fn get_owner_memo_ref(&self, idx: usize) -> Option<&OwnerMemo> {
         self.txn.get_owner_memos_ref()[idx]
     }
 
+    #[allow(missing_docs)]
     pub fn get_output_ref(&self, idx: usize) -> TxOutput {
         self.txn.get_outputs_ref(true)[idx].clone()
     }
 
+    /// Create a instance from seq_id
     pub fn from_seq_id(seq_id: u64) -> Self {
         let mut prng = ChaChaRng::from_entropy();
         let no_replay_token = NoReplayToken::new(&mut prng, seq_id);
@@ -264,12 +280,14 @@ impl TransactionBuilder {
         }
     }
 
+    #[allow(missing_docs)]
     pub fn get_seq_id(&self) -> u64 {
         self.no_replay_token.get_seq_id()
     }
 }
 
 impl TransactionBuilder {
+    /// Add a basic asset issuing operation to builder and return modified builder
     pub fn add_basic_issue_asset(
         &mut self,
         key_pair: &XfrKeyPair,
@@ -305,19 +323,23 @@ impl TransactionBuilder {
         .c(d!())
     }
 
+    #[allow(missing_docs)]
     pub fn transaction(&self) -> &Transaction {
         &self.txn
     }
 
+    #[allow(missing_docs)]
     pub fn take_transaction(self) -> Transaction {
         self.txn
     }
 
+    /// Append a transaction memo
     pub fn add_memo(&mut self, memo: Memo) -> &mut Self {
         self.txn.body.memos.push(memo);
         self
     }
 
+    /// Add asset creating operation to builder an return modified builder
     pub fn add_operation_create_asset(
         &mut self,
         key_pair: &XfrKeyPair,
@@ -349,6 +371,8 @@ impl TransactionBuilder {
 
         Ok(self)
     }
+
+    /// Add asset issuing operation to builder and return modified builder
     pub fn add_operation_issue_asset(
         &mut self,
         key_pair: &XfrKeyPair,
@@ -368,6 +392,7 @@ impl TransactionBuilder {
         Ok(self)
     }
 
+    /// Add asset transfer operation to builder and return modified builder
     #[allow(clippy::too_many_arguments)]
     pub fn add_operation_transfer_asset(
         &mut self,
@@ -418,6 +443,7 @@ impl TransactionBuilder {
         Ok(self)
     }
 
+    /// Add a operation to updating asset memo
     pub fn add_operation_update_memo(
         &mut self,
         auth_key_pair: &XfrKeyPair,
@@ -439,6 +465,8 @@ impl TransactionBuilder {
         self
     }
 
+    /// Add a operation to delegating finddra accmount to a tendermint validator.
+    /// The transfer operation to BLACK_HOLE_PUBKEY_STAKING should be sent along with.
     pub fn add_operation_delegation(
         &mut self,
         keypair: &XfrKeyPair,
@@ -454,6 +482,7 @@ impl TransactionBuilder {
         self.add_operation(Operation::Delegation(op))
     }
 
+    /// Add a operation to updating staker memo and commission_rate
     pub fn add_operation_update_staker(
         &mut self,
         keypair: &XfrKeyPair,
@@ -482,6 +511,7 @@ impl TransactionBuilder {
         Ok(self.add_operation(Operation::UpdateStaker(op)))
     }
 
+    /// Add a staking operation to add a tendermint node as a validator
     pub fn add_operation_staking(
         &mut self,
         keypair: &XfrKeyPair,
@@ -516,6 +546,9 @@ impl TransactionBuilder {
         Ok(self.add_operation(Operation::Delegation(op)))
     }
 
+    /// Add a operation to reduce delegation amount of a findora account.
+    /// If no validator address and FRA amount provided, it will be a full un-delegation
+    /// Otherwise, it will withdraw some FRA from the validator
     pub fn add_operation_undelegation(
         &mut self,
         keypair: &XfrKeyPair,
@@ -525,6 +558,7 @@ impl TransactionBuilder {
         self.add_operation(Operation::UnDelegation(Box::new(op)))
     }
 
+    /// Add a operation to claim all the rewards
     pub fn add_operation_claim(
         &mut self,
         keypair: &XfrKeyPair,
@@ -534,6 +568,7 @@ impl TransactionBuilder {
         self.add_operation(Operation::Claim(op))
     }
 
+    #[allow(missing_docs)]
     pub fn add_operation_fra_distribution(
         &mut self,
         kps: &[&XfrKeyPair],
@@ -544,6 +579,7 @@ impl TransactionBuilder {
             .map(move |op| self.add_operation(Operation::FraDistribution(op)))
     }
 
+    #[allow(missing_docs)]
     pub fn add_operation_governance(
         &mut self,
         kps: &[&XfrKeyPair],
@@ -562,6 +598,7 @@ impl TransactionBuilder {
         .map(move |op| self.add_operation(Operation::Governance(op)))
     }
 
+    /// Add a operation update the validator set at specified block height.
     pub fn add_operation_update_validator(
         &mut self,
         kps: &[&XfrKeyPair],
@@ -573,16 +610,19 @@ impl TransactionBuilder {
             .map(move |op| self.add_operation(Operation::UpdateValidator(op)))
     }
 
+    #[allow(missing_docs)]
     pub fn add_operation(&mut self, op: Operation) -> &mut Self {
         self.txn.add_operation(op);
         self
     }
 
+    /// Signing this transaction with XfrKeyPair
     pub fn sign(&mut self, kp: &XfrKeyPair) -> &mut Self {
         self.txn.sign(kp);
         self
     }
 
+    /// Check and append signature to transaction
     pub fn add_signature(
         &mut self,
         pk: &XfrPublicKey,
@@ -593,12 +633,14 @@ impl TransactionBuilder {
         Ok(self)
     }
 
+    #[allow(missing_docs)]
     pub fn serialize(&self) -> Vec<u8> {
         // Unwrap is safe beacuse the underlying transaction is guaranteed to be serializable.
         let j = serde_json::to_string(&self.txn).unwrap();
         j.as_bytes().to_vec()
     }
 
+    #[allow(missing_docs)]
     pub fn serialize_str(&self) -> String {
         // Unwrap is safe because the underlying transaction is guaranteed to be serializable.
         serde_json::to_string(&self.txn).unwrap()
@@ -695,12 +737,13 @@ pub struct TransferOperationBuilder {
 }
 
 impl TransferOperationBuilder {
+    #[allow(missing_docs)]
     pub fn new() -> Self {
         Self::default()
     }
 
-    // TxoRef is the location of the input on the ledger and the amount is how much of the record
-    // should be spent in the transfer. See tests for example usage.
+    /// TxoRef is the location of the input on the ledger and the amount is how much of the record
+    /// should be spent in the transfer. See tests for example usage.
     pub fn add_input(
         &mut self,
         txo_sid: TxoRef,
@@ -731,6 +774,7 @@ impl TransferOperationBuilder {
         Ok(self)
     }
 
+    #[allow(missing_docs)]
     pub fn add_output(
         &mut self,
         asset_record_template: &AssetRecordTemplate,
@@ -834,8 +878,8 @@ impl TransferOperationBuilder {
         Ok(self)
     }
 
-    // Ensures that outputs and inputs are balanced by adding remainder outputs for leftover asset
-    // amounts
+    /// Ensures that outputs and inputs are balanced by adding remainder outputs for leftover asset
+    /// amounts
     pub fn balance(&mut self) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
         if self.transfer.is_some() {
@@ -894,7 +938,7 @@ impl TransferOperationBuilder {
             .iter()
             .fold(0, |acc, ar| acc + ar.open_asset_record.amount);
         if spend_total != output_total {
-            return Err(eg!());
+            return Err(eg!(format!("{} != {}", spend_total, output_total)));
         }
         self.output_records.append(&mut partially_consumed_inputs);
 
@@ -906,8 +950,8 @@ impl TransferOperationBuilder {
         Ok(self)
     }
 
-    // Finalize the transaction and prepare for signing. Once called, the transaction cannot be
-    // modified.
+    /// Finalize the transaction and prepare for signing. Once called, the transaction cannot be
+    /// modified.
     pub fn create(&mut self, transfer_type: TransferType) -> Result<&mut Self> {
         self.balance().c(d!())?;
 
@@ -934,6 +978,7 @@ impl TransferOperationBuilder {
         Ok(self)
     }
 
+    #[allow(missing_docs)]
     pub fn get_output_record(&self, idx: usize) -> Option<BlindAssetRecord> {
         self.transfer
             .as_ref()?
@@ -944,7 +989,7 @@ impl TransferOperationBuilder {
             .cloned()
     }
 
-    // All input owners must sign eventually for the transaction to be valid.
+    /// All input owners must sign eventually for the transaction to be valid.
     pub fn sign(&mut self, kp: &XfrKeyPair) -> Result<&mut Self> {
         if self.transfer.is_none() {
             return Err(eg!(no_transfer_err!()));
@@ -953,6 +998,7 @@ impl TransferOperationBuilder {
         Ok(self)
     }
 
+    #[allow(missing_docs)]
     pub fn create_input_signature(
         &self,
         keypair: &XfrKeyPair,
@@ -965,6 +1011,7 @@ impl TransferOperationBuilder {
         Ok(sig)
     }
 
+    #[allow(missing_docs)]
     pub fn attach_signature(
         &mut self,
         sig: IndexedSignature<TransferAssetBody>,
@@ -977,7 +1024,7 @@ impl TransferOperationBuilder {
         Ok(self)
     }
 
-    // Return the transaction operation
+    /// Return the transaction operation
     pub fn transaction(&self) -> Result<Operation> {
         if self.transfer.is_none() {
             return Err(eg!(no_transfer_err!()));
@@ -985,7 +1032,7 @@ impl TransferOperationBuilder {
         Ok(Operation::TransferAsset(self.transfer.clone().c(d!())?))
     }
 
-    // Checks to see whether all necessary signatures are present and valid
+    /// Checks to see whether all necessary signatures are present and valid
     pub fn validate_signatures(&mut self) -> Result<&mut Self> {
         if self.transfer.is_none() {
             return Err(eg!(no_transfer_err!()));

@@ -40,8 +40,8 @@ const BLOCK_SIZE: usize = HASH_SIZE * (HASHES_IN_BLOCK + 1);
 const MAX_BLOCK_LEVELS: usize = 64;
 const PROOF_VERSION: u64 = 0;
 
-#[derive(PartialEq, Copy, Clone, Debug, Deserialize, Serialize)]
 #[repr(C)]
+#[derive(PartialEq, Copy, Clone, Debug, Deserialize, Serialize)]
 struct CheckBits {
     bits: [u8; CHECK_SIZE],
 }
@@ -50,8 +50,8 @@ struct CheckBits {
 // in the block, and contains a checksum. This structure needs to
 // be HASH_SIZE bytes in size. It must sit at the start of the block.
 // The check_bits field must be first in the structure.
-#[derive(PartialEq, Copy, Clone, Debug, Deserialize, Serialize)]
 #[repr(C)]
+#[derive(PartialEq, Copy, Clone, Debug, Deserialize, Serialize)]
 struct BlockHeader {
     check_bits: CheckBits,
     header_mark: u32,

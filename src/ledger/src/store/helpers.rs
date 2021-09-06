@@ -25,6 +25,7 @@ use zei::{
     },
 };
 
+/// Create a transaction to define a custom asset
 pub fn create_definition_transaction(
     code: &AssetTypeCode,
     keypair: &XfrKeyPair,
@@ -46,10 +47,12 @@ pub fn create_definition_transaction(
 }
 
 #[inline(always)]
+#[allow(missing_docs)]
 pub fn build_keys<R: CryptoRng + RngCore>(prng: &mut R) -> XfrKeyPair {
     XfrKeyPair::generate(prng)
 }
 
+#[allow(missing_docs)]
 pub fn asset_creation_body(
     token_code: &AssetTypeCode,
     issuer_key: &XfrPublicKey,
@@ -81,6 +84,7 @@ pub fn asset_creation_body(
     }
 }
 
+#[allow(missing_docs)]
 pub fn asset_creation_operation(
     asset_body: &DefineAssetBody,
     iss_key: &XfrKeyPair,
@@ -95,6 +99,7 @@ pub fn asset_creation_operation(
     }
 }
 
+#[allow(missing_docs)]
 pub fn apply_transaction(
     ledger: &mut LedgerState,
     tx: Transaction,
@@ -119,6 +124,7 @@ pub fn apply_transaction(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(missing_docs)]
 pub fn create_issue_and_transfer_txn(
     ledger: &mut LedgerState,
     params: &PublicParams,
@@ -195,6 +201,7 @@ pub fn create_issue_and_transfer_txn(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(missing_docs)]
 pub fn create_issue_and_transfer_txn_with_asset_tracing(
     ledger: &mut LedgerState,
     params: &PublicParams,
@@ -289,6 +296,7 @@ pub fn create_issue_and_transfer_txn_with_asset_tracing(
     (tx, ar)
 }
 
+#[allow(missing_docs)]
 pub fn create_issuance_txn(
     ledger: &mut LedgerState,
     params: &PublicParams,

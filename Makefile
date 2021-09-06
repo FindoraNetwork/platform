@@ -37,7 +37,7 @@ bin_files = \
 		./$(pick)/abcid \
 		$(shell go env GOPATH)/bin/tendermint \
 		./$(pick)/xx \
-		./$(pick)/fns \
+		./$(pick)/fn \
 		./$(pick)/stt \
 		./$(pick)/staking_cfg_generator
 

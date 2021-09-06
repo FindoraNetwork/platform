@@ -3,6 +3,7 @@
 //!
 
 #![deny(warnings)]
+#![deny(missing_docs)]
 
 pub mod wallet;
 
@@ -15,29 +16,15 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{fs, marker::PhantomData, path::PathBuf, result::Result as StdResult};
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 
-pub const TRANSACTION_WINDOW_WIDTH: u64 = 100;
-
-#[inline(always)]
-#[cfg(not(target_arch = "wasm32"))]
-pub fn http_post_request<T: Serialize>(
-    query: &str,
-    body: Option<T>,
-) -> StdResult<String, attohttpc::Error> {
-    let req = attohttpc::post(query);
-
-    if let Some(body) = body {
-        req.json(&body)?.send()?.error_for_status()?.text()
-    } else {
-        req.send()?.error_for_status()?.text()
-    }
-}
-
+/// Perform a synchronize http get request with attohttpc,
+/// and parse the response as a String
 #[inline(always)]
 #[cfg(not(target_arch = "wasm32"))]
 pub fn http_get_request(query: &str) -> StdResult<String, attohttpc::Error> {
     attohttpc::get(query).send()?.error_for_status()?.text()
 }
 
+/// Create a new temporary file for a `findora_ledger`
 pub fn fresh_tmp_dir() -> PathBuf {
     let base_dir = std::env::temp_dir();
     let base_dirname = "findora_ledger";
@@ -53,7 +40,7 @@ pub fn fresh_tmp_dir() -> PathBuf {
     dirname.unwrap()
 }
 
-/// Convert a u64 into a string with commas.
+// Convert a u64 into a string with commas.
 fn commas_u64(input: u64) -> String {
     if input < 10000 {
         return format!("{}", input);
@@ -76,7 +63,7 @@ fn commas_u64(input: u64) -> String {
     result
 }
 
-/// Convert an i64 into a string with commas.
+// Convert an i64 into a string with commas.
 fn commas_i64(input: i64) -> String {
     if input == 0 {
         return "0".to_string();
@@ -100,6 +87,7 @@ fn commas_i64(input: i64) -> String {
     result
 }
 
+#[allow(missing_docs)]
 pub trait Commas {
     fn commas(self) -> String;
 }
@@ -125,13 +113,14 @@ impl_commas!(i32, i64, commas_i64);
 impl_commas!(i16, i64, commas_i64);
 impl_commas!(i8, i64, commas_i64);
 
-// Wrapper around a serialized variable that maintains type semantics.
+/// Wrapper around a serialized variable that maintains type semantics.
 #[derive(Clone, Debug)]
 pub struct Serialized<T> {
-    pub val: String,
+    val: String,
     phantom: PhantomData<T>,
 }
 
+/// A tuple struct to create and verify a signature
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SignatureOf<T>(pub SignatureOfBytes<Serialized<T>>);
 
@@ -139,17 +128,20 @@ impl<T> SignatureOf<T>
 where
     T: Serialize + serde::de::DeserializeOwned,
 {
+    /// Serialize a data structure and singed it with the `XfrKeyPair`
     #[inline(always)]
     pub fn new(xfr: &XfrKeyPair, to_sign: &T) -> Self {
         Self(SignatureOfBytes::new(xfr, &Serialized::new(to_sign)))
     }
 
+    /// Verify if a value is properly singed with the `XfrKeyPair`
     #[inline(always)]
     pub fn verify(&self, pubkey: &XfrPublicKey, val: &T) -> Result<()> {
         self.0.verify(pubkey, &Serialized::new(val)).c(d!())
     }
 }
 
+/// A tuple struct to calculate and display a hash value
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct HashOf<T>(pub HashOfBytes<Serialized<T>>);
 
@@ -158,21 +150,17 @@ where
     T: Serialize + serde::de::DeserializeOwned,
 {
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn new(to_hash: &T) -> Self {
         Self(HashOfBytes::new(&Serialized::new(to_hash)))
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn hex(&self) -> String {
         hex::encode(self)
     }
 }
-
-pub type GlobalState<T> = (
-    HashOf<Option<T>>,
-    u64,
-    SignatureOf<(HashOf<Option<T>>, u64)>,
-);
 
 impl<T> AsRef<[u8]> for HashOf<T> {
     #[inline(always)]
@@ -181,6 +169,7 @@ impl<T> AsRef<[u8]> for HashOf<T> {
     }
 }
 
+/// A tuple struct to create an verify a merkle proof
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProofOf<T>(pub ProofOfBytes<Serialized<T>>);
 
@@ -189,31 +178,38 @@ where
     T: Serialize + serde::de::DeserializeOwned,
 {
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn new(proof: Proof) -> Self {
         Self(ProofOfBytes::new(proof))
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn verify(&self, leaf: &T) -> bool {
         self.0.verify(HashOf::new(leaf).0)
     }
 }
 
+/// Wrapper around a Digest variable that maintains type semantics.
 #[derive(Copy, Clone, Debug)]
 pub struct HashOfBytes<T> {
+    #[allow(missing_docs)]
     pub hash: Digest,
     phantom: PhantomData<T>,
 }
 
+/// Wrapper around a Proof variable that maintains type semantics.
 #[derive(Debug, Clone)]
 pub struct ProofOfBytes<T> {
+    #[allow(missing_docs)]
     pub proof: Proof,
     phantom: PhantomData<T>,
 }
 
+/// Wrapper around a XfrSingature variable that maintains type semantics.
 #[derive(Clone, Debug)]
 pub struct SignatureOfBytes<T> {
-    pub sig: XfrSignature,
+    sig: XfrSignature,
     phantom: PhantomData<T>,
 }
 
@@ -235,6 +231,7 @@ impl<T> Serialized<T>
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
+    /// Serializing a type by serde_json
     #[inline(always)]
     pub fn new(to_serialize: &T) -> Self {
         Serialized {
@@ -243,6 +240,7 @@ where
         }
     }
 
+    /// Deserializing a type by serde_json
     #[inline(always)]
     pub fn deserialize(&self) -> T {
         serde_json::from_str(&self.val).unwrap()
@@ -306,6 +304,7 @@ where
     T: AsRef<[u8]>,
 {
     #[inline(always)]
+    /// Hashing a type with sha256
     pub fn new(to_hash: &T) -> Self {
         Self {
             hash: sha256::hash(to_hash.as_ref()),
@@ -343,6 +342,7 @@ impl<T> ProofOfBytes<T>
 where
     T: AsRef<[u8]>,
 {
+    /// Creating a wrapper of Proof
     #[inline(always)]
     pub fn new(proof: Proof) -> Self {
         Self {
@@ -351,6 +351,7 @@ where
         }
     }
 
+    /// Verifying if this proof is valid
     #[inline(always)]
     pub fn verify(&self, leaf: HashOfBytes<T>) -> bool {
         self.proof.is_valid_proof(leaf.hash.into())
@@ -379,6 +380,7 @@ impl<T> SignatureOfBytes<T>
 where
     T: AsRef<[u8]>,
 {
+    /// Create a signature with specified keypair
     #[inline(always)]
     pub fn new(xfr: &XfrKeyPair, to_sign: &T) -> Self {
         Self {
@@ -387,6 +389,7 @@ where
         }
     }
 
+    /// Verify a signature with specified keypair
     #[inline(always)]
     pub fn verify(&self, pubkey: &XfrPublicKey, val: &T) -> Result<()> {
         pubkey.verify(val.as_ref(), &self.sig).c(d!())

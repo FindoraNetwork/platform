@@ -77,8 +77,8 @@ const BIT_HEADER: u16 = 4;
 
 /// For users who download the bitmap, this is what they
 /// get for a block header.
-#[derive(Debug, Default)]
 #[repr(C)]
+#[derive(Debug, Default)]
 pub struct BlockInfo {
     magic: u32, // Should be first to allow changes...
     count: u32,
@@ -272,8 +272,8 @@ impl SparseMap {
 //
 // The size of this structure must match the HEADER_SIZE
 // constant.
-#[derive(Debug)]
 #[repr(C)]
+#[derive(Debug)]
 struct BlockHeader {
     checksum: CheckBlock, // must be first
     magic: u32,           // must be second

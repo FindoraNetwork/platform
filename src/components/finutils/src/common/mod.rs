@@ -1,17 +1,18 @@
 //!
-//! # Findora Network Staking
+//! # Findora Network Cli tool
 //!
-//! FNS, a command line tool for staking in findora network.
+//! FN, a command line tool for findora network.
 //!
-//! This module is the library part of FNS.
+//! This module is the library part of FN.
 //!
 
 pub mod utils;
 
+use crate::api::DelegationInfo;
 use globutils::wallet;
 use lazy_static::lazy_static;
 use ledger::{
-    data_model::BLACK_HOLE_PUBKEY_STAKING,
+    data_model::{AssetRules, AssetTypeCode, Transaction, BLACK_HOLE_PUBKEY_STAKING},
     staking::{
         check_delegation_amount, gen_random_keypair, td_addr_to_bytes,
         td_pubkey_to_td_addr, td_pubkey_to_td_addr_bytes, PartialUnDelegation,
@@ -25,11 +26,17 @@ use utils::{
     get_block_height, get_local_block_height, get_validator_detail,
     parse_td_validator_keys,
 };
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
+use zei::{
+    setup::PublicParams,
+    xfr::{
+        asset_record::AssetRecordType,
+        sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+    },
+};
 
 lazy_static! {
     static ref CFG_PATH: String = format!(
-        "{}/.____fns_config____",
+        "{}/.____fn_config____",
         ruc::info!(env::var("HOME")).unwrap_or_else(|_| "/tmp/".to_owned())
     );
     static ref MNEMONIC: Option<String> = fs::read_to_string(&*MNEMONIC_FILE).ok();
@@ -40,6 +47,7 @@ lazy_static! {
     static ref SERV_ADDR_FILE: String = format!("{}/serv_addr", &*CFG_PATH);
 }
 
+/// Updating the information of a staker includes commission_rate and staker_memo
 pub fn staker_update(cr: Option<&str>, memo: Option<&str>) -> Result<()> {
     let addr = get_td_pubkey().map(|i| td_pubkey_to_td_addr(&i)).c(d!())?;
     let vd = get_validator_detail(&addr).c(d!())?;
@@ -72,6 +80,8 @@ pub fn staker_update(cr: Option<&str>, memo: Option<&str>) -> Result<()> {
     utils::send_tx(&builder.take_transaction()).c(d!())
 }
 
+/// Perform a staking operation to add current tendermint node to validator list
+/// The cli tool user will be alert if the block height of local node is too small
 pub fn stake(
     amount: &str,
     commission_rate: &str,
@@ -119,13 +129,20 @@ pub fn stake(
     builder
         .add_operation_staking(&kp, &vkp, td_pubkey, cr, memo.map(|m| m.to_owned()))
         .c(d!())?;
-    utils::gen_transfer_op(&kp, vec![(&BLACK_HOLE_PUBKEY_STAKING, am)], false, false)
-        .c(d!())
-        .map(|principal_op| builder.add_operation(principal_op))?;
+    utils::gen_transfer_op(
+        &kp,
+        vec![(&BLACK_HOLE_PUBKEY_STAKING, am)],
+        None,
+        false,
+        false,
+    )
+    .c(d!())
+    .map(|principal_op| builder.add_operation(principal_op))?;
 
     utils::send_tx(&builder.take_transaction()).c(d!())
 }
 
+/// Append more FRA token to the specified tendermint node
 pub fn stake_append(
     amount: &str,
     staker: Option<&str>,
@@ -147,13 +164,20 @@ pub fn stake_append(
 
     let mut builder = utils::new_tx_builder().c(d!())?;
     builder.add_operation_delegation(&kp, td_addr);
-    utils::gen_transfer_op(&kp, vec![(&BLACK_HOLE_PUBKEY_STAKING, am)], false, false)
-        .c(d!())
-        .map(|principal_op| builder.add_operation(principal_op))?;
+    utils::gen_transfer_op(
+        &kp,
+        vec![(&BLACK_HOLE_PUBKEY_STAKING, am)],
+        None,
+        false,
+        false,
+    )
+    .c(d!())
+    .map(|principal_op| builder.add_operation(principal_op))?;
 
     utils::send_tx(&builder.take_transaction()).c(d!())
 }
 
+/// Withdraw Fra token from findora network for a staker
 pub fn unstake(
     am: Option<&str>,
     staker: Option<&str>,
@@ -200,14 +224,16 @@ pub fn unstake(
     utils::send_tx(&builder.take_transaction()).c(d!())
 }
 
-pub fn claim(am: Option<&str>) -> Result<()> {
+/// Claim rewards from findora network
+pub fn claim(am: Option<&str>, sk_str: Option<&str>) -> Result<()> {
     let am = if let Some(i) = am {
         Some(i.parse::<u64>().c(d!("'amount' must be an integer"))?)
     } else {
         None
     };
 
-    let kp = get_keypair().c(d!())?;
+    let kp = restore_keypair_from_str_with_default(sk_str)?;
+
     let mut builder = utils::new_tx_builder().c(d!())?;
 
     utils::gen_fee_op(&kp).c(d!()).map(|op| {
@@ -218,15 +244,15 @@ pub fn claim(am: Option<&str>) -> Result<()> {
     utils::send_tx(&builder.take_transaction()).c(d!())
 }
 
-pub fn show_staker() -> Result<()> {
-    let addr = get_td_pubkey().map(|i| td_pubkey_to_td_addr(&i))?;
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&get_validator_detail(&addr).c(d!())?).c(d!())?
-    );
-    Ok(())
-}
-
+/// Show information of current node, including following sections:
+///     Server URL
+///     Findora Wallet Address
+///     Findora Public Key
+///     Local validator address
+///     FRA balance
+///     Delegation Information
+///     Validator Detail (if already staked)
+///
 pub fn show() -> Result<()> {
     let kp = get_keypair().c(d!())?;
 
@@ -245,43 +271,50 @@ pub fn show() -> Result<()> {
         );
     });
 
-    let td_pubkey = ruc::info!(get_td_pubkey()).map(|i| {
-        println!(
-            "\x1b[31;01mValidator Node Addr:\x1b[00m\n{}\n",
-            td_pubkey_to_td_addr(&i)
-        );
-        i
+    let td_info = ruc::info!(get_td_pubkey()).map(|i| {
+        let addr = td_pubkey_to_td_addr(&i);
+        println!("\x1b[31;01mValidator Node Addr:\x1b[00m\n{}\n", addr);
+        (i, addr)
     });
 
     let self_balance = ruc::info!(utils::get_balance(&kp)).map(|i| {
         println!("\x1b[31;01mNode Balance:\x1b[00m\n{} FRA units\n", i);
     });
 
-    if let Ok(tpk) = td_pubkey.as_ref() {
-        let res = utils::get_validator_detail(&td_pubkey_to_td_addr(tpk))
-            .c(d!("Validator not found"))
-            .and_then(|di| {
-                serde_json::to_string_pretty(&di).c(d!("server returned invalid data"))
-            })
-            .map(|i| {
-                println!("\x1b[31;01mYour Staking:\x1b[00m\n{}\n", i);
-            });
-        ruc::info_omit!(res);
-    }
+    let di = utils::get_delegation_info(kp.get_pk_ref());
+    let bond_entries = match di.as_ref() {
+        Ok(di) => Some(di.bond_entries.clone()),
+        Err(_) => None,
+    };
 
-    let delegation_info = utils::get_delegation_info(kp.get_pk_ref())
-        .c(d!())
-        .and_then(|di| {
-            serde_json::to_string_pretty(&di).c(d!("server returned invalid data"))
-        });
+    let delegation_info = di.and_then(|di| {
+        serde_json::to_string_pretty(&di).c(d!("server returned invalid data"))
+    });
     let delegation_info = ruc::info!(delegation_info).map(|i| {
         println!("\x1b[31;01mYour Delegation:\x1b[00m\n{}\n", i);
     });
 
+    if let Ok((tpk, addr)) = td_info.as_ref() {
+        let self_delegation =
+            bond_entries.map_or(false, |bes| bes.iter().any(|i| &i.0 == addr));
+        if self_delegation {
+            let res = utils::get_validator_detail(&td_pubkey_to_td_addr(tpk))
+                .c(d!("Validator not found"))
+                .and_then(|di| {
+                    serde_json::to_string_pretty(&di)
+                        .c(d!("server returned invalid data"))
+                })
+                .map(|i| {
+                    println!("\x1b[31;01mYour Staking:\x1b[00m\n{}\n", i);
+                });
+            ruc::info_omit!(res);
+        }
+    }
+
     if [
         serv_addr,
         xfr_account,
-        td_pubkey.map(|_| ()),
+        td_info.map(|_| ()),
         self_balance,
         delegation_info,
     ]
@@ -294,6 +327,10 @@ pub fn show() -> Result<()> {
     }
 }
 
+/// Setup for a cli tool
+///    Server URL
+///    Owner mnemonic path
+///    Tendermint node private key path
 pub fn setup(
     serv_addr: Option<&str>,
     owner_mnemonic_path: Option<&str>,
@@ -331,16 +368,19 @@ pub fn setup(
     Ok(())
 }
 
-pub fn transfer_fra(
+#[allow(missing_docs)]
+pub fn transfer_asset(
     owner_sk: Option<&str>,
     target_addr: XfrPublicKey,
+    token_code: Option<AssetTypeCode>,
     am: &str,
     confidential_am: bool,
     confidential_ty: bool,
 ) -> Result<()> {
-    transfer_fra_batch(
+    transfer_asset_batch(
         owner_sk,
         &[target_addr],
+        token_code,
         am,
         confidential_am,
         confidential_ty,
@@ -348,26 +388,22 @@ pub fn transfer_fra(
     .c(d!())
 }
 
-pub fn transfer_fra_batch(
+#[allow(missing_docs)]
+pub fn transfer_asset_batch(
     owner_sk: Option<&str>,
     target_addr: &[XfrPublicKey],
+    token_code: Option<AssetTypeCode>,
     am: &str,
     confidential_am: bool,
     confidential_ty: bool,
 ) -> Result<()> {
-    let from = owner_sk
-        .c(d!())
-        .and_then(|sk| {
-            ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!("\"{}\"", sk)))
-                .c(d!())
-                .map(|sk| sk.into_keypair())
-        })
-        .or_else(|_| get_keypair().c(d!()))?;
+    let from = restore_keypair_from_str_with_default(owner_sk)?;
     let am = am.parse::<u64>().c(d!("'amount' must be an integer"))?;
 
     utils::transfer_batch(
         &from,
         target_addr.iter().map(|addr| (addr, am)).collect(),
+        token_code,
         confidential_am,
         confidential_ty,
     )
@@ -440,6 +476,7 @@ fn convert_commission_rate(cr: f64) -> Result<[u64; 2]> {
     Ok([(cr * 10000.0) as u64, 10000])
 }
 
+#[allow(missing_docs)]
 pub fn gen_key_and_print() {
     let (m, k, kp) = loop {
         let mnemonic = pnk!(wallet::generate_mnemonic_custom(24, "en"));
@@ -456,6 +493,176 @@ pub fn gen_key_and_print() {
         "\n\x1b[31;01mWallet Address:\x1b[00m {}\n\x1b[31;01mMnemonic:\x1b[00m {}\n\x1b[31;01mKey:\x1b[00m {}\n",
         wallet_addr, m, k
     );
+}
+
+fn restore_keypair_from_str_with_default(sk_str: Option<&str>) -> Result<XfrKeyPair> {
+    if let Some(sk) = sk_str {
+        serde_json::from_str::<XfrSecretKey>(&format!("\"{}\"", sk))
+            .map(|sk| sk.into_keypair())
+            .c(d!("Invalid secret key"))
+    } else {
+        get_keypair().c(d!())
+    }
+}
+
+/// Show the asset balance of a findora account
+pub fn show_account(sk_str: Option<&str>, asset: Option<&str>) -> Result<()> {
+    let kp = restore_keypair_from_str_with_default(sk_str)?;
+    let token_code = asset.and_then(|asset| AssetTypeCode::new_from_base64(asset).ok());
+    let balance = utils::get_asset_balance(&kp, token_code).c(d!())?;
+
+    println!("{}: {}", asset.unwrap_or("FRA"), balance);
+    Ok(())
+}
+
+#[allow(missing_docs)]
+pub fn delegate(sk_str: Option<&str>, amount: u64, validator: &str) -> Result<()> {
+    let kp = restore_keypair_from_str_with_default(sk_str)?;
+
+    utils::send_tx(&gen_delegate_tx(&kp, amount, validator).c(d!())?)
+}
+
+#[allow(missing_docs)]
+pub fn undelegate(sk_str: Option<&str>, param: Option<(u64, &str)>) -> Result<()> {
+    let kp = restore_keypair_from_str_with_default(sk_str)?;
+
+    utils::send_tx(&gen_undelegate_tx(&kp, param).c(d!())?)
+}
+
+/// Display delegation information of a findora account
+pub fn show_delegations(sk_str: Option<&str>) -> Result<()> {
+    let pk = restore_keypair_from_str_with_default(sk_str)?.get_pk();
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty::<DelegationInfo>(
+            &utils::get_delegation_info(&pk).c(d!())?
+        )
+        .c(d!())?
+    );
+
+    Ok(())
+}
+
+fn gen_undelegate_tx(
+    owner_kp: &XfrKeyPair,
+    param: Option<(u64, &str)>,
+) -> Result<Transaction> {
+    let mut builder = utils::new_tx_builder().c(d!())?;
+    utils::gen_fee_op(owner_kp).c(d!()).map(|op| {
+        builder.add_operation(op);
+    })?;
+    if let Some((amount, validator)) = param {
+        // partial undelegation
+        builder.add_operation_undelegation(
+            owner_kp,
+            Some(PartialUnDelegation::new(
+                amount,
+                gen_random_keypair().get_pk(),
+                td_addr_to_bytes(validator).c(d!())?,
+            )),
+        );
+    } else {
+        builder.add_operation_undelegation(owner_kp, None);
+    }
+
+    Ok(builder.take_transaction())
+}
+
+fn gen_delegate_tx(
+    owner_kp: &XfrKeyPair,
+    amount: u64,
+    validator: &str,
+) -> Result<Transaction> {
+    let mut builder = utils::new_tx_builder().c(d!())?;
+
+    utils::gen_transfer_op(
+        owner_kp,
+        vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
+        None,
+        false,
+        false,
+    )
+    .c(d!())
+    .map(|principal_op| {
+        builder.add_operation(principal_op);
+        builder.add_operation_delegation(owner_kp, validator.to_owned());
+    })?;
+
+    Ok(builder.take_transaction())
+}
+
+/// Create a custom asset for a findora account. If no token code string provided,
+/// it will generate a random new one.
+pub fn create_asset(
+    sk_str: Option<&str>,
+    memo: &str,
+    decimal: u8,
+    max_units: Option<u64>,
+    tranferable: bool,
+    token_code: Option<&str>,
+) -> Result<()> {
+    let code = if token_code.is_none() {
+        AssetTypeCode::gen_random()
+    } else {
+        AssetTypeCode::new_from_base64(token_code.unwrap())
+            .c(d!("invalid asset code"))?
+    };
+    let kp = restore_keypair_from_str_with_default(sk_str)?;
+
+    let mut rules = AssetRules::default();
+    rules.set_decimals(decimal).c(d!())?;
+    rules.set_max_units(max_units);
+    rules.set_transferable(tranferable);
+
+    let mut builder = utils::new_tx_builder().c(d!())?;
+    builder
+        .add_operation_create_asset(&kp, Some(code), rules, memo)
+        .c(d!())?;
+    utils::gen_fee_op(&kp)
+        .c(d!())
+        .map(|op| builder.add_operation(op))?;
+
+    utils::send_tx(&builder.take_transaction())
+}
+
+/// Issue a custom asset with specified amount
+pub fn issue_asset(
+    sk_str: Option<&str>,
+    asset: &str,
+    amount: u64,
+    hidden: bool,
+) -> Result<()> {
+    let kp = restore_keypair_from_str_with_default(sk_str)?;
+    let code = AssetTypeCode::new_from_base64(asset).c(d!())?;
+    let confidentiality_flags = AssetRecordType::from_flags(hidden, false);
+
+    let mut builder = utils::new_tx_builder().c(d!())?;
+    builder
+        .add_basic_issue_asset(
+            &kp,
+            &code,
+            builder.get_seq_id(),
+            amount,
+            confidentiality_flags,
+            &PublicParams::default(),
+        )
+        .c(d!())?;
+    utils::gen_fee_op(&kp)
+        .c(d!())
+        .map(|op| builder.add_operation(op))?;
+
+    utils::send_tx(&builder.take_transaction())
+}
+
+/// Show a list of custom asset token created by a findora account
+pub fn show_asset(addr: &str) -> Result<()> {
+    let pk = wallet::public_key_from_bech32(addr).c(d!())?;
+    let assets = utils::get_created_assets(&pk).c(d!())?;
+    assets
+        .iter()
+        .for_each(|asset| println!("{}", asset.body.asset.code.to_base64()));
+    Ok(())
 }
 
 /// Return the built version.

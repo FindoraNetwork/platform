@@ -1,3 +1,8 @@
+//!
+//! An implementation of findora ledger data model
+//!
+
+#![deny(missing_docs)]
 #![allow(clippy::field_reassign_with_default)]
 #![allow(clippy::assertions_on_constants)]
 
@@ -49,16 +54,16 @@ use zei::{
     },
 };
 
-pub const RANDOM_CODE_LENGTH: usize = 16;
-pub const TRANSACTION_WINDOW_WIDTH: usize = 128;
-pub const MAX_DECIMALS_LENGTH: u8 = 19;
+const RANDOM_CODE_LENGTH: usize = 16;
+const MAX_DECIMALS_LENGTH: u8 = 19;
 
 #[inline(always)]
-pub fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
+fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
     base64::encode_config(input, base64::URL_SAFE)
 }
 
 #[inline(always)]
+#[allow(missing_docs)]
 pub fn b64dec<T: ?Sized + AsRef<[u8]>>(input: &T) -> Result<Vec<u8>> {
     base64::decode_config(input, base64::URL_SAFE).c(d!())
 }
@@ -66,6 +71,7 @@ pub fn b64dec<T: ?Sized + AsRef<[u8]>>(input: &T) -> Result<Vec<u8>> {
 /// Unique Identifier for ledger objects
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct Code {
+    /// 16 bytes
     pub val: [u8; 16],
 }
 
@@ -77,7 +83,9 @@ fn is_default<T: Default + PartialEq>(x: &T) -> bool {
 #[derive(
     Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Ord, PartialOrd, Serialize,
 )]
+/// Findora asset type code
 pub struct AssetTypeCode {
+    /// Internal asset type
     pub val: ZeiAssetType,
 }
 
@@ -112,6 +120,7 @@ impl AssetTypeCode {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn gen_random_with_rng<R: RngCore + CryptoRng>(prng: &mut R) -> Self {
         let val: [u8; ASSET_TYPE_LENGTH] = prng.gen();
         Self {
@@ -184,6 +193,10 @@ impl AssetTypeCode {
         Ok("".to_string())
     }
 
+    /// Converts a string to an asset type code.
+    /// Truncates the code if the length is greater than 32 bytes.
+    ///
+    /// Used to customize the asset type code.
     #[inline(always)]
     pub fn new_from_str(s: &str) -> Self {
         let mut as_vec = s.to_string().into_bytes();
@@ -194,6 +207,10 @@ impl AssetTypeCode {
         }
     }
 
+    /// Converts a base64-format string to an asset type code.
+    /// Truncates the code if the length is greater than 32 bytes.
+    ///
+    /// Used to customize the asset type code.
     pub fn new_from_base64(b64: &str) -> Result<Self> {
         match b64dec(b64) {
             Ok(mut bin) => {
@@ -210,17 +227,18 @@ impl AssetTypeCode {
         }
     }
 
+    /// Converts the asset type code to a base64 format string.
+    ///
+    /// Used to display the asset type code.
     #[inline(always)]
     pub fn to_base64(self) -> String {
         b64enc(&self.val.0)
     }
 }
 
-pub type AssetPolicyKey = Code;
-pub type SmartContractKey = Code;
-
 impl Code {
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn gen_random() -> Self {
         let mut small_rng = ChaChaRng::from_entropy();
         let mut buf: [u8; 16] = [0u8; 16];
@@ -229,12 +247,14 @@ impl Code {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn gen_random_with_rng<R: Rng>(mut prng: R) -> Self {
         let val: [u8; 16] = prng.gen();
         Self { val }
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn new_from_str(s: &str) -> Self {
         let mut as_vec = s.to_string().into_bytes();
         as_vec.resize(16, 0u8);
@@ -243,6 +263,7 @@ impl Code {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn new_from_base64(b64: &str) -> Result<Self> {
         if let Ok(mut bin) = b64dec(b64) {
             bin.resize(16, 0u8);
@@ -254,6 +275,7 @@ impl Code {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn to_base64(self) -> String {
         b64enc(&self.val)
     }
@@ -323,21 +345,19 @@ impl<'de> Deserialize<'de> for Code {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct AssetDigest {
-    // Generated from the asset definition, also unique
-    pub val: [u8; 32],
-}
-
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Memo(pub String);
 
+#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct ConfidentialMemo;
 
+#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Commitment([u8; 32]);
 
+#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct XfrAddress {
     pub key: XfrPublicKey,
@@ -351,6 +371,7 @@ impl Hash for XfrAddress {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(
     Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Ord, PartialOrd, Serialize,
 )]
@@ -368,7 +389,6 @@ impl Hash for IssuerPublicKey {
 
 impl Deref for IssuerPublicKey {
     type Target = XfrPublicKey;
-
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.key
@@ -376,6 +396,7 @@ impl Deref for IssuerPublicKey {
 }
 
 #[derive(Debug)]
+#[allow(missing_docs)]
 pub struct IssuerKeyPair<'a> {
     pub keypair: &'a XfrKeyPair,
 }
@@ -385,6 +406,7 @@ struct AccountAddress {
     pub key: XfrPublicKey,
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IndexedSignature<T> {
     pub address: XfrAddress,
@@ -399,6 +421,7 @@ where
     T: Clone + Serialize + serde::de::DeserializeOwned,
 {
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn verify(&self, message: &T) -> bool {
         self.signature
             .verify(&self.address.key, &(message.clone(), self.input_idx))
@@ -409,8 +432,10 @@ where
 /// Stores threshold and weights for a multisignature requirement.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SignatureRules {
+    /// Minimum sum of signature weights that is required for an asset transfer.
     pub threshold: u64,
-    pub weights: Vec<(XfrPublicKey, u64)>, // Stored as a vector so that serialization is deterministic
+    /// Stored as a vector so that serialization is deterministic
+    pub weights: Vec<(XfrPublicKey, u64)>,
 }
 
 impl SignatureRules {
@@ -437,24 +462,25 @@ impl SignatureRules {
     }
 }
 
-/// Simple asset rules:
-/// 1) Transferable: Non-transferable assets can only be transferred once from the issuer to
-///    another user.
-/// 2) Updatable: Whether the asset memo can be updated.
-/// 3) Transfer signature rules: Signature weights and threshold for a valid transfer.
-/// 4) Asset tracing policies: A bundle of tracing policies specifying the tracing proofs that
-///    constitute a valid transfer.
-/// 5) Max units: Optional limit on total issuance amount.
+/// Simple asset rules
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AssetRules {
+    /// Transferable: Non-transferable assets can only be transferred once from the issuer to
+    ///   another user.
     pub transferable: bool,
+    /// Updatable: Whether the asset memo can be updated.
     pub updatable: bool,
+    /// Transfer signature rules: Signature weights and threshold for a valid transfer.
     pub transfer_multisig_rules: Option<SignatureRules>,
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
+    /// Asset tracing policies: A bundle of tracing policies specifying the tracing proofs that
+    ///  constitute a valid transfer.
     pub tracing_policies: TracingPolicies,
     #[serde(with = "serde_strz::emp", default)]
+    /// Max units: Optional limit on total issuance amount.
     pub max_units: Option<u64>,
+    /// Decimals: default to FRA_DECIMALS
     pub decimals: u8,
 }
 impl Default for AssetRules {
@@ -473,30 +499,35 @@ impl Default for AssetRules {
 
 impl AssetRules {
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn add_tracing_policy(&mut self, policy: TracingPolicy) -> &mut Self {
         self.tracing_policies.add(policy);
         self
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn set_max_units(&mut self, max_units: Option<u64>) -> &mut Self {
         self.max_units = max_units;
         self
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn set_transferable(&mut self, transferable: bool) -> &mut Self {
         self.transferable = transferable;
         self
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn set_updatable(&mut self, updatable: bool) -> &mut Self {
         self.updatable = updatable;
         self
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn set_transfer_multisig_rules(
         &mut self,
         multisig_rules: Option<SignatureRules>,
@@ -506,6 +537,7 @@ impl AssetRules {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn set_decimals(&mut self, decimals: u8) -> Result<&mut Self> {
         if decimals > MAX_DECIMALS_LENGTH {
             return Err(eg!("asset decimals should be less than 20"));
@@ -515,6 +547,7 @@ impl AssetRules {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Asset {
     #[serde(default)]
@@ -534,22 +567,27 @@ pub struct Asset {
     pub policy: Option<(Box<Policy>, PolicyGlobals)>,
 }
 
+/// Note:
+/// if the properties field of this struct is changed,
+/// update the comment for AssetType::from_json in wasm_data_model.rs as well.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-// Note: if the properties field of this struct is changed, update the comment for AssetType::from_json in wasm_data_model.rs as well.
 pub struct AssetType {
+    /// major properties of this asset
     pub properties: Asset,
-    pub digest: [u8; 32],
-    pub units: u64,
-    pub confidential_units: Commitment,
+    pub(crate) digest: [u8; 32],
+    pub(crate) units: u64,
+    pub(crate) confidential_units: Commitment,
 }
 
 impl AssetType {
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn has_issuance_restrictions(&self) -> bool {
         self.properties.asset_rules.max_units.is_some()
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn has_transfer_restrictions(&self) -> bool {
         let simple_asset: Asset = {
             let mut ret: Asset = Default::default();
@@ -569,26 +607,27 @@ impl AssetType {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_tracing_policies_ref(&self) -> &TracingPolicies {
         &self.properties.asset_rules.tracing_policies
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct CustomAssetPolicy {
     policy: Vec<u8>, // serialized policy, underlying form TBD.
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct CredentialProofKey([u8; 16]);
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct CredentialProof {
     pub key: CredentialProofKey,
 }
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct SmartContract;
 
 #[derive(
     Clone,
@@ -603,14 +642,17 @@ pub struct SmartContract;
     Ord,
     PartialOrd,
 )]
+#[allow(missing_docs)]
 pub struct TxoSID(pub u64);
 
 #[allow(missing_docs)]
 pub type TxoSIDList = Vec<TxoSID>;
 
+#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct OutputPosition(pub usize);
 
+#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct TxnSID(pub usize);
 
@@ -621,14 +663,16 @@ impl fmt::Display for TxoSID {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct BlockSID(pub usize);
 
-// An ephemeral index for a transaction (with a different newtype so that
-// it's harder to mix up)
+/// An ephemeral index for a transaction (with a different newtype so that
+/// it's harder to mix up)
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct TxnTempSID(pub usize);
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TxOutput {
     pub id: Option<TxoSID>,
@@ -638,6 +682,7 @@ pub struct TxOutput {
     pub lien: Option<HashOf<Vec<TxOutput>>>,
 }
 
+#[allow(missing_docs)]
 #[derive(Eq, Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum UtxoStatus {
     Spent,
@@ -645,68 +690,77 @@ pub enum UtxoStatus {
     Nonexistent,
 }
 
-pub enum LienEntry {
-    SimpleTxo(TxOutput),
-    Lien(TxOutput, Vec<LienEntry>),
-}
-
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Utxo(pub TxOutput);
 
+/// Ledger address of input
 #[derive(Copy, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TxoRef {
-    // Offset backwards from this operation (within a txn) -- 0 is the most recent, (n-1) (if there
-    // are n outputs so far) is the first output of the transaction
+    /// Offset backwards from this operation (within a txn) -- 0 is the most recent, (n-1) (if there
+    /// are n outputs so far) is the first output of the transaction
     Relative(u64),
-    // Absolute Txo address to a location outside this txn
+    /// Absolute Txo address to a location outside this txn
     Absolute(TxoSID),
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct NoReplayToken([u8; 8], u64);
 
 impl NoReplayToken {
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn new<R: RngCore>(prng: &mut R, seq_id: u64) -> Self {
         NoReplayToken(prng.next_u64().to_be_bytes(), seq_id)
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn unsafe_new(rand: u64, seq_id: u64) -> Self {
         NoReplayToken(rand.to_be_bytes(), seq_id)
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_seq_id(&self) -> u64 {
         self.1
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_rand(&self) -> [u8; 8] {
         self.0
     }
 }
 
+/// The inner data of Transfer Operation
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAssetBody {
-    pub inputs: Vec<TxoRef>, // Ledger address of inputs
+    /// Ledger address of inputs
+    pub inputs: Vec<TxoRef>,
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
+    /// Transfer policies
     pub policies: XfrNotePolicies,
+    /// A array of transaction outputs
     pub outputs: Vec<TxOutput>,
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
-    // (inp_idx,out_idx,hash) triples signifying that the lien `hash` on
-    // the input `inp_idx` gets assigned to the output `out_idx`
+    /// (inp_idx,out_idx,hash) triples signifying that the lien `hash` on
+    /// the input `inp_idx` gets assigned to the output `out_idx`
     pub lien_assignments: Vec<(usize, usize, HashOf<Vec<TxOutput>>)>,
-    // TODO(joe): we probably don't need the whole XfrNote with input records
-    // once it's on the chain
-    pub transfer: Box<XfrBody>, // Encrypted transfer note
+    /// TODO(joe): we probably don't need the whole XfrNote with input records
+    /// once it's on the chain
+    /// Encrypted transfer note
+    pub transfer: Box<XfrBody>,
 
+    /// Only Standard type supported
     pub transfer_type: TransferType,
 }
 
 impl TransferAssetBody {
+    #[allow(missing_docs)]
     #[allow(clippy::too_many_arguments)]
     pub fn new<R: CryptoRng + RngCore>(
         prng: &mut R,
@@ -791,6 +845,7 @@ impl TransferAssetBody {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IssueAssetBody {
     #[serde(default)]
@@ -803,6 +858,7 @@ pub struct IssueAssetBody {
 
 impl IssueAssetBody {
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn new(
         token_code: &AssetTypeCode,
         seq_num: u64,
@@ -817,12 +873,14 @@ impl IssueAssetBody {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DefineAssetBody {
     pub asset: Box<Asset>,
 }
 
 impl DefineAssetBody {
+    #[allow(missing_docs)]
     pub fn new(
         token_code: &AssetTypeCode,
         issuer_key: &IssuerPublicKey,
@@ -853,6 +911,7 @@ impl DefineAssetBody {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct UpdateMemoBody {
     pub new_memo: Memo,
@@ -862,9 +921,13 @@ pub struct UpdateMemoBody {
     pub no_replay_token: NoReplayToken,
 }
 
+/// Enum indicating whether an Transfer is standard type
+/// Currently only Standard type is supported
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TransferType {
+    /// Standard transfer
     Standard,
+    /// Not supported yet
     DebtSwap,
 }
 
@@ -877,10 +940,13 @@ impl Default for TransferType {
 
 /// Enum indicating whether an output appearning in transaction is internally spent
 pub enum OutputSpentStatus {
+    #[allow(missing_docs)]
     Spent,
+    #[allow(missing_docs)]
     Unspent,
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransferAsset {
     pub body: TransferAssetBody,
@@ -889,6 +955,7 @@ pub struct TransferAsset {
 
 impl TransferAsset {
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn new(transfer_body: TransferAssetBody) -> Result<TransferAsset> {
         Ok(TransferAsset {
             body: transfer_body,
@@ -897,12 +964,14 @@ impl TransferAsset {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn sign(&mut self, keypair: &XfrKeyPair) {
         let sig = self.create_input_signature(keypair);
         self.attach_signature(sig).unwrap()
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn attach_signature(
         &mut self,
         sig: IndexedSignature<TransferAssetBody>,
@@ -915,6 +984,7 @@ impl TransferAsset {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn create_input_signature(
         &self,
         keypair: &XfrKeyPair,
@@ -923,6 +993,7 @@ impl TransferAsset {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
         self.body
             .transfer
@@ -933,11 +1004,13 @@ impl TransferAsset {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
         self.body.outputs.iter().collect()
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IssueAsset {
     pub body: IssueAssetBody,
@@ -947,6 +1020,7 @@ pub struct IssueAsset {
 
 impl IssueAsset {
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn new(
         issuance_body: IssueAssetBody,
         keypair: &IssuerKeyPair,
@@ -962,6 +1036,7 @@ impl IssueAsset {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
         self.body
             .records
@@ -971,12 +1046,13 @@ impl IssueAsset {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
         self.body.records.iter().map(|rec| &rec.0).collect()
     }
 }
 
-// ... etc...
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DefineAsset {
     pub body: DefineAssetBody,
@@ -987,6 +1063,7 @@ pub struct DefineAsset {
 
 impl DefineAsset {
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn new(
         creation_body: DefineAssetBody,
         keypair: &IssuerKeyPair,
@@ -1002,15 +1079,20 @@ impl DefineAsset {
     }
 }
 
+/// Operation data for a updating findora custom asset memo
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct UpdateMemo {
+    /// Inner data to update
     pub body: UpdateMemoBody,
+    /// The findora account publickey
     pub pubkey: XfrPublicKey,
+    /// the signature
     pub signature: SignatureOf<UpdateMemoBody>,
 }
 
 impl UpdateMemo {
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn new(
         update_memo_body: UpdateMemoBody,
         signing_key: &XfrKeyPair,
@@ -1024,19 +1106,32 @@ impl UpdateMemo {
     }
 }
 
+/// Operation list supported in findora network
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
+    /// Transfer a findora asset, FRA or custom asset
     TransferAsset(TransferAsset),
+    /// Issue a custom asset in findora network
     IssueAsset(IssueAsset),
+    /// Create a new asset for a findora account
     DefineAsset(DefineAsset),
+    /// Update memo for a findora custom asset
     UpdateMemo(UpdateMemo),
+    /// Add or remove validator from findora network
     UpdateStaker(UpdateStakerOps),
+    /// Delegate FRA token to existed validator or self-delegation
     Delegation(DelegationOps),
+    /// Withdraw FRA token from findora network
     UnDelegation(Box<UnDelegationOps>),
+    /// Claim rewards
     Claim(ClaimOps),
+    /// Update initial validator list
     UpdateValidator(UpdateValidatorOps),
+    /// Findora network goverance operation
     Governance(GovernanceOps),
+    /// Update FRA distribution
     FraDistribution(FraDistributionOps),
+    /// Coinbase operation
     MintFra(MintFraOps),
 }
 
@@ -1068,6 +1163,7 @@ fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, Default)]
 pub struct TransactionBody {
     pub no_replay_token: NoReplayToken,
@@ -1092,6 +1188,7 @@ impl TransactionBody {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Transaction {
     pub body: TransactionBody,
@@ -1100,6 +1197,7 @@ pub struct Transaction {
     pub signatures: Vec<SignatureOf<TransactionBody>>,
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FinalizedTransaction {
     pub txn: Transaction,
@@ -1109,16 +1207,22 @@ pub struct FinalizedTransaction {
     pub merkle_id: u64,
 }
 
+/// Note: if the utxo field of this struct is changed, update the comment for ClientAssetRecord::from_json in wasm_data_model.rs as well.
 #[derive(Clone, Serialize, Deserialize)]
-// Note: if the utxo field of this struct is changed, update the comment for ClientAssetRecord::from_json in wasm_data_model.rs as well.
 pub struct AuthenticatedUtxo {
-    pub utxo: Utxo,                                  // Utxo to authenticate
-    pub authenticated_txn: AuthenticatedTransaction, // Merkle proof that transaction containing the utxo exists on the ledger
-    pub authenticated_spent_status: AuthenticatedUtxoStatus, // Bitmap proof that the utxo is unspent
+    /// Utxo to authenticate
+    pub utxo: Utxo,
+    /// Merkle proof that transaction containing the utxo exists on the ledger
+    pub authenticated_txn: AuthenticatedTransaction,
+    /// Bitmap proof that the utxo is unspent
+    pub authenticated_spent_status: AuthenticatedUtxoStatus,
+    /// which output this utxo locations
     pub utxo_location: OutputPosition,
+    /// utxo proof data
     pub state_commitment_data: StateCommitmentData,
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct UnAuthenticatedUtxo {
     pub utxo: Utxo,
@@ -1127,12 +1231,12 @@ pub struct UnAuthenticatedUtxo {
 }
 
 impl AuthenticatedUtxo {
-    // An authenticated utxo result is valid iff
-    // 1) The state commitment data used during verification hashes to the provided state commitment
-    // 2) The authenticated transaction proof is valid
-    // 3) The spent status proof is valid and denotes the utxo as unspent
-    // 4) The utxo appears in one of the outputs of the transaction (i.e. the output at
-    //    OutputPosition)
+    /// An authenticated utxo result is valid iff
+    /// 1) The state commitment data used during verification hashes to the provided state commitment
+    /// 2) The authenticated transaction proof is valid
+    /// 3) The spent status proof is valid and denotes the utxo as unspent
+    /// 4) The utxo appears in one of the outputs of the transaction (i.e. the output at
+    ///    OutputPosition)
     pub fn is_valid(
         &self,
         state_commitment: HashOf<Option<StateCommitmentData>>,
@@ -1175,6 +1279,7 @@ impl AuthenticatedUtxo {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Serialize, Deserialize, Clone)]
 pub struct AuthenticatedTransaction {
     pub finalized_txn: FinalizedTransaction,
@@ -1184,11 +1289,11 @@ pub struct AuthenticatedTransaction {
 }
 
 impl AuthenticatedTransaction {
-    // An authenticated txn result is valid if
-    // 1) The state commitment used in the proof matches what we pass in and the state commitment
-    //    data hashes to the state commitment
-    // 2) The transaction merkle proof is valid
-    // 3) The transaction merkle root matches the value in root_hash_data
+    /// An authenticated txn result is valid if
+    /// 1) The state commitment used in the proof matches what we pass in and the state commitment
+    ///    data hashes to the state commitment
+    /// 2) The transaction merkle proof is valid
+    /// 3) The transaction merkle root matches the value in root_hash_data
     pub fn is_valid(
         &self,
         state_commitment: HashOf<Option<StateCommitmentData>>,
@@ -1218,6 +1323,7 @@ impl AuthenticatedTransaction {
     }
 }
 
+#[allow(missing_docs)]
 pub struct AuthenticatedBlock {
     pub block: FinalizedBlock,
     pub block_inclusion_proof: ProofOf<Vec<Transaction>>,
@@ -1226,11 +1332,11 @@ pub struct AuthenticatedBlock {
 }
 
 impl AuthenticatedBlock {
-    // An authenticated block result is valid if
-    // 1) The block merkle proof is valid
-    // 2) The block merkle root matches the value in root_hash_data
-    // 3) root_hash_data hashes to root_hash
-    // 4) The state commitment of the proof matches the state commitment passed in
+    /// An authenticated block result is valid if
+    /// 1) The block merkle proof is valid
+    /// 2) The block merkle root matches the value in root_hash_data
+    /// 3) root_hash_data hashes to root_hash
+    /// 4) The state commitment of the proof matches the state commitment passed in
     pub fn is_valid(
         &self,
         state_commitment: HashOf<Option<StateCommitmentData>>,
@@ -1265,6 +1371,7 @@ impl AuthenticatedBlock {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Serialize, Clone, Deserialize)]
 pub struct AuthenticatedUtxoStatus {
     pub status: UtxoStatus,
@@ -1322,6 +1429,7 @@ impl AuthenticatedUtxoStatus {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct FinalizedBlock {
     pub txns: Vec<FinalizedTransaction>,
@@ -1331,10 +1439,12 @@ pub struct FinalizedBlock {
 
 impl FinalizedTransaction {
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn hash(&self) -> HashOf<(TxnSID, Transaction)> {
         self.txn.hash(self.tx_id)
     }
 
+    #[allow(missing_docs)]
     pub fn set_txo_id(&mut self) {
         let ids = mem::take(&mut self.txo_ids);
 
@@ -1465,11 +1575,13 @@ impl Transaction {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn handle(&self) -> String {
         let digest = self.hash(TxnSID(0));
         hex::encode(digest)
     }
 
+    /// Create a transaction from seq id
     #[inline(always)]
     pub fn from_seq_id(seq_id: u64) -> Self {
         let mut prng = ChaChaRng::from_entropy();
@@ -1480,6 +1592,7 @@ impl Transaction {
         }
     }
 
+    /// Create a transaction from a operation
     #[inline(always)]
     pub fn from_operation(op: Operation, seq_id: u64) -> Self {
         let mut tx = Transaction::from_seq_id(seq_id);
@@ -1487,6 +1600,7 @@ impl Transaction {
         tx
     }
 
+    /// Create a transaction from coinbase operation
     #[inline(always)]
     pub fn from_operation_coinbase_mint(op: Operation, seq_id: u64) -> Self {
         let mut tx = Transaction {
@@ -1501,17 +1615,20 @@ impl Transaction {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn add_operation(&mut self, mut op: Operation) {
         set_no_replay_token(&mut op, self.body.no_replay_token);
         self.body.operations.push(op);
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn sign(&mut self, keypair: &XfrKeyPair) {
         self.signatures.push(SignatureOf::new(keypair, &self.body));
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn check_signature(
         &self,
         public_key: &XfrPublicKey,
@@ -1521,6 +1638,7 @@ impl Transaction {
     }
 
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
         let mut memos = Vec::new();
         for op in self.body.operations.iter() {
@@ -1581,23 +1699,33 @@ impl Transaction {
     }
 }
 
+/// Current ledger state commitment data
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StateCommitmentData {
-    pub bitmap: BitDigest,       // The checksum of the utxo_map
-    pub block_merkle: HashValue, // The root hash of the block Merkle tree
-    pub txns_in_block_hash: HashOf<Vec<Transaction>>, // The hash of the transactions in the block
-    pub previous_state_commitment: HashOf<Option<StateCommitmentData>>, // The prior global block hash
-    pub transaction_merkle_commitment: HashValue, // The root hash of the transaction Merkle tree
-    pub air_commitment: BitDigest, // for compatible with old data of mainnet
-    pub txo_count: u64, // Number of transaction outputs. Used to provide proof that a utxo does not exist
+    /// The checksum of the utxo_map
+    pub bitmap: BitDigest,
+    /// The root hash of the block Merkle tree
+    pub block_merkle: HashValue,
+    /// The hash of the transactions in the block
+    pub txns_in_block_hash: HashOf<Vec<Transaction>>,
+    /// The prior global block hash
+    pub previous_state_commitment: HashOf<Option<StateCommitmentData>>,
+    /// The root hash of the transaction Merkle tree
+    pub transaction_merkle_commitment: HashValue,
+    /// for compatible with old data of mainnet
+    pub air_commitment: BitDigest,
+    /// Number of transaction outputs. Used to provide proof that a utxo does not exist
+    pub txo_count: u64,
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
-    pub pulse_count: u64, // a consensus-specific counter; should be 0 unless consensus needs it.
+    /// a consensus-specific counter; should be 0 unless consensus needs it.
+    pub pulse_count: u64,
 }
 
 impl StateCommitmentData {
     #[inline(always)]
+    #[allow(missing_docs)]
     pub fn compute_commitment(&self) -> HashOf<Option<Self>> {
         HashOf::new(&Some(self).cloned())
     }

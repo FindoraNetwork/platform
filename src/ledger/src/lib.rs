@@ -1,5 +1,9 @@
+//!
+//! The findora ledger core implementation
+//!
+
 #![deny(warnings)]
-// #![deny(missing_docs)]
+#![deny(missing_docs)]
 #![allow(clippy::needless_borrow)]
 
 #[macro_use]

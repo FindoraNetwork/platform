@@ -85,9 +85,9 @@ init() {
 
     printf "zoo nerve assault talk depend approve mercy surge bicycle ridge dismiss satoshi boring opera next fat cinnamon valley office actor above spray alcohol giant" > ${RWD_KEY_PATH}
 
-    fns setup -S ${SERVER_HOST} || exit 1
-    fns setup -O ${RWD_KEY_PATH} || exit 1
-    fns setup -K ${TD_NODE_KEY} || exit 1
+    fn setup -S ${SERVER_HOST} || exit 1
+    fn setup -O ${RWD_KEY_PATH} || exit 1
+    fn setup -K ${TD_NODE_KEY} || exit 1
 
     stt init || exit 1
 }
@@ -114,12 +114,12 @@ check() {
     println "There are 20 initial validators..."
 
     # At least 88_8888 FRAs
-    fns stake -n $((888888 * 1000000)) -R 0.2 || exit 1
+    fn stake -n $((888888 * 1000000)) -R 0.2 || exit 1
     sleep $[6 * ${BLOCK_ITV}]
     curl ${SERVER_HOST}:26657/validators | grep -A 5 ${SELF_ADDR}
     println "Our validator appears in the validator list after staking..."
 
-    fns stake --append -n $((222222 * 1000000)) || exit 1
+    fn stake --append -n $((222222 * 1000000)) || exit 1
     sleep $[6 * ${BLOCK_ITV}]
     curl ${SERVER_HOST}:26657/validators | grep -A 5 ${SELF_ADDR}
     println "Its vote power has been raised after appending a new staking..."
@@ -138,7 +138,7 @@ check() {
     println "Pay attention to its power change..."
 
     println "Now we unstake..."
-    fns unstake
+    fn unstake
     println "Wait $[5 * ${BLOCK_ITV}]s..."
     sleep $[5 * ${BLOCK_ITV}]
 
