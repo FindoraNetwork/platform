@@ -23,7 +23,7 @@ use crate::{
 use bitmap::{BitMap, SparseMap};
 use bnc::{helper::Value, mapx::Mapx, new_mapx, new_vecx, vecx::Vecx};
 use cryptohash::sha256::Digest as BitDigest;
-use globutils::{HashOf, ProofOf, SignatureOf};
+use globutils::{HashOf, ProofOf};
 use merkle_tree::AppendOnlyMerkle;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -41,7 +41,7 @@ use std::{
 };
 use zei::xfr::{
     lib::XfrNotePolicies,
-    sig::{XfrKeyPair, XfrPublicKey},
+    sig::XfrPublicKey,
     structs::{OwnerMemo, TracingPolicies, TracingPolicy, XfrAmount},
 };
 
@@ -69,10 +69,8 @@ pub struct LedgerState {
     utxo_map: BitMap,
     // current block effect (middle cache)
     block_ctx: Option<BlockEffect>,
-    // PRNG used for transaction validation
+
     prng: ChaChaRng,
-    // Useless, ignore this field
-    signing_key: XfrKeyPair,
 }
 
 impl LedgerState {
@@ -440,15 +438,9 @@ impl LedgerState {
         let tx_to_block_location_path =
             tx_to_block_location_buf.to_str().map(String::from).unwrap();
 
-        let mut prng = ChaChaRng::from_entropy();
-
-        // useless, ignore this key
-        let signing_key = XfrKeyPair::generate(&mut prng);
-
         let ledger = LedgerState {
             status: LedgerStatus::new(snapshot_path, snapshot_entries_dir).c(d!())?,
-            prng,
-            signing_key,
+            prng: ChaChaRng::from_entropy(),
             block_merkle: LedgerState::init_merkle_log(block_merkle_path).c(d!())?,
             txn_merkle: LedgerState::init_merkle_log(txn_merkle_path).c(d!())?,
             blocks: new_vecx!(blocks_path),
@@ -531,7 +523,7 @@ impl LedgerState {
             .c(d!())?;
 
         self.get_staking_mut()
-            .record_block_rewards_rate(&return_rate);
+            .record_block_rewards_rate(return_rate);
 
         let commission_rate = if let Some(Some(v)) = self
             .get_staking()
@@ -819,21 +811,6 @@ impl LedgerState {
             .map(|v| v.deref().clone())
             .unwrap_or_else(|| HashOf::new(&None));
         (commitment, block_count)
-    }
-
-    #[inline(always)]
-    #[allow(missing_docs)]
-    pub fn public_key(&self) -> &XfrPublicKey {
-        self.signing_key.get_pk_ref()
-    }
-
-    #[inline(always)]
-    #[allow(missing_docs)]
-    pub fn sign_message<T: Serialize + serde::de::DeserializeOwned>(
-        &self,
-        msg: &T,
-    ) -> SignatureOf<T> {
-        SignatureOf::new(&self.signing_key, msg)
     }
 
     /// Get utxo status and its proof data

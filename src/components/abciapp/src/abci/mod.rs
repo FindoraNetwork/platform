@@ -16,7 +16,7 @@ use crate::api::{
 use lazy_static::lazy_static;
 use ruc::*;
 use std::{
-    fs,
+    env, fs,
     net::SocketAddr,
     path::Path,
     sync::{atomic::AtomicBool, Arc},
@@ -63,6 +63,7 @@ pub fn run() -> Result<()> {
     }
 
     if CFG.enable_query_service {
+        env::set_var("FINDORA_KEEP_STAKING_HIST", "1");
         let query_service_hdr = submission_service_hdr.read().borrowable_ledger_state();
         pnk!(query_api::service::start_query_server(
             query_service_hdr,
