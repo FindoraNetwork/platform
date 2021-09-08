@@ -61,11 +61,20 @@ fn node_command() -> Result<()> {
         .spawn()
         .c(d!())?;
 
-    let mut tendermint_child = Command::new("/tmp/tendermint__")
+    let mut tendermint = Command::new("/tmp/tendermint__");
+
+    tendermint
         .arg("node")
-        .arg("--fast_sync=false")
         .arg("--home")
-        .arg(&CFG.tendermint_home)
+        .arg(&CFG.tendermint_home);
+
+    if CFG.enable_fast_sync {
+        tendermint.arg("--fast_sync=true");
+    } else {
+        tendermint.arg("--fast_sync=false");
+    }
+
+    let mut tendermint_child = tendermint
         .stdin(Stdio::null())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
@@ -329,6 +338,7 @@ mod config {
         pub ledger_service_port: u16,
         pub enable_ledger_service: bool,
         pub enable_query_service: bool,
+        pub enable_fast_sync: bool,
         pub tendermint_node_self_addr: Option<String>,
         pub tendermint_node_key_config_path: Option<String>,
         pub ledger_dir: String,
@@ -349,6 +359,7 @@ mod config {
                     .arg_from_usage("--ledger-service-port=[Ledger Service Port]")
                     .arg_from_usage("-l, --enable-ledger-service")
                     .arg_from_usage("-q, --enable-query-service")
+                    .arg_from_usage("-F, --enable-fast-sync")
                     .arg_from_usage("--tendermint-node-self-addr=[Address] 'the address of your tendermint node, in upper-hex format'")
                     .arg_from_usage("--tendermint-node-key-config-path=[Path] 'such as: ${HOME}/.tendermint/config/priv_validator_key.json'")
                     .arg_from_usage("-d, --ledger-dir=[Path]")
@@ -440,6 +451,8 @@ mod config {
             || env::var("ENABLE_LEDGER_SERVICE").is_ok();
         let eqs = m.is_present("enable-query-service")
             || env::var("ENABLE_QUERY_SERVICE").is_ok();
+        let efs =
+            m.is_present("enable-fast-sync") || env::var("ENABLE_FAST_SYNC").is_ok();
         let tnsa = m
             .value_of("tendermint-node-self-addr")
             .map(|v| v.to_owned())
@@ -475,6 +488,7 @@ mod config {
             ledger_service_port: lsp,
             enable_ledger_service: els,
             enable_query_service: eqs,
+            enable_fast_sync: efs,
             tendermint_node_self_addr: tnsa,
             tendermint_node_key_config_path: tnkcp,
             ledger_dir: ld,

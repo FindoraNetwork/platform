@@ -70,6 +70,7 @@ set_env
 ###################
 
 cd /tmp || exit 1
+ulimit -n 20000 || exit 1
 abcid -l -q \
     --tendermint-node-key-config-path="${th}/config/priv_validator_key.json" \
     >abcid.log 2>&1 &

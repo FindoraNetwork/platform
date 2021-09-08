@@ -31,7 +31,7 @@ use ruc::*;
 use serde::{Deserialize, Serialize};
 use sliding_set::SlidingSet;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet},
     env,
     fs::{self, File, OpenOptions},
     io::{BufRead, BufReader, ErrorKind},
@@ -46,7 +46,6 @@ use zei::xfr::{
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
-const MAX_VERSION: usize = 100;
 
 type TmpSidMap = HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)>;
 
@@ -330,16 +329,6 @@ impl LedgerState {
         Ok(v)
     }
 
-    #[inline(always)]
-    fn save_utxo_map_version(&mut self) {
-        if self.status.utxo_map_versions.len() >= MAX_VERSION {
-            self.status.utxo_map_versions.pop_front();
-        }
-        self.status
-            .utxo_map_versions
-            .push_back((self.status.next_txn, self.utxo_map.compute_checksum()));
-    }
-
     // In this functionn:
     //  1. Compute the hash of transactions in the block and update txns_in_block_hash
     //  2. Append txns_in_block_hash to block_merkle
@@ -494,7 +483,6 @@ impl LedgerState {
 
     /// Perform checkpoint of current ledger state
     pub fn checkpoint(&mut self, block: &BlockEffect) -> Result<u64> {
-        self.save_utxo_map_version();
         let merkle_id = self.compute_and_append_txns_hash(&block);
         let pulse_count = block
             .staking_simulator
@@ -914,29 +902,6 @@ impl LedgerState {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn get_utxo_map(&self) -> &BitMap {
-        &self.utxo_map
-    }
-
-    #[inline(always)]
-    #[allow(missing_docs)]
-    pub fn serialize_utxo_map(&mut self) -> Vec<u8> {
-        self.utxo_map.serialize(self.get_transaction_count())
-    }
-
-    #[inline(always)]
-    #[allow(missing_docs)]
-    pub fn get_utxo_checksum(&self, version: u64) -> Option<BitDigest> {
-        for pair in self.status.utxo_map_versions.iter() {
-            if (pair.0).0 as u64 == version {
-                return Some(pair.1);
-            }
-        }
-        None
-    }
-
-    #[inline(always)]
-    #[allow(missing_docs)]
     pub fn get_state_commitment_at_block_height(
         &self,
         block_height: u64,
@@ -959,8 +924,6 @@ pub struct LedgerStatus {
     pub spent_utxos: Mapx<TxoSID, Utxo>,
     // Map a TXO to its output position in a transaction
     txo_to_txn_location: Mapx<TxoSID, (TxnSID, OutputPosition)>,
-    // Digests of the UTXO bitmap to track recent states of the UTXO map
-    utxo_map_versions: VecDeque<(TxnSID, BitDigest)>,
     // State commitment history.
     // The BitDigest at index i is the state commitment of the ledger at block height  i + 1.
     state_commitment_versions: Vecx<HashOf<Option<StateCommitmentData>>>,
@@ -1086,7 +1049,6 @@ impl LedgerStatus {
             spent_utxos: new_mapx!(spent_utxos_path.as_str()),
             txo_to_txn_location: new_mapx!(txo_to_txn_location_path.as_str()),
             issuance_amounts: new_mapx!(issuance_amounts_path.as_str()),
-            utxo_map_versions: VecDeque::new(),
             state_commitment_versions: new_vecx!(state_commitment_versions_path.as_str()),
             asset_types: new_mapx!(asset_types_path.as_str()),
             tracing_policies: map! {},
