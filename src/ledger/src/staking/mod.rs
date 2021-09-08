@@ -38,9 +38,9 @@ use std::{
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
 lazy_static! {
-    // will be set in `findorad` together with '--enable-query-server' option,
-    // full-nodes may need this feature, meaningless in other kinds of node.
-    static ref KEEP_HIST: bool = env::var("FINDORA_KEEP_STAKING_HIST").is_ok();
+    /// will be set in `findorad` together with '--enable-query-server' option,
+    /// full-nodes may need this feature, meaningless in other kinds of node.
+    pub static ref KEEP_HIST: bool = env::var("FINDORA_KEEP_STAKING_HIST").is_ok();
 }
 
 /// Staking entry
@@ -464,7 +464,7 @@ impl Staking {
             entries: map! {B validator => 0},
             self_delegation_hist: map! {B},
             delegators: indexmap::IndexMap::new(),
-            delegation_amount: map! {B},
+            delegation_amount_hist: map! {B},
             id: owner,
             receiver_pk: None,
             start_height: h,
@@ -490,6 +490,7 @@ impl Staking {
         d.state = DelegationState::Bond;
 
         *d.entries.entry(validator).or_insert(0) += am;
+
         // record self-delegation amount for a validator
         if owner == validator && *KEEP_HIST {
             d.self_delegation_hist
@@ -501,8 +502,10 @@ impl Staking {
             if owner != validator {
                 *vd.delegators.entry(owner).or_insert(0) += am;
                 vd.delegators.sort_by(|_, v1, _, v2| v2.cmp(&v1));
-                vd.delegation_amount
-                    .insert(self.cur_height, vd.delegators.values().sum());
+                if *KEEP_HIST {
+                    vd.delegation_amount_hist
+                        .insert(self.cur_height, vd.delegators.values().sum());
+                }
             }
         }
 
@@ -550,7 +553,9 @@ impl Staking {
             }
             if self.addr_is_validator(addr) {
                 // clear its power when a validator propose a complete undelegation
-                // > `panic` should not happen without bug[s]
+                //   - `panic` should not happen without bug[s]
+                //
+                // is this logic reasonable ?
                 pnk!(self.validator_change_power(addr, u64::MAX, true));
                 is_validator = true;
             }
@@ -656,7 +661,7 @@ impl Staking {
                     entries: map! {B target_validator => actual_am},
                     self_delegation_hist: map! {B},
                     delegators: indexmap::IndexMap::new(),
-                    delegation_amount: map! {B},
+                    delegation_amount_hist: map! {B},
                     id: pu.new_delegator_id,
                     receiver_pk: Some(d.id),
                     start_height: d.start_height,
@@ -699,8 +704,12 @@ impl Staking {
                 *am -= pu.am;
             }
             vd.delegators.sort_by(|_, v1, _, v2| v2.cmp(&v1));
-            vd.delegation_amount
-                .insert(self.cur_height, vd.delegators.values().sum());
+
+            // // Useless !!
+            // if *KEEP_HIST {
+            //     vd.delegation_amount_hist
+            //         .insert(self.cur_height, vd.delegators.values().sum());
+            // }
         }
 
         Ok(())
@@ -908,8 +917,12 @@ impl Staking {
                         if let Some(vd) = self.di.addr_map.get_mut(&v) {
                             vd.delegators.remove(&addr);
                             vd.delegators.sort_by(|_, v1, _, v2| v2.cmp(&v1));
-                            vd.delegation_amount
-                                .insert(self.cur_height, vd.delegators.values().sum());
+                            if *KEEP_HIST {
+                                vd.delegation_amount_hist.insert(
+                                    self.cur_height,
+                                    vd.delegators.values().sum(),
+                                );
+                            }
                         }
                     });
                 }
@@ -1555,6 +1568,7 @@ impl ValidatorData {
 #[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]
 pub(crate) struct DelegationInfo {
     pub(crate) global_amount: Amount,
+    // validator pubkey => delegation info
     pub(crate) addr_map: BTreeMap<XfrPublicKey, Delegation>,
     pub(crate) end_height_map: BTreeMap<BlockHeight, BTreeSet<XfrPublicKey>>,
     #[serde(rename = "block_rewards_rate")]
@@ -1690,21 +1704,10 @@ impl Validator {
 /// - validator's self-delegation
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Delegation {
-    /// - the target validator
-    /// - `NonConfidential` FRAs amount
+    /// validator pubkey => amount
+    ///   - `NonConfidential` FRAs amount
+    ///   - valid for all delegators
     pub entries: BTreeMap<XfrPublicKey, Amount>,
-
-    /// - per-block-height self-delegation amount for a validator
-    /// - `NonConfidential` FRAs amount
-    #[serde(rename = "self_delegation_detail")]
-    pub self_delegation_hist: BTreeMap<BlockHeight, Amount>,
-
-    /// - delegator entries on current block height
-    /// - only valid for a validator
-    pub delegators: indexmap::IndexMap<XfrPublicKey, Amount>,
-    /// - delegation amount per block height
-    /// - only valid for a validator
-    pub delegation_amount: BTreeMap<BlockHeight, Amount>,
 
     /// delegation rewards will be paid to this pk by default
     pub id: XfrPublicKey,
@@ -1722,13 +1725,29 @@ pub struct Delegation {
     pub state: DelegationState,
     /// set this field when `Bond` state finished
     pub rwd_amount: Amount,
-    /// rewards history, used on some pulic nodes, such as fullnode
-    #[serde(rename = "rwd_detail")]
-    pub rwd_hist: BTreeMap<BlockHeight, DelegationRwdDetail>,
     /// how many times you get proposer rewards
     pub proposer_rwd_cnt: u64,
     /// how many times you get delegation rewards
     pub delegation_rwd_cnt: u64,
+
+    /// rewards history, used on some pulic nodes, such as fullnode
+    #[serde(rename = "rwd_detail")]
+    pub rwd_hist: BTreeMap<BlockHeight, DelegationRwdDetail>,
+
+    // TODO: the following fields should be members of the `Validator` structure
+    /// delegator pubkey => amount
+    ///   - delegator entries on current block height
+    ///   - only valid for validators
+    pub delegators: indexmap::IndexMap<XfrPublicKey, Amount>,
+    /// - self-delegation amount history
+    ///   - `NonConfidential` FRAs amount
+    ///   - only valid for validators
+    #[serde(rename = "self_delegation_detail")]
+    pub self_delegation_hist: BTreeMap<BlockHeight, Amount>,
+    /// - delegation amount per block height
+    /// - only valid for a validator
+    #[serde(rename = "delegation_amount")]
+    pub delegation_amount_hist: BTreeMap<BlockHeight, Amount>,
 }
 
 /// Detail of each reward entry.

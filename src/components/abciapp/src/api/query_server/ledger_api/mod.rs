@@ -364,9 +364,9 @@ async fn get_validator_delegation_history(
                     .query_block_rewards_rate(&h)
                     .unwrap_or(&history.last().unwrap().return_rate), //unwrap is safe here
                 delegated: {
-                    if v_self_delegation.delegation_amount.is_empty()
+                    if v_self_delegation.delegation_amount_hist.is_empty()
                         || v_self_delegation
-                            .delegation_amount
+                            .delegation_amount_hist
                             .iter()
                             .take(1)
                             .all(|(&i, _)| i > h)
@@ -374,7 +374,7 @@ async fn get_validator_delegation_history(
                         0
                     } else {
                         *v_self_delegation
-                            .delegation_amount
+                            .delegation_amount_hist
                             .get(&h)
                             .unwrap_or(&history.last().unwrap().delegated)
                     }

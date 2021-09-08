@@ -14,7 +14,7 @@ use abci::{
     ResponseEndBlock, ResponseInfo,
 };
 use lazy_static::lazy_static;
-use ledger::staking::is_coinbase_tx;
+use ledger::staking::{is_coinbase_tx, KEEP_HIST};
 use parking_lot::Mutex;
 use protobuf::RepeatedField;
 use ruc::*;
@@ -114,10 +114,12 @@ pub fn deliver_tx(
         if !is_coinbase_tx(&tx)
             && tx.is_basic_valid(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed))
         {
-            // set attr(tags) if any
-            let attr = utils::gen_tendermint_attr(&tx);
-            if !attr.is_empty() {
-                resp.set_events(attr);
+            if *KEEP_HIST {
+                // set attr(tags) if any, only needed on a fullnode
+                let attr = utils::gen_tendermint_attr(&tx);
+                if !attr.is_empty() {
+                    resp.set_events(attr);
+                }
             }
 
             if s.la.write().cache_transaction(tx).is_ok() {

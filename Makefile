@@ -182,16 +182,16 @@ start_debug_env:
 stop_debug_env:
 	bash ./tools/devnet/stopnodes.sh
 
-join_qa01: stop_debug_env
+join_qa01: stop_debug_env build_release_goleveldb
 	bash -x tools/node_init.sh qa01
 
-join_qa02: stop_debug_env
+join_qa02: stop_debug_env build_release_goleveldb
 	bash -x tools/node_init.sh qa02
 
-join_testnet: stop_debug_env
+join_testnet: stop_debug_env build_release_goleveldb
 	bash -x tools/node_init.sh testnet
 
-join_mainnet: stop_debug_env
+join_mainnet: stop_debug_env build_release_goleveldb
 	bash -x tools/node_init.sh mainnet
 
 # ci_build_image:
