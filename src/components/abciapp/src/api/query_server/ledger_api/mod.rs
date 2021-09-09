@@ -278,7 +278,7 @@ async fn get_delegation_reward(
     // Convert from base64 representation
     let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
 
     let read = data.read();
     let staking = read.get_staking();
@@ -532,7 +532,7 @@ async fn query_delegation_info(
 ) -> actix_web::Result<web::Json<DelegationInfo>> {
     let pk = globutils::wallet::public_key_from_base64(address.as_str())
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
 
     let read = data.read();
     let staking = read.get_staking();
@@ -618,7 +618,7 @@ async fn query_owned_utxos(
 ) -> actix_web::Result<web::Json<BTreeMap<TxoSID, (Utxo, Option<OwnerMemo>)>>> {
     globutils::wallet::public_key_from_base64(owner.as_str())
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log()))
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
         .map(|pk| web::Json(pnk!(data.read().get_owned_utxos(&pk))))
 }
 

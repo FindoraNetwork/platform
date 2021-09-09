@@ -234,9 +234,9 @@ where
                 Ok(handle)
             }
             Err(e) => {
-                e.print();
+                e.print(None);
                 self.txn_status
-                    .insert(handle.clone(), TxnStatus::Rejected(e.generate_log()));
+                    .insert(handle.clone(), TxnStatus::Rejected(e.generate_log(None)));
                 Err(handle)
             }
         }

@@ -34,8 +34,8 @@ tendermint = "0.19.0"
 indexmap = { version = "1.6.2", features = ["serde"] }
 
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4b" }
-zeiutils = { package = "utils", git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4b" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4c" }
+zeiutils = { package = "utils", git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4c" }
 bulletproofs = { package = "bulletproofs", git = "ssh://git@github.com/FindoraNetwork/bulletproofs", branch = "batch_verification", features = ["yoloproofs"] }
 
 globutils = { path = "../libs/globutils" }
