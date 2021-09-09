@@ -179,12 +179,6 @@ pub fn end_block(
         &begin_block_req.byzantine_validators.as_slice(),
     );
 
-    let laa = la.get_committed_state().write();
-    pnk!(serde_json::to_vec(&laa.get_status())
-        .c(d!())
-        .and_then(|s| fs::write(&laa.get_status().snapshot_path, s)
-            .c(d!(laa.get_status().snapshot_path.clone()))));
-
     resp
 }
 
@@ -192,8 +186,15 @@ pub fn commit(s: &mut ABCISubmissionServer, _req: &RequestCommit) -> ResponseCom
     let la = s.la.write();
     let mut state = la.get_committed_state().write();
 
+    // will change `struct LedgerStatus`
     state.set_tendermint_commit(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed) as u64);
     state.flush_data();
+
+    // snapshot them finally
+    pnk!(serde_json::to_vec(&state.get_status())
+        .c(d!())
+        .and_then(|s| fs::write(&state.get_status().snapshot_path, s)
+            .c(d!(state.get_status().snapshot_path.clone()))));
 
     let mut r = ResponseCommit::new();
     r.set_data(state.get_state_commitment().0.as_ref().to_vec());

@@ -18,6 +18,7 @@ pub mod ops;
 use crate::data_model::{Operation, Transaction, TransferAsset, TxoRef, FRA_DECIMALS};
 use cosig::CoSigRule;
 use cryptohash::sha256::{self, Digest};
+use globutils::wallet;
 use lazy_static::lazy_static;
 use ops::{
     fra_distribution::FraDistributionOps,
@@ -1342,7 +1343,7 @@ lazy_static! {
     /// Reserved accounts of Findora Foundation or System.
     pub static ref FF_PK_LIST: Vec<XfrPublicKey> = FF_ADDR_LIST
         .iter()
-        .map(|addr| pnk!(globutils::wallet::public_key_from_bech32(addr)))
+        .map(|addr| pnk!(wallet::public_key_from_bech32(addr)))
         .collect();
 }
 
@@ -1839,7 +1840,10 @@ impl Delegation {
                     am += self.rwd_amount.saturating_mul(am) / self.amount();
                     calculate_delegation_rewards(am, return_rate).c(d!())
                 } else {
-                    Err(eg!())
+                    Err(eg!(format!(
+                        "staking amount of <{}> available is less than 0",
+                        wallet::public_key_to_base64(validator)
+                    )))
                 }
             })
             .and_then(|mut n| {
