@@ -5,5 +5,3 @@ COPY release/bin/findorad /usr/local/sbin/findorad
 COPY container/docker-entrypoint-findorad.sh /docker-entrypoint.sh
 WORKDIR /
 ENTRYPOINT ["/docker-entrypoint.sh"]
-
-

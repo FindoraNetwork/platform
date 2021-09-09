@@ -217,12 +217,23 @@ join_mainnet: stop_debug_env build_release_goleveldb
 # endif
 
 
+ci_build_binary_rust_base:
+	docker build -t binary-rust-base -f container/Dockerfile-binary-rust-base .
+
+ci_build_dev_binary_image:
+	docker build -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-binary-image-dev .
+
+ci_build_release_binary_image:
+	docker build -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-binary-image-release .
+
 ci_build_image:
-	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \
-		mkdir -p release/bin/; \
-		cp debug/bin/findorad release/bin/; \
+	@ if [ -d "./binary" ]; then \
+		rm -rf ./binary || true; \
 	fi
-	docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-CI-findorad .
+	@ docker run --rm -d --name findorad-binary findorad-binary-image:$(IMAGE_TAG)
+	@ docker cp findorad-binary:/binary ./binary
+	@ docker rm -f findorad-binary
+	@ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-cleveldb .
 ifeq ($(ENV),release)
 	docker tag $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
 endif
@@ -240,11 +251,13 @@ ifeq ($(ENV),release)
 endif
 
 ci_build_image_dockerhub:
-	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \
-		mkdir -p release/bin/; \
-		cp debug/bin/findorad release/bin/; \
+	@ if [ -d "./binary" ]; then \
+		rm -rf ./binary || true; \
 	fi
-	docker build -t $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) -f container/Dockerfile-CI-findorad .
+	@ docker run --rm -d --name findorad-binary findorad-binary-image:$(IMAGE_TAG)
+	@ docker cp findorad-binary:/binary ./binary
+	@ docker rm -f findorad-binary
+	@ docker build -t $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb .
 ifeq ($(ENV),release)
 	docker tag $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) $(DOCKERHUB_URL)/findorad:latest
 endif
@@ -255,12 +268,18 @@ ifeq ($(ENV),release)
 	docker push $(DOCKERHUB_URL)/findorad:latest
 endif
 
+ci_build_wasm_js_bindings:
+	docker run --rm -d --name wasm -v /tmp/wasm-js-bindings:/build/wasm-js-bindings -v $(shell pwd)/container/docker-entrypoint-wasm-js-bindings.sh:/entrypoint.sh findorad-binary-image:$(IMAGE_TAG) /entrypoint.sh
+	docker rm -f wasm findorad-binary || true
+
 clean_image_dockerhub:
 	docker rmi $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG)
 ifeq ($(ENV),release)
 	docker rmi $(DOCKERHUB_URL)/findorad:latest
 endif
 
+clean_binary_dockerhub:
+	docker rmi findorad-binary-image:$(IMAGE_TAG)
 
 ####@./tools/devnet/snapshot.sh <user_nick> <password> <token_name> <max_units> <genesis_issuance> <memo> <memo_updatable>
 snapshot:
