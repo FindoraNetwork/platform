@@ -60,7 +60,7 @@ version = "0.4.6"
 features = ["f16", "serde"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-bnc = { git = "https://github.com/FindoraNetwork/BNC.git", branch = "feat-rocksdb" }
+bnc = { git = "https://github.com/FindoraNetwork/BNC.git", branch = "master" }
 sodiumoxide = "0.2.1"
 fs2 = "0.4"
 
