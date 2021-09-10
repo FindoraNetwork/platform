@@ -55,6 +55,7 @@ set_env() {
     perl -pi -e 's/^(timeout_precommit_delta =).*/$1 "100ms"/' $tc
     perl -pi -e 's/^(timeout_commit =).*/$1 "15s"/' $tc
     perl -pi -e 's/^(recheck =).*/$1 false/' $tc
+    perl -pi -e 's/^(size =) 5000/$1 2000/' $tc
     # perl -pi -e 's/^(fast_sync =).*/$1 false/' $tc
 
     curl ${serv_url}:26657/genesis \
@@ -70,7 +71,6 @@ set_env
 ###################
 
 cd /tmp || exit 1
-ulimit -n 20000 || exit 1
 abcid -l -q \
     --tendermint-node-key-config-path="${th}/config/priv_validator_key.json" \
     >abcid.log 2>&1 &

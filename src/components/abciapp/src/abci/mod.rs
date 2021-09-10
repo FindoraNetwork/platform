@@ -41,6 +41,8 @@ pub fn run() -> Result<()> {
     let config = ruc::info!(ABCIConfig::from_file())
         .or_else(|_| ABCIConfig::from_env().c(d!()))?;
 
+    env::set_var("BNC_DATA_DIR", format!("{}/__bnc__", &config.ledger_dir));
+
     let app = server::ABCISubmissionServer::new(
         base_dir,
         format!("{}:{}", config.tendermint_host, config.tendermint_port),
@@ -48,7 +50,9 @@ pub fn run() -> Result<()> {
 
     let submission_service_hdr = Arc::clone(&app.la);
 
-    if CFG.enable_ledger_service {
+    if CFG.enable_query_service {
+        env::set_var("FINDORA_KEEP_STAKING_HIST", "1");
+
         let ledger_api_service_hdr =
             submission_service_hdr.read().borrowable_ledger_state();
         let ledger_host = config.abci_host.clone();
@@ -60,10 +64,7 @@ pub fn run() -> Result<()> {
                 ledger_port
             ));
         });
-    }
 
-    if CFG.enable_query_service {
-        env::set_var("FINDORA_KEEP_STAKING_HIST", "1");
         let query_service_hdr = submission_service_hdr.read().borrowable_ledger_state();
         pnk!(query_api::service::start_query_server(
             query_service_hdr,
@@ -73,17 +74,17 @@ pub fn run() -> Result<()> {
         ))
         .write()
         .update();
-    }
 
-    let submission_host = config.abci_host.clone();
-    let submission_port = config.submission_port;
-    thread::spawn(move || {
-        pnk!(SubmissionApi::create(
-            submission_service_hdr,
-            &submission_host,
-            submission_port,
-        ));
-    });
+        let submission_host = config.abci_host.clone();
+        let submission_port = config.submission_port;
+        thread::spawn(move || {
+            pnk!(SubmissionApi::create(
+                submission_service_hdr,
+                &submission_host,
+                submission_port,
+            ));
+        });
+    }
 
     let addr_str = format!("{}:{}", config.abci_host, config.abci_port);
     let addr = addr_str.parse::<SocketAddr>().c(d!())?;

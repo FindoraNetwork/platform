@@ -292,9 +292,10 @@ async fn get_delegation_reward(
         (0..=info.height)
             .into_iter()
             .rev()
-            .filter_map(|i| di.rwd_hist.get(&i))
+            .filter_map(|i| di.rwd_hist.as_ref().map(|rh| rh.get(&i)))
+            .flatten()
             .take(1)
-            .cloned()
+            .map(|v| v.into_inner().into_owned())
             .collect(),
     ))
 }
@@ -360,29 +361,29 @@ async fn get_validator_delegation_history(
         })
         .for_each(|h| {
             history.push(ValidatorDelegation {
-                return_rate: *staking
+                return_rate: staking
                     .query_block_rewards_rate(&h)
-                    .unwrap_or(&history.last().unwrap().return_rate), //unwrap is safe here
-                delegated: {
-                    if v_self_delegation.delegation_amount_hist.is_empty()
-                        || v_self_delegation
-                            .delegation_amount_hist
-                            .iter()
-                            .take(1)
-                            .all(|(&i, _)| i > h)
-                    {
-                        0
-                    } else {
-                        *v_self_delegation
-                            .delegation_amount_hist
-                            .get(&h)
-                            .unwrap_or(&history.last().unwrap().delegated)
-                    }
-                },
-                self_delegation: *v_self_delegation
-                    .self_delegation_hist
-                    .get(&h)
-                    .unwrap_or(&history.last().unwrap().self_delegation),
+                    .unwrap_or(history.last().unwrap().return_rate), //unwrap is safe here
+                delegated: v_self_delegation
+                    .delegation_amount_hist
+                    .as_ref()
+                    .map(|dah| {
+                        if dah.is_empty() || dah.iter().take(1).all(|(i, _)| i > h) {
+                            0
+                        } else {
+                            dah.get(&h)
+                                .map(|v| v.into_inner().into_owned())
+                                .unwrap_or(history.last().unwrap().delegated)
+                        }
+                    })
+                    .unwrap_or(0),
+                self_delegation: v_self_delegation
+                    .delegation_amount_hist
+                    .as_ref()
+                    .map(|dah| dah.get(&h))
+                    .flatten()
+                    .map(|v| v.into_inner().into_owned())
+                    .unwrap_or(history.last().unwrap().self_delegation),
             })
         });
 
