@@ -9,7 +9,6 @@
 //!  to disk as needed.
 //!
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 #![allow(clippy::needless_borrow)]
 

@@ -19,7 +19,7 @@ ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0"
 sha3 = "0.8"
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4c" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "test9"  }
 
 # primitives
 fp-utils = { path = "../utils" }

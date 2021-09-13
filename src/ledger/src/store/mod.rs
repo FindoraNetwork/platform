@@ -25,11 +25,13 @@ use bnc::{new_mapx, new_vecx, Mapx, Vecx};
 use cryptohash::sha256::Digest as BitDigest;
 use globutils::{HashOf, ProofOf};
 use merkle_tree::AppendOnlyMerkle;
+use parking_lot::RwLock;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use sliding_set::SlidingSet;
+use std::sync::Arc;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs::{self, File, OpenOptions},
@@ -37,10 +39,21 @@ use std::{
     mem,
     ops::{Deref, DerefMut},
 };
-use zei::xfr::{
-    lib::XfrNotePolicies,
-    sig::XfrPublicKey,
-    structs::{OwnerMemo, TracingPolicies, TracingPolicy, XfrAmount},
+use storage::{
+    db::RocksDB,
+    state::{RocksChainState, RocksState},
+    store::RocksStore
+};
+use zei::{
+    xfr::{
+        lib::XfrNotePolicies,
+        sig::XfrPublicKey,
+        structs::{OwnerMemo, TracingPolicies, TracingPolicy, XfrAmount},
+    },
+    anon_xfr::{
+        merkle_tree::PersistentMerkleTree,
+        structs::AnonBlindAssetRecord,
+    },
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
@@ -66,6 +79,8 @@ pub struct LedgerState {
     utxo_map: BitMap,
     // current block effect (middle cache)
     block_ctx: Option<BlockEffect>,
+    // Merkle Tree with all the ABARs created till now
+    abar_state: RocksState<RocksDB>,
 
     prng: ChaChaRng,
 }
@@ -359,6 +374,25 @@ impl LedgerState {
         self.status.incr_block_commit_count();
     }
 
+    // ABAR util mappers
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn add_abar(&mut self, abar: &AnonBlindAssetRecord) -> Result<u64> {
+        let store = RocksStore::new("abar_store", &mut self.abar_state);
+        let mut mt = PersistentMerkleTree::new(store)?;
+
+        mt.add_abar(abar)
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn abar_commit(&mut self) -> Result<u64> {
+        let store = RocksStore::new("abar_store", &mut self.abar_state);
+        let mut mt = PersistentMerkleTree::new(store)?;
+
+        mt.commit()
+    }
+
     // Initialize a logged Merkle tree for the ledger.
     // We might be creating a new tree or opening an existing one.
     #[inline(always)]
@@ -380,6 +414,17 @@ impl LedgerState {
             .and_then(|f| BitMap::open(f).c(d!()))
     }
 
+    // Initialize a persistent merkle tree for ABAR store.
+    #[inline(always)]
+    fn init_abar_state(path: &str) -> Result<RocksState<RocksDB>> {
+        let fdb = RocksDB::open(path).c(d!("failed to open db"))?;
+        let cs = Arc::new(RwLock::new(RocksChainState::new(
+            fdb,
+            "abar_db".to_string(),
+        )));
+        Ok(RocksState::new(cs))
+    }
+
     /// Initialize a new Ledger structure.
     pub fn new(base_dir: &str, prefix: Option<String>) -> Result<LedgerState> {
         let prefix = prefix.unwrap_or_default();
@@ -387,6 +432,7 @@ impl LedgerState {
         let block_merkle_path = format!("{}/{}_block_merkle", base_dir, &prefix);
         let txn_merkle_path = format!("{}/{}_txn_merkle", base_dir, &prefix);
         let utxo_map_path = format!("{}/{}_utxo_map", base_dir, &prefix);
+        let abar_store_path = format!("{}/{}_abar_store", base_dir, &prefix);
 
         // These iterms will be set under ${BNC_DATA_DIR}
         fs::create_dir_all(&base_dir).c(d!())?;
@@ -404,6 +450,7 @@ impl LedgerState {
             tx_to_block_location: new_mapx!(&tx_to_block_location_path),
             utxo_map: LedgerState::init_utxo_map(&utxo_map_path).c(d!())?,
             block_ctx: Some(BlockEffect::default()),
+            abar_state: LedgerState::init_abar_state(&abar_store_path).c(d!())?,
         };
 
         Ok(ledger)
