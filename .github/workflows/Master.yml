@@ -88,6 +88,7 @@ jobs:
         export BRANCH="${GITHUB_HEAD_REF}"
         export TOBRANCH="${GITHUB_BASE_REF}"
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
+        export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_release_binary_image
     - name: Build findorad images
