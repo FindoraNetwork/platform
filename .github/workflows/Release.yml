@@ -16,7 +16,6 @@ jobs:
       PRIVATE_ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
       PUBLIC_ECR_URL: public.ecr.aws/k6m5b6e2
       DOCKERHUB_URL: findoranetwork
-      DOCKERHUB_TOKEN: b838371e-dcf4-47f4-bc17-11adf4b2e9df
     steps:
     - uses: actions/checkout@v2
     - uses: actions-rs/toolchain@v1
@@ -162,7 +161,7 @@ jobs:
     - name: Login Dockerhub
       env: 
         DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
-        DOCKERHUB_TOKEN: ${{env.DOCKERHUB_TOKEN}}
+        DOCKERHUB_TOKEN: ${{secrets.DOCKERHUB_TOKEN}}
       shell: bash
       run: |
         docker login -u ${DOCKERHUB_URL} -p ${DOCKERHUB_TOKEN}
