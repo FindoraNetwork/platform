@@ -37,6 +37,7 @@ fp-types = { path = "../components/contracts/primitives/types" }
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "test9" }
 zeiutils = { package = "utils", git = "ssh://git@github.com/FindoraNetwork/zei", tag = "test9" }
+zeialgebra = { package = "algebra", git = "ssh://git@github.com/FindoraNetwork/zei", tag = "test9" }
 bulletproofs = { package = "bulletproofs", git = "ssh://git@github.com/FindoraNetwork/bulletproofs", branch = "batch_verification", features = ["yoloproofs"] }
 bnc = { git = "https://github.com/FindoraNetwork/BNC.git", tag = "v0.2.0a", default-features = false }
 storage = { git = "https://github.com/FindoraNetwork/storage.git", branch = "feat-non-merkle-store" }
@@ -47,6 +48,7 @@ cryptohash = { path = "../libs/cryptohash" }
 credentials = { path = "../libs/credentials"}
 merkle_tree = { path = "../libs/merkle_tree" }
 sliding_set = { path = "../libs/sliding_set" }
+sparse_merkle_tree = { path = "../libs/sparse_merkle_tree" }
 
 [features]
 default = []

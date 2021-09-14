@@ -9,6 +9,7 @@ pub mod utils;
 
 pub use bnc;
 
+use crate::data_model::ATxoSID;
 use crate::{
     data_model::{
         AssetType, AssetTypeCode, AuthenticatedBlock, AuthenticatedTransaction,
@@ -31,6 +32,7 @@ use rand_core::SeedableRng;
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use sliding_set::SlidingSet;
+use sparse_merkle_tree::SmtMap256;
 use std::sync::Arc;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -42,19 +44,17 @@ use std::{
 use storage::{
     db::RocksDB,
     state::{RocksChainState, RocksState},
-    store::RocksStore
+    store::RocksStore,
 };
 use zei::{
+    anon_xfr::{merkle_tree::PersistentMerkleTree, structs::AnonBlindAssetRecord},
     xfr::{
         lib::XfrNotePolicies,
         sig::XfrPublicKey,
         structs::{OwnerMemo, TracingPolicies, TracingPolicy, XfrAmount},
     },
-    anon_xfr::{
-        merkle_tree::PersistentMerkleTree,
-        structs::AnonBlindAssetRecord,
-    },
 };
+use zeialgebra::bls12_381::BLSScalar;
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
 
@@ -81,6 +81,9 @@ pub struct LedgerState {
     block_ctx: Option<BlockEffect>,
     // Merkle Tree with all the ABARs created till now
     abar_state: RocksState<RocksDB>,
+    // Sparse Merkle Tree to hold nullifier Set
+    #[allow(dead_code)]
+    nullifier_set: SmtMap256<String>,
 
     prng: ChaChaRng,
 }
@@ -451,6 +454,7 @@ impl LedgerState {
             utxo_map: LedgerState::init_utxo_map(&utxo_map_path).c(d!())?,
             block_ctx: Some(BlockEffect::default()),
             abar_state: LedgerState::init_abar_state(&abar_store_path).c(d!())?,
+            nullifier_set: SmtMap256::new(),
         };
 
         Ok(ledger)
@@ -932,9 +936,13 @@ pub struct LedgerStatus {
     pub spent_utxos: Mapx<TxoSID, Utxo>,
     // Map a TXO to its output position in a transaction
     txo_to_txn_location: Mapx<TxoSID, (TxnSID, OutputPosition)>,
+    // Map a Anonymous TXO to its output position in a transaction
+    ax_txo_to_txn_location: Mapx<ATxoSID, (TxnSID, OutputPosition)>,
     // State commitment history.
     // The BitDigest at index i is the state commitment of the ledger at block height  i + 1.
     state_commitment_versions: Vecx<HashOf<Option<StateCommitmentData>>>,
+    // Abar commitment versions for verifying proofs
+    abar_commitment_versions: Vecx<BLSScalar>,
     // Registered asset types
     asset_types: Mapx<AssetTypeCode, AssetType>,
     // Issuance number is always increasing
@@ -945,6 +953,8 @@ pub struct LedgerStatus {
     next_txn: TxnSID,
     // Should be equal to the count of TXOs
     next_txo: TxoSID,
+    // Should be equal to the count of ABARs
+    next_atxo: ATxoSID,
     // Each block corresponds to such a summary structure
     state_commitment_data: Option<StateCommitmentData>,
     // number of non-empty blocks, equal to: <block count of tendermint> - <pulse count>
@@ -1036,10 +1046,14 @@ impl LedgerStatus {
         let spent_utxos_path = snapshot_entries_dir.to_owned() + "/spent_utxos";
         let txo_to_txn_location_path =
             snapshot_entries_dir.to_owned() + "/txo_to_txn_location";
+        let atxo_to_txn_location_path =
+            snapshot_entries_dir.to_owned() + "/atxo_to_txn_location";
         let issuance_amounts_path =
             snapshot_entries_dir.to_owned() + "/issuance_amounts";
         let state_commitment_versions_path =
             snapshot_entries_dir.to_owned() + "/state_commitment_versions";
+        let abar_commitment_versions_path =
+            snapshot_entries_dir.to_owned() + "/abar_commitment_versions";
         let asset_types_path = snapshot_entries_dir.to_owned() + "/asset_types";
         let issuance_num_path = snapshot_entries_dir.to_owned() + "/issuance_num";
         let owned_utxos_path = snapshot_entries_dir.to_owned() + "/owned_utxos";
@@ -1051,13 +1065,16 @@ impl LedgerStatus {
             owned_utxos: new_mapx!(owned_utxos_path.as_str()),
             spent_utxos: new_mapx!(spent_utxos_path.as_str()),
             txo_to_txn_location: new_mapx!(txo_to_txn_location_path.as_str()),
+            ax_txo_to_txn_location: new_mapx!(atxo_to_txn_location_path.as_str()),
             issuance_amounts: new_mapx!(issuance_amounts_path.as_str()),
             state_commitment_versions: new_vecx!(state_commitment_versions_path.as_str()),
+            abar_commitment_versions: new_vecx!(abar_commitment_versions_path.as_str()),
             asset_types: new_mapx!(asset_types_path.as_str()),
             tracing_policies: map! {},
             issuance_num: new_mapx!(issuance_num_path.as_str()),
             next_txn: TxnSID(0),
             next_txo: TxoSID(0),
+            next_atxo: ATxoSID(0),
             txns_in_block_hash: None,
             state_commitment_data: None,
             block_commit_count: 0,

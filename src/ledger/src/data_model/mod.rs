@@ -648,6 +648,22 @@ pub struct CredentialProof {
 #[allow(missing_docs)]
 pub struct TxoSID(pub u64);
 
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Deserialize,
+    Eq,
+    Hash,
+    PartialEq,
+    Serialize,
+    Ord,
+    PartialOrd,
+)]
+#[allow(missing_docs)]
+pub struct ATxoSID(pub u64);
+
 #[allow(missing_docs)]
 pub type TxoSIDList = Vec<TxoSID>;
 
