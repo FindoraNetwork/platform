@@ -6,8 +6,10 @@
 
 use bech32::{self, FromBase32, ToBase32};
 use bip0039::{Count, Language, Mnemonic};
+use crypto::basics::hybrid_encryption::XPublicKey;
 use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
 use ruc::*;
+use zei::anon_xfr::keys::AXfrPubKey;
 use zei::{
     serialization::ZeiFromToBytes,
     xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
@@ -182,6 +184,22 @@ pub fn public_key_from_bech32(addr: &str) -> Result<XfrPublicKey> {
     bech32dec(addr)
         .c(d!())
         .and_then(|bytes| XfrPublicKey::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Restore a anon public key from base64
+pub fn anon_public_key_from_base64(pk: &str) -> Result<AXfrPubKey> {
+    base64::decode_config(pk, base64::URL_SAFE)
+        .c(d!())
+        .and_then(|bytes| AXfrPubKey::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Restore a x public key from base64
+pub fn x_public_key_from_base64(pk: &str) -> Result<XPublicKey> {
+    base64::decode_config(pk, base64::URL_SAFE)
+        .c(d!())
+        .and_then(|bytes| XPublicKey::zei_from_bytes(&bytes).c(d!()))
 }
 
 #[inline(always)]

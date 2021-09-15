@@ -12,6 +12,7 @@ pub mod utils;
 use crate::api::DelegationInfo;
 use globutils::wallet;
 use lazy_static::lazy_static;
+use ledger::data_model::TxoSID;
 use ledger::{
     data_model::{AssetRules, AssetTypeCode, Transaction, BLACK_HOLE_PUBKEY_STAKING},
     staking::{
@@ -27,6 +28,7 @@ use utils::{
     get_block_height, get_local_block_height, get_validator_detail,
     parse_td_validator_keys,
 };
+use zei::anon_xfr::structs::AnonBlindAssetRecord;
 use zei::{
     setup::PublicParams,
     xfr::{
@@ -669,6 +671,35 @@ pub fn show_asset(addr: &str) -> Result<()> {
         .iter()
         .for_each(|asset| println!("{}", asset.body.asset.code.to_base64()));
     Ok(())
+}
+
+/// Convert a Blind Asset Record to Anonymous Asset
+pub fn convert_bar2abar(
+    owner_sk: Option<&str>,
+    target_addr: &str,
+    owner_enc_key: &str,
+    txo_sid: &str,
+) -> Result<AnonBlindAssetRecord> {
+    let from = owner_sk
+        .c(d!())
+        .and_then(|sk| {
+            ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!("\"{}\"", sk)))
+                .c(d!())
+                .map(|sk| sk.into_keypair())
+        })
+        .or_else(|_| get_keypair().c(d!()))?;
+    let to = wallet::anon_public_key_from_base64(target_addr)
+        .c(d!("invalid 'target-addr'"))?;
+    let enc_key = wallet::x_public_key_from_base64(owner_enc_key)
+        .c(d!("invalid owner_enc_key"))?;
+    let sid = txo_sid.parse::<u64>().c(d!("error parsing TxoSID"))?;
+
+    let oar =
+        utils::get_oar(&from, TxoSID(sid)).c(d!("error fetching open asset record"))?;
+
+    let abar = utils::generate_bar2abar_op(&from, &to, TxoSID(sid), &oar, &enc_key)?;
+
+    Ok(abar)
 }
 
 /// Return the built version.

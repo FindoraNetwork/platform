@@ -654,6 +654,14 @@ where
                     key: update_memo.pubkey,
                 });
             }
+            Operation::BarToAbar(i) => {
+                related_addresses.insert(XfrAddress {
+                    key: i.note.body.input.public_key,
+                });
+            }
+            Operation::TransferAnonAsset(_) => {
+                // Anon
+            }
         }
     }
     related_addresses

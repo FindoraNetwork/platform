@@ -26,13 +26,18 @@
 #![deny(warnings)]
 
 use clap::{crate_authors, load_yaml, App};
+use crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey};
 use finutils::common;
 use finutils::common::evm::*;
 use fp_utils::ecdsa::SecpPair;
 use globutils::wallet;
 use ledger::data_model::{AssetTypeCode, FRA_DECIMALS};
+use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use ruc::*;
 use std::{fmt, fs};
+use zei::anon_xfr::keys::AXfrKeyPair;
+use zei::serialization::ZeiFromToBytes;
 
 fn main() {
     if let Err(e) = run() {
@@ -366,6 +371,46 @@ fn run() -> Result<()> {
         let address = m.value_of("addr");
         let eth_key = m.value_of("eth-key");
         transfer_from_account(amount.parse::<u64>().c(d!())?, address, eth_key)?
+    } else if let Some(m) = matches.subcommand_matches("convert-bar-to-abar") {
+        let owner_sk = m.value_of("from-seckey");
+        let target_addr = m.value_of("to-pubkey");
+        let owner_enc_key = m.value_of("enc-key");
+        let txo_sid = m.value_of("txo-sid");
+
+        if target_addr.is_none() || owner_enc_key.is_none() || txo_sid.is_none() {
+            println!("{}", m.usage());
+        } else {
+            common::convert_bar2abar(
+                owner_sk,
+                target_addr.unwrap(),
+                owner_enc_key.unwrap(),
+                txo_sid.unwrap(),
+            )
+            .c(d!())?;
+        }
+    } else if let Some(_m) = matches.subcommand_matches("generate-anon-keys") {
+        let mut prng = ChaChaRng::from_entropy();
+        let keypair = AXfrKeyPair::generate(&mut prng);
+
+        println!(
+            "AXfrSecretKey: {}",
+            base64::encode(keypair.zei_to_bytes().as_slice())
+        );
+        println!(
+            "AXfrPublicKey: {}",
+            base64::encode(keypair.pub_key().zei_to_bytes().as_slice())
+        );
+
+        let secret_key = XSecretKey::new(&mut prng);
+        let public_key = XPublicKey::from(&secret_key);
+        println!(
+            "Decryption Key: {}",
+            base64::encode(secret_key.zei_to_bytes().as_slice())
+        );
+        println!(
+            "Encryption Key: {}",
+            base64::encode(public_key.zei_to_bytes().as_slice())
+        );
     } else {
         println!("{}", matches.usage());
     }

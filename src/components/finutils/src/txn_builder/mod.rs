@@ -6,17 +6,19 @@
 #![allow(clippy::needless_borrow)]
 
 use credentials::CredUserSecretKey;
+use crypto::basics::hybrid_encryption::XPublicKey;
 use curve25519_dalek::scalar::Scalar;
 use fp_types::crypto::MultiSigner;
 use globutils::SignatureOf;
 use ledger::{
     converter::ConvertAccount,
     data_model::{
-        AssetRules, AssetTypeCode, ConfidentialMemo, DefineAsset, DefineAssetBody,
-        IndexedSignature, IssueAsset, IssueAssetBody, IssuerKeyPair, IssuerPublicKey,
-        Memo, NoReplayToken, Operation, Transaction, TransactionBody, TransferAsset,
-        TransferAssetBody, TransferType, TxOutput, TxoRef, UpdateMemo, UpdateMemoBody,
-        ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+        AnonTransferOps, AssetRules, AssetTypeCode, BarToAbarOps, ConfidentialMemo,
+        DefineAsset, DefineAssetBody, IndexedSignature, IssueAsset, IssueAssetBody,
+        IssuerKeyPair, IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
+        TransactionBody, TransferAsset, TransferAssetBody, TransferType, TxOutput,
+        TxoRef, TxoSID, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
+        TX_FEE_MIN,
     },
     staking::{
         is_valid_tendermint_addr,
@@ -43,12 +45,18 @@ use std::{
 };
 use tendermint::PrivateKey;
 use zei::{
+    anon_xfr::{
+        bar_to_from_abar::gen_bar_to_abar_body,
+        gen_anon_xfr_body,
+        keys::{AXfrKeyPair, AXfrPubKey},
+        structs::{AXfrNote, AnonBlindAssetRecord, OpenAnonBlindAssetRecord},
+    },
     api::anon_creds::{
         ac_confidential_open_commitment, ACCommitment, ACCommitmentKey, ConfidentialAC,
         Credential,
     },
     serialization::ZeiFromToBytes,
-    setup::PublicParams,
+    setup::{PublicParams, UserParams, DEFAULT_BP_NUM_GENS},
     xfr::{
         asset_record::{
             build_blind_asset_record, build_open_asset_record, open_blind_asset_record,
@@ -465,6 +473,62 @@ impl TransactionBuilder {
         let op = Operation::UpdateMemo(memo_update);
         self.txn.add_operation(op);
         self
+    }
+
+    /// Add an operation to convert a Blind Asset Record to a Anonymous record.
+    #[allow(dead_code)]
+    pub fn add_operation_bar_to_abar(
+        &mut self,
+        auth_key_pair: &XfrKeyPair,
+        abar_pub_key: &AXfrPubKey,
+        txo_sid: TxoSID,
+        input_record: &OpenAssetRecord,
+        enc_key: &XPublicKey,
+    ) -> Result<(&mut Self, AnonBlindAssetRecord)> {
+        let mut prng = ChaChaRng::from_entropy();
+        let user_params = UserParams::eq_committed_vals_params();
+        let body = gen_bar_to_abar_body(
+            &mut prng,
+            &user_params,
+            input_record,
+            abar_pub_key,
+            enc_key,
+        )
+        .c(d!())?;
+
+        let bar_to_abar =
+            BarToAbarOps::new(body, auth_key_pair, txo_sid, self.no_replay_token)?;
+        let abar = bar_to_abar.note.body.output.clone();
+        let op = Operation::BarToAbar(bar_to_abar);
+        self.txn.add_operation(op);
+        Ok((self, abar))
+    }
+
+    /// Add an operation to transfer assets held in Anonymous Blind Asset Record.
+    #[allow(dead_code)]
+    pub fn add_operation_anon_transfer(
+        &mut self,
+        inputs: &[OpenAnonBlindAssetRecord],
+        outputs: &[OpenAnonBlindAssetRecord],
+        input_keypairs: &[AXfrKeyPair],
+    ) -> Result<&mut Self> {
+        let mut prng = ChaChaRng::from_seed([0u8; 32]); // TODO: removing this, CRS would be pre generated in a file
+        let depth: usize = 41;
+        let user_params = UserParams::new(
+            inputs.len(),
+            outputs.len(),
+            Option::from(depth),
+            DEFAULT_BP_NUM_GENS,
+        );
+
+        let (body, keypairs) =
+            gen_anon_xfr_body(&mut prng, &user_params, inputs, outputs, input_keypairs)
+                .c(d!())?;
+        let note = AXfrNote::generate_note_from_body(body, keypairs).c(d!())?;
+        let inp = AnonTransferOps::new(note, self.no_replay_token).c(d!())?;
+        let op = Operation::TransferAnonAsset(inp);
+        self.txn.add_operation(op);
+        Ok(self)
     }
 
     /// Add a operation to delegating finddra accmount to a tendermint validator.
@@ -1076,14 +1140,18 @@ impl TransferOperationBuilder {
 #[allow(missing_docs)]
 mod tests {
     use super::*;
+    use crypto::basics::commitments::ristretto_pedersen::RistrettoPedersenGens;
+    use crypto::basics::hybrid_encryption::XSecretKey;
     use ledger::data_model::{TxnEffect, TxoRef};
     use ledger::store::{utils::fra_gen_initial_tx, LedgerState};
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
-    use zei::setup::PublicParams;
+    use zei::anon_xfr::bar_to_from_abar::verify_bar_to_abar_note;
+    use zei::setup::{NodeParams, PublicParams};
     use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
     use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record};
     use zei::xfr::sig::XfrKeyPair;
+    use zei::xfr::structs::AssetType as AT;
 
     // Defines an asset type
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1429,4 +1497,73 @@ mod tests {
         let mut block = ledger.start_block().unwrap();
         assert!(ledger.apply_transaction(&mut block, effect, false).is_err());
     }
+
+    #[test]
+    fn test_operation_bar_to_abar() {
+        let mut builder = TransactionBuilder::from_seq_id(1);
+
+        let mut prng = ChaChaRng::from_seed([0u8; 32]);
+        let from = XfrKeyPair::generate(&mut prng);
+        let to = AXfrKeyPair::generate(&mut prng).pub_key();
+        let to_enc_key = XSecretKey::new(&mut prng);
+
+        let ar = AssetRecordTemplate::with_no_asset_tracing(
+            10u64,
+            AT::from_identical_byte(1u8),
+            AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
+            from.get_pk(),
+        );
+        let pc_gens = RistrettoPedersenGens::default();
+        let (bar, _, memo) = build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
+        let dummy_input = open_blind_asset_record(&bar, &memo, &from).unwrap();
+
+        let _ = builder
+            .add_operation_bar_to_abar(
+                &from,
+                &to,
+                TxoSID(123),
+                &dummy_input,
+                &XPublicKey::from(&to_enc_key),
+            )
+            .is_ok();
+
+        let txn = builder.take_transaction();
+
+        if let Operation::BarToAbar(note) = txn.body.operations[0].clone() {
+            let user_params = UserParams::eq_committed_vals_params();
+            let node_params = NodeParams::from(user_params);
+            let result =
+                verify_bar_to_abar_note(&node_params, &note.note, from.get_pk_ref());
+            assert!(result.is_ok());
+        }
+    }
+    //
+    // #[test]
+    // fn test_operation_anon_transfer() {
+    //     let mut builder = TransactionBuilder::from_seq_id(1);
+    //     // Randomness
+    //     let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    //
+    //     // Sender
+    //     let from = XfrKeyPair::generate(&mut prng);
+    //
+    //     // Receiver
+    //     let to = AXfrKeyPair::generate(&mut prng).pub_key();
+    //     let to_enc_key = XSecretKey::new(&mut prng);
+    //     let to_enc_pub_key = XPublicKey::from(&to_enc_key);
+    //
+    //     // Asset Record being transferred
+    //     let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
+    //         .amount(10u64)
+    //         .asset_type( AT::from_identical_byte(1u8))
+    //         .pub_key(to)
+    //         .finalize(&mut prng, &to_enc_pub_key)
+    //         .unwrap()
+    //         .build()
+    //         .unwrap();
+    //
+    //     let mut ledger = LedgerState::test_ledger();
+    //
+    //
+    // }
 }

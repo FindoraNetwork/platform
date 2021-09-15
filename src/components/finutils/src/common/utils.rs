@@ -7,6 +7,7 @@ use crate::{
     common::get_serv_addr,
     txn_builder::{TransactionBuilder, TransferOperationBuilder},
 };
+use crypto::basics::hybrid_encryption::XPublicKey;
 use globutils::{wallet, HashOf, SignatureOf};
 use ledger::{
     data_model::{
@@ -20,6 +21,9 @@ use ruc::*;
 use serde::{self, Deserialize, Serialize};
 use std::collections::HashMap;
 use tendermint::{PrivateKey, PublicKey};
+use zei::anon_xfr::keys::AXfrPubKey;
+use zei::anon_xfr::structs::AnonBlindAssetRecord;
+use zei::xfr::structs::OpenAssetRecord;
 use zei::xfr::{
     asset_record::{open_blind_asset_record, AssetRecordType},
     sig::{XfrKeyPair, XfrPublicKey},
@@ -549,4 +553,49 @@ pub struct ValidatorKey {
 /// Restore validator key from a string
 pub fn parse_td_validator_keys(key_data: String) -> Result<ValidatorKey> {
     serde_json::from_str(key_data.as_str()).c(d!())
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn generate_bar2abar_op(
+    auth_key_pair: &XfrKeyPair,
+    abar_pub_key: &AXfrPubKey,
+    txo_sid: TxoSID,
+    input_record: &OpenAssetRecord,
+    enc_key: &XPublicKey,
+) -> Result<AnonBlindAssetRecord> {
+    let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
+    let (_, abar) = builder
+        .add_operation_bar_to_abar(
+            auth_key_pair,
+            abar_pub_key,
+            txo_sid,
+            input_record,
+            enc_key,
+        )
+        .c(d!())?;
+    let feeop = gen_fee_op(auth_key_pair).c(d!())?;
+    builder.add_operation(feeop);
+
+    send_tx(&builder.take_transaction()).c(d!())?;
+    Ok(abar)
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn get_oar(owner_kp: &XfrKeyPair, txo_sid: TxoSID) -> Result<OpenAssetRecord> {
+    let utxos = get_owned_utxos(owner_kp.get_pk_ref()).c(d!())?.into_iter();
+
+    for (sid, (utxo, owner_memo)) in utxos {
+        if sid != txo_sid {
+            continue;
+        }
+
+        let oar =
+            open_blind_asset_record(&utxo.0.record, &owner_memo, &owner_kp).c(d!())?;
+
+        return Ok(oar);
+    }
+
+    Err(eg!("utxo not found"))
 }

@@ -9,7 +9,7 @@ pub mod utils;
 
 pub use bnc;
 
-use crate::data_model::ATxoSID;
+use crate::data_model::{ATxoSID, AnonStateCommitmentData};
 use crate::{
     data_model::{
         AssetType, AssetTypeCode, AuthenticatedBlock, AuthenticatedTransaction,
@@ -32,7 +32,7 @@ use rand_core::SeedableRng;
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use sliding_set::SlidingSet;
-use sparse_merkle_tree::SmtMap256;
+use sparse_merkle_tree::{Key, SmtMap256};
 use std::sync::Arc;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -46,8 +46,14 @@ use storage::{
     state::{RocksChainState, RocksState},
     store::RocksStore,
 };
+use zei::anon_xfr::structs::MTLeafInfo;
 use zei::{
-    anon_xfr::{merkle_tree::PersistentMerkleTree, structs::AnonBlindAssetRecord},
+    anon_xfr::{
+        merkle_tree::PersistentMerkleTree,
+        structs::{AnonBlindAssetRecord, Nullifier},
+        verify_anon_xfr_body,
+    },
+    setup::{NodeParams, UserParams, DEFAULT_BP_NUM_GENS},
     xfr::{
         lib::XfrNotePolicies,
         sig::XfrPublicKey,
@@ -222,6 +228,13 @@ impl LedgerState {
             }
         }
 
+        self.update_anon_stores(
+            block.new_nullifiers.clone(),
+            block.output_abars.clone(),
+        )
+        .c(d!())?;
+        self.commit_abar_changes().c(d!())?;
+
         // Checkpoint
         let block_merkle_id = self.checkpoint(&block).c(d!())?;
         block.temp_sids.clear();
@@ -264,6 +277,31 @@ impl LedgerState {
             .c(d!())
             .and_then(|_| self.update_state(block, &tsm).c(d!()))
             .map(|_| tsm)
+    }
+
+    /// Apply the changes from current block
+    /// to the merkle trees holding anonymous data
+    pub fn update_anon_stores(
+        &mut self,
+        new_nullifiers: Vec<Nullifier>,
+        output_abars: Vec<AnonBlindAssetRecord>,
+    ) -> Result<()> {
+        for n in new_nullifiers.iter() {
+            let str =
+                base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
+            let d: Key = Key::from_base64(&str).c(d!())?;
+
+            // if the nullifier hash is present in our nullifier set, fail the block
+            if self.nullifier_set.get(&d).is_some() {
+                return Err(eg!("Nullifier hash already present in set"));
+            }
+            self.nullifier_set.set(&d, Some("".to_string()));
+        }
+        for abar in output_abars.iter() {
+            self.add_abar(&abar).c(d!())?;
+        }
+
+        Ok(())
     }
 
     #[inline(always)]
@@ -374,26 +412,62 @@ impl LedgerState {
             .state_commitment_versions
             .push(state_commitment_data.compute_commitment());
         self.status.state_commitment_data = Some(state_commitment_data);
+
+        let abar_root_hash =
+            self.get_abar_root_hash().expect("failed to read root hash");
+        self.status.abar_commitment_versions.push(abar_root_hash);
+        let anon_state_commitment_data = AnonStateCommitmentData {
+            abar_root_hash,
+            nullifier_root_hash: self.nullifier_set.merkle_root().clone(),
+        };
+        self.status
+            .anon_state_commitment_versions
+            .push(anon_state_commitment_data.compute_commitment());
+        self.status.anon_state_commitment_data = Some(anon_state_commitment_data);
+
         self.status.incr_block_commit_count();
     }
 
-    // ABAR util mappers
     #[inline(always)]
-    #[allow(missing_docs)]
-    pub fn add_abar(&mut self, abar: &AnonBlindAssetRecord) -> Result<u64> {
+    /// Adds a new abar to session cache and updates merkle hashes of ancestors
+    pub fn add_abar(&mut self, abar: &AnonBlindAssetRecord) -> Result<ATxoSID> {
         let store = RocksStore::new("abar_store", &mut self.abar_state);
         let mut mt = PersistentMerkleTree::new(store)?;
 
-        mt.add_abar(abar)
+        mt.add_abar(abar).map(ATxoSID)
     }
 
     #[inline(always)]
-    #[allow(missing_docs)]
-    pub fn abar_commit(&mut self) -> Result<u64> {
+    /// writes the changes from session cache to the RocksDB store
+    pub fn commit_abar_changes(&mut self) -> Result<u64> {
         let store = RocksStore::new("abar_store", &mut self.abar_state);
         let mut mt = PersistentMerkleTree::new(store)?;
 
         mt.commit()
+    }
+
+    #[inline(always)]
+    /// Fetches the root hash of the committed merkle tree of abar commitments
+    pub fn get_abar_root_hash(&mut self) -> Result<BLSScalar> {
+        let chain_state = self.abar_state.chain_state();
+        let mut rocks_state = RocksState::new(chain_state);
+        let store = RocksStore::new("abar_store", &mut rocks_state);
+        let mt = PersistentMerkleTree::new(store)?;
+
+        mt.get_current_root_hash().c(d!(
+            "probably due to badly constructed tree or data corruption"
+        ))
+    }
+
+    #[inline(always)]
+    /// Generates a MTLeafInfo from the latest committed version of tree
+    pub fn get_abar_proof(&self, id: ATxoSID) -> Result<MTLeafInfo> {
+        let chain_state = self.abar_state.chain_state();
+        let mut rocks_state = RocksState::new(chain_state);
+        let store = RocksStore::new("abar_store", &mut rocks_state);
+        let mt = PersistentMerkleTree::new(store)?;
+
+        mt.generate_proof(id.0)
     }
 
     // Initialize a logged Merkle tree for the ledger.
@@ -507,7 +581,6 @@ impl LedgerState {
         self.utxo_map.write().c(d!())?;
         self.txn_merkle.write().c(d!())?;
         self.block_merkle.write().c(d!())?;
-
         Ok(merkle_id)
     }
 
@@ -943,6 +1016,8 @@ pub struct LedgerStatus {
     state_commitment_versions: Vecx<HashOf<Option<StateCommitmentData>>>,
     // Abar commitment versions for verifying proofs
     abar_commitment_versions: Vecx<BLSScalar>,
+    // Anon state commitment versions
+    anon_state_commitment_versions: Vecx<HashOf<Option<AnonStateCommitmentData>>>,
     // Registered asset types
     asset_types: Mapx<AssetTypeCode, AssetType>,
     // Issuance number is always increasing
@@ -957,6 +1032,8 @@ pub struct LedgerStatus {
     next_atxo: ATxoSID,
     // Each block corresponds to such a summary structure
     state_commitment_data: Option<StateCommitmentData>,
+    // Anon state commitment
+    anon_state_commitment_data: Option<AnonStateCommitmentData>,
     // number of non-empty blocks, equal to: <block count of tendermint> - <pulse count>
     block_commit_count: u64,
     // Hash of the transactions in the most recent block
@@ -1004,6 +1081,34 @@ impl LedgerStatus {
     #[allow(missing_docs)]
     fn get_asset_type(&self, code: &AssetTypeCode) -> Option<AssetType> {
         self.asset_types.get(code)
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    #[allow(dead_code)]
+    fn get_latest_abar_hash(&self) -> Option<BLSScalar> {
+        self.abar_commitment_versions.last()
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    #[allow(dead_code)]
+    pub fn add_abar_commitment(&mut self, hash: BLSScalar) {
+        self.abar_commitment_versions.push(hash)
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    #[allow(dead_code)]
+    fn get_versioned_abar_hash(&self, version: usize) -> Option<BLSScalar> {
+        self.abar_commitment_versions.get(version - 1)
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    #[allow(dead_code)]
+    fn get_current_abar_version(&self) -> usize {
+        self.abar_commitment_versions.len()
     }
 
     fn fast_invariant_check(&self) -> Result<()> {
@@ -1054,6 +1159,8 @@ impl LedgerStatus {
             snapshot_entries_dir.to_owned() + "/state_commitment_versions";
         let abar_commitment_versions_path =
             snapshot_entries_dir.to_owned() + "/abar_commitment_versions";
+        let anon_state_commitment_versions_path =
+            snapshot_entries_dir.to_owned() + "/anon_state_commitment_versions";
         let asset_types_path = snapshot_entries_dir.to_owned() + "/asset_types";
         let issuance_num_path = snapshot_entries_dir.to_owned() + "/issuance_num";
         let owned_utxos_path = snapshot_entries_dir.to_owned() + "/owned_utxos";
@@ -1069,6 +1176,9 @@ impl LedgerStatus {
             issuance_amounts: new_mapx!(issuance_amounts_path.as_str()),
             state_commitment_versions: new_vecx!(state_commitment_versions_path.as_str()),
             abar_commitment_versions: new_vecx!(abar_commitment_versions_path.as_str()),
+            anon_state_commitment_versions: new_vecx!(
+                anon_state_commitment_versions_path.as_str()
+            ),
             asset_types: new_mapx!(asset_types_path.as_str()),
             tracing_policies: map! {},
             issuance_num: new_mapx!(issuance_num_path.as_str()),
@@ -1077,6 +1187,7 @@ impl LedgerStatus {
             next_atxo: ATxoSID(0),
             txns_in_block_hash: None,
             state_commitment_data: None,
+            anon_state_commitment_data: None,
             block_commit_count: 0,
             staking: Staking::new(),
             td_commit_height: 1,
@@ -1286,6 +1397,29 @@ impl LedgerStatus {
                     ("non-confidential assets with transfer restrictions can't become confidential")
                 ));
             }
+        }
+
+        // An axfr_body requires abar merkle root hash for AxfrNote verification. This is done
+        // here with LedgerStatus available.
+        for axfr_body in txn_effect.axfr_bodies.iter() {
+            // TODO: maybe load user_params in memory for inp_op mapping
+            let user_params = UserParams::from_file_if_exists(
+                axfr_body.inputs.len(),
+                axfr_body.outputs.len(),
+                Some(41),
+                DEFAULT_BP_NUM_GENS,
+                None,
+            )
+            .unwrap();
+            let node_params = NodeParams::from(user_params);
+            let abar_version = axfr_body.proof.merkle_root_version;
+            verify_anon_xfr_body(
+                &node_params,
+                axfr_body,
+                // Unwrap Now to get the code to compile . Change in Zei later to accept Option<BLSScalar>
+                &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
+            )
+            .c(d!())?;
         }
 
         Ok(())

@@ -15,7 +15,7 @@ rand = "0.8"
 rand_chacha = "0.2.0"
 lazy_static = "1.4.0"
 
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "test9" }
+zei = { git = "ssh://git@github.com/FindoraNetwork/zei", branch = "develop" }
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 
 ledger = { path = "../../ledger" }

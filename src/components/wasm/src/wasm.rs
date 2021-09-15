@@ -420,6 +420,47 @@ impl TransactionBuilder {
         Ok(self)
     }
 
+    /// Adds an operation to the transaction builder that converts a bar to abar.
+    ///
+    /// @param {XfrKeyPair} auth_key_pair - input bar owner key pair
+    /// @param {AXfrKeyPair} abar_key_pair - abar receiver's public key
+    /// @param {TxoSID} input_sid - txo sid of input bar
+    /// @param {ClientAssetRecord} input_record -
+    pub fn add_operation_bar_to_abar(
+        mut self,
+        auth_key_pair: &XfrKeyPair,
+        abar_pubkey: &AXfrPubKey,
+        txo_sid: u64,
+        input_record: &ClientAssetRecord,
+        owner_memo: Option<OwnerMemo>,
+        enc_key: &XPublicKey,
+    ) -> Result<TransactionBuilder, JsValue> {
+        let oar = open_bar(
+            input_record.get_bar_ref(),
+            &owner_memo.map(|memo| memo.get_memo_ref().clone()),
+            &auth_key_pair,
+        )
+        .c(d!())
+        .map_err(|e| {
+            JsValue::from_str(&format!("Could not open asset record: {}", e))
+        })?;
+
+        self.get_builder_mut()
+            .add_operation_bar_to_abar(
+                auth_key_pair,
+                &abar_pubkey,
+                TxoSID(txo_sid),
+                &oar,
+                enc_key,
+            )
+            .c(d!())
+            .map_err(|e| {
+                JsValue::from_str(&format!("Could not add operation: {}", e))
+            })?;
+
+        Ok(self)
+    }
+
     #[allow(missing_docs)]
     pub fn add_operation_delegate(
         mut self,
@@ -1222,10 +1263,13 @@ pub fn trace_assets(
 
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
+use crypto::basics::hybrid_encryption::XPublicKey;
+use ledger::data_model::TxoSID;
 use rand::{thread_rng, Rng};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
+use zei::anon_xfr::keys::AXfrPubKey;
 
 #[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.
