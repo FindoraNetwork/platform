@@ -1,0 +1,15 @@
+[package]
+name = "evm-precompile-modexp"
+version = "0.1.0"
+authors = ["Findora <admin@findora.org>"]
+edition = "2018"
+homepage = "https://findora.org/technology"
+repository = "https://github.com/findoranetwork/platform/"
+description = "MODEXP precompiles for EVM module."
+readme = "README.md"
+
+[dependencies]
+evm = { version = "0.27.0", features = ["with-serde"] }
+fp-evm = { path = "../../../../primitives/evm" }
+num = { version = "0.3", features = ["alloc"] }
+

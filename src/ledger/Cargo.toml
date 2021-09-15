@@ -32,6 +32,7 @@ wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"]  }
 time = "0.2.26"
 tendermint = "0.19.0"
 indexmap = { version = "1.6.2", features = ["serde"] }
+fp-types = { path = "../components/contracts/primitives/types" }
 
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4c" }

@@ -1,0 +1,14 @@
+[package]
+name = "evm-precompile-sha3fips"
+version = "0.1.0"
+authors = ["Findora <admin@findora.org>"]
+edition = "2018"
+homepage = "https://findora.org/technology"
+repository = "https://github.com/findoranetwork/platform/"
+description = "SHA3 FIPS202 precompiles for EVM module."
+readme = "README.md"
+
+[dependencies]
+evm = { version = "0.27.0", features = ["with-serde"] }
+fp-evm = { path = "../../../../primitives/evm" }
+tiny-keccak = { version = "2.0", features = ["fips202"] }

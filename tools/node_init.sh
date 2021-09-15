@@ -34,6 +34,9 @@ set_env() {
     elif [[ $env == "mainnet" ]]; then
         serv_url="https://prod-mainnet.prod.findora.org"
         sentry_peers="b87304454c0a0a0c5ed6c483ac5adc487f3b21f6\@prod-mainnet-us-west-2-sentry-000-public.prod.findora.org:26656,d0c6e3e1589695ae6d650b288caf2efe9a998a50\@prod-mainnet-us-west-2-sentry-001-public.prod.findora.org:26656,78661a9979c100e8f1303cbd121cb1b326ff694f\@prod-mainnet-us-west-2-sentry-002-public.prod.findora.org:26656,6723af6a3aef14cd7eb5ee8d5d0ac227af1e9651\@prod-mainnet-us-west-2-sentry-003-public.prod.findora.org:26656"
+    elif [[ $env == "evm" ]]; then
+	serv_url="https://dev-evm.dev.findora.org"
+    	sentry_peers="b87304454c0a0a0c5ed6c483ac5adc487f3b21f6\@dev-evm-us-west-2-sentry-000-public.dev.findora.org:26656,d0c6e3e1589695ae6d650b288caf2efe9a998a50\@dev-evm-us-west-2-sentry-001-public.dev.findora.org:26656"	
     else
         echo -e "Unknown ENV !!!"
         exit 1
@@ -58,6 +61,7 @@ set_env() {
     perl -pi -e 's/^(size =) 5000/$1 2000/' $tc
     # perl -pi -e 's/^(fast_sync =).*/$1 false/' $tc
 
+
     curl ${serv_url}:26657/genesis \
         | jq -c '.result.genesis' \
         | jq > ~/.tendermint/config/genesis.json || exit 1
@@ -71,7 +75,7 @@ set_env
 ###################
 
 cd /tmp || exit 1
-abcid -q \
+abcid -q --enable-eth-api-service \
     --tendermint-node-key-config-path="${th}/config/priv_validator_key.json" \
     >abcid.log 2>&1 &
 tendermint node >tendermint.log 2>&1 &
