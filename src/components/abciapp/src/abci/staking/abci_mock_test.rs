@@ -111,11 +111,7 @@ impl AbciMocker {
 
     fn new_with_path(path: Option<&str>) -> AbciMocker {
         if let Some(s) = path {
-            let base_dir = Path::new(s);
-            AbciMocker(pnk!(ABCISubmissionServer::new(
-                Some(base_dir),
-                String::new()
-            )))
+            AbciMocker(pnk!(ABCISubmissionServer::new(Some(s), String::new())))
         } else {
             AbciMocker::new()
         }

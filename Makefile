@@ -12,7 +12,6 @@ export STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV = $(shell pwd)/src/ledger/src/
 export STAKING_INITIAL_VALIDATOR_CONFIG_ABCI_MOCK = $(shell pwd)/src/ledger/src/staking/init/staking_config_abci_mock.json
 
 export DEBUG_DIR=/tmp/findora
-export ENABLE_LEDGER_SERVICE = true
 export ENABLE_QUERY_SERVICE = true
 
 ifndef CARGO_TARGET_DIR

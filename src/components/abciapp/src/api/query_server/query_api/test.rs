@@ -48,7 +48,8 @@ lazy_static! {
 
 /// create server
 fn create_server() -> QueryServer {
-    QueryServer::new(LEDGER.clone(), Some(globutils::fresh_tmp_dir().as_path())).unwrap()
+    let path = globutils::fresh_tmp_dir().to_string_lossy().into_owned();
+    QueryServer::new(LEDGER.clone(), Some(&path)).unwrap()
 }
 
 /// apply transaction

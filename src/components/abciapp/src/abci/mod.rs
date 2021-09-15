@@ -10,15 +10,13 @@ mod server;
 pub mod staking;
 
 use crate::api::{
-    query_server::{ledger_api::RestfulApiService, query_api},
-    submission_server::submission_api::SubmissionApi,
+    query_server::query_api, submission_server::submission_api::SubmissionApi,
 };
 use lazy_static::lazy_static;
 use ruc::*;
 use std::{
     env, fs,
     net::SocketAddr,
-    path::Path,
     sync::{atomic::AtomicBool, Arc},
     thread,
 };
@@ -35,7 +33,7 @@ lazy_static! {
 pub fn run() -> Result<()> {
     let base_dir = {
         fs::create_dir_all(&CFG.ledger_dir).c(d!())?;
-        Some(Path::new(&CFG.ledger_dir))
+        Some(CFG.ledger_dir.as_str())
     };
 
     let config = ruc::info!(ABCIConfig::from_file())
@@ -53,24 +51,14 @@ pub fn run() -> Result<()> {
     if CFG.enable_query_service {
         env::set_var("FINDORA_KEEP_STAKING_HIST", "1");
 
-        let ledger_api_service_hdr =
-            submission_service_hdr.read().borrowable_ledger_state();
-        let ledger_host = config.abci_host.clone();
-        let ledger_port = config.ledger_port;
-        thread::spawn(move || {
-            pnk!(RestfulApiService::create(
-                ledger_api_service_hdr,
-                &ledger_host,
-                ledger_port
-            ));
-        });
-
         let query_service_hdr = submission_service_hdr.read().borrowable_ledger_state();
         pnk!(query_api::service::start_query_server(
-            query_service_hdr,
-            &config.abci_host,
-            config.query_port,
-            Some(Path::new(&config.ledger_dir)),
+            Arc::clone(&query_service_hdr),
+            &[
+                (&config.abci_host, config.query_port),
+                (&config.abci_host, config.ledger_port)
+            ],
+            Some(&config.ledger_dir),
         ))
         .write()
         .update();

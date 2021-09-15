@@ -39,7 +39,7 @@ pub struct ABCISubmissionServer {
 impl ABCISubmissionServer {
     /// create ABCISubmissionServer
     pub fn new(
-        base_dir: Option<&Path>,
+        base_dir: Option<&str>,
         tendermint_reply: String,
     ) -> Result<ABCISubmissionServer> {
         let ledger_state = match base_dir {
@@ -57,7 +57,10 @@ impl ABCISubmissionServer {
                 ))
             }
             Some(base_dir) => {
-                pnk!(AccountBaseAPP::new(base_dir, CFG.enable_eth_empty_blocks))
+                pnk!(AccountBaseAPP::new(
+                    Path::new(base_dir),
+                    CFG.enable_eth_empty_blocks
+                ))
             }
         };
 

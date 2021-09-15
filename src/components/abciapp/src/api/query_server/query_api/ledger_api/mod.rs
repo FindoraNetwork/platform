@@ -1,13 +1,13 @@
 //!
-//! # query ledger interface
+//! # Access Ledger Data
 //!
 
 #[cfg(test)]
 #[allow(missing_docs)]
 mod test;
 
-use actix_cors::Cors;
-use actix_web::{dev, error, middleware, web, App, HttpServer};
+use super::server::QueryServer;
+use actix_web::{error, web};
 use finutils::api::{
     DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
     ValidatorDetail, ValidatorList,
@@ -19,42 +19,28 @@ use ledger::{
         TxoSID, UnAuthenticatedUtxo, Utxo,
     },
     staking::{DelegationRwdDetail, DelegationState, TendermintAddr, UNBOND_BLOCK_CNT},
-    store::LedgerState,
 };
-use log::info;
 use parking_lot::RwLock;
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, mem, sync::Arc};
 use zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo};
 
-/// Structures exposed to the outside world
-pub struct RestfulApiService;
-
-/// Ping route to check for liveness of API
+// Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]
-async fn ping() -> actix_web::Result<String> {
+pub(super) async fn ping() -> actix_web::Result<String> {
     Ok("success".into())
 }
 
-/// Returns the git commit hash and commit date of this build
-#[allow(clippy::unnecessary_wraps)]
-async fn version() -> actix_web::Result<String> {
-    Ok(format!(
-        "Build: {} {}",
-        option_env!("VERGEN_SHA_EXTERN").unwrap_or(env!("VERGEN_SHA")),
-        env!("VERGEN_BUILD_DATE")
-    ))
-}
-
-/// query utxo according to `TxoSID` return Authenticated Utxo
-pub async fn query_utxo(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
+// query utxo according to `TxoSID` return Authenticated Utxo
+pub(super) async fn query_utxo(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<AuthenticatedUtxo>> {
-    let reader = data.read();
+    let read = data.read();
+    let read = read.state.as_ref().unwrap().read();
     if let Ok(txo_sid) = info.parse::<u64>() {
-        if let Some(txo) = reader.get_utxo(TxoSID(txo_sid)) {
+        if let Some(txo) = read.get_utxo(TxoSID(txo_sid)) {
             Ok(web::Json(txo))
         } else {
             Err(actix_web::error::ErrorNotFound(
@@ -68,14 +54,15 @@ pub async fn query_utxo(
     }
 }
 
-/// query utxo according to `TxoSID` return UnAuthenticated Utxo
-pub async fn query_utxo_light(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
+// query utxo according to `TxoSID` return UnAuthenticated Utxo
+pub(super) async fn query_utxo_light(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<UnAuthenticatedUtxo>> {
-    let reader = data.read();
+    let read = data.read();
+    let read = read.state.as_ref().unwrap().read();
     if let Ok(txo_sid) = info.parse::<u64>() {
-        if let Some(txo) = reader.get_utxo_light(TxoSID(txo_sid)) {
+        if let Some(txo) = read.get_utxo_light(TxoSID(txo_sid)) {
             Ok(web::Json(txo))
         } else {
             Err(actix_web::error::ErrorNotFound(
@@ -89,14 +76,15 @@ pub async fn query_utxo_light(
     }
 }
 
-/// query issuance num according to `AssetTypeCode`
-pub async fn query_asset_issuance_num(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
+// query issuance num according to `AssetTypeCode`
+pub(super) async fn query_asset_issuance_num(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<u64>> {
-    let reader = data.read();
+    let read = data.read();
+    let read = read.state.as_ref().unwrap().read();
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
-        if let Some(iss_num) = reader.get_issuance_num(&token_code) {
+        if let Some(iss_num) = read.get_issuance_num(&token_code) {
             Ok(web::Json(iss_num))
         } else {
             Err(actix_web::error::ErrorNotFound(
@@ -110,9 +98,9 @@ pub async fn query_asset_issuance_num(
     }
 }
 
-/// Separate a string of `TxoSID` by ',' and query the corresponding Authenticated utxo
-pub async fn query_utxos(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
+// Separate a string of `TxoSID` by ',' and query the corresponding Authenticated utxo
+pub(super) async fn query_utxos(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<Option<AuthenticatedUtxo>>>> {
     let sid_list = info
@@ -125,23 +113,25 @@ pub async fn query_utxos(
         })
         .collect::<actix_web::Result<Vec<_>, actix_web::error::Error>>()?;
 
-    let reader = data.read();
+    let read = data.read();
+    let read = read.state.as_ref().unwrap().read();
 
     if sid_list.len() > 10 || sid_list.is_empty() {
         return Err(actix_web::error::ErrorBadRequest("Invalid Query List"));
     }
 
-    Ok(web::Json(reader.get_utxos(sid_list.as_slice())))
+    Ok(web::Json(read.get_utxos(sid_list.as_slice())))
 }
 
-/// query asset according to `AssetType`
-pub async fn query_asset(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
+// query asset according to `AssetType`
+pub(super) async fn query_asset(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<AssetType>> {
-    let reader = data.read();
+    let read = data.read();
+    let read = read.state.as_ref().unwrap().read();
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
-        if let Some(asset) = reader.get_asset_type(&token_code) {
+        if let Some(asset) = read.get_asset_type(&token_code) {
             Ok(web::Json(asset))
         } else {
             Err(actix_web::error::ErrorNotFound(
@@ -155,14 +145,15 @@ pub async fn query_asset(
     }
 }
 
-/// query tx according to `TxnSID`
-pub async fn query_txn(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
+// query tx according to `TxnSID`
+pub(super) async fn query_txn(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<String> {
-    let reader = data.read();
+    let read = data.read();
+    let read = read.state.as_ref().unwrap().read();
     if let Ok(txn_sid) = info.parse::<usize>() {
-        if let Ok(mut txn) = ruc::info!(reader.get_transaction(TxnSID(txn_sid))) {
+        if let Ok(mut txn) = ruc::info!(read.get_transaction(TxnSID(txn_sid))) {
             txn.finalized_txn.set_txo_id();
             Ok(serde_json::to_string(&txn)?)
         } else {
@@ -177,14 +168,15 @@ pub async fn query_txn(
     }
 }
 
-/// query tx according to `TxnSID`, lighter and faster version
-pub async fn query_txn_light(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
+// query tx according to `TxnSID`, lighter and faster version
+pub(super) async fn query_txn_light(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<String> {
-    let reader = data.read();
+    let read = data.read();
+    let read = read.state.as_ref().unwrap().read();
     if let Ok(txn_sid) = info.parse::<usize>() {
-        if let Ok(mut txn) = ruc::info!(reader.get_transaction_light(TxnSID(txn_sid))) {
+        if let Ok(mut txn) = ruc::info!(read.get_transaction_light(TxnSID(txn_sid))) {
             txn.set_txo_id();
             Ok(serde_json::to_string(&txn)?)
         } else {
@@ -199,34 +191,37 @@ pub async fn query_txn_light(
     }
 }
 
-/// query global state, return (apphash, block count, apphash and block count signatures)
+// query global state, return (apphash, block count, apphash and block count signatures)
 #[allow(clippy::type_complexity)]
-pub async fn query_global_state(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
+pub(super) async fn query_global_state(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> web::Json<(HashOf<Option<StateCommitmentData>>, u64, &'static str)> {
-    let reader = data.read();
-    let (hash, seq_id) = reader.get_state_commitment();
+    let read = data.read();
+    let read = read.state.as_ref().unwrap().read();
+    let (hash, seq_id) = read.get_state_commitment();
 
     web::Json((hash, seq_id, "v4UVgkIBpj0eNYI1B1QhTTduJHCIHH126HcdesCxRdLkVGDKrVUPgwmNLCDafTVgC5e4oDhAGjPNt1VhUr6ZCQ=="))
 }
 
-/// query global state version according to `block_height`
-pub async fn query_global_state_version(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
+// query global state version according to `block_height`
+pub(super) async fn query_global_state_version(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
     version: web::Path<u64>,
 ) -> web::Json<Option<HashOf<Option<StateCommitmentData>>>> {
-    let reader = data.read();
-    let hash = reader.get_state_commitment_at_block_height(*version);
+    let read = data.read();
+    let read = read.state.as_ref().unwrap().read();
+    let hash = read.get_state_commitment_at_block_height(*version);
     web::Json(hash)
 }
 
-/// Query current validator list,
-/// validtors who have not completed self-deletagion will be filtered out.
+// Query current validator list,
+// validtors who have not completed self-deletagion will be filtered out.
 #[allow(unused)]
-async fn query_validators(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
+pub(super) async fn query_validators(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> actix_web::Result<web::Json<ValidatorList>> {
     let read = data.read();
+    let read = read.state.as_ref().unwrap().read();
     let staking = read.get_staking();
 
     if let Some(validator_data) = staking.validator_get_current() {
@@ -265,14 +260,14 @@ async fn query_validators(
 }
 
 #[derive(Deserialize, Debug)]
-struct DelegationRwdQueryParams {
+pub(super) struct DelegationRwdQueryParams {
     address: String,
     height: u64,
 }
 
 /// get delegation reward according to `DelegationRwdQueryParams`
-async fn get_delegation_reward(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
+pub(super) async fn get_delegation_reward(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
     web::Query(info): web::Query<DelegationRwdQueryParams>,
 ) -> actix_web::Result<web::Json<Vec<DelegationRwdDetail>>> {
     // Convert from base64 representation
@@ -281,18 +276,16 @@ async fn get_delegation_reward(
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
 
     let read = data.read();
-    let staking = read.get_staking();
-
-    let di = staking
-        .delegation_get(&key)
-        .c(d!())
-        .map_err(error::ErrorBadRequest)?;
 
     Ok(web::Json(
         (0..=info.height)
             .into_iter()
             .rev()
-            .filter_map(|i| di.rwd_hist.as_ref().map(|rh| rh.get(&i)))
+            .filter_map(|i| {
+                read.staking_delegation_rwd_hist
+                    .get(&key)
+                    .map(|rh| rh.get(&i))
+            })
             .flatten()
             .take(1)
             .collect(),
@@ -300,25 +293,26 @@ async fn get_delegation_reward(
 }
 
 #[derive(Deserialize, Debug)]
-struct ValidatorDelegationQueryParams {
+pub(super) struct ValidatorDelegationQueryParams {
     address: TendermintAddr,
     epoch_size: u32,
     epoch_cnt: u8,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-struct ValidatorDelegation {
+pub(super) struct ValidatorDelegation {
     return_rate: [u128; 2],
     self_delegation: u64,
     delegated: u64,
 }
 
-/// get history according to `ValidatorDelegationQueryParams`
-async fn get_validator_delegation_history(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
+// get history according to `ValidatorDelegationQueryParams`
+pub(super) async fn get_validator_delegation_history(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
     web::Query(info): web::Query<ValidatorDelegationQueryParams>,
 ) -> actix_web::Result<web::Json<Vec<ValidatorDelegation>>> {
-    let read = data.read();
+    let qs = data.read();
+    let read = qs.state.as_ref().unwrap().read();
     let staking = read.get_staking();
 
     let v_id = staking
@@ -328,8 +322,7 @@ async fn get_validator_delegation_history(
     let v_self_delegation = staking
         .delegation_get(&v_id)
         .ok_or_else(|| error::ErrorBadRequest("not exists"))?;
-
-    let mut history = vec![];
+    let delegation_amount_hist = qs.staking_delegation_amount_hist.get(&v_id);
 
     let self_delegation = v_self_delegation
         .entries
@@ -339,11 +332,11 @@ async fn get_validator_delegation_history(
         .sum();
     let delegated = v_self_delegation.delegators.values().sum::<u64>();
 
-    history.push(ValidatorDelegation {
+    let mut history = vec![ValidatorDelegation {
         return_rate: read.staking_get_block_rewards_rate(),
         delegated,
         self_delegation,
-    });
+    }];
 
     let h = staking.cur_height();
     let epoch_size = info.epoch_size as u64;
@@ -360,11 +353,10 @@ async fn get_validator_delegation_history(
         })
         .for_each(|h| {
             history.push(ValidatorDelegation {
-                return_rate: staking
+                return_rate: qs
                     .query_block_rewards_rate(&h)
                     .unwrap_or(history.last().unwrap().return_rate), //unwrap is safe here
-                delegated: v_self_delegation
-                    .delegation_amount_hist
+                delegated: delegation_amount_hist
                     .as_ref()
                     .map(|dah| {
                         if dah.is_empty()
@@ -380,8 +372,7 @@ async fn get_validator_delegation_history(
                         }
                     })
                     .unwrap_or(0),
-                self_delegation: v_self_delegation
-                    .delegation_amount_hist
+                self_delegation: delegation_amount_hist
                     .as_ref()
                     .map(|dah| dah.get(&h))
                     .flatten()
@@ -393,7 +384,7 @@ async fn get_validator_delegation_history(
 }
 
 #[derive(Deserialize, Debug)]
-struct DelegatorQueryParams {
+pub(super) struct DelegatorQueryParams {
     address: String,
     page: usize,
     per_page: usize,
@@ -407,12 +398,13 @@ enum OrderOption {
     Asc,
 }
 
-/// paging Query delegators according to `DelegatorQueryParams`
-async fn get_delegators_with_params(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
+// paging Query delegators according to `DelegatorQueryParams`
+pub(super) async fn get_delegators_with_params(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
     web::Query(info): web::Query<DelegatorQueryParams>,
 ) -> actix_web::Result<web::Json<DelegatorList>> {
     let read = data.read();
+    let read = read.state.as_ref().unwrap().read();
     let staking = read.get_staking();
 
     if info.page == 0 || info.order == OrderOption::Asc {
@@ -443,12 +435,13 @@ async fn get_delegators_with_params(
     Ok(web::Json(DelegatorList::new(list)))
 }
 
-/// query delegator list according to `TendermintAddr`
-async fn query_delegator_list(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
+// query delegator list according to `TendermintAddr`
+pub(super) async fn query_delegator_list(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
     addr: web::Path<TendermintAddr>,
 ) -> actix_web::Result<web::Json<DelegatorList>> {
     let read = data.read();
+    let read = read.state.as_ref().unwrap().read();
     let staking = read.get_staking();
 
     let list = staking
@@ -466,12 +459,13 @@ async fn query_delegator_list(
     Ok(web::Json(DelegatorList::new(list)))
 }
 
-/// query validator detail according to `TendermintAddr`
-async fn query_validator_detail(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
+// query validator detail according to `TendermintAddr`
+pub(super) async fn query_validator_detail(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
     addr: web::Path<TendermintAddr>,
 ) -> actix_web::Result<web::Json<ValidatorDetail>> {
     let read = data.read();
+    let read = read.state.as_ref().unwrap().read();
     let staking = read.get_staking();
 
     let v_id = staking
@@ -528,9 +522,9 @@ async fn query_validator_detail(
     Err(error::ErrorNotFound("not exists"))
 }
 
-/// query delegation info according to `public_key`
-async fn query_delegation_info(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
+// query delegation info according to `public_key`
+pub(super) async fn query_delegation_info(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
     address: web::Path<String>,
 ) -> actix_web::Result<web::Json<DelegationInfo>> {
     let pk = globutils::wallet::public_key_from_base64(address.as_str())
@@ -538,6 +532,7 @@ async fn query_delegation_info(
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
 
     let read = data.read();
+    let read = read.state.as_ref().unwrap().read();
     let staking = read.get_staking();
 
     let block_rewards_rate = read.staking_get_block_rewards_rate();
@@ -614,18 +609,19 @@ async fn query_delegation_info(
     Ok(web::Json(resp))
 }
 
-/// query utxos according `public_key`
-async fn query_owned_utxos(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
+// query utxos according `public_key`
+pub(super) async fn query_owned_utxos(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
     owner: web::Path<String>,
 ) -> actix_web::Result<web::Json<BTreeMap<TxoSID, (Utxo, Option<OwnerMemo>)>>> {
+    let qs = data.read();
+    let read = qs.state.as_ref().unwrap().read();
     globutils::wallet::public_key_from_base64(owner.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
-        .map(|pk| web::Json(pnk!(data.read().get_owned_utxos(&pk))))
+        .map(|pk| web::Json(pnk!(read.get_owned_utxos(&pk))))
 }
 
-/// Define interface type
 #[allow(missing_docs)]
 pub enum ApiRoutes {
     UtxoSid,
@@ -663,120 +659,5 @@ impl NetworkRoute for ApiRoutes {
             ApiRoutes::ValidatorDetail => "validator_detail",
         };
         "/".to_owned() + endpoint
-    }
-}
-
-trait Route {
-    fn set_route(self) -> Self;
-}
-
-impl<T, B> Route for App<T, B>
-where
-    B: actix_web::dev::MessageBody,
-    T: actix_service::ServiceFactory<
-        Config = (),
-        Request = dev::ServiceRequest,
-        Response = dev::ServiceResponse<B>,
-        Error = error::Error,
-        InitError = (),
-    >,
-{
-    fn set_route(self) -> Self {
-        self.route("/ping", web::get().to(ping))
-            .route("/version", web::get().to(version))
-            .route(
-                &ApiRoutes::UtxoSid.with_arg_template("sid"),
-                web::get().to(query_utxo),
-            )
-            .route(
-                &ApiRoutes::UtxoSidLight.with_arg_template("sid"),
-                web::get().to(query_utxo_light),
-            )
-            .route(
-                &ApiRoutes::UtxoSidList.with_arg_template("sid_list"),
-                web::get().to(query_utxos),
-            )
-            .route(
-                &ApiRoutes::AssetIssuanceNum.with_arg_template("code"),
-                web::get().to(query_asset_issuance_num),
-            )
-            .route(
-                &ApiRoutes::AssetToken.with_arg_template("code"),
-                web::get().to(query_asset),
-            )
-            .route(
-                &ApiRoutes::GlobalState.route(),
-                web::get().to(query_global_state),
-            )
-            .route(
-                &ApiRoutes::TxnSid.with_arg_template("sid"),
-                web::get().to(query_txn),
-            )
-            .route(
-                &ApiRoutes::TxnSidLight.with_arg_template("sid"),
-                web::get().to(query_txn_light),
-            )
-            .route(
-                &ApiRoutes::GlobalStateVersion.with_arg_template("version"),
-                web::get().to(query_global_state_version),
-            )
-            .route(
-                &ApiRoutes::OwnedUtxos.with_arg_template("owner"),
-                web::get().to(query_owned_utxos),
-            )
-            .route(
-                &ApiRoutes::ValidatorList.route(),
-                web::get().to(query_validators),
-            )
-            .route(
-                &ApiRoutes::DelegationInfo.with_arg_template("XfrPublicKey"),
-                web::get().to(query_delegation_info),
-            )
-            .route(
-                &ApiRoutes::DelegatorList.with_arg_template("NodeAddress"),
-                web::get().to(query_delegator_list),
-            )
-            .service(
-                web::resource("/delegator_list")
-                    .route(web::get().to(get_delegators_with_params)),
-            )
-            .service(
-                web::resource("/delegation_rewards")
-                    .route(web::get().to(get_delegation_reward)),
-            )
-            .service(
-                web::resource("/validator_delegation")
-                    .route(web::get().to(get_validator_delegation_history)),
-            )
-            .route(
-                &ApiRoutes::ValidatorDetail.with_arg_template("NodeAddress"),
-                web::get().to(query_validator_detail),
-            )
-    }
-}
-
-impl RestfulApiService {
-    /// create ledger api
-    pub fn create(
-        ledger_access: Arc<RwLock<LedgerState>>,
-        host: &str,
-        port: u16,
-    ) -> Result<RestfulApiService> {
-        let _ = actix_rt::System::new("findora API");
-
-        HttpServer::new(move || {
-            App::new()
-                .wrap(middleware::Logger::default())
-                .wrap(Cors::permissive().supports_credentials())
-                .data(ledger_access.clone())
-                .set_route()
-        })
-        .bind(&format!("{}:{}", host, port))
-        .c(d!())?
-        .run();
-
-        info!("RestfulApi server started");
-
-        Ok(RestfulApiService)
     }
 }
