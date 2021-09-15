@@ -295,7 +295,6 @@ async fn get_delegation_reward(
             .filter_map(|i| di.rwd_hist.as_ref().map(|rh| rh.get(&i)))
             .flatten()
             .take(1)
-            .map(|v| v.into_inner().into_owned())
             .collect(),
     ))
 }
@@ -368,12 +367,16 @@ async fn get_validator_delegation_history(
                     .delegation_amount_hist
                     .as_ref()
                     .map(|dah| {
-                        if dah.is_empty() || dah.iter().take(1).all(|(i, _)| i > h) {
+                        if dah.is_empty()
+                            || dah.iter().take(1).all(|(i, _)| {
+                                #[cfg(not(feature = "diskcache"))]
+                                let i = *i;
+                                i > h
+                            })
+                        {
                             0
                         } else {
-                            dah.get(&h)
-                                .map(|v| v.into_inner().into_owned())
-                                .unwrap_or(history.last().unwrap().delegated)
+                            dah.get(&h).unwrap_or(history.last().unwrap().delegated)
                         }
                     })
                     .unwrap_or(0),
@@ -382,7 +385,6 @@ async fn get_validator_delegation_history(
                     .as_ref()
                     .map(|dah| dah.get(&h))
                     .flatten()
-                    .map(|v| v.into_inner().into_owned())
                     .unwrap_or(history.last().unwrap().self_delegation),
             })
         });

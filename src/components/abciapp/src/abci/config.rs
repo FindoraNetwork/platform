@@ -103,7 +103,6 @@ pub(crate) mod global_cfg {
         pub tendermint_port: u16,
         pub submission_service_port: u16,
         pub ledger_service_port: u16,
-        pub enable_ledger_service: bool,
         pub enable_query_service: bool,
         pub tendermint_node_self_addr: Option<String>,
         pub tendermint_node_key_config_path: Option<String>,
@@ -127,7 +126,6 @@ pub(crate) mod global_cfg {
                 .arg_from_usage("--tendermint-port=[Tendermint Port]")
                 .arg_from_usage("--submission-service-port=[Submission Service Port]")
                 .arg_from_usage("--ledger-service-port=[Ledger Service Port]")
-                .arg_from_usage("-l, --enable-ledger-service")
                 .arg_from_usage("-q, --enable-query-service")
                 .arg_from_usage("--tendermint-node-self-addr=[Address] 'the address of your tendermint node, in upper-hex format'")
                 .arg_from_usage("--tendermint-node-key-config-path=[Path] 'such as: ${HOME}/.tendermint/config/priv_validator_key.json'")
@@ -178,8 +176,6 @@ pub(crate) mod global_cfg {
             .unwrap_or_else(|| "8668".to_owned())
             .parse::<u16>()
             .c(d!())?;
-        let els = m.is_present("enable-ledger-service")
-            || env::var("ENABLE_LEDGER_SERVICE").is_ok();
         let eqs = m.is_present("enable-query-service")
             || env::var("ENABLE_QUERY_SERVICE").is_ok();
         let tnsa = m
@@ -206,7 +202,6 @@ pub(crate) mod global_cfg {
             tendermint_port: tp,
             submission_service_port: ssp,
             ledger_service_port: lsp,
-            enable_ledger_service: els,
             enable_query_service: eqs,
             tendermint_node_self_addr: tnsa,
             tendermint_node_key_config_path: tnkcp,

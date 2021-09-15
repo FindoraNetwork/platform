@@ -16,7 +16,7 @@ pub mod init;
 pub mod ops;
 
 use crate::data_model::{Operation, Transaction, TransferAsset, TxoRef, FRA_DECIMALS};
-use bnc::{mapx::Mapx, new_mapx};
+use bnc::{new_mapx, Mapx};
 use cosig::CoSigRule;
 use cryptohash::sha256::{self, Digest};
 use globutils::wallet;
@@ -43,7 +43,117 @@ lazy_static! {
     /// will be set in `findorad` together with '--enable-query-server' option,
     /// full-nodes may need this feature, meaningless in other kinds of node.
     pub static ref KEEP_HIST: bool = env::var("FINDORA_KEEP_STAKING_HIST").is_ok();
+
+    /// Reserved accounts of Findora Foundation or System.
+    pub static ref FF_PK_LIST: Vec<XfrPublicKey> = FF_ADDR_LIST
+        .iter()
+        .map(|addr| pnk!(wallet::public_key_from_bech32(addr)))
+        .collect();
 }
+
+/// Reserved accounts of Findora Foundation.
+pub const FF_ADDR_LIST: [&str; 8] = [
+    "fra1s9c6p0656as48w8su2gxntc3zfuud7m66847j6yh7n8wezazws3s68p0m9",
+    "fra1zjfttcnvyv9ypy2d4rcg7t4tw8n88fsdzpggr0y2h827kx5qxmjshwrlx7",
+    "fra18rfyc9vfyacssmr5x7ku7udyd5j5vmfkfejkycr06e4as8x7n3dqwlrjrc",
+    "fra1kvf8z5f5m8wmp2wfkscds45xv3yp384eszu2mpre836x09mq5cqsknltvj",
+    "fra1w8s3e7v5a78623t8cq43uejtw90yzd0xctpwv63um5amtv72detq95v0dy",
+    "fra1ukju0dhmx0sjwzcgjzgg3e7n6f755jkkfl9akq4hleulds9a0hgq4uzcp5",
+    "fra1mjdr0mgn2e0670hxptpzu9tmf0ary8yj8nv90znjspwdupv9aacqwrg3dx",
+    "fra1whn756rtqt3gpsmdlw6pvns75xdh3ttqslvxaf7eefwa83pcnlhsree9gv",
+];
+
+/// SEE:
+/// - https://www.notion.so/findora/PoS-Stage-1-Consensus-Rewards-Penalties-72f5c9a697ff461c89c3728e34348834#3d2f1b8ff8244632b715abdd42b6a67b
+pub const PROPOSER_REWARDS_RATE_RULE: [([u128; 2], u128); 6] = [
+    ([0, 66_6667], 0),
+    ([66_6667, 75_0000], 1),
+    ([75_0000, 83_3333], 2),
+    ([83_3333, 91_6667], 3),
+    ([91_6667, 100_0000], 4),
+    ([100_0000, 100_0001], 5),
+];
+
+/// Apply new validator config every N blocks.
+///
+/// Update the validator list every 4 blocks to ensure that
+/// the validator list obtained from `abci::LastCommitInfo` is exactly
+/// the same as the current block.
+/// So we can use it to filter out non-existing entries.
+pub const VALIDATOR_UPDATE_BLOCK_ITV: i64 = 4;
+
+/// How many FRA units per FRA
+pub const FRA: Amount = 10_u64.pow(FRA_DECIMALS as u32);
+
+/// Total amount of FRA-units issuance.
+pub const FRA_PRE_ISSUE_AMOUNT: Amount = 210_0000_0000 * FRA;
+
+/// <Total amount of FRA-units issuance> + <token pool of CoinBase>.
+pub const FRA_TOTAL_AMOUNT: Amount = FRA_PRE_ISSUE_AMOUNT + MINT_AMOUNT_LIMIT;
+
+/// Minimum allowable delegation amount.
+pub const MIN_DELEGATION_AMOUNT: Amount = 1;
+/// Maximum allowable delegation amount.
+pub const MAX_DELEGATION_AMOUNT: Amount = FRA_TOTAL_AMOUNT;
+
+/// The minimum investment to become a validator through staking.
+pub const STAKING_VALIDATOR_MIN_POWER: Power = 88_8888 * FRA;
+
+/// The highest height in the context of tendermint.
+pub const BLOCK_HEIGHT_MAX: u64 = i64::MAX as u64;
+
+/// A limitation from
+/// [tendermint](https://docs.tendermint.com/v0.33/spec/abci/apps.html#validator-updates)
+///
+/// > Note that the maximum global power of the validator set
+/// > is bounded by MaxTotalVotingPower = MaxInt64 / 8.
+/// > Applications are responsible for ensuring
+/// > they do not make changes to the validator set
+/// > that cause it to exceed this limit.
+pub const MAX_TOTAL_POWER: Amount = Amount::MAX / 8;
+
+/// The max vote power of any validator
+/// can not exceed 20% of global power.
+pub const MAX_POWER_PERCENT_PER_VALIDATOR: [u128; 2] = [1, 5];
+
+/// Block time interval, in seconds.
+pub const BLOCK_INTERVAL: u64 = 15 + 1;
+
+/// The lock time after the delegation expires, about 21 days.
+#[cfg(not(any(feature = "debug_env", feature = "abci_mock")))]
+pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
+
+/// used in test/mock env
+#[cfg(any(feature = "debug_env", feature = "abci_mock"))]
+pub const UNBOND_BLOCK_CNT: u64 = 5;
+
+// minimal number of validators
+pub(crate) const VALIDATORS_MIN: usize = 5;
+
+/// The minimum weight threshold required
+/// when updating validator information, 2/3.
+pub const COSIG_THRESHOLD_DEFAULT: [u64; 2] = [2, 3];
+
+/// block height of tendermint
+pub type BlockHeight = u64;
+
+pub(crate) type Amount = u64;
+pub(crate) type Power = u64;
+
+/// Node PubKey in base64 format
+pub type TendermintPubKey = String;
+type TendermintPubKeyRef<'a> = &'a str;
+
+/// sha256(pubkey)[:20] in hex format
+pub type TendermintAddr = String;
+/// ref `TendermintAddr`
+pub type TendermintAddrRef<'a> = &'a str;
+
+/// sha256(pubkey)[:20]
+pub type TendermintAddrBytes = Vec<u8>;
+// type TendermintAddrBytesRef<'a> = &'a [u8];
+
+type ValidatorInfo = BTreeMap<BlockHeight, ValidatorData>;
 
 /// Staking entry
 ///
@@ -75,6 +185,18 @@ impl Default for Staking {
 }
 
 impl Staking {
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn has_been_inited(&self) -> bool {
+        !self.vi.is_empty() && 0 != self.vi.keys().next().copied().unwrap()
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn flush_data(&mut self) {
+        self.di.flush_data();
+    }
+
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn new() -> Self {
@@ -110,7 +232,7 @@ impl Staking {
         self.di
             .rate_hist
             .as_ref()
-            .map(|rh| rh.get(height).map(|v| v.into_inner().into_owned()))
+            .map(|rh| rh.get(height))
             .flatten()
     }
 
@@ -1314,103 +1436,6 @@ impl Staking {
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/// Reserved accounts of Findora Foundation.
-pub const FF_ADDR_LIST: [&str; 8] = [
-    "fra1s9c6p0656as48w8su2gxntc3zfuud7m66847j6yh7n8wezazws3s68p0m9",
-    "fra1zjfttcnvyv9ypy2d4rcg7t4tw8n88fsdzpggr0y2h827kx5qxmjshwrlx7",
-    "fra18rfyc9vfyacssmr5x7ku7udyd5j5vmfkfejkycr06e4as8x7n3dqwlrjrc",
-    "fra1kvf8z5f5m8wmp2wfkscds45xv3yp384eszu2mpre836x09mq5cqsknltvj",
-    "fra1w8s3e7v5a78623t8cq43uejtw90yzd0xctpwv63um5amtv72detq95v0dy",
-    "fra1ukju0dhmx0sjwzcgjzgg3e7n6f755jkkfl9akq4hleulds9a0hgq4uzcp5",
-    "fra1mjdr0mgn2e0670hxptpzu9tmf0ary8yj8nv90znjspwdupv9aacqwrg3dx",
-    "fra1whn756rtqt3gpsmdlw6pvns75xdh3ttqslvxaf7eefwa83pcnlhsree9gv",
-];
-
-lazy_static! {
-    /// Reserved accounts of Findora Foundation or System.
-    pub static ref FF_PK_LIST: Vec<XfrPublicKey> = FF_ADDR_LIST
-        .iter()
-        .map(|addr| pnk!(wallet::public_key_from_bech32(addr)))
-        .collect();
-}
-
-/// SEE:
-/// - https://www.notion.so/findora/PoS-Stage-1-Consensus-Rewards-Penalties-72f5c9a697ff461c89c3728e34348834#3d2f1b8ff8244632b715abdd42b6a67b
-pub const PROPOSER_REWARDS_RATE_RULE: [([u128; 2], u128); 6] = [
-    ([0, 66_6667], 0),
-    ([66_6667, 75_0000], 1),
-    ([75_0000, 83_3333], 2),
-    ([83_3333, 91_6667], 3),
-    ([91_6667, 100_0000], 4),
-    ([100_0000, 100_0001], 5),
-];
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/// Apply new validator config every N blocks.
-///
-/// Update the validator list every 4 blocks to ensure that
-/// the validator list obtained from `abci::LastCommitInfo` is exactly
-/// the same as the current block.
-/// So we can use it to filter out non-existing entries.
-pub const VALIDATOR_UPDATE_BLOCK_ITV: i64 = 4;
-
-/// How many FRA units per FRA
-pub const FRA: Amount = 10_u64.pow(FRA_DECIMALS as u32);
-
-/// Total amount of FRA-units issuance.
-pub const FRA_PRE_ISSUE_AMOUNT: Amount = 210_0000_0000 * FRA;
-
-/// <Total amount of FRA-units issuance> + <token pool of CoinBase>.
-pub const FRA_TOTAL_AMOUNT: Amount = FRA_PRE_ISSUE_AMOUNT + MINT_AMOUNT_LIMIT;
-
-/// Minimum allowable delegation amount.
-pub const MIN_DELEGATION_AMOUNT: Amount = 1;
-/// Maximum allowable delegation amount.
-pub const MAX_DELEGATION_AMOUNT: Amount = FRA_TOTAL_AMOUNT;
-
-/// The minimum investment to become a validator through staking.
-pub const STAKING_VALIDATOR_MIN_POWER: Power = 88_8888 * FRA;
-
-/// The highest height in the context of tendermint.
-pub const BLOCK_HEIGHT_MAX: u64 = i64::MAX as u64;
-
-/// A limitation from
-/// [tendermint](https://docs.tendermint.com/v0.33/spec/abci/apps.html#validator-updates)
-///
-/// > Note that the maximum global power of the validator set
-/// > is bounded by MaxTotalVotingPower = MaxInt64 / 8.
-/// > Applications are responsible for ensuring
-/// > they do not make changes to the validator set
-/// > that cause it to exceed this limit.
-pub const MAX_TOTAL_POWER: Amount = Amount::MAX / 8;
-
-/// The max vote power of any validator
-/// can not exceed 20% of global power.
-pub const MAX_POWER_PERCENT_PER_VALIDATOR: [u128; 2] = [1, 5];
-
-/// Block time interval, in seconds.
-pub const BLOCK_INTERVAL: u64 = 15 + 1;
-
-/// The lock time after the delegation expires, about 21 days.
-#[cfg(not(any(feature = "debug_env", feature = "abci_mock")))]
-pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
-
-/// used in test/mock env
-#[cfg(any(feature = "debug_env", feature = "abci_mock"))]
-pub const UNBOND_BLOCK_CNT: u64 = 5;
-
-// minimal number of validators
-pub(crate) const VALIDATORS_MIN: usize = 5;
-
-/// The minimum weight threshold required
-/// when updating validator information, 2/3.
-pub const COSIG_THRESHOLD_DEFAULT: [u64; 2] = [2, 3];
-
 /// self-description of staker
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct StakerMemo {
@@ -1435,27 +1460,6 @@ impl Default for StakerMemo {
         }
     }
 }
-
-/// block height of tendermint
-pub type BlockHeight = u64;
-
-pub(crate) type Amount = u64;
-pub(crate) type Power = u64;
-
-/// Node PubKey in base64 format
-pub type TendermintPubKey = String;
-type TendermintPubKeyRef<'a> = &'a str;
-
-/// sha256(pubkey)[:20] in hex format
-pub type TendermintAddr = String;
-/// ref `TendermintAddr`
-pub type TendermintAddrRef<'a> = &'a str;
-
-/// sha256(pubkey)[:20]
-pub type TendermintAddrBytes = Vec<u8>;
-// type TendermintAddrBytesRef<'a> = &'a [u8];
-
-type ValidatorInfo = BTreeMap<BlockHeight, ValidatorData>;
 
 /// Data of the effective validators on a specified height.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -1572,6 +1576,27 @@ impl DelegationInfo {
             addr_map: BTreeMap::new(),
             end_height_map: BTreeMap::new(),
             rate_hist: Some(new_mapx!()),
+        }
+    }
+
+    #[inline(always)]
+    fn flush_data(&mut self) {
+        self.addr_map.values_mut().for_each(|d| {
+            if let Some(rh) = d.rwd_hist.as_mut() {
+                rh.flush_data();
+            }
+
+            if let Some(sdh) = d.self_delegation_hist.as_mut() {
+                sdh.flush_data();
+            }
+
+            if let Some(dah) = d.delegation_amount_hist.as_mut() {
+                dah.flush_data();
+            }
+        });
+
+        if let Some(rh) = self.rate_hist.as_mut() {
+            rh.flush_data();
         }
     }
 }

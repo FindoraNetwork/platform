@@ -132,7 +132,7 @@ bench:
 
 lint:
 	cargo clippy --workspace
-	cargo clippy --workspace --tests
+	cargo clippy --workspace --no-default-features
 	cargo clippy --features="abci_mock" --workspace --tests
 
 update:

@@ -37,6 +37,7 @@ ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4c" }
 zeiutils = { package = "utils", git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4c" }
 bulletproofs = { package = "bulletproofs", git = "ssh://git@github.com/FindoraNetwork/bulletproofs", branch = "batch_verification", features = ["yoloproofs"] }
+bnc = { git = "https://github.com/FindoraNetwork/BNC.git", branch = "feat-newapi", default-features = false }
 
 globutils = { path = "../libs/globutils" }
 bitmap = { path = "../libs/bitmap" }
@@ -46,11 +47,10 @@ merkle_tree = { path = "../libs/merkle_tree" }
 sliding_set = { path = "../libs/sliding_set" }
 
 [features]
-default = ["compress"]
-TESTING = []
+default = []
+diskcache = ["bnc/diskcache"]
 debug_env = []
 abci_mock = []
-compress = ["bnc/compress"]
 
 [dev-dependencies]
 lazy_static = "1.4.0"
@@ -60,7 +60,6 @@ version = "0.4.6"
 features = ["f16", "serde"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-bnc = { git = "https://github.com/FindoraNetwork/BNC.git", branch = "master" }
 sodiumoxide = "0.2.1"
 fs2 = "0.4"
 

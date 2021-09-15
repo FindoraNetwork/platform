@@ -113,7 +113,6 @@ pub enum QueryServerRoutes {
     GetOwnerMemoBatch,
     GetOwnedUtxos,
     GetCreatedAssets,
-    GetTracedAssets,
     GetIssuedRecords,
     GetIssuedRecordsByCode,
     GetRelatedTxns,
@@ -135,7 +134,6 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetOwnerMemo => "get_owner_memo",
             QueryServerRoutes::GetOwnerMemoBatch => "get_owner_memo_batch",
             QueryServerRoutes::GetCreatedAssets => "get_created_assets",
-            QueryServerRoutes::GetTracedAssets => "get_traced_assets",
             QueryServerRoutes::GetIssuedRecords => "get_issued_records",
             QueryServerRoutes::GetIssuedRecordsByCode => "get_issued_records_by_code",
             QueryServerRoutes::GetAuthencatedTxnIDHash => "get_authencated_txnid_hash",
@@ -162,23 +160,6 @@ async fn get_created_assets(
     .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
     let query_server = data.read();
     let assets = query_server.get_created_assets(&IssuerPublicKey { key });
-    Ok(web::Json(assets.unwrap_or_default()))
-}
-
-/// Returns the list of assets traced by a public key
-async fn get_traced_assets(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-    info: web::Path<String>,
-) -> actix_web::Result<web::Json<Vec<AssetTypeCode>>> {
-    // Convert from base64 representation
-    let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
-        &b64dec(&*info)
-            .c(d!())
-            .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?,
-    )
-    .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
-    let query_server = data.read();
-    let assets = query_server.get_traced_assets(&IssuerPublicKey { key });
     Ok(web::Json(assets.unwrap_or_default()))
 }
 
@@ -484,10 +465,6 @@ impl QueryApi {
                 .route(
                     &QueryServerRoutes::GetCreatedAssets.with_arg_template("address"),
                     web::get().to(get_created_assets),
-                )
-                .route(
-                    &QueryServerRoutes::GetTracedAssets.with_arg_template("address"),
-                    web::get().to(get_traced_assets),
                 )
                 .route(
                     &QueryServerRoutes::GetIssuedRecords.with_arg_template("address"),

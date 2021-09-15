@@ -18,7 +18,7 @@ pub fn start_query_server(
     port: u16,
     base_dir: Option<&Path>,
 ) -> Result<Arc<RwLock<QueryServer>>> {
-    let qs = Arc::new(RwLock::new(QueryServer::new(ledger, base_dir)));
+    let qs = Arc::new(RwLock::new(QueryServer::new(ledger, base_dir).c(d!())?));
     QueryApi::create(Arc::clone(&qs), host, port)
         .c(d!())
         .map(|_| {

@@ -20,6 +20,7 @@ use crate::staking::{
         mint_fra::MintFraOps, undelegation::UnDelegationOps,
         update_staker::UpdateStakerOps, update_validator::UpdateValidatorOps,
     },
+    Staking,
 };
 use __trash__::{Policy, PolicyGlobals, TxnPolicyData};
 use bitmap::SparseMap;
@@ -1714,7 +1715,6 @@ impl Transaction {
 }
 
 /// Current ledger state commitment data
-#[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StateCommitmentData {
     /// The checksum of the utxo_map
@@ -1731,10 +1731,14 @@ pub struct StateCommitmentData {
     pub air_commitment: BitDigest,
     /// Number of transaction outputs. Used to provide proof that a utxo does not exist
     pub txo_count: u64,
+    /// a consensus-specific counter; should be 0 unless consensus needs it.
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
-    /// a consensus-specific counter; should be 0 unless consensus needs it.
     pub pulse_count: u64,
+    /// hash(non-empty Staking)
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
+    pub staking: Option<HashOf<Staking>>,
 }
 
 impl StateCommitmentData {

@@ -54,6 +54,7 @@ fn test_compute_and_save_block_hash() {
         air_commitment: BitDigest::from_slice(&[0; 32][..]).unwrap(),
         txo_count: 0,
         pulse_count: 0,
+        staking: None,
     };
 
     let count_original = ledger_state.status.block_commit_count;

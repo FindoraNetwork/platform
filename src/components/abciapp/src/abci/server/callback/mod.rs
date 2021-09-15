@@ -22,13 +22,13 @@ use std::{
     fs,
     ops::Deref,
     sync::{
-        atomic::{AtomicI64, Ordering},
+        atomic::{AtomicBool, AtomicI64, Ordering},
         Arc,
     },
 };
 
-/// current block height
-pub static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
+static HAS_ACTUAL_TXS: AtomicBool = AtomicBool::new(false);
+pub(crate) static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
 
 lazy_static! {
     /// save the request parameters from the begin_block for use in the end_block
@@ -80,7 +80,15 @@ pub fn begin_block(
     s: &mut ABCISubmissionServer,
     req: &RequestBeginBlock,
 ) -> ResponseBeginBlock {
-    IN_SAFE_ITV.swap(true, Ordering::SeqCst);
+    // cache the last block in query server
+    // trigger this op in `BeginBlock` to make abci-commit safer
+    if HAS_ACTUAL_TXS.swap(false, Ordering::Relaxed) {
+        let mut created = BLOCK_CREATED.0.lock();
+        *created = true;
+        BLOCK_CREATED.1.notify_one();
+    }
+
+    IN_SAFE_ITV.swap(true, Ordering::Relaxed);
 
     let header = pnk!(req.header.as_ref());
     TENDERMINT_BLOCK_HEIGHT.swap(header.height, Ordering::Relaxed);
@@ -142,7 +150,7 @@ pub fn end_block(
     let begin_block_req = REQ_BEGIN_BLOCK.lock();
     let header = pnk!(begin_block_req.header.as_ref());
 
-    IN_SAFE_ITV.swap(false, Ordering::SeqCst);
+    IN_SAFE_ITV.swap(false, Ordering::Relaxed);
     let mut la = s.la.write();
 
     // mint coinbase, cache system transactions to ledger
@@ -157,12 +165,7 @@ pub fn end_block(
 
     if !la.all_commited() && la.block_txn_count() != 0 {
         pnk!(la.end_block());
-
-        {
-            let mut created = BLOCK_CREATED.0.lock();
-            *created = true;
-            BLOCK_CREATED.1.notify_one();
-        }
+        HAS_ACTUAL_TXS.swap(true, Ordering::Relaxed);
     }
 
     if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
