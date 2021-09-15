@@ -223,10 +223,7 @@ impl Staking {
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn has_been_inited(&self) -> bool {
-        lazy_static! {
-            static ref DEFAULT: Staking = Staking::default();
-        }
-        self != &*DEFAULT
+        !self.vi.is_empty() && 0 != self.vi.keys().next().copied().unwrap()
     }
 
     #[inline(always)]
