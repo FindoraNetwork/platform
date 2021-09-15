@@ -1,0 +1,51 @@
+[package]
+name = "fc-rpc"
+version = "0.1.0"
+authors = ["Findora <admin@findora.org>"]
+edition = "2018"
+homepage = "https://findora.org/technology"
+repository = "https://github.com/findoranetwork/platform/"
+description = "Ethereum RPC (web3) compatibility layer for Findora."
+readme = "README.md"
+
+[dependencies]
+async-std = "1.9.0"
+baseapp = { path = "../baseapp" }
+base64 = "0.12"
+ethereum = { version = "0.7.1", features = ["with-serde"] }
+ethereum-types = "0.11.0"
+evm = "0.27.0"
+fp-rpc-core = { path = "../primitives/rpc-core" }
+fp-rpc-server = { path = "../primitives/rpc-server" }
+futures = { version = "0.3.16", features = ["compat", "thread-pool"] }
+jsonrpc-core = "18.0"
+jsonrpc-core-client = "18.0"
+jsonrpc-derive = "18.0"
+jsonrpc-pubsub = "18.0"
+jsonrpc-http-server = "18.0"
+jsonrpc-tcp-server = "18.0"
+libsecp256k1 = { version = "0.5", features = ["static-context", "hmac"] }
+lazy_static = "1.4.0"
+log = "0.4.8"
+parking_lot = "0.11.1"
+rand = "0.7"
+rlp = "0.5"
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+rustc-hex = { version = "2.1.0" }
+rustc_version = "0.4.0"
+semver = "1.0.4"
+serde_json = "1.0"
+sha3 = "0.8"
+tendermint-rpc = { version = "0.19.0", features = ["http-client", "websocket-client"] }
+tokio = { version = "1.10.1", features = ["rt-multi-thread" ] }
+
+# modules
+module-ethereum = { path = "../modules/ethereum"}
+module-evm = { path = "../modules/evm"}
+
+# primitives
+fp-core = { path = "../primitives/core" }
+fp-evm = { path = "../primitives/evm" }
+fp-traits = { path = "../primitives/traits" }
+fp-types = { path = "../primitives/types" }
+fp-utils = { path = "../primitives/utils" }

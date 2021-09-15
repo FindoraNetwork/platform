@@ -16,7 +16,7 @@ use crate::api::{
 use lazy_static::lazy_static;
 use ruc::*;
 use std::{
-    fs,
+    env, fs,
     net::SocketAddr,
     path::Path,
     sync::{atomic::AtomicBool, Arc},
@@ -41,6 +41,8 @@ pub fn run() -> Result<()> {
     let config = ruc::info!(ABCIConfig::from_file())
         .or_else(|_| ABCIConfig::from_env().c(d!()))?;
 
+    env::set_var("BNC_DATA_DIR", format!("{}/__bnc__", &config.ledger_dir));
+
     let app = server::ABCISubmissionServer::new(
         base_dir,
         format!("{}:{}", config.tendermint_host, config.tendermint_port),
@@ -48,7 +50,9 @@ pub fn run() -> Result<()> {
 
     let submission_service_hdr = Arc::clone(&app.la);
 
-    if CFG.enable_ledger_service {
+    if CFG.enable_query_service {
+        env::set_var("FINDORA_KEEP_STAKING_HIST", "1");
+
         let ledger_api_service_hdr =
             submission_service_hdr.read().borrowable_ledger_state();
         let ledger_host = config.abci_host.clone();
@@ -60,9 +64,7 @@ pub fn run() -> Result<()> {
                 ledger_port
             ));
         });
-    }
 
-    if CFG.enable_query_service {
         let query_service_hdr = submission_service_hdr.read().borrowable_ledger_state();
         pnk!(query_api::service::start_query_server(
             query_service_hdr,
@@ -72,21 +74,37 @@ pub fn run() -> Result<()> {
         ))
         .write()
         .update();
+
+        let submission_host = config.abci_host.clone();
+        let submission_port = config.submission_port;
+        thread::spawn(move || {
+            pnk!(SubmissionApi::create(
+                submission_service_hdr,
+                &submission_host,
+                submission_port,
+            ));
+        });
     }
 
-    let submission_host = config.abci_host.clone();
-    let submission_port = config.submission_port;
-    thread::spawn(move || {
-        pnk!(SubmissionApi::create(
-            submission_service_hdr,
-            &submission_host,
-            submission_port,
-        ));
-    });
+    let mut web3_rpc: Box<dyn std::any::Any + Send> = Box::new(());
+    if CFG.enable_eth_api_service {
+        let base_app = app.account_base_app.clone();
+        let evm_http = format!("{}:{}", config.abci_host, config.evm_http_port);
+        let evm_ws = format!("{}:{}", config.abci_host, config.evm_ws_port);
+        let tendermint_rpc = format!(
+            "http://{}:{}",
+            config.tendermint_host, config.tendermint_port
+        );
+        web3_rpc =
+            fc_rpc::start_web3_service(evm_http, evm_ws, tendermint_rpc, base_app);
+    }
 
     let addr_str = format!("{}:{}", config.abci_host, config.abci_port);
     let addr = addr_str.parse::<SocketAddr>().c(d!())?;
 
     abci::run(addr, app);
+
+    drop(web3_rpc);
+
     Ok(())
 }

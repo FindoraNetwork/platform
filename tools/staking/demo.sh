@@ -61,7 +61,6 @@ stop_node() {
 
 start_node() {
     abcid \
-        --enable-ledger-service \
         --enable-query-service \
         --ledger-dir=${__LEDGER_DIR__} \
         --ledger-service-port=${__LEDGER_PORT__} \

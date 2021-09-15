@@ -1,6 +1,6 @@
+![](https://tokei.rs/b1/github/FindoraNetwork/platform)
+
 # Findora Platform
 
-> TODO: add badges
-
-- [**compile & build**](docs/compile_build.md)
-- [**contribution guide**](docs/contribution_guide.md)
+- [**Wiki**](https://wiki.findora.org/)
+- [**Contribution Guide**](docs/contribution_guide.md)

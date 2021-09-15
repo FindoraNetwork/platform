@@ -34,10 +34,7 @@ use zei::{
             build_blind_asset_record, open_blind_asset_record, AssetRecordType,
         },
         sig::XfrKeyPair,
-        structs::{
-            AssetRecordTemplate, AssetTracerKeyPair, OwnerMemo, TracingPolicies,
-            TracingPolicy,
-        },
+        structs::{AssetRecordTemplate, OwnerMemo},
     },
 };
 
@@ -51,9 +48,7 @@ lazy_static! {
 
 /// create server
 fn create_server() -> QueryServer {
-    let mut qs =
-        QueryServer::new(LEDGER.clone(), Some(globutils::fresh_tmp_dir().as_path()));
-    qs
+    QueryServer::new(LEDGER.clone(), Some(globutils::fresh_tmp_dir().as_path())).unwrap()
 }
 
 /// apply transaction
@@ -73,7 +68,6 @@ fn apply_transaction(tx: Transaction) -> Option<(TxnSID, Vec<TxoSID>)> {
 /// 1. get_address_of_sid
 /// 2. get_owned_utxo_sids
 /// 3. get_coinbase_entries
-/// 4. get_traced_assets
 /// 5. get_issued_records
 /// 6. get_owner_memo
 /// 7. get_created_assets
@@ -94,19 +88,8 @@ fn test_scene_1() -> Result<()> {
         TransactionBuilder::from_seq_id(LEDGER.read().get_block_commit_count());
 
     {
-        // if get traced assets,must create AssetRules from TracingPolicy
-        let asset_tracer_key_pair = AssetTracerKeyPair::generate(&mut prng);
-        let tracing_policy = TracingPolicy {
-            enc_keys: asset_tracer_key_pair.enc_key,
-            asset_tracing: false,
-            identity_tracing: None,
-        };
-
-        let mut ar = AssetRules::default();
-        ar.add_tracing_policy(tracing_policy);
-
         builder
-            .add_operation_create_asset(&x_kp, Some(code), ar, "test")
+            .add_operation_create_asset(&x_kp, Some(code), AssetRules::default(), "test")
             .c(d!());
     }
 
@@ -225,14 +208,6 @@ fn test_scene_1() -> Result<()> {
         key: x_kp.pub_key.clone()
     }));
     assert_eq!(records[0].0.record.public_key, x_kp.pub_key.clone());
-
-    let atc_vec = pnk!(QS
-        .read()
-        .get_traced_assets(&IssuerPublicKey {
-            key: x_kp.pub_key.clone()
-        })
-        .clone());
-    assert_eq!(atc_vec[0], code);
 
     let (_, result) = QS
         .read()

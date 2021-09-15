@@ -10,7 +10,7 @@ use std::{
 };
 
 fn main() {
-    env_logger::init();
+    globutils::logging::init_logging(None);
     log::info!(concat!(
         "Build: ",
         env!("VERGEN_SHA"),

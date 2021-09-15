@@ -5,6 +5,7 @@
 #![deny(warnings)]
 #![deny(missing_docs)]
 
+pub mod logging;
 pub mod wallet;
 
 use cryptohash::{

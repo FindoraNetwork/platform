@@ -96,10 +96,10 @@ async fn get_owned_utxos(
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
             .c(d!())
-            .map_err(|e| error::ErrorBadRequest(e.generate_log()))?,
+            .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?,
     )
     .c(d!())
-    .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
+    .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
     let query_server = data.read();
     let sids = query_server.get_owned_utxo_sids(&XfrAddress { key });
     Ok(web::Json(sids.unwrap_or_default()))
@@ -113,7 +113,6 @@ pub enum QueryServerRoutes {
     GetOwnerMemoBatch,
     GetOwnedUtxos,
     GetCreatedAssets,
-    GetTracedAssets,
     GetIssuedRecords,
     GetIssuedRecordsByCode,
     GetRelatedTxns,
@@ -135,7 +134,6 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetOwnerMemo => "get_owner_memo",
             QueryServerRoutes::GetOwnerMemoBatch => "get_owner_memo_batch",
             QueryServerRoutes::GetCreatedAssets => "get_created_assets",
-            QueryServerRoutes::GetTracedAssets => "get_traced_assets",
             QueryServerRoutes::GetIssuedRecords => "get_issued_records",
             QueryServerRoutes::GetIssuedRecordsByCode => "get_issued_records_by_code",
             QueryServerRoutes::GetAuthencatedTxnIDHash => "get_authencated_txnid_hash",
@@ -157,28 +155,11 @@ async fn get_created_assets(
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
             .c(d!())
-            .map_err(|e| error::ErrorBadRequest(e.generate_log()))?,
+            .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?,
     )
-    .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
+    .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
     let query_server = data.read();
     let assets = query_server.get_created_assets(&IssuerPublicKey { key });
-    Ok(web::Json(assets.unwrap_or_default()))
-}
-
-/// Returns the list of assets traced by a public key
-async fn get_traced_assets(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-    info: web::Path<String>,
-) -> actix_web::Result<web::Json<Vec<AssetTypeCode>>> {
-    // Convert from base64 representation
-    let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
-        &b64dec(&*info)
-            .c(d!())
-            .map_err(|e| error::ErrorBadRequest(e.generate_log()))?,
-    )
-    .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
-    let query_server = data.read();
-    let assets = query_server.get_traced_assets(&IssuerPublicKey { key });
     Ok(web::Json(assets.unwrap_or_default()))
 }
 
@@ -192,9 +173,9 @@ async fn get_issued_records(
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
             .c(d!())
-            .map_err(|e| error::ErrorBadRequest(e.generate_log()))?,
+            .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?,
     )
-    .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
+    .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
     let query_server = data.read();
     let records = query_server.get_issued_records(&IssuerPublicKey { key });
     Ok(web::Json(records.unwrap_or_default()))
@@ -218,7 +199,7 @@ async fn get_issued_records_by_code(
                 ))
             }
         }
-        Err(e) => Err(actix_web::error::ErrorBadRequest(e.generate_log())),
+        Err(e) => Err(actix_web::error::ErrorBadRequest(e.generate_log(None))),
     }
 }
 
@@ -312,7 +293,7 @@ async fn get_coinbase_oper_list(
     // Convert from base64 representation
     let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
 
     let query_server = data.read();
 
@@ -363,7 +344,7 @@ async fn get_claim_txns(
     // Convert from base64 representation
     let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
 
     let query_server = data.read();
 
@@ -402,10 +383,10 @@ async fn get_related_txns(
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
             .c(d!())
-            .map_err(|e| error::ErrorBadRequest(e.generate_log()))?,
+            .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?,
     )
     .c(d!())
-    .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
+    .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
     let query_server = data.read();
     let records = query_server.get_related_transactions(&XfrAddress { key });
     Ok(web::Json(records.unwrap_or_default()))
@@ -484,10 +465,6 @@ impl QueryApi {
                 .route(
                     &QueryServerRoutes::GetCreatedAssets.with_arg_template("address"),
                     web::get().to(get_created_assets),
-                )
-                .route(
-                    &QueryServerRoutes::GetTracedAssets.with_arg_template("address"),
-                    web::get().to(get_traced_assets),
                 )
                 .route(
                     &QueryServerRoutes::GetIssuedRecords.with_arg_template("address"),

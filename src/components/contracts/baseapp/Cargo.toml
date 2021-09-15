@@ -1,0 +1,45 @@
+[package]
+name = "baseapp"
+version = "0.1.0"
+authors = ["Findora <admin@findora.org>"]
+edition = "2018"
+homepage = "https://findora.org/technology"
+repository = "https://github.com/findoranetwork/platform/"
+description = "Base application for tendermint abci"
+readme = "README.md"
+
+[dependencies]
+abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
+ethereum = { version = "0.7.1", features = ["with-serde"] }
+ethereum-types = "0.11.0"
+futures = "0.3.16"
+lazy_static = "1.4.0"
+ledger = { path = "../../../ledger" }
+log = "0.4"
+parking_lot = "0.11.1"
+primitive-types = { version = "0.9.0", features = ["rlp", "byteorder", "serde"] }
+protobuf = "2.16"
+ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+serde = { version = "1.0.124", features = ["derive"] }
+serde_json = "1.0.40"
+storage = { git = "ssh://git@github.com/FindoraNetwork/storage.git", branch = "develop" }
+
+# primitives
+fp-core = { path = "../primitives/core" }
+fp-evm = { path = "../primitives/evm" }
+fp-traits = { path = "../primitives/traits" }
+fp-types = { path = "../primitives/types" }
+fp-utils = { path = "../primitives/utils" }
+
+# modules
+module-account = { path = "../modules/account"}
+module-ethereum = { path = "../modules/ethereum"}
+module-evm = { path = "../modules/evm"}
+module-template = { path = "../modules/template"}
+
+evm-precompile-basic = { path = "../modules/evm/precompile/basic" }
+evm-precompile-modexp = { path = "../modules/evm/precompile/modexp" }
+evm-precompile-sha3fips = { path = "../modules/evm/precompile/sha3fips" }
+
+[features]
+abci_mock = []

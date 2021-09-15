@@ -46,8 +46,8 @@ where
         .handle_transaction(tx)
         .map(web::Json)
         .map_err(|e| {
-            e.print();
-            error::ErrorBadRequest(e.generate_log())
+            e.print(None);
+            error::ErrorBadRequest(e.generate_log(None))
         })
 }
 

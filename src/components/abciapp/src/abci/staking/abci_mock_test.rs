@@ -2259,16 +2259,6 @@ fn staking_scene_5() -> Result<()> {
         assert!(is_failed(tx_hash));
     }
 
-    // flush data
-    wait_n_block(5);
-    ABCI_MOCKER
-        .write()
-        .0
-        .la
-        .write()
-        .get_committed_state()
-        .write()
-        .flush_data();
     Ok(())
 }
 

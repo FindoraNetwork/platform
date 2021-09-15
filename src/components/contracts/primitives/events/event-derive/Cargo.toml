@@ -1,0 +1,16 @@
+[package]
+name = "fp-event-derive"
+version = "0.1.0"
+authors = ["Findora <admin@findora.org>"]
+edition = "2018"
+homepage = "https://findora.org/technology"
+repository = "https://github.com/findoranetwork/platform/"
+description = "Proc derive macro for findora transaction events"
+readme = "README.md"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1"
+syn = "1"

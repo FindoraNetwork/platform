@@ -2,7 +2,6 @@
 //! An implementation of findora ledger data model
 //!
 
-#![deny(missing_docs)]
 #![allow(clippy::field_reassign_with_default)]
 #![allow(clippy::assertions_on_constants)]
 
@@ -12,6 +11,7 @@ mod test;
 
 pub use effects::{BlockEffect, TxnEffect};
 
+use crate::converter::ConvertAccount;
 use crate::staking::{
     is_coinbase_tx,
     ops::{
@@ -20,6 +20,7 @@ use crate::staking::{
         mint_fra::MintFraOps, undelegation::UnDelegationOps,
         update_staker::UpdateStakerOps, update_validator::UpdateValidatorOps,
     },
+    Staking,
 };
 use __trash__::{Policy, PolicyGlobals, TxnPolicyData};
 use bitmap::SparseMap;
@@ -358,7 +359,9 @@ pub struct ConfidentialMemo;
 pub struct Commitment([u8; 32]);
 
 #[allow(missing_docs)]
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(
+    Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize,
+)]
 pub struct XfrAddress {
     pub key: XfrPublicKey,
 }
@@ -653,7 +656,19 @@ pub type TxoSIDList = Vec<TxoSID>;
 pub struct OutputPosition(pub usize);
 
 #[allow(missing_docs)]
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Deserialize,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+)]
 pub struct TxnSID(pub usize);
 
 impl fmt::Display for TxoSID {
@@ -1133,6 +1148,8 @@ pub enum Operation {
     FraDistribution(FraDistributionOps),
     /// Coinbase operation
     MintFra(MintFraOps),
+    /// Convert UTXO to Account
+    ConvertAccount(ConvertAccount),
 }
 
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
@@ -1159,6 +1176,7 @@ fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
             i.set_nonce(no_replay_token);
         }
         Operation::UpdateMemo(i) => i.body.no_replay_token = no_replay_token,
+        Operation::ConvertAccount(i) => i.set_nonce(no_replay_token),
         _ => {}
     }
 }
@@ -1700,7 +1718,6 @@ impl Transaction {
 }
 
 /// Current ledger state commitment data
-#[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StateCommitmentData {
     /// The checksum of the utxo_map
@@ -1717,10 +1734,14 @@ pub struct StateCommitmentData {
     pub air_commitment: BitDigest,
     /// Number of transaction outputs. Used to provide proof that a utxo does not exist
     pub txo_count: u64,
+    /// a consensus-specific counter; should be 0 unless consensus needs it.
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
-    /// a consensus-specific counter; should be 0 unless consensus needs it.
     pub pulse_count: u64,
+    /// hash(non-empty Staking)
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
+    pub staking: Option<HashOf<Staking>>,
 }
 
 impl StateCommitmentData {

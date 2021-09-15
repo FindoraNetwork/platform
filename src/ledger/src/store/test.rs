@@ -4,7 +4,7 @@
 use super::{helpers::*, *};
 use crate::data_model::{
     AssetRules, AssetTypeCode, IssueAsset, IssueAssetBody, Memo, Operation, Transaction,
-    TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxnSID, TxoRef, TxoSID,
+    TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxoRef, TxoSID,
     ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
 };
 use rand_core::SeedableRng;
@@ -43,38 +43,6 @@ fn test_load_fake_transaction_log() {
 }
 
 #[test]
-fn test_save_utxo_map_version() {
-    let mut ledger_state = LedgerState::tmp_ledger();
-    let digest = BitDigest { 0: [0_u8; 32] };
-    ledger_state.status.utxo_map_versions = vec![(TxnSID(0), digest); MAX_VERSION - 1]
-        .into_iter()
-        .collect();
-
-    // Verify that save_utxo_map_version increases the size of utxo_map_versions by 1 if its length < MAX_VERSION
-    ledger_state.save_utxo_map_version();
-    assert_eq!(ledger_state.status.utxo_map_versions.len(), MAX_VERSION);
-
-    // Verify that save_utxo_map_version doesn't change the size of utxo_map_versions if its length >= MAX_VERSION
-    ledger_state
-        .status
-        .utxo_map_versions
-        .push_back((TxnSID(0), digest));
-    assert_eq!(ledger_state.status.utxo_map_versions.len(), MAX_VERSION + 1);
-    ledger_state.save_utxo_map_version();
-    assert_eq!(ledger_state.status.utxo_map_versions.len(), MAX_VERSION + 1);
-
-    // Verify that the element pushed to the back is as expected
-    let back = ledger_state.status.utxo_map_versions.get(MAX_VERSION);
-    assert_eq!(
-        back,
-        Some(&(
-            TxnSID(ledger_state.status.next_txn.0),
-            ledger_state.utxo_map.compute_checksum()
-        ))
-    );
-}
-
-#[test]
 fn test_compute_and_save_block_hash() {
     let mut ledger_state = LedgerState::tmp_ledger();
     let mut data = StateCommitmentData {
@@ -86,6 +54,7 @@ fn test_compute_and_save_block_hash() {
         air_commitment: BitDigest::from_slice(&[0; 32][..]).unwrap(),
         txo_count: 0,
         pulse_count: 0,
+        staking: None,
     };
 
     let count_original = ledger_state.status.block_commit_count;
@@ -113,80 +82,6 @@ fn test_compute_and_save_block_hash() {
     );
     assert_eq!(ledger_state.status.block_commit_count, count_original + 1);
 }
-
-#[test]
-fn test_checkpoint() {
-    let mut ledger_state = LedgerState::tmp_ledger();
-
-    let digest = BitDigest { 0: [0_u8; 32] };
-    ledger_state.status.utxo_map_versions = vec![(TxnSID(0), digest); MAX_VERSION - 1]
-        .into_iter()
-        .collect();
-
-    // Verify that checkpoint increases the size of utxo_map_versions by 1 if its length < MAX_VERSION
-    pnk!(ledger_state.checkpoint(&BlockEffect::default()));
-    assert_eq!(ledger_state.status.utxo_map_versions.len(), MAX_VERSION);
-
-    let count_original = ledger_state.status.block_commit_count;
-    let (commitment1, v1) = ledger_state.get_state_commitment();
-
-    // Verify that end_commit doesn't change the size of utxo_map_versions if its length >= MAX_VERSION
-    ledger_state
-        .status
-        .utxo_map_versions
-        .push_back((TxnSID(0), digest));
-    assert_eq!(ledger_state.status.utxo_map_versions.len(), MAX_VERSION + 1);
-    pnk!(ledger_state.checkpoint(&BlockEffect::default()));
-    assert_eq!(ledger_state.status.utxo_map_versions.len(), MAX_VERSION + 1);
-    let (commitment2, v2) = ledger_state.get_state_commitment();
-
-    // Verify that the element pushed to the back is as expected
-    let back = ledger_state.status.utxo_map_versions.get(MAX_VERSION);
-    assert_eq!(
-        back,
-        Some(&(
-            TxnSID(ledger_state.status.next_txn.0),
-            ledger_state.utxo_map.compute_checksum()
-        ))
-    );
-
-    // Verify that the status is saved as expected
-    assert_eq!(
-        ledger_state.status.txns_in_block_hash.clone().unwrap(),
-        BlockEffect::default().compute_txns_in_block_hash()
-    );
-    assert_eq!(ledger_state.status.block_commit_count, count_original + 1);
-    // Check state commitment history
-    assert_eq!(
-        ledger_state
-            .get_state_commitment_at_block_height(v1)
-            .unwrap(),
-        commitment1
-    );
-    assert_eq!(
-        ledger_state
-            .get_state_commitment_at_block_height(v2)
-            .unwrap(),
-        commitment2
-    );
-}
-
-/*
-  #[test]
-  fn test_create_merkle_log() {
-    let tmp_dir = tempdir().c(d!())?;
-    let buf = tmp_dir.path().join("merkle_log");
-    let base_path = buf.to_str().c(d!())?;
-
-    let result = LedgerState::create_merkle_log(base_path.to_string(), 0);
-    assert!(result.is_ok());
-
-    let path = base_path.to_owned() + "-log-0";
-    assert!(fs::metadata(path).is_ok());
-
-    tmp_dir.close().c(d!())?;
-  }
-*/
 
 #[test]
 fn test_asset_creation_valid() {
@@ -571,16 +466,6 @@ fn asset_issued() {
                 2
             )
     );
-    let query_result = ledger
-        .get_utxo_checksum(ledger.status.next_txn.0 as u64)
-        .unwrap();
-    let compute_result = ledger.utxo_map.compute_checksum();
-    println!(
-        "query_result = {:?}, compute_result = {:?}",
-        query_result, compute_result
-    );
-
-    assert!(query_result == compute_result);
 }
 
 #[test]

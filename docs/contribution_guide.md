@@ -1,5 +1,21 @@
 # Contribution Guide
 
+## Environment Preparements
+
+- [**Check This Page**](./compile_build.md)
+
+## Compiling
+
+- `make`
+
+## Running
+
+```shell
+make join_testnet
+# OR
+make join_mainnet
+```
+
 ## Code Style
 
 #### Introduction of dependency

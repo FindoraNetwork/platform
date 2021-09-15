@@ -9,12 +9,18 @@ use crate::{
     api::{query_server::BLOCK_CREATED, submission_server::convert_tx},
 };
 use abci::{
-    RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx, RequestEndBlock,
-    RequestInfo, ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
-    ResponseEndBlock, ResponseInfo,
+    Application, RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx,
+    RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery, ResponseBeginBlock,
+    ResponseCheckTx, ResponseCommit, ResponseDeliverTx, ResponseEndBlock, ResponseInfo,
+    ResponseInitChain, ResponseQuery,
 };
+use fp_storage::hash::{Sha256, StorageHasher};
+use fp_traits::base::BaseProvider;
 use lazy_static::lazy_static;
-use ledger::staking::is_coinbase_tx;
+use ledger::{
+    converter::is_convert_tx,
+    staking::{is_coinbase_tx, KEEP_HIST},
+};
 use parking_lot::Mutex;
 use protobuf::RepeatedField;
 use ruc::*;
@@ -22,13 +28,13 @@ use std::{
     fs,
     ops::Deref,
     sync::{
-        atomic::{AtomicI64, Ordering},
+        atomic::{AtomicBool, AtomicI64, Ordering},
         Arc,
     },
 };
 
-/// current block height
-pub static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
+static HAS_ACTUAL_TXS: AtomicBool = AtomicBool::new(false);
+pub(crate) static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
 
 lazy_static! {
     /// save the request parameters from the begin_block for use in the end_block
@@ -36,7 +42,7 @@ lazy_static! {
         Arc::new(Mutex::new(RequestBeginBlock::new()));
 }
 
-pub fn info(s: &mut ABCISubmissionServer, _req: &RequestInfo) -> ResponseInfo {
+pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let mut resp = ResponseInfo::new();
 
     let mut la = s.la.write();
@@ -48,7 +54,17 @@ pub fn info(s: &mut ABCISubmissionServer, _req: &RequestInfo) -> ResponseInfo {
     TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
 
     if 1 < h {
-        resp.set_last_block_app_hash(commitment.0.as_ref().to_vec());
+        if s.account_base_app.read().current_block_number().is_some() {
+            // Combines ledger state hash and chain state hash
+            let mut commitment_hash = commitment.0.as_ref().to_vec();
+            let mut data_hash = s.account_base_app.write().info(req).last_block_app_hash;
+            commitment_hash.append(&mut data_hash);
+            resp.set_last_block_app_hash(
+                Sha256::hash(commitment_hash.as_slice()).to_vec(),
+            );
+        } else {
+            resp.set_last_block_app_hash(commitment.0.as_ref().to_vec());
+        }
     }
 
     resp.set_last_block_height(h);
@@ -67,20 +83,35 @@ pub fn info(s: &mut ABCISubmissionServer, _req: &RequestInfo) -> ResponseInfo {
     resp
 }
 
+pub fn query(s: &mut ABCISubmissionServer, req: &RequestQuery) -> ResponseQuery {
+    s.account_base_app.write().query(req)
+}
+
+pub fn init_chain(
+    s: &mut ABCISubmissionServer,
+    req: &RequestInitChain,
+) -> ResponseInitChain {
+    s.account_base_app.write().init_chain(req)
+}
+
 /// any new tx will trigger this callback before it can enter the mem-pool of tendermint
-#[inline(always)]
-pub fn check_tx(
-    _s: &mut ABCISubmissionServer,
-    _req: &RequestCheckTx,
-) -> ResponseCheckTx {
-    ResponseCheckTx::new()
+pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseCheckTx {
+    s.account_base_app.write().check_tx(req)
 }
 
 pub fn begin_block(
     s: &mut ABCISubmissionServer,
     req: &RequestBeginBlock,
 ) -> ResponseBeginBlock {
-    IN_SAFE_ITV.swap(true, Ordering::SeqCst);
+    // cache the last block in query server
+    // trigger this op in `BeginBlock` to make abci-commit safer
+    if HAS_ACTUAL_TXS.swap(false, Ordering::Relaxed) {
+        let mut created = BLOCK_CREATED.0.lock();
+        *created = true;
+        BLOCK_CREATED.1.notify_one();
+    }
+
+    IN_SAFE_ITV.swap(true, Ordering::Relaxed);
 
     let header = pnk!(req.header.as_ref());
     TENDERMINT_BLOCK_HEIGHT.swap(header.height, Ordering::Relaxed);
@@ -102,7 +133,7 @@ pub fn begin_block(
         pnk!(la.update_staking_simulator());
     }
 
-    ResponseBeginBlock::new()
+    s.account_base_app.write().begin_block(req)
 }
 
 pub fn deliver_tx(
@@ -114,39 +145,51 @@ pub fn deliver_tx(
         if !is_coinbase_tx(&tx)
             && tx.is_basic_valid(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed))
         {
-            // set attr(tags) if any
-            let attr = utils::gen_tendermint_attr(&tx);
-            if !attr.is_empty() {
-                resp.set_events(attr);
+            if *KEEP_HIST {
+                // set attr(tags) if any, only needed on a fullnode
+                let attr = utils::gen_tendermint_attr(&tx);
+                if !attr.is_empty() {
+                    resp.set_events(attr);
+                }
             }
 
-            if s.la.write().cache_transaction(tx).is_ok() {
+            if s.la.write().cache_transaction(tx.clone()).is_ok() {
+                if is_convert_tx(&tx)
+                    && s.account_base_app.write().deliver_findora_tx(&tx).is_err()
+                {
+                    resp.code = 1;
+                    resp.log = String::from("Failed to deliver transaction!");
+                }
                 return resp;
             }
         }
+        resp.code = 1;
+        resp.log = String::from("Failed to deliver transaction!");
+        resp
+    } else {
+        s.account_base_app.write().deliver_tx(req)
     }
-
-    resp.set_code(1);
-    resp
 }
 
 /// putting block in the ledgerState
 pub fn end_block(
     s: &mut ABCISubmissionServer,
-    _req: &RequestEndBlock,
+    req: &RequestEndBlock,
 ) -> ResponseEndBlock {
     let mut resp = ResponseEndBlock::new();
 
     let begin_block_req = REQ_BEGIN_BLOCK.lock();
     let header = pnk!(begin_block_req.header.as_ref());
 
-    IN_SAFE_ITV.swap(false, Ordering::SeqCst);
+    IN_SAFE_ITV.swap(false, Ordering::Relaxed);
     let mut la = s.la.write();
 
     // mint coinbase, cache system transactions to ledger
     {
-        let laa = la.get_committed_state().write();
-        if let Some(tx) = staking::system_mint_pay(&*laa) {
+        let laa = la.get_committed_state().read();
+        if let Some(tx) =
+            staking::system_mint_pay(&*laa, &mut *s.account_base_app.write())
+        {
             drop(laa);
             // this unwrap should be safe
             la.cache_transaction(tx).unwrap();
@@ -155,12 +198,7 @@ pub fn end_block(
 
     if !la.all_commited() && la.block_txn_count() != 0 {
         pnk!(la.end_block());
-
-        {
-            let mut created = BLOCK_CREATED.0.lock();
-            *created = true;
-            BLOCK_CREATED.1.notify_one();
-        }
+        HAS_ACTUAL_TXS.swap(true, Ordering::Relaxed);
     }
 
     if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
@@ -177,23 +215,33 @@ pub fn end_block(
         &begin_block_req.byzantine_validators.as_slice(),
     );
 
-    let laa = la.get_committed_state().write();
-    pnk!(serde_json::to_vec(&laa.get_status())
-        .c(d!())
-        .and_then(|s| fs::write(&laa.get_status().snapshot_path, s)
-            .c(d!(laa.get_status().snapshot_path.clone()))));
+    let _ = s.account_base_app.write().end_block(req);
 
     resp
 }
 
-pub fn commit(s: &mut ABCISubmissionServer, _req: &RequestCommit) -> ResponseCommit {
+pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseCommit {
     let la = s.la.write();
     let mut state = la.get_committed_state().write();
 
+    // will change `struct LedgerStatus`
     state.set_tendermint_commit(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed) as u64);
-    state.flush_data();
+
+    // snapshot them finally
+    pnk!(serde_json::to_vec(&state.get_status())
+        .c(d!())
+        .and_then(|s| fs::write(&state.get_status().snapshot_path, s)
+            .c(d!(state.get_status().snapshot_path.clone()))));
 
     let mut r = ResponseCommit::new();
-    r.set_data(state.get_state_commitment().0.as_ref().to_vec());
+    let mut commitment = state.get_state_commitment().0.as_ref().to_vec();
+    if s.account_base_app.read().latest_block_number().is_some() {
+        // Combines ledger state hash and chain state hash
+        let mut data_hash = s.account_base_app.write().commit(req).data;
+        commitment.append(&mut data_hash);
+        r.set_data(Sha256::hash(commitment.as_slice()).to_vec());
+    } else {
+        r.set_data(commitment);
+    }
     r
 }

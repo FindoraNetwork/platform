@@ -12,7 +12,7 @@ use finutils::api::{
     DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
     ValidatorDetail, ValidatorList,
 };
-use globutils::{HashOf, SignatureOf};
+use globutils::HashOf;
 use ledger::{
     data_model::{
         AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData, TxnSID,
@@ -199,30 +199,15 @@ pub async fn query_txn_light(
     }
 }
 
-/// query `LedgerState` public key
-pub async fn query_public_key(
-    data: web::Data<Arc<RwLock<LedgerState>>>,
-) -> web::Json<XfrPublicKey> {
-    let reader = data.read();
-    web::Json(*reader.public_key())
-}
-
 /// query global state, return (apphash, block count, apphash and block count signatures)
 #[allow(clippy::type_complexity)]
 pub async fn query_global_state(
     data: web::Data<Arc<RwLock<LedgerState>>>,
-) -> web::Json<(
-    HashOf<Option<StateCommitmentData>>,
-    u64,
-    SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
-)> {
+) -> web::Json<(HashOf<Option<StateCommitmentData>>, u64, &'static str)> {
     let reader = data.read();
     let (hash, seq_id) = reader.get_state_commitment();
 
-    // useless, do NOT use this sig
-    let sig = reader.sign_message(&(hash.clone(), seq_id));
-
-    web::Json((hash, seq_id, sig))
+    web::Json((hash, seq_id, "v4UVgkIBpj0eNYI1B1QhTTduJHCIHH126HcdesCxRdLkVGDKrVUPgwmNLCDafTVgC5e4oDhAGjPNt1VhUr6ZCQ=="))
 }
 
 /// query global state version according to `block_height`
@@ -293,7 +278,7 @@ async fn get_delegation_reward(
     // Convert from base64 representation
     let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
 
     let read = data.read();
     let staking = read.get_staking();
@@ -307,9 +292,9 @@ async fn get_delegation_reward(
         (0..=info.height)
             .into_iter()
             .rev()
-            .filter_map(|i| di.rwd_detail.get(&i))
+            .filter_map(|i| di.rwd_hist.as_ref().map(|rh| rh.get(&i)))
+            .flatten()
             .take(1)
-            .cloned()
             .collect(),
     ))
 }
@@ -375,29 +360,32 @@ async fn get_validator_delegation_history(
         })
         .for_each(|h| {
             history.push(ValidatorDelegation {
-                return_rate: *staking
+                return_rate: staking
                     .query_block_rewards_rate(&h)
-                    .unwrap_or(&history.last().unwrap().return_rate), //unwrap is safe here
-                delegated: {
-                    if v_self_delegation.delegation_amount.is_empty()
-                        || v_self_delegation
-                            .delegation_amount
-                            .iter()
-                            .take(1)
-                            .all(|(&i, _)| i > h)
-                    {
-                        0
-                    } else {
-                        *v_self_delegation
-                            .delegation_amount
-                            .get(&h)
-                            .unwrap_or(&history.last().unwrap().delegated)
-                    }
-                },
-                self_delegation: *v_self_delegation
-                    .self_delegation_detail
-                    .get(&h)
-                    .unwrap_or(&history.last().unwrap().self_delegation),
+                    .unwrap_or(history.last().unwrap().return_rate), //unwrap is safe here
+                delegated: v_self_delegation
+                    .delegation_amount_hist
+                    .as_ref()
+                    .map(|dah| {
+                        if dah.is_empty()
+                            || dah.iter().take(1).all(|(i, _)| {
+                                #[cfg(not(feature = "diskcache"))]
+                                let i = *i;
+                                i > h
+                            })
+                        {
+                            0
+                        } else {
+                            dah.get(&h).unwrap_or(history.last().unwrap().delegated)
+                        }
+                    })
+                    .unwrap_or(0),
+                self_delegation: v_self_delegation
+                    .delegation_amount_hist
+                    .as_ref()
+                    .map(|dah| dah.get(&h))
+                    .flatten()
+                    .unwrap_or(history.last().unwrap().self_delegation),
             })
         });
 
@@ -547,7 +535,7 @@ async fn query_delegation_info(
 ) -> actix_web::Result<web::Json<DelegationInfo>> {
     let pk = globutils::wallet::public_key_from_base64(address.as_str())
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log()))?;
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
 
     let read = data.read();
     let staking = read.get_staking();
@@ -633,7 +621,7 @@ async fn query_owned_utxos(
 ) -> actix_web::Result<web::Json<BTreeMap<TxoSID, (Utxo, Option<OwnerMemo>)>>> {
     globutils::wallet::public_key_from_base64(owner.as_str())
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log()))
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
         .map(|pk| web::Json(pnk!(data.read().get_owned_utxos(&pk))))
 }
 
@@ -645,7 +633,6 @@ pub enum ApiRoutes {
     UtxoSidList,
     AssetIssuanceNum,
     AssetToken,
-    PublicKey,
     GlobalState,
     TxnSid,
     TxnSidLight,
@@ -665,7 +652,6 @@ impl NetworkRoute for ApiRoutes {
             ApiRoutes::UtxoSidList => "utxo_sid_list",
             ApiRoutes::AssetIssuanceNum => "asset_issuance_num",
             ApiRoutes::AssetToken => "asset_token",
-            ApiRoutes::PublicKey => "public_key",
             ApiRoutes::GlobalState => "global_state",
             ApiRoutes::TxnSid => "txn_sid",
             ApiRoutes::TxnSidLight => "txn_sid_light",
@@ -717,10 +703,6 @@ where
             .route(
                 &ApiRoutes::AssetToken.with_arg_template("code"),
                 web::get().to(query_asset),
-            )
-            .route(
-                &ApiRoutes::PublicKey.route(),
-                web::get().to(query_public_key),
             )
             .route(
                 &ApiRoutes::GlobalState.route(),

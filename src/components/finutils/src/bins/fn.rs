@@ -27,6 +27,8 @@
 
 use clap::{crate_authors, load_yaml, App};
 use finutils::common;
+use finutils::common::evm::*;
+use fp_utils::ecdsa::SecpPair;
 use globutils::wallet;
 use ledger::data_model::{AssetTypeCode, FRA_DECIMALS};
 use ruc::*;
@@ -247,8 +249,9 @@ fn run() -> Result<()> {
             None => None,
         };
         common::claim(am, seckey.as_deref()).c(d!())?;
-    } else if matches.subcommand_matches("show").is_some() {
-        common::show().c(d!())?;
+    } else if let Some(m) = matches.subcommand_matches("show") {
+        let basic = m.is_present("basic");
+        common::show(basic).c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("setup") {
         let sa = m.value_of("serv-addr");
         let om = m.value_of("owner-mnemonic-path");
@@ -341,6 +344,28 @@ fn run() -> Result<()> {
         }
     } else if matches.is_present("set-initial-validators") {
         common::set_initial_validators().c(d!())?;
+    } else if matches.is_present("gen-eth-key") {
+        let (pair, phrase, _) = SecpPair::generate_with_phrase(None);
+        let kp = hex::encode(pair.seed());
+        println!(
+            "\x1b[31;01mMnemonic:\x1b[00m {}\n\x1b[31;01mPrivateKey:\x1b[00m {}\n\x1b[31;01mAddress:\x1b[00m {:?}\n",
+            phrase,
+            kp,
+            pair.address()
+        );
+    } else if let Some(m) = matches.subcommand_matches("account") {
+        let address = m.value_of("addr");
+        let (account, info) = contract_account_info(address)?;
+        println!("AccountId: {}\n{:#?}\n", account, info);
+    } else if let Some(m) = matches.subcommand_matches("contract-deposit") {
+        let amount = m.value_of("amount").c(d!())?;
+        let address = m.value_of("addr");
+        transfer_to_account(amount.parse::<u64>().c(d!())?, address)?
+    } else if let Some(m) = matches.subcommand_matches("contract-withdraw") {
+        let amount = m.value_of("amount").c(d!())?;
+        let address = m.value_of("addr");
+        let eth_key = m.value_of("eth-key");
+        transfer_from_account(amount.parse::<u64>().c(d!())?, address, eth_key)?
     } else {
         println!("{}", matches.usage());
     }
