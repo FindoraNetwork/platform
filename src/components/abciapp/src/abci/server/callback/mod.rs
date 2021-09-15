@@ -191,7 +191,6 @@ pub fn commit(s: &mut ABCISubmissionServer, _req: &RequestCommit) -> ResponseCom
 
     // will change `struct LedgerStatus`
     state.set_tendermint_commit(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed) as u64);
-    state.flush_data();
 
     // snapshot them finally
     pnk!(serde_json::to_vec(&state.get_status())

@@ -11,7 +11,7 @@ use ledger::{
     staking::{ops::mint_fra::MintEntry, BlockHeight},
     store::{
         bnc::{new_mapx, Mapx},
-        LedgerState,
+        flush_data, LedgerState,
     },
 };
 use parking_lot::{Condvar, Mutex, RwLock};
@@ -486,28 +486,13 @@ impl QueryServer {
         }
 
         self.app_block_cnt = ledger.blocks.len();
-        self.flush();
+
+        flush_data();
 
         // snapshot them finally
         serde_json::to_vec(&self)
             .c(d!())
             .and_then(|s| fs::write(&self.snapshot_path, s).c(d!()))
-    }
-
-    fn flush(&mut self) {
-        self.addresses_to_utxos.flush_data();
-        self.related_transactions.flush_data();
-        self.related_transfers.flush_data();
-        self.claim_hist_txns.flush_data();
-        self.coinbase_oper_hist.flush_data();
-        self.created_assets.flush_data();
-        self.issuances.flush_data();
-        self.token_code_issuances.flush_data();
-        self.owner_memos.flush_data();
-        self.utxos_to_map_index.flush_data();
-        self.txo_to_txnid.flush_data();
-        self.txn_sid_to_hash.flush_data();
-        self.txn_hash_to_sid.flush_data();
     }
 
     /// update data of query server

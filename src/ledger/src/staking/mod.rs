@@ -193,12 +193,6 @@ impl Staking {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn flush_data(&mut self) {
-        self.di.flush_data();
-    }
-
-    #[inline(always)]
-    #[allow(missing_docs)]
     pub fn new() -> Self {
         Staking {
             // use '0' instead of '1' to
@@ -1576,27 +1570,6 @@ impl DelegationInfo {
             addr_map: BTreeMap::new(),
             end_height_map: BTreeMap::new(),
             rate_hist: Some(new_mapx!()),
-        }
-    }
-
-    #[inline(always)]
-    fn flush_data(&mut self) {
-        self.addr_map.values_mut().for_each(|d| {
-            if let Some(rh) = d.rwd_hist.as_mut() {
-                rh.flush_data();
-            }
-
-            if let Some(sdh) = d.self_delegation_hist.as_mut() {
-                sdh.flush_data();
-            }
-
-            if let Some(dah) = d.delegation_amount_hist.as_mut() {
-                dah.flush_data();
-            }
-        });
-
-        if let Some(rh) = self.rate_hist.as_mut() {
-            rh.flush_data();
         }
     }
 }

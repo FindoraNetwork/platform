@@ -255,21 +255,6 @@ impl LedgerState {
         &mut self.status.staking
     }
 
-    /// Flush in-memory data to back-end storage
-    pub fn flush_data(&mut self) {
-        self.blocks.flush_data();
-        self.tx_to_block_location.flush_data();
-        self.status.utxos.flush_data();
-        self.status.owned_utxos.flush_data();
-        self.status.spent_utxos.flush_data();
-        self.status.txo_to_txn_location.flush_data();
-        self.status.state_commitment_versions.flush_data();
-        self.status.asset_types.flush_data();
-        self.status.issuance_num.flush_data();
-        self.status.issuance_amounts.flush_data();
-        self.status.staking.flush_data();
-    }
-
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn set_tendermint_commit(&mut self, tendermint_h: u64) {
@@ -468,7 +453,8 @@ impl LedgerState {
         ledger.get_staking_mut().set_custom_block_height(h);
         omit!(ledger.utxo_map.compute_checksum());
         ledger.fast_invariant_check().c(d!())?;
-        ledger.flush_data();
+
+        flush_data();
 
         Ok(ledger)
     }
@@ -1366,4 +1352,9 @@ impl LedgerStatus {
 pub struct LoggedBlock {
     pub block: Vec<Transaction>,
     pub state: StateCommitmentData,
+}
+
+/// Flush data to disk
+pub fn flush_data() {
+    bnc::flush_data();
 }
