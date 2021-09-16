@@ -44,6 +44,7 @@ lazy_static! {
 const APP_NAME: &str = "findora";
 const APP_DB_NAME: &str = "findora_db";
 const CHAIN_STATE_PATH: &str = "state.db";
+const CHAIN_STATE_MIN_VERSIONS: u64 = 4 * 60 * 24;
 
 pub struct BaseApp {
     /// application name from abci.Info
@@ -123,8 +124,11 @@ impl BaseApp {
         // Creates a fresh chain state db
         let fdb_path = base_dir.join(CHAIN_STATE_PATH);
         let fdb = FinDB::open(fdb_path.as_path())?;
-        let chain_state =
-            Arc::new(RwLock::new(ChainState::new(fdb, APP_DB_NAME.to_string())));
+        let chain_state = Arc::new(RwLock::new(ChainState::new(
+            fdb,
+            APP_DB_NAME.to_string(),
+            CHAIN_STATE_MIN_VERSIONS,
+        )));
 
         Ok(BaseApp {
             name: APP_NAME.to_string(),
