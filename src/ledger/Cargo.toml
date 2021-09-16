@@ -38,7 +38,7 @@ ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4c" }
 zeiutils = { package = "utils", git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4c" }
 bulletproofs = { package = "bulletproofs", git = "ssh://git@github.com/FindoraNetwork/bulletproofs", branch = "batch_verification", features = ["yoloproofs"] }
-bnc = { git = "https://github.com/FindoraNetwork/BNC.git", branch = "feat-newapi", default-features = false }
+bnc = { git = "https://github.com/FindoraNetwork/BNC.git", tag = "v0.2.0a", default-features = false }
 
 globutils = { path = "../libs/globutils" }
 bitmap = { path = "../libs/bitmap" }

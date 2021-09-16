@@ -14,14 +14,14 @@ use ledger::{
         CHAN_D_AMOUNT_HIST, CHAN_D_RWD_HIST, CHAN_GLOB_RATE_HIST, CHAN_V_SELF_D_HIST,
     },
     store::{
-        bnc::{new_mapx, Mapx},
+        bnc::{self, new_mapx, Mapx},
         flush_data, LedgerState,
     },
 };
 use parking_lot::{Condvar, Mutex, RwLock};
 use ruc::*;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, env, fs, io::ErrorKind, sync::Arc};
+use std::{collections::HashSet, fs, io::ErrorKind, sync::Arc};
 use zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo};
 
 lazy_static! {
@@ -86,7 +86,11 @@ impl QueryServer {
         let base_dir = if let Some(path) = base_dir {
             format!("{}/query_server", path)
         } else {
-            pnk!(env::var("tmp_dir").c(d!())) + "/test_query_server"
+            bnc::clear();
+            globutils::fresh_tmp_dir()
+                .join("/test_query_server")
+                .to_string_lossy()
+                .into_owned()
         };
 
         fs::create_dir_all(&base_dir).c(d!())?;

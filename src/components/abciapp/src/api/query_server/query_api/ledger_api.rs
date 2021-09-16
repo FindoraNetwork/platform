@@ -2,10 +2,6 @@
 //! # Access Ledger Data
 //!
 
-#[cfg(test)]
-#[allow(missing_docs)]
-mod test;
-
 use super::server::QueryServer;
 use actix_web::{error, web};
 use finutils::api::{

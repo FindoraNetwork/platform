@@ -286,6 +286,7 @@ impl LedgerState {
 
     /// create a tmp ledger for testing purpose
     pub fn tmp_ledger() -> LedgerState {
+        bnc::clear();
         let tmp_dir = globutils::fresh_tmp_dir().to_string_lossy().into_owned();
         LedgerState::new(&tmp_dir, Some(String::from("test"))).unwrap()
     }
@@ -542,7 +543,7 @@ impl LedgerState {
             - FF_PK_LIST
                 .iter()
                 .chain([*BLACK_HOLE_PUBKEY].iter())
-                .map(|pk| self.staking_get_nonconfidential_balance(pk))
+                .map(|pk| self.staking_get_nonconfidential_balance(pk).unwrap_or(0))
                 .sum::<Amount>()
             - self.get_staking().coinbase_balance()
     }
@@ -556,17 +557,18 @@ impl LedgerState {
         ]
     }
 
-    fn staking_get_nonconfidential_balance(&self, addr: &XfrPublicKey) -> u64 {
-        pnk!(self.get_owned_utxos(addr))
-            .values()
-            .map(|(utxo, _)| {
-                if let XfrAmount::NonConfidential(am) = utxo.0.record.amount {
-                    am
-                } else {
-                    0
-                }
-            })
-            .sum()
+    fn staking_get_nonconfidential_balance(&self, addr: &XfrPublicKey) -> Result<u64> {
+        self.get_owned_utxos(addr).c(d!()).map(|o| {
+            o.values()
+                .map(|(utxo, _)| {
+                    if let XfrAmount::NonConfidential(am) = utxo.0.record.amount {
+                        am
+                    } else {
+                        0
+                    }
+                })
+                .sum()
+        })
     }
 
     /// Get a utxo along with the transaction, spent status and commitment data which it belongs

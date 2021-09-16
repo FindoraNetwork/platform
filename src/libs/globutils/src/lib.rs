@@ -27,7 +27,7 @@ pub fn http_get_request(query: &str) -> StdResult<String, attohttpc::Error> {
 
 /// Create a new temporary file for a `findora_ledger`
 pub fn fresh_tmp_dir() -> PathBuf {
-    let base_dir = std::env::temp_dir();
+    let base_dir = PathBuf::from("/tmp");
     let base_dirname = "findora_ledger";
     let mut dirname = None;
     while dirname.is_none() {
