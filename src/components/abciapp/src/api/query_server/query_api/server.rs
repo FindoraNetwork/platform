@@ -121,23 +121,31 @@ impl QueryServer {
             basedir: basedir.to_owned(),
             state: Some(ledger),
             snapshot_file: snapshot_file.to_owned(),
-            addresses_to_utxos: new_mapx!("addresses_to_utxos"),
-            related_transactions: new_mapx!("related_transactions"),
-            related_transfers: new_mapx!("related_transfers"),
-            claim_hist_txns: new_mapx!("claim_hist_txns"),
-            coinbase_oper_hist: new_mapx!("coinbase_oper_hist"),
-            owner_memos: new_mapx!("owner_memos"),
-            created_assets: new_mapx!("created_assets"),
-            issuances: new_mapx!("issuances"),
-            token_code_issuances: new_mapx!("token_code_issuances"),
-            utxos_to_map_index: new_mapx!("utxos_to_map_index"),
-            txo_to_txnid: new_mapx!("txo_to_txnid"),
-            txn_sid_to_hash: new_mapx!("txn_sid_to_hash"),
-            txn_hash_to_sid: new_mapx!("txn_hash_to_sid"),
-            staking_global_rate_hist: new_mapx!("staking_rate_hist"),
-            staking_self_delegation_hist: new_mapx!("staking_self_delegation_hist"),
-            staking_delegation_amount_hist: new_mapx!("staking_delegation_amount_hist"),
-            staking_delegation_rwd_hist: new_mapx!("staking_rwd_hist"),
+            addresses_to_utxos: new_mapx!("query_server_subdata/addresses_to_utxos"),
+            related_transactions: new_mapx!("query_server_subdata/related_transactions"),
+            related_transfers: new_mapx!("query_server_subdata/related_transfers"),
+            claim_hist_txns: new_mapx!("query_server_subdata/claim_hist_txns"),
+            coinbase_oper_hist: new_mapx!("query_server_subdata/coinbase_oper_hist"),
+            owner_memos: new_mapx!("query_server_subdata/owner_memos"),
+            created_assets: new_mapx!("query_server_subdata/created_assets"),
+            issuances: new_mapx!("query_server_subdata/issuances"),
+            token_code_issuances: new_mapx!("query_server_subdata/token_code_issuances"),
+            utxos_to_map_index: new_mapx!("query_server_subdata/utxos_to_map_index"),
+            txo_to_txnid: new_mapx!("query_server_subdata/txo_to_txnid"),
+            txn_sid_to_hash: new_mapx!("query_server_subdata/txn_sid_to_hash"),
+            txn_hash_to_sid: new_mapx!("query_server_subdata/txn_hash_to_sid"),
+            staking_global_rate_hist: new_mapx!(
+                "query_server_subdata/staking_rate_hist"
+            ),
+            staking_self_delegation_hist: new_mapx!(
+                "query_server_subdata/staking_self_delegation_hist"
+            ),
+            staking_delegation_amount_hist: new_mapx!(
+                "query_server_subdata/staking_delegation_amount_hist"
+            ),
+            staking_delegation_rwd_hist: new_mapx!(
+                "query_server_subdata/staking_rwd_hist"
+            ),
             app_block_cnt: 0,
         }
     }
