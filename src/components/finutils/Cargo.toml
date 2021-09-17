@@ -30,6 +30,7 @@ globutils = { path = "../../libs/globutils" }
 credentials = { path = "../../libs/credentials" }
 
 baseapp = { path = "../contracts/baseapp", optional = true }
+eth_checksum = "0.1.2"
 fp-core = { path = "../contracts/primitives/core", optional = true }
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = { path = "../contracts/primitives/types" }
