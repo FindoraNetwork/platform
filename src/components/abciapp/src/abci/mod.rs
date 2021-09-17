@@ -74,30 +74,9 @@ pub fn run() -> Result<()> {
         });
     }
 
-    let mut web3_rpc: Box<dyn std::any::Any + Send> = Box::new(());
-    if CFG.enable_eth_api_service {
-        let base_app = app.account_base_app.clone();
-        let evm_http = format!("{}:{}", config.abci_host, config.evm_http_port);
-        let evm_ws = format!("{}:{}", config.abci_host, config.evm_ws_port);
-        let tendermint_rpc = format!(
-            "http://{}:{}",
-            config.tendermint_host, config.tendermint_port
-        );
-        web3_rpc = fc_rpc::start_web3_service(
-            evm_http,
-            evm_ws,
-            tendermint_rpc,
-            base_app,
-            10000,
-        );
-    }
-
     let addr_str = format!("{}:{}", config.abci_host, config.abci_port);
     let addr = addr_str.parse::<SocketAddr>().c(d!())?;
 
     abci::run(addr, app);
-
-    drop(web3_rpc);
-
     Ok(())
 }

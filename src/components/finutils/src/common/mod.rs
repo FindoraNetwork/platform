@@ -6,7 +6,6 @@
 //! This module is the library part of FN.
 //!
 
-pub mod evm;
 pub mod utils;
 
 use crate::api::DelegationInfo;
@@ -254,7 +253,7 @@ pub fn claim(am: Option<&str>, sk_str: Option<&str>) -> Result<()> {
 ///     Delegation Information
 ///     Validator Detail (if already staked)
 ///
-pub fn show(basic: bool) -> Result<()> {
+pub fn show() -> Result<()> {
     let kp = get_keypair().c(d!())?;
 
     let serv_addr = ruc::info!(get_serv_addr()).map(|i| {
@@ -272,18 +271,14 @@ pub fn show(basic: bool) -> Result<()> {
         );
     });
 
-    let self_balance = ruc::info!(utils::get_balance(&kp)).map(|i| {
-        println!("\x1b[31;01mNode Balance:\x1b[00m\n{} FRA units\n", i);
-    });
-
-    if basic {
-        return Ok(());
-    }
-
     let td_info = ruc::info!(get_td_pubkey()).map(|i| {
         let addr = td_pubkey_to_td_addr(&i);
         println!("\x1b[31;01mValidator Node Addr:\x1b[00m\n{}\n", addr);
         (i, addr)
+    });
+
+    let self_balance = ruc::info!(utils::get_balance(&kp)).map(|i| {
+        println!("\x1b[31;01mNode Balance:\x1b[00m\n{} FRA units\n", i);
     });
 
     let di = utils::get_delegation_info(kp.get_pk_ref());
@@ -431,8 +426,7 @@ fn get_serv_addr() -> Result<&'static str> {
     }
 }
 
-/// Get keypair from config file
-pub fn get_keypair() -> Result<XfrKeyPair> {
+fn get_keypair() -> Result<XfrKeyPair> {
     if let Some(m_path) = MNEMONIC.as_ref() {
         fs::read_to_string(m_path)
             .c(d!("can not read mnemonic from 'owner-mnemonic-path'"))

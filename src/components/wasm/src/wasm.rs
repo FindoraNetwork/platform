@@ -21,7 +21,6 @@ use crate::wasm_data_model::{
     CredentialPoK, CredentialRevealSig, CredentialSignature, CredentialUserKeyPair,
     OwnerMemo, PublicParams, TracingPolicies, TxoRef,
 };
-use core::str::FromStr;
 use credentials::{
     credential_commit, credential_issuer_key_gen, credential_open_commitment,
     credential_reveal, credential_sign, credential_user_key_gen, credential_verify,
@@ -34,13 +33,6 @@ use finutils::txn_builder::{
     TransactionBuilder as PlatformTransactionBuilder,
     TransferOperationBuilder as PlatformTransferOperationBuilder,
 };
-use fp_types::{
-    actions::account::{Action as AccountAction, MintOutput, TransferToUTXO},
-    actions::Action,
-    assemble::{CheckFee, CheckNonce, SignedExtra, UncheckedTransaction},
-    crypto::{Address, MultiSignature, MultiSigner},
-};
-use fp_utils::ecdsa::SecpPair;
 use globutils::{wallet, HashOf};
 use ledger::{
     data_model::{
@@ -55,7 +47,6 @@ use ledger::{
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ruc::{d, err::RucResult};
-use std::convert::From;
 use wasm_bindgen::prelude::*;
 use zei::{
     serialization::ZeiFromToBytes,
@@ -483,24 +474,6 @@ impl TransactionBuilder {
         Ok(self)
     }
 
-    /// Adds an operation to the transaction builder that support transfer utxo asset to ethereum address.
-    /// @param {XfrKeyPair} keypair - Asset creator key pair.
-    /// @param {String} ethereum_address - The address to receive Ethereum assets.
-    pub fn add_operation_convert_account(
-        mut self,
-        keypair: &XfrKeyPair,
-        ethereum_address: String,
-    ) -> Result<TransactionBuilder, JsValue> {
-        let ea = MultiSigner::from_str(&ethereum_address)
-            .c(d!())
-            .map_err(error_to_jsvalue)?;
-        self.get_builder_mut()
-            .add_operation_convert_account(keypair, ea)
-            .c(d!())
-            .map_err(error_to_jsvalue)?;
-        Ok(self)
-    }
-
     /// Adds a serialized transfer asset operation to a transaction builder instance.
     /// @param {string} op - a JSON-serialized transfer operation.
     /// @see {@link module:Findora-Wasm~TransferOperationBuilder} for details on constructing a transfer operation.
@@ -548,80 +521,6 @@ impl TransactionBuilder {
             .map(|memo| OwnerMemo { memo: memo.clone() })
     }
 }
-
-fn generate_extra(nonce: u64, fee: Option<u64>) -> SignedExtra {
-    (CheckNonce::new(nonce), CheckFee::new(fee))
-}
-
-/// Build transfer from account balance to utxo tx.
-/// @param {XfrPublicKey} recipient - UTXO Asset receiver.
-/// @param {u64} amount - Transfer amount.
-/// @param {string} sk - Ethereum wallet private key.
-/// @param {u64} nonce - Transaction nonce for sender.
-#[wasm_bindgen]
-pub fn transfer_to_utxo_from_account(
-    recipient: XfrPublicKey,
-    amount: u64,
-    sk: String,
-    nonce: u64,
-) -> Result<String, JsValue> {
-    let seed = hex::decode(sk).map_err(error_to_jsvalue)?;
-    let mut s = [0u8; 32];
-    s.copy_from_slice(&seed);
-    let kp = SecpPair::from_seed(&s);
-
-    let output = MintOutput {
-        target: recipient,
-        amount,
-        asset: ASSET_TYPE_FRA,
-    };
-    let action = Action::Account(AccountAction::TransferToUTXO(TransferToUTXO {
-        outputs: vec![output],
-    }));
-
-    let extra = generate_extra(nonce, None);
-    let msg = serde_json::to_vec(&(action.clone(), extra.clone()))
-        .map_err(error_to_jsvalue)?;
-    let signature = MultiSignature::from(kp.sign(&msg));
-    let signer = Address::from(kp.address());
-
-    let tx = UncheckedTransaction::new_signed(action, signer, signature, extra);
-    let res = serde_json::to_string(&tx).map_err(error_to_jsvalue)?;
-
-    Ok(res)
-}
-
-/// Recover ecdsa private key from mnemonic.
-#[wasm_bindgen]
-pub fn recover_sk_from_mnemonic(
-    phrase: String,
-    password: String,
-) -> Result<String, JsValue> {
-    let sp = SecpPair::from_phrase(&phrase, Some(&password))
-        .map_err(error_to_jsvalue)?
-        .0;
-    Ok(hex::encode(sp.seed()))
-}
-
-/// Recover ethereum address from ecdsa private key, eg. 0x73c71...
-#[wasm_bindgen]
-pub fn recover_address_from_sk(sk: String) -> Result<String, JsValue> {
-    let seed = hex::decode(sk).map_err(error_to_jsvalue)?;
-    let mut s = [0u8; 32];
-    s.copy_from_slice(&seed);
-    let pair = SecpPair::from_seed(&s);
-    Ok(format!("{:?}", pair.address()))
-}
-
-/// Serialize ethereum address used to abci query nonce.
-#[wasm_bindgen]
-pub fn get_serialized_address(address: String) -> Result<String, JsValue> {
-    let ms = MultiSigner::from_str(&address).map_err(error_to_jsvalue)?;
-    let account: Address = ms.into();
-    let sa = serde_json::to_vec(&account).map_err(error_to_jsvalue)?;
-    String::from_utf8(sa).map_err(error_to_jsvalue)
-}
-
 #[wasm_bindgen]
 #[derive(Default)]
 /// Structure that enables clients to construct complex transfers.

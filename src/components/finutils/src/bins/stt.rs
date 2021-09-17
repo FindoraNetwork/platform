@@ -39,8 +39,8 @@ type Name = String;
 type NameRef<'a> = &'a str;
 
 macro_rules! sleep_n_block {
-    ($n_block: expr, $intvl: expr) => {
-        sleep_ms!($n_block * $intvl * 1000);
+    ($n_block: expr) => {
+        sleep_ms!($n_block * BLOCK_INTERVAL * 1000);
     };
 }
 
@@ -49,9 +49,7 @@ fn main() {
 }
 
 fn run() -> Result<()> {
-    let subcmd_init = SubCommand::with_name("init")
-        .arg_from_usage("-i, --interval=[Interval] 'block interval'")
-        .arg_from_usage("-s, --skip-validator 'skip validator initialization'");
+    let subcmd_init = SubCommand::with_name("init");
     let subcmd_issue = SubCommand::with_name("issue").about("issue FRA on demand");
     let subcmd_delegate = SubCommand::with_name("delegate")
         .arg_from_usage("-u, --user=[User] 'user name of delegator'")
@@ -90,15 +88,8 @@ fn run() -> Result<()> {
 
     if matches.is_present("version") {
         println!("{}", env!("VERGEN_SHA"));
-    } else if let Some(m) = matches.subcommand_matches("init") {
-        let interval = m.value_of("interval");
-        let skip_validator = m.is_present("skip-validator");
-        if interval.is_none() {
-            init::init(0, skip_validator).c(d!())?;
-        } else {
-            let interval = interval.unwrap().parse::<u64>().c(d!())?;
-            init::init(interval, skip_validator).c(d!())?;
-        }
+    } else if matches.is_present("init") {
+        init::init().c(d!())?;
     } else if matches.is_present("issue") {
         issue::issue().c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("delegate") {
@@ -186,31 +177,21 @@ fn run() -> Result<()> {
 mod init {
     use super::*;
 
-    pub fn init(mut interval: u64, skip_validator: bool) -> Result<()> {
+    pub fn init() -> Result<()> {
         let root_kp =
             wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC).c(d!())?;
-
-        if interval == 0 {
-            interval = BLOCK_INTERVAL;
-        }
-        println!(">>> block interval: {} seconds", interval);
 
         println!(">>> define and issue FRA...");
         common::utils::send_tx(&fra_gen_initial_tx(&root_kp)).c(d!())?;
 
-        println!(">>> wait 2 block...");
-        sleep_n_block!(2, interval);
-
-        if skip_validator {
-            println!(">>> DONE !");
-            return Ok(());
-        }
+        println!(">>> wait 2 blocks...");
+        sleep_n_block!(2);
 
         println!(">>> set initial validator set...");
         common::utils::set_initial_validators(&root_kp).c(d!())?;
 
         println!(">>> wait 5 blocks...");
-        sleep_n_block!(5, interval);
+        sleep_n_block!(5);
 
         let mut target_list = USER_LIST
             .values()
@@ -235,7 +216,7 @@ mod init {
             .c(d!())?;
 
         println!(">>> wait 6 blocks ...");
-        sleep_n_block!(6, interval);
+        sleep_n_block!(6);
 
         println!(">>> propose self-delegations...");
         for v in VALIDATOR_LIST.values() {
