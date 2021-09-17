@@ -55,6 +55,7 @@ baseapp = { path = "../contracts/baseapp" }
 fc-rpc = { path = "../contracts/rpc" }
 fp-storage = { path = "../contracts/primitives/storage" }
 fp-traits = { path = "../contracts/primitives/traits" }
+fp-utils = { path = "../contracts/primitives/utils" }
 
 [dev-dependencies]
 

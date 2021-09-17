@@ -3,6 +3,7 @@ use crate::actions::Action;
 use crate::crypto::{Address, Signature};
 use crate::transaction;
 use ethereum::TransactionV0 as Transaction;
+use fp_utils::tx::EvmRawTxWrapper;
 use ruc::*;
 use serde::{Deserialize, Serialize};
 
@@ -51,8 +52,12 @@ pub fn convert_unsigned_transaction<Action, Extra>(
 pub fn convert_unchecked_transaction<'a, Extra: Deserialize<'a>>(
     transaction: &'a [u8],
 ) -> Result<UncheckedTransaction<Extra>> {
-    serde_json::from_slice::<UncheckedTransaction<Extra>>(transaction)
-        .map_err(|e| eg!(e))
+    match EvmRawTxWrapper::unwrap(transaction) {
+        Ok(tx) => {
+            serde_json::from_slice::<UncheckedTransaction<Extra>>(tx).map_err(|e| eg!(e))
+        }
+        Err(e) => Err(e),
+    }
 }
 
 /// Convert raw ethereum transaction to unified format unchecked transaction.

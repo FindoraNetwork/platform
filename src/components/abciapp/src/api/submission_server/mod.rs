@@ -4,6 +4,7 @@
 
 pub mod submission_api;
 
+use fp_utils::tx::EVM_TX_TAG;
 use ledger::{
     data_model::{BlockEffect, Transaction, TxnEffect, TxnSID, TxnTempSID, TxoSID},
     store::LedgerState,
@@ -257,4 +258,30 @@ where
 pub fn convert_tx(tx: &[u8]) -> Option<Transaction> {
     let transaction: Option<Transaction> = serde_json::from_slice(tx).ok();
     transaction
+}
+
+/// Tx Catalog
+pub enum TxCatalog {
+    /// findora tx
+    FindoraTx,
+
+    /// evm tx
+    EvmTx,
+
+    /// unknown tx
+    Unknown,
+}
+
+/// Check Tx Catalog
+pub fn try_tx_catalog(tx: &[u8]) -> TxCatalog {
+    let len = EVM_TX_TAG.len();
+    if tx.len() <= len {
+        return TxCatalog::Unknown;
+    }
+
+    if EVM_TX_TAG.eq(&tx[..len]) {
+        return TxCatalog::EvmTx;
+    }
+
+    TxCatalog::FindoraTx
 }
