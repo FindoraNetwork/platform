@@ -125,7 +125,10 @@ pub(crate) mod global_cfg {
 
     #[cfg(test)]
     fn get_config() -> Result<Config> {
-        Ok(Config::default())
+        Ok(Config {
+            ledger_dir: globutils::fresh_tmp_dir().to_string_lossy().into_owned(),
+            ..Default::default()
+        })
     }
 
     #[cfg(not(test))]

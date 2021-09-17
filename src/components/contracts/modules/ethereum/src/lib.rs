@@ -109,8 +109,8 @@ pub struct App<C> {
 }
 
 impl<C: Config> App<C> {
-    pub fn new(base_dir: &Path, empty_block: bool) -> Self {
-        let store_path = base_dir.join("ethereum").to_str().unwrap().to_owned();
+    pub fn new(basedir: &Path, empty_block: bool) -> Self {
+        let store_path = basedir.join("ethereum").to_str().unwrap().to_owned();
         let blocks_path = store_path.clone() + "/blocks";
         let receipts_path = store_path.clone() + "/receipts";
         let transaction_statuses_path = store_path + "/transaction_statuses";

@@ -288,7 +288,7 @@ impl LedgerState {
     pub fn tmp_ledger() -> LedgerState {
         bnc::clear();
         let tmp_dir = globutils::fresh_tmp_dir().to_string_lossy().into_owned();
-        LedgerState::new(&tmp_dir, Some(String::from("test"))).unwrap()
+        LedgerState::new(&tmp_dir, Some("test")).unwrap()
     }
 
     fn load_transaction_log(path: &str) -> Result<Vec<LoggedBlock>> {
@@ -381,22 +381,27 @@ impl LedgerState {
     }
 
     /// Initialize a new Ledger structure.
-    pub fn new(base_dir: &str, prefix: Option<String>) -> Result<LedgerState> {
-        let prefix = prefix.unwrap_or_default();
+    pub fn new(basedir: &str, prefix: Option<&str>) -> Result<LedgerState> {
+        let prefix = if let Some(p) = prefix {
+            format!("{}_", p)
+        } else {
+            "".to_owned()
+        };
 
-        let block_merkle_path = format!("{}/{}_block_merkle", base_dir, &prefix);
-        let txn_merkle_path = format!("{}/{}_txn_merkle", base_dir, &prefix);
-        let utxo_map_path = format!("{}/{}_utxo_map", base_dir, &prefix);
+        let block_merkle_path = format!("{}/{}block_merkle", basedir, &prefix);
+        let txn_merkle_path = format!("{}/{}txn_merkle", basedir, &prefix);
+        let utxo_map_path = format!("{}/{}utxo_map", basedir, &prefix);
 
         // These iterms will be set under ${BNC_DATA_DIR}
-        fs::create_dir_all(&base_dir).c(d!())?;
-        let snapshot_path = format!("{}/{}_ledger_status", base_dir, &prefix);
-        let snapshot_entries_dir = prefix.clone() + "_ledger_status_subdata";
-        let blocks_path = prefix.clone() + "_blocks";
-        let tx_to_block_location_path = prefix + "_tx_to_block_location";
+        fs::create_dir_all(&basedir).c(d!())?;
+        let snapshot_file = format!("{}ledger_status", &prefix);
+        let snapshot_entries_dir = prefix.clone() + "ledger_status_subdata";
+        let blocks_path = prefix.clone() + "blocks";
+        let tx_to_block_location_path = prefix + "tx_to_block_location";
 
         let ledger = LedgerState {
-            status: LedgerStatus::new(&snapshot_path, &snapshot_entries_dir).c(d!())?,
+            status: LedgerStatus::new(&basedir, &snapshot_file, &snapshot_entries_dir)
+                .c(d!())?,
             prng: ChaChaRng::from_entropy(),
             block_merkle: LedgerState::init_merkle_log(&block_merkle_path).c(d!())?,
             txn_merkle: LedgerState::init_merkle_log(&txn_merkle_path).c(d!())?,
@@ -410,11 +415,11 @@ impl LedgerState {
     }
 
     // Load an existing one OR create a new one.
-    fn load_from_log(base_dir: &str) -> Result<LedgerState> {
-        let mut ledger = LedgerState::new(base_dir, None).c(d!())?;
+    fn load_from_log(basedir: &str) -> Result<LedgerState> {
+        let mut ledger = LedgerState::new(basedir, None).c(d!())?;
 
         if ledger.blocks.is_empty() {
-            let txn_log_path = format!("{}/txn_log", base_dir);
+            let txn_log_path = format!("{}/txn_log", basedir);
             if let Ok(old_blocks) =
                 LedgerState::load_transaction_log(&txn_log_path).c(d!())
             {
@@ -441,8 +446,8 @@ impl LedgerState {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn load_or_init(base_dir: &str) -> Result<LedgerState> {
-        LedgerState::load_from_log(base_dir)
+    pub fn load_or_init(basedir: &str) -> Result<LedgerState> {
+        LedgerState::load_from_log(basedir)
     }
 
     /// Perform checkpoint of current ledger state
@@ -878,7 +883,7 @@ impl LedgerState {
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub struct LedgerStatus {
     /// the file path of the snapshot
-    pub snapshot_path: String,
+    pub snapshot_file: String,
     utxos: Mapx<TxoSID, Utxo>, // all currently-unspent TXOs
     owned_utxos: Mapx<XfrPublicKey, HashSet<TxoSID>>,
     /// all spent TXOs
@@ -971,20 +976,25 @@ impl LedgerStatus {
 
     /// Load or init LedgerStatus from snapshot
     #[inline(always)]
-    pub fn new(snapshot_path: &str, snapshot_entries_dir: &str) -> Result<LedgerStatus> {
-        match fs::read_to_string(snapshot_path) {
+    pub fn new(
+        basedir: &str,
+        snapshot_file: &str,
+        snapshot_entries_dir: &str,
+    ) -> Result<LedgerStatus> {
+        let path = format!("{}/{}", basedir, snapshot_file);
+        match fs::read_to_string(path) {
             Ok(s) => serde_json::from_str(&s).c(d!()),
             Err(e) => {
                 if ErrorKind::NotFound != e.kind() {
                     Err(eg!(e))
                 } else {
-                    Self::create(snapshot_path, snapshot_entries_dir).c(d!())
+                    Self::create(snapshot_file, snapshot_entries_dir).c(d!())
                 }
             }
         }
     }
 
-    fn create(snapshot_path: &str, snapshot_entries_dir: &str) -> Result<LedgerStatus> {
+    fn create(snapshot_file: &str, snapshot_entries_dir: &str) -> Result<LedgerStatus> {
         let utxos_path = snapshot_entries_dir.to_owned() + "/utxo";
         let spent_utxos_path = snapshot_entries_dir.to_owned() + "/spent_utxos";
         let txo_to_txn_location_path =
@@ -998,7 +1008,7 @@ impl LedgerStatus {
         let owned_utxos_path = snapshot_entries_dir.to_owned() + "/owned_utxos";
 
         let ledger = LedgerStatus {
-            snapshot_path: snapshot_path.to_owned(),
+            snapshot_file: snapshot_file.to_owned(),
             sliding_set: SlidingSet::<[u8; 8]>::new(TRANSACTION_WINDOW_WIDTH as usize),
             utxos: new_mapx!(utxos_path.as_str()),
             owned_utxos: new_mapx!(owned_utxos_path.as_str()),

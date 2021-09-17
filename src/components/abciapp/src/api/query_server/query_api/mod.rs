@@ -6,10 +6,6 @@ mod ledger_api;
 pub mod server;
 pub mod service;
 
-#[cfg(test)]
-#[allow(missing_docs)]
-mod test;
-
 use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
 use finutils::api::NetworkRoute;

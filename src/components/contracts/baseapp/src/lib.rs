@@ -120,9 +120,9 @@ impl module_evm::Config for BaseApp {
 }
 
 impl BaseApp {
-    pub fn new(base_dir: &Path, empty_block: bool) -> Result<Self> {
+    pub fn new(basedir: &Path, empty_block: bool) -> Result<Self> {
         // Creates a fresh chain state db
-        let fdb_path = base_dir.join(CHAIN_STATE_PATH);
+        let fdb_path = basedir.join(CHAIN_STATE_PATH);
         let fdb = FinDB::open(fdb_path.as_path())?;
         let chain_state = Arc::new(RwLock::new(ChainState::new(
             fdb,
@@ -138,10 +138,7 @@ impl BaseApp {
             check_state: Context::new(chain_state.clone()),
             deliver_state: Context::new(chain_state),
             modules: ModuleManager {
-                ethereum_module: module_ethereum::App::<Self>::new(
-                    base_dir,
-                    empty_block,
-                ),
+                ethereum_module: module_ethereum::App::<Self>::new(basedir, empty_block),
                 ..Default::default()
             },
             event_notify: Notifications::new(),

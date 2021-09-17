@@ -5,7 +5,9 @@
 mod utils;
 
 use crate::{
-    abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV},
+    abci::{
+        config::global_cfg::CFG, server::ABCISubmissionServer, staking, IN_SAFE_ITV,
+    },
     api::{query_server::BLOCK_CREATED, submission_server::convert_tx},
 };
 use abci::{
@@ -228,10 +230,10 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     state.set_tendermint_commit(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed) as u64);
 
     // snapshot them finally
+    let path = format!("{}/{}", &CFG.ledger_dir, &state.get_status().snapshot_file);
     pnk!(serde_json::to_vec(&state.get_status())
         .c(d!())
-        .and_then(|s| fs::write(&state.get_status().snapshot_path, s)
-            .c(d!(state.get_status().snapshot_path.clone()))));
+        .and_then(|s| fs::write(&path, s).c(d!(path))));
 
     let mut r = ResponseCommit::new();
     let mut commitment = state.get_state_commitment().0.as_ref().to_vec();
