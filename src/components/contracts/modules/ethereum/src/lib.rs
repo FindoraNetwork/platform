@@ -27,7 +27,7 @@ use lazy_static::lazy_static;
 use ledger::store::bnc::{self, new_mapx, Mapx};
 use parking_lot::Mutex;
 use ruc::*;
-use std::{marker::PhantomData, path::Path, sync::Arc};
+use std::{marker::PhantomData, sync::Arc};
 use storage::*;
 
 pub const MODULE_NAME: &str = "ethereum";
@@ -109,17 +109,12 @@ pub struct App<C> {
 }
 
 impl<C: Config> App<C> {
-    pub fn new(basedir: &Path, empty_block: bool) -> Self {
-        let store_path = basedir.join("ethereum").to_str().unwrap().to_owned();
-        let blocks_path = store_path.clone() + "/blocks";
-        let receipts_path = store_path.clone() + "/receipts";
-        let transaction_statuses_path = store_path + "/transaction_statuses";
-
+    pub fn new(empty_block: bool) -> Self {
         App {
             enable_eth_empty_blocks: empty_block,
-            blocks: new_mapx!(blocks_path.as_str()),
-            receipts: new_mapx!(receipts_path.as_str()),
-            transaction_statuses: new_mapx!(transaction_statuses_path.as_str()),
+            blocks: new_mapx!("ethereum/blocks"),
+            receipts: new_mapx!("ethereum/receipts"),
+            transaction_statuses: new_mapx!("ethereum/transaction_statuses"),
             is_store_block: false,
             phantom: Default::default(),
         }
@@ -135,9 +130,9 @@ impl<C: Config> Default for App<C> {
     fn default() -> Self {
         App {
             enable_eth_empty_blocks: false,
-            blocks: new_mapx!(),
-            receipts: new_mapx!(),
-            transaction_statuses: new_mapx!(),
+            blocks: new_mapx!("ethereum/blocks"),
+            receipts: new_mapx!("ethereum/receipts"),
+            transaction_statuses: new_mapx!("ethereum/transaction_statuses"),
             is_store_block: false,
             phantom: Default::default(),
         }

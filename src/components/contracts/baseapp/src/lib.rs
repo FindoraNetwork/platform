@@ -138,7 +138,7 @@ impl BaseApp {
             check_state: Context::new(chain_state.clone()),
             deliver_state: Context::new(chain_state),
             modules: ModuleManager {
-                ethereum_module: module_ethereum::App::<Self>::new(basedir, empty_block),
+                ethereum_module: module_ethereum::App::<Self>::new(empty_block),
                 ..Default::default()
             },
             event_notify: Notifications::new(),
