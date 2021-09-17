@@ -1,4 +1,5 @@
 use baseapp::BaseApp;
+use ethereum::{BlockV0 as EthereumBlock, Receipt};
 use ethereum_types::{H256, U256};
 use fp_evm::BlockId;
 use fp_rpc_core::{
@@ -183,7 +184,7 @@ impl SubscriptionResult {
     pub fn new() -> Self {
         SubscriptionResult {}
     }
-    pub fn new_heads(&self, block: ethereum::Block) -> PubSubResult {
+    pub fn new_heads(&self, block: EthereumBlock) -> PubSubResult {
         PubSubResult::Header(Box::new(Rich {
             inner: Header {
                 hash: Some(H256::from_slice(
@@ -214,8 +215,8 @@ impl SubscriptionResult {
     }
     pub fn logs(
         &self,
-        block: ethereum::Block,
-        receipts: Vec<ethereum::Receipt>,
+        block: EthereumBlock,
+        receipts: Vec<Receipt>,
         params: &FilteredParams,
     ) -> Vec<Log> {
         let block_hash = Some(H256::from_slice(
@@ -258,7 +259,7 @@ impl SubscriptionResult {
         &self,
         block_hash: H256,
         ethereum_log: &ethereum::Log,
-        block: &ethereum::Block,
+        block: &EthereumBlock,
         params: &FilteredParams,
     ) -> bool {
         let log = Log {

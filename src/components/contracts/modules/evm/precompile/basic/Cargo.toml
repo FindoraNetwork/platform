@@ -1,7 +1,7 @@
 [package]
 name = "evm-precompile-basic"
 version = "0.1.0"
-authors = ["Findora <admin@findora.org>"]
+authors = ["FindoraNetwork"]
 edition = "2018"
 homepage = "https://findora.org/technology"
 repository = "https://github.com/findoranetwork/platform/"
@@ -9,7 +9,7 @@ description = "Basic precompiles for EVM module."
 readme = "README.md"
 
 [dependencies]
-evm = { version = "0.27.0", features = ["with-serde"] }
+evm = { version = "0.30.0", default-features = false, features = ["with-serde"] }
 ripemd160 = "0.9"
 
 # primitives

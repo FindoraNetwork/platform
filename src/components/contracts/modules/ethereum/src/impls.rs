@@ -1,5 +1,8 @@
 use crate::storage::*;
 use crate::{App, Config, ContractLog, TransactionExecuted, PENDING_TRANSACTIONS};
+use ethereum::{
+    BlockV0 as Block, LegacyTransactionMessage, Receipt, TransactionV0 as Transaction,
+};
 use ethereum_types::{Bloom, BloomInput, H160, H256, H64, U256};
 use evm::ExitReason;
 use fp_core::{
@@ -15,14 +18,14 @@ use ruc::*;
 use sha3::{Digest, Keccak256};
 
 impl<C: Config> App<C> {
-    pub fn recover_signer(transaction: &ethereum::Transaction) -> Option<H160> {
+    pub fn recover_signer(transaction: &Transaction) -> Option<H160> {
         let mut sig = [0u8; 65];
         let mut msg = [0u8; 32];
         sig[0..32].copy_from_slice(&transaction.signature.r()[..]);
         sig[32..64].copy_from_slice(&transaction.signature.s()[..]);
         sig[64] = transaction.signature.standard_v();
         msg.copy_from_slice(
-            &ethereum::TransactionMessage::from(transaction.clone()).hash()[..],
+            &LegacyTransactionMessage::from(transaction.clone()).hash()[..],
         );
 
         let pubkey = secp256k1_ecdsa_recover(&sig, &msg).ok()?;
@@ -32,9 +35,9 @@ impl<C: Config> App<C> {
     }
 
     pub fn store_block(&mut self, ctx: &mut Context, block_number: U256) -> Result<()> {
-        let mut transactions: Vec<ethereum::Transaction> = Vec::new();
+        let mut transactions: Vec<Transaction> = Vec::new();
         let mut statuses: Vec<TransactionStatus> = Vec::new();
-        let mut receipts: Vec<ethereum::Receipt> = Vec::new();
+        let mut receipts: Vec<Receipt> = Vec::new();
         let mut logs_bloom = Bloom::default();
 
         for (transaction, status, receipt) in
@@ -80,7 +83,7 @@ impl<C: Config> App<C> {
             mix_hash: H256::default(),
             nonce: H64::default(),
         };
-        let block = ethereum::Block::new(partial_header, transactions, ommers);
+        let block = Block::new(partial_header, transactions, ommers);
         let block_hash = block.header.hash();
 
         CurrentBlockNumber::put(ctx.store.clone(), &block_number)?;
@@ -99,10 +102,7 @@ impl<C: Config> App<C> {
         Ok(())
     }
 
-    pub fn do_transact(
-        ctx: &Context,
-        transaction: ethereum::Transaction,
-    ) -> Result<ActionResult> {
+    pub fn do_transact(ctx: &Context, transaction: Transaction) -> Result<ActionResult> {
         debug!(target: "evm", "transact ethereum transaction: {:?}", transaction);
 
         let mut events = vec![];
@@ -168,6 +168,9 @@ impl<C: Config> App<C> {
         };
 
         for log in &status.logs {
+            debug!(target: "evm", "transaction status log: block: {:?}, address: {:?}, topics: {:?}, data: {:?}",
+                ctx.header.height,  log.address, log.topics.clone(), log.data.clone());
+
             events.push(Event::emit_event(
                 App::<C>::name(),
                 ContractLog {
@@ -198,6 +201,7 @@ impl<C: Config> App<C> {
             Self::name(),
             TransactionExecuted {
                 sender: source,
+                to: to.unwrap_or_default(),
                 contract_address: contract_address.unwrap_or_default(),
                 transaction_hash,
                 reason,
@@ -273,11 +277,7 @@ impl<C: Config> App<C> {
     }
 
     /// Get the block with given block id.
-    pub fn current_block(
-        &self,
-        ctx: &Context,
-        id: Option<BlockId>,
-    ) -> Option<ethereum::Block> {
+    pub fn current_block(&self, ctx: &Context, id: Option<BlockId>) -> Option<Block> {
         let hash = Self::block_hash(ctx, id).unwrap_or_default();
         self.blocks.get(&hash)
     }

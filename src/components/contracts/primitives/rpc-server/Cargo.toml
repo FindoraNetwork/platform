@@ -1,12 +1,12 @@
 [package]
 name = "fp-rpc-server"
 version = "0.1.0"
-authors = ["Parity Technologies <admin@parity.io>"]
+authors = ["FindoraNetwork"]
 edition = "2018"
+homepage = "https://findora.org/technology"
+repository = "https://github.com/findoranetwork/platform/"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
-description = "Substrate RPC servers."
+description = "EVM RPC servers."
 readme = "README.md"
 
 [dependencies]

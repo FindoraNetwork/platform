@@ -6,7 +6,7 @@ mod genesis;
 mod impls;
 
 use abci::{RequestEndBlock, ResponseEndBlock};
-use ethereum::{Block, Receipt, Transaction};
+use ethereum::{BlockV0 as Block, Receipt, TransactionV0 as Transaction};
 use ethereum_types::{H160, H256, U256};
 use evm::Config as EvmConfig;
 use fp_core::{
@@ -82,6 +82,7 @@ pub mod storage {
 #[derive(Event)]
 pub struct TransactionExecuted {
     sender: H160,
+    to: H160,
     contract_address: H160,
     transaction_hash: H256,
     reason: evm::ExitReason,

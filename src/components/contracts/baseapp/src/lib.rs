@@ -12,6 +12,7 @@ mod notify;
 
 use crate::modules::ModuleManager;
 use abci::Header;
+use ethereum::BlockV0 as Block;
 use fp_core::{
     account::SmartAccount,
     context::{Context, RunTxMode},
@@ -265,10 +266,10 @@ impl BaseProvider for BaseApp {
             Some(ctx) => ctx,
         };
         module_account::App::<Self>::account_of(&ctx, who)
-            .ok_or(eg!("account does not exist"))
+            .ok_or(eg!(format!("account does not exist: {}", who)))
     }
 
-    fn current_block(&self, id: Option<BlockId>) -> Option<ethereum::Block> {
+    fn current_block(&self, id: Option<BlockId>) -> Option<Block> {
         if let Ok(ctx) = self.create_query_context(0, false) {
             self.modules.ethereum_module.current_block(&ctx, id)
         } else {

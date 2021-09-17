@@ -83,8 +83,13 @@ pub fn run() -> Result<()> {
             "http://{}:{}",
             config.tendermint_host, config.tendermint_port
         );
-        web3_rpc =
-            fc_rpc::start_web3_service(evm_http, evm_ws, tendermint_rpc, base_app);
+        web3_rpc = fc_rpc::start_web3_service(
+            evm_http,
+            evm_ws,
+            tendermint_rpc,
+            base_app,
+            10000,
+        );
     }
 
     let addr_str = format!("{}:{}", config.abci_host, config.abci_port);
