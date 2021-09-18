@@ -10,7 +10,6 @@ use fp_core::{
 };
 use fp_events::Event;
 use fp_evm::{BlockId, CallOrCreateInfo, Runner, TransactionStatus};
-use fp_traits::evm::DecimalsMapping;
 use fp_types::{actions::evm as EvmAction, crypto::secp256k1_ecdsa_recover};
 use fp_utils::{proposer_converter, timestamp_converter};
 use log::debug;
@@ -103,7 +102,7 @@ impl<C: Config> App<C> {
     }
 
     pub fn do_transact(ctx: &Context, transaction: Transaction) -> Result<ActionResult> {
-        debug!(target: "evm", "transact ethereum transaction: {:?}", transaction);
+        debug!(target: "ethereum", "transact ethereum transaction: {:?}", transaction);
 
         let mut events = vec![];
 
@@ -116,14 +115,12 @@ impl<C: Config> App<C> {
         let transaction_index = PENDING_TRANSACTIONS.lock().len() as u32;
 
         let gas_limit = transaction.gas_limit;
-        let transferred_value =
-            C::DecimalsMapping::convert_to_native_token(transaction.value);
 
         let (to, contract_address, info) = Self::execute_transaction(
             ctx,
             source,
             transaction.input.clone(),
-            transferred_value,
+            transaction.value,
             transaction.gas_limit,
             Some(transaction.gas_price),
             Some(transaction.nonce),

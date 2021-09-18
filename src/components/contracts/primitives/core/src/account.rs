@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct SmartAccount {
     /// Account nonce.
     pub nonce: u64,
-    /// Account balance(native asset).
+    /// Account balance(native asset). Note: decimals is 6.
     pub balance: u128,
     /// Balance which is reserved and may not be used.
     /// such as: staking deposit

@@ -306,7 +306,8 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
     fn transfer(&mut self, transfer: Transfer) -> Result<(), ExitError> {
         let source = C::AddressMapping::convert_to_account_id(transfer.source);
         let target = C::AddressMapping::convert_to_account_id(transfer.target);
-        let value = C::DecimalsMapping::convert_to_native_token(transfer.value);
+        let value = C::DecimalsMapping::convert_to_native_token(transfer.value)
+            .map_err(|e| ExitError::Other(std::borrow::Cow::from(format!("{}", e))))?;
 
         C::AccountAsset::transfer(self.ctx, &source, &target, value.low_u128())
             .map_err(|_| ExitError::OutOfFund)

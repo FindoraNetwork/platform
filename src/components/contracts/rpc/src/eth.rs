@@ -1,4 +1,5 @@
 use crate::{error_on_execution_failure, internal_err};
+use abci::{Application, RequestCheckTx};
 use baseapp::{extensions::SignedExtra, BaseApp};
 use ethereum::{
     BlockV0 as EthereumBlock, LegacyTransactionMessage as EthereumTransactionMessage,
@@ -182,9 +183,16 @@ impl EthApi for EthApiImpl {
         }
 
         let txn_with_tag = EvmRawTxWrapper::wrap(&txn.unwrap());
+        let resp = self.account_base_app.write().check_tx(&RequestCheckTx {
+            tx: txn_with_tag.clone(),
+            ..Default::default()
+        });
+        if resp.code != 0 {
+            return Box::pin(future::err(internal_err(resp.log)));
+        }
 
         let client = self.tm_client.clone();
-        RT.spawn(async move { client.broadcast_tx_sync(txn_with_tag.into()).await });
+        RT.spawn(async move { client.broadcast_tx_async(txn_with_tag.into()).await });
         Box::pin(future::ok(transaction_hash))
     }
 
@@ -204,7 +212,10 @@ impl EthApi for EthApiImpl {
         let value =
             <BaseApp as module_evm::Config>::DecimalsMapping::convert_to_native_token(
                 value.unwrap_or_default(),
-            );
+            )
+            .map_err(|err| {
+                internal_err(format!("eth_call value convert err: {:?}", err))
+            })?;
 
         // use given gas limit or query current block's limit
         let gas_limit = match gas {
@@ -321,7 +332,7 @@ impl EthApi for EthApiImpl {
         number: Option<BlockNumber>,
     ) -> Result<H256> {
         warn!(target: "eth_rpc", "storage_at, address:{:?}, index:{:?}, number:{:?}", address, index, number);
-        // TODO
+        // TODO wait storage versioning
         Ok(self
             .account_base_app
             .read()
@@ -396,7 +407,7 @@ impl EthApi for EthApiImpl {
             .account_base_app
             .read()
             .account_of(&account_id, None)
-            .map_err(internal_err)?;
+            .unwrap_or_default();
         Ok(U256::from(sa.nonce))
     }
 
@@ -437,7 +448,7 @@ impl EthApi for EthApiImpl {
 
     fn code_at(&self, address: H160, number: Option<BlockNumber>) -> Result<Bytes> {
         debug!(target: "eth_rpc", "code_at, address:{:?}, number:{:?}", address, number);
-        // TODO
+        // TODO wait storage versioning
         Ok(self
             .account_base_app
             .read()
@@ -447,14 +458,14 @@ impl EthApi for EthApiImpl {
     }
 
     fn send_raw_transaction(&self, bytes: Bytes) -> BoxFuture<Result<H256>> {
-        debug!(target: "eth_rpc", "send_raw_transaction, bytes:{:?}", bytes);
-
         let transaction = match rlp::decode::<EthereumTransaction>(&bytes.0[..]) {
             Ok(transaction) => transaction,
             Err(_) => {
                 return Box::pin(future::err(internal_err("decode transaction failed")));
             }
         };
+        debug!(target: "eth_rpc", "send_raw_transaction :{:?}", transaction);
+
         let transaction_hash =
             H256::from_slice(Keccak256::digest(&rlp::encode(&transaction)).as_slice());
         let function =
@@ -468,9 +479,16 @@ impl EthApi for EthApiImpl {
         }
 
         let txn_with_tag = EvmRawTxWrapper::wrap(&txn.unwrap());
+        let resp = self.account_base_app.write().check_tx(&RequestCheckTx {
+            tx: txn_with_tag.clone(),
+            ..Default::default()
+        });
+        if resp.code != 0 {
+            return Box::pin(future::err(internal_err(resp.log)));
+        }
 
         let client = self.tm_client.clone();
-        RT.spawn(async move { client.broadcast_tx_sync(txn_with_tag.into()).await });
+        RT.spawn(async move { client.broadcast_tx_async(txn_with_tag.into()).await });
         Box::pin(future::ok(transaction_hash))
     }
 
@@ -492,7 +510,10 @@ impl EthApi for EthApiImpl {
         let value =
             <BaseApp as module_evm::Config>::DecimalsMapping::convert_to_native_token(
                 value.unwrap_or_default(),
-            );
+            )
+            .map_err(|err| {
+                internal_err(format!("eth_estimateGas value convert err: {:?}", err))
+            })?;
 
         let gas_limit = <BaseApp as module_evm::Config>::BlockGasLimit::get();
 
