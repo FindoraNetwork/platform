@@ -71,6 +71,8 @@ pub mod storage {
 
     // Mapping for block number and hashes.
     generate_storage!(Ethereum, BlockHash => Map<U256, H256>);
+    // Mapping for transaction hash and at block number with index.
+    generate_storage!(Ethereum, TransactionIndex => Map<H256, (U256, u32)>);
     // The current Ethereum block number.
     generate_storage!(Ethereum, CurrentBlockNumber => Value<U256>);
     // // The current Ethereum block.
@@ -215,7 +217,7 @@ impl<C: Config> ValidateUnsigned for App<C> {
         }
 
         if transaction.gas_limit > C::BlockGasLimit::get() {
-            return Err(eg!(format!("InvalidGasLimit: the gas limit too large")));
+            return Err(eg!("InvalidGasLimit: the gas limit too large"));
         }
 
         if transaction.gas_price < C::FeeCalculator::min_gas_price() {

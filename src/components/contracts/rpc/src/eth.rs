@@ -581,23 +581,36 @@ impl EthApi for EthApiImpl {
     fn transaction_by_hash(&self, hash: H256) -> Result<Option<Transaction>> {
         debug!(target: "eth_rpc", "transaction_by_hash, hash:{:?}", hash);
 
-        let block = self.account_base_app.read().current_block(None);
+        let mut id = None;
+        let mut index = 0;
+        if let Some((number, idx)) = self.account_base_app.read().transaction_index(hash)
+        {
+            id = Some(BlockId::Number(number));
+            index = idx as usize
+        }
+
+        let block = self.account_base_app.read().current_block(id.clone());
         let statuses = self
             .account_base_app
             .read()
-            .current_transaction_statuses(None);
+            .current_transaction_statuses(id.clone());
 
         match (block, statuses) {
             (Some(block), Some(statuses)) => {
-                let index = statuses.iter().position(|t| t.transaction_hash == hash);
-                if index.is_none() {
-                    return Ok(None);
+                if id.is_none() {
+                    if let Some(idx) =
+                        statuses.iter().position(|t| t.transaction_hash == hash)
+                    {
+                        index = idx;
+                    } else {
+                        return Ok(None);
+                    }
                 }
 
                 Ok(Some(transaction_build(
-                    block.transactions[index.unwrap()].clone(),
+                    block.transactions[index].clone(),
                     Some(block),
-                    Some(statuses[index.unwrap()].clone()),
+                    Some(statuses[index].clone()),
                 )))
             }
             _ => Ok(None),
@@ -611,13 +624,15 @@ impl EthApi for EthApiImpl {
     ) -> Result<Option<Transaction>> {
         debug!(target: "eth_rpc", "transaction_by_block_hash_and_index, hash:{:?}, index:{:?}", hash, index);
 
-        let id = Some(BlockId::Hash(hash));
         let index = index.value();
-        let block = self.account_base_app.read().current_block(id.clone());
+        let block = self
+            .account_base_app
+            .read()
+            .current_block(Some(BlockId::Hash(hash)));
         let statuses = self
             .account_base_app
             .read()
-            .current_transaction_statuses(id);
+            .current_transaction_statuses(Some(BlockId::Hash(hash)));
 
         match (block, statuses) {
             (Some(block), Some(statuses)) => {
@@ -669,25 +684,38 @@ impl EthApi for EthApiImpl {
     fn transaction_receipt(&self, hash: H256) -> Result<Option<Receipt>> {
         debug!(target: "eth_rpc", "transaction_receipt, hash:{:?}", hash);
 
-        let block = self.account_base_app.read().current_block(None);
+        let mut id = None;
+        let mut index = 0;
+        if let Some((number, idx)) = self.account_base_app.read().transaction_index(hash)
+        {
+            id = Some(BlockId::Number(number));
+            index = idx as usize
+        }
+
+        let block = self.account_base_app.read().current_block(id.clone());
         let statuses = self
             .account_base_app
             .read()
-            .current_transaction_statuses(None);
-        let receipts = self.account_base_app.read().current_receipts(None);
+            .current_transaction_statuses(id.clone());
+        let receipts = self.account_base_app.read().current_receipts(id.clone());
 
         match (block, statuses, receipts) {
             (Some(block), Some(statuses), Some(receipts)) => {
-                let index = statuses.iter().position(|t| t.transaction_hash == hash);
-                if index.is_none() {
-                    return Ok(None);
+                if id.is_none() {
+                    if let Some(idx) =
+                        statuses.iter().position(|t| t.transaction_hash == hash)
+                    {
+                        index = idx;
+                    } else {
+                        return Ok(None);
+                    }
                 }
 
                 let block_hash = H256::from_slice(
                     Keccak256::digest(&rlp::encode(&block.header)).as_slice(),
                 );
-                let receipt = receipts[index.unwrap()].clone();
-                let status = statuses[index.unwrap()].clone();
+                let receipt = receipts[index].clone();
+                let status = statuses[index].clone();
                 let mut cumulative_receipts = receipts;
                 cumulative_receipts.truncate((status.transaction_index + 1) as usize);
 
