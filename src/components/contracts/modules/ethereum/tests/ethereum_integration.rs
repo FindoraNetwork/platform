@@ -31,6 +31,7 @@ fn base_transfer_fee() -> u128 {
     <BaseApp as module_ethereum::Config>::DecimalsMapping::convert_to_native_token(
         fee.into(),
     )
+    .unwrap()
     .as_u128()
 }
 
@@ -63,7 +64,7 @@ fn test_abci_check_tx() {
     .unwrap();
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
     assert!(
-        resp.code == 1 && resp.log.contains("InvalidTransaction: InsufficientBalance"),
+        resp.code == 1 && resp.log.contains("InsufficientBalance"),
         "resp log: {}",
         resp.log
     );

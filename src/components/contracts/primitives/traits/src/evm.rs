@@ -1,7 +1,7 @@
 use fp_core::context::Context;
 use fp_types::crypto::Address;
 use primitive_types::{H160, H256, U256};
-use ruc::Result;
+use ruc::{eg, Result};
 use std::convert::TryFrom;
 
 pub trait AddressMapping {
@@ -27,7 +27,7 @@ pub trait BlockHashMapping {
 pub trait DecimalsMapping {
     fn from_native_token(balance: U256) -> Option<U256>;
 
-    fn convert_to_native_token(balance: U256) -> U256;
+    fn convert_to_native_token(balance: U256) -> Result<U256>;
 }
 
 /// FRA decimals
@@ -35,6 +35,9 @@ const FRA_DECIMALS: u32 = 6;
 
 /// ETH decimals
 const ETH_DECIMALS: u32 = 18;
+
+/// The minimum FRA amount supported by ethereum transfer value.
+pub const MIN_FRA_UNIT: u64 = 1_0000_0000_0000;
 
 /// Ethereum decimals mapping.
 pub struct EthereumDecimalsMapping;
@@ -44,10 +47,15 @@ impl DecimalsMapping for EthereumDecimalsMapping {
         balance.checked_mul(U256::from(10_u64.pow(ETH_DECIMALS - FRA_DECIMALS)))
     }
 
-    fn convert_to_native_token(balance: U256) -> U256 {
-        balance
+    fn convert_to_native_token(balance: U256) -> Result<U256> {
+        if !balance.is_zero() && balance.checked_sub(U256::from(MIN_FRA_UNIT)).is_none()
+        {
+            return Err(eg!("Invalid value, the minimum FRA transfer unit is 1_0000_0000_0000 (0.000001FRA)"));
+        }
+
+        Ok(balance
             .checked_div(U256::from(10_u64.pow(ETH_DECIMALS - FRA_DECIMALS)))
-            .unwrap_or_else(U256::zero)
+            .unwrap_or_else(U256::zero))
     }
 }
 
@@ -59,7 +67,7 @@ pub trait FeeCalculator {
 
 impl FeeCalculator for () {
     fn min_gas_price() -> U256 {
-        // 100 GWEI
+        // 100 GWEI, min gas limit: 21000, min gas price must > 50_0000_0000
         U256::from(1000_0000_0000_u64)
     }
 }
