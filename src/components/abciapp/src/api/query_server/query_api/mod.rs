@@ -87,19 +87,14 @@ async fn get_owner_memo_batch(
 /// Returns an array of the utxo sids currently spendable by a given address
 async fn get_owned_utxos(
     data: web::Data<Arc<RwLock<QueryServer>>>,
-    info: web::Path<String>,
+    owner: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxoSID>>> {
-    // Convert from basee64 representation
-    let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
-        &b64dec(&*info)
-            .c(d!())
-            .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?,
-    )
-    .c(d!())
-    .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
-    let server = data.read();
-    let sids = server.get_owned_utxo_sids(&XfrAddress { key });
-    Ok(web::Json(sids.unwrap_or_default()))
+    let qs = data.read();
+    let read = qs.state.as_ref().unwrap().read();
+    globutils::wallet::public_key_from_base64(owner.as_str())
+        .c(d!())
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
+        .map(|pk| web::Json(pnk!(read.get_owned_utxos(&pk)).keys().copied().collect()))
 }
 
 /// Define interface type

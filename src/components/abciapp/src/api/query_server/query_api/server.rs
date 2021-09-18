@@ -7,7 +7,7 @@ use lazy_static::lazy_static;
 use ledger::{
     data_model::{
         AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Operation, Transaction,
-        TransferAsset, TxOutput, TxnSID, TxoRef, TxoSID, XfrAddress,
+        TxOutput, TxnSID, TxoSID, XfrAddress,
     },
     staking::{
         ops::mint_fra::MintEntry, Amount, BlockHeight, DelegationRwdDetail,
@@ -43,7 +43,6 @@ pub struct QueryServer {
     snapshot_file: String,
     #[serde(skip)]
     pub(crate) state: Option<Arc<RwLock<LedgerState>>>,
-    addresses_to_utxos: Mapx<XfrAddress, HashSet<TxoSID>>,
     related_transactions: Mapx<XfrAddress, HashSet<TxnSID>>, // Set of transactions related to a ledger address
     related_transfers: Mapx<AssetTypeCode, HashSet<TxnSID>>, // Set of transfer transactions related to an asset code
     claim_hist_txns: Mapx<XfrAddress, Vec<TxnSID>>, // List of claim transactions related to a ledger address
@@ -121,7 +120,6 @@ impl QueryServer {
             basedir: basedir.to_owned(),
             state: Some(ledger),
             snapshot_file: snapshot_file.to_owned(),
-            addresses_to_utxos: new_mapx!("query_server_subdata/addresses_to_utxos"),
             related_transactions: new_mapx!("query_server_subdata/related_transactions"),
             related_transfers: new_mapx!("query_server_subdata/related_transfers"),
             claim_hist_txns: new_mapx!("query_server_subdata/claim_hist_txns"),
@@ -291,12 +289,6 @@ impl QueryServer {
         self.related_transfers.get(&code)
     }
 
-    /// Returns the set of TxoSIDs that are the indices of records owned by a given address.
-    #[inline(always)]
-    pub fn get_owned_utxo_sids(&self, address: &XfrAddress) -> Option<HashSet<TxoSID>> {
-        self.addresses_to_utxos.get(&address)
-    }
-
     /// Returns the owner of a given txo_sid.
     #[inline(always)]
     pub fn get_address_of_sid(&self, txo_sid: TxoSID) -> Option<XfrAddress> {
@@ -366,28 +358,6 @@ impl QueryServer {
         save_issuance!(token_issuances, token_code);
     }
 
-    fn remove_spent_utxos(&mut self, transfer: &TransferAsset) {
-        for input in &transfer.body.inputs {
-            match input {
-                TxoRef::Relative(_) => {} // Relative utxos were never cached so no need to do anything here
-                TxoRef::Absolute(txo_sid) => {
-                    if let Some(addr) = self.utxos_to_map_index.get(&txo_sid) {
-                        #[allow(unused_mut)]
-                        if let Some(mut hash_set) =
-                            self.addresses_to_utxos.get_mut(&addr)
-                        {
-                            hash_set.remove(&txo_sid);
-                        } else {
-                            ruc::pd!("No txos stored for this address");
-                        }
-                    } else {
-                        ruc::pd!("Attempting to remove owned txo of address that isn't cached");
-                    }
-                }
-            }
-        }
-    }
-
     fn cache_hist_data(&mut self) {
         CHAN_GLOB_RATE_HIST.1.lock().try_iter().for_each(|(h, r)| {
             self.staking_global_rate_hist.insert(h, r);
@@ -401,7 +371,7 @@ impl QueryServer {
                 self.staking_self_delegation_hist
                     .entry(pk)
                     .or_insert(new_mapx!(format!(
-                        "staking_self_delegation_hist_subdir/{}",
+                        "staking_self_delegation_hist_subdata/{}",
                         wallet::public_key_to_base64(&pk)
                     )))
                     .insert(h, r);
@@ -415,7 +385,7 @@ impl QueryServer {
                 self.staking_delegation_amount_hist
                     .entry(pk)
                     .or_insert(new_mapx!(format!(
-                        "staking_delegation_amount_hist_subdir/{}",
+                        "staking_delegation_amount_hist_subdata/{}",
                         wallet::public_key_to_base64(&pk)
                     )))
                     .insert(h, r);
@@ -427,7 +397,7 @@ impl QueryServer {
                 self.staking_delegation_rwd_hist
                     .entry(pk)
                     .or_insert(new_mapx!(format!(
-                        "staking_delegation_rwd_hist_subdir/{}",
+                        "staking_delegation_rwd_hist_subdata/{}",
                         wallet::public_key_to_base64(&pk)
                     )));
             let mut dd = dd.entry(h).or_insert_with(DelegationRwdDetail::default);
@@ -542,7 +512,7 @@ impl QueryServer {
                         .insert(txn_sid);
                 }
 
-                // Add created asset and remove spent utxos
+                // Add created asset
                 for op in &curr_txn.body.operations {
                     match op {
                         Operation::DefineAsset(define_asset) => {
@@ -550,9 +520,6 @@ impl QueryServer {
                         }
                         Operation::IssueAsset(issue_asset) => {
                             self.cache_issuance(&issue_asset);
-                        }
-                        Operation::TransferAsset(transfer_asset) => {
-                            self.remove_spent_utxos(&transfer_asset);
                         }
                         _ => {}
                     };
@@ -563,10 +530,6 @@ impl QueryServer {
                     .iter()
                     .zip(addresses.iter().zip(owner_memos.iter()))
                 {
-                    self.addresses_to_utxos
-                        .entry(*address)
-                        .or_insert_with(HashSet::new)
-                        .insert(*txo_sid);
                     self.utxos_to_map_index.insert(*txo_sid, *address);
                     let hash = curr_txn.hash_tm().hex().to_uppercase();
                     self.txo_to_txnid.insert(*txo_sid, (txn_sid, hash.clone()));
