@@ -314,6 +314,14 @@ impl BaseProvider for BaseApp {
         }
     }
 
+    fn transaction_index(&self, hash: H256) -> Option<(U256, u32)> {
+        if let Ok(ctx) = self.create_query_context(0, false) {
+            module_ethereum::App::<Self>::transaction_index(&ctx, hash)
+        } else {
+            None
+        }
+    }
+
     fn account_code_at(&self, address: H160) -> Option<Vec<u8>> {
         if let Ok(ctx) = self.create_query_context(0, false) {
             module_evm::App::<Self>::account_codes(&ctx, &address)
