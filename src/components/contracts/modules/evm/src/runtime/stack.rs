@@ -7,6 +7,7 @@ use evm::{
 };
 use fp_core::{context::Context, macros::Get};
 use fp_evm::{Log, Vicinity};
+use fp_traits::evm::DecimalsMapping;
 use fp_traits::{account::AccountAsset, evm::BlockHashMapping};
 use fp_utils::timestamp_converter;
 use std::{collections::btree_set::BTreeSet, marker::PhantomData, mem};
@@ -303,8 +304,9 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
     fn transfer(&mut self, transfer: Transfer) -> Result<(), ExitError> {
         let source = C::AddressMapping::convert_to_account_id(transfer.source);
         let target = C::AddressMapping::convert_to_account_id(transfer.target);
+        let value = C::DecimalsMapping::convert_to_native_token(transfer.value);
 
-        C::AccountAsset::transfer(self.ctx, &source, &target, transfer.value.low_u128())
+        C::AccountAsset::transfer(self.ctx, &source, &target, value.low_u128())
             .map_err(|_| ExitError::OutOfFund)
     }
 
