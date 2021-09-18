@@ -9,7 +9,7 @@ pub mod utils;
 
 pub use bnc;
 
-use crate::data_model::{ATxoSID, AnonStateCommitmentData};
+use crate::data_model::{ATxoSID, AnonStateCommitmentData, Memo};
 use crate::{
     data_model::{
         AssetType, AssetTypeCode, AuthenticatedBlock, AuthenticatedTransaction,
@@ -46,6 +46,7 @@ use storage::{
     state::{RocksChainState, RocksState},
     store::RocksStore,
 };
+use zei::anon_xfr::keys::AXfrPubKey;
 use zei::anon_xfr::structs::MTLeafInfo;
 use zei::{
     anon_xfr::{
@@ -858,6 +859,32 @@ impl LedgerState {
         Ok(res)
     }
 
+    /// Get all abars with sid which are associated with a diversified public key
+    #[allow(dead_code)]
+    fn get_owned_abars(
+        &self,
+        addr: &AXfrPubKey,
+    ) -> Vec<(ATxoSID, AnonBlindAssetRecord)> {
+        self.status
+            .ax_utxos
+            .iter()
+            .filter(|(_, axutxo)| &axutxo.public_key == addr)
+            .map(|(sid, record)| (sid.clone(), record.clone()))
+            .collect()
+    }
+
+    /// Get the owner memo of a abar by ATxoSID
+    #[allow(dead_code)]
+    fn get_abar_memo(&self, ax_id: ATxoSID) -> Option<Vec<Memo>> {
+        let txn_location = self.status.ax_txo_to_txn_location.get(&ax_id).unwrap();
+        let authenticated_txn = self.get_transaction(txn_location.0).unwrap();
+        let memo = authenticated_txn.finalized_txn.txn.body.memos;
+        if memo.is_empty() {
+            return None;
+        }
+        Some(memo)
+    }
+
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn get_issuance_num(&self, code: &AssetTypeCode) -> Option<u64> {
@@ -1005,6 +1032,8 @@ pub struct LedgerStatus {
     pub snapshot_path: String,
     utxos: Mapx<TxoSID, Utxo>, // all currently-unspent TXOs
     owned_utxos: Mapx<XfrPublicKey, HashSet<TxoSID>>,
+    /// all owned ax_utxos
+    ax_utxos: Mapx<ATxoSID, AnonBlindAssetRecord>,
     /// all spent TXOs
     pub spent_utxos: Mapx<TxoSID, Utxo>,
     // Map a TXO to its output position in a transaction
@@ -1057,6 +1086,16 @@ impl LedgerStatus {
             .get(addr)
             .map(|v| v.iter().cloned().collect())
             .unwrap_or_default()
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn get_owned_abars_ids(&self, addr: &AXfrPubKey) -> Vec<ATxoSID> {
+        self.ax_utxos
+            .iter()
+            .filter(|(_, axutxo)| &axutxo.public_key == addr)
+            .map(|(sid, _)| sid)
+            .collect()
     }
 
     #[inline(always)]
@@ -1148,6 +1187,7 @@ impl LedgerStatus {
 
     fn create(snapshot_path: &str, snapshot_entries_dir: &str) -> Result<LedgerStatus> {
         let utxos_path = snapshot_entries_dir.to_owned() + "/utxo";
+        let ax_utxos_path = snapshot_entries_dir.to_owned() + "/ax_utxos";
         let spent_utxos_path = snapshot_entries_dir.to_owned() + "/spent_utxos";
         let txo_to_txn_location_path =
             snapshot_entries_dir.to_owned() + "/txo_to_txn_location";
@@ -1170,6 +1210,7 @@ impl LedgerStatus {
             sliding_set: SlidingSet::<[u8; 8]>::new(TRANSACTION_WINDOW_WIDTH as usize),
             utxos: new_mapx!(utxos_path.as_str()),
             owned_utxos: new_mapx!(owned_utxos_path.as_str()),
+            ax_utxos: new_mapx!(ax_utxos_path.as_str()),
             spent_utxos: new_mapx!(spent_utxos_path.as_str()),
             txo_to_txn_location: new_mapx!(txo_to_txn_location_path.as_str()),
             ax_txo_to_txn_location: new_mapx!(atxo_to_txn_location_path.as_str()),

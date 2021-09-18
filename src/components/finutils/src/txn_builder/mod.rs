@@ -511,7 +511,7 @@ impl TransactionBuilder {
         inputs: &[OpenAnonBlindAssetRecord],
         outputs: &[OpenAnonBlindAssetRecord],
         input_keypairs: &[AXfrKeyPair],
-    ) -> Result<&mut Self> {
+    ) -> Result<(&mut Self, AXfrNote)> {
         let mut prng = ChaChaRng::from_seed([0u8; 32]); // TODO: removing this, CRS would be pre generated in a file
         let depth: usize = 41;
         let user_params = UserParams::new(
@@ -525,10 +525,10 @@ impl TransactionBuilder {
             gen_anon_xfr_body(&mut prng, &user_params, inputs, outputs, input_keypairs)
                 .c(d!())?;
         let note = AXfrNote::generate_note_from_body(body, keypairs).c(d!())?;
-        let inp = AnonTransferOps::new(note, self.no_replay_token).c(d!())?;
+        let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
         let op = Operation::TransferAnonAsset(inp);
         self.txn.add_operation(op);
-        Ok(self)
+        Ok((self, note))
     }
 
     /// Add a operation to delegating finddra accmount to a tendermint validator.
