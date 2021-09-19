@@ -32,7 +32,7 @@ use ruc::*;
 use serde::{Deserialize, Serialize};
 use sha2::Digest as _;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     convert::TryFrom,
     env,
     iter::FromIterator,
@@ -372,7 +372,7 @@ impl Staking {
                 let mut addr_map = mem::take(&mut prev.addr_td_to_app)
                     .into_iter()
                     .map(|(addr, pk)| (pk, addr))
-                    .collect::<HashMap<_, _>>();
+                    .collect::<BTreeMap<_, _>>();
                 prev.body.into_iter().for_each(|(k, mut v)| {
                     v.td_power = 0;
                     vs.addr_td_to_app.insert(pnk!(addr_map.remove(&k)), k);
@@ -413,7 +413,7 @@ impl Staking {
                     .iter()
                     .filter(|(_, v)| 0 == v.td_power)
                     .map(|(k, _)| *k)
-                    .collect::<HashSet<_>>()
+                    .collect::<BTreeSet<_>>()
             })
         {
             if let Some(vd) = self.validator_get_current_mut() {
@@ -920,7 +920,7 @@ impl Staking {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn delegation_get_global_principal(&self) -> HashMap<XfrPublicKey, Amount> {
+    pub fn delegation_get_global_principal(&self) -> BTreeMap<XfrPublicKey, Amount> {
         self.delegation_get_global_principal_before_height(self.cur_height)
     }
 
@@ -929,7 +929,7 @@ impl Staking {
     pub fn delegation_get_global_principal_before_height(
         &self,
         h: BlockHeight,
-    ) -> HashMap<XfrPublicKey, Amount> {
+    ) -> BTreeMap<XfrPublicKey, Amount> {
         self.delegation_get_freed_before_height(h)
             .into_iter()
             .map(|(k, d)| (k, d.amount()))
@@ -940,7 +940,7 @@ impl Staking {
     #[allow(missing_docs)]
     pub fn delegation_get_global_principal_with_receiver(
         &self,
-    ) -> HashMap<XfrPublicKey, (Amount, Option<XfrPublicKey>)> {
+    ) -> BTreeMap<XfrPublicKey, (Amount, Option<XfrPublicKey>)> {
         self.delegation_get_global_principal_before_height_with_receiver(self.cur_height)
     }
 
@@ -949,7 +949,7 @@ impl Staking {
     pub fn delegation_get_global_principal_before_height_with_receiver(
         &self,
         h: BlockHeight,
-    ) -> HashMap<XfrPublicKey, (Amount, Option<XfrPublicKey>)> {
+    ) -> BTreeMap<XfrPublicKey, (Amount, Option<XfrPublicKey>)> {
         self.delegation_get_freed_before_height(h)
             .into_iter()
             .map(|(k, d)| (k, (d.amount(), d.receiver_pk)))
@@ -958,7 +958,7 @@ impl Staking {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn delegation_get_global_rewards(&self) -> HashMap<XfrPublicKey, Amount> {
+    pub fn delegation_get_global_rewards(&self) -> BTreeMap<XfrPublicKey, Amount> {
         self.delegation_get_global_rewards_before_height(self.cur_height)
     }
 
@@ -967,7 +967,7 @@ impl Staking {
     pub fn delegation_get_global_rewards_before_height(
         &self,
         h: BlockHeight,
-    ) -> HashMap<XfrPublicKey, Amount> {
+    ) -> BTreeMap<XfrPublicKey, Amount> {
         self.delegation_get_freed_before_height(h)
             .into_iter()
             .filter(|(_, d)| 0 < d.rwd_amount)
@@ -989,7 +989,7 @@ impl Staking {
 
     /// Query all freed delegations.
     #[inline(always)]
-    pub fn delegation_get_freed(&self) -> HashMap<XfrPublicKey, &Delegation> {
+    pub fn delegation_get_freed(&self) -> BTreeMap<XfrPublicKey, &Delegation> {
         self.delegation_get_freed_before_height(self.cur_height)
     }
 
@@ -998,7 +998,7 @@ impl Staking {
     pub fn delegation_get_freed_before_height(
         &self,
         h: BlockHeight,
-    ) -> HashMap<XfrPublicKey, &Delegation> {
+    ) -> BTreeMap<XfrPublicKey, &Delegation> {
         self.di
             .end_height_map
             .range(..=h)
