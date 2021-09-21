@@ -208,13 +208,13 @@ impl EthApi for EthApiImpl {
             nonce,
         } = request;
 
-        let value =
-            <BaseApp as module_evm::Config>::DecimalsMapping::convert_to_native_token(
-                value.unwrap_or_default(),
-            )
-            .map_err(|err| {
-                internal_err(format!("eth_call value convert err: {:?}", err))
-            })?;
+        // let value =
+        //     <BaseApp as module_evm::Config>::DecimalsMapping::convert_to_native_token(
+        //         value.unwrap_or_default(),
+        //     )
+        //     .map_err(|err| {
+        //         internal_err(format!("eth_call value convert err: {:?}", err))
+        //     })?;
 
         // use given gas limit or query current block's limit
         let gas_limit = match gas {
@@ -244,7 +244,7 @@ impl EthApi for EthApiImpl {
                     source: from.unwrap_or_default(),
                     target: to,
                     input: data,
-                    value,
+                    value: value.unwrap_or_default(),
                     gas_limit: gas_limit.as_u64(),
                     gas_price,
                     nonce,
@@ -266,7 +266,7 @@ impl EthApi for EthApiImpl {
                 let create = Create {
                     source: from.unwrap_or_default(),
                     init: data,
-                    value,
+                    value: value.unwrap_or_default(),
                     gas_limit: gas_limit.as_u64(),
                     gas_price,
                     nonce,
@@ -506,13 +506,13 @@ impl EthApi for EthApiImpl {
             nonce: _,
         } = request;
 
-        let value =
-            <BaseApp as module_evm::Config>::DecimalsMapping::convert_to_native_token(
-                value.unwrap_or_default(),
-            )
-            .map_err(|err| {
-                internal_err(format!("eth_estimateGas value convert err: {:?}", err))
-            })?;
+        // let value =
+        //     <BaseApp as module_evm::Config>::DecimalsMapping::convert_to_native_token(
+        //         value.unwrap_or_default(),
+        //     )
+        //     .map_err(|err| {
+        //         internal_err(format!("eth_estimateGas value convert err: {:?}", err))
+        //     })?;
 
         let gas_limit = <BaseApp as module_evm::Config>::BlockGasLimit::get();
 
@@ -533,7 +533,7 @@ impl EthApi for EthApiImpl {
                     source: from.unwrap_or_default(),
                     target: to,
                     input: data,
-                    value,
+                    value: value.unwrap_or_default(),
                     gas_limit: gas_limit.as_u64(),
                     gas_price: None,
                     nonce: None,
@@ -555,7 +555,7 @@ impl EthApi for EthApiImpl {
                 let create = Create {
                     source: from.unwrap_or_default(),
                     init: data,
-                    value,
+                    value: value.unwrap_or_default(),
                     gas_limit: gas_limit.as_u64(),
                     gas_price: None,
                     nonce: None,
