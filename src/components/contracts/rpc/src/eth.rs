@@ -208,14 +208,6 @@ impl EthApi for EthApiImpl {
             nonce,
         } = request;
 
-        // let value =
-        //     <BaseApp as module_evm::Config>::DecimalsMapping::convert_to_native_token(
-        //         value.unwrap_or_default(),
-        //     )
-        //     .map_err(|err| {
-        //         internal_err(format!("eth_call value convert err: {:?}", err))
-        //     })?;
-
         // use given gas limit or query current block's limit
         let gas_limit = match gas {
             Some(amount) => amount,
@@ -505,14 +497,6 @@ impl EthApi for EthApiImpl {
             data,
             nonce: _,
         } = request;
-
-        // let value =
-        //     <BaseApp as module_evm::Config>::DecimalsMapping::convert_to_native_token(
-        //         value.unwrap_or_default(),
-        //     )
-        //     .map_err(|err| {
-        //         internal_err(format!("eth_estimateGas value convert err: {:?}", err))
-        //     })?;
 
         let gas_limit = <BaseApp as module_evm::Config>::BlockGasLimit::get();
 
