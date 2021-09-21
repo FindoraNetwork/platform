@@ -737,7 +737,7 @@ pub fn gen_oabar_add_op(
     let mt_leaf_info = ledger.get_abar_proof(axtxo_abar[0].0).c(d!())?;
     
     let oabar_in_builder = OpenAnonBlindAssetRecordBuilder::from_abar(&axtxo_abar[0].1,
-        owner_memo[0], //TODO - resolve expected struct `OwnerMemo`, found struct `Memo`
+        owner_memo,
         &from,
         &from_secret_key,
     )
@@ -763,7 +763,7 @@ pub fn gen_oabar_add_op(
         &[oabar_out],
         &[from],
     )
-    .c(d!())?;
+    .c(d!())?; //TODO later - support multiple inputs-outputs
 
     send_tx(&builder.take_transaction()).c(d!())?;
     Ok(())
