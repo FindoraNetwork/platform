@@ -449,3 +449,27 @@ subcommands:
             required: true
   - gen-eth-key:
       about: Generate an Ethereum address
+  - anon-transfer:
+      about: Perform Anonymous Transfer
+      args:
+        - axfr-secretkey:
+            help: Axfr secret key
+            short: s
+            long: axfr-secretkey
+            takes_value: true
+            value_name: SECRET KEY
+            required: true
+        - decryption-key:
+            help: Decryption Key for anon transfer
+            short: d
+            long: decryption-key
+            takes_value: true
+            value_name: DECRYPTION KEY
+            required: true
+        - amount:
+            help: how much units to transfer
+            short: n
+            long: amount
+            takes_value: true
+            value_name: Amount
+            required: true

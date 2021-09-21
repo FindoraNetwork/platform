@@ -29,6 +29,7 @@ use utils::{
     parse_td_validator_keys,
 };
 use zei::anon_xfr::structs::AnonBlindAssetRecord;
+use zei::anon_xfr::structs::OpenAnonBlindAssetRecordBuilder;
 use zei::{
     setup::PublicParams,
     xfr::{
@@ -702,6 +703,46 @@ pub fn convert_bar2abar(
     let abar = utils::generate_bar2abar_op(&from, &to, TxoSID(sid), &oar, &enc_key)?;
 
     Ok(abar)
+}
+
+/// Generate OABAR and add anonymous transfer operation
+pub fn gen_oabar_add_op(
+    axfr_secret_key: &str,
+    dec_key: &str,
+    amount: &str,
+) -> Result<()> {
+
+    //let from = axfr_secret_key.zei_from_bytes();
+    //let from_secret_key = base64::decode(dec_key.zei_from_bytes());
+    let from = wallet::anon_secret_key_from_base64(axfr_secret_key)
+        .c(d!("invalid 'axfr-secret-key'"))?;
+    let from_secret_key = wallet::x_secret_key_from_base64(dec_key)
+        .c(d!("invalid owner_enc_key"))?;
+    let axfr_amount = amount.parse::<u64>().c(d!("error parsing amount"))?;
+
+    let diversified_from_pub_key = from.pub_key().randomize(r);
+
+    let mut oabar_in = OpenAnonBlindAssetRecordBuilder::new();
+    //let oabar_out = OpenAnonBlindAssetRecordBuilder::new();
+    
+    oabar_in.from_abar(record,
+        owner_memo,
+        key_pair,
+        dec_key,
+    )
+    .c(d!())?;
+
+    let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
+    //oabar_in.oabar
+    let _ = builder
+    .add_operation_anon_transfer(
+        oabar_in.oabar,
+        oabar_out,
+        key_pair,
+    )
+    .c(d!())?;
+
+    send_tx(&builder.take_transaction()).c(d!())?;
 }
 
 /// Return the built version.

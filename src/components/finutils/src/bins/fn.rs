@@ -411,6 +411,29 @@ fn run() -> Result<()> {
             "Encryption Key: {}",
             base64::encode(public_key.zei_to_bytes().as_slice())
         );
+    } else if let Some(m) = matches.subcommand_matches("anon-transfer") {
+        //let mut prng = ChaChaRng::from_entropy();
+        //let keypair = AXfrKeyPair::generate(&mut prng);
+        let axfr_secret_key  = m.value_of("axfr-secret-key");
+        let dec_key = m.value_of("decryption-key");
+        let amount = m.value_of("n");
+    
+        
+        //let abar_in = m.value_of("input-abars"); // take private key and randomizer
+        //let abar_out = m.value_of("output-abars"); // public key and amount
+        //let dec_key = XSecretKey::new(&mut prng); // todo - take as input
+    
+    
+        if axfr_secret_key.is_none() || dec_key.is_none() || amount.is_none() {
+            println!("{}", m.usage());
+        } else {
+            common::gen_oabar_add_op(
+                axfr_secret_key.unwrap(),
+                dec_key.unwrap(),
+                amount.unwrap(),
+            )
+            .c(d!())?;
+        }       
     } else {
         println!("{}", matches.usage());
     }
