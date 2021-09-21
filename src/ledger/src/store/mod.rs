@@ -9,7 +9,7 @@ pub mod utils;
 
 pub use bnc;
 
-use crate::data_model::{ATxoSID, AnonStateCommitmentData, Memo};
+use crate::data_model::{ATxoSID, AnonStateCommitmentData};
 use crate::{
     data_model::{
         AssetType, AssetTypeCode, AuthenticatedBlock, AuthenticatedTransaction,
@@ -17,7 +17,7 @@ use crate::{
         FinalizedBlock, FinalizedTransaction, IssuerKeyPair, IssuerPublicKey,
         OutputPosition, StateCommitmentData, Transaction, TransferType, TxnEffect,
         TxnSID, TxnTempSID, TxoSID, UnAuthenticatedUtxo, Utxo, UtxoStatus,
-        BLACK_HOLE_PUBKEY,
+        BLACK_HOLE_PUBKEY, Operation
     },
     staking::{Amount, Power, Staking, TendermintAddrRef, FF_PK_LIST, FRA_TOTAL_AMOUNT},
 };
@@ -875,14 +875,35 @@ impl LedgerState {
 
     /// Get the owner memo of a abar by ATxoSID
     #[allow(dead_code)]
-    fn get_abar_memo(&self, ax_id: ATxoSID) -> Option<Vec<Memo>> {
+    fn get_abar_memo(&self, ax_id: ATxoSID) -> Option<OwnerMemo> {
         let txn_location = self.status.ax_txo_to_txn_location.get(&ax_id).unwrap();
         let authenticated_txn = self.get_transaction(txn_location.0).unwrap();
-        let memo = authenticated_txn.finalized_txn.txn.body.memos;
+        let memo: Vec<OwnerMemo> = authenticated_txn
+            .finalized_txn
+            .txn
+            .body
+            .operations
+            .iter()
+            .filter_map(|o| {
+            match o {
+                Operation::BarToAbar(body) => {
+                    Some(body.note.body.memo.clone())
+                },
+                Operation::TransferAnonAsset(body) => {
+                    body.note.body.owner_memos
+                        .get(txn_location.1.0)
+                        .and_then(|f| {
+                        Some(f.clone())
+                    })
+                },
+                _ => { None },
+            }
+        }).collect::<Vec<OwnerMemo>>();
+
         if memo.is_empty() {
             return None;
         }
-        Some(memo)
+        Some(memo.first().unwrap().clone())
     }
 
     #[inline(always)]

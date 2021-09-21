@@ -1191,7 +1191,7 @@ impl BarToAbarOps {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AnonTransferOps {
     // The note which holds the signatures, the ZKF and memo
-    note: AXfrNote,
+    pub(crate) note: AXfrNote,
     nonce: NoReplayToken,
 }
 impl AnonTransferOps {
