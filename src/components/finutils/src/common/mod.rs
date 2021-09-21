@@ -10,6 +10,9 @@ pub mod evm;
 pub mod utils;
 
 use crate::api::DelegationInfo;
+use crate::txn_builder::TransactionBuilder;
+use crate::common::utils::{new_tx_builder, send_tx};
+use crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey};
 use globutils::wallet;
 use lazy_static::lazy_static;
 use ledger::data_model::TxoSID;
@@ -20,16 +23,19 @@ use ledger::{
         td_pubkey_to_td_addr, td_pubkey_to_td_addr_bytes, PartialUnDelegation,
         TendermintAddrRef,
     },
+    store::LedgerState,
 };
 use ruc::*;
+use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
+use zei::anon_xfr::keys::AXfrKeyPair;
 use std::{env, fs};
 use tendermint::PrivateKey;
 use utils::{
     get_block_height, get_local_block_height, get_validator_detail,
     parse_td_validator_keys,
 };
-use zei::anon_xfr::structs::AnonBlindAssetRecord;
-use zei::anon_xfr::structs::OpenAnonBlindAssetRecordBuilder;
+use zei::anon_xfr::structs::{AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder};
 use zei::{
     setup::PublicParams,
     xfr::{
@@ -712,37 +718,55 @@ pub fn gen_oabar_add_op(
     amount: &str,
 ) -> Result<()> {
 
-    //let from = axfr_secret_key.zei_from_bytes();
-    //let from_secret_key = base64::decode(dec_key.zei_from_bytes());
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let from = wallet::anon_secret_key_from_base64(axfr_secret_key)
         .c(d!("invalid 'axfr-secret-key'"))?;
     let from_secret_key = wallet::x_secret_key_from_base64(dec_key)
-        .c(d!("invalid owner_enc_key"))?;
+        .c(d!("invalid dec_key"))?;
     let axfr_amount = amount.parse::<u64>().c(d!("error parsing amount"))?;
+    let to = AXfrKeyPair::generate(&mut prng);
+    let to_dec_key = XSecretKey::new(&mut prng);
+    let enc_key_out = XPublicKey::from(&to_dec_key);
 
+    let r = JubjubScalar::random(&mut prng); //TODO - import JubjubScalar
     let diversified_from_pub_key = from.pub_key().randomize(r);
-
-    let mut oabar_in = OpenAnonBlindAssetRecordBuilder::new();
-    //let oabar_out = OpenAnonBlindAssetRecordBuilder::new();
     
-    oabar_in.from_abar(record,
-        owner_memo,
-        key_pair,
-        dec_key,
+    let mut ledger = LedgerState::tmp_ledger(); //TODO - replace tmp with actual
+    let axtxo_abar = ledger.get_owned_abars(&diversified_from_pub_key);
+    let owner_memo = ledger.get_abar_memo(axtxo_abar[0].0).c(d!())?;
+    let mt_leaf_info = ledger.get_abar_proof(axtxo_abar[0].0).c(d!())?;
+    
+    let oabar_in_builder = OpenAnonBlindAssetRecordBuilder::from_abar(&axtxo_abar[0].1,
+        owner_memo[0], //TODO - resolve expected struct `OwnerMemo`, found struct `Memo`
+        &from,
+        &from_secret_key,
     )
-    .c(d!())?;
+    .unwrap()
+    .mt_leaf_info(mt_leaf_info)
+    .build()
+    .unwrap();
 
+    let oabar_in = oabar_in_builder.oabar; //TODO - field `oabar` of struct `OpenAnonBlindAssetRecordBuilder` is private field
+
+    let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
+    .amount(axfr_amount)
+    .pub_key(to.pub_key())
+    .finalize(&mut prng, &enc_key_out)
+    .unwrap()
+    .build()
+    .unwrap();
+    
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
-    //oabar_in.oabar
     let _ = builder
     .add_operation_anon_transfer(
-        oabar_in.oabar,
-        oabar_out,
-        key_pair,
+        &[oabar_in],
+        &[oabar_out],
+        &[from],
     )
     .c(d!())?;
 
     send_tx(&builder.take_transaction()).c(d!())?;
+    Ok(())
 }
 
 /// Return the built version.
