@@ -15,7 +15,7 @@ use fp_rpc_core::{
 };
 use fp_rpc_server::{rpc_handler, start_http, start_ws, RpcHandler, RpcMiddleware};
 use fp_utils::ecdsa::SecpPair;
-use jsonrpc_core::*;
+use jsonrpc_core::types::error::{Error, ErrorCode};
 use log::error;
 use parking_lot::RwLock;
 use rustc_hex::ToHex;
