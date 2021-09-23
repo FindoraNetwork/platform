@@ -377,11 +377,11 @@ mod config {
 
             let init = SubCommand::with_name("init")
                     .about("Initialize the configurations of findorad")
-                    .arg_from_usage("--dev-net 'Initialize for Findora Local DevNet.'")
-                    .arg_from_usage("--test-net 'Initialize for Findora TestNet.'")
-                    .arg_from_usage("--main-net 'Initialize for Findora MainNet.'")
-                    .arg_from_usage("--qa01-net 'Initialize for Findora QA01.'")
-                    .group(ArgGroup::with_name("environment").args(&["dev-net", "test-net", "main-net", "qa01-net"]))
+                    .arg_from_usage("--devnet 'Initialize for Findora Local DevNet.'")
+                    .arg_from_usage("--testnet 'Initialize for Findora TestNet.'")
+                    .arg_from_usage("--mainnet 'Initialize for Findora MainNet.'")
+                    .arg_from_usage("--qa01 'Initialize for Findora QA01.'")
+                    .group(ArgGroup::with_name("environment").args(&["devnet", "testnet", "mainnet", "qa01"]))
                     .arg_from_usage(
                         "-b, --base-dir=[DIR] 'The root directory for tendermint config, aka $TENDERMINT_HOME'",
                     );
@@ -478,13 +478,13 @@ mod config {
                     .unwrap_or_else(|_| format!("{}/__findora__", &tdir))
             });
 
-        let init_mode = if m.is_present("dev-net") {
+        let init_mode = if m.is_present("devnet") {
             InitMode::Dev
-        } else if m.is_present("test-net") {
+        } else if m.is_present("testnet") {
             InitMode::Testnet
-        } else if m.is_present("main-net") {
+        } else if m.is_present("mainnet") {
             InitMode::Mainnet
-        } else if m.is_present("qa01-net") {
+        } else if m.is_present("qa01") {
             InitMode::Qa01
         } else {
             InitMode::Dev
