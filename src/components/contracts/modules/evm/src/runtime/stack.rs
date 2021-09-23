@@ -182,7 +182,8 @@ impl<'context, 'vicinity, 'config, C: Config> Backend
         let account = App::<C>::account_basic(self.ctx, &address);
 
         evm::backend::Basic {
-            balance: account.balance,
+            balance: C::DecimalsMapping::from_native_token(account.balance)
+                .unwrap_or_default(),
             nonce: account.nonce,
         }
     }
