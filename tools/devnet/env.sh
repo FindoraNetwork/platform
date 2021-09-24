@@ -22,7 +22,7 @@ MNEMONIC="zoo nerve assault talk depend approve mercy surge bicycle ridge dismis
 PRIV_KEY="tffuZXQRo4XZcD7Xwm09JOoIJT6vdRe_8gZLxWRuB9U="
 
 # other
-export BLOCK_INTERVAL="6"
+export BLOCK_INTERVAL="5"
 
 # show envs
 if [ "$1" == "s" ]; then
