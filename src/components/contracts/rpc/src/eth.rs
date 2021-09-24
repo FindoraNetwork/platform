@@ -902,7 +902,7 @@ fn rich_block_build(
             gas_limit: block.header.gas_limit,
             extra_data: Bytes(block.header.extra_data.clone()),
             logs_bloom: Some(block.header.logs_bloom),
-            timestamp: U256::from(block.header.timestamp / 1000),
+            timestamp: U256::from(block.header.timestamp),
             difficulty: block.header.difficulty,
             total_difficulty: U256::zero(),
             seal_fields: vec![
