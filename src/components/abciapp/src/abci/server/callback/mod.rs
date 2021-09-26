@@ -8,7 +8,10 @@ use crate::{
     abci::{
         config::global_cfg::CFG, server::ABCISubmissionServer, staking, IN_SAFE_ITV,
     },
-    api::{query_server::BLOCK_CREATED, submission_server::convert_tx},
+    api::{
+        query_server::BLOCK_CREATED,
+        submission_server::{convert_tx, try_tx_catalog, TxCatalog},
+    },
 };
 use abci::{
     Application, RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx,
@@ -143,33 +146,49 @@ pub fn deliver_tx(
     req: &RequestDeliverTx,
 ) -> ResponseDeliverTx {
     let mut resp = ResponseDeliverTx::new();
-    if let Some(tx) = convert_tx(req.get_tx()) {
-        if !is_coinbase_tx(&tx)
-            && tx.is_basic_valid(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed))
-        {
-            if *KEEP_HIST {
-                // set attr(tags) if any, only needed on a fullnode
-                let attr = utils::gen_tendermint_attr(&tx);
-                if !attr.is_empty() {
-                    resp.set_events(attr);
+    let tx_catalog = try_tx_catalog(req.get_tx());
+    match tx_catalog {
+        TxCatalog::FindoraTx => {
+            if let Some(tx) = convert_tx(req.get_tx()) {
+                if !is_coinbase_tx(&tx)
+                    && tx.is_basic_valid(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed))
+                {
+                    if *KEEP_HIST {
+                        // set attr(tags) if any, only needed on a fullnode
+                        let attr = utils::gen_tendermint_attr(&tx);
+                        if !attr.is_empty() {
+                            resp.set_events(attr);
+                        }
+                    }
+
+                    if s.la.write().cache_transaction(tx.clone()).is_ok() {
+                        if is_convert_tx(&tx)
+                            && s.account_base_app
+                                .write()
+                                .deliver_findora_tx(&tx)
+                                .is_err()
+                        {
+                            resp.code = 1;
+                            resp.log = String::from("Failed to deliver transaction!");
+                        }
+                        return resp;
+                    }
                 }
+
+                resp.code = 1;
+                resp.log = String::from("Failed to deliver transaction!");
             }
 
-            if s.la.write().cache_transaction(tx.clone()).is_ok() {
-                if is_convert_tx(&tx)
-                    && s.account_base_app.write().deliver_findora_tx(&tx).is_err()
-                {
-                    resp.code = 1;
-                    resp.log = String::from("Failed to deliver transaction!");
-                }
-                return resp;
-            }
+            resp
         }
-        resp.code = 1;
-        resp.log = String::from("Failed to deliver transaction!");
-        resp
-    } else {
-        s.account_base_app.write().deliver_tx(req)
+        TxCatalog::EvmTx => {
+            return s.account_base_app.write().deliver_tx(req);
+        }
+        TxCatalog::Unknown => {
+            resp.code = 1;
+            resp.log = String::from("Failed to deliver transaction!");
+            resp
+        }
     }
 }
 

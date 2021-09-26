@@ -68,8 +68,8 @@ impl<C: Config> AccountAsset<Address> for App<C> {
     }
 
     fn burn(ctx: &Context, target: &Address, balance: u128) -> Result<()> {
-        let mut target_account: SmartAccount =
-            Self::account_of(ctx, target).c(d!("account does not exist"))?;
+        let mut target_account: SmartAccount = Self::account_of(ctx, target)
+            .c(d!(format!("account = {} does not exist", target)))?;
         target_account.balance = target_account
             .balance
             .checked_sub(balance)

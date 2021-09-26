@@ -11,6 +11,7 @@ use fp_types::{
     actions::ethereum::Action as EthereumAction, actions::evm::Call, actions::Action,
     assemble::UncheckedTransaction,
 };
+use fp_utils::tx::EvmRawTxWrapper;
 use module_evm::storage::*;
 use utils::*;
 
@@ -100,9 +101,11 @@ fn erc20_works() {
 
 fn test_deploy_check_tx() {
     let mut req = RequestCheckTx::default();
-    req.tx =
+    let tx =
         serde_json::to_vec(&build_erc20_deploy_transaction("erc20", "FRA", 0.into()).0)
             .unwrap();
+    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
+    req.tx = txn_with_tag;
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -115,7 +118,9 @@ fn test_deploy_deliver_tx() -> (H160, ethabi::Contract) {
     let mut req = RequestDeliverTx::default();
     let (tx, contract_abi) = build_erc20_deploy_transaction("erc20", "FRA", 0.into());
 
-    req.tx = serde_json::to_vec(&tx).unwrap();
+    let tx = serde_json::to_vec(&tx).unwrap();
+    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
+    req.tx = txn_with_tag;
     let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -153,13 +158,15 @@ fn test_deploy_commit(contract_address: H160) {
 
 fn test_mint_check_tx(contract: ERC20) {
     let mut req = RequestCheckTx::default();
-    req.tx = serde_json::to_vec(&build_erc20_mint_transaction(
+    let tx = serde_json::to_vec(&build_erc20_mint_transaction(
         contract,
         BOB_ECDSA.address,
         10000.into(),
         1.into(),
     ))
     .unwrap();
+    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
+    req.tx = txn_with_tag;
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -170,13 +177,15 @@ fn test_mint_check_tx(contract: ERC20) {
 
 fn test_mint_deliver_tx(contract: ERC20) {
     let mut req = RequestDeliverTx::default();
-    req.tx = serde_json::to_vec(&build_erc20_mint_transaction(
+    let tx = serde_json::to_vec(&build_erc20_mint_transaction(
         contract,
         BOB_ECDSA.address,
         10000.into(),
         1.into(),
     ))
     .unwrap();
+    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
+    req.tx = txn_with_tag;
     let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -189,7 +198,7 @@ fn test_mint_deliver_tx(contract: ERC20) {
 
 fn test_transfer_check_tx(contract: ERC20) {
     let mut req = RequestCheckTx::default();
-    req.tx = serde_json::to_vec(&build_erc20_transfer_transaction(
+    let tx = serde_json::to_vec(&build_erc20_transfer_transaction(
         contract,
         ALICE_ECDSA.address,
         100.into(),
@@ -198,6 +207,8 @@ fn test_transfer_check_tx(contract: ERC20) {
         BOB_ECDSA.private_key,
     ))
     .unwrap();
+    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
+    req.tx = txn_with_tag;
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -208,7 +219,7 @@ fn test_transfer_check_tx(contract: ERC20) {
 
 fn test_transfer_deliver_tx(contract: ERC20) {
     let mut req = RequestDeliverTx::default();
-    req.tx = serde_json::to_vec(&build_erc20_transfer_transaction(
+    let tx = serde_json::to_vec(&build_erc20_transfer_transaction(
         contract,
         ALICE_ECDSA.address,
         100.into(),
@@ -217,6 +228,8 @@ fn test_transfer_deliver_tx(contract: ERC20) {
         BOB_ECDSA.private_key,
     ))
     .unwrap();
+    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
+    req.tx = txn_with_tag;
     let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -229,9 +242,11 @@ fn test_transfer_deliver_tx(contract: ERC20) {
 
 fn test_balance_of_deliver_tx(contract: ERC20, who: H160) -> U256 {
     let mut req = RequestDeliverTx::default();
-    req.tx =
+    let tx =
         serde_json::to_vec(&build_erc20_balance_of_transaction(contract, who, 2.into()))
             .unwrap();
+    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
+    req.tx = txn_with_tag;
     let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
         resp.code, 0,

@@ -3,6 +3,7 @@
 
 pub mod ecdsa;
 pub mod hashing;
+pub mod tx;
 
 use primitive_types::H160;
 
