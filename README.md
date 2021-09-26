@@ -1,4 +1,3 @@
-![](https://img.shields.io/badge/Project-Findora-brightgreen)
 ![](https://tokei.rs/b1/github/FindoraNetwork/platform)
 ![GitHub top language](https://img.shields.io/github/languages/top/FindoraNetwork/platform)
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/FindoraNetwork/platform/Develop)
