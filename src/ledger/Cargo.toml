@@ -35,9 +35,9 @@ indexmap = { version = "1.6.2", features = ["serde"] }
 fp-types = { path = "../components/contracts/primitives/types" }
 
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4c" }
-zeiutils = { package = "utils", git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4c" }
-bulletproofs = { package = "bulletproofs", git = "ssh://git@github.com/FindoraNetwork/bulletproofs", branch = "batch_verification", features = ["yoloproofs"] }
+zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4d" }
+zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4d" }
+bulletproofs = { package = "bulletproofs", git = "https://github.com/FindoraNetwork/bp", branch = "batch_verification", features = ["yoloproofs"] }
 bnc = { git = "https://github.com/FindoraNetwork/BNC.git", tag = "v0.2.0c", default-features = false }
 
 globutils = { path = "../libs/globutils" }

@@ -41,7 +41,7 @@ percent-encoding = "2.1.0"
 
 nix = "0.22.1"
 
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", tag = "v0.1.4c" }
+zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4d" }
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
 
