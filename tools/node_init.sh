@@ -67,8 +67,10 @@ set_env() {
         | jq > ~/.tendermint/config/genesis.json || exit 1
 }
 
-check_env
-set_env
+if [[ "" == $2 ]]; then
+    check_env
+    set_env
+fi
 
 ###################
 # Run local node #
@@ -83,4 +85,5 @@ tendermint node >tendermint.log 2>&1 &
 echo "**** ABCId log path: /tmp/abcid.log"
 echo "**** Tendermint log path: /tmp/tendermint.log"
 
-curl $serv_url:8669/version
+sleep 0.5
+curl localhost:8669/version

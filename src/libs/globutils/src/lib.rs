@@ -27,12 +27,12 @@ pub fn http_get_request(query: &str) -> StdResult<String, attohttpc::Error> {
 
 /// Create a new temporary file for a `findora_ledger`
 pub fn fresh_tmp_dir() -> PathBuf {
-    let base_dir = std::env::temp_dir();
-    let base_dirname = "findora_ledger";
+    let basedir = PathBuf::from("/tmp");
+    let basedirname = "findora_ledger";
     let mut dirname = None;
     while dirname.is_none() {
-        let name = std::format!("{}_{}", base_dirname, rand::random::<u64>());
-        let path = base_dir.join(name);
+        let name = std::format!("{}_{}", basedirname, rand::random::<u64>());
+        let path = basedir.join(name);
         let _ = fs::remove_dir_all(&path);
         if fs::create_dir(&path).is_ok() {
             dirname = Some(path);

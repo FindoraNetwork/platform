@@ -2,25 +2,27 @@
 //! data sources for the query api
 //!
 
+use globutils::wallet;
 use lazy_static::lazy_static;
 use ledger::{
     data_model::{
         AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Operation, Transaction,
-        TransferAsset, TxOutput, TxnSID, TxoRef, TxoSID, XfrAddress,
+        TxOutput, TxnSID, TxoSID, XfrAddress,
     },
-    staking::{ops::mint_fra::MintEntry, BlockHeight},
+    staking::{
+        ops::mint_fra::MintEntry, Amount, BlockHeight, DelegationRwdDetail,
+        CHAN_D_AMOUNT_HIST, CHAN_D_RWD_HIST, CHAN_GLOB_RATE_HIST, CHAN_V_SELF_D_HIST,
+    },
     store::{
-        bnc::{new_mapx, Mapx},
+        bnc::{self, new_mapx, Mapx},
         flush_data, LedgerState,
     },
 };
 use parking_lot::{Condvar, Mutex, RwLock};
 use ruc::*;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashSet, env, fs, io::ErrorKind, ops::Deref, path::Path, sync::Arc,
-};
-use zei::xfr::structs::OwnerMemo;
+use std::{collections::HashSet, fs, io::ErrorKind, sync::Arc};
+use zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo};
 
 lazy_static! {
     /// the query_server will be notified every time
@@ -37,10 +39,10 @@ type Issuances = Vec<(TxOutput, Option<OwnerMemo>)>;
 /// data from ledgerState
 #[derive(Serialize, Deserialize)]
 pub struct QueryServer {
-    snapshot_path: String,
+    pub(crate) basedir: String,
+    snapshot_file: String,
     #[serde(skip)]
-    committed_state: Option<Arc<RwLock<LedgerState>>>,
-    addresses_to_utxos: Mapx<XfrAddress, HashSet<TxoSID>>,
+    pub(crate) state: Option<Arc<RwLock<LedgerState>>>,
     related_transactions: Mapx<XfrAddress, HashSet<TxnSID>>, // Set of transactions related to a ledger address
     related_transfers: Mapx<AssetTypeCode, HashSet<TxnSID>>, // Set of transfer transactions related to an asset code
     claim_hist_txns: Mapx<XfrAddress, Vec<TxnSID>>, // List of claim transactions related to a ledger address
@@ -53,6 +55,25 @@ pub struct QueryServer {
     txo_to_txnid: Mapx<TxoSID, TxnIDHash>, // txo(spent, unspent) to authenticated txn (sid, hash)
     txn_sid_to_hash: Mapx<TxnSID, String>, // txn sid to txn hash
     txn_hash_to_sid: Mapx<String, TxnSID>, // txn hash to txn sid
+
+    // global rate history
+    pub(crate) staking_global_rate_hist: Mapx<BlockHeight, [u128; 2]>,
+
+    // - self-delegation amount history
+    //   - `NonConfidential` FRAs amount
+    //   - only valid for validators
+    pub(crate) staking_self_delegation_hist:
+        Mapx<XfrPublicKey, Mapx<BlockHeight, Amount>>,
+
+    // - delegation amount per block height
+    // - only valid for a validator
+    pub(crate) staking_delegation_amount_hist:
+        Mapx<XfrPublicKey, Mapx<BlockHeight, Amount>>,
+
+    // rewards history, used on some pulic nodes, such as fullnode
+    pub(crate) staking_delegation_rwd_hist:
+        Mapx<XfrPublicKey, Mapx<BlockHeight, DelegationRwdDetail>>,
+
     app_block_cnt: usize,
 }
 
@@ -60,26 +81,31 @@ impl QueryServer {
     /// create query server
     pub fn new(
         ledger: Arc<RwLock<LedgerState>>,
-        base_dir: Option<&Path>,
+        basedir: Option<&str>,
     ) -> Result<QueryServer> {
-        let base_dir = if let Some(path) = base_dir {
-            path.to_str().unwrap().to_string() + "/query_server"
+        let basedir = if let Some(path) = basedir {
+            path.to_owned()
         } else {
-            pnk!(env::var("tmp_dir").c(d!())) + "/test_query_server"
+            bnc::clear();
+            globutils::fresh_tmp_dir()
+                .join("/test_query_server")
+                .to_string_lossy()
+                .into_owned()
         };
 
-        let snapshot_path = base_dir.to_string() + "/query_server";
+        fs::create_dir_all(&basedir).c(d!())?;
 
-        match fs::read_to_string(&snapshot_path) {
+        match fs::read_to_string(format!("{}/query_server", &basedir)) {
             Ok(s) => serde_json::from_str(&s).c(d!()).map(|mut r: QueryServer| {
-                r.committed_state = Some(ledger);
+                r.basedir = basedir;
+                r.state = Some(ledger);
                 r
             }),
             Err(e) => {
                 if ErrorKind::NotFound != e.kind() {
                     Err(eg!(e))
                 } else {
-                    Ok(Self::create(ledger, base_dir, snapshot_path))
+                    Ok(Self::create(ledger, &basedir, "query_server"))
                 }
             }
         }
@@ -87,64 +113,61 @@ impl QueryServer {
 
     fn create(
         ledger: Arc<RwLock<LedgerState>>,
-        base_dir: String,
-        snapshot_path: String,
+        basedir: &str,
+        snapshot_file: &str,
     ) -> QueryServer {
-        let addresses_to_utxos_path = base_dir.to_string() + "/addresses_to_utxos";
-        let related_transactions_path = base_dir.to_string() + "/related_transactions";
-        let related_transfers_path = base_dir.to_string() + "/related_transfers";
-        let claim_hist_txns_path = base_dir.to_string() + "/claim_hist_txns";
-        let coinbase_oper_hist_path = base_dir.to_string() + "/coinbase_oper_hist";
-        let owner_memos_path = base_dir.to_string() + "/owner_memos";
-        let created_assets_path = base_dir.to_string() + "/created_assets";
-        let issuances_path = base_dir.to_string() + "/issuances";
-        let token_code_issuances_path = base_dir.to_string() + "/token_code_issuances";
-        let utxos_to_map_index_path = base_dir.to_string() + "/utxos_to_map_index";
-        let txo_to_txnid_path = base_dir.to_string() + "/txo_to_txnid";
-        let txn_sid_to_hash_path = base_dir.to_string() + "/txn_sid_to_hash";
-        let txn_hash_to_sid_path = base_dir + "/txn_hash_to_sid";
-
         QueryServer {
-            committed_state: Some(ledger),
-            snapshot_path,
-            addresses_to_utxos: new_mapx!(addresses_to_utxos_path.as_str()),
-            related_transactions: new_mapx!(related_transactions_path.as_str()),
-            related_transfers: new_mapx!(related_transfers_path.as_str()),
-            claim_hist_txns: new_mapx!(claim_hist_txns_path.as_str()),
-            coinbase_oper_hist: new_mapx!(coinbase_oper_hist_path.as_str()),
-            owner_memos: new_mapx!(owner_memos_path.as_str()),
-            created_assets: new_mapx!(created_assets_path.as_str()),
-            issuances: new_mapx!(issuances_path.as_str()),
-            token_code_issuances: new_mapx!(token_code_issuances_path.as_str()),
-            utxos_to_map_index: new_mapx!(utxos_to_map_index_path.as_str()),
-            txo_to_txnid: new_mapx!(txo_to_txnid_path.as_str()),
-            txn_sid_to_hash: new_mapx!(txn_sid_to_hash_path.as_str()),
-            txn_hash_to_sid: new_mapx!(txn_hash_to_sid_path.as_str()),
+            basedir: basedir.to_owned(),
+            state: Some(ledger),
+            snapshot_file: snapshot_file.to_owned(),
+            related_transactions: new_mapx!("query_server_subdata/related_transactions"),
+            related_transfers: new_mapx!("query_server_subdata/related_transfers"),
+            claim_hist_txns: new_mapx!("query_server_subdata/claim_hist_txns"),
+            coinbase_oper_hist: new_mapx!("query_server_subdata/coinbase_oper_hist"),
+            owner_memos: new_mapx!("query_server_subdata/owner_memos"),
+            created_assets: new_mapx!("query_server_subdata/created_assets"),
+            issuances: new_mapx!("query_server_subdata/issuances"),
+            token_code_issuances: new_mapx!("query_server_subdata/token_code_issuances"),
+            utxos_to_map_index: new_mapx!("query_server_subdata/utxos_to_map_index"),
+            txo_to_txnid: new_mapx!("query_server_subdata/txo_to_txnid"),
+            txn_sid_to_hash: new_mapx!("query_server_subdata/txn_sid_to_hash"),
+            txn_hash_to_sid: new_mapx!("query_server_subdata/txn_hash_to_sid"),
+            staking_global_rate_hist: new_mapx!(
+                "query_server_subdata/staking_rate_hist"
+            ),
+            staking_self_delegation_hist: new_mapx!(
+                "query_server_subdata/staking_self_delegation_hist"
+            ),
+            staking_delegation_amount_hist: new_mapx!(
+                "query_server_subdata/staking_delegation_amount_hist"
+            ),
+            staking_delegation_rwd_hist: new_mapx!(
+                "query_server_subdata/staking_rwd_hist"
+            ),
             app_block_cnt: 0,
         }
     }
 
     /// Returns the set of records issued by a certain key.
+    #[inline(always)]
     pub fn get_issued_records(
         &self,
         issuer: &IssuerPublicKey,
     ) -> Option<Vec<(TxOutput, Option<OwnerMemo>)>> {
-        self.issuances
-            .get(issuer)
-            .map(|recs| recs.deref().iter().map(|rec| rec.deref().clone()).collect())
+        self.issuances.get(issuer)
     }
 
     /// Returns the set of records issued by a certain token code.
+    #[inline(always)]
     pub fn get_issued_records_by_code(
         &self,
         code: &AssetTypeCode,
     ) -> Option<Vec<(TxOutput, Option<OwnerMemo>)>> {
-        self.token_code_issuances
-            .get(code)
-            .map(|recs| recs.deref().iter().map(|rec| rec.deref().clone()).collect())
+        self.token_code_issuances.get(code)
     }
 
     /// return `DefineAsset` according to `IssuerPublicKey`
+    #[inline(always)]
     pub fn get_created_assets(
         &self,
         issuer: &IssuerPublicKey,
@@ -222,7 +245,7 @@ impl QueryServer {
                     }
                 };
 
-                let ledger = Arc::clone(self.committed_state.as_ref().unwrap());
+                let ledger = Arc::clone(self.state.as_ref().unwrap());
                 let ledger = ledger.read();
 
                 return Ok(slice
@@ -248,6 +271,7 @@ impl QueryServer {
     /// 3. Signer of a an issuance txn
     /// 4. Signer of a kv_update txn
     /// 5. Signer of a memo_update txn
+    #[inline(always)]
     pub fn get_related_transactions(
         &self,
         address: &XfrAddress,
@@ -257,6 +281,7 @@ impl QueryServer {
 
     /// Returns the set of transfer transactions that are associated with a given asset.
     /// The asset type must be nonconfidential.
+    #[inline(always)]
     pub fn get_related_transfers(
         &self,
         code: &AssetTypeCode,
@@ -264,46 +289,44 @@ impl QueryServer {
         self.related_transfers.get(&code)
     }
 
-    /// Returns the set of TxoSIDs that are the indices of records owned by a given address.
-    pub fn get_owned_utxo_sids(&self, address: &XfrAddress) -> Option<HashSet<TxoSID>> {
-        self.addresses_to_utxos.get(&address)
-    }
-
     /// Returns the owner of a given txo_sid.
+    #[inline(always)]
     pub fn get_address_of_sid(&self, txo_sid: TxoSID) -> Option<XfrAddress> {
         self.utxos_to_map_index.get(&txo_sid)
     }
 
     /// Returns the authenticated txn (id, hash) of a given txo_sid.
+    #[inline(always)]
     pub fn get_authenticated_txnid(&self, txo_sid: TxoSID) -> Option<TxnIDHash> {
         self.txo_to_txnid.get(&txo_sid)
     }
 
     /// Returns the transaction hash of a given txn_sid.
+    #[inline(always)]
     pub fn get_transaction_hash(&self, txn_sid: TxnSID) -> Option<String> {
         self.txn_sid_to_hash.get(&txn_sid)
     }
 
     /// Returns the transaction sid of a given txn_hash.
+    #[inline(always)]
     pub fn get_transaction_sid(&self, txn_hash: String) -> Option<TxnSID> {
         self.txn_hash_to_sid.get(&txn_hash)
     }
 
     /// Returns most recent commits at query_server side.
+    #[inline(always)]
     pub fn get_commits(&self) -> u64 {
-        self.committed_state
-            .as_ref()
-            .unwrap()
-            .read()
-            .get_block_commit_count()
+        self.state.as_ref().unwrap().read().get_block_commit_count()
     }
 
     /// Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
+    #[inline(always)]
     pub fn get_owner_memo(&self, txo_sid: TxoSID) -> Option<OwnerMemo> {
         self.owner_memos.get(&txo_sid)
     }
 
     /// Add created asset
+    #[inline(always)]
     pub fn add_created_asset(&mut self, creation: &DefineAsset) {
         let issuer = creation.pubkey;
         #[allow(unused_mut)]
@@ -335,32 +358,73 @@ impl QueryServer {
         save_issuance!(token_issuances, token_code);
     }
 
-    fn remove_spent_utxos(&mut self, transfer: &TransferAsset) {
-        for input in &transfer.body.inputs {
-            match input {
-                TxoRef::Relative(_) => {} // Relative utxos were never cached so no need to do anything here
-                TxoRef::Absolute(txo_sid) => {
-                    if let Some(addr) = self.utxos_to_map_index.get(&txo_sid) {
-                        #[allow(unused_mut)]
-                        if let Some(mut hash_set) =
-                            self.addresses_to_utxos.get_mut(&addr)
-                        {
-                            hash_set.remove(&txo_sid);
-                        } else {
-                            ruc::pd!("No txos stored for this address");
-                        }
-                    } else {
-                        ruc::pd!("Attempting to remove owned txo of address that isn't cached");
-                    }
-                }
-            }
-        }
+    fn cache_hist_data(&mut self) {
+        CHAN_GLOB_RATE_HIST.1.lock().try_iter().for_each(|(h, r)| {
+            self.staking_global_rate_hist.insert(h, r);
+        });
+
+        CHAN_V_SELF_D_HIST
+            .1
+            .lock()
+            .try_iter()
+            .for_each(|(pk, h, r)| {
+                self.staking_self_delegation_hist
+                    .entry(pk)
+                    .or_insert(new_mapx!(format!(
+                        "staking_self_delegation_hist_subdata/{}",
+                        wallet::public_key_to_base64(&pk)
+                    )))
+                    .insert(h, r);
+            });
+
+        CHAN_D_AMOUNT_HIST
+            .1
+            .lock()
+            .try_iter()
+            .for_each(|(pk, h, r)| {
+                self.staking_delegation_amount_hist
+                    .entry(pk)
+                    .or_insert(new_mapx!(format!(
+                        "staking_delegation_amount_hist_subdata/{}",
+                        wallet::public_key_to_base64(&pk)
+                    )))
+                    .insert(h, r);
+            });
+
+        CHAN_D_RWD_HIST.1.lock().try_iter().for_each(|(pk, h, r)| {
+            #[allow(unused_mut)]
+            let mut dd =
+                self.staking_delegation_rwd_hist
+                    .entry(pk)
+                    .or_insert(new_mapx!(format!(
+                        "staking_delegation_rwd_hist_subdata/{}",
+                        wallet::public_key_to_base64(&pk)
+                    )));
+            let mut dd = dd.entry(h).or_insert_with(DelegationRwdDetail::default);
+
+            dd.block_height = r.block_height;
+            dd.amount += r.amount;
+            dd.penalty_amount += r.penalty_amount;
+
+            alt!(0 < r.bond, dd.bond = r.bond);
+            alt!(r.return_rate.is_some(), dd.return_rate = r.return_rate);
+            alt!(
+                r.commission_rate.is_some(),
+                dd.commission_rate = r.commission_rate
+            );
+            alt!(
+                r.global_delegation_percent.is_some(),
+                dd.global_delegation_percent = r.global_delegation_percent
+            );
+        });
     }
 
     /// Updates query server cache with new transactions from a block.
     /// Each new block must be consistent with the state of the cached ledger up until this point
-    fn apply_new_blocks(&mut self) -> Result<()> {
-        let ledger = Arc::clone(self.committed_state.as_ref().unwrap());
+    fn apply_new_blocks(&mut self, basedir: &str) -> Result<()> {
+        self.cache_hist_data();
+
+        let ledger = Arc::clone(self.state.as_ref().unwrap());
         let ledger = ledger.read();
 
         if self.app_block_cnt == ledger.blocks.len() {
@@ -448,7 +512,7 @@ impl QueryServer {
                         .insert(txn_sid);
                 }
 
-                // Add created asset and remove spent utxos
+                // Add created asset
                 for op in &curr_txn.body.operations {
                     match op {
                         Operation::DefineAsset(define_asset) => {
@@ -456,9 +520,6 @@ impl QueryServer {
                         }
                         Operation::IssueAsset(issue_asset) => {
                             self.cache_issuance(&issue_asset);
-                        }
-                        Operation::TransferAsset(transfer_asset) => {
-                            self.remove_spent_utxos(&transfer_asset);
                         }
                         _ => {}
                     };
@@ -469,10 +530,6 @@ impl QueryServer {
                     .iter()
                     .zip(addresses.iter().zip(owner_memos.iter()))
                 {
-                    self.addresses_to_utxos
-                        .entry(*address)
-                        .or_insert_with(HashSet::new)
-                        .insert(*txo_sid);
                     self.utxos_to_map_index.insert(*txo_sid, *address);
                     let hash = curr_txn.hash_tm().hex().to_uppercase();
                     self.txo_to_txnid.insert(*txo_sid, (txn_sid, hash.clone()));
@@ -490,15 +547,23 @@ impl QueryServer {
         flush_data();
 
         // snapshot them finally
+        let path = format!("{}/{}", basedir, &self.snapshot_file);
         serde_json::to_vec(&self)
             .c(d!())
-            .and_then(|s| fs::write(&self.snapshot_path, s).c(d!()))
+            .and_then(|s| fs::write(&path, s).c(d!(path)))
     }
 
     /// update data of query server
     /// call update when the block into end_block and commit to ledgerState
-    pub fn update(&mut self) {
-        pnk!(self.apply_new_blocks());
+    #[inline(always)]
+    pub fn update(&mut self, basedir: &str) {
+        pnk!(self.apply_new_blocks(basedir));
+    }
+
+    /// retrieve block reward rate at specified block height
+    #[inline(always)]
+    pub fn query_block_rewards_rate(&self, height: &BlockHeight) -> Option<[u128; 2]> {
+        self.staking_global_rate_hist.get(height)
     }
 }
 

@@ -12,7 +12,6 @@ export STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV = $(shell pwd)/src/ledger/src/
 export STAKING_INITIAL_VALIDATOR_CONFIG_ABCI_MOCK = $(shell pwd)/src/ledger/src/staking/init/staking_config_abci_mock.json
 
 export DEBUG_DIR=/tmp/findora
-export ENABLE_LEDGER_SERVICE = true
 export ENABLE_QUERY_SERVICE = true
 
 ifndef CARGO_TARGET_DIR
@@ -30,13 +29,12 @@ endif
 bin_dir         = bin
 lib_dir         = lib
 pick            = ${CARGO_TARGET_DIR}/$(target_dir)
-release_subdirs = $(bin_dir) $(lib_dir)
+subdirs = $(bin_dir) $(lib_dir)
 
 bin_files = \
 		./$(pick)/findorad \
 		./$(pick)/abcid \
 		$(shell go env GOPATH)/bin/tendermint \
-		./$(pick)/xx \
 		./$(pick)/fn \
 		./$(pick)/stt \
 		./$(pick)/staking_cfg_generator
@@ -45,9 +43,9 @@ WASM_PKG = wasm.tar.gz
 lib_files = ./$(WASM_PKG)
 
 define pack
-	-@ rm -rf $(target_dir)
+	- rm -rf $(target_dir)
 	mkdir $(target_dir)
-	cd $(target_dir); for i in $(release_subdirs); do mkdir $$i; done
+	cd $(target_dir); for i in $(subdirs); do mkdir $$i; done
 	cp $(bin_files) $(target_dir)/$(bin_dir)
 	cp $(target_dir)/$(bin_dir)/* ~/.cargo/bin/
 	cd $(target_dir)/$(bin_dir)/ && findorad pack
@@ -58,65 +56,67 @@ endef
 # Build for cleveldb
 build: tendermint_cleveldb
 ifdef DBG
-	cargo build --bins -p abciapp -p bugchecker -p finutils
+	cargo build --bins -p abciapp -p finutils
 	$(call pack,$(target_dir))
 else
-	@ echo -e "\x1b[31;01m\$$(DBG) must be defined !\x1b[00m"
-	@ exit 1
+	echo -e "\x1b[31;01m\$$(DBG) must be defined !\x1b[00m"
+	exit 1
 endif
 
 # Build for cleveldb
 build_release: tendermint_cleveldb
 ifdef DBG
-	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
-	@ exit 1
+	echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
+	exit 1
 else
-	cargo build --release --bins -p abciapp -p bugchecker -p finutils
+	cargo build --release --bins -p abciapp -p finutils
 	$(call pack,$(target_dir))
 endif
 
 # Build for goleveldb
 build_goleveldb: tendermint_goleveldb
 ifdef DBG
-	cargo build --bins -p abciapp -p bugchecker -p finutils
+	cargo build --bins -p abciapp -p finutils
 	$(call pack,$(target_dir))
 else
-	@ echo -e "\x1b[31;01m\$$(DBG) must be defined !\x1b[00m"
-	@ exit 1
+	echo -e "\x1b[31;01m\$$(DBG) must be defined !\x1b[00m"
+	exit 1
 endif
 
 # Build for goleveldb
 build_release_goleveldb: tendermint_goleveldb
 ifdef DBG
-	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
-	@ exit 1
+	echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
+	exit 1
 else
-	cargo build --release --bins -p abciapp -p bugchecker -p finutils
+	cargo build --release --bins -p abciapp -p finutils
 	$(call pack,$(target_dir))
 endif
 
 build_release_debug: tendermint_goleveldb
 ifdef DBG
-	@ echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
-	@ exit 1
+	echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
+	exit 1
 else
-	cargo build --features="debug_env" --release --bins -p abciapp -p bugchecker -p finutils
+	cargo build --features="debug_env" --release --bins -p abciapp -p finutils
 	$(call pack,$(target_dir))
 endif
 
 tendermint_cleveldb:
-	bash -x tools/download_tendermint.sh 'tools/tendermint'
+	- rm $(shell which tendermint)
+	bash tools/download_tendermint.sh 'tools/tendermint'
 	mkdir -p $(shell go env GOPATH)/bin
 	cd tools/tendermint \
 		&& $(MAKE) build TENDERMINT_BUILD_OPTIONS=cleveldb \
 		&& cp build/tendermint $(shell go env GOPATH)/bin/
 
 tendermint_goleveldb:
-	bash -x tools/download_tendermint.sh 'tools/tendermint'
+	- rm $(shell which tendermint)
+	bash tools/download_tendermint.sh 'tools/tendermint'
 	cd tools/tendermint && $(MAKE) install
 
 test:
-	# cargo test --release --workspace -- --test-threads=1 # --nocapture
+	# cargo test --workspace -- --test-threads=1 # --nocapture
 	cargo test --release --features="abci_mock" -- --test-threads=1 # --nocapture
 
 coverage:
@@ -139,39 +139,39 @@ update:
 	cargo update
 
 fmt:
-	@ cargo fmt
+	cargo fmt
 
 fmtall:
-	@ bash ./tools/fmt.sh
+	bash ./tools/fmt.sh
 
 clean:
-	@ cargo clean
-	@ rm -rf tools/tendermint .git/modules/tools/tendermint
-	@ rm -rf debug release Cargo.lock
+	cargo clean
+	rm -rf tools/tendermint .git/modules/tools/tendermint
+	rm -rf debug release Cargo.lock
 
 cleanall: clean
-	@ git clean -fdx
+	git clean -fdx
 
 wasm:
 	cd src/components/wasm && wasm-pack build
 	tar -zcpf $(WASM_PKG) src/components/wasm/pkg
 
 single:
-	@./tools/devnet/stopnodes.sh
-	@./tools/devnet/resetsingle.sh
-	@./tools/devnet/startsingle.sh
+	./tools/devnet/stopnodes.sh
+	./tools/devnet/resetsingle.sh
+	./tools/devnet/startsingle.sh
 
 devnet:
-	@./tools/devnet/stopnodes.sh
-	@./tools/devnet/resetnodes.sh 20 1
-	@./tools/devnet/startnodes.sh
+	./tools/devnet/stopnodes.sh
+	./tools/devnet/resetnodes.sh 20 1
+	./tools/devnet/startnodes.sh
 
 debug_env: stop_debug_env build_release_debug
-	@- rm -rf $(DEBUG_DIR)
-	@ mkdir $(DEBUG_DIR)
-	@ cp tools/debug_env.tar.gz $(DEBUG_DIR)/
-	@ cd $(DEBUG_DIR) && tar -xpf debug_env.tar.gz && mv debug_env devnet
-	@ ./tools/devnet/startnodes.sh
+	- rm -rf $(DEBUG_DIR)
+	mkdir $(DEBUG_DIR)
+	cp tools/debug_env.tar.gz $(DEBUG_DIR)/
+	cd $(DEBUG_DIR) && tar -xpf debug_env.tar.gz && mv debug_env devnet
+	./tools/devnet/startnodes.sh
 
 run_staking_demo: stop_debug_env
 	bash tools/staking/demo.sh
@@ -183,16 +183,19 @@ stop_debug_env:
 	bash ./tools/devnet/stopnodes.sh
 
 join_qa01: stop_debug_env build_release_goleveldb
-	bash -x tools/node_init.sh qa01
+	bash tools/node_init.sh qa01
 
 join_qa02: stop_debug_env build_release_goleveldb
-	bash -x tools/node_init.sh qa02
+	bash tools/node_init.sh qa02
 
 join_testnet: stop_debug_env build_release_goleveldb
-	bash -x tools/node_init.sh testnet
+	bash tools/node_init.sh testnet
 
 join_mainnet: stop_debug_env build_release_goleveldb
-	bash -x tools/node_init.sh mainnet
+	bash tools/node_init.sh mainnet
+
+start_localnode: stop_debug_env
+	bash tools/node_init.sh _ _
 
 # ci_build_image:
 # 	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \

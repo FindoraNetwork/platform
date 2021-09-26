@@ -2,17 +2,13 @@
 //! need to transform the data in ledgerState to store
 //!
 
-pub mod query_server;
+mod ledger_api;
+pub mod server;
 pub mod service;
-
-#[cfg(test)]
-#[allow(missing_docs)]
-mod test;
 
 use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
 use finutils::api::NetworkRoute;
-use globutils::http_get_request;
 use ledger::{
     data_model::{
         b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
@@ -20,11 +16,12 @@ use ledger::{
     },
     staking::ops::mint_fra::MintEntry,
 };
+use ledger_api::*;
 use log::info;
 use parking_lot::RwLock;
-use query_server::{QueryServer, TxnIDHash};
 use ruc::*;
 use serde::{Deserialize, Serialize};
+use server::{QueryServer, TxnIDHash};
 use std::{collections::HashSet, sync::Arc};
 use zei::{
     serialization::ZeiFromToBytes,
@@ -47,8 +44,8 @@ async fn get_address(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<u64>,
 ) -> actix_web::Result<String, actix_web::error::Error> {
-    let query_server = data.read();
-    let address_res = query_server.get_address_of_sid(TxoSID(*info));
+    let server = data.read();
+    let address_res = server.get_address_of_sid(TxoSID(*info));
     let res;
     if let Some(address) = address_res {
         res = serde_json::to_string(&address)?;
@@ -64,8 +61,8 @@ async fn get_owner_memo(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<u64>,
 ) -> actix_web::Result<web::Json<Option<OwnerMemo>>, actix_web::error::Error> {
-    let query_server = data.read();
-    Ok(web::Json(query_server.get_owner_memo(TxoSID(*info))))
+    let server = data.read();
+    Ok(web::Json(server.get_owner_memo(TxoSID(*info))))
 }
 
 /// Separate a string of `TxoSID` by ',' and query the corresponding memo
@@ -90,19 +87,14 @@ async fn get_owner_memo_batch(
 /// Returns an array of the utxo sids currently spendable by a given address
 async fn get_owned_utxos(
     data: web::Data<Arc<RwLock<QueryServer>>>,
-    info: web::Path<String>,
+    owner: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxoSID>>> {
-    // Convert from basee64 representation
-    let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
-        &b64dec(&*info)
-            .c(d!())
-            .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?,
-    )
-    .c(d!())
-    .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
-    let query_server = data.read();
-    let sids = query_server.get_owned_utxo_sids(&XfrAddress { key });
-    Ok(web::Json(sids.unwrap_or_default()))
+    let qs = data.read();
+    let read = qs.state.as_ref().unwrap().read();
+    globutils::wallet::public_key_from_base64(owner.as_str())
+        .c(d!())
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
+        .map(|pk| web::Json(pnk!(read.get_owned_utxos(&pk)).keys().copied().collect()))
 }
 
 /// Define interface type
@@ -121,7 +113,6 @@ pub enum QueryServerRoutes {
     GetTransactionHash,
     GetTransactionSid,
     GetCommits,
-    Version,
 }
 
 impl NetworkRoute for QueryServerRoutes {
@@ -140,7 +131,6 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetTransactionHash => "get_transaction_hash",
             QueryServerRoutes::GetTransactionSid => "get_transaction_sid",
             QueryServerRoutes::GetCommits => "get_commits",
-            QueryServerRoutes::Version => "version",
         };
         "/".to_owned() + endpoint
     }
@@ -158,8 +148,8 @@ async fn get_created_assets(
             .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?,
     )
     .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
-    let query_server = data.read();
-    let assets = query_server.get_created_assets(&IssuerPublicKey { key });
+    let server = data.read();
+    let assets = server.get_created_assets(&IssuerPublicKey { key });
     Ok(web::Json(assets.unwrap_or_default()))
 }
 
@@ -176,8 +166,8 @@ async fn get_issued_records(
             .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?,
     )
     .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
-    let query_server = data.read();
-    let records = query_server.get_issued_records(&IssuerPublicKey { key });
+    let server = data.read();
+    let records = server.get_issued_records(&IssuerPublicKey { key });
     Ok(web::Json(records.unwrap_or_default()))
 }
 
@@ -187,11 +177,11 @@ async fn get_issued_records_by_code(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<(TxOutput, Option<OwnerMemo>)>>> {
-    let query_server = data.read();
+    let server = data.read();
 
     match AssetTypeCode::new_from_base64(&*info).c(d!()) {
         Ok(token_code) => {
-            if let Some(records) = query_server.get_issued_records_by_code(&token_code) {
+            if let Some(records) = server.get_issued_records_by_code(&token_code) {
                 Ok(web::Json(records))
             } else {
                 Err(actix_web::error::ErrorNotFound(
@@ -208,8 +198,8 @@ async fn get_authenticated_txnid_hash(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<u64>,
 ) -> actix_web::Result<web::Json<TxnIDHash>> {
-    let query_server = data.read();
-    match query_server.get_authenticated_txnid(TxoSID(*info)) {
+    let server = data.read();
+    match server.get_authenticated_txnid(TxoSID(*info)) {
         Some(txnid) => Ok(web::Json(txnid)),
         None => Err(actix_web::error::ErrorNotFound(
             "No authenticated transaction found. Please retry with correct sid.",
@@ -222,8 +212,8 @@ async fn get_transaction_hash(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<usize>,
 ) -> actix_web::Result<web::Json<String>> {
-    let query_server = data.read();
-    match query_server.get_transaction_hash(TxnSID(*info)) {
+    let server = data.read();
+    match server.get_transaction_hash(TxnSID(*info)) {
         Some(hash) => Ok(web::Json(hash)),
         None => Err(actix_web::error::ErrorNotFound(
             "No transaction found. Please retry with correct sid.",
@@ -236,8 +226,8 @@ async fn get_transaction_sid(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<usize>> {
-    let query_server = data.read();
-    match query_server.get_transaction_sid((*info).clone()) {
+    let server = data.read();
+    match server.get_transaction_sid((*info).clone()) {
         Some(sid) => Ok(web::Json(sid.0)),
         None => Err(actix_web::error::ErrorNotFound(
             "No transaction found. Please retry with correct hash.",
@@ -245,13 +235,13 @@ async fn get_transaction_sid(
     }
 }
 
-/// Returns most recent commit count at query_server side
-/// Check this number to make sure query_server is in sync
+/// Returns most recent commit count at server side
+/// Check this number to make sure server is in sync
 async fn get_commits(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> actix_web::Result<web::Json<u64>> {
-    let query_server = data.read();
-    Ok(web::Json(query_server.get_commits()))
+    let server = data.read();
+    Ok(web::Json(server.get_commits()))
 }
 
 #[allow(missing_docs)]
@@ -295,7 +285,7 @@ async fn get_coinbase_oper_list(
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
 
-    let query_server = data.read();
+    let server = data.read();
 
     if info.page == 0 {
         return Ok(web::Json(CoinbaseOperInfo {
@@ -313,7 +303,7 @@ async fn get_coinbase_oper_list(
         .c(d!())
         .map_err(error::ErrorBadRequest)?;
 
-    let resp = query_server
+    let resp = server
         .get_coinbase_entries(
             &XfrAddress { key },
             start,
@@ -346,7 +336,7 @@ async fn get_claim_txns(
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
 
-    let query_server = data.read();
+    let server = data.read();
 
     if info.page == 0 {
         return Ok(web::Json(vec![]));
@@ -361,7 +351,7 @@ async fn get_claim_txns(
         .c(d!())
         .map_err(error::ErrorBadRequest)?;
 
-    let records = query_server
+    let records = server
         .get_claim_transactions(
             &XfrAddress { key },
             start,
@@ -387,8 +377,8 @@ async fn get_related_txns(
     )
     .c(d!())
     .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
-    let query_server = data.read();
-    let records = query_server.get_related_transactions(&XfrAddress { key });
+    let server = data.read();
+    let records = server.get_related_transactions(&XfrAddress { key });
     Ok(web::Json(records.unwrap_or_default()))
 }
 
@@ -397,9 +387,9 @@ async fn get_related_xfrs(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxnSID>>> {
-    let query_server = data.read();
+    let server = data.read();
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
-        if let Some(records) = query_server.get_related_transfers(&token_code) {
+        if let Some(records) = server.get_related_transfers(&token_code) {
             Ok(web::Json(records))
         } else {
             Err(actix_web::error::ErrorNotFound(
@@ -419,17 +409,18 @@ pub struct QueryApi;
 impl QueryApi {
     /// create query api
     pub fn create(
-        query_server: Arc<RwLock<QueryServer>>,
-        host: &str,
-        port: u16,
+        server: Arc<RwLock<QueryServer>>,
+        addrs: &[(&str, u16)],
     ) -> Result<QueryApi> {
         let _ = actix_rt::System::new("findora API");
 
-        HttpServer::new(move || {
+        let mut hdr = HttpServer::new(move || {
             App::new()
                 .wrap(middleware::Logger::default())
                 .wrap(Cors::permissive().supports_credentials())
-                .data(Arc::clone(&query_server))
+                .data(Arc::clone(&server))
+                .route("/ping", web::get().to(ping))
+                .route("/version", web::get().to(version))
                 .route(
                     &QueryServerRoutes::GetAddress.with_arg_template("txo_sid"),
                     web::get().to(get_address),
@@ -492,64 +483,84 @@ impl QueryApi {
                     &QueryServerRoutes::GetCommits.route(),
                     web::get().to(get_commits),
                 )
-                .route(&QueryServerRoutes::Version.route(), web::get().to(version))
-        })
-        .bind(&format!("{}:{}", host, port))
-        .c(d!())?
-        .run();
+                .route(
+                    &ApiRoutes::UtxoSid.with_arg_template("sid"),
+                    web::get().to(query_utxo),
+                )
+                .route(
+                    &ApiRoutes::UtxoSidLight.with_arg_template("sid"),
+                    web::get().to(query_utxo_light),
+                )
+                .route(
+                    &ApiRoutes::UtxoSidList.with_arg_template("sid_list"),
+                    web::get().to(query_utxos),
+                )
+                .route(
+                    &ApiRoutes::AssetIssuanceNum.with_arg_template("code"),
+                    web::get().to(query_asset_issuance_num),
+                )
+                .route(
+                    &ApiRoutes::AssetToken.with_arg_template("code"),
+                    web::get().to(query_asset),
+                )
+                .route(
+                    &ApiRoutes::GlobalState.route(),
+                    web::get().to(query_global_state),
+                )
+                .route(
+                    &ApiRoutes::TxnSid.with_arg_template("sid"),
+                    web::get().to(query_txn),
+                )
+                .route(
+                    &ApiRoutes::TxnSidLight.with_arg_template("sid"),
+                    web::get().to(query_txn_light),
+                )
+                .route(
+                    &ApiRoutes::GlobalStateVersion.with_arg_template("version"),
+                    web::get().to(query_global_state_version),
+                )
+                .route(
+                    &ApiRoutes::OwnedUtxos.with_arg_template("owner"),
+                    web::get().to(query_owned_utxos),
+                )
+                .route(
+                    &ApiRoutes::ValidatorList.route(),
+                    web::get().to(query_validators),
+                )
+                .route(
+                    &ApiRoutes::DelegationInfo.with_arg_template("XfrPublicKey"),
+                    web::get().to(query_delegation_info),
+                )
+                .route(
+                    &ApiRoutes::DelegatorList.with_arg_template("NodeAddress"),
+                    web::get().to(query_delegator_list),
+                )
+                .service(
+                    web::resource("/delegator_list")
+                        .route(web::get().to(get_delegators_with_params)),
+                )
+                .service(
+                    web::resource("/delegation_rewards")
+                        .route(web::get().to(get_delegation_reward)),
+                )
+                .service(
+                    web::resource("/validator_delegation")
+                        .route(web::get().to(get_validator_delegation_history)),
+                )
+                .route(
+                    &ApiRoutes::ValidatorDetail.with_arg_template("NodeAddress"),
+                    web::get().to(query_validator_detail),
+                )
+        });
+
+        for (host, port) in addrs.iter() {
+            hdr = hdr.bind(&format!("{}:{}", host, port)).c(d!())?
+        }
+
+        hdr.run();
 
         info!("Query server started");
 
         Ok(QueryApi)
-    }
-}
-
-#[allow(missing_docs)]
-pub trait RestfulQueryServerAccess {
-    fn get_owner_memo(&self, txo_sid: u64) -> Result<Option<OwnerMemo>>;
-}
-
-/// Unimplemented until I can figure out a way to force the mock server to get new data (we can do
-/// this with a new endpoint)
-pub struct MockQueryServerClient();
-
-#[allow(missing_docs)]
-impl RestfulQueryServerAccess for MockQueryServerClient {
-    fn get_owner_memo(&self, _txo_sid: u64) -> Result<Option<OwnerMemo>> {
-        unimplemented!();
-    }
-}
-
-#[allow(missing_docs)]
-pub struct ActixQueryServerClient {
-    port: usize,
-    host: String,
-    protocol: String,
-}
-
-#[allow(missing_docs)]
-impl ActixQueryServerClient {
-    pub fn new(port: usize, host: &str, protocol: &str) -> Self {
-        ActixQueryServerClient {
-            port,
-            host: String::from(host),
-            protocol: String::from(protocol),
-        }
-    }
-}
-
-#[allow(missing_docs)]
-impl RestfulQueryServerAccess for ActixQueryServerClient {
-    /// query memo based on `RestfulQueryServerAccess` implementation
-    fn get_owner_memo(&self, txo_sid: u64) -> Result<Option<OwnerMemo>> {
-        let query = format!(
-            "{}://{}:{}{}",
-            self.protocol,
-            self.host,
-            self.port,
-            QueryServerRoutes::GetOwnerMemo.with_arg(&txo_sid)
-        );
-        let text = http_get_request(&query).c(d!())?;
-        serde_json::from_str::<Option<OwnerMemo>>(&text).c(d!())
     }
 }

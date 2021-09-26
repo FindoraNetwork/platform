@@ -2,6 +2,7 @@ use crate::actions::ethereum::Action as EtherAction;
 use crate::actions::Action;
 use crate::crypto::{Address, Signature};
 use crate::transaction;
+use ethereum::TransactionV0 as Transaction;
 use ruc::*;
 use serde::{Deserialize, Serialize};
 
@@ -58,8 +59,7 @@ pub fn convert_unchecked_transaction<'a, Extra: Deserialize<'a>>(
 pub fn convert_ethereum_transaction<Extra>(
     transaction: &[u8],
 ) -> Result<UncheckedTransaction<Extra>> {
-    let tx = serde_json::from_slice::<ethereum::Transaction>(transaction)
-        .map_err(|e| eg!(e))?;
+    let tx = serde_json::from_slice::<Transaction>(transaction).map_err(|e| eg!(e))?;
     Ok(UncheckedTransaction::<Extra>::new_unsigned(
         Action::Ethereum(EtherAction::Transact(tx)),
     ))

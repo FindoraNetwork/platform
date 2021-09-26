@@ -1,7 +1,7 @@
 [package]
 name = "module-template"
 version = "0.1.0"
-authors = ["Findora <admin@findora.org>"]
+authors = ["FindoraNetwork"]
 edition = "2018"
 homepage = "https://findora.org/technology"
 repository = "https://github.com/findoranetwork/platform/"

@@ -27,6 +27,7 @@ pub fn start_web3_service(
     evm_ws: String,
     tendermint_rpc: String,
     account_base_app: Arc<RwLock<BaseApp>>,
+    max_past_logs: u32,
 ) -> Box<dyn std::any::Any + Send> {
     // PrivateKey: 9f7bebaa5c55464b10150bc2e0fd552e915e2bdbca95cc45ed1c909aca96e7f5
     // Address: 0xf6aca39539374993b37d29ccf0d93fa214ea0af1
@@ -40,6 +41,7 @@ pub fn start_web3_service(
                     tendermint_rpc.clone(),
                     account_base_app.clone(),
                     signers.clone(),
+                    max_past_logs,
                 )
                 .to_delegate(),
                 eth_filter::EthFilterApiImpl::new().to_delegate(),

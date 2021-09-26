@@ -1,5 +1,5 @@
 use core::fmt::Display;
-use ethereum::Transaction;
+use ethereum::{LegacyTransactionMessage, TransactionV0 as Transaction};
 use ethereum_types::{H160, H256};
 use fp_types::crypto::secp256k1_ecdsa_recover;
 use fp_types::{
@@ -22,9 +22,7 @@ pub fn recover_signer(transaction: &Transaction) -> Option<H160> {
     sig[0..32].copy_from_slice(&transaction.signature.r()[..]);
     sig[32..64].copy_from_slice(&transaction.signature.s()[..]);
     sig[64] = transaction.signature.standard_v();
-    msg.copy_from_slice(
-        &ethereum::TransactionMessage::from(transaction.clone()).hash()[..],
-    );
+    msg.copy_from_slice(&LegacyTransactionMessage::from(transaction.clone()).hash()[..]);
 
     let pubkey = secp256k1_ecdsa_recover(&sig, &msg).ok()?;
     Some(H160::from(H256::from_slice(

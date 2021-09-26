@@ -24,7 +24,11 @@ fn setup() -> Context {
     path.push(format!("temp-findora-db–{}", time));
 
     let fdb = FinDB::open(path).unwrap();
-    let chain_state = Arc::new(RwLock::new(ChainState::new(fdb, "temp_db".to_string())));
+    let chain_state = Arc::new(RwLock::new(ChainState::new(
+        fdb,
+        "temp_db".to_string(),
+        100,
+    )));
 
     Context::new(chain_state)
 }

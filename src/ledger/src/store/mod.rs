@@ -36,7 +36,6 @@ use std::{
     io::{BufRead, BufReader, ErrorKind},
     mem,
     ops::{Deref, DerefMut},
-    path::{Path, PathBuf},
 };
 use zei::xfr::{
     lib::XfrNotePolicies,
@@ -89,7 +88,7 @@ impl LedgerState {
         self.block_ctx
             .take()
             .map(|mut b| {
-                *b.get_staking_simulator_mut() = self.get_staking().deref().clone();
+                *b.get_staking_simulator_mut() = self.get_staking().clone();
                 b
             })
             .c(d!())
@@ -287,8 +286,9 @@ impl LedgerState {
 
     /// create a tmp ledger for testing purpose
     pub fn tmp_ledger() -> LedgerState {
-        let tmp_dir = globutils::fresh_tmp_dir();
-        LedgerState::new(tmp_dir, Some(String::from("test"))).unwrap()
+        bnc::clear();
+        let tmp_dir = globutils::fresh_tmp_dir().to_string_lossy().into_owned();
+        LedgerState::new(&tmp_dir, Some("test")).unwrap()
     }
 
     fn load_transaction_log(path: &str) -> Result<Vec<LoggedBlock>> {
@@ -381,47 +381,33 @@ impl LedgerState {
     }
 
     /// Initialize a new Ledger structure.
-    pub fn new(base_dir: PathBuf, prefix: Option<String>) -> Result<LedgerState> {
-        let prefix = prefix.unwrap_or_default();
+    pub fn new(basedir: &str, prefix: Option<&str>) -> Result<LedgerState> {
+        let prefix = if let Some(p) = prefix {
+            format!("{}_", p)
+        } else {
+            "".to_owned()
+        };
 
-        let ledger_status = prefix.clone() + "_ledger_status";
-        let block_merkle = prefix.clone() + "_block_merkle";
-        let txn_merkle = prefix.clone() + "_txn_merkle";
-        let utxo_map = prefix.clone() + "_utxo_map";
-        let ledger_status_subdata = prefix.clone() + "_ledger_status_subdata";
-        let blocks = prefix.clone() + "_blocks";
-        let tx_to_block_location = prefix + "_tx_to_block_location";
+        let block_merkle_path = format!("{}/{}block_merkle", basedir, &prefix);
+        let txn_merkle_path = format!("{}/{}txn_merkle", basedir, &prefix);
+        let utxo_map_path = format!("{}/{}utxo_map", basedir, &prefix);
 
-        let ledger_status_buf = base_dir.join(ledger_status);
-        let snapshot_path = ledger_status_buf.to_str().unwrap();
-
-        let block_merkle_buf = base_dir.join(block_merkle);
-        let block_merkle_path = block_merkle_buf.to_str().unwrap();
-
-        let txn_merkle_buf = base_dir.join(txn_merkle);
-        let txn_merkle_path = txn_merkle_buf.to_str().unwrap();
-
-        let utxo_map_buf = base_dir.join(utxo_map);
-        let utxo_map_path = utxo_map_buf.to_str().unwrap();
-
-        let ledger_status_subdata_buf = base_dir.join(ledger_status_subdata);
-        let snapshot_entries_dir = ledger_status_subdata_buf.to_str().unwrap();
-
-        let blocks_buf = base_dir.join(blocks);
-        let blocks_path = blocks_buf.to_str().unwrap();
-
-        let tx_to_block_location_buf = base_dir.join(tx_to_block_location);
-        let tx_to_block_location_path =
-            tx_to_block_location_buf.to_str().map(String::from).unwrap();
+        // These iterms will be set under ${BNC_DATA_DIR}
+        fs::create_dir_all(&basedir).c(d!())?;
+        let snapshot_file = format!("{}ledger_status", &prefix);
+        let snapshot_entries_dir = prefix.clone() + "ledger_status_subdata";
+        let blocks_path = prefix.clone() + "blocks";
+        let tx_to_block_location_path = prefix + "tx_to_block_location";
 
         let ledger = LedgerState {
-            status: LedgerStatus::new(snapshot_path, snapshot_entries_dir).c(d!())?,
+            status: LedgerStatus::new(&basedir, &snapshot_file, &snapshot_entries_dir)
+                .c(d!())?,
             prng: ChaChaRng::from_entropy(),
-            block_merkle: LedgerState::init_merkle_log(block_merkle_path).c(d!())?,
-            txn_merkle: LedgerState::init_merkle_log(txn_merkle_path).c(d!())?,
-            blocks: new_vecx!(blocks_path),
-            tx_to_block_location: new_mapx!(tx_to_block_location_path.as_str()),
-            utxo_map: LedgerState::init_utxo_map(utxo_map_path).c(d!())?,
+            block_merkle: LedgerState::init_merkle_log(&block_merkle_path).c(d!())?,
+            txn_merkle: LedgerState::init_merkle_log(&txn_merkle_path).c(d!())?,
+            blocks: new_vecx!(&blocks_path),
+            tx_to_block_location: new_mapx!(&tx_to_block_location_path),
+            utxo_map: LedgerState::init_utxo_map(&utxo_map_path).c(d!())?,
             block_ctx: Some(BlockEffect::default()),
         };
 
@@ -429,14 +415,13 @@ impl LedgerState {
     }
 
     // Load an existing one OR create a new one.
-    fn load_from_log(base_dir: &Path) -> Result<LedgerState> {
-        let mut ledger = LedgerState::new(base_dir.to_path_buf(), None).c(d!())?;
+    fn load_from_log(basedir: &str) -> Result<LedgerState> {
+        let mut ledger = LedgerState::new(basedir, None).c(d!())?;
 
         if ledger.blocks.is_empty() {
-            let txn_log_buf = base_dir.join("txn_log");
-            let txn_log_path = txn_log_buf.to_str().c(d!())?;
+            let txn_log_path = format!("{}/txn_log", basedir);
             if let Ok(old_blocks) =
-                LedgerState::load_transaction_log(txn_log_path).c(d!())
+                LedgerState::load_transaction_log(&txn_log_path).c(d!())
             {
                 for logged_block in old_blocks.into_iter() {
                     let mut be = ledger.start_block().c(d!())?;
@@ -461,8 +446,8 @@ impl LedgerState {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn load_or_init(base_dir: &Path) -> Result<LedgerState> {
-        LedgerState::load_from_log(base_dir)
+    pub fn load_or_init(basedir: &str) -> Result<LedgerState> {
+        LedgerState::load_from_log(basedir)
     }
 
     /// Perform checkpoint of current ledger state
@@ -563,7 +548,7 @@ impl LedgerState {
             - FF_PK_LIST
                 .iter()
                 .chain([*BLACK_HOLE_PUBKEY].iter())
-                .map(|pk| self.staking_get_nonconfidential_balance(pk))
+                .map(|pk| self.staking_get_nonconfidential_balance(pk).unwrap_or(0))
                 .sum::<Amount>()
             - self.get_staking().coinbase_balance()
     }
@@ -577,17 +562,18 @@ impl LedgerState {
         ]
     }
 
-    fn staking_get_nonconfidential_balance(&self, addr: &XfrPublicKey) -> u64 {
-        pnk!(self.get_owned_utxos(addr))
-            .values()
-            .map(|(utxo, _)| {
-                if let XfrAmount::NonConfidential(am) = utxo.0.record.amount {
-                    am
-                } else {
-                    0
-                }
-            })
-            .sum()
+    fn staking_get_nonconfidential_balance(&self, addr: &XfrPublicKey) -> Result<u64> {
+        self.get_owned_utxos(addr).c(d!()).map(|o| {
+            o.values()
+                .map(|(utxo, _)| {
+                    if let XfrAmount::NonConfidential(am) = utxo.0.record.amount {
+                        am
+                    } else {
+                        0
+                    }
+                })
+                .sum()
+        })
     }
 
     /// Get a utxo along with the transaction, spent status and commitment data which it belongs
@@ -897,7 +883,7 @@ impl LedgerState {
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub struct LedgerStatus {
     /// the file path of the snapshot
-    pub snapshot_path: String,
+    pub snapshot_file: String,
     utxos: Mapx<TxoSID, Utxo>, // all currently-unspent TXOs
     owned_utxos: Mapx<XfrPublicKey, HashSet<TxoSID>>,
     /// all spent TXOs
@@ -990,20 +976,25 @@ impl LedgerStatus {
 
     /// Load or init LedgerStatus from snapshot
     #[inline(always)]
-    pub fn new(snapshot_path: &str, snapshot_entries_dir: &str) -> Result<LedgerStatus> {
-        match fs::read_to_string(snapshot_path) {
+    pub fn new(
+        basedir: &str,
+        snapshot_file: &str,
+        snapshot_entries_dir: &str,
+    ) -> Result<LedgerStatus> {
+        let path = format!("{}/{}", basedir, snapshot_file);
+        match fs::read_to_string(path) {
             Ok(s) => serde_json::from_str(&s).c(d!()),
             Err(e) => {
                 if ErrorKind::NotFound != e.kind() {
                     Err(eg!(e))
                 } else {
-                    Self::create(snapshot_path, snapshot_entries_dir).c(d!())
+                    Self::create(snapshot_file, snapshot_entries_dir).c(d!())
                 }
             }
         }
     }
 
-    fn create(snapshot_path: &str, snapshot_entries_dir: &str) -> Result<LedgerStatus> {
+    fn create(snapshot_file: &str, snapshot_entries_dir: &str) -> Result<LedgerStatus> {
         let utxos_path = snapshot_entries_dir.to_owned() + "/utxo";
         let spent_utxos_path = snapshot_entries_dir.to_owned() + "/spent_utxos";
         let txo_to_txn_location_path =
@@ -1017,7 +1008,7 @@ impl LedgerStatus {
         let owned_utxos_path = snapshot_entries_dir.to_owned() + "/owned_utxos";
 
         let ledger = LedgerStatus {
-            snapshot_path: snapshot_path.to_owned(),
+            snapshot_file: snapshot_file.to_owned(),
             sliding_set: SlidingSet::<[u8; 8]>::new(TRANSACTION_WINDOW_WIDTH as usize),
             utxos: new_mapx!(utxos_path.as_str()),
             owned_utxos: new_mapx!(owned_utxos_path.as_str()),

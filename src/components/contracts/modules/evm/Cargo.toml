@@ -1,7 +1,7 @@
 [package]
 name = "module-evm"
 version = "0.1.0"
-authors = ["Findora <admin@findora.org>"]
+authors = ["FindoraNetwork"]
 edition = "2018"
 homepage = "https://findora.org/technology"
 repository = "https://github.com/findoranetwork/platform/"
@@ -10,16 +10,16 @@ readme = "README.md"
 
 [dependencies]
 abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
-ethereum-types = "0.11.0"
-evm = { version = "0.27.0", features = ["with-serde"] }
-evm-runtime = "0.27.0"
-evm-gasometer = "0.27.0"
+ethereum-types = { version = "0.12", default-features = false }
+evm = { version = "0.30.0", default-features = false, features = ["with-serde"] }
+evm-runtime = { version = "0.30.0", default-features = false }
+evm-gasometer = { version = "0.30.0", default-features = false }
 log = "0.4"
-rlp = "0.5"
+rlp = { version = "0.5", default-features = false }
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0.64"
-sha3 = "0.8"
+sha3 = { version = "0.8", default-features = false }
 
 # primitives, don't depend on any modules
 fp-core = { path = "../../primitives/core" }
@@ -31,8 +31,8 @@ fp-utils = { path = "../../primitives/utils" }
 
 [dev-dependencies]
 baseapp = { path = "../../baseapp" }
-ethabi = "14.1.0"
-ethereum = { version = "0.7.1", features = ["with-serde"] }
+ethabi = { git = "https://github.com/rust-ethereum/ethabi.git", branch = "master" }
+ethereum = { version = "0.9.0", default-features = false, features = ["with-serde"] }
 fp-mocks = { path = "../../primitives/mocks" }
 hex = "0.4.2"
 module-account = { path = "../account" }

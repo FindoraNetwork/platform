@@ -39,25 +39,28 @@ pub struct ABCISubmissionServer {
 impl ABCISubmissionServer {
     /// create ABCISubmissionServer
     pub fn new(
-        base_dir: Option<&Path>,
+        basedir: Option<&str>,
         tendermint_reply: String,
     ) -> Result<ABCISubmissionServer> {
-        let ledger_state = match base_dir {
+        let ledger_state = match basedir {
             None => LedgerState::tmp_ledger(),
-            Some(base_dir) => pnk!(LedgerState::load_or_init(base_dir)),
+            Some(basedir) => pnk!(LedgerState::load_or_init(basedir)),
         };
         let tendermint_height = ledger_state.get_staking().cur_height();
         TENDERMINT_BLOCK_HEIGHT.swap(tendermint_height as i64, Ordering::Relaxed);
 
-        let account_base_app = match base_dir {
+        let account_base_app = match basedir {
             None => {
                 pnk!(AccountBaseAPP::new(
                     tempfile::tempdir().unwrap().path(),
                     CFG.enable_eth_empty_blocks
                 ))
             }
-            Some(base_dir) => {
-                pnk!(AccountBaseAPP::new(base_dir, CFG.enable_eth_empty_blocks))
+            Some(basedir) => {
+                pnk!(AccountBaseAPP::new(
+                    Path::new(basedir),
+                    CFG.enable_eth_empty_blocks
+                ))
             }
         };
 

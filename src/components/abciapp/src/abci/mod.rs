@@ -10,15 +10,13 @@ mod server;
 pub mod staking;
 
 use crate::api::{
-    query_server::{ledger_api::RestfulApiService, query_api},
-    submission_server::submission_api::SubmissionApi,
+    query_server::query_api, submission_server::submission_api::SubmissionApi,
 };
 use lazy_static::lazy_static;
 use ruc::*;
 use std::{
     env, fs,
     net::SocketAddr,
-    path::Path,
     sync::{atomic::AtomicBool, Arc},
     thread,
 };
@@ -33,9 +31,9 @@ lazy_static! {
 
 /// Starting findorad
 pub fn run() -> Result<()> {
-    let base_dir = {
+    let basedir = {
         fs::create_dir_all(&CFG.ledger_dir).c(d!())?;
-        Some(Path::new(&CFG.ledger_dir))
+        Some(CFG.ledger_dir.as_str())
     };
 
     let config = ruc::info!(ABCIConfig::from_file())
@@ -44,7 +42,7 @@ pub fn run() -> Result<()> {
     env::set_var("BNC_DATA_DIR", format!("{}/__bnc__", &config.ledger_dir));
 
     let app = server::ABCISubmissionServer::new(
-        base_dir,
+        basedir,
         format!("{}:{}", config.tendermint_host, config.tendermint_port),
     )?;
 
@@ -53,27 +51,17 @@ pub fn run() -> Result<()> {
     if CFG.enable_query_service {
         env::set_var("FINDORA_KEEP_STAKING_HIST", "1");
 
-        let ledger_api_service_hdr =
-            submission_service_hdr.read().borrowable_ledger_state();
-        let ledger_host = config.abci_host.clone();
-        let ledger_port = config.ledger_port;
-        thread::spawn(move || {
-            pnk!(RestfulApiService::create(
-                ledger_api_service_hdr,
-                &ledger_host,
-                ledger_port
-            ));
-        });
-
         let query_service_hdr = submission_service_hdr.read().borrowable_ledger_state();
         pnk!(query_api::service::start_query_server(
-            query_service_hdr,
-            &config.abci_host,
-            config.query_port,
-            Some(Path::new(&config.ledger_dir)),
+            Arc::clone(&query_service_hdr),
+            &[
+                (&config.abci_host, config.query_port),
+                (&config.abci_host, config.ledger_port)
+            ],
+            Some(&config.ledger_dir),
         ))
         .write()
-        .update();
+        .update(&config.ledger_dir);
 
         let submission_host = config.abci_host.clone();
         let submission_port = config.submission_port;
@@ -95,8 +83,13 @@ pub fn run() -> Result<()> {
             "http://{}:{}",
             config.tendermint_host, config.tendermint_port
         );
-        web3_rpc =
-            fc_rpc::start_web3_service(evm_http, evm_ws, tendermint_rpc, base_app);
+        web3_rpc = fc_rpc::start_web3_service(
+            evm_http,
+            evm_ws,
+            tendermint_rpc,
+            base_app,
+            10000,
+        );
     }
 
     let addr_str = format!("{}:{}", config.abci_host, config.abci_port);

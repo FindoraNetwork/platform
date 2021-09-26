@@ -13,9 +13,7 @@ use parking_lot::RwLock;
 use rand_core::{CryptoRng, RngCore};
 use ruc::*;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap, fmt, ops::Deref, result::Result as StdResult, sync::Arc,
-};
+use std::{collections::HashMap, fmt, result::Result as StdResult, sync::Arc};
 
 /// Query handle for user
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Serialize, Deserialize)]
@@ -167,7 +165,7 @@ where
     /// In abci's begin_block, if the block is empty,
     /// call this method to update the staking in the ledgerState to the submission_server's block
     pub fn update_staking_simulator(&mut self) -> Result<()> {
-        let staking = self.committed_state.read().get_staking().deref().clone();
+        let staking = self.committed_state.read().get_staking().clone();
         self.block
             .as_mut()
             .map(|b| {
