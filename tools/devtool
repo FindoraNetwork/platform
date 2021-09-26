@@ -19,6 +19,7 @@ if [[ ${OPT} == "help" ]]; then
   echo "  $0 help"
   echo "  $0 DBG, build with debug features"
   echo "  $0 release, build release binary"
+  echo "  $0 gorelease, build goleveldb release binary"
   echo "  $0 cli, build cli tools only"
   echo "  $0 ltchk, lightweight check, such as fmt, lint"
   echo "  $0 prchk, make a pre-check before creating new pull request"
@@ -69,6 +70,10 @@ elif [[ ${OPT} == "DBG" ]]; then
 elif [[ ${OPT} == "release" ]]; then
   export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release
   make
+  exit 0
+elif [[ ${OPT} == "gorelease" ]]; then
+  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release
+  make build_release_goleveldb
   exit 0
 elif [[ ${OPT} == "debug_env" ]]; then
   export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release_debug
