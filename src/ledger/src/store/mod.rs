@@ -511,16 +511,10 @@ impl LedgerState {
             "".to_owned()
         };
 
-<<<<<<< HEAD
-        let block_merkle_path = format!("{}/{}_block_merkle", base_dir, &prefix);
-        let txn_merkle_path = format!("{}/{}_txn_merkle", base_dir, &prefix);
-        let utxo_map_path = format!("{}/{}_utxo_map", base_dir, &prefix);
-        let abar_store_path = format!("{}/{}_abar_store", base_dir, &prefix);
-=======
         let block_merkle_path = format!("{}/{}block_merkle", basedir, &prefix);
         let txn_merkle_path = format!("{}/{}txn_merkle", basedir, &prefix);
         let utxo_map_path = format!("{}/{}utxo_map", basedir, &prefix);
->>>>>>> develop
+        let abar_store_path = format!("{}/{}abar_store", basedir, &prefix);
 
         // These iterms will be set under ${BNC_DATA_DIR}
         fs::create_dir_all(&basedir).c(d!())?;
