@@ -470,11 +470,13 @@ impl TransactionBuilder {
     pub fn add_operation_delegation(
         &mut self,
         keypair: &XfrKeyPair,
+        amount: u64,
         validator: TendermintAddr,
     ) -> &mut Self {
         let op = DelegationOps::new(
             keypair,
             None,
+            amount,
             validator,
             None,
             self.txn.body.no_replay_token,
@@ -515,6 +517,7 @@ impl TransactionBuilder {
     pub fn add_operation_staking(
         &mut self,
         keypair: &XfrKeyPair,
+        amount: u64,
         vltor_key: &PrivateKey,
         td_pubkey: Vec<u8>,
         commission_rate: [u64; 2],
@@ -538,6 +541,7 @@ impl TransactionBuilder {
         let op = DelegationOps::new(
             keypair,
             Some(vltor_key),
+            amount,
             vaddr,
             Some(v),
             self.txn.body.no_replay_token,
