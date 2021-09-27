@@ -34,7 +34,7 @@ pub(super) async fn query_utxo(
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<AuthenticatedUtxo>> {
     let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let read = &read.ledger_clone;
     if let Ok(txo_sid) = info.parse::<u64>() {
         if let Some(txo) = read.get_utxo(TxoSID(txo_sid)) {
             Ok(web::Json(txo))
@@ -56,7 +56,7 @@ pub(super) async fn query_utxo_light(
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<UnAuthenticatedUtxo>> {
     let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let read = &read.ledger_clone;
     if let Ok(txo_sid) = info.parse::<u64>() {
         if let Some(txo) = read.get_utxo_light(TxoSID(txo_sid)) {
             Ok(web::Json(txo))
@@ -78,7 +78,7 @@ pub(super) async fn query_asset_issuance_num(
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<u64>> {
     let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let read = &read.ledger_clone;
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
         if let Some(iss_num) = read.get_issuance_num(&token_code) {
             Ok(web::Json(iss_num))
@@ -110,7 +110,7 @@ pub(super) async fn query_utxos(
         .collect::<actix_web::Result<Vec<_>, actix_web::error::Error>>()?;
 
     let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let read = &read.ledger_clone;
 
     if sid_list.len() > 10 || sid_list.is_empty() {
         return Err(actix_web::error::ErrorBadRequest("Invalid Query List"));
@@ -125,7 +125,7 @@ pub(super) async fn query_asset(
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<AssetType>> {
     let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let read = &read.ledger_clone;
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
         if let Some(asset) = read.get_asset_type(&token_code) {
             Ok(web::Json(asset))
@@ -147,7 +147,7 @@ pub(super) async fn query_txn(
     info: web::Path<String>,
 ) -> actix_web::Result<String> {
     let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let read = &read.ledger_clone;
     if let Ok(txn_sid) = info.parse::<usize>() {
         if let Ok(mut txn) = ruc::info!(read.get_transaction(TxnSID(txn_sid))) {
             txn.finalized_txn.set_txo_id();
@@ -170,7 +170,7 @@ pub(super) async fn query_txn_light(
     info: web::Path<String>,
 ) -> actix_web::Result<String> {
     let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let read = &read.ledger_clone;
     if let Ok(txn_sid) = info.parse::<usize>() {
         if let Ok(mut txn) = ruc::info!(read.get_transaction_light(TxnSID(txn_sid))) {
             txn.set_txo_id();
@@ -193,7 +193,7 @@ pub(super) async fn query_global_state(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> web::Json<(HashOf<Option<StateCommitmentData>>, u64, &'static str)> {
     let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let read = &read.ledger_clone;
     let (hash, seq_id) = read.get_state_commitment();
 
     web::Json((hash, seq_id, "v4UVgkIBpj0eNYI1B1QhTTduJHCIHH126HcdesCxRdLkVGDKrVUPgwmNLCDafTVgC5e4oDhAGjPNt1VhUr6ZCQ=="))
@@ -205,7 +205,7 @@ pub(super) async fn query_global_state_version(
     version: web::Path<u64>,
 ) -> web::Json<Option<HashOf<Option<StateCommitmentData>>>> {
     let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let read = &read.ledger_clone;
     let hash = read.get_state_commitment_at_block_height(*version);
     web::Json(hash)
 }
@@ -217,7 +217,7 @@ pub(super) async fn query_validators(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> actix_web::Result<web::Json<ValidatorList>> {
     let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let read = &read.ledger_clone;
     let staking = read.get_staking();
 
     if let Some(validator_data) = staking.validator_get_current() {
@@ -278,7 +278,9 @@ pub(super) async fn get_delegation_reward(
             .into_iter()
             .rev()
             .filter_map(|i| {
-                read.staking_delegation_rwd_hist
+                read.ledger_clone
+                    .api_cache
+                    .staking_delegation_rwd_hist
                     .get(&key)
                     .map(|rh| rh.get(&i))
             })
@@ -308,7 +310,7 @@ pub(super) async fn get_validator_delegation_history(
     web::Query(info): web::Query<ValidatorDelegationQueryParams>,
 ) -> actix_web::Result<web::Json<Vec<ValidatorDelegation>>> {
     let qs = data.read();
-    let read = qs.state.as_ref().unwrap().read();
+    let read = &qs.ledger_clone;
     let staking = read.get_staking();
 
     let v_id = staking
@@ -318,7 +320,8 @@ pub(super) async fn get_validator_delegation_history(
     let v_self_delegation = staking
         .delegation_get(&v_id)
         .ok_or_else(|| error::ErrorBadRequest("not exists"))?;
-    let delegation_amount_hist = qs.staking_delegation_amount_hist.get(&v_id);
+    let delegation_amount_hist =
+        read.api_cache.staking_delegation_amount_hist.get(&v_id);
 
     let self_delegation = v_self_delegation
         .entries
@@ -400,7 +403,7 @@ pub(super) async fn get_delegators_with_params(
     web::Query(info): web::Query<DelegatorQueryParams>,
 ) -> actix_web::Result<web::Json<DelegatorList>> {
     let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let read = &read.ledger_clone;
     let staking = read.get_staking();
 
     if info.page == 0 || info.order == OrderOption::Asc {
@@ -437,7 +440,7 @@ pub(super) async fn query_delegator_list(
     addr: web::Path<TendermintAddr>,
 ) -> actix_web::Result<web::Json<DelegatorList>> {
     let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let read = &read.ledger_clone;
     let staking = read.get_staking();
 
     let list = staking
@@ -461,7 +464,7 @@ pub(super) async fn query_validator_detail(
     addr: web::Path<TendermintAddr>,
 ) -> actix_web::Result<web::Json<ValidatorDetail>> {
     let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let read = &read.ledger_clone;
     let staking = read.get_staking();
 
     let v_id = staking
@@ -528,7 +531,7 @@ pub(super) async fn query_delegation_info(
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
 
     let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let read = &read.ledger_clone;
     let staking = read.get_staking();
 
     let block_rewards_rate = read.staking_get_block_rewards_rate();
@@ -611,7 +614,7 @@ pub(super) async fn query_owned_utxos(
     owner: web::Path<String>,
 ) -> actix_web::Result<web::Json<BTreeMap<TxoSID, (Utxo, Option<OwnerMemo>)>>> {
     let qs = data.read();
-    let read = qs.state.as_ref().unwrap().read();
+    let read = &qs.ledger_clone;
     globutils::wallet::public_key_from_base64(owner.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))

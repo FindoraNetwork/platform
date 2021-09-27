@@ -11,16 +11,11 @@ use parking_lot::RwLock;
 use ruc::*;
 use std::{sync::Arc, thread};
 
-/// create query server
-pub fn start_query_server(
+pub(crate) fn start_query_server(
     ledger: Arc<RwLock<LedgerState>>,
     addrs: &[(&str, u16)],
-    basedir: Option<&str>,
 ) -> Result<Arc<RwLock<QueryServer>>> {
-    let qs = QueryServer::new(ledger, basedir).c(d!())?;
-    let basedir = qs.basedir.clone();
-
-    let qs = Arc::new(RwLock::new(qs));
+    let qs = Arc::new(RwLock::new(QueryServer::new(ledger)));
     let qs1 = Arc::clone(&qs);
     let qs2 = Arc::clone(&qs);
 
@@ -30,7 +25,7 @@ pub fn start_query_server(
             if !*created {
                 BLOCK_CREATED.1.wait(&mut created);
             }
-            qs2.write().update(&basedir);
+            qs2.write().update();
             *created = false;
         });
         qs

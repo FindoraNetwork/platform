@@ -67,7 +67,7 @@ macro_rules! chan {
 lazy_static! {
     /// will be set in `findorad` together with '--enable-query-server' option,
     /// full-nodes may need this feature, meaningless in other kinds of node.
-    pub static ref KEEP_HIST: bool = env::var("FINDORA_KEEP_STAKING_HIST").is_ok();
+    pub static ref KEEP_HIST: bool = env::var("FINDORAD_KEEP_HIST").is_ok();
 
     /// Reserved accounts of Findora Foundation or System.
     pub static ref FF_PK_LIST: Vec<XfrPublicKey> = FF_ADDR_LIST

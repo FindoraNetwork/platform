@@ -142,7 +142,7 @@ pub fn create_issue_and_transfer_txn(
         issuer_keys.get_pk(),
     );
     let (ba, _tracer_memo, owner_memo) = build_blind_asset_record(
-        ledger.get_prng(),
+        &mut ledger.get_prng(),
         &params.pc_gens,
         &ar_template,
         vec![],
@@ -178,11 +178,13 @@ pub fn create_issue_and_transfer_txn(
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         *recipient_pk,
     );
-    let ar =
-        AssetRecord::from_template_no_identity_tracing(ledger.get_prng(), &ar_template)
-            .unwrap();
+    let ar = AssetRecord::from_template_no_identity_tracing(
+        &mut ledger.get_prng(),
+        &ar_template,
+    )
+    .unwrap();
     let mut transfer = pnk!(TransferAsset::new(pnk!(TransferAssetBody::new(
-        ledger.get_prng(),
+        &mut ledger.get_prng(),
         vec![TxoRef::Relative(0)],
         &[AssetRecord::from_open_asset_record_no_asset_tracing(
             open_blind_asset_record(&ba, &owner_memo, &issuer_keys).unwrap()
@@ -228,7 +230,7 @@ pub fn create_issue_and_transfer_txn_with_asset_tracing(
         tracing_policies.clone(),
     );
     let (ba, _tracer_memo, owner_memo) = build_blind_asset_record(
-        ledger.get_prng(),
+        &mut ledger.get_prng(),
         &params.pc_gens,
         &ar_template,
         vec![vec![]],
@@ -265,18 +267,20 @@ pub fn create_issue_and_transfer_txn_with_asset_tracing(
         *recipient_pk,
         tracing_policies.clone(),
     );
-    let ar =
-        AssetRecord::from_template_no_identity_tracing(ledger.get_prng(), &ar_template)
-            .unwrap();
+    let ar = AssetRecord::from_template_no_identity_tracing(
+        &mut ledger.get_prng(),
+        &ar_template,
+    )
+    .unwrap();
     let tar = AssetRecord::from_open_asset_record_with_asset_tracing_but_no_identity(
-        ledger.get_prng(),
+        &mut ledger.get_prng(),
         open_blind_asset_record(&ba, &owner_memo, &issuer_keys).unwrap(),
         tracing_policies,
     )
     .unwrap();
     let mut transfer = TransferAsset::new(
         TransferAssetBody::new(
-            ledger.get_prng(),
+            &mut ledger.get_prng(),
             vec![TxoRef::Relative(0)],
             &[tar],
             &[ar.clone()],
@@ -314,7 +318,7 @@ pub fn create_issuance_txn(
         issuer_keys.get_pk(),
     );
     let (ba, _tracer_memo, _owner_memo) = build_blind_asset_record(
-        ledger.get_prng(),
+        &mut ledger.get_prng(),
         &params.pc_gens,
         &ar_template,
         vec![],

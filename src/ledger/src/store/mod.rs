@@ -1,8 +1,8 @@
 //!
 //! # Findora ledger store implementation
 //!
-//!
 
+pub mod api_cache;
 pub mod helpers;
 mod test;
 pub mod utils;
@@ -13,18 +13,23 @@ use crate::{
     data_model::{
         AssetType, AssetTypeCode, AuthenticatedBlock, AuthenticatedTransaction,
         AuthenticatedUtxo, AuthenticatedUtxoStatus, BlockEffect, BlockSID,
-        FinalizedBlock, FinalizedTransaction, IssuerKeyPair, IssuerPublicKey,
+        FinalizedBlock, FinalizedTransaction, IssuerKeyPair, IssuerPublicKey, Operation,
         OutputPosition, StateCommitmentData, Transaction, TransferType, TxnEffect,
-        TxnSID, TxnTempSID, TxoSID, UnAuthenticatedUtxo, Utxo, UtxoStatus,
+        TxnSID, TxnTempSID, TxoSID, UnAuthenticatedUtxo, Utxo, UtxoStatus, XfrAddress,
         BLACK_HOLE_PUBKEY,
     },
-    staking::{Amount, Power, Staking, TendermintAddrRef, FF_PK_LIST, FRA_TOTAL_AMOUNT},
+    staking::{
+        Amount, Power, Staking, TendermintAddrRef, FF_PK_LIST, FRA_TOTAL_AMOUNT,
+        KEEP_HIST,
+    },
 };
+use api_cache::ApiCache;
 use bitmap::{BitMap, SparseMap};
 use bnc::{new_mapx, new_vecx, Mapx, Vecx};
 use cryptohash::sha256::Digest as BitDigest;
 use globutils::{HashOf, ProofOf};
 use merkle_tree::AppendOnlyMerkle;
+use parking_lot::RwLock;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ruc::*;
@@ -36,6 +41,7 @@ use std::{
     io::{BufRead, BufReader, ErrorKind},
     mem,
     ops::{Deref, DerefMut},
+    sync::Arc,
 };
 use zei::xfr::{
     lib::XfrNotePolicies,
@@ -47,27 +53,31 @@ const TRANSACTION_WINDOW_WIDTH: u64 = 128;
 
 type TmpSidMap = HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)>;
 
-/// The findora ledger in-memory representative.
+/// findora ledger
+#[derive(Clone)]
 pub struct LedgerState {
     // major part of State
     status: LedgerStatus,
-    // Merkle tree tracing the sequence of transaction hashes in the block
-    // Each appended hash is the hash of transactions in the same block
-    block_merkle: AppendOnlyMerkle,
-    // Merkle tree tracing the sequence of all transaction hashes
-    // Each appended hash is the hash of a transaction
-    txn_merkle: AppendOnlyMerkle,
+
     /// The `FinalizedTransaction`s consist of a Transaction and an index into
     /// `merkle` representing its hash.
     pub blocks: Vecx<FinalizedBlock>,
     /// <tx id> => [<block id>, <tx idx in block>]
     pub tx_to_block_location: Mapx<TxnSID, [usize; 2]>,
-    // Bitmap tracing all the live TXOs
-    utxo_map: BitMap,
+    /// cache used in APIs
+    pub api_cache: ApiCache,
+
     // current block effect (middle cache)
     block_ctx: Option<BlockEffect>,
 
-    prng: ChaChaRng,
+    // Merkle tree tracing the sequence of transaction hashes in the block
+    // Each appended hash is the hash of transactions in the same block
+    block_merkle: Arc<RwLock<AppendOnlyMerkle>>,
+    // Merkle tree tracing the sequence of all transaction hashes
+    // Each appended hash is the hash of a transaction
+    txn_merkle: Arc<RwLock<AppendOnlyMerkle>>,
+    // Bitmap tracing all the live TXOs
+    utxo_map: Arc<RwLock<BitMap>>,
 }
 
 impl LedgerState {
@@ -78,8 +88,8 @@ impl LedgerState {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn get_prng(&mut self) -> &mut ChaChaRng {
-        &mut self.prng
+    pub fn get_prng(&mut self) -> ChaChaRng {
+        ChaChaRng::from_entropy()
     }
 
     /// Consume a block context and assemble a BlockEffect
@@ -142,16 +152,17 @@ impl LedgerState {
             temp_sid_ix += 1;
         }
 
+        let mut utxo_map = self.utxo_map.write();
         for ix in base_sid..max_sid {
             let temp_sid = txn_temp_sids[temp_sid_ix];
             let utxo_sids = &tsm[&temp_sid].1;
 
             // Only .set() extends the bitmap, so to append a 0 we currently
             // nead to .set() then .clear().
-            self.utxo_map.set(ix as usize).c(d!())?;
+            utxo_map.set(ix as usize).c(d!())?;
             if let Some(TxoSID(utxo_sid)) = utxo_sids.get(txo_sid_ix) {
                 if *utxo_sid != ix {
-                    self.utxo_map.clear(ix as usize).c(d!())?;
+                    utxo_map.clear(ix as usize).c(d!())?;
                 } else {
                     txo_sid_ix += 1;
 
@@ -179,14 +190,14 @@ impl LedgerState {
 
         // Update the transaction Merkle tree
         // Store the location of each utxo so we can create authenticated utxo proofs
+        let mut txn_merkle = self.txn_merkle.write();
         for (tmp_sid, txn) in block.temp_sids.iter().zip(block.txns.iter()) {
             let txn = txn.clone();
             let txo_sid_map = tsm.get(&tmp_sid).c(d!())?;
             let txn_sid = txo_sid_map.0;
             let txo_sids = &txo_sid_map.1;
 
-            let merkle_id = self
-                .txn_merkle
+            let merkle_id = txn_merkle
                 .append_hash(&txn.hash(txn_sid).0.hash.into())
                 .c(d!())?;
 
@@ -203,6 +214,7 @@ impl LedgerState {
                     .insert(*sid, (txn_sid, OutputPosition(position)));
             }
         }
+        drop(txn_merkle);
 
         // Checkpoint
         let block_merkle_id = self.checkpoint(&block).c(d!())?;
@@ -231,13 +243,147 @@ impl LedgerState {
         Ok(())
     }
 
+    /// update data of query server,
+    /// do this op when we create a new block
+    fn update_api_cache(&mut self) -> Result<()> {
+        if !*KEEP_HIST {
+            return Ok(());
+        }
+
+        self.api_cache.cache_hist_data();
+
+        let block = if let Some(b) = self.blocks.last() {
+            b
+        } else {
+            return Ok(());
+        };
+
+        // Update ownership status
+        for (txn_sid, txo_sids) in
+            block.txns.iter().map(|v| (v.tx_id, v.txo_ids.as_slice()))
+        {
+            let curr_txn = self.get_transaction_light(txn_sid).c(d!())?.txn;
+            // get the transaction, ownership addresses, and memos associated with each transaction
+            let (addresses, owner_memos) = {
+                let addresses: Vec<XfrAddress> = txo_sids
+                    .iter()
+                    .map(|sid| XfrAddress {
+                        key: ((self
+                            .get_utxo_light(*sid)
+                            .or_else(|| self.get_spent_utxo_light(*sid))
+                            .unwrap()
+                            .utxo)
+                            .0)
+                            .record
+                            .public_key,
+                    })
+                    .collect();
+
+                let owner_memos = curr_txn.get_owner_memos_ref();
+
+                (addresses, owner_memos)
+            };
+
+            let classify_op = |op: &Operation| {
+                match op {
+                    Operation::Claim(i) => {
+                        let key = i.get_claim_publickey();
+                        #[allow(unused_mut)]
+                        let mut hist = self
+                            .api_cache
+                            .claim_hist_txns
+                            .entry(XfrAddress { key })
+                            .or_insert_with(Vec::new);
+
+                        // keep it in ascending order to reduce memory movement count
+                        match hist.binary_search_by(|a| a.0.cmp(&txn_sid.0)) {
+                            Ok(_) => { /*skip if txn_sid already exists*/ }
+                            Err(idx) => hist.insert(idx, txn_sid),
+                        }
+                    }
+                    Operation::MintFra(i) => i.entries.iter().for_each(|me| {
+                        let key = me.utxo.record.public_key;
+                        #[allow(unused_mut)]
+                        let mut hist = self
+                            .api_cache
+                            .coinbase_oper_hist
+                            .entry(XfrAddress { key })
+                            .or_insert_with(Vec::new);
+                        hist.push((i.height, me.clone()));
+                    }),
+                    _ => { /* filter more operations before this line */ }
+                };
+            };
+
+            // Update related addresses
+            // Apply classify_op for each operation in curr_txn
+            let related_addresses =
+                api_cache::get_related_addresses(&curr_txn, classify_op);
+            for address in &related_addresses {
+                self.api_cache
+                    .related_transactions
+                    .entry(*address)
+                    .or_insert_with(HashSet::new)
+                    .insert(txn_sid);
+            }
+
+            // Update transferred nonconfidential assets
+            let transferred_assets =
+                api_cache::get_transferred_nonconfidential_assets(&curr_txn);
+            for asset in &transferred_assets {
+                self.api_cache
+                    .related_transfers
+                    .entry(*asset)
+                    .or_insert_with(HashSet::new)
+                    .insert(txn_sid);
+            }
+
+            // Add created asset
+            for op in &curr_txn.body.operations {
+                match op {
+                    Operation::DefineAsset(define_asset) => {
+                        self.api_cache.add_created_asset(&define_asset);
+                    }
+                    Operation::IssueAsset(issue_asset) => {
+                        self.api_cache.cache_issuance(&issue_asset);
+                    }
+                    _ => {}
+                };
+            }
+
+            // Add new utxos (this handles both transfers and issuances)
+            for (txo_sid, (address, owner_memo)) in txo_sids
+                .iter()
+                .zip(addresses.iter().zip(owner_memos.iter()))
+            {
+                self.api_cache.utxos_to_map_index.insert(*txo_sid, *address);
+                let hash = curr_txn.hash_tm().hex().to_uppercase();
+                self.api_cache
+                    .txo_to_txnid
+                    .insert(*txo_sid, (txn_sid, hash.clone()));
+                self.api_cache.txn_sid_to_hash.insert(txn_sid, hash.clone());
+                self.api_cache.txn_hash_to_sid.insert(hash.clone(), txn_sid);
+                if let Some(owner_memo) = owner_memo {
+                    self.api_cache
+                        .owner_memos
+                        .insert(*txo_sid, (*owner_memo).clone());
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Finish current block, peform following operations:
     ///    Invalid current input utxos
     ///    Apply current block to ledger status
     ///    Update Utxo map
     pub fn finish_block(&mut self, mut block: BlockEffect) -> Result<TmpSidMap> {
-        for (inp_sid, _) in block.input_txos.iter() {
-            self.utxo_map.clear(inp_sid.0 as usize).c(d!())?;
+        {
+            let mut utxo_map = self.utxo_map.write();
+            for (inp_sid, _) in block.input_txos.iter() {
+                utxo_map.clear(inp_sid.0 as usize).c(d!())?;
+            }
         }
 
         let (tsm, base_sid, max_sid) = self.status.apply_block_effects(&mut block);
@@ -245,6 +391,7 @@ impl LedgerState {
         self.update_utxo_map(base_sid, max_sid, &block.temp_sids, &tsm)
             .c(d!())
             .and_then(|_| self.update_state(block, &tsm).c(d!()))
+            .and_then(|_| self.update_api_cache().c(d!()))
             .map(|_| tsm)
     }
 
@@ -324,6 +471,7 @@ impl LedgerState {
         //  2.1 Update the block Merkle tree
         let ret = self
             .block_merkle
+            .write()
             .append_hash(&txns_in_block_hash.0.hash.into())
             .unwrap();
 
@@ -332,9 +480,9 @@ impl LedgerState {
 
     fn compute_and_save_state_commitment_data(&mut self, pulse_count: u64) {
         let state_commitment_data = StateCommitmentData {
-            bitmap: self.utxo_map.compute_checksum(),
-            block_merkle: self.block_merkle.get_root_hash(),
-            transaction_merkle_commitment: self.txn_merkle.get_root_hash(),
+            bitmap: self.utxo_map.write().compute_checksum(),
+            block_merkle: self.block_merkle.read().get_root_hash(),
+            transaction_merkle_commitment: self.txn_merkle.read().get_root_hash(),
             txns_in_block_hash: self
                 .status
                 .txns_in_block_hash
@@ -397,18 +545,24 @@ impl LedgerState {
         let snapshot_file = format!("{}ledger_status", &prefix);
         let snapshot_entries_dir = prefix.clone() + "ledger_status_subdata";
         let blocks_path = prefix.clone() + "blocks";
-        let tx_to_block_location_path = prefix + "tx_to_block_location";
+        let tx_to_block_location_path = prefix.clone() + "tx_to_block_location";
 
         let ledger = LedgerState {
             status: LedgerStatus::new(&basedir, &snapshot_file, &snapshot_entries_dir)
                 .c(d!())?,
-            prng: ChaChaRng::from_entropy(),
-            block_merkle: LedgerState::init_merkle_log(&block_merkle_path).c(d!())?,
-            txn_merkle: LedgerState::init_merkle_log(&txn_merkle_path).c(d!())?,
+            block_merkle: Arc::new(RwLock::new(
+                LedgerState::init_merkle_log(&block_merkle_path).c(d!())?,
+            )),
+            txn_merkle: Arc::new(RwLock::new(
+                LedgerState::init_merkle_log(&txn_merkle_path).c(d!())?,
+            )),
             blocks: new_vecx!(&blocks_path),
             tx_to_block_location: new_mapx!(&tx_to_block_location_path),
-            utxo_map: LedgerState::init_utxo_map(&utxo_map_path).c(d!())?,
+            utxo_map: Arc::new(RwLock::new(
+                LedgerState::init_utxo_map(&utxo_map_path).c(d!())?,
+            )),
             block_ctx: Some(BlockEffect::default()),
+            api_cache: ApiCache::new(&prefix),
         };
 
         Ok(ledger)
@@ -436,7 +590,7 @@ impl LedgerState {
 
         let h = ledger.get_tendermint_height() as u64;
         ledger.get_staking_mut().set_custom_block_height(h);
-        omit!(ledger.utxo_map.compute_checksum());
+        omit!(ledger.utxo_map.write().compute_checksum());
         ledger.fast_invariant_check().c(d!())?;
 
         flush_data();
@@ -458,9 +612,9 @@ impl LedgerState {
             .cur_height()
             .saturating_sub(self.get_block_commit_count() + 1);
         self.compute_and_save_state_commitment_data(pulse_count);
-        self.utxo_map.write().c(d!())?;
-        self.txn_merkle.write().c(d!())?;
-        self.block_merkle.write().c(d!())?;
+        self.utxo_map.write().write().c(d!())?;
+        self.txn_merkle.write().write().c(d!())?;
+        self.block_merkle.write().write().c(d!())?;
 
         Ok(merkle_id)
     }
@@ -775,7 +929,7 @@ impl LedgerState {
         let utxo_map_bytes;
         let status;
         if addr.0 < state_commitment_data.txo_count {
-            utxo_map_bytes = Some(self.utxo_map.serialize(0));
+            utxo_map_bytes = Some(self.utxo_map.read().serialize(0));
             let utxo_map =
                 SparseMap::new(&utxo_map_bytes.as_ref().unwrap().clone()).unwrap();
             status = if utxo_map.query(addr.0).unwrap() {
@@ -809,7 +963,7 @@ impl LedgerState {
             let state_commitment_data =
                 self.status.state_commitment_data.as_ref().c(d!())?.clone();
             let merkle = &self.txn_merkle;
-            let proof = ProofOf::new(merkle.get_proof(tx.merkle_id, 0).c(d!())?);
+            let proof = ProofOf::new(merkle.read().get_proof(tx.merkle_id, 0).c(d!())?);
 
             Ok(AuthenticatedTransaction {
                 finalized_txn: tx,
@@ -840,6 +994,7 @@ impl LedgerState {
             Some(finalized_block) => {
                 let block_inclusion_proof = ProofOf::new(
                     self.block_merkle
+                        .read()
                         .get_proof(finalized_block.merkle_id, 0)
                         .unwrap(),
                 );
@@ -880,7 +1035,7 @@ impl LedgerState {
 }
 
 /// The main LedgerStatus of findora ledger
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub struct LedgerStatus {
     /// the file path of the snapshot
     pub snapshot_file: String,
