@@ -5,6 +5,7 @@ use abci::*;
 use fp_mocks::*;
 use fp_traits::account::{AccountAsset, FeeCalculator};
 use fp_types::{actions::template::Action as TemplateAction, actions::Action};
+use fp_utils::tx::EvmRawTxWrapper;
 use module_template::ValueStore;
 use std::convert::TryInto;
 
@@ -54,8 +55,10 @@ fn test_abci_check_tx() {
     let mut req = RequestCheckTx::default();
 
     let function = Action::Template(TemplateAction::SetValue(10));
-    req.tx =
+    let tx =
         serde_json::to_vec(&build_signed_transaction(function, &ALICE_XFR, 0)).unwrap();
+    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
+    req.tx = txn_with_tag;
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -90,8 +93,10 @@ fn test_abci_begin_block() {
 fn test_abci_deliver_tx() {
     let mut req = RequestDeliverTx::default();
     let function = Action::Template(TemplateAction::SetValue(10));
-    req.tx =
+    let tx =
         serde_json::to_vec(&build_signed_transaction(function, &ALICE_XFR, 0)).unwrap();
+    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
+    req.tx = txn_with_tag;
     let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -158,8 +163,10 @@ fn test_abci_check_tx_with_bad_nonce() {
     let mut req = RequestCheckTx::default();
 
     let function = Action::Template(TemplateAction::SetValue(10));
-    req.tx =
+    let tx =
         serde_json::to_vec(&build_signed_transaction(function, &ALICE_XFR, 0)).unwrap();
+    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
+    req.tx = txn_with_tag;
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
     assert!(
         resp.code == 1 && resp.log.contains("InvalidNonce, expected: 1, actual: 0"),

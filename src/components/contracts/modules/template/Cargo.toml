@@ -18,6 +18,7 @@ serde_json = "1.0"
 fp-core = { path = "../../primitives/core" }
 fp-storage = { path = "../../primitives/storage" }
 fp-types = { path = "../../primitives/types" }
+fp-utils = { path = "../../primitives/utils" }
 
 [dev-dependencies]
 fp-mocks = { path = "../../primitives/mocks" }

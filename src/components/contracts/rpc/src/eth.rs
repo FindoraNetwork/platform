@@ -21,6 +21,7 @@ use fp_types::{
     actions::evm::{Call, Create},
     assemble::UncheckedTransaction,
 };
+use fp_utils::tx::EvmRawTxWrapper;
 use fp_utils::{ecdsa::SecpPair, proposer_converter};
 use jsonrpc_core::{futures::future, BoxFuture, Result};
 use lazy_static::lazy_static;
@@ -180,8 +181,10 @@ impl EthApi for EthApiImpl {
             return Box::pin(future::err(e));
         }
 
+        let txn_with_tag = EvmRawTxWrapper::wrap(&txn.unwrap());
+
         let client = self.tm_client.clone();
-        RT.spawn(async move { client.broadcast_tx_sync(txn.unwrap().into()).await });
+        RT.spawn(async move { client.broadcast_tx_sync(txn_with_tag.into()).await });
         Box::pin(future::ok(transaction_hash))
     }
 
@@ -464,8 +467,10 @@ impl EthApi for EthApiImpl {
             return Box::pin(future::err(e));
         }
 
+        let txn_with_tag = EvmRawTxWrapper::wrap(&txn.unwrap());
+
         let client = self.tm_client.clone();
-        RT.spawn(async move { client.broadcast_tx_sync(txn.unwrap().into()).await });
+        RT.spawn(async move { client.broadcast_tx_sync(txn_with_tag.into()).await });
         Box::pin(future::ok(transaction_hash))
     }
 

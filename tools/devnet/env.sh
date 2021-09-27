@@ -19,10 +19,10 @@ ABCI_LOG_LEVEL="abciapp=debug,baseapp=info,account=info,ethereum=info,evm=info,e
 
 # keypair
 MNEMONIC="zoo nerve assault talk depend approve mercy surge bicycle ridge dismiss satoshi boring opera next fat cinnamon valley office actor above spray alcohol giant"
-PRIV_KEY="tffuZXQRo4XZcD7Xwm09JOoIJT6vdRe_8gZLxWRuB9U="
+PRIV_KEY="o9gXFI5ft1VOkzYhvFpgUTWVoskM1CEih0zJcm3-EAQ="
 
 # other
-export BLOCK_INTERVAL="6"
+export BLOCK_INTERVAL="5"
 
 # show envs
 if [ "$1" == "s" ]; then
