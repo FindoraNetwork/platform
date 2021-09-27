@@ -425,10 +425,11 @@ impl TransactionBuilder {
     pub fn add_operation_delegate(
         mut self,
         keypair: &XfrKeyPair,
+        amount: u64,
         validator: TendermintAddr,
     ) -> Result<TransactionBuilder, JsValue> {
         self.get_builder_mut()
-            .add_operation_delegation(keypair, validator);
+            .add_operation_delegation(keypair, amount, validator);
         Ok(self)
     }
 
