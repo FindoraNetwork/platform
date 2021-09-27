@@ -348,7 +348,7 @@ mod delegate {
         .c(d!())
         .map(|principal_op| {
             builder.add_operation(principal_op);
-            builder.add_operation_delegation(owner_kp, validator.to_owned());
+            builder.add_operation_delegation(owner_kp, amount, validator.to_owned());
         })?;
 
         Ok(builder.take_transaction())
