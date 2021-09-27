@@ -14,15 +14,15 @@ use crate::{
 use lazy_static::lazy_static;
 use ruc::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
 lazy_static! {
     // The current MVP version is a fixed rule,
     // and it will be upgraded to a mechanism
     // that can update rules by sending a specific transaction.
-    static ref RULES: HashMap<ByzantineKind, Rule> = {
-        map! {
+    static ref RULES: BTreeMap<ByzantineKind, Rule> = {
+        map! { B
             ByzantineKind::DuplicateVote => Rule::new([5, 100]),
             ByzantineKind::LightClientAttack => Rule::new([1, 100]),
             ByzantineKind::Unknown => Rule::new([30, 100]),
@@ -114,14 +114,14 @@ impl Data {
 }
 
 /// Kinds of byzantine behavior and corresponding punishment mechanism.
-pub type RuleSet = HashMap<ByzantineKind, Rule>;
+pub type RuleSet = BTreeMap<ByzantineKind, Rule>;
 
 /// Kinds of byzantine behaviors:
 /// - `DuplicateVote` and `LightClientAttack` can be auto-detected by tendermint
 /// - other attack kinds need to be defined and applied on the application side
 #[non_exhaustive]
 #[allow(missing_docs)]
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum ByzantineKind {
     DuplicateVote,
     LightClientAttack,

@@ -5,8 +5,13 @@
 mod utils;
 
 use crate::{
-    abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV},
-    api::{query_server::BLOCK_CREATED, submission_server::convert_tx},
+    abci::{
+        config::global_cfg::CFG, server::ABCISubmissionServer, staking, IN_SAFE_ITV,
+    },
+    api::{
+        query_server::BLOCK_CREATED,
+        submission_server::{convert_tx, try_tx_catalog, TxCatalog},
+    },
 };
 use abci::{
     Application, RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx,
@@ -141,33 +146,49 @@ pub fn deliver_tx(
     req: &RequestDeliverTx,
 ) -> ResponseDeliverTx {
     let mut resp = ResponseDeliverTx::new();
-    if let Some(tx) = convert_tx(req.get_tx()) {
-        if !is_coinbase_tx(&tx)
-            && tx.is_basic_valid(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed))
-        {
-            if *KEEP_HIST {
-                // set attr(tags) if any, only needed on a fullnode
-                let attr = utils::gen_tendermint_attr(&tx);
-                if !attr.is_empty() {
-                    resp.set_events(attr);
+    let tx_catalog = try_tx_catalog(req.get_tx());
+    match tx_catalog {
+        TxCatalog::FindoraTx => {
+            if let Some(tx) = convert_tx(req.get_tx()) {
+                if !is_coinbase_tx(&tx)
+                    && tx.is_basic_valid(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed))
+                {
+                    if *KEEP_HIST {
+                        // set attr(tags) if any, only needed on a fullnode
+                        let attr = utils::gen_tendermint_attr(&tx);
+                        if !attr.is_empty() {
+                            resp.set_events(attr);
+                        }
+                    }
+
+                    if s.la.write().cache_transaction(tx.clone()).is_ok() {
+                        if is_convert_tx(&tx)
+                            && s.account_base_app
+                                .write()
+                                .deliver_findora_tx(&tx)
+                                .is_err()
+                        {
+                            resp.code = 1;
+                            resp.log = String::from("Failed to deliver transaction!");
+                        }
+                        return resp;
+                    }
                 }
+
+                resp.code = 1;
+                resp.log = String::from("Failed to deliver transaction!");
             }
 
-            if s.la.write().cache_transaction(tx.clone()).is_ok() {
-                if is_convert_tx(&tx)
-                    && s.account_base_app.write().deliver_findora_tx(&tx).is_err()
-                {
-                    resp.code = 1;
-                    resp.log = String::from("Failed to deliver transaction!");
-                }
-                return resp;
-            }
+            resp
         }
-        resp.code = 1;
-        resp.log = String::from("Failed to deliver transaction!");
-        resp
-    } else {
-        s.account_base_app.write().deliver_tx(req)
+        TxCatalog::EvmTx => {
+            return s.account_base_app.write().deliver_tx(req);
+        }
+        TxCatalog::Unknown => {
+            resp.code = 1;
+            resp.log = String::from("Failed to deliver transaction!");
+            resp
+        }
     }
 }
 
@@ -228,10 +249,10 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     state.set_tendermint_commit(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed) as u64);
 
     // snapshot them finally
+    let path = format!("{}/{}", &CFG.ledger_dir, &state.get_status().snapshot_file);
     pnk!(serde_json::to_vec(&state.get_status())
         .c(d!())
-        .and_then(|s| fs::write(&state.get_status().snapshot_path, s)
-            .c(d!(state.get_status().snapshot_path.clone()))));
+        .and_then(|s| fs::write(&path, s).c(d!(path))));
 
     let mut r = ResponseCommit::new();
     let mut commitment = state.get_state_commitment().0.as_ref().to_vec();

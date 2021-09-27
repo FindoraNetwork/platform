@@ -31,7 +31,7 @@ lazy_static! {
 
 /// Starting findorad
 pub fn run() -> Result<()> {
-    let base_dir = {
+    let basedir = {
         fs::create_dir_all(&CFG.ledger_dir).c(d!())?;
         Some(CFG.ledger_dir.as_str())
     };
@@ -42,7 +42,7 @@ pub fn run() -> Result<()> {
     env::set_var("BNC_DATA_DIR", format!("{}/__bnc__", &config.ledger_dir));
 
     let app = server::ABCISubmissionServer::new(
-        base_dir,
+        basedir,
         format!("{}:{}", config.tendermint_host, config.tendermint_port),
     )?;
 
@@ -61,7 +61,7 @@ pub fn run() -> Result<()> {
             Some(&config.ledger_dir),
         ))
         .write()
-        .update();
+        .update(&config.ledger_dir);
 
         let submission_host = config.abci_host.clone();
         let submission_port = config.submission_port;
@@ -83,8 +83,13 @@ pub fn run() -> Result<()> {
             "http://{}:{}",
             config.tendermint_host, config.tendermint_port
         );
-        web3_rpc =
-            fc_rpc::start_web3_service(evm_http, evm_ws, tendermint_rpc, base_app);
+        web3_rpc = fc_rpc::start_web3_service(
+            evm_http,
+            evm_ws,
+            tendermint_rpc,
+            base_app,
+            10000,
+        );
     }
 
     let addr_str = format!("{}:{}", config.abci_host, config.abci_port);

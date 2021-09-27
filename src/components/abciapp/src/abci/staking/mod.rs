@@ -31,7 +31,7 @@ use ledger::{
 use ruc::*;
 use serde::Serialize;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     ops::{Deref, DerefMut},
     sync::atomic::Ordering,
 };
@@ -85,9 +85,9 @@ pub fn get_validators(
             .as_slice()
             .iter()
             .flat_map(|v| v.validator.as_ref().map(|v| (&v.address, v.power)))
-            .collect::<HashMap<_, _>>()
+            .collect::<BTreeMap<_, _>>()
     } else {
-        map! {}
+        BTreeMap::new()
     };
 
     // The logic of the context guarantees:
@@ -186,7 +186,7 @@ pub fn system_ops(
             .iter()
             .filter(|v| v.signed_last_block)
             .flat_map(|info| info.validator.as_ref().map(|v| &v.address))
-            .collect::<HashSet<_>>();
+            .collect::<BTreeSet<_>>();
 
         // mark if a validator is online at last block
         if let Ok(vd) = ruc::info!(la.get_staking_mut().validator_get_current_mut()) {
@@ -344,7 +344,7 @@ pub fn system_mint_pay(
 /// filtering online lists from staking's validators
 fn gen_offline_punish_list(
     staking: &Staking,
-    online_list: &HashSet<&Vec<u8>>,
+    online_list: &BTreeSet<&Vec<u8>>,
 ) -> Result<Vec<Vec<u8>>> {
     let last_height = TENDERMINT_BLOCK_HEIGHT
         .load(Ordering::Relaxed)

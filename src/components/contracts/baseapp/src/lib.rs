@@ -12,6 +12,7 @@ mod notify;
 
 use crate::modules::ModuleManager;
 use abci::Header;
+use ethereum::BlockV0 as Block;
 use fp_core::{
     account::SmartAccount,
     context::{Context, RunTxMode},
@@ -120,9 +121,9 @@ impl module_evm::Config for BaseApp {
 }
 
 impl BaseApp {
-    pub fn new(base_dir: &Path, empty_block: bool) -> Result<Self> {
+    pub fn new(basedir: &Path, empty_block: bool) -> Result<Self> {
         // Creates a fresh chain state db
-        let fdb_path = base_dir.join(CHAIN_STATE_PATH);
+        let fdb_path = basedir.join(CHAIN_STATE_PATH);
         let fdb = FinDB::open(fdb_path.as_path())?;
         let chain_state = Arc::new(RwLock::new(ChainState::new(
             fdb,
@@ -138,10 +139,7 @@ impl BaseApp {
             check_state: Context::new(chain_state.clone()),
             deliver_state: Context::new(chain_state),
             modules: ModuleManager {
-                ethereum_module: module_ethereum::App::<Self>::new(
-                    base_dir,
-                    empty_block,
-                ),
+                ethereum_module: module_ethereum::App::<Self>::new(empty_block),
                 ..Default::default()
             },
             event_notify: Notifications::new(),
@@ -268,10 +266,10 @@ impl BaseProvider for BaseApp {
             Some(ctx) => ctx,
         };
         module_account::App::<Self>::account_of(&ctx, who)
-            .ok_or(eg!("account does not exist"))
+            .ok_or(eg!(format!("account does not exist: {}", who)))
     }
 
-    fn current_block(&self, id: Option<BlockId>) -> Option<ethereum::Block> {
+    fn current_block(&self, id: Option<BlockId>) -> Option<Block> {
         if let Ok(ctx) = self.create_query_context(0, false) {
             self.modules.ethereum_module.current_block(&ctx, id)
         } else {

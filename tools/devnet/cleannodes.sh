@@ -1,41 +1,43 @@
 #!/usr/bin/env bash
-RED='\033[31m'
-GRN="\033[32m"
-NC='\033[0m'
 
-# paths
-DEVNET="$LEDGER_DIR/devnet"
+# env
+source tools/devnet/env.sh || exit
+
 
 # stop nodes
-script_stop=$(dirname "$0")/stopnodes.sh
-bash "$script_stop"
+Node=""
+if [ ! -z "$1" ];
+then
+    Node="node$1"
+    tools/devnet/stopnodes.sh "$1"
+else
+    tools/devnet/stopnodes.sh
+fi
 
 # clean nodes
 nodes=`ls -l $DEVNET | grep node | awk '(NR>0){print $9}' | sort -V`
 echo -n "cleaned: "
 for node in $nodes
 do
+if [ -z "$Node" ] || ([ ! -z "$Node" ] && [ "$Node" = "$node" ]); then
+    echo -en "$node "
+    # abcis
+    ls -d $DEVNET/$node/abci/* | grep -v 'abci.toml' | xargs rm -r
 
-echo -en "$node "
-# abcis
-rm -rf $DEVNET/$node/abci/utxo_map
-rm -rf $DEVNET/$node/abci/txn_merkle
-rm -rf $DEVNET/$node/abci/txn_log
-rm -rf $DEVNET/$node/abci/block_merkle
-
-# tendermint
-rm -rf $DEVNET/$node/data/*.db
-rm -rf $DEVNET/$node/data/cs.wal
-rm -rf $DEVNET/$node/config/addrbook.json
-rm -rf $DEVNET/$node/abci_validator.log
-rm -rf $DEVNET/$node/consensus.log
-cat > $DEVNET/$node/data/priv_validator_state.json <<EOF
+    # tendermint
+    rm -rf $DEVNET/$node/data/*.db
+    rm -rf $DEVNET/$node/data/cs.wal
+    rm -rf $DEVNET/$node/config/addrbook.json
+    rm -rf $DEVNET/$node/abcid.log
+    rm -rf $DEVNET/$node/consensus.log
+    cat > $DEVNET/$node/data/priv_validator_state.json <<EOF
 {
-"height": "0",
-"round": "0",
-"step": 0
+  "height": "0",
+  "round": "0",
+  "step": 0
 }
 EOF
-done
 
+fi
+done
 echo

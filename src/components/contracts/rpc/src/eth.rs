@@ -1,8 +1,8 @@
 use crate::{error_on_execution_failure, internal_err};
 use baseapp::{extensions::SignedExtra, BaseApp};
 use ethereum::{
-    Block as EthereumBlock, Transaction as EthereumTransaction,
-    TransactionMessage as EthereumTransactionMessage,
+    BlockV0 as EthereumBlock, LegacyTransactionMessage as EthereumTransactionMessage,
+    LegacyTransactionMessage, TransactionV0 as EthereumTransaction,
 };
 use ethereum_types::{BigEndianHash, H160, H256, H512, H64, U256, U64};
 use fp_evm::{BlockId, Runner, TransactionStatus};
@@ -21,6 +21,7 @@ use fp_types::{
     actions::evm::{Call, Create},
     assemble::UncheckedTransaction,
 };
+use fp_utils::tx::EvmRawTxWrapper;
 use fp_utils::{ecdsa::SecpPair, proposer_converter};
 use jsonrpc_core::{futures::future, BoxFuture, Result};
 use lazy_static::lazy_static;
@@ -43,6 +44,7 @@ pub struct EthApiImpl {
     account_base_app: Arc<RwLock<BaseApp>>,
     signers: Vec<SecpPair>,
     tm_client: Arc<HttpClient>,
+    max_past_logs: u32,
 }
 
 impl EthApiImpl {
@@ -50,11 +52,13 @@ impl EthApiImpl {
         url: String,
         account_base_app: Arc<RwLock<BaseApp>>,
         signers: Vec<SecpPair>,
+        max_past_logs: u32,
     ) -> Self {
         Self {
             account_base_app,
             signers,
             tm_client: Arc::new(HttpClient::new(url.as_str()).unwrap()),
+            max_past_logs,
         }
     }
 }
@@ -131,7 +135,7 @@ impl EthApi for EthApiImpl {
             Err(e) => return Box::pin(future::err(e)),
         };
 
-        let message = ethereum::TransactionMessage {
+        let message = EthereumTransactionMessage {
             nonce,
             gas_price: request.gas_price.unwrap_or_else(
                 <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price,
@@ -177,8 +181,10 @@ impl EthApi for EthApiImpl {
             return Box::pin(future::err(e));
         }
 
+        let txn_with_tag = EvmRawTxWrapper::wrap(&txn.unwrap());
+
         let client = self.tm_client.clone();
-        RT.spawn(async move { client.broadcast_tx_sync(txn.unwrap().into()).await });
+        RT.spawn(async move { client.broadcast_tx_sync(txn_with_tag.into()).await });
         Box::pin(future::ok(transaction_hash))
     }
 
@@ -443,7 +449,7 @@ impl EthApi for EthApiImpl {
     fn send_raw_transaction(&self, bytes: Bytes) -> BoxFuture<Result<H256>> {
         debug!(target: "eth_rpc", "send_raw_transaction, bytes:{:?}", bytes);
 
-        let transaction = match rlp::decode::<ethereum::Transaction>(&bytes.0[..]) {
+        let transaction = match rlp::decode::<EthereumTransaction>(&bytes.0[..]) {
             Ok(transaction) => transaction,
             Err(_) => {
                 return Box::pin(future::err(internal_err("decode transaction failed")));
@@ -461,8 +467,10 @@ impl EthApi for EthApiImpl {
             return Box::pin(future::err(e));
         }
 
+        let txn_with_tag = EvmRawTxWrapper::wrap(&txn.unwrap());
+
         let client = self.tm_client.clone();
-        RT.spawn(async move { client.broadcast_tx_sync(txn.unwrap().into()).await });
+        RT.spawn(async move { client.broadcast_tx_sync(txn_with_tag.into()).await });
         Box::pin(future::ok(transaction_hash))
     }
 
@@ -752,7 +760,40 @@ impl EthApi for EthApiImpl {
             if let (Some(block), Some(statuses)) = (block, statuses) {
                 filter_block_logs(&mut ret, &filter, block, statuses);
             }
+        } else {
+            let current_number = self
+                .account_base_app
+                .read()
+                .current_block_number()
+                .unwrap_or_default();
+            let mut to_number = filter
+                .to_block
+                .clone()
+                .and_then(|v| v.to_min_block_num())
+                .map(|s| s.into())
+                .unwrap_or(current_number);
+
+            if to_number > current_number {
+                to_number = current_number;
+            }
+
+            let from_number = filter
+                .from_block
+                .clone()
+                .and_then(|v| v.to_min_block_num())
+                .map(|s| s.into())
+                .unwrap_or(current_number);
+
+            filter_range_logs(
+                self.account_base_app.clone(),
+                &mut ret,
+                self.max_past_logs,
+                &filter,
+                from_number,
+                to_number,
+            )?;
         }
+        debug!(target: "eth_rpc", "logs, ret: {:?}", ret);
         Ok(ret)
     }
 
@@ -775,9 +816,9 @@ impl EthApi for EthApiImpl {
 }
 
 pub fn sign_transaction_message(
-    message: ethereum::TransactionMessage,
+    message: LegacyTransactionMessage,
     private_key: &H256,
-) -> ruc::Result<ethereum::Transaction> {
+) -> ruc::Result<EthereumTransaction> {
     let signing_message = libsecp256k1::Message::parse_slice(&message.hash()[..])
         .map_err(|_| eg!("invalid signing message"))?;
     let secret = &libsecp256k1::SecretKey::parse_slice(&private_key[..])
@@ -792,7 +833,7 @@ pub fn sign_transaction_message(
     let r = H256::from_slice(&rs[0..32]);
     let s = H256::from_slice(&rs[32..64]);
 
-    Ok(ethereum::Transaction {
+    Ok(EthereumTransaction {
         nonce: message.nonce,
         gas_price: message.gas_price,
         gas_limit: message.gas_limit,
@@ -805,7 +846,7 @@ pub fn sign_transaction_message(
 }
 
 fn rich_block_build(
-    block: ethereum::Block,
+    block: EthereumBlock,
     statuses: Vec<Option<TransactionStatus>>,
     hash: Option<H256>,
     full_transactions: bool,
@@ -942,6 +983,59 @@ pub fn public_key(transaction: &EthereumTransaction) -> ruc::Result<[u8; 64]> {
     );
 
     fp_types::crypto::secp256k1_ecdsa_recover(&sig, &msg)
+}
+
+fn filter_range_logs(
+    app: Arc<RwLock<BaseApp>>,
+    ret: &mut Vec<Log>,
+    max_past_logs: u32,
+    filter: &Filter,
+    from: U256,
+    to: U256,
+) -> Result<()> {
+    let mut current_number = to;
+
+    let topics_input = if filter.topics.is_some() {
+        let filtered_params = FilteredParams::new(Some(filter.clone()));
+        Some(filtered_params.flat_topics)
+    } else {
+        None
+    };
+    let address_bloom_filter = FilteredParams::addresses_bloom_filter(&filter.address);
+    let topics_bloom_filter = FilteredParams::topics_bloom_filter(&topics_input);
+
+    while current_number >= from {
+        let id = BlockId::Number(current_number);
+        let block = app.read().current_block(Some(id.clone()));
+
+        if let Some(block) = block {
+            if FilteredParams::address_in_bloom(
+                block.header.logs_bloom,
+                &address_bloom_filter,
+            ) && FilteredParams::topics_in_bloom(
+                block.header.logs_bloom,
+                &topics_bloom_filter,
+            ) {
+                let statuses = app.read().current_transaction_statuses(Some(id));
+                if let Some(statuses) = statuses {
+                    filter_block_logs(ret, filter, block, statuses);
+                }
+            }
+        }
+        // Check for restrictions
+        if ret.len() as u32 > max_past_logs {
+            return Err(internal_err(format!(
+                "query returned more than {} results",
+                max_past_logs
+            )));
+        }
+        if current_number == U256::zero() {
+            break;
+        } else {
+            current_number = current_number.saturating_sub(U256::one());
+        }
+    }
+    Ok(())
 }
 
 fn filter_block_logs<'a>(

@@ -7,7 +7,7 @@ pub use baseapp::{
 };
 pub use fp_types::{actions::Action, assemble::UncheckedTransaction};
 
-use ethereum::{Transaction, TransactionAction, TransactionSignature};
+use ethereum::{TransactionAction, TransactionSignature, TransactionV0 as Transaction};
 use fp_traits::account::AccountAsset;
 use fp_traits::evm::{AddressMapping, EthereumAddressMapping};
 use fp_types::crypto::{Address, MultiSignature};

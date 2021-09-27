@@ -198,8 +198,8 @@ mod init {
         println!(">>> define and issue FRA...");
         common::utils::send_tx(&fra_gen_initial_tx(&root_kp)).c(d!())?;
 
-        println!(">>> wait 1 block...");
-        sleep_n_block!(1, interval);
+        println!(">>> wait 2 block...");
+        sleep_n_block!(2, interval);
 
         if skip_validator {
             println!(">>> DONE !");
@@ -209,8 +209,8 @@ mod init {
         println!(">>> set initial validator set...");
         common::utils::set_initial_validators(&root_kp).c(d!())?;
 
-        println!(">>> wait 4 blocks...");
-        sleep_n_block!(4, interval);
+        println!(">>> wait 5 blocks...");
+        sleep_n_block!(5, interval);
 
         let mut target_list = USER_LIST
             .values()

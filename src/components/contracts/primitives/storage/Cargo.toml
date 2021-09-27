@@ -1,7 +1,7 @@
 [package]
 name = "fp-storage"
 version = "0.1.0"
-authors = ["Findora <admin@findora.org>"]
+authors = ["FindoraNetwork"]
 edition = "2018"
 homepage = "https://findora.org/technology"
 repository = "https://github.com/findoranetwork/platform/"
@@ -15,7 +15,7 @@ ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.9.5"
-storage = { git = "ssh://git@github.com/FindoraNetwork/storage.git", branch = "develop" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", branch = "dev-unify-state-interface" }
 
 # primitives
 fp-core = { path = "../core" }

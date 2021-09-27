@@ -15,17 +15,22 @@ use std::{sync::Arc, thread};
 pub fn start_query_server(
     ledger: Arc<RwLock<LedgerState>>,
     addrs: &[(&str, u16)],
-    base_dir: Option<&str>,
+    basedir: Option<&str>,
 ) -> Result<Arc<RwLock<QueryServer>>> {
-    let qs = Arc::new(RwLock::new(QueryServer::new(ledger, base_dir).c(d!())?));
-    QueryApi::create(Arc::clone(&qs), addrs).c(d!()).map(|_| {
-        let qs1 = Arc::clone(&qs);
+    let qs = QueryServer::new(ledger, basedir).c(d!())?;
+    let basedir = qs.basedir.clone();
+
+    let qs = Arc::new(RwLock::new(qs));
+    let qs1 = Arc::clone(&qs);
+    let qs2 = Arc::clone(&qs);
+
+    QueryApi::create(qs1, addrs).c(d!()).map(|_| {
         thread::spawn(move || loop {
             let mut created = BLOCK_CREATED.0.lock();
             if !*created {
                 BLOCK_CREATED.1.wait(&mut created);
             }
-            qs1.write().update();
+            qs2.write().update(&basedir);
             *created = false;
         });
         qs

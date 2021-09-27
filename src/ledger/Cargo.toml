@@ -35,12 +35,13 @@ indexmap = { version = "1.6.2", features = ["serde"] }
 fp-types = { path = "../components/contracts/primitives/types" }
 
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
-zei = { git = "ssh://git@github.com/FindoraNetwork/zei", branch = "develop" }
-zeiutils = { package = "utils", git = "ssh://git@github.com/FindoraNetwork/zei", branch = "develop" }
-zeialgebra = { package = "algebra", git = "ssh://git@github.com/FindoraNetwork/zei", branch = "develop" }
-bulletproofs = { package = "bulletproofs", git = "ssh://git@github.com/FindoraNetwork/bulletproofs", branch = "batch_verification", features = ["yoloproofs"] }
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zeialgebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+bulletproofs = { package = "bulletproofs", git = "https://github.com/FindoraNetwork/bulletproofs", branch = "batch_verification", features = ["yoloproofs"] }
 bnc = { git = "https://github.com/FindoraNetwork/BNC.git", tag = "v0.2.0a", default-features = false }
-storage = { git = "ssh://git@github.com/FindoraNetwork/storage.git", branch = "develop" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", branch = "develop" }
+
 
 globutils = { path = "../libs/globutils" }
 bitmap = { path = "../libs/bitmap" }

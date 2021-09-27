@@ -216,6 +216,7 @@ mod init {
     use std::{fs, str};
 
     const QA01_GENESIS_URL: &str = "https://dev-qa01.dev.findora.org:26657/genesis";
+    const EVM_GENESIS_URL: &str = "https://dev-evm.dev.findora.org:26657/genesis";
     const TESTNET_GENESIS_URL: &str =
         "https://prod-testnet.prod.findora.org:26657/genesis";
     const MAINNET_GENESIS_URL: &str =
@@ -228,6 +229,7 @@ mod init {
         Testnet,
         Mainnet,
         Qa01,
+        Evm,
     }
 
     impl Default for InitMode {
@@ -255,6 +257,7 @@ mod init {
             InitMode::Testnet => save_genesis(TESTNET_GENESIS_URL, path)?,
             InitMode::Mainnet => save_genesis(MAINNET_GENESIS_URL, path)?,
             InitMode::Qa01 => save_genesis(QA01_GENESIS_URL, path)?,
+            InitMode::Evm => save_genesis(EVM_GENESIS_URL, path)?,
             InitMode::Dev => {}
         }
         Ok(())
@@ -317,6 +320,12 @@ mod init {
                     "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@dev-qa01-us-west-2-sentry-000-public.dev.findora.org:26656\"",
                 )
             }
+            InitMode::Evm => {
+                config.replace(
+                    "persistent_peers = \"\"",
+                    "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@dev-evm-us-west-2-sentry-000-public.dev.findora.org:26656\"",
+                )
+            }
             InitMode::Dev => config,
         };
         fs::write(path, result).c(d!())?;
@@ -377,11 +386,12 @@ mod config {
 
             let init = SubCommand::with_name("init")
                     .about("Initialize the configurations of findorad")
-                    .arg_from_usage("--dev-net 'Initialize for Findora Local DevNet.'")
-                    .arg_from_usage("--test-net 'Initialize for Findora TestNet.'")
-                    .arg_from_usage("--main-net 'Initialize for Findora MainNet.'")
-                    .arg_from_usage("--qa01-net 'Initialize for Findora QA01.'")
-                    .group(ArgGroup::with_name("environment").args(&["dev-net", "test-net", "main-net", "qa01-net"]))
+                    .arg_from_usage("--devnet 'Initialize for Findora Local DevNet.'")
+                    .arg_from_usage("--testnet 'Initialize for Findora TestNet.'")
+                    .arg_from_usage("--mainnet 'Initialize for Findora MainNet.'")
+                    .arg_from_usage("--qa01 'Initialize for Findora QA01.'")
+                    .arg_from_usage("--evm 'Initialize for Findora EVM.'")
+                    .group(ArgGroup::with_name("environment").args(&["devnet", "testnet", "mainnet", "qa01", "evm"]))
                     .arg_from_usage(
                         "-b, --base-dir=[DIR] 'The root directory for tendermint config, aka $TENDERMINT_HOME'",
                     );
@@ -478,14 +488,16 @@ mod config {
                     .unwrap_or_else(|_| format!("{}/__findora__", &tdir))
             });
 
-        let init_mode = if m.is_present("dev-net") {
+        let init_mode = if m.is_present("devnet") {
             InitMode::Dev
-        } else if m.is_present("test-net") {
+        } else if m.is_present("testnet") {
             InitMode::Testnet
-        } else if m.is_present("main-net") {
+        } else if m.is_present("mainnet") {
             InitMode::Mainnet
-        } else if m.is_present("qa01-net") {
+        } else if m.is_present("qa01") {
             InitMode::Qa01
+        } else if m.is_present("evm") {
+            InitMode::Evm
         } else {
             InitMode::Dev
         };
