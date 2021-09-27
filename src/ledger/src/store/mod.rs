@@ -14,10 +14,10 @@ use crate::{
     data_model::{
         AssetType, AssetTypeCode, AuthenticatedBlock, AuthenticatedTransaction,
         AuthenticatedUtxo, AuthenticatedUtxoStatus, BlockEffect, BlockSID,
-        FinalizedBlock, FinalizedTransaction, IssuerKeyPair, IssuerPublicKey,
+        FinalizedBlock, FinalizedTransaction, IssuerKeyPair, IssuerPublicKey, Operation,
         OutputPosition, StateCommitmentData, Transaction, TransferType, TxnEffect,
         TxnSID, TxnTempSID, TxoSID, UnAuthenticatedUtxo, Utxo, UtxoStatus,
-        BLACK_HOLE_PUBKEY, Operation
+        BLACK_HOLE_PUBKEY,
     },
     staking::{Amount, Power, Staking, TendermintAddrRef, FF_PK_LIST, FRA_TOTAL_AMOUNT},
 };
@@ -43,8 +43,8 @@ use std::{
 };
 use storage::{
     db::RocksDB,
-    state::{RocksChainState, RocksState},
-    store::RocksStore,
+    state::{ChainState, State},
+    store::PrefixedStore,
 };
 use zei::anon_xfr::keys::AXfrPubKey;
 use zei::anon_xfr::structs::MTLeafInfo;
@@ -87,7 +87,7 @@ pub struct LedgerState {
     // current block effect (middle cache)
     block_ctx: Option<BlockEffect>,
     // Merkle Tree with all the ABARs created till now
-    abar_state: RocksState<RocksDB>,
+    abar_state: State<RocksDB>,
     // Sparse Merkle Tree to hold nullifier Set
     #[allow(dead_code)]
     nullifier_set: SmtMap256<String>,
@@ -432,7 +432,7 @@ impl LedgerState {
     #[inline(always)]
     /// Adds a new abar to session cache and updates merkle hashes of ancestors
     pub fn add_abar(&mut self, abar: &AnonBlindAssetRecord) -> Result<ATxoSID> {
-        let store = RocksStore::new("abar_store", &mut self.abar_state);
+        let store = PrefixedStore::new("abar_store", &mut self.abar_state);
         let mut mt = PersistentMerkleTree::new(store)?;
 
         mt.add_abar(abar).map(ATxoSID)
@@ -441,7 +441,7 @@ impl LedgerState {
     #[inline(always)]
     /// writes the changes from session cache to the RocksDB store
     pub fn commit_abar_changes(&mut self) -> Result<u64> {
-        let store = RocksStore::new("abar_store", &mut self.abar_state);
+        let store = PrefixedStore::new("abar_store", &mut self.abar_state);
         let mut mt = PersistentMerkleTree::new(store)?;
 
         mt.commit()
@@ -451,8 +451,8 @@ impl LedgerState {
     /// Fetches the root hash of the committed merkle tree of abar commitments
     pub fn get_abar_root_hash(&mut self) -> Result<BLSScalar> {
         let chain_state = self.abar_state.chain_state();
-        let mut rocks_state = RocksState::new(chain_state);
-        let store = RocksStore::new("abar_store", &mut rocks_state);
+        let mut rocks_state = State::new(chain_state);
+        let store = PrefixedStore::new("abar_store", &mut rocks_state);
         let mt = PersistentMerkleTree::new(store)?;
 
         mt.get_current_root_hash().c(d!(
@@ -464,8 +464,8 @@ impl LedgerState {
     /// Generates a MTLeafInfo from the latest committed version of tree
     pub fn get_abar_proof(&self, id: ATxoSID) -> Result<MTLeafInfo> {
         let chain_state = self.abar_state.chain_state();
-        let mut rocks_state = RocksState::new(chain_state);
-        let store = RocksStore::new("abar_store", &mut rocks_state);
+        let mut rocks_state = State::new(chain_state);
+        let store = PrefixedStore::new("abar_store", &mut rocks_state);
         let mt = PersistentMerkleTree::new(store)?;
 
         mt.generate_proof(id.0)
@@ -494,13 +494,10 @@ impl LedgerState {
 
     // Initialize a persistent merkle tree for ABAR store.
     #[inline(always)]
-    fn init_abar_state(path: &str) -> Result<RocksState<RocksDB>> {
+    fn init_abar_state(path: &str) -> Result<State<RocksDB>> {
         let fdb = RocksDB::open(path).c(d!("failed to open db"))?;
-        let cs = Arc::new(RwLock::new(RocksChainState::new(
-            fdb,
-            "abar_db".to_string(),
-        )));
-        Ok(RocksState::new(cs))
+        let cs = Arc::new(RwLock::new(ChainState::new(fdb, "abar_db".to_string(), 0)));
+        Ok(State::new(cs))
     }
 
     /// Initialize a new Ledger structure.
@@ -889,21 +886,17 @@ impl LedgerState {
             .body
             .operations
             .iter()
-            .filter_map(|o| {
-            match o {
-                Operation::BarToAbar(body) => {
-                    Some(body.note.body.memo.clone())
-                },
-                Operation::TransferAnonAsset(body) => {
-                    body.note.body.owner_memos
-                        .get(txn_location.1.0)
-                        .and_then(|f| {
-                        Some(f.clone())
-                    })
-                },
-                _ => { None },
-            }
-        }).collect::<Vec<OwnerMemo>>();
+            .filter_map(|o| match o {
+                Operation::BarToAbar(body) => Some(body.note.body.memo.clone()),
+                Operation::TransferAnonAsset(body) => body
+                    .note
+                    .body
+                    .owner_memos
+                    .get(txn_location.1 .0)
+                    .and_then(|f| Some(f.clone())),
+                _ => None,
+            })
+            .collect::<Vec<OwnerMemo>>();
 
         if memo.is_empty() {
             return None;
