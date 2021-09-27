@@ -13,6 +13,8 @@ use crate::api::DelegationInfo;
 use crate::txn_builder::TransactionBuilder;
 use crate::common::utils::{new_tx_builder, send_tx};
 use crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey};
+use zeialgebra::groups::Scalar;
+use zeialgebra::jubjub::JubjubScalar;
 use globutils::wallet;
 use lazy_static::lazy_static;
 use ledger::data_model::TxoSID;
@@ -728,15 +730,15 @@ pub fn gen_oabar_add_op(
     let to_dec_key = XSecretKey::new(&mut prng);
     let enc_key_out = XPublicKey::from(&to_dec_key);
 
-    let r = JubjubScalar::random(&mut prng); //TODO - import JubjubScalar
-    let diversified_from_pub_key = from.pub_key().randomize(r);
+    let r = JubjubScalar::random(&mut prng);
+    let diversified_from_pub_key = from.pub_key().randomize(&r);
     
-    let mut ledger = LedgerState::tmp_ledger(); //TODO - replace tmp with actual
+    let ledger = LedgerState::tmp_ledger(); //TODO - replace tmp with actual
     let axtxo_abar = ledger.get_owned_abars(&diversified_from_pub_key);
     let owner_memo = ledger.get_abar_memo(axtxo_abar[0].0).c(d!())?;
     let mt_leaf_info = ledger.get_abar_proof(axtxo_abar[0].0).c(d!())?;
     
-    let oabar_in_builder = OpenAnonBlindAssetRecordBuilder::from_abar(&axtxo_abar[0].1,
+    let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(&axtxo_abar[0].1,
         owner_memo,
         &from,
         &from_secret_key,
@@ -745,8 +747,6 @@ pub fn gen_oabar_add_op(
     .mt_leaf_info(mt_leaf_info)
     .build()
     .unwrap();
-
-    let oabar_in = oabar_in_builder.oabar; //TODO - field `oabar` of struct `OpenAnonBlindAssetRecordBuilder` is private field
 
     let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
     .amount(axfr_amount)

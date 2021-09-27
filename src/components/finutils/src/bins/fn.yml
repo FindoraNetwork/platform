@@ -453,7 +453,7 @@ subcommands:
       about: Perform Anonymous Transfer
       args:
         - axfr-secretkey:
-            help: Axfr secret key
+            help: Axfr secret key of the sender
             short: s
             long: axfr-secretkey
             takes_value: true
