@@ -90,11 +90,11 @@ async fn get_owned_utxos(
     owner: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxoSID>>> {
     let qs = data.read();
-    let read = &qs.ledger_clone;
+    let ledger = &qs.ledger_cloned;
     globutils::wallet::public_key_from_base64(owner.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
-        .map(|pk| web::Json(pnk!(read.get_owned_utxos(&pk)).keys().copied().collect()))
+        .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk)).keys().copied().collect()))
 }
 
 /// Define interface type

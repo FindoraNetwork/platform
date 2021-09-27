@@ -25,16 +25,16 @@ lazy_static! {
 
 pub(crate) struct QueryServer {
     pub(crate) ledger: Arc<RwLock<LedgerState>>,
-    pub(crate) ledger_clone: LedgerState,
+    pub(crate) ledger_cloned: LedgerState,
 }
 
 impl QueryServer {
     /// create query server
     pub fn new(ledger: Arc<RwLock<LedgerState>>) -> QueryServer {
-        let ledger_clone = ledger.read().clone();
+        let ledger_cloned = ledger.read().clone();
         QueryServer {
             ledger,
-            ledger_clone,
+            ledger_cloned,
         }
     }
 
@@ -44,7 +44,7 @@ impl QueryServer {
         &self,
         issuer: &IssuerPublicKey,
     ) -> Option<Vec<(TxOutput, Option<OwnerMemo>)>> {
-        self.ledger_clone.api_cache.issuances.get(issuer)
+        self.ledger_cloned.api_cache.issuances.get(issuer)
     }
 
     /// Returns the set of records issued by a certain token code.
@@ -53,7 +53,7 @@ impl QueryServer {
         &self,
         code: &AssetTypeCode,
     ) -> Option<Vec<(TxOutput, Option<OwnerMemo>)>> {
-        self.ledger_clone.api_cache.token_code_issuances.get(code)
+        self.ledger_cloned.api_cache.token_code_issuances.get(code)
     }
 
     /// return `DefineAsset` according to `IssuerPublicKey`
@@ -62,7 +62,7 @@ impl QueryServer {
         &self,
         issuer: &IssuerPublicKey,
     ) -> Option<Vec<DefineAsset>> {
-        self.ledger_clone.api_cache.created_assets.get(issuer)
+        self.ledger_cloned.api_cache.created_assets.get(issuer)
     }
 
     /// get coinbase based on address and sorting rules and start and end position
@@ -73,7 +73,8 @@ impl QueryServer {
         end: usize,
         order_desc: bool,
     ) -> Result<(u64, Vec<(u64, MintEntry)>)> {
-        if let Some(hist) = self.ledger_clone.api_cache.coinbase_oper_hist.get(address) {
+        if let Some(hist) = self.ledger_cloned.api_cache.coinbase_oper_hist.get(address)
+        {
             let len = hist.len();
             if len > start {
                 let slice = match order_desc {
@@ -113,7 +114,7 @@ impl QueryServer {
         end: usize,
         order_desc: bool,
     ) -> Result<Vec<Option<Transaction>>> {
-        if let Some(hist) = self.ledger_clone.api_cache.claim_hist_txns.get(address) {
+        if let Some(hist) = self.ledger_cloned.api_cache.claim_hist_txns.get(address) {
             let len = hist.len();
             if len > start {
                 let slice = match order_desc {
@@ -139,7 +140,7 @@ impl QueryServer {
                     .iter()
                     .map(|h| {
                         if let Ok(tx) =
-                            ruc::info!(self.ledger_clone.get_transaction_light(*h))
+                            ruc::info!(self.ledger_cloned.get_transaction_light(*h))
                         {
                             Some(tx.txn)
                         } else {
@@ -165,7 +166,7 @@ impl QueryServer {
         &self,
         address: &XfrAddress,
     ) -> Option<HashSet<TxnSID>> {
-        self.ledger_clone
+        self.ledger_cloned
             .api_cache
             .related_transactions
             .get(&address)
@@ -178,49 +179,52 @@ impl QueryServer {
         &self,
         code: &AssetTypeCode,
     ) -> Option<HashSet<TxnSID>> {
-        self.ledger_clone.api_cache.related_transfers.get(&code)
+        self.ledger_cloned.api_cache.related_transfers.get(&code)
     }
 
     /// Returns the owner of a given txo_sid.
     #[inline(always)]
     pub fn get_address_of_sid(&self, txo_sid: TxoSID) -> Option<XfrAddress> {
-        self.ledger_clone.api_cache.utxos_to_map_index.get(&txo_sid)
+        self.ledger_cloned
+            .api_cache
+            .utxos_to_map_index
+            .get(&txo_sid)
     }
 
     /// Returns the authenticated txn (id, hash) of a given txo_sid.
     #[inline(always)]
     pub fn get_authenticated_txnid(&self, txo_sid: TxoSID) -> Option<TxnIDHash> {
-        self.ledger_clone.api_cache.txo_to_txnid.get(&txo_sid)
+        self.ledger_cloned.api_cache.txo_to_txnid.get(&txo_sid)
     }
 
     /// Returns the transaction hash of a given txn_sid.
     #[inline(always)]
     pub fn get_transaction_hash(&self, txn_sid: TxnSID) -> Option<String> {
-        self.ledger_clone.api_cache.txn_sid_to_hash.get(&txn_sid)
+        self.ledger_cloned.api_cache.txn_sid_to_hash.get(&txn_sid)
     }
 
     /// Returns the transaction sid of a given txn_hash.
     #[inline(always)]
     pub fn get_transaction_sid(&self, txn_hash: String) -> Option<TxnSID> {
-        self.ledger_clone.api_cache.txn_hash_to_sid.get(&txn_hash)
+        self.ledger_cloned.api_cache.txn_hash_to_sid.get(&txn_hash)
     }
 
     /// Returns most recent commits at query_server side.
     #[inline(always)]
     pub fn get_commits(&self) -> u64 {
-        self.ledger_clone.get_block_commit_count()
+        self.ledger_cloned.get_block_commit_count()
     }
 
     /// Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
     #[inline(always)]
     pub fn get_owner_memo(&self, txo_sid: TxoSID) -> Option<OwnerMemo> {
-        self.ledger_clone.api_cache.owner_memos.get(&txo_sid)
+        self.ledger_cloned.api_cache.owner_memos.get(&txo_sid)
     }
 
     /// retrieve block reward rate at specified block height
     #[inline(always)]
     pub fn query_block_rewards_rate(&self, height: &BlockHeight) -> Option<[u128; 2]> {
-        self.ledger_clone
+        self.ledger_cloned
             .api_cache
             .staking_global_rate_hist
             .get(height)
@@ -230,7 +234,7 @@ impl QueryServer {
     #[inline(always)]
     pub fn update(&mut self) {
         if let Some(l) = self.ledger.try_read() {
-            self.ledger_clone = l.clone();
+            self.ledger_cloned = l.clone();
         }
     }
 }
