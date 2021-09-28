@@ -33,9 +33,11 @@ time = "0.2.26"
 tendermint = "0.19.0"
 indexmap = { version = "1.6.2", features = ["serde"] }
 fp-types = { path = "../components/contracts/primitives/types" }
+itertools = "0.8"
 
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+crypto = { package = "crypto", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
 zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
 zeialgebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
 bulletproofs = { package = "bulletproofs", git = "https://github.com/FindoraNetwork/bulletproofs", branch = "batch_verification", features = ["yoloproofs"] }

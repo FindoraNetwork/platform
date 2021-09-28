@@ -255,11 +255,15 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         .and_then(|s| fs::write(&path, s).c(d!(path))));
 
     let mut r = ResponseCommit::new();
+
+    // Commit Anon tree changes here following Tendermint protocol
+    pnk!(state.commit_anon_changes().c(d!()));
     let mut commitment = state.get_state_commitment().0.as_ref().to_vec();
     if s.account_base_app.read().latest_block_number().is_some() {
         // Combines ledger state hash and chain state hash
         let mut data_hash = s.account_base_app.write().commit(req).data;
         commitment.append(&mut data_hash);
+        commitment.append(&mut state.get_anon_state_commitment().0.as_ref().to_vec());
         r.set_data(Sha256::hash(commitment.as_slice()).to_vec());
     } else {
         r.set_data(commitment);

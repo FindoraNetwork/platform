@@ -199,7 +199,12 @@ impl LedgerState {
         Ok(())
     }
 
-    fn update_state(&mut self, mut block: BlockEffect, tsm: &TmpSidMap) -> Result<()> {
+    fn update_state(
+        &mut self,
+        mut block: BlockEffect,
+        tsm: &TmpSidMap,
+        next_txn_sid: usize,
+    ) -> Result<()> {
         let mut tx_block = Vec::new();
 
         // Update the transaction Merkle tree
@@ -232,9 +237,9 @@ impl LedgerState {
         self.update_anon_stores(
             block.new_nullifiers.clone(),
             block.output_abars.clone(),
+            next_txn_sid,
         )
         .c(d!())?;
-        self.commit_abar_changes().c(d!())?;
 
         // Checkpoint
         let block_merkle_id = self.checkpoint(&block).c(d!())?;
@@ -272,11 +277,12 @@ impl LedgerState {
             self.utxo_map.clear(inp_sid.0 as usize).c(d!())?;
         }
 
+        let backup_next_txn_sid = self.status.next_txn.0;
         let (tsm, base_sid, max_sid) = self.status.apply_block_effects(&mut block);
 
         self.update_utxo_map(base_sid, max_sid, &block.temp_sids, &tsm)
             .c(d!())
-            .and_then(|_| self.update_state(block, &tsm).c(d!()))
+            .and_then(|_| self.update_state(block, &tsm, backup_next_txn_sid).c(d!()))
             .map(|_| tsm)
     }
 
@@ -285,7 +291,8 @@ impl LedgerState {
     pub fn update_anon_stores(
         &mut self,
         new_nullifiers: Vec<Nullifier>,
-        output_abars: Vec<AnonBlindAssetRecord>,
+        output_abars: Vec<Vec<AnonBlindAssetRecord>>,
+        backup_next_txn_sid: usize,
     ) -> Result<()> {
         for n in new_nullifiers.iter() {
             let str =
@@ -298,8 +305,26 @@ impl LedgerState {
             }
             self.nullifier_set.set(&d, Some("".to_string()));
         }
-        for abar in output_abars.iter() {
-            self.add_abar(&abar).c(d!())?;
+
+        let mut txn_sid = TxnSID(backup_next_txn_sid);
+        for txn_abars in output_abars.iter() {
+            let mut op_position = OutputPosition(0);
+            for abar in txn_abars {
+                let uid = self.add_abar(&abar).c(d!())?;
+                self.status.ax_utxos.insert(uid, abar.clone());
+                self.status
+                    .owned_ax_utxos
+                    .entry(abar.public_key.clone())
+                    .or_insert_with(HashSet::new)
+                    .insert(uid);
+                self.status
+                    .ax_txo_to_txn_location
+                    .insert(uid, (txn_sid, op_position));
+
+                self.status.next_atxo = ATxoSID(uid.0 + 1);
+                op_position = OutputPosition(op_position.0 + 1);
+            }
+            txn_sid = TxnSID(txn_sid.0 + 1);
         }
 
         Ok(())
@@ -440,7 +465,7 @@ impl LedgerState {
 
     #[inline(always)]
     /// writes the changes from session cache to the RocksDB store
-    pub fn commit_abar_changes(&mut self) -> Result<u64> {
+    pub fn commit_anon_changes(&mut self) -> Result<u64> {
         let store = PrefixedStore::new("abar_store", &mut self.abar_state);
         let mut mt = PersistentMerkleTree::new(store)?;
 
@@ -448,10 +473,11 @@ impl LedgerState {
     }
 
     #[inline(always)]
-    /// Fetches the root hash of the committed merkle tree of abar commitments
+    /// Fetches the root hash of the committed merkle tree of abar commitments directly from committed
+    /// state and ignore session cache
     pub fn get_abar_root_hash(&mut self) -> Result<BLSScalar> {
         let chain_state = self.abar_state.chain_state();
-        let mut rocks_state = State::new(chain_state);
+        let mut rocks_state = State::new(chain_state, false);
         let store = PrefixedStore::new("abar_store", &mut rocks_state);
         let mt = PersistentMerkleTree::new(store)?;
 
@@ -461,10 +487,11 @@ impl LedgerState {
     }
 
     #[inline(always)]
-    /// Generates a MTLeafInfo from the latest committed version of tree
+    /// Generates a MTLeafInfo from the latest committed version of tree from committed state and
+    /// ignore session cache
     pub fn get_abar_proof(&self, id: ATxoSID) -> Result<MTLeafInfo> {
         let chain_state = self.abar_state.chain_state();
-        let mut rocks_state = State::new(chain_state);
+        let mut rocks_state = State::new(chain_state, false);
         let store = PrefixedStore::new("abar_store", &mut rocks_state);
         let mt = PersistentMerkleTree::new(store)?;
 
@@ -497,7 +524,7 @@ impl LedgerState {
     fn init_abar_state(path: &str) -> Result<State<RocksDB>> {
         let fdb = RocksDB::open(path).c(d!("failed to open db"))?;
         let cs = Arc::new(RwLock::new(ChainState::new(fdb, "abar_db".to_string(), 0)));
-        Ok(State::new(cs))
+        Ok(State::new(cs, false))
     }
 
     /// Initialize a new Ledger structure.
@@ -867,12 +894,17 @@ impl LedgerState {
         &self,
         addr: &AXfrPubKey,
     ) -> Vec<(ATxoSID, AnonBlindAssetRecord)> {
-        self.status
-            .ax_utxos
-            .iter()
-            .filter(|(_, axutxo)| &axutxo.public_key == addr)
-            .map(|(sid, record)| (sid.clone(), record.clone()))
-            .collect()
+        if let Some(set) = self.status.owned_ax_utxos.get(addr) {
+            return set
+                .iter()
+                .map(|sid| {
+                    let abar = self.status.ax_utxos.get(sid).unwrap();
+                    (sid.clone(), abar)
+                })
+                .collect();
+        }
+
+        vec![]
     }
 
     /// Get the owner memo of a abar by ATxoSID
@@ -880,7 +912,7 @@ impl LedgerState {
     fn get_abar_memo(&self, ax_id: ATxoSID) -> Option<OwnerMemo> {
         let txn_location = self.status.ax_txo_to_txn_location.get(&ax_id).unwrap();
         let authenticated_txn = self.get_transaction(txn_location.0).unwrap();
-        let memo: Vec<OwnerMemo> = authenticated_txn
+        let mut memo: Vec<OwnerMemo> = authenticated_txn
             .finalized_txn
             .txn
             .body
@@ -888,20 +920,33 @@ impl LedgerState {
             .iter()
             .filter_map(|o| match o {
                 Operation::BarToAbar(body) => Some(body.note.body.memo.clone()),
-                Operation::TransferAnonAsset(body) => body
-                    .note
-                    .body
-                    .owner_memos
-                    .get(txn_location.1 .0)
-                    .and_then(|f| Some(f.clone())),
                 _ => None,
             })
             .collect::<Vec<OwnerMemo>>();
 
+        memo.append(
+            &mut authenticated_txn
+                .finalized_txn
+                .txn
+                .body
+                .operations
+                .iter()
+                .filter_map(|o| match o {
+                    Operation::TransferAnonAsset(body) => body
+                        .note
+                        .body
+                        .owner_memos
+                        .get(txn_location.1 .0)
+                        .and_then(|f| Some(f.clone())),
+                    _ => None,
+                })
+                .collect::<Vec<OwnerMemo>>(),
+        );
+
         if memo.is_empty() {
             return None;
         }
-        Some(memo.first().unwrap().clone())
+        Some(memo.get(txn_location.1 .0).unwrap().clone())
     }
 
     #[inline(always)]
@@ -929,6 +974,20 @@ impl LedgerState {
         let commitment = self
             .status
             .state_commitment_versions
+            .last()
+            .unwrap_or_else(|| HashOf::new(&None));
+        (commitment, block_count)
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn get_anon_state_commitment(
+        &self,
+    ) -> (HashOf<Option<AnonStateCommitmentData>>, u64) {
+        let block_count = self.status.block_commit_count;
+        let commitment = self
+            .status
+            .anon_state_commitment_versions
             .last()
             .unwrap_or_else(|| HashOf::new(&None));
         (commitment, block_count)
@@ -1051,8 +1110,10 @@ pub struct LedgerStatus {
     pub snapshot_file: String,
     utxos: Mapx<TxoSID, Utxo>, // all currently-unspent TXOs
     owned_utxos: Mapx<XfrPublicKey, HashSet<TxoSID>>,
-    /// all owned ax_utxos
+    /// all existing ax_utxos
     ax_utxos: Mapx<ATxoSID, AnonBlindAssetRecord>,
+    /// all owned abars
+    owned_ax_utxos: Mapx<AXfrPubKey, HashSet<ATxoSID>>,
     /// all spent TXOs
     pub spent_utxos: Mapx<TxoSID, Utxo>,
     // Map a TXO to its output position in a transaction
@@ -1228,6 +1289,7 @@ impl LedgerStatus {
         let asset_types_path = snapshot_entries_dir.to_owned() + "/asset_types";
         let issuance_num_path = snapshot_entries_dir.to_owned() + "/issuance_num";
         let owned_utxos_path = snapshot_entries_dir.to_owned() + "/owned_utxos";
+        let owned_ax_utxos_path = snapshot_entries_dir.to_owned() + "/owned_ax_utxos";
 
         let ledger = LedgerStatus {
             snapshot_file: snapshot_file.to_owned(),
@@ -1235,6 +1297,7 @@ impl LedgerStatus {
             utxos: new_mapx!(utxos_path.as_str()),
             owned_utxos: new_mapx!(owned_utxos_path.as_str()),
             ax_utxos: new_mapx!(ax_utxos_path.as_str()),
+            owned_ax_utxos: new_mapx!(owned_ax_utxos_path.as_str()),
             spent_utxos: new_mapx!(spent_utxos_path.as_str()),
             txo_to_txn_location: new_mapx!(txo_to_txn_location_path.as_str()),
             ax_txo_to_txn_location: new_mapx!(atxo_to_txn_location_path.as_str()),
