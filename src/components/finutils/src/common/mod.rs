@@ -763,7 +763,73 @@ pub fn gen_oabar_add_op(
         &[oabar_out],
         &[from],
     )
-    .c(d!())?; //TODO later - support multiple inputs-outputs
+    .c(d!())?;
+
+    send_tx(&builder.take_transaction()).c(d!())?;
+    Ok(())
+}
+
+/// Batch anon transfer - Generate OABAR and add anonymous transfer operation
+pub fn gen_oabar_add_op_x(
+    axfr_secret_keys: &[AXfrKeyPair],
+    dec_keys: &[XSecretKey],
+    receiver_count: &str,
+    amount: &str,
+) -> Result<()> {
+
+    let rcvr_count = receiver_count.parse::<u64>().c(d!("error parsing receiver count"))?;
+    let axfr_amount = amount.parse::<u64>().c(d!("error parsing amount"))?;
+
+    let ledger = LedgerState::tmp_ledger(); //TODO - replace tmp with actual
+    let oabars_in = Vec::new();
+    for (from ,from_secret_key) in axfr_secret_keys.iter().zip(dec_keys.iter()){
+        let mut prng = ChaChaRng::from_seed([0u8; 32]);
+        let r = JubjubScalar::random(&mut prng);
+        let diversified_from_pub_key = from.pub_key().randomize(&r);
+        
+        let axtxo_abar = ledger.get_owned_abars(&diversified_from_pub_key);
+        let owner_memo = ledger.get_abar_memo(axtxo_abar[0].0).c(d!())?;
+        let mt_leaf_info = ledger.get_abar_proof(axtxo_abar[0].0).c(d!())?;
+        
+        let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(&axtxo_abar[0].1,
+            owner_memo,
+            from,
+            from_secret_key,
+        )
+        .unwrap()
+        .mt_leaf_info(mt_leaf_info)
+        .build()
+        .unwrap();
+
+        oabars_in.push(oabar_in);
+    }
+
+    let oabars_out = Vec::new();
+    for n in 1..rcvr_count{
+        let mut prng = ChaChaRng::from_seed([0u8; 32]);
+        let to = AXfrKeyPair::generate(&mut prng);
+        let to_dec_key = XSecretKey::new(&mut prng);
+        let enc_key_out = XPublicKey::from(&to_dec_key);
+
+        let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
+        .amount(axfr_amount)
+        .pub_key(to.pub_key())
+        .finalize(&mut prng, &enc_key_out)
+        .unwrap()
+        .build()
+        .unwrap();
+
+        oabars_out.push(oabar_out);
+    }
+    
+    let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
+    let _ = builder
+    .add_operation_anon_transfer(
+        &oabars_in[..],
+        &oabars_out[..],
+        axfr_secret_keys,
+    )
+    .c(d!())?;
 
     send_tx(&builder.take_transaction()).c(d!())?;
     Ok(())

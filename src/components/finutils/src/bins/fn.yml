@@ -473,3 +473,33 @@ subcommands:
             takes_value: true
             value_name: Amount
             required: true
+  - anon-transfer-batch:
+      about: Anonymous Transfer of tokens from multiple inputs to multiple outputs
+      args:
+        - axfr-secretkey-file:
+            help: Axfr secret keys of the sender
+            short: s
+            long: axfr-secretkey-file
+            takes_value: true
+            value_name: SECRET KEY
+            required: true
+        - decryption-key-file:
+            help: Decryption Keys for anon transfer
+            short: d
+            long: decryption-key-file
+            takes_value: true
+            value_name: DECRYPTION KEY
+            required: true
+        - receiver-count:
+            help: Total number of receivers
+            short: r
+            long: receiver-count
+            takes_value: true
+            required: true            
+        - amount:
+            help: how much FRA units to transfer
+            short: n
+            long: amount
+            takes_value: true
+            value_name: Amount
+            required: true

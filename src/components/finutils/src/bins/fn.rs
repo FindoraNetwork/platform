@@ -412,9 +412,9 @@ fn run() -> Result<()> {
             base64::encode(public_key.zei_to_bytes().as_slice())
         );
     } else if let Some(m) = matches.subcommand_matches("anon-transfer") {
-        let axfr_secret_key  = m.value_of("axfr-secret-key");
+        let axfr_secret_key  = m.value_of("axfr-secretkey");
         let dec_key = m.value_of("decryption-key");
-        let amount = m.value_of("n");   
+        let amount = m.value_of("amount");   
     
         if axfr_secret_key.is_none() || dec_key.is_none() || amount.is_none() {
             println!("{}", m.usage());
@@ -422,6 +422,43 @@ fn run() -> Result<()> {
             common::gen_oabar_add_op(
                 axfr_secret_key.unwrap(),
                 dec_key.unwrap(),
+                amount.unwrap(),
+            )
+            .c(d!())?;
+        }       
+    } else if let Some(m) = matches.subcommand_matches("anon-transfer-batch") {
+        let axfr_secret_keys  = m
+        .value_of("axfr-secretkey-file")
+        .c(d!())
+        .and_then(|f| {
+            fs::read_to_string(f).c(d!()).and_then(|sks| {
+                sks.lines()
+                    .map(|sk| wallet::anon_secret_key_from_base64(sk.trim()))
+                    .collect::<Result<Vec<_>>>()
+                    .c(d!("invalid file"))
+            })
+        })?;
+        let dec_keys = m
+        .value_of("decryption-key-file")
+        .c(d!())
+        .and_then(|f| {
+            fs::read_to_string(f).c(d!()).and_then(|dks| {
+                dks.lines()
+                    .map(|dk| wallet::x_secret_key_from_base64(dk.trim()))
+                    .collect::<Result<Vec<_>>>()
+                    .c(d!("invalid file"))
+            })
+        })?;
+        let receiver_count = m.value_of("receiver-count");;
+        let amount = m.value_of("amount");   
+    
+        if axfr_secret_keys.is_empty() || dec_keys.is_empty() || receiver_count.is_none() || amount.is_none() {
+            println!("{}", m.usage());
+        } else {
+            common::gen_oabar_add_op_x(
+                axfr_secret_keys.unwrap(),
+                dec_keys.unwrap(),
+                receiver_count.unwrap(),
                 amount.unwrap(),
             )
             .c(d!())?;
