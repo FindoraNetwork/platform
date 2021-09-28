@@ -49,7 +49,7 @@ pub fn run() -> Result<()> {
     let submission_service_hdr = Arc::clone(&app.la);
 
     if CFG.enable_query_service {
-        env::set_var("FINDORA_KEEP_STAKING_HIST", "1");
+        env::set_var("FINDORAD_KEEP_HIST", "1");
 
         let query_service_hdr = submission_service_hdr.read().borrowable_ledger_state();
         pnk!(query_api::service::start_query_server(
@@ -58,10 +58,9 @@ pub fn run() -> Result<()> {
                 (&config.abci_host, config.query_port),
                 (&config.abci_host, config.ledger_port)
             ],
-            Some(&config.ledger_dir),
         ))
         .write()
-        .update(&config.ledger_dir);
+        .update();
 
         let submission_host = config.abci_host.clone();
         let submission_port = config.submission_port;

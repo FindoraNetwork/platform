@@ -671,6 +671,9 @@ pub struct OutputPosition(pub usize);
 )]
 pub struct TxnSID(pub usize);
 
+/// (sid, hash)
+pub type TxnIDHash = (TxnSID, String);
+
 impl fmt::Display for TxoSID {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

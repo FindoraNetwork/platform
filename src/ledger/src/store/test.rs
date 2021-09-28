@@ -46,11 +46,11 @@ fn test_load_fake_transaction_log() {
 fn test_compute_and_save_block_hash() {
     let mut ledger_state = LedgerState::tmp_ledger();
     let mut data = StateCommitmentData {
-        bitmap: ledger_state.utxo_map.compute_checksum(),
-        block_merkle: ledger_state.block_merkle.get_root_hash(),
+        bitmap: ledger_state.utxo_map.write().compute_checksum(),
+        block_merkle: ledger_state.block_merkle.read().get_root_hash(),
         txns_in_block_hash: HashOf::new(&vec![]),
         previous_state_commitment: HashOf::new(&None),
-        transaction_merkle_commitment: ledger_state.txn_merkle.get_root_hash(),
+        transaction_merkle_commitment: ledger_state.txn_merkle.read().get_root_hash(),
         air_commitment: BitDigest::from_slice(&[0; 32][..]).unwrap(),
         txo_count: 0,
         pulse_count: 0,
@@ -61,7 +61,7 @@ fn test_compute_and_save_block_hash() {
 
     let b = ledger_state.start_block().unwrap();
     ledger_state.finish_block(b).unwrap();
-    data.block_merkle = ledger_state.block_merkle.get_root_hash();
+    data.block_merkle = ledger_state.block_merkle.read().get_root_hash();
 
     let first_hash = data.compute_commitment();
 
@@ -152,7 +152,7 @@ fn test_asset_transfer() {
     let code = AssetTypeCode::gen_random();
     let mut prng = ChaChaRng::from_entropy();
     let key_pair = XfrKeyPair::generate(&mut prng);
-    let key_pair_adversary = XfrKeyPair::generate(ledger.get_prng());
+    let key_pair_adversary = XfrKeyPair::generate(&mut ledger.get_prng());
 
     let tx = create_definition_transaction(
         &code,
@@ -178,8 +178,12 @@ fn test_asset_transfer() {
         art,
         key_pair.get_pk(),
     );
-    let (ba, _, _) =
-        build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &template, vec![]);
+    let (ba, _, _) = build_blind_asset_record(
+        &mut ledger.get_prng(),
+        &params.pc_gens,
+        &template,
+        vec![],
+    );
     let second_ba = ba.clone();
 
     let asset_issuance_body = IssueAssetBody::new(
@@ -250,7 +254,7 @@ fn test_asset_transfer() {
         key_pair_adversary.get_pk(),
     );
     let output_ar = AssetRecord::from_template_no_identity_tracing(
-        ledger.get_prng(),
+        &mut ledger.get_prng(),
         &output_template,
     )
     .unwrap();
@@ -258,7 +262,7 @@ fn test_asset_transfer() {
 
     let mut transfer = TransferAsset::new(
         TransferAssetBody::new(
-            ledger.get_prng(),
+            &mut ledger.get_prng(),
             vec![TxoRef::Absolute(txo_sid)],
             &[input_ar],
             &[output_ar],
@@ -370,7 +374,7 @@ fn asset_issued() {
     );
 
     let (ba, _, _) =
-        build_blind_asset_record(ledger.get_prng(), &params.pc_gens, &ar, vec![]);
+        build_blind_asset_record(&mut ledger.get_prng(), &params.pc_gens, &ar, vec![]);
     let asset_issuance_body = IssueAssetBody::new(
         &token_code1,
         0,
@@ -445,8 +449,8 @@ fn asset_issued() {
                     "get_proof failed for tx_id {}, merkle_id {}, block state {}, transaction state {}",
                     transaction.finalized_txn.tx_id.0,
                     transaction.finalized_txn.merkle_id,
-                    ledger.block_merkle.state(),
-                    ledger.txn_merkle.state()
+                    ledger.block_merkle.read().state(),
+                    ledger.txn_merkle.read().state()
                 );
         }
     }
@@ -509,7 +513,7 @@ pub fn test_transferable() {
         bob.get_pk(),
     );
     let record = AssetRecord::from_template_no_identity_tracing(
-        ledger.get_prng(),
+        &mut ledger.get_prng(),
         &transfer_template,
     )
     .unwrap();
@@ -517,7 +521,7 @@ pub fn test_transferable() {
     // Cant transfer non-transferable asset
     let mut transfer = TransferAsset::new(
         TransferAssetBody::new(
-            ledger.get_prng(),
+            &mut ledger.get_prng(),
             vec![TxoRef::Absolute(sid)],
             &[AssetRecord::from_open_asset_record_no_asset_tracing(
                 open_blind_asset_record(&bar, &None, &alice).unwrap(),
@@ -546,7 +550,7 @@ pub fn test_transferable() {
         bob.get_pk(),
     );
     let record = AssetRecord::from_template_no_identity_tracing(
-        ledger.get_prng(),
+        &mut ledger.get_prng(),
         &transfer_template,
     )
     .unwrap();
@@ -554,7 +558,7 @@ pub fn test_transferable() {
     // Cant transfer non-transferable asset
     let mut transfer = TransferAsset::new(
         TransferAssetBody::new(
-            ledger.get_prng(),
+            &mut ledger.get_prng(),
             vec![TxoRef::Absolute(sid)],
             &[AssetRecord::from_open_asset_record_no_asset_tracing(
                 open_blind_asset_record(&bar, &None, &alice).unwrap(),
@@ -584,7 +588,7 @@ pub fn test_transferable() {
         bob.get_pk(),
     );
     let second_record = AssetRecord::from_template_no_identity_tracing(
-        ledger.get_prng(),
+        &mut ledger.get_prng(),
         &second_transfer_template,
     )
     .unwrap();
@@ -599,7 +603,7 @@ pub fn test_transferable() {
     );
     let mut transfer = TransferAsset::new(
         TransferAssetBody::new(
-            ledger.get_prng(),
+            &mut ledger.get_prng(),
             vec![TxoRef::Relative(0)],
             &[AssetRecord::from_open_asset_record_no_asset_tracing(
                 ar.open_asset_record,
@@ -715,9 +719,11 @@ fn gen_fee_operation(
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         fra_owner_kp.get_pk(),
     );
-    let output_ar =
-        AssetRecord::from_template_no_identity_tracing(l.get_prng(), &output_template)
-            .unwrap();
+    let output_ar = AssetRecord::from_template_no_identity_tracing(
+        &mut l.get_prng(),
+        &output_template,
+    )
+    .unwrap();
 
     let output_template = AssetRecordTemplate::with_no_asset_tracing(
         TX_FEE_MIN,
@@ -725,15 +731,17 @@ fn gen_fee_operation(
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         *BLACK_HOLE_PUBKEY,
     );
-    let output_ar_fee =
-        AssetRecord::from_template_no_identity_tracing(l.get_prng(), &output_template)
-            .unwrap();
+    let output_ar_fee = AssetRecord::from_template_no_identity_tracing(
+        &mut l.get_prng(),
+        &output_template,
+    )
+    .unwrap();
 
     let input_ar = AssetRecord::from_open_asset_record_no_asset_tracing(input_oar);
 
     let mut transfer = TransferAsset::new(
         TransferAssetBody::new(
-            l.get_prng(),
+            &mut l.get_prng(),
             vec![TxoRef::Absolute(txo_sid)],
             &[input_ar],
             &[output_ar, output_ar_fee],
