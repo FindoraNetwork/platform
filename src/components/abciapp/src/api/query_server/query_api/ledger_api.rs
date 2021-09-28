@@ -577,6 +577,9 @@ pub(super) async fn query_delegation_info(
                     }
                 }
             }
+            // check temporary partial undelegators
+            unbond_amount += d.tmp_delegators.values().sum::<u64>();
+
             (
                 bond_amount,
                 bond_entries,
