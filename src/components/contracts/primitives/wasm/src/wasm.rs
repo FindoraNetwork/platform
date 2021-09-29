@@ -1,11 +1,12 @@
 use core::fmt::Display;
 use ethereum::{LegacyTransactionMessage, TransactionV0 as Transaction};
 use ethereum_types::{H160, H256};
-use fp_types::crypto::secp256k1_ecdsa_recover;
 use fp_types::{
     actions::{ethereum::Action as EthAction, Action},
     assemble::UncheckedTransaction,
+    crypto::secp256k1_ecdsa_recover,
 };
+use fp_utils::tx::EvmRawTxWrapper;
 use ruc::{d, err::RucResult};
 use sha3::{Digest, Keccak256};
 use wasm_bindgen::prelude::*;
@@ -35,10 +36,13 @@ pub fn recover_tx_signer(raw_tx: String) -> Result<String, JsValue> {
     let tx_bytes = base64::decode_config(&raw_tx, base64::URL_SAFE)
         .c(d!())
         .map_err(error_to_jsvalue)?;
-    let unchecked_tx: UncheckedTransaction<()> =
-        serde_json::from_slice(tx_bytes.as_slice())
-            .c(d!())
-            .map_err(error_to_jsvalue)?;
+    let raw_tx = EvmRawTxWrapper::unwrap(&tx_bytes)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+
+    let unchecked_tx: UncheckedTransaction<()> = serde_json::from_slice(raw_tx)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
     if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
         let signer = recover_signer(&tx).c(d!()).map_err(error_to_jsvalue)?;
         Ok(format!("{:?}", signer))
@@ -52,10 +56,13 @@ pub fn evm_tx_hash(raw_tx: String) -> Result<String, JsValue> {
     let tx_bytes = base64::decode_config(&raw_tx, base64::URL_SAFE)
         .c(d!())
         .map_err(error_to_jsvalue)?;
-    let unchecked_tx: UncheckedTransaction<()> =
-        serde_json::from_slice(tx_bytes.as_slice())
-            .c(d!())
-            .map_err(error_to_jsvalue)?;
+    let raw_tx = EvmRawTxWrapper::unwrap(&tx_bytes)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+
+    let unchecked_tx: UncheckedTransaction<()> = serde_json::from_slice(raw_tx)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
     if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
         let hash = H256::from_slice(Keccak256::digest(&rlp::encode(&tx)).as_slice());
         Ok(format!("{:?}", hash))
@@ -72,10 +79,11 @@ mod test {
 
     #[test]
     fn recover_signer_works() {
-        let raw_tx = String::from("eyJzaWduYXR1cmUiOm51bGwsImZ1bmN0aW9uIjp7IkV0aGVyZXVtIjp7IlRyYW5zYWN0Ijp7Im5vbmNlIjoiMHg5IiwiZ2FzX3ByaWNlIjoiMHhlOGQ0YTUxMDAwIiwiZ2FzX2xpbWl0IjoiMHg1MjA4IiwiYWN0aW9uIjp7IkNhbGwiOiIweGE1MjI1Y2JlZTUwNTIxMDBlYzJkMmQ5NGFhNmQyNTg1NTgwNzM3NTcifSwidmFsdWUiOiIweDk4YTdkOWI4MzE0YzAwMDAiLCJpbnB1dCI6W10sInNpZ25hdHVyZSI6eyJ2IjoxMDgyLCJyIjoiMHg4MDBjZjQ5ZTAzMmJhYzY4MjY3MzdhZGJhZDEzN2Y0MTk5OTRjNjgxZWE1ZDUyYjliMGJhZDJmNDAyYjMwMTI0IiwicyI6IjB4Mjk1Mjc3ZWY2NTYzNDAwY2VkNjFiODhkM2ZiNGM3YjMyY2NkNTcwYThiOWJiOGNiYmUyNTkyMTRhYjdkZTI1YSJ9fX19fQ==");
+        let raw_tx = String::from("ZXZteyJzaWduYXR1cmUiOm51bGwsImZ1bmN0aW9uIjp7IkV0aGVyZXVtIjp7IlRyYW5zYWN0Ijp7Im5vbmNlIjoiMHgwIiwiZ2FzX3ByaWNlIjoiMHgxNzQ4NzZlODAwIiwiZ2FzX2xpbWl0IjoiMHg1MjA4IiwiYWN0aW9uIjp7IkNhbGwiOiIweDU4NDk3NzExMzk5NzhmZTBiM2Q1MjMwM2Q3MWQyMjJhMzQ3ZTdjYWIifSwidmFsdWUiOiIweDYwNDZmMzdlNTk0NWMwMDAwIiwiaW5wdXQiOltdLCJzaWduYXR1cmUiOnsidiI6MTA4MSwiciI6IjB4MGRhODlhZTgzNzkyNWM3MjE1ZDVjMzFkYTc5OGU1Yzk0MzQ1YTZmNDNiZTU0ODkxZDUyZGMzMzUwNjEwNGFhNyIsInMiOiIweDJiOGQxNzhkN2U3ZmQ3YTlmZWJjYjM1NDg0M2JiMTY4NDg3YWI2OGUxZjViNTlkZGFlNTc0MDRlMmU3ZDZmOTUifX19fX0=");
         let tx_bytes = base64::decode_config(&raw_tx, base64::URL_SAFE).unwrap();
+        let evm_tx = EvmRawTxWrapper::unwrap(&tx_bytes).unwrap();
         let unchecked_tx: UncheckedTransaction<()> =
-            serde_json::from_slice(tx_bytes.as_slice()).unwrap();
+            serde_json::from_slice(evm_tx).unwrap();
         if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
             let signer = recover_signer(&tx).unwrap();
             assert_eq!(

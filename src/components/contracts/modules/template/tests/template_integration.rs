@@ -57,8 +57,7 @@ fn test_abci_check_tx() {
     let function = Action::Template(TemplateAction::SetValue(10));
     let tx =
         serde_json::to_vec(&build_signed_transaction(function, &ALICE_XFR, 0)).unwrap();
-    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
-    req.tx = txn_with_tag;
+    req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -95,8 +94,7 @@ fn test_abci_deliver_tx() {
     let function = Action::Template(TemplateAction::SetValue(10));
     let tx =
         serde_json::to_vec(&build_signed_transaction(function, &ALICE_XFR, 0)).unwrap();
-    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
-    req.tx = txn_with_tag;
+    req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -165,8 +163,7 @@ fn test_abci_check_tx_with_bad_nonce() {
     let function = Action::Template(TemplateAction::SetValue(10));
     let tx =
         serde_json::to_vec(&build_signed_transaction(function, &ALICE_XFR, 0)).unwrap();
-    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
-    req.tx = txn_with_tag;
+    req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
     assert!(
         resp.code == 1 && resp.log.contains("InvalidNonce, expected: 1, actual: 0"),

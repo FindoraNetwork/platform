@@ -40,7 +40,7 @@ use fp_types::{
     assemble::{CheckFee, CheckNonce, SignedExtra, UncheckedTransaction},
     crypto::{Address, MultiSignature, MultiSigner},
 };
-use fp_utils::ecdsa::SecpPair;
+use fp_utils::{ecdsa::SecpPair, tx::EvmRawTxWrapper};
 use globutils::{wallet, HashOf};
 use ledger::{
     data_model::{
@@ -588,7 +588,8 @@ pub fn transfer_to_utxo_from_account(
     let tx = UncheckedTransaction::new_signed(action, signer, signature, extra);
     let res = serde_json::to_string(&tx).map_err(error_to_jsvalue)?;
 
-    Ok(res)
+    let tx_with_tag = EvmRawTxWrapper::wrap(res.as_bytes());
+    String::from_utf8(tx_with_tag).map_err(error_to_jsvalue)
 }
 
 /// Recover ecdsa private key from mnemonic.

@@ -4,8 +4,8 @@
 
 use ruc::*;
 
-/// EVM_TX_TAG = keccak256("EVM_V1")[..4]
-pub const EVM_TX_TAG: [u8; 4] = [0xd7, 0x70, 0x31, 0x83];
+/// EVM_TX_TAG = "evm"
+pub const EVM_TX_TAG: [u8; 3] = [0x65, 0x76, 0x6d];
 
 /// Evm Tx wrapper
 pub struct EvmRawTxWrapper {}
@@ -27,6 +27,6 @@ impl EvmRawTxWrapper {
             return Err(eg!("Invalide evm transaction"));
         }
 
-        Ok(&tx[4..])
+        Ok(&tx[len..])
     }
 }

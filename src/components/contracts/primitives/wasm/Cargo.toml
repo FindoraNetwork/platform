@@ -17,6 +17,7 @@ base64 = "0.10"
 ethereum = { version = "0.9.0", default-features = false, features = ["with-serde"] }
 ethereum-types = { version = "0.12", default-features = false }
 fp-types = { path = "../../primitives/types" }
+fp-utils = { path = "../../primitives/utils" }
 rlp = "0.5"
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 sha3 = "0.8"

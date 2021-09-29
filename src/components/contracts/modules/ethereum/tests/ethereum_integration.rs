@@ -63,8 +63,7 @@ fn test_abci_check_tx() {
         value.as_u128(),
     ))
     .unwrap();
-    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
-    req.tx = txn_with_tag;
+    req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
     assert!(
         resp.code == 1 && resp.log.contains("InsufficientBalance"),
@@ -103,8 +102,7 @@ fn test_abci_deliver_tx() {
         value.as_u128(),
     ))
     .unwrap();
-    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
-    req.tx = txn_with_tag;
+    req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
         resp.code, 0,
