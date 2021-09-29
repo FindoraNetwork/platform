@@ -6,6 +6,8 @@ fn setup -S http://127.0.0.1 2>&1 >/dev/null
 V1_ADDR=$(curl -s http://127.0.0.1:8668/validator_list|jq -r '.validators[1].addr')
 #ROOTSK=$(stt show -r|tail -1|awk -F "\"" '{print $8}')
 #ROOTPK=$(stt show -r|tail -1|awk -F "\"" '{print $4}')
+echo -n "Validator:"
+echo "   ${V1_ADDR}"
 
 
 BANK_ADDR="fra18xkez3fum44jq0zhvwq380rfme7u624cccn3z56fjeex6uuhpq6qv9e4g5"
@@ -68,12 +70,11 @@ if [ "${BALANCE}" -ne $((1000*1000*1000*1000*999)) ]; then echo "Incorrect custo
 
 echo "Delegation operations"
 fn delegate --seckey usersk --amount $((1000*1000*1000*1000*999)) --validator "${V1_ADDR}" 2>&1 >/dev/null
-sleep 20
+sleep 60
 BOND=$(fn delegate --info --seckey usersk 2>&1 |grep -w "bond")
 BOND=$(echo "${BOND}" | awk '{print $NF}' | awk -F "," '{print $1}')
 echo "   bond: ${BOND}"
 if [ "${BOND}" -ne $((1000*1000*1000*1000*999)) ]; then echo "Incorrect bond amount"; exit 3; fi
-sleep 60
 fn undelegate --seckey usersk --amount $((1000*1000*1000*1000)) --validator "${V1_ADDR}" 2>&1 > /dev/null
 sleep 60
 BOND=$(fn delegate --info --seckey usersk 2>&1 |grep -w "bond")
