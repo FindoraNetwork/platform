@@ -33,10 +33,10 @@ pub(super) async fn query_utxo(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<AuthenticatedUtxo>> {
-    let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
     if let Ok(txo_sid) = info.parse::<u64>() {
-        if let Some(txo) = read.get_utxo(TxoSID(txo_sid)) {
+        if let Some(txo) = ledger.get_utxo(TxoSID(txo_sid)) {
             Ok(web::Json(txo))
         } else {
             Err(actix_web::error::ErrorNotFound(
@@ -55,10 +55,10 @@ pub(super) async fn query_utxo_light(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<UnAuthenticatedUtxo>> {
-    let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
     if let Ok(txo_sid) = info.parse::<u64>() {
-        if let Some(txo) = read.get_utxo_light(TxoSID(txo_sid)) {
+        if let Some(txo) = ledger.get_utxo_light(TxoSID(txo_sid)) {
             Ok(web::Json(txo))
         } else {
             Err(actix_web::error::ErrorNotFound(
@@ -77,10 +77,10 @@ pub(super) async fn query_asset_issuance_num(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<u64>> {
-    let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
-        if let Some(iss_num) = read.get_issuance_num(&token_code) {
+        if let Some(iss_num) = ledger.get_issuance_num(&token_code) {
             Ok(web::Json(iss_num))
         } else {
             Err(actix_web::error::ErrorNotFound(
@@ -109,14 +109,14 @@ pub(super) async fn query_utxos(
         })
         .collect::<actix_web::Result<Vec<_>, actix_web::error::Error>>()?;
 
-    let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
 
     if sid_list.len() > 10 || sid_list.is_empty() {
         return Err(actix_web::error::ErrorBadRequest("Invalid Query List"));
     }
 
-    Ok(web::Json(read.get_utxos(sid_list.as_slice())))
+    Ok(web::Json(ledger.get_utxos(sid_list.as_slice())))
 }
 
 // query asset according to `AssetType`
@@ -124,10 +124,10 @@ pub(super) async fn query_asset(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<AssetType>> {
-    let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
     if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
-        if let Some(asset) = read.get_asset_type(&token_code) {
+        if let Some(asset) = ledger.get_asset_type(&token_code) {
             Ok(web::Json(asset))
         } else {
             Err(actix_web::error::ErrorNotFound(
@@ -146,10 +146,10 @@ pub(super) async fn query_txn(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<String> {
-    let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
     if let Ok(txn_sid) = info.parse::<usize>() {
-        if let Ok(mut txn) = ruc::info!(read.get_transaction(TxnSID(txn_sid))) {
+        if let Ok(mut txn) = ruc::info!(ledger.get_transaction(TxnSID(txn_sid))) {
             txn.finalized_txn.set_txo_id();
             Ok(serde_json::to_string(&txn)?)
         } else {
@@ -169,10 +169,10 @@ pub(super) async fn query_txn_light(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<String> {
-    let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
     if let Ok(txn_sid) = info.parse::<usize>() {
-        if let Ok(mut txn) = ruc::info!(read.get_transaction_light(TxnSID(txn_sid))) {
+        if let Ok(mut txn) = ruc::info!(ledger.get_transaction_light(TxnSID(txn_sid))) {
             txn.set_txo_id();
             Ok(serde_json::to_string(&txn)?)
         } else {
@@ -192,9 +192,9 @@ pub(super) async fn query_txn_light(
 pub(super) async fn query_global_state(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> web::Json<(HashOf<Option<StateCommitmentData>>, u64, &'static str)> {
-    let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
-    let (hash, seq_id) = read.get_state_commitment();
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
+    let (hash, seq_id) = ledger.get_state_commitment();
 
     web::Json((hash, seq_id, "v4UVgkIBpj0eNYI1B1QhTTduJHCIHH126HcdesCxRdLkVGDKrVUPgwmNLCDafTVgC5e4oDhAGjPNt1VhUr6ZCQ=="))
 }
@@ -204,9 +204,9 @@ pub(super) async fn query_global_state_version(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     version: web::Path<u64>,
 ) -> web::Json<Option<HashOf<Option<StateCommitmentData>>>> {
-    let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
-    let hash = read.get_state_commitment_at_block_height(*version);
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
+    let hash = ledger.get_state_commitment_at_block_height(*version);
     web::Json(hash)
 }
 
@@ -216,9 +216,9 @@ pub(super) async fn query_global_state_version(
 pub(super) async fn query_validators(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> actix_web::Result<web::Json<ValidatorList>> {
-    let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
-    let staking = read.get_staking();
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
+    let staking = ledger.get_staking();
 
     if let Some(validator_data) = staking.validator_get_current() {
         let validators = validator_data.get_validator_addr_map();
@@ -271,14 +271,16 @@ pub(super) async fn get_delegation_reward(
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
 
-    let read = data.read();
+    let qs = data.read();
 
     Ok(web::Json(
         (0..=info.height)
             .into_iter()
             .rev()
             .filter_map(|i| {
-                read.staking_delegation_rwd_hist
+                qs.ledger_cloned
+                    .api_cache
+                    .staking_delegation_rwd_hist
                     .get(&key)
                     .map(|rh| rh.get(&i))
             })
@@ -308,8 +310,8 @@ pub(super) async fn get_validator_delegation_history(
     web::Query(info): web::Query<ValidatorDelegationQueryParams>,
 ) -> actix_web::Result<web::Json<Vec<ValidatorDelegation>>> {
     let qs = data.read();
-    let read = qs.state.as_ref().unwrap().read();
-    let staking = read.get_staking();
+    let ledger = &qs.ledger_cloned;
+    let staking = ledger.get_staking();
 
     let v_id = staking
         .validator_td_addr_to_app_pk(info.address.as_ref())
@@ -318,7 +320,8 @@ pub(super) async fn get_validator_delegation_history(
     let v_self_delegation = staking
         .delegation_get(&v_id)
         .ok_or_else(|| error::ErrorBadRequest("not exists"))?;
-    let delegation_amount_hist = qs.staking_delegation_amount_hist.get(&v_id);
+    let delegation_amount_hist =
+        ledger.api_cache.staking_delegation_amount_hist.get(&v_id);
 
     let self_delegation = v_self_delegation
         .entries
@@ -329,7 +332,7 @@ pub(super) async fn get_validator_delegation_history(
     let delegated = v_self_delegation.delegators.values().sum::<u64>();
 
     let mut history = vec![ValidatorDelegation {
-        return_rate: read.staking_get_block_rewards_rate(),
+        return_rate: ledger.staking_get_block_rewards_rate(),
         delegated,
         self_delegation,
     }];
@@ -399,9 +402,9 @@ pub(super) async fn get_delegators_with_params(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     web::Query(info): web::Query<DelegatorQueryParams>,
 ) -> actix_web::Result<web::Json<DelegatorList>> {
-    let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
-    let staking = read.get_staking();
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
+    let staking = ledger.get_staking();
 
     if info.page == 0 || info.order == OrderOption::Asc {
         return Ok(web::Json(DelegatorList::new(vec![])));
@@ -436,9 +439,9 @@ pub(super) async fn query_delegator_list(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     addr: web::Path<TendermintAddr>,
 ) -> actix_web::Result<web::Json<DelegatorList>> {
-    let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
-    let staking = read.get_staking();
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
+    let staking = ledger.get_staking();
 
     let list = staking
         .validator_get_delegator_list(addr.as_ref(), 0, usize::MAX)
@@ -460,9 +463,9 @@ pub(super) async fn query_validator_detail(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     addr: web::Path<TendermintAddr>,
 ) -> actix_web::Result<web::Json<ValidatorDetail>> {
-    let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
-    let staking = read.get_staking();
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
+    let staking = ledger.get_staking();
 
     let v_id = staking
         .validator_td_addr_to_app_pk(addr.as_ref())
@@ -480,7 +483,7 @@ pub(super) async fn query_validator_detail(
                 power_list.sort_unstable();
                 let voting_power_rank =
                     power_list.len() - power_list.binary_search(&v.td_power).unwrap();
-                let realtime_rate = read.staking_get_block_rewards_rate();
+                let realtime_rate = ledger.staking_get_block_rewards_rate();
                 let expected_annualization = [
                     realtime_rate[0] as u128
                         * v_self_delegation.proposer_rwd_cnt as u128,
@@ -527,11 +530,11 @@ pub(super) async fn query_delegation_info(
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
 
-    let read = data.read();
-    let read = read.state.as_ref().unwrap().read();
-    let staking = read.get_staking();
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
+    let staking = ledger.get_staking();
 
-    let block_rewards_rate = read.staking_get_block_rewards_rate();
+    let block_rewards_rate = ledger.staking_get_block_rewards_rate();
     let global_staking = staking.validator_global_power();
     let global_delegation = staking.delegation_info_global_amount();
 
@@ -574,6 +577,9 @@ pub(super) async fn query_delegation_info(
                     }
                 }
             }
+            // check temporary partial undelegators
+            unbond_amount += d.tmp_delegators.values().sum::<u64>();
+
             (
                 bond_amount,
                 bond_entries,
@@ -611,11 +617,11 @@ pub(super) async fn query_owned_utxos(
     owner: web::Path<String>,
 ) -> actix_web::Result<web::Json<BTreeMap<TxoSID, (Utxo, Option<OwnerMemo>)>>> {
     let qs = data.read();
-    let read = qs.state.as_ref().unwrap().read();
+    let ledger = &qs.ledger_cloned;
     globutils::wallet::public_key_from_base64(owner.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
-        .map(|pk| web::Json(pnk!(read.get_owned_utxos(&pk))))
+        .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk))))
 }
 
 #[allow(missing_docs)]

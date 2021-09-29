@@ -16,6 +16,7 @@ use fp_types::{
     transaction::UncheckedTransaction,
 };
 use fp_utils::ecdsa::SecpPair;
+use fp_utils::tx::EvmRawTxWrapper;
 use ledger::data_model::ASSET_TYPE_FRA;
 use ledger::data_model::BLACK_HOLE_PUBKEY_STAKING;
 use ruc::*;
@@ -126,9 +127,11 @@ pub fn transfer_from_account(
     let tx = UncheckedTransaction::new_signed(action, signer, signature, extra);
     let txn = serde_json::to_vec(&tx).unwrap();
 
+    let txn_with_tag = EvmRawTxWrapper::wrap(&txn);
+
     Runtime::new()
         .unwrap()
-        .block_on(tm_client.broadcast_tx_sync(txn.into()))
+        .block_on(tm_client.broadcast_tx_sync(txn_with_tag.into()))
         .c(d!())?;
 
     Ok(())

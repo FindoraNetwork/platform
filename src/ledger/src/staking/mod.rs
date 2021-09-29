@@ -67,7 +67,7 @@ macro_rules! chan {
 lazy_static! {
     /// will be set in `findorad` together with '--enable-query-server' option,
     /// full-nodes may need this feature, meaningless in other kinds of node.
-    pub static ref KEEP_HIST: bool = env::var("FINDORA_KEEP_STAKING_HIST").is_ok();
+    pub static ref KEEP_HIST: bool = env::var("FINDORAD_KEEP_HIST").is_ok();
 
     /// Reserved accounts of Findora Foundation or System.
     pub static ref FF_PK_LIST: Vec<XfrPublicKey> = FF_ADDR_LIST
@@ -597,6 +597,7 @@ impl Staking {
             entries: map! {B validator => 0},
             id: owner,
             receiver_pk: None,
+            tmp_delegators: map! {B},
             start_height: h,
             end_height,
             state: DelegationState::Bond,
@@ -797,6 +798,7 @@ impl Staking {
                     entries: map! {B target_validator => actual_am},
                     id: pu.new_delegator_id,
                     receiver_pk: Some(d.id),
+                    tmp_delegators: map! {B},
                     start_height: d.start_height,
                     end_height: h + UNBOND_BLOCK_CNT,
                     state: DelegationState::Bond,
@@ -816,6 +818,9 @@ impl Staking {
             } else {
                 return Err(eg!("delegator is out of bond"));
             }
+
+            // tracking temporary partial undelegations in original delegation
+            d.tmp_delegators.insert(pu.new_delegator_id, actual_am);
         } else {
             return Err(eg!("delegator not found"));
         }
@@ -857,6 +862,13 @@ impl Staking {
                 .end_height_map
                 .get_mut(h)
                 .map(|addrs| addrs.remove(addr));
+
+            // If this is a temporary delegation, remove it from original one
+            if let Some(receiver) = d.receiver_pk {
+                if let Some(orig_d) = self.di.addr_map.get_mut(&receiver) {
+                    orig_d.tmp_delegators.remove(addr);
+                }
+            }
             Ok(d)
         } else {
             // we assume that this probability is very low
@@ -1729,6 +1741,8 @@ pub struct Delegation {
     /// optional receiver address,
     /// if this one exists, tokens will be paid to it instead of id
     pub receiver_pk: Option<XfrPublicKey>,
+    /// Temporary partial undelegations of current id
+    pub tmp_delegators: BTreeMap<XfrPublicKey, Amount>,
     /// the joint height of the delegtator
     pub start_height: BlockHeight,
     /// the height at which the delegation ends

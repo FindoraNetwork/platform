@@ -14,6 +14,7 @@ use fp_types::{
     actions::{ethereum::Action as EthereumAction, Action},
     assemble::UncheckedTransaction,
 };
+use fp_utils::tx::EvmRawTxWrapper;
 
 #[test]
 fn run_all_tests() {
@@ -56,11 +57,13 @@ fn test_abci_check_tx() {
             10.into(),
         )
         .unwrap();
-    req.tx = serde_json::to_vec(&build_transfer_transaction(
+    let tx = serde_json::to_vec(&build_transfer_transaction(
         BOB_ECDSA.address,
         value.as_u128(),
     ))
     .unwrap();
+    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
+    req.tx = txn_with_tag;
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
     assert!(
         resp.code == 1 && resp.log.contains("InvalidTransaction: InsufficientBalance"),
@@ -94,11 +97,13 @@ fn test_abci_deliver_tx() {
             10.into(),
         )
         .unwrap();
-    req.tx = serde_json::to_vec(&build_transfer_transaction(
+    let tx = serde_json::to_vec(&build_transfer_transaction(
         BOB_ECDSA.address,
         value.as_u128(),
     ))
     .unwrap();
+    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
+    req.tx = txn_with_tag;
     let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
         resp.code, 0,

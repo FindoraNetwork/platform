@@ -12,7 +12,7 @@ use finutils::api::NetworkRoute;
 use ledger::{
     data_model::{
         b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
-        TxnSID, TxoSID, XfrAddress,
+        TxnIDHash, TxnSID, TxoSID, XfrAddress,
     },
     staking::ops::mint_fra::MintEntry,
 };
@@ -21,7 +21,7 @@ use log::info;
 use parking_lot::RwLock;
 use ruc::*;
 use serde::{Deserialize, Serialize};
-use server::{QueryServer, TxnIDHash};
+use server::QueryServer;
 use std::{collections::HashSet, sync::Arc};
 use zei::{
     serialization::ZeiFromToBytes,
@@ -90,11 +90,11 @@ async fn get_owned_utxos(
     owner: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxoSID>>> {
     let qs = data.read();
-    let read = qs.state.as_ref().unwrap().read();
+    let ledger = &qs.ledger_cloned;
     globutils::wallet::public_key_from_base64(owner.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
-        .map(|pk| web::Json(pnk!(read.get_owned_utxos(&pk)).keys().copied().collect()))
+        .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk)).keys().copied().collect()))
 }
 
 /// Define interface type
@@ -407,8 +407,7 @@ async fn get_related_xfrs(
 pub struct QueryApi;
 
 impl QueryApi {
-    /// create query api
-    pub fn create(
+    pub(crate) fn create(
         server: Arc<RwLock<QueryServer>>,
         addrs: &[(&str, u16)],
     ) -> Result<QueryApi> {

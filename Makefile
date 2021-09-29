@@ -11,7 +11,7 @@ export STAKING_INITIAL_VALIDATOR_CONFIG = $(shell pwd)/src/ledger/src/staking/in
 export STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV = $(shell pwd)/src/ledger/src/staking/init/staking_config_debug_env.json
 export STAKING_INITIAL_VALIDATOR_CONFIG_ABCI_MOCK = $(shell pwd)/src/ledger/src/staking/init/staking_config_abci_mock.json
 
-export DEBUG_DIR=/tmp/findora
+FIN_DEBUG ?= /tmp/findora
 export ENABLE_QUERY_SERVICE = true
 
 ifndef CARGO_TARGET_DIR
@@ -156,21 +156,11 @@ wasm:
 	cd src/components/wasm && wasm-pack build
 	tar -zcpf $(WASM_PKG) src/components/wasm/pkg
 
-single:
-	./tools/devnet/stopnodes.sh
-	./tools/devnet/resetsingle.sh
-	./tools/devnet/startsingle.sh
-
-devnet:
-	./tools/devnet/stopnodes.sh
-	./tools/devnet/resetnodes.sh 20 1
-	./tools/devnet/startnodes.sh
-
 debug_env: stop_debug_env build_release_debug
-	- rm -rf $(DEBUG_DIR)
-	mkdir $(DEBUG_DIR)
-	cp tools/debug_env.tar.gz $(DEBUG_DIR)/
-	cd $(DEBUG_DIR) && tar -xpf debug_env.tar.gz && mv debug_env devnet
+	- rm -rf $(FIN_DEBUG)
+	mkdir $(FIN_DEBUG)
+	cp tools/debug_env.tar.gz $(FIN_DEBUG)/
+	cd $(FIN_DEBUG) && tar -xpf debug_env.tar.gz && mv debug_env devnet
 	./tools/devnet/startnodes.sh
 
 run_staking_demo: stop_debug_env
@@ -286,14 +276,11 @@ endif
 clean_binary_dockerhub:
 	docker rmi findorad-binary-image:$(IMAGE_TAG)
 
-####@./tools/devnet/snapshot.sh <user_nick> <password> <token_name> <max_units> <genesis_issuance> <memo> <memo_updatable>
-snapshot:
-	@./tools/devnet/snapshot.sh Findora my_pass FRA 21210000000000000 21000000000000000 my_memo N
-
-network:
-	@./tools/devnet/startnetwork.sh Findora my_pass FRA 21210000000000000 21000000000000000 my_memo N
-
-####@./tools/devnet/resetnodes.sh <num_of_validator_nodes> <num_of_normal_nodes>
-mainnet:
+reset:
 	@./tools/devnet/stopnodes.sh
-	@./tools/devnet/resetnodes.sh 4 4
+	@./tools/devnet/resetnodes.sh 1 1
+
+snapshot:
+	@./tools/devnet/snapshot.sh
+
+devnet: reset snapshot

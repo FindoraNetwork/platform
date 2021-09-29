@@ -2,27 +2,19 @@
 //! data sources for the query api
 //!
 
-use globutils::wallet;
 use lazy_static::lazy_static;
 use ledger::{
     data_model::{
-        AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Operation, Transaction,
-        TxOutput, TxnSID, TxoSID, XfrAddress,
+        AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput, TxnIDHash,
+        TxnSID, TxoSID, XfrAddress,
     },
-    staking::{
-        ops::mint_fra::MintEntry, Amount, BlockHeight, DelegationRwdDetail,
-        CHAN_D_AMOUNT_HIST, CHAN_D_RWD_HIST, CHAN_GLOB_RATE_HIST, CHAN_V_SELF_D_HIST,
-    },
-    store::{
-        bnc::{self, new_mapx, Mapx},
-        flush_data, LedgerState,
-    },
+    staking::{ops::mint_fra::MintEntry, BlockHeight},
+    store::LedgerState,
 };
 use parking_lot::{Condvar, Mutex, RwLock};
 use ruc::*;
-use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, fs, io::ErrorKind, sync::Arc};
-use zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo};
+use std::{collections::HashSet, sync::Arc};
+use zei::xfr::structs::OwnerMemo;
 
 lazy_static! {
     /// the query_server will be notified every time
@@ -31,120 +23,18 @@ lazy_static! {
         Arc::new((Mutex::new(false), Condvar::new()));
 }
 
-/// (sid, hash)
-pub type TxnIDHash = (TxnSID, String);
-
-type Issuances = Vec<(TxOutput, Option<OwnerMemo>)>;
-
-/// data from ledgerState
-#[derive(Serialize, Deserialize)]
-pub struct QueryServer {
-    pub(crate) basedir: String,
-    snapshot_file: String,
-    #[serde(skip)]
-    pub(crate) state: Option<Arc<RwLock<LedgerState>>>,
-    related_transactions: Mapx<XfrAddress, HashSet<TxnSID>>, // Set of transactions related to a ledger address
-    related_transfers: Mapx<AssetTypeCode, HashSet<TxnSID>>, // Set of transfer transactions related to an asset code
-    claim_hist_txns: Mapx<XfrAddress, Vec<TxnSID>>, // List of claim transactions related to a ledger address
-    coinbase_oper_hist: Mapx<XfrAddress, Vec<(BlockHeight, MintEntry)>>,
-    created_assets: Mapx<IssuerPublicKey, Vec<DefineAsset>>,
-    issuances: Mapx<IssuerPublicKey, Issuances>, // issuance mapped by public key
-    token_code_issuances: Mapx<AssetTypeCode, Issuances>, // issuance mapped by token code
-    owner_memos: Mapx<TxoSID, OwnerMemo>,
-    utxos_to_map_index: Mapx<TxoSID, XfrAddress>,
-    txo_to_txnid: Mapx<TxoSID, TxnIDHash>, // txo(spent, unspent) to authenticated txn (sid, hash)
-    txn_sid_to_hash: Mapx<TxnSID, String>, // txn sid to txn hash
-    txn_hash_to_sid: Mapx<String, TxnSID>, // txn hash to txn sid
-
-    // global rate history
-    pub(crate) staking_global_rate_hist: Mapx<BlockHeight, [u128; 2]>,
-
-    // - self-delegation amount history
-    //   - `NonConfidential` FRAs amount
-    //   - only valid for validators
-    pub(crate) staking_self_delegation_hist:
-        Mapx<XfrPublicKey, Mapx<BlockHeight, Amount>>,
-
-    // - delegation amount per block height
-    // - only valid for a validator
-    pub(crate) staking_delegation_amount_hist:
-        Mapx<XfrPublicKey, Mapx<BlockHeight, Amount>>,
-
-    // rewards history, used on some pulic nodes, such as fullnode
-    pub(crate) staking_delegation_rwd_hist:
-        Mapx<XfrPublicKey, Mapx<BlockHeight, DelegationRwdDetail>>,
-
-    app_block_cnt: usize,
+pub(crate) struct QueryServer {
+    pub(crate) ledger: Arc<RwLock<LedgerState>>,
+    pub(crate) ledger_cloned: LedgerState,
 }
 
 impl QueryServer {
     /// create query server
-    pub fn new(
-        ledger: Arc<RwLock<LedgerState>>,
-        basedir: Option<&str>,
-    ) -> Result<QueryServer> {
-        let basedir = if let Some(path) = basedir {
-            path.to_owned()
-        } else {
-            bnc::clear();
-            globutils::fresh_tmp_dir()
-                .join("/test_query_server")
-                .to_string_lossy()
-                .into_owned()
-        };
-
-        fs::create_dir_all(&basedir).c(d!())?;
-
-        match fs::read_to_string(format!("{}/query_server", &basedir)) {
-            Ok(s) => serde_json::from_str(&s).c(d!()).map(|mut r: QueryServer| {
-                r.basedir = basedir;
-                r.state = Some(ledger);
-                r
-            }),
-            Err(e) => {
-                if ErrorKind::NotFound != e.kind() {
-                    Err(eg!(e))
-                } else {
-                    Ok(Self::create(ledger, &basedir, "query_server"))
-                }
-            }
-        }
-    }
-
-    fn create(
-        ledger: Arc<RwLock<LedgerState>>,
-        basedir: &str,
-        snapshot_file: &str,
-    ) -> QueryServer {
+    pub fn new(ledger: Arc<RwLock<LedgerState>>) -> QueryServer {
+        let ledger_cloned = ledger.read().clone();
         QueryServer {
-            basedir: basedir.to_owned(),
-            state: Some(ledger),
-            snapshot_file: snapshot_file.to_owned(),
-            related_transactions: new_mapx!("query_server_subdata/related_transactions"),
-            related_transfers: new_mapx!("query_server_subdata/related_transfers"),
-            claim_hist_txns: new_mapx!("query_server_subdata/claim_hist_txns"),
-            coinbase_oper_hist: new_mapx!("query_server_subdata/coinbase_oper_hist"),
-            owner_memos: new_mapx!("query_server_subdata/owner_memos"),
-            created_assets: new_mapx!("query_server_subdata/created_assets"),
-            issuances: new_mapx!("query_server_subdata/issuances"),
-            token_code_issuances: new_mapx!("query_server_subdata/token_code_issuances"),
-            utxos_to_map_index: new_mapx!("query_server_subdata/utxos_to_map_index"),
-            txo_to_txnid: new_mapx!("query_server_subdata/txo_to_txnid"),
-            txn_sid_to_hash: new_mapx!("query_server_subdata/txn_sid_to_hash"),
-            txn_hash_to_sid: new_mapx!("query_server_subdata/txn_hash_to_sid"),
-            staking_global_rate_hist: new_mapx!(
-                "query_server_subdata/staking_rate_hist"
-            ),
-            staking_self_delegation_hist: new_mapx!(
-                "query_server_subdata/staking_self_delegation_hist"
-            ),
-            staking_delegation_amount_hist: new_mapx!(
-                "query_server_subdata/staking_delegation_amount_hist"
-            ),
-            staking_delegation_rwd_hist: new_mapx!(
-                "query_server_subdata/staking_rwd_hist"
-            ),
-            app_block_cnt: 0,
+            ledger,
+            ledger_cloned,
         }
     }
 
@@ -154,7 +44,7 @@ impl QueryServer {
         &self,
         issuer: &IssuerPublicKey,
     ) -> Option<Vec<(TxOutput, Option<OwnerMemo>)>> {
-        self.issuances.get(issuer)
+        self.ledger_cloned.api_cache.issuances.get(issuer)
     }
 
     /// Returns the set of records issued by a certain token code.
@@ -163,7 +53,7 @@ impl QueryServer {
         &self,
         code: &AssetTypeCode,
     ) -> Option<Vec<(TxOutput, Option<OwnerMemo>)>> {
-        self.token_code_issuances.get(code)
+        self.ledger_cloned.api_cache.token_code_issuances.get(code)
     }
 
     /// return `DefineAsset` according to `IssuerPublicKey`
@@ -172,7 +62,7 @@ impl QueryServer {
         &self,
         issuer: &IssuerPublicKey,
     ) -> Option<Vec<DefineAsset>> {
-        self.created_assets.get(issuer)
+        self.ledger_cloned.api_cache.created_assets.get(issuer)
     }
 
     /// get coinbase based on address and sorting rules and start and end position
@@ -183,7 +73,8 @@ impl QueryServer {
         end: usize,
         order_desc: bool,
     ) -> Result<(u64, Vec<(u64, MintEntry)>)> {
-        if let Some(hist) = self.coinbase_oper_hist.get(address) {
+        if let Some(hist) = self.ledger_cloned.api_cache.coinbase_oper_hist.get(address)
+        {
             let len = hist.len();
             if len > start {
                 let slice = match order_desc {
@@ -223,7 +114,7 @@ impl QueryServer {
         end: usize,
         order_desc: bool,
     ) -> Result<Vec<Option<Transaction>>> {
-        if let Some(hist) = self.claim_hist_txns.get(address) {
+        if let Some(hist) = self.ledger_cloned.api_cache.claim_hist_txns.get(address) {
             let len = hist.len();
             if len > start {
                 let slice = match order_desc {
@@ -245,13 +136,12 @@ impl QueryServer {
                     }
                 };
 
-                let ledger = Arc::clone(self.state.as_ref().unwrap());
-                let ledger = ledger.read();
-
                 return Ok(slice
                     .iter()
                     .map(|h| {
-                        if let Ok(tx) = ruc::info!(ledger.get_transaction_light(*h)) {
+                        if let Ok(tx) =
+                            ruc::info!(self.ledger_cloned.get_transaction_light(*h))
+                        {
                             Some(tx.txn)
                         } else {
                             None
@@ -276,7 +166,10 @@ impl QueryServer {
         &self,
         address: &XfrAddress,
     ) -> Option<HashSet<TxnSID>> {
-        self.related_transactions.get(&address)
+        self.ledger_cloned
+            .api_cache
+            .related_transactions
+            .get(&address)
     }
 
     /// Returns the set of transfer transactions that are associated with a given asset.
@@ -286,368 +179,62 @@ impl QueryServer {
         &self,
         code: &AssetTypeCode,
     ) -> Option<HashSet<TxnSID>> {
-        self.related_transfers.get(&code)
+        self.ledger_cloned.api_cache.related_transfers.get(&code)
     }
 
     /// Returns the owner of a given txo_sid.
     #[inline(always)]
     pub fn get_address_of_sid(&self, txo_sid: TxoSID) -> Option<XfrAddress> {
-        self.utxos_to_map_index.get(&txo_sid)
+        self.ledger_cloned
+            .api_cache
+            .utxos_to_map_index
+            .get(&txo_sid)
     }
 
     /// Returns the authenticated txn (id, hash) of a given txo_sid.
     #[inline(always)]
     pub fn get_authenticated_txnid(&self, txo_sid: TxoSID) -> Option<TxnIDHash> {
-        self.txo_to_txnid.get(&txo_sid)
+        self.ledger_cloned.api_cache.txo_to_txnid.get(&txo_sid)
     }
 
     /// Returns the transaction hash of a given txn_sid.
     #[inline(always)]
     pub fn get_transaction_hash(&self, txn_sid: TxnSID) -> Option<String> {
-        self.txn_sid_to_hash.get(&txn_sid)
+        self.ledger_cloned.api_cache.txn_sid_to_hash.get(&txn_sid)
     }
 
     /// Returns the transaction sid of a given txn_hash.
     #[inline(always)]
     pub fn get_transaction_sid(&self, txn_hash: String) -> Option<TxnSID> {
-        self.txn_hash_to_sid.get(&txn_hash)
+        self.ledger_cloned.api_cache.txn_hash_to_sid.get(&txn_hash)
     }
 
     /// Returns most recent commits at query_server side.
     #[inline(always)]
     pub fn get_commits(&self) -> u64 {
-        self.state.as_ref().unwrap().read().get_block_commit_count()
+        self.ledger_cloned.get_block_commit_count()
     }
 
     /// Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
     #[inline(always)]
     pub fn get_owner_memo(&self, txo_sid: TxoSID) -> Option<OwnerMemo> {
-        self.owner_memos.get(&txo_sid)
-    }
-
-    /// Add created asset
-    #[inline(always)]
-    pub fn add_created_asset(&mut self, creation: &DefineAsset) {
-        let issuer = creation.pubkey;
-        #[allow(unused_mut)]
-        let mut set = self.created_assets.entry(issuer).or_insert_with(Vec::new);
-
-        set.push(creation.clone());
-        set.sort_by_key(|i| i.pubkey);
-        set.dedup_by_key(|i| i.body.asset.code);
-    }
-
-    /// Cache issuance records
-    pub fn cache_issuance(&mut self, issuance: &IssueAsset) {
-        let new_records = issuance.body.records.to_vec();
-
-        macro_rules! save_issuance {
-            ($maps: tt, $key: tt) => {
-                #[allow(unused_mut)]
-                let mut records = $maps.entry($key).or_insert_with(Vec::new);
-                records.extend_from_slice(&new_records);
-            };
-        }
-
-        let key_issuances = &mut self.issuances;
-        let pubkey = issuance.pubkey;
-        save_issuance!(key_issuances, pubkey);
-
-        let token_issuances = &mut self.token_code_issuances;
-        let token_code = issuance.body.code;
-        save_issuance!(token_issuances, token_code);
-    }
-
-    fn cache_hist_data(&mut self) {
-        CHAN_GLOB_RATE_HIST.1.lock().try_iter().for_each(|(h, r)| {
-            self.staking_global_rate_hist.insert(h, r);
-        });
-
-        CHAN_V_SELF_D_HIST
-            .1
-            .lock()
-            .try_iter()
-            .for_each(|(pk, h, r)| {
-                self.staking_self_delegation_hist
-                    .entry(pk)
-                    .or_insert(new_mapx!(format!(
-                        "staking_self_delegation_hist_subdata/{}",
-                        wallet::public_key_to_base64(&pk)
-                    )))
-                    .insert(h, r);
-            });
-
-        CHAN_D_AMOUNT_HIST
-            .1
-            .lock()
-            .try_iter()
-            .for_each(|(pk, h, r)| {
-                self.staking_delegation_amount_hist
-                    .entry(pk)
-                    .or_insert(new_mapx!(format!(
-                        "staking_delegation_amount_hist_subdata/{}",
-                        wallet::public_key_to_base64(&pk)
-                    )))
-                    .insert(h, r);
-            });
-
-        CHAN_D_RWD_HIST.1.lock().try_iter().for_each(|(pk, h, r)| {
-            #[allow(unused_mut)]
-            let mut dd =
-                self.staking_delegation_rwd_hist
-                    .entry(pk)
-                    .or_insert(new_mapx!(format!(
-                        "staking_delegation_rwd_hist_subdata/{}",
-                        wallet::public_key_to_base64(&pk)
-                    )));
-            let mut dd = dd.entry(h).or_insert_with(DelegationRwdDetail::default);
-
-            dd.block_height = r.block_height;
-            dd.amount += r.amount;
-            dd.penalty_amount += r.penalty_amount;
-
-            alt!(0 < r.bond, dd.bond = r.bond);
-            alt!(r.return_rate.is_some(), dd.return_rate = r.return_rate);
-            alt!(
-                r.commission_rate.is_some(),
-                dd.commission_rate = r.commission_rate
-            );
-            alt!(
-                r.global_delegation_percent.is_some(),
-                dd.global_delegation_percent = r.global_delegation_percent
-            );
-        });
-    }
-
-    /// Updates query server cache with new transactions from a block.
-    /// Each new block must be consistent with the state of the cached ledger up until this point
-    fn apply_new_blocks(&mut self, basedir: &str) -> Result<()> {
-        self.cache_hist_data();
-
-        let ledger = Arc::clone(self.state.as_ref().unwrap());
-        let ledger = ledger.read();
-
-        if self.app_block_cnt == ledger.blocks.len() {
-            return Ok(());
-        }
-
-        // Should be unreachable !!
-        if self.app_block_cnt > ledger.blocks.len() {
-            return Err(eg!("The fucking world is over!"));
-        }
-
-        for block in ledger.blocks.iter().skip(self.app_block_cnt) {
-            // Update ownership status
-            for (txn_sid, txo_sids) in
-                block.txns.iter().map(|v| (v.tx_id, v.txo_ids.as_slice()))
-            {
-                let curr_txn = ledger.get_transaction_light(txn_sid).c(d!())?.txn;
-                // get the transaction, ownership addresses, and memos associated with each transaction
-                let (addresses, owner_memos) = {
-                    let addresses: Vec<XfrAddress> = txo_sids
-                        .iter()
-                        .map(|sid| XfrAddress {
-                            key: ((ledger
-                                .get_utxo_light(*sid)
-                                .or_else(|| ledger.get_spent_utxo_light(*sid))
-                                .unwrap()
-                                .utxo)
-                                .0)
-                                .record
-                                .public_key,
-                        })
-                        .collect();
-
-                    let owner_memos = curr_txn.get_owner_memos_ref();
-
-                    (addresses, owner_memos)
-                };
-
-                let classify_op = |op: &Operation| {
-                    match op {
-                        Operation::Claim(i) => {
-                            let key = i.get_claim_publickey();
-                            #[allow(unused_mut)]
-                            let mut hist = self
-                                .claim_hist_txns
-                                .entry(XfrAddress { key })
-                                .or_insert_with(Vec::new);
-
-                            // keep it in ascending order to reduce memory movement count
-                            match hist.binary_search_by(|a| a.0.cmp(&txn_sid.0)) {
-                                Ok(_) => { /*skip if txn_sid already exists*/ }
-                                Err(idx) => hist.insert(idx, txn_sid),
-                            }
-                        }
-                        Operation::MintFra(i) => i.entries.iter().for_each(|me| {
-                            let key = me.utxo.record.public_key;
-                            #[allow(unused_mut)]
-                            let mut hist = self
-                                .coinbase_oper_hist
-                                .entry(XfrAddress { key })
-                                .or_insert_with(Vec::new);
-                            hist.push((i.height, me.clone()));
-                        }),
-                        _ => { /* filter more operations before this line */ }
-                    };
-                };
-
-                // Update related addresses
-                // Apply classify_op for each operation in curr_txn
-                let related_addresses = get_related_addresses(&curr_txn, classify_op);
-                for address in &related_addresses {
-                    self.related_transactions
-                        .entry(*address)
-                        .or_insert_with(HashSet::new)
-                        .insert(txn_sid);
-                }
-
-                // Update transferred nonconfidential assets
-                let transferred_assets =
-                    get_transferred_nonconfidential_assets(&curr_txn);
-                for asset in &transferred_assets {
-                    self.related_transfers
-                        .entry(*asset)
-                        .or_insert_with(HashSet::new)
-                        .insert(txn_sid);
-                }
-
-                // Add created asset
-                for op in &curr_txn.body.operations {
-                    match op {
-                        Operation::DefineAsset(define_asset) => {
-                            self.add_created_asset(&define_asset);
-                        }
-                        Operation::IssueAsset(issue_asset) => {
-                            self.cache_issuance(&issue_asset);
-                        }
-                        _ => {}
-                    };
-                }
-
-                // Add new utxos (this handles both transfers and issuances)
-                for (txo_sid, (address, owner_memo)) in txo_sids
-                    .iter()
-                    .zip(addresses.iter().zip(owner_memos.iter()))
-                {
-                    self.utxos_to_map_index.insert(*txo_sid, *address);
-                    let hash = curr_txn.hash_tm().hex().to_uppercase();
-                    self.txo_to_txnid.insert(*txo_sid, (txn_sid, hash.clone()));
-                    self.txn_sid_to_hash.insert(txn_sid, hash.clone());
-                    self.txn_hash_to_sid.insert(hash.clone(), txn_sid);
-                    if let Some(owner_memo) = owner_memo {
-                        self.owner_memos.insert(*txo_sid, (*owner_memo).clone());
-                    }
-                }
-            }
-        }
-
-        self.app_block_cnt = ledger.blocks.len();
-
-        flush_data();
-
-        // snapshot them finally
-        let path = format!("{}/{}", basedir, &self.snapshot_file);
-        serde_json::to_vec(&self)
-            .c(d!())
-            .and_then(|s| fs::write(&path, s).c(d!(path)))
-    }
-
-    /// update data of query server
-    /// call update when the block into end_block and commit to ledgerState
-    #[inline(always)]
-    pub fn update(&mut self, basedir: &str) {
-        pnk!(self.apply_new_blocks(basedir));
+        self.ledger_cloned.api_cache.owner_memos.get(&txo_sid)
     }
 
     /// retrieve block reward rate at specified block height
     #[inline(always)]
     pub fn query_block_rewards_rate(&self, height: &BlockHeight) -> Option<[u128; 2]> {
-        self.staking_global_rate_hist.get(height)
-    }
-}
-
-/// An xfr address is related to a transaction if it is one of the following:
-/// 1. Owner of a transfer output
-/// 2. Transfer signer (owner of input or co-signer)
-/// 3. Signer of a an issuance txn
-/// 4. Signer of a kv_update txn
-/// 5. Signer of a memo_update txn
-fn get_related_addresses<F>(txn: &Transaction, mut classify: F) -> HashSet<XfrAddress>
-where
-    F: FnMut(&Operation),
-{
-    let mut related_addresses = HashSet::new();
-
-    macro_rules! staking_gen {
-        ($op: expr) => {
-            $op.get_related_pubkeys().into_iter().for_each(|pk| {
-                related_addresses.insert(XfrAddress { key: pk });
-            });
-        };
+        self.ledger_cloned
+            .api_cache
+            .staking_global_rate_hist
+            .get(height)
     }
 
-    for op in &txn.body.operations {
-        classify(op);
-        match op {
-            Operation::UpdateStaker(i) => staking_gen!(i),
-            Operation::Delegation(i) => staking_gen!(i),
-            Operation::UnDelegation(i) => staking_gen!(i),
-            Operation::Claim(i) => staking_gen!(i),
-            Operation::UpdateValidator(i) => staking_gen!(i),
-            Operation::Governance(i) => staking_gen!(i),
-            Operation::FraDistribution(i) => staking_gen!(i),
-            Operation::MintFra(i) => staking_gen!(i),
-
-            Operation::ConvertAccount(i) => {
-                related_addresses.insert(XfrAddress {
-                    key: i.get_related_address(),
-                });
-            }
-            Operation::TransferAsset(transfer) => {
-                for input in transfer.body.transfer.inputs.iter() {
-                    related_addresses.insert(XfrAddress {
-                        key: input.public_key,
-                    });
-                }
-
-                for output in transfer.body.transfer.outputs.iter() {
-                    related_addresses.insert(XfrAddress {
-                        key: output.public_key,
-                    });
-                }
-            }
-            Operation::IssueAsset(issue_asset) => {
-                related_addresses.insert(XfrAddress {
-                    key: issue_asset.pubkey.key,
-                });
-            }
-            Operation::DefineAsset(define_asset) => {
-                related_addresses.insert(XfrAddress {
-                    key: define_asset.pubkey.key,
-                });
-            }
-            Operation::UpdateMemo(update_memo) => {
-                related_addresses.insert(XfrAddress {
-                    key: update_memo.pubkey,
-                });
-            }
+    /// update after a new block is created
+    #[inline(always)]
+    pub fn update(&mut self) {
+        if let Some(l) = self.ledger.try_read() {
+            self.ledger_cloned = l.clone();
         }
     }
-    related_addresses
-}
-
-/// Returns the set of nonconfidential assets transferred in a transaction.
-fn get_transferred_nonconfidential_assets(txn: &Transaction) -> HashSet<AssetTypeCode> {
-    let mut transferred_assets = HashSet::new();
-    for op in &txn.body.operations {
-        if let Operation::TransferAsset(transfer) = op {
-            for input in transfer.body.transfer.inputs.iter() {
-                if let Some(asset_type) = input.asset_type.get_asset_type() {
-                    transferred_assets.insert(AssetTypeCode { val: asset_type });
-                }
-            }
-        }
-    }
-    transferred_assets
 }
