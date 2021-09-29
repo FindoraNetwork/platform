@@ -738,12 +738,22 @@ pub struct TransferOperationBuilder {
     output_identity_commitments: Vec<Option<ACCommitment>>,
     transfer: Option<TransferAsset>,
     transfer_type: TransferType,
+    auto_refund: bool,
 }
 
 impl TransferOperationBuilder {
     #[allow(missing_docs)]
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            auto_refund: true,
+            ..Default::default()
+        }
+    }
+
+    /// set auto_refund, will be checked when calling `create`
+    pub fn auto_refund(&mut self, auto_refund: bool) -> &mut Self {
+        self.auto_refund = auto_refund;
+        self
     }
 
     /// TxoRef is the location of the input on the ledger and the amount is how much of the record
@@ -882,6 +892,24 @@ impl TransferOperationBuilder {
         Ok(self)
     }
 
+    // Check if outputs and inputs are balanced
+
+    fn check_balance(&self) -> Result<()> {
+        let input_total: u64 = self
+            .input_records
+            .iter()
+            .fold(0, |acc, ar| acc + ar.open_asset_record.amount);
+        let output_total = self
+            .output_records
+            .iter()
+            .fold(0, |acc, ar| acc + ar.open_asset_record.amount);
+        if input_total != output_total {
+            return Err(eg!(format!("{} != {}", input_total, output_total)));
+        }
+
+        Ok(())
+    }
+
     /// Ensures that outputs and inputs are balanced by adding remainder outputs for leftover asset
     /// amounts
     pub fn balance(&mut self) -> Result<&mut Self> {
@@ -957,7 +985,11 @@ impl TransferOperationBuilder {
     /// Finalize the transaction and prepare for signing. Once called, the transaction cannot be
     /// modified.
     pub fn create(&mut self, transfer_type: TransferType) -> Result<&mut Self> {
-        self.balance().c(d!())?;
+        if self.auto_refund {
+            self.balance().c(d!())?;
+        } else {
+            self.check_balance().c(d!())?;
+        }
 
         let mut prng = ChaChaRng::from_entropy();
         let num_inputs = self.input_records.len();

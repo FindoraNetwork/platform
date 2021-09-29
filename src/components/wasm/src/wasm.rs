@@ -749,6 +749,7 @@ impl TransferOperationBuilder {
     /// @throws Will throw an error if not all record owners have signed the transaction.
     pub fn create(mut self) -> Result<TransferOperationBuilder, JsValue> {
         self.get_builder_mut()
+            .auto_refund(false)
             .create(TransferType::Standard)
             .c(d!())
             .map_err(error_to_jsvalue)?;
