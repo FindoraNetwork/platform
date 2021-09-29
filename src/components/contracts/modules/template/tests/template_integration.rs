@@ -13,7 +13,11 @@ use std::convert::TryInto;
 fn run_all_tests() {
     test_abci_info();
     test_abci_init_chain();
-    test_mint_balance(&ALICE_XFR.pub_key.into(), 100000000, 0);
+    test_mint_balance(
+        &ALICE_XFR.pub_key.into(),
+        100_0000_0000_0000_0000_u64.into(),
+        0,
+    );
     test_abci_check_tx();
     test_abci_begin_block();
     test_abci_deliver_tx();
@@ -75,8 +79,9 @@ fn test_abci_check_tx() {
             &BASE_APP.lock().unwrap().check_state,
             &ALICE_XFR.pub_key.into()
         ),
-        (100000000 - <BaseApp as module_account::Config>::FeeCalculator::min_fee())
-            as u128
+        U256::from(100_0000_0000_0000_0000_u64).saturating_sub(
+            <BaseApp as module_account::Config>::FeeCalculator::min_fee()
+        )
     );
 }
 
@@ -143,8 +148,9 @@ fn test_abci_commit() {
             &BASE_APP.lock().unwrap().deliver_state,
             &ALICE_XFR.pub_key.into()
         ),
-        (100000000 - <BaseApp as module_account::Config>::FeeCalculator::min_fee())
-            as u128
+        U256::from(100_0000_0000_0000_0000_u64).saturating_sub(
+            <BaseApp as module_account::Config>::FeeCalculator::min_fee()
+        )
     );
 }
 

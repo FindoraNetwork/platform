@@ -395,7 +395,7 @@ impl EthApi for EthApiImpl {
             .read()
             .account_of(&account_id, None)
             .unwrap_or_default();
-        Ok(U256::from(sa.nonce))
+        Ok(sa.nonce)
     }
 
     fn block_transaction_count_by_hash(&self, hash: H256) -> Result<Option<U256>> {

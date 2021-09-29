@@ -35,7 +35,7 @@ fn build_transfer_transaction(to: H160, balance: U256) -> UncheckedTransaction<(
         gas_price: <BaseApp as module_ethereum::Config>::FeeCalculator::min_gas_price(),
         gas_limit: U256::from(0x100000),
         action: ethereum::TransactionAction::Call(to),
-        value: U256::from(balance),
+        value: balance,
         input: Vec::new(),
     };
 
