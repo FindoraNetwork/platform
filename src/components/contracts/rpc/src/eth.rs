@@ -15,7 +15,7 @@ use fp_rpc_core::types::{
 use fp_rpc_core::EthApi;
 use fp_traits::{
     base::BaseProvider,
-    evm::{AddressMapping, DecimalsMapping, EthereumAddressMapping, FeeCalculator},
+    evm::{AddressMapping, EthereumAddressMapping, FeeCalculator},
 };
 use fp_types::{
     actions,
@@ -90,12 +90,7 @@ impl EthApi for EthApiImpl {
 
         let account_id = EthereumAddressMapping::convert_to_account_id(address);
         if let Ok(sa) = self.account_base_app.read().account_of(&account_id, None) {
-            Ok(
-                <BaseApp as module_evm::Config>::DecimalsMapping::from_native_token(
-                    U256::from(sa.balance),
-                )
-                .unwrap_or_default(),
-            )
+            Ok(sa.balance)
         } else {
             Ok(U256::zero())
         }

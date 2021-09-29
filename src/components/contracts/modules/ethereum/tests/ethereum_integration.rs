@@ -6,10 +6,7 @@ use abci::*;
 use baseapp::{BaseApp, ChainId};
 use ethereum_types::{H160, U256};
 use fp_mocks::*;
-use fp_traits::{
-    account::AccountAsset,
-    evm::{DecimalsMapping, FeeCalculator},
-};
+use fp_traits::{account::AccountAsset, evm::FeeCalculator};
 use fp_types::{
     actions::{ethereum::Action as EthereumAction, Action},
     assemble::UncheckedTransaction,
@@ -26,17 +23,13 @@ fn run_all_tests() {
     test_abci_query()
 }
 
-fn base_transfer_fee() -> u128 {
-    let fee = 21000
-        * <BaseApp as module_ethereum::Config>::FeeCalculator::min_gas_price().as_u128();
-    <BaseApp as module_ethereum::Config>::DecimalsMapping::convert_to_native_token(
-        fee.into(),
+fn base_transfer_fee() -> U256 {
+    U256::from(21000).saturating_mul(
+        <BaseApp as module_ethereum::Config>::FeeCalculator::min_gas_price(),
     )
-    .unwrap()
-    .as_u128()
 }
 
-fn build_transfer_transaction(to: H160, balance: u128) -> UncheckedTransaction<()> {
+fn build_transfer_transaction(to: H160, balance: U256) -> UncheckedTransaction<()> {
     let tx = UnsignedTransaction {
         nonce: U256::zero(),
         gas_price: <BaseApp as module_ethereum::Config>::FeeCalculator::min_gas_price(),
@@ -53,16 +46,9 @@ fn build_transfer_transaction(to: H160, balance: u128) -> UncheckedTransaction<(
 
 fn test_abci_check_tx() {
     let mut req = RequestCheckTx::default();
-    let value =
-        <BaseApp as module_ethereum::Config>::DecimalsMapping::from_native_token(
-            10.into(),
-        )
-        .unwrap();
-    let tx = serde_json::to_vec(&build_transfer_transaction(
-        BOB_ECDSA.address,
-        value.as_u128(),
-    ))
-    .unwrap();
+    let tx =
+        serde_json::to_vec(&build_transfer_transaction(BOB_ECDSA.address, 10.into()))
+            .unwrap();
     req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
     assert!(
@@ -71,7 +57,11 @@ fn test_abci_check_tx() {
         resp.log
     );
 
-    test_mint_balance(&ALICE_ECDSA.account_id, 2000000, 2);
+    test_mint_balance(
+        &ALICE_ECDSA.account_id,
+        100_0000_0000_0000_0000_u64.into(),
+        2,
+    );
 
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
     assert_eq!(
@@ -92,16 +82,9 @@ fn test_abci_begin_block() {
 
 fn test_abci_deliver_tx() {
     let mut req = RequestDeliverTx::default();
-    let value =
-        <BaseApp as module_ethereum::Config>::DecimalsMapping::from_native_token(
-            10.into(),
-        )
-        .unwrap();
-    let tx = serde_json::to_vec(&build_transfer_transaction(
-        BOB_ECDSA.address,
-        value.as_u128(),
-    ))
-    .unwrap();
+    let tx =
+        serde_json::to_vec(&build_transfer_transaction(BOB_ECDSA.address, 10.into()))
+            .unwrap();
     req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
@@ -112,13 +95,15 @@ fn test_abci_deliver_tx() {
 
     println!("transfer resp: {:?}", resp);
 
-    // initial balance = 2000000, gas limit = 21000, transfer balance = 10
+    // initial balance = 100_0000_0000_0000_0000_u64, gas limit = 21000, transfer balance = 10
     assert_eq!(
         module_account::App::<BaseApp>::balance(
             &BASE_APP.lock().unwrap().deliver_state,
             &ALICE_ECDSA.account_id
         ),
-        2000000 - base_transfer_fee() - 10
+        U256::from(100_0000_0000_0000_0000_u64)
+            .saturating_sub(base_transfer_fee())
+            .saturating_sub(10.into())
     );
 
     assert_eq!(
@@ -126,7 +111,7 @@ fn test_abci_deliver_tx() {
             &BASE_APP.lock().unwrap().deliver_state,
             &BOB_ECDSA.account_id
         ),
-        10
+        10.into()
     );
 }
 
@@ -158,11 +143,13 @@ fn test_abci_query() {
         .unwrap();
     assert_eq!(
         module_account::App::<BaseApp>::balance(&ctx, &ALICE_ECDSA.account_id),
-        2000000 - base_transfer_fee() - 10
+        U256::from(100_0000_0000_0000_0000_u64)
+            .saturating_sub(base_transfer_fee())
+            .saturating_sub(10.into())
     );
 
     assert_eq!(
         module_account::App::<BaseApp>::balance(&ctx, &BOB_ECDSA.account_id),
-        10
+        10.into()
     );
 }

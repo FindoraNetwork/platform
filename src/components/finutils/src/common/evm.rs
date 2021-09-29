@@ -14,6 +14,7 @@ use fp_types::{
     },
     crypto::{Address, MultiSignature, MultiSigner},
     transaction::UncheckedTransaction,
+    U256,
 };
 use fp_utils::ecdsa::SecpPair;
 use fp_utils::tx::EvmRawTxWrapper;
@@ -113,7 +114,7 @@ pub fn transfer_from_account(
             false,
         ))
         .unwrap();
-    let nonce = serde_json::from_slice::<u64>(query_ret.value.as_slice()).unwrap();
+    let nonce = serde_json::from_slice::<U256>(query_ret.value.as_slice()).unwrap();
 
     let account_call = AccountAction::TransferToUTXO(TransferToUTXO {
         outputs: vec![output],

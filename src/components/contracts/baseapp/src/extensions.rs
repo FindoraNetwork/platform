@@ -6,16 +6,17 @@ use fp_core::{
 };
 use fp_traits::account::{AccountAsset, FeeCalculator};
 use fp_types::crypto::Address;
+use primitive_types::U256;
 use ruc::*;
 use serde::{Deserialize, Serialize};
 
 pub type SignedExtra = (CheckNonce, CheckFee);
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct CheckNonce(u64);
+pub struct CheckNonce(U256);
 
 impl CheckNonce {
-    pub fn new(nonce: u64) -> Self {
+    pub fn new(nonce: U256) -> Self {
         CheckNonce(nonce)
     }
 }
@@ -50,17 +51,17 @@ impl SignedExtension for CheckNonce {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct CheckFee(Option<u64>);
+pub struct CheckFee(Option<U256>);
 
 impl CheckFee {
-    pub fn new(fee: Option<u64>) -> Self {
+    pub fn new(fee: Option<U256>) -> Self {
         CheckFee(fee)
     }
 }
 
 impl SignedExtension for CheckFee {
     type AccountId = Address;
-    type Pre = (Address, u64);
+    type Pre = (Address, U256);
 
     fn validate(&self, ctx: &Context, who: &Self::AccountId) -> Result<()> {
         let min_fee = <BaseApp as module_account::Config>::FeeCalculator::min_fee();
@@ -76,11 +77,11 @@ impl SignedExtension for CheckFee {
 
         if RunTxMode::Check == ctx.run_mode {
             // deduct tx fee prevent attacks
-            module_account::App::<BaseApp>::burn(ctx, who, tx_fee as u128)?;
+            module_account::App::<BaseApp>::burn(ctx, who, tx_fee)?;
         } else {
             // check tx fee
             let amount = module_account::App::<BaseApp>::balance(ctx, who);
-            if amount < tx_fee as u128 {
+            if amount < tx_fee {
                 return Err(eg!("Insufficient balance payment fee."));
             }
         }
@@ -98,7 +99,7 @@ impl SignedExtension for CheckFee {
                 fee
             }
         };
-        module_account::App::<BaseApp>::burn(ctx, who, tx_fee as u128)?;
+        module_account::App::<BaseApp>::burn(ctx, who, tx_fee)?;
         Ok((who.clone(), tx_fee))
     }
 

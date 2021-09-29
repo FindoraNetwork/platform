@@ -7,7 +7,7 @@ use evm::{
 };
 use fp_core::{context::Context, ensure};
 use fp_evm::*;
-use fp_traits::evm::{DecimalsMapping, FeeCalculator, OnChargeEVMTransaction};
+use fp_traits::evm::{FeeCalculator, OnChargeEVMTransaction};
 use fp_types::actions::evm::*;
 use ruc::*;
 use sha3::{Digest, Keccak256};
@@ -36,8 +36,6 @@ impl<C: Config> ActionRunner<C> {
             &mut StackExecutor<'config, FindoraStackState<'_, '_, 'config, C>>,
         ) -> (ExitReason, R),
     {
-        let transferred_value = C::DecimalsMapping::convert_to_native_token(value)?;
-
         // Gas price check is skipped when performing a gas estimation.
         let gas_price = match gas_price {
             Some(gas_price) => {
@@ -63,10 +61,8 @@ impl<C: Config> ActionRunner<C> {
         let total_fee = gas_price
             .checked_mul(U256::from(gas_limit))
             .ok_or(eg!("FeeOverflow"))?;
-        let total_fee = C::DecimalsMapping::convert_to_native_token(total_fee)?;
-        let total_payment = transferred_value
-            .checked_add(total_fee)
-            .ok_or(eg!("PaymentOverflow"))?;
+        let total_payment =
+            value.checked_add(total_fee).ok_or(eg!("PaymentOverflow"))?;
         let source_account = App::<C>::account_basic(ctx, &source);
 
         if let Some(nonce) = nonce {
@@ -96,13 +92,12 @@ impl<C: Config> ActionRunner<C> {
             "Execution {:?} [source: {:?}, value: {}, gas_limit: {}, actual_fee: {}]",
             reason,
             source,
-            transferred_value,
+            value,
             gas_limit,
             actual_fee
         );
 
         if !config.estimate {
-            let actual_fee = C::DecimalsMapping::convert_to_native_token(actual_fee)?;
             // Refund fees to the `source` account if deducted more before,
             App::<C>::correct_and_deposit_fee(ctx, &source, actual_fee, total_fee)?;
         }

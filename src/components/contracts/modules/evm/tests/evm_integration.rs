@@ -69,8 +69,12 @@ fn build_erc20_balance_of_transaction(
 
 #[test]
 fn erc20_works() {
-    test_mint_balance(&ALICE_ECDSA.account_id, 100_0000_0000, 1);
-    test_mint_balance(&BOB_ECDSA.account_id, 100_0000_0000, 1);
+    test_mint_balance(
+        &ALICE_ECDSA.account_id,
+        100_0000_0000_0000_0000_u64.into(),
+        1,
+    );
+    test_mint_balance(&BOB_ECDSA.account_id, 100_0000_0000_0000_0000_u64.into(), 1);
 
     // erc20 initialize
     test_deploy_check_tx();
@@ -277,7 +281,7 @@ fn test_balance_of_with_eth_call(contract: ERC20, who: H160) -> U256 {
         target: contract.0.address,
         input,
         value: U256::zero(),
-        gas_limit: <BaseApp as module_evm::Config>::BlockGasLimit::get().as_u64(),
+        gas_limit: DEFAULT_GAS_LIMIT,
         gas_price: None,
         nonce: None,
     };

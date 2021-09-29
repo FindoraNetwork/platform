@@ -20,9 +20,7 @@ use fp_events::*;
 use fp_evm::{BlockId, Runner, TransactionStatus};
 use fp_traits::{
     account::AccountAsset,
-    evm::{
-        AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator, MIN_FRA_UNIT,
-    },
+    evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
 };
 use fp_types::{actions::ethereum::Action, crypto::Address};
 use lazy_static::lazy_static;
@@ -204,18 +202,6 @@ impl<C: Config> ValidateUnsigned for App<C> {
         let origin = Self::recover_signer(transaction)
             .ok_or_else(|| eg!("InvalidSignature, can not recover signer address"))?;
 
-        if !transaction.value.is_zero()
-            && transaction
-                .value
-                .checked_sub(U256::from(MIN_FRA_UNIT))
-                .is_none()
-        {
-            return Err(eg!(format!(
-                "InvalidTransactionValue: got {}, but the minimum FRA transfer unit is 1_0000_0000_0000 (0.000001FRA)",
-                transaction.value
-            )));
-        }
-
         if transaction.gas_limit > C::BlockGasLimit::get() {
             return Err(eg!("InvalidGasLimit: the gas limit too large"));
         }
@@ -229,8 +215,8 @@ impl<C: Config> ValidateUnsigned for App<C> {
         }
 
         let account_id = C::AddressMapping::convert_to_account_id(origin);
-        let nonce = U256::from(C::AccountAsset::nonce(ctx, &account_id));
-        let balance = U256::from(C::AccountAsset::balance(ctx, &account_id));
+        let nonce = C::AccountAsset::nonce(ctx, &account_id);
+        let balance = C::AccountAsset::balance(ctx, &account_id);
 
         if transaction.nonce < nonce {
             return Err(eg!(format!(
@@ -241,7 +227,6 @@ impl<C: Config> ValidateUnsigned for App<C> {
 
         let fee = transaction.gas_price.saturating_mul(transaction.gas_limit);
         let total_payment = transaction.value.saturating_add(fee);
-        let total_payment = C::DecimalsMapping::convert_to_native_token(total_payment)?;
         if balance < total_payment {
             return Err(eg!(format!(
                 "InsufficientBalance, actual balance {}, but expected payment {}",

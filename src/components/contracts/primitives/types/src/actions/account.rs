@@ -1,4 +1,5 @@
 use crate::crypto::Address;
+use primitive_types::U256;
 use serde::{Deserialize, Serialize};
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::AssetType;
@@ -27,5 +28,5 @@ pub struct TransferToUTXO {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FinerTransfer {
     pub to: Address,
-    pub amount: u128,
+    pub amount: U256,
 }

@@ -45,7 +45,7 @@ fn test_accounts_set_get() {
 
     //Generate SmartAccount
     let account = SmartAccount {
-        balance: 123,
+        balance: 123.into(),
         ..Default::default()
     };
 
@@ -71,7 +71,7 @@ fn test_account_of() {
 
     //Generate SmartAccount
     let account = SmartAccount {
-        balance: 123,
+        balance: 123.into(),
         ..Default::default()
     };
 
@@ -94,7 +94,7 @@ fn test_account_balance() {
 
     //Generate SmartAccount
     let account = SmartAccount {
-        balance: 123,
+        balance: 123.into(),
         ..Default::default()
     };
 
@@ -117,7 +117,7 @@ fn test_account_nonce() {
 
     //Generate SmartAccount
     let account = SmartAccount {
-        nonce: 100001,
+        nonce: 100001.into(),
         ..Default::default()
     };
 
@@ -140,7 +140,7 @@ fn test_account_inc_nonce() {
 
     //Generate SmartAccount
     let account = SmartAccount {
-        nonce: 100001,
+        nonce: 100001.into(),
         ..Default::default()
     };
 
@@ -169,25 +169,25 @@ fn test_account_transfer() {
     //Generate accounts with different amounts
     let mut acct1 = SmartAccount::default();
     let mut acct2 = SmartAccount::default();
-    acct1.balance = 300;
-    acct2.balance = 200;
+    acct1.balance = 300.into();
+    acct2.balance = 200.into();
 
     //Setup accounts in database
     assert!(AccountStore::insert(ctx.store.clone(), &address1, &acct1).is_ok());
     assert!(AccountStore::insert(ctx.store.clone(), &address2, &acct2).is_ok());
 
     //Transfer 100 from acct2 to acct1
-    assert!(App::<()>::transfer(&ctx, &address2, &address1, 100).is_ok());
-    assert_eq!(100, App::<()>::balance(&ctx, &address2));
-    assert_eq!(400, App::<()>::balance(&ctx, &address1));
+    assert!(App::<()>::transfer(&ctx, &address2, &address1, 100.into()).is_ok());
+    assert_eq!(App::<()>::balance(&ctx, &address2), 100.into());
+    assert_eq!(App::<()>::balance(&ctx, &address1), 400.into());
 
     //Transfer 500 from acct2 to acct1 - Should fail
-    assert!(App::<()>::transfer(&ctx, &address2, &address1, 500).is_err());
+    assert!(App::<()>::transfer(&ctx, &address2, &address1, 500.into()).is_err());
 
     //Transfer 300 from acct1 to acct2
-    assert!(App::<()>::transfer(&ctx, &address1, &address2, 400).is_ok());
-    assert_eq!(500, App::<()>::balance(&ctx, &address2));
-    assert_eq!(0, App::<()>::balance(&ctx, &address1));
+    assert!(App::<()>::transfer(&ctx, &address1, &address2, 400.into()).is_ok());
+    assert_eq!(App::<()>::balance(&ctx, &address2), 500.into());
+    assert_eq!(App::<()>::balance(&ctx, &address1), 0.into());
 }
 
 #[test]
@@ -202,7 +202,7 @@ fn test_account_mint() {
 
     //Generate SmartAccount
     let account = SmartAccount {
-        balance: 100,
+        balance: 100.into(),
         ..Default::default()
     };
 
@@ -210,8 +210,8 @@ fn test_account_mint() {
     assert!(AccountStore::insert(ctx.store.clone(), &address, &account).is_ok());
 
     //MintOutputs FRA for account
-    assert!(App::<()>::mint(&ctx, &address, 500).is_ok());
-    assert_eq!(600, App::<()>::balance(&ctx, &address));
+    assert!(App::<()>::mint(&ctx, &address, 500.into()).is_ok());
+    assert_eq!(App::<()>::balance(&ctx, &address), 600.into());
 }
 
 #[test]
@@ -226,7 +226,7 @@ fn test_account_burn() {
 
     //Generate SmartAccount
     let account = SmartAccount {
-        balance: 500,
+        balance: 500.into(),
         ..Default::default()
     };
 
@@ -234,8 +234,8 @@ fn test_account_burn() {
     assert!(AccountStore::insert(ctx.store.clone(), &address, &account).is_ok());
 
     //burn FRA
-    assert!(App::<()>::burn(&ctx, &address, 200).is_ok());
-    assert_eq!(300, App::<()>::balance(&ctx, &address));
+    assert!(App::<()>::burn(&ctx, &address, 200.into()).is_ok());
+    assert_eq!(App::<()>::balance(&ctx, &address), 300.into());
 }
 
 #[test]
@@ -250,7 +250,7 @@ fn test_account_withdraw() {
 
     //Generate SmartAccount
     let account = SmartAccount {
-        balance: 500,
+        balance: 500.into(),
         ..Default::default()
     };
 
@@ -258,11 +258,11 @@ fn test_account_withdraw() {
     assert!(AccountStore::insert(ctx.store.clone(), &address, &account).is_ok());
 
     //Withdraw some funds
-    assert!(App::<()>::withdraw(&ctx, &address, 300).is_ok());
-    assert_eq!(App::<()>::balance(&ctx, &address), 200);
+    assert!(App::<()>::withdraw(&ctx, &address, 300.into()).is_ok());
+    assert_eq!(App::<()>::balance(&ctx, &address), 200.into());
 
     //Withdraw more funds than available
-    assert!(App::<()>::withdraw(&ctx, &address, 600).is_err());
+    assert!(App::<()>::withdraw(&ctx, &address, 600.into()).is_err());
 }
 
 #[test]
@@ -277,7 +277,7 @@ fn test_account_refund() {
 
     //Generate SmartAccount
     let account = SmartAccount {
-        balance: 500,
+        balance: 500.into(),
         ..Default::default()
     };
 
@@ -285,8 +285,8 @@ fn test_account_refund() {
     assert!(AccountStore::insert(ctx.store.clone(), &address, &account).is_ok());
 
     //Refund an amount to address
-    assert!(App::<()>::refund(&ctx, &address, 700).is_ok());
-    assert_eq!(App::<()>::balance(&ctx, &address), 1200);
+    assert!(App::<()>::refund(&ctx, &address, 700.into()).is_ok());
+    assert_eq!(App::<()>::balance(&ctx, &address), 1200.into());
 }
 
 #[test]

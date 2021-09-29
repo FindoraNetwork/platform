@@ -7,6 +7,7 @@ use fp_core::{
         ActionResult, Applyable, Executable, SignedExtension, ValidateUnsigned,
     },
 };
+use fp_traits::evm::DecimalsMapping;
 use fp_types::{
     actions,
     actions::account::MintOutput,
@@ -123,12 +124,15 @@ impl ModuleManager {
         for (asset, amount) in assets.iter() {
             ensure!(
                 *asset == ASSET_TYPE_FRA,
-                "invalid asset type only support FRA"
+                "Invalid asset type only support FRA"
             );
+            let balance =
+                EthereumDecimalsMapping::from_native_token(U256::from(*amount))
+                    .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
             module_account::App::<BaseApp>::mint(
                 ctx,
                 &Address::from(owner.clone()),
-                (*amount).into(),
+                balance,
             )?;
             self.ethereum_module
                 .update_block_number(ctx, &U256::from(ctx.block_header().height))?;

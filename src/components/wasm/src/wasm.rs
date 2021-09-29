@@ -39,6 +39,7 @@ use fp_types::{
     actions::Action,
     assemble::{CheckFee, CheckNonce, SignedExtra, UncheckedTransaction},
     crypto::{Address, MultiSignature, MultiSigner},
+    U256,
 };
 use fp_utils::{ecdsa::SecpPair, tx::EvmRawTxWrapper};
 use globutils::{wallet, HashOf};
