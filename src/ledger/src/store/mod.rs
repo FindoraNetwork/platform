@@ -523,12 +523,8 @@ impl LedgerState {
     #[inline(always)]
     fn init_abar_state(path: &str) -> Result<State<RocksDB>> {
         let fdb = RocksDB::open(path).c(d!("failed to open db"))?;
-        let cs = Arc::new(RwLock::new(ChainState::new(
-            fdb,
-            "abar_db".to_string(),
-            0
-        )));
-        Ok(RocksState::new(cs))
+        let cs = Arc::new(RwLock::new(ChainState::new(fdb, "abar_db".to_string(), 0)));
+        Ok(State::new(cs))
     }
 
     /// Initialize a new Ledger structure.
