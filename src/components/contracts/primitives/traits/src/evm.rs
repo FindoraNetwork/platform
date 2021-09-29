@@ -1,8 +1,8 @@
+use core::{convert::TryFrom, ops::Div};
 use fp_core::context::Context;
 use fp_types::crypto::Address;
 use primitive_types::{H160, H256, U256};
 use ruc::Result;
-use std::convert::TryFrom;
 
 pub trait AddressMapping {
     fn convert_to_account_id(address: H160) -> Address;
@@ -45,9 +45,7 @@ impl DecimalsMapping for EthereumDecimalsMapping {
     }
 
     fn convert_to_native_token(balance: U256) -> U256 {
-        balance
-            .checked_div(U256::from(10_u64.pow(ETH_DECIMALS - FRA_DECIMALS)))
-            .unwrap_or_else(U256::zero)
+        balance.div(U256::from(10_u64.pow(ETH_DECIMALS - FRA_DECIMALS)))
     }
 }
 
@@ -59,7 +57,7 @@ pub trait FeeCalculator {
 
 impl FeeCalculator for () {
     fn min_gas_price() -> U256 {
-        // 100 GWEI
+        // 100 GWEI, min gas limit: 21000, min gas price must > 50_0000_0000
         U256::from(1000_0000_0000_u64)
     }
 }

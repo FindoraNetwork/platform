@@ -39,8 +39,9 @@ use fp_types::{
     actions::Action,
     assemble::{CheckFee, CheckNonce, SignedExtra, UncheckedTransaction},
     crypto::{Address, MultiSignature, MultiSigner},
+    U256,
 };
-use fp_utils::ecdsa::SecpPair;
+use fp_utils::{ecdsa::SecpPair, tx::EvmRawTxWrapper};
 use globutils::{wallet, HashOf};
 use ledger::{
     data_model::{
@@ -549,7 +550,7 @@ impl TransactionBuilder {
     }
 }
 
-fn generate_extra(nonce: u64, fee: Option<u64>) -> SignedExtra {
+fn generate_extra(nonce: U256, fee: Option<U256>) -> SignedExtra {
     (CheckNonce::new(nonce), CheckFee::new(fee))
 }
 
@@ -579,7 +580,7 @@ pub fn transfer_to_utxo_from_account(
         outputs: vec![output],
     }));
 
-    let extra = generate_extra(nonce, None);
+    let extra = generate_extra(nonce.into(), None);
     let msg = serde_json::to_vec(&(action.clone(), extra.clone()))
         .map_err(error_to_jsvalue)?;
     let signature = MultiSignature::from(kp.sign(&msg));
@@ -588,7 +589,8 @@ pub fn transfer_to_utxo_from_account(
     let tx = UncheckedTransaction::new_signed(action, signer, signature, extra);
     let res = serde_json::to_string(&tx).map_err(error_to_jsvalue)?;
 
-    Ok(res)
+    let tx_with_tag = EvmRawTxWrapper::wrap(res.as_bytes());
+    String::from_utf8(tx_with_tag).map_err(error_to_jsvalue)
 }
 
 /// Recover ecdsa private key from mnemonic.

@@ -30,10 +30,10 @@ globutils = { path = "../../libs/globutils" }
 credentials = { path = "../../libs/credentials" }
 
 baseapp = { path = "../contracts/baseapp", optional = true }
+eth_checksum = { version = "0.1.2", optional = true }
 fp-core = { path = "../contracts/primitives/core", optional = true }
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = { path = "../contracts/primitives/types" }
-fc-rpc = { path = "../contracts/rpc" }
 
 tendermint-rpc = { version = "0.19.0", features = ["http-client", "websocket-client"], optional = true }
 
@@ -46,6 +46,7 @@ vergen = "=3.1.0"
 default = ["std"]
 std = [
     "baseapp",
+    "eth_checksum",
     "fp-core",
     "tendermint-rpc"
 ]

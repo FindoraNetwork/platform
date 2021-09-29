@@ -3,6 +3,7 @@ use abci::*;
 use fp_core::context::RunTxMode;
 use fp_evm::BlockId;
 use fp_types::assemble::convert_unchecked_transaction;
+use fp_utils::tx::EvmRawTxWrapper;
 use log::{debug, error};
 use primitive_types::U256;
 use ruc::*;
@@ -62,9 +63,20 @@ impl abci::Application for crate::BaseApp {
     /// check_tx implements the ABCI interface and executes a tx in Check/ReCheck mode.
     fn check_tx(&mut self, req: &RequestCheckTx) -> ResponseCheckTx {
         let mut resp = ResponseCheckTx::new();
-        if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(&req.tx) {
+
+        let raw_tx;
+        if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
+            raw_tx = tx;
+        } else {
+            debug!(target: "baseapp", "Transaction evm tag check failed");
+            resp.code = 1;
+            resp.log = String::from("Transaction evm tag check failed");
+            return resp;
+        }
+
+        if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
             let check_fn = |mode: RunTxMode| {
-                let ctx = self.retrieve_context(mode, req.tx.clone()).clone();
+                let ctx = self.retrieve_context(mode, raw_tx.to_vec()).clone();
                 if let Err(e) = self.modules.process_tx::<SignedExtra>(ctx, tx) {
                     debug!(target: "baseapp", "Transaction check error: {}", e);
                     resp.code = 1;
@@ -115,10 +127,21 @@ impl abci::Application for crate::BaseApp {
     }
 
     fn deliver_tx(&mut self, req: &RequestDeliverTx) -> ResponseDeliverTx {
-        let mut resp: ResponseDeliverTx = Default::default();
-        if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(&req.tx) {
+        let mut resp = ResponseDeliverTx::new();
+
+        let raw_tx;
+        if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
+            raw_tx = tx;
+        } else {
+            debug!(target: "baseapp", "Transaction deliver tx unwrap evm tag failed");
+            resp.code = 1;
+            resp.log = String::from("Transaction deliver tx unwrap evm tag failed");
+            return resp;
+        }
+
+        if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
             let ctx = self
-                .retrieve_context(RunTxMode::Deliver, req.get_tx().to_vec())
+                .retrieve_context(RunTxMode::Deliver, raw_tx.to_vec())
                 .clone();
 
             let ret = self.modules.process_tx::<SignedExtra>(ctx, tx);

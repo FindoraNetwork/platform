@@ -14,7 +14,11 @@ use fp_core::{
     module::AppModule,
     transaction::{ActionResult, Executable},
 };
-use fp_traits::account::{AccountAsset, FeeCalculator};
+use fp_traits::evm::DecimalsMapping;
+use fp_traits::{
+    account::{AccountAsset, FeeCalculator},
+    evm::EthereumDecimalsMapping,
+};
 use fp_types::{actions::account::Action, crypto::Address};
 use ruc::*;
 use std::marker::PhantomData;
@@ -74,7 +78,13 @@ impl<C: Config> AppModule for App<C> {
                     resp.log = String::from("account: query nonce with invalid params");
                     return resp;
                 }
-                let info = Self::account_of(&ctx, &data.unwrap()).unwrap_or_default();
+                let mut info =
+                    Self::account_of(&ctx, &data.unwrap()).unwrap_or_default();
+                info.balance =
+                    EthereumDecimalsMapping::convert_to_native_token(info.balance);
+                info.reserved =
+                    EthereumDecimalsMapping::convert_to_native_token(info.reserved);
+
                 resp.value = serde_json::to_vec(&info).unwrap_or_default();
                 resp
             }

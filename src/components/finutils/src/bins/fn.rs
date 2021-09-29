@@ -348,10 +348,10 @@ fn run() -> Result<()> {
         let (pair, phrase, _) = SecpPair::generate_with_phrase(None);
         let kp = hex::encode(pair.seed());
         println!(
-            "\x1b[31;01mMnemonic:\x1b[00m {}\n\x1b[31;01mPrivateKey:\x1b[00m {}\n\x1b[31;01mAddress:\x1b[00m {:?}\n",
+            "\x1b[31;01mMnemonic:\x1b[00m {}\n\x1b[31;01mPrivateKey:\x1b[00m {}\n\x1b[31;01mAddress:\x1b[00m {}\n",
             phrase,
             kp,
-            pair.address()
+            eth_checksum::checksum(&format!("{:?}", pair.address()))
         );
     } else if let Some(m) = matches.subcommand_matches("account") {
         let address = m.value_of("addr");

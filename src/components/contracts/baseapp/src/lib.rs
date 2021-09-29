@@ -27,7 +27,7 @@ use fp_traits::{
 };
 use fp_types::{actions::account::MintOutput, actions::Action, crypto::Address};
 use lazy_static::lazy_static;
-use ledger::data_model::{Transaction as FindoraTransaction, TX_FEE_MIN};
+use ledger::data_model::Transaction as FindoraTransaction;
 use notify::*;
 use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
@@ -74,8 +74,9 @@ impl module_template::Config for BaseApp {}
 pub struct StableTxFee;
 
 impl FeeCalculator for StableTxFee {
-    fn min_fee() -> u64 {
-        TX_FEE_MIN
+    fn min_fee() -> U256 {
+        // TX_FEE_MIN
+        U256::from(1_0000_0000_0000_0000_u64)
     }
 }
 
@@ -309,6 +310,14 @@ impl BaseProvider for BaseApp {
     fn block_hash(&self, id: Option<BlockId>) -> Option<H256> {
         if let Ok(ctx) = self.create_query_context(0, false) {
             module_ethereum::App::<Self>::block_hash(&ctx, id)
+        } else {
+            None
+        }
+    }
+
+    fn transaction_index(&self, hash: H256) -> Option<(U256, u32)> {
+        if let Ok(ctx) = self.create_query_context(0, false) {
+            module_ethereum::App::<Self>::transaction_index(&ctx, hash)
         } else {
             None
         }

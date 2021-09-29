@@ -3,9 +3,13 @@ use crate::{App, Config};
 use fp_core::{
     account::SmartAccount, context::Context, ensure, transaction::ActionResult,
 };
-use fp_traits::account::AccountAsset;
+use fp_traits::{
+    account::AccountAsset,
+    evm::{DecimalsMapping, EthereumDecimalsMapping},
+};
 use fp_types::{actions::account::MintOutput, crypto::Address};
 use ledger::data_model::ASSET_TYPE_FRA;
+use primitive_types::U256;
 use ruc::*;
 
 impl<C: Config> AccountAsset<Address> for App<C> {
@@ -13,22 +17,22 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         AccountStore::get(ctx.store.clone(), who)
     }
 
-    fn balance(ctx: &Context, who: &Address) -> u128 {
+    fn balance(ctx: &Context, who: &Address) -> U256 {
         let who_account: SmartAccount =
             AccountStore::get(ctx.store.clone(), who).unwrap_or_default();
         who_account.balance
     }
 
-    fn nonce(ctx: &Context, who: &Address) -> u64 {
+    fn nonce(ctx: &Context, who: &Address) -> U256 {
         let who_account: SmartAccount =
             AccountStore::get(ctx.store.clone(), who).unwrap_or_default();
         who_account.nonce
     }
 
-    fn inc_nonce(ctx: &Context, who: &Address) -> Result<u64> {
+    fn inc_nonce(ctx: &Context, who: &Address) -> Result<U256> {
         let mut sa: SmartAccount =
             AccountStore::get(ctx.store.clone(), who).c(d!("account does not exist"))?;
-        sa.nonce = sa.nonce.checked_add(1).c(d!("balance overflow"))?;
+        sa.nonce = sa.nonce.saturating_add(U256::one());
         AccountStore::insert(ctx.store.clone(), who, &sa).map(|()| sa.nonce)
     }
 
@@ -36,9 +40,9 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         ctx: &Context,
         sender: &Address,
         dest: &Address,
-        balance: u128,
+        balance: U256,
     ) -> Result<()> {
-        if balance == 0 || sender == dest {
+        if balance.is_zero() || sender == dest {
             return Ok(());
         }
         let mut from_account: SmartAccount =
@@ -59,7 +63,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         AccountStore::insert(ctx.store.clone(), dest, &to_account)
     }
 
-    fn mint(ctx: &Context, target: &Address, balance: u128) -> Result<()> {
+    fn mint(ctx: &Context, target: &Address, balance: U256) -> Result<()> {
         let mut target_account: SmartAccount =
             AccountStore::get(ctx.store.clone(), target).unwrap_or_default();
         target_account.balance = target_account.balance.checked_add(balance).c(d!())?;
@@ -67,7 +71,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         AccountStore::insert(ctx.store.clone(), target, &target_account)
     }
 
-    fn burn(ctx: &Context, target: &Address, balance: u128) -> Result<()> {
+    fn burn(ctx: &Context, target: &Address, balance: U256) -> Result<()> {
         let mut target_account: SmartAccount = Self::account_of(ctx, target)
             .c(d!(format!("account = {} does not exist", target)))?;
         target_account.balance = target_account
@@ -78,7 +82,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         AccountStore::insert(ctx.store.clone(), target, &target_account)
     }
 
-    fn withdraw(ctx: &Context, who: &Address, value: u128) -> Result<()> {
+    fn withdraw(ctx: &Context, who: &Address, value: U256) -> Result<()> {
         let mut sa: SmartAccount =
             AccountStore::get(ctx.store.clone(), who).c(d!("account does not exist"))?;
         sa.balance = sa
@@ -88,7 +92,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         AccountStore::insert(ctx.store.clone(), who, &sa)
     }
 
-    fn refund(ctx: &Context, who: &Address, value: u128) -> Result<()> {
+    fn refund(ctx: &Context, who: &Address, value: U256) -> Result<()> {
         let mut sa: SmartAccount =
             AccountStore::get(ctx.store.clone(), who).c(d!("account does not exist"))?;
         sa.balance = sa.balance.checked_add(value).c(d!("balance overflow"))?;
@@ -111,15 +115,19 @@ impl<C: Config> App<C> {
             asset_amount += output.amount;
         }
 
-        log::debug!(target: "account", "this tx's amount is: FRA: {}", asset_amount);
+        log::debug!(target: "account", "transfer to UTXO amount is: {} FRA", asset_amount);
+
+        let amount =
+            EthereumDecimalsMapping::from_native_token(U256::from(asset_amount))
+                .ok_or_else(|| eg!("The transfer to UTXO amount is too large"))?;
 
         let sa = Self::account_of(ctx, &sender).c(d!("account does not exist"))?;
-        if sa.balance < asset_amount as u128 {
+        if sa.balance < amount {
             return Err(eg!("insufficient balance"));
         }
 
-        if asset_amount > 0 {
-            Self::burn(ctx, &sender, asset_amount as u128)?;
+        if !amount.is_zero() {
+            Self::burn(ctx, &sender, amount)?;
             Self::add_mint(ctx, outputs)?;
         }
         Ok(ActionResult::default())

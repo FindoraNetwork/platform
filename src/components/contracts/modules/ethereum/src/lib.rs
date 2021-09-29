@@ -69,6 +69,8 @@ pub mod storage {
 
     // Mapping for block number and hashes.
     generate_storage!(Ethereum, BlockHash => Map<U256, H256>);
+    // Mapping for transaction hash and at block number with index.
+    generate_storage!(Ethereum, TransactionIndex => Map<H256, (U256, u32)>);
     // The current Ethereum block number.
     generate_storage!(Ethereum, CurrentBlockNumber => Value<U256>);
     // // The current Ethereum block.
@@ -189,36 +191,46 @@ impl<C: Config> ValidateUnsigned for App<C> {
         let Action::Transact(transaction) = call;
         if let Some(chain_id) = transaction.signature.chain_id() {
             if chain_id != C::ChainId::get() {
-                return Err(eg!("TransactionValidationError: InvalidChainId"));
+                return Err(eg!(format!(
+                    "InvalidChainId, got {}, but expected {}",
+                    chain_id,
+                    C::ChainId::get()
+                )));
             }
         }
 
         let origin = Self::recover_signer(transaction)
-            .ok_or_else(|| eg!("TransactionValidationError: InvalidSignature"))?;
+            .ok_or_else(|| eg!("InvalidSignature, can not recover signer address"))?;
 
         if transaction.gas_limit > C::BlockGasLimit::get() {
-            return Err(eg!("TransactionValidationError: InvalidGasLimit"));
+            return Err(eg!("InvalidGasLimit: the gas limit too large"));
         }
 
         if transaction.gas_price < C::FeeCalculator::min_gas_price() {
-            return Err(eg!("InvalidTransaction: Payment"));
+            return Err(eg!(format!(
+                "InvalidGasPrice: got {}, but the minimum gas price is {}",
+                transaction.gas_price,
+                C::FeeCalculator::min_gas_price()
+            )));
         }
 
         let account_id = C::AddressMapping::convert_to_account_id(origin);
-        let nonce = U256::from(C::AccountAsset::nonce(ctx, &account_id));
-        let balance = U256::from(C::AccountAsset::balance(ctx, &account_id));
+        let nonce = C::AccountAsset::nonce(ctx, &account_id);
+        let balance = C::AccountAsset::balance(ctx, &account_id);
 
         if transaction.nonce < nonce {
-            return Err(eg!("InvalidTransaction: Outdated"));
+            return Err(eg!(format!(
+                "InvalidNonce: got {}, but expected {}",
+                transaction.nonce, nonce
+            )));
         }
 
         let fee = transaction.gas_price.saturating_mul(transaction.gas_limit);
         let total_payment = transaction.value.saturating_add(fee);
-        let total_payment = C::DecimalsMapping::convert_to_native_token(total_payment);
         if balance < total_payment {
             return Err(eg!(format!(
-                "InvalidTransaction: InsufficientBalance, expected:{}, actual:{}",
-                total_payment, balance
+                "InsufficientBalance, actual balance {}, but expected payment {}",
+                balance, total_payment
             )));
         }
 

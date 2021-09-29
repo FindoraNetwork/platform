@@ -101,7 +101,17 @@ pub fn init_chain(
 
 /// any new tx will trigger this callback before it can enter the mem-pool of tendermint
 pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseCheckTx {
-    s.account_base_app.write().check_tx(req)
+    let mut resp = ResponseCheckTx::new();
+    let tx_catalog = try_tx_catalog(req.get_tx());
+    match tx_catalog {
+        TxCatalog::FindoraTx => resp,
+        TxCatalog::EvmTx => s.account_base_app.write().check_tx(req),
+        TxCatalog::Unknown => {
+            resp.code = 1;
+            resp.log = String::from("Checked unknown transaction!");
+            resp
+        }
+    }
 }
 
 pub fn begin_block(

@@ -3,7 +3,7 @@ use crate::actions::Action;
 use crate::crypto::{Address, Signature};
 use crate::transaction;
 use ethereum::TransactionV0 as Transaction;
-use fp_utils::tx::EvmRawTxWrapper;
+use primitive_types::U256;
 use ruc::*;
 use serde::{Deserialize, Serialize};
 
@@ -11,19 +11,19 @@ use serde::{Deserialize, Serialize};
 pub type SignedExtra = (CheckNonce, CheckFee);
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct CheckNonce(u64);
+pub struct CheckNonce(U256);
 
 impl CheckNonce {
-    pub fn new(nonce: u64) -> Self {
+    pub fn new(nonce: U256) -> Self {
         CheckNonce(nonce)
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct CheckFee(Option<u64>);
+pub struct CheckFee(Option<U256>);
 
 impl CheckFee {
-    pub fn new(fee: Option<u64>) -> Self {
+    pub fn new(fee: Option<U256>) -> Self {
         CheckFee(fee)
     }
 }
@@ -52,12 +52,8 @@ pub fn convert_unsigned_transaction<Action, Extra>(
 pub fn convert_unchecked_transaction<'a, Extra: Deserialize<'a>>(
     transaction: &'a [u8],
 ) -> Result<UncheckedTransaction<Extra>> {
-    match EvmRawTxWrapper::unwrap(transaction) {
-        Ok(tx) => {
-            serde_json::from_slice::<UncheckedTransaction<Extra>>(tx).map_err(|e| eg!(e))
-        }
-        Err(e) => Err(e),
-    }
+    serde_json::from_slice::<UncheckedTransaction<Extra>>(transaction)
+        .map_err(|e| eg!(e))
 }
 
 /// Convert raw ethereum transaction to unified format unchecked transaction.

@@ -6,6 +6,8 @@ use fp_mocks::*;
 use fp_traits::evm::FeeCalculator;
 use std::path::{Path, PathBuf};
 
+pub const DEFAULT_GAS_LIMIT: u64 = 5000000;
+
 pub struct ERC20Constructor(pub ContractConstructor);
 
 impl From<ERC20Constructor> for ContractConstructor {
@@ -44,7 +46,7 @@ impl ERC20Constructor {
         UnsignedTransaction {
             nonce,
             gas_price: <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(),
-            gas_limit: <BaseApp as module_evm::Config>::BlockGasLimit::get(),
+            gas_limit: U256::from(DEFAULT_GAS_LIMIT),
             action: TransactionAction::Create,
             value: Default::default(),
             input,
@@ -77,7 +79,7 @@ impl ERC20 {
         UnsignedTransaction {
             nonce,
             gas_price: <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(),
-            gas_limit: <BaseApp as module_evm::Config>::BlockGasLimit::get(),
+            gas_limit: U256::from(DEFAULT_GAS_LIMIT),
             action: TransactionAction::Call(self.0.address),
             value: Default::default(),
             input,
@@ -104,7 +106,7 @@ impl ERC20 {
         UnsignedTransaction {
             nonce,
             gas_price: <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(),
-            gas_limit: <BaseApp as module_evm::Config>::BlockGasLimit::get(),
+            gas_limit: U256::from(DEFAULT_GAS_LIMIT),
             action: TransactionAction::Call(self.0.address),
             value,
             input,
@@ -122,7 +124,7 @@ impl ERC20 {
         UnsignedTransaction {
             nonce,
             gas_price: <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(),
-            gas_limit: <BaseApp as module_evm::Config>::BlockGasLimit::get(),
+            gas_limit: U256::from(DEFAULT_GAS_LIMIT),
             action: TransactionAction::Call(self.0.address),
             value: Default::default(),
             input,

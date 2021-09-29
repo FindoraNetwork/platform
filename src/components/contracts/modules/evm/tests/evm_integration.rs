@@ -69,8 +69,12 @@ fn build_erc20_balance_of_transaction(
 
 #[test]
 fn erc20_works() {
-    test_mint_balance(&ALICE_ECDSA.account_id, 100_0000_0000, 1);
-    test_mint_balance(&BOB_ECDSA.account_id, 100_0000_0000, 1);
+    test_mint_balance(
+        &ALICE_ECDSA.account_id,
+        100_0000_0000_0000_0000_u64.into(),
+        1,
+    );
+    test_mint_balance(&BOB_ECDSA.account_id, 100_0000_0000_0000_0000_u64.into(), 1);
 
     // erc20 initialize
     test_deploy_check_tx();
@@ -104,8 +108,7 @@ fn test_deploy_check_tx() {
     let tx =
         serde_json::to_vec(&build_erc20_deploy_transaction("erc20", "FRA", 0.into()).0)
             .unwrap();
-    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
-    req.tx = txn_with_tag;
+    req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -119,8 +122,7 @@ fn test_deploy_deliver_tx() -> (H160, ethabi::Contract) {
     let (tx, contract_abi) = build_erc20_deploy_transaction("erc20", "FRA", 0.into());
 
     let tx = serde_json::to_vec(&tx).unwrap();
-    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
-    req.tx = txn_with_tag;
+    req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -165,8 +167,7 @@ fn test_mint_check_tx(contract: ERC20) {
         1.into(),
     ))
     .unwrap();
-    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
-    req.tx = txn_with_tag;
+    req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -184,8 +185,7 @@ fn test_mint_deliver_tx(contract: ERC20) {
         1.into(),
     ))
     .unwrap();
-    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
-    req.tx = txn_with_tag;
+    req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -207,8 +207,7 @@ fn test_transfer_check_tx(contract: ERC20) {
         BOB_ECDSA.private_key,
     ))
     .unwrap();
-    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
-    req.tx = txn_with_tag;
+    req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -228,8 +227,7 @@ fn test_transfer_deliver_tx(contract: ERC20) {
         BOB_ECDSA.private_key,
     ))
     .unwrap();
-    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
-    req.tx = txn_with_tag;
+    req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -245,8 +243,7 @@ fn test_balance_of_deliver_tx(contract: ERC20, who: H160) -> U256 {
     let tx =
         serde_json::to_vec(&build_erc20_balance_of_transaction(contract, who, 2.into()))
             .unwrap();
-    let txn_with_tag = EvmRawTxWrapper::wrap(&tx);
-    req.tx = txn_with_tag;
+    req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -284,7 +281,7 @@ fn test_balance_of_with_eth_call(contract: ERC20, who: H160) -> U256 {
         target: contract.0.address,
         input,
         value: U256::zero(),
-        gas_limit: <BaseApp as module_evm::Config>::BlockGasLimit::get().as_u64(),
+        gas_limit: DEFAULT_GAS_LIMIT,
         gas_price: None,
         nonce: None,
     };

@@ -33,7 +33,7 @@ lazy_static! {
         XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
 }
 
-pub fn test_mint_balance(who: &Address, balance: u128, height: u64) {
+pub fn test_mint_balance(who: &Address, balance: U256, height: u64) {
     assert!(module_account::App::<BaseApp>::mint(
         &BASE_APP.lock().unwrap().deliver_state,
         who,
@@ -61,7 +61,7 @@ pub fn test_mint_balance(who: &Address, balance: u128, height: u64) {
 pub fn build_signed_transaction(
     function: Action,
     who: &XfrKeyPair,
-    nonce: u64,
+    nonce: U256,
 ) -> UncheckedTransaction<SignedExtra> {
     let extra = (CheckNonce::new(nonce), CheckFee::new(None));
 

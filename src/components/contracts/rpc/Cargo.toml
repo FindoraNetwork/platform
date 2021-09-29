@@ -9,6 +9,7 @@ description = "Ethereum RPC (web3) compatibility layer for Findora."
 readme = "README.md"
 
 [dependencies]
+abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
 async-std = "1.9.0"
 baseapp = { path = "../baseapp" }
 base64 = "0.12"
@@ -37,7 +38,7 @@ semver = "1.0.4"
 serde_json = "1.0"
 sha3 = "0.8"
 tendermint-rpc = { version = "0.19.0", features = ["http-client", "websocket-client"] }
-tokio = { version = "1.10.1", features = ["rt-multi-thread" ] }
+tokio = { version = "1.10.1", features = ["full"] }
 
 # modules
 module-ethereum = { path = "../modules/ethereum"}
