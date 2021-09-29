@@ -85,6 +85,7 @@ jobs:
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
         echo "Image tag: ${IMAGE_TAG}"
+        make clean
         make ci_build_dev_binary_image
     - name: Build findorad images
       env:
