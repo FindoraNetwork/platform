@@ -550,7 +550,7 @@ impl TransactionBuilder {
     }
 }
 
-fn generate_extra(nonce: u64, fee: Option<u64>) -> SignedExtra {
+fn generate_extra(nonce: U256, fee: Option<U256>) -> SignedExtra {
     (CheckNonce::new(nonce), CheckFee::new(fee))
 }
 
@@ -580,7 +580,7 @@ pub fn transfer_to_utxo_from_account(
         outputs: vec![output],
     }));
 
-    let extra = generate_extra(nonce, None);
+    let extra = generate_extra(nonce.into(), None);
     let msg = serde_json::to_vec(&(action.clone(), extra.clone()))
         .map_err(error_to_jsvalue)?;
     let signature = MultiSignature::from(kp.sign(&msg));
