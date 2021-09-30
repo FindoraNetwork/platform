@@ -190,7 +190,7 @@ impl abci::Application for crate::BaseApp {
         // Store so when commit() is called is persists those values.
         let (root_hash, _) = self
             .deliver_state
-            .store
+            .state
             .write()
             .commit(block_height as u64)
             .unwrap_or_else(|_| {
@@ -198,7 +198,7 @@ impl abci::Application for crate::BaseApp {
             });
 
         // Reset the Check state to the latest committed.
-        self.check_state.store.write().discard_session();
+        self.check_state.state.write().discard_session();
         Self::update_state(&mut self.check_state, header, header_hash);
 
         // Reset the deliver state

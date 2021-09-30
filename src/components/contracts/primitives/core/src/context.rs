@@ -1,13 +1,11 @@
 use abci::Header;
 use storage::{
-    db::FinDB,
+    db::{FinDB, RocksDB},
     state::{ChainState, State},
 };
 
-pub use parking_lot::{Mutex, RwLock};
+pub use parking_lot::RwLock;
 pub use std::sync::Arc;
-
-pub type Store = State<FinDB>;
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash, Copy)]
 pub enum RunTxMode {
@@ -24,7 +22,8 @@ pub enum RunTxMode {
 
 #[derive(Clone)]
 pub struct Context {
-    pub store: Arc<RwLock<Store>>,
+    pub state: Arc<RwLock<State<FinDB>>>,
+    pub db: Arc<RwLock<State<RocksDB>>>,
     pub run_mode: RunTxMode,
     pub header: Header,
     pub header_hash: Vec<u8>,
@@ -32,9 +31,13 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new(cs: Arc<RwLock<ChainState<FinDB>>>) -> Self {
+    pub fn new(
+        state_merkle: Arc<RwLock<ChainState<FinDB>>>,
+        state_db: Arc<RwLock<ChainState<RocksDB>>>,
+    ) -> Self {
         Context {
-            store: Arc::new(RwLock::new(Store::new(cs))),
+            state: Arc::new(RwLock::new(State::new(state_merkle))),
+            db: Arc::new(RwLock::new(State::new(state_db))),
             run_mode: RunTxMode::None,
             header: Default::default(),
             header_hash: vec![],
@@ -42,22 +45,17 @@ impl Context {
         }
     }
 
-    pub fn copy_with_new_store(
-        ctx: &Context,
-        cs: Arc<RwLock<ChainState<FinDB>>>,
-    ) -> Self {
+    pub fn copy_with_new_state(&self) -> Self {
         Context {
-            store: Arc::new(RwLock::new(Store::new(cs))),
-            ..ctx.clone()
+            state: Arc::new(RwLock::new(State::new(self.state.read().chain_state()))),
+            db: Arc::new(RwLock::new(State::new(self.db.read().chain_state()))),
+            run_mode: RunTxMode::None,
+            ..self.clone()
         }
     }
 }
 
 impl Context {
-    pub fn commit_store(&self) -> Arc<RwLock<Store>> {
-        self.store.clone()
-    }
-
     pub fn run_mode(&self) -> RunTxMode {
         self.run_mode
     }

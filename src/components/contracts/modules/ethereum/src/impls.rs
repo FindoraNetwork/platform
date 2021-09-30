@@ -10,6 +10,7 @@ use fp_core::{
 };
 use fp_events::Event;
 use fp_evm::{BlockId, CallOrCreateInfo, Runner, TransactionStatus};
+use fp_storage::{Borrow, BorrowMut};
 use fp_types::{actions::evm as EvmAction, crypto::secp256k1_ecdsa_recover};
 use fp_utils::{proposer_converter, timestamp_converter};
 use log::debug;
@@ -54,7 +55,7 @@ impl<C: Config> App<C> {
         let block_timestamp = ctx.header.time.clone().unwrap_or_default();
 
         let mut state_root = H256::default();
-        let root_hash = ctx.store.read().root_hash();
+        let root_hash = ctx.state.read().root_hash();
         if !root_hash.is_empty() {
             state_root = H256::from_slice(&root_hash);
         }
@@ -85,11 +86,11 @@ impl<C: Config> App<C> {
         let block = Block::new(partial_header, transactions, ommers);
         let block_hash = block.header.hash();
 
-        CurrentBlockNumber::put(ctx.store.clone(), &block_number)?;
+        CurrentBlockNumber::put(ctx.state.write().borrow_mut(), &block_number)?;
         // CurrentBlock::insert(ctx.store.clone(), &block_hash, &block);
         // CurrentReceipts::insert(ctx.store.clone(), &block_hash, &receipts);
         // CurrentTransactionStatuses::insert(ctx.store.clone(), &block_hash, &statuses);
-        BlockHash::insert(ctx.store.clone(), &block_number, &block_hash)?;
+        BlockHash::insert(ctx.state.write().borrow_mut(), &block_number, &block_hash)?;
 
         PENDING_TRANSACTIONS.lock().clear();
 
@@ -195,7 +196,7 @@ impl<C: Config> App<C> {
             .push((transaction, status, receipt));
 
         TransactionIndex::insert(
-            ctx.store.clone(),
+            ctx.state.write().borrow_mut(),
             &transaction_hash,
             &(ctx.header.height.into(), transaction_index),
         )?;
@@ -297,8 +298,8 @@ impl<C: Config> App<C> {
 
     /// Get current block hash
     pub fn current_block_hash(ctx: &Context) -> Option<H256> {
-        if let Some(number) = CurrentBlockNumber::get(ctx.store.clone()) {
-            BlockHash::get(ctx.store.clone(), &number)
+        if let Some(number) = CurrentBlockNumber::get(ctx.state.read().borrow()) {
+            BlockHash::get(ctx.state.read().borrow(), &number)
         } else {
             None
         }
@@ -306,7 +307,7 @@ impl<C: Config> App<C> {
 
     /// Get current block number
     pub fn current_block_number(ctx: &Context) -> Option<U256> {
-        CurrentBlockNumber::get(ctx.store.clone())
+        CurrentBlockNumber::get(ctx.state.read().borrow())
     }
 
     /// Set the latest block number
@@ -315,7 +316,7 @@ impl<C: Config> App<C> {
         ctx: &Context,
         block_number: &U256,
     ) -> Result<()> {
-        CurrentBlockNumber::put(ctx.store.clone(), block_number)?;
+        CurrentBlockNumber::put(ctx.state.write().borrow_mut(), block_number)?;
         self.is_store_block = true;
         Ok(())
     }
@@ -325,7 +326,7 @@ impl<C: Config> App<C> {
         if let Some(id) = id {
             match id {
                 BlockId::Hash(h) => Some(h),
-                BlockId::Number(n) => BlockHash::get(ctx.store.clone(), &n),
+                BlockId::Number(n) => BlockHash::get(ctx.state.read().borrow(), &n),
             }
         } else {
             Self::current_block_hash(ctx)
@@ -334,7 +335,7 @@ impl<C: Config> App<C> {
 
     /// The index of the transaction in the block
     pub fn transaction_index(ctx: &Context, hash: H256) -> Option<(U256, u32)> {
-        TransactionIndex::get(ctx.store.clone(), &hash)
+        TransactionIndex::get(ctx.state.read().borrow(), &hash)
     }
 
     fn logs_bloom(logs: Vec<ethereum::Log>, bloom: &mut Bloom) {

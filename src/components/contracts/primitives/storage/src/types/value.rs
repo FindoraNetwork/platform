@@ -56,38 +56,32 @@ where
     }
 
     /// Does the value (explicitly) exist in storage?
-    pub fn exists<D: MerkleDB>(state: Arc<RwLock<State<D>>>) -> bool {
-        Instance::exists(
-            state.read().deref(),
-            <Self as StoragePrefixKey>::store_key().as_ref(),
-        )
-        .unwrap()
+    pub fn exists<D: MerkleDB>(state: &State<D>) -> bool {
+        Instance::exists(state, <Self as StoragePrefixKey>::store_key().as_ref())
+            .unwrap()
     }
 
     /// Load the value from the provided storage instance.
-    pub fn get<D: MerkleDB>(state: Arc<RwLock<State<D>>>) -> Option<Value> {
+    pub fn get<D: MerkleDB>(state: &State<D>) -> Option<Value> {
         Instance::get_obj::<Value, D>(
-            state.read().deref(),
+            state,
             <Self as StoragePrefixKey>::store_key().as_ref(),
         )
         .unwrap()
     }
 
     /// Store a value under this hashed key into the provided storage instance.
-    pub fn put<D: MerkleDB>(state: Arc<RwLock<State<D>>>, val: &Value) -> Result<()> {
+    pub fn put<D: MerkleDB>(state: &mut State<D>, val: &Value) -> Result<()> {
         Instance::set_obj::<Value, D>(
-            state.write().deref_mut(),
+            state,
             <Self as StoragePrefixKey>::store_key().as_ref(),
             val,
         )
     }
 
     /// Take a value from storage, removing it afterwards.
-    pub fn delete<D: MerkleDB>(state: Arc<RwLock<State<D>>>) {
-        Instance::delete(
-            state.write().deref_mut(),
-            <Self as StoragePrefixKey>::store_key().as_ref(),
-        )
-        .unwrap()
+    pub fn delete<D: MerkleDB>(state: &mut State<D>) {
+        Instance::delete(state, <Self as StoragePrefixKey>::store_key().as_ref())
+            .unwrap()
     }
 }

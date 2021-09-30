@@ -151,16 +151,16 @@ where
             U::pre_execute(ctx, &self.function)?;
             (None, Default::default())
         };
-        ctx.store.write().commit_session();
+        ctx.state.write().commit_session();
 
         match U::execute(maybe_who, self.function, ctx) {
             Ok(res) => {
                 Extra::post_execute(ctx, pre, &res)?;
-                ctx.store.write().commit_session();
+                ctx.state.write().commit_session();
                 Ok(res)
             }
             Err(e) => {
-                ctx.store.write().discard_session();
+                ctx.state.write().discard_session();
                 Err(e)
             }
         }

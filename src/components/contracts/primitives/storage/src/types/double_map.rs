@@ -60,61 +60,41 @@ where
     }
 
     /// Does the value (explicitly) exist in storage?
-    pub fn contains_key<D: MerkleDB>(
-        state: Arc<RwLock<State<D>>>,
-        k1: &Key1,
-        k2: &Key2,
-    ) -> bool {
-        Instance::exists(state.read().deref(), Self::build_key_for(k1, k2).as_slice())
-            .unwrap()
+    pub fn contains_key<D: MerkleDB>(state: &State<D>, k1: &Key1, k2: &Key2) -> bool {
+        Instance::exists(state, Self::build_key_for(k1, k2).as_slice()).unwrap()
     }
 
     /// Load the value associated with the given key from the map.
-    pub fn get<D: MerkleDB>(
-        state: Arc<RwLock<State<D>>>,
-        k1: &Key1,
-        k2: &Key2,
-    ) -> Option<Value> {
-        Instance::get_obj::<Value, D>(
-            state.read().deref(),
-            Self::build_key_for(k1, k2).as_slice(),
-        )
-        .unwrap()
+    pub fn get<D: MerkleDB>(state: &State<D>, k1: &Key1, k2: &Key2) -> Option<Value> {
+        Instance::get_obj::<Value, D>(state, Self::build_key_for(k1, k2).as_slice())
+            .unwrap()
     }
 
     /// Store a value to be associated with the given key from the map.
     pub fn insert<D: MerkleDB>(
-        state: Arc<RwLock<State<D>>>,
+        state: &mut State<D>,
         k1: &Key1,
         k2: &Key2,
         val: &Value,
     ) -> Result<()> {
-        Instance::set_obj::<Value, D>(
-            state.write().deref_mut(),
-            Self::build_key_for(k1, k2).as_slice(),
-            val,
-        )
+        Instance::set_obj::<Value, D>(state, Self::build_key_for(k1, k2).as_slice(), val)
     }
 
     /// Remove the value under a key.
-    pub fn remove<D: MerkleDB>(state: Arc<RwLock<State<D>>>, k1: &Key1, k2: &Key2) {
-        Instance::delete(
-            state.write().deref_mut(),
-            Self::build_key_for(k1, k2).as_slice(),
-        )
-        .unwrap();
+    pub fn remove<D: MerkleDB>(state: &mut State<D>, k1: &Key1, k2: &Key2) {
+        Instance::delete(state, Self::build_key_for(k1, k2).as_slice()).unwrap();
     }
 
     /// Remove all values under the first key.
-    pub fn remove_prefix<D: MerkleDB>(state: Arc<RwLock<State<D>>>, k1: &Key1) {
-        for (k2, _) in Self::iterate_prefix(state.clone(), k1).iter() {
-            Self::remove(state.clone(), k1, k2);
+    pub fn remove_prefix<D: MerkleDB>(state: &mut State<D>, k1: &Key1) {
+        for (k2, _) in Self::iterate_prefix(state, k1).iter() {
+            Self::remove(state, k1, k2);
         }
     }
 
     /// Iter over all value of the storage.
     pub fn iterate_prefix<D: MerkleDB>(
-        state: Arc<RwLock<State<D>>>,
+        state: &State<D>,
         k1: &Key1,
     ) -> Vec<(Key2, Value)> {
         let prefix_key: Vec<u8> =
@@ -122,7 +102,7 @@ where
         let data_key1 = k1.to_string();
         let final_key = Prefix::new(prefix_key.as_slice()).push(data_key1.as_ref());
 
-        let kv_map = Instance::iter_cur(state.read().deref(), final_key);
+        let kv_map = Instance::iter_cur(state, final_key);
 
         let mut res = Vec::new();
         for (k, v) in kv_map {

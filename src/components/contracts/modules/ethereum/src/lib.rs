@@ -18,6 +18,7 @@ use fp_core::{
 };
 use fp_events::*;
 use fp_evm::{BlockId, Runner, TransactionStatus};
+use fp_storage::{Borrow, BorrowMut};
 use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
@@ -156,11 +157,14 @@ impl<C: Config> AppModule for App<C> {
             let _ = ruc::info!(self.store_block(ctx, U256::from(req.height)));
 
             let block_hash_count = C::BlockHashCount::get();
-            let n = BlockHash::iterate(ctx.store.clone()).len() as u32;
+            let n = BlockHash::iterate(ctx.state.read().borrow()).len() as u32;
             // keep earliest hash
             let delete_number = n.saturating_sub(block_hash_count).saturating_sub(1);
             if delete_number > 0 {
-                BlockHash::remove(ctx.store.clone(), &U256::from(delete_number));
+                BlockHash::remove(
+                    ctx.state.write().borrow_mut(),
+                    &U256::from(delete_number),
+                );
             }
         }
         Default::default()

@@ -34,7 +34,10 @@ use primitive_types::{H160, H256, U256};
 use ruc::{eg, Result};
 use std::path::Path;
 use std::sync::Arc;
-use storage::{db::FinDB, state::ChainState};
+use storage::{
+    db::{FinDB, RocksDB},
+    state::ChainState,
+};
 
 lazy_static! {
     /// An identifier that distinguishes different EVM chains.
@@ -45,6 +48,7 @@ lazy_static! {
 const APP_NAME: &str = "findora";
 const APP_DB_NAME: &str = "findora_db";
 const CHAIN_STATE_PATH: &str = "state.db";
+const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
 const CHAIN_STATE_MIN_VERSIONS: u64 = 4 * 60 * 24;
 
 pub struct BaseApp {
@@ -55,8 +59,10 @@ pub struct BaseApp {
     /// application's protocol version that increments on every upgrade
     /// if BaseApp is passed to the upgrade keeper's NewKeeper method.
     pub app_version: u64,
-    /// Chain persistent state
+    /// Chain persistent state with merkle root hash
     pub chain_state: Arc<RwLock<ChainState<FinDB>>>,
+    /// Chain persistent state without merkle root hash
+    pub chain_db: Arc<RwLock<ChainState<RocksDB>>>,
     /// volatile states
     ///
     /// check_state is set on InitChain and reset on Commit
@@ -123,11 +129,19 @@ impl module_evm::Config for BaseApp {
 
 impl BaseApp {
     pub fn new(basedir: &Path, empty_block: bool) -> Result<Self> {
-        // Creates a fresh chain state db
+        // Creates a fresh chain state db and history db
         let fdb_path = basedir.join(CHAIN_STATE_PATH);
         let fdb = FinDB::open(fdb_path.as_path())?;
         let chain_state = Arc::new(RwLock::new(ChainState::new(
             fdb,
+            APP_DB_NAME.to_string(),
+            CHAIN_STATE_MIN_VERSIONS,
+        )));
+
+        let rdb_path = basedir.join(CHAIN_HISTORY_DATA_PATH);
+        let rdb = RocksDB::open(rdb_path.as_path())?;
+        let chain_db = Arc::new(RwLock::new(ChainState::new(
+            rdb,
             APP_DB_NAME.to_string(),
             CHAIN_STATE_MIN_VERSIONS,
         )));
@@ -137,8 +151,9 @@ impl BaseApp {
             version: "1.0.0".to_string(),
             app_version: 1,
             chain_state: chain_state.clone(),
-            check_state: Context::new(chain_state.clone()),
-            deliver_state: Context::new(chain_state),
+            chain_db: chain_db.clone(),
+            check_state: Context::new(chain_state.clone(), chain_db.clone()),
+            deliver_state: Context::new(chain_state, chain_db),
             modules: ModuleManager {
                 ethereum_module: module_ethereum::App::<Self>::new(empty_block),
                 ..Default::default()
@@ -198,10 +213,7 @@ impl BaseApp {
             ));
         }
 
-        let mut ctx =
-            Context::copy_with_new_store(&self.check_state, self.chain_state.clone());
-        ctx.run_mode = RunTxMode::None;
-        Ok(ctx)
+        Ok(self.check_state.copy_with_new_state())
     }
 
     /// retrieve the context for the txBytes and other memoized values.
