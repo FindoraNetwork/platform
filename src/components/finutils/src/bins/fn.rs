@@ -449,15 +449,15 @@ fn run() -> Result<()> {
                     .c(d!("invalid file"))
             })
         })?;
-        let receiver_count = m.value_of("receiver-count");;
+        let receiver_count = m.value_of("receiver-count");
         let amount = m.value_of("amount");   
     
         if axfr_secret_keys.is_empty() || dec_keys.is_empty() || receiver_count.is_none() || amount.is_none() {
             println!("{}", m.usage());
         } else {
             common::gen_oabar_add_op_x(
-                axfr_secret_keys.unwrap(),
-                dec_keys.unwrap(),
+                axfr_secret_keys,
+                dec_keys,
                 receiver_count.unwrap(),
                 amount.unwrap(),
             )

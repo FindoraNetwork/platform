@@ -771,8 +771,8 @@ pub fn gen_oabar_add_op(
 
 /// Batch anon transfer - Generate OABAR and add anonymous transfer operation
 pub fn gen_oabar_add_op_x(
-    axfr_secret_keys: &[AXfrKeyPair],
-    dec_keys: &[XSecretKey],
+    axfr_secret_keys: Vec<AXfrKeyPair>,
+    dec_keys: Vec<XSecretKey>,
     receiver_count: &str,
     amount: &str,
 ) -> Result<()> {
@@ -781,7 +781,7 @@ pub fn gen_oabar_add_op_x(
     let axfr_amount = amount.parse::<u64>().c(d!("error parsing amount"))?;
 
     let ledger = LedgerState::tmp_ledger(); //TODO - replace tmp with actual
-    let oabars_in = Vec::new();
+    let mut oabars_in = Vec::new();
     for (from ,from_secret_key) in axfr_secret_keys.iter().zip(dec_keys.iter()){
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
         let r = JubjubScalar::random(&mut prng);
@@ -804,8 +804,8 @@ pub fn gen_oabar_add_op_x(
         oabars_in.push(oabar_in);
     }
 
-    let oabars_out = Vec::new();
-    for n in 1..rcvr_count{
+    let mut oabars_out = Vec::new();
+    for _ in 1..rcvr_count{
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
         let to = AXfrKeyPair::generate(&mut prng);
         let to_dec_key = XSecretKey::new(&mut prng);
@@ -827,7 +827,7 @@ pub fn gen_oabar_add_op_x(
     .add_operation_anon_transfer(
         &oabars_in[..],
         &oabars_out[..],
-        axfr_secret_keys,
+        &axfr_secret_keys,
     )
     .c(d!())?;
 
@@ -838,4 +838,53 @@ pub fn gen_oabar_add_op_x(
 /// Return the built version.
 pub fn version() -> &'static str {
     concat!(env!("VERGEN_SHA"), " ", env!("VERGEN_BUILD_DATE"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zei::serialization::ZeiFromToBytes;
+
+    #[test]
+    fn test_gen_oabar_add_anon_tx_single() {
+        let amount = "10";
+        let mut prng = ChaChaRng::from_entropy();
+        let keypair = AXfrKeyPair::generate(&mut prng);
+        let axfr_secret_key = base64::encode(keypair.zei_to_bytes().as_slice());
+        let secret_key = XSecretKey::new(&mut prng);
+        let dec_key = base64::encode(secret_key.zei_to_bytes().as_slice());
+
+        let result = gen_oabar_add_op(
+            &axfr_secret_key,
+            &dec_key,
+            amount,
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_gen_oabar_add_anon_tx_multi() {
+        let amount = "10";
+        let n_payees = "3";
+
+        let mut axfr_secret_keys = Vec::new();
+        let mut dec_keys = Vec::new();
+        let n_payers = 3;
+        for _ in 1..n_payers{
+            let mut prng = ChaChaRng::from_entropy();
+            let axfr_secret_key = AXfrKeyPair::generate(&mut prng);
+            let dec_key = XSecretKey::new(&mut prng);
+            axfr_secret_keys.push(axfr_secret_key);
+            dec_keys.push(dec_key);
+        }
+        let result = gen_oabar_add_op_x(
+            axfr_secret_keys,
+            dec_keys,
+            n_payees,
+            amount,
+        );
+
+        assert!(result.is_ok());
+    }
 }
