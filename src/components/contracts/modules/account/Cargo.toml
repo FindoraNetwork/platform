@@ -16,7 +16,7 @@ primitive-types = { version = "0.10.0", default-features = false, features = ["r
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0.64"
-storage = { git = "https://github.com/FindoraNetwork/storage.git", branch = "dev-unify-state-interface" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.1" }
 
 # primitives, don't depend on any modules
 fp-core = { path = "../../primitives/core" }
