@@ -86,17 +86,18 @@ impl<C: Config> App<C> {
         let block = Block::new(partial_header, transactions, ommers);
         let block_hash = block.header.hash();
 
-        CurrentBlockNumber::put(ctx.state.write().borrow_mut(), &block_number)?;
-        // CurrentBlock::insert(ctx.store.clone(), &block_hash, &block);
-        // CurrentReceipts::insert(ctx.store.clone(), &block_hash, &receipts);
-        // CurrentTransactionStatuses::insert(ctx.store.clone(), &block_hash, &statuses);
-        BlockHash::insert(ctx.state.write().borrow_mut(), &block_number, &block_hash)?;
+        CurrentBlockNumber::put(ctx.db.write().borrow_mut(), &block_number)?;
+        BlockHash::insert(ctx.db.write().borrow_mut(), &block_number, &block_hash)?;
 
         PENDING_TRANSACTIONS.lock().clear();
 
-        self.blocks.insert(block_hash, block);
-        self.receipts.insert(block_hash, receipts);
-        self.transaction_statuses.insert(block_hash, statuses);
+        CurrentBlock::insert(ctx.db.write().borrow_mut(), &block_hash, &block)?;
+        CurrentReceipts::insert(ctx.db.write().borrow_mut(), &block_hash, &receipts)?;
+        CurrentTransactionStatuses::insert(
+            ctx.db.write().borrow_mut(),
+            &block_hash,
+            &statuses,
+        )?;
 
         debug!(target: "ethereum", "store new ethereum block: {}", block_number);
         Ok(())
@@ -277,13 +278,13 @@ impl<C: Config> App<C> {
         id: Option<BlockId>,
     ) -> Option<Vec<TransactionStatus>> {
         let hash = Self::block_hash(ctx, id).unwrap_or_default();
-        self.transaction_statuses.get(&hash)
+        CurrentTransactionStatuses::get(ctx.db.read().borrow(), &hash)
     }
 
     /// Get the block with given block id.
     pub fn current_block(&self, ctx: &Context, id: Option<BlockId>) -> Option<Block> {
         let hash = Self::block_hash(ctx, id).unwrap_or_default();
-        self.blocks.get(&hash)
+        CurrentBlock::get(ctx.db.read().borrow(), &hash)
     }
 
     /// Get receipts with given block id.
@@ -293,13 +294,13 @@ impl<C: Config> App<C> {
         id: Option<BlockId>,
     ) -> Option<Vec<ethereum::Receipt>> {
         let hash = Self::block_hash(ctx, id).unwrap_or_default();
-        self.receipts.get(&hash)
+        CurrentReceipts::get(ctx.db.read().borrow(), &hash)
     }
 
     /// Get current block hash
     pub fn current_block_hash(ctx: &Context) -> Option<H256> {
-        if let Some(number) = CurrentBlockNumber::get(ctx.state.read().borrow()) {
-            BlockHash::get(ctx.state.read().borrow(), &number)
+        if let Some(number) = CurrentBlockNumber::get(ctx.db.read().borrow()) {
+            BlockHash::get(ctx.db.read().borrow(), &number)
         } else {
             None
         }
@@ -307,18 +308,7 @@ impl<C: Config> App<C> {
 
     /// Get current block number
     pub fn current_block_number(ctx: &Context) -> Option<U256> {
-        CurrentBlockNumber::get(ctx.state.read().borrow())
-    }
-
-    /// Set the latest block number
-    pub fn update_block_number(
-        &mut self,
-        ctx: &Context,
-        block_number: &U256,
-    ) -> Result<()> {
-        CurrentBlockNumber::put(ctx.state.write().borrow_mut(), block_number)?;
-        self.is_store_block = true;
-        Ok(())
+        CurrentBlockNumber::get(ctx.db.read().borrow())
     }
 
     /// Get header hash of given block id.
@@ -326,7 +316,7 @@ impl<C: Config> App<C> {
         if let Some(id) = id {
             match id {
                 BlockId::Hash(h) => Some(h),
-                BlockId::Number(n) => BlockHash::get(ctx.state.read().borrow(), &n),
+                BlockId::Number(n) => BlockHash::get(ctx.db.read().borrow(), &n),
             }
         } else {
             Self::current_block_hash(ctx)

@@ -165,7 +165,7 @@ impl<'context, 'vicinity, 'config, C: Config> Backend
     }
 
     fn block_gas_limit(&self) -> U256 {
-        U256::zero()
+        C::BlockGasLimit::get()
     }
 
     fn chain_id(&self) -> U256 {

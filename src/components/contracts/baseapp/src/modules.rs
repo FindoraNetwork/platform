@@ -134,8 +134,6 @@ impl ModuleManager {
                 &Address::from(owner.clone()),
                 balance,
             )?;
-            self.ethereum_module
-                .update_block_number(ctx, &U256::from(ctx.block_header().height))?;
         }
         Ok(())
     }

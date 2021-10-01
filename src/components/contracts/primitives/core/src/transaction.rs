@@ -157,10 +157,12 @@ where
             Ok(res) => {
                 Extra::post_execute(ctx, pre, &res)?;
                 ctx.state.write().commit_session();
+                ctx.db.write().commit_session();
                 Ok(res)
             }
             Err(e) => {
                 ctx.state.write().discard_session();
+                ctx.db.write().discard_session();
                 Err(e)
             }
         }

@@ -46,7 +46,6 @@ lazy_static! {
 }
 
 const APP_NAME: &str = "findora";
-const APP_DB_NAME: &str = "findora_db";
 const CHAIN_STATE_PATH: &str = "state.db";
 const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
 const CHAIN_STATE_MIN_VERSIONS: u64 = 4 * 60 * 24;
@@ -134,17 +133,14 @@ impl BaseApp {
         let fdb = FinDB::open(fdb_path.as_path())?;
         let chain_state = Arc::new(RwLock::new(ChainState::new(
             fdb,
-            APP_DB_NAME.to_string(),
+            "findora_db".to_owned(),
             CHAIN_STATE_MIN_VERSIONS,
         )));
 
         let rdb_path = basedir.join(CHAIN_HISTORY_DATA_PATH);
         let rdb = RocksDB::open(rdb_path.as_path())?;
-        let chain_db = Arc::new(RwLock::new(ChainState::new(
-            rdb,
-            APP_DB_NAME.to_string(),
-            CHAIN_STATE_MIN_VERSIONS,
-        )));
+        let chain_db =
+            Arc::new(RwLock::new(ChainState::new(rdb, "rocks_db".to_owned(), 0)));
 
         Ok(BaseApp {
             name: APP_NAME.to_string(),
@@ -265,10 +261,6 @@ impl BaseApp {
 
     pub fn consume_mint(&mut self, size: usize) -> Result<Vec<MintOutput>> {
         self.modules.consume_mint(&self.deliver_state, size)
-    }
-
-    pub fn latest_block_number(&self) -> Option<U256> {
-        module_ethereum::App::<Self>::current_block_number(&self.deliver_state)
     }
 }
 

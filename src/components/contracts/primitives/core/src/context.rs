@@ -36,8 +36,8 @@ impl Context {
         state_db: Arc<RwLock<ChainState<RocksDB>>>,
     ) -> Self {
         Context {
-            state: Arc::new(RwLock::new(State::new(state_merkle))),
-            db: Arc::new(RwLock::new(State::new(state_db))),
+            state: Arc::new(RwLock::new(State::new(state_merkle, true))),
+            db: Arc::new(RwLock::new(State::new(state_db, false))),
             run_mode: RunTxMode::None,
             header: Default::default(),
             header_hash: vec![],
@@ -47,8 +47,11 @@ impl Context {
 
     pub fn copy_with_new_state(&self) -> Self {
         Context {
-            state: Arc::new(RwLock::new(State::new(self.state.read().chain_state()))),
-            db: Arc::new(RwLock::new(State::new(self.db.read().chain_state()))),
+            state: Arc::new(RwLock::new(State::new(
+                self.state.read().chain_state(),
+                true,
+            ))),
+            db: Arc::new(RwLock::new(State::new(self.db.read().chain_state(), false))),
             run_mode: RunTxMode::None,
             ..self.clone()
         }

@@ -185,6 +185,14 @@ impl abci::Application for crate::BaseApp {
         let block_height = header.height;
         let header_hash = self.deliver_state.header_hash();
 
+        self.deliver_state
+            .db
+            .write()
+            .commit(block_height as u64)
+            .unwrap_or_else(|_| {
+                panic!("Failed to commit chain db at height: {}", block_height)
+            });
+
         // Write the DeliverTx state into branched storage and commit the Store.
         // The write to the DeliverTx state writes all state transitions to the root
         // Store so when commit() is called is persists those values.
@@ -203,8 +211,6 @@ impl abci::Application for crate::BaseApp {
 
         // Reset the deliver state
         Self::update_state(&mut self.deliver_state, Default::default(), vec![]);
-
-        self.modules.ethereum_module.flush();
 
         pnk!(self
             .event_notify

@@ -135,24 +135,23 @@ impl<C: Config> App<C> {
     }
 
     pub(crate) fn add_mint(ctx: &Context, mut outputs: Vec<MintOutput>) -> Result<()> {
-        let ops =
-            if let Some(mut ori_outputs) = MintOutputs::get(ctx.state.read().borrow()) {
-                ori_outputs.append(&mut outputs);
-                ori_outputs
-            } else {
-                outputs
-            };
-        MintOutputs::put(ctx.state.write().borrow_mut(), &ops)
+        let ops = if let Some(mut ori_outputs) = MintOutputs::get(ctx.db.read().borrow())
+        {
+            ori_outputs.append(&mut outputs);
+            ori_outputs
+        } else {
+            outputs
+        };
+        MintOutputs::put(ctx.db.write().borrow_mut(), &ops)
     }
 
     pub fn consume_mint(ctx: &Context, size: usize) -> Result<Vec<MintOutput>> {
-        let mut outputs =
-            MintOutputs::get(ctx.state.read().borrow()).unwrap_or_default();
+        let mut outputs = MintOutputs::get(ctx.db.read().borrow()).unwrap_or_default();
         if outputs.len() > size {
             let vec2 = outputs.split_off(size);
-            MintOutputs::put(ctx.state.write().borrow_mut(), &vec2)?;
+            MintOutputs::put(ctx.db.write().borrow_mut(), &vec2)?;
         } else {
-            MintOutputs::delete(ctx.state.write().borrow_mut());
+            MintOutputs::delete(ctx.db.write().borrow_mut());
         }
         Ok(outputs)
     }

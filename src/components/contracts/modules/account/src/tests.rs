@@ -38,7 +38,7 @@ fn setup() -> Context {
     let chain_db = Arc::new(RwLock::new(ChainState::new(
         rdb,
         "temp_rocks_db".to_string(),
-        100,
+        0,
     )));
 
     Context::new(chain_state, chain_db)
@@ -349,7 +349,7 @@ fn test_add_mint() {
     let mut ref_outputs = outputs.clone();
     assert!(App::<()>::add_mint(&ctx, outputs).is_ok());
     assert_eq!(
-        MintOutputs::get(ctx.state.read().borrow()).unwrap(),
+        MintOutputs::get(ctx.db.read().borrow()).unwrap(),
         ref_outputs
     );
 
@@ -374,7 +374,7 @@ fn test_add_mint() {
     //Confirm new output was appended to output list
     ref_outputs.append(&mut ref_new_outputs);
     assert_eq!(
-        MintOutputs::get(ctx.state.read().borrow()).unwrap(),
+        MintOutputs::get(ctx.db.read().borrow()).unwrap(),
         ref_outputs
     );
 }
