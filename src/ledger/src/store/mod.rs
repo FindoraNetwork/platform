@@ -1171,7 +1171,7 @@ impl LedgerStatus {
         self.ax_utxos
             .iter()
             .filter(|(_, axutxo)| &axutxo.public_key == addr)
-            .map(|(sid, _)| sid.to_owned())
+            .map(|(sid, _)| sid.clone())
             .collect()
     }
 
