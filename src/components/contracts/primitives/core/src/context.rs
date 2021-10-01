@@ -34,7 +34,7 @@ pub struct Context {
 impl Context {
     pub fn new(cs: Arc<RwLock<ChainState<FinDB>>>) -> Self {
         Context {
-            store: Arc::new(RwLock::new(Store::new(cs))),
+            store: Arc::new(RwLock::new(Store::new(cs, false))),
             run_mode: RunTxMode::None,
             header: Default::default(),
             header_hash: vec![],
@@ -47,7 +47,7 @@ impl Context {
         cs: Arc<RwLock<ChainState<FinDB>>>,
     ) -> Self {
         Context {
-            store: Arc::new(RwLock::new(Store::new(cs))),
+            store: Arc::new(RwLock::new(Store::new(cs, false))),
             ..ctx.clone()
         }
     }

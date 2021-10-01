@@ -451,7 +451,7 @@ impl LedgerState {
     /// Fetches the root hash of the committed merkle tree of abar commitments
     pub fn get_abar_root_hash(&mut self) -> Result<BLSScalar> {
         let chain_state = self.abar_state.chain_state();
-        let mut rocks_state = State::new(chain_state);
+        let mut rocks_state = State::new(chain_state, false);
         let store = PrefixedStore::new("abar_store", &mut rocks_state);
         let mt = PersistentMerkleTree::new(store)?;
 
@@ -464,7 +464,7 @@ impl LedgerState {
     /// Generates a MTLeafInfo from the latest committed version of tree
     pub fn get_abar_proof(&self, id: ATxoSID) -> Result<MTLeafInfo> {
         let chain_state = self.abar_state.chain_state();
-        let mut rocks_state = State::new(chain_state);
+        let mut rocks_state = State::new(chain_state, false);
         let store = PrefixedStore::new("abar_store", &mut rocks_state);
         let mt = PersistentMerkleTree::new(store)?;
 
@@ -497,7 +497,7 @@ impl LedgerState {
     fn init_abar_state(path: &str) -> Result<State<RocksDB>> {
         let fdb = RocksDB::open(path).c(d!("failed to open db"))?;
         let cs = Arc::new(RwLock::new(ChainState::new(fdb, "abar_db".to_string(), 0)));
-        Ok(State::new(cs))
+        Ok(State::new(cs, false))
     }
 
     /// Initialize a new Ledger structure.
