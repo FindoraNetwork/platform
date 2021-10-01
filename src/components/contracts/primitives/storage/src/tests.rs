@@ -19,7 +19,7 @@ fn setup_temp_db() -> Arc<RwLock<State<TempFinDB>>> {
         "temp_db".to_string(),
         100,
     )));
-    Arc::new(RwLock::new(State::new(chain_state)))
+    Arc::new(RwLock::new(State::new(chain_state, true)))
 }
 
 #[test]
