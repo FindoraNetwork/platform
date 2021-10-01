@@ -4,7 +4,7 @@ use ethereum::{
     BlockV0 as Block, LegacyTransactionMessage, Receipt, TransactionV0 as Transaction,
 };
 use ethereum_types::{Bloom, BloomInput, H160, H256, H64, U256};
-use evm::ExitReason;
+use evm::{ExitFatal, ExitReason};
 use fp_core::{
     context::Context, macros::Get, module::AppModuleBasic, transaction::ActionResult,
 };
@@ -118,7 +118,7 @@ impl<C: Config> App<C> {
 
         let gas_limit = transaction.gas_limit;
 
-        let (to, contract_address, info) = Self::execute_transaction(
+        let execute_ret = Self::execute_transaction(
             ctx,
             source,
             transaction.input.clone(),
@@ -127,7 +127,35 @@ impl<C: Config> App<C> {
             Some(transaction.gas_price),
             Some(transaction.nonce),
             transaction.action,
-        )?;
+        );
+
+        if let Err(e) = execute_ret {
+            let mut to = Default::default();
+            if let ethereum::TransactionAction::Call(target) = transaction.action {
+                to = target;
+            }
+            events.push(Event::emit_event(
+                Self::name(),
+                TransactionExecuted {
+                    sender: source,
+                    to,
+                    contract_address: Default::default(),
+                    transaction_hash,
+                    reason: ExitReason::Fatal(ExitFatal::UnhandledInterrupt),
+                },
+            ));
+
+            return Ok(ActionResult {
+                code: 1,
+                data: vec![],
+                log: format!("{}", e),
+                gas_wanted: gas_limit.low_u64(),
+                gas_used: 0,
+                events,
+            });
+        }
+
+        let (to, contract_address, info) = execute_ret.unwrap();
 
         let (reason, status, used_gas) = match info.clone() {
             CallOrCreateInfo::Call(info) => (
@@ -214,6 +242,7 @@ impl<C: Config> App<C> {
         ));
 
         Ok(ActionResult {
+            code: 0,
             data: serde_json::to_vec(&info).unwrap_or_default(),
             log: "".to_string(),
             gas_wanted: gas_limit.low_u64(),

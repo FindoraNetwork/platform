@@ -148,7 +148,7 @@ impl abci::Application for crate::BaseApp {
             match ret {
                 Ok(ar) => {
                     debug!(target: "baseapp", "deliver tx succeed result: {:?}", ar);
-
+                    resp.code = ar.code;
                     resp.data = ar.data;
                     resp.log = ar.log;
                     resp.gas_wanted = ar.gas_wanted as i64;
