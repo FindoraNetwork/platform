@@ -27,7 +27,6 @@ pub struct Context {
     pub run_mode: RunTxMode,
     pub header: Header,
     pub header_hash: Vec<u8>,
-    pub tx: Vec<u8>,
 }
 
 impl Context {
@@ -41,7 +40,6 @@ impl Context {
             run_mode: RunTxMode::None,
             header: Default::default(),
             header_hash: vec![],
-            tx: vec![],
         }
     }
 
@@ -69,9 +67,5 @@ impl Context {
 
     pub fn header_hash(&self) -> Vec<u8> {
         self.header_hash.clone()
-    }
-
-    pub fn tx(&self) -> Vec<u8> {
-        self.tx.clone()
     }
 }

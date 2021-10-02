@@ -213,17 +213,12 @@ impl BaseApp {
     }
 
     /// retrieve the context for the txBytes and other memoized values.
-    pub fn retrieve_context(
-        &mut self,
-        mode: RunTxMode,
-        tx_bytes: Vec<u8>,
-    ) -> &mut Context {
+    pub fn retrieve_context(&mut self, mode: RunTxMode) -> &mut Context {
         let ctx = if mode == RunTxMode::Deliver {
             &mut self.deliver_state
         } else {
             &mut self.check_state
         };
-        ctx.tx = tx_bytes;
         ctx.run_mode = mode;
         ctx
     }
@@ -248,7 +243,6 @@ impl BaseApp {
         ctx.run_mode = RunTxMode::None;
         ctx.header_hash = header_hash;
         ctx.header = header;
-        ctx.tx = vec![];
     }
 
     pub fn deliver_findora_tx(&mut self, tx: &FindoraTransaction) -> Result<()> {

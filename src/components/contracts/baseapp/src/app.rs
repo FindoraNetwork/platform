@@ -76,7 +76,7 @@ impl abci::Application for crate::BaseApp {
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
             let check_fn = |mode: RunTxMode| {
-                let ctx = self.retrieve_context(mode, raw_tx.to_vec()).clone();
+                let ctx = self.retrieve_context(mode).clone();
                 if let Err(e) = self.modules.process_tx::<SignedExtra>(ctx, tx) {
                     debug!(target: "baseapp", "Transaction check error: {}", e);
                     resp.code = 1;
@@ -140,9 +140,7 @@ impl abci::Application for crate::BaseApp {
         }
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
-            let ctx = self
-                .retrieve_context(RunTxMode::Deliver, raw_tx.to_vec())
-                .clone();
+            let ctx = self.retrieve_context(RunTxMode::Deliver).clone();
 
             let ret = self.modules.process_tx::<SignedExtra>(ctx, tx);
             match ret {
@@ -181,14 +179,15 @@ impl abci::Application for crate::BaseApp {
     }
 
     fn commit(&mut self, _req: &RequestCommit) -> ResponseCommit {
-        let header = self.deliver_state.block_header().clone();
-        let block_height = header.height;
-        let header_hash = self.deliver_state.header_hash();
+        // Reset the Check state to the latest committed.
+        self.check_state = self.deliver_state.copy_with_new_state();
+
+        let block_height = self.deliver_state.block_header().height as u64;
 
         self.deliver_state
             .db
             .write()
-            .commit(block_height as u64)
+            .commit(block_height)
             .unwrap_or_else(|_| {
                 panic!("Failed to commit chain db at height: {}", block_height)
             });
@@ -200,14 +199,10 @@ impl abci::Application for crate::BaseApp {
             .deliver_state
             .state
             .write()
-            .commit(block_height as u64)
+            .commit(block_height)
             .unwrap_or_else(|_| {
                 panic!("Failed to commit chain state at height: {}", block_height)
             });
-
-        // Reset the Check state to the latest committed.
-        self.check_state.state.write().discard_session();
-        Self::update_state(&mut self.check_state, header, header_hash);
 
         // Reset the deliver state
         Self::update_state(&mut self.deliver_state, Default::default(), vec![]);
