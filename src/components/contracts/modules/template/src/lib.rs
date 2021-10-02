@@ -12,6 +12,7 @@ use fp_core::{
 };
 // use fp_storage::{hash::StoragePrefixKey, Deref, StatelessStore};
 use abci::{RequestQuery, ResponseQuery};
+use fp_storage::{Borrow, BorrowMut};
 use fp_types::{actions::template::Action, crypto::Address};
 use ruc::Result;
 use std::marker::PhantomData;
@@ -55,7 +56,7 @@ impl<C: Config> AppModule for App<C> {
             return resp;
         }
 
-        let value = ValueStore::get(ctx.store).unwrap_or_default();
+        let value = ValueStore::get(ctx.state.read().borrow()).unwrap_or_default();
 
         // let value: u64 = <ValueStoreInstance as StatelessStore>::get_obj(
         //     ctx.store.read().deref(),
@@ -79,12 +80,11 @@ impl<C: Config> Executable for App<C> {
         ctx: &Context,
     ) -> Result<ActionResult> {
         match call {
-            Action::SetValue(v) => {
-                ValueStore::put(ctx.store.clone(), &v).map(|()| ActionResult {
+            Action::SetValue(v) => ValueStore::put(ctx.state.write().borrow_mut(), &v)
+                .map(|()| ActionResult {
                     data: v.to_be_bytes().to_vec(),
                     ..Default::default()
-                })
-            }
+                }),
         }
     }
 }

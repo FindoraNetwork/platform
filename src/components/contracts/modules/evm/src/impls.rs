@@ -3,6 +3,7 @@ use crate::{App, Config};
 use ethereum_types::{H160, H256, U256};
 use fp_core::context::Context;
 use fp_evm::Account;
+use fp_storage::{Borrow, BorrowMut};
 use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, OnChargeEVMTransaction},
@@ -14,15 +15,16 @@ impl<C: Config> App<C> {
     /// Check whether an account is empty.
     pub fn is_account_empty(ctx: &Context, address: &H160) -> bool {
         let account = Self::account_basic(ctx, address);
-        let code_len = AccountCodes::decode_len(ctx.store.clone(), address).unwrap_or(0);
+        let code_len =
+            AccountCodes::decode_len(ctx.state.read().borrow(), address).unwrap_or(0);
 
         account.nonce == U256::zero() && account.balance == U256::zero() && code_len == 0
     }
 
     /// Remove an account.
     pub fn remove_account(ctx: &Context, address: &H160) {
-        AccountCodes::remove(ctx.store.clone(), address);
-        AccountStorages::remove_prefix(ctx.store.clone(), address);
+        AccountCodes::remove(ctx.state.write().borrow_mut(), address);
+        AccountStorages::remove_prefix(ctx.state.write().borrow_mut(), address);
     }
 
     /// Create an account.
@@ -31,12 +33,12 @@ impl<C: Config> App<C> {
             return Ok(());
         }
 
-        AccountCodes::insert(ctx.store.clone(), &address, &code)
+        AccountCodes::insert(ctx.state.write().borrow_mut(), &address, &code)
     }
 
     /// Get the account code
     pub fn account_codes(ctx: &Context, address: &H160) -> Option<Vec<u8>> {
-        AccountCodes::get(ctx.store.clone(), address)
+        AccountCodes::get(ctx.state.read().borrow(), address)
     }
 
     /// Get the account storage
@@ -45,7 +47,7 @@ impl<C: Config> App<C> {
         address: &H160,
         index: &H256,
     ) -> Option<H256> {
-        AccountStorages::get(ctx.store.clone(), address, index)
+        AccountStorages::get(ctx.state.read().borrow(), address, index)
     }
 
     /// Get the account basic in EVM format.

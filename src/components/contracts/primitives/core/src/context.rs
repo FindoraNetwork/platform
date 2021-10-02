@@ -1,13 +1,11 @@
 use abci::Header;
 use storage::{
-    db::FinDB,
+    db::{FinDB, RocksDB},
     state::{ChainState, State},
 };
 
-pub use parking_lot::{Mutex, RwLock};
+pub use parking_lot::RwLock;
 pub use std::sync::Arc;
-
-pub type Store = State<FinDB>;
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash, Copy)]
 pub enum RunTxMode {
@@ -24,40 +22,41 @@ pub enum RunTxMode {
 
 #[derive(Clone)]
 pub struct Context {
-    pub store: Arc<RwLock<Store>>,
+    pub state: Arc<RwLock<State<FinDB>>>,
+    pub db: Arc<RwLock<State<RocksDB>>>,
     pub run_mode: RunTxMode,
     pub header: Header,
     pub header_hash: Vec<u8>,
-    pub tx: Vec<u8>,
 }
 
 impl Context {
-    pub fn new(cs: Arc<RwLock<ChainState<FinDB>>>) -> Self {
+    pub fn new(
+        state_merkle: Arc<RwLock<ChainState<FinDB>>>,
+        state_db: Arc<RwLock<ChainState<RocksDB>>>,
+    ) -> Self {
         Context {
-            store: Arc::new(RwLock::new(Store::new(cs))),
+            state: Arc::new(RwLock::new(State::new(state_merkle, true))),
+            db: Arc::new(RwLock::new(State::new(state_db, false))),
             run_mode: RunTxMode::None,
             header: Default::default(),
             header_hash: vec![],
-            tx: vec![],
         }
     }
 
-    pub fn copy_with_new_store(
-        ctx: &Context,
-        cs: Arc<RwLock<ChainState<FinDB>>>,
-    ) -> Self {
+    pub fn copy_with_new_state(&self) -> Self {
         Context {
-            store: Arc::new(RwLock::new(Store::new(cs))),
-            ..ctx.clone()
+            state: Arc::new(RwLock::new(State::new(
+                self.state.read().chain_state(),
+                true,
+            ))),
+            db: Arc::new(RwLock::new(State::new(self.db.read().chain_state(), false))),
+            run_mode: RunTxMode::None,
+            ..self.clone()
         }
     }
 }
 
 impl Context {
-    pub fn commit_store(&self) -> Arc<RwLock<Store>> {
-        self.store.clone()
-    }
-
     pub fn run_mode(&self) -> RunTxMode {
         self.run_mode
     }
@@ -68,9 +67,5 @@ impl Context {
 
     pub fn header_hash(&self) -> Vec<u8> {
         self.header_hash.clone()
-    }
-
-    pub fn tx(&self) -> Vec<u8> {
-        self.tx.clone()
     }
 }

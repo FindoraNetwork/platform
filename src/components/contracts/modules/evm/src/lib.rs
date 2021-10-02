@@ -15,6 +15,7 @@ use fp_core::{
     transaction::{ActionResult, Executable},
 };
 use fp_evm::PrecompileSet;
+use fp_storage::Borrow;
 use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
@@ -84,7 +85,7 @@ impl<C: Config> AppModule for App<C> {
         match path[0] {
             "contract-number" => {
                 let contracts: Vec<(H160, Vec<u8>)> =
-                    storage::AccountCodes::iterate(ctx.store);
+                    storage::AccountCodes::iterate(ctx.state.read().borrow());
                 resp.value = serde_json::to_vec(&contracts.len()).unwrap_or_default();
                 resp
             }

@@ -76,7 +76,7 @@ impl abci::Application for crate::BaseApp {
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
             let check_fn = |mode: RunTxMode| {
-                let ctx = self.retrieve_context(mode, raw_tx.to_vec()).clone();
+                let ctx = self.retrieve_context(mode).clone();
                 if let Err(e) = self.modules.process_tx::<SignedExtra>(ctx, tx) {
                     debug!(target: "baseapp", "Transaction check error: {}", e);
                     resp.code = 1;
@@ -140,15 +140,13 @@ impl abci::Application for crate::BaseApp {
         }
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
-            let ctx = self
-                .retrieve_context(RunTxMode::Deliver, raw_tx.to_vec())
-                .clone();
+            let ctx = self.retrieve_context(RunTxMode::Deliver).clone();
 
             let ret = self.modules.process_tx::<SignedExtra>(ctx, tx);
             match ret {
                 Ok(ar) => {
                     debug!(target: "baseapp", "deliver tx succeed result: {:?}", ar);
-
+                    resp.code = ar.code;
                     resp.data = ar.data;
                     resp.log = ar.log;
                     resp.gas_wanted = ar.gas_wanted as i64;
@@ -181,30 +179,33 @@ impl abci::Application for crate::BaseApp {
     }
 
     fn commit(&mut self, _req: &RequestCommit) -> ResponseCommit {
-        let header = self.deliver_state.block_header().clone();
-        let block_height = header.height;
-        let header_hash = self.deliver_state.header_hash();
+        // Reset the Check state to the latest committed.
+        self.check_state = self.deliver_state.copy_with_new_state();
+
+        let block_height = self.deliver_state.block_header().height as u64;
+
+        self.deliver_state
+            .db
+            .write()
+            .commit(block_height)
+            .unwrap_or_else(|_| {
+                panic!("Failed to commit chain db at height: {}", block_height)
+            });
 
         // Write the DeliverTx state into branched storage and commit the Store.
         // The write to the DeliverTx state writes all state transitions to the root
         // Store so when commit() is called is persists those values.
         let (root_hash, _) = self
             .deliver_state
-            .store
+            .state
             .write()
-            .commit(block_height as u64)
+            .commit(block_height)
             .unwrap_or_else(|_| {
                 panic!("Failed to commit chain state at height: {}", block_height)
             });
 
-        // Reset the Check state to the latest committed.
-        self.check_state.store.write().discard_session();
-        Self::update_state(&mut self.check_state, header, header_hash);
-
         // Reset the deliver state
         Self::update_state(&mut self.deliver_state, Default::default(), vec![]);
-
-        self.modules.ethereum_module.flush();
 
         pnk!(self
             .event_notify

@@ -90,23 +90,16 @@ impl ModuleManager {
         Extra: Clone + Serialize + SignedExtension<AccountId = Address>,
     >(
         &mut self,
-        mut ctx: Context,
+        ctx: Context,
         tx: UncheckedTransaction<Extra>,
     ) -> Result<ActionResult> {
         let checked = tx.clone().check()?;
         match tx.function.clone() {
-            actions::Action::Ethereum(action) => {
-                // handle unsigned transaction, set specified module.
-                let actions::ethereum::Action::Transact(eth_tx) = action.clone();
-                ctx.tx = serde_json::to_vec(&eth_tx)
-                    .map_err(|e| eg!(format!("Serialize ethereum tx err: {}", e)))?;
-
-                Self::dispatch::<
-                    actions::ethereum::Action,
-                    module_ethereum::App<BaseApp>,
-                    Extra,
-                >(&ctx, action, checked)
-            }
+            actions::Action::Ethereum(action) => Self::dispatch::<
+                actions::ethereum::Action,
+                module_ethereum::App<BaseApp>,
+                Extra,
+            >(&ctx, action, checked),
             _ => Self::dispatch::<actions::Action, BaseApp, Extra>(
                 &ctx,
                 tx.function,
@@ -134,8 +127,6 @@ impl ModuleManager {
                 &Address::from(owner.clone()),
                 balance,
             )?;
-            self.ethereum_module
-                .update_block_number(ctx, &U256::from(ctx.block_header().height))?;
         }
         Ok(())
     }

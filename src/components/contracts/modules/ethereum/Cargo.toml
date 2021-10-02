@@ -31,7 +31,6 @@ fp-storage = { path = "../../primitives/storage" }
 fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
-ledger = { path = "../../../../ledger" }
 
 [dev-dependencies]
 baseapp = { path = "../../baseapp" }
