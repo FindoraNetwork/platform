@@ -19,7 +19,7 @@ use crate::wasm_data_model::{
     AttributeDefinition, ClientAssetRecord, Credential, CredentialCommitment,
     CredentialCommitmentData, CredentialCommitmentKey, CredentialIssuerKeyPair,
     CredentialPoK, CredentialRevealSig, CredentialSignature, CredentialUserKeyPair,
-    OwnerMemo, PublicParams, TracingPolicies, TxoRef,
+    MTLeafInfo, OwnerMemo, PublicParams, TracingPolicies, TxoRef,
 };
 use core::str::FromStr;
 use credentials::{
@@ -452,6 +452,67 @@ impl TransactionBuilder {
                 TxoSID(txo_sid),
                 &oar,
                 enc_key,
+            )
+            .c(d!())
+            .map_err(|e| {
+                JsValue::from_str(&format!("Could not add operation: {}", e))
+            })?;
+
+        Ok(self)
+    }
+
+    /// Adds an operation to transaction builder which transfer a Anon Blind Asset Record
+    ///
+    ///
+    pub fn add_operation_anon_transfer(
+        mut self,
+        input: AnonBlindAssetRecord,
+        owner_memo: OwnerMemo,
+        mt_leaf_info: MTLeafInfo,
+        from_keypair: AXfrKeyPair,
+        from_dec_key: XSecretKey,
+        to_pub_key: AXfrPubKey,
+        to_enc_key: XPublicKey,
+        to_amount: u64,
+    ) -> Result<TransactionBuilder, JsValue> {
+        let mut prng = ChaChaRng::from_entropy();
+        let input_oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
+            &input,
+            owner_memo.memo,
+            &from_keypair,
+            &from_dec_key,
+        )
+        .c(d!())
+        .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
+        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .build()
+        .c(d!())
+        .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?;
+
+        if input_oabar.get_amount() != to_amount {
+            return Err(JsValue::from_str(&format!(
+                "Transfer amount doesn't match input abar: {}",
+                input_oabar.get_amount()
+            )));
+        }
+
+        let output_oabar = OpenAnonBlindAssetRecordBuilder::new()
+            .amount(to_amount)
+            .asset_type(input_oabar.get_asset_type())
+            .pub_key(to_pub_key)
+            .finalize(&mut prng, &to_enc_key)
+            .c(d!())
+            .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
+            .build()
+            .map_err(|e| {
+                JsValue::from_str(&format!("Could not add operation: {}", e))
+            })?;
+
+        self.get_builder_mut()
+            .add_operation_anon_transfer(
+                &[input_oabar],
+                &[output_oabar],
+                &[from_keypair],
             )
             .c(d!())
             .map_err(|e| {
@@ -1263,13 +1324,14 @@ pub fn trace_assets(
 
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
-use crypto::basics::hybrid_encryption::XPublicKey;
+use crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey};
 use ledger::data_model::TxoSID;
 use rand::{thread_rng, Rng};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
-use zei::anon_xfr::keys::AXfrPubKey;
+use zei::anon_xfr::keys::{AXfrKeyPair, AXfrPubKey};
+use zei::anon_xfr::structs::{AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder};
 
 #[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.
