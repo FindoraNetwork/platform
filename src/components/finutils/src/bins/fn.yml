@@ -466,13 +466,27 @@ subcommands:
             takes_value: true
             value_name: DECRYPTION KEY
             required: true
+        - to-axfr-public-key:
+            help: Axfr public key of the receiver
+            short: tp
+            long: to-axfr-public-key
+            takes_value: true
+            value_name: PUBLIC KEY
+            required: true
+        - to-enc-key:
+            help: Receiver encryption key for anon transfer
+            short: te
+            long: to-enc-key
+            takes_value: true
+            value_name: ENCRYPTION KEY
+            required: true  
         - amount:
             help: how much units to transfer
             short: n
             long: amount
             takes_value: true
             value_name: Amount
-            required: true
+            required: true      
   - anon-transfer-batch:
       about: Anonymous Transfer of tokens from multiple inputs to multiple outputs
       args:
@@ -490,16 +504,24 @@ subcommands:
             takes_value: true
             value_name: DECRYPTION KEY
             required: true
-        - receiver-count:
-            help: Total number of receivers
-            short: r
-            long: receiver-count
+        - to-axfr-public-key-file:
+            help: Axfr public keys of the receivers
+            short: tp
+            long: to-axfr-public-key-file
             takes_value: true
-            required: true            
-        - amount:
-            help: how much FRA units to transfer
+            value_name: PUBLIC KEY
+            required: true
+        - to-enc-key-file:
+            help: Receivers encryption keys for anon transfer
+            short: te
+            long: to-enc-key-file
+            takes_value: true
+            value_name: ENCRYPTION KEY
+            required: true           
+        - amount-file:
+            help: how much units to transfer for each receiver
             short: n
-            long: amount
+            long: amount-file
             takes_value: true
             value_name: Amount
             required: true

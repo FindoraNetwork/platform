@@ -9,7 +9,7 @@ use bip0039::{Count, Language, Mnemonic};
 use crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey};
 use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
 use ruc::*;
-use zei::anon_xfr::keys::{AXfrPubKey, AXfrKeyPair};
+use zei::anon_xfr::keys::{AXfrKeyPair, AXfrPubKey};
 use zei::{
     serialization::ZeiFromToBytes,
     xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},

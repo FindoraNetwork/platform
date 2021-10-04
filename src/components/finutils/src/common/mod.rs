@@ -10,11 +10,9 @@ pub mod evm;
 pub mod utils;
 
 use crate::api::DelegationInfo;
-use crate::txn_builder::TransactionBuilder;
 use crate::common::utils::{new_tx_builder, send_tx};
+use crate::txn_builder::TransactionBuilder;
 use crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey};
-use zeialgebra::groups::Scalar;
-use zeialgebra::jubjub::JubjubScalar;
 use globutils::wallet;
 use lazy_static::lazy_static;
 use ledger::data_model::TxoSID;
@@ -27,16 +25,16 @@ use ledger::{
     },
     store::LedgerState,
 };
-use ruc::*;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
-use zei::anon_xfr::keys::AXfrKeyPair;
+use ruc::*;
 use std::{env, fs};
 use tendermint::PrivateKey;
 use utils::{
     get_block_height, get_local_block_height, get_validator_detail,
     parse_td_validator_keys,
 };
+use zei::anon_xfr::keys::{AXfrKeyPair, AXfrPubKey};
 use zei::anon_xfr::structs::{AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder};
 use zei::{
     setup::PublicParams,
@@ -45,6 +43,8 @@ use zei::{
         sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
     },
 };
+use zeialgebra::groups::Scalar;
+use zeialgebra::jubjub::JubjubScalar;
 
 lazy_static! {
     static ref CFG_PATH: String = format!(
@@ -718,27 +718,31 @@ pub fn gen_oabar_add_op(
     axfr_secret_key: &str,
     dec_key: &str,
     amount: &str,
+    to_axfr_public_key: &str,
+    to_enc_key: &str,
 ) -> Result<()> {
+    let from = wallet::anon_secret_key_from_base64(axfr_secret_key)
+        .c(d!("invalid 'from-axfr-secret-key'"))?;
+    let from_secret_key =
+        wallet::x_secret_key_from_base64(dec_key).c(d!("invalid dec_key"))?;
+    let axfr_amount = amount.parse::<u64>().c(d!("error parsing amount"))?;
+    let to = wallet::anon_public_key_from_base64(to_axfr_public_key)
+        .c(d!("invalid 'to-axfr-public-key'"))?;
+    let enc_key_out =
+        wallet::x_public_key_from_base64(to_enc_key).c(d!("invalid to_enc_key"))?;
 
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
-    let from = wallet::anon_secret_key_from_base64(axfr_secret_key)
-        .c(d!("invalid 'axfr-secret-key'"))?;
-    let from_secret_key = wallet::x_secret_key_from_base64(dec_key)
-        .c(d!("invalid dec_key"))?;
-    let axfr_amount = amount.parse::<u64>().c(d!("error parsing amount"))?;
-    let to = AXfrKeyPair::generate(&mut prng);
-    let to_dec_key = XSecretKey::new(&mut prng);
-    let enc_key_out = XPublicKey::from(&to_dec_key);
-
     let r = JubjubScalar::random(&mut prng);
     let diversified_from_pub_key = from.pub_key().randomize(&r);
-    
+
     let ledger = LedgerState::tmp_ledger(); //TODO - replace tmp with actual
     let axtxo_abar = ledger.get_owned_abars(&diversified_from_pub_key);
+    //Only the first abar received from the ledger query is considered
     let owner_memo = ledger.get_abar_memo(axtxo_abar[0].0).c(d!())?;
     let mt_leaf_info = ledger.get_abar_proof(axtxo_abar[0].0).c(d!())?;
-    
-    let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(&axtxo_abar[0].1,
+
+    let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
+        &axtxo_abar[0].1,
         owner_memo,
         &from,
         &from_secret_key,
@@ -749,21 +753,17 @@ pub fn gen_oabar_add_op(
     .unwrap();
 
     let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
-    .amount(axfr_amount)
-    .pub_key(to.pub_key())
-    .finalize(&mut prng, &enc_key_out)
-    .unwrap()
-    .build()
-    .unwrap();
-    
+        .amount(axfr_amount)
+        .pub_key(to)
+        .finalize(&mut prng, &enc_key_out)
+        .unwrap()
+        .build()
+        .unwrap();
+
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
     let _ = builder
-    .add_operation_anon_transfer(
-        &[oabar_in],
-        &[oabar_out],
-        &[from],
-    )
-    .c(d!())?;
+        .add_operation_anon_transfer(&[oabar_in], &[oabar_out], &[from])
+        .c(d!())?;
 
     send_tx(&builder.take_transaction()).c(d!())?;
     Ok(())
@@ -773,25 +773,24 @@ pub fn gen_oabar_add_op(
 pub fn gen_oabar_add_op_x(
     axfr_secret_keys: Vec<AXfrKeyPair>,
     dec_keys: Vec<XSecretKey>,
-    receiver_count: &str,
-    amount: &str,
+    to_axfr_public_keys: Vec<AXfrPubKey>,
+    to_enc_keys: Vec<XPublicKey>,
+    amounts: Vec<String>,
 ) -> Result<()> {
-
-    let rcvr_count = receiver_count.parse::<u64>().c(d!("error parsing receiver count"))?;
-    let axfr_amount = amount.parse::<u64>().c(d!("error parsing amount"))?;
-
     let ledger = LedgerState::tmp_ledger(); //TODO - replace tmp with actual
     let mut oabars_in = Vec::new();
-    for (from ,from_secret_key) in axfr_secret_keys.iter().zip(dec_keys.iter()){
+    for (from, from_secret_key) in axfr_secret_keys.iter().zip(dec_keys.iter()) {
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
         let r = JubjubScalar::random(&mut prng);
         let diversified_from_pub_key = from.pub_key().randomize(&r);
-        
+
         let axtxo_abar = ledger.get_owned_abars(&diversified_from_pub_key);
+        //Only the first abar received from the ledger query is considered
         let owner_memo = ledger.get_abar_memo(axtxo_abar[0].0).c(d!())?;
         let mt_leaf_info = ledger.get_abar_proof(axtxo_abar[0].0).c(d!())?;
-        
-        let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(&axtxo_abar[0].1,
+
+        let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
+            &axtxo_abar[0].1,
             owner_memo,
             from,
             from_secret_key,
@@ -804,32 +803,29 @@ pub fn gen_oabar_add_op_x(
         oabars_in.push(oabar_in);
     }
 
+    let rcvr_count = to_axfr_public_keys.len();
     let mut oabars_out = Vec::new();
-    for _ in 1..rcvr_count{
+    for i in 0..rcvr_count - 1 {
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
-        let to = AXfrKeyPair::generate(&mut prng);
-        let to_dec_key = XSecretKey::new(&mut prng);
-        let enc_key_out = XPublicKey::from(&to_dec_key);
+        let to = to_axfr_public_keys[i];
+        let enc_key_out = &to_enc_keys[i];
+        let axfr_amount = amounts[i].parse::<u64>().c(d!("error parsing amount"))?;
 
         let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
-        .amount(axfr_amount)
-        .pub_key(to.pub_key())
-        .finalize(&mut prng, &enc_key_out)
-        .unwrap()
-        .build()
-        .unwrap();
+            .amount(axfr_amount)
+            .pub_key(to)
+            .finalize(&mut prng, enc_key_out)
+            .unwrap()
+            .build()
+            .unwrap();
 
         oabars_out.push(oabar_out);
     }
-    
+
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
     let _ = builder
-    .add_operation_anon_transfer(
-        &oabars_in[..],
-        &oabars_out[..],
-        &axfr_secret_keys,
-    )
-    .c(d!())?;
+        .add_operation_anon_transfer(&oabars_in[..], &oabars_out[..], &axfr_secret_keys)
+        .c(d!())?;
 
     send_tx(&builder.take_transaction()).c(d!())?;
     Ok(())
@@ -854,10 +850,20 @@ mod tests {
         let secret_key = XSecretKey::new(&mut prng);
         let dec_key = base64::encode(secret_key.zei_to_bytes().as_slice());
 
+        let mut prng = ChaChaRng::from_entropy();
+        let to_keypair = AXfrKeyPair::generate(&mut prng);
+        let to_axfr_public_key =
+            base64::encode(to_keypair.pub_key().zei_to_bytes().as_slice());
+        let to_secret_key = XSecretKey::new(&mut prng);
+        let to_enc_key =
+            base64::encode(XPublicKey::from(&to_secret_key).zei_to_bytes().as_slice());
+
         let result = gen_oabar_add_op(
             &axfr_secret_key,
             &dec_key,
             amount,
+            &to_axfr_public_key,
+            &to_enc_key,
         );
         // The result is an error because a temp ledger is used and
         //the fn get_owned_abars returns nothing
@@ -867,24 +873,37 @@ mod tests {
 
     #[test]
     fn test_gen_oabar_add_anon_tx_multi() {
-        let amount = "10";
-        let n_payees = "3";
+        let amounts = vec![String::from("10"), String::from("15"), String::from("20")];
+        let n_payees = amounts.len();
 
         let mut axfr_secret_keys = Vec::new();
         let mut dec_keys = Vec::new();
-        let n_payers = 3;
-        for _ in 1..n_payers{
+        let mut to_axfr_public_keys = Vec::new();
+        let mut to_enc_keys = Vec::new();
+        let n_payers = 2;
+        for _ in 1..n_payers {
             let mut prng = ChaChaRng::from_entropy();
             let axfr_secret_key = AXfrKeyPair::generate(&mut prng);
             let dec_key = XSecretKey::new(&mut prng);
             axfr_secret_keys.push(axfr_secret_key);
             dec_keys.push(dec_key);
         }
+        for _ in 1..n_payees {
+            let mut prng = ChaChaRng::from_entropy();
+            let to_keypair = AXfrKeyPair::generate(&mut prng);
+            let to_axfr_public_key = to_keypair.pub_key();
+            let to_secret_key = XSecretKey::new(&mut prng);
+            let to_enc_key = XPublicKey::from(&to_secret_key);
+            to_axfr_public_keys.push(to_axfr_public_key);
+            to_enc_keys.push(to_enc_key);
+        }
+
         let result = gen_oabar_add_op_x(
             axfr_secret_keys,
             dec_keys,
-            n_payees,
-            amount,
+            to_axfr_public_keys,
+            to_enc_keys,
+            amounts,
         );
         // The result is an error because a temp ledger is used and
         //the fn get_owned_abars returns nothing
