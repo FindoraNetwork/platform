@@ -1242,9 +1242,9 @@ pub enum Operation {
     /// Convert UTXO to Account
     ConvertAccount(ConvertAccount),
     /// Anonymous conversion operation
-    BarToAbar(BarToAbarOps),
+    BarToAbar(Box<BarToAbarOps>),
     /// Anonymous transfer operation
-    TransferAnonAsset(AnonTransferOps),
+    TransferAnonAsset(Box<AnonTransferOps>),
 }
 
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {

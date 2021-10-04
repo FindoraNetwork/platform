@@ -314,7 +314,7 @@ impl LedgerState {
                 self.status.ax_utxos.insert(uid, abar.clone());
                 self.status
                     .owned_ax_utxos
-                    .entry(abar.public_key.clone())
+                    .entry(abar.public_key)
                     .or_insert_with(HashSet::new)
                     .insert(uid);
                 self.status
@@ -444,7 +444,7 @@ impl LedgerState {
         self.status.abar_commitment_versions.push(abar_root_hash);
         let anon_state_commitment_data = AnonStateCommitmentData {
             abar_root_hash,
-            nullifier_root_hash: self.nullifier_set.merkle_root().clone(),
+            nullifier_root_hash: *self.nullifier_set.merkle_root(),
         };
         self.status
             .anon_state_commitment_versions
@@ -899,7 +899,7 @@ impl LedgerState {
                 .iter()
                 .map(|sid| {
                     let abar = self.status.ax_utxos.get(sid).unwrap();
-                    (sid.clone(), abar)
+                    (*sid, abar)
                 })
                 .collect();
         }
@@ -932,12 +932,9 @@ impl LedgerState {
                 .operations
                 .iter()
                 .filter_map(|o| match o {
-                    Operation::TransferAnonAsset(body) => body
-                        .note
-                        .body
-                        .owner_memos
-                        .get(txn_location.1 .0)
-                        .and_then(|f| Some(f.clone())),
+                    Operation::TransferAnonAsset(body) => {
+                        body.note.body.owner_memos.get(txn_location.1 .0).cloned()
+                    }
                     _ => None,
                 })
                 .collect::<Vec<OwnerMemo>>(),
@@ -1174,7 +1171,7 @@ impl LedgerStatus {
         self.ax_utxos
             .iter()
             .filter(|(_, axutxo)| &axutxo.public_key == addr)
-            .map(|(sid, _)| sid)
+            .map(|(sid, _)| sid.to_owned())
             .collect()
     }
 

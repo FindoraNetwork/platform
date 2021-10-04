@@ -499,7 +499,7 @@ impl TransactionBuilder {
         let bar_to_abar =
             BarToAbarOps::new(body, auth_key_pair, txo_sid, self.no_replay_token)?;
         let abar = bar_to_abar.note.body.output.clone();
-        let op = Operation::BarToAbar(bar_to_abar);
+        let op = Operation::BarToAbar(Box::from(bar_to_abar));
         self.txn.add_operation(op);
         Ok((self, abar))
     }
@@ -526,7 +526,7 @@ impl TransactionBuilder {
                 .c(d!())?;
         let note = AXfrNote::generate_note_from_body(body, keypairs).c(d!())?;
         let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
-        let op = Operation::TransferAnonAsset(inp);
+        let op = Operation::TransferAnonAsset(Box::new(inp));
         self.txn.add_operation(op);
         Ok((self, note))
     }

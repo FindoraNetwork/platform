@@ -805,7 +805,7 @@ fn test_update_anon_stores() {
     let oabar = oab
         .amount(123)
         .asset_type(zei::xfr::structs::AssetType([39u8; 32]))
-        .pub_key(pub_key.clone())
+        .pub_key(pub_key.to_owned())
         .finalize(&mut prng, enc_key)
         .unwrap()
         .build()

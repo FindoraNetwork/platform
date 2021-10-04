@@ -568,13 +568,14 @@ impl TxnEffect {
 
     fn add_anon_transfer(&mut self, anon_transfer: &AnonTransferOps) -> Result<()> {
         // verify nullifiers not double spent within txn
-        let nullifier_list = self
-            .axfr_bodies
-            .iter()
-            .flat_map(|ab| ab.inputs.iter().map(|i| i.0))
-            .collect::<Vec<Nullifier>>();
+
         for i in &anon_transfer.note.body.inputs {
-            if nullifier_list.contains(&i.0) {
+            if self
+                .axfr_bodies
+                .iter()
+                .flat_map(|ab| ab.inputs.iter().map(|i| i.0))
+                .any(|n| n == i.0)
+            {
                 return Err(eg!("Transaction has duplicate nullifiers"));
             }
         }
