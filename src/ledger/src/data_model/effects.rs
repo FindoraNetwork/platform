@@ -93,7 +93,7 @@ pub struct TxnEffect {
     /// Staking operations
     pub update_stakers: Vec<UpdateStakerOps>,
     /// Newly create Anon Blind Asset Records
-    pub output_abars: Vec<AnonBlindAssetRecord>,
+    pub bar_conv_abars: Vec<AnonBlindAssetRecord>,
     /// New anon transfer bodies
     pub axfr_bodies: Vec<AXfrBody>,
 }
@@ -561,19 +561,21 @@ impl TxnEffect {
                 lien: None,
             },
         );
-        self.output_abars.push(bar_to_abar.note.body.output.clone());
+        self.bar_conv_abars
+            .push(bar_to_abar.note.body.output.clone());
         Ok(())
     }
 
     fn add_anon_transfer(&mut self, anon_transfer: &AnonTransferOps) -> Result<()> {
         // verify nullifiers not double spent within txn
-        let nullifier_list = self
-            .axfr_bodies
-            .iter()
-            .flat_map(|ab| ab.inputs.iter().map(|i| i.0))
-            .collect::<Vec<Nullifier>>();
+
         for i in &anon_transfer.note.body.inputs {
-            if nullifier_list.contains(&i.0) {
+            if self
+                .axfr_bodies
+                .iter()
+                .flat_map(|ab| ab.inputs.iter().map(|i| i.0))
+                .any(|n| n == i.0)
+            {
                 return Err(eg!("Transaction has duplicate nullifiers"));
             }
         }
@@ -602,7 +604,7 @@ pub struct BlockEffect {
     /// Should line up element-wise with `txns`
     pub txos: Vec<Vec<Option<TxOutput>>>,
     /// New ABARs created
-    pub output_abars: Vec<AnonBlindAssetRecord>,
+    pub output_abars: Vec<Vec<AnonBlindAssetRecord>>,
     /// Which TXOs this consumes
     pub input_txos: HashMap<TxoSID, TxOutput>,
     /// Which new nullifiers are created
@@ -673,8 +675,9 @@ impl BlockEffect {
             self.memo_updates.insert(code, memo);
         }
 
-        for abar in txn_effect.output_abars {
-            self.output_abars.push(abar);
+        let mut current_txn_abars: Vec<AnonBlindAssetRecord> = vec![];
+        for abar in txn_effect.bar_conv_abars {
+            current_txn_abars.push(abar);
         }
 
         for axfr_body in txn_effect.axfr_bodies {
@@ -682,9 +685,10 @@ impl BlockEffect {
                 self.new_nullifiers.push(n);
             }
             for abar in axfr_body.outputs {
-                self.output_abars.push(abar)
+                current_txn_abars.push(abar)
             }
         }
+        self.output_abars.push(current_txn_abars);
 
         Ok(temp_sid)
     }

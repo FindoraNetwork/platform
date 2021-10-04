@@ -592,7 +592,7 @@ pub fn get_oar(owner_kp: &XfrKeyPair, txo_sid: TxoSID) -> Result<OpenAssetRecord
         }
 
         let oar =
-            open_blind_asset_record(&utxo.0.record, &owner_memo, &owner_kp).c(d!())?;
+            open_blind_asset_record(&utxo.0.record, &owner_memo, owner_kp).c(d!())?;
 
         return Ok(oar);
     }
