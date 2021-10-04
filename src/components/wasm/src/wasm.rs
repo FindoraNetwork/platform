@@ -463,7 +463,14 @@ impl TransactionBuilder {
 
     /// Adds an operation to transaction builder which transfer a Anon Blind Asset Record
     ///
-    ///
+    /// @param {AnonBlindAssetRecord} input - input abar
+    /// @param {OwnerMemo} owner_memo - input owner memo
+    /// @param {AXfrKeyPair} from_keypair - abar sender's private key
+    /// @param {XSecretKey} from_dec_key - sender's abar decryption key
+    /// @param {AXfrPubKey} to_pub_key - receiver's Anon public key
+    /// @param {XPublicKey} to_enc_key - receiver's encryption public key
+    /// @param {u64} to_amount - amount to send to receiver
+    #[allow(clippy::too_many_arguments)]
     pub fn add_operation_anon_transfer(
         mut self,
         input: AnonBlindAssetRecord,

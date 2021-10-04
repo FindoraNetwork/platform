@@ -224,6 +224,7 @@ impl LedgerState {
                 txn: txn.clone(),
                 tx_id: txn_sid,
                 txo_ids: txo_sids.clone(),
+                atxo_ids: vec![],
                 merkle_id,
             });
 
@@ -234,12 +235,14 @@ impl LedgerState {
             }
         }
 
-        self.update_anon_stores(
-            block.new_nullifiers.clone(),
-            block.output_abars.clone(),
-            next_txn_sid,
-        )
-        .c(d!())?;
+        tx_block = self
+            .update_anon_stores(
+                block.new_nullifiers.clone(),
+                block.output_abars.clone(),
+                next_txn_sid,
+                tx_block,
+            )
+            .c(d!())?;
 
         // Checkpoint
         let block_merkle_id = self.checkpoint(&block).c(d!())?;
@@ -293,7 +296,8 @@ impl LedgerState {
         new_nullifiers: Vec<Nullifier>,
         output_abars: Vec<Vec<AnonBlindAssetRecord>>,
         backup_next_txn_sid: usize,
-    ) -> Result<()> {
+        mut tx_block: Vec<FinalizedTransaction>,
+    ) -> Result<Vec<FinalizedTransaction>> {
         for n in new_nullifiers.iter() {
             let str =
                 base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
@@ -307,8 +311,9 @@ impl LedgerState {
         }
 
         let mut txn_sid = TxnSID(backup_next_txn_sid);
-        for txn_abars in output_abars.iter() {
+        for (txn_abars, txn) in output_abars.iter().zip(tx_block.iter_mut()) {
             let mut op_position = OutputPosition(0);
+            let mut atxo_ids: Vec<ATxoSID> = vec![];
             for abar in txn_abars {
                 let uid = self.add_abar(&abar).c(d!())?;
                 self.status.ax_utxos.insert(uid, abar.clone());
@@ -321,13 +326,15 @@ impl LedgerState {
                     .ax_txo_to_txn_location
                     .insert(uid, (txn_sid, op_position));
 
+                atxo_ids.push(uid);
                 self.status.next_atxo = ATxoSID(uid.0 + 1);
                 op_position = OutputPosition(op_position.0 + 1);
             }
+            txn.atxo_ids = atxo_ids;
             txn_sid = TxnSID(txn_sid.0 + 1);
         }
 
-        Ok(())
+        Ok(tx_block)
     }
 
     #[inline(always)]
@@ -890,7 +897,7 @@ impl LedgerState {
 
     /// Get all abars with sid which are associated with a diversified public key
     #[allow(dead_code)]
-    fn get_owned_abars(
+    pub fn get_owned_abars(
         &self,
         addr: &AXfrPubKey,
     ) -> Vec<(ATxoSID, AnonBlindAssetRecord)> {
@@ -909,7 +916,7 @@ impl LedgerState {
 
     /// Get the owner memo of a abar by ATxoSID
     #[allow(dead_code)]
-    fn get_abar_memo(&self, ax_id: ATxoSID) -> Option<OwnerMemo> {
+    pub fn get_abar_memo(&self, ax_id: ATxoSID) -> Option<OwnerMemo> {
         let txn_location = self.status.ax_txo_to_txn_location.get(&ax_id).unwrap();
         let authenticated_txn = self.get_transaction(txn_location.0).unwrap();
         let mut memo: Vec<OwnerMemo> = authenticated_txn
