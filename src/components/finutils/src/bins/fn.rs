@@ -473,12 +473,9 @@ fn run() -> Result<()> {
             })
         })?;
         let amounts = m.value_of("amount-file").c(d!()).and_then(|f| {
-            fs::read_to_string(f).c(d!()).and_then(|ams| {
-                Ok(ams
-                    .lines()
-                    .map(|am| String::from(am))
-                    .collect::<Vec<String>>())
-            })
+            fs::read_to_string(f)
+                .c(d!())
+                .map(|ams| ams.lines().map(String::from).collect::<Vec<String>>())
         })?;
 
         if axfr_secret_keys.is_empty()

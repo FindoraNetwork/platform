@@ -524,7 +524,7 @@ impl LedgerState {
     fn init_abar_state(path: &str) -> Result<State<RocksDB>> {
         let fdb = RocksDB::open(path).c(d!("failed to open db"))?;
         let cs = Arc::new(RwLock::new(ChainState::new(fdb, "abar_db".to_string(), 0)));
-        Ok(State::new(cs))
+        Ok(State::new(cs, false))
     }
 
     /// Initialize a new Ledger structure.
@@ -1171,7 +1171,7 @@ impl LedgerStatus {
         self.ax_utxos
             .iter()
             .filter(|(_, axutxo)| &axutxo.public_key == addr)
-            .map(|(sid, _)| sid.clone())
+            .map(|(sid, _)| sid.clone().to_owned())
             .collect()
     }
 
