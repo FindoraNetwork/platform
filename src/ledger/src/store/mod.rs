@@ -46,7 +46,7 @@ use std::{
 use zei::xfr::{
     lib::XfrNotePolicies,
     sig::XfrPublicKey,
-    structs::{OwnerMemo, TracingPolicies, TracingPolicy, XfrAmount},
+    structs::{OwnerMemo, TracingPolicies, TracingPolicy},
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
@@ -722,18 +722,9 @@ impl LedgerState {
         ]
     }
 
+    #[inline(always)]
     fn staking_get_nonconfidential_balance(&self, addr: &XfrPublicKey) -> Result<u64> {
-        self.get_owned_utxos(addr).c(d!()).map(|o| {
-            o.values()
-                .map(|(utxo, _)| {
-                    if let XfrAmount::NonConfidential(am) = utxo.0.record.amount {
-                        am
-                    } else {
-                        0
-                    }
-                })
-                .sum()
-        })
+        self.get_nonconfidential_balance(addr).c(d!())
     }
 
     /// Get a utxo along with the transaction, spent status and commitment data which it belongs
@@ -866,6 +857,12 @@ impl LedgerState {
             }
         }
         Ok(utxos)
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn get_nonconfidential_balance(&self, addr: &XfrPublicKey) -> Option<u64> {
+        self.status.nonconfidential_balances.get(addr)
     }
 
     /// Get unspent utxos owned by a findora account
@@ -1046,6 +1043,7 @@ pub struct LedgerStatus {
     /// the file path of the snapshot
     pub snapshot_file: String,
     utxos: Mapx<TxoSID, Utxo>, // all currently-unspent TXOs
+    nonconfidential_balances: Mapx<XfrPublicKey, u64>,
     owned_utxos: Mapx<XfrPublicKey, HashSet<TxoSID>>,
     /// all spent TXOs
     pub spent_utxos: Mapx<TxoSID, Utxo>,
@@ -1157,6 +1155,8 @@ impl LedgerStatus {
 
     fn create(snapshot_file: &str, snapshot_entries_dir: &str) -> Result<LedgerStatus> {
         let utxos_path = snapshot_entries_dir.to_owned() + "/utxo";
+        let nonconfidential_balances_path =
+            snapshot_entries_dir.to_owned() + "/nonconfidential_balances";
         let spent_utxos_path = snapshot_entries_dir.to_owned() + "/spent_utxos";
         let txo_to_txn_location_path =
             snapshot_entries_dir.to_owned() + "/txo_to_txn_location";
@@ -1172,6 +1172,7 @@ impl LedgerStatus {
             snapshot_file: snapshot_file.to_owned(),
             sliding_set: SlidingSet::<[u8; 8]>::new(TRANSACTION_WINDOW_WIDTH as usize),
             utxos: new_mapx!(utxos_path.as_str()),
+            nonconfidential_balances: new_mapx!(nonconfidential_balances_path.as_str()),
             owned_utxos: new_mapx!(owned_utxos_path.as_str()),
             spent_utxos: new_mapx!(spent_utxos_path.as_str()),
             txo_to_txn_location: new_mapx!(txo_to_txn_location_path.as_str()),
@@ -1424,6 +1425,13 @@ impl LedgerStatus {
                 v.deref_mut().remove(&inp_sid);
             }
             if let Some(v) = self.utxos.remove(&inp_sid) {
+                #[allow(unused_mut)]
+                if let Some(mut bl) = self
+                    .nonconfidential_balances
+                    .get_mut(&v.0.record.public_key)
+                {
+                    *bl -= v.get_nonconfidential_balance();
+                }
                 self.spent_utxos.insert(inp_sid, v);
             }
         }
@@ -1462,7 +1470,15 @@ impl LedgerStatus {
                             .entry(tx_output.record.public_key)
                             .or_insert_with(HashSet::new)
                             .insert(TxoSID(txo_sid));
-                        self.utxos.insert(TxoSID(txo_sid), Utxo(tx_output));
+                        let utxo = Utxo(tx_output);
+                        #[allow(unused_mut)]
+                        if let Some(mut bl) = self
+                            .nonconfidential_balances
+                            .get_mut(&utxo.0.record.public_key)
+                        {
+                            *bl += utxo.get_nonconfidential_balance();
+                        }
+                        self.utxos.insert(TxoSID(txo_sid), utxo);
                         txn_utxo_sids.push(TxoSID(txo_sid));
                     }
                 }
