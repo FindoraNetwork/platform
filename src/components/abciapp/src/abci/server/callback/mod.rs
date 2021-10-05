@@ -255,7 +255,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     let mut state = la.get_committed_state().write();
 
     // will change `struct LedgerStatus`
-    state.set_tendermint_commit(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed) as u64);
+    state.set_tendermint_height(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed) as u64);
 
     // snapshot them finally
     let path = format!("{}/{}", &CFG.ledger_dir, &state.get_status().snapshot_file);
