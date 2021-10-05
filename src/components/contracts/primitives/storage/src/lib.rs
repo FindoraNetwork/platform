@@ -7,11 +7,11 @@ pub mod types;
 #[cfg(test)]
 mod tests;
 
-pub use fp_core::context::Store;
 pub use parking_lot::RwLock;
 pub use paste;
 pub use ruc::{d, Result, RucResult};
 pub use serde::{de::DeserializeOwned, Serialize};
+pub use std::borrow::{Borrow, BorrowMut};
 pub use std::ops::{Deref, DerefMut};
 pub use std::sync::Arc;
 pub use storage::store::traits::StatelessStore;
@@ -113,9 +113,9 @@ macro_rules! generate_storage {
         }
     };
     (
-    	$module:ident,
-    	$name:ident<$t:ident : $bounds:tt>
-    	=> DoubleMap<$key1:ty, $key2:ty, $value:ty>) => {
+        $module:ident,
+        $name:ident<$t:ident : $bounds:tt>
+        => DoubleMap<$key1:ty, $key2:ty, $value:ty>) => {
         $crate::paste::paste! {
             $crate::generate_storage!(@GENERATE_INSTANCE_STRUCT $module, $name);
             #[allow(type_alias_bounds)]

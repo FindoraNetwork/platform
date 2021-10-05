@@ -7,6 +7,7 @@ use fp_traits::account::{AccountAsset, FeeCalculator};
 use fp_types::{actions::template::Action as TemplateAction, actions::Action, U256};
 use fp_utils::tx::EvmRawTxWrapper;
 use module_template::ValueStore;
+pub use std::borrow::Borrow;
 use std::convert::TryInto;
 
 #[test]
@@ -118,7 +119,7 @@ fn test_abci_deliver_tx() {
     assert_eq!(u64::from_be_bytes(resp.data.try_into().unwrap()), 10);
 
     assert_eq!(
-        ValueStore::get(BASE_APP.lock().unwrap().deliver_state.store.clone()),
+        ValueStore::get(BASE_APP.lock().unwrap().deliver_state.state.read().borrow()),
         Some(10)
     );
 }

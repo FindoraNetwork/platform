@@ -151,16 +151,23 @@ where
             U::pre_execute(ctx, &self.function)?;
             (None, Default::default())
         };
-        ctx.store.write().commit_session();
+        ctx.state.write().commit_session();
 
         match U::execute(maybe_who, self.function, ctx) {
             Ok(res) => {
-                Extra::post_execute(ctx, pre, &res)?;
-                ctx.store.write().commit_session();
+                if res.code == 0 {
+                    Extra::post_execute(ctx, pre, &res)?;
+                    ctx.state.write().commit_session();
+                    ctx.db.write().commit_session();
+                } else {
+                    ctx.state.write().discard_session();
+                    ctx.db.write().discard_session();
+                }
                 Ok(res)
             }
             Err(e) => {
-                ctx.store.write().discard_session();
+                ctx.state.write().discard_session();
+                ctx.db.write().discard_session();
                 Err(e)
             }
         }
@@ -170,6 +177,8 @@ where
 /// Action execution result in the transaction.
 #[derive(PartialEq, Debug, Clone, Default)]
 pub struct ActionResult {
+    /// code: 0 is succeed, others is failed
+    pub code: u32,
     /// Data is any data returned from message or handler execution.
     pub data: Vec<u8>,
     /// Log contains the log information from message or handler execution.

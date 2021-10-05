@@ -20,7 +20,6 @@ use abci::{
     ResponseInitChain, ResponseQuery,
 };
 use fp_storage::hash::{Sha256, StorageHasher};
-use fp_traits::base::BaseProvider;
 use lazy_static::lazy_static;
 use ledger::{
     converter::is_convert_tx,
@@ -58,19 +57,17 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let h = state.get_tendermint_height() as i64;
     TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
 
-    if 1 < h {
-        if s.account_base_app.read().current_block_number().is_some() {
-            // Combines ledger state hash and chain state hash
-            let mut commitment_hash = commitment.0.as_ref().to_vec();
-            let mut data_hash = s.account_base_app.write().info(req).last_block_app_hash;
-            commitment_hash.append(&mut data_hash);
-            resp.set_last_block_app_hash(
-                Sha256::hash(commitment_hash.as_slice()).to_vec(),
-            );
-        } else {
-            resp.set_last_block_app_hash(commitment.0.as_ref().to_vec());
-        }
+    // if 1 < h {
+    let mut data_hash = s.account_base_app.write().info(req).last_block_app_hash;
+    if !data_hash.is_empty() {
+        // Combines ledger state hash and chain state hash
+        let mut commitment_hash = commitment.0.as_ref().to_vec();
+        commitment_hash.append(&mut data_hash);
+        resp.set_last_block_app_hash(Sha256::hash(commitment_hash.as_slice()).to_vec());
+    } else {
+        resp.set_last_block_app_hash(commitment.0.as_ref().to_vec());
     }
+    // }
 
     resp.set_last_block_height(h);
 
@@ -256,7 +253,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     let mut state = la.get_committed_state().write();
 
     // will change `struct LedgerStatus`
-    state.set_tendermint_commit(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed) as u64);
+    state.set_tendermint_height(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed) as u64);
 
     // snapshot them finally
     let path = format!("{}/{}", &CFG.ledger_dir, &state.get_status().snapshot_file);
@@ -266,9 +263,9 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
 
     let mut r = ResponseCommit::new();
     let mut commitment = state.get_state_commitment().0.as_ref().to_vec();
-    if s.account_base_app.read().latest_block_number().is_some() {
+    let mut data_hash = s.account_base_app.write().commit(req).data;
+    if !data_hash.is_empty() {
         // Combines ledger state hash and chain state hash
-        let mut data_hash = s.account_base_app.write().commit(req).data;
         commitment.append(&mut data_hash);
         r.set_data(Sha256::hash(commitment.as_slice()).to_vec());
     } else {

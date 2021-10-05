@@ -79,7 +79,7 @@ impl ApiCache {
                 prefix
             )),
             created_assets: new_mapx!(format!("api_cache/{}created_assets", prefix)),
-            issuances: new_mapx!(format!("/api_cache{}issuances", prefix)),
+            issuances: new_mapx!(format!("api_cache/{}issuances", prefix)),
             token_code_issuances: new_mapx!(format!(
                 "api_cache/{}token_code_issuances",
                 prefix

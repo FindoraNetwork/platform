@@ -7,6 +7,7 @@ use evm::{
 };
 use fp_core::{context::Context, macros::Get};
 use fp_evm::{Log, Vicinity};
+use fp_storage::BorrowMut;
 use fp_traits::{account::AccountAsset, evm::BlockHashMapping};
 use fp_utils::timestamp_converter;
 use std::{collections::btree_set::BTreeSet, marker::PhantomData, mem};
@@ -41,7 +42,7 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         self.parent = Some(Box::new(entering));
 
         // start_transaction();
-        self.ctx.store.clone().write().commit_session();
+        self.ctx.state.write().commit_session();
     }
 
     pub fn exit_commit(&mut self) -> Result<(), ExitError> {
@@ -52,7 +53,7 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         self.logs.append(&mut exited.logs);
         self.deletes.append(&mut exited.deletes);
 
-        self.ctx.store.clone().write().commit_session();
+        self.ctx.state.write().commit_session();
         Ok(())
     }
 
@@ -61,7 +62,7 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         mem::swap(&mut exited, self);
         self.metadata.swallow_revert(exited.metadata)?;
 
-        self.ctx.store.clone().write().discard_session();
+        self.ctx.state.write().discard_session();
         Ok(())
     }
 
@@ -70,7 +71,7 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         mem::swap(&mut exited, self);
         self.metadata.swallow_discard(exited.metadata)?;
 
-        self.ctx.store.clone().write().discard_session();
+        self.ctx.state.write().discard_session();
         Ok(())
     }
 
@@ -164,7 +165,7 @@ impl<'context, 'vicinity, 'config, C: Config> Backend
     }
 
     fn block_gas_limit(&self) -> U256 {
-        U256::zero()
+        C::BlockGasLimit::get()
     }
 
     fn chain_id(&self) -> U256 {
@@ -245,7 +246,11 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                 address,
                 index,
             );
-            AccountStorages::remove(self.ctx.store.clone(), &address, &index);
+            AccountStorages::remove(
+                self.ctx.state.write().borrow_mut(),
+                &address,
+                &index,
+            );
         } else {
             log::debug!(
                 target: "evm",
@@ -254,9 +259,12 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                 index,
                 value,
             );
-            if let Err(e) =
-                AccountStorages::insert(self.ctx.store.clone(), &address, &index, &value)
-            {
+            if let Err(e) = AccountStorages::insert(
+                self.ctx.state.write().borrow_mut(),
+                &address,
+                &index,
+                &value,
+            ) {
                 log::error!(
                     target: "evm",
                     "Failed updating storage for {:?} [index: {:?}, value: {:?}], error: {:?}",
@@ -270,7 +278,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
     }
 
     fn reset_storage(&mut self, address: H160) {
-        AccountStorages::remove_prefix(self.ctx.store.clone(), &address);
+        AccountStorages::remove_prefix(self.ctx.state.write().borrow_mut(), &address);
     }
 
     fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>) {

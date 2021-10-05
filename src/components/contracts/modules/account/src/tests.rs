@@ -1,6 +1,7 @@
 use crate::storage::*;
 use crate::App;
 use fp_core::{account::SmartAccount, context::Context};
+use fp_storage::{Borrow, BorrowMut};
 use fp_traits::account::AccountAsset;
 use fp_types::actions::account::MintOutput;
 use fp_types::crypto::Address;
@@ -11,7 +12,7 @@ use rand_chacha::ChaChaRng;
 use std::env::temp_dir;
 use std::sync::Arc;
 use std::time::SystemTime;
-use storage::db::FinDB;
+use storage::db::{FinDB, RocksDB};
 use storage::state::ChainState;
 use zei::xfr::sig::XfrKeyPair;
 
@@ -30,7 +31,17 @@ fn setup() -> Context {
         100,
     )));
 
-    Context::new(chain_state)
+    let mut rocks_path = temp_dir();
+    rocks_path.push(format!("temp-rocks-db–{}", time));
+
+    let rdb = RocksDB::open(rocks_path).unwrap();
+    let chain_db = Arc::new(RwLock::new(ChainState::new(
+        rdb,
+        "temp_rocks_db".to_string(),
+        0,
+    )));
+
+    Context::new(chain_state, chain_db)
 }
 
 #[test]
@@ -50,13 +61,18 @@ fn test_accounts_set_get() {
     };
 
     //Call set and get
-    assert!(AccountStore::insert(ctx.store.clone(), &address, &account).is_ok());
+    assert!(
+        AccountStore::insert(ctx.state.write().borrow_mut(), &address, &account).is_ok()
+    );
     assert_eq!(
         account,
-        AccountStore::get(ctx.store.clone(), &address).unwrap()
+        AccountStore::get(ctx.state.read().borrow(), &address).unwrap()
     );
-    assert!(ctx.store.write().commit(1).is_ok());
-    assert_eq!(account, AccountStore::get(ctx.store, &address).unwrap());
+    assert!(ctx.state.write().commit(1).is_ok());
+    assert_eq!(
+        account,
+        AccountStore::get(ctx.state.read().borrow(), &address).unwrap()
+    );
 }
 
 #[test]
@@ -76,9 +92,11 @@ fn test_account_of() {
     };
 
     //Call set and account_of
-    assert!(AccountStore::insert(ctx.store.clone(), &address, &account).is_ok());
+    assert!(
+        AccountStore::insert(ctx.state.write().borrow_mut(), &address, &account).is_ok()
+    );
     assert_eq!(account, App::<()>::account_of(&ctx, &address).unwrap());
-    assert!(ctx.store.write().commit(2).is_ok());
+    assert!(ctx.state.write().commit(2).is_ok());
     assert_eq!(account, App::<()>::account_of(&ctx, &address).unwrap());
 }
 
@@ -99,9 +117,11 @@ fn test_account_balance() {
     };
 
     //Call set and balance
-    assert!(AccountStore::insert(ctx.store.clone(), &address, &account).is_ok());
+    assert!(
+        AccountStore::insert(ctx.state.write().borrow_mut(), &address, &account).is_ok()
+    );
     assert_eq!(account.balance, App::<()>::balance(&ctx, &address));
-    assert!(ctx.store.write().commit(3).is_ok());
+    assert!(ctx.state.write().commit(3).is_ok());
     assert_eq!(account.balance, App::<()>::balance(&ctx, &address));
 }
 
@@ -122,9 +142,11 @@ fn test_account_nonce() {
     };
 
     //Call set and nonce
-    assert!(AccountStore::insert(ctx.store.clone(), &address, &account).is_ok());
+    assert!(
+        AccountStore::insert(ctx.state.write().borrow_mut(), &address, &account).is_ok()
+    );
     assert_eq!(account.nonce, App::<()>::nonce(&ctx, &address));
-    assert!(ctx.store.write().commit(4).is_ok());
+    assert!(ctx.state.write().commit(4).is_ok());
     assert_eq!(account.nonce, App::<()>::nonce(&ctx, &address));
 }
 
@@ -145,12 +167,14 @@ fn test_account_inc_nonce() {
     };
 
     //Call set and inc_nonce, commit and check nonce again
-    assert!(AccountStore::insert(ctx.store.clone(), &address, &account).is_ok());
+    assert!(
+        AccountStore::insert(ctx.state.write().borrow_mut(), &address, &account).is_ok()
+    );
     assert_eq!(
         account.nonce + 1,
         App::<()>::inc_nonce(&ctx, &address).unwrap()
     );
-    assert!(ctx.store.write().commit(3).is_ok());
+    assert!(ctx.state.write().commit(3).is_ok());
     assert_eq!(account.nonce + 1, App::<()>::nonce(&ctx, &address));
 }
 
@@ -173,8 +197,12 @@ fn test_account_transfer() {
     acct2.balance = 200.into();
 
     //Setup accounts in database
-    assert!(AccountStore::insert(ctx.store.clone(), &address1, &acct1).is_ok());
-    assert!(AccountStore::insert(ctx.store.clone(), &address2, &acct2).is_ok());
+    assert!(
+        AccountStore::insert(ctx.state.write().borrow_mut(), &address1, &acct1).is_ok()
+    );
+    assert!(
+        AccountStore::insert(ctx.state.write().borrow_mut(), &address2, &acct2).is_ok()
+    );
 
     //Transfer 100 from acct2 to acct1
     assert!(App::<()>::transfer(&ctx, &address2, &address1, 100.into()).is_ok());
@@ -207,7 +235,9 @@ fn test_account_mint() {
     };
 
     //Call set and inc_nonce, commit and check nonce again
-    assert!(AccountStore::insert(ctx.store.clone(), &address, &account).is_ok());
+    assert!(
+        AccountStore::insert(ctx.state.write().borrow_mut(), &address, &account).is_ok()
+    );
 
     //MintOutputs FRA for account
     assert!(App::<()>::mint(&ctx, &address, 500.into()).is_ok());
@@ -231,7 +261,9 @@ fn test_account_burn() {
     };
 
     //Add account to database
-    assert!(AccountStore::insert(ctx.store.clone(), &address, &account).is_ok());
+    assert!(
+        AccountStore::insert(ctx.state.write().borrow_mut(), &address, &account).is_ok()
+    );
 
     //burn FRA
     assert!(App::<()>::burn(&ctx, &address, 200.into()).is_ok());
@@ -255,7 +287,9 @@ fn test_account_withdraw() {
     };
 
     //Add account to database
-    assert!(AccountStore::insert(ctx.store.clone(), &address, &account).is_ok());
+    assert!(
+        AccountStore::insert(ctx.state.write().borrow_mut(), &address, &account).is_ok()
+    );
 
     //Withdraw some funds
     assert!(App::<()>::withdraw(&ctx, &address, 300.into()).is_ok());
@@ -282,7 +316,9 @@ fn test_account_refund() {
     };
 
     //Add account to database
-    assert!(AccountStore::insert(ctx.store.clone(), &address, &account).is_ok());
+    assert!(
+        AccountStore::insert(ctx.state.write().borrow_mut(), &address, &account).is_ok()
+    );
 
     //Refund an amount to address
     assert!(App::<()>::refund(&ctx, &address, 700.into()).is_ok());
@@ -312,9 +348,12 @@ fn test_add_mint() {
     //Add mint outputs and check if it was stored correctly
     let mut ref_outputs = outputs.clone();
     assert!(App::<()>::add_mint(&ctx, outputs).is_ok());
-    assert_eq!(MintOutputs::get(ctx.store.clone()).unwrap(), ref_outputs);
+    assert_eq!(
+        MintOutputs::get(ctx.db.read().borrow()).unwrap(),
+        ref_outputs
+    );
 
-    assert!(ctx.store.write().commit(100).is_ok());
+    assert!(ctx.state.write().commit(100).is_ok());
 
     //Append mint outputs and read if it was stored
     let mut new_outputs = Vec::new();
@@ -334,7 +373,10 @@ fn test_add_mint() {
 
     //Confirm new output was appended to output list
     ref_outputs.append(&mut ref_new_outputs);
-    assert_eq!(MintOutputs::get(ctx.store).unwrap(), ref_outputs);
+    assert_eq!(
+        MintOutputs::get(ctx.db.read().borrow()).unwrap(),
+        ref_outputs
+    );
 }
 
 #[test]

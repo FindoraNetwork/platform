@@ -19,7 +19,7 @@ fn setup_temp_db() -> Arc<RwLock<State<TempFinDB>>> {
         "temp_db".to_string(),
         100,
     )));
-    Arc::new(RwLock::new(State::new(chain_state)))
+    Arc::new(RwLock::new(State::new(chain_state, true)))
 }
 
 #[test]
@@ -42,13 +42,13 @@ fn storage_value_works() {
 
     let state = setup_temp_db();
 
-    assert!(Number::put(state.clone(), &10).is_ok());
+    assert!(Number::put(state.write().borrow_mut(), &10).is_ok());
 
-    assert_eq!(Number::get(state.clone()), Some(10));
-    assert!(Number::exists(state.clone()));
-    Number::delete(state.clone());
-    assert_eq!(Number::get(state.clone()), None);
-    assert!(!Number::exists(state));
+    assert_eq!(Number::get(state.read().borrow()), Some(10));
+    assert!(Number::exists(state.read().borrow()));
+    Number::delete(state.write().borrow_mut());
+    assert_eq!(Number::get(state.read().borrow()), None);
+    assert!(!Number::exists(state.read().borrow()));
 }
 
 #[test]
@@ -59,21 +59,30 @@ fn storage_map_test() {
     assert_eq!(Account::storage_prefix(), b"Account");
 
     let state = setup_temp_db();
-    assert!(Account::insert(state.clone(), &"a".to_string(), &10).is_ok());
-    assert!(Account::insert(state.clone(), &"b".to_string(), &20).is_ok());
-    assert!(Account::insert(state.clone(), &"c".to_string(), &30).is_ok());
+    assert!(Account::insert(state.write().borrow_mut(), &"a".to_string(), &10).is_ok());
+    assert!(Account::insert(state.write().borrow_mut(), &"b".to_string(), &20).is_ok());
+    assert!(Account::insert(state.write().borrow_mut(), &"c".to_string(), &30).is_ok());
 
-    assert_eq!(Account::get(state.clone(), &"a".to_string()), Some(10));
-    assert!(Account::contains_key(state.clone(), &"a".to_string()));
-    Account::remove(state.clone(), &"a".to_string());
-    assert_eq!(Account::get(state.clone(), &"a".to_string()), None);
-    assert!(!Account::contains_key(state.clone(), &"a".to_string()),);
+    assert_eq!(
+        Account::get(state.read().borrow(), &"a".to_string()),
+        Some(10)
+    );
+    assert!(Account::contains_key(
+        state.read().borrow(),
+        &"a".to_string()
+    ));
+    Account::remove(state.write().borrow_mut(), &"a".to_string());
+    assert_eq!(Account::get(state.read().borrow(), &"a".to_string()), None);
+    assert!(!Account::contains_key(
+        state.read().borrow(),
+        &"a".to_string()
+    ),);
 
-    let kvs = Account::iterate(state.clone());
+    let kvs = Account::iterate(state.read().borrow());
     assert_eq!(kvs, vec![("b".to_string(), 20), ("c".to_string(), 30)]);
 
     state.write().commit(1).unwrap();
-    let kvs = Account::iterate(state);
+    let kvs = Account::iterate(state.read().borrow());
     assert_eq!(kvs, vec![("b".to_string(), 20), ("c".to_string(), 30)]);
 }
 
@@ -85,28 +94,28 @@ fn storage_double_map_test() {
     assert_eq!(Data::storage_prefix(), b"Data");
 
     let state = setup_temp_db();
-    assert!(Data::insert(state.clone(), &1, &2, &10).is_ok());
-    assert!(Data::insert(state.clone(), &1, &3, &20).is_ok());
-    assert!(Data::insert(state.clone(), &2, &3, &30).is_ok());
-    assert!(Data::insert(state.clone(), &2, &4, &40).is_ok());
+    assert!(Data::insert(state.write().borrow_mut(), &1, &2, &10).is_ok());
+    assert!(Data::insert(state.write().borrow_mut(), &1, &3, &20).is_ok());
+    assert!(Data::insert(state.write().borrow_mut(), &2, &3, &30).is_ok());
+    assert!(Data::insert(state.write().borrow_mut(), &2, &4, &40).is_ok());
 
-    assert_eq!(Data::get(state.clone(), &1, &2), Some(10));
-    assert!(Data::contains_key(state.clone(), &1, &2));
-    Data::remove(state.clone(), &1, &2);
-    assert_eq!(Data::get(state.clone(), &1, &2), None);
-    assert!(!Data::contains_key(state.clone(), &1, &2));
+    assert_eq!(Data::get(state.read().borrow(), &1, &2), Some(10));
+    assert!(Data::contains_key(state.read().borrow(), &1, &2));
+    Data::remove(state.write().borrow_mut(), &1, &2);
+    assert_eq!(Data::get(state.read().borrow(), &1, &2), None);
+    assert!(!Data::contains_key(state.read().borrow(), &1, &2));
 
-    let kvs = Data::iterate_prefix(state.clone(), &1);
+    let kvs = Data::iterate_prefix(state.read().borrow(), &1);
     assert_eq!(kvs, vec![(3, 20)]);
 
-    let kvs = Data::iterate_prefix(state.clone(), &2);
+    let kvs = Data::iterate_prefix(state.read().borrow(), &2);
     assert_eq!(kvs, vec![(3, 30), (4, 40)]);
 
-    Data::remove_prefix(state.clone(), &2);
-    let kvs = Data::iterate_prefix(state.clone(), &2);
+    Data::remove_prefix(state.write().borrow_mut(), &2);
+    let kvs = Data::iterate_prefix(state.read().borrow(), &2);
     assert_eq!(kvs, vec![]);
 
     state.write().commit(1).unwrap();
-    let kvs = Data::iterate_prefix(state, &1);
+    let kvs = Data::iterate_prefix(state.read().borrow(), &1);
     assert_eq!(kvs, vec![(3, 20)]);
 }

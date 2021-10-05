@@ -3,6 +3,7 @@ use crate::{App, Config};
 use fp_core::{
     account::SmartAccount, context::Context, ensure, transaction::ActionResult,
 };
+use fp_storage::{Borrow, BorrowMut};
 use fp_traits::{
     account::AccountAsset,
     evm::{DecimalsMapping, EthereumDecimalsMapping},
@@ -14,26 +15,26 @@ use ruc::*;
 
 impl<C: Config> AccountAsset<Address> for App<C> {
     fn account_of(ctx: &Context, who: &Address) -> Option<SmartAccount> {
-        AccountStore::get(ctx.store.clone(), who)
+        AccountStore::get(ctx.state.read().borrow(), who)
     }
 
     fn balance(ctx: &Context, who: &Address) -> U256 {
         let who_account: SmartAccount =
-            AccountStore::get(ctx.store.clone(), who).unwrap_or_default();
+            AccountStore::get(ctx.state.read().borrow(), who).unwrap_or_default();
         who_account.balance
     }
 
     fn nonce(ctx: &Context, who: &Address) -> U256 {
         let who_account: SmartAccount =
-            AccountStore::get(ctx.store.clone(), who).unwrap_or_default();
+            AccountStore::get(ctx.state.read().borrow(), who).unwrap_or_default();
         who_account.nonce
     }
 
     fn inc_nonce(ctx: &Context, who: &Address) -> Result<U256> {
-        let mut sa: SmartAccount =
-            AccountStore::get(ctx.store.clone(), who).c(d!("account does not exist"))?;
+        let mut sa: SmartAccount = AccountStore::get(ctx.state.read().borrow(), who)
+            .c(d!("account does not exist"))?;
         sa.nonce = sa.nonce.saturating_add(U256::one());
-        AccountStore::insert(ctx.store.clone(), who, &sa).map(|()| sa.nonce)
+        AccountStore::insert(ctx.state.write().borrow_mut(), who, &sa).map(|()| sa.nonce)
     }
 
     fn transfer(
@@ -46,11 +47,11 @@ impl<C: Config> AccountAsset<Address> for App<C> {
             return Ok(());
         }
         let mut from_account: SmartAccount =
-            AccountStore::get(ctx.store.clone(), sender)
+            AccountStore::get(ctx.state.read().borrow(), sender)
                 .c(d!("sender does not exist"))?;
 
         let mut to_account: SmartAccount =
-            AccountStore::get(ctx.store.clone(), dest).unwrap_or_default();
+            AccountStore::get(ctx.state.read().borrow(), dest).unwrap_or_default();
         from_account.balance = from_account
             .balance
             .checked_sub(balance)
@@ -59,16 +60,16 @@ impl<C: Config> AccountAsset<Address> for App<C> {
             .balance
             .checked_add(balance)
             .c(d!("balance overflow"))?;
-        AccountStore::insert(ctx.store.clone(), sender, &from_account)?;
-        AccountStore::insert(ctx.store.clone(), dest, &to_account)
+        AccountStore::insert(ctx.state.write().borrow_mut(), sender, &from_account)?;
+        AccountStore::insert(ctx.state.write().borrow_mut(), dest, &to_account)
     }
 
     fn mint(ctx: &Context, target: &Address, balance: U256) -> Result<()> {
         let mut target_account: SmartAccount =
-            AccountStore::get(ctx.store.clone(), target).unwrap_or_default();
+            AccountStore::get(ctx.state.read().borrow(), target).unwrap_or_default();
         target_account.balance = target_account.balance.checked_add(balance).c(d!())?;
 
-        AccountStore::insert(ctx.store.clone(), target, &target_account)
+        AccountStore::insert(ctx.state.write().borrow_mut(), target, &target_account)
     }
 
     fn burn(ctx: &Context, target: &Address, balance: U256) -> Result<()> {
@@ -79,24 +80,24 @@ impl<C: Config> AccountAsset<Address> for App<C> {
             .checked_sub(balance)
             .c(d!("insufficient balance"))?;
 
-        AccountStore::insert(ctx.store.clone(), target, &target_account)
+        AccountStore::insert(ctx.state.write().borrow_mut(), target, &target_account)
     }
 
     fn withdraw(ctx: &Context, who: &Address, value: U256) -> Result<()> {
-        let mut sa: SmartAccount =
-            AccountStore::get(ctx.store.clone(), who).c(d!("account does not exist"))?;
+        let mut sa: SmartAccount = AccountStore::get(ctx.state.read().borrow(), who)
+            .c(d!("account does not exist"))?;
         sa.balance = sa
             .balance
             .checked_sub(value)
             .c(d!("insufficient balance"))?;
-        AccountStore::insert(ctx.store.clone(), who, &sa)
+        AccountStore::insert(ctx.state.write().borrow_mut(), who, &sa)
     }
 
     fn refund(ctx: &Context, who: &Address, value: U256) -> Result<()> {
-        let mut sa: SmartAccount =
-            AccountStore::get(ctx.store.clone(), who).c(d!("account does not exist"))?;
+        let mut sa: SmartAccount = AccountStore::get(ctx.state.read().borrow(), who)
+            .c(d!("account does not exist"))?;
         sa.balance = sa.balance.checked_add(value).c(d!("balance overflow"))?;
-        AccountStore::insert(ctx.store.clone(), who, &sa)
+        AccountStore::insert(ctx.state.write().borrow_mut(), who, &sa)
     }
 }
 
@@ -134,22 +135,23 @@ impl<C: Config> App<C> {
     }
 
     pub(crate) fn add_mint(ctx: &Context, mut outputs: Vec<MintOutput>) -> Result<()> {
-        let ops = if let Some(mut ori_outputs) = MintOutputs::get(ctx.store.clone()) {
+        let ops = if let Some(mut ori_outputs) = MintOutputs::get(ctx.db.read().borrow())
+        {
             ori_outputs.append(&mut outputs);
             ori_outputs
         } else {
             outputs
         };
-        MintOutputs::put(ctx.store.clone(), &ops)
+        MintOutputs::put(ctx.db.write().borrow_mut(), &ops)
     }
 
     pub fn consume_mint(ctx: &Context, size: usize) -> Result<Vec<MintOutput>> {
-        let mut outputs = MintOutputs::get(ctx.store.clone()).unwrap_or_default();
+        let mut outputs = MintOutputs::get(ctx.db.read().borrow()).unwrap_or_default();
         if outputs.len() > size {
             let vec2 = outputs.split_off(size);
-            MintOutputs::put(ctx.store.clone(), &vec2)?;
+            MintOutputs::put(ctx.db.write().borrow_mut(), &vec2)?;
         } else {
-            MintOutputs::delete(ctx.store.clone());
+            MintOutputs::delete(ctx.db.write().borrow_mut());
         }
         Ok(outputs)
     }

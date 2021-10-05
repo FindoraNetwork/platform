@@ -403,7 +403,7 @@ impl LedgerState {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn set_tendermint_commit(&mut self, tendermint_h: u64) {
+    pub fn set_tendermint_height(&mut self, tendermint_h: u64) {
         self.status.td_commit_height = tendermint_h;
     }
 
@@ -577,18 +577,24 @@ impl LedgerState {
             if let Ok(old_blocks) =
                 LedgerState::load_transaction_log(&txn_log_path).c(d!())
             {
-                for logged_block in old_blocks.into_iter() {
-                    let mut be = ledger.start_block().c(d!())?;
-                    for txn in logged_block.block {
-                        let te = TxnEffect::compute_effect(txn).c(d!())?;
-                        ledger.apply_transaction(&mut be, te, true).c(d!())?;
+                let cnt = old_blocks.len();
+                if 0 < cnt {
+                    ledger.set_tendermint_height(
+                        cnt as u64 + old_blocks[cnt - 1].state.pulse_count,
+                    );
+                    for b in old_blocks.into_iter() {
+                        let mut be = ledger.start_block().c(d!())?;
+                        for txn in b.block {
+                            let te = TxnEffect::compute_effect(txn).c(d!())?;
+                            ledger.apply_transaction(&mut be, te, true).c(d!())?;
+                        }
+                        ledger.finish_block(be).c(d!())?;
                     }
-                    ledger.finish_block(be).c(d!())?;
                 }
             }
         }
 
-        let h = ledger.get_tendermint_height() as u64;
+        let h = ledger.get_tendermint_height();
         ledger.get_staking_mut().set_custom_block_height(h);
         omit!(ledger.utxo_map.write().compute_checksum());
         ledger.fast_invariant_check().c(d!())?;
@@ -1180,7 +1186,7 @@ impl LedgerStatus {
             state_commitment_data: None,
             block_commit_count: 0,
             staking: Staking::new(),
-            td_commit_height: 1,
+            td_commit_height: 0,
         };
 
         Ok(ledger)

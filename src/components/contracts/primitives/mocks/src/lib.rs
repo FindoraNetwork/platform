@@ -44,7 +44,7 @@ pub fn test_mint_balance(who: &Address, balance: U256, height: u64) {
         .lock()
         .unwrap()
         .deliver_state
-        .store
+        .state
         .clone()
         .write()
         .commit(height)

@@ -41,55 +41,55 @@ impl<T: Default> Get<T> for () {
 /// ```
 #[macro_export]
 macro_rules! parameter_types {
-	(
-		$( #[ $attr:meta ] )*
-		$vis:vis const $name:ident: $type:ty = $value:expr;
-		$( $rest:tt )*
-	) => (
-		$( #[ $attr ] )*
-		$vis struct $name;
-		$crate::parameter_types!(IMPL_CONST $name , $type , $value);
-		$crate::parameter_types!( $( $rest )* );
-	);
-	(
-		$( #[ $attr:meta ] )*
-		$vis:vis $name:ident: $type:ty = $value:expr;
-		$( $rest:tt )*
-	) => (
-		$( #[ $attr ] )*
-		$vis struct $name;
-		$crate::parameter_types!(IMPL $name, $type, $value);
-		$crate::parameter_types!( $( $rest )* );
-	);
-	() => ();
-	(IMPL_CONST $name:ident, $type:ty, $value:expr) => {
-		impl $name {
-			/// Returns the value of this parameter type.
-			pub const fn get() -> $type {
-				$value
-			}
-		}
+    (
+        $( #[ $attr:meta ] )*
+        $vis:vis const $name:ident: $type:ty = $value:expr;
+        $( $rest:tt )*
+    ) => (
+        $( #[ $attr ] )*
+        $vis struct $name;
+        $crate::parameter_types!(IMPL_CONST $name , $type , $value);
+        $crate::parameter_types!( $( $rest )* );
+    );
+    (
+        $( #[ $attr:meta ] )*
+        $vis:vis $name:ident: $type:ty = $value:expr;
+        $( $rest:tt )*
+    ) => (
+        $( #[ $attr ] )*
+        $vis struct $name;
+        $crate::parameter_types!(IMPL $name, $type, $value);
+        $crate::parameter_types!( $( $rest )* );
+    );
+    () => ();
+    (IMPL_CONST $name:ident, $type:ty, $value:expr) => {
+        impl $name {
+            /// Returns the value of this parameter type.
+            pub const fn get() -> $type {
+                $value
+            }
+        }
 
-		impl<I: From<$type>> $crate::macros::Get<I> for $name {
-			fn get() -> I {
-				I::from($value)
-			}
-		}
-	};
-	(IMPL $name:ident, $type:ty, $value:expr) => {
-		impl $name {
-			/// Returns the value of this parameter type.
-			pub fn get() -> $type {
-				$value
-			}
-		}
+        impl<I: From<$type>> $crate::macros::Get<I> for $name {
+            fn get() -> I {
+                I::from($value)
+            }
+        }
+    };
+    (IMPL $name:ident, $type:ty, $value:expr) => {
+        impl $name {
+            /// Returns the value of this parameter type.
+            pub fn get() -> $type {
+                $value
+            }
+        }
 
-		impl<I: From<$type>> $crate::macros::Get<I> for $name {
-			fn get() -> I {
-				I::from($value)
-			}
-		}
-	};
+        impl<I: From<$type>> $crate::macros::Get<I> for $name {
+            fn get() -> I {
+                I::from($value)
+            }
+        }
+    };
 }
 
 /// Return Err of the expression: `return Err($expression);`.
