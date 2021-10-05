@@ -512,7 +512,7 @@ impl TransactionBuilder {
         outputs: &[OpenAnonBlindAssetRecord],
         input_keypairs: &[AXfrKeyPair],
     ) -> Result<(&mut Self, AXfrNote)> {
-        let mut prng = ChaChaRng::from_seed([0u8; 32]); // TODO: removing this, CRS would be pre generated in a file
+        let mut prng = ChaChaRng::from_entropy(); // TODO: removing this, CRS would be pre generated in a file
         let depth: usize = 41;
         let user_params = UserParams::new(
             inputs.len(),

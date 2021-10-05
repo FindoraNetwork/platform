@@ -449,3 +449,79 @@ subcommands:
             required: true
   - gen-eth-key:
       about: Generate an Ethereum address
+  - anon-transfer:
+      about: Perform Anonymous Transfer
+      args:
+        - axfr-secretkey:
+            help: Axfr secret key of the sender
+            short: s
+            long: axfr-secretkey
+            takes_value: true
+            value_name: SECRET KEY
+            required: true
+        - decryption-key:
+            help: Decryption Key for anon transfer
+            short: d
+            long: decryption-key
+            takes_value: true
+            value_name: DECRYPTION KEY
+            required: true
+        - to-axfr-public-key:
+            help: Axfr public key of the receiver
+            short: tp
+            long: to-axfr-public-key
+            takes_value: true
+            value_name: PUBLIC KEY
+            required: true
+        - to-enc-key:
+            help: Receiver encryption key for anon transfer
+            short: te
+            long: to-enc-key
+            takes_value: true
+            value_name: ENCRYPTION KEY
+            required: true  
+        - amount:
+            help: how much units to transfer
+            short: n
+            long: amount
+            takes_value: true
+            value_name: Amount
+            required: true      
+  - anon-transfer-batch:
+      about: Anonymous Transfer of tokens from multiple inputs to multiple outputs
+      args:
+        - axfr-secretkey-file:
+            help: Axfr secret keys of the sender
+            short: s
+            long: axfr-secretkey-file
+            takes_value: true
+            value_name: SECRET KEY
+            required: true
+        - decryption-key-file:
+            help: Decryption Keys for anon transfer
+            short: d
+            long: decryption-key-file
+            takes_value: true
+            value_name: DECRYPTION KEY
+            required: true
+        - to-axfr-public-key-file:
+            help: Axfr public keys of the receivers
+            short: tp
+            long: to-axfr-public-key-file
+            takes_value: true
+            value_name: PUBLIC KEY
+            required: true
+        - to-enc-key-file:
+            help: Receivers encryption keys for anon transfer
+            short: te
+            long: to-enc-key-file
+            takes_value: true
+            value_name: ENCRYPTION KEY
+            required: true           
+        - amount-file:
+            help: how much units to transfer for each receiver
+            short: n
+            long: amount-file
+            takes_value: true
+            value_name: Amount
+            required: true

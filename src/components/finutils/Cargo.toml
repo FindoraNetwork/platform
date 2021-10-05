@@ -24,6 +24,7 @@ wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"] }
 
 zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
 crypto = { package = "crypto", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zeialgebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 
 ledger = { path = "../../ledger" }

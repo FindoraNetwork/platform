@@ -411,6 +411,90 @@ fn run() -> Result<()> {
             "Encryption Key: {}",
             base64::encode(public_key.zei_to_bytes().as_slice())
         );
+    } else if let Some(m) = matches.subcommand_matches("anon-transfer") {
+        let axfr_secret_key = m.value_of("axfr-secretkey");
+        let dec_key = m.value_of("decryption-key");
+        let to_axfr_public_key = m.value_of("to-axfr-public-key");
+        let to_enc_key = m.value_of("to-enc-key");
+        let amount = m.value_of("amount");
+
+        if axfr_secret_key.is_none()
+            || dec_key.is_none()
+            || to_axfr_public_key.is_none()
+            || to_enc_key.is_none()
+            || amount.is_none()
+        {
+            println!("{}", m.usage());
+        } else {
+            common::gen_oabar_add_op(
+                axfr_secret_key.unwrap(),
+                dec_key.unwrap(),
+                amount.unwrap(),
+                to_axfr_public_key.unwrap(),
+                to_enc_key.unwrap(),
+            )
+            .c(d!())?;
+        }
+    } else if let Some(m) = matches.subcommand_matches("anon-transfer-batch") {
+        let axfr_secret_keys =
+            m.value_of("axfr-secretkey-file").c(d!()).and_then(|f| {
+                fs::read_to_string(f).c(d!()).and_then(|sks| {
+                    sks.lines()
+                        .map(|sk| wallet::anon_secret_key_from_base64(sk.trim()))
+                        .collect::<Result<Vec<_>>>()
+                        .c(d!("invalid file"))
+                })
+            })?;
+        let dec_keys = m.value_of("decryption-key-file").c(d!()).and_then(|f| {
+            fs::read_to_string(f).c(d!()).and_then(|dks| {
+                dks.lines()
+                    .map(|dk| wallet::x_secret_key_from_base64(dk.trim()))
+                    .collect::<Result<Vec<_>>>()
+                    .c(d!("invalid file"))
+            })
+        })?;
+        let to_axfr_public_keys = m
+            .value_of("to-axfr-public-key-file")
+            .c(d!())
+            .and_then(|f| {
+                fs::read_to_string(f).c(d!()).and_then(|pks| {
+                    pks.lines()
+                        .map(|pk| wallet::anon_public_key_from_base64(pk.trim()))
+                        .collect::<Result<Vec<_>>>()
+                        .c(d!("invalid file"))
+                })
+            })?;
+        let to_enc_keys = m.value_of("to-enc-key-file").c(d!()).and_then(|f| {
+            fs::read_to_string(f).c(d!()).and_then(|eks| {
+                eks.lines()
+                    .map(|ek| wallet::x_public_key_from_base64(ek.trim()))
+                    .collect::<Result<Vec<_>>>()
+                    .c(d!("invalid file"))
+            })
+        })?;
+        let amounts = m.value_of("amount-file").c(d!()).and_then(|f| {
+            fs::read_to_string(f)
+                .c(d!())
+                .map(|ams| ams.lines().map(String::from).collect::<Vec<String>>())
+        })?;
+
+        if axfr_secret_keys.is_empty()
+            || dec_keys.is_empty()
+            || to_axfr_public_keys.is_empty()
+            || to_enc_keys.is_empty()
+            || amounts.is_empty()
+        {
+            println!("{}", m.usage());
+        } else {
+            common::gen_oabar_add_op_x(
+                axfr_secret_keys,
+                dec_keys,
+                to_axfr_public_keys,
+                to_enc_keys,
+                amounts,
+            )
+            .c(d!())?;
+        }
     } else {
         println!("{}", matches.usage());
     }
