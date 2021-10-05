@@ -57,19 +57,17 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let h = state.get_tendermint_height() as i64;
     TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
 
-    if 1 < h {
-        let mut data_hash = s.account_base_app.write().info(req).last_block_app_hash;
-        if !data_hash.is_empty() {
-            // Combines ledger state hash and chain state hash
-            let mut commitment_hash = commitment.0.as_ref().to_vec();
-            commitment_hash.append(&mut data_hash);
-            resp.set_last_block_app_hash(
-                Sha256::hash(commitment_hash.as_slice()).to_vec(),
-            );
-        } else {
-            resp.set_last_block_app_hash(commitment.0.as_ref().to_vec());
-        }
+    // if 1 < h {
+    let mut data_hash = s.account_base_app.write().info(req).last_block_app_hash;
+    if !data_hash.is_empty() {
+        // Combines ledger state hash and chain state hash
+        let mut commitment_hash = commitment.0.as_ref().to_vec();
+        commitment_hash.append(&mut data_hash);
+        resp.set_last_block_app_hash(Sha256::hash(commitment_hash.as_slice()).to_vec());
+    } else {
+        resp.set_last_block_app_hash(commitment.0.as_ref().to_vec());
     }
+    // }
 
     resp.set_last_block_height(h);
 

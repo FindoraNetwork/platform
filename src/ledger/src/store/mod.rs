@@ -1186,7 +1186,7 @@ impl LedgerStatus {
             state_commitment_data: None,
             block_commit_count: 0,
             staking: Staking::new(),
-            td_commit_height: 1,
+            td_commit_height: 0,
         };
 
         Ok(ledger)
