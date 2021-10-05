@@ -1,6 +1,9 @@
+use crate::runtime::stack::FindoraStackState;
+use ethereum_types::H160;
 use evm::{executor::PrecompileOutput, Context, ExitError, ExitSucceed};
 use impl_trait_for_tuples::impl_for_tuples;
-use primitive_types::H160;
+
+pub use fp_core::context::Context as FinState;
 
 /// Custom precompiles to be used by EVM engine.
 pub trait PrecompileSet {
@@ -9,11 +12,13 @@ pub trait PrecompileSet {
     /// Otherwise, calculate the amount of gas needed with given `input` and
     /// `target_gas`. Return `Some(Ok(status, output, gas_used))` if the execution
     /// is successful. Otherwise return `Some(Err(_))`.
-    fn execute(
+    fn execute<'context, 'vicinity, 'config, T>(
         address: H160,
         input: &[u8],
         target_gas: Option<u64>,
         context: &Context,
+        state: &mut FindoraStackState<'context, 'vicinity, 'config, T>,
+        is_static: bool,
     ) -> Option<core::result::Result<PrecompileOutput, ExitError>>;
 }
 
@@ -26,6 +31,7 @@ pub trait Precompile {
         input: &[u8],
         target_gas: Option<u64>,
         context: &Context,
+        state: &FinState,
     ) -> core::result::Result<PrecompileOutput, ExitError>;
 }
 
@@ -34,20 +40,22 @@ pub trait Precompile {
 impl PrecompileSet for Tuple {
     for_tuples!( where #( Tuple: Precompile )* );
 
-    fn execute(
+    fn execute<'context, 'vicinity, 'config, T>(
         address: H160,
         input: &[u8],
         target_gas: Option<u64>,
         context: &Context,
+        state: &mut FindoraStackState<'context, 'vicinity, 'config, T>,
+        _is_static: bool,
     ) -> Option<core::result::Result<PrecompileOutput, ExitError>> {
         let mut index = 0;
 
         for_tuples!( #(
-            index += 1;
-            if address == H160::from_low_u64_be(index) {
-                return Some(Tuple::execute(input, target_gas, context))
-            }
-        )* );
+			index += 1;
+			if address == H160::from_low_u64_be(index) {
+				return Some(Tuple::execute(input, target_gas, context, state.ctx))
+			}
+		)* );
 
         None
     }
@@ -68,6 +76,7 @@ impl<T: LinearCostPrecompile> Precompile for T {
         input: &[u8],
         target_gas: Option<u64>,
         _: &Context,
+        _: &FinState,
     ) -> core::result::Result<PrecompileOutput, ExitError> {
         let cost = ensure_linear_cost(target_gas, input.len() as u64, T::BASE, T::WORD)?;
 

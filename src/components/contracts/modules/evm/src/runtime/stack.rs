@@ -108,8 +108,8 @@ pub struct FindoraStackState<'context, 'vicinity, 'config, T> {
     _marker: PhantomData<T>,
 }
 
-impl<'context, 'vicinity, 'config, T: Config>
-    FindoraStackState<'context, 'vicinity, 'config, T>
+impl<'context, 'vicinity, 'config, C: Config>
+    FindoraStackState<'context, 'vicinity, 'config, C>
 {
     /// Create a new backend with given vicinity.
     pub fn new(
