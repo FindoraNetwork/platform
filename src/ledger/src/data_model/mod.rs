@@ -712,6 +712,17 @@ pub enum UtxoStatus {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Utxo(pub TxOutput);
 
+impl Utxo {
+    #[inline(always)]
+    pub(crate) fn get_nonconfidential_balance(&self) -> u64 {
+        if let XfrAmount::NonConfidential(n) = self.0.record.amount {
+            n
+        } else {
+            0
+        }
+    }
+}
+
 /// Ledger address of input
 #[derive(Copy, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TxoRef {
