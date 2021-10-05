@@ -43,11 +43,11 @@ impl PrecompileSet for Tuple {
         let mut index = 0;
 
         for_tuples!( #(
-			index += 1;
-			if address == H160::from_low_u64_be(index) {
-				return Some(Tuple::execute(input, target_gas, context))
-			}
-		)* );
+            index += 1;
+            if address == H160::from_low_u64_be(index) {
+                return Some(Tuple::execute(input, target_gas, context))
+            }
+        )* );
 
         None
     }

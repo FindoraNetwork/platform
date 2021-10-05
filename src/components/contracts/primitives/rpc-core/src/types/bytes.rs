@@ -89,8 +89,8 @@ impl<'a> Visitor<'a> for BytesVisitor {
             })?))
         } else {
             Err(Error::custom(
-				"Invalid bytes format. Expected a 0x-prefixed hex string with even length",
-			))
+                "Invalid bytes format. Expected a 0x-prefixed hex string with even length",
+            ))
         }
     }
 

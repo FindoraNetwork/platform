@@ -196,7 +196,7 @@ impl<C: Config> App<C> {
 
         for log in &status.logs {
             debug!(target: "evm", "transaction status log: block: {:?}, address: {:?}, topics: {:?}, data: {:?}",
-                ctx.header.height,  log.address, log.topics.clone(), log.data.clone());
+                ctx.header.height, log.address, log.topics.clone(), log.data.clone());
 
             events.push(Event::emit_event(
                 App::<C>::name(),

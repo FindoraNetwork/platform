@@ -406,11 +406,11 @@ mod test {
         ));
         let public = pair.public();
         assert_eq!(
-			public,
-			Public::from_full(
-				&hex!("8db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd913ebbe148dd17c56551a52952371071a6c604b3f3abe8f2c8fa742158ea6dd7d4")[..],
-			).unwrap(),
-		);
+            public,
+            Public::from_full(
+                &hex!("8db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd913ebbe148dd17c56551a52952371071a6c604b3f3abe8f2c8fa742158ea6dd7d4")[..],
+            ).unwrap(),
+        );
         let message = b"";
         let signature = hex!(
             "4e1fd58a98bbce5fe948c4e5fec7662d253130a300156c037429dca66f9f6a0728e8b5e8bc55f4bcf445af4b75928a876d54949aaee93a62e3eb1cf12aefb60800"
@@ -435,11 +435,11 @@ mod test {
         let pair = SecpPair::from_seed(b"12345678901234567890123456789012");
         let public = pair.public();
         assert_eq!(
-			public,
-			Public::from_full(
-				&hex!("5676109c54b9a16d271abeb4954316a40a32bcce023ac14c8e26e958aa68fba995840f3de562156558efbfdac3f16af0065e5f66795f4dd8262a228ef8c6d813")[..],
-			).unwrap(),
-		);
+            public,
+            Public::from_full(
+                &hex!("5676109c54b9a16d271abeb4954316a40a32bcce023ac14c8e26e958aa68fba995840f3de562156558efbfdac3f16af0065e5f66795f4dd8262a228ef8c6d813")[..],
+            ).unwrap(),
+        );
         let message = hex!(
             "2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000"
         );
