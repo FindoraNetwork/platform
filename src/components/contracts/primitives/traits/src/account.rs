@@ -4,7 +4,11 @@ use ruc::Result;
 
 pub trait AccountAsset<Address> {
     /// The smart account info of `who`.
-    fn account_of(ctx: &Context, who: &Address) -> Option<SmartAccount>;
+    fn account_of(
+        ctx: &Context,
+        who: &Address,
+        height: Option<u64>,
+    ) -> Option<SmartAccount>;
 
     /// The balance of `who`.
     fn balance(ctx: &Context, who: &Address) -> U256;

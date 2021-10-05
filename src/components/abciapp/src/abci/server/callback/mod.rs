@@ -25,6 +25,7 @@ use ledger::{
     converter::is_convert_tx,
     staking::{is_coinbase_tx, KEEP_HIST},
 };
+use log::debug;
 use parking_lot::Mutex;
 use protobuf::RepeatedField;
 use ruc::*;
@@ -53,29 +54,21 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
 
     let state = la.get_committed_state().write();
     let commitment = state.get_state_commitment();
+    let la_hash = commitment.0.as_ref().to_vec();
 
     let h = state.get_tendermint_height() as i64;
     TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
 
     if 1 < h {
-        let mut data_hash = s.account_base_app.write().info(req).last_block_app_hash;
-        if !data_hash.is_empty() {
-            // Combines ledger state hash and chain state hash
-            let mut commitment_hash = commitment.0.as_ref().to_vec();
-            commitment_hash.append(&mut data_hash);
-            resp.set_last_block_app_hash(
-                Sha256::hash(commitment_hash.as_slice()).to_vec(),
-            );
-        } else {
-            resp.set_last_block_app_hash(commitment.0.as_ref().to_vec());
-        }
+        let cs_hash = s.account_base_app.write().info(req).last_block_app_hash;
+        resp.set_last_block_app_hash(app_hash("info", h, la_hash, cs_hash));
     }
 
     resp.set_last_block_height(h);
 
     println!("\n\n");
     println!("==========================================");
-    println!("======== Starting from height: {} ========", h);
+    println!("======== Last committed height: {} ========", h);
     println!("==========================================");
     println!("\n\n");
 
@@ -255,7 +248,8 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     let mut state = la.get_committed_state().write();
 
     // will change `struct LedgerStatus`
-    state.set_tendermint_commit(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed) as u64);
+    let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+    state.set_tendermint_commit(td_height as u64);
 
     // snapshot them finally
     let path = format!("{}/{}", &CFG.ledger_dir, &state.get_status().snapshot_file);
@@ -264,14 +258,33 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         .and_then(|s| fs::write(&path, s).c(d!(path))));
 
     let mut r = ResponseCommit::new();
-    let mut commitment = state.get_state_commitment().0.as_ref().to_vec();
-    let mut data_hash = s.account_base_app.write().commit(req).data;
-    if !data_hash.is_empty() {
-        // Combines ledger state hash and chain state hash
-        commitment.append(&mut data_hash);
-        r.set_data(Sha256::hash(commitment.as_slice()).to_vec());
-    } else {
-        r.set_data(commitment);
-    }
+    let la_hash = state.get_state_commitment().0.as_ref().to_vec();
+    let cs_hash = s.account_base_app.write().commit(req).data;
+    r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
     r
+}
+
+/// Combines ledger state hash and EVM chain state hash
+/// and print app hashes for debugging
+fn app_hash(
+    when: &str,
+    height: i64,
+    mut la_hash: Vec<u8>,
+    mut cs_hash: Vec<u8>,
+) -> Vec<u8> {
+    debug!(target: "abciapp",
+        "app_hash_{}: {}_{}, height: {}",
+        when,
+        hex::encode(la_hash.clone()),
+        hex::encode(cs_hash.clone()),
+        height
+    );
+
+    // append ONLY non-empty EVM chain state hash
+    if !cs_hash.is_empty() {
+        la_hash.append(&mut cs_hash);
+        Sha256::hash(la_hash.as_slice()).to_vec()
+    } else {
+        la_hash
+    }
 }

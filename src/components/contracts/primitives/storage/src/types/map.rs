@@ -70,6 +70,23 @@ where
             .unwrap()
     }
 
+    /// Load versioned value associated with the given key from the map.
+    pub fn get_ver<D: MerkleDB>(
+        state: &State<D>,
+        key: &Key,
+        height: u64,
+    ) -> Option<Value> {
+        match Instance::get_v::<D>(state, Self::build_key_for(key).as_slice(), height)
+            .unwrap()
+        {
+            Some(bytes) => match serde_json::from_slice::<Value>(&bytes) {
+                Ok(val) => Some(val),
+                Err(_) => None,
+            },
+            None => None,
+        }
+    }
+
     /// Store a value to be associated with the given key from the map.
     pub fn insert<D: MerkleDB>(
         state: &mut State<D>,

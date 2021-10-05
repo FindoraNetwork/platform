@@ -95,9 +95,15 @@ fn test_account_of() {
     assert!(
         AccountStore::insert(ctx.state.write().borrow_mut(), &address, &account).is_ok()
     );
-    assert_eq!(account, App::<()>::account_of(&ctx, &address).unwrap());
+    assert_eq!(
+        account,
+        App::<()>::account_of(&ctx, &address, None).unwrap()
+    );
     assert!(ctx.state.write().commit(2).is_ok());
-    assert_eq!(account, App::<()>::account_of(&ctx, &address).unwrap());
+    assert_eq!(
+        account,
+        App::<()>::account_of(&ctx, &address, None).unwrap()
+    );
 }
 
 #[test]

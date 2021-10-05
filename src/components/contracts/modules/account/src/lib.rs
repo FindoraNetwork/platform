@@ -79,7 +79,7 @@ impl<C: Config> AppModule for App<C> {
                     return resp;
                 }
                 let mut info =
-                    Self::account_of(&ctx, &data.unwrap()).unwrap_or_default();
+                    Self::account_of(&ctx, &data.unwrap(), None).unwrap_or_default();
                 info.balance =
                     EthereumDecimalsMapping::convert_to_native_token(info.balance);
                 info.reserved =

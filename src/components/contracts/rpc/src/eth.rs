@@ -1,6 +1,6 @@
 use crate::{error_on_execution_failure, internal_err};
 use abci::{Application, RequestCheckTx};
-use baseapp::{extensions::SignedExtra, BaseApp};
+use baseapp::{extensions::SignedExtra, BaseApp, CHAIN_STATE_MIN_VERSIONS};
 use ethereum::{
     BlockV0 as EthereumBlock, LegacyTransactionMessage as EthereumTransactionMessage,
     LegacyTransactionMessage, TransactionV0 as EthereumTransaction,
@@ -62,6 +62,46 @@ impl EthApiImpl {
             max_past_logs,
         }
     }
+
+    pub fn block_number_to_height(
+        &self,
+        number: Option<BlockNumber>,
+    ) -> Result<Option<u64>> {
+        let range = self.version_range()?;
+        let block = match number.unwrap_or(BlockNumber::Latest) {
+            BlockNumber::Hash {
+                hash,
+                require_canonical: _,
+            } => match self.block_by_hash(hash, false)? {
+                Some(rich) => rich.inner.number.map(|num| num.as_u64()),
+                None => None,
+            },
+            BlockNumber::Num(num) => Some(num),
+            BlockNumber::Latest => Some(range.1),
+            BlockNumber::Earliest => Some(range.0),
+            BlockNumber::Pending => None,
+        };
+
+        // make sure height falls in the range
+        let height = block.map(|num| {
+            if num < range.0 {
+                range.0
+            } else if num > range.1 {
+                range.1
+            } else {
+                num
+            }
+        });
+        Ok(height)
+    }
+
+    /// get the range of queryable versioned data [lower, upper]
+    pub fn version_range(&self) -> Result<(u64, u64)> {
+        let number = self.block_number()?;
+        let upper = number.as_u64();
+        let lower = upper.saturating_sub(CHAIN_STATE_MIN_VERSIONS);
+        Ok((lower, upper))
+    }
 }
 
 impl EthApi for EthApiImpl {
@@ -88,8 +128,13 @@ impl EthApi for EthApiImpl {
     fn balance(&self, address: H160, number: Option<BlockNumber>) -> Result<U256> {
         debug!(target: "eth_rpc", "balance, address:{:?}, number:{:?}", address, number);
 
+        let height = self.block_number_to_height(number)?;
         let account_id = EthereumAddressMapping::convert_to_account_id(address);
-        if let Ok(sa) = self.account_base_app.read().account_of(&account_id, None) {
+        if let Ok(sa) =
+            self.account_base_app
+                .read()
+                .account_of(&account_id, height, None)
+        {
             Ok(sa.balance)
         } else {
             Ok(U256::zero())
@@ -319,11 +364,12 @@ impl EthApi for EthApiImpl {
         number: Option<BlockNumber>,
     ) -> Result<H256> {
         warn!(target: "eth_rpc", "storage_at, address:{:?}, index:{:?}, number:{:?}", address, index, number);
-        // TODO wait storage versioning
+
+        let height = self.block_number_to_height(number)?;
         Ok(self
             .account_base_app
             .read()
-            .account_storage_at(address, H256::from_uint(&index))
+            .account_storage_at(address, H256::from_uint(&index), height)
             .unwrap_or_default())
     }
 
@@ -386,6 +432,7 @@ impl EthApi for EthApiImpl {
     ) -> Result<U256> {
         debug!(target: "eth_rpc", "transaction_count, address:{:?}, number:{:?}", address, number);
 
+        let height = self.block_number_to_height(number)?;
         let account_id =
             <BaseApp as module_evm::Config>::AddressMapping::convert_to_account_id(
                 address,
@@ -393,7 +440,7 @@ impl EthApi for EthApiImpl {
         let sa = self
             .account_base_app
             .read()
-            .account_of(&account_id, None)
+            .account_of(&account_id, height, None)
             .unwrap_or_default();
         Ok(sa.nonce)
     }
@@ -435,11 +482,12 @@ impl EthApi for EthApiImpl {
 
     fn code_at(&self, address: H160, number: Option<BlockNumber>) -> Result<Bytes> {
         debug!(target: "eth_rpc", "code_at, address:{:?}, number:{:?}", address, number);
-        // TODO wait storage versioning
+
+        let height = self.block_number_to_height(number)?;
         Ok(self
             .account_base_app
             .read()
-            .account_code_at(address)
+            .account_code_at(address, height)
             .unwrap_or_default()
             .into())
     }
