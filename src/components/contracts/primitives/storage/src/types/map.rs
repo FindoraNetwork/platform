@@ -76,15 +76,12 @@ where
         key: &Key,
         height: u64,
     ) -> Option<Value> {
-        match Instance::get_v::<D>(state, Self::build_key_for(key).as_slice(), height)
-            .unwrap()
-        {
-            Some(bytes) => match serde_json::from_slice::<Value>(&bytes) {
-                Ok(val) => Some(val),
-                Err(_) => None,
-            },
-            None => None,
-        }
+        Instance::get_obj_v::<Value, D>(
+            state,
+            Self::build_key_for(key).as_slice(),
+            height,
+        )
+        .unwrap()
     }
 
     /// Store a value to be associated with the given key from the map.
