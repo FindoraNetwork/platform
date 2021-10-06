@@ -12,7 +12,7 @@ use crate::{
         CHAN_D_AMOUNT_HIST, CHAN_D_RWD_HIST, CHAN_GLOB_RATE_HIST, CHAN_V_SELF_D_HIST,
     },
 };
-use bnc::{new_mapx, Mapx};
+use fbnc::{new_mapx, Mapx};
 use globutils::wallet;
 use ruc::*;
 use serde::{Deserialize, Serialize};

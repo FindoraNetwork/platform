@@ -35,8 +35,8 @@ bech32 = "0.7.2"
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
 
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4d" }
-ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
+ruc = "0.6.2"
 
 finutils = { path = "../finutils", default-features = false }
 globutils = { path = "../../libs/globutils" }
