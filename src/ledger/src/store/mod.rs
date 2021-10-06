@@ -7,7 +7,7 @@ pub mod helpers;
 mod test;
 pub mod utils;
 
-pub use bnc;
+pub use fbnc;
 
 use crate::{
     data_model::{
@@ -25,8 +25,8 @@ use crate::{
 };
 use api_cache::ApiCache;
 use bitmap::{BitMap, SparseMap};
-use bnc::{new_mapx, new_vecx, Mapx, Vecx};
 use cryptohash::sha256::Digest as BitDigest;
+use fbnc::{new_mapx, new_vecx, Mapx, Vecx};
 use globutils::{HashOf, ProofOf};
 use merkle_tree::AppendOnlyMerkle;
 use parking_lot::RwLock;
@@ -433,7 +433,7 @@ impl LedgerState {
 
     /// create a tmp ledger for testing purpose
     pub fn tmp_ledger() -> LedgerState {
-        bnc::clear();
+        fbnc::clear();
         let tmp_dir = globutils::fresh_tmp_dir().to_string_lossy().into_owned();
         LedgerState::new(&tmp_dir, Some("test")).unwrap()
     }
@@ -1524,5 +1524,5 @@ pub struct LoggedBlock {
 
 /// Flush data to disk
 pub fn flush_data() {
-    bnc::flush_data();
+    fbnc::flush_data();
 }
