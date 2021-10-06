@@ -48,7 +48,7 @@ lazy_static! {
 const APP_NAME: &str = "findora";
 const CHAIN_STATE_PATH: &str = "state.db";
 const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
-const CHAIN_STATE_MIN_VERSIONS: u64 = 4 * 60 * 24;
+const CHAIN_STATE_MIN_VERSIONS: u64 = 4 * 60 * 24 * 60;
 
 pub struct BaseApp {
     /// application name from abci.Info
@@ -259,12 +259,17 @@ impl BaseApp {
 }
 
 impl BaseProvider for BaseApp {
-    fn account_of(&self, who: &Address, ctx: Option<Context>) -> Result<SmartAccount> {
+    fn account_of(
+        &self,
+        who: &Address,
+        height: Option<u64>,
+        ctx: Option<Context>,
+    ) -> Result<SmartAccount> {
         let ctx = match ctx {
             None => self.create_query_context(0, false)?,
             Some(ctx) => ctx,
         };
-        module_account::App::<Self>::account_of(&ctx, who)
+        module_account::App::<Self>::account_of(&ctx, who, height)
             .ok_or(eg!(format!("account does not exist: {}", who)))
     }
 
@@ -321,17 +326,22 @@ impl BaseProvider for BaseApp {
         }
     }
 
-    fn account_code_at(&self, address: H160) -> Option<Vec<u8>> {
+    fn account_code_at(&self, address: H160, height: Option<u64>) -> Option<Vec<u8>> {
         if let Ok(ctx) = self.create_query_context(0, false) {
-            module_evm::App::<Self>::account_codes(&ctx, &address)
+            module_evm::App::<Self>::account_codes(&ctx, &address, height)
         } else {
             None
         }
     }
 
-    fn account_storage_at(&self, address: H160, index: H256) -> Option<H256> {
+    fn account_storage_at(
+        &self,
+        address: H160,
+        index: H256,
+        height: Option<u64>,
+    ) -> Option<H256> {
         if let Ok(ctx) = self.create_query_context(0, false) {
-            module_evm::App::<Self>::account_storages(&ctx, &address, &index)
+            module_evm::App::<Self>::account_storages(&ctx, &address, &index, height)
         } else {
             None
         }

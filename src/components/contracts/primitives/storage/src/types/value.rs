@@ -70,6 +70,16 @@ where
         .unwrap()
     }
 
+    /// Load versioned value from the provided storage instance.
+    pub fn get_ver<D: MerkleDB>(state: &State<D>, height: u64) -> Option<Value> {
+        Instance::get_obj_v::<Value, D>(
+            state,
+            <Self as StoragePrefixKey>::store_key().as_ref(),
+            height,
+        )
+        .unwrap()
+    }
+
     /// Store a value under this hashed key into the provided storage instance.
     pub fn put<D: MerkleDB>(state: &mut State<D>, val: &Value) -> Result<()> {
         Instance::set_obj::<Value, D>(

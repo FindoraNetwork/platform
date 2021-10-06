@@ -14,8 +14,15 @@ use primitive_types::U256;
 use ruc::*;
 
 impl<C: Config> AccountAsset<Address> for App<C> {
-    fn account_of(ctx: &Context, who: &Address) -> Option<SmartAccount> {
-        AccountStore::get(ctx.state.read().borrow(), who)
+    fn account_of(
+        ctx: &Context,
+        who: &Address,
+        height: Option<u64>,
+    ) -> Option<SmartAccount> {
+        match height {
+            Some(ver) => AccountStore::get_ver(ctx.state.read().borrow(), who, ver),
+            None => AccountStore::get(ctx.state.read().borrow(), who),
+        }
     }
 
     fn balance(ctx: &Context, who: &Address) -> U256 {
@@ -73,7 +80,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
     }
 
     fn burn(ctx: &Context, target: &Address, balance: U256) -> Result<()> {
-        let mut target_account: SmartAccount = Self::account_of(ctx, target)
+        let mut target_account: SmartAccount = Self::account_of(ctx, target, None)
             .c(d!(format!("account = {} does not exist", target)))?;
         target_account.balance = target_account
             .balance
@@ -122,7 +129,7 @@ impl<C: Config> App<C> {
             EthereumDecimalsMapping::from_native_token(U256::from(asset_amount))
                 .ok_or_else(|| eg!("The transfer to UTXO amount is too large"))?;
 
-        let sa = Self::account_of(ctx, &sender).c(d!("account does not exist"))?;
+        let sa = Self::account_of(ctx, &sender, None).c(d!("account does not exist"))?;
         if sa.balance < amount {
             return Err(eg!("insufficient balance"));
         }
