@@ -36,7 +36,7 @@ impl Config for () {
 mod storage {
     use fp_core::account::SmartAccount;
     use fp_types::{actions::account::MintOutput, crypto::Address};
-    use primitive_types::{H160, U256};
+    use primitive_types::U256;
 
     use fp_storage::*;
 
@@ -44,11 +44,9 @@ mod storage {
     generate_storage!(Account, AccountStore => Map<Address, SmartAccount>);
     // The total units transferred from the fra UTXO side.
     generate_storage!(Account, TotalIssuance => Value<U256>);
-    // Returns the remaining number of tokens that `spender` will be
-    // allowed to spend on behalf of `owner` through {transferFrom}. This is
-    // zero by default.
+    // The owner approve his amount of funds to the spender.
     // owner => spender => amount
-    generate_storage!(Account, Allowances => DoubleMap<H160, H160, U256>);
+    generate_storage!(Account, Allowances => DoubleMap<Address, Address, U256>);
 
     // The following data is stored in non-state rocksdb
     // Store MintOutputDefine

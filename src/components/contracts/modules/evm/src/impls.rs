@@ -96,7 +96,7 @@ impl<C: Config> OnChargeEVMTransaction for App<C> {
         already_withdrawn: U256,
     ) -> Result<()> {
         let account_id = C::AddressMapping::convert_to_account_id(*who);
-        let refund_amount = already_withdrawn.saturating_sub(corrected_fee);
-        C::AccountAsset::refund(ctx, &account_id, refund_amount)
+        C::AccountAsset::refund(ctx, &account_id, already_withdrawn)?;
+        C::AccountAsset::burn(ctx, &account_id, corrected_fee)
     }
 }
