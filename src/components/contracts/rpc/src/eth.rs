@@ -1,6 +1,6 @@
 use crate::{error_on_execution_failure, internal_err};
 use abci::{Application, RequestCheckTx};
-use baseapp::{extensions::SignedExtra, BaseApp, CHAIN_STATE_MIN_VERSIONS};
+use baseapp::{extensions::SignedExtra, BaseApp};
 use ethereum::{
     BlockV0 as EthereumBlock, LegacyTransactionMessage as EthereumTransactionMessage,
     LegacyTransactionMessage, TransactionV0 as EthereumTransaction,
@@ -32,6 +32,7 @@ use ruc::eg;
 use sha3::{Digest, Keccak256};
 use std::collections::BTreeMap;
 use std::convert::Into;
+use std::ops::Range;
 use std::sync::Arc;
 use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::Runtime;
@@ -63,44 +64,53 @@ impl EthApiImpl {
         }
     }
 
+    /// Some(height) means versioned
+    /// None means latest
     pub fn block_number_to_height(
         &self,
         number: Option<BlockNumber>,
     ) -> Result<Option<u64>> {
         let range = self.version_range()?;
-        let block = match number.unwrap_or(BlockNumber::Latest) {
+        let height = match number.unwrap_or(BlockNumber::Latest) {
             BlockNumber::Hash {
                 hash,
                 require_canonical: _,
             } => match self.block_by_hash(hash, false)? {
                 Some(rich) => rich.inner.number.map(|num| num.as_u64()),
-                None => None,
+                None => {
+                    return Err(internal_err(format!(
+                        "block number not found, hash: {:?}",
+                        hash
+                    )))
+                }
             },
-            BlockNumber::Num(num) => Some(num),
-            BlockNumber::Latest => Some(range.1),
-            BlockNumber::Earliest => Some(range.0),
+            BlockNumber::Num(num) => {
+                if range.contains(&num) || num == range.end {
+                    Some(num)
+                } else {
+                    return Err(internal_err(format!(
+                        "block number: {} exceeds version range: {:?}",
+                        num, range
+                    )));
+                }
+            }
+            BlockNumber::Latest => None,
+            BlockNumber::Earliest => Some(range.start),
             BlockNumber::Pending => None,
         };
-
-        // make sure height falls in the range
-        let height = block.map(|num| {
-            if num < range.0 {
-                range.0
-            } else if num > range.1 {
-                range.1
-            } else {
-                num
-            }
-        });
         Ok(height)
     }
 
-    /// get the range of queryable versioned data [lower, upper]
-    pub fn version_range(&self) -> Result<(u64, u64)> {
-        let number = self.block_number()?;
-        let upper = number.as_u64();
-        let lower = upper.saturating_sub(CHAIN_STATE_MIN_VERSIONS);
-        Ok((lower, upper))
+    /// get the range of queryable versioned data [lower, upper)
+    pub fn version_range(&self) -> Result<Range<u64>> {
+        let range = self
+            .account_base_app
+            .read()
+            .chain_state
+            .read()
+            .get_ver_range()
+            .map_err(internal_err)?;
+        Ok(range)
     }
 }
 
