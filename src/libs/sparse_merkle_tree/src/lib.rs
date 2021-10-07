@@ -249,7 +249,7 @@ impl SmtMap256 {
         let mut index = TreeNodeIndex::leaf(*key);
         for i in 0..256 {
             if let Ok(sibling_hash) = self.get_hash(&index.sibling().unwrap()) {
-                if &sibling_hash != &ZERO_DIGEST {
+                if sibling_hash != ZERO_DIGEST {
                     set_bit(&mut bitmap, i);
                     sibling_hashes.push(sibling_hash);
                 }
@@ -294,7 +294,7 @@ impl SmtMap256 {
             .kvs
             .get(&ser_key)
             .c(d!())?
-            .unwrap_or(ZERO_DIGEST.as_ref().to_vec()); // (&(*DEFAULT_HASHES)[256 - index.depth])
+            .unwrap_or_else(|| ZERO_DIGEST.as_ref().to_vec()); // (&(*DEFAULT_HASHES)[256 - index.depth])
 
         if let Some(dig) = Digest::from_slice(digest.as_slice()) {
             return Ok(dig);
