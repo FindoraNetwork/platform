@@ -75,8 +75,12 @@ impl EthApiImpl {
             BlockNumber::Hash {
                 hash,
                 require_canonical: _,
-            } => match self.block_by_hash(hash, false)? {
-                Some(rich) => rich.inner.number.map(|num| num.as_u64()),
+            } => match self
+                .account_base_app
+                .read()
+                .current_block(Some(BlockId::Hash(hash)))
+            {
+                Some(block) => Some(block.header.number.as_u64()),
                 None => {
                     return Err(internal_err(format!(
                         "block number not found, hash: {:?}",
