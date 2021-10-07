@@ -11,15 +11,18 @@ use rand::Rng;
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use sha256::DIGESTBYTES;
-use std::collections::HashMap;
-use std::fs;
 
+use parking_lot::RwLock;
 pub use sha256::Digest;
+use std::sync::Arc;
+use storage::db::RocksDB;
+use storage::state::{chain_state, State};
 
 pub fn digest(value: impl AsRef<[u8]>) -> Digest {
     sha256::hash(value.as_ref())
 }
 
+const SMT256_DB: &str = "smt256-db";
 const ZERO_256: [u8; DIGESTBYTES] = [0; DIGESTBYTES];
 const ZERO_DIGEST: Digest = Digest { 0: ZERO_256 };
 
@@ -171,7 +174,7 @@ pub struct MerkleProof {
 }
 
 /// SmtMap256 is Sparse Merkle Tree Map from 256-bit keys to an optional value
-//  and supports generating 256-bit merkle (non) inclusion proofs.
+/// and supports generating 256-bit merkle (non) inclusion proofs.
 /// Initially, each  of the 2**256 possible keys has a default value of None,
 /// which has a hash value of zero.
 ///
@@ -181,101 +184,139 @@ pub struct MerkleProof {
 /// The hash of the leaf node is a 256 bit zero value. The hash of an non-leaf
 /// node is calculated by hashing (using keccak-256) the concatenation of the
 /// hashes of its two sub-nodes.
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
-pub struct SmtMap256<Value: AsRef<[u8]>> {
-    kvs: HashMap<Key, Value>,
-
-    // Hash values of both leaf and inner nodes.
-    hashes: HashMap<TreeNodeIndex, Digest>,
+pub struct SmtMap256 {
+    kvs: State<RocksDB>,
 }
 
-impl<Value: AsRef<[u8]>> SmtMap256<Value> {
+impl SmtMap256 {
     /// Returns a new SMT-Map where all keys have the default value (zero).
-    pub fn new() -> Self {
+    pub fn new(db: RocksDB) -> Self {
         Self {
-            kvs: HashMap::new(),
-            hashes: HashMap::new(),
+            kvs: State::new(
+                Arc::new(RwLock::new(chain_state::ChainState::new(
+                    db,
+                    SMT256_DB.to_string(),
+                    0,
+                ))),
+                false,
+            ),
         }
     }
 
     /// Sets the value of a key. Returns the previous value corresponding to the key.
-    pub fn set(&mut self, key: &Key, value: Option<Value>) -> Option<Value> {
+    pub fn set<Value: AsRef<[u8]>>(
+        &mut self,
+        key: &Key,
+        value: Option<Value>,
+    ) -> Result<()> {
         // Update the hash of the leaf.
         let mut index = TreeNodeIndex::leaf(*key);
         let mut hash: Digest = value.as_ref().map(digest).unwrap_or(ZERO_DIGEST);
-        self.update_hash(&index, &hash);
+        self.update_hash(&index, &hash)?;
 
         // Update the hashes of the inner nodes along the path.
         while !index.is_root() {
-            let sibling_hash = self.get_hash(&index.sibling().unwrap());
+            let sibling_hash = self.get_hash(&index.sibling().unwrap())?;
 
             hash = if index.is_left() {
-                hash_pair(&hash, sibling_hash)
+                hash_pair(&hash, &sibling_hash)
             } else {
-                hash_pair(sibling_hash, &hash)
+                hash_pair(&sibling_hash, &hash)
             };
             index.move_up();
-            self.update_hash(&index, &hash);
+            self.update_hash(&index, &hash)?;
         }
 
+        let ser_key = Self::build_key_for_node(key).c(d!())?;
+
         if let Some(v) = value {
-            self.kvs.insert(*key, v)
+            self.kvs.set(&ser_key, v.as_ref().to_vec()).c(d!())
         } else {
-            self.kvs.remove(key)
+            self.kvs.delete(&ser_key).c(d!())
         }
     }
 
     /// Returns a reference to the value of a key.
-    pub fn get(&self, key: &Key) -> Option<&Value> {
-        self.kvs.get(key)
+    pub fn get(&self, key: &Key) -> Result<Option<Vec<u8>>> {
+        let ser_key = Self::build_key_for_node(key).c(d!())?;
+        self.kvs.get(&ser_key).c(d!())
     }
 
     /// Returns a reference to the value of the key with merkle proof.
-    pub fn get_with_proof(&self, key: &Key) -> (Option<&Value>, MerkleProof) {
+    pub fn get_with_proof(&self, key: &Key) -> Result<(Option<Vec<u8>>, MerkleProof)> {
         let mut bitmap: [u8; DIGESTBYTES] = [0; 32];
         let mut sibling_hashes = Vec::new();
         let mut index = TreeNodeIndex::leaf(*key);
         for i in 0..256 {
-            if let Some(sibling_hash) = self.hashes.get(&index.sibling().unwrap()) {
-                set_bit(&mut bitmap, i);
-                sibling_hashes.push(*sibling_hash);
+            if let Ok(sibling_hash) = self.get_hash(&index.sibling().unwrap()) {
+                if &sibling_hash != &ZERO_DIGEST {
+                    set_bit(&mut bitmap, i);
+                    sibling_hashes.push(sibling_hash);
+                }
             }
             index.move_up();
         }
-        (
-            self.get(key),
+        Ok((
+            self.get(key).c(d!())?,
             MerkleProof {
                 bitmap,
                 hashes: sibling_hashes,
             },
-        )
+        ))
     }
 
     /// Returns the Merkle root
-    pub fn merkle_root(&self) -> &Digest {
+    pub fn merkle_root(&self) -> Result<Digest> {
         self.get_hash(&TreeNodeIndex::root())
     }
 
     /// Returns `true` when proof is valid, `false` otherwise.
-    pub fn check_merkle_proof(
+    pub fn check_merkle_proof<Value: AsRef<[u8]>>(
         &self,
         key: &Key,
         value: Option<&Value>,
         proof: &MerkleProof,
     ) -> bool {
-        check_merkle_proof(self.merkle_root(), key, value, proof)
-    }
-
-    fn get_hash(&self, index: &TreeNodeIndex) -> &Digest {
-        self.hashes.get(index).unwrap_or(&ZERO_DIGEST) // (&(*DEFAULT_HASHES)[256 - index.depth])
-    }
-
-    fn update_hash(&mut self, index: &TreeNodeIndex, hash: &Digest) {
-        if ZERO_DIGEST /* (*DEFAULT_HASHES)[256 - index.depth] */ == *hash {
-            self.hashes.remove(index);
-        } else {
-            self.hashes.insert(index.clone(), *hash);
+        if let Ok(merkle_root) = self.merkle_root() {
+            return check_merkle_proof(&merkle_root, key, value, proof);
         }
+        false
+    }
+
+    /// Commit the modified key value pairs to the db
+    pub fn commit(&mut self) -> Result<(Vec<u8>, u64)> {
+        self.kvs.commit(0)
+    }
+
+    fn get_hash(&self, index: &TreeNodeIndex) -> Result<Digest> {
+        let ser_key = Self::build_key_for_hash(index).c(d!())?;
+        let digest = self
+            .kvs
+            .get(&ser_key)
+            .c(d!())?
+            .unwrap_or(ZERO_DIGEST.as_ref().to_vec()); // (&(*DEFAULT_HASHES)[256 - index.depth])
+
+        if let Some(dig) = Digest::from_slice(digest.as_slice()) {
+            return Ok(dig);
+        }
+        Err(eg!("error deserializing digest"))
+    }
+
+    fn update_hash(&mut self, index: &TreeNodeIndex, hash: &Digest) -> Result<()> {
+        let ser_key = Self::build_key_for_hash(index).c(d!())?;
+        return if ZERO_DIGEST /* (*DEFAULT_HASHES)[256 - index.depth] */ == *hash {
+            self.kvs.delete(&ser_key)
+        } else {
+            self.kvs.set(&ser_key, hash.as_ref().to_vec())
+        };
+    }
+
+    fn build_key_for_hash(idx: &TreeNodeIndex) -> Result<Vec<u8>> {
+        serde_json::to_vec(idx).c(d!("error serializing TreeNodeIndex"))
+    }
+
+    fn build_key_for_node(key: &Key) -> Result<Vec<u8>> {
+        serde_json::to_vec(key).c(d!("error serializing key"))
     }
 }
 
@@ -309,13 +350,6 @@ pub fn check_merkle_proof<Value: AsRef<[u8]>>(
     }
 
     iter.next() == None && hash == *merkle_root
-}
-
-pub fn open(path: &str) -> Result<SmtMap256<String>> {
-    let contents: String = fs::read_to_string(path).c(d!())?;
-
-    // Deserialize and print Rust data structure.
-    serde_json::from_str(&contents).c(d!())
 }
 
 pub mod helpers {
@@ -556,7 +590,7 @@ mod tests {
         let mut smt = SmtMap256::new();
         let merkle_root: Digest = *(&smt).merkle_root();
 
-        assert_eq!(smt.get(&Key(ZERO_DIGEST)), None);
+        assert_eq!(smt.get(&Key(ZERO_DIGEST)).unwrap(), None);
 
         let key = Key(b256(
             "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
