@@ -2,7 +2,6 @@
 #![allow(missing_docs)]
 
 mod basic;
-mod genesis;
 mod impls;
 
 #[cfg(test)]

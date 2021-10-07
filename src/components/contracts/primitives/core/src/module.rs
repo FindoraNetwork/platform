@@ -10,27 +10,18 @@ pub trait AppModuleBasic {
     /// Returns default genesis state as raw bytes for the module.
     fn default_genesis(&self) -> Vec<u8>;
 
-    /// Performs genesis state validation for the module.
-    fn validate_genesis(&self) -> Result<()>;
-
-    /// Returns the root tx command for the module.
-    fn get_tx_cmd(&self);
-
-    /// Returns no root query command for the module.
-    fn get_query_cmd(&self);
-}
-
-/// AppModuleGenesis is the standard form for an application module genesis functions
-pub trait AppModuleGenesis {
     /// Performs genesis initialization for the module. It returns no validator updates.
     fn init_genesis(&self);
+
+    /// Performs genesis state validation for the module.
+    fn validate_genesis(&self) -> Result<()>;
 
     /// Returns the exported genesis state as raw bytes for the module.
     fn export_genesis(&self);
 }
 
 /// AppModule is the standard form for an application module
-pub trait AppModule: AppModuleBasic + AppModuleGenesis {
+pub trait AppModule: AppModuleBasic {
     /// query_route returns the application module's query response.
     fn query_route(
         &self,

@@ -199,7 +199,7 @@ impl<C: Config> App<C> {
                 ctx.header.height, log.address, log.topics.clone(), log.data.clone());
 
             events.push(Event::emit_event(
-                App::<C>::name(),
+                Self::name(),
                 ContractLog {
                     address: log.address,
                     topics: log.topics.clone(),

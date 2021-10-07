@@ -11,15 +11,15 @@ impl<C: Config> AppModuleBasic for App<C> {
         todo!()
     }
 
+    fn init_genesis(&self) {
+        todo!()
+    }
+
     fn validate_genesis(&self) -> Result<()> {
         todo!()
     }
 
-    fn get_tx_cmd(&self) {
-        todo!()
-    }
-
-    fn get_query_cmd(&self) {
+    fn export_genesis(&self) {
         todo!()
     }
 }

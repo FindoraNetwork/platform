@@ -2,7 +2,6 @@
 #![allow(missing_docs)]
 
 mod basic;
-mod genesis;
 pub mod impls;
 pub mod precompile;
 pub mod runtime;
