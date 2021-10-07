@@ -30,19 +30,21 @@ impl<C: Config> AccountAsset<Address> for App<C> {
     }
 
     fn balance(ctx: &Context, who: &Address) -> U256 {
-        Self::account_of(ctx, who).unwrap_or_default().balance
+        Self::account_of(ctx, who, None).unwrap_or_default().balance
     }
 
     fn reserved_balance(ctx: &Context, who: &Address) -> U256 {
-        Self::account_of(ctx, who).unwrap_or_default().reserved
+        Self::account_of(ctx, who, None)
+            .unwrap_or_default()
+            .reserved
     }
 
     fn nonce(ctx: &Context, who: &Address) -> U256 {
-        Self::account_of(ctx, who).unwrap_or_default().nonce
+        Self::account_of(ctx, who, None).unwrap_or_default().nonce
     }
 
     fn inc_nonce(ctx: &Context, who: &Address) -> Result<U256> {
-        let mut sa = Self::account_of(ctx, who).c(d!("account does not exist"))?;
+        let mut sa = Self::account_of(ctx, who, None).c(d!("account does not exist"))?;
         sa.nonce = sa.nonce.saturating_add(U256::one());
         AccountStore::insert(ctx.state.write().borrow_mut(), who, &sa).map(|()| sa.nonce)
     }
@@ -58,8 +60,8 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         }
 
         let mut from_account =
-            Self::account_of(ctx, sender).c(d!("sender does not exist"))?;
-        let mut to_account = Self::account_of(ctx, dest).unwrap_or_default();
+            Self::account_of(ctx, sender, None).c(d!("sender does not exist"))?;
+        let mut to_account = Self::account_of(ctx, dest, None).unwrap_or_default();
 
         from_account.balance = from_account
             .balance
@@ -78,7 +80,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
             return Ok(());
         }
 
-        let mut target_account = Self::account_of(ctx, target).unwrap_or_default();
+        let mut target_account = Self::account_of(ctx, target, None).unwrap_or_default();
         target_account.balance = target_account
             .balance
             .checked_add(balance)
@@ -97,7 +99,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
             return Ok(());
         }
 
-        let mut target_account = Self::account_of(ctx, target)
+        let mut target_account = Self::account_of(ctx, target, None)
             .c(d!(format!("account: {} does not exist", target)))?;
         target_account.balance = target_account
             .balance
@@ -117,7 +119,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
             return Ok(());
         }
 
-        let mut sa = Self::account_of(ctx, who).c(d!("account does not exist"))?;
+        let mut sa = Self::account_of(ctx, who, None).c(d!("account does not exist"))?;
         sa.balance = sa
             .balance
             .checked_sub(value)
@@ -135,7 +137,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
             return Ok(());
         }
 
-        let mut sa = Self::account_of(ctx, who).c(d!("account does not exist"))?;
+        let mut sa = Self::account_of(ctx, who, None).c(d!("account does not exist"))?;
         sa.reserved = sa
             .reserved
             .checked_sub(value)
