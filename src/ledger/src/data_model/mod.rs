@@ -11,7 +11,7 @@ mod test;
 
 pub use effects::{BlockEffect, TxnEffect};
 
-use crate::converter::ConvertAccount;
+use crate::converter::{erc20::TransferERC20, ConvertAccount};
 use crate::staking::{
     is_coinbase_tx,
     ops::{
@@ -1164,6 +1164,8 @@ pub enum Operation {
     MintFra(MintFraOps),
     /// Convert UTXO to Account
     ConvertAccount(ConvertAccount),
+    /// Transfer UTXO to ERC20
+    TransferERC20(TransferERC20),
 }
 
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {

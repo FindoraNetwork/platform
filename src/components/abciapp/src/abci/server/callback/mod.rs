@@ -22,7 +22,7 @@ use abci::{
 use fp_storage::hash::{Sha256, StorageHasher};
 use lazy_static::lazy_static;
 use ledger::{
-    converter::is_convert_tx,
+    converter::{erc20::is_transfer_erc20_tx, is_convert_tx},
     staking::{is_coinbase_tx, KEEP_HIST},
 };
 use log::debug;
@@ -164,11 +164,16 @@ pub fn deliver_tx(
                     }
 
                     if s.la.write().cache_transaction(tx.clone()).is_ok() {
-                        if is_convert_tx(&tx)
+                        if (is_convert_tx(&tx)
                             && s.account_base_app
                                 .write()
                                 .deliver_findora_tx(&tx)
-                                .is_err()
+                                .is_err())
+                            || (is_transfer_erc20_tx(&tx)
+                                && s.account_base_app
+                                    .write()
+                                    .deliver_findora_erc20(&tx)
+                                    .is_err())
                         {
                             resp.code = 1;
                             resp.log = String::from("Failed to deliver transaction!");

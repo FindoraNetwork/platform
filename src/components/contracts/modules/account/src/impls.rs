@@ -8,10 +8,19 @@ use fp_traits::{
     account::AccountAsset,
     evm::{DecimalsMapping, EthereumDecimalsMapping},
 };
+// use fp_evm::Runner;
+use fp_types::actions::evm::Call;
 use fp_types::{actions::account::MintOutput, crypto::Address};
 use ledger::data_model::ASSET_TYPE_FRA;
 use primitive_types::U256;
 use ruc::*;
+// use module_ethereum;
+// use module_evm;
+use fp_core::macros::Get;
+// use fp_traits::evm::FeeCalculator;
+use fp_traits::account::FeeCalculator;
+use fp_types::H160;
+use fp_utils::proposer_converter;
 
 impl<C: Config> AccountAsset<Address> for App<C> {
     fn total_issuance(ctx: &Context) -> U256 {
@@ -194,6 +203,63 @@ impl<C: Config> App<C> {
             Self::burn(ctx, &sender, amount)?;
             Self::add_mint(ctx, outputs)?;
         }
+        Ok(ActionResult::default())
+    }
+
+    pub fn erc20_to_utxo(
+        ctx: &Context,
+        sender: Address,
+        contractaddress: H160,
+        input: Vec<u8>,
+        nonce: U256,
+        outputs: Vec<MintOutput>,
+    ) -> Result<ActionResult> {
+        let mut asset_amount = 0;
+        for output in &outputs {
+            ensure!(
+                output.asset == ASSET_TYPE_FRA,
+                "Invalid asset type only support FRA"
+            );
+            asset_amount += output.amount;
+        }
+
+        log::debug!(target: "account", "transfer to UTXO amount is: {} FRA", asset_amount);
+
+        let amount =
+            EthereumDecimalsMapping::from_native_token(U256::from(asset_amount))
+                .ok_or_else(|| eg!("The transfer to UTXO amount is too large"))?;
+
+        let sa = Self::account_of(ctx, &sender, None).c(d!("account does not exist"))?;
+        if sa.balance < amount {
+            return Err(eg!("insufficient balance"));
+        }
+
+        if !amount.is_zero() {
+            // mint UTXO
+            Self::add_mint(ctx, outputs)?;
+
+            // Self::burn(ctx, &sender, amount)?;
+
+            // call ERC20 contract burn method
+            let mut config = C::config().clone();
+            config.estimate = true;
+
+            let v: [u8; 32] = *sender.as_ref();
+            let source = proposer_converter(v.to_vec()).unwrap();
+            let _call = Call {
+                source,
+                target: contractaddress,
+                input,
+                value: U256::zero(),
+                gas_limit: C::BlockGasLimit::get().as_u64(),
+                gas_price: Some(C::FeeCalculator::min_fee()),
+                nonce: Some(nonce),
+            };
+
+            // TODO: fix
+            // C::Runner::call(ctx, call, &config)?;
+        }
+
         Ok(ActionResult::default())
     }
 

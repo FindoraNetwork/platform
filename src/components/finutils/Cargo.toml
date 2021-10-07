@@ -35,6 +35,9 @@ fp-core = { path = "../contracts/primitives/core", optional = true }
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = { path = "../contracts/primitives/types" }
 
+module-evm = { path = "../contracts/modules/evm" }
+fp-traits = { path = "../contracts/primitives/traits" }
+
 tendermint-rpc = { version = "0.19.0", features = ["http-client", "websocket-client"], optional = true }
 
 [dev-dependencies]

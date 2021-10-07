@@ -449,3 +449,63 @@ subcommands:
             required: true
   - gen-eth-key:
       about: Generate an Ethereum address
+  - transfer-erc20:
+      about: Transfer Asset from a Findora account to the specified Ethereum ERC20 address
+      args:
+        - addr:
+            help: ethereum erc20 address to receive asset, eg:0xd3Bf...
+            short: a
+            long: addr
+            takes_value: true
+            value_name: ERC20 ADDRESS
+            required: true
+        - amount:
+            help: deposit asset amount
+            short: n
+            long: amount
+            takes_value: true
+            value_name: AMOUNT
+            required: true
+        - input:
+            help: erc20 input data
+            short: i
+            long: input
+            takes_value: true
+            value_name: INPUT
+            required: true
+  - erc20-to-utxo:
+      about: Transfer FRA from an Ethereum address to the specified Findora account
+      args:
+        - addr:
+            help: findora account to receive FRA, eg:fra1rkv...
+            short: a
+            long: addr
+            takes_value: true
+            value_name: WALLET ADDRESS
+        - amount:
+            help: withdraw FRA amount
+            short: n
+            long: amount
+            takes_value: true
+            value_name: AMOUNT
+            required: true
+        - addr:
+            help: ERC20 contract address, eg:0xd3Bf...
+            short: a
+            long: addr
+            takes_value: true
+            value_name: WALLET ADDRESS
+        - input:
+            help: erc20 input data
+            short: i
+            long: input
+            takes_value: true
+            value_name: INPUT
+            required: true
+        - eth-key:
+            help: ethereum account mnemonic phrase sign withdraw tx
+            short: e
+            long: eth-key
+            takes_value: true
+            value_name: MNEMONIC
+            required: true

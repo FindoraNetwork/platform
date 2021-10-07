@@ -1,4 +1,7 @@
+use std::convert::TryFrom;
+
 use super::*;
+use crate::BaseApp;
 use abci::*;
 use fp_core::{
     context::Context,
@@ -7,19 +10,25 @@ use fp_core::{
         ActionResult, Applyable, Executable, SignedExtension, ValidateUnsigned,
     },
 };
+use fp_evm::Runner;
 use fp_traits::evm::DecimalsMapping;
+use fp_traits::evm::FeeCalculator;
 use fp_types::{
     actions,
     actions::account::MintOutput,
+    actions::evm::Call,
     assemble::{convert_unsigned_transaction, CheckedTransaction, UncheckedTransaction},
     crypto::Address,
 };
+use fp_utils::proposer_converter;
 use ledger::{
-    converter::check_convert_tx,
+    converter::{check_convert_tx, erc20::check_erc20_tx},
     data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA},
 };
 use ruc::*;
 use serde::Serialize;
+// use fp_types::crypto::MultiSigner;
+// use std::str::FromStr;
 
 #[derive(Default)]
 pub struct ModuleManager {
@@ -137,6 +146,37 @@ impl ModuleManager {
         size: usize,
     ) -> Result<Vec<MintOutput>> {
         module_account::App::<BaseApp>::consume_mint(ctx, size)
+    }
+
+    /// process findora tx -> erc20
+    pub fn process_findora_erc20(
+        &mut self,
+        ctx: &Context,
+        tx: &FindoraTransaction,
+    ) -> Result<()> {
+        let (signer, owner, _nonce, input) = check_erc20_tx(tx)?;
+        let signer = proposer_converter(signer).unwrap();
+        let target = H160::try_from(owner).unwrap();
+
+        // call mint method
+        let mut config = <BaseApp as module_ethereum::Config>::config().clone();
+        config.estimate = true;
+
+        let call = Call {
+            source: signer,
+            target,
+            input,
+            value: U256::zero(),
+            gas_limit: <BaseApp as module_evm::Config>::BlockGasLimit::get().as_u64(),
+            gas_price: Some(
+                <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(),
+            ),
+            nonce: Some(U256::from(0_u64)),
+        };
+
+        <BaseApp as module_ethereum::Config>::Runner::call(ctx, call, &config)?;
+
+        Ok(())
     }
 }
 

@@ -8,29 +8,50 @@ mod impls;
 mod tests;
 
 use abci::{RequestQuery, ResponseQuery};
+use evm::Config as EvmConfig;
 use fp_core::{
     context::Context,
+    macros::Get,
     module::AppModule,
     transaction::{ActionResult, Executable},
 };
+use fp_evm::Runner;
 use fp_traits::evm::DecimalsMapping;
 use fp_traits::{
     account::{AccountAsset, FeeCalculator},
     evm::EthereumDecimalsMapping,
+    // evm::FeeCalculator,
 };
+use fp_types::U256;
 use fp_types::{actions::account::Action, crypto::Address};
 use ruc::*;
 use std::marker::PhantomData;
 
 pub const MODULE_NAME: &str = "account";
+static ISTANBUL_CONFIG: EvmConfig = EvmConfig::istanbul();
 
 pub trait Config {
     type FeeCalculator: FeeCalculator;
+
+    /// The block gas limit. Can be a simple constant, or an adjustment algorithm in another pallet.
+    type BlockGasLimit: Get<U256>;
+
+    /// EVM execution runner.
+    type Runner: Runner;
+
+    /// EVM config used in the module.
+    fn config() -> &'static EvmConfig {
+        &ISTANBUL_CONFIG
+    }
 }
 
-impl Config for () {
-    type FeeCalculator = ();
-}
+//TODO: the trait `fp_evm::Runner` is not implemented for `()`
+// impl Config for () {
+//     type FeeCalculator = ();
+//     // type BlockGasLimit = ();
+//     // type Runner = module_evm::runtime::runner::ActionRunner<Self>;
+//     // type Runner = ();
+// }
 
 mod storage {
     use fp_core::account::SmartAccount;
@@ -124,6 +145,20 @@ impl<C: Config> Executable for App<C> {
             Action::TransferToUTXO(action) => {
                 if let Some(sender) = origin {
                     Self::transfer_to_utxo(ctx, sender, action.outputs)
+                } else {
+                    Err(eg!("invalid transaction origin"))
+                }
+            }
+            Action::ERC20ToUTXO(action) => {
+                if let Some(sender) = origin {
+                    Self::erc20_to_utxo(
+                        ctx,
+                        sender,
+                        action.contractaddress,
+                        action.input,
+                        action.nonce,
+                        action.outputs,
+                    )
                 } else {
                     Err(eg!("invalid transaction origin"))
                 }

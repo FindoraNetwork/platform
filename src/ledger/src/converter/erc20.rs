@@ -1,7 +1,11 @@
 //! Multi Signer operation for transaction.
 
+use crate::converter::ASSET_TYPE_FRA;
 use crate::data_model::{
-    NoReplayToken, Operation, Transaction, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
+    NoReplayToken,
+    Operation,
+    Transaction,
+    BLACK_HOLE_PUBKEY_STAKING, //ASSET_TYPE_FRA,
 };
 use fp_types::crypto::MultiSigner;
 use ruc::*;
@@ -9,15 +13,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use zei::xfr::{
     sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
-    structs::{AssetType, XfrAmount, XfrAssetType},
+    structs::{XfrAmount, XfrAssetType}, //AssetType
 };
-pub mod erc20;
+use zeiutils::serialization::ZeiFromToBytes;
 
 /// Use this operation to transfer.
 ///
 /// This operation only support binded xfr_address is sender address.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct ConvertAccount {
+pub struct TransferERC20 {
     /// transaction body
     pub data: Data,
     /// transaction signer
@@ -27,13 +31,14 @@ pub struct ConvertAccount {
 }
 
 #[allow(missing_docs)]
-impl ConvertAccount {
+impl TransferERC20 {
     pub fn new(
         keypair: &XfrKeyPair,
         nonce: NoReplayToken,
         address: MultiSigner,
+        input: Vec<u8>,
     ) -> Self {
-        let data = Data::new(nonce, address);
+        let data = Data::new(nonce, address, input);
         let public = keypair.get_pk();
         let signature = keypair.sign(&data.to_bytes());
         Self {
@@ -69,12 +74,18 @@ pub struct Data {
     pub nonce: NoReplayToken,
     /// receiver address
     pub address: MultiSigner,
+    /// input
+    pub input: Vec<u8>,
 }
 
 #[allow(missing_docs)]
 impl Data {
-    pub fn new(nonce: NoReplayToken, address: MultiSigner) -> Self {
-        Data { nonce, address }
+    pub fn new(nonce: NoReplayToken, address: MultiSigner, input: Vec<u8>) -> Self {
+        Data {
+            nonce,
+            address,
+            input,
+        }
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -83,9 +94,9 @@ impl Data {
 }
 
 #[allow(missing_docs)]
-pub fn is_convert_tx(tx: &Transaction) -> bool {
+pub fn is_transfer_erc20_tx(tx: &Transaction) -> bool {
     for op in &tx.body.operations {
-        if let Operation::ConvertAccount(_) = op {
+        if let Operation::TransferERC20(_) = op {
             return true;
         }
     }
@@ -93,19 +104,23 @@ pub fn is_convert_tx(tx: &Transaction) -> bool {
 }
 
 #[allow(missing_docs)]
-pub fn check_convert_tx(
-    tx: &Transaction,
-) -> Result<(MultiSigner, HashMap<AssetType, u64>)> {
+pub fn check_erc20_tx(tx: &Transaction) -> Result<(Vec<u8>, MultiSigner, u64, Vec<u8>)> {
     let mut owner = None;
+    let mut nonce = None;
+    let mut input = None;
+    let mut signer = None;
 
     let mut assets = HashMap::new();
 
     for op in &tx.body.operations {
-        if let Operation::ConvertAccount(ca) = op {
+        if let Operation::TransferERC20(ca) = op {
             if owner.is_some() {
                 return Err(eg!("tx must have 1 convert account"));
             }
-            owner = Some(ca.data.address.clone())
+            owner = Some(ca.data.address.clone());
+            nonce = Some(ca.get_nonce());
+            input = Some(ca.data.input.clone());
+            signer = Some(ca.get_related_address().zei_to_bytes())
         }
         if let Operation::TransferAsset(t) = op {
             for o in &t.body.outputs {
@@ -135,5 +150,10 @@ pub fn check_convert_tx(
     if owner.is_none() {
         return Err(eg!("this tx isn't a convert tx"));
     }
-    Ok((owner.unwrap(), assets))
+    Ok((
+        signer.unwrap(),
+        owner.unwrap(),
+        nonce.unwrap().get_seq_id(),
+        input.unwrap(),
+    ))
 }
