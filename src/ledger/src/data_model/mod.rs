@@ -1247,6 +1247,8 @@ pub enum Operation {
     MintFra(MintFraOps),
     /// Convert UTXOs to EVM Account balance
     ConvertAccount(ConvertAccount),
+    /// Transfer UTXO to ERC20
+    TransferERC20(TransferERC20),
 }
 
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {

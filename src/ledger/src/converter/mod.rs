@@ -10,6 +10,7 @@ use zei::xfr::{
     sig::XfrPublicKey,
     structs::{XfrAmount, XfrAssetType},
 };
+pub mod erc20;
 
 /// Use this operation to transfer.
 ///
