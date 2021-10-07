@@ -5,6 +5,7 @@ use fp_storage::{Borrow, BorrowMut};
 use fp_traits::account::AccountAsset;
 use fp_types::actions::account::MintOutput;
 use fp_types::crypto::Address;
+use fp_types::U256;
 use ledger::data_model::ASSET_TYPE_FRA;
 use parking_lot::RwLock;
 use rand_chacha::rand_core::SeedableRng;
@@ -305,6 +306,7 @@ fn test_account_burn() {
     assert!(
         AccountStore::insert(ctx.state.write().borrow_mut(), &address, &account).is_ok()
     );
+    assert!(TotalIssuance::put(ctx.state.write().borrow_mut(), &500.into()).is_ok());
 
     //burn FRA
     assert!(App::<()>::burn(&ctx, &address, 200.into()).is_ok());
@@ -352,8 +354,9 @@ fn test_account_refund() {
 
     //Generate SmartAccount
     let account = SmartAccount {
+        nonce: U256::zero(),
         balance: 500.into(),
-        ..Default::default()
+        reserved: 1000.into(),
     };
 
     //Add account to database
@@ -364,6 +367,7 @@ fn test_account_refund() {
     //Refund an amount to address
     assert!(App::<()>::refund(&ctx, &address, 700.into()).is_ok());
     assert_eq!(App::<()>::balance(&ctx, &address), 1200.into());
+    assert_eq!(App::<()>::reserved_balance(&ctx, &address), 300.into());
 }
 
 #[test]
