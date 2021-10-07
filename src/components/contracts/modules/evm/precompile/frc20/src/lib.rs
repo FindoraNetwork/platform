@@ -27,15 +27,17 @@ pub const TRANSFER_EVENT_SELECTOR: &[u8; 32] =
 pub const APPROVAL_EVENT_SELECTOR: &[u8; 32] =
     u8_slice!("0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925");
 
-const GAS_NAME: u64 = 10000;
-const GAS_SYMBOL: u64 = 10000;
-const GAS_DECIMALS: u64 = 10000;
-const GAS_TOTAL_SUPPLY: u64 = 10000;
-const GAS_BALANCE_OF: u64 = 10000;
-const GAS_TRANSFER: u64 = 10000;
-const GAS_ALLOWANCE: u64 = 10000;
-const GAS_APPROVE: u64 = 10000;
-const GAS_TRANSFER_FROM: u64 = 10000;
+// The gas used value is obtained according to the standard erc20 call.
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.3.2/contracts/token/ERC20/ERC20.sol
+const GAS_NAME: u64 = 24347;
+const GAS_SYMBOL: u64 = 24501;
+const GAS_DECIMALS: u64 = 21307;
+const GAS_TOTAL_SUPPLY: u64 = 22067;
+const GAS_BALANCE_OF: u64 = 22770;
+const GAS_TRANSFER: u64 = 45233;
+const GAS_ALLOWANCE: u64 = 23412;
+const GAS_APPROVE: u64 = 42324;
+const GAS_TRANSFER_FROM: u64 = 30294;
 
 pub struct FRC20<C> {
     _marker: PhantomData<C>,
@@ -364,6 +366,14 @@ impl<C: Config> FRC20<C> {
                     from,
                     recipient,
                     EvmDataWriter::new().write(amount).build(),
+                )
+                .log3(
+                    APPROVAL_EVENT_SELECTOR,
+                    from,
+                    context.caller,
+                    EvmDataWriter::new()
+                        .write(allowance.saturating_sub(amount))
+                        .build(),
                 )
                 .build(),
         })

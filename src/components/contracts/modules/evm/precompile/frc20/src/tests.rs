@@ -6,7 +6,7 @@ use evm_precompile_utils::{error, EvmDataWriter, LogsBuilder};
 use module_evm::precompile::Precompile;
 use sha3::{Digest, Keccak256};
 
-pub const FRC20_PRECOMPILE_ADDRESS: u64 = 8;
+pub const FRC20_PRECOMPILE_ADDRESS: u64 = 9;
 
 #[test]
 fn selector_less_than_four_bytes() {
@@ -249,13 +249,19 @@ fn transfer_from_works() {
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
             output: EvmDataWriter::new().write(true).build(),
-            cost: GAS_APPROVE + 1756,
+            cost: GAS_TRANSFER_FROM + 1756,
             logs: LogsBuilder::new(H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS))
                 .log3(
                     TRANSFER_EVENT_SELECTOR,
                     ALICE_ECDSA.address,
                     BOB_ECDSA.address,
                     EvmDataWriter::new().write(U256::from(400)).build(),
+                )
+                .log3(
+                    APPROVAL_EVENT_SELECTOR,
+                    ALICE_ECDSA.address,
+                    BOB_ECDSA.address,
+                    EvmDataWriter::new().write(U256::from(100)).build(),
                 )
                 .build(),
         })

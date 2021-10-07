@@ -13,10 +13,7 @@ pub struct EthereumAddressMapping;
 
 impl AddressMapping for EthereumAddressMapping {
     fn convert_to_account_id(address: H160) -> Address {
-        let mut data = [0u8; 32];
-        data[0..4].copy_from_slice(b"evm:");
-        data[4..24].copy_from_slice(&address[..]);
-        Address::from(data)
+        Address::from(address)
     }
 }
 
