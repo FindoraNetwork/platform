@@ -4,8 +4,8 @@
 
 use ruc::*;
 
-/// EVM_TX_TAG = "evm"
-pub const EVM_TX_TAG: [u8; 3] = [0x65, 0x76, 0x6d];
+/// EVM_TX_TAG = "evm:"
+pub const EVM_TX_TAG: [u8; 4] = [0x65, 0x76, 0x6d, 0x3a];
 
 /// Evm Tx wrapper
 pub struct EvmRawTxWrapper {}

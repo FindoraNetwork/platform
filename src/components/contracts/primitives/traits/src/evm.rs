@@ -1,4 +1,4 @@
-use core::{convert::TryFrom, ops::Div};
+use core::{convert::From, ops::Div};
 use fp_core::context::Context;
 use fp_types::crypto::Address;
 use primitive_types::{H160, H256, U256};
@@ -14,8 +14,9 @@ pub struct EthereumAddressMapping;
 impl AddressMapping for EthereumAddressMapping {
     fn convert_to_account_id(address: H160) -> Address {
         let mut data = [0u8; 32];
-        data[0..20].copy_from_slice(&address[..]);
-        Address::try_from(&data[..]).unwrap()
+        data[0..4].copy_from_slice(b"evm:");
+        data[4..24].copy_from_slice(&address[..]);
+        Address::from(data)
     }
 }
 

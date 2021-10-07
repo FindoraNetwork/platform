@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use core::marker::PhantomData;
 use ethereum_types::{H160, U256};
 use evm::{executor::PrecompileOutput, Context, ExitError, ExitSucceed};
