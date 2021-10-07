@@ -4,6 +4,7 @@
 mod basic;
 mod genesis;
 pub mod impls;
+pub mod precompile;
 pub mod runtime;
 
 use abci::{RequestQuery, ResponseQuery};
@@ -14,13 +15,13 @@ use fp_core::{
     module::AppModule,
     transaction::{ActionResult, Executable},
 };
-use fp_evm::PrecompileSet;
 use fp_storage::Borrow;
 use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
 };
 use fp_types::{actions::evm::Action, crypto::Address};
+use precompile::PrecompileSet;
 use ruc::*;
 use std::marker::PhantomData;
 

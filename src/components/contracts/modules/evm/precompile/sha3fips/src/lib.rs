@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use evm::{ExitError, ExitSucceed};
-use fp_evm::LinearCostPrecompile;
+use module_evm::precompile::LinearCostPrecompile;
 use tiny_keccak::Hasher;
 
 pub struct Sha3FIPS256;

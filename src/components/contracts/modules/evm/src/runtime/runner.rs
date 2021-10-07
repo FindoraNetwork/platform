@@ -1,4 +1,5 @@
 use super::stack::FindoraStackState;
+use crate::precompile::PrecompileSet;
 use crate::{App, Config};
 use ethereum_types::{H160, H256, U256};
 use evm::{

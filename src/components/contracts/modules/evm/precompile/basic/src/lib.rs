@@ -17,7 +17,7 @@
 
 use core::cmp::min;
 use evm::{ExitError, ExitSucceed};
-use fp_evm::LinearCostPrecompile;
+use module_evm::precompile::LinearCostPrecompile;
 
 /// The identity precompile.
 pub struct Identity;

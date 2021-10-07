@@ -9,11 +9,12 @@ description = "Basic precompiles for EVM module."
 readme = "README.md"
 
 [dependencies]
-evm = { version = "0.30.0", default-features = false, features = ["with-serde"] }
+evm = { version = "0.29.0", default-features = false, features = ["with-serde"] }
+module-evm = { path = "../../../../modules/evm"}
 ripemd160 = "0.9"
 
 # primitives
-fp-core = { path = "../../../../primitives/core" }
-fp-evm = { path = "../../../../primitives/evm" }
+#fp-core = { path = "../../../../primitives/core" }
+#fp-evm = { path = "../../../../primitives/evm" }
 fp-types = { path = "../../../../primitives/types" }
 fp-utils = { path = "../../../../primitives/utils" }
