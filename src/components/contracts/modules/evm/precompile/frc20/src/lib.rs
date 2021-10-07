@@ -27,6 +27,20 @@ pub const TRANSFER_EVENT_SELECTOR: &[u8; 32] =
 pub const APPROVAL_EVENT_SELECTOR: &[u8; 32] =
     u8_slice!("0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925");
 
+/// b"Findora"
+pub const FRC20_NAME: &[u8; 96] = u8_slice!(
+    "0x00000000000000000000000000000000000000000000000000000000000000200000000000000\
+    00000000000000000000000000000000000000000000000000746696e646f7261000000000000000\
+    00000000000000000000000000000000000"
+);
+
+/// b"FRA"
+pub const FRC20_SYMBOL: &[u8; 96] = u8_slice!(
+    "0x00000000000000000000000000000000000000000000000000000000000000200000000000000\
+    00000000000000000000000000000000000000000000000000346524100000000000000000000000\
+    00000000000000000000000000000000000"
+);
+
 // The gas used value is obtained according to the standard erc20 call.
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.3.2/contracts/token/ERC20/ERC20.sol
 const GAS_NAME: u64 = 24347;
@@ -96,7 +110,7 @@ impl<C: Config> FRC20<C> {
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
             cost: gasometer.used_gas(),
-            output: EvmDataWriter::new().write_raw_bytes(b"Findora").build(),
+            output: EvmDataWriter::new().write_raw_bytes(FRC20_NAME).build(),
             logs: vec![],
         })
     }
@@ -116,7 +130,7 @@ impl<C: Config> FRC20<C> {
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
             cost: gasometer.used_gas(),
-            output: EvmDataWriter::new().write_raw_bytes(b"FRA").build(),
+            output: EvmDataWriter::new().write_raw_bytes(FRC20_SYMBOL).build(),
             logs: vec![],
         })
     }
