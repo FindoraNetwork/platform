@@ -396,6 +396,24 @@ fn run() -> Result<()> {
         let address = m.value_of("addr");
         let eth_key = m.value_of("eth-key");
         transfer_from_account(amount.parse::<u64>().c(d!())?, address, eth_key)?
+    } else if let Some(m) = matches.subcommand_matches("transfer-erc20") {
+        let amount = m.value_of("amount").c(d!())?;
+        let address = m.value_of("addr");
+        let input = m.value_of("input");
+        transfer_to_erc20(amount.parse::<u64>().c(d!())?, address, input)?
+    } else if let Some(m) = matches.subcommand_matches("erc20-to-utxo") {
+        let amount = m.value_of("amount").c(d!())?;
+        let address = m.value_of("addr");
+        let contractaddress = m.value_of("contractaddress");
+        let eth_key = m.value_of("eth-key");
+        let input = m.value_of("input");
+        erc20_to_utxo(
+            amount.parse::<u64>().c(d!())?,
+            address,
+            contractaddress,
+            eth_key,
+            input,
+        )?
     } else {
         println!("{}", matches.usage());
     }

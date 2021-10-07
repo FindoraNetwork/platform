@@ -87,6 +87,8 @@ impl FeeCalculator for StableTxFee {
 
 impl module_account::Config for BaseApp {
     type FeeCalculator = StableTxFee;
+    type BlockGasLimit = BlockGasLimit;
+    type Runner = module_evm::runtime::runner::ActionRunner<Self>;
 }
 
 parameter_types! {
@@ -274,6 +276,12 @@ impl BaseApp {
 
     pub fn consume_mint(&mut self) -> Option<Vec<NonConfidentialOutput>> {
         module_xhub::App::<BaseApp>::consume_mint(&self.deliver_state)
+    }
+
+
+    /// transfer to erc20 address
+    pub fn deliver_findora_erc20(&mut self, tx: &FindoraTransaction) -> Result<()> {
+        self.modules.process_findora_erc20(&self.deliver_state, tx)
     }
 }
 

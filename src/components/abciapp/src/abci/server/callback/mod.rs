@@ -212,7 +212,7 @@ pub fn deliver_tx(
                         }
                     }
 
-                    if is_convert_account(&tx) {
+                    if is_convert_account(&tx) || is_transfer_erc20_tx(&tx) {
                         if let Err(err) =
                             s.account_base_app.write().deliver_findora_tx(&tx)
                         {
@@ -255,6 +255,7 @@ pub fn deliver_tx(
                     } else if let Err(e) = s.la.write().cache_transaction(tx) {
                         resp.code = 1;
                         resp.log = e.to_string();
+                        return resp;
                     }
                 } else {
                     resp.code = 1;
