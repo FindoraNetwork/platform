@@ -1,8 +1,6 @@
 #![deny(warnings)]
 #![allow(missing_docs)]
 
-mod precompile;
-
 use ethereum_types::{Bloom, H160, H256, U256};
 use evm::ExitReason;
 use fp_core::context::Context;
@@ -10,8 +8,8 @@ use fp_types::actions::evm::{Call, Create, Create2};
 use ruc::*;
 use serde::{Deserialize, Serialize};
 
-pub use evm::backend::{Basic as Account, Log};
-pub use precompile::{LinearCostPrecompile, Precompile, PrecompileSet};
+pub use ethereum::Log;
+pub use evm::backend::Basic as Account;
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize, Default)]
 /// External input from the transaction.

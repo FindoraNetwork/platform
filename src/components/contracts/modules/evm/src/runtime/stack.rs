@@ -108,8 +108,8 @@ pub struct FindoraStackState<'context, 'vicinity, 'config, T> {
     _marker: PhantomData<T>,
 }
 
-impl<'context, 'vicinity, 'config, T: Config>
-    FindoraStackState<'context, 'vicinity, 'config, T>
+impl<'context, 'vicinity, 'config, C: Config>
+    FindoraStackState<'context, 'vicinity, 'config, C>
 {
     /// Create a new backend with given vicinity.
     pub fn new(
@@ -186,11 +186,11 @@ impl<'context, 'vicinity, 'config, C: Config> Backend
     }
 
     fn code(&self, address: H160) -> Vec<u8> {
-        App::<C>::account_codes(self.ctx, &address).unwrap_or_default()
+        App::<C>::account_codes(self.ctx, &address, None).unwrap_or_default()
     }
 
     fn storage(&self, address: H160, index: H256) -> H256 {
-        App::<C>::account_storages(self.ctx, &address, &index).unwrap_or_default()
+        App::<C>::account_storages(self.ctx, &address, &index, None).unwrap_or_default()
     }
 
     fn original_storage(&self, _address: H160, _index: H256) -> Option<H256> {

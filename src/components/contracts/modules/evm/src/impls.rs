@@ -37,8 +37,15 @@ impl<C: Config> App<C> {
     }
 
     /// Get the account code
-    pub fn account_codes(ctx: &Context, address: &H160) -> Option<Vec<u8>> {
-        AccountCodes::get(ctx.state.read().borrow(), address)
+    pub fn account_codes(
+        ctx: &Context,
+        address: &H160,
+        height: Option<u64>,
+    ) -> Option<Vec<u8>> {
+        match height {
+            Some(ver) => AccountCodes::get_ver(ctx.state.read().borrow(), address, ver),
+            None => AccountCodes::get(ctx.state.read().borrow(), address),
+        }
     }
 
     /// Get the account storage
@@ -46,8 +53,14 @@ impl<C: Config> App<C> {
         ctx: &Context,
         address: &H160,
         index: &H256,
+        height: Option<u64>,
     ) -> Option<H256> {
-        AccountStorages::get(ctx.state.read().borrow(), address, index)
+        match height {
+            Some(ver) => {
+                AccountStorages::get_ver(ctx.state.read().borrow(), address, index, ver)
+            }
+            None => AccountStorages::get(ctx.state.read().borrow(), address, index),
+        }
     }
 
     /// Get the account basic in EVM format.
@@ -83,7 +96,7 @@ impl<C: Config> OnChargeEVMTransaction for App<C> {
         already_withdrawn: U256,
     ) -> Result<()> {
         let account_id = C::AddressMapping::convert_to_account_id(*who);
-        let refund_amount = already_withdrawn.saturating_sub(corrected_fee);
-        C::AccountAsset::refund(ctx, &account_id, refund_amount)
+        C::AccountAsset::refund(ctx, &account_id, already_withdrawn)?;
+        C::AccountAsset::burn(ctx, &account_id, corrected_fee)
     }
 }

@@ -7,7 +7,12 @@ use ruc::*;
 
 /// Provide query and call interface provided by each module.
 pub trait BaseProvider {
-    fn account_of(&self, who: &Address, ctx: Option<Context>) -> Result<SmartAccount>;
+    fn account_of(
+        &self,
+        who: &Address,
+        height: Option<u64>,
+        ctx: Option<Context>,
+    ) -> Result<SmartAccount>;
 
     fn current_block(&self, id: Option<BlockId>) -> Option<Block>;
 
@@ -24,7 +29,12 @@ pub trait BaseProvider {
 
     fn transaction_index(&self, hash: H256) -> Option<(U256, u32)>;
 
-    fn account_code_at(&self, address: H160) -> Option<Vec<u8>>;
+    fn account_code_at(&self, address: H160, height: Option<u64>) -> Option<Vec<u8>>;
 
-    fn account_storage_at(&self, address: H160, index: H256) -> Option<H256>;
+    fn account_storage_at(
+        &self,
+        address: H160,
+        index: H256,
+        height: Option<u64>,
+    ) -> Option<H256>;
 }

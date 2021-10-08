@@ -2,7 +2,6 @@
 #![allow(missing_docs)]
 
 mod basic;
-mod genesis;
 
 pub use crate::storage::*;
 use fp_core::{

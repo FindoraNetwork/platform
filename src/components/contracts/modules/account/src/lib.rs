@@ -2,7 +2,6 @@
 #![allow(missing_docs)]
 
 mod basic;
-mod genesis;
 mod impls;
 
 #[cfg(test)]
@@ -36,11 +35,19 @@ impl Config for () {
 mod storage {
     use fp_core::account::SmartAccount;
     use fp_types::{actions::account::MintOutput, crypto::Address};
+    use primitive_types::U256;
 
     use fp_storage::*;
 
     // Store account information under all account addresses
     generate_storage!(Account, AccountStore => Map<Address, SmartAccount>);
+    // The total units transferred from the fra UTXO side.
+    generate_storage!(Account, TotalIssuance => Value<U256>);
+    // The owner approve his amount of funds to the spender.
+    // owner => spender => amount
+    generate_storage!(Account, Allowances => DoubleMap<Address, Address, U256>);
+
+    // The following data is stored in non-state rocksdb
     // Store MintOutputDefine
     generate_storage!(Account, MintOutputs => Value<Vec<MintOutput>>);
 }
@@ -79,7 +86,7 @@ impl<C: Config> AppModule for App<C> {
                     return resp;
                 }
                 let mut info =
-                    Self::account_of(&ctx, &data.unwrap()).unwrap_or_default();
+                    Self::account_of(&ctx, &data.unwrap(), None).unwrap_or_default();
                 info.balance =
                     EthereumDecimalsMapping::convert_to_native_token(info.balance);
                 info.reserved =
@@ -114,14 +121,6 @@ impl<C: Config> Executable for App<C> {
         ctx: &Context,
     ) -> Result<ActionResult> {
         match call {
-            Action::Transfer(action) => {
-                if let Some(sender) = origin {
-                    Self::transfer(ctx, &sender, &action.to, action.amount)?;
-                    Ok(ActionResult::default())
-                } else {
-                    Err(eg!("invalid transaction origin"))
-                }
-            }
             Action::TransferToUTXO(action) => {
                 if let Some(sender) = origin {
                     Self::transfer_to_utxo(ctx, sender, action.outputs)

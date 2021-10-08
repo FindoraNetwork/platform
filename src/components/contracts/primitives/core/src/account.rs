@@ -8,6 +8,6 @@ pub struct SmartAccount {
     /// Account balance(native asset). Note: decimals is 6.
     pub balance: U256,
     /// Balance which is reserved and may not be used.
-    /// such as: staking deposit
+    /// such as: staking deposit, transaction fee
     pub reserved: U256,
 }

@@ -79,7 +79,7 @@ mod test {
 
     #[test]
     fn recover_signer_works() {
-        let raw_tx = String::from("ZXZteyJzaWduYXR1cmUiOm51bGwsImZ1bmN0aW9uIjp7IkV0aGVyZXVtIjp7IlRyYW5zYWN0Ijp7Im5vbmNlIjoiMHgwIiwiZ2FzX3ByaWNlIjoiMHgxNzQ4NzZlODAwIiwiZ2FzX2xpbWl0IjoiMHg1MjA4IiwiYWN0aW9uIjp7IkNhbGwiOiIweDU4NDk3NzExMzk5NzhmZTBiM2Q1MjMwM2Q3MWQyMjJhMzQ3ZTdjYWIifSwidmFsdWUiOiIweDYwNDZmMzdlNTk0NWMwMDAwIiwiaW5wdXQiOltdLCJzaWduYXR1cmUiOnsidiI6MTA4MSwiciI6IjB4MGRhODlhZTgzNzkyNWM3MjE1ZDVjMzFkYTc5OGU1Yzk0MzQ1YTZmNDNiZTU0ODkxZDUyZGMzMzUwNjEwNGFhNyIsInMiOiIweDJiOGQxNzhkN2U3ZmQ3YTlmZWJjYjM1NDg0M2JiMTY4NDg3YWI2OGUxZjViNTlkZGFlNTc0MDRlMmU3ZDZmOTUifX19fX0=");
+        let raw_tx = String::from("ZXZtOnsic2lnbmF0dXJlIjpudWxsLCJmdW5jdGlvbiI6eyJFdGhlcmV1bSI6eyJUcmFuc2FjdCI6eyJub25jZSI6IjB4MSIsImdhc19wcmljZSI6IjB4MTc0ODc2ZTgwMCIsImdhc19saW1pdCI6IjB4NTIwOCIsImFjdGlvbiI6eyJDYWxsIjoiMHgyYWQzMjg0NmM2ZGQyZmZkM2VkYWRiZTUxY2Q1YWUwNGFhNWU1NzVlIn0sInZhbHVlIjoiMHg1NmJjNzVlMmQ2MzEwMDAwMCIsImlucHV0IjpbXSwic2lnbmF0dXJlIjp7InYiOjEwODIsInIiOiIweGY4YWVmN2Y4MDUzZDg5ZmVlMzk1MGM0ZDcwMjA4MGJmM2E4MDcyYmVkNWQ4NGEzYWYxOWEzNjAwODFiNjM2YTIiLCJzIjoiMHgyOTYyOTlhOGYyNDMwYjg2ZmQzZWI5NzZlYWJjNzMwYWMxY2ZiYmJlMzZlYjY5ZWFlMzM4Y2ZmMzNjNGE5OGMxIn19fX19");
         let tx_bytes = base64::decode_config(&raw_tx, base64::URL_SAFE).unwrap();
         let evm_tx = EvmRawTxWrapper::unwrap(&tx_bytes).unwrap();
         let unchecked_tx: UncheckedTransaction<()> =

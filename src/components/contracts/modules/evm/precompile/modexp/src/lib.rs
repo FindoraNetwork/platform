@@ -18,7 +18,7 @@
 use core::cmp::max;
 use core::ops::BitAnd;
 use evm::{executor::PrecompileOutput, Context, ExitError, ExitSucceed};
-use fp_evm::Precompile;
+use module_evm::precompile::{FinState, Precompile};
 use num::{BigUint, FromPrimitive, One, ToPrimitive, Zero};
 use std::cmp::Ordering;
 
@@ -94,6 +94,7 @@ impl Precompile for Modexp {
         input: &[u8],
         target_gas: Option<u64>,
         _context: &Context,
+        _state: &FinState,
     ) -> core::result::Result<PrecompileOutput, ExitError> {
         if input.len() < 96 {
             return Err(ExitError::Other(

@@ -32,6 +32,7 @@ use ruc::eg;
 use sha3::{Digest, Keccak256};
 use std::collections::BTreeMap;
 use std::convert::Into;
+use std::ops::Range;
 use std::sync::Arc;
 use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::Runtime;
@@ -62,6 +63,59 @@ impl EthApiImpl {
             max_past_logs,
         }
     }
+
+    /// Some(height) means versioned
+    /// None means latest
+    pub fn block_number_to_height(
+        &self,
+        number: Option<BlockNumber>,
+    ) -> Result<Option<u64>> {
+        let range = self.version_range()?;
+        let height = match number.unwrap_or(BlockNumber::Latest) {
+            BlockNumber::Hash {
+                hash,
+                require_canonical: _,
+            } => match self
+                .account_base_app
+                .read()
+                .current_block(Some(BlockId::Hash(hash)))
+            {
+                Some(block) => Some(block.header.number.as_u64()),
+                None => {
+                    return Err(internal_err(format!(
+                        "block number not found, hash: {:?}",
+                        hash
+                    )))
+                }
+            },
+            BlockNumber::Num(num) => {
+                if range.contains(&num) || num == range.end {
+                    Some(num)
+                } else {
+                    return Err(internal_err(format!(
+                        "block number: {} exceeds version range: {:?}",
+                        num, range
+                    )));
+                }
+            }
+            BlockNumber::Latest => None,
+            BlockNumber::Earliest => Some(range.start),
+            BlockNumber::Pending => None,
+        };
+        Ok(height)
+    }
+
+    /// get the range of queryable versioned data [lower, upper)
+    pub fn version_range(&self) -> Result<Range<u64>> {
+        let range = self
+            .account_base_app
+            .read()
+            .chain_state
+            .read()
+            .get_ver_range()
+            .map_err(internal_err)?;
+        Ok(range)
+    }
 }
 
 impl EthApi for EthApiImpl {
@@ -88,8 +142,13 @@ impl EthApi for EthApiImpl {
     fn balance(&self, address: H160, number: Option<BlockNumber>) -> Result<U256> {
         debug!(target: "eth_rpc", "balance, address:{:?}, number:{:?}", address, number);
 
+        let height = self.block_number_to_height(number)?;
         let account_id = EthereumAddressMapping::convert_to_account_id(address);
-        if let Ok(sa) = self.account_base_app.read().account_of(&account_id, None) {
+        if let Ok(sa) =
+            self.account_base_app
+                .read()
+                .account_of(&account_id, height, None)
+        {
             Ok(sa.balance)
         } else {
             Ok(U256::zero())
@@ -319,11 +378,12 @@ impl EthApi for EthApiImpl {
         number: Option<BlockNumber>,
     ) -> Result<H256> {
         warn!(target: "eth_rpc", "storage_at, address:{:?}, index:{:?}, number:{:?}", address, index, number);
-        // TODO wait storage versioning
+
+        let height = self.block_number_to_height(number)?;
         Ok(self
             .account_base_app
             .read()
-            .account_storage_at(address, H256::from_uint(&index))
+            .account_storage_at(address, H256::from_uint(&index), height)
             .unwrap_or_default())
     }
 
@@ -386,6 +446,7 @@ impl EthApi for EthApiImpl {
     ) -> Result<U256> {
         debug!(target: "eth_rpc", "transaction_count, address:{:?}, number:{:?}", address, number);
 
+        let height = self.block_number_to_height(number)?;
         let account_id =
             <BaseApp as module_evm::Config>::AddressMapping::convert_to_account_id(
                 address,
@@ -393,7 +454,7 @@ impl EthApi for EthApiImpl {
         let sa = self
             .account_base_app
             .read()
-            .account_of(&account_id, None)
+            .account_of(&account_id, height, None)
             .unwrap_or_default();
         Ok(sa.nonce)
     }
@@ -435,11 +496,12 @@ impl EthApi for EthApiImpl {
 
     fn code_at(&self, address: H160, number: Option<BlockNumber>) -> Result<Bytes> {
         debug!(target: "eth_rpc", "code_at, address:{:?}, number:{:?}", address, number);
-        // TODO wait storage versioning
+
+        let height = self.block_number_to_height(number)?;
         Ok(self
             .account_base_app
             .read()
-            .account_code_at(address)
+            .account_code_at(address, height)
             .unwrap_or_default()
             .into())
     }

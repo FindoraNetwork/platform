@@ -5,6 +5,7 @@ use fp_storage::{Borrow, BorrowMut};
 use fp_traits::account::AccountAsset;
 use fp_types::actions::account::MintOutput;
 use fp_types::crypto::Address;
+use fp_types::U256;
 use ledger::data_model::ASSET_TYPE_FRA;
 use parking_lot::RwLock;
 use rand_chacha::rand_core::SeedableRng;
@@ -83,21 +84,62 @@ fn test_account_of() {
     //Generate Address
     let mut prng = ChaChaRng::from_entropy();
     let key = XfrKeyPair::generate(&mut prng);
-    let address = Address::from(key.pub_key);
+    let addr = Address::from(key.pub_key);
 
     //Generate SmartAccount
-    let account = SmartAccount {
+    let sa1 = SmartAccount {
         balance: 123.into(),
         ..Default::default()
     };
 
     //Call set and account_of
-    assert!(
-        AccountStore::insert(ctx.state.write().borrow_mut(), &address, &account).is_ok()
+    AccountStore::insert(ctx.state.write().borrow_mut(), &addr, &sa1).unwrap();
+    assert_eq!(App::<()>::account_of(&ctx, &addr, None), Some(sa1.clone()));
+    assert_eq!(App::<()>::account_of(&ctx, &addr, Some(2)), None);
+
+    //Verify after commit block 1
+    assert!(ctx.state.write().commit(1).is_ok());
+    assert_eq!(App::<()>::account_of(&ctx, &addr, None), Some(sa1.clone()));
+    assert_eq!(App::<()>::account_of(&ctx, &addr, Some(0)), None);
+    assert_eq!(
+        App::<()>::account_of(&ctx, &addr, Some(1)),
+        Some(sa1.clone())
     );
-    assert_eq!(account, App::<()>::account_of(&ctx, &address).unwrap());
+
+    //Update SmartAccount
+    let sa2 = SmartAccount {
+        balance: 456.into(),
+        ..Default::default()
+    };
+
+    //Call set and account_of with version
+    AccountStore::insert(ctx.state.write().borrow_mut(), &addr, &sa2).unwrap();
+    assert_eq!(App::<()>::account_of(&ctx, &addr, None), Some(sa2.clone()));
+
+    //Verify after commit block 2
     assert!(ctx.state.write().commit(2).is_ok());
-    assert_eq!(account, App::<()>::account_of(&ctx, &address).unwrap());
+    assert_eq!(App::<()>::account_of(&ctx, &addr, None), Some(sa2.clone()));
+    assert_eq!(App::<()>::account_of(&ctx, &addr, Some(0)), None);
+    assert!(App::<()>::account_of(&ctx, &addr, Some(1)) == Some(sa1.clone()));
+    assert!(App::<()>::account_of(&ctx, &addr, Some(2)) == Some(sa2.clone()));
+
+    //Update SmartAccount again
+    let sa3 = SmartAccount {
+        balance: 789.into(),
+        ..Default::default()
+    };
+
+    //Call set and account_of with version again
+    AccountStore::insert(ctx.state.write().borrow_mut(), &addr, &sa3).unwrap();
+    assert_eq!(App::<()>::account_of(&ctx, &addr, None), Some(sa3.clone()));
+
+    //Verify after commit block 3
+    assert!(ctx.state.write().commit(3).is_ok());
+    assert_eq!(App::<()>::account_of(&ctx, &addr, None), Some(sa3.clone()));
+    assert_eq!(App::<()>::account_of(&ctx, &addr, Some(0)), None);
+    assert_eq!(App::<()>::account_of(&ctx, &addr, Some(1)), Some(sa1));
+    assert_eq!(App::<()>::account_of(&ctx, &addr, Some(2)), Some(sa2));
+    assert_eq!(App::<()>::account_of(&ctx, &addr, Some(3)), Some(sa3));
 }
 
 #[test]
@@ -264,6 +306,7 @@ fn test_account_burn() {
     assert!(
         AccountStore::insert(ctx.state.write().borrow_mut(), &address, &account).is_ok()
     );
+    assert!(TotalIssuance::put(ctx.state.write().borrow_mut(), &500.into()).is_ok());
 
     //burn FRA
     assert!(App::<()>::burn(&ctx, &address, 200.into()).is_ok());
@@ -311,8 +354,9 @@ fn test_account_refund() {
 
     //Generate SmartAccount
     let account = SmartAccount {
+        nonce: U256::zero(),
         balance: 500.into(),
-        ..Default::default()
+        reserved: 1000.into(),
     };
 
     //Add account to database
@@ -323,6 +367,7 @@ fn test_account_refund() {
     //Refund an amount to address
     assert!(App::<()>::refund(&ctx, &address, 700.into()).is_ok());
     assert_eq!(App::<()>::balance(&ctx, &address), 1200.into());
+    assert_eq!(App::<()>::reserved_balance(&ctx, &address), 300.into());
 }
 
 #[test]

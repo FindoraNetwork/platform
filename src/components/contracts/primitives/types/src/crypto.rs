@@ -95,7 +95,8 @@ impl From<ecdsa::Public> for Address32 {
 impl From<H160> for Address32 {
     fn from(k: H160) -> Self {
         let mut data = [0u8; 32];
-        data[0..20].copy_from_slice(k.as_bytes());
+        data[0..4].copy_from_slice(b"evm:");
+        data[4..24].copy_from_slice(k.as_bytes());
         data.into()
     }
 }
