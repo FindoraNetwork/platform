@@ -42,6 +42,7 @@ percent-encoding = "2.1.0"
 nix = "0.22.1"
 
 zei = { git = "https://@github.com/FindoraNetwork/zei", branch = "develop" }
+algebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
 ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
 abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
 
