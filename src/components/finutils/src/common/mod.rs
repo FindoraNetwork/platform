@@ -736,9 +736,10 @@ pub fn gen_oabar_add_op(
     let diversified_from_pub_key = from.pub_key().randomize(&r);
 
     let ledger = LedgerState::tmp_ledger(); //TODO - replace tmp with actual
-    let axtxo_abar = ledger.get_owned_abars(&diversified_from_pub_key);
+
+    let axtxo_abar = utils::get_owned_abars(&diversified_from_pub_key).c(d!())?;
     //Only the first abar received from the ledger query is considered
-    let owner_memo = ledger.get_abar_memo(axtxo_abar[0].0).c(d!())?;
+    let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
     let mt_leaf_info = ledger.get_abar_proof(axtxo_abar[0].0).c(d!())?;
 
     let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(

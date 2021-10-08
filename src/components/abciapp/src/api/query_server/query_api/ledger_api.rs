@@ -20,7 +20,9 @@ use parking_lot::RwLock;
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, mem, sync::Arc};
+use zei::anon_xfr::structs::AnonBlindAssetRecord;
 use zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo};
+use ledger::data_model::ATxoSID;
 
 // Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]
@@ -618,6 +620,19 @@ pub(super) async fn query_owned_utxos(
         .map(|pk| web::Json(pnk!(read.get_owned_utxos(&pk))))
 }
 
+// query utxos according `public_key`
+pub(super) async fn query_owned_abars(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    owner: web::Path<String>,
+) -> actix_web::Result<web::Json<Vec<(ATxoSID, AnonBlindAssetRecord)>>> {
+    let qs = data.read();
+    let read = qs.state.as_ref().unwrap().read();
+    globutils::wallet::anon_public_key_from_base64(owner.as_str())
+        .c(d!())
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
+        .map(|pk| web::Json(read.get_owned_abars(&pk)))
+}
+
 #[allow(missing_docs)]
 pub enum ApiRoutes {
     UtxoSid,
@@ -630,6 +645,7 @@ pub enum ApiRoutes {
     TxnSidLight,
     GlobalStateVersion,
     OwnedUtxos,
+    OwnedAbars,
     ValidatorList,
     DelegationInfo,
     DelegatorList,
@@ -649,6 +665,7 @@ impl NetworkRoute for ApiRoutes {
             ApiRoutes::TxnSidLight => "txn_sid_light",
             ApiRoutes::GlobalStateVersion => "global_state_version",
             ApiRoutes::OwnedUtxos => "owned_utxos",
+            ApiRoutes::OwnedAbars => "owned_abars",
             ApiRoutes::ValidatorList => "validator_list",
             ApiRoutes::DelegationInfo => "delegation_info",
             ApiRoutes::DelegatorList => "delegator_list",

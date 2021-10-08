@@ -195,6 +195,12 @@ pub fn anon_public_key_from_base64(pk: &str) -> Result<AXfrPubKey> {
 }
 
 #[inline(always)]
+/// Convert an anon public key to base64
+pub fn anon_public_key_to_base64(key: &AXfrPubKey) -> String {
+    base64::encode_config(&AXfrPubKey::zei_to_bytes(key), base64::URL_SAFE)
+}
+
+#[inline(always)]
 /// Restore a x public key from base64
 pub fn x_public_key_from_base64(pk: &str) -> Result<XPublicKey> {
     base64::decode_config(pk, base64::URL_SAFE)
