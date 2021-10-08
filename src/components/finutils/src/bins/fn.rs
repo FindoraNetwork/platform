@@ -509,6 +509,14 @@ fn run() -> Result<()> {
             )
             .c(d!())?;
         }
+    } else if let Some(m) = matches.subcommand_matches("anon-fetch-merkle-proof") {
+        let atxo_sid = m.value_of("atxo-sid");
+
+        if atxo_sid.is_none() {
+            println!("{}", m.usage());
+        } else {
+            common::get_mtleaf_info(atxo_sid.unwrap()).c(d!())?;
+        }
     } else {
         println!("{}", matches.usage());
     }

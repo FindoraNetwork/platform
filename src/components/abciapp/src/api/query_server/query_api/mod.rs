@@ -13,8 +13,8 @@ use finutils::api::NetworkRoute;
 use ledger::data_model::ATxoSID;
 use ledger::{
     data_model::{
-        b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
-        TxnSID, TxoSID, XfrAddress,
+        b64dec, ATxoSID, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction,
+        TxOutput, TxnSID, TxoSID, XfrAddress,
     },
     staking::ops::mint_fra::MintEntry,
 };
@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use server::{QueryServer, TxnIDHash};
 use std::{collections::HashSet, sync::Arc};
 use zei::{
+    anon_xfr::structs::MTLeafInfo,
     serialization::ZeiFromToBytes,
     xfr::{sig::XfrPublicKey, structs::OwnerMemo},
 };
@@ -126,6 +127,14 @@ async fn get_owned_abars(
             let rpk = pk.randomize(&r);
             web::Json(read.get_owned_abars(&rpk).iter().map(|a| a.0).collect())
         })
+    }
+/// Returns the merkle proof for anonymous transactions
+async fn get_abar_proof(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    info: web::Path<u64>,
+) -> actix_web::Result<web::Json<Option<MTLeafInfo>>, actix_web::error::Error> {
+    let server = data.read();
+    Ok(web::Json(server.get_abar_proof(ATxoSID(*info))))
 }
 
 /// Define interface type
@@ -137,6 +146,7 @@ pub enum QueryServerRoutes {
     GetAbarMemo,
     GetOwnedUtxos,
     GetOwnedAbars,
+    GetAbarProof,
     GetCreatedAssets,
     GetIssuedRecords,
     GetIssuedRecordsByCode,
@@ -159,6 +169,7 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetOwnerMemo => "get_owner_memo",
             QueryServerRoutes::GetOwnerMemoBatch => "get_owner_memo_batch",
             QueryServerRoutes::GetAbarMemo => "get_abar_memo",
+            QueryServerRoutes::GetAbarProof => "get_abar_proof",
             QueryServerRoutes::GetCreatedAssets => "get_created_assets",
             QueryServerRoutes::GetIssuedRecords => "get_issued_records",
             QueryServerRoutes::GetIssuedRecordsByCode => "get_issued_records_by_code",
@@ -480,6 +491,10 @@ impl QueryApi {
                 .route(
                     &QueryServerRoutes::GetAbarMemo.with_arg_template("atxo_sid"),
                     web::get().to(get_abar_memo),
+                )
+                .route(
+                    &QueryServerRoutes::GetAbarProof.with_arg_template("atxo_sid"),
+                    web::get().to(get_abar_proof),
                 )
                 .route(
                     &QueryServerRoutes::GetRelatedTxns.with_arg_template("address"),

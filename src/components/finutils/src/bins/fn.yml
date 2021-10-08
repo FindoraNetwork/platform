@@ -551,3 +551,13 @@ subcommands:
             takes_value: true
             value_name: Amount
             required: true
+  - anon-fetch-merkle-proof:
+      about: Query to fetch mtleaf info
+      args:
+        - atxo-sid:
+            help: ATXO SID of the Anonymous Blind Asset Record
+            short: a
+            long: atxo-sid
+            takes_value: true
+            value_name: ATXO SID
+            required: true
