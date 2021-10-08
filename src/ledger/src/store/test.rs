@@ -39,6 +39,105 @@ fn abort_block(block: BlockEffect) -> HashMap<TxnTempSID, Transaction> {
 }
 
 #[test]
+fn axfr_create_verify_unit() {
+    let mut ledger_state = LedgerState::test_ledger();
+    let mut ledger_status = ledger_state.get_status();
+
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+
+    let user_params =
+        UserParams::from_file_if_exists(1, 1, Some(1), DEFAULT_BP_NUM_GENS, None)
+            .unwrap();
+
+    let amount = 10u64;
+    let asset_type = AssetType::from_identical_byte(0);
+
+    // simulate input abar
+    let (oabar, keypair_in, dec_key_in, _) =
+        gen_oabar_and_keys(&mut prng, amount, asset_type);
+    let abar = AnonBlindAssetRecord::from_oabar(&oabar);
+    assert_eq!(keypair_in.pub_key(), *oabar.pub_key_ref());
+    let rand_keypair_in = keypair_in.randomize(&oabar.get_key_rand_factor());
+    assert_eq!(rand_keypair_in.pub_key(), abar.public_key);
+
+    let owner_memo = oabar.get_owner_memo().unwrap();
+
+    // add abar to merkle tree
+    ledger_state.add_abar(abar);
+    //ledger_state.add_abar_comitment(abar);
+    let mut version_count = ledger_state.abar_commit().unwrap();
+    // commit
+    //simulate output abar
+    let (oabar_out, keypair_out, dec_key_out, _) =
+        gen_oabar_and_keys(&mut prng, amount, asset_type);
+    let abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
+    //let mut builder = TransactionBuilder::from_seq_id(1);
+    //let mut txn_builder = builder.add_operation_anon_transfer(&oabar, oabar_out, keypair_in);
+    // spend
+    //let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    //let depth: usize = 41;
+    /*let user_params = UserParams::new(
+        inputs.len(),
+        outputs.len(),
+        Option::from(depth),
+        DEFAULT_BP_NUM_GENS,
+    );*/
+
+    let (body, keypairs) =
+        gen_anon_xfr_body(&mut prng, &user_params, oabar, oabar_out, keypair_in)
+            .c(d!())?;
+    let axfr_note = AXfrNote::generate_note_from_body(body, keypairs).c(d!())?;
+
+    axfr_note.verify().c(d!())?;
+    let mut axfr_bodies: Vec<AXfrBody> = Vec::new();
+    // push
+    axfr_bodies.push(axfr_note.body.clone());
+    // axfr_body
+    let mut builder = TransactionBuilder::from_seq_id(1);
+    let _ = builder
+        .add_operation_bar_to_abar(
+            &from,
+            &to,
+            TxoSID(123),
+            &dummy_input,
+            &XPublicKey::from(&to_enc_key),
+        )
+        .is_ok();
+
+    let txn = builder.take_transaction();
+    let compute_effect = txn.compute_effect();
+    let block = BlockEffect();
+    block.add_txn_effect(compute_effect);
+    //862 is_loading()true, check stacking, block effect, add_txn_effect() in blockc effect after initializing block effect
+
+    // compute effect - transaction to transaction effect
+    //973 apply_transaction - check transaction effect - then finish block
+
+
+
+    for n in block.new_nullifiers.iter() {
+        let str =
+            base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
+        let d: Key = Key::from_base64(&str).c(d!())?;
+
+        // if the nullifier hash is present in our nullifier set, fail the block
+        if self.nullifier.get(&d).is_some() {
+            return Err(eg!("Nullifier hash already present in set"));
+        }
+        self.nullifier.set(&d, Some("".to_string()));
+    }
+    let txn_sid = ledger_status.status.next_txn;
+    for abar in block.output_abars.iter() {
+        let ax_sid = self.abar_store.add_abar(&abar).c(d!())?;
+        self.status
+            .ax_txo_to_txn_location
+            .insert(*ax_sid, (txn_sid, OutputPosition(position)));
+    }
+
+
+}
+
+#[test]
 fn test_load_fake_transaction_log() {
     // Verify that loading transaction fails with incorrect path
     let result_err = LedgerState::load_transaction_log("incorrect/path");
