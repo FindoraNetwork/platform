@@ -80,6 +80,8 @@ pub fn begin_block(
     s: &mut ABCISubmissionServer,
     req: &RequestBeginBlock,
 ) -> ResponseBeginBlock {
+    pnk!(CFG.snapcfg.snapshot());
+
     // cache the last block in query server
     // trigger this op in `BeginBlock` to make abci-commit safer
     if HAS_ACTUAL_TXS.swap(false, Ordering::Relaxed) {

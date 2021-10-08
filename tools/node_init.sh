@@ -77,7 +77,7 @@ fi
 ###################
 
 cd /tmp || exit 1
-abcid -q --enable-eth-api-service \
+abcid -q \
     --tendermint-node-key-config-path="${th}/config/priv_validator_key.json" \
     >abcid.log 2>&1 &
 tendermint node >tendermint.log 2>&1 &

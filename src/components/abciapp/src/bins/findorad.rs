@@ -30,33 +30,43 @@ const PAD_SIZE: usize = 128;
 fn node_command() -> Result<()> {
     let mut abcid = Command::new("/tmp/abcid__");
 
+    macro_rules! convert_arg {
+        ($arg: tt) => {{
+            if let Some(v) = CFG.$arg.as_deref() {
+                abcid
+                    .arg("--".to_owned() + &stringify!($arg).replace("_", "-"))
+                    .arg(v);
+            }
+        }};
+    }
+
     abcid
         .arg("--submission-service-port")
         .arg(CFG.submission_service_port.to_string())
-        .arg("ledger-service-port")
+        .arg("--ledger-service-port")
         .arg(CFG.ledger_service_port.to_string())
         .arg("--ledger-dir")
         .arg(&CFG.ledger_dir);
-
-    if let Some(v) = CFG.tendermint_node_self_addr.as_deref() {
-        abcid.arg("--tendermint-node-self-addr").arg(v);
-    }
-
-    if let Some(v) = CFG.tendermint_node_key_config_path.as_deref() {
-        abcid.arg("--tendermint-node-key-config-path").arg(v);
-    }
 
     if CFG.enable_query_service {
         abcid.arg("--enable-query-service");
     }
 
-    if CFG.enable_eth_api_service {
-        abcid.arg("--enable-eth-api-service");
+    convert_arg!(tendermint_node_self_addr);
+    convert_arg!(tendermint_node_key_config_path);
+
+    if CFG.enable_snapshot {
+        abcid.arg("--enable-snapshot");
     }
 
-    if CFG.enable_eth_empty_blocks {
-        abcid.arg("--enable-eth-empty-blocks");
-    }
+    convert_arg!(snapshot_itv);
+    convert_arg!(snapshot_cap);
+    convert_arg!(snapshot_mode);
+    convert_arg!(snapshot_infra);
+    convert_arg!(snapshot_target);
+    convert_arg!(snapshot_daemon);
+    convert_arg!(snapshot_rollback);
+    convert_arg!(snapshot_rollback_exact);
 
     let mut abcid_child = abcid
         .stdin(Stdio::null())
@@ -362,6 +372,15 @@ mod config {
         pub tendermint_config: Option<String>,
         pub command: String,
         pub init_mode: InitMode,
+        pub enable_snapshot: bool,
+        pub snapshot_itv: Option<String>,
+        pub snapshot_cap: Option<String>,
+        pub snapshot_mode: Option<String>,
+        pub snapshot_infra: Option<String>,
+        pub snapshot_target: Option<String>,
+        pub snapshot_daemon: Option<String>,
+        pub snapshot_rollback: Option<String>,
+        pub snapshot_rollback_exact: Option<String>,
     }
 
     fn get_config() -> Result<Config> {
@@ -382,7 +401,16 @@ mod config {
                     .arg_from_usage("-d, --ledger-dir=[Path]")
                     .arg_from_usage(
                         "-b, --base-dir=[DIR] 'The root directory for tendermint config, aka $TENDERMINT_HOME'",
-                    );
+                    )
+                .arg_from_usage("--enable-snapshot 'global switch for enabling snapshot functions'")
+                .arg_from_usage("--snapshot-itv=[Iterval] 'interval between adjacent snapshots, default to 10 blocks'")
+                .arg_from_usage("--snapshot-cap=[Capacity] 'the maximum number of snapshots that will be stored, default to 100'")
+                .arg_from_usage("--snapshot-mode=[Mode] 'native/external, default to native'")
+                .arg_from_usage("--snapshot-infra=[Infra] 'zfs/btrfs, will try a guess if missing, only useful in native mode'")
+                .arg_from_usage("--snapshot-daemon=[UdpDaemon] 'a UDP address like `ADDR:PORT`, only useful in external mode'")
+                .arg_from_usage("--snapshot-target=[TargetPath] 'a data volume containing both ledger data and tendermint data'")
+                .arg_from_usage("-r, --snapshot-rollback=[Height] 'rollback to a custom height, will try the closest smaller height if the target does not exist'")
+                .arg_from_usage("-R, --snapshot-rollback-exact=[Height] 'rollback to a custom height exactly, an error will be reported if the target does not exist'");
 
             let init = SubCommand::with_name("init")
                     .about("Initialize the configurations of findorad")
@@ -518,6 +546,17 @@ mod config {
             tendermint_config: tcfg,
             tendermint_home: tdir,
             init_mode,
+            enable_snapshot: m.is_present("enable-snapshot"),
+            snapshot_itv: m.value_of("snapshot-itv").map(|v| v.to_owned()),
+            snapshot_cap: m.value_of("snapshot-cap").map(|v| v.to_owned()),
+            snapshot_mode: m.value_of("snapshot-mode").map(|v| v.to_owned()),
+            snapshot_infra: m.value_of("snapshot-infra").map(|v| v.to_owned()),
+            snapshot_target: m.value_of("snapshot-target").map(|v| v.to_owned()),
+            snapshot_daemon: m.value_of("snapshot-daemon").map(|v| v.to_owned()),
+            snapshot_rollback: m.value_of("snapshot-rollback").map(|v| v.to_owned()),
+            snapshot_rollback_exact: m
+                .value_of("snapshot-rollback-exact")
+                .map(|v| v.to_owned()),
         };
 
         Ok(res)

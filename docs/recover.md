@@ -12,21 +12,15 @@ findorad node
 --snapshot-cap           the maximum number of snapshots that will be stored, default to 100
 --snapshot-mode          native/external, default to native
 --snapshot-infra         zfs/btrfs, will try a guess if missing, only useful in native mode
---snapshot-server        an address pair like "ADDR:PORT", only useful in external mode
+--snapshot-daemon        a UDP address like "ADDR:PORT", only useful in external mode
 --snapshot-target        a data volume containing both ledger data and tendermint data
 --snapshot-list          list all available snapshots in the form of block height
 
-findorad node restore
-
 > running offline, only useful in native mode
 
---snapshot-infra         zfs/btrfs, will try a guess if missing
---snapshot-target        a data volume containing both ledger data and tendermint data
+-r, --snapshot-rollback        rollback to a custom height, will try the closest smaller height if the target does not exist
 
---list-snapshots         same as `findorad node --snapshot-list`
-
---to-height              restore to a custom height, will try the closest smaller height if the target does not exist
---to-height-exact        restore to a custom height exactly, an error will be reported if the target does not exist
+-R, --snapshot-rollback-exact  rollback to a custom height exactly, an error will be reported if the target does not exist
 ```
 
 ## Inner Operations

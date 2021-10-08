@@ -12,8 +12,6 @@ pub struct ABCIConfig {
     pub submission_port: u16,
     pub ledger_port: u16,
     pub query_port: u16,
-    pub evm_http_port: u16,
-    pub evm_ws_port: u16,
     pub ledger_dir: String,
 }
 
@@ -25,8 +23,6 @@ pub struct ABCIConfigStr {
     pub tendermint_port: String,
     pub submission_port: String,
     pub ledger_port: String,
-    pub evm_http_port: String,
-    pub evm_ws_port: String,
     #[serde(skip)]
     pub ledger_dir: Option<String>,
 }
@@ -36,8 +32,6 @@ impl TryFrom<ABCIConfigStr> for ABCIConfig {
     fn try_from(cfg: ABCIConfigStr) -> Result<Self> {
         let ledger_port = cfg.ledger_port.parse::<u16>().c(d!())?;
         let query_port = ledger_port - 1;
-        let evm_http_port = cfg.evm_http_port.parse::<u16>().c(d!())?;
-        let evm_ws_port = cfg.evm_ws_port.parse::<u16>().c(d!())?;
         Ok(ABCIConfig {
             abci_host: cfg.abci_host,
             abci_port: cfg.abci_port.parse::<u16>().c(d!())?,
@@ -46,8 +40,6 @@ impl TryFrom<ABCIConfigStr> for ABCIConfig {
             submission_port: cfg.submission_port.parse::<u16>().c(d!())?,
             ledger_port,
             query_port,
-            evm_http_port,
-            evm_ws_port,
             ledger_dir: cfg.ledger_dir.unwrap_or(pnk!(env::var("LEDGER_DIR"))),
         })
     }
@@ -77,8 +69,6 @@ impl ABCIConfig {
             submission_port,
             ledger_port,
             query_port,
-            evm_http_port: CFG.evm_http_port,
-            evm_ws_port: CFG.evm_ws_port,
             ledger_dir: CFG.ledger_dir.clone(),
         })
     }
@@ -93,12 +83,15 @@ impl ABCIConfig {
 }
 
 pub(crate) mod global_cfg {
+    use crate::abci::snap::SnapCfg;
+    #[cfg(not(test))]
+    use crate::abci::snap::{SnapInfra, SnapMode};
     #[cfg(not(test))]
     use clap::{crate_authors, App, Arg, ArgMatches};
     use lazy_static::lazy_static;
     use ruc::*;
     #[cfg(not(test))]
-    use std::env;
+    use std::{env, process::exit, str::FromStr};
 
     lazy_static! {
         /// Global config.
@@ -114,13 +107,10 @@ pub(crate) mod global_cfg {
         pub submission_service_port: u16,
         pub ledger_service_port: u16,
         pub enable_query_service: bool,
-        pub enable_eth_empty_blocks: bool,
-        pub enable_eth_api_service: bool,
-        pub evm_http_port: u16,
-        pub evm_ws_port: u16,
         pub tendermint_node_self_addr: Option<String>,
         pub tendermint_node_key_config_path: Option<String>,
         pub ledger_dir: String,
+        pub snapcfg: SnapCfg,
     }
 
     #[cfg(test)]
@@ -144,13 +134,19 @@ pub(crate) mod global_cfg {
                 .arg_from_usage("--submission-service-port=[Submission Service Port]")
                 .arg_from_usage("--ledger-service-port=[Ledger Service Port]")
                 .arg_from_usage("-q, --enable-query-service")
-                .arg_from_usage("--enable-eth-empty-blocks 'whether to generate empty ethereum blocks when no evm contract transaction'")
-                .arg_from_usage("--enable-eth-api-service")
-                .arg_from_usage("--evm-http-port=[EVM Web3 Http Port]")
-                .arg_from_usage("--evm-ws-port=[EVM Web3 WS Port]")
                 .arg_from_usage("--tendermint-node-self-addr=[Address] 'the address of your tendermint node, in upper-hex format'")
                 .arg_from_usage("--tendermint-node-key-config-path=[Path] 'such as: ${HOME}/.tendermint/config/priv_validator_key.json'")
                 .arg_from_usage("-d, --ledger-dir=[Path]")
+
+                .arg_from_usage("--enable-snapshot 'global switch for enabling snapshot functions'")
+                .arg_from_usage("--snapshot-itv=[Iterval] 'interval between adjacent snapshots, default to 10 blocks'")
+                .arg_from_usage("--snapshot-cap=[Capacity] 'the maximum number of snapshots that will be stored, default to 100'")
+                .arg_from_usage("--snapshot-mode=[Mode] 'native/external, default to native'")
+                .arg_from_usage("--snapshot-infra=[Infra] 'zfs/btrfs, will try a guess if missing, only useful in native mode'")
+                .arg_from_usage("--snapshot-daemon=[UdpDaemon] 'a UDP address like `ADDR:PORT`, only useful in external mode'")
+                .arg_from_usage("--snapshot-target=[TargetPath] 'a data volume containing both ledger data and tendermint data'")
+                .arg_from_usage("-r, --snapshot-rollback=[Height] 'rollback to a custom height, will try the closest smaller height if the target does not exist'")
+                .arg_from_usage("-R, --snapshot-rollback-exact=[Height] 'rollback to a custom height exactly, an error will be reported if the target does not exist'")
                 .arg(Arg::with_name("_a").long("ignored").hidden(true))
                 .arg(Arg::with_name("_b").long("nocapture").hidden(true))
                 .arg(Arg::with_name("_c").long("test-threads").hidden(true))
@@ -216,25 +212,6 @@ pub(crate) mod global_cfg {
                 })
             });
 
-        let eeb = m.is_present("enable-eth-empty-blocks")
-            || env::var("ENABLE_ETH_EMPTY_BLOCKS").is_ok();
-        let eas = m.is_present("enable-eth-api-service")
-            || env::var("ENABLE_ETH_API_SERVICE").is_ok();
-        let ehp = m
-            .value_of("evm-http-port")
-            .map(|v| v.to_owned())
-            .or_else(|| env::var("EVM_HTTP_PORT").ok())
-            .unwrap_or_else(|| "8545".to_owned())
-            .parse::<u16>()
-            .c(d!())?;
-        let ewp = m
-            .value_of("evm-ws-port")
-            .map(|v| v.to_owned())
-            .or_else(|| env::var("EVM_WS_PORT").ok())
-            .unwrap_or_else(|| "8546".to_owned())
-            .parse::<u16>()
-            .c(d!())?;
-
         let res = Config {
             abci_host: ah,
             abci_port: ap,
@@ -243,13 +220,10 @@ pub(crate) mod global_cfg {
             submission_service_port: ssp,
             ledger_service_port: lsp,
             enable_query_service: eqs,
-            enable_eth_empty_blocks: eeb,
-            enable_eth_api_service: eas,
-            evm_http_port: ehp,
-            evm_ws_port: ewp,
             tendermint_node_self_addr: tnsa,
             tendermint_node_key_config_path: tnkcp,
             ledger_dir: ld,
+            snapcfg: parse_snapcfg(&m).c(d!())?,
         };
 
         Ok(res)
@@ -259,7 +233,83 @@ pub(crate) mod global_cfg {
     fn print_version(m: &ArgMatches) {
         if m.is_present("version") {
             println!("{}", env!("VERGEN_SHA"));
-            std::process::exit(0);
+            exit(0);
         }
+    }
+
+    #[cfg(not(test))]
+    fn parse_snapcfg(m: &ArgMatches) -> Result<SnapCfg> {
+        let mut res = SnapCfg::new();
+
+        res.enable = m.is_present("enable-snapshot");
+
+        if res.enable {
+            // this field should be parsed at the top
+            res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
+        }
+
+        res.itv = m
+            .value_of("snapshot-itv")
+            .unwrap_or("10")
+            .parse::<u32>()
+            .c(d!())?;
+        res.cap = m
+            .value_of("snapshot-cap")
+            .unwrap_or("100")
+            .parse::<u32>()
+            .c(d!())?;
+
+        res.mode = m
+            .value_of("snapshot-mode")
+            .map(|m| SnapMode::from_str(m))
+            .unwrap_or_else(|| Ok(SnapMode::default()))
+            .c(d!())?;
+
+        if let Some(si) = m.value_of("snapshot-infra") {
+            res.infra = SnapInfra::from_str(si).c(d!())?;
+        } else {
+            res.guess_infra().c(d!())?;
+        }
+
+        res.udp_daemon = m.value_of("snapshot-daemon").map(|v| v.to_owned());
+
+        if m.is_present("snapshot-list") {
+            list_snapshots(&res).c(d!())?;
+        }
+
+        check_rollback(&m, &res).c(d!())?;
+
+        Ok(res)
+    }
+
+    #[cfg(not(test))]
+    fn list_snapshots(cfg: &SnapCfg) -> Result<()> {
+        println!("Available snapshots are listed below:");
+        cfg.get_sorted_snapshots()
+            .c(d!())?
+            .into_iter()
+            .for_each(|h| {
+                println!("    {}", h);
+            });
+        exit(0);
+    }
+
+    #[cfg(not(test))]
+    fn check_rollback(m: &ArgMatches, cfg: &SnapCfg) -> Result<()> {
+        if m.is_present("snapshot-rollback") || m.is_present("snapshot-rollback-exact") {
+            let (h, strict) = m
+                .value_of("snapshot-rollback-exact")
+                .map(|h| (Some(h), true))
+                .or_else(|| m.value_of("snapshot-rollback").map(|h| (Some(h), false)))
+                .unwrap_or((None, false));
+            let h = if let Some(h) = h {
+                Some(h.parse::<u64>().c(d!())?)
+            } else {
+                None
+            };
+            cfg.rollback(h, strict).c(d!())?;
+            exit(0);
+        }
+        Ok(())
     }
 }
