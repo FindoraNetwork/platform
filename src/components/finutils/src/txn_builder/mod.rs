@@ -467,7 +467,7 @@ impl TransactionBuilder {
         self
     }
 
-    /// Add a operation to delegating finddra accmount to a tendermint validator.
+    /// Add a operation to delegating findora account to a tendermint validator.
     /// The transfer operation to BLACK_HOLE_PUBKEY_STAKING should be sent along with.
     pub fn add_operation_delegation(
         &mut self,
