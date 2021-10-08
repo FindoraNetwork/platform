@@ -6,7 +6,6 @@
 //! This module is the library part of FN.
 //!
 
-pub mod evm;
 pub mod utils;
 
 use crate::api::DelegationInfo;

@@ -13,5 +13,3 @@ pub mod staking;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod store;
-
-pub mod converter;

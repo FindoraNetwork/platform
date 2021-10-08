@@ -85,7 +85,6 @@ pub enum SubmissionRoutes {
     SubmitTransaction,
     TxnStatus,
     Ping,
-    ForceEndBlock,
     Version,
 }
 
@@ -95,7 +94,6 @@ impl NetworkRoute for SubmissionRoutes {
             SubmissionRoutes::SubmitTransaction => "submit_transaction",
             SubmissionRoutes::TxnStatus => "txn_status",
             SubmissionRoutes::Ping => "ping",
-            SubmissionRoutes::ForceEndBlock => "force_end_block",
             SubmissionRoutes::Version => "version",
         };
         "/".to_owned() + endpoint

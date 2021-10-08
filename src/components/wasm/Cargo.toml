@@ -15,7 +15,6 @@ wasm-opt = false
 
 [dependencies]
 base64 = "0.10"
-futures = "0.1.20"
 hex = "0.3.2"
 js-sys = "0.3.27"
 rand_chacha = "0.2.0"
@@ -43,9 +42,6 @@ globutils = { path = "../../libs/globutils" }
 credentials = { path = "../../libs/credentials" }
 cryptohash = { path = "../../libs/cryptohash" }
 ledger = { path = "../../ledger" }
-
-fp-utils = { path = "../contracts/primitives/utils" }
-fp-types = { path = "../contracts/primitives/types" }
 
 [lib]
 crate-type = ["cdylib", "rlib"]
