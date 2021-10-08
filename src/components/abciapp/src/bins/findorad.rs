@@ -59,11 +59,15 @@ fn node_command() -> Result<()> {
         abcid.arg("--enable-snapshot");
     }
 
+    if CFG.snapshot_list {
+        abcid.arg("--snapshot-list");
+    }
+
+    convert_arg!(snapshot_target);
     convert_arg!(snapshot_itv);
     convert_arg!(snapshot_cap);
     convert_arg!(snapshot_mode);
     convert_arg!(snapshot_infra);
-    convert_arg!(snapshot_target);
     convert_arg!(snapshot_daemon);
     convert_arg!(snapshot_rollback);
     convert_arg!(snapshot_rollback_exact);
@@ -373,11 +377,12 @@ mod config {
         pub command: String,
         pub init_mode: InitMode,
         pub enable_snapshot: bool,
+        pub snapshot_list: bool,
+        pub snapshot_target: Option<String>,
         pub snapshot_itv: Option<String>,
         pub snapshot_cap: Option<String>,
         pub snapshot_mode: Option<String>,
         pub snapshot_infra: Option<String>,
-        pub snapshot_target: Option<String>,
         pub snapshot_daemon: Option<String>,
         pub snapshot_rollback: Option<String>,
         pub snapshot_rollback_exact: Option<String>,
@@ -403,12 +408,13 @@ mod config {
                         "-b, --base-dir=[DIR] 'The root directory for tendermint config, aka $TENDERMINT_HOME'",
                     )
                 .arg_from_usage("--enable-snapshot 'global switch for enabling snapshot functions'")
+                .arg_from_usage("--snapshot-list 'list all available snapshots in the form of block height'")
+                .arg_from_usage("--snapshot-target=[TargetPath] 'a data volume containing both ledger data and tendermint data'")
                 .arg_from_usage("--snapshot-itv=[Iterval] 'interval between adjacent snapshots, default to 10 blocks'")
                 .arg_from_usage("--snapshot-cap=[Capacity] 'the maximum number of snapshots that will be stored, default to 100'")
                 .arg_from_usage("--snapshot-mode=[Mode] 'native/external, default to native'")
                 .arg_from_usage("--snapshot-infra=[Infra] 'zfs/btrfs, will try a guess if missing, only useful in native mode'")
                 .arg_from_usage("--snapshot-daemon=[UdpDaemon] 'a UDP address like `ADDR:PORT`, only useful in external mode'")
-                .arg_from_usage("--snapshot-target=[TargetPath] 'a data volume containing both ledger data and tendermint data'")
                 .arg_from_usage("-r, --snapshot-rollback=[Height] 'rollback to a custom height, will try the closest smaller height if the target does not exist'")
                 .arg_from_usage("-R, --snapshot-rollback-exact=[Height] 'rollback to a custom height exactly, an error will be reported if the target does not exist'");
 
@@ -547,11 +553,12 @@ mod config {
             tendermint_home: tdir,
             init_mode,
             enable_snapshot: m.is_present("enable-snapshot"),
+            snapshot_list: m.is_present("snapshot-list"),
+            snapshot_target: m.value_of("snapshot-target").map(|v| v.to_owned()),
             snapshot_itv: m.value_of("snapshot-itv").map(|v| v.to_owned()),
             snapshot_cap: m.value_of("snapshot-cap").map(|v| v.to_owned()),
             snapshot_mode: m.value_of("snapshot-mode").map(|v| v.to_owned()),
             snapshot_infra: m.value_of("snapshot-infra").map(|v| v.to_owned()),
-            snapshot_target: m.value_of("snapshot-target").map(|v| v.to_owned()),
             snapshot_daemon: m.value_of("snapshot-daemon").map(|v| v.to_owned()),
             snapshot_rollback: m.value_of("snapshot-rollback").map(|v| v.to_owned()),
             snapshot_rollback_exact: m

@@ -10,7 +10,7 @@ use ruc::*;
 use std::str::FromStr;
 
 /// Maximum number of snapshots that can be kept
-pub const CAP_MAX: u32 = 248;
+pub const CAP_MAX: u32 = 256;
 
 /// Config structure of snapshot
 pub struct SnapCfg {
