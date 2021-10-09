@@ -232,7 +232,10 @@ mod zfs {
     pub(super) fn gen_snapshot(cfg: &SnapCfg, h: u64) -> Result<()> {
         clean_outdated(cfg).c(d!())?;
         let cmd = format!(
-            "zfs destroy {0}@{1} 2>/dev/null; zfs snapshot {0}@{1}",
+            "
+            zfs destroy {0}@{1} 2>/dev/null;
+            zfs snapshot {0}@{1}
+            ",
             &cfg.target, h
         );
         exec_output(&cmd).c(d!()).map(|_| ())
@@ -309,33 +312,101 @@ mod zfs {
 }
 
 mod btrfs {
-    use super::SnapCfg;
+    use super::{exec_output, SnapCfg};
     use ruc::*;
 
-    pub(super) fn gen_snapshot(cfg: &SnapCfg, _h: u64) -> Result<()> {
+    #[inline(always)]
+    pub(super) fn gen_snapshot(cfg: &SnapCfg, h: u64) -> Result<()> {
         clean_outdated(cfg).c(d!())?;
-        todo!()
+        let cmd = format!(
+            "
+            btrfs subvolume delete {0}@{1} 2>/dev/null;
+            btrfs subvolume snapshot {0} {0}@{1}
+            ",
+            &cfg.target, h
+        );
+        exec_output(&cmd).c(d!()).map(|_| ())
     }
 
-    pub(super) fn sorted_snapshots(_cfg: &SnapCfg) -> Result<Vec<u64>> {
-        todo!()
+    pub(super) fn sorted_snapshots(cfg: &SnapCfg) -> Result<Vec<u64>> {
+        let cmd = format!(
+            "find . -regextype egrep -regex '{}@[0-9]+' | grep -o '[0-9]\\+$'",
+            &cfg.target
+        );
+        let output = exec_output(&cmd).c(d!())?;
+
+        let mut res = output
+            .lines()
+            .map(|l| l.parse::<u64>().c(d!()))
+            .collect::<Result<Vec<u64>>>()?;
+        res.sort_unstable();
+
+        Ok(res)
     }
 
     pub(super) fn rollback(
-        _cfg: &SnapCfg,
-        _height: Option<u64>,
-        _strict: bool,
+        cfg: &SnapCfg,
+        height: Option<u64>,
+        strict: bool,
     ) -> Result<()> {
-        todo!()
+        let snaps = sorted_snapshots(cfg).c(d!())?;
+        alt!(snaps.is_empty(), return Err(eg!("no snapshots")));
+
+        let h = height.unwrap_or_else(|| snaps[snaps.len() - 1]);
+
+        let cmd = match snaps.binary_search(&h) {
+            Ok(_) => {
+                format!(
+                    "
+                    rm -rf {0} 2>/dev/null;
+                    btrfs subvolume snapshot {0}@{1} {0}
+                    ",
+                    &cfg.target, h
+                )
+            }
+            Err(idx) => {
+                if strict {
+                    return Err(eg!("specified height does not exist"));
+                } else {
+                    let effective_h = if 1 + idx > snaps.len() {
+                        snaps[snaps.len() - 1]
+                    } else {
+                        *(0..idx).rev().find_map(|i| snaps.get(i)).c(d!())?
+                    };
+                    format!(
+                        "
+                        rm -rf {0} 2>/dev/null;
+                        btrfs subvolume snapshot {0}@{1} {0}
+                        ",
+                        &cfg.target, effective_h
+                    )
+                }
+            }
+        };
+
+        exec_output(&cmd).c(d!()).map(|_| ())
     }
 
-    pub(super) fn check(_target: &str) -> Result<()> {
-        todo!()
+    #[inline(always)]
+    pub(super) fn check(target: &str) -> Result<()> {
+        let cmd = format!("btrfs subvolume list {}", target);
+        exec_output(&cmd).c(d!()).map(|_| ())
     }
 
     fn clean_outdated(cfg: &SnapCfg) -> Result<()> {
-        let _cap = cfg.get_cap();
-        todo!()
+        let snaps = sorted_snapshots(cfg).c(d!())?;
+        let cap = cfg.get_cap() as usize;
+
+        if 1 + cap > snaps.len() {
+            return Ok(());
+        }
+
+        snaps[..(snaps.len() - cap)].iter().for_each(|i| {
+            let cmd = format!("btrfs subvolume delete {}@{}", &cfg.target, i);
+            info_omit!(exec_output(&cmd));
+        });
+
+        Ok(())
     }
 }
 

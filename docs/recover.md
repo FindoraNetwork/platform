@@ -38,18 +38,26 @@ findorad node
 3. create a root volume for testing
     - zfs
         - `zpool create zfs /dev/sdX` or `zpool create zfs <PATH-TO-A-FILE>`
+        ```
+        # assume the name of your zfs root volume is 'zfs'
+        zfs destroy -R zfs/findora
+        zfs create zfs/findora
+        zfs set mountpoint=/tmp/findora zfs/findora
+        ```
     - btrfs
         - `mkfs.btrfs -f /dev/sdX` or `mkfs.btrfs -f <PATH-TO-A-FILE>`
         - `mount /dev/sdX /btrfs` or `mount <PATH-TO-A-FILE> /btrfs`
+        ```
+        # assume the name of your btrfs root volume is '/btrfs'
+        umount /tmp/findora
+        rm -rf /btrfs/findora
+        btrfs subvolume create /btrfs/findora
+        mount --bind /btrfs/findora /tmp/findora
+        ```
 
 #### Run findorad with snapshot
 
 ```shell
-# assume the name of your zfs root volume is 'zfs'
-zfs destroy -R zfs/findora
-zfs create zfs/findora
-zfs set mountpoint=/tmp/findora zfs/findora
-
 # init and start local node
 # you should copy `findorad` to one of your $PATH before this step
 findorad init -b /tmp/findora --mainnet
@@ -57,11 +65,6 @@ findorad node -b /tmp/findora -q --enable-snapshot --snapshot-target zfs/findora
 
 # show available snapshots
 findorad node --snapshot-target zfs/findora --snapshot-list
-
-# check the real-time status of snapshots,
-# such as creation, destruction, etc.,
-# they are all managed automatically
-zfs list -t snapshot zfs/findora
 ```
 
 #### Let's Rollback
