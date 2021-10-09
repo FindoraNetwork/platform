@@ -275,7 +275,7 @@ pub(crate) mod global_cfg {
         if let Some(si) = m.value_of("snapshot-infra") {
             res.infra = SnapInfra::from_str(si).c(d!())?;
         } else {
-            res.guess_infra().c(d!())?;
+            res.infra = res.guess_infra().c(d!())?;
         }
 
         res.udp_daemon = m.value_of("snapshot-daemon").map(|v| v.to_owned());

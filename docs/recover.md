@@ -42,17 +42,17 @@ findorad node
         # assume the name of your zfs root volume is 'zfs'
         zfs destroy -R zfs/findora
         zfs create zfs/findora
-        zfs set mountpoint=/tmp/findora zfs/findora
+        zfs set mountpoint=/data/findora zfs/findora
         ```
     - btrfs
         - `mkfs.btrfs -f /dev/sdX` or `mkfs.btrfs -f <PATH-TO-A-FILE>`
         - `mount /dev/sdX /btrfs` or `mount <PATH-TO-A-FILE> /btrfs`
         ```
         # assume the name of your btrfs root volume is '/btrfs'
-        umount /tmp/findora
-        rm -rf /btrfs/findora
-        btrfs subvolume create /btrfs/findora
-        mount --bind /btrfs/findora /tmp/findora
+        btrfs subvolume list -so /data/findora | xargs btrfs subvolume delete
+        btrfs subvolume delete /data/findora
+        btrfs subvolume create /data
+        btrfs subvolume create /data/findora
         ```
 
 #### Run findorad with snapshot
@@ -60,11 +60,13 @@ findorad node
 ```shell
 # init and start local node
 # you should copy `findorad` to one of your $PATH before this step
-findorad init -b /tmp/findora --mainnet
-findorad node -b /tmp/findora -q --enable-snapshot --snapshot-target zfs/findora
+findorad init -b /data/findora --mainnet
+[zfs] findorad node -b /data/findora -q --enable-snapshot --snapshot-target zfs/findora
+[btrfs] findorad node -b /data/findora -q --enable-snapshot --snapshot-target /data/findora
 
 # show available snapshots
-findorad node --snapshot-target zfs/findora --snapshot-list
+[zfs] findorad node --snapshot-target zfs/findora --snapshot-list
+[btrfs] findorad node --snapshot-target /data/findora --snapshot-list
 ```
 
 #### Let's Rollback
@@ -82,13 +84,15 @@ Example: `--snapshot-rollback`
 ```shell
 # corrupt data deliberately at run-time
 # our processes will crash and can not restart again
-rm -rf /tmp/findora/*
+rm -rf /data/findora/*
 
 # rollback to the last available snapshot
-findorad node --snapshot-target zfs/findora --snapshot-rollback
+[zfs] findorad node --snapshot-target zfs/findora --snapshot-rollback
+[btrfs] findorad node --snapshot-target /data/findora --snapshot-rollback
 
 # restart your node, it will start running from the last height correctly
-findorad node -b /tmp/findora -q --enable-snapshot --snapshot-target zfs/findora
+[zfs] findorad node -b /data/findora -q --enable-snapshot --snapshot-target zfs/findora
+[btrfs] findorad node -b /data/findora -q --enable-snapshot --snapshot-target /data/findora
 ```
 
 Example: `--snapshot-rollback-to`
@@ -96,14 +100,16 @@ Example: `--snapshot-rollback-to`
 ```shell
 # corrupt data deliberately at run-time
 # our processes will crash and can not restart again
-rm -rf /tmp/findora/*
+rm -rf /data/findora/*
 
 # try to rollback to the state at some height, such as 1000,
 # will choose an available state at a smaller height if it does not exist
-findorad node --snapshot-target zfs/findora --snapshot-rollback-to 1000
+[zfs] findorad node --snapshot-target zfs/findora --snapshot-rollback-to 1000
+[btrfs] findorad node --snapshot-target /data/findora --snapshot-rollback-to 1000
 
 # restart your node, it will start running from the height of 1000(or 999, etc.) correctly
-findorad node -b /tmp/findora -q --enable-snapshot --snapshot-target zfs/findora
+[zfs] findorad node -b /data/findora -q --enable-snapshot --snapshot-target zfs/findora
+[btrfs] findorad node -b /data/findora -q --enable-snapshot --snapshot-target /data/findora
 ```
 
 Example: `--snapshot-rollback-to-exact`
@@ -111,12 +117,14 @@ Example: `--snapshot-rollback-to-exact`
 ```shell
 # corrupt data deliberately at run-time
 # our processes will crash and can not restart again
-rm -rf /tmp/findora/*
+rm -rf /data/findora/*
 
 # try to rollback to the state at some height, such as 1000,
 # will report error if it does not exist
-findorad node --snapshot-target zfs/findora --snapshot-rollback-to-exact 1000
+[zfs] findorad node --snapshot-target zfs/findora --snapshot-rollback-to-exact 1000
+[btrfs] findorad node --snapshot-target /data/findora --snapshot-rollback-to-exact 1000
 
 # restart your node, it will start running from the height of 1000 correctly
-findorad node -b /tmp/findora -q --enable-snapshot --snapshot-target zfs/findora
+[zfs] findorad node -b /data/findora -q --enable-snapshot --snapshot-target zfs/findora
+[btrfs] findorad node -b /data/findora -q --enable-snapshot --snapshot-target /data/findora
 ```

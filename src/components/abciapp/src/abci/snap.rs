@@ -290,7 +290,7 @@ mod zfs {
 
     #[inline(always)]
     pub(super) fn check(target: &str) -> Result<()> {
-        let cmd = format!("zfs list {}", target);
+        let cmd = format!("zfs list {0} || zfs create {0}", target);
         exec_output(&cmd).c(d!()).map(|_| ())
     }
 
@@ -314,6 +314,7 @@ mod zfs {
 mod btrfs {
     use super::{exec_output, SnapCfg};
     use ruc::*;
+    use std::path::PathBuf;
 
     #[inline(always)]
     pub(super) fn gen_snapshot(cfg: &SnapCfg, h: u64) -> Result<()> {
@@ -330,8 +331,12 @@ mod btrfs {
 
     pub(super) fn sorted_snapshots(cfg: &SnapCfg) -> Result<Vec<u64>> {
         let cmd = format!(
-            "find . -regextype egrep -regex '{}@[0-9]+' | grep -o '[0-9]\\+$'",
-            &cfg.target
+            r"btrfs subvolume list -so {} | grep -o '@[0-9]\+$' | sed 's/@//'",
+            PathBuf::from(&cfg.target)
+                .parent()
+                .c(d!())?
+                .to_str()
+                .c(d!())?
         );
         let output = exec_output(&cmd).c(d!())?;
 
@@ -358,7 +363,7 @@ mod btrfs {
             Ok(_) => {
                 format!(
                     "
-                    rm -rf {0} 2>/dev/null;
+                    btrfs subvolume delete {0} 2>/dev/null;
                     btrfs subvolume snapshot {0}@{1} {0}
                     ",
                     &cfg.target, h
@@ -375,7 +380,7 @@ mod btrfs {
                     };
                     format!(
                         "
-                        rm -rf {0} 2>/dev/null;
+                        btrfs subvolume delete {0} 2>/dev/null;
                         btrfs subvolume snapshot {0}@{1} {0}
                         ",
                         &cfg.target, effective_h
@@ -389,7 +394,10 @@ mod btrfs {
 
     #[inline(always)]
     pub(super) fn check(target: &str) -> Result<()> {
-        let cmd = format!("btrfs subvolume list {}", target);
+        let cmd = format!(
+            "btrfs subvolume list {0} || btrfs subvolume create {0}",
+            target
+        );
         exec_output(&cmd).c(d!()).map(|_| ())
     }
 
@@ -401,10 +409,14 @@ mod btrfs {
             return Ok(());
         }
 
-        snaps[..(snaps.len() - cap)].iter().for_each(|i| {
-            let cmd = format!("btrfs subvolume delete {}@{}", &cfg.target, i);
-            info_omit!(exec_output(&cmd));
-        });
+        let list = snaps[..(snaps.len() - cap)]
+            .iter()
+            .fold(String::new(), |acc, i| {
+                acc + &format!("{}@{} ", &cfg.target, i)
+            });
+
+        let cmd = format!("btrfs subvolume delete -c {}", list);
+        info_omit!(exec_output(cmd.trim_end()));
 
         Ok(())
     }
