@@ -8,8 +8,10 @@
 use {
     credentials::CredUserSecretKey,
     curve25519_dalek::scalar::Scalar,
+    fp_types::crypto::MultiSigner,
     globutils::SignatureOf,
     ledger::{
+        converter::ConvertAccount,
         data_model::{
             AssetRules, AssetTypeCode, ConfidentialMemo, DefineAsset, DefineAssetBody,
             IndexedSignature, IssueAsset, IssueAssetBody, IssuerKeyPair,
@@ -615,6 +617,20 @@ impl TransactionBuilder {
         UpdateValidatorOps::new(kps, h, v_set, self.txn.body.no_replay_token)
             .c(d!())
             .map(move |op| self.add_operation(Operation::UpdateValidator(op)))
+    }
+
+    /// Add a operation convert utxo asset to account balance.
+    pub fn add_operation_convert_account(
+        &mut self,
+        kp: &XfrKeyPair,
+        addr: MultiSigner,
+    ) -> Result<&mut Self> {
+        self.add_operation(Operation::ConvertAccount(ConvertAccount::new(
+            kp,
+            self.txn.body.no_replay_token,
+            addr,
+        )));
+        Ok(self)
     }
 
     #[allow(missing_docs)]

@@ -7,6 +7,7 @@ edition = "2018"
 
 [dependencies]
 tendermint = "0.19.0"
+tokio = "1.10.1"
 hex = "0.4.2"
 base64 = "0.10"
 clap = { version = "2.33.3", features = ["yaml"] }
@@ -27,12 +28,27 @@ ledger = { path = "../../ledger" }
 globutils = { path = "../../libs/globutils" }
 credentials = { path = "../../libs/credentials" }
 
+baseapp = { path = "../contracts/baseapp", optional = true }
+eth_checksum = { version = "0.1.2", optional = true }
+fp-core = { path = "../contracts/primitives/core", optional = true }
+fp-utils = { path = "../contracts/primitives/utils" }
+fp-types = { path = "../contracts/primitives/types" }
+
+tendermint-rpc = { version = "0.19.0", features = ["http-client", "websocket-client"], optional = true }
+
 [dev-dependencies]
 
 [build-dependencies]
 vergen = "=3.1.0"
 
 [features]
+default = ["std"]
+std = [
+    "baseapp",
+    "eth_checksum",
+    "fp-core",
+    "tendermint-rpc"
+]
 abci_mock = ["ledger/abci_mock"]
 debug_env = ["ledger/debug_env"]
 
