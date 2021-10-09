@@ -497,6 +497,11 @@ impl EthApi for EthApiImpl {
     fn code_at(&self, address: H160, number: Option<BlockNumber>) -> Result<Bytes> {
         debug!(target: "eth_rpc", "code_at, address:{:?}, number:{:?}", address, number);
 
+        // FRA (FRC20 precompile)
+        if address == H160::from_low_u64_be(9) {
+            return Ok(Bytes::new(b"fra".to_vec()));
+        }
+
         let height = self.block_number_to_height(number)?;
         Ok(self
             .account_base_app

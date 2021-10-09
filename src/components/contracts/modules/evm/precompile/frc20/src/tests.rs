@@ -249,7 +249,7 @@ fn transfer_from_works() {
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
             output: EvmDataWriter::new().write(true).build(),
-            cost: GAS_TRANSFER_FROM + 1756,
+            cost: GAS_TRANSFER_FROM + 1756 * 2,
             logs: LogsBuilder::new(H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS))
                 .log3(
                     TRANSFER_EVENT_SELECTOR,

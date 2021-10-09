@@ -43,15 +43,15 @@ pub const FRC20_SYMBOL: &[u8; 96] = u8_slice!(
 
 // The gas used value is obtained according to the standard erc20 call.
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.3.2/contracts/token/ERC20/ERC20.sol
-const GAS_NAME: u64 = 24347;
-const GAS_SYMBOL: u64 = 24501;
-const GAS_DECIMALS: u64 = 21307;
-const GAS_TOTAL_SUPPLY: u64 = 22067;
-const GAS_BALANCE_OF: u64 = 22770;
-const GAS_TRANSFER: u64 = 45233;
-const GAS_ALLOWANCE: u64 = 23412;
-const GAS_APPROVE: u64 = 42324;
-const GAS_TRANSFER_FROM: u64 = 30294;
+const GAS_NAME: u64 = 3283;
+const GAS_SYMBOL: u64 = 3437;
+const GAS_DECIMALS: u64 = 243;
+const GAS_TOTAL_SUPPLY: u64 = 1003;
+const GAS_BALANCE_OF: u64 = 1350;
+const GAS_TRANSFER: u64 = 23661;
+const GAS_ALLOWANCE: u64 = 1624;
+const GAS_APPROVE: u64 = 20750;
+const GAS_TRANSFER_FROM: u64 = 6610;
 
 pub struct FRC20<C> {
     _marker: PhantomData<C>,
@@ -334,6 +334,7 @@ impl<C: Config> FRC20<C> {
     ) -> EvmResult<PrecompileOutput> {
         let mut gasometer = Gasometer::new(target_gas);
         gasometer.record_cost(GAS_TRANSFER_FROM)?;
+        gasometer.record_log_costs_manual(3, 32)?;
         gasometer.record_log_costs_manual(3, 32)?;
 
         input.expect_arguments(3)?;
