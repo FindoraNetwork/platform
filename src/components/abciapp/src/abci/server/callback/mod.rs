@@ -80,7 +80,9 @@ pub fn begin_block(
     s: &mut ABCISubmissionServer,
     req: &RequestBeginBlock,
 ) -> ResponseBeginBlock {
-    pnk!(CFG.snapcfg.snapshot());
+    // snapshot the last block
+    let last_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+    pnk!(CFG.snapcfg.snapshot(last_height as u64));
 
     // cache the last block in query server
     // trigger this op in `BeginBlock` to make abci-commit safer

@@ -7,7 +7,7 @@
 //!
 
 use ruc::*;
-use std::str::FromStr;
+use std::{process::Command, str::FromStr};
 
 /// Maximum number of snapshots that can be kept
 pub const CAP_MAX: u32 = 256;
@@ -56,14 +56,15 @@ impl SnapCfg {
 
     /// generate a snapshot for the latest state of blockchain
     #[inline(always)]
-    pub fn snapshot(&self) -> Result<()> {
+    pub fn snapshot(&self, h: u64) -> Result<()> {
         alt!(!self.enable, return Ok(()));
+        alt!(0 != h % self.itv as u64, return Ok(()));
 
         alt!(self.mode.is_external(), todo!());
 
         match self.infra {
-            SnapInfra::Zfs => zfs::gen_snapshot(self).c(d!()),
-            SnapInfra::Btrfs => btrfs::gen_snapshot(self).c(d!()),
+            SnapInfra::Zfs => zfs::gen_snapshot(self, h).c(d!()),
+            SnapInfra::Btrfs => btrfs::gen_snapshot(self, h).c(d!()),
         }
     }
 
@@ -76,7 +77,8 @@ impl SnapCfg {
         }
     }
 
-    /// Get snapshot list in desc order
+    /// Get snapshot list in aesc order.
+    /// NOTE: must use AESC order, `binary_search` need this feature
     #[inline(always)]
     pub fn get_sorted_snapshots(&self) -> Result<Vec<u64>> {
         match self.infra {
@@ -221,10 +223,94 @@ impl FromStr for SnapInfra {
 }
 
 mod zfs {
+    use super::{exec_output, SnapCfg};
+    use ruc::*;
+
+    #[inline(always)]
+    pub(super) fn gen_snapshot(cfg: &SnapCfg, h: u64) -> Result<()> {
+        clean_outdated(cfg).c(d!())?;
+        let cmd = format!(
+            "zfs destroy {0}@{1} 2>/dev/null; zfs snapshot {0}@{1}",
+            &cfg.target, h
+        );
+        exec_output(&cmd).c(d!()).map(|_| ())
+    }
+
+    pub(super) fn sorted_snapshots(cfg: &SnapCfg) -> Result<Vec<u64>> {
+        let cmd = format!(
+            r"zfs list -t snapshot {} | grep -o '@[0-9]\+' | sed 's/@//'",
+            &cfg.target
+        );
+        let output = exec_output(&cmd).c(d!())?;
+
+        let mut res = output
+            .lines()
+            .map(|l| l.parse::<u64>().c(d!()))
+            .collect::<Result<Vec<u64>>>()?;
+        res.sort_unstable();
+
+        Ok(res)
+    }
+
+    pub(super) fn rollback(
+        cfg: &SnapCfg,
+        height: Option<u64>,
+        strict: bool,
+    ) -> Result<()> {
+        let snaps = sorted_snapshots(cfg).c(d!())?;
+        alt!(snaps.is_empty(), return Err(eg!("no snapshots")));
+
+        let h = height.unwrap_or(snaps[0]);
+
+        let cmd = match snaps.binary_search(&h) {
+            Ok(_) => {
+                format!("zfs rollback {}@{}", &cfg.target, h)
+            }
+            Err(idx) => {
+                if strict {
+                    return Err(eg!("specified height does not exist"));
+                } else {
+                    let effective_h = if 1 + idx > snaps.len() {
+                        snaps[snaps.len() - 1]
+                    } else {
+                        *(0..idx).rev().find_map(|i| snaps.get(i)).c(d!())?
+                    };
+                    format!("zfs rollback -r {}@{}", &cfg.target, effective_h)
+                }
+            }
+        };
+
+        exec_output(&cmd).c(d!()).map(|_| ())
+    }
+
+    #[inline(always)]
+    pub(super) fn check(target: &str) -> Result<()> {
+        let cmd = format!("zfs list {}", target);
+        exec_output(&cmd).c(d!()).map(|_| ())
+    }
+
+    fn clean_outdated(cfg: &SnapCfg) -> Result<()> {
+        let snaps = sorted_snapshots(cfg).c(d!())?;
+        let cap = cfg.get_cap() as usize;
+
+        if 1 + cap > snaps.len() {
+            return Ok(());
+        }
+
+        snaps[cap..].iter().for_each(|i| {
+            let cmd = format!("zfs destroy {}@{}", &cfg.target, i);
+            info_omit!(exec_output(&cmd));
+        });
+
+        Ok(())
+    }
+}
+
+mod btrfs {
     use super::SnapCfg;
     use ruc::*;
 
-    pub(super) fn gen_snapshot(cfg: &SnapCfg) -> Result<()> {
+    pub(super) fn gen_snapshot(cfg: &SnapCfg, _h: u64) -> Result<()> {
         clean_outdated(cfg).c(d!())?;
         todo!()
     }
@@ -251,33 +337,12 @@ mod zfs {
     }
 }
 
-mod btrfs {
-    use super::SnapCfg;
-    use ruc::*;
-
-    pub(super) fn gen_snapshot(cfg: &SnapCfg) -> Result<()> {
-        clean_outdated(cfg).c(d!())?;
-        todo!()
-    }
-
-    pub(super) fn sorted_snapshots(_cfg: &SnapCfg) -> Result<Vec<u64>> {
-        todo!()
-    }
-
-    pub(super) fn rollback(
-        _cfg: &SnapCfg,
-        _height: Option<u64>,
-        _strict: bool,
-    ) -> Result<()> {
-        todo!()
-    }
-
-    pub(super) fn check(_target: &str) -> Result<()> {
-        todo!()
-    }
-
-    fn clean_outdated(cfg: &SnapCfg) -> Result<()> {
-        let _cap = cfg.get_cap();
-        todo!()
+#[inline(always)]
+fn exec_output(cmd: &str) -> Result<String> {
+    let res = Command::new("sh").arg("-c").arg(cmd).output().c(d!())?;
+    if res.status.success() {
+        Ok(String::from_utf8_lossy(&res.stdout).into_owned())
+    } else {
+        Err(eg!(String::from_utf8_lossy(&res.stderr).into_owned()))
     }
 }

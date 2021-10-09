@@ -244,7 +244,11 @@ pub(crate) mod global_cfg {
 
         res.enable = m.is_present("enable-snapshot");
 
-        if res.enable {
+        if res.enable
+            || m.is_present("snapshot-list")
+            || m.is_present("snapshot-rollback")
+            || m.is_present("snapshot-rollback-exact")
+        {
             // this field should be parsed at the top
             res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
         }
@@ -297,6 +301,13 @@ pub(crate) mod global_cfg {
 
     #[cfg(not(test))]
     fn check_rollback(m: &ArgMatches, cfg: &SnapCfg) -> Result<()> {
+        const HINTS: &str = r#"    NOTE:
+            before executing the rollback,
+            all related processes must be exited,
+            such as findorad, abcid, tendermint, etc.
+        "#;
+        println!("\x1b[31;01m\n{}\x1b[00m", HINTS);
+
         if m.is_present("snapshot-rollback") || m.is_present("snapshot-rollback-exact") {
             let (h, strict) = m
                 .value_of("snapshot-rollback-exact")
