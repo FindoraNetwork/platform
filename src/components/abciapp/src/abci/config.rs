@@ -146,8 +146,9 @@ pub(crate) mod global_cfg {
                 .arg_from_usage("--snapshot-mode=[Mode] 'native/external, default to native'")
                 .arg_from_usage("--snapshot-infra=[Infra] 'zfs/btrfs, will try a guess if missing, only useful in native mode'")
                 .arg_from_usage("--snapshot-daemon=[UdpDaemon] 'a UDP address like `ADDR:PORT`, only useful in external mode'")
-                .arg_from_usage("-r, --snapshot-rollback=[Height] 'rollback to a custom height, will try the closest smaller height if the target does not exist'")
-                .arg_from_usage("-R, --snapshot-rollback-exact=[Height] 'rollback to a custom height exactly, an error will be reported if the target does not exist'")
+                .arg_from_usage("--snapshot-rollback 'rollback to the last available snapshot'")
+                .arg_from_usage("-r, --snapshot-rollback-to=[Height] 'rollback to a custom height, will try the closest smaller height if the target does not exist'")
+                .arg_from_usage("-R, --snapshot-rollback-to-exact=[Height] 'rollback to a custom height exactly, an error will be reported if the target does not exist'")
                 .arg(Arg::with_name("_a").long("ignored").hidden(true))
                 .arg(Arg::with_name("_b").long("nocapture").hidden(true))
                 .arg(Arg::with_name("_c").long("test-threads").hidden(true))
@@ -247,7 +248,8 @@ pub(crate) mod global_cfg {
         if res.enable
             || m.is_present("snapshot-list")
             || m.is_present("snapshot-rollback")
-            || m.is_present("snapshot-rollback-exact")
+            || m.is_present("snapshot-rollback-to")
+            || m.is_present("snapshot-rollback-to-exact")
         {
             // this field should be parsed at the top
             res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
@@ -306,13 +308,17 @@ pub(crate) mod global_cfg {
             all related processes must be exited,
             such as findorad, abcid, tendermint, etc.
         "#;
-        println!("\x1b[31;01m\n{}\x1b[00m", HINTS);
 
-        if m.is_present("snapshot-rollback") || m.is_present("snapshot-rollback-exact") {
+        if m.is_present("snapshot-rollback")
+            || m.is_present("snapshot-rollback-to")
+            || m.is_present("snapshot-rollback-to-exact")
+        {
+            println!("\x1b[31;01m\n{}\x1b[00m", HINTS);
+
             let (h, strict) = m
-                .value_of("snapshot-rollback-exact")
+                .value_of("snapshot-rollback-to-exact")
                 .map(|h| (Some(h), true))
-                .or_else(|| m.value_of("snapshot-rollback").map(|h| (Some(h), false)))
+                .or_else(|| m.value_of("snapshot-rollback-to").map(|h| (Some(h), false)))
                 .unwrap_or((None, false));
             let h = if let Some(h) = h {
                 Some(h.parse::<u64>().c(d!())?)
@@ -320,6 +326,7 @@ pub(crate) mod global_cfg {
                 None
             };
             cfg.rollback(h, strict).c(d!())?;
+
             exit(0);
         }
         Ok(())

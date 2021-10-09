@@ -8,6 +8,7 @@
 #![deny(warnings)]
 
 use config::CFG;
+use lazy_static::lazy_static;
 use nix::{
     sys::signal::{kill, Signal},
     unistd::{truncate, Pid},
@@ -27,8 +28,12 @@ use std::{
 const U64L: usize = size_of::<u64>();
 const PAD_SIZE: usize = 128;
 
+lazy_static! {
+    static ref SUFFIX: u32 = rand::random();
+}
+
 fn node_command() -> Result<()> {
-    let mut abcid = Command::new("/tmp/abcid__");
+    let mut abcid = Command::new(format!("/tmp/abcid_{}", *SUFFIX));
 
     macro_rules! convert_arg {
         ($arg: tt) => {{
@@ -48,29 +53,27 @@ fn node_command() -> Result<()> {
         .arg("--ledger-dir")
         .arg(&CFG.ledger_dir);
 
-    if CFG.enable_query_service {
-        abcid.arg("--enable-query-service");
+    for (condition, action) in [
+        (CFG.enable_query_service, "--enable-query-service"),
+        (CFG.enable_snapshot, "--enable-snapshot"),
+        (CFG.snapshot_list, "--snapshot-list"),
+        (CFG.snapshot_rollback, "--snapshot-rollback"),
+    ] {
+        if condition {
+            abcid.arg(action);
+        }
     }
 
     convert_arg!(tendermint_node_self_addr);
     convert_arg!(tendermint_node_key_config_path);
-
-    if CFG.enable_snapshot {
-        abcid.arg("--enable-snapshot");
-    }
-
-    if CFG.snapshot_list {
-        abcid.arg("--snapshot-list");
-    }
-
     convert_arg!(snapshot_target);
     convert_arg!(snapshot_itv);
     convert_arg!(snapshot_cap);
     convert_arg!(snapshot_mode);
     convert_arg!(snapshot_infra);
     convert_arg!(snapshot_daemon);
-    convert_arg!(snapshot_rollback);
-    convert_arg!(snapshot_rollback_exact);
+    convert_arg!(snapshot_rollback_to);
+    convert_arg!(snapshot_rollback_to_exact);
 
     let mut abcid_child = abcid
         .stdin(Stdio::null())
@@ -80,13 +83,14 @@ fn node_command() -> Result<()> {
         .c(d!())?;
 
     if CFG.snapshot_list
-        || CFG.snapshot_rollback.is_some()
-        || CFG.snapshot_rollback_exact.is_some()
+        || CFG.snapshot_rollback
+        || CFG.snapshot_rollback_to.is_some()
+        || CFG.snapshot_rollback_to_exact.is_some()
     {
         return Ok(());
     }
 
-    let mut tendermint = Command::new("/tmp/tendermint__");
+    let mut tendermint = Command::new(format!("/tmp/tendermint_{}", *SUFFIX));
 
     tendermint
         .arg("node")
@@ -117,7 +121,7 @@ fn node_command() -> Result<()> {
 }
 
 fn init_command() -> Result<()> {
-    Command::new("/tmp/tendermint__")
+    Command::new(format!("/tmp/tendermint_{}", *SUFFIX))
         .arg("init")
         .arg("validator")
         .arg("--home")
@@ -183,12 +187,16 @@ fn unpack() -> Result<()> {
         .create(true)
         .truncate(true)
         .write(true)
-        .open("/tmp/abcid__")
+        .open(format!("/tmp/abcid_{}", *SUFFIX))
         .c(d!())?;
     io::copy(&mut abcid_reader, &mut abcid_writer)
         .c(d!())
         .and_then(|_| {
-            set_permissions("/tmp/abcid__", Permissions::from_mode(0o755)).c(d!())
+            set_permissions(
+                format!("/tmp/abcid_{}", *SUFFIX),
+                Permissions::from_mode(0o755),
+            )
+            .c(d!())
         })?;
 
     let mut tendermint_reader =
@@ -201,15 +209,23 @@ fn unpack() -> Result<()> {
         .create(true)
         .truncate(true)
         .write(true)
-        .open("/tmp/tendermint__")
+        .open(format!("/tmp/tendermint_{}", *SUFFIX))
         .c(d!())?;
     io::copy(&mut tendermint_reader, &mut tendermint_writer)
         .c(d!())
         .and_then(|_| {
-            set_permissions("/tmp/tendermint__", Permissions::from_mode(0o755)).c(d!())
+            set_permissions(
+                format!("/tmp/tendermint_{}", *SUFFIX),
+                Permissions::from_mode(0o755),
+            )
+            .c(d!())
         })?;
 
-    truncate("/tmp/tendermint__", tendermint_len as i64).c(d!())
+    truncate(
+        format!("/tmp/tendermint_{}", *SUFFIX).as_str(),
+        tendermint_len as i64,
+    )
+    .c(d!())
 }
 
 fn get_bin_path() -> Result<PathBuf> {
@@ -380,8 +396,9 @@ mod config {
         pub snapshot_mode: Option<String>,
         pub snapshot_infra: Option<String>,
         pub snapshot_daemon: Option<String>,
-        pub snapshot_rollback: Option<String>,
-        pub snapshot_rollback_exact: Option<String>,
+        pub snapshot_rollback: bool,
+        pub snapshot_rollback_to: Option<String>,
+        pub snapshot_rollback_to_exact: Option<String>,
     }
 
     fn get_config() -> Result<Config> {
@@ -409,8 +426,9 @@ mod config {
                 .arg_from_usage("--snapshot-mode=[Mode] 'native/external, default to native'")
                 .arg_from_usage("--snapshot-infra=[Infra] 'zfs/btrfs, will try a guess if missing, only useful in native mode'")
                 .arg_from_usage("--snapshot-daemon=[UdpDaemon] 'a UDP address like `ADDR:PORT`, only useful in external mode'")
-                .arg_from_usage("-r, --snapshot-rollback=[Height] 'rollback to a custom height, will try the closest smaller height if the target does not exist'")
-                .arg_from_usage("-R, --snapshot-rollback-exact=[Height] 'rollback to a custom height exactly, an error will be reported if the target does not exist'");
+                .arg_from_usage("--snapshot-rollback 'rollback to the last available snapshot'")
+                .arg_from_usage("-r, --snapshot-rollback-to=[Height] 'rollback to a custom height, will try the closest smaller height if the target does not exist'")
+                .arg_from_usage("-R, --snapshot-rollback-to-exact=[Height] 'rollback to a custom height exactly, an error will be reported if the target does not exist'");
 
             let init = SubCommand::with_name("init")
                     .about("Initialize the configurations of findorad")
@@ -545,9 +563,12 @@ mod config {
             snapshot_mode: m.value_of("snapshot-mode").map(|v| v.to_owned()),
             snapshot_infra: m.value_of("snapshot-infra").map(|v| v.to_owned()),
             snapshot_daemon: m.value_of("snapshot-daemon").map(|v| v.to_owned()),
-            snapshot_rollback: m.value_of("snapshot-rollback").map(|v| v.to_owned()),
-            snapshot_rollback_exact: m
-                .value_of("snapshot-rollback-exact")
+            snapshot_rollback: m.is_present("snapshot-rollback"),
+            snapshot_rollback_to: m
+                .value_of("snapshot-rollback-to")
+                .map(|v| v.to_owned()),
+            snapshot_rollback_to_exact: m
+                .value_of("snapshot-rollback-to-exact")
                 .map(|v| v.to_owned()),
         };
 

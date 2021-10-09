@@ -10,7 +10,7 @@ use ruc::*;
 use std::{process::Command, str::FromStr};
 
 /// Maximum number of snapshots that can be kept
-pub const CAP_MAX: u32 = 256;
+pub const CAP_MAX: u32 = 1024;
 
 /// Config structure of snapshot
 pub struct SnapCfg {
@@ -260,11 +260,11 @@ mod zfs {
         let snaps = sorted_snapshots(cfg).c(d!())?;
         alt!(snaps.is_empty(), return Err(eg!("no snapshots")));
 
-        let h = height.unwrap_or(snaps[0]);
+        let h = height.unwrap_or(snaps[snaps.len() - 1]);
 
         let cmd = match snaps.binary_search(&h) {
             Ok(_) => {
-                format!("zfs rollback {}@{}", &cfg.target, h)
+                format!("zfs rollback -r {}@{}", &cfg.target, h)
             }
             Err(idx) => {
                 if strict {
@@ -297,7 +297,7 @@ mod zfs {
             return Ok(());
         }
 
-        snaps[cap..].iter().for_each(|i| {
+        snaps[..(snaps.len() - cap)].iter().for_each(|i| {
             let cmd = format!("zfs destroy {}@{}", &cfg.target, i);
             info_omit!(exec_output(&cmd));
         });
