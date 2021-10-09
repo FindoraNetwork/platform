@@ -6,6 +6,7 @@
 //! - clean up expired snapshots
 //!
 
+use ledger::store::fbnc;
 use ruc::*;
 use std::{process::Command, str::FromStr};
 
@@ -62,6 +63,7 @@ impl SnapCfg {
 
         alt!(self.mode.is_external(), todo!());
 
+        fbnc::flush_data();
         match self.infra {
             SnapInfra::Zfs => zfs::gen_snapshot(self, h).c(d!()),
             SnapInfra::Btrfs => btrfs::gen_snapshot(self, h).c(d!()),
@@ -260,7 +262,7 @@ mod zfs {
         let snaps = sorted_snapshots(cfg).c(d!())?;
         alt!(snaps.is_empty(), return Err(eg!("no snapshots")));
 
-        let h = height.unwrap_or(snaps[snaps.len() - 1]);
+        let h = height.unwrap_or_else(|| snaps[snaps.len() - 1]);
 
         let cmd = match snaps.binary_search(&h) {
             Ok(_) => {
