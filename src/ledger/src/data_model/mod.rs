@@ -11,6 +11,7 @@ mod test;
 
 pub use effects::{BlockEffect, TxnEffect};
 
+use crate::converter::ConvertAccount;
 use crate::staking::{
     is_coinbase_tx,
     ops::{
@@ -1162,6 +1163,8 @@ pub enum Operation {
     FraDistribution(FraDistributionOps),
     /// Coinbase operation
     MintFra(MintFraOps),
+    /// Convert UTXO to Account
+    ConvertAccount(ConvertAccount),
 }
 
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
@@ -1188,6 +1191,7 @@ fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
             i.set_nonce(no_replay_token);
         }
         Operation::UpdateMemo(i) => i.body.no_replay_token = no_replay_token,
+        Operation::ConvertAccount(i) => i.set_nonce(no_replay_token),
         _ => {}
     }
 }
