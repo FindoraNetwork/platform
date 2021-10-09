@@ -1,0 +1,20 @@
+[package]
+name = "fp-evm"
+version = "0.1.0"
+authors = ["FindoraNetwork"]
+edition = "2018"
+homepage = "https://findora.org/technology"
+repository = "https://github.com/findoranetwork/platform/"
+description = "Findora Primitive EVM abstractions types"
+readme = "README.md"
+
+[dependencies]
+ethereum = { version = "0.9.0", default-features = false, features = ["with-serde"] }
+ethereum-types = { version = "0.12", default-features = false }
+evm = { version = "0.29.0", default-features = false, features = ["with-serde"] }
+ruc = "0.6.2"
+serde = { version = "1.0.124", features = ["derive"] }
+
+# primitives
+fp-core = { path = "../core" }
+fp-types = { path = "../types" }
