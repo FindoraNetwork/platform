@@ -11,9 +11,9 @@ use crate::{
     api::{query_server::BLOCK_CREATED, submission_server::convert_tx},
 };
 use abci::{
-    RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx, RequestEndBlock,
-    RequestInfo, ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
-    ResponseEndBlock, ResponseInfo,
+    CheckTxType, RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx,
+    RequestEndBlock, RequestInfo, ResponseBeginBlock, ResponseCheckTx, ResponseCommit,
+    ResponseDeliverTx, ResponseEndBlock, ResponseInfo,
 };
 use lazy_static::lazy_static;
 use ledger::staking::{is_coinbase_tx, KEEP_HIST};
@@ -33,7 +33,7 @@ static HAS_ACTUAL_TXS: AtomicBool = AtomicBool::new(false);
 pub(crate) static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
 
 lazy_static! {
-    /// save the request parameters from the begin_block for use in the end_block
+    // save the request parameters from the begin_block for use in the end_block
     static ref REQ_BEGIN_BLOCK: Arc<Mutex<RequestBeginBlock>> =
         Arc::new(Mutex::new(RequestBeginBlock::new()));
 }
@@ -70,7 +70,7 @@ pub fn info(s: &mut ABCISubmissionServer, _req: &RequestInfo) -> ResponseInfo {
 /// any new tx will trigger this callback before it can enter the mem-pool of tendermint
 pub fn check_tx(_s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseCheckTx {
     let mut resp = ResponseCheckTx::new();
-    if convert_tx(req.get_tx()).is_err() {
+    if matches!(req.field_type, CheckTxType::New) && convert_tx(req.get_tx()).is_err() {
         resp.code = 1;
     }
     resp
@@ -93,7 +93,7 @@ pub fn begin_block(
     IN_SAFE_ITV.swap(true, Ordering::Relaxed);
 
     let header = pnk!(req.header.as_ref());
-    TENDERMINT_BLOCK_HEIGHT.swap(dbg!(header.height), Ordering::Relaxed);
+    TENDERMINT_BLOCK_HEIGHT.swap(header.height, Ordering::Relaxed);
 
     *REQ_BEGIN_BLOCK.lock() = req.clone();
 
