@@ -186,6 +186,9 @@ impl TxnEffect {
                     check_nonce!(i);
                     te.fra_distributions.push(i.clone());
                 }
+                Operation::ConvertAccount(i) => {
+                    check_nonce!(i)
+                }
             }
         }
 
