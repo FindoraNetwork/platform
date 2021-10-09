@@ -21,6 +21,7 @@ use {
         },
         Staking,
     },
+    crate::converter::ConvertAccount,
     __trash__::{Policy, PolicyGlobals, TxnPolicyData},
     bitmap::SparseMap,
     cryptohash::{sha256::Digest as BitDigest, HashValue},
@@ -1188,6 +1189,8 @@ pub enum Operation {
     FraDistribution(FraDistributionOps),
     /// Coinbase operation
     MintFra(MintFraOps),
+    /// Convert UTXO to Account
+    ConvertAccount(ConvertAccount),
 }
 
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
@@ -1214,6 +1217,7 @@ fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
             i.set_nonce(no_replay_token);
         }
         Operation::UpdateMemo(i) => i.body.no_replay_token = no_replay_token,
+        Operation::ConvertAccount(i) => i.set_nonce(no_replay_token),
         _ => {}
     }
 }

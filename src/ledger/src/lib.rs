@@ -8,9 +8,8 @@
 
 #[macro_use]
 pub mod data_model;
-
+pub mod converter;
 pub mod staking;
-
 #[cfg(not(target_arch = "wasm32"))]
 pub mod store;
 

@@ -28,6 +28,7 @@ use {
         },
         store::LedgerState,
     },
+    baseapp::BaseApp as AccountBaseApp,
     ruc::*,
     serde::Serialize,
     std::{
@@ -272,14 +273,17 @@ fn system_governance(staking: &mut Staking, bz: &ByzantineInfo) -> Result<()> {
 }
 
 /// Pay for freed 'Delegations' and 'FraDistributions'.
-pub fn system_mint_pay(la: &LedgerState) -> Option<Transaction> {
+pub fn system_mint_pay(
+    la: &LedgerState,
+    account_base_app: &mut AccountBaseApp,
+) -> Option<Transaction> {
     let staking = la.get_staking();
     let mut limit = staking.coinbase_balance() as i128;
 
     // at most `NUM_TO_PAY` items to pay per block
     const NUM_TO_PAY: usize = 2048;
 
-    let mint_entries = staking
+    let mut mint_entries = staking
         .delegation_get_global_principal_with_receiver()
         .into_iter()
         .map(|(k, (n, receiver_pk))| {
@@ -305,6 +309,27 @@ pub fn system_mint_pay(la: &LedgerState) -> Option<Transaction> {
         )
         .take(NUM_TO_PAY)
         .collect::<Vec<_>>();
+
+    // add account mint_entries.
+    const MAX_MINT_PAY: usize = 64;
+    let mut vec = if let Ok(account_mint) = account_base_app.consume_mint(MAX_MINT_PAY) {
+        account_mint
+            .iter()
+            .map(|mint| {
+                MintEntry::new(
+                    MintKind::Other,
+                    mint.target,
+                    None,
+                    mint.amount,
+                    mint.asset,
+                )
+            })
+            .collect::<Vec<MintEntry>>()
+    } else {
+        Vec::new()
+    };
+
+    mint_entries.append(&mut vec);
 
     if mint_entries.is_empty() {
         None
