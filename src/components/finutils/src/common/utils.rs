@@ -30,6 +30,7 @@ use zei::xfr::{
     sig::{XfrKeyPair, XfrPublicKey},
     structs::{AssetRecordTemplate, OwnerMemo},
 };
+use zeialgebra::jubjub::JubjubScalar;
 
 ///////////////////////////////////////
 // Part 1: utils for transfer assets //

@@ -445,8 +445,7 @@ impl TransactionBuilder {
             JsValue::from_str(&format!("Could not open asset record: {}", e))
         })?;
 
-        let (_, r) = self
-            .get_builder_mut()
+        let (_, r) = self.get_builder_mut()
             .add_operation_bar_to_abar(
                 auth_key_pair,
                 &abar_pubkey,

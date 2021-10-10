@@ -398,7 +398,7 @@ fn run() -> Result<()> {
         if txo_sid.is_none() {
             println!("{}", m.usage());
         } else {
-            let r = common::convert_bar2abar(
+            let r= common::convert_bar2abar(
                 owner_sk,
                 target_addr,
                 owner_enc_key,
