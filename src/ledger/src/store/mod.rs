@@ -554,12 +554,8 @@ impl LedgerState {
         let blocks_path = prefix.clone() + "blocks";
         let tx_to_block_location_path = prefix + "tx_to_block_location";
 
-        let (mut abar_state, abar_query_state) =
+        let (abar_state, abar_query_state) =
             LedgerState::init_abar_state(&abar_store_path).c(d!())?;
-
-        // Initializing Merkle tree to set Empty tree root hash, which is a hash of null children
-        let store = PrefixedStore::new("abar_store", &mut abar_state);
-        let _ = PersistentMerkleTree::new(store)?;
 
         let ledger = LedgerState {
             status: LedgerStatus::new(&basedir, &snapshot_file, &snapshot_entries_dir)

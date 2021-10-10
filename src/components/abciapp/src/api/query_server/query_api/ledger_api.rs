@@ -23,7 +23,6 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, mem, sync::Arc};
 use zei::anon_xfr::structs::AnonBlindAssetRecord;
 use zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo};
-use ledger::data_model::ATxoSID;
 
 // Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]

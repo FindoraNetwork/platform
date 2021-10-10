@@ -30,7 +30,6 @@ use zei::xfr::{
     sig::{XfrKeyPair, XfrPublicKey},
     structs::{AssetRecordTemplate, OwnerMemo},
 };
-use zeialgebra::jubjub::JubjubScalar;
 
 ///////////////////////////////////////
 // Part 1: utils for transfer assets //
@@ -480,12 +479,9 @@ pub(crate) fn get_owned_abars(
         .bytes()
         .c(d!())
         .and_then(|b| {
-            serde_json::from_slice::<Vec<(ATxoSID, AnonBlindAssetRecord)>>(&b)
-                .c(d!())
+            serde_json::from_slice::<Vec<(ATxoSID, AnonBlindAssetRecord)>>(&b).c(d!())
         })
 }
-
-
 
 #[inline(always)]
 fn get_seq_id() -> Result<u64> {
