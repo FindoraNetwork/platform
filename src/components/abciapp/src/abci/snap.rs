@@ -58,7 +58,7 @@ impl SnapCfg {
     #[inline(always)]
     pub fn snapshot(&self, idx: u64) -> Result<()> {
         alt!(!self.enable, return Ok(()));
-        alt!(0 != idx % self.itv as u64, return Ok(()));
+        alt!(0 != idx % self.itv as u64 || 0 == idx, return Ok(()));
 
         match self.mode {
             SnapMode::Zfs => zfs::gen_snapshot(self, idx).c(d!()),
