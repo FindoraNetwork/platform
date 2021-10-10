@@ -9,6 +9,7 @@ use crate::{
 };
 use crypto::basics::hybrid_encryption::XPublicKey;
 use globutils::{wallet, HashOf, SignatureOf};
+use ledger::data_model::ATxoSID;
 use ledger::{
     data_model::{
         AssetType, AssetTypeCode, DefineAsset, Operation, StateCommitmentData,
@@ -29,7 +30,6 @@ use zei::xfr::{
     sig::{XfrKeyPair, XfrPublicKey},
     structs::{AssetRecordTemplate, OwnerMemo},
 };
-use ledger::data_model::ATxoSID;
 
 ///////////////////////////////////////
 // Part 1: utils for transfer assets //
@@ -479,12 +479,9 @@ pub(crate) fn get_owned_abars(
         .bytes()
         .c(d!())
         .and_then(|b| {
-            serde_json::from_slice::<Vec<(ATxoSID, AnonBlindAssetRecord)>>(&b)
-                .c(d!())
+            serde_json::from_slice::<Vec<(ATxoSID, AnonBlindAssetRecord)>>(&b).c(d!())
         })
 }
-
-
 
 #[inline(always)]
 fn get_seq_id() -> Result<u64> {
@@ -535,11 +532,7 @@ pub fn get_owner_memo_batch(ids: &[TxoSID]) -> Result<Vec<Option<OwnerMemo>>> {
 #[allow(missing_docs)]
 pub fn get_abar_memo(id: &ATxoSID) -> Result<Option<OwnerMemo>> {
     let id = id.0.to_string();
-    let url = format!(
-        "{}:8667/get_abar_memo/{}",
-        get_serv_addr().c(d!())?,
-        id
-    );
+    let url = format!("{}:8667/get_abar_memo/{}", get_serv_addr().c(d!())?, id);
 
     attohttpc::get(&url)
         .send()
@@ -550,7 +543,6 @@ pub fn get_abar_memo(id: &ATxoSID) -> Result<Option<OwnerMemo>> {
         .c(d!())
         .and_then(|b| serde_json::from_slice(&b).c(d!()))
 }
-
 
 /// Delegation info(and staking info if `pk` is a validator).
 pub fn get_delegation_info(pk: &XfrPublicKey) -> Result<DelegationInfo> {
