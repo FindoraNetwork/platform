@@ -35,6 +35,7 @@ use ledger::data_model::{AssetTypeCode, FRA_DECIMALS};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ruc::*;
+use serde::{Deserialize, Serialize};
 use std::{fmt, fs};
 use zei::anon_xfr::keys::AXfrKeyPair;
 use zei::serialization::ZeiFromToBytes;
@@ -372,18 +373,35 @@ fn run() -> Result<()> {
         let eth_key = m.value_of("eth-key");
         transfer_from_account(amount.parse::<u64>().c(d!())?, address, eth_key)?
     } else if let Some(m) = matches.subcommand_matches("convert-bar-to-abar") {
-        let owner_sk = m.value_of("from-seckey");
-        let target_addr = m.value_of("to-pubkey");
-        let owner_enc_key = m.value_of("enc-key");
+        let f = match m.value_of("from-seckey") {
+            Some(path) => {
+                Some(fs::read_to_string(path).c(d!("Failed to read seckey file"))?)
+            }
+            None => None,
+        };
+
+        let anon_keys = match m.value_of("anon-keys") {
+            Some(path) => {
+                let f =
+                    fs::read_to_string(path).c(d!("Failed to read anon-keys file"))?;
+                let keys = serde_json::from_str::<AnonKeys>(f.as_str()).c(d!())?;
+                keys
+            }
+            None => return Err(eg!("path for anon-keys file not found")),
+        };
+
+        let owner_sk = f.as_ref();
+        let target_addr = anon_keys.axfr_public_key;
+        let owner_enc_key = anon_keys.enc_key;
         let txo_sid = m.value_of("txo-sid");
 
-        if target_addr.is_none() || owner_enc_key.is_none() || txo_sid.is_none() {
+        if txo_sid.is_none() {
             println!("{}", m.usage());
         } else {
             common::convert_bar2abar(
                 owner_sk,
-                target_addr.unwrap(),
-                owner_enc_key.unwrap(),
+                target_addr,
+                owner_enc_key,
                 txo_sid.unwrap(),
             )
             .c(d!())?;
@@ -391,26 +409,18 @@ fn run() -> Result<()> {
     } else if let Some(_m) = matches.subcommand_matches("generate-anon-keys") {
         let mut prng = ChaChaRng::from_entropy();
         let keypair = AXfrKeyPair::generate(&mut prng);
-
-        println!(
-            "AXfrSecretKey: {}",
-            base64::encode(keypair.zei_to_bytes().as_slice())
-        );
-        println!(
-            "AXfrPublicKey: {}",
-            base64::encode(keypair.pub_key().zei_to_bytes().as_slice())
-        );
-
         let secret_key = XSecretKey::new(&mut prng);
         let public_key = XPublicKey::from(&secret_key);
-        println!(
-            "Decryption Key: {}",
-            base64::encode(secret_key.zei_to_bytes().as_slice())
-        );
-        println!(
-            "Encryption Key: {}",
-            base64::encode(public_key.zei_to_bytes().as_slice())
-        );
+
+        let keys = AnonKeys {
+            axfr_secret_key: base64::encode(keypair.zei_to_bytes().as_slice()),
+            axfr_public_key: base64::encode(keypair.pub_key().zei_to_bytes().as_slice()),
+            enc_key: base64::encode(public_key.zei_to_bytes().as_slice()),
+            dec_key: base64::encode(secret_key.zei_to_bytes().as_slice()),
+        };
+
+        // print keys to terminal
+        println!("{:?}", serde_json::to_string_pretty(&keys));
     } else if let Some(m) = matches.subcommand_matches("anon-transfer") {
         let axfr_secret_key = m.value_of("axfr-secretkey");
         let dec_key = m.value_of("decryption-key");
@@ -514,4 +524,12 @@ fn tip_success() {
     println!(
         "\x1b[35;01mNote\x1b[01m:\n\tYour operations has been executed without local error,\n\tbut the final result may need an asynchronous query.\x1b[00m"
     );
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+pub struct AnonKeys {
+    pub axfr_secret_key: String,
+    pub axfr_public_key: String,
+    pub enc_key: String,
+    pub dec_key: String,
 }

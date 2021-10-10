@@ -686,9 +686,9 @@ pub fn show_asset(addr: &str) -> Result<()> {
 
 /// Convert a Blind Asset Record to Anonymous Asset
 pub fn convert_bar2abar(
-    owner_sk: Option<&str>,
-    target_addr: &str,
-    owner_enc_key: &str,
+    owner_sk: Option<&String>,
+    target_addr: String,
+    owner_enc_key: String,
     txo_sid: &str,
 ) -> Result<AnonBlindAssetRecord> {
     let from = owner_sk
@@ -699,9 +699,9 @@ pub fn convert_bar2abar(
                 .map(|sk| sk.into_keypair())
         })
         .or_else(|_| get_keypair().c(d!()))?;
-    let to = wallet::anon_public_key_from_base64(target_addr)
+    let to = wallet::anon_public_key_from_base64(target_addr.as_str())
         .c(d!("invalid 'target-addr'"))?;
-    let enc_key = wallet::x_public_key_from_base64(owner_enc_key)
+    let enc_key = wallet::x_public_key_from_base64(owner_enc_key.as_str())
         .c(d!("invalid owner_enc_key"))?;
     let sid = txo_sid.parse::<u64>().c(d!("error parsing TxoSID"))?;
 
