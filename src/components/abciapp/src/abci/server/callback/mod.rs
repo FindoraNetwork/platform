@@ -16,7 +16,10 @@ use abci::{
     ResponseDeliverTx, ResponseEndBlock, ResponseInfo,
 };
 use lazy_static::lazy_static;
-use ledger::staking::{is_coinbase_tx, KEEP_HIST};
+use ledger::{
+    staking::{is_coinbase_tx, KEEP_HIST},
+    store::fbnc,
+};
 use parking_lot::Mutex;
 use protobuf::RepeatedField;
 use ruc::*;
@@ -81,6 +84,7 @@ pub fn begin_block(
     req: &RequestBeginBlock,
 ) -> ResponseBeginBlock {
     // snapshot the last block
+    fbnc::flush_data();
     let last_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
     pnk!(CFG.snapcfg.snapshot(last_height as u64));
 
