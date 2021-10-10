@@ -85,7 +85,7 @@ impl ABCIConfig {
 pub(crate) mod global_cfg {
     use crate::abci::snap::SnapCfg;
     #[cfg(not(test))]
-    use crate::abci::snap::{SnapInfra, SnapMode};
+    use crate::abci::snap::SnapMode;
     #[cfg(not(test))]
     use clap::{crate_authors, App, Arg, ArgMatches};
     use lazy_static::lazy_static;
@@ -143,9 +143,7 @@ pub(crate) mod global_cfg {
                 .arg_from_usage("--snapshot-target=[TargetPath] 'a data volume containing both ledger data and tendermint data'")
                 .arg_from_usage("--snapshot-itv=[Iterval] 'interval between adjacent snapshots, default to 10 blocks'")
                 .arg_from_usage("--snapshot-cap=[Capacity] 'the maximum number of snapshots that will be stored, default to 100'")
-                .arg_from_usage("--snapshot-mode=[Mode] 'native/external, default to native'")
-                .arg_from_usage("--snapshot-infra=[Infra] 'zfs/btrfs, will try a guess if missing, only useful in native mode'")
-                .arg_from_usage("--snapshot-daemon=[UdpDaemon] 'a UDP address like `ADDR:PORT`, only useful in external mode'")
+                .arg_from_usage("--snapshot-mode=[Mode] 'zfs/btrfs/external, will try a guess if missing'")
                 .arg_from_usage("--snapshot-rollback 'rollback to the last available snapshot'")
                 .arg_from_usage("-r, --snapshot-rollback-to=[Height] 'rollback to a custom height, will try the closest smaller height if the target does not exist'")
                 .arg_from_usage("-R, --snapshot-rollback-to-exact=[Height] 'rollback to a custom height exactly, an error will be reported if the target does not exist'")
@@ -266,19 +264,11 @@ pub(crate) mod global_cfg {
             .parse::<u32>()
             .c(d!())?;
 
-        res.mode = m
-            .value_of("snapshot-mode")
-            .map(|m| SnapMode::from_str(m))
-            .unwrap_or_else(|| Ok(SnapMode::default()))
-            .c(d!())?;
-
-        if let Some(si) = m.value_of("snapshot-infra") {
-            res.infra = SnapInfra::from_str(si).c(d!())?;
+        if let Some(si) = m.value_of("snapshot-mode") {
+            res.mode = SnapMode::from_str(si).c(d!())?;
         } else {
-            res.infra = res.guess_infra().c(d!())?;
+            res.mode = res.guess_mode().c(d!())?;
         }
-
-        res.udp_daemon = m.value_of("snapshot-daemon").map(|v| v.to_owned());
 
         if m.is_present("snapshot-list") {
             list_snapshots(&res).c(d!())?;

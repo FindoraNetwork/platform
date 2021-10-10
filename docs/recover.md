@@ -10,13 +10,11 @@ findorad node
 --enable-snapshot        a global switch for enabling snapshot functions
 --snapshot-itv           interval between adjacent snapshots, default to 10 blocks
 --snapshot-cap           the maximum number of snapshots that will be stored, default to 100
---snapshot-mode          native/external, default to native
---snapshot-infra         zfs/btrfs, will try a guess if missing, only useful in native mode
---snapshot-daemon        a UDP address like "ADDR:PORT", only useful in external mode
+--snapshot-mode          zfs/btrfs/external, will try a guess if missing
 --snapshot-target        a data volume containing both ledger data and tendermint data
 --snapshot-list          list all available snapshots in the form of block height
 
-> running offline, only useful in native mode
+> running offline
 
 --snapshot-rollback                rollback to the last available snapshot
 -r, --snapshot-rollback-to         rollback to a custom height, \

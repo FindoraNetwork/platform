@@ -6,7 +6,6 @@
 //! - clean up expired snapshots
 //!
 
-use ledger::store::fbnc;
 use ruc::*;
 use std::{process::Command, str::FromStr};
 
@@ -21,12 +20,8 @@ pub struct SnapCfg {
     pub itv: u32,
     /// the maximum number of snapshots that will be stored, default to 100
     pub cap: u32,
-    /// native or external, default to native
+    /// Zfs or Btrfs or External, will try a guess if missing
     pub mode: SnapMode,
-    /// zfs or btrfs, will try a guess if missing, only useful in native mode
-    pub infra: SnapInfra,
-    /// a UDP address like "ADDR:PORT", only useful in external mode
-    pub udp_daemon: Option<String>,
     /// a data volume containing both ledger data and tendermint data
     pub target: String,
 }
@@ -37,9 +32,7 @@ impl Default for SnapCfg {
             enable: false,
             itv: 10,
             cap: 100,
-            mode: SnapMode::Native,
-            infra: SnapInfra::Zfs,
-            udp_daemon: None,
+            mode: SnapMode::Zfs,
             target: "zfs/findora".to_owned(),
         }
     }
@@ -61,21 +54,20 @@ impl SnapCfg {
         alt!(!self.enable, return Ok(()));
         alt!(0 != h % self.itv as u64, return Ok(()));
 
-        alt!(self.mode.is_external(), todo!());
-
-        fbnc::flush_data();
-        match self.infra {
-            SnapInfra::Zfs => zfs::gen_snapshot(self, h).c(d!()),
-            SnapInfra::Btrfs => btrfs::gen_snapshot(self, h).c(d!()),
+        match self.mode {
+            SnapMode::Zfs => zfs::gen_snapshot(self, h).c(d!()),
+            SnapMode::Btrfs => btrfs::gen_snapshot(self, h).c(d!()),
+            SnapMode::External => external::gen_snapshot(self, h).c(d!()),
         }
     }
 
     /// rollback the state of blockchain to a specificed height
     #[inline(always)]
     pub fn rollback(&self, height: Option<u64>, strict: bool) -> Result<()> {
-        match self.infra {
-            SnapInfra::Zfs => zfs::rollback(self, height, strict).c(d!()),
-            SnapInfra::Btrfs => btrfs::rollback(self, height, strict).c(d!()),
+        match self.mode {
+            SnapMode::Zfs => zfs::rollback(self, height, strict).c(d!()),
+            SnapMode::Btrfs => btrfs::rollback(self, height, strict).c(d!()),
+            SnapMode::External => Err(eg!("please use `btm` tool in `External` mode")),
         }
     }
 
@@ -83,83 +75,26 @@ impl SnapCfg {
     /// NOTE: must use AESC order, `binary_search` need this feature
     #[inline(always)]
     pub fn get_sorted_snapshots(&self) -> Result<Vec<u64>> {
-        match self.infra {
-            SnapInfra::Zfs => zfs::sorted_snapshots(self).c(d!()),
-            SnapInfra::Btrfs => btrfs::sorted_snapshots(self).c(d!()),
+        match self.mode {
+            SnapMode::Zfs => zfs::sorted_snapshots(self).c(d!()),
+            SnapMode::Btrfs => btrfs::sorted_snapshots(self).c(d!()),
+            SnapMode::External => Err(eg!("please use `btm` tool in `External` mode")),
         }
     }
 
-    /// try to guess which infra the `target` is on
+    /// try to guess a correct mode
+    /// NOTE: not suitable for `External` mode
     #[inline(always)]
-    pub fn guess_infra(&self) -> Result<SnapInfra> {
+    pub fn guess_mode(&self) -> Result<SnapMode> {
         zfs::check(&self.target)
             .c(d!())
-            .map(|_| SnapInfra::Zfs)
-            .or_else(|e| {
-                btrfs::check(&self.target)
-                    .c(d!(e))
-                    .map(|_| SnapInfra::Btrfs)
-            })
-    }
-
-    #[inline(always)]
-    #[allow(missing_docs)]
-    pub fn is_native_mode(&self) -> bool {
-        self.mode.is_native()
-    }
-
-    #[inline(always)]
-    #[allow(missing_docs)]
-    pub fn is_external_mode(&self) -> bool {
-        self.mode.is_external()
+            .map(|_| SnapMode::Zfs)
+            .or_else(|e| btrfs::check(&self.target).c(d!(e)).map(|_| SnapMode::Btrfs))
     }
 
     #[inline(always)]
     fn get_cap(&self) -> u32 {
         alt!(self.cap > CAP_MAX, CAP_MAX, self.cap)
-    }
-}
-
-/// Which mode to use to generate the snapshot
-pub enum SnapMode {
-    /// manage the generation of snapshots directly
-    Native,
-    ///
-    /// TODO: unimplemented yet!
-    ///
-    /// rely on an external independent process
-    External,
-}
-
-impl Default for SnapMode {
-    fn default() -> Self {
-        Self::Native
-    }
-}
-
-impl FromStr for SnapMode {
-    type Err = Box<dyn RucError>;
-    #[inline(always)]
-    #[allow(missing_docs)]
-    fn from_str(m: &str) -> Result<Self> {
-        match m.to_lowercase().as_str() {
-            "native" => Ok(Self::Native),
-            // "external" => Ok(Self::External),
-            "external" => Err(eg!("unimplemented!")),
-            _ => Err(eg!("invalid mode name!")),
-        }
-    }
-}
-
-impl SnapMode {
-    #[inline(always)]
-    fn is_native(&self) -> bool {
-        matches!(self, Self::Native)
-    }
-
-    #[inline(always)]
-    fn is_external(&self) -> bool {
-        matches!(self, Self::External)
     }
 }
 
@@ -193,7 +128,7 @@ impl SnapMode {
 /// rm -rf /btrfs/findora || exit 1
 /// btrfs subvolume snapshot /btrfs/FINDORA/123456 /btrfs/findora
 /// ```
-pub enum SnapInfra {
+pub enum SnapMode {
     /// available on some Linux distributions and FreeBSD
     /// - Ubuntu Linux
     /// - Gentoo Linux
@@ -203,15 +138,18 @@ pub enum SnapInfra {
     /// available on most Linux distributions,
     /// but its user experience is worse than zfs
     Btrfs,
+    /// TODO: unimplemented!
+    /// rely on an external independent process
+    External,
 }
 
-impl Default for SnapInfra {
+impl Default for SnapMode {
     fn default() -> Self {
         Self::Zfs
     }
 }
 
-impl FromStr for SnapInfra {
+impl FromStr for SnapMode {
     type Err = Box<dyn RucError>;
     #[inline(always)]
     #[allow(missing_docs)]
@@ -219,6 +157,7 @@ impl FromStr for SnapInfra {
         match m.to_lowercase().as_str() {
             "zfs" => Ok(Self::Zfs),
             "btrfs" => Ok(Self::Btrfs),
+            "external" => Ok(Self::External),
             _ => Err(eg!()),
         }
     }
@@ -419,6 +358,16 @@ mod btrfs {
         info_omit!(exec_output(cmd.trim_end()));
 
         Ok(())
+    }
+}
+
+mod external {
+    use super::SnapCfg;
+    use ruc::*;
+
+    #[inline(always)]
+    pub(super) fn gen_snapshot(_cfg: &SnapCfg, _h: u64) -> Result<()> {
+        todo!()
     }
 }
 
