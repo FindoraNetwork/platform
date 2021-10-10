@@ -50,29 +50,28 @@ impl SnapCfg {
 
     /// generate a snapshot for the latest state of blockchain
     #[inline(always)]
-    pub fn snapshot(&self, h: u64) -> Result<()> {
+    pub fn snapshot(&self, idx: u64) -> Result<()> {
         alt!(!self.enable, return Ok(()));
-        alt!(0 != h % self.itv as u64, return Ok(()));
+        alt!(0 != idx % self.itv as u64, return Ok(()));
 
         match self.mode {
-            SnapMode::Zfs => zfs::gen_snapshot(self, h).c(d!()),
-            SnapMode::Btrfs => btrfs::gen_snapshot(self, h).c(d!()),
-            SnapMode::External => external::gen_snapshot(self, h).c(d!()),
+            SnapMode::Zfs => zfs::gen_snapshot(self, idx).c(d!()),
+            SnapMode::Btrfs => btrfs::gen_snapshot(self, idx).c(d!()),
+            SnapMode::External => external::gen_snapshot(self, idx).c(d!()),
         }
     }
 
     /// rollback the state of blockchain to a specificed height
     #[inline(always)]
-    pub fn rollback(&self, height: Option<u64>, strict: bool) -> Result<()> {
+    pub fn rollback(&self, idx: Option<u64>, strict: bool) -> Result<()> {
         match self.mode {
-            SnapMode::Zfs => zfs::rollback(self, height, strict).c(d!()),
-            SnapMode::Btrfs => btrfs::rollback(self, height, strict).c(d!()),
+            SnapMode::Zfs => zfs::rollback(self, idx, strict).c(d!()),
+            SnapMode::Btrfs => btrfs::rollback(self, idx, strict).c(d!()),
             SnapMode::External => Err(eg!("please use `btm` tool in `External` mode")),
         }
     }
 
-    /// Get snapshot list in aesc order.
-    /// NOTE: must use AESC order, `binary_search` need this feature
+    /// Get snapshot list in desc order.
     #[inline(always)]
     pub fn get_sorted_snapshots(&self) -> Result<Vec<u64>> {
         match self.mode {
@@ -168,14 +167,14 @@ mod zfs {
     use ruc::*;
 
     #[inline(always)]
-    pub(super) fn gen_snapshot(cfg: &SnapCfg, h: u64) -> Result<()> {
+    pub(super) fn gen_snapshot(cfg: &SnapCfg, idx: u64) -> Result<()> {
         clean_outdated(cfg).c(d!())?;
         let cmd = format!(
             "
             zfs destroy {0}@{1} 2>/dev/null;
             zfs snapshot {0}@{1}
             ",
-            &cfg.target, h
+            &cfg.target, idx
         );
         exec_output(&cmd).c(d!()).map(|_| ())
     }
@@ -191,35 +190,36 @@ mod zfs {
             .lines()
             .map(|l| l.parse::<u64>().c(d!()))
             .collect::<Result<Vec<u64>>>()?;
-        res.sort_unstable();
+        res.sort_unstable_by(|a, b| b.cmp(a));
 
         Ok(res)
     }
 
-    pub(super) fn rollback(
-        cfg: &SnapCfg,
-        height: Option<u64>,
-        strict: bool,
-    ) -> Result<()> {
-        let snaps = sorted_snapshots(cfg).c(d!())?;
+    pub(super) fn rollback(cfg: &SnapCfg, idx: Option<u64>, strict: bool) -> Result<()> {
+        // convert to AESC order for `binary_search`
+        let snaps = sorted_snapshots(cfg)
+            .c(d!())?
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>();
         alt!(snaps.is_empty(), return Err(eg!("no snapshots")));
 
-        let h = height.unwrap_or_else(|| snaps[snaps.len() - 1]);
+        let idx = idx.unwrap_or_else(|| snaps[snaps.len() - 1]);
 
-        let cmd = match snaps.binary_search(&h) {
+        let cmd = match snaps.binary_search(&idx) {
             Ok(_) => {
-                format!("zfs rollback -r {}@{}", &cfg.target, h)
+                format!("zfs rollback -r {}@{}", &cfg.target, idx)
             }
-            Err(idx) => {
+            Err(i) => {
                 if strict {
                     return Err(eg!("specified height does not exist"));
                 } else {
-                    let effective_h = if 1 + idx > snaps.len() {
+                    let effective_idx = if 1 + i > snaps.len() {
                         snaps[snaps.len() - 1]
                     } else {
-                        *(0..idx).rev().find_map(|i| snaps.get(i)).c(d!())?
+                        *(0..i).rev().find_map(|i| snaps.get(i)).c(d!())?
                     };
-                    format!("zfs rollback -r {}@{}", &cfg.target, effective_h)
+                    format!("zfs rollback -r {}@{}", &cfg.target, effective_idx)
                 }
             }
         };
@@ -241,7 +241,7 @@ mod zfs {
             return Ok(());
         }
 
-        snaps[..(snaps.len() - cap)].iter().for_each(|i| {
+        snaps[cap..].iter().for_each(|i| {
             let cmd = format!("zfs destroy {}@{}", &cfg.target, i);
             info_omit!(exec_output(&cmd));
         });
@@ -256,14 +256,14 @@ mod btrfs {
     use std::path::PathBuf;
 
     #[inline(always)]
-    pub(super) fn gen_snapshot(cfg: &SnapCfg, h: u64) -> Result<()> {
+    pub(super) fn gen_snapshot(cfg: &SnapCfg, idx: u64) -> Result<()> {
         clean_outdated(cfg).c(d!())?;
         let cmd = format!(
             "
             btrfs subvolume delete {0}@{1} 2>/dev/null;
             btrfs subvolume snapshot {0} {0}@{1}
             ",
-            &cfg.target, h
+            &cfg.target, idx
         );
         exec_output(&cmd).c(d!()).map(|_| ())
     }
@@ -283,46 +283,47 @@ mod btrfs {
             .lines()
             .map(|l| l.parse::<u64>().c(d!()))
             .collect::<Result<Vec<u64>>>()?;
-        res.sort_unstable();
+        res.sort_unstable_by(|a, b| b.cmp(a));
 
         Ok(res)
     }
 
-    pub(super) fn rollback(
-        cfg: &SnapCfg,
-        height: Option<u64>,
-        strict: bool,
-    ) -> Result<()> {
-        let snaps = sorted_snapshots(cfg).c(d!())?;
+    pub(super) fn rollback(cfg: &SnapCfg, idx: Option<u64>, strict: bool) -> Result<()> {
+        // convert to AESC order for `binary_search`
+        let snaps = sorted_snapshots(cfg)
+            .c(d!())?
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>();
         alt!(snaps.is_empty(), return Err(eg!("no snapshots")));
 
-        let h = height.unwrap_or_else(|| snaps[snaps.len() - 1]);
+        let idx = idx.unwrap_or_else(|| snaps[snaps.len() - 1]);
 
-        let cmd = match snaps.binary_search(&h) {
+        let cmd = match snaps.binary_search(&idx) {
             Ok(_) => {
                 format!(
                     "
                     btrfs subvolume delete {0} 2>/dev/null;
                     btrfs subvolume snapshot {0}@{1} {0}
                     ",
-                    &cfg.target, h
+                    &cfg.target, idx
                 )
             }
-            Err(idx) => {
+            Err(i) => {
                 if strict {
                     return Err(eg!("specified height does not exist"));
                 } else {
-                    let effective_h = if 1 + idx > snaps.len() {
+                    let effective_idx = if 1 + i > snaps.len() {
                         snaps[snaps.len() - 1]
                     } else {
-                        *(0..idx).rev().find_map(|i| snaps.get(i)).c(d!())?
+                        *(0..i).rev().find_map(|i| snaps.get(i)).c(d!())?
                     };
                     format!(
                         "
                         btrfs subvolume delete {0} 2>/dev/null;
                         btrfs subvolume snapshot {0}@{1} {0}
                         ",
-                        &cfg.target, effective_h
+                        &cfg.target, effective_idx
                     )
                 }
             }
@@ -348,11 +349,9 @@ mod btrfs {
             return Ok(());
         }
 
-        let list = snaps[..(snaps.len() - cap)]
-            .iter()
-            .fold(String::new(), |acc, i| {
-                acc + &format!("{}@{} ", &cfg.target, i)
-            });
+        let list = snaps[cap..].iter().fold(String::new(), |acc, i| {
+            acc + &format!("{}@{} ", &cfg.target, i)
+        });
 
         let cmd = format!("btrfs subvolume delete -c {}", list);
         info_omit!(exec_output(cmd.trim_end()));
@@ -366,7 +365,7 @@ mod external {
     use ruc::*;
 
     #[inline(always)]
-    pub(super) fn gen_snapshot(_cfg: &SnapCfg, _h: u64) -> Result<()> {
+    pub(super) fn gen_snapshot(_cfg: &SnapCfg, _idx: u64) -> Result<()> {
         todo!()
     }
 }
