@@ -398,13 +398,15 @@ fn run() -> Result<()> {
         if txo_sid.is_none() {
             println!("{}", m.usage());
         } else {
-            common::convert_bar2abar(
+            let r= common::convert_bar2abar(
                 owner_sk,
                 target_addr,
                 owner_enc_key,
                 txo_sid.unwrap(),
             )
             .c(d!())?;
+
+            println!("Randomizer: {}", wallet::randomizer_to_base64(&r));
         }
     } else if let Some(_m) = matches.subcommand_matches("generate-anon-keys") {
         let mut prng = ChaChaRng::from_entropy();
@@ -423,6 +425,7 @@ fn run() -> Result<()> {
         println!("{:?}", serde_json::to_string_pretty(&keys));
     } else if let Some(m) = matches.subcommand_matches("anon-transfer") {
         let axfr_secret_key = m.value_of("axfr-secretkey");
+        let randomizer = m.value_of("randomizer");
         let dec_key = m.value_of("decryption-key");
         let to_axfr_public_key = m.value_of("to-axfr-public-key");
         let to_enc_key = m.value_of("to-enc-key");
@@ -438,6 +441,7 @@ fn run() -> Result<()> {
         } else {
             common::gen_oabar_add_op(
                 axfr_secret_key.unwrap(),
+                randomizer.unwrap(),
                 dec_key.unwrap(),
                 amount.unwrap(),
                 to_axfr_public_key.unwrap(),

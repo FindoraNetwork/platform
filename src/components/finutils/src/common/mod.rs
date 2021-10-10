@@ -35,7 +35,7 @@ use utils::{
     parse_td_validator_keys,
 };
 use zei::anon_xfr::keys::{AXfrKeyPair, AXfrPubKey};
-use zei::anon_xfr::structs::{AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder};
+use zei::anon_xfr::structs::{OpenAnonBlindAssetRecordBuilder};
 use zei::{
     setup::PublicParams,
     xfr::{
@@ -690,7 +690,7 @@ pub fn convert_bar2abar(
     target_addr: String,
     owner_enc_key: String,
     txo_sid: &str,
-) -> Result<AnonBlindAssetRecord> {
+) -> Result<JubjubScalar> {
     let from = owner_sk
         .c(d!())
         .and_then(|sk| {
@@ -708,14 +708,15 @@ pub fn convert_bar2abar(
     let oar =
         utils::get_oar(&from, TxoSID(sid)).c(d!("error fetching open asset record"))?;
 
-    let abar = utils::generate_bar2abar_op(&from, &to, TxoSID(sid), &oar, &enc_key)?;
+    let r = utils::generate_bar2abar_op(&from, &to, TxoSID(sid), &oar, &enc_key)?;
 
-    Ok(abar)
+    Ok(r)
 }
 
 /// Generate OABAR and add anonymous transfer operation
 pub fn gen_oabar_add_op(
     axfr_secret_key: &str,
+    r: &str,
     dec_key: &str,
     amount: &str,
     to_axfr_public_key: &str,
@@ -732,7 +733,7 @@ pub fn gen_oabar_add_op(
         wallet::x_public_key_from_base64(to_enc_key).c(d!("invalid to_enc_key"))?;
 
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
-    let r = JubjubScalar::random(&mut prng);
+    let r = wallet::randomizer_from_base64(r).c(d!())?;
     let diversified_from_pub_key = from.pub_key().randomize(&r);
 
     let ledger = LedgerState::tmp_ledger(); //TODO - replace tmp with actual
@@ -761,12 +762,15 @@ pub fn gen_oabar_add_op(
         .build()
         .unwrap();
 
+    let r = oabar_out.get_key_rand_factor().clone();
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
     let _ = builder
         .add_operation_anon_transfer(&[oabar_in], &[oabar_out], &[from])
         .c(d!())?;
 
     send_tx(&builder.take_transaction()).c(d!())?;
+
+    println!("Randomizer: {}", wallet::randomizer_to_base64(&r));
     Ok(())
 }
 

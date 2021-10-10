@@ -30,6 +30,7 @@ use zei::xfr::{
     sig::{XfrKeyPair, XfrPublicKey},
     structs::{AssetRecordTemplate, OwnerMemo},
 };
+use zeialgebra::jubjub::JubjubScalar;
 
 ///////////////////////////////////////
 // Part 1: utils for transfer assets //
@@ -601,9 +602,9 @@ pub fn generate_bar2abar_op(
     txo_sid: TxoSID,
     input_record: &OpenAssetRecord,
     enc_key: &XPublicKey,
-) -> Result<AnonBlindAssetRecord> {
+) -> Result<JubjubScalar> {
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
-    let (_, abar) = builder
+    let (_, r) = builder
         .add_operation_bar_to_abar(
             auth_key_pair,
             abar_pub_key,
@@ -616,7 +617,7 @@ pub fn generate_bar2abar_op(
     builder.add_operation(feeop);
 
     send_tx(&builder.take_transaction()).c(d!())?;
-    Ok(abar)
+    Ok(r)
 }
 
 #[inline(always)]
