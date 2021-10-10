@@ -85,7 +85,7 @@ impl ABCIConfig {
 pub(crate) mod global_cfg {
     use crate::abci::snap::SnapCfg;
     #[cfg(not(test))]
-    use crate::abci::snap::SnapMode;
+    use crate::abci::snap::{SnapAlgo, SnapMode, STEP_CNT};
     #[cfg(not(test))]
     use clap::{crate_authors, App, Arg, ArgMatches};
     use lazy_static::lazy_static;
@@ -144,6 +144,7 @@ pub(crate) mod global_cfg {
                 .arg_from_usage("--snapshot-itv=[Iterval] 'interval between adjacent snapshots, default to 10 blocks'")
                 .arg_from_usage("--snapshot-cap=[Capacity] 'the maximum number of snapshots that will be stored, default to 100'")
                 .arg_from_usage("--snapshot-mode=[Mode] 'zfs/btrfs/external, will try a guess if missing'")
+                .arg_from_usage("--snapshot-algo=[Algo] 'fair/fade, default to `fair`'")
                 .arg_from_usage("--snapshot-rollback 'rollback to the last available snapshot'")
                 .arg_from_usage("-r, --snapshot-rollback-to=[Height] 'rollback to a custom height, will try the closest smaller height if the target does not exist'")
                 .arg_from_usage("-R, --snapshot-rollback-to-exact=[Height] 'rollback to a custom height exactly, an error will be reported if the target does not exist'")
@@ -256,18 +257,23 @@ pub(crate) mod global_cfg {
         res.itv = m
             .value_of("snapshot-itv")
             .unwrap_or("10")
-            .parse::<u32>()
+            .parse::<u64>()
             .c(d!())?;
         res.cap = m
             .value_of("snapshot-cap")
             .unwrap_or("100")
-            .parse::<u32>()
+            .parse::<u64>()
             .c(d!())?;
 
-        if let Some(si) = m.value_of("snapshot-mode") {
-            res.mode = SnapMode::from_str(si).c(d!())?;
+        if let Some(sm) = m.value_of("snapshot-mode") {
+            res.mode = SnapMode::from_str(sm).c(d!())?;
         } else {
             res.mode = res.guess_mode().c(d!())?;
+        }
+
+        if let Some(sa) = m.value_of("snapshot-algo") {
+            res.algo = SnapAlgo::from_str(sa).c(d!())?;
+            res.itv.checked_pow(STEP_CNT as u32).c(d!())?;
         }
 
         if m.is_present("snapshot-list") {
@@ -285,6 +291,7 @@ pub(crate) mod global_cfg {
         cfg.get_sorted_snapshots()
             .c(d!())?
             .into_iter()
+            .rev()
             .for_each(|h| {
                 println!("    {}", h);
             });

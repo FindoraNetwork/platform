@@ -10,18 +10,23 @@ use ruc::*;
 use std::{process::Command, str::FromStr};
 
 /// Maximum number of snapshots that can be kept
-pub const CAP_MAX: u32 = 1024;
+pub const CAP_MAX: u64 = 1000;
+
+/// `itv.pow(i)`, only useful in `SnapAlgo::Fade` alfo
+pub const STEP_CNT: usize = 8;
 
 /// Config structure of snapshot
 pub struct SnapCfg {
     /// a global switch for enabling snapshot functions
     pub enable: bool,
     /// interval between adjacent snapshots, default to 10 blocks
-    pub itv: u32,
+    pub itv: u64,
     /// the maximum number of snapshots that will be stored, default to 100
-    pub cap: u32,
+    pub cap: u64,
     /// Zfs or Btrfs or External, will try a guess if missing
     pub mode: SnapMode,
+    /// Fair or Fade, default to 'Fair'
+    pub algo: SnapAlgo,
     /// a data volume containing both ledger data and tendermint data
     pub target: String,
 }
@@ -33,6 +38,7 @@ impl Default for SnapCfg {
             itv: 10,
             cap: 100,
             mode: SnapMode::Zfs,
+            algo: SnapAlgo::Fair,
             target: "zfs/findora".to_owned(),
         }
     }
@@ -92,7 +98,7 @@ impl SnapCfg {
     }
 
     #[inline(always)]
-    fn get_cap(&self) -> u32 {
+    fn get_cap(&self) -> u64 {
         alt!(self.cap > CAP_MAX, CAP_MAX, self.cap)
     }
 }
@@ -150,6 +156,7 @@ impl Default for SnapMode {
 
 impl FromStr for SnapMode {
     type Err = Box<dyn RucError>;
+
     #[inline(always)]
     #[allow(missing_docs)]
     fn from_str(m: &str) -> Result<Self> {
@@ -162,8 +169,37 @@ impl FromStr for SnapMode {
     }
 }
 
+/// Snapshot management algorithm
+#[derive(Debug)]
+pub enum SnapAlgo {
+    /// snapshots are saved at fixed intervals
+    Fair,
+    /// snapshots are saved in decreasing density
+    Fade,
+}
+
+impl Default for SnapAlgo {
+    fn default() -> Self {
+        Self::Fair
+    }
+}
+
+impl FromStr for SnapAlgo {
+    type Err = Box<dyn RucError>;
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    fn from_str(m: &str) -> Result<Self> {
+        match m.to_lowercase().as_str() {
+            "fair" => Ok(Self::Fair),
+            "fade" => Ok(Self::Fade),
+            _ => Err(eg!()),
+        }
+    }
+}
+
 mod zfs {
-    use super::{exec_output, SnapCfg};
+    use super::{exec_output, SnapAlgo, SnapCfg, STEP_CNT};
     use ruc::*;
 
     #[inline(always)]
@@ -197,11 +233,9 @@ mod zfs {
 
     pub(super) fn rollback(cfg: &SnapCfg, idx: Option<u64>, strict: bool) -> Result<()> {
         // convert to AESC order for `binary_search`
-        let snaps = sorted_snapshots(cfg)
-            .c(d!())?
-            .into_iter()
-            .rev()
-            .collect::<Vec<_>>();
+        let mut snaps = sorted_snapshots(cfg).c(d!())?;
+        // convert to AESC order for `binary_search`
+        snaps.reverse();
         alt!(snaps.is_empty(), return Err(eg!("no snapshots")));
 
         let idx = idx.unwrap_or_else(|| snaps[snaps.len() - 1]);
@@ -217,7 +251,10 @@ mod zfs {
                     let effective_idx = if 1 + i > snaps.len() {
                         snaps[snaps.len() - 1]
                     } else {
-                        *(0..i).rev().find_map(|i| snaps.get(i)).c(d!())?
+                        *(0..i)
+                            .rev()
+                            .find_map(|i| snaps.get(i))
+                            .c(d!("no snapshots found"))?
                     };
                     format!("zfs rollback -r {}@{}", &cfg.target, effective_idx)
                 }
@@ -233,7 +270,15 @@ mod zfs {
         exec_output(&cmd).c(d!()).map(|_| ())
     }
 
+    #[inline(always)]
     fn clean_outdated(cfg: &SnapCfg) -> Result<()> {
+        match cfg.algo {
+            SnapAlgo::Fair => clean_outdated_fair(cfg).c(d!()),
+            SnapAlgo::Fade => clean_outdated_fade(cfg).c(d!()),
+        }
+    }
+
+    fn clean_outdated_fair(cfg: &SnapCfg) -> Result<()> {
         let snaps = sorted_snapshots(cfg).c(d!())?;
         let cap = cfg.get_cap() as usize;
 
@@ -248,10 +293,64 @@ mod zfs {
 
         Ok(())
     }
+
+    // Logical steps:
+    //
+    // 1. clean up outdated snapshot in each chunks
+    // > # Example
+    // > - itv = 10
+    // > - cap = 100
+    // > - step_cnt = 5
+    // > - chunk_size = 100 / 5 = 20
+    // >
+    // > blocks cover = chunk_size * (itv^1 + itv^2 ... itv^step_cnt)
+    // >              = 55_5500
+    // >
+    // > this means we can use 100 snapshots to cover 55_5500 blocks
+    //
+    // 2. clean up snapshot whose indexs exceed `cap`
+    fn clean_outdated_fade(cfg: &SnapCfg) -> Result<()> {
+        let snaps = sorted_snapshots(cfg).c(d!())?;
+        let cap = cfg.get_cap() as usize;
+
+        let chunk_size = cap / STEP_CNT;
+        let chunk_denominators = (0..STEP_CNT as u32).map(|n| cfg.itv.pow(1 + n));
+
+        if 1 + chunk_size > snaps.len() {
+            return Ok(());
+        }
+
+        // 1.
+        let mut pair = (&snaps[..0], &snaps[..]);
+        for denominator in chunk_denominators {
+            pair = if chunk_size < pair.1.len() {
+                pair.1.split_at(chunk_size)
+            } else {
+                (pair.1, &[])
+            };
+
+            pair.0.iter().for_each(|n| {
+                if 0 != n % denominator as u64 {
+                    let cmd = format!("zfs destroy {}@{}", &cfg.target, n);
+                    info_omit!(exec_output(&cmd));
+                }
+            });
+        }
+
+        // 2.
+        if cap < snaps.len() {
+            snaps[cap..].iter().for_each(|i| {
+                let cmd = format!("zfs destroy {}@{}", &cfg.target, i);
+                info_omit!(exec_output(&cmd));
+            });
+        }
+
+        Ok(())
+    }
 }
 
 mod btrfs {
-    use super::{exec_output, SnapCfg};
+    use super::{exec_output, SnapAlgo, SnapCfg, STEP_CNT};
     use ruc::*;
     use std::path::PathBuf;
 
@@ -289,12 +388,9 @@ mod btrfs {
     }
 
     pub(super) fn rollback(cfg: &SnapCfg, idx: Option<u64>, strict: bool) -> Result<()> {
+        let mut snaps = sorted_snapshots(cfg).c(d!())?;
         // convert to AESC order for `binary_search`
-        let snaps = sorted_snapshots(cfg)
-            .c(d!())?
-            .into_iter()
-            .rev()
-            .collect::<Vec<_>>();
+        snaps.reverse();
         alt!(snaps.is_empty(), return Err(eg!("no snapshots")));
 
         let idx = idx.unwrap_or_else(|| snaps[snaps.len() - 1]);
@@ -341,7 +437,15 @@ mod btrfs {
         exec_output(&cmd).c(d!()).map(|_| ())
     }
 
+    #[inline(always)]
     fn clean_outdated(cfg: &SnapCfg) -> Result<()> {
+        match cfg.algo {
+            SnapAlgo::Fair => clean_outdated_fair(cfg).c(d!()),
+            SnapAlgo::Fade => clean_outdated_fade(cfg).c(d!()),
+        }
+    }
+
+    fn clean_outdated_fair(cfg: &SnapCfg) -> Result<()> {
         let snaps = sorted_snapshots(cfg).c(d!())?;
         let cap = cfg.get_cap() as usize;
 
@@ -353,8 +457,70 @@ mod btrfs {
             acc + &format!("{}@{} ", &cfg.target, i)
         });
 
-        let cmd = format!("btrfs subvolume delete -c {}", list);
+        // let cmd = format!("btrfs subvolume delete -c {}", list);
+        let cmd = format!("btrfs subvolume delete {}", list);
         info_omit!(exec_output(cmd.trim_end()));
+
+        Ok(())
+    }
+
+    // Logical steps:
+    //
+    // 1. clean up outdated snapshot in each chunks
+    // > # Example
+    // > - itv = 10
+    // > - cap = 100
+    // > - step_cnt = 5
+    // > - chunk_size = 100 / 5 = 20
+    // >
+    // > blocks cover = chunk_size * (itv^1 + itv^2 ... itv^step_cnt)
+    // >              = 55_5500
+    // >
+    // > this means we can use 100 snapshots to cover 55_5500 blocks
+    //
+    // 2. clean up snapshot whose indexs exceed `cap`
+    // > this means we can use 100 snapshots to cover 55_5500 blocks
+    fn clean_outdated_fade(cfg: &SnapCfg) -> Result<()> {
+        let snaps = sorted_snapshots(cfg).c(d!())?;
+        let cap = cfg.get_cap() as usize;
+
+        let chunk_size = cap / STEP_CNT;
+        let chunk_denominators = (0..STEP_CNT as u32).map(|n| cfg.itv.pow(1 + n));
+
+        if 1 + chunk_size > snaps.len() {
+            return Ok(());
+        }
+
+        let mut to_del = vec![];
+
+        // 1.
+        let mut pair = (&snaps[..0], &snaps[..]);
+        for denominator in chunk_denominators {
+            pair = if chunk_size < pair.1.len() {
+                pair.1.split_at(chunk_size)
+            } else {
+                (pair.1, &[])
+            };
+
+            pair.0.iter().for_each(|n| {
+                if 0 != n % denominator as u64 {
+                    to_del.push(format!("{}@{}", &cfg.target, n));
+                }
+            });
+        }
+
+        // 2.
+        if cap < snaps.len() {
+            snaps[cap..].iter().for_each(|n| {
+                to_del.push(format!("{}@{}", &cfg.target, n));
+            });
+        }
+
+        if !to_del.is_empty() {
+            // let cmd = format!("btrfs subvolume delete -c {}", to_del.join(" "));
+            let cmd = format!("btrfs subvolume delete {}", to_del.join(" "));
+            info_omit!(exec_output(&cmd));
+        }
 
         Ok(())
     }

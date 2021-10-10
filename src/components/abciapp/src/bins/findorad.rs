@@ -70,6 +70,7 @@ fn node_command() -> Result<()> {
     convert_arg!(snapshot_itv);
     convert_arg!(snapshot_cap);
     convert_arg!(snapshot_mode);
+    convert_arg!(snapshot_algo);
     convert_arg!(snapshot_rollback_to);
     convert_arg!(snapshot_rollback_to_exact);
 
@@ -392,6 +393,7 @@ mod config {
         pub snapshot_itv: Option<String>,
         pub snapshot_cap: Option<String>,
         pub snapshot_mode: Option<String>,
+        pub snapshot_algo: Option<String>,
         pub snapshot_rollback: bool,
         pub snapshot_rollback_to: Option<String>,
         pub snapshot_rollback_to_exact: Option<String>,
@@ -420,6 +422,7 @@ mod config {
                 .arg_from_usage("--snapshot-itv=[Iterval] 'interval between adjacent snapshots, default to 10 blocks'")
                 .arg_from_usage("--snapshot-cap=[Capacity] 'the maximum number of snapshots that will be stored, default to 100'")
                 .arg_from_usage("--snapshot-mode=[Mode] 'zfs/btrfs/external, will try a guess if missing'")
+                .arg_from_usage("--snapshot-algo=[Algo] 'fair/fade, default to `fair`'")
                 .arg_from_usage("--snapshot-rollback 'rollback to the last available snapshot'")
                 .arg_from_usage("-r, --snapshot-rollback-to=[Height] 'rollback to a custom height, will try the closest smaller height if the target does not exist'")
                 .arg_from_usage("-R, --snapshot-rollback-to-exact=[Height] 'rollback to a custom height exactly, an error will be reported if the target does not exist'");
@@ -555,6 +558,7 @@ mod config {
             snapshot_itv: m.value_of("snapshot-itv").map(|v| v.to_owned()),
             snapshot_cap: m.value_of("snapshot-cap").map(|v| v.to_owned()),
             snapshot_mode: m.value_of("snapshot-mode").map(|v| v.to_owned()),
+            snapshot_algo: m.value_of("snapshot-algo").map(|v| v.to_owned()),
             snapshot_rollback: m.is_present("snapshot-rollback"),
             snapshot_rollback_to: m
                 .value_of("snapshot-rollback-to")

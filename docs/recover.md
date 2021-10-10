@@ -11,6 +11,7 @@ findorad node
 --snapshot-itv           interval between adjacent snapshots, default to 10 blocks
 --snapshot-cap           the maximum number of snapshots that will be stored, default to 100
 --snapshot-mode          zfs/btrfs/external, will try a guess if missing
+--snapshot-algo          fair/fade, default to `fair`
 --snapshot-target        a data volume containing both ledger data and tendermint data
 --snapshot-list          list all available snapshots in the form of block height
 
