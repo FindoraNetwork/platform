@@ -23,7 +23,8 @@ lazy_static! {
         Arc::new((Mutex::new(false), Condvar::new()));
 }
 
-pub(crate) struct QueryServer {
+/// A data container for API
+pub struct QueryServer {
     pub(crate) ledger: Arc<RwLock<LedgerState>>,
     pub(crate) ledger_cloned: LedgerState,
 }

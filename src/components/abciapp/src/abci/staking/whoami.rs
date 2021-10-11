@@ -1,7 +1,7 @@
 //!
 //! # Tendermint Node Address
 //!
-//! - sha256(pubkey)[:20]
+//! - `sha256(pubkey)[..20]`
 //!
 
 use crate::abci::config::global_cfg::CFG;

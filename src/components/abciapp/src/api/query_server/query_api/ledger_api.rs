@@ -22,14 +22,14 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, mem, sync::Arc};
 use zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo};
 
-// Ping route to check for liveness of API
+/// Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]
-pub(super) async fn ping() -> actix_web::Result<String> {
+pub async fn ping() -> actix_web::Result<String> {
     Ok("success".into())
 }
 
-// query utxo according to `TxoSID` return Authenticated Utxo
-pub(super) async fn query_utxo(
+/// query utxo according to `TxoSID` return Authenticated Utxo
+pub async fn query_utxo(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<AuthenticatedUtxo>> {
@@ -50,8 +50,8 @@ pub(super) async fn query_utxo(
     }
 }
 
-// query utxo according to `TxoSID` return UnAuthenticated Utxo
-pub(super) async fn query_utxo_light(
+/// query utxo according to `TxoSID` return UnAuthenticated Utxo
+pub async fn query_utxo_light(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<UnAuthenticatedUtxo>> {
@@ -72,8 +72,8 @@ pub(super) async fn query_utxo_light(
     }
 }
 
-// query issuance num according to `AssetTypeCode`
-pub(super) async fn query_asset_issuance_num(
+/// query issuance num according to `AssetTypeCode`
+pub async fn query_asset_issuance_num(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<u64>> {
@@ -94,8 +94,8 @@ pub(super) async fn query_asset_issuance_num(
     }
 }
 
-// Separate a string of `TxoSID` by ',' and query the corresponding Authenticated utxo
-pub(super) async fn query_utxos(
+/// Separate a string of `TxoSID` by ',' and query the corresponding Authenticated utxo
+pub async fn query_utxos(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<Option<AuthenticatedUtxo>>>> {
@@ -119,8 +119,8 @@ pub(super) async fn query_utxos(
     Ok(web::Json(ledger.get_utxos(sid_list.as_slice())))
 }
 
-// query asset according to `AssetType`
-pub(super) async fn query_asset(
+/// query asset according to `AssetType`
+pub async fn query_asset(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<AssetType>> {
@@ -141,8 +141,8 @@ pub(super) async fn query_asset(
     }
 }
 
-// query tx according to `TxnSID`
-pub(super) async fn query_txn(
+/// query tx according to `TxnSID`
+pub async fn query_txn(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<String> {
@@ -164,8 +164,8 @@ pub(super) async fn query_txn(
     }
 }
 
-// query tx according to `TxnSID`, lighter and faster version
-pub(super) async fn query_txn_light(
+/// query tx according to `TxnSID`, lighter and faster version
+pub async fn query_txn_light(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<String> {
@@ -187,9 +187,9 @@ pub(super) async fn query_txn_light(
     }
 }
 
-// query global state, return (apphash, block count, apphash and block count signatures)
+/// query global state, return (apphash, block count, apphash and block count signatures)
 #[allow(clippy::type_complexity)]
-pub(super) async fn query_global_state(
+pub async fn query_global_state(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> web::Json<(HashOf<Option<StateCommitmentData>>, u64, &'static str)> {
     let qs = data.read();
@@ -199,8 +199,8 @@ pub(super) async fn query_global_state(
     web::Json((hash, seq_id, "v4UVgkIBpj0eNYI1B1QhTTduJHCIHH126HcdesCxRdLkVGDKrVUPgwmNLCDafTVgC5e4oDhAGjPNt1VhUr6ZCQ=="))
 }
 
-// query global state version according to `block_height`
-pub(super) async fn query_global_state_version(
+/// query global state version according to `block_height`
+pub async fn query_global_state_version(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     version: web::Path<u64>,
 ) -> web::Json<Option<HashOf<Option<StateCommitmentData>>>> {
@@ -210,10 +210,10 @@ pub(super) async fn query_global_state_version(
     web::Json(hash)
 }
 
-// Query current validator list,
-// validtors who have not completed self-deletagion will be filtered out.
+/// Query current validator list,
+/// validtors who have not completed self-deletagion will be filtered out.
 #[allow(unused)]
-pub(super) async fn query_validators(
+pub async fn query_validators(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> actix_web::Result<web::Json<ValidatorList>> {
     let qs = data.read();
@@ -255,14 +255,15 @@ pub(super) async fn query_validators(
     Ok(web::Json(ValidatorList::new(0, vec![])))
 }
 
+#[allow(missing_docs)]
 #[derive(Deserialize, Debug)]
-pub(super) struct DelegationRwdQueryParams {
+pub struct DelegationRwdQueryParams {
     address: String,
     height: u64,
 }
 
 /// get delegation reward according to `DelegationRwdQueryParams`
-pub(super) async fn get_delegation_reward(
+pub async fn get_delegation_reward(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     web::Query(info): web::Query<DelegationRwdQueryParams>,
 ) -> actix_web::Result<web::Json<Vec<DelegationRwdDetail>>> {
@@ -290,22 +291,24 @@ pub(super) async fn get_delegation_reward(
     ))
 }
 
+#[allow(missing_docs)]
 #[derive(Deserialize, Debug)]
-pub(super) struct ValidatorDelegationQueryParams {
+pub struct ValidatorDelegationQueryParams {
     address: TendermintAddr,
     epoch_size: u32,
     epoch_cnt: u8,
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub(super) struct ValidatorDelegation {
+pub struct ValidatorDelegation {
     return_rate: [u128; 2],
     self_delegation: u64,
     delegated: u64,
 }
 
-// get history according to `ValidatorDelegationQueryParams`
-pub(super) async fn get_validator_delegation_history(
+/// get history according to `ValidatorDelegationQueryParams`
+pub async fn get_validator_delegation_history(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     web::Query(info): web::Query<ValidatorDelegationQueryParams>,
 ) -> actix_web::Result<web::Json<Vec<ValidatorDelegation>>> {
@@ -382,8 +385,9 @@ pub(super) async fn get_validator_delegation_history(
     Ok(web::Json(history))
 }
 
+#[allow(missing_docs)]
 #[derive(Deserialize, Debug)]
-pub(super) struct DelegatorQueryParams {
+pub struct DelegatorQueryParams {
     address: String,
     page: usize,
     per_page: usize,
@@ -397,8 +401,8 @@ enum OrderOption {
     Asc,
 }
 
-// paging Query delegators according to `DelegatorQueryParams`
-pub(super) async fn get_delegators_with_params(
+/// paging Query delegators according to `DelegatorQueryParams`
+pub async fn get_delegators_with_params(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     web::Query(info): web::Query<DelegatorQueryParams>,
 ) -> actix_web::Result<web::Json<DelegatorList>> {
@@ -434,8 +438,8 @@ pub(super) async fn get_delegators_with_params(
     Ok(web::Json(DelegatorList::new(list)))
 }
 
-// query delegator list according to `TendermintAddr`
-pub(super) async fn query_delegator_list(
+/// query delegator list according to `TendermintAddr`
+pub async fn query_delegator_list(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     addr: web::Path<TendermintAddr>,
 ) -> actix_web::Result<web::Json<DelegatorList>> {
@@ -458,8 +462,8 @@ pub(super) async fn query_delegator_list(
     Ok(web::Json(DelegatorList::new(list)))
 }
 
-// query validator detail according to `TendermintAddr`
-pub(super) async fn query_validator_detail(
+/// query validator detail according to `TendermintAddr`
+pub async fn query_validator_detail(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     addr: web::Path<TendermintAddr>,
 ) -> actix_web::Result<web::Json<ValidatorDetail>> {
@@ -521,8 +525,8 @@ pub(super) async fn query_validator_detail(
     Err(error::ErrorNotFound("not exists"))
 }
 
-// query delegation info according to `public_key`
-pub(super) async fn query_delegation_info(
+/// query delegation info according to `public_key`
+pub async fn query_delegation_info(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     address: web::Path<String>,
 ) -> actix_web::Result<web::Json<DelegationInfo>> {
@@ -611,8 +615,8 @@ pub(super) async fn query_delegation_info(
     Ok(web::Json(resp))
 }
 
-// query utxos according `public_key`
-pub(super) async fn query_owned_utxos(
+/// query utxos according `public_key`
+pub async fn query_owned_utxos(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     owner: web::Path<String>,
 ) -> actix_web::Result<web::Json<BTreeMap<TxoSID, (Utxo, Option<OwnerMemo>)>>> {
