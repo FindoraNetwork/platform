@@ -2,7 +2,9 @@
 //! need to transform the data in ledgerState to store
 //!
 
-mod ledger_api;
+// pub it for doc
+pub mod ledger_api;
+
 pub mod server;
 pub mod service;
 
@@ -30,7 +32,7 @@ use zei::{
 
 /// Returns the git commit hash and commit date of this build
 #[allow(clippy::unnecessary_wraps)]
-async fn version() -> actix_web::Result<String> {
+pub async fn version() -> actix_web::Result<String> {
     Ok(format!(
         "Build: {} {}",
         option_env!("VERGEN_SHA_EXTERN").unwrap_or(env!("VERGEN_SHA")),
@@ -40,7 +42,7 @@ async fn version() -> actix_web::Result<String> {
 
 /// Queries the status of a transaction by its handle. Returns either a not committed message or a
 /// serialized TxnStatus.
-async fn get_address(
+pub async fn get_address(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<u64>,
 ) -> actix_web::Result<String, actix_web::error::Error> {
@@ -57,7 +59,7 @@ async fn get_address(
 
 /// Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
 #[allow(clippy::unnecessary_wraps)]
-async fn get_owner_memo(
+pub async fn get_owner_memo(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<u64>,
 ) -> actix_web::Result<web::Json<Option<OwnerMemo>>, actix_web::error::Error> {
@@ -67,7 +69,7 @@ async fn get_owner_memo(
 
 /// Separate a string of `TxoSID` by ',' and query the corresponding memo
 #[allow(clippy::unnecessary_wraps)]
-async fn get_owner_memo_batch(
+pub async fn get_owner_memo_batch(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<Option<OwnerMemo>>>, actix_web::error::Error> {
@@ -85,7 +87,7 @@ async fn get_owner_memo_batch(
 }
 
 /// Returns an array of the utxo sids currently spendable by a given address
-async fn get_owned_utxos(
+pub async fn get_owned_utxos(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     owner: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxoSID>>> {
@@ -137,7 +139,7 @@ impl NetworkRoute for QueryServerRoutes {
 }
 
 /// Returns the list of assets created by a public key
-async fn get_created_assets(
+pub async fn get_created_assets(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<DefineAsset>>> {
@@ -155,7 +157,7 @@ async fn get_created_assets(
 
 /// Returns the list of records issued by a public key
 #[allow(clippy::type_complexity)]
-async fn get_issued_records(
+pub async fn get_issued_records(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<(TxOutput, Option<OwnerMemo>)>>> {
@@ -173,7 +175,7 @@ async fn get_issued_records(
 
 /// Returns the list of records issued by a token code
 #[allow(clippy::type_complexity)]
-async fn get_issued_records_by_code(
+pub async fn get_issued_records_by_code(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<(TxOutput, Option<OwnerMemo>)>>> {
@@ -194,7 +196,7 @@ async fn get_issued_records_by_code(
 }
 
 /// Returns authenticated txn sid and hash
-async fn get_authenticated_txnid_hash(
+pub async fn get_authenticated_txnid_hash(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<u64>,
 ) -> actix_web::Result<web::Json<TxnIDHash>> {
@@ -208,7 +210,7 @@ async fn get_authenticated_txnid_hash(
 }
 
 /// Returns txn hash by sid
-async fn get_transaction_hash(
+pub async fn get_transaction_hash(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<usize>,
 ) -> actix_web::Result<web::Json<String>> {
@@ -222,7 +224,7 @@ async fn get_transaction_hash(
 }
 
 /// Returns txn sid by hash
-async fn get_transaction_sid(
+pub async fn get_transaction_sid(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<usize>> {
@@ -237,7 +239,7 @@ async fn get_transaction_sid(
 
 /// Returns most recent commit count at server side
 /// Check this number to make sure server is in sync
-async fn get_commits(
+pub async fn get_commits(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> actix_web::Result<web::Json<u64>> {
     let server = data.read();
@@ -270,13 +272,13 @@ struct CoinbaseTxnBody {
 
 #[allow(missing_docs)]
 #[derive(Debug, Deserialize, Serialize)]
-struct CoinbaseOperInfo {
+pub struct CoinbaseOperInfo {
     total_count: u64,
     txs: Vec<CoinbaseTxnBody>,
 }
 
 /// paging Query delegators according to `WalletQueryParams`
-async fn get_coinbase_oper_list(
+pub async fn get_coinbase_oper_list(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     web::Query(info): web::Query<WalletQueryParams>,
 ) -> actix_web::Result<web::Json<CoinbaseOperInfo>> {
@@ -327,7 +329,7 @@ async fn get_coinbase_oper_list(
 }
 
 /// Returns the list of claim transations of a given ledger address
-async fn get_claim_txns(
+pub async fn get_claim_txns(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     web::Query(info): web::Query<WalletQueryParams>,
 ) -> actix_web::Result<web::Json<Vec<Option<Transaction>>>> {
@@ -365,7 +367,7 @@ async fn get_claim_txns(
 }
 
 /// Returns the list of transations associated with a given ledger address
-async fn get_related_txns(
+pub async fn get_related_txns(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxnSID>>> {
@@ -383,7 +385,7 @@ async fn get_related_txns(
 }
 
 /// Returns the list of transfer transations associated with a given asset
-async fn get_related_xfrs(
+pub async fn get_related_xfrs(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxnSID>>> {

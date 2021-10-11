@@ -97,8 +97,7 @@ pub const FF_ADDR_LIST: [&str; 8] = [
     "fra1whn756rtqt3gpsmdlw6pvns75xdh3ttqslvxaf7eefwa83pcnlhsree9gv",
 ];
 
-/// SEE:
-/// - https://www.notion.so/findora/PoS-Stage-1-Consensus-Rewards-Penalties-72f5c9a697ff461c89c3728e34348834#3d2f1b8ff8244632b715abdd42b6a67b
+/// SEE: <https://www.notion.so/findora/PoS-Stage-1-Consensus-Rewards-Penalties-72f5c9a697ff461c89c3728e34348834#3d2f1b8ff8244632b715abdd42b6a67b>
 pub const PROPOSER_REWARDS_RATE_RULE: [([u128; 2], u128); 6] = [
     ([0, 66_6667], 0),
     ([66_6667, 75_0000], 1),
@@ -179,12 +178,12 @@ pub(crate) type Power = u64;
 pub type TendermintPubKey = String;
 type TendermintPubKeyRef<'a> = &'a str;
 
-/// sha256(pubkey)[:20] in hex format
+/// `sha256(pubkey)[..20]` in hex format
 pub type TendermintAddr = String;
 /// ref `TendermintAddr`
 pub type TendermintAddrRef<'a> = &'a str;
 
-/// sha256(pubkey)[:20]
+/// `sha256(pubkey)[..20]`
 pub type TendermintAddrBytes = Vec<u8>;
 // type TendermintAddrBytesRef<'a> = &'a [u8];
 
@@ -1987,7 +1986,7 @@ impl CoinBase {
     }
 }
 
-/// sha256(pubkey)[:20]
+/// `sha256(pubkey)[..20]`
 #[inline(always)]
 pub fn td_pubkey_to_td_addr(pubkey: &[u8]) -> String {
     hex::encode_upper(&sha2::Sha256::digest(pubkey)[..20])
