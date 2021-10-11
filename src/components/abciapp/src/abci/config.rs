@@ -244,43 +244,48 @@ pub(crate) mod global_cfg {
 
         res.enable = m.is_present("enable-snapshot");
 
-        if res.enable
-            || m.is_present("snapshot-list")
+        if res.enable {
+            res.itv = m
+                .value_of("snapshot-itv")
+                .unwrap_or("10")
+                .parse::<u64>()
+                .c(d!())?;
+            res.cap = m
+                .value_of("snapshot-cap")
+                .unwrap_or("100")
+                .parse::<u64>()
+                .c(d!())?;
+
+            if let Some(sm) = m.value_of("snapshot-mode") {
+                res.mode = SnapMode::from_str(sm).c(d!())?;
+                if !matches!(res.mode, SnapMode::External) {
+                    res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
+                }
+            } else {
+                res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
+                res.mode = res.guess_mode().c(d!())?;
+            }
+
+            if let Some(sa) = m.value_of("snapshot-algo") {
+                res.algo = SnapAlgo::from_str(sa).c(d!())?;
+                res.itv.checked_pow(STEP_CNT as u32).c(d!())?;
+            }
+        }
+
+        if m.is_present("snapshot-list")
             || m.is_present("snapshot-rollback")
             || m.is_present("snapshot-rollback-to")
             || m.is_present("snapshot-rollback-to-exact")
         {
             // this field should be parsed at the top
             res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
+
+            if m.is_present("snapshot-list") {
+                list_snapshots(&res).c(d!())?;
+            }
+
+            check_rollback(&m, &res).c(d!())?;
         }
-
-        res.itv = m
-            .value_of("snapshot-itv")
-            .unwrap_or("10")
-            .parse::<u64>()
-            .c(d!())?;
-        res.cap = m
-            .value_of("snapshot-cap")
-            .unwrap_or("100")
-            .parse::<u64>()
-            .c(d!())?;
-
-        if let Some(sm) = m.value_of("snapshot-mode") {
-            res.mode = SnapMode::from_str(sm).c(d!())?;
-        } else {
-            res.mode = res.guess_mode().c(d!())?;
-        }
-
-        if let Some(sa) = m.value_of("snapshot-algo") {
-            res.algo = SnapAlgo::from_str(sa).c(d!())?;
-            res.itv.checked_pow(STEP_CNT as u32).c(d!())?;
-        }
-
-        if m.is_present("snapshot-list") {
-            list_snapshots(&res).c(d!())?;
-        }
-
-        check_rollback(&m, &res).c(d!())?;
 
         Ok(res)
     }
