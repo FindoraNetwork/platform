@@ -5,7 +5,7 @@
 //!
 //! ## Usage
 //!
-//! ```
+//! ```shell
 //! fn [SUBCOMMAND]
 //!
 //! - stake
