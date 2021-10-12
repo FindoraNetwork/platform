@@ -15,7 +15,7 @@ use sha256::DIGESTBYTES;
 use parking_lot::RwLock;
 pub use sha256::Digest;
 use std::sync::Arc;
-use storage::db::RocksDB;
+use storage::db::MerkleDB;
 use storage::state::{chain_state, State};
 
 pub fn digest(value: impl AsRef<[u8]>) -> Digest {
@@ -184,13 +184,13 @@ pub struct MerkleProof {
 /// The hash of the leaf node is a 256 bit zero value. The hash of an non-leaf
 /// node is calculated by hashing (using keccak-256) the concatenation of the
 /// hashes of its two sub-nodes.
-pub struct SmtMap256 {
-    kvs: State<RocksDB>,
+pub struct SmtMap256<D: MerkleDB> {
+    kvs: State<D>,
 }
 
-impl SmtMap256 {
+impl<D: MerkleDB> SmtMap256<D> {
     /// Returns a new SMT-Map where all keys have the default value (zero).
-    pub fn new(db: RocksDB) -> Self {
+    pub fn new(db: D) -> Self {
         Self {
             kvs: State::new(
                 Arc::new(RwLock::new(chain_state::ChainState::new(
@@ -204,11 +204,7 @@ impl SmtMap256 {
     }
 
     /// Sets the value of a key. Returns the previous value corresponding to the key.
-    pub fn set<Value: AsRef<[u8]>>(
-        &mut self,
-        key: &Key,
-        value: Option<Value>,
-    ) -> Result<()> {
+    pub fn set(&mut self, key: &Key, value: Option<Vec<u8>>) -> Result<()> {
         // Update the hash of the leaf.
         let mut index = TreeNodeIndex::leaf(*key);
         let mut hash: Digest = value.as_ref().map(digest).unwrap_or(ZERO_DIGEST);
@@ -230,7 +226,7 @@ impl SmtMap256 {
         let ser_key = Self::build_key_for_node(key).c(d!())?;
 
         if let Some(v) = value {
-            self.kvs.set(&ser_key, v.as_ref().to_vec()).c(d!())
+            self.kvs.set(&ser_key, v).c(d!())
         } else {
             self.kvs.delete(&ser_key).c(d!())
         }
@@ -271,10 +267,10 @@ impl SmtMap256 {
     }
 
     /// Returns `true` when proof is valid, `false` otherwise.
-    pub fn check_merkle_proof<Value: AsRef<[u8]>>(
+    pub fn check_merkle_proof(
         &self,
         key: &Key,
-        value: Option<&Value>,
+        value: Option<&Vec<u8>>,
         proof: &MerkleProof,
     ) -> bool {
         if let Ok(merkle_root) = self.merkle_root() {
@@ -322,10 +318,10 @@ impl SmtMap256 {
 
 /// Check the Merkle proof of a key-value pair in a Merkle root.
 /// whether the proof is valid.
-pub fn check_merkle_proof<Value: AsRef<[u8]>>(
+pub fn check_merkle_proof(
     merkle_root: &Digest,
     key: &Key,
-    value: Option<&Value>,
+    value: Option<&Vec<u8>>,
     proof: &MerkleProof,
 ) -> bool {
     let mut hash = value.map_or(ZERO_DIGEST, digest);
@@ -387,7 +383,10 @@ mod tests {
     use super::*;
     use hex::{encode, FromHex};
     use quickcheck::{quickcheck, TestResult};
-    use std::string::ToString;
+    //use std::string::ToString;
+    use std::env::temp_dir;
+    use std::time::SystemTime;
+    use storage::db::TempRocksDB;
 
     // `hex` is the first a few bytes of the desired 32 bytes (the rest bytes are zeros).
     pub fn l256(hex: &str) -> Digest {
@@ -456,6 +455,16 @@ mod tests {
         }
 
         Digest { 0: result }
+    }
+
+    fn new_rocks_db() -> TempRocksDB {
+        let time = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let mut path = temp_dir();
+        path.push(format!("temp-findora-db–{}", time));
+        TempRocksDB::open(path).expect("failed to open rocksdb")
     }
 
     #[test]
@@ -587,56 +596,47 @@ mod tests {
 
     #[test]
     fn test_smt_map_256_kv() {
-        let mut smt = SmtMap256::new();
-        let merkle_root: Digest = *(&smt).merkle_root();
+        let mut smt = SmtMap256::new(new_rocks_db());
+        let merkle_root: Digest = (&smt).merkle_root().unwrap();
 
         assert_eq!(smt.get(&Key(ZERO_DIGEST)).unwrap(), None);
 
         let key = Key(b256(
             "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
         ));
-        assert_eq!(smt.get(&key), None); // [0; 32]);
+        assert_eq!(smt.get(&key).unwrap(), None); // [0; 32]);
 
-        let value1 = Some("ffeebbaa99887766554433221100");
-        let value2 = Some("ffeebbaa99887766554433221199");
-        let value3 =
-            Some("cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe");
+        let value1 = Some(b"ffeebbaa99887766554433221100".to_vec());
+        let value2 = Some(b"ffeebbaa99887766554433221199".to_vec());
+        let value3 = Some(
+            b"cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe".to_vec(),
+        );
 
-        assert_eq!(smt.set(&key, value1), None);
-        assert!(merkle_root != *(&smt).merkle_root());
-        assert_eq!(smt.get(&key), value1.as_ref());
-        assert_eq!(smt.set(&key, value2), value1);
-        assert_eq!(smt.get(&key), value2.as_ref());
-        assert_eq!(smt.set(&key, value3), value2);
-        assert_eq!(smt.get(&key), value3.as_ref());
-        assert_eq!(smt.set(&key, None), value3);
-        assert_eq!(merkle_root, *(&smt).merkle_root());
+        assert!(smt.set(&key, value1.clone()).is_ok());
+        assert_ne!(merkle_root, (&smt).merkle_root().unwrap());
+        assert_eq!(smt.get(&key).unwrap(), value1);
+        assert!(smt.set(&key, value2.clone()).is_ok());
+        assert_eq!(smt.get(&key).unwrap(), value2);
+        assert!(smt.set(&key, value3.clone()).is_ok());
+        assert_eq!(smt.get(&key).unwrap(), value3);
+        assert!(smt.set(&key, None).is_ok());
+        assert_eq!(merkle_root, (&smt).merkle_root().unwrap());
         println!(
             "retrieved value {:?} associated with key {:?}",
             &value3.unwrap(),
             to_hex(&key.get_digest().0)
         );
 
-        fn prop(x0: u64, x1: u64, x2: u64, x3: u64, s: String) -> TestResult {
-            let mut smt = SmtMap256::new();
+        fn prop(x0: u64, x1: u64, x2: u64, x3: u64, s: Vec<u8>) -> TestResult {
+            let mut smt = SmtMap256::new(new_rocks_db());
             let (key, value) = (Key(make_digest(x0, x1, x2, x3)), Some(s.clone()));
             let prev = smt.set(&key, value);
             match prev {
-                Some(_) => TestResult::failed(),
-                None => {
-                    if let Some(v) = smt.get(&key) {
-                        if v == &s {
-                            TestResult::passed()
-                        } else {
-                            TestResult::failed()
-                        }
-                    } else {
-                        TestResult::failed()
-                    }
-                }
+                Ok(_) => TestResult::passed(),
+                Err(_) => TestResult::failed(),
             }
         }
-        quickcheck(prop as fn(u64, u64, u64, u64, String) -> TestResult);
+        quickcheck(prop as fn(u64, u64, u64, u64, Vec<u8>) -> TestResult);
     }
 
     #[test]
@@ -644,11 +644,11 @@ mod tests {
         let expected_default_root_hash =
             b256("0000000000000000000000000000000000000000000000000000000000000000");
 
-        let mut smt = SmtMap256::new();
+        let mut smt = SmtMap256::new(new_rocks_db());
 
         // Verify proof of `key` when the values of all keys are default.
         let key = Key(r256("C0"));
-        let (value, proof) = smt.get_with_proof(&key);
+        let (value, proof) = smt.get_with_proof(&key).unwrap();
         println!(
             "test_smt_map_256_merkle_proof: key={:?}, value={:?}, proof={:?}",
             &key, &value, &proof
@@ -661,12 +661,17 @@ mod tests {
                 hashes: Vec::new()
             }
         );
-        assert!(smt.check_merkle_proof(&key, value, &proof));
-        assert!(check_merkle_proof(smt.merkle_root(), &key, value, &proof));
+        assert!(smt.check_merkle_proof(&key, Option::from(&value), &proof));
+        assert!(check_merkle_proof(
+            &smt.merkle_root().unwrap(),
+            &key,
+            Option::from(&value),
+            &proof
+        ));
 
         // Verify the merkle proof of `key` when key 0x00 has a non-default value.
-        smt.set(&Key(ZERO_DIGEST), Some(r256("AA")));
-        let (value, proof) = smt.get_with_proof(&key);
+        let _ = smt.set(&Key(ZERO_DIGEST), Some(r256("AA").as_ref().to_vec()));
+        let (value, proof) = smt.get_with_proof(&key).unwrap();
         assert_eq!(value, None); // [0; 32]);
         assert_eq!(
             proof,
@@ -678,15 +683,20 @@ mod tests {
             },
         );
         assert_eq!(
-            *smt.merkle_root(),
+            smt.merkle_root().unwrap(),
             b256("b2ad41cbb57aa3e5f0645c1c15568856063c8b1fa91a36261c07f79b5a83eb57")
         );
-        assert!(smt.check_merkle_proof(&key, value, &proof));
-        assert!(check_merkle_proof(smt.merkle_root(), &key, value, &proof));
+        assert!(smt.check_merkle_proof(&key, Option::from(&value), &proof));
+        assert!(check_merkle_proof(
+            &smt.merkle_root().unwrap(),
+            &key,
+            Option::from(&value),
+            &proof
+        ));
 
         // Verify the merkle proof of `key` again after setting a value at the max key (0xFF..FF).
-        smt.set(&Key(max256()), Some(r256("1234")));
-        let (value, proof) = smt.get_with_proof(&key);
+        let _ = smt.set(&Key(max256()), Some(r256("1234").as_ref().to_vec()));
+        let (value, proof) = smt.get_with_proof(&key).unwrap();
         assert_eq!(value, None); // [0; 32]);
         assert_eq!(
             proof,
@@ -706,17 +716,22 @@ mod tests {
             },
         );
         assert_eq!(
-            *smt.merkle_root(),
+            smt.merkle_root().unwrap(),
             b256("240a695aed4152b8f5b77aa9cb0e2b93b844ee0bc184fe898d28a29c348d57f6")
         );
-        assert!(smt.check_merkle_proof(&key, value, &proof));
-        assert!(check_merkle_proof(smt.merkle_root(), &key, value, &proof));
+        assert!(smt.check_merkle_proof(&key, Option::from(&value), &proof));
+        assert!(check_merkle_proof(
+            &smt.merkle_root().unwrap(),
+            &key,
+            Option::from(&value),
+            &proof
+        ));
 
         // Verify the merkle proof of `key` again after setting a value at `key` itself.
-        let value2 = Some(r256("0100000000000000000000000000000000"));
-        smt.set(&key, value2);
-        let (value, proof) = smt.get_with_proof(&key);
-        assert_eq!(value, value2.as_ref());
+        let value2 = Some(r256("0100000000000000000000000000000000").as_ref().to_vec());
+        let _ = smt.set(&key, value2.clone());
+        let (value, proof) = smt.get_with_proof(&key).unwrap();
+        assert_eq!(value, value2.clone());
         assert_eq!(
             proof,
             MerkleProof {
@@ -735,14 +750,14 @@ mod tests {
             },
         );
         assert_eq!(
-            *smt.merkle_root(),
+            smt.merkle_root().unwrap(),
             b256("ada8f75819448c00025257d17bfd78c821487e60f9b31340bcf393e9c6acefa2")
         );
 
         // Reset the value of key 0x00..00 to the default, and verify the merkle proof of `key`.
-        smt.set(&Key(ZERO_DIGEST), None); // [0; 32]);
-        let (value, proof) = smt.get_with_proof(&key);
-        assert_eq!(value, value2.as_ref());
+        let _ = smt.set(&Key(ZERO_DIGEST), None); // [0; 32]);
+        let (value, proof) = smt.get_with_proof(&key).unwrap();
+        assert_eq!(value, value2.clone());
         assert_eq!(
             proof,
             MerkleProof {
@@ -756,14 +771,14 @@ mod tests {
             },
         );
         assert_eq!(
-            *smt.merkle_root(),
+            smt.merkle_root().unwrap(),
             b256("46b50abc16c1f97e918186a18397082e02adb1f38dd79c765da71f37501f9277")
         );
 
         // Reset the value of the max key to the default, and verify the merkle proof of `key`.
-        smt.set(&Key(max256()), None); // [0; 32]);
-        let (value, proof) = smt.get_with_proof(&key);
-        assert_eq!(value, value2.as_ref());
+        let _ = smt.set(&Key(max256()), None); // [0; 32]);
+        let (value, proof) = smt.get_with_proof(&key).unwrap();
+        assert_eq!(value, value2.clone());
         assert_eq!(
             proof,
             MerkleProof {
@@ -772,13 +787,13 @@ mod tests {
             },
         );
         assert_eq!(
-            *smt.merkle_root(),
+            smt.merkle_root().unwrap(),
             b256("41cf2d63e95cc4f4e430ffebb1c4c7d84adf81c6196348d6ea1f8afb9871599b")
         );
 
         // Reset the value of `key`, and verify that the merkle tree has been reset to the init state.
-        smt.set(&key, None); // [0; 32]);
-        let (value, proof) = smt.get_with_proof(&key);
+        let _ = smt.set(&key, None); // [0; 32]);
+        let (value, proof) = smt.get_with_proof(&key).unwrap();
         assert_eq!(value, None); // [0; 32]);
         assert_eq!(
             proof,
@@ -787,27 +802,27 @@ mod tests {
                 hashes: vec![]
             },
         );
-        assert_eq!(smt.merkle_root(), &expected_default_root_hash);
+        assert_eq!(smt.merkle_root().unwrap(), expected_default_root_hash);
     }
 
     #[test]
     fn test_smt_map_256_merkle_proof_negative_cases() {
-        let mut smt = SmtMap256::new();
+        let mut smt = SmtMap256::new(new_rocks_db());
         let (key, value) = (
             Key(r256("C0")),
-            Some(r256("0100000000000000000000000000000000")),
+            Some(r256("0100000000000000000000000000000000").as_ref().to_vec()),
         );
-        smt.set(&key, value);
-        smt.set(&Key(ZERO_DIGEST), Some(r256("AA")));
-        smt.set(&Key(max256()), Some(r256("1234")));
+        let _ = smt.set(&key, value.clone());
+        let _ = smt.set(&Key(ZERO_DIGEST), Some(r256("AA").as_ref().to_vec()));
+        let _ = smt.set(&Key(max256()), Some(r256("1234").as_ref().to_vec()));
 
-        let (v, p) = smt.get_with_proof(&key);
+        let (v, p) = smt.get_with_proof(&key).unwrap();
         // The correct merkle proof:
-        assert!(smt.check_merkle_proof(&key, v, &p));
+        assert!(smt.check_merkle_proof(&key, Option::from(&v), &p));
         // Negative cases of merkle proof verification:
         assert!(!smt.check_merkle_proof(
             &key,
-            value.as_ref(),
+            Option::from(&value.clone()),
             &MerkleProof {
                 bitmap: b256("0200000000000000000000000000000000000000000000000000000000000080").0,
                 hashes: vec![
@@ -819,7 +834,7 @@ mod tests {
         ));
         assert!(!smt.check_merkle_proof(
             &key,
-            value.as_ref(),
+            Option::from(&value.clone()),
             &MerkleProof {
                 bitmap: b256("0200000000000000000000000000000000000000000000000000000000000080").0,
                 hashes: vec![
@@ -830,7 +845,7 @@ mod tests {
         ));
         assert!(!smt.check_merkle_proof(
             &key,
-            value.as_ref(),
+            Option::from(&value.clone()),
             &MerkleProof {
                 // wrong bitmap - missing bit
                 bitmap: b256("0200000000000000000000000000000000000000000000000000000000000000").0,
@@ -839,7 +854,7 @@ mod tests {
         ));
         assert!(!smt.check_merkle_proof(
             &key,
-            value.as_ref(),
+            Option::from(&value.clone()),
             &MerkleProof {
                 // wrong bitmap - extra bit
                 bitmap: b256("0200010000000000000000000000000000000000000000000000000000000080").0,
@@ -848,7 +863,7 @@ mod tests {
         ));
         assert!(!smt.check_merkle_proof(
             &key,
-            value.as_ref(),
+            Option::from(&value.clone()),
             &MerkleProof {
                 // wrong bitmap - wrong bit
                 bitmap: b256("0400000000000000000000000000000000000000000000000000000000000080").0,
@@ -861,20 +876,32 @@ mod tests {
 #[test]
 fn test_nullfier() {
     use bls12_381::Scalar;
+    use std::env::temp_dir;
+    use std::time::SystemTime;
+    use storage::db::TempRocksDB;
 
     // Common value used for all nullifiers
-    let value = Some("nullifier");
+    let value = Some(b"nullifier".to_vec());
 
     //Generate a nullifier
     let nullifier = Scalar::from(10);
     let spent_token_key = Key::hash(nullifier.to_bytes());
 
-    let mut smt = SmtMap256::new();
-    let merkle_root: Digest = *(&smt).merkle_root();
+    //Create New db for smt256
+    let time = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let mut path = temp_dir();
+    path.push(format!("temp-findora-db–{}", time));
+    let rocksdb = TempRocksDB::open(path).expect("failed to open rocksdb");
+
+    let mut smt = SmtMap256::new(rocksdb);
+    let merkle_root: Digest = smt.merkle_root().unwrap();
     // Spend the nullifier
-    assert_eq!(smt.set(&spent_token_key, value), None);
-    assert!(merkle_root != *(&smt).merkle_root());
-    assert_eq!(smt.get(&spent_token_key), value.as_ref());
+    assert!(smt.set(&spent_token_key, value.clone()).is_ok());
+    assert_ne!(merkle_root, smt.merkle_root().unwrap());
+    assert_eq!(smt.get(&spent_token_key).unwrap(), value.clone());
 
     // Generate a new unspent nullifier
     let unspent_nullifier = Scalar::from(11);
@@ -882,17 +909,17 @@ fn test_nullfier() {
     let unspent_token_key = Key::hash(unspent_nullifier.to_bytes());
 
     // Generate unspent merkle proof (user side )
-    assert_eq!(smt.get(&unspent_token_key), None);
+    assert_eq!(smt.get(&unspent_token_key).unwrap(), None);
 
-    let (_, unspent_proof) = smt.get_with_proof(&unspent_token_key);
+    let (_, unspent_proof) = smt.get_with_proof(&unspent_token_key).unwrap();
 
     // Verify unspent merkle proof (ledger side )
     assert!(smt.check_merkle_proof(&unspent_token_key, None, &unspent_proof));
 
     // Spend the token
-    assert_eq!(smt.set(&unspent_token_key, value), None);
-    assert!(merkle_root != *(&smt).merkle_root());
+    assert!(smt.set(&unspent_token_key, value).is_ok());
+    assert_ne!(merkle_root, smt.merkle_root().unwrap());
 
-    let (_, spent_proof) = smt.get_with_proof(&unspent_token_key);
+    let (_, spent_proof) = smt.get_with_proof(&unspent_token_key).unwrap();
     assert!(!smt.check_merkle_proof(&unspent_token_key, None, &spent_proof));
 }
