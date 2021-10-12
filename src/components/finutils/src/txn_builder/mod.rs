@@ -911,13 +911,16 @@ impl TransferOperationBuilder {
     // Check if outputs and inputs are balanced
 
     fn check_balance(&self) -> Result<()> {
-        let spend_total: u64 = self.spend_amounts.iter().sum();
+        let input_total: u64 = self
+            .input_records
+            .iter()
+            .fold(0, |acc, ar| acc + ar.open_asset_record.amount);
         let output_total = self
             .output_records
             .iter()
             .fold(0, |acc, ar| acc + ar.open_asset_record.amount);
-        if spend_total != output_total {
-            return Err(eg!(format!("{} != {}", spend_total, output_total)));
+        if input_total != output_total {
+            return Err(eg!(format!("{} != {}", input_total, output_total)));
         }
 
         Ok(())
