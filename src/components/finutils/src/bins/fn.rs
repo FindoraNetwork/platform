@@ -424,15 +424,23 @@ fn run() -> Result<()> {
         // print keys to terminal
         println!("{:?}", serde_json::to_string_pretty(&keys));
     } else if let Some(m) = matches.subcommand_matches("anon-transfer") {
-        let axfr_secret_key = m.value_of("axfr-secretkey");
+        let anon_keys = match m.value_of("anon-keys") {
+            Some(path) => {
+                let f =
+                    fs::read_to_string(path).c(d!("Failed to read anon-keys file"))?;
+                let keys = serde_json::from_str::<AnonKeys>(f.as_str()).c(d!())?;
+                keys
+            }
+            None => return Err(eg!("path for anon-keys file not found")),
+        };
+        let axfr_secret_key = anon_keys.axfr_secret_key;
         let randomizer = m.value_of("randomizer");
-        let dec_key = m.value_of("decryption-key");
+        let dec_key = anon_keys.dec_key;
         let to_axfr_public_key = m.value_of("to-axfr-public-key");
         let to_enc_key = m.value_of("to-enc-key");
         let amount = m.value_of("amount");
 
-        if axfr_secret_key.is_none()
-            || dec_key.is_none()
+        if randomizer.is_none()
             || to_axfr_public_key.is_none()
             || to_enc_key.is_none()
             || amount.is_none()
@@ -440,9 +448,9 @@ fn run() -> Result<()> {
             println!("{}", m.usage());
         } else {
             common::gen_oabar_add_op(
-                axfr_secret_key.unwrap(),
+                axfr_secret_key,
                 randomizer.unwrap(),
-                dec_key.unwrap(),
+                dec_key,
                 amount.unwrap(),
                 to_axfr_public_key.unwrap(),
                 to_enc_key.unwrap(),
@@ -486,6 +494,11 @@ fn run() -> Result<()> {
                     .c(d!("invalid file"))
             })
         })?;
+        let randomizers = m.value_of("randomizer-file").c(d!()).and_then(|f| {
+            fs::read_to_string(f)
+                .c(d!())
+                .map(|rms| rms.lines().map(String::from).collect::<Vec<String>>())
+        })?;
         let amounts = m.value_of("amount-file").c(d!()).and_then(|f| {
             fs::read_to_string(f)
                 .c(d!())
@@ -496,6 +509,7 @@ fn run() -> Result<()> {
             || dec_keys.is_empty()
             || to_axfr_public_keys.is_empty()
             || to_enc_keys.is_empty()
+            || randomizers.is_empty()
             || amounts.is_empty()
         {
             println!("{}", m.usage());
@@ -505,6 +519,7 @@ fn run() -> Result<()> {
                 dec_keys,
                 to_axfr_public_keys,
                 to_enc_keys,
+                randomizers,
                 amounts,
             )
             .c(d!())?;
@@ -515,7 +530,8 @@ fn run() -> Result<()> {
         if atxo_sid.is_none() {
             println!("{}", m.usage());
         } else {
-            common::get_mtleaf_info(atxo_sid.unwrap()).c(d!())?;
+            let mt_leaf_info = common::get_mtleaf_info(atxo_sid.unwrap()).c(d!())?;
+            println!("{:?}", serde_json::to_string_pretty(&mt_leaf_info));
         }
     } else {
         println!("{}", matches.usage());
