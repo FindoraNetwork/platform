@@ -40,7 +40,9 @@ lazy_static! {
         "{}/.____fn_config____",
         ruc::info!(env::var("HOME")).unwrap_or_else(|_| "/tmp/".to_owned())
     );
-    static ref MNEMONIC: Option<String> = fs::read_to_string(&*MNEMONIC_FILE).ok();
+    static ref MNEMONIC: Option<String> = fs::read_to_string(&*MNEMONIC_FILE)
+        .map(|s| s.trim().to_string())
+        .ok();
     static ref MNEMONIC_FILE: String = format!("{}/mnemonic", &*CFG_PATH);
     static ref TD_KEY: Option<String> = fs::read_to_string(&*TD_KEY_FILE).ok();
     static ref TD_KEY_FILE: String = format!("{}/tendermint_keys", &*CFG_PATH);
