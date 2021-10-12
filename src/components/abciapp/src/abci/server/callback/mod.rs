@@ -86,7 +86,7 @@ pub fn begin_block(
     // snapshot the last block
     fbnc::flush_data();
     let last_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
-    pnk!(CFG.snapcfg.snapshot(last_height as u64));
+    pnk!(CFG.btmcfg.snapshot(last_height as u64));
 
     // cache the last block in query server
     // trigger this op in `BeginBlock` to make abci-commit safer

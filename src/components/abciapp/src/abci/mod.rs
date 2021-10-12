@@ -7,7 +7,6 @@
 
 mod config;
 mod server;
-pub mod snap;
 pub mod staking;
 
 use crate::api::{
