@@ -280,6 +280,9 @@ pub(crate) mod global_cfg {
             // this field should be parsed at the top
             res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
 
+            // the guess should always success in this scene
+            res.mode = res.guess_mode().c(d!())?;
+
             if m.is_present("snapshot-list") {
                 list_snapshots(&res).c(d!())?;
             }
