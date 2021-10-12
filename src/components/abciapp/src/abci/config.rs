@@ -83,9 +83,9 @@ impl ABCIConfig {
 }
 
 pub(crate) mod global_cfg {
-    use crate::abci::snap::SnapCfg;
+    use btm::BtmCfg;
     #[cfg(not(test))]
-    use crate::abci::snap::{SnapAlgo, SnapMode, STEP_CNT};
+    use btm::{SnapAlgo, SnapMode, STEP_CNT};
     #[cfg(not(test))]
     use clap::{crate_authors, App, Arg, ArgMatches};
     use lazy_static::lazy_static;
@@ -110,7 +110,7 @@ pub(crate) mod global_cfg {
         pub tendermint_node_self_addr: Option<String>,
         pub tendermint_node_key_config_path: Option<String>,
         pub ledger_dir: String,
-        pub snapcfg: SnapCfg,
+        pub btmcfg: BtmCfg,
     }
 
     #[cfg(test)]
@@ -224,7 +224,7 @@ pub(crate) mod global_cfg {
             tendermint_node_self_addr: tnsa,
             tendermint_node_key_config_path: tnkcp,
             ledger_dir: ld,
-            snapcfg: parse_snapcfg(&m).c(d!())?,
+            btmcfg: parse_btmcfg(&m).c(d!())?,
         };
 
         Ok(res)
@@ -239,54 +239,59 @@ pub(crate) mod global_cfg {
     }
 
     #[cfg(not(test))]
-    fn parse_snapcfg(m: &ArgMatches) -> Result<SnapCfg> {
-        let mut res = SnapCfg::new();
+    fn parse_btmcfg(m: &ArgMatches) -> Result<BtmCfg> {
+        let mut res = BtmCfg::new();
 
         res.enable = m.is_present("enable-snapshot");
 
-        if res.enable
-            || m.is_present("snapshot-list")
+        if res.enable {
+            res.itv = m
+                .value_of("snapshot-itv")
+                .unwrap_or("10")
+                .parse::<u64>()
+                .c(d!())?;
+            res.cap = m
+                .value_of("snapshot-cap")
+                .unwrap_or("100")
+                .parse::<u64>()
+                .c(d!())?;
+
+            if let Some(sm) = m.value_of("snapshot-mode") {
+                res.mode = SnapMode::from_str(sm).c(d!())?;
+                if !matches!(res.mode, SnapMode::External) {
+                    res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
+                }
+            } else {
+                res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
+                res.mode = res.guess_mode().c(d!())?;
+            }
+
+            if let Some(sa) = m.value_of("snapshot-algo") {
+                res.algo = SnapAlgo::from_str(sa).c(d!())?;
+                res.itv.checked_pow(STEP_CNT as u32).c(d!())?;
+            }
+        }
+
+        if m.is_present("snapshot-list")
             || m.is_present("snapshot-rollback")
             || m.is_present("snapshot-rollback-to")
             || m.is_present("snapshot-rollback-to-exact")
         {
             // this field should be parsed at the top
             res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
+
+            if m.is_present("snapshot-list") {
+                list_snapshots(&res).c(d!())?;
+            }
+
+            check_rollback(&m, &res).c(d!())?;
         }
-
-        res.itv = m
-            .value_of("snapshot-itv")
-            .unwrap_or("10")
-            .parse::<u64>()
-            .c(d!())?;
-        res.cap = m
-            .value_of("snapshot-cap")
-            .unwrap_or("100")
-            .parse::<u64>()
-            .c(d!())?;
-
-        if let Some(sm) = m.value_of("snapshot-mode") {
-            res.mode = SnapMode::from_str(sm).c(d!())?;
-        } else {
-            res.mode = res.guess_mode().c(d!())?;
-        }
-
-        if let Some(sa) = m.value_of("snapshot-algo") {
-            res.algo = SnapAlgo::from_str(sa).c(d!())?;
-            res.itv.checked_pow(STEP_CNT as u32).c(d!())?;
-        }
-
-        if m.is_present("snapshot-list") {
-            list_snapshots(&res).c(d!())?;
-        }
-
-        check_rollback(&m, &res).c(d!())?;
 
         Ok(res)
     }
 
     #[cfg(not(test))]
-    fn list_snapshots(cfg: &SnapCfg) -> Result<()> {
+    fn list_snapshots(cfg: &BtmCfg) -> Result<()> {
         println!("Available snapshots are listed below:");
         cfg.get_sorted_snapshots()
             .c(d!())?
@@ -299,7 +304,7 @@ pub(crate) mod global_cfg {
     }
 
     #[cfg(not(test))]
-    fn check_rollback(m: &ArgMatches, cfg: &SnapCfg) -> Result<()> {
+    fn check_rollback(m: &ArgMatches, cfg: &BtmCfg) -> Result<()> {
         const HINTS: &str = r#"    NOTE:
             before executing the rollback,
             all related processes must be exited,
