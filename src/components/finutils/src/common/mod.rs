@@ -35,9 +35,7 @@ use utils::{
     parse_td_validator_keys,
 };
 use zei::anon_xfr::keys::{AXfrKeyPair, AXfrPubKey};
-use zei::anon_xfr::structs::{
-    MTLeafInfo, OpenAnonBlindAssetRecordBuilder,
-};
+use zei::anon_xfr::structs::{MTLeafInfo, OpenAnonBlindAssetRecordBuilder};
 use zei::{
     setup::PublicParams,
     xfr::{
@@ -838,12 +836,12 @@ pub fn gen_oabar_add_op_x(
     Ok(())
 }
 
-/// Batch anon transfer - Generate OABAR and add anonymous transfer operation
+/// Get merkle proof - Generate MTLeafInfo from ATxoSID
 pub fn get_mtleaf_info(atxo_sid: &str) -> Result<MTLeafInfo> {
     let asid = atxo_sid.parse::<u64>().c(d!("error parsing ATxoSID"))?;
     let mt_leaf_info = utils::get_abar_proof(asid).c(d!("error fetching abar proof"))?;
 
-    Ok(mt_leaf_info)
+    Ok(mt_leaf_info) // TODO: print mtleafinfo into json output
 }
 /// Return the built version.
 pub fn version() -> &'static str {

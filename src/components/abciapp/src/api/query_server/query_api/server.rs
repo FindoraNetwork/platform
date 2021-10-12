@@ -7,8 +7,8 @@ use lazy_static::lazy_static;
 use ledger::data_model::{ATxoSID, AXfrAddress};
 use ledger::{
     data_model::{
-        ATxoSID, AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Operation,
-        Transaction, TxOutput, TxnSID, TxoSID, XfrAddress,
+        AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Operation, Transaction,
+        TxOutput, TxnSID, TxoSID, XfrAddress,
     },
     staking::{
         ops::mint_fra::MintEntry, Amount, BlockHeight, DelegationRwdDetail,
@@ -342,7 +342,7 @@ impl QueryServer {
     pub fn get_abar_memo(&self, atxo_sid: ATxoSID) -> Option<OwnerMemo> {
         self.abar_memos.get(&atxo_sid)
     }
-    
+
     /// Returns the merkle proof from the given ATxoSID
     #[inline(always)]
     pub fn get_abar_proof(&self, atxo_sid: ATxoSID) -> Option<MTLeafInfo> {

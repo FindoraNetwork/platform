@@ -13,8 +13,8 @@ use finutils::api::NetworkRoute;
 use ledger::data_model::ATxoSID;
 use ledger::{
     data_model::{
-        b64dec, ATxoSID, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction,
-        TxOutput, TxnSID, TxoSID, XfrAddress,
+        b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
+        TxnSID, TxoSID, XfrAddress,
     },
     staking::ops::mint_fra::MintEntry,
 };
@@ -127,7 +127,7 @@ async fn get_owned_abars(
             let rpk = pk.randomize(&r);
             web::Json(read.get_owned_abars(&rpk).iter().map(|a| a.0).collect())
         })
-    }
+}
 /// Returns the merkle proof for anonymous transactions
 async fn get_abar_proof(
     data: web::Data<Arc<RwLock<QueryServer>>>,
