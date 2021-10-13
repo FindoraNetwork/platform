@@ -189,31 +189,40 @@ pub struct MerkleProof {
 /// hashes of its two sub-nodes.
 pub struct SmtMap256<D: MerkleDB> {
     kvs: State<D>,
+    version: u64,
 }
 
 impl<D: MerkleDB> SmtMap256<D> {
-    /// Returns a new SMT-Map where all keys have the default value (zero).
+    /// Returns a new SMT-Map based on the db passed in
     pub fn new(db: D) -> Self {
+        let cs = chain_state::ChainState::new(db, SMT256_DB.to_string(), 0);
+        let version = cs.height().unwrap_or(0u64);
         Self {
-            kvs: State::new(
-                Arc::new(RwLock::new(chain_state::ChainState::new(
-                    db,
-                    SMT256_DB.to_string(),
-                    0,
-                ))),
-                false,
-            ),
+            kvs: State::new(Arc::new(RwLock::new(cs)), false),
+            version,
         }
     }
 
-    /// Sets the value of a key. Returns the previous value corresponding to the key.
+    /// Sets the value of a key. If an error occurs, the session is discarded and the error
+    /// is propagated. Otherwise the session gets committed.
     pub fn set(&mut self, key: &Key, value: Option<Vec<u8>>) -> Result<()> {
+        match self.set_exec(key, value) {
+            Ok(_) => {
+                self.kvs.commit_session();
+                Ok(())
+            }
+            Err(err) => {
+                self.kvs.discard_session();
+                Err(err)
+            }
+        }
+    }
+
+    /// Execute insert of key value pair
+    fn set_exec(&mut self, key: &Key, value: Option<Vec<u8>>) -> Result<()> {
         // Update the hash of the leaf.
         let mut index = TreeNodeIndex::leaf(*key);
         let mut hash: Digest = value.as_ref().map(digest).unwrap_or(ZERO_DIGEST);
-
-        //Begin Session
-        self.kvs.discard_session();
 
         self.update_hash(&index, &hash)?;
 
@@ -233,14 +242,10 @@ impl<D: MerkleDB> SmtMap256<D> {
         let ser_key = Self::build_key_for_node(key).c(d!())?;
 
         if let Some(v) = value {
-            self.kvs.set(&ser_key, v).c(d!())?
+            self.kvs.set(&ser_key, v).c(d!())
         } else {
-            self.kvs.delete(&ser_key).c(d!())?
+            self.kvs.delete(&ser_key).c(d!())
         }
-
-        //Commit Session
-        self.kvs.commit_session();
-        Ok(())
     }
 
     /// Returns a reference to the value of a key.
@@ -291,8 +296,10 @@ impl<D: MerkleDB> SmtMap256<D> {
     }
 
     /// Commit the modified key value pairs to the db
-    pub fn commit(&mut self) -> Result<(Vec<u8>, u64)> {
-        self.kvs.commit(0)
+    pub fn commit(&mut self) -> Result<u64> {
+        let (_, ver) = self.kvs.commit(self.version + 1).c(d!())?;
+        self.version = ver;
+        Ok(ver)
     }
 
     fn get_hash(&self, index: &TreeNodeIndex) -> Result<Digest> {

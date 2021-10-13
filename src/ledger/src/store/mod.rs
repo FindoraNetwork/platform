@@ -483,6 +483,12 @@ impl LedgerState {
     }
 
     #[inline(always)]
+    /// writes the changes from session cache to the RocksDB store
+    pub fn commit_nullifier_changes(&mut self) -> Result<u64> {
+        self.nullifier_set.commit()
+    }
+
+    #[inline(always)]
     /// Fetches the root hash of the committed merkle tree of abar commitments directly from committed
     /// state and ignore session cache
     pub fn get_abar_root_hash(&mut self) -> Result<BLSScalar> {
