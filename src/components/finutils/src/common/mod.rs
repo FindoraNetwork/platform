@@ -35,7 +35,7 @@ use utils::{
     parse_td_validator_keys,
 };
 use zei::anon_xfr::keys::{AXfrKeyPair, AXfrPubKey};
-use zei::anon_xfr::structs::{OpenAnonBlindAssetRecordBuilder};
+use zei::anon_xfr::structs::OpenAnonBlindAssetRecordBuilder;
 use zei::{
     setup::PublicParams,
     xfr::{
