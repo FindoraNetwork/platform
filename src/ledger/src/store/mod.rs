@@ -90,7 +90,7 @@ pub struct LedgerState {
     abar_state: State<RocksDB>,
     // Sparse Merkle Tree to hold nullifier Set
     #[allow(dead_code)]
-    nullifier_set: SmtMap256<String>,
+    nullifier_set: SmtMap256<RocksDB>,
 
     prng: ChaChaRng,
 }
@@ -300,10 +300,10 @@ impl LedgerState {
             let d: Key = Key::from_base64(&str).c(d!())?;
 
             // if the nullifier hash is present in our nullifier set, fail the block
-            if self.nullifier_set.get(&d).is_some() {
+            if self.nullifier_set.get(&d).c(d!())?.is_some() {
                 return Err(eg!("Nullifier hash already present in set"));
             }
-            self.nullifier_set.set(&d, Some("".to_string()));
+            self.nullifier_set.set(&d, Some(b"".to_vec())).c(d!())?;
         }
 
         let mut txn_sid = TxnSID(backup_next_txn_sid);
@@ -444,7 +444,10 @@ impl LedgerState {
         self.status.abar_commitment_versions.push(abar_root_hash);
         let anon_state_commitment_data = AnonStateCommitmentData {
             abar_root_hash,
-            nullifier_root_hash: *self.nullifier_set.merkle_root(),
+            nullifier_root_hash: self
+                .nullifier_set
+                .merkle_root()
+                .unwrap_or(sparse_merkle_tree::ZERO_DIGEST),
         };
         self.status
             .anon_state_commitment_versions
@@ -527,6 +530,13 @@ impl LedgerState {
         Ok(State::new(cs, false))
     }
 
+    // Initialize persistent Sparse Merkle tree for the Nullifier set
+    #[inline(always)]
+    fn init_nullifier_smt(path: &str) -> Result<SmtMap256<RocksDB>> {
+        let rdb = RocksDB::open(path).c(d!("failed to open db"))?;
+        Ok(SmtMap256::new(rdb))
+    }
+
     /// Initialize a new Ledger structure.
     pub fn new(basedir: &str, prefix: Option<&str>) -> Result<LedgerState> {
         let prefix = if let Some(p) = prefix {
@@ -539,6 +549,7 @@ impl LedgerState {
         let txn_merkle_path = format!("{}/{}txn_merkle", basedir, &prefix);
         let utxo_map_path = format!("{}/{}utxo_map", basedir, &prefix);
         let abar_store_path = format!("{}/{}abar_store", basedir, &prefix);
+        let nullifier_store_path = format!("{}/{}nullifier_store", basedir, &prefix);
 
         // These iterms will be set under ${BNC_DATA_DIR}
         fs::create_dir_all(&basedir).c(d!())?;
@@ -558,7 +569,8 @@ impl LedgerState {
             utxo_map: LedgerState::init_utxo_map(&utxo_map_path).c(d!())?,
             block_ctx: Some(BlockEffect::default()),
             abar_state: LedgerState::init_abar_state(&abar_store_path).c(d!())?,
-            nullifier_set: SmtMap256::new(),
+            nullifier_set: LedgerState::init_nullifier_smt(&nullifier_store_path)
+                .c(d!())?,
         };
 
         Ok(ledger)

@@ -24,7 +24,7 @@ pub fn digest(value: impl AsRef<[u8]>) -> Digest {
 
 const SMT256_DB: &str = "smt256-db";
 const ZERO_256: [u8; DIGESTBYTES] = [0; DIGESTBYTES];
-const ZERO_DIGEST: Digest = Digest { 0: ZERO_256 };
+pub const ZERO_DIGEST: Digest = Digest { 0: ZERO_256 };
 
 // Compute the hash of two hashes. This Merkle tree is a binary
 // representation, so this is a common operation.
