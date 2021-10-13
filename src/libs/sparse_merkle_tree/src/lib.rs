@@ -211,6 +211,10 @@ impl<D: MerkleDB> SmtMap256<D> {
         // Update the hash of the leaf.
         let mut index = TreeNodeIndex::leaf(*key);
         let mut hash: Digest = value.as_ref().map(digest).unwrap_or(ZERO_DIGEST);
+
+        //Begin Session
+        self.kvs.discard_session();
+
         self.update_hash(&index, &hash)?;
 
         // Update the hashes of the inner nodes along the path.
@@ -229,10 +233,14 @@ impl<D: MerkleDB> SmtMap256<D> {
         let ser_key = Self::build_key_for_node(key).c(d!())?;
 
         if let Some(v) = value {
-            self.kvs.set(&ser_key, v).c(d!())
+            self.kvs.set(&ser_key, v).c(d!())?
         } else {
-            self.kvs.delete(&ser_key).c(d!())
+            self.kvs.delete(&ser_key).c(d!())?
         }
+
+        //Commit Session
+        self.kvs.commit_session();
+        Ok(())
     }
 
     /// Returns a reference to the value of a key.
