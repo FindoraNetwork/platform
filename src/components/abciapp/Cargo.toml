@@ -51,6 +51,12 @@ cryptohash = { path = "../../libs/cryptohash" }
 globutils = { path = "../../libs/globutils" }
 finutils = { path = "../finutils" }
 
+tempfile = "3.1.0"
+baseapp = { path = "../contracts/baseapp" }
+fc-rpc = { path = "../contracts/rpc" }
+fp-storage = { path = "../contracts/primitives/storage" }
+fp-utils = { path = "../contracts/primitives/utils" }
+
 [dev-dependencies]
 
 [build-dependencies]
