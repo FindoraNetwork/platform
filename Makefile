@@ -116,7 +116,9 @@ tendermint_goleveldb:
 	cd tools/tendermint && $(MAKE) install
 
 test:
-	# cargo test --workspace -- --test-threads=1 # --nocapture
+	cargo test --release --workspace -- --test-threads=1 # --nocapture
+
+testall:
 	cargo test --release --features="abci_mock" -- --test-threads=1 # --nocapture
 
 coverage:
