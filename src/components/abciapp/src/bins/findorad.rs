@@ -252,6 +252,7 @@ mod init {
     use std::{fs, str};
 
     const QA01_GENESIS_URL: &str = "https://dev-qa01.dev.findora.org:26657/genesis";
+    const QA02_GENESIS_URL: &str = "https://dev-qa02.dev.findora.org:26657/genesis";
     const TESTNET_GENESIS_URL: &str =
         "https://prod-testnet.prod.findora.org:26657/genesis";
     const MAINNET_GENESIS_URL: &str =
@@ -264,6 +265,7 @@ mod init {
         Testnet,
         Mainnet,
         Qa01,
+        Qa02,
     }
 
     impl Default for InitMode {
@@ -291,6 +293,7 @@ mod init {
             InitMode::Testnet => save_genesis(TESTNET_GENESIS_URL, path)?,
             InitMode::Mainnet => save_genesis(MAINNET_GENESIS_URL, path)?,
             InitMode::Qa01 => save_genesis(QA01_GENESIS_URL, path)?,
+            InitMode::Qa02 => save_genesis(QA02_GENESIS_URL, path)?,
             InitMode::Dev => {}
         }
         Ok(())
@@ -351,6 +354,12 @@ mod init {
                 config.replace(
                     "persistent_peers = \"\"",
                     "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@dev-qa01-us-west-2-sentry-000-public.dev.findora.org:26656\"",
+                )
+            }
+            InitMode::Qa02 => {
+                config.replace(
+                    "persistent_peers = \"\"",
+                    "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@dev-qa02-us-west-2-sentry-000-public.dev.findora.org:26656\"",
                 )
             }
             InitMode::Dev => config,
@@ -433,7 +442,8 @@ mod config {
                     .arg_from_usage("--testnet 'Initialize for Findora TestNet.'")
                     .arg_from_usage("--mainnet 'Initialize for Findora MainNet.'")
                     .arg_from_usage("--qa01 'Initialize for Findora QA01.'")
-                    .group(ArgGroup::with_name("environment").args(&["devnet", "testnet", "mainnet", "qa01"]))
+                    .arg_from_usage("--qa02 'Initialize for Findora QA02.'")
+                    .group(ArgGroup::with_name("environment").args(&["devnet", "testnet", "mainnet", "qa01", "qa02"]))
                     .arg_from_usage(
                         "-b, --base-dir=[DIR] 'The root directory for tendermint config, aka $TENDERMINT_HOME'",
                     );
@@ -534,6 +544,8 @@ mod config {
             InitMode::Mainnet
         } else if m.is_present("qa01") {
             InitMode::Qa01
+        } else if m.is_present("qa02") {
+            InitMode::Qa02
         } else {
             InitMode::Dev
         };
