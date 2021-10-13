@@ -17,11 +17,14 @@ pub use sha256::Digest;
 use std::sync::Arc;
 use storage::db::MerkleDB;
 use storage::state::{chain_state, State};
+use storage::store::Prefix;
 
 pub fn digest(value: impl AsRef<[u8]>) -> Digest {
     sha256::hash(value.as_ref())
 }
 
+const NODE_PREFIX: &[u8] = b"node";
+const HASH_PREFIX: &[u8] = b"hash";
 const SMT256_DB: &str = "smt256-db";
 const ZERO_256: [u8; DIGESTBYTES] = [0; DIGESTBYTES];
 pub const ZERO_DIGEST: Digest = Digest { 0: ZERO_256 };
@@ -308,11 +311,20 @@ impl<D: MerkleDB> SmtMap256<D> {
     }
 
     fn build_key_for_hash(idx: &TreeNodeIndex) -> Result<Vec<u8>> {
-        serde_json::to_vec(idx).c(d!("error serializing TreeNodeIndex"))
+        let raw_key =
+            serde_json::to_vec(idx).c(d!("error serializing TreeNodeIndex"))?;
+        Ok(Prefix::new(HASH_PREFIX)
+            .push(raw_key.as_slice())
+            .as_ref()
+            .to_vec())
     }
 
     fn build_key_for_node(key: &Key) -> Result<Vec<u8>> {
-        serde_json::to_vec(key).c(d!("error serializing key"))
+        let raw_key = serde_json::to_vec(key).c(d!("error serializing key"))?;
+        Ok(Prefix::new(NODE_PREFIX)
+            .push(raw_key.as_slice())
+            .as_ref()
+            .to_vec())
     }
 }
 
