@@ -39,7 +39,9 @@ lazy_static! {
         "{}/.____fn_config____",
         ruc::info!(env::var("HOME")).unwrap_or_else(|_| "/tmp/".to_owned())
     );
-    static ref MNEMONIC: Option<String> = fs::read_to_string(&*MNEMONIC_FILE).ok();
+    static ref MNEMONIC: Option<String> = fs::read_to_string(&*MNEMONIC_FILE)
+        .map(|s| s.trim().to_string())
+        .ok();
     static ref MNEMONIC_FILE: String = format!("{}/mnemonic", &*CFG_PATH);
     static ref TD_KEY: Option<String> = fs::read_to_string(&*TD_KEY_FILE).ok();
     static ref TD_KEY_FILE: String = format!("{}/tendermint_keys", &*CFG_PATH);
@@ -127,7 +129,7 @@ pub fn stake(
 
     let mut builder = utils::new_tx_builder().c(d!())?;
     builder
-        .add_operation_staking(&kp, &vkp, td_pubkey, cr, memo.map(|m| m.to_owned()))
+        .add_operation_staking(&kp, am, &vkp, td_pubkey, cr, memo.map(|m| m.to_owned()))
         .c(d!())?;
     utils::gen_transfer_op(
         &kp,
@@ -163,7 +165,7 @@ pub fn stake_append(
         .or_else(|_| get_keypair().c(d!()))?;
 
     let mut builder = utils::new_tx_builder().c(d!())?;
-    builder.add_operation_delegation(&kp, td_addr);
+    builder.add_operation_delegation(&kp, am, td_addr);
     utils::gen_transfer_op(
         &kp,
         vec![(&BLACK_HOLE_PUBKEY_STAKING, am)],
@@ -593,7 +595,7 @@ fn gen_delegate_tx(
     .c(d!())
     .map(|principal_op| {
         builder.add_operation(principal_op);
-        builder.add_operation_delegation(owner_kp, validator.to_owned());
+        builder.add_operation_delegation(owner_kp, amount, validator.to_owned());
     })?;
 
     Ok(builder.take_transaction())
