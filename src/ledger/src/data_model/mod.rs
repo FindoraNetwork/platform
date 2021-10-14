@@ -1163,7 +1163,7 @@ pub enum Operation {
     FraDistribution(FraDistributionOps),
     /// Coinbase operation
     MintFra(MintFraOps),
-    /// Convert UTXO to Account
+    /// Convert UTXO to EVM Account
     ConvertAccount(ConvertAccount),
 }
 
