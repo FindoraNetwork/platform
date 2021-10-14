@@ -99,15 +99,14 @@ pub struct ContractLog {
 }
 
 pub struct App<C> {
-    /// Whether to store empty ethereum blocks when no evm contract transaction.
-    enable_eth_empty_blocks: bool,
+    disable_eth_empty_blocks: bool,
     phantom: PhantomData<C>,
 }
 
 impl<C: Config> App<C> {
     pub fn new(empty_block: bool) -> Self {
         App {
-            enable_eth_empty_blocks: empty_block,
+            disable_eth_empty_blocks: empty_block,
             phantom: Default::default(),
         }
     }
@@ -116,7 +115,7 @@ impl<C: Config> App<C> {
 impl<C: Config> Default for App<C> {
     fn default() -> Self {
         App {
-            enable_eth_empty_blocks: false,
+            disable_eth_empty_blocks: false,
             phantom: Default::default(),
         }
     }
@@ -128,7 +127,7 @@ impl<C: Config> AppModule for App<C> {
         ctx: &mut Context,
         req: &RequestEndBlock,
     ) -> ResponseEndBlock {
-        if PENDING_TRANSACTIONS.lock().len() > 0 || self.enable_eth_empty_blocks {
+        if PENDING_TRANSACTIONS.lock().len() > 0 || !self.disable_eth_empty_blocks {
             let _ = ruc::info!(self.store_block(ctx, U256::from(req.height)));
         }
         Default::default()

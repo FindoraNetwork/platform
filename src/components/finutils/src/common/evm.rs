@@ -9,7 +9,9 @@ use baseapp::extensions::{CheckFee, CheckNonce};
 use fp_core::account::SmartAccount;
 use fp_types::{
     actions::{
-        account::{Action as AccountAction, MintOutput, TransferToUTXO},
+        xhub::{
+            Action as AccountAction, NonConfidentialOutput, NonConfidentialTransfer,
+        },
         Action,
     },
     crypto::{Address, MultiSignature, MultiSigner},
@@ -86,7 +88,7 @@ pub fn transfer_from_account(
         None => fra_kp.get_pk(),
     };
 
-    let output = MintOutput {
+    let output = NonConfidentialOutput {
         target,
         amount,
         asset: ASSET_TYPE_FRA,
@@ -116,10 +118,11 @@ pub fn transfer_from_account(
         .unwrap();
     let nonce = serde_json::from_slice::<U256>(query_ret.value.as_slice()).unwrap();
 
-    let account_call = AccountAction::TransferToUTXO(TransferToUTXO {
+    let account_call = AccountAction::NonConfidentialTransfer(NonConfidentialTransfer {
+        input_value: amount,
         outputs: vec![output],
     });
-    let action = Action::Account(account_call);
+    let action = Action::XHub(account_call);
     let extra = (CheckNonce::new(nonce), CheckFee::new(None));
     let msg = serde_json::to_vec(&(action.clone(), extra.clone())).unwrap();
 

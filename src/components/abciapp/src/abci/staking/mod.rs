@@ -309,8 +309,7 @@ pub fn system_mint_pay(
         .collect::<Vec<_>>();
 
     // add account mint_entries.
-    const MAX_MINT_PAY: usize = 64;
-    let mut vec = if let Ok(account_mint) = account_base_app.consume_mint(MAX_MINT_PAY) {
+    let mut mints = if let Some(account_mint) = account_base_app.consume_mint() {
         account_mint
             .iter()
             .map(|mint| {
@@ -327,7 +326,7 @@ pub fn system_mint_pay(
         Vec::new()
     };
 
-    mint_entries.append(&mut vec);
+    mint_entries.append(&mut mints);
 
     if mint_entries.is_empty() {
         None
