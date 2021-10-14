@@ -83,15 +83,17 @@ impl ABCIConfig {
 }
 
 pub(crate) mod global_cfg {
+    #[cfg(target_os = "linux")]
     use btm::BtmCfg;
     #[cfg(not(test))]
+    #[cfg(target_os = "linux")]
     use btm::{SnapAlgo, SnapMode, STEP_CNT};
     #[cfg(not(test))]
     use clap::{crate_authors, App, Arg, ArgMatches};
     use lazy_static::lazy_static;
     use ruc::*;
     #[cfg(not(test))]
-    use std::{env, process::exit, str::FromStr};
+    use std::{env, process::exit};
 
     lazy_static! {
         /// Global config.
@@ -110,6 +112,7 @@ pub(crate) mod global_cfg {
         pub tendermint_node_self_addr: Option<String>,
         pub tendermint_node_key_config_path: Option<String>,
         pub ledger_dir: String,
+        #[cfg(target_os = "linux")]
         pub btmcfg: BtmCfg,
     }
 
@@ -224,6 +227,7 @@ pub(crate) mod global_cfg {
             tendermint_node_self_addr: tnsa,
             tendermint_node_key_config_path: tnkcp,
             ledger_dir: ld,
+            #[cfg(target_os = "linux")]
             btmcfg: parse_btmcfg(&m).c(d!())?,
         };
 
@@ -239,6 +243,7 @@ pub(crate) mod global_cfg {
     }
 
     #[cfg(not(test))]
+    #[cfg(target_os = "linux")]
     fn parse_btmcfg(m: &ArgMatches) -> Result<BtmCfg> {
         let mut res = BtmCfg::new();
 
@@ -257,7 +262,7 @@ pub(crate) mod global_cfg {
                 .c(d!())?;
 
             if let Some(sm) = m.value_of("snapshot-mode") {
-                res.mode = SnapMode::from_str(sm).c(d!())?;
+                res.mode = SnapMode::from_string(sm).c(d!())?;
                 if !matches!(res.mode, SnapMode::External) {
                     res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
                 }
@@ -267,7 +272,7 @@ pub(crate) mod global_cfg {
             }
 
             if let Some(sa) = m.value_of("snapshot-algo") {
-                res.algo = SnapAlgo::from_str(sa).c(d!())?;
+                res.algo = SnapAlgo::from_string(sa).c(d!())?;
                 res.itv.checked_pow(STEP_CNT as u32).c(d!())?;
             }
         }
@@ -294,6 +299,7 @@ pub(crate) mod global_cfg {
     }
 
     #[cfg(not(test))]
+    #[cfg(target_os = "linux")]
     fn list_snapshots(cfg: &BtmCfg) -> Result<()> {
         println!("Available snapshots are listed below:");
         cfg.get_sorted_snapshots()
@@ -307,6 +313,7 @@ pub(crate) mod global_cfg {
     }
 
     #[cfg(not(test))]
+    #[cfg(target_os = "linux")]
     fn check_rollback(m: &ArgMatches, cfg: &BtmCfg) -> Result<()> {
         const HINTS: &str = r#"    NOTE:
             before executing the rollback,

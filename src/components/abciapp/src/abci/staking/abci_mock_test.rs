@@ -606,7 +606,7 @@ fn delegate_x(
     is_evil: bool,
 ) -> Result<Digest> {
     let mut builder = new_tx_builder();
-    builder.add_operation_delegation(owner_kp, validator);
+    builder.add_operation_delegation(owner_kp, amount, validator);
 
     alt!(is_evil, amount = 1);
 

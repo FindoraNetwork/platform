@@ -416,10 +416,11 @@ impl TransactionBuilder {
     pub fn add_operation_delegate(
         mut self,
         keypair: &XfrKeyPair,
+        amount: u64,
         validator: TendermintAddr,
     ) -> Result<TransactionBuilder, JsValue> {
         self.get_builder_mut()
-            .add_operation_delegation(keypair, validator);
+            .add_operation_delegation(keypair, amount, validator);
         Ok(self)
     }
 
@@ -748,6 +749,7 @@ impl TransferOperationBuilder {
     /// @throws Will throw an error if not all record owners have signed the transaction.
     pub fn create(mut self) -> Result<TransferOperationBuilder, JsValue> {
         self.get_builder_mut()
+            .auto_refund(false)
             .create(TransferType::Standard)
             .c(d!())
             .map_err(error_to_jsvalue)?;

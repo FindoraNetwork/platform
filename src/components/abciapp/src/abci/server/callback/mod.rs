@@ -16,10 +16,7 @@ use abci::{
     ResponseDeliverTx, ResponseEndBlock, ResponseInfo,
 };
 use lazy_static::lazy_static;
-use ledger::{
-    staking::{is_coinbase_tx, KEEP_HIST},
-    store::fbnc,
-};
+use ledger::staking::{is_coinbase_tx, KEEP_HIST};
 use parking_lot::Mutex;
 use protobuf::RepeatedField;
 use ruc::*;
@@ -83,10 +80,13 @@ pub fn begin_block(
     s: &mut ABCISubmissionServer,
     req: &RequestBeginBlock,
 ) -> ResponseBeginBlock {
-    // snapshot the last block
-    fbnc::flush_data();
-    let last_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
-    pnk!(CFG.btmcfg.snapshot(last_height as u64));
+    #[cfg(target_os = "linux")]
+    {
+        // snapshot the last block
+        ledger::store::fbnc::flush_data();
+        let last_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+        info_omit!(CFG.btmcfg.snapshot(last_height as u64));
+    }
 
     // cache the last block in query server
     // trigger this op in `BeginBlock` to make abci-commit safer

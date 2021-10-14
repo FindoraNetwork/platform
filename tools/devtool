@@ -21,6 +21,7 @@ if [[ ${OPT} == "help" ]]; then
   echo "  $0 release, build release binary"
   echo "  $0 gorelease, build goleveldb release binary"
   echo "  $0 cli, build cli tools only"
+  echo "  $0 wasm, build wasm-js-bindings"
   echo "  $0 ltchk, lightweight check, such as fmt, lint"
   echo "  $0 prchk, make a pre-check before creating new pull request"
   echo "  $0 debug_env, build and start a new local devnet"
@@ -36,6 +37,19 @@ elif [[ ${OPT} == "cli" ]]; then
 	cp "${CARGO_TARGET_DIR}"/release/stt                    ~/.cargo/bin
 	cp "${CARGO_TARGET_DIR}"/release/staking_cfg_generator  ~/.cargo/bin
 	exit 0
+elif [[ ${OPT} == "wasm" ]]; then
+  export CARGO_TARGET_DIR=${PWD}/../target-${GITBRANCH}-build_wasm
+  WASM_DIR="${CARGO_TARGET_DIR}/wasm-js-bindings"
+  mkdir -p "${WASM_DIR}"
+  echo "change to directory ./src/components/wasm"
+  cd ./src/components/wasm || exit 1
+  wasm-pack build --target nodejs --out-dir "${WASM_DIR}/nodejs"
+  rm "${WASM_DIR}/nodejs/.gitignore"
+  wasm-pack build --target web --out-dir "${WASM_DIR}/web"
+  rm "${WASM_DIR}/web/.gitignore"
+  wasm-pack build --target bundler --out-dir "${WASM_DIR}/bundler"
+  rm "${WASM_DIR}/bundler/.gitignore"
+  exit 0
 elif [[ ${OPT} == "prchk" ]]; then
   export CARGO_TARGET_DIR=../target-${GITBRANCH}-prchk
   echo "======make fmt======"

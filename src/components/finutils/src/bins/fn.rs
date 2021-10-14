@@ -340,8 +340,6 @@ fn run() -> Result<()> {
             )
             .c(d!())?;
         }
-    } else if matches.is_present("set-initial-validators") {
-        common::set_initial_validators().c(d!())?;
     } else {
         println!("{}", matches.usage());
     }
