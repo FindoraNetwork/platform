@@ -547,15 +547,19 @@ impl LedgerState {
         let utxo_map_path = format!("{}/{}utxo_map", basedir, &prefix);
         let abar_store_path = format!("{}/{}abar_store", basedir, &prefix);
 
-        // These iterms will be set under ${BNC_DATA_DIR}
+        // These items will be set under ${BNC_DATA_DIR}
         fs::create_dir_all(&basedir).c(d!())?;
         let snapshot_file = format!("{}ledger_status", &prefix);
         let snapshot_entries_dir = prefix.clone() + "ledger_status_subdata";
         let blocks_path = prefix.clone() + "blocks";
         let tx_to_block_location_path = prefix + "tx_to_block_location";
 
-        let (abar_state, abar_query_state) =
+        let (mut abar_state, abar_query_state) =
             LedgerState::init_abar_state(&abar_store_path).c(d!())?;
+
+        // Initializing Merkle tree to set Empty tree root hash, which is a hash of null children
+        let store = PrefixedStore::new("abar_store", &mut abar_state);
+        let _ = PersistentMerkleTree::new(store)?;
 
         let ledger = LedgerState {
             status: LedgerStatus::new(&basedir, &snapshot_file, &snapshot_entries_dir)
