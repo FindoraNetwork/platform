@@ -102,7 +102,12 @@ pub fn check_convert_tx(
     for op in &tx.body.operations {
         if let Operation::ConvertAccount(ca) = op {
             if owner.is_some() {
-                return Err(eg!("tx must have 1 convert account"));
+                return Err(eg!("TransferUTXOsToEVM error: UXTOs can only be transferred to one evm account"));
+            }
+            if ca.data.nonce != tx.body.no_replay_token {
+                return Err(eg!(
+                    "TransferUTXOsToEVM error: nonce mismatch no_replay_token"
+                ));
             }
             owner = Some(ca.data.address.clone())
         }
@@ -112,7 +117,7 @@ pub fn check_convert_tx(
                     || matches!(o.record.amount, XfrAmount::Confidential(_))
                 {
                     return Err(eg!(
-                        "asset cross ledger transfer not support confidential"
+                        "TransferUTXOsToEVM error: only support non-confidential UTXOs transfer to an evm account"
                     ));
                 }
                 if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
@@ -132,7 +137,9 @@ pub fn check_convert_tx(
         }
     }
     if owner.is_none() {
-        return Err(eg!("this tx isn't a convert tx"));
+        return Err(eg!(
+            "TransferUTXOsToEVM error: not found the evm target account"
+        ));
     }
     Ok((owner.unwrap(), assets))
 }

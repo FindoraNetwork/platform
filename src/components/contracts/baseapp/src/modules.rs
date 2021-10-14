@@ -10,7 +10,6 @@ use fp_core::{
 use fp_traits::evm::DecimalsMapping;
 use fp_types::{
     actions,
-    actions::account::MintOutput,
     assemble::{convert_unsigned_transaction, CheckedTransaction, UncheckedTransaction},
     crypto::Address,
 };
@@ -27,6 +26,7 @@ pub struct ModuleManager {
     pub(crate) account_module: module_account::App<BaseApp>,
     pub(crate) ethereum_module: module_ethereum::App<BaseApp>,
     pub(crate) evm_module: module_evm::App<BaseApp>,
+    pub(crate) xhub_module: module_xhub::App<BaseApp>,
     pub(crate) template_module: module_template::App<BaseApp>,
 }
 
@@ -52,6 +52,8 @@ impl ModuleManager {
             self.ethereum_module.query_route(ctx, path, req)
         } else if module_name == module_evm::MODULE_NAME {
             self.evm_module.query_route(ctx, path, req)
+        } else if module_name == module_xhub::MODULE_NAME {
+            self.xhub_module.query_route(ctx, path, req)
         } else if module_name == module_template::MODULE_NAME {
             self.template_module.query_route(ctx, path, req)
         } else {
@@ -66,6 +68,7 @@ impl ModuleManager {
         self.account_module.begin_block(ctx, req);
         self.ethereum_module.begin_block(ctx, req);
         self.evm_module.begin_block(ctx, req);
+        self.xhub_module.begin_block(ctx, req);
         self.template_module.begin_block(ctx, req);
     }
 
@@ -79,6 +82,7 @@ impl ModuleManager {
         self.account_module.end_block(ctx, req);
         self.ethereum_module.end_block(ctx, req);
         self.evm_module.end_block(ctx, req);
+        self.xhub_module.end_block(ctx, req);
         let resp_template = self.template_module.end_block(ctx, req);
         if !resp_template.validator_updates.is_empty() {
             resp.validator_updates = resp_template.validator_updates;
@@ -129,14 +133,6 @@ impl ModuleManager {
             )?;
         }
         Ok(())
-    }
-
-    pub fn consume_mint(
-        &mut self,
-        ctx: &Context,
-        size: usize,
-    ) -> Result<Vec<MintOutput>> {
-        module_account::App::<BaseApp>::consume_mint(ctx, size)
     }
 }
 

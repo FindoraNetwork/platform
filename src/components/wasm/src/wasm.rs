@@ -35,7 +35,9 @@ use finutils::txn_builder::{
     TransferOperationBuilder as PlatformTransferOperationBuilder,
 };
 use fp_types::{
-    actions::account::{Action as AccountAction, MintOutput, TransferToUTXO},
+    actions::xhub::{
+        Action as XHubAction, NonConfidentialOutput, NonConfidentialTransfer,
+    },
     actions::Action,
     assemble::{CheckFee, CheckNonce, SignedExtra, UncheckedTransaction},
     crypto::{Address, MultiSignature, MultiSigner},
@@ -572,14 +574,17 @@ pub fn transfer_to_utxo_from_account(
     s.copy_from_slice(&seed);
     let kp = SecpPair::from_seed(&s);
 
-    let output = MintOutput {
+    let output = NonConfidentialOutput {
         target: recipient,
         amount,
         asset: ASSET_TYPE_FRA,
     };
-    let action = Action::Account(AccountAction::TransferToUTXO(TransferToUTXO {
-        outputs: vec![output],
-    }));
+    let action = Action::XHub(XHubAction::NonConfidentialTransfer(
+        NonConfidentialTransfer {
+            input_value: amount,
+            outputs: vec![output],
+        },
+    ));
 
     let extra = generate_extra(nonce.into(), None);
     let msg = serde_json::to_vec(&(action.clone(), extra.clone()))

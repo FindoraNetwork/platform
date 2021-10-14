@@ -36,6 +36,7 @@ module-account = { path = "../modules/account"}
 module-ethereum = { path = "../modules/ethereum"}
 module-evm = { path = "../modules/evm"}
 module-template = { path = "../modules/template"}
+module-xhub = { path = "../modules/xhub"}
 
 evm-precompile-basic = { path = "../modules/evm/precompile/basic" }
 evm-precompile-frc20 = { path = "../modules/evm/precompile/frc20" }
