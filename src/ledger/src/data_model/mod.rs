@@ -1564,6 +1564,8 @@ impl Transaction {
                     if x.body.code.val == ASSET_TYPE_FRA {
                         return true;
                     }
+                } else if matches!(ops, Operation::UpdateValidator(_)) {
+                    return true;
                 }
                 false
             })

@@ -50,6 +50,7 @@ fn main() {
 
 fn run() -> Result<()> {
     let subcmd_init = SubCommand::with_name("init")
+        .arg_from_usage("--mainnet")
         .arg_from_usage("-i, --interval=[Interval] 'block interval'")
         .arg_from_usage("-s, --skip-validator 'skip validator initialization'");
     let subcmd_issue = SubCommand::with_name("issue").about("issue FRA on demand");
@@ -91,14 +92,14 @@ fn run() -> Result<()> {
     if matches.is_present("version") {
         println!("{}", env!("VERGEN_SHA"));
     } else if let Some(m) = matches.subcommand_matches("init") {
-        let interval = m.value_of("interval");
+        let interval = m
+            .value_of("interval")
+            .unwrap_or("0")
+            .parse::<u64>()
+            .c(d!())?;
         let skip_validator = m.is_present("skip-validator");
-        if interval.is_none() {
-            init::init(0, skip_validator).c(d!())?;
-        } else {
-            let interval = interval.unwrap().parse::<u64>().c(d!())?;
-            init::init(interval, skip_validator).c(d!())?;
-        }
+        let is_mainnet = m.is_present("mainnet");
+        init::init(interval, skip_validator, is_mainnet).c(d!())?;
     } else if matches.is_present("issue") {
         issue::issue().c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("delegate") {
@@ -186,7 +187,19 @@ fn run() -> Result<()> {
 mod init {
     use super::*;
 
-    pub fn init(mut interval: u64, skip_validator: bool) -> Result<()> {
+    pub fn init(
+        mut interval: u64,
+        skip_validator: bool,
+        is_mainnet: bool,
+    ) -> Result<()> {
+        println!(">>> set initial validator set...");
+        common::set_initial_validators().c(d!())?;
+
+        alt!(is_mainnet, return Ok(()));
+
+        println!(">>> wait 5 blocks...");
+        sleep_n_block!(5, interval);
+
         let root_kp =
             wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC).c(d!())?;
 
@@ -205,12 +218,6 @@ mod init {
             println!(">>> DONE !");
             return Ok(());
         }
-
-        println!(">>> set initial validator set...");
-        common::utils::set_initial_validators(&root_kp).c(d!())?;
-
-        println!(">>> wait 5 blocks...");
-        sleep_n_block!(5, interval);
 
         let mut target_list = USER_LIST
             .values()

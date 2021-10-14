@@ -419,9 +419,7 @@ pub fn transfer_asset_batch(
 /// Mainly for official usage,
 /// and can be also used in test scenes.
 pub fn set_initial_validators() -> Result<()> {
-    get_keypair()
-        .c(d!())
-        .and_then(|kp| utils::set_initial_validators(&kp).c(d!()))
+    utils::set_initial_validators().c(d!())
 }
 
 fn get_serv_addr() -> Result<&'static str> {

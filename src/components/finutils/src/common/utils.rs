@@ -50,16 +50,13 @@ pub fn send_tx(tx: &Transaction) -> Result<()> {
         .map(|_| ())
 }
 
+/// Fee is needless in a `UpdateValidator` operation
 #[inline(always)]
-#[allow(missing_docs)]
-pub fn set_initial_validators(owner_kp: &XfrKeyPair) -> Result<()> {
+pub fn set_initial_validators() -> Result<()> {
     let mut builder = new_tx_builder().c(d!())?;
 
     let vs = get_inital_validators().c(d!())?;
-    let feeop = gen_fee_op(owner_kp).c(d!())?;
-
     builder.add_operation_update_validator(&[], 1, vs).c(d!())?;
-    builder.add_operation(feeop);
 
     send_tx(&builder.take_transaction()).c(d!())
 }
