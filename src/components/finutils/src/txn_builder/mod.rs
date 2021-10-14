@@ -49,7 +49,7 @@ use zei::{
         bar_to_from_abar::gen_bar_to_abar_body,
         gen_anon_xfr_body,
         keys::{AXfrKeyPair, AXfrPubKey},
-        structs::{AXfrNote, AnonBlindAssetRecord, OpenAnonBlindAssetRecord},
+        structs::{AXfrNote, OpenAnonBlindAssetRecord},
     },
     api::anon_creds::{
         ac_confidential_open_commitment, ACCommitment, ACCommitmentKey, ConfidentialAC,
@@ -70,6 +70,7 @@ use zei::{
         },
     },
 };
+use zeialgebra::jubjub::JubjubScalar;
 
 macro_rules! no_transfer_err {
     () => {
@@ -484,10 +485,10 @@ impl TransactionBuilder {
         txo_sid: TxoSID,
         input_record: &OpenAssetRecord,
         enc_key: &XPublicKey,
-    ) -> Result<(&mut Self, AnonBlindAssetRecord)> {
+    ) -> Result<(&mut Self, JubjubScalar)> {
         let mut prng = ChaChaRng::from_entropy();
         let user_params = UserParams::eq_committed_vals_params();
-        let body = gen_bar_to_abar_body(
+        let (body, r) = gen_bar_to_abar_body(
             &mut prng,
             &user_params,
             input_record,
@@ -498,10 +499,10 @@ impl TransactionBuilder {
 
         let bar_to_abar =
             BarToAbarOps::new(body, auth_key_pair, txo_sid, self.no_replay_token)?;
-        let abar = bar_to_abar.note.body.output.clone();
+
         let op = Operation::BarToAbar(Box::from(bar_to_abar));
         self.txn.add_operation(op);
-        Ok((self, abar))
+        Ok((self, r))
     }
 
     /// Add an operation to transfer assets held in Anonymous Blind Asset Record.

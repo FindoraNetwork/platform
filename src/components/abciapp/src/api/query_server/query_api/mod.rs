@@ -567,6 +567,10 @@ impl QueryApi {
                     web::get().to(query_owned_utxos),
                 )
                 .route(
+                    &ApiRoutes::OwnedAbars.with_arg_template("owner"),
+                    web::get().to(query_owned_abars),
+                )
+                .route(
                     &ApiRoutes::ValidatorList.route(),
                     web::get().to(query_validators),
                 )

@@ -821,13 +821,22 @@ fn test_update_anon_stores() {
         ],
     ];
     let new_pub_key = oabar.pub_key_ref().randomize(&oabar.get_key_rand_factor());
-    let tx_block = vec![FinalizedTransaction {
-        txn: Default::default(),
-        tx_id: Default::default(),
-        txo_ids: vec![],
-        atxo_ids: vec![],
-        merkle_id: 0,
-    }];
+    let tx_block = vec![
+        FinalizedTransaction {
+            txn: Default::default(),
+            tx_id: Default::default(),
+            txo_ids: vec![],
+            atxo_ids: vec![],
+            merkle_id: 0,
+        },
+        FinalizedTransaction {
+            txn: Default::default(),
+            tx_id: Default::default(),
+            txo_ids: vec![],
+            atxo_ids: vec![],
+            merkle_id: 0,
+        },
+    ];
     let res = state.update_anon_stores(nullifiers, output_abars, 0, tx_block);
     assert!(res.is_ok());
 
