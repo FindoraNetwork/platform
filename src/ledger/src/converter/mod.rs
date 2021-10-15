@@ -43,11 +43,10 @@ impl ConvertAccount {
 
 #[allow(missing_docs)]
 pub fn is_convert_account(tx: &Transaction) -> bool {
-    if let Some(Operation::ConvertAccount(_)) = tx.body.operations.first() {
-        true
-    } else {
-        false
-    }
+    matches!(
+        tx.body.operations.first(),
+        Some(Operation::ConvertAccount(_))
+    )
 }
 
 #[allow(missing_docs)]
