@@ -547,7 +547,8 @@ pub fn get_abar_memo(id: &ATxoSID) -> Result<Option<OwnerMemo>> {
 
 #[inline(always)]
 #[allow(missing_docs)]
-pub fn get_abar_proof(atxo_sid: u64) -> Result<MTLeafInfo> {
+pub fn get_abar_proof(atxo_sid: &ATxoSID) -> Result<Option<MTLeafInfo>> {
+    let atxo_sid = atxo_sid.0.to_string();
     let url = format!(
         "{}:8667/get_abar_proof/{}",
         get_serv_addr().c(d!())?,

@@ -735,7 +735,7 @@ pub fn gen_oabar_add_op(
     let axtxo_abar = utils::get_owned_abars(&diversified_from_pub_key).c(d!())?;
     //Only the first abar received from the ledger query is considered
     let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
-    let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?;
+    let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
 
     let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
         &axtxo_abar[0].1,
@@ -789,7 +789,7 @@ pub fn gen_oabar_add_op_x(
         let axtxo_abar = utils::get_owned_abars(&diversified_from_pub_key).c(d!())?;
         //Only the first abar received from the ledger query is considered
         let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
-        let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?;
+        let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
 
         let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
             &axtxo_abar[0].1,
@@ -838,8 +838,9 @@ pub fn gen_oabar_add_op_x(
 /// Get merkle proof - Generate MTLeafInfo from ATxoSID
 pub fn get_mtleaf_info(atxo_sid: &str) -> Result<MTLeafInfo> {
     let asid = atxo_sid.parse::<u64>().c(d!("error parsing ATxoSID"))?;
-    let mt_leaf_info =
-        utils::get_abar_proof(&ATxoSID(asid)).c(d!("error fetching abar proof"))?;
+    let mt_leaf_info = utils::get_abar_proof(&ATxoSID(asid))
+        .c(d!("error fetching abar proof"))?
+        .unwrap();
     Ok(mt_leaf_info)
 }
 /// Return the built version.
