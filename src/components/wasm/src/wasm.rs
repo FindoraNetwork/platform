@@ -495,12 +495,13 @@ impl TransactionBuilder {
         mut self,
         keypair: &XfrKeyPair,
         ethereum_address: String,
+        amount: u64,
     ) -> Result<TransactionBuilder, JsValue> {
         let ea = MultiSigner::from_str(&ethereum_address)
             .c(d!())
             .map_err(error_to_jsvalue)?;
         self.get_builder_mut()
-            .add_operation_convert_account(keypair, ea)
+            .add_operation_convert_account(keypair, ea, amount)
             .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
