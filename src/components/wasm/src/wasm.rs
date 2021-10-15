@@ -445,7 +445,8 @@ impl TransactionBuilder {
             JsValue::from_str(&format!("Could not open asset record: {}", e))
         })?;
 
-        self.get_builder_mut()
+        let (_, r) = self
+            .get_builder_mut()
             .add_operation_bar_to_abar(
                 auth_key_pair,
                 &abar_pubkey,
@@ -458,6 +459,7 @@ impl TransactionBuilder {
                 JsValue::from_str(&format!("Could not add operation: {}", e))
             })?;
 
+        println!("Randomizer: {}", wallet::randomizer_to_base64(&r));
         Ok(self)
     }
 

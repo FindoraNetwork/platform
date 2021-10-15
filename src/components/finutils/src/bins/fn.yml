@@ -449,6 +449,32 @@ subcommands:
             required: true
   - gen-eth-key:
       about: Generate an Ethereum address
+  - generate-anon-keys:
+      about: Generate Anon keys
+  - convert-bar-to-abar:
+      about: Convert a BAR to Anon BAR for yourself
+      args:
+        - from-seckey:
+            help: Xfr secret key file path of converter
+            short: s
+            long: xfr-secretkey
+            takes_value: true
+            value_name: SECRET KEY PATH
+            required: true
+        - anon-keys:
+            help: Anon keys file path of converter
+            short: a
+            long: anon-keys
+            takes_value: true
+            value_name: ANON KEYS PATH
+            required: true
+        - txo-sid:
+            help: Txo Sid of input to convert
+            short: t
+            long: txo-sid
+            takes_value: true
+            value_name: TXO SID
+            required: true
   - anon-transfer:
       about: Perform Anonymous Transfer
       args:

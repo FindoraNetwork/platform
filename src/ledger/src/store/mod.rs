@@ -41,12 +41,14 @@ use std::{
     mem,
     ops::{Deref, DerefMut},
 };
+use storage::store::ImmutablePrefixedStore;
 use storage::{
     db::RocksDB,
     state::{ChainState, State},
     store::PrefixedStore,
 };
 use zei::anon_xfr::keys::AXfrPubKey;
+use zei::anon_xfr::merkle_tree::ImmutablePersistentMerkleTree;
 use zei::anon_xfr::structs::MTLeafInfo;
 use zei::{
     anon_xfr::{
@@ -88,6 +90,8 @@ pub struct LedgerState {
     block_ctx: Option<BlockEffect>,
     // Merkle Tree with all the ABARs created till now
     abar_state: State<RocksDB>,
+    // Merkle Tree with all the ABARs created till now
+    abar_query_state: State<RocksDB>,
     // Sparse Merkle Tree to hold nullifier Set
     #[allow(dead_code)]
     nullifier_set: SmtMap256<RocksDB>,
@@ -491,11 +495,9 @@ impl LedgerState {
     #[inline(always)]
     /// Fetches the root hash of the committed merkle tree of abar commitments directly from committed
     /// state and ignore session cache
-    pub fn get_abar_root_hash(&mut self) -> Result<BLSScalar> {
-        let chain_state = self.abar_state.chain_state();
-        let mut rocks_state = State::new(chain_state, false);
-        let store = PrefixedStore::new("abar_store", &mut rocks_state);
-        let mt = PersistentMerkleTree::new(store)?;
+    pub fn get_abar_root_hash(&self) -> Result<BLSScalar> {
+        let store = ImmutablePrefixedStore::new("abar_store", &self.abar_query_state);
+        let mt = ImmutablePersistentMerkleTree::new(store)?;
 
         mt.get_current_root_hash().c(d!(
             "probably due to badly constructed tree or data corruption"
@@ -506,10 +508,8 @@ impl LedgerState {
     /// Generates a MTLeafInfo from the latest committed version of tree from committed state and
     /// ignore session cache
     pub fn get_abar_proof(&self, id: ATxoSID) -> Result<MTLeafInfo> {
-        let chain_state = self.abar_state.chain_state();
-        let mut rocks_state = State::new(chain_state, false);
-        let store = PrefixedStore::new("abar_store", &mut rocks_state);
-        let mt = PersistentMerkleTree::new(store)?;
+        let store = ImmutablePrefixedStore::new("abar_store", &self.abar_query_state);
+        let mt = ImmutablePersistentMerkleTree::new(store)?;
 
         mt.generate_proof(id.0)
     }
@@ -537,10 +537,10 @@ impl LedgerState {
 
     // Initialize a persistent merkle tree for ABAR store.
     #[inline(always)]
-    fn init_abar_state(path: &str) -> Result<State<RocksDB>> {
+    fn init_abar_state(path: &str) -> Result<(State<RocksDB>, State<RocksDB>)> {
         let fdb = RocksDB::open(path).c(d!("failed to open db"))?;
         let cs = Arc::new(RwLock::new(ChainState::new(fdb, "abar_db".to_string(), 0)));
-        Ok(State::new(cs, false))
+        Ok((State::new(cs.clone(), false), State::new(cs, false)))
     }
 
     // Initialize persistent Sparse Merkle tree for the Nullifier set
@@ -564,12 +564,19 @@ impl LedgerState {
         let abar_store_path = format!("{}/{}abar_store", basedir, &prefix);
         let nullifier_store_path = format!("{}/{}nullifier_store", basedir, &prefix);
 
-        // These iterms will be set under ${BNC_DATA_DIR}
+        // These items will be set under ${BNC_DATA_DIR}
         fs::create_dir_all(&basedir).c(d!())?;
         let snapshot_file = format!("{}ledger_status", &prefix);
         let snapshot_entries_dir = prefix.clone() + "ledger_status_subdata";
         let blocks_path = prefix.clone() + "blocks";
         let tx_to_block_location_path = prefix + "tx_to_block_location";
+
+        let (mut abar_state, abar_query_state) =
+            LedgerState::init_abar_state(&abar_store_path).c(d!())?;
+
+        // Initializing Merkle tree to set Empty tree root hash, which is a hash of null children
+        let store = PrefixedStore::new("abar_store", &mut abar_state);
+        let _ = PersistentMerkleTree::new(store)?;
 
         let ledger = LedgerState {
             status: LedgerStatus::new(&basedir, &snapshot_file, &snapshot_entries_dir)
@@ -581,7 +588,8 @@ impl LedgerState {
             tx_to_block_location: new_mapx!(&tx_to_block_location_path),
             utxo_map: LedgerState::init_utxo_map(&utxo_map_path).c(d!())?,
             block_ctx: Some(BlockEffect::default()),
-            abar_state: LedgerState::init_abar_state(&abar_store_path).c(d!())?,
+            abar_state,
+            abar_query_state,
             nullifier_set: LedgerState::init_nullifier_smt(&nullifier_store_path)
                 .c(d!())?,
         };

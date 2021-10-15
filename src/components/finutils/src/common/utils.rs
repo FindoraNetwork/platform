@@ -9,6 +9,7 @@ use crate::{
 };
 use crypto::basics::hybrid_encryption::XPublicKey;
 use globutils::{wallet, HashOf, SignatureOf};
+use ledger::data_model::ATxoSID;
 use ledger::{
     data_model::{
         AssetType, AssetTypeCode, DefineAsset, Operation, StateCommitmentData,
@@ -29,6 +30,7 @@ use zei::xfr::{
     sig::{XfrKeyPair, XfrPublicKey},
     structs::{AssetRecordTemplate, OwnerMemo},
 };
+use zeialgebra::jubjub::JubjubScalar;
 
 ///////////////////////////////////////
 // Part 1: utils for transfer assets //
@@ -461,6 +463,27 @@ fn get_owned_utxos(
         })
 }
 
+pub(crate) fn get_owned_abars(
+    addr: &AXfrPubKey,
+) -> Result<Vec<(ATxoSID, AnonBlindAssetRecord)>> {
+    let url = format!(
+        "{}:8668/owned_abars/{}",
+        get_serv_addr().c(d!())?,
+        wallet::anon_public_key_to_base64(addr)
+    );
+
+    attohttpc::get(&url)
+        .send()
+        .c(d!())?
+        .error_for_status()
+        .c(d!())?
+        .bytes()
+        .c(d!())
+        .and_then(|b| {
+            serde_json::from_slice::<Vec<(ATxoSID, AnonBlindAssetRecord)>>(&b).c(d!())
+        })
+}
+
 #[inline(always)]
 fn get_seq_id() -> Result<u64> {
     type Resp = (
@@ -495,6 +518,22 @@ pub fn get_owner_memo_batch(ids: &[TxoSID]) -> Result<Vec<Option<OwnerMemo>>> {
         get_serv_addr().c(d!())?,
         ids
     );
+
+    attohttpc::get(&url)
+        .send()
+        .c(d!())?
+        .error_for_status()
+        .c(d!())?
+        .bytes()
+        .c(d!())
+        .and_then(|b| serde_json::from_slice(&b).c(d!()))
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn get_abar_memo(id: &ATxoSID) -> Result<Option<OwnerMemo>> {
+    let id = id.0.to_string();
+    let url = format!("{}:8667/get_abar_memo/{}", get_serv_addr().c(d!())?, id);
 
     attohttpc::get(&url)
         .send()
@@ -563,9 +602,9 @@ pub fn generate_bar2abar_op(
     txo_sid: TxoSID,
     input_record: &OpenAssetRecord,
     enc_key: &XPublicKey,
-) -> Result<AnonBlindAssetRecord> {
+) -> Result<JubjubScalar> {
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
-    let (_, abar) = builder
+    let (_, r) = builder
         .add_operation_bar_to_abar(
             auth_key_pair,
             abar_pub_key,
@@ -578,7 +617,7 @@ pub fn generate_bar2abar_op(
     builder.add_operation(feeop);
 
     send_tx(&builder.take_transaction()).c(d!())?;
-    Ok(abar)
+    Ok(r)
 }
 
 #[inline(always)]
