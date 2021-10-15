@@ -621,12 +621,14 @@ impl TransactionBuilder {
         &mut self,
         kp: &XfrKeyPair,
         addr: MultiSigner,
+        amount: u64,
     ) -> Result<&mut Self> {
-        self.add_operation(Operation::ConvertAccount(ConvertAccount::new(
-            kp,
-            self.txn.body.no_replay_token,
-            addr,
-        )));
+        self.add_operation(Operation::ConvertAccount(ConvertAccount {
+            signer: kp.get_pk(),
+            nonce: self.txn.body.no_replay_token,
+            receiver: addr,
+            value: amount,
+        }));
         Ok(self)
     }
 

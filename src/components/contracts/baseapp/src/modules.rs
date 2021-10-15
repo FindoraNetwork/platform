@@ -14,8 +14,7 @@ use fp_types::{
     crypto::Address,
 };
 use ledger::{
-    converter::check_convert_tx,
-    data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA},
+    converter::check_convert_account, data_model::Transaction as FindoraTransaction,
 };
 use ruc::*;
 use serde::Serialize;
@@ -117,22 +116,10 @@ impl ModuleManager {
         ctx: &Context,
         tx: &FindoraTransaction,
     ) -> Result<()> {
-        let (owner, assets) = check_convert_tx(tx)?;
-        for (asset, amount) in assets.iter() {
-            ensure!(
-                *asset == ASSET_TYPE_FRA,
-                "Invalid asset type only support FRA"
-            );
-            let balance =
-                EthereumDecimalsMapping::from_native_token(U256::from(*amount))
-                    .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
-            module_account::App::<BaseApp>::mint(
-                ctx,
-                &Address::from(owner.clone()),
-                balance,
-            )?;
-        }
-        Ok(())
+        let (owner, amount) = check_convert_account(tx)?;
+        let balance = EthereumDecimalsMapping::from_native_token(U256::from(amount))
+            .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
+        module_account::App::<BaseApp>::mint(ctx, &Address::from(owner), balance)
     }
 }
 

@@ -22,7 +22,7 @@ use abci::{
 use fp_storage::hash::{Sha256, StorageHasher};
 use lazy_static::lazy_static;
 use ledger::{
-    converter::is_convert_tx,
+    converter::is_convert_account,
     staking::{is_coinbase_tx, KEEP_HIST},
 };
 use parking_lot::Mutex;
@@ -178,7 +178,7 @@ pub fn deliver_tx(
                     }
 
                     if s.la.write().cache_transaction(tx.clone()).is_ok() {
-                        if is_convert_tx(&tx)
+                        if is_convert_account(&tx)
                             && s.account_base_app
                                 .write()
                                 .deliver_findora_tx(&tx)
