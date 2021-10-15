@@ -192,21 +192,26 @@ mod init {
         skip_validator: bool,
         is_mainnet: bool,
     ) -> Result<()> {
+        // Customized interval(for devnet) or default(for mainnet)
         if 0 == interval {
             interval = BLOCK_INTERVAL;
         }
+        println!(">>> block interval: {} seconds", interval);
 
-        println!(">>> set initial validator set...");
-        common::set_initial_validators().c(d!())?;
-
-        alt!(is_mainnet, return Ok(()));
-
-        println!(">>> wait 5 blocks...");
-        sleep_n_block!(5, interval);
-
+        // The genesis key pair
         let root_kp =
             wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC).c(d!())?;
-        println!(">>> block interval: {} seconds", interval);
+
+        // Reset genesis validators
+        if !skip_validator {
+            println!(">>> set initial validator set...");
+            common::set_initial_validators().c(d!())?;
+
+            alt!(is_mainnet, return Ok(()));
+
+            println!(">>> wait 5 blocks...");
+            sleep_n_block!(5, interval);
+        }
 
         println!(">>> define and issue FRA...");
         common::utils::send_tx(&fra_gen_initial_tx(&root_kp)).c(d!())?;
@@ -219,6 +224,7 @@ mod init {
             return Ok(());
         }
 
+        // Genesis validators trigger self-staking
         let mut target_list = USER_LIST
             .values()
             .map(|u| &u.pubkey)
