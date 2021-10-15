@@ -85,8 +85,7 @@ pub fn check_convert_account(tx: &Transaction) -> Result<(MultiSigner, u64)> {
                     has_signer = t
                         .get_owner_addresses()
                         .iter()
-                        .find(|&&pk| pk == signer.unwrap())
-                        .is_some();
+                        .any(|&pk| pk == signer.unwrap());
                 }
 
                 for o in &t.body.outputs {

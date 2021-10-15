@@ -1,5 +1,5 @@
 use crate::storage::*;
-use crate::{App, Config, ContractLog, TransactionExecuted, PENDING_TRANSACTIONS};
+use crate::{App, Config, ContractLog, TransactionExecuted};
 use ethereum::{
     BlockV0 as Block, LegacyTransactionMessage, Receipt, TransactionV0 as Transaction,
 };
@@ -39,10 +39,16 @@ impl<C: Config> App<C> {
         let mut statuses: Vec<TransactionStatus> = Vec::new();
         let mut receipts: Vec<Receipt> = Vec::new();
         let mut logs_bloom = Bloom::default();
+        let mut is_store_block = true;
 
-        for (transaction, status, receipt) in
-            PENDING_TRANSACTIONS.lock().clone().into_iter()
-        {
+        let pending_txs: Vec<(Transaction, TransactionStatus, Receipt)> =
+            PendingTransactions::take(ctx.db.write().borrow_mut()).unwrap_or_default();
+
+        if pending_txs.is_empty() && self.disable_eth_empty_blocks {
+            is_store_block = false;
+        }
+
+        for (transaction, status, receipt) in pending_txs {
             Self::logs_bloom(receipt.logs.clone(), &mut logs_bloom);
             transactions.push(transaction);
             statuses.push(status);
@@ -88,16 +94,19 @@ impl<C: Config> App<C> {
 
         CurrentBlockNumber::put(ctx.db.write().borrow_mut(), &block_number)?;
         BlockHash::insert(ctx.db.write().borrow_mut(), &block_number, &block_hash)?;
-
-        PENDING_TRANSACTIONS.lock().clear();
-
-        CurrentBlock::insert(ctx.db.write().borrow_mut(), &block_hash, &block)?;
-        CurrentReceipts::insert(ctx.db.write().borrow_mut(), &block_hash, &receipts)?;
-        CurrentTransactionStatuses::insert(
-            ctx.db.write().borrow_mut(),
-            &block_hash,
-            &statuses,
-        )?;
+        if is_store_block {
+            CurrentBlock::insert(ctx.db.write().borrow_mut(), &block_hash, &block)?;
+            CurrentReceipts::insert(
+                ctx.db.write().borrow_mut(),
+                &block_hash,
+                &receipts,
+            )?;
+            CurrentTransactionStatuses::insert(
+                ctx.db.write().borrow_mut(),
+                &block_hash,
+                &statuses,
+            )?;
+        }
 
         debug!(target: "ethereum", "store new ethereum block: {}", block_number);
         Ok(())
@@ -114,7 +123,9 @@ impl<C: Config> App<C> {
         let transaction_hash =
             H256::from_slice(Keccak256::digest(&rlp::encode(&transaction)).as_slice());
 
-        let transaction_index = PENDING_TRANSACTIONS.lock().len() as u32;
+        let mut pending_txs: Vec<_> =
+            PendingTransactions::get(ctx.db.read().borrow()).unwrap_or_default();
+        let transaction_index = pending_txs.len() as u32;
 
         let gas_limit = transaction.gas_limit;
 
@@ -220,9 +231,8 @@ impl<C: Config> App<C> {
             logs: status.logs.clone(),
         };
 
-        PENDING_TRANSACTIONS
-            .lock()
-            .push((transaction, status, receipt));
+        pending_txs.push((transaction, status, receipt));
+        PendingTransactions::put(ctx.db.write().borrow_mut(), &pending_txs)?;
 
         TransactionIndex::insert(
             ctx.state.write().borrow_mut(),
