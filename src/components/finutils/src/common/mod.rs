@@ -12,11 +12,13 @@ use crate::api::DelegationInfo;
 use globutils::wallet;
 use lazy_static::lazy_static;
 use ledger::{
-    data_model::{AssetRules, AssetTypeCode, Transaction, BLACK_HOLE_PUBKEY_STAKING},
+    data_model::{
+        gen_random_keypair, AssetRules, AssetTypeCode, Transaction,
+        BLACK_HOLE_PUBKEY_STAKING,
+    },
     staking::{
-        check_delegation_amount, gen_random_keypair, td_addr_to_bytes,
-        td_pubkey_to_td_addr, td_pubkey_to_td_addr_bytes, PartialUnDelegation,
-        TendermintAddrRef,
+        check_delegation_amount, td_addr_to_bytes, td_pubkey_to_td_addr,
+        td_pubkey_to_td_addr_bytes, PartialUnDelegation, TendermintAddrRef,
     },
 };
 use ruc::*;

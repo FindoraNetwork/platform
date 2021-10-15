@@ -16,9 +16,15 @@ pub mod cosig;
 pub mod init;
 pub mod ops;
 
-use crate::data_model::{Operation, Transaction, TransferAsset, TxoRef, FRA_DECIMALS};
+use crate::{
+    data_model::{
+        ConsensusRng, Operation, Transaction, TransferAsset, TxoRef, FRA_DECIMALS,
+    },
+    SNAPSHOT_ENTRIES_DIR,
+};
 use cosig::CoSigRule;
 use cryptohash::sha256::{self, Digest};
+use fbnc::{new_mapx, Mapx};
 use globutils::wallet;
 use lazy_static::lazy_static;
 use ops::{
@@ -26,8 +32,6 @@ use ops::{
     mint_fra::{MintKind, MINT_AMOUNT_LIMIT},
 };
 use parking_lot::Mutex;
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use sha2::Digest as _;
@@ -210,6 +214,7 @@ pub struct Staking {
     pub(crate) cur_height: BlockHeight,
     // FRA CoinBase.
     coinbase: CoinBase,
+    cr: ConsensusRng,
 }
 
 impl Default for Staking {
@@ -226,6 +231,11 @@ impl Staking {
     }
 
     #[inline(always)]
+    fn gen_consensus_tmp_pubkey(cr: &mut ConsensusRng) -> XfrPublicKey {
+        XfrKeyPair::generate(cr).get_pk()
+    }
+
+    #[inline(always)]
     #[allow(missing_docs)]
     pub fn new() -> Self {
         Staking {
@@ -235,6 +245,7 @@ impl Staking {
             di: DelegationInfo::new(),
             cur_height: 0,
             coinbase: CoinBase::gen(),
+            cr: ConsensusRng::default(),
         }
     }
 
@@ -712,6 +723,7 @@ impl Staking {
                 .unwrap();
 
             // unwrap is safe here
+            let mut cr = self.cr;
             self.di
                 .addr_map
                 .get(addr)
@@ -723,11 +735,12 @@ impl Staking {
                         *pk,
                         PartialUnDelegation::new(
                             *am,
-                            gen_random_keypair().get_pk(),
+                            Self::gen_consensus_tmp_pubkey(&mut cr),
                             v.td_addr.clone(),
                         ),
                     ));
                 });
+            self.cr = cr;
 
             auto_ud_list.iter().for_each(|(addr, pu)| {
                 ruc::info_omit!(self.undelegate_partially(addr, pu));
@@ -1249,12 +1262,12 @@ impl Staking {
     ) -> Result<()> {
         let h = ops.hash().c(d!())?;
 
-        if self.coinbase.distribution_hist.contains(&h) {
+        if self.coinbase.distribution_hist.contains_key(&h) {
             return Err(eg!("already exists"));
         }
 
         // Update fra distribution history first.
-        self.coinbase.distribution_hist.insert(h);
+        self.coinbase.distribution_hist.insert(h, false);
 
         let mut v;
         for (k, am) in ops.data.alloc_table.into_iter() {
@@ -1959,7 +1972,7 @@ impl PartialUnDelegation {
 // All transactions sent from CoinBase must support idempotence.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 struct CoinBase {
-    distribution_hist: BTreeSet<Digest>,
+    distribution_hist: Mapx<Digest, bool>,
     distribution_plan: BTreeMap<XfrPublicKey, Amount>,
 
     // mint limit of CoinBase for rewards
@@ -1978,7 +1991,10 @@ impl Default for CoinBase {
 impl CoinBase {
     fn gen() -> Self {
         CoinBase {
-            distribution_hist: BTreeSet::new(),
+            distribution_hist: new_mapx!(&format!(
+                "{}/staking/coinbase/distribution_hist",
+                SNAPSHOT_ENTRIES_DIR.as_str()
+            )),
             distribution_plan: BTreeMap::new(),
             balance: ops::mint_fra::MINT_AMOUNT_LIMIT,
             principal_balance: 0,
@@ -2077,12 +2093,6 @@ pub fn is_coinbase_tx(tx: &Transaction) -> bool {
         .operations
         .iter()
         .any(|o| matches!(o, Operation::MintFra(_)))
-}
-
-#[inline(always)]
-#[allow(missing_docs)]
-pub fn gen_random_keypair() -> XfrKeyPair {
-    XfrKeyPair::generate(&mut ChaChaRng::from_entropy())
 }
 
 #[cfg(test)]

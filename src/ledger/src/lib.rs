@@ -13,3 +13,9 @@ pub mod staking;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod store;
+
+use ruc::*;
+const LSSED_VAR: &str = "LEDGER_STATE_SNAPSHOT_ENTRIES_DIR";
+lazy_static::lazy_static! {
+    static ref SNAPSHOT_ENTRIES_DIR: String = pnk!(std::env::var(LSSED_VAR));
+}
