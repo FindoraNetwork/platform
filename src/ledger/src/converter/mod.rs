@@ -111,6 +111,9 @@ pub fn check_convert_tx(
                     "TransferUTXOsToEVM error: nonce mismatch no_replay_token"
                 ));
             }
+
+            has_sig = has_sig || tx.check_has_signature(&ca.public).is_ok();
+
             owner = Some(ca.data.address.clone())
         }
         if let Operation::TransferAsset(t) = op {
@@ -127,9 +130,6 @@ pub fn check_convert_tx(
                         && ty == ASSET_TYPE_FRA
                     {
                         if let XfrAmount::NonConfidential(i_am) = o.record.amount {
-                            has_sig = has_sig
-                                || tx.check_has_signature(&o.record.public_key).is_ok();
-
                             if let Some(amount) = assets.get_mut(&ty) {
                                 *amount += i_am;
                             } else {
