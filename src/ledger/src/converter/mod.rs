@@ -130,7 +130,6 @@ pub fn check_convert_tx(
                         && ty == ASSET_TYPE_FRA
                     {
                         if let XfrAmount::NonConfidential(i_am) = o.record.amount {
-
                             if let Some(amount) = assets.get_mut(&ty) {
                                 *amount += i_am;
                             } else {
