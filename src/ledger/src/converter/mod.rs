@@ -99,6 +99,8 @@ pub fn check_convert_tx(
 
     let mut assets = HashMap::new();
 
+    let mut has_sig = false;
+
     for op in &tx.body.operations {
         if let Operation::ConvertAccount(ca) = op {
             if owner.is_some() {
@@ -125,6 +127,9 @@ pub fn check_convert_tx(
                         && ty == ASSET_TYPE_FRA
                     {
                         if let XfrAmount::NonConfidential(i_am) = o.record.amount {
+                            has_sig = has_sig
+                                || tx.check_has_signature(&o.record.public_key).is_ok();
+
                             if let Some(amount) = assets.get_mut(&ty) {
                                 *amount += i_am;
                             } else {
@@ -136,7 +141,7 @@ pub fn check_convert_tx(
             }
         }
     }
-    if owner.is_none() {
+    if owner.is_none() || !has_sig {
         return Err(eg!(
             "TransferUTXOsToEVM error: not found the evm target account"
         ));
