@@ -98,6 +98,18 @@ pub fn restore_keypair_from_mnemonic_default(phrase: &str) -> Result<XfrKeyPair>
         .c(d!())
 }
 
+/// Restore the XfrKeyPair from secret key,
+#[inline(always)]
+pub fn restore_keypair_from_seckey_base64(sec: &str) -> Result<XfrKeyPair> {
+    base64::decode_config(sec, base64::URL_SAFE)
+        .c(d!())
+        .and_then(|sec| {
+            XfrSecretKey::zei_from_bytes(&sec)
+                .c(d!())
+                .map(|sec| sec.into_keypair())
+        })
+}
+
 /// Restore the XfrKeyPair from a mnemonic with custom params,
 /// in bip44 form.
 #[inline(always)]

@@ -192,6 +192,10 @@ mod init {
         skip_validator: bool,
         is_mainnet: bool,
     ) -> Result<()> {
+        if 0 == interval {
+            interval = BLOCK_INTERVAL;
+        }
+
         println!(">>> set initial validator set...");
         common::set_initial_validators().c(d!())?;
 
@@ -202,10 +206,6 @@ mod init {
 
         let root_kp =
             wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC).c(d!())?;
-
-        if interval == 0 {
-            interval = BLOCK_INTERVAL;
-        }
         println!(">>> block interval: {} seconds", interval);
 
         println!(">>> define and issue FRA...");

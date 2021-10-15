@@ -436,8 +436,10 @@ pub fn get_keypair() -> Result<XfrKeyPair> {
         fs::read_to_string(m_path)
             .c(d!("can not read mnemonic from 'owner-mnemonic-path'"))
             .and_then(|m| {
-                wallet::restore_keypair_from_mnemonic_default(m.trim())
+                let k = m.trim();
+                wallet::restore_keypair_from_mnemonic_default(k)
                     .c(d!("invalid 'owner-mnemonic'"))
+                    .or_else(|e| wallet::restore_keypair_from_seckey_base64(k).c(d!(e)))
             })
     } else {
         Err(eg!("'owner-mnemonic-path' has not been set"))
