@@ -18,7 +18,7 @@ if [ -z "$Node" ] || ([ ! -z "$Node" ] && [ "$Node" = "$node" ]); then
         TD_NODE_SELF_ADDR=$SelfAddr \
         RUST_LOG=$ABCI_LOG_LEVEL \
         LEDGER_DIR=$DEVNET/$node/abci \
-        $BIN_CFG/bin/abcid $DEVNET/$node >> $DEVNET/$node/abcid.log 2>&1  &
+        $BIN/abcid $DEVNET/$node >> $DEVNET/$node/abcid.log 2>&1  &
 fi
 done
 
