@@ -1133,7 +1133,7 @@ fn filter_range_logs(
     Ok(())
 }
 
-fn filter_block_logs<'a>(
+pub fn filter_block_logs<'a>(
     ret: &'a mut Vec<Log>,
     filter: &'a Filter,
     block: EthereumBlock,
