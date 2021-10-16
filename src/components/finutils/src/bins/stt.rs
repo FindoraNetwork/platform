@@ -201,9 +201,6 @@ mod init {
 
         alt!(is_mainnet, return Ok(()));
 
-        println!(">>> wait 5 blocks...");
-        sleep_n_block!(5, interval);
-
         let root_kp =
             wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC).c(d!())?;
         println!(">>> block interval: {} seconds", interval);
