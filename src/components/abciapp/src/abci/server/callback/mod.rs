@@ -24,12 +24,11 @@ use std::{
     fs,
     ops::Deref,
     sync::{
-        atomic::{AtomicBool, AtomicI64, Ordering},
+        atomic::{AtomicI64, Ordering},
         Arc,
     },
 };
 
-static HAS_ACTUAL_TXS: AtomicBool = AtomicBool::new(false);
 pub(crate) static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
 
 lazy_static! {
@@ -90,7 +89,7 @@ pub fn begin_block(
 
     // cache the last block in query server
     // trigger this op in `BeginBlock` to make abci-commit safer
-    if HAS_ACTUAL_TXS.swap(false, Ordering::Relaxed) {
+    {
         let mut created = BLOCK_CREATED.0.lock();
         *created = true;
         BLOCK_CREATED.1.notify_one();
@@ -175,7 +174,6 @@ pub fn end_block(
 
     if !la.all_commited() && la.block_txn_count() != 0 {
         pnk!(la.end_block());
-        HAS_ACTUAL_TXS.swap(true, Ordering::Relaxed);
     }
 
     if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
