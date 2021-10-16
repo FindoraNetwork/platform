@@ -516,76 +516,13 @@ fn gen_valiator_list() -> BTreeMap<Name, Validator> {
 
     // locale env
     #[cfg(feature = "debug_env")]
-    const TD_ADDR_LIST: [&str; NUM] = [
-        "611C922247C3BE7EA13455B191B6EFD909F10196",
-        "5A006EA8455C6DB35B4B60B7218774B2E589482B",
-        "0F64C8259BFCD1A9F6E21958D0A60D9E370D9C13",
-        "A9534BB329FE980838EC0FEB7550AD66228D581B",
-        "7DEFDDA9E24A1C4320A9D45B8E7F14A40E479713",
-        "4C2582DC314575DE73AD1EAA06726E555786900E",
-        "82DEBD3B6C108095BDD3FE7352B9C538BDEFA621",
-        "EC046D54F2FA16AE7126343425C1E91A96ED18BD",
-        "325EC027285ABAA2A755286E1982E8F66633C05B",
-        "CF7D19D604FF5EFE7EC90583D5700D7FF1CF63BA",
-        "30E07994969FFE8007481914335521CE665BEEFE",
-        "59A3EC547FCFA2434F64A09F0B85A9BB6262F71B",
-        "88C045F586A338E90CE9A712FC4F13D04764E28F",
-        "91F40F5F761DF9A09D9CA7E6200D02551BBA31F1",
-        "57AF4341DE9A2A3725123718DEDBA5C7B9141E7D",
-        "908D050231F5D568DB11F379DC5B3E8A7C8A453D",
-        "D88C6FE77A7F3F84578D6D9AA2718BB034743902",
-        "55B8CF069F6F6C75935F8EB5FAC6B8C8138BC954",
-        "8424784D8505B2661F120831D18BE0021DD0CDA8",
-        "9F832EE81DB4FBDAA8D3541ECA6ECEE0E97C119B",
-    ];
+    const TD_ADDR_LIST: [&str; NUM] = include!("td_addr_list.const.debug_env");
 
     // online env
     #[cfg(not(feature = "debug_env"))]
-    const TD_ADDR_LIST: [&str; NUM] = [
-        "FD8C65634A9D8899FA14200177AF19D24F6E1C37",
-        "0856654F7CD4BB0D6CC4409EF4892136C9D24692",
-        "5C97EE9B91D90B332813078957E3A96B304791B4",
-        "000E33AB7471186F3B1DE9FC08BB9C480F453590",
-        "EA70EB6087E3D606730C4E9062CC24A5BD7D2B37",
-        "E5705FED0049EDA431D37B37947A136F22F8F054",
-        "9ED0D8D661C99A58F78F80816968E61AAE8DC649",
-        "9AB077E00C8B731AE1F82DEC5E45CB3D1E9BBB12",
-        "8CB713C8EA32223FCAC66B966FCFA9BAEE257946",
-        "EAC5792572EB726AA0DBA9A7AFA9757F8063C6C9",
-        "A50D65F2F63F65D845A7C5CBB989FF94D6688F38",
-        "A8DFD116BA9664F38958C721688FA73E6320755B",
-        "A07875BBD4E062BAB2C162E180237FC3B30C4ABC",
-        "39F0C5E451394FAAE7213FD914EFBA8F963CCB90",
-        "EE2F73BAA1605C998BB106E5A38DBD79B5209F1D",
-        "09EF1DB6B67D1CBF7EBA6BD9B204611848993DF7",
-        "AD2C69A9432E8F6634E1ADC3D6CA69EA9E1F4114",
-        "510082967DFA7DEBA11267B26A6318D07A457B48",
-        "60689516C566F27E03794329C431D0084299480A",
-        "5C71532CEEFC43EE3857905AB94FDA505BFC06F3",
-    ];
+    const TD_ADDR_LIST: [&str; NUM] = include!("td_addr_list.const");
 
-    const MNEMONIC_LIST: [&str; NUM] = [
-        "noodle master spare innocent interest waste cram shaft cluster save middle only satoshi huge distance caught case oil rapid muscle tuition normal leader climb",
-        "cram case solid tooth adult melody nasty minute glance start pencil travel possible roof unknown lottery race candy jungle weather version speak when gadget",
-        "mean wrestle adapt ranch shiver bread napkin spice heavy select design office label material umbrella pause slogan twelve dinner original survey just unveil attend",
-        "okay tonight tenant van credit noble baby arrest make say render layer damage elegant spray human truth dog cactus cruel energy reflect net bread",
-        "entire vapor brand idea march legal mother fun process elegant segment hamster brother excess never public matrix senior three token pink century area obey",
-        "pony celery approve woman shrimp matrix maximum trophy chicken start share naive secret ill slot obey solve kangaroo junior decide tail lamp coffee ethics",
-        "note fiction island quote shoulder weapon tide rather whale execute deputy fox enter host crane broom mechanic dial embody fiction win spike isolate horse",
-        "hat suit hockey flight bamboo always organ hungry chase garment raise inmate diet anxiety daughter diagram zone whip fiscal include globe cherry reveal such",
-        "prevent bleak flush pizza web jump afford grid always dirt clump office drift alarm naive stone empty six aspect engage fashion hobby equal denial",
-        "tube voyage assume load aware toilet broccoli genius puzzle angle wear describe clerk enroll hope cash creek million trial cup grain push romance little",
-        "violin patch moral envelope decrease account moon mammal swear noble grit water course decade guide smoke egg delay glove ring mushroom absent trash globe",
-        "cream rhythm present stumble trust impact evoke oil famous gloom release oven sphere atom pair sausage knee mom gallery deputy usage traffic guitar pulp",
-        "issue choice enemy color load push banner bone ridge drastic vendor electric rely amount vibrant write ready slice exercise similar daughter hundred diamond just",
-        "turtle thrive weird attitude cat okay super deposit tackle nest primary sock fruit ready erase motion uncle celery promote warrior sense window cheese valley",
-        "rhythm short deer inquiry noble paper way canvas foam dynamic never bulk write laptop silk enjoy stay icon carbon obtain divide life stomach random",
-        "boring flag lunch banner turtle attitude license empower witness kiwi ethics fade seek before tiger theme summer toy crush adapt stomach stove audit erosion",
-        "carbon deny rabbit purse stage bench leave say city video disagree between wrong need credit option ripple random nose brisk tell pave leg recycle",
-        "today doll gym surprise valve you effort abstract jacket account extend duck video eagle obtain rigid invite expand embody arch arrow monster clarify wrestle",
-        "essay turkey planet sleep edit joy fence aim dice midnight wait clump staff adult east excuse garlic company myth clarify journey bundle quiz hope",
-        "decade drift input differ sleep alley risk mutual direct diagram double soon garment subject track labor bubble sweet state laugh festival ridge produce float",
-    ];
+    const MNEMONIC_LIST: [&str; NUM] = include!("mnemonic_list.const");
 
     (0..NUM)
         .map(|i| {

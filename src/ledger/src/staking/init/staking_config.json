@@ -2,7 +2,7 @@
   "height": null,
   "valiators": [
     {
-      "id": "HwBCi7ZtAxHPKMTjN7dLL0NC8i2OwfjZRbAkAJemzuc=",
+      "id": "i3LogT6L1r5swm0EO1fPiPk_xll9XBXNLNoGIjBUiA0=",
       "td_addr": "FD8C65634A9D8899FA14200177AF19D24F6E1C37",
       "td_pubkey": "B5tUqZvHVAJw4xu5x5yFBm6uO9L28ZiqQ9SYNeTsx4A=",
       "td_power": null,
@@ -11,7 +11,7 @@
       "kind": null
     },
     {
-      "id": "Xn2OZKJ5VYjP0C_yjiSkZ0KDZppSV4_XgNNW75ztxxA=",
+      "id": "aMQNXjDiLUhvUrL-KbnhHU5FZh_m82d71E-qs8e7M5U=",
       "td_addr": "0856654F7CD4BB0D6CC4409EF4892136C9D24692",
       "td_pubkey": "NkiURaWrhY6Ao2qgBX+ZbZIw2cqctUw5fevNnhqYrNQ=",
       "td_power": null,
@@ -20,7 +20,7 @@
       "kind": null
     },
     {
-      "id": "2cgiZh0ZGthHKUsPKz8VfQV2utdg-0W8cr75S-28874=",
+      "id": "9Mm0XHgY3ajSPoB1veeU6681BtWxKXHzO6FdwG-s2Vw=",
       "td_addr": "5C97EE9B91D90B332813078957E3A96B304791B4",
       "td_pubkey": "elrzoQ3aKkH+023XYDK2VAuzUBkHjcDhbzrfmZOX4M4=",
       "td_power": null,
@@ -29,7 +29,7 @@
       "kind": null
     },
     {
-      "id": "BMFTwJSo5jMYeWWAQv6rA9gYKUcMO0ZqOclWN1qZSkI=",
+      "id": "9H_64Cmq2_gHytk-DDcPBirKLxjHwF0nIpIz7QaYtDA=",
       "td_addr": "000E33AB7471186F3B1DE9FC08BB9C480F453590",
       "td_pubkey": "H6wmuTEul46sCvwDUXCtYRxtW6xiVAwwa9pezrP2o80=",
       "td_power": null,
@@ -38,7 +38,7 @@
       "kind": null
     },
     {
-      "id": "ZeUSLUT9O4pskfgfA5MlBcccEzI0hl8tdxczCrEk_LE=",
+      "id": "LEdt1xO0n9mEnOcKd0heLI5o83ovGE6hW7iuVZjVlzo=",
       "td_addr": "EA70EB6087E3D606730C4E9062CC24A5BD7D2B37",
       "td_pubkey": "I9GrRvKlzS48VyxpDJr+O3574ibsFjIZpQzU7t74b8o=",
       "td_power": null,
@@ -47,7 +47,7 @@
       "kind": null
     },
     {
-      "id": "bB22PdHg5YCIaI0AA0XqN-guciGKgplw2g7uV-Ijewk=",
+      "id": "hZRm5E2hkfg7gYN6rtPebrVty_iQ_MNXwZCzLRRUCgk=",
       "td_addr": "E5705FED0049EDA431D37B37947A136F22F8F054",
       "td_pubkey": "+1dMQrGaVrjWLRbTxFRtoBLH2s+NYWvjiLL0jlNHi/w=",
       "td_power": null,
@@ -56,7 +56,7 @@
       "kind": null
     },
     {
-      "id": "-1p4_Xpf0EXnO709_vyEHx7a9CVaZ9a1wqUVbk6FD20=",
+      "id": "pf6JdfF6Lt3_IaRyEXlyPrbujQHnQNCprb15g9eG4xM=",
       "td_addr": "9ED0D8D661C99A58F78F80816968E61AAE8DC649",
       "td_pubkey": "6LGsL/tD5LLZW4tXQYVqJRIg6Vz8r1OOCrrG6p53RIo=",
       "td_power": null,
@@ -65,7 +65,7 @@
       "kind": null
     },
     {
-      "id": "Zlk2_Hvf38ju7bh7PVOifAyAbw0SL06Jk8GIgGaMqaQ=",
+      "id": "njReVn079rYRPwTjEyS7LNOfkrLi5vl4cVNn3b4W5EI=",
       "td_addr": "9AB077E00C8B731AE1F82DEC5E45CB3D1E9BBB12",
       "td_pubkey": "p1W9CxtMCH1RcH83zOWHENRWjJlPDdURAlPozM2Arw0=",
       "td_power": null,
@@ -74,7 +74,7 @@
       "kind": null
     },
     {
-      "id": "btIj6fY7rm1n1QPjeqCisJ1uz6r4gIVvK283ICDuaqw=",
+      "id": "KABYwpVc87K7ZpsorS3FjiXqxZC6wQLvtmIHYmCYHkM=",
       "td_addr": "8CB713C8EA32223FCAC66B966FCFA9BAEE257946",
       "td_pubkey": "BCCnRcAWYfM8wQ8NXc5PPlxho2a9jSXAeT0sVnMmkjg=",
       "td_power": null,
@@ -83,7 +83,7 @@
       "kind": null
     },
     {
-      "id": "qG0av9GyZN3eSBv0bUkDaMIN8MDnsuqSrWiJjiaYd8E=",
+      "id": "PeylpZ1Fj1ar-cc65HJKkpclcr_1O3IVF03GmykT26c=",
       "td_addr": "EAC5792572EB726AA0DBA9A7AFA9757F8063C6C9",
       "td_pubkey": "H25b+bRch0oH6sdRyr72gmP/+NpHV7yaZEk3QtDhSUA=",
       "td_power": null,
@@ -92,7 +92,7 @@
       "kind": null
     },
     {
-      "id": "O1UPDaXULaFsSO258ib_HtrAZtfnxPUVafP0hCeJZec=",
+      "id": "sgJfvO8N024crLp9R9zFJN6yzLk56HjXiW2c46PNlN8=",
       "td_addr": "A50D65F2F63F65D845A7C5CBB989FF94D6688F38",
       "td_pubkey": "hgFW7c97SrmmTu5Neq8iaGKOIETJQ+2Yy43OAScRasM=",
       "td_power": null,
@@ -101,7 +101,7 @@
       "kind": null
     },
     {
-      "id": "zfNIUherNfYlIt2X5HxNHBZVboCGiux4qmbDWVYBu8I=",
+      "id": "n_AeXqjCdCay3Pl1JwqWSYRs4D42kbaFfRGJZD5vcgs=",
       "td_addr": "A8DFD116BA9664F38958C721688FA73E6320755B",
       "td_pubkey": "TrKAw22tqstm8mLSihU8Zcaq+ujAM+SeAQldCeyNfeA=",
       "td_power": null,
@@ -110,7 +110,7 @@
       "kind": null
     },
     {
-      "id": "kqga842N1uOqKRgsRDxcjz2vDc-i9zdzMULpzj1eF5Y=",
+      "id": "0TBxNxCoGkQkklqRQvBqpi2jfoEnMi8q7HPxOEV11Ig=",
       "td_addr": "A07875BBD4E062BAB2C162E180237FC3B30C4ABC",
       "td_pubkey": "tTLSfzxCspD7o2xOg8FpU8LP0Z4/8g0hYfkcrHyB054=",
       "td_power": null,
@@ -119,7 +119,7 @@
       "kind": null
     },
     {
-      "id": "aDgVASaQO4gfPO9iG7AD2W4IpIuNevxWKjitwVoP014=",
+      "id": "wWLcguc7jppMjwNRFl-YX6rOwYDJ7iMwuxPAffrsseg=",
       "td_addr": "39F0C5E451394FAAE7213FD914EFBA8F963CCB90",
       "td_pubkey": "WA6+6DX7ezKEjShNsZzvBBL5uhqubMDt7D54PSbJURQ=",
       "td_power": null,
@@ -128,7 +128,7 @@
       "kind": null
     },
     {
-      "id": "nr6_QJtneN37LkHt2SBR53lhk0hAtdvWfxLpONGZiUU=",
+      "id": "Y4luauDaFKCsH7juw1h3l8788TKaRafWjBzLFWKeTcU=",
       "td_addr": "EE2F73BAA1605C998BB106E5A38DBD79B5209F1D",
       "td_pubkey": "ZQH2pfH00RuClYUU5J4pnb+zCUK0iplcYmewZ9H9QU8=",
       "td_power": null,
@@ -137,7 +137,7 @@
       "kind": null
     },
     {
-      "id": "HOxCO9hMTWP_g4t1T-M4QEvppX5mMULlC_Ih-PS8Oa0=",
+      "id": "_MFu8i2uzXJOBdMzjHq0gyY6KhHHGDafqPbhOIjpd50=",
       "td_addr": "09EF1DB6B67D1CBF7EBA6BD9B204611848993DF7",
       "td_pubkey": "vuV4K1sAS0F255kc7FgZxK6/rmP/nMJQ3qYC3zqMOC8=",
       "td_power": null,
@@ -146,7 +146,7 @@
       "kind": null
     },
     {
-      "id": "M9-mKBUjvaH7ivwz8YDpqkkQE0XcpgVJk-CDywc5Vec=",
+      "id": "Q6y6KwBf0t5SP-zjH_fpKL-7L7M8vcbzWhuK04YG_2Y=",
       "td_addr": "AD2C69A9432E8F6634E1ADC3D6CA69EA9E1F4114",
       "td_pubkey": "UAvGQOeMsEQNR89cDK7fGELhCvMLdC8bo1BG/77qwd8=",
       "td_power": null,
@@ -155,7 +155,7 @@
       "kind": null
     },
     {
-      "id": "rQBy3O4CGIPjhf095_0IdqL2zpasOAI8RETxZB8sqnU=",
+      "id": "L-qK-AbOlQqI_2NSg3EaZYMZVwfGODoJRs7zp6EUWI4=",
       "td_addr": "510082967DFA7DEBA11267B26A6318D07A457B48",
       "td_pubkey": "h/DkJo3TsoxZR9yINi3I0AOTZAYOF1gTJw9iQwcp0qA=",
       "td_power": null,
@@ -164,7 +164,7 @@
       "kind": null
     },
     {
-      "id": "6jBuDXIpnSJ5I_mt3bwcoEcHfY7a_ycBX9g8PzkLLmw=",
+      "id": "x-Ez8mv4s11BGh05GQtPQuTahHrhJDcib3f8Fmdur74=",
       "td_addr": "60689516C566F27E03794329C431D0084299480A",
       "td_pubkey": "k/jv9U6MiMNUjh9ZigHiQSLgereJhxFdgrTHEmxmnes=",
       "td_power": null,
@@ -173,7 +173,7 @@
       "kind": null
     },
     {
-      "id": "WqDervwPofkTmnJ8i2M58fcRAoVhqq85cfS4YY6g-Mk=",
+      "id": "Emwj5AIm53biTAIsk7l0_12j2ePcd_tfri-Vt0hq6_E=",
       "td_addr": "5C71532CEEFC43EE3857905AB94FDA505BFC06F3",
       "td_pubkey": "8bQ1CgoaWCzpemN3oZGAsf+lmdmuysNozMyAvpE2lBY=",
       "td_power": null,
