@@ -27,6 +27,7 @@ members = [
     "src/components/contracts/primitives/wasm",
     "src/components/contracts/rpc",
     "src/components/wasm",
+    "src/components/wallet_mobile",
     "src/components/bugchecker",
     "src/libs/bitmap",
     "src/libs/merkle_tree",
