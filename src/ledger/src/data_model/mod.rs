@@ -1764,3 +1764,29 @@ impl StateCommitmentData {
         HashOf::new(&Some(self).cloned())
     }
 }
+
+/// Used in `Staking` logic to create consensus-tmp XfrPublicKey
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq, Default)]
+pub struct ConsensusRng(u32);
+
+impl CryptoRng for ConsensusRng {}
+
+impl RngCore for ConsensusRng {
+    fn next_u32(&mut self) -> u32 {
+        self.0 = self.0.overflowing_add(1).0;
+        self.0
+    }
+    fn next_u64(&mut self) -> u64 {
+        self.next_u32() as u64
+    }
+    fn fill_bytes(&mut self, _dest: &mut [u8]) {}
+    fn try_fill_bytes(&mut self, _dest: &mut [u8]) -> StdResult<(), rand_core::Error> {
+        Ok(())
+    }
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn gen_random_keypair() -> XfrKeyPair {
+    XfrKeyPair::generate(&mut ChaChaRng::from_entropy())
+}

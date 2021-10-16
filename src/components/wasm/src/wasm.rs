@@ -36,12 +36,13 @@ use finutils::txn_builder::{
 use globutils::{wallet, HashOf};
 use ledger::{
     data_model::{
-        AssetTypeCode, AuthenticatedTransaction, Operation, TransferType, TxOutput,
-        ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
+        gen_random_keypair, AssetTypeCode, AuthenticatedTransaction, Operation,
+        TransferType, TxOutput, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
+        BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
     },
     staking::{
-        gen_random_keypair, td_addr_to_bytes, PartialUnDelegation, TendermintAddr,
-        MAX_DELEGATION_AMOUNT, MIN_DELEGATION_AMOUNT,
+        td_addr_to_bytes, PartialUnDelegation, TendermintAddr, MAX_DELEGATION_AMOUNT,
+        MIN_DELEGATION_AMOUNT,
     },
 };
 use rand_chacha::ChaChaRng;

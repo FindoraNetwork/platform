@@ -14,10 +14,10 @@ use finutils::common;
 use globutils::wallet;
 use lazy_static::lazy_static;
 use ledger::{
-    data_model::{Transaction, BLACK_HOLE_PUBKEY_STAKING},
+    data_model::{gen_random_keypair, Transaction, BLACK_HOLE_PUBKEY_STAKING},
     staking::{
-        check_delegation_amount, gen_random_keypair, td_addr_to_bytes, BLOCK_INTERVAL,
-        FRA, FRA_PRE_ISSUE_AMOUNT,
+        check_delegation_amount, td_addr_to_bytes, BLOCK_INTERVAL, FRA,
+        FRA_PRE_ISSUE_AMOUNT,
     },
     store::utils::fra_gen_initial_tx,
 };

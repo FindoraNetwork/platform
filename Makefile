@@ -99,7 +99,7 @@ coverage:
 		&& cargo tarpaulin --timeout=900 --branch --workspace --release --features="abci_mock"
 
 staking_cfg:
-	cargo run --bin staking_cfg_generator
+	bash tools/update_staking_cfg.sh
 
 bench:
 	cargo bench --workspace
@@ -145,6 +145,9 @@ start_debug_env:
 
 stop_debug_env:
 	bash ./tools/devnet/stopnodes.sh
+
+join_debug_env: stop_debug_env build_release_goleveldb
+	bash tools/node_init.sh debug_env
 
 join_qa01: stop_debug_env build_release_goleveldb
 	bash tools/node_init.sh qa01

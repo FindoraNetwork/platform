@@ -22,6 +22,7 @@ use crate::{
         Amount, Power, Staking, TendermintAddrRef, FF_PK_LIST, FRA_TOTAL_AMOUNT,
         KEEP_HIST,
     },
+    LSSED_VAR, SNAPSHOT_ENTRIES_DIR,
 };
 use api_cache::ApiCache;
 use bitmap::{BitMap, SparseMap};
@@ -37,6 +38,7 @@ use serde::{Deserialize, Serialize};
 use sliding_set::SlidingSet;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    env,
     fs::{self, File, OpenOptions},
     io::{BufRead, BufReader, ErrorKind},
     mem,
@@ -543,13 +545,15 @@ impl LedgerState {
         // These iterms will be set under ${BNC_DATA_DIR}
         fs::create_dir_all(&basedir).c(d!())?;
         let snapshot_file = format!("{}ledger_status", &prefix);
+
         let snapshot_entries_dir = prefix.clone() + "ledger_status_subdata";
+        env::set_var(LSSED_VAR, &snapshot_entries_dir);
+
         let blocks_path = prefix.clone() + "blocks";
         let tx_to_block_location_path = prefix.clone() + "tx_to_block_location";
 
         let ledger = LedgerState {
-            status: LedgerStatus::new(&basedir, &snapshot_file, &snapshot_entries_dir)
-                .c(d!())?,
+            status: LedgerStatus::new(&basedir, &snapshot_file).c(d!())?,
             block_merkle: Arc::new(RwLock::new(
                 LedgerState::init_merkle_log(&block_merkle_path).c(d!())?,
             )),
@@ -1135,11 +1139,7 @@ impl LedgerStatus {
 
     /// Load or init LedgerStatus from snapshot
     #[inline(always)]
-    pub fn new(
-        basedir: &str,
-        snapshot_file: &str,
-        snapshot_entries_dir: &str,
-    ) -> Result<LedgerStatus> {
+    pub fn new(basedir: &str, snapshot_file: &str) -> Result<LedgerStatus> {
         let path = format!("{}/{}", basedir, snapshot_file);
         match fs::read_to_string(path) {
             Ok(s) => serde_json::from_str(&s).c(d!()),
@@ -1147,26 +1147,26 @@ impl LedgerStatus {
                 if ErrorKind::NotFound != e.kind() {
                     Err(eg!(e))
                 } else {
-                    Self::create(snapshot_file, snapshot_entries_dir).c(d!())
+                    Self::create(snapshot_file).c(d!())
                 }
             }
         }
     }
 
-    fn create(snapshot_file: &str, snapshot_entries_dir: &str) -> Result<LedgerStatus> {
-        let utxos_path = snapshot_entries_dir.to_owned() + "/utxo";
+    fn create(snapshot_file: &str) -> Result<LedgerStatus> {
+        let utxos_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/utxo";
         let nonconfidential_balances_path =
-            snapshot_entries_dir.to_owned() + "/nonconfidential_balances";
-        let spent_utxos_path = snapshot_entries_dir.to_owned() + "/spent_utxos";
+            SNAPSHOT_ENTRIES_DIR.to_owned() + "/nonconfidential_balances";
+        let spent_utxos_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/spent_utxos";
         let txo_to_txn_location_path =
-            snapshot_entries_dir.to_owned() + "/txo_to_txn_location";
+            SNAPSHOT_ENTRIES_DIR.to_owned() + "/txo_to_txn_location";
         let issuance_amounts_path =
-            snapshot_entries_dir.to_owned() + "/issuance_amounts";
+            SNAPSHOT_ENTRIES_DIR.to_owned() + "/issuance_amounts";
         let state_commitment_versions_path =
-            snapshot_entries_dir.to_owned() + "/state_commitment_versions";
-        let asset_types_path = snapshot_entries_dir.to_owned() + "/asset_types";
-        let issuance_num_path = snapshot_entries_dir.to_owned() + "/issuance_num";
-        let owned_utxos_path = snapshot_entries_dir.to_owned() + "/owned_utxos";
+            SNAPSHOT_ENTRIES_DIR.to_owned() + "/state_commitment_versions";
+        let asset_types_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/asset_types";
+        let issuance_num_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/issuance_num";
+        let owned_utxos_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/owned_utxos";
 
         let ledger = LedgerStatus {
             snapshot_file: snapshot_file.to_owned(),
