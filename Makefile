@@ -99,7 +99,7 @@ coverage:
 		&& cargo tarpaulin --timeout=900 --branch --workspace --release --features="abci_mock"
 
 staking_cfg:
-	cargo run --bin staking_cfg_generator
+	bash tools/update_staking_cfg.sh
 
 bench:
 	cargo bench --workspace
