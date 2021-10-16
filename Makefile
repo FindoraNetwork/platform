@@ -146,6 +146,9 @@ start_debug_env:
 stop_debug_env:
 	bash ./tools/devnet/stopnodes.sh
 
+join_debug_env: stop_debug_env build_release_goleveldb
+	bash tools/node_init.sh debug_env
+
 join_qa01: stop_debug_env build_release_goleveldb
 	bash tools/node_init.sh qa01
 
