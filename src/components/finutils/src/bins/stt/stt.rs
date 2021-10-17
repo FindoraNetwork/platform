@@ -9,6 +9,8 @@
 
 #![deny(warnings)]
 
+mod init;
+
 use clap::{crate_authors, App, SubCommand};
 use finutils::common;
 use globutils::wallet;
@@ -38,6 +40,7 @@ const ROOT_MNEMONIC: &str = "zoo nerve assault talk depend approve mercy surge b
 type Name = String;
 type NameRef<'a> = &'a str;
 
+#[macro_export(crate)]
 macro_rules! sleep_n_block {
     ($n_block: expr, $intvl: expr) => {
         sleep_ms!($n_block * $intvl * 1000);
@@ -182,75 +185,6 @@ fn run() -> Result<()> {
     }
 
     Ok(())
-}
-
-mod init {
-    use super::*;
-
-    pub fn init(
-        mut interval: u64,
-        skip_validator: bool,
-        is_mainnet: bool,
-    ) -> Result<()> {
-        if 0 == interval {
-            interval = BLOCK_INTERVAL;
-        }
-
-        println!(">>> set initial validator set...");
-        common::set_initial_validators().c(d!())?;
-
-        alt!(is_mainnet, return Ok(()));
-
-        let root_kp =
-            wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC).c(d!())?;
-        println!(">>> block interval: {} seconds", interval);
-
-        println!(">>> define and issue FRA...");
-        common::utils::send_tx(&fra_gen_initial_tx(&root_kp)).c(d!())?;
-
-        println!(">>> wait 2 block...");
-        sleep_n_block!(2, interval);
-
-        if skip_validator {
-            println!(">>> DONE !");
-            return Ok(());
-        }
-
-        let mut target_list = USER_LIST
-            .values()
-            .map(|u| &u.pubkey)
-            .chain(VALIDATOR_LIST.values().map(|v| &v.pubkey))
-            .map(|pk| (pk, FRA_PRE_ISSUE_AMOUNT / 2_0000))
-            .collect::<Vec<_>>();
-
-        // Wallet Address: fra18xkez3fum44jq0zhvwq380rfme7u624cccn3z56fjeex6uuhpq6qv9e4g5
-        // Mnemonic: field ranch pencil chest effort coyote april move injury illegal forest amount bid sound mixture use second pet embrace twice total essay valve loan
-        // Key: {
-        //   "pub_key": "Oa2RRTzdayA8V2OBE7xp3n3NKrjGJxFTSZZybXOXCDQ=",
-        //   "sec_key": "Ew9fMaryTL44ZXnEhcF7hQ-AB-fxgaC8vyCH-hCGtzg="
-        // }
-        let bank = pnk!(wallet::public_key_from_base64(
-            "Oa2RRTzdayA8V2OBE7xp3n3NKrjGJxFTSZZybXOXCDQ="
-        ));
-        target_list.push((&bank, FRA_PRE_ISSUE_AMOUNT / 100 * 99));
-
-        println!(">>> transfer FRAs to validators...");
-        common::utils::transfer_batch(&root_kp, target_list, None, false, false)
-            .c(d!())?;
-
-        println!(">>> wait 6 blocks ...");
-        sleep_n_block!(6, interval);
-
-        println!(">>> propose self-delegations...");
-        for v in VALIDATOR_LIST.values() {
-            delegate::gen_tx(&v.name, FRA, &v.name)
-                .c(d!())
-                .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
-        }
-
-        println!(">>> DONE !");
-        Ok(())
-    }
 }
 
 mod issue {

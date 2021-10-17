@@ -42,7 +42,7 @@ path = "src/bins/fn.rs"
 
 [[bin]]
 name = "stt"
-path = "src/bins/stt.rs"
+path = "src/bins/stt/stt.rs"
 
 [[bin]]
 name = "key_generator"

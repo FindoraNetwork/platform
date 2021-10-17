@@ -19,17 +19,17 @@ cargo run --bin staking_cfg_generator
 
 cd ../src/ledger/src/staking/init || exit 1
 
-ml_path="${EXEC_PATH}/../src/components/finutils/src/bins/mnemonic_list.const"
+ml_path="${EXEC_PATH}/../src/components/finutils/src/bins/stt/mnemonic_list.const"
 echo "[" > $ml_path || exit 1
-grep -Ev '=|\[|\]' staking_config.json.keys >> $ml_path
+grep -Ev '=|\[|\]|}|{' staking_config.json.keys >> $ml_path
 echo "]" >> $ml_path
 
-tal_path="${EXEC_PATH}/../src/components/finutils/src/bins/td_addr_list.const"
+tal_path="${EXEC_PATH}/../src/components/finutils/src/bins/stt/td_addr_list.const"
 echo "[" > $tal_path || exit 1
 grep '"td_addr"' staking_config.json | sed 's/ \+"td_addr": *//g' >> $tal_path
 echo "]" >> $tal_path
 
-tal_path_debug_env="${EXEC_PATH}/../src/components/finutils/src/bins/td_addr_list.const.debug_env"
+tal_path_debug_env="${EXEC_PATH}/../src/components/finutils/src/bins/stt/td_addr_list.const.debug_env"
 echo "[" > $tal_path_debug_env || exit 1
 grep '"td_addr"' staking_config_debug_env.json | sed 's/ \+"td_addr": *//g' >> $tal_path_debug_env
 echo "]" >> $tal_path_debug_env
