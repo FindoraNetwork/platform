@@ -55,7 +55,7 @@ pub fn init(mut interval: u64, skip_validator: bool, is_mainnet: bool) -> Result
         target_list.push((&bank, FRA_PRE_ISSUE_AMOUNT / 100 * 98));
 
         println!(">>> Transfer FRAs to validators ...");
-        common::utils::transfer_batch(&root_kp, target_list, None, false, false)
+        common::utils::transfer_batch(&root_kp, target_list, None, true, true)
             .c(d!())?;
     }
 
@@ -124,8 +124,8 @@ fn re_distribution() -> Result<()> {
         &v_set.iter().skip(1).map(|v| v.pubkey).collect::<Vec<_>>(),
         None,
         expected,
-        false,
-        false,
+        true,
+        true,
     )
     .c(d!())?;
 

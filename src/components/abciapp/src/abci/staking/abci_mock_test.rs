@@ -457,7 +457,7 @@ pub fn gen_transfer_op(
     }
 
     trans_builder
-        .balance()
+        .balance(None)
         .c(d!())?
         .create(TransferType::Standard)
         .c(d!())?

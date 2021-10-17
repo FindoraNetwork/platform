@@ -151,7 +151,7 @@ fn gen_transfer_tx(
     }
 
     let op = trans_builder
-        .balance()
+        .balance(None)
         .c(d!())?
         .create(TransferType::Standard)
         .c(d!())?

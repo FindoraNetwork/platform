@@ -202,7 +202,7 @@ impl TransactionBuilder {
             None,
         )
         .c(d!())
-        .and_then(|o| o.balance().c(d!()))
+        .and_then(|o| o.balance(None).c(d!()))
         .and_then(|o| o.create(TransferType::Standard).c(d!()))
         .and_then(|o| o.sign(&kp).c(d!()))
         .and_then(|o| o.transaction().c(d!()))
@@ -239,7 +239,7 @@ impl TransactionBuilder {
             None,
         )
         .c(d!())
-        .and_then(|o| o.balance().c(d!()))
+        .and_then(|o| o.balance(None).c(d!()))
         .and_then(|o| o.create(TransferType::Standard).c(d!()))
         .and_then(|o| {
             let cmp = |a: &XfrKeyPair, b: &XfrKeyPair| {
@@ -915,7 +915,7 @@ impl TransferOperationBuilder {
 
     /// Ensures that outputs and inputs are balanced by adding remainder outputs for leftover asset
     /// amounts
-    pub fn balance(&mut self) -> Result<&mut Self> {
+    pub fn balance(&mut self, rt: Option<AssetRecordType>) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
         if self.transfer.is_some() {
             return Err(eg!(
@@ -943,7 +943,8 @@ impl TransferOperationBuilder {
                 }
                 Ordering::Less => {
                     let asset_type = *ar.open_asset_record.get_asset_type();
-                    let record_type = ar.open_asset_record.get_record_type();
+                    let record_type =
+                        rt.unwrap_or_else(|| ar.open_asset_record.get_record_type());
                     let recipient = *ar.open_asset_record.get_pub_key();
                     let ar_template = AssetRecordTemplate::with_asset_tracing(
                         amt - spend_amount,
@@ -989,7 +990,7 @@ impl TransferOperationBuilder {
     /// modified.
     pub fn create(&mut self, transfer_type: TransferType) -> Result<&mut Self> {
         if self.auto_refund {
-            self.balance().c(d!())?;
+            self.balance(None).c(d!())?;
         } else {
             self.check_balance().c(d!())?;
         }
@@ -1181,7 +1182,7 @@ mod tests {
             .c(d!())?
             .add_output(&output_template, None, None, None)
             .c(d!())?
-            .balance();
+            .balance(None);
 
         assert!(res.is_err());
 
@@ -1204,7 +1205,7 @@ mod tests {
             .c(d!())?
             .add_output(&output_template, None, None, None)
             .c(d!())?
-            .balance()
+            .balance(None)
             .c(d!())?
             .create(TransferType::Standard)
             .c(d!())?
@@ -1232,7 +1233,7 @@ mod tests {
             .c(d!())?
             .add_output(&output_template, None, None, None)
             .c(d!())?
-            .balance()
+            .balance(None)
             .c(d!())?
             .create(TransferType::Standard)
             .c(d!())?
@@ -1306,7 +1307,7 @@ mod tests {
             .c(d!())?
             .add_output(&output_ben2_code2_template, None, None, None)
             .c(d!())?
-            .balance()
+            .balance(None)
             .c(d!())?
             .create(TransferType::Standard)
             .c(d!())?
@@ -1366,7 +1367,7 @@ mod tests {
                     .unwrap()
                     .add_output(&output_bob_fra_template, None, None, None)
                     .unwrap()
-                    .balance()
+                    .balance(None)
                     .unwrap()
                     .create(TransferType::Standard)
                     .unwrap()

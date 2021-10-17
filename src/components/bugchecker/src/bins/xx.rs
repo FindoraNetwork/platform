@@ -238,7 +238,7 @@ fn generate_evil_tx_big_input_transfer(seq_id: u64) -> Result<Transaction> {
         .c(d!())?;
 
     let op = builder
-        .balance()
+        .balance(None)
         .c(d!())?
         .create(TransferType::Standard)
         .c(d!())?
@@ -351,7 +351,7 @@ fn generate_evil_tx_big_output_transfer(seq_id: u64) -> Result<Transaction> {
     }
 
     let op = builder
-        .balance()
+        .balance(None)
         .c(d!())?
         .create(TransferType::Standard)
         .c(d!())?
@@ -409,7 +409,7 @@ fn generate_fee_operation_inner(
             None,
         )
         .c(d!())?
-        .balance()
+        .balance(None)
         .c(d!())?
         .create(TransferType::Standard)
         .c(d!())?
