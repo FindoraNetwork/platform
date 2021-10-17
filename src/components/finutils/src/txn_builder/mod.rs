@@ -5,58 +5,61 @@
 #![deny(warnings)]
 #![allow(clippy::needless_borrow)]
 
-use credentials::CredUserSecretKey;
-use curve25519_dalek::scalar::Scalar;
-use globutils::SignatureOf;
-use ledger::{
-    data_model::{
-        AssetRules, AssetTypeCode, ConfidentialMemo, DefineAsset, DefineAssetBody,
-        IndexedSignature, IssueAsset, IssueAssetBody, IssuerKeyPair, IssuerPublicKey,
-        Memo, NoReplayToken, Operation, Transaction, TransactionBody, TransferAsset,
-        TransferAssetBody, TransferType, TxOutput, TxoRef, UpdateMemo, UpdateMemoBody,
-        ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
-    },
-    staking::{
-        is_valid_tendermint_addr,
-        ops::{
-            claim::ClaimOps,
-            delegation::DelegationOps,
-            fra_distribution::FraDistributionOps,
-            governance::{ByzantineKind, GovernanceOps},
-            undelegation::UnDelegationOps,
-            update_staker::UpdateStakerOps,
-            update_validator::UpdateValidatorOps,
+use {
+    credentials::CredUserSecretKey,
+    curve25519_dalek::scalar::Scalar,
+    globutils::SignatureOf,
+    ledger::{
+        data_model::{
+            AssetRules, AssetTypeCode, ConfidentialMemo, DefineAsset, DefineAssetBody,
+            IndexedSignature, IssueAsset, IssueAssetBody, IssuerKeyPair,
+            IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
+            TransactionBody, TransferAsset, TransferAssetBody, TransferType, TxOutput,
+            TxoRef, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
+            TX_FEE_MIN,
         },
-        td_addr_to_string, BlockHeight, PartialUnDelegation, StakerMemo, TendermintAddr,
-        Validator,
-    },
-};
-use rand_chacha::ChaChaRng;
-use rand_core::{CryptoRng, RngCore, SeedableRng};
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, HashSet},
-};
-use tendermint::PrivateKey;
-use zei::{
-    api::anon_creds::{
-        ac_confidential_open_commitment, ACCommitment, ACCommitmentKey, ConfidentialAC,
-        Credential,
-    },
-    serialization::ZeiFromToBytes,
-    setup::PublicParams,
-    xfr::{
-        asset_record::{
-            build_blind_asset_record, build_open_asset_record, open_blind_asset_record,
-            AssetRecordType,
+        staking::{
+            is_valid_tendermint_addr,
+            ops::{
+                claim::ClaimOps,
+                delegation::DelegationOps,
+                fra_distribution::FraDistributionOps,
+                governance::{ByzantineKind, GovernanceOps},
+                undelegation::UnDelegationOps,
+                update_staker::UpdateStakerOps,
+                update_validator::UpdateValidatorOps,
+            },
+            td_addr_to_string, BlockHeight, PartialUnDelegation, StakerMemo,
+            TendermintAddr, Validator,
         },
-        lib::XfrNotePolicies,
-        sig::{XfrKeyPair, XfrPublicKey},
-        structs::{
-            AssetRecord, AssetRecordTemplate, BlindAssetRecord, OpenAssetRecord,
-            OwnerMemo, TracingPolicies, TracingPolicy,
+    },
+    rand_chacha::ChaChaRng,
+    rand_core::{CryptoRng, RngCore, SeedableRng},
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    std::{
+        cmp::Ordering,
+        collections::{BTreeMap, HashSet},
+    },
+    tendermint::PrivateKey,
+    zei::{
+        api::anon_creds::{
+            ac_confidential_open_commitment, ACCommitment, ACCommitmentKey,
+            ConfidentialAC, Credential,
+        },
+        serialization::ZeiFromToBytes,
+        setup::PublicParams,
+        xfr::{
+            asset_record::{
+                build_blind_asset_record, build_open_asset_record,
+                open_blind_asset_record, AssetRecordType,
+            },
+            lib::XfrNotePolicies,
+            sig::{XfrKeyPair, XfrPublicKey},
+            structs::{
+                AssetRecord, AssetRecordTemplate, BlindAssetRecord, OpenAssetRecord,
+                OwnerMemo, TracingPolicies, TracingPolicy,
+            },
         },
     },
 };
@@ -1095,15 +1098,17 @@ impl TransferOperationBuilder {
 #[cfg(test)]
 #[allow(missing_docs)]
 mod tests {
-    use super::*;
-    use ledger::data_model::{TxnEffect, TxoRef};
-    use ledger::store::{utils::fra_gen_initial_tx, LedgerState};
-    use rand_chacha::ChaChaRng;
-    use rand_core::SeedableRng;
-    use zei::setup::PublicParams;
-    use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
-    use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record};
-    use zei::xfr::sig::XfrKeyPair;
+    use {
+        super::*,
+        ledger::data_model::{TxnEffect, TxoRef},
+        ledger::store::{utils::fra_gen_initial_tx, LedgerState},
+        rand_chacha::ChaChaRng,
+        rand_core::SeedableRng,
+        zei::setup::PublicParams,
+        zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+        zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record},
+        zei::xfr::sig::XfrKeyPair,
+    };
 
     // Defines an asset type
     #[derive(Clone, Debug, Eq, PartialEq)]

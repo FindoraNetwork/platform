@@ -1,7 +1,4 @@
-use globutils::wallet;
-use ledger::staking::init;
-use ruc::*;
-use std::fs;
+use {globutils::wallet, ledger::staking::init, ruc::*, std::fs};
 
 fn main() {
     pnk!(gen());

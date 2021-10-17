@@ -11,22 +11,24 @@
 
 mod init;
 
-use clap::{crate_authors, App, SubCommand};
-use finutils::common;
-use globutils::wallet;
-use lazy_static::lazy_static;
-use ledger::{
-    data_model::{gen_random_keypair, Transaction, BLACK_HOLE_PUBKEY_STAKING},
-    staking::{
-        check_delegation_amount, td_addr_to_bytes, BLOCK_INTERVAL, FRA,
-        FRA_PRE_ISSUE_AMOUNT,
+use {
+    clap::{crate_authors, App, SubCommand},
+    finutils::common,
+    globutils::wallet,
+    lazy_static::lazy_static,
+    ledger::{
+        data_model::{gen_random_keypair, Transaction, BLACK_HOLE_PUBKEY_STAKING},
+        staking::{
+            check_delegation_amount, td_addr_to_bytes, BLOCK_INTERVAL, FRA,
+            FRA_PRE_ISSUE_AMOUNT,
+        },
+        store::utils::fra_gen_initial_tx,
     },
-    store::utils::fra_gen_initial_tx,
+    ruc::*,
+    serde::Serialize,
+    std::{collections::BTreeMap, env},
+    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
-use ruc::*;
-use serde::Serialize;
-use std::{collections::BTreeMap, env};
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
 lazy_static! {
     static ref USER_LIST: BTreeMap<Name, User> = gen_user_list();
@@ -45,6 +47,9 @@ macro_rules! sleep_n_block {
     ($n_block: expr, $intvl: expr) => {
         sleep_ms!($n_block * $intvl * 1000);
     };
+    ($n_block: expr) => {
+        sleep_ms!($n_block * ledger::staking::BLOCK_INTERVAL * 1000);
+    };
 }
 
 fn main() {
@@ -56,6 +61,7 @@ fn run() -> Result<()> {
         .arg_from_usage("--mainnet")
         .arg_from_usage("-i, --interval=[Interval] 'block interval'")
         .arg_from_usage("-s, --skip-validator 'skip validator initialization'");
+    let subcmd_test = SubCommand::with_name("test");
     let subcmd_issue = SubCommand::with_name("issue").about("issue FRA on demand");
     let subcmd_delegate = SubCommand::with_name("delegate")
         .arg_from_usage("-u, --user=[User] 'user name of delegator'")
@@ -84,6 +90,7 @@ fn run() -> Result<()> {
         .about("A manual test tool for the staking function.")
         .arg_from_usage("-v, --version")
         .subcommand(subcmd_init)
+        .subcommand(subcmd_test)
         .subcommand(subcmd_issue)
         .subcommand(subcmd_delegate)
         .subcommand(subcmd_undelegate)
@@ -103,6 +110,8 @@ fn run() -> Result<()> {
         let skip_validator = m.is_present("skip-validator");
         let is_mainnet = m.is_present("mainnet");
         init::init(interval, skip_validator, is_mainnet).c(d!())?;
+    } else if matches.is_present("test") {
+        init::i_testing::run_all().c(d!())?;
     } else if matches.is_present("issue") {
         issue::issue().c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("delegate") {
@@ -188,20 +197,22 @@ fn run() -> Result<()> {
 }
 
 mod issue {
-    use super::*;
-    use ledger::{
-        data_model::{
-            AssetTypeCode, IssueAsset, IssueAssetBody, IssuerKeyPair, Operation,
-            TxOutput, ASSET_TYPE_FRA,
+    use {
+        super::*,
+        ledger::{
+            data_model::{
+                AssetTypeCode, IssueAsset, IssueAssetBody, IssuerKeyPair, Operation,
+                TxOutput, ASSET_TYPE_FRA,
+            },
+            staking::FRA_PRE_ISSUE_AMOUNT,
         },
-        staking::FRA_PRE_ISSUE_AMOUNT,
-    };
-    use rand_chacha::rand_core::SeedableRng;
-    use rand_chacha::ChaChaRng;
-    use zei::setup::PublicParams;
-    use zei::xfr::{
-        asset_record::{build_blind_asset_record, AssetRecordType},
-        structs::AssetRecordTemplate,
+        rand_chacha::rand_core::SeedableRng,
+        rand_chacha::ChaChaRng,
+        zei::setup::PublicParams,
+        zei::xfr::{
+            asset_record::{build_blind_asset_record, AssetRecordType},
+            structs::AssetRecordTemplate,
+        },
     };
 
     pub fn issue() -> Result<()> {
@@ -294,8 +305,7 @@ mod delegate {
 }
 
 mod undelegate {
-    use super::*;
-    use ledger::staking::PartialUnDelegation;
+    use {super::*, ledger::staking::PartialUnDelegation};
 
     pub fn gen_tx(
         user: NameRef,

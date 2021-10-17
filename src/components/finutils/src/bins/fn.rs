@@ -25,12 +25,14 @@
 
 #![deny(warnings)]
 
-use clap::{crate_authors, load_yaml, App};
-use finutils::common;
-use globutils::wallet;
-use ledger::data_model::{AssetTypeCode, FRA_DECIMALS};
-use ruc::*;
-use std::{fmt, fs};
+use {
+    clap::{crate_authors, load_yaml, App},
+    finutils::common,
+    globutils::wallet,
+    ledger::data_model::{AssetTypeCode, FRA_DECIMALS},
+    ruc::*,
+    std::{fmt, fs},
+};
 
 fn main() {
     if let Err(e) = run() {

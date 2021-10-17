@@ -4,7 +4,7 @@
 //! Initialize a new network environment.
 //!
 
-mod i_testing;
+pub mod i_testing;
 
 use super::*;
 
@@ -65,8 +65,12 @@ pub fn init(mut interval: u64, skip_validator: bool, is_mainnet: bool) -> Result
             .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
     }
 
-    println!(">>> DONE !");
+    println!(">>> Init work done !");
 
     println!(">>> Start running integration tests ...");
+
+    println!(">>> Wait 6 block ...");
+    sleep_n_block!(6);
+
     i_testing::run_all().c(d!())
 }

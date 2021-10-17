@@ -14,50 +14,53 @@
 
 mod wasm_data_model;
 
-use crate::wasm_data_model::{
-    error_to_jsvalue, AssetRules, AssetTracerKeyPair, AttributeAssignment,
-    AttributeDefinition, ClientAssetRecord, Credential, CredentialCommitment,
-    CredentialCommitmentData, CredentialCommitmentKey, CredentialIssuerKeyPair,
-    CredentialPoK, CredentialRevealSig, CredentialSignature, CredentialUserKeyPair,
-    OwnerMemo, PublicParams, TracingPolicies, TxoRef,
-};
-use credentials::{
-    credential_commit, credential_issuer_key_gen, credential_open_commitment,
-    credential_reveal, credential_sign, credential_user_key_gen, credential_verify,
-    credential_verify_commitment, CredIssuerPublicKey, CredIssuerSecretKey,
-    CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
-};
-use cryptohash::sha256;
-use finutils::txn_builder::{
-    FeeInput as PlatformFeeInput, FeeInputs as PlatformFeeInputs,
-    TransactionBuilder as PlatformTransactionBuilder,
-    TransferOperationBuilder as PlatformTransferOperationBuilder,
-};
-use globutils::{wallet, HashOf};
-use ledger::{
-    data_model::{
-        gen_random_keypair, AssetTypeCode, AuthenticatedTransaction, Operation,
-        TransferType, TxOutput, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
-        BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
+use {
+    crate::wasm_data_model::{
+        error_to_jsvalue, AssetRules, AssetTracerKeyPair, AttributeAssignment,
+        AttributeDefinition, ClientAssetRecord, Credential, CredentialCommitment,
+        CredentialCommitmentData, CredentialCommitmentKey, CredentialIssuerKeyPair,
+        CredentialPoK, CredentialRevealSig, CredentialSignature, CredentialUserKeyPair,
+        OwnerMemo, PublicParams, TracingPolicies, TxoRef,
     },
-    staking::{
-        td_addr_to_bytes, PartialUnDelegation, TendermintAddr, MAX_DELEGATION_AMOUNT,
-        MIN_DELEGATION_AMOUNT,
+    credentials::{
+        credential_commit, credential_issuer_key_gen, credential_open_commitment,
+        credential_reveal, credential_sign, credential_user_key_gen, credential_verify,
+        credential_verify_commitment, CredIssuerPublicKey, CredIssuerSecretKey,
+        CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
     },
-};
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
-use ruc::{d, err::RucResult};
-use std::convert::From;
-use wasm_bindgen::prelude::*;
-use zei::{
-    serialization::ZeiFromToBytes,
-    xfr::{
-        asset_record::{open_blind_asset_record as open_bar, AssetRecordType},
-        lib::trace_assets as zei_trace_assets,
-        sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
-        structs::{
-            AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody, ASSET_TYPE_LENGTH,
+    cryptohash::sha256,
+    finutils::txn_builder::{
+        FeeInput as PlatformFeeInput, FeeInputs as PlatformFeeInputs,
+        TransactionBuilder as PlatformTransactionBuilder,
+        TransferOperationBuilder as PlatformTransferOperationBuilder,
+    },
+    globutils::{wallet, HashOf},
+    ledger::{
+        data_model::{
+            gen_random_keypair, AssetTypeCode, AuthenticatedTransaction, Operation,
+            TransferType, TxOutput, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
+            BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
+        },
+        staking::{
+            td_addr_to_bytes, PartialUnDelegation, TendermintAddr,
+            MAX_DELEGATION_AMOUNT, MIN_DELEGATION_AMOUNT,
+        },
+    },
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::{d, err::RucResult},
+    std::convert::From,
+    wasm_bindgen::prelude::*,
+    zei::{
+        serialization::ZeiFromToBytes,
+        xfr::{
+            asset_record::{open_blind_asset_record as open_bar, AssetRecordType},
+            lib::trace_assets as zei_trace_assets,
+            sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+            structs::{
+                AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody,
+                ASSET_TYPE_LENGTH,
+            },
         },
     },
 };

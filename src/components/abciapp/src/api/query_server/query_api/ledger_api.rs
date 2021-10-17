@@ -225,7 +225,7 @@ pub async fn query_validators(
         let validators_list = validators
             .iter()
             .flat_map(|(tendermint_addr, pk)| {
-                validator_data.get_powered_validator_by_id(pk).map(|v| {
+                validator_data.get_validator_by_id(pk).map(|v| {
                     let rank = if v.td_power == 0 {
                         validator_data.body.len()
                     } else {
@@ -478,54 +478,52 @@ pub async fn query_validator_detail(
     let ledger = &qs.ledger_cloned;
     let staking = ledger.get_staking();
 
-    let v_id = staking
-        .validator_td_addr_to_app_pk(addr.as_ref())
-        .c(d!())
+    let v_id = info!(staking.validator_td_addr_to_app_pk(addr.as_ref()))
         .map_err(error::ErrorBadRequest)?;
-    let v_self_delegation = staking
-        .delegation_get(&v_id)
-        .ok_or_else(|| error::ErrorBadRequest("not exists"))?;
+    let v_self_delegation =
+        info!(staking.delegation_get(&v_id)).map_err(error::ErrorBadRequest)?;
 
     if let Some(vd) = staking.validator_get_current() {
         if let Some(v) = vd.body.get(&v_id) {
-            if 0 < v.td_power {
+            let voting_power_rank = if 0 == v.td_power {
+                usize::MAX
+            } else {
                 let mut power_list =
                     vd.body.values().map(|v| v.td_power).collect::<Vec<_>>();
                 power_list.sort_unstable();
-                let voting_power_rank =
-                    power_list.len() - power_list.binary_search(&v.td_power).unwrap();
-                let realtime_rate = ledger.staking_get_block_rewards_rate();
-                let expected_annualization = [
-                    realtime_rate[0] as u128
-                        * v_self_delegation.proposer_rwd_cnt as u128,
-                    realtime_rate[1] as u128
-                        * (1 + staking.cur_height() - v_self_delegation.start_height)
-                            as u128,
-                ];
+                power_list.len() - power_list.binary_search(&v.td_power).unwrap()
+            };
+            let realtime_rate = ledger.staking_get_block_rewards_rate();
+            let expected_annualization = [
+                realtime_rate[0] as u128 * v_self_delegation.proposer_rwd_cnt as u128,
+                realtime_rate[1] as u128
+                    * (1 + staking.cur_height() - v_self_delegation.start_height)
+                        as u128,
+            ];
 
-                let resp = ValidatorDetail {
-                    addr: addr.into_inner(),
-                    is_online: v.signed_last_block,
-                    voting_power: v.td_power,
-                    voting_power_rank,
-                    commission_rate: v.get_commission_rate(),
-                    self_staking: v_self_delegation
-                        .entries
-                        .iter()
-                        .filter(|(k, _)| **k == v_id)
-                        .map(|(_, n)| n)
-                        .sum(),
-                    fra_rewards: v_self_delegation.rwd_amount,
-                    memo: v.memo.clone(),
-                    start_height: v_self_delegation.start_height,
-                    cur_height: staking.cur_height(),
-                    block_signed_cnt: v.signed_cnt,
-                    block_proposed_cnt: v_self_delegation.proposer_rwd_cnt,
-                    expected_annualization,
-                    kind: v.kind(),
-                };
-                return Ok(web::Json(resp));
-            }
+            let resp = ValidatorDetail {
+                addr: addr.into_inner(),
+                is_online: v.signed_last_block,
+                voting_power: v.td_power,
+                voting_power_rank,
+                commission_rate: v.get_commission_rate(),
+                self_staking: v_self_delegation
+                    .entries
+                    .iter()
+                    .filter(|(k, _)| **k == v_id)
+                    .map(|(_, n)| n)
+                    .sum(),
+                fra_rewards: v_self_delegation.rwd_amount,
+                memo: v.memo.clone(),
+                start_height: v_self_delegation.start_height,
+                cur_height: staking.cur_height(),
+                block_signed_cnt: v.signed_cnt,
+                block_proposed_cnt: v_self_delegation.proposer_rwd_cnt,
+                expected_annualization,
+                kind: v.kind(),
+                delegator_cnt: v.delegators.len() as u64,
+            };
+            return Ok(web::Json(resp));
         }
     }
 

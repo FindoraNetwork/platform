@@ -8,7 +8,6 @@ use ledger::{
     data_model::{BlockEffect, Transaction, TxnEffect, TxnSID, TxnTempSID, TxoSID},
     store::LedgerState,
 };
-use log::info;
 use parking_lot::RwLock;
 use rand_core::{CryptoRng, RngCore};
 use ruc::*;
@@ -181,20 +180,18 @@ where
         if let Some(block) = self.block.take() {
             let mut ledger = self.committed_state.write();
             let finalized_txns = ledger.finish_block(block).c(d!())?;
+
             // Update status of all committed transactions
             for (txn_temp_sid, handle, _txn) in self.pending_txns.drain(..) {
                 let committed_txn_info = finalized_txns.get(&txn_temp_sid).c(d!())?;
                 self.txn_status
                     .insert(handle, TxnStatus::Committed(committed_txn_info.clone()));
             }
-            info!("Block ended. Statuses of committed transactions are now updated");
-            // Empty temp_sids after the block is finished
-            // If begin_commit or end_commit is no longer empty, move this line to the end of end_commit
+
             self.pending_txns = Vec::new();
-            // Finally, return the finalized txn sids
-            debug_assert!(self.block.is_none());
             return Ok(());
         }
+
         Err(eg!("Cannot finish block because there are no pending txns"))
     }
 

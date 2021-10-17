@@ -156,11 +156,11 @@ pub const MAX_POWER_PERCENT_PER_VALIDATOR: [u128; 2] = [1, 5];
 pub const BLOCK_INTERVAL: u64 = 15 + 1;
 
 /// The lock time after the delegation expires, about 21 days.
-#[cfg(not(any(feature = "debug_env", feature = "abci_mock")))]
+#[cfg(not(feature = "abci_mock"))]
 pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
 
 /// used in test/mock env
-#[cfg(any(feature = "debug_env", feature = "abci_mock"))]
+#[cfg(feature = "abci_mock")]
 pub const UNBOND_BLOCK_CNT: u64 = 5;
 
 // minimal number of validators
@@ -764,12 +764,7 @@ impl Staking {
             let mut auto_ud_list = vec![];
 
             // unwrap is safe here
-            let v = self
-                .validator_get_current()
-                .unwrap()
-                .body
-                .get(addr)
-                .unwrap();
+            let v = self.validator_get_current_one_by_id(addr).unwrap();
 
             // unwrap is safe here
             let mut cr = self.cr;
