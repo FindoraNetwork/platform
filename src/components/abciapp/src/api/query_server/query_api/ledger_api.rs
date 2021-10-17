@@ -332,7 +332,14 @@ pub async fn get_validator_delegation_history(
         .filter(|(k, _)| **k == v_id)
         .map(|(_, n)| n)
         .sum();
-    let delegated = v_self_delegation.delegators.values().sum::<u64>();
+
+    // this `unwrap` is safe
+    let delegated = staking
+        .validator_get_current_one_by_id(&v_id)
+        .unwrap()
+        .delegators
+        .values()
+        .sum::<u64>();
 
     let mut history = vec![ValidatorDelegation {
         return_rate: ledger.staking_get_block_rewards_rate(),

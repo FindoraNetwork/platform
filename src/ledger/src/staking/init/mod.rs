@@ -2,13 +2,16 @@
 //! Initial Config
 //!
 
-use super::{
-    td_addr_to_bytes, BlockHeight, Power, Validator, ValidatorKind,
-    STAKING_VALIDATOR_MIN_POWER,
+use {
+    super::{
+        td_addr_to_bytes, BlockHeight, Power, Validator, ValidatorKind,
+        STAKING_VALIDATOR_MIN_POWER,
+    },
+    indexmap::IndexMap,
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    std::convert::TryFrom,
 };
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
 
 // The initial power of an initor.
 const DEFAULT_POWER: Power = 1000 * STAKING_VALIDATOR_MIN_POWER;
@@ -51,6 +54,7 @@ impl TryFrom<ValidatorStr> for Validator {
             kind: v.kind.unwrap_or(ValidatorKind::Initor),
             signed_last_block: false,
             signed_cnt: 0,
+            delegators: IndexMap::new(),
         })
     }
 }
