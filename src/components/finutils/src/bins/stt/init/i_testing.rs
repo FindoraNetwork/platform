@@ -91,21 +91,21 @@ pub fn run_all() -> Result<()> {
 
     println!(">>> Create custom asset A ...");
     let code = create_asset_x(v0_kp, "A", 9, None, true, None).c(d!())?;
-    println!(">>> Wait 2 block ...");
-    sleep_n_block!(2);
+    println!(">>> Wait 1.5 block ...");
+    sleep_n_block!(1.5);
 
     println!(">>> Issue custom asset A ...");
     issue_asset_x(v0_kp, &code, 123456, false).c(d!())?;
 
     // 3.
-    println!(">>> Wait 2 block ...");
-    sleep_n_block!(2);
+    println!(">>> Wait 1.5 block ...");
+    sleep_n_block!(1.5);
 
     assert_eq!(123456, get_asset_balance(v0_kp, Some(code)).c(d!())?);
 
     // 4.
     println!(">>> Transfer custom asset A ...");
-    println!(">>> Wait 8 block for 4 times of transfering ...");
+    println!(">>> Wait 6 block for 4 times of transfering ...");
 
     let target_kps = v_set
         .iter()
@@ -114,13 +114,13 @@ pub fn run_all() -> Result<()> {
         .collect::<Vec<_>>();
     let targets = target_kps.iter().map(|kp| kp.get_pk()).collect::<Vec<_>>();
     transfer_asset_batch_x(v0_kp, &targets, Some(code), 1, true, true).c(d!())?;
-    sleep_n_block!(2);
+    sleep_n_block!(1.5);
     transfer_asset_batch_x(v0_kp, &targets, Some(code), 1, false, true).c(d!())?;
-    sleep_n_block!(2);
+    sleep_n_block!(1.5);
     transfer_asset_batch_x(v0_kp, &targets, Some(code), 1, true, false).c(d!())?;
-    sleep_n_block!(2);
+    sleep_n_block!(1.5);
     transfer_asset_batch_x(v0_kp, &targets, Some(code), 1, false, false).c(d!())?;
-    sleep_n_block!(2);
+    sleep_n_block!(1.5);
 
     // 5.
     println!(">>> Check balances ...");
@@ -142,8 +142,8 @@ pub fn run_all() -> Result<()> {
     }
 
     // 7.
-    println!(">>> Wait 2 block ...");
-    sleep_n_block!(2);
+    println!(">>> Wait 3 block ...");
+    sleep_n_block!(3);
 
     println!(">>> Check delegators of each validators ...");
 
@@ -234,8 +234,8 @@ pub fn run_all() -> Result<()> {
 
     for _ in 0..5 {
         let height = get_26657_validators(sa).c(d!())?.block_height_int;
-        println!(">>> Wait 2 block ...");
-        sleep_n_block!(2);
+        println!(">>> Wait 1.5 block ...");
+        sleep_n_block!(1.5);
 
         let vs = get_26657_validators(sa).c(d!())?;
         assert!(height < vs.block_height_int);

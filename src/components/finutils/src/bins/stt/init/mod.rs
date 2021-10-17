@@ -24,8 +24,8 @@ pub fn init(mut interval: u64, skip_validator: bool, is_mainnet: bool) -> Result
         println!(">>> Define and issue FRA ...");
         common::utils::send_tx(&fra_gen_initial_tx(&root_kp)).c(d!())?;
 
-        println!(">>> Wait 2 block ...");
-        sleep_n_block!(2, interval);
+        println!(">>> Wait 1.5 block ...");
+        sleep_n_block!(1.5, interval);
 
         if skip_validator {
             println!(">>> DONE !");
@@ -55,8 +55,8 @@ pub fn init(mut interval: u64, skip_validator: bool, is_mainnet: bool) -> Result
             .c(d!())?;
     }
 
-    println!(">>> Wait 6 blocks ...");
-    sleep_n_block!(6, interval);
+    println!(">>> Wait 5 blocks ...");
+    sleep_n_block!(5, interval);
 
     println!(">>> Propose self-delegations ...");
     for (i, v) in VALIDATOR_LIST.values().enumerate() {
@@ -69,8 +69,8 @@ pub fn init(mut interval: u64, skip_validator: bool, is_mainnet: bool) -> Result
 
     println!(">>> Start running integration tests ...");
 
-    println!(">>> Wait 6 block ...");
-    sleep_n_block!(6);
+    println!(">>> Wait 5 block ...");
+    sleep_n_block!(5);
 
     i_testing::run_all().c(d!())
 }

@@ -486,7 +486,7 @@ pub async fn query_validator_detail(
     if let Some(vd) = staking.validator_get_current() {
         if let Some(v) = vd.body.get(&v_id) {
             let voting_power_rank = if 0 == v.td_power {
-                usize::MAX
+                100_0000 + vd.body.len()
             } else {
                 let mut power_list =
                     vd.body.values().map(|v| v.td_power).collect::<Vec<_>>();

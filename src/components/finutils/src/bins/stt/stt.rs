@@ -44,11 +44,13 @@ type NameRef<'a> = &'a str;
 
 #[macro_export(crate)]
 macro_rules! sleep_n_block {
-    ($n_block: expr, $intvl: expr) => {
-        sleep_ms!($n_block * $intvl * 1000);
-    };
+    ($n_block: expr, $itv: expr) => {{
+        let n = $n_block as f64;
+        let itv = $itv as f64;
+        sleep_ms!((n * itv * 1000.0) as u64);
+    }};
     ($n_block: expr) => {
-        sleep_ms!($n_block * ledger::staking::BLOCK_INTERVAL * 1000);
+        sleep_n_block!($n_block, ledger::staking::BLOCK_INTERVAL)
     };
 }
 
