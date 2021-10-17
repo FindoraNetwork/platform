@@ -10,30 +10,33 @@
 
 #![deny(warnings)]
 
-use async_std::task;
-use finutils::txn_builder::TransferOperationBuilder;
-use globutils::{HashOf, SignatureOf};
-use lazy_static::lazy_static;
-use ledger::data_model::{
-    AssetRules, AssetTypeCode, DefineAsset, DefineAssetBody, IssueAsset, IssueAssetBody,
-    IssuerKeyPair, IssuerPublicKey, Memo, Operation, StateCommitmentData, Transaction,
-    TransferType, TxOutput, TxnEffect, TxoRef, TxoSID, UpdateMemo, UpdateMemoBody,
-    ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
-};
-use parking_lot::{Condvar, Mutex};
-use rand::random;
-use rand_chacha::rand_core::SeedableRng;
-use rand_chacha::ChaChaRng;
-use ruc::*;
-use std::{env, sync::Arc};
-use zei::{
-    setup::PublicParams,
-    xfr::{
-        asset_record::{
-            build_blind_asset_record, open_blind_asset_record, AssetRecordType,
+use {
+    async_std::task,
+    finutils::txn_builder::TransferOperationBuilder,
+    globutils::{HashOf, SignatureOf},
+    lazy_static::lazy_static,
+    ledger::data_model::{
+        AssetRules, AssetTypeCode, DefineAsset, DefineAssetBody, IssueAsset,
+        IssueAssetBody, IssuerKeyPair, IssuerPublicKey, Memo, Operation,
+        StateCommitmentData, Transaction, TransferType, TxOutput, TxnEffect, TxoRef,
+        TxoSID, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
+        TX_FEE_MIN,
+    },
+    parking_lot::{Condvar, Mutex},
+    rand::random,
+    rand_chacha::rand_core::SeedableRng,
+    rand_chacha::ChaChaRng,
+    ruc::*,
+    std::{env, sync::Arc},
+    zei::{
+        setup::PublicParams,
+        xfr::{
+            asset_record::{
+                build_blind_asset_record, open_blind_asset_record, AssetRecordType,
+            },
+            sig::XfrKeyPair,
+            structs::{AssetRecordTemplate, OpenAssetRecord},
         },
-        sig::XfrKeyPair,
-        structs::{AssetRecordTemplate, OpenAssetRecord},
     },
 };
 

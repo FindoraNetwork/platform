@@ -1,29 +1,32 @@
-use core::fmt::Display;
-use credentials::{
-    CredCommitment, CredCommitmentKey, CredIssuerPublicKey, CredIssuerSecretKey,
-    CredPoK, CredRevealSig, CredSignature, CredUserPublicKey, CredUserSecretKey,
-    Credential as PlatformCredential,
-};
-use globutils::{wallet, HashOf};
-use ledger::data_model::{
-    AssetRules as PlatformAssetRules, AssetType as PlatformAssetType, AuthenticatedUtxo,
-    SignatureRules as PlatformSignatureRules, TxOutput, TxoRef as PlatformTxoRef,
-    TxoSID,
-};
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
-use ruc::{d, err::RucResult};
-use serde::{Deserialize, Serialize};
-use wasm_bindgen::prelude::*;
-use zei::{
-    setup::PublicParams as ZeiPublicParams,
-    xfr::{
-        sig::XfrPublicKey,
-        structs::{
-            AssetTracerDecKeys, AssetTracerEncKeys,
-            AssetTracerKeyPair as ZeiAssetTracerKeyPair, BlindAssetRecord,
-            IdentityRevealPolicy, OwnerMemo as ZeiOwnerMemo,
-            TracingPolicies as ZeiTracingPolicies, TracingPolicy as ZeiTracingPolicy,
+use {
+    core::fmt::Display,
+    credentials::{
+        CredCommitment, CredCommitmentKey, CredIssuerPublicKey, CredIssuerSecretKey,
+        CredPoK, CredRevealSig, CredSignature, CredUserPublicKey, CredUserSecretKey,
+        Credential as PlatformCredential,
+    },
+    globutils::{wallet, HashOf},
+    ledger::data_model::{
+        AssetRules as PlatformAssetRules, AssetType as PlatformAssetType,
+        AuthenticatedUtxo, SignatureRules as PlatformSignatureRules, TxOutput,
+        TxoRef as PlatformTxoRef, TxoSID,
+    },
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::{d, err::RucResult},
+    serde::{Deserialize, Serialize},
+    wasm_bindgen::prelude::*,
+    zei::{
+        setup::PublicParams as ZeiPublicParams,
+        xfr::{
+            sig::XfrPublicKey,
+            structs::{
+                AssetTracerDecKeys, AssetTracerEncKeys,
+                AssetTracerKeyPair as ZeiAssetTracerKeyPair, BlindAssetRecord,
+                IdentityRevealPolicy, OwnerMemo as ZeiOwnerMemo,
+                TracingPolicies as ZeiTracingPolicies,
+                TracingPolicy as ZeiTracingPolicy,
+            },
         },
     },
 };

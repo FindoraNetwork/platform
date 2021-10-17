@@ -91,6 +91,8 @@ pub struct ValidatorDetail {
     pub block_proposed_cnt: u64,
     /// expected annulation of thi validator
     pub expected_annualization: [u128; 2],
+    /// total number of its delegators
+    pub delegator_cnt: u64,
 }
 
 #[allow(missing_docs)]

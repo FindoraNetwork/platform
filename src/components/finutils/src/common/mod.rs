@@ -8,31 +8,33 @@
 
 pub mod utils;
 
-use crate::api::DelegationInfo;
-use globutils::wallet;
-use lazy_static::lazy_static;
-use ledger::{
-    data_model::{
-        gen_random_keypair, AssetRules, AssetTypeCode, Transaction,
-        BLACK_HOLE_PUBKEY_STAKING,
+use {
+    crate::api::DelegationInfo,
+    globutils::wallet,
+    lazy_static::lazy_static,
+    ledger::{
+        data_model::{
+            gen_random_keypair, AssetRules, AssetTypeCode, Transaction,
+            BLACK_HOLE_PUBKEY_STAKING,
+        },
+        staking::{
+            check_delegation_amount, td_addr_to_bytes, td_pubkey_to_td_addr,
+            td_pubkey_to_td_addr_bytes, PartialUnDelegation, TendermintAddrRef,
+        },
     },
-    staking::{
-        check_delegation_amount, td_addr_to_bytes, td_pubkey_to_td_addr,
-        td_pubkey_to_td_addr_bytes, PartialUnDelegation, TendermintAddrRef,
+    ruc::*,
+    std::{env, fs},
+    tendermint::PrivateKey,
+    utils::{
+        get_block_height, get_local_block_height, get_validator_detail,
+        parse_td_validator_keys,
     },
-};
-use ruc::*;
-use std::{env, fs};
-use tendermint::PrivateKey;
-use utils::{
-    get_block_height, get_local_block_height, get_validator_detail,
-    parse_td_validator_keys,
-};
-use zei::{
-    setup::PublicParams,
-    xfr::{
-        asset_record::AssetRecordType,
-        sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+    zei::{
+        setup::PublicParams,
+        xfr::{
+            asset_record::AssetRecordType,
+            sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+        },
     },
 };
 
@@ -397,6 +399,26 @@ pub fn transfer_asset(
 }
 
 #[allow(missing_docs)]
+pub fn transfer_asset_x(
+    kp: &XfrKeyPair,
+    target_addr: XfrPublicKey,
+    token_code: Option<AssetTypeCode>,
+    am: u64,
+    confidential_am: bool,
+    confidential_ty: bool,
+) -> Result<()> {
+    transfer_asset_batch_x(
+        kp,
+        &[target_addr],
+        token_code,
+        am,
+        confidential_am,
+        confidential_ty,
+    )
+    .c(d!())
+}
+
+#[allow(missing_docs)]
 pub fn transfer_asset_batch(
     owner_sk: Option<&str>,
     target_addr: &[XfrPublicKey],
@@ -408,8 +430,28 @@ pub fn transfer_asset_batch(
     let from = restore_keypair_from_str_with_default(owner_sk)?;
     let am = am.parse::<u64>().c(d!("'amount' must be an integer"))?;
 
-    utils::transfer_batch(
+    transfer_asset_batch_x(
         &from,
+        target_addr,
+        token_code,
+        am,
+        confidential_am,
+        confidential_ty,
+    )
+    .c(d!())
+}
+
+#[allow(missing_docs)]
+pub fn transfer_asset_batch_x(
+    kp: &XfrKeyPair,
+    target_addr: &[XfrPublicKey],
+    token_code: Option<AssetTypeCode>,
+    am: u64,
+    confidential_am: bool,
+    confidential_ty: bool,
+) -> Result<()> {
+    utils::transfer_batch(
+        kp,
         target_addr.iter().map(|addr| (addr, am)).collect(),
         token_code,
         confidential_am,
@@ -424,7 +466,8 @@ pub fn set_initial_validators() -> Result<()> {
     utils::set_initial_validators().c(d!())
 }
 
-fn get_serv_addr() -> Result<&'static str> {
+/// Get the effective address of server
+pub fn get_serv_addr() -> Result<&'static str> {
     if let Some(sa) = SERV_ADDR.as_ref() {
         Ok(sa)
     } else {
@@ -526,18 +569,36 @@ pub fn show_account(sk_str: Option<&str>, asset: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+#[inline(always)]
 #[allow(missing_docs)]
 pub fn delegate(sk_str: Option<&str>, amount: u64, validator: &str) -> Result<()> {
-    let kp = restore_keypair_from_str_with_default(sk_str)?;
-
-    utils::send_tx(&gen_delegate_tx(&kp, amount, validator).c(d!())?)
+    restore_keypair_from_str_with_default(sk_str)
+        .c(d!())
+        .and_then(|kp| delegate_x(&kp, amount, validator).c(d!()))
 }
 
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn delegate_x(kp: &XfrKeyPair, amount: u64, validator: &str) -> Result<()> {
+    gen_delegate_tx(kp, amount, validator)
+        .c(d!())
+        .and_then(|tx| utils::send_tx(&tx).c(d!()))
+}
+
+#[inline(always)]
 #[allow(missing_docs)]
 pub fn undelegate(sk_str: Option<&str>, param: Option<(u64, &str)>) -> Result<()> {
-    let kp = restore_keypair_from_str_with_default(sk_str)?;
+    restore_keypair_from_str_with_default(sk_str)
+        .c(d!())
+        .and_then(|kp| undelegate_x(&kp, param).c(d!()))
+}
 
-    utils::send_tx(&gen_undelegate_tx(&kp, param).c(d!())?)
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn undelegate_x(kp: &XfrKeyPair, param: Option<(u64, &str)>) -> Result<()> {
+    gen_undelegate_tx(kp, param)
+        .c(d!())
+        .and_then(|tx| utils::send_tx(&tx).c(d!()))
 }
 
 /// Display delegation information of a findora account
@@ -602,7 +663,6 @@ fn gen_delegate_tx(
 
     Ok(builder.take_transaction())
 }
-
 /// Create a custom asset for a findora account. If no token code string provided,
 /// it will generate a random new one.
 pub fn create_asset(
@@ -610,31 +670,48 @@ pub fn create_asset(
     memo: &str,
     decimal: u8,
     max_units: Option<u64>,
-    tranferable: bool,
+    transferable: bool,
     token_code: Option<&str>,
 ) -> Result<()> {
+    let kp = restore_keypair_from_str_with_default(sk_str)?;
+
     let code = if token_code.is_none() {
         AssetTypeCode::gen_random()
     } else {
         AssetTypeCode::new_from_base64(token_code.unwrap())
             .c(d!("invalid asset code"))?
     };
-    let kp = restore_keypair_from_str_with_default(sk_str)?;
+
+    create_asset_x(&kp, memo, decimal, max_units, transferable, Some(code))
+        .c(d!())
+        .map(|_| ())
+}
+
+#[allow(missing_docs)]
+pub fn create_asset_x(
+    kp: &XfrKeyPair,
+    memo: &str,
+    decimal: u8,
+    max_units: Option<u64>,
+    transferable: bool,
+    code: Option<AssetTypeCode>,
+) -> Result<AssetTypeCode> {
+    let code = code.unwrap_or_else(AssetTypeCode::gen_random);
 
     let mut rules = AssetRules::default();
     rules.set_decimals(decimal).c(d!())?;
     rules.set_max_units(max_units);
-    rules.set_transferable(tranferable);
+    rules.set_transferable(transferable);
 
     let mut builder = utils::new_tx_builder().c(d!())?;
     builder
-        .add_operation_create_asset(&kp, Some(code), rules, memo)
+        .add_operation_create_asset(kp, Some(code), rules, memo)
         .c(d!())?;
-    utils::gen_fee_op(&kp)
+    utils::gen_fee_op(kp)
         .c(d!())
         .map(|op| builder.add_operation(op))?;
 
-    utils::send_tx(&builder.take_transaction())
+    utils::send_tx(&builder.take_transaction()).map(|_| code)
 }
 
 /// Issue a custom asset with specified amount
@@ -646,20 +723,30 @@ pub fn issue_asset(
 ) -> Result<()> {
     let kp = restore_keypair_from_str_with_default(sk_str)?;
     let code = AssetTypeCode::new_from_base64(asset).c(d!())?;
+    issue_asset_x(&kp, &code, amount, hidden).c(d!())
+}
+
+#[allow(missing_docs)]
+pub fn issue_asset_x(
+    kp: &XfrKeyPair,
+    code: &AssetTypeCode,
+    amount: u64,
+    hidden: bool,
+) -> Result<()> {
     let confidentiality_flags = AssetRecordType::from_flags(hidden, false);
 
     let mut builder = utils::new_tx_builder().c(d!())?;
     builder
         .add_basic_issue_asset(
-            &kp,
-            &code,
+            kp,
+            code,
             builder.get_seq_id(),
             amount,
             confidentiality_flags,
             &PublicParams::default(),
         )
         .c(d!())?;
-    utils::gen_fee_op(&kp)
+    utils::gen_fee_op(kp)
         .c(d!())
         .map(|op| builder.add_operation(op))?;
 

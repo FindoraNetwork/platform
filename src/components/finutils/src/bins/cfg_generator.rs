@@ -1,6 +1,4 @@
-use ledger::staking::init;
-use ruc::*;
-use std::fs;
+use {globutils::wallet, ledger::staking::init, ruc::*, std::fs};
 
 fn main() {
     pnk!(gen());
@@ -13,13 +11,12 @@ fn gen() -> Result<()> {
 
     let mnemonics = (0..cfg_template.valiators.len())
         .map(|_| {
-            globutils::wallet::generate_mnemonic_custom(24, "en")
+            wallet::generate_mnemonic_custom(24, "en")
                 .c(d!())
                 .and_then(|m| {
-                    globutils::wallet::restore_keypair_from_mnemonic_default(&m)
+                    wallet::restore_keypair_from_mnemonic_default(&m)
                         .c(d!())
-                        .map(|kp| globutils::wallet::public_key_to_base64(&kp.get_pk()))
-                        .map(|pk| (m, pk))
+                        .map(|k| (m, k))
                 })
         })
         .collect::<Result<Vec<_>>>()?;
@@ -29,7 +26,7 @@ fn gen() -> Result<()> {
         .iter_mut()
         .zip(mnemonics.iter())
         .for_each(|(v, m)| {
-            v.id = m.1.clone();
+            v.id = wallet::public_key_to_base64(m.1.get_pk_ref());
         });
 
     let cfg = cfg_template;

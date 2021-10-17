@@ -1,6 +1,4 @@
-use finutils::common::gen_key_and_print;
-use ruc::*;
-use std::env::args;
+use {finutils::common::gen_key_and_print, ruc::*, std::env::args};
 
 fn main() {
     let n = pnk!(args()

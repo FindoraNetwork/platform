@@ -26,6 +26,7 @@ use cosig::CoSigRule;
 use cryptohash::sha256::{self, Digest};
 use fbnc::{new_mapx, Mapx};
 use globutils::wallet;
+use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use ops::{
     fra_distribution::FraDistributionOps,
@@ -38,9 +39,7 @@ use sha2::Digest as _;
 use std::{
     collections::{BTreeMap, BTreeSet},
     convert::TryFrom,
-    env,
-    iter::FromIterator,
-    mem,
+    env, mem,
     sync::{
         mpsc::{channel, Receiver, Sender},
         Arc,
@@ -157,11 +156,11 @@ pub const MAX_POWER_PERCENT_PER_VALIDATOR: [u128; 2] = [1, 5];
 pub const BLOCK_INTERVAL: u64 = 15 + 1;
 
 /// The lock time after the delegation expires, about 21 days.
-#[cfg(not(any(feature = "debug_env", feature = "abci_mock")))]
+#[cfg(not(feature = "abci_mock"))]
 pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
 
 /// used in test/mock env
-#[cfg(any(feature = "debug_env", feature = "abci_mock"))]
+#[cfg(feature = "abci_mock")]
 pub const UNBOND_BLOCK_CNT: u64 = 5;
 
 // minimal number of validators
@@ -314,8 +313,30 @@ impl Staking {
 
     #[inline(always)]
     #[allow(missing_docs)]
+    pub fn validator_get_current_one_by_id(
+        &self,
+        id: &XfrPublicKey,
+    ) -> Option<&Validator> {
+        self.validator_get_current()
+            .map(|vd| vd.body.get(id))
+            .flatten()
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
     pub fn validator_get_current_mut(&mut self) -> Option<&mut ValidatorData> {
         self.validator_get_effective_at_height_mut(self.cur_height)
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn validator_get_current_mut_one_by_id(
+        &mut self,
+        id: &XfrPublicKey,
+    ) -> Option<&mut Validator> {
+        self.validator_get_current_mut()
+            .map(|vd| vd.body.get_mut(id))
+            .flatten()
     }
 
     /// Get the validators that will be used for the specified height.
@@ -464,6 +485,29 @@ impl Staking {
                     })
                     .c(d!("validator not exists"))
             })
+            .map(|_| self.validator_align_power(validator))
+    }
+
+    // functions:
+    // - align its power to the total amount of delegations, include self-delegation.
+    // - change its kind to `ValidatorKind::Staker` if it is a `ValidatorKind::Initor`
+    //
+    // trigger conditions:
+    //   - the target validator have done its self-delegation
+    //   - its current power is bigger than zero
+    fn validator_align_power(&mut self, vid: &XfrPublicKey) {
+        if let Some(self_delegation_am) = self
+            .delegation_get(vid)
+            .map(|d| d.validator_entry(vid))
+            .flatten()
+        {
+            if let Some(v) = self.validator_get_current_mut_one_by_id(vid) {
+                if 0 < v.td_power {
+                    v.td_power = self_delegation_am + v.delegators.values().sum::<u64>();
+                    v.kind = ValidatorKind::Staker;
+                }
+            }
+        }
     }
 
     /// Get the power of a specified validator at current term.
@@ -481,11 +525,15 @@ impl Staking {
         new_power: Amount,
         vldtor: &XfrPublicKey,
     ) -> Result<()> {
-        self.validator_get_power(vldtor)
-            .c(d!("Failed to get validator power"))
-            .and_then(|power| {
-                self.validator_check_power_x(new_power, power)
-                    .c(d!("validator power check failed"))
+        self.validator_get_current_one_by_id(vldtor)
+            .c(d!("validator not found"))
+            .and_then(|v| {
+                if ValidatorKind::Staker == v.kind {
+                    self.validator_check_power_x(new_power, v.td_power)
+                        .c(d!("validator power check failed"))
+                } else {
+                    Ok(())
+                }
             })
     }
 
@@ -563,15 +611,17 @@ impl Staking {
     ) -> Result<Vec<(&XfrPublicKey, &u64)>> {
         let validator = self.validator_td_addr_to_app_pk(validator).c(d!())?;
 
-        if let Some(vd) = self.di.addr_map.get(&validator) {
-            if start >= vd.delegators.len() || start > end {
+        if let Some(v) = self.validator_get_current_one_by_id(&validator) {
+            if start >= v.delegators.len() || start > end {
                 return Err(eg!("Index out of range"));
             }
-            if end > vd.delegators.len() {
-                end = vd.delegators.len();
+            if end > v.delegators.len() {
+                end = v.delegators.len();
             }
 
-            Ok((Vec::from_iter(&vd.delegators))[start..end].to_vec())
+            Ok((start..end)
+                .filter_map(|i| v.delegators.get_index(i))
+                .collect())
         } else {
             Err(eg!("Not a validator or non-existing node address"))
         }
@@ -614,7 +664,6 @@ impl Staking {
             rwd_amount: 0,
             delegation_rwd_cnt: 0,
             proposer_rwd_cnt: 0,
-            delegators: indexmap::IndexMap::new(),
         };
 
         let d = self.di.addr_map.entry(owner).or_insert_with(new);
@@ -642,15 +691,15 @@ impl Staking {
         }
 
         // update delegator entries for this validator
-        if let Some(vd) = self.di.addr_map.get_mut(&validator) {
+        if let Some(v) = self.validator_get_current_mut_one_by_id(&validator) {
             if owner != validator {
-                *vd.delegators.entry(owner).or_insert(0) += am;
-                vd.delegators.sort_by(|_, v1, _, v2| v2.cmp(&v1));
+                *v.delegators.entry(owner).or_insert(0) += am;
+                v.delegators.sort_by(|_, v1, _, v2| v2.cmp(&v1));
                 if *KEEP_HIST {
                     CHAN_D_AMOUNT_HIST
                         .0
                         .lock()
-                        .send((vd.id, self.cur_height, vd.delegators.values().sum()))
+                        .send((v.id, h, v.delegators.values().sum()))
                         .unwrap();
                 }
             }
@@ -715,18 +764,11 @@ impl Staking {
             let mut auto_ud_list = vec![];
 
             // unwrap is safe here
-            let v = self
-                .validator_get_current()
-                .unwrap()
-                .body
-                .get(addr)
-                .unwrap();
+            let v = self.validator_get_current_one_by_id(addr).unwrap();
 
             // unwrap is safe here
             let mut cr = self.cr;
-            self.di
-                .addr_map
-                .get(addr)
+            self.validator_get_current_one_by_id(addr)
                 .unwrap()
                 .delegators
                 .iter()
@@ -817,7 +859,6 @@ impl Staking {
                     rwd_amount: 0,
                     delegation_rwd_cnt: 0,
                     proposer_rwd_cnt: 0,
-                    delegators: indexmap::IndexMap::new(),
                 };
                 // record per-block-height self-delegation amount for a validator
                 if target_validator == *addr && *KEEP_HIST {
@@ -847,16 +888,16 @@ impl Staking {
             .insert(pu.new_delegator_id);
 
         // update delegator entries for pu target_validator
-        if let Some(vd) = self.di.addr_map.get_mut(&target_validator) {
+        if let Some(v) = self.validator_get_current_mut_one_by_id(&target_validator) {
             // add new_delegator_id to delegator list
-            *vd.delegators.entry(pu.new_delegator_id).or_insert(0) += pu.am;
+            *v.delegators.entry(pu.new_delegator_id).or_insert(0) += pu.am;
 
             // update delegation amount of current address
             // make sure previous delegation amount is bigger than pu.am above.
-            if let Some(am) = vd.delegators.get_mut(addr) {
+            if let Some(am) = v.delegators.get_mut(addr) {
                 *am -= pu.am;
             }
-            vd.delegators.sort_by(|_, v1, _, v2| v2.cmp(&v1));
+            v.delegators.sort_by(|_, v1, _, v2| v2.cmp(&v1));
         }
 
         Ok(())
@@ -1061,25 +1102,21 @@ impl Staking {
                 };
 
                 if let Some(e) = entries {
-                    e.into_iter().for_each(|(v, am)| {
+                    e.into_iter().for_each(|(vid, am)| {
                         // - reduce the power of the target validator
-                        ruc::info_omit!(self.validator_change_power(&v, am, true));
+                        ruc::info_omit!(self.validator_change_power(&vid, am, true));
 
                         // - reduce global amount of global delegations
                         self.di.global_amount -= am;
 
-                        if let Some(vd) = self.di.addr_map.get_mut(&v) {
-                            vd.delegators.remove(&addr);
-                            vd.delegators.sort_by(|_, v1, _, v2| v2.cmp(&v1));
+                        if let Some(v) = self.validator_get_current_mut_one_by_id(&vid) {
+                            v.delegators.remove(&addr);
+                            v.delegators.sort_by(|_, v1, _, v2| v2.cmp(&v1));
                             if *KEEP_HIST {
                                 CHAN_D_AMOUNT_HIST
                                     .0
                                     .lock()
-                                    .send((
-                                        vd.id,
-                                        self.cur_height,
-                                        vd.delegators.values().sum(),
-                                    ))
+                                    .send((v.id, h, v.delegators.values().sum()))
                                     .unwrap();
                             }
                         }
@@ -1143,25 +1180,25 @@ impl Staking {
             .c(d!())?;
 
         if self.addr_is_validator(addr) {
-            // punish vote power if it is a validator
-            self.validator_get_power(addr).c(d!()).and_then(|power| {
-                self.validator_change_power(addr, power * percent[0] / percent[1], true)
-                    .c(d!())
-            })?;
-
             // punish related delegators
             let pl = || {
-                self.di
-                    .addr_map
+                self.validator_get_current_one_by_id(addr)
+                    .unwrap()
+                    .delegators
                     .iter()
-                    .filter(|(pk, d)| *pk != addr && d.validator_entry_exists(addr))
-                    .map(|(pk, d)| (*pk, d.amount() * percent[0] / percent[1]))
+                    .map(|(pk, am)| (*pk, am * percent[0] / percent[1]))
                     .collect::<Vec<_>>()
             };
 
             pl().into_iter().for_each(|(pk, p_am)| {
                 ruc::info_omit!(self.governance_penalty_sub_amount(&pk, p_am));
             });
+
+            // punish its vote power
+            self.validator_get_power(addr).c(d!()).and_then(|power| {
+                self.validator_change_power(addr, power * percent[0] / percent[1], true)
+                    .c(d!())
+            })?;
         }
 
         Ok(())
@@ -1670,6 +1707,10 @@ pub struct Validator {
     pub signed_last_block: bool,
     /// how many blocks has the validator signed
     pub signed_cnt: u64,
+
+    /// delegator pubkey => amount
+    ///   - delegator entries on current block height
+    pub delegators: IndexMap<XfrPublicKey, Amount>,
 }
 
 impl Validator {
@@ -1696,6 +1737,7 @@ impl Validator {
             kind,
             signed_last_block: false,
             signed_cnt: 0,
+            delegators: IndexMap::new(),
         })
     }
 
@@ -1770,13 +1812,6 @@ pub struct Delegation {
     pub proposer_rwd_cnt: u64,
     /// how many times you get delegation rewards
     pub delegation_rwd_cnt: u64,
-
-    /// TODO: should be in the `Validator` structure
-    ///
-    /// delegator pubkey => amount
-    ///   - delegator entries on current block height
-    ///   - only valid for validators
-    pub delegators: indexmap::IndexMap<XfrPublicKey, Amount>,
 }
 
 /// Detail of each reward entry.
@@ -1819,8 +1854,8 @@ impl Delegation {
 
     #[inline(always)]
     #[cfg(not(target_arch = "wasm32"))]
-    fn validator_entry(&self, validator: &XfrPublicKey) -> Result<Amount> {
-        self.entries.get(validator).copied().c(d!())
+    fn validator_entry(&self, validator: &XfrPublicKey) -> Option<Amount> {
+        self.entries.get(validator).copied()
     }
 
     #[inline(always)]

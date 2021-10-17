@@ -2,28 +2,30 @@
 //! Some handful function and data structure for findora cli tools
 //!
 
-use crate::{
-    api::{DelegationInfo, ValidatorDetail},
-    common::get_serv_addr,
-    txn_builder::{TransactionBuilder, TransferOperationBuilder},
-};
-use globutils::{wallet, HashOf, SignatureOf};
-use ledger::{
-    data_model::{
-        AssetType, AssetTypeCode, DefineAsset, Operation, StateCommitmentData,
-        Transaction, TransferType, TxoRef, TxoSID, Utxo, ASSET_TYPE_FRA,
-        BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+use {
+    crate::{
+        api::{DelegationInfo, ValidatorDetail},
+        common::get_serv_addr,
+        txn_builder::{TransactionBuilder, TransferOperationBuilder},
     },
-    staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
-};
-use ruc::*;
-use serde::{self, Deserialize, Serialize};
-use std::collections::HashMap;
-use tendermint::{PrivateKey, PublicKey};
-use zei::xfr::{
-    asset_record::{open_blind_asset_record, AssetRecordType},
-    sig::{XfrKeyPair, XfrPublicKey},
-    structs::{AssetRecordTemplate, OwnerMemo},
+    globutils::{wallet, HashOf, SignatureOf},
+    ledger::{
+        data_model::{
+            AssetType, AssetTypeCode, DefineAsset, Operation, StateCommitmentData,
+            Transaction, TransferType, TxoRef, TxoSID, Utxo, ASSET_TYPE_FRA,
+            BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+        },
+        staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
+    },
+    ruc::*,
+    serde::{self, Deserialize, Serialize},
+    std::collections::HashMap,
+    tendermint::{PrivateKey, PublicKey},
+    zei::xfr::{
+        asset_record::{open_blind_asset_record, AssetRecordType},
+        sig::{XfrKeyPair, XfrPublicKey},
+        structs::{AssetRecordTemplate, OwnerMemo},
+    },
 };
 
 ///////////////////////////////////////
@@ -394,22 +396,10 @@ pub fn get_created_assets(addr: &XfrPublicKey) -> Result<Vec<DefineAsset>> {
         .and_then(|b| serde_json::from_slice::<Vec<DefineAsset>>(&b).c(d!()))
 }
 
+#[inline(always)]
 #[allow(missing_docs)]
 pub fn get_balance(kp: &XfrKeyPair) -> Result<u64> {
-    let balance = get_owned_utxos(kp.get_pk_ref())
-        .c(d!())?
-        .values()
-        .map(|(utxo, owner_memo)| {
-            open_blind_asset_record(&utxo.0.record, owner_memo, kp)
-                .c(d!())
-                .map(|obr| obr.amount)
-        })
-        .collect::<Result<Vec<_>>>()
-        .c(d!())?
-        .iter()
-        .sum();
-
-    Ok(balance)
+    get_asset_balance(kp, None).c(d!())
 }
 
 /// Retrieve Utxos of a findora keypair and calcultate the balance of the specified asset
