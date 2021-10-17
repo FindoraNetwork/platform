@@ -7,7 +7,7 @@
     - **VERY IMPORTMANT**: do NOT commit this file to the code base
     - **VERY IMPORTMANT**: do NOT push this file to GitHub!
 3. Ask 'community partners' to transfer some amounts of mainnet-FRA to these new addresses in `staking_config.json.keys`
-    - From 8000009.1 FRAs to 8190009.1 FRAs, that is '800,0009.1/801,0009.1/802,0009.1/.../819,0009.1'
+    - From 4000009.1 FRAs to 4190009.1 FRAs, that is '400,0009.1/401,0009.1/402,0009.1/.../419,0009.1'
 4. Check the results of the transfer-operations in < step 3 > on mainnet
 5. Send a copy of each key to the co-responding owner
 6. Commit the changes to the local git repo
