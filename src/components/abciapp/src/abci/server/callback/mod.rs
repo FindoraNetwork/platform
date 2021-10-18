@@ -177,14 +177,18 @@ pub fn deliver_tx(
                     }
 
                     if s.la.write().cache_transaction(tx.clone()).is_ok() {
-                        if is_convert_account(&tx)
-                            && s.account_base_app
-                                .write()
-                                .deliver_findora_tx(&tx)
-                                .is_err()
-                        {
-                            resp.code = 1;
-                            resp.log = String::from("Failed to deliver transaction!");
+                        if is_convert_account(&tx) {
+                            if let Err(err) =
+                                s.account_base_app.write().deliver_findora_tx(&tx)
+                            {
+                                log::debug!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
+
+                                resp.code = 1;
+                                resp.log = format!(
+                                    "deliver convert account tx failed: {:?}",
+                                    err
+                                );
+                            }
                         }
                         return resp;
                     }
