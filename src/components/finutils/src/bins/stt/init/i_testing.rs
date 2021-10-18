@@ -81,8 +81,8 @@ pub fn run_all() -> Result<()> {
         assert!(vd.is_online);
         assert_eq!(0, vd.delegator_cnt);
         assert!(
-            vs.block_height_int == 2 + vd.cur_height
-                || vs.block_height_int == 1 + vd.cur_height
+            vs.block_height_int < 5 + vd.cur_height
+                && vs.block_height_int >= vd.cur_height
         );
         assert!((0..v_set.len() as u64)
             .any(|i| (400_0000 + 1_0000 * i) * FRA == v.voting_power_int));
@@ -287,8 +287,8 @@ pub fn run_all() -> Result<()> {
             assert!(vd.is_online);
             assert!(1 <= vd.delegator_cnt);
             assert!(
-                vs.block_height_int == 2 + vd.cur_height
-                    || vs.block_height_int == 1 + vd.cur_height
+                vs.block_height_int < 5 + vd.cur_height
+                    && vs.block_height_int >= vd.cur_height
             );
             assert!((0..v_set.len() as u64).any(|i| {
                 let l_b = (400_0000 + 1_0000 * i) * FRA;
