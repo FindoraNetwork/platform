@@ -107,7 +107,7 @@ pub fn apply_transaction(
     match TxnEffect::compute_effect(tx) {
         Ok(effect) => {
             let mut block = ledger.start_block().unwrap();
-            let temp_sid = ledger.apply_transaction(&mut block, effect, false).unwrap();
+            let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
             ledger
                 .finish_block(block)
                 .unwrap()

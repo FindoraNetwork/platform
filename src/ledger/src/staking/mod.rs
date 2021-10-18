@@ -644,12 +644,15 @@ impl Staking {
         let validator = self.validator_td_addr_to_app_pk(validator).c(d!())?;
         let end_height = BLOCK_HEIGHT_MAX;
 
-        check_delegation_amount(am, true).c(d!())?;
-
-        if self.delegation_has_addr(&validator) || owner == validator {
-            // `normal scene` or `do self-delegation`
-        } else {
-            return Err(eg!("self-delegation has not been finished"));
+        // check everything in advance before changing the data
+        {
+            if self.delegation_has_addr(&validator) || owner == validator {
+                // `normal scene` or `do self-delegation`
+            } else {
+                return Err(eg!("self-delegation has not been finished"));
+            }
+            check_delegation_amount(am, true).c(d!())?;
+            self.validator_check_power(am, &validator).c(d!())?;
         }
 
         let h = self.cur_height;
@@ -711,7 +714,8 @@ impl Staking {
             .or_insert_with(BTreeSet::new)
             .insert(owner);
 
-        self.validator_change_power(&validator, am, false).c(d!())?;
+        // There should be no failure here !!
+        pnk!(self.validator_change_power(&validator, am, false));
 
         // global amount of all delegations
         self.di.global_amount += am;
@@ -1321,15 +1325,14 @@ impl Staking {
     /// this function also serves as the checker of invalid tx
     /// sent from COIN_BASE_PRINCIPAL, every tx that can
     /// not pass this checker will be regarded as invalid.
-    pub fn coinbase_check_and_pay(&mut self, tx: &Transaction) -> Result<()> {
+    pub fn coinbase_check_and_pay(&mut self, tx: &Transaction) {
         if !is_coinbase_tx(tx) {
-            return Ok(());
+            return;
         }
-
-        self.coinbase_pay(tx).c(d!())
+        self.coinbase_pay(tx);
     }
 
-    fn coinbase_pay(&mut self, tx: &Transaction) -> Result<()> {
+    fn coinbase_pay(&mut self, tx: &Transaction) {
         let mut cbb = self.coinbase.balance;
         let mut cbb_principal = self.coinbase.principal_balance;
 
@@ -1383,8 +1386,6 @@ impl Staking {
 
         self.coinbase.balance = cbb;
         self.coinbase.principal_balance = cbb_principal;
-
-        Ok(())
     }
 
     #[inline(always)]
