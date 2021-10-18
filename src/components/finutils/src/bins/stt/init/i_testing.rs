@@ -298,6 +298,8 @@ pub fn run_all() -> Result<()> {
         }
     }
 
+    println!("\x1b[31;1mcongratulate! We passed all the tests!\x1b[0m");
+
     Ok(())
 }
 
