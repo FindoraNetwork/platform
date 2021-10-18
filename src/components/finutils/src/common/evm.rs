@@ -45,10 +45,9 @@ pub fn transfer_to_account(amount: u64, address: Option<&str>) -> Result<()> {
         None => MultiSigner::Xfr(kp.get_pk()),
     };
 
-    // ConvertAccount Operation must be the first (reduce query overhead)
     builder
-        .add_operation_convert_account(&kp, target_address, amount)?
         .add_operation(transfer_op)
+        .add_operation_convert_account(&kp, target_address, amount)?
         .sign(&kp);
     utils::send_tx(&builder.take_transaction())?;
     Ok(())

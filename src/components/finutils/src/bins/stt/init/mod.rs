@@ -13,8 +13,10 @@ pub fn init(mut interval: u64, skip_validator: bool, is_mainnet: bool) -> Result
         interval = BLOCK_INTERVAL;
     }
 
-    println!(">>> Set initial validator set ...");
-    common::set_initial_validators().c(d!())?;
+    if !skip_validator {
+        println!(">>> Set initial validator set ...");
+        common::set_initial_validators().c(d!())?;
+    }
 
     if !is_mainnet {
         let root_kp =
