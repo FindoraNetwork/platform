@@ -35,7 +35,9 @@ use {
         TransferOperationBuilder as PlatformTransferOperationBuilder,
     },
     fp_types::{
-        actions::account::{Action as AccountAction, MintOutput, TransferToUTXO},
+        actions::xhub::{
+            Action as XHubAction, NonConfidentialOutput, NonConfidentialTransfer,
+        },
         actions::Action,
         assemble::{CheckFee, CheckNonce, SignedExtra, UncheckedTransaction},
         crypto::{Address, MultiSignature, MultiSigner},
@@ -495,12 +497,13 @@ impl TransactionBuilder {
         mut self,
         keypair: &XfrKeyPair,
         ethereum_address: String,
+        amount: u64,
     ) -> Result<TransactionBuilder, JsValue> {
         let ea = MultiSigner::from_str(&ethereum_address)
             .c(d!())
             .map_err(error_to_jsvalue)?;
         self.get_builder_mut()
-            .add_operation_convert_account(keypair, ea)
+            .add_operation_convert_account(keypair, ea, amount)
             .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
@@ -575,14 +578,17 @@ pub fn transfer_to_utxo_from_account(
     s.copy_from_slice(&seed);
     let kp = SecpPair::from_seed(&s);
 
-    let output = MintOutput {
+    let output = NonConfidentialOutput {
         target: recipient,
         amount,
         asset: ASSET_TYPE_FRA,
     };
-    let action = Action::Account(AccountAction::TransferToUTXO(TransferToUTXO {
-        outputs: vec![output],
-    }));
+    let action = Action::XHub(XHubAction::NonConfidentialTransfer(
+        NonConfidentialTransfer {
+            input_value: amount,
+            outputs: vec![output],
+        },
+    ));
 
     let extra = generate_extra(nonce.into(), None);
     let msg = serde_json::to_vec(&(action.clone(), extra.clone()))

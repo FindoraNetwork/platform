@@ -5,7 +5,6 @@ mod basic;
 mod impls;
 
 use abci::{RequestEndBlock, ResponseEndBlock};
-use ethereum::{Receipt, TransactionV0 as Transaction};
 use ethereum_types::{H160, H256, U256};
 use evm::Config as EvmConfig;
 use fp_core::{
@@ -16,26 +15,18 @@ use fp_core::{
     transaction::{ActionResult, Executable, ValidateUnsigned},
 };
 use fp_events::*;
-use fp_evm::{BlockId, Runner, TransactionStatus};
+use fp_evm::{BlockId, Runner};
 use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
 };
 use fp_types::{actions::ethereum::Action, crypto::Address};
-use lazy_static::lazy_static;
-use parking_lot::Mutex;
 use ruc::*;
-use std::{marker::PhantomData, sync::Arc};
+use std::marker::PhantomData;
 
 pub const MODULE_NAME: &str = "ethereum";
 
 static ISTANBUL_CONFIG: EvmConfig = EvmConfig::istanbul();
-
-lazy_static! {
-    /// Current building block's transactions and receipts.
-    static ref PENDING_TRANSACTIONS: Arc<Mutex<Vec<(Transaction, TransactionStatus, Receipt)>>> =
-        Arc::new(Mutex::new(Vec::new()));
-}
 
 pub trait Config {
     /// Account module interface to read/write account assets.
@@ -61,7 +52,7 @@ pub trait Config {
 }
 
 pub mod storage {
-    use ethereum::{BlockV0 as Block, Receipt};
+    use ethereum::{BlockV0 as Block, Receipt, TransactionV0 as Transaction};
     use ethereum_types::{H256, U256};
     use fp_evm::TransactionStatus;
     use fp_storage::*;
@@ -70,6 +61,8 @@ pub mod storage {
     generate_storage!(Ethereum, TransactionIndex => Map<H256, (U256, u32)>);
 
     // The following data is stored in stateless rocksdb
+    // Current building block's transactions and receipts.
+    generate_storage!(Ethereum, PendingTransactions => Value<Vec<(Transaction, TransactionStatus, Receipt)>>);
     // The current Ethereum block number.
     generate_storage!(Ethereum, CurrentBlockNumber => Value<U256>);
     // Mapping for block number and hashes.
@@ -99,15 +92,14 @@ pub struct ContractLog {
 }
 
 pub struct App<C> {
-    /// Whether to store empty ethereum blocks when no evm contract transaction.
-    enable_eth_empty_blocks: bool,
+    disable_eth_empty_blocks: bool,
     phantom: PhantomData<C>,
 }
 
 impl<C: Config> App<C> {
     pub fn new(empty_block: bool) -> Self {
         App {
-            enable_eth_empty_blocks: empty_block,
+            disable_eth_empty_blocks: empty_block,
             phantom: Default::default(),
         }
     }
@@ -116,7 +108,7 @@ impl<C: Config> App<C> {
 impl<C: Config> Default for App<C> {
     fn default() -> Self {
         App {
-            enable_eth_empty_blocks: false,
+            disable_eth_empty_blocks: false,
             phantom: Default::default(),
         }
     }
@@ -128,9 +120,7 @@ impl<C: Config> AppModule for App<C> {
         ctx: &mut Context,
         req: &RequestEndBlock,
     ) -> ResponseEndBlock {
-        if PENDING_TRANSACTIONS.lock().len() > 0 || self.enable_eth_empty_blocks {
-            let _ = ruc::info!(self.store_block(ctx, U256::from(req.height)));
-        }
+        let _ = ruc::info!(self.store_block(ctx, U256::from(req.height)));
         Default::default()
     }
 }
