@@ -20,23 +20,23 @@ use {
     serde::Deserialize,
 };
 
-// 1. wait 4 blocks
+// 1. check the initial state
 //     - the number of validators should be 20
 //     - the power of validators should be [400_0000, 401_0000, ..., 419_0000]
 //     - the `is_online` state of every validator should be 'true'
 //     - the number of delegators should be 0
 // 2. use validator[0] to define and issue a new asset A
-// 3. wait 2 blocks
+// 3. wait 1.2 blocks
 //     - check the balance of asset A of validator[0]
 // 4. transfer asset A from validator[0] to validator[1..19]
-// 5. wait 2 blocks
+// 5. wait 1.2 blocks
 //     - check the balance of asset A of validator[1..19]
 // 6. validators delegate 1 FRA unit to each other
 //     - validator[0] --> validator[1]
 //     - validator[2] --> validator[2]
 //     - ...
 //     - validator[19] --> validator[0]
-// 7. wait 2 blocks
+// 7. wait 1.2 blocks
 //     - check the delegators of each validator
 // 8. wait 3 blocks
 //     - check the power of each validator via ':26657/validators'
@@ -54,9 +54,9 @@ use {
 // 14. wait 3 blocks
 //     - the number of delegators of validator[0] should be 2
 // 15. transfer all balances of validator[1..19] to validator[0]
-// 16. wait 1.5 blocks
+// 16. wait 1.2 blocks
 //     - all balances of validator[1..19] should be 0
-// 17. store the current block height, and wait 2 blocks
+// 17. store the current block height, and wait 1.2 blocks
 //     - the new block height should be bigger the the old one
 //     - the number of validators should be 20
 //     - the `is_online` state of every validator should be 'true'
@@ -98,21 +98,21 @@ pub fn run_all() -> Result<()> {
 
     println!(">>> Create custom asset A ...");
     let code = create_asset_x(v0_kp, "A", 9, None, true, None).c(d!())?;
-    println!(">>> Wait 1.5 block ...");
-    sleep_n_block!(1.5);
+    println!(">>> Wait 1.2 block ...");
+    sleep_n_block!(1.2);
 
     println!(">>> Issue custom asset A ...");
     issue_asset_x(v0_kp, &code, 123456, false).c(d!())?;
 
     // 3.
-    println!(">>> Wait 1.5 block ...");
-    sleep_n_block!(1.5);
+    println!(">>> Wait 1.2 block ...");
+    sleep_n_block!(1.2);
 
     assert_eq!(123456, get_asset_balance(v0_kp, Some(code)).c(d!())?);
 
     // 4.
     println!(">>> Transfer custom asset A ...");
-    println!(">>> Wait 6 block for 4 times of transfering ...");
+    println!(">>> Wait 3.6 block for 4 times of transfering ...");
 
     let target_kps = v_set
         .iter()
@@ -121,13 +121,13 @@ pub fn run_all() -> Result<()> {
         .collect::<Vec<_>>();
     let targets = target_kps.iter().map(|kp| kp.get_pk()).collect::<Vec<_>>();
     transfer_asset_batch_x(v0_kp, &targets, Some(code), 1, true, true).c(d!())?;
-    sleep_n_block!(1.5);
+    sleep_n_block!(1.2);
     transfer_asset_batch_x(v0_kp, &targets, Some(code), 1, false, true).c(d!())?;
-    sleep_n_block!(1.5);
+    sleep_n_block!(1.2);
     transfer_asset_batch_x(v0_kp, &targets, Some(code), 1, true, false).c(d!())?;
-    sleep_n_block!(1.5);
+    sleep_n_block!(1.2);
     transfer_asset_batch_x(v0_kp, &targets, Some(code), 1, false, false).c(d!())?;
-    sleep_n_block!(1.5);
+    sleep_n_block!(1.2);
 
     // 5.
     println!(">>> Check balances ...");
@@ -261,8 +261,8 @@ pub fn run_all() -> Result<()> {
     }
 
     // 16.
-    println!(">>> Wait 1.5 block ...");
-    sleep_n_block!(1.5);
+    println!(">>> Wait 1.2 block ...");
+    sleep_n_block!(1.2);
 
     println!(">>> Check balances ...");
     assert_eq!(balances, get_balance(&v_set[0].keypair).c(d!())?);
@@ -271,12 +271,12 @@ pub fn run_all() -> Result<()> {
     }
 
     // 17/18.
-    println!(">>> Check the next 10 blocks ...");
+    println!(">>> Check the next 6 blocks ...");
 
     for _ in 0..5 {
         let height = get_26657_validators(sa).c(d!())?.block_height_int;
-        println!(">>> Wait 1.5 block ...");
-        sleep_n_block!(1.5);
+        println!(">>> Wait 1.2 block ...");
+        sleep_n_block!(1.2);
 
         let vs = get_26657_validators(sa).c(d!())?;
         assert!(height < vs.block_height_int);

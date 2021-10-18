@@ -19,13 +19,13 @@
 12. Deploy the new compiled version(docker image) to an new environment
     - The new environment should be initialized with the snapshot created in < step 11 >
     - Let's call it 'mainnet-new'
-13. Do `stt init --mainet` on 'mainnet-new', the following scenarios will be checked by `stt` automatically
+13. Do `stt init --mainnet` on 'mainnet-new', the following scenarios will be checked by `stt` automatically
     - The number of validators should be 20
     - The corresponding voting power of each validator should be correct
         - should be equal to `{total balance} - 9(reserved for testing) - 0.1(reserved for fee)`
     - The state of each validator should be `online`(the online/offline mark in `fn show`)
     - All major functions should run well, such as transfer FRAs, custom assets, delegation ...
-    - Should be able to create 10 new blocks without any errors after all the above operations
+    - Should be able to create 6 new blocks without any errors after all the above operations
 14. Switch the public network entrances between mainnet and mainnet-new
 15. Open the network entrance of mainnet-new
     - Keep the old mainnet running for 30 days

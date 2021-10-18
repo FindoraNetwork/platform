@@ -4,7 +4,6 @@ members = [
     "src/components/finutils",
     "src/components/abciapp",
     "src/components/wasm",
-    "src/components/bugchecker",
     "src/libs/bitmap",
     "src/libs/merkle_tree",
     "src/libs/globutils",

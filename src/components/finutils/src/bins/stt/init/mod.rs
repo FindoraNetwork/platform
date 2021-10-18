@@ -12,7 +12,7 @@ use {
     ledger::data_model::TX_FEE_MIN,
 };
 
-pub fn init(mut interval: u64, skip_validator: bool, is_mainnet: bool) -> Result<()> {
+pub fn init(mut interval: u64, is_mainnet: bool) -> Result<()> {
     if 0 == interval {
         interval = BLOCK_INTERVAL;
     }
@@ -28,13 +28,8 @@ pub fn init(mut interval: u64, skip_validator: bool, is_mainnet: bool) -> Result
         println!(">>> Define and issue FRA ...");
         common::utils::send_tx(&fra_gen_initial_tx(&root_kp)).c(d!())?;
 
-        println!(">>> Wait 1.5 block ...");
-        sleep_n_block!(1.5, interval);
-
-        if skip_validator {
-            println!(">>> DONE !");
-            return Ok(());
-        }
+        println!(">>> Wait 1.2 block ...");
+        sleep_n_block!(1.2, interval);
 
         let mut target_list = USER_LIST
             .values()
@@ -57,11 +52,14 @@ pub fn init(mut interval: u64, skip_validator: bool, is_mainnet: bool) -> Result
         println!(">>> Transfer FRAs to validators ...");
         common::utils::transfer_batch(&root_kp, target_list, None, true, true)
             .c(d!())?;
+
+        println!(">>> Wait 1.2 block ...");
+        sleep_n_block!(1.2);
     }
 
-    println!(">>> Wait 6 block ...");
-    sleep_n_block!(2);
-    re_distribution().c(d!())?; // 4 blocks of waiting time
+    println!(">>> Re-distribution ...");
+    println!(">>> Wait 2.4 block ...");
+    re_distribution().c(d!())?;
 
     println!(">>> Propose self-delegations ...");
     for (i, v) in VALIDATOR_LIST.values().enumerate() {
@@ -109,7 +107,7 @@ fn re_distribution() -> Result<()> {
     }
 
     // 2.
-    sleep_n_block!(2);
+    sleep_n_block!(1.2);
 
     // 3.
     let total = get_balance(&v_set[0].keypair).c(d!())?;
@@ -130,7 +128,7 @@ fn re_distribution() -> Result<()> {
     .c(d!())?;
 
     // 5.
-    sleep_n_block!(1.5);
+    sleep_n_block!(1.2);
 
     // 6.
     for v in v_set.iter().skip(1) {
