@@ -8,6 +8,7 @@ mod net;
 mod web3;
 
 use baseapp::BaseApp;
+use eth::filter_block_logs;
 use evm::{ExitError, ExitReason};
 use fp_rpc_core::types::pubsub::Metadata;
 use fp_rpc_core::{
@@ -22,12 +23,14 @@ use rustc_hex::ToHex;
 use serde_json::Value;
 use std::sync::Arc;
 
+const MAX_PAST_LOGS: u32 = 10000;
+const MAX_STORED_FILTERS: usize = 500;
+
 pub fn start_web3_service(
     evm_http: String,
     evm_ws: String,
     tendermint_rpc: String,
     account_base_app: Arc<RwLock<BaseApp>>,
-    max_past_logs: u32,
 ) -> Box<dyn std::any::Any + Send> {
     // PrivateKey: 9f7bebaa5c55464b10150bc2e0fd552e915e2bdbca95cc45ed1c909aca96e7f5
     // Address: 0xf6aca39539374993b37d29ccf0d93fa214ea0af1
@@ -41,10 +44,15 @@ pub fn start_web3_service(
                     tendermint_rpc.clone(),
                     account_base_app.clone(),
                     signers.clone(),
-                    max_past_logs,
+                    MAX_PAST_LOGS,
                 )
                 .to_delegate(),
-                eth_filter::EthFilterApiImpl::new().to_delegate(),
+                eth_filter::EthFilterApiImpl::new(
+                    account_base_app.clone(),
+                    MAX_PAST_LOGS,
+                    MAX_STORED_FILTERS,
+                )
+                .to_delegate(),
                 net::NetApiImpl::new().to_delegate(),
                 web3::Web3ApiImpl::new().to_delegate(),
                 eth_pubsub::EthPubSubApiImpl::new(account_base_app.clone())
