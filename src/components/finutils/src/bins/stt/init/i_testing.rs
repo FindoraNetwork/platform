@@ -13,16 +13,16 @@ use {
     finutils::common::{
         create_asset_x, delegate_x, get_serv_addr, issue_asset_x,
         transfer_asset_batch_x, undelegate_x,
-        utils::{get_asset_balance, get_validator_detail},
+        utils::{get_asset_balance, get_balance, get_validator_detail},
     },
-    ledger::staking::FRA,
+    ledger::{data_model::TX_FEE_MIN, staking::FRA},
     ruc::*,
     serde::Deserialize,
 };
 
 // 1. wait 4 blocks
 //     - the number of validators should be 20
-//     - the power of validators should be [800_0000, 801_0000, ..., 819_0000]
+//     - the power of validators should be [400_0000, 401_0000, ..., 419_0000]
 //     - the `is_online` state of every validator should be 'true'
 //     - the number of delegators should be 0
 // 2. use validator[0] to define and issue a new asset A
@@ -53,16 +53,23 @@ use {
 // 13. validator[18] delegate 1 FRA unit to validator[0]
 // 14. wait 3 blocks
 //     - the number of delegators of validator[0] should be 2
-// 15. store the current block height, and wait 2 blocks
+// 15. transfer all balances of validator[1..19] to validator[0]
+// 16. wait 1.5 blocks
+//     - all balances of validator[1..19] should be 0
+// 17. store the current block height, and wait 2 blocks
 //     - the new block height should be bigger the the old one
 //     - the number of validators should be 20
 //     - the `is_online` state of every validator should be 'true'
-//     - the power of validators should approximately be [800_0000, ..., 819_0000]
+//     - the power of validators should approximately be [400_0000, ..., 419_0000]
 //     - the number of delegators of each validator should be 1
-// 16. repeat < step 15 > 4 times
+// 18. repeat < step 15 > 4 times
 pub fn run_all() -> Result<()> {
     let sa = get_serv_addr().c(d!())?;
     let v_set = VALIDATOR_LIST.values().collect::<Vec<_>>();
+
+    for (i, v) in v_set.iter().skip(1).rev().enumerate() {
+        assert!((i as u64 * 1_0000 + 2) * FRA > get_balance(&v.keypair).c(d!())?);
+    }
 
     // 1.
     println!(">>> Check new validators ...");
@@ -78,7 +85,7 @@ pub fn run_all() -> Result<()> {
                 || vs.block_height_int == 1 + vd.cur_height
         );
         assert!((0..v_set.len() as u64)
-            .any(|i| (800_0000 + 1_0000 * i) * FRA == v.voting_power_int));
+            .any(|i| (400_0000 + 1_0000 * i) * FRA == v.voting_power_int));
     }
 
     // 2.
@@ -164,7 +171,7 @@ pub fn run_all() -> Result<()> {
             get_validator_detail(&v.address).c(d!())?.voting_power
         );
         assert!((0..v_set.len() as u64)
-            .any(|i| 1 + (800_0000 + 1_0000 * i) * FRA == v.voting_power_int));
+            .any(|i| 1 + (400_0000 + 1_0000 * i) * FRA == v.voting_power_int));
     }
 
     // 9.
@@ -229,7 +236,41 @@ pub fn run_all() -> Result<()> {
     assert_eq!(3, vd.delegator_cnt);
     assert_eq!(2 + v0_power, vd.voting_power);
 
-    // 15/16.
+    // 15.
+    println!(">>> Transfer all balances to validator-0...");
+
+    let mut balances = get_balance(&v_set[0].keypair).c(d!())?;
+    for v in v_set.iter().skip(1) {
+        get_balance(&v.keypair).c(d!()).and_then(|mut n| {
+            if TX_FEE_MIN < n {
+                n -= TX_FEE_MIN;
+                balances += n;
+                transfer_asset_batch_x(
+                    &v.keypair,
+                    &[v_set[0].pubkey],
+                    None,
+                    n,
+                    true,
+                    true,
+                )
+                .c(d!())
+            } else {
+                Ok(())
+            }
+        })?;
+    }
+
+    // 16.
+    println!(">>> Wait 1.5 block ...");
+    sleep_n_block!(1.5);
+
+    println!(">>> Check balances ...");
+    assert_eq!(balances, get_balance(&v_set[0].keypair).c(d!())?);
+    for v in v_set.iter().skip(1) {
+        assert_eq!(0, get_balance(&v.keypair).c(d!())?);
+    }
+
+    // 17/18.
     println!(">>> Check the next 10 blocks ...");
 
     for _ in 0..5 {
@@ -250,12 +291,14 @@ pub fn run_all() -> Result<()> {
                     || vs.block_height_int == 1 + vd.cur_height
             );
             assert!((0..v_set.len() as u64).any(|i| {
-                let l_b = (800_0000 + 1_0000 * i) * FRA;
-                let u_b = (10 + 800_0000 + 1_0000 * i) * FRA;
+                let l_b = (400_0000 + 1_0000 * i) * FRA;
+                let u_b = (10 + 400_0000 + 1_0000 * i) * FRA;
                 l_b < v.voting_power_int && u_b > v.voting_power_int
             }));
         }
     }
+
+    println!("\x1b[31;1mcongratulate! We passed all the tests!\x1b[0m");
 
     Ok(())
 }

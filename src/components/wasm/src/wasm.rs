@@ -741,7 +741,7 @@ impl TransferOperationBuilder {
     /// @throws Will throw an error if the transaction cannot be balanced.
     pub fn balance(mut self) -> Result<TransferOperationBuilder, JsValue> {
         self.get_builder_mut()
-            .balance()
+            .balance(None)
             .c(d!())
             .map_err(|e| JsValue::from_str(&format!("Error balancing txn: {}", e)))?;
         Ok(self)

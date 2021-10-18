@@ -271,7 +271,7 @@ mod issue {
 }
 
 mod delegate {
-    use super::*;
+    use {super::*, zei::xfr::asset_record::AssetRecordType};
 
     pub fn gen_tx(
         user: NameRef,
@@ -295,6 +295,7 @@ mod delegate {
             None,
             false,
             false,
+            Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
         )
         .c(d!())
         .map(|principal_op| {

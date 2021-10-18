@@ -141,6 +141,7 @@ pub fn stake(
         None,
         false,
         false,
+        Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
     )
     .c(d!())
     .map(|principal_op| builder.add_operation(principal_op))?;
@@ -176,6 +177,7 @@ pub fn stake_append(
         None,
         false,
         false,
+        Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
     )
     .c(d!())
     .map(|principal_op| builder.add_operation(principal_op))?;
@@ -654,6 +656,7 @@ fn gen_delegate_tx(
         None,
         false,
         false,
+        Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
     )
     .c(d!())
     .map(|principal_op| {

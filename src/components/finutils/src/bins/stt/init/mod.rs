@@ -6,7 +6,11 @@
 
 pub mod i_testing;
 
-use super::*;
+use {
+    super::*,
+    finutils::common::{transfer_asset_batch_x, utils::get_balance},
+    ledger::data_model::TX_FEE_MIN,
+};
 
 pub fn init(mut interval: u64, skip_validator: bool, is_mainnet: bool) -> Result<()> {
     if 0 == interval {
@@ -51,26 +55,91 @@ pub fn init(mut interval: u64, skip_validator: bool, is_mainnet: bool) -> Result
         target_list.push((&bank, FRA_PRE_ISSUE_AMOUNT / 100 * 98));
 
         println!(">>> Transfer FRAs to validators ...");
-        common::utils::transfer_batch(&root_kp, target_list, None, false, false)
+        common::utils::transfer_batch(&root_kp, target_list, None, true, true)
             .c(d!())?;
     }
 
-    println!(">>> Wait 5 blocks ...");
-    sleep_n_block!(5, interval);
+    println!(">>> Wait 6 block ...");
+    sleep_n_block!(2);
+    re_distribution().c(d!())?; // 4 blocks of waiting time
 
     println!(">>> Propose self-delegations ...");
     for (i, v) in VALIDATOR_LIST.values().enumerate() {
-        delegate::gen_tx(&v.name, (800_0000 + i as u64 * 1_0000) * FRA, &v.name)
+        delegate::gen_tx(&v.name, (400_0000 + i as u64 * 1_0000) * FRA, &v.name)
             .c(d!())
             .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
     }
+
+    println!(">>> Wait 5 block ...");
+    sleep_n_block!(5);
 
     println!(">>> Init work done !");
 
     println!(">>> Start running integration tests ...");
 
-    println!(">>> Wait 5 block ...");
-    sleep_n_block!(5);
-
     i_testing::run_all().c(d!())
+}
+
+// 1. transfer all balances of validator[1..19] to validator[0]
+// 2. wait 2 blocks
+// 3. check whether the total amount is bigger than 8400_0000 FRAs
+// 4. transfer back to validator[1..19] from validator[0]
+// 5. wait 2 blocks
+// 6. check the balance of each validator
+fn re_distribution() -> Result<()> {
+    let v_set = VALIDATOR_LIST.values().collect::<Vec<_>>();
+
+    // 1.
+    for v in v_set.iter().skip(1) {
+        get_balance(&v.keypair).c(d!()).and_then(|n| {
+            if TX_FEE_MIN < n {
+                transfer_asset_batch_x(
+                    &v.keypair,
+                    &[v_set[0].pubkey],
+                    None,
+                    n - TX_FEE_MIN,
+                    true,
+                    true,
+                )
+                .c(d!())
+            } else {
+                Ok(())
+            }
+        })?;
+    }
+
+    // 2.
+    sleep_n_block!(2);
+
+    // 3.
+    let total = get_balance(&v_set[0].keypair).c(d!())?;
+    if 8400_0000 > total {
+        return Err(eg!("Total balance is not enough !!"));
+    }
+
+    // 4.
+    let expected = (400_0000 + 1_0000 * (v_set.len() as u64 - 1) + 1) * FRA;
+    transfer_asset_batch_x(
+        &v_set[0].keypair,
+        &v_set.iter().skip(1).map(|v| v.pubkey).collect::<Vec<_>>(),
+        None,
+        expected,
+        true,
+        true,
+    )
+    .c(d!())?;
+
+    // 5.
+    sleep_n_block!(1.5);
+
+    // 6.
+    for v in v_set.iter().skip(1) {
+        let actual = get_balance(&v.keypair).c(d!())?;
+        alt!(
+            actual > expected + TX_FEE_MIN || actual < expected,
+            return Err(eg!("incorrect balance"))
+        );
+    }
+
+    Ok(())
 }

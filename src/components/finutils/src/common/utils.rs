@@ -105,6 +105,7 @@ pub fn transfer_batch(
         token_code,
         confidential_am,
         confidential_ty,
+        None,
     )
     .c(d!())?;
     builder.add_operation(op);
@@ -120,6 +121,7 @@ pub fn gen_transfer_op(
     token_code: Option<AssetTypeCode>,
     confidential_am: bool,
     confidential_ty: bool,
+    balance_type: Option<AssetRecordType>,
 ) -> Result<Operation> {
     gen_transfer_op_x(
         owner_kp,
@@ -128,6 +130,7 @@ pub fn gen_transfer_op(
         true,
         confidential_am,
         confidential_ty,
+        balance_type,
     )
     .c(d!())
 }
@@ -140,6 +143,7 @@ pub fn gen_transfer_op_x(
     auto_fee: bool,
     confidential_am: bool,
     confidential_ty: bool,
+    balance_type: Option<AssetRecordType>,
 ) -> Result<Operation> {
     let mut op_fee: u64 = 0;
     if auto_fee {
@@ -233,7 +237,7 @@ pub fn gen_transfer_op_x(
     }
 
     trans_builder
-        .balance()
+        .balance(balance_type)
         .c(d!())?
         .create(TransferType::Standard)
         .c(d!())?
@@ -247,7 +251,7 @@ pub fn gen_transfer_op_x(
 #[inline(always)]
 #[allow(missing_docs)]
 pub fn gen_fee_op(owner_kp: &XfrKeyPair) -> Result<Operation> {
-    gen_transfer_op(owner_kp, vec![], None, false, false).c(d!())
+    gen_transfer_op(owner_kp, vec![], None, false, false, None).c(d!())
 }
 
 /////////////////////////////////////////
