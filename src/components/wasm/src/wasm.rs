@@ -35,7 +35,9 @@ use {
         TransferOperationBuilder as PlatformTransferOperationBuilder,
     },
     fp_types::{
-        actions::xhub::{Action as XHubAction, NonConfidentialTransfer, NonConfidentialOutput},
+        actions::xhub::{
+            Action as XHubAction, NonConfidentialOutput, NonConfidentialTransfer,
+        },
         actions::Action,
         assemble::{CheckFee, CheckNonce, SignedExtra, UncheckedTransaction},
         crypto::{Address, MultiSignature, MultiSigner},

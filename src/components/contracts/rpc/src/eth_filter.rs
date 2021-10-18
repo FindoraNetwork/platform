@@ -283,7 +283,7 @@ impl EthFilterApi for EthFilterApiImpl {
                         self.filter_range_logs(
                             &mut ret,
                             self.max_past_logs,
-                            &filter,
+                            filter,
                             from_number,
                             to_number,
                         )?;
@@ -339,7 +339,7 @@ impl EthFilterApi for EthFilterApiImpl {
                         self.filter_range_logs(
                             &mut ret,
                             self.max_past_logs,
-                            &filter,
+                            filter,
                             from_number,
                             to_number,
                         )?;
