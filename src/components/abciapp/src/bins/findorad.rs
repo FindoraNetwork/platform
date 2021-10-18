@@ -56,7 +56,7 @@ fn node_command() -> Result<()> {
     for (condition, action) in [
         (CFG.enable_query_service, "--enable-query-service"),
         (CFG.enable_eth_api_service, "--enable-eth-api-service"),
-        (CFG.enable_eth_empty_blocks, "--enable-eth-empty-blocks"),
+        (CFG.disable_eth_empty_blocks, "--disable-eth-empty-blocks"),
         (CFG.enable_snapshot, "--enable-snapshot"),
         (CFG.snapshot_list, "--snapshot-list"),
         (CFG.snapshot_rollback, "--snapshot-rollback"),
@@ -391,7 +391,7 @@ mod config {
         pub ledger_service_port: u16,
         pub enable_query_service: bool,
         pub enable_eth_api_service: bool,
-        pub enable_eth_empty_blocks: bool,
+        pub disable_eth_empty_blocks: bool,
         pub no_fast_sync: bool,
         pub tendermint_node_self_addr: Option<String>,
         pub tendermint_node_key_config_path: Option<String>,
@@ -423,7 +423,7 @@ mod config {
                     .arg_from_usage("--ledger-service-port=[Ledger Service Port]")
                     .arg_from_usage("-q, --enable-query-service")
                     .arg_from_usage("--enable-eth-api-service")
-                    .arg_from_usage("--enable-eth-empty-blocks")
+                    .arg_from_usage("--disable-eth-empty-blocks")
                     .arg_from_usage("-N, --no-fast-sync")
                     .arg_from_usage("--tendermint-node-self-addr=[Address] 'the address of your tendermint node, in upper-hex format'")
                     .arg_from_usage("--tendermint-node-key-config-path=[Path] 'such as: ${HOME}/.tendermint/config/priv_validator_key.json'")
@@ -527,8 +527,8 @@ mod config {
             || env::var("ENABLE_QUERY_SERVICE").is_ok();
         let eeas = m.is_present("enable-eth-api-service")
             || env::var("ENABLE_ETH_API_SERVICE").is_ok();
-        let eeeb = m.is_present("enable-eth-empty-blocks")
-            || env::var("ENABLE_ETH_EMPTY_BLOCKS").is_ok();
+        let deeb = m.is_present("disable-eth-empty-blocks")
+            || env::var("DISABLE_ETH_EMPTY_BLOCKS").is_ok();
         let nfs = m.is_present("no-fast-sync") || env::var("NO_FAST_SYNC").is_ok();
         let tnsa = m
             .value_of("tendermint-node-self-addr")
@@ -567,7 +567,7 @@ mod config {
             ledger_service_port: lsp,
             enable_query_service: eqs,
             enable_eth_api_service: eeas,
-            enable_eth_empty_blocks: eeeb,
+            disable_eth_empty_blocks: deeb,
             no_fast_sync: nfs,
             tendermint_node_self_addr: tnsa,
             tendermint_node_key_config_path: tnkcp,

@@ -59,23 +59,32 @@ fn storage_map_test() {
     assert_eq!(Account::storage_prefix(), b"Account");
 
     let state = setup_temp_db();
-    assert!(Account::insert(state.write().borrow_mut(), &"a".to_string(), &10).is_ok());
+    assert!(
+        Account::insert(state.write().borrow_mut(), &"abc".to_string(), &10).is_ok()
+    );
     assert!(Account::insert(state.write().borrow_mut(), &"b".to_string(), &20).is_ok());
     assert!(Account::insert(state.write().borrow_mut(), &"c".to_string(), &30).is_ok());
 
     assert_eq!(
-        Account::get(state.read().borrow(), &"a".to_string()),
+        Account::get(state.read().borrow(), &"abc".to_string()),
         Some(10)
+    );
+    assert_eq!(
+        Account::get_unique_prefix(state.read().borrow(), &"ab".to_string()),
+        Some(("abc".to_string(), 10))
     );
     assert!(Account::contains_key(
         state.read().borrow(),
-        &"a".to_string()
+        &"abc".to_string()
     ));
-    Account::remove(state.write().borrow_mut(), &"a".to_string());
-    assert_eq!(Account::get(state.read().borrow(), &"a".to_string()), None);
+    Account::remove(state.write().borrow_mut(), &"abc".to_string());
+    assert_eq!(
+        Account::get(state.read().borrow(), &"abc".to_string()),
+        None
+    );
     assert!(!Account::contains_key(
         state.read().borrow(),
-        &"a".to_string()
+        &"abc".to_string()
     ),);
 
     let kvs = Account::iterate(state.read().borrow());

@@ -1854,12 +1854,12 @@ impl Delegation {
     }
 
     #[inline(always)]
-    #[cfg(not(target_arch = "wasm32"))]
     fn validator_entry(&self, validator: &XfrPublicKey) -> Option<Amount> {
         self.entries.get(validator).copied()
     }
 
     #[inline(always)]
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn validator_entry_exists(&self, validator: &XfrPublicKey) -> bool {
         self.entries.contains_key(validator)
     }

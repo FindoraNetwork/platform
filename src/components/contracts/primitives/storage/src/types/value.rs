@@ -89,6 +89,13 @@ where
         )
     }
 
+    /// Take the value from the provided storage instance.
+    pub fn take<D: MerkleDB>(state: &mut State<D>) -> Option<Value> {
+        let val = Self::get(state);
+        Self::delete(state);
+        val
+    }
+
     /// Take a value from storage, removing it afterwards.
     pub fn delete<D: MerkleDB>(state: &mut State<D>) {
         Instance::delete(state, <Self as StoragePrefixKey>::store_key().as_ref())

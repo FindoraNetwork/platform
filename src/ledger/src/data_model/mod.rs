@@ -1035,6 +1035,17 @@ impl TransferAsset {
 
     #[inline(always)]
     #[allow(missing_docs)]
+    pub fn get_owner_addresses(&self) -> Vec<XfrPublicKey> {
+        self.body
+            .transfer
+            .inputs
+            .iter()
+            .map(|record| record.public_key)
+            .collect()
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
         self.body.outputs.iter().collect()
     }
@@ -1163,7 +1174,7 @@ pub enum Operation {
     FraDistribution(FraDistributionOps),
     /// Coinbase operation
     MintFra(MintFraOps),
-    /// Convert UTXO to Account
+    /// Convert UTXOs to EVM Account balance
     ConvertAccount(ConvertAccount),
 }
 
