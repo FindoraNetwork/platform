@@ -43,86 +43,75 @@ impl ConvertAccount {
 
 #[allow(missing_docs)]
 pub fn is_convert_account(tx: &Transaction) -> bool {
-    matches!(
-        tx.body.operations.first(),
-        Some(Operation::ConvertAccount(_))
-    )
+    tx.body.operations.len() == 2
+        && matches!(
+            tx.body.operations.first(),
+            Some(Operation::TransferAsset(_))
+        )
+        && matches!(
+            tx.body.operations.last(),
+            Some(Operation::ConvertAccount(_))
+        )
 }
 
 #[allow(missing_docs)]
 pub fn check_convert_account(tx: &Transaction) -> Result<(MultiSigner, u64)> {
-    let mut signer = None;
-    let mut target = None;
-    let mut expected_value = 0_u64;
-    let mut convert_amount = 0_u64;
-    let mut has_sig = false;
-    let mut has_signer = false;
+    let signer;
+    let target;
+    let expected_value;
 
-    for op in &tx.body.operations {
-        match op {
-            Operation::ConvertAccount(ca) => {
-                if target.is_some() {
-                    return Err(eg!("TransferUTXOsToEVM error: UXTOs can only be transferred to one evm account"));
-                }
-                if ca.nonce != tx.body.no_replay_token {
-                    return Err(eg!(
-                        "TransferUTXOsToEVM error: nonce mismatch no_replay_token"
-                    ));
-                }
-
-                signer = Some(ca.signer);
-                target = Some(ca.receiver.clone());
-                expected_value = ca.value;
-
-                has_sig = tx.check_has_signature(&ca.signer).is_ok();
-            }
-            Operation::TransferAsset(t) => {
-                if !has_sig || signer.is_none() {
-                    return Err(eg!("TransferUTXOsToEVM error: invalid signature"));
-                }
-                if !has_signer {
-                    has_signer = t
-                        .get_owner_addresses()
-                        .iter()
-                        .any(|&pk| pk == signer.unwrap());
-                }
-
-                for o in &t.body.outputs {
-                    if matches!(o.record.asset_type, XfrAssetType::Confidential(_))
-                        || matches!(o.record.amount, XfrAmount::Confidential(_))
-                    {
-                        return Err(eg!(
-                        "TransferUTXOsToEVM error: only support non-confidential UTXOs transfer to an evm account"
-                    ));
-                    }
-                    if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
-                        if o.record.public_key == *BLACK_HOLE_PUBKEY_STAKING
-                            && ty == ASSET_TYPE_FRA
-                        {
-                            if let XfrAmount::NonConfidential(amount) = o.record.amount {
-                                convert_amount += amount;
-                            }
-                        }
-                    }
-                }
-            }
-            _ => {
-                return Err(eg!("TransferUTXOsToEVM error: invalid operation"));
-            }
+    if let Some(Operation::ConvertAccount(ca)) = tx.body.operations.last() {
+        if ca.nonce != tx.body.no_replay_token {
+            return Err(eg!(
+                "TransferUTXOsToEVM error: nonce mismatch no_replay_token"
+            ));
         }
-    }
+        if tx.check_has_signature(&ca.signer).is_err() {
+            return Err(eg!("TransferUTXOsToEVM error: invalid signature"));
+        }
 
-    if expected_value != convert_amount {
-        return Err(eg!("TransferUTXOsToEVM error: invalid convert value"));
-    }
-    if !has_signer {
-        return Err(eg!("TransferUTXOsToEVM error: not found signer"));
-    }
-    if target.is_none() {
+        signer = ca.signer;
+        target = ca.receiver.clone();
+        expected_value = ca.value;
+    } else {
         return Err(eg!(
-            "TransferUTXOsToEVM error: not found the evm target account"
+            "TransferUTXOsToEVM error: invalid ConvertAccount operation"
         ));
     }
 
-    Ok((target.unwrap(), expected_value))
+    if let Some(Operation::TransferAsset(t)) = tx.body.operations.first() {
+        let has_signer = t.get_owner_addresses().iter().any(|&pk| pk == signer);
+        if !has_signer {
+            return Err(eg!("TransferUTXOsToEVM error: not found signer"));
+        }
+
+        let mut convert_amount = 0_u64;
+        for o in &t.body.outputs {
+            if matches!(o.record.asset_type, XfrAssetType::Confidential(_))
+                || matches!(o.record.amount, XfrAmount::Confidential(_))
+            {
+                return Err(eg!(
+                        "TransferUTXOsToEVM error: only support non-confidential UTXOs transfer to an evm account"
+                    ));
+            }
+            if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
+                if o.record.public_key == *BLACK_HOLE_PUBKEY_STAKING
+                    && ty == ASSET_TYPE_FRA
+                {
+                    if let XfrAmount::NonConfidential(amount) = o.record.amount {
+                        convert_amount += amount;
+                    }
+                }
+            }
+        }
+        if expected_value != convert_amount {
+            return Err(eg!("TransferUTXOsToEVM error: invalid convert value"));
+        }
+    } else {
+        return Err(eg!(
+            "TransferUTXOsToEVM error: invalid TransferAsset operation"
+        ));
+    }
+
+    Ok((target, expected_value))
 }
