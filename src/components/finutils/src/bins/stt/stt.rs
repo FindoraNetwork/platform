@@ -61,8 +61,7 @@ fn main() {
 fn run() -> Result<()> {
     let subcmd_init = SubCommand::with_name("init")
         .arg_from_usage("--mainnet")
-        .arg_from_usage("-i, --interval=[Interval] 'block interval'")
-        .arg_from_usage("-s, --skip-validator 'skip validator initialization'");
+        .arg_from_usage("-i, --interval=[Interval] 'block interval'");
     let subcmd_test = SubCommand::with_name("test");
     let subcmd_issue = SubCommand::with_name("issue").about("issue FRA on demand");
     let subcmd_delegate = SubCommand::with_name("delegate")
@@ -109,9 +108,8 @@ fn run() -> Result<()> {
             .unwrap_or("0")
             .parse::<u64>()
             .c(d!())?;
-        let skip_validator = m.is_present("skip-validator");
         let is_mainnet = m.is_present("mainnet");
-        init::init(interval, skip_validator, is_mainnet).c(d!())?;
+        init::init(interval, is_mainnet).c(d!())?;
     } else if matches.is_present("test") {
         init::i_testing::run_all().c(d!())?;
     } else if matches.is_present("issue") {
