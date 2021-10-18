@@ -121,7 +121,7 @@ pub(crate) mod global_cfg {
         pub submission_service_port: u16,
         pub ledger_service_port: u16,
         pub enable_query_service: bool,
-        pub enable_eth_empty_blocks: bool,
+        pub disable_eth_empty_blocks: bool,
         pub enable_eth_api_service: bool,
         pub evm_http_port: u16,
         pub evm_ws_port: u16,
@@ -153,7 +153,7 @@ pub(crate) mod global_cfg {
                 .arg_from_usage("--submission-service-port=[Submission Service Port]")
                 .arg_from_usage("--ledger-service-port=[Ledger Service Port]")
                 .arg_from_usage("-q, --enable-query-service")
-                .arg_from_usage("--enable-eth-empty-blocks 'whether to generate empty ethereum blocks when no evm contract transaction'")
+                .arg_from_usage("--disable-eth-empty-blocks 'not generate empty ethereum blocks when no evm transaction'")
                 .arg_from_usage("--enable-eth-api-service")
                 .arg_from_usage("--evm-http-port=[EVM Web3 Http Port]")
                 .arg_from_usage("--evm-ws-port=[EVM Web3 WS Port]")
@@ -235,8 +235,8 @@ pub(crate) mod global_cfg {
                     format!("{}/.tendermint/__findora__", pnk!(env::var("HOME")))
                 })
             });
-        let eeb = m.is_present("enable-eth-empty-blocks")
-            || env::var("ENABLE_ETH_EMPTY_BLOCKS").is_ok();
+        let eeb = m.is_present("disable-eth-empty-blocks")
+            || env::var("DISABLE_ETH_EMPTY_BLOCKS").is_ok();
         let eas = m.is_present("enable-eth-api-service")
             || env::var("ENABLE_ETH_API_SERVICE").is_ok();
         let ehp = m
@@ -262,7 +262,7 @@ pub(crate) mod global_cfg {
             submission_service_port: ssp,
             ledger_service_port: lsp,
             enable_query_service: eqs,
-            enable_eth_empty_blocks: eeb,
+            disable_eth_empty_blocks: eeb,
             enable_eth_api_service: eas,
             evm_http_port: ehp,
             evm_ws_port: ewp,

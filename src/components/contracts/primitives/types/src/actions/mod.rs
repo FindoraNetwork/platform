@@ -1,7 +1,7 @@
-pub mod account;
 pub mod ethereum;
 pub mod evm;
 pub mod template;
+pub mod xhub;
 
 use serde::{Deserialize, Serialize};
 
@@ -9,6 +9,6 @@ use serde::{Deserialize, Serialize};
 pub enum Action {
     Ethereum(ethereum::Action),
     Evm(evm::Action),
-    Account(account::Action),
+    XHub(xhub::Action),
     Template(template::Action),
 }

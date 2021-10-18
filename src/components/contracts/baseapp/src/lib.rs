@@ -25,7 +25,7 @@ use fp_traits::{
     base::BaseProvider,
     evm::{EthereumAddressMapping, EthereumDecimalsMapping},
 };
-use fp_types::{actions::account::MintOutput, actions::Action, crypto::Address};
+use fp_types::{actions::xhub::NonConfidentialOutput, actions::Action, crypto::Address};
 use lazy_static::lazy_static;
 use ledger::data_model::Transaction as FindoraTransaction;
 use notify::*;
@@ -127,6 +127,11 @@ impl module_evm::Config for BaseApp {
     );
 }
 
+impl module_xhub::Config for BaseApp {
+    type AccountAsset = module_account::App<Self>;
+    type DecimalsMapping = EthereumDecimalsMapping;
+}
+
 impl BaseApp {
     pub fn new(basedir: &Path, empty_block: bool) -> Result<Self> {
         // Creates a fresh chain state db and history db
@@ -188,8 +193,8 @@ impl Executable for BaseApp {
                 module_ethereum::App::<Self>::execute(origin, action, ctx)
             }
             Action::Evm(action) => module_evm::App::<Self>::execute(origin, action, ctx),
-            Action::Account(action) => {
-                module_account::App::<Self>::execute(origin, action, ctx)
+            Action::XHub(action) => {
+                module_xhub::App::<Self>::execute(origin, action, ctx)
             }
             Action::Template(action) => {
                 module_template::App::<Self>::execute(origin, action, ctx)
@@ -254,8 +259,8 @@ impl BaseApp {
         self.modules.process_findora_tx(&self.check_state, tx)
     }
 
-    pub fn consume_mint(&mut self, size: usize) -> Result<Vec<MintOutput>> {
-        self.modules.consume_mint(&self.deliver_state, size)
+    pub fn consume_mint(&mut self) -> Option<Vec<NonConfidentialOutput>> {
+        module_xhub::App::<BaseApp>::consume_mint(&self.deliver_state)
     }
 }
 

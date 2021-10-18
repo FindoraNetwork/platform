@@ -6,10 +6,9 @@ use crate::data_model::{
 use fp_types::crypto::MultiSigner;
 use ruc::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use zei::xfr::{
-    sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
-    structs::{AssetType, XfrAmount, XfrAssetType},
+    sig::XfrPublicKey,
+    structs::{XfrAmount, XfrAssetType},
 };
 
 /// Use this operation to transfer.
@@ -17,122 +16,113 @@ use zei::xfr::{
 /// This operation only support binded xfr_address is sender address.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ConvertAccount {
-    /// transaction body
-    pub data: Data,
     /// transaction signer
-    pub public: XfrPublicKey,
-    /// transaction signature
-    pub signature: XfrSignature,
+    pub signer: XfrPublicKey,
+    /// transaction nonce
+    pub nonce: NoReplayToken,
+    /// receiver address
+    pub receiver: MultiSigner,
+    /// convert UTXOs value
+    pub value: u64,
 }
 
 #[allow(missing_docs)]
 impl ConvertAccount {
-    pub fn new(
-        keypair: &XfrKeyPair,
-        nonce: NoReplayToken,
-        address: MultiSigner,
-    ) -> Self {
-        let data = Data::new(nonce, address);
-        let public = keypair.get_pk();
-        let signature = keypair.sign(&data.to_bytes());
-        Self {
-            data,
-            public,
-            signature,
-        }
-    }
-
-    pub fn verify(&self) -> Result<()> {
-        self.public
-            .verify(&self.data.to_bytes(), &self.signature)
-            .c(d!())
-    }
-
     pub fn set_nonce(&mut self, nonce: NoReplayToken) {
-        self.data.nonce = nonce;
+        self.nonce = nonce;
     }
 
     pub fn get_nonce(&self) -> NoReplayToken {
-        self.data.nonce
+        self.nonce
     }
 
     pub fn get_related_address(&self) -> XfrPublicKey {
-        self.public
-    }
-}
-
-/// The body of TranserToAccount.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct Data {
-    /// transaction nonce
-    pub nonce: NoReplayToken,
-    /// receiver address
-    pub address: MultiSigner,
-}
-
-#[allow(missing_docs)]
-impl Data {
-    pub fn new(nonce: NoReplayToken, address: MultiSigner) -> Self {
-        Data { nonce, address }
-    }
-
-    pub fn to_bytes(&self) -> Vec<u8> {
-        pnk!(bincode::serialize(self))
+        self.signer
     }
 }
 
 #[allow(missing_docs)]
-pub fn is_convert_tx(tx: &Transaction) -> bool {
-    for op in &tx.body.operations {
-        if let Operation::ConvertAccount(_) = op {
-            return true;
-        }
-    }
-    false
+pub fn is_convert_account(tx: &Transaction) -> bool {
+    matches!(
+        tx.body.operations.first(),
+        Some(Operation::ConvertAccount(_))
+    )
 }
 
 #[allow(missing_docs)]
-pub fn check_convert_tx(
-    tx: &Transaction,
-) -> Result<(MultiSigner, HashMap<AssetType, u64>)> {
-    let mut owner = None;
-
-    let mut assets = HashMap::new();
+pub fn check_convert_account(tx: &Transaction) -> Result<(MultiSigner, u64)> {
+    let mut signer = None;
+    let mut target = None;
+    let mut expected_value = 0_u64;
+    let mut convert_amount = 0_u64;
+    let mut has_sig = false;
+    let mut has_signer = false;
 
     for op in &tx.body.operations {
-        if let Operation::ConvertAccount(ca) = op {
-            if owner.is_some() {
-                return Err(eg!("tx must have 1 convert account"));
-            }
-            owner = Some(ca.data.address.clone())
-        }
-        if let Operation::TransferAsset(t) = op {
-            for o in &t.body.outputs {
-                if matches!(o.record.asset_type, XfrAssetType::Confidential(_))
-                    || matches!(o.record.amount, XfrAmount::Confidential(_))
-                {
+        match op {
+            Operation::ConvertAccount(ca) => {
+                if target.is_some() {
+                    return Err(eg!("TransferUTXOsToEVM error: UXTOs can only be transferred to one evm account"));
+                }
+                if ca.nonce != tx.body.no_replay_token {
                     return Err(eg!(
-                        "asset cross ledger transfer not support confidential"
+                        "TransferUTXOsToEVM error: nonce mismatch no_replay_token"
                     ));
                 }
-                if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
-                    if o.record.public_key == *BLACK_HOLE_PUBKEY_STAKING
-                        && ty == ASSET_TYPE_FRA
+
+                signer = Some(ca.signer);
+                target = Some(ca.receiver.clone());
+                expected_value = ca.value;
+
+                has_sig = tx.check_has_signature(&ca.signer).is_ok();
+            }
+            Operation::TransferAsset(t) => {
+                if !has_sig || signer.is_none() {
+                    return Err(eg!("TransferUTXOsToEVM error: invalid signature"));
+                }
+                if !has_signer {
+                    has_signer = t
+                        .get_owner_addresses()
+                        .iter()
+                        .any(|&pk| pk == signer.unwrap());
+                }
+
+                for o in &t.body.outputs {
+                    if matches!(o.record.asset_type, XfrAssetType::Confidential(_))
+                        || matches!(o.record.amount, XfrAmount::Confidential(_))
                     {
-                        if let XfrAmount::NonConfidential(i_am) = o.record.amount {
-                            if let Some(amount) = assets.get_mut(&ty) {
-                                *amount += i_am;
-                            } else {
-                                assets.insert(ty, i_am);
+                        return Err(eg!(
+                        "TransferUTXOsToEVM error: only support non-confidential UTXOs transfer to an evm account"
+                    ));
+                    }
+                    if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
+                        if o.record.public_key == *BLACK_HOLE_PUBKEY_STAKING
+                            && ty == ASSET_TYPE_FRA
+                        {
+                            if let XfrAmount::NonConfidential(amount) = o.record.amount {
+                                convert_amount += amount;
                             }
                         }
                     }
                 }
             }
+            _ => {
+                return Err(eg!("TransferUTXOsToEVM error: invalid operation"));
+            }
         }
     }
-    if owner.is_none() {
-        return Err(eg!("this tx isn't a convert tx"));
+
+    if expected_value != convert_amount {
+        return Err(eg!("TransferUTXOsToEVM error: invalid convert value"));
     }
-    Ok((owner.unwrap(), assets))
+    if !has_signer {
+        return Err(eg!("TransferUTXOsToEVM error: not found signer"));
+    }
+    if target.is_none() {
+        return Err(eg!(
+            "TransferUTXOsToEVM error: not found the evm target account"
+        ));
+    }
+
+    Ok((target.unwrap(), expected_value))
 }

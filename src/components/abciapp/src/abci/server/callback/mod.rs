@@ -40,7 +40,6 @@ use {
             atomic::{AtomicI64, Ordering},
             Arc,
         },
-
     },
 };
 
@@ -198,6 +197,7 @@ pub fn deliver_tx(
                             resp.set_events(attr);
                         }
                     }
+
                     if let Err(e) = s.la.write().cache_transaction(tx) {
                         resp.code = 1;
                         resp.log = e.to_string();
