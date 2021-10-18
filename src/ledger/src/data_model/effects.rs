@@ -567,12 +567,8 @@ impl BlockEffect {
     ///   if `txn` would not interfere with any transaction in the block, the
     ///       new temp SID representing the transaction.
     ///   Otherwise, Err(...)
-    pub fn add_txn_effect(
-        &mut self,
-        txn_effect: TxnEffect,
-        is_loading: bool,
-    ) -> Result<TxnTempSID> {
-        self.check_txn_effect(&txn_effect, is_loading).c(d!())?;
+    pub fn add_txn_effect(&mut self, txn_effect: TxnEffect) -> Result<TxnTempSID> {
+        self.check_txn_effect(&txn_effect).c(d!())?;
 
         // By construction, no_replay_tokens entries are unique
         self.no_replay_tokens
@@ -607,11 +603,7 @@ impl BlockEffect {
         Ok(temp_sid)
     }
 
-    fn check_txn_effect(
-        &mut self,
-        txn_effect: &TxnEffect,
-        is_loading: bool,
-    ) -> Result<()> {
+    fn check_txn_effect(&mut self, txn_effect: &TxnEffect) -> Result<()> {
         // Check that no inputs are consumed twice
         for (input_sid, _) in txn_effect.input_txos.iter() {
             if self.input_txos.contains_key(&input_sid) {
@@ -660,9 +652,7 @@ impl BlockEffect {
         }
 
         // NOTE: set at the last position
-        if !is_loading {
-            self.check_staking(&txn_effect).c(d!())?;
-        }
+        self.check_staking(&txn_effect).c(d!())?;
 
         Ok(())
     }

@@ -219,7 +219,7 @@ where
             .c(d!("Failed to compute txn effect"))
             .and_then(|txn_effect| {
                 ledger
-                    .apply_transaction(&mut block, txn_effect, false)
+                    .apply_transaction(&mut block, txn_effect)
                     .c(d!("Failed to apply transaction"))
             });
         match temp_sid {

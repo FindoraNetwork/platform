@@ -111,24 +111,16 @@ impl LedgerState {
         &self,
         block: &mut BlockEffect,
         txe: TxnEffect,
-        is_loading: bool,
     ) -> Result<TxnTempSID> {
         let tx = txe.txn.clone();
         self.status
             .check_txn_effects(&txe)
             .c(d!())
-            .and_then(|_| block.add_txn_effect(txe, is_loading).c(d!()))
-            .and_then(|tmpid| {
+            .and_then(|_| block.add_txn_effect(txe).c(d!()))
+            .map(|tmpid| {
                 // NOTE: set at the last position
-                if is_loading {
-                    Ok(tmpid)
-                } else {
-                    block
-                        .staking_simulator
-                        .coinbase_check_and_pay(&tx)
-                        .c(d!())
-                        .map(|_| tmpid)
-                }
+                block.staking_simulator.coinbase_check_and_pay(&tx);
+                tmpid
             })
     }
 
@@ -590,7 +582,7 @@ impl LedgerState {
                         let mut be = ledger.start_block().c(d!())?;
                         for txn in b.block {
                             let te = TxnEffect::compute_effect(txn).c(d!())?;
-                            ledger.apply_transaction(&mut be, te, true).c(d!())?;
+                            ledger.apply_transaction(&mut be, te).c(d!())?;
                         }
                         ledger.finish_block(be).c(d!())?;
                     }
