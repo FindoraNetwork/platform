@@ -36,13 +36,6 @@ fn abort_block(block: BlockEffect) -> HashMap<TxnTempSID, Transaction> {
 }
 
 #[test]
-fn test_load_fake_transaction_log() {
-    // Verify that loading transaction fails with incorrect path
-    let result_err = LedgerState::load_transaction_log("incorrect/path");
-    assert!(result_err.is_err());
-}
-
-#[test]
 fn test_compute_and_save_block_hash() {
     let mut ledger_state = LedgerState::tmp_ledger();
     let mut data = StateCommitmentData {

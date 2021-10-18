@@ -39,8 +39,8 @@ use sliding_set::SlidingSet;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     env,
-    fs::{self, File, OpenOptions},
-    io::{BufRead, BufReader, ErrorKind},
+    fs::{self, OpenOptions},
+    io::ErrorKind,
     mem,
     ops::{Deref, DerefMut},
     sync::Arc,
@@ -432,26 +432,6 @@ impl LedgerState {
         LedgerState::new(&tmp_dir, Some("test")).unwrap()
     }
 
-    fn load_transaction_log(path: &str) -> Result<Vec<LoggedBlock>> {
-        let file = File::open(path).c(d!())?;
-        let reader = BufReader::new(file);
-        let mut v = Vec::new();
-        for l in reader.lines() {
-            let l = l.c(d!())?;
-            match serde_json::from_str::<LoggedBlock>(&l) {
-                Ok(next_block) => {
-                    v.push(next_block);
-                }
-                Err(e) => {
-                    if !l.is_empty() {
-                        return Err(eg!(format!("{:?} (deserializing '{:?}')", e, &l)));
-                    }
-                }
-            }
-        }
-        Ok(v)
-    }
-
     // In this functionn:
     //  1. Compute the hash of transactions in the block and update txns_in_block_hash
     //  2. Append txns_in_block_hash to block_merkle
@@ -564,31 +544,10 @@ impl LedgerState {
         Ok(ledger)
     }
 
-    // Load an existing one OR create a new one.
-    fn load_from_log(basedir: &str) -> Result<LedgerState> {
+    /// Load an existing one OR create a new one.
+    #[inline(always)]
+    pub fn load_or_init(basedir: &str) -> Result<LedgerState> {
         let mut ledger = LedgerState::new(basedir, None).c(d!())?;
-
-        if ledger.blocks.is_empty() {
-            let txn_log_path = format!("{}/txn_log", basedir);
-            if let Ok(old_blocks) =
-                LedgerState::load_transaction_log(&txn_log_path).c(d!())
-            {
-                let cnt = old_blocks.len();
-                if 0 < cnt {
-                    ledger.set_tendermint_height(
-                        cnt as u64 + old_blocks[cnt - 1].state.pulse_count,
-                    );
-                    for b in old_blocks.into_iter() {
-                        let mut be = ledger.start_block().c(d!())?;
-                        for txn in b.block {
-                            let te = TxnEffect::compute_effect(txn).c(d!())?;
-                            ledger.apply_transaction(&mut be, te).c(d!())?;
-                        }
-                        ledger.finish_block(be).c(d!())?;
-                    }
-                }
-            }
-        }
 
         let h = ledger.get_tendermint_height();
         ledger.get_staking_mut().set_custom_block_height(h);
@@ -598,12 +557,6 @@ impl LedgerState {
         flush_data();
 
         Ok(ledger)
-    }
-
-    #[inline(always)]
-    #[allow(missing_docs)]
-    pub fn load_or_init(basedir: &str) -> Result<LedgerState> {
-        LedgerState::load_from_log(basedir)
     }
 
     /// Perform checkpoint of current ledger state
