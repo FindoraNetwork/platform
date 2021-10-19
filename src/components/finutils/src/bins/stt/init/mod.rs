@@ -111,7 +111,7 @@ fn re_distribution() -> Result<()> {
 
     // 3.
     let total = get_balance(&v_set[0].keypair).c(d!())?;
-    if 8400_0000 > total {
+    if 8400_0000 * FRA > total {
         return Err(eg!("Total balance is not enough !!"));
     }
 

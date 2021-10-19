@@ -33,7 +33,7 @@ use {
 //     - check the balance of asset A of validator[1..19]
 // 6. validators delegate 1 FRA unit to each other
 //     - validator[0] --> validator[1]
-//     - validator[2] --> validator[2]
+//     - validator[2] --> validator[3]
 //     - ...
 //     - validator[19] --> validator[0]
 // 7. wait 1.2 blocks
@@ -61,7 +61,7 @@ use {
 //     - the number of validators should be 20
 //     - the `is_online` state of every validator should be 'true'
 //     - the power of validators should approximately be [400_0000, ..., 419_0000]
-//     - the number of delegators of each validator should be 1
+//     - the number of delegators of each validator should be 1, except validator[0]
 // 18. repeat < step 15 > 4 times
 pub fn run_all() -> Result<()> {
     let sa = get_serv_addr().c(d!())?;

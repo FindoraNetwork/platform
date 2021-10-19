@@ -54,3 +54,6 @@ for ((i=1;i<=$(grep -c '"id"' staking_config.json);i++)); do
     idx=$(grep -n '"id"' staking_config_abci_mock.json | grep -o '^[0-9]\+' | head -n $i | tail -1)
     $SED "${idx}s/.*/$(grep '"id"' staking_config.json | head -n $i | tail -1)/" staking_config_abci_mock.json
 done
+
+cd $EXEC_PATH || exit 1
+make -C ..
