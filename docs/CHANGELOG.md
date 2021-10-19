@@ -20,6 +20,13 @@
 
 > Functions that have been added.
 
+#### v0.2.2-RC2
+
+- Optimize ABCI checker
+    - Avoid invalid transactions from being stored
+- Add balance checker for coinbase
+    - Avoid wrong rewards when the reward pool is empty
+
 #### v0.2.2-RC1
 
 - Enhance stability by using seed nodes in `findorad init`
