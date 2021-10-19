@@ -8,7 +8,9 @@ pub mod service;
 
 use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
+use algebra::jubjub::JubjubScalar;
 use finutils::api::NetworkRoute;
+use ledger::data_model::ATxoSID;
 use ledger::{
     data_model::{
         b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
@@ -24,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use server::{QueryServer, TxnIDHash};
 use std::{collections::HashSet, sync::Arc};
 use zei::{
+    anon_xfr::structs::MTLeafInfo,
     serialization::ZeiFromToBytes,
     xfr::{sig::XfrPublicKey, structs::OwnerMemo},
 };
@@ -84,6 +87,16 @@ async fn get_owner_memo_batch(
     Ok(web::Json(resp))
 }
 
+/// Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
+#[allow(clippy::unnecessary_wraps)]
+async fn get_abar_memo(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    info: web::Path<u64>,
+) -> actix_web::Result<web::Json<Option<OwnerMemo>>, actix_web::error::Error> {
+    let server = data.read();
+    Ok(web::Json(server.get_abar_memo(ATxoSID(*info))))
+}
+
 /// Returns an array of the utxo sids currently spendable by a given address
 async fn get_owned_utxos(
     data: web::Data<Arc<RwLock<QueryServer>>>,
@@ -97,19 +110,49 @@ async fn get_owned_utxos(
         .map(|pk| web::Json(pnk!(read.get_owned_utxos(&pk)).keys().copied().collect()))
 }
 
+/// Returns an array of the ATxo Sids currently spendable by a given address
+async fn get_owned_abars(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    owner: web::Path<String>,
+    randomizing_factor: web::Path<String>,
+) -> actix_web::Result<web::Json<HashSet<ATxoSID>>> {
+    let qs = data.read();
+    let read = qs.state.as_ref().unwrap().read();
+    globutils::wallet::anon_public_key_from_base64(owner.as_str())
+        .c(d!())
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
+        .map(|pk| {
+            let rb = base64::decode(randomizing_factor.as_bytes()).unwrap();
+            let r = JubjubScalar::zei_from_bytes(rb.as_slice()).unwrap();
+            let rpk = pk.randomize(&r);
+            web::Json(read.get_owned_abars(&rpk).iter().map(|a| a.0).collect())
+        })
+}
+/// Returns the merkle proof for anonymous transactions
+async fn get_abar_proof(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    info: web::Path<u64>,
+) -> actix_web::Result<web::Json<Option<MTLeafInfo>>, actix_web::error::Error> {
+    let server = data.read();
+    Ok(web::Json(server.get_abar_proof(ATxoSID(*info))))
+}
+
 /// Define interface type
 #[allow(missing_docs)]
 pub enum QueryServerRoutes {
     GetAddress,
     GetOwnerMemo,
     GetOwnerMemoBatch,
+    GetAbarMemo,
     GetOwnedUtxos,
+    GetOwnedAbars,
+    GetAbarProof,
     GetCreatedAssets,
     GetIssuedRecords,
     GetIssuedRecordsByCode,
     GetRelatedTxns,
     GetRelatedXfrs,
-    GetAuthencatedTxnIDHash,
+    GetAuthenticatedTxnIDHash,
     GetTransactionHash,
     GetTransactionSid,
     GetCommits,
@@ -122,12 +165,15 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetRelatedTxns => "get_related_txns",
             QueryServerRoutes::GetRelatedXfrs => "get_related_xfrs",
             QueryServerRoutes::GetOwnedUtxos => "get_owned_utxos",
+            QueryServerRoutes::GetOwnedAbars => "get_owned_abars",
             QueryServerRoutes::GetOwnerMemo => "get_owner_memo",
             QueryServerRoutes::GetOwnerMemoBatch => "get_owner_memo_batch",
+            QueryServerRoutes::GetAbarMemo => "get_abar_memo",
+            QueryServerRoutes::GetAbarProof => "get_abar_proof",
             QueryServerRoutes::GetCreatedAssets => "get_created_assets",
             QueryServerRoutes::GetIssuedRecords => "get_issued_records",
             QueryServerRoutes::GetIssuedRecordsByCode => "get_issued_records_by_code",
-            QueryServerRoutes::GetAuthencatedTxnIDHash => "get_authencated_txnid_hash",
+            QueryServerRoutes::GetAuthenticatedTxnIDHash => "get_authencated_txnid_hash",
             QueryServerRoutes::GetTransactionHash => "get_transaction_hash",
             QueryServerRoutes::GetTransactionSid => "get_transaction_sid",
             QueryServerRoutes::GetCommits => "get_commits",
@@ -430,6 +476,10 @@ impl QueryApi {
                     web::get().to(get_owned_utxos),
                 )
                 .route(
+                    &QueryServerRoutes::GetOwnedAbars.with_arg_template("address"),
+                    web::get().to(get_owned_abars),
+                )
+                .route(
                     &QueryServerRoutes::GetOwnerMemo.with_arg_template("txo_sid"),
                     web::get().to(get_owner_memo),
                 )
@@ -437,6 +487,14 @@ impl QueryApi {
                     &QueryServerRoutes::GetOwnerMemoBatch
                         .with_arg_template("txo_sid_list"),
                     web::get().to(get_owner_memo_batch),
+                )
+                .route(
+                    &QueryServerRoutes::GetAbarMemo.with_arg_template("atxo_sid"),
+                    web::get().to(get_abar_memo),
+                )
+                .route(
+                    &QueryServerRoutes::GetAbarProof.with_arg_template("atxo_sid"),
+                    web::get().to(get_abar_proof),
                 )
                 .route(
                     &QueryServerRoutes::GetRelatedTxns.with_arg_template("address"),
@@ -467,7 +525,7 @@ impl QueryApi {
                     web::get().to(get_issued_records_by_code),
                 )
                 .route(
-                    &QueryServerRoutes::GetAuthencatedTxnIDHash
+                    &QueryServerRoutes::GetAuthenticatedTxnIDHash
                         .with_arg_template("txo_sid"),
                     web::get().to(get_authenticated_txnid_hash),
                 )
@@ -522,6 +580,10 @@ impl QueryApi {
                 .route(
                     &ApiRoutes::OwnedUtxos.with_arg_template("owner"),
                     web::get().to(query_owned_utxos),
+                )
+                .route(
+                    &ApiRoutes::OwnedAbars.with_arg_template("owner"),
+                    web::get().to(query_owned_abars),
                 )
                 .route(
                     &ApiRoutes::ValidatorList.route(),

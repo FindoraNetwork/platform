@@ -4,6 +4,7 @@
 
 use globutils::wallet;
 use lazy_static::lazy_static;
+use ledger::data_model::{ATxoSID, AXfrAddress};
 use ledger::{
     data_model::{
         AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Operation, Transaction,
@@ -22,7 +23,10 @@ use parking_lot::{Condvar, Mutex, RwLock};
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, fs, io::ErrorKind, sync::Arc};
-use zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo};
+use zei::{
+    anon_xfr::structs::MTLeafInfo,
+    xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+};
 
 lazy_static! {
     /// the query_server will be notified every time
@@ -51,8 +55,12 @@ pub struct QueryServer {
     issuances: Mapx<IssuerPublicKey, Issuances>, // issuance mapped by public key
     token_code_issuances: Mapx<AssetTypeCode, Issuances>, // issuance mapped by token code
     owner_memos: Mapx<TxoSID, OwnerMemo>,
+    abar_memos: Mapx<ATxoSID, OwnerMemo>,
+    abar_proof: Mapx<ATxoSID, MTLeafInfo>,
     utxos_to_map_index: Mapx<TxoSID, XfrAddress>,
+    atxos_to_map_index: Mapx<ATxoSID, AXfrAddress>,
     txo_to_txnid: Mapx<TxoSID, TxnIDHash>, // txo(spent, unspent) to authenticated txn (sid, hash)
+    atxo_to_txnid: Mapx<ATxoSID, TxnIDHash>,
     txn_sid_to_hash: Mapx<TxnSID, String>, // txn sid to txn hash
     txn_hash_to_sid: Mapx<String, TxnSID>, // txn hash to txn sid
 
@@ -129,7 +137,9 @@ impl QueryServer {
             issuances: new_mapx!("query_server_subdata/issuances"),
             token_code_issuances: new_mapx!("query_server_subdata/token_code_issuances"),
             utxos_to_map_index: new_mapx!("query_server_subdata/utxos_to_map_index"),
+            atxos_to_map_index: new_mapx!("query_server_subdata/atxos_to_map_index"),
             txo_to_txnid: new_mapx!("query_server_subdata/txo_to_txnid"),
+            atxo_to_txnid: new_mapx!("query_server_subdata/atxo_to_txnid"),
             txn_sid_to_hash: new_mapx!("query_server_subdata/txn_sid_to_hash"),
             txn_hash_to_sid: new_mapx!("query_server_subdata/txn_hash_to_sid"),
             staking_global_rate_hist: new_mapx!(
@@ -145,6 +155,8 @@ impl QueryServer {
                 "query_server_subdata/staking_rwd_hist"
             ),
             app_block_cnt: 0,
+            abar_memos: new_mapx!("query_server_subdata/abar_memos"),
+            abar_proof: new_mapx!("query_server_subdata/abar_proof"),
         }
     }
 
@@ -325,6 +337,18 @@ impl QueryServer {
         self.owner_memos.get(&txo_sid)
     }
 
+    /// Returns the abar owner memo required to decrypt the asset record stored at given index, if it exists.
+    #[inline(always)]
+    pub fn get_abar_memo(&self, atxo_sid: ATxoSID) -> Option<OwnerMemo> {
+        self.abar_memos.get(&atxo_sid)
+    }
+
+    /// Returns the merkle proof from the given ATxoSID
+    #[inline(always)]
+    pub fn get_abar_proof(&self, atxo_sid: ATxoSID) -> Option<MTLeafInfo> {
+        self.abar_proof.get(&atxo_sid)
+    }
+
     /// Add created asset
     #[inline(always)]
     pub fn add_created_asset(&mut self, creation: &DefineAsset) {
@@ -438,8 +462,10 @@ impl QueryServer {
 
         for block in ledger.blocks.iter().skip(self.app_block_cnt) {
             // Update ownership status
-            for (txn_sid, txo_sids) in
-                block.txns.iter().map(|v| (v.tx_id, v.txo_ids.as_slice()))
+            for (txn_sid, txo_sids, atxo_sids) in block
+                .txns
+                .iter()
+                .map(|v| (v.tx_id, v.txo_ids.as_slice(), v.atxo_ids.as_slice()))
             {
                 let curr_txn = ledger.get_transaction_light(txn_sid).c(d!())?.txn;
                 // get the transaction, ownership addresses, and memos associated with each transaction
@@ -525,19 +551,51 @@ impl QueryServer {
                     };
                 }
 
+                let hash = curr_txn.hash_tm().hex().to_uppercase();
                 // Add new utxos (this handles both transfers and issuances)
                 for (txo_sid, (address, owner_memo)) in txo_sids
                     .iter()
                     .zip(addresses.iter().zip(owner_memos.iter()))
                 {
                     self.utxos_to_map_index.insert(*txo_sid, *address);
-                    let hash = curr_txn.hash_tm().hex().to_uppercase();
                     self.txo_to_txnid.insert(*txo_sid, (txn_sid, hash.clone()));
                     self.txn_sid_to_hash.insert(txn_sid, hash.clone());
                     self.txn_hash_to_sid.insert(hash.clone(), txn_sid);
                     if let Some(owner_memo) = owner_memo {
                         self.owner_memos.insert(*txo_sid, (*owner_memo).clone());
                     }
+                }
+
+                let conv_memos =
+                    curr_txn.body.operations.iter().filter_map(|o| match o {
+                        Operation::BarToAbar(b) => Some((
+                            b.note.body.output.public_key,
+                            b.note.body.memo.clone(),
+                        )),
+                        _ => None,
+                    });
+                let abar_memos = curr_txn
+                    .body
+                    .operations
+                    .iter()
+                    .filter_map(|o| match o {
+                        Operation::TransferAnonAsset(b) => Some(
+                            b.note
+                                .body
+                                .outputs
+                                .iter()
+                                .zip(b.note.body.owner_memos.clone())
+                                .map(|(op, memo)| (op.public_key, memo)),
+                        ),
+                        _ => None,
+                    })
+                    .flatten();
+
+                for (a, id) in conv_memos.chain(abar_memos).zip(atxo_sids) {
+                    self.atxos_to_map_index
+                        .insert(*id, AXfrAddress { key: a.0 });
+                    self.abar_memos.insert(*id, a.1);
+                    self.atxo_to_txnid.insert(*id, (txn_sid, hash.clone()));
                 }
             }
         }

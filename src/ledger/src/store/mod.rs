@@ -41,12 +41,14 @@ use std::{
     mem,
     ops::{Deref, DerefMut},
 };
+use storage::store::ImmutablePrefixedStore;
 use storage::{
     db::RocksDB,
     state::{ChainState, State},
     store::PrefixedStore,
 };
 use zei::anon_xfr::keys::AXfrPubKey;
+use zei::anon_xfr::merkle_tree::ImmutablePersistentMerkleTree;
 use zei::anon_xfr::structs::MTLeafInfo;
 use zei::{
     anon_xfr::{
@@ -88,9 +90,11 @@ pub struct LedgerState {
     block_ctx: Option<BlockEffect>,
     // Merkle Tree with all the ABARs created till now
     abar_state: State<RocksDB>,
+    // Merkle Tree with all the ABARs created till now
+    abar_query_state: State<RocksDB>,
     // Sparse Merkle Tree to hold nullifier Set
     #[allow(dead_code)]
-    nullifier_set: SmtMap256<String>,
+    nullifier_set: SmtMap256<RocksDB>,
 
     prng: ChaChaRng,
 }
@@ -224,6 +228,7 @@ impl LedgerState {
                 txn: txn.clone(),
                 tx_id: txn_sid,
                 txo_ids: txo_sids.clone(),
+                atxo_ids: vec![],
                 merkle_id,
             });
 
@@ -234,12 +239,14 @@ impl LedgerState {
             }
         }
 
-        self.update_anon_stores(
-            block.new_nullifiers.clone(),
-            block.output_abars.clone(),
-            next_txn_sid,
-        )
-        .c(d!())?;
+        tx_block = self
+            .update_anon_stores(
+                block.new_nullifiers.clone(),
+                block.output_abars.clone(),
+                next_txn_sid,
+                tx_block,
+            )
+            .c(d!())?;
 
         // Checkpoint
         let block_merkle_id = self.checkpoint(&block).c(d!())?;
@@ -293,22 +300,24 @@ impl LedgerState {
         new_nullifiers: Vec<Nullifier>,
         output_abars: Vec<Vec<AnonBlindAssetRecord>>,
         backup_next_txn_sid: usize,
-    ) -> Result<()> {
+        mut tx_block: Vec<FinalizedTransaction>,
+    ) -> Result<Vec<FinalizedTransaction>> {
         for n in new_nullifiers.iter() {
             let str =
                 base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
             let d: Key = Key::from_base64(&str).c(d!())?;
 
             // if the nullifier hash is present in our nullifier set, fail the block
-            if self.nullifier_set.get(&d).is_some() {
+            if self.nullifier_set.get(&d).c(d!())?.is_some() {
                 return Err(eg!("Nullifier hash already present in set"));
             }
-            self.nullifier_set.set(&d, Some("".to_string()));
+            self.nullifier_set.set(&d, Some(b"".to_vec())).c(d!())?;
         }
 
         let mut txn_sid = TxnSID(backup_next_txn_sid);
-        for txn_abars in output_abars.iter() {
+        for (txn_abars, txn) in output_abars.iter().zip(tx_block.iter_mut()) {
             let mut op_position = OutputPosition(0);
+            let mut atxo_ids: Vec<ATxoSID> = vec![];
             for abar in txn_abars {
                 let uid = self.add_abar(&abar).c(d!())?;
                 self.status.ax_utxos.insert(uid, abar.clone());
@@ -321,13 +330,15 @@ impl LedgerState {
                     .ax_txo_to_txn_location
                     .insert(uid, (txn_sid, op_position));
 
+                atxo_ids.push(uid);
                 self.status.next_atxo = ATxoSID(uid.0 + 1);
                 op_position = OutputPosition(op_position.0 + 1);
             }
+            txn.atxo_ids = atxo_ids;
             txn_sid = TxnSID(txn_sid.0 + 1);
         }
 
-        Ok(())
+        Ok(tx_block)
     }
 
     #[inline(always)]
@@ -444,7 +455,10 @@ impl LedgerState {
         self.status.abar_commitment_versions.push(abar_root_hash);
         let anon_state_commitment_data = AnonStateCommitmentData {
             abar_root_hash,
-            nullifier_root_hash: *self.nullifier_set.merkle_root(),
+            nullifier_root_hash: self
+                .nullifier_set
+                .merkle_root()
+                .unwrap_or(sparse_merkle_tree::ZERO_DIGEST),
         };
         self.status
             .anon_state_commitment_versions
@@ -473,13 +487,17 @@ impl LedgerState {
     }
 
     #[inline(always)]
+    /// writes the changes from session cache to the RocksDB store
+    pub fn commit_nullifier_changes(&mut self) -> Result<u64> {
+        self.nullifier_set.commit()
+    }
+
+    #[inline(always)]
     /// Fetches the root hash of the committed merkle tree of abar commitments directly from committed
     /// state and ignore session cache
-    pub fn get_abar_root_hash(&mut self) -> Result<BLSScalar> {
-        let chain_state = self.abar_state.chain_state();
-        let mut rocks_state = State::new(chain_state, false);
-        let store = PrefixedStore::new("abar_store", &mut rocks_state);
-        let mt = PersistentMerkleTree::new(store)?;
+    pub fn get_abar_root_hash(&self) -> Result<BLSScalar> {
+        let store = ImmutablePrefixedStore::new("abar_store", &self.abar_query_state);
+        let mt = ImmutablePersistentMerkleTree::new(store)?;
 
         mt.get_current_root_hash().c(d!(
             "probably due to badly constructed tree or data corruption"
@@ -490,10 +508,8 @@ impl LedgerState {
     /// Generates a MTLeafInfo from the latest committed version of tree from committed state and
     /// ignore session cache
     pub fn get_abar_proof(&self, id: ATxoSID) -> Result<MTLeafInfo> {
-        let chain_state = self.abar_state.chain_state();
-        let mut rocks_state = State::new(chain_state, false);
-        let store = PrefixedStore::new("abar_store", &mut rocks_state);
-        let mt = PersistentMerkleTree::new(store)?;
+        let store = ImmutablePrefixedStore::new("abar_store", &self.abar_query_state);
+        let mt = ImmutablePersistentMerkleTree::new(store)?;
 
         mt.generate_proof(id.0)
     }
@@ -521,10 +537,17 @@ impl LedgerState {
 
     // Initialize a persistent merkle tree for ABAR store.
     #[inline(always)]
-    fn init_abar_state(path: &str) -> Result<State<RocksDB>> {
+    fn init_abar_state(path: &str) -> Result<(State<RocksDB>, State<RocksDB>)> {
         let fdb = RocksDB::open(path).c(d!("failed to open db"))?;
         let cs = Arc::new(RwLock::new(ChainState::new(fdb, "abar_db".to_string(), 0)));
-        Ok(State::new(cs, false))
+        Ok((State::new(cs.clone(), false), State::new(cs, false)))
+    }
+
+    // Initialize persistent Sparse Merkle tree for the Nullifier set
+    #[inline(always)]
+    fn init_nullifier_smt(path: &str) -> Result<SmtMap256<RocksDB>> {
+        let rdb = RocksDB::open(path).c(d!("failed to open db"))?;
+        Ok(SmtMap256::new(rdb))
     }
 
     /// Initialize a new Ledger structure.
@@ -539,13 +562,21 @@ impl LedgerState {
         let txn_merkle_path = format!("{}/{}txn_merkle", basedir, &prefix);
         let utxo_map_path = format!("{}/{}utxo_map", basedir, &prefix);
         let abar_store_path = format!("{}/{}abar_store", basedir, &prefix);
+        let nullifier_store_path = format!("{}/{}nullifier_store", basedir, &prefix);
 
-        // These iterms will be set under ${BNC_DATA_DIR}
+        // These items will be set under ${BNC_DATA_DIR}
         fs::create_dir_all(&basedir).c(d!())?;
         let snapshot_file = format!("{}ledger_status", &prefix);
         let snapshot_entries_dir = prefix.clone() + "ledger_status_subdata";
         let blocks_path = prefix.clone() + "blocks";
         let tx_to_block_location_path = prefix + "tx_to_block_location";
+
+        let (mut abar_state, abar_query_state) =
+            LedgerState::init_abar_state(&abar_store_path).c(d!())?;
+
+        // Initializing Merkle tree to set Empty tree root hash, which is a hash of null children
+        let store = PrefixedStore::new("abar_store", &mut abar_state);
+        let _ = PersistentMerkleTree::new(store)?;
 
         let ledger = LedgerState {
             status: LedgerStatus::new(&basedir, &snapshot_file, &snapshot_entries_dir)
@@ -557,8 +588,10 @@ impl LedgerState {
             tx_to_block_location: new_mapx!(&tx_to_block_location_path),
             utxo_map: LedgerState::init_utxo_map(&utxo_map_path).c(d!())?,
             block_ctx: Some(BlockEffect::default()),
-            abar_state: LedgerState::init_abar_state(&abar_store_path).c(d!())?,
-            nullifier_set: SmtMap256::new(),
+            abar_state,
+            abar_query_state,
+            nullifier_set: LedgerState::init_nullifier_smt(&nullifier_store_path)
+                .c(d!())?,
         };
 
         Ok(ledger)

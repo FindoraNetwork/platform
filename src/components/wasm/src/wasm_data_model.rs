@@ -15,6 +15,7 @@ use rand_core::SeedableRng;
 use ruc::{d, err::RucResult};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
+use zei::anon_xfr::structs::MTLeafInfo as ZeiMTLeafInfo;
 use zei::{
     setup::PublicParams as ZeiPublicParams,
     xfr::{
@@ -715,4 +716,34 @@ impl AssetRules {
 #[inline(always)]
 pub(crate) fn error_to_jsvalue<T: Display>(e: T) -> JsValue {
     JsValue::from_str(&e.to_string())
+}
+
+#[wasm_bindgen]
+#[derive(Default, Clone)]
+pub struct MTLeafInfo {
+    object: ZeiMTLeafInfo,
+}
+
+impl MTLeafInfo {
+    pub fn get_zei_mt_leaf_info(&self) -> &ZeiMTLeafInfo {
+        &self.object
+    }
+}
+
+#[wasm_bindgen]
+impl MTLeafInfo {
+    pub fn from_json(json: &JsValue) -> Result<MTLeafInfo, JsValue> {
+        let mt_leaf_info: ZeiMTLeafInfo =
+            json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
+        Ok(MTLeafInfo {
+            object: mt_leaf_info,
+        })
+    }
+
+    pub fn to_json(&self) -> Result<JsValue, JsValue> {
+        serde_json::to_string(&self.object)
+            .map(|s| JsValue::from_str(&s))
+            .c(d!())
+            .map_err(error_to_jsvalue)
+    }
 }

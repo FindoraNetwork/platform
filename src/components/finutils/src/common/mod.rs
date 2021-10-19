@@ -15,7 +15,7 @@ use crate::txn_builder::TransactionBuilder;
 use crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey};
 use globutils::wallet;
 use lazy_static::lazy_static;
-use ledger::data_model::TxoSID;
+use ledger::data_model::{ATxoSID, TxoSID};
 use ledger::{
     data_model::{AssetRules, AssetTypeCode, Transaction, BLACK_HOLE_PUBKEY_STAKING},
     staking::{
@@ -23,7 +23,6 @@ use ledger::{
         td_pubkey_to_td_addr, td_pubkey_to_td_addr_bytes, PartialUnDelegation,
         TendermintAddrRef,
     },
-    store::LedgerState,
 };
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
@@ -35,7 +34,7 @@ use utils::{
     parse_td_validator_keys,
 };
 use zei::anon_xfr::keys::{AXfrKeyPair, AXfrPubKey};
-use zei::anon_xfr::structs::{AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder};
+use zei::anon_xfr::structs::{MTLeafInfo, OpenAnonBlindAssetRecordBuilder};
 use zei::{
     setup::PublicParams,
     xfr::{
@@ -43,7 +42,6 @@ use zei::{
         sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
     },
 };
-use zeialgebra::groups::Scalar;
 use zeialgebra::jubjub::JubjubScalar;
 
 lazy_static! {
@@ -686,11 +684,11 @@ pub fn show_asset(addr: &str) -> Result<()> {
 
 /// Convert a Blind Asset Record to Anonymous Asset
 pub fn convert_bar2abar(
-    owner_sk: Option<&str>,
-    target_addr: &str,
-    owner_enc_key: &str,
+    owner_sk: Option<&String>,
+    target_addr: String,
+    owner_enc_key: String,
     txo_sid: &str,
-) -> Result<AnonBlindAssetRecord> {
+) -> Result<JubjubScalar> {
     let from = owner_sk
         .c(d!())
         .and_then(|sk| {
@@ -699,47 +697,45 @@ pub fn convert_bar2abar(
                 .map(|sk| sk.into_keypair())
         })
         .or_else(|_| get_keypair().c(d!()))?;
-    let to = wallet::anon_public_key_from_base64(target_addr)
+    let to = wallet::anon_public_key_from_base64(target_addr.as_str())
         .c(d!("invalid 'target-addr'"))?;
-    let enc_key = wallet::x_public_key_from_base64(owner_enc_key)
+    let enc_key = wallet::x_public_key_from_base64(owner_enc_key.as_str())
         .c(d!("invalid owner_enc_key"))?;
     let sid = txo_sid.parse::<u64>().c(d!("error parsing TxoSID"))?;
 
     let oar =
         utils::get_oar(&from, TxoSID(sid)).c(d!("error fetching open asset record"))?;
 
-    let abar = utils::generate_bar2abar_op(&from, &to, TxoSID(sid), &oar, &enc_key)?;
+    let r = utils::generate_bar2abar_op(&from, &to, TxoSID(sid), &oar, &enc_key)?;
 
-    Ok(abar)
+    Ok(r)
 }
 
 /// Generate OABAR and add anonymous transfer operation
 pub fn gen_oabar_add_op(
-    axfr_secret_key: &str,
-    dec_key: &str,
+    axfr_secret_key: String,
+    r: &str,
+    dec_key: String,
     amount: &str,
     to_axfr_public_key: &str,
     to_enc_key: &str,
 ) -> Result<()> {
-    let from = wallet::anon_secret_key_from_base64(axfr_secret_key)
+    let from = wallet::anon_secret_key_from_base64(axfr_secret_key.as_str())
         .c(d!("invalid 'from-axfr-secret-key'"))?;
     let from_secret_key =
-        wallet::x_secret_key_from_base64(dec_key).c(d!("invalid dec_key"))?;
+        wallet::x_secret_key_from_base64(dec_key.as_str()).c(d!("invalid dec_key"))?;
     let axfr_amount = amount.parse::<u64>().c(d!("error parsing amount"))?;
     let to = wallet::anon_public_key_from_base64(to_axfr_public_key)
         .c(d!("invalid 'to-axfr-public-key'"))?;
     let enc_key_out =
         wallet::x_public_key_from_base64(to_enc_key).c(d!("invalid to_enc_key"))?;
 
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
-    let r = JubjubScalar::random(&mut prng);
+    let r = wallet::randomizer_from_base64(r).c(d!())?;
     let diversified_from_pub_key = from.pub_key().randomize(&r);
-
-    let ledger = LedgerState::tmp_ledger(); //TODO - replace tmp with actual
-    let axtxo_abar = ledger.get_owned_abars(&diversified_from_pub_key);
+    let axtxo_abar = utils::get_owned_abars(&diversified_from_pub_key).c(d!())?;
     //Only the first abar received from the ledger query is considered
-    let owner_memo = ledger.get_abar_memo(axtxo_abar[0].0).c(d!())?;
-    let mt_leaf_info = ledger.get_abar_proof(axtxo_abar[0].0).c(d!())?;
+    let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
+    let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
 
     let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
         &axtxo_abar[0].1,
@@ -752,6 +748,7 @@ pub fn gen_oabar_add_op(
     .build()
     .unwrap();
 
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
     let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
         .amount(axfr_amount)
         .pub_key(to)
@@ -760,12 +757,15 @@ pub fn gen_oabar_add_op(
         .build()
         .unwrap();
 
+    let r = oabar_out.get_key_rand_factor();
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
     let _ = builder
         .add_operation_anon_transfer(&[oabar_in], &[oabar_out], &[from])
         .c(d!())?;
 
     send_tx(&builder.take_transaction()).c(d!())?;
+
+    println!("Randomizer: {}", wallet::randomizer_to_base64(&r));
     Ok(())
 }
 
@@ -775,19 +775,21 @@ pub fn gen_oabar_add_op_x(
     dec_keys: Vec<XSecretKey>,
     to_axfr_public_keys: Vec<AXfrPubKey>,
     to_enc_keys: Vec<XPublicKey>,
+    randomizers: Vec<String>,
     amounts: Vec<String>,
 ) -> Result<()> {
-    let ledger = LedgerState::tmp_ledger(); //TODO - replace tmp with actual
+    let sender_count = axfr_secret_keys.len();
     let mut oabars_in = Vec::new();
-    for (from, from_secret_key) in axfr_secret_keys.iter().zip(dec_keys.iter()) {
-        let mut prng = ChaChaRng::from_seed([0u8; 32]);
-        let r = JubjubScalar::random(&mut prng);
+    for i in 0..sender_count - 1 {
+        let from = &axfr_secret_keys[i];
+        let from_secret_key = &dec_keys[i];
+        let r = wallet::randomizer_from_base64(randomizers[i].as_str()).c(d!())?;
         let diversified_from_pub_key = from.pub_key().randomize(&r);
 
-        let axtxo_abar = ledger.get_owned_abars(&diversified_from_pub_key);
+        let axtxo_abar = utils::get_owned_abars(&diversified_from_pub_key).c(d!())?;
         //Only the first abar received from the ledger query is considered
-        let owner_memo = ledger.get_abar_memo(axtxo_abar[0].0).c(d!())?;
-        let mt_leaf_info = ledger.get_abar_proof(axtxo_abar[0].0).c(d!())?;
+        let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
+        let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
 
         let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
             &axtxo_abar[0].1,
@@ -819,6 +821,8 @@ pub fn gen_oabar_add_op_x(
             .build()
             .unwrap();
 
+        let r = oabar_out.get_key_rand_factor();
+        println!("Randomizer: {}", wallet::randomizer_to_base64(&r));
         oabars_out.push(oabar_out);
     }
 
@@ -831,6 +835,14 @@ pub fn gen_oabar_add_op_x(
     Ok(())
 }
 
+/// Get merkle proof - Generate MTLeafInfo from ATxoSID
+pub fn get_mtleaf_info(atxo_sid: &str) -> Result<MTLeafInfo> {
+    let asid = atxo_sid.parse::<u64>().c(d!("error parsing ATxoSID"))?;
+    let mt_leaf_info = utils::get_abar_proof(&ATxoSID(asid))
+        .c(d!("error fetching abar proof"))?
+        .unwrap();
+    Ok(mt_leaf_info)
+}
 /// Return the built version.
 pub fn version() -> &'static str {
     concat!(env!("VERGEN_SHA"), " ", env!("VERGEN_BUILD_DATE"))

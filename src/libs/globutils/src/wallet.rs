@@ -14,6 +14,7 @@ use zei::{
     serialization::ZeiFromToBytes,
     xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
+use zeialgebra::jubjub::JubjubScalar;
 
 /// Randomly generate a 12words-length mnemonic.
 #[inline(always)]
@@ -195,6 +196,18 @@ pub fn anon_public_key_from_base64(pk: &str) -> Result<AXfrPubKey> {
 }
 
 #[inline(always)]
+/// Convert an anon public key to base64
+pub fn anon_public_key_to_base64(key: &AXfrPubKey) -> String {
+    base64::encode_config(&AXfrPubKey::zei_to_bytes(key), base64::URL_SAFE)
+}
+
+#[inline(always)]
+/// Convert a randomizer to base64
+pub fn randomizer_to_base64(r: &JubjubScalar) -> String {
+    base64::encode_config(&JubjubScalar::zei_to_bytes(r), base64::URL_SAFE)
+}
+
+#[inline(always)]
 /// Restore a x public key from base64
 pub fn x_public_key_from_base64(pk: &str) -> Result<XPublicKey> {
     base64::decode_config(pk, base64::URL_SAFE)
@@ -216,6 +229,14 @@ pub fn x_secret_key_from_base64(sk: &str) -> Result<XSecretKey> {
     base64::decode(sk)
         .c(d!())
         .and_then(|bytes| XSecretKey::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Restore a randomizer from base64
+pub fn randomizer_from_base64(sk: &str) -> Result<JubjubScalar> {
+    base64::decode(sk)
+        .c(d!())
+        .and_then(|bytes| JubjubScalar::zei_from_bytes(&bytes).c(d!()))
 }
 
 #[inline(always)]

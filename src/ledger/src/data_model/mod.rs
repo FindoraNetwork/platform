@@ -43,6 +43,7 @@ use std::{
 };
 use unicode_normalization::UnicodeNormalization;
 use zei::anon_xfr::bar_to_from_abar::{BarToAbarBody, BarToAbarNote};
+use zei::anon_xfr::keys::AXfrPubKey;
 use zei::anon_xfr::structs::AXfrNote;
 use zei::errors::ZeiError;
 use zei::{
@@ -375,6 +376,22 @@ impl Hash for XfrAddress {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.key.as_bytes().hash(state);
+    }
+}
+
+#[allow(missing_docs)]
+#[derive(
+    Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize,
+)]
+pub struct AXfrAddress {
+    pub key: AXfrPubKey,
+}
+
+#[allow(clippy::derive_hash_xor_eq)]
+impl Hash for AXfrAddress {
+    #[inline(always)]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.key.zei_to_bytes().hash(state);
     }
 }
 
@@ -1190,8 +1207,8 @@ impl BarToAbarOps {
 /// A struct to hold the transfer ops
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AnonTransferOps {
-    // The note which holds the signatures, the ZKF and memo
-    pub(crate) note: AXfrNote,
+    /// The note which holds the signatures, the ZKF and memo
+    pub note: AXfrNote,
     nonce: NoReplayToken,
 }
 impl AnonTransferOps {
@@ -1316,6 +1333,7 @@ pub struct FinalizedTransaction {
     pub txn: Transaction,
     pub tx_id: TxnSID,
     pub txo_ids: Vec<TxoSID>,
+    pub atxo_ids: Vec<ATxoSID>,
 
     pub merkle_id: u64,
 }
