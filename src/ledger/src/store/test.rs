@@ -9,6 +9,7 @@ use crate::data_model::{
 };
 use crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey};
 use rand_core::SeedableRng;
+use zei::anon_xfr::structs::{AXfrBody, AXfrNote};
 use zei::anon_xfr::{keys::AXfrKeyPair, structs::OpenAnonBlindAssetRecordBuilder};
 use zei::{
     setup::PublicParams,
@@ -40,7 +41,7 @@ fn abort_block(block: BlockEffect) -> HashMap<TxnTempSID, Transaction> {
 
 #[test]
 fn axfr_create_verify_unit() {
-    let mut ledger_state = LedgerState::test_ledger();
+    let mut ledger_state = LedgerState::tmp_ledger();
     let mut ledger_status = ledger_state.get_status();
 
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
@@ -54,7 +55,7 @@ fn axfr_create_verify_unit() {
 
     // simulate input abar
     let (oabar, keypair_in, dec_key_in, _) =
-        gen_oabar_and_keys(&mut prng, amount, asset_type);
+        gen_oabar_and_keys(&mut prng, amount, asset_type); //should import from zei exact path
     let abar = AnonBlindAssetRecord::from_oabar(&oabar);
     assert_eq!(keypair_in.pub_key(), *oabar.pub_key_ref());
     let rand_keypair_in = keypair_in.randomize(&oabar.get_key_rand_factor());
@@ -63,13 +64,13 @@ fn axfr_create_verify_unit() {
     let owner_memo = oabar.get_owner_memo().unwrap();
 
     // add abar to merkle tree
-    ledger_state.add_abar(abar);
+    ledger_state.add_abar(&abar);
     //ledger_state.add_abar_comitment(abar);
     let mut version_count = ledger_state.abar_commit().unwrap();
     // commit
     //simulate output abar
     let (oabar_out, keypair_out, dec_key_out, _) =
-        gen_oabar_and_keys(&mut prng, amount, asset_type);
+        gen_oabar_and_keys(&mut prng, amount, asset_type);  //should import from zei exact path
     let abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
     //let mut builder = TransactionBuilder::from_seq_id(1);
     //let mut txn_builder = builder.add_operation_anon_transfer(&oabar, oabar_out, keypair_in);
@@ -85,7 +86,7 @@ fn axfr_create_verify_unit() {
 
     let (body, keypairs) =
         gen_anon_xfr_body(&mut prng, &user_params, oabar, oabar_out, keypair_in)
-            .c(d!())?;
+            .c(d!());
     let axfr_note = AXfrNote::generate_note_from_body(body, keypairs).c(d!())?;
 
     axfr_note.verify().c(d!())?;
