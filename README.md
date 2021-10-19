@@ -11,6 +11,7 @@
 
 - [**Wiki**](https://wiki.findora.org/)
 - [**Contribution Guide**](docs/contribution_guide.md)
+- [**Change Log**](docs/CHANGELOG.md)
 
 ## Licensing
 

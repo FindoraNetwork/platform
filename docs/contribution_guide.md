@@ -23,8 +23,10 @@ make join_mainnet
 correct style:
 
 ```rust
-use std::{env, thread, rand::random};
-use clap::Arg;
+use {
+    std::{env, thread, rand::random},
+    clap::Arg
+};
 ```
 
 wrong style:
