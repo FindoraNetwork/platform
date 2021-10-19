@@ -12,7 +12,7 @@ use crate::{
         CHAN_D_AMOUNT_HIST, CHAN_D_RWD_HIST, CHAN_GLOB_RATE_HIST, CHAN_V_SELF_D_HIST,
     },
 };
-use fbnc::{new_mapx, Mapx};
+use fbnc::{new_mapx, new_mapxnk, Mapx, Mapxnk};
 use globutils::wallet;
 use ruc::*;
 use serde::{Deserialize, Serialize};
@@ -39,27 +39,27 @@ pub struct ApiCache {
     /// issuance mapped by token code
     pub token_code_issuances: Mapx<AssetTypeCode, Issuances>,
     /// used in confidential tx
-    pub owner_memos: Mapx<TxoSID, OwnerMemo>,
+    pub owner_memos: Mapxnk<TxoSID, OwnerMemo>,
     /// ownship of txo
-    pub utxos_to_map_index: Mapx<TxoSID, XfrAddress>,
+    pub utxos_to_map_index: Mapxnk<TxoSID, XfrAddress>,
     /// txo(spent, unspent) to authenticated txn (sid, hash)
-    pub txo_to_txnid: Mapx<TxoSID, TxnIDHash>,
+    pub txo_to_txnid: Mapxnk<TxoSID, TxnIDHash>,
     /// txn sid to txn hash
-    pub txn_sid_to_hash: Mapx<TxnSID, String>,
+    pub txn_sid_to_hash: Mapxnk<TxnSID, String>,
     /// txn hash to txn sid
     pub txn_hash_to_sid: Mapx<String, TxnSID>,
     /// global rate history
-    pub staking_global_rate_hist: Mapx<BlockHeight, [u128; 2]>,
+    pub staking_global_rate_hist: Mapxnk<BlockHeight, [u128; 2]>,
     /// - self-delegation amount history
     ///   - `NonConfidential` FRAs amount
     ///   - only valid for validators
-    pub staking_self_delegation_hist: Mapx<XfrPublicKey, Mapx<BlockHeight, Amount>>,
+    pub staking_self_delegation_hist: Mapx<XfrPublicKey, Mapxnk<BlockHeight, Amount>>,
     /// - delegation amount per block height
     /// - only valid for a validator
-    pub staking_delegation_amount_hist: Mapx<XfrPublicKey, Mapx<BlockHeight, Amount>>,
+    pub staking_delegation_amount_hist: Mapx<XfrPublicKey, Mapxnk<BlockHeight, Amount>>,
     /// rewards history, used on some pulic nodes, such as fullnode
     pub staking_delegation_rwd_hist:
-        Mapx<XfrPublicKey, Mapx<BlockHeight, DelegationRwdDetail>>,
+        Mapx<XfrPublicKey, Mapxnk<BlockHeight, DelegationRwdDetail>>,
 }
 
 impl ApiCache {
@@ -84,15 +84,15 @@ impl ApiCache {
                 "api_cache/{}token_code_issuances",
                 prefix
             )),
-            owner_memos: new_mapx!(format!("api_cache/{}owner_memos", prefix)),
-            utxos_to_map_index: new_mapx!(format!(
+            owner_memos: new_mapxnk!(format!("api_cache/{}owner_memos", prefix)),
+            utxos_to_map_index: new_mapxnk!(format!(
                 "api_cache/{}utxos_to_map_index",
                 prefix
             )),
-            txo_to_txnid: new_mapx!(format!("api_cache/{}txo_to_txnid", prefix)),
-            txn_sid_to_hash: new_mapx!(format!("api_cache/{}txn_sid_to_hash", prefix)),
+            txo_to_txnid: new_mapxnk!(format!("api_cache/{}txo_to_txnid", prefix)),
+            txn_sid_to_hash: new_mapxnk!(format!("api_cache/{}txn_sid_to_hash", prefix)),
             txn_hash_to_sid: new_mapx!(format!("api_cache/{}txn_hash_to_sid", prefix)),
-            staking_global_rate_hist: new_mapx!(format!(
+            staking_global_rate_hist: new_mapxnk!(format!(
                 "api_cache/{}staking_global_rate_hist",
                 prefix
             )),
@@ -157,7 +157,7 @@ impl ApiCache {
             .for_each(|(pk, h, r)| {
                 self.staking_self_delegation_hist
                     .entry(pk)
-                    .or_insert(new_mapx!(format!(
+                    .or_insert(new_mapxnk!(format!(
                         "staking_self_delegation_hist_subdata/{}",
                         wallet::public_key_to_base64(&pk)
                     )))
@@ -171,7 +171,7 @@ impl ApiCache {
             .for_each(|(pk, h, r)| {
                 self.staking_delegation_amount_hist
                     .entry(pk)
-                    .or_insert(new_mapx!(format!(
+                    .or_insert(new_mapxnk!(format!(
                         "staking_delegation_amount_hist_subdata/{}",
                         wallet::public_key_to_base64(&pk)
                     )))
@@ -183,7 +183,7 @@ impl ApiCache {
             let mut dd =
                 self.staking_delegation_rwd_hist
                     .entry(pk)
-                    .or_insert(new_mapx!(format!(
+                    .or_insert(new_mapxnk!(format!(
                         "staking_delegation_rwd_hist_subdata/{}",
                         wallet::public_key_to_base64(&pk)
                     )));

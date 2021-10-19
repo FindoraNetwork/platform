@@ -23,6 +23,7 @@ use crate::staking::{
 use __trash__::{Policy, PolicyGlobals, TxnPolicyData};
 use bitmap::SparseMap;
 use cryptohash::{sha256::Digest as BitDigest, HashValue};
+use fbnc::NumKey;
 use globutils::{HashOf, ProofOf, Serialized, SignatureOf};
 use lazy_static::lazy_static;
 use rand::Rng;
@@ -646,6 +647,18 @@ pub struct CredentialProof {
 #[allow(missing_docs)]
 pub struct TxoSID(pub u64);
 
+impl NumKey for TxoSID {
+    fn to_bytes(&self) -> Vec<u8> {
+        self.0.to_ne_bytes().to_vec()
+    }
+    fn from_bytes(b: &[u8]) -> Result<Self> {
+        <[u8; mem::size_of::<u64>()]>::try_from(b)
+            .c(d!())
+            .map(u64::from_ne_bytes)
+            .map(TxoSID)
+    }
+}
+
 #[allow(missing_docs)]
 pub type TxoSIDList = Vec<TxoSID>;
 
@@ -669,15 +682,27 @@ pub struct OutputPosition(pub usize);
 )]
 pub struct TxnSID(pub usize);
 
-/// (sid, hash)
-pub type TxnIDHash = (TxnSID, String);
-
 impl fmt::Display for TxoSID {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
+
+impl NumKey for TxnSID {
+    fn to_bytes(&self) -> Vec<u8> {
+        self.0.to_ne_bytes().to_vec()
+    }
+    fn from_bytes(b: &[u8]) -> Result<Self> {
+        <[u8; mem::size_of::<usize>()]>::try_from(b)
+            .c(d!())
+            .map(usize::from_ne_bytes)
+            .map(TxnSID)
+    }
+}
+
+/// (sid, hash)
+pub type TxnIDHash = (TxnSID, String);
 
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]

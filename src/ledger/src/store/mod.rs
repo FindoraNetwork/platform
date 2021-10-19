@@ -27,7 +27,7 @@ use crate::{
 use api_cache::ApiCache;
 use bitmap::{BitMap, SparseMap};
 use cryptohash::sha256::Digest as BitDigest;
-use fbnc::{new_mapx, new_vecx, Mapx, Vecx};
+use fbnc::{new_mapx, new_mapxnk, new_vecx, Mapx, Mapxnk, Vecx};
 use globutils::{HashOf, ProofOf};
 use merkle_tree::AppendOnlyMerkle;
 use parking_lot::RwLock;
@@ -65,7 +65,7 @@ pub struct LedgerState {
     /// `merkle` representing its hash.
     pub blocks: Vecx<FinalizedBlock>,
     /// <tx id> => [<block id>, <tx idx in block>]
-    pub tx_to_block_location: Mapx<TxnSID, [usize; 2]>,
+    pub tx_to_block_location: Mapxnk<TxnSID, [usize; 2]>,
     /// cache used in APIs
     pub api_cache: ApiCache,
 
@@ -531,7 +531,7 @@ impl LedgerState {
                 LedgerState::init_merkle_log(&txn_merkle_path).c(d!())?,
             )),
             blocks: new_vecx!(&blocks_path),
-            tx_to_block_location: new_mapx!(&tx_to_block_location_path),
+            tx_to_block_location: new_mapxnk!(&tx_to_block_location_path),
             utxo_map: Arc::new(RwLock::new(
                 LedgerState::init_utxo_map(&utxo_map_path).c(d!())?,
             )),
@@ -999,13 +999,13 @@ impl LedgerState {
 pub struct LedgerStatus {
     /// the file path of the snapshot
     pub snapshot_file: String,
-    utxos: Mapx<TxoSID, Utxo>, // all currently-unspent TXOs
+    utxos: Mapxnk<TxoSID, Utxo>, // all currently-unspent TXOs
     nonconfidential_balances: Mapx<XfrPublicKey, u64>,
     owned_utxos: Mapx<XfrPublicKey, HashSet<TxoSID>>,
     /// all spent TXOs
-    pub spent_utxos: Mapx<TxoSID, Utxo>,
+    pub spent_utxos: Mapxnk<TxoSID, Utxo>,
     // Map a TXO to its output position in a transaction
-    txo_to_txn_location: Mapx<TxoSID, (TxnSID, OutputPosition)>,
+    txo_to_txn_location: Mapxnk<TxoSID, (TxnSID, OutputPosition)>,
     // State commitment history.
     // The BitDigest at index i is the state commitment of the ledger at block height  i + 1.
     state_commitment_versions: Vecx<HashOf<Option<StateCommitmentData>>>,
@@ -1124,11 +1124,11 @@ impl LedgerStatus {
         let ledger = LedgerStatus {
             snapshot_file: snapshot_file.to_owned(),
             sliding_set: SlidingSet::<[u8; 8]>::new(TRANSACTION_WINDOW_WIDTH as usize),
-            utxos: new_mapx!(utxos_path.as_str()),
+            utxos: new_mapxnk!(utxos_path.as_str()),
             nonconfidential_balances: new_mapx!(nonconfidential_balances_path.as_str()),
             owned_utxos: new_mapx!(owned_utxos_path.as_str()),
-            spent_utxos: new_mapx!(spent_utxos_path.as_str()),
-            txo_to_txn_location: new_mapx!(txo_to_txn_location_path.as_str()),
+            spent_utxos: new_mapxnk!(spent_utxos_path.as_str()),
+            txo_to_txn_location: new_mapxnk!(txo_to_txn_location_path.as_str()),
             issuance_amounts: new_mapx!(issuance_amounts_path.as_str()),
             state_commitment_versions: new_vecx!(state_commitment_versions_path.as_str()),
             asset_types: new_mapx!(asset_types_path.as_str()),
