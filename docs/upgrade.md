@@ -10,23 +10,19 @@
     - From 4000009.1 FRAs to 4190009.1 FRAs, that is '400,0009.1/401,0009.1/402,0009.1/.../419,0009.1'
 4. Check the results of the transfer-operations in < step 3 > on mainnet
 5. Send a copy of each key to the co-responding owner
-6. Commit the changes to the local git repo
-7. Create a new release tag
-8. Push the new tag to GitHub
-9. Wait the CI-compiling work done
-10. Cut off the network entrance of mainnet
-11. Make a snapshot based on the final data state after the mainnet stops public services
-12. Deploy the new compiled version(docker image) to an new environment
+6. Cut off the network entrance of mainnet
+7. Make a snapshot based on the final data state after the mainnet stops public services
+8. Deploy the new compiled version(docker image) to an new environment
     - The new environment should be initialized with the snapshot created in < step 11 >
     - Let's call it 'mainnet-new'
-13. Do `stt init --mainnet` on 'mainnet-new', the following scenarios will be checked by `stt` automatically
+9. Do `stt init --mainnet` on 'mainnet-new', the following scenarios will be checked by `stt` automatically
     - The number of validators should be 20
     - The corresponding voting power of each validator should be correct
         - should be equal to `{total balance} - 9(reserved for testing) - 0.1(reserved for fee)`
     - The state of each validator should be `online`(the online/offline mark in `fn show`)
     - All major functions should run well, such as transfer FRAs, custom assets, delegation ...
     - Should be able to create 6 new blocks without any errors after all the above operations
-14. Switch the public network entrances between mainnet and mainnet-new
-15. Open the network entrance of mainnet-new
+10. Switch the public network entrances between mainnet and mainnet-new
+11. Open the network entrance of mainnet-new
     - Keep the old mainnet running for 30 days
     - From now on, Findora Network is a decentralized autonomous network!
