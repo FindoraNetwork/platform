@@ -16,7 +16,7 @@ use abci::{
     ResponseDeliverTx, ResponseEndBlock, ResponseInfo,
 };
 use lazy_static::lazy_static;
-use ledger::staking::{is_coinbase_tx, KEEP_HIST};
+use ledger::staking::KEEP_HIST;
 use parking_lot::Mutex;
 use protobuf::RepeatedField;
 use ruc::*;
@@ -72,11 +72,7 @@ pub fn check_tx(_s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> Response
 
     if matches!(req.field_type, CheckTxType::New) {
         if let Ok(tx) = convert_tx(req.get_tx()) {
-            if !tx.is_basic_valid(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed))
-                || is_coinbase_tx(&tx)
-            {
-                resp.code = 1;
-            }
+            alt!(!tx.valid_in_abci(), resp.code = 1);
         } else {
             resp.code = 1;
         }
@@ -95,6 +91,18 @@ pub fn begin_block(
         ledger::store::fbnc::flush_data();
         let last_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
         info_omit!(CFG.btmcfg.snapshot(last_height as u64));
+    }
+
+    // notify here to make abci-commit safer
+    //
+    // NOTE:
+    // We must ensure that the ledger lock is not occupied,
+    // otherwise the peer will not perform any substantial operations,
+    // because there is a `try_lock` mechanism used to avoid deadlock
+    {
+        let mut created = BLOCK_CREATED.0.lock();
+        *created = true;
+        BLOCK_CREATED.1.notify_one();
     }
 
     IN_SAFE_ITV.swap(true, Ordering::Relaxed);
@@ -128,9 +136,7 @@ pub fn deliver_tx(
 ) -> ResponseDeliverTx {
     let mut resp = ResponseDeliverTx::new();
     if let Ok(tx) = convert_tx(req.get_tx()) {
-        if !is_coinbase_tx(&tx)
-            && tx.is_basic_valid(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed))
-        {
+        if tx.valid_in_abci() {
             if *KEEP_HIST {
                 // set attr(tags) if any, only needed on a fullnode
                 let attr = utils::gen_tendermint_attr(&tx);
@@ -203,21 +209,17 @@ pub fn commit(s: &mut ABCISubmissionServer, _req: &RequestCommit) -> ResponseCom
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
     state.set_tendermint_height(td_height as u64);
 
+    // cache last block for QueryServer
+    pnk!(state.update_api_cache());
+
     // snapshot them finally
     let path = format!("{}/{}", &CFG.ledger_dir, &state.get_status().snapshot_file);
     pnk!(serde_json::to_vec(&state.get_status())
         .c(d!())
         .and_then(|s| fs::write(&path, s).c(d!(path))));
 
-    // cache last block to QueryServer
-    {
-        pnk!(state.update_api_cache());
-        let mut created = BLOCK_CREATED.0.lock();
-        *created = true;
-        BLOCK_CREATED.1.notify_one();
-    }
-
     let mut r = ResponseCommit::new();
     r.set_data(state.get_state_commitment().0.as_ref().to_vec());
+
     r
 }

@@ -599,7 +599,9 @@ impl LedgerState {
             return Err(eg!("not validator"));
         };
 
-        let h = self.get_staking().cur_height;
+        let s = self.get_staking();
+        let h = s.cur_height;
+        let cbl = s.coinbase_balance();
         let commissions = self
             .get_staking_mut()
             .di
@@ -607,7 +609,15 @@ impl LedgerState {
             .values_mut()
             .filter(|d| d.validator_entry_exists(&pk))
             .map(|d| {
-                d.set_delegation_rewards(&pk, h, return_rate, commission_rate, gdp, true)
+                d.set_delegation_rewards(
+                    &pk,
+                    h,
+                    return_rate,
+                    commission_rate,
+                    gdp,
+                    true,
+                    cbl,
+                )
             })
             .collect::<Result<Vec<_>>>()
             .c(d!())?;
