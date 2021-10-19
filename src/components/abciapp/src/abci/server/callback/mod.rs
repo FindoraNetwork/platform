@@ -87,14 +87,6 @@ pub fn begin_block(
         info_omit!(CFG.btmcfg.snapshot(last_height as u64));
     }
 
-    // cache the last block in query server
-    // trigger this op in `BeginBlock` to make abci-commit safer
-    {
-        let mut created = BLOCK_CREATED.0.lock();
-        *created = true;
-        BLOCK_CREATED.1.notify_one();
-    }
-
     IN_SAFE_ITV.swap(true, Ordering::Relaxed);
 
     let header = pnk!(req.header.as_ref());
@@ -206,6 +198,14 @@ pub fn commit(s: &mut ABCISubmissionServer, _req: &RequestCommit) -> ResponseCom
     pnk!(serde_json::to_vec(&state.get_status())
         .c(d!())
         .and_then(|s| fs::write(&path, s).c(d!(path))));
+
+    // cache last block to QueryServer
+    {
+        pnk!(state.update_api_cache());
+        let mut created = BLOCK_CREATED.0.lock();
+        *created = true;
+        BLOCK_CREATED.1.notify_one();
+    }
 
     let mut r = ResponseCommit::new();
     r.set_data(state.get_state_commitment().0.as_ref().to_vec());

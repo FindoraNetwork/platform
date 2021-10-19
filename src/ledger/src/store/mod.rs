@@ -237,9 +237,8 @@ impl LedgerState {
         Ok(())
     }
 
-    /// update data of query server,
-    /// do this op when we create a new block
-    fn update_api_cache(&mut self) -> Result<()> {
+    /// update the data of QueryServer when we create a new block in ABCI
+    pub fn update_api_cache(&mut self) -> Result<()> {
         if !*KEEP_HIST {
             return Ok(());
         }
@@ -385,7 +384,6 @@ impl LedgerState {
         self.update_utxo_map(base_sid, max_sid, &block.temp_sids, &tsm)
             .c(d!())
             .and_then(|_| self.update_state(block, &tsm).c(d!()))
-            .and_then(|_| self.update_api_cache().c(d!()))
             .map(|_| tsm)
     }
 
