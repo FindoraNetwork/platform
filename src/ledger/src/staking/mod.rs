@@ -1326,7 +1326,7 @@ impl Staking {
     /// sent from COIN_BASE_PRINCIPAL, every tx that can
     /// not pass this checker will be regarded as invalid.
     pub fn coinbase_check_and_pay(&mut self, tx: &Transaction) {
-        if !is_coinbase_tx(tx) {
+        if !tx.is_coinbase_tx() {
             return;
         }
         self.coinbase_pay(tx);
@@ -1425,10 +1425,11 @@ impl Staking {
     ) -> Result<()> {
         let p = Self::get_proposer_rewards_rate(vote_percent).c(d!())?;
         let h = self.cur_height;
+        let cbl = self.coinbase_balance();
         self.delegation_get_mut(proposer)
             .c(d!())
             .and_then(|d| {
-                d.set_delegation_rewards(proposer, h, p, [0, 100], [0, 0], false)
+                d.set_delegation_rewards(proposer, h, p, [0, 100], [0, 0], false, cbl)
                     .c(d!())
             })
             .map(|_| ())
@@ -1880,6 +1881,7 @@ impl Delegation {
     // > use 'AssignAdd' instead of 'Assign'
     // > to keep compatible with the logic of governance penalty.
     #[cfg(not(target_arch = "wasm32"))]
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn set_delegation_rewards(
         &mut self,
         validator: &XfrPublicKey,
@@ -1888,6 +1890,7 @@ impl Delegation {
         commission_rate: [u64; 2],
         global_delegation_percent: [u64; 2],
         is_delegation_rwd: bool,
+        coinbase_bl: Amount,
     ) -> Result<u64> {
         if self.end_height < cur_height || DelegationState::Bond != self.state {
             return Ok(0);
@@ -1909,7 +1912,9 @@ impl Delegation {
                 if 0 < am {
                     // APY
                     am += self.rwd_amount.saturating_mul(am) / self.amount();
-                    calculate_delegation_rewards(am, return_rate).c(d!())
+                    calculate_delegation_rewards(am, return_rate)
+                        .c(d!())
+                        .map(|n| alt!(n > coinbase_bl, coinbase_bl, n))
                 } else {
                     Err(eg!(format!(
                         "staking amount of <{}> available is less than 0",
@@ -2120,15 +2125,6 @@ pub fn deny_relative_inputs(x: &TransferAsset) -> Result<()> {
     } else {
         Ok(())
     }
-}
-
-#[inline(always)]
-#[allow(missing_docs)]
-pub fn is_coinbase_tx(tx: &Transaction) -> bool {
-    tx.body
-        .operations
-        .iter()
-        .any(|o| matches!(o, Operation::MintFra(_)))
 }
 
 #[cfg(test)]

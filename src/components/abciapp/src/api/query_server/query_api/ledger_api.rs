@@ -259,7 +259,7 @@ pub async fn query_validators(
 #[derive(Deserialize, Debug)]
 pub struct DelegationRwdQueryParams {
     address: String,
-    height: u64,
+    height: Option<u64>,
 }
 
 /// get delegation reward according to `DelegationRwdQueryParams`
@@ -274,20 +274,25 @@ pub async fn get_delegation_reward(
 
     let qs = data.read();
 
+    let hdr = qs
+        .ledger_cloned
+        .api_cache
+        .staking_delegation_rwd_hist
+        .get(&key)
+        .c(d!())
+        .map_err(|e| error::ErrorNotFound(e.generate_log(None)))?;
+
+    let h = qs.ledger_cloned.get_tendermint_height();
+
+    let mut req_h = info.height.unwrap_or(h);
+    alt!(req_h > h, req_h = h);
+
     Ok(web::Json(
-        (0..=info.height)
-            .into_iter()
+        (0..=req_h)
             .rev()
-            .filter_map(|i| {
-                qs.ledger_cloned
-                    .api_cache
-                    .staking_delegation_rwd_hist
-                    .get(&key)
-                    .map(|rh| rh.get(&i))
-            })
-            .flatten()
-            .take(1)
-            .collect(),
+            .find_map(|i| hdr.get(&i))
+            .map(|r| vec![r])
+            .unwrap_or_default(),
     ))
 }
 

@@ -12,7 +12,6 @@ mod test;
 pub use effects::{BlockEffect, TxnEffect};
 
 use crate::staking::{
-    is_coinbase_tx,
     ops::{
         claim::ClaimOps, delegation::DelegationOps,
         fra_distribution::FraDistributionOps, governance::GovernanceOps,
@@ -1519,10 +1518,19 @@ lazy_static! {
 pub const TX_FEE_MIN: u64 = 1_0000;
 
 impl Transaction {
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn is_coinbase_tx(&self) -> bool {
+        self.body
+            .operations
+            .iter()
+            .any(|o| matches!(o, Operation::MintFra(_)))
+    }
+
     /// All-in-one checker
     #[inline(always)]
-    pub fn is_basic_valid(&self, td_height: i64) -> bool {
-        self.check_fee() && self.fra_no_illegal_issuance(td_height)
+    pub fn valid_in_abci(&self) -> bool {
+        self.check_fee() && !self.is_coinbase_tx()
     }
 
     /// A simple fee checker
@@ -1539,7 +1547,7 @@ impl Transaction {
         //
         // But it seems enough when we combine it with limiting
         // the payload size of submission-server's http-requests.
-        is_coinbase_tx(self)
+        self.is_coinbase_tx()
             || self.body.operations.iter().any(|ops| {
                 if let Operation::TransferAsset(ref x) = ops {
                     return x.body.outputs.iter().any(|o| {
@@ -1569,28 +1577,6 @@ impl Transaction {
                 }
                 false
             })
-    }
-
-    /// Issuing FRA is denied except in the genesis block.
-    #[inline(always)]
-    pub fn fra_no_illegal_issuance(&self, tendermint_block_height: i64) -> bool {
-        // block height of mainnet has been higher than this value
-        const HEIGHT_LIMIT: i64 = 10_0000;
-
-        // **mainnet v0.1**:
-        // FRA is defined and issued in genesis block.
-        if HEIGHT_LIMIT > tendermint_block_height {
-            return true;
-        }
-
-        !self.body.operations.iter().any(|o| {
-            if let Operation::IssueAsset(ref x) = o {
-                if ASSET_TYPE_FRA == x.body.code.val {
-                    return true;
-                }
-            }
-            false
-        })
     }
 
     /// findora hash

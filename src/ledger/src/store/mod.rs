@@ -237,9 +237,8 @@ impl LedgerState {
         Ok(())
     }
 
-    /// update data of query server,
-    /// do this op when we create a new block
-    fn update_api_cache(&mut self) -> Result<()> {
+    /// update the data of QueryServer when we create a new block in ABCI
+    pub fn update_api_cache(&mut self) -> Result<()> {
         if !*KEEP_HIST {
             return Ok(());
         }
@@ -385,7 +384,6 @@ impl LedgerState {
         self.update_utxo_map(base_sid, max_sid, &block.temp_sids, &tsm)
             .c(d!())
             .and_then(|_| self.update_state(block, &tsm).c(d!()))
-            .and_then(|_| self.update_api_cache().c(d!()))
             .map(|_| tsm)
     }
 
@@ -601,7 +599,9 @@ impl LedgerState {
             return Err(eg!("not validator"));
         };
 
-        let h = self.get_staking().cur_height;
+        let s = self.get_staking();
+        let h = s.cur_height;
+        let cbl = s.coinbase_balance();
         let commissions = self
             .get_staking_mut()
             .di
@@ -609,7 +609,15 @@ impl LedgerState {
             .values_mut()
             .filter(|d| d.validator_entry_exists(&pk))
             .map(|d| {
-                d.set_delegation_rewards(&pk, h, return_rate, commission_rate, gdp, true)
+                d.set_delegation_rewards(
+                    &pk,
+                    h,
+                    return_rate,
+                    commission_rate,
+                    gdp,
+                    true,
+                    cbl,
+                )
             })
             .collect::<Result<Vec<_>>>()
             .c(d!())?;
