@@ -338,28 +338,28 @@ mod init {
             .fold(config, |acc, pair| acc.replace(pair.0, pair.1));
 
         let result = match mode {
-            InitMode::Testnet => {
-                config.replace(
-                    "persistent_peers = \"\"",
-                    "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@prod-testnet-us-west-2-sentry-000-public.prod.findora.org:26656,d0c6e3e1589695ae6d650b288caf2efe9a998a50@prod-testnet-us-west-2-sentry-001-public.prod.findora.org:26656,78661a9979c100e8f1303cbd121cb1b326ff694f@prod-testnet-us-west-2-sentry-002-public.prod.findora.org:26656,6723af6a3aef14cd7eb5ee8d5d0ac227af1e9651@prod-testnet-us-west-2-sentry-003-public.prod.findora.org:26656\"",
-                )
-            }
             InitMode::Mainnet => {
                 config.replace(
-                    "persistent_peers = \"\"",
-                    "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@prod-mainnet-us-west-2-sentry-000-public.prod.findora.org:26656,d0c6e3e1589695ae6d650b288caf2efe9a998a50@prod-mainnet-us-west-2-sentry-001-public.prod.findora.org:26656,78661a9979c100e8f1303cbd121cb1b326ff694f@prod-mainnet-us-west-2-sentry-002-public.prod.findora.org:26656,6723af6a3aef14cd7eb5ee8d5d0ac227af1e9651@prod-mainnet-us-west-2-sentry-003-public.prod.findora.org:26656\"",
+                    "seeds = \"\"",
+                    "seeds = \"bd518151ac767d5dd77e228d34f31c581140fbe0@prod-mainnet-us-west-2-seed-000-public.prod.findora.org:26656,03deb91289c430fecf6883caaf69c69bb66f7d8e@prod-mainnet-us-west-2-seed-001-public.prod.findora.org:26656\"",
+                )
+            }
+            InitMode::Testnet => {
+                config.replace(
+                    "seeds = \"\"",
+                    "seeds = \"bd518151ac767d5dd77e228d34f31c581140fbe0@prod-testnet-us-west-2-seed-000-public.prod.findora.org:26656,03deb91289c430fecf6883caaf69c69bb66f7d8e@prod-testnet-us-west-2-seed-001-public.prod.findora.org:26656\"",
                 )
             }
             InitMode::Qa01 => {
                 config.replace(
-                    "persistent_peers = \"\"",
-                    "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@dev-qa01-us-west-2-sentry-000-public.dev.findora.org:26656\"",
+                    "seeds = \"\"",
+                    "seeds = \"bd518151ac767d5dd77e228d34f31c581140fbe0@dev-qa01-us-west-2-seed-000-public.dev.findora.org:26656,03deb91289c430fecf6883caaf69c69bb66f7d8e@dev-qa01-us-west-2-seed-001-public.dev.findora.org:26656\"",
                 )
             }
             InitMode::Qa02 => {
                 config.replace(
-                    "persistent_peers = \"\"",
-                    "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@dev-qa02-us-west-2-sentry-000-public.dev.findora.org:26656\"",
+                    "seeds = \"\"",
+                    "seeds = \"bd518151ac767d5dd77e228d34f31c581140fbe0@dev-qa02-us-west-2-seed-000-public.dev.findora.org:26656,03deb91289c430fecf6883caaf69c69bb66f7d8e@dev-qa02-us-west-2-seed-001-public.dev.findora.org:26656\"",
                 )
             }
             InitMode::Dev => config,
