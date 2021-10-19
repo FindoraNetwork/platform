@@ -69,9 +69,19 @@ pub fn info(s: &mut ABCISubmissionServer, _req: &RequestInfo) -> ResponseInfo {
 /// any new tx will trigger this callback before it can enter the mem-pool of tendermint
 pub fn check_tx(_s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseCheckTx {
     let mut resp = ResponseCheckTx::new();
-    if matches!(req.field_type, CheckTxType::New) && convert_tx(req.get_tx()).is_err() {
-        resp.code = 1;
+
+    if matches!(req.field_type, CheckTxType::New) {
+        if let Ok(tx) = convert_tx(req.get_tx()) {
+            if !tx.is_basic_valid(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed))
+                || is_coinbase_tx(&tx)
+            {
+                resp.code = 1;
+            }
+        } else {
+            resp.code = 1;
+        }
     }
+
     resp
 }
 
