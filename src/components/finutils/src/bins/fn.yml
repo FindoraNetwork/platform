@@ -478,19 +478,19 @@ subcommands:
   - anon-transfer:
       about: Perform Anonymous Transfer
       args:
-        - axfr-secretkey:
-            help: Axfr secret key of the sender
-            short: s
-            long: axfr-secretkey
+        - anon-keys:
+            help: Anon keys file path of converter
+            short: a
+            long: anon-keys
             takes_value: true
-            value_name: SECRET KEY
+            value_name: ANON KEYS PATH
             required: true
-        - decryption-key:
-            help: Decryption Key for anon transfer
-            short: d
-            long: decryption-key
+        - randomizer:
+            help: Randomizer for the input Anon BAR
+            short: r
+            long: randomizer
             takes_value: true
-            value_name: DECRYPTION KEY
+            value_name: RANDOMIZER
             required: true
         - to-axfr-public-key:
             help: Axfr public key of the receiver
@@ -523,6 +523,13 @@ subcommands:
             takes_value: true
             value_name: SECRET KEY
             required: true
+        - randomizer-file:
+            help: Randomizers for the input Anon BARs
+            short: r
+            long: randomizer-file
+            takes_value: true
+            value_name: RANDOMIZER
+            required: true        
         - decryption-key-file:
             help: Decryption Keys for anon transfer
             short: d
@@ -550,4 +557,14 @@ subcommands:
             long: amount-file
             takes_value: true
             value_name: Amount
+            required: true
+  - anon-fetch-merkle-proof:
+      about: Query to fetch mtleaf info
+      args:
+        - atxo-sid:
+            help: ATXO SID of the Anonymous Blind Asset Record
+            short: a
+            long: atxo-sid
+            takes_value: true
+            value_name: ATXO SID
             required: true

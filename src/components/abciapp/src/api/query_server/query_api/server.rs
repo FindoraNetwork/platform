@@ -23,7 +23,10 @@ use parking_lot::{Condvar, Mutex, RwLock};
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, fs, io::ErrorKind, sync::Arc};
-use zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo};
+use zei::{
+    anon_xfr::structs::MTLeafInfo,
+    xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+};
 
 lazy_static! {
     /// the query_server will be notified every time
@@ -53,6 +56,7 @@ pub struct QueryServer {
     token_code_issuances: Mapx<AssetTypeCode, Issuances>, // issuance mapped by token code
     owner_memos: Mapx<TxoSID, OwnerMemo>,
     abar_memos: Mapx<ATxoSID, OwnerMemo>,
+    abar_proof: Mapx<ATxoSID, MTLeafInfo>,
     utxos_to_map_index: Mapx<TxoSID, XfrAddress>,
     atxos_to_map_index: Mapx<ATxoSID, AXfrAddress>,
     txo_to_txnid: Mapx<TxoSID, TxnIDHash>, // txo(spent, unspent) to authenticated txn (sid, hash)
@@ -152,6 +156,7 @@ impl QueryServer {
             ),
             app_block_cnt: 0,
             abar_memos: new_mapx!("query_server_subdata/abar_memos"),
+            abar_proof: new_mapx!("query_server_subdata/abar_proof"),
         }
     }
 
@@ -336,6 +341,12 @@ impl QueryServer {
     #[inline(always)]
     pub fn get_abar_memo(&self, atxo_sid: ATxoSID) -> Option<OwnerMemo> {
         self.abar_memos.get(&atxo_sid)
+    }
+
+    /// Returns the merkle proof from the given ATxoSID
+    #[inline(always)]
+    pub fn get_abar_proof(&self, atxo_sid: ATxoSID) -> Option<MTLeafInfo> {
+        self.abar_proof.get(&atxo_sid)
     }
 
     /// Add created asset

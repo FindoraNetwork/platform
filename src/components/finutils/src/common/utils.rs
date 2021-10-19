@@ -22,8 +22,8 @@ use ruc::*;
 use serde::{self, Deserialize, Serialize};
 use std::collections::HashMap;
 use tendermint::{PrivateKey, PublicKey};
-use zei::anon_xfr::keys::AXfrPubKey;
 use zei::anon_xfr::structs::AnonBlindAssetRecord;
+use zei::anon_xfr::{keys::AXfrPubKey, structs::MTLeafInfo};
 use zei::xfr::structs::OpenAssetRecord;
 use zei::xfr::{
     asset_record::{open_blind_asset_record, AssetRecordType},
@@ -534,6 +534,26 @@ pub fn get_owner_memo_batch(ids: &[TxoSID]) -> Result<Vec<Option<OwnerMemo>>> {
 pub fn get_abar_memo(id: &ATxoSID) -> Result<Option<OwnerMemo>> {
     let id = id.0.to_string();
     let url = format!("{}:8667/get_abar_memo/{}", get_serv_addr().c(d!())?, id);
+
+    attohttpc::get(&url)
+        .send()
+        .c(d!())?
+        .error_for_status()
+        .c(d!())?
+        .bytes()
+        .c(d!())
+        .and_then(|b| serde_json::from_slice(&b).c(d!()))
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn get_abar_proof(atxo_sid: &ATxoSID) -> Result<Option<MTLeafInfo>> {
+    let atxo_sid = atxo_sid.0.to_string();
+    let url = format!(
+        "{}:8667/get_abar_proof/{}",
+        get_serv_addr().c(d!())?,
+        atxo_sid
+    );
 
     attohttpc::get(&url)
         .send()
