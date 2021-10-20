@@ -288,10 +288,8 @@ pub async fn get_delegation_reward(
     alt!(req_h > h, req_h = h);
 
     Ok(web::Json(
-        (0..=req_h)
-            .rev()
-            .find_map(|i| hdr.get(&i))
-            .map(|r| vec![r])
+        hdr.get_closest_smaller(&req_h)
+            .map(|(_, r)| vec![r])
             .unwrap_or_default(),
     ))
 }
@@ -300,8 +298,8 @@ pub async fn get_delegation_reward(
 #[derive(Deserialize, Debug)]
 pub struct ValidatorDelegationQueryParams {
     address: TendermintAddr,
-    epoch_size: u32,
-    epoch_cnt: u8,
+    epoch_size: Option<u64>,
+    epoch_cnt: Option<u64>,
 }
 
 #[allow(missing_docs)]
@@ -322,79 +320,96 @@ pub async fn get_validator_delegation_history(
     let staking = ledger.get_staking();
 
     let v_id = staking
-        .validator_td_addr_to_app_pk(info.address.as_ref())
+        .validator_td_addr_to_app_pk(&info.address)
         .c(d!())
         .map_err(error::ErrorBadRequest)?;
-    let v_self_delegation = staking
+
+    let h = staking.cur_height();
+
+    let start_height = staking
         .delegation_get(&v_id)
-        .ok_or_else(|| error::ErrorBadRequest("not exists"))?;
+        .ok_or_else(|| error::ErrorBadRequest("not exists"))?
+        .start_height;
+
+    let staking_global_rate_hist = &qs.ledger_cloned.api_cache.staking_global_rate_hist;
+
     let delegation_amount_hist =
         ledger.api_cache.staking_delegation_amount_hist.get(&v_id);
 
-    let self_delegation = v_self_delegation
-        .entries
-        .iter()
-        .filter(|(k, _)| **k == v_id)
-        .map(|(_, n)| n)
-        .sum();
+    let self_delegation_amount_hist =
+        ledger.api_cache.staking_self_delegation_hist.get(&v_id);
 
-    // this `unwrap` is safe
-    let delegated = staking
-        .validator_get_current_one_by_id(&v_id)
-        .unwrap()
-        .delegators
-        .values()
-        .sum::<u64>();
+    let mut esiz = info.epoch_size.unwrap_or(10);
+    alt!(esiz > h, esiz = h);
+    alt!(0 == esiz, esiz = 1);
 
-    let mut history = vec![ValidatorDelegation {
-        return_rate: ledger.staking_get_block_rewards_rate(),
-        delegated,
-        self_delegation,
-    }];
+    let ecnt_max = h.saturating_sub(start_height) / esiz;
+    let mut ecnt = info
+        .epoch_cnt
+        .map(|n| alt!(n > ecnt_max, ecnt_max, n))
+        .unwrap_or(ecnt_max);
 
-    let h = staking.cur_height();
-    let epoch_size = info.epoch_size as u64;
-    (1..=info.epoch_cnt as u64)
-        .into_iter()
-        .filter_map(|i| {
-            if h >= i * epoch_size
-                && h - i * epoch_size >= v_self_delegation.start_height
-            {
-                Some(h - i * epoch_size)
-            } else {
-                None
+    alt!(ecnt > h, ecnt = h);
+    alt!(ecnt > 1024, ecnt = 1024);
+    alt!(0 == ecnt, ecnt = 1);
+
+    let mut c1 = map! { B 1 + h => None};
+    let mut c2 = map! { B 1 + h => None};
+    let mut c3 = map! { B 1 + h => None};
+    let res = (0..ecnt)
+        .map(|i| h - i * esiz)
+        .filter_map(|hi| {
+            if c1.range(..=hi).next().is_none() {
+                c1.clear();
+                if let Some((h, v)) = staking_global_rate_hist.get_closest_smaller(&hi) {
+                    c1.insert(h, Some(v));
+                } else {
+                    c1.insert(0, None);
+                }
             }
-        })
-        .for_each(|h| {
-            history.push(ValidatorDelegation {
-                return_rate: qs
-                    .query_block_rewards_rate(&h)
-                    .unwrap_or(history.last().unwrap().return_rate), //unwrap is safe here
-                delegated: delegation_amount_hist
-                    .as_ref()
-                    .map(|dah| {
-                        if dah.is_empty()
-                            || dah.iter().take(1).all(|(i, _)| {
-                                #[cfg(not(feature = "diskcache"))]
-                                let i = *i;
-                                i > h
-                            })
-                        {
-                            0
-                        } else {
-                            dah.get(&h).unwrap_or(history.last().unwrap().delegated)
-                        }
-                    })
-                    .unwrap_or(0),
-                self_delegation: delegation_amount_hist
-                    .as_ref()
-                    .map(|dah| dah.get(&h))
-                    .flatten()
-                    .unwrap_or(history.last().unwrap().self_delegation),
-            })
-        });
 
-    Ok(web::Json(history))
+            c1.values().copied().next().flatten().map(|return_rate| {
+                if c2.range(..=hi).next().is_none() {
+                    c2.clear();
+                    if let Some((h, v)) = delegation_amount_hist
+                        .as_ref()
+                        .map(|dah| dah.get_closest_smaller(&hi))
+                        .flatten()
+                    {
+                        c2.insert(h, Some(v));
+                    } else {
+                        c2.insert(0, None);
+                    }
+                }
+
+                if c3.range(..=hi).next().is_none() {
+                    c3.clear();
+                    if let Some((h, v)) = self_delegation_amount_hist
+                        .as_ref()
+                        .map(|sdah| sdah.get_closest_smaller(&hi))
+                        .flatten()
+                    {
+                        c3.insert(h, Some(v));
+                    } else {
+                        c3.insert(0, None);
+                    }
+                }
+
+                ValidatorDelegation {
+                    return_rate,
+                    delegated: c2.values().copied().next().flatten().unwrap_or_default(),
+                    self_delegation: c3
+                        .values()
+                        .copied()
+                        .next()
+                        .flatten()
+                        .unwrap_or_default(),
+                }
+            })
+        })
+        .collect();
+
+    Ok(web::Json(res))
 }
 
 #[allow(missing_docs)]
