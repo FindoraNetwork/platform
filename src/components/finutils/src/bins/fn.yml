@@ -451,6 +451,24 @@ subcommands:
       about: Generate an Ethereum address
   - generate-anon-keys:
       about: Generate Anon keys
+  - owned-abars:
+      about: List Anon UTXOs for a public key, randomizer pair
+      args:
+        - randomizer:
+            help: Jubjub Scalar which was used to randmoize public key
+            short: r
+            long: randomizer
+            takes_value: true
+            value_name: JUBJUB SCALAR
+        - axfr-public-key:
+            help: Axfr public key of the account to query
+            short: p
+            long: axfr-public-key
+            takes_value: true
+            value_name: PUBLIC KEY
+            required: true
+  - owned-utxos:
+      about: List owned UTXOs for a public key
   - convert-bar-to-abar:
       about: Convert a BAR to Anon BAR for yourself
       args:
@@ -460,7 +478,6 @@ subcommands:
             long: xfr-secretkey
             takes_value: true
             value_name: SECRET KEY PATH
-            required: true
         - anon-keys:
             help: Anon keys file path of converter
             short: a

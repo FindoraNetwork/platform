@@ -21,6 +21,7 @@ use crate::{
     },
     staking::{Amount, Power, Staking, TendermintAddrRef, FF_PK_LIST, FRA_TOTAL_AMOUNT},
 };
+use base64::URL_SAFE;
 use bitmap::{BitMap, SparseMap};
 use bnc::{new_mapx, new_vecx, Mapx, Vecx};
 use cryptohash::sha256::Digest as BitDigest;
@@ -50,6 +51,7 @@ use storage::{
 use zei::anon_xfr::keys::AXfrPubKey;
 use zei::anon_xfr::merkle_tree::ImmutablePersistentMerkleTree;
 use zei::anon_xfr::structs::MTLeafInfo;
+use zei::serialization::ZeiFromToBytes;
 use zei::{
     anon_xfr::{
         merkle_tree::PersistentMerkleTree,
@@ -252,6 +254,7 @@ impl LedgerState {
         let block_merkle_id = self.checkpoint(&block).c(d!())?;
         block.temp_sids.clear();
         block.txns.clear();
+        block.output_abars.clear();
 
         let block_idx = self.blocks.len();
         tx_block.iter().enumerate().for_each(|(tx_idx, tx)| {
@@ -283,7 +286,6 @@ impl LedgerState {
         for (inp_sid, _) in block.input_txos.iter() {
             self.utxo_map.clear(inp_sid.0 as usize).c(d!())?;
         }
-
         let backup_next_txn_sid = self.status.next_txn.0;
         let (tsm, base_sid, max_sid) = self.status.apply_block_effects(&mut block);
 
@@ -302,6 +304,9 @@ impl LedgerState {
         backup_next_txn_sid: usize,
         mut tx_block: Vec<FinalizedTransaction>,
     ) -> Result<Vec<FinalizedTransaction>> {
+        println!("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
+        println!("Output Abars {:?}", output_abars.len());
+        println!("Finalized Txns {:?}", tx_block.len());
         for n in new_nullifiers.iter() {
             let str =
                 base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
@@ -314,11 +319,22 @@ impl LedgerState {
             self.nullifier_set.set(&d, Some(b"".to_vec())).c(d!())?;
         }
 
+        println!("Before Iterating Abars");
+        let mut count = 0;
         let mut txn_sid = TxnSID(backup_next_txn_sid);
         for (txn_abars, txn) in output_abars.iter().zip(tx_block.iter_mut()) {
+            println!("Iterating: {}", count);
+            count += 1;
             let mut op_position = OutputPosition(0);
             let mut atxo_ids: Vec<ATxoSID> = vec![];
             for abar in txn_abars {
+                println!(
+                    "ABAR setting in LedgerStatus: {}",
+                    base64::encode_config(
+                        abar.public_key.zei_to_bytes().as_slice(),
+                        URL_SAFE
+                    )
+                );
                 let uid = self.add_abar(&abar).c(d!())?;
                 self.status.ax_utxos.insert(uid, abar.clone());
                 self.status
@@ -337,6 +353,7 @@ impl LedgerState {
             txn.atxo_ids = atxo_ids;
             txn_sid = TxnSID(txn_sid.0 + 1);
         }
+        println!("After Iterating Abars");
 
         Ok(tx_block)
     }
@@ -927,6 +944,11 @@ impl LedgerState {
         &self,
         addr: &AXfrPubKey,
     ) -> Vec<(ATxoSID, AnonBlindAssetRecord)> {
+        println!(
+            "Public Key: {:?}",
+            base64::encode_config(addr.zei_to_bytes().as_slice(), URL_SAFE)
+        );
+
         if let Some(set) = self.status.owned_ax_utxos.get(addr) {
             return set
                 .iter()

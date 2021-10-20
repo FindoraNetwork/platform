@@ -4,6 +4,7 @@
 //! Separating mnemonic to a standalone library is needed by tests.
 //!
 
+use base64::URL_SAFE;
 use bech32::{self, FromBase32, ToBase32};
 use bip0039::{Count, Language, Mnemonic};
 use crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey};
@@ -218,7 +219,7 @@ pub fn x_public_key_from_base64(pk: &str) -> Result<XPublicKey> {
 #[inline(always)]
 /// Restore a anon secret key from base64
 pub fn anon_secret_key_from_base64(sk: &str) -> Result<AXfrKeyPair> {
-    base64::decode(sk)
+    base64::decode_config(sk, URL_SAFE)
         .c(d!())
         .and_then(|bytes| AXfrKeyPair::zei_from_bytes(&bytes).c(d!()))
 }
@@ -226,7 +227,7 @@ pub fn anon_secret_key_from_base64(sk: &str) -> Result<AXfrKeyPair> {
 #[inline(always)]
 /// Restore a x secret key from base64
 pub fn x_secret_key_from_base64(sk: &str) -> Result<XSecretKey> {
-    base64::decode(sk)
+    base64::decode_config(sk, URL_SAFE)
         .c(d!())
         .and_then(|bytes| XSecretKey::zei_from_bytes(&bytes).c(d!()))
 }
@@ -234,7 +235,7 @@ pub fn x_secret_key_from_base64(sk: &str) -> Result<XSecretKey> {
 #[inline(always)]
 /// Restore a randomizer from base64
 pub fn randomizer_from_base64(sk: &str) -> Result<JubjubScalar> {
-    base64::decode(sk)
+    base64::decode_config(sk, URL_SAFE)
         .c(d!())
         .and_then(|bytes| JubjubScalar::zei_from_bytes(&bytes).c(d!()))
 }

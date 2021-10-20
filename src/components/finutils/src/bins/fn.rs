@@ -406,7 +406,10 @@ fn run() -> Result<()> {
             )
             .c(d!())?;
 
-            println!("Randomizer: {}", wallet::randomizer_to_base64(&r));
+            println!(
+                "\x1b[31;01m Randomizer: {}\x1b[00m",
+                wallet::randomizer_to_base64(&r)
+            );
         }
     } else if let Some(_m) = matches.subcommand_matches("generate-anon-keys") {
         let mut prng = ChaChaRng::from_entropy();
@@ -422,7 +425,31 @@ fn run() -> Result<()> {
         };
 
         // print keys to terminal
-        println!("{:?}", serde_json::to_string_pretty(&keys));
+        println!("Keys : {}", serde_json::to_string_pretty(&keys).unwrap());
+    } else if let Some(m) = matches.subcommand_matches("owned-abars") {
+        let randomizer_str = m.value_of("randomizer");
+        let axfr_public_key_str = m.value_of("axfr-public-key");
+
+        // create derived public key
+        let randomizer = wallet::randomizer_from_base64(randomizer_str.unwrap())?;
+        let axfr_public_key =
+            wallet::anon_public_key_from_base64(axfr_public_key_str.unwrap())?;
+        let derived_public_key = axfr_public_key.randomize(&randomizer);
+
+        println!(
+            "Derived Public Key:   {}",
+            wallet::anon_public_key_to_base64(&derived_public_key)
+        );
+
+        // get results from query server and print
+        let list = common::get_owned_abars(&derived_public_key).c(d!())?;
+        println!(
+            "(AtxoSID, ABAR)   :  {}",
+            serde_json::to_string(&list).c(d!())?
+        );
+    } else if let Some(_m) = matches.subcommand_matches("owned-utxos") {
+        let list = common::get_owned_utxos()?;
+        println!("{:?}", list);
     } else if let Some(m) = matches.subcommand_matches("anon-transfer") {
         let anon_keys = match m.value_of("anon-keys") {
             Some(path) => {
