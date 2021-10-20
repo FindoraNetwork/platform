@@ -331,6 +331,9 @@ pub async fn get_validator_delegation_history(
     let delegation_amount_hist =
         ledger.api_cache.staking_delegation_amount_hist.get(&v_id);
 
+    let self_delegation_amount_hist =
+        ledger.api_cache.staking_self_delegation_hist.get(&v_id);
+
     let self_delegation = v_self_delegation
         .entries
         .iter()
@@ -353,14 +356,29 @@ pub async fn get_validator_delegation_history(
     }];
 
     let h = staking.cur_height();
-    let epoch_size = info.epoch_size as u64;
-    (1..=info.epoch_cnt as u64)
+
+    // epoch_size and epoch_cnt over, size = 1, cnt = block_height
+    // become cur..cnt..cnt-1..cnt-2..cnt-3...start_height
+    let mut epoch_size = info.epoch_size as u64;
+    let mut epoch_cnt = info.epoch_cnt as u64;
+    epoch_size = if epoch_size > h {
+        1_u64
+    } else {
+        epoch_size
+    };
+
+    epoch_cnt = if epoch_cnt > h {
+        h as u64
+    } else {
+        epoch_cnt
+    };
+
+    (1..=epoch_cnt)
         .into_iter()
         .filter_map(|i| {
-            if h >= i * epoch_size
-                && h - i * epoch_size >= v_self_delegation.start_height
-            {
-                Some(h - i * epoch_size)
+            let temp_h = h.saturating_sub(i * epoch_size);
+            if temp_h >= v_self_delegation.start_height {
+                Some(temp_h)
             } else {
                 None
             }
@@ -373,20 +391,25 @@ pub async fn get_validator_delegation_history(
                 delegated: delegation_amount_hist
                     .as_ref()
                     .map(|dah| {
-                        if dah.is_empty()
-                            || dah.iter().take(1).all(|(i, _)| {
-                                #[cfg(not(feature = "diskcache"))]
-                                let i = *i;
-                                i > h
-                            })
-                        {
-                            0
-                        } else {
-                            dah.get(&h).unwrap_or(history.last().unwrap().delegated)
+
+                        if dah.is_empty() {
+                            return 0;
                         }
+
+                        // take(1) == v_self_delegation.start_height
+                        // but must use take(1), because there have diskcache logic
+                        if dah.iter().take(1).all(|(i,_)|{
+                            #[cfg(not(feature = "diskcache"))]
+                            let i = *i;
+                            i > h
+                        }) {
+                            return 0;
+                        }
+
+                        dah.get(&h).unwrap_or(history.last().unwrap().delegated)
                     })
                     .unwrap_or(0),
-                self_delegation: delegation_amount_hist
+                self_delegation: self_delegation_amount_hist
                     .as_ref()
                     .map(|dah| dah.get(&h))
                     .flatten()
