@@ -1143,17 +1143,19 @@ mod tests {
     use super::*;
     use crypto::basics::commitments::ristretto_pedersen::RistrettoPedersenGens;
     use crypto::basics::hybrid_encryption::XSecretKey;
-    use ledger::data_model::{TxnEffect, TxoRef, BlockEffect};
+    use ledger::data_model::{BlockEffect, TxnEffect, TxoRef};
     use ledger::store::{utils::fra_gen_initial_tx, LedgerState};
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
     use zei::anon_xfr::bar_to_from_abar::verify_bar_to_abar_note;
+    use zei::anon_xfr::structs::{
+        AXfrBody, AXfrNote, AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
+    };
     use zei::setup::{NodeParams, PublicParams};
     use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
     use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record};
     use zei::xfr::sig::XfrKeyPair;
     use zei::xfr::structs::AssetType as AT;
-    use zei::anon_xfr::structs::{AXfrBody, AXfrNote, AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder};
 
     // Defines an asset type
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1572,36 +1574,34 @@ mod tests {
     #[test]
     fn axfr_create_verify_unit() {
         let mut ledger_state = LedgerState::tmp_ledger();
-        let mut ledger_status = ledger_state.get_status();
-    
+        let _ledger_status = ledger_state.get_status();
+
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
-    
-        let user_params =
-            UserParams::from_file_if_exists(1, 1, Some(1), DEFAULT_BP_NUM_GENS, None)
-                .unwrap();
-    
+
+        let user_params = UserParams::eq_committed_vals_params();
+
         let amount = 10u64;
         let asset_type = AT::from_identical_byte(0);
-    
+
         // simulate input abar
-        let (oabar, keypair_in, dec_key_in, _) =
+        let (oabar, keypair_in, _dec_key_in, _) =
             gen_oabar_and_keys(&mut prng, amount, asset_type);
         let abar = AnonBlindAssetRecord::from_oabar(&oabar);
         assert_eq!(keypair_in.pub_key(), *oabar.pub_key_ref());
         let rand_keypair_in = keypair_in.randomize(&oabar.get_key_rand_factor());
         assert_eq!(rand_keypair_in.pub_key(), abar.public_key);
-    
-        let owner_memo = oabar.get_owner_memo().unwrap();
-    
+
+        let _owner_memo = oabar.get_owner_memo().unwrap();
+
         // add abar to merkle tree
-        ledger_state.add_abar(&abar);
+        let _ = ledger_state.add_abar(&abar);
         //ledger_state.add_abar_comitment(abar);
         let _ = ledger_state.commit_anon_changes().unwrap();
         // commit
         //simulate output abar
         let (oabar_out, keypair_out, dec_key_out, _) =
             gen_oabar_and_keys(&mut prng, amount, asset_type);
-        let abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
+        let _abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
         //let mut builder = TransactionBuilder::from_seq_id(1);
         //let mut txn_builder = builder.add_operation_anon_transfer(&oabar, oabar_out, keypair_in);
         // spend
@@ -1613,61 +1613,76 @@ mod tests {
             Option::from(depth),
             DEFAULT_BP_NUM_GENS,
         );*/
-    
-        let (body, keypairs) =
-            gen_anon_xfr_body(&mut prng, &user_params, &[oabar], &[oabar_out], &[keypair_in]) 
-                .unwrap();
+
+        let (body, keypairs) = gen_anon_xfr_body(
+            &mut prng,
+            &user_params,
+            &[oabar],
+            &[oabar_out],
+            &[keypair_in],
+        ).unwrap();
         let axfr_note = AXfrNote::generate_note_from_body(body, keypairs).unwrap();
-    
-        axfr_note.verify().c(d!());
+
+        let _ = axfr_note.verify();
         let mut axfr_bodies: Vec<AXfrBody> = Vec::new();
         // push
         axfr_bodies.push(axfr_note.body.clone());
         // axfr_body
         let mut builder = TransactionBuilder::from_seq_id(1);
+        let mut prng = ChaChaRng::from_seed([0u8; 32]);
+        let from = XfrKeyPair::generate(&mut prng);
+        //let to = AXfrKeyPair::generate(&mut prng).pub_key();
+        //let to_enc_key = XSecretKey::new(&mut prng);
+
+        let ar = AssetRecordTemplate::with_no_asset_tracing(
+            10u64,
+            AT::from_identical_byte(1u8),
+            AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
+            from.get_pk(),
+        );
+        let pc_gens = RistrettoPedersenGens::default();
+        let (bar, _, memo) = build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
+        let dummy_input = open_blind_asset_record(&bar, &memo, &from).unwrap();
+
         let _ = builder
             .add_operation_bar_to_abar(
                 &from,
-                &to,
+                &keypair_out.pub_key(),
                 TxoSID(123),
                 &dummy_input,
-                &XPublicKey::from(&to_enc_key),
+                &XPublicKey::from(&dec_key_out),
             )
-            .is_ok();    // some variables not defined
-    
+            .is_ok(); // some variables not defined
+
         let txn = builder.take_transaction();
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
-        let block = BlockEffect::default();
-        block.add_txn_effect(compute_effect, false);
+        let mut block = BlockEffect::default();
+        let _ = block.add_txn_effect(compute_effect, false);
         //862 is_loading()true, check stacking, block effect, add_txn_effect() in blockc effect after initializing block effect
-    
+
         // compute effect - transaction to transaction effect
         //973 apply_transaction - check transaction effect - then finish block
-    
-    
-    
+
         for n in block.new_nullifiers.iter() {
-            let str =
+            let _str =
                 base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
             //let d: Key = Key::from_base64(&str).c(d!());
-    
+
             /* / if the nullifier hash is present in our nullifier set, fail the block
             if ledger_state.nullifier(&d).is_some() {
                 return Err(eg!("Nullifier hash already present in set"));
             }
             //ledger_state.nullifier_set; */
         }
-        let txn_sid = ledger_state.finish_block(block).unwrap();
+        let _txn_sid = ledger_state.finish_block(block).unwrap();
         /* for abar in block.output_abars.iter() {
             let ax_sid = ledger_state.abar_store.add_abar(&abar).c(d!())?;
             status
                 .ax_txo_to_txn_location
                 .insert(*ax_sid, (txn_sid, OutputPosition(position)));
         } */
-    
-    
     }
-    
+
     fn gen_oabar_and_keys<R: CryptoRng + RngCore>(
         prng: &mut R,
         amount: u64,

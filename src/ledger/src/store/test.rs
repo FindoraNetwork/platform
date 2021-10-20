@@ -38,7 +38,6 @@ fn abort_block(block: BlockEffect) -> HashMap<TxnTempSID, Transaction> {
     ret
 }
 
-
 #[test]
 fn test_load_fake_transaction_log() {
     // Verify that loading transaction fails with incorrect path
