@@ -656,7 +656,7 @@ mod tests {
 
         fn prop(x0: u64, x1: u64, x2: u64, x3: u64, s: Vec<u8>) -> TestResult {
             let mut smt = SmtMap256::new(new_rocks_db());
-            let (key, value) = (Key(make_digest(x0, x1, x2, x3)), Some(s.clone()));
+            let (key, value) = (Key(make_digest(x0, x1, x2, x3)), Some(s));
             let prev = smt.set(&key, value);
             match prev {
                 Ok(_) => TestResult::passed(),
@@ -758,7 +758,7 @@ mod tests {
         let value2 = Some(r256("0100000000000000000000000000000000").as_ref().to_vec());
         let _ = smt.set(&key, value2.clone());
         let (value, proof) = smt.get_with_proof(&key).unwrap();
-        assert_eq!(value, value2.clone());
+        assert_eq!(value, value2);
         assert_eq!(
             proof,
             MerkleProof {
@@ -784,7 +784,7 @@ mod tests {
         // Reset the value of key 0x00..00 to the default, and verify the merkle proof of `key`.
         let _ = smt.set(&Key(ZERO_DIGEST), None); // [0; 32]);
         let (value, proof) = smt.get_with_proof(&key).unwrap();
-        assert_eq!(value, value2.clone());
+        assert_eq!(value, value2);
         assert_eq!(
             proof,
             MerkleProof {
@@ -805,7 +805,7 @@ mod tests {
         // Reset the value of the max key to the default, and verify the merkle proof of `key`.
         let _ = smt.set(&Key(max256()), None); // [0; 32]);
         let (value, proof) = smt.get_with_proof(&key).unwrap();
-        assert_eq!(value, value2.clone());
+        assert_eq!(value, value2);
         assert_eq!(
             proof,
             MerkleProof {
@@ -849,7 +849,7 @@ mod tests {
         // Negative cases of merkle proof verification:
         assert!(!smt.check_merkle_proof(
             &key,
-            Option::from(&value.clone()),
+            Option::from(&value),
             &MerkleProof {
                 bitmap: b256("0200000000000000000000000000000000000000000000000000000000000080").0,
                 hashes: vec![
@@ -861,7 +861,7 @@ mod tests {
         ));
         assert!(!smt.check_merkle_proof(
             &key,
-            Option::from(&value.clone()),
+            Option::from(&value),
             &MerkleProof {
                 bitmap: b256("0200000000000000000000000000000000000000000000000000000000000080").0,
                 hashes: vec![
@@ -872,7 +872,7 @@ mod tests {
         ));
         assert!(!smt.check_merkle_proof(
             &key,
-            Option::from(&value.clone()),
+            Option::from(&value),
             &MerkleProof {
                 // wrong bitmap - missing bit
                 bitmap: b256("0200000000000000000000000000000000000000000000000000000000000000").0,
@@ -881,7 +881,7 @@ mod tests {
         ));
         assert!(!smt.check_merkle_proof(
             &key,
-            Option::from(&value.clone()),
+            Option::from(&value),
             &MerkleProof {
                 // wrong bitmap - extra bit
                 bitmap: b256("0200010000000000000000000000000000000000000000000000000000000080").0,
@@ -890,7 +890,7 @@ mod tests {
         ));
         assert!(!smt.check_merkle_proof(
             &key,
-            Option::from(&value.clone()),
+            Option::from(&value),
             &MerkleProof {
                 // wrong bitmap - wrong bit
                 bitmap: b256("0400000000000000000000000000000000000000000000000000000000000080").0,
@@ -928,7 +928,7 @@ fn test_nullfier() {
     // Spend the nullifier
     assert!(smt.set(&spent_token_key, value.clone()).is_ok());
     assert_ne!(merkle_root, smt.merkle_root().unwrap());
-    assert_eq!(smt.get(&spent_token_key).unwrap(), value.clone());
+    assert_eq!(smt.get(&spent_token_key).unwrap(), value);
 
     // Generate a new unspent nullifier
     let unspent_nullifier = Scalar::from(11);

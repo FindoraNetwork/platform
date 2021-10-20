@@ -288,15 +288,14 @@ pub fn gen_fee_bar_to_abar(
             break;
         }
         if oar.asset_type == ASSET_TYPE_FRA && op_fee != 0 && sid != avoid_input {
+            let i_am = oar.amount;
             if oar.amount <= op_fee {
-                let i_am = oar.amount;
                 op_fee -= i_am;
 
                 trans_builder
                     .add_input(TxoRef::Absolute(sid), oar, None, None, i_am)
                     .c(d!())?;
             } else {
-                let i_am = oar.amount;
                 trans_builder
                     .add_input(TxoRef::Absolute(sid), oar, None, None, i_am)
                     .c(d!())?;

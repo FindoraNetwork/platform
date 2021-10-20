@@ -304,9 +304,6 @@ impl LedgerState {
         backup_next_txn_sid: usize,
         mut tx_block: Vec<FinalizedTransaction>,
     ) -> Result<Vec<FinalizedTransaction>> {
-        println!("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
-        println!("Output Abars {:?}", output_abars.len());
-        println!("Finalized Txns {:?}", tx_block.len());
         for n in new_nullifiers.iter() {
             let str =
                 base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
@@ -319,12 +316,8 @@ impl LedgerState {
             self.nullifier_set.set(&d, Some(b"".to_vec())).c(d!())?;
         }
 
-        println!("Before Iterating Abars");
-        let mut count = 0;
         let mut txn_sid = TxnSID(backup_next_txn_sid);
         for (txn_abars, txn) in output_abars.iter().zip(tx_block.iter_mut()) {
-            println!("Iterating: {}", count);
-            count += 1;
             let mut op_position = OutputPosition(0);
             let mut atxo_ids: Vec<ATxoSID> = vec![];
             for abar in txn_abars {
@@ -353,7 +346,6 @@ impl LedgerState {
             txn.atxo_ids = atxo_ids;
             txn_sid = TxnSID(txn_sid.0 + 1);
         }
-        println!("After Iterating Abars");
 
         Ok(tx_block)
     }

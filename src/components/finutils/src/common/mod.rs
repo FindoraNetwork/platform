@@ -858,7 +858,7 @@ pub fn get_owned_utxos() -> Result<Vec<TxoSID>> {
 
     let list = utils::get_owned_utxos(&kp.pub_key)?
         .iter()
-        .map(|a| a.0.clone())
+        .map(|a| *a.0)
         .collect();
 
     Ok(list)
