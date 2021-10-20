@@ -1149,7 +1149,7 @@ mod tests {
     use rand_core::SeedableRng;
     use zei::anon_xfr::bar_to_from_abar::verify_bar_to_abar_note;
     use zei::anon_xfr::structs::{
-        AXfrBody, AXfrNote, AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
+        AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
     };
     use zei::setup::{NodeParams, PublicParams};
     use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
@@ -1578,13 +1578,11 @@ mod tests {
 
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
 
-        let user_params = UserParams::eq_committed_vals_params();
-
         let amount = 10u64;
         let asset_type = AT::from_identical_byte(0);
 
         // simulate input abar
-        let (oabar, keypair_in, _dec_key_in, _) =
+        let (mut oabar, keypair_in, _dec_key_in, _) =
             gen_oabar_and_keys(&mut prng, amount, asset_type);
         let abar = AnonBlindAssetRecord::from_oabar(&oabar);
         assert_eq!(keypair_in.pub_key(), *oabar.pub_key_ref());
@@ -1594,93 +1592,34 @@ mod tests {
         let _owner_memo = oabar.get_owner_memo().unwrap();
 
         // add abar to merkle tree
-        let _ = ledger_state.add_abar(&abar);
-        //ledger_state.add_abar_comitment(abar);
+        let uid = ledger_state.add_abar(&abar).unwrap();
         let _ = ledger_state.commit_anon_changes().unwrap();
-        // commit
-        //simulate output abar
-        let (oabar_out, keypair_out, dec_key_out, _) =
+        let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
+        oabar.update_mt_leaf_info(mt_leaf_info);
+        
+        let (oabar_out, _keypair_out, _dec_key_out, _) =
             gen_oabar_and_keys(&mut prng, amount, asset_type);
         let _abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
-        //let mut builder = TransactionBuilder::from_seq_id(1);
-        //let mut txn_builder = builder.add_operation_anon_transfer(&oabar, oabar_out, keypair_in);
-        // spend
-        //let mut prng = ChaChaRng::from_seed([0u8; 32]);
-        //let depth: usize = 41;
-        /*let user_params = UserParams::new(
-            inputs.len(),
-            outputs.len(),
-            Option::from(depth),
-            DEFAULT_BP_NUM_GENS,
-        );*/
-
-        let (body, keypairs) = gen_anon_xfr_body(
-            &mut prng,
-            &user_params,
-            &[oabar],
-            &[oabar_out],
-            &[keypair_in],
-        ).unwrap();
-        let axfr_note = AXfrNote::generate_note_from_body(body, keypairs).unwrap();
-
-        let _ = axfr_note.verify();
-        let mut axfr_bodies: Vec<AXfrBody> = Vec::new();
-        // push
-        axfr_bodies.push(axfr_note.body.clone());
-        // axfr_body
         let mut builder = TransactionBuilder::from_seq_id(1);
-        let mut prng = ChaChaRng::from_seed([0u8; 32]);
-        let from = XfrKeyPair::generate(&mut prng);
-        //let to = AXfrKeyPair::generate(&mut prng).pub_key();
-        //let to_enc_key = XSecretKey::new(&mut prng);
-
-        let ar = AssetRecordTemplate::with_no_asset_tracing(
-            10u64,
-            AT::from_identical_byte(1u8),
-            AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
-            from.get_pk(),
-        );
-        let pc_gens = RistrettoPedersenGens::default();
-        let (bar, _, memo) = build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
-        let dummy_input = open_blind_asset_record(&bar, &memo, &from).unwrap();
 
         let _ = builder
-            .add_operation_bar_to_abar(
-                &from,
-                &keypair_out.pub_key(),
-                TxoSID(123),
-                &dummy_input,
-                &XPublicKey::from(&dec_key_out),
+            .add_operation_anon_transfer(
+                &[oabar],
+                &[oabar_out],
+                &[keypair_in],
             )
-            .is_ok(); // some variables not defined
+            .is_ok();
 
         let txn = builder.take_transaction();
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
         let mut block = BlockEffect::default();
         let _ = block.add_txn_effect(compute_effect, false);
-        //862 is_loading()true, check stacking, block effect, add_txn_effect() in blockc effect after initializing block effect
-
-        // compute effect - transaction to transaction effect
-        //973 apply_transaction - check transaction effect - then finish block
 
         for n in block.new_nullifiers.iter() {
             let _str =
                 base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
-            //let d: Key = Key::from_base64(&str).c(d!());
-
-            /* / if the nullifier hash is present in our nullifier set, fail the block
-            if ledger_state.nullifier(&d).is_some() {
-                return Err(eg!("Nullifier hash already present in set"));
-            }
-            //ledger_state.nullifier_set; */
         }
         let _txn_sid = ledger_state.finish_block(block).unwrap();
-        /* for abar in block.output_abars.iter() {
-            let ax_sid = ledger_state.abar_store.add_abar(&abar).c(d!())?;
-            status
-                .ax_txo_to_txn_location
-                .insert(*ax_sid, (txn_sid, OutputPosition(position)));
-        } */
     }
 
     fn gen_oabar_and_keys<R: CryptoRng + RngCore>(
