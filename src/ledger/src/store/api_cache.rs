@@ -223,11 +223,11 @@ where
     let mut related_addresses = HashSet::new();
 
     macro_rules! staking_gen {
-        ($op: expr) => {
+        ($op: expr) => {{
             $op.get_related_pubkeys().into_iter().for_each(|pk| {
                 related_addresses.insert(XfrAddress { key: pk });
             });
-        };
+        }};
     }
 
     for op in &txn.body.operations {

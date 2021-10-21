@@ -16,18 +16,16 @@
 
 #### v0.2.2-release
 
-- fix a BUG in the logic of some special partial undelegations
+- Fix a BUG in the logic of some special partial undelegations
     - [Issue 75, #75](https://github.com/FindoraNetwork/platform/issues/75)
-- fix a BUG about the voting power in the logic of un-delegation
-- fix some issues in the history-style API about POS
+- Fix a BUG about the voting power in the logic of un-delegation
+- Fix some issues in the history-style API about POS
 - optimize the usage of 'bnc'
 - Optimize ABCI checker
     - Avoid invalid transactions from being stored
 - Add balance checker for coinbase
     - Avoid wrong rewards when the reward pool is empty
 - Enhance stability by using seed nodes in `findorad init`
-- fix `make wasm`
-- fix `make testall`
 
 #### v0.2.1-release (Yanked !)
 
