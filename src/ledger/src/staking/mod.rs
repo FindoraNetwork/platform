@@ -828,6 +828,7 @@ impl Staking {
             .validator_td_addr_to_app_pk(&td_addr_to_string(&pu.target_validator))
             .c(d!("Invalid target validator"))?;
 
+        let actual_am;
         if let Some(d) = self.di.addr_map.get_mut(addr) {
             if is_validator
                 && STAKING_VALIDATOR_MIN_POWER > d.amount().saturating_sub(pu.am)
@@ -840,9 +841,9 @@ impl Staking {
                 .get_mut(&target_validator)
                 .c(d!("Target validator does not exist"))?;
 
-            let actual_am = if pu.am > *am {
+            actual_am = if pu.am > *am {
                 ruc::pd!(format!(
-                    "Amount exceeds limits, requested: {}, total: {}",
+                    "Amount exceeds limits, requested: {}, total: {}, use the value of `total`",
                     pu.am, *am
                 ));
                 *am
@@ -894,12 +895,11 @@ impl Staking {
         // update delegator entries for pu target_validator
         if let Some(v) = self.validator_get_current_mut_one_by_id(&target_validator) {
             // add new_delegator_id to delegator list
-            *v.delegators.entry(pu.new_delegator_id).or_insert(0) += pu.am;
+            *v.delegators.entry(pu.new_delegator_id).or_insert(0) += actual_am;
 
             // update delegation amount of current address
-            // make sure previous delegation amount is bigger than pu.am above.
             if let Some(am) = v.delegators.get_mut(addr) {
-                *am -= pu.am;
+                *am -= actual_am;
             }
             v.delegators.sort_by(|_, v1, _, v2| v2.cmp(&v1));
         }
