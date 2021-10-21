@@ -30,8 +30,10 @@ pub fn start_web3_service(
     evm_http: String,
     evm_ws: String,
     tendermint_rpc: String,
-    account_base_app: Arc<RwLock<BaseApp>>,
+    base_app: BaseApp,
 ) -> Box<dyn std::any::Any + Send> {
+    let app = Arc::new(RwLock::new(base_app));
+
     // PrivateKey: 9f7bebaa5c55464b10150bc2e0fd552e915e2bdbca95cc45ed1c909aca96e7f5
     // Address: 0xf6aca39539374993b37d29ccf0d93fa214ea0af1
     let dev_signer = "zebra paddle unveil toilet weekend space gorilla lesson relief useless arrive picture";
@@ -42,21 +44,20 @@ pub fn start_web3_service(
             (
                 eth::EthApiImpl::new(
                     tendermint_rpc.clone(),
-                    account_base_app.clone(),
+                    app.clone(),
                     signers.clone(),
                     MAX_PAST_LOGS,
                 )
                 .to_delegate(),
                 eth_filter::EthFilterApiImpl::new(
-                    account_base_app.clone(),
+                    app.clone(),
                     MAX_PAST_LOGS,
                     MAX_STORED_FILTERS,
                 )
                 .to_delegate(),
                 net::NetApiImpl::new().to_delegate(),
                 web3::Web3ApiImpl::new().to_delegate(),
-                eth_pubsub::EthPubSubApiImpl::new(account_base_app.clone())
-                    .to_delegate(),
+                eth_pubsub::EthPubSubApiImpl::new(app.clone()).to_delegate(),
             ),
             RpcMiddleware::new(),
         )

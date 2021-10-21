@@ -26,7 +26,7 @@ use ruc::*;
 use std::str::FromStr;
 use tendermint_rpc::Client;
 use tokio::runtime::Runtime;
-use zei::xfr::sig::XfrKeyPair;
+use zei::xfr::{asset_record::AssetRecordType, sig::XfrKeyPair};
 
 /// transfer utxo assets to account(ed25519 or ecdsa address) balance.
 pub fn transfer_to_account(amount: u64, address: Option<&str>) -> Result<()> {
@@ -39,6 +39,7 @@ pub fn transfer_to_account(amount: u64, address: Option<&str>) -> Result<()> {
         None,
         false,
         false,
+        Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
     )?;
     let target_address = match address {
         Some(s) => MultiSigner::from_str(s).c(d!())?,

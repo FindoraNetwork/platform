@@ -160,10 +160,10 @@ impl EthPubSubApiT for EthPubSubApiImpl {
                 });
             }
             Kind::NewPendingTransactions => {
-                unimplemented!()
+                warn!(target: "eth_rpc", "subscribe NewPendingTransactions unimplemented");
             }
             Kind::Syncing => {
-                unimplemented!()
+                warn!(target: "eth_rpc", "subscribe Syncing unimplemented");
             }
         }
     }

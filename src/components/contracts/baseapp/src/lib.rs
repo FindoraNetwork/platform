@@ -71,7 +71,7 @@ pub struct BaseApp {
     /// Ordered module set
     pub modules: ModuleManager,
     /// New Block event notify
-    pub event_notify: Notifications<BlockId>,
+    pub event_notify: Arc<Notifications<BlockId>>,
 }
 
 impl module_template::Config for BaseApp {}
@@ -160,8 +160,25 @@ impl BaseApp {
                 ethereum_module: module_ethereum::App::<Self>::new(empty_block),
                 ..Default::default()
             },
-            event_notify: Notifications::new(),
+            event_notify: Arc::new(Notifications::new()),
         })
+    }
+
+    pub fn derive_app(&self) -> Self {
+        let chain_state = self.chain_state.clone();
+        let chain_db = self.chain_db.clone();
+
+        BaseApp {
+            name: APP_NAME.to_string(),
+            version: "1.0.0".to_string(),
+            app_version: 1,
+            chain_state: chain_state.clone(),
+            chain_db: chain_db.clone(),
+            check_state: Context::new(chain_state.clone(), chain_db.clone()),
+            deliver_state: Context::new(chain_state, chain_db),
+            modules: ModuleManager::default(),
+            event_notify: self.event_notify.clone(),
+        }
     }
 }
 
