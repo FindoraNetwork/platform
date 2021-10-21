@@ -14,7 +14,10 @@ use ledger::{
         AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData, TxnSID,
         TxoSID, UnAuthenticatedUtxo, Utxo,
     },
-    staking::{DelegationRwdDetail, DelegationState, TendermintAddr, UNBOND_BLOCK_CNT},
+    staking::{
+        DelegationRwdDetail, DelegationState, Staking, TendermintAddr,
+        TendermintAddrRef, UNBOND_BLOCK_CNT,
+    },
 };
 use parking_lot::RwLock;
 use ruc::*;
@@ -450,8 +453,7 @@ pub async fn get_delegators_with_params(
         .c(d!())
         .map_err(error::ErrorBadRequest)?;
 
-    let list = staking
-        .validator_get_delegator_list(info.address.as_ref(), start, end)
+    let list = validator_get_delegator_list(staking, info.address.as_ref(), start, end)
         .c(d!())
         .map_err(error::ErrorNotFound)?;
 
@@ -474,8 +476,7 @@ pub async fn query_delegator_list(
     let ledger = &qs.ledger_cloned;
     let staking = ledger.get_staking();
 
-    let list = staking
-        .validator_get_delegator_list(addr.as_ref(), 0, usize::MAX)
+    let list = validator_get_delegator_list(staking, addr.as_ref(), 0, usize::MAX)
         .c(d!())
         .map_err(error::ErrorNotFound)?;
 
@@ -690,5 +691,30 @@ impl NetworkRoute for ApiRoutes {
             ApiRoutes::ValidatorDetail => "validator_detail",
         };
         "/".to_owned() + endpoint
+    }
+}
+
+#[allow(missing_docs)]
+pub fn validator_get_delegator_list<'a>(
+    s: &'a Staking,
+    validator: TendermintAddrRef,
+    start: usize,
+    mut end: usize,
+) -> Result<Vec<(&'a XfrPublicKey, &'a u64)>> {
+    let validator = s.validator_td_addr_to_app_pk(validator).c(d!())?;
+
+    if let Some(v) = s.validator_get_current_one_by_id(&validator) {
+        if start >= v.delegators.len() || start > end {
+            return Err(eg!("Index out of range"));
+        }
+        if end > v.delegators.len() {
+            end = v.delegators.len();
+        }
+
+        Ok((start..end)
+            .filter_map(|i| v.delegators.get_index(i))
+            .collect())
+    } else {
+        Err(eg!("Not a validator or non-existing node address"))
     }
 }

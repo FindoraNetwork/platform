@@ -161,14 +161,14 @@ pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
 
 /// used in test/mock env
 #[cfg(feature = "abci_mock")]
-pub const UNBOND_BLOCK_CNT: u64 = 5;
+pub const UNBOND_BLOCK_CNT: u64 = 10;
 
 // minimal number of validators
 pub(crate) const VALIDATORS_MIN: usize = 5;
 
 /// The minimum weight threshold required
-/// when updating validator information, 2/3.
-pub const COSIG_THRESHOLD_DEFAULT: [u64; 2] = [2, 3];
+/// when updating validator information, 9/10.
+pub const COSIG_THRESHOLD_DEFAULT: [u64; 2] = [9, 10];
 
 /// block height of tendermint
 pub type BlockHeight = u64;
@@ -600,31 +600,6 @@ impl Staking {
     #[allow(missing_docs)]
     pub fn set_custom_block_height(&mut self, h: BlockHeight) {
         self.cur_height = h;
-    }
-
-    #[allow(missing_docs)]
-    pub fn validator_get_delegator_list(
-        &self,
-        validator: TendermintAddrRef,
-        start: usize,
-        mut end: usize,
-    ) -> Result<Vec<(&XfrPublicKey, &u64)>> {
-        let validator = self.validator_td_addr_to_app_pk(validator).c(d!())?;
-
-        if let Some(v) = self.validator_get_current_one_by_id(&validator) {
-            if start >= v.delegators.len() || start > end {
-                return Err(eg!("Index out of range"));
-            }
-            if end > v.delegators.len() {
-                end = v.delegators.len();
-            }
-
-            Ok((start..end)
-                .filter_map(|i| v.delegators.get_index(i))
-                .collect())
-        } else {
-            Err(eg!("Not a validator or non-existing node address"))
-        }
     }
 
     /// Start a new delegation.
@@ -1107,12 +1082,6 @@ impl Staking {
 
                 if let Some(e) = entries {
                     e.into_iter().for_each(|(vid, am)| {
-                        // - reduce the power of the target validator
-                        ruc::info_omit!(self.validator_change_power(&vid, am, true));
-
-                        // - reduce global amount of global delegations
-                        self.di.global_amount -= am;
-
                         if let Some(v) = self.validator_get_current_mut_one_by_id(&vid) {
                             v.delegators.remove(&addr);
                             v.delegators.sort_by(|_, v1, _, v2| v2.cmp(&v1));
@@ -1124,6 +1093,13 @@ impl Staking {
                                     .unwrap();
                             }
                         }
+
+                        // reduce global amount of global delegations
+                        self.di.global_amount -= am;
+
+                        // reduce the power of the target validator
+                        // NOTE: set this operation after cleaning delegators!
+                        ruc::info_omit!(self.validator_change_power(&vid, am, true));
                     });
                 }
             });
