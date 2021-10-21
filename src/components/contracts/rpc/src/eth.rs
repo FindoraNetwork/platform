@@ -22,8 +22,8 @@ use fp_types::{
     actions::evm::{Call, Create},
     assemble::UncheckedTransaction,
 };
+use fp_utils::ecdsa::SecpPair;
 use fp_utils::tx::EvmRawTxWrapper;
-use fp_utils::{ecdsa::SecpPair, proposer_converter};
 use jsonrpc_core::{futures::future, BoxFuture, Result};
 use lazy_static::lazy_static;
 use log::{debug, warn};
@@ -284,7 +284,9 @@ impl EthApi for EthApiImpl {
             .account_base_app
             .read()
             .create_query_context(0, false)
-            .unwrap();
+            .map_err(|err| {
+                internal_err(format!("create query context error: {:?}", err))
+            })?;
         match to {
             Some(to) => {
                 let call = Call {
@@ -340,15 +342,12 @@ impl EthApi for EthApiImpl {
     }
 
     fn author(&self) -> Result<H160> {
-        Ok(proposer_converter(
-            self.account_base_app
-                .read()
-                .check_state
-                .header
-                .proposer_address
-                .clone(),
-        )
-        .unwrap_or_default())
+        let block = self.account_base_app.read().current_block(None);
+        if let Some(block) = block {
+            Ok(block.header.beneficiary)
+        } else {
+            Err(internal_err("not found author"))
+        }
     }
 
     fn is_mining(&self) -> Result<bool> {
@@ -572,7 +571,9 @@ impl EthApi for EthApiImpl {
             .account_base_app
             .read()
             .create_query_context(0, false)
-            .unwrap();
+            .map_err(|err| {
+                internal_err(format!("create query context error: {:?}", err))
+            })?;
 
         let used_gas = match to {
             Some(to) => {
