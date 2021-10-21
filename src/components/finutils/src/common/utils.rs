@@ -287,7 +287,12 @@ pub fn gen_fee_bar_to_abar(
         if op_fee == 0 {
             break;
         }
-        if oar.asset_type == ASSET_TYPE_FRA && op_fee != 0 && sid != avoid_input {
+        if oar.asset_type == ASSET_TYPE_FRA
+            && oar.get_record_type()
+                == AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType
+            && op_fee != 0
+            && sid != avoid_input
+        {
             let i_am = oar.amount;
             if oar.amount <= op_fee {
                 op_fee -= i_am;
@@ -317,6 +322,10 @@ pub fn gen_fee_bar_to_abar(
                 op_fee = 0;
             }
         }
+    }
+
+    if op_fee != 0 {
+        return Err(eg!("Insufficient balance to pay Txn fees"));
     }
 
     trans_builder

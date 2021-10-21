@@ -36,9 +36,9 @@ use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ruc::*;
 use serde::{Deserialize, Serialize};
+use std::fs::File;
 use std::{fmt, fs};
 use zei::anon_xfr::keys::AXfrKeyPair;
-use zei::serialization::ZeiFromToBytes;
 
 fn main() {
     if let Err(e) = run() {
@@ -411,21 +411,26 @@ fn run() -> Result<()> {
                 wallet::randomizer_to_base64(&r)
             );
         }
-    } else if let Some(_m) = matches.subcommand_matches("generate-anon-keys") {
+    } else if let Some(m) = matches.subcommand_matches("gen-anon-keys") {
         let mut prng = ChaChaRng::from_entropy();
         let keypair = AXfrKeyPair::generate(&mut prng);
         let secret_key = XSecretKey::new(&mut prng);
         let public_key = XPublicKey::from(&secret_key);
 
         let keys = AnonKeys {
-            axfr_secret_key: base64::encode(keypair.zei_to_bytes().as_slice()),
-            axfr_public_key: base64::encode(keypair.pub_key().zei_to_bytes().as_slice()),
-            enc_key: base64::encode(public_key.zei_to_bytes().as_slice()),
-            dec_key: base64::encode(secret_key.zei_to_bytes().as_slice()),
+            axfr_secret_key: wallet::anon_secret_key_to_base64(&keypair),
+            axfr_public_key: wallet::anon_public_key_to_base64(&keypair.pub_key()),
+            enc_key: wallet::x_public_key_to_base64(&public_key),
+            dec_key: wallet::x_secret_key_to_base64(&secret_key),
         };
 
+        if let Some(path) = m.value_of("file-path") {
+            serde_json::to_writer_pretty(&File::create(path).c(d!())?, &keys).c(d!())?;
+            println!("Keys saved to file: {}", path);
+        }
+
         // print keys to terminal
-        println!("Keys : {}", serde_json::to_string_pretty(&keys).unwrap());
+        println!("Keys :\n {}", serde_json::to_string_pretty(&keys).unwrap());
     } else if let Some(m) = matches.subcommand_matches("owned-abars") {
         let randomizer_str = m.value_of("randomizer");
         let axfr_public_key_str = m.value_of("axfr-public-key");

@@ -217,6 +217,12 @@ pub fn x_public_key_from_base64(pk: &str) -> Result<XPublicKey> {
 }
 
 #[inline(always)]
+/// Convert an anon public key to base64
+pub fn x_public_key_to_base64(key: &XPublicKey) -> String {
+    base64::encode_config(&XPublicKey::zei_to_bytes(key), base64::URL_SAFE)
+}
+
+#[inline(always)]
 /// Restore a anon secret key from base64
 pub fn anon_secret_key_from_base64(sk: &str) -> Result<AXfrKeyPair> {
     base64::decode_config(sk, URL_SAFE)
@@ -225,11 +231,23 @@ pub fn anon_secret_key_from_base64(sk: &str) -> Result<AXfrKeyPair> {
 }
 
 #[inline(always)]
+/// Convert an anon public key to base64
+pub fn anon_secret_key_to_base64(key: &AXfrKeyPair) -> String {
+    base64::encode_config(&AXfrKeyPair::zei_to_bytes(key), base64::URL_SAFE)
+}
+
+#[inline(always)]
 /// Restore a x secret key from base64
 pub fn x_secret_key_from_base64(sk: &str) -> Result<XSecretKey> {
     base64::decode_config(sk, URL_SAFE)
         .c(d!())
         .and_then(|bytes| XSecretKey::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Convert an anon public key to base64
+pub fn x_secret_key_to_base64(key: &XSecretKey) -> String {
+    base64::encode_config(&XSecretKey::zei_to_bytes(key), base64::URL_SAFE)
 }
 
 #[inline(always)]

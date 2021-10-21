@@ -449,8 +449,15 @@ subcommands:
             required: true
   - gen-eth-key:
       about: Generate an Ethereum address
-  - generate-anon-keys:
+  - gen-anon-keys:
       about: Generate Anon keys
+      args:
+        - file-path:
+            help: Path of file to save the anon keys json
+            short: f
+            long: file-path
+            takes_value: true
+            value_name: File Path
   - owned-abars:
       about: List Anon UTXOs for a public key, randomizer pair
       args:
@@ -460,6 +467,7 @@ subcommands:
             long: randomizer
             takes_value: true
             value_name: JUBJUB SCALAR
+            required: true
         - axfr-public-key:
             help: Axfr public key of the account to query
             short: p
