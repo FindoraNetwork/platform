@@ -10,31 +10,24 @@
 
 - Smart contact, and so on
 
-#### v0.2.x
-
-**plan to launch at October 2021**
-
-- Security hardening
-
 ## Change log
 
 > Functions that have been added.
 
-#### v0.2.2-RC3
+#### v0.2.2-release
 
-- fix `make wasm`
+- fix a BUG in the logic of some special partial undelegations
+    - [Issue 75, #75](https://github.com/FindoraNetwork/platform/issues/75)
+- fix a BUG about the voting power in the logic of un-delegation
+- fix some issues in the history-style API about POS
 - optimize the usage of 'bnc'
-
-#### v0.2.2-RC2 (Yanked !)
-
 - Optimize ABCI checker
     - Avoid invalid transactions from being stored
 - Add balance checker for coinbase
     - Avoid wrong rewards when the reward pool is empty
-
-#### v0.2.2-RC1 (Yanked !)
-
 - Enhance stability by using seed nodes in `findorad init`
+- fix `make wasm`
+- fix `make testall`
 
 #### v0.2.1-release (Yanked !)
 
