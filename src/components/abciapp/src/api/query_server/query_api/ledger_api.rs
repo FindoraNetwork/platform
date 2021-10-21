@@ -371,7 +371,7 @@ pub async fn get_validator_delegation_history(
                         if dah.is_empty()
                             || dah.iter().take(1).all(|(i, _)| {
                                 #[cfg(not(feature = "diskcache"))]
-                                let i = *i;
+                                let i = i;
                                 i > h
                             })
                         {
