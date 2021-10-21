@@ -75,7 +75,7 @@ pub fn run() -> Result<()> {
 
     let mut web3_rpc: Box<dyn std::any::Any + Send> = Box::new(());
     if CFG.enable_eth_api_service {
-        let base_app = app.account_base_app.clone();
+        let base_app = app.account_base_app.read().derive_app();
         let evm_http = format!("{}:{}", config.abci_host, config.evm_http_port);
         let evm_ws = format!("{}:{}", config.abci_host, config.evm_ws_port);
         let tendermint_rpc = format!(

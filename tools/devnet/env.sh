@@ -15,7 +15,7 @@ BIN_CFG="${BIN_CFG:=$BIN_CFG_DEFAULT}"
 BIN="target/$BIN_CFG"
 
 # logs
-ABCI_LOG_LEVEL="abciapp=debug,baseapp=info,account=info,ethereum=info,evm=info,eth_rpc=info"
+ABCI_LOG_LEVEL="abciapp=debug,baseapp=debug,account=info,ethereum=info,evm=info,eth_rpc=info"
 
 # keypair
 MNEMONIC="zoo nerve assault talk depend approve mercy surge bicycle ridge dismiss satoshi boring opera next fat cinnamon valley office actor above spray alcohol giant"
