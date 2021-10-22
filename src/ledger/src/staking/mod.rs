@@ -133,7 +133,7 @@ pub const MIN_DELEGATION_AMOUNT: Amount = 1;
 pub const MAX_DELEGATION_AMOUNT: Amount = FRA_TOTAL_AMOUNT;
 
 /// The minimum investment to become a validator through staking.
-pub const STAKING_VALIDATOR_MIN_POWER: Power = 88_8888 * FRA;
+pub const STAKING_VALIDATOR_MIN_POWER: Power = 1000 * FRA;
 
 /// The highest height in the context of tendermint.
 pub const BLOCK_HEIGHT_MAX: u64 = i64::MAX as u64;
