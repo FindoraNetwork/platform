@@ -23,6 +23,7 @@ pub struct ConvertAccount {
     /// receiver address
     pub receiver: MultiSigner,
     /// convert UTXOs value
+    #[serde(with = "serde_strz")]
     pub value: u64,
 }
 

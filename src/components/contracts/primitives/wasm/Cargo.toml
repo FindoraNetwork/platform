@@ -2,7 +2,7 @@
 name = "evm-wasm-util"
 version = "0.2.0"
 authors = ["FindoraNetwork"]
-edition = "2018"
+edition = "2021"
 
 description = ""
 repository = ""

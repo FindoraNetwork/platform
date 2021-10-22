@@ -2,7 +2,7 @@
 name = "fp-rpc-server"
 version = "0.1.0"
 authors = ["FindoraNetwork"]
-edition = "2018"
+edition = "2021"
 homepage = "https://findora.org/technology"
 repository = "https://github.com/findoranetwork/platform/"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"

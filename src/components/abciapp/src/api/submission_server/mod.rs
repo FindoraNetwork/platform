@@ -5,6 +5,7 @@
 pub mod submission_api;
 
 use {
+    fp_utils::tx::EVM_TX_TAG,
     ledger::{
         data_model::{BlockEffect, Transaction, TxnEffect, TxnSID, TxnTempSID, TxoSID},
         store::LedgerState,

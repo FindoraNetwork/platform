@@ -2,7 +2,7 @@
 name = "precompile-utils-macro"
 version = "0.1.0"
 authors = ["PureStake"]
-edition = "2018"
+edition = "2021"
 description = ""
 
 [lib]

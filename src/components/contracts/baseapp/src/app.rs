@@ -103,8 +103,6 @@ impl abci::Application for crate::BaseApp {
         Self::update_state(&mut self.deliver_state, init_header.clone(), vec![]);
         Self::update_state(&mut self.check_state, init_header, vec![]);
 
-        // TODO init genesis about consensus and validators
-
         ResponseInitChain::default()
     }
 

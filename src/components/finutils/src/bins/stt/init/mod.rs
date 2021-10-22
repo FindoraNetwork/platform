@@ -17,10 +17,8 @@ pub fn init(mut interval: u64, is_mainnet: bool) -> Result<()> {
         interval = BLOCK_INTERVAL;
     }
 
-    if !skip_validator {
-        println!(">>> Set initial validator set ...");
-        common::set_initial_validators().c(d!())?;
-    }
+    println!(">>> Set initial validator set ...");
+    common::set_initial_validators().c(d!())?;
 
     if is_mainnet {
         Ok(())

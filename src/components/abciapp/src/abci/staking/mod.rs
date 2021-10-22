@@ -12,6 +12,7 @@ mod test;
 use {
     crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
     abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate},
+    baseapp::BaseApp as AccountBaseApp,
     lazy_static::lazy_static,
     ledger::{
         data_model::{Operation, Transaction, ASSET_TYPE_FRA},
@@ -24,7 +25,6 @@ use {
         },
         store::LedgerState,
     },
-    baseapp::BaseApp as AccountBaseApp,
     ruc::*,
     serde::Serialize,
     std::{
