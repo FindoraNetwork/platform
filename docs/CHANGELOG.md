@@ -14,6 +14,12 @@
 
 > Functions that have been added.
 
+#### v0.2.3-release
+
+- Adjust minimal staking amount
+- Avoid punish unstaked validator and its delegators
+- Upgrade rust to the 2021 edition
+
 #### v0.2.2-release
 
 - Fix a BUG in the logic of some special partial undelegations
