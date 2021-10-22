@@ -28,15 +28,17 @@
 #[cfg(test)]
 mod test;
 
-use cryptohash::sha256::{self, Digest, DIGESTBYTES};
-use globutils::Commas;
-use ruc::*;
-use std::{
-    cmp,
-    collections::{HashMap, HashSet},
-    fs::File,
-    io::{Read, Seek, SeekFrom, Write},
-    mem, slice,
+use {
+    cryptohash::sha256::{self, Digest, DIGESTBYTES},
+    globutils::Commas,
+    ruc::*,
+    std::{
+        cmp,
+        collections::{HashMap, HashSet},
+        fs::File,
+        io::{Read, Seek, SeekFrom, Write},
+        mem, slice,
+    },
 };
 
 // Constants for calling serialize_block.

@@ -5,20 +5,22 @@
 #![deny(warnings)]
 #![deny(missing_docs)]
 
-use linear_map::LinearMap;
-use rand_core::{CryptoRng, RngCore};
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use wasm_bindgen::prelude::*;
-use zei::{
-    api::anon_creds::{
-        ac_commit, ac_commit_with_key, ac_keygen_commitment, ac_keygen_issuer,
-        ac_keygen_user, ac_open_commitment, ac_reveal, ac_sign, ac_verify,
-        ac_verify_commitment, ACCommitment, ACCommitmentKey, ACIssuerPublicKey,
-        ACIssuerSecretKey, ACPoK, ACRevealProof, ACRevealSig, ACSignature,
-        ACUserPublicKey, ACUserSecretKey, Credential as ZeiCredential,
+use {
+    linear_map::LinearMap,
+    rand_core::{CryptoRng, RngCore},
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    wasm_bindgen::prelude::*,
+    zei::{
+        api::anon_creds::{
+            ac_commit, ac_commit_with_key, ac_keygen_commitment, ac_keygen_issuer,
+            ac_keygen_user, ac_open_commitment, ac_reveal, ac_sign, ac_verify,
+            ac_verify_commitment, ACCommitment, ACCommitmentKey, ACIssuerPublicKey,
+            ACIssuerSecretKey, ACPoK, ACRevealProof, ACRevealSig, ACSignature,
+            ACUserPublicKey, ACUserSecretKey, Credential as ZeiCredential,
+        },
+        errors::ZeiError,
     },
-    errors::ZeiError,
 };
 
 /// Secret key of a credential issuer.

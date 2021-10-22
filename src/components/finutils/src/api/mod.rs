@@ -2,10 +2,12 @@
 //! This module defines findora ledger/query rpc apis for server and client.
 //!
 
-use ledger::staking::{
-    self, StakerMemo, TendermintAddr, MAX_POWER_PERCENT_PER_VALIDATOR,
+use {
+    ledger::staking::{
+        self, StakerMemo, TendermintAddr, MAX_POWER_PERCENT_PER_VALIDATOR,
+    },
+    serde::{Deserialize, Serialize},
 };
-use serde::{Deserialize, Serialize};
 
 /// A list of basic validator information of current height
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

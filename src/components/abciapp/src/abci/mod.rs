@@ -9,19 +9,20 @@ mod config;
 mod server;
 pub mod staking;
 
-use crate::api::{
-    query_server::query_api, submission_server::submission_api::SubmissionApi,
+use {
+    crate::api::{
+        query_server::query_api, submission_server::submission_api::SubmissionApi,
+    },
+    config::{global_cfg::CFG, ABCIConfig},
+    lazy_static::lazy_static,
+    ruc::*,
+    std::{
+        env, fs,
+        net::SocketAddr,
+        sync::{atomic::AtomicBool, Arc},
+        thread,
+    },
 };
-use lazy_static::lazy_static;
-use ruc::*;
-use std::{
-    env, fs,
-    net::SocketAddr,
-    sync::{atomic::AtomicBool, Arc},
-    thread,
-};
-
-use config::{global_cfg::CFG, ABCIConfig};
 
 lazy_static! {
     /// if `true`,

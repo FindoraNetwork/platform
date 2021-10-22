@@ -8,8 +8,10 @@
 #![deny(warnings)]
 #![deny(missing_docs)]
 
-use ruc::*;
-use serde::{Deserialize, Serialize};
+use {
+    ruc::*,
+    serde::{Deserialize, Serialize},
+};
 
 /// Define a sliding window
 #[derive(Clone, Default, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -79,10 +81,12 @@ impl<T: Eq + Copy + std::fmt::Debug> SlidingSet<T> {
 #[cfg(test)]
 #[allow(missing_docs)]
 mod tests {
-    use super::*;
-    use cryptohash::sha256::{hash, Digest};
-    use rand::distributions::Alphanumeric;
-    use rand::{thread_rng, Rng};
+    use {
+        super::*,
+        cryptohash::sha256::{hash, Digest},
+        rand::distributions::Alphanumeric,
+        rand::{thread_rng, Rng},
+    };
 
     #[test]
     fn test_basic() {

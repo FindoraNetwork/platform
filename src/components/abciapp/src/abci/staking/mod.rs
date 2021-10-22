@@ -13,26 +13,28 @@ mod test;
 #[cfg(feature = "abci_mock")]
 pub mod abci_mock_test;
 
-use crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT;
-use abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate};
-use lazy_static::lazy_static;
-use ledger::{
-    data_model::{Operation, Transaction, ASSET_TYPE_FRA},
-    staking::{
-        ops::{
-            governance::{governance_penalty_tendermint_auto, ByzantineKind},
-            mint_fra::{MintEntry, MintFraOps, MintKind},
+use {
+    crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
+    abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate},
+    lazy_static::lazy_static,
+    ledger::{
+        data_model::{Operation, Transaction, ASSET_TYPE_FRA},
+        staking::{
+            ops::{
+                governance::{governance_penalty_tendermint_auto, ByzantineKind},
+                mint_fra::{MintEntry, MintFraOps, MintKind},
+            },
+            td_addr_to_string, Staking, VALIDATOR_UPDATE_BLOCK_ITV,
         },
-        td_addr_to_string, Staking, VALIDATOR_UPDATE_BLOCK_ITV,
+        store::LedgerState,
     },
-    store::LedgerState,
-};
-use ruc::*;
-use serde::Serialize;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    ops::{Deref, DerefMut},
-    sync::atomic::Ordering,
+    ruc::*,
+    serde::Serialize,
+    std::{
+        collections::{BTreeMap, BTreeSet},
+        ops::{Deref, DerefMut},
+        sync::atomic::Ordering,
+    },
 };
 
 // The top 50~ candidate validators

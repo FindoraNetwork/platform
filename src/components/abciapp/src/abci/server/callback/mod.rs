@@ -4,28 +4,30 @@
 
 mod utils;
 
-use crate::{
-    abci::{
-        config::global_cfg::CFG, server::ABCISubmissionServer, staking, IN_SAFE_ITV,
+use {
+    crate::{
+        abci::{
+            config::global_cfg::CFG, server::ABCISubmissionServer, staking, IN_SAFE_ITV,
+        },
+        api::{query_server::BLOCK_CREATED, submission_server::convert_tx},
     },
-    api::{query_server::BLOCK_CREATED, submission_server::convert_tx},
-};
-use abci::{
-    CheckTxType, RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx,
-    RequestEndBlock, RequestInfo, ResponseBeginBlock, ResponseCheckTx, ResponseCommit,
-    ResponseDeliverTx, ResponseEndBlock, ResponseInfo,
-};
-use lazy_static::lazy_static;
-use ledger::staking::KEEP_HIST;
-use parking_lot::Mutex;
-use protobuf::RepeatedField;
-use ruc::*;
-use std::{
-    fs,
-    ops::Deref,
-    sync::{
-        atomic::{AtomicI64, Ordering},
-        Arc,
+    abci::{
+        CheckTxType, RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx,
+        RequestEndBlock, RequestInfo, ResponseBeginBlock, ResponseCheckTx,
+        ResponseCommit, ResponseDeliverTx, ResponseEndBlock, ResponseInfo,
+    },
+    lazy_static::lazy_static,
+    ledger::staking::KEEP_HIST,
+    parking_lot::Mutex,
+    protobuf::RepeatedField,
+    ruc::*,
+    std::{
+        fs,
+        ops::Deref,
+        sync::{
+            atomic::{AtomicI64, Ordering},
+            Arc,
+        },
     },
 };
 

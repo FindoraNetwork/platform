@@ -4,20 +4,22 @@
 //! A more standard CoinBase implementation.
 //!
 
-use crate::staking::BlockHeight;
-use crate::{
-    data_model::TxOutput,
-    staking::{Amount, FRA},
-};
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
-use serde::{Deserialize, Serialize};
-use zei::{
-    setup::PublicParams,
-    xfr::{
-        asset_record::{build_blind_asset_record, AssetRecordType},
-        sig::XfrPublicKey,
-        structs::{AssetRecordTemplate, AssetType, OwnerMemo},
+use {
+    crate::staking::BlockHeight,
+    crate::{
+        data_model::TxOutput,
+        staking::{Amount, FRA},
+    },
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    serde::{Deserialize, Serialize},
+    zei::{
+        setup::PublicParams,
+        xfr::{
+            asset_record::{build_blind_asset_record, AssetRecordType},
+            sig::XfrPublicKey,
+            structs::{AssetRecordTemplate, AssetType, OwnerMemo},
+        },
     },
 };
 

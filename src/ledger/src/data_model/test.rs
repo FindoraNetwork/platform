@@ -1,14 +1,16 @@
 #![cfg(test)]
 #![allow(missing_docs)]
-use super::*;
-use curve25519_dalek::ristretto::CompressedRistretto;
-use rand_core::SeedableRng;
-use std::cmp::min;
-use zei::{
-    ristretto,
-    xfr::structs::{AssetTypeAndAmountProof, XfrBody, XfrProofs},
+use {
+    super::*,
+    curve25519_dalek::ristretto::CompressedRistretto,
+    rand_core::SeedableRng,
+    std::cmp::min,
+    zei::{
+        ristretto,
+        xfr::structs::{AssetTypeAndAmountProof, XfrBody, XfrProofs},
+    },
+    zeiutils::err_eq,
 };
-use zeiutils::err_eq;
 
 const UTF8_ASSET_TYPES_WORK: bool = false;
 

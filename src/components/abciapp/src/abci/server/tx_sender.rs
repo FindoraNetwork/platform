@@ -10,12 +10,14 @@ pub use mocker::{forward_txn_with_mode, TendermintForward, CHAN};
 
 #[cfg(not(feature = "abci_mock"))]
 mod real {
-    use crate::api::submission_server::TxnForward;
-    use futures::executor::{ThreadPool, ThreadPoolBuilder};
-    use lazy_static::lazy_static;
-    use ledger::data_model::Transaction;
-    use ruc::*;
-    use std::sync::atomic::{AtomicU16, Ordering};
+    use {
+        crate::api::submission_server::TxnForward,
+        futures::executor::{ThreadPool, ThreadPoolBuilder},
+        lazy_static::lazy_static,
+        ledger::data_model::Transaction,
+        ruc::*,
+        std::sync::atomic::{AtomicU16, Ordering},
+    };
 
     static TX_PENDING_CNT: AtomicU16 = AtomicU16::new(0);
 
@@ -84,14 +86,16 @@ mod real {
 
 #[cfg(feature = "abci_mock")]
 mod mocker {
-    use crate::api::submission_server::TxnForward;
-    use lazy_static::lazy_static;
-    use ledger::data_model::Transaction;
-    use parking_lot::Mutex;
-    use ruc::*;
-    use std::sync::{
-        mpsc::{channel, Receiver, Sender},
-        Arc,
+    use {
+        crate::api::submission_server::TxnForward,
+        lazy_static::lazy_static,
+        ledger::data_model::Transaction,
+        parking_lot::Mutex,
+        ruc::*,
+        std::sync::{
+            mpsc::{channel, Receiver, Sender},
+            Arc,
+        },
     };
 
     lazy_static! {

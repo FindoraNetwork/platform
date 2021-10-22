@@ -7,15 +7,17 @@
 //! **NOTE**: always use the same multi-signature rules as `UpdateValidator`.
 //!
 
-use crate::{
-    data_model::NoReplayToken,
-    staking::{cosig::CoSigOp, Staking, TendermintAddrRef, BLOCK_HEIGHT_MAX},
+use {
+    crate::{
+        data_model::NoReplayToken,
+        staking::{cosig::CoSigOp, Staking, TendermintAddrRef, BLOCK_HEIGHT_MAX},
+    },
+    lazy_static::lazy_static,
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    std::collections::BTreeMap,
+    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
-use lazy_static::lazy_static;
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
 lazy_static! {
     // The current MVP version is a fixed rule,

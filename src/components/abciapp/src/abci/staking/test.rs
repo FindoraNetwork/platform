@@ -1,22 +1,24 @@
 #![allow(missing_docs)]
 
-use finutils::txn_builder::{TransactionBuilder, TransferOperationBuilder};
-use ledger::{
-    data_model::{
-        Transaction, TransferType, TxnEffect, TxoRef, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
-        TX_FEE_MIN,
+use {
+    finutils::txn_builder::{TransactionBuilder, TransferOperationBuilder},
+    ledger::{
+        data_model::{
+            Transaction, TransferType, TxnEffect, TxoRef, ASSET_TYPE_FRA,
+            BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+        },
+        staking::{FF_PK_LIST, FRA_PRE_ISSUE_AMOUNT},
+        store::{utils::fra_gen_initial_tx, LedgerState},
     },
-    staking::{FF_PK_LIST, FRA_PRE_ISSUE_AMOUNT},
-    store::{utils::fra_gen_initial_tx, LedgerState},
-};
-use rand::random;
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
-use ruc::*;
-use zei::xfr::{
-    asset_record::{open_blind_asset_record, AssetRecordType},
-    sig::{XfrKeyPair, XfrPublicKey},
-    structs::{AssetRecordTemplate, XfrAmount},
+    rand::random,
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::*,
+    zei::xfr::{
+        asset_record::{open_blind_asset_record, AssetRecordType},
+        sig::{XfrKeyPair, XfrPublicKey},
+        structs::{AssetRecordTemplate, XfrAmount},
+    },
 };
 
 #[test]

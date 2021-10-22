@@ -7,22 +7,24 @@
 
 #![deny(warnings)]
 
-use config::CFG;
-use lazy_static::lazy_static;
-use nix::{
-    sys::signal::{kill, Signal},
-    unistd::{truncate, Pid},
-};
-use ruc::*;
-use std::{
-    convert::TryFrom,
-    env,
-    fs::{self, metadata, set_permissions, File, OpenOptions, Permissions},
-    io::{self, prelude::*, BufReader, Read, Seek, SeekFrom},
-    mem::size_of,
-    os::unix::fs::PermissionsExt,
-    path::PathBuf,
-    process::{Command, Stdio},
+use {
+    config::CFG,
+    lazy_static::lazy_static,
+    nix::{
+        sys::signal::{kill, Signal},
+        unistd::{truncate, Pid},
+    },
+    ruc::*,
+    std::{
+        convert::TryFrom,
+        env,
+        fs::{self, metadata, set_permissions, File, OpenOptions, Permissions},
+        io::{self, prelude::*, BufReader, Read, Seek, SeekFrom},
+        mem::size_of,
+        os::unix::fs::PermissionsExt,
+        path::PathBuf,
+        process::{Command, Stdio},
+    },
 };
 
 const U64L: usize = size_of::<u64>();
@@ -248,8 +250,10 @@ fn main() {
 }
 
 mod init {
-    use ruc::*;
-    use std::{fs, str};
+    use {
+        ruc::*,
+        std::{fs, str},
+    };
 
     const QA01_GENESIS_URL: &str = "https://dev-qa01.dev.findora.org:26657/genesis";
     const QA02_GENESIS_URL: &str = "https://dev-qa02.dev.findora.org:26657/genesis";
@@ -371,11 +375,13 @@ mod init {
 }
 
 mod config {
-    use super::init::InitMode;
-    use clap::{crate_authors, App, Arg, ArgGroup, ArgMatches, SubCommand};
-    use lazy_static::lazy_static;
-    use ruc::*;
-    use std::{env, process};
+    use {
+        super::init::InitMode,
+        clap::{crate_authors, App, Arg, ArgGroup, ArgMatches, SubCommand},
+        lazy_static::lazy_static,
+        ruc::*,
+        std::{env, process},
+    };
 
     lazy_static! {
         pub(crate) static ref CFG: Config = pnk!(get_config());

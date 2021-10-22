@@ -2,28 +2,30 @@
 //! # Access Ledger Data
 //!
 
-use super::server::QueryServer;
-use actix_web::{error, web};
-use finutils::api::{
-    DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
-    ValidatorDetail, ValidatorList,
-};
-use globutils::HashOf;
-use ledger::{
-    data_model::{
-        AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData, TxnSID,
-        TxoSID, UnAuthenticatedUtxo, Utxo,
+use {
+    super::server::QueryServer,
+    actix_web::{error, web},
+    finutils::api::{
+        DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
+        ValidatorDetail, ValidatorList,
     },
-    staking::{
-        DelegationRwdDetail, DelegationState, Staking, TendermintAddr,
-        TendermintAddrRef, UNBOND_BLOCK_CNT,
+    globutils::HashOf,
+    ledger::{
+        data_model::{
+            AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData, TxnSID,
+            TxoSID, UnAuthenticatedUtxo, Utxo,
+        },
+        staking::{
+            DelegationRwdDetail, DelegationState, Staking, TendermintAddr,
+            TendermintAddrRef, UNBOND_BLOCK_CNT,
+        },
     },
+    parking_lot::RwLock,
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    std::{collections::BTreeMap, mem, sync::Arc},
+    zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
 };
-use parking_lot::RwLock;
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, mem, sync::Arc};
-use zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo};
 
 /// Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]

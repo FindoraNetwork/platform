@@ -9,46 +9,48 @@ pub mod utils;
 
 pub use fbnc;
 
-use crate::{
-    data_model::{
-        AssetType, AssetTypeCode, AuthenticatedBlock, AuthenticatedTransaction,
-        AuthenticatedUtxo, AuthenticatedUtxoStatus, BlockEffect, BlockSID,
-        FinalizedBlock, FinalizedTransaction, IssuerKeyPair, IssuerPublicKey, Operation,
-        OutputPosition, StateCommitmentData, Transaction, TransferType, TxnEffect,
-        TxnSID, TxnTempSID, TxoSID, UnAuthenticatedUtxo, Utxo, UtxoStatus, XfrAddress,
-        BLACK_HOLE_PUBKEY,
+use {
+    crate::{
+        data_model::{
+            AssetType, AssetTypeCode, AuthenticatedBlock, AuthenticatedTransaction,
+            AuthenticatedUtxo, AuthenticatedUtxoStatus, BlockEffect, BlockSID,
+            FinalizedBlock, FinalizedTransaction, IssuerKeyPair, IssuerPublicKey,
+            Operation, OutputPosition, StateCommitmentData, Transaction, TransferType,
+            TxnEffect, TxnSID, TxnTempSID, TxoSID, UnAuthenticatedUtxo, Utxo,
+            UtxoStatus, XfrAddress, BLACK_HOLE_PUBKEY,
+        },
+        staking::{
+            Amount, Power, Staking, TendermintAddrRef, FF_PK_LIST, FRA_TOTAL_AMOUNT,
+            KEEP_HIST,
+        },
+        LSSED_VAR, SNAPSHOT_ENTRIES_DIR,
     },
-    staking::{
-        Amount, Power, Staking, TendermintAddrRef, FF_PK_LIST, FRA_TOTAL_AMOUNT,
-        KEEP_HIST,
+    api_cache::ApiCache,
+    bitmap::{BitMap, SparseMap},
+    cryptohash::sha256::Digest as BitDigest,
+    fbnc::{new_mapx, new_mapxnk, new_vecx, Mapx, Mapxnk, Vecx},
+    globutils::{HashOf, ProofOf},
+    merkle_tree::AppendOnlyMerkle,
+    parking_lot::RwLock,
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    sliding_set::SlidingSet,
+    std::{
+        collections::{BTreeMap, HashMap, HashSet},
+        env,
+        fs::{self, OpenOptions},
+        io::ErrorKind,
+        mem,
+        ops::{Deref, DerefMut},
+        sync::Arc,
     },
-    LSSED_VAR, SNAPSHOT_ENTRIES_DIR,
-};
-use api_cache::ApiCache;
-use bitmap::{BitMap, SparseMap};
-use cryptohash::sha256::Digest as BitDigest;
-use fbnc::{new_mapx, new_mapxnk, new_vecx, Mapx, Mapxnk, Vecx};
-use globutils::{HashOf, ProofOf};
-use merkle_tree::AppendOnlyMerkle;
-use parking_lot::RwLock;
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use sliding_set::SlidingSet;
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    env,
-    fs::{self, OpenOptions},
-    io::ErrorKind,
-    mem,
-    ops::{Deref, DerefMut},
-    sync::Arc,
-};
-use zei::xfr::{
-    lib::XfrNotePolicies,
-    sig::XfrPublicKey,
-    structs::{OwnerMemo, TracingPolicies, TracingPolicy},
+    zei::xfr::{
+        lib::XfrNotePolicies,
+        sig::XfrPublicKey,
+        structs::{OwnerMemo, TracingPolicies, TracingPolicy},
+    },
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;

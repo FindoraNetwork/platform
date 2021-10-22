@@ -1,21 +1,23 @@
 #![cfg(test)]
 #![allow(missing_docs)]
 
-use super::{helpers::*, *};
-use crate::data_model::{
-    AssetRules, AssetTypeCode, IssueAsset, IssueAssetBody, Memo, Operation, Transaction,
-    TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxoRef, TxoSID,
-    ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
-};
-use rand_core::SeedableRng;
-use zei::{
-    setup::PublicParams,
-    xfr::{
-        asset_record::{
-            build_blind_asset_record, open_blind_asset_record, AssetRecordType,
+use {
+    super::{helpers::*, *},
+    crate::data_model::{
+        AssetRules, AssetTypeCode, IssueAsset, IssueAssetBody, Memo, Operation,
+        Transaction, TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxoRef,
+        TxoSID, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+    },
+    rand_core::SeedableRng,
+    zei::{
+        setup::PublicParams,
+        xfr::{
+            asset_record::{
+                build_blind_asset_record, open_blind_asset_record, AssetRecordType,
+            },
+            sig::XfrKeyPair,
+            structs::{AssetRecord, AssetRecordTemplate},
         },
-        sig::XfrKeyPair,
-        structs::{AssetRecord, AssetRecordTemplate},
     },
 };
 

@@ -4,12 +4,10 @@
 //! - `sha256(pubkey)[..20]`
 //!
 
-use crate::abci::config::global_cfg::CFG;
-use lazy_static::lazy_static;
-use ledger::staking::td_addr_to_bytes;
-use ruc::*;
-use serde::Deserialize;
-use std::fs;
+use {
+    crate::abci::config::global_cfg::CFG, lazy_static::lazy_static,
+    ledger::staking::td_addr_to_bytes, ruc::*, serde::Deserialize, std::fs,
+};
 
 pub fn get_self_addr() -> Result<Vec<u8>> {
     from_env().c(d!()).or_else(|_| from_config_file().c(d!()))

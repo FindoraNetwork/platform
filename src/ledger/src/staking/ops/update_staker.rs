@@ -4,15 +4,17 @@
 //! Data representation required when users want to update information of a staker.
 //!
 
-use crate::{
-    data_model::{NoReplayToken, Transaction},
-    staking::{td_addr_to_string, Staking, TendermintAddr, Validator},
+use {
+    crate::{
+        data_model::{NoReplayToken, Transaction},
+        staking::{td_addr_to_string, Staking, TendermintAddr, Validator},
+    },
+    ed25519_dalek::Signer,
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},
+    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
-use ed25519_dalek::Signer;
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature};
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 
 /// Used as the inner object of a `Staker Update Operation`.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

@@ -8,26 +8,28 @@ pub mod ledger_api;
 pub mod server;
 pub mod service;
 
-use actix_cors::Cors;
-use actix_web::{error, middleware, web, App, HttpServer};
-use finutils::api::NetworkRoute;
-use ledger::{
-    data_model::{
-        b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
-        TxnIDHash, TxnSID, TxoSID, XfrAddress,
+use {
+    actix_cors::Cors,
+    actix_web::{error, middleware, web, App, HttpServer},
+    finutils::api::NetworkRoute,
+    ledger::{
+        data_model::{
+            b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
+            TxnIDHash, TxnSID, TxoSID, XfrAddress,
+        },
+        staking::ops::mint_fra::MintEntry,
     },
-    staking::ops::mint_fra::MintEntry,
-};
-use ledger_api::*;
-use log::info;
-use parking_lot::RwLock;
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use server::QueryServer;
-use std::{collections::HashSet, sync::Arc};
-use zei::{
-    serialization::ZeiFromToBytes,
-    xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+    ledger_api::*,
+    log::info,
+    parking_lot::RwLock,
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    server::QueryServer,
+    std::{collections::HashSet, sync::Arc},
+    zei::{
+        serialization::ZeiFromToBytes,
+        xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+    },
 };
 
 /// Returns the git commit hash and commit date of this build

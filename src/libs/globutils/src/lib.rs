@@ -8,14 +8,16 @@
 pub mod logging;
 pub mod wallet;
 
-use cryptohash::{
-    sha256::{self, Digest},
-    Proof,
+use {
+    cryptohash::{
+        sha256::{self, Digest},
+        Proof,
+    },
+    ruc::*,
+    serde::{Deserialize, Deserializer, Serialize, Serializer},
+    std::{fs, marker::PhantomData, path::PathBuf, result::Result as StdResult},
+    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
-use ruc::*;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::{fs, marker::PhantomData, path::PathBuf, result::Result as StdResult};
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 
 /// Perform a synchronize http get request with attohttpc,
 /// and parse the response as a String

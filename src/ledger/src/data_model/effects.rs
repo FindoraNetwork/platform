@@ -1,37 +1,39 @@
-use crate::{
-    data_model::{
-        AssetType, AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Memo,
-        NoReplayToken, Operation, Transaction, TransferAsset, TransferType, TxOutput,
-        TxnTempSID, TxoRef, TxoSID, UpdateMemo,
-    },
-    staking::{
-        self,
-        ops::{
-            claim::ClaimOps, delegation::DelegationOps,
-            fra_distribution::FraDistributionOps, governance::GovernanceOps,
-            undelegation::UnDelegationOps, update_staker::UpdateStakerOps,
-            update_validator::UpdateValidatorOps,
+use {
+    crate::{
+        data_model::{
+            AssetType, AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Memo,
+            NoReplayToken, Operation, Transaction, TransferAsset, TransferType,
+            TxOutput, TxnTempSID, TxoRef, TxoSID, UpdateMemo,
+        },
+        staking::{
+            self,
+            ops::{
+                claim::ClaimOps, delegation::DelegationOps,
+                fra_distribution::FraDistributionOps, governance::GovernanceOps,
+                undelegation::UnDelegationOps, update_staker::UpdateStakerOps,
+                update_validator::UpdateValidatorOps,
+            },
         },
     },
-};
-use globutils::HashOf;
-use lazy_static::lazy_static;
-use parking_lot::Mutex;
-use rand_chacha::{ChaCha20Rng, ChaChaRng};
-use rand_core::SeedableRng;
-use ruc::*;
-use serde::Serialize;
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
-use zei::{
-    serialization::ZeiFromToBytes,
-    setup::PublicParams,
-    xfr::{
-        lib::verify_xfr_body,
-        sig::XfrPublicKey,
-        structs::{XfrAmount, XfrAssetType},
+    globutils::HashOf,
+    lazy_static::lazy_static,
+    parking_lot::Mutex,
+    rand_chacha::{ChaCha20Rng, ChaChaRng},
+    rand_core::SeedableRng,
+    ruc::*,
+    serde::Serialize,
+    std::{
+        collections::{HashMap, HashSet},
+        sync::Arc,
+    },
+    zei::{
+        serialization::ZeiFromToBytes,
+        setup::PublicParams,
+        xfr::{
+            lib::verify_xfr_body,
+            sig::XfrPublicKey,
+            structs::{XfrAmount, XfrAssetType},
+        },
     },
 };
 

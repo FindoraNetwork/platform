@@ -1,7 +1,9 @@
-use global_cfg::CFG;
-use ruc::*;
-use serde::Deserialize;
-use std::{convert::TryFrom, env, fs, path::Path};
+use {
+    global_cfg::CFG,
+    ruc::*,
+    serde::Deserialize,
+    std::{convert::TryFrom, env, fs, path::Path},
+};
 
 #[derive(Debug)]
 pub struct ABCIConfig {

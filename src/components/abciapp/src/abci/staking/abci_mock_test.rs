@@ -5,62 +5,64 @@
 #![allow(warnings)]
 #![allow(missing_docs)]
 
-use crate::abci::server::{
-    callback::TENDERMINT_BLOCK_HEIGHT,
-    tx_sender::{forward_txn_with_mode, CHAN},
-    ABCISubmissionServer,
-};
-use abci::*;
-use cryptohash::sha256::{self, Digest};
-use finutils::{
-    api::DelegationInfo,
-    txn_builder::{TransactionBuilder, TransferOperationBuilder},
-};
-use globutils::{fresh_tmp_dir, wallet};
-use lazy_static::lazy_static;
-use ledger::{
-    data_model::{
-        Operation, Transaction, TransferType, TxoRef, TxoSID, Utxo, ASSET_TYPE_FRA,
-        BLACK_HOLE_PUBKEY, BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
+use {
+    crate::abci::server::{
+        callback::TENDERMINT_BLOCK_HEIGHT,
+        tx_sender::{forward_txn_with_mode, CHAN},
+        ABCISubmissionServer,
     },
-    staking::{
-        calculate_delegation_rewards,
-        ops::{
-            governance::ByzantineKind,
-            mint_fra::{MintEntry, MintFraOps, MintKind},
+    abci::*,
+    cryptohash::sha256::{self, Digest},
+    finutils::{
+        api::DelegationInfo,
+        txn_builder::{TransactionBuilder, TransferOperationBuilder},
+    },
+    globutils::{fresh_tmp_dir, wallet},
+    lazy_static::lazy_static,
+    ledger::{
+        data_model::{
+            Operation, Transaction, TransferType, TxoRef, TxoSID, Utxo, ASSET_TYPE_FRA,
+            BLACK_HOLE_PUBKEY, BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
         },
-        td_addr_to_bytes, td_addr_to_string, td_pubkey_to_td_addr, Delegation,
-        DelegationState, PartialUnDelegation, TendermintAddr,
-        Validator as StakingValidator, ValidatorKind, BLOCK_HEIGHT_MAX, FRA,
-        FRA_TOTAL_AMOUNT, UNBOND_BLOCK_CNT,
+        staking::{
+            calculate_delegation_rewards,
+            ops::{
+                governance::ByzantineKind,
+                mint_fra::{MintEntry, MintFraOps, MintKind},
+            },
+            td_addr_to_bytes, td_addr_to_string, td_pubkey_to_td_addr, Delegation,
+            DelegationState, PartialUnDelegation, TendermintAddr,
+            Validator as StakingValidator, ValidatorKind, BLOCK_HEIGHT_MAX, FRA,
+            FRA_TOTAL_AMOUNT, UNBOND_BLOCK_CNT,
+        },
+        store::utils::fra_gen_initial_tx,
     },
-    store::utils::fra_gen_initial_tx,
-};
-use parking_lot::{Mutex, RwLock};
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
-use ruc::*;
-use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
-use std::hash::Hash;
-use std::ops::Deref;
-use std::path::Path;
-use std::{
-    collections::BTreeMap,
-    convert::TryFrom,
-    env, mem,
-    sync::{
-        atomic::{AtomicI64, Ordering},
-        mpsc::{channel, Receiver, Sender},
-        Arc,
+    parking_lot::{Mutex, RwLock},
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::*,
+    std::collections::hash_map::DefaultHasher,
+    std::collections::HashMap,
+    std::hash::Hash,
+    std::ops::Deref,
+    std::path::Path,
+    std::{
+        collections::BTreeMap,
+        convert::TryFrom,
+        env, mem,
+        sync::{
+            atomic::{AtomicI64, Ordering},
+            mpsc::{channel, Receiver, Sender},
+            Arc,
+        },
+        thread,
+        time::Duration,
     },
-    thread,
-    time::Duration,
-};
-use zei::xfr::{
-    asset_record::{open_blind_asset_record, AssetRecordType},
-    sig::{XfrKeyPair, XfrPublicKey},
-    structs::{AssetRecordTemplate, OwnerMemo, XfrAmount},
+    zei::xfr::{
+        asset_record::{open_blind_asset_record, AssetRecordType},
+        sig::{XfrKeyPair, XfrPublicKey},
+        structs::{AssetRecordTemplate, OwnerMemo, XfrAmount},
+    },
 };
 
 lazy_static! {

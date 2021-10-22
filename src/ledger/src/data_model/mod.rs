@@ -11,45 +11,47 @@ mod test;
 
 pub use effects::{BlockEffect, TxnEffect};
 
-use crate::staking::{
-    ops::{
-        claim::ClaimOps, delegation::DelegationOps,
-        fra_distribution::FraDistributionOps, governance::GovernanceOps,
-        mint_fra::MintFraOps, undelegation::UnDelegationOps,
-        update_staker::UpdateStakerOps, update_validator::UpdateValidatorOps,
+use {
+    crate::staking::{
+        ops::{
+            claim::ClaimOps, delegation::DelegationOps,
+            fra_distribution::FraDistributionOps, governance::GovernanceOps,
+            mint_fra::MintFraOps, undelegation::UnDelegationOps,
+            update_staker::UpdateStakerOps, update_validator::UpdateValidatorOps,
+        },
+        Staking,
     },
-    Staking,
-};
-use __trash__::{Policy, PolicyGlobals, TxnPolicyData};
-use bitmap::SparseMap;
-use cryptohash::{sha256::Digest as BitDigest, HashValue};
-use fbnc::NumKey;
-use globutils::{HashOf, ProofOf, Serialized, SignatureOf};
-use lazy_static::lazy_static;
-use rand::Rng;
-use rand_chacha::{rand_core, ChaChaRng};
-use rand_core::{CryptoRng, RngCore, SeedableRng};
-use ruc::*;
-use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
-use std::{
-    collections::{HashMap, HashSet},
-    convert::TryFrom,
-    fmt,
-    hash::{Hash, Hasher},
-    mem,
-    ops::Deref,
-    result::Result as StdResult,
-};
-use unicode_normalization::UnicodeNormalization;
-use zei::{
-    serialization::ZeiFromToBytes,
-    xfr::{
-        lib::{gen_xfr_body, XfrNotePolicies},
-        sig::{XfrKeyPair, XfrPublicKey},
-        structs::{
-            AssetRecord, AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo,
-            TracingPolicies, TracingPolicy, XfrAmount, XfrAssetType, XfrBody,
-            ASSET_TYPE_LENGTH,
+    __trash__::{Policy, PolicyGlobals, TxnPolicyData},
+    bitmap::SparseMap,
+    cryptohash::{sha256::Digest as BitDigest, HashValue},
+    fbnc::NumKey,
+    globutils::{HashOf, ProofOf, Serialized, SignatureOf},
+    lazy_static::lazy_static,
+    rand::Rng,
+    rand_chacha::{rand_core, ChaChaRng},
+    rand_core::{CryptoRng, RngCore, SeedableRng},
+    ruc::*,
+    serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer},
+    std::{
+        collections::{HashMap, HashSet},
+        convert::TryFrom,
+        fmt,
+        hash::{Hash, Hasher},
+        mem,
+        ops::Deref,
+        result::Result as StdResult,
+    },
+    unicode_normalization::UnicodeNormalization,
+    zei::{
+        serialization::ZeiFromToBytes,
+        xfr::{
+            lib::{gen_xfr_body, XfrNotePolicies},
+            sig::{XfrKeyPair, XfrPublicKey},
+            structs::{
+                AssetRecord, AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo,
+                TracingPolicies, TracingPolicy, XfrAmount, XfrAssetType, XfrBody,
+                ASSET_TYPE_LENGTH,
+            },
         },
     },
 };

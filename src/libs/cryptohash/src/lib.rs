@@ -14,11 +14,14 @@ pub const HASH_SIZE: usize = 32;
 #[allow(missing_docs)]
 #[cfg(target_arch = "wasm32")]
 pub mod sha256 {
-    use arrayref::array_ref;
-    use serde::{Deserialize, Serialize};
-    use sha2::Digest as DigestTrait;
-    use sha2::Sha256;
-    use std::ops::{Index, Range, RangeFrom};
+    use {
+        arrayref::array_ref,
+        serde::{Deserialize, Serialize},
+        sha2::Digest as DigestTrait,
+        sha2::Sha256,
+        std::ops::{Index, Range, RangeFrom},
+    };
+
     pub const DIGESTBYTES: usize = 32;
 
     #[derive(

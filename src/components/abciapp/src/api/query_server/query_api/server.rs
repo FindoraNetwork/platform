@@ -2,19 +2,21 @@
 //! data sources for the query api
 //!
 
-use lazy_static::lazy_static;
-use ledger::{
-    data_model::{
-        AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput, TxnIDHash,
-        TxnSID, TxoSID, XfrAddress,
+use {
+    lazy_static::lazy_static,
+    ledger::{
+        data_model::{
+            AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
+            TxnIDHash, TxnSID, TxoSID, XfrAddress,
+        },
+        staking::{ops::mint_fra::MintEntry, BlockHeight},
+        store::LedgerState,
     },
-    staking::{ops::mint_fra::MintEntry, BlockHeight},
-    store::LedgerState,
+    parking_lot::{Condvar, Mutex, RwLock},
+    ruc::*,
+    std::{collections::HashSet, sync::Arc},
+    zei::xfr::structs::OwnerMemo,
 };
-use parking_lot::{Condvar, Mutex, RwLock};
-use ruc::*;
-use std::{collections::HashSet, sync::Arc};
-use zei::xfr::structs::OwnerMemo;
 
 lazy_static! {
     /// the query_server will be notified every time

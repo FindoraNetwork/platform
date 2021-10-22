@@ -8,12 +8,14 @@ pub use mocker::gen_tendermint_attr;
 
 #[cfg(not(feature = "abci_mock"))]
 mod real {
-    use abci::{Event, Pair};
-    use ledger::data_model::{Operation, Transaction, TxnSID};
-    use protobuf::RepeatedField;
-    use serde::Serialize;
-    use std::time::SystemTime;
-    use zei::xfr::structs::{XfrAmount, XfrAssetType};
+    use {
+        abci::{Event, Pair},
+        ledger::data_model::{Operation, Transaction, TxnSID},
+        protobuf::RepeatedField,
+        serde::Serialize,
+        std::time::SystemTime,
+        zei::xfr::structs::{XfrAmount, XfrAssetType},
+    };
 
     /// generate attr(tags) for index-ops of tendermint
     ///   - "tx.exist" => "y"
@@ -152,9 +154,7 @@ mod real {
 
 #[cfg(feature = "abci_mock")]
 mod mocker {
-    use abci::Event;
-    use ledger::data_model::Transaction;
-    use protobuf::RepeatedField;
+    use {abci::Event, ledger::data_model::Transaction, protobuf::RepeatedField};
 
     pub fn gen_tendermint_attr(_tx: &Transaction) -> RepeatedField<Event> {
         RepeatedField::from_vec(vec![Event::new()])
