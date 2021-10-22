@@ -99,7 +99,7 @@ const INITIAL_MNEMONIC: [&str; 20] = [
     "clerk purpose acid rail invite stone raccoon pottery blame harbor dawn wrap cluster relief account law angle warm bullet great auction naive moral cloth",
 ];
 
-const ITV: u64 = 5;
+const ITV_MS: u64 = 20;
 const INITIAL_POWER: u64 = 1_0000 * FRA;
 
 struct AbciMocker(ABCISubmissionServer);
@@ -344,7 +344,7 @@ pub struct TendermintMocker {
 impl TendermintMocker {
     fn new() -> TendermintMocker {
         thread::spawn(move || loop {
-            thread::sleep(Duration::from_millis(ITV));
+            thread::sleep(Duration::from_millis(ITV_MS));
             ABCI_MOCKER.write().produce_block();
         });
 
@@ -689,7 +689,7 @@ fn wait_one_block() {
 
 fn wait_n_block(n: u8) {
     (0..n).for_each(|_| {
-        sleep_ms!(2 * ITV);
+        sleep_ms!(2 * ITV_MS);
     });
 }
 
@@ -859,7 +859,7 @@ fn staking_scene_1() -> Result<()> {
         let tx_hash =
             delegate(kp, td_pubkey_to_td_addr(&v_set[i].td_pubkey), 1_0000 * FRA)
                 .c(d!())?;
-        wait_one_block();
+        wait_n_block(5);
         assert!(is_successful(&tx_hash));
     }
 
