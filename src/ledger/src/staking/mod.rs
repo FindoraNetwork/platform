@@ -16,36 +16,39 @@ pub mod cosig;
 pub mod init;
 pub mod ops;
 
-use crate::{
-    data_model::{
-        ConsensusRng, Operation, Transaction, TransferAsset, TxoRef, FRA_DECIMALS,
+use {
+    crate::{
+        data_model::{
+            ConsensusRng, Operation, Transaction, TransferAsset, TxoRef, FRA_DECIMALS,
+        },
+        SNAPSHOT_ENTRIES_DIR,
     },
-    SNAPSHOT_ENTRIES_DIR,
-};
-use cosig::CoSigRule;
-use cryptohash::sha256::{self, Digest};
-use fbnc::{new_mapx, Mapx};
-use globutils::wallet;
-use indexmap::IndexMap;
-use lazy_static::lazy_static;
-use ops::{
-    fra_distribution::FraDistributionOps,
-    mint_fra::{MintKind, MINT_AMOUNT_LIMIT},
-};
-use parking_lot::Mutex;
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use sha2::Digest as _;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    convert::TryFrom,
-    env, mem,
-    sync::{
-        mpsc::{channel, Receiver, Sender},
-        Arc,
+    cosig::CoSigRule,
+    cryptohash::sha256::{self, Digest},
+    fbnc::{new_mapx, Mapx},
+    globutils::wallet,
+    indexmap::IndexMap,
+    lazy_static::lazy_static,
+    ops::{
+        fra_distribution::FraDistributionOps,
+        mint_fra::{MintKind, MINT_AMOUNT_LIMIT},
     },
+    parking_lot::Mutex,
+    rand::random,
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    sha2::Digest as _,
+    std::{
+        collections::{BTreeMap, BTreeSet},
+        convert::TryFrom,
+        env, mem,
+        sync::{
+            mpsc::{channel, Receiver, Sender},
+            Arc,
+        },
+    },
+    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
 // height, reward rate
 type GRH = (BlockHeight, [u128; 2]);
@@ -1514,11 +1517,10 @@ pub struct StakerMemo {
 impl Default for StakerMemo {
     fn default() -> Self {
         StakerMemo {
-            name: "Findora Network".to_owned(),
-            desc: "A `findorad` node".to_owned(),
-            website: "https://www.findora.org".to_owned(),
-            logo: "https://mk0findorallrhx93ixi.kinstacdn.com/wp-content/uploads/2020/08/about-1600x1600.png"
-                .to_owned(),
+            name: format!("Validator No.{}", random::<u16>() ^ random::<u16>()),
+            desc: "NONE".to_owned(),
+            website: "NONE".to_owned(),
+            logo: "http://lorempixel.com/160/160".to_owned(),
         }
     }
 }
@@ -2107,7 +2109,6 @@ pub fn deny_relative_inputs(x: &TransferAsset) -> Result<()> {
 #[allow(missing_docs)]
 mod test {
     use super::*;
-    use rand::random;
 
     // **NOTE**
     //
