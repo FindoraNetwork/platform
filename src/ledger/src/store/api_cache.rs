@@ -226,7 +226,7 @@ where
         ($op: expr) => {
             $op.get_related_pubkeys().into_iter().for_each(|pk| {
                 related_addresses.insert(XfrAddress { key: pk });
-            });
+            })
         };
     }
 
