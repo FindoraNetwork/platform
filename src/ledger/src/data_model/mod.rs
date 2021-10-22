@@ -12,6 +12,7 @@ mod test;
 pub use effects::{BlockEffect, TxnEffect};
 
 use {
+    crate::converter::ConvertAccount,
     crate::staking::{
         ops::{
             claim::ClaimOps, delegation::DelegationOps,
@@ -21,7 +22,6 @@ use {
         },
         Staking,
     },
-    crate::converter::ConvertAccount,
     __trash__::{Policy, PolicyGlobals, TxnPolicyData},
     bitmap::SparseMap,
     cryptohash::{sha256::Digest as BitDigest, HashValue},

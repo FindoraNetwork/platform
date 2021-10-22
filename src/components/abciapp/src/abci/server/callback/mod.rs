@@ -4,36 +4,35 @@
 
 mod utils;
 
-use crate::{
+use {
+    crate::{
+        abci::{
+            config::global_cfg::CFG, server::ABCISubmissionServer, staking, IN_SAFE_ITV,
+        },
+        api::{
+            query_server::BLOCK_CREATED,
+            submission_server::{convert_tx, try_tx_catalog, TxCatalog},
+        },
+    },
     abci::{
-        config::global_cfg::CFG, server::ABCISubmissionServer, staking, IN_SAFE_ITV,
+        Application, CheckTxType, RequestBeginBlock, RequestCheckTx, RequestCommit,
+        RequestDeliverTx, RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery,
+        ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
+        ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
     },
-    api::{
-        query_server::BLOCK_CREATED,
-        submission_server::{convert_tx, try_tx_catalog, TxCatalog},
-    },
-};
-use abci::{
-    Application, CheckTxType, RequestBeginBlock, RequestCheckTx, RequestCommit,
-    RequestDeliverTx, RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery,
-    ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
-    ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
-};
-use fp_storage::hash::{Sha256, StorageHasher};
-use lazy_static::lazy_static;
-use ledger::{
-    converter::is_convert_account,
-    staking::{is_coinbase_tx, KEEP_HIST},
-};
-use parking_lot::Mutex;
-use protobuf::RepeatedField;
-use ruc::*;
-use std::{
-    fs,
-    ops::Deref,
-    sync::{
-        atomic::{AtomicI64, Ordering},
-        Arc,
+    fp_storage::hash::{Sha256, StorageHasher},
+    lazy_static::lazy_static,
+    ledger::{converter::is_convert_account, staking::KEEP_HIST},
+    parking_lot::Mutex,
+    protobuf::RepeatedField,
+    ruc::*,
+    std::{
+        fs,
+        ops::Deref,
+        sync::{
+            atomic::{AtomicI64, Ordering},
+            Arc,
+        },
     },
 };
 

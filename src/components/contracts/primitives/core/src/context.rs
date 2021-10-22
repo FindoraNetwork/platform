@@ -51,7 +51,8 @@ impl Context {
             ))),
             db: Arc::new(RwLock::new(State::new(self.db.read().chain_state(), false))),
             run_mode: RunTxMode::None,
-            ..self.clone()
+            header: self.header.clone(),
+            header_hash: self.header_hash(),
         }
     }
 }

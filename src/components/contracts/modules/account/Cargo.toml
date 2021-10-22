@@ -2,7 +2,7 @@
 name = "module-account"
 version = "0.1.0"
 authors = ["FindoraNetwork"]
-edition = "2018"
+edition = "2021"
 homepage = "https://findora.org/technology"
 repository = "https://github.com/findoranetwork/platform/"
 description = "Findora module supporting smart account function"

@@ -263,12 +263,12 @@ impl EthApi for EthApiImpl {
             nonce,
         } = request;
 
+        let block = self.account_base_app.read().current_block(None);
         // use given gas limit or query current block's limit
         let gas_limit = match gas {
             Some(amount) => amount,
             None => {
-                let block = self.account_base_app.read().current_block(None);
-                if let Some(block) = block {
+                if let Some(block) = block.clone() {
                     block.header.gas_limit
                 } else {
                     <BaseApp as module_evm::Config>::BlockGasLimit::get()
@@ -280,13 +280,21 @@ impl EthApi for EthApiImpl {
         let mut config = <BaseApp as module_ethereum::Config>::config().clone();
         config.estimate = true;
 
-        let ctx = self
+        let mut ctx = self
             .account_base_app
             .read()
             .create_query_context(0, false)
             .map_err(|err| {
                 internal_err(format!("create query context error: {:?}", err))
             })?;
+        if let Some(block) = block {
+            ctx.header
+                .mut_time()
+                .set_seconds(block.header.timestamp as i64);
+            ctx.header.height = block.header.number.as_u64() as i64;
+            ctx.header.proposer_address = Vec::from(block.header.beneficiary.as_bytes())
+        }
+
         match to {
             Some(to) => {
                 let call = Call {
@@ -567,13 +575,20 @@ impl EthApi for EthApiImpl {
         let mut config = <BaseApp as module_ethereum::Config>::config().clone();
         config.estimate = true;
 
-        let ctx = self
+        let mut ctx = self
             .account_base_app
             .read()
             .create_query_context(0, false)
             .map_err(|err| {
                 internal_err(format!("create query context error: {:?}", err))
             })?;
+        if let Some(block) = self.account_base_app.read().current_block(None) {
+            ctx.header
+                .mut_time()
+                .set_seconds(block.header.timestamp as i64);
+            ctx.header.height = block.header.number.as_u64() as i64;
+            ctx.header.proposer_address = Vec::from(block.header.beneficiary.as_bytes())
+        }
 
         let used_gas = match to {
             Some(to) => {

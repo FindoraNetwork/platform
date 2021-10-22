@@ -5,6 +5,7 @@
 pub mod submission_api;
 
 use {
+    fp_utils::tx::EVM_TX_TAG,
     ledger::{
         data_model::{BlockEffect, Transaction, TxnEffect, TxnSID, TxnTempSID, TxoSID},
         store::LedgerState,
@@ -14,7 +15,6 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{collections::HashMap, fmt, result::Result as StdResult, sync::Arc},
-    fp_utils::tx::EVM_TX_TAG,
 };
 
 /// Query handle for user
