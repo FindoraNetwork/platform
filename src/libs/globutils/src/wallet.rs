@@ -225,7 +225,7 @@ pub fn x_public_key_to_base64(key: &XPublicKey) -> String {
 #[inline(always)]
 /// Restore a anon secret key from base64
 pub fn anon_secret_key_from_base64(sk: &str) -> Result<AXfrKeyPair> {
-    base64::decode_config(sk, URL_SAFE)
+    base64::decode(sk)
         .c(d!())
         .and_then(|bytes| AXfrKeyPair::zei_from_bytes(&bytes).c(d!()))
 }

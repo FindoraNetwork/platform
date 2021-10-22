@@ -751,24 +751,30 @@ pub fn gen_oabar_add_op(
     .build()
     .unwrap();
 
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = ChaChaRng::from_entropy();
     let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
         .amount(axfr_amount)
+        .asset_type(oabar_in.get_asset_type())
         .pub_key(to)
         .finalize(&mut prng, &enc_key_out)
         .unwrap()
         .build()
         .unwrap();
 
-    let r = oabar_out.get_key_rand_factor();
+    let r_out = oabar_out.get_key_rand_factor();
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
-    let _ = builder
+    let (_, note) = builder
         .add_operation_anon_transfer(&[oabar_in], &[oabar_out], &[from])
         .c(d!())?;
 
     send_tx(&builder.take_transaction()).c(d!())?;
 
-    println!("Randomizer: {}", wallet::randomizer_to_base64(&r));
+    println!(
+        "\x1b[31;01m Randomizer: {}\x1b[00m",
+        wallet::randomizer_to_base64(&r_out)
+    );
+
+    println!("Signed AxfrNote: {:?}", serde_json::to_string_pretty(&note));
     Ok(())
 }
 
@@ -825,7 +831,10 @@ pub fn gen_oabar_add_op_x(
             .unwrap();
 
         let r = oabar_out.get_key_rand_factor();
-        println!("Randomizer: {}", wallet::randomizer_to_base64(&r));
+        println!(
+            "\x1b[31;01m Randomizer: {}\x1b[00m",
+            wallet::randomizer_to_base64(&r)
+        );
         oabars_out.push(oabar_out);
     }
 

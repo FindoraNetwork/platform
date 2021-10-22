@@ -56,7 +56,7 @@ pub struct QueryServer {
     token_code_issuances: Mapx<AssetTypeCode, Issuances>, // issuance mapped by token code
     owner_memos: Mapx<TxoSID, OwnerMemo>,
     abar_memos: Mapx<ATxoSID, OwnerMemo>,
-    abar_proof: Mapx<ATxoSID, MTLeafInfo>,
+    abar_proofs: Mapx<ATxoSID, MTLeafInfo>,
     utxos_to_map_index: Mapx<TxoSID, XfrAddress>,
     atxos_to_map_index: Mapx<ATxoSID, AXfrAddress>,
     txo_to_txnid: Mapx<TxoSID, TxnIDHash>, // txo(spent, unspent) to authenticated txn (sid, hash)
@@ -156,7 +156,7 @@ impl QueryServer {
             ),
             app_block_cnt: 0,
             abar_memos: new_mapx!("query_server_subdata/abar_memos"),
-            abar_proof: new_mapx!("query_server_subdata/abar_proof"),
+            abar_proofs: new_mapx!("query_server_subdata/abar_proofs"),
         }
     }
 
@@ -346,7 +346,7 @@ impl QueryServer {
     /// Returns the merkle proof from the given ATxoSID
     #[inline(always)]
     pub fn get_abar_proof(&self, atxo_sid: ATxoSID) -> Option<MTLeafInfo> {
-        self.abar_proof.get(&atxo_sid)
+        self.abar_proofs.get(&atxo_sid)
     }
 
     /// Add created asset
@@ -596,6 +596,13 @@ impl QueryServer {
                         .insert(*id, AXfrAddress { key: a.0 });
                     self.abar_memos.insert(*id, a.1);
                     self.atxo_to_txnid.insert(*id, (txn_sid, hash.clone()));
+                }
+
+                //let ledger = Arc::clone(self.state.as_ref().unwrap());
+                //let ledger = ledger.read();
+                for a in atxo_sids {
+                    let abar_proof = ledger.get_abar_proof(*a).unwrap();
+                    self.abar_proofs.insert(*a, abar_proof);
                 }
             }
         }
