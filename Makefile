@@ -78,8 +78,8 @@ tendermint_goleveldb:
 test:
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
 
-testall: test
-	stt test
+test_all: test
+	stt env --test
 
 bench:
 	cargo bench --workspace
@@ -96,7 +96,7 @@ update:
 fmt:
 	cargo fmt
 
-fmtall:
+fmt_all:
 	bash ./tools/fmt.sh
 
 clean:
@@ -104,7 +104,7 @@ clean:
 	rm -rf tools/tendermint .git/modules/tools/tendermint
 	rm -rf debug release Cargo.lock
 
-cleanall: clean
+clean_all: clean
 	git clean -fdx
 
 wasm:
@@ -121,12 +121,16 @@ staking_cfg:
 
 debug_env: stop_debug_env build_release_debug
 	fn setup -S 'http://localhost'
-	stt test --create-default-env
+	stt env --destroy 2>/dev/null
+	stt env --create
 
 start_debug_env:
-	stt test --start-default-env
+	stt env --start
 
 stop_debug_env:
+	stt env stop
+
+stop_all:
 	pkill abci
 	pkill tendermint
 

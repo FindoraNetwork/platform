@@ -156,19 +156,33 @@ pub const MAX_POWER_PERCENT_PER_VALIDATOR: [u128; 2] = [1, 5];
 
 /// Block time interval, in seconds.
 #[cfg(not(feature = "debug_env"))]
-pub const BLOCK_INTERVAL: u64 = 15 + 1;
-
-/// Used in debug env
-#[cfg(feature = "debug_env")]
-pub const BLOCK_INTERVAL: u64 = 3;
+pub const fn block_itv() -> u64 {
+    15 + 1
+}
 
 /// The lock time after the delegation expires, about 21 days.
 #[cfg(not(feature = "debug_env"))]
-pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
+pub const fn unbond_block_cnt() -> u64 {
+    3600 * 24 * 21 / block_itv()
+}
 
-/// Used in debug env
+#[allow(missing_docs)]
 #[cfg(feature = "debug_env")]
-pub const UNBOND_BLOCK_CNT: u64 = 2;
+pub fn block_itv() -> u64 {
+    // use a `.tmp` suffix to make it ignored by git
+    std::fs::read_to_string("block_itv_debug_env.tmp")
+        .map(|i| i.parse::<u64>().unwrap())
+        .unwrap_or(1 + 1)
+}
+
+#[allow(missing_docs)]
+#[cfg(feature = "debug_env")]
+pub fn unbond_block_cnt() -> u64 {
+    // use a `.tmp` suffix to make it ignored by git
+    std::fs::read_to_string("unbond_block_cnt_debug_env.tmp")
+        .map(|i| i.parse::<u64>().unwrap())
+        .unwrap_or(2)
+}
 
 // minimal number of validators
 pub(crate) const VALIDATORS_MIN: usize = 5;
@@ -440,12 +454,12 @@ impl Staking {
     fn validator_clean_invalid_items(&mut self) {
         let h = self.cur_height;
 
-        if UNBOND_BLOCK_CNT > h {
+        if unbond_block_cnt() > h {
             return;
         }
 
         if let Some(old) = self
-            .validator_get_effective_at_height(h - UNBOND_BLOCK_CNT)
+            .validator_get_effective_at_height(h - unbond_block_cnt())
             .map(|ovd| {
                 ovd.body
                     .iter()
@@ -728,7 +742,7 @@ impl Staking {
             if BLOCK_HEIGHT_MAX == d.end_height {
                 if d.end_height != h {
                     orig_h = Some(d.end_height);
-                    d.end_height = h + UNBOND_BLOCK_CNT;
+                    d.end_height = h + unbond_block_cnt();
                 }
             } else {
                 return Err(eg!("delegator is not bonded"));
@@ -782,7 +796,7 @@ impl Staking {
                 .map(|set| set.remove(addr));
             self.di
                 .end_height_map
-                .entry(h + UNBOND_BLOCK_CNT)
+                .entry(h + unbond_block_cnt())
                 .or_insert_with(BTreeSet::new)
                 .insert(*addr);
         }
@@ -841,7 +855,7 @@ impl Staking {
                     receiver_pk: Some(d.id),
                     tmp_delegators: map! {B},
                     start_height: d.start_height,
-                    end_height: h + UNBOND_BLOCK_CNT,
+                    end_height: h + unbond_block_cnt(),
                     state: DelegationState::Bond,
                     rwd_amount: 0,
                     delegation_rwd_cnt: 0,
@@ -870,7 +884,7 @@ impl Staking {
             .insert(pu.new_delegator_id, new_tmp_delegator);
         self.di
             .end_height_map
-            .entry(h + UNBOND_BLOCK_CNT)
+            .entry(h + unbond_block_cnt())
             .or_insert_with(BTreeSet::new)
             .insert(pu.new_delegator_id);
 
@@ -1786,7 +1800,7 @@ pub struct Delegation {
     /// the height at which the delegation ends
     ///
     /// **NOTE:** before users can actually get the rewards,
-    /// they need to wait for an extra `UNBOND_BLOCK_CNT` period
+    /// they need to wait for an extra `unbond_block_cnt()` period
     pub end_height: BlockHeight,
     #[allow(missing_docs)]
     pub state: DelegationState,
@@ -1939,7 +1953,7 @@ pub fn calculate_delegation_rewards(
     return_rate: [u128; 2],
 ) -> Result<Amount> {
     let am = amount as u128;
-    let block_itv = BLOCK_INTERVAL as u128;
+    let block_itv = block_itv() as u128;
 
     am.checked_mul(return_rate[0])
         .and_then(|i| i.checked_mul(block_itv))

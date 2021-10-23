@@ -16,8 +16,8 @@ use {
             TxoSID, UnAuthenticatedUtxo, Utxo,
         },
         staking::{
-            DelegationRwdDetail, DelegationState, Staking, TendermintAddr,
-            TendermintAddrRef, UNBOND_BLOCK_CNT,
+            unbond_block_cnt, DelegationRwdDetail, DelegationState, Staking,
+            TendermintAddr, TendermintAddrRef,
         },
     },
     parking_lot::RwLock,
@@ -603,7 +603,7 @@ pub async fn query_delegation_info(
                 }
                 DelegationState::Bond => {
                     if staking.cur_height()
-                        > d.end_height().saturating_sub(UNBOND_BLOCK_CNT)
+                        > d.end_height().saturating_sub(unbond_block_cnt())
                     {
                         mem::swap(&mut bond_amount, &mut unbond_amount);
                     }

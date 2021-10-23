@@ -19,7 +19,7 @@ use {
     ledger::{
         data_model::{gen_random_keypair, Transaction, BLACK_HOLE_PUBKEY_STAKING},
         staking::{
-            check_delegation_amount, td_addr_to_bytes, BLOCK_INTERVAL, FRA,
+            block_itv, check_delegation_amount, td_addr_to_bytes, FRA,
             FRA_PRE_ISSUE_AMOUNT,
         },
         store::utils::fra_gen_initial_tx,
@@ -50,7 +50,7 @@ macro_rules! sleep_n_block {
         sleep_ms!((n * itv * 1000.0) as u64);
     }};
     ($n_block: expr) => {
-        sleep_n_block!($n_block, ledger::staking::BLOCK_INTERVAL)
+        sleep_n_block!($n_block, ledger::staking::block_itv())
     };
 }
 
