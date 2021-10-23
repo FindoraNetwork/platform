@@ -19,7 +19,7 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
-    tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},
+    tendermint::{signature::Ed25519, PrivateKey, PublicKey, Signature},
     zei::xfr::{
         sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
         structs::{XfrAmount, XfrAssetType},
@@ -32,7 +32,7 @@ pub struct DelegationOps {
     pub(crate) body: Box<Data>,
     pub(crate) pubkey: XfrPublicKey,
     signature: XfrSignature,
-    v_signature: Option<Ed25519Signature>,
+    v_signature: Option<Ed25519>,
 }
 
 impl DelegationOps {
@@ -126,7 +126,7 @@ impl DelegationOps {
     ) -> Self {
         let body = Box::new(Data::new(validator, new_validator, amount, nonce));
         let signature = keypair.sign(&body.to_bytes());
-        let v_signature: Option<Ed25519Signature> = vltor_key
+        let v_signature: Option<Ed25519> = vltor_key
             .and_then(|pk| pk.ed25519_keypair().map(|k| k.sign(&body.to_bytes())));
         DelegationOps {
             body,

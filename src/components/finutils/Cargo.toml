@@ -6,7 +6,6 @@ build = "build.rs"
 edition = "2021"
 
 [dependencies]
-tendermint = "0.19.0"
 hex = "0.4.2"
 base64 = "0.10"
 clap = { version = "2.33.3", features = ["yaml"] }
@@ -21,6 +20,7 @@ curve25519-dalek = { version = "3.0", features = ["serde"] }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"] }
 
 zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
+tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs.git", tag = "v0.16.0-fixcfg" }
 ruc = "0.6.5"
 
 ledger = { path = "../../ledger" }
