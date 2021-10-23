@@ -89,6 +89,8 @@ lint:
 	cargo clippy --workspace --tests
 	cargo clippy --workspace --no-default-features
 	cargo clippy --workspace --tests --no-default-features
+	cargo clippy --workspace --features='debug_env'
+	cargo clippy --workspace --features='debug_env' --tests
 
 update:
 	cargo update
