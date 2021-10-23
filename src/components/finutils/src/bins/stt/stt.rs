@@ -10,10 +10,12 @@
 #![deny(warnings)]
 
 mod debug_env;
+
 mod init;
 
 use {
     clap::{crate_authors, App, ArgMatches, SubCommand},
+    debug_env::{EnvCfg, Ops},
     finutils::common::{self, utils},
     globutils::wallet,
     lazy_static::lazy_static,
@@ -126,8 +128,53 @@ fn run() -> Result<()> {
 
     if matches.is_present("version") {
         println!("{}", env!("VERGEN_SHA"));
-    } else if let Some(_m) = matches.subcommand_matches("env") {
-        debug_env::x();
+    } else if let Some(m) = matches.subcommand_matches("env") {
+        let mut ops = None;
+        alt!(
+            m.is_present("create"),
+            ops = Some(Ops::from_string("Create").c(d!())?)
+        );
+        alt!(
+            m.is_present("destroy"),
+            ops = Some(Ops::from_string("Destroy").c(d!())?)
+        );
+        alt!(
+            m.is_present("start"),
+            ops = Some(Ops::from_string("Start").c(d!())?)
+        );
+        alt!(
+            m.is_present("stop"),
+            ops = Some(Ops::from_string("Stop").c(d!())?)
+        );
+        alt!(
+            m.is_present("add-node"),
+            ops = Some(Ops::from_string("AddNode").c(d!())?)
+        );
+        alt!(
+            m.is_present("del-node"),
+            ops = Some(Ops::from_string("DelNode").c(d!())?)
+        );
+        alt!(
+            m.is_present("run-test"),
+            ops = Some(Ops::from_string("RunTest").c(d!())?)
+        );
+
+        EnvCfg {
+            name: m.value_of("env-name").c(d!())?.to_owned(),
+            ops: ops.c(d!())?,
+            block_itv: m
+                .value_of("block-itv")
+                .unwrap_or("0")
+                .parse::<u32>()
+                .c(d!())?,
+            unbond_blocks: m
+                .value_of("unbond-blocks")
+                .unwrap_or("0")
+                .parse::<u32>()
+                .c(d!())?,
+        }
+        .run()
+        .c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("init") {
         set_env(m).c(d!())?;
         let interval = m

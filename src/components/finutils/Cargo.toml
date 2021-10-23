@@ -14,15 +14,18 @@ lazy_static = "1.4.0"
 attohttpc = { version = "0.16.3", default-features = false, features = ["compress", "json", "tls-rustls"] }
 serde_json = "1.0.40"
 serde = { version = "1.0.124", features = ["derive"] }
+toml = "0.5.8"
 rand = "0.8"
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
 rand_chacha = "0.2.0"
 curve25519-dalek = { version = "3.0", features = ["serde"] }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"] }
+nix = "0.22.1"
+ctrlc = { version = "3.0", features = ["termination"] }
 
 zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
 tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs.git", tag = "v0.16.0-fixcfg" }
-ruc = "0.6.5"
+ruc = { version = "0.6.6", features = ["rich"] }
 
 ledger = { path = "../../ledger" }
 globutils = { path = "../../libs/globutils" }

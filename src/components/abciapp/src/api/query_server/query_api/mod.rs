@@ -556,6 +556,9 @@ impl QueryApi {
                 )
         });
 
+        let mut addrs = addrs.to_vec();
+        addrs.sort_unstable();
+        addrs.dedup();
         for (host, port) in addrs.iter() {
             hdr = hdr.bind(&format!("{}:{}", host, port)).c(d!())?
         }

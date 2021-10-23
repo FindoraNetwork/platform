@@ -25,7 +25,7 @@ unicode-normalization = "0.1.13"
 time = "0.2.26"
 indexmap = { version = "1.6.2", features = ["serde"] }
 
-ruc = "0.6.5"
+ruc = "0.6.6"
 zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
 zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
 bulletproofs = { package = "bulletproofs", git = "https://github.com/FindoraNetwork/bp", branch = "batch_verification", features = ["yoloproofs"] }

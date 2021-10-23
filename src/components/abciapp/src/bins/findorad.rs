@@ -115,7 +115,6 @@ fn node_command() -> Result<()> {
 
     ctrlc::set_handler(move || {
         info_omit!(kill(Pid::from_raw(0), Signal::SIGINT));
-        info_omit!(kill(Pid::from_raw(0), Signal::SIGINT));
     })
     .c(d!())
 }
