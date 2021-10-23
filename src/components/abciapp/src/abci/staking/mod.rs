@@ -9,10 +9,6 @@ mod whoami;
 #[cfg(test)]
 mod test;
 
-#[cfg(test)]
-#[cfg(feature = "abci_mock")]
-pub mod abci_mock_test;
-
 use {
     crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
     abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate},

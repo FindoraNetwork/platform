@@ -13,7 +13,10 @@ use {
     finutils::common::{
         create_asset_x, delegate_x, get_serv_addr, issue_asset_x,
         transfer_asset_batch_x, undelegate_x,
-        utils::{get_asset_balance, get_balance, get_validator_detail},
+        utils::{
+            get_asset_balance, get_balance, get_port_of_tendermint_rpc,
+            get_validator_detail,
+        },
     },
     ledger::{
         data_model::{gen_random_keypair, TX_FEE_MIN},
@@ -394,7 +397,7 @@ struct TmValidator {
 }
 
 fn get_26657_validators(sa: &str) -> Result<TmValidatorsBody> {
-    let url = format!("{}:26657/validators", sa);
+    let url = format!("{}:{}/validators", sa, get_port_of_tendermint_rpc());
     attohttpc::get(&url)
         .send()
         .c(d!())?

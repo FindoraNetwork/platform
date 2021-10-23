@@ -23,5 +23,6 @@ Cargo.lock
 nohup.out
 
 *.keys
+*.tmp
 
 tools/tendermint

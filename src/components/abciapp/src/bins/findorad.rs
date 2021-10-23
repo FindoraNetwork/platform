@@ -48,6 +48,10 @@ fn node_command() -> Result<()> {
     }
 
     abcid
+        .arg("--tendermint-port")
+        .arg(CFG.tendermint_port.to_string())
+        .arg("--abci-port")
+        .arg(CFG.abci_port.to_string())
         .arg("--submission-service-port")
         .arg(CFG.submission_service_port.to_string())
         .arg("--ledger-service-port")
@@ -111,11 +115,16 @@ fn node_command() -> Result<()> {
         .spawn()
         .c(d!())?;
 
-    abcid_child.wait().c(d!()).map(|s| println!("{}", s))?;
-    tendermint_child.wait().c(d!()).map(|s| println!("{}", s))?;
+    abcid_child
+        .wait()
+        .c(d!())
+        .map(|exit_status| println!("{}", exit_status))?;
+    tendermint_child
+        .wait()
+        .c(d!())
+        .map(|exit_status| println!("{}", exit_status))?;
 
     ctrlc::set_handler(move || {
-        info_omit!(kill(Pid::from_raw(0), Signal::SIGINT));
         info_omit!(kill(Pid::from_raw(0), Signal::SIGINT));
     })
     .c(d!())
@@ -124,7 +133,6 @@ fn node_command() -> Result<()> {
 fn init_command() -> Result<()> {
     Command::new(format!("/tmp/tendermint_{}", *SUFFIX))
         .arg("init")
-        .arg("validator")
         .arg("--home")
         .arg(&CFG.tendermint_home)
         .stdin(Stdio::null())
@@ -391,6 +399,7 @@ mod config {
     pub struct Config {
         pub tendermint_host: String,
         pub tendermint_port: u16,
+        pub abci_port: u16,
         pub submission_service_port: u16,
         pub ledger_service_port: u16,
         pub enable_query_service: bool,
@@ -420,9 +429,10 @@ mod config {
                     .about("Start findora node.")
                     .arg_from_usage("-c, --config=[FILE] 'Path to $TMHOM/config/config.toml'")
                     .arg_from_usage("-H, --tendermint-host=[Tendermint Node IP]")
-                    .arg_from_usage("-P, --tendermint-port=[Tendermint Node Port]")
-                    .arg_from_usage("--submission-service-port=[Submission Service Port]")
-                    .arg_from_usage("--ledger-service-port=[Ledger Service Port]")
+                    .arg_from_usage("-P, --tendermint-port=[Tendermint RPC Port]")
+                    .arg_from_usage("-p, --abci-port=[ABCI Port]")
+                    .arg_from_usage("-S, --submission-service-port=[Submission Service Port]")
+                    .arg_from_usage("-L, --ledger-service-port=[Ledger Service Port]")
                     .arg_from_usage("-q, --enable-query-service")
                     .arg_from_usage("-N, --no-fast-sync")
                     .arg_from_usage("--tendermint-node-self-addr=[Address] 'the address of your tendermint node, in upper-hex format'")
@@ -509,6 +519,13 @@ mod config {
             .unwrap_or_else(|| "26657".to_owned())
             .parse::<u16>()
             .c(d!())?;
+        let ap = m
+            .value_of("abci-port")
+            .map(|v| v.to_owned())
+            .or_else(|| env::var("ABCI_PORT").ok())
+            .unwrap_or_else(|| "26658".to_owned())
+            .parse::<u16>()
+            .c(d!())?;
         let ssp = m
             .value_of("submission-service-port")
             .map(|v| v.to_owned())
@@ -559,6 +576,7 @@ mod config {
         let res = Config {
             tendermint_host: th,
             tendermint_port: tp,
+            abci_port: ap,
             submission_service_port: ssp,
             ledger_service_port: lsp,
             enable_query_service: eqs,

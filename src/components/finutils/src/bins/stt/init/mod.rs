@@ -14,7 +14,7 @@ use {
 
 pub fn init(mut interval: u64, is_mainnet: bool) -> Result<()> {
     if 0 == interval {
-        interval = BLOCK_INTERVAL;
+        interval = block_itv();
     }
 
     println!(">>> Set initial validator set ...");

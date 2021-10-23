@@ -12,7 +12,7 @@ use {
     ed25519_dalek::Signer,
     ruc::*,
     serde::{Deserialize, Serialize},
-    tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},
+    tendermint::{signature::Ed25519, PrivateKey, PublicKey, Signature},
     zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 
@@ -22,7 +22,7 @@ pub struct UpdateStakerOps {
     pub(crate) body: Box<Data>,
     pub(crate) pubkey: XfrPublicKey,
     signature: XfrSignature,
-    v_signature: Option<Ed25519Signature>,
+    v_signature: Option<Ed25519>,
 }
 
 impl UpdateStakerOps {
@@ -90,7 +90,7 @@ impl UpdateStakerOps {
     ) -> Self {
         let body = Box::new(Data::new(validator, new_validator, nonce));
         let signature = keypair.sign(&body.to_bytes());
-        let v_signature: Option<Ed25519Signature> = vltor_key
+        let v_signature: Option<Ed25519> = vltor_key
             .ed25519_keypair()
             .map(|k| k.sign(&body.to_bytes()));
         UpdateStakerOps {

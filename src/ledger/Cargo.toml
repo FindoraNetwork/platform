@@ -23,14 +23,14 @@ serde-strz = "1.1.1"
 sha2 = "0.8.0"
 unicode-normalization = "0.1.13"
 time = "0.2.26"
-tendermint = "0.19.0"
 indexmap = { version = "1.6.2", features = ["serde"] }
 
-ruc = "0.6.5"
+ruc = "0.6.6"
 zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
 zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
 bulletproofs = { package = "bulletproofs", git = "https://github.com/FindoraNetwork/bp", branch = "batch_verification", features = ["yoloproofs"] }
 fbnc = { version = "0.2.9", default-features = false}
+tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs.git", tag = "v0.16.0-fixcfg" }
 
 globutils = { path = "../libs/globutils" }
 bitmap = { path = "../libs/bitmap" }

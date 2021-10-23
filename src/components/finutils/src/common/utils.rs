@@ -19,7 +19,10 @@ use {
     },
     ruc::*,
     serde::{self, Deserialize, Serialize},
-    std::collections::HashMap,
+    std::{
+        collections::HashMap,
+        sync::atomic::{AtomicU16, Ordering},
+    },
     tendermint::{PrivateKey, PublicKey},
     zei::xfr::{
         asset_record::{open_blind_asset_record, AssetRecordType},
@@ -27,6 +30,43 @@ use {
         structs::{AssetRecordTemplate, OwnerMemo},
     },
 };
+
+// port of `QueryServer`, allow caller to change it for different configs
+static PORT_QUERY: AtomicU16 = AtomicU16::new(8668);
+// port of `SubmissionServer`, allow caller to change it for different configs
+static PORT_SUBMISSION: AtomicU16 = AtomicU16::new(8669);
+// port of `Tendermint RPC`, allow caller to change it for different configs
+static PORT_TD_RPC: AtomicU16 = AtomicU16::new(26657);
+
+#[allow(missing_docs)]
+pub fn get_port_of_query_server() -> u16 {
+    PORT_QUERY.load(Ordering::Relaxed)
+}
+
+#[allow(missing_docs)]
+pub fn set_port_of_query_server(new_port: u16) {
+    PORT_QUERY.swap(new_port, Ordering::Relaxed);
+}
+
+#[allow(missing_docs)]
+pub fn get_port_of_submission_server() -> u16 {
+    PORT_SUBMISSION.load(Ordering::Relaxed)
+}
+
+#[allow(missing_docs)]
+pub fn set_port_of_submission_server(new_port: u16) {
+    PORT_SUBMISSION.swap(new_port, Ordering::Relaxed);
+}
+
+#[allow(missing_docs)]
+pub fn get_port_of_tendermint_rpc() -> u16 {
+    PORT_TD_RPC.load(Ordering::Relaxed)
+}
+
+#[allow(missing_docs)]
+pub fn set_port_of_tendermint_rpc(new_port: u16) {
+    PORT_TD_RPC.swap(new_port, Ordering::Relaxed);
+}
 
 ///////////////////////////////////////
 // Part 1: utils for transfer assets //
@@ -41,7 +81,11 @@ pub fn new_tx_builder() -> Result<TransactionBuilder> {
 #[inline(always)]
 #[allow(missing_docs)]
 pub fn send_tx(tx: &Transaction) -> Result<()> {
-    let url = format!("{}:8669/submit_transaction", get_serv_addr().c(d!())?);
+    let url = format!(
+        "{}:{}/submit_transaction",
+        get_serv_addr().c(d!())?,
+        get_port_of_submission_server()
+    );
     attohttpc::post(&url)
         .header(attohttpc::header::CONTENT_TYPE, "application/json")
         .bytes(&serde_json::to_vec(tx).c(d!())?)
@@ -339,7 +383,7 @@ struct TmStatus {
 // retrieve tendermint status and node info
 #[inline(always)]
 fn get_network_status(addr: &str) -> Result<TmStatus> {
-    let url = format!("{}:26657/status", addr);
+    let url = format!("{}:{}/status", addr, get_port_of_tendermint_rpc());
 
     attohttpc::get(&url)
         .send()
@@ -370,7 +414,12 @@ pub fn get_local_block_height() -> u64 {
 
 /// Retrieve custom asset(aka token) type of a findora network with asset code
 pub fn get_asset_type(code: &str) -> Result<AssetType> {
-    let url = format!("{}:8668/asset_token/{}", get_serv_addr().c(d!())?, code);
+    let url = format!(
+        "{}:{}/asset_token/{}",
+        get_serv_addr().c(d!())?,
+        get_port_of_query_server(),
+        code
+    );
 
     attohttpc::get(&url)
         .send()
@@ -385,8 +434,9 @@ pub fn get_asset_type(code: &str) -> Result<AssetType> {
 /// Retrieve a list of assets created by the specified findora account
 pub fn get_created_assets(addr: &XfrPublicKey) -> Result<Vec<DefineAsset>> {
     let url = format!(
-        "{}:8667/get_created_assets/{}",
+        "{}:{}/get_created_assets/{}",
         get_serv_addr().c(d!())?,
+        get_port_of_query_server(),
         wallet::public_key_to_base64(addr)
     );
 
@@ -430,8 +480,9 @@ fn get_owned_utxos(
     addr: &XfrPublicKey,
 ) -> Result<HashMap<TxoSID, (Utxo, Option<OwnerMemo>)>> {
     let url = format!(
-        "{}:8668/owned_utxos/{}",
+        "{}:{}/owned_utxos/{}",
         get_serv_addr().c(d!())?,
+        get_port_of_query_server(),
         wallet::public_key_to_base64(addr)
     );
 
@@ -456,7 +507,11 @@ fn get_seq_id() -> Result<u64> {
         SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
     );
 
-    let url = format!("{}:8668/global_state", get_serv_addr().c(d!())?);
+    let url = format!(
+        "{}:{}/global_state",
+        get_serv_addr().c(d!())?,
+        get_port_of_query_server(),
+    );
 
     attohttpc::get(&url)
         .send()
@@ -478,8 +533,9 @@ pub fn get_owner_memo_batch(ids: &[TxoSID]) -> Result<Vec<Option<OwnerMemo>>> {
         .collect::<Vec<_>>()
         .join(",");
     let url = format!(
-        "{}:8667/get_owner_memo_batch/{}",
+        "{}:{}/get_owner_memo_batch/{}",
         get_serv_addr().c(d!())?,
+        get_port_of_query_server(),
         ids
     );
 
@@ -496,8 +552,9 @@ pub fn get_owner_memo_batch(ids: &[TxoSID]) -> Result<Vec<Option<OwnerMemo>>> {
 /// Delegation info(and staking info if `pk` is a validator).
 pub fn get_delegation_info(pk: &XfrPublicKey) -> Result<DelegationInfo> {
     let url = format!(
-        "{}:8668/delegation_info/{}",
+        "{}:{}/delegation_info/{}",
         get_serv_addr().c(d!())?,
+        get_port_of_query_server(),
         wallet::public_key_to_base64(pk)
     );
 
@@ -514,8 +571,9 @@ pub fn get_delegation_info(pk: &XfrPublicKey) -> Result<DelegationInfo> {
 /// Get validator infomations.
 pub fn get_validator_detail(td_addr: TendermintAddrRef) -> Result<ValidatorDetail> {
     let url = format!(
-        "{}:8668/validator_detail/{}",
+        "{}:{}/validator_detail/{}",
         get_serv_addr().c(d!())?,
+        get_port_of_query_server(),
         td_addr
     );
 

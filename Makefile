@@ -1,7 +1,3 @@
-#
-#
-#
-
 all: build_release_goleveldb
 
 export CARGO_NET_GIT_FETCH_WITH_CLI = true
@@ -9,16 +5,8 @@ export PROTOC = $(shell which protoc)
 
 export STAKING_INITIAL_VALIDATOR_CONFIG = $(shell pwd)/src/ledger/src/staking/init/staking_config.json
 export STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV = $(shell pwd)/src/ledger/src/staking/init/staking_config_debug_env.json
-export STAKING_INITIAL_VALIDATOR_CONFIG_ABCI_MOCK = $(shell pwd)/src/ledger/src/staking/init/staking_config_abci_mock.json
 
-FIN_DEBUG ?= /tmp/findora
 export ENABLE_QUERY_SERVICE = true
-
-ifndef CARGO_TARGET_DIR
-	export CARGO_TARGET_DIR=target
-endif
-
-$(info ====== Build root is "$(CARGO_TARGET_DIR)" ======)
 
 bin_dir         = bin
 lib_dir         = lib
@@ -32,12 +20,12 @@ define pack
 	mkdir $(1)
 	cd $(1); for i in $(subdirs); do mkdir $$i; done
 	cp \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/findorad \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/abcid \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/genstx \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
+		./target/$(2)/$(1)/findorad \
+		./target/$(2)/$(1)/abcid \
+		./target/$(2)/$(1)/fn \
+		./target/$(2)/$(1)/stt \
+		./target/$(2)/$(1)/genstx \
+		./target/$(2)/$(1)/staking_cfg_generator \
 		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
 	cp $(1)/$(bin_dir)/* ~/.cargo/bin/
@@ -96,27 +84,19 @@ tendermint_goleveldb:
 test:
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
 
-testall:
-	cargo test --release --features="abci_mock" -- --test-threads=1 # --nocapture
-
-coverage:
-	cargo tarpaulin --timeout=900 --branch --workspace --release --features="abci_mock" \
-		|| cargo install cargo-tarpaulin \
-		&& cargo tarpaulin --timeout=900 --branch --workspace --release --features="abci_mock"
-
-staking_cfg:
-	bash tools/update_staking_cfg.sh
-
-staking_cfg_debug:
-	bash tools/update_staking_cfg_debug.sh
+test_all: test
+	stt env --test
 
 bench:
 	cargo bench --workspace
 
 lint:
 	cargo clippy --workspace
+	cargo clippy --workspace --tests
 	cargo clippy --workspace --no-default-features
-	cargo clippy --features="abci_mock" --workspace --tests
+	cargo clippy --workspace --tests --no-default-features
+	cargo clippy --workspace --features='debug_env'
+	cargo clippy --workspace --features='debug_env' --tests
 
 update:
 	cargo update
@@ -124,7 +104,7 @@ update:
 fmt:
 	cargo fmt
 
-fmtall:
+fmt_all:
 	bash ./tools/fmt.sh
 
 clean:
@@ -132,29 +112,44 @@ clean:
 	rm -rf tools/tendermint .git/modules/tools/tendermint
 	rm -rf debug release Cargo.lock
 
-cleanall: clean
+clean_all: clean
 	git clean -fdx
 
 wasm:
 	cd src/components/wasm && wasm-pack build
 	tar -zcpf $(WASM_PKG) src/components/wasm/pkg
 
-debug_env: stop_debug_env build_release_debug
-	- rm -rf $(FIN_DEBUG)
-	mkdir $(FIN_DEBUG)
-	cp tools/debug_env.tar.gz $(FIN_DEBUG)/
-	cd $(FIN_DEBUG) && tar -xpf debug_env.tar.gz && mv debug_env devnet
-	fn setup -S 'http://localhost'
-	./tools/devnet/startnodes.sh
+coverage:
+	cargo tarpaulin --timeout=900 --branch --workspace --release \
+		|| cargo install cargo-tarpaulin \
+		&& cargo tarpaulin --timeout=900 --branch --workspace --release
 
-run_staking_demo: stop_debug_env
-	bash tools/staking/demo.sh
+staking_cfg:
+	bash tools/update_staking_cfg.sh
+
+staking_cfg_debug:
+	bash tools/update_staking_cfg_debug.sh
+
+debug_env: stop_debug_env build_release_debug
+	fn setup -S 'http://localhost'
+	- stt env --destroy 2>/dev/null
+	cd /tmp; nohup stt env --create
+	echo -e '\033[31;1mLOG FILE: /tmp/nohup.out\033[0m'
 
 start_debug_env:
-	bash ./tools/devnet/startnodes.sh
+	stt env --start
 
 stop_debug_env:
-	bash ./tools/devnet/stopnodes.sh
+	- stt env --stop 2>/dev/null
+
+stop_all:
+	@- pkill -9 stt
+	@- pkill -9 abci
+	@- pkill tendermint
+	@- pkill findorad
+
+run_staking_demo:
+	bash tools/staking/demo.sh
 
 join_debug_env: stop_debug_env build_release_debug
 	bash tools/node_init.sh debug_env
@@ -262,12 +257,3 @@ endif
 
 clean_binary_dockerhub:
 	docker rmi findorad-binary-image:$(IMAGE_TAG)
-
-reset:
-	@./tools/devnet/stopnodes.sh
-	@./tools/devnet/resetnodes.sh 1 1
-
-snapshot:
-	@./tools/devnet/snapshot.sh
-
-devnet: reset snapshot
