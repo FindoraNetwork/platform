@@ -9,11 +9,12 @@
 
 #![deny(warnings)]
 
+mod debug_env;
 mod init;
 
 use {
-    clap::{crate_authors, App, SubCommand},
-    finutils::common,
+    clap::{crate_authors, App, ArgMatches, SubCommand},
+    finutils::common::{self, utils},
     globutils::wallet,
     lazy_static::lazy_static,
     ledger::{
@@ -24,18 +25,25 @@ use {
         },
         store::utils::fra_gen_initial_tx,
     },
+    parking_lot::Mutex,
     ruc::*,
     serde::Serialize,
-    std::{collections::BTreeMap, env},
+    std::{collections::BTreeMap, env, fs, sync::Arc},
     zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
 
 lazy_static! {
     static ref USER_LIST: BTreeMap<Name, User> = gen_user_list();
-    static ref VALIDATOR_LIST: BTreeMap<Name, Validator> = gen_valiator_list();
+    static ref ENV_NAME: Arc<Mutex<String>> = Arc::new(Mutex::new(
+        env::var("STT_ENV_NAME").unwrap_or_else(|_| ENV_NAME_DEFAULT.to_owned())
+    ));
+    static ref VALIDATOR_LIST: BTreeMap<Name, Validator> = pnk!(gen_valiator_list());
     static ref ROOT_KP: XfrKeyPair =
         pnk!(wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC));
 }
+
+const ENV_BASE_DIR: &str = "/tmp/____stt____";
+const ENV_NAME_DEFAULT: &str = "default";
 
 const ROOT_MNEMONIC: &str = "zoo nerve assault talk depend approve mercy surge bicycle ridge dismiss satoshi boring opera next fat cinnamon valley office actor above spray alcohol giant";
 
@@ -59,27 +67,43 @@ fn main() {
 }
 
 fn run() -> Result<()> {
+    let subcmd_env = SubCommand::with_name("env")
+        .arg_from_usage("-E, --env-name=[EnvName]")
+        .arg_from_usage("--create")
+        .arg_from_usage("--destroy")
+        .arg_from_usage("--start")
+        .arg_from_usage("--stop")
+        .arg_from_usage("--add-node")
+        .arg_from_usage("--del-node")
+        .arg_from_usage("--block-itv=[Seconds] 'an interval in seconds'")
+        .arg_from_usage("--unbond-blocks=[Num] 'an interval in blocks'")
+        .arg_from_usage("-t, --run-test");
     let subcmd_init = SubCommand::with_name("init")
         .arg_from_usage("--mainnet")
+        .arg_from_usage("-E, --env-name=[EnvName]")
         .arg_from_usage("-i, --interval=[Interval] 'block interval'");
-    let subcmd_test = SubCommand::with_name("test");
     let subcmd_issue = SubCommand::with_name("issue").about("issue FRA on demand");
     let subcmd_delegate = SubCommand::with_name("delegate")
+        .arg_from_usage("-E, --env-name=[EnvName]")
         .arg_from_usage("-u, --user=[User] 'user name of delegator'")
         .arg_from_usage("-n, --amount=[Amount] 'how much FRA units to delegate'")
         .arg_from_usage("-v, --validator=[Validator] 'which validator to delegate to'");
     let subcmd_undelegate = SubCommand::with_name("undelegate")
+        .arg_from_usage("-E, --env-name=[EnvName]")
         .arg_from_usage("-u, --user=[User] 'user name of the delegator'")
         .arg_from_usage("-n, --amount=[Amount] 'how much FRA to undelegate, needed for partial undelegation'")
         .arg_from_usage("-v, --validator=[Validator] 'which validator to undelegate from, needed for partial undelegation'");
     let subcmd_claim = SubCommand::with_name("claim")
+        .arg_from_usage("-E, --env-name=[EnvName]")
         .arg_from_usage("-u, --user=[User] 'user name of delegator'")
         .arg_from_usage("-n, --amount=[Amount] 'how much FRA to claim'");
     let subcmd_transfer = SubCommand::with_name("transfer")
+        .arg_from_usage("-E, --env-name=[EnvName]")
         .arg_from_usage("-f, --from-user=[User] 'transfer sender'")
         .arg_from_usage("-t, --to-user=[User] 'transfer receiver'")
         .arg_from_usage("-n, --amount=[Amount] 'how much FRA to transfer'");
     let subcmd_show = SubCommand::with_name("show")
+        .arg_from_usage("-E, --env-name=[EnvName]")
         .arg_from_usage("-r, --root-mnemonic 'show the pre-defined root mnemonic'")
         .arg_from_usage("-U, --user-list 'show the pre-defined user list'")
         .arg_from_usage("-v, --validator-list 'show the pre-defined validator list'")
@@ -90,8 +114,8 @@ fn run() -> Result<()> {
         .author(crate_authors!())
         .about("A manual test tool for the staking function.")
         .arg_from_usage("-v, --version")
+        .subcommand(subcmd_env)
         .subcommand(subcmd_init)
-        .subcommand(subcmd_test)
         .subcommand(subcmd_issue)
         .subcommand(subcmd_delegate)
         .subcommand(subcmd_undelegate)
@@ -102,7 +126,10 @@ fn run() -> Result<()> {
 
     if matches.is_present("version") {
         println!("{}", env!("VERGEN_SHA"));
+    } else if let Some(_m) = matches.subcommand_matches("env") {
+        debug_env::x();
     } else if let Some(m) = matches.subcommand_matches("init") {
+        set_env(m).c(d!())?;
         let interval = m
             .value_of("interval")
             .unwrap_or("0")
@@ -110,11 +137,11 @@ fn run() -> Result<()> {
             .c(d!())?;
         let is_mainnet = m.is_present("mainnet");
         init::init(interval, is_mainnet).c(d!())?;
-    } else if matches.is_present("test") {
-        init::i_testing::run_all().c(d!())?;
-    } else if matches.is_present("issue") {
+    } else if let Some(m) = matches.subcommand_matches("issue") {
+        set_env(m).c(d!())?;
         issue::issue().c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("delegate") {
+        set_env(m).c(d!())?;
         let user = m.value_of("user");
         let amount = m.value_of("amount");
         let validator = m.value_of("validator");
@@ -128,6 +155,7 @@ fn run() -> Result<()> {
                 .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
         }
     } else if let Some(m) = matches.subcommand_matches("undelegate") {
+        set_env(m).c(d!())?;
         let user = m.value_of("user");
         let amount = m.value_of("amount");
         let validator = m.value_of("validator");
@@ -144,6 +172,7 @@ fn run() -> Result<()> {
                 .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
         }
     } else if let Some(m) = matches.subcommand_matches("claim") {
+        set_env(m).c(d!())?;
         let user = m.value_of("user");
 
         if user.is_none() {
@@ -159,6 +188,7 @@ fn run() -> Result<()> {
                 .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
         }
     } else if let Some(m) = matches.subcommand_matches("transfer") {
+        set_env(m).c(d!())?;
         let from = m.value_of("from-user");
         let to = m.value_of("to-user");
         let amount = m.value_of("amount");
@@ -179,6 +209,7 @@ fn run() -> Result<()> {
             }
         }
     } else if let Some(m) = matches.subcommand_matches("show") {
+        set_env(m).c(d!())?;
         let rm = m.is_present("root-mnemonic");
         let ul = m.is_present("user-list");
         let vl = m.is_present("validator-list");
@@ -453,24 +484,47 @@ struct Validator {
     keypair: XfrKeyPair,
 }
 
-fn gen_valiator_list() -> BTreeMap<Name, Validator> {
-    const NUM: usize = 20;
-
-    // locale env
-    #[cfg(feature = "debug_env")]
-    const TD_ADDR_LIST: [&str; NUM] = include!("td_addr_list.const.debug_env");
-
-    // online env
+fn gen_valiator_list() -> Result<BTreeMap<Name, Validator>> {
     #[cfg(not(feature = "debug_env"))]
-    const TD_ADDR_LIST: [&str; NUM] = include!("td_addr_list.const");
+    let td_addr_list: Vec<String> = include_str!("td_addr_list.const")
+        .lines()
+        .map(|l| l.to_owned())
+        .collect();
+    #[cfg(not(feature = "debug_env"))]
+    let mnemonic_list: Vec<String> = include_str!("mnemonic_list.const")
+        .lines()
+        .map(|l| l.to_owned())
+        .collect();
 
-    const MNEMONIC_LIST: [&str; NUM] = include!("mnemonic_list.const");
+    #[cfg(feature = "debug_env")]
+    let td_addr_list: Vec<String> = std::fs::read_to_string(format!(
+        "{}/{}/td_addr_list_debug_env.tmp",
+        ENV_BASE_DIR,
+        &*ENV_NAME.lock()
+    ))
+    .c(d!())?
+    .lines()
+    .map(|l| l.to_owned())
+    .collect();
+    #[cfg(feature = "debug_env")]
+    let mnemonic_list: Vec<String> = std::fs::read_to_string(format!(
+        "{}/{}/mnemonic_list_debug_env.tmp",
+        ENV_BASE_DIR,
+        &*ENV_NAME.lock()
+    ))
+    .c(d!())?
+    .lines()
+    .map(|l| l.to_owned())
+    .collect();
 
-    (0..NUM)
+    let num = td_addr_list.len();
+    alt!(mnemonic_list.len() != num, return Err(eg!("Invalid meta")));
+
+    let res = (0..num)
         .map(|i| {
-            let td_addr = TD_ADDR_LIST[i].to_owned();
+            let td_addr = td_addr_list[i].to_owned();
             let keypair = pnk!(wallet::restore_keypair_from_mnemonic_default(
-                MNEMONIC_LIST[i]
+                &mnemonic_list[i]
             ));
             let pubkey = keypair.get_pk();
             Validator {
@@ -481,7 +535,9 @@ fn gen_valiator_list() -> BTreeMap<Name, Validator> {
             }
         })
         .map(|v| (v.name.clone(), v))
-        .collect()
+        .collect();
+
+    Ok(res)
 }
 
 fn search_kp(user: NameRef) -> Option<&'static XfrKeyPair> {
@@ -493,4 +549,30 @@ fn search_kp(user: NameRef) -> Option<&'static XfrKeyPair> {
         .get(user)
         .map(|u| &u.keypair)
         .or_else(|| VALIDATOR_LIST.get(user).map(|v| &v.keypair))
+}
+
+fn set_env(m: &ArgMatches) -> Result<()> {
+    fs::create_dir_all(ENV_BASE_DIR).c(d!())?;
+
+    if let Some(name) = m.value_of("env-name") {
+        *ENV_NAME.lock() = name.to_owned();
+    }
+
+    let env_name = &ENV_NAME.lock();
+    let ports = ["query_server", "submission_server", "tendermint_rpc"]
+        .iter()
+        .map(|p| format!("{}/{}/{}.port", ENV_BASE_DIR, env_name, p))
+        .map(|p| {
+            fs::read_to_string(p)
+                .c(d!())
+                .and_then(|port| port.parse::<u16>().c(d!()))
+        })
+        .collect::<Result<Vec<_>>>()
+        .c(d!())?;
+
+    utils::set_port_of_query_server(ports[0]);
+    utils::set_port_of_submission_server(ports[1]);
+    utils::set_port_of_tendermint_rpc(ports[2]);
+
+    Ok(())
 }
