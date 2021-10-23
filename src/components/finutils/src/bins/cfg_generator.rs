@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn gen() -> Result<()> {
-    let cfg_path = init::get_cfg_path().c(d!())?;
+    let cfg_path = get_cfg_path().c(d!())?;
     let secret_info_path = format!("{}.keys", &cfg_path);
     let mut cfg_template = init::get_cfg_data().c(d!())?;
 
@@ -41,4 +41,16 @@ fn gen() -> Result<()> {
                 secret_info_path
             );
         })
+}
+
+/// used in `cfg_generator` binary
+#[cfg(not(feature = "debug_env"))]
+pub fn get_cfg_path() -> Option<String> {
+    option_env!("STAKING_INITIAL_VALIDATOR_CONFIG").map(|c| c.to_owned())
+}
+
+#[allow(missing_docs)]
+#[cfg(feature = "debug_env")]
+pub fn get_cfg_path() -> Option<String> {
+    std::env::var("STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV").ok()
 }

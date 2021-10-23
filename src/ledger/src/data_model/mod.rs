@@ -34,7 +34,6 @@ use {
     serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer},
     std::{
         collections::{HashMap, HashSet},
-        convert::TryFrom,
         fmt,
         hash::{Hash, Hasher},
         mem,
