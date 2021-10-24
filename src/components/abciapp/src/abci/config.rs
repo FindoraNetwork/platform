@@ -2,7 +2,7 @@ use {
     global_cfg::CFG,
     ruc::*,
     serde::Deserialize,
-    std::{env, fs, path::Path},
+    std::{convert::TryFrom, env, fs, path::Path},
 };
 
 #[derive(Debug)]

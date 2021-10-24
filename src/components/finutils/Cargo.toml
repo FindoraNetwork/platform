@@ -3,7 +3,7 @@ name = "finutils"
 version = "0.2.0"
 authors = ["FindoraNetwork"]
 build = "build.rs"
-edition = "2021"
+edition = "2018"
 
 [dependencies]
 hex = "0.4.2"

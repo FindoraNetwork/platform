@@ -2,7 +2,7 @@
 name = "globutils"
 version = "0.2.0"
 authors = ["FindoraNetwork"]
-edition = "2021"
+edition = "2018"
 
 [dependencies]
 ruc = "0.6.6"

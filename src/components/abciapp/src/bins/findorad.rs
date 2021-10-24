@@ -16,6 +16,7 @@ use {
     },
     ruc::*,
     std::{
+        convert::TryFrom,
         env,
         fs::{self, metadata, set_permissions, File, OpenOptions, Permissions},
         io::{self, prelude::*, BufReader, Read, Seek, SeekFrom},

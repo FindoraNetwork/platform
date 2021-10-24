@@ -18,7 +18,9 @@ use {
     parking_lot::Mutex,
     ruc::{cmd, *},
     serde::{Deserialize, Serialize},
-    std::{collections::HashMap, fs, process, str::FromStr, sync::Arc},
+    std::{
+        collections::HashMap, convert::TryFrom, fs, process, str::FromStr, sync::Arc,
+    },
     tendermint::{
         config::TendermintConfig as TdConfig, net::Address as TdAddr,
         Timeout as TdTimeout,
@@ -332,9 +334,9 @@ impl Node {
                 self.ports.tendermint_p2p,
                 self.ports.abci,
             ]
-            .into_iter()
+            .iter()
             .for_each(|port| {
-                db.remove(&port);
+                db.remove(port);
             });
         })
     }

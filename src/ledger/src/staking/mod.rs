@@ -40,6 +40,7 @@ use {
     sha2::Digest as _,
     std::{
         collections::{BTreeMap, BTreeSet},
+        convert::TryFrom,
         env, mem,
         sync::{
             mpsc::{channel, Receiver, Sender},

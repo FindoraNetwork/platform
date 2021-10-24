@@ -7,6 +7,7 @@ use {
         td_addr_to_bytes, BlockHeight, Power, Validator, ValidatorKind,
         STAKING_VALIDATOR_MIN_POWER,
     },
+    core::convert::TryFrom,
     indexmap::IndexMap,
     ruc::*,
     serde::{Deserialize, Serialize},
