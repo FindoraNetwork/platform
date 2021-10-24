@@ -79,6 +79,7 @@ fn run() -> Result<()> {
         .arg_from_usage("--del-node")
         .arg_from_usage("--block-itv=[Seconds] 'an interval in seconds'")
         .arg_from_usage("--unbond-blocks=[Num] 'an interval in blocks'")
+        .arg_from_usage("--info 'show informations'")
         .arg_from_usage("-t, --run-test");
     let subcmd_init = SubCommand::with_name("init")
         .arg_from_usage("--mainnet")
@@ -158,9 +159,16 @@ fn run() -> Result<()> {
             m.is_present("run-test"),
             ops = Some(Ops::from_string("RunTest").c(d!())?)
         );
+        alt!(
+            m.is_present("info"),
+            ops = Some(Ops::from_string("Info").c(d!())?)
+        );
 
         EnvCfg {
-            name: m.value_of("env-name").c(d!())?.to_owned(),
+            name: m
+                .value_of("env-name")
+                .map(|n| n.to_owned())
+                .unwrap_or_else(|| ENV_NAME.lock().clone()),
             ops: ops.c(d!())?,
             block_itv: m
                 .value_of("block-itv")
@@ -173,7 +181,7 @@ fn run() -> Result<()> {
                 .parse::<u32>()
                 .c(d!())?,
         }
-        .run()
+        .exec()
         .c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("init") {
         set_env(m).c(d!())?;
@@ -605,21 +613,26 @@ fn set_env(m: &ArgMatches) -> Result<()> {
         *ENV_NAME.lock() = name.to_owned();
     }
 
-    let env_name = &ENV_NAME.lock();
-    let ports = ["query_server", "submission_server", "tendermint_rpc"]
-        .iter()
-        .map(|p| format!("{}/{}/{}.port", ENV_BASE_DIR, env_name, p))
-        .map(|p| {
-            fs::read_to_string(p)
-                .c(d!())
-                .and_then(|port| port.parse::<u16>().c(d!()))
-        })
-        .collect::<Result<Vec<_>>>()
-        .c(d!())?;
+    let ecfg = EnvCfg {
+        name: ENV_NAME.lock().clone(),
+        ops: Ops::Info,
+        ..Default::default()
+    };
 
-    utils::set_port_of_query_server(ports[0]);
-    utils::set_port_of_submission_server(ports[1]);
-    utils::set_port_of_tendermint_rpc(ports[2]);
+    let ports = ecfg
+        .exec()
+        .c(d!())?
+        .unwrap()
+        .full_nodes
+        .into_iter()
+        .next()
+        .c(d!())?
+        .1
+        .ports;
+
+    utils::set_port_of_query_server(ports.query);
+    utils::set_port_of_submission_server(ports.submission);
+    utils::set_port_of_tendermint_rpc(ports.tendermint_rpc);
 
     Ok(())
 }

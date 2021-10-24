@@ -121,20 +121,22 @@ coverage:
 staking_cfg:
 	bash tools/update_staking_cfg.sh
 
-debug_env: stop_debug_env build_release_debug
+debug_env: build_release_debug stop_debug_env
 	fn setup -S 'http://localhost'
-	stt env --destroy 2>/dev/null
+	- stt env --destroy 2>/dev/null
 	stt env --create
 
 start_debug_env:
 	stt env --start
 
 stop_debug_env:
-	stt env stop
+	- stt env --stop 2>/dev/null
 
 stop_all:
-	pkill abci
-	pkill tendermint
+	@- pkill -9 stt
+	@- pkill -9 abci
+	@- pkill tendermint
+	@- pkill findorad
 
 run_staking_demo:
 	bash tools/staking/demo.sh

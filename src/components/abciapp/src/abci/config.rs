@@ -132,12 +132,12 @@ pub(crate) mod global_cfg {
                 .version(env!("VERGEN_SHA"))
                 .author(crate_authors!())
                 .about("An ABCI node implementation of FindoraNetwork.")
-                .arg_from_usage("--abcid-host=[ABCId IP]")
-                .arg_from_usage("--abcid-port=[ABCId Port]")
+                .arg_from_usage("--abci-host=[ABCI IP]")
+                .arg_from_usage("-p, --abci-port=[ABCI Port]")
                 .arg_from_usage("--tendermint-host=[Tendermint IP]")
-                .arg_from_usage("--tendermint-port=[Tendermint Port]")
-                .arg_from_usage("--submission-service-port=[Submission Service Port]")
-                .arg_from_usage("--ledger-service-port=[Ledger Service Port]")
+                .arg_from_usage("-P, --tendermint-port=[Tendermint RPC Port]")
+                .arg_from_usage("-S, --submission-service-port=[Submission Service Port]")
+                .arg_from_usage("-L, --ledger-service-port=[Ledger Service Port]")
                 .arg_from_usage("-q, --enable-query-service")
                 .arg_from_usage("--tendermint-node-self-addr=[Address] 'the address of your tendermint node, in upper-hex format'")
                 .arg_from_usage("--tendermint-node-key-config-path=[Path] 'such as: ${HOME}/.tendermint/config/priv_validator_key.json'")
@@ -162,12 +162,12 @@ pub(crate) mod global_cfg {
         print_version(&m);
 
         let ah = m
-            .value_of("abcid-host")
+            .value_of("abci-host")
             .map(|v| v.to_owned())
             .or_else(|| env::var("ABCI_HOST").ok())
             .unwrap_or_else(|| "0.0.0.0".to_owned());
         let ap = m
-            .value_of("abcid-port")
+            .value_of("abci-port")
             .map(|v| v.to_owned())
             .or_else(|| env::var("ABCI_PORT").ok())
             .unwrap_or_else(|| "26658".to_owned())
