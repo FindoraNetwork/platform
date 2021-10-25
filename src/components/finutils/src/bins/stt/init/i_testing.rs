@@ -15,7 +15,10 @@ use {
         transfer_asset_batch_x, undelegate_x,
         utils::{get_asset_balance, get_balance, get_validator_detail},
     },
-    ledger::{data_model::TX_FEE_MIN, staking::FRA},
+    ledger::{
+        data_model::{gen_random_keypair, TX_FEE_MIN},
+        staking::FRA,
+    },
     ruc::*,
     serde::Deserialize,
 };
@@ -56,13 +59,20 @@ use {
 // 15. transfer all balances of validator[1..19] to validator[0]
 // 16. wait 1.2 blocks
 //     - all balances of validator[1..19] should be 0
-// 17. store the current block height, and wait 1.2 blocks
+// 17. trnasfer 100001 to 10 random addresses
+// 18. wait 1.2 blocks
+//     - check balances of the random addresses created in < step 17 >
+// 19. delegate 10 times to validator[1] using the random addresses created in < step 17 >
+// 10. wait 5 blocks
+//     - check the number of delegators of validator[1]
+//     - check the power of validator[1]
+// 21. store the current block height, and wait 1.2 blocks
 //     - the new block height should be bigger the the old one
 //     - the number of validators should be 20
 //     - the `is_online` state of every validator should be 'true'
 //     - the power of validators should approximately be [400_0000, ..., 419_0000]
 //     - the number of delegators of each validator should be 1, except validator[0]
-// 18. repeat < step 15 > 4 times
+// 22. repeat < step 15 > 4 times
 pub fn run_all() -> Result<()> {
     let sa = get_serv_addr().c(d!())?;
     let v_set = VALIDATOR_LIST.values().collect::<Vec<_>>();
@@ -250,8 +260,8 @@ pub fn run_all() -> Result<()> {
                     &[v_set[0].pubkey],
                     None,
                     n,
-                    true,
-                    true,
+                    false,
+                    false,
                 )
                 .c(d!())
             } else {
@@ -270,7 +280,54 @@ pub fn run_all() -> Result<()> {
         assert_eq!(0, get_balance(&v.keypair).c(d!())?);
     }
 
-    // 17/18.
+    // 17.
+    println!(">>> Transfer to 10 random addresses ...");
+    let rkps = (0..10).map(|_| gen_random_keypair()).collect::<Vec<_>>();
+    let targets = rkps.iter().map(|kp| kp.get_pk()).collect::<Vec<_>>();
+    transfer_asset_batch_x(
+        &v_set[0].keypair,
+        &targets,
+        None,
+        1 + TX_FEE_MIN,
+        false,
+        false,
+    )
+    .c(d!())?;
+
+    // 18.
+    println!(">>> Wait 1.2 block ...");
+    sleep_n_block!(1.2);
+    println!(">>> Check balances of the 10 random addresses ...");
+    for k in rkps.iter() {
+        assert_eq!(1 + TX_FEE_MIN, get_asset_balance(k, None).c(d!())?);
+    }
+
+    // 19.
+    println!(">>> Delegate 10 times to validator[1] ...");
+    let vd_power = get_validator_detail(&v_set[1].td_addr)
+        .c(d!())?
+        .voting_power;
+    for k in rkps.iter() {
+        delegate_x(k, 1, &v_set[1].td_addr).c(d!())?;
+    }
+
+    // 20.
+    println!(">>> Wait 5 block ...");
+    sleep_n_block!(5);
+    println!(">>> Check the results of those delegations ...");
+    let vd = get_validator_detail(&v_set[1].td_addr).c(d!())?;
+    assert_eq!(11, vd.delegator_cnt);
+    assert_eq!(10 + vd_power, vd.voting_power);
+    let td_power = get_26657_validators(sa)
+        .c(d!())?
+        .validators
+        .iter()
+        .find(|v| v.address == v_set[1].td_addr)
+        .c(d!())?
+        .voting_power_int;
+    assert_eq!(vd.voting_power, td_power);
+
+    // 21./22.
     println!(">>> Check the next 6 blocks ...");
 
     for _ in 0..5 {
