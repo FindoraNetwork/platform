@@ -122,7 +122,7 @@ pub fn run_all() -> Result<()> {
 
     // 4.
     println!(">>> Transfer custom asset A ...");
-    println!(">>> Wait 3.6 block for 4 times of transfering ...");
+    println!(">>> Wait 4.8 block for 4 times of transfering ...");
 
     let target_kps = v_set
         .iter()
