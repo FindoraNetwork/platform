@@ -145,6 +145,7 @@ pub fn deliver_tx(
     s: &mut ABCISubmissionServer,
     req: &RequestDeliverTx,
 ) -> ResponseDeliverTx {
+    println!("In deliver_tx");
     let mut resp = ResponseDeliverTx::new();
     let tx_catalog = try_tx_catalog(req.get_tx());
     match tx_catalog {
@@ -197,6 +198,7 @@ pub fn end_block(
     s: &mut ABCISubmissionServer,
     req: &RequestEndBlock,
 ) -> ResponseEndBlock {
+    println!("In end_block");
     let mut resp = ResponseEndBlock::new();
 
     let begin_block_req = REQ_BEGIN_BLOCK.lock();
@@ -242,6 +244,7 @@ pub fn end_block(
 }
 
 pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseCommit {
+    println!("In commit");
     let la = s.la.write();
     let mut state = la.get_committed_state().write();
 
@@ -255,10 +258,6 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         .and_then(|s| fs::write(&path, s).c(d!(path))));
 
     let mut r = ResponseCommit::new();
-
-    // Commit Anon tree changes here following Tendermint protocol
-    pnk!(state.commit_anon_changes().c(d!()));
-    pnk!(state.commit_nullifier_changes().c(d!()));
 
     let mut commitment = state.get_state_commitment().0.as_ref().to_vec();
     if s.account_base_app.read().latest_block_number().is_some() {

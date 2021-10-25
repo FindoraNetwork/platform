@@ -739,6 +739,7 @@ pub fn gen_oabar_add_op(
     //Only the first abar received from the ledger query is considered
     let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
     let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
+    println!("Version: {} | Hash: {:?}", mt_leaf_info.root_version, mt_leaf_info.root.clone());
 
     let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
         &axtxo_abar[0].1,

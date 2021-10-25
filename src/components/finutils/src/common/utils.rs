@@ -45,6 +45,8 @@ pub fn new_tx_builder() -> Result<TransactionBuilder> {
 #[inline(always)]
 #[allow(missing_docs)]
 pub fn send_tx(tx: &Transaction) -> Result<()> {
+
+    println!("Sending Txn of {} bytes", serde_json::to_vec(&tx).unwrap().len());
     let url = format!("{}:8669/submit_transaction", get_serv_addr().c(d!())?);
     attohttpc::post(&url)
         .header(attohttpc::header::CONTENT_TYPE, "application/json")

@@ -132,6 +132,7 @@ impl LedgerState {
         txe: TxnEffect,
         is_loading: bool,
     ) -> Result<TxnTempSID> {
+        println!("In apply_transaction");
         let tx = txe.txn.clone();
         self.status
             .check_txn_effects(&txe)
@@ -211,6 +212,7 @@ impl LedgerState {
         tsm: &TmpSidMap,
         next_txn_sid: usize,
     ) -> Result<()> {
+        println!("In update state");
         let mut tx_block = Vec::new();
 
         // Update the transaction Merkle tree
@@ -250,6 +252,7 @@ impl LedgerState {
             )
             .c(d!())?;
 
+        println!("Before checkpoint");
         // Checkpoint
         let block_merkle_id = self.checkpoint(&block).c(d!())?;
         block.temp_sids.clear();
@@ -433,6 +436,7 @@ impl LedgerState {
     }
 
     fn compute_and_save_state_commitment_data(&mut self, pulse_count: u64) {
+        println!("In compute_and_save_state_commitment_data");
         let state_commitment_data = StateCommitmentData {
             bitmap: self.utxo_map.compute_checksum(),
             block_merkle: self.block_merkle.get_root_hash(),
@@ -459,8 +463,17 @@ impl LedgerState {
             .push(state_commitment_data.compute_commitment());
         self.status.state_commitment_data = Some(state_commitment_data);
 
+        // Commit Anon tree changes here following Tendermint protocol
+        pnk!(self.commit_anon_changes().c(d!()));
+        pnk!(self.commit_nullifier_changes().c(d!()));
+
         let abar_root_hash =
             self.get_abar_root_hash().expect("failed to read root hash");
+
+        if let Ok(p) = self.get_abar_proof(ATxoSID(0)) {
+            print!("In compute_and_save_state_commitment_data from get_abar_proof 0 Version: {}, Hash: {:?}", p.root_version, p.root);
+        }
+        println!("In compute_and_save_state_commitment_data Version: {}, Hash: {:?}", self.status.abar_commitment_versions.len(), abar_root_hash);
         self.status.abar_commitment_versions.push(abar_root_hash);
         let anon_state_commitment_data = AnonStateCommitmentData {
             abar_root_hash,
@@ -508,19 +521,26 @@ impl LedgerState {
         let store = ImmutablePrefixedStore::new("abar_store", &self.abar_query_state);
         let mt = ImmutablePersistentMerkleTree::new(store)?;
 
-        mt.get_current_root_hash().c(d!(
+        let t = mt.get_current_root_hash().c(d!(
             "probably due to badly constructed tree or data corruption"
-        ))
+        )).c(d!())?;
+        println!("get_abar_root_hash: {:?}", t);
+        Ok(t)
     }
 
     #[inline(always)]
     /// Generates a MTLeafInfo from the latest committed version of tree from committed state and
     /// ignore session cache
     pub fn get_abar_proof(&self, id: ATxoSID) -> Result<MTLeafInfo> {
+        println!("In get_abar_proof");
         let store = ImmutablePrefixedStore::new("abar_store", &self.abar_query_state);
         let mt = ImmutablePersistentMerkleTree::new(store)?;
 
-        mt.generate_proof(id.0)
+        let mut t = mt.generate_proof(id.0)?;
+        t.root_version = self.status.get_current_abar_version();
+
+        println!("get_abar_proof Version: {},  Hash: {:?}",t.clone().root_version, t.clone().root);
+        Ok(t)
     }
 
     // Initialize a logged Merkle tree for the ledger.
@@ -644,6 +664,7 @@ impl LedgerState {
 
     /// Perform checkpoint of current ledger state
     pub fn checkpoint(&mut self, block: &BlockEffect) -> Result<u64> {
+        println!("In checkpoint");
         let merkle_id = self.compute_and_append_txns_hash(&block);
         let pulse_count = block
             .staking_simulator
@@ -1264,14 +1285,16 @@ impl LedgerStatus {
     #[allow(missing_docs)]
     #[allow(dead_code)]
     fn get_versioned_abar_hash(&self, version: usize) -> Option<BLSScalar> {
-        self.abar_commitment_versions.get(version - 1)
+        let hash = self.abar_commitment_versions.get(version - 1);
+        println!("In get_versioned_abar_hash Version: {} | Hash: {:?}", version, hash.unwrap());
+        hash
     }
 
     #[inline(always)]
     #[allow(missing_docs)]
     #[allow(dead_code)]
     fn get_current_abar_version(&self) -> usize {
-        self.abar_commitment_versions.len()
+        self.abar_commitment_versions.len() - 1
     }
 
     fn fast_invariant_check(&self) -> Result<()> {

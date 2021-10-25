@@ -125,6 +125,8 @@ impl TxnEffect {
         let mut te = TxnEffect::default();
         let mut txo_count: usize = 0;
 
+        println!("In compute effect");
+
         for op in txn.body.operations.iter() {
             macro_rules! check_nonce {
                 ($i: expr) => {
@@ -643,6 +645,8 @@ impl BlockEffect {
         txn_effect: TxnEffect,
         is_loading: bool,
     ) -> Result<TxnTempSID> {
+        println!("In add_txn_effect");
+
         self.check_txn_effect(&txn_effect, is_loading).c(d!())?;
 
         // By construction, no_replay_tokens entries are unique
