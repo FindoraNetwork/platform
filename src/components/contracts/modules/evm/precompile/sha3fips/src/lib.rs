@@ -16,10 +16,16 @@
 // limitations under the License.
 
 use evm::{ExitError, ExitSucceed};
-use module_evm::precompile::LinearCostPrecompile;
+use module_evm::precompile::{LinearCostPrecompile, PrecompileId};
 use tiny_keccak::Hasher;
 
 pub struct Sha3FIPS256;
+
+impl PrecompileId for Sha3FIPS256 {
+    fn contract_id() -> u64 {
+        0x7
+    }
+}
 
 impl LinearCostPrecompile for Sha3FIPS256 {
     const BASE: u64 = 60;
@@ -38,6 +44,12 @@ impl LinearCostPrecompile for Sha3FIPS256 {
 }
 
 pub struct Sha3FIPS512;
+
+impl PrecompileId for Sha3FIPS512 {
+    fn contract_id() -> u64 {
+        0x8
+    }
+}
 
 impl LinearCostPrecompile for Sha3FIPS512 {
     const BASE: u64 = 60;
