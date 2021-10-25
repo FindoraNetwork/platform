@@ -103,6 +103,6 @@ impl<C: Config> Executable for App<C> {
         _call: Self::Call,
         _ctx: &Context,
     ) -> Result<ActionResult> {
-        todo!()
+        Err(eg!("Unsupported evm action!"))
     }
 }
