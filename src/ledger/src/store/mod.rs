@@ -1285,7 +1285,7 @@ impl LedgerStatus {
     #[allow(missing_docs)]
     #[allow(dead_code)]
     fn get_versioned_abar_hash(&self, version: usize) -> Option<BLSScalar> {
-        let hash = self.abar_commitment_versions.get(version - 1);
+        let hash = self.abar_commitment_versions.get(version);
         println!("In get_versioned_abar_hash Version: {} | Hash: {:?}", version, hash.unwrap());
         hash
     }
