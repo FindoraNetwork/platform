@@ -473,7 +473,11 @@ impl LedgerState {
         if let Ok(p) = self.get_abar_proof(ATxoSID(0)) {
             print!("In compute_and_save_state_commitment_data from get_abar_proof 0 Version: {}, Hash: {:?}", p.root_version, p.root);
         }
-        println!("In compute_and_save_state_commitment_data Version: {}, Hash: {:?}", self.status.abar_commitment_versions.len(), abar_root_hash);
+        println!(
+            "In compute_and_save_state_commitment_data Version: {}, Hash: {:?}",
+            self.status.abar_commitment_versions.len(),
+            abar_root_hash
+        );
         self.status.abar_commitment_versions.push(abar_root_hash);
         let anon_state_commitment_data = AnonStateCommitmentData {
             abar_root_hash,
@@ -521,9 +525,12 @@ impl LedgerState {
         let store = ImmutablePrefixedStore::new("abar_store", &self.abar_query_state);
         let mt = ImmutablePersistentMerkleTree::new(store)?;
 
-        let t = mt.get_current_root_hash().c(d!(
-            "probably due to badly constructed tree or data corruption"
-        )).c(d!())?;
+        let t = mt
+            .get_current_root_hash()
+            .c(d!(
+                "probably due to badly constructed tree or data corruption"
+            ))
+            .c(d!())?;
         println!("get_abar_root_hash: {:?}", t);
         Ok(t)
     }
@@ -539,7 +546,11 @@ impl LedgerState {
         let mut t = mt.generate_proof(id.0)?;
         t.root_version = self.status.get_current_abar_version();
 
-        println!("get_abar_proof Version: {},  Hash: {:?}",t.clone().root_version, t.clone().root);
+        println!(
+            "get_abar_proof Version: {},  Hash: {:?}",
+            t.clone().root_version,
+            t.clone().root
+        );
         Ok(t)
     }
 
@@ -1286,7 +1297,11 @@ impl LedgerStatus {
     #[allow(dead_code)]
     fn get_versioned_abar_hash(&self, version: usize) -> Option<BLSScalar> {
         let hash = self.abar_commitment_versions.get(version);
-        println!("In get_versioned_abar_hash Version: {} | Hash: {:?}", version, hash.unwrap());
+        println!(
+            "In get_versioned_abar_hash Version: {} | Hash: {:?}",
+            version,
+            hash.unwrap()
+        );
         hash
     }
 

@@ -18,15 +18,23 @@ sleep 5
 
 # setup the new wallet
 set +e
-rm mnemonic-temp anon-keys-temp
+rm mnemonic-temp anon-keys-temp anon-keys-temp2
 echo "double quit tape enough charge fancy mandate ostrich this program laundry insect either escape cement van turtle loud immense load tip spike inquiry spice" >> mnemonic-temp
 echo "
 {
-  \"axfr_secret_key\": \"HQ6lFbnibT0Lri+GJotVOQuitfmcdZVqDWxkmaEF7AR0UTKQ3jRMXwPqxy6EUSAhVTQvaPRy9iC/kLlmQFQZHw==\",
-  \"axfr_public_key\": \"dFEykN40TF8D6scuhFEgIVU0L2j0cvYgv5C5ZkBUGR8=\",
-  \"enc_key\": \"Cpg9izrzn385hbqkm5ugq3KPCoHbkMcH7vpUz79V6hY=\",
-  \"dec_key\": \"mCGipK02JeXTGCibxbDc0tGUHyt3WuFJGUBsH8enaXw=\"
+  \"axfr_secret_key\": \"keQ0N8bNYef_3GhCrxgLwZKdiRl6QoTwYj6PLsW3DQR68cSPG2d5JH5sQe6EQai_tCDSFlIWE_EE_RCtiLUgbg==\",
+  \"axfr_public_key\": \"evHEjxtneSR-bEHuhEGov7Qg0hZSFhPxBP0QrYi1IG4=\",
+  \"enc_key\": \"LcZyndaw20-7FxmkNGorHpEbTYfWSaIFsiocDScD7nk=\",
+  \"dec_key\": \"gN6-nw3NeHM3QBPnevuWmzsfP64X3u6j6ybPCQqHSXA=\"
 }" >> anon-keys-temp
+
+echo "
+{
+  \"axfr_secret_key\": \"EdQbauUfT4ig3Km8SH2MUfEwYq9Re0670KrsL-dt0wAByb3lQ2hsG31quzP_6cqbEshrjkJg_WhIyzPEUCaQzQ==\",
+  \"axfr_public_key\": \"Acm95UNobBt9arsz_-nKmxLIa45CYP1oSMszxFAmkM0=\",
+  \"enc_key\": \"0MTSVCEvwoVfW3NirjENvAuXtjTyBHYWE283c_i_C1Y=\",
+  \"dec_key\": \"IDZNwpZohkun5MKGRF360YyyBFUbzkGq49Zn6oIg9VI=\"
+}" >> anon-keys-temp2
 
 set -e
 echo "\n\n\n Bar To Abar Conversion"
@@ -37,4 +45,4 @@ sleep 1
 target/release/fn convert-bar-to-abar --anon-keys ./anon-keys-temp  --txo-sid 3
 
 echo "Bar 2 Abar Conversion demo script executed successfully!"
-echo "To check generated Abar run \`target/release/fn owned-abars -p dFEykN40TF8D6scuhFEgIVU0L2j0cvYgv5C5ZkBUGR8= -r RANDOMIZER_STRING\`"
+echo "To check generated Abar run \`target/release/fn owned-abars -p evHEjxtneSR-bEHuhEGov7Qg0hZSFhPxBP0QrYi1IG4= -r RANDOMIZER_STRING\`"
