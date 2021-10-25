@@ -179,20 +179,47 @@ pub fn deliver_tx(
                         }
                     }
 
-                    if s.la.write().cache_transaction(tx.clone()).is_ok() {
-                        if is_convert_account(&tx) {
-                            if let Err(err) =
-                                s.account_base_app.write().deliver_findora_tx(&tx)
-                            {
-                                log::debug!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
+                    if is_convert_account(&tx) {
+                        if let Err(err) =
+                            s.account_base_app.write().deliver_findora_tx(&tx)
+                        {
+                            log::debug!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
 
-                                resp.code = 1;
-                                resp.log = format!(
-                                    "deliver convert account tx failed: {:?}",
-                                    err
-                                );
-                            }
+                            resp.code = 1;
+                            resp.log =
+                                format!("deliver convert account tx failed: {:?}", err);
+                            return resp;
                         }
+
+                        if s.la.write().cache_transaction(tx).is_ok() {
+                            s.account_base_app
+                                .read()
+                                .deliver_state
+                                .state
+                                .write()
+                                .commit_session();
+                            s.account_base_app
+                                .read()
+                                .deliver_state
+                                .db
+                                .write()
+                                .commit_session();
+                            return resp;
+                        }
+
+                        s.account_base_app
+                            .read()
+                            .deliver_state
+                            .state
+                            .write()
+                            .discard_session();
+                        s.account_base_app
+                            .read()
+                            .deliver_state
+                            .db
+                            .write()
+                            .discard_session();
+                    } else if s.la.write().cache_transaction(tx).is_ok() {
                         return resp;
                     }
                 }
