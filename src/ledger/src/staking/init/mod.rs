@@ -29,8 +29,8 @@ pub struct InitialValidatorInfo {
 pub struct ValidatorStr {
     /// `XfrPublicKey` in base64 format
     pub id: String,
-    // Tendermint Addr, in hex format
-    td_addr: String,
+    /// Tendermint Addr, in hex format
+    pub td_addr: String,
     // Tendermint PubKey, in base64 format
     td_pubkey: String,
     td_power: Option<Power>,

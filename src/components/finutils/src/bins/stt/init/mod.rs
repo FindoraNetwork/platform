@@ -20,7 +20,9 @@ pub fn init(mut interval: u64, is_mainnet: bool) -> Result<()> {
     println!(">>> Set initial validator set ...");
     common::set_initial_validators().c(d!())?;
 
-    if !is_mainnet {
+    if is_mainnet {
+        Ok(())
+    } else {
         let root_kp =
             wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC).c(d!())?;
         println!(">>> Block interval: {} seconds", interval);
@@ -55,27 +57,27 @@ pub fn init(mut interval: u64, is_mainnet: bool) -> Result<()> {
 
         println!(">>> Wait 1.2 block ...");
         sleep_n_block!(1.2);
+
+        println!(">>> Re-distribution ...");
+        println!(">>> Wait 2.4 block ...");
+        re_distribution().c(d!())?;
+
+        println!(">>> Propose self-delegations ...");
+        for (i, v) in VALIDATOR_LIST.values().enumerate() {
+            delegate::gen_tx(&v.name, (400_0000 + i as u64 * 1_0000) * FRA, &v.name)
+                .c(d!())
+                .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
+        }
+
+        println!(">>> Wait 5 block ...");
+        sleep_n_block!(5);
+
+        println!(">>> Init work done !");
+
+        println!(">>> Start running integration tests ...");
+
+        i_testing::run_all().c(d!())
     }
-
-    println!(">>> Re-distribution ...");
-    println!(">>> Wait 2.4 block ...");
-    re_distribution().c(d!())?;
-
-    println!(">>> Propose self-delegations ...");
-    for (i, v) in VALIDATOR_LIST.values().enumerate() {
-        delegate::gen_tx(&v.name, (400_0000 + i as u64 * 1_0000) * FRA, &v.name)
-            .c(d!())
-            .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
-    }
-
-    println!(">>> Wait 5 block ...");
-    sleep_n_block!(5);
-
-    println!(">>> Init work done !");
-
-    println!(">>> Start running integration tests ...");
-
-    i_testing::run_all().c(d!())
 }
 
 // 1. transfer all balances of validator[1..19] to validator[0]

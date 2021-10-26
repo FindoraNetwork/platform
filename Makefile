@@ -36,6 +36,7 @@ define pack
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/abcid \
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
+		./${CARGO_TARGET_DIR}/$(2)/$(1)/genstx \
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
 		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
@@ -100,6 +101,9 @@ coverage:
 
 staking_cfg:
 	bash tools/update_staking_cfg.sh
+
+staking_cfg_debug:
+	bash tools/update_staking_cfg_debug.sh
 
 bench:
 	cargo bench --workspace
