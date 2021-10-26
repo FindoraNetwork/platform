@@ -6,7 +6,10 @@ use super::get_keypair;
 use super::get_serv_addr;
 use super::utils;
 use baseapp::extensions::{CheckFee, CheckNonce};
+use baseapp::BaseApp;
 use fp_core::account::SmartAccount;
+use fp_traits::evm::FeeCalculator;
+use fp_types::actions::xhub::ERC20ToUTXO;
 use fp_types::{
     actions::{
         xhub::{
@@ -20,10 +23,10 @@ use fp_types::{
 };
 use fp_utils::ecdsa::SecpPair;
 use fp_utils::tx::EvmRawTxWrapper;
+use hex::FromHex;
 use ledger::data_model::ASSET_TYPE_FRA;
 use ledger::data_model::BLACK_HOLE_PUBKEY_STAKING;
 use module_evm;
-use hex::FromHex;
 use ruc::*;
 use std::str::FromStr;
 use tendermint::block::Height;
@@ -223,6 +226,7 @@ pub fn transfer_to_erc20(
         None,
         false,
         false,
+        Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
     )?;
     let target_address = match address {
         Some(s) => MultiSigner::from_str(s).c(d!())?,
@@ -260,7 +264,7 @@ pub fn erc20_to_utxo(
         None => fra_kp.get_pk(),
     };
 
-    let output = MintOutput {
+    let output = NonConfidentialOutput {
         target,
         amount,
         asset: ASSET_TYPE_FRA,
@@ -305,7 +309,7 @@ pub fn erc20_to_utxo(
         amount: U256::from(amount),
         outputs: vec![output],
     });
-    let action = Action::Account(account_call);
+    let action = Action::XHub(account_call);
     let extra = (CheckNonce::new(nonce), CheckFee::new(None));
     let msg = serde_json::to_vec(&(action.clone(), extra.clone())).unwrap();
 

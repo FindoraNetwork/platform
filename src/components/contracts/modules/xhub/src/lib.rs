@@ -4,23 +4,36 @@
 mod basic;
 mod impls;
 
+use evm::Config as EvmConfig;
+use fp_core::macros::Get;
 use fp_core::{
     context::Context,
     module::AppModule,
     transaction::{ActionResult, Executable},
 };
+use fp_traits::account::FeeCalculator;
 use fp_traits::{account::AccountAsset, evm::DecimalsMapping};
 use fp_types::{actions::xhub::Action, crypto::Address};
+use primitive_types::U256;
 use ruc::*;
 use std::marker::PhantomData;
 
 pub const MODULE_NAME: &str = "xhub";
+static ISTANBUL_CONFIG: EvmConfig = EvmConfig::istanbul();
 
 pub trait Config {
     /// Account module interface to read/write account assets.
     type AccountAsset: AccountAsset<Address>;
     /// Mapping from eth decimals to native token decimals.
     type DecimalsMapping: DecimalsMapping;
+    /// The block gas limit. Can be a simple constant, or an adjustment algorithm in another pallet.
+    type BlockGasLimit: Get<U256>;
+    /// Calculator for current gas price.
+    type FeeCalculator: FeeCalculator;
+    /// EVM config used in the module.
+    fn config() -> &'static EvmConfig {
+        &ISTANBUL_CONFIG
+    }
 }
 
 mod storage {
@@ -60,6 +73,20 @@ impl<C: Config> Executable for App<C> {
             Action::NonConfidentialTransfer(action) => {
                 if let Some(sender) = origin {
                     Self::transfer_to_nonconfidential_utxo(ctx, sender, action)
+                } else {
+                    Err(eg!("invalid transaction origin"))
+                }
+            }
+            Action::ERC20ToUTXO(action) => {
+                if let Some(sender) = origin {
+                    Self::erc20_to_utxo(
+                        ctx,
+                        sender,
+                        action.contractaddress,
+                        action.input,
+                        action.nonce,
+                        action.outputs,
+                    )
                 } else {
                     Err(eg!("invalid transaction origin"))
                 }
