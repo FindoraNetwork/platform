@@ -12,13 +12,15 @@ use {
     ledger::data_model::TX_FEE_MIN,
 };
 
-pub fn init(mut interval: u64, is_mainnet: bool) -> Result<()> {
+pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result<()> {
     if 0 == interval {
         interval = BLOCK_INTERVAL;
     }
 
-    println!(">>> Set initial validator set ...");
-    common::set_initial_validators().c(d!())?;
+    if !skip_validator {
+        println!(">>> Set initial validator set ...");
+        common::set_initial_validators().c(d!())?;
+    }
 
     if !is_mainnet {
         let root_kp =
@@ -30,6 +32,11 @@ pub fn init(mut interval: u64, is_mainnet: bool) -> Result<()> {
 
         println!(">>> Wait 1.2 block ...");
         sleep_n_block!(1.2, interval);
+
+        if skip_validator {
+            println!(">>> DONE !");
+            return Ok(());
+        }
 
         let mut target_list = USER_LIST
             .values()
