@@ -4,6 +4,7 @@
 
 mod utils;
 
+use ledger::converter::erc20::is_transfer_erc20_tx;
 use {
     crate::{
         abci::{

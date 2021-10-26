@@ -23,7 +23,6 @@ use ledger::converter::erc20::check_erc20_tx;
 use ledger::{
     converter::check_convert_account, data_model::Transaction as FindoraTransaction,
 };
-use module_ethereum::Config;
 use ruc::*;
 use serde::Serialize;
 

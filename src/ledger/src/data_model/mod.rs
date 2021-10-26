@@ -11,6 +11,7 @@ mod test;
 
 pub use effects::{BlockEffect, TxnEffect};
 
+use crate::converter::erc20::TransferERC20;
 use {
     crate::converter::ConvertAccount,
     crate::staking::{

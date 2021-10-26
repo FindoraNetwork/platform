@@ -27,6 +27,7 @@ use fp_traits::{
 };
 use fp_types::{actions::xhub::NonConfidentialOutput, actions::Action, crypto::Address};
 use lazy_static::lazy_static;
+use ledger::converter::erc20::is_transfer_erc20_tx;
 use ledger::data_model::Transaction as FindoraTransaction;
 use notify::*;
 use parking_lot::RwLock;
@@ -87,8 +88,6 @@ impl FeeCalculator for StableTxFee {
 
 impl module_account::Config for BaseApp {
     type FeeCalculator = StableTxFee;
-    type BlockGasLimit = BlockGasLimit;
-    type Runner = module_evm::runtime::runner::ActionRunner<Self>;
 }
 
 parameter_types! {
@@ -132,6 +131,8 @@ impl module_evm::Config for BaseApp {
 impl module_xhub::Config for BaseApp {
     type AccountAsset = module_account::App<Self>;
     type DecimalsMapping = EthereumDecimalsMapping;
+    type BlockGasLimit = BlockGasLimit;
+    type FeeCalculator = ();
 }
 
 impl BaseApp {
@@ -271,17 +272,15 @@ impl BaseApp {
     }
 
     pub fn deliver_findora_tx(&mut self, tx: &FindoraTransaction) -> Result<()> {
-        self.modules.process_findora_tx(&self.deliver_state, tx)
+        if is_transfer_erc20_tx(tx) {
+            self.modules.process_findora_erc20(&self.deliver_state, tx)
+        } else {
+            self.modules.process_findora_tx(&self.deliver_state, tx)
+        }
     }
 
     pub fn consume_mint(&mut self) -> Option<Vec<NonConfidentialOutput>> {
         module_xhub::App::<BaseApp>::consume_mint(&self.deliver_state)
-    }
-
-
-    /// transfer to erc20 address
-    pub fn deliver_findora_erc20(&mut self, tx: &FindoraTransaction) -> Result<()> {
-        self.modules.process_findora_erc20(&self.deliver_state, tx)
     }
 }
 
