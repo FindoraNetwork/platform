@@ -1,6 +1,6 @@
 [package]
 name = "finutils"
-version = "0.2.4"
+version = "0.2.5"
 authors = ["FindoraNetwork"]
 build = "build.rs"
 edition = "2018"

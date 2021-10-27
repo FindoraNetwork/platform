@@ -1,6 +1,6 @@
 [package]
 name = "globutils"
-version = "0.2.4"
+version = "0.2.5"
 authors = ["FindoraNetwork"]
 edition = "2018"
 
