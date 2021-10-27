@@ -14,6 +14,10 @@
 
 > Functions that have been added.
 
+#### v0.2.4-release
+
+- Support generating offline transactions
+
 #### v0.2.3-release
 
 - Adjust minimal staking amount

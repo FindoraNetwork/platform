@@ -86,7 +86,7 @@ fn gen_txs() -> Result<Vec<Transaction>> {
             return Err(eg!(msg));
         }
 
-        let amount = (189_8361 + random::<u64>() % 20_0000) * FRA;
+        let amount = (379_8361 + random::<u64>() % 40_0000) * FRA;
         check_delegation_amount(amount, false).c(d!())?;
 
         let mut builder = TransactionBuilder::from_seq_id(seq_id);

@@ -1,6 +1,6 @@
 [package]
 name = "finutils"
-version = "0.2.0"
+version = "0.2.4"
 authors = ["FindoraNetwork"]
 build = "build.rs"
 edition = "2018"
@@ -41,6 +41,7 @@ attohttpc = { version = "0.18", default-features = false, features = ["compress"
 [features]
 abci_mock = ["ledger/abci_mock"]
 debug_env = ["ledger/debug_env"]
+genstx = []
 
 [[bin]]
 name = "fn"

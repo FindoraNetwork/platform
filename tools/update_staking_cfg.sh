@@ -26,4 +26,4 @@ echo -e "\033[31;1m'Secret info' is invalid in this scene, so we clean it up!\03
 echo
 
 cd $EXEC_PATH || exit 1
-make -C ..
+make -C .. build_release_goleveldb_with_genstx

@@ -67,6 +67,11 @@ build_release_goleveldb: tendermint_goleveldb
 	$(call pack,release)
 
 # Build for goleveldb
+build_release_goleveldb_with_genstx: tendermint_goleveldb
+	cargo build --features='genstx' --release --bins -p abciapp -p finutils
+	$(call pack,release)
+
+# Build for goleveldb
 build_release_musl_goleveldb: tendermint_goleveldb
 	cargo build --release --bins -p abciapp -p finutils --target=x86_64-unknown-linux-musl
 	$(call pack,release,x86_64-unknown-linux-musl)
