@@ -9,7 +9,6 @@ export PROTOC = $(shell which protoc)
 
 export STAKING_INITIAL_VALIDATOR_CONFIG = $(shell pwd)/src/ledger/src/staking/init/staking_config.json
 export STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV = $(shell pwd)/src/ledger/src/staking/init/staking_config_debug_env.json
-export STAKING_INITIAL_VALIDATOR_CONFIG_ABCI_MOCK = $(shell pwd)/src/ledger/src/staking/init/staking_config_abci_mock.json
 
 FIN_DEBUG ?= /tmp/findora
 export ENABLE_QUERY_SERVICE = true
@@ -96,13 +95,10 @@ tendermint_goleveldb:
 test:
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
 
-testall:
-	cargo test --release --features="abci_mock" -- --test-threads=1 # --nocapture
-
 coverage:
-	cargo tarpaulin --timeout=900 --branch --workspace --release --features="abci_mock" \
+	cargo tarpaulin --timeout=900 --branch --workspace --release \
 		|| cargo install cargo-tarpaulin \
-		&& cargo tarpaulin --timeout=900 --branch --workspace --release --features="abci_mock"
+		&& cargo tarpaulin --timeout=900 --branch --workspace --release
 
 staking_cfg:
 	bash tools/update_staking_cfg.sh
@@ -116,7 +112,7 @@ bench:
 lint:
 	cargo clippy --workspace
 	cargo clippy --workspace --no-default-features
-	cargo clippy --features="abci_mock" --workspace --tests
+	cargo clippy --workspace --tests
 
 update:
 	cargo update

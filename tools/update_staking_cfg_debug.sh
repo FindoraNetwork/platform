@@ -56,4 +56,4 @@ for ((i=1;i<=$(grep -c '"id"' staking_config.json);i++)); do
 done
 
 cd $EXEC_PATH || exit 1
-make -C .. build_release_goleveldb_with_genstx
+make -C .. build_release_debug

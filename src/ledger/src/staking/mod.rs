@@ -159,12 +159,7 @@ pub const MAX_POWER_PERCENT_PER_VALIDATOR: [u128; 2] = [1, 5];
 pub const BLOCK_INTERVAL: u64 = 15 + 1;
 
 /// The lock time after the delegation expires, about 21 days.
-#[cfg(not(feature = "abci_mock"))]
 pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
-
-/// used in test/mock env
-#[cfg(feature = "abci_mock")]
-pub const UNBOND_BLOCK_CNT: u64 = 10;
 
 // minimal number of validators
 pub(crate) const VALIDATORS_MIN: usize = 5;
@@ -1405,11 +1400,30 @@ impl Staking {
         let p = Self::get_proposer_rewards_rate(vote_percent).c(d!())?;
         let h = self.cur_height;
         let cbl = self.coinbase_balance();
+        let total_delegation_amount_of_validator = self
+            .validator_get_current_one_by_id(proposer)
+            .c(d!())?
+            .delegators
+            .values()
+            .sum::<Amount>();
+        let gda = self.get_global_delegation_amount();
         self.delegation_get_mut(proposer)
             .c(d!())
             .and_then(|d| {
-                d.set_delegation_rewards(proposer, h, p, [0, 100], [0, 0], false, cbl)
-                    .c(d!())
+                let tdaov = d.entries.get(proposer).copied().unwrap_or(0)
+                    + total_delegation_amount_of_validator;
+                d.set_delegation_rewards(
+                    proposer,
+                    h,
+                    p,
+                    [0, 100],
+                    [0, 0],
+                    tdaov,
+                    gda,
+                    false,
+                    cbl,
+                )
+                .c(d!())
             })
             .map(|_| ())
     }
@@ -1867,6 +1881,8 @@ impl Delegation {
         return_rate: [u128; 2],
         commission_rate: [u64; 2],
         global_delegation_percent: [u64; 2],
+        total_delegation_amount_of_validator: Amount,
+        global_delegation_amount: Amount,
         is_delegation_rwd: bool,
         coinbase_bl: Amount,
     ) -> Result<u64> {
@@ -1890,9 +1906,16 @@ impl Delegation {
                 if 0 < am {
                     // APY
                     am += self.rwd_amount.saturating_mul(am) / self.amount();
-                    calculate_delegation_rewards(am, return_rate)
-                        .c(d!())
-                        .map(|n| alt!(n > coinbase_bl, coinbase_bl, n))
+                    calculate_delegation_rewards(
+                        return_rate,
+                        am,
+                        total_delegation_amount_of_validator,
+                        global_delegation_amount,
+                        is_delegation_rwd,
+                        cur_height,
+                    )
+                    .c(d!())
+                    .map(|n| alt!(n > coinbase_bl, coinbase_bl, n))
                 } else {
                     Err(eg!(format!(
                         "staking amount of <{}> available is less than 0",
@@ -1928,24 +1951,74 @@ impl Delegation {
     }
 }
 
-/// Calculate the amount(in FRA units) that
-/// should be paid to the owner of this delegation.
-pub fn calculate_delegation_rewards(
-    amount: Amount,
+// Calculate the amount(in FRA units) that
+// should be paid to the owner of this delegation.
+fn calculate_delegation_rewards(
     return_rate: [u128; 2],
+    amount: Amount,
+    total_amount: Amount,
+    global_amount: Amount,
+    is_delegation_rwd: bool,
+    cur_height: BlockHeight,
 ) -> Result<Amount> {
+    #[cfg(feature = "debug_env")]
+    const APY_V1_FIX: BlockHeight = 0;
+
+    #[cfg(not(feature = "debug_env"))]
+    const APY_V1_FIX: BlockHeight = 1177000;
+
     let am = amount as u128;
+    let total_am = total_amount as u128;
+    let global_am = global_amount as u128;
     let block_itv = BLOCK_INTERVAL as u128;
 
-    am.checked_mul(return_rate[0])
-        .and_then(|i| i.checked_mul(block_itv))
-        .and_then(|i| {
-            return_rate[1]
-                .checked_mul(365 * 24 * 3600)
-                .and_then(|j| i.checked_div(j))
-        })
-        .c(d!("overflow"))
-        .and_then(|n| u64::try_from(n).c(d!()))
+    let calculate_self_only = || {
+        am.checked_mul(return_rate[0])
+            .and_then(|i| i.checked_mul(block_itv))
+            .and_then(|i| {
+                return_rate[1]
+                    .checked_mul(365 * 24 * 3600)
+                    .and_then(|j| i.checked_div(j))
+            })
+    };
+
+    if cur_height > APY_V1_FIX {
+        if is_delegation_rwd {
+            // # For delegation rewards:
+            //
+            // <A>. (am / total_amount) * (global_amount * ((return_rate[0] / return_rate[1]) / ((365 * 24 * 3600) / block_itv)))
+            // <B>. global_amount * am * return_rate[0] * block_itv / (return_rate[1] * (365 * 24 * 3600) * total_amount)
+            //
+            // We want A,
+            // and B is equal to A,
+            // but B is easier to be calculated.
+            global_am
+                .checked_mul(am)
+                .and_then(|i| i.checked_mul(return_rate[0]))
+                .and_then(|i| i.checked_mul(block_itv))
+                .and_then(|i| {
+                    return_rate[1]
+                        .checked_mul(365 * 24 * 3600)
+                        .and_then(|j| j.checked_mul(total_am))
+                        .and_then(|j| i.checked_div(j))
+                })
+        } else {
+            // # For proposer rewards:
+            //
+            // <A>. am * ((return_rate[0] / return_rate[1]) / ((365 * 24 * 3600) / block_itv))
+            // <B>. am * return_rate[0] * block_itv / (return_rate[1] * (365 * 24 * 3600))
+            //
+            // We want A,
+            // and B is equal to A,
+            // but B is easier to be calculated.
+            calculate_self_only()
+        }
+    } else {
+        // compitable with old logic, an incorrect logic
+        calculate_self_only()
+    }
+    .c(d!("overflow"))
+    .and_then(|n| u64::try_from(n).c(d!()))
 }
 
 #[allow(missing_docs)]

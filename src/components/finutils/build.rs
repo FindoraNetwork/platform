@@ -55,7 +55,7 @@ mod genstx {
             SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
         );
 
-        attohttpc::get("https://prod-mainnet01.prod.findora.org:8668/global_state")
+        attohttpc::get("https://prod-mainnet.prod.findora.org:8668/global_state")
             .send()
             .c(d!())?
             .error_for_status()
@@ -81,7 +81,7 @@ mod genstx {
                 .or_else(|e| wallet::public_key_from_bech32(l).c(d!(e)))?;
             let pk_str = wallet::public_key_to_base64(&pk);
             let url = format!(
-                "https://prod-mainnet01.prod.findora.org:8668/owned_utxos/{}",
+                "https://prod-mainnet.prod.findora.org:8668/owned_utxos/{}",
                 pk_str
             );
 

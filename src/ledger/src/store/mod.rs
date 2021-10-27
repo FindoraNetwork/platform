@@ -604,6 +604,18 @@ impl LedgerState {
         let s = self.get_staking();
         let h = s.cur_height;
         let cbl = s.coinbase_balance();
+        let total_delegation_amount_of_validator = s
+            .delegation_get(&pk)
+            .map(|d| d.entries.get(&pk))
+            .flatten()
+            .copied()
+            .unwrap_or(0)
+            + s.validator_get_current_one_by_id(&pk)
+                .c(d!())?
+                .delegators
+                .values()
+                .sum::<Amount>();
+        let gda = s.get_global_delegation_amount();
         let commissions = self
             .get_staking_mut()
             .di
@@ -617,6 +629,8 @@ impl LedgerState {
                     return_rate,
                     commission_rate,
                     gdp,
+                    total_delegation_amount_of_validator,
+                    gda,
                     true,
                     cbl,
                 )

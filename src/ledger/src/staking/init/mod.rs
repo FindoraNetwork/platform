@@ -71,7 +71,7 @@ pub fn get_inital_validators() -> Result<Vec<Validator>> {
 }
 
 #[allow(missing_docs)]
-#[cfg(not(any(feature = "debug_env", feature = "abci_mock")))]
+#[cfg(not(feature = "debug_env"))]
 pub fn get_cfg_data() -> Result<InitialValidatorInfo> {
     serde_json::from_slice(&include_bytes!("staking_config.json")[..]).c(d!())
 }
@@ -82,14 +82,8 @@ pub fn get_cfg_data() -> Result<InitialValidatorInfo> {
     serde_json::from_slice(&include_bytes!("staking_config_debug_env.json")[..]).c(d!())
 }
 
-#[allow(missing_docs)]
-#[cfg(feature = "abci_mock")]
-pub fn get_cfg_data() -> Result<InitialValidatorInfo> {
-    serde_json::from_slice(&include_bytes!("staking_config_abci_mock.json")[..]).c(d!())
-}
-
 /// used in `cfg_generator` binary
-#[cfg(not(any(feature = "debug_env", feature = "abci_mock")))]
+#[cfg(not(feature = "debug_env"))]
 pub fn get_cfg_path() -> Option<&'static str> {
     option_env!("STAKING_INITIAL_VALIDATOR_CONFIG")
 }
@@ -98,12 +92,6 @@ pub fn get_cfg_path() -> Option<&'static str> {
 #[cfg(feature = "debug_env")]
 pub fn get_cfg_path() -> Option<&'static str> {
     option_env!("STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV")
-}
-
-#[allow(missing_docs)]
-#[cfg(feature = "abci_mock")]
-pub fn get_cfg_path() -> Option<&'static str> {
-    option_env!("STAKING_INITIAL_VALIDATOR_CONFIG_ABCI_MOCK")
 }
 
 #[cfg(test)]
