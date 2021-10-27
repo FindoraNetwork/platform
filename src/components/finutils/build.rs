@@ -15,17 +15,17 @@ fn main() {
     pnk!(store_meta());
 }
 
-#[cfg(features = "genstx")]
+#[cfg(feature = "genstx")]
 fn store_meta() -> Result<()> {
     genstx::store_meta().c(d!())
 }
 
-#[cfg(not(features = "genstx"))]
+#[cfg(not(feature = "genstx"))]
 fn store_meta() -> Result<()> {
     Ok(())
 }
 
-#[cfg(features = "genstx")]
+#[cfg(feature = "genstx")]
 mod genstx {
     use {
         globutils::{wallet, HashOf, SignatureOf},
