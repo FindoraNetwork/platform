@@ -21,7 +21,7 @@ curve25519-dalek = { version = "3.0", features = ["serde"] }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"] }
 
 zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
-ruc = "0.6.5"
+ruc = "0.6.6"
 
 ledger = { path = "../../ledger" }
 globutils = { path = "../../libs/globutils" }
@@ -30,7 +30,7 @@ credentials = { path = "../../libs/credentials" }
 [dev-dependencies]
 
 [build-dependencies]
-ruc = "0.6.5"
+ruc = "0.6.6"
 vergen = "=3.1.0"
 serde_json = "1.0.40"
 ledger = { path = "../../ledger" }

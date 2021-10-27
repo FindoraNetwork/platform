@@ -351,8 +351,8 @@ pub async fn get_validator_delegation_history(
     let ecnt_max = h.saturating_sub(start_height) / esiz;
     let mut ecnt = info
         .epoch_cnt
-        .map(|n| alt!(n > ecnt_max, ecnt_max, n))
-        .unwrap_or(16);
+        .map(|n| min!(n, ecnt_max))
+        .unwrap_or(min!(16, ecnt_max));
 
     alt!(ecnt > h, ecnt = h);
     alt!(ecnt > 1024, ecnt = 1024);
