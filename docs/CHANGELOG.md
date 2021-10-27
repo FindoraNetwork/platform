@@ -14,6 +14,10 @@
 
 > Functions that have been added.
 
+#### v0.2.6-release
+
+- Optimize the performance of some APIs
+
 #### v0.2.5-release
 
 - Fix incorrect APY-calculation

@@ -1,6 +1,6 @@
 [package]
 name = "wasm"
-version = "0.2.5"
+version = "0.2.6"
 authors = ["FindoraNetwork"]
 build = "build.rs"
 edition = "2018"
