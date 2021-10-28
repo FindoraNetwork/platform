@@ -258,6 +258,7 @@ impl LedgerState {
         block.temp_sids.clear();
         block.txns.clear();
         block.output_abars.clear();
+        block.new_nullifiers.clear();
 
         let block_idx = self.blocks.len();
         tx_block.iter().enumerate().for_each(|(tx_idx, tx)| {
@@ -316,7 +317,7 @@ impl LedgerState {
             if self.nullifier_set.get(&d).c(d!())?.is_some() {
                 return Err(eg!("Nullifier hash already present in set"));
             }
-            self.nullifier_set.set(&d, Some(b"".to_vec())).c(d!())?;
+            self.nullifier_set.set(&d, Some(n.zei_to_bytes())).c(d!())?;
         }
 
         let mut txn_sid = TxnSID(backup_next_txn_sid);

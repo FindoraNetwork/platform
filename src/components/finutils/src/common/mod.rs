@@ -739,11 +739,6 @@ pub fn gen_oabar_add_op(
     //Only the first abar received from the ledger query is considered
     let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
     let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
-    println!(
-        "Version: {} | Hash: {:?}",
-        mt_leaf_info.root_version,
-        mt_leaf_info.root.clone()
-    );
 
     let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
         &axtxo_abar[0].1,
@@ -778,6 +773,18 @@ pub fn gen_oabar_add_op(
         "\x1b[31;01m Randomizer: {}\x1b[00m",
         wallet::randomizer_to_base64(&r_out)
     );
+    /* let mut file = fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open("randomizers")
+        .expect("cannot open randomizers file");
+    std::io::Write::write_all(
+        &mut file,
+        ("\n".to_owned() + &wallet::randomizer_to_base64(&r_out) + &"\n".to_owned()).as_bytes(),
+    )
+    .expect("randomizer write failed"); */
+
+    fs::write("randomizers", wallet::randomizer_to_base64(&r_out).as_str()).expect("Unable to write randomizer to file");
 
     println!("Signed AxfrNote: {:?}", serde_json::to_string_pretty(&note));
     Ok(())

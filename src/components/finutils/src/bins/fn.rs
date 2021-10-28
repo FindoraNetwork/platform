@@ -410,6 +410,7 @@ fn run() -> Result<()> {
                 "\x1b[31;01m Randomizer: {}\x1b[00m",
                 wallet::randomizer_to_base64(&r)
             );
+            fs::write("randomizers", wallet::randomizer_to_base64(&r).as_str()).expect("Unable to write randomizer to file");
         }
     } else if let Some(m) = matches.subcommand_matches("gen-anon-keys") {
         let mut prng = ChaChaRng::from_entropy();
@@ -434,6 +435,7 @@ fn run() -> Result<()> {
     } else if let Some(m) = matches.subcommand_matches("owned-abars") {
         let randomizer_str = m.value_of("randomizer");
         let axfr_public_key_str = m.value_of("axfr-public-key");
+        println!("{:?}", randomizer_str);
 
         // create derived public key
         let randomizer = wallet::randomizer_from_base64(randomizer_str.unwrap())?;
@@ -471,6 +473,7 @@ fn run() -> Result<()> {
         let to_axfr_public_key = m.value_of("to-axfr-public-key");
         let to_enc_key = m.value_of("to-enc-key");
         let amount = m.value_of("amount");
+        println!("{:?}", randomizer);
 
         if randomizer.is_none()
             || to_axfr_public_key.is_none()

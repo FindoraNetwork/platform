@@ -31,6 +31,7 @@ fn abort_block(block: BlockEffect) -> HashMap<TxnTempSID, Transaction> {
 
     block.txos.clear();
     block.output_abars.clear();
+    block.new_nullifiers.clear();
     block.input_txos.clear();
     block.new_asset_codes.clear();
     block.new_issuance_nums.clear();
