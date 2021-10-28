@@ -1620,6 +1620,53 @@ mod tests {
                 base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
         }
         let _txn_sid = ledger_state.finish_block(block).unwrap();
+
+
+        let mut prng1 = ChaChaRng::from_seed([0u8; 32]);
+
+        let amount1 = 10u64;
+        let asset_type1 = AT::from_identical_byte(0);
+
+        // simulate input abar
+        let (mut oabar1, keypair_in1, _dec_key_in1, _) =
+            gen_oabar_and_keys(&mut prng1, amount1, asset_type1);
+        let abar1 = AnonBlindAssetRecord::from_oabar(&oabar1);
+        assert_eq!(keypair_in1.pub_key(), *oabar1.pub_key_ref());
+        let rand_keypair_in1 = keypair_in1.randomize(&oabar1.get_key_rand_factor());
+        assert_eq!(rand_keypair_in1.pub_key(), abar1.public_key);
+
+        let _owner_memo1 = oabar1.get_owner_memo().unwrap();
+
+        // add abar to merkle tree
+        let uid1 = ledger_state.add_abar(&abar1).unwrap();
+        let _ = ledger_state.commit_anon_changes().unwrap();
+        let mt_leaf_info1 = ledger_state.get_abar_proof(uid1).unwrap();
+        oabar1.update_mt_leaf_info(mt_leaf_info1);
+        
+        let (oabar_out1, _keypair_out1, _dec_key_out1, _) =
+            gen_oabar_and_keys(&mut prng1, amount1, asset_type1);
+        let _abar_out1 = AnonBlindAssetRecord::from_oabar(&oabar_out1);
+        let mut builder1 = TransactionBuilder::from_seq_id(1);
+        let _ = builder1
+            .add_operation_anon_transfer(
+                &[oabar1],
+                &[oabar_out1],
+                &[keypair_in1],
+            )
+            .is_ok();
+
+
+        let txn1 = builder1.take_transaction();
+        let compute_effect1 = TxnEffect::compute_effect(txn1).unwrap();
+        let mut block1 = BlockEffect::default();
+        let _ = block1.add_txn_effect(compute_effect1, false);
+
+        for n in block1.new_nullifiers.iter() {
+            let _str =
+                base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
+        }
+        let _txn_sid1 = ledger_state.finish_block(block1).unwrap();
+
     }
 
     /* Negative test cases
