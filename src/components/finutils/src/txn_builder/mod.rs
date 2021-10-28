@@ -1622,6 +1622,26 @@ mod tests {
         let _txn_sid = ledger_state.finish_block(block).unwrap();
     }
 
+    /* Negative test cases
+    1. Amount - positive amount - 
+        a. negative amount should fail 
+    2. Asset type - 
+        a. input asset tyoe and output asset type should match
+        b. both asset types are valid asset types - meaning in the range
+    3. Public Keys
+        a. obtain 2 different keys for keypair_in.pub_key() and *oabar.pub_key_ref() and check that the test fails
+        b. obtain 2 different keys for  rrand_keypair_in.pub_key() and abar.public_key and check that the test fails
+    4. Owner Memo - several fields - change each field and 5 fields - 
+    5. Uid change - make test fail - random uid - check not repeated - should be in some range - inspect function returning uid
+    6. Mt_leaf_info - generate random - check not repeated - fail the test
+    7. Randomnise each of (oabar_out, _keypair_out, _dec_key_out) and test fails
+    8. Builder - randomnise each field - test fails
+    9. Random txn - test fails
+    10. Random compute effect different from that generated from txn
+    11. Random block effect different from that generated from compute effect
+    12. randomnise txn_sid 
+    */
+
     fn gen_oabar_and_keys<R: CryptoRng + RngCore>(
         prng: &mut R,
         amount: u64,
