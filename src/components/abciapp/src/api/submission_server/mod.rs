@@ -13,7 +13,7 @@ use {
     rand_core::{CryptoRng, RngCore},
     ruc::*,
     serde::{Deserialize, Serialize},
-    std::{collections::HashMap, fmt, result::Result as StdResult, sync::Arc},
+    std::{collections::HashMap, fmt, sync::Arc},
 };
 
 /// Query handle for user
@@ -204,10 +204,7 @@ where
 
     /// The transaction will be applied to the effect_block after a series of judgments,
     /// and will be classified as pending or rejected depending on the result of the processing.
-    pub fn cache_transaction(
-        &mut self,
-        txn: Transaction,
-    ) -> StdResult<TxnHandle, TxnHandle> {
+    pub fn cache_transaction(&mut self, txn: Transaction) -> Result<TxnHandle> {
         // Begin a block if the previous one has been commited
         if self.all_commited() {
             self.begin_block();
@@ -231,10 +228,9 @@ where
                 Ok(handle)
             }
             Err(e) => {
-                e.print(None);
                 self.txn_status
-                    .insert(handle.clone(), TxnStatus::Rejected(e.generate_log(None)));
-                Err(handle)
+                    .insert(handle, TxnStatus::Rejected(e.to_string()));
+                Err(e)
             }
         }
     }

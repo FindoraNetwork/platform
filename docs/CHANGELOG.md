@@ -14,6 +14,10 @@
 
 > Functions that have been added.
 
+#### v0.2.7-release
+
+- Optimize the on-chain log of `DeliverTx`
+
 #### v0.2.6-release
 
 - Optimize the performance of some APIs

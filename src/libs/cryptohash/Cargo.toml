@@ -1,6 +1,6 @@
 [package]
 name = "cryptohash"
-version = "0.2.6"
+version = "0.2.7"
 authors = ["FindoraNetwork"]
 edition = "2018"
 

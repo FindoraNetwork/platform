@@ -97,7 +97,7 @@ pub async fn get_owned_utxos(
     let ledger = &qs.ledger_cloned;
     globutils::wallet::public_key_from_base64(owner.as_str())
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))
         .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk)).keys().copied().collect()))
 }
 
@@ -149,9 +149,9 @@ pub async fn get_created_assets(
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
             .c(d!())
-            .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?,
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?,
     )
-    .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
+    .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
     let server = data.read();
     let assets = server.get_created_assets(&IssuerPublicKey { key });
     Ok(web::Json(assets.unwrap_or_default()))
@@ -167,9 +167,9 @@ pub async fn get_issued_records(
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
             .c(d!())
-            .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?,
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?,
     )
-    .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
+    .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
     let server = data.read();
     let records = server.get_issued_records(&IssuerPublicKey { key });
     Ok(web::Json(records.unwrap_or_default()))
@@ -193,7 +193,7 @@ pub async fn get_issued_records_by_code(
                 ))
             }
         }
-        Err(e) => Err(actix_web::error::ErrorBadRequest(e.generate_log(None))),
+        Err(e) => Err(actix_web::error::ErrorBadRequest(e.to_string())),
     }
 }
 
@@ -287,7 +287,7 @@ pub async fn get_coinbase_oper_list(
     // Convert from base64 representation
     let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
     let server = data.read();
 
@@ -338,7 +338,7 @@ pub async fn get_claim_txns(
     // Convert from base64 representation
     let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
     let server = data.read();
 
@@ -377,10 +377,10 @@ pub async fn get_related_txns(
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
             .c(d!())
-            .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?,
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?,
     )
     .c(d!())
-    .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
+    .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
     let server = data.read();
     let records = server.get_related_transactions(&XfrAddress { key });
     Ok(web::Json(records.unwrap_or_default()))

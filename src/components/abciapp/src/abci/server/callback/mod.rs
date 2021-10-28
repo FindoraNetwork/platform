@@ -137,6 +137,10 @@ pub fn deliver_tx(
     req: &RequestDeliverTx,
 ) -> ResponseDeliverTx {
     let mut resp = ResponseDeliverTx::new();
+
+    let mut code = 0;
+    let mut msg = String::new();
+
     if let Ok(tx) = convert_tx(req.get_tx()) {
         if tx.valid_in_abci() {
             if *KEEP_HIST {
@@ -147,15 +151,21 @@ pub fn deliver_tx(
                 }
             }
 
-            if s.la.write().cache_transaction(tx).is_ok() {
-                return resp;
+            if let Err(e) = s.la.write().cache_transaction(tx) {
+                code = 1;
+                msg = e.to_string();
             }
+        } else {
+            code = 1;
+            msg = "Should not appear in ABCI".to_owned();
         }
-
-        resp.code = 1;
-        resp.log = String::from("Failed to deliver transaction!");
+    } else {
+        code = 1;
+        msg = "Invalid data format".to_owned();
     }
 
+    resp.code = code;
+    resp.log = msg;
     resp
 }
 

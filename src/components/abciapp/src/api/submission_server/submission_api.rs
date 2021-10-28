@@ -49,7 +49,7 @@ where
         .map(web::Json)
         .map_err(|e| {
             e.print(None);
-            error::ErrorBadRequest(e.generate_log(None))
+            error::ErrorBadRequest(e.to_string())
         })
 }
 

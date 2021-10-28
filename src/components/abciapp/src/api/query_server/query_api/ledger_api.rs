@@ -275,7 +275,7 @@ pub async fn get_delegation_reward(
     // Convert from base64 representation
     let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
     let qs = data.read();
 
@@ -285,7 +285,7 @@ pub async fn get_delegation_reward(
         .staking_delegation_rwd_hist
         .get(&key)
         .c(d!())
-        .map_err(|e| error::ErrorNotFound(e.generate_log(None)))?;
+        .map_err(|e| error::ErrorNotFound(e.to_string()))?;
 
     let h = qs.ledger_cloned.get_tendermint_height();
 
@@ -560,7 +560,7 @@ pub async fn query_delegation_info(
 ) -> actix_web::Result<web::Json<DelegationInfo>> {
     let pk = globutils::wallet::public_key_from_base64(address.as_str())
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
     let qs = data.read();
     let ledger = &qs.ledger_cloned;
@@ -652,7 +652,7 @@ pub async fn query_owned_utxos(
     let ledger = &qs.ledger_cloned;
     globutils::wallet::public_key_from_base64(owner.as_str())
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))
         .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk))))
 }
 
