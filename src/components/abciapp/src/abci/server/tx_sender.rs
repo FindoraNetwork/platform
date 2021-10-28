@@ -3,19 +3,13 @@
 //!
 
 use {
-    crate::api::submission_server::TxnForward,
-    futures::executor::{ThreadPool, ThreadPoolBuilder},
-    lazy_static::lazy_static,
+    crate::{abci::POOL, api::submission_server::TxnForward},
     ledger::data_model::Transaction,
     ruc::*,
     std::sync::atomic::{AtomicU16, Ordering},
 };
 
 static TX_PENDING_CNT: AtomicU16 = AtomicU16::new(0);
-
-lazy_static! {
-    static ref POOL: ThreadPool = pnk!(ThreadPoolBuilder::new().pool_size(4).create());
-}
 
 pub struct TendermintForward {
     pub tendermint_reply: String,

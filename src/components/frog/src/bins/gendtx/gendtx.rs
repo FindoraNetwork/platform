@@ -1,9 +1,6 @@
-//!
-//! # Offline operations
-//!
-
 use {
     finutils::txn_builder::{TransactionBuilder, TransferOperationBuilder},
+    frog::UtxoMap,
     globutils::wallet,
     ledger::{
         data_model::{
@@ -17,12 +14,10 @@ use {
     std::{collections::BTreeMap, env::args, fs},
     zei::xfr::{
         asset_record::{open_blind_asset_record, AssetRecordType},
-        sig::{XfrKeyPair, XfrPublicKey},
+        sig::XfrKeyPair,
         structs::{AssetRecordTemplate, OwnerMemo},
     },
 };
-
-type UtxoMap = BTreeMap<XfrPublicKey, BTreeMap<TxoSID, (Utxo, Option<OwnerMemo>)>>;
 
 fn main() {
     for tx in pnk!(gen_txs()).iter() {
@@ -42,7 +37,7 @@ fn gen_txs() -> Result<Vec<Transaction>> {
         .collect::<BTreeMap<_, _>>();
     let keypairs = args()
         .nth(1)
-        .c(d!("Usage: ./genstx <PATH-TO-KEY-FILE>"))
+        .c(d!("Usage: ./gendtx <PATH-TO-KEY-FILE>"))
         .and_then(|file| fs::read_to_string(&file).c(d!()))
         .and_then(|c| {
             c.lines()

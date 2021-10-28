@@ -8,6 +8,7 @@ use {
     crate::{
         abci::{
             config::global_cfg::CFG, server::ABCISubmissionServer, staking, IN_SAFE_ITV,
+            POOL,
         },
         api::{query_server::BLOCK_CREATED, submission_server::convert_tx},
     },
@@ -17,8 +18,11 @@ use {
         ResponseCommit, ResponseDeliverTx, ResponseEndBlock, ResponseInfo,
     },
     lazy_static::lazy_static,
-    ledger::staking::KEEP_HIST,
-    parking_lot::Mutex,
+    ledger::{
+        staking::KEEP_HIST,
+        store::fbnc::{new_mapx, Mapx},
+    },
+    parking_lot::{Mutex, RwLock},
     protobuf::RepeatedField,
     ruc::*,
     std::{
@@ -37,6 +41,9 @@ lazy_static! {
     // save the request parameters from the begin_block for use in the end_block
     static ref REQ_BEGIN_BLOCK: Arc<Mutex<RequestBeginBlock>> =
         Arc::new(Mutex::new(RequestBeginBlock::new()));
+    // avoid on-chain-existing transactions to be stored again
+    static ref TX_HISTORY: Arc<RwLock<Mapx<Vec<u8>, bool>>> =
+        Arc::new(RwLock::new(new_mapx!("tx_history")));
 }
 
 pub fn info(s: &mut ABCISubmissionServer, _req: &RequestInfo) -> ResponseInfo {
@@ -74,8 +81,15 @@ pub fn check_tx(_s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> Response
 
     if matches!(req.field_type, CheckTxType::New) {
         if let Ok(tx) = convert_tx(req.get_tx()) {
-            alt!(!tx.valid_in_abci(), resp.code = 1);
+            if !tx.valid_in_abci() {
+                resp.log = "Should not appear in ABCI".to_owned();
+                resp.code = 1;
+            } else if TX_HISTORY.read().contains_key(&tx.hash_tm_rawbytes()) {
+                resp.log = "Historical transaction".to_owned();
+                resp.code = 1;
+            }
         } else {
+            resp.log = "Invalid format".to_owned();
             resp.code = 1;
         }
     }
@@ -138,10 +152,12 @@ pub fn deliver_tx(
 ) -> ResponseDeliverTx {
     let mut resp = ResponseDeliverTx::new();
 
-    let mut code = 0;
-    let mut msg = String::new();
-
     if let Ok(tx) = convert_tx(req.get_tx()) {
+        let txhash = tx.hash_tm_rawbytes();
+        POOL.spawn_ok(async move {
+            TX_HISTORY.write().set_value(txhash, Default::default());
+        });
+
         if tx.valid_in_abci() {
             if *KEEP_HIST {
                 // set attr(tags) if any, only needed on a fullnode
@@ -152,20 +168,18 @@ pub fn deliver_tx(
             }
 
             if let Err(e) = s.la.write().cache_transaction(tx) {
-                code = 1;
-                msg = e.to_string();
+                resp.code = 1;
+                resp.log = e.to_string();
             }
         } else {
-            code = 1;
-            msg = "Should not appear in ABCI".to_owned();
+            resp.code = 1;
+            resp.log = "Should not appear in ABCI".to_owned();
         }
     } else {
-        code = 1;
-        msg = "Invalid data format".to_owned();
+        resp.code = 1;
+        resp.log = "Invalid data format".to_owned();
     }
 
-    resp.code = code;
-    resp.log = msg;
     resp
 }
 

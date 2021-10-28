@@ -14,6 +14,7 @@ use {
         query_server::query_api, submission_server::submission_api::SubmissionApi,
     },
     config::{global_cfg::CFG, ABCIConfig},
+    futures::executor::ThreadPool,
     lazy_static::lazy_static,
     ruc::*,
     std::{
@@ -28,6 +29,8 @@ lazy_static! {
     /// if `true`,
     /// we can exit safely without the risk of breaking data
     pub static ref IN_SAFE_ITV: AtomicBool = AtomicBool::new(true);
+    /// A shared pool of the ABCI area
+    pub static ref POOL: ThreadPool = pnk!(ThreadPool::new());
 }
 
 /// Starting findorad

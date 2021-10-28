@@ -1,6 +1,6 @@
 [package]
 name = "finutils"
-version = "0.2.7"
+version = "0.2.8"
 authors = ["FindoraNetwork"]
 build = "build.rs"
 edition = "2018"
@@ -30,13 +30,7 @@ credentials = { path = "../../libs/credentials" }
 [dev-dependencies]
 
 [build-dependencies]
-ruc = "0.6.6"
 vergen = "=3.1.0"
-serde_json = "1.0.40"
-ledger = { path = "../../ledger" }
-globutils = { path = "../../libs/globutils" }
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
-attohttpc = { version = "0.18", default-features = false, features = ["compress", "json", "tls-rustls"] }
 
 [features]
 abci_mock = ["ledger/abci_mock"]
@@ -58,7 +52,3 @@ path = "src/bins/key_generator.rs"
 [[bin]]
 name = "staking_cfg_generator"
 path = "src/bins/cfg_generator.rs"
-
-[[bin]]
-name = "genstx"
-path = "src/bins/genstx/genstx.rs"

@@ -1615,7 +1615,13 @@ impl Transaction {
     /// tendermint hash
     #[inline(always)]
     pub fn hash_tm(&self) -> HashOf<Transaction> {
-        HashOf::new(&self.clone())
+        HashOf::new(self)
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn hash_tm_rawbytes(&self) -> Vec<u8> {
+        self.hash_tm().0.hash.as_ref().to_vec()
     }
 
     #[inline(always)]

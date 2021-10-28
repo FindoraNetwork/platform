@@ -35,7 +35,6 @@ define pack
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/abcid \
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/genstx \
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
 		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
@@ -63,11 +62,6 @@ build_goleveldb: tendermint_goleveldb
 # Build for goleveldb
 build_release_goleveldb: tendermint_goleveldb
 	cargo build --release --bins -p abciapp -p finutils
-	$(call pack,release)
-
-# Build for goleveldb
-build_release_goleveldb_with_genstx: tendermint_goleveldb
-	cargo build --features='genstx' --release --bins -p abciapp -p finutils
 	$(call pack,release)
 
 # Build for goleveldb

@@ -1,6 +1,6 @@
 [package]
 name = "abciapp"
-version = "0.2.7"
+version = "0.2.8"
 authors = ["FindoraNetwork"]
 build = "build.rs"
 edition = "2018"

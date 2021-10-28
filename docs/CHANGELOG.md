@@ -14,6 +14,11 @@
 
 > Functions that have been added.
 
+#### v0.2.8-release
+
+- Avoid to store historical transactions on chain
+    - Resist some kinds of the replay attack
+
 #### v0.2.7-release
 
 - Optimize the on-chain log of `DeliverTx`
