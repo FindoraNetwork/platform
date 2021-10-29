@@ -13,6 +13,8 @@ export STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV = $(shell pwd)/src/ledger/src/
 FIN_DEBUG ?= /tmp/findora
 export ENABLE_QUERY_SERVICE = true
 
+EXTERNAL_ADDRESS = ""
+
 ifndef CARGO_TARGET_DIR
 	export CARGO_TARGET_DIR=target
 endif
@@ -43,6 +45,15 @@ define pack
 	cp -f /tmp/findorad $(1)/$(bin_dir)/
 	cp -f /tmp/findorad ~/.cargo/bin/
 endef
+
+install: stop_all build_release_goleveldb
+	cp -f release/bin/* /usr/local/bin/
+	bash -x tools/systemd_services/install.sh $(EXTERNAL_ADDRESS)
+
+stop_all:
+	- pkill abcid
+	- pkill tendermint
+	- pkill findorad
 
 # Build for cleveldb
 build: tendermint_cleveldb
