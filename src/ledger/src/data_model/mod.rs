@@ -1193,13 +1193,14 @@ impl BarToAbarOps {
     }
 
     #[inline(always)]
-    #[allow(dead_code)]
-    fn set_nonce(&mut self, nonce: NoReplayToken) {
+    /// Sets the nonce for the operation
+    pub fn set_nonce(&mut self, nonce: NoReplayToken) {
         self.nonce = nonce;
     }
 
     #[inline(always)]
-    fn get_nonce(&self) -> NoReplayToken {
+    /// Fetches the nonce of the operation
+    pub fn get_nonce(&self) -> NoReplayToken {
         self.nonce
     }
 }
@@ -1668,6 +1669,8 @@ impl Transaction {
                     if x.body.code.val == ASSET_TYPE_FRA {
                         return true;
                     }
+                } else if let Operation::TransferAnonAsset(_) = ops {
+                    return true;
                 }
                 false
             })

@@ -21,6 +21,7 @@ use crate::{
     },
     staking::{Amount, Power, Staking, TendermintAddrRef, FF_PK_LIST, FRA_TOTAL_AMOUNT},
 };
+use base64::URL_SAFE;
 use bitmap::{BitMap, SparseMap};
 use bnc::{new_mapx, new_vecx, Mapx, Vecx};
 use cryptohash::sha256::Digest as BitDigest;
@@ -50,6 +51,7 @@ use storage::{
 use zei::anon_xfr::keys::AXfrPubKey;
 use zei::anon_xfr::merkle_tree::ImmutablePersistentMerkleTree;
 use zei::anon_xfr::structs::MTLeafInfo;
+use zei::serialization::ZeiFromToBytes;
 use zei::{
     anon_xfr::{
         merkle_tree::PersistentMerkleTree,
@@ -252,6 +254,8 @@ impl LedgerState {
         let block_merkle_id = self.checkpoint(&block).c(d!())?;
         block.temp_sids.clear();
         block.txns.clear();
+        block.output_abars.clear();
+        block.new_nullifiers.clear();
 
         let block_idx = self.blocks.len();
         tx_block.iter().enumerate().for_each(|(tx_idx, tx)| {
@@ -283,7 +287,6 @@ impl LedgerState {
         for (inp_sid, _) in block.input_txos.iter() {
             self.utxo_map.clear(inp_sid.0 as usize).c(d!())?;
         }
-
         let backup_next_txn_sid = self.status.next_txn.0;
         let (tsm, base_sid, max_sid) = self.status.apply_block_effects(&mut block);
 
@@ -311,7 +314,7 @@ impl LedgerState {
             if self.nullifier_set.get(&d).c(d!())?.is_some() {
                 return Err(eg!("Nullifier hash already present in set"));
             }
-            self.nullifier_set.set(&d, Some(b"".to_vec())).c(d!())?;
+            self.nullifier_set.set(&d, Some(n.zei_to_bytes())).c(d!())?;
         }
 
         let mut txn_sid = TxnSID(backup_next_txn_sid);
@@ -319,6 +322,13 @@ impl LedgerState {
             let mut op_position = OutputPosition(0);
             let mut atxo_ids: Vec<ATxoSID> = vec![];
             for abar in txn_abars {
+                println!(
+                    "ABAR setting in LedgerStatus: {}",
+                    base64::encode_config(
+                        abar.public_key.zei_to_bytes().as_slice(),
+                        URL_SAFE
+                    )
+                );
                 let uid = self.add_abar(&abar).c(d!())?;
                 self.status.ax_utxos.insert(uid, abar.clone());
                 self.status
@@ -450,6 +460,10 @@ impl LedgerState {
             .push(state_commitment_data.compute_commitment());
         self.status.state_commitment_data = Some(state_commitment_data);
 
+        // Commit Anon tree changes here following Tendermint protocol
+        pnk!(self.commit_anon_changes().c(d!()));
+        pnk!(self.commit_nullifier_changes().c(d!()));
+
         let abar_root_hash =
             self.get_abar_root_hash().expect("failed to read root hash");
         self.status.abar_commitment_versions.push(abar_root_hash);
@@ -511,7 +525,10 @@ impl LedgerState {
         let store = ImmutablePrefixedStore::new("abar_store", &self.abar_query_state);
         let mt = ImmutablePersistentMerkleTree::new(store)?;
 
-        mt.generate_proof(id.0)
+        let mut t = mt.generate_proof(id.0)?;
+        t.root_version = self.status.get_current_abar_version();
+
+        Ok(t)
     }
 
     // Initialize a logged Merkle tree for the ledger.
@@ -927,6 +944,11 @@ impl LedgerState {
         &self,
         addr: &AXfrPubKey,
     ) -> Vec<(ATxoSID, AnonBlindAssetRecord)> {
+        println!(
+            "Public Key: {:?}",
+            base64::encode_config(addr.zei_to_bytes().as_slice(), URL_SAFE)
+        );
+
         if let Some(set) = self.status.owned_ax_utxos.get(addr) {
             return set
                 .iter()
@@ -1250,14 +1272,14 @@ impl LedgerStatus {
     #[allow(missing_docs)]
     #[allow(dead_code)]
     fn get_versioned_abar_hash(&self, version: usize) -> Option<BLSScalar> {
-        self.abar_commitment_versions.get(version - 1)
+        self.abar_commitment_versions.get(version)
     }
 
     #[inline(always)]
     #[allow(missing_docs)]
     #[allow(dead_code)]
     fn get_current_abar_version(&self) -> usize {
-        self.abar_commitment_versions.len()
+        self.abar_commitment_versions.len() - 1
     }
 
     fn fast_invariant_check(&self) -> Result<()> {

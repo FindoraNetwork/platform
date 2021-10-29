@@ -36,9 +36,9 @@ use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ruc::*;
 use serde::{Deserialize, Serialize};
+use std::fs::File;
 use std::{fmt, fs};
 use zei::anon_xfr::keys::AXfrKeyPair;
-use zei::serialization::ZeiFromToBytes;
 
 fn main() {
     if let Err(e) = run() {
@@ -406,23 +406,65 @@ fn run() -> Result<()> {
             )
             .c(d!())?;
 
-            println!("Randomizer: {}", wallet::randomizer_to_base64(&r));
+            println!(
+                "\x1b[31;01m Randomizer: {}\x1b[00m",
+                wallet::randomizer_to_base64(&r)
+            );
+            let mut file = fs::OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open("randomizers")
+                .expect("cannot open randomizers file");
+            std::io::Write::write_all(
+                &mut file,
+                ("\n".to_owned() + &wallet::randomizer_to_base64(&r)).as_bytes(),
+            )
+            .expect("randomizer write failed");
         }
-    } else if let Some(_m) = matches.subcommand_matches("generate-anon-keys") {
+    } else if let Some(m) = matches.subcommand_matches("gen-anon-keys") {
         let mut prng = ChaChaRng::from_entropy();
         let keypair = AXfrKeyPair::generate(&mut prng);
         let secret_key = XSecretKey::new(&mut prng);
         let public_key = XPublicKey::from(&secret_key);
 
         let keys = AnonKeys {
-            axfr_secret_key: base64::encode(keypair.zei_to_bytes().as_slice()),
-            axfr_public_key: base64::encode(keypair.pub_key().zei_to_bytes().as_slice()),
-            enc_key: base64::encode(public_key.zei_to_bytes().as_slice()),
-            dec_key: base64::encode(secret_key.zei_to_bytes().as_slice()),
+            axfr_secret_key: wallet::anon_secret_key_to_base64(&keypair),
+            axfr_public_key: wallet::anon_public_key_to_base64(&keypair.pub_key()),
+            enc_key: wallet::x_public_key_to_base64(&public_key),
+            dec_key: wallet::x_secret_key_to_base64(&secret_key),
         };
 
+        if let Some(path) = m.value_of("file-path") {
+            serde_json::to_writer_pretty(&File::create(path).c(d!())?, &keys).c(d!())?;
+            println!("Keys saved to file: {}", path);
+        }
+
         // print keys to terminal
-        println!("{:?}", serde_json::to_string_pretty(&keys));
+        println!("Keys :\n {}", serde_json::to_string_pretty(&keys).unwrap());
+    } else if let Some(m) = matches.subcommand_matches("owned-abars") {
+        let randomizer_str = m.value_of("randomizer");
+        let axfr_public_key_str = m.value_of("axfr-public-key");
+
+        // create derived public key
+        let randomizer = wallet::randomizer_from_base64(randomizer_str.unwrap())?;
+        let axfr_public_key =
+            wallet::anon_public_key_from_base64(axfr_public_key_str.unwrap())?;
+        let derived_public_key = axfr_public_key.randomize(&randomizer);
+
+        println!(
+            "Derived Public Key:   {}",
+            wallet::anon_public_key_to_base64(&derived_public_key)
+        );
+
+        // get results from query server and print
+        let list = common::get_owned_abars(&derived_public_key).c(d!())?;
+        println!(
+            "(AtxoSID, ABAR)   :  {}",
+            serde_json::to_string(&list).c(d!())?
+        );
+    } else if let Some(_m) = matches.subcommand_matches("owned-utxos") {
+        let list = common::get_owned_utxos()?;
+        println!("{:?}", list);
     } else if let Some(m) = matches.subcommand_matches("anon-transfer") {
         let anon_keys = match m.value_of("anon-keys") {
             Some(path) => {
