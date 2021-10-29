@@ -155,6 +155,8 @@ impl<C: Config> ValidateUnsigned for App<C> {
                     C::ChainId::get()
                 )));
             }
+        } else {
+            return Err(eg!(format!("Must provide the chainId",)));
         }
 
         let origin = Self::recover_signer(transaction)
