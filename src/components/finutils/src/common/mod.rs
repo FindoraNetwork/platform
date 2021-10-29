@@ -773,18 +773,16 @@ pub fn gen_oabar_add_op(
         "\x1b[31;01m Randomizer: {}\x1b[00m",
         wallet::randomizer_to_base64(&r_out)
     );
-    /* let mut file = fs::OpenOptions::new()
+    let mut file = fs::OpenOptions::new()
         .append(true)
         .create(true)
         .open("randomizers")
         .expect("cannot open randomizers file");
     std::io::Write::write_all(
         &mut file,
-        ("\n".to_owned() + &wallet::randomizer_to_base64(&r_out) + &"\n".to_owned()).as_bytes(),
+        ("\n".to_owned() + &wallet::randomizer_to_base64(&r_out)).as_bytes(),
     )
-    .expect("randomizer write failed"); */
-
-    fs::write("randomizers", wallet::randomizer_to_base64(&r_out).as_str()).expect("Unable to write randomizer to file");
+    .expect("randomizer write failed");
 
     println!("Signed AxfrNote: {:?}", serde_json::to_string_pretty(&note));
     Ok(())

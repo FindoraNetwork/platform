@@ -244,7 +244,6 @@ where
     /// Handle the whole process when there's a new transaction
     pub fn handle_transaction(&mut self, txn: Transaction) -> Result<TxnHandle> {
         let txn_handle = TxnHandle::new(&txn);
-        println!("In handle transaction");
         self.txn_forwarder.forward_txn(txn).c(d!())?;
         Ok(txn_handle)
     }

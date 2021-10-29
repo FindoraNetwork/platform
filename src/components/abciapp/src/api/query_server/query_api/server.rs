@@ -598,8 +598,6 @@ impl QueryServer {
                     self.atxo_to_txnid.insert(*id, (txn_sid, hash.clone()));
                 }
 
-                //let ledger = Arc::clone(self.state.as_ref().unwrap());
-                //let ledger = ledger.read();
                 for a in atxo_sids {
                     let abar_proof = ledger.get_abar_proof(*a).unwrap();
                     self.abar_proofs.insert(*a, abar_proof);
