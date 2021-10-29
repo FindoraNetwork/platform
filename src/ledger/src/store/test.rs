@@ -30,6 +30,7 @@ fn abort_block(block: BlockEffect) -> HashMap<TxnTempSID, Transaction> {
         block.temp_sids.drain(..).zip(txns).collect();
 
     block.txos.clear();
+    block.output_abars.clear();
     block.input_txos.clear();
     block.new_asset_codes.clear();
     block.new_issuance_nums.clear();
@@ -849,14 +850,14 @@ fn test_update_anon_stores() {
         base64::URL_SAFE,
     );
     let d0: Key = Key::from_base64(&str0).unwrap();
-    assert_eq!(state.nullifier_set.get(&d0), Some(&String::new()));
+    assert_eq!(state.nullifier_set.get(&d0).unwrap(), Some(Vec::new()));
 
     let str1 = base64::encode_config(
         &BLSScalar::one().get_scalar().to_bytes(),
         base64::URL_SAFE,
     );
     let d1: Key = Key::from_base64(&str1).unwrap();
-    assert_eq!(state.nullifier_set.get(&d1), Some(&String::new()));
+    assert_eq!(state.nullifier_set.get(&d1).unwrap(), Some(Vec::new()));
 
     assert_eq!(state.status.next_atxo.0, 4);
     assert_eq!(

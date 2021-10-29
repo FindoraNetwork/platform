@@ -257,6 +257,88 @@ pub fn gen_fee_op(owner_kp: &XfrKeyPair) -> Result<Operation> {
     gen_transfer_op(owner_kp, vec![], None, false, false).c(d!())
 }
 
+/// fee for bar to abar conversion
+#[inline(always)]
+pub fn gen_fee_bar_to_abar(
+    owner_kp: &XfrKeyPair,
+    avoid_input: TxoSID,
+) -> Result<Operation> {
+    let mut op_fee: u64 = TX_FEE_MIN;
+    let mut trans_builder = TransferOperationBuilder::new();
+    trans_builder
+        .add_output(
+            &AssetRecordTemplate::with_no_asset_tracing(
+                TX_FEE_MIN,
+                ASSET_TYPE_FRA,
+                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                *BLACK_HOLE_PUBKEY,
+            ),
+            None,
+            None,
+            None,
+        )
+        .c(d!())?;
+
+    let utxos = get_owned_utxos(owner_kp.get_pk_ref()).c(d!())?.into_iter();
+    for (sid, (utxo, owner_memo)) in utxos {
+        let oar =
+            open_blind_asset_record(&utxo.0.record, &owner_memo, owner_kp).c(d!())?;
+
+        if op_fee == 0 {
+            break;
+        }
+        if oar.asset_type == ASSET_TYPE_FRA
+            && oar.get_record_type()
+                == AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType
+            && op_fee != 0
+            && sid != avoid_input
+        {
+            let i_am = oar.amount;
+            if oar.amount <= op_fee {
+                op_fee -= i_am;
+
+                trans_builder
+                    .add_input(TxoRef::Absolute(sid), oar, None, None, i_am)
+                    .c(d!())?;
+            } else {
+                trans_builder
+                    .add_input(TxoRef::Absolute(sid), oar, None, None, i_am)
+                    .c(d!())?;
+
+                trans_builder
+                    .add_output(
+                        &AssetRecordTemplate::with_no_asset_tracing(
+                            i_am - op_fee,
+                            ASSET_TYPE_FRA,
+                            AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                            owner_kp.pub_key,
+                        ),
+                        None,
+                        None,
+                        None,
+                    )
+                    .c(d!())?;
+
+                op_fee = 0;
+            }
+        }
+    }
+
+    if op_fee != 0 {
+        return Err(eg!("Insufficient balance to pay Txn fees"));
+    }
+
+    trans_builder
+        .balance()
+        .c(d!())?
+        .create(TransferType::Standard)
+        .c(d!())?
+        .sign(owner_kp)
+        .c(d!())?
+        .transaction()
+        .c(d!())
+}
+
 /////////////////////////////////////////
 // Part 2: utils for query infomations //
 /////////////////////////////////////////
@@ -441,7 +523,8 @@ pub fn get_asset_balance(kp: &XfrKeyPair, asset: Option<AssetTypeCode>) -> Resul
     Ok(balance)
 }
 
-fn get_owned_utxos(
+#[allow(missing_docs)]
+pub fn get_owned_utxos(
     addr: &XfrPublicKey,
 ) -> Result<HashMap<TxoSID, (Utxo, Option<OwnerMemo>)>> {
     let url = format!(
@@ -633,7 +716,7 @@ pub fn generate_bar2abar_op(
             enc_key,
         )
         .c(d!())?;
-    let feeop = gen_fee_op(auth_key_pair).c(d!())?;
+    let feeop = gen_fee_bar_to_abar(auth_key_pair, txo_sid).c(d!())?;
     builder.add_operation(feeop);
 
     send_tx(&builder.take_transaction()).c(d!())?;

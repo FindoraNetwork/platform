@@ -1193,13 +1193,14 @@ impl BarToAbarOps {
     }
 
     #[inline(always)]
-    #[allow(dead_code)]
-    fn set_nonce(&mut self, nonce: NoReplayToken) {
+    /// Sets the nonce for the operation
+    pub fn set_nonce(&mut self, nonce: NoReplayToken) {
         self.nonce = nonce;
     }
 
     #[inline(always)]
-    fn get_nonce(&self) -> NoReplayToken {
+    /// Fetches the nonce of the operation
+    pub fn get_nonce(&self) -> NoReplayToken {
         self.nonce
     }
 }
@@ -1289,6 +1290,8 @@ fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
         }
         Operation::UpdateMemo(i) => i.body.no_replay_token = no_replay_token,
         Operation::ConvertAccount(i) => i.set_nonce(no_replay_token),
+        Operation::BarToAbar(i) => i.set_nonce(no_replay_token),
+        Operation::TransferAnonAsset(i) => i.set_nonce(no_replay_token),
         _ => {}
     }
 }

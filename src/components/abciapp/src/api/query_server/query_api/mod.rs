@@ -8,7 +8,6 @@ pub mod service;
 
 use actix_cors::Cors;
 use actix_web::{error, middleware, web, App, HttpServer};
-use algebra::jubjub::JubjubScalar;
 use finutils::api::NetworkRoute;
 use ledger::data_model::ATxoSID;
 use ledger::{
@@ -114,19 +113,13 @@ async fn get_owned_utxos(
 async fn get_owned_abars(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     owner: web::Path<String>,
-    randomizing_factor: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<ATxoSID>>> {
     let qs = data.read();
     let read = qs.state.as_ref().unwrap().read();
     globutils::wallet::anon_public_key_from_base64(owner.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
-        .map(|pk| {
-            let rb = base64::decode(randomizing_factor.as_bytes()).unwrap();
-            let r = JubjubScalar::zei_from_bytes(rb.as_slice()).unwrap();
-            let rpk = pk.randomize(&r);
-            web::Json(read.get_owned_abars(&rpk).iter().map(|a| a.0).collect())
-        })
+        .map(|pk| web::Json(read.get_owned_abars(&pk).iter().map(|a| a.0).collect()))
 }
 /// Returns the merkle proof for anonymous transactions
 async fn get_abar_proof(

@@ -34,7 +34,9 @@ use utils::{
     parse_td_validator_keys,
 };
 use zei::anon_xfr::keys::{AXfrKeyPair, AXfrPubKey};
-use zei::anon_xfr::structs::{MTLeafInfo, OpenAnonBlindAssetRecordBuilder};
+use zei::anon_xfr::structs::{
+    AnonBlindAssetRecord, MTLeafInfo, OpenAnonBlindAssetRecordBuilder,
+};
 use zei::{
     setup::PublicParams,
     xfr::{
@@ -689,14 +691,15 @@ pub fn convert_bar2abar(
     owner_enc_key: String,
     txo_sid: &str,
 ) -> Result<JubjubScalar> {
-    let from = owner_sk
-        .c(d!())
-        .and_then(|sk| {
-            ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!("\"{}\"", sk)))
-                .c(d!())
-                .map(|sk| sk.into_keypair())
-        })
-        .or_else(|_| get_keypair().c(d!()))?;
+    let from = match owner_sk {
+        Some(str) => ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!(
+            "\"{}\"",
+            str
+        )))
+        .c(d!())?
+        .into_keypair(),
+        None => get_keypair().c(d!())?,
+    };
     let to = wallet::anon_public_key_from_base64(target_addr.as_str())
         .c(d!("invalid 'target-addr'"))?;
     let enc_key = wallet::x_public_key_from_base64(owner_enc_key.as_str())
@@ -843,6 +846,24 @@ pub fn get_mtleaf_info(atxo_sid: &str) -> Result<MTLeafInfo> {
         .unwrap();
     Ok(mt_leaf_info)
 }
+
+/// Fetch Owned ABARs from query server
+pub fn get_owned_abars(p: &AXfrPubKey) -> Result<Vec<(ATxoSID, AnonBlindAssetRecord)>> {
+    utils::get_owned_abars(p)
+}
+
+/// Fetches list of owned TxoSIDs from LedgerStatus
+pub fn get_owned_utxos() -> Result<Vec<TxoSID>> {
+    let kp = get_keypair().c(d!())?;
+
+    let list = utils::get_owned_utxos(&kp.pub_key)?
+        .iter()
+        .map(|a| *a.0)
+        .collect();
+
+    Ok(list)
+}
+
 /// Return the built version.
 pub fn version() -> &'static str {
     concat!(env!("VERGEN_SHA"), " ", env!("VERGEN_BUILD_DATE"))

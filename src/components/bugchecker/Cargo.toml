@@ -16,7 +16,7 @@ rand_chacha = "0.2.0"
 lazy_static = "1.4.0"
 
 zei = { git = "https://@github.com/FindoraNetwork/zei", branch = "develop" }
-ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+ruc = "0.6.2"
 
 ledger = { path = "../../ledger" }
 finutils = { path = "../finutils" }
