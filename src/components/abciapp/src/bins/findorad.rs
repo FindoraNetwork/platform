@@ -319,6 +319,7 @@ mod init {
             "recheck = true",
             "fast_sync = true",
             "size = 5000",
+            "prometheus = false",
         ];
 
         let target_cfg = [
@@ -334,6 +335,7 @@ mod init {
             "recheck = false",
             "fast_sync = false",
             "size = 2000",
+            "prometheus = true",
         ];
 
         let config = orig_cfg
