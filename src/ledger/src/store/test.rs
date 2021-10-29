@@ -861,7 +861,6 @@ fn test_update_anon_stores() {
     assert!(res2.is_ok());
     assert_eq!(res2.unwrap(), 1);
 
-
     assert!(state.nullifier_set.get(&d0).unwrap().is_some());
     assert!(state.nullifier_set.get(&d1).unwrap().is_some());
 
