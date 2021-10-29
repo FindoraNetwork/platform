@@ -75,11 +75,15 @@ lazy_static! {
     /// full-nodes may need this feature, meaningless in other kinds of node.
     pub static ref KEEP_HIST: bool = env::var("FINDORAD_KEEP_HIST").is_ok();
 
-    /// Reserved accounts of Findora Foundation or System.
+    /// Reserved accounts of EcoSystem.
     pub static ref FF_PK_LIST: Vec<XfrPublicKey> = FF_ADDR_LIST
         .iter()
         .map(|addr| pnk!(wallet::public_key_from_bech32(addr)))
         .collect();
+
+    /// Reserved accounts of Findora Foundation.
+    pub static ref FF_PK_EXTRA_120_0000: XfrPublicKey =
+        pnk!(wallet::public_key_from_bech32(FF_ADDR_EXTRA_120_0000));
 
     #[allow(missing_docs)]
     pub static ref CHAN_GLOB_RATE_HIST: GRHCP = chan!();
@@ -91,8 +95,8 @@ lazy_static! {
     pub static ref CHAN_D_RWD_HIST: DRHCP = chan!();
 }
 
-/// Reserved accounts of Findora Foundation.
-pub const FF_ADDR_LIST: [&str; 8] = [
+// Reserved accounts of Findora Foundation.
+const FF_ADDR_LIST: [&str; 8] = [
     "fra1s9c6p0656as48w8su2gxntc3zfuud7m66847j6yh7n8wezazws3s68p0m9",
     "fra1zjfttcnvyv9ypy2d4rcg7t4tw8n88fsdzpggr0y2h827kx5qxmjshwrlx7",
     "fra18rfyc9vfyacssmr5x7ku7udyd5j5vmfkfejkycr06e4as8x7n3dqwlrjrc",
@@ -102,6 +106,9 @@ pub const FF_ADDR_LIST: [&str; 8] = [
     "fra1mjdr0mgn2e0670hxptpzu9tmf0ary8yj8nv90znjspwdupv9aacqwrg3dx",
     "fra1whn756rtqt3gpsmdlw6pvns75xdh3ttqslvxaf7eefwa83pcnlhsree9gv",
 ];
+
+const FF_ADDR_EXTRA_120_0000: &str =
+    "fra1dkn9w5c674grdl6gmvj0s8zs0z2nf39zrmp3dpq5rqnnf9axwjrqexqnd6";
 
 /// SEE: <https://www.notion.so/findora/PoS-Stage-1-Consensus-Rewards-Penalties-72f5c9a697ff461c89c3728e34348834#3d2f1b8ff8244632b715abdd42b6a67b>
 pub const PROPOSER_REWARDS_RATE_RULE: [([u128; 2], u128); 6] = [
@@ -1886,6 +1893,12 @@ impl Delegation {
         is_delegation_rwd: bool,
         coinbase_bl: Amount,
     ) -> Result<u64> {
+        #[cfg(feature = "debug_env")]
+        const ZERO_AMOUNT_FIX_HEIGHT: BlockHeight = 0;
+
+        #[cfg(not(feature = "debug_env"))]
+        const ZERO_AMOUNT_FIX_HEIGHT: BlockHeight = 120_0000;
+
         if self.end_height < cur_height || DelegationState::Bond != self.state {
             return Ok(0);
         }
@@ -1903,25 +1916,27 @@ impl Delegation {
         self.validator_entry(validator)
             .c(d!())
             .and_then(|mut am| {
-                if 0 < am {
-                    // APY
-                    am += self.rwd_amount.saturating_mul(am) / self.amount();
-                    calculate_delegation_rewards(
-                        return_rate,
-                        am,
-                        total_delegation_amount_of_validator,
-                        global_delegation_amount,
-                        is_delegation_rwd,
-                        cur_height,
-                    )
-                    .c(d!())
-                    .map(|n| alt!(n > coinbase_bl, coinbase_bl, n))
-                } else {
-                    Err(eg!(format!(
-                        "staking amount of <{}> available is less than 0",
-                        wallet::public_key_to_base64(validator)
-                    )))
+                if 0 == am {
+                    if ZERO_AMOUNT_FIX_HEIGHT < cur_height {
+                        return Ok(0);
+                    } else {
+                        return Err(eg!("set rewards on zero amount"));
+                    }
                 }
+
+                // **APY**,
+                // NOTE: the `div` calculation is safe here
+                am += self.rwd_amount.saturating_mul(am) / self.amount();
+                calculate_delegation_rewards(
+                    return_rate,
+                    am,
+                    total_delegation_amount_of_validator,
+                    global_delegation_amount,
+                    is_delegation_rwd,
+                    cur_height,
+                )
+                .c(d!())
+                .map(|n| alt!(n > coinbase_bl, coinbase_bl, n))
             })
             .and_then(|mut n| {
                 let commission =
@@ -1962,10 +1977,10 @@ fn calculate_delegation_rewards(
     cur_height: BlockHeight,
 ) -> Result<Amount> {
     #[cfg(feature = "debug_env")]
-    const APY_V1_FIX: BlockHeight = 0;
+    const APY_FIX_HEIGHT: BlockHeight = 0;
 
     #[cfg(not(feature = "debug_env"))]
-    const APY_V1_FIX: BlockHeight = 1177000;
+    const APY_FIX_HEIGHT: BlockHeight = 117_7000;
 
     let am = amount as u128;
     let total_am = total_amount as u128;
@@ -1982,7 +1997,7 @@ fn calculate_delegation_rewards(
             })
     };
 
-    if cur_height > APY_V1_FIX {
+    if APY_FIX_HEIGHT < cur_height {
         if is_delegation_rwd {
             // # For delegation rewards:
             //

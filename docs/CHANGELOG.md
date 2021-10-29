@@ -14,6 +14,12 @@
 
 > Functions that have been added.
 
+#### v0.2.9-release
+
+- Add an extra `reserved account` to promote the APY
+- Fix a BUG about the calculation of commissions
+    - validator will loss its proposer&commission rewards when a zero-amount delegation is found
+
 #### v0.2.8-release
 
 - Avoid to store historical transactions on chain

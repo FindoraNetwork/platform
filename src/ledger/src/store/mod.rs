@@ -20,8 +20,8 @@ use {
             UtxoStatus, XfrAddress, BLACK_HOLE_PUBKEY,
         },
         staking::{
-            Amount, Power, Staking, TendermintAddrRef, FF_PK_LIST, FRA_TOTAL_AMOUNT,
-            KEEP_HIST,
+            Amount, BlockHeight, Power, Staking, TendermintAddrRef,
+            FF_PK_EXTRA_120_0000, FF_PK_LIST, FRA_TOTAL_AMOUNT, KEEP_HIST,
         },
         LSSED_VAR, SNAPSHOT_ENTRIES_DIR,
     },
@@ -583,25 +583,19 @@ impl LedgerState {
         let gdp = self.staking_get_global_delegation_percent();
         let return_rate = self.staking_get_block_rewards_rate();
 
-        let pk = self
-            .get_staking()
-            .validator_td_addr_to_app_pk(addr)
-            .c(d!())?;
-
         self.get_staking_mut()
             .record_block_rewards_rate(return_rate);
 
-        let commission_rate = if let Some(Some(v)) = self
-            .get_staking()
-            .validator_get_current()
-            .map(|vd| vd.body.get(&pk))
-        {
+        let s = self.get_staking();
+
+        let pk = s.validator_td_addr_to_app_pk(addr).c(d!())?;
+
+        let commission_rate = if let Some(v) = s.validator_get_current_one_by_id(&pk) {
             v.commission_rate
         } else {
             return Err(eg!("not validator"));
         };
 
-        let s = self.get_staking();
         let h = s.cur_height;
         let cbl = s.coinbase_balance();
         let total_delegation_amount_of_validator = s
@@ -674,16 +668,30 @@ impl LedgerState {
         [a0, a1]
     }
 
-    // Total amount of all freed FRAs, aka 'are not being locked in any way'.
+    // Total amount of all freed FRAs, aka 'are not being locked'.
     #[inline(always)]
     fn staking_get_global_unlocked_amount(&self) -> Amount {
+        #[cfg(feature = "debug_env")]
+        const FF_ADDR_EXTRA_FIX_HEIGHT: BlockHeight = 0;
+
+        #[cfg(not(feature = "debug_env"))]
+        const FF_ADDR_EXTRA_FIX_HEIGHT: BlockHeight = 120_0000;
+
+        let s = self.get_staking();
+
+        let extras = if FF_ADDR_EXTRA_FIX_HEIGHT < s.cur_height {
+            vec![*BLACK_HOLE_PUBKEY, *FF_PK_EXTRA_120_0000]
+        } else {
+            vec![*BLACK_HOLE_PUBKEY]
+        };
+
         FRA_TOTAL_AMOUNT
             - FF_PK_LIST
                 .iter()
-                .chain([*BLACK_HOLE_PUBKEY].iter())
+                .chain(extras.iter())
                 .map(|pk| self.staking_get_nonconfidential_balance(pk).unwrap_or(0))
                 .sum::<Amount>()
-            - self.get_staking().coinbase_balance()
+            - s.coinbase_balance()
     }
 
     #[inline(always)]
