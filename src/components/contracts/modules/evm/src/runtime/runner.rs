@@ -42,7 +42,11 @@ impl<C: Config> ActionRunner<C> {
             Some(gas_price) => {
                 ensure!(
                     gas_price >= C::FeeCalculator::min_gas_price(),
-                    "GasPriceTooLow"
+                    format!(
+                        "GasPriceTooLow: actual {}, min {}",
+                        gas_price,
+                        C::FeeCalculator::min_gas_price()
+                    )
                 );
                 gas_price
             }

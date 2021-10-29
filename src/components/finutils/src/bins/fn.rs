@@ -404,16 +404,9 @@ fn run() -> Result<()> {
     } else if let Some(m) = matches.subcommand_matches("erc20-to-utxo") {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");
-        let contractaddress = m.value_of("contractaddress");
         let eth_key = m.value_of("eth-key");
         let input = m.value_of("input");
-        erc20_to_utxo(
-            amount.parse::<u64>().c(d!())?,
-            address,
-            contractaddress,
-            eth_key,
-            input,
-        )?
+        erc20_to_utxo(amount.parse::<u64>().c(d!())?, address, eth_key, input)?
     } else {
         println!("{}", matches.usage());
     }

@@ -1,12 +1,9 @@
 use crate::storage::*;
 use crate::{App, Config};
-use fp_core::{context::Context, ensure, macros::Get, transaction::ActionResult};
+use fp_core::{context::Context, ensure, transaction::ActionResult};
 use fp_evm::Runner;
 use fp_storage::{Borrow, BorrowMut};
-use fp_traits::{
-    account::{AccountAsset, FeeCalculator},
-    evm::DecimalsMapping,
-};
+use fp_traits::{account::AccountAsset, evm::DecimalsMapping};
 use fp_types::{
     actions::{
         evm::Call,
@@ -21,12 +18,15 @@ use primitive_types::{H160, U256};
 use ruc::*;
 
 impl<C: Config> App<C> {
+    #![allow(clippy::too_many_arguments)]
     pub fn erc20_to_utxo(
         ctx: &Context,
         sender: Address,
         contractaddress: H160,
+        gas_price: U256,
+        gas_limit: U256,
         input: Vec<u8>,
-        nonce: U256,
+        _nonce: U256,
         outputs: Vec<NonConfidentialOutput>,
     ) -> Result<ActionResult> {
         let mut asset_amount = 0;
@@ -65,9 +65,9 @@ impl<C: Config> App<C> {
                 target: contractaddress,
                 input,
                 value: U256::zero(),
-                gas_limit: C::BlockGasLimit::get().as_u64(),
-                gas_price: Some(C::FeeCalculator::min_fee()),
-                nonce: Some(nonce),
+                gas_limit: gas_limit.low_u64(),
+                gas_price: Some(gas_price),
+                nonce: Some(U256::zero()),
             };
 
             C::Runner::call(ctx, call, &config)?;
