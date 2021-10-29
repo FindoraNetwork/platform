@@ -459,7 +459,7 @@ impl TransactionBuilder {
                 JsValue::from_str(&format!("Could not add operation: {}", e))
             })?;
 
-        println!("Randomizer: {}", wallet::randomizer_to_base64(&r));
+        println!("Randomizer: {}", wallet::randomizer_to_base58(&r));
         Ok(self)
     }
 
