@@ -247,25 +247,13 @@ pub fn transfer_to_erc20(
 pub fn erc20_to_utxo(
     amount: u64,
     address: Option<&str>,
-    contractaddress: Option<&str>,
     eth_phrase: Option<&str>,
     input: Option<&str>,
 ) -> Result<()> {
     let fra_kp = get_keypair()?;
 
-    let target = match address {
-        Some(s) => {
-            if let Ok(address) = globutils::wallet::public_key_from_base64(s) {
-                address
-            } else {
-                globutils::wallet::public_key_from_bech32(s)?
-            }
-        }
-        None => fra_kp.get_pk(),
-    };
-
     let output = NonConfidentialOutput {
-        target,
+        target: fra_kp.get_pk(),
         amount,
         asset: ASSET_TYPE_FRA,
     };
@@ -302,7 +290,7 @@ pub fn erc20_to_utxo(
         gas_price: <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(),
         gas_limit: <BaseApp as module_evm::Config>::BlockGasLimit::get(),
         contractaddress: H160::try_from(
-            MultiSigner::from_str(contractaddress.unwrap()).unwrap(),
+            MultiSigner::from_str(address.unwrap()).unwrap(),
         )
         .unwrap(),
         input,

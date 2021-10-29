@@ -88,6 +88,8 @@ impl<C: Config> Executable for App<C> {
                         ctx,
                         sender,
                         action.contractaddress,
+                        action.gas_price,
+                        action.gas_limit,
                         action.input,
                         action.nonce,
                         action.outputs,
