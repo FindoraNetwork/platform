@@ -5,14 +5,17 @@ mod basic;
 mod impls;
 
 use evm::Config as EvmConfig;
-use fp_core::macros::Get;
 use fp_core::{
     context::Context,
+    macros::Get,
     module::AppModule,
     transaction::{ActionResult, Executable},
 };
-use fp_traits::account::FeeCalculator;
-use fp_traits::{account::AccountAsset, evm::DecimalsMapping};
+use fp_evm::Runner;
+use fp_traits::{
+    account::{AccountAsset, FeeCalculator},
+    evm::DecimalsMapping,
+};
 use fp_types::{actions::xhub::Action, crypto::Address};
 use primitive_types::U256;
 use ruc::*;
@@ -30,6 +33,8 @@ pub trait Config {
     type BlockGasLimit: Get<U256>;
     /// Calculator for current gas price.
     type FeeCalculator: FeeCalculator;
+    /// EVM execution runner.
+    type Runner: Runner;
     /// EVM config used in the module.
     fn config() -> &'static EvmConfig {
         &ISTANBUL_CONFIG

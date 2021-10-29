@@ -1,13 +1,19 @@
 use crate::storage::*;
 use crate::{App, Config};
-use fp_core::macros::Get;
-use fp_core::{context::Context, ensure, transaction::ActionResult};
+use fp_core::{context::Context, ensure, macros::Get, transaction::ActionResult};
+use fp_evm::Runner;
 use fp_storage::{Borrow, BorrowMut};
-use fp_traits::account::FeeCalculator;
-use fp_traits::{account::AccountAsset, evm::DecimalsMapping};
-use fp_types::actions::evm::Call;
-use fp_types::actions::xhub::NonConfidentialTransfer;
-use fp_types::{actions::xhub::NonConfidentialOutput, crypto::Address};
+use fp_traits::{
+    account::{AccountAsset, FeeCalculator},
+    evm::DecimalsMapping,
+};
+use fp_types::{
+    actions::{
+        evm::Call,
+        xhub::{NonConfidentialOutput, NonConfidentialTransfer},
+    },
+    crypto::Address,
+};
 use fp_utils::proposer_converter;
 use ledger::data_model::ASSET_TYPE_FRA;
 use log::debug;
@@ -54,7 +60,7 @@ impl<C: Config> App<C> {
 
             let v: [u8; 32] = *sender.as_ref();
             let source = proposer_converter(v.to_vec()).unwrap();
-            let _call = Call {
+            let call = Call {
                 source,
                 target: contractaddress,
                 input,
@@ -64,8 +70,7 @@ impl<C: Config> App<C> {
                 nonce: Some(nonce),
             };
 
-            // TODO: fix
-            // C::Runner::call(ctx, call, &config)?;
+            C::Runner::call(ctx, call, &config)?;
         }
 
         Ok(ActionResult::default())

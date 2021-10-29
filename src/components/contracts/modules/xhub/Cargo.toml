@@ -25,6 +25,7 @@ fp-storage = { path = "../../primitives/storage" }
 fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
+fp-evm = { path = "../../primitives/evm" }
 
 [dev-dependencies]
 fp-mocks = { path = "../../primitives/mocks" }

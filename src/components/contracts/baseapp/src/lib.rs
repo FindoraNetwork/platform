@@ -133,6 +133,7 @@ impl module_xhub::Config for BaseApp {
     type DecimalsMapping = EthereumDecimalsMapping;
     type BlockGasLimit = BlockGasLimit;
     type FeeCalculator = ();
+    type Runner = module_evm::runtime::runner::ActionRunner<Self>;
 }
 
 impl BaseApp {
