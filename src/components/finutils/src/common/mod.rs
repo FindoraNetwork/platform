@@ -19,7 +19,8 @@ use {
         },
         staking::{
             check_delegation_amount, td_addr_to_bytes, td_pubkey_to_td_addr,
-            td_pubkey_to_td_addr_bytes, PartialUnDelegation, TendermintAddrRef,
+            td_pubkey_to_td_addr_bytes, PartialUnDelegation, StakerMemo,
+            TendermintAddrRef,
         },
     },
     ruc::*,
@@ -54,7 +55,7 @@ lazy_static! {
 }
 
 /// Updating the information of a staker includes commission_rate and staker_memo
-pub fn staker_update(cr: Option<&str>, memo: Option<&str>) -> Result<()> {
+pub fn staker_update(cr: Option<&str>, memo: Option<StakerMemo>) -> Result<()> {
     let addr = get_td_pubkey().map(|i| td_pubkey_to_td_addr(&i)).c(d!())?;
     let vd = get_validator_detail(&addr).c(d!())?;
 
@@ -65,9 +66,7 @@ pub fn staker_update(cr: Option<&str>, memo: Option<&str>) -> Result<()> {
                 .and_then(convert_commission_rate)
         })
         .c(d!())?;
-    let memo = memo
-        .map_or(Ok(vd.memo), |s| serde_json::from_str(s))
-        .c(d!())?;
+    let memo = memo.unwrap_or(vd.memo);
 
     let td_pubkey = get_td_pubkey().c(d!())?;
 

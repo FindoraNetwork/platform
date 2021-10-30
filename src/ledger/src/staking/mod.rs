@@ -1538,10 +1538,10 @@ pub struct StakerMemo {
 impl Default for StakerMemo {
     fn default() -> Self {
         StakerMemo {
-            name: format!("Validator No.{}", random::<u16>() ^ random::<u16>()),
-            desc: "NONE".to_owned(),
-            website: "NONE".to_owned(),
-            logo: "http://lorempixel.com/160/160".to_owned(),
+            name: format!("NULL_{}", random::<u16>() ^ random::<u16>()),
+            desc: "NULL".to_owned(),
+            website: "NULL".to_owned(),
+            logo: "https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png".to_owned(),
         }
     }
 }

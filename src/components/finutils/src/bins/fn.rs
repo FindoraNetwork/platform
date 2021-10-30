@@ -29,7 +29,10 @@ use {
     clap::{crate_authors, load_yaml, App},
     finutils::common,
     globutils::wallet,
-    ledger::data_model::{AssetTypeCode, FRA_DECIMALS},
+    ledger::{
+        data_model::{AssetTypeCode, FRA_DECIMALS},
+        staking::StakerMemo,
+    },
     ruc::*,
     std::{fmt, fs},
 };
@@ -192,8 +195,36 @@ fn run() -> Result<()> {
             println!("{}", help);
         }
     } else if let Some(m) = matches.subcommand_matches("staker-update") {
+        let vm = if let Some(memo) = m.value_of("validator-memo") {
+            Some(serde_json::from_str(memo).c(d!())?)
+        } else {
+            match (
+                m.value_of("validator-memo-name"),
+                m.value_of("validator-memo-desc"),
+                m.value_of("validator-memo-website"),
+                m.value_of("validator-memo-logo"),
+            ) {
+                (None, None, None, None) => None,
+                (name, desc, website, logo) => {
+                    let mut memo = StakerMemo::default();
+                    if let Some(n) = name {
+                        memo.name = n.to_owned();
+                    }
+                    if let Some(d) = desc {
+                        memo.desc = d.to_owned();
+                    }
+                    if let Some(w) = website {
+                        memo.website = w.to_owned();
+                    }
+                    if let Some(l) = logo {
+                        memo.logo = l.to_owned();
+                    }
+                    Some(memo)
+                }
+            }
+        };
+
         let cr = m.value_of("commission-rate");
-        let vm = m.value_of("validator-memo");
         if vm.is_none() && cr.is_none() {
             println!("{}", m.usage());
             println!(

@@ -103,6 +103,22 @@ subcommands:
             long: validator-memo
             takes_value: true
             value_name: Memo
+        - validator-memo-name:
+            long: validator-memo-name
+            takes_value: true
+            value_name: Name
+        - validator-memo-desc:
+            long: validator-memo-desc
+            takes_value: true
+            value_name: Desc
+        - validator-memo-website:
+            long: validator-memo-website
+            takes_value: true
+            value_name: Website
+        - validator-memo-logo:
+            long: validator-memo-logo
+            takes_value: true
+            value_name: Logo
   - unstake:
       about: Unstake tokens (i.e. unbond tokens) from a Validator
       args:
