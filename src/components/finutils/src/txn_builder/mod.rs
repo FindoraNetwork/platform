@@ -1593,7 +1593,8 @@ mod tests {
 
         // add abar to merkle tree
         let uid = ledger_state.add_abar(&abar).unwrap();
-        let _ = ledger_state.commit_anon_changes().unwrap();
+        ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
+        let _ = ledger_state.compute_and_save_state_commitment_data(1);
         let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
         oabar.update_mt_leaf_info(mt_leaf_info);
         
@@ -1639,7 +1640,8 @@ mod tests {
 
         // add abar to merkle tree
         let uid1 = ledger_state.add_abar(&abar1).unwrap();
-        let _ = ledger_state.commit_anon_changes().unwrap();
+        ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
+        let _ = ledger_state.compute_and_save_state_commitment_data(2);
         let mt_leaf_info1 = ledger_state.get_abar_proof(uid1).unwrap();
         oabar1.update_mt_leaf_info(mt_leaf_info1);
         
