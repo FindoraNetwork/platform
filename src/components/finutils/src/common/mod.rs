@@ -497,7 +497,7 @@ fn get_td_pubkey() -> Result<Vec<u8>> {
         fs::read_to_string(key_path)
             .c(d!("can not read key file from path"))
             .and_then(|k| {
-                let v_keys = parse_td_validator_keys(k).c(d!())?;
+                let v_keys = parse_td_validator_keys(&k).c(d!())?;
                 Ok(v_keys.pub_key.to_vec())
             })
     } else {
@@ -510,7 +510,7 @@ fn get_td_privkey() -> Result<PrivateKey> {
         fs::read_to_string(key_path)
             .c(d!("can not read key file from path"))
             .and_then(|k| {
-                parse_td_validator_keys(k)
+                parse_td_validator_keys(&k)
                     .c(d!())
                     .map(|v_keys| v_keys.priv_key)
             })
@@ -519,7 +519,8 @@ fn get_td_privkey() -> Result<PrivateKey> {
     }
 }
 
-fn convert_commission_rate(cr: f64) -> Result<[u64; 2]> {
+#[allow(missing_docs)]
+pub fn convert_commission_rate(cr: f64) -> Result<[u64; 2]> {
     if 1.0 < cr {
         return Err(eg!("commission rate can exceed 100%"));
     }

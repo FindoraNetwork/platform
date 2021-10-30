@@ -529,15 +529,15 @@ pub fn get_validator_detail(td_addr: TendermintAddrRef) -> Result<ValidatorDetai
         .and_then(|b| serde_json::from_slice::<ValidatorDetail>(&b).c(d!()))
 }
 
-#[derive(Serialize, Deserialize)]
 #[allow(missing_docs)]
+#[derive(Serialize, Deserialize)]
 pub struct ValidatorKey {
-    pub(crate) address: String,
-    pub(crate) pub_key: PublicKey,
-    pub(crate) priv_key: PrivateKey,
+    pub address: String,
+    pub pub_key: PublicKey,
+    pub priv_key: PrivateKey,
 }
 
 /// Restore validator key from a string
-pub fn parse_td_validator_keys(key_data: String) -> Result<ValidatorKey> {
-    serde_json::from_str(key_data.as_str()).c(d!())
+pub fn parse_td_validator_keys(key_data: &str) -> Result<ValidatorKey> {
+    serde_json::from_str(key_data).c(d!())
 }

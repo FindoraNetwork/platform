@@ -272,3 +272,9 @@ snapshot:
 	@./tools/devnet/snapshot.sh
 
 devnet: reset snapshot
+
+frog:
+	cargo build --release --bins -p frog
+
+frog_debug:
+	cargo build --release --bins -p frog --features="debug_env"

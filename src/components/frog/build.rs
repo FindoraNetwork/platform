@@ -34,12 +34,14 @@ fn store_meta() -> Result<()> {
             )
             .c(d!())
             .and_then(|_| serde_json::to_vec(&utxo_map).c(d!()))
-            .and_then(|um| fs::write("src/bins/gendtx/utxo.map", um).c(d!()))?
+            .and_then(|um| {
+                fs::write(format!("src/bins/gen{}/utxo.map", $who), um).c(d!())
+            })?
         };
     }
 
     write_meta!("dtx");
-    // write_meta!("utx");
+    write_meta!("utx");
 
     Ok(())
 }

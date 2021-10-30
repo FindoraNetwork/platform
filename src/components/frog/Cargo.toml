@@ -9,6 +9,7 @@ edition = "2018"
 attohttpc = { version = "0.18", default-features = false, features = ["compress", "json", "tls-rustls"] }
 serde_json = "1.0.40"
 serde = { version = "1.0.124", features = ["derive"] }
+tendermint = "0.19.0"
 rand = "0.8"
 zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
 ruc = "0.6.6"
@@ -25,10 +26,13 @@ globutils = { path = "../../libs/globutils" }
 zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
 attohttpc = { version = "0.18", default-features = false, features = ["compress", "json", "tls-rustls"] }
 
+[features]
+debug_env = ["ledger/debug_env", "finutils/debug_env"]
+
 [[bin]]
 name = "gendtx"
 path = "src/bins/gendtx/gendtx.rs"
 
-# [[bin]]
-# name = "genutx"
-# path = "src/bins/genutx/genutx.rs"
+[[bin]]
+name = "genutx"
+path = "src/bins/genutx/genutx.rs"
