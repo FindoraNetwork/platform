@@ -16,24 +16,24 @@
 
 #### v0.2.9-release
 
-- Add an extra `reserved account` to promote the APY
+- Add an extra `reserved account` to optimize the APY curve
 - Fix a BUG about the calculation of commissions
     - validator will loss its proposer&commission rewards when a zero-amount delegation is found
 
-#### v0.2.8-release
+#### v0.2.8-release (Yanked !)
 
 - Avoid to store historical transactions on chain
     - Resist some kinds of the replay attack
 
-#### v0.2.7-release
+#### v0.2.7-release (Yanked !)
 
 - Optimize the on-chain log of `DeliverTx`
 
-#### v0.2.6-release
+#### v0.2.6-release (Yanked !)
 
 - Optimize the performance of some APIs
 
-#### v0.2.5-release
+#### v0.2.5-release (Yanked !)
 
 - Fix incorrect APY-calculation
 
