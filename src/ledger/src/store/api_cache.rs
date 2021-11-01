@@ -27,16 +27,17 @@ type Issuances = Vec<(TxOutput, Option<OwnerMemo>)>;
 /// Used in APIs
 #[derive(Clone, Deserialize, Serialize)]
 pub struct ApiCache {
+    pub(crate) prefix: String,
     /// Set of transactions related to a ledger address
-    pub related_transactions: Mapx<XfrAddress, HashSet<TxnSID>>,
+    pub related_transactions: Mapx<XfrAddress, Mapxnk<TxnSID, bool>>,
     /// Set of transfer transactions related to an asset code
-    pub related_transfers: Mapx<AssetTypeCode, HashSet<TxnSID>>,
+    pub related_transfers: Mapx<AssetTypeCode, Mapxnk<TxnSID, bool>>,
     /// List of claim transactions related to a ledger address
-    pub claim_hist_txns: Mapx<XfrAddress, Vec<TxnSID>>,
+    pub claim_hist_txns: Mapx<XfrAddress, Mapxnk<TxnSID, bool>>,
     /// Payments from coinbase
-    pub coinbase_oper_hist: Mapx<XfrAddress, Vec<(BlockHeight, MintEntry)>>,
+    pub coinbase_oper_hist: Mapx<XfrAddress, Mapxnk<BlockHeight, MintEntry>>,
     /// Created assets
-    pub created_assets: Mapx<IssuerPublicKey, Vec<DefineAsset>>,
+    pub created_assets: Mapx<IssuerPublicKey, Mapxnk<AssetTypeCode, DefineAsset>>,
     /// issuance mapped by public key
     pub issuances: Mapx<IssuerPublicKey, Issuances>,
     /// issuance mapped by token code
@@ -68,6 +69,7 @@ pub struct ApiCache {
 impl ApiCache {
     pub(crate) fn new(prefix: &str) -> Self {
         ApiCache {
+            prefix: prefix.to_owned(),
             related_transactions: new_mapx!(format!(
                 "api_cache/{}related_transactions",
                 prefix
@@ -117,13 +119,18 @@ impl ApiCache {
     /// Add created asset
     #[inline(always)]
     pub fn add_created_asset(&mut self, creation: &DefineAsset) {
+        let prefix = self.prefix.clone();
         let issuer = creation.pubkey;
-        #[allow(unused_mut)]
-        let mut set = self.created_assets.entry(issuer).or_insert_with(Vec::new);
-
-        set.push(creation.clone());
-        set.sort_by_key(|i| i.pubkey);
-        set.dedup_by_key(|i| i.body.asset.code);
+        self.created_assets
+            .entry(issuer)
+            .or_insert_with(|| {
+                new_mapxnk!(format!(
+                    "api_cache/{}created_assets/{}",
+                    prefix,
+                    issuer.to_base64()
+                ))
+            })
+            .insert(creation.body.asset.code, creation.clone());
     }
 
     /// Cache issuance records

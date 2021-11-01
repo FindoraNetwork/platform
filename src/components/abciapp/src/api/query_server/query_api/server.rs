@@ -65,7 +65,11 @@ impl QueryServer {
         &self,
         issuer: &IssuerPublicKey,
     ) -> Option<Vec<DefineAsset>> {
-        self.ledger_cloned.api_cache.created_assets.get(issuer)
+        self.ledger_cloned
+            .api_cache
+            .created_assets
+            .get(issuer)
+            .map(|d| d.iter().map(|(_, v)| v).collect())
     }
 
     /// get coinbase based on address and sorting rules and start and end position
@@ -86,14 +90,21 @@ impl QueryServer {
                         if len > end {
                             new_end = end;
                         }
-                        hist[start..new_end].to_vec()
+                        hist.iter()
+                            .skip(start.saturating_sub(1))
+                            .take((new_end + 1) - start)
+                            .collect()
                     }
                     true => {
                         let mut new_start = 0;
                         if len > end {
                             new_start = len - end;
                         }
-                        let mut tmp = hist[new_start..len - start].to_vec();
+                        let mut tmp = hist
+                            .iter()
+                            .skip(new_start.saturating_sub(1))
+                            .take((len - start + 1) - new_start)
+                            .collect::<Vec<_>>();
                         tmp.reverse();
                         tmp
                     }
@@ -126,14 +137,23 @@ impl QueryServer {
                         if len > end {
                             new_end = end;
                         }
-                        hist[start..new_end].to_vec()
+                        hist.iter()
+                            .skip(start.saturating_sub(1))
+                            .take((new_end + 1) - start)
+                            .map(|(k, _)| k)
+                            .collect()
                     }
                     true => {
                         let mut new_start = 0;
                         if len > end {
                             new_start = len - end;
                         }
-                        let mut tmp = hist[new_start..len - start].to_vec();
+                        let mut tmp = hist
+                            .iter()
+                            .skip(new_start.saturating_sub(1))
+                            .take((len - start + 1) - new_start)
+                            .map(|(k, _)| k)
+                            .collect::<Vec<_>>();
                         tmp.reverse();
                         tmp
                     }
@@ -173,6 +193,7 @@ impl QueryServer {
             .api_cache
             .related_transactions
             .get(&address)
+            .map(|d| d.iter().map(|(k, _)| k).collect())
     }
 
     /// Returns the set of transfer transactions that are associated with a given asset.
@@ -182,7 +203,11 @@ impl QueryServer {
         &self,
         code: &AssetTypeCode,
     ) -> Option<HashSet<TxnSID>> {
-        self.ledger_cloned.api_cache.related_transfers.get(&code)
+        self.ledger_cloned
+            .api_cache
+            .related_transfers
+            .get(&code)
+            .map(|d| d.iter().map(|(k, _)| k).collect())
     }
 
     /// Returns the owner of a given txo_sid.

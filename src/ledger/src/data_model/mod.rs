@@ -91,6 +91,21 @@ pub struct AssetTypeCode {
     pub val: ZeiAssetType,
 }
 
+impl NumKey for AssetTypeCode {
+    fn to_bytes(&self) -> Vec<u8> {
+        self.val.0.to_vec()
+    }
+    fn from_bytes(b: &[u8]) -> Result<Self> {
+        let mut b = b.to_owned();
+        b.resize(ASSET_TYPE_LENGTH, 0u8);
+        Ok(Self {
+            val: ZeiAssetType(
+                <[u8; ASSET_TYPE_LENGTH]>::try_from(b.as_slice()).c(d!())?,
+            ),
+        })
+    }
+}
+
 // The code of FRA is [0;  ASSET_TYPE_LENGTH],
 // exactly equal to the derived `default value`,
 // so we implement a custom `Default` for it.
@@ -236,6 +251,10 @@ impl AssetTypeCode {
     pub fn to_base64(self) -> String {
         b64enc(&self.val.0)
     }
+
+    // pub(crate) fn to_bytes(&self) -> Vec<u8> {
+    //     self.val.0.to_vec()
+    // }
 }
 
 impl Code {
@@ -281,6 +300,10 @@ impl Code {
     pub fn to_base64(self) -> String {
         b64enc(&self.val)
     }
+
+    // pub(crate) fn to_bytes(self) -> Vec<u8> {
+    //     self.val.to_vec()
+    // }
 }
 
 impl Serialize for Code {
@@ -367,6 +390,16 @@ pub struct XfrAddress {
     pub key: XfrPublicKey,
 }
 
+impl XfrAddress {
+    pub(crate) fn to_base64(self) -> String {
+        b64enc(&self.key.as_bytes())
+    }
+
+    // pub(crate) fn to_bytes(self) -> Vec<u8> {
+    //     self.key.as_bytes().to_vec()
+    // }
+}
+
 #[allow(clippy::derive_hash_xor_eq)]
 impl Hash for XfrAddress {
     #[inline(always)]
@@ -381,6 +414,16 @@ impl Hash for XfrAddress {
 )]
 pub struct IssuerPublicKey {
     pub key: XfrPublicKey,
+}
+
+impl IssuerPublicKey {
+    pub(crate) fn to_base64(self) -> String {
+        b64enc(self.key.as_bytes())
+    }
+
+    // pub(crate) fn to_bytes(&self) -> Vec<u8> {
+    //     self.key.as_bytes().to_vec()
+    // }
 }
 
 #[allow(clippy::derive_hash_xor_eq)]

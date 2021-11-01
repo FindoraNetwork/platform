@@ -518,10 +518,13 @@ pub async fn query_validator_detail(
             };
             let realtime_rate = ledger.staking_get_block_rewards_rate();
             let expected_annualization = [
-                realtime_rate[0] as u128 * v_self_delegation.proposer_rwd_cnt as u128,
+                realtime_rate[0] as u128
+                    * v_self_delegation.proposer_rwd_cnt as u128
+                    * staking.get_global_delegation_amount() as u128,
                 realtime_rate[1] as u128
                     * (1 + staking.cur_height() - v_self_delegation.start_height)
-                        as u128,
+                        as u128
+                    * v.td_power as u128,
             ];
 
             let resp = ValidatorDetail {

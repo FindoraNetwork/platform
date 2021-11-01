@@ -253,6 +253,8 @@ impl LedgerState {
             return Ok(());
         };
 
+        let prefix = self.api_cache.prefix.clone();
+
         // Update ownership status
         for (txn_sid, txo_sids) in
             block.txns.iter().map(|v| (v.tx_id, v.txo_ids.as_slice()))
@@ -282,29 +284,37 @@ impl LedgerState {
             let classify_op = |op: &Operation| {
                 match op {
                     Operation::Claim(i) => {
-                        let key = i.get_claim_publickey();
-                        #[allow(unused_mut)]
-                        let mut hist = self
-                            .api_cache
+                        let key = XfrAddress {
+                            key: i.get_claim_publickey(),
+                        };
+                        self.api_cache
                             .claim_hist_txns
-                            .entry(XfrAddress { key })
-                            .or_insert_with(Vec::new);
-
-                        // keep it in ascending order to reduce memory movement count
-                        match hist.binary_search_by(|a| a.0.cmp(&txn_sid.0)) {
-                            Ok(_) => { /*skip if txn_sid already exists*/ }
-                            Err(idx) => hist.insert(idx, txn_sid),
-                        }
+                            .entry(key)
+                            .or_insert_with(|| {
+                                new_mapxnk!(format!(
+                                    "api_cache/{}coinbase_oper_hist/{}",
+                                    prefix,
+                                    key.to_base64()
+                                ))
+                            })
+                            .set_value(txn_sid, Default::default());
                     }
                     Operation::MintFra(i) => i.entries.iter().for_each(|me| {
-                        let key = me.utxo.record.public_key;
+                        let key = XfrAddress {
+                            key: me.utxo.record.public_key,
+                        };
                         #[allow(unused_mut)]
-                        let mut hist = self
-                            .api_cache
-                            .coinbase_oper_hist
-                            .entry(XfrAddress { key })
-                            .or_insert_with(Vec::new);
-                        hist.push((i.height, me.clone()));
+                        let mut hist =
+                            self.api_cache.coinbase_oper_hist.entry(key).or_insert_with(
+                                || {
+                                    new_mapxnk!(format!(
+                                        "api_cache/{}coinbase_oper_hist/{}",
+                                        prefix,
+                                        key.to_base64()
+                                    ))
+                                },
+                            );
+                        hist.insert(i.height, me.clone());
                     }),
                     _ => { /* filter more operations before this line */ }
                 };
@@ -318,8 +328,14 @@ impl LedgerState {
                 self.api_cache
                     .related_transactions
                     .entry(*address)
-                    .or_insert_with(HashSet::new)
-                    .insert(txn_sid);
+                    .or_insert_with(|| {
+                        new_mapxnk!(format!(
+                            "api_cache/{}related_transactions/{}",
+                            prefix,
+                            address.to_base64()
+                        ))
+                    })
+                    .insert(txn_sid, Default::default());
             }
 
             // Update transferred nonconfidential assets
@@ -329,8 +345,14 @@ impl LedgerState {
                 self.api_cache
                     .related_transfers
                     .entry(*asset)
-                    .or_insert_with(HashSet::new)
-                    .insert(txn_sid);
+                    .or_insert_with(|| {
+                        new_mapxnk!(format!(
+                            "api_cache/{}related_transfers/{}",
+                            &prefix,
+                            asset.to_base64()
+                        ))
+                    })
+                    .insert(txn_sid, Default::default());
             }
 
             // Add created asset

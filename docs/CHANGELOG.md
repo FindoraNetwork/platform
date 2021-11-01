@@ -14,6 +14,11 @@
 
 > Functions that have been added.
 
+#### v0.2.10-release
+
+- Optimize the calculation of `expected return rate`
+- Optimize some history-style APIs
+
 #### v0.2.9-release
 
 - Add an extra `reserved account` to optimize the APY curve
