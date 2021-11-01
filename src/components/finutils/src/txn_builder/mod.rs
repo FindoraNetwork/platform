@@ -1597,18 +1597,14 @@ mod tests {
         let _ = ledger_state.compute_and_save_state_commitment_data(1);
         let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
         oabar.update_mt_leaf_info(mt_leaf_info);
-        
+
         let (oabar_out, _keypair_out, _dec_key_out, _) =
             gen_oabar_and_keys(&mut prng, amount, asset_type);
         let _abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
         let mut builder = TransactionBuilder::from_seq_id(1);
 
         let _ = builder
-            .add_operation_anon_transfer(
-                &[oabar],
-                &[oabar_out],
-                &[keypair_in],
-            )
+            .add_operation_anon_transfer(&[oabar], &[oabar_out], &[keypair_in])
             .is_ok();
 
         let txn = builder.take_transaction();
@@ -1621,7 +1617,6 @@ mod tests {
                 base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
         }
         let _txn_sid = ledger_state.finish_block(block).unwrap();
-
 
         let mut prng1 = ChaChaRng::from_seed([0u8; 32]);
 
@@ -1644,19 +1639,14 @@ mod tests {
         let _ = ledger_state.compute_and_save_state_commitment_data(2);
         let mt_leaf_info1 = ledger_state.get_abar_proof(uid1).unwrap();
         oabar1.update_mt_leaf_info(mt_leaf_info1);
-        
+
         let (oabar_out1, _keypair_out1, _dec_key_out1, _) =
             gen_oabar_and_keys(&mut prng1, amount1, asset_type1);
         let _abar_out1 = AnonBlindAssetRecord::from_oabar(&oabar_out1);
         let mut builder1 = TransactionBuilder::from_seq_id(1);
         let _ = builder1
-            .add_operation_anon_transfer(
-                &[oabar1],
-                &[oabar_out1],
-                &[keypair_in1],
-            )
+            .add_operation_anon_transfer(&[oabar1], &[oabar_out1], &[keypair_in1])
             .is_ok();
-
 
         let txn1 = builder1.take_transaction();
         let compute_effect1 = TxnEffect::compute_effect(txn1).unwrap();
@@ -1668,19 +1658,18 @@ mod tests {
                 base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
         }
         let _txn_sid1 = ledger_state.finish_block(block1).unwrap();
-
     }
 
     /* Negative test cases
-    1. Amount - positive amount - 
-        a. negative amount should fail 
-    2. Asset type - 
+    1. Amount - positive amount -
+        a. negative amount should fail
+    2. Asset type -
         a. input asset tyoe and output asset type should match
         b. both asset types are valid asset types - meaning in the range
     3. Public Keys
         a. obtain 2 different keys for keypair_in.pub_key() and *oabar.pub_key_ref() and check that the test fails
         b. obtain 2 different keys for  rrand_keypair_in.pub_key() and abar.public_key and check that the test fails
-    4. Owner Memo - several fields - change each field and 5 fields - 
+    4. Owner Memo - several fields - change each field and 5 fields -
     5. Uid change - make test fail - random uid - check not repeated - should be in some range - inspect function returning uid
     6. Mt_leaf_info - generate random - check not repeated - fail the test
     7. Randomnise each of (oabar_out, _keypair_out, _dec_key_out) and test fails
@@ -1688,7 +1677,7 @@ mod tests {
     9. Random txn - test fails
     10. Random compute effect different from that generated from txn
     11. Random block effect different from that generated from compute effect
-    12. randomnise txn_sid 
+    12. randomnise txn_sid
     */
 
     fn gen_oabar_and_keys<R: CryptoRng + RngCore>(
