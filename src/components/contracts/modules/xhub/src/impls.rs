@@ -67,7 +67,7 @@ impl<C: Config> App<C> {
                 value: U256::zero(),
                 gas_limit: gas_limit.low_u64(),
                 gas_price: Some(gas_price),
-                nonce: Some(U256::zero()),
+                nonce: None,
             };
 
             C::Runner::call(ctx, call, &config)?;
