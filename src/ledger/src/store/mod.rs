@@ -69,7 +69,7 @@ pub struct LedgerState {
     /// <tx id> => [<block id>, <tx idx in block>]
     pub tx_to_block_location: Mapxnk<TxnSID, [usize; 2]>,
     /// cache used in APIs
-    pub api_cache: ApiCache,
+    pub api_cache: Option<ApiCache>,
 
     // current block effect (middle cache)
     block_ctx: Option<BlockEffect>,
@@ -245,7 +245,7 @@ impl LedgerState {
             return Ok(());
         }
 
-        self.api_cache.cache_hist_data();
+        self.api_cache.as_mut().unwrap().cache_hist_data();
 
         let block = if let Some(b) = self.blocks.last() {
             b
@@ -253,7 +253,7 @@ impl LedgerState {
             return Ok(());
         };
 
-        let prefix = self.api_cache.prefix.clone();
+        let prefix = self.api_cache.as_mut().unwrap().prefix.clone();
 
         // Update ownership status
         for (txn_sid, txo_sids) in
@@ -288,6 +288,8 @@ impl LedgerState {
                             key: i.get_claim_publickey(),
                         };
                         self.api_cache
+                            .as_mut()
+                            .unwrap()
                             .claim_hist_txns
                             .entry(key)
                             .or_insert_with(|| {
@@ -304,16 +306,19 @@ impl LedgerState {
                             key: me.utxo.record.public_key,
                         };
                         #[allow(unused_mut)]
-                        let mut hist =
-                            self.api_cache.coinbase_oper_hist.entry(key).or_insert_with(
-                                || {
-                                    new_mapxnk!(format!(
-                                        "api_cache/{}coinbase_oper_hist/{}",
-                                        prefix,
-                                        key.to_base64()
-                                    ))
-                                },
-                            );
+                        let mut hist = self
+                            .api_cache
+                            .as_mut()
+                            .unwrap()
+                            .coinbase_oper_hist
+                            .entry(key)
+                            .or_insert_with(|| {
+                                new_mapxnk!(format!(
+                                    "api_cache/{}coinbase_oper_hist/{}",
+                                    prefix,
+                                    key.to_base64()
+                                ))
+                            });
                         hist.insert(i.height, me.clone());
                     }),
                     _ => { /* filter more operations before this line */ }
@@ -326,6 +331,8 @@ impl LedgerState {
                 api_cache::get_related_addresses(&curr_txn, classify_op);
             for address in &related_addresses {
                 self.api_cache
+                    .as_mut()
+                    .unwrap()
                     .related_transactions
                     .entry(*address)
                     .or_insert_with(|| {
@@ -343,6 +350,8 @@ impl LedgerState {
                 api_cache::get_transferred_nonconfidential_assets(&curr_txn);
             for asset in &transferred_assets {
                 self.api_cache
+                    .as_mut()
+                    .unwrap()
                     .related_transfers
                     .entry(*asset)
                     .or_insert_with(|| {
@@ -359,10 +368,16 @@ impl LedgerState {
             for op in &curr_txn.body.operations {
                 match op {
                     Operation::DefineAsset(define_asset) => {
-                        self.api_cache.add_created_asset(&define_asset);
+                        self.api_cache
+                            .as_mut()
+                            .unwrap()
+                            .add_created_asset(&define_asset);
                     }
                     Operation::IssueAsset(issue_asset) => {
-                        self.api_cache.cache_issuance(&issue_asset);
+                        self.api_cache
+                            .as_mut()
+                            .unwrap()
+                            .cache_issuance(&issue_asset);
                     }
                     _ => {}
                 };
@@ -373,15 +388,31 @@ impl LedgerState {
                 .iter()
                 .zip(addresses.iter().zip(owner_memos.iter()))
             {
-                self.api_cache.utxos_to_map_index.insert(*txo_sid, *address);
+                self.api_cache
+                    .as_mut()
+                    .unwrap()
+                    .utxos_to_map_index
+                    .insert(*txo_sid, *address);
                 let hash = curr_txn.hash_tm().hex().to_uppercase();
                 self.api_cache
+                    .as_mut()
+                    .unwrap()
                     .txo_to_txnid
                     .insert(*txo_sid, (txn_sid, hash.clone()));
-                self.api_cache.txn_sid_to_hash.insert(txn_sid, hash.clone());
-                self.api_cache.txn_hash_to_sid.insert(hash.clone(), txn_sid);
+                self.api_cache
+                    .as_mut()
+                    .unwrap()
+                    .txn_sid_to_hash
+                    .insert(txn_sid, hash.clone());
+                self.api_cache
+                    .as_mut()
+                    .unwrap()
+                    .txn_hash_to_sid
+                    .insert(hash.clone(), txn_sid);
                 if let Some(owner_memo) = owner_memo {
                     self.api_cache
+                        .as_mut()
+                        .unwrap()
                         .owner_memos
                         .insert(*txo_sid, (*owner_memo).clone());
                 }
@@ -560,7 +591,7 @@ impl LedgerState {
                 LedgerState::init_utxo_map(&utxo_map_path).c(d!())?,
             )),
             block_ctx: Some(BlockEffect::default()),
-            api_cache: ApiCache::new(&prefix),
+            api_cache: alt!(*KEEP_HIST, Some(ApiCache::new(&prefix)), None),
         };
 
         Ok(ledger)

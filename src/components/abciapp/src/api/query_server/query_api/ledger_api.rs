@@ -282,6 +282,8 @@ pub async fn get_delegation_reward(
     let hdr = qs
         .ledger_cloned
         .api_cache
+        .as_ref()
+        .unwrap()
         .staking_delegation_rwd_hist
         .get(&key)
         .c(d!())
@@ -336,13 +338,26 @@ pub async fn get_validator_delegation_history(
         .ok_or_else(|| error::ErrorBadRequest("not exists"))?
         .start_height;
 
-    let staking_global_rate_hist = &qs.ledger_cloned.api_cache.staking_global_rate_hist;
+    let staking_global_rate_hist = &qs
+        .ledger_cloned
+        .api_cache
+        .as_ref()
+        .unwrap()
+        .staking_global_rate_hist;
 
-    let delegation_amount_hist =
-        ledger.api_cache.staking_delegation_amount_hist.get(&v_id);
+    let delegation_amount_hist = ledger
+        .api_cache
+        .as_ref()
+        .unwrap()
+        .staking_delegation_amount_hist
+        .get(&v_id);
 
-    let self_delegation_amount_hist =
-        ledger.api_cache.staking_self_delegation_hist.get(&v_id);
+    let self_delegation_amount_hist = ledger
+        .api_cache
+        .as_ref()
+        .unwrap()
+        .staking_self_delegation_hist
+        .get(&v_id);
 
     let mut esiz = info.epoch_size.unwrap_or(10);
     alt!(esiz > h, esiz = h);
