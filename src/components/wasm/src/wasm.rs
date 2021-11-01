@@ -33,6 +33,7 @@ use finutils::txn_builder::{
     FeeInput as PlatformFeeInput, FeeInputs as PlatformFeeInputs,
     TransactionBuilder as PlatformTransactionBuilder,
     TransferOperationBuilder as PlatformTransferOperationBuilder,
+    AnonTransferOperationBuilder as PlatformAnonTransferOperationBuilder,
 };
 use fp_types::{
     actions::account::{Action as AccountAction, MintOutput, TransferToUTXO},
@@ -733,6 +734,33 @@ pub fn get_serialized_address(address: String) -> Result<String, JsValue> {
     String::from_utf8(sa).map_err(error_to_jsvalue)
 }
 
+#[derive(Clone, Deserialize, Serialize)]
+#[wasm_bindgen]
+pub struct AnonKeys {
+    pub axfr_secret_key: String,
+    pub axfr_public_key: String,
+    pub enc_key: String,
+    pub dec_key: String,
+}
+
+/// Generate new anonymous keys
+#[wasm_bindgen]
+pub fn gen_anon_keys() -> Result<AnonKeys, JsValue> {
+    let mut prng = ChaChaRng::from_entropy();
+    let keypair = AXfrKeyPair::generate(&mut prng);
+    let secret_key = XSecretKey::new(&mut prng);
+    let public_key = XPublicKey::from(&secret_key);
+
+    let keys = AnonKeys {
+        axfr_secret_key: wallet::anon_secret_key_to_base64(&keypair),
+        axfr_public_key: wallet::anon_public_key_to_base64(&keypair.pub_key()),
+        enc_key: wallet::x_public_key_to_base64(&public_key),
+        dec_key: wallet::x_secret_key_to_base64(&secret_key),
+    };
+
+    Ok(keys)
+}
+
 #[wasm_bindgen]
 #[derive(Default)]
 /// Structure that enables clients to construct complex transfers.
@@ -987,6 +1015,114 @@ impl TransferOperationBuilder {
         let op = self
             .get_builder()
             .transaction()
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
+        Ok(serde_json::to_string(&op).unwrap())
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Default)]
+/// Structure that enables clients to construct complex transfers.
+pub struct AnonTransferOperationBuilder {
+    op_builder: PlatformAnonTransferOperationBuilder,
+}
+
+impl AnonTransferOperationBuilder {
+    #[allow(missing_docs)]
+    pub fn get_builder(&self) -> &PlatformAnonTransferOperationBuilder {
+        &self.op_builder
+    }
+
+    #[allow(missing_docs)]
+    pub fn get_builder_mut(&mut self) -> &mut PlatformAnonTransferOperationBuilder {
+        &mut self.op_builder
+    }
+}
+
+impl AnonTransferOperationBuilder {
+
+    pub fn new() -> Self { Self::default() }
+
+    pub fn add_input(
+        mut self,
+        abar: AnonBlindAssetRecord,
+        memo: OwnerMemo,
+        keypair: AXfrKeyPair,
+        dec_key: XSecretKey,
+        mt_leaf_info: MTLeafInfo,
+    ) -> Result<AnonTransferOperationBuilder, JsValue> {
+        let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
+            &abar,
+            memo.memo,
+            &keypair,
+            &dec_key,
+        )
+            .c(d!())
+            .map_err(error_to_jsvalue)?
+            .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+            .build()
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
+
+        self
+            .get_builder_mut()
+            .add_input(oabar, keypair)
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
+
+        Ok(self)
+    }
+
+    pub fn add_output(
+        mut self,
+        amount: u64,
+        to: AXfrPubKey,
+        to_enc_key: XPublicKey,
+    ) -> Result<(AnonTransferOperationBuilder), JsValue> {
+
+        let mut prng = ChaChaRng::from_entropy();
+
+        let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
+            .amount(amount)
+            .pub_key(to)
+            .finalize(&mut prng, &to_enc_key)
+            .unwrap()
+            .build()
+            .unwrap();
+
+        self.get_builder_mut()
+            .add_output(oabar_out)
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
+
+        Ok(self)
+    }
+
+    pub fn get_randomizers(&self) -> Vec<JubJubScalar> {
+        self
+            .get_builder()
+            .get_randomizers()
+    }
+
+    pub fn create(mut self) -> Result<AnonTransferOperationBuilder, JsValue> {
+        self.get_builder_mut()
+            .build()
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
+
+        self.get_builder_mut()
+            .sign()
+            .c(d!())
+            .map_err(error_to_jsvalue);
+
+        Ok(self)
+    }
+
+    pub fn transaction(self, nonce: NoReplayToken) -> Result<String, JsValue> {
+        let op = self
+            .get_builder()
+            .transaction(nonce)
             .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(serde_json::to_string(&op).unwrap())
@@ -1334,7 +1470,7 @@ pub fn trace_assets(
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
 use crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey};
-use ledger::data_model::TxoSID;
+use ledger::data_model::{NoReplayToken, TxoSID};
 use rand::{thread_rng, Rng};
 use ring::pbkdf2;
 use std::num::NonZeroU32;

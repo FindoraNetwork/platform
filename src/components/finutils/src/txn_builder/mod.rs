@@ -70,6 +70,7 @@ use zei::{
         },
     },
 };
+use zei::anon_xfr::structs::{AXfrBody};
 use zeialgebra::jubjub::JubjubScalar;
 
 macro_rules! no_transfer_err {
@@ -1134,6 +1135,114 @@ impl TransferOperationBuilder {
             }
         }
         Ok(self)
+    }
+}
+
+/// AnonTransferOperationBuilder builders anon transfer operation using the factory pattern.
+/// This is used for the wasm interface in building a multi-input/output anon transfer operation.
+pub struct AnonTransferOperationBuilder {
+    inputs: Vec<OpenAnonBlindAssetRecord>,
+    outputs: Vec<OpenAnonBlindAssetRecord>,
+    keypairs: Vec<AXfrKeyPair>,
+
+    body: Option<AXfrBody>,
+    diversified_keypairs: Vec<AXfrKeyPair>,
+    randomizers: Vec<JubjubScalar>,
+    note: Option<AXfrNote>,
+}
+
+impl AnonTransferOperationBuilder {
+
+    /// new returns a fresh default builder
+    pub fn new() -> Self {
+        AnonTransferOperationBuilder{
+            inputs: vec![],
+            outputs: vec![],
+            keypairs: vec![],
+            body: None,
+            diversified_keypairs: vec![],
+            randomizers: vec![],
+            note: None
+        }
+    }
+
+    /// add_input is used for adding an input source to the Anon Transfer Operation factory, it takes
+    /// an ABAR and a Keypair as input
+    pub fn add_input(
+        &mut self,
+        abar: OpenAnonBlindAssetRecord,
+        secret_key: AXfrKeyPair
+    ) -> &mut Self {
+        self.inputs.push(abar);
+        self.keypairs.push(secret_key);
+        self
+    }
+
+    /// add_output is used to add a output record to the Anon Transfer factory
+    pub fn add_output(
+        &mut self,
+        abar: OpenAnonBlindAssetRecord
+    ) -> &mut Self {
+        let randomizer = abar.get_key_rand_factor().clone();
+        self.outputs.push(abar);
+        self.randomizers.push(randomizer);
+        self
+    }
+
+    /// get_randomizers fetches the randomizers for the different outputs.
+    pub fn get_randomizers(&self) -> Vec<JubjubScalar> {
+        self.randomizers.clone()
+    }
+
+    /// build generates the anon transfer body with the Zero Knowledge Proof.
+    pub fn build(&mut self) -> &mut Self {
+        let mut prng = ChaChaRng::from_entropy();
+        let user_params = UserParams::from_file_if_exists(
+            self.inputs.len(),
+            self.outputs.len(),
+            Some(41),
+            DEFAULT_BP_NUM_GENS,
+            None,
+        ).unwrap();
+
+        let (body, diversified_keypairs) = gen_anon_xfr_body(
+            &mut prng,
+            &user_params,
+            self.inputs.as_slice(),
+            self.outputs.as_slice(),
+            self.keypairs.as_slice()
+        ).unwrap();
+
+        self.body = Some(body);
+        self.diversified_keypairs = diversified_keypairs;
+
+        self
+    }
+
+    /// sign method signs the anon transfer body and creates a anon-note for the operation
+    pub fn sign(&mut self) -> &mut Self {
+
+        self.note = Some(
+            AXfrNote::generate_note_from_body(
+                self.body.as_ref().unwrap().clone(),
+                self.diversified_keypairs.clone(),
+            ).unwrap()
+        );
+
+        self
+    }
+
+    /// transaction method wraps the anon transfer note in an Operation and returns it
+    pub fn transaction(&self, nonce: NoReplayToken) -> Result<Operation> {
+        if self.note.is_none() {
+            return Err(eg!("Anon transfer not built and signed"));
+        }
+
+        Ok(Operation::TransferAnonAsset(
+            Box::from(
+                AnonTransferOps::new(self.note.as_ref().unwrap().clone(), nonce).unwrap()
+            )
+        ))
     }
 }
 
