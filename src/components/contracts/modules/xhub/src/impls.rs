@@ -1,5 +1,6 @@
 use crate::storage::*;
 use crate::{App, Config};
+use evm::ExitReason;
 use fp_core::{context::Context, ensure, transaction::ActionResult};
 use fp_evm::Runner;
 use fp_storage::{Borrow, BorrowMut};
@@ -49,11 +50,6 @@ impl<C: Config> App<C> {
         }
 
         if !amount.is_zero() {
-            // mint UTXO
-            Self::add_mint(ctx, outputs)?;
-
-            // Self::burn(ctx, &sender, amount)?;
-
             // call ERC20 contract burn method
             let mut config = C::config().clone();
             config.estimate = true;
@@ -70,7 +66,14 @@ impl<C: Config> App<C> {
                 nonce: None,
             };
 
-            C::Runner::call(ctx, call, &config)?;
+            let info = C::Runner::call(ctx, call, &config).c(d!("Evm runner failed"))?;
+            match info.exit_reason {
+                ExitReason::Succeed(_) => {
+                    // mint UTXO
+                    Self::add_mint(ctx, outputs)?;
+                }
+                _ => return Err(eg!("Failed to execute evm tx")),
+            }
         }
 
         Ok(ActionResult::default())

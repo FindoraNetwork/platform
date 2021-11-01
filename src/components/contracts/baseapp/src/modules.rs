@@ -3,6 +3,7 @@ use std::convert::TryFrom;
 use super::*;
 use crate::BaseApp;
 use abci::*;
+use evm::ExitReason;
 use fp_core::{
     context::Context,
     module::AppModule,
@@ -156,12 +157,13 @@ impl ModuleManager {
             nonce: Some(account.nonce),
         };
 
-        let res =
-            <BaseApp as module_ethereum::Config>::Runner::call(ctx, call, &config)?;
-
-        log::debug!("erc20: {:?}", res);
-
-        Ok(())
+        let info =
+            <BaseApp as module_ethereum::Config>::Runner::call(ctx, call, &config)
+                .c(d!("Evm runner failed!"))?;
+        match info.exit_reason {
+            ExitReason::Succeed(_) => Ok(()),
+            _ => Err(eg!("Failed to execute evm transaction")),
+        }
     }
 }
 
