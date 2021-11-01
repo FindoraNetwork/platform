@@ -44,6 +44,7 @@ use std::{
     collections::{BTreeMap, HashSet},
 };
 use tendermint::PrivateKey;
+use zei::anon_xfr::structs::AXfrBody;
 use zei::{
     anon_xfr::{
         bar_to_from_abar::gen_bar_to_abar_body,
@@ -70,7 +71,6 @@ use zei::{
         },
     },
 };
-use zei::anon_xfr::structs::{AXfrBody};
 use zeialgebra::jubjub::JubjubScalar;
 
 macro_rules! no_transfer_err {
@@ -1140,6 +1140,7 @@ impl TransferOperationBuilder {
 
 /// AnonTransferOperationBuilder builders anon transfer operation using the factory pattern.
 /// This is used for the wasm interface in building a multi-input/output anon transfer operation.
+#[derive(Default)]
 pub struct AnonTransferOperationBuilder {
     inputs: Vec<OpenAnonBlindAssetRecord>,
     outputs: Vec<OpenAnonBlindAssetRecord>,
@@ -1152,17 +1153,16 @@ pub struct AnonTransferOperationBuilder {
 }
 
 impl AnonTransferOperationBuilder {
-
-    /// new returns a fresh default builder
-    pub fn new() -> Self {
-        AnonTransferOperationBuilder{
-            inputs: vec![],
-            outputs: vec![],
-            keypairs: vec![],
+    /// default returns a fresh default builder
+    pub fn default() -> Self {
+        AnonTransferOperationBuilder {
+            inputs: Vec::default(),
+            outputs: Vec::default(),
+            keypairs: Vec::default(),
             body: None,
-            diversified_keypairs: vec![],
-            randomizers: vec![],
-            note: None
+            diversified_keypairs: Vec::default(),
+            randomizers: Vec::default(),
+            note: None,
         }
     }
 
@@ -1171,22 +1171,19 @@ impl AnonTransferOperationBuilder {
     pub fn add_input(
         &mut self,
         abar: OpenAnonBlindAssetRecord,
-        secret_key: AXfrKeyPair
-    ) -> &mut Self {
+        secret_key: AXfrKeyPair,
+    ) -> Result<&mut Self> {
         self.inputs.push(abar);
         self.keypairs.push(secret_key);
-        self
+        Ok(self)
     }
 
     /// add_output is used to add a output record to the Anon Transfer factory
-    pub fn add_output(
-        &mut self,
-        abar: OpenAnonBlindAssetRecord
-    ) -> &mut Self {
-        let randomizer = abar.get_key_rand_factor().clone();
+    pub fn add_output(&mut self, abar: OpenAnonBlindAssetRecord) -> Result<&mut Self> {
+        let randomizer = abar.get_key_rand_factor();
         self.outputs.push(abar);
         self.randomizers.push(randomizer);
-        self
+        Ok(self)
     }
 
     /// get_randomizers fetches the randomizers for the different outputs.
@@ -1195,7 +1192,7 @@ impl AnonTransferOperationBuilder {
     }
 
     /// build generates the anon transfer body with the Zero Knowledge Proof.
-    pub fn build(&mut self) -> &mut Self {
+    pub fn build(&mut self) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
         let user_params = UserParams::from_file_if_exists(
             self.inputs.len(),
@@ -1203,33 +1200,35 @@ impl AnonTransferOperationBuilder {
             Some(41),
             DEFAULT_BP_NUM_GENS,
             None,
-        ).unwrap();
+        )
+        .c(d!())?;
 
         let (body, diversified_keypairs) = gen_anon_xfr_body(
             &mut prng,
             &user_params,
             self.inputs.as_slice(),
             self.outputs.as_slice(),
-            self.keypairs.as_slice()
-        ).unwrap();
+            self.keypairs.as_slice(),
+        )
+        .c(d!())?;
 
         self.body = Some(body);
         self.diversified_keypairs = diversified_keypairs;
 
-        self
+        Ok(self)
     }
 
     /// sign method signs the anon transfer body and creates a anon-note for the operation
-    pub fn sign(&mut self) -> &mut Self {
-
+    pub fn sign(&mut self) -> Result<&mut Self> {
         self.note = Some(
             AXfrNote::generate_note_from_body(
                 self.body.as_ref().unwrap().clone(),
                 self.diversified_keypairs.clone(),
-            ).unwrap()
+            )
+            .c(d!())?,
         );
 
-        self
+        Ok(self)
     }
 
     /// transaction method wraps the anon transfer note in an Operation and returns it
@@ -1238,11 +1237,9 @@ impl AnonTransferOperationBuilder {
             return Err(eg!("Anon transfer not built and signed"));
         }
 
-        Ok(Operation::TransferAnonAsset(
-            Box::from(
-                AnonTransferOps::new(self.note.as_ref().unwrap().clone(), nonce).unwrap()
-            )
-        ))
+        Ok(Operation::TransferAnonAsset(Box::from(
+            AnonTransferOps::new(self.note.as_ref().unwrap().clone(), nonce).unwrap(),
+        )))
     }
 }
 

@@ -21,6 +21,7 @@ use crate::wasm_data_model::{
     CredentialPoK, CredentialRevealSig, CredentialSignature, CredentialUserKeyPair,
     MTLeafInfo, OwnerMemo, PublicParams, TracingPolicies, TxoRef,
 };
+use algebra::jubjub::JubjubScalar;
 use core::str::FromStr;
 use credentials::{
     credential_commit, credential_issuer_key_gen, credential_open_commitment,
@@ -30,10 +31,10 @@ use credentials::{
 };
 use cryptohash::sha256;
 use finutils::txn_builder::{
+    AnonTransferOperationBuilder as PlatformAnonTransferOperationBuilder,
     FeeInput as PlatformFeeInput, FeeInputs as PlatformFeeInputs,
     TransactionBuilder as PlatformTransactionBuilder,
     TransferOperationBuilder as PlatformTransferOperationBuilder,
-    AnonTransferOperationBuilder as PlatformAnonTransferOperationBuilder,
 };
 use fp_types::{
     actions::account::{Action as AccountAction, MintOutput, TransferToUTXO},
@@ -734,13 +735,58 @@ pub fn get_serialized_address(address: String) -> Result<String, JsValue> {
     String::from_utf8(sa).map_err(error_to_jsvalue)
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+/// AnonKeys is used to store keys for Anon proofs
 #[wasm_bindgen]
 pub struct AnonKeys {
-    pub axfr_secret_key: String,
-    pub axfr_public_key: String,
-    pub enc_key: String,
-    pub dec_key: String,
+    axfr_secret_key: String,
+    axfr_public_key: String,
+    enc_key: String,
+    dec_key: String,
+}
+
+/// AnonKeys is a struct to store keys required for anon transfer
+#[wasm_bindgen]
+#[allow(missing_docs)]
+impl AnonKeys {
+    #[wasm_bindgen(getter)]
+    pub fn axfr_secret_key(&self) -> String {
+        self.axfr_secret_key.clone()
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_axfr_secret_key(&mut self, axfr_secret_key: String) {
+        self.axfr_secret_key = axfr_secret_key;
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn axfr_public_key(&self) -> String {
+        self.axfr_public_key.clone()
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_axfr_public_key(&mut self, axfr_public_key: String) {
+        self.axfr_public_key = axfr_public_key;
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn enc_key(&self) -> String {
+        self.enc_key.clone()
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_enc_key(&mut self, enc_key: String) {
+        self.enc_key = enc_key;
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn dec_key(&self) -> String {
+        self.dec_key.clone()
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_dec_key(&mut self, dec_key: String) {
+        self.dec_key = dec_key;
+    }
 }
 
 /// Generate new anonymous keys
@@ -1038,12 +1084,21 @@ impl AnonTransferOperationBuilder {
     pub fn get_builder_mut(&mut self) -> &mut PlatformAnonTransferOperationBuilder {
         &mut self.op_builder
     }
+
+    fn default() -> Self {
+        AnonTransferOperationBuilder {
+            op_builder: PlatformAnonTransferOperationBuilder::default(),
+        }
+    }
 }
 
 impl AnonTransferOperationBuilder {
+    /// new is a constructor for AnonTransferOperationBuilder
+    pub fn new() -> Self {
+        Self::default()
+    }
 
-    pub fn new() -> Self { Self::default() }
-
+    /// add_input is used to add a new input source for Anon Transfer
     pub fn add_input(
         mut self,
         abar: AnonBlindAssetRecord,
@@ -1053,20 +1108,16 @@ impl AnonTransferOperationBuilder {
         mt_leaf_info: MTLeafInfo,
     ) -> Result<AnonTransferOperationBuilder, JsValue> {
         let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
-            &abar,
-            memo.memo,
-            &keypair,
-            &dec_key,
+            &abar, memo.memo, &keypair, &dec_key,
         )
-            .c(d!())
-            .map_err(error_to_jsvalue)?
-            .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
-            .build()
-            .c(d!())
-            .map_err(error_to_jsvalue)?;
+        .c(d!())
+        .map_err(error_to_jsvalue)?
+        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .build()
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
 
-        self
-            .get_builder_mut()
+        self.get_builder_mut()
             .add_input(oabar, keypair)
             .c(d!())
             .map_err(error_to_jsvalue)?;
@@ -1074,13 +1125,13 @@ impl AnonTransferOperationBuilder {
         Ok(self)
     }
 
+    /// add_output is used to add a output to the Anon Transfer
     pub fn add_output(
         mut self,
         amount: u64,
         to: AXfrPubKey,
         to_enc_key: XPublicKey,
-    ) -> Result<(AnonTransferOperationBuilder), JsValue> {
-
+    ) -> Result<AnonTransferOperationBuilder, JsValue> {
         let mut prng = ChaChaRng::from_entropy();
 
         let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
@@ -1099,12 +1150,12 @@ impl AnonTransferOperationBuilder {
         Ok(self)
     }
 
-    pub fn get_randomizers(&self) -> Vec<JubJubScalar> {
-        self
-            .get_builder()
-            .get_randomizers()
+    /// get_randomizers
+    pub fn get_randomizers(&self) -> Vec<JubjubScalar> {
+        self.get_builder().get_randomizers()
     }
 
+    /// create is used to buiuld proof and sign the Transfer Operation
     pub fn create(mut self) -> Result<AnonTransferOperationBuilder, JsValue> {
         self.get_builder_mut()
             .build()
@@ -1114,11 +1165,12 @@ impl AnonTransferOperationBuilder {
         self.get_builder_mut()
             .sign()
             .c(d!())
-            .map_err(error_to_jsvalue);
+            .map_err(error_to_jsvalue)?;
 
         Ok(self)
     }
 
+    /// transaction returns the prepared Anon Transfer Operation
     pub fn transaction(self, nonce: NoReplayToken) -> Result<String, JsValue> {
         let op = self
             .get_builder()
