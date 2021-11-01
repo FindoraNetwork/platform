@@ -143,6 +143,7 @@ impl ModuleManager {
         let mut config = <BaseApp as module_ethereum::Config>::config().clone();
         config.estimate = true;
 
+        let account = module_evm::App::<BaseApp>::account_basic(ctx, &target);
         let call = Call {
             source: signer,
             target,
@@ -152,10 +153,13 @@ impl ModuleManager {
             gas_price: Some(
                 <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(),
             ),
-            nonce: Some(U256::from(0_u64)),
+            nonce: Some(account.nonce),
         };
 
-        <BaseApp as module_ethereum::Config>::Runner::call(ctx, call, &config)?;
+        let res =
+            <BaseApp as module_ethereum::Config>::Runner::call(ctx, call, &config)?;
+
+        log::debug!("erc20: {:?}", res);
 
         Ok(())
     }
