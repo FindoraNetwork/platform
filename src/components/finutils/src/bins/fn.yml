@@ -492,12 +492,6 @@ subcommands:
   - erc20-to-utxo:
       about: Transfer FRA from an Ethereum address to the specified Findora account
       args:
-        - addr:
-            help: findora account to receive FRA, eg:fra1rkv...
-            short: a
-            long: addr
-            takes_value: true
-            value_name: WALLET ADDRESS
         - amount:
             help: withdraw FRA amount
             short: n
@@ -510,9 +504,9 @@ subcommands:
             short: a
             long: addr
             takes_value: true
-            value_name: WALLET ADDRESS
+            value_name: CONTRACT ADDRESS
         - input:
-            help: erc20 input data
+            help: erc20 input data, the `Burn` function bytecode
             short: i
             long: input
             takes_value: true
