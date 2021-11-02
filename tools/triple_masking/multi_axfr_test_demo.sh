@@ -17,9 +17,9 @@ set -e
 
 echo "\n\n\n Bar To Abar Conversion 2"
 sleep 10
-target/release/fn convert-bar-to-abar --anon-keys ./anon-keys-temp2.keys  --txo-sid 9
-#echo "Owned UTXOs of the converter"
-#target/release/fn owned-utxos
+target/release/fn convert-bar-to-abar --anon-keys ./anon-keys-temp2.keys  --txo-sid 9 2> /dev/null
+sleep 10
+target/release/fn convert-bar-to-abar --anon-keys ./anon-keys-temp2.keys  --txo-sid 6 2> /dev/null
 #echo "\n\n\n Bar To Abar Conversion 3"
 #sleep 10
 #target/release/fn convert-bar-to-abar --anon-keys ./anon-keys-temp2.keys  --txo-sid 12
@@ -56,14 +56,14 @@ sleep 5
 target/release/fn anon-transfer-batch -n amount_file -s axfr_secretkey_file -d decryption_key_file --to-axfr-public-key-file to_axfr_public_key_file --to-enc-key-file to_enc_key_file -r randomizer_file
 
 tail -n 2 randomizers > randomizer_file
-randomiser=$(awk 'FNR>=1 && FNR<=1' randomizers)
+randomiser=$(awk 'FNR>=1 && FNR<=1' randomizer_file)
 echo "\n\n Owned Abars for Receiver1 after Batch Anon Transfer"
-sleep 10
+sleep 20
 target/release/fn owned-abars -p 1ASVNYLgW2SzBEmAnHfaiJwVBd0M72aRhcReJluZo9M= -r $randomiser
 
-randomiser=$(awk 'FNR>=2 && FNR<=2' randomizers)
+randomiser=$(awk 'FNR>=2 && FNR<=2' randomizer_file)
 echo "\n\n Owned Abars for Receiver2 after Batch Anon Transfer"
-sleep 10
+sleep 20
 target/release/fn owned-abars -p ovO3hR4HeZ_arSGhiLAFUeN9jPsxjajcNiRsV8dNjIg= -r $randomiser
 
 sleep 2
