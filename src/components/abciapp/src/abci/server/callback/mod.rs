@@ -20,7 +20,10 @@ use {
     lazy_static::lazy_static,
     ledger::{
         staking::KEEP_HIST,
-        store::fbnc::{new_mapx, Mapx},
+        store::{
+            api_cache,
+            fbnc::{new_mapx, Mapx},
+        },
     },
     parking_lot::{Mutex, RwLock},
     protobuf::RepeatedField,
@@ -236,7 +239,7 @@ pub fn commit(s: &mut ABCISubmissionServer, _req: &RequestCommit) -> ResponseCom
     state.set_tendermint_height(td_height as u64);
 
     // cache last block for QueryServer
-    pnk!(state.update_api_cache());
+    pnk!(api_cache::update_api_cache(&mut state));
 
     // snapshot them finally
     let path = format!("{}/{}", &CFG.ledger_dir, &state.get_status().snapshot_file);

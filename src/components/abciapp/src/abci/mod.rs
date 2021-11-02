@@ -45,6 +45,10 @@ pub fn run() -> Result<()> {
 
     env::set_var("BNC_DATA_DIR", format!("{}/__bnc__", &config.ledger_dir));
 
+    if CFG.enable_query_service {
+        env::set_var("FINDORAD_KEEP_HIST", "1");
+    }
+
     let app = server::ABCISubmissionServer::new(
         basedir,
         format!("{}:{}", config.tendermint_host, config.tendermint_port),
@@ -53,8 +57,6 @@ pub fn run() -> Result<()> {
     let submission_service_hdr = Arc::clone(&app.la);
 
     if CFG.enable_query_service {
-        env::set_var("FINDORAD_KEEP_HIST", "1");
-
         let query_service_hdr = submission_service_hdr.read().borrowable_ledger_state();
         pnk!(query_api::service::start_query_server(
             Arc::clone(&query_service_hdr),
