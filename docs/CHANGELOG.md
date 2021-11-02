@@ -17,19 +17,16 @@
 #### v0.2.11-release
 
 - Fix incorrect calculations about `Nonconfidential Balances`
-
-#### v0.2.10-release
-
 - Optimize the calculation of `expected return rate`
 - Optimize some history-style APIs
 
-#### v0.2.9-release
+#### v0.2.9-release (Yanked at the block height of 121_0000 !)
 
 - Add an extra `reserved account` to optimize the APY curve
 - Fix a BUG about the calculation of commissions
     - validator will loss its proposer&commission rewards when a zero-amount delegation is found
 
-#### v0.2.8-release (Yanked !)
+#### v0.2.8-release (Yanked at the block height of 120_0000 !)
 
 - Avoid to store historical transactions on chain
     - Resist some kinds of the replay attack
