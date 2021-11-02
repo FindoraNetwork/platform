@@ -839,6 +839,21 @@ fn test_update_anon_stores() {
             merkle_id: 0,
         },
     ];
+
+    let str0 = base64::encode_config(
+        &BLSScalar::zero().get_scalar().to_bytes(),
+        base64::URL_SAFE,
+    );
+    let d0: Key = Key::from_base64(&str0).unwrap();
+    assert!(state.nullifier_set.get(&d0).unwrap().is_none());
+
+    let str1 = base64::encode_config(
+        &BLSScalar::one().get_scalar().to_bytes(),
+        base64::URL_SAFE,
+    );
+    let d1: Key = Key::from_base64(&str1).unwrap();
+    assert!(state.nullifier_set.get(&d1).unwrap().is_none());
+
     let res = state.update_anon_stores(nullifiers, output_abars, 0, tx_block);
     assert!(res.is_ok());
 
@@ -846,19 +861,8 @@ fn test_update_anon_stores() {
     assert!(res2.is_ok());
     assert_eq!(res2.unwrap(), 1);
 
-    let str0 = base64::encode_config(
-        &BLSScalar::zero().get_scalar().to_bytes(),
-        base64::URL_SAFE,
-    );
-    let d0: Key = Key::from_base64(&str0).unwrap();
-    assert_eq!(state.nullifier_set.get(&d0).unwrap(), Some(Vec::new()));
-
-    let str1 = base64::encode_config(
-        &BLSScalar::one().get_scalar().to_bytes(),
-        base64::URL_SAFE,
-    );
-    let d1: Key = Key::from_base64(&str1).unwrap();
-    assert_eq!(state.nullifier_set.get(&d1).unwrap(), Some(Vec::new()));
+    assert!(state.nullifier_set.get(&d0).unwrap().is_some());
+    assert!(state.nullifier_set.get(&d1).unwrap().is_some());
 
     assert_eq!(state.status.next_atxo.0, 4);
     assert_eq!(

@@ -408,7 +408,7 @@ fn run() -> Result<()> {
 
             println!(
                 "\x1b[31;01m Randomizer: {}\x1b[00m",
-                wallet::randomizer_to_base64(&r)
+                wallet::randomizer_to_base58(&r)
             );
             let mut file = fs::OpenOptions::new()
                 .append(true)
@@ -417,7 +417,7 @@ fn run() -> Result<()> {
                 .expect("cannot open randomizers file");
             std::io::Write::write_all(
                 &mut file,
-                ("\n".to_owned() + &wallet::randomizer_to_base64(&r)).as_bytes(),
+                ("\n".to_owned() + &wallet::randomizer_to_base58(&r)).as_bytes(),
             )
             .expect("randomizer write failed");
         }
@@ -446,7 +446,7 @@ fn run() -> Result<()> {
         let axfr_public_key_str = m.value_of("axfr-public-key");
 
         // create derived public key
-        let randomizer = wallet::randomizer_from_base64(randomizer_str.unwrap())?;
+        let randomizer = wallet::randomizer_from_base58(randomizer_str.unwrap())?;
         let axfr_public_key =
             wallet::anon_public_key_from_base64(axfr_public_key_str.unwrap())?;
         let derived_public_key = axfr_public_key.randomize(&randomizer);

@@ -733,7 +733,7 @@ pub fn gen_oabar_add_op(
     let enc_key_out =
         wallet::x_public_key_from_base64(to_enc_key).c(d!("invalid to_enc_key"))?;
 
-    let r = wallet::randomizer_from_base64(r).c(d!())?;
+    let r = wallet::randomizer_from_base58(r).c(d!())?;
     let diversified_from_pub_key = from.pub_key().randomize(&r);
     let axtxo_abar = utils::get_owned_abars(&diversified_from_pub_key).c(d!())?;
     //Only the first abar received from the ledger query is considered
@@ -771,7 +771,7 @@ pub fn gen_oabar_add_op(
 
     println!(
         "\x1b[31;01m Randomizer: {}\x1b[00m",
-        wallet::randomizer_to_base64(&r_out)
+        wallet::randomizer_to_base58(&r_out)
     );
     let mut file = fs::OpenOptions::new()
         .append(true)
@@ -780,7 +780,7 @@ pub fn gen_oabar_add_op(
         .expect("cannot open randomizers file");
     std::io::Write::write_all(
         &mut file,
-        ("\n".to_owned() + &wallet::randomizer_to_base64(&r_out)).as_bytes(),
+        ("\n".to_owned() + &wallet::randomizer_to_base58(&r_out)).as_bytes(),
     )
     .expect("randomizer write failed");
 
@@ -802,7 +802,7 @@ pub fn gen_oabar_add_op_x(
     for i in 0..sender_count - 1 {
         let from = &axfr_secret_keys[i];
         let from_secret_key = &dec_keys[i];
-        let r = wallet::randomizer_from_base64(randomizers[i].as_str()).c(d!())?;
+        let r = wallet::randomizer_from_base58(randomizers[i].as_str()).c(d!())?;
         let diversified_from_pub_key = from.pub_key().randomize(&r);
 
         let axtxo_abar = utils::get_owned_abars(&diversified_from_pub_key).c(d!())?;
@@ -843,7 +843,7 @@ pub fn gen_oabar_add_op_x(
         let r = oabar_out.get_key_rand_factor();
         println!(
             "\x1b[31;01m Randomizer: {}\x1b[00m",
-            wallet::randomizer_to_base64(&r)
+            wallet::randomizer_to_base58(&r)
         );
         oabars_out.push(oabar_out);
     }

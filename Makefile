@@ -287,3 +287,6 @@ devnet: reset snapshot
 
 run_bar_to_abar_demo: devnet
 	@./tools/triple_masking/bar_to_abar_convert.sh
+
+run_anon_transfer_demo: devnet
+	@./tools/triple_masking/anonxfr_test_demo.sh
