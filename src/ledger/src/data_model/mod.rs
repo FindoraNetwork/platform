@@ -1669,6 +1669,8 @@ impl Transaction {
                     if x.body.code.val == ASSET_TYPE_FRA {
                         return true;
                     }
+                } else if let Operation::TransferAnonAsset(_) = ops {
+                    return true;
                 }
                 false
             })

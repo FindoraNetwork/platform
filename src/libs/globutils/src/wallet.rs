@@ -203,9 +203,9 @@ pub fn anon_public_key_to_base64(key: &AXfrPubKey) -> String {
 }
 
 #[inline(always)]
-/// Convert a randomizer to base64
-pub fn randomizer_to_base64(r: &JubjubScalar) -> String {
-    base64::encode_config(&JubjubScalar::zei_to_bytes(r), base64::URL_SAFE)
+/// Convert a randomizer to base58
+pub fn randomizer_to_base58(r: &JubjubScalar) -> String {
+    bs58::encode(&JubjubScalar::zei_to_bytes(r)).into_string()
 }
 
 #[inline(always)]
@@ -251,9 +251,10 @@ pub fn x_secret_key_to_base64(key: &XSecretKey) -> String {
 }
 
 #[inline(always)]
-/// Restore a randomizer from base64
-pub fn randomizer_from_base64(sk: &str) -> Result<JubjubScalar> {
-    base64::decode_config(sk, URL_SAFE)
+/// Restore a randomizer from base58
+pub fn randomizer_from_base58(sk: &str) -> Result<JubjubScalar> {
+    bs58::decode(sk)
+        .into_vec()
         .c(d!())
         .and_then(|bytes| JubjubScalar::zei_from_bytes(&bytes).c(d!()))
 }

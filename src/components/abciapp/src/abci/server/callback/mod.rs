@@ -256,10 +256,6 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
 
     let mut r = ResponseCommit::new();
 
-    // Commit Anon tree changes here following Tendermint protocol
-    pnk!(state.commit_anon_changes().c(d!()));
-    pnk!(state.commit_nullifier_changes().c(d!()));
-
     let mut commitment = state.get_state_commitment().0.as_ref().to_vec();
     if s.account_base_app.read().latest_block_number().is_some() {
         // Combines ledger state hash and chain state hash

@@ -733,7 +733,7 @@ pub fn gen_oabar_add_op(
     let enc_key_out =
         wallet::x_public_key_from_base64(to_enc_key).c(d!("invalid to_enc_key"))?;
 
-    let r = wallet::randomizer_from_base64(r).c(d!())?;
+    let r = wallet::randomizer_from_base58(r).c(d!())?;
     let diversified_from_pub_key = from.pub_key().randomize(&r);
     let axtxo_abar = utils::get_owned_abars(&diversified_from_pub_key).c(d!())?;
     //Only the first abar received from the ledger query is considered
@@ -751,24 +751,40 @@ pub fn gen_oabar_add_op(
     .build()
     .unwrap();
 
-    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    let mut prng = ChaChaRng::from_entropy();
     let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
         .amount(axfr_amount)
+        .asset_type(oabar_in.get_asset_type())
         .pub_key(to)
         .finalize(&mut prng, &enc_key_out)
         .unwrap()
         .build()
         .unwrap();
 
-    let r = oabar_out.get_key_rand_factor();
+    let r_out = oabar_out.get_key_rand_factor();
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
-    let _ = builder
+    let (_, note) = builder
         .add_operation_anon_transfer(&[oabar_in], &[oabar_out], &[from])
         .c(d!())?;
 
     send_tx(&builder.take_transaction()).c(d!())?;
 
-    println!("Randomizer: {}", wallet::randomizer_to_base64(&r));
+    println!(
+        "\x1b[31;01m Randomizer: {}\x1b[00m",
+        wallet::randomizer_to_base58(&r_out)
+    );
+    let mut file = fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open("randomizers")
+        .expect("cannot open randomizers file");
+    std::io::Write::write_all(
+        &mut file,
+        ("\n".to_owned() + &wallet::randomizer_to_base58(&r_out)).as_bytes(),
+    )
+    .expect("randomizer write failed");
+
+    println!("Signed AxfrNote: {:?}", serde_json::to_string_pretty(&note));
     Ok(())
 }
 
@@ -786,7 +802,7 @@ pub fn gen_oabar_add_op_x(
     for i in 0..sender_count - 1 {
         let from = &axfr_secret_keys[i];
         let from_secret_key = &dec_keys[i];
-        let r = wallet::randomizer_from_base64(randomizers[i].as_str()).c(d!())?;
+        let r = wallet::randomizer_from_base58(randomizers[i].as_str()).c(d!())?;
         let diversified_from_pub_key = from.pub_key().randomize(&r);
 
         let axtxo_abar = utils::get_owned_abars(&diversified_from_pub_key).c(d!())?;
@@ -825,7 +841,10 @@ pub fn gen_oabar_add_op_x(
             .unwrap();
 
         let r = oabar_out.get_key_rand_factor();
-        println!("Randomizer: {}", wallet::randomizer_to_base64(&r));
+        println!(
+            "\x1b[31;01m Randomizer: {}\x1b[00m",
+            wallet::randomizer_to_base58(&r)
+        );
         oabars_out.push(oabar_out);
     }
 

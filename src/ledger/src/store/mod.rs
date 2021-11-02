@@ -255,6 +255,7 @@ impl LedgerState {
         block.temp_sids.clear();
         block.txns.clear();
         block.output_abars.clear();
+        block.new_nullifiers.clear();
 
         let block_idx = self.blocks.len();
         tx_block.iter().enumerate().for_each(|(tx_idx, tx)| {
@@ -313,7 +314,7 @@ impl LedgerState {
             if self.nullifier_set.get(&d).c(d!())?.is_some() {
                 return Err(eg!("Nullifier hash already present in set"));
             }
-            self.nullifier_set.set(&d, Some(b"".to_vec())).c(d!())?;
+            self.nullifier_set.set(&d, Some(n.zei_to_bytes())).c(d!())?;
         }
 
         let mut txn_sid = TxnSID(backup_next_txn_sid);
@@ -459,6 +460,10 @@ impl LedgerState {
             .push(state_commitment_data.compute_commitment());
         self.status.state_commitment_data = Some(state_commitment_data);
 
+        // Commit Anon tree changes here following Tendermint protocol
+        pnk!(self.commit_anon_changes().c(d!()));
+        pnk!(self.commit_nullifier_changes().c(d!()));
+
         let abar_root_hash =
             self.get_abar_root_hash().expect("failed to read root hash");
         self.status.abar_commitment_versions.push(abar_root_hash);
@@ -520,7 +525,10 @@ impl LedgerState {
         let store = ImmutablePrefixedStore::new("abar_store", &self.abar_query_state);
         let mt = ImmutablePersistentMerkleTree::new(store)?;
 
-        mt.generate_proof(id.0)
+        let mut t = mt.generate_proof(id.0)?;
+        t.root_version = self.status.get_current_abar_version();
+
+        Ok(t)
     }
 
     // Initialize a logged Merkle tree for the ledger.
@@ -1264,14 +1272,14 @@ impl LedgerStatus {
     #[allow(missing_docs)]
     #[allow(dead_code)]
     fn get_versioned_abar_hash(&self, version: usize) -> Option<BLSScalar> {
-        self.abar_commitment_versions.get(version - 1)
+        self.abar_commitment_versions.get(version)
     }
 
     #[inline(always)]
     #[allow(missing_docs)]
     #[allow(dead_code)]
     fn get_current_abar_version(&self) -> usize {
-        self.abar_commitment_versions.len()
+        self.abar_commitment_versions.len() - 1
     }
 
     fn fast_invariant_check(&self) -> Result<()> {
