@@ -282,6 +282,8 @@ pub async fn get_delegation_reward(
     let hdr = qs
         .ledger_cloned
         .api_cache
+        .as_ref()
+        .unwrap()
         .staking_delegation_rwd_hist
         .get(&key)
         .c(d!())
@@ -336,13 +338,26 @@ pub async fn get_validator_delegation_history(
         .ok_or_else(|| error::ErrorBadRequest("not exists"))?
         .start_height;
 
-    let staking_global_rate_hist = &qs.ledger_cloned.api_cache.staking_global_rate_hist;
+    let staking_global_rate_hist = &qs
+        .ledger_cloned
+        .api_cache
+        .as_ref()
+        .unwrap()
+        .staking_global_rate_hist;
 
-    let delegation_amount_hist =
-        ledger.api_cache.staking_delegation_amount_hist.get(&v_id);
+    let delegation_amount_hist = ledger
+        .api_cache
+        .as_ref()
+        .unwrap()
+        .staking_delegation_amount_hist
+        .get(&v_id);
 
-    let self_delegation_amount_hist =
-        ledger.api_cache.staking_self_delegation_hist.get(&v_id);
+    let self_delegation_amount_hist = ledger
+        .api_cache
+        .as_ref()
+        .unwrap()
+        .staking_self_delegation_hist
+        .get(&v_id);
 
     let mut esiz = info.epoch_size.unwrap_or(10);
     alt!(esiz > h, esiz = h);
@@ -518,10 +533,13 @@ pub async fn query_validator_detail(
             };
             let realtime_rate = ledger.staking_get_block_rewards_rate();
             let expected_annualization = [
-                realtime_rate[0] as u128 * v_self_delegation.proposer_rwd_cnt as u128,
+                realtime_rate[0] as u128
+                    * v_self_delegation.proposer_rwd_cnt as u128
+                    * staking.get_global_delegation_amount() as u128,
                 realtime_rate[1] as u128
                     * (1 + staking.cur_height() - v_self_delegation.start_height)
-                        as u128,
+                        as u128
+                    * v.td_power as u128,
             ];
 
             let resp = ValidatorDetail {

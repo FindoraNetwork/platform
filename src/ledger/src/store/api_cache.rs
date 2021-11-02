@@ -11,8 +11,9 @@ use {
         staking::{
             ops::mint_fra::MintEntry, Amount, BlockHeight, DelegationRwdDetail,
             CHAN_D_AMOUNT_HIST, CHAN_D_RWD_HIST, CHAN_GLOB_RATE_HIST,
-            CHAN_V_SELF_D_HIST,
+            CHAN_V_SELF_D_HIST, KEEP_HIST,
         },
+        store::LedgerState,
     },
     fbnc::{new_mapx, new_mapxnk, Mapx, Mapxnk},
     globutils::wallet,
@@ -27,16 +28,17 @@ type Issuances = Vec<(TxOutput, Option<OwnerMemo>)>;
 /// Used in APIs
 #[derive(Clone, Deserialize, Serialize)]
 pub struct ApiCache {
+    pub(crate) prefix: String,
     /// Set of transactions related to a ledger address
-    pub related_transactions: Mapx<XfrAddress, HashSet<TxnSID>>,
+    pub related_transactions: Mapx<XfrAddress, Mapxnk<TxnSID, bool>>,
     /// Set of transfer transactions related to an asset code
-    pub related_transfers: Mapx<AssetTypeCode, HashSet<TxnSID>>,
+    pub related_transfers: Mapx<AssetTypeCode, Mapxnk<TxnSID, bool>>,
     /// List of claim transactions related to a ledger address
-    pub claim_hist_txns: Mapx<XfrAddress, Vec<TxnSID>>,
+    pub claim_hist_txns: Mapx<XfrAddress, Mapxnk<TxnSID, bool>>,
     /// Payments from coinbase
-    pub coinbase_oper_hist: Mapx<XfrAddress, Vec<(BlockHeight, MintEntry)>>,
+    pub coinbase_oper_hist: Mapx<XfrAddress, Mapxnk<BlockHeight, MintEntry>>,
     /// Created assets
-    pub created_assets: Mapx<IssuerPublicKey, Vec<DefineAsset>>,
+    pub created_assets: Mapx<IssuerPublicKey, Mapxnk<AssetTypeCode, DefineAsset>>,
     /// issuance mapped by public key
     pub issuances: Mapx<IssuerPublicKey, Issuances>,
     /// issuance mapped by token code
@@ -68,6 +70,7 @@ pub struct ApiCache {
 impl ApiCache {
     pub(crate) fn new(prefix: &str) -> Self {
         ApiCache {
+            prefix: prefix.to_owned(),
             related_transactions: new_mapx!(format!(
                 "api_cache/{}related_transactions",
                 prefix
@@ -117,13 +120,18 @@ impl ApiCache {
     /// Add created asset
     #[inline(always)]
     pub fn add_created_asset(&mut self, creation: &DefineAsset) {
+        let prefix = self.prefix.clone();
         let issuer = creation.pubkey;
-        #[allow(unused_mut)]
-        let mut set = self.created_assets.entry(issuer).or_insert_with(Vec::new);
-
-        set.push(creation.clone());
-        set.sort_by_key(|i| i.pubkey);
-        set.dedup_by_key(|i| i.body.asset.code);
+        self.created_assets
+            .entry(issuer)
+            .or_insert_with(|| {
+                new_mapxnk!(format!(
+                    "api_cache/{}created_assets/{}",
+                    prefix,
+                    issuer.to_base64()
+                ))
+            })
+            .insert(creation.body.asset.code, creation.clone());
     }
 
     /// Cache issuance records
@@ -292,4 +300,194 @@ pub fn get_transferred_nonconfidential_assets(
         }
     }
     transferred_assets
+}
+
+/// update the data of QueryServer when we create a new block in ABCI
+pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
+    if !*KEEP_HIST {
+        return Ok(());
+    }
+
+    ledger.api_cache.as_mut().unwrap().cache_hist_data();
+
+    let block = if let Some(b) = ledger.blocks.last() {
+        b
+    } else {
+        return Ok(());
+    };
+
+    let prefix = ledger.api_cache.as_mut().unwrap().prefix.clone();
+
+    // Update ownership status
+    for (txn_sid, txo_sids) in block.txns.iter().map(|v| (v.tx_id, v.txo_ids.as_slice()))
+    {
+        let curr_txn = ledger.get_transaction_light(txn_sid).c(d!())?.txn;
+        // get the transaction, ownership addresses, and memos associated with each transaction
+        let (addresses, owner_memos) = {
+            let addresses: Vec<XfrAddress> = txo_sids
+                .iter()
+                .map(|sid| XfrAddress {
+                    key: ((ledger
+                        .get_utxo_light(*sid)
+                        .or_else(|| ledger.get_spent_utxo_light(*sid))
+                        .unwrap()
+                        .utxo)
+                        .0)
+                        .record
+                        .public_key,
+                })
+                .collect();
+
+            let owner_memos = curr_txn.get_owner_memos_ref();
+
+            (addresses, owner_memos)
+        };
+
+        let classify_op = |op: &Operation| {
+            match op {
+                Operation::Claim(i) => {
+                    let key = XfrAddress {
+                        key: i.get_claim_publickey(),
+                    };
+                    ledger
+                        .api_cache
+                        .as_mut()
+                        .unwrap()
+                        .claim_hist_txns
+                        .entry(key)
+                        .or_insert_with(|| {
+                            new_mapxnk!(format!(
+                                "api_cache/{}coinbase_oper_hist/{}",
+                                prefix,
+                                key.to_base64()
+                            ))
+                        })
+                        .set_value(txn_sid, Default::default());
+                }
+                Operation::MintFra(i) => i.entries.iter().for_each(|me| {
+                    let key = XfrAddress {
+                        key: me.utxo.record.public_key,
+                    };
+                    #[allow(unused_mut)]
+                    let mut hist = ledger
+                        .api_cache
+                        .as_mut()
+                        .unwrap()
+                        .coinbase_oper_hist
+                        .entry(key)
+                        .or_insert_with(|| {
+                            new_mapxnk!(format!(
+                                "api_cache/{}coinbase_oper_hist/{}",
+                                prefix,
+                                key.to_base64()
+                            ))
+                        });
+                    hist.insert(i.height, me.clone());
+                }),
+                _ => { /* filter more operations before this line */ }
+            };
+        };
+
+        // Update related addresses
+        // Apply classify_op for each operation in curr_txn
+        let related_addresses = get_related_addresses(&curr_txn, classify_op);
+        for address in &related_addresses {
+            ledger
+                .api_cache
+                .as_mut()
+                .unwrap()
+                .related_transactions
+                .entry(*address)
+                .or_insert_with(|| {
+                    new_mapxnk!(format!(
+                        "api_cache/{}related_transactions/{}",
+                        prefix,
+                        address.to_base64()
+                    ))
+                })
+                .insert(txn_sid, Default::default());
+        }
+
+        // Update transferred nonconfidential assets
+        let transferred_assets = get_transferred_nonconfidential_assets(&curr_txn);
+        for asset in &transferred_assets {
+            ledger
+                .api_cache
+                .as_mut()
+                .unwrap()
+                .related_transfers
+                .entry(*asset)
+                .or_insert_with(|| {
+                    new_mapxnk!(format!(
+                        "api_cache/{}related_transfers/{}",
+                        &prefix,
+                        asset.to_base64()
+                    ))
+                })
+                .insert(txn_sid, Default::default());
+        }
+
+        // Add created asset
+        for op in &curr_txn.body.operations {
+            match op {
+                Operation::DefineAsset(define_asset) => {
+                    ledger
+                        .api_cache
+                        .as_mut()
+                        .unwrap()
+                        .add_created_asset(&define_asset);
+                }
+                Operation::IssueAsset(issue_asset) => {
+                    ledger
+                        .api_cache
+                        .as_mut()
+                        .unwrap()
+                        .cache_issuance(&issue_asset);
+                }
+                _ => {}
+            };
+        }
+
+        // Add new utxos (this handles both transfers and issuances)
+        for (txo_sid, (address, owner_memo)) in txo_sids
+            .iter()
+            .zip(addresses.iter().zip(owner_memos.iter()))
+        {
+            ledger
+                .api_cache
+                .as_mut()
+                .unwrap()
+                .utxos_to_map_index
+                .insert(*txo_sid, *address);
+            let hash = curr_txn.hash_tm().hex().to_uppercase();
+            ledger
+                .api_cache
+                .as_mut()
+                .unwrap()
+                .txo_to_txnid
+                .insert(*txo_sid, (txn_sid, hash.clone()));
+            ledger
+                .api_cache
+                .as_mut()
+                .unwrap()
+                .txn_sid_to_hash
+                .insert(txn_sid, hash.clone());
+            ledger
+                .api_cache
+                .as_mut()
+                .unwrap()
+                .txn_hash_to_sid
+                .insert(hash.clone(), txn_sid);
+            if let Some(owner_memo) = owner_memo {
+                ledger
+                    .api_cache
+                    .as_mut()
+                    .unwrap()
+                    .owner_memos
+                    .insert(*txo_sid, (*owner_memo).clone());
+            }
+        }
+    }
+
+    Ok(())
 }

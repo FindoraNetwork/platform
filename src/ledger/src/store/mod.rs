@@ -15,9 +15,9 @@ use {
             AssetType, AssetTypeCode, AuthenticatedBlock, AuthenticatedTransaction,
             AuthenticatedUtxo, AuthenticatedUtxoStatus, BlockEffect, BlockSID,
             FinalizedBlock, FinalizedTransaction, IssuerKeyPair, IssuerPublicKey,
-            Operation, OutputPosition, StateCommitmentData, Transaction, TransferType,
-            TxnEffect, TxnSID, TxnTempSID, TxoSID, UnAuthenticatedUtxo, Utxo,
-            UtxoStatus, XfrAddress, BLACK_HOLE_PUBKEY,
+            OutputPosition, StateCommitmentData, Transaction, TransferType, TxnEffect,
+            TxnSID, TxnTempSID, TxoSID, UnAuthenticatedUtxo, Utxo, UtxoStatus,
+            BLACK_HOLE_PUBKEY,
         },
         staking::{
             Amount, BlockHeight, Power, Staking, TendermintAddrRef,
@@ -69,7 +69,7 @@ pub struct LedgerState {
     /// <tx id> => [<block id>, <tx idx in block>]
     pub tx_to_block_location: Mapxnk<TxnSID, [usize; 2]>,
     /// cache used in APIs
-    pub api_cache: ApiCache,
+    pub api_cache: Option<ApiCache>,
 
     // current block effect (middle cache)
     block_ctx: Option<BlockEffect>,
@@ -235,136 +235,6 @@ impl LedgerState {
         );
 
         self.block_ctx = Some(block);
-
-        Ok(())
-    }
-
-    /// update the data of QueryServer when we create a new block in ABCI
-    pub fn update_api_cache(&mut self) -> Result<()> {
-        if !*KEEP_HIST {
-            return Ok(());
-        }
-
-        self.api_cache.cache_hist_data();
-
-        let block = if let Some(b) = self.blocks.last() {
-            b
-        } else {
-            return Ok(());
-        };
-
-        // Update ownership status
-        for (txn_sid, txo_sids) in
-            block.txns.iter().map(|v| (v.tx_id, v.txo_ids.as_slice()))
-        {
-            let curr_txn = self.get_transaction_light(txn_sid).c(d!())?.txn;
-            // get the transaction, ownership addresses, and memos associated with each transaction
-            let (addresses, owner_memos) = {
-                let addresses: Vec<XfrAddress> = txo_sids
-                    .iter()
-                    .map(|sid| XfrAddress {
-                        key: ((self
-                            .get_utxo_light(*sid)
-                            .or_else(|| self.get_spent_utxo_light(*sid))
-                            .unwrap()
-                            .utxo)
-                            .0)
-                            .record
-                            .public_key,
-                    })
-                    .collect();
-
-                let owner_memos = curr_txn.get_owner_memos_ref();
-
-                (addresses, owner_memos)
-            };
-
-            let classify_op = |op: &Operation| {
-                match op {
-                    Operation::Claim(i) => {
-                        let key = i.get_claim_publickey();
-                        #[allow(unused_mut)]
-                        let mut hist = self
-                            .api_cache
-                            .claim_hist_txns
-                            .entry(XfrAddress { key })
-                            .or_insert_with(Vec::new);
-
-                        // keep it in ascending order to reduce memory movement count
-                        match hist.binary_search_by(|a| a.0.cmp(&txn_sid.0)) {
-                            Ok(_) => { /*skip if txn_sid already exists*/ }
-                            Err(idx) => hist.insert(idx, txn_sid),
-                        }
-                    }
-                    Operation::MintFra(i) => i.entries.iter().for_each(|me| {
-                        let key = me.utxo.record.public_key;
-                        #[allow(unused_mut)]
-                        let mut hist = self
-                            .api_cache
-                            .coinbase_oper_hist
-                            .entry(XfrAddress { key })
-                            .or_insert_with(Vec::new);
-                        hist.push((i.height, me.clone()));
-                    }),
-                    _ => { /* filter more operations before this line */ }
-                };
-            };
-
-            // Update related addresses
-            // Apply classify_op for each operation in curr_txn
-            let related_addresses =
-                api_cache::get_related_addresses(&curr_txn, classify_op);
-            for address in &related_addresses {
-                self.api_cache
-                    .related_transactions
-                    .entry(*address)
-                    .or_insert_with(HashSet::new)
-                    .insert(txn_sid);
-            }
-
-            // Update transferred nonconfidential assets
-            let transferred_assets =
-                api_cache::get_transferred_nonconfidential_assets(&curr_txn);
-            for asset in &transferred_assets {
-                self.api_cache
-                    .related_transfers
-                    .entry(*asset)
-                    .or_insert_with(HashSet::new)
-                    .insert(txn_sid);
-            }
-
-            // Add created asset
-            for op in &curr_txn.body.operations {
-                match op {
-                    Operation::DefineAsset(define_asset) => {
-                        self.api_cache.add_created_asset(&define_asset);
-                    }
-                    Operation::IssueAsset(issue_asset) => {
-                        self.api_cache.cache_issuance(&issue_asset);
-                    }
-                    _ => {}
-                };
-            }
-
-            // Add new utxos (this handles both transfers and issuances)
-            for (txo_sid, (address, owner_memo)) in txo_sids
-                .iter()
-                .zip(addresses.iter().zip(owner_memos.iter()))
-            {
-                self.api_cache.utxos_to_map_index.insert(*txo_sid, *address);
-                let hash = curr_txn.hash_tm().hex().to_uppercase();
-                self.api_cache
-                    .txo_to_txnid
-                    .insert(*txo_sid, (txn_sid, hash.clone()));
-                self.api_cache.txn_sid_to_hash.insert(txn_sid, hash.clone());
-                self.api_cache.txn_hash_to_sid.insert(hash.clone(), txn_sid);
-                if let Some(owner_memo) = owner_memo {
-                    self.api_cache
-                        .owner_memos
-                        .insert(*txo_sid, (*owner_memo).clone());
-                }
-            }
-        }
 
         Ok(())
     }
@@ -538,7 +408,7 @@ impl LedgerState {
                 LedgerState::init_utxo_map(&utxo_map_path).c(d!())?,
             )),
             block_ctx: Some(BlockEffect::default()),
-            api_cache: ApiCache::new(&prefix),
+            api_cache: alt!(*KEEP_HIST, Some(ApiCache::new(&prefix)), None),
         };
 
         Ok(ledger)
@@ -668,9 +538,9 @@ impl LedgerState {
         [a0, a1]
     }
 
-    // Total amount of all freed FRAs, aka 'are not being locked'.
+    /// Total amount of all freed FRAs, aka 'are not being locked'.
     #[inline(always)]
-    fn staking_get_global_unlocked_amount(&self) -> Amount {
+    pub fn staking_get_global_unlocked_amount(&self) -> Amount {
         #[cfg(feature = "debug_env")]
         const FF_ADDR_EXTRA_FIX_HEIGHT: BlockHeight = 0;
 
@@ -705,7 +575,17 @@ impl LedgerState {
 
     #[inline(always)]
     fn staking_get_nonconfidential_balance(&self, addr: &XfrPublicKey) -> Result<u64> {
-        self.get_nonconfidential_balance(addr).c(d!())
+        #[cfg(feature = "debug_env")]
+        const NONCONFIDENTIAL_BALANCE_FIX_HEIGHT: BlockHeight = 0;
+
+        #[cfg(not(feature = "debug_env"))]
+        const NONCONFIDENTIAL_BALANCE_FIX_HEIGHT: BlockHeight = 121_0000;
+
+        if NONCONFIDENTIAL_BALANCE_FIX_HEIGHT < self.get_tendermint_height() {
+            self.get_nonconfidential_balance(addr).c(d!())
+        } else {
+            Ok(0)
+        }
     }
 
     /// Get a utxo along with the transaction, spent status and commitment data which it belongs
@@ -1448,13 +1328,10 @@ impl LedgerStatus {
                             .or_insert_with(HashSet::new)
                             .insert(TxoSID(txo_sid));
                         let utxo = Utxo(tx_output);
-                        #[allow(unused_mut)]
-                        if let Some(mut bl) = self
+                        *self
                             .nonconfidential_balances
-                            .get_mut(&utxo.0.record.public_key)
-                        {
-                            *bl += utxo.get_nonconfidential_balance();
-                        }
+                            .entry(utxo.0.record.public_key)
+                            .or_insert(0) += utxo.get_nonconfidential_balance();
                         self.utxos.insert(TxoSID(txo_sid), utxo);
                         txn_utxo_sids.push(TxoSID(txo_sid));
                     }
