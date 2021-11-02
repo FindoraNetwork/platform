@@ -414,11 +414,11 @@ impl LedgerState {
         Ok(v)
     }
 
-    // In this functionn:
-    //  1. Compute the hash of transactions in the block and update txns_in_block_hash
-    //  2. Append txns_in_block_hash to block_merkle
+    /// In this functionn:
+    ///  1. Compute the hash of transactions in the block and update txns_in_block_hash
+    ///  2. Append txns_in_block_hash to block_merkle
     #[inline(always)]
-    fn compute_and_append_txns_hash(&mut self, block: &BlockEffect) -> u64 {
+    pub fn compute_and_append_txns_hash(&mut self, block: &BlockEffect) -> u64 {
         // 1. Compute the hash of transactions in the block and update txns_in_block_hash
         let txns_in_block_hash = block.compute_txns_in_block_hash();
         self.status.txns_in_block_hash = Some(txns_in_block_hash.clone());
@@ -433,7 +433,8 @@ impl LedgerState {
         ret
     }
 
-    fn compute_and_save_state_commitment_data(&mut self, pulse_count: u64) {
+    #[allow(missing_docs)]
+    pub fn compute_and_save_state_commitment_data(&mut self, pulse_count: u64) {
         let state_commitment_data = StateCommitmentData {
             bitmap: self.utxo_map.compute_checksum(),
             block_merkle: self.block_merkle.get_root_hash(),
