@@ -504,7 +504,7 @@ subcommands:
       about: Perform Anonymous Transfer
       args:
         - anon-keys:
-            help: Anon keys file path of converter
+            help: Anon keys file path of the sender
             short: a
             long: anon-keys
             takes_value: true
