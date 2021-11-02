@@ -538,9 +538,9 @@ impl LedgerState {
         [a0, a1]
     }
 
-    // Total amount of all freed FRAs, aka 'are not being locked'.
+    /// Total amount of all freed FRAs, aka 'are not being locked'.
     #[inline(always)]
-    fn staking_get_global_unlocked_amount(&self) -> Amount {
+    pub fn staking_get_global_unlocked_amount(&self) -> Amount {
         #[cfg(feature = "debug_env")]
         const FF_ADDR_EXTRA_FIX_HEIGHT: BlockHeight = 0;
 
@@ -575,7 +575,17 @@ impl LedgerState {
 
     #[inline(always)]
     fn staking_get_nonconfidential_balance(&self, addr: &XfrPublicKey) -> Result<u64> {
-        self.get_nonconfidential_balance(addr).c(d!())
+        #[cfg(feature = "debug_env")]
+        const NONCONFIDENTIAL_BALANCE_FIX_HEIGHT: BlockHeight = 0;
+
+        #[cfg(not(feature = "debug_env"))]
+        const NONCONFIDENTIAL_BALANCE_FIX_HEIGHT: BlockHeight = 121_0000;
+
+        if NONCONFIDENTIAL_BALANCE_FIX_HEIGHT < self.get_tendermint_height() {
+            self.get_nonconfidential_balance(addr).c(d!())
+        } else {
+            Ok(0)
+        }
     }
 
     /// Get a utxo along with the transaction, spent status and commitment data which it belongs
@@ -1318,13 +1328,10 @@ impl LedgerStatus {
                             .or_insert_with(HashSet::new)
                             .insert(TxoSID(txo_sid));
                         let utxo = Utxo(tx_output);
-                        #[allow(unused_mut)]
-                        if let Some(mut bl) = self
+                        *self
                             .nonconfidential_balances
-                            .get_mut(&utxo.0.record.public_key)
-                        {
-                            *bl += utxo.get_nonconfidential_balance();
-                        }
+                            .entry(utxo.0.record.public_key)
+                            .or_insert(0) += utxo.get_nonconfidential_balance();
                         self.utxos.insert(TxoSID(txo_sid), utxo);
                         txn_utxo_sids.push(TxoSID(txo_sid));
                     }

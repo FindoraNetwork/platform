@@ -14,6 +14,10 @@
 
 > Functions that have been added.
 
+#### v0.2.11-release
+
+- Fix incorrect calculations about `Nonconfidential Balances`
+
 #### v0.2.10-release
 
 - Optimize the calculation of `expected return rate`

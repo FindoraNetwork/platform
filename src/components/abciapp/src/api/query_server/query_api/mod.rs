@@ -407,6 +407,18 @@ pub async fn get_related_xfrs(
     }
 }
 
+#[allow(missing_docs)]
+#[allow(clippy::unnecessary_wraps)]
+pub async fn get_circulating_supply(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+) -> actix_web::Result<web::Json<u64>, actix_web::error::Error> {
+    Ok(web::Json(
+        data.read()
+            .ledger_cloned
+            .staking_get_global_unlocked_amount(),
+    ))
+}
+
 /// Structures exposed to the outside world
 pub struct QueryApi;
 
@@ -424,6 +436,10 @@ impl QueryApi {
                 .data(Arc::clone(&server))
                 .route("/ping", web::get().to(ping))
                 .route("/version", web::get().to(version))
+                .service(
+                    web::resource("circulating_supply")
+                        .route(web::get().to(get_circulating_supply)),
+                )
                 .route(
                     &QueryServerRoutes::GetAddress.with_arg_template("txo_sid"),
                     web::get().to(get_address),
