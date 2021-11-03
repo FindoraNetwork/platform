@@ -24,8 +24,7 @@ use fp_types::{
 use fp_utils::ecdsa::SecpPair;
 use fp_utils::tx::EvmRawTxWrapper;
 use hex::FromHex;
-use ledger::data_model::ASSET_TYPE_FRA;
-use ledger::data_model::BLACK_HOLE_PUBKEY_STAKING;
+use ledger::data_model::{AssetTypeCode, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING};
 use module_evm;
 use ruc::*;
 use std::str::FromStr;
@@ -214,16 +213,22 @@ pub fn contract_account_info(address: Option<&str>) -> Result<(Address, SmartAcc
 /// transfer UTXO -> ERC20
 pub fn transfer_to_erc20(
     amount: u64,
+    token_code: &str,
     address: Option<&str>,
     input: Option<&str>,
 ) -> Result<()> {
-    let mut builder = utils::new_tx_builder()?;
+    let token_code =
+        AssetTypeCode::new_from_base64(token_code).c(d!("invalid token code"))?;
+    if token_code.val == ASSET_TYPE_FRA {
+        return Err(eg!("Only a custom token is allowed!"));
+    }
 
+    let mut builder = utils::new_tx_builder()?;
     let kp = get_keypair()?;
     let transfer_op = utils::gen_transfer_op(
         &kp,
         vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
-        None,
+        Some(token_code),
         false,
         false,
         Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
@@ -246,16 +251,23 @@ pub fn transfer_to_erc20(
 /// transfer to uxto assets from account(ed25519 or ecdsa address) balance.
 pub fn erc20_to_utxo(
     amount: u64,
+    token_code: &str,
     address: Option<&str>,
     eth_phrase: Option<&str>,
     input: Option<&str>,
 ) -> Result<()> {
     let fra_kp = get_keypair()?;
 
+    let token_code =
+        AssetTypeCode::new_from_base64(token_code).c(d!("invalid token code"))?;
+    if token_code.val == ASSET_TYPE_FRA {
+        return Err(eg!("Only a custom asset is supported!"));
+    }
+
     let output = NonConfidentialOutput {
         target: fra_kp.get_pk(),
         amount,
-        asset: ASSET_TYPE_FRA,
+        asset: token_code.val,
     };
 
     let (signer, kp) = if let Some(key_path) = eth_phrase {

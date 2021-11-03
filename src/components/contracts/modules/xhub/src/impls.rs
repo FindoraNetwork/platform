@@ -33,13 +33,13 @@ impl<C: Config> App<C> {
         let mut asset_amount = 0;
         for output in &outputs {
             ensure!(
-                output.asset == ASSET_TYPE_FRA,
-                "Invalid asset type only support FRA"
+                output.asset != ASSET_TYPE_FRA,
+                "Only Findora custom asset type is supported"
             );
             asset_amount += output.amount;
         }
 
-        log::debug!(target: "xhub", "transfer to UTXO amount is: {} FRA", asset_amount);
+        log::debug!(target: "xhub", "transfer to UTXO amount is: {}", asset_amount);
         let amount = C::DecimalsMapping::from_native_token(U256::from(asset_amount))
             .ok_or_else(|| eg!("The transfer to UTXO amount is too large"))?;
 

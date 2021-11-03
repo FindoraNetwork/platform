@@ -475,6 +475,12 @@ subcommands:
             takes_value: true
             value_name: ERC20 ADDRESS
             required: true
+        - code:
+            help: Associated custom asset type code, in base64-format
+            long: code
+            takes_value: true
+            value_name: ASSET CODE
+            required: true
         - amount:
             help: deposit asset amount
             short: n
@@ -498,6 +504,12 @@ subcommands:
             long: amount
             takes_value: true
             value_name: AMOUNT
+            required: true
+        - code:
+            help: Associated custom asset type code, in base64-format
+            long: code
+            takes_value: true
+            value_name: ASSET CODE
             required: true
         - addr:
             help: ERC20 contract address, eg:0xd3Bf...
