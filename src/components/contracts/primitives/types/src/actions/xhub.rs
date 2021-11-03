@@ -1,7 +1,7 @@
 use primitive_types::{H160, U256};
 use serde::{Deserialize, Serialize};
 use zei::xfr::sig::XfrPublicKey;
-use zei::xfr::structs::AssetType;
+use zei::xfr::structs::AssetType as ZeiAssetType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Action {
@@ -19,7 +19,7 @@ pub struct NonConfidentialTransfer {
 /// Evm account balance convert to NonConfidential utxo.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NonConfidentialOutput {
-    pub asset: AssetType,
+    pub asset: ZeiAssetType,
     pub amount: u64,
     pub target: XfrPublicKey,
 }

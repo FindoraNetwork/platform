@@ -400,13 +400,25 @@ fn run() -> Result<()> {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");
         let input = m.value_of("input");
-        transfer_to_erc20(amount.parse::<u64>().c(d!())?, address, input)?
+        let token_code = m
+            .value_of("code")
+            .c(d!("A token code should be provided"))?;
+        transfer_to_erc20(amount.parse::<u64>().c(d!())?, token_code, address, input)?
     } else if let Some(m) = matches.subcommand_matches("erc20-to-utxo") {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");
         let eth_key = m.value_of("eth-key");
         let input = m.value_of("input");
-        erc20_to_utxo(amount.parse::<u64>().c(d!())?, address, eth_key, input)?
+        let token_code = m
+            .value_of("code")
+            .c(d!("A token code should be provided"))?;
+        erc20_to_utxo(
+            amount.parse::<u64>().c(d!())?,
+            token_code,
+            address,
+            eth_key,
+            input,
+        )?
     } else {
         println!("{}", matches.usage());
     }

@@ -124,15 +124,25 @@ impl ModuleManager {
         ctx: &Context,
         tx: &FindoraTransaction,
     ) -> Result<()> {
-        let (owner, amount) = check_convert_account(tx)?;
-        let balance = EthereumDecimalsMapping::from_native_token(U256::from(amount))
-            .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
-        module_account::App::<BaseApp>::mint(ctx, &Address::from(owner), balance)
+        if let Ok((owner, amount)) = check_convert_account(tx) {
+            let balance = EthereumDecimalsMapping::from_native_token(U256::from(amount))
+                .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
+            return module_account::App::<BaseApp>::mint(
+                ctx,
+                &Address::from(owner),
+                balance,
+            );
+        }
+        if is_transfer_erc20_tx(tx) {
+            return self.process_findora_erc20(ctx, tx);
+        }
+
+        Err(eg!("Unknown findora transaction"))
     }
 
-    /// process findora tx -> erc20
-    pub fn process_findora_erc20(
-        &mut self,
+    // findora utxo -> erc20
+    fn process_findora_erc20(
+        &self,
         ctx: &Context,
         tx: &FindoraTransaction,
     ) -> Result<()> {

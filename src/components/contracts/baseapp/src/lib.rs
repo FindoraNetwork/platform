@@ -273,11 +273,7 @@ impl BaseApp {
     }
 
     pub fn deliver_findora_tx(&mut self, tx: &FindoraTransaction) -> Result<()> {
-        if is_transfer_erc20_tx(tx) {
-            self.modules.process_findora_erc20(&self.deliver_state, tx)
-        } else {
-            self.modules.process_findora_tx(&self.deliver_state, tx)
-        }
+        self.modules.process_findora_tx(&self.deliver_state, tx)
     }
 
     pub fn consume_mint(&mut self) -> Option<Vec<NonConfidentialOutput>> {

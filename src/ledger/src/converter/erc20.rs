@@ -10,10 +10,9 @@ use crate::data_model::{
 use fp_types::crypto::MultiSigner;
 use ruc::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use zei::xfr::{
     sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
-    structs::{XfrAmount, XfrAssetType}, //AssetType
+    structs::XfrAssetType, //AssetType
 };
 use zeiutils::serialization::ZeiFromToBytes;
 
@@ -95,10 +94,11 @@ impl Data {
 
 #[allow(missing_docs)]
 pub fn is_transfer_erc20_tx(tx: &Transaction) -> bool {
-    for op in &tx.body.operations {
-        if let Operation::TransferERC20(_) = op {
-            return true;
-        }
+    if tx.body.operations.len() == 2 {
+        return matches!(
+            tx.body.operations[..],
+            [Operation::TransferAsset(_), Operation::TransferERC20(_)]
+        );
     }
     false
 }
@@ -109,8 +109,6 @@ pub fn check_erc20_tx(tx: &Transaction) -> Result<(Vec<u8>, MultiSigner, u64, Ve
     let mut nonce = None;
     let mut input = None;
     let mut signer = None;
-
-    let mut assets = HashMap::new();
 
     for op in &tx.body.operations {
         if let Operation::TransferERC20(ca) = op {
@@ -123,34 +121,27 @@ pub fn check_erc20_tx(tx: &Transaction) -> Result<(Vec<u8>, MultiSigner, u64, Ve
             signer = Some(ca.get_related_address().zei_to_bytes())
         }
         if let Operation::TransferAsset(t) = op {
-            // check if transerable
             for o in &t.body.outputs {
-                if matches!(o.record.asset_type, XfrAssetType::Confidential(_))
-                    || matches!(o.record.amount, XfrAmount::Confidential(_))
-                {
+                // both amount and asset type are no-confidential
+                // FIXME: check if transferable
+                if !o.record.is_public() {
                     return Err(eg!(
-                        "asset cross ledger transfer not support confidential"
+                        "Findora custom asset cross ledger transfer not support confidential"
                     ));
                 }
-                // burn fra
+                // check utxo
                 if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
-                    if o.record.public_key == *BLACK_HOLE_PUBKEY_STAKING
-                        && ty == ASSET_TYPE_FRA
+                    if !(o.record.public_key == *BLACK_HOLE_PUBKEY_STAKING
+                        && ty != ASSET_TYPE_FRA)
                     {
-                        if let XfrAmount::NonConfidential(i_am) = o.record.amount {
-                            if let Some(amount) = assets.get_mut(&ty) {
-                                *amount += i_am;
-                            } else {
-                                assets.insert(ty, i_am);
-                            }
-                        }
+                        return Err(eg!("Only Findora custom asset is supported"));
                     }
                 }
             }
         }
     }
     if owner.is_none() {
-        return Err(eg!("this tx isn't a convert tx"));
+        return Err(eg!("this isn't a valid utxo-to-erc20 tx"));
     }
     Ok((
         signer.unwrap(),
