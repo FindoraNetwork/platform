@@ -357,7 +357,7 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
                         .entry(key)
                         .or_insert_with(|| {
                             new_mapxnk!(format!(
-                                "api_cache/{}coinbase_oper_hist/{}",
+                                "api_cache/{}claim_hist_txns/{}",
                                 prefix,
                                 key.to_base64()
                             ))

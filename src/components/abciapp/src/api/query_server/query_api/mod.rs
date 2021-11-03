@@ -12,6 +12,7 @@ use {
     actix_cors::Cors,
     actix_web::{error, middleware, web, App, HttpServer},
     finutils::api::NetworkRoute,
+    globutils::wallet,
     ledger::{
         data_model::{
             b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
@@ -98,7 +99,7 @@ pub async fn get_owned_utxos(
 ) -> actix_web::Result<web::Json<HashSet<TxoSID>>> {
     let qs = data.read();
     let ledger = &qs.ledger_cloned;
-    globutils::wallet::public_key_from_base64(owner.as_str())
+    wallet::public_key_from_base64(owner.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.to_string()))
         .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk)).keys().copied().collect()))
@@ -288,7 +289,7 @@ pub async fn get_coinbase_oper_list(
     web::Query(info): web::Query<WalletQueryParams>,
 ) -> actix_web::Result<web::Json<CoinbaseOperInfo>> {
     // Convert from base64 representation
-    let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
+    let key: XfrPublicKey = wallet::public_key_from_base64(&info.address)
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
@@ -339,7 +340,7 @@ pub async fn get_claim_txns(
     web::Query(info): web::Query<WalletQueryParams>,
 ) -> actix_web::Result<web::Json<Vec<Option<Transaction>>>> {
     // Convert from base64 representation
-    let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
+    let key: XfrPublicKey = wallet::public_key_from_base64(&info.address)
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
