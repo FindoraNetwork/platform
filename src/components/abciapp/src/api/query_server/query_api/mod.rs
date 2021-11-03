@@ -17,7 +17,7 @@ use {
             b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
             TxnIDHash, TxnSID, TxoSID, XfrAddress,
         },
-        staking::ops::mint_fra::MintEntry,
+        staking::{ops::mint_fra::MintEntry, FRA},
     },
     ledger_api::*,
     log::info,
@@ -25,7 +25,10 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     server::QueryServer,
-    std::{collections::HashSet, sync::Arc},
+    std::{
+        collections::{BTreeMap, HashSet},
+        sync::Arc,
+    },
     zei::{
         serialization::ZeiFromToBytes,
         xfr::{sig::XfrPublicKey, structs::OwnerMemo},
@@ -411,12 +414,22 @@ pub async fn get_related_xfrs(
 #[allow(clippy::unnecessary_wraps)]
 pub async fn get_circulating_supply(
     data: web::Data<Arc<RwLock<QueryServer>>>,
-) -> actix_web::Result<web::Json<u64>, actix_web::error::Error> {
-    Ok(web::Json(
-        data.read()
-            .ledger_cloned
-            .staking_get_global_unlocked_amount(),
-    ))
+) -> actix_web::Result<web::Json<BTreeMap<&'static str, f64>>, actix_web::error::Error> {
+    let l = data.read();
+    let fra = FRA as f64;
+
+    let cs = l.ledger_cloned.staking_get_global_unlocked_amount() as f64 / fra;
+    let gd = l.ledger_cloned.get_staking().get_global_delegation_amount() as f64 / fra;
+    let rr = l.ledger_cloned.staking_get_block_rewards_rate();
+    let rr = rr[0] as f64 / rr[1] as f64;
+
+    let res = map! { B
+        "global_return_rate" => rr,
+        "global_circulating_supply" => cs,
+        "global_delegation_amount" => gd
+    };
+
+    Ok(web::Json(res))
 }
 
 /// Structures exposed to the outside world

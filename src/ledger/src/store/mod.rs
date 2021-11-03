@@ -394,7 +394,7 @@ impl LedgerState {
         let blocks_path = prefix.clone() + "blocks";
         let tx_to_block_location_path = prefix.clone() + "tx_to_block_location";
 
-        let ledger = LedgerState {
+        let mut ledger = LedgerState {
             status: LedgerStatus::new(&basedir, &snapshot_file).c(d!())?,
             block_merkle: Arc::new(RwLock::new(
                 LedgerState::init_merkle_log(&block_merkle_path).c(d!())?,
@@ -410,6 +410,8 @@ impl LedgerState {
             block_ctx: Some(BlockEffect::default()),
             api_cache: alt!(*KEEP_HIST, Some(ApiCache::new(&prefix)), None),
         };
+
+        ledger.status.refresh_data();
 
         Ok(ledger)
     }
@@ -903,7 +905,8 @@ impl LedgerState {
 pub struct LedgerStatus {
     /// the file path of the snapshot
     pub snapshot_file: String,
-    utxos: Mapxnk<TxoSID, Utxo>, // all currently-unspent TXOs
+    // all currently-unspent TXOs
+    utxos: Mapxnk<TxoSID, Utxo>,
     nonconfidential_balances: Mapx<XfrPublicKey, u64>,
     owned_utxos: Mapx<XfrPublicKey, HashSet<TxoSID>>,
     /// all spent TXOs
@@ -1366,6 +1369,21 @@ impl LedgerStatus {
     #[inline(always)]
     pub fn is_unspent_txo(&self, addr: TxoSID) -> bool {
         self.utxos.contains_key(&addr)
+    }
+
+    fn refresh_data(&mut self) {
+        if self.nonconfidential_balances.is_empty() {
+            self.utxos
+                .iter()
+                .collect::<Vec<_>>()
+                .into_iter()
+                .for_each(|(_, txo)| {
+                    *self
+                        .nonconfidential_balances
+                        .entry(txo.0.record.public_key)
+                        .or_insert(0) += txo.get_nonconfidential_balance();
+                });
+        }
     }
 }
 
