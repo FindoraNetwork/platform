@@ -44,27 +44,30 @@ EdQbauUfT4ig3Km8SH2MUfEwYq9Re0670KrsL-dt0wAByb3lQ2hsG31quzP_6cqbEshrjkJg_WhIyzPE
 echo "gN6-nw3NeHM3QBPnevuWmzsfP64X3u6j6ybPCQqHSXA=
 IDZNwpZohkun5MKGRF360YyyBFUbzkGq49Zn6oIg9VI=" > decryption_key_file
 echo "1ASVNYLgW2SzBEmAnHfaiJwVBd0M72aRhcReJluZo9M=
-ovO3hR4HeZ_arSGhiLAFUeN9jPsxjajcNiRsV8dNjIg=" > to_axfr_public_key_file
+ovO3hR4HeZ_arSGhiLAFUeN9jPsxjajcNiRsV8dNjIg=
+IEJkCPKple-s18YzlKQkSj-rBdXKvbPFSRssUHgXtVE=" > to_axfr_public_key_file
 echo "S9xkhvejemaNuzzZB0l5NnTf9l2Xt4nurnlKiRsPBB8=
-e9d0qy8z2D3npp-pfXNcnolZBYXik6m0GhnDjK5Hvnk=" > to_enc_key_file
-echo "210000000
-210000000" > amount_file
+e9d0qy8z2D3npp-pfXNcnolZBYXik6m0GhnDjK5Hvnk=
+VU3YEMaEqXDs5yA27s1IDUPrT-hHxK2xHM9UIA7EyVU=" > to_enc_key_file
+echo "100000000
+200000000
+120000000" > amount_file
 
 echo "\n\n\n Batch Anonymous Transfer from Senders to Receivers"
 echo "------------------------------------------------------------------------------"
 sleep 5
 target/release/fn anon-transfer-batch -n amount_file -s axfr_secretkey_file -d decryption_key_file --to-axfr-public-key-file to_axfr_public_key_file --to-enc-key-file to_enc_key_file -r randomizer_file
 
-tail -n 2 randomizers > randomizer_file
+tail -n 3 randomizers > randomizer_file
 randomiser=$(awk 'FNR>=1 && FNR<=1' randomizer_file)
 echo "\n\n Owned Abars for Receiver1 after Batch Anon Transfer"
 sleep 20
 target/release/fn owned-abars -p 1ASVNYLgW2SzBEmAnHfaiJwVBd0M72aRhcReJluZo9M= -r $randomiser
 
-randomiser=$(awk 'FNR>=2 && FNR<=2' randomizer_file)
-echo "\n\n Owned Abars for Receiver2 after Batch Anon Transfer"
+randomiser=$(awk 'FNR>=3 && FNR<=3' randomizer_file)
+echo "\n\n Owned Abars for Receiver3 after Batch Anon Transfer"
 sleep 20
-target/release/fn owned-abars -p ovO3hR4HeZ_arSGhiLAFUeN9jPsxjajcNiRsV8dNjIg= -r $randomiser
+target/release/fn owned-abars -p IEJkCPKple-s18YzlKQkSj-rBdXKvbPFSRssUHgXtVE= -r $randomiser
 
 sleep 2
 echo "\n\n\n Fetch merkle proof for Batch Anon Transfer"
