@@ -1099,6 +1099,12 @@ impl AnonTransferOperationBuilder {
     }
 
     /// add_input is used to add a new input source for Anon Transfer
+    /// @param {AnonBlindAssetRecord} abar - input ABAR to transfer
+    /// @param {OwnerMemo} memo - memo corresponding to the input abar
+    /// @param keypair {AXfrKeyPair} - AXfrKeyPair of the ABAR owner
+    /// @param dec_key {XSecretKey} - Decryption key of the abar owner to open the Owner Memo
+    /// @param MTLeafInfo {mt_leaf_info} - the Merkle proof of the ABAR from commitment tree
+    /// @throws Will throw an error if abar fails to open, input fails to get added to Operation
     pub fn add_input(
         mut self,
         abar: AnonBlindAssetRecord,
@@ -1126,6 +1132,10 @@ impl AnonTransferOperationBuilder {
     }
 
     /// add_output is used to add a output to the Anon Transfer
+    /// @param amount {u64} - amount to be sent to the receiver
+    /// @param to {AXfrPubKey} - original pub key of receiver
+    /// @param to_enc_key {XPublicKey} - The encryption public key of receiver.
+    /// @throws error if ABAR fails to be built
     pub fn add_output(
         mut self,
         amount: u64,
@@ -1150,12 +1160,12 @@ impl AnonTransferOperationBuilder {
         Ok(self)
     }
 
-    /// get_randomizers
+    /// get_randomizers returns a list of all the randomizers for receiver public keys
     pub fn get_randomizers(&self) -> Vec<JubjubScalar> {
         self.get_builder().get_randomizers()
     }
 
-    /// create is used to buiuld proof and sign the Transfer Operation
+    /// create is used to build proof and sign the Transfer Operation
     pub fn create(mut self) -> Result<AnonTransferOperationBuilder, JsValue> {
         self.get_builder_mut()
             .build()
@@ -1171,6 +1181,7 @@ impl AnonTransferOperationBuilder {
     }
 
     /// transaction returns the prepared Anon Transfer Operation
+    /// @param nonce {NoReplayToken} - nonce of the txn to be added to the operation
     pub fn transaction(self, nonce: NoReplayToken) -> Result<String, JsValue> {
         let op = self
             .get_builder()
