@@ -4,7 +4,7 @@
 
 mod utils;
 
-use ledger::converter::erc20::is_transfer_erc20_tx;
+use ledger::converter::erc20::{check_valid_asset, is_transfer_erc20_tx};
 use {
     crate::{
         abci::{
@@ -203,7 +203,13 @@ pub fn deliver_tx(
                         }
                     }
 
-                    if is_convert_account(&tx) || is_transfer_erc20_tx(&tx) {
+                    let is_utxo_erc20_tx = is_transfer_erc20_tx(&tx)
+                        && check_valid_asset(
+                            &tx,
+                            s.la.read().get_committed_state().read().deref(),
+                        );
+
+                    if is_convert_account(&tx) || is_utxo_erc20_tx {
                         if let Err(err) =
                             s.account_base_app.write().deliver_findora_tx(&tx)
                         {

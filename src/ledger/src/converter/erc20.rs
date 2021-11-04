@@ -2,14 +2,13 @@
 
 use crate::converter::ASSET_TYPE_FRA;
 use crate::data_model::{
-    NoReplayToken,
-    Operation,
-    Transaction,
-    BLACK_HOLE_PUBKEY_STAKING, //ASSET_TYPE_FRA,
+    AssetTypeCode, NoReplayToken, Operation, Transaction, BLACK_HOLE_PUBKEY_STAKING,
 };
+use crate::store::LedgerState;
 use fp_types::crypto::MultiSigner;
 use ruc::*;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use zei::xfr::{
     sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
     structs::XfrAssetType, //AssetType
@@ -101,6 +100,43 @@ pub fn is_transfer_erc20_tx(tx: &Transaction) -> bool {
         );
     }
     false
+}
+
+/// check asset if suitable for a uto->erc20 transaction
+pub fn check_valid_asset(tx: &Transaction, la: &LedgerState) -> bool {
+    let address;
+    if let Operation::TransferERC20(te) = &tx.body.operations[1] {
+        address = &te.data.address
+    } else {
+        return false;
+    }
+
+    if let Operation::TransferAsset(ta) = &tx.body.operations[0] {
+        for txo in &ta.body.outputs {
+            if txo.record.is_public() {
+                // unwrap is safe here, because current asset is public
+                let asset = txo.record.asset_type.get_asset_type().unwrap();
+                if let Some(at) = la.get_asset_type(&AssetTypeCode { val: asset }) {
+                    if let Ok(signer) = MultiSigner::from_str(&at.properties.memo.0) {
+                        if &signer != address {
+                            // asset and erc20 address are not bound
+                            return false;
+                        }
+                    } else {
+                        // Not binding with a valid address
+                        return false;
+                    }
+                } else {
+                    // non-existed asset type
+                    return false;
+                }
+            } else {
+                // confidential type or amount
+                return false;
+            }
+        }
+    }
+    true
 }
 
 #[allow(missing_docs)]
