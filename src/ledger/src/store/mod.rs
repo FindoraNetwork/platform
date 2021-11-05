@@ -523,18 +523,18 @@ impl LedgerState {
         let p = self.staking_get_global_delegation_percent();
         let p = [p[0] as u128, p[1] as u128];
 
-        // This is an equal conversion of `1 / p% * 0.0201`
-        let mut a0 = p[1] * 201;
+        // This is an equal conversion of `1 / p% * 0.0536`
+        let mut a0 = p[1] * 536;
         let mut a1 = p[0] * 10000;
 
-        if a0 * 100 > a1 * 105 {
-            // max value: 105%
-            a0 = 105;
+        if a0 * 100 > a1 * 268 {
+            // max value: 268%
+            a0 = 268;
             a1 = 100;
-        } else if a0 * 50 < a1 {
-            // min value: 2%
-            a0 = 2;
-            a1 = 100;
+        } else if a0 * 1000 < a1 * 54 {
+            // min value: 5.4%
+            a0 = 54;
+            a1 = 1000;
         }
 
         [a0, a1]
