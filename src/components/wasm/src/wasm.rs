@@ -807,6 +807,33 @@ pub fn gen_anon_keys() -> Result<AnonKeys, JsValue> {
     Ok(keys)
 }
 
+/// Get balance for an Anonymous Blind Asset Record
+/// @param {AnonBlindAssetRecord} abar - ABAR for which balance needs to be queried
+/// @param {OwnerMemo} memo - memo corresponding to the abar
+/// @param keypair {AXfrKeyPair} - AXfrKeyPair of the ABAR owner
+/// @param dec_key {XSecretKey} - Decryption key of the abar owner to open the Owner Memo
+/// @param MTLeafInfo {mt_leaf_info} - the Merkle proof of the ABAR from commitment tree
+/// @throws Will throw an error if abar fails to open
+#[wasm_bindgen]
+pub fn get_anon_balance(
+    abar: AnonBlindAssetRecord,
+    memo: OwnerMemo,
+    keypair: AXfrKeyPair,
+    dec_key: XSecretKey,
+    mt_leaf_info: MTLeafInfo,
+) -> Result<u64, JsValue> {
+    let oabar =
+        OpenAnonBlindAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair, &dec_key)
+            .c(d!())
+            .map_err(error_to_jsvalue)?
+            .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+            .build()
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
+
+    Ok(oabar.get_amount())
+}
+
 #[wasm_bindgen]
 #[derive(Default)]
 /// Structure that enables clients to construct complex transfers.
