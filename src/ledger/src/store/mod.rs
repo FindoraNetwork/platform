@@ -520,7 +520,6 @@ impl LedgerState {
     /// Return rate definition for delegation rewards.
     #[inline(always)]
     pub fn staking_get_block_rewards_rate(&self) -> [u128; 2] {
-
         let p = self.staking_get_global_delegation_percent();
         let p = [p[0] as u128, p[1] as u128];
 
@@ -558,7 +557,6 @@ impl LedgerState {
 
             [a0, a1]
         }
-
     }
 
     /// Total amount of all freed FRAs, aka 'are not being locked'.
