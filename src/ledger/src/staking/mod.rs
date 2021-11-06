@@ -1990,7 +1990,38 @@ fn calculate_delegation_rewards(
     #[cfg(not(feature = "debug_env"))]
     const OVERFLOW_FIX_HEIGHT: BlockHeight = 122_5000;
 
-    if OVERFLOW_FIX_HEIGHT > cur_height {
+    if OVERFLOW_FIX_HEIGHT < cur_height {
+        let am = BigUint::from(amount);
+        let total_am = BigUint::from(total_amount);
+        let global_am = BigUint::from(global_amount);
+        let block_itv = BLOCK_INTERVAL as u128;
+
+        const SECOND_PER_YEAR: u128 = 356 * 24 * 3600;
+
+        let calculate_self_only = || {
+            let a1 = am.clone() * return_rate[0] * block_itv;
+            let a2 = return_rate[1] * SECOND_PER_YEAR;
+
+            a1 / a2
+        };
+
+        let n = if APY_FIX_HEIGHT < cur_height {
+            if is_delegation_rwd {
+                // global_amount * am * return_rate[0] * block_itv / (return_rate[1] * (365 * 24 * 3600) * total_amount)
+                let a1 = global_am * am * return_rate[0] * block_itv;
+                let a2 = total_am * SECOND_PER_YEAR * return_rate[1];
+                a1 / a2
+            } else {
+                calculate_self_only()
+            }
+        } else {
+            // compitable with old logic, an incorrect logic
+            calculate_self_only()
+        };
+
+        u64::try_from(n).c(d!())
+    } else {
+        // compitable with old logic, an incorrect logic
         let am = amount as u128;
         let total_am = total_amount as u128;
         let global_am = global_amount as u128;
@@ -2043,36 +2074,6 @@ fn calculate_delegation_rewards(
         }
         .c(d!("overflow"))
         .and_then(|n| u64::try_from(n).c(d!()))
-    } else {
-        let am = BigUint::from(amount);
-        let total_am = BigUint::from(total_amount);
-        let global_am = BigUint::from(global_amount);
-        let block_itv = BLOCK_INTERVAL as u128;
-
-        const SECOND_PER_YEAR: u128 = 356 * 24 * 3600;
-
-        let calculate_self_only = || {
-            let a1 = am.clone() * return_rate[0] * block_itv;
-            let a2 = return_rate[1] * SECOND_PER_YEAR;
-
-            a1 / a2
-        };
-
-        let n = if APY_FIX_HEIGHT < cur_height {
-            if is_delegation_rwd {
-                // global_amount * am * return_rate[0] * block_itv / (return_rate[1] * (365 * 24 * 3600) * total_amount)
-                let a1 = global_am * am * return_rate[0] * block_itv;
-                let a2 = total_am * SECOND_PER_YEAR * return_rate[1];
-                a1 / a2
-            } else {
-                calculate_self_only()
-            }
-        } else {
-            // compitable with old logic, an incorrect logic
-            calculate_self_only()
-        };
-
-        u64::try_from(n).c(d!())
     }
 }
 
