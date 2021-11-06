@@ -32,6 +32,8 @@ zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", t
 bulletproofs = { package = "bulletproofs", git = "https://github.com/FindoraNetwork/bp", branch = "batch_verification", features = ["yoloproofs"] }
 fbnc = { version = "0.2.9", default-features = false}
 
+num-bigint = "0.4.3"
+
 globutils = { path = "../libs/globutils" }
 bitmap = { path = "../libs/bitmap" }
 cryptohash = { path = "../libs/cryptohash" }
