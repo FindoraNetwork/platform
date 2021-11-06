@@ -1988,7 +1988,7 @@ fn calculate_delegation_rewards(
     const APY_FIX_HEIGHT: BlockHeight = 117_7000;
 
     #[cfg(not(feature = "debug_env"))]
-    const OVERFLOW_FIX_HEIGHT: BlockHeight = 117_7000;
+    const OVERFLOW_FIX_HEIGHT: BlockHeight = 122_5000;
 
     if OVERFLOW_FIX_HEIGHT < cur_height {
         let am = amount as u128;
