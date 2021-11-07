@@ -1987,8 +1987,9 @@ fn calculate_delegation_rewards(
     #[cfg(not(feature = "debug_env"))]
     const APY_FIX_HEIGHT: BlockHeight = 117_7000;
 
+    // logic apply at about 2021-11-08 23:45
     #[cfg(not(feature = "debug_env"))]
-    const OVERFLOW_FIX_HEIGHT: BlockHeight = 122_5000;
+    const OVERFLOW_FIX_HEIGHT: BlockHeight = 123_2000;
 
     if OVERFLOW_FIX_HEIGHT < cur_height {
         let am = BigUint::from(amount);
