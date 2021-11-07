@@ -523,9 +523,13 @@ impl LedgerState {
         let p = self.staking_get_global_delegation_percent();
         let p = [p[0] as u128, p[1] as u128];
 
-        const APY_FIX_HEIGHT: BlockHeight = 123_0000;
+        #[cfg(feature = "debug_env")]
+        const APY_V7_UPGRADE_HEIGHT: BlockHeight = 0;
 
-        if APY_FIX_HEIGHT < self.get_tendermint_height() {
+        #[cfg(not(feature = "debug_env"))]
+        const APY_V7_UPGRADE_HEIGHT: BlockHeight = 124_0000;
+
+        if APY_V7_UPGRADE_HEIGHT < self.get_tendermint_height() {
             // This is an equal conversion of `1 / p% * 0.0536`
             let mut a0 = p[1] * 536;
             let mut a1 = p[0] * 10000;
