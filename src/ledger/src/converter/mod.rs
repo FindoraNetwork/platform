@@ -1,5 +1,6 @@
 //! Multi Signer operation for transaction.
 
+use crate::converter::erc20::is_transfer_erc20_tx;
 use crate::data_model::{
     NoReplayToken, Operation, Transaction, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
 };
@@ -10,6 +11,7 @@ use zei::xfr::{
     sig::XfrPublicKey,
     structs::{XfrAmount, XfrAssetType},
 };
+
 pub mod erc20;
 
 /// Use this operation to transfer.
@@ -54,6 +56,40 @@ pub fn is_convert_account(tx: &Transaction) -> bool {
             tx.body.operations.last(),
             Some(Operation::ConvertAccount(_))
         )
+}
+
+/// tx converting type between findora and evm
+pub enum ConvertingType {
+    /// convert native and EVM token
+    ConvertAccount,
+    /// convert ERC20 asset and findora custom asset
+    ERC20,
+    /// convert FRC20 asset and findora custom asset
+    FRC20,
+    /// handle findora custom asset in xhub module
+    FindoraAsset,
+}
+
+fn is_findora_asset_tx(tx: &Transaction) -> bool {
+    tx.body.operations.iter().any(|op| {
+        matches!(op, Operation::DefineAsset(_))
+            || matches!(op, Operation::IssueAsset(_))
+            || matches!(op, Operation::TransferAsset(_))
+            || matches!(op, Operation::UpdateMemo(_))
+    })
+}
+
+/// check if it's a converting-related tx
+pub fn check_converting_tx_type(tx: &Transaction) -> Option<ConvertingType> {
+    if is_convert_account(tx) {
+        Some(ConvertingType::ConvertAccount)
+    } else if is_transfer_erc20_tx(tx) {
+        Some(ConvertingType::ERC20)
+    } else if is_findora_asset_tx(tx) {
+        Some(ConvertingType::FindoraAsset)
+    } else {
+        None
+    }
 }
 
 #[allow(missing_docs)]

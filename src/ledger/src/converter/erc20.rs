@@ -115,7 +115,9 @@ pub fn check_valid_asset(tx: &Transaction, la: &LedgerState) -> bool {
         for txo in &ta.body.outputs {
             if txo.record.is_public() {
                 // unwrap is safe here, because current asset is public
+                // ZeiAssetType
                 let asset = txo.record.asset_type.get_asset_type().unwrap();
+                // Findora AssetType
                 if let Some(at) = la.get_asset_type(&AssetTypeCode { val: asset }) {
                     if let Ok(signer) = MultiSigner::from_str(&at.properties.memo.0) {
                         if &signer != address {
@@ -124,6 +126,9 @@ pub fn check_valid_asset(tx: &Transaction, la: &LedgerState) -> bool {
                         }
                     } else {
                         // Not binding with a valid address
+                        return false;
+                    }
+                    if at.has_transfer_restrictions() || at.has_issuance_restrictions() {
                         return false;
                     }
                 } else {

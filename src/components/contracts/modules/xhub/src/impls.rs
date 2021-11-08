@@ -13,7 +13,7 @@ use fp_types::{
     crypto::Address,
 };
 use fp_utils::proposer_converter;
-use ledger::data_model::ASSET_TYPE_FRA;
+use ledger::data_model::{Asset as FindoraAsset, ASSET_TYPE_FRA};
 use log::debug;
 use primitive_types::{H160, U256};
 use ruc::*;
@@ -132,5 +132,17 @@ impl<C: Config> App<C> {
 
     pub fn consume_mint(ctx: &Context) -> Option<Vec<NonConfidentialOutput>> {
         PendingUTXOs::take(ctx.db.write().borrow_mut())
+    }
+
+    pub fn add_asset(ctx: &Context, address: &H160, asset: &FindoraAsset) -> Result<()> {
+        FindoraAssets::insert(ctx.db.write().borrow_mut(), address, asset)
+    }
+
+    //pub fn remove_asset(ctx: &Context, address: &H160) {
+    //    FindoraAssets::remove(ctx.db.write().borrow_mut(), address)
+    //}
+
+    pub fn asset_of(ctx: &Context, address: &H160) -> Option<FindoraAsset> {
+        FindoraAssets::get(ctx.db.read().borrow(), address)
     }
 }

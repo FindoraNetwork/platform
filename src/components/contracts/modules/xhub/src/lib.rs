@@ -43,12 +43,17 @@ pub trait Config {
 
 mod storage {
     use fp_types::actions::xhub::NonConfidentialOutput;
+    use ledger::data_model::Asset as FindoraAsset;
+    use primitive_types::H160;
 
     use fp_storage::*;
 
     // The following data is stored in non-state rocksdb
     // account balance transfer to utxo waiting to be mint.
     generate_storage!(XHub, PendingUTXOs => Value<Vec<NonConfidentialOutput>>);
+
+    // Findora custom asset associate with a Ethereum address
+    generate_storage!(XHub, FindoraAssets => Map<H160, FindoraAsset>);
 }
 
 pub struct App<C> {
