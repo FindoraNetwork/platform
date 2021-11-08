@@ -1,4 +1,6 @@
+use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::str::FromStr;
 
 use super::*;
 use crate::BaseApp;
@@ -13,16 +15,15 @@ use fp_core::{
 };
 use fp_evm::Runner;
 use fp_traits::evm::{DecimalsMapping, FeeCalculator};
-use fp_types::actions::evm::Call;
 use fp_types::{
-    actions,
+    actions::{self, evm::Call},
     assemble::{convert_unsigned_transaction, CheckedTransaction, UncheckedTransaction},
-    crypto::Address,
+    crypto::{Address, MultiSigner},
 };
 use fp_utils::proposer_converter;
-use ledger::converter::erc20::check_erc20_tx;
 use ledger::{
-    converter::check_convert_account, data_model::Transaction as FindoraTransaction,
+    converter::{check_convert_account, erc20::check_erc20_tx, ConvertingType},
+    data_model::{Operation, Transaction as FindoraTransaction},
 };
 use ruc::*;
 use serde::Serialize;
@@ -123,21 +124,96 @@ impl ModuleManager {
         &mut self,
         ctx: &Context,
         tx: &FindoraTransaction,
+        tx_type: ConvertingType,
     ) -> Result<()> {
-        if let Ok((owner, amount)) = check_convert_account(tx) {
-            let balance = EthereumDecimalsMapping::from_native_token(U256::from(amount))
-                .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
-            return module_account::App::<BaseApp>::mint(
-                ctx,
-                &Address::from(owner),
-                balance,
-            );
+        match tx_type {
+            ConvertingType::ConvertAccount => {
+                if let Ok((owner, amount)) = check_convert_account(tx) {
+                    let balance =
+                        EthereumDecimalsMapping::from_native_token(U256::from(amount))
+                            .ok_or_else(|| {
+                            eg!("The transfer to account amount is too large")
+                        })?;
+                    module_account::App::<BaseApp>::mint(
+                        ctx,
+                        &Address::from(owner),
+                        balance,
+                    )
+                } else {
+                    Err(eg!("Invalid check_convert_account"))
+                }
+            }
+            ConvertingType::ERC20 => self.process_findora_erc20(ctx, tx),
+            ConvertingType::FindoraAsset => self.process_findora_asset(ctx, tx),
+            ConvertingType::FRC20 => {
+                todo!()
+            }
         }
-        if is_transfer_erc20_tx(tx) {
-            return self.process_findora_erc20(ctx, tx);
+    }
+
+    fn process_findora_asset(
+        &mut self,
+        ctx: &Context,
+        tx: &FindoraTransaction,
+    ) -> Result<()> {
+        let mut new_assets = HashMap::new();
+        let mut issue_assets = HashMap::new();
+        let mut update_memos = HashMap::new();
+
+        for op in &tx.body.operations {
+            match op {
+                Operation::DefineAsset(da) => {
+                    let code = da.body.asset.code;
+                    if new_assets.contains_key(&code)
+                        || issue_assets.contains_key(&code)
+                        || update_memos.contains_key(&code)
+                    {
+                        return Err(eg!("duplicate asset type code"));
+                    }
+                    new_assets.insert(code, *da.body.asset.clone());
+                }
+                Operation::IssueAsset(ia) => {
+                    let code = ia.body.code;
+                    if issue_assets.contains_key(&code) {
+                        return Err(eg!("duplicate asset type code when issuing"));
+                    }
+                    // TODO: calculate issuance amount
+                    issue_assets.insert(code, 0);
+                }
+                Operation::TransferAsset(_ta) => {
+                    todo!()
+                }
+                Operation::UpdateMemo(um) => {
+                    let code = um.body.asset_type;
+                    let memo = um.body.new_memo.clone();
+                    if update_memos.contains_key(&code) {
+                        return Err(eg!("duplicate asset type code when updating memo"));
+                    }
+                    update_memos.insert(code, memo);
+                }
+                _ => {
+                    log::debug!(target: "baseapp", "Unsupported findora asset operation");
+                }
+            }
         }
 
-        Err(eg!("Unknown findora transaction"))
+        for da in new_assets {
+            if let Ok(MultiSigner::Ethereum(address)) =
+                MultiSigner::from_str(da.1.memo.0.as_str())
+            {
+                if module_xhub::App::<BaseApp>::asset_of(ctx, &address).is_some() {
+                    return Err(eg!("Existed findora asset"));
+                }
+                return module_xhub::App::<BaseApp>::add_asset(ctx, &address, &da.1)
+                    .c(d!("Failed to add new asset"));
+            } else {
+                log::info!(target: "baseapp", "Skipping invalid new asset");
+            };
+        }
+
+        // TODO: handle other asset operations
+
+        Ok(())
     }
 
     // findora utxo -> erc20

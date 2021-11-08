@@ -4,7 +4,6 @@
 
 mod utils;
 
-use ledger::converter::erc20::{check_valid_asset, is_transfer_erc20_tx};
 use {
     crate::{
         abci::{
@@ -27,6 +26,7 @@ use {
     ledger::{
         converter::is_convert_account,
         staking::KEEP_HIST,
+        converter::check_converting_tx_type,
         store::{
             api_cache,
             fbnc::{new_mapx, Mapx},
@@ -213,15 +213,9 @@ pub fn deliver_tx(
                         }
                     }
 
-                    let is_utxo_erc20_tx = is_transfer_erc20_tx(&tx)
-                        && check_valid_asset(
-                            &tx,
-                            s.la.read().get_committed_state().read().deref(),
-                        );
-
-                    if is_convert_account(&tx) || is_utxo_erc20_tx {
+                    if let Some(tx_type) = check_converting_tx_type(&tx) {
                         if let Err(err) =
-                            s.account_base_app.write().deliver_findora_tx(&tx)
+                            s.account_base_app.write().deliver_findora_tx(&tx, tx_type)
                         {
                             log::debug!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
 
