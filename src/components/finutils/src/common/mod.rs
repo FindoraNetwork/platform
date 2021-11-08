@@ -736,7 +736,6 @@ pub fn gen_oabar_add_op(
     let r = wallet::randomizer_from_base58(r).c(d!())?;
     let diversified_from_pub_key = from.pub_key().randomize(&r);
     let axtxo_abar = utils::get_owned_abars(&diversified_from_pub_key).c(d!())?;
-    //Only the first abar received from the ledger query is considered
     let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
     let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
 
@@ -799,14 +798,13 @@ pub fn gen_oabar_add_op_x(
 ) -> Result<()> {
     let sender_count = axfr_secret_keys.len();
     let mut oabars_in = Vec::new();
-    for i in 0..sender_count - 1 {
+    for i in 0..sender_count {
         let from = &axfr_secret_keys[i];
         let from_secret_key = &dec_keys[i];
         let r = wallet::randomizer_from_base58(randomizers[i].as_str()).c(d!())?;
         let diversified_from_pub_key = from.pub_key().randomize(&r);
 
         let axtxo_abar = utils::get_owned_abars(&diversified_from_pub_key).c(d!())?;
-        //Only the first abar received from the ledger query is considered
         let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
         let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
 
@@ -826,8 +824,8 @@ pub fn gen_oabar_add_op_x(
 
     let rcvr_count = to_axfr_public_keys.len();
     let mut oabars_out = Vec::new();
-    for i in 0..rcvr_count - 1 {
-        let mut prng = ChaChaRng::from_seed([0u8; 32]);
+    for i in 0..rcvr_count {
+        let mut prng = ChaChaRng::from_entropy();
         let to = to_axfr_public_keys[i];
         let enc_key_out = &to_enc_keys[i];
         let axfr_amount = amounts[i].parse::<u64>().c(d!("error parsing amount"))?;
@@ -840,20 +838,34 @@ pub fn gen_oabar_add_op_x(
             .build()
             .unwrap();
 
-        let r = oabar_out.get_key_rand_factor();
-        println!(
-            "\x1b[31;01m Randomizer: {}\x1b[00m",
-            wallet::randomizer_to_base58(&r)
-        );
         oabars_out.push(oabar_out);
     }
 
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
-    let _ = builder
+    let (_, note) = builder
         .add_operation_anon_transfer(&oabars_in[..], &oabars_out[..], &axfr_secret_keys)
         .c(d!())?;
 
     send_tx(&builder.take_transaction()).c(d!())?;
+
+    for oabar_out in oabars_out {
+        let r_out = oabar_out.get_key_rand_factor();
+        println!(
+            "\x1b[31;01m Randomizer: {}\x1b[00m",
+            wallet::randomizer_to_base58(&r_out)
+        );
+        let mut file = fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open("randomizers")
+            .expect("cannot open randomizers file");
+        std::io::Write::write_all(
+            &mut file,
+            ("\n".to_owned() + &wallet::randomizer_to_base58(&r_out)).as_bytes(),
+        )
+        .expect("randomizer write failed");
+    }
+    println!("Signed AxfrNote: {:?}", serde_json::to_string_pretty(&note));
     Ok(())
 }
 
