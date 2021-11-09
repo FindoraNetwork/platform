@@ -2,16 +2,16 @@
 
 use crate::converter::ASSET_TYPE_FRA;
 use crate::data_model::{
-    AssetTypeCode, NoReplayToken, Operation, Transaction, BLACK_HOLE_PUBKEY_STAKING,
+    NoReplayToken, Operation, Transaction, BLACK_HOLE_PUBKEY_STAKING,
 };
-use crate::store::LedgerState;
 use fp_types::crypto::MultiSigner;
+use fp_types::H160;
 use ruc::*;
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use std::collections::HashSet;
 use zei::xfr::{
     sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
-    structs::XfrAssetType, //AssetType
+    structs::{AssetType as ZeiAssetType, XfrAssetType},
 };
 use zeiutils::serialization::ZeiFromToBytes;
 
@@ -102,61 +102,23 @@ pub fn is_transfer_erc20_tx(tx: &Transaction) -> bool {
     false
 }
 
-/// check asset if suitable for a uto->erc20 transaction
-pub fn check_valid_asset(tx: &Transaction, la: &LedgerState) -> bool {
-    let address;
-    if let Operation::TransferERC20(te) = &tx.body.operations[1] {
-        address = &te.data.address
-    } else {
-        return false;
-    }
-
-    if let Operation::TransferAsset(ta) = &tx.body.operations[0] {
-        for txo in &ta.body.outputs {
-            if txo.record.is_public() {
-                // unwrap is safe here, because current asset is public
-                // ZeiAssetType
-                let asset = txo.record.asset_type.get_asset_type().unwrap();
-                // Findora AssetType
-                if let Some(at) = la.get_asset_type(&AssetTypeCode { val: asset }) {
-                    if let Ok(signer) = MultiSigner::from_str(&at.properties.memo.0) {
-                        if &signer != address {
-                            // asset and erc20 address are not bound
-                            return false;
-                        }
-                    } else {
-                        // Not binding with a valid address
-                        return false;
-                    }
-                    if at.has_transfer_restrictions() || at.has_issuance_restrictions() {
-                        return false;
-                    }
-                } else {
-                    // non-existed asset type
-                    return false;
-                }
-            } else {
-                // confidential type or amount
-                return false;
-            }
-        }
-    }
-    true
-}
-
 #[allow(missing_docs)]
-pub fn check_erc20_tx(tx: &Transaction) -> Result<(Vec<u8>, MultiSigner, u64, Vec<u8>)> {
+#[allow(clippy::type_complexity)]
+pub fn check_erc20_tx(
+    tx: &Transaction,
+) -> Result<(Vec<u8>, H160, u64, Vec<u8>, HashSet<ZeiAssetType>)> {
     let mut owner = None;
     let mut nonce = None;
     let mut input = None;
     let mut signer = None;
+    let mut assets = HashSet::new();
 
     for op in &tx.body.operations {
         if let Operation::TransferERC20(ca) = op {
             if owner.is_some() {
-                return Err(eg!("tx must have 1 convert account"));
+                return Err(eg!("tx should have only one convert account"));
             }
-            owner = Some(ca.data.address.clone());
+            owner = H160::try_from(ca.data.address.clone()).ok();
             nonce = Some(ca.get_nonce());
             input = Some(ca.data.input.clone());
             signer = Some(ca.get_related_address().zei_to_bytes())
@@ -164,7 +126,6 @@ pub fn check_erc20_tx(tx: &Transaction) -> Result<(Vec<u8>, MultiSigner, u64, Ve
         if let Operation::TransferAsset(t) = op {
             for o in &t.body.outputs {
                 // both amount and asset type are no-confidential
-                // FIXME: check if transferable
                 if !o.record.is_public() {
                     return Err(eg!(
                         "Findora custom asset cross ledger transfer not support confidential"
@@ -177,17 +138,21 @@ pub fn check_erc20_tx(tx: &Transaction) -> Result<(Vec<u8>, MultiSigner, u64, Ve
                     {
                         return Err(eg!("Only Findora custom asset is supported"));
                     }
+                    assets.insert(ty);
                 }
             }
         }
     }
+
     if owner.is_none() {
         return Err(eg!("this isn't a valid utxo-to-erc20 tx"));
     }
+
     Ok((
         signer.unwrap(),
         owner.unwrap(),
         nonce.unwrap().get_seq_id(),
         input.unwrap(),
+        assets,
     ))
 }

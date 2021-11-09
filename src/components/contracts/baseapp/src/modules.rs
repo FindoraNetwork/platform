@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::convert::TryFrom;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use super::*;
@@ -23,10 +22,11 @@ use fp_types::{
 use fp_utils::proposer_converter;
 use ledger::{
     converter::{check_convert_account, erc20::check_erc20_tx, ConvertingType},
-    data_model::{Operation, Transaction as FindoraTransaction},
+    data_model::{Operation, Transaction as FindoraTransaction, ASSET_TYPE_FRA},
 };
 use ruc::*;
 use serde::Serialize;
+use zei::xfr::structs::AssetType as ZeiAssetType;
 
 #[derive(Default)]
 pub struct ModuleManager {
@@ -180,9 +180,6 @@ impl ModuleManager {
                     // TODO: calculate issuance amount
                     issue_assets.insert(code, 0);
                 }
-                Operation::TransferAsset(_ta) => {
-                    todo!()
-                }
                 Operation::UpdateMemo(um) => {
                     let code = um.body.asset_type;
                     let memo = um.body.new_memo.clone();
@@ -198,9 +195,18 @@ impl ModuleManager {
         }
 
         for da in new_assets {
+            if da.0.val == ASSET_TYPE_FRA {
+                log::info!(target: "baseapp", "Skipping native asset");
+                continue;
+            }
             if let Ok(MultiSigner::Ethereum(address)) =
                 MultiSigner::from_str(da.1.memo.0.as_str())
             {
+                if !da.1.asset_rules.transferable || da.1.asset_rules.max_units.is_some()
+                {
+                    return Err(eg!("Binding asset with restrictions"));
+                }
+
                 if module_xhub::App::<BaseApp>::asset_of(ctx, &address).is_some() {
                     return Err(eg!("Existed findora asset"));
                 }
@@ -216,15 +222,42 @@ impl ModuleManager {
         Ok(())
     }
 
+    // check asset if suitable for a utxo->erc20 transaction
+    //  1. only one kind of asset is supported
+    //  2. asset should be bind with a valid H160 address
+    fn check_valid_asset(
+        &self,
+        ctx: &Context,
+        address: &H160,
+        assets: HashSet<ZeiAssetType>,
+    ) -> Result<()> {
+        if !assets.is_empty() && assets.len() != 1 {
+            return Err(eg!("Only one kind of asset is supported currently."));
+        }
+
+        for code in assets.into_iter() {
+            ensure!(
+                Some(code)
+                    == module_xhub::App::<BaseApp>::asset_of(ctx, address)
+                        .map(|x| x.code.val),
+                "No binding asset"
+            );
+        }
+
+        Ok(())
+    }
+
     // findora utxo -> erc20
     fn process_findora_erc20(
         &self,
         ctx: &Context,
         tx: &FindoraTransaction,
     ) -> Result<()> {
-        let (signer, owner, _nonce, input) = check_erc20_tx(tx)?;
+        let (signer, target, _nonce, input, assets) = check_erc20_tx(tx)?;
         let signer = proposer_converter(signer).unwrap();
-        let target = H160::try_from(owner).unwrap();
+
+        self.check_valid_asset(ctx, &target, assets)
+            .c(d!("Assets check failed"))?;
 
         // call mint method
         let mut config = <BaseApp as module_ethereum::Config>::config().clone();

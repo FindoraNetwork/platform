@@ -23,7 +23,7 @@ impl<C: Config> App<C> {
     pub fn erc20_to_utxo(
         ctx: &Context,
         sender: Address,
-        contractaddress: H160,
+        contract: H160,
         gas_price: U256,
         gas_limit: U256,
         input: Vec<u8>,
@@ -31,13 +31,30 @@ impl<C: Config> App<C> {
         outputs: Vec<NonConfidentialOutput>,
     ) -> Result<ActionResult> {
         let mut asset_amount = 0;
+        let mut asset = None;
         for output in &outputs {
             ensure!(
                 output.asset != ASSET_TYPE_FRA,
                 "Only Findora custom asset type is supported"
             );
+            if asset.is_none() {
+                asset = Some(output.asset)
+            } else if asset.unwrap() != output.asset {
+                return Err(eg!(
+                    "Only one kind of findora custom asset type is supported"
+                ));
+            }
             asset_amount += output.amount;
         }
+
+        if asset.is_none() || asset_amount == 0 {
+            return Err(eg!("Invalid utxo output"));
+        }
+
+        ensure!(
+            Self::asset_of(ctx, &contract).map(|x| x.code.val) == asset,
+            "Not binding asset"
+        );
 
         log::debug!(target: "xhub", "transfer to UTXO amount is: {}", asset_amount);
         let amount = C::DecimalsMapping::from_native_token(U256::from(asset_amount))
@@ -58,7 +75,7 @@ impl<C: Config> App<C> {
             let source = proposer_converter(v.to_vec()).unwrap();
             let call = Call {
                 source,
-                target: contractaddress,
+                target: contract,
                 input,
                 value: U256::zero(),
                 gas_limit: gas_limit.low_u64(),
