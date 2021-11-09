@@ -1,11 +1,9 @@
 //! Multi Signer operation for transaction.
 
-use crate::converter::ASSET_TYPE_FRA;
 use crate::data_model::{
-    NoReplayToken, Operation, Transaction, BLACK_HOLE_PUBKEY_STAKING,
+    NoReplayToken, Operation, Transaction, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
 };
-use fp_types::crypto::MultiSigner;
-use fp_types::H160;
+use fp_types::{crypto::MultiSigner, H160};
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;

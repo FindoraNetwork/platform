@@ -43,7 +43,7 @@ pub trait Config {
 
 mod storage {
     use fp_types::actions::xhub::NonConfidentialOutput;
-    use ledger::data_model::Asset as FindoraAsset;
+    use ledger::data_model::AssetType as FindoraAsset;
     use primitive_types::H160;
 
     use fp_storage::*;
