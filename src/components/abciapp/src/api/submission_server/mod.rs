@@ -15,7 +15,6 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{collections::HashMap, fmt, sync::Arc},
-    fp_utils::tx::EVM_TX_TAG,
 };
 
 /// Query handle for user

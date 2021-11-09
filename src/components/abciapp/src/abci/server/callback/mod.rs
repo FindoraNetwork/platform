@@ -5,12 +5,6 @@
 mod utils;
 
 use {
-    abci::{
-    Application, CheckTxType, RequestBeginBlock, RequestCheckTx, RequestCommit,
-    RequestDeliverTx, RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery,
-    ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
-    ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery},
-    fp_storage::hash::{Sha256, StorageHasher},
     crate::{
         abci::{
             config::global_cfg::CFG, server::ABCISubmissionServer, staking, IN_SAFE_ITV,
@@ -21,9 +15,15 @@ use {
             submission_server::{convert_tx, try_tx_catalog, TxCatalog},
         },
     },
+    abci::{
+        Application, CheckTxType, RequestBeginBlock, RequestCheckTx, RequestCommit,
+        RequestDeliverTx, RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery,
+        ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
+        ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
+    },
+    fp_storage::hash::{Sha256, StorageHasher},
     lazy_static::lazy_static,
     ledger::{
-        converter::is_convert_tx,
         staking::KEEP_HIST,
         store::{
             api_cache,
@@ -100,6 +100,7 @@ pub fn init_chain(
 /// any new tx will trigger this callback before it can enter the mem-pool of tendermint
 pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseCheckTx {
     let mut resp = ResponseCheckTx::new();
+
     let tx_catalog = try_tx_catalog(req.get_tx());
     match tx_catalog {
         TxCatalog::FindoraTx => {
@@ -114,6 +115,8 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                     }
                 } else {
                     resp.log = "Invalid format".to_owned();
+                }
+            }
             resp
         }
         TxCatalog::EvmTx => s.account_base_app.write().check_tx(req),
