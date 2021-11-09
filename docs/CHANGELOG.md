@@ -14,7 +14,12 @@
 
 > Functions that have been added.
 
-#### v0.2.11-release
+#### v0.2.12-release 
+
+- Fix overflow error for rewards.
+- Use `RUC_OUT=1` to enable error log from `RUC`.
+
+#### v0.2.11-release (Yanked at the block height of 124_7000 !)
 
 - Fix incorrect calculations about `Nonconfidential Balances`
 - Optimize the calculation of `expected return rate`
