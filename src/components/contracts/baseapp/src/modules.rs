@@ -22,7 +22,9 @@ use fp_types::{
 use fp_utils::proposer_converter;
 use ledger::{
     converter::{check_convert_account, erc20::check_erc20_tx, ConvertingType},
-    data_model::{Operation, Transaction as FindoraTransaction, ASSET_TYPE_FRA},
+    data_model::{
+        AssetType, Operation, Transaction as FindoraTransaction, ASSET_TYPE_FRA,
+    },
 };
 use ruc::*;
 use serde::Serialize;
@@ -202,7 +204,9 @@ impl ModuleManager {
             if let Ok(MultiSigner::Ethereum(address)) =
                 MultiSigner::from_str(da.1.memo.0.as_str())
             {
-                if !da.1.asset_rules.transferable || da.1.asset_rules.max_units.is_some()
+                let asset = AssetType::new(da.1);
+
+                if asset.has_issuance_restrictions() || asset.has_transfer_restrictions()
                 {
                     return Err(eg!("Binding asset with restrictions"));
                 }
@@ -210,7 +214,7 @@ impl ModuleManager {
                 if module_xhub::App::<BaseApp>::asset_of(ctx, &address).is_some() {
                     return Err(eg!("Existed findora asset"));
                 }
-                return module_xhub::App::<BaseApp>::add_asset(ctx, &address, &da.1)
+                return module_xhub::App::<BaseApp>::add_asset(ctx, &address, &asset)
                     .c(d!("Failed to add new asset"));
             } else {
                 log::info!(target: "baseapp", "Skipping invalid new asset");
@@ -239,7 +243,7 @@ impl ModuleManager {
             ensure!(
                 Some(code)
                     == module_xhub::App::<BaseApp>::asset_of(ctx, address)
-                        .map(|x| x.code.val),
+                        .map(|x| x.properties.code.val),
                 "No binding asset"
             );
         }

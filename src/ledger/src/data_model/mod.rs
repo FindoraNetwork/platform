@@ -11,9 +11,8 @@ mod test;
 
 pub use effects::{BlockEffect, TxnEffect};
 
-use crate::converter::erc20::TransferERC20;
 use {
-    crate::converter::ConvertAccount,
+    crate::converter::{erc20::TransferERC20, ConvertAccount},
     crate::staking::{
         ops::{
             claim::ClaimOps, delegation::DelegationOps,
@@ -631,6 +630,15 @@ pub struct AssetType {
 }
 
 impl AssetType {
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn new(properties: Asset) -> Self {
+        Self {
+            properties,
+            ..Default::default()
+        }
+    }
+
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn has_issuance_restrictions(&self) -> bool {

@@ -13,7 +13,7 @@ use fp_types::{
     crypto::Address,
 };
 use fp_utils::proposer_converter;
-use ledger::data_model::{Asset as FindoraAsset, ASSET_TYPE_FRA};
+use ledger::data_model::{AssetType as FindoraAsset, ASSET_TYPE_FRA};
 use log::debug;
 use primitive_types::{H160, U256};
 use ruc::*;
@@ -52,7 +52,7 @@ impl<C: Config> App<C> {
         }
 
         ensure!(
-            Self::asset_of(ctx, &contract).map(|x| x.code.val) == asset,
+            Self::asset_of(ctx, &contract).map(|x| x.properties.code.val) == asset,
             "Not binding asset"
         );
 
