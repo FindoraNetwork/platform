@@ -498,9 +498,9 @@ fn run() -> Result<()> {
         let list = list
             .iter()
             .map(|(uid, abar)| {
-                let memo = common::get_abar_memo(&uid).unwrap().unwrap();
+                let memo = common::get_abar_memo(uid).unwrap().unwrap();
                 let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
-                    &abar,
+                    abar,
                     memo,
                     &axfr_secret_key,
                     &dec_key,

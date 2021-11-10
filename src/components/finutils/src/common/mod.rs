@@ -886,7 +886,7 @@ pub fn get_owned_abars(p: &AXfrPubKey) -> Result<Vec<(ATxoSID, AnonBlindAssetRec
 
 /// Get the Abar Memo by ATxoSID
 pub fn get_abar_memo(uid: &ATxoSID) -> Result<Option<OwnerMemo>> {
-    utils::get_abar_memo(&uid).c(d!())
+    utils::get_abar_memo(uid).c(d!())
 }
 
 /// Fetches list of owned TxoSIDs from LedgerStatus
