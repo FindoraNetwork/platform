@@ -37,6 +37,7 @@ use zei::anon_xfr::keys::{AXfrKeyPair, AXfrPubKey};
 use zei::anon_xfr::structs::{
     AnonBlindAssetRecord, MTLeafInfo, OpenAnonBlindAssetRecordBuilder,
 };
+use zei::xfr::structs::OwnerMemo;
 use zei::{
     setup::PublicParams,
     xfr::{
@@ -881,6 +882,11 @@ pub fn get_mtleaf_info(atxo_sid: &str) -> Result<MTLeafInfo> {
 /// Fetch Owned ABARs from query server
 pub fn get_owned_abars(p: &AXfrPubKey) -> Result<Vec<(ATxoSID, AnonBlindAssetRecord)>> {
     utils::get_owned_abars(p)
+}
+
+/// Get the Abar Memo by ATxoSID
+pub fn get_abar_memo(uid: &ATxoSID) -> Result<Option<OwnerMemo>> {
+    utils::get_abar_memo(&uid).c(d!())
 }
 
 /// Fetches list of owned TxoSIDs from LedgerStatus
