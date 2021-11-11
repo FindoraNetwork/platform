@@ -147,9 +147,7 @@ impl ModuleManager {
             }
             ConvertingType::ERC20 => self.process_findora_erc20(ctx, tx),
             ConvertingType::FindoraAsset => self.process_findora_asset(ctx, tx),
-            ConvertingType::FRC20 => {
-                todo!()
-            }
+            ConvertingType::FRC20 => Err(eg!("Unsupported converting type")),
         }
     }
 
@@ -190,9 +188,7 @@ impl ModuleManager {
                     }
                     update_memos.insert(code, memo);
                 }
-                _ => {
-                    log::debug!(target: "baseapp", "Unsupported findora asset operation");
-                }
+                _ => {}
             }
         }
 
