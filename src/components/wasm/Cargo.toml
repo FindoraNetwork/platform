@@ -3,7 +3,7 @@ name = "wasm"
 version = "0.2.11"
 authors = ["FindoraNetwork"]
 build = "build.rs"
-edition = "2018"
+edition = "2021"
 
 description = ""
 repository = ""

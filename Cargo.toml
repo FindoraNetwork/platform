@@ -1,8 +1,15 @@
 [workspace]
 members = [
     "src/ledger",
+    "src/libs/bitmap",
+    "src/libs/merkle_tree",
+    "src/libs/globutils",
+    "src/libs/cryptohash",
+    "src/libs/credentials",
+    "src/libs/sliding_set",
     "src/components/finutils",
     "src/components/abciapp",
+    "src/components/wasm",
     "src/components/contracts/baseapp",
     "src/components/contracts/modules/account",
     "src/components/contracts/modules/ethereum",
@@ -27,13 +34,6 @@ members = [
     "src/components/contracts/primitives/utils",
     "src/components/contracts/primitives/wasm",
     "src/components/contracts/rpc",
-    "src/components/wasm",
-    "src/libs/bitmap",
-    "src/libs/merkle_tree",
-    "src/libs/globutils",
-    "src/libs/cryptohash",
-    "src/libs/credentials",
-    "src/libs/sliding_set",
 ]
 
 [profile.dev]
