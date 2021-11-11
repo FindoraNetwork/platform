@@ -6,7 +6,7 @@ use crate::data_model::{
 use fp_types::{crypto::MultiSigner, H160};
 use ruc::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::{collections::HashSet, convert::TryFrom};
 use zei::xfr::{
     sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
     structs::{AssetType as ZeiAssetType, XfrAssetType},

@@ -24,9 +24,8 @@ use {
     fp_storage::hash::{Sha256, StorageHasher},
     lazy_static::lazy_static,
     ledger::{
-        converter::is_convert_account,
-        staking::KEEP_HIST,
         converter::check_converting_tx_type,
+        staking::KEEP_HIST,
         store::{
             api_cache,
             fbnc::{new_mapx, Mapx},
@@ -215,7 +214,10 @@ pub fn deliver_tx(
                             return resp;
                         }
 
-                        if s.la.write().cache_transaction(tx).is_ok() {
+                        if let Err(e) = s.la.write().cache_transaction(tx) {
+                            resp.code = 1;
+                            resp.log = e.to_string();
+                        } else {
                             s.account_base_app
                                 .read()
                                 .deliver_state
@@ -246,7 +248,6 @@ pub fn deliver_tx(
                     } else if let Err(e) = s.la.write().cache_transaction(tx) {
                         resp.code = 1;
                         resp.log = e.to_string();
-                        return resp;
                     }
                 } else {
                     resp.code = 1;
