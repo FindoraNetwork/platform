@@ -71,6 +71,19 @@ impl<C: Config> App<C> {
             let mut config = C::config().clone();
             config.estimate = true;
 
+            // check burn input
+            let burn = ledger::converter::erc20::ERC20_CONSTRUCTOR
+                .abi
+                .function("burn")
+                .c(d!("No burn function"))?
+                .encode_input(&[
+                    ethabi::Token::Address(contract),
+                    ethabi::Token::Uint(U256::from(asset_amount)),
+                ])
+                .c(d!("Failed to encode burn input"))?;
+
+            ensure!(burn == input, "Not a valid burn input");
+
             let v: [u8; 32] = *sender.as_ref();
             let source = proposer_converter(v.to_vec()).unwrap();
             let call = Call {
