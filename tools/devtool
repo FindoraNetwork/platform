@@ -74,7 +74,7 @@ elif [[ ${OPT} = "ltchk" ]]; then
   make lint
   exit 0
 elif [[ ${OPT} = "staking_demo" ]]; then
-  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release_debug
+  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release
   make run_staking_demo
   exit 0
 elif [[ ${OPT} == "DBG" ]]; then
@@ -90,7 +90,7 @@ elif [[ ${OPT} == "gorelease" ]]; then
   make build_release_goleveldb
   exit 0
 elif [[ ${OPT} == "debug_env" ]]; then
-  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release_debug
+  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release
   rm -rf target
   ln -sf "${CARGO_TARGET_DIR}" target
   make debug_env
