@@ -16,9 +16,11 @@ use {
     ledger::{
         data_model::{
             b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
-            TxnIDHash, TxnSID, TxoSID, XfrAddress,
+            TxnIDHash, TxnSID, TxoSID, XfrAddress, BLACK_HOLE_PUBKEY,
         },
-        staking::{ops::mint_fra::MintEntry, FRA},
+        staking::{
+            ops::mint_fra::MintEntry, FF_PK_EXTRA_120_0000, FRA, FRA_TOTAL_AMOUNT,
+        },
     },
     ledger_api::*,
     log::info,
@@ -28,6 +30,7 @@ use {
     server::QueryServer,
     std::{
         collections::{BTreeMap, HashSet},
+        ops::Deref,
         sync::Arc,
     },
     zei::{
@@ -433,6 +436,44 @@ pub async fn get_circulating_supply(
     Ok(web::Json(res))
 }
 
+/// return
+/// global_circulating_supply
+/// global_adjusted_circulating_supply
+/// global_total_supply
+pub async fn get_total_supply(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+) -> actix_web::Result<web::Json<BTreeMap<&'static str, f64>>, actix_web::error::Error> {
+    let l = data.read();
+    let burn_pubkey = BLACK_HOLE_PUBKEY.deref();
+    let extra_pubkey = FF_PK_EXTRA_120_0000.deref();
+
+    let burn_balance = l
+        .ledger_cloned
+        .get_nonconfidential_balance(burn_pubkey)
+        .unwrap_or(0);
+    let extra_balance = l
+        .ledger_cloned
+        .get_nonconfidential_balance(extra_pubkey)
+        .unwrap_or(0);
+
+    let fra = FRA as f64;
+
+    let big_9 = l.ledger_cloned.staking_get_global_unlocked_amount();
+    let big_8 = big_9 + extra_balance;
+
+    let cs = big_8 as f64 / fra;
+    let acs = big_9 as f64 / fra;
+    let ts = (FRA_TOTAL_AMOUNT - burn_balance) as f64 / fra;
+
+    let res = map! { B
+        "global_circulating_supply" => cs,
+        "global_adjusted_circulating_supply" => acs,
+        "global_total_supply" => ts
+    };
+
+    Ok(web::Json(res))
+}
+
 /// Structures exposed to the outside world
 pub struct QueryApi;
 
@@ -450,6 +491,10 @@ impl QueryApi {
                 .data(Arc::clone(&server))
                 .route("/ping", web::get().to(ping))
                 .route("/version", web::get().to(version))
+                .service(
+                    web::resource("get_total_supply")
+                        .route(web::get().to(get_total_supply)),
+                )
                 .service(
                     web::resource("circulating_supply")
                         .route(web::get().to(get_circulating_supply)),
