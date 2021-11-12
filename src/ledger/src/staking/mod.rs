@@ -165,7 +165,7 @@ pub const MAX_TOTAL_POWER: Amount = Amount::MAX / 8;
 pub const MAX_POWER_PERCENT_PER_VALIDATOR: [u128; 2] = [1, 5];
 
 /// Block time interval, in seconds.
-pub const BLOCK_INTERVAL: u64 = 15 + 1;
+pub const BLOCK_INTERVAL: u64 = 7;
 
 /// The lock time after the delegation expires, about 21 days.
 pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
