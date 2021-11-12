@@ -518,6 +518,8 @@ impl TransactionBuilder {
     ) -> Result<(&mut Self, AXfrNote)> {
         let mut prng = ChaChaRng::from_entropy(); // TODO: removing this, CRS would be pre generated in a file
         let depth: usize = 41;
+        //--Sergio--
+        //let depth: usize = 10;
         let user_params = UserParams::new(
             inputs.len(),
             outputs.len(),
@@ -1251,7 +1253,7 @@ mod tests {
     use super::*;
     use crypto::basics::commitments::ristretto_pedersen::RistrettoPedersenGens;
     use crypto::basics::hybrid_encryption::XSecretKey;
-    use ledger::data_model::{BlockEffect, TxnEffect, TxoRef};
+    use ledger::data_model::{BlockEffect, TxnEffect, TxoRef, ATxoSID};
     use ledger::store::{utils::fra_gen_initial_tx, LedgerState};
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
@@ -1682,9 +1684,9 @@ mod tests {
     // }
 
 
-    //This is the test I cloned to add the new code
+    //Negative tests added 
     #[test]
-    fn axfr_create_verify_unit_cloned() {
+    fn axfr_create_verify_unit_with_negative_tests() {
 
 
         let mut ledger_state = LedgerState::tmp_ledger();
@@ -1765,7 +1767,6 @@ mod tests {
 
         let abar = AnonBlindAssetRecord::from_oabar(&oabar);
         let _owner_memo = oabar.get_owner_memo().unwrap();
-        
 
         /*let (decrypt_amount, decrypt_asset) = owner_memo.decrypt_amount_and_asset_type .unwrap();
         assert_eq!(decrypt_amount, amount_nonneg);
@@ -1800,63 +1801,6 @@ mod tests {
                 base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
         }
         let _txn_sid = ledger_state.finish_block(block).unwrap();
-
-        //let mut prng1 = ChaChaRng::from_seed([0u8; 32]);
-
-        /*
-        //let amount1 = 10u64;
-        let amount2 = -2i64;
-        let asset_type1 = AT::from_identical_byte(0);
-
-        // simulate input abar
-        //let (mut oabar1, keypair_in1, _dec_key_in1, _) =
-        //    gen_oabar_and_keys(&mut prng1, amount1, asset_type1);
-        let (mut oabarneg1, keypair_in1, _dec_key_in1, _) =
-            gen_oabar_and_keys(&mut prng1, amount2, asset_type1);
-        //let abar1 = AnonBlindAssetRecord::from_oabar(&oabar1);
-        let abarneg1 = AnonBlindAssetRecord::from_oabar(&oabarneg1);
-        //assert_eq!(keypair_in1.pub_key(), *oabar1.pub_key_ref());
-        //let rand_keypair_in1 = keypair_in1.randomize(&oabar1.get_key_rand_factor());
-        assert_eq!(rand_keypair_in1.pub_key(), *oabar1.public_key_ref());
-
-        let _owner_memo1 = oabar1.get_owner_memo().unwrap();
-
-        // add abar to merkle tree
-        let uid1 = ledger_state.add_abar(&abar1).unwrap();
-        ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-        let _ = ledger_state.compute_and_save_state_commitment_data(2);
-        let mt_leaf_info1 = ledger_state.get_abar_proof(uid1).unwrap();
-        oabar1.update_mt_leaf_info(mt_leaf_info1);
-
-        // add abar to merkle tree for negative amount
-        let uidneg = ledger_state.add_abar(&abarneg1).unwrap();
-        ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-        let _ = ledger_state.compute_and_save_state_commitment_data(2);
-        let mt_leaf_infoneg1 = ledger_state.get_abar_proof(uidneg).unwrap();
-        oabarneg1.update_mt_leaf_info(mt_leaf_infoneg1);
-
-        let (oabar_out1, _keypair_out1, _dec_key_out1, _) =
-            gen_oabar_and_keys(&mut prng1, amount1, asset_type1);
-        //let (oabar_outneg1, _keypair_outneg1, _dec_key_outneg1, _) =
-        //gen_oabar_and_keys(&mut prng1, amount2, asset_type1);
-        assert!(gen_oabar_and_keys(&mut prng1, amount2, asset_type1).is_err());
-        let _abar_out1 = AnonBlindAssetRecord::from_oabar(&oabar_out1);
-        let mut builder1 = TransactionBuilder::from_seq_id(1);
-        let _ = builder1
-            .add_operation_anon_transfer(&[oabar1], &[oabar_out1], &[keypair_in1])
-            .is_ok();
-
-        let txn1 = builder1.take_transaction();
-        let compute_effect1 = TxnEffect::compute_effect(txn1).unwrap();
-        let mut block1 = BlockEffect::default();
-        let _ = block1.add_txn_effect(compute_effect1, false);
-
-        for n in block1.new_nullifiers.iter() {
-            let _str =
-                base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
-        }
-        let _txn_sid1 = ledger_state.finish_block(block1).unwrap();
-    */
     }
 
 
