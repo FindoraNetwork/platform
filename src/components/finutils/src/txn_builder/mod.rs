@@ -1765,7 +1765,12 @@ mod tests {
 
         let abar = AnonBlindAssetRecord::from_oabar(&oabar);
         let _owner_memo = oabar.get_owner_memo().unwrap();
+        
 
+        /*let (decrypt_amount, decrypt_asset) = owner_memo.decrypt_amount_and_asset_type .unwrap();
+        assert_eq!(decrypt_amount, amount_nonneg);
+        assert_eq!(decrypt_asset, asset_type);
+        */
 
         //let rand_keypair_in = keypair_in.randomize(&oabar.get_key_rand_factor());
         //assert_eq!(rand_keypair_in.pub_key(), abar.public_key);
@@ -1775,6 +1780,10 @@ mod tests {
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
         let _ = ledger_state.compute_and_save_state_commitment_data(1);
         let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
+
+        let _mt_leaf_info_fail = ledger_state.get_abar_proof(ATxoSID( 100u64));
+        assert!(_mt_leaf_info_fail.is_err());
+
         oabar.update_mt_leaf_info(mt_leaf_info);
 
         let result = builder
