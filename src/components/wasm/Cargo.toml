@@ -35,7 +35,7 @@ bech32 = "0.7.2"
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
 
-zei = { git = "https://@github.com/FindoraNetwork/zei", branch = "develop" }
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
 ruc = "0.6.2"
 algebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
 crypto = { package = "crypto", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }

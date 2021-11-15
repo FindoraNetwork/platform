@@ -475,6 +475,23 @@ subcommands:
             takes_value: true
             value_name: PUBLIC KEY
             required: true
+  - owned-open-abars:
+      about: List Open Anon UTXOs for a public key, randomizer pair
+      args:
+        - randomizer:
+            help: Jubjub Scalar which was used to randmoize public key
+            short: r
+            long: randomizer
+            takes_value: true
+            value_name: JUBJUB SCALAR
+            required: true
+        - anon-keys:
+            help: Anon keys file path of the sender
+            short: a
+            long: anon-keys
+            takes_value: true
+            value_name: ANON KEYS PATH
+            required: true
   - owned-utxos:
       about: List owned UTXOs for a public key
   - convert-bar-to-abar:

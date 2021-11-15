@@ -3,6 +3,7 @@ use crate::{
         AnonTransferOps, AssetType, AssetTypeCode, BarToAbarOps, DefineAsset,
         IssueAsset, IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
         TransferAsset, TransferType, TxOutput, TxnTempSID, TxoRef, TxoSID, UpdateMemo,
+        ASSET_TYPE_FRA, TX_FEE_MIN,
     },
     staking::{
         self,
@@ -25,6 +26,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
+use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
 use zei::{
     anon_xfr::{
         bar_to_from_abar::verify_bar_to_abar_note,
@@ -551,7 +553,15 @@ impl TxnEffect {
         let user_params = UserParams::eq_committed_vals_params();
         let node_params = NodeParams::from(user_params);
 
-        verify_bar_to_abar_note(&node_params, &bar_to_abar.note, &key).c(d!())?;
+        let mut fee = 0u64;
+        if bar_to_abar.note.body.input.get_record_type()
+            == NonConfidentialAmount_NonConfidentialAssetType
+            && bar_to_abar.note.body.input.asset_type.get_asset_type()
+                == Some(ASSET_TYPE_FRA)
+        {
+            fee = TX_FEE_MIN;
+        }
+        verify_bar_to_abar_note(&node_params, &bar_to_abar.note, &key, fee).c(d!())?;
 
         self.input_txos.insert(
             bar_to_abar.txo_sid,

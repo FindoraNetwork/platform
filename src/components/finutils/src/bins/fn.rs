@@ -31,7 +31,7 @@ use finutils::common;
 use finutils::common::evm::*;
 use fp_utils::ecdsa::SecpPair;
 use globutils::wallet;
-use ledger::data_model::{AssetTypeCode, FRA_DECIMALS};
+use ledger::data_model::{ATxoSID, AssetTypeCode, FRA_DECIMALS};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ruc::*;
@@ -39,6 +39,9 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::{fmt, fs};
 use zei::anon_xfr::keys::AXfrKeyPair;
+use zei::anon_xfr::structs::{
+    AnonBlindAssetRecord, OpenAnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
+};
 
 fn main() {
     if let Err(e) = run() {
@@ -460,6 +463,58 @@ fn run() -> Result<()> {
         let list = common::get_owned_abars(&derived_public_key).c(d!())?;
         println!(
             "(AtxoSID, ABAR)   :  {}",
+            serde_json::to_string(&list).c(d!())?
+        );
+    } else if let Some(m) = matches.subcommand_matches("owned-open-abars") {
+        let anon_keys = match m.value_of("anon-keys") {
+            Some(path) => {
+                let f =
+                    fs::read_to_string(path).c(d!("Failed to read anon-keys file"))?;
+                let keys = serde_json::from_str::<AnonKeys>(f.as_str()).c(d!())?;
+                keys
+            }
+            None => return Err(eg!("path for anon-keys file not found")),
+        };
+        let randomizer_str = m.value_of("randomizer");
+
+        // create derived public key
+        let randomizer = wallet::randomizer_from_base58(randomizer_str.unwrap())?;
+        let axfr_public_key =
+            wallet::anon_public_key_from_base64(anon_keys.axfr_public_key.as_str())?;
+        let axfr_secret_key =
+            wallet::anon_secret_key_from_base64(anon_keys.axfr_secret_key.as_str())
+                .c(d!())?;
+        let dec_key = wallet::x_secret_key_from_base64(anon_keys.dec_key.as_str())?;
+        let derived_public_key = axfr_public_key.randomize(&randomizer);
+
+        println!(
+            "Derived Public Key:   {}",
+            wallet::anon_public_key_to_base64(&derived_public_key)
+        );
+
+        // get results from query server and print
+        let list = common::get_owned_abars(&derived_public_key).c(d!())?;
+
+        let list = list
+            .iter()
+            .map(|(uid, abar)| {
+                let memo = common::get_abar_memo(uid).unwrap().unwrap();
+                let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
+                    abar,
+                    memo,
+                    &axfr_secret_key,
+                    &dec_key,
+                )
+                .unwrap()
+                .build()
+                .unwrap();
+                (uid, abar, oabar)
+            })
+            .collect::<Vec<(&ATxoSID, &AnonBlindAssetRecord, OpenAnonBlindAssetRecord)>>(
+            );
+
+        println!(
+            "(AtxoSID, ABAR, OABAR)   :  {}",
             serde_json::to_string(&list).c(d!())?
         );
     } else if let Some(_m) = matches.subcommand_matches("owned-utxos") {

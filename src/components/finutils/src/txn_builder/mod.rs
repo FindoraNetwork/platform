@@ -45,6 +45,7 @@ use std::{
 };
 use tendermint::PrivateKey;
 use zei::anon_xfr::structs::AXfrBody;
+use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
 use zei::{
     anon_xfr::{
         bar_to_from_abar::gen_bar_to_abar_body,
@@ -489,12 +490,22 @@ impl TransactionBuilder {
     ) -> Result<(&mut Self, JubjubScalar)> {
         let mut prng = ChaChaRng::from_entropy();
         let user_params = UserParams::eq_committed_vals_params();
+
+        let mut fee = 0u64;
+        if input_record.get_record_type()
+            == NonConfidentialAmount_NonConfidentialAssetType
+            && input_record.asset_type == ASSET_TYPE_FRA
+        {
+            fee = TX_FEE_MIN;
+        }
+
         let (body, r) = gen_bar_to_abar_body(
             &mut prng,
             &user_params,
             input_record,
             abar_pub_key,
             enc_key,
+            fee,
         )
         .c(d!())?;
 
@@ -1643,7 +1654,7 @@ mod tests {
             let user_params = UserParams::eq_committed_vals_params();
             let node_params = NodeParams::from(user_params);
             let result =
-                verify_bar_to_abar_note(&node_params, &note.note, from.get_pk_ref());
+                verify_bar_to_abar_note(&node_params, &note.note, from.get_pk_ref(), 0);
             assert!(result.is_ok());
         }
     }

@@ -24,6 +24,7 @@ use std::collections::HashMap;
 use tendermint::{PrivateKey, PublicKey};
 use zei::anon_xfr::structs::AnonBlindAssetRecord;
 use zei::anon_xfr::{keys::AXfrPubKey, structs::MTLeafInfo};
+use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
 use zei::xfr::structs::OpenAssetRecord;
 use zei::xfr::{
     asset_record::{open_blind_asset_record, AssetRecordType},
@@ -716,8 +717,13 @@ pub fn generate_bar2abar_op(
             enc_key,
         )
         .c(d!())?;
-    let feeop = gen_fee_bar_to_abar(auth_key_pair, txo_sid).c(d!())?;
-    builder.add_operation(feeop);
+
+    if input_record.get_record_type() != NonConfidentialAmount_NonConfidentialAssetType
+        || input_record.asset_type != ASSET_TYPE_FRA
+    {
+        let feeop = gen_fee_bar_to_abar(auth_key_pair, txo_sid).c(d!())?;
+        builder.add_operation(feeop);
+    }
 
     send_tx(&builder.take_transaction()).c(d!())?;
     Ok(r)

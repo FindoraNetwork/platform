@@ -46,6 +46,7 @@ use zei::anon_xfr::bar_to_from_abar::{BarToAbarBody, BarToAbarNote};
 use zei::anon_xfr::keys::AXfrPubKey;
 use zei::anon_xfr::structs::AXfrNote;
 use zei::errors::ZeiError;
+use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
 use zei::{
     serialization::ZeiFromToBytes,
     xfr::{
@@ -1671,6 +1672,14 @@ impl Transaction {
                     }
                 } else if let Operation::TransferAnonAsset(_) = ops {
                     return true;
+                } else if let Operation::BarToAbar(ref x) = ops {
+                    if x.note.body.input.get_record_type()
+                        == NonConfidentialAmount_NonConfidentialAssetType
+                        && x.note.body.input.asset_type
+                            == XfrAssetType::NonConfidential(ASSET_TYPE_FRA)
+                    {
+                        return true;
+                    }
                 }
                 false
             })
