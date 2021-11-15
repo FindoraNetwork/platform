@@ -1872,7 +1872,7 @@ mod tests {
         assert!(result.is_ok());
 
         let txn = builder.take_transaction();
-        let mut txn_copy = txn.clone();
+        //let mut txn_copy = txn.clone();
         //txn_copy.body.credentials.remove(0);
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
         //let compute_effect_wrong = TxnEffect::compute_effect(txn_copy);
