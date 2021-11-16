@@ -1790,7 +1790,7 @@ mod tests {
         let wrong_asset_type_result = builder
             .add_operation_anon_transfer(&[oabar], &[oabar_out], &[keypair_in]);
 
-        //Here we have an error due to the asset type input is not the same as the asset type output
+        //Here we have an error due to the asset type input being unequal to the asset type output
         assert!(wrong_asset_type_result.is_err());
 
         //The happy path
@@ -1821,7 +1821,7 @@ mod tests {
         let mt_leaf_result_fail = ledger_state.get_abar_proof(ATxoSID( 100u64));
         assert!(mt_leaf_result_fail.is_err());
 
-        //After update the merkle tree info we are able to add the operation_anon_transfer
+        //After updating the merkle tree info we are able to add the operation_anon_transfer
         oabar.update_mt_leaf_info(mt_leaf_info);
 
         let result = builder
