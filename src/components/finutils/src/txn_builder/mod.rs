@@ -1801,7 +1801,14 @@ mod tests {
             gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type_out);
 
         let abar = AnonBlindAssetRecord::from_oabar(&oabar);
-        let _owner_memo = oabar.get_owner_memo().unwrap();
+
+        let owner_memo = oabar.get_owner_memo().unwrap();
+
+        let new_xfrkeys = XfrKeyPair::generate(&mut prng);
+
+        //Trying to decrypt asset type and amount from owner memo using wrong keys
+        let result_decrypt = owner_memo.decrypt_amount_and_asset_type(&new_xfrkeys);
+        assert!(result_decrypt.is_err());
         
         // add abar to merkle tree
         let uid = ledger_state.add_abar(&abar).unwrap();
