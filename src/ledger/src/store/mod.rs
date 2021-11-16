@@ -494,9 +494,8 @@ impl LedgerState {
         // Get total delegation amount
         let gda = s.get_global_delegation_amount();
 
-        /// Set rewards for each delegation
-        /// Iterate over every delgation , check if it has an entry for this validator .
-        /// If it does have an entry set commission rewards for the validator
+        /// Iterate over every delegation , check if it has an entry for this validator .
+        /// Set commission rewards for the validator , if a valid delegation to this validator exists
         let commissions = self
             .get_staking_mut()
             .delegation_info
@@ -540,7 +539,7 @@ impl LedgerState {
         let p = self.staking_get_global_delegation_percent();
         let p = [p[0] as u128, p[1] as u128];
 
-        /// `1 / StakingRatio * Modifier`
+        /// (1 / StakingRatio) * Modifier
         /// Modifier is a constant , changing would cause a hard fork
         /// This returns the real_time_apy for this block (RT_APY)
         /// This APY is still the annual yield, and would need to be decomposed into the block level APY
