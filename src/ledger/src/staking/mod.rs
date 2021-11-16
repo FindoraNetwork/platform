@@ -168,7 +168,8 @@ pub const MAX_POWER_PERCENT_PER_VALIDATOR: [u128; 2] = [1, 5];
 pub const BLOCK_INTERVAL: u64 = 7;
 
 /// The lock time after the delegation expires, about 21 days.
-pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
+pub const UNBOND_BLOCK_CNT: u64 = 5;
+// pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
 
 // minimal number of validators
 pub(crate) const VALIDATORS_MIN: usize = 5;
