@@ -1253,7 +1253,7 @@ mod tests {
     use super::*;
     use crypto::basics::commitments::ristretto_pedersen::RistrettoPedersenGens;
     use crypto::basics::hybrid_encryption::XSecretKey;
-    use ledger::data_model::{BlockEffect, TxnEffect, TxoRef, ATxoSID};
+    use ledger::data_model::{ATxoSID, BlockEffect, TxnEffect, TxoRef};
     use ledger::store::{utils::fra_gen_initial_tx, LedgerState};
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
@@ -1654,11 +1654,9 @@ mod tests {
         }
     }
 
-
     #[test]
     //This contains only the positive tests
     fn axfr_create_verify_unit_positive_tests() {
-
         let mut ledger_state = LedgerState::tmp_ledger();
         let _ledger_status = ledger_state.get_status();
 
@@ -1667,43 +1665,39 @@ mod tests {
         let amount = 10i64;
         let amount_nonneg = Amount::from_nonnegative_i64(amount);
         assert!(amount_nonneg.is_ok());
-        
+
         //Here the Asset Type is generated as a 32 byte and each of them are zero
         let asset_type = AT::from_identical_byte(0);
 
         // simulate input abar
-        let (mut  oabar, keypair_in, _dec_key_in, _) =
+        let (mut oabar, keypair_in, _dec_key_in, _) =
             gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type);
 
         let abar = AnonBlindAssetRecord::from_oabar(&oabar);
 
-
         let asset_type_out = AT::from_identical_byte(0);
 
         //Simulate output abar
-        let ( oabar_out, _keypair_out, _dec_key_out, _) =
+        let (oabar_out, _keypair_out, _dec_key_out, _) =
             gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type_out);
 
         let _abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
-    
+
         let mut builder = TransactionBuilder::from_seq_id(1);
 
-           
         let _owner_memo = oabar.get_owner_memo().unwrap();
-
 
         // add abar to merkle tree
         let uid = ledger_state.add_abar(&abar).unwrap();
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-       
-        let _ = ledger_state.compute_and_save_state_commitment_data(1);  //It is not necessary
+
+        let _ = ledger_state.compute_and_save_state_commitment_data(1); //It is not necessary
         let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
         oabar.update_mt_leaf_info(mt_leaf_info);
 
+        let result =
+            builder.add_operation_anon_transfer(&[oabar], &[oabar_out], &[keypair_in]);
 
-        let result = builder
-            .add_operation_anon_transfer(&[oabar], &[oabar_out], &[keypair_in]);
-    
         assert!(result.is_ok());
 
         let txn = builder.take_transaction();
@@ -1715,21 +1709,17 @@ mod tests {
         assert!(block_result.is_ok());
 
         for n in block.new_nullifiers.iter() {
-                let _str =
-                    base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
+            let _str =
+                base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
         }
         let txn_sid_result = ledger_state.finish_block(block);
         assert!(txn_sid_result.is_ok());
         let _txn_sid_result = txn_sid_result.unwrap();
-
     }
 
-
-
-    //Negative tests added 
+    //Negative tests added
     #[test]
     fn axfr_create_verify_unit_with_negative_tests() {
-
         let mut ledger_state = LedgerState::tmp_ledger();
         let _ledger_status = ledger_state.get_status();
 
@@ -1749,9 +1739,8 @@ mod tests {
         //Here the Asset Type is generated as a 32 byte and each of them are zero
         let asset_type = AT::from_identical_byte(0);
 
-
         // simulate input abar
-        let ( oabar, keypair_in, _dec_key_in, _) =
+        let (oabar, keypair_in, _dec_key_in, _) =
             gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type);
 
         //simulate another oabar just to get new keypair
@@ -1767,37 +1756,40 @@ mod tests {
         let asset_type_out = AT::from_identical_byte(0);
 
         //Simulate output abar
-        let ( oabar_out, _keypair_out, _dec_key_out, _) =
+        let (oabar_out, _keypair_out, _dec_key_out, _) =
             gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type_out);
 
         let _abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
         let mut builder = TransactionBuilder::from_seq_id(1);
 
-        let wrong_key_result = builder
-            .add_operation_anon_transfer(&[oabar], &[oabar_out], &[another_keypair]);
+        let wrong_key_result = builder.add_operation_anon_transfer(
+            &[oabar],
+            &[oabar_out],
+            &[another_keypair],
+        );
         assert!(wrong_key_result.is_err());
 
         let asset_type = AT::from_identical_byte(0);
 
         let wrong_asset_type_out = AT::from_identical_byte(1);
 
-        let ( oabar, keypair_in, _dec_key_in, _) =
+        let (oabar, keypair_in, _dec_key_in, _) =
             gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type);
 
-        let ( oabar_out, _keypair_out, _dec_key_out, _) =
+        let (oabar_out, _keypair_out, _dec_key_out, _) =
             gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), wrong_asset_type_out);
 
-        let wrong_asset_type_result = builder
-            .add_operation_anon_transfer(&[oabar], &[oabar_out], &[keypair_in]);
+        let wrong_asset_type_result =
+            builder.add_operation_anon_transfer(&[oabar], &[oabar_out], &[keypair_in]);
 
         //Here we have an error due to the asset type input being unequal to the asset type output
         assert!(wrong_asset_type_result.is_err());
 
         //The happy path
-        let ( mut oabar, keypair_in, _dec_key_in, _) =
+        let (mut oabar, keypair_in, _dec_key_in, _) =
             gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type);
 
-        let ( oabar_out, _keypair_out, _dec_key_out, _) =
+        let (oabar_out, _keypair_out, _dec_key_out, _) =
             gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type_out);
 
         let abar = AnonBlindAssetRecord::from_oabar(&oabar);
@@ -1809,32 +1801,32 @@ mod tests {
         //Trying to decrypt asset type and amount from owner memo using wrong keys
         let result_decrypt = owner_memo.decrypt_amount_and_asset_type(&new_xfrkeys);
         assert!(result_decrypt.is_err());
-        
+
         // add abar to merkle tree
         let uid = ledger_state.add_abar(&abar).unwrap();
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-        
+
         ledger_state.compute_and_save_state_commitment_data(1);
         let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
 
         //100 is not a valid uid, so we will catch an error
-        let mt_leaf_result_fail = ledger_state.get_abar_proof(ATxoSID( 100u64));
+        let mt_leaf_result_fail = ledger_state.get_abar_proof(ATxoSID(100u64));
         assert!(mt_leaf_result_fail.is_err());
 
         //After updating the merkle tree info we are able to add the operation_anon_transfer
         oabar.update_mt_leaf_info(mt_leaf_info);
 
-        let result = builder
-            .add_operation_anon_transfer(&[oabar], &[oabar_out], &[keypair_in]);
+        let result =
+            builder.add_operation_anon_transfer(&[oabar], &[oabar_out], &[keypair_in]);
 
         assert!(result.is_ok());
 
         let txn = builder.take_transaction();
-        
+
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
 
         let mut block = BlockEffect::default();
-        
+
         let block_result = block.add_txn_effect(compute_effect, true);
 
         assert!(block_result.is_ok());
@@ -1855,7 +1847,7 @@ mod tests {
         let _ledger_status = ledger_state.get_status();
 
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
-        
+
         let amount = 10u64;
         let amount_nonneg = Amount::from_u64(amount).unwrap();
         let asset_type = AT::from_identical_byte(0);
@@ -1900,19 +1892,19 @@ mod tests {
         let mut prng1 = ChaChaRng::from_seed([0u8; 32]);
 
         let amount1 = Amount::from_u64(10u64).unwrap();
-        
+
         let asset_type1 = AT::from_identical_byte(0);
 
         // simulate input abar
         let (mut oabar1, keypair_in1, _dec_key_in1, _) =
             gen_oabar_and_keys(&mut prng1, amount1, asset_type1);
-        
+
         let abar1 = AnonBlindAssetRecord::from_oabar(&oabar1);
-        
+
         assert_eq!(keypair_in1.pub_key(), *oabar1.pub_key_ref());
         let rand_keypair_in1 = keypair_in1.randomize(&oabar1.get_key_rand_factor());
         assert_eq!(rand_keypair_in1.pub_key(), abar1.public_key);
-        
+
         let _owner_memo1 = oabar1.get_owner_memo().unwrap();
 
         // add abar to merkle tree
@@ -1923,14 +1915,13 @@ mod tests {
         oabar1.update_mt_leaf_info(mt_leaf_info1);
 
         // add abar to merkle tree for negative amount
-        
+
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
         let _ = ledger_state.compute_and_save_state_commitment_data(2);
-        
 
         let (oabar_out1, _keypair_out1, _dec_key_out1, _) =
             gen_oabar_and_keys(&mut prng1, amount1, asset_type1);
-        
+
         let _abar_out1 = AnonBlindAssetRecord::from_oabar(&oabar_out1);
         let mut builder1 = TransactionBuilder::from_seq_id(1);
         let _ = builder1
