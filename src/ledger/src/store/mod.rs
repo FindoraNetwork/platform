@@ -481,7 +481,7 @@ impl LedgerState {
         // Fetch total delegation amount for this validator ( Self stake + Stake from delegators )
         let total_delegation_amount_of_validator = s
             .delegation_get(&pk)
-            .map(|d| d.entries.get(&pk))
+            .map(|d| d.delegations.get(&pk))
             .flatten()
             .copied()
             .unwrap_or(0)
@@ -499,8 +499,8 @@ impl LedgerState {
         /// If it does have an entry set commission rewards for the validator
         let commissions = self
             .get_staking_mut()
-            .di
-            .addr_map
+            .delegation_info
+            .global_delegation_records_map
             .values_mut()
             .filter(|d| d.validator_entry_exists(&pk))
             .map(|d| {
@@ -524,7 +524,6 @@ impl LedgerState {
             v.rwd_amount = v.rwd_amount.saturating_add(commissions.into_iter().sum());
         }
 
-
         if let Some(vote_percent) = block_vote_percent {
             self.get_staking_mut()
                 .set_proposer_rewards(&pk, vote_percent)
@@ -541,10 +540,10 @@ impl LedgerState {
         let p = self.staking_get_global_delegation_percent();
         let p = [p[0] as u128, p[1] as u128];
 
-        /// 1 (div) StakingRatio * Modifier
+        /// `1 / StakingRatio * Modifier`
         /// Modifier is a constant , changing would cause a hard fork
         /// This returns the real_time_apy for this block (RT_APY)
-        /// THis APY is still the annual yield, and would need to be decomposed into the block level APY
+        /// This APY is still the annual yield, and would need to be decomposed into the block level APY
         let mut a0 = p[1] * 201;
         let mut a1 = p[0] * 10000;
 
