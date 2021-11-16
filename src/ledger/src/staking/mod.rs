@@ -1997,7 +1997,7 @@ fn calculate_delegation_rewards(
         let global_am = BigUint::from(global_amount);
         let block_itv = BLOCK_INTERVAL as u128;
 
-        const SECOND_PER_YEAR: u128 = 356 * 24 * 3600;
+        const SECOND_PER_YEAR: u128 = 365 * 24 * 3600;
 
         let calculate_self_only = || {
             let a1 = am.clone() * return_rate[0] * block_itv;
