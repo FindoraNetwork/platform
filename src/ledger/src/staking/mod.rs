@@ -1651,6 +1651,8 @@ impl ValidatorData {
 pub(crate) struct DelegationInfo {
     pub(crate) global_amount: Amount,
     // validator pubkey => delegation info
+    // addr_map contains an entry for each delgation the network .
+    // Self Delegation + Regular Delagation
     pub(crate) addr_map: BTreeMap<XfrPublicKey, Delegation>,
     pub(crate) end_height_map: BTreeMap<BlockHeight, BTreeSet<XfrPublicKey>>,
 }
@@ -1791,6 +1793,8 @@ pub struct Delegation {
     /// validator pubkey => amount
     ///   - `NonConfidential` FRAs amount
     ///   - valid for all delegators
+    /// Entries contains an entry for each validator this `delegator` has delagated to
+    /// XfrPublicKey here has to be the public key of a validator
     pub entries: BTreeMap<XfrPublicKey, Amount>,
 
     /// delegation rewards will be paid to this pk by default

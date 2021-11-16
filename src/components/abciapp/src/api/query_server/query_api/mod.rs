@@ -413,6 +413,7 @@ pub async fn get_related_xfrs(
 
 #[allow(missing_docs)]
 #[allow(clippy::unnecessary_wraps)]
+
 pub async fn get_circulating_supply(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> actix_web::Result<web::Json<BTreeMap<&'static str, f64>>, actix_web::error::Error> {
