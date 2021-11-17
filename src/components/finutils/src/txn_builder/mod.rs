@@ -1734,7 +1734,7 @@ mod tests {
         //
         // Returns an error if the amount is outside the range `{0..MAX_MONEY}`.
         let amount_neg = Amount::from_nonnegative_i64(amount * -1);
-        
+
         //Here we catch the exception, so we can ensure that we do not allow negative amounts
         assert!(amount_neg.is_err());
 
