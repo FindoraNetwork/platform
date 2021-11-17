@@ -1726,6 +1726,7 @@ mod tests {
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
 
         let amount = 10i64;
+        //negative test for amount
         let amount_nonneg = Amount::from_nonnegative_i64(amount);
         assert!(amount_nonneg.is_ok());
 
@@ -1733,6 +1734,7 @@ mod tests {
         //
         // Returns an error if the amount is outside the range `{0..MAX_MONEY}`.
         let amount_neg = Amount::from_nonnegative_i64(amount * -1);
+        
         //Here we catch the exception, so we can ensure that we do not allow negative amounts
         assert!(amount_neg.is_err());
 
@@ -1747,6 +1749,7 @@ mod tests {
         let (_, another_keypair, _, _) =
             gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type);
 
+        //negative test for input keypairs
         assert_eq!(keypair_in.pub_key(), *oabar.pub_key_ref());
 
         assert_ne!(keypair_in.pub_key(), another_keypair.pub_key());
@@ -1767,10 +1770,12 @@ mod tests {
             &[oabar_out],
             &[another_keypair],
         );
+        //negative test for keys
         assert!(wrong_key_result.is_err());
 
         let asset_type = AT::from_identical_byte(0);
 
+        //negative test for asset type
         let wrong_asset_type_out = AT::from_identical_byte(1);
 
         let (oabar, keypair_in, _dec_key_in, _) =
@@ -1794,6 +1799,7 @@ mod tests {
 
         let abar = AnonBlindAssetRecord::from_oabar(&oabar);
 
+        //negative test for owner memo
         let owner_memo = oabar.get_owner_memo().unwrap();
 
         let new_xfrkeys = XfrKeyPair::generate(&mut prng);
@@ -1811,6 +1817,7 @@ mod tests {
 
         //100 is not a valid uid, so we will catch an error
         let mt_leaf_result_fail = ledger_state.get_abar_proof(ATxoSID(100u64));
+        //negative test for merkle tree proof
         assert!(mt_leaf_result_fail.is_err());
 
         //After updating the merkle tree info we are able to add the operation_anon_transfer
@@ -1819,6 +1826,7 @@ mod tests {
         let result =
             builder.add_operation_anon_transfer(&[oabar], &[oabar_out], &[keypair_in]);
 
+        //negative test for builder
         assert!(result.is_ok());
 
         let txn = builder.take_transaction();
