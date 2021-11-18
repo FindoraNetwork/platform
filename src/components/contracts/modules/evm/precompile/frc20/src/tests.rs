@@ -57,6 +57,8 @@ fn selectors() {
     assert_eq!(Call::Allowance as u32, 0xdd62ed3e);
     assert_eq!(Call::Approve as u32, 0x095ea7b3);
     assert_eq!(Call::TransferFrom as u32, 0x23b872dd);
+    assert_eq!(Call::Mint as u32, 0xa9059cbb);
+    assert_eq!(Call::Burn as u32, 0xa9059cbe);
 
     assert_eq!(
         TRANSFER_EVENT_SELECTOR,
@@ -73,6 +75,8 @@ fn frc20_works() {
     test_mint_balance(&ALICE_ECDSA.account_id, 1000u64.into(), 1);
     test_mint_balance(&BOB_ECDSA.account_id, 1000u64.into(), 2);
 
+    mint_works();
+    burn_works();
     total_supply_works();
     balance_of_works();
     transfer_works();
@@ -166,6 +170,60 @@ fn transfer_works() {
     balance_of(ALICE_ECDSA.address, U256::from(600));
 
     balance_of(BOB_ECDSA.address, U256::from(1400));
+}
+
+fn mint_works() {
+    assert_eq!(
+        FRC20::<BaseApp>::execute(
+            &EvmDataWriter::new()
+                .write_selector(Call::Mint)
+                .write(Address(ALICE_ECDSA.address))
+                .write(U256::from(400))
+                .build(),
+            None,
+            &evm::Context {
+                address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
+                caller: ALICE_ECDSA.address,
+                apparent_value: From::from(0)
+            },
+            &BASE_APP.lock().unwrap().deliver_state,
+        ),
+        Ok(PrecompileOutput {
+            exit_status: ExitSucceed::Returned,
+            cost: GAS_MINT,
+            output: vec![],
+            logs: vec![]
+        })
+    );
+
+    balance_of(ALICE_ECDSA.address, U256::from(1400));
+}
+
+fn burn_works() {
+    assert_eq!(
+        FRC20::<BaseApp>::execute(
+            &EvmDataWriter::new()
+                .write_selector(Call::Burn)
+                .write(Address(ALICE_ECDSA.address))
+                .write(U256::from(400))
+                .build(),
+            None,
+            &evm::Context {
+                address: H160::from_low_u64_be(FRC20_PRECOMPILE_ADDRESS),
+                caller: ALICE_ECDSA.address,
+                apparent_value: From::from(0)
+            },
+            &BASE_APP.lock().unwrap().deliver_state,
+        ),
+        Ok(PrecompileOutput {
+            exit_status: ExitSucceed::Returned,
+            cost: GAS_BURN,
+            output: vec![],
+            logs: vec![]
+        })
+    );
+
+    balance_of(ALICE_ECDSA.address, U256::from(1000));
 }
 
 fn approve_works() {

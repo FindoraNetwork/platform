@@ -52,6 +52,8 @@ const GAS_TRANSFER: u64 = 23661;
 const GAS_ALLOWANCE: u64 = 1624;
 const GAS_APPROVE: u64 = 20750;
 const GAS_TRANSFER_FROM: u64 = 6610;
+const GAS_MINT: u64 = 23662;
+const GAS_BURN: u64 = 23662;
 
 pub struct FRC20<C> {
     _marker: PhantomData<C>,
@@ -75,6 +77,8 @@ pub enum Call {
     Allowance = "allowance(address,address)",
     Approve = "approve(address,uint256)",
     TransferFrom = "transferFrom(address,address,uint256)",
+    Mint = "mint(address,uint256)",
+    Burn = "burn(address,uint256)",
 }
 
 impl<C: Config> Precompile for FRC20<C> {
@@ -96,6 +100,8 @@ impl<C: Config> Precompile for FRC20<C> {
             Call::Approve => Self::approve(state, input, target_gas, context),
             Call::Transfer => Self::transfer(state, input, target_gas, context),
             Call::TransferFrom => Self::transfer_from(state, input, target_gas, context),
+            Call::Mint => Self::mint(state, input, target_gas, context),
+            Call::Burn => Self::burn(state, input, target_gas, context),
         }
     }
 }
@@ -397,6 +403,72 @@ impl<C: Config> FRC20<C> {
                         .build(),
                 )
                 .build(),
+        })
+    }
+
+    /// mint more tokens to TotalSupply and caller's balance
+    pub fn mint(
+        state: &FinState,
+        mut input: EvmDataReader,
+        target_gas: Option<u64>,
+        _context: &Context,
+    ) -> EvmResult<PrecompileOutput> {
+        let mut gasometer = Gasometer::new(target_gas);
+        gasometer.record_cost(GAS_MINT)?;
+
+        input.expect_arguments(2)?;
+
+        let recipient: H160 = input.read::<Address>()?.into();
+        if recipient == H160::zero() {
+            return Err(error("FRC20: mint to the zero address"));
+        }
+        let recipient_id = C::AddressMapping::convert_to_account_id(recipient);
+        let amount: U256 = input.read()?;
+        if amount == U256::zero() {
+            return Err(error("FRC20: mint amount is not valid"));
+        }
+
+        C::AccountAsset::mint(state, &recipient_id, amount)
+            .map_err(|e| error(format!("{:?}", e)))?;
+
+        Ok(PrecompileOutput {
+            exit_status: ExitSucceed::Returned,
+            cost: gasometer.used_gas(),
+            output: vec![],
+            logs: vec![],
+        })
+    }
+
+    /// burn some tokens from TotalSupply and recipient's balance
+    pub fn burn(
+        state: &FinState,
+        mut input: EvmDataReader,
+        target_gas: Option<u64>,
+        _context: &Context,
+    ) -> EvmResult<PrecompileOutput> {
+        let mut gasometer = Gasometer::new(target_gas);
+        gasometer.record_cost(GAS_BURN)?;
+
+        input.expect_arguments(2)?;
+
+        let recipient: H160 = input.read::<Address>()?.into();
+        if recipient == H160::zero() {
+            return Err(error("FRC20: burn to the zero address"));
+        }
+        let recipient_id = C::AddressMapping::convert_to_account_id(recipient);
+        let amount: U256 = input.read()?;
+        if amount == U256::zero() {
+            return Err(error("FRC20: burn amount is not valid"));
+        }
+
+        C::AccountAsset::burn(state, &recipient_id, amount)
+            .map_err(|e| error(format!("{:?}", e)))?;
+
+        Ok(PrecompileOutput {
+            exit_status: ExitSucceed::Returned,
+            cost: gasometer.used_gas(),
+            output: vec![],
+            logs: vec![],
         })
     }
 }
