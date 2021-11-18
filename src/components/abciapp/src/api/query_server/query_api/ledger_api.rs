@@ -519,8 +519,8 @@ pub async fn query_validator_detail(
     // Get Pub key from from the provided tendermint address
     let v_pub_key = info!(staking.validator_td_addr_to_app_pk(addr.as_ref()))
         .map_err(error::ErrorBadRequest)?;
-    /// Get Self delegation for the validator
-    /// v_self_delegation is the delegation details for the validator
+    // Get Self delegation for the validator
+    // v_self_delegation is the delegation details for the validator
     let v_self_delegation =
         info!(staking.delegation_get(&v_pub_key)).map_err(error::ErrorBadRequest)?;
 
@@ -534,12 +534,12 @@ pub async fn query_validator_detail(
                 power_list.sort_unstable();
                 power_list.len() - power_list.binary_search(&v.td_power).unwrap()
             };
-            /// Network Realtime APY
+            // Network Realtime APY
             let network_realtime_apy = ledger.staking_get_block_rewards_rate();
-            /// Validator Realtime APY calculation
-            /// Validator Consistency Factor = (Number of blocks proposed by validator / Total blocks the validator witnessed by validator  *  total staked by all validators / staked by validator)
-            /// Validator Realtime APY =  Validator Consistency Factor * Network_Realtime_APY
-            /// For a perfect validator consistency factor will be 1.
+            // Validator Realtime APY calculation
+            // Validator Consistency Factor = (Number of blocks proposed by validator / Total blocks the validator witnessed by validator  *  total staked by all validators / staked by validator)
+            // Validator Realtime APY =  Validator Consistency Factor * Network_Realtime_APY
+            // For a perfect validator consistency factor will be 1.
             let validator_realtime_apy = [
                 network_realtime_apy[0] as u128
                     * v_self_delegation.proposer_rwd_cnt as u128

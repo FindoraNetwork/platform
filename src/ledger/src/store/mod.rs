@@ -447,6 +447,7 @@ impl LedgerState {
     }
 
     /// A helper for setting block rewards in ABCI.
+    // This function is called from end_block
     pub fn staking_set_last_block_rewards(
         &mut self,
         addr: TendermintAddrRef,
@@ -454,7 +455,7 @@ impl LedgerState {
     ) -> Result<()> {
         // Get Staking Ratio
         let gdp = self.staking_get_global_delegation_percent();
-        // RT_APY (modifier has been included)
+        // Realtime_network_APY (modifier has been included)
         let return_rate = self.staking_get_block_rewards_rate();
 
         // Record RT_APY for this block in Historical Data
@@ -494,8 +495,8 @@ impl LedgerState {
         // Get total delegation amount
         let gda = s.get_global_delegation_amount();
 
-        /// Iterate over every delegation , check if it has an entry for this validator .
-        /// Set commission rewards for the validator , if a valid delegation to this validator exists
+        // Iterate over every delegation , check if it has an entry for this validator .
+        // Set commission rewards for the validator , if a valid delegation to this validator exists
         let commissions = self
             .get_staking_mut()
             .delegation_info
@@ -518,7 +519,7 @@ impl LedgerState {
             .collect::<Result<Vec<_>>>()
             .c(d!())?;
 
-        // Add total commission to the Validators Delegation ( Their self delegation)
+        // Add total commission to the Validators own delegation
         if let Some(v) = self.get_staking_mut().delegation_get_mut(&pk) {
             v.rwd_amount = v.rwd_amount.saturating_add(commissions.into_iter().sum());
         }
@@ -539,14 +540,14 @@ impl LedgerState {
         let p = self.staking_get_global_delegation_percent();
         let p = [p[0] as u128, p[1] as u128];
 
-        /// (1 / StakingRatio) * Modifier
-        /// Modifier is a constant , changing would cause a hard fork
-        /// This returns the real_time_apy for this block (RT_APY)
-        /// This APY is still the annual yield, and would need to be decomposed into the block level APY
+        // (1 / StakingRatio) * Modifier
+        // Modifier is a constant , changing would cause a hard fork
+        // This returns the real_time_apy for this block (RT_APY)
+        // This APY is still the annual yield, and would need to be decomposed into the block level APY
         let mut a0 = p[1] * 201;
         let mut a1 = p[0] * 10000;
 
-        /// Verfying and capping of the RT_APY (2 < RT_APY < 105 )
+        // Verify and cap the RT_APY (2 < RT_APY < 105 )
         if a0 * 100 > a1 * 105 {
             // max value: 105%
             a0 = 105;

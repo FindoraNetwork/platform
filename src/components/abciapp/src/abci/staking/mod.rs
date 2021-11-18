@@ -220,6 +220,7 @@ pub fn system_ops(
 
 /// Get the actual voted power of last block.
 fn get_last_vote_percent(last_commit_info: &LastCommitInfo) -> [u64; 2] {
+    // Returns Voted in last block and Total Voting power (including signed_last_block = false)
     last_commit_info
         .votes
         .iter()

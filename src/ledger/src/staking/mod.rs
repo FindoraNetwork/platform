@@ -233,7 +233,8 @@ impl Staking {
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn has_been_inited(&self) -> bool {
-        !self.validator_info.is_empty() && 0 != self.validator_info.keys().next().copied().unwrap()
+        !self.validator_info.is_empty()
+            && 0 != self.validator_info.keys().next().copied().unwrap()
     }
 
     #[inline(always)]
@@ -281,7 +282,9 @@ impl Staking {
     /// Get the validators that exactly be setted at a specified height.
     #[inline(always)]
     pub fn validator_get_at_height(&self, h: BlockHeight) -> Option<Vec<&Validator>> {
-        self.validator_info.get(&h).map(|v| v.body.values().collect())
+        self.validator_info
+            .get(&h)
+            .map(|v| v.body.values().collect())
     }
 
     // Check if there is some settings on a specified height.
@@ -352,7 +355,11 @@ impl Staking {
         &self,
         h: BlockHeight,
     ) -> Option<&ValidatorData> {
-        self.validator_info.range(0..=h).rev().next().map(|(_, v)| v)
+        self.validator_info
+            .range(0..=h)
+            .rev()
+            .next()
+            .map(|(_, v)| v)
     }
 
     /// Remove the validators that will be used for the specified height.
@@ -373,7 +380,11 @@ impl Staking {
         &mut self,
         h: BlockHeight,
     ) -> Option<&mut ValidatorData> {
-        self.validator_info.range_mut(0..=h).rev().next().map(|(_, v)| v)
+        self.validator_info
+            .range_mut(0..=h)
+            .rev()
+            .next()
+            .map(|(_, v)| v)
     }
 
     /// Get the validators exactly on a specified height.
@@ -651,7 +662,11 @@ impl Staking {
             proposer_rwd_cnt: 0,
         };
 
-        let d = self.delegation_info.global_delegation_records_map.entry(owner).or_insert_with(new);
+        let d = self
+            .delegation_info
+            .global_delegation_records_map
+            .entry(owner)
+            .or_insert_with(new);
 
         if DelegationState::Paid == d.state {
             *d = new();
@@ -724,7 +739,11 @@ impl Staking {
         let mut orig_h = None;
         let mut is_validator = false;
 
-        if let Some(d) = self.delegation_info.global_delegation_records_map.get_mut(addr) {
+        if let Some(d) = self
+            .delegation_info
+            .global_delegation_records_map
+            .get_mut(addr)
+        {
             if BLOCK_HEIGHT_MAX == d.end_height {
                 if d.end_height != h {
                     orig_h = Some(d.end_height);
@@ -811,7 +830,11 @@ impl Staking {
             .c(d!("Invalid target validator"))?;
 
         let actual_am;
-        if let Some(d) = self.delegation_info.global_delegation_records_map.get_mut(addr) {
+        if let Some(d) = self
+            .delegation_info
+            .global_delegation_records_map
+            .get_mut(addr)
+        {
             if is_validator
                 && STAKING_VALIDATOR_MIN_POWER > d.amount().saturating_sub(pu.am)
             {
@@ -895,7 +918,11 @@ impl Staking {
         addr: &XfrPublicKey,
         h: &BlockHeight,
     ) -> Result<Delegation> {
-        let d = self.delegation_info.global_delegation_records_map.remove(addr).c(d!("not exists"))?;
+        let d = self
+            .delegation_info
+            .global_delegation_records_map
+            .remove(addr)
+            .c(d!("not exists"))?;
         if d.state == DelegationState::Paid {
             self.delegation_info
                 .end_height_map
@@ -904,14 +931,20 @@ impl Staking {
 
             // If this is a temporary delegation, remove it from original one
             if let Some(receiver) = d.receiver_pk {
-                if let Some(orig_d) = self.delegation_info.global_delegation_records_map.get_mut(&receiver) {
+                if let Some(orig_d) = self
+                    .delegation_info
+                    .global_delegation_records_map
+                    .get_mut(&receiver)
+                {
                     orig_d.tmp_delegators.remove(addr);
                 }
             }
             Ok(d)
         } else {
             // we assume that this probability is very low
-            self.delegation_info.global_delegation_records_map.insert(addr.to_owned(), d);
+            self.delegation_info
+                .global_delegation_records_map
+                .insert(addr.to_owned(), d);
             Err(eg!("unpaid delegation"))
         }
     }
@@ -923,7 +956,11 @@ impl Staking {
         end_height: BlockHeight,
     ) -> Result<()> {
         let addr = owner;
-        let d = if let Some(d) = self.delegation_info.global_delegation_records_map.get_mut(addr) {
+        let d = if let Some(d) = self
+            .delegation_info
+            .global_delegation_records_map
+            .get_mut(addr)
+        {
             d
         } else {
             return Err(eg!("not exists"));
@@ -951,7 +988,9 @@ impl Staking {
     /// Get the delegation instance of `addr`.
     #[inline(always)]
     pub fn delegation_get(&self, addr: &XfrPublicKey) -> Option<&Delegation> {
-        self.delegation_info.global_delegation_records_map.get(&addr)
+        self.delegation_info
+            .global_delegation_records_map
+            .get(&addr)
     }
 
     /// Get the delegation instance of `addr`.
@@ -960,13 +999,17 @@ impl Staking {
         &mut self,
         addr: &XfrPublicKey,
     ) -> Option<&mut Delegation> {
-        self.delegation_info.global_delegation_records_map.get_mut(&addr)
+        self.delegation_info
+            .global_delegation_records_map
+            .get_mut(&addr)
     }
 
     /// Check if the `addr` is in a state of delegation
     #[inline(always)]
     pub fn delegation_has_addr(&self, addr: &XfrPublicKey) -> bool {
-        self.delegation_info.global_delegation_records_map.contains_key(&addr)
+        self.delegation_info
+            .global_delegation_records_map
+            .contains_key(&addr)
     }
 
     #[inline(always)]
@@ -1029,13 +1072,21 @@ impl Staking {
     /// Query delegation rewards.
     #[inline(always)]
     pub fn delegation_get_rewards(&self, pk: &XfrPublicKey) -> Result<Amount> {
-        self.delegation_info.global_delegation_records_map.get(pk).map(|d| d.rwd_amount).c(d!())
+        self.delegation_info
+            .global_delegation_records_map
+            .get(pk)
+            .map(|d| d.rwd_amount)
+            .c(d!())
     }
 
     /// Query delegation principal.
     #[inline(always)]
     pub fn delegation_get_principal(&self, pk: &XfrPublicKey) -> Result<Amount> {
-        self.delegation_info.global_delegation_records_map.get(pk).map(|d| d.amount()).c(d!())
+        self.delegation_info
+            .global_delegation_records_map
+            .get(pk)
+            .map(|d| d.amount())
+            .c(d!())
     }
 
     /// Query all freed delegations.
@@ -1056,7 +1107,12 @@ impl Staking {
             .flat_map(|(_, addrs)| {
                 addrs
                     .iter()
-                    .flat_map(|addr| self.delegation_info.global_delegation_records_map.get(addr).map(|d| (*addr, d)))
+                    .flat_map(|addr| {
+                        self.delegation_info
+                            .global_delegation_records_map
+                            .get(addr)
+                            .map(|d| (*addr, d))
+                    })
                     .filter(|(_, d)| matches!(d.state, DelegationState::Free))
             })
             .collect()
@@ -1076,7 +1132,11 @@ impl Staking {
             .collect::<Vec<_>>()
             .into_iter()
             .for_each(|addr| {
-                let entries = if let Some(d) = self.delegation_info.global_delegation_records_map.get_mut(&addr) {
+                let entries = if let Some(d) = self
+                    .delegation_info
+                    .global_delegation_records_map
+                    .get_mut(&addr)
+                {
                     if DelegationState::Bond == d.state {
                         d.state = DelegationState::Free;
                         Some(d.delegations.clone())
@@ -1133,7 +1193,13 @@ impl Staking {
                     ruc::info_omit!(self.delegation_clean_paid(addr, h));
                 });
                 // this unwrap is safe
-                if self.delegation_info.end_height_map.get(&h).unwrap().is_empty() {
+                if self
+                    .delegation_info
+                    .end_height_map
+                    .get(&h)
+                    .unwrap()
+                    .is_empty()
+                {
                     self.delegation_info.end_height_map.remove(&h);
                 }
             });
@@ -1197,7 +1263,11 @@ impl Staking {
         addr: &XfrPublicKey,
         mut am: Amount,
     ) -> Result<()> {
-        let d = if let Some(d) = self.delegation_info.global_delegation_records_map.get_mut(addr) {
+        let d = if let Some(d) = self
+            .delegation_info
+            .global_delegation_records_map
+            .get_mut(addr)
+        {
             d
         } else {
             return Err(eg!("not exists"));
@@ -1401,11 +1471,15 @@ impl Staking {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
+    /// set_proposer_rewards sets the rewards for the block proposer
+    /// All rewards are allocated to the proposer only
     pub(crate) fn set_proposer_rewards(
         &mut self,
         proposer: &XfrPublicKey,
         vote_percent: [u64; 2],
     ) -> Result<()> {
+        // Get rate from based on LastCommitInfo and hardcoded PROPOSER_REWARDS_RATE_RULE
+        // This is rewards B (bonus proposer reward )
         let p = Self::get_proposer_rewards_rate(vote_percent).c(d!())?;
         let h = self.cur_height;
         let cbl = self.coinbase_balance();
@@ -1419,6 +1493,7 @@ impl Staking {
         self.delegation_get_mut(proposer)
             .c(d!())
             .and_then(|d| {
+                // Self delegation + total_delegation_amount_of_validator
                 let tdaov = d.delegations.get(proposer).copied().unwrap_or(0)
                     + total_delegation_amount_of_validator;
                 d.set_delegation_rewards(
@@ -1440,10 +1515,26 @@ impl Staking {
     #[cfg(not(target_arch = "wasm32"))]
     fn get_proposer_rewards_rate(vote_percent: [u64; 2]) -> Result<[u128; 2]> {
         let p = [vote_percent[0] as u128, vote_percent[1] as u128];
+        // p[0] = Validator power which voted for this block
+        // p[1] = Total Validator power including those that did not vote
         if p[0] > p[1] || 0 == p[1] {
             let msg = format!("Invalid power percent: {}/{}", p[0], p[1]);
             return Err(eg!(msg));
         }
+        // Voted = Power voted in last block
+        // Total = Power total validator in validator set
+        // Condition
+        // Voted * 100_0000 < Total * high
+        // Voted * 100_0000 > Total * low
+        // Return rate from matching the table below
+
+        // Where [high ,low , rate ]
+        // (0, 66_6667, 0),
+        // (66_6667, 75_0000, 1),
+        // (75_0000, 83_3333, 2),
+        // (83_3333, 91_6667, 3),
+        // (91_6667, 100_0000, 4),
+        // (100_0000, 100_0001, 5),
         for ([low, high], rate) in PROPOSER_REWARDS_RATE_RULE.iter().copied() {
             if p[0] * 100_0000 < p[1] * high && p[0] * 100_0000 >= p[1] * low {
                 return Ok([rate, 100]);
@@ -1793,7 +1884,7 @@ pub struct Delegation {
     /// validator pubkey => amount
     ///   - `NonConfidential` FRAs amount
     ///   - valid for all delegators
-    /// Entries contains an entry for each validator this `delegator` has delegated to
+    /// delegations contains an entry for each validator this `delegator` has delegated to
     /// XfrPublicKey here has to be the public key of a validator
     pub delegations: BTreeMap<XfrPublicKey, Amount>,
 
