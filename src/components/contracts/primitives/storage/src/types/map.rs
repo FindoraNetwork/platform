@@ -70,6 +70,11 @@ where
             .unwrap()
     }
 
+    /// Load the value associated with the given key from the map.
+    pub fn get_bytes<D: MerkleDB>(state: &State<D>, key: &Key) -> Option<Vec<u8>> {
+        Instance::get::<D>(state, Self::build_key_for(key).as_slice()).unwrap()
+    }
+
     /// Load versioned value associated with the given key from the map.
     pub fn get_ver<D: MerkleDB>(
         state: &State<D>,
@@ -82,6 +87,15 @@ where
             height,
         )
         .unwrap()
+    }
+
+    /// Load versioned value associated with the given key from the map.
+    pub fn get_ver_bytes<D: MerkleDB>(
+        state: &State<D>,
+        key: &Key,
+        height: u64,
+    ) -> Option<Vec<u8>> {
+        Instance::get_v::<D>(state, Self::build_key_for(key).as_slice(), height).unwrap()
     }
 
     /// Load the unique key value pair with specified prefix.
@@ -113,6 +127,15 @@ where
         val: &Value,
     ) -> Result<()> {
         Instance::set_obj::<Value, D>(state, Self::build_key_for(key).as_slice(), val)
+    }
+
+    /// Store a serialized value to be associated with the given key from the map.
+    pub fn insert_bytes<D: MerkleDB>(
+        state: &mut State<D>,
+        key: &Key,
+        val: Vec<u8>,
+    ) -> Result<()> {
+        Instance::set::<D>(state, Self::build_key_for(key).as_slice(), val)
     }
 
     /// Remove the value under a key.
