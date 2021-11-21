@@ -32,8 +32,7 @@ impl<C: Config> App<C> {
         if code.is_empty() {
             return Ok(());
         }
-
-        AccountCodes::insert(ctx.state.write().borrow_mut(), &address, &code)
+        AccountCodes::insert_bytes(ctx.state.write().borrow_mut(), &address, code)
     }
 
     /// Get the account code
@@ -43,8 +42,10 @@ impl<C: Config> App<C> {
         height: Option<u64>,
     ) -> Option<Vec<u8>> {
         match height {
-            Some(ver) => AccountCodes::get_ver(ctx.state.read().borrow(), address, ver),
-            None => AccountCodes::get(ctx.state.read().borrow(), address),
+            Some(ver) => {
+                AccountCodes::get_ver_bytes(ctx.state.read().borrow(), address, ver)
+            }
+            None => AccountCodes::get_bytes(ctx.state.read().borrow(), address),
         }
     }
 
