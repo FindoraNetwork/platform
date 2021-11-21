@@ -1104,7 +1104,7 @@ fn filter_range_logs(
     from: U256,
     to: U256,
 ) -> Result<()> {
-    let mut current_number = to;
+    let mut current = to;
 
     let topics_input = if filter.topics.is_some() {
         let filtered_params = FilteredParams::new(Some(filter.clone()));
@@ -1115,8 +1115,8 @@ fn filter_range_logs(
     let address_bloom_filter = FilteredParams::addresses_bloom_filter(&filter.address);
     let topics_bloom_filter = FilteredParams::topics_bloom_filter(&topics_input);
 
-    while current_number >= from {
-        let id = BlockId::Number(current_number);
+    while current >= from {
+        let id = BlockId::Number(current);
         let block = app.read().current_block(Some(id.clone()));
 
         if let Some(block) = block {
@@ -1127,23 +1127,28 @@ fn filter_range_logs(
                 block.header.logs_bloom,
                 &topics_bloom_filter,
             ) {
+                let mut logs: Vec<Log> = Vec::new();
                 let statuses = app.read().current_transaction_statuses(Some(id));
                 if let Some(statuses) = statuses {
-                    filter_block_logs(ret, filter, block, statuses);
+                    filter_block_logs(&mut logs, filter, block, statuses);
+                }
+
+                // insert logs at the beginning of ret
+                if !logs.is_empty() {
+                    logs.append(ret);
+                    ret.append(&mut logs);
                 }
             }
         }
         // Check for restrictions
         if ret.len() as u32 > max_past_logs {
-            return Err(internal_err(format!(
-                "query returned more than {} results",
-                max_past_logs
-            )));
+            warn!(target: "eth_rpc", "max_past_logs reached at block {:?}", current);
+            break;
         }
-        if current_number == U256::zero() {
+        if current == U256::zero() {
             break;
         } else {
-            current_number = current_number.saturating_sub(U256::one());
+            current = current.saturating_sub(U256::one());
         }
     }
     Ok(())
