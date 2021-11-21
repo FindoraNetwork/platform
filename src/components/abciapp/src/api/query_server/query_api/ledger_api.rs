@@ -542,6 +542,15 @@ pub async fn query_validator_detail(
                     * v.td_power as u128,
             ];
 
+            // fra_rewards: all delegators rewards including self-delegation
+            let mut fra_rewards = v_self_delegation.rwd_amount;
+            for (delegator, _) in &v.delegators {
+                let delegation = staking
+                    .delegation_get(&delegator)
+                    .ok_or_else(|| error::ErrorBadRequest("not exists"))?;
+                fra_rewards += delegation.rwd_amount;
+            }
+
             let resp = ValidatorDetail {
                 addr: addr.into_inner(),
                 is_online: v.signed_last_block,
@@ -554,7 +563,7 @@ pub async fn query_validator_detail(
                     .filter(|(k, _)| **k == v_id)
                     .map(|(_, n)| n)
                     .sum(),
-                fra_rewards: v_self_delegation.rwd_amount,
+                fra_rewards,
                 memo: v.memo.clone(),
                 start_height: v_self_delegation.start_height,
                 cur_height: staking.cur_height(),
