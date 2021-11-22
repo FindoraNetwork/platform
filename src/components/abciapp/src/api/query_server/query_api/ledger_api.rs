@@ -230,24 +230,22 @@ pub async fn query_validators(
         let validators_list = validators
             .iter()
             .flat_map(|(tendermint_addr, pk)| {
-                validator_data.get_validator_by_id(pk).map(|v| {
-                    let rank = if v.td_power == 0 {
-                        validator_data.body.len()
-                    } else {
+                validator_data.get_validator_by_id(pk)
+                    .filter(|v|v.td_power != 0)
+                    .map(|v| {
                         let mut power_list = validator_data
                             .body
                             .values()
                             .map(|v| v.td_power)
                             .collect::<Vec<_>>();
                         power_list.sort_unstable();
-                        power_list.len() - power_list.binary_search(&v.td_power).unwrap()
-                    };
-                    Validator::new(
-                        tendermint_addr.clone(),
-                        rank as u64,
-                        staking.delegation_has_addr(&pk),
-                        &v,
-                    )
+                        let rank = power_list.len() - power_list.binary_search(&v.td_power).unwrap();
+                        Validator::new(
+                            tendermint_addr.clone(),
+                            rank as u64,
+                            staking.delegation_has_addr(&pk),
+                            &v,
+                        )
                 })
             })
             .collect();
