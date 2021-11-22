@@ -8,7 +8,7 @@ use fp_types::{crypto::MultiSigner, H160, U256};
 use lazy_static::lazy_static;
 use ruc::*;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, convert::TryFrom};
+use std::convert::TryFrom;
 use zei::xfr::{
     sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
     structs::{AssetType as ZeiAssetType, XfrAssetType},
@@ -137,12 +137,12 @@ pub fn is_transfer_erc20_tx(tx: &Transaction) -> bool {
 #[allow(clippy::type_complexity)]
 pub fn check_erc20_tx(
     tx: &Transaction,
-) -> Result<(Vec<u8>, H160, u64, Vec<u8>, HashSet<ZeiAssetType>)> {
+) -> Result<(Vec<u8>, H160, u64, Vec<u8>, ZeiAssetType)> {
     let mut owner = None;
     let mut nonce = None;
     let mut input = None;
     let mut signer = None;
-    let mut assets = HashSet::new();
+    let mut asset = None;
     let mut amount = 0u64;
 
     for op in &tx.body.operations {
@@ -157,6 +157,7 @@ pub fn check_erc20_tx(
         }
         if let Operation::TransferAsset(t) = op {
             for o in &t.body.outputs {
+                // FIXME: If we can relax this restriction?
                 // both amount and asset type are no-confidential
                 if !o.record.is_public() {
                     return Err(eg!(
@@ -170,7 +171,11 @@ pub fn check_erc20_tx(
                     {
                         if let Some(am) = o.record.amount.get_amount() {
                             amount += am;
-                            assets.insert(ty);
+                            if asset.is_some() && asset != Some(ty) {
+                                return Err(eg!("Only one custom asset is supported"));
+                            } else if asset.is_none() {
+                                asset = Some(ty);
+                            }
                         }
                     }
                 }
@@ -178,7 +183,12 @@ pub fn check_erc20_tx(
         }
     }
 
-    if owner.is_none() {
+    if signer.is_none()
+        || owner.is_none()
+        || nonce.is_none()
+        || input.is_none()
+        || asset.is_none()
+    {
         return Err(eg!("this isn't a valid utxo-to-erc20 tx"));
     }
 
@@ -202,6 +212,6 @@ pub fn check_erc20_tx(
         owner.unwrap(),
         nonce.unwrap().get_seq_id(),
         input.unwrap(),
-        assets,
+        asset.unwrap(),
     ))
 }

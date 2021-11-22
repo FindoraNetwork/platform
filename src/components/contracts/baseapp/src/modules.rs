@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::str::FromStr;
 
 use super::*;
@@ -194,22 +194,32 @@ impl ModuleManager {
 
         for da in new_assets {
             if da.0.val == ASSET_TYPE_FRA {
-                log::info!(target: "baseapp", "Skipping native asset");
+                log::debug!(target: "baseapp", "Skipping native asset");
                 continue;
             }
+            // User deployed erc20 contract address (base64-format) is stored in custom asset memo
             if let Ok(MultiSigner::Ethereum(address)) =
                 MultiSigner::from_str(da.1.memo.0.as_str())
             {
                 let asset = AssetType::new(da.1);
 
-                if asset.has_issuance_restrictions() || asset.has_transfer_restrictions()
-                {
-                    return Err(eg!("Binding asset with restrictions"));
+                // TODO: remove these restriction
+                // 1. Currently if a custom asset has issuance restriction,
+                //    the coinbase mint operation could be failed, then we
+                //    need to rollback erc20 burn transaction and the rollback
+                //    mechanism has not been implemented yet.
+                // 2. A findora custom asset and a Erc20 contract are one-to-one match,
+                //    findora custom asset should not be updatable
+                if asset.has_issuance_restrictions() {
+                    return Err(eg!("Binding asset with issuance restrictions"));
+                } else if asset.is_updatable() {
+                    return Err(eg!("Binding asset should not be updatable"));
                 }
 
                 if module_xhub::App::<BaseApp>::asset_of(ctx, &address).is_some() {
                     return Err(eg!("Existed findora asset"));
                 }
+                // FIXME: check the contract ownership or access control
                 return module_xhub::App::<BaseApp>::add_asset(ctx, &address, &asset)
                     .c(d!("Failed to add new asset"));
             } else {
@@ -218,6 +228,8 @@ impl ModuleManager {
         }
 
         // TODO: handle other asset operations
+        // 1. record issuance amount
+        // 2. update custom asset or erc20 contract address
 
         Ok(())
     }
@@ -229,21 +241,14 @@ impl ModuleManager {
         &self,
         ctx: &Context,
         address: &H160,
-        assets: HashSet<ZeiAssetType>,
+        asset: ZeiAssetType,
     ) -> Result<()> {
-        if !assets.is_empty() && assets.len() != 1 {
-            return Err(eg!("Only one kind of asset is supported currently."));
-        }
-
-        for code in assets.into_iter() {
-            ensure!(
-                Some(code)
-                    == module_xhub::App::<BaseApp>::asset_of(ctx, address)
-                        .map(|x| x.properties.code.val),
-                "No binding asset"
-            );
-        }
-
+        ensure!(
+            Some(asset)
+                == module_xhub::App::<BaseApp>::asset_of(ctx, address)
+                    .map(|x| x.properties.code.val),
+            "No binding asset"
+        );
         Ok(())
     }
 
@@ -253,10 +258,11 @@ impl ModuleManager {
         ctx: &Context,
         tx: &FindoraTransaction,
     ) -> Result<()> {
-        let (signer, target, _nonce, input, assets) = check_erc20_tx(tx)?;
+        let (signer, target, _nonce, input, asset) = check_erc20_tx(tx)?;
+        // FixMe: original signer address(XfrPublicKey) is truncated to H160 address
         let signer = proposer_converter(signer).unwrap();
 
-        self.check_valid_asset(ctx, &target, assets)
+        self.check_valid_asset(ctx, &target, asset)
             .c(d!("Assets check failed"))?;
 
         // call mint method
@@ -281,7 +287,7 @@ impl ModuleManager {
                 .c(d!("Evm runner failed!"))?;
         match info.exit_reason {
             ExitReason::Succeed(_) => Ok(()),
-            _ => Err(eg!("Failed to execute evm transaction")),
+            _ => Err(eg!("Failed to execute erc20 mint transaction")),
         }
     }
 }
