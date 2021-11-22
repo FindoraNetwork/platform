@@ -79,30 +79,27 @@ impl<C: Config> Executable for App<C> {
         call: Self::Call,
         ctx: &Context,
     ) -> Result<ActionResult> {
+        let sender = if let Some(sender) = origin {
+            sender
+        } else {
+            log::error!(target: "xhub", "invalid transaction origin");
+            return Err(eg!("invalid transaction origin"));
+        };
+
         match call {
             Action::NonConfidentialTransfer(action) => {
-                if let Some(sender) = origin {
-                    Self::transfer_to_nonconfidential_utxo(ctx, sender, action)
-                } else {
-                    Err(eg!("invalid transaction origin"))
-                }
+                Self::transfer_to_nonconfidential_utxo(ctx, sender, action)
             }
-            Action::ERC20ToUTXO(action) => {
-                if let Some(sender) = origin {
-                    Self::erc20_to_utxo(
-                        ctx,
-                        sender,
-                        action.contractaddress,
-                        action.gas_price,
-                        action.gas_limit,
-                        action.input,
-                        action.nonce,
-                        action.outputs,
-                    )
-                } else {
-                    Err(eg!("invalid transaction origin"))
-                }
-            }
+            Action::Erc20ToUtxo(action) => Self::erc20_to_utxo(
+                ctx,
+                sender,
+                action.contract,
+                action.gas_price,
+                action.gas_limit,
+                action.input,
+                action.nonce,
+                action.outputs,
+            ),
         }
     }
 }

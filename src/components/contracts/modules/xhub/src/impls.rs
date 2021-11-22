@@ -99,10 +99,10 @@ impl<C: Config> App<C> {
             let info = C::Runner::call(ctx, call, &config).c(d!("Evm runner failed"))?;
             match info.exit_reason {
                 ExitReason::Succeed(_) => {
-                    // mint UTXO
+                    // Fixme: what if failing to mint UTXO
                     Self::add_mint(ctx, outputs)?;
                 }
-                _ => return Err(eg!("Failed to execute evm tx")),
+                _ => return Err(eg!("Failed to execute Erc20 burn tx")),
             }
         }
 

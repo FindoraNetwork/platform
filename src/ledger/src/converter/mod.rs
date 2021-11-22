@@ -74,7 +74,6 @@ fn is_findora_asset_tx(tx: &Transaction) -> bool {
     tx.body.operations.iter().any(|op| {
         matches!(op, Operation::DefineAsset(_))
             || matches!(op, Operation::IssueAsset(_))
-            //|| matches!(op, Operation::TransferAsset(_))
             || matches!(op, Operation::UpdateMemo(_))
     })
 }

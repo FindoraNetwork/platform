@@ -6,7 +6,7 @@ use zei::xfr::structs::AssetType as ZeiAssetType;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Action {
     NonConfidentialTransfer(NonConfidentialTransfer),
-    ERC20ToUTXO(ERC20ToUTXO),
+    Erc20ToUtxo(Erc20ToUtxo),
 }
 
 /// Findora evm account balance transfer to NonConfidential utxo.
@@ -26,11 +26,11 @@ pub struct NonConfidentialOutput {
 
 /// ERC20 -> UTXO
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ERC20ToUTXO {
+pub struct Erc20ToUtxo {
     pub nonce: U256,
     pub gas_price: U256,
     pub gas_limit: U256,
-    pub contractaddress: H160,
+    pub contract: H160,
     pub input: Vec<u8>,
     pub amount: U256,
     pub outputs: Vec<NonConfidentialOutput>,

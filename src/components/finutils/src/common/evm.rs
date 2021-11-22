@@ -2,18 +2,18 @@
 //! EVM transfer functions
 //!
 
-use super::get_keypair;
-use super::get_serv_addr;
-use super::utils;
-use baseapp::extensions::{CheckFee, CheckNonce};
-use baseapp::BaseApp;
+use super::{get_keypair, get_serv_addr, utils};
+use baseapp::{
+    extensions::{CheckFee, CheckNonce},
+    BaseApp,
+};
 use fp_core::account::SmartAccount;
 use fp_traits::evm::FeeCalculator;
-use fp_types::actions::xhub::ERC20ToUTXO;
 use fp_types::{
     actions::{
         xhub::{
-            Action as AccountAction, NonConfidentialOutput, NonConfidentialTransfer,
+            Action as AccountAction, Erc20ToUtxo, NonConfidentialOutput,
+            NonConfidentialTransfer,
         },
         Action,
     },
@@ -21,17 +21,15 @@ use fp_types::{
     transaction::UncheckedTransaction,
     H160, U256,
 };
-use fp_utils::ecdsa::SecpPair;
-use fp_utils::tx::EvmRawTxWrapper;
+use fp_utils::{ecdsa::SecpPair, tx::EvmRawTxWrapper};
 use hex::FromHex;
 use ledger::data_model::{AssetTypeCode, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING};
 use module_evm;
 use ruc::*;
-use std::str::FromStr;
 use tendermint::block::Height;
 use tendermint_rpc::endpoint::abci_query::AbciQuery;
 use tendermint_rpc::{Client, HttpClient};
-use std::convert::TryFrom;
+use std::{convert::TryFrom, str::FromStr};
 use tokio::runtime::Runtime;
 use zei::xfr::{asset_record::AssetRecordType, sig::XfrKeyPair};
 
@@ -297,14 +295,12 @@ pub fn erc20_to_utxo(
     let input_hex = &input.unwrap()[2..];
     let input = <Vec<u8>>::from_hex(input_hex).unwrap();
 
-    let account_call = AccountAction::ERC20ToUTXO(ERC20ToUTXO {
+    let account_call = AccountAction::Erc20ToUtxo(Erc20ToUtxo {
         nonce,
         gas_price: <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(),
         gas_limit: <BaseApp as module_evm::Config>::BlockGasLimit::get(),
-        contractaddress: H160::try_from(
-            MultiSigner::from_str(address.unwrap()).unwrap(),
-        )
-        .unwrap(),
+        contract: H160::try_from(MultiSigner::from_str(address.unwrap()).unwrap())
+            .unwrap(),
         input,
         amount: U256::from(amount),
         outputs: vec![output],

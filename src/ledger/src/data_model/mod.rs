@@ -641,6 +641,12 @@ impl AssetType {
 
     #[inline(always)]
     #[allow(missing_docs)]
+    pub fn is_updatable(&self) -> bool {
+        self.properties.asset_rules.updatable
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
     pub fn has_issuance_restrictions(&self) -> bool {
         self.properties.asset_rules.max_units.is_some()
     }
