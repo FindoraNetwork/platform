@@ -1984,6 +1984,9 @@ fn calculate_delegation_rewards(
     #[cfg(feature = "debug_env")]
     const OVERFLOW_FIX_HEIGHT: BlockHeight = 0;
 
+    #[cfg(feature = "debug_env")]
+    const SECOND_FIX_HEIGHT: BlockHeight = 0;
+
     #[cfg(not(feature = "debug_env"))]
     const APY_FIX_HEIGHT: BlockHeight = 117_7000;
 
@@ -1991,17 +1994,24 @@ fn calculate_delegation_rewards(
     #[cfg(not(feature = "debug_env"))]
     const OVERFLOW_FIX_HEIGHT: BlockHeight = 124_7000;
 
+    #[cfg(not(feature = "debug_env"))]
+    const SECOND_FIX_HEIGHT: BlockHeight = 131_0000;
+
     if OVERFLOW_FIX_HEIGHT < cur_height {
         let am = BigUint::from(amount);
         let total_am = BigUint::from(total_amount);
         let global_am = BigUint::from(global_amount);
         let block_itv = BLOCK_INTERVAL as u128;
 
-        const SECOND_PER_YEAR: u128 = 365 * 24 * 3600;
+        let second_per_year: u128 = if SECOND_FIX_HEIGHT < cur_height {
+            365 * 24 * 3600
+        } else {
+            356 * 24 * 3600
+        };
 
         let calculate_self_only = || {
             let a1 = am.clone() * return_rate[0] * block_itv;
-            let a2 = return_rate[1] * SECOND_PER_YEAR;
+            let a2 = return_rate[1] * second_per_year;
 
             a1 / a2
         };
@@ -2010,7 +2020,7 @@ fn calculate_delegation_rewards(
             if is_delegation_rwd {
                 // global_amount * am * return_rate[0] * block_itv / (return_rate[1] * (365 * 24 * 3600) * total_amount)
                 let a1 = global_am * am * return_rate[0] * block_itv;
-                let a2 = total_am * SECOND_PER_YEAR * return_rate[1];
+                let a2 = total_am * second_per_year * return_rate[1];
                 a1 / a2
             } else {
                 calculate_self_only()
