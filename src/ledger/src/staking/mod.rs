@@ -2065,6 +2065,7 @@ impl Delegation {
 
 // Calculate the amount(in FRA units) that
 // should be paid to the owner of this delegation.
+#[allow(dead_code)]
 fn calculate_delegation_rewards(
     return_rate: [u128; 2],
     amount: Amount,

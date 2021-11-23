@@ -392,6 +392,7 @@ pub struct XfrAddress {
 }
 
 impl XfrAddress {
+    #[allow(dead_code)]
     pub(crate) fn to_base64(self) -> String {
         b64enc(&self.key.as_bytes())
     }
@@ -418,6 +419,7 @@ pub struct IssuerPublicKey {
 }
 
 impl IssuerPublicKey {
+    #[allow(dead_code)]
     pub(crate) fn to_base64(self) -> String {
         b64enc(self.key.as_bytes())
     }
