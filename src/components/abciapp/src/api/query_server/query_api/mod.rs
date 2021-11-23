@@ -30,7 +30,6 @@ use {
     server::QueryServer,
     std::{
         collections::{BTreeMap, HashSet},
-        ops::Deref,
         sync::Arc,
     },
     zei::{
@@ -444,16 +443,16 @@ pub async fn get_total_supply(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> actix_web::Result<web::Json<BTreeMap<&'static str, f64>>, actix_web::error::Error> {
     let l = data.read();
-    let burn_pubkey = BLACK_HOLE_PUBKEY.deref();
-    let extra_pubkey = FF_PK_EXTRA_120_0000.deref();
+    let burn_pubkey = *BLACK_HOLE_PUBKEY;
+    let extra_pubkey = *FF_PK_EXTRA_120_0000;
 
     let burn_balance = l
         .ledger_cloned
-        .get_nonconfidential_balance(burn_pubkey)
+        .get_nonconfidential_balance(&burn_pubkey)
         .unwrap_or(0);
     let extra_balance = l
         .ledger_cloned
-        .get_nonconfidential_balance(extra_pubkey)
+        .get_nonconfidential_balance(&extra_pubkey)
         .unwrap_or(0);
 
     let fra = FRA as f64;
