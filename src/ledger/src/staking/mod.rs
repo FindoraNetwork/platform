@@ -12,7 +12,8 @@
 #![deny(missing_docs)]
 #![allow(clippy::upper_case_acronyms)]
 
-use num_bigint::BigUint;
+#[cfg(not(target_arch = "wasm32"))]
+use {num_bigint::BigUint, std::convert::TryFrom};
 
 pub mod cosig;
 pub mod init;
@@ -42,7 +43,6 @@ use {
     sha2::Digest as _,
     std::{
         collections::{BTreeMap, BTreeSet},
-        convert::TryFrom,
         env, mem,
         sync::{
             mpsc::{channel, Receiver, Sender},
@@ -2065,6 +2065,7 @@ impl Delegation {
 
 // Calculate the amount(in FRA units) that
 // should be paid to the owner of this delegation.
+#[cfg(not(target_arch = "wasm32"))]
 fn calculate_delegation_rewards(
     return_rate: [u128; 2],
     amount: Amount,
