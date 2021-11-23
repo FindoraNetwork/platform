@@ -133,6 +133,16 @@ pub fn is_transfer_erc20_tx(tx: &Transaction) -> bool {
     false
 }
 
+/// build a input to call `decimals` function
+pub fn build_decimals_input() -> Result<Vec<u8>> {
+    ERC20_CONSTRUCTOR
+        .abi
+        .function("decimals")
+        .c(d!("No decimals functions"))?
+        .encode_input(&[])
+        .c(d!("Failed to encode function input"))
+}
+
 #[allow(missing_docs)]
 #[allow(clippy::type_complexity)]
 pub fn check_erc20_tx(

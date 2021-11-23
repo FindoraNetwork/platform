@@ -20,6 +20,7 @@ use fp_types::{
     crypto::{Address, MultiSigner},
 };
 use fp_utils::proposer_converter;
+use ledger::converter::erc20::build_decimals_input;
 use ledger::{
     converter::{check_convert_account, erc20::check_erc20_tx, ConvertingType},
     data_model::{
@@ -28,6 +29,7 @@ use ledger::{
 };
 use ruc::*;
 use serde::Serialize;
+use zei::serialization::ZeiFromToBytes;
 use zei::xfr::structs::AssetType as ZeiAssetType;
 
 #[derive(Default)]
@@ -214,6 +216,19 @@ impl ModuleManager {
                     return Err(eg!("Binding asset with issuance restrictions"));
                 } else if asset.is_updatable() {
                     return Err(eg!("Binding asset should not be updatable"));
+                } else {
+                    // FixMe: don't use proposer_converter
+                    let signer =
+                        proposer_converter(asset.properties.issuer.zei_to_bytes())
+                            .c(d!("Invalid singer"))?;
+                    let input = build_decimals_input().c(d!())?;
+                    let decimals = self
+                        .erc20_decimals(ctx, signer, address, input)
+                        .c(d!("can not get decimals of erc20 token"))?
+                        as u8;
+                    if decimals != asset.properties.asset_rules.decimals {
+                        return Err(eg!("binding custom asset to a erc20 token which has different decimals"));
+                    }
                 }
 
                 if module_xhub::App::<BaseApp>::asset_of(ctx, &address).is_some() {
@@ -250,6 +265,40 @@ impl ModuleManager {
             "No binding asset"
         );
         Ok(())
+    }
+
+    fn erc20_decimals(
+        &self,
+        ctx: &Context,
+        source: H160,
+        target: H160,
+        decimals: Vec<u8>,
+    ) -> Result<u32> {
+        let mut config = <BaseApp as module_ethereum::Config>::config().clone();
+        config.estimate = true;
+
+        let call = Call {
+            source,
+            target,
+            input: decimals,
+            value: Default::default(),
+            gas_limit: <BaseApp as module_evm::Config>::BlockGasLimit::get().as_u64(),
+            gas_price: Some(
+                <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(),
+            ),
+            nonce: None,
+        };
+
+        let info =
+            <BaseApp as module_ethereum::Config>::Runner::call(ctx, call, &config)
+                .c(d!("Evm runner failed!"))?;
+
+        match info.exit_reason {
+            ExitReason::Succeed(_) => {
+                Ok(U256::from_big_endian(info.value.as_ref()).low_u32())
+            }
+            _ => Err(eg!("Failed to execute erc20 `decimals` transaction")),
+        }
     }
 
     // findora utxo -> erc20
