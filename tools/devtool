@@ -88,6 +88,7 @@ elif [[ ${OPT} == "release" ]]; then
 elif [[ ${OPT} == "gorelease" ]]; then
   export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release
   make build_release_goleveldb
+  $0 wasm
   exit 0
 elif [[ ${OPT} == "debug_env" ]]; then
   export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release

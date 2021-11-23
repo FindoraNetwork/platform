@@ -34,6 +34,7 @@ fp-core = { path = "../contracts/primitives/core", optional = true }
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = { path = "../contracts/primitives/types" }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 module-evm = { path = "../contracts/modules/evm" }
 fp-traits = { path = "../contracts/primitives/traits" }
 
