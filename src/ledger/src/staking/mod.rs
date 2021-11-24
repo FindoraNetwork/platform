@@ -62,7 +62,12 @@ type SDHCP = (Arc<Mutex<Sender<SDH>>>, Arc<Mutex<Receiver<SDH>>>);
 type DAH = (XfrPublicKey, BlockHeight, Amount);
 type DAHCP = (Arc<Mutex<Sender<DAH>>>, Arc<Mutex<Receiver<DAH>>>);
 // pk, height, <struct DelegationRwdDetail>
-type DRH = (XfrPublicKey, BlockHeight, DelegationRwdDetail);
+type DRH = (
+    XfrPublicKey,
+    BlockHeight,
+    DelegationRwdDetail,
+    Option<TendermintAddr>,
+);
 type DRHCP = (Arc<Mutex<Sender<DRH>>>, Arc<Mutex<Receiver<DRH>>>);
 
 macro_rules! chan {
@@ -1216,7 +1221,7 @@ impl Staking {
             CHAN_D_RWD_HIST
                 .0
                 .lock()
-                .send((d.id, self.cur_height, r))
+                .send((d.id, self.cur_height, r, None))
                 .unwrap();
         }
 
@@ -1416,6 +1421,7 @@ impl Staking {
             .values()
             .sum::<Amount>();
         let gda = self.get_global_delegation_amount();
+        let td_addr = self.validator_app_pk_to_td_addr(proposer)?;
         self.delegation_get_mut(proposer)
             .c(d!())
             .and_then(|d| {
@@ -1431,6 +1437,7 @@ impl Staking {
                     gda,
                     false,
                     cbl,
+                    &td_addr,
                 )
                 .c(d!())
             })
@@ -1894,6 +1901,7 @@ impl Delegation {
         global_delegation_amount: Amount,
         is_delegation_rwd: bool,
         coinbase_bl: Amount,
+        td_addr: TendermintAddrRef,
     ) -> Result<u64> {
         #[cfg(feature = "debug_env")]
         const ZERO_AMOUNT_FIX_HEIGHT: BlockHeight = 0;
@@ -1957,7 +1965,7 @@ impl Delegation {
                     CHAN_D_RWD_HIST
                         .0
                         .lock()
-                        .send((self.id, cur_height, r))
+                        .send((self.id, cur_height, r, Some(td_addr.to_string())))
                         .unwrap();
                 }
                 self.rwd_amount.checked_add(n).c(d!()).map(|i| {

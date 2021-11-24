@@ -2,6 +2,7 @@
 //! # Cached data for APIs
 //!
 
+use crate::staking::TendermintAddr;
 use {
     crate::{
         data_model::{
@@ -65,6 +66,8 @@ pub struct ApiCache {
     /// rewards history, used on some pulic nodes, such as fullnode
     pub staking_delegation_rwd_hist:
         Mapx<XfrPublicKey, Mapxnk<BlockHeight, DelegationRwdDetail>>,
+    /// reward for each delegator comes from the validator they pledge
+    pub delegation_validator_rwd: Mapx<XfrPublicKey, Mapx<TendermintAddr, Amount>>,
 }
 
 impl ApiCache {
@@ -112,6 +115,10 @@ impl ApiCache {
             )),
             staking_delegation_rwd_hist: new_mapx!(format!(
                 "api_cache/{}staking_delegation_rwd_hist",
+                prefix
+            )),
+            delegation_validator_rwd: new_mapx!(format!(
+                "api_cache/{}delegation_validator_rwd",
                 prefix
             )),
         }
@@ -189,7 +196,7 @@ impl ApiCache {
                     .insert(h, r);
             });
 
-        CHAN_D_RWD_HIST.1.lock().try_iter().for_each(|(pk, h, r)| {
+        CHAN_D_RWD_HIST.1.lock().try_iter().for_each(|(pk, h, r, td_addr)| {
             #[allow(unused_mut)]
             let mut dd =
                 self.staking_delegation_rwd_hist
@@ -214,6 +221,63 @@ impl ApiCache {
                 r.global_delegation_percent.is_some(),
                 dd.global_delegation_percent = r.global_delegation_percent
             );
+
+            // into each validator from add each delegator reward
+            let update_map;
+            let delegator_base_64 = wallet::public_key_to_base64(&pk);
+            if let Some(mut map) = self.delegation_validator_rwd.get(&pk){
+                // penalty if tendermint address is none
+                if let Some(td_addr) = td_addr {
+                    if let Some(mut rwd_amount) = map.get(&td_addr) {
+                        rwd_amount = rwd_amount.saturating_add(r.amount);
+                        map.set_value(td_addr.clone(),rwd_amount);
+                    } else {
+                        map.set_value(td_addr.clone(), r.amount);
+                    }
+                } else {
+                    let mut penalty = r.penalty_amount;
+
+                    let mut updates:Vec<(TendermintAddr, Amount)> = Vec::new();
+                    for (addr, mut am) in map.iter() {
+                        if am > 0 && penalty > 0{
+                            if am > penalty {
+                                am = am.saturating_sub(penalty);
+                            } else {
+                                let pa = penalty.saturating_sub(am);
+                                am = am.saturating_sub(am);
+                                penalty = pa;
+                            }
+                            updates.push((addr.clone(), am));
+                        }
+                    }
+
+                    for (addr, am) in updates {
+                        map.set_value(addr, am);
+                    }
+
+                    if penalty != 0 {
+                        println!("{}",format!("rewards are not enough for fines: {}",delegator_base_64));
+                    }
+                }
+                update_map = map;
+            } else {
+
+                let mut map = new_mapx!(format!(
+                        "delegation_validator_rwd_subdata/{}",
+                        delegator_base_64
+                    ));
+
+                if let Some(td_addr) = td_addr {
+                    map.insert(td_addr, r.amount);
+                } else {
+                    println!("{}",format!("there is no corresponding delegator and yet there is a penalty: {}",delegator_base_64));
+                }
+                update_map = map;
+            }
+
+            if !update_map.is_empty() {
+                self.delegation_validator_rwd.set_value(pk, update_map);
+            }
         });
     }
 }
@@ -363,6 +427,48 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
                             ))
                         })
                         .set_value(txn_sid, Default::default());
+
+                    // sub reward
+                    if let Some(mut claim_am) = i.body.amount {
+                        let map = ledger
+                            .api_cache
+                            .as_mut()
+                            .unwrap()
+                            .delegation_validator_rwd
+                            .get_mut(&i.pubkey);
+
+                        #[allow(unused_mut)]
+                        if let Some(mut map) = map {
+                            let mut updates: Vec<(TendermintAddr, Amount)> = Vec::new();
+
+                            for (addr, am) in map.iter() {
+                                if claim_am > 0 {
+                                    if am > claim_am {
+                                        updates
+                                            .push((addr, am.saturating_sub(claim_am)));
+                                    } else {
+                                        let ca = claim_am.saturating_sub(am);
+                                        updates.push((addr, 0));
+                                        claim_am = ca;
+                                    }
+                                }
+                            }
+
+                            if claim_am != 0 {
+                                println!(
+                                    "{}",
+                                    format!(
+                                        "rewards are not enough for claim: {}",
+                                        base64::encode(i.pubkey.as_bytes())
+                                    )
+                                );
+                            } else {
+                                for (addr, am) in updates {
+                                    map.set_value(addr, am);
+                                }
+                            }
+                        }
+                    }
                 }
                 Operation::MintFra(i) => i.entries.iter().for_each(|me| {
                     let key = XfrAddress {

@@ -545,10 +545,18 @@ pub async fn query_validator_detail(
             // fra_rewards: all delegators rewards including self-delegation
             let mut fra_rewards = v_self_delegation.rwd_amount;
             for (delegator, _) in &v.delegators {
-                let delegation = staking
-                    .delegation_get(&delegator)
-                    .ok_or_else(|| error::ErrorBadRequest("not exists"))?;
-                fra_rewards += delegation.rwd_amount;
+                let op = ledger
+                    .api_cache
+                    .as_ref()
+                    .unwrap()
+                    .delegation_validator_rwd
+                    .get(delegator);
+
+                if let Some(map) = op {
+                    if let Some(am) = map.get(&addr) {
+                        fra_rewards += am;
+                    }
+                }
             }
 
             let resp = ValidatorDetail {

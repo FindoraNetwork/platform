@@ -499,6 +499,7 @@ impl LedgerState {
                     gda,
                     true,
                     cbl,
+                    addr,
                 )
             })
             .collect::<Result<Vec<_>>>()
