@@ -548,9 +548,11 @@ pub async fn query_validator_detail(
                 let delegation = staking
                     .delegation_get(&delegator)
                     .ok_or_else(|| error::ErrorBadRequest("not exists"))?;
-                fra_rewards += delegation.rwd_amount;
+                if delegation.entries.contains_key(&v_id) {
+                    fra_rewards += delegation.rwd_amount;
+                }
             }
-
+ 
             let resp = ValidatorDetail {
                 addr: addr.into_inner(),
                 is_online: v.signed_last_block,
