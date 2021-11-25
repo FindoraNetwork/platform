@@ -24,7 +24,9 @@ use ledger::data_model::ASSET_TYPE_FRA;
 use ledger::data_model::BLACK_HOLE_PUBKEY_STAKING;
 use ruc::*;
 use std::str::FromStr;
-use tendermint_rpc::Client;
+use tendermint::block::Height;
+use tendermint_rpc::endpoint::abci_query::AbciQuery;
+use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::Runtime;
 use zei::xfr::{asset_record::AssetRecordType, sig::XfrKeyPair};
 
@@ -110,16 +112,17 @@ pub fn transfer_from_account(
         format!("{}:26657", get_serv_addr().c(d!())?).as_str(),
     )
     .unwrap();
-    let query_ret = Runtime::new()
-        .unwrap()
-        .block_on(tm_client.abci_query(
-            Some(tendermint::abci::Path::from_str("module/account/nonce").unwrap()),
-            serde_json::to_vec(&signer).unwrap(),
-            None,
-            false,
-        ))
-        .unwrap();
-    let nonce = serde_json::from_slice::<U256>(query_ret.value.as_slice()).unwrap();
+
+    let query_ret = one_shot_abci_query(
+        &tm_client,
+        "module/account/nonce",
+        serde_json::to_vec(&signer).unwrap(),
+        None,
+        false,
+    )?;
+
+    let nonce = serde_json::from_slice::<U256>(query_ret.value.as_slice())
+        .c(d!("invalid nonce"))?;
 
     let account_call = AccountAction::NonConfidentialTransfer(NonConfidentialTransfer {
         input_value: amount,
@@ -144,6 +147,34 @@ pub fn transfer_from_account(
     Ok(())
 }
 
+fn one_shot_abci_query(
+    tm_client: &HttpClient,
+    path: &str,
+    data: Vec<u8>,
+    height: Option<Height>,
+    prove: bool,
+) -> Result<AbciQuery> {
+    let path = if path.is_empty() {
+        None
+    } else {
+        Some(tendermint::abci::Path::from_str(path).unwrap())
+    };
+
+    let query_ret = Runtime::new()
+        .c(d!())?
+        .block_on(tm_client.abci_query(path, data, height, prove))
+        .c(d!("abci query error"))?;
+
+    if query_ret.code.is_err() {
+        Err(eg!(format!(
+            "error code: {:?}, log: {}",
+            query_ret.code, query_ret.log
+        )))
+    } else {
+        Ok(query_ret)
+    }
+}
+
 /// Query contract account info by abci/query
 pub fn contract_account_info(address: Option<&str>) -> Result<(Address, SmartAccount)> {
     let fra_kp = get_keypair()?;
@@ -158,17 +189,18 @@ pub fn contract_account_info(address: Option<&str>) -> Result<(Address, SmartAcc
         format!("{}:26657", get_serv_addr().c(d!())?).as_str(),
     )
     .unwrap();
-    let query_ret = Runtime::new()
-        .unwrap()
-        .block_on(tm_client.abci_query(
-            Some(tendermint::abci::Path::from_str("module/account/info").unwrap()),
-            serde_json::to_vec(&account).unwrap(),
-            None,
-            false,
-        ))
-        .unwrap();
+
+    let query_ret = one_shot_abci_query(
+        &tm_client,
+        "module/account/info",
+        serde_json::to_vec(&account).unwrap(),
+        None,
+        false,
+    )?;
+
     Ok((
         account,
-        serde_json::from_slice(query_ret.value.as_slice()).c(d!())?,
+        serde_json::from_slice(query_ret.value.as_slice())
+            .c(d!("invalid account info"))?,
     ))
 }

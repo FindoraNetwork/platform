@@ -82,7 +82,13 @@ impl<C: Config> AppModule for App<C> {
                 info.reserved =
                     EthereumDecimalsMapping::convert_to_native_token(info.reserved);
 
-                resp.value = serde_json::to_vec(&info).unwrap_or_default();
+                if let Ok(value) = serde_json::to_vec(&info) {
+                    resp.value = value;
+                } else {
+                    resp.code = 1;
+                    resp.log = String::from("account: failed to serialize account data");
+                }
+
                 resp
             }
             "nonce" => {
@@ -93,7 +99,13 @@ impl<C: Config> AppModule for App<C> {
                     return resp;
                 }
                 let nonce = Self::nonce(&ctx, &data.unwrap());
-                resp.value = serde_json::to_vec(&nonce).unwrap_or_default();
+
+                if let Ok(value) = serde_json::to_vec(&nonce) {
+                    resp.value = value;
+                } else {
+                    resp.code = 1;
+                    resp.log = String::from("account: failed to serialize account data");
+                }
                 resp
             }
             _ => resp,
