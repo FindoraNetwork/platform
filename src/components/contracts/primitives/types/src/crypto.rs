@@ -9,6 +9,7 @@ use primitive_types::{H160, H256};
 use ruc::{d, eg, RucResult};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
+use std::fmt::Write;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::{XfrPublicKey, XfrSignature};
 
@@ -98,6 +99,41 @@ impl From<H160> for Address32 {
         data[0..4].copy_from_slice(b"evm:");
         data[4..24].copy_from_slice(k.as_bytes());
         data.into()
+    }
+}
+
+/// A wrapper of the Hash type defined inf fixed-hash crate.
+#[derive(
+    Clone, Eq, PartialEq, Ord, PartialOrd, Default, Hash, Serialize, Deserialize, Debug,
+)]
+pub struct HA256(H256);
+
+impl HA256 {
+    pub fn new(hash: H256) -> HA256 {
+        HA256(hash)
+    }
+
+    pub fn h256(&self) -> H256 {
+        self.0
+    }
+}
+
+impl ToString for HA256 {
+    fn to_string(&self) -> String {
+        let mut s = String::new();
+        for &byte in self.0.as_bytes() {
+            let _ = write!(&mut s, "{:X} ", byte);
+        }
+        s
+    }
+}
+
+impl FromStr for HA256 {
+    type Err = fixed_hash::rustc_hex::FromHexError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let hash = H256::from_str(s)?;
+        Ok(HA256(hash))
     }
 }
 

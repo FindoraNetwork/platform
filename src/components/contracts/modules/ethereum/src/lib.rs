@@ -53,12 +53,13 @@ pub trait Config {
 
 pub mod storage {
     use ethereum::{BlockV0 as Block, Receipt, TransactionV0 as Transaction};
-    use ethereum_types::{H256, U256};
+    use ethereum_types::U256;
     use fp_evm::TransactionStatus;
     use fp_storage::*;
+    use fp_types::crypto::HA256;
 
     // Mapping for transaction hash and at block number with index.
-    generate_storage!(Ethereum, TransactionIndex => Map<H256, (U256, u32)>);
+    generate_storage!(Ethereum, TransactionIndex => Map<HA256, (U256, u32)>);
 
     // The following data is stored in stateless rocksdb
     // Current building block's transactions and receipts.
@@ -66,13 +67,13 @@ pub mod storage {
     // The current Ethereum block number.
     generate_storage!(Ethereum, CurrentBlockNumber => Value<U256>);
     // Mapping for block number and hashes.
-    generate_storage!(Ethereum, BlockHash => Map<U256, H256>);
+    generate_storage!(Ethereum, BlockHash => Map<U256, HA256>);
     // The ethereum history blocks with block number.
-    generate_storage!(Ethereum, CurrentBlock => Map<H256, Block>);
+    generate_storage!(Ethereum, CurrentBlock => Map<HA256, Block>);
     // The ethereum history receipts with block number.
-    generate_storage!(Ethereum, CurrentReceipts => Map<H256, Vec<Receipt>>);
+    generate_storage!(Ethereum, CurrentReceipts => Map<HA256, Vec<Receipt>>);
     // The ethereum history transaction statuses with block number.
-    generate_storage!(Ethereum, CurrentTransactionStatuses => Map<H256, Vec<TransactionStatus>>);
+    generate_storage!(Ethereum, CurrentTransactionStatuses => Map<HA256, Vec<TransactionStatus>>);
 }
 
 #[derive(Event)]
