@@ -190,7 +190,8 @@ impl<'context, 'vicinity, 'config, C: Config> Backend
     }
 
     fn storage(&self, address: H160, index: H256) -> H256 {
-        App::<C>::account_storages(self.ctx, &address.into(), &index.into(), None).unwrap_or_default()
+        App::<C>::account_storages(self.ctx, &address.into(), &index.into(), None)
+            .unwrap_or_default()
     }
 
     fn original_storage(&self, _address: H160, _index: H256) -> Option<H256> {
@@ -278,7 +279,10 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
     }
 
     fn reset_storage(&mut self, address: H160) {
-        AccountStorages::remove_prefix(self.ctx.state.write().borrow_mut(), &address.into());
+        AccountStorages::remove_prefix(
+            self.ctx.state.write().borrow_mut(),
+            &address.into(),
+        );
     }
 
     fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>) {

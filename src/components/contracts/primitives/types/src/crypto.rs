@@ -2,7 +2,6 @@ use bech32::{FromBase32, ToBase32};
 use core::convert::TryFrom;
 use core::fmt::Formatter;
 use core::str::FromStr;
-use std::ops::{Deref, DerefMut};
 use fp_utils::{ecdsa, hashing::keccak_256};
 use globutils::wallet;
 use hex::FromHex;
@@ -10,6 +9,7 @@ use primitive_types::{H160, H256};
 use ruc::{d, eg, RucResult};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
+use std::ops::{Deref, DerefMut};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::{XfrPublicKey, XfrSignature};
 
@@ -110,7 +110,7 @@ pub struct HA160(pub H160);
 
 impl From<H160> for HA160 {
     fn from(h: H160) -> Self {
-        Self (h)
+        Self(h)
     }
 }
 

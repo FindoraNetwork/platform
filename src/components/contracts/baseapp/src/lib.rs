@@ -360,7 +360,12 @@ impl BaseProvider for BaseApp {
         height: Option<u64>,
     ) -> Option<H256> {
         if let Ok(ctx) = self.create_query_context(0, false) {
-            module_evm::App::<Self>::account_storages(&ctx, &address.into(), &index.into(), height)
+            module_evm::App::<Self>::account_storages(
+                &ctx,
+                &address.into(),
+                &index.into(),
+                height,
+            )
         } else {
             None
         }

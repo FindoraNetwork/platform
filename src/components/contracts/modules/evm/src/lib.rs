@@ -7,7 +7,7 @@ pub mod precompile;
 pub mod runtime;
 
 use abci::{RequestQuery, ResponseQuery};
-use ethereum_types::{U256};
+use ethereum_types::U256;
 use fp_core::{
     context::Context,
     macros::Get,
@@ -19,7 +19,10 @@ use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
 };
-use fp_types::{actions::evm::Action, crypto::{Address, HA160}};
+use fp_types::{
+    actions::evm::Action,
+    crypto::{Address, HA160},
+};
 use precompile::PrecompileSet;
 use ruc::*;
 use std::marker::PhantomData;
@@ -48,7 +51,7 @@ pub trait Config {
 }
 
 pub mod storage {
-    use ethereum_types::{H256};
+    use ethereum_types::H256;
     use fp_storage::*;
     use fp_types::crypto::{HA160, HA256};
 
