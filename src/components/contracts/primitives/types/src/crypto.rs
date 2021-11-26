@@ -9,7 +9,6 @@ use primitive_types::{H160, H256};
 use ruc::{d, eg, RucResult};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
-use std::fmt::Write;
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::{XfrPublicKey, XfrSignature};
 
@@ -120,11 +119,7 @@ impl HA256 {
 
 impl ToString for HA256 {
     fn to_string(&self) -> String {
-        let mut s = String::new();
-        for &byte in self.0.as_bytes() {
-            let _ = write!(&mut s, "{:X} ", byte);
-        }
-        s
+        hex::encode_upper(self.0)
     }
 }
 
