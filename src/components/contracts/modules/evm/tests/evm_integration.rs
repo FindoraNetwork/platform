@@ -158,7 +158,7 @@ fn test_deploy_commit(contract_address: H160) {
         .unwrap();
     assert!(AccountCodes::contains_key(
         ctx.state.read().borrow(),
-        &contract_address
+        &contract_address.into()
     ));
 }
 
