@@ -212,9 +212,11 @@ type ValidatorInfo = BTreeMap<BlockHeight, ValidatorData>;
 pub struct Staking {
     // the main logic when updating:
     // - the new validator inherits the original vote power, if any
+    #[serde(rename = "vi")]
     validator_info: ValidatorInfo,
     // when the end-time of delegations arrived,
     // we will try to paid the rewards until all is successful.
+    #[serde(rename = "di")]
     pub(crate) delegation_info: DelegationInfo,
     // current block height in the context of tendermint.
     pub(crate) cur_height: BlockHeight,
@@ -1744,6 +1746,7 @@ pub(crate) struct DelegationInfo {
     // validator pubkey => delegation info
     // addr_map contains an entry for every delegation on the network .
     // Self Delegations and Regular Delegation
+    #[serde(rename = "addr_map")]
     pub(crate) global_delegation_records_map: BTreeMap<XfrPublicKey, Delegation>,
     pub(crate) end_height_map: BTreeMap<BlockHeight, BTreeSet<XfrPublicKey>>,
 }
@@ -1762,6 +1765,7 @@ impl DelegationInfo {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ValidatorKind {
     Staker,
+    #[serde(rename = "Initor")]
     Initiator,
 }
 
@@ -1886,6 +1890,7 @@ pub struct Delegation {
     ///   - valid for all delegators
     /// delegations contains an entry for each validator this `delegator` has delegated to
     /// XfrPublicKey here has to be the public key of a validator
+    #[serde(rename = "entries")]
     pub delegations: BTreeMap<XfrPublicKey, Amount>,
 
     /// delegation rewards will be paid to this pk by default
