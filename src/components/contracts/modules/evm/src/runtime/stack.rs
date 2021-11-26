@@ -186,11 +186,12 @@ impl<'context, 'vicinity, 'config, C: Config> Backend
     }
 
     fn code(&self, address: H160) -> Vec<u8> {
-        App::<C>::account_codes(self.ctx, &address, None).unwrap_or_default()
+        App::<C>::account_codes(self.ctx, &address.into(), None).unwrap_or_default()
     }
 
     fn storage(&self, address: H160, index: H256) -> H256 {
-        App::<C>::account_storages(self.ctx, &address, &index, None).unwrap_or_default()
+        App::<C>::account_storages(self.ctx, &address.into(), &index.into(), None)
+            .unwrap_or_default()
     }
 
     fn original_storage(&self, _address: H160, _index: H256) -> Option<H256> {
@@ -226,7 +227,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
     }
 
     fn is_empty(&self, address: H160) -> bool {
-        App::<C>::is_account_empty(self.ctx, &address)
+        App::<C>::is_account_empty(self.ctx, &address.into())
     }
 
     fn deleted(&self, address: H160) -> bool {
@@ -248,8 +249,8 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
             );
             AccountStorages::remove(
                 self.ctx.state.write().borrow_mut(),
-                &address,
-                &index,
+                &address.into(),
+                &index.into(),
             );
         } else {
             log::debug!(
@@ -261,8 +262,8 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
             );
             if let Err(e) = AccountStorages::insert(
                 self.ctx.state.write().borrow_mut(),
-                &address,
-                &index,
+                &address.into(),
+                &index.into(),
                 &value,
             ) {
                 log::error!(
@@ -278,7 +279,10 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
     }
 
     fn reset_storage(&mut self, address: H160) {
-        AccountStorages::remove_prefix(self.ctx.state.write().borrow_mut(), &address);
+        AccountStorages::remove_prefix(
+            self.ctx.state.write().borrow_mut(),
+            &address.into(),
+        );
     }
 
     fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>) {
@@ -297,7 +301,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
            code_len,
             address
         );
-        if let Err(e) = App::<C>::create_account(self.ctx, address, code) {
+        if let Err(e) = App::<C>::create_account(self.ctx, address.into(), code) {
             log::error!(
                 target: "evm",
                 "Failed inserting code ({} bytes) at {:?}, error: {:?}",

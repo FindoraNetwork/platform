@@ -9,6 +9,7 @@ use primitive_types::{H160, H256};
 use ruc::{d, eg, RucResult};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
+use std::ops::{Deref, DerefMut};
 use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::{XfrPublicKey, XfrSignature};
 
@@ -98,6 +99,83 @@ impl From<H160> for Address32 {
         data[0..4].copy_from_slice(b"evm:");
         data[4..24].copy_from_slice(k.as_bytes());
         data.into()
+    }
+}
+
+/// A wrapper of the Hash type defined inf fixed-hash crate.
+#[derive(
+    Clone, Eq, PartialEq, Ord, PartialOrd, Default, Hash, Serialize, Deserialize, Debug,
+)]
+pub struct HA160(pub H160);
+
+impl From<H160> for HA160 {
+    fn from(h: H160) -> Self {
+        Self(h)
+    }
+}
+
+impl Deref for HA160 {
+    type Target = H160;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for HA160 {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl ToString for HA160 {
+    fn to_string(&self) -> String {
+        hex::encode_upper(self.0)
+    }
+}
+
+impl FromStr for HA160 {
+    type Err = fixed_hash::rustc_hex::FromHexError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let hash = H160::from_str(s)?;
+        Ok(HA160(hash))
+    }
+}
+/// A wrapper of the Hash type defined inf fixed-hash crate.
+#[derive(
+    Clone, Eq, PartialEq, Ord, PartialOrd, Default, Hash, Serialize, Deserialize, Debug,
+)]
+pub struct HA256(H256);
+
+impl From<H256> for HA256 {
+    fn from(e: H256) -> Self {
+        Self(e)
+    }
+}
+
+impl HA256 {
+    pub fn new(hash: H256) -> HA256 {
+        HA256(hash)
+    }
+
+    pub fn h256(&self) -> H256 {
+        self.0
+    }
+}
+
+impl ToString for HA256 {
+    fn to_string(&self) -> String {
+        hex::encode_upper(self.0)
+    }
+}
+
+impl FromStr for HA256 {
+    type Err = fixed_hash::rustc_hex::FromHexError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let hash = H256::from_str(s)?;
+        Ok(HA256(hash))
     }
 }
 
