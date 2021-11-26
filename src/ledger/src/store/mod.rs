@@ -48,22 +48,23 @@ use storage::{
     state::{ChainState, State},
     store::PrefixedStore,
 };
-use zei::anon_xfr::keys::AXfrPubKey;
-use zei::anon_xfr::merkle_tree::ImmutablePersistentMerkleTree;
-use zei::anon_xfr::structs::MTLeafInfo;
-use zei::serialization::ZeiFromToBytes;
 use zei::{
     anon_xfr::{
-        merkle_tree::PersistentMerkleTree,
-        structs::{AnonBlindAssetRecord, Nullifier},
+        hash_abar,
+        keys::AXfrPubKey,
+        structs::{AnonBlindAssetRecord, MTLeafInfo, MTNode, MTPath, Nullifier},
         verify_anon_xfr_body,
     },
+    serialization::ZeiFromToBytes,
     setup::{NodeParams, UserParams, DEFAULT_BP_NUM_GENS},
     xfr::{
         lib::XfrNotePolicies,
         sig::XfrPublicKey,
         structs::{OwnerMemo, TracingPolicies, TracingPolicy, XfrAmount},
     },
+};
+use zei_accumulators::merkle_tree::{
+    ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof,
 };
 use zeialgebra::bls12_381::BLSScalar;
 
@@ -489,7 +490,8 @@ impl LedgerState {
         let store = PrefixedStore::new("abar_store", &mut self.abar_state);
         let mut mt = PersistentMerkleTree::new(store)?;
 
-        mt.add_abar(abar).map(ATxoSID)
+        mt.add_commitment_hash(hash_abar(mt.entry_count(), abar))
+            .map(ATxoSID)
     }
 
     #[inline(always)]
@@ -529,7 +531,7 @@ impl LedgerState {
         let mut t = mt.generate_proof(id.0)?;
         t.root_version = self.status.get_current_abar_version();
 
-        Ok(t)
+        Ok(create_mt_leaf_info(t))
     }
 
     // Initialize a logged Merkle tree for the ledger.
@@ -1717,4 +1719,25 @@ pub struct LoggedBlock {
 /// Flush data to disk
 pub fn flush_data() {
     bnc::flush_data();
+}
+
+/// convert merkle tree proof to Zei compatible proofs
+pub fn create_mt_leaf_info(proof: Proof) -> MTLeafInfo {
+    MTLeafInfo {
+        path: MTPath {
+            nodes: proof
+                .nodes
+                .iter()
+                .map(|e| MTNode {
+                    siblings1: e.siblings1,
+                    siblings2: e.siblings2,
+                    is_left_child: e.is_left_child,
+                    is_right_child: e.is_right_child,
+                })
+                .collect(),
+        },
+        root: proof.root,
+        root_version: proof.root_version,
+        uid: proof.uid,
+    }
 }

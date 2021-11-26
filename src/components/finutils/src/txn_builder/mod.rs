@@ -1268,6 +1268,7 @@ mod tests {
     use ledger::store::{utils::fra_gen_initial_tx, LedgerState};
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
+    use std::ops::Neg;
     use zei::anon_xfr::bar_to_from_abar::verify_bar_to_abar_note;
     use zei::anon_xfr::structs::{
         AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
@@ -1744,7 +1745,7 @@ mod tests {
         // Creates a non-negative Amount from an i64.
         //
         // Returns an error if the amount is outside the range `{0..MAX_MONEY}`.
-        let amount_neg = Amount::from_nonnegative_i64(amount * -1);
+        let amount_neg = Amount::from_nonnegative_i64(amount.neg());
 
         //Here we catch the exception, so we can ensure that we do not allow negative amounts
         assert!(amount_neg.is_err());
