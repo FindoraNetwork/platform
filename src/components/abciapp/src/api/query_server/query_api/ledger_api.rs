@@ -230,25 +230,25 @@ pub async fn query_validators(
         let validators_list = validators
             .iter()
             .flat_map(|(tendermint_addr, pk)| {
-                validator_data.get_validator_by_id(pk).map(|v| {
-                    let rank = if v.td_power == 0 {
-                        validator_data.body.len()
-                    } else {
+                validator_data
+                    .get_validator_by_id(pk)
+                    .filter(|v| v.td_power != 0)
+                    .map(|v| {
                         let mut power_list = validator_data
                             .body
                             .values()
                             .map(|v| v.td_power)
                             .collect::<Vec<_>>();
                         power_list.sort_unstable();
-                        power_list.len() - power_list.binary_search(&v.td_power).unwrap()
-                    };
-                    Validator::new(
-                        tendermint_addr.clone(),
-                        rank as u64,
-                        staking.delegation_has_addr(&pk),
-                        &v,
-                    )
-                })
+                        let rank = power_list.len()
+                            - power_list.binary_search(&v.td_power).unwrap();
+                        Validator::new(
+                            tendermint_addr.clone(),
+                            rank as u64,
+                            staking.delegation_has_addr(&pk),
+                            &v,
+                        )
+                    })
             })
             .collect();
         return Ok(web::Json(ValidatorList::new(
@@ -549,6 +549,14 @@ pub async fn query_validator_detail(
                         as u128
                     * v.td_power as u128,
             ];
+            // fra_rewards: all delegators rewards including self-delegation
+            let mut fra_rewards = v_self_delegation.rwd_amount;
+            for (delegator, _) in &v.delegators {
+                let delegation = staking
+                    .delegation_get(&delegator)
+                    .ok_or_else(|| error::ErrorBadRequest("not exists"))?;
+                fra_rewards += delegation.rwd_amount;
+            }
             let resp = ValidatorDetail {
                 addr: addr.into_inner(),
                 is_online: v.signed_last_block,
@@ -561,7 +569,7 @@ pub async fn query_validator_detail(
                     .filter(|(k, _)| **k == v_pub_key)
                     .map(|(_, n)| n)
                     .sum(),
-                fra_rewards: v_self_delegation.rwd_amount,
+                fra_rewards,
                 memo: v.memo.clone(),
                 start_height: v_self_delegation.start_height,
                 cur_height: staking.cur_height(),
