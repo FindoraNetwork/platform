@@ -111,7 +111,7 @@ impl<C: Config> ActionRunner<C> {
                 "Deleting account at {:?}",
                 address
             );
-            App::<C>::remove_account(ctx, &address)
+            App::<C>::remove_account(ctx, &address.into())
         }
 
         for log in &state.substate.logs {

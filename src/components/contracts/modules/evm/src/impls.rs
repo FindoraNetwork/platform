@@ -8,12 +8,13 @@ use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, OnChargeEVMTransaction},
 };
+use fp_types::crypto::{HA160, HA256};
 use fp_utils::proposer_converter;
 use ruc::Result;
 
 impl<C: Config> App<C> {
     /// Check whether an account is empty.
-    pub fn is_account_empty(ctx: &Context, address: &H160) -> bool {
+    pub fn is_account_empty(ctx: &Context, address: &HA160) -> bool {
         let account = Self::account_basic(ctx, address);
         let code_len =
             AccountCodes::decode_len(ctx.state.read().borrow(), address).unwrap_or(0);
@@ -22,13 +23,13 @@ impl<C: Config> App<C> {
     }
 
     /// Remove an account.
-    pub fn remove_account(ctx: &Context, address: &H160) {
+    pub fn remove_account(ctx: &Context, address: &HA160) {
         AccountCodes::remove(ctx.state.write().borrow_mut(), address);
         AccountStorages::remove_prefix(ctx.state.write().borrow_mut(), address);
     }
 
     /// Create an account.
-    pub fn create_account(ctx: &Context, address: H160, code: Vec<u8>) -> Result<()> {
+    pub fn create_account(ctx: &Context, address: HA160, code: Vec<u8>) -> Result<()> {
         if code.is_empty() {
             return Ok(());
         }
@@ -38,7 +39,7 @@ impl<C: Config> App<C> {
     /// Get the account code
     pub fn account_codes(
         ctx: &Context,
-        address: &H160,
+        address: &HA160,
         height: Option<u64>,
     ) -> Option<Vec<u8>> {
         match height {
@@ -52,8 +53,8 @@ impl<C: Config> App<C> {
     /// Get the account storage
     pub fn account_storages(
         ctx: &Context,
-        address: &H160,
-        index: &H256,
+        address: &HA160,
+        index: &HA256,
         height: Option<u64>,
     ) -> Option<H256> {
         match height {

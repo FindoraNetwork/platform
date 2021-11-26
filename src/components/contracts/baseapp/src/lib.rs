@@ -347,7 +347,7 @@ impl BaseProvider for BaseApp {
 
     fn account_code_at(&self, address: H160, height: Option<u64>) -> Option<Vec<u8>> {
         if let Ok(ctx) = self.create_query_context(0, false) {
-            module_evm::App::<Self>::account_codes(&ctx, &address, height)
+            module_evm::App::<Self>::account_codes(&ctx, &address.into(), height)
         } else {
             None
         }
@@ -360,7 +360,7 @@ impl BaseProvider for BaseApp {
         height: Option<u64>,
     ) -> Option<H256> {
         if let Ok(ctx) = self.create_query_context(0, false) {
-            module_evm::App::<Self>::account_storages(&ctx, &address, &index, height)
+            module_evm::App::<Self>::account_storages(&ctx, &address.into(), &index.into(), height)
         } else {
             None
         }
