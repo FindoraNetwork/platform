@@ -172,6 +172,13 @@ impl<C: Config> App<C> {
     //    FindoraAssets::remove(ctx.db.write().borrow_mut(), address)
     //}
 
+    pub fn assets(ctx: &Context) -> Vec<H160> {
+        FindoraAssets::iterate(ctx.db.read().borrow())
+            .iter()
+            .map(|x| x.0)
+            .collect()
+    }
+
     pub fn asset_of(ctx: &Context, address: &H160) -> Option<FindoraAsset> {
         FindoraAssets::get(ctx.db.read().borrow(), address)
     }

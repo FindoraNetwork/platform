@@ -104,7 +104,7 @@ fi
 if [[ ${OPT} == "debug_env" ]]; then
   echo "Initializing local devnet..."
   fn setup -S http://127.0.0.1
-  stt init  --skip-validator
+  stt init --skip-validator
   echo "Initialized."
   rm -rf target
 fi
