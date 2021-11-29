@@ -4,6 +4,7 @@
 mod basic;
 mod impls;
 
+use abci::{RequestQuery, ResponseQuery};
 use evm::Config as EvmConfig;
 use fp_core::{
     context::Context,
@@ -68,7 +69,63 @@ impl<C: Config> Default for App<C> {
     }
 }
 
-impl<C: Config> AppModule for App<C> {}
+impl<C: Config> AppModule for App<C> {
+    fn query_route(
+        &self,
+        ctx: Context,
+        path: Vec<&str>,
+        req: &RequestQuery,
+    ) -> ResponseQuery {
+        let mut resp = ResponseQuery::default();
+
+        if path.len() != 1 {
+            resp.code = 1;
+            resp.log = format!("empty query path for {}", MODULE_NAME);
+            return resp;
+        }
+
+        match path[0] {
+            "info" => {
+                if let Ok(address) = serde_json::from_slice(req.data.as_slice()) {
+                    if let Some(asset) = Self::asset_of(&ctx, &address) {
+                        resp.value = match serde_json::to_vec(&asset) {
+                            Ok(value) => value,
+                            Err(e) => {
+                                resp.code = 2;
+                                resp.log = format!("Internal error: {}", e.to_string());
+                                return resp;
+                            }
+                        }
+                    } else {
+                        resp.code = 3;
+                        resp.log = String::from("Not existed address")
+                    }
+                } else {
+                    resp.code = 4;
+                    resp.log = String::from("Invalid contract address");
+                }
+            }
+            "unfinished_txs" => {
+                resp.code = 5;
+                resp.log = String::from("Internal error to fetch unfinished txs");
+            }
+            "contracts" => {
+                if let Ok(value) = serde_json::to_vec(Self::assets(&ctx).as_slice()) {
+                    resp.value = value;
+                } else {
+                    resp.code = 6;
+                    resp.log = String::from("Internal error to fetch contracts");
+                }
+            }
+            _ => {
+                resp.code = 99;
+                resp.log = format!("Invalid path for {}", MODULE_NAME);
+            }
+        }
+
+        resp
+    }
+}
 
 impl<C: Config> Executable for App<C> {
     type Origin = Address;
