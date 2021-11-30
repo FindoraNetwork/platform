@@ -101,7 +101,7 @@ async function initfra() {
                         resolve(res);
                     }, (err2) => {
                         console.log('第' + idx + '个钱包：' + receiver + '转账失败: ', err2);
-                        reject('transfer failed');
+                        resolve('transfer failed');
                     });
                 }, (err) => {
                     console.log('query nonce failed: ' + err);
