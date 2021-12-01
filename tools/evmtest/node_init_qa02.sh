@@ -5,7 +5,8 @@ NAMESPACE=qa02
 SERV_URL=https://${ENV}-${NAMESPACE}.${ENV}.findora.org
 FINDORAD_IMG=public.ecr.aws/k6m5b6e2/release/findorad:testnet-evm-v0.2.7a
 
-export ROOT_DIR=/data/findora/${NAMESPACE}
+ROOT_DIR=$1
+[ -n "$ROOT_DIR" ] || ROOT_DIR=/data/findora/$NAMESPACE
 
 FRESH_START=1
 if [ "$1" = "snapshot" ];then
@@ -88,8 +89,8 @@ if ((FRESH_START == 1)); then
     mkdir -p ${ROOT_DIR}/tendermint/config
     mkdir -p ${ROOT_DIR}/tendermint/data
     
-    cp -f ${ROOT_DIR}/../config.toml ${ROOT_DIR}/tendermint/config/
-    cp -f ${ROOT_DIR}/../priv_validator_state.json ${ROOT_DIR}/tendermint/data/
+    cp -f ${ROOT_DIR}/../$NAMESPACE.config.toml ${ROOT_DIR}/tendermint/config/config.toml
+    cp -f ${ROOT_DIR}/../zero_height.json ${ROOT_DIR}/tendermint/data/priv_validator_state.json
 
     rm -rf "${ROOT_DIR}/findorad"
     rm -rf "${ROOT_DIR}/tendermint/config/addrbook.json"
@@ -109,7 +110,7 @@ else
     
     wget -O "${ROOT_DIR}/snapshot" "${CHAINDATA_URL}" 
     mkdir "${ROOT_DIR}/snapshot_data"
-    tar zxvf "${ROOT_DIR}/snapshot" -C "${ROOT_DIR}/snapshot_data"
+    tar zxf "${ROOT_DIR}/snapshot" -C "${ROOT_DIR}/snapshot_data"
     
     mv "${ROOT_DIR}/snapshot_data/data/ledger" "${ROOT_DIR}/findorad"
     mv "${ROOT_DIR}/snapshot_data/data/tendermint/mainnet/node0/data" "${ROOT_DIR}/tendermint/data"

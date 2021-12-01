@@ -2,6 +2,8 @@
 
 set -e
 
+source ./common/common.sh
+
 num=$1
 full_addr_book=$2
 addr_book="$full_addr_book.address"
@@ -18,6 +20,16 @@ gen_one_key()
   printf "PrivateKey:%s\n" "$pk"
   printf "Address:%s\n" "$addr"
 }
+
+if ! is_unsigned_integer "$num"; then
+  echo "Not invalid count number"
+  exit 1
+fi
+
+if [ "$full_addr_book" = "address" ]; then
+  echo "Choose another file"
+  exit 2
+fi
 
 for ((i=0; i<num; i++))
 do
