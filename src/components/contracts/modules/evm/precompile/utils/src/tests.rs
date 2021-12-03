@@ -378,7 +378,7 @@ fn write_address_nested_array() {
 
     writer_output
         .chunks_exact(32)
-        .map(|chunk| H256::from_slice(chunk))
+        .map(H256::from_slice)
         .for_each(|hash| println!("{:?}", hash));
 
     // We can read this "manualy" using simpler functions since arrays are 32-byte aligned.

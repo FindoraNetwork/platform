@@ -37,7 +37,7 @@ pub enum CallOrCreateInfo {
     Create(CreateInfo),
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Default)]
 pub struct TransactionStatus {
     pub transaction_hash: H256,
     pub transaction_index: u32,
@@ -46,20 +46,6 @@ pub struct TransactionStatus {
     pub contract_address: Option<H160>,
     pub logs: Vec<Log>,
     pub logs_bloom: Bloom,
-}
-
-impl Default for TransactionStatus {
-    fn default() -> Self {
-        TransactionStatus {
-            transaction_hash: H256::default(),
-            transaction_index: 0_u32,
-            from: H160::default(),
-            to: None,
-            contract_address: None,
-            logs: Vec::new(),
-            logs_bloom: Bloom::default(),
-        }
-    }
 }
 
 pub trait Runner {

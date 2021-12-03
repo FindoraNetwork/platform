@@ -58,7 +58,7 @@ impl<C: Config> App<C> {
 
         let ommers = Vec::<ethereum::Header>::new();
         let receipts_root =
-            ethereum::util::ordered_trie_root(receipts.iter().map(|r| rlp::encode(r)));
+            ethereum::util::ordered_trie_root(receipts.iter().map(rlp::encode));
         let block_timestamp = ctx.header.time.clone().unwrap_or_default();
 
         let mut state_root = H256::default();
