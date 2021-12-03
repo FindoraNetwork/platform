@@ -34,3 +34,7 @@ fp-utils = { path = "../../primitives/utils" }
 baseapp = { path = "../../baseapp" }
 fp-mocks = { path = "../../primitives/mocks" }
 module-account = { path = "../account" }
+
+[features]
+default = []
+debug_env = []
