@@ -2096,7 +2096,7 @@ fn calculate_delegation_rewards(
     const OVERFLOW_FIX_HEIGHT: BlockHeight = 124_7000;
 
     #[cfg(not(feature = "debug_env"))]
-    const SECOND_FIX_HEIGHT: BlockHeight = 131_0000;
+    const SECOND_FIX_HEIGHT: BlockHeight = 138_7000;
 
     if OVERFLOW_FIX_HEIGHT < cur_height {
         let am = BigUint::from(amount);

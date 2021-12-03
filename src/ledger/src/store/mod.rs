@@ -544,7 +544,7 @@ impl LedgerState {
         const APY_V7_UPGRADE_HEIGHT: BlockHeight = 0;
 
         #[cfg(not(feature = "debug_env"))]
-        const APY_V7_UPGRADE_HEIGHT: BlockHeight = 131_0000;
+        const APY_V7_UPGRADE_HEIGHT: BlockHeight = 138_7000;
 
         if APY_V7_UPGRADE_HEIGHT < self.get_tendermint_height() {
             // This is an equal conversion of `1 / p% * 0.0536`
