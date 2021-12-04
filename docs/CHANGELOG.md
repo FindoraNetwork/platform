@@ -4,20 +4,24 @@
 
 > Features to be added.
 
-#### v0.3.x
+#### v0.4
 
-**plan to launch at November 2021**
-
-- Smart contact, and so on
+- Triple masking, and so on
 
 ## Change log
 
 > Functions that have been added.
 
+#### v0.3.0-release
+
+- Staking (Yanked at the block height of 139_8000 !)
+  - Fix second compute for per year.
+  - Fix APY rate range.
+- EVM
+
 #### v0.2.12-release 
 
 - Fix overflow error for rewards.
-- Use `RUC_OUT=1` to enable error log from `RUC`.
 
 #### v0.2.11-release (Yanked at the block height of 124_7000 !)
 
