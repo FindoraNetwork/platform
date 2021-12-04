@@ -163,11 +163,12 @@ impl<C: Config> ValidateUnsigned for App<C> {
         let origin = Self::recover_signer(transaction)
             .ok_or_else(|| eg!("InvalidSignature, can not recover signer address"))?;
 
-        if transaction.gas_limit <= U256::zero()
+        // Same as go ethereum, Min gas limit is 21000.
+        if transaction.gas_limit < U256::from(21000)
             || transaction.gas_limit > C::BlockGasLimit::get()
         {
             return Err(eg!(format!(
-                "InvalidGasLimit: got {}, the gas limit must be in range [1, {}]",
+                "InvalidGasLimit: got {}, the gas limit must be in range [21000, {}]",
                 transaction.gas_limit,
                 C::BlockGasLimit::get()
             )));
