@@ -36,6 +36,12 @@ impl<C: Config> App<C> {
     }
 
     pub fn store_block(&mut self, ctx: &mut Context, block_number: U256) -> Result<()> {
+        #[cfg(feature = "debug_env")]
+        const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::from(139_8000);
+
+        #[cfg(not(feature = "debug_env"))]
+        const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::zero();
+
         let mut transactions: Vec<Transaction> = Vec::new();
         let mut statuses: Vec<TransactionStatus> = Vec::new();
         let mut receipts: Vec<Receipt> = Vec::new();
@@ -45,7 +51,9 @@ impl<C: Config> App<C> {
         let pending_txs: Vec<(Transaction, TransactionStatus, Receipt)> =
             PendingTransactions::take(ctx.db.write().borrow_mut()).unwrap_or_default();
 
-        if pending_txs.is_empty() && self.disable_eth_empty_blocks {
+        if block_number < EVM_FIRST_BLOCK_HEIGHT
+            || (pending_txs.is_empty() && self.disable_eth_empty_blocks)
+        {
             is_store_block = false;
         }
 
