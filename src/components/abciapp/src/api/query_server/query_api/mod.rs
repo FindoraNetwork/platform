@@ -2,35 +2,45 @@
 //! need to transform the data in ledgerState to store
 //!
 
-mod ledger_api;
+// pub it for doc
+pub mod ledger_api;
+
 pub mod server;
 pub mod service;
 
-use actix_cors::Cors;
-use actix_web::{error, middleware, web, App, HttpServer};
-use finutils::api::NetworkRoute;
-use ledger::{
-    data_model::{
-        b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
-        TxnIDHash, TxnSID, TxoSID, XfrAddress,
+use {
+    actix_cors::Cors,
+    actix_web::{error, middleware, web, App, HttpServer},
+    finutils::api::NetworkRoute,
+    globutils::wallet,
+    ledger::{
+        data_model::{
+            b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
+            TxnIDHash, TxnSID, TxoSID, XfrAddress, BLACK_HOLE_PUBKEY,
+        },
+        staking::{
+            ops::mint_fra::MintEntry, FF_PK_EXTRA_120_0000, FRA, FRA_TOTAL_AMOUNT,
+        },
     },
-    staking::ops::mint_fra::MintEntry,
-};
-use ledger_api::*;
-use log::info;
-use parking_lot::RwLock;
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use server::QueryServer;
-use std::{collections::HashSet, sync::Arc};
-use zei::{
-    serialization::ZeiFromToBytes,
-    xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+    ledger_api::*,
+    log::info,
+    parking_lot::RwLock,
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    server::QueryServer,
+    std::{
+        collections::{BTreeMap, HashSet},
+        sync::Arc,
+    },
+    zei::{
+        serialization::ZeiFromToBytes,
+        xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+    },
 };
 
 /// Returns the git commit hash and commit date of this build
 #[allow(clippy::unnecessary_wraps)]
-async fn version() -> actix_web::Result<String> {
+pub async fn version() -> actix_web::Result<String> {
     Ok(format!(
         "Build: {} {}",
         option_env!("VERGEN_SHA_EXTERN").unwrap_or(env!("VERGEN_SHA")),
@@ -40,7 +50,7 @@ async fn version() -> actix_web::Result<String> {
 
 /// Queries the status of a transaction by its handle. Returns either a not committed message or a
 /// serialized TxnStatus.
-async fn get_address(
+pub async fn get_address(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<u64>,
 ) -> actix_web::Result<String, actix_web::error::Error> {
@@ -57,7 +67,7 @@ async fn get_address(
 
 /// Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
 #[allow(clippy::unnecessary_wraps)]
-async fn get_owner_memo(
+pub async fn get_owner_memo(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<u64>,
 ) -> actix_web::Result<web::Json<Option<OwnerMemo>>, actix_web::error::Error> {
@@ -67,7 +77,7 @@ async fn get_owner_memo(
 
 /// Separate a string of `TxoSID` by ',' and query the corresponding memo
 #[allow(clippy::unnecessary_wraps)]
-async fn get_owner_memo_batch(
+pub async fn get_owner_memo_batch(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<Option<OwnerMemo>>>, actix_web::error::Error> {
@@ -85,15 +95,15 @@ async fn get_owner_memo_batch(
 }
 
 /// Returns an array of the utxo sids currently spendable by a given address
-async fn get_owned_utxos(
+pub async fn get_owned_utxos(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     owner: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxoSID>>> {
     let qs = data.read();
     let ledger = &qs.ledger_cloned;
-    globutils::wallet::public_key_from_base64(owner.as_str())
+    wallet::public_key_from_base64(owner.as_str())
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))
         .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk)).keys().copied().collect()))
 }
 
@@ -137,7 +147,7 @@ impl NetworkRoute for QueryServerRoutes {
 }
 
 /// Returns the list of assets created by a public key
-async fn get_created_assets(
+pub async fn get_created_assets(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<DefineAsset>>> {
@@ -145,9 +155,9 @@ async fn get_created_assets(
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
             .c(d!())
-            .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?,
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?,
     )
-    .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
+    .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
     let server = data.read();
     let assets = server.get_created_assets(&IssuerPublicKey { key });
     Ok(web::Json(assets.unwrap_or_default()))
@@ -155,7 +165,7 @@ async fn get_created_assets(
 
 /// Returns the list of records issued by a public key
 #[allow(clippy::type_complexity)]
-async fn get_issued_records(
+pub async fn get_issued_records(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<(TxOutput, Option<OwnerMemo>)>>> {
@@ -163,9 +173,9 @@ async fn get_issued_records(
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
             .c(d!())
-            .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?,
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?,
     )
-    .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
+    .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
     let server = data.read();
     let records = server.get_issued_records(&IssuerPublicKey { key });
     Ok(web::Json(records.unwrap_or_default()))
@@ -173,7 +183,7 @@ async fn get_issued_records(
 
 /// Returns the list of records issued by a token code
 #[allow(clippy::type_complexity)]
-async fn get_issued_records_by_code(
+pub async fn get_issued_records_by_code(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<(TxOutput, Option<OwnerMemo>)>>> {
@@ -189,12 +199,12 @@ async fn get_issued_records_by_code(
                 ))
             }
         }
-        Err(e) => Err(actix_web::error::ErrorBadRequest(e.generate_log(None))),
+        Err(e) => Err(actix_web::error::ErrorBadRequest(e.to_string())),
     }
 }
 
 /// Returns authenticated txn sid and hash
-async fn get_authenticated_txnid_hash(
+pub async fn get_authenticated_txnid_hash(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<u64>,
 ) -> actix_web::Result<web::Json<TxnIDHash>> {
@@ -208,7 +218,7 @@ async fn get_authenticated_txnid_hash(
 }
 
 /// Returns txn hash by sid
-async fn get_transaction_hash(
+pub async fn get_transaction_hash(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<usize>,
 ) -> actix_web::Result<web::Json<String>> {
@@ -222,7 +232,7 @@ async fn get_transaction_hash(
 }
 
 /// Returns txn sid by hash
-async fn get_transaction_sid(
+pub async fn get_transaction_sid(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<usize>> {
@@ -237,7 +247,7 @@ async fn get_transaction_sid(
 
 /// Returns most recent commit count at server side
 /// Check this number to make sure server is in sync
-async fn get_commits(
+pub async fn get_commits(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> actix_web::Result<web::Json<u64>> {
     let server = data.read();
@@ -270,20 +280,20 @@ struct CoinbaseTxnBody {
 
 #[allow(missing_docs)]
 #[derive(Debug, Deserialize, Serialize)]
-struct CoinbaseOperInfo {
+pub struct CoinbaseOperInfo {
     total_count: u64,
     txs: Vec<CoinbaseTxnBody>,
 }
 
 /// paging Query delegators according to `WalletQueryParams`
-async fn get_coinbase_oper_list(
+pub async fn get_coinbase_oper_list(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     web::Query(info): web::Query<WalletQueryParams>,
 ) -> actix_web::Result<web::Json<CoinbaseOperInfo>> {
     // Convert from base64 representation
-    let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
+    let key: XfrPublicKey = wallet::public_key_from_base64(&info.address)
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
     let server = data.read();
 
@@ -327,14 +337,14 @@ async fn get_coinbase_oper_list(
 }
 
 /// Returns the list of claim transations of a given ledger address
-async fn get_claim_txns(
+pub async fn get_claim_txns(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     web::Query(info): web::Query<WalletQueryParams>,
 ) -> actix_web::Result<web::Json<Vec<Option<Transaction>>>> {
     // Convert from base64 representation
-    let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
+    let key: XfrPublicKey = wallet::public_key_from_base64(&info.address)
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
     let server = data.read();
 
@@ -365,7 +375,7 @@ async fn get_claim_txns(
 }
 
 /// Returns the list of transations associated with a given ledger address
-async fn get_related_txns(
+pub async fn get_related_txns(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxnSID>>> {
@@ -373,17 +383,17 @@ async fn get_related_txns(
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
             .c(d!())
-            .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?,
+            .map_err(|e| error::ErrorBadRequest(e.to_string()))?,
     )
     .c(d!())
-    .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
+    .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
     let server = data.read();
     let records = server.get_related_transactions(&XfrAddress { key });
     Ok(web::Json(records.unwrap_or_default()))
 }
 
 /// Returns the list of transfer transations associated with a given asset
-async fn get_related_xfrs(
+pub async fn get_related_xfrs(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxnSID>>> {
@@ -403,6 +413,66 @@ async fn get_related_xfrs(
     }
 }
 
+#[allow(missing_docs)]
+#[allow(clippy::unnecessary_wraps)]
+pub async fn get_circulating_supply(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+) -> actix_web::Result<web::Json<BTreeMap<&'static str, f64>>, actix_web::error::Error> {
+    let l = data.read();
+    let fra = FRA as f64;
+
+    let cs = l.ledger_cloned.staking_get_global_unlocked_amount() as f64 / fra;
+    let gd = l.ledger_cloned.get_staking().get_global_delegation_amount() as f64 / fra;
+    let rr = l.ledger_cloned.staking_get_block_rewards_rate();
+    let rr = rr[0] as f64 / rr[1] as f64;
+
+    let res = map! { B
+        "global_return_rate" => rr,
+        "global_circulating_supply" => cs,
+        "global_delegation_amount" => gd
+    };
+
+    Ok(web::Json(res))
+}
+
+/// return
+/// global_circulating_supply
+/// global_adjusted_circulating_supply
+/// global_total_supply
+pub async fn get_total_supply(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+) -> actix_web::Result<web::Json<BTreeMap<&'static str, f64>>, actix_web::error::Error> {
+    let l = data.read();
+    let burn_pubkey = *BLACK_HOLE_PUBKEY;
+    let extra_pubkey = *FF_PK_EXTRA_120_0000;
+
+    let burn_balance = l
+        .ledger_cloned
+        .get_nonconfidential_balance(&burn_pubkey)
+        .unwrap_or(0);
+    let extra_balance = l
+        .ledger_cloned
+        .get_nonconfidential_balance(&extra_pubkey)
+        .unwrap_or(0);
+
+    let fra = FRA as f64;
+
+    let big_9 = l.ledger_cloned.staking_get_global_unlocked_amount();
+    let big_8 = big_9 + extra_balance;
+
+    let cs = big_8 as f64 / fra;
+    let acs = big_9 as f64 / fra;
+    let ts = (FRA_TOTAL_AMOUNT - burn_balance) as f64 / fra;
+
+    let res = map! { B
+        "global_circulating_supply" => cs,
+        "global_adjusted_circulating_supply" => acs,
+        "global_total_supply" => ts
+    };
+
+    Ok(web::Json(res))
+}
+
 /// Structures exposed to the outside world
 pub struct QueryApi;
 
@@ -420,6 +490,14 @@ impl QueryApi {
                 .data(Arc::clone(&server))
                 .route("/ping", web::get().to(ping))
                 .route("/version", web::get().to(version))
+                .service(
+                    web::resource("get_total_supply")
+                        .route(web::get().to(get_total_supply)),
+                )
+                .service(
+                    web::resource("circulating_supply")
+                        .route(web::get().to(get_circulating_supply)),
+                )
                 .route(
                     &QueryServerRoutes::GetAddress.with_arg_template("txo_sid"),
                     web::get().to(get_address),

@@ -5,60 +5,61 @@
 #![deny(warnings)]
 #![allow(clippy::needless_borrow)]
 
-use credentials::CredUserSecretKey;
-use curve25519_dalek::scalar::Scalar;
-use fp_types::crypto::MultiSigner;
-use globutils::SignatureOf;
-use ledger::{
-    converter::ConvertAccount,
-    data_model::{
-        AssetRules, AssetTypeCode, ConfidentialMemo, DefineAsset, DefineAssetBody,
-        IndexedSignature, IssueAsset, IssueAssetBody, IssuerKeyPair, IssuerPublicKey,
-        Memo, NoReplayToken, Operation, Transaction, TransactionBody, TransferAsset,
-        TransferAssetBody, TransferType, TxOutput, TxoRef, UpdateMemo, UpdateMemoBody,
-        ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
-    },
-    staking::{
-        is_valid_tendermint_addr,
-        ops::{
-            claim::ClaimOps,
-            delegation::DelegationOps,
-            fra_distribution::FraDistributionOps,
-            governance::{ByzantineKind, GovernanceOps},
-            undelegation::UnDelegationOps,
-            update_staker::UpdateStakerOps,
-            update_validator::UpdateValidatorOps,
+use {
+    credentials::CredUserSecretKey,
+    curve25519_dalek::scalar::Scalar,
+    globutils::SignatureOf,
+    ledger::{
+        data_model::{
+            AssetRules, AssetTypeCode, ConfidentialMemo, DefineAsset, DefineAssetBody,
+            IndexedSignature, IssueAsset, IssueAssetBody, IssuerKeyPair,
+            IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
+            TransactionBody, TransferAsset, TransferAssetBody, TransferType, TxOutput,
+            TxoRef, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
+            TX_FEE_MIN,
         },
-        td_addr_to_string, BlockHeight, PartialUnDelegation, StakerMemo, TendermintAddr,
-        Validator,
-    },
-};
-use rand_chacha::ChaChaRng;
-use rand_core::{CryptoRng, RngCore, SeedableRng};
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, HashSet},
-};
-use tendermint::PrivateKey;
-use zei::{
-    api::anon_creds::{
-        ac_confidential_open_commitment, ACCommitment, ACCommitmentKey, ConfidentialAC,
-        Credential,
-    },
-    serialization::ZeiFromToBytes,
-    setup::PublicParams,
-    xfr::{
-        asset_record::{
-            build_blind_asset_record, build_open_asset_record, open_blind_asset_record,
-            AssetRecordType,
+        staking::{
+            is_valid_tendermint_addr,
+            ops::{
+                claim::ClaimOps,
+                delegation::DelegationOps,
+                fra_distribution::FraDistributionOps,
+                governance::{ByzantineKind, GovernanceOps},
+                undelegation::UnDelegationOps,
+                update_staker::UpdateStakerOps,
+                update_validator::UpdateValidatorOps,
+            },
+            td_addr_to_string, BlockHeight, PartialUnDelegation, StakerMemo,
+            TendermintAddr, Validator,
         },
-        lib::XfrNotePolicies,
-        sig::{XfrKeyPair, XfrPublicKey},
-        structs::{
-            AssetRecord, AssetRecordTemplate, BlindAssetRecord, OpenAssetRecord,
-            OwnerMemo, TracingPolicies, TracingPolicy,
+    },
+    rand_chacha::ChaChaRng,
+    rand_core::{CryptoRng, RngCore, SeedableRng},
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    std::{
+        cmp::Ordering,
+        collections::{BTreeMap, HashSet},
+    },
+    tendermint::PrivateKey,
+    zei::{
+        api::anon_creds::{
+            ac_confidential_open_commitment, ACCommitment, ACCommitmentKey,
+            ConfidentialAC, Credential,
+        },
+        serialization::ZeiFromToBytes,
+        setup::PublicParams,
+        xfr::{
+            asset_record::{
+                build_blind_asset_record, build_open_asset_record,
+                open_blind_asset_record, AssetRecordType,
+            },
+            lib::XfrNotePolicies,
+            sig::{XfrKeyPair, XfrPublicKey},
+            structs::{
+                AssetRecord, AssetRecordTemplate, BlindAssetRecord, OpenAssetRecord,
+                OwnerMemo, TracingPolicies, TracingPolicy,
+            },
         },
     },
 };
@@ -201,7 +202,7 @@ impl TransactionBuilder {
             None,
         )
         .c(d!())
-        .and_then(|o| o.balance().c(d!()))
+        .and_then(|o| o.balance(None).c(d!()))
         .and_then(|o| o.create(TransferType::Standard).c(d!()))
         .and_then(|o| o.sign(&kp).c(d!()))
         .and_then(|o| o.transaction().c(d!()))
@@ -238,7 +239,7 @@ impl TransactionBuilder {
             None,
         )
         .c(d!())
-        .and_then(|o| o.balance().c(d!()))
+        .and_then(|o| o.balance(None).c(d!()))
         .and_then(|o| o.create(TransferType::Standard).c(d!()))
         .and_then(|o| {
             let cmp = |a: &XfrKeyPair, b: &XfrKeyPair| {
@@ -467,16 +468,18 @@ impl TransactionBuilder {
         self
     }
 
-    /// Add a operation to delegating finddra accmount to a tendermint validator.
+    /// Add a operation to delegating findora account to a tendermint validator.
     /// The transfer operation to BLACK_HOLE_PUBKEY_STAKING should be sent along with.
     pub fn add_operation_delegation(
         &mut self,
         keypair: &XfrKeyPair,
+        amount: u64,
         validator: TendermintAddr,
     ) -> &mut Self {
         let op = DelegationOps::new(
             keypair,
             None,
+            amount,
             validator,
             None,
             self.txn.body.no_replay_token,
@@ -517,6 +520,7 @@ impl TransactionBuilder {
     pub fn add_operation_staking(
         &mut self,
         keypair: &XfrKeyPair,
+        amount: u64,
         vltor_key: &PrivateKey,
         td_pubkey: Vec<u8>,
         commission_rate: [u64; 2],
@@ -540,6 +544,7 @@ impl TransactionBuilder {
         let op = DelegationOps::new(
             keypair,
             Some(vltor_key),
+            amount,
             vaddr,
             Some(v),
             self.txn.body.no_replay_token,
@@ -610,20 +615,6 @@ impl TransactionBuilder {
         UpdateValidatorOps::new(kps, h, v_set, self.txn.body.no_replay_token)
             .c(d!())
             .map(move |op| self.add_operation(Operation::UpdateValidator(op)))
-    }
-
-    /// Add a operation convert utxo asset to account balance.
-    pub fn add_operation_convert_account(
-        &mut self,
-        kp: &XfrKeyPair,
-        addr: MultiSigner,
-    ) -> Result<&mut Self> {
-        self.add_operation(Operation::ConvertAccount(ConvertAccount::new(
-            kp,
-            self.txn.body.no_replay_token,
-            addr,
-        )));
-        Ok(self)
     }
 
     #[allow(missing_docs)]
@@ -750,12 +741,22 @@ pub struct TransferOperationBuilder {
     output_identity_commitments: Vec<Option<ACCommitment>>,
     transfer: Option<TransferAsset>,
     transfer_type: TransferType,
+    auto_refund: bool,
 }
 
 impl TransferOperationBuilder {
     #[allow(missing_docs)]
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            auto_refund: true,
+            ..Default::default()
+        }
+    }
+
+    /// set auto_refund, will be checked when calling `create`
+    pub fn auto_refund(&mut self, auto_refund: bool) -> &mut Self {
+        self.auto_refund = auto_refund;
+        self
     }
 
     /// TxoRef is the location of the input on the ledger and the amount is how much of the record
@@ -894,9 +895,27 @@ impl TransferOperationBuilder {
         Ok(self)
     }
 
+    // Check if outputs and inputs are balanced
+
+    fn check_balance(&self) -> Result<()> {
+        let input_total: u64 = self
+            .input_records
+            .iter()
+            .fold(0, |acc, ar| acc + ar.open_asset_record.amount);
+        let output_total = self
+            .output_records
+            .iter()
+            .fold(0, |acc, ar| acc + ar.open_asset_record.amount);
+        if input_total != output_total {
+            return Err(eg!(format!("{} != {}", input_total, output_total)));
+        }
+
+        Ok(())
+    }
+
     /// Ensures that outputs and inputs are balanced by adding remainder outputs for leftover asset
     /// amounts
-    pub fn balance(&mut self) -> Result<&mut Self> {
+    pub fn balance(&mut self, rt: Option<AssetRecordType>) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
         if self.transfer.is_some() {
             return Err(eg!(
@@ -924,7 +943,8 @@ impl TransferOperationBuilder {
                 }
                 Ordering::Less => {
                     let asset_type = *ar.open_asset_record.get_asset_type();
-                    let record_type = ar.open_asset_record.get_record_type();
+                    let record_type =
+                        rt.unwrap_or_else(|| ar.open_asset_record.get_record_type());
                     let recipient = *ar.open_asset_record.get_pub_key();
                     let ar_template = AssetRecordTemplate::with_asset_tracing(
                         amt - spend_amount,
@@ -969,7 +989,11 @@ impl TransferOperationBuilder {
     /// Finalize the transaction and prepare for signing. Once called, the transaction cannot be
     /// modified.
     pub fn create(&mut self, transfer_type: TransferType) -> Result<&mut Self> {
-        self.balance().c(d!())?;
+        if self.auto_refund {
+            self.balance(None).c(d!())?;
+        } else {
+            self.check_balance().c(d!())?;
+        }
 
         let mut prng = ChaChaRng::from_entropy();
         let num_inputs = self.input_records.len();
@@ -1075,15 +1099,17 @@ impl TransferOperationBuilder {
 #[cfg(test)]
 #[allow(missing_docs)]
 mod tests {
-    use super::*;
-    use ledger::data_model::{TxnEffect, TxoRef};
-    use ledger::store::{utils::fra_gen_initial_tx, LedgerState};
-    use rand_chacha::ChaChaRng;
-    use rand_core::SeedableRng;
-    use zei::setup::PublicParams;
-    use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
-    use zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record};
-    use zei::xfr::sig::XfrKeyPair;
+    use {
+        super::*,
+        ledger::data_model::{TxnEffect, TxoRef},
+        ledger::store::{utils::fra_gen_initial_tx, LedgerState},
+        rand_chacha::ChaChaRng,
+        rand_core::SeedableRng,
+        zei::setup::PublicParams,
+        zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+        zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record},
+        zei::xfr::sig::XfrKeyPair,
+    };
 
     // Defines an asset type
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1156,7 +1182,7 @@ mod tests {
             .c(d!())?
             .add_output(&output_template, None, None, None)
             .c(d!())?
-            .balance();
+            .balance(None);
 
         assert!(res.is_err());
 
@@ -1179,7 +1205,7 @@ mod tests {
             .c(d!())?
             .add_output(&output_template, None, None, None)
             .c(d!())?
-            .balance()
+            .balance(None)
             .c(d!())?
             .create(TransferType::Standard)
             .c(d!())?
@@ -1207,7 +1233,7 @@ mod tests {
             .c(d!())?
             .add_output(&output_template, None, None, None)
             .c(d!())?
-            .balance()
+            .balance(None)
             .c(d!())?
             .create(TransferType::Standard)
             .c(d!())?
@@ -1281,7 +1307,7 @@ mod tests {
             .c(d!())?
             .add_output(&output_ben2_code2_template, None, None, None)
             .c(d!())?
-            .balance()
+            .balance(None)
             .c(d!())?
             .create(TransferType::Standard)
             .c(d!())?
@@ -1309,7 +1335,7 @@ mod tests {
 
         let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
         let mut block = ledger.start_block().unwrap();
-        let tmp_sid = ledger.apply_transaction(&mut block, effect, false).unwrap();
+        let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
         let txo_sid = ledger
             .finish_block(block)
             .unwrap()
@@ -1341,7 +1367,7 @@ mod tests {
                     .unwrap()
                     .add_output(&output_bob_fra_template, None, None, None)
                     .unwrap()
-                    .balance()
+                    .balance(None)
                     .unwrap()
                     .create(TransferType::Standard)
                     .unwrap()
@@ -1360,7 +1386,7 @@ mod tests {
 
         let effect = TxnEffect::compute_effect(tx2.into_transaction()).unwrap();
         let mut block = ledger.start_block().unwrap();
-        let tmp_sid = ledger.apply_transaction(&mut block, effect, false).unwrap();
+        let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
         // txo_sid[0]: fra_owner to bob
         // txo_sid[1]: fra_owner to fee
         // txo_sid[2]: balance to fra_owner
@@ -1389,7 +1415,7 @@ mod tests {
 
         let effect = TxnEffect::compute_effect(tx3.into_transaction()).unwrap();
         let mut block = ledger.start_block().unwrap();
-        let tmp_sid = ledger.apply_transaction(&mut block, effect, false).unwrap();
+        let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
         // txo_sid[0]: fra_owner to bob
         // txo_sid[1]: balance to fra_owner
         // txo_sid[2]: bob to fee
@@ -1419,7 +1445,7 @@ mod tests {
 
         let effect = TxnEffect::compute_effect(tx4.into_transaction()).unwrap();
         let mut block = ledger.start_block().unwrap();
-        ledger.apply_transaction(&mut block, effect, false).unwrap();
+        ledger.apply_transaction(&mut block, effect).unwrap();
         ledger.finish_block(block).unwrap();
 
         // Ensure that FRA can only be defined only once.
@@ -1427,6 +1453,6 @@ mod tests {
             NoReplayToken::new(&mut ChaChaRng::from_entropy(), 100);
         let effect = TxnEffect::compute_effect(tx).unwrap();
         let mut block = ledger.start_block().unwrap();
-        assert!(ledger.apply_transaction(&mut block, effect, false).is_err());
+        assert!(ledger.apply_transaction(&mut block, effect).is_err());
     }
 }

@@ -2,14 +2,16 @@
 //! new query server
 //!
 
-use super::{
-    server::{QueryServer, BLOCK_CREATED},
-    QueryApi,
+use {
+    super::{
+        server::{QueryServer, BLOCK_CREATED},
+        QueryApi,
+    },
+    ledger::store::LedgerState,
+    parking_lot::RwLock,
+    ruc::*,
+    std::{sync::Arc, thread},
 };
-use ledger::store::LedgerState;
-use parking_lot::RwLock;
-use ruc::*;
-use std::{sync::Arc, thread};
 
 pub(crate) fn start_query_server(
     ledger: Arc<RwLock<LedgerState>>,

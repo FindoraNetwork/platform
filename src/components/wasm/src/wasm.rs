@@ -14,57 +14,53 @@
 
 mod wasm_data_model;
 
-use crate::wasm_data_model::{
-    error_to_jsvalue, AssetRules, AssetTracerKeyPair, AttributeAssignment,
-    AttributeDefinition, ClientAssetRecord, Credential, CredentialCommitment,
-    CredentialCommitmentData, CredentialCommitmentKey, CredentialIssuerKeyPair,
-    CredentialPoK, CredentialRevealSig, CredentialSignature, CredentialUserKeyPair,
-    OwnerMemo, PublicParams, TracingPolicies, TxoRef,
-};
-use core::str::FromStr;
-use credentials::{
-    credential_commit, credential_issuer_key_gen, credential_open_commitment,
-    credential_reveal, credential_sign, credential_user_key_gen, credential_verify,
-    credential_verify_commitment, CredIssuerPublicKey, CredIssuerSecretKey,
-    CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
-};
-use cryptohash::sha256;
-use finutils::txn_builder::{
-    FeeInput as PlatformFeeInput, FeeInputs as PlatformFeeInputs,
-    TransactionBuilder as PlatformTransactionBuilder,
-    TransferOperationBuilder as PlatformTransferOperationBuilder,
-};
-use fp_types::{
-    actions::account::{Action as AccountAction, MintOutput, TransferToUTXO},
-    actions::Action,
-    assemble::{CheckFee, CheckNonce, SignedExtra, UncheckedTransaction},
-    crypto::{Address, MultiSignature, MultiSigner},
-};
-use fp_utils::ecdsa::SecpPair;
-use globutils::{wallet, HashOf};
-use ledger::{
-    data_model::{
-        AssetTypeCode, AuthenticatedTransaction, Operation, TransferType, TxOutput,
-        ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
+use {
+    crate::wasm_data_model::{
+        error_to_jsvalue, AssetRules, AssetTracerKeyPair, AttributeAssignment,
+        AttributeDefinition, ClientAssetRecord, Credential, CredentialCommitment,
+        CredentialCommitmentData, CredentialCommitmentKey, CredentialIssuerKeyPair,
+        CredentialPoK, CredentialRevealSig, CredentialSignature, CredentialUserKeyPair,
+        OwnerMemo, PublicParams, TracingPolicies, TxoRef,
     },
-    staking::{
-        gen_random_keypair, td_addr_to_bytes, PartialUnDelegation, TendermintAddr,
-        MAX_DELEGATION_AMOUNT, MIN_DELEGATION_AMOUNT,
+    credentials::{
+        credential_commit, credential_issuer_key_gen, credential_open_commitment,
+        credential_reveal, credential_sign, credential_user_key_gen, credential_verify,
+        credential_verify_commitment, CredIssuerPublicKey, CredIssuerSecretKey,
+        CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
     },
-};
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
-use ruc::{d, err::RucResult};
-use std::convert::From;
-use wasm_bindgen::prelude::*;
-use zei::{
-    serialization::ZeiFromToBytes,
-    xfr::{
-        asset_record::{open_blind_asset_record as open_bar, AssetRecordType},
-        lib::trace_assets as zei_trace_assets,
-        sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
-        structs::{
-            AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody, ASSET_TYPE_LENGTH,
+    cryptohash::sha256,
+    finutils::txn_builder::{
+        FeeInput as PlatformFeeInput, FeeInputs as PlatformFeeInputs,
+        TransactionBuilder as PlatformTransactionBuilder,
+        TransferOperationBuilder as PlatformTransferOperationBuilder,
+    },
+    globutils::{wallet, HashOf},
+    ledger::{
+        data_model::{
+            gen_random_keypair, AssetTypeCode, AuthenticatedTransaction, Operation,
+            TransferType, TxOutput, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
+            BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
+        },
+        staking::{
+            td_addr_to_bytes, PartialUnDelegation, TendermintAddr,
+            MAX_DELEGATION_AMOUNT, MIN_DELEGATION_AMOUNT,
+        },
+    },
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::{d, err::RucResult},
+    std::convert::From,
+    wasm_bindgen::prelude::*,
+    zei::{
+        serialization::ZeiFromToBytes,
+        xfr::{
+            asset_record::{open_blind_asset_record as open_bar, AssetRecordType},
+            lib::trace_assets as zei_trace_assets,
+            sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+            structs::{
+                AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody,
+                ASSET_TYPE_LENGTH,
+            },
         },
     },
 };
@@ -424,10 +420,11 @@ impl TransactionBuilder {
     pub fn add_operation_delegate(
         mut self,
         keypair: &XfrKeyPair,
+        amount: u64,
         validator: TendermintAddr,
     ) -> Result<TransactionBuilder, JsValue> {
         self.get_builder_mut()
-            .add_operation_delegation(keypair, validator);
+            .add_operation_delegation(keypair, amount, validator);
         Ok(self)
     }
 
@@ -483,24 +480,6 @@ impl TransactionBuilder {
         Ok(self)
     }
 
-    /// Adds an operation to the transaction builder that support transfer utxo asset to ethereum address.
-    /// @param {XfrKeyPair} keypair - Asset creator key pair.
-    /// @param {String} ethereum_address - The address to receive Ethereum assets.
-    pub fn add_operation_convert_account(
-        mut self,
-        keypair: &XfrKeyPair,
-        ethereum_address: String,
-    ) -> Result<TransactionBuilder, JsValue> {
-        let ea = MultiSigner::from_str(&ethereum_address)
-            .c(d!())
-            .map_err(error_to_jsvalue)?;
-        self.get_builder_mut()
-            .add_operation_convert_account(keypair, ea)
-            .c(d!())
-            .map_err(error_to_jsvalue)?;
-        Ok(self)
-    }
-
     /// Adds a serialized transfer asset operation to a transaction builder instance.
     /// @param {string} op - a JSON-serialized transfer operation.
     /// @see {@link module:Findora-Wasm~TransferOperationBuilder} for details on constructing a transfer operation.
@@ -547,79 +526,6 @@ impl TransactionBuilder {
             .get_owner_memo_ref(idx)
             .map(|memo| OwnerMemo { memo: memo.clone() })
     }
-}
-
-fn generate_extra(nonce: u64, fee: Option<u64>) -> SignedExtra {
-    (CheckNonce::new(nonce), CheckFee::new(fee))
-}
-
-/// Build transfer from account balance to utxo tx.
-/// @param {XfrPublicKey} recipient - UTXO Asset receiver.
-/// @param {u64} amount - Transfer amount.
-/// @param {string} sk - Ethereum wallet private key.
-/// @param {u64} nonce - Transaction nonce for sender.
-#[wasm_bindgen]
-pub fn transfer_to_utxo_from_account(
-    recipient: XfrPublicKey,
-    amount: u64,
-    sk: String,
-    nonce: u64,
-) -> Result<String, JsValue> {
-    let seed = hex::decode(sk).map_err(error_to_jsvalue)?;
-    let mut s = [0u8; 32];
-    s.copy_from_slice(&seed);
-    let kp = SecpPair::from_seed(&s);
-
-    let output = MintOutput {
-        target: recipient,
-        amount,
-        asset: ASSET_TYPE_FRA,
-    };
-    let action = Action::Account(AccountAction::TransferToUTXO(TransferToUTXO {
-        outputs: vec![output],
-    }));
-
-    let extra = generate_extra(nonce, None);
-    let msg = serde_json::to_vec(&(action.clone(), extra.clone()))
-        .map_err(error_to_jsvalue)?;
-    let signature = MultiSignature::from(kp.sign(&msg));
-    let signer = Address::from(kp.address());
-
-    let tx = UncheckedTransaction::new_signed(action, signer, signature, extra);
-    let res = serde_json::to_string(&tx).map_err(error_to_jsvalue)?;
-
-    Ok(res)
-}
-
-/// Recover ecdsa private key from mnemonic.
-#[wasm_bindgen]
-pub fn recover_sk_from_mnemonic(
-    phrase: String,
-    password: String,
-) -> Result<String, JsValue> {
-    let sp = SecpPair::from_phrase(&phrase, Some(&password))
-        .map_err(error_to_jsvalue)?
-        .0;
-    Ok(hex::encode(sp.seed()))
-}
-
-/// Recover ethereum address from ecdsa private key, eg. 0x73c71...
-#[wasm_bindgen]
-pub fn recover_address_from_sk(sk: String) -> Result<String, JsValue> {
-    let seed = hex::decode(sk).map_err(error_to_jsvalue)?;
-    let mut s = [0u8; 32];
-    s.copy_from_slice(&seed);
-    let pair = SecpPair::from_seed(&s);
-    Ok(format!("{:?}", pair.address()))
-}
-
-/// Serialize ethereum address used to abci query nonce.
-#[wasm_bindgen]
-pub fn get_serialized_address(address: String) -> Result<String, JsValue> {
-    let ms = MultiSigner::from_str(&address).map_err(error_to_jsvalue)?;
-    let account: Address = ms.into();
-    let sa = serde_json::to_vec(&account).map_err(error_to_jsvalue)?;
-    String::from_utf8(sa).map_err(error_to_jsvalue)
 }
 
 #[wasm_bindgen]
@@ -835,7 +741,7 @@ impl TransferOperationBuilder {
     /// @throws Will throw an error if the transaction cannot be balanced.
     pub fn balance(mut self) -> Result<TransferOperationBuilder, JsValue> {
         self.get_builder_mut()
-            .balance()
+            .balance(None)
             .c(d!())
             .map_err(|e| JsValue::from_str(&format!("Error balancing txn: {}", e)))?;
         Ok(self)
@@ -847,6 +753,7 @@ impl TransferOperationBuilder {
     /// @throws Will throw an error if not all record owners have signed the transaction.
     pub fn create(mut self) -> Result<TransferOperationBuilder, JsValue> {
         self.get_builder_mut()
+            .auto_refund(false)
             .create(TransferType::Standard)
             .c(d!())
             .map_err(error_to_jsvalue)?;

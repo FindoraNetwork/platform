@@ -7,56 +7,74 @@
 
 #![deny(warnings)]
 
-use config::CFG;
-use nix::{
-    sys::signal::{kill, Signal},
-    unistd::{truncate, Pid},
-};
-use ruc::*;
-use std::{
-    convert::TryFrom,
-    env,
-    fs::{self, metadata, set_permissions, File, OpenOptions, Permissions},
-    io::{self, prelude::*, BufReader, Read, Seek, SeekFrom},
-    mem::size_of,
-    os::unix::fs::PermissionsExt,
-    path::PathBuf,
-    process::{Command, Stdio},
+use {
+    config::CFG,
+    lazy_static::lazy_static,
+    nix::{
+        sys::signal::{kill, Signal},
+        unistd::{truncate, Pid},
+    },
+    ruc::*,
+    std::{
+        convert::TryFrom,
+        env,
+        fs::{self, metadata, set_permissions, File, OpenOptions, Permissions},
+        io::{self, prelude::*, BufReader, Read, Seek, SeekFrom},
+        mem::size_of,
+        os::unix::fs::PermissionsExt,
+        path::PathBuf,
+        process::{Command, Stdio},
+    },
 };
 
 const U64L: usize = size_of::<u64>();
 const PAD_SIZE: usize = 128;
 
+lazy_static! {
+    static ref SUFFIX: u32 = rand::random();
+}
+
 fn node_command() -> Result<()> {
-    let mut abcid = Command::new("/tmp/abcid__");
+    let mut abcid = Command::new(format!("/tmp/abcid_{}", *SUFFIX));
+
+    macro_rules! convert_arg {
+        ($arg: tt) => {{
+            if let Some(v) = CFG.$arg.as_deref() {
+                abcid
+                    .arg("--".to_owned() + &stringify!($arg).replace("_", "-"))
+                    .arg(v);
+            }
+        }};
+    }
 
     abcid
         .arg("--submission-service-port")
         .arg(CFG.submission_service_port.to_string())
-        .arg("ledger-service-port")
+        .arg("--ledger-service-port")
         .arg(CFG.ledger_service_port.to_string())
         .arg("--ledger-dir")
         .arg(&CFG.ledger_dir);
 
-    if let Some(v) = CFG.tendermint_node_self_addr.as_deref() {
-        abcid.arg("--tendermint-node-self-addr").arg(v);
+    for (condition, action) in [
+        (CFG.enable_query_service, "--enable-query-service"),
+        (CFG.enable_snapshot, "--enable-snapshot"),
+        (CFG.snapshot_list, "--snapshot-list"),
+        (CFG.snapshot_rollback, "--snapshot-rollback"),
+    ] {
+        if condition {
+            abcid.arg(action);
+        }
     }
 
-    if let Some(v) = CFG.tendermint_node_key_config_path.as_deref() {
-        abcid.arg("--tendermint-node-key-config-path").arg(v);
-    }
-
-    if CFG.enable_query_service {
-        abcid.arg("--enable-query-service");
-    }
-
-    if CFG.enable_eth_api_service {
-        abcid.arg("--enable-eth-api-service");
-    }
-
-    if CFG.enable_eth_empty_blocks {
-        abcid.arg("--enable-eth-empty-blocks");
-    }
+    convert_arg!(tendermint_node_self_addr);
+    convert_arg!(tendermint_node_key_config_path);
+    convert_arg!(snapshot_target);
+    convert_arg!(snapshot_itv);
+    convert_arg!(snapshot_cap);
+    convert_arg!(snapshot_mode);
+    convert_arg!(snapshot_algo);
+    convert_arg!(snapshot_rollback_to);
+    convert_arg!(snapshot_rollback_to_exact);
 
     let mut abcid_child = abcid
         .stdin(Stdio::null())
@@ -65,7 +83,15 @@ fn node_command() -> Result<()> {
         .spawn()
         .c(d!())?;
 
-    let mut tendermint = Command::new("/tmp/tendermint__");
+    if CFG.snapshot_list
+        || CFG.snapshot_rollback
+        || CFG.snapshot_rollback_to.is_some()
+        || CFG.snapshot_rollback_to_exact.is_some()
+    {
+        return Ok(());
+    }
+
+    let mut tendermint = Command::new(format!("/tmp/tendermint_{}", *SUFFIX));
 
     tendermint
         .arg("node")
@@ -96,7 +122,7 @@ fn node_command() -> Result<()> {
 }
 
 fn init_command() -> Result<()> {
-    Command::new("/tmp/tendermint__")
+    Command::new(format!("/tmp/tendermint_{}", *SUFFIX))
         .arg("init")
         .arg("validator")
         .arg("--home")
@@ -162,12 +188,16 @@ fn unpack() -> Result<()> {
         .create(true)
         .truncate(true)
         .write(true)
-        .open("/tmp/abcid__")
+        .open(format!("/tmp/abcid_{}", *SUFFIX))
         .c(d!())?;
     io::copy(&mut abcid_reader, &mut abcid_writer)
         .c(d!())
         .and_then(|_| {
-            set_permissions("/tmp/abcid__", Permissions::from_mode(0o755)).c(d!())
+            set_permissions(
+                format!("/tmp/abcid_{}", *SUFFIX),
+                Permissions::from_mode(0o755),
+            )
+            .c(d!())
         })?;
 
     let mut tendermint_reader =
@@ -180,15 +210,23 @@ fn unpack() -> Result<()> {
         .create(true)
         .truncate(true)
         .write(true)
-        .open("/tmp/tendermint__")
+        .open(format!("/tmp/tendermint_{}", *SUFFIX))
         .c(d!())?;
     io::copy(&mut tendermint_reader, &mut tendermint_writer)
         .c(d!())
         .and_then(|_| {
-            set_permissions("/tmp/tendermint__", Permissions::from_mode(0o755)).c(d!())
+            set_permissions(
+                format!("/tmp/tendermint_{}", *SUFFIX),
+                Permissions::from_mode(0o755),
+            )
+            .c(d!())
         })?;
 
-    truncate("/tmp/tendermint__", tendermint_len as i64).c(d!())
+    truncate(
+        format!("/tmp/tendermint_{}", *SUFFIX).as_str(),
+        tendermint_len as i64,
+    )
+    .c(d!())
 }
 
 fn get_bin_path() -> Result<PathBuf> {
@@ -212,11 +250,13 @@ fn main() {
 }
 
 mod init {
-    use ruc::*;
-    use std::{fs, str};
+    use {
+        ruc::*,
+        std::{fs, str},
+    };
 
     const QA01_GENESIS_URL: &str = "https://dev-qa01.dev.findora.org:26657/genesis";
-    const EVM_GENESIS_URL: &str = "https://dev-evm.dev.findora.org:26657/genesis";
+    const QA02_GENESIS_URL: &str = "https://dev-qa02.dev.findora.org:26657/genesis";
     const TESTNET_GENESIS_URL: &str =
         "https://prod-testnet.prod.findora.org:26657/genesis";
     const MAINNET_GENESIS_URL: &str =
@@ -229,7 +269,7 @@ mod init {
         Testnet,
         Mainnet,
         Qa01,
-        Evm,
+        Qa02,
     }
 
     impl Default for InitMode {
@@ -257,7 +297,7 @@ mod init {
             InitMode::Testnet => save_genesis(TESTNET_GENESIS_URL, path)?,
             InitMode::Mainnet => save_genesis(MAINNET_GENESIS_URL, path)?,
             InitMode::Qa01 => save_genesis(QA01_GENESIS_URL, path)?,
-            InitMode::Evm => save_genesis(EVM_GENESIS_URL, path)?,
+            InitMode::Qa02 => save_genesis(QA02_GENESIS_URL, path)?,
             InitMode::Dev => {}
         }
         Ok(())
@@ -279,6 +319,7 @@ mod init {
             "recheck = true",
             "fast_sync = true",
             "size = 5000",
+            "prometheus = false",
         ];
 
         let target_cfg = [
@@ -294,6 +335,7 @@ mod init {
             "recheck = false",
             "fast_sync = false",
             "size = 2000",
+            "prometheus = true",
         ];
 
         let config = orig_cfg
@@ -302,28 +344,28 @@ mod init {
             .fold(config, |acc, pair| acc.replace(pair.0, pair.1));
 
         let result = match mode {
-            InitMode::Testnet => {
-                config.replace(
-                    "persistent_peers = \"\"",
-                    "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@prod-testnet-us-west-2-sentry-000-public.prod.findora.org:26656,d0c6e3e1589695ae6d650b288caf2efe9a998a50@prod-testnet-us-west-2-sentry-001-public.prod.findora.org:26656,78661a9979c100e8f1303cbd121cb1b326ff694f@prod-testnet-us-west-2-sentry-002-public.prod.findora.org:26656,6723af6a3aef14cd7eb5ee8d5d0ac227af1e9651@prod-testnet-us-west-2-sentry-003-public.prod.findora.org:26656\"",
-                )
-            }
             InitMode::Mainnet => {
                 config.replace(
-                    "persistent_peers = \"\"",
-                    "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@prod-mainnet-us-west-2-sentry-000-public.prod.findora.org:26656,d0c6e3e1589695ae6d650b288caf2efe9a998a50@prod-mainnet-us-west-2-sentry-001-public.prod.findora.org:26656,78661a9979c100e8f1303cbd121cb1b326ff694f@prod-mainnet-us-west-2-sentry-002-public.prod.findora.org:26656,6723af6a3aef14cd7eb5ee8d5d0ac227af1e9651@prod-mainnet-us-west-2-sentry-003-public.prod.findora.org:26656\"",
+                    "seeds = \"\"",
+                    "seeds = \"bd518151ac767d5dd77e228d34f31c581140fbe0@prod-mainnet-us-west-2-seed-000-public.prod.findora.org:26656,03deb91289c430fecf6883caaf69c69bb66f7d8e@prod-mainnet-us-west-2-seed-001-public.prod.findora.org:26656\"",
+                )
+            }
+            InitMode::Testnet => {
+                config.replace(
+                    "seeds = \"\"",
+                    "seeds = \"bd518151ac767d5dd77e228d34f31c581140fbe0@prod-testnet-us-west-2-seed-000-public.prod.findora.org:26656,03deb91289c430fecf6883caaf69c69bb66f7d8e@prod-testnet-us-west-2-seed-001-public.prod.findora.org:26656\"",
                 )
             }
             InitMode::Qa01 => {
                 config.replace(
-                    "persistent_peers = \"\"",
-                    "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@dev-qa01-us-west-2-sentry-000-public.dev.findora.org:26656\"",
+                    "seeds = \"\"",
+                    "seeds = \"bd518151ac767d5dd77e228d34f31c581140fbe0@dev-qa01-us-west-2-seed-000-public.dev.findora.org:26656,03deb91289c430fecf6883caaf69c69bb66f7d8e@dev-qa01-us-west-2-seed-001-public.dev.findora.org:26656\"",
                 )
             }
-            InitMode::Evm => {
+            InitMode::Qa02 => {
                 config.replace(
-                    "persistent_peers = \"\"",
-                    "persistent_peers = \"b87304454c0a0a0c5ed6c483ac5adc487f3b21f6@dev-evm-us-west-2-sentry-000-public.dev.findora.org:26656\"",
+                    "seeds = \"\"",
+                    "seeds = \"bd518151ac767d5dd77e228d34f31c581140fbe0@dev-qa02-us-west-2-seed-000-public.dev.findora.org:26656,03deb91289c430fecf6883caaf69c69bb66f7d8e@dev-qa02-us-west-2-seed-001-public.dev.findora.org:26656\"",
                 )
             }
             InitMode::Dev => config,
@@ -335,11 +377,13 @@ mod init {
 }
 
 mod config {
-    use super::init::InitMode;
-    use clap::{crate_authors, App, Arg, ArgGroup, ArgMatches, SubCommand};
-    use lazy_static::lazy_static;
-    use ruc::*;
-    use std::{env, process};
+    use {
+        super::init::InitMode,
+        clap::{crate_authors, App, Arg, ArgGroup, ArgMatches, SubCommand},
+        lazy_static::lazy_static,
+        ruc::*,
+        std::{env, process},
+    };
 
     lazy_static! {
         pub(crate) static ref CFG: Config = pnk!(get_config());
@@ -352,8 +396,6 @@ mod config {
         pub submission_service_port: u16,
         pub ledger_service_port: u16,
         pub enable_query_service: bool,
-        pub enable_eth_api_service: bool,
-        pub enable_eth_empty_blocks: bool,
         pub no_fast_sync: bool,
         pub tendermint_node_self_addr: Option<String>,
         pub tendermint_node_key_config_path: Option<String>,
@@ -362,6 +404,16 @@ mod config {
         pub tendermint_config: Option<String>,
         pub command: String,
         pub init_mode: InitMode,
+        pub enable_snapshot: bool,
+        pub snapshot_list: bool,
+        pub snapshot_target: Option<String>,
+        pub snapshot_itv: Option<String>,
+        pub snapshot_cap: Option<String>,
+        pub snapshot_mode: Option<String>,
+        pub snapshot_algo: Option<String>,
+        pub snapshot_rollback: bool,
+        pub snapshot_rollback_to: Option<String>,
+        pub snapshot_rollback_to_exact: Option<String>,
     }
 
     fn get_config() -> Result<Config> {
@@ -374,15 +426,23 @@ mod config {
                     .arg_from_usage("--submission-service-port=[Submission Service Port]")
                     .arg_from_usage("--ledger-service-port=[Ledger Service Port]")
                     .arg_from_usage("-q, --enable-query-service")
-                    .arg_from_usage("--enable-eth-api-service")
-                    .arg_from_usage("--enable-eth-empty-blocks")
                     .arg_from_usage("-N, --no-fast-sync")
                     .arg_from_usage("--tendermint-node-self-addr=[Address] 'the address of your tendermint node, in upper-hex format'")
                     .arg_from_usage("--tendermint-node-key-config-path=[Path] 'such as: ${HOME}/.tendermint/config/priv_validator_key.json'")
                     .arg_from_usage("-d, --ledger-dir=[Path]")
                     .arg_from_usage(
                         "-b, --base-dir=[DIR] 'The root directory for tendermint config, aka $TENDERMINT_HOME'",
-                    );
+                    )
+                .arg_from_usage("--enable-snapshot 'global switch for enabling snapshot functions'")
+                .arg_from_usage("--snapshot-list 'list all available snapshots in the form of block height'")
+                .arg_from_usage("--snapshot-target=[TargetPath] 'a data volume containing both ledger data and tendermint data'")
+                .arg_from_usage("--snapshot-itv=[Iterval] 'interval between adjacent snapshots, default to 10 blocks'")
+                .arg_from_usage("--snapshot-cap=[Capacity] 'the maximum number of snapshots that will be stored, default to 100'")
+                .arg_from_usage("--snapshot-mode=[Mode] 'zfs/btrfs/external, will try a guess if missing'")
+                .arg_from_usage("--snapshot-algo=[Algo] 'fair/fade, default to `fair`'")
+                .arg_from_usage("--snapshot-rollback 'rollback to the last available snapshot'")
+                .arg_from_usage("-r, --snapshot-rollback-to=[Height] 'rollback to a custom height, will try the closest smaller height if the target does not exist'")
+                .arg_from_usage("-R, --snapshot-rollback-to-exact=[Height] 'rollback to a custom height exactly, an error will be reported if the target does not exist'");
 
             let init = SubCommand::with_name("init")
                     .about("Initialize the configurations of findorad")
@@ -390,8 +450,8 @@ mod config {
                     .arg_from_usage("--testnet 'Initialize for Findora TestNet.'")
                     .arg_from_usage("--mainnet 'Initialize for Findora MainNet.'")
                     .arg_from_usage("--qa01 'Initialize for Findora QA01.'")
-                    .arg_from_usage("--evm 'Initialize for Findora EVM.'")
-                    .group(ArgGroup::with_name("environment").args(&["devnet", "testnet", "mainnet", "qa01", "evm"]))
+                    .arg_from_usage("--qa02 'Initialize for Findora QA02.'")
+                    .group(ArgGroup::with_name("environment").args(&["devnet", "testnet", "mainnet", "qa01", "qa02"]))
                     .arg_from_usage(
                         "-b, --base-dir=[DIR] 'The root directory for tendermint config, aka $TENDERMINT_HOME'",
                     );
@@ -467,10 +527,6 @@ mod config {
             .c(d!())?;
         let eqs = m.is_present("enable-query-service")
             || env::var("ENABLE_QUERY_SERVICE").is_ok();
-        let eeas = m.is_present("enable-eth-api-service")
-            || env::var("ENABLE_ETH_API_SERVICE").is_ok();
-        let eeeb = m.is_present("enable-eth-empty-blocks")
-            || env::var("ENABLE_ETH_EMPTY_BLOCKS").is_ok();
         let nfs = m.is_present("no-fast-sync") || env::var("NO_FAST_SYNC").is_ok();
         let tnsa = m
             .value_of("tendermint-node-self-addr")
@@ -496,8 +552,8 @@ mod config {
             InitMode::Mainnet
         } else if m.is_present("qa01") {
             InitMode::Qa01
-        } else if m.is_present("evm") {
-            InitMode::Evm
+        } else if m.is_present("qa02") {
+            InitMode::Qa02
         } else {
             InitMode::Dev
         };
@@ -508,8 +564,6 @@ mod config {
             submission_service_port: ssp,
             ledger_service_port: lsp,
             enable_query_service: eqs,
-            enable_eth_api_service: eeas,
-            enable_eth_empty_blocks: eeeb,
             no_fast_sync: nfs,
             tendermint_node_self_addr: tnsa,
             tendermint_node_key_config_path: tnkcp,
@@ -518,6 +572,20 @@ mod config {
             tendermint_config: tcfg,
             tendermint_home: tdir,
             init_mode,
+            enable_snapshot: m.is_present("enable-snapshot"),
+            snapshot_list: m.is_present("snapshot-list"),
+            snapshot_target: m.value_of("snapshot-target").map(|v| v.to_owned()),
+            snapshot_itv: m.value_of("snapshot-itv").map(|v| v.to_owned()),
+            snapshot_cap: m.value_of("snapshot-cap").map(|v| v.to_owned()),
+            snapshot_mode: m.value_of("snapshot-mode").map(|v| v.to_owned()),
+            snapshot_algo: m.value_of("snapshot-algo").map(|v| v.to_owned()),
+            snapshot_rollback: m.is_present("snapshot-rollback"),
+            snapshot_rollback_to: m
+                .value_of("snapshot-rollback-to")
+                .map(|v| v.to_owned()),
+            snapshot_rollback_to_exact: m
+                .value_of("snapshot-rollback-to-exact")
+                .map(|v| v.to_owned()),
         };
 
         Ok(res)

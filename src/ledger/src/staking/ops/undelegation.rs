@@ -4,13 +4,15 @@
 //! Data representation required when users propose a un-delegation.
 //!
 
-use crate::{
-    data_model::{NoReplayToken, Operation, Transaction},
-    staking::{PartialUnDelegation, Staking},
+use {
+    crate::{
+        data_model::{NoReplayToken, Operation, Transaction},
+        staking::{PartialUnDelegation, Staking},
+    },
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 
 /// Used as the inner object of a `UnDelegation Operation`.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

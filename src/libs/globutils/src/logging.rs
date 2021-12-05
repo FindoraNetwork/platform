@@ -2,10 +2,10 @@
 //! log system
 //!
 
-use std::env;
-use std::io;
-use tracing_subscriber::filter::LevelFilter;
-use tracing_subscriber::EnvFilter;
+use {
+    std::env, std::io, tracing_subscriber::filter::LevelFilter,
+    tracing_subscriber::EnvFilter,
+};
 
 #[allow(missing_docs)]
 pub fn init_logging(verbose: Option<&str>) {

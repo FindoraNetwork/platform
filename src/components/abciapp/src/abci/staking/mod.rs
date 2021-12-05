@@ -9,31 +9,28 @@ mod whoami;
 #[cfg(test)]
 mod test;
 
-#[cfg(test)]
-#[cfg(feature = "abci_mock")]
-pub mod abci_mock_test;
-
-use crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT;
-use abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate};
-use baseapp::BaseApp as AccountBaseApp;
-use lazy_static::lazy_static;
-use ledger::{
-    data_model::{Operation, Transaction, ASSET_TYPE_FRA},
-    staking::{
-        ops::{
-            governance::{governance_penalty_tendermint_auto, ByzantineKind},
-            mint_fra::{MintEntry, MintFraOps, MintKind},
+use {
+    crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
+    abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate},
+    lazy_static::lazy_static,
+    ledger::{
+        data_model::{Operation, Transaction, ASSET_TYPE_FRA},
+        staking::{
+            ops::{
+                governance::{governance_penalty_tendermint_auto, ByzantineKind},
+                mint_fra::{MintEntry, MintFraOps, MintKind},
+            },
+            td_addr_to_string, Staking, VALIDATOR_UPDATE_BLOCK_ITV,
         },
-        td_addr_to_string, Staking, VALIDATOR_UPDATE_BLOCK_ITV,
+        store::LedgerState,
     },
-    store::LedgerState,
-};
-use ruc::*;
-use serde::Serialize;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    ops::{Deref, DerefMut},
-    sync::atomic::Ordering,
+    ruc::*,
+    serde::Serialize,
+    std::{
+        collections::{BTreeMap, BTreeSet},
+        ops::{Deref, DerefMut},
+        sync::atomic::Ordering,
+    },
 };
 
 // The top 50~ candidate validators
@@ -271,17 +268,14 @@ fn system_governance(staking: &mut Staking, bz: &ByzantineInfo) -> Result<()> {
 }
 
 /// Pay for freed 'Delegations' and 'FraDistributions'.
-pub fn system_mint_pay(
-    la: &LedgerState,
-    account_base_app: &mut AccountBaseApp,
-) -> Option<Transaction> {
+pub fn system_mint_pay(la: &LedgerState) -> Option<Transaction> {
     let staking = la.get_staking();
     let mut limit = staking.coinbase_balance() as i128;
 
     // at most `NUM_TO_PAY` items to pay per block
     const NUM_TO_PAY: usize = 2048;
 
-    let mut mint_entries = staking
+    let mint_entries = staking
         .delegation_get_global_principal_with_receiver()
         .into_iter()
         .map(|(k, (n, receiver_pk))| {
@@ -307,27 +301,6 @@ pub fn system_mint_pay(
         )
         .take(NUM_TO_PAY)
         .collect::<Vec<_>>();
-
-    // add account mint_entries.
-    const MAX_MINT_PAY: usize = 64;
-    let mut vec = if let Ok(account_mint) = account_base_app.consume_mint(MAX_MINT_PAY) {
-        account_mint
-            .iter()
-            .map(|mint| {
-                MintEntry::new(
-                    MintKind::Other,
-                    mint.target,
-                    None,
-                    mint.amount,
-                    mint.asset,
-                )
-            })
-            .collect::<Vec<MintEntry>>()
-    } else {
-        Vec::new()
-    };
-
-    mint_entries.append(&mut vec);
 
     if mint_entries.is_empty() {
         None

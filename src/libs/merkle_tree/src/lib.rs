@@ -13,21 +13,23 @@
 #![deny(missing_docs)]
 #![allow(clippy::needless_borrow)]
 
-use chrono::Utc;
-use cryptohash::{hash_pair, hash_partial, sha256, HashValue, Proof, HASH_SIZE};
-use globutils::Commas;
-use ruc::*;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::{
-    collections::HashMap,
-    fmt,
-    fs::{self, File, OpenOptions},
-    io::{ErrorKind, Read, Seek, SeekFrom, Write},
-    mem::{self, MaybeUninit},
-    path,
-    ptr::copy_nonoverlapping,
-    result::Result as StdResult,
-    slice,
+use {
+    chrono::Utc,
+    cryptohash::{hash_pair, hash_partial, sha256, HashValue, Proof, HASH_SIZE},
+    globutils::Commas,
+    ruc::*,
+    serde::{Deserialize, Deserializer, Serialize, Serializer},
+    std::{
+        collections::HashMap,
+        fmt,
+        fs::{self, File, OpenOptions},
+        io::{ErrorKind, Read, Seek, SeekFrom, Write},
+        mem::{self, MaybeUninit},
+        path,
+        ptr::copy_nonoverlapping,
+        result::Result as StdResult,
+        slice,
+    },
 };
 
 const BLOCK_SHIFT: u16 = 9;
@@ -2080,10 +2082,12 @@ impl AppendOnlyMerkle {
 #[cfg(test)]
 #[allow(missing_docs)]
 mod tests {
-    use super::*;
-    use byteorder::{LittleEndian, WriteBytesExt};
-    use cryptohash::sha256;
-    use rand::{prelude::thread_rng, Rng};
+    use {
+        super::*,
+        byteorder::{LittleEndian, WriteBytesExt},
+        cryptohash::sha256,
+        rand::{prelude::thread_rng, Rng},
+    };
 
     #[test]
     fn test_info() {

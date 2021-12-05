@@ -4,23 +4,26 @@
 //! Data representation required when users propose a delegation.
 //!
 
-use crate::{
-    data_model::{
-        NoReplayToken, Operation, Transaction, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
+use {
+    crate::{
+        data_model::{
+            NoReplayToken, Operation, Transaction, ASSET_TYPE_FRA,
+            BLACK_HOLE_PUBKEY_STAKING,
+        },
+        staking::{
+            deny_relative_inputs, td_addr_to_string, Amount, Staking, TendermintAddr,
+            Validator, STAKING_VALIDATOR_MIN_POWER,
+        },
     },
-    staking::{
-        deny_relative_inputs, td_addr_to_string, Amount, Staking, TendermintAddr,
-        Validator, STAKING_VALIDATOR_MIN_POWER,
+    ed25519_dalek::Signer,
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    std::collections::HashSet,
+    tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},
+    zei::xfr::{
+        sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
+        structs::{XfrAmount, XfrAssetType},
     },
-};
-use ed25519_dalek::Signer;
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature};
-use zei::xfr::{
-    sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
-    structs::{XfrAmount, XfrAssetType},
 };
 
 /// Used as the inner object of a `Delegation Operation`.
@@ -116,11 +119,12 @@ impl DelegationOps {
     pub fn new(
         keypair: &XfrKeyPair,
         vltor_key: Option<&PrivateKey>,
+        amount: Amount,
         validator: TendermintAddr,
         new_validator: Option<Validator>,
         nonce: NoReplayToken,
     ) -> Self {
-        let body = Box::new(Data::new(validator, new_validator, nonce));
+        let body = Box::new(Data::new(validator, new_validator, amount, nonce));
         let signature = keypair.sign(&body.to_bytes());
         let v_signature: Option<Ed25519Signature> = vltor_key
             .and_then(|pk| pk.ed25519_keypair().map(|k| k.sign(&body.to_bytes())));
@@ -152,6 +156,8 @@ pub struct Data {
     pub validator: TendermintAddr,
     /// if set this field, then enter staking flow
     pub new_validator: Option<Validator>,
+    /// amount of current delegation
+    pub amount: Amount,
     nonce: NoReplayToken,
 }
 
@@ -160,11 +166,13 @@ impl Data {
     fn new(
         v: TendermintAddr,
         new_validator: Option<Validator>,
+        amount: Amount,
         nonce: NoReplayToken,
     ) -> Self {
         Data {
             validator: v,
             new_validator,
+            amount,
             nonce,
         }
     }
@@ -192,7 +200,7 @@ fn check_delegation_context(tx: &Transaction) -> Result<Amount> {
         .iter()
         .flat_map(|op| {
             if let Operation::Delegation(ref x) = op {
-                Some(x.pubkey)
+                Some((x.pubkey, x.body.amount))
             } else {
                 None
             }
@@ -210,7 +218,7 @@ fn check_delegation_context(tx: &Transaction) -> Result<Amount> {
 
 fn check_delegation_context_principal(
     tx: &Transaction,
-    owner: XfrPublicKey,
+    owner: (XfrPublicKey, Amount),
 ) -> Result<Amount> {
     let target_pk = *BLACK_HOLE_PUBKEY_STAKING;
 
@@ -244,7 +252,7 @@ fn check_delegation_context_principal(
                 //
                 // - all inputs are owned by a same address
                 // - the owner of all inputs is same as the delegator
-                if 1 == keynum && owner == x.body.transfer.inputs[0].public_key {
+                if 1 == keynum && owner.0 == x.body.transfer.inputs[0].public_key {
                     let am = x
                         .body
                         .outputs
@@ -277,5 +285,9 @@ fn check_delegation_context_principal(
         .iter()
         .sum();
 
-    alt!(0 < am, Ok(am), Err(eg!()))
+    alt!(
+        0 < am && am == owner.1,
+        Ok(am),
+        Err(eg!("Invalid delegation principal"))
+    )
 }

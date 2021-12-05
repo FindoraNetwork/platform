@@ -1,21 +1,23 @@
 #![cfg(test)]
 #![allow(missing_docs)]
 
-use super::{helpers::*, *};
-use crate::data_model::{
-    AssetRules, AssetTypeCode, IssueAsset, IssueAssetBody, Memo, Operation, Transaction,
-    TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxoRef, TxoSID,
-    ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
-};
-use rand_core::SeedableRng;
-use zei::{
-    setup::PublicParams,
-    xfr::{
-        asset_record::{
-            build_blind_asset_record, open_blind_asset_record, AssetRecordType,
+use {
+    super::{helpers::*, *},
+    crate::data_model::{
+        AssetRules, AssetTypeCode, IssueAsset, IssueAssetBody, Memo, Operation,
+        Transaction, TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxoRef,
+        TxoSID, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+    },
+    rand_core::SeedableRng,
+    zei::{
+        setup::PublicParams,
+        xfr::{
+            asset_record::{
+                build_blind_asset_record, open_blind_asset_record, AssetRecordType,
+            },
+            sig::XfrKeyPair,
+            structs::{AssetRecord, AssetRecordTemplate},
         },
-        sig::XfrKeyPair,
-        structs::{AssetRecord, AssetRecordTemplate},
     },
 };
 
@@ -33,13 +35,6 @@ fn abort_block(block: BlockEffect) -> HashMap<TxnTempSID, Transaction> {
     block.issuance_keys.clear();
 
     ret
-}
-
-#[test]
-fn test_load_fake_transaction_log() {
-    // Verify that loading transaction fails with incorrect path
-    let result_err = LedgerState::load_transaction_log("incorrect/path");
-    assert!(result_err.is_err());
 }
 
 #[test]
@@ -104,7 +99,7 @@ fn test_asset_creation_valid() {
     let effect = TxnEffect::compute_effect(tx).unwrap();
     {
         let mut block = state.start_block().unwrap();
-        state.apply_transaction(&mut block, effect, false).unwrap();
+        state.apply_transaction(&mut block, effect).unwrap();
         state.finish_block(block).unwrap();
     }
 
@@ -166,7 +161,7 @@ fn test_asset_transfer() {
     let effect = TxnEffect::compute_effect(tx).unwrap();
     {
         let mut block = ledger.start_block().unwrap();
-        ledger.apply_transaction(&mut block, effect, false).unwrap();
+        ledger.apply_transaction(&mut block, effect).unwrap();
         ledger.finish_block(block).unwrap();
     }
 
@@ -221,7 +216,7 @@ fn test_asset_transfer() {
     let effect = TxnEffect::compute_effect(tx).unwrap();
 
     let mut block = ledger.start_block().unwrap();
-    let temp_sid = ledger.apply_transaction(&mut block, effect, false).unwrap();
+    let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
 
     let (_txn_sid, txos) = ledger
         .finish_block(block)
@@ -284,7 +279,7 @@ fn test_asset_transfer() {
     // Commit first transfer
     let effect = TxnEffect::compute_effect(tx).unwrap();
     let mut block = ledger.start_block().unwrap();
-    let temp_sid = ledger.apply_transaction(&mut block, effect, false).unwrap();
+    let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
 
     let (_txn_sid, _txos) = ledger
         .finish_block(block)
@@ -361,7 +356,7 @@ fn asset_issued() {
     let effect = TxnEffect::compute_effect(tx).unwrap();
     {
         let mut block = ledger.start_block().unwrap();
-        ledger.apply_transaction(&mut block, effect, false).unwrap();
+        ledger.apply_transaction(&mut block, effect).unwrap();
         ledger.finish_block(block).unwrap();
     }
 
@@ -401,7 +396,7 @@ fn asset_issued() {
     let effect = TxnEffect::compute_effect(tx).unwrap();
 
     let mut block = ledger.start_block().unwrap();
-    let temp_sid = ledger.apply_transaction(&mut block, effect, false).unwrap();
+    let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
 
     let (txn_sid, txos) = ledger
         .finish_block(block)
@@ -412,7 +407,7 @@ fn asset_issued() {
     // shouldn't be able to replay issuance
     let effect = TxnEffect::compute_effect(second_tx).unwrap();
     let mut block = ledger.start_block().unwrap();
-    let result = ledger.apply_transaction(&mut block, effect, false);
+    let result = ledger.apply_transaction(&mut block, effect);
     assert!(result.is_err());
     abort_block(block);
 
@@ -540,7 +535,7 @@ pub fn test_transferable() {
     let effect = TxnEffect::compute_effect(tx).unwrap();
 
     let mut block = ledger.start_block().unwrap();
-    let res = ledger.apply_transaction(&mut block, effect, false);
+    let res = ledger.apply_transaction(&mut block, effect);
     assert!(res.is_err());
     // Cant transfer by making asset confidential
     let transfer_template = AssetRecordTemplate::with_no_asset_tracing(
@@ -576,7 +571,7 @@ pub fn test_transferable() {
     let tx = Transaction::from_operation(Operation::TransferAsset(transfer), seq_id);
     let effect = TxnEffect::compute_effect(tx).unwrap();
 
-    let res = ledger.apply_transaction(&mut block, effect, false);
+    let res = ledger.apply_transaction(&mut block, effect);
     assert!(res.is_err());
     // Cant transfer non-transferable asset through some intermediate operation
     // In this case, alice attempts to spend her non-transferable asset in the same transaction it
@@ -619,7 +614,7 @@ pub fn test_transferable() {
     transfer.sign(&alice);
     tx.body.operations.push(Operation::TransferAsset(transfer));
     let effect = TxnEffect::compute_effect(tx).unwrap();
-    let res = ledger.apply_transaction(&mut block, effect, false);
+    let res = ledger.apply_transaction(&mut block, effect);
     assert!(res.is_err());
 }
 
@@ -666,7 +661,7 @@ pub fn test_max_units() {
         let effect = TxnEffect::compute_effect(tx).unwrap();
 
         let mut block = ledger.start_block().unwrap();
-        let res = ledger.apply_transaction(&mut block, effect, false);
+        let res = ledger.apply_transaction(&mut block, effect);
         assert!(res.is_err());
 
         // Ensure that cap can be reached
@@ -680,7 +675,7 @@ pub fn test_max_units() {
             &issuer,
         );
         let effect = TxnEffect::compute_effect(tx).unwrap();
-        ledger.apply_transaction(&mut block, effect, false).unwrap();
+        ledger.apply_transaction(&mut block, effect).unwrap();
         ledger.finish_block(block).unwrap();
 
         // Cant try to exceed asset cap by issuing confidentially
@@ -695,7 +690,7 @@ pub fn test_max_units() {
         );
         let effect = TxnEffect::compute_effect(tx).unwrap();
         let mut block = ledger.start_block().unwrap();
-        let res = ledger.apply_transaction(&mut block, effect, false);
+        let res = ledger.apply_transaction(&mut block, effect);
         assert!(res.is_err());
     }
 }
@@ -768,7 +763,7 @@ fn test_check_fee_with_ledger() {
 
     let effect = TxnEffect::compute_effect(tx.clone()).unwrap();
     let mut block = ledger.start_block().unwrap();
-    let tmp_sid = ledger.apply_transaction(&mut block, effect, false).unwrap();
+    let tmp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
     let txo_sid = ledger
         .finish_block(block)
         .unwrap()
@@ -784,11 +779,11 @@ fn test_check_fee_with_ledger() {
 
     let effect = TxnEffect::compute_effect(tx2).unwrap();
     let mut block = ledger.start_block().unwrap();
-    ledger.apply_transaction(&mut block, effect, false).unwrap();
+    ledger.apply_transaction(&mut block, effect).unwrap();
     ledger.finish_block(block).unwrap();
 
     // Ensure that FRA can only be defined only once.
     let effect = TxnEffect::compute_effect(tx).unwrap();
     let mut block = ledger.start_block().unwrap();
-    assert!(ledger.apply_transaction(&mut block, effect, false).is_err());
+    assert!(ledger.apply_transaction(&mut block, effect).is_err());
 }

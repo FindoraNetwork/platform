@@ -1,0 +1,14 @@
+[Unit]
+Description="ABCI Daemon"
+After=network.target
+
+[Service]
+Restart=on-failure
+RestartSec=5s
+
+ExecStart=/usr/local/bin/abcid --ledger-dir /data/findora/__findora__ --enable-snapshot --snapshot-algo fade --snapshot-target zroot/findora
+
+LimitNOFILE=200000
+
+[Install]
+WantedBy=multi-user.target

@@ -9,10 +9,11 @@ export PROTOC = $(shell which protoc)
 
 export STAKING_INITIAL_VALIDATOR_CONFIG = $(shell pwd)/src/ledger/src/staking/init/staking_config.json
 export STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV = $(shell pwd)/src/ledger/src/staking/init/staking_config_debug_env.json
-export STAKING_INITIAL_VALIDATOR_CONFIG_ABCI_MOCK = $(shell pwd)/src/ledger/src/staking/init/staking_config_abci_mock.json
 
 FIN_DEBUG ?= /tmp/findora
 export ENABLE_QUERY_SERVICE = true
+
+EXTERNAL_ADDRESS = ""
 
 ifndef CARGO_TARGET_DIR
 	export CARGO_TARGET_DIR=target
@@ -20,87 +21,68 @@ endif
 
 $(info ====== Build root is "$(CARGO_TARGET_DIR)" ======)
 
-ifdef DBG
-target_dir = debug
-else
-target_dir = release
-endif
-
 bin_dir         = bin
 lib_dir         = lib
-pick            = ${CARGO_TARGET_DIR}/$(target_dir)
 subdirs = $(bin_dir) $(lib_dir)
-
-bin_files = \
-		./$(pick)/findorad \
-		./$(pick)/abcid \
-		$(shell go env GOPATH)/bin/tendermint \
-		./$(pick)/fn \
-		./$(pick)/stt \
-		./$(pick)/staking_cfg_generator
 
 WASM_PKG = wasm.tar.gz
 lib_files = ./$(WASM_PKG)
 
 define pack
-	- rm -rf $(target_dir)
-	mkdir $(target_dir)
-	cd $(target_dir); for i in $(subdirs); do mkdir $$i; done
-	cp $(bin_files) $(target_dir)/$(bin_dir)
-	cp $(target_dir)/$(bin_dir)/* ~/.cargo/bin/
-	cd $(target_dir)/$(bin_dir)/ && findorad pack
-	cp -f /tmp/findorad $(target_dir)/$(bin_dir)/
+	- rm -rf $(1)
+	mkdir $(1)
+	cd $(1); for i in $(subdirs); do mkdir $$i; done
+	cp \
+		./${CARGO_TARGET_DIR}/$(2)/$(1)/findorad \
+		./${CARGO_TARGET_DIR}/$(2)/$(1)/abcid \
+		./${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
+		./${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
+		./${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
+		$(shell go env GOPATH)/bin/tendermint \
+		$(1)/$(bin_dir)/
+	cp $(1)/$(bin_dir)/* ~/.cargo/bin/
+	cd $(1)/$(bin_dir)/ && findorad pack
+	cp -f /tmp/findorad $(1)/$(bin_dir)/
 	cp -f /tmp/findorad ~/.cargo/bin/
 endef
 
+install: stop_all build_release_goleveldb
+	cp -f release/bin/* /usr/local/bin/
+	bash -x tools/systemd_services/install.sh $(EXTERNAL_ADDRESS)
+
+stop_all:
+	- pkill abcid
+	- pkill tendermint
+	- pkill findorad
+
 # Build for cleveldb
 build: tendermint_cleveldb
-ifdef DBG
 	cargo build --bins -p abciapp -p finutils
-	$(call pack,$(target_dir))
-else
-	echo -e "\x1b[31;01m\$$(DBG) must be defined !\x1b[00m"
-	exit 1
-endif
+	$(call pack,debug)
 
 # Build for cleveldb
 build_release: tendermint_cleveldb
-ifdef DBG
-	echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
-	exit 1
-else
 	cargo build --release --bins -p abciapp -p finutils
-	$(call pack,$(target_dir))
-endif
+	$(call pack,release)
 
 # Build for goleveldb
 build_goleveldb: tendermint_goleveldb
-ifdef DBG
 	cargo build --bins -p abciapp -p finutils
-	$(call pack,$(target_dir))
-else
-	echo -e "\x1b[31;01m\$$(DBG) must be defined !\x1b[00m"
-	exit 1
-endif
+	$(call pack,debug)
 
 # Build for goleveldb
 build_release_goleveldb: tendermint_goleveldb
-ifdef DBG
-	echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
-	exit 1
-else
 	cargo build --release --bins -p abciapp -p finutils
-	$(call pack,$(target_dir))
-endif
+	$(call pack,release)
+
+# Build for goleveldb
+build_release_musl_goleveldb: tendermint_goleveldb
+	cargo build --release --bins -p abciapp -p finutils --target=x86_64-unknown-linux-musl
+	$(call pack,release,x86_64-unknown-linux-musl)
 
 build_release_debug: tendermint_goleveldb
-ifdef DBG
-	echo -e "\x1b[31;01m\$$(DBG) must NOT be defined !\x1b[00m"
-	exit 1
-else
 	cargo build --features="debug_env" --release --bins -p abciapp -p finutils
-	$(call pack,$(target_dir))
-endif
+	$(call pack,release)
 
 tendermint_cleveldb:
 	- rm $(shell which tendermint)
@@ -116,16 +98,18 @@ tendermint_goleveldb:
 	cd tools/tendermint && $(MAKE) install
 
 test:
-	# cargo test --workspace -- --test-threads=1 # --nocapture
-	cargo test --release --features="abci_mock" -- --test-threads=1 # --nocapture
+	cargo test --release --workspace -- --test-threads=1 # --nocapture
 
 coverage:
-	cargo tarpaulin --timeout=900 --branch --workspace --release --features="abci_mock" \
+	cargo tarpaulin --timeout=900 --branch --workspace --release \
 		|| cargo install cargo-tarpaulin \
-		&& cargo tarpaulin --timeout=900 --branch --workspace --release --features="abci_mock"
+		&& cargo tarpaulin --timeout=900 --branch --workspace --release
 
 staking_cfg:
-	cargo run --bin staking_cfg_generator
+	bash tools/update_staking_cfg.sh
+
+staking_cfg_debug:
+	bash tools/update_staking_cfg_debug.sh
 
 bench:
 	cargo bench --workspace
@@ -133,7 +117,7 @@ bench:
 lint:
 	cargo clippy --workspace
 	cargo clippy --workspace --no-default-features
-	cargo clippy --features="abci_mock" --workspace --tests
+	cargo clippy --workspace --tests
 
 update:
 	cargo update
@@ -161,6 +145,7 @@ debug_env: stop_debug_env build_release_debug
 	mkdir $(FIN_DEBUG)
 	cp tools/debug_env.tar.gz $(FIN_DEBUG)/
 	cd $(FIN_DEBUG) && tar -xpf debug_env.tar.gz && mv debug_env devnet
+	fn setup -S 'http://localhost'
 	./tools/devnet/startnodes.sh
 
 run_staking_demo: stop_debug_env
@@ -171,6 +156,9 @@ start_debug_env:
 
 stop_debug_env:
 	bash ./tools/devnet/stopnodes.sh
+
+join_debug_env: stop_debug_env build_release_debug
+	bash tools/node_init.sh debug_env
 
 join_qa01: stop_debug_env build_release_goleveldb
 	bash tools/node_init.sh qa01

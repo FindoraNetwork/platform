@@ -4,13 +4,15 @@
 //! Separating mnemonic to a standalone library is needed by tests.
 //!
 
-use bech32::{self, FromBase32, ToBase32};
-use bip0039::{Count, Language, Mnemonic};
-use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
-use ruc::*;
-use zei::{
-    serialization::ZeiFromToBytes,
-    xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+use {
+    bech32::{self, FromBase32, ToBase32},
+    bip0039::{Count, Language, Mnemonic},
+    ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey},
+    ruc::*,
+    zei::{
+        serialization::ZeiFromToBytes,
+        xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+    },
 };
 
 /// Randomly generate a 12words-length mnemonic.
@@ -96,6 +98,18 @@ pub fn restore_keypair_from_mnemonic_default(phrase: &str) -> Result<XfrKeyPair>
     const FRA: u32 = 917;
     restore_keypair_from_mnemonic!(phrase, "en", BipPath::new(FRA, 0, 0, 0), bip44)
         .c(d!())
+}
+
+/// Restore the XfrKeyPair from secret key,
+#[inline(always)]
+pub fn restore_keypair_from_seckey_base64(sec: &str) -> Result<XfrKeyPair> {
+    base64::decode_config(sec, base64::URL_SAFE)
+        .c(d!())
+        .and_then(|sec| {
+            XfrSecretKey::zei_from_bytes(&sec)
+                .c(d!())
+                .map(|sec| sec.into_keypair())
+        })
 }
 
 /// Restore the XfrKeyPair from a mnemonic with custom params,
@@ -201,8 +215,7 @@ fn bech32dec(input: &str) -> Result<Vec<u8>> {
 #[cfg(test)]
 #[allow(missing_docs)]
 mod test {
-    use super::*;
-    use rand_core::SeedableRng;
+    use {super::*, rand_core::SeedableRng};
 
     #[test]
     fn t_generate_mnemonic() {

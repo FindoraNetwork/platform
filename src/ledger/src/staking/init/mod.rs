@@ -2,16 +2,19 @@
 //! Initial Config
 //!
 
-use super::{
-    td_addr_to_bytes, BlockHeight, Power, Validator, ValidatorKind,
-    STAKING_VALIDATOR_MIN_POWER,
+use {
+    super::{
+        td_addr_to_bytes, BlockHeight, Power, Validator, ValidatorKind,
+        STAKING_VALIDATOR_MIN_POWER,
+    },
+    indexmap::IndexMap,
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    std::convert::TryFrom,
 };
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
 
 // The initial power of an initor.
-const DEFAULT_POWER: Power = 1000 * STAKING_VALIDATOR_MIN_POWER;
+const DEFAULT_POWER: Power = STAKING_VALIDATOR_MIN_POWER;
 
 /// Generate config during compiling time.
 #[derive(Serialize, Deserialize)]
@@ -26,8 +29,8 @@ pub struct InitialValidatorInfo {
 pub struct ValidatorStr {
     /// `XfrPublicKey` in base64 format
     pub id: String,
-    // Tendermint Addr, in hex format
-    td_addr: String,
+    /// Tendermint Addr, in hex format
+    pub td_addr: String,
     // Tendermint PubKey, in base64 format
     td_pubkey: String,
     td_power: Option<Power>,
@@ -51,6 +54,7 @@ impl TryFrom<ValidatorStr> for Validator {
             kind: v.kind.unwrap_or(ValidatorKind::Initor),
             signed_last_block: false,
             signed_cnt: 0,
+            delegators: IndexMap::new(),
         })
     }
 }
@@ -67,7 +71,7 @@ pub fn get_inital_validators() -> Result<Vec<Validator>> {
 }
 
 #[allow(missing_docs)]
-#[cfg(not(any(feature = "debug_env", feature = "abci_mock")))]
+#[cfg(not(feature = "debug_env"))]
 pub fn get_cfg_data() -> Result<InitialValidatorInfo> {
     serde_json::from_slice(&include_bytes!("staking_config.json")[..]).c(d!())
 }
@@ -78,14 +82,8 @@ pub fn get_cfg_data() -> Result<InitialValidatorInfo> {
     serde_json::from_slice(&include_bytes!("staking_config_debug_env.json")[..]).c(d!())
 }
 
-#[allow(missing_docs)]
-#[cfg(feature = "abci_mock")]
-pub fn get_cfg_data() -> Result<InitialValidatorInfo> {
-    serde_json::from_slice(&include_bytes!("staking_config_abci_mock.json")[..]).c(d!())
-}
-
 /// used in `cfg_generator` binary
-#[cfg(not(any(feature = "debug_env", feature = "abci_mock")))]
+#[cfg(not(feature = "debug_env"))]
 pub fn get_cfg_path() -> Option<&'static str> {
     option_env!("STAKING_INITIAL_VALIDATOR_CONFIG")
 }
@@ -96,18 +94,10 @@ pub fn get_cfg_path() -> Option<&'static str> {
     option_env!("STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV")
 }
 
-#[allow(missing_docs)]
-#[cfg(feature = "abci_mock")]
-pub fn get_cfg_path() -> Option<&'static str> {
-    option_env!("STAKING_INITIAL_VALIDATOR_CONFIG_ABCI_MOCK")
-}
-
 #[cfg(test)]
 #[allow(missing_docs)]
 mod test {
-    use super::*;
-    use crate::staking::td_pubkey_to_td_addr;
-    use ruc::pnk;
+    use {super::*, crate::staking::td_pubkey_to_td_addr, ruc::pnk};
 
     #[test]
     fn staking_tendermint_addr_conversion() {

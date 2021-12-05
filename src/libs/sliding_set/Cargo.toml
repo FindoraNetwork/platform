@@ -1,11 +1,11 @@
 [package]
 name = "sliding_set"
-version = "0.2.0"
+version = "0.2.11"
 authors = ["FindoraNetwork"]
 edition = "2018"
 
 [dependencies]
-ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+ruc = "0.6.6"
 bincode = "1.2.1"
 cryptohash = { path = "../cryptohash" }
 rand = "0.7.3"

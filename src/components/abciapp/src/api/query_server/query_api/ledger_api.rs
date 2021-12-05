@@ -2,34 +2,39 @@
 //! # Access Ledger Data
 //!
 
-use super::server::QueryServer;
-use actix_web::{error, web};
-use finutils::api::{
-    DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
-    ValidatorDetail, ValidatorList,
-};
-use globutils::HashOf;
-use ledger::{
-    data_model::{
-        AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData, TxnSID,
-        TxoSID, UnAuthenticatedUtxo, Utxo,
+use {
+    super::server::QueryServer,
+    actix_web::{error, web},
+    finutils::api::{
+        DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
+        ValidatorDetail, ValidatorList,
     },
-    staking::{DelegationRwdDetail, DelegationState, TendermintAddr, UNBOND_BLOCK_CNT},
+    globutils::HashOf,
+    ledger::{
+        data_model::{
+            AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData, TxnSID,
+            TxoSID, UnAuthenticatedUtxo, Utxo,
+        },
+        staking::{
+            DelegationRwdDetail, DelegationState, Staking, TendermintAddr,
+            TendermintAddrRef, UNBOND_BLOCK_CNT,
+        },
+    },
+    parking_lot::RwLock,
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    std::{collections::BTreeMap, mem, sync::Arc},
+    zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
 };
-use parking_lot::RwLock;
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, mem, sync::Arc};
-use zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo};
 
-// Ping route to check for liveness of API
+/// Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]
-pub(super) async fn ping() -> actix_web::Result<String> {
+pub async fn ping() -> actix_web::Result<String> {
     Ok("success".into())
 }
 
-// query utxo according to `TxoSID` return Authenticated Utxo
-pub(super) async fn query_utxo(
+/// query utxo according to `TxoSID` return Authenticated Utxo
+pub async fn query_utxo(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<AuthenticatedUtxo>> {
@@ -50,8 +55,8 @@ pub(super) async fn query_utxo(
     }
 }
 
-// query utxo according to `TxoSID` return UnAuthenticated Utxo
-pub(super) async fn query_utxo_light(
+/// query utxo according to `TxoSID` return UnAuthenticated Utxo
+pub async fn query_utxo_light(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<UnAuthenticatedUtxo>> {
@@ -72,8 +77,8 @@ pub(super) async fn query_utxo_light(
     }
 }
 
-// query issuance num according to `AssetTypeCode`
-pub(super) async fn query_asset_issuance_num(
+/// query issuance num according to `AssetTypeCode`
+pub async fn query_asset_issuance_num(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<u64>> {
@@ -94,8 +99,8 @@ pub(super) async fn query_asset_issuance_num(
     }
 }
 
-// Separate a string of `TxoSID` by ',' and query the corresponding Authenticated utxo
-pub(super) async fn query_utxos(
+/// Separate a string of `TxoSID` by ',' and query the corresponding Authenticated utxo
+pub async fn query_utxos(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<Option<AuthenticatedUtxo>>>> {
@@ -119,8 +124,8 @@ pub(super) async fn query_utxos(
     Ok(web::Json(ledger.get_utxos(sid_list.as_slice())))
 }
 
-// query asset according to `AssetType`
-pub(super) async fn query_asset(
+/// query asset according to `AssetType`
+pub async fn query_asset(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<AssetType>> {
@@ -141,8 +146,8 @@ pub(super) async fn query_asset(
     }
 }
 
-// query tx according to `TxnSID`
-pub(super) async fn query_txn(
+/// query tx according to `TxnSID`
+pub async fn query_txn(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<String> {
@@ -164,8 +169,8 @@ pub(super) async fn query_txn(
     }
 }
 
-// query tx according to `TxnSID`, lighter and faster version
-pub(super) async fn query_txn_light(
+/// query tx according to `TxnSID`, lighter and faster version
+pub async fn query_txn_light(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
 ) -> actix_web::Result<String> {
@@ -187,9 +192,9 @@ pub(super) async fn query_txn_light(
     }
 }
 
-// query global state, return (apphash, block count, apphash and block count signatures)
+/// query global state, return (apphash, block count, apphash and block count signatures)
 #[allow(clippy::type_complexity)]
-pub(super) async fn query_global_state(
+pub async fn query_global_state(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> web::Json<(HashOf<Option<StateCommitmentData>>, u64, &'static str)> {
     let qs = data.read();
@@ -199,8 +204,8 @@ pub(super) async fn query_global_state(
     web::Json((hash, seq_id, "v4UVgkIBpj0eNYI1B1QhTTduJHCIHH126HcdesCxRdLkVGDKrVUPgwmNLCDafTVgC5e4oDhAGjPNt1VhUr6ZCQ=="))
 }
 
-// query global state version according to `block_height`
-pub(super) async fn query_global_state_version(
+/// query global state version according to `block_height`
+pub async fn query_global_state_version(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     version: web::Path<u64>,
 ) -> web::Json<Option<HashOf<Option<StateCommitmentData>>>> {
@@ -210,10 +215,10 @@ pub(super) async fn query_global_state_version(
     web::Json(hash)
 }
 
-// Query current validator list,
-// validtors who have not completed self-deletagion will be filtered out.
+/// Query current validator list,
+/// validtors who have not completed self-deletagion will be filtered out.
 #[allow(unused)]
-pub(super) async fn query_validators(
+pub async fn query_validators(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> actix_web::Result<web::Json<ValidatorList>> {
     let qs = data.read();
@@ -225,25 +230,25 @@ pub(super) async fn query_validators(
         let validators_list = validators
             .iter()
             .flat_map(|(tendermint_addr, pk)| {
-                validator_data.get_powered_validator_by_id(pk).map(|v| {
-                    let rank = if v.td_power == 0 {
-                        validator_data.body.len()
-                    } else {
+                validator_data
+                    .get_validator_by_id(pk)
+                    .filter(|v| v.td_power != 0)
+                    .map(|v| {
                         let mut power_list = validator_data
                             .body
                             .values()
                             .map(|v| v.td_power)
                             .collect::<Vec<_>>();
                         power_list.sort_unstable();
-                        power_list.len() - power_list.binary_search(&v.td_power).unwrap()
-                    };
-                    Validator::new(
-                        tendermint_addr.clone(),
-                        rank as u64,
-                        staking.delegation_has_addr(&pk),
-                        &v,
-                    )
-                })
+                        let rank = power_list.len()
+                            - power_list.binary_search(&v.td_power).unwrap();
+                        Validator::new(
+                            tendermint_addr.clone(),
+                            rank as u64,
+                            staking.delegation_has_addr(&pk),
+                            &v,
+                        )
+                    })
             })
             .collect();
         return Ok(web::Json(ValidatorList::new(
@@ -255,57 +260,65 @@ pub(super) async fn query_validators(
     Ok(web::Json(ValidatorList::new(0, vec![])))
 }
 
+#[allow(missing_docs)]
 #[derive(Deserialize, Debug)]
-pub(super) struct DelegationRwdQueryParams {
+pub struct DelegationRwdQueryParams {
     address: String,
-    height: u64,
+    height: Option<u64>,
 }
 
 /// get delegation reward according to `DelegationRwdQueryParams`
-pub(super) async fn get_delegation_reward(
+pub async fn get_delegation_reward(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     web::Query(info): web::Query<DelegationRwdQueryParams>,
 ) -> actix_web::Result<web::Json<Vec<DelegationRwdDetail>>> {
     // Convert from base64 representation
     let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
     let qs = data.read();
 
+    let hdr = qs
+        .ledger_cloned
+        .api_cache
+        .as_ref()
+        .unwrap()
+        .staking_delegation_rwd_hist
+        .get(&key)
+        .c(d!())
+        .map_err(|e| error::ErrorNotFound(e.to_string()))?;
+
+    let h = qs.ledger_cloned.get_tendermint_height();
+
+    let mut req_h = info.height.unwrap_or(h);
+    alt!(req_h > h, req_h = h);
+
     Ok(web::Json(
-        (0..=info.height)
-            .into_iter()
-            .rev()
-            .filter_map(|i| {
-                qs.ledger_cloned
-                    .api_cache
-                    .staking_delegation_rwd_hist
-                    .get(&key)
-                    .map(|rh| rh.get(&i))
-            })
-            .flatten()
-            .take(1)
-            .collect(),
+        hdr.get_closest_smaller(&req_h)
+            .map(|(_, r)| vec![r])
+            .unwrap_or_default(),
     ))
 }
 
+#[allow(missing_docs)]
 #[derive(Deserialize, Debug)]
-pub(super) struct ValidatorDelegationQueryParams {
+pub struct ValidatorDelegationQueryParams {
     address: TendermintAddr,
-    epoch_size: u32,
-    epoch_cnt: u8,
+    epoch_size: Option<u64>,
+    epoch_cnt: Option<u64>,
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub(super) struct ValidatorDelegation {
+pub struct ValidatorDelegation {
     return_rate: [u128; 2],
     self_delegation: u64,
     delegated: u64,
 }
 
-// get history according to `ValidatorDelegationQueryParams`
-pub(super) async fn get_validator_delegation_history(
+/// get history according to `ValidatorDelegationQueryParams`
+pub async fn get_validator_delegation_history(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     web::Query(info): web::Query<ValidatorDelegationQueryParams>,
 ) -> actix_web::Result<web::Json<Vec<ValidatorDelegation>>> {
@@ -314,76 +327,114 @@ pub(super) async fn get_validator_delegation_history(
     let staking = ledger.get_staking();
 
     let v_id = staking
-        .validator_td_addr_to_app_pk(info.address.as_ref())
+        .validator_td_addr_to_app_pk(&info.address)
         .c(d!())
         .map_err(error::ErrorBadRequest)?;
-    let v_self_delegation = staking
-        .delegation_get(&v_id)
-        .ok_or_else(|| error::ErrorBadRequest("not exists"))?;
-    let delegation_amount_hist =
-        ledger.api_cache.staking_delegation_amount_hist.get(&v_id);
-
-    let self_delegation = v_self_delegation
-        .entries
-        .iter()
-        .filter(|(k, _)| **k == v_id)
-        .map(|(_, n)| n)
-        .sum();
-    let delegated = v_self_delegation.delegators.values().sum::<u64>();
-
-    let mut history = vec![ValidatorDelegation {
-        return_rate: ledger.staking_get_block_rewards_rate(),
-        delegated,
-        self_delegation,
-    }];
 
     let h = staking.cur_height();
-    let epoch_size = info.epoch_size as u64;
-    (1..=info.epoch_cnt as u64)
-        .into_iter()
-        .filter_map(|i| {
-            if h >= i * epoch_size
-                && h - i * epoch_size >= v_self_delegation.start_height
-            {
-                Some(h - i * epoch_size)
-            } else {
-                None
-            }
-        })
-        .for_each(|h| {
-            history.push(ValidatorDelegation {
-                return_rate: qs
-                    .query_block_rewards_rate(&h)
-                    .unwrap_or(history.last().unwrap().return_rate), //unwrap is safe here
-                delegated: delegation_amount_hist
-                    .as_ref()
-                    .map(|dah| {
-                        if dah.is_empty()
-                            || dah.iter().take(1).all(|(i, _)| {
-                                #[cfg(not(feature = "diskcache"))]
-                                let i = *i;
-                                i > h
-                            })
-                        {
-                            0
-                        } else {
-                            dah.get(&h).unwrap_or(history.last().unwrap().delegated)
-                        }
-                    })
-                    .unwrap_or(0),
-                self_delegation: delegation_amount_hist
-                    .as_ref()
-                    .map(|dah| dah.get(&h))
-                    .flatten()
-                    .unwrap_or(history.last().unwrap().self_delegation),
-            })
-        });
 
-    Ok(web::Json(history))
+    let start_height = staking
+        .delegation_get(&v_id)
+        .ok_or_else(|| error::ErrorBadRequest("not exists"))?
+        .start_height;
+
+    let staking_global_rate_hist = &qs
+        .ledger_cloned
+        .api_cache
+        .as_ref()
+        .unwrap()
+        .staking_global_rate_hist;
+
+    let delegation_amount_hist = ledger
+        .api_cache
+        .as_ref()
+        .unwrap()
+        .staking_delegation_amount_hist
+        .get(&v_id);
+
+    let self_delegation_amount_hist = ledger
+        .api_cache
+        .as_ref()
+        .unwrap()
+        .staking_self_delegation_hist
+        .get(&v_id);
+
+    let mut esiz = info.epoch_size.unwrap_or(10);
+    alt!(esiz > h, esiz = h);
+    alt!(0 == esiz, esiz = 1);
+
+    let ecnt_max = h.saturating_sub(start_height) / esiz;
+    let mut ecnt = info
+        .epoch_cnt
+        .map(|n| min!(n, ecnt_max))
+        .unwrap_or(min!(16, ecnt_max));
+
+    alt!(ecnt > h, ecnt = h);
+    alt!(ecnt > 1024, ecnt = 1024);
+    alt!(0 == ecnt, ecnt = 1);
+
+    let mut c1 = map! { B 1 + h => None};
+    let mut c2 = map! { B 1 + h => None};
+    let mut c3 = map! { B 1 + h => None};
+    let res = (0..ecnt)
+        .map(|i| h - i * esiz)
+        .filter_map(|hi| {
+            if c1.range(..=hi).next().is_none() {
+                c1.clear();
+                if let Some((h, v)) = staking_global_rate_hist.get_closest_smaller(&hi) {
+                    c1.insert(h, Some(v));
+                } else {
+                    c1.insert(0, None);
+                }
+            }
+
+            c1.values().copied().next().flatten().map(|return_rate| {
+                if c2.range(..=hi).next().is_none() {
+                    c2.clear();
+                    if let Some((h, v)) = delegation_amount_hist
+                        .as_ref()
+                        .map(|dah| dah.get_closest_smaller(&hi))
+                        .flatten()
+                    {
+                        c2.insert(h, Some(v));
+                    } else {
+                        c2.insert(0, None);
+                    }
+                }
+
+                if c3.range(..=hi).next().is_none() {
+                    c3.clear();
+                    if let Some((h, v)) = self_delegation_amount_hist
+                        .as_ref()
+                        .map(|sdah| sdah.get_closest_smaller(&hi))
+                        .flatten()
+                    {
+                        c3.insert(h, Some(v));
+                    } else {
+                        c3.insert(0, None);
+                    }
+                }
+
+                ValidatorDelegation {
+                    return_rate,
+                    delegated: c2.values().copied().next().flatten().unwrap_or_default(),
+                    self_delegation: c3
+                        .values()
+                        .copied()
+                        .next()
+                        .flatten()
+                        .unwrap_or_default(),
+                }
+            })
+        })
+        .collect();
+
+    Ok(web::Json(res))
 }
 
+#[allow(missing_docs)]
 #[derive(Deserialize, Debug)]
-pub(super) struct DelegatorQueryParams {
+pub struct DelegatorQueryParams {
     address: String,
     page: usize,
     per_page: usize,
@@ -397,8 +448,8 @@ enum OrderOption {
     Asc,
 }
 
-// paging Query delegators according to `DelegatorQueryParams`
-pub(super) async fn get_delegators_with_params(
+/// paging Query delegators according to `DelegatorQueryParams`
+pub async fn get_delegators_with_params(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     web::Query(info): web::Query<DelegatorQueryParams>,
 ) -> actix_web::Result<web::Json<DelegatorList>> {
@@ -419,8 +470,7 @@ pub(super) async fn get_delegators_with_params(
         .c(d!())
         .map_err(error::ErrorBadRequest)?;
 
-    let list = staking
-        .validator_get_delegator_list(info.address.as_ref(), start, end)
+    let list = validator_get_delegator_list(staking, info.address.as_ref(), start, end)
         .c(d!())
         .map_err(error::ErrorNotFound)?;
 
@@ -434,8 +484,8 @@ pub(super) async fn get_delegators_with_params(
     Ok(web::Json(DelegatorList::new(list)))
 }
 
-// query delegator list according to `TendermintAddr`
-pub(super) async fn query_delegator_list(
+/// query delegator list according to `TendermintAddr`
+pub async fn query_delegator_list(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     addr: web::Path<TendermintAddr>,
 ) -> actix_web::Result<web::Json<DelegatorList>> {
@@ -443,8 +493,7 @@ pub(super) async fn query_delegator_list(
     let ledger = &qs.ledger_cloned;
     let staking = ledger.get_staking();
 
-    let list = staking
-        .validator_get_delegator_list(addr.as_ref(), 0, usize::MAX)
+    let list = validator_get_delegator_list(staking, addr.as_ref(), 0, usize::MAX)
         .c(d!())
         .map_err(error::ErrorNotFound)?;
 
@@ -458,8 +507,8 @@ pub(super) async fn query_delegator_list(
     Ok(web::Json(DelegatorList::new(list)))
 }
 
-// query validator detail according to `TendermintAddr`
-pub(super) async fn query_validator_detail(
+/// query validator detail according to `TendermintAddr`
+pub async fn query_validator_detail(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     addr: web::Path<TendermintAddr>,
 ) -> actix_web::Result<web::Json<ValidatorDetail>> {
@@ -467,68 +516,78 @@ pub(super) async fn query_validator_detail(
     let ledger = &qs.ledger_cloned;
     let staking = ledger.get_staking();
 
-    let v_id = staking
-        .validator_td_addr_to_app_pk(addr.as_ref())
-        .c(d!())
+    let v_id = info!(staking.validator_td_addr_to_app_pk(addr.as_ref()))
         .map_err(error::ErrorBadRequest)?;
-    let v_self_delegation = staking
-        .delegation_get(&v_id)
-        .ok_or_else(|| error::ErrorBadRequest("not exists"))?;
+    let v_self_delegation =
+        info!(staking.delegation_get(&v_id)).map_err(error::ErrorBadRequest)?;
 
     if let Some(vd) = staking.validator_get_current() {
         if let Some(v) = vd.body.get(&v_id) {
-            if 0 < v.td_power {
+            let voting_power_rank = if 0 == v.td_power {
+                100_0000 + vd.body.len()
+            } else {
                 let mut power_list =
                     vd.body.values().map(|v| v.td_power).collect::<Vec<_>>();
                 power_list.sort_unstable();
-                let voting_power_rank =
-                    power_list.len() - power_list.binary_search(&v.td_power).unwrap();
-                let realtime_rate = ledger.staking_get_block_rewards_rate();
-                let expected_annualization = [
-                    realtime_rate[0] as u128
-                        * v_self_delegation.proposer_rwd_cnt as u128,
-                    realtime_rate[1] as u128
-                        * (1 + staking.cur_height() - v_self_delegation.start_height)
-                            as u128,
-                ];
+                power_list.len() - power_list.binary_search(&v.td_power).unwrap()
+            };
+            let realtime_rate = ledger.staking_get_block_rewards_rate();
+            let expected_annualization = [
+                realtime_rate[0] as u128
+                    * v_self_delegation.proposer_rwd_cnt as u128
+                    * staking.get_global_delegation_amount() as u128,
+                realtime_rate[1] as u128
+                    * (1 + staking.cur_height() - v_self_delegation.start_height)
+                        as u128
+                    * v.td_power as u128,
+            ];
 
-                let resp = ValidatorDetail {
-                    addr: addr.into_inner(),
-                    is_online: v.signed_last_block,
-                    voting_power: v.td_power,
-                    voting_power_rank,
-                    commission_rate: v.get_commission_rate(),
-                    self_staking: v_self_delegation
-                        .entries
-                        .iter()
-                        .filter(|(k, _)| **k == v_id)
-                        .map(|(_, n)| n)
-                        .sum(),
-                    fra_rewards: v_self_delegation.rwd_amount,
-                    memo: v.memo.clone(),
-                    start_height: v_self_delegation.start_height,
-                    cur_height: staking.cur_height(),
-                    block_signed_cnt: v.signed_cnt,
-                    block_proposed_cnt: v_self_delegation.proposer_rwd_cnt,
-                    expected_annualization,
-                    kind: v.kind(),
-                };
-                return Ok(web::Json(resp));
+            // fra_rewards: all delegators rewards including self-delegation
+            let mut fra_rewards = v_self_delegation.rwd_amount;
+            for (delegator, _) in &v.delegators {
+                let delegation = staking
+                    .delegation_get(&delegator)
+                    .ok_or_else(|| error::ErrorBadRequest("not exists"))?;
+                fra_rewards += delegation.rwd_amount;
             }
+
+            let resp = ValidatorDetail {
+                addr: addr.into_inner(),
+                is_online: v.signed_last_block,
+                voting_power: v.td_power,
+                voting_power_rank,
+                commission_rate: v.get_commission_rate(),
+                self_staking: v_self_delegation
+                    .entries
+                    .iter()
+                    .filter(|(k, _)| **k == v_id)
+                    .map(|(_, n)| n)
+                    .sum(),
+                fra_rewards,
+                memo: v.memo.clone(),
+                start_height: v_self_delegation.start_height,
+                cur_height: staking.cur_height(),
+                block_signed_cnt: v.signed_cnt,
+                block_proposed_cnt: v_self_delegation.proposer_rwd_cnt,
+                expected_annualization,
+                kind: v.kind(),
+                delegator_cnt: v.delegators.len() as u64,
+            };
+            return Ok(web::Json(resp));
         }
     }
 
     Err(error::ErrorNotFound("not exists"))
 }
 
-// query delegation info according to `public_key`
-pub(super) async fn query_delegation_info(
+/// query delegation info according to `public_key`
+pub async fn query_delegation_info(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     address: web::Path<String>,
 ) -> actix_web::Result<web::Json<DelegationInfo>> {
     let pk = globutils::wallet::public_key_from_base64(address.as_str())
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
     let qs = data.read();
     let ledger = &qs.ledger_cloned;
@@ -611,8 +670,8 @@ pub(super) async fn query_delegation_info(
     Ok(web::Json(resp))
 }
 
-// query utxos according `public_key`
-pub(super) async fn query_owned_utxos(
+/// query utxos according `public_key`
+pub async fn query_owned_utxos(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     owner: web::Path<String>,
 ) -> actix_web::Result<web::Json<BTreeMap<TxoSID, (Utxo, Option<OwnerMemo>)>>> {
@@ -620,7 +679,7 @@ pub(super) async fn query_owned_utxos(
     let ledger = &qs.ledger_cloned;
     globutils::wallet::public_key_from_base64(owner.as_str())
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))
         .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk))))
 }
 
@@ -661,5 +720,30 @@ impl NetworkRoute for ApiRoutes {
             ApiRoutes::ValidatorDetail => "validator_detail",
         };
         "/".to_owned() + endpoint
+    }
+}
+
+#[allow(missing_docs)]
+pub fn validator_get_delegator_list<'a>(
+    s: &'a Staking,
+    validator: TendermintAddrRef,
+    start: usize,
+    mut end: usize,
+) -> Result<Vec<(&'a XfrPublicKey, &'a u64)>> {
+    let validator = s.validator_td_addr_to_app_pk(validator).c(d!())?;
+
+    if let Some(v) = s.validator_get_current_one_by_id(&validator) {
+        if start >= v.delegators.len() || start > end {
+            return Err(eg!("Index out of range"));
+        }
+        if end > v.delegators.len() {
+            end = v.delegators.len();
+        }
+
+        Ok((start..end)
+            .filter_map(|i| v.delegators.get_index(i))
+            .collect())
+    } else {
+        Err(eg!("Not a validator or non-existing node address"))
     }
 }

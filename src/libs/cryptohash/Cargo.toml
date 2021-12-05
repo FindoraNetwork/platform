@@ -1,11 +1,11 @@
 [package]
 name = "cryptohash"
-version = "0.2.0"
+version = "0.2.11"
 authors = ["FindoraNetwork"]
 edition = "2018"
 
 [dependencies]
-ruc = { git = "https://github.com/FindoraNetwork/RUC.git", branch = "master" }
+ruc = "0.6.6"
 arrayref = "0.3.5"
 base64 = "0.10"
 byteorder = "1.0.0"

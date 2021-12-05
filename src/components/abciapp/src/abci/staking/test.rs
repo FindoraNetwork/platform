@@ -1,22 +1,24 @@
 #![allow(missing_docs)]
 
-use finutils::txn_builder::{TransactionBuilder, TransferOperationBuilder};
-use ledger::{
-    data_model::{
-        Transaction, TransferType, TxnEffect, TxoRef, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
-        TX_FEE_MIN,
+use {
+    finutils::txn_builder::{TransactionBuilder, TransferOperationBuilder},
+    ledger::{
+        data_model::{
+            Transaction, TransferType, TxnEffect, TxoRef, ASSET_TYPE_FRA,
+            BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+        },
+        staking::{FF_PK_LIST, FRA_PRE_ISSUE_AMOUNT},
+        store::{utils::fra_gen_initial_tx, LedgerState},
     },
-    staking::{FF_PK_LIST, FRA_PRE_ISSUE_AMOUNT},
-    store::{utils::fra_gen_initial_tx, LedgerState},
-};
-use rand::random;
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
-use ruc::*;
-use zei::xfr::{
-    asset_record::{open_blind_asset_record, AssetRecordType},
-    sig::{XfrKeyPair, XfrPublicKey},
-    structs::{AssetRecordTemplate, XfrAmount},
+    rand::random,
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::*,
+    zei::xfr::{
+        asset_record::{open_blind_asset_record, AssetRecordType},
+        sig::{XfrKeyPair, XfrPublicKey},
+        structs::{AssetRecordTemplate, XfrAmount},
+    },
 };
 
 #[test]
@@ -36,9 +38,7 @@ fn check_block_rewards_rate() -> Result<()> {
 
     let effect = TxnEffect::compute_effect(tx).c(d!())?;
     let mut block = ledger.start_block().c(d!())?;
-    ledger
-        .apply_transaction(&mut block, effect, false)
-        .c(d!())?;
+    ledger.apply_transaction(&mut block, effect).c(d!())?;
     ledger.finish_block(block).c(d!())?;
 
     // set a fake delegation amount
@@ -59,9 +59,7 @@ fn check_block_rewards_rate() -> Result<()> {
 
         let effect = TxnEffect::compute_effect(tx).c(d!())?;
         let mut block = ledger.start_block().c(d!())?;
-        ledger
-            .apply_transaction(&mut block, effect, false)
-            .c(d!())?;
+        ledger.apply_transaction(&mut block, effect).c(d!())?;
         ledger.finish_block(block).c(d!())?;
 
         {
@@ -151,7 +149,7 @@ fn gen_transfer_tx(
     }
 
     let op = trans_builder
-        .balance()
+        .balance(None)
         .c(d!())?
         .create(TransferType::Standard)
         .c(d!())?

@@ -4,83 +4,73 @@
 
 mod utils;
 
-use crate::{
+use {
+    crate::{
+        abci::{
+            config::global_cfg::CFG, server::ABCISubmissionServer, staking, IN_SAFE_ITV,
+            POOL,
+        },
+        api::{query_server::BLOCK_CREATED, submission_server::convert_tx},
+    },
     abci::{
-        config::global_cfg::CFG, server::ABCISubmissionServer, staking, IN_SAFE_ITV,
+        CheckTxType, RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx,
+        RequestEndBlock, RequestInfo, ResponseBeginBlock, ResponseCheckTx,
+        ResponseCommit, ResponseDeliverTx, ResponseEndBlock, ResponseInfo,
     },
-    api::{
-        query_server::BLOCK_CREATED,
-        submission_server::{convert_tx, try_tx_catalog, TxCatalog},
+    lazy_static::lazy_static,
+    ledger::{
+        staking::KEEP_HIST,
+        store::{
+            api_cache,
+            fbnc::{new_mapx, Mapx},
+        },
     },
-};
-use abci::{
-    Application, RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx,
-    RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery, ResponseBeginBlock,
-    ResponseCheckTx, ResponseCommit, ResponseDeliverTx, ResponseEndBlock, ResponseInfo,
-    ResponseInitChain, ResponseQuery,
-};
-use fp_storage::hash::{Sha256, StorageHasher};
-use fp_traits::base::BaseProvider;
-use lazy_static::lazy_static;
-use ledger::{
-    converter::is_convert_tx,
-    staking::{is_coinbase_tx, KEEP_HIST},
-};
-use parking_lot::Mutex;
-use protobuf::RepeatedField;
-use ruc::*;
-use std::{
-    fs,
-    ops::Deref,
-    sync::{
-        atomic::{AtomicBool, AtomicI64, Ordering},
-        Arc,
+    parking_lot::{Mutex, RwLock},
+    protobuf::RepeatedField,
+    ruc::*,
+    std::{
+        fs,
+        ops::Deref,
+        sync::{
+            atomic::{AtomicI64, Ordering},
+            Arc,
+        },
     },
 };
 
-static HAS_ACTUAL_TXS: AtomicBool = AtomicBool::new(false);
 pub(crate) static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
 
 lazy_static! {
-    /// save the request parameters from the begin_block for use in the end_block
+    // save the request parameters from the begin_block for use in the end_block
     static ref REQ_BEGIN_BLOCK: Arc<Mutex<RequestBeginBlock>> =
         Arc::new(Mutex::new(RequestBeginBlock::new()));
+    // avoid on-chain-existing transactions to be stored again
+    static ref TX_HISTORY: Arc<RwLock<Mapx<Vec<u8>, bool>>> =
+        Arc::new(RwLock::new(new_mapx!("tx_history")));
 }
 
-pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
+pub fn info(s: &mut ABCISubmissionServer, _req: &RequestInfo) -> ResponseInfo {
     let mut resp = ResponseInfo::new();
 
     let mut la = s.la.write();
-
     let state = la.get_committed_state().write();
-    let commitment = state.get_state_commitment();
 
     let h = state.get_tendermint_height() as i64;
     TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
-
-    if 1 < h {
-        if s.account_base_app.read().current_block_number().is_some() {
-            // Combines ledger state hash and chain state hash
-            let mut commitment_hash = commitment.0.as_ref().to_vec();
-            let mut data_hash = s.account_base_app.write().info(req).last_block_app_hash;
-            commitment_hash.append(&mut data_hash);
-            resp.set_last_block_app_hash(
-                Sha256::hash(commitment_hash.as_slice()).to_vec(),
-            );
-        } else {
-            resp.set_last_block_app_hash(commitment.0.as_ref().to_vec());
-        }
+    resp.set_last_block_height(h);
+    if 0 < h {
+        let la_hash = state.get_state_commitment().0.as_ref().to_vec();
+        resp.set_last_block_app_hash(la_hash);
     }
 
-    resp.set_last_block_height(h);
-
-    println!("\n\n");
-    println!("==========================================");
-    println!("======== Starting from height: {} ========", h);
-    println!("==========================================");
-    println!("\n\n");
-
     drop(state);
+
+    println!("\n\n");
+    println!("==========================================");
+    println!("======== Last committed height: {} ========", h);
+    println!("==========================================");
+    println!("\n\n");
+
     if la.all_commited() {
         la.begin_block();
     }
@@ -88,29 +78,47 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     resp
 }
 
-pub fn query(s: &mut ABCISubmissionServer, req: &RequestQuery) -> ResponseQuery {
-    s.account_base_app.write().query(req)
-}
-
-pub fn init_chain(
-    s: &mut ABCISubmissionServer,
-    req: &RequestInitChain,
-) -> ResponseInitChain {
-    s.account_base_app.write().init_chain(req)
-}
-
 /// any new tx will trigger this callback before it can enter the mem-pool of tendermint
-pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseCheckTx {
-    s.account_base_app.write().check_tx(req)
+pub fn check_tx(_s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseCheckTx {
+    let mut resp = ResponseCheckTx::new();
+
+    if matches!(req.field_type, CheckTxType::New) {
+        if let Ok(tx) = convert_tx(req.get_tx()) {
+            if !tx.valid_in_abci() {
+                resp.log = "Should not appear in ABCI".to_owned();
+                resp.code = 1;
+            } else if TX_HISTORY.read().contains_key(&tx.hash_tm_rawbytes()) {
+                resp.log = "Historical transaction".to_owned();
+                resp.code = 1;
+            }
+        } else {
+            resp.log = "Invalid format".to_owned();
+            resp.code = 1;
+        }
+    }
+
+    resp
 }
 
 pub fn begin_block(
     s: &mut ABCISubmissionServer,
     req: &RequestBeginBlock,
 ) -> ResponseBeginBlock {
-    // cache the last block in query server
-    // trigger this op in `BeginBlock` to make abci-commit safer
-    if HAS_ACTUAL_TXS.swap(false, Ordering::Relaxed) {
+    #[cfg(target_os = "linux")]
+    {
+        // snapshot the last block
+        ledger::store::fbnc::flush_data();
+        let last_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+        info_omit!(CFG.btmcfg.snapshot(last_height as u64));
+    }
+
+    // notify here to make abci-commit safer
+    //
+    // NOTE:
+    // We must ensure that the ledger lock is not occupied,
+    // otherwise the peer will not perform any substantial operations,
+    // because there is a `try_lock` mechanism used to avoid deadlock
+    {
         let mut created = BLOCK_CREATED.0.lock();
         *created = true;
         BLOCK_CREATED.1.notify_one();
@@ -138,7 +146,7 @@ pub fn begin_block(
         pnk!(la.update_staking_simulator());
     }
 
-    s.account_base_app.write().begin_block(req)
+    ResponseBeginBlock::new()
 }
 
 pub fn deliver_tx(
@@ -146,56 +154,42 @@ pub fn deliver_tx(
     req: &RequestDeliverTx,
 ) -> ResponseDeliverTx {
     let mut resp = ResponseDeliverTx::new();
-    let tx_catalog = try_tx_catalog(req.get_tx());
-    match tx_catalog {
-        TxCatalog::FindoraTx => {
-            if let Some(tx) = convert_tx(req.get_tx()) {
-                if !is_coinbase_tx(&tx)
-                    && tx.is_basic_valid(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed))
-                {
-                    if *KEEP_HIST {
-                        // set attr(tags) if any, only needed on a fullnode
-                        let attr = utils::gen_tendermint_attr(&tx);
-                        if !attr.is_empty() {
-                            resp.set_events(attr);
-                        }
-                    }
 
-                    if s.la.write().cache_transaction(tx.clone()).is_ok() {
-                        if is_convert_tx(&tx)
-                            && s.account_base_app
-                                .write()
-                                .deliver_findora_tx(&tx)
-                                .is_err()
-                        {
-                            resp.code = 1;
-                            resp.log = String::from("Failed to deliver transaction!");
-                        }
-                        return resp;
-                    }
+    if let Ok(tx) = convert_tx(req.get_tx()) {
+        let txhash = tx.hash_tm_rawbytes();
+        POOL.spawn_ok(async move {
+            TX_HISTORY.write().set_value(txhash, Default::default());
+        });
+
+        if tx.valid_in_abci() {
+            if *KEEP_HIST {
+                // set attr(tags) if any, only needed on a fullnode
+                let attr = utils::gen_tendermint_attr(&tx);
+                if !attr.is_empty() {
+                    resp.set_events(attr);
                 }
-
-                resp.code = 1;
-                resp.log = String::from("Failed to deliver transaction!");
             }
 
-            resp
-        }
-        TxCatalog::EvmTx => {
-            return s.account_base_app.write().deliver_tx(req);
-        }
-        TxCatalog::Unknown => {
+            if let Err(e) = s.la.write().cache_transaction(tx) {
+                resp.code = 1;
+                resp.log = e.to_string();
+            }
+        } else {
             resp.code = 1;
-            resp.log = String::from("Failed to deliver transaction!");
-            resp
+            resp.log = "Should not appear in ABCI".to_owned();
         }
+    } else {
+        resp.code = 1;
+        resp.log = "Invalid data format".to_owned();
     }
+
+    resp
 }
 
 /// putting block in the ledgerState
 pub fn end_block(
     s: &mut ABCISubmissionServer,
-    req: &RequestEndBlock,
+    _req: &RequestEndBlock,
 ) -> ResponseEndBlock {
     let mut resp = ResponseEndBlock::new();
 
@@ -208,9 +202,7 @@ pub fn end_block(
     // mint coinbase, cache system transactions to ledger
     {
         let laa = la.get_committed_state().read();
-        if let Some(tx) =
-            staking::system_mint_pay(&*laa, &mut *s.account_base_app.write())
-        {
+        if let Some(tx) = staking::system_mint_pay(&*laa) {
             drop(laa);
             // this unwrap should be safe
             la.cache_transaction(tx).unwrap();
@@ -219,7 +211,6 @@ pub fn end_block(
 
     if !la.all_commited() && la.block_txn_count() != 0 {
         pnk!(la.end_block());
-        HAS_ACTUAL_TXS.swap(true, Ordering::Relaxed);
     }
 
     if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
@@ -236,17 +227,19 @@ pub fn end_block(
         &begin_block_req.byzantine_validators.as_slice(),
     );
 
-    let _ = s.account_base_app.write().end_block(req);
-
     resp
 }
 
-pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseCommit {
+pub fn commit(s: &mut ABCISubmissionServer, _req: &RequestCommit) -> ResponseCommit {
     let la = s.la.write();
     let mut state = la.get_committed_state().write();
 
     // will change `struct LedgerStatus`
-    state.set_tendermint_commit(TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed) as u64);
+    let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+    state.set_tendermint_height(td_height as u64);
+
+    // cache last block for QueryServer
+    pnk!(api_cache::update_api_cache(&mut state));
 
     // snapshot them finally
     let path = format!("{}/{}", &CFG.ledger_dir, &state.get_status().snapshot_file);
@@ -255,14 +248,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         .and_then(|s| fs::write(&path, s).c(d!(path))));
 
     let mut r = ResponseCommit::new();
-    let mut commitment = state.get_state_commitment().0.as_ref().to_vec();
-    if s.account_base_app.read().latest_block_number().is_some() {
-        // Combines ledger state hash and chain state hash
-        let mut data_hash = s.account_base_app.write().commit(req).data;
-        commitment.append(&mut data_hash);
-        r.set_data(Sha256::hash(commitment.as_slice()).to_vec());
-    } else {
-        r.set_data(commitment);
-    }
+    r.set_data(state.get_state_commitment().0.as_ref().to_vec());
+
     r
 }

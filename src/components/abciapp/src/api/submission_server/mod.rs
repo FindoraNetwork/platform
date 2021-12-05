@@ -4,17 +4,17 @@
 
 pub mod submission_api;
 
-use fp_utils::tx::EVM_TX_TAG;
-use ledger::{
-    data_model::{BlockEffect, Transaction, TxnEffect, TxnSID, TxnTempSID, TxoSID},
-    store::LedgerState,
+use {
+    ledger::{
+        data_model::{BlockEffect, Transaction, TxnEffect, TxnSID, TxnTempSID, TxoSID},
+        store::LedgerState,
+    },
+    parking_lot::RwLock,
+    rand_core::{CryptoRng, RngCore},
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    std::{collections::HashMap, fmt, sync::Arc},
 };
-use log::info;
-use parking_lot::RwLock;
-use rand_core::{CryptoRng, RngCore};
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt, result::Result as StdResult, sync::Arc};
 
 /// Query handle for user
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Serialize, Deserialize)]
@@ -182,20 +182,18 @@ where
         if let Some(block) = self.block.take() {
             let mut ledger = self.committed_state.write();
             let finalized_txns = ledger.finish_block(block).c(d!())?;
+
             // Update status of all committed transactions
             for (txn_temp_sid, handle, _txn) in self.pending_txns.drain(..) {
                 let committed_txn_info = finalized_txns.get(&txn_temp_sid).c(d!())?;
                 self.txn_status
                     .insert(handle, TxnStatus::Committed(committed_txn_info.clone()));
             }
-            info!("Block ended. Statuses of committed transactions are now updated");
-            // Empty temp_sids after the block is finished
-            // If begin_commit or end_commit is no longer empty, move this line to the end of end_commit
+
             self.pending_txns = Vec::new();
-            // Finally, return the finalized txn sids
-            debug_assert!(self.block.is_none());
             return Ok(());
         }
+
         Err(eg!("Cannot finish block because there are no pending txns"))
     }
 
@@ -206,10 +204,7 @@ where
 
     /// The transaction will be applied to the effect_block after a series of judgments,
     /// and will be classified as pending or rejected depending on the result of the processing.
-    pub fn cache_transaction(
-        &mut self,
-        txn: Transaction,
-    ) -> StdResult<TxnHandle, TxnHandle> {
+    pub fn cache_transaction(&mut self, txn: Transaction) -> Result<TxnHandle> {
         // Begin a block if the previous one has been commited
         if self.all_commited() {
             self.begin_block();
@@ -223,7 +218,7 @@ where
             .c(d!("Failed to compute txn effect"))
             .and_then(|txn_effect| {
                 ledger
-                    .apply_transaction(&mut block, txn_effect, false)
+                    .apply_transaction(&mut block, txn_effect)
                     .c(d!("Failed to apply transaction"))
             });
         match temp_sid {
@@ -233,10 +228,9 @@ where
                 Ok(handle)
             }
             Err(e) => {
-                e.print(None);
                 self.txn_status
-                    .insert(handle.clone(), TxnStatus::Rejected(e.generate_log(None)));
-                Err(handle)
+                    .insert(handle, TxnStatus::Rejected(e.to_string()));
+                Err(e)
             }
         }
     }
@@ -255,33 +249,7 @@ where
 }
 
 /// Convert incoming tx data to the proper Transaction format
-pub fn convert_tx(tx: &[u8]) -> Option<Transaction> {
-    let transaction: Option<Transaction> = serde_json::from_slice(tx).ok();
-    transaction
-}
-
-/// Tx Catalog
-pub enum TxCatalog {
-    /// findora tx
-    FindoraTx,
-
-    /// evm tx
-    EvmTx,
-
-    /// unknown tx
-    Unknown,
-}
-
-/// Check Tx Catalog
-pub fn try_tx_catalog(tx: &[u8]) -> TxCatalog {
-    let len = EVM_TX_TAG.len();
-    if tx.len() <= len {
-        return TxCatalog::Unknown;
-    }
-
-    if EVM_TX_TAG.eq(&tx[..len]) {
-        return TxCatalog::EvmTx;
-    }
-
-    TxCatalog::FindoraTx
+#[inline(always)]
+pub fn convert_tx(tx: &[u8]) -> Result<Transaction> {
+    serde_json::from_slice(tx).c(d!())
 }

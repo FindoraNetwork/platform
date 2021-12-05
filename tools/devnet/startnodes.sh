@@ -18,13 +18,18 @@ if [ -z "$Node" ] || ([ ! -z "$Node" ] && [ "$Node" = "$node" ]); then
         TD_NODE_SELF_ADDR=$SelfAddr \
         RUST_LOG=$ABCI_LOG_LEVEL \
         LEDGER_DIR=$DEVNET/$node/abci \
-        target/$BIN_CFG/abcid $DEVNET/$node >> $DEVNET/$node/abcid.log 2>&1  &
+        RUC_OUT=1 \
+        $BIN_CFG/bin/abcid $DEVNET/$node >> $DEVNET/$node/abcid.log 2>&1  &
 fi
 done
 
 # start nodes
 for node in $nodes
 do
+    perl -pi -e 's/addr_book_strict\s*=.*/addr_book_strict = false/g' $DEVNET/$node/config/config.toml || exit 1
+    if [[ "" != ${DEBUG_ENV_IP} ]]; then
+        perl -pi -e "s/127.0.0.1/${DEBUG_ENV_IP}/g" $DEVNET/$node/config/config.toml || exit 1
+    fi
     tendermint node --home $DEVNET/$node >> $DEVNET/$node/consensus.log 2>&1  &
 done
 

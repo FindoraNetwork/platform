@@ -2,23 +2,25 @@
 //! # Test only
 //!
 
-use super::helpers;
-use crate::{
-    data_model::{
-        AssetRules, AssetTypeCode, IssueAsset, IssueAssetBody, IssuerKeyPair, Memo,
-        Operation, Transaction, TxOutput, ASSET_TYPE_FRA, FRA_DECIMALS,
+use {
+    super::helpers,
+    crate::{
+        data_model::{
+            AssetRules, AssetTypeCode, IssueAsset, IssueAssetBody, IssuerKeyPair, Memo,
+            Operation, Transaction, TxOutput, ASSET_TYPE_FRA, FRA_DECIMALS,
+        },
+        staking::FRA_PRE_ISSUE_AMOUNT,
     },
-    staking::FRA_PRE_ISSUE_AMOUNT,
-};
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
-use ruc::*;
-use zei::{
-    setup::PublicParams,
-    xfr::{
-        asset_record::{build_blind_asset_record, AssetRecordType},
-        sig::XfrKeyPair,
-        structs::AssetRecordTemplate,
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::*,
+    zei::{
+        setup::PublicParams,
+        xfr::{
+            asset_record::{build_blind_asset_record, AssetRecordType},
+            sig::XfrKeyPair,
+            structs::AssetRecordTemplate,
+        },
     },
 };
 

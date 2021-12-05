@@ -11,46 +11,47 @@ mod test;
 
 pub use effects::{BlockEffect, TxnEffect};
 
-use crate::converter::ConvertAccount;
-use crate::staking::{
-    is_coinbase_tx,
-    ops::{
-        claim::ClaimOps, delegation::DelegationOps,
-        fra_distribution::FraDistributionOps, governance::GovernanceOps,
-        mint_fra::MintFraOps, undelegation::UnDelegationOps,
-        update_staker::UpdateStakerOps, update_validator::UpdateValidatorOps,
+use {
+    crate::staking::{
+        ops::{
+            claim::ClaimOps, delegation::DelegationOps,
+            fra_distribution::FraDistributionOps, governance::GovernanceOps,
+            mint_fra::MintFraOps, undelegation::UnDelegationOps,
+            update_staker::UpdateStakerOps, update_validator::UpdateValidatorOps,
+        },
+        Staking,
     },
-    Staking,
-};
-use __trash__::{Policy, PolicyGlobals, TxnPolicyData};
-use bitmap::SparseMap;
-use cryptohash::{sha256::Digest as BitDigest, HashValue};
-use globutils::{HashOf, ProofOf, Serialized, SignatureOf};
-use lazy_static::lazy_static;
-use rand::Rng;
-use rand_chacha::{rand_core, ChaChaRng};
-use rand_core::{CryptoRng, RngCore, SeedableRng};
-use ruc::*;
-use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
-use std::{
-    collections::{HashMap, HashSet},
-    convert::TryFrom,
-    fmt,
-    hash::{Hash, Hasher},
-    mem,
-    ops::Deref,
-    result::Result as StdResult,
-};
-use unicode_normalization::UnicodeNormalization;
-use zei::{
-    serialization::ZeiFromToBytes,
-    xfr::{
-        lib::{gen_xfr_body, XfrNotePolicies},
-        sig::{XfrKeyPair, XfrPublicKey},
-        structs::{
-            AssetRecord, AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo,
-            TracingPolicies, TracingPolicy, XfrAmount, XfrAssetType, XfrBody,
-            ASSET_TYPE_LENGTH,
+    __trash__::{Policy, PolicyGlobals, TxnPolicyData},
+    bitmap::SparseMap,
+    cryptohash::{sha256::Digest as BitDigest, HashValue},
+    fbnc::NumKey,
+    globutils::{HashOf, ProofOf, Serialized, SignatureOf},
+    lazy_static::lazy_static,
+    rand::Rng,
+    rand_chacha::{rand_core, ChaChaRng},
+    rand_core::{CryptoRng, RngCore, SeedableRng},
+    ruc::*,
+    serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer},
+    std::{
+        collections::{HashMap, HashSet},
+        convert::TryFrom,
+        fmt,
+        hash::{Hash, Hasher},
+        mem,
+        ops::Deref,
+        result::Result as StdResult,
+    },
+    unicode_normalization::UnicodeNormalization,
+    zei::{
+        serialization::ZeiFromToBytes,
+        xfr::{
+            lib::{gen_xfr_body, XfrNotePolicies},
+            sig::{XfrKeyPair, XfrPublicKey},
+            structs::{
+                AssetRecord, AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo,
+                TracingPolicies, TracingPolicy, XfrAmount, XfrAssetType, XfrBody,
+                ASSET_TYPE_LENGTH,
+            },
         },
     },
 };
@@ -88,6 +89,21 @@ fn is_default<T: Default + PartialEq>(x: &T) -> bool {
 pub struct AssetTypeCode {
     /// Internal asset type
     pub val: ZeiAssetType,
+}
+
+impl NumKey for AssetTypeCode {
+    fn to_bytes(&self) -> Vec<u8> {
+        self.val.0.to_vec()
+    }
+    fn from_bytes(b: &[u8]) -> Result<Self> {
+        let mut b = b.to_owned();
+        b.resize(ASSET_TYPE_LENGTH, 0u8);
+        Ok(Self {
+            val: ZeiAssetType(
+                <[u8; ASSET_TYPE_LENGTH]>::try_from(b.as_slice()).c(d!())?,
+            ),
+        })
+    }
 }
 
 // The code of FRA is [0;  ASSET_TYPE_LENGTH],
@@ -235,6 +251,10 @@ impl AssetTypeCode {
     pub fn to_base64(self) -> String {
         b64enc(&self.val.0)
     }
+
+    // pub(crate) fn to_bytes(&self) -> Vec<u8> {
+    //     self.val.0.to_vec()
+    // }
 }
 
 impl Code {
@@ -280,6 +300,10 @@ impl Code {
     pub fn to_base64(self) -> String {
         b64enc(&self.val)
     }
+
+    // pub(crate) fn to_bytes(self) -> Vec<u8> {
+    //     self.val.to_vec()
+    // }
 }
 
 impl Serialize for Code {
@@ -366,6 +390,16 @@ pub struct XfrAddress {
     pub key: XfrPublicKey,
 }
 
+impl XfrAddress {
+    pub(crate) fn to_base64(self) -> String {
+        b64enc(&self.key.as_bytes())
+    }
+
+    // pub(crate) fn to_bytes(self) -> Vec<u8> {
+    //     self.key.as_bytes().to_vec()
+    // }
+}
+
 #[allow(clippy::derive_hash_xor_eq)]
 impl Hash for XfrAddress {
     #[inline(always)]
@@ -380,6 +414,16 @@ impl Hash for XfrAddress {
 )]
 pub struct IssuerPublicKey {
     pub key: XfrPublicKey,
+}
+
+impl IssuerPublicKey {
+    pub(crate) fn to_base64(self) -> String {
+        b64enc(self.key.as_bytes())
+    }
+
+    // pub(crate) fn to_bytes(&self) -> Vec<u8> {
+    //     self.key.as_bytes().to_vec()
+    // }
 }
 
 #[allow(clippy::derive_hash_xor_eq)]
@@ -648,6 +692,18 @@ pub struct CredentialProof {
 #[allow(missing_docs)]
 pub struct TxoSID(pub u64);
 
+impl NumKey for TxoSID {
+    fn to_bytes(&self) -> Vec<u8> {
+        self.0.to_ne_bytes().to_vec()
+    }
+    fn from_bytes(b: &[u8]) -> Result<Self> {
+        <[u8; mem::size_of::<u64>()]>::try_from(b)
+            .c(d!())
+            .map(u64::from_ne_bytes)
+            .map(TxoSID)
+    }
+}
+
 #[allow(missing_docs)]
 pub type TxoSIDList = Vec<TxoSID>;
 
@@ -671,15 +727,27 @@ pub struct OutputPosition(pub usize);
 )]
 pub struct TxnSID(pub usize);
 
-/// (sid, hash)
-pub type TxnIDHash = (TxnSID, String);
-
 impl fmt::Display for TxoSID {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
+
+impl NumKey for TxnSID {
+    fn to_bytes(&self) -> Vec<u8> {
+        self.0.to_ne_bytes().to_vec()
+    }
+    fn from_bytes(b: &[u8]) -> Result<Self> {
+        <[u8; mem::size_of::<usize>()]>::try_from(b)
+            .c(d!())
+            .map(usize::from_ne_bytes)
+            .map(TxnSID)
+    }
+}
+
+/// (sid, hash)
+pub type TxnIDHash = (TxnSID, String);
 
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -711,6 +779,18 @@ pub enum UtxoStatus {
 #[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Utxo(pub TxOutput);
+
+impl Utxo {
+    #[cfg(not(target_arch = "wasm32"))]
+    #[inline(always)]
+    pub(crate) fn get_nonconfidential_balance(&self) -> u64 {
+        if let XfrAmount::NonConfidential(n) = self.0.record.amount {
+            n
+        } else {
+            0
+        }
+    }
+}
 
 /// Ledger address of input
 #[derive(Copy, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1151,8 +1231,6 @@ pub enum Operation {
     FraDistribution(FraDistributionOps),
     /// Coinbase operation
     MintFra(MintFraOps),
-    /// Convert UTXO to Account
-    ConvertAccount(ConvertAccount),
 }
 
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
@@ -1179,7 +1257,6 @@ fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
             i.set_nonce(no_replay_token);
         }
         Operation::UpdateMemo(i) => i.body.no_replay_token = no_replay_token,
-        Operation::ConvertAccount(i) => i.set_nonce(no_replay_token),
         _ => {}
     }
 }
@@ -1511,10 +1588,19 @@ lazy_static! {
 pub const TX_FEE_MIN: u64 = 1_0000;
 
 impl Transaction {
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn is_coinbase_tx(&self) -> bool {
+        self.body
+            .operations
+            .iter()
+            .any(|o| matches!(o, Operation::MintFra(_)))
+    }
+
     /// All-in-one checker
     #[inline(always)]
-    pub fn is_basic_valid(&self, td_height: i64) -> bool {
-        self.check_fee() && self.fra_no_illegal_issuance(td_height)
+    pub fn valid_in_abci(&self) -> bool {
+        self.check_fee() && !self.is_coinbase_tx()
     }
 
     /// A simple fee checker
@@ -1531,7 +1617,7 @@ impl Transaction {
         //
         // But it seems enough when we combine it with limiting
         // the payload size of submission-server's http-requests.
-        is_coinbase_tx(self)
+        self.is_coinbase_tx()
             || self.body.operations.iter().any(|ops| {
                 if let Operation::TransferAsset(ref x) = ops {
                     return x.body.outputs.iter().any(|o| {
@@ -1556,31 +1642,11 @@ impl Transaction {
                     if x.body.code.val == ASSET_TYPE_FRA {
                         return true;
                     }
+                } else if matches!(ops, Operation::UpdateValidator(_)) {
+                    return true;
                 }
                 false
             })
-    }
-
-    /// Issuing FRA is denied except in the genesis block.
-    #[inline(always)]
-    pub fn fra_no_illegal_issuance(&self, tendermint_block_height: i64) -> bool {
-        // block height of mainnet has been higher than this value
-        const HEIGHT_LIMIT: i64 = 10_0000;
-
-        // **mainnet v0.1**:
-        // FRA is defined and issued in genesis block.
-        if HEIGHT_LIMIT > tendermint_block_height {
-            return true;
-        }
-
-        !self.body.operations.iter().any(|o| {
-            if let Operation::IssueAsset(ref x) = o {
-                if ASSET_TYPE_FRA == x.body.code.val {
-                    return true;
-                }
-            }
-            false
-        })
     }
 
     /// findora hash
@@ -1592,7 +1658,13 @@ impl Transaction {
     /// tendermint hash
     #[inline(always)]
     pub fn hash_tm(&self) -> HashOf<Transaction> {
-        HashOf::new(&self.clone())
+        HashOf::new(self)
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn hash_tm_rawbytes(&self) -> Vec<u8> {
+        self.hash_tm().0.hash.as_ref().to_vec()
     }
 
     #[inline(always)]
@@ -1753,4 +1825,30 @@ impl StateCommitmentData {
     pub fn compute_commitment(&self) -> HashOf<Option<Self>> {
         HashOf::new(&Some(self).cloned())
     }
+}
+
+/// Used in `Staking` logic to create consensus-tmp XfrPublicKey
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq, Default)]
+pub struct ConsensusRng(u32);
+
+impl CryptoRng for ConsensusRng {}
+
+impl RngCore for ConsensusRng {
+    fn next_u32(&mut self) -> u32 {
+        self.0 = self.0.overflowing_add(1).0;
+        self.0
+    }
+    fn next_u64(&mut self) -> u64 {
+        self.next_u32() as u64
+    }
+    fn fill_bytes(&mut self, _dest: &mut [u8]) {}
+    fn try_fill_bytes(&mut self, _dest: &mut [u8]) -> StdResult<(), rand_core::Error> {
+        Ok(())
+    }
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn gen_random_keypair() -> XfrKeyPair {
+    XfrKeyPair::generate(&mut ChaChaRng::from_entropy())
 }

@@ -103,6 +103,22 @@ subcommands:
             long: validator-memo
             takes_value: true
             value_name: Memo
+        - validator-memo-name:
+            long: validator-memo-name
+            takes_value: true
+            value_name: Name
+        - validator-memo-desc:
+            long: validator-memo-desc
+            takes_value: true
+            value_name: Desc
+        - validator-memo-website:
+            long: validator-memo-website
+            takes_value: true
+            value_name: Website
+        - validator-memo-logo:
+            long: validator-memo-logo
+            takes_value: true
+            value_name: Logo
   - unstake:
       about: Unstake tokens (i.e. unbond tokens) from a Validator
       args:
@@ -397,55 +413,3 @@ subcommands:
   #          takes_value: true
   #          value_name: WALLET
   #          required: true
-  - account:
-      about: Return user contract account information
-      args:
-        - addr:
-            help: findora account(eg:fra1rkv...) or Ethereum address(g:0xd3Bf...)
-            short: a
-            long: addr
-            takes_value: true
-            value_name: WALLET ADDRESS
-            required: true
-  - contract-deposit:
-      about: Transfer FRA from a Findora account to the specified Ethereum address
-      args:
-        - addr:
-            help: ethereum address to receive FRA, eg:0xd3Bf...
-            short: a
-            long: addr
-            takes_value: true
-            value_name: WALLET ADDRESS
-            required: true
-        - amount:
-            help: deposit FRA amount
-            short: n
-            long: amount
-            takes_value: true
-            value_name: AMOUNT
-            required: true
-  - contract-withdraw:
-      about: Transfer FRA from an Ethereum address to the specified Findora account
-      args:
-        - addr:
-            help: findora account to receive FRA, eg:fra1rkv...
-            short: a
-            long: addr
-            takes_value: true
-            value_name: WALLET ADDRESS
-        - amount:
-            help: withdraw FRA amount
-            short: n
-            long: amount
-            takes_value: true
-            value_name: AMOUNT
-            required: true
-        - eth-key:
-            help: ethereum account mnemonic phrase sign withdraw tx
-            short: e
-            long: eth-key
-            takes_value: true
-            value_name: MNEMONIC
-            required: true
-  - gen-eth-key:
-      about: Generate an Ethereum address

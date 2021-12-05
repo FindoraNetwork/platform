@@ -2,17 +2,19 @@
 //! # interface of operating tx
 //!
 
-use super::{SubmissionServer, TxnForward, TxnHandle};
-use actix_cors::Cors;
-use actix_web::{error, middleware, web, App, HttpServer};
-use finutils::api::NetworkRoute;
-use ledger::data_model::Transaction;
-use log::info;
-use parking_lot::RwLock;
-use rand_core::{CryptoRng, RngCore};
-use ruc::*;
-use std::result::Result as StdResult;
-use std::sync::Arc;
+use {
+    super::{SubmissionServer, TxnForward, TxnHandle},
+    actix_cors::Cors,
+    actix_web::{error, middleware, web, App, HttpServer},
+    finutils::api::NetworkRoute,
+    ledger::data_model::Transaction,
+    log::info,
+    parking_lot::RwLock,
+    rand_core::{CryptoRng, RngCore},
+    ruc::*,
+    std::result::Result as StdResult,
+    std::sync::Arc,
+};
 
 /// Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]
@@ -47,7 +49,7 @@ where
         .map(web::Json)
         .map_err(|e| {
             e.print(None);
-            error::ErrorBadRequest(e.generate_log(None))
+            error::ErrorBadRequest(e.to_string())
         })
 }
 
@@ -85,7 +87,6 @@ pub enum SubmissionRoutes {
     SubmitTransaction,
     TxnStatus,
     Ping,
-    ForceEndBlock,
     Version,
 }
 
@@ -95,7 +96,6 @@ impl NetworkRoute for SubmissionRoutes {
             SubmissionRoutes::SubmitTransaction => "submit_transaction",
             SubmissionRoutes::TxnStatus => "txn_status",
             SubmissionRoutes::Ping => "ping",
-            SubmissionRoutes::ForceEndBlock => "force_end_block",
             SubmissionRoutes::Version => "version",
         };
         "/".to_owned() + endpoint

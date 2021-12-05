@@ -7,46 +7,50 @@ pub mod helpers;
 mod test;
 pub mod utils;
 
-pub use bnc;
+pub use fbnc;
 
-use crate::{
-    data_model::{
-        AssetType, AssetTypeCode, AuthenticatedBlock, AuthenticatedTransaction,
-        AuthenticatedUtxo, AuthenticatedUtxoStatus, BlockEffect, BlockSID,
-        FinalizedBlock, FinalizedTransaction, IssuerKeyPair, IssuerPublicKey, Operation,
-        OutputPosition, StateCommitmentData, Transaction, TransferType, TxnEffect,
-        TxnSID, TxnTempSID, TxoSID, UnAuthenticatedUtxo, Utxo, UtxoStatus, XfrAddress,
-        BLACK_HOLE_PUBKEY,
+use {
+    crate::{
+        data_model::{
+            AssetType, AssetTypeCode, AuthenticatedBlock, AuthenticatedTransaction,
+            AuthenticatedUtxo, AuthenticatedUtxoStatus, BlockEffect, BlockSID,
+            FinalizedBlock, FinalizedTransaction, IssuerKeyPair, IssuerPublicKey,
+            OutputPosition, StateCommitmentData, Transaction, TransferType, TxnEffect,
+            TxnSID, TxnTempSID, TxoSID, UnAuthenticatedUtxo, Utxo, UtxoStatus,
+            BLACK_HOLE_PUBKEY,
+        },
+        staking::{
+            Amount, BlockHeight, Power, Staking, TendermintAddrRef,
+            FF_PK_EXTRA_120_0000, FF_PK_LIST, FRA_TOTAL_AMOUNT, KEEP_HIST,
+        },
+        LSSED_VAR, SNAPSHOT_ENTRIES_DIR,
     },
-    staking::{
-        Amount, Power, Staking, TendermintAddrRef, FF_PK_LIST, FRA_TOTAL_AMOUNT,
-        KEEP_HIST,
+    api_cache::ApiCache,
+    bitmap::{BitMap, SparseMap},
+    cryptohash::sha256::Digest as BitDigest,
+    fbnc::{new_mapx, new_mapxnk, new_vecx, Mapx, Mapxnk, Vecx},
+    globutils::{HashOf, ProofOf},
+    merkle_tree::AppendOnlyMerkle,
+    parking_lot::RwLock,
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    sliding_set::SlidingSet,
+    std::{
+        collections::{BTreeMap, HashMap, HashSet},
+        env,
+        fs::{self, OpenOptions},
+        io::ErrorKind,
+        mem,
+        ops::{Deref, DerefMut},
+        sync::Arc,
     },
-};
-use api_cache::ApiCache;
-use bitmap::{BitMap, SparseMap};
-use bnc::{new_mapx, new_vecx, Mapx, Vecx};
-use cryptohash::sha256::Digest as BitDigest;
-use globutils::{HashOf, ProofOf};
-use merkle_tree::AppendOnlyMerkle;
-use parking_lot::RwLock;
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use sliding_set::SlidingSet;
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    fs::{self, File, OpenOptions},
-    io::{BufRead, BufReader, ErrorKind},
-    mem,
-    ops::{Deref, DerefMut},
-    sync::Arc,
-};
-use zei::xfr::{
-    lib::XfrNotePolicies,
-    sig::XfrPublicKey,
-    structs::{OwnerMemo, TracingPolicies, TracingPolicy, XfrAmount},
+    zei::xfr::{
+        lib::XfrNotePolicies,
+        sig::XfrPublicKey,
+        structs::{OwnerMemo, TracingPolicies, TracingPolicy},
+    },
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
@@ -63,9 +67,9 @@ pub struct LedgerState {
     /// `merkle` representing its hash.
     pub blocks: Vecx<FinalizedBlock>,
     /// <tx id> => [<block id>, <tx idx in block>]
-    pub tx_to_block_location: Mapx<TxnSID, [usize; 2]>,
+    pub tx_to_block_location: Mapxnk<TxnSID, [usize; 2]>,
     /// cache used in APIs
-    pub api_cache: ApiCache,
+    pub api_cache: Option<ApiCache>,
 
     // current block effect (middle cache)
     block_ctx: Option<BlockEffect>,
@@ -109,24 +113,16 @@ impl LedgerState {
         &self,
         block: &mut BlockEffect,
         txe: TxnEffect,
-        is_loading: bool,
     ) -> Result<TxnTempSID> {
         let tx = txe.txn.clone();
         self.status
             .check_txn_effects(&txe)
             .c(d!())
-            .and_then(|_| block.add_txn_effect(txe, is_loading).c(d!()))
-            .and_then(|tmpid| {
+            .and_then(|_| block.add_txn_effect(txe).c(d!()))
+            .map(|tmpid| {
                 // NOTE: set at the last position
-                if is_loading {
-                    Ok(tmpid)
-                } else {
-                    block
-                        .staking_simulator
-                        .coinbase_check_and_pay(&tx)
-                        .c(d!())
-                        .map(|_| tmpid)
-                }
+                block.staking_simulator.coinbase_check_and_pay(&tx);
+                tmpid
             })
     }
 
@@ -243,137 +239,6 @@ impl LedgerState {
         Ok(())
     }
 
-    /// update data of query server,
-    /// do this op when we create a new block
-    fn update_api_cache(&mut self) -> Result<()> {
-        if !*KEEP_HIST {
-            return Ok(());
-        }
-
-        self.api_cache.cache_hist_data();
-
-        let block = if let Some(b) = self.blocks.last() {
-            b
-        } else {
-            return Ok(());
-        };
-
-        // Update ownership status
-        for (txn_sid, txo_sids) in
-            block.txns.iter().map(|v| (v.tx_id, v.txo_ids.as_slice()))
-        {
-            let curr_txn = self.get_transaction_light(txn_sid).c(d!())?.txn;
-            // get the transaction, ownership addresses, and memos associated with each transaction
-            let (addresses, owner_memos) = {
-                let addresses: Vec<XfrAddress> = txo_sids
-                    .iter()
-                    .map(|sid| XfrAddress {
-                        key: ((self
-                            .get_utxo_light(*sid)
-                            .or_else(|| self.get_spent_utxo_light(*sid))
-                            .unwrap()
-                            .utxo)
-                            .0)
-                            .record
-                            .public_key,
-                    })
-                    .collect();
-
-                let owner_memos = curr_txn.get_owner_memos_ref();
-
-                (addresses, owner_memos)
-            };
-
-            let classify_op = |op: &Operation| {
-                match op {
-                    Operation::Claim(i) => {
-                        let key = i.get_claim_publickey();
-                        #[allow(unused_mut)]
-                        let mut hist = self
-                            .api_cache
-                            .claim_hist_txns
-                            .entry(XfrAddress { key })
-                            .or_insert_with(Vec::new);
-
-                        // keep it in ascending order to reduce memory movement count
-                        match hist.binary_search_by(|a| a.0.cmp(&txn_sid.0)) {
-                            Ok(_) => { /*skip if txn_sid already exists*/ }
-                            Err(idx) => hist.insert(idx, txn_sid),
-                        }
-                    }
-                    Operation::MintFra(i) => i.entries.iter().for_each(|me| {
-                        let key = me.utxo.record.public_key;
-                        #[allow(unused_mut)]
-                        let mut hist = self
-                            .api_cache
-                            .coinbase_oper_hist
-                            .entry(XfrAddress { key })
-                            .or_insert_with(Vec::new);
-                        hist.push((i.height, me.clone()));
-                    }),
-                    _ => { /* filter more operations before this line */ }
-                };
-            };
-
-            // Update related addresses
-            // Apply classify_op for each operation in curr_txn
-            let related_addresses =
-                api_cache::get_related_addresses(&curr_txn, classify_op);
-            for address in &related_addresses {
-                self.api_cache
-                    .related_transactions
-                    .entry(*address)
-                    .or_insert_with(HashSet::new)
-                    .insert(txn_sid);
-            }
-
-            // Update transferred nonconfidential assets
-            let transferred_assets =
-                api_cache::get_transferred_nonconfidential_assets(&curr_txn);
-            for asset in &transferred_assets {
-                self.api_cache
-                    .related_transfers
-                    .entry(*asset)
-                    .or_insert_with(HashSet::new)
-                    .insert(txn_sid);
-            }
-
-            // Add created asset
-            for op in &curr_txn.body.operations {
-                match op {
-                    Operation::DefineAsset(define_asset) => {
-                        self.api_cache.add_created_asset(&define_asset);
-                    }
-                    Operation::IssueAsset(issue_asset) => {
-                        self.api_cache.cache_issuance(&issue_asset);
-                    }
-                    _ => {}
-                };
-            }
-
-            // Add new utxos (this handles both transfers and issuances)
-            for (txo_sid, (address, owner_memo)) in txo_sids
-                .iter()
-                .zip(addresses.iter().zip(owner_memos.iter()))
-            {
-                self.api_cache.utxos_to_map_index.insert(*txo_sid, *address);
-                let hash = curr_txn.hash_tm().hex().to_uppercase();
-                self.api_cache
-                    .txo_to_txnid
-                    .insert(*txo_sid, (txn_sid, hash.clone()));
-                self.api_cache.txn_sid_to_hash.insert(txn_sid, hash.clone());
-                self.api_cache.txn_hash_to_sid.insert(hash.clone(), txn_sid);
-                if let Some(owner_memo) = owner_memo {
-                    self.api_cache
-                        .owner_memos
-                        .insert(*txo_sid, (*owner_memo).clone());
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     /// Finish current block, peform following operations:
     ///    Invalid current input utxos
     ///    Apply current block to ledger status
@@ -391,7 +256,6 @@ impl LedgerState {
         self.update_utxo_map(base_sid, max_sid, &block.temp_sids, &tsm)
             .c(d!())
             .and_then(|_| self.update_state(block, &tsm).c(d!()))
-            .and_then(|_| self.update_api_cache().c(d!()))
             .map(|_| tsm)
     }
 
@@ -403,7 +267,7 @@ impl LedgerState {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn set_tendermint_commit(&mut self, tendermint_h: u64) {
+    pub fn set_tendermint_height(&mut self, tendermint_h: u64) {
         self.status.td_commit_height = tendermint_h;
     }
 
@@ -433,29 +297,9 @@ impl LedgerState {
 
     /// create a tmp ledger for testing purpose
     pub fn tmp_ledger() -> LedgerState {
-        bnc::clear();
+        fbnc::clear();
         let tmp_dir = globutils::fresh_tmp_dir().to_string_lossy().into_owned();
         LedgerState::new(&tmp_dir, Some("test")).unwrap()
-    }
-
-    fn load_transaction_log(path: &str) -> Result<Vec<LoggedBlock>> {
-        let file = File::open(path).c(d!())?;
-        let reader = BufReader::new(file);
-        let mut v = Vec::new();
-        for l in reader.lines() {
-            let l = l.c(d!())?;
-            match serde_json::from_str::<LoggedBlock>(&l) {
-                Ok(next_block) => {
-                    v.push(next_block);
-                }
-                Err(e) => {
-                    if !l.is_empty() {
-                        return Err(eg!(format!("{:?} (deserializing '{:?}')", e, &l)));
-                    }
-                }
-            }
-        }
-        Ok(v)
     }
 
     // In this functionn:
@@ -543,13 +387,15 @@ impl LedgerState {
         // These iterms will be set under ${BNC_DATA_DIR}
         fs::create_dir_all(&basedir).c(d!())?;
         let snapshot_file = format!("{}ledger_status", &prefix);
+
         let snapshot_entries_dir = prefix.clone() + "ledger_status_subdata";
+        env::set_var(LSSED_VAR, &snapshot_entries_dir);
+
         let blocks_path = prefix.clone() + "blocks";
         let tx_to_block_location_path = prefix.clone() + "tx_to_block_location";
 
-        let ledger = LedgerState {
-            status: LedgerStatus::new(&basedir, &snapshot_file, &snapshot_entries_dir)
-                .c(d!())?,
+        let mut ledger = LedgerState {
+            status: LedgerStatus::new(&basedir, &snapshot_file).c(d!())?,
             block_merkle: Arc::new(RwLock::new(
                 LedgerState::init_merkle_log(&block_merkle_path).c(d!())?,
             )),
@@ -557,38 +403,25 @@ impl LedgerState {
                 LedgerState::init_merkle_log(&txn_merkle_path).c(d!())?,
             )),
             blocks: new_vecx!(&blocks_path),
-            tx_to_block_location: new_mapx!(&tx_to_block_location_path),
+            tx_to_block_location: new_mapxnk!(&tx_to_block_location_path),
             utxo_map: Arc::new(RwLock::new(
                 LedgerState::init_utxo_map(&utxo_map_path).c(d!())?,
             )),
             block_ctx: Some(BlockEffect::default()),
-            api_cache: ApiCache::new(&prefix),
+            api_cache: alt!(*KEEP_HIST, Some(ApiCache::new(&prefix)), None),
         };
+
+        ledger.status.refresh_data();
 
         Ok(ledger)
     }
 
-    // Load an existing one OR create a new one.
-    fn load_from_log(basedir: &str) -> Result<LedgerState> {
+    /// Load an existing one OR create a new one.
+    #[inline(always)]
+    pub fn load_or_init(basedir: &str) -> Result<LedgerState> {
         let mut ledger = LedgerState::new(basedir, None).c(d!())?;
 
-        if ledger.blocks.is_empty() {
-            let txn_log_path = format!("{}/txn_log", basedir);
-            if let Ok(old_blocks) =
-                LedgerState::load_transaction_log(&txn_log_path).c(d!())
-            {
-                for logged_block in old_blocks.into_iter() {
-                    let mut be = ledger.start_block().c(d!())?;
-                    for txn in logged_block.block {
-                        let te = TxnEffect::compute_effect(txn).c(d!())?;
-                        ledger.apply_transaction(&mut be, te, true).c(d!())?;
-                    }
-                    ledger.finish_block(be).c(d!())?;
-                }
-            }
-        }
-
-        let h = ledger.get_tendermint_height() as u64;
+        let h = ledger.get_tendermint_height();
         ledger.get_staking_mut().set_custom_block_height(h);
         omit!(ledger.utxo_map.write().compute_checksum());
         ledger.fast_invariant_check().c(d!())?;
@@ -596,12 +429,6 @@ impl LedgerState {
         flush_data();
 
         Ok(ledger)
-    }
-
-    #[inline(always)]
-    #[allow(missing_docs)]
-    pub fn load_or_init(basedir: &str) -> Result<LedgerState> {
-        LedgerState::load_from_log(basedir)
     }
 
     /// Perform checkpoint of current ledger state
@@ -628,25 +455,33 @@ impl LedgerState {
         let gdp = self.staking_get_global_delegation_percent();
         let return_rate = self.staking_get_block_rewards_rate();
 
-        let pk = self
-            .get_staking()
-            .validator_td_addr_to_app_pk(addr)
-            .c(d!())?;
-
         self.get_staking_mut()
             .record_block_rewards_rate(return_rate);
 
-        let commission_rate = if let Some(Some(v)) = self
-            .get_staking()
-            .validator_get_current()
-            .map(|vd| vd.body.get(&pk))
-        {
+        let s = self.get_staking();
+
+        let pk = s.validator_td_addr_to_app_pk(addr).c(d!())?;
+
+        let commission_rate = if let Some(v) = s.validator_get_current_one_by_id(&pk) {
             v.commission_rate
         } else {
             return Err(eg!("not validator"));
         };
 
-        let h = self.get_staking().cur_height;
+        let h = s.cur_height;
+        let cbl = s.coinbase_balance();
+        let total_delegation_amount_of_validator = s
+            .delegation_get(&pk)
+            .map(|d| d.entries.get(&pk))
+            .flatten()
+            .copied()
+            .unwrap_or(0)
+            + s.validator_get_current_one_by_id(&pk)
+                .c(d!())?
+                .delegators
+                .values()
+                .sum::<Amount>();
+        let gda = s.get_global_delegation_amount();
         let commissions = self
             .get_staking_mut()
             .di
@@ -654,7 +489,17 @@ impl LedgerState {
             .values_mut()
             .filter(|d| d.validator_entry_exists(&pk))
             .map(|d| {
-                d.set_delegation_rewards(&pk, h, return_rate, commission_rate, gdp, true)
+                d.set_delegation_rewards(
+                    &pk,
+                    h,
+                    return_rate,
+                    commission_rate,
+                    gdp,
+                    total_delegation_amount_of_validator,
+                    gda,
+                    true,
+                    cbl,
+                )
             })
             .collect::<Result<Vec<_>>>()
             .c(d!())?;
@@ -678,33 +523,70 @@ impl LedgerState {
         let p = self.staking_get_global_delegation_percent();
         let p = [p[0] as u128, p[1] as u128];
 
-        // This is an equal conversion of `1 / p% * 0.0201`
-        let mut a0 = p[1] * 201;
-        let mut a1 = p[0] * 10000;
+        #[cfg(feature = "debug_env")]
+        const APY_V7_UPGRADE_HEIGHT: BlockHeight = 0;
 
-        if a0 * 100 > a1 * 105 {
-            // max value: 105%
-            a0 = 105;
-            a1 = 100;
-        } else if a0 * 50 < a1 {
-            // min value: 2%
-            a0 = 2;
-            a1 = 100;
+        #[cfg(not(feature = "debug_env"))]
+        const APY_V7_UPGRADE_HEIGHT: BlockHeight = 131_0000;
+
+        if APY_V7_UPGRADE_HEIGHT < self.get_tendermint_height() {
+            // This is an equal conversion of `1 / p% * 0.0536`
+            let mut a0 = p[1] * 536;
+            let mut a1 = p[0] * 10000;
+
+            if a0 * 100 > a1 * 268 {
+                // max value: 268%
+                a0 = 268;
+                a1 = 100;
+            } else if a0 * 1000 < a1 * 54 {
+                // min value: 5.4%
+                a0 = 54;
+                a1 = 1000;
+            }
+            [a0, a1]
+        } else {
+            // This is an equal conversion of `1 / p% * 0.0201`
+            let mut a0 = p[1] * 201;
+            let mut a1 = p[0] * 10000;
+
+            if a0 * 100 > a1 * 105 {
+                // max value: 105%
+                a0 = 105;
+                a1 = 100;
+            } else if a0 * 50 < a1 {
+                // min value: 2%
+                a0 = 2;
+                a1 = 100;
+            }
+
+            [a0, a1]
         }
-
-        [a0, a1]
     }
 
-    // Total amount of all freed FRAs, aka 'are not being locked in any way'.
+    /// Total amount of all freed FRAs, aka 'are not being locked'.
     #[inline(always)]
-    fn staking_get_global_unlocked_amount(&self) -> Amount {
+    pub fn staking_get_global_unlocked_amount(&self) -> Amount {
+        #[cfg(feature = "debug_env")]
+        const FF_ADDR_EXTRA_FIX_HEIGHT: BlockHeight = 0;
+
+        #[cfg(not(feature = "debug_env"))]
+        const FF_ADDR_EXTRA_FIX_HEIGHT: BlockHeight = 120_0000;
+
+        let s = self.get_staking();
+
+        let extras = if FF_ADDR_EXTRA_FIX_HEIGHT < s.cur_height {
+            vec![*BLACK_HOLE_PUBKEY, *FF_PK_EXTRA_120_0000]
+        } else {
+            vec![*BLACK_HOLE_PUBKEY]
+        };
+
         FRA_TOTAL_AMOUNT
             - FF_PK_LIST
                 .iter()
-                .chain([*BLACK_HOLE_PUBKEY].iter())
+                .chain(extras.iter())
                 .map(|pk| self.staking_get_nonconfidential_balance(pk).unwrap_or(0))
                 .sum::<Amount>()
-            - self.get_staking().coinbase_balance()
+            - s.coinbase_balance()
     }
 
     #[inline(always)]
@@ -716,18 +598,19 @@ impl LedgerState {
         ]
     }
 
+    #[inline(always)]
     fn staking_get_nonconfidential_balance(&self, addr: &XfrPublicKey) -> Result<u64> {
-        self.get_owned_utxos(addr).c(d!()).map(|o| {
-            o.values()
-                .map(|(utxo, _)| {
-                    if let XfrAmount::NonConfidential(am) = utxo.0.record.amount {
-                        am
-                    } else {
-                        0
-                    }
-                })
-                .sum()
-        })
+        #[cfg(feature = "debug_env")]
+        const NONCONFIDENTIAL_BALANCE_FIX_HEIGHT: BlockHeight = 0;
+
+        #[cfg(not(feature = "debug_env"))]
+        const NONCONFIDENTIAL_BALANCE_FIX_HEIGHT: BlockHeight = 121_0000;
+
+        if NONCONFIDENTIAL_BALANCE_FIX_HEIGHT < self.get_tendermint_height() {
+            self.get_nonconfidential_balance(addr).c(d!())
+        } else {
+            Ok(0)
+        }
     }
 
     /// Get a utxo along with the transaction, spent status and commitment data which it belongs
@@ -860,6 +743,12 @@ impl LedgerState {
             }
         }
         Ok(utxos)
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn get_nonconfidential_balance(&self, addr: &XfrPublicKey) -> Option<u64> {
+        self.status.nonconfidential_balances.get(addr)
     }
 
     /// Get unspent utxos owned by a findora account
@@ -1039,12 +928,14 @@ impl LedgerState {
 pub struct LedgerStatus {
     /// the file path of the snapshot
     pub snapshot_file: String,
-    utxos: Mapx<TxoSID, Utxo>, // all currently-unspent TXOs
+    // all currently-unspent TXOs
+    utxos: Mapxnk<TxoSID, Utxo>,
+    nonconfidential_balances: Mapx<XfrPublicKey, u64>,
     owned_utxos: Mapx<XfrPublicKey, HashSet<TxoSID>>,
     /// all spent TXOs
-    pub spent_utxos: Mapx<TxoSID, Utxo>,
+    pub spent_utxos: Mapxnk<TxoSID, Utxo>,
     // Map a TXO to its output position in a transaction
-    txo_to_txn_location: Mapx<TxoSID, (TxnSID, OutputPosition)>,
+    txo_to_txn_location: Mapxnk<TxoSID, (TxnSID, OutputPosition)>,
     // State commitment history.
     // The BitDigest at index i is the state commitment of the ledger at block height  i + 1.
     state_commitment_versions: Vecx<HashOf<Option<StateCommitmentData>>>,
@@ -1131,11 +1022,7 @@ impl LedgerStatus {
 
     /// Load or init LedgerStatus from snapshot
     #[inline(always)]
-    pub fn new(
-        basedir: &str,
-        snapshot_file: &str,
-        snapshot_entries_dir: &str,
-    ) -> Result<LedgerStatus> {
+    pub fn new(basedir: &str, snapshot_file: &str) -> Result<LedgerStatus> {
         let path = format!("{}/{}", basedir, snapshot_file);
         match fs::read_to_string(path) {
             Ok(s) => serde_json::from_str(&s).c(d!()),
@@ -1143,32 +1030,35 @@ impl LedgerStatus {
                 if ErrorKind::NotFound != e.kind() {
                     Err(eg!(e))
                 } else {
-                    Self::create(snapshot_file, snapshot_entries_dir).c(d!())
+                    Self::create(snapshot_file).c(d!())
                 }
             }
         }
     }
 
-    fn create(snapshot_file: &str, snapshot_entries_dir: &str) -> Result<LedgerStatus> {
-        let utxos_path = snapshot_entries_dir.to_owned() + "/utxo";
-        let spent_utxos_path = snapshot_entries_dir.to_owned() + "/spent_utxos";
+    fn create(snapshot_file: &str) -> Result<LedgerStatus> {
+        let utxos_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/utxo";
+        let nonconfidential_balances_path =
+            SNAPSHOT_ENTRIES_DIR.to_owned() + "/nonconfidential_balances";
+        let spent_utxos_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/spent_utxos";
         let txo_to_txn_location_path =
-            snapshot_entries_dir.to_owned() + "/txo_to_txn_location";
+            SNAPSHOT_ENTRIES_DIR.to_owned() + "/txo_to_txn_location";
         let issuance_amounts_path =
-            snapshot_entries_dir.to_owned() + "/issuance_amounts";
+            SNAPSHOT_ENTRIES_DIR.to_owned() + "/issuance_amounts";
         let state_commitment_versions_path =
-            snapshot_entries_dir.to_owned() + "/state_commitment_versions";
-        let asset_types_path = snapshot_entries_dir.to_owned() + "/asset_types";
-        let issuance_num_path = snapshot_entries_dir.to_owned() + "/issuance_num";
-        let owned_utxos_path = snapshot_entries_dir.to_owned() + "/owned_utxos";
+            SNAPSHOT_ENTRIES_DIR.to_owned() + "/state_commitment_versions";
+        let asset_types_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/asset_types";
+        let issuance_num_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/issuance_num";
+        let owned_utxos_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/owned_utxos";
 
         let ledger = LedgerStatus {
             snapshot_file: snapshot_file.to_owned(),
             sliding_set: SlidingSet::<[u8; 8]>::new(TRANSACTION_WINDOW_WIDTH as usize),
-            utxos: new_mapx!(utxos_path.as_str()),
+            utxos: new_mapxnk!(utxos_path.as_str()),
+            nonconfidential_balances: new_mapx!(nonconfidential_balances_path.as_str()),
             owned_utxos: new_mapx!(owned_utxos_path.as_str()),
-            spent_utxos: new_mapx!(spent_utxos_path.as_str()),
-            txo_to_txn_location: new_mapx!(txo_to_txn_location_path.as_str()),
+            spent_utxos: new_mapxnk!(spent_utxos_path.as_str()),
+            txo_to_txn_location: new_mapxnk!(txo_to_txn_location_path.as_str()),
             issuance_amounts: new_mapx!(issuance_amounts_path.as_str()),
             state_commitment_versions: new_vecx!(state_commitment_versions_path.as_str()),
             asset_types: new_mapx!(asset_types_path.as_str()),
@@ -1180,7 +1070,7 @@ impl LedgerStatus {
             state_commitment_data: None,
             block_commit_count: 0,
             staking: Staking::new(),
-            td_commit_height: 1,
+            td_commit_height: 0,
         };
 
         Ok(ledger)
@@ -1418,6 +1308,13 @@ impl LedgerStatus {
                 v.deref_mut().remove(&inp_sid);
             }
             if let Some(v) = self.utxos.remove(&inp_sid) {
+                #[allow(unused_mut)]
+                if let Some(mut bl) = self
+                    .nonconfidential_balances
+                    .get_mut(&v.0.record.public_key)
+                {
+                    *bl -= v.get_nonconfidential_balance();
+                }
                 self.spent_utxos.insert(inp_sid, v);
             }
         }
@@ -1456,7 +1353,12 @@ impl LedgerStatus {
                             .entry(tx_output.record.public_key)
                             .or_insert_with(HashSet::new)
                             .insert(TxoSID(txo_sid));
-                        self.utxos.insert(TxoSID(txo_sid), Utxo(tx_output));
+                        let utxo = Utxo(tx_output);
+                        *self
+                            .nonconfidential_balances
+                            .entry(utxo.0.record.public_key)
+                            .or_insert(0) += utxo.get_nonconfidential_balance();
+                        self.utxos.insert(TxoSID(txo_sid), utxo);
                         txn_utxo_sids.push(TxoSID(txo_sid));
                     }
                 }
@@ -1491,6 +1393,21 @@ impl LedgerStatus {
     pub fn is_unspent_txo(&self, addr: TxoSID) -> bool {
         self.utxos.contains_key(&addr)
     }
+
+    fn refresh_data(&mut self) {
+        if self.nonconfidential_balances.is_empty() {
+            self.utxos
+                .iter()
+                .collect::<Vec<_>>()
+                .into_iter()
+                .for_each(|(_, txo)| {
+                    *self
+                        .nonconfidential_balances
+                        .entry(txo.0.record.public_key)
+                        .or_insert(0) += txo.get_nonconfidential_balance();
+                });
+        }
+    }
 }
 
 #[allow(missing_docs)]
@@ -1502,5 +1419,5 @@ pub struct LoggedBlock {
 
 /// Flush data to disk
 pub fn flush_data() {
-    bnc::flush_data();
+    fbnc::flush_data();
 }

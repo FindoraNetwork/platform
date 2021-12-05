@@ -6,14 +6,16 @@
 //! **NOTE**: always use the same multi-signature rules as `UpdateValidator`.
 //!
 
-use crate::{
-    data_model::{NoReplayToken, Operation, Transaction},
-    staking::{cosig::CoSigOp, Staking},
+use {
+    crate::{
+        data_model::{NoReplayToken, Operation, Transaction},
+        staking::{cosig::CoSigOp, Staking},
+    },
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    std::collections::BTreeMap,
+    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
 /// Used as the inner object of a `FraDistribution Operation`.
 pub type FraDistributionOps = CoSigOp<Data>;

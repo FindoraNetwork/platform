@@ -4,10 +4,12 @@
 //! Take back some partial rewards of a valid delegation.
 //!
 
-use crate::{data_model::NoReplayToken, staking::Staking};
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
+use {
+    crate::{data_model::NoReplayToken, staking::Staking},
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
+};
 
 /// Used as the inner object of a `Claim Operation`.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
