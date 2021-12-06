@@ -81,7 +81,13 @@ impl<C: Config> ActionRunner<C> {
         }
 
         if !config.estimate {
-            ensure!(source_account.balance >= total_payment, "BalanceLow");
+            ensure!(
+                source_account.balance >= total_payment,
+                format!(
+                    "BalanceLow source: {}, payment: {}",
+                    source_account.balance, total_payment
+                )
+            );
 
             // Deduct fee from the `source` account.
             App::<C>::withdraw_fee(ctx, &source, total_fee)?;

@@ -11,11 +11,10 @@ use fp_types::{
         xhub::{NonConfidentialOutput, NonConfidentialTransfer},
     },
     crypto::Address,
+    H160, U256,
 };
-use fp_utils::proposer_converter;
 use ledger::data_model::{AssetType as FindoraAsset, ASSET_TYPE_FRA};
 use log::debug;
-use primitive_types::{H160, U256};
 use ruc::*;
 
 impl<C: Config> App<C> {
@@ -60,16 +59,19 @@ impl<C: Config> App<C> {
         let amount = C::DecimalsMapping::from_native_token(U256::from(asset_amount))
             .ok_or_else(|| eg!("The transfer to UTXO amount is too large"))?;
 
+        let source = H160::try_from(&sender)?;
         let sa = C::AccountAsset::account_of(ctx, &sender, None)
             .c(d!("account does not exist"))?;
         if sa.balance < amount {
             return Err(eg!("insufficient balance"));
         }
 
+        log::debug!(target: "xhub", "balance {} amount {}", sa.balance, amount);
+
         if !amount.is_zero() {
             // call ERC20 contract burn method
             let mut config = C::config().clone();
-            config.estimate = true;
+            config.estimate = false;
 
             // check burn input
             let burn = ledger::converter::erc20::ERC20_CONSTRUCTOR
@@ -84,8 +86,6 @@ impl<C: Config> App<C> {
 
             ensure!(burn == input, "Not a valid burn input");
 
-            let v: [u8; 32] = *sender.as_ref();
-            let source = proposer_converter(v.to_vec()).unwrap();
             let call = Call {
                 source,
                 target: contract,
