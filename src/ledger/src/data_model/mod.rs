@@ -391,6 +391,7 @@ pub struct XfrAddress {
 }
 
 impl XfrAddress {
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn to_base64(self) -> String {
         b64enc(&self.key.as_bytes())
     }
@@ -417,6 +418,7 @@ pub struct IssuerPublicKey {
 }
 
 impl IssuerPublicKey {
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn to_base64(self) -> String {
         b64enc(self.key.as_bytes())
     }
