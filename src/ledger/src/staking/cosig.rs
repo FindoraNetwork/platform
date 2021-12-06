@@ -253,7 +253,7 @@ mod test {
                     kp.get_pk(),
                     [1, 5],
                     Default::default(),
-                    ValidatorKind::Initor,
+                    ValidatorKind::Initiator,
                 )
             })
             .collect::<Result<Vec<_>>>();

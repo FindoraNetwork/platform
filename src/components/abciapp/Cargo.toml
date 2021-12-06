@@ -3,7 +3,7 @@ name = "abciapp"
 version = "0.2.11"
 authors = ["FindoraNetwork"]
 build = "build.rs"
-edition = "2018"
+edition = "2021"
 
 [[bin]]
 name = "findorad"
@@ -49,6 +49,12 @@ ledger = { path = "../../ledger" }
 cryptohash = { path = "../../libs/cryptohash" }
 globutils = { path = "../../libs/globutils" }
 finutils = { path = "../finutils" }
+
+tempfile = "3.1.0"
+baseapp = { path = "../contracts/baseapp" }
+fc-rpc = { path = "../contracts/rpc" }
+fp-storage = { path = "../contracts/primitives/storage" }
+fp-utils = { path = "../contracts/primitives/utils" }
 
 [target.'cfg(target_os= "linux")'.dependencies]
 btm = "0.1.6"

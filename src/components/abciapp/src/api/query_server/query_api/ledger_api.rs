@@ -516,13 +516,16 @@ pub async fn query_validator_detail(
     let ledger = &qs.ledger_cloned;
     let staking = ledger.get_staking();
 
-    let v_id = info!(staking.validator_td_addr_to_app_pk(addr.as_ref()))
+    // Get Pub key from from the provided tendermint address
+    let v_pub_key = info!(staking.validator_td_addr_to_app_pk(addr.as_ref()))
         .map_err(error::ErrorBadRequest)?;
+    // Get Self delegation for the validator
+    // v_self_delegation is the delegation details for the validator
     let v_self_delegation =
-        info!(staking.delegation_get(&v_id)).map_err(error::ErrorBadRequest)?;
+        info!(staking.delegation_get(&v_pub_key)).map_err(error::ErrorBadRequest)?;
 
     if let Some(vd) = staking.validator_get_current() {
-        if let Some(v) = vd.body.get(&v_id) {
+        if let Some(v) = vd.body.get(&v_pub_key) {
             let voting_power_rank = if 0 == v.td_power {
                 100_0000 + vd.body.len()
             } else {
@@ -531,17 +534,21 @@ pub async fn query_validator_detail(
                 power_list.sort_unstable();
                 power_list.len() - power_list.binary_search(&v.td_power).unwrap()
             };
-            let realtime_rate = ledger.staking_get_block_rewards_rate();
-            let expected_annualization = [
-                realtime_rate[0] as u128
+            // Network Realtime APY
+            let network_realtime_apy = ledger.staking_get_block_rewards_rate();
+            // Validator Realtime APY calculation
+            // Validator Consistency Factor = (Number of blocks proposed by validator / Total blocks the validator witnessed by validator  *  total staked by all validators / staked by validator)
+            // Validator Realtime APY =  Validator Consistency Factor * Network_Realtime_APY
+            // For a perfect validator consistency factor will be 1.
+            let validator_realtime_apy = [
+                network_realtime_apy[0] as u128
                     * v_self_delegation.proposer_rwd_cnt as u128
                     * staking.get_global_delegation_amount() as u128,
-                realtime_rate[1] as u128
+                network_realtime_apy[1] as u128
                     * (1 + staking.cur_height() - v_self_delegation.start_height)
                         as u128
                     * v.td_power as u128,
             ];
-
             // fra_rewards: all delegators rewards including self-delegation
             let mut fra_rewards = v_self_delegation.rwd_amount;
             for (delegator, _) in &v.delegators {
@@ -550,7 +557,6 @@ pub async fn query_validator_detail(
                     .ok_or_else(|| error::ErrorBadRequest("not exists"))?;
                 fra_rewards += delegation.rwd_amount;
             }
-
             let resp = ValidatorDetail {
                 addr: addr.into_inner(),
                 is_online: v.signed_last_block,
@@ -558,9 +564,9 @@ pub async fn query_validator_detail(
                 voting_power_rank,
                 commission_rate: v.get_commission_rate(),
                 self_staking: v_self_delegation
-                    .entries
+                    .delegations
                     .iter()
-                    .filter(|(k, _)| **k == v_id)
+                    .filter(|(k, _)| **k == v_pub_key)
                     .map(|(_, n)| n)
                     .sum(),
                 fra_rewards,
@@ -569,7 +575,7 @@ pub async fn query_validator_detail(
                 cur_height: staking.cur_height(),
                 block_signed_cnt: v.signed_cnt,
                 block_proposed_cnt: v_self_delegation.proposer_rwd_cnt,
-                expected_annualization,
+                validator_realtime_apy,
                 kind: v.kind(),
                 delegator_cnt: v.delegators.len() as u64,
             };
@@ -611,7 +617,7 @@ pub async fn query_delegation_info(
         .map(|d| {
             let mut bond_amount = d.amount();
             let bond_entries: Vec<(String, u64)> = d
-                .entries
+                .delegations
                 .iter()
                 .filter_map(|(pk, am)| {
                     staking

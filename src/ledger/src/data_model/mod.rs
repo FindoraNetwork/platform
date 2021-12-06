@@ -12,6 +12,7 @@ mod test;
 pub use effects::{BlockEffect, TxnEffect};
 
 use {
+    crate::converter::ConvertAccount,
     crate::staking::{
         ops::{
             claim::ClaimOps, delegation::DelegationOps,
@@ -391,6 +392,7 @@ pub struct XfrAddress {
 }
 
 impl XfrAddress {
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn to_base64(self) -> String {
         b64enc(&self.key.as_bytes())
     }
@@ -417,6 +419,7 @@ pub struct IssuerPublicKey {
 }
 
 impl IssuerPublicKey {
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn to_base64(self) -> String {
         b64enc(self.key.as_bytes())
     }
@@ -1103,6 +1106,17 @@ impl TransferAsset {
 
     #[inline(always)]
     #[allow(missing_docs)]
+    pub fn get_owner_addresses(&self) -> Vec<XfrPublicKey> {
+        self.body
+            .transfer
+            .inputs
+            .iter()
+            .map(|record| record.public_key)
+            .collect()
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
     pub fn get_outputs_ref(&self) -> Vec<&TxOutput> {
         self.body.outputs.iter().collect()
     }
@@ -1231,6 +1245,8 @@ pub enum Operation {
     FraDistribution(FraDistributionOps),
     /// Coinbase operation
     MintFra(MintFraOps),
+    /// Convert UTXOs to EVM Account balance
+    ConvertAccount(ConvertAccount),
 }
 
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
@@ -1257,6 +1273,7 @@ fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
             i.set_nonce(no_replay_token);
         }
         Operation::UpdateMemo(i) => i.body.no_replay_token = no_replay_token,
+        Operation::ConvertAccount(i) => i.set_nonce(no_replay_token),
         _ => {}
     }
 }

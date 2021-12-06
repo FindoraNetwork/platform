@@ -14,6 +14,8 @@ pub struct ABCIConfig {
     pub submission_port: u16,
     pub ledger_port: u16,
     pub query_port: u16,
+    pub evm_http_port: u16,
+    pub evm_ws_port: u16,
     pub ledger_dir: String,
 }
 
@@ -25,6 +27,8 @@ pub struct ABCIConfigStr {
     pub tendermint_port: String,
     pub submission_port: String,
     pub ledger_port: String,
+    pub evm_http_port: String,
+    pub evm_ws_port: String,
     #[serde(skip)]
     pub ledger_dir: Option<String>,
 }
@@ -34,6 +38,8 @@ impl TryFrom<ABCIConfigStr> for ABCIConfig {
     fn try_from(cfg: ABCIConfigStr) -> Result<Self> {
         let ledger_port = cfg.ledger_port.parse::<u16>().c(d!())?;
         let query_port = ledger_port - 1;
+        let evm_http_port = cfg.evm_http_port.parse::<u16>().c(d!())?;
+        let evm_ws_port = cfg.evm_ws_port.parse::<u16>().c(d!())?;
         Ok(ABCIConfig {
             abci_host: cfg.abci_host,
             abci_port: cfg.abci_port.parse::<u16>().c(d!())?,
@@ -42,6 +48,8 @@ impl TryFrom<ABCIConfigStr> for ABCIConfig {
             submission_port: cfg.submission_port.parse::<u16>().c(d!())?,
             ledger_port,
             query_port,
+            evm_http_port,
+            evm_ws_port,
             ledger_dir: cfg.ledger_dir.unwrap_or(pnk!(env::var("LEDGER_DIR"))),
         })
     }
@@ -71,6 +79,8 @@ impl ABCIConfig {
             submission_port,
             ledger_port,
             query_port,
+            evm_http_port: CFG.evm_http_port,
+            evm_ws_port: CFG.evm_ws_port,
             ledger_dir: CFG.ledger_dir.clone(),
         })
     }
@@ -111,6 +121,10 @@ pub(crate) mod global_cfg {
         pub submission_service_port: u16,
         pub ledger_service_port: u16,
         pub enable_query_service: bool,
+        pub disable_eth_empty_blocks: bool,
+        pub enable_eth_api_service: bool,
+        pub evm_http_port: u16,
+        pub evm_ws_port: u16,
         pub tendermint_node_self_addr: Option<String>,
         pub tendermint_node_key_config_path: Option<String>,
         pub ledger_dir: String,
@@ -139,6 +153,10 @@ pub(crate) mod global_cfg {
                 .arg_from_usage("--submission-service-port=[Submission Service Port]")
                 .arg_from_usage("--ledger-service-port=[Ledger Service Port]")
                 .arg_from_usage("-q, --enable-query-service")
+                .arg_from_usage("--disable-eth-empty-blocks 'not generate empty ethereum blocks when no evm transaction'")
+                .arg_from_usage("--enable-eth-api-service")
+                .arg_from_usage("--evm-http-port=[EVM Web3 Http Port]")
+                .arg_from_usage("--evm-ws-port=[EVM Web3 WS Port]")
                 .arg_from_usage("--tendermint-node-self-addr=[Address] 'the address of your tendermint node, in upper-hex format'")
                 .arg_from_usage("--tendermint-node-key-config-path=[Path] 'such as: ${HOME}/.tendermint/config/priv_validator_key.json'")
                 .arg_from_usage("-d, --ledger-dir=[Path]")
@@ -217,6 +235,24 @@ pub(crate) mod global_cfg {
                     format!("{}/.tendermint/__findora__", pnk!(env::var("HOME")))
                 })
             });
+        let eeb = m.is_present("disable-eth-empty-blocks")
+            || env::var("DISABLE_ETH_EMPTY_BLOCKS").is_ok();
+        let eas = m.is_present("enable-eth-api-service")
+            || env::var("ENABLE_ETH_API_SERVICE").is_ok();
+        let ehp = m
+            .value_of("evm-http-port")
+            .map(|v| v.to_owned())
+            .or_else(|| env::var("EVM_HTTP_PORT").ok())
+            .unwrap_or_else(|| "8545".to_owned())
+            .parse::<u16>()
+            .c(d!())?;
+        let ewp = m
+            .value_of("evm-ws-port")
+            .map(|v| v.to_owned())
+            .or_else(|| env::var("EVM_WS_PORT").ok())
+            .unwrap_or_else(|| "8546".to_owned())
+            .parse::<u16>()
+            .c(d!())?;
 
         let res = Config {
             abci_host: ah,
@@ -226,6 +262,10 @@ pub(crate) mod global_cfg {
             submission_service_port: ssp,
             ledger_service_port: lsp,
             enable_query_service: eqs,
+            disable_eth_empty_blocks: eeb,
+            enable_eth_api_service: eas,
+            evm_http_port: ehp,
+            evm_ws_port: ewp,
             tendermint_node_self_addr: tnsa,
             tendermint_node_key_config_path: tnkcp,
             ledger_dir: ld,
