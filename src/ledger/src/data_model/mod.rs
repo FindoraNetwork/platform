@@ -7,9 +7,11 @@
 
 mod __trash__;
 mod effects;
+mod fraction;
 mod test;
 
 pub use effects::{BlockEffect, TxnEffect};
+pub use fraction::U128Fraction;
 
 use {
     crate::staking::{

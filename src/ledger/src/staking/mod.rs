@@ -21,7 +21,8 @@ pub mod ops;
 use {
     crate::{
         data_model::{
-            ConsensusRng, Operation, Transaction, TransferAsset, TxoRef, FRA_DECIMALS,
+            ConsensusRng, Operation, Transaction, TransferAsset, TxoRef, U128Fraction,
+            FRA_DECIMALS,
         },
         SNAPSHOT_ENTRIES_DIR,
     },
@@ -95,6 +96,46 @@ lazy_static! {
     pub static ref CHAN_D_AMOUNT_HIST: DAHCP = chan!();
     #[allow(missing_docs)]
     pub static ref CHAN_D_RWD_HIST: DRHCP = chan!();
+    #[allow(missing_docs)]
+    //Denominators, represent as 1/D.
+    pub static ref APY_RATE_BLOCK_TABLE: Vec<U128Fraction> = {
+        [ 1512764,  1922991,  2318412,  2705506,  3088553,  3465695,
+        3843427,  4216038,  4592461,  4967730,  5334344,  5712925,
+        6078548,  6456444,  6821691,  7197721,  7556802,  7934100,
+        8301015,  8677637,  9027536,  9410350,  9791023, 10163949,
+       10522714, 10860230, 11276177, 11611687, 11969639, 12352366,
+       12692146, 13127515, 13436098, 13844477, 14190882, 14556370,
+       14942564, 15351279, 15673806, 16011087, 16364159, 16734159,
+       17122335, 17530062, 17813484, 18257245, 18566281, 19051079,
+       19389367, 19740532, 20105323, 20484550, 20879088, 21289884,
+       21501696, 21938831, 22394959, 22630537, 23117565, 23369376,
+       23890555, 24160337, 24436539, 25009142, 25306042, 25610360,
+       25922380, 26242396, 26570720, 27253622, 27608910, 27973928,
+       28349081, 28734798, 28734798, 29131531, 29539759, 29959989,
+       30392759, 30838639, 31298234, 31298234, 31772186, 32261180,
+       32765943, 32765943, 33287251, 33825930, 33825930, 34382865,
+       34958999, 34958999, 35555343, 36172979, 36172979, 36813070,
+       36813070, 37476862, 37476862]
+        .iter()
+        .map(|d|U128Fraction::new(1,*d).unwrap())
+        .collect()
+    };
+
+    #[allow(missing_docs)]
+    pub static ref APY_RATE_YEAR_TABLE:Vec<U128Fraction> = {
+        [2680, 1787, 1340, 1072,  893,  765,  670,  596,  536,  487,  447,
+        412,  382,  357,  335,  315,  298,  282,  268,  255,  244,  233,
+        223,  214,  206,  198,  191,  185,  179,  173,  168,  162,  158,
+        153,  149,  145,  141,  136,  134,  131,  128,  125,  122,  119,
+        117,  114,  111,  109,  107,  105,  103,  100,   99,   96,   96,
+         94,   92,   91,   89,   88,   86,   85,   84,   81,   81,   80,
+         79,   78,   77,   75,   74,   73,   72,   71,   71,   70,   69,
+         68,   67,   66,   65,   65,   64,   63,   62,   62,   61,   60,
+         60,   59,   57,   57,   57,   55,   55,   55,   55,   54,   54]
+         .iter()
+         .map(|n| U128Fraction::new( *n, 1000).unwrap())
+         .collect()
+    };
 }
 
 // Reserved accounts of Findora Foundation.
@@ -2245,6 +2286,28 @@ pub fn deny_relative_inputs(x: &TransferAsset) -> Result<()> {
     }
 }
 
+fn rate_year_to_index(rate_year: U128Fraction) -> usize {
+    if rate_year >= APY_RATE_YEAR_TABLE[0] {
+        return 0;
+    }
+
+    for index in 1..99 {
+        if APY_RATE_YEAR_TABLE[index] <= rate_year
+            && rate_year < APY_RATE_YEAR_TABLE[index - 1]
+        {
+            return index;
+        }
+    }
+
+    98
+}
+
+#[allow(missing_docs)]
+pub fn rate_year_to_rate_block(rate_year: U128Fraction) -> U128Fraction {
+    let index = rate_year_to_index(rate_year);
+    APY_RATE_BLOCK_TABLE[index]
+}
+
 #[cfg(test)]
 #[allow(missing_docs)]
 mod test {
@@ -2290,5 +2353,31 @@ mod test {
         };
 
         [lb, 100_0000]
+    }
+
+    #[test]
+    fn rate_block() {
+        let rate_year = [
+            2900, 2680, 2000, 1800, 1787, 1340, 1072, 893, 765, 670, 596, 536, 487, 447,
+            412, 382, 357, 335, 315, 298, 282, 268, 255, 244, 233, 223, 214, 206, 198,
+            191, 185, 179, 173, 168, 162, 158, 153, 149, 145, 141, 136, 134, 131, 128,
+            125, 122, 119, 117, 114, 111, 109, 107, 105, 103, 100, 99, 96, 96, 94, 92,
+            91, 89, 88, 86, 85, 84, 81, 81, 80, 79, 78, 77, 75, 74, 73, 72, 71, 71, 70,
+            69, 68, 67, 66, 65, 65, 64, 63, 62, 62, 61, 60, 60, 59, 57, 57, 57, 55, 55,
+            55, 55, 54, 54, 30, 0,
+        ]
+        .iter()
+        .map(|n| U128Fraction::new(*n, 1000).unwrap());
+
+        for r in rate_year {
+            let rb = rate_year_to_rate_block(r);
+            println!("{}:{:e}", rb, rb.estimate_f64());
+        }
+
+        let r_max = rate_year_to_rate_block(U128Fraction::new(268, 100).unwrap());
+        let r_min = rate_year_to_rate_block(U128Fraction::new(54, 1000).unwrap());
+
+        assert!((r_max.estimate_f64() - 6.61041696e-07).abs() < 1e-12);
+        assert!((r_min.estimate_f64() - 2.66831308e-08).abs() < 1e-12);
     }
 }
