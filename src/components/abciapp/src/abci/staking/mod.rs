@@ -160,7 +160,7 @@ pub fn system_ops(
     ruc::info_omit!(set_rewards(
         la,
         &header.proposer_address,
-        last_commit_info.map(|lci| get_last_vote_percent(lci))
+        last_commit_info.map(get_last_vote_percent)
     ));
 
     // tendermint primary governances
