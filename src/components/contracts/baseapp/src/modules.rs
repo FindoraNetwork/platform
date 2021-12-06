@@ -301,7 +301,7 @@ impl ModuleManager {
         }
     }
 
-    // findora utxo -> erc20
+    // convert custom asset(utxo) to erc20 contract
     fn process_findora_erc20(
         &self,
         ctx: &Context,
@@ -314,21 +314,18 @@ impl ModuleManager {
         self.check_valid_asset(ctx, &target, asset)
             .c(d!("Assets check failed"))?;
 
-        // call mint method
+        // call erc20 mint method
         let mut config = <BaseApp as module_ethereum::Config>::config().clone();
         config.estimate = true;
 
-        let account = module_evm::App::<BaseApp>::account_basic(ctx, &target);
         let call = Call {
             source: signer,
             target,
             input,
             value: U256::zero(),
             gas_limit: <BaseApp as module_evm::Config>::BlockGasLimit::get().as_u64(),
-            gas_price: Some(
-                <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(),
-            ),
-            nonce: Some(account.nonce),
+            gas_price: None,
+            nonce: None,
         };
 
         let info =

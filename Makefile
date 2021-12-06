@@ -11,7 +11,6 @@ export STAKING_INITIAL_VALIDATOR_CONFIG = $(shell pwd)/src/ledger/src/staking/in
 export STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV = $(shell pwd)/src/ledger/src/staking/init/staking_config_debug_env.json
 
 FIN_DEBUG ?= /tmp/findora
-export ENABLE_QUERY_SERVICE = true
 
 EXTERNAL_ADDRESS = ""
 

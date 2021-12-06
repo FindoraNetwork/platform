@@ -11,11 +11,10 @@ use fp_types::{
         xhub::{NonConfidentialOutput, NonConfidentialTransfer},
     },
     crypto::Address,
+    H160, U256,
 };
-use fp_utils::proposer_converter;
 use ledger::data_model::{AssetType as FindoraAsset, ASSET_TYPE_FRA};
 use log::debug;
-use primitive_types::{H160, U256};
 use ruc::*;
 
 impl<C: Config> App<C> {
@@ -24,7 +23,7 @@ impl<C: Config> App<C> {
         ctx: &Context,
         sender: Address,
         contract: H160,
-        gas_price: U256,
+        _gas_price: U256,
         gas_limit: U256,
         input: Vec<u8>,
         _nonce: U256,
@@ -56,12 +55,10 @@ impl<C: Config> App<C> {
             "Not binding asset"
         );
 
-        log::debug!(target: "xhub", "transfer to UTXO amount is: {}", asset_amount);
-        let amount = C::DecimalsMapping::from_native_token(U256::from(asset_amount))
-            .ok_or_else(|| eg!("The transfer to UTXO amount is too large"))?;
-
+        let amount = U256::from(asset_amount);
         let sa = C::AccountAsset::account_of(ctx, &sender, None)
             .c(d!("account does not exist"))?;
+        log::debug!(target: "xhub", "balance {} amount {}", sa.balance, amount);
         if sa.balance < amount {
             return Err(eg!("insufficient balance"));
         }
@@ -78,25 +75,24 @@ impl<C: Config> App<C> {
                 .c(d!("No burn function"))?
                 .encode_input(&[
                     ethabi::Token::Address(contract),
-                    ethabi::Token::Uint(U256::from(asset_amount)),
+                    ethabi::Token::Uint(amount),
                 ])
                 .c(d!("Failed to encode burn input"))?;
 
             ensure!(burn == input, "Not a valid burn input");
 
-            let v: [u8; 32] = *sender.as_ref();
-            let source = proposer_converter(v.to_vec()).unwrap();
             let call = Call {
-                source,
+                source: H160::try_from(&sender)?,
                 target: contract,
                 input,
                 value: U256::zero(),
                 gas_limit: gas_limit.low_u64(),
-                gas_price: Some(gas_price),
+                gas_price: None,
                 nonce: None,
             };
 
-            let info = C::Runner::call(ctx, call, &config).c(d!("Evm runner failed"))?;
+            let info = C::Runner::call(ctx, call, &config)
+                .c(d!("Evm runner call burn function failed"))?;
             match info.exit_reason {
                 ExitReason::Succeed(_) => {
                     // Fixme: what if failing to mint UTXO
