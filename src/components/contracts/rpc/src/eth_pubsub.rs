@@ -43,8 +43,9 @@ impl Spawn for SubscriptionTaskExecutor {
 }
 
 pub struct EthPubSubApiImpl {
-    account_base_app: Arc<RwLock<BaseApp>>,
+    pub account_base_app: Arc<RwLock<BaseApp>>,
     subscriptions: SubscriptionManager,
+    pub name: String,
 }
 
 impl EthPubSubApiImpl {
@@ -52,6 +53,7 @@ impl EthPubSubApiImpl {
         Self {
             account_base_app,
             subscriptions: SubscriptionManager::new(Arc::new(SubscriptionTaskExecutor)),
+            name: String::from("filter"),
         }
     }
 }
