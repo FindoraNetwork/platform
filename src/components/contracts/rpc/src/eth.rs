@@ -140,7 +140,7 @@ impl EthApi for EthApiImpl {
     }
 
     fn balance(&self, address: H160, number: Option<BlockNumber>) -> Result<U256> {
-        debug!(target: "eth_rpc", "balance, address:{:?}, number:{:?}", address, number);
+        println!("balance, address:{:?}, number:{:?}", address, number);
 
         let height = self.block_number_to_height(number)?;
         let account_id = EthereumAddressMapping::convert_to_account_id(address);
@@ -156,7 +156,7 @@ impl EthApi for EthApiImpl {
     }
 
     fn send_transaction(&self, request: TransactionRequest) -> BoxFuture<Result<H256>> {
-        debug!(target: "eth_rpc", "send_transaction, request:{:?}", request);
+        println!("send_transaction, request:{:?}", request);
 
         let from = match request.from {
             Some(from) => from,
@@ -251,7 +251,7 @@ impl EthApi for EthApiImpl {
     }
 
     fn call(&self, request: CallRequest, _: Option<BlockNumber>) -> Result<Bytes> {
-        debug!(target: "eth_rpc", "call, request:{:?}", request);
+        println!("call, request:{:?}", request);
 
         let CallRequest {
             from,
@@ -384,7 +384,10 @@ impl EthApi for EthApiImpl {
         index: U256,
         number: Option<BlockNumber>,
     ) -> Result<H256> {
-        warn!(target: "eth_rpc", "storage_at, address:{:?}, index:{:?}, number:{:?}", address, index, number);
+        println!(
+            "storage_at, address:{:?}, index:{:?}, number:{:?}",
+            address, index, number
+        );
 
         let height = self.block_number_to_height(number)?;
         Ok(self
@@ -395,7 +398,7 @@ impl EthApi for EthApiImpl {
     }
 
     fn block_by_hash(&self, hash: H256, full: bool) -> Result<Option<RichBlock>> {
-        debug!(target: "eth_rpc", "block_by_hash, hash:{:?}, full:{:?}", hash, full);
+        println!("block_by_hash, hash:{:?}, full:{:?}", hash, full);
 
         let block = self
             .account_base_app
@@ -422,7 +425,7 @@ impl EthApi for EthApiImpl {
         number: BlockNumber,
         full: bool,
     ) -> Result<Option<RichBlock>> {
-        debug!(target: "eth_rpc", "block_by_number, number:{:?}, full:{:?}", number, full);
+        println!("block_by_number, number:{:?}, full:{:?}", number, full);
 
         let id = native_block_id(Some(number));
         let block = self.account_base_app.read().current_block(id.clone());
@@ -451,7 +454,10 @@ impl EthApi for EthApiImpl {
         address: H160,
         number: Option<BlockNumber>,
     ) -> Result<U256> {
-        debug!(target: "eth_rpc", "transaction_count, address:{:?}, number:{:?}", address, number);
+        println!(
+            "transaction_count, address:{:?}, number:{:?}",
+            address, number
+        );
 
         let height = self.block_number_to_height(number)?;
         let account_id =
@@ -467,7 +473,7 @@ impl EthApi for EthApiImpl {
     }
 
     fn block_transaction_count_by_hash(&self, hash: H256) -> Result<Option<U256>> {
-        debug!(target: "eth_rpc", "block_transaction_count_by_hash, hash:{:?}", hash);
+        println!("block_transaction_count_by_hash, hash:{:?}", hash);
 
         let block = self
             .account_base_app
@@ -483,7 +489,7 @@ impl EthApi for EthApiImpl {
         &self,
         number: BlockNumber,
     ) -> Result<Option<U256>> {
-        debug!(target: "eth_rpc", "block_transaction_count_by_number, number:{:?}", number);
+        println!("block_transaction_count_by_number, number:{:?}", number);
 
         let id = native_block_id(Some(number));
         let block = self.account_base_app.read().current_block(id);
@@ -502,7 +508,7 @@ impl EthApi for EthApiImpl {
     }
 
     fn code_at(&self, address: H160, number: Option<BlockNumber>) -> Result<Bytes> {
-        debug!(target: "eth_rpc", "code_at, address:{:?}, number:{:?}", address, number);
+        println!("code_at, address:{:?}, number:{:?}", address, number);
 
         // FRA (FRC20 precompile)
         if address == H160::from_low_u64_be(9) {
@@ -525,7 +531,7 @@ impl EthApi for EthApiImpl {
                 return Box::pin(future::err(internal_err("decode transaction failed")));
             }
         };
-        debug!(target: "eth_rpc", "send_raw_transaction :{:?}", transaction);
+        println!("send_raw_transaction :{:?}", transaction);
 
         let transaction_hash =
             H256::from_slice(Keccak256::digest(&rlp::encode(&transaction)).as_slice());
@@ -642,7 +648,7 @@ impl EthApi for EthApiImpl {
     }
 
     fn transaction_by_hash(&self, hash: H256) -> Result<Option<Transaction>> {
-        debug!(target: "eth_rpc", "transaction_by_hash, hash:{:?}", hash);
+        println!("transaction_by_hash, hash:{:?}", hash);
 
         let mut id = None;
         let mut index = 0;
@@ -685,7 +691,10 @@ impl EthApi for EthApiImpl {
         hash: H256,
         index: Index,
     ) -> Result<Option<Transaction>> {
-        debug!(target: "eth_rpc", "transaction_by_block_hash_and_index, hash:{:?}, index:{:?}", hash, index);
+        println!(
+            "transaction_by_block_hash_and_index, hash:{:?}, index:{:?}",
+            hash, index
+        );
 
         let index = index.value();
         let block = self
@@ -718,7 +727,10 @@ impl EthApi for EthApiImpl {
         number: BlockNumber,
         index: Index,
     ) -> Result<Option<Transaction>> {
-        debug!(target: "eth_rpc", "transaction_by_block_number_and_index, number:{:?}, index:{:?}", number, index);
+        println!(
+            "transaction_by_block_number_and_index, number:{:?}, index:{:?}",
+            number, index
+        );
 
         let id = native_block_id(Some(number));
         let index = index.value();
@@ -745,7 +757,7 @@ impl EthApi for EthApiImpl {
     }
 
     fn transaction_receipt(&self, hash: H256) -> Result<Option<Receipt>> {
-        debug!(target: "eth_rpc", "transaction_receipt, hash:{:?}", hash);
+        println!("transaction_receipt, hash:{:?}", hash);
 
         let mut id = None;
         let mut index = 0;
@@ -855,7 +867,7 @@ impl EthApi for EthApiImpl {
     }
 
     fn logs(&self, filter: Filter) -> Result<Vec<Log>> {
-        warn!(target: "eth_rpc", "logs, filter:{:?}", filter);
+        println!("logs, filter:{:?}", filter);
 
         let mut ret: Vec<Log> = Vec::new();
         if let Some(hash) = filter.block_hash {
