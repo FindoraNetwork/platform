@@ -92,7 +92,7 @@ pub struct ValidatorDetail {
     /// block proposed by this validator
     pub block_proposed_cnt: u64,
     /// expected annulation of thi validator
-    pub expected_annualization: [u128; 2],
+    pub validator_realtime_apy: [u128; 2],
     /// total number of its delegators
     pub delegator_cnt: u64,
 }

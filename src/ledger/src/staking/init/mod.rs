@@ -51,7 +51,7 @@ impl TryFrom<ValidatorStr> for Validator {
             memo: v.memo.map_or(Default::default(), |s| {
                 serde_json::from_str(s.as_str()).unwrap_or_default()
             }),
-            kind: v.kind.unwrap_or(ValidatorKind::Initor),
+            kind: v.kind.unwrap_or(ValidatorKind::Initiator),
             signed_last_block: false,
             signed_cnt: 0,
             delegators: IndexMap::new(),
