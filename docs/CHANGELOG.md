@@ -18,8 +18,11 @@
   - Fix second compute for per year.
   - Fix APY rate range.
 - EVM
+  - Ethereum Virtual Machine integration.
+  - Internal transfers (UTXO <--> Account).
+  - Web3 API support.
 
-#### v0.2.12-release 
+#### v0.2.12-release
 
 - Fix overflow error for rewards.
 
@@ -33,12 +36,12 @@
 
 - Add an extra `reserved account` to optimize the APY curve
 - Fix a BUG about the calculation of commissions
-    - validator will loss its proposer&commission rewards when a zero-amount delegation is found
+  - validator will loss its proposer&commission rewards when a zero-amount delegation is found
 
 #### v0.2.8-release (Yanked at the block height of 120_0000 !)
 
 - Avoid to store historical transactions on chain
-    - Resist some kinds of the replay attack
+  - Resist some kinds of the replay attack
 
 #### v0.2.7-release (Yanked !)
 
@@ -65,20 +68,20 @@
 #### v0.2.2-release (Yanked !)
 
 - Fix a BUG in the logic of some special partial undelegations
-    - [Issue 75, #75](https://github.com/FindoraNetwork/platform/issues/75)
+  - [Issue 75, #75](https://github.com/FindoraNetwork/platform/issues/75)
 - Fix a BUG about the voting power in the logic of un-delegation
 - Fix some issues in the history-style API about POS
 - optimize the usage of 'bnc'
 - Optimize ABCI checker
-    - Avoid invalid transactions from being stored
+  - Avoid invalid transactions from being stored
 - Add balance checker for coinbase
-    - Avoid wrong rewards when the reward pool is empty
+  - Avoid wrong rewards when the reward pool is empty
 - Enhance stability by using seed nodes in `findorad init`
 
 #### v0.2.1-release (Yanked !)
 
 - Fix a BUG in delegation logic
-    - [Issue 65, #65](https://github.com/FindoraNetwork/platform/issues/65)
+  - [Issue 65, #65](https://github.com/FindoraNetwork/platform/issues/65)
 
 #### v0.2.0-release (Yanked !)
 
