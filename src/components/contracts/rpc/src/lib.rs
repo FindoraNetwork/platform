@@ -11,9 +11,7 @@ use baseapp::BaseApp;
 use eth::filter_block_logs;
 use evm::{ExitError, ExitReason};
 use fp_rpc_core::types::pubsub::Metadata;
-use fp_rpc_core::{
-    EthApiServer, EthFilterApiServer, EthPubSubApiServer, NetApiServer, Web3ApiServer,
-};
+use fp_rpc_core::{EthApiServer, NetApiServer, Web3ApiServer};
 use fp_rpc_server::{rpc_handler, start_http, start_ws, RpcHandler, RpcMiddleware};
 use fp_utils::ecdsa::SecpPair;
 use jsonrpc_core::types::error::{Error, ErrorCode};
@@ -39,6 +37,13 @@ pub fn start_web3_service(
     let dev_signer = "zebra paddle unveil toilet weekend space gorilla lesson relief useless arrive picture";
     let signers = vec![SecpPair::from_phrase(dev_signer, None).unwrap().0];
 
+    let filter = eth_filter::EthFilterApiImpl::new(
+        app.clone(),
+        MAX_PAST_LOGS,
+        MAX_STORED_FILTERS,
+    );
+    let pubsub = eth_pubsub::EthPubSubApiImpl::new(app.clone());
+    println!("{:?}, {:?}", pubsub.name, filter.max_past_logs);
     let io = || -> RpcHandler<Metadata> {
         rpc_handler(
             (
@@ -49,15 +54,8 @@ pub fn start_web3_service(
                     MAX_PAST_LOGS,
                 )
                 .to_delegate(),
-                eth_filter::EthFilterApiImpl::new(
-                    app.clone(),
-                    MAX_PAST_LOGS,
-                    MAX_STORED_FILTERS,
-                )
-                .to_delegate(),
                 net::NetApiImpl::new().to_delegate(),
                 web3::Web3ApiImpl::new().to_delegate(),
-                eth_pubsub::EthPubSubApiImpl::new(app.clone()).to_delegate(),
             ),
             RpcMiddleware::new(),
         )

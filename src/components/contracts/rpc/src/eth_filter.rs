@@ -33,7 +33,7 @@ const FILTER_RETAIN_THRESHOLD: u64 = 100;
 
 pub struct EthFilterApiImpl {
     filter_pool: FilterPool,
-    max_past_logs: u32,
+    pub max_past_logs: u32,
     max_stored_filters: usize,
     block_data_cache: Arc<EthBlockDataCache>,
     account_base_app: Arc<RwLock<BaseApp>>,
