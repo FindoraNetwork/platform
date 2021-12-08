@@ -2058,9 +2058,9 @@ fn calculate_delegation_rewards(
         let global_reward = global_am.saturating_mul(rate_block);
         let delegator_reward = global_reward
             .saturating_mul(delegator_percentage_of_validator)
-            .into_raw();
+            .quotient();
 
-        let reward = (delegator_reward[0] / delegator_reward[1]) as Amount;
+        let reward = delegator_reward.0 as Amount;
 
         return Ok(reward);
     }
