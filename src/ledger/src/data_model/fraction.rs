@@ -136,6 +136,16 @@ impl U128Fraction {
         let div = overflowing_mul(self.1, rhs.1)?;
         U128Fraction::new(num, div)
     }
+
+    ///Overflowing division with an U64Frac. Computes `self * rhs`, Error will be returned if overflowing or divding zero.
+    pub fn overflowing_div(self, rhs: Self) -> Result<Self> {
+        if rhs.0 == 0 {
+            return Err(eg!("Dividing by zero!"));
+        }
+        let num = overflowing_mul(self.0, rhs.1)?;
+        let div = overflowing_mul(self.1, rhs.0)?;
+        U128Fraction::new(num, div)
+    }
 }
 
 impl PartialEq for U128Fraction {
@@ -154,6 +164,10 @@ impl PartialOrd for U128Fraction {
         let (r1, o1) = Repr::overflowing_mul(self.0, other.1);
         let (r2, o2) = Repr::overflowing_mul(self.1, other.0);
         if o1 || o2 {
+            println!(
+                "[WARNING] {}: Overflowing in `ParitalOrd`.",
+                stringify!(U128Fraction)
+            );
             return None;
         }
         Some(r1.cmp(&r2))
@@ -228,6 +242,11 @@ mod test {
         assert!(x > half);
         assert!(half < x);
 
+        assert_eq!(
+            x.overflowing_div(U128Fraction::new(7, 1).unwrap()).unwrap(),
+            quarter,
+        );
+
         // 7/4 = 1/4 + 3/2
         assert_eq!(
             x,
@@ -257,7 +276,7 @@ mod test {
 
         assert!(
             !(U128Fraction::new(u128::MAX, 27).unwrap()
-                 > U128Fraction::new(u128::MAX, 5).unwrap())
+                > U128Fraction::new(u128::MAX, 5).unwrap())
         );
     }
 }

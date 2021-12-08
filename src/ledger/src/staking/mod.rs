@@ -2156,12 +2156,12 @@ fn calculate_delegation_rewards(
         let rate_year = U128Fraction::new(return_rate[0], return_rate[1])?;
         let rate_block = rate_year_to_rate_block(rate_year);
 
-        let global_reward = global_am.saturating_mul(rate_block);
-        let delegator_reward = global_reward
-            .saturating_mul(delegator_percentage_of_validator)
-            .quotient();
+        let global_reward = global_am.overflowing_mul(rate_block)?;
+        let (delegator_reward, _) = global_reward
+            .overflowing_mul(delegator_percentage_of_validator)?
+            .quotient()?;
 
-        let reward = delegator_reward.0 as Amount;
+        let reward = delegator_reward as Amount;
 
         return Ok(reward);
     }
