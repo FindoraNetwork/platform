@@ -185,6 +185,8 @@ pub fn deliver_tx(
     let mut resp = ResponseDeliverTx::new();
 
     let tx_catalog = try_tx_catalog(req.get_tx());
+    let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+    const EVM_FIRST_BLOCK_HEIGHT: i64 = 139_8000;
     match tx_catalog {
         TxCatalog::FindoraTx => {
             if let Ok(tx) = convert_tx(req.get_tx()) {
@@ -194,6 +196,14 @@ pub fn deliver_tx(
                 });
 
                 if tx.valid_in_abci() {
+                    // Log print for monitor purpose
+                    if td_height < EVM_FIRST_BLOCK_HEIGHT {
+                        println!(
+                            "EVM transaction(FindoraTx) detected at early height {}: {:?}",
+                            td_height, tx
+                        );
+                    }
+
                     if *KEEP_HIST {
                         // set attr(tags) if any, only needed on a fullnode
                         let attr = utils::gen_tendermint_attr(&tx);
@@ -258,6 +268,13 @@ pub fn deliver_tx(
             resp
         }
         TxCatalog::EvmTx => {
+            // Log print for monitor purpose
+            if td_height < EVM_FIRST_BLOCK_HEIGHT {
+                println!(
+                    "EVM transaction(EvmTx) detected at early height {}: {:?}",
+                    td_height, req
+                );
+            }
             return s.account_base_app.write().deliver_tx(req);
         }
         TxCatalog::Unknown => {
