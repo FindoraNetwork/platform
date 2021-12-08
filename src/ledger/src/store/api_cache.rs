@@ -65,6 +65,8 @@ pub struct ApiCache {
     /// rewards history, used on some pulic nodes, such as fullnode
     pub staking_delegation_rwd_hist:
         Mapx<XfrPublicKey, Mapxnk<BlockHeight, DelegationRwdDetail>>,
+    /// tip is a TxnSID, which there are no transactions lost before it
+    pub tip: usize,
 }
 
 impl ApiCache {
@@ -114,6 +116,17 @@ impl ApiCache {
                 "api_cache/{}staking_delegation_rwd_hist",
                 prefix
             )),
+            tip: 0,
+        }
+    }
+
+    /// Check the lost txn sid
+    pub fn check_lost_sid(&mut self, start: usize, end: usize) {
+        for sid in start..end {
+            if !self.txn_sid_to_hash.contains_key(&TxnSID(sid)) {
+                // todo
+            }
+            self.tip = sid;
         }
     }
 

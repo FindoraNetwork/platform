@@ -426,6 +426,14 @@ impl LedgerState {
         omit!(ledger.utxo_map.write().compute_checksum());
         ledger.fast_invariant_check().c(d!())?;
 
+        let cur_txn_sid = ledger.get_next_txn();
+        let tip = ledger.api_cache.as_mut().unwrap().tip;
+        if tip < cur_txn_sid {
+            ledger.api_cache
+                .as_mut()
+                .unwrap()
+                .check_lost_sid(tip, cur_txn_sid.0);
+        }
         flush_data();
 
         Ok(ledger)
