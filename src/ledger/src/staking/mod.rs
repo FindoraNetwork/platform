@@ -2129,6 +2129,9 @@ fn calculate_delegation_rewards(
     #[cfg(feature = "debug_env")]
     const SECOND_FIX_HEIGHT: BlockHeight = 0;
 
+    #[cfg(feature = "debug_env")]
+    const NEW_RATE_BLOCK_HEIGHT: BlockHeight = 0;
+
     #[cfg(not(feature = "debug_env"))]
     const APY_FIX_HEIGHT: BlockHeight = 117_7000;
 
@@ -2138,6 +2141,30 @@ fn calculate_delegation_rewards(
 
     #[cfg(not(feature = "debug_env"))]
     const SECOND_FIX_HEIGHT: BlockHeight = 139_8000;
+
+    #[cfg(not(feature = "debug_env"))]
+    const NEW_RATE_BLOCK_HEIGHT: BlockHeight = 141_0000;
+
+    if NEW_RATE_BLOCK_HEIGHT < cur_height {
+        // delegator_reward = (am / total_amount) * (global_amount * rate_block)
+        // here we use u128fraction, which uses the largest convention, so we don't use bigint
+        let delegator_percentage_of_validator =
+            U128Fraction::new(amount as u128, total_amount as u128)?;
+        let global_am = U128Fraction::new(global_amount as u128, 1)?;
+
+        // use new rate
+        let rate_year = U128Fraction::new(return_rate[0], return_rate[1])?;
+        let rate_block = rate_year_to_rate_block(rate_year);
+
+        let global_reward = global_am.saturating_mul(rate_block);
+        let delegator_reward = global_reward
+            .saturating_mul(delegator_percentage_of_validator)
+            .quotient();
+
+        let reward = delegator_reward.0 as Amount;
+
+        return Ok(reward);
+    }
 
     if OVERFLOW_FIX_HEIGHT < cur_height {
         let am = BigUint::from(amount);
