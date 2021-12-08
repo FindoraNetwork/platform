@@ -37,7 +37,7 @@ impl<C: Config> App<C> {
 
     pub fn store_block(&mut self, ctx: &mut Context, block_number: U256) -> Result<()> {
         #[cfg(feature = "debug_env")]
-        const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::from(139_8000);
+        const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::from(139_2500);
 
         #[cfg(not(feature = "debug_env"))]
         const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::zero();
