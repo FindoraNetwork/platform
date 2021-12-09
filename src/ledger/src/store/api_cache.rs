@@ -120,16 +120,6 @@ impl ApiCache {
         }
     }
 
-    /// Check the lost txn sid
-    pub fn check_lost_sid(&mut self, start: usize, end: usize) {
-        for sid in start..end {
-            if !self.txn_sid_to_hash.contains_key(&TxnSID(sid)) {
-                // todo
-            }
-            self.tip = sid;
-        }
-    }
-
     /// Add created asset
     #[inline(always)]
     pub fn add_created_asset(&mut self, creation: &DefineAsset) {
