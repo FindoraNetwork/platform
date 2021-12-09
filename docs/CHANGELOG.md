@@ -14,7 +14,7 @@
 
 #### v0.3.0-release
 
-- Staking (Yanked at the block height of 139_8000 !)
+- Staking (Yanked at the block height of 142_5000 !)
   - Fix second compute for per year.
   - Fix APY rate range.
 - EVM
