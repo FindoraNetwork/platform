@@ -502,6 +502,9 @@ impl TransactionBuilder {
         let ea = MultiSigner::from_str(&ethereum_address)
             .c(d!())
             .map_err(error_to_jsvalue)?;
+        if let MultiSigner::Xfr(_pk) = ea {
+            return Err(error_to_jsvalue("Invalid Ethereum address"));
+        }
         self.get_builder_mut()
             .add_operation_convert_account(keypair, ea, amount)
             .c(d!())
