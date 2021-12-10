@@ -426,30 +426,6 @@ impl LedgerState {
         omit!(ledger.utxo_map.write().compute_checksum());
         ledger.fast_invariant_check().c(d!())?;
 
-
-        let cloned_ledger = ledger.clone();
-        let cur_txn_sid = ledger.get_next_txn().0;
-        let api_cache = ledger.api_cache.as_mut().unwrap();
-        let tip = api_cache.tip;
-
-        if tip < cur_txn_sid {
-            for i in tip..cur_txn_sid {
-                if !api_cache.txn_sid_to_hash.contains_key(&TxnSID(i)) {
-                    let ftx = cloned_ledger.get_transaction_light(TxnSID(i));
-                    let hash = ftx
-                        .unwrap()
-                        .txn
-                        .hash_tm()
-                        .hex()
-                        .to_uppercase();
-
-                    api_cache.txn_sid_to_hash.insert(TxnSID(i), hash.clone());
-                    api_cache.txn_hash_to_sid.insert(hash, TxnSID(i));
-                }
-                api_cache.tip = i;
-            }
-        }
-
         flush_data();
 
         Ok(ledger)

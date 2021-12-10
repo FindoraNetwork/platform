@@ -65,8 +65,8 @@ pub struct ApiCache {
     /// rewards history, used on some pulic nodes, such as fullnode
     pub staking_delegation_rwd_hist:
         Mapx<XfrPublicKey, Mapxnk<BlockHeight, DelegationRwdDetail>>,
-    /// tip is a TxnSID, which there are no transactions lost before it
-    pub tip: usize,
+    /// there are no transactions lost before last_txn_sid
+    pub last_txn_sid: TxnSID,
 }
 
 impl ApiCache {
@@ -116,7 +116,7 @@ impl ApiCache {
                 "api_cache/{}staking_delegation_rwd_hist",
                 prefix
             )),
-            tip: 0,
+            last_txn_sid: TxnSID(0),
         }
     }
 
@@ -315,6 +315,29 @@ pub fn get_transferred_nonconfidential_assets(
 pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
     if !*KEEP_HIST {
         return Ok(());
+    }
+
+    let cloned_ledger = ledger.clone();
+    let mut api_cache = ledger.api_cache.as_mut().unwrap();
+    let cur_txn_sid = cloned_ledger.get_next_txn().0;
+    let last_txn_sid = api_cache.last_txn_sid.0;
+
+    if last_txn_sid < cur_txn_sid {
+        for index in last_txn_sid..cur_txn_sid {
+            if !api_cache.txn_sid_to_hash.contains_key(&TxnSID(index)) {
+                let ftx = cloned_ledger.get_transaction_light(TxnSID(index));
+                let hash = ftx
+                    .unwrap()
+                    .txn
+                    .hash_tm()
+                    .hex()
+                    .to_uppercase();
+
+                api_cache.txn_sid_to_hash.insert(TxnSID(index), hash.clone());
+                api_cache.txn_hash_to_sid.insert(hash, TxnSID(index));
+            }
+            api_cache.last_txn_sid = TxnSID(index);
+        }
     }
 
     ledger.api_cache.as_mut().unwrap().cache_hist_data();
