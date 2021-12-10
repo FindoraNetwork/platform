@@ -5,6 +5,7 @@ on:
       - main
 env:
   CARGO_TERM_COLOR: always
+  RUNNER_EPHEMERAL: false
 jobs:
   build:
     strategy:
