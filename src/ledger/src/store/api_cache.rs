@@ -332,7 +332,8 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
 
     if last_txn_sid < cur_txn_sid {
         for index in last_txn_sid..cur_txn_sid {
-            if !ledger.api_cache
+            if !ledger
+                .api_cache
                 .as_mut()
                 .unwrap()
                 .txn_sid_to_hash
@@ -340,7 +341,8 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
                 let ftx = ledger.get_transaction_light(TxnSID(index));
                 let hash = ftx
                     .unwrap()
-                    .txn.hash_tm()
+                    .txn
+                    .hash_tm()
                     .hex()
                     .to_uppercase();
 
