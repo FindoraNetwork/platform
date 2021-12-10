@@ -72,6 +72,11 @@ impl U128Fraction {
         U128Fraction(0, 1)
     }
 
+    ///Give out a `1`.
+    pub fn one() -> Self {
+        U128Fraction(1, 1)
+    }
+
     ///Construct a fraction by a numerator and denominator, **Error** would be returned if denominator is zero.
     pub fn new(n: Repr, d: Repr) -> Result<Self> {
         if d == 0 {
@@ -124,6 +129,9 @@ impl U128Fraction {
 
     ///Overflowing substraction with an U64Frac. Computes `self - rhs`, Error will be returned if overflowing.
     pub fn overflowing_sub(self, rhs: Self) -> Result<Self> {
+        if self == rhs {
+            return Ok(U128Fraction::zero());
+        }
         self.overflowing_op(rhs, overflowing_sub)
     }
 
@@ -141,6 +149,9 @@ impl U128Fraction {
     pub fn overflowing_div(self, rhs: Self) -> Result<Self> {
         if rhs.0 == 0 {
             return Err(eg!("Dividing by zero!"));
+        }
+        if self.0 == 0 {
+            return Ok(U128Fraction::zero());
         }
         let num = overflowing_mul(self.0, rhs.1)?;
         let div = overflowing_mul(self.1, rhs.0)?;
@@ -269,14 +280,14 @@ mod test {
         assert!((max_v + 10).is_err());
 
         //Comparing always return false because of overflowing.
-        assert!(
-            !(U128Fraction::new(u128::MAX, 27).unwrap()
-                < U128Fraction::new(u128::MAX, 5).unwrap())
-        );
+        assert!(U128Fraction::new(u128::MAX, 27)
+            .unwrap()
+            .partial_cmp(&U128Fraction::new(u128::MAX, 5).unwrap())
+            .is_none());
 
-        assert!(
-            !(U128Fraction::new(u128::MAX, 27).unwrap()
-                > U128Fraction::new(u128::MAX, 5).unwrap())
-        );
+        assert!(U128Fraction::new(u128::MAX, 5)
+            .unwrap()
+            .partial_cmp(&U128Fraction::new(u128::MAX, 27).unwrap())
+            .is_none());
     }
 }

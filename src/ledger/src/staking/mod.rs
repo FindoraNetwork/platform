@@ -99,23 +99,26 @@ lazy_static! {
     #[allow(missing_docs)]
     //Denominators, represent as 1/D.
     pub static ref APY_RATE_BLOCK_TABLE: Vec<U128Fraction> = {
-        [ 1512764,  1922991,  2318412,  2705506,  3088553,  3465695,
-        3843427,  4216038,  4592461,  4967730,  5334344,  5712925,
-        6078548,  6456444,  6821691,  7197721,  7556802,  7934100,
-        8301015,  8677637,  9027536,  9410350,  9791023, 10163949,
-       10522714, 10860230, 11276177, 11611687, 11969639, 12352366,
-       12692146, 13127515, 13436098, 13844477, 14190882, 14556370,
-       14942564, 15351279, 15673806, 16011087, 16364159, 16734159,
-       17122335, 17530062, 17813484, 18257245, 18566281, 19051079,
-       19389367, 19740532, 20105323, 20484550, 20879088, 21289884,
-       21501696, 21938831, 22394959, 22630537, 23117565, 23369376,
-       23890555, 24160337, 24436539, 25009142, 25306042, 25610360,
-       25922380, 26242396, 26570720, 27253622, 27608910, 27973928,
-       28349081, 28734798, 28734798, 29131531, 29539759, 29959989,
-       30392759, 30838639, 31298234, 31298234, 31772186, 32261180,
-       32765943, 32765943, 33287251, 33825930, 33825930, 34382865,
-       34958999, 34958999, 35555343, 36172979, 36172979, 36813070,
-       36813070, 37476862, 37476862]
+       [37476862, 36813070, 34958999, 33287251, 30838639, 29131531,
+        26907680, 25009142, 23117565, 21501696, 19921175, 18566281,
+        17255999, 16126969, 15042556, 14102552, 13279881, 12485898,
+        11787719, 11168965, 10569523,  9994414,  9521087,  9060910,
+         8617225,  8246279,  7884624,  7534555,  7237952,  6948115,
+         6666661,  6425446,  6189282,  5972313,  5760290,  5565096,
+         5384789,  5217719,  5053678,  4901446,  4759784,  4627617,
+         4497382,  4375736,  4261849,  4149551,  4044303,  3945453,
+         3852429,  3760470,  3673857,  3592132,  3514885,  3438369,
+         3365997,  3297437,  3232390,  3167852,  3106588,  3048349,
+         2992913,  2940079,  2887524,  2837416,  2789584,  2742013,
+         2696585,  2654855,  2611590,  2571772,  2532094,  2495505,
+         2458976,  2422586,  2388940,  2355361,  2323087,  2292042,
+         2262154,  2233359,  2204587,  2176861,  2150126,  2123421,
+         2098537,  2073648,  2049610,  2026379,  2003913,  1981438,
+         1959701,  1938665,  1918296,  1898562,  1878804,  1860268,
+         1841690,  1823670,  1805627,  1788664,  1771661,  1755152,
+         1739114,  1723526,  1707903,  1693171,  1678392,  1664016,
+         1649605,  1635994,  1622339,  1609430,  1596470,  1583841,
+         1571174,  1559179,  1547138,  1535396,  1523942,  1512764]
         .iter()
         .map(|d|U128Fraction::new(1,*d).unwrap())
         .collect()
@@ -123,15 +126,17 @@ lazy_static! {
 
     #[allow(missing_docs)]
     pub static ref APY_RATE_YEAR_TABLE:Vec<U128Fraction> = {
-        [2680, 1787, 1340, 1072,  893,  765,  670,  596,  536,  487,  447,
-        412,  382,  357,  335,  315,  298,  282,  268,  255,  244,  233,
-        223,  214,  206,  198,  191,  185,  179,  173,  168,  162,  158,
-        153,  149,  145,  141,  136,  134,  131,  128,  125,  122,  119,
-        117,  114,  111,  109,  107,  105,  103,  100,   99,   96,   96,
-         94,   92,   91,   89,   88,   86,   85,   84,   81,   81,   80,
-         79,   78,   77,   75,   74,   73,   72,   71,   71,   70,   69,
-         68,   67,   66,   65,   65,   64,   63,   62,   62,   61,   60,
-         60,   59,   57,   57,   57,   55,   55,   55,   55,   54,   54]
+        [54,   55,   58,   61,   66,   70,   76,   82,   89,   96,  104,
+        112,  121,  130,  140,  150,  160,  171,  182,  193,  205,  218,
+        230,  243,  257,  270,  284,  299,  313,  328,  344,  359,  375,
+        391,  408,  425,  442,  459,  477,  495,  513,  531,  550,  569,
+        588,  608,  628,  648,  668,  689,  710,  731,  752,  774,  796,
+        818,  840,  863,  886,  909,  932,  955,  979, 1002, 1027, 1052,
+       1077, 1101, 1127, 1152, 1178, 1203, 1229, 1256, 1282, 1309, 1336,
+       1363, 1390, 1417, 1445, 1473, 1501, 1530, 1558, 1587, 1616, 1645,
+       1674, 1704, 1734, 1764, 1794, 1824, 1855, 1885, 1916, 1947, 1979,
+       2009, 2041, 2074, 2106, 2138, 2171, 2203, 2236, 2269, 2303, 2336,
+       2370, 2403, 2437, 2471, 2506, 2540, 2575, 2610, 2645, 2680]
          .iter()
          .map(|n| U128Fraction::new( *n, 1000).unwrap())
          .collect()
@@ -2154,7 +2159,7 @@ fn calculate_delegation_rewards(
 
         // use new rate
         let rate_year = U128Fraction::new(return_rate[0], return_rate[1])?;
-        let rate_block = rate_year_to_rate_block(rate_year);
+        let rate_block = rate_year_to_rate_block(rate_year)?;
 
         let global_reward = global_am.overflowing_mul(rate_block)?;
         let (delegator_reward, _) = global_reward
@@ -2414,26 +2419,60 @@ pub fn deny_relative_inputs(x: &TransferAsset) -> Result<()> {
     }
 }
 
-fn rate_year_to_index(rate_year: U128Fraction) -> usize {
-    if rate_year >= APY_RATE_YEAR_TABLE[0] {
-        return 0;
-    }
-
-    for index in 1..99 {
+fn locate_rate_year_table(rate_year: U128Fraction) -> usize {
+    let len = APY_RATE_YEAR_TABLE.len();
+    for index in 0..len - 1 {
         if APY_RATE_YEAR_TABLE[index] <= rate_year
-            && rate_year < APY_RATE_YEAR_TABLE[index - 1]
+            && rate_year < APY_RATE_YEAR_TABLE[index + 1]
         {
             return index;
         }
     }
+    debug_assert!(false);
+    len - 1 //should never reach here.
+}
 
-    98
+// r = (x-x1) / (x2-x1)
+// return (1-r)*y1 + r*y2
+fn linear_interp(
+    x1: U128Fraction,
+    x2: U128Fraction,
+    y1: U128Fraction,
+    y2: U128Fraction,
+    x: U128Fraction,
+) -> Result<U128Fraction> {
+    let r = (x.overflowing_sub(x1)?).overflowing_div(x2.overflowing_sub(x1)?)?;
+    let one = U128Fraction::one();
+
+    let a = one.overflowing_sub(r)?.overflowing_mul(y1)?;
+    let b = r.overflowing_mul(y2)?;
+
+    a.overflowing_add(b)
 }
 
 #[allow(missing_docs)]
-pub fn rate_year_to_rate_block(rate_year: U128Fraction) -> U128Fraction {
-    let index = rate_year_to_index(rate_year);
-    APY_RATE_BLOCK_TABLE[index]
+pub fn rate_year_to_rate_block(rate_year: U128Fraction) -> Result<U128Fraction> {
+    //round up to 6 decimal places
+    let (n, _) = (rate_year * 1_000_000)?.quotient()?;
+
+    if rate_year <= APY_RATE_YEAR_TABLE[0] {
+        return Ok(APY_RATE_BLOCK_TABLE[0]);
+    }
+    let last = APY_RATE_YEAR_TABLE.len() - 1;
+    if rate_year >= APY_RATE_YEAR_TABLE[last] {
+        return Ok(APY_RATE_BLOCK_TABLE[last]);
+    }
+
+    let rate_year = U128Fraction::new(n, 1_000_000).unwrap();
+
+    let index = locate_rate_year_table(rate_year);
+
+    let x1 = APY_RATE_YEAR_TABLE[index];
+    let x2 = APY_RATE_YEAR_TABLE[index + 1];
+    let y1 = APY_RATE_BLOCK_TABLE[index];
+    let y2 = APY_RATE_BLOCK_TABLE[index + 1];
+
+    linear_interp(x1, x2, y1, y2, rate_year)
 }
 
 #[cfg(test)]
@@ -2485,27 +2524,53 @@ mod test {
 
     #[test]
     fn rate_block() {
-        let rate_year = [
-            2900, 2680, 2000, 1800, 1787, 1340, 1072, 893, 765, 670, 596, 536, 487, 447,
-            412, 382, 357, 335, 315, 298, 282, 268, 255, 244, 233, 223, 214, 206, 198,
-            191, 185, 179, 173, 168, 162, 158, 153, 149, 145, 141, 136, 134, 131, 128,
-            125, 122, 119, 117, 114, 111, 109, 107, 105, 103, 100, 99, 96, 96, 94, 92,
-            91, 89, 88, 86, 85, 84, 81, 81, 80, 79, 78, 77, 75, 74, 73, 72, 71, 71, 70,
-            69, 68, 67, 66, 65, 65, 64, 63, 62, 62, 61, 60, 60, 59, 57, 57, 57, 55, 55,
-            55, 55, 54, 54, 30, 0,
-        ]
-        .iter()
-        .map(|n| U128Fraction::new(*n, 1000).unwrap());
+        let rate_year = [2900, 2680, 765, 670, 165, 141, 136, 55, 54, 0]
+            .iter()
+            .map(|n| U128Fraction::new(*n, 1000).unwrap());
 
         for r in rate_year {
-            let rb = rate_year_to_rate_block(r);
-            println!("{}:{:e}", rb, rb.estimate_f64());
+            let rb = rate_year_to_rate_block(r).unwrap();
+            println!("{} -> {:e}", rb, rb.estimate_f64());
         }
 
-        let r_max = rate_year_to_rate_block(U128Fraction::new(268, 100).unwrap());
-        let r_min = rate_year_to_rate_block(U128Fraction::new(54, 1000).unwrap());
+        let r_max =
+            rate_year_to_rate_block(U128Fraction::new(268, 100).unwrap()).unwrap();
+        let r_min =
+            rate_year_to_rate_block(U128Fraction::new(54, 1000).unwrap()).unwrap();
 
         assert!((r_max.estimate_f64() - 6.61041696e-07).abs() < 1e-12);
         assert!((r_min.estimate_f64() - 2.66831308e-08).abs() < 1e-12);
+
+        let amount = 193391311055996_u128;
+
+        let mut rate_years: Vec<_> = vec![
+            5400051, 7099936, 8599922, 25499771, 38299656, 76599312, 178698397,
+        ]
+        .into_iter()
+        // 99999103 is a prime.
+        .map(|n| U128Fraction::new(n, 99999103).unwrap())
+        .collect();
+
+        rate_years.push(U128Fraction::new(193391311055997, 530346070507283).unwrap());
+        rate_years
+            .push(U128Fraction::new(2u128.pow(63) + 3, 2u128.pow(64) + 7).unwrap());
+
+        for rate_year in rate_years.into_iter() {
+            let mut total = amount;
+            let rate_block = rate_year_to_rate_block(rate_year).unwrap();
+            let block_year = 365 * 24 * 3600 / 16;
+            for _ in 0..block_year {
+                let rw = U128Fraction::new(total, 1)
+                    .unwrap()
+                    .overflowing_mul(rate_block)
+                    .unwrap();
+                total += rw.quotient().unwrap().0
+            }
+
+            let rate_year_computed = (total - amount) as f64 / amount as f64;
+            let err = rate_year.estimate_f64() - rate_year_computed;
+            println!("Rate year computed: {}, error:{}", rate_year_computed, err);
+            assert!(err.abs() < 1e-4);
+        }
     }
 }
