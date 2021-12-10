@@ -186,6 +186,7 @@ pub fn deliver_tx(
 
     let tx_catalog = try_tx_catalog(req.get_tx());
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+
     const EVM_FIRST_BLOCK_HEIGHT: i64 = 139_2500;
     match tx_catalog {
         TxCatalog::FindoraTx => {
