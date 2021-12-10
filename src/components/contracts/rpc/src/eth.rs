@@ -505,7 +505,7 @@ impl EthApi for EthApiImpl {
         debug!(target: "eth_rpc", "code_at, address:{:?}, number:{:?}", address, number);
 
         // FRA (FRC20 precompile)
-        if address == H160::from_low_u64_be(9) {
+        if address == H160::from_low_u64_be(0x1000) {
             return Ok(Bytes::new(b"fra".to_vec()));
         }
 
