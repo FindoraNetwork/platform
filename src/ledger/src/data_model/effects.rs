@@ -27,6 +27,10 @@ use {
         sync::Arc,
     },
     zei::{
+        anon_xfr::{
+            bar_to_from_abar::verify_bar_to_abar_note,
+            structs::{AXfrBody, AnonBlindAssetRecord, Nullifier},
+        },
         serialization::ZeiFromToBytes,
         setup::PublicParams,
         xfr::{
@@ -90,6 +94,10 @@ pub struct TxnEffect {
     pub fra_distributions: Vec<FraDistributionOps>,
     /// Staking operations
     pub update_stakers: Vec<UpdateStakerOps>,
+    /// Newly create Anon Blind Asset Records
+    pub bar_conv_abars: Vec<AnonBlindAssetRecord>,
+    /// New anon transfer bodies
+    pub axfr_bodies: Vec<AXfrBody>,
 }
 
 impl TxnEffect {

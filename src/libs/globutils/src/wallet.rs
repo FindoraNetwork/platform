@@ -7,12 +7,15 @@
 use {
     bech32::{self, FromBase32, ToBase32},
     bip0039::{Count, Language, Mnemonic},
+    crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey},
     ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey},
     ruc::*,
     zei::{
+        anon_xfr::keys::{AXfrKeyPair, AXfrPubKey},
         serialization::ZeiFromToBytes,
         xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
     },
+    zeialgebra::jubjub::JubjubScalar,
 };
 
 /// Randomly generate a 12words-length mnemonic.
@@ -182,6 +185,77 @@ pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey> {
     base64::decode_config(pk, base64::URL_SAFE)
         .c(d!())
         .and_then(|bytes| XfrPublicKey::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Restore a anon public key from base64
+pub fn anon_public_key_from_base64(pk: &str) -> Result<AXfrPubKey> {
+    base64::decode_config(pk, base64::URL_SAFE)
+        .c(d!())
+        .and_then(|bytes| AXfrPubKey::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Convert an anon public key to base64
+pub fn anon_public_key_to_base64(key: &AXfrPubKey) -> String {
+    base64::encode_config(&AXfrPubKey::zei_to_bytes(key), base64::URL_SAFE)
+}
+
+#[inline(always)]
+/// Convert a randomizer to base58
+pub fn randomizer_to_base58(r: &JubjubScalar) -> String {
+    bs58::encode(&JubjubScalar::zei_to_bytes(r)).into_string()
+}
+
+#[inline(always)]
+/// Restore a x public key from base64
+pub fn x_public_key_from_base64(pk: &str) -> Result<XPublicKey> {
+    base64::decode_config(pk, base64::URL_SAFE)
+        .c(d!())
+        .and_then(|bytes| XPublicKey::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Convert an anon public key to base64
+pub fn x_public_key_to_base64(key: &XPublicKey) -> String {
+    base64::encode_config(&XPublicKey::zei_to_bytes(key), base64::URL_SAFE)
+}
+
+#[inline(always)]
+/// Restore a anon secret key from base64
+pub fn anon_secret_key_from_base64(sk: &str) -> Result<AXfrKeyPair> {
+    base64::decode_config(sk, base64::URL_SAFE)
+        .c(d!())
+        .and_then(|bytes| AXfrKeyPair::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Convert an anon public key to base64
+pub fn anon_secret_key_to_base64(key: &AXfrKeyPair) -> String {
+    base64::encode_config(&AXfrKeyPair::zei_to_bytes(key), base64::URL_SAFE)
+}
+
+#[inline(always)]
+/// Restore a x secret key from base64
+pub fn x_secret_key_from_base64(sk: &str) -> Result<XSecretKey> {
+    base64::decode_config(sk, base64::URL_SAFE)
+        .c(d!())
+        .and_then(|bytes| XSecretKey::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Convert an anon public key to base64
+pub fn x_secret_key_to_base64(key: &XSecretKey) -> String {
+    base64::encode_config(&XSecretKey::zei_to_bytes(key), base64::URL_SAFE)
+}
+
+#[inline(always)]
+/// Restore a randomizer from base58
+pub fn randomizer_from_base58(sk: &str) -> Result<JubjubScalar> {
+    bs58::decode(sk)
+        .into_vec()
+        .c(d!())
+        .and_then(|bytes| JubjubScalar::zei_from_bytes(&bytes).c(d!()))
 }
 
 /// Convert a XfrPublicKey to bech32 human-readable address

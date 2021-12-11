@@ -28,8 +28,9 @@ indexmap = { version = "1.6.2", features = ["serde"] }
 fp-types = { path = "../components/contracts/primitives/types" }
 
 ruc = "0.6.6"
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
-zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zeialgebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
 bulletproofs = { package = "bulletproofs", git = "https://github.com/FindoraNetwork/bp", branch = "batch_verification", features = ["yoloproofs"] }
 fbnc = { version = "0.2.9", default-features = false}
 
@@ -59,6 +60,9 @@ features = ["f16", "serde"]
 parking_lot = "0.11.1"
 sodiumoxide = "0.2.1"
 fs2 = "0.4"
+storage = { git = "https://github.com/FindoraNetwork/storage.git", branch = "develop" }
+sparse_merkle_tree = { path = "../libs/sparse_merkle_tree" }
+zei_accumulators = { package = "accumulators", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 parking_lot = { version = "0.11.1", features = ["wasm-bindgen"] }

@@ -44,6 +44,12 @@ use {
     },
     unicode_normalization::UnicodeNormalization,
     zei::{
+        anon_xfr::{
+            bar_to_from_abar::{BarToAbarBody, BarToAbarNote},
+            // keys::AXfrPubKey,
+            structs::AXfrNote,
+        },
+        errors::ZeiError,
         serialization::ZeiFromToBytes,
         xfr::{
             lib::{gen_xfr_body, XfrNotePolicies},
@@ -55,6 +61,7 @@ use {
             },
         },
     },
+    zeialgebra::bls12_381::BLSScalar,
 };
 
 const RANDOM_CODE_LENGTH: usize = 16;
@@ -710,6 +717,22 @@ impl NumKey for TxoSID {
 #[allow(missing_docs)]
 pub type TxoSIDList = Vec<TxoSID>;
 
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Deserialize,
+    Eq,
+    Hash,
+    PartialEq,
+    Serialize,
+    Ord,
+    PartialOrd,
+)]
+#[allow(missing_docs)]
+pub struct ATxoSID(pub u64);
+
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct OutputPosition(pub usize);
@@ -1218,6 +1241,78 @@ impl UpdateMemo {
     }
 }
 
+/// Operation for converting a Blind Asset Record to a Anonymous record
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BarToAbarOps {
+    /// the note which contains the inp/op and ZKP
+    pub note: BarToAbarNote,
+    /// The TxoSID of the the input BAR
+    pub txo_sid: TxoSID,
+    nonce: NoReplayToken,
+}
+
+impl BarToAbarOps {
+    /// Generates a new BarToAbarOps object
+    pub fn new(
+        bar_to_abar_body: BarToAbarBody,
+        signing_key: &XfrKeyPair,
+        txo_sid: TxoSID,
+        nonce: NoReplayToken,
+    ) -> Result<BarToAbarOps> {
+        // sign the body
+        let msg = bincode::serialize(&bar_to_abar_body)
+            .map_err(|_| ZeiError::SerializationError)
+            .c(d!())?;
+        let signature = signing_key.sign(&msg);
+
+        Ok(BarToAbarOps {
+            note: BarToAbarNote {
+                body: bar_to_abar_body,
+                signature,
+            },
+            txo_sid,
+            nonce,
+        })
+    }
+
+    #[inline(always)]
+    /// Sets the nonce for the operation
+    pub fn set_nonce(&mut self, nonce: NoReplayToken) {
+        self.nonce = nonce;
+    }
+
+    #[inline(always)]
+    /// Fetches the nonce of the operation
+    pub fn get_nonce(&self) -> NoReplayToken {
+        self.nonce
+    }
+}
+
+/// A struct to hold the transfer ops
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AnonTransferOps {
+    /// The note which holds the signatures, the ZKF and memo
+    pub note: AXfrNote,
+    nonce: NoReplayToken,
+}
+impl AnonTransferOps {
+    /// Generates the anon transfer note
+    pub fn new(note: AXfrNote, nonce: NoReplayToken) -> Result<AnonTransferOps> {
+        Ok(AnonTransferOps { note, nonce })
+    }
+
+    #[inline(always)]
+    #[allow(dead_code)]
+    fn set_nonce(&mut self, nonce: NoReplayToken) {
+        self.nonce = nonce;
+    }
+
+    #[inline(always)]
+    fn get_nonce(&self) -> NoReplayToken {
+        self.nonce
+    }
+}
+
 /// Operation list supported in findora network
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
@@ -1247,6 +1342,10 @@ pub enum Operation {
     MintFra(MintFraOps),
     /// Convert UTXOs to EVM Account balance
     ConvertAccount(ConvertAccount),
+    /// Anonymous conversion operation
+    BarToAbar(Box<BarToAbarOps>),
+    /// Anonymous transfer operation
+    TransferAnonAsset(Box<AnonTransferOps>),
 }
 
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
@@ -1274,6 +1373,8 @@ fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
         }
         Operation::UpdateMemo(i) => i.body.no_replay_token = no_replay_token,
         Operation::ConvertAccount(i) => i.set_nonce(no_replay_token),
+        Operation::BarToAbar(i) => i.set_nonce(no_replay_token),
+        Operation::TransferAnonAsset(i) => i.set_nonce(no_replay_token),
         _ => {}
     }
 }
@@ -1318,6 +1419,7 @@ pub struct FinalizedTransaction {
     pub txn: Transaction,
     pub tx_id: TxnSID,
     pub txo_ids: Vec<TxoSID>,
+    pub atxo_ids: Vec<ATxoSID>,
 
     pub merkle_id: u64,
 }
@@ -1837,6 +1939,23 @@ pub struct StateCommitmentData {
 }
 
 impl StateCommitmentData {
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn compute_commitment(&self) -> HashOf<Option<Self>> {
+        HashOf::new(&Some(self).cloned())
+    }
+}
+
+/// Commitment data for Anon merkle trees
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AnonStateCommitmentData {
+    /// Root hash of the latest committed version of abar merkle tree
+    pub abar_root_hash: BLSScalar,
+    /// Root hash of the nullifier set merkle tree
+    pub nullifier_root_hash: BitDigest,
+}
+
+impl AnonStateCommitmentData {
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn compute_commitment(&self) -> HashOf<Option<Self>> {
