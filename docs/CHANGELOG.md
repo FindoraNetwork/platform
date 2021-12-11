@@ -12,6 +12,14 @@
 
 > Functions that have been added.
 
+#### v0.3.2-release
+
+- Force internal transfer's receiver must be ETH address.
+
+#### v0.3.1-release
+
+- adjust target height to `142_5000`.
+
 #### v0.3.0-release
 
 - Staking (Yanked at the block height of 142_5000 !)
