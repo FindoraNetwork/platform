@@ -323,7 +323,7 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
         .as_mut()
         .unwrap()
         .last_txn_sid
-        .get(&"tip".to_string());
+        .get(&"last_txn_sid".to_string());
 
     let mut last_txn_sid: usize = 0;
     if let Some(sid) = last_txn_sid_opt {
@@ -366,7 +366,7 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
                 .as_mut()
                 .unwrap()
                 .last_txn_sid
-                .insert("tip".to_string(), TxnSID(index));
+                .insert("last_txn_sid".to_string(), TxnSID(index));
         }
     }
 
