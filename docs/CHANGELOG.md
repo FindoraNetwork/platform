@@ -12,6 +12,11 @@
 
 > Functions that have been added.
 
+#### v0.3.3-release
+
+- update height to 142_9000.
+- Fix lost utxo info in utxo.
+
 #### v0.3.2-release
 
 - Force internal transfer's receiver must be ETH address.
