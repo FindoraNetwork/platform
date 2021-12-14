@@ -65,6 +65,8 @@ pub struct ApiCache {
     /// rewards history, used on some pulic nodes, such as fullnode
     pub staking_delegation_rwd_hist:
         Mapx<XfrPublicKey, Mapxnk<BlockHeight, DelegationRwdDetail>>,
+    /// there are no transactions lost before last_txn_sid
+    pub last_txn_sid: Mapx<String, TxnSID>,
 }
 
 impl ApiCache {
@@ -114,6 +116,7 @@ impl ApiCache {
                 "api_cache/{}staking_delegation_rwd_hist",
                 prefix
             )),
+            last_txn_sid: new_mapx!(format!("api_cache/{}last_txn_sid", prefix)),
         }
     }
 
@@ -312,6 +315,59 @@ pub fn get_transferred_nonconfidential_assets(
 pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
     if !*KEEP_HIST {
         return Ok(());
+    }
+
+    let cur_txn_sid = ledger.get_next_txn().0;
+    let last_txn_sid_opt = ledger
+        .api_cache
+        .as_mut()
+        .unwrap()
+        .last_txn_sid
+        .get(&"last_txn_sid".to_string());
+
+    let mut last_txn_sid: usize = 0;
+    if let Some(sid) = last_txn_sid_opt {
+        last_txn_sid = sid.0;
+    };
+
+    if last_txn_sid < cur_txn_sid {
+        for index in last_txn_sid..cur_txn_sid {
+            if !ledger
+                .api_cache
+                .as_mut()
+                .unwrap()
+                .txn_sid_to_hash
+                .contains_key(&TxnSID(index)) {
+                let ftx = ledger.get_transaction_light(TxnSID(index));
+                let hash = ftx
+                    .unwrap()
+                    .txn
+                    .hash_tm()
+                    .hex()
+                    .to_uppercase();
+
+                ledger
+                    .api_cache
+                    .as_mut()
+                    .unwrap()
+                    .txn_sid_to_hash
+                    .insert(TxnSID(index), hash.clone());
+
+                ledger
+                    .api_cache
+                    .as_mut()
+                    .unwrap()
+                    .txn_hash_to_sid
+                    .insert(hash, TxnSID(index));
+            }
+
+            ledger
+                .api_cache
+                .as_mut()
+                .unwrap()
+                .last_txn_sid
+                .insert("last_txn_sid".to_string(), TxnSID(index));
+        }
     }
 
     ledger.api_cache.as_mut().unwrap().cache_hist_data();
