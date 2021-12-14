@@ -51,10 +51,10 @@ jobs:
     #   shell: bash
     #   run: |
     #     make lint
-    - name: test
-      shell: bash
-      run: |
-        make test
+    # - name: test
+    #   shell: bash
+    #   run: |
+    #     make test
     # - name: Build
     #   env:
     #     DBG: true
