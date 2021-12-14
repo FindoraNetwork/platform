@@ -14,7 +14,7 @@
 
 #### v0.3.4-release
 
-- fix IERC20 compability.
+- fix IERC20 compatibility.
 
 #### v0.3.3-release
 
