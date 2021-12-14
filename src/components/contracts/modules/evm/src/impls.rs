@@ -42,6 +42,9 @@ impl<C: Config> App<C> {
         address: &HA160,
         height: Option<u64>,
     ) -> Option<Vec<u8>> {
+        if address.0 == H160::from_low_u64_be(0x1000) {
+            return Some(b"fra".to_vec());
+        }
         match height {
             Some(ver) => {
                 AccountCodes::get_ver_bytes(ctx.state.read().borrow(), address, ver)

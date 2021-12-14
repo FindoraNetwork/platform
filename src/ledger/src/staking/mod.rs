@@ -2145,7 +2145,7 @@ fn calculate_delegation_rewards(
     const OVERFLOW_FIX_HEIGHT: BlockHeight = 124_7000;
 
     #[cfg(not(feature = "debug_env"))]
-    const SECOND_FIX_HEIGHT: BlockHeight = 139_8000;
+    const SECOND_FIX_HEIGHT: BlockHeight = 142_9000;
 
     #[cfg(not(feature = "debug_env"))]
     const NEW_RATE_BLOCK_HEIGHT: BlockHeight = 141_0000;
