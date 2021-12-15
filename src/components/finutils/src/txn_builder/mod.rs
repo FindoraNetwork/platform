@@ -5,19 +5,22 @@
 #![deny(warnings)]
 #![allow(clippy::needless_borrow)]
 
+mod amount;
+
 use {
     credentials::CredUserSecretKey,
+    crypto::basics::hybrid_encryption::XPublicKey,
     curve25519_dalek::scalar::Scalar,
     fp_types::crypto::MultiSigner,
     globutils::SignatureOf,
     ledger::{
         converter::ConvertAccount,
         data_model::{
-            AssetRules, AssetTypeCode, ConfidentialMemo, DefineAsset, DefineAssetBody,
-            IndexedSignature, IssueAsset, IssueAssetBody, IssuerKeyPair,
-            IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
+            AnonTransferOps, AssetRules, AssetTypeCode, BarToAbarOps, ConfidentialMemo,
+            DefineAsset, DefineAssetBody, IndexedSignature, IssueAsset, IssueAssetBody,
+            IssuerKeyPair, IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
             TransactionBody, TransferAsset, TransferAssetBody, TransferType, TxOutput,
-            TxoRef, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
+            TxoRef, TxoSID, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
             TX_FEE_MIN,
         },
         staking::{
@@ -44,13 +47,21 @@ use {
         collections::{BTreeMap, HashSet},
     },
     tendermint::PrivateKey,
+    zei::anon_xfr::structs::AXfrBody,
+    zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
     zei::{
+        anon_xfr::{
+            bar_to_from_abar::gen_bar_to_abar_body,
+            gen_anon_xfr_body,
+            keys::{AXfrKeyPair, AXfrPubKey},
+            structs::{AXfrNote, OpenAnonBlindAssetRecord},
+        },
         api::anon_creds::{
             ac_confidential_open_commitment, ACCommitment, ACCommitmentKey,
             ConfidentialAC, Credential,
         },
         serialization::ZeiFromToBytes,
-        setup::PublicParams,
+        setup::{PublicParams, UserParams, DEFAULT_BP_NUM_GENS},
         xfr::{
             asset_record::{
                 build_blind_asset_record, build_open_asset_record,
@@ -64,6 +75,7 @@ use {
             },
         },
     },
+    zeialgebra::jubjub::JubjubScalar,
 };
 
 macro_rules! no_transfer_err {
@@ -470,7 +482,75 @@ impl TransactionBuilder {
         self
     }
 
-    /// Add a operation to delegating findora account to a tendermint validator.
+    /// Add an operation to convert a Blind Asset Record to a Anonymous record.
+    #[allow(dead_code)]
+    pub fn add_operation_bar_to_abar(
+        &mut self,
+        auth_key_pair: &XfrKeyPair,
+        abar_pub_key: &AXfrPubKey,
+        txo_sid: TxoSID,
+        input_record: &OpenAssetRecord,
+        enc_key: &XPublicKey,
+    ) -> Result<(&mut Self, JubjubScalar)> {
+        let mut prng = ChaChaRng::from_entropy();
+        let user_params = UserParams::eq_committed_vals_params();
+
+        let mut fee = 0u64;
+        if input_record.get_record_type()
+            == NonConfidentialAmount_NonConfidentialAssetType
+            && input_record.asset_type == ASSET_TYPE_FRA
+        {
+            fee = TX_FEE_MIN;
+        }
+
+        let (body, r) = gen_bar_to_abar_body(
+            &mut prng,
+            &user_params,
+            input_record,
+            abar_pub_key,
+            enc_key,
+            fee,
+        )
+        .c(d!())?;
+
+        let bar_to_abar =
+            BarToAbarOps::new(body, auth_key_pair, txo_sid, self.no_replay_token)?;
+
+        let op = Operation::BarToAbar(Box::from(bar_to_abar));
+        self.txn.add_operation(op);
+        Ok((self, r))
+    }
+
+    /// Add an operation to transfer assets held in Anonymous Blind Asset Record.
+    #[allow(dead_code)]
+    pub fn add_operation_anon_transfer(
+        &mut self,
+        inputs: &[OpenAnonBlindAssetRecord],
+        outputs: &[OpenAnonBlindAssetRecord],
+        input_keypairs: &[AXfrKeyPair],
+    ) -> Result<(&mut Self, AXfrNote)> {
+        let mut prng = ChaChaRng::from_entropy(); // TODO: removing this, CRS would be pre generated in a file
+        let depth: usize = 41;
+        //--Sergio--
+        //let depth: usize = 10;
+        let user_params = UserParams::new(
+            inputs.len(),
+            outputs.len(),
+            Option::from(depth),
+            DEFAULT_BP_NUM_GENS,
+        );
+
+        let (body, keypairs) =
+            gen_anon_xfr_body(&mut prng, &user_params, inputs, outputs, input_keypairs)
+                .c(d!())?;
+        let note = AXfrNote::generate_note_from_body(body, keypairs).c(d!())?;
+        let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
+        let op = Operation::TransferAnonAsset(Box::new(inp));
+        self.txn.add_operation(op);
+        Ok((self, note))
+    }
+
+    /// Add a operation to delegating finddra accmount to a tendermint validator.
     /// The transfer operation to BLACK_HOLE_PUBKEY_STAKING should be sent along with.
     pub fn add_operation_delegation(
         &mut self,
@@ -1114,19 +1194,133 @@ impl TransferOperationBuilder {
     }
 }
 
+/// AnonTransferOperationBuilder builders anon transfer operation using the factory pattern.
+/// This is used for the wasm interface in building a multi-input/output anon transfer operation.
+#[derive(Default)]
+pub struct AnonTransferOperationBuilder {
+    inputs: Vec<OpenAnonBlindAssetRecord>,
+    outputs: Vec<OpenAnonBlindAssetRecord>,
+    keypairs: Vec<AXfrKeyPair>,
+
+    body: Option<AXfrBody>,
+    diversified_keypairs: Vec<AXfrKeyPair>,
+    randomizers: Vec<JubjubScalar>,
+    note: Option<AXfrNote>,
+}
+
+impl AnonTransferOperationBuilder {
+    /// default returns a fresh default builder
+    pub fn default() -> Self {
+        AnonTransferOperationBuilder {
+            inputs: Vec::default(),
+            outputs: Vec::default(),
+            keypairs: Vec::default(),
+            body: None,
+            diversified_keypairs: Vec::default(),
+            randomizers: Vec::default(),
+            note: None,
+        }
+    }
+
+    /// add_input is used for adding an input source to the Anon Transfer Operation factory, it takes
+    /// an ABAR and a Keypair as input
+    pub fn add_input(
+        &mut self,
+        abar: OpenAnonBlindAssetRecord,
+        secret_key: AXfrKeyPair,
+    ) -> Result<&mut Self> {
+        self.inputs.push(abar);
+        self.keypairs.push(secret_key);
+        Ok(self)
+    }
+
+    /// add_output is used to add a output record to the Anon Transfer factory
+    pub fn add_output(&mut self, abar: OpenAnonBlindAssetRecord) -> Result<&mut Self> {
+        let randomizer = abar.get_key_rand_factor();
+        self.outputs.push(abar);
+        self.randomizers.push(randomizer);
+        Ok(self)
+    }
+
+    /// get_randomizers fetches the randomizers for the different outputs.
+    pub fn get_randomizers(&self) -> Vec<JubjubScalar> {
+        self.randomizers.clone()
+    }
+
+    /// build generates the anon transfer body with the Zero Knowledge Proof.
+    pub fn build(&mut self) -> Result<&mut Self> {
+        let mut prng = ChaChaRng::from_entropy();
+        let user_params = UserParams::from_file_if_exists(
+            self.inputs.len(),
+            self.outputs.len(),
+            Some(41),
+            DEFAULT_BP_NUM_GENS,
+            None,
+        )
+        .c(d!())?;
+
+        let (body, diversified_keypairs) = gen_anon_xfr_body(
+            &mut prng,
+            &user_params,
+            self.inputs.as_slice(),
+            self.outputs.as_slice(),
+            self.keypairs.as_slice(),
+        )
+        .c(d!())?;
+
+        self.body = Some(body);
+        self.diversified_keypairs = diversified_keypairs;
+
+        Ok(self)
+    }
+
+    /// sign method signs the anon transfer body and creates a anon-note for the operation
+    pub fn sign(&mut self) -> Result<&mut Self> {
+        self.note = Some(
+            AXfrNote::generate_note_from_body(
+                self.body.as_ref().unwrap().clone(),
+                self.diversified_keypairs.clone(),
+            )
+            .c(d!())?,
+        );
+
+        Ok(self)
+    }
+
+    /// transaction method wraps the anon transfer note in an Operation and returns it
+    pub fn transaction(&self, nonce: NoReplayToken) -> Result<Operation> {
+        if self.note.is_none() {
+            return Err(eg!("Anon transfer not built and signed"));
+        }
+
+        Ok(Operation::TransferAnonAsset(Box::from(
+            AnonTransferOps::new(self.note.as_ref().unwrap().clone(), nonce).unwrap(),
+        )))
+    }
+}
+
 #[cfg(test)]
 #[allow(missing_docs)]
 mod tests {
     use {
         super::*,
-        ledger::data_model::{TxnEffect, TxoRef},
+        crypto::basics::commitments::ristretto_pedersen::RistrettoPedersenGens,
+        crypto::basics::hybrid_encryption::XSecretKey,
+        ledger::data_model::{ATxoSID, BlockEffect, TxnEffect, TxoRef},
         ledger::store::{utils::fra_gen_initial_tx, LedgerState},
         rand_chacha::ChaChaRng,
         rand_core::SeedableRng,
-        zei::setup::PublicParams,
+        std::ops::Neg,
+        zei::anon_xfr::bar_to_from_abar::verify_bar_to_abar_note,
+        zei::anon_xfr::structs::{
+            AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
+        },
+        zei::setup::{NodeParams, PublicParams},
         zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record},
         zei::xfr::sig::XfrKeyPair,
+        zei::xfr::structs::AssetType as AT,
+        crate::txn_builder::amount::Amount,
     };
 
     // Defines an asset type

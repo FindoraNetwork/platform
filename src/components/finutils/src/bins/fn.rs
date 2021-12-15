@@ -27,15 +27,22 @@
 
 use {
     clap::{crate_authors, load_yaml, App},
+    crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey},
     finutils::common::{self, evm::*},
     fp_utils::ecdsa::SecpPair,
     globutils::wallet,
     ledger::{
-        data_model::{AssetTypeCode, FRA_DECIMALS},
+        data_model::{ATxoSID, AssetTypeCode, FRA_DECIMALS},
         staking::StakerMemo,
     },
     ruc::*,
+    serde::{Deserialize, Serialize},
+    std::fs::File,
     std::{fmt, fs},
+    zei::anon_xfr::keys::AXfrKeyPair,
+    zei::anon_xfr::structs::{
+        AnonBlindAssetRecord, OpenAnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
+    },
 };
 
 fn main() {
@@ -396,6 +403,261 @@ fn run() -> Result<()> {
         let address = m.value_of("addr");
         let eth_key = m.value_of("eth-key");
         transfer_from_account(amount.parse::<u64>().c(d!())?, address, eth_key)?
+    } else if let Some(m) = matches.subcommand_matches("convert-bar-to-abar") {
+        let f = match m.value_of("from-seckey") {
+            Some(path) => {
+                Some(fs::read_to_string(path).c(d!("Failed to read seckey file"))?)
+            }
+            None => None,
+        };
+
+        let anon_keys = match m.value_of("anon-keys") {
+            Some(path) => {
+                let f =
+                    fs::read_to_string(path).c(d!("Failed to read anon-keys file"))?;
+                let keys = serde_json::from_str::<AnonKeys>(f.as_str()).c(d!())?;
+                keys
+            }
+            None => return Err(eg!("path for anon-keys file not found")),
+        };
+
+        let owner_sk = f.as_ref();
+        let target_addr = anon_keys.axfr_public_key;
+        let owner_enc_key = anon_keys.enc_key;
+        let txo_sid = m.value_of("txo-sid");
+
+        if txo_sid.is_none() {
+            println!("{}", m.usage());
+        } else {
+            let r = common::convert_bar2abar(
+                owner_sk,
+                target_addr,
+                owner_enc_key,
+                txo_sid.unwrap(),
+            )
+            .c(d!())?;
+
+            println!(
+                "\x1b[31;01m Randomizer: {}\x1b[00m",
+                wallet::randomizer_to_base58(&r)
+            );
+            let mut file = fs::OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open("randomizers")
+                .expect("cannot open randomizers file");
+            std::io::Write::write_all(
+                &mut file,
+                ("\n".to_owned() + &wallet::randomizer_to_base58(&r)).as_bytes(),
+            )
+            .expect("randomizer write failed");
+        }
+    } else if let Some(m) = matches.subcommand_matches("gen-anon-keys") {
+        let mut prng = ChaChaRng::from_entropy();
+        let keypair = AXfrKeyPair::generate(&mut prng);
+        let secret_key = XSecretKey::new(&mut prng);
+        let public_key = XPublicKey::from(&secret_key);
+
+        let keys = AnonKeys {
+            axfr_secret_key: wallet::anon_secret_key_to_base64(&keypair),
+            axfr_public_key: wallet::anon_public_key_to_base64(&keypair.pub_key()),
+            enc_key: wallet::x_public_key_to_base64(&public_key),
+            dec_key: wallet::x_secret_key_to_base64(&secret_key),
+        };
+
+        if let Some(path) = m.value_of("file-path") {
+            serde_json::to_writer_pretty(&File::create(path).c(d!())?, &keys).c(d!())?;
+            println!("Keys saved to file: {}", path);
+        }
+
+        // print keys to terminal
+        println!("Keys :\n {}", serde_json::to_string_pretty(&keys).unwrap());
+    } else if let Some(m) = matches.subcommand_matches("owned-abars") {
+        let randomizer_str = m.value_of("randomizer");
+        let axfr_public_key_str = m.value_of("axfr-public-key");
+
+        // create derived public key
+        let randomizer = wallet::randomizer_from_base58(randomizer_str.unwrap())?;
+        let axfr_public_key =
+            wallet::anon_public_key_from_base64(axfr_public_key_str.unwrap())?;
+        let derived_public_key = axfr_public_key.randomize(&randomizer);
+
+        println!(
+            "Derived Public Key:   {}",
+            wallet::anon_public_key_to_base64(&derived_public_key)
+        );
+
+        // get results from query server and print
+        let list = common::get_owned_abars(&derived_public_key).c(d!())?;
+        println!(
+            "(AtxoSID, ABAR)   :  {}",
+            serde_json::to_string(&list).c(d!())?
+        );
+    } else if let Some(m) = matches.subcommand_matches("owned-open-abars") {
+        let anon_keys = match m.value_of("anon-keys") {
+            Some(path) => {
+                let f =
+                    fs::read_to_string(path).c(d!("Failed to read anon-keys file"))?;
+                let keys = serde_json::from_str::<AnonKeys>(f.as_str()).c(d!())?;
+                keys
+            }
+            None => return Err(eg!("path for anon-keys file not found")),
+        };
+        let randomizer_str = m.value_of("randomizer");
+
+        // create derived public key
+        let randomizer = wallet::randomizer_from_base58(randomizer_str.unwrap())?;
+        let axfr_public_key =
+            wallet::anon_public_key_from_base64(anon_keys.axfr_public_key.as_str())?;
+        let axfr_secret_key =
+            wallet::anon_secret_key_from_base64(anon_keys.axfr_secret_key.as_str())
+                .c(d!())?;
+        let dec_key = wallet::x_secret_key_from_base64(anon_keys.dec_key.as_str())?;
+        let derived_public_key = axfr_public_key.randomize(&randomizer);
+
+        println!(
+            "Derived Public Key:   {}",
+            wallet::anon_public_key_to_base64(&derived_public_key)
+        );
+
+        // get results from query server and print
+        let list = common::get_owned_abars(&derived_public_key).c(d!())?;
+
+        let list = list
+            .iter()
+            .map(|(uid, abar)| {
+                let memo = common::get_abar_memo(uid).unwrap().unwrap();
+                let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
+                    abar,
+                    memo,
+                    &axfr_secret_key,
+                    &dec_key,
+                )
+                .unwrap()
+                .build()
+                .unwrap();
+                (uid, abar, oabar)
+            })
+            .collect::<Vec<(&ATxoSID, &AnonBlindAssetRecord, OpenAnonBlindAssetRecord)>>(
+            );
+
+        println!(
+            "(AtxoSID, ABAR, OABAR)   :  {}",
+            serde_json::to_string(&list).c(d!())?
+        );
+    } else if let Some(_m) = matches.subcommand_matches("owned-utxos") {
+        let list = common::get_owned_utxos()?;
+        println!("{:?}", list);
+    } else if let Some(m) = matches.subcommand_matches("anon-transfer") {
+        let anon_keys = match m.value_of("anon-keys") {
+            Some(path) => {
+                let f =
+                    fs::read_to_string(path).c(d!("Failed to read anon-keys file"))?;
+                let keys = serde_json::from_str::<AnonKeys>(f.as_str()).c(d!())?;
+                keys
+            }
+            None => return Err(eg!("path for anon-keys file not found")),
+        };
+        let axfr_secret_key = anon_keys.axfr_secret_key;
+        let randomizer = m.value_of("randomizer");
+        let dec_key = anon_keys.dec_key;
+        let to_axfr_public_key = m.value_of("to-axfr-public-key");
+        let to_enc_key = m.value_of("to-enc-key");
+        let amount = m.value_of("amount");
+
+        if randomizer.is_none()
+            || to_axfr_public_key.is_none()
+            || to_enc_key.is_none()
+            || amount.is_none()
+        {
+            println!("{}", m.usage());
+        } else {
+            common::gen_oabar_add_op(
+                axfr_secret_key,
+                randomizer.unwrap(),
+                dec_key,
+                amount.unwrap(),
+                to_axfr_public_key.unwrap(),
+                to_enc_key.unwrap(),
+            )
+            .c(d!())?;
+        }
+    } else if let Some(m) = matches.subcommand_matches("anon-transfer-batch") {
+        let axfr_secret_keys =
+            m.value_of("axfr-secretkey-file").c(d!()).and_then(|f| {
+                fs::read_to_string(f).c(d!()).and_then(|sks| {
+                    sks.lines()
+                        .map(|sk| wallet::anon_secret_key_from_base64(sk.trim()))
+                        .collect::<Result<Vec<_>>>()
+                        .c(d!("invalid file"))
+                })
+            })?;
+        let dec_keys = m.value_of("decryption-key-file").c(d!()).and_then(|f| {
+            fs::read_to_string(f).c(d!()).and_then(|dks| {
+                dks.lines()
+                    .map(|dk| wallet::x_secret_key_from_base64(dk.trim()))
+                    .collect::<Result<Vec<_>>>()
+                    .c(d!("invalid file"))
+            })
+        })?;
+        let to_axfr_public_keys = m
+            .value_of("to-axfr-public-key-file")
+            .c(d!())
+            .and_then(|f| {
+                fs::read_to_string(f).c(d!()).and_then(|pks| {
+                    pks.lines()
+                        .map(|pk| wallet::anon_public_key_from_base64(pk.trim()))
+                        .collect::<Result<Vec<_>>>()
+                        .c(d!("invalid file"))
+                })
+            })?;
+        let to_enc_keys = m.value_of("to-enc-key-file").c(d!()).and_then(|f| {
+            fs::read_to_string(f).c(d!()).and_then(|eks| {
+                eks.lines()
+                    .map(|ek| wallet::x_public_key_from_base64(ek.trim()))
+                    .collect::<Result<Vec<_>>>()
+                    .c(d!("invalid file"))
+            })
+        })?;
+        let randomizers = m.value_of("randomizer-file").c(d!()).and_then(|f| {
+            fs::read_to_string(f)
+                .c(d!())
+                .map(|rms| rms.lines().map(String::from).collect::<Vec<String>>())
+        })?;
+        let amounts = m.value_of("amount-file").c(d!()).and_then(|f| {
+            fs::read_to_string(f)
+                .c(d!())
+                .map(|ams| ams.lines().map(String::from).collect::<Vec<String>>())
+        })?;
+
+        if axfr_secret_keys.is_empty()
+            || dec_keys.is_empty()
+            || to_axfr_public_keys.is_empty()
+            || to_enc_keys.is_empty()
+            || randomizers.is_empty()
+            || amounts.is_empty()
+        {
+            println!("{}", m.usage());
+        } else {
+            common::gen_oabar_add_op_x(
+                axfr_secret_keys,
+                dec_keys,
+                to_axfr_public_keys,
+                to_enc_keys,
+                randomizers,
+                amounts,
+            )
+            .c(d!())?;
+        }
+    } else if let Some(m) = matches.subcommand_matches("anon-fetch-merkle-proof") {
+        let atxo_sid = m.value_of("atxo-sid");
+
+        if atxo_sid.is_none() {
+            println!("{}", m.usage());
+        } else {
+            let mt_leaf_info = common::get_mtleaf_info(atxo_sid.unwrap()).c(d!())?;
+            println!("{:?}", serde_json::to_string_pretty(&mt_leaf_info));
+        }
     } else {
         println!("{}", matches.usage());
     }
@@ -415,4 +677,12 @@ fn tip_success() {
     println!(
         "\x1b[35;01mNote\x1b[01m:\n\tYour operations has been executed without local error,\n\tbut the final result may need an asynchronous query.\x1b[00m"
     );
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+pub struct AnonKeys {
+    pub axfr_secret_key: String,
+    pub axfr_public_key: String,
+    pub enc_key: String,
+    pub dec_key: String,
 }

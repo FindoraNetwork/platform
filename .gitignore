@@ -23,6 +23,7 @@ Cargo.lock
 nohup.out
 
 *.keys
+randomizers
 
 tools/tendermint
 seq_id.str
