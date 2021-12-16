@@ -67,6 +67,8 @@ pub struct ApiCache {
         Mapx<XfrPublicKey, Mapxnk<BlockHeight, DelegationRwdDetail>>,
     /// there are no transactions lost before last_txn_sid
     pub last_txn_sid: Mapx<String, TxnSID>,
+    /// there are no owner memos lost before last_txo_sid
+    pub last_txo_sid: Mapx<String, TxoSID>,
 }
 
 impl ApiCache {
@@ -117,6 +119,7 @@ impl ApiCache {
                 prefix
             )),
             last_txn_sid: new_mapx!(format!("api_cache/{}last_txn_sid", prefix)),
+            last_txo_sid: new_mapx!(format!("api_cache/{}last_txo_sid", prefix)),
         }
     }
 
@@ -330,6 +333,7 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
         last_txn_sid = sid.0;
     };
 
+    // check the lost txn sids
     if last_txn_sid < cur_txn_sid {
         for index in last_txn_sid..cur_txn_sid {
             if !ledger
@@ -339,12 +343,7 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
                 .txn_sid_to_hash
                 .contains_key(&TxnSID(index)) {
                 let ftx = ledger.get_transaction_light(TxnSID(index));
-                let hash = ftx
-                    .unwrap()
-                    .txn
-                    .hash_tm()
-                    .hex()
-                    .to_uppercase();
+                let hash = ftx.unwrap().txn.hash_tm().hex().to_uppercase();
 
                 ledger
                     .api_cache
@@ -367,6 +366,68 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
                 .unwrap()
                 .last_txn_sid
                 .insert("last_txn_sid".to_string(), TxnSID(index));
+        }
+    }
+
+    // check the last memos
+    let cur_txo_sid = ledger.get_next_txo().0;
+    let last_txo_sid_opt = ledger
+        .api_cache
+        .as_mut()
+        .unwrap()
+        .last_txo_sid
+        .get(&"last_txo_sid".to_string());
+
+    let mut last_txo_sid: u64 = 0;
+    if let Some(sid) = last_txo_sid_opt {
+        last_txo_sid = sid.0;
+    };
+
+    if last_txo_sid < cur_txo_sid {
+        for index in last_txo_sid..cur_txo_sid {
+            if !ledger
+                .api_cache
+                .as_mut()
+                .unwrap()
+                .owner_memos
+                .contains_key(&TxoSID(index)) {
+
+                let utxo = ledger.get_utxo_light(TxoSID(index)).unwrap();
+                let ftx = ledger.get_transaction_light(utxo.txn.tx_id).unwrap();
+                let tx_hash = ftx.txn.hash_tm().hex().to_uppercase();
+                let owner_memos = ftx.txn.get_owner_memos_ref();
+
+                for (txo_sid, memo) in utxo.txn.txo_ids
+                    .iter()
+                    .zip(owner_memos.iter()) {
+
+                    if *txo_sid == TxoSID(index) {
+                        if let Some(memo) = memo {
+                            ledger
+                                .api_cache
+                                .as_mut()
+                                .unwrap()
+                                .owner_memos
+                                .insert(*txo_sid, (*memo).clone());
+                        }
+
+                        ledger
+                            .api_cache
+                            .as_mut()
+                            .unwrap()
+                            .txo_to_txnid
+                            .insert(*txo_sid, (utxo.txn.tx_id, tx_hash.clone()));
+
+                        ledger
+                            .api_cache
+                            .as_mut()
+                            .unwrap()
+                            .last_txo_sid
+                            .insert("last_txo_sid".to_string(), TxoSID(index));
+                    }
+                }
+
+            }
         }
     }
 
