@@ -65,10 +65,8 @@ pub struct ApiCache {
     /// rewards history, used on some pulic nodes, such as fullnode
     pub staking_delegation_rwd_hist:
         Mapx<XfrPublicKey, Mapxnk<BlockHeight, DelegationRwdDetail>>,
-    /// there are no transactions lost before last_txn_sid
-    pub last_txn_sid: Mapx<String, TxnSID>,
-    /// there are no transactions lost before last_txo_sid
-    pub last_txo_sid: Mapx<String, TxoSID>,
+    /// there are no transactions lost before last_sid
+    pub last_sid: Mapx<String, u64>,
 }
 
 impl ApiCache {
@@ -118,8 +116,7 @@ impl ApiCache {
                 "api_cache/{}staking_delegation_rwd_hist",
                 prefix
             )),
-            last_txn_sid: new_mapx!(format!("api_cache/{}last_txn_sid", prefix)),
-            last_txo_sid: new_mapx!(format!("api_cache/{}last_txo_sid", prefix)),
+            last_sid: new_mapx!(format!("api_cache/{}last_sid", prefix)),
         }
     }
 
@@ -322,12 +319,12 @@ pub fn check_lost_data(ledger: &mut LedgerState) {
         .api_cache
         .as_mut()
         .unwrap()
-        .last_txn_sid
+        .last_sid
         .get(&"last_txn_sid".to_string());
 
     let mut last_txn_sid: usize = 0;
     if let Some(sid) = last_txn_sid_opt {
-        last_txn_sid = sid.0;
+        last_txn_sid = sid as usize;
     };
 
     if last_txn_sid < cur_txn_sid {
@@ -361,8 +358,8 @@ pub fn check_lost_data(ledger: &mut LedgerState) {
                 .api_cache
                 .as_mut()
                 .unwrap()
-                .last_txn_sid
-                .insert("last_txn_sid".to_string(), TxnSID(index));
+                .last_sid
+                .insert("last_txn_sid".to_string(), index as u64);
         }
     }
 
@@ -372,12 +369,12 @@ pub fn check_lost_data(ledger: &mut LedgerState) {
         .api_cache
         .as_mut()
         .unwrap()
-        .last_txo_sid
+        .last_sid
         .get(&"last_txo_sid".to_string());
 
     let mut last_txo_sid: u64 = 0;
     if let Some(sid) = last_txo_sid_opt {
-        last_txo_sid = sid.0;
+        last_txo_sid = sid;
     };
 
 
@@ -450,8 +447,8 @@ pub fn check_lost_data(ledger: &mut LedgerState) {
                 .api_cache
                 .as_mut()
                 .unwrap()
-                .last_txo_sid
-                .insert("last_txo_sid".to_string(), TxoSID(index));
+                .last_sid
+                .insert("last_txo_sid".to_string(), index as u64);
         }
     }
 }
