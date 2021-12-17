@@ -252,7 +252,9 @@ where
             Operation::Governance(i) => staking_gen!(i),
             Operation::FraDistribution(i) => staking_gen!(i),
             Operation::MintFra(i) => staking_gen!(i),
-
+            Operation::BarToAbar(_) => {},
+            Operation::TransferAnonAsset(_) => {},
+            
             Operation::ConvertAccount(i) => {
                 related_addresses.insert(XfrAddress {
                     key: i.get_related_address(),

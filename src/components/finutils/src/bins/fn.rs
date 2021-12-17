@@ -35,6 +35,8 @@ use {
         data_model::{ATxoSID, AssetTypeCode, FRA_DECIMALS},
         staking::StakerMemo,
     },
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
     ruc::*,
     serde::{Deserialize, Serialize},
     std::fs::File,

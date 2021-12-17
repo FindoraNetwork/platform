@@ -12,9 +12,9 @@ use {
     globutils::{wallet, HashOf, SignatureOf},
     ledger::{
         data_model::{
-            ATxoSID, AssetType, AssetTypeCode, DefineAsset, Operation, StateCommitmentData,
-            Transaction, TransferType, TxoRef, TxoSID, Utxo, ASSET_TYPE_FRA,
-            BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+            ATxoSID, AssetType, AssetTypeCode, DefineAsset, Operation,
+            StateCommitmentData, Transaction, TransferType, TxoRef, TxoSID, Utxo,
+            ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
         staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
     },
@@ -332,7 +332,7 @@ pub fn gen_fee_bar_to_abar(
     }
 
     trans_builder
-        .balance()
+        .balance(None)
         .c(d!())?
         .create(TransferType::Standard)
         .c(d!())?
@@ -686,4 +686,54 @@ pub struct ValidatorKey {
 /// Restore validator key from a string
 pub fn parse_td_validator_keys(key_data: &str) -> Result<ValidatorKey> {
     serde_json::from_str(key_data).c(d!())
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn generate_bar2abar_op(
+    auth_key_pair: &XfrKeyPair,
+    abar_pub_key: &AXfrPubKey,
+    txo_sid: TxoSID,
+    input_record: &OpenAssetRecord,
+    enc_key: &XPublicKey,
+) -> Result<JubjubScalar> {
+    let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
+    let (_, r) = builder
+        .add_operation_bar_to_abar(
+            auth_key_pair,
+            abar_pub_key,
+            txo_sid,
+            input_record,
+            enc_key,
+        )
+        .c(d!())?;
+
+    if input_record.get_record_type() != NonConfidentialAmount_NonConfidentialAssetType
+        || input_record.asset_type != ASSET_TYPE_FRA
+    {
+        let feeop = gen_fee_bar_to_abar(auth_key_pair, txo_sid).c(d!())?;
+        builder.add_operation(feeop);
+    }
+
+    send_tx(&builder.take_transaction()).c(d!())?;
+    Ok(r)
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn get_oar(owner_kp: &XfrKeyPair, txo_sid: TxoSID) -> Result<OpenAssetRecord> {
+    let utxos = get_owned_utxos(owner_kp.get_pk_ref()).c(d!())?.into_iter();
+
+    for (sid, (utxo, owner_memo)) in utxos {
+        if sid != txo_sid {
+            continue;
+        }
+
+        let oar =
+            open_blind_asset_record(&utxo.0.record, &owner_memo, owner_kp).c(d!())?;
+
+        return Ok(oar);
+    }
+
+    Err(eg!("utxo not found"))
 }

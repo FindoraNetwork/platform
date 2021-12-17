@@ -208,7 +208,12 @@ impl LedgerState {
         Ok(())
     }
 
-    fn update_state(&mut self, mut block: BlockEffect, tsm: &TmpSidMap) -> Result<()> {
+    fn update_state(
+        &mut self,
+        mut block: BlockEffect,
+        tsm: &TmpSidMap,
+        next_txn_sid: usize,
+    ) -> Result<()> {
         let mut tx_block = Vec::new();
 
         // Update the transaction Merkle tree
@@ -240,10 +245,21 @@ impl LedgerState {
         }
         drop(txn_merkle);
 
+        tx_block = self
+            .update_anon_stores(
+                block.new_nullifiers.clone(),
+                block.output_abars.clone(),
+                next_txn_sid,
+                tx_block,
+            )
+            .c(d!())?;
+
         // Checkpoint
         let block_merkle_id = self.checkpoint(&block).c(d!())?;
         block.temp_sids.clear();
         block.txns.clear();
+        block.output_abars.clear();
+        block.new_nullifiers.clear();
 
         let block_idx = self.blocks.len();
         tx_block.iter().enumerate().for_each(|(tx_idx, tx)| {
@@ -279,11 +295,12 @@ impl LedgerState {
             }
         }
 
+        let backup_next_txn_sid = self.status.next_txn.0;
         let (tsm, base_sid, max_sid) = self.status.apply_block_effects(&mut block);
 
         self.update_utxo_map(base_sid, max_sid, &block.temp_sids, &tsm)
             .c(d!())
-            .and_then(|_| self.update_state(block, &tsm).c(d!()))
+            .and_then(|_| self.update_state(block, &tsm, backup_next_txn_sid).c(d!()))
             .map(|_| tsm)
     }
 
@@ -389,7 +406,8 @@ impl LedgerState {
     //  1. Compute the hash of transactions in the block and update txns_in_block_hash
     //  2. Append txns_in_block_hash to block_merkle
     #[inline(always)]
-    fn compute_and_append_txns_hash(&mut self, block: &BlockEffect) -> u64 {
+    #[allow(missing_docs)]
+    pub fn compute_and_append_txns_hash(&mut self, block: &BlockEffect) -> u64 {
         // 1. Compute the hash of transactions in the block and update txns_in_block_hash
         let txns_in_block_hash = block.compute_txns_in_block_hash();
         self.status.txns_in_block_hash = Some(txns_in_block_hash.clone());
@@ -405,7 +423,8 @@ impl LedgerState {
         ret
     }
 
-    fn compute_and_save_state_commitment_data(&mut self, pulse_count: u64) {
+    #[allow(missing_docs)]
+    pub fn compute_and_save_state_commitment_data(&mut self, pulse_count: u64) {
         let state_commitment_data = StateCommitmentData {
             bitmap: self.utxo_map.write().compute_checksum(),
             block_merkle: self.block_merkle.read().get_root_hash(),
@@ -554,7 +573,7 @@ impl LedgerState {
         let abar_store_path = format!("{}/{}abar_store", basedir, &prefix);
         let nullifier_store_path = format!("{}/{}nullifier_store", basedir, &prefix);
 
-        // These iterms will be set under ${BNC_DATA_DIR}
+        // These items will be set under ${BNC_DATA_DIR}
         fs::create_dir_all(&basedir).c(d!())?;
         let snapshot_file = format!("{}ledger_status", &prefix);
 
@@ -566,6 +585,10 @@ impl LedgerState {
 
         let (mut abar_state, abar_query_state) =
             LedgerState::init_abar_state(&abar_store_path).c(d!())?;
+
+        // Initializing Merkle tree to set Empty tree root hash, which is a hash of null children
+        let store = PrefixedStore::new("abar_store", &mut abar_state);
+        let _ = PersistentMerkleTree::new(store)?;
 
         let mut ledger = LedgerState {
             status: LedgerStatus::new(&basedir, &snapshot_file).c(d!())?,
@@ -1261,6 +1284,16 @@ impl LedgerStatus {
             .get(addr)
             .map(|v| v.iter().cloned().collect())
             .unwrap_or_default()
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn get_owned_abars_ids(&self, addr: &AXfrPubKey) -> Vec<ATxoSID> {
+        self.ax_utxos
+            .iter()
+            .filter(|(_, axutxo)| &axutxo.public_key == addr)
+            .map(|(sid, _)| sid.clone().to_owned())
+            .collect()
     }
 
     #[inline(always)]

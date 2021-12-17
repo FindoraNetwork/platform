@@ -20,8 +20,8 @@ use {
             DefineAsset, DefineAssetBody, IndexedSignature, IssueAsset, IssueAssetBody,
             IssuerKeyPair, IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
             TransactionBody, TransferAsset, TransferAssetBody, TransferType, TxOutput,
-            TxoRef, TxoSID, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
-            TX_FEE_MIN,
+            TxoRef, TxoSID, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA,
+            BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
         staking::{
             is_valid_tendermint_addr,
@@ -1304,6 +1304,7 @@ impl AnonTransferOperationBuilder {
 mod tests {
     use {
         super::*,
+        crate::txn_builder::amount::Amount,
         crypto::basics::commitments::ristretto_pedersen::RistrettoPedersenGens,
         crypto::basics::hybrid_encryption::XSecretKey,
         ledger::data_model::{ATxoSID, BlockEffect, TxnEffect, TxoRef},
@@ -1320,7 +1321,6 @@ mod tests {
         zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record},
         zei::xfr::sig::XfrKeyPair,
         zei::xfr::structs::AssetType as AT,
-        crate::txn_builder::amount::Amount,
     };
 
     // Defines an asset type
@@ -1757,7 +1757,7 @@ mod tests {
         let txn = builder.take_transaction();
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
         let mut block = BlockEffect::default();
-        let block_result = block.add_txn_effect(compute_effect, false);
+        let block_result = block.add_txn_effect(compute_effect);
         //let block_result = block.add_txn_effect(compute_effect, true);
 
         assert!(block_result.is_ok());
@@ -1889,7 +1889,7 @@ mod tests {
 
         let mut block = BlockEffect::default();
 
-        let block_result = block.add_txn_effect(compute_effect, true);
+        let block_result = block.add_txn_effect(compute_effect);
 
         assert!(block_result.is_ok());
 
@@ -1943,7 +1943,7 @@ mod tests {
         let txn = builder.take_transaction();
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
         let mut block = BlockEffect::default();
-        let _ = block.add_txn_effect(compute_effect, false);
+        let _ = block.add_txn_effect(compute_effect);
 
         for n in block.new_nullifiers.iter() {
             let _str =
@@ -1993,7 +1993,7 @@ mod tests {
         let txn1 = builder1.take_transaction();
         let compute_effect1 = TxnEffect::compute_effect(txn1).unwrap();
         let mut block1 = BlockEffect::default();
-        let _ = block1.add_txn_effect(compute_effect1, false);
+        let _ = block1.add_txn_effect(compute_effect1);
 
         for n in block1.new_nullifiers.iter() {
             let _str =

@@ -1,9 +1,10 @@
 use {
     crate::{
         data_model::{
-            AssetType, AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Memo,
-            NoReplayToken, Operation, Transaction, TransferAsset, TransferType,
-            TxOutput, TxnTempSID, TxoRef, TxoSID, UpdateMemo,
+            AnonTransferOps, AssetType, AssetTypeCode, BarToAbarOps, DefineAsset,
+            IssueAsset, IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
+            TransferAsset, TransferType, TxOutput, TxnTempSID, TxoRef, TxoSID,
+            UpdateMemo, ASSET_TYPE_FRA, TX_FEE_MIN,
         },
         staking::{
             self,
@@ -26,13 +27,14 @@ use {
         collections::{HashMap, HashSet},
         sync::Arc,
     },
+    zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
     zei::{
         anon_xfr::{
             bar_to_from_abar::verify_bar_to_abar_note,
             structs::{AXfrBody, AnonBlindAssetRecord, Nullifier},
         },
         serialization::ZeiFromToBytes,
-        setup::PublicParams,
+        setup::{NodeParams, PublicParams, UserParams},
         xfr::{
             lib::verify_xfr_body,
             sig::XfrPublicKey,
@@ -196,6 +198,14 @@ impl TxnEffect {
                 }
                 Operation::ConvertAccount(i) => {
                     check_nonce!(i)
+                }
+                Operation::BarToAbar(i) => {
+                    check_nonce!(i);
+                    te.add_bar_to_abar(i).c(d!())?;
+                }
+                Operation::TransferAnonAsset(i) => {
+                    check_nonce!(i);
+                    te.add_anon_transfer(i).c(d!())?;
                 }
             }
         }
@@ -534,6 +544,62 @@ impl TxnEffect {
 
         Ok(())
     }
+
+    /// A bar to abar note is valid iff
+    /// 1. the signature is correct,
+    /// 2. the ZKP can be verified,
+    /// 3. the input txos are unspent. (checked in finish block)
+    ///
+    fn add_bar_to_abar(&mut self, bar_to_abar: &BarToAbarOps) -> Result<()> {
+        let key = bar_to_abar.note.body.input.public_key;
+        let user_params = UserParams::eq_committed_vals_params();
+        let node_params = NodeParams::from(user_params);
+
+        let mut fee = 0u64;
+        if bar_to_abar.note.body.input.get_record_type()
+            == NonConfidentialAmount_NonConfidentialAssetType
+            && bar_to_abar.note.body.input.asset_type.get_asset_type()
+                == Some(ASSET_TYPE_FRA)
+        {
+            fee = TX_FEE_MIN;
+        }
+        verify_bar_to_abar_note(&node_params, &bar_to_abar.note, &key, fee).c(d!())?;
+
+        self.input_txos.insert(
+            bar_to_abar.txo_sid,
+            TxOutput {
+                id: None,
+                record: bar_to_abar.note.body.input.clone(),
+                lien: None,
+            },
+        );
+        self.bar_conv_abars
+            .push(bar_to_abar.note.body.output.clone());
+        Ok(())
+    }
+
+    fn add_anon_transfer(&mut self, anon_transfer: &AnonTransferOps) -> Result<()> {
+        // verify nullifiers not double spent within txn
+
+        for i in &anon_transfer.note.body.inputs {
+            if self
+                .axfr_bodies
+                .iter()
+                .flat_map(|ab| ab.inputs.iter().map(|i| i.0))
+                .any(|n| n == i.0)
+            {
+                return Err(eg!("Transaction has duplicate nullifiers"));
+            }
+        }
+
+        // verify axfr_note signatures
+        anon_transfer.note.verify().c(d!())?;
+
+        // push
+        self.axfr_bodies.push(anon_transfer.note.body.clone());
+
+        Ok(())
+    }
 }
 
 /// Check tx in the context of a block, partially.
@@ -549,8 +615,12 @@ pub struct BlockEffect {
     /// Internally-spent TXOs are None, UTXOs are Some(...)
     /// Should line up element-wise with `txns`
     pub txos: Vec<Vec<Option<TxOutput>>>,
+    /// New ABARs created
+    pub output_abars: Vec<Vec<AnonBlindAssetRecord>>,
     /// Which TXOs this consumes
     pub input_txos: HashMap<TxoSID, TxOutput>,
+    /// Which new nullifiers are created
+    pub new_nullifiers: Vec<Nullifier>,
     /// Which new asset types this defines
     pub new_asset_codes: HashMap<AssetTypeCode, AssetType>,
     /// Which new TXO issuance sequence numbers are used, in sorted order
@@ -613,6 +683,21 @@ impl BlockEffect {
             self.memo_updates.insert(code, memo);
         }
 
+        let mut current_txn_abars: Vec<AnonBlindAssetRecord> = vec![];
+        for abar in txn_effect.bar_conv_abars {
+            current_txn_abars.push(abar);
+        }
+
+        for axfr_body in txn_effect.axfr_bodies {
+            for (n, _) in axfr_body.inputs {
+                self.new_nullifiers.push(n);
+            }
+            for abar in axfr_body.outputs {
+                current_txn_abars.push(abar)
+            }
+        }
+        self.output_abars.push(current_txn_abars);
+
         Ok(temp_sid)
     }
 
@@ -621,6 +706,15 @@ impl BlockEffect {
         for (input_sid, _) in txn_effect.input_txos.iter() {
             if self.input_txos.contains_key(&input_sid) {
                 return Err(eg!());
+            }
+        }
+
+        // Check that no nullifier are created twice in same block
+        for axfr_body in txn_effect.axfr_bodies.iter() {
+            for (nullifier, _) in axfr_body.inputs.iter() {
+                if self.new_nullifiers.contains(nullifier) {
+                    return Err(eg!());
+                }
             }
         }
 

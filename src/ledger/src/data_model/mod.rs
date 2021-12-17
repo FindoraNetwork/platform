@@ -43,10 +43,11 @@ use {
         result::Result as StdResult,
     },
     unicode_normalization::UnicodeNormalization,
+    zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
     zei::{
         anon_xfr::{
             bar_to_from_abar::{BarToAbarBody, BarToAbarNote},
-            // keys::AXfrPubKey,
+            keys::AXfrPubKey,
             structs::AXfrNote,
         },
         errors::ZeiError,
@@ -414,6 +415,22 @@ impl Hash for XfrAddress {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.key.as_bytes().hash(state);
+    }
+}
+
+#[allow(missing_docs)]
+#[derive(
+    Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize,
+)]
+pub struct AXfrAddress {
+    pub key: AXfrPubKey,
+}
+
+#[allow(clippy::derive_hash_xor_eq)]
+impl Hash for AXfrAddress {
+    #[inline(always)]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.key.zei_to_bytes().hash(state);
     }
 }
 
@@ -1763,6 +1780,16 @@ impl Transaction {
                     }
                 } else if matches!(ops, Operation::UpdateValidator(_)) {
                     return true;
+                } else if let Operation::TransferAnonAsset(_) = ops {
+                    return true;
+                } else if let Operation::BarToAbar(ref x) = ops {
+                    if x.note.body.input.get_record_type()
+                        == NonConfidentialAmount_NonConfidentialAssetType
+                        && x.note.body.input.asset_type
+                            == XfrAssetType::NonConfidential(ASSET_TYPE_FRA)
+                    {
+                        return true;
+                    }
                 }
                 false
             })
