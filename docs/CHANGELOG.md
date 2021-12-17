@@ -12,6 +12,10 @@
 
 > Functions that have been added.
 
+#### v0.3.4-release
+
+- fix IERC20 compability.
+
 #### v0.3.3-release
 
 - update height to 142_9000.
