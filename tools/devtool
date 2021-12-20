@@ -90,17 +90,21 @@ elif [[ ${OPT} == "gorelease" ]]; then
   make build_release_goleveldb
   exit 0
 elif [[ ${OPT} == "debug_env" ]]; then
-  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release_debug
-  make debug_env
-else
-  echo "Invalid command"
-  $0 help
+  export CARGO_TARGET_DIR=../target-debug_env
+  make build_release_debug
   exit 0
-fi
-
-if [[ ${OPT} == "debug_env" ]]; then
+elif [[ "$OPT" == "init_debug_env" ]]; then
+  export CARGO_TARGET_DIR=../target-debug_env
+  rm -f target
+  ln -sf "$CARGO_TARGET_DIR" target
+  make debug_env
   echo "Initializing local devnet..."
   fn setup -S http://127.0.0.1
   stt init  --skip-validator
   echo "Initialized."
+  exit 0
+else
+  echo "Invalid command"
+  $0 help
+  exit 0
 fi
