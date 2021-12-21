@@ -315,17 +315,15 @@ pub fn get_transferred_nonconfidential_assets(
 pub fn check_lost_data(ledger: &mut LedgerState) {
     // check the lost txn sids
     let cur_txn_sid = ledger.get_next_txn().0;
-    let last_txn_sid_opt = ledger
-        .api_cache
-        .as_mut()
-        .unwrap()
-        .last_sid
-        .get(&"last_txn_sid".to_string());
-
+    let api_cache_opt = ledger.api_cache.as_mut();
     let mut last_txn_sid: usize = 0;
-    if let Some(sid) = last_txn_sid_opt {
-        last_txn_sid = sid as usize;
-    };
+    if let Some(api_cache) = api_cache_opt {
+        if let Some(sid) = api_cache.last_sid.get(&"last_txn_sid".to_string()) {
+            last_txn_sid = sid as usize;
+        };
+    } else {
+        return;
+    }
 
     if last_txn_sid < cur_txn_sid {
         for index in last_txn_sid..cur_txn_sid {
