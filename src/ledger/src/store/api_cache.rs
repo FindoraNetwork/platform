@@ -261,6 +261,11 @@ where
                     key: i.get_related_address(),
                 });
             }
+            Operation::TransferERC20(i) => {
+                related_addresses.insert(XfrAddress {
+                    key: i.get_related_address(),
+                });
+            }
             Operation::TransferAsset(transfer) => {
                 for input in transfer.body.transfer.inputs.iter() {
                     related_addresses.insert(XfrAddress {
@@ -313,6 +318,9 @@ pub fn get_transferred_nonconfidential_assets(
 
 /// check the lost data
 pub fn check_lost_data(ledger: &mut LedgerState) {
+    if ledger.api_cache.is_none() {
+        return;
+    }
     // check the lost txn sids
     let cur_txn_sid = ledger.get_next_txn().0;
     let api_cache_opt = ledger.api_cache.as_mut();
@@ -332,7 +340,8 @@ pub fn check_lost_data(ledger: &mut LedgerState) {
                 .as_mut()
                 .unwrap()
                 .txn_sid_to_hash
-                .contains_key(&TxnSID(index)) {
+                .contains_key(&TxnSID(index))
+            {
                 let ftx = ledger.get_transaction_light(TxnSID(index)).unwrap();
                 let hash = ftx.txn.hash_tm().hex().to_uppercase();
 
@@ -375,7 +384,6 @@ pub fn check_lost_data(ledger: &mut LedgerState) {
         last_txo_sid = sid;
     };
 
-
     if last_txo_sid < cur_txo_sid {
         for index in last_txo_sid..cur_txo_sid {
             if !ledger
@@ -383,11 +391,14 @@ pub fn check_lost_data(ledger: &mut LedgerState) {
                 .as_mut()
                 .unwrap()
                 .owner_memos
-                .contains_key(&TxoSID(index)) {
+                .contains_key(&TxoSID(index))
+            {
                 let utxo_opt = ledger.get_utxo(TxoSID(index));
                 if let Some(utxo) = utxo_opt {
                     let ftx = ledger
-                        .get_transaction_light(utxo.authenticated_txn.finalized_txn.tx_id)
+                        .get_transaction_light(
+                            utxo.authenticated_txn.finalized_txn.tx_id,
+                        )
                         .unwrap();
                     let tx_hash = ftx.txn.hash_tm().hex().to_uppercase();
                     let owner_memos = ftx.txn.get_owner_memos_ref();
@@ -409,7 +420,8 @@ pub fn check_lost_data(ledger: &mut LedgerState) {
                     for (txo_sid, (address, owner_memo)) in ftx
                         .txo_ids
                         .iter()
-                        .zip(addresses.iter().zip(owner_memos.iter())) {
+                        .zip(addresses.iter().zip(owner_memos.iter()))
+                    {
                         if *txo_sid == TxoSID(index) {
                             ledger
                                 .api_cache

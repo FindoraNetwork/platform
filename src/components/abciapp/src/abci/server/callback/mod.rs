@@ -24,7 +24,7 @@ use {
     fp_storage::hash::{Sha256, StorageHasher},
     lazy_static::lazy_static,
     ledger::{
-        converter::is_convert_account,
+        converter::check_converting_tx_type,
         staking::KEEP_HIST,
         store::{
             api_cache,
@@ -212,9 +212,9 @@ pub fn deliver_tx(
                         }
                     }
 
-                    if is_convert_account(&tx) {
+                    if let Some(tx_type) = check_converting_tx_type(&tx) {
                         if let Err(err) =
-                            s.account_base_app.write().deliver_findora_tx(&tx)
+                            s.account_base_app.write().deliver_findora_tx(&tx, tx_type)
                         {
                             log::debug!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
 
@@ -224,7 +224,10 @@ pub fn deliver_tx(
                             return resp;
                         }
 
-                        if s.la.write().cache_transaction(tx).is_ok() {
+                        if let Err(e) = s.la.write().cache_transaction(tx) {
+                            resp.code = 1;
+                            resp.log = e.to_string();
+                        } else {
                             s.account_base_app
                                 .read()
                                 .deliver_state

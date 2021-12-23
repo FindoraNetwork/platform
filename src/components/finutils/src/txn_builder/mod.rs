@@ -11,7 +11,7 @@ use {
     fp_types::crypto::MultiSigner,
     globutils::SignatureOf,
     ledger::{
-        converter::ConvertAccount,
+        converter::{erc20::TransferERC20, ConvertAccount},
         data_model::{
             AssetRules, AssetTypeCode, ConfidentialMemo, DefineAsset, DefineAssetBody,
             IndexedSignature, IssueAsset, IssueAssetBody, IssuerKeyPair,
@@ -632,6 +632,22 @@ impl TransactionBuilder {
             receiver: addr,
             value: amount,
         }));
+        Ok(self)
+    }
+
+    /// Add a operation convert utxo asset to erc20 account balance.
+    pub fn add_operation_transfer_erc20(
+        &mut self,
+        kp: &XfrKeyPair,
+        addr: MultiSigner,
+        input: Vec<u8>,
+    ) -> Result<&mut Self> {
+        self.add_operation(Operation::TransferERC20(TransferERC20::new(
+            kp,
+            self.txn.body.no_replay_token,
+            addr,
+            input,
+        )));
         Ok(self)
     }
 

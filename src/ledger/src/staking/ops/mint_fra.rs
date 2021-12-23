@@ -18,7 +18,7 @@ use {
         xfr::{
             asset_record::{build_blind_asset_record, AssetRecordType},
             sig::XfrPublicKey,
-            structs::{AssetRecordTemplate, AssetType, OwnerMemo},
+            structs::{AssetRecordTemplate, AssetType as ZeiAssetType, OwnerMemo},
         },
     },
 };
@@ -60,7 +60,7 @@ pub struct MintEntry {
     pub target_pk: XfrPublicKey,
     pub amount: Amount,
     pub utxo: TxOutput,
-    pub asset_type: AssetType,
+    pub asset_type: ZeiAssetType,
 }
 
 impl MintEntry {
@@ -71,7 +71,7 @@ impl MintEntry {
         target_pk: XfrPublicKey,
         receiver_pk: Option<XfrPublicKey>,
         amount: Amount,
-        asset_type: AssetType,
+        asset_type: ZeiAssetType,
     ) -> Self {
         let mut prng = ChaChaRng::seed_from_u64(0);
         let ar = AssetRecordTemplate::with_no_asset_tracing(

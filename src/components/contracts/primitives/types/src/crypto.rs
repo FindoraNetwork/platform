@@ -102,6 +102,18 @@ impl From<H160> for Address32 {
     }
 }
 
+impl TryFrom<&Address32> for H160 {
+    type Error = Box<dyn ruc::RucError>;
+
+    fn try_from(value: &Address32) -> Result<Self, Self::Error> {
+        let bytes: &[u8; 32] = value.as_ref();
+        match &bytes[0..4] {
+            b"evm:" => Ok(H160::from_slice(&bytes[4..24])),
+            _ => Err(eg!("Not a valid account")),
+        }
+    }
+}
+
 /// A wrapper of the Hash type defined inf fixed-hash crate.
 #[derive(
     Clone, Eq, PartialEq, Ord, PartialOrd, Default, Hash, Serialize, Deserialize, Debug,

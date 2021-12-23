@@ -11,7 +11,6 @@ export STAKING_INITIAL_VALIDATOR_CONFIG = $(shell pwd)/src/ledger/src/staking/in
 export STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV = $(shell pwd)/src/ledger/src/staking/init/staking_config_debug_env.json
 
 FIN_DEBUG ?= /tmp/findora
-export ENABLE_QUERY_SERVICE = true
 
 EXTERNAL_ADDRESS = ""
 
@@ -144,6 +143,7 @@ debug_env: stop_debug_env build_release_debug
 	- rm -rf $(FIN_DEBUG)
 	mkdir $(FIN_DEBUG)
 	cp tools/debug_env.tar.gz $(FIN_DEBUG)/
+	cp -Rf src/ledger/src/converter/abi $(FIN_DEBUG)/
 	cd $(FIN_DEBUG) && tar -xpf debug_env.tar.gz && mv debug_env devnet
 	fn setup -S 'http://localhost'
 	./tools/devnet/startnodes.sh

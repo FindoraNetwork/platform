@@ -74,7 +74,7 @@ elif [[ ${OPT} = "ltchk" ]]; then
   make lint
   exit 0
 elif [[ ${OPT} = "staking_demo" ]]; then
-  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release_debug
+  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release
   make run_staking_demo
   exit 0
 elif [[ ${OPT} == "DBG" ]]; then
@@ -88,9 +88,12 @@ elif [[ ${OPT} == "release" ]]; then
 elif [[ ${OPT} == "gorelease" ]]; then
   export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release
   make build_release_goleveldb
+  $0 wasm
   exit 0
 elif [[ ${OPT} == "debug_env" ]]; then
-  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release_debug
+  export CARGO_TARGET_DIR=../target-debug_env
+  rm -f target
+  ln -sf "${CARGO_TARGET_DIR}" target
   make debug_env
 else
   echo "Invalid command"
@@ -99,8 +102,12 @@ else
 fi
 
 if [[ ${OPT} == "debug_env" ]]; then
+  tools/devnet/stopnodes.sh 12
+  ENABLE_QUERY_SERVICE=true tools/devnet/startnodes.sh 12
+  sleep 10
   echo "Initializing local devnet..."
   fn setup -S http://127.0.0.1
-  stt init  --skip-validator
+  stt init --skip-validator
   echo "Initialized."
+  rm -rf target
 fi

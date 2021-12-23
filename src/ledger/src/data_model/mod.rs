@@ -12,7 +12,7 @@ mod test;
 pub use effects::{BlockEffect, TxnEffect};
 
 use {
-    crate::converter::ConvertAccount,
+    crate::converter::{erc20::TransferERC20, ConvertAccount},
     crate::staking::{
         ops::{
             claim::ClaimOps, delegation::DelegationOps,
@@ -632,6 +632,21 @@ pub struct AssetType {
 impl AssetType {
     #[inline(always)]
     #[allow(missing_docs)]
+    pub fn new(properties: Asset) -> Self {
+        Self {
+            properties,
+            ..Default::default()
+        }
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn is_updatable(&self) -> bool {
+        self.properties.asset_rules.updatable
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
     pub fn has_issuance_restrictions(&self) -> bool {
         self.properties.asset_rules.max_units.is_some()
     }
@@ -1247,6 +1262,8 @@ pub enum Operation {
     MintFra(MintFraOps),
     /// Convert UTXOs to EVM Account balance
     ConvertAccount(ConvertAccount),
+    /// Transfer UTXO to ERC20
+    TransferERC20(TransferERC20),
 }
 
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {

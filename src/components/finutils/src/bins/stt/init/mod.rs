@@ -81,9 +81,10 @@ pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result
 
         println!(">>> Init work done !");
 
-        println!(">>> Start running integration tests ...");
+        Ok(())
+        //println!(">>> Start running integration tests ...");
 
-        i_testing::run_all().c(d!())
+        //i_testing::run_all().c(d!())
     }
 }
 

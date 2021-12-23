@@ -72,7 +72,7 @@ impl<C: Config> AppModule for App<C> {
                 let data = serde_json::from_slice::<Address>(req.data.as_slice());
                 if data.is_err() {
                     resp.code = 1;
-                    resp.log = String::from("account: query nonce with invalid params");
+                    resp.log = String::from("account: query info with invalid params");
                     return resp;
                 }
                 let mut info =

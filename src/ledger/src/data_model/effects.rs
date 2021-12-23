@@ -189,6 +189,9 @@ impl TxnEffect {
                 Operation::ConvertAccount(i) => {
                     check_nonce!(i)
                 }
+                Operation::TransferERC20(i) => {
+                    check_nonce!(i)
+                }
             }
         }
 
