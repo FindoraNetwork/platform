@@ -12,6 +12,10 @@
 
 > Functions that have been added.
 
+#### v0.3.6-release
+
+- Temporary disable EVM function.
+
 #### v0.3.4-release
 
 - fix IERC20 compability.
