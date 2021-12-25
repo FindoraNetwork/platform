@@ -130,6 +130,7 @@ pub(crate) mod global_cfg {
         pub ledger_dir: String,
         #[cfg(target_os = "linux")]
         pub btmcfg: BtmCfg,
+        pub disable_evm: bool,
     }
 
     #[cfg(test)]
@@ -171,6 +172,7 @@ pub(crate) mod global_cfg {
                 .arg_from_usage("--snapshot-rollback 'rollback to the last available snapshot'")
                 .arg_from_usage("-r, --snapshot-rollback-to=[Height] 'rollback to a custom height, will try the closest smaller height if the target does not exist'")
                 .arg_from_usage("-R, --snapshot-rollback-to-exact=[Height] 'rollback to a custom height exactly, an error will be reported if the target does not exist'")
+                .arg_from_usage("--disable-evm")
                 .arg(Arg::with_name("_a").long("ignored").hidden(true))
                 .arg(Arg::with_name("_b").long("nocapture").hidden(true))
                 .arg(Arg::with_name("_c").long("test-threads").hidden(true))
@@ -254,6 +256,8 @@ pub(crate) mod global_cfg {
             .parse::<u16>()
             .c(d!())?;
 
+        let disable_evm = m.is_present("disable-evm") || env::var("DISABLE_EVM").is_ok();
+
         let res = Config {
             abci_host: ah,
             abci_port: ap,
@@ -271,6 +275,7 @@ pub(crate) mod global_cfg {
             ledger_dir: ld,
             #[cfg(target_os = "linux")]
             btmcfg: parse_btmcfg(&m).c(d!())?,
+            disable_evm,
         };
 
         Ok(res)

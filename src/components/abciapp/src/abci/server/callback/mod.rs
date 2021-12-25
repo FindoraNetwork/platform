@@ -103,6 +103,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
     let mut resp = ResponseCheckTx::new();
 
     let tx_catalog = try_tx_catalog(req.get_tx());
+
     match tx_catalog {
         TxCatalog::FindoraTx => {
             if matches!(req.field_type, CheckTxType::New) {
@@ -120,7 +121,15 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
             }
             resp
         }
-        TxCatalog::EvmTx => s.account_base_app.write().check_tx(req),
+        TxCatalog::EvmTx => {
+            if CFG.disable_evm {
+                resp.code = 2;
+                resp.log = "EVM is disabled".to_owned();
+                resp
+            } else {
+                s.account_base_app.write().check_tx(req)
+            }
+        }
         TxCatalog::Unknown => {
             resp.code = 1;
             resp.log = "Unknown transaction".to_owned();
@@ -175,7 +184,11 @@ pub fn begin_block(
         pnk!(la.update_staking_simulator());
     }
 
-    s.account_base_app.write().begin_block(req)
+    if CFG.disable_evm {
+        s.account_base_app.write().begin_block(req)
+    } else {
+        ResponseBeginBlock::default()
+    }
 }
 
 pub fn deliver_tx(
@@ -187,6 +200,7 @@ pub fn deliver_tx(
     let tx_catalog = try_tx_catalog(req.get_tx());
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
     const EVM_FIRST_BLOCK_HEIGHT: i64 = 142_5000;
+
     match tx_catalog {
         TxCatalog::FindoraTx => {
             if let Ok(tx) = convert_tx(req.get_tx()) {
@@ -212,7 +226,16 @@ pub fn deliver_tx(
                         }
                     }
 
-                    if is_convert_account(&tx) {
+                    if CFG.disable_evm {
+                        if is_convert_account(&tx) {
+                            resp.code = 2;
+                            resp.log = "EVM is disabled".to_owned();
+                            return resp;
+                        } else if let Err(e) = s.la.write().cache_transaction(tx) {
+                            resp.code = 1;
+                            resp.log = e.to_string();
+                        }
+                    } else if is_convert_account(&tx) {
                         if let Err(err) =
                             s.account_base_app.write().deliver_findora_tx(&tx)
                         {
@@ -268,14 +291,20 @@ pub fn deliver_tx(
             resp
         }
         TxCatalog::EvmTx => {
-            // Log print for monitor purpose
-            if td_height < EVM_FIRST_BLOCK_HEIGHT {
-                println!(
-                    "EVM transaction(EvmTx) detected at early height {}: {:?}",
-                    td_height, req
-                );
+            if CFG.disable_evm {
+                resp.code = 2;
+                resp.log = "EVM is disabled".to_owned();
+                resp
+            } else {
+                // Log print for monitor purpose
+                if td_height < EVM_FIRST_BLOCK_HEIGHT {
+                    println!(
+                        "EVM transaction(EvmTx) detected at early height {}: {:?}",
+                        td_height, req
+                    );
+                }
+                return s.account_base_app.write().deliver_tx(req);
             }
-            return s.account_base_app.write().deliver_tx(req);
         }
         TxCatalog::Unknown => {
             resp.code = 1;
@@ -328,7 +357,9 @@ pub fn end_block(
         &begin_block_req.byzantine_validators.as_slice(),
     );
 
-    let _ = s.account_base_app.write().end_block(req);
+    if CFG.disable_evm {
+        let _ = s.account_base_app.write().end_block(req);
+    }
 
     resp
 }
@@ -351,9 +382,16 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         .and_then(|s| fs::write(&path, s).c(d!(path))));
 
     let mut r = ResponseCommit::new();
-    let la_hash = state.get_state_commitment().0.as_ref().to_vec();
-    let cs_hash = s.account_base_app.write().commit(req).data;
-    r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
+
+    if CFG.disable_evm {
+        let la_hash = state.get_state_commitment().0.as_ref().to_vec();
+        r.set_data(la_hash);
+    } else {
+        let la_hash = state.get_state_commitment().0.as_ref().to_vec();
+        let cs_hash = s.account_base_app.write().commit(req).data;
+        r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
+    }
+
     r
 }
 
