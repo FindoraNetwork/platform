@@ -55,6 +55,12 @@ lazy_static! {
         Arc::new(RwLock::new(new_mapx!("tx_history")));
 }
 
+#[cfg(feature = "debug_env")]
+pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 0;
+
+#[cfg(not(feature = "debug_env"))]
+pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 148_3289;
+
 pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let mut resp = ResponseInfo::new();
 
@@ -104,6 +110,8 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
 
     let tx_catalog = try_tx_catalog(req.get_tx());
 
+    let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+
     match tx_catalog {
         TxCatalog::FindoraTx => {
             if matches!(req.field_type, CheckTxType::New) {
@@ -122,7 +130,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
             resp
         }
         TxCatalog::EvmTx => {
-            if CFG.disable_evm {
+            if DISBALE_EVM_BLOCK_HEIGHT < td_height {
                 resp.code = 2;
                 resp.log = "EVM is disabled".to_owned();
                 resp
@@ -184,7 +192,7 @@ pub fn begin_block(
         pnk!(la.update_staking_simulator());
     }
 
-    if CFG.disable_evm {
+    if DISBALE_EVM_BLOCK_HEIGHT < header.height {
         s.account_base_app.write().begin_block(req)
     } else {
         ResponseBeginBlock::default()
@@ -226,7 +234,7 @@ pub fn deliver_tx(
                         }
                     }
 
-                    if CFG.disable_evm {
+                    if DISBALE_EVM_BLOCK_HEIGHT < td_height {
                         if is_convert_account(&tx) {
                             resp.code = 2;
                             resp.log = "EVM is disabled".to_owned();
@@ -291,7 +299,7 @@ pub fn deliver_tx(
             resp
         }
         TxCatalog::EvmTx => {
-            if CFG.disable_evm {
+            if DISBALE_EVM_BLOCK_HEIGHT < td_height {
                 resp.code = 2;
                 resp.log = "EVM is disabled".to_owned();
                 resp
@@ -323,6 +331,8 @@ pub fn end_block(
 
     let begin_block_req = REQ_BEGIN_BLOCK.lock();
     let header = pnk!(begin_block_req.header.as_ref());
+
+    let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
 
     IN_SAFE_ITV.swap(false, Ordering::Relaxed);
     let mut la = s.la.write();
@@ -357,7 +367,7 @@ pub fn end_block(
         &begin_block_req.byzantine_validators.as_slice(),
     );
 
-    if CFG.disable_evm {
+    if DISBALE_EVM_BLOCK_HEIGHT < td_height {
         let _ = s.account_base_app.write().end_block(req);
     }
 
@@ -383,7 +393,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
 
     let mut r = ResponseCommit::new();
 
-    if CFG.disable_evm {
+    if DISBALE_EVM_BLOCK_HEIGHT < td_height {
         let la_hash = state.get_state_commitment().0.as_ref().to_vec();
         r.set_data(la_hash);
     } else {
