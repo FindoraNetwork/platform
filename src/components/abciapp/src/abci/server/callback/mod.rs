@@ -193,9 +193,9 @@ pub fn begin_block(
     }
 
     if DISBALE_EVM_BLOCK_HEIGHT < header.height {
-        s.account_base_app.write().begin_block(req)
-    } else {
         ResponseBeginBlock::default()
+    } else {
+        s.account_base_app.write().begin_block(req)
     }
 }
 
@@ -367,7 +367,7 @@ pub fn end_block(
         &begin_block_req.byzantine_validators.as_slice(),
     );
 
-    if DISBALE_EVM_BLOCK_HEIGHT < td_height {
+    if ! DISBALE_EVM_BLOCK_HEIGHT < td_height {
         let _ = s.account_base_app.write().end_block(req);
     }
 
