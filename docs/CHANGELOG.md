@@ -12,6 +12,10 @@
 
 > Functions that have been added.
 
+#### v0.3.7-release
+
+- Update height to `148_3286`.
+
 #### v0.3.6-release
 
 - Temporary disable EVM function.
