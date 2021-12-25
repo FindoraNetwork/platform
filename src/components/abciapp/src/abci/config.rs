@@ -171,7 +171,6 @@ pub(crate) mod global_cfg {
                 .arg_from_usage("--snapshot-rollback 'rollback to the last available snapshot'")
                 .arg_from_usage("-r, --snapshot-rollback-to=[Height] 'rollback to a custom height, will try the closest smaller height if the target does not exist'")
                 .arg_from_usage("-R, --snapshot-rollback-to-exact=[Height] 'rollback to a custom height exactly, an error will be reported if the target does not exist'")
-                .arg_from_usage("--disable-evm")
                 .arg(Arg::with_name("_a").long("ignored").hidden(true))
                 .arg(Arg::with_name("_b").long("nocapture").hidden(true))
                 .arg(Arg::with_name("_c").long("test-threads").hidden(true))
