@@ -59,7 +59,7 @@ lazy_static! {
 pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 0;
 
 #[cfg(not(feature = "debug_env"))]
-pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 148_3289;
+pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 148_3286;
 
 pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let mut resp = ResponseInfo::new();
