@@ -19,7 +19,7 @@ use std::str::FromStr;
 pub const ENABLE_FRC20_HEIGHT: i64 = 0;
 
 #[cfg(not(feature = "debug_env"))]
-pub const ENABLE_FRC20_HEIGHT: i64 = 148_9000;
+pub const ENABLE_FRC20_HEIGHT: i64 = 149_2000;
 
 const FRC20_ADDR: &str = "0x0000000000000000000000000000000000001000";
 
@@ -149,10 +149,9 @@ impl<C: Config> Runner for ActionRunner<C> {
         // Enable basic EVM
         let height = ctx.block_header().height;
         if height >= ENABLE_FRC20_HEIGHT {
-            ensure!(
-                args.target == H160::from_str(FRC20_ADDR).unwrap(),
-                "Non-FRC20 contract call is disabled"
-            );
+            let frc20_call = args.target == H160::from_str(FRC20_ADDR).unwrap();
+            let fra_transfer = args.input.is_empty();
+            ensure!(frc20_call || fra_transfer, "Not a FRC20 contract call");
         }
 
         Self::execute(

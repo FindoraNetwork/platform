@@ -65,7 +65,7 @@ pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 148_3286;
 pub const ENABLE_FRC20_HEIGHT: i64 = 0;
 
 #[cfg(not(feature = "debug_env"))]
-pub const ENABLE_FRC20_HEIGHT: i64 = 148_9000;
+pub const ENABLE_FRC20_HEIGHT: i64 = 149_2000;
 
 pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let mut resp = ResponseInfo::new();
@@ -400,13 +400,12 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         .and_then(|s| fs::write(&path, s).c(d!(path))));
 
     let mut r = ResponseCommit::new();
+    let la_hash = state.get_state_commitment().0.as_ref().to_vec();
+    let cs_hash = s.account_base_app.write().commit(req).data;
 
     if DISBALE_EVM_BLOCK_HEIGHT < td_height && td_height < ENABLE_FRC20_HEIGHT {
-        let la_hash = state.get_state_commitment().0.as_ref().to_vec();
         r.set_data(la_hash);
     } else {
-        let la_hash = state.get_state_commitment().0.as_ref().to_vec();
-        let cs_hash = s.account_base_app.write().commit(req).data;
         r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
     }
 
