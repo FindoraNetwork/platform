@@ -61,6 +61,12 @@ pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 0;
 #[cfg(not(feature = "debug_env"))]
 pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 148_3286;
 
+#[cfg(feature = "debug_env")]
+pub const ENABLE_FRC20_HEIGHT: i64 = 0;
+
+#[cfg(not(feature = "debug_env"))]
+pub const ENABLE_FRC20_HEIGHT: i64 = 148_9000;
+
 pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let mut resp = ResponseInfo::new();
 
@@ -130,7 +136,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
             resp
         }
         TxCatalog::EvmTx => {
-            if DISBALE_EVM_BLOCK_HEIGHT < td_height {
+            if DISBALE_EVM_BLOCK_HEIGHT < td_height && td_height < ENABLE_FRC20_HEIGHT {
                 resp.code = 2;
                 resp.log = "EVM is disabled".to_owned();
                 resp
@@ -192,7 +198,7 @@ pub fn begin_block(
         pnk!(la.update_staking_simulator());
     }
 
-    if DISBALE_EVM_BLOCK_HEIGHT < header.height {
+    if DISBALE_EVM_BLOCK_HEIGHT < header.height && header.height < ENABLE_FRC20_HEIGHT {
         ResponseBeginBlock::default()
     } else {
         s.account_base_app.write().begin_block(req)
@@ -234,7 +240,9 @@ pub fn deliver_tx(
                         }
                     }
 
-                    if DISBALE_EVM_BLOCK_HEIGHT < td_height {
+                    if DISBALE_EVM_BLOCK_HEIGHT < td_height
+                        && td_height < ENABLE_FRC20_HEIGHT
+                    {
                         if is_convert_account(&tx) {
                             resp.code = 2;
                             resp.log = "EVM is disabled".to_owned();
@@ -299,7 +307,7 @@ pub fn deliver_tx(
             resp
         }
         TxCatalog::EvmTx => {
-            if DISBALE_EVM_BLOCK_HEIGHT < td_height {
+            if DISBALE_EVM_BLOCK_HEIGHT < td_height && td_height < ENABLE_FRC20_HEIGHT {
                 resp.code = 2;
                 resp.log = "EVM is disabled".to_owned();
                 resp
@@ -367,7 +375,7 @@ pub fn end_block(
         &begin_block_req.byzantine_validators.as_slice(),
     );
 
-    if ! DISBALE_EVM_BLOCK_HEIGHT < td_height {
+    if td_height < DISBALE_EVM_BLOCK_HEIGHT || td_height >= ENABLE_FRC20_HEIGHT {
         let _ = s.account_base_app.write().end_block(req);
     }
 
@@ -393,7 +401,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
 
     let mut r = ResponseCommit::new();
 
-    if DISBALE_EVM_BLOCK_HEIGHT < td_height {
+    if DISBALE_EVM_BLOCK_HEIGHT < td_height && td_height < ENABLE_FRC20_HEIGHT {
         let la_hash = state.get_state_commitment().0.as_ref().to_vec();
         r.set_data(la_hash);
     } else {
