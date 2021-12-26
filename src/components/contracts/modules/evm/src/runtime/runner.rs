@@ -148,7 +148,6 @@ impl<C: Config> Runner for ActionRunner<C> {
     fn call(ctx: &Context, args: Call, config: &evm::Config) -> Result<CallInfo> {
         // Enable basic EVM
         let height = ctx.block_header().height;
-        println!("execute, target = {:?}", args.target);
         if height >= ENABLE_FRC20_HEIGHT {
             ensure!(
                 args.target == H160::from_str(FRC20_ADDR).unwrap(),
