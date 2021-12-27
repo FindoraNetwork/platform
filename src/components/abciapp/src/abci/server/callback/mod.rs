@@ -375,7 +375,7 @@ pub fn end_block(
         &begin_block_req.byzantine_validators.as_slice(),
     );
 
-    if td_height < DISBALE_EVM_BLOCK_HEIGHT || td_height >= ENABLE_FRC20_HEIGHT {
+    if td_height <= DISBALE_EVM_BLOCK_HEIGHT || td_height >= ENABLE_FRC20_HEIGHT {
         let _ = s.account_base_app.write().end_block(req);
     }
 
