@@ -640,13 +640,11 @@ impl TransactionBuilder {
         &mut self,
         kp: &XfrKeyPair,
         addr: MultiSigner,
-        input: Vec<u8>,
     ) -> Result<&mut Self> {
         self.add_operation(Operation::TransferERC20(TransferERC20::new(
             kp,
             self.txn.body.no_replay_token,
             addr,
-            input,
         )));
         Ok(self)
     }

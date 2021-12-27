@@ -398,27 +398,19 @@ fn run() -> Result<()> {
         transfer_from_account(amount.parse::<u64>().c(d!())?, address, eth_key)?
     } else if let Some(m) = matches.subcommand_matches("transfer-erc20") {
         let amount = m.value_of("amount").c(d!())?;
-        let address = m.value_of("addr");
-        let input = m.value_of("input");
+        let address = m.value_of("addr").c(d!("Unknown contract address"))?;
         let token_code = m
             .value_of("code")
             .c(d!("A token code should be provided"))?;
-        transfer_to_erc20(amount.parse::<u64>().c(d!())?, token_code, address, input)?
+        transfer_to_erc20(amount.parse::<u64>().c(d!())?, token_code, address)?
     } else if let Some(m) = matches.subcommand_matches("erc20-to-utxo") {
         let amount = m.value_of("amount").c(d!())?;
-        let address = m.value_of("addr");
-        let eth_key = m.value_of("eth-key");
-        let input = m.value_of("input");
+        let address = m.value_of("addr").c(d!("Unknown contract address"))?;
+        let eth_key = m.value_of("eth-key").c(d!("Unknown singer key"))?;
         let token_code = m
             .value_of("code")
             .c(d!("A token code should be provided"))?;
-        erc20_to_utxo(
-            amount.parse::<u64>().c(d!())?,
-            token_code,
-            address,
-            eth_key,
-            input,
-        )?
+        erc20_to_utxo(amount.parse::<u64>().c(d!())?, token_code, address, eth_key)?
     } else {
         println!("{}", matches.usage());
     }

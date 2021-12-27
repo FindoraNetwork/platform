@@ -27,11 +27,7 @@ pub struct NonConfidentialOutput {
 /// ERC20 -> UTXO
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Erc20ToUtxo {
-    pub nonce: U256,
-    pub gas_price: U256,
-    pub gas_limit: U256,
     pub contract: H160,
-    pub input: Vec<u8>,
     pub amount: U256,
     pub outputs: Vec<NonConfidentialOutput>,
 }

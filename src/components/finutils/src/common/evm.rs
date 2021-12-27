@@ -3,12 +3,8 @@
 //!
 
 use super::{get_keypair, get_serv_addr, utils};
-use baseapp::{
-    extensions::{CheckFee, CheckNonce},
-    BaseApp,
-};
+use baseapp::extensions::{CheckFee, CheckNonce};
 use fp_core::account::SmartAccount;
-use fp_traits::evm::FeeCalculator;
 use fp_types::{
     actions::{
         xhub::{
@@ -22,9 +18,7 @@ use fp_types::{
     H160, U256,
 };
 use fp_utils::{ecdsa::SecpPair, tx::EvmRawTxWrapper};
-use hex::FromHex;
 use ledger::data_model::{AssetTypeCode, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING};
-use module_evm;
 use ruc::*;
 use std::{convert::TryFrom, str::FromStr};
 use tendermint::block::Height;
@@ -209,12 +203,7 @@ pub fn contract_account_info(address: Option<&str>) -> Result<(Address, SmartAcc
 }
 
 /// transfer UTXO -> ERC20
-pub fn transfer_to_erc20(
-    amount: u64,
-    token_code: &str,
-    address: Option<&str>,
-    input: Option<&str>,
-) -> Result<()> {
+pub fn transfer_to_erc20(amount: u64, token_code: &str, address: &str) -> Result<()> {
     let token_code =
         AssetTypeCode::new_from_base64(token_code).c(d!("invalid token code"))?;
     if token_code.val == ASSET_TYPE_FRA {
@@ -231,18 +220,25 @@ pub fn transfer_to_erc20(
         false,
         Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
     )?;
-    let target_address = match address {
-        Some(s) => MultiSigner::from_str(s).c(d!())?,
-        None => MultiSigner::Xfr(kp.get_pk()),
-    };
-
-    let input_hex = &input.unwrap()[2..];
-    let inner = <Vec<u8>>::from_hex(input_hex).unwrap();
+    let target_address = MultiSigner::from_str(address).c(d!())?;
 
     builder
         .add_operation(transfer_op)
-        .add_operation_transfer_erc20(&kp, target_address, inner)?;
-    utils::send_tx(&builder.take_transaction())?;
+        .add_operation_transfer_erc20(&kp, target_address)?;
+    let tx = serde_json::to_vec(&builder.take_transaction()).unwrap();
+
+    let tm_client = tendermint_rpc::HttpClient::new(
+        format!("{}:26657", get_serv_addr().c(d!())?).as_str(),
+    )
+    .unwrap();
+
+    let response = Runtime::new()
+        .unwrap()
+        .block_on(tm_client.broadcast_tx_sync(tx.into()))
+        .c(d!())?;
+
+    println!("{:?}", response);
+
     Ok(())
 }
 
@@ -250,9 +246,8 @@ pub fn transfer_to_erc20(
 pub fn erc20_to_utxo(
     amount: u64,
     token_code: &str,
-    address: Option<&str>,
-    eth_phrase: Option<&str>,
-    input: Option<&str>,
+    address: &str,
+    eth_phrase: &str,
 ) -> Result<()> {
     let fra_kp = get_keypair()?;
 
@@ -268,13 +263,10 @@ pub fn erc20_to_utxo(
         asset: token_code.val,
     };
 
-    let (signer, kp) = if let Some(key_path) = eth_phrase {
-        let kp = SecpPair::from_phrase(key_path, None)?.0;
+    let (signer, kp) = {
+        let kp = SecpPair::from_phrase(eth_phrase, None)?.0;
         let signer = Address::from(kp.address());
         (signer, Keypair::Ecdsa(kp))
-    } else {
-        let signer = Address::from(fra_kp.get_pk());
-        (signer, Keypair::Ed25519(fra_kp))
     };
 
     let tm_client = tendermint_rpc::HttpClient::new(
@@ -292,16 +284,8 @@ pub fn erc20_to_utxo(
         .unwrap();
     let nonce = serde_json::from_slice::<U256>(query_ret.value.as_slice()).unwrap();
 
-    let input_hex = &input.unwrap()[2..];
-    let input = <Vec<u8>>::from_hex(input_hex).unwrap();
-
     let account_call = AccountAction::Erc20ToUtxo(Erc20ToUtxo {
-        nonce,
-        gas_price: <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(),
-        gas_limit: <BaseApp as module_evm::Config>::BlockGasLimit::get(),
-        contract: H160::try_from(MultiSigner::from_str(address.unwrap()).unwrap())
-            .unwrap(),
-        input,
+        contract: H160::try_from(MultiSigner::from_str(address).unwrap()).unwrap(),
         amount: U256::from(amount),
         outputs: vec![output],
     });
@@ -316,10 +300,12 @@ pub fn erc20_to_utxo(
 
     let txn_with_tag = EvmRawTxWrapper::wrap(&txn);
 
-    Runtime::new()
+    let response = Runtime::new()
         .unwrap()
         .block_on(tm_client.broadcast_tx_sync(txn_with_tag.into()))
         .c(d!())?;
+
+    println!("{:?}", response);
 
     Ok(())
 }

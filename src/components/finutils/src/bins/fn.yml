@@ -488,13 +488,6 @@ subcommands:
             takes_value: true
             value_name: AMOUNT
             required: true
-        - input:
-            help: erc20 input data
-            short: i
-            long: input
-            takes_value: true
-            value_name: INPUT
-            required: true
   - erc20-to-utxo:
       about: Transfer FRA from an Ethereum address to the specified Findora account
       args:
@@ -517,13 +510,6 @@ subcommands:
             long: addr
             takes_value: true
             value_name: CONTRACT ADDRESS
-        - input:
-            help: erc20 input data, the `Burn` function bytecode
-            short: i
-            long: input
-            takes_value: true
-            value_name: INPUT
-            required: true
         - eth-key:
             help: ethereum account mnemonic phrase sign withdraw tx
             short: e

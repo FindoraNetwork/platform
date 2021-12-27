@@ -18,15 +18,9 @@ use log::debug;
 use ruc::*;
 
 impl<C: Config> App<C> {
-    #![allow(clippy::too_many_arguments)]
     pub fn erc20_to_utxo(
         ctx: &Context,
-        sender: Address,
         contract: H160,
-        _gas_price: U256,
-        gas_limit: U256,
-        input: Vec<u8>,
-        _nonce: U256,
         outputs: Vec<NonConfidentialOutput>,
     ) -> Result<ActionResult> {
         let mut asset_amount = 0;
@@ -56,12 +50,6 @@ impl<C: Config> App<C> {
         );
 
         let amount = U256::from(asset_amount);
-        let sa = C::AccountAsset::account_of(ctx, &sender, None)
-            .c(d!("account does not exist"))?;
-        log::debug!(target: "xhub", "balance {} amount {}", sa.balance, amount);
-        if sa.balance < amount {
-            return Err(eg!("insufficient balance"));
-        }
 
         if !amount.is_zero() {
             // call ERC20 contract burn method
@@ -79,14 +67,12 @@ impl<C: Config> App<C> {
                 ])
                 .c(d!("Failed to encode burn input"))?;
 
-            ensure!(burn == input, "Not a valid burn input");
-
             let call = Call {
-                source: H160::try_from(&sender)?,
+                source: Default::default(),
                 target: contract,
-                input,
+                input: burn,
                 value: U256::zero(),
-                gas_limit: gas_limit.low_u64(),
+                gas_limit: 5000000,
                 gas_price: None,
                 nonce: None,
             };

@@ -13,7 +13,6 @@ use zei::xfr::{
     sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
     structs::{AssetType as ZeiAssetType, XfrAssetType},
 };
-use zeiutils::serialization::ZeiFromToBytes;
 
 #[allow(missing_docs)]
 pub struct ContractConstructor {
@@ -65,9 +64,8 @@ impl TransferERC20 {
         keypair: &XfrKeyPair,
         nonce: NoReplayToken,
         address: MultiSigner,
-        input: Vec<u8>,
     ) -> Self {
-        let data = Data::new(nonce, address, input);
+        let data = Data::new(nonce, address);
         let public = keypair.get_pk();
         let signature = keypair.sign(&data.to_bytes());
         Self {
@@ -103,18 +101,12 @@ pub struct Data {
     pub nonce: NoReplayToken,
     /// receiver address
     pub address: MultiSigner,
-    /// input
-    pub input: Vec<u8>,
 }
 
 #[allow(missing_docs)]
 impl Data {
-    pub fn new(nonce: NoReplayToken, address: MultiSigner, input: Vec<u8>) -> Self {
-        Data {
-            nonce,
-            address,
-            input,
-        }
+    pub fn new(nonce: NoReplayToken, address: MultiSigner) -> Self {
+        Data { nonce, address }
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -144,14 +136,8 @@ pub fn build_decimals_input() -> Result<Vec<u8>> {
 }
 
 #[allow(missing_docs)]
-#[allow(clippy::type_complexity)]
-pub fn check_erc20_tx(
-    tx: &Transaction,
-) -> Result<(Vec<u8>, H160, u64, Vec<u8>, ZeiAssetType)> {
+pub fn check_erc20_tx(tx: &Transaction) -> Result<(H160, Vec<u8>, ZeiAssetType)> {
     let mut owner = None;
-    let mut nonce = None;
-    let mut input = None;
-    let mut signer = None;
     let mut asset = None;
     let mut amount = 0u64;
 
@@ -161,9 +147,6 @@ pub fn check_erc20_tx(
                 return Err(eg!("tx should have only one convert account"));
             }
             owner = H160::try_from(ca.data.address.clone()).ok();
-            nonce = Some(ca.get_nonce());
-            input = Some(ca.data.input.clone());
-            signer = Some(ca.get_related_address().zei_to_bytes())
         }
         if let Operation::TransferAsset(t) = op {
             for o in &t.body.outputs {
@@ -193,12 +176,7 @@ pub fn check_erc20_tx(
         }
     }
 
-    if signer.is_none()
-        || owner.is_none()
-        || nonce.is_none()
-        || input.is_none()
-        || asset.is_none()
-    {
+    if owner.is_none() || asset.is_none() {
         return Err(eg!("this isn't a valid utxo-to-erc20 tx"));
     }
 
@@ -213,15 +191,5 @@ pub fn check_erc20_tx(
         ])
         .c(d!("Failed to encode mint input"))?;
 
-    if &mint != input.as_ref().unwrap() {
-        return Err(eg!("Not a valid mint input"));
-    }
-
-    Ok((
-        signer.unwrap(),
-        owner.unwrap(),
-        nonce.unwrap().get_seq_id(),
-        input.unwrap(),
-        asset.unwrap(),
-    ))
+    Ok((owner.unwrap(), mint, asset.unwrap()))
 }

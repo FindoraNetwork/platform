@@ -147,16 +147,9 @@ impl<C: Config> Executable for App<C> {
             Action::NonConfidentialTransfer(action) => {
                 Self::transfer_to_nonconfidential_utxo(ctx, sender, action)
             }
-            Action::Erc20ToUtxo(action) => Self::erc20_to_utxo(
-                ctx,
-                sender,
-                action.contract,
-                action.gas_price,
-                action.gas_limit,
-                action.input,
-                action.nonce,
-                action.outputs,
-            ),
+            Action::Erc20ToUtxo(action) => {
+                Self::erc20_to_utxo(ctx, action.contract, action.outputs)
+            }
         }
     }
 }

@@ -11,8 +11,6 @@ if [ -d .git ]; then
 else
   GITBRANCH=$(basename "$(pwd)")
 fi
-CARGO_TARGET_DIR=../target-${GITBRANCH}-${OPT}
-export CARGO_TARGET_DIR
 
 if [[ ${OPT} == "help" ]]; then
   echo "  $0 -h"
@@ -92,16 +90,20 @@ elif [[ ${OPT} == "gorelease" ]]; then
   exit 0
 elif [[ ${OPT} == "debug_env" ]]; then
   export CARGO_TARGET_DIR=../target-debug_env
-  rm -f target
-  ln -sf "${CARGO_TARGET_DIR}" target
-  make debug_env
-else
-  echo "Invalid command"
-  $0 help
+  make build_release_debug
   exit 0
-fi
-
-if [[ ${OPT} == "debug_env" ]]; then
+elif [[ $OPT == "restart_debug_env" ]]; then
+  export CARGO_TARGET_DIR=../target-debug_env
+  make stop_debug_env
+  make start_debug_env
+  tools/devnet/stopnodes.sh 12
+  ENABLE_QUERY_SERVICE=true tools/devnet/startnodes.sh 12
+  exit 0
+elif [[ ${OPT} == "init_debug_env" ]]; then
+  export CARGO_TARGET_DIR=../target-debug_env
+  rm -rf target
+  ln -sf "$CARGO_TARGET_DIR" target
+  make debug_env
   tools/devnet/stopnodes.sh 12
   ENABLE_QUERY_SERVICE=true tools/devnet/startnodes.sh 12
   sleep 10
@@ -109,5 +111,9 @@ if [[ ${OPT} == "debug_env" ]]; then
   fn setup -S http://127.0.0.1
   stt init --skip-validator
   echo "Initialized."
-  rm -rf target
+  exit 0
+else
+  echo "Invalid command"
+  $0 help
+  exit 0
 fi

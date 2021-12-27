@@ -13,13 +13,12 @@ use fp_core::{
     },
 };
 use fp_evm::Runner;
-use fp_traits::evm::{DecimalsMapping, FeeCalculator};
+use fp_traits::evm::DecimalsMapping;
 use fp_types::{
     actions::{self, evm::Call},
     assemble::{convert_unsigned_transaction, CheckedTransaction, UncheckedTransaction},
     crypto::{Address, MultiSigner},
 };
-use fp_utils::proposer_converter;
 use ledger::converter::erc20::build_decimals_input;
 use ledger::{
     converter::{check_convert_account, erc20::check_erc20_tx, ConvertingType},
@@ -29,7 +28,6 @@ use ledger::{
 };
 use ruc::*;
 use serde::Serialize;
-use zei::serialization::ZeiFromToBytes;
 use zei::xfr::structs::AssetType as ZeiAssetType;
 
 #[derive(Default)]
@@ -217,13 +215,9 @@ impl ModuleManager {
                 } else if asset.is_updatable() {
                     return Err(eg!("Binding asset should not be updatable"));
                 } else {
-                    // FixMe: don't use proposer_converter
-                    let signer =
-                        proposer_converter(asset.properties.issuer.zei_to_bytes())
-                            .c(d!("Invalid singer"))?;
                     let input = build_decimals_input().c(d!())?;
                     let decimals = self
-                        .erc20_decimals(ctx, signer, address, input)
+                        .erc20_decimals(ctx, address, input)
                         .c(d!("can not get decimals of erc20 token"))?
                         as u8;
                     if decimals != asset.properties.asset_rules.decimals {
@@ -270,7 +264,6 @@ impl ModuleManager {
     fn erc20_decimals(
         &self,
         ctx: &Context,
-        source: H160,
         target: H160,
         decimals: Vec<u8>,
     ) -> Result<u32> {
@@ -278,14 +271,12 @@ impl ModuleManager {
         config.estimate = true;
 
         let call = Call {
-            source,
+            source: Default::default(),
             target,
             input: decimals,
-            value: Default::default(),
-            gas_limit: <BaseApp as module_evm::Config>::BlockGasLimit::get().as_u64(),
-            gas_price: Some(
-                <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(),
-            ),
+            value: U256::zero(),
+            gas_limit: 5000000,
+            gas_price: None,
             nonce: None,
         };
 
@@ -307,11 +298,8 @@ impl ModuleManager {
         ctx: &Context,
         tx: &FindoraTransaction,
     ) -> Result<()> {
-        let (signer, target, _nonce, input, asset) = check_erc20_tx(tx)?;
-        // FixMe: original signer address(XfrPublicKey) is truncated to H160 address
-        let signer = proposer_converter(signer).unwrap();
-
-        self.check_valid_asset(ctx, &target, asset)
+        let (contract, mint, asset) = check_erc20_tx(tx)?;
+        self.check_valid_asset(ctx, &contract, asset)
             .c(d!("Assets check failed"))?;
 
         // call erc20 mint method
@@ -319,11 +307,11 @@ impl ModuleManager {
         config.estimate = true;
 
         let call = Call {
-            source: signer,
-            target,
-            input,
+            source: Default::default(),
+            target: contract,
+            input: mint,
             value: U256::zero(),
-            gas_limit: <BaseApp as module_evm::Config>::BlockGasLimit::get().as_u64(),
+            gas_limit: 5000000,
             gas_price: None,
             nonce: None,
         };
