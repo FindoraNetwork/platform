@@ -12,7 +12,7 @@
 
 #### v0.3.8-release
 
-- Update height to `148_9000`.
+- Update height to `149_2000`.
 
 > Functions that have been added.
 
