@@ -65,7 +65,7 @@ pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 148_3286;
 pub const ENABLE_FRC20_HEIGHT: i64 = 1;
 
 #[cfg(not(feature = "debug_env"))]
-pub const ENABLE_FRC20_HEIGHT: i64 = 1489062;
+pub const ENABLE_FRC20_HEIGHT: i64 = 148_3588;
 
 pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let mut resp = ResponseInfo::new();
