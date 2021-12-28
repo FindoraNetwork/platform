@@ -12,7 +12,7 @@
 
 #### v0.3.8-release
 
-- FRC20 update height to `149_6500`.
+- FRC20 update height to `149_7500`.
 
 > Functions that have been added.
 
