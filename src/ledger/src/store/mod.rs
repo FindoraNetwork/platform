@@ -428,7 +428,7 @@ impl LedgerState {
 
         flush_data();
 
-        api_cache::check_lost_data(&mut ledger);
+        // api_cache::check_lost_data(&mut ledger);
 
         Ok(ledger)
     }
