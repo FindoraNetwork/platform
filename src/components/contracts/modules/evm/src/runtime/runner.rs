@@ -13,15 +13,6 @@ use fp_types::actions::evm::*;
 use ruc::*;
 use sha3::{Digest, Keccak256};
 use std::marker::PhantomData;
-use std::str::FromStr;
-
-#[cfg(feature = "debug_env")]
-pub const ENABLE_FRC20_HEIGHT: i64 = 0;
-
-#[cfg(not(feature = "debug_env"))]
-pub const ENABLE_FRC20_HEIGHT: i64 = 149_2000;
-
-const FRC20_ADDR: &str = "0x0000000000000000000000000000000000001000";
 
 #[derive(Default)]
 pub struct ActionRunner<C: Config> {
@@ -146,14 +137,6 @@ impl<C: Config> ActionRunner<C> {
 
 impl<C: Config> Runner for ActionRunner<C> {
     fn call(ctx: &Context, args: Call, config: &evm::Config) -> Result<CallInfo> {
-        // Enable basic EVM
-        let height = ctx.block_header().height;
-        if height >= ENABLE_FRC20_HEIGHT {
-            let frc20_call = args.target == H160::from_str(FRC20_ADDR).unwrap();
-            let fra_transfer = args.input.is_empty();
-            ensure!(frc20_call || fra_transfer, "Not a FRC20 contract call");
-        }
-
         Self::execute(
             ctx,
             args.source,

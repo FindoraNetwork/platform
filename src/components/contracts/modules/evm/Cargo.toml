@@ -39,7 +39,3 @@ hex = "0.4.2"
 module-account = { path = "../account" }
 module-ethereum = { path = "../ethereum" }
 serde_json = "1.0.64"
-
-[features]
-default = []
-debug_env = []

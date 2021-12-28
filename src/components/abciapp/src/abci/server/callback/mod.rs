@@ -56,16 +56,16 @@ lazy_static! {
 }
 
 #[cfg(feature = "debug_env")]
-pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 0;
+pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 1;
 
 #[cfg(not(feature = "debug_env"))]
 pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 148_3286;
 
 #[cfg(feature = "debug_env")]
-pub const ENABLE_FRC20_HEIGHT: i64 = 0;
+pub const ENABLE_FRC20_HEIGHT: i64 = 1;
 
 #[cfg(not(feature = "debug_env"))]
-pub const ENABLE_FRC20_HEIGHT: i64 = 149_2000;
+pub const ENABLE_FRC20_HEIGHT: i64 = 149_6500;
 
 pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let mut resp = ResponseInfo::new();
@@ -255,7 +255,7 @@ pub fn deliver_tx(
                         if let Err(err) =
                             s.account_base_app.write().deliver_findora_tx(&tx)
                         {
-                            log::debug!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
+                            log::info!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
 
                             resp.code = 1;
                             resp.log =
@@ -420,7 +420,7 @@ fn app_hash(
     mut la_hash: Vec<u8>,
     mut cs_hash: Vec<u8>,
 ) -> Vec<u8> {
-    log::debug!(target: "abciapp",
+    log::info!(target: "abciapp",
         "app_hash_{}: {}_{}, height: {}",
         when,
         hex::encode(la_hash.clone()),

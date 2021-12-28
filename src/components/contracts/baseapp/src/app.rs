@@ -4,7 +4,7 @@ use fp_core::context::RunTxMode;
 use fp_evm::BlockId;
 use fp_types::assemble::convert_unchecked_transaction;
 use fp_utils::tx::EvmRawTxWrapper;
-use log::{debug, error};
+use log::{debug, error, info};
 use primitive_types::U256;
 use ruc::*;
 
@@ -68,7 +68,7 @@ impl abci::Application for crate::BaseApp {
         if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
             raw_tx = tx;
         } else {
-            debug!(target: "baseapp", "Transaction evm tag check failed");
+            info!(target: "baseapp", "Transaction evm tag check failed");
             resp.code = 1;
             resp.log = String::from("Transaction evm tag check failed");
             return resp;
@@ -78,7 +78,7 @@ impl abci::Application for crate::BaseApp {
             let check_fn = |mode: RunTxMode| {
                 let ctx = self.retrieve_context(mode).clone();
                 if let Err(e) = self.modules.process_tx::<SignedExtra>(ctx, tx) {
-                    debug!(target: "baseapp", "Transaction check error: {}", e);
+                    info!(target: "baseapp", "Transaction check error: {}", e);
                     resp.code = 1;
                     resp.log = format!("Transaction check error: {}", e);
                 }
@@ -88,7 +88,7 @@ impl abci::Application for crate::BaseApp {
                 CheckTxType::Recheck => check_fn(RunTxMode::ReCheck),
             }
         } else {
-            debug!(target: "baseapp", "Could not unpack transaction");
+            info!(target: "baseapp", "Could not unpack transaction");
         }
         resp
     }
@@ -131,7 +131,7 @@ impl abci::Application for crate::BaseApp {
         if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
             raw_tx = tx;
         } else {
-            debug!(target: "baseapp", "Transaction deliver tx unwrap evm tag failed");
+            info!(target: "baseapp", "Transaction deliver tx unwrap evm tag failed");
             resp.code = 1;
             resp.log = String::from("Transaction deliver tx unwrap evm tag failed");
             return resp;
