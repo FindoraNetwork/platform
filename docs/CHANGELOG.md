@@ -10,6 +10,10 @@
 
 ## Change log
 
+#### v0.3.8-release
+
+- FRC20 update height to `149_7500`.
+
 > Functions that have been added.
 
 #### v0.3.7-release
