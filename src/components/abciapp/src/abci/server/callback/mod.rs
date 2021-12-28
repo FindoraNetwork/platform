@@ -114,7 +114,7 @@ pub fn init_chain(
 pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseCheckTx {
     let mut resp = ResponseCheckTx::new();
 
-    let tx_catalog = try_tx_catalog(req.get_tx());
+    let tx_catalog = try_tx_catalog(req.get_tx(), false);
 
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
 
@@ -211,7 +211,7 @@ pub fn deliver_tx(
 ) -> ResponseDeliverTx {
     let mut resp = ResponseDeliverTx::new();
 
-    let tx_catalog = try_tx_catalog(req.get_tx());
+    let tx_catalog = try_tx_catalog(req.get_tx(), true);
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
     const EVM_FIRST_BLOCK_HEIGHT: i64 = 142_5000;
 
