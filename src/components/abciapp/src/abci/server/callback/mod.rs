@@ -65,7 +65,7 @@ pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 148_3286;
 pub const ENABLE_FRC20_HEIGHT: i64 = 1;
 
 #[cfg(not(feature = "debug_env"))]
-pub const ENABLE_FRC20_HEIGHT: i64 = 149_7900;
+pub const ENABLE_FRC20_HEIGHT: i64 = 149_8600;
 
 pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let mut resp = ResponseInfo::new();
@@ -408,6 +408,9 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     } else {
         r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
     }
+
+    // Add this flush to keep safe kill for backup server.
+    ledger::store::fbnc::flush_data();
 
     r
 }

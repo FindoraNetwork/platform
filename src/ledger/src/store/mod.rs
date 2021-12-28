@@ -426,9 +426,9 @@ impl LedgerState {
         omit!(ledger.utxo_map.write().compute_checksum());
         ledger.fast_invariant_check().c(d!())?;
 
-        api_cache::check_lost_data(&mut ledger);
-
         flush_data();
+
+        api_cache::check_lost_data(&mut ledger);
 
         Ok(ledger)
     }
