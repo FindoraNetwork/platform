@@ -362,99 +362,98 @@ pub fn check_lost_data(ledger: &mut LedgerState) -> Result<()> {
         }
     }
 
-    Ok(())
+    // check the lost memos
+    let cur_txo_sid = ledger.get_next_txo().0;
+    let last_txo_sid_opt = ledger
+        .api_cache
+        .as_mut()
+        .unwrap()
+        .last_sid
+        .get(&"last_txo_sid".to_string());
 
-    //     // check the lost memos
-    // let cur_txo_sid = ledger.get_next_txo().0;
-    // let last_txo_sid_opt = ledger
-    //     .api_cache
-    //     .as_mut()
-    //     .unwrap()
-    //     .last_sid
-    //     .get(&"last_txo_sid".to_string());
-    //
-    // let mut last_txo_sid: u64 = 0;
-    // if let Some(sid) = last_txo_sid_opt {
-    //     last_txo_sid = sid;
-    // };
-    //
-    // if last_txo_sid < cur_txo_sid {
-    //     for index in last_txo_sid..cur_txo_sid {
-    //         if !ledger
-    //             .api_cache
-    //             .as_mut()
-    //             .unwrap()
-    //             .owner_memos
-    //             .contains_key(&TxoSID(index))
-    //         {
-    //             let utxo_opt = ledger.get_utxo(TxoSID(index));
-    //             if let Some(utxo) = utxo_opt {
-    //                 let ftx = ledger
-    //                     .get_transaction_light(
-    //                         utxo.authenticated_txn.finalized_txn.tx_id,
-    //                     )
-    //                     .unwrap();
-    //                 let tx_hash = ftx.txn.hash_tm().hex().to_uppercase();
-    //                 let owner_memos = ftx.txn.get_owner_memos_ref();
-    //                 let addresses: Vec<XfrAddress> = ftx
-    //                     .txo_ids
-    //                     .iter()
-    //                     .map(|sid| XfrAddress {
-    //                         key: ((ledger
-    //                             .get_utxo_light(*sid)
-    //                             .or_else(|| ledger.get_spent_utxo_light(*sid))
-    //                             .unwrap()
-    //                             .utxo)
-    //                             .0)
-    //                             .record
-    //                             .public_key,
-    //                     })
-    //                     .collect();
-    //
-    //                 for (txo_sid, (address, owner_memo)) in ftx
-    //                     .txo_ids
-    //                     .iter()
-    //                     .zip(addresses.iter().zip(owner_memos.iter()))
-    //                 {
-    //                     if *txo_sid == TxoSID(index) {
-    //                         ledger
-    //                             .api_cache
-    //                             .as_mut()
-    //                             .unwrap()
-    //                             .utxos_to_map_index
-    //                             .insert(*txo_sid, *address);
-    //
-    //                         if let Some(memo) = owner_memo {
-    //                             ledger
-    //                                 .api_cache
-    //                                 .as_mut()
-    //                                 .unwrap()
-    //                                 .owner_memos
-    //                                 .insert(*txo_sid, (*memo).clone());
-    //                         }
-    //
-    //                         ledger
-    //                             .api_cache
-    //                             .as_mut()
-    //                             .unwrap()
-    //                             .txo_to_txnid
-    //                             .insert(*txo_sid, (ftx.tx_id, tx_hash.clone()));
-    //                     }
-    //                 }
-    //             } else {
-    //                 continue;
-    //             }
-    //         }
-    //
-    //         // update the last txo sid
-    //         ledger
-    //             .api_cache
-    //             .as_mut()
-    //             .unwrap()
-    //             .last_sid
-    //             .insert("last_txo_sid".to_string(), index as u64);
-    // }
-    // }
+    let mut last_txo_sid: u64 = 0;
+    if let Some(sid) = last_txo_sid_opt {
+        last_txo_sid = sid;
+    };
+
+    if last_txo_sid < cur_txo_sid {
+        for index in last_txo_sid..cur_txo_sid {
+            if !ledger
+                .api_cache
+                .as_mut()
+                .unwrap()
+                .owner_memos
+                .contains_key(&TxoSID(index))
+            {
+                let utxo_opt = ledger.get_utxo(TxoSID(index));
+                if let Some(utxo) = utxo_opt {
+                    let ftx = ledger
+                        .get_transaction_light(
+                            utxo.authenticated_txn.finalized_txn.tx_id,
+                        )
+                        .unwrap();
+                    let tx_hash = ftx.txn.hash_tm().hex().to_uppercase();
+                    let owner_memos = ftx.txn.get_owner_memos_ref();
+                    let addresses: Vec<XfrAddress> = ftx
+                        .txo_ids
+                        .iter()
+                        .map(|sid| XfrAddress {
+                            key: ((ledger
+                                .get_utxo_light(*sid)
+                                .or_else(|| ledger.get_spent_utxo_light(*sid))
+                                .unwrap()
+                                .utxo)
+                                .0)
+                                .record
+                                .public_key,
+                        })
+                        .collect();
+
+                    for (txo_sid, (address, owner_memo)) in ftx
+                        .txo_ids
+                        .iter()
+                        .zip(addresses.iter().zip(owner_memos.iter()))
+                    {
+                        if *txo_sid == TxoSID(index) {
+                            ledger
+                                .api_cache
+                                .as_mut()
+                                .unwrap()
+                                .utxos_to_map_index
+                                .insert(*txo_sid, *address);
+
+                            if let Some(memo) = owner_memo {
+                                ledger
+                                    .api_cache
+                                    .as_mut()
+                                    .unwrap()
+                                    .owner_memos
+                                    .insert(*txo_sid, (*memo).clone());
+                            }
+
+                            ledger
+                                .api_cache
+                                .as_mut()
+                                .unwrap()
+                                .txo_to_txnid
+                                .insert(*txo_sid, (ftx.tx_id, tx_hash.clone()));
+                        }
+                    }
+                } else {
+                    continue;
+                }
+            }
+
+            // update the last txo sid
+            ledger
+                .api_cache
+                .as_mut()
+                .unwrap()
+                .last_sid
+                .insert("last_txo_sid".to_string(), index as u64);
+        }
+    }
+    Ok(())
 }
 
 /// update the data of QueryServer when we create a new block in ABCI
