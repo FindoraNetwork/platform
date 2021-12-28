@@ -80,8 +80,12 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
     resp.set_last_block_height(h);
     if 0 < h {
-        let cs_hash = s.account_base_app.write().info(req).last_block_app_hash;
-        resp.set_last_block_app_hash(app_hash("info", h, la_hash, cs_hash));
+        if DISBALE_EVM_BLOCK_HEIGHT < h && h < ENABLE_FRC20_HEIGHT {
+            resp.set_last_block_app_hash(la_hash);
+        } else {
+            let cs_hash = s.account_base_app.write().info(req).last_block_app_hash;
+            resp.set_last_block_app_hash(app_hash("info", h, la_hash, cs_hash));
+        }
     }
 
     drop(state);
