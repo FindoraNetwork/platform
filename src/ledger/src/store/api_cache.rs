@@ -462,6 +462,10 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
         return Ok(());
     }
 
+    if ledger.api_cache.as_mut().is_none() {
+        return Ok(());
+    }
+
     check_lost_data(ledger)?;
 
     ledger.api_cache.as_mut().unwrap().cache_hist_data();
