@@ -22,8 +22,11 @@ use ledger::data_model::{AssetTypeCode, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKIN
 use ruc::*;
 use std::{convert::TryFrom, str::FromStr};
 use tendermint::block::Height;
-use tendermint_rpc::endpoint::abci_query::AbciQuery;
-use tendermint_rpc::{Client, HttpClient};
+use tendermint_rpc::{
+    endpoint::abci_query::AbciQuery,
+    query::{EventType, Query},
+    Client, HttpClient, Order,
+};
 use tokio::runtime::Runtime;
 use zei::xfr::{asset_record::AssetRecordType, sig::XfrKeyPair};
 
@@ -237,7 +240,13 @@ pub fn transfer_to_erc20(amount: u64, token_code: &str, address: &str) -> Result
         .block_on(tm_client.broadcast_tx_sync(tx.into()))
         .c(d!())?;
 
-    println!("{:?}", response);
+    if response.code.is_ok() {
+        let tx_hash = response.hash.to_string();
+        println!("tx_hash: {}", tx_hash);
+        retrieve_tx_by_hash(&tx_hash, 16).unwrap();
+    } else {
+        return Err(eg!("Failed to send tx"));
+    }
 
     Ok(())
 }
@@ -305,7 +314,57 @@ pub fn erc20_to_utxo(
         .block_on(tm_client.broadcast_tx_sync(txn_with_tag.into()))
         .c(d!())?;
 
-    println!("{:?}", response);
+    if response.code.is_ok() {
+        let tx_hash = response.hash.to_string();
+        println!("tx_hash: {}", tx_hash);
+        retrieve_tx_by_hash(&tx_hash, 16).unwrap();
+    } else {
+        return Err(eg!("Failed to check tx"));
+    }
 
     Ok(())
+}
+
+// Retrieve a transaction by the tx hash
+// If the tx is ok, return the tx_result data which is filled by deliver_tx
+fn retrieve_tx_by_hash(tx_hash: &str, duration: u64) -> Result<Vec<u8>> {
+    let tm_client = tendermint_rpc::HttpClient::new(
+        format!("{}:26657", get_serv_addr().c(d!())?).as_str(),
+    )
+    .c(d!("Failed to create tendermint client"))?;
+
+    let query = Query::from(EventType::Tx).and_eq("tx.hash", tx_hash);
+    let mut response = Runtime::new()
+        .unwrap()
+        .block_on(tm_client.tx_search(query.clone(), true, 1, 10, Order::Ascending))
+        .c(d!())?;
+
+    for _ in 1..duration {
+        if response.total_count == 0 {
+            sleep_ms!(1000);
+        } else {
+            break;
+        }
+
+        response = Runtime::new()
+            .unwrap()
+            .block_on(tm_client.tx_search(query.clone(), true, 1, 10, Order::Ascending))
+            .c(d!())?;
+    }
+
+    if response.total_count == 0 {
+        return Err(eg!("No such transaction with this tx_hash"));
+    } else if response.total_count != 1 {
+        return Err(eg!("Too many transactions with same tx_hash"));
+    }
+
+    let (code, data) = {
+        let result = &response.txs[0].tx_result;
+        (result.code, result.data.clone())
+    };
+    if code.is_err() {
+        return Err(eg!("Failed to deliver tx"));
+    }
+
+    Ok(data.into())
 }

@@ -4,13 +4,15 @@ set -e
 
 OPT=$1
 if [ -d .git ]; then
-    GITBRANCH=$(git branch --show-current)
-    if [ -z "${GITBRANCH}" ]; then
-      GITBRANCH=$(git describe --tags)
+    Branch=$(git branch --show-current)
+    if [ -z "$Branch" ]; then
+      Branch=$(git describe --tags)
     fi
 else
-  GITBRANCH=$(basename "$(pwd)")
+  Branch=$(basename "$(pwd)")
 fi
+
+export FIN_DEBUG=/data/findora/localtest/
 
 if [[ ${OPT} == "help" ]]; then
   echo "  $0 -h"
@@ -22,21 +24,23 @@ if [[ ${OPT} == "help" ]]; then
   echo "  $0 wasm, build wasm-js-bindings"
   echo "  $0 ltchk, lightweight check, such as fmt, lint"
   echo "  $0 prchk, make a pre-check before creating new pull request"
-  echo "  $0 debug_env, build and start a new local devnet"
+  echo "  $0 debug_env, build binaries for a local devnet"
+  echo "  $0 init_debug_env, build and start a new local devnet"
+  echo "  $0 restart_debug_env, restart a local devnet"
   echo "  $0 staking_demo, run a staking_demo"
   exit 0
 elif [[ ${OPT} == "-h" ]]; then
   $0 help
   exit 0
 elif [[ ${OPT} == "cli" ]]; then
-  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release
+  export CARGO_TARGET_DIR=../target-${Branch}-build_release
 	cargo build --release --bins -p finutils --no-default-features
 	cp "${CARGO_TARGET_DIR}"/release/fn                     ~/.cargo/bin
 	cp "${CARGO_TARGET_DIR}"/release/stt                    ~/.cargo/bin
 	cp "${CARGO_TARGET_DIR}"/release/staking_cfg_generator  ~/.cargo/bin
 	exit 0
 elif [[ ${OPT} == "wasm" ]]; then
-  export CARGO_TARGET_DIR=${PWD}/../target-${GITBRANCH}-build_wasm
+  export CARGO_TARGET_DIR=${PWD}/../target-${Branch}-build_wasm
   WASM_DIR="${CARGO_TARGET_DIR}/wasm-js-bindings"
   mkdir -p "${WASM_DIR}"
   echo "change to directory ./src/components/wasm"
@@ -49,7 +53,7 @@ elif [[ ${OPT} == "wasm" ]]; then
   rm "${WASM_DIR}/bundler/.gitignore"
   exit 0
 elif [[ ${OPT} == "prchk" ]]; then
-  export CARGO_TARGET_DIR=../target-${GITBRANCH}-prchk
+  export CARGO_TARGET_DIR=../target-${Branch}-prchk
   echo "======make fmt======"
   make fmt
   echo "======make lint======"
@@ -65,14 +69,14 @@ elif [[ ${OPT} == "prchk" ]]; then
   ulimit -n ${CURRENT}
   exit 0
 elif [[ ${OPT} = "ltchk" ]]; then
-  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release
+  export CARGO_TARGET_DIR=../target-${Branch}-build_release
   echo "======make fmt======"
   make fmt
   echo "======make lint======"
   make lint
   exit 0
 elif [[ ${OPT} = "staking_demo" ]]; then
-  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release
+  export CARGO_TARGET_DIR=../target-${Branch}-build_release
   make run_staking_demo
   exit 0
 elif [[ ${OPT} == "DBG" ]]; then
@@ -80,11 +84,11 @@ elif [[ ${OPT} == "DBG" ]]; then
   make build DBG=1
   exit 0
 elif [[ ${OPT} == "release" ]]; then
-  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release
+  export CARGO_TARGET_DIR=../target-${Branch}-build_release
   make
   exit 0
 elif [[ ${OPT} == "gorelease" ]]; then
-  export CARGO_TARGET_DIR=../target-${GITBRANCH}-build_release
+  export CARGO_TARGET_DIR=../target-${Branch}-build_release
   make build_release_goleveldb
   $0 wasm
   exit 0
