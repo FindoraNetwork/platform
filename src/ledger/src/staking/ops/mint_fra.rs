@@ -49,7 +49,7 @@ impl MintFraOps {
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
-        vec![None; self.entries.len()]
+        self.entries.iter().map(|e| e.owner_memo.as_ref()).collect()
     }
 }
 
@@ -61,6 +61,8 @@ pub struct MintEntry {
     pub amount: Amount,
     pub utxo: TxOutput,
     pub asset_type: ZeiAssetType,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner_memo: Option<OwnerMemo>,
 }
 
 impl MintEntry {
@@ -72,16 +74,30 @@ impl MintEntry {
         receiver_pk: Option<XfrPublicKey>,
         amount: Amount,
         asset_type: ZeiAssetType,
+        confidential_am: bool,
+        confidential_ty: bool,
     ) -> Self {
         let mut prng = ChaChaRng::seed_from_u64(0);
+        let art = match (confidential_am, confidential_ty) {
+            (true, true) => AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
+            (true, false) => {
+                AssetRecordType::ConfidentialAmount_NonConfidentialAssetType
+            }
+            (false, true) => {
+                AssetRecordType::NonConfidentialAmount_ConfidentialAssetType
+            }
+            _ => AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+        };
+
         let ar = AssetRecordTemplate::with_no_asset_tracing(
             amount,
             asset_type,
-            AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+            art,
             receiver_pk.unwrap_or(target_pk),
         );
         let pc_gens = PublicParams::default().pc_gens;
-        let (ba, _, _) = build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
+        let (ba, _, owner_memo) =
+            build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
 
         let utxo = TxOutput {
             id: None,
@@ -95,6 +111,7 @@ impl MintEntry {
             amount,
             utxo,
             asset_type,
+            owner_memo,
         }
     }
 }
@@ -104,5 +121,6 @@ impl MintEntry {
 pub enum MintKind {
     Claim,
     UnStake,
+    Erc20ToAsset,
     Other,
 }

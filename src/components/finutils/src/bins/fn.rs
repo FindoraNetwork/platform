@@ -407,10 +407,19 @@ fn run() -> Result<()> {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr").c(d!("Unknown contract address"))?;
         let eth_key = m.value_of("eth-key").c(d!("Unknown singer key"))?;
+        let confidential_am = m.is_present("confidential_am");
+        let confidential_ty = m.is_present("confidential_ty");
         let token_code = m
             .value_of("code")
             .c(d!("A token code should be provided"))?;
-        erc20_to_utxo(amount.parse::<u64>().c(d!())?, token_code, address, eth_key)?
+        erc20_to_utxo(
+            amount.parse::<u64>().c(d!())?,
+            token_code,
+            address,
+            eth_key,
+            confidential_am,
+            confidential_ty,
+        )?
     } else {
         println!("{}", matches.usage());
     }

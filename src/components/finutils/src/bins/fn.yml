@@ -517,3 +517,9 @@ subcommands:
             takes_value: true
             value_name: MNEMONIC
             required: true
+        - confidential-amount:
+            help: mask the amount sent on the transaction log
+            long: confidential-amount
+        - confidential-type:
+            help: mask the asset type sent on the transaction log
+            long: confidential-type

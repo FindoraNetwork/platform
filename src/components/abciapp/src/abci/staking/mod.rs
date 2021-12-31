@@ -284,7 +284,15 @@ pub fn system_mint_pay(
         .delegation_get_global_principal_with_receiver()
         .into_iter()
         .map(|(k, (n, receiver_pk))| {
-            MintEntry::new(MintKind::UnStake, k, receiver_pk, n, ASSET_TYPE_FRA)
+            MintEntry::new(
+                MintKind::UnStake,
+                k,
+                receiver_pk,
+                n,
+                ASSET_TYPE_FRA,
+                false,
+                false,
+            )
         })
         .chain(
             staking
@@ -301,29 +309,40 @@ pub fn system_mint_pay(
                     limit >= 0
                 })
                 .map(|(k, n)| {
-                    MintEntry::new(MintKind::Claim, k, None, n, ASSET_TYPE_FRA)
+                    MintEntry::new(
+                        MintKind::Claim,
+                        k,
+                        None,
+                        n,
+                        ASSET_TYPE_FRA,
+                        false,
+                        false,
+                    )
                 }),
         )
         .take(NUM_TO_PAY)
         .collect::<Vec<_>>();
 
     // add account mint_entries.
-    let mut mints = if let Some(account_mint) = account_base_app.consume_mint() {
-        account_mint
-            .iter()
-            .map(|mint| {
-                MintEntry::new(
-                    MintKind::Other,
-                    mint.target,
-                    None,
-                    mint.amount,
-                    mint.asset,
-                )
-            })
-            .collect::<Vec<MintEntry>>()
-    } else {
-        Vec::new()
-    };
+    let mut mints = account_base_app
+        .consume_mint()
+        .iter()
+        .map(|mint| {
+            let kind = match mint.asset {
+                ASSET_TYPE_FRA => MintKind::Other,
+                _ => MintKind::Erc20ToAsset,
+            };
+            MintEntry::new(
+                kind,
+                mint.target,
+                None,
+                mint.amount,
+                mint.asset,
+                mint.confidential_am,
+                mint.confidential_ty,
+            )
+        })
+        .collect::<Vec<MintEntry>>();
 
     mint_entries.append(&mut mints);
 

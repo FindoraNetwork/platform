@@ -8,7 +8,7 @@ use fp_traits::{account::AccountAsset, evm::DecimalsMapping};
 use fp_types::{
     actions::{
         evm::Call,
-        xhub::{NonConfidentialOutput, NonConfidentialTransfer},
+        xhub::{NonConfidentialOutput, NonConfidentialTransfer, TxOutput},
     },
     crypto::Address,
     H160, U256,
@@ -21,7 +21,7 @@ impl<C: Config> App<C> {
     pub fn erc20_to_utxo(
         ctx: &Context,
         contract: H160,
-        outputs: Vec<NonConfidentialOutput>,
+        outputs: Vec<TxOutput>,
     ) -> Result<ActionResult> {
         let mut asset_amount = 0;
         let mut asset = None;
@@ -82,7 +82,7 @@ impl<C: Config> App<C> {
             match info.exit_reason {
                 ExitReason::Succeed(_) => {
                     // Fixme: what if failing to mint UTXO
-                    Self::add_mint(ctx, outputs)?;
+                    Self::add_mint_v2(ctx, outputs)?;
                 }
                 _ => return Err(eg!("Failed to execute Erc20 burn tx")),
             }
@@ -126,6 +126,21 @@ impl<C: Config> App<C> {
             Self::add_mint(ctx, call.outputs)?;
         }
         Ok(ActionResult::default())
+    }
+
+    pub(crate) fn add_mint_v2(ctx: &Context, mut outputs: Vec<TxOutput>) -> Result<()> {
+        let ops =
+            if let Some(mut ori_outputs) = PendingUtxos2::get(ctx.db.read().borrow()) {
+                ori_outputs.append(&mut outputs);
+                ori_outputs
+            } else {
+                outputs
+            };
+        PendingUtxos2::put(ctx.db.write().borrow_mut(), &ops)
+    }
+
+    pub fn consume_mint_v2(ctx: &Context) -> Option<Vec<TxOutput>> {
+        PendingUtxos2::take(ctx.db.write().borrow_mut())
     }
 
     pub(crate) fn add_mint(

@@ -9,7 +9,7 @@ use fp_types::{
     actions::{
         xhub::{
             Action as AccountAction, Erc20ToUtxo, NonConfidentialOutput,
-            NonConfidentialTransfer,
+            NonConfidentialTransfer, TxOutput,
         },
         Action,
     },
@@ -257,6 +257,8 @@ pub fn erc20_to_utxo(
     token_code: &str,
     address: &str,
     eth_phrase: &str,
+    confidential_am: bool,
+    confidential_ty: bool,
 ) -> Result<()> {
     let fra_kp = get_keypair()?;
 
@@ -266,10 +268,12 @@ pub fn erc20_to_utxo(
         return Err(eg!("Only a custom asset is supported!"));
     }
 
-    let output = NonConfidentialOutput {
+    let output = TxOutput {
         target: fra_kp.get_pk(),
         amount,
         asset: token_code.val,
+        confidential_am,
+        confidential_ty,
     };
 
     let (signer, kp) = {

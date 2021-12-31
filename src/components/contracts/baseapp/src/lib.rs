@@ -25,7 +25,7 @@ use fp_traits::{
     base::BaseProvider,
     evm::{EthereumAddressMapping, EthereumDecimalsMapping},
 };
-use fp_types::{actions::xhub::NonConfidentialOutput, actions::Action, crypto::Address};
+use fp_types::{actions::xhub::TxOutput, actions::Action, crypto::Address};
 use lazy_static::lazy_static;
 use ledger::converter::ConvertingType;
 use ledger::data_model::Transaction as FindoraTransaction;
@@ -281,8 +281,19 @@ impl BaseApp {
             .process_findora_tx(&self.deliver_state, tx, tx_type)
     }
 
-    pub fn consume_mint(&mut self) -> Option<Vec<NonConfidentialOutput>> {
-        module_xhub::App::<BaseApp>::consume_mint(&self.deliver_state)
+    pub fn consume_mint(&mut self) -> Vec<TxOutput> {
+        let mut outputs = module_xhub::App::<BaseApp>::consume_mint(&self.deliver_state)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|x| x.into())
+            .collect::<Vec<TxOutput>>();
+
+        if let Some(mut o) =
+            module_xhub::App::<BaseApp>::consume_mint_v2(&self.deliver_state)
+        {
+            outputs.append(&mut o)
+        }
+        outputs
     }
 }
 
