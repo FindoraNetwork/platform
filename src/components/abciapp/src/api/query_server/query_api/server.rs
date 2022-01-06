@@ -300,6 +300,23 @@ impl QueryServer {
             .get(&txo_sid)
     }
 
+    /// Returns the abar owner memo required to decrypt the asset record stored at given index, if it exists.
+    #[inline(always)]
+    pub fn get_abar_memo(&self, atxo_sid: ATxoSID) -> Option<OwnerMemo> {
+        self.ledger_cloned
+            .api_cache
+            .as_ref()
+            .unwrap()
+            .abar_memos
+            .get(&atxo_sid)
+    }
+
+    /// Returns the merkle proof from the given ATxoSID
+    #[inline(always)]
+    pub fn get_abar_proof(&self, atxo_sid: ATxoSID) -> Option<MTLeafInfo> {
+        self.ledger_cloned.get_abar_proof(atxo_sid).unwrap()
+    }
+
     /// retrieve block reward rate at specified block height
     #[inline(always)]
     pub fn query_block_rewards_rate(&self, height: &BlockHeight) -> Option<[u128; 2]> {

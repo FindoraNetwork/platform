@@ -738,6 +738,7 @@ impl NetworkRoute for ApiRoutes {
             ApiRoutes::DelegationInfo => "delegation_info",
             ApiRoutes::DelegatorList => "delegator_list",
             ApiRoutes::ValidatorDetail => "validator_detail",
+            ApiRoutes::OwnedAbars => "owned_abars",
         };
         "/".to_owned() + endpoint
     }

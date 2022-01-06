@@ -5,8 +5,9 @@
 use {
     crate::{
         data_model::{
-            AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Operation,
-            Transaction, TxOutput, TxnIDHash, TxnSID, TxoSID, XfrAddress,
+            ATxoSID, AXfrAddress, AssetTypeCode, DefineAsset, IssueAsset,
+            IssuerPublicKey, Operation, Transaction, TxOutput, TxnIDHash, TxnSID,
+            TxoSID, XfrAddress,
         },
         staking::{
             ops::mint_fra::MintEntry, Amount, BlockHeight, DelegationRwdDetail,
@@ -45,10 +46,16 @@ pub struct ApiCache {
     pub token_code_issuances: Mapx<AssetTypeCode, Issuances>,
     /// used in confidential tx
     pub owner_memos: Mapxnk<TxoSID, OwnerMemo>,
+    /// used in anonymous tx
+    pub abar_memos: Mapx<ATxoSID, OwnerMemo>,
     /// ownship of txo
     pub utxos_to_map_index: Mapxnk<TxoSID, XfrAddress>,
+    /// ownship of atxo
+    pub atxos_to_map_index: Mapx<ATxoSID, AXfrAddress>,
     /// txo(spent, unspent) to authenticated txn (sid, hash)
     pub txo_to_txnid: Mapxnk<TxoSID, TxnIDHash>,
+    /// atxo to authenticated txn (sid, hash)
+    pub atxo_to_txnid: Mapx<ATxoSID, TxnIDHash>,
     /// txn sid to txn hash
     pub txn_sid_to_hash: Mapxnk<TxnSID, String>,
     /// txn hash to txn sid
@@ -91,11 +98,17 @@ impl ApiCache {
                 prefix
             )),
             owner_memos: new_mapxnk!(format!("api_cache/{}owner_memos", prefix)),
+            abar_memos: new_mapx!(format!("api_cache/{}abar_memos", prefix)),
             utxos_to_map_index: new_mapxnk!(format!(
                 "api_cache/{}utxos_to_map_index",
                 prefix
             )),
+            atxos_to_map_index: new_mapx!(format!(
+                "api_cache/{}atxos_to_map_index",
+                prefix
+            )),
             txo_to_txnid: new_mapxnk!(format!("api_cache/{}txo_to_txnid", prefix)),
+            atxo_to_txnid: new_mapx!(format!("api_cache/{}atxo_to_txnid", prefix)),
             txn_sid_to_hash: new_mapxnk!(format!("api_cache/{}txn_sid_to_hash", prefix)),
             txn_hash_to_sid: new_mapx!(format!("api_cache/{}txn_hash_to_sid", prefix)),
             staking_global_rate_hist: new_mapxnk!(format!(
@@ -252,9 +265,14 @@ where
             Operation::Governance(i) => staking_gen!(i),
             Operation::FraDistribution(i) => staking_gen!(i),
             Operation::MintFra(i) => staking_gen!(i),
-            Operation::BarToAbar(_) => {},
-            Operation::TransferAnonAsset(_) => {},
-            
+            Operation::BarToAbar(i) => {
+                related_addresses.insert(XfrAddress {
+                    key: i.note.body.input.public_key,
+                });
+            }
+            Operation::TransferAnonAsset(_) => {
+                // Anon
+            }
             Operation::ConvertAccount(i) => {
                 related_addresses.insert(XfrAddress {
                     key: i.get_related_address(),
@@ -327,7 +345,10 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
     let prefix = ledger.api_cache.as_mut().unwrap().prefix.clone();
 
     // Update ownership status
-    for (txn_sid, txo_sids) in block.txns.iter().map(|v| (v.tx_id, v.txo_ids.as_slice()))
+    for (txn_sid, txo_sids, atxo_sids) in block
+        .txns
+        .iter()
+        .map(|v| (v.tx_id, v.txo_ids.as_slice(), v.atxo_ids.as_slice()))
     {
         let curr_txn = ledger.get_transaction_light(txn_sid).c(d!())?.txn;
         // get the transaction, ownership addresses, and memos associated with each transaction
@@ -494,6 +515,51 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
                     .owner_memos
                     .insert(*txo_sid, (*owner_memo).clone());
             }
+        }
+
+        let conv_memos = curr_txn.body.operations.iter().filter_map(|o| match o {
+            Operation::BarToAbar(b) => {
+                Some((b.note.body.output.public_key, b.note.body.memo.clone()))
+            }
+            _ => None,
+        });
+        let abar_memos = curr_txn
+            .body
+            .operations
+            .iter()
+            .filter_map(|o| match o {
+                Operation::TransferAnonAsset(b) => Some(
+                    b.note
+                        .body
+                        .outputs
+                        .iter()
+                        .zip(b.note.body.owner_memos.clone())
+                        .map(|(op, memo)| (op.public_key, memo)),
+                ),
+                _ => None,
+            })
+            .flatten();
+
+        for (a, id) in conv_memos.chain(abar_memos).zip(atxo_sids) {
+            ledger
+                .api_cache
+                .as_mut()
+                .unwrap()
+                .atxos_to_map_index
+                .insert(*id, AXfrAddress { key: a.0 });
+            ledger
+                .api_cache
+                .as_mut()
+                .unwrap()
+                .abar_memos
+                .insert(*id, a.1);
+            let hash = curr_txn.hash_tm().hex().to_uppercase();
+            ledger
+                .api_cache
+                .as_mut()
+                .unwrap()
+                .atxo_to_txnid
+                .insert(*id, (txn_sid, hash.clone()));
         }
     }
 

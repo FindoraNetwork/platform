@@ -187,7 +187,6 @@ pub struct MerkleProof {
 /// The hash of the leaf node is a 256 bit zero value. The hash of an non-leaf
 /// node is calculated by hashing (using keccak-256) the concatenation of the
 /// hashes of its two sub-nodes.
-#[derive(Clone)]
 pub struct SmtMap256<D: MerkleDB> {
     kvs: State<D>,
     version: u64,
