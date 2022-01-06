@@ -558,6 +558,8 @@ impl EthApi for EthApiImpl {
         request: CallRequest,
         _: Option<BlockNumber>,
     ) -> Result<U256> {
+        debug!(target: "eth_rpc", "estimate_gas, request:{:?}", request);
+
         let CallRequest {
             from,
             to,

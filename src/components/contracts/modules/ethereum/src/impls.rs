@@ -14,7 +14,7 @@ use fp_storage::{Borrow, BorrowMut};
 use fp_types::crypto::HA256;
 use fp_types::{actions::evm as EvmAction, crypto::secp256k1_ecdsa_recover};
 use fp_utils::{proposer_converter, timestamp_converter};
-use log::debug;
+use log::{debug, info};
 use ruc::*;
 use sha3::{Digest, Keccak256};
 
@@ -177,9 +177,10 @@ impl<C: Config> App<C> {
 
         let (to, contract_address, info) = execute_ret.unwrap();
 
-        let (reason, status, used_gas) = match info.clone() {
+        let (reason, data, status, used_gas) = match info.clone() {
             CallOrCreateInfo::Call(info) => (
                 info.exit_reason,
+                info.value.clone(),
                 TransactionStatus {
                     transaction_hash,
                     transaction_index,
@@ -197,6 +198,7 @@ impl<C: Config> App<C> {
             ),
             CallOrCreateInfo::Create(info) => (
                 info.exit_reason,
+                vec![],
                 TransactionStatus {
                     transaction_hash,
                     transaction_index,
@@ -215,7 +217,7 @@ impl<C: Config> App<C> {
         };
 
         for log in &status.logs {
-            debug!(target: "evm", "transaction status log: block: {:?}, address: {:?}, topics: {:?}, data: {:?}",
+            debug!(target: "ethereum", "transaction status log: block: {:?}, address: {:?}, topics: {:?}, data: {:?}",
                 ctx.header.height, log.address, log.topics.clone(), log.data.clone());
 
             events.push(Event::emit_event(
@@ -226,6 +228,31 @@ impl<C: Config> App<C> {
                     data: log.data.clone(),
                 },
             ));
+        }
+
+        let (code, message) = match reason {
+            ExitReason::Succeed(_) => (0, String::new()),
+            // code 1 indicates `Failed to execute evm function`, see above
+            ExitReason::Error(_) => (2, "EVM error".to_string()),
+            ExitReason::Revert(_) => {
+                let mut message =
+                    "VM Exception while processing transaction: revert".to_string();
+                // A minimum size of error function selector (4) + offset (32) + string length (32)
+                // should contain a utf-8 encoded revert reason.
+                if data.len() > 68 {
+                    let message_len = data[36..68].iter().sum::<u8>();
+                    let body: &[u8] = &data[68..68 + message_len as usize];
+                    if let Ok(reason) = std::str::from_utf8(body) {
+                        message = format!("{} {}", message, reason.to_string());
+                    }
+                }
+                (3, message)
+            }
+            ExitReason::Fatal(_) => (4, "EVM Fatal error".to_string()),
+        };
+
+        if code != 0 {
+            info!(target: "ethereum", "evm execute result: reason {:?} status {:?} used_gas {}", reason, status, used_gas);
         }
 
         let receipt = ethereum::Receipt {
@@ -261,9 +288,9 @@ impl<C: Config> App<C> {
         ));
 
         Ok(ActionResult {
-            code: 0,
+            code,
             data: serde_json::to_vec(&info).unwrap_or_default(),
-            log: "".to_string(),
+            log: message,
             gas_wanted: gas_limit.low_u64(),
             gas_used: used_gas.low_u64(),
             events,
