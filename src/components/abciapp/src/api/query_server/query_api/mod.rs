@@ -15,8 +15,8 @@ use {
     globutils::wallet,
     ledger::{
         data_model::{
-            b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
-            TxnIDHash, TxnSID, TxoSID, XfrAddress, BLACK_HOLE_PUBKEY,
+            b64dec, ATxoSID, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction,
+            TxOutput, TxnIDHash, TxnSID, TxoSID, XfrAddress, BLACK_HOLE_PUBKEY,
         },
         staking::{
             ops::mint_fra::MintEntry, FF_PK_EXTRA_120_0000, FRA, FRA_TOTAL_AMOUNT,
@@ -33,6 +33,7 @@ use {
         sync::Arc,
     },
     zei::{
+        anon_xfr::structs::MTLeafInfo,
         serialization::ZeiFromToBytes,
         xfr::{sig::XfrPublicKey, structs::OwnerMemo},
     },
@@ -123,11 +124,12 @@ async fn get_owned_abars(
     owner: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<ATxoSID>>> {
     let qs = data.read();
-    let read = qs.state.as_ref().unwrap().read();
+    let ledger = &qs.ledger_cloned;
+    //let read = qs.state.as_ref().unwrap().read();
     globutils::wallet::anon_public_key_from_base64(owner.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
-        .map(|pk| web::Json(read.get_owned_abars(&pk).iter().map(|a| a.0).collect()))
+        .map(|pk| web::Json(ledger.get_owned_abars(&pk).iter().map(|a| a.0).collect()))
 }
 /// Returns the merkle proof for anonymous transactions
 async fn get_abar_proof(

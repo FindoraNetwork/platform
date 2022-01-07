@@ -6,7 +6,7 @@ use {
     lazy_static::lazy_static,
     ledger::{
         data_model::{
-            AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
+            ATxoSID, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
             TxnIDHash, TxnSID, TxoSID, XfrAddress,
         },
         staking::{ops::mint_fra::MintEntry, BlockHeight},
@@ -15,7 +15,7 @@ use {
     parking_lot::{Condvar, Mutex, RwLock},
     ruc::*,
     std::{collections::HashSet, sync::Arc},
-    zei::xfr::structs::OwnerMemo,
+    zei::{anon_xfr::structs::MTLeafInfo, xfr::structs::OwnerMemo},
 };
 
 lazy_static! {
@@ -314,7 +314,7 @@ impl QueryServer {
     /// Returns the merkle proof from the given ATxoSID
     #[inline(always)]
     pub fn get_abar_proof(&self, atxo_sid: ATxoSID) -> Option<MTLeafInfo> {
-        self.ledger_cloned.get_abar_proof(atxo_sid).unwrap()
+        Some(self.ledger_cloned.get_abar_proof(atxo_sid).unwrap())
     }
 
     /// retrieve block reward rate at specified block height
