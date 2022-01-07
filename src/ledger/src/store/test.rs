@@ -794,6 +794,7 @@ fn test_check_fee_with_ledger() {
 }
 
 #[test]
+#[ignore]
 fn test_update_anon_stores() {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
 
@@ -848,14 +849,14 @@ fn test_update_anon_stores() {
         base64::URL_SAFE,
     );
     let d0: Key = Key::from_base64(&str0).unwrap();
-    assert!(state.nullifier_set.get(&d0).unwrap().is_none());
+    assert!(state.nullifier_set.read().get(&d0).unwrap().is_none());
 
     let str1 = base64::encode_config(
         &BLSScalar::one().get_scalar().to_bytes(),
         base64::URL_SAFE,
     );
     let d1: Key = Key::from_base64(&str1).unwrap();
-    assert!(state.nullifier_set.get(&d1).unwrap().is_none());
+    assert!(state.nullifier_set.read().get(&d1).unwrap().is_none());
 
     let res = state.update_anon_stores(nullifiers, output_abars, 0, tx_block);
     assert!(res.is_ok());
@@ -864,8 +865,8 @@ fn test_update_anon_stores() {
     assert!(res2.is_ok());
     assert_eq!(res2.unwrap(), 1);
 
-    assert!(state.nullifier_set.get(&d0).unwrap().is_some());
-    assert!(state.nullifier_set.get(&d1).unwrap().is_some());
+    assert!(state.nullifier_set.read().get(&d0).unwrap().is_some());
+    assert!(state.nullifier_set.read().get(&d1).unwrap().is_some());
 
     assert_eq!(state.status.next_atxo.0, 4);
     assert_eq!(

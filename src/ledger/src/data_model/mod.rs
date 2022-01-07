@@ -1778,8 +1778,6 @@ impl Transaction {
                     if x.body.code.val == ASSET_TYPE_FRA {
                         return true;
                     }
-                } else if matches!(ops, Operation::UpdateValidator(_)) {
-                    return true;
                 } else if let Operation::TransferAnonAsset(_) = ops {
                     return true;
                 } else if let Operation::BarToAbar(ref x) = ops {
@@ -1790,6 +1788,8 @@ impl Transaction {
                     {
                         return true;
                     }
+                } else if matches!(ops, Operation::UpdateValidator(_)) {
+                    return true;
                 }
                 false
             })
