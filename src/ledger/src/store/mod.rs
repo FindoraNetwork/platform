@@ -9,6 +9,8 @@ pub mod utils;
 
 pub use fbnc;
 
+use crate::data_model::U128Fraction;
+
 use {
     crate::{
         data_model::{
@@ -20,7 +22,8 @@ use {
             BLACK_HOLE_PUBKEY,
         },
         staking::{
-            Amount, BlockHeight, Power, Staking, TendermintAddrRef,
+            rate_year_to_rate_block, Amount, BlockHeight, DelegationRwdDetail,
+            DelegationState, Power, Staking, TendermintAddrRef, CHAN_D_RWD_HIST,
             FF_PK_EXTRA_120_0000, FF_PK_LIST, FRA_TOTAL_AMOUNT, KEEP_HIST,
         },
         LSSED_VAR, SNAPSHOT_ENTRIES_DIR,
@@ -530,6 +533,161 @@ impl LedgerState {
             self.get_staking_mut()
                 .set_proposer_rewards(&pk, vote_percent)
                 .c(d!())?;
+        }
+
+        Ok(())
+    }
+
+    ///Compute rewards for all delegations.
+    pub fn staking_set_block_rewards(
+        &mut self,
+        proposer_td_addr: TendermintAddrRef,
+        block_vote_percent: Option<[Power; 2]>,
+    ) -> Result<()> {
+        let gdp = self.staking_get_global_delegation_percent();
+
+        let return_rate = self.staking_get_block_rewards_rate();
+
+        let staking = self.get_staking();
+
+        let proposer = staking
+            .validator_td_addr_to_app_pk(proposer_td_addr)
+            .c(d!())?;
+
+        let rate_block = {
+            let rate_year = U128Fraction::new(return_rate[0], return_rate[1])?;
+            rate_year_to_rate_block(rate_year)?
+        };
+
+        let rate_block_proposer = {
+            match block_vote_percent {
+                Some(bvp) => {
+                    let r = Staking::get_proposer_rewards_rate(bvp).c(d!())?;
+                    rate_year_to_rate_block(U128Fraction::new(r[0], r[1])?)?
+                }
+                None => {
+                    println!("No LastCommitInfo???");
+                    debug_assert!(false);
+                    rate_block
+                }
+            }
+        };
+
+        let cur_height = staking.cur_height;
+        // Record RT_APY for this block in Historical Data
+
+        // Total balance for coinbase ( Staking rewards distribution address )???
+        let cbl = staking.coinbase_balance() as u128;
+
+        //bypass borrow checker
+        let mut commission_list = Vec::with_capacity(64);
+        let mut reward_list = Vec::with_capacity(64);
+
+        for (pk, delegation) in
+            staking.delegation_info.global_delegation_records_map.iter()
+        {
+            //Total FRA a PK(maybe a wallet address) delegate.
+            let total_delegation_amount = delegation.amount();
+
+            if delegation.end_height < cur_height
+                || delegation.state != DelegationState::Bond
+            {
+                continue;
+            }
+
+            debug_assert!(total_delegation_amount > 0);
+            let mut reward_accumulated: u64 = 0;
+            //beacuse of "commission rate", we need to deal with amount(FRA) sperately.
+            for (validator_pk, am) in delegation.delegations.iter() {
+                if let Some(validator) =
+                    staking.validator_get_current_one_by_id(validator_pk)
+                {
+                    //propser is the validator who firstly delegate the (tendermint)validator.
+                    let is_proposer = (validator_pk == &proposer) && (pk == &proposer);
+
+                    let commission_rate = if is_proposer {
+                        U128Fraction::zero()
+                    } else {
+                        validator.get_commission_rate_f()?
+                    };
+
+                    //because reward is summed, we don't now which validator generate how much reward.
+                    //compute it in proportion.
+                    let reward_old = delegation.rwd_amount.saturating_mul(*am)
+                        / total_delegation_amount;
+
+                    let balance =
+                        U128Fraction::new((*am + reward_old) as u128, 1).unwrap();
+
+                    let reward = {
+                        let rate_used = if is_proposer {
+                            rate_block_proposer
+                        } else {
+                            rate_block
+                        };
+                        let r = balance.overflowing_mul(rate_used)?.quotient().0;
+                        if r > cbl {
+                            cbl
+                        } else {
+                            r
+                        }
+                    };
+
+                    //UXXFraction * <integer> return Result<UXXFraction>
+                    let (commission, _) = (commission_rate * reward)?.quotient();
+
+                    commission_list.push((validator_pk.clone(), commission as u64));
+
+                    let reward = reward.saturating_sub(commission);
+
+                    //just for statistic
+                    if *KEEP_HIST {
+                        let detail = DelegationRwdDetail {
+                            bond: delegation.amount(),
+                            amount: reward as u64,
+                            penalty_amount: 0,
+                            return_rate: Some(return_rate),
+                            commission_rate: Some(validator.get_commission_rate()),
+                            global_delegation_percent: Some(gdp),
+                            block_height: cur_height,
+                        };
+                        CHAN_D_RWD_HIST
+                            .0
+                            .lock()
+                            .send((validator.id, cur_height, detail))
+                            .unwrap();
+                    }
+
+                    reward_accumulated =
+                        reward_accumulated.saturating_add(reward as u64);
+                } else {
+                    println!("Delegate a non-existing validator.?");
+                };
+            }
+            reward_list.push((pk.clone(), reward_accumulated));
+        }
+
+        let staking = self.get_staking_mut();
+
+        staking.record_block_rewards_rate(return_rate);
+
+        for (pk, cms) in commission_list {
+            if let Some(delegation) = staking.delegation_get_mut(&pk) {
+                delegation.rwd_amount += cms;
+            } else {
+                println!("Pay commission to non-existing validator.??");
+                debug_assert!(false);
+            }
+        }
+
+        for (pk, rwd) in reward_list {
+            if let Some(delegation) = staking.delegation_get_mut(&pk) {
+                delegation.rwd_amount += rwd;
+                delegation.delegation_rwd_cnt += 1;
+                if pk == proposer {
+                    delegation.proposer_rwd_cnt += 1;
+                }
+            }
         }
 
         Ok(())

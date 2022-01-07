@@ -1561,7 +1561,8 @@ impl Staking {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn get_proposer_rewards_rate(vote_percent: [u64; 2]) -> Result<[u128; 2]> {
+    #[allow(missing_docs)]
+    pub fn get_proposer_rewards_rate(vote_percent: [u64; 2]) -> Result<[u128; 2]> {
         let p = [vote_percent[0] as u128, vote_percent[1] as u128];
         // p[0] = Validator power which voted for this block
         // p[1] = Total Validator power including those that did not vote
@@ -1917,6 +1918,16 @@ impl Validator {
         self.commission_rate
     }
 
+    ///Check commission rate and convert it to fraction.
+    pub fn get_commission_rate_f(&self) -> Result<U128Fraction> {
+        let div = self.commission_rate[0];
+        let num = self.commission_rate[1];
+        if div > num {
+            return Err(eg!("Commission rate is large than 1."));
+        }
+        U128Fraction::new(div as _, num as _)
+    }
+
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn staking_is_basic_valid(&self) -> bool {
@@ -2164,7 +2175,7 @@ fn calculate_delegation_rewards(
         let global_reward = global_am.overflowing_mul(rate_block)?;
         let (delegator_reward, _) = global_reward
             .overflowing_mul(delegator_percentage_of_validator)?
-            .quotient()?;
+            .quotient();
 
         let reward = delegator_reward as Amount;
 
@@ -2453,7 +2464,7 @@ fn linear_interp(
 #[allow(missing_docs)]
 pub fn rate_year_to_rate_block(rate_year: U128Fraction) -> Result<U128Fraction> {
     //round up to 6 decimal places
-    let (n, _) = (rate_year * 1_000_000)?.quotient()?;
+    let (n, _) = (rate_year * 1_000_000)?.quotient();
 
     if rate_year <= APY_RATE_YEAR_TABLE[0] {
         return Ok(APY_RATE_BLOCK_TABLE[0]);
@@ -2564,7 +2575,7 @@ mod test {
                     .unwrap()
                     .overflowing_mul(rate_block)
                     .unwrap();
-                total += rw.quotient().unwrap().0
+                total += rw.quotient().0
             }
 
             let rate_year_computed = (total - amount) as f64 / amount as f64;

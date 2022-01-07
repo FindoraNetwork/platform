@@ -94,14 +94,20 @@ impl U128Fraction {
         self.0 as f64 / self.1 as f64
     }
 
-    ///Return the quotient and remainder of this fraction, Error will be returned if denominator is zero.
-    pub fn quotient(&self) -> Result<(Repr, Repr)> {
-        checked_div(self.0, self.1)
+    ///Return the quotient and remainder of this fraction.
+    pub fn quotient(&self) -> (Repr, Repr) {
+        //divde zero is impossible, because we can't construct a UXXFraction with zero denominator.
+        checked_div(self.0, self.1).unwrap()
     }
 
     ///Consume itself and return a `[Repr;2]`.
     pub fn into_raw(self) -> [Repr; 2] {
         [self.0, self.1]
+    }
+
+    ///Return ture if it is zero.
+    pub fn is_zero(&self) -> bool {
+        self.0 == 0
     }
 
     ///Calculate: a/b <op> c/d = (ad <op> bc)/(bd)
@@ -268,7 +274,7 @@ mod test {
         // 7/4 + 1 = 11/4
         assert_eq!((x + 1).unwrap(), U128Fraction::new(11, 4).unwrap());
         // 7/4 = 1, remainder = 3
-        let (q, r) = x.quotient().unwrap();
+        let (q, r) = x.quotient();
         assert_eq!(q, 1);
         assert_eq!(r, 3);
 
