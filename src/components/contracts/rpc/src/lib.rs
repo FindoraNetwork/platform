@@ -30,9 +30,9 @@ pub fn start_web3_service(
     evm_http: String,
     evm_ws: String,
     tendermint_rpc: String,
-    base_app: BaseApp,
+    app: Arc<RwLock<BaseApp>>,
 ) -> Box<dyn std::any::Any + Send> {
-    let app = Arc::new(RwLock::new(base_app));
+    let app2 = Arc::new(RwLock::new(app.read().derive_app()));
 
     // PrivateKey: 9f7bebaa5c55464b10150bc2e0fd552e915e2bdbca95cc45ed1c909aca96e7f5
     // Address: 0xf6aca39539374993b37d29ccf0d93fa214ea0af1
@@ -50,14 +50,14 @@ pub fn start_web3_service(
                 )
                 .to_delegate(),
                 eth_filter::EthFilterApiImpl::new(
-                    app.clone(),
+                    app2.clone(),
                     MAX_PAST_LOGS,
                     MAX_STORED_FILTERS,
                 )
                 .to_delegate(),
                 net::NetApiImpl::new().to_delegate(),
                 web3::Web3ApiImpl::new().to_delegate(),
-                eth_pubsub::EthPubSubApiImpl::new(app.clone()).to_delegate(),
+                eth_pubsub::EthPubSubApiImpl::new(app2.clone()).to_delegate(),
             ),
             RpcMiddleware::new(),
         )

@@ -1,5 +1,4 @@
 use crate::{error_on_execution_failure, internal_err};
-use abci::{Application, RequestCheckTx};
 use baseapp::{extensions::SignedExtra, BaseApp};
 use ethereum::{
     BlockV0 as EthereumBlock, LegacyTransactionMessage as EthereumTransactionMessage,
@@ -33,7 +32,8 @@ use sha3::{Digest, Keccak256};
 use std::collections::BTreeMap;
 use std::convert::Into;
 use std::ops::Range;
-use std::sync::Arc;
+use std::sync::{mpsc, Arc};
+use tendermint::abci::Code;
 use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::Runtime;
 
@@ -64,8 +64,11 @@ impl EthApiImpl {
         }
     }
 
-    /// Some(height) means versioned
-    /// None means latest
+    /// Some(height): versioned
+    ///
+    /// Some(0): latest
+    ///
+    /// None: pending
     pub fn block_number_to_height(
         &self,
         number: Option<BlockNumber>,
@@ -98,7 +101,7 @@ impl EthApiImpl {
                     )));
                 }
             }
-            BlockNumber::Latest => None,
+            BlockNumber::Latest => Some(0),
             BlockNumber::Earliest => Some(range.start),
             BlockNumber::Pending => None,
         };
@@ -144,11 +147,7 @@ impl EthApi for EthApiImpl {
 
         let height = self.block_number_to_height(number)?;
         let account_id = EthereumAddressMapping::convert_to_account_id(address);
-        if let Ok(sa) =
-            self.account_base_app
-                .read()
-                .account_of(&account_id, height, None)
-        {
+        if let Ok(sa) = self.account_base_app.read().account_of(&account_id, height) {
             Ok(sa.balance)
         } else {
             Ok(U256::zero())
@@ -236,17 +235,26 @@ impl EthApi for EthApiImpl {
             return Box::pin(future::err(e));
         }
 
+        // check_tx and broadcast
+        let client = self.tm_client.clone();
         let txn_with_tag = EvmRawTxWrapper::wrap(&txn.unwrap());
-        let resp = self.account_base_app.write().check_tx(&RequestCheckTx {
-            tx: txn_with_tag.clone(),
-            ..Default::default()
+        let (tx, rx) = mpsc::channel();
+        RT.spawn(async move {
+            let resp = client.broadcast_tx_sync(txn_with_tag.into()).await;
+            tx.send(resp).unwrap();
         });
-        if resp.code != 0 {
-            return Box::pin(future::err(internal_err(resp.log)));
+
+        // fetch response
+        if let Ok(resp) = rx.recv().unwrap() {
+            if resp.code != Code::Ok {
+                return Box::pin(future::err(internal_err(resp.log)));
+            }
+        } else {
+            return Box::pin(future::err(internal_err(String::from(
+                "send_transaction: broadcast_tx_sync failed",
+            ))));
         }
 
-        let client = self.tm_client.clone();
-        RT.spawn(async move { client.broadcast_tx_async(txn_with_tag.into()).await });
         Box::pin(future::ok(transaction_hash))
     }
 
@@ -283,7 +291,7 @@ impl EthApi for EthApiImpl {
         let mut ctx = self
             .account_base_app
             .read()
-            .create_query_context(0, false)
+            .create_query_context(None, false)
             .map_err(|err| {
                 internal_err(format!("create query context error: {:?}", err))
             })?;
@@ -384,7 +392,7 @@ impl EthApi for EthApiImpl {
         index: U256,
         number: Option<BlockNumber>,
     ) -> Result<H256> {
-        warn!(target: "eth_rpc", "storage_at, address:{:?}, index:{:?}, number:{:?}", address, index, number);
+        debug!(target: "eth_rpc", "storage_at, address:{:?}, index:{:?}, number:{:?}", address, index, number);
 
         let height = self.block_number_to_height(number)?;
         Ok(self
@@ -461,7 +469,7 @@ impl EthApi for EthApiImpl {
         let sa = self
             .account_base_app
             .read()
-            .account_of(&account_id, height, None)
+            .account_of(&account_id, height)
             .unwrap_or_default();
         Ok(sa.nonce)
     }
@@ -539,17 +547,26 @@ impl EthApi for EthApiImpl {
             return Box::pin(future::err(e));
         }
 
+        // check_tx and broadcast
+        let client = self.tm_client.clone();
         let txn_with_tag = EvmRawTxWrapper::wrap(&txn.unwrap());
-        let resp = self.account_base_app.write().check_tx(&RequestCheckTx {
-            tx: txn_with_tag.clone(),
-            ..Default::default()
+        let (tx, rx) = mpsc::channel();
+        RT.spawn(async move {
+            let resp = client.broadcast_tx_sync(txn_with_tag.into()).await;
+            tx.send(resp).unwrap();
         });
-        if resp.code != 0 {
-            return Box::pin(future::err(internal_err(resp.log)));
+
+        // fetch response
+        if let Ok(resp) = rx.recv().unwrap() {
+            if resp.code != Code::Ok {
+                return Box::pin(future::err(internal_err(resp.log)));
+            }
+        } else {
+            return Box::pin(future::err(internal_err(String::from(
+                "send_raw_transaction: broadcast_tx_sync failed",
+            ))));
         }
 
-        let client = self.tm_client.clone();
-        RT.spawn(async move { client.broadcast_tx_async(txn_with_tag.into()).await });
         Box::pin(future::ok(transaction_hash))
     }
 
@@ -580,7 +597,7 @@ impl EthApi for EthApiImpl {
         let mut ctx = self
             .account_base_app
             .read()
-            .create_query_context(0, false)
+            .create_query_context(None, false)
             .map_err(|err| {
                 internal_err(format!("create query context error: {:?}", err))
             })?;
@@ -776,6 +793,7 @@ impl EthApi for EthApiImpl {
                     }
                 }
 
+                let _leng = receipts.len();
                 let block_hash = H256::from_slice(
                     Keccak256::digest(&rlp::encode(&block.header)).as_slice(),
                 );
@@ -857,7 +875,7 @@ impl EthApi for EthApiImpl {
     }
 
     fn logs(&self, filter: Filter) -> Result<Vec<Log>> {
-        warn!(target: "eth_rpc", "logs, filter:{:?}", filter);
+        debug!(target: "eth_rpc", "logs, filter:{:?}", filter);
 
         let mut ret: Vec<Log> = Vec::new();
         if let Some(hash) = filter.block_hash {
