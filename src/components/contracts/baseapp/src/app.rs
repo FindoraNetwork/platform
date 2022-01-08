@@ -48,7 +48,7 @@ impl abci::Application for crate::BaseApp {
             return err_resp("Empty query path!".to_string());
         }
 
-        let ctx = self.create_query_context(req.height as u64, req.prove);
+        let ctx = self.create_query_context(Some(req.height as u64), req.prove);
         if let Err(e) = ctx {
             return err_resp(format!("Cannot create query context with err: {}!", e));
         }

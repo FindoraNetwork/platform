@@ -221,18 +221,26 @@ impl Executable for BaseApp {
 }
 
 impl BaseApp {
-    pub fn create_query_context(&self, mut height: u64, prove: bool) -> Result<Context> {
-        // when a client did not provide a query height, manually inject the latest
-        if height == 0 {
-            height = self.chain_state.read().height()?;
-        }
-        if height <= 1 && prove {
-            return Err(eg!(
-                "cannot query with proof when height <= 1; please provide a valid height"
-            ));
+    pub fn create_query_context(
+        &self,
+        height: Option<u64>,
+        prove: bool,
+    ) -> Result<Context> {
+        if let Some(h) = height {
+            if h <= 1 && prove {
+                return Err(eg!(
+                    "cannot query with proof when height <= 1; please provide a valid height"
+                ));
+            }
         }
 
-        Ok(self.check_state.copy_with_new_state())
+        // query from pending state if height is not provided
+        // query from latest state otherwise, including versioned data
+        if height.is_none() {
+            Ok(self.check_state.copy_with_state())
+        } else {
+            Ok(self.check_state.copy_with_new_state())
+        }
     }
 
     /// retrieve the context for the txBytes and other memoized values.
@@ -278,22 +286,14 @@ impl BaseApp {
 }
 
 impl BaseProvider for BaseApp {
-    fn account_of(
-        &self,
-        who: &Address,
-        height: Option<u64>,
-        ctx: Option<Context>,
-    ) -> Result<SmartAccount> {
-        let ctx = match ctx {
-            None => self.create_query_context(0, false)?,
-            Some(ctx) => ctx,
-        };
+    fn account_of(&self, who: &Address, height: Option<u64>) -> Result<SmartAccount> {
+        let ctx = self.create_query_context(height, false)?;
         module_account::App::<Self>::account_of(&ctx, who, height)
             .ok_or(eg!(format!("account does not exist: {}", who)))
     }
 
     fn current_block(&self, id: Option<BlockId>) -> Option<Block> {
-        if let Ok(ctx) = self.create_query_context(0, false) {
+        if let Ok(ctx) = self.create_query_context(Some(0), false) {
             self.modules.ethereum_module.current_block(&ctx, id)
         } else {
             None
@@ -301,7 +301,7 @@ impl BaseProvider for BaseApp {
     }
 
     fn current_block_number(&self) -> Option<U256> {
-        if let Ok(ctx) = self.create_query_context(0, false) {
+        if let Ok(ctx) = self.create_query_context(Some(0), false) {
             module_ethereum::App::<Self>::current_block_number(&ctx)
         } else {
             None
@@ -312,7 +312,7 @@ impl BaseProvider for BaseApp {
         &self,
         id: Option<BlockId>,
     ) -> Option<Vec<fp_evm::TransactionStatus>> {
-        if let Ok(ctx) = self.create_query_context(0, false) {
+        if let Ok(ctx) = self.create_query_context(Some(0), false) {
             self.modules
                 .ethereum_module
                 .current_transaction_statuses(&ctx, id)
@@ -322,7 +322,7 @@ impl BaseProvider for BaseApp {
     }
 
     fn current_receipts(&self, id: Option<BlockId>) -> Option<Vec<ethereum::Receipt>> {
-        if let Ok(ctx) = self.create_query_context(0, false) {
+        if let Ok(ctx) = self.create_query_context(Some(0), false) {
             self.modules.ethereum_module.current_receipts(&ctx, id)
         } else {
             None
@@ -330,7 +330,7 @@ impl BaseProvider for BaseApp {
     }
 
     fn block_hash(&self, id: Option<BlockId>) -> Option<H256> {
-        if let Ok(ctx) = self.create_query_context(0, false) {
+        if let Ok(ctx) = self.create_query_context(Some(0), false) {
             module_ethereum::App::<Self>::block_hash(&ctx, id)
         } else {
             None
@@ -338,7 +338,7 @@ impl BaseProvider for BaseApp {
     }
 
     fn transaction_index(&self, hash: H256) -> Option<(U256, u32)> {
-        if let Ok(ctx) = self.create_query_context(0, false) {
+        if let Ok(ctx) = self.create_query_context(Some(0), false) {
             module_ethereum::App::<Self>::transaction_index(&ctx, hash)
         } else {
             None
@@ -346,7 +346,7 @@ impl BaseProvider for BaseApp {
     }
 
     fn account_code_at(&self, address: H160, height: Option<u64>) -> Option<Vec<u8>> {
-        if let Ok(ctx) = self.create_query_context(0, false) {
+        if let Ok(ctx) = self.create_query_context(Some(0), false) {
             module_evm::App::<Self>::account_codes(&ctx, &address.into(), height)
         } else {
             None
@@ -359,7 +359,7 @@ impl BaseProvider for BaseApp {
         index: H256,
         height: Option<u64>,
     ) -> Option<H256> {
-        if let Ok(ctx) = self.create_query_context(0, false) {
+        if let Ok(ctx) = self.create_query_context(None, false) {
             module_evm::App::<Self>::account_storages(
                 &ctx,
                 &address.into(),
