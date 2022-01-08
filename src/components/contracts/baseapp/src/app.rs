@@ -77,10 +77,20 @@ impl abci::Application for crate::BaseApp {
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
             let check_fn = |mode: RunTxMode| {
                 let ctx = self.retrieve_context(mode).clone();
-                if let Err(e) = self.modules.process_tx::<SignedExtra>(ctx, tx) {
-                    info!(target: "baseapp", "Transaction check error: {}", e);
-                    resp.code = 1;
-                    resp.log = format!("Transaction check error: {}", e);
+                let result = self.modules.process_tx::<SignedExtra>(ctx, tx);
+                match result {
+                    Ok(ar) => {
+                        resp.code = ar.code;
+                        if ar.code != 0 {
+                            info!(target: "baseapp", "Transaction check error, action result {:?}", ar);
+                            resp.log = ar.log;
+                        }
+                    }
+                    Err(e) => {
+                        info!(target: "baseapp", "Transaction check error: {}", e);
+                        resp.code = 1;
+                        resp.log = format!("Transaction check error: {}", e);
+                    }
                 }
             };
             match req.get_field_type() {
@@ -143,7 +153,11 @@ impl abci::Application for crate::BaseApp {
             let ret = self.modules.process_tx::<SignedExtra>(ctx, tx);
             match ret {
                 Ok(ar) => {
-                    debug!(target: "baseapp", "deliver tx succeed result: {:?}", ar);
+                    if ar.code != 0 {
+                        info!(target: "baseapp", "deliver tx with result: {:?}", ar);
+                    } else {
+                        debug!(target: "baseapp", "deliver tx succeed with result: {:?}", ar);
+                    }
                     resp.code = ar.code;
                     resp.data = ar.data;
                     resp.log = ar.log;
