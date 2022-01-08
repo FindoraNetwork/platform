@@ -98,7 +98,10 @@ fn test_account_of() {
     //Verify after commit block 1
     assert!(ctx.state.write().commit(1).is_ok());
     assert_eq!(App::<()>::account_of(&ctx, &addr, None), Some(sa1.clone()));
-    assert_eq!(App::<()>::account_of(&ctx, &addr, Some(0)), None);
+    assert_eq!(
+        App::<()>::account_of(&ctx, &addr, Some(0)),
+        Some(sa1.clone())
+    );
     assert_eq!(
         App::<()>::account_of(&ctx, &addr, Some(1)),
         Some(sa1.clone())
@@ -117,7 +120,10 @@ fn test_account_of() {
     //Verify after commit block 2
     assert!(ctx.state.write().commit(2).is_ok());
     assert_eq!(App::<()>::account_of(&ctx, &addr, None), Some(sa2.clone()));
-    assert_eq!(App::<()>::account_of(&ctx, &addr, Some(0)), None);
+    assert_eq!(
+        App::<()>::account_of(&ctx, &addr, Some(0)),
+        Some(sa2.clone())
+    );
     assert!(App::<()>::account_of(&ctx, &addr, Some(1)) == Some(sa1.clone()));
     assert!(App::<()>::account_of(&ctx, &addr, Some(2)) == Some(sa2.clone()));
 
@@ -134,7 +140,10 @@ fn test_account_of() {
     //Verify after commit block 3
     assert!(ctx.state.write().commit(3).is_ok());
     assert_eq!(App::<()>::account_of(&ctx, &addr, None), Some(sa3.clone()));
-    assert_eq!(App::<()>::account_of(&ctx, &addr, Some(0)), None);
+    assert_eq!(
+        App::<()>::account_of(&ctx, &addr, Some(0)),
+        Some(sa3.clone())
+    );
     assert_eq!(App::<()>::account_of(&ctx, &addr, Some(1)), Some(sa1));
     assert_eq!(App::<()>::account_of(&ctx, &addr, Some(2)), Some(sa2));
     assert_eq!(App::<()>::account_of(&ctx, &addr, Some(3)), Some(sa3));
