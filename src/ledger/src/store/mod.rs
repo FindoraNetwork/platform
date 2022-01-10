@@ -10,6 +10,7 @@ pub mod utils;
 pub use fbnc;
 
 use {
+
     crate::{
         data_model::{
             AssetType, AssetTypeCode, AuthenticatedBlock, AuthenticatedTransaction,
@@ -20,8 +21,8 @@ use {
             BLACK_HOLE_PUBKEY,
         },
         staking::{
-            Amount, BlockHeight, Power, Staking, TendermintAddrRef,
-            FF_PK_EXTRA_120_0000, FF_PK_LIST, FRA_TOTAL_AMOUNT, KEEP_HIST,
+            Amount, Power, Staking, TendermintAddrRef,
+            FF_PK_EXTRA_120_0000, FF_PK_LIST, FRA_TOTAL_AMOUNT, KEEP_HIST, CHECKPOINT,
         },
         LSSED_VAR, SNAPSHOT_ENTRIES_DIR,
     },
@@ -542,13 +543,13 @@ impl LedgerState {
         let p = self.staking_get_global_delegation_percent();
         let p = [p[0] as u128, p[1] as u128];
 
-        #[cfg(feature = "debug_env")]
-        const APY_V7_UPGRADE_HEIGHT: BlockHeight = 0;
+        // #[cfg(feature = "debug_env")]
+        // const APY_V7_UPGRADE_HEIGHT: BlockHeight = 0;
+        //
+        // #[cfg(not(feature = "debug_env"))]
+        // const APY_V7_UPGRADE_HEIGHT: BlockHeight = 142_9000;
 
-        #[cfg(not(feature = "debug_env"))]
-        const APY_V7_UPGRADE_HEIGHT: BlockHeight = 142_9000;
-
-        if APY_V7_UPGRADE_HEIGHT < self.get_tendermint_height() {
+        if CHECKPOINT.apy_v7_upgrade_height < self.get_tendermint_height() {
             // This is an equal conversion of `1 / p% * 0.0536`
             let mut a0 = p[1] * 536;
             let mut a1 = p[0] * 10000;
@@ -585,15 +586,15 @@ impl LedgerState {
     /// Total amount of all freed FRAs, aka 'are not being locked'.
     #[inline(always)]
     pub fn staking_get_global_unlocked_amount(&self) -> Amount {
-        #[cfg(feature = "debug_env")]
-        const FF_ADDR_EXTRA_FIX_HEIGHT: BlockHeight = 0;
-
-        #[cfg(not(feature = "debug_env"))]
-        const FF_ADDR_EXTRA_FIX_HEIGHT: BlockHeight = 120_0000;
+        //#[cfg(feature = "debug_env")]
+        // const FF_ADDR_EXTRA_FIX_HEIGHT: BlockHeight = 0;
+        //
+        // #[cfg(not(feature = "debug_env"))]
+        // const FF_ADDR_EXTRA_FIX_HEIGHT: BlockHeight = 120_0000;
 
         let s = self.get_staking();
 
-        let extras = if FF_ADDR_EXTRA_FIX_HEIGHT < s.cur_height {
+        let extras = if CHECKPOINT.ff_addr_extra_fix_height < s.cur_height {
             vec![*BLACK_HOLE_PUBKEY, *FF_PK_EXTRA_120_0000]
         } else {
             vec![*BLACK_HOLE_PUBKEY]
@@ -621,13 +622,13 @@ impl LedgerState {
 
     #[inline(always)]
     fn staking_get_nonconfidential_balance(&self, addr: &XfrPublicKey) -> Result<u64> {
-        #[cfg(feature = "debug_env")]
-        const NONCONFIDENTIAL_BALANCE_FIX_HEIGHT: BlockHeight = 0;
+        // #[cfg(feature = "debug_env")]
+        // const NONCONFIDENTIAL_BALANCE_FIX_HEIGHT: BlockHeight = 0;
+        //
+        // #[cfg(not(feature = "debug_env"))]
+        // const NONCONFIDENTIAL_BALANCE_FIX_HEIGHT: BlockHeight = 121_0000;
 
-        #[cfg(not(feature = "debug_env"))]
-        const NONCONFIDENTIAL_BALANCE_FIX_HEIGHT: BlockHeight = 121_0000;
-
-        if NONCONFIDENTIAL_BALANCE_FIX_HEIGHT < self.get_tendermint_height() {
+        if CHECKPOINT.nonconfidential_balance_fix_height < self.get_tendermint_height() {
             self.get_nonconfidential_balance(addr).c(d!())
         } else {
             Ok(0)

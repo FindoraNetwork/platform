@@ -48,7 +48,9 @@ use {
             mpsc::{channel, Receiver, Sender},
             Arc,
         },
+        {fs::File, io::Read},
     },
+    toml,
     zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
 
@@ -64,6 +66,33 @@ type DAHCP = (Arc<Mutex<Sender<DAH>>>, Arc<Mutex<Receiver<DAH>>>);
 // pk, height, <struct DelegationRwdDetail>
 type DRH = (XfrPublicKey, BlockHeight, DelegationRwdDetail);
 type DRHCP = (Arc<Mutex<Sender<DRH>>>, Arc<Mutex<Receiver<DRH>>>);
+
+#[derive(Deserialize, Default)]
+#[allow(missing_docs)]
+pub struct CheckPointConfig {
+    pub disable_evm_block_height: i64,
+    pub enable_frc20_height: i64,
+    pub evm_first_block_height: i64,
+    pub zero_amount_fix_height: u64,
+    pub apy_fix_height: u64,
+    pub overflow_fix_height: u64,
+    pub second_fix_height: u64,
+    pub apy_v7_upgrade_height: u64,
+    pub ff_addr_extra_fix_height: u64,
+    pub nonconfidential_balance_fix_height: u64,
+}
+
+impl CheckPointConfig {
+    /// load configuration of checkpoints from file.
+    pub fn from_file() -> Result<CheckPointConfig> {
+        let mut f: File = File::open(format!("{}/.tendermint/config/checkpoint.toml",
+                                             pnk!(env::var("HOME")))).unwrap();
+        let mut content = String::new();
+        f.read_to_string(&mut content).unwrap();
+        let config: CheckPointConfig = toml::from_str(content.as_str()).unwrap();
+        Ok(config)
+    }
+}
 
 macro_rules! chan {
     () => {{
@@ -86,6 +115,9 @@ lazy_static! {
     /// Reserved accounts of Findora Foundation.
     pub static ref FF_PK_EXTRA_120_0000: XfrPublicKey =
         pnk!(wallet::public_key_from_bech32(FF_ADDR_EXTRA_120_0000));
+
+    /// load checkpoint configuration
+    pub static ref CHECKPOINT: CheckPointConfig = CheckPointConfig::from_file().unwrap();
 
     #[allow(missing_docs)]
     pub static ref CHAN_GLOB_RATE_HIST: GRHCP = chan!();
@@ -1995,11 +2027,11 @@ impl Delegation {
         is_delegation_rwd: bool,
         coinbase_bl: Amount,
     ) -> Result<u64> {
-        #[cfg(feature = "debug_env")]
-        const ZERO_AMOUNT_FIX_HEIGHT: BlockHeight = 0;
-
-        #[cfg(not(feature = "debug_env"))]
-        const ZERO_AMOUNT_FIX_HEIGHT: BlockHeight = 120_0000;
+        // #[cfg(feature = "debug_env")]
+        // const ZERO_AMOUNT_FIX_HEIGHT: BlockHeight = 0;
+        //
+        // #[cfg(not(feature = "debug_env"))]
+        // const ZERO_AMOUNT_FIX_HEIGHT: BlockHeight = 120_0000;
 
         if self.end_height < cur_height || DelegationState::Bond != self.state {
             return Ok(0);
@@ -2019,7 +2051,7 @@ impl Delegation {
             .c(d!())
             .and_then(|mut am| {
                 if 0 == am {
-                    if ZERO_AMOUNT_FIX_HEIGHT < cur_height {
+                    if CHECKPOINT.zero_amount_fix_height < cur_height {
                         return Ok(0);
                     } else {
                         return Err(eg!("set rewards on zero amount"));
@@ -2079,32 +2111,32 @@ fn calculate_delegation_rewards(
     is_delegation_rwd: bool,
     cur_height: BlockHeight,
 ) -> Result<Amount> {
-    #[cfg(feature = "debug_env")]
-    const APY_FIX_HEIGHT: BlockHeight = 0;
+    // #[cfg(feature = "debug_env")]
+    // const APY_FIX_HEIGHT: BlockHeight = 0;
 
-    #[cfg(feature = "debug_env")]
-    const OVERFLOW_FIX_HEIGHT: BlockHeight = 0;
+    // #[cfg(feature = "debug_env")]
+    // const OVERFLOW_FIX_HEIGHT: BlockHeight = 0;
 
-    #[cfg(feature = "debug_env")]
-    const SECOND_FIX_HEIGHT: BlockHeight = 0;
+    // #[cfg(feature = "debug_env")]
+    // const SECOND_FIX_HEIGHT: BlockHeight = 0;
 
-    #[cfg(not(feature = "debug_env"))]
-    const APY_FIX_HEIGHT: BlockHeight = 117_7000;
+    // #[cfg(not(feature = "debug_env"))]
+    // const APY_FIX_HEIGHT: BlockHeight = 117_7000;
 
     // logic apply at about 2021-11-11 14:30
-    #[cfg(not(feature = "debug_env"))]
-    const OVERFLOW_FIX_HEIGHT: BlockHeight = 124_7000;
+    // #[cfg(not(feature = "debug_env"))]
+    // const OVERFLOW_FIX_HEIGHT: BlockHeight = 124_7000;
 
-    #[cfg(not(feature = "debug_env"))]
-    const SECOND_FIX_HEIGHT: BlockHeight = 142_9000;
+    // #[cfg(not(feature = "debug_env"))]
+    // const SECOND_FIX_HEIGHT: BlockHeight = 142_9000;
 
-    if OVERFLOW_FIX_HEIGHT < cur_height {
+    if CHECKPOINT.overflow_fix_height < cur_height {
         let am = BigUint::from(amount);
         let total_am = BigUint::from(total_amount);
         let global_am = BigUint::from(global_amount);
         let block_itv = BLOCK_INTERVAL as u128;
 
-        let second_per_year: u128 = if SECOND_FIX_HEIGHT < cur_height {
+        let second_per_year: u128 = if CHECKPOINT.second_fix_height < cur_height {
             365 * 24 * 3600
         } else {
             356 * 24 * 3600
@@ -2117,7 +2149,7 @@ fn calculate_delegation_rewards(
             a1 / a2
         };
 
-        let n = if APY_FIX_HEIGHT < cur_height {
+        let n = if CHECKPOINT.apy_fix_height < cur_height {
             if is_delegation_rwd {
                 // global_amount * am * return_rate[0] * block_itv / (return_rate[1] * (365 * 24 * 3600) * total_amount)
                 let a1 = global_am * am * return_rate[0] * block_itv;
@@ -2149,7 +2181,7 @@ fn calculate_delegation_rewards(
                 })
         };
 
-        if APY_FIX_HEIGHT < cur_height {
+        if CHECKPOINT.apy_fix_height < cur_height {
             if is_delegation_rwd {
                 // # For delegation rewards:
                 //

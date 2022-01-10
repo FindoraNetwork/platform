@@ -25,7 +25,7 @@ use {
     lazy_static::lazy_static,
     ledger::{
         converter::is_convert_account,
-        staking::KEEP_HIST,
+        staking::{KEEP_HIST, CHECKPOINT},
         store::{
             api_cache,
             fbnc::{new_mapx, Mapx},
@@ -55,17 +55,17 @@ lazy_static! {
         Arc::new(RwLock::new(new_mapx!("tx_history")));
 }
 
-#[cfg(feature = "debug_env")]
-pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 1;
-
-#[cfg(not(feature = "debug_env"))]
-pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 148_3286;
-
-#[cfg(feature = "debug_env")]
-pub const ENABLE_FRC20_HEIGHT: i64 = 1;
-
-#[cfg(not(feature = "debug_env"))]
-pub const ENABLE_FRC20_HEIGHT: i64 = 150_1000;
+// #[cfg(feature = "debug_env")]
+// pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 1;
+//
+// #[cfg(not(feature = "debug_env"))]
+// pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 148_3286;
+//
+// #[cfg(feature = "debug_env")]
+// pub const ENABLE_FRC20_HEIGHT: i64 = 1;
+//
+// #[cfg(not(feature = "debug_env"))]
+// pub const ENABLE_FRC20_HEIGHT: i64 = 150_1000;
 
 pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let mut resp = ResponseInfo::new();
@@ -80,7 +80,8 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
     resp.set_last_block_height(h);
     if 0 < h {
-        if DISBALE_EVM_BLOCK_HEIGHT < h && h < ENABLE_FRC20_HEIGHT {
+        if CHECKPOINT.disable_evm_block_height < h && h < CHECKPOINT.enable_frc20_height
+        {
             resp.set_last_block_app_hash(la_hash);
         } else {
             let cs_hash = s.account_base_app.write().info(req).last_block_app_hash;
@@ -140,7 +141,9 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
             resp
         }
         TxCatalog::EvmTx => {
-            if DISBALE_EVM_BLOCK_HEIGHT < td_height && td_height < ENABLE_FRC20_HEIGHT {
+            if CHECKPOINT.disable_evm_block_height < td_height
+                && td_height < CHECKPOINT.enable_frc20_height
+            {
                 resp.code = 2;
                 resp.log = "EVM is disabled".to_owned();
                 resp
@@ -202,7 +205,9 @@ pub fn begin_block(
         pnk!(la.update_staking_simulator());
     }
 
-    if DISBALE_EVM_BLOCK_HEIGHT < header.height && header.height < ENABLE_FRC20_HEIGHT {
+    if CHECKPOINT.disable_evm_block_height < header.height
+        && header.height < CHECKPOINT.enable_frc20_height
+    {
         ResponseBeginBlock::default()
     } else {
         s.account_base_app.write().begin_block(req)
@@ -244,8 +249,8 @@ pub fn deliver_tx(
                         }
                     }
 
-                    if DISBALE_EVM_BLOCK_HEIGHT < td_height
-                        && td_height < ENABLE_FRC20_HEIGHT
+                    if CHECKPOINT.disable_evm_block_height < td_height
+                        && td_height < CHECKPOINT.enable_frc20_height
                     {
                         if is_convert_account(&tx) {
                             resp.code = 2;
@@ -311,7 +316,9 @@ pub fn deliver_tx(
             resp
         }
         TxCatalog::EvmTx => {
-            if DISBALE_EVM_BLOCK_HEIGHT < td_height && td_height < ENABLE_FRC20_HEIGHT {
+            if CHECKPOINT.disable_evm_block_height < td_height
+                && td_height < CHECKPOINT.enable_frc20_height
+            {
                 resp.code = 2;
                 resp.log = "EVM is disabled".to_owned();
                 resp
@@ -379,7 +386,9 @@ pub fn end_block(
         &begin_block_req.byzantine_validators.as_slice(),
     );
 
-    if td_height <= DISBALE_EVM_BLOCK_HEIGHT || td_height >= ENABLE_FRC20_HEIGHT {
+    if td_height <= CHECKPOINT.disable_evm_block_height
+        || td_height >= CHECKPOINT.enable_frc20_height
+    {
         let _ = s.account_base_app.write().end_block(req);
     }
 
@@ -407,7 +416,9 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     let la_hash = state.get_state_commitment().0.as_ref().to_vec();
     let cs_hash = s.account_base_app.write().commit(req).data;
 
-    if DISBALE_EVM_BLOCK_HEIGHT < td_height && td_height < ENABLE_FRC20_HEIGHT {
+    if CHECKPOINT.disable_evm_block_height < td_height
+        && td_height < CHECKPOINT.enable_frc20_height
+    {
         r.set_data(la_hash);
     } else {
         r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
