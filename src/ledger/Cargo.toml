@@ -29,10 +29,10 @@ fp-types = { path = "../components/contracts/primitives/types" }
 itertools = "0.8"
 
 ruc = "0.6.6"
-zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
-crypto = { package = "crypto", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
-zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
-zeialgebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4f" }
+crypto = { package = "crypto", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4f" }
+zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4f" }
+zeialgebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4f" }
 bulletproofs = { package = "bulletproofs", git = "https://github.com/FindoraNetwork/bp", branch = "batch_verification", features = ["yoloproofs"] }
 fbnc = { version = "0.2.9", default-features = false}
 
@@ -64,7 +64,7 @@ sodiumoxide = "0.2.1"
 fs2 = "0.4"
 storage = { git = "https://github.com/FindoraNetwork/storage.git", branch = "develop" }
 sparse_merkle_tree = { path = "../libs/sparse_merkle_tree" }
-zei_accumulators = { package = "accumulators", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zei_accumulators = { package = "accumulators", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4f" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 parking_lot = { version = "0.11.1", features = ["wasm-bindgen"] }

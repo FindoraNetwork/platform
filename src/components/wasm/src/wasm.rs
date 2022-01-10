@@ -22,7 +22,7 @@ use {
         CredentialPoK, CredentialRevealSig, CredentialSignature, CredentialUserKeyPair,
         MTLeafInfo, OwnerMemo, PublicParams, TracingPolicies, TxoRef,
     },
-    algebra::jubjub::JubjubScalar,
+    zeialgebra::jubjub::JubjubScalar,
     core::str::FromStr,
     credentials::{
         credential_commit, credential_issuer_key_gen, credential_open_commitment,
