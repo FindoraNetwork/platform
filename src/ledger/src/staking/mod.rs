@@ -49,7 +49,9 @@ use {
             mpsc::{channel, Receiver, Sender},
             Arc,
         },
+        {fs::File, io::Read},
     },
+    toml,
     zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
 
@@ -65,6 +67,33 @@ type DAHCP = (Arc<Mutex<Sender<DAH>>>, Arc<Mutex<Receiver<DAH>>>);
 // pk, height, <struct DelegationRwdDetail>
 type DRH = (XfrPublicKey, BlockHeight, DelegationRwdDetail);
 type DRHCP = (Arc<Mutex<Sender<DRH>>>, Arc<Mutex<Receiver<DRH>>>);
+
+#[derive(Deserialize, Default)]
+#[allow(missing_docs)]
+pub struct CheckPointConfig {
+    pub disable_evm_block_height: i64,
+    pub enable_frc20_height: i64,
+    pub evm_first_block_height: i64,
+    pub zero_amount_fix_height: u64,
+    pub apy_fix_height: u64,
+    pub overflow_fix_height: u64,
+    pub second_fix_height: u64,
+    pub apy_v7_upgrade_height: u64,
+    pub ff_addr_extra_fix_height: u64,
+    pub nonconfidential_balance_fix_height: u64,
+}
+
+impl CheckPointConfig {
+    /// load configuration of checkpoints from file.
+    pub fn from_file() -> Result<CheckPointConfig> {
+        let mut f: File = File::open(format!("{}/.tendermint/config/checkpoint.toml",
+                                             pnk!(env::var("HOME")))).unwrap();
+        let mut content = String::new();
+        f.read_to_string(&mut content).unwrap();
+        let config: CheckPointConfig = toml::from_str(content.as_str()).unwrap();
+        Ok(config)
+    }
+}
 
 macro_rules! chan {
     () => {{
