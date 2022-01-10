@@ -12,6 +12,7 @@
 #![deny(missing_docs)]
 #![allow(clippy::upper_case_acronyms)]
 
+use std::io::Write;
 #[cfg(not(target_arch = "wasm32"))]
 use {num_bigint::BigUint, std::convert::TryFrom};
 
@@ -48,7 +49,7 @@ use {
             mpsc::{channel, Receiver, Sender},
             Arc,
         },
-        {fs::File, io::Read},
+        {fs::File, io::{Read, ErrorKind}},
     },
     toml,
     zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
@@ -67,7 +68,7 @@ type DAHCP = (Arc<Mutex<Sender<DAH>>>, Arc<Mutex<Receiver<DAH>>>);
 type DRH = (XfrPublicKey, BlockHeight, DelegationRwdDetail);
 type DRHCP = (Arc<Mutex<Sender<DRH>>>, Arc<Mutex<Receiver<DRH>>>);
 
-#[derive(Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default)]
 #[allow(missing_docs)]
 pub struct CheckPointConfig {
     pub disable_evm_block_height: i64,
@@ -85,8 +86,33 @@ pub struct CheckPointConfig {
 impl CheckPointConfig {
     /// load configuration of checkpoints from file.
     pub fn from_file() -> Result<CheckPointConfig> {
-        let mut f: File = File::open(format!("{}/.tendermint/config/checkpoint.toml",
-                                             pnk!(env::var("HOME")))).unwrap();
+        let file_path = format!("{}/.tendermint/config/checkpoint.toml", pnk!(env::var("HOME")));
+        let mut f = match File::open(&file_path) {
+            Ok(file) => file,
+            Err(error) => {
+                if error.kind() == ErrorKind::NotFound {
+                    let mut file = File::create(&file_path).unwrap();
+                    let cfg = CheckPointConfig{
+                        disable_evm_block_height: 1483286,
+                        enable_frc20_height: 1501000,
+                        evm_first_block_height: 0,
+                        zero_amount_fix_height: 1200000,
+                        apy_fix_height: 1177000,
+                        overflow_fix_height: 1247000,
+                        second_fix_height: 1429000,
+                        apy_v7_upgrade_height: 1429000,
+                        ff_addr_extra_fix_height: 1200000,
+                        nonconfidential_balance_fix_height: 1210000,
+                    };
+                    let content = toml::to_string(&cfg).unwrap();
+                    file.write_all(content.as_bytes()).unwrap();
+                    return Ok(cfg)
+                } else {
+                    panic!("failed to create checkpoint.toml: {:?}", error)
+                }
+            }
+        };
+
         let mut content = String::new();
         f.read_to_string(&mut content).unwrap();
         let config: CheckPointConfig = toml::from_str(content.as_str()).unwrap();
