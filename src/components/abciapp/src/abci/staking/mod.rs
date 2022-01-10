@@ -243,16 +243,16 @@ fn set_rewards(
     proposer: &[u8],
     last_vote_percent: Option<[u64; 2]>,
 ) -> Result<()> {
-    #[cfg(debug_env)]
+    #[cfg(feature = "debug_env")]
     const NEW_REWARD_HEIGHT: u64 = 0;
 
-    #[cfg(not(debug_env))]
+    #[cfg(not(feature = "debug_env"))]
     const NEW_REWARD_HEIGHT: u64 = 200_0000;
 
     let proposer = td_addr_to_string(proposer);
 
     if la.get_staking().cur_height() >= NEW_REWARD_HEIGHT {
-        return la.staking_set_block_rewards(&proposer, last_vote_percent);
+        return la.staking_set_block_rewards(&proposer);
     }
     la.staking_set_last_block_rewards(&proposer, last_vote_percent)
         .c(d!())

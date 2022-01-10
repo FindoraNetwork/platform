@@ -77,6 +77,14 @@ impl U128Fraction {
         U128Fraction(1, 1)
     }
 
+    ///Give out reciprocal, eg: a/b => b/a
+    pub fn reciprocal(&self) -> Result<Self> {
+        if self.0 == 0 {
+            return Err(eg!("Numerator can not be zero!"));
+        }
+        Ok(U128Fraction(self.1, self.0))
+    }
+
     ///Construct a fraction by a numerator and denominator, **Error** would be returned if denominator is zero.
     pub fn new(n: Repr, d: Repr) -> Result<Self> {
         if d == 0 {
@@ -84,6 +92,9 @@ impl U128Fraction {
         }
         if n == 0 {
             return Ok(U128Fraction::zero());
+        }
+        if n == 1 || d == 1 {
+            return Ok(U128Fraction(n, d));
         }
         let g = gcd(n, d);
         Ok(U128Fraction(n / g, d / g))
@@ -113,7 +124,7 @@ impl U128Fraction {
     ///Calculate: a/b <op> c/d = (ad <op> bc)/(bd)
     fn overflowing_op(
         self,
-        rhs: Self,
+        rhs: &Self,
         op: impl Fn(Repr, Repr) -> Result<Repr>,
     ) -> Result<Self> {
         if self.1 == rhs.1 {
@@ -129,20 +140,20 @@ impl U128Fraction {
     }
 
     ///Overflowing addition with an U64Frac. Computes `self + rhs`, Error will be returned if overflowing.
-    pub fn overflowing_add(self, rhs: Self) -> Result<Self> {
+    pub fn overflowing_add(self, rhs: &Self) -> Result<Self> {
         self.overflowing_op(rhs, overflowing_add)
     }
 
     ///Overflowing substraction with an U64Frac. Computes `self - rhs`, Error will be returned if overflowing.
-    pub fn overflowing_sub(self, rhs: Self) -> Result<Self> {
-        if self == rhs {
+    pub fn overflowing_sub(self, rhs: &Self) -> Result<Self> {
+        if self == *rhs {
             return Ok(U128Fraction::zero());
         }
-        self.overflowing_op(rhs, overflowing_sub)
+        self.overflowing_op(&rhs, overflowing_sub)
     }
 
     ///Overflowing multiplication with an U64Frac. Computes `self * rhs`, Error will be returned if overflowing.
-    pub fn overflowing_mul(self, rhs: Self) -> Result<Self> {
+    pub fn overflowing_mul(self, rhs: &Self) -> Result<Self> {
         if self.0 == 0 || rhs.0 == 0 {
             return Ok(U128Fraction::zero());
         }
@@ -152,7 +163,7 @@ impl U128Fraction {
     }
 
     ///Overflowing division with an U64Frac. Computes `self * rhs`, Error will be returned if overflowing or divding zero.
-    pub fn overflowing_div(self, rhs: Self) -> Result<Self> {
+    pub fn overflowing_div(self, rhs: &Self) -> Result<Self> {
         if rhs.0 == 0 {
             return Err(eg!("Dividing by zero!"));
         }
@@ -239,17 +250,18 @@ impl From<Repr> for U128Fraction {
 
 #[cfg(test)]
 mod test {
+
     use super::*;
     #[test]
     fn test_calculation() {
         //get 1/2
         let half = U128Fraction::new(125, 250).unwrap();
-        assert_eq!(half.overflowing_sub(half).unwrap(), U128Fraction::zero());
+        assert_eq!(half.overflowing_sub(&half).unwrap(), U128Fraction::zero());
         // 1/4 = 1/2 * 1/2
-        let quarter = half.overflowing_mul(half).unwrap();
+        let quarter = half.overflowing_mul(&half).unwrap();
         println!("{}", quarter);
         // 1/4 = 1/2 - 1/4
-        assert_eq!(quarter, half.overflowing_sub(quarter).unwrap());
+        assert_eq!(quarter, half.overflowing_sub(&quarter).unwrap());
         assert!((quarter.estimate_f64() - 0.25_f64).abs() < f64::EPSILON);
         // 1/4 < 1/2
         assert!(quarter < half);
@@ -260,7 +272,8 @@ mod test {
         assert!(half < x);
 
         assert_eq!(
-            x.overflowing_div(U128Fraction::new(7, 1).unwrap()).unwrap(),
+            x.overflowing_div(&U128Fraction::new(7, 1).unwrap())
+                .unwrap(),
             quarter,
         );
 
@@ -268,11 +281,14 @@ mod test {
         assert_eq!(
             x,
             quarter
-                .overflowing_add(U128Fraction::new(3, 2).unwrap())
+                .overflowing_add(&U128Fraction::new(3, 2).unwrap())
                 .unwrap()
         );
         // 7/4 + 1 = 11/4
         assert_eq!((x + 1).unwrap(), U128Fraction::new(11, 4).unwrap());
+
+        assert_eq!(x.reciprocal().unwrap(), U128Fraction::new(4, 7).unwrap());
+
         // 7/4 = 1, remainder = 3
         let (q, r) = x.quotient();
         assert_eq!(q, 1);
@@ -280,8 +296,8 @@ mod test {
 
         let max_v = U128Fraction::new(u128::MAX, 1).unwrap();
 
-        assert!(max_v.overflowing_mul(max_v).is_err());
-        assert!(max_v.overflowing_add(max_v).is_err());
+        assert!(max_v.overflowing_mul(&max_v).is_err());
+        assert!(max_v.overflowing_add(&max_v).is_err());
         assert!((max_v * 2).is_err());
         assert!((max_v + 10).is_err());
 

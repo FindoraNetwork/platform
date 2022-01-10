@@ -2172,9 +2172,9 @@ fn calculate_delegation_rewards(
         let rate_year = U128Fraction::new(return_rate[0], return_rate[1])?;
         let rate_block = rate_year_to_rate_block(rate_year)?;
 
-        let global_reward = global_am.overflowing_mul(rate_block)?;
+        let global_reward = global_am.overflowing_mul(&rate_block)?;
         let (delegator_reward, _) = global_reward
-            .overflowing_mul(delegator_percentage_of_validator)?
+            .overflowing_mul(&delegator_percentage_of_validator)?
             .quotient();
 
         let reward = delegator_reward as Amount;
@@ -2452,13 +2452,13 @@ fn linear_interp(
     y2: U128Fraction,
     x: U128Fraction,
 ) -> Result<U128Fraction> {
-    let r = (x.overflowing_sub(x1)?).overflowing_div(x2.overflowing_sub(x1)?)?;
+    let r = (x.overflowing_sub(&x1)?).overflowing_div(&x2.overflowing_sub(&x1)?)?;
     let one = U128Fraction::one();
 
-    let a = one.overflowing_sub(r)?.overflowing_mul(y1)?;
-    let b = r.overflowing_mul(y2)?;
+    let a = one.overflowing_sub(&r)?.overflowing_mul(&y1)?;
+    let b = r.overflowing_mul(&y2)?;
 
-    a.overflowing_add(b)
+    a.overflowing_add(&b)
 }
 
 #[allow(missing_docs)]
@@ -2573,7 +2573,7 @@ mod test {
             for _ in 0..block_year {
                 let rw = U128Fraction::new(total, 1)
                     .unwrap()
-                    .overflowing_mul(rate_block)
+                    .overflowing_mul(&rate_block)
                     .unwrap();
                 total += rw.quotient().0
             }
