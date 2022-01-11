@@ -12,8 +12,8 @@ use {
     globutils::HashOf,
     ledger::{
         data_model::{
-            AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData, TxnSID,
-            TxoSID, UnAuthenticatedUtxo, Utxo,
+            ATxoSID, AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData,
+            TxnSID, TxoSID, UnAuthenticatedUtxo, Utxo,
         },
         staking::{
             DelegationRwdDetail, DelegationState, Staking, TendermintAddr,
@@ -24,6 +24,7 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{collections::BTreeMap, mem, sync::Arc},
+    zei::anon_xfr::structs::AnonBlindAssetRecord,
     zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
 };
 
@@ -738,6 +739,7 @@ impl NetworkRoute for ApiRoutes {
             ApiRoutes::DelegationInfo => "delegation_info",
             ApiRoutes::DelegatorList => "delegator_list",
             ApiRoutes::ValidatorDetail => "validator_detail",
+            ApiRoutes::OwnedAbars => "owned_abars",
         };
         "/".to_owned() + endpoint
     }

@@ -22,9 +22,9 @@ parking_lot = "0.11.1"
 curve25519-dalek = { version = "3.0", features = ["serde"] }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"] }
 
-zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
-crypto = { package = "crypto", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
-zeialgebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4f" }
+crypto = { package = "crypto", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4f" }
+zeialgebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4f" }
 ruc = "0.6.6"
 
 ledger = { path = "../../ledger" }
