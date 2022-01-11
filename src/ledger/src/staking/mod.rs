@@ -105,7 +105,7 @@ impl CheckPointConfig {
                                 ff_addr_extra_fix_height: 1200000,
                                 nonconfidential_balance_fix_height: 1210000,
                             };
-                            let content = toml::to_string(&cfg).unwrap();
+                            let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
                             return Ok(config)
                         }
