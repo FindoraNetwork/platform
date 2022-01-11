@@ -91,24 +91,30 @@ impl CheckPointConfig {
             Ok(file) => file,
             Err(error) => {
                 if error.kind() == ErrorKind::NotFound {
-                    let mut file = File::create(&file_path).unwrap();
-                    let cfg = CheckPointConfig{
-                        disable_evm_block_height: 1483286,
-                        enable_frc20_height: 1501000,
-                        evm_first_block_height: 0,
-                        zero_amount_fix_height: 1200000,
-                        apy_fix_height: 1177000,
-                        overflow_fix_height: 1247000,
-                        second_fix_height: 1429000,
-                        apy_v7_upgrade_height: 1429000,
-                        ff_addr_extra_fix_height: 1200000,
-                        nonconfidential_balance_fix_height: 1210000,
+                    match File::create(&file_path) {
+                        Ok(mut file) => {
+                            let config = CheckPointConfig{
+                                disable_evm_block_height: 1483286,
+                                enable_frc20_height: 1501000,
+                                evm_first_block_height: 0,
+                                zero_amount_fix_height: 1200000,
+                                apy_fix_height: 1177000,
+                                overflow_fix_height: 1247000,
+                                second_fix_height: 1429000,
+                                apy_v7_upgrade_height: 1429000,
+                                ff_addr_extra_fix_height: 1200000,
+                                nonconfidential_balance_fix_height: 1210000,
+                            };
+                            let content = toml::to_string(&cfg).unwrap();
+                            file.write_all(content.as_bytes()).unwrap();
+                            return Ok(config)
+                        }
+                        Err(error) => {
+                            panic!("failed to create file: {:?}", error)
+                        }
                     };
-                    let content = toml::to_string(&cfg).unwrap();
-                    file.write_all(content.as_bytes()).unwrap();
-                    return Ok(cfg)
                 } else {
-                    panic!("failed to create checkpoint.toml: {:?}", error)
+                    panic!("failed to open file: {:?}", error)
                 }
             }
         };
