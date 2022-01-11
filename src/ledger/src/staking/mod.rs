@@ -86,7 +86,7 @@ pub struct CheckPointConfig {
 impl CheckPointConfig {
     /// load configuration of checkpoints from file.
     pub fn from_file() -> Result<CheckPointConfig> {
-        let file_path = format!("checkpoint.toml");
+        let file_path = "checkpoint.toml".to_string();
         let mut f = match File::open(&file_path) {
             Ok(file) => file,
             Err(error) => {
