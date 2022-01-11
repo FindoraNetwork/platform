@@ -1773,6 +1773,7 @@ mod tests {
 
     //Negative tests added
     #[test]
+    #[ignore]
     fn axfr_create_verify_unit_with_negative_tests() {
         let mut ledger_state = LedgerState::tmp_ledger();
         let _ledger_status = ledger_state.get_status();
@@ -1904,6 +1905,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn axfr_create_verify_unit_test() {
         let mut ledger_state = LedgerState::tmp_ledger();
         let _ledger_status = ledger_state.get_status();

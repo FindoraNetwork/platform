@@ -556,7 +556,7 @@ impl LedgerState {
     fn init_abar_state(path: &str) -> Result<State<RocksDB>> {
         let fdb = RocksDB::open(path).c(d!("failed to open db"))?;
         let cs = Arc::new(RwLock::new(ChainState::new(fdb, "abar_db".to_string(), 0)));
-        Ok(State::new(cs.clone(), false))
+        Ok(State::new(cs, false))
     }
 
     // Initialize persistent Sparse Merkle tree for the Nullifier set
@@ -590,8 +590,7 @@ impl LedgerState {
         let blocks_path = prefix.clone() + "blocks";
         let tx_to_block_location_path = prefix.clone() + "tx_to_block_location";
 
-        let mut abar_state =
-            LedgerState::init_abar_state(&abar_store_path).c(d!())?;
+        let mut abar_state = LedgerState::init_abar_state(&abar_store_path).c(d!())?;
 
         // Initializing Merkle tree to set Empty tree root hash, which is a hash of null children
         let store = PrefixedStore::new("abar_store", &mut abar_state);

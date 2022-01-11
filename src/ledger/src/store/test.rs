@@ -794,7 +794,6 @@ fn test_check_fee_with_ledger() {
 }
 
 #[test]
-#[ignore]
 fn test_update_anon_stores() {
     let mut prng = ChaChaRng::from_seed([0u8; 32]);
 

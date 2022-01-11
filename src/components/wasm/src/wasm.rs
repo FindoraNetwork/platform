@@ -22,7 +22,6 @@ use {
         CredentialPoK, CredentialRevealSig, CredentialSignature, CredentialUserKeyPair,
         MTLeafInfo, OwnerMemo, PublicParams, TracingPolicies, TxoRef,
     },
-    zeialgebra::jubjub::JubjubScalar,
     core::str::FromStr,
     credentials::{
         credential_commit, credential_issuer_key_gen, credential_open_commitment,
@@ -76,6 +75,7 @@ use {
             },
         },
     },
+    zeialgebra::jubjub::JubjubScalar,
 };
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
