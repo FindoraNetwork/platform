@@ -10,6 +10,7 @@
 pub mod data_model;
 pub mod converter;
 pub mod staking;
+pub mod config;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod store;
 
