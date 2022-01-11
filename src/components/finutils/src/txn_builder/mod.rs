@@ -1206,11 +1206,16 @@ pub struct AnonTransferOperationBuilder {
     diversified_keypairs: Vec<AXfrKeyPair>,
     randomizers: Vec<JubjubScalar>,
     note: Option<AXfrNote>,
+
+    nonce: NoReplayToken,
 }
 
 impl AnonTransferOperationBuilder {
     /// default returns a fresh default builder
-    pub fn default() -> Self {
+    pub fn new_from_seq_id(seq_id: u64) -> Self {
+        let mut prng = ChaChaRng::from_entropy();
+        let no_replay_token = NoReplayToken::new(&mut prng, seq_id);
+
         AnonTransferOperationBuilder {
             inputs: Vec::default(),
             outputs: Vec::default(),
@@ -1219,6 +1224,7 @@ impl AnonTransferOperationBuilder {
             diversified_keypairs: Vec::default(),
             randomizers: Vec::default(),
             note: None,
+            nonce: no_replay_token,
         }
     }
 
@@ -1288,13 +1294,13 @@ impl AnonTransferOperationBuilder {
     }
 
     /// transaction method wraps the anon transfer note in an Operation and returns it
-    pub fn transaction(&self, nonce: NoReplayToken) -> Result<Operation> {
+    pub fn transaction(&self) -> Result<Operation> {
         if self.note.is_none() {
             return Err(eg!("Anon transfer not built and signed"));
         }
 
         Ok(Operation::TransferAnonAsset(Box::from(
-            AnonTransferOps::new(self.note.as_ref().unwrap().clone(), nonce).unwrap(),
+            AnonTransferOps::new(self.note.as_ref().unwrap().clone(), self.nonce).unwrap(),
         )))
     }
 }
