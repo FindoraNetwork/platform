@@ -46,7 +46,7 @@ impl CheckPointConfig {
                             return Some(config)
                         }
                         Err(error) => {
-                            panic!("failed to create file: {:?}, file_path: {:?}", error, file_path)
+                            panic!("failed to create file: {:?}", error)
                         }
                     };
                 } else {
