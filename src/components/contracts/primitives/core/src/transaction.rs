@@ -161,6 +161,7 @@ where
                     ctx.db.write().commit_session();
                 } else {
                     ctx.state.write().discard_session();
+                    ctx.db.write().commit_session();
                 }
                 Ok(res)
             }
