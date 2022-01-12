@@ -584,7 +584,8 @@ mod config {
             tendermint_config: tcfg,
             tendermint_home: tdir,
             init_mode,
-            enable_snapshot: m.is_present("enable-snapshot"),
+            enable_snapshot: m.is_present("enable-snapshot")
+                || env::var("ENABLE_BTM_SNAPSHOT").is_ok(),
             snapshot_list: m.is_present("snapshot-list"),
             snapshot_target: m.value_of("snapshot-target").map(|v| v.to_owned()),
             snapshot_itv: m.value_of("snapshot-itv").map(|v| v.to_owned()),
