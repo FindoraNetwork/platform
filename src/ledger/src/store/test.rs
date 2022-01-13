@@ -843,17 +843,11 @@ fn test_update_anon_stores() {
         },
     ];
 
-    let str0 = base64::encode_config(
-        &BLSScalar::zero().get_scalar().to_bytes(),
-        base64::URL_SAFE,
-    );
+    let str0 = base64::encode_config(&BLSScalar::zero().to_bytes(), base64::URL_SAFE);
     let d0: Key = Key::from_base64(&str0).unwrap();
     assert!(state.nullifier_set.read().get(&d0).unwrap().is_none());
 
-    let str1 = base64::encode_config(
-        &BLSScalar::one().get_scalar().to_bytes(),
-        base64::URL_SAFE,
-    );
+    let str1 = base64::encode_config(&BLSScalar::one().to_bytes(), base64::URL_SAFE);
     let d1: Key = Key::from_base64(&str1).unwrap();
     assert!(state.nullifier_set.read().get(&d1).unwrap().is_none());
 
