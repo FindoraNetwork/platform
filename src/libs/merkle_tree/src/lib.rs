@@ -2974,7 +2974,8 @@ mod tests {
         //
         match tree.generate_proof(0, tree.total_size() - 1) {
             Err(e) => {
-                if !e.eq_any(eg!("Versioning is not yet supported.").as_ref()) {
+                if !e.msg_has_overloop(eg!("Versioning is not yet supported.").as_ref())
+                {
                     panic!("The error for an invalid generation was not valid.");
                 }
             }

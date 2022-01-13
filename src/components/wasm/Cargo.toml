@@ -33,7 +33,7 @@ bech32 = "0.7.2"
 getrandom = { version = "0.2", features = ["js"] }
 
 zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
-ruc = "0.6.6"
+ruc = "1.0"
 zeialgebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
 crypto = { package = "crypto", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
 

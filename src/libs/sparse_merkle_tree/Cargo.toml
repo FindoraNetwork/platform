@@ -8,7 +8,7 @@ edition = "2021"
 path = "src/lib.rs"
 
 [dependencies]
-ruc = "0.6.2"
+ruc = "1.0"
 arrayref = "0.3.5"
 base64 = "0.10"
 cryptohash = { path = "../cryptohash" }
