@@ -61,6 +61,7 @@ use {
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::{d, err::RucResult},
+    serde::{Deserialize, Serialize},
     std::convert::From,
     wasm_bindgen::prelude::*,
     zei::{
@@ -146,10 +147,17 @@ pub fn get_null_pk() -> XfrPublicKey {
     XfrPublicKey::zei_from_bytes(&[0; 32]).unwrap()
 }
 
+/// struct to return list of randomizer strings
+#[derive(Serialize, Deserialize)]
+pub struct RandomizerStringArray {
+    randomizers: Vec<String>,
+}
+
 #[wasm_bindgen]
 /// Structure that allows users to construct arbitrary transactions.
 pub struct TransactionBuilder {
     transaction_builder: PlatformTransactionBuilder,
+    randomizers: Vec<JubjubScalar>,
 }
 
 impl TransactionBuilder {
@@ -300,6 +308,7 @@ impl TransactionBuilder {
     pub fn new(seq_id: u64) -> Self {
         TransactionBuilder {
             transaction_builder: PlatformTransactionBuilder::from_seq_id(seq_id),
+            randomizers: Default::default(),
         }
     }
 
@@ -468,8 +477,21 @@ impl TransactionBuilder {
                 JsValue::from_str(&format!("Could not add operation: {}", e))
             })?;
 
-        println!("Randomizer: {}", wallet::randomizer_to_base58(&r));
+        self.randomizers.push(r);
         Ok(self)
+    }
+
+    /// Returns a list of randomizer base58 strings as json
+    pub fn get_randomizers(&self) -> JsValue {
+        let r = RandomizerStringArray {
+            randomizers: self
+                .randomizers
+                .iter()
+                .map(wallet::randomizer_to_base58)
+                .collect(),
+        };
+
+        JsValue::from_serde(&r).unwrap()
     }
 
     /// Adds an operation to transaction builder which transfer a Anon Blind Asset Record
@@ -1109,7 +1131,6 @@ impl TransferOperationBuilder {
 }
 
 #[wasm_bindgen]
-#[derive(Default)]
 /// Structure that enables clients to construct complex transfers.
 pub struct AnonTransferOperationBuilder {
     op_builder: PlatformAnonTransferOperationBuilder,
@@ -1125,18 +1146,15 @@ impl AnonTransferOperationBuilder {
     pub fn get_builder_mut(&mut self) -> &mut PlatformAnonTransferOperationBuilder {
         &mut self.op_builder
     }
-
-    fn default() -> Self {
-        AnonTransferOperationBuilder {
-            op_builder: PlatformAnonTransferOperationBuilder::default(),
-        }
-    }
 }
 
+#[wasm_bindgen]
 impl AnonTransferOperationBuilder {
     /// new is a constructor for AnonTransferOperationBuilder
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(seq_id: u64) -> Self {
+        AnonTransferOperationBuilder {
+            op_builder: PlatformAnonTransferOperationBuilder::new_from_seq_id(seq_id),
+        }
     }
 
     /// add_input is used to add a new input source for Anon Transfer
@@ -1202,8 +1220,17 @@ impl AnonTransferOperationBuilder {
     }
 
     /// get_randomizers returns a list of all the randomizers for receiver public keys
-    pub fn get_randomizers(&self) -> Vec<JubjubScalar> {
-        self.get_builder().get_randomizers()
+    pub fn get_randomizers(&self) -> JsValue {
+        let r = RandomizerStringArray {
+            randomizers: self
+                .get_builder()
+                .get_randomizers()
+                .iter()
+                .map(wallet::randomizer_to_base58)
+                .collect(),
+        };
+
+        JsValue::from_serde(&r).unwrap()
     }
 
     /// create is used to build proof and sign the Transfer Operation
@@ -1223,10 +1250,10 @@ impl AnonTransferOperationBuilder {
 
     /// transaction returns the prepared Anon Transfer Operation
     /// @param nonce {NoReplayToken} - nonce of the txn to be added to the operation
-    pub fn transaction(self, nonce: NoReplayToken) -> Result<String, JsValue> {
+    pub fn transaction(self) -> Result<String, JsValue> {
         let op = self
             .get_builder()
-            .transaction(nonce)
+            .transaction()
             .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(serde_json::to_string(&op).unwrap())
@@ -1574,7 +1601,7 @@ pub fn trace_assets(
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
 use crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey};
-use ledger::data_model::{NoReplayToken, TxoSID};
+use ledger::data_model::TxoSID;
 use rand::{thread_rng, Rng};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
@@ -1824,6 +1851,38 @@ pub fn get_delegation_min_amount() -> u64 {
 #[allow(missing_docs)]
 pub fn get_delegation_max_amount() -> u64 {
     MAX_DELEGATION_AMOUNT
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn axfr_pubkey_from_string(key_str: &str) -> Result<AXfrPubKey, JsValue> {
+    wallet::anon_public_key_from_base64(key_str)
+        .c(d!())
+        .map_err(error_to_jsvalue)
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn axfr_keypair_from_string(key_str: &str) -> Result<AXfrKeyPair, JsValue> {
+    wallet::anon_secret_key_from_base64(key_str)
+        .c(d!())
+        .map_err(error_to_jsvalue)
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn x_pubkey_from_string(key_str: &str) -> Result<XPublicKey, JsValue> {
+    wallet::x_public_key_from_base64(key_str)
+        .c(d!())
+        .map_err(error_to_jsvalue)
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn x_secretkey_from_string(key_str: &str) -> Result<XSecretKey, JsValue> {
+    wallet::x_secret_key_from_base64(key_str)
+        .c(d!())
+        .map_err(error_to_jsvalue)
 }
 
 #[cfg(test)]
