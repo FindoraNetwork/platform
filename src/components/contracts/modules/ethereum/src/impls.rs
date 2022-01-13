@@ -418,4 +418,14 @@ impl<C: Config> App<C> {
         }
         None
     }
+
+    pub fn migrate(ctx: Context) -> Result<()> {
+        //Migrate existing transaction indices from chain-state to rocksdb.
+        let txn_idxs: Vec<(HA256, (U256, u32))> =
+            TransactionIndex::iterate(ctx.state.read().borrow());
+        for idx in txn_idxs {
+            TransactionIndex::insert(ctx.db.write().borrow_mut(), &idx.0, &idx.1)?;
+        }
+        Ok(())
+    }
 }

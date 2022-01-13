@@ -148,6 +148,9 @@ impl BaseApp {
         let chain_db =
             Arc::new(RwLock::new(ChainState::new(rdb, "rocks_db".to_owned(), 0)));
 
+        //Migrate any existing data from one database to the other.
+        BaseApp::migrate_initial_db(chain_state.clone(), chain_db.clone())?;
+
         Ok(BaseApp {
             name: APP_NAME.to_string(),
             version: "1.0.0".to_string(),
@@ -179,6 +182,18 @@ impl BaseApp {
             modules: ModuleManager::default(),
             event_notify: self.event_notify.clone(),
         }
+    }
+
+    //Migrate any pre-existing data from one database to the other if necessary
+    pub fn migrate_initial_db(
+        state_merkle: Arc<RwLock<ChainState<FinDB>>>,
+        state_db: Arc<RwLock<ChainState<RocksDB>>>,
+    ) -> Result<()> {
+        //Create context.
+        let state = Context::new(state_merkle.clone(), state_db.clone());
+        //Migrate data for ethereum module.
+        module_ethereum::App::<Self>::migrate(state)?;
+        Ok(())
     }
 }
 
