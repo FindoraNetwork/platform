@@ -61,7 +61,7 @@ use {
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::{d, err::RucResult},
-    serde::{ Serialize, Deserialize},
+    serde::{Deserialize, Serialize},
     std::convert::From,
     wasm_bindgen::prelude::*,
     zei::{
@@ -483,8 +483,12 @@ impl TransactionBuilder {
 
     /// Returns a list of randomizer base58 strings as json
     pub fn get_randomizers(&self) -> JsValue {
-        let r = RandomizerStringArray{
-            randomizers: self.randomizers.iter().map(wallet::randomizer_to_base58).collect()
+        let r = RandomizerStringArray {
+            randomizers: self
+                .randomizers
+                .iter()
+                .map(wallet::randomizer_to_base58)
+                .collect(),
         };
 
         JsValue::from_serde(&r).unwrap()
@@ -1217,8 +1221,13 @@ impl AnonTransferOperationBuilder {
 
     /// get_randomizers returns a list of all the randomizers for receiver public keys
     pub fn get_randomizers(&self) -> JsValue {
-        let r = RandomizerStringArray{
-            randomizers: self.get_builder().get_randomizers().iter().map(wallet::randomizer_to_base58).collect()
+        let r = RandomizerStringArray {
+            randomizers: self
+                .get_builder()
+                .get_randomizers()
+                .iter()
+                .map(wallet::randomizer_to_base58)
+                .collect(),
         };
 
         JsValue::from_serde(&r).unwrap()
@@ -1842,6 +1851,38 @@ pub fn get_delegation_min_amount() -> u64 {
 #[allow(missing_docs)]
 pub fn get_delegation_max_amount() -> u64 {
     MAX_DELEGATION_AMOUNT
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn axfr_pubkey_from_string(key_str: &str) -> Result<AXfrPubKey, JsValue> {
+    wallet::anon_public_key_from_base64(key_str)
+        .c(d!())
+        .map_err(error_to_jsvalue)
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn axfr_keypair_from_string(key_str: &str) -> Result<AXfrKeyPair, JsValue> {
+    wallet::anon_secret_key_from_base64(key_str)
+        .c(d!())
+        .map_err(error_to_jsvalue)
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn x_pubkey_from_string(key_str: &str) -> Result<XPublicKey, JsValue> {
+    wallet::x_public_key_from_base64(key_str)
+        .c(d!())
+        .map_err(error_to_jsvalue)
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn x_secretkey_from_string(key_str: &str) -> Result<XSecretKey, JsValue> {
+    wallet::x_secret_key_from_base64(key_str)
+        .c(d!())
+        .map_err(error_to_jsvalue)
 }
 
 #[cfg(test)]

@@ -1300,7 +1300,8 @@ impl AnonTransferOperationBuilder {
         }
 
         Ok(Operation::TransferAnonAsset(Box::from(
-            AnonTransferOps::new(self.note.as_ref().unwrap().clone(), self.nonce).unwrap(),
+            AnonTransferOps::new(self.note.as_ref().unwrap().clone(), self.nonce)
+                .unwrap(),
         )))
     }
 }
