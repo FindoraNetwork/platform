@@ -8,3 +8,4 @@ second_fix_height = 1429000
 apy_v7_upgrade_height = 1429000
 ff_addr_extra_fix_height = 1200000
 nonconfidential_balance_fix_height = 1210000
+unbond_block_cnt = 113400

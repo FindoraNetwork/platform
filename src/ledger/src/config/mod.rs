@@ -17,6 +17,7 @@ pub struct CheckPointConfig {
     pub apy_v7_upgrade_height: u64,
     pub ff_addr_extra_fix_height: u64,
     pub nonconfidential_balance_fix_height: u64,
+    pub unbond_block_cnt: u64,
 }
 
 impl CheckPointConfig {
@@ -40,6 +41,7 @@ impl CheckPointConfig {
                                 apy_v7_upgrade_height: 1429000,
                                 ff_addr_extra_fix_height: 1200000,
                                 nonconfidential_balance_fix_height: 1210000,
+                                unbond_block_cnt: 3600 * 24 * 21 / 16,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();

@@ -172,7 +172,7 @@ pub const MAX_POWER_PERCENT_PER_VALIDATOR: [u128; 2] = [1, 5];
 pub const BLOCK_INTERVAL: u64 = 15 + 1;
 
 /// The lock time after the delegation expires, about 21 days.
-pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
+//pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
 
 // minimal number of validators
 pub(crate) const VALIDATORS_MIN: usize = 5;
@@ -457,12 +457,12 @@ impl Staking {
     fn validator_clean_invalid_items(&mut self) {
         let h = self.cur_height;
 
-        if UNBOND_BLOCK_CNT > h {
+        if CHECKPOINT.unbond_block_cnt > h {
             return;
         }
 
         if let Some(old) = self
-            .validator_get_effective_at_height(h - UNBOND_BLOCK_CNT)
+            .validator_get_effective_at_height(h - CHECKPOINT.unbond_block_cnt)
             .map(|ovd| {
                 ovd.body
                     .iter()
@@ -753,7 +753,7 @@ impl Staking {
             if BLOCK_HEIGHT_MAX == d.end_height {
                 if d.end_height != h {
                     orig_h = Some(d.end_height);
-                    d.end_height = h + UNBOND_BLOCK_CNT;
+                    d.end_height = h + CHECKPOINT.unbond_block_cnt;
                 }
             } else {
                 return Err(eg!("delegator is not bonded"));
@@ -807,7 +807,7 @@ impl Staking {
                 .map(|set| set.remove(addr));
             self.delegation_info
                 .end_height_map
-                .entry(h + UNBOND_BLOCK_CNT)
+                .entry(h + CHECKPOINT.unbond_block_cnt)
                 .or_insert_with(BTreeSet::new)
                 .insert(*addr);
         }
@@ -870,7 +870,7 @@ impl Staking {
                     receiver_pk: Some(d.id),
                     tmp_delegators: map! {B},
                     start_height: d.start_height,
-                    end_height: h + UNBOND_BLOCK_CNT,
+                    end_height: h + CHECKPOINT.unbond_block_cnt,
                     state: DelegationState::Bond,
                     rwd_amount: 0,
                     delegation_rwd_cnt: 0,
@@ -899,7 +899,7 @@ impl Staking {
             .insert(pu.new_delegator_id, new_tmp_delegator);
         self.delegation_info
             .end_height_map
-            .entry(h + UNBOND_BLOCK_CNT)
+            .entry(h + CHECKPOINT.unbond_block_cnt)
             .or_insert_with(BTreeSet::new)
             .insert(pu.new_delegator_id);
 
