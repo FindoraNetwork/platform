@@ -5,6 +5,7 @@ use ethereum::{
     LegacyTransactionMessage, TransactionV0 as EthereumTransaction,
 };
 use ethereum_types::{BigEndianHash, H160, H256, H512, H64, U256, U64};
+use evm::ExitReason;
 use fp_evm::{BlockId, Runner, TransactionStatus};
 use fp_rpc_core::types::{
     Block, BlockNumber, BlockTransactions, Bytes, CallRequest, Filter, FilteredParams,
@@ -573,91 +574,181 @@ impl EthApi for EthApiImpl {
     fn estimate_gas(
         &self,
         request: CallRequest,
-        _: Option<BlockNumber>,
+        number: Option<BlockNumber>,
     ) -> Result<U256> {
-        debug!(target: "eth_rpc", "estimate_gas, request:{:?}", request);
+        debug!(target: "eth_rpc", "estimate_gas, block number {:?} request:{:?}", number, request);
 
-        let CallRequest {
-            from,
-            to,
-            gas_price: _,
-            gas: _,
-            value,
-            data,
-            nonce: _,
-        } = request;
+        let (block_id, pending) = match number.unwrap_or(BlockNumber::Latest) {
+            BlockNumber::Num(num) => {
+                let range = self.version_range()?;
+                if range.contains(&num) || num == range.end {
+                    (Some(BlockId::Number(U256::from(num))), false)
+                } else {
+                    return Err(internal_err(format!(
+                        "block number: {} exceeds version range: {:?}",
+                        num, range
+                    )));
+                }
+            }
+            BlockNumber::Earliest => (
+                Some(BlockId::Number(U256::from(self.version_range()?.start))),
+                false,
+            ),
+            BlockNumber::Hash {
+                hash,
+                require_canonical: _,
+            } => {
+                if let Some(block) = self
+                    .account_base_app
+                    .read()
+                    .current_block(Some(BlockId::Hash(hash)))
+                {
+                    (Some(BlockId::Number(block.header.number)), false)
+                } else {
+                    return Err(internal_err("Cannot find the specified block"));
+                }
+            }
+            BlockNumber::Latest => (None, false),
+            BlockNumber::Pending => (None, true),
+        };
 
         let gas_limit = <BaseApp as module_evm::Config>::BlockGasLimit::get();
 
-        let data = data.map(|d| d.0).unwrap_or_default();
+        let mut highest = if let Some(gas) = request.gas {
+            gas
+        } else if let Some(block) = self.account_base_app.read().current_block(block_id)
+        {
+            block.header.gas_limit
+        } else {
+            gas_limit
+        };
 
-        let mut config = <BaseApp as module_ethereum::Config>::config().clone();
-        config.estimate = true;
-
-        let mut ctx = self
-            .account_base_app
-            .read()
-            .create_query_context(None, false)
-            .map_err(|err| {
-                internal_err(format!("create query context error: {:?}", err))
-            })?;
-        if let Some(block) = self.account_base_app.read().current_block(None) {
-            ctx.header
-                .mut_time()
-                .set_seconds(block.header.timestamp as i64);
-            ctx.header.height = block.header.number.as_u64() as i64;
-            ctx.header.proposer_address = Vec::from(block.header.beneficiary.as_bytes())
+        // recap gas limit according to account balance
+        if let Some(from) = request.from {
+            let gas_price = request.gas_price.unwrap_or_default();
+            if gas_price > U256::zero() {
+                let balance = self.balance(from, None).unwrap_or_default();
+                let mut available = balance;
+                if let Some(value) = request.value {
+                    if value > available {
+                        return Err(internal_err("insufficient funds for transfer"));
+                    }
+                    available -= value;
+                }
+                let allowance = available / gas_price;
+                if highest < allowance {
+                    log::warn!(
+                        "Gas estimation capped by limited funds original {} balance {} sent {} feecap {} fundable {}",
+                        highest,
+                        balance,
+                        request.value.unwrap_or_default(),
+                        gas_price,
+                        allowance
+                    );
+                    highest = allowance;
+                }
+            }
         }
 
-        let used_gas = match to {
-            Some(to) => {
-                let call = Call {
-                    source: from.unwrap_or_default(),
-                    target: to,
-                    input: data,
-                    value: value.unwrap_or_default(),
-                    gas_limit: gas_limit.as_u64(),
-                    gas_price: None,
-                    nonce: None,
-                };
+        struct ExecuteResult {
+            data: Vec<u8>,
+            exit_reason: ExitReason,
+            used_gas: U256,
+        }
 
-                let info = <BaseApp as module_ethereum::Config>::Runner::call(
-                    &ctx, call, &config,
-                )
+        let execute_call_or_create = move |request: CallRequest,
+                                           gas_limit|
+              -> Result<ExecuteResult> {
+            let ctx = self
+                .account_base_app
+                .read()
+                .create_query_context(if pending { None } else { Some(0) }, false)
                 .map_err(|err| {
-                    internal_err(format!("evm runner call error: {:?}", err))
+                    internal_err(format!("create query context error: {:?}", err))
                 })?;
-                debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
 
-                error_on_execution_failure(&info.exit_reason, &info.value)?;
+            //ctx.header
+            //    .mut_time()
+            //    .set_seconds(block.header.timestamp as i64);
+            //ctx.header.height = block.header.number.as_u64() as i64;
+            //ctx.header.proposer_address = Vec::from(block.header.beneficiary.as_bytes());
 
-                info.used_gas
-            }
-            None => {
-                let create = Create {
-                    source: from.unwrap_or_default(),
-                    init: data,
-                    value: value.unwrap_or_default(),
-                    gas_limit: gas_limit.as_u64(),
-                    gas_price: None,
-                    nonce: None,
-                };
+            let CallRequest {
+                from,
+                to,
+                gas_price,
+                gas,
+                value,
+                data,
+                nonce,
+            } = request;
 
-                let info = <BaseApp as module_ethereum::Config>::Runner::create(
-                    &ctx, create, &config,
-                )
-                .map_err(|err| {
-                    internal_err(format!("evm runner create error: {:?}", err))
-                })?;
-                debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
+            let gas_limit = core::cmp::min(
+                gas.unwrap_or_else(|| U256::from(gas_limit)).low_u64(),
+                gas_limit,
+            );
 
-                error_on_execution_failure(&info.exit_reason, &[])?;
+            let mut config = <BaseApp as module_ethereum::Config>::config().clone();
+            config.estimate = true;
 
-                info.used_gas
+            match to {
+                Some(to) => {
+                    let call = Call {
+                        source: from.unwrap_or_default(),
+                        target: to,
+                        input: data.map(|d| d.0).unwrap_or_default(),
+                        value: value.unwrap_or_default(),
+                        gas_limit,
+                        gas_price,
+                        nonce,
+                    };
+
+                    let info = <BaseApp as module_ethereum::Config>::Runner::call(
+                        &ctx, call, &config,
+                    )
+                    .map_err(|err| {
+                        internal_err(format!("evm runner call error: {:?}", err))
+                    })?;
+                    debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
+
+                    Ok(ExecuteResult {
+                        data: info.value,
+                        exit_reason: info.exit_reason,
+                        used_gas: info.used_gas,
+                    })
+                }
+                None => {
+                    let create = Create {
+                        source: from.unwrap_or_default(),
+                        init: data.map(|d| d.0).unwrap_or_default(),
+                        value: value.unwrap_or_default(),
+                        gas_limit,
+                        gas_price,
+                        nonce,
+                    };
+
+                    let info = <BaseApp as module_ethereum::Config>::Runner::create(
+                        &ctx, create, &config,
+                    )
+                    .map_err(|err| {
+                        internal_err(format!("evm runner create error: {:?}", err))
+                    })?;
+                    debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
+
+                    Ok(ExecuteResult {
+                        data: vec![],
+                        exit_reason: info.exit_reason,
+                        used_gas: info.used_gas,
+                    })
+                }
             }
         };
 
-        Ok(used_gas)
+        let result = execute_call_or_create(request, highest.low_u64())?;
+
+        error_on_execution_failure(&result.exit_reason, &result.data)?;
+
+        Ok(result.used_gas)
     }
 
     fn transaction_by_hash(&self, hash: H256) -> Result<Option<Transaction>> {
