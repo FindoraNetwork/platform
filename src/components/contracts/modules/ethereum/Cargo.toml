@@ -34,6 +34,7 @@ fp-utils = { path = "../../primitives/utils" }
 baseapp = { path = "../../baseapp" }
 fp-mocks = { path = "../../primitives/mocks" }
 module-account = { path = "../account" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.3" }
 
 [features]
 default = []
