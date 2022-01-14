@@ -1863,6 +1863,15 @@ pub fn axfr_pubkey_from_string(key_str: &str) -> Result<AXfrPubKey, JsValue> {
 
 #[wasm_bindgen]
 #[allow(missing_docs)]
+pub fn randomize_axfr_pubkey(pub_key: AXfrPubKey, randomizer_str: &str) -> Result<AXfrPubKey, JsValue> {
+    let randomizer = wallet::randomizer_from_base58(randomizer_str)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+    Ok(pub_key.randomize(&randomizer))
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
 pub fn axfr_keypair_from_string(key_str: &str) -> Result<AXfrKeyPair, JsValue> {
     wallet::anon_secret_key_from_base64(key_str)
         .c(d!())

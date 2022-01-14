@@ -41,9 +41,9 @@ percent-encoding = "2.1.0"
 
 nix = "0.22.1"
 
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4f" }
-zeialgebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4f" }
-ruc = "0.6.6"
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "anon-native-ruc-fix" }
+zeialgebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", branch = "anon-native-ruc-fix" }
+ruc = "1.0"
 abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
 
 ledger = { path = "../../ledger" }
