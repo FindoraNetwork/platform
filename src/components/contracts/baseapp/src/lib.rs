@@ -191,7 +191,7 @@ impl BaseApp {
         state_db: Arc<RwLock<ChainState<RocksDB>>>,
     ) -> Result<()> {
         //Create context.
-        let mut ctx = Context::new(state_merkle.clone(), state_db.clone());
+        let mut ctx = Context::new(state_merkle, state_db);
         let height = ctx.db.read().height()?;
 
         //Migrate data for ethereum module.

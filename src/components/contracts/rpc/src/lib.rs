@@ -158,7 +158,7 @@ pub fn error_on_execution_failure(
                 let message_len = data[36..68].iter().sum::<u8>();
                 let body: &[u8] = &data[68..68 + message_len as usize];
                 if let Ok(reason) = std::str::from_utf8(body) {
-                    message = format!("{} {}", message, reason.to_string());
+                    message = format!("{} {}", message, reason);
                 }
             }
             Err(Error {
