@@ -42,7 +42,7 @@ fn setup() -> Context {
 
 #[test]
 fn test_eth_db_migrate_txn_index() {
-    let ctx = setup();
+    let mut ctx = setup();
 
     //Create txn hashes, block numbers and indices and save them to chain-state
     let mut txns = Vec::with_capacity(5);
@@ -63,19 +63,19 @@ fn test_eth_db_migrate_txn_index() {
         //Save Transaction index
         txns.push((HA256::new(transaction_hash), (U256::from(i), i)));
         let _ = TransactionIndex::insert(
-            ctx.clone().state.write().borrow_mut(),
+            ctx.state.write().borrow_mut(),
             &HA256::new(transaction_hash),
             &(U256::from(i), i),
         );
     }
 
     //Call migrate on ethereum module.
-    let _ = module_ethereum::App::<BaseApp>::migrate(ctx.clone());
+    let _ = module_ethereum::App::<BaseApp>::migrate(ctx.borrow_mut());
 
     //Confirm transaction index values were migrated to rocksdb instance from the context.
     for txn in txns {
         let value: Option<(U256, u32)> =
-            TransactionIndex::get(ctx.clone().db.read().borrow(), &txn.0);
+            TransactionIndex::get(ctx.db.read().borrow(), &txn.0);
         assert!(value.is_some());
         assert_eq!(value.unwrap(), txn.1);
     }
