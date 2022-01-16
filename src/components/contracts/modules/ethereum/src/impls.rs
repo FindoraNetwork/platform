@@ -418,4 +418,20 @@ impl<C: Config> App<C> {
         }
         None
     }
+
+    pub fn migrate(ctx: &mut Context) -> Result<()> {
+        //Migrate existing transaction indices from chain-state to rocksdb.
+        let txn_idxs: Vec<(HA256, (U256, u32))> =
+            TransactionIndex::iterate(ctx.state.read().borrow());
+        let txn_idxs_cnt = txn_idxs.len();
+
+        for idx in txn_idxs {
+            TransactionIndex::insert(ctx.db.write().borrow_mut(), &idx.0, &idx.1)?;
+            debug!(target: "ethereum", "hash: 0x{}, block: {}, index: {}", idx.0.to_string(), idx.1 .0, idx.1 .1);
+        }
+        ctx.db.write().commit_session();
+        info!(target: "ethereum", "{} transaction indexes migrated to db", txn_idxs_cnt);
+
+        Ok(())
+    }
 }

@@ -32,6 +32,7 @@ use notify::*;
 use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
 use ruc::{eg, Result};
+use std::borrow::BorrowMut;
 use std::path::Path;
 use std::sync::Arc;
 use storage::{
@@ -148,6 +149,9 @@ impl BaseApp {
         let chain_db =
             Arc::new(RwLock::new(ChainState::new(rdb, "rocks_db".to_owned(), 0)));
 
+        //Migrate any existing data from one database to the other.
+        BaseApp::migrate_initial_db(chain_state.clone(), chain_db.clone())?;
+
         Ok(BaseApp {
             name: APP_NAME.to_string(),
             version: "1.0.0".to_string(),
@@ -179,6 +183,23 @@ impl BaseApp {
             modules: ModuleManager::default(),
             event_notify: self.event_notify.clone(),
         }
+    }
+
+    //Migrate any pre-existing data from one database to the other if necessary
+    pub fn migrate_initial_db(
+        state_merkle: Arc<RwLock<ChainState<FinDB>>>,
+        state_db: Arc<RwLock<ChainState<RocksDB>>>,
+    ) -> Result<()> {
+        //Create context.
+        let mut ctx = Context::new(state_merkle.clone(), state_db.clone());
+        let height = ctx.db.read().height()?;
+
+        //Migrate data for ethereum module.
+        if module_ethereum::App::<Self>::migrate(ctx.borrow_mut()).is_err() {
+            ctx.db.write().discard_session();
+        };
+        ctx.db.write().commit(height)?;
+        Ok(())
     }
 }
 
