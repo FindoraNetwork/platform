@@ -5,7 +5,6 @@
 use super::get_keypair;
 use super::get_serv_addr;
 use super::utils;
-use baseapp::extensions::{CheckFee, CheckNonce};
 use fp_core::account::SmartAccount;
 use fp_types::{
     actions::{
@@ -16,6 +15,7 @@ use fp_types::{
     },
     crypto::{Address, MultiSignature, MultiSigner},
     transaction::UncheckedTransaction,
+    assemble::{CheckFee, CheckNonce},
     U256,
 };
 use fp_utils::ecdsa::SecpPair;
