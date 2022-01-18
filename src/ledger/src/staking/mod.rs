@@ -103,8 +103,8 @@ lazy_static! {
     ///A hard-coded key for "blacklist", that blacklist delegate a validator means nobody can delegate it.
     pub static ref  LOCK_KEY: XfrPublicKey = {
         let bytes : [u8;32]=[
-            213,  90, 152,   1, 132, 178,  10, 183, 212,  75, 254, 211, 200, 101,   6,  57,
-            16, 225, 114, 243, 218, 162,  35,  37, 175,   3,  25, 104, 245,   7,   81, 26
+            8,  8, 8,   8, 8, 8,  8, 8, 88,  8, 8, 8, 8, 8,   8,  8,
+            8, 8, 8, 8, 8, 8,  8,  8, 8,   8,  8, 8, 8,   8,   8, 8
         ];
 
         XfrPublicKey::zei_from_bytes(&bytes).unwrap()
@@ -214,7 +214,7 @@ pub type TendermintAddrBytes = Vec<u8>;
 type ValidatorInfo = BTreeMap<BlockHeight, ValidatorData>;
 
 #[cfg(feature = "debug_env")]
-const DELEGATE_LOCK: u64 = 0;
+const CHECK_DELEGATE_LOCK: u64 = 0;
 
 #[cfg(not(feature = "debug_env"))]
 const CHECK_DELEGATE_LOCK: u64 = 180_0000;
@@ -671,15 +671,27 @@ impl Staking {
             self.validator_check_power(am, &validator).c(d!())?;
 
             if h >= CHECK_DELEGATE_LOCK {
-                if let Some(lock_delegation) = self
-                    .delegation_info
-                    .global_delegation_records_map
-                    .get(&*LOCK_KEY)
-                {
-                    if lock_delegation.delegations.contains_key(&validator) {
-                        return Err(eg!(
-                            "Validator is locked, delegating is impossible."
-                        ));
+                if owner != validator {
+                    //To avoid impacting consensus, this map is constructed the first time undelegating happen.
+                    if let Some(lock_delegation) = self
+                        .delegation_info
+                        .global_delegation_records_map
+                        .get(&*LOCK_KEY)
+                    {
+                        if lock_delegation.delegations.contains_key(&validator) {
+                            return Err(eg!(
+                                "Validator is locked, delegating is impossible."
+                            ));
+                        }
+                    }
+                } else {
+                    //unlock the validator if there exists a lock, remember that we are doing delegation now.
+                    if let Some(lock_delegation) = self
+                        .delegation_info
+                        .global_delegation_records_map
+                        .get_mut(&*LOCK_KEY)
+                    {
+                        lock_delegation.delegations.remove(&validator);
                     }
                 }
             }
