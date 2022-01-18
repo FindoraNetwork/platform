@@ -10,6 +10,11 @@
 
 ## Change log
 
+#### v0.3.12-release
+
+- EVM error code handling
+- Pending nonce fix
+
 #### v0.3.8-release
 
 - FRC20 update height to `149_7500`.

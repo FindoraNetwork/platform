@@ -138,7 +138,10 @@ impl ModuleManager {
 
         origin_tx.validate::<Module>(ctx)?;
 
-        if RunTxMode::Deliver == ctx.run_mode {
+        if RunTxMode::Deliver == ctx.run_mode
+            || RunTxMode::Check == ctx.run_mode
+            || RunTxMode::ReCheck == ctx.run_mode
+        {
             return origin_tx.apply::<Module>(ctx);
         }
         Ok(ActionResult::default())

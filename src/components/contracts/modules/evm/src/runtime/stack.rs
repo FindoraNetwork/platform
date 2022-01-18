@@ -42,7 +42,7 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         self.parent = Some(Box::new(entering));
 
         // start_transaction();
-        self.ctx.state.write().commit_session();
+        // self.ctx.state.write().commit_session();
     }
 
     pub fn exit_commit(&mut self) -> Result<(), ExitError> {
@@ -53,7 +53,7 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         self.logs.append(&mut exited.logs);
         self.deletes.append(&mut exited.deletes);
 
-        self.ctx.state.write().commit_session();
+        // self.ctx.state.write().commit_session();
         Ok(())
     }
 
@@ -62,7 +62,7 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         mem::swap(&mut exited, self);
         self.metadata.swallow_revert(exited.metadata)?;
 
-        self.ctx.state.write().discard_session();
+        // self.ctx.state.write().discard_session();
         Ok(())
     }
 
@@ -71,7 +71,7 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         mem::swap(&mut exited, self);
         self.metadata.swallow_discard(exited.metadata)?;
 
-        self.ctx.state.write().discard_session();
+        // self.ctx.state.write().discard_session();
         Ok(())
     }
 

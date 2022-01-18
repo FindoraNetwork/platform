@@ -155,8 +155,12 @@ where
 
         match U::execute(maybe_who, self.function, ctx) {
             Ok(res) => {
-                Extra::post_execute(ctx, pre, &res)?;
-                ctx.state.write().commit_session();
+                if res.code == 0 {
+                    Extra::post_execute(ctx, pre, &res)?;
+                    ctx.state.write().commit_session();
+                } else {
+                    ctx.state.write().discard_session();
+                }
                 ctx.db.write().commit_session();
                 Ok(res)
             }

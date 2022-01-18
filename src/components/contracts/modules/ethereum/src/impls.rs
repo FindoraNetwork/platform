@@ -243,7 +243,7 @@ impl<C: Config> App<C> {
                     let message_len = data[36..68].iter().sum::<u8>();
                     let body: &[u8] = &data[68..68 + message_len as usize];
                     if let Ok(reason) = std::str::from_utf8(body) {
-                        message = format!("{} {}", message, reason.to_string());
+                        message = format!("{} {}", message, reason);
                     }
                 }
                 (3, message)
@@ -271,7 +271,7 @@ impl<C: Config> App<C> {
         PendingTransactions::put(ctx.db.write().borrow_mut(), &pending_txs)?;
 
         TransactionIndex::insert(
-            ctx.state.write().borrow_mut(),
+            ctx.db.write().borrow_mut(),
             &HA256::new(transaction_hash),
             &(ctx.header.height.into(), transaction_index),
         )?;
@@ -400,7 +400,7 @@ impl<C: Config> App<C> {
 
     /// The index of the transaction in the block
     pub fn transaction_index(ctx: &Context, hash: H256) -> Option<(U256, u32)> {
-        TransactionIndex::get(ctx.state.read().borrow(), &HA256::new(hash))
+        TransactionIndex::get(ctx.db.read().borrow(), &HA256::new(hash))
     }
 
     fn logs_bloom(logs: Vec<ethereum::Log>, bloom: &mut Bloom) {
@@ -417,5 +417,21 @@ impl<C: Config> App<C> {
             return Some(hash.h256());
         }
         None
+    }
+
+    pub fn migrate(ctx: &mut Context) -> Result<()> {
+        //Migrate existing transaction indices from chain-state to rocksdb.
+        let txn_idxs: Vec<(HA256, (U256, u32))> =
+            TransactionIndex::iterate(ctx.state.read().borrow());
+        let txn_idxs_cnt = txn_idxs.len();
+
+        for idx in txn_idxs {
+            TransactionIndex::insert(ctx.db.write().borrow_mut(), &idx.0, &idx.1)?;
+            debug!(target: "ethereum", "hash: 0x{}, block: {}, index: {}", idx.0.to_string(), idx.1 .0, idx.1 .1);
+        }
+        ctx.db.write().commit_session();
+        info!(target: "ethereum", "{} transaction indexes migrated to db", txn_idxs_cnt);
+
+        Ok(())
     }
 }

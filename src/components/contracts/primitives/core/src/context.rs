@@ -43,6 +43,16 @@ impl Context {
         }
     }
 
+    pub fn copy_with_state(&self) -> Self {
+        Context {
+            state: Arc::new(RwLock::new(self.state.read().copy())),
+            db: Arc::new(RwLock::new(self.db.read().copy())),
+            run_mode: RunTxMode::None,
+            header: self.header.clone(),
+            header_hash: self.header_hash(),
+        }
+    }
+
     pub fn copy_with_new_state(&self) -> Self {
         Context {
             state: Arc::new(RwLock::new(State::new(
