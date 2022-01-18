@@ -5,7 +5,6 @@
 #![deny(warnings)]
 #![allow(clippy::needless_borrow)]
 
-mod config;
 mod server;
 pub mod staking;
 
@@ -13,7 +12,7 @@ use {
     crate::api::{
         query_server::query_api, submission_server::submission_api::SubmissionApi,
     },
-    config::{global_cfg::CFG, ABCIConfig},
+    config::abci::{global_cfg::CFG, ABCIConfig},
     futures::executor::ThreadPool,
     lazy_static::lazy_static,
     ruc::*,

@@ -1,0 +1,26 @@
+[package]
+name = "config"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+
+attohttpc = { version = "0.18", default-features = false, features = ["compress", "json", "tls-rustls"] }
+clap = "2.33.3"
+lazy_static = { version = "1.2.0" }
+ruc = "1.0"
+serde = { version = "1.0.124", features = ["derive"] }
+serde_derive = "1.0"
+serde_json = "1.0"
+serde-strz = "1.1.1"
+toml = "0.5.8"
+
+globutils = { path = "../../libs/globutils" }
+
+[target.'cfg(target_os= "linux")'.dependencies]
+btm = "0.1.6"
+
+[build-dependencies]
+vergen = "=3.1.0"
+

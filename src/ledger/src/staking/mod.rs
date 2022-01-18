@@ -24,9 +24,9 @@ use {
         data_model::{
             ConsensusRng, Operation, Transaction, TransferAsset, TxoRef, FRA_DECIMALS,
         },
-        config::CheckPointConfig,
         SNAPSHOT_ENTRIES_DIR,
     },
+    config::abci::global_cfg::CFG,
     cosig::CoSigRule,
     cryptohash::sha256::{self, Digest},
     fbnc::{new_mapx, Mapx},
@@ -87,9 +87,6 @@ lazy_static! {
     /// Reserved accounts of Findora Foundation.
     pub static ref FF_PK_EXTRA_120_0000: XfrPublicKey =
         pnk!(wallet::public_key_from_bech32(FF_ADDR_EXTRA_120_0000));
-
-    /// load checkpoint configuration
-    pub static ref CHECKPOINT: CheckPointConfig = CheckPointConfig::from_file().unwrap();
 
     #[allow(missing_docs)]
     pub static ref CHAN_GLOB_RATE_HIST: GRHCP = chan!();
@@ -457,12 +454,12 @@ impl Staking {
     fn validator_clean_invalid_items(&mut self) {
         let h = self.cur_height;
 
-        if CHECKPOINT.unbond_block_cnt > h {
+        if CFG.checkpoint.unbond_block_cnt > h {
             return;
         }
 
         if let Some(old) = self
-            .validator_get_effective_at_height(h - CHECKPOINT.unbond_block_cnt)
+            .validator_get_effective_at_height(h - CFG.checkpoint.unbond_block_cnt)
             .map(|ovd| {
                 ovd.body
                     .iter()
@@ -753,7 +750,7 @@ impl Staking {
             if BLOCK_HEIGHT_MAX == d.end_height {
                 if d.end_height != h {
                     orig_h = Some(d.end_height);
-                    d.end_height = h + CHECKPOINT.unbond_block_cnt;
+                    d.end_height = h + CFG.checkpoint.unbond_block_cnt;
                 }
             } else {
                 return Err(eg!("delegator is not bonded"));
@@ -807,7 +804,7 @@ impl Staking {
                 .map(|set| set.remove(addr));
             self.delegation_info
                 .end_height_map
-                .entry(h + CHECKPOINT.unbond_block_cnt)
+                .entry(h + CFG.checkpoint.unbond_block_cnt)
                 .or_insert_with(BTreeSet::new)
                 .insert(*addr);
         }
@@ -870,7 +867,7 @@ impl Staking {
                     receiver_pk: Some(d.id),
                     tmp_delegators: map! {B},
                     start_height: d.start_height,
-                    end_height: h + CHECKPOINT.unbond_block_cnt,
+                    end_height: h + CFG.checkpoint.unbond_block_cnt,
                     state: DelegationState::Bond,
                     rwd_amount: 0,
                     delegation_rwd_cnt: 0,
@@ -899,7 +896,7 @@ impl Staking {
             .insert(pu.new_delegator_id, new_tmp_delegator);
         self.delegation_info
             .end_height_map
-            .entry(h + CHECKPOINT.unbond_block_cnt)
+            .entry(h + CFG.checkpoint.unbond_block_cnt)
             .or_insert_with(BTreeSet::new)
             .insert(pu.new_delegator_id);
 
@@ -2023,7 +2020,7 @@ impl Delegation {
             .c(d!())
             .and_then(|mut am| {
                 if 0 == am {
-                    if CHECKPOINT.zero_amount_fix_height < cur_height {
+                    if CFG.checkpoint.zero_amount_fix_height < cur_height {
                         return Ok(0);
                     } else {
                         return Err(eg!("set rewards on zero amount"));
@@ -2102,13 +2099,13 @@ fn calculate_delegation_rewards(
     // #[cfg(not(feature = "debug_env"))]
     // const SECOND_FIX_HEIGHT: BlockHeight = 142_9000;
 
-    if CHECKPOINT.overflow_fix_height < cur_height {
+    if CFG.checkpoint.overflow_fix_height < cur_height {
         let am = BigUint::from(amount);
         let total_am = BigUint::from(total_amount);
         let global_am = BigUint::from(global_amount);
         let block_itv = BLOCK_INTERVAL as u128;
 
-        let second_per_year: u128 = if CHECKPOINT.second_fix_height < cur_height {
+        let second_per_year: u128 = if CFG.checkpoint.second_fix_height < cur_height {
             365 * 24 * 3600
         } else {
             356 * 24 * 3600
@@ -2121,7 +2118,7 @@ fn calculate_delegation_rewards(
             a1 / a2
         };
 
-        let n = if CHECKPOINT.apy_fix_height < cur_height {
+        let n = if CFG.checkpoint.apy_fix_height < cur_height {
             if is_delegation_rwd {
                 // global_amount * am * return_rate[0] * block_itv / (return_rate[1] * (365 * 24 * 3600) * total_amount)
                 let a1 = global_am * am * return_rate[0] * block_itv;
@@ -2153,7 +2150,7 @@ fn calculate_delegation_rewards(
                 })
         };
 
-        if CHECKPOINT.apy_fix_height < cur_height {
+        if CFG.checkpoint.apy_fix_height < cur_height {
             if is_delegation_rwd {
                 // # For delegation rewards:
                 //

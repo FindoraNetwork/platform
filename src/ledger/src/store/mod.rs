@@ -22,12 +22,13 @@ use {
         },
         staking::{
             Amount, Power, Staking, TendermintAddrRef,
-            FF_PK_EXTRA_120_0000, FF_PK_LIST, FRA_TOTAL_AMOUNT, KEEP_HIST, CHECKPOINT,
+            FF_PK_EXTRA_120_0000, FF_PK_LIST, FRA_TOTAL_AMOUNT, KEEP_HIST,
         },
         LSSED_VAR, SNAPSHOT_ENTRIES_DIR,
     },
     api_cache::ApiCache,
     bitmap::{BitMap, SparseMap},
+    config::abci::global_cfg::CFG,
     cryptohash::sha256::Digest as BitDigest,
     fbnc::{new_mapx, new_mapxnk, new_vecx, Mapx, Mapxnk, Vecx},
     globutils::{HashOf, ProofOf},
@@ -549,7 +550,7 @@ impl LedgerState {
         // #[cfg(not(feature = "debug_env"))]
         // const APY_V7_UPGRADE_HEIGHT: BlockHeight = 142_9000;
 
-        if CHECKPOINT.apy_v7_upgrade_height < self.get_tendermint_height() {
+        if CFG.checkpoint.apy_v7_upgrade_height < self.get_tendermint_height() {
             // This is an equal conversion of `1 / p% * 0.0536`
             let mut a0 = p[1] * 536;
             let mut a1 = p[0] * 10000;
@@ -594,7 +595,7 @@ impl LedgerState {
 
         let s = self.get_staking();
 
-        let extras = if CHECKPOINT.ff_addr_extra_fix_height < s.cur_height {
+        let extras = if CFG.checkpoint.ff_addr_extra_fix_height < s.cur_height {
             vec![*BLACK_HOLE_PUBKEY, *FF_PK_EXTRA_120_0000]
         } else {
             vec![*BLACK_HOLE_PUBKEY]
@@ -628,7 +629,7 @@ impl LedgerState {
         // #[cfg(not(feature = "debug_env"))]
         // const NONCONFIDENTIAL_BALANCE_FIX_HEIGHT: BlockHeight = 121_0000;
 
-        if CHECKPOINT.nonconfidential_balance_fix_height < self.get_tendermint_height() {
+        if CFG.checkpoint.nonconfidential_balance_fix_height < self.get_tendermint_height() {
             self.get_nonconfidential_balance(addr).c(d!())
         } else {
             Ok(0)

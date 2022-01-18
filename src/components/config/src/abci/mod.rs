@@ -1,9 +1,75 @@
 use {
     global_cfg::CFG,
     ruc::*,
-    serde::Deserialize,
-    std::{convert::TryFrom, env, fs, path::Path},
+    serde::{Deserialize, Serialize},
+    std::{
+        convert::TryFrom,
+        env,
+        fs::{self, File},
+        io::{ErrorKind, Read, Write},
+        path::Path,
+    },
+    toml,
 };
+
+#[derive(Serialize, Deserialize, Default)]
+#[allow(missing_docs)]
+pub struct CheckPointConfig {
+    pub disable_evm_block_height: i64,
+    pub enable_frc20_height: i64,
+    pub evm_first_block_height: i64,
+    pub zero_amount_fix_height: u64,
+    pub apy_fix_height: u64,
+    pub overflow_fix_height: u64,
+    pub second_fix_height: u64,
+    pub apy_v7_upgrade_height: u64,
+    pub ff_addr_extra_fix_height: u64,
+    pub nonconfidential_balance_fix_height: u64,
+    pub unbond_block_cnt: u64,
+}
+
+impl CheckPointConfig {
+    /// load configuration of checkpoints from file.
+    pub fn from_file(file_path: &str) -> Option<CheckPointConfig> {
+        let mut f = match File::open(file_path) {
+            Ok(file) => file,
+            Err(error) => {
+                if error.kind() == ErrorKind::NotFound {
+                    match File::create(file_path) {
+                        Ok(mut file) => {
+                            let config = CheckPointConfig {
+                                disable_evm_block_height: 1483286,
+                                enable_frc20_height: 1501000,
+                                evm_first_block_height: 0,
+                                zero_amount_fix_height: 1200000,
+                                apy_fix_height: 1177000,
+                                overflow_fix_height: 1247000,
+                                second_fix_height: 1429000,
+                                apy_v7_upgrade_height: 1429000,
+                                ff_addr_extra_fix_height: 1200000,
+                                nonconfidential_balance_fix_height: 1210000,
+                                unbond_block_cnt: 3600 * 24 * 21 / 16,
+                            };
+                            let content = toml::to_string(&config).unwrap();
+                            file.write_all(content.as_bytes()).unwrap();
+                            return Some(config);
+                        }
+                        Err(error) => {
+                            panic!("failed to create file: {:?}", error)
+                        }
+                    };
+                } else {
+                    panic!("failed to open file: {:?}", error)
+                }
+            }
+        };
+
+        let mut content = String::new();
+        f.read_to_string(&mut content).unwrap();
+        let config: CheckPointConfig = toml::from_str(content.as_str()).unwrap();
+        Some(config)
+    }
+}
 
 #[derive(Debug)]
 pub struct ABCIConfig {
@@ -94,7 +160,8 @@ impl ABCIConfig {
     }
 }
 
-pub(crate) mod global_cfg {
+pub mod global_cfg {
+    use crate::abci::CheckPointConfig;
     #[cfg(target_os = "linux")]
     use btm::BtmCfg;
     #[cfg(not(test))]
@@ -108,7 +175,7 @@ pub(crate) mod global_cfg {
     use std::{env, process::exit};
 
     lazy_static! {
-        /// Global config.
+        /// Global abci config.
         pub static ref CFG: Config = pnk!(get_config());
     }
 
@@ -130,6 +197,7 @@ pub(crate) mod global_cfg {
         pub ledger_dir: String,
         #[cfg(target_os = "linux")]
         pub btmcfg: BtmCfg,
+        pub checkpoint: CheckPointConfig,
     }
 
     #[cfg(test)]
@@ -143,39 +211,39 @@ pub(crate) mod global_cfg {
     #[cfg(not(test))]
     fn get_config() -> Result<Config> {
         let m = App::new("abcid")
-                .version(env!("VERGEN_SHA"))
-                .author(crate_authors!())
-                .about("An ABCI node implementation of FindoraNetwork.")
-                .arg_from_usage("--abcid-host=[ABCId IP]")
-                .arg_from_usage("--abcid-port=[ABCId Port]")
-                .arg_from_usage("--tendermint-host=[Tendermint IP]")
-                .arg_from_usage("--tendermint-port=[Tendermint Port]")
-                .arg_from_usage("--submission-service-port=[Submission Service Port]")
-                .arg_from_usage("--ledger-service-port=[Ledger Service Port]")
-                .arg_from_usage("-q, --enable-query-service")
-                .arg_from_usage("--disable-eth-empty-blocks 'not generate empty ethereum blocks when no evm transaction'")
-                .arg_from_usage("--enable-eth-api-service")
-                .arg_from_usage("--evm-http-port=[EVM Web3 Http Port]")
-                .arg_from_usage("--evm-ws-port=[EVM Web3 WS Port]")
-                .arg_from_usage("--tendermint-node-self-addr=[Address] 'the address of your tendermint node, in upper-hex format'")
-                .arg_from_usage("--tendermint-node-key-config-path=[Path] 'such as: ${HOME}/.tendermint/config/priv_validator_key.json'")
-                .arg_from_usage("-d, --ledger-dir=[Path]")
-
-                .arg_from_usage("--enable-snapshot 'global switch for enabling snapshot functions'")
-                .arg_from_usage("--snapshot-list 'list all available snapshots in the form of block height'")
-                .arg_from_usage("--snapshot-target=[TargetPath] 'a data volume containing both ledger data and tendermint data'")
-                .arg_from_usage("--snapshot-itv=[Iterval] 'interval between adjacent snapshots, default to 10 blocks'")
-                .arg_from_usage("--snapshot-cap=[Capacity] 'the maximum number of snapshots that will be stored, default to 100'")
-                .arg_from_usage("--snapshot-mode=[Mode] 'zfs/btrfs/external, will try a guess if missing'")
-                .arg_from_usage("--snapshot-algo=[Algo] 'fair/fade, default to `fair`'")
-                .arg_from_usage("--snapshot-rollback 'rollback to the last available snapshot'")
-                .arg_from_usage("-r, --snapshot-rollback-to=[Height] 'rollback to a custom height, will try the closest smaller height if the target does not exist'")
-                .arg_from_usage("-R, --snapshot-rollback-to-exact=[Height] 'rollback to a custom height exactly, an error will be reported if the target does not exist'")
-                .arg(Arg::with_name("_a").long("ignored").hidden(true))
-                .arg(Arg::with_name("_b").long("nocapture").hidden(true))
-                .arg(Arg::with_name("_c").long("test-threads").hidden(true))
-                .arg(Arg::with_name("INPUT").multiple(true).hidden(true))
-                .get_matches();
+            .version(env!("VERGEN_SHA"))
+            .author(crate_authors!())
+            .about("An ABCI node implementation of FindoraNetwork.")
+            .arg_from_usage("--abcid-host=[ABCId IP]")
+            .arg_from_usage("--abcid-port=[ABCId Port]")
+            .arg_from_usage("--tendermint-host=[Tendermint IP]")
+            .arg_from_usage("--tendermint-port=[Tendermint Port]")
+            .arg_from_usage("--submission-service-port=[Submission Service Port]")
+            .arg_from_usage("--ledger-service-port=[Ledger Service Port]")
+            .arg_from_usage("-q, --enable-query-service")
+            .arg_from_usage("--disable-eth-empty-blocks 'not generate empty ethereum blocks when no evm transaction'")
+            .arg_from_usage("--enable-eth-api-service")
+            .arg_from_usage("--evm-http-port=[EVM Web3 Http Port]")
+            .arg_from_usage("--evm-ws-port=[EVM Web3 WS Port]")
+            .arg_from_usage("--tendermint-node-self-addr=[Address] 'the address of your tendermint node, in upper-hex format'")
+            .arg_from_usage("--tendermint-node-key-config-path=[Path] 'such as: ${HOME}/.tendermint/config/priv_validator_key.json'")
+            .arg_from_usage("-d, --ledger-dir=[Path]")
+            .arg_from_usage("--checkpoint=[Path]")
+            .arg_from_usage("--enable-snapshot 'global switch for enabling snapshot functions'")
+            .arg_from_usage("--snapshot-list 'list all available snapshots in the form of block height'")
+            .arg_from_usage("--snapshot-target=[TargetPath] 'a data volume containing both ledger data and tendermint data'")
+            .arg_from_usage("--snapshot-itv=[Iterval] 'interval between adjacent snapshots, default to 10 blocks'")
+            .arg_from_usage("--snapshot-cap=[Capacity] 'the maximum number of snapshots that will be stored, default to 100'")
+            .arg_from_usage("--snapshot-mode=[Mode] 'zfs/btrfs/external, will try a guess if missing'")
+            .arg_from_usage("--snapshot-algo=[Algo] 'fair/fade, default to `fair`'")
+            .arg_from_usage("--snapshot-rollback 'rollback to the last available snapshot'")
+            .arg_from_usage("-r, --snapshot-rollback-to=[Height] 'rollback to a custom height, will try the closest smaller height if the target does not exist'")
+            .arg_from_usage("-R, --snapshot-rollback-to-exact=[Height] 'rollback to a custom height exactly, an error will be reported if the target does not exist'")
+            .arg(Arg::with_name("_a").long("ignored").hidden(true))
+            .arg(Arg::with_name("_b").long("nocapture").hidden(true))
+            .arg(Arg::with_name("_c").long("test-threads").hidden(true))
+            .arg(Arg::with_name("INPUT").multiple(true).hidden(true))
+            .get_matches();
 
         print_version(&m);
 
@@ -224,7 +292,7 @@ pub(crate) mod global_cfg {
             .map(|v| v.to_owned())
             .or_else(|| env::var("TD_NODE_SELF_ADDR").ok());
         let tnkcp = m
-            .value_of("tendermint-node-key-config-path")
+            .value_of("tendermint-node-key-abci-path")
             .map(|v| v.to_owned())
             .or_else(|| env::var("TENDERMINT_NODE_KEY_CONFIG_PATH").ok());
         let ld = m
@@ -253,6 +321,10 @@ pub(crate) mod global_cfg {
             .unwrap_or_else(|| "8546".to_owned())
             .parse::<u16>()
             .c(d!())?;
+        let checkpoint_path = m
+            .value_of("checkpoint")
+            .map(|v| v.to_owned())
+            .unwrap_or_else(|| "./checkpoint.toml".to_owned());
 
         let res = Config {
             abci_host: ah,
@@ -271,6 +343,7 @@ pub(crate) mod global_cfg {
             ledger_dir: ld,
             #[cfg(target_os = "linux")]
             btmcfg: parse_btmcfg(&m).c(d!())?,
+            checkpoint: CheckPointConfig::from_file(&checkpoint_path).unwrap(),
         };
 
         Ok(res)
@@ -334,7 +407,7 @@ pub(crate) mod global_cfg {
                 list_snapshots(&res).c(d!())?;
             }
 
-            check_rollback(&m, &res).c(d!())?;
+            check_rollback(m, &res).c(d!())?;
         }
 
         Ok(res)
