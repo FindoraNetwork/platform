@@ -44,7 +44,7 @@ nix = "0.22.1"
 zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4x" }
 ruc = "1.0"
 abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
-
+config = { path = "../config"}
 ledger = { path = "../../ledger" }
 cryptohash = { path = "../../libs/cryptohash" }
 globutils = { path = "../../libs/globutils" }

@@ -25,6 +25,7 @@ unicode-normalization = "0.1.13"
 time = "0.2.26"
 tendermint = "0.19.0"
 indexmap = { version = "1.6.2", features = ["serde"] }
+config = { path = "../components/config" }
 fp-types = { path = "../components/contracts/primitives/types" }
 
 ruc = "1.0"

@@ -8,6 +8,7 @@ use evm::{ExitFatal, ExitReason};
 use fp_core::{
     context::Context, macros::Get, module::AppModuleBasic, transaction::ActionResult,
 };
+use config::abci::global_cfg::CFG;
 use fp_events::Event;
 use fp_evm::{BlockId, CallOrCreateInfo, Runner, TransactionStatus};
 use fp_storage::{Borrow, BorrowMut};
@@ -36,11 +37,11 @@ impl<C: Config> App<C> {
     }
 
     pub fn store_block(&mut self, ctx: &mut Context, block_number: U256) -> Result<()> {
-        #[cfg(feature = "debug_env")]
-        const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::from(142_5000);
-
-        #[cfg(not(feature = "debug_env"))]
-        const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::zero();
+        // #[cfg(feature = "debug_env")]
+        // const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::from(142_5000);
+        //
+        // #[cfg(not(feature = "debug_env"))]
+        // const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::zero();
 
         let mut transactions: Vec<Transaction> = Vec::new();
         let mut statuses: Vec<TransactionStatus> = Vec::new();
@@ -51,7 +52,7 @@ impl<C: Config> App<C> {
         let pending_txs: Vec<(Transaction, TransactionStatus, Receipt)> =
             PendingTransactions::take(ctx.db.write().borrow_mut()).unwrap_or_default();
 
-        if block_number < EVM_FIRST_BLOCK_HEIGHT
+        if block_number < U256::from(CFG.checkpoint.evm_first_block_height)
             || (pending_txs.is_empty() && self.disable_eth_empty_blocks)
         {
             is_store_block = false;
