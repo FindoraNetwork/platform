@@ -23,18 +23,18 @@ target/release/fn convert-bar-to-abar --anon-keys ./anon-keys-temp2.keys  --txo-
 #target/release/fn convert-bar-to-abar --anon-keys ./anon-keys-temp2.keys  --txo-sid 9 2> /dev/null
 
 tail -n 2 randomizers > randomizer_file
-randomiser=$(awk 'FNR>=1 && FNR<=1' randomizer_file)
+randomiser1=$(awk 'FNR>=1 && FNR<=1' randomizer_file)
 echo "\n\n Owned Abars after Bar to Abar conversion 1"
-sleep 25
-target/release/fn owned-abars -p evHEjxtneSR-bEHuhEGov7Qg0hZSFhPxBP0QrYi1IG4= -r $randomiser
-randomiser=$(awk 'FNR>=2 && FNR<=2' randomizer_file)
+sleep 20
+target/release/fn owned-abars -p evHEjxtneSR-bEHuhEGov7Qg0hZSFhPxBP0QrYi1IG4= -r $randomiser1
+randomiser2=$(awk 'FNR>=2 && FNR<=2' randomizer_file)
 echo "\n\n Owned Abars after Bar to Abar conversion 2"
-sleep 25
-target/release/fn owned-abars -p Acm95UNobBt9arsz_-nKmxLIa45CYP1oSMszxFAmkM0= -r $randomiser
-#randomiser=$(awk 'FNR>=3 && FNR<=3' randomizer_file)
+sleep 20
+target/release/fn owned-abars -p Acm95UNobBt9arsz_-nKmxLIa45CYP1oSMszxFAmkM0= -r $randomiser2
+#randomiser3=$(awk 'FNR>=3 && FNR<=3' randomizer_file)
 #echo "\n\n Owned Abars after Bar to Abar conversion 3"
 #sleep 20
-#target/release/fn owned-abars -p evHEjxtneSR-bEHuhEGov7Qg0hZSFhPxBP0QrYi1IG4= -r $randomiser
+#target/release/fn owned-abars -p evHEjxtneSR-bEHuhEGov7Qg0hZSFhPxBP0QrYi1IG4= -r $randomiser3
 
 sleep 5
 echo "keQ0N8bNYef_3GhCrxgLwZKdiRl6QoTwYj6PLsW3DQR68cSPG2d5JH5sQe6EQai_tCDSFlIWE_EE_RCtiLUgbg==
@@ -56,20 +56,22 @@ echo "--------------------------------------------------------------------------
 sleep 5
 target/release/fn anon-transfer-batch -n amount_file -s axfr_secretkey_file -d decryption_key_file --to-axfr-public-key-file to_axfr_public_key_file --to-enc-key-file to_enc_key_file -r randomizer_file
 
-tail -n 3 randomizers > randomizer_file
-randomiser=$(awk 'FNR>=1 && FNR<=1' randomizer_file)
+tail -n 3 randomizers > randomizer_file2
+randomiser4=$(awk 'FNR>=1 && FNR<=1' randomizer_file2)
 echo "\n\n Owned Abars for Receiver1 after Batch Anon Transfer"
-sleep 30
-target/release/fn owned-abars -p 1ASVNYLgW2SzBEmAnHfaiJwVBd0M72aRhcReJluZo9M= -r $randomiser
+sleep 20
+echo $randomiser4 > /dev/null
+target/release/fn owned-abars -p 1ASVNYLgW2SzBEmAnHfaiJwVBd0M72aRhcReJluZo9M= -r $randomiser4
 
-randomiser=$(awk 'FNR>=3 && FNR<=3' randomizer_file)
+randomiser5=$(awk 'FNR>=3 && FNR<=3' randomizer_file2)
 echo "\n\n Owned Abars for Receiver3 after Batch Anon Transfer"
-sleep 30
-target/release/fn owned-abars -p IEJkCPKple-s18YzlKQkSj-rBdXKvbPFSRssUHgXtVE= -r $randomiser
+sleep 20
+echo $randomiser5 > /dev/null
+target/release/fn owned-abars -p IEJkCPKple-s18YzlKQkSj-rBdXKvbPFSRssUHgXtVE= -r $randomiser5
 
 sleep 2
 echo "\n\n\n Fetch merkle proof for Batch Anon Transfer"
 echo "------------------------------------------------------------------------------"
 target/release/fn anon-fetch-merkle-proof -a 3
-rm axfr_secretkey_file decryption_key_file randomizer_file to_axfr_public_key_file to_enc_key_file amount_file
+rm axfr_secretkey_file decryption_key_file randomizer_file randomizer_file2 to_axfr_public_key_file to_enc_key_file amount_file
 echo "\n\n Batch Anonymous Transfer demo script executed successfully!"
