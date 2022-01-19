@@ -4,7 +4,7 @@
 
 use {
     crate::{
-        abci::{server::callback::TENDERMINT_BLOCK_HEIGHT},
+        abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
         api::submission_server::SubmissionServer,
     },
     abci::{

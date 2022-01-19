@@ -8,7 +8,7 @@
 #![deny(warnings)]
 
 use {
-    config::findora::{init, config::CFG},
+    config::findora::{config::CFG, init},
     lazy_static::lazy_static,
     nix::{
         sys::signal::{kill, Signal},

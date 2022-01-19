@@ -10,7 +10,6 @@ pub mod utils;
 pub use fbnc;
 
 use {
-
     crate::{
         data_model::{
             AssetType, AssetTypeCode, AuthenticatedBlock, AuthenticatedTransaction,
@@ -21,8 +20,8 @@ use {
             BLACK_HOLE_PUBKEY,
         },
         staking::{
-            Amount, Power, Staking, TendermintAddrRef,
-            FF_PK_EXTRA_120_0000, FF_PK_LIST, FRA_TOTAL_AMOUNT, KEEP_HIST,
+            Amount, Power, Staking, TendermintAddrRef, FF_PK_EXTRA_120_0000, FF_PK_LIST,
+            FRA_TOTAL_AMOUNT, KEEP_HIST,
         },
         LSSED_VAR, SNAPSHOT_ENTRIES_DIR,
     },
@@ -629,7 +628,9 @@ impl LedgerState {
         // #[cfg(not(feature = "debug_env"))]
         // const NONCONFIDENTIAL_BALANCE_FIX_HEIGHT: BlockHeight = 121_0000;
 
-        if CFG.checkpoint.nonconfidential_balance_fix_height < self.get_tendermint_height() {
+        if CFG.checkpoint.nonconfidential_balance_fix_height
+            < self.get_tendermint_height()
+        {
             self.get_nonconfidential_balance(addr).c(d!())
         } else {
             Ok(0)

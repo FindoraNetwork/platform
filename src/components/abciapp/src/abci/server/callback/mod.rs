@@ -6,10 +6,7 @@ mod utils;
 
 use {
     crate::{
-        abci::{
-            server::ABCISubmissionServer, staking, IN_SAFE_ITV,
-            POOL,
-        },
+        abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV, POOL},
         api::{
             query_server::BLOCK_CREATED,
             submission_server::{convert_tx, try_tx_catalog, TxCatalog},
@@ -26,7 +23,7 @@ use {
     lazy_static::lazy_static,
     ledger::{
         converter::is_convert_account,
-        staking::{KEEP_HIST},
+        staking::KEEP_HIST,
         store::{
             api_cache,
             fbnc::{new_mapx, Mapx},
@@ -81,7 +78,8 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
     resp.set_last_block_height(h);
     if 0 < h {
-        if CFG.checkpoint.disable_evm_block_height < h && h < CFG.checkpoint.enable_frc20_height
+        if CFG.checkpoint.disable_evm_block_height < h
+            && h < CFG.checkpoint.enable_frc20_height
         {
             resp.set_last_block_app_hash(la_hash);
         } else {

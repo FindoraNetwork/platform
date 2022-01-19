@@ -339,9 +339,13 @@ pub mod global_cfg {
         let checkpoint_path = m
             .value_of("checkpoint-file")
             .map(|v| v.to_owned())
-            .unwrap_or_else(| |
-                format!("{}/.tendermint/config/checkpoint.toml", pnk!(env::var("HOME"))).to_owned()
-            );
+            .unwrap_or_else(|| {
+                format!(
+                    "{}/.tendermint/config/checkpoint.toml",
+                    pnk!(env::var("HOME"))
+                )
+                .to_owned()
+            });
 
         let res = Config {
             abci_host: ah,

@@ -637,7 +637,8 @@ pub async fn query_delegation_info(
                 }
                 DelegationState::Bond => {
                     if staking.cur_height()
-                        > d.end_height().saturating_sub(CFG.checkpoint.unbond_block_cnt)
+                        > d.end_height()
+                            .saturating_sub(CFG.checkpoint.unbond_block_cnt)
                     {
                         mem::swap(&mut bond_amount, &mut unbond_amount);
                     }

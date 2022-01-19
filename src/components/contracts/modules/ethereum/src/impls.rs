@@ -1,5 +1,6 @@
 use crate::storage::*;
 use crate::{App, Config, ContractLog, TransactionExecuted};
+use config::abci::global_cfg::CFG;
 use ethereum::{
     BlockV0 as Block, LegacyTransactionMessage, Receipt, TransactionV0 as Transaction,
 };
@@ -8,7 +9,6 @@ use evm::{ExitFatal, ExitReason};
 use fp_core::{
     context::Context, macros::Get, module::AppModuleBasic, transaction::ActionResult,
 };
-use config::abci::global_cfg::CFG;
 use fp_events::Event;
 use fp_evm::{BlockId, CallOrCreateInfo, Runner, TransactionStatus};
 use fp_storage::{Borrow, BorrowMut};
