@@ -47,11 +47,18 @@ fn node_command() -> Result<()> {
         }};
     }
 
+    let checkpoint_file = CFG
+        .checkpoint_file
+        .clone()
+        .unwrap_or_else(|| String::from("./checkpoint.toml"));
+
     abcid
         .arg("--submission-service-port")
         .arg(CFG.submission_service_port.to_string())
         .arg("--ledger-service-port")
         .arg(CFG.ledger_service_port.to_string())
+        .arg("--checkpoint-file")
+        .arg(&checkpoint_file)
         .arg("--ledger-dir")
         .arg(&CFG.ledger_dir);
 

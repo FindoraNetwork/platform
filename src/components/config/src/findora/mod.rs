@@ -157,6 +157,7 @@ pub mod config {
         pub init_mode: InitMode,
         pub enable_snapshot: bool,
         pub snapshot_list: bool,
+        pub checkpoint_file: Option<String>,
         pub snapshot_target: Option<String>,
         pub snapshot_itv: Option<String>,
         pub snapshot_cap: Option<String>,
@@ -195,6 +196,7 @@ pub mod config {
                 .arg_from_usage("--snapshot-algo=[Algo] 'fair/fade, default to `fair`'")
                 .arg_from_usage("--snapshot-rollback 'rollback to the last available snapshot'")
                 .arg_from_usage("-r, --snapshot-rollback-to=[Height] 'rollback to a custom height, will try the closest smaller height if the target does not exist'")
+                .arg_from_usage("--checkpoint-file=[Path]")
                 .arg_from_usage("-R, --snapshot-rollback-to-exact=[Height] 'rollback to a custom height exactly, an error will be reported if the target does not exist'");
 
             let init = SubCommand::with_name("init")
@@ -300,6 +302,10 @@ pub mod config {
                 env::var("LEDGER_DIR")
                     .unwrap_or_else(|_| format!("{}/__findora__", &tdir))
             });
+        let cpf = m
+            .value_of("checkpoint-file")
+            .map(|v| v.to_owned())
+            .or_else(|| env::var("CHECKPOINT_FILE").ok());
 
         let init_mode = if m.is_present("devnet") {
             InitMode::Dev
@@ -330,6 +336,7 @@ pub mod config {
             command: cmd.to_owned(),
             tendermint_config: tcfg,
             tendermint_home: tdir,
+            checkpoint_file: cpf,
             init_mode,
             enable_snapshot: m.is_present("enable-snapshot")
                 || env::var("ENABLE_BTM_SNAPSHOT").is_ok(),
