@@ -24,3 +24,5 @@ btm = "0.1.6"
 [build-dependencies]
 vergen = "=3.1.0"
 
+[features]
+debug_env = []

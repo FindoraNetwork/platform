@@ -37,6 +37,21 @@ impl CheckPointConfig {
                 if error.kind() == ErrorKind::NotFound {
                     match File::create(file_path) {
                         Ok(mut file) => {
+                            #[cfg(feature = "debug_env")]
+                            let config = CheckPointConfig {
+                                disable_evm_block_height: 0,
+                                enable_frc20_height: 0,
+                                evm_first_block_height: 0,
+                                zero_amount_fix_height: 0,
+                                apy_fix_height: 0,
+                                overflow_fix_height: 0,
+                                second_fix_height: 0,
+                                apy_v7_upgrade_height: 0,
+                                ff_addr_extra_fix_height: 0,
+                                nonconfidential_balance_fix_height: 0,
+                                unbond_block_cnt: 0,
+                            };
+                            #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
                                 disable_evm_block_height: 1483286,
                                 enable_frc20_height: 1501000,
@@ -228,7 +243,7 @@ pub mod global_cfg {
             .arg_from_usage("--tendermint-node-self-addr=[Address] 'the address of your tendermint node, in upper-hex format'")
             .arg_from_usage("--tendermint-node-key-config-path=[Path] 'such as: ${HOME}/.tendermint/config/priv_validator_key.json'")
             .arg_from_usage("-d, --ledger-dir=[Path]")
-            .arg_from_usage("--checkpoint=[Path]")
+            .arg_from_usage("--checkpoint-file=[Path]")
             .arg_from_usage("--enable-snapshot 'global switch for enabling snapshot functions'")
             .arg_from_usage("--snapshot-list 'list all available snapshots in the form of block height'")
             .arg_from_usage("--snapshot-target=[TargetPath] 'a data volume containing both ledger data and tendermint data'")
@@ -322,9 +337,11 @@ pub mod global_cfg {
             .parse::<u16>()
             .c(d!())?;
         let checkpoint_path = m
-            .value_of("checkpoint")
+            .value_of("checkpoint-file")
             .map(|v| v.to_owned())
-            .unwrap_or_else(|| "./checkpoint.toml".to_owned());
+            .unwrap_or_else(| |
+                format!("{}/.tendermint/config/checkpoint.toml", pnk!(env::var("HOME"))).to_owned()
+            );
 
         let res = Config {
             abci_host: ah,
