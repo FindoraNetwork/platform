@@ -15,6 +15,7 @@ use {
 #[derive(Serialize, Deserialize, Default)]
 #[allow(missing_docs)]
 pub struct CheckPointConfig {
+    pub nonce_reentrant_fix_height: i64,
     pub disable_evm_block_height: i64,
     pub enable_frc20_height: i64,
     pub evm_first_block_height: i64,
@@ -39,6 +40,7 @@ impl CheckPointConfig {
                         Ok(mut file) => {
                             #[cfg(feature = "debug_env")]
                             let config = CheckPointConfig {
+                                nonce_reentrant_fix_height: 0,
                                 disable_evm_block_height: 0,
                                 enable_frc20_height: 0,
                                 evm_first_block_height: 0,
@@ -53,6 +55,7 @@ impl CheckPointConfig {
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
+                                nonce_reentrant_fix_height: 1620850,
                                 disable_evm_block_height: 1483286,
                                 enable_frc20_height: 1501000,
                                 evm_first_block_height: 0,

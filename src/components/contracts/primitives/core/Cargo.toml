@@ -21,6 +21,7 @@ serde_with = { version = "1.9.4"}
 
 # primitives
 fp-types = { path = "../types" }
+config = { path = "../../../config"}
 
 [features]
 default = ["with-storage"]

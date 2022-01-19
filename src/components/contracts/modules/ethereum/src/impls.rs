@@ -37,12 +37,6 @@ impl<C: Config> App<C> {
     }
 
     pub fn store_block(&mut self, ctx: &mut Context, block_number: U256) -> Result<()> {
-        // #[cfg(feature = "debug_env")]
-        // const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::from(142_5000);
-        //
-        // #[cfg(not(feature = "debug_env"))]
-        // const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::zero();
-
         let mut transactions: Vec<Transaction> = Vec::new();
         let mut statuses: Vec<TransactionStatus> = Vec::new();
         let mut receipts: Vec<Receipt> = Vec::new();
@@ -271,6 +265,16 @@ impl<C: Config> App<C> {
         pending_txs.push((transaction, status, receipt));
         PendingTransactions::put(ctx.db.write().borrow_mut(), &pending_txs)?;
 
+        // keep writing index to state before upgrading
+        if ctx.header.height < CFG.checkpoint.nonce_reentrant_fix_height {
+            TransactionIndex::insert(
+                ctx.state.write().borrow_mut(),
+                &HA256::new(transaction_hash),
+                &(ctx.header.height.into(), transaction_index),
+            )?;
+        }
+
+        // write index to only history db after upgrading
         TransactionIndex::insert(
             ctx.db.write().borrow_mut(),
             &HA256::new(transaction_hash),

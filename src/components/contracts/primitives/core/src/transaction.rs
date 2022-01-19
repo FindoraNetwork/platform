@@ -1,5 +1,6 @@
 use crate::context::Context;
 use abci::Event;
+use config::abci::global_cfg::CFG;
 use fp_types::transaction::CheckedTransaction;
 use impl_trait_for_tuples::impl_for_tuples;
 use ruc::*;
@@ -155,14 +156,23 @@ where
 
         match U::execute(maybe_who, self.function, ctx) {
             Ok(res) => {
-                if res.code == 0 {
+                // ignore error code before upgrading
+                if ctx.header.height < CFG.checkpoint.nonce_reentrant_fix_height {
                     Extra::post_execute(ctx, pre, &res)?;
                     ctx.state.write().commit_session();
+                    ctx.db.write().commit_session();
+                    Ok(res)
                 } else {
-                    ctx.state.write().discard_session();
+                    // handle error code after upgrading
+                    if res.code == 0 {
+                        Extra::post_execute(ctx, pre, &res)?;
+                        ctx.state.write().commit_session();
+                    } else {
+                        ctx.state.write().discard_session();
+                    }
+                    ctx.db.write().commit_session();
+                    Ok(res)
                 }
-                ctx.db.write().commit_session();
-                Ok(res)
             }
             Err(e) => {
                 ctx.state.write().discard_session();
