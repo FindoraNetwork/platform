@@ -49,7 +49,7 @@ impl CheckPointConfig {
                                 apy_v7_upgrade_height: 0,
                                 ff_addr_extra_fix_height: 0,
                                 nonconfidential_balance_fix_height: 0,
-                                unbond_block_cnt: 0,
+                                unbond_block_cnt: 3600 * 24 * 21 / 16,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
