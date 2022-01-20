@@ -5,7 +5,7 @@ use ethereum::{
     LegacyTransactionMessage, TransactionV0 as EthereumTransaction,
 };
 use ethereum_types::{BigEndianHash, H160, H256, H512, H64, U256, U64};
-use evm::ExitReason;
+use evm::{ExitError, ExitReason};
 use fp_evm::{BlockId, Runner, TransactionStatus};
 use fp_rpc_core::types::{
     Block, BlockNumber, BlockTransactions, Bytes, CallRequest, Filter, FilteredParams,
@@ -667,12 +667,6 @@ impl EthApi for EthApiImpl {
                     internal_err(format!("create query context error: {:?}", err))
                 })?;
 
-            //ctx.header
-            //    .mut_time()
-            //    .set_seconds(block.header.timestamp as i64);
-            //ctx.header.height = block.header.number.as_u64() as i64;
-            //ctx.header.proposer_address = Vec::from(block.header.beneficiary.as_bytes());
-
             let CallRequest {
                 from,
                 to,
@@ -744,9 +738,39 @@ impl EthApi for EthApiImpl {
             }
         };
 
-        let result = execute_call_or_create(request, highest.low_u64())?;
+        let result = execute_call_or_create(request.clone(), highest.low_u64())?;
 
         error_on_execution_failure(&result.exit_reason, &result.data)?;
+
+        {
+            let mut lowest = U256::from(21_000);
+            let mut mid = std::cmp::min(result.used_gas * 3, (highest + lowest) / 2);
+            let mut previous_highest = highest;
+
+            while (highest - lowest) > U256::one() {
+                let ExecuteResult {
+                    data,
+                    exit_reason,
+                    used_gas: _,
+                } = execute_call_or_create(request.clone(), mid.low_u64())?;
+                match exit_reason {
+                    ExitReason::Succeed(_) => {
+                        highest = mid;
+                        if (previous_highest - highest) * 10 / previous_highest
+                            < U256::one()
+                        {
+                            return Ok(highest);
+                        }
+                        previous_highest = highest;
+                    }
+                    ExitReason::Revert(_) | ExitReason::Error(ExitError::OutOfGas) => {
+                        lowest = mid;
+                    }
+                    other => error_on_execution_failure(&other, &data)?,
+                }
+                mid = (highest + lowest) / 2;
+            }
+        }
 
         Ok(result.used_gas)
     }
