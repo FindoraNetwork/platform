@@ -64,7 +64,7 @@ sodiumoxide = "0.2.1"
 fs2 = "0.4"
 storage = { git = "https://github.com/FindoraNetwork/storage.git", branch = "develop" }
 sparse_merkle_tree = { path = "../libs/sparse_merkle_tree" }
-zei_accumulators = { package = "accumulators", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zei_accumulators = { package = "accumulators", git = "https://github.com/FindoraNetwork/zei", branch = "test-anon-fees" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 parking_lot = { version = "0.11.1", features = ["wasm-bindgen"] }
