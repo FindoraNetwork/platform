@@ -7,7 +7,7 @@ use evm::{
 };
 use fp_core::{context::Context, macros::Get};
 use fp_evm::{Log, Vicinity};
-use fp_storage::BorrowMut;
+use fp_storage::{BorrowMut, DerefMut};
 use fp_traits::{account::AccountAsset, evm::BlockHashMapping};
 use fp_utils::timestamp_converter;
 use storage::{state::State, db::FinDB};
@@ -57,8 +57,6 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         self.logs.append(&mut exited.logs);
         self.deletes.append(&mut exited.deletes);
 
-        self.substate.merge(&mut exited.substate);
-
         Ok(())
     }
 
@@ -66,6 +64,8 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         let mut exited = *self.parent.take().expect("Cannot discard on root substate");
         mem::swap(&mut exited, self);
         self.metadata.swallow_revert(exited.metadata)?;
+
+        let _ = mem::replace(self.ctx.state.write().deref_mut(), exited.substate);
 
         // self.ctx.state.write().discard_session();
         Ok(())
@@ -75,6 +75,8 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         let mut exited = *self.parent.take().expect("Cannot discard on root substate");
         mem::swap(&mut exited, self);
         self.metadata.swallow_discard(exited.metadata)?;
+
+        let _ = mem::replace(self.ctx.state.write().deref_mut(), exited.substate);
 
         // self.ctx.state.write().discard_session();
         Ok(())
