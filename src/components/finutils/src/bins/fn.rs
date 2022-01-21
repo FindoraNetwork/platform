@@ -454,6 +454,34 @@ fn run() -> Result<()> {
             )
             .expect("randomizer write failed");
         }
+    } else if let Some(m) = matches.subcommand_matches("convert-abar-to-bar") {
+        let anon_keys = match m.value_of("anon-keys") {
+            Some(path) => {
+                let f =
+                    fs::read_to_string(path).c(d!("Failed to read anon-keys file"))?;
+                let keys = serde_json::from_str::<AnonKeys>(f.as_str()).c(d!())?;
+                keys
+            }
+            None => return Err(eg!("path for anon-keys file not found")),
+        };
+        let axfr_secret_key = anon_keys.axfr_secret_key;
+        let randomizer = m.value_of("randomizer");
+        let dec_key = anon_keys.dec_key;
+        let to_xfr_public_key = m.value_of("to-xfr-public-key");
+
+        if randomizer.is_none() || to_xfr_public_key.is_none() {
+            println!("{}", m.usage());
+        } else {
+            common::convert_abar2bar(
+                axfr_secret_key,
+                randomizer.unwrap(),
+                dec_key,
+                to_xfr_public_key.unwrap(),
+                m.is_present("confidential-amount"),
+                m.is_present("confidential-type"),
+            )
+            .c(d!())?;
+        }
     } else if let Some(m) = matches.subcommand_matches("gen-anon-keys") {
         let mut prng = ChaChaRng::from_entropy();
         let keypair = AXfrKeyPair::generate(&mut prng);

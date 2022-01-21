@@ -7,6 +7,7 @@
 
 mod amount;
 
+use ledger::data_model::AbarToBarOps;
 use {
     credentials::CredUserSecretKey,
     crypto::basics::hybrid_encryption::XPublicKey,
@@ -50,6 +51,7 @@ use {
     zei::anon_xfr::structs::AXfrBody,
     zei::{
         anon_xfr::{
+            abar_to_bar::gen_abar_to_bar_note,
             bar_to_abar::gen_bar_to_abar_body,
             gen_anon_xfr_body,
             keys::{AXfrKeyPair, AXfrPubKey},
@@ -519,6 +521,35 @@ impl TransactionBuilder {
         let op = Operation::BarToAbar(Box::from(bar_to_abar));
         self.txn.add_operation(op);
         Ok((self, r))
+    }
+
+    /// Create a new operation to convert from Anonymous record to Blind Asset Record
+    #[allow(dead_code)]
+    pub fn add_operation_abar_to_bar(
+        &mut self,
+        input: &OpenAnonBlindAssetRecord,
+        input_keypair: &AXfrKeyPair,
+        bar_pub_key: &XfrPublicKey,
+        asset_record_type: AssetRecordType,
+    ) -> Result<&mut Self> {
+        let mut prng = ChaChaRng::from_entropy();
+        let user_params = UserParams::abar_to_bar_params(41);
+
+        let note = gen_abar_to_bar_note(
+            &mut prng,
+            &user_params,
+            &input,
+            &input_keypair,
+            bar_pub_key,
+            asset_record_type,
+        )
+        .c(d!())?;
+
+        let abar_to_bar = AbarToBarOps::new(&note, self.no_replay_token).c(d!())?;
+
+        let op = Operation::AbarToBar(Box::from(abar_to_bar));
+        self.txn.add_operation(op);
+        Ok(self)
     }
 
     /// Add an operation to transfer assets held in Anonymous Blind Asset Record.
@@ -1307,7 +1338,7 @@ mod tests {
         rand_chacha::ChaChaRng,
         rand_core::SeedableRng,
         std::ops::Neg,
-        zei::anon_xfr::bar_to_from_abar::verify_bar_to_abar_note,
+        zei::anon_xfr::bar_to_abar::verify_bar_to_abar_note,
         zei::anon_xfr::config::FEE_CALCULATING_FUNC,
         zei::anon_xfr::structs::{
             AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
@@ -1700,7 +1731,7 @@ mod tests {
             let user_params = UserParams::eq_committed_vals_params();
             let node_params = NodeParams::from(user_params);
             let result =
-                verify_bar_to_abar_note(&node_params, &note.note, from.get_pk_ref(), 0);
+                verify_bar_to_abar_note(&node_params, &note.note, from.get_pk_ref());
             assert!(result.is_ok());
         }
     }

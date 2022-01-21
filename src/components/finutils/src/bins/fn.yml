@@ -533,6 +533,36 @@ subcommands:
             takes_value: true
             value_name: TXO SID
             required: true
+  - convert-abar-to-bar:
+      about: Convert a ABAR to BAR
+      args:
+        - anon-keys:
+            help: Anon keys file path of the sender
+            short: a
+            long: anon-keys
+            takes_value: true
+            value_name: ANON KEYS PATH
+            required: true
+        - randomizer:
+            help: Randomizer for the input Anon BAR
+            short: r
+            long: randomizer
+            takes_value: true
+            value_name: RANDOMIZER
+            required: true
+        - to-xfr-public-key:
+            help: Xfr public key of the receiver
+            short: tp
+            long: to-xfr-public-key
+            takes_value: true
+            value_name: XFR PUBLIC KEY
+            required: true
+        - confidential-amount:
+            help: mask the amount sent on the transaction log
+            long: confidential-amount
+        - confidential-type:
+            help: mask the asset type sent on the transaction log
+            long: confidential-type
   - anon-transfer:
       about: Perform Anonymous Transfer
       args:

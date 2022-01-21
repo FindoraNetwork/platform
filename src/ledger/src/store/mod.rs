@@ -8,6 +8,7 @@ mod test;
 pub mod utils;
 
 pub use fbnc;
+use zei::anon_xfr::abar_to_bar::verify_abar_to_bar_body;
 
 use {
     crate::{
@@ -1311,6 +1312,12 @@ impl LedgerStatus {
 
     #[inline(always)]
     #[allow(missing_docs)]
+    pub fn get_abar(&self, uid: ATxoSID) -> Option<AnonBlindAssetRecord> {
+        self.ax_utxos.get(&uid)
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
     fn get_utxo(&self, id: TxoSID) -> Option<Utxo> {
         self.utxos.get(&id)
     }
@@ -1672,6 +1679,19 @@ impl LedgerStatus {
                 &node_params,
                 axfr_body,
                 // Unwrap Now to get the code to compile . Change in Zei later to accept Option<BLSScalar>
+                &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
+            )
+            .c(d!())?;
+        }
+
+        for abar_conv in &txn_effect.abar_conv_inputs {
+            let user_params = UserParams::abar_to_bar_params(41);
+            let node_params = NodeParams::from(user_params);
+            let abar_version: usize = abar_conv.proof.get_merkle_root_version();
+
+            verify_abar_to_bar_body(
+                &node_params,
+                abar_conv,
                 &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
             )
             .c(d!())?;

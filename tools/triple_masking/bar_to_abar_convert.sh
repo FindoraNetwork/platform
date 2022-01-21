@@ -28,10 +28,14 @@ echo "
   \"dec_key\": \"4GNC0J_qOXV2kww5BC5bOCyrTEfCodX5BoFaj06uN1s=\"
 }" >> anon-keys-temp.keys
 
+target/release/fn setup -O mnemonic-temp.keys -S http://0.0.0.0
+
+echo "BAR Balance:"
+target/release/fn wallet --show
+
 set -e
 echo "\n\n\n Bar To Abar Conversion"
 echo "==============================================================================="
-target/release/fn setup -O mnemonic-temp.keys -S http://0.0.0.0
 # convert bar to abar
 sleep 1
 target/release/fn convert-bar-to-abar --anon-keys ./anon-keys-temp.keys  --txo-sid 3

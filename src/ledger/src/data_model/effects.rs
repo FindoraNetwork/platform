@@ -1,3 +1,5 @@
+use crate::data_model::AbarToBarOps;
+use zei::anon_xfr::abar_to_bar::AbarToBarBody;
 use {
     crate::{
         data_model::{
@@ -97,6 +99,8 @@ pub struct TxnEffect {
     pub update_stakers: Vec<UpdateStakerOps>,
     /// Newly create Anon Blind Asset Records
     pub bar_conv_abars: Vec<AnonBlindAssetRecord>,
+    /// Nullifiers of conv abars
+    pub abar_conv_inputs: Vec<AbarToBarBody>,
     /// New anon transfer bodies
     pub axfr_bodies: Vec<AXfrBody>,
 }
@@ -201,6 +205,10 @@ impl TxnEffect {
                 Operation::BarToAbar(i) => {
                     check_nonce!(i);
                     te.add_bar_to_abar(i).c(d!())?;
+                }
+                Operation::AbarToBar(i) => {
+                    check_nonce!(i);
+                    te.add_abar_to_bar(i).c(d!())?;
                 }
                 Operation::TransferAnonAsset(i) => {
                     check_nonce!(i);
@@ -579,6 +587,32 @@ impl TxnEffect {
         Ok(())
     }
 
+    /// A bar to abar note is valid iff
+    /// 1. the signature is correct,
+    /// 2. the ZKP can be verified,
+    /// 3. the input atxos are unspent. (checked in finish block)
+    ///
+    fn add_abar_to_bar(&mut self, abar_to_bar: &AbarToBarOps) -> Result<()> {
+        let body = abar_to_bar.note.body.clone();
+
+        //verify singature
+        let msg: Vec<u8> = bincode::serialize(&body).c(d!("Serialization error!"))?;
+        body.input
+            .1
+            .verify(msg.as_slice(), &abar_to_bar.note.signature)
+            .c(d!("AbarToBar signature verification failed"))?;
+
+        // collect body to verify ZKP later
+        self.abar_conv_inputs.push(body.clone());
+        self.txos.push(Some(TxOutput {
+            id: None,
+            record: body.output,
+            lien: None,
+        }));
+
+        Ok(())
+    }
+
     fn add_anon_transfer(&mut self, anon_transfer: &AnonTransferOps) -> Result<()> {
         // verify nullifiers not double spent within txn
 
@@ -689,6 +723,10 @@ impl BlockEffect {
             current_txn_abars.push(abar);
         }
 
+        for inputs in txn_effect.abar_conv_inputs {
+            self.new_nullifiers.push(inputs.input.0);
+        }
+
         for axfr_body in txn_effect.axfr_bodies {
             for (n, _) in axfr_body.inputs {
                 self.new_nullifiers.push(n);
@@ -716,6 +754,11 @@ impl BlockEffect {
                 if self.new_nullifiers.contains(nullifier) {
                     return Err(eg!());
                 }
+            }
+        }
+        for inputs in txn_effect.abar_conv_inputs.iter() {
+            if self.new_nullifiers.contains(&inputs.input.0) {
+                return Err(eg!());
             }
         }
 
