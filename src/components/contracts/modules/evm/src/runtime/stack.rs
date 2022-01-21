@@ -222,7 +222,6 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
     }
 
     fn exit_commit(&mut self) -> Result<(), ExitError> {
-        self.ctx.state.write().merge(&mut self.substate.substate);
         self.substate.exit_commit()
     }
 
