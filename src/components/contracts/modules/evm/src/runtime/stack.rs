@@ -10,8 +10,8 @@ use fp_evm::{Log, Vicinity};
 use fp_storage::{BorrowMut, DerefMut};
 use fp_traits::{account::AccountAsset, evm::BlockHashMapping};
 use fp_utils::timestamp_converter;
-use storage::{state::State, db::FinDB};
 use std::{collections::btree_set::BTreeSet, marker::PhantomData, mem};
+use storage::{db::FinDB, state::State};
 
 pub struct FindoraStackSubstate<'context, 'config> {
     pub ctx: &'context Context,
@@ -45,8 +45,6 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         mem::swap(&mut entering, self);
 
         self.parent = Some(Box::new(entering));
-
-
     }
 
     pub fn exit_commit(&mut self) -> Result<(), ExitError> {
