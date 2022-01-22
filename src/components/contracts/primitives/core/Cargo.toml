@@ -23,6 +23,5 @@ serde_with = { version = "1.9.4"}
 fp-types = { path = "../types" }
 
 [features]
-default = ["with-storage"]
-with-storage = ["storage", "abci"]
-
+default = ["with-storage-net"]
+with-storage-net = ["storage", "abci"]
