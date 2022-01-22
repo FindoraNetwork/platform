@@ -3,7 +3,7 @@ on: [push]
 
 jobs:
   build-push:
-    concurrency: wasm-ci-$${GITHUB_REF##*/}
+    concurrency: wasm-ci-${GITHUB_REF##*/}
     runs-on: ubuntu-latest
     # accepting any branches push but not pull_request
     if: github.event_name != 'pull_request'
@@ -29,6 +29,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           repository: FindoraNetwork/wasm-js-bindings
+          ref: ${GITHUB_REF##*/}
           token: ${{ secrets.ACCESS_TOKEN }}
           path: wasm-js-bindings
 
