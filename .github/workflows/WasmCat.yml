@@ -3,7 +3,7 @@ on: [push]
 
 jobs:
   build-push:
-    concurrency: ci-${{ github.ref }}
+    concurrency: wasm-ci-${{ github.ref }}
     runs-on: ubuntu-latest
     # accepting any branches push but not pull_request
     if: github.event_name != 'pull_request'
@@ -46,7 +46,7 @@ jobs:
           echo "::set-output name=tmp::${tmp}"
           echo "::set-output name=sha::$(git rev-parse --short HEAD)"
           echo "::set-output name=date::$(date +'%Y-%m-%d')"
-          echo "::set-output name=branch::$(echo ${GITHUB_REF##*/})"
+          echo "::set-output name=branch::$(echo ${github.ref##*/})"
 
           cd ./src/components/wasm
           wasm-pack build --release --target nodejs --out-dir $tmp/nodejs
@@ -68,6 +68,8 @@ jobs:
             .DS_Store
             LICENSE
           commit-message: |
+            wasmcat-bot automation push 🚀
+
             platform branch: ${{ steps.wasm.outputs.branch }}
-            commit hash ${{ steps.wasm.outputs.sha }}
+            commit: hash ${{ steps.wasm.outputs.sha }}
             date: ${{ steps.wasm.outputs.date }}
