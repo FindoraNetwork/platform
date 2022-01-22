@@ -16,8 +16,9 @@ jobs:
       - name: Extract vars
         id: vars
         run:
-          echo "::set-output name=sha::$(git rev-parse --short HEAD)"
+          # echo "::set-output name=sha::$(git rev-parse --short HEAD)"
           echo "::set-output name=branch::$(echo ${GITHUB_REF##*/})"
+          echo "::set-output name=sha::$(echo ${GITHUB_SHA})"
 
       - name: Setup Rust enviroment
         uses: actions-rs/toolchain@v1
