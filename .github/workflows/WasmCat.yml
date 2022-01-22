@@ -49,7 +49,7 @@ jobs:
           echo "::set-output name=date::$(date +'%Y-%m-%d')"
           echo "::set-output name=branch::$(echo ${GITHUB_REF##*/})"
 
-          cd ./src/components/wasm
+          cd ./platform/src/components/wasm
           wasm-pack build --release --target nodejs --out-dir $tmp/nodejs
           wasm-pack build --release --target web --out-dir $tmp/web
           wasm-pack build --release --target bundler --out-dir $tmp/bundler
