@@ -22,6 +22,17 @@ jobs:
 
       - name: Checkout platform branch
         uses: actions/checkout@v2
+
+      - name: Using cache to speed up
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     
       - name: Building WASM
         run: |
@@ -38,10 +49,11 @@ jobs:
       - name: Debugging
         run: |
           # testing: 
+          set -x
           echo the work place: $GITHUB_WORKSPACE
           echo the temp place: $tmp
           ls $GITHUB_WORKSPACE
-          ls -lR $tmp
+          ls $tmp
 
       - name: Checkout wasm-js-bindings branch
         uses: actions/checkout@v2
@@ -52,7 +64,8 @@ jobs:
       - name: Debugging
         run: |
           # testing: 
+          set -x
           echo the work place: $GITHUB_WORKSPACE
           echo the temp place: $tmp
           ls $GITHUB_WORKSPACE
-          ls -lR $tmp
+          ls $tmp
