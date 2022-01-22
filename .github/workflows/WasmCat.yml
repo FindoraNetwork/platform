@@ -67,7 +67,7 @@ jobs:
             .gitignore
             .DS_Store
             LICENSE
-          commit-message: >
-            From platform branch: ${{ steps.wasm.outputs.branch }}
+          commit-message: |
+            platform branch: ${{ steps.wasm.outputs.branch }}
             commit hash ${{ steps.wasm.outputs.sha }}
             date: ${{ steps.wasm.outputs.date }}
