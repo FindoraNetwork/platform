@@ -1,8 +1,5 @@
 name: Wasm Building And Pushing
 on:
-  # adding pull_request for testing purpose, remove it after testing
-  pull_request:
-    branch: [main]
   push:
     branches: ['**']
 
@@ -26,12 +23,6 @@ jobs:
 
       - name: Checkout platform branch
         uses: actions/checkout@v2
-
-      - name: Checkout wasm-js-bindings branch
-        uses: actions/checkout@v2
-        with:
-          repository: FindoraNetwork/wasm-js-bindings
-          # ref: testing_wasm_cat # change to ${{ github.ref }} later
     
       - name: Building WASM
         run: |
@@ -41,6 +32,13 @@ jobs:
           tmp=$( mktemp -d )
 
           # testing: 
+          ls $(which cargo)
           echo the work place: $GITHUB_WORKSPACE
           echo the temp place: $tmp
           ls $GITHUB_WORKSPACE
+
+          # - name: Checkout wasm-js-bindings branch
+          #   uses: actions/checkout@v2
+          #   with:
+          #     repository: FindoraNetwork/wasm-js-bindings
+          #     # ref: testing_wasm_cat # change to ${{ github.ref }} later
