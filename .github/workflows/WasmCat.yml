@@ -59,6 +59,7 @@ jobs:
         with:
           destination_repo: 'FindoraNetwork/wasm-js-bindings'
           destination_branch: ${{ steps.wasm.outputs.branch }}
+          destination_branch_create: ${{ steps.wasm.outputs.branch }}
           source_file: '${{ steps.wasm.outputs.tmp }}'
           user_name: wasmcat-bot
           user_email: wasmcat-bot@users.noreply.github.com
