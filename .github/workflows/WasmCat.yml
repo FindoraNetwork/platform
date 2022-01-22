@@ -46,14 +46,13 @@ jobs:
           wasm-pack build --release --target web --out-dir $tmp/web
           wasm-pack build --release --target bundler --out-dir $tmp/bundler
 
+          ls -la $tmp
+
       - name: Debugging
         run: |
           # testing: 
           set -x
-          echo the work place: $GITHUB_WORKSPACE
-          echo the temp place: $tmp
           ls $GITHUB_WORKSPACE
-          ls $tmp
 
       - name: Checkout wasm-js-bindings branch
         uses: actions/checkout@v2
@@ -65,7 +64,4 @@ jobs:
         run: |
           # testing: 
           set -x
-          echo the work place: $GITHUB_WORKSPACE
-          echo the temp place: $tmp
           ls $GITHUB_WORKSPACE
-          ls $tmp
