@@ -23,7 +23,14 @@ jobs:
       - name: Checkout platform branch
         uses: actions/checkout@v2
         with:
-          path: ./platform
+          path: platform
+
+      - name: Checkout wasm-js-bindings branch
+        uses: actions/checkout@v2
+        with:
+          repository: FindoraNetwork/wasm-js-bindings
+          token: ${{ secrets.ACCESS_TOKEN }}
+          path: wasm-js-bindings
 
       - name: Using cache to speed up
         uses: actions/cache@v2
@@ -39,27 +46,20 @@ jobs:
       - name: Building WASM
         id: wasm
         run: |
-          # print out the script steps
-          set -x
-          # make a unique temp folder for storing output
-          tmp=$( mktemp -d )
+          ## print out the script steps
+          #set -x
+          ## make a unique temp folder for storing output
+          #tmp=$( mktemp -d )
           # set some vars for further usage
           echo "::set-output name=tmp::${tmp}"
           echo "::set-output name=sha::$(git rev-parse --short HEAD)"
           echo "::set-output name=date::$(date +'%Y-%m-%d')"
           echo "::set-output name=branch::$(echo ${GITHUB_REF##*/})"
 
-          cd ./platform/src/components/wasm
-          wasm-pack build --release --target nodejs --out-dir $tmp/nodejs
-          wasm-pack build --release --target web --out-dir $tmp/web
-          wasm-pack build --release --target bundler --out-dir $tmp/bundler
-
-      - name: Checkout wasm-js-bindings branch
-        uses: actions/checkout@v2
-        with:
-          repository: FindoraNetwork/wasm-js-bindings
-          token: ${{ secrets.ACCESS_TOKEN }}
-          path: ${{ steps.wasm.outputs.tmp }}
+          cd platform/src/components/wasm
+          wasm-pack build --release --target nodejs --out-dir ${GITHUB_WORKSPACE}/wasm-js-bindings/nodejs
+          wasm-pack build --release --target web --out-dir ${GITHUB_WORKSPACE}/wasm-js-bindings/web
+          wasm-pack build --release --target bundler --out-dir ${GITHUB_WORKSPACE}/wasm-js-bindings/bundler
 
       - name: Pushing wasm-js-bindings branch
         run: |
