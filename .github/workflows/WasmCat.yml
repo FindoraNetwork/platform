@@ -64,7 +64,6 @@ jobs:
           user-name: wasmcat-bot
           user-email: wasmcat-bot@users.noreply.github.com
           commit-message: "platform <${{ steps.wasm.outputs.branch }}>(${{ steps.wasm.outputs.sha }}) by wasmcat-bot automation push 🚀"
-
             # - name: Pushing wasm-js-bindings branch
             #   uses: JamesIves/github-pages-deploy-action@v4.2.2
             #   with:
