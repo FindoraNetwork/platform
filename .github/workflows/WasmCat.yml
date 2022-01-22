@@ -31,7 +31,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           repository: FindoraNetwork/wasm-js-bindings
-          ref: testing_wasm_cat # change to ${{ github.ref }} later
+          # ref: testing_wasm_cat # change to ${{ github.ref }} later
     
       - name: Building WASM
         run: |
