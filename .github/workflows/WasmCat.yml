@@ -16,10 +16,9 @@ jobs:
           profile: minimal
 
       - name: Install Wasm-pack
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: wasm-pack
+        # install wasm-pack from downloading is more faster then cargo install
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
 
       - name: Checkout platform branch
         uses: actions/checkout@v2
@@ -33,6 +32,7 @@ jobs:
 
           # testing: 
           ls $(which cargo)
+          ls $(which wasm-pack)
           echo the work place: $GITHUB_WORKSPACE
           echo the temp place: $tmp
           ls $GITHUB_WORKSPACE
