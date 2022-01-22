@@ -3,7 +3,7 @@ on: [push]
 
 jobs:
   build-push:
-    concurrency: wasm-ci-${GITHUB_REF##*/}
+    concurrency: wasmcat-ci-${GITHUB_REF##*/}
     runs-on: ubuntu-latest
     # accepting any branches push but not pull_request
     if: github.event_name != 'pull_request'
@@ -13,6 +13,7 @@ jobs:
         run: |
           echo "::set-output name=branch::${GITHUB_REF#refs/heads/}"
           echo "::set-output name=sha::${GITHUB_SHA}"
+          echo "::set-output name=tmp::$(mktemp -d)"
 
       - name: Setup Rust enviroment
         uses: actions-rs/toolchain@v1
@@ -28,16 +29,14 @@ jobs:
 
       - name: Checkout platform branch
         uses: actions/checkout@v2
-        with:
-          path: platform
 
-      - name: Checkout wasm-js-bindings branch
-        uses: actions/checkout@v2
-        with:
-          repository: FindoraNetwork/wasm-js-bindings
-          ref: ${{ steps.vars.outputs.branch }}
-          token: ${{ secrets.ACCESS_TOKEN }}
-          path: wasm-js-bindings
+          # - name: Checkout wasm-js-bindings branch
+          #   uses: actions/checkout@v2
+          #   with:
+          #     repository: FindoraNetwork/wasm-js-bindings
+          #     ref: ${{ steps.vars.outputs.branch }}
+          #     token: ${{ secrets.ACCESS_TOKEN }}
+          #     path: wasm-js-bindings
 
       - name: Using cache to speed up
         uses: actions/cache@v2
@@ -51,31 +50,20 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     
       - name: Building WASM
-        id: wasm
         run: |
-          ## print out the script steps
-          #set -x
-          ## make a unique temp folder for storing output
-          #tmp=$( mktemp -d )
-          # set some vars for further usage
-          # echo "::set-output name=tmp::${tmp}"
-          # echo "::set-output name=sha::$(git rev-parse --short HEAD)"
-          # echo "::set-output name=date::$(date +'%Y-%m-%d')"
-          # echo "::set-output name=branch::$(echo ${GITHUB_REF##*/})"
+          cd src/components/wasm
+          wasm-pack build --release --target nodejs --out-dir ${{ steps.vars.outputs.tmp }}/wasm-js-bindings/nodejs
+          wasm-pack build --release --target web --out-dir ${{ steps.vars.outputs.tmp }}/wasm-js-bindings/web
+          wasm-pack build --release --target bundler --out-dir ${{ steps.vars.outputs.tmp }}/wasm-js-bindings/bundler
 
-          cd platform/src/components/wasm
-          wasm-pack build --release --target nodejs --out-dir ${GITHUB_WORKSPACE}/wasm-js-bindings/nodejs
-          wasm-pack build --release --target web --out-dir ${GITHUB_WORKSPACE}/wasm-js-bindings/web
-          wasm-pack build --release --target bundler --out-dir ${GITHUB_WORKSPACE}/wasm-js-bindings/bundler
-
-      - name: Pushing wasm-js-bindings branch
-        run: |
-          cd ${GITHUB_WORKSPACE}/wasm-js-bindings
-          git add .
-          git config user.name wasmcat-bot
-          git config user.email wasmcat-bot@users.noreply.github.com
-          git commit -am "platform (${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.sha }}) by wasmcat-bot automation push 🚀"
-          git push
+          #- name: Pushing wasm-js-bindings branch
+          #  run: |
+          #    cd ${GITHUB_WORKSPACE}/wasm-js-bindings
+          #    git add .
+          #    git config user.name wasmcat-bot
+          #    git config user.email wasmcat-bot@users.noreply.github.com
+          #    git commit -am "platform (${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.sha }}) by wasmcat-bot automation push 🚀"
+          #    git push
 
         # uses: dmnemec/copy_file_to_another_repo_action@main
         # env:
@@ -88,18 +76,20 @@ jobs:
         #   user_name: wasmcat-bot
         #   user_email: wasmcat-bot@users.noreply.github.com
         #   commit_message: 'platform (${{ steps.wasm.outputs.branch }}:${{ steps.wasm.outputs.sha }}) by wasmcat-bot automation push 🚀'
-            # - name: Pushing wasm-js-bindings branch
-            #   uses: JamesIves/github-pages-deploy-action@v4.2.2
-            #   with:
-            #     repository-name: FindoraNetwork/wasm-js-bindings
-            #     branch: ${{ steps.wasm.outputs.branch }}
-            #     folder: ${{ steps.wasm.outputs.tmp }}
-            #     token: ${{ secrets.ACCESS_TOKEN }}
-            #     ssh-key: ${{ secrets.DEPLOY_KEY }}
-            #     git-config-name: wasmcat-bot
-            #     git-config-email: wasmcat-bot@users.noreply.github.com
-            #     clean-exclude: |
-            #       .gitignore
-            #       .DS_Store
-            #       LICENSE
-            #     commit-message: "platform <${{ steps.wasm.outputs.branch }}>(${{ steps.wasm.outputs.sha }}) by wasmcat-bot automation push 🚀"
+        
+      - name: Pushing wasm-js-bindings branch
+        uses: JamesIves/github-pages-deploy-action@v4.2.2
+        with:
+          repository-name: FindoraNetwork/wasm-js-bindings
+          branch: ${{ steps.vars.outputs.branch }}
+          folder: ${{ steps.vars.outputs.tmp }}
+          token: ${{ secrets.ACCESS_TOKEN }}
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
+          git-config-name: wasmcat-bot
+          git-config-email: wasmcat-bot@users.noreply.github.com
+          single-commit: true
+          clean-exclude: |
+            .gitignore
+            .DS_Store
+            LICENSE
+          commit-message: "platform (${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.sha }}) by wasmcat-bot automation push 🚀"
