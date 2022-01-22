@@ -35,7 +35,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           repository: FindoraNetwork/wasm-js-bindings
-          ref: ${{ steps.vaars.outputs.branch }}
+          ref: ${{ steps.vars.outputs.branch }}
           token: ${{ secrets.ACCESS_TOKEN }}
           path: wasm-js-bindings
 
@@ -74,7 +74,7 @@ jobs:
           git add .
           git config user.name wasmcat-bot
           git config user.email wasmcat-bot@users.noreply.github.com
-          git commit -am "platform (${{ steps.vaars.outputs.branch }}:${{ steps.vaars.outputs.sha }}) by wasmcat-bot automation push 🚀"
+          git commit -am "platform (${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.sha }}) by wasmcat-bot automation push 🚀"
           git push
 
         # uses: dmnemec/copy_file_to_another_repo_action@main
