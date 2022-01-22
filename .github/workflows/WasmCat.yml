@@ -10,7 +10,7 @@ jobs:
     steps:
       - name: Extract vars
         id: vars
-        run:
+        run: |
           echo "::set-output name=branch::${GITHUB_REF#refs/heads/}"
           echo "::set-output name=sha::${GITHUB_SHA}"
 
