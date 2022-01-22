@@ -46,7 +46,7 @@ jobs:
           echo "::set-output name=tmp::${tmp}"
           echo "::set-output name=sha::$(git rev-parse --short HEAD)"
           echo "::set-output name=date::$(date +'%Y-%m-%d')"
-          echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+          echo "::set-output name=branch::$(echo ${GITHUB_REF##*/})"
 
           cd ./src/components/wasm
           wasm-pack build --release --target nodejs --out-dir $tmp/nodejs
