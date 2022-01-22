@@ -22,6 +22,8 @@ jobs:
 
       - name: Checkout platform branch
         uses: actions/checkout@v2
+        with:
+          path: ./platform
 
       - name: Using cache to speed up
         uses: actions/cache@v2
@@ -52,18 +54,33 @@ jobs:
           wasm-pack build --release --target web --out-dir $tmp/web
           wasm-pack build --release --target bundler --out-dir $tmp/bundler
 
-      - name: Pushing wasm-js-bindings branch
-        uses: dmnemec/copy_file_to_another_repo_action@main
-        env:
-          API_TOKEN_GITHUB: ${{ secrets.ACCESS_TOKEN }}
+      - name: Checkout wasm-js-bindings branch
+        uses: actions/checkout@v2
         with:
-          destination_repo: 'FindoraNetwork/wasm-js-bindings'
-          destination_branch: ${{ steps.wasm.outputs.branch }}
-          destination_branch_create: ${{ steps.wasm.outputs.branch }}
-          source_file: '${{ steps.wasm.outputs.tmp }}'
-          user_name: wasmcat-bot
-          user_email: wasmcat-bot@users.noreply.github.com
-          commit_message: 'platform (${{ steps.wasm.outputs.branch }}:${{ steps.wasm.outputs.sha }}) by wasmcat-bot automation push 🚀'
+          repository: FindoraNetwork/wasm-js-bindings
+          token: ${{ secrets.ACCESS_TOKEN }}
+          path: ${{ steps.wasm.outputs.tmp }}
+
+      - name: Pushing wasm-js-bindings branch
+        run: |
+          cd ${{ steps.wasm.outputs.tmp }}
+          git add .
+          git config user.name wasmcat-bot
+          git config user.email wasmcat-bot@users.noreply.github.com
+          git commit -am "platform (${{ steps.wasm.outputs.branch }}:${{ steps.wasm.outputs.sha }}) by wasmcat-bot automation push 🚀"
+          git push
+
+        # uses: dmnemec/copy_file_to_another_repo_action@main
+        # env:
+        #   API_TOKEN_GITHUB: ${{ secrets.ACCESS_TOKEN }}
+        # with:
+        #   destination_repo: 'FindoraNetwork/wasm-js-bindings'
+        #   destination_branch: ${{ steps.wasm.outputs.branch }}
+        #   destination_branch_create: ${{ steps.wasm.outputs.branch }}
+        #   source_file: '${{ steps.wasm.outputs.tmp }}'
+        #   user_name: wasmcat-bot
+        #   user_email: wasmcat-bot@users.noreply.github.com
+        #   commit_message: 'platform (${{ steps.wasm.outputs.branch }}:${{ steps.wasm.outputs.sha }}) by wasmcat-bot automation push 🚀'
             # - name: Pushing wasm-js-bindings branch
             #   uses: JamesIves/github-pages-deploy-action@v4.2.2
             #   with:
