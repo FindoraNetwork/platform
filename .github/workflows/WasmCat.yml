@@ -41,10 +41,11 @@ jobs:
           set -x
           # make a unique temp folder for storing output
           tmp=$( mktemp -d )
-          # set it to output for further usage
+          # set some vars for further usage
           echo "::set-output name=tmp::${tmp}"
           echo "::set-output name=sha::$(git rev-parse --short HEAD)"
           echo "::set-output name=date::$(date +'%Y-%m-%d')"
+          echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
 
           cd ./src/components/wasm
           wasm-pack build --release --target nodejs --out-dir $tmp/nodejs
@@ -52,13 +53,17 @@ jobs:
           wasm-pack build --release --target bundler --out-dir $tmp/bundler
 
       - name: Pushing wasm-js-bindings branch
-        uses: s0/git-publish-subdir-action@develop
-        env:
-          REPO: git@github.com:FindoraNetwork/wasm-js-bindings.git
-          BRANCH: ${{ github.ref }}
-          FOLDER: ${{ steps.wasm.outputs.tmp }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MESSAGE: >
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          repository-name: FindoraNetwork/wasm-js-bindings
+          branch: ${{ steps.wasm.outputs.branch }}
+          folder: ${{ steps.wasm.outputs.tmp }}
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
+          clean-exclude: |
+            .gitignore
+            .DS_Store
+            LICENSE
+          commit-message: >
             From platform branch: ${{ github.ref }}
             commit hash ${{ steps.wasm.outputs.sha }}
-            date: $(date '%Y%m%d'))
+            date: ${{ steps.wasm.outputs.date }}
