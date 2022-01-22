@@ -1,12 +1,12 @@
 name: Wasm Building And Pushing
-on:
-  push:
-    branches: ['**']
+on: [push]
 
 jobs:
   build-push:
     concurrency: ci-${{ github.ref }}
     runs-on: ubuntu-latest
+    # accepting any branches push but not pull_request
+    if: github.event_name != 'pull_request'
     steps:
       - name: Setup Rust enviroment
         uses: actions-rs/toolchain@v1
