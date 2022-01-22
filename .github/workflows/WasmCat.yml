@@ -53,17 +53,16 @@ jobs:
           wasm-pack build --release --target bundler --out-dir $tmp/bundler
 
       - name: Pushing wasm-js-bindings branch
-        uses: cpina/github-action-push-to-another-repository@main
+        uses: dmnemec/copy_file_to_another_repo_action@main
         env:
           API_TOKEN_GITHUB: ${{ secrets.ACCESS_TOKEN }}
         with:
-          destination-github-username: 'FindoraNetwork'
-          destination-repository-name: 'wasm-js-bindings'
-          target-branch: ${{ steps.wasm.outputs.branch }}
-          source-directory: '${{ steps.wasm.outputs.tmp }}'
-          user-name: wasmcat-bot
-          user-email: wasmcat-bot@users.noreply.github.com
-          commit-message: "platform <${{ steps.wasm.outputs.branch }}>(${{ steps.wasm.outputs.sha }}) by wasmcat-bot automation push 🚀"
+          destination_repo: 'FindoraNetwork/wasm-js-bindings'
+          destination_branch: ${{ steps.wasm.outputs.branch }}
+          source_file: '${{ steps.wasm.outputs.tmp }}'
+          user_name: wasmcat-bot
+          user_email: wasmcat-bot@users.noreply.github.com
+          commit_message: 'platform (${{ steps.wasm.outputs.branch }}:${{ steps.wasm.outputs.sha }}) by wasmcat-bot automation push 🚀'
             # - name: Pushing wasm-js-bindings branch
             #   uses: JamesIves/github-pages-deploy-action@v4.2.2
             #   with:
