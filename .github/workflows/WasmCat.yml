@@ -54,7 +54,7 @@ jobs:
           wasm-pack build --release --target bundler --out-dir $tmp/bundler
 
       - name: Pushing wasm-js-bindings branch
-        uses: JamesIves/github-pages-deploy-action@v4
+        uses: JamesIves/github-pages-deploy-action@v4.2.2
         with:
           repository-name: FindoraNetwork/wasm-js-bindings
           branch: ${{ steps.wasm.outputs.branch }}
