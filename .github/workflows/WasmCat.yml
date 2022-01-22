@@ -35,33 +35,30 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     
       - name: Building WASM
+        id: wasm
         run: |
           # print out the script steps
           set -x
           # make a unique temp folder for storing output
           tmp=$( mktemp -d )
+          # set it to output for further usage
+          echo "::set-output name=tmp::${tmp}"
+          echo "::set-output name=sha::$(git rev-parse --short HEAD)"
+          echo "::set-output name=date::$(date +'%Y-%m-%d')"
 
           cd ./src/components/wasm
           wasm-pack build --release --target nodejs --out-dir $tmp/nodejs
           wasm-pack build --release --target web --out-dir $tmp/web
           wasm-pack build --release --target bundler --out-dir $tmp/bundler
 
-          ls -la $tmp
-
-      - name: Debugging
-        run: |
-          # testing: 
-          set -x
-          ls $GITHUB_WORKSPACE
-
-      - name: Checkout wasm-js-bindings branch
-        uses: actions/checkout@v2
-        with:
-          repository: FindoraNetwork/wasm-js-bindings
-          # ref: testing_wasm_cat # change to ${{ github.ref }} later
-          
-      - name: Debugging
-        run: |
-          # testing: 
-          set -x
-          ls $GITHUB_WORKSPACE
+      - name: Pushing wasm-js-bindings branch
+        uses: s0/git-publish-subdir-action@develop
+        env:
+          REPO: git@github.com:FindoraNetwork/wasm-js-bindings.git
+          BRANCH: ${{ github.ref }}
+          FOLDER: ${{ steps.wasm.outputs.tmp }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MESSAGE: >
+            From platform branch: ${{ github.ref }}
+            commit hash ${{ steps.wasm.outputs.sha }}
+            date: $(date '%Y%m%d'))
