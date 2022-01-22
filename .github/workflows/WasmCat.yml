@@ -63,7 +63,7 @@ jobs:
 
       - name: Pushing wasm-js-bindings branch
         run: |
-          cd ${{ steps.wasm.outputs.tmp }}
+          cd ${GITHUB_WORKSPACE}/wasm-js-bindings
           git add .
           git config user.name wasmcat-bot
           git config user.email wasmcat-bot@users.noreply.github.com
