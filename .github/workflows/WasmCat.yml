@@ -3,7 +3,7 @@ on: [push]
 
 jobs:
   build-push:
-    concurrency: wasm-ci-${{ github.ref }}
+    concurrency: wasm-ci-$${GITHUB_REF##*/}
     runs-on: ubuntu-latest
     # accepting any branches push but not pull_request
     if: github.event_name != 'pull_request'
@@ -46,7 +46,7 @@ jobs:
           echo "::set-output name=tmp::${tmp}"
           echo "::set-output name=sha::$(git rev-parse --short HEAD)"
           echo "::set-output name=date::$(date +'%Y-%m-%d')"
-          echo "::set-output name=branch::$(echo ${github.ref##*/})"
+          echo "::set-output name=branch::$(echo ${GITHUB_REF##*/})"
 
           cd ./src/components/wasm
           wasm-pack build --release --target nodejs --out-dir $tmp/nodejs
