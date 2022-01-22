@@ -8,6 +8,11 @@ jobs:
     # accepting any branches push but not pull_request
     if: github.event_name != 'pull_request'
     steps:
+      - name: Checkout platform branch
+        uses: actions/checkout@v2
+        with:
+          path: platform
+
       - name: Extract vars
         id: vars
         run:
@@ -25,11 +30,6 @@ jobs:
       - name: Install Wasm-pack
         # install wasm-pack from downloading is more faster then cargo install
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-
-      - name: Checkout platform branch
-        uses: actions/checkout@v2
-        with:
-          path: platform
 
       - name: Checkout wasm-js-bindings branch
         uses: actions/checkout@v2
