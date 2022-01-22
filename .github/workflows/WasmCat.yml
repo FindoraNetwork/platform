@@ -30,15 +30,29 @@ jobs:
           # make a unique temp folder for storing output
           tmp=$( mktemp -d )
 
+          cd ./src/components/wasm
+          wasm-pack build --release --target nodejs --out-dir $tmp/nodejs
+          wasm-pack build --release --target web --out-dir $tmp/web
+          wasm-pack build --release --target bundler --out-dir $tmp/bundler
+
+      - name: Debugging
+        run: |
           # testing: 
-          ls $(which cargo)
-          ls $(which wasm-pack)
           echo the work place: $GITHUB_WORKSPACE
           echo the temp place: $tmp
           ls $GITHUB_WORKSPACE
+          ls -lR $tmp
 
-          # - name: Checkout wasm-js-bindings branch
-          #   uses: actions/checkout@v2
-          #   with:
-          #     repository: FindoraNetwork/wasm-js-bindings
-          #     # ref: testing_wasm_cat # change to ${{ github.ref }} later
+      - name: Checkout wasm-js-bindings branch
+        uses: actions/checkout@v2
+        with:
+          repository: FindoraNetwork/wasm-js-bindings
+          # ref: testing_wasm_cat # change to ${{ github.ref }} later
+          
+      - name: Debugging
+        run: |
+          # testing: 
+          echo the work place: $GITHUB_WORKSPACE
+          echo the temp place: $tmp
+          ls $GITHUB_WORKSPACE
+          ls -lR $tmp
