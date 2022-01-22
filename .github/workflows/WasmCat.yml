@@ -5,6 +5,7 @@ on:
 
 jobs:
   build-push:
+    concurrency: ci-${{ github.ref }}
     runs-on: ubuntu-latest
     steps:
       - name: Setup Rust enviroment
@@ -58,12 +59,15 @@ jobs:
           repository-name: FindoraNetwork/wasm-js-bindings
           branch: ${{ steps.wasm.outputs.branch }}
           folder: ${{ steps.wasm.outputs.tmp }}
+          token: ${{ secrets.ACCESS_TOKEN }}
           ssh-key: ${{ secrets.DEPLOY_KEY }}
+          git-config-name: wasmcat-bot
+          git-config-email: wasmcat-bot@users.noreply.github.com
           clean-exclude: |
             .gitignore
             .DS_Store
             LICENSE
           commit-message: >
-            From platform branch: ${{ github.ref }}
+            From platform branch: ${{ steps.wasm.outputs.branch }}
             commit hash ${{ steps.wasm.outputs.sha }}
             date: ${{ steps.wasm.outputs.date }}
