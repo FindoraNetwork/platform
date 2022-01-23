@@ -8,6 +8,11 @@ jobs:
     # accepting any branches push but not pull_request and pull_request push
     if: github.event_name != 'pull_request'
     steps:
+      - name: Detect is this a PR push
+        id: pr
+        run: echo "::set-output name=pull_request_number::$(gh pr view --json number -q .number || echo "")"
+      - run: echo ${{ steps.pr.outputs.pull_request_number }}
+
       - name: Extract vars
         id: vars
         run: |
