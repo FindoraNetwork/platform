@@ -73,7 +73,7 @@ jobs:
 
           # Cleaning up exists files (we can add some exceptions here)
           shopt -s extglob
-          rm -rf * -v !("LICENSE")
+          rm -rf -v !("LICENSE")
 
           # Copying built files into here
           cp -r ${{ steps.vars.outputs.tmp }}/bundler ./
