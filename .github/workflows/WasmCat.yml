@@ -6,7 +6,7 @@ jobs:
     concurrency: wasmcat-ci-${GITHUB_REF##*/}
     runs-on: ubuntu-latest
     # accepting any branches push but not pull_request and pull_request push
-    if: github.event_name != 'pull_request' && github.event.pull_request.number != 0
+    if: github.event_name != 'pull_request' && github.event.pull_request.number == 0
     steps:
       - name: Checkout platform branch
         uses: actions/checkout@v2
