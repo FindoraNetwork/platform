@@ -8,6 +8,9 @@ jobs:
     # accepting any branches push but not pull_request and pull_request push
     if: github.event_name != 'pull_request'
     steps:
+      - name: Checkout platform branch
+        uses: actions/checkout@v2
+
       - name: Detect is this a PR push
         id: pr
         run: echo "::set-output name=pull_request_number::$(gh pr view --json number -q .number || echo "")"
@@ -31,9 +34,6 @@ jobs:
       - name: Install Wasm-pack
         # install wasm-pack from downloading is more faster then cargo install
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-
-      - name: Checkout platform branch
-        uses: actions/checkout@v2
 
       - name: Using cache to speed up
         uses: actions/cache@v2
