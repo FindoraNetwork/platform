@@ -6,7 +6,7 @@ jobs:
     concurrency: wasmcat-ci-${GITHUB_REF##*/}
     runs-on: ubuntu-latest
     # accepting any branches push but not pull_request and pull_request push
-    if: github.event_name != 'pull_request' && github.event.pull_request.number == 0
+    if: github.event_name != 'pull_request' || github.event.pull_request.number == 0
     steps:
       - name: Checkout platform branch
         uses: actions/checkout@v2
@@ -64,7 +64,7 @@ jobs:
           # check target branch exists or not
           if git ls-remote --heads --exit-code origin ${{ steps.vars.outputs.branch }}; then
             # exists, we pull it
-            git fetch --depth 1 origin ${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.branch }}
+            git fetch --depth 1 --update-head-ok origin ${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.branch }}
             git switch ${{ steps.vars.outputs.branch }}
           else
             # not exists, we create a new one
