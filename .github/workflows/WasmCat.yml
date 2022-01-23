@@ -5,7 +5,7 @@ jobs:
   build-push:
     concurrency: wasmcat-ci-${GITHUB_REF##*/}
     runs-on: ubuntu-latest
-    # accepting any branches push but not pull_request
+    # accepting any branches push but not pull_request and pull_request push
     if: github.event_name != 'pull_request'
     steps:
       - name: Extract vars
@@ -30,14 +30,6 @@ jobs:
       - name: Checkout platform branch
         uses: actions/checkout@v2
 
-          # - name: Checkout wasm-js-bindings branch
-          #   uses: actions/checkout@v2
-          #   with:
-          #     repository: FindoraNetwork/wasm-js-bindings
-          #     ref: ${{ steps.vars.outputs.branch }}
-          #     token: ${{ secrets.ACCESS_TOKEN }}
-          #     path: wasm-js-bindings
-
       - name: Using cache to speed up
         uses: actions/cache@v2
         with:
@@ -52,44 +44,59 @@ jobs:
       - name: Building WASM
         run: |
           cd src/components/wasm
-          wasm-pack build --release --target nodejs --out-dir ${{ steps.vars.outputs.tmp }}/wasm-js-bindings/nodejs
-          wasm-pack build --release --target web --out-dir ${{ steps.vars.outputs.tmp }}/wasm-js-bindings/web
-          wasm-pack build --release --target bundler --out-dir ${{ steps.vars.outputs.tmp }}/wasm-js-bindings/bundler
+          wasm-pack build --release --target nodejs --out-dir ${{ steps.vars.outputs.tmp }}/nodejs
+          wasm-pack build --release --target web --out-dir ${{ steps.vars.outputs.tmp }}/web
+          wasm-pack build --release --target bundler --out-dir ${{ steps.vars.outputs.tmp }}/bundler
 
-          #- name: Pushing wasm-js-bindings branch
-          #  run: |
-          #    cd ${GITHUB_WORKSPACE}/wasm-js-bindings
-          #    git add .
-          #    git config user.name wasmcat-bot
-          #    git config user.email wasmcat-bot@users.noreply.github.com
-          #    git commit -am "platform (${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.sha }}) by wasmcat-bot automation push 🚀"
-          #    git push
-
-        # uses: dmnemec/copy_file_to_another_repo_action@main
-        # env:
-        #   API_TOKEN_GITHUB: ${{ secrets.ACCESS_TOKEN }}
-        # with:
-        #   destination_repo: 'FindoraNetwork/wasm-js-bindings'
-        #   destination_branch: ${{ steps.wasm.outputs.branch }}
-        #   destination_branch_create: ${{ steps.wasm.outputs.branch }}
-        #   source_file: '${{ steps.wasm.outputs.tmp }}'
-        #   user_name: wasmcat-bot
-        #   user_email: wasmcat-bot@users.noreply.github.com
-        #   commit_message: 'platform (${{ steps.wasm.outputs.branch }}:${{ steps.wasm.outputs.sha }}) by wasmcat-bot automation push 🚀'
-        
       - name: Pushing wasm-js-bindings branch
-        uses: JamesIves/github-pages-deploy-action@v4.2.2
-        with:
-          repository-name: FindoraNetwork/wasm-js-bindings
-          branch: test # ${{ steps.vars.outputs.branch }}
-          folder: ${{ steps.vars.outputs.tmp }}
-          token: ${{ secrets.ACCESS_TOKEN }}
-          ssh-key: ${{ secrets.DEPLOY_KEY }}
-          git-config-name: wasmcat-bot
-          git-config-email: wasmcat-bot@users.noreply.github.com
-          single-commit: true
-          clean-exclude: |
-            .gitignore
-            .DS_Store
-            LICENSE
-          commit-message: "platform (${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.sha }}) by wasmcat-bot automation push 🚀"
+        run: |
+          set -x
+          workspace=$(mktemp -d)
+          cd $workspace
+
+          git config --global user.email "wasmcat-bot@users.noreply.github.com"
+          git config --global user.name "wasmcat-bot"
+
+          # clone the main branch
+          git clone --depth 1 https://${{secrets.ACCESS_TOKEN}}@github.com/FindoraNetwork/wasm-js-bindings
+          cd wasm-js-bindings
+
+          # check target branch exists or not
+          if git ls-remote --heads --exit-code origin ${{ steps.vars.outputs.branch }}; then
+            # exists, we pull it
+            git fetch --depth 1 origin ${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.branch }}
+            git switch ${{ steps.vars.outputs.branch }}
+          else
+            # not exists, we create a new one
+            git checkout -B ${{ steps.vars.outputs.branch }}
+          fi
+
+          # Cleaning up exists files (we can add some exceptions here)
+          rm -rf *
+
+          # Copying built files into here
+          cp -r ${{ steps.vars.outputs.tmp }}/bundler ./
+          cp -r ${{ steps.vars.outputs.tmp }}/nodejs ./
+          cp -r ${{ steps.vars.outputs.tmp }}/web ./
+
+          # commit and push
+          git add .
+          git commit -m "platform (${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.sha }}) by wasmcat-bot automation push 🚀"
+          git push -f
+        
+          # - name: Pushing wasm-js-bindings branch
+          #   uses: JamesIves/github-pages-deploy-action@v4
+          #   with:
+          #     repository-name: FindoraNetwork/wasm-js-bindings
+          #     branch: ${{ steps.vars.outputs.branch }}
+          #     folder: ${{ steps.vars.outputs.tmp }}
+          #     token: ${{ secrets.ACCESS_TOKEN }}
+          #     ssh-key: ${{ secrets.DEPLOY_KEY }}
+          #     git-config-name: wasmcat-bot
+          #     git-config-email: wasmcat-bot@users.noreply.github.com
+          #     single-commit: true
+          #     clean-exclude: |
+          #       .gitignore
+          #       .DS_Store
+          #       LICENSE
+          #     commit-message: "platform (${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.sha }}) by wasmcat-bot automation push 🚀"
