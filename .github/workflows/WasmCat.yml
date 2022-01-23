@@ -6,17 +6,10 @@ jobs:
     concurrency: wasmcat-ci-${GITHUB_REF##*/}
     runs-on: ubuntu-latest
     # accepting any branches push but not pull_request and pull_request push
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' &&  github.event.pull_request.number == 0
     steps:
       - name: Checkout platform branch
         uses: actions/checkout@v2
-
-      - name: Detect is this a PR push
-        id: pr
-        env: 
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "::set-output name=pull_request_number::$(gh pr view --json number -q .number || echo "")"
-      - run: echo ${{ steps.pr.outputs.pull_request_number }}
 
       - name: Extract vars
         id: vars
