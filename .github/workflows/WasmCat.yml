@@ -81,7 +81,7 @@ jobs:
         uses: JamesIves/github-pages-deploy-action@v4.2.2
         with:
           repository-name: FindoraNetwork/wasm-js-bindings
-          branch: ${{ steps.vars.outputs.branch }}
+          branch: test # ${{ steps.vars.outputs.branch }}
           folder: ${{ steps.vars.outputs.tmp }}
           token: ${{ secrets.ACCESS_TOKEN }}
           ssh-key: ${{ secrets.DEPLOY_KEY }}
