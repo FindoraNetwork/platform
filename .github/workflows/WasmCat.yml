@@ -72,7 +72,8 @@ jobs:
           fi
 
           # Cleaning up exists files (we can add some exceptions here)
-          rm -rf *
+          shopt -s extglob
+          rm -rf * -v !("LICENSE")
 
           # Copying built files into here
           cp -r ${{ steps.vars.outputs.tmp }}/bundler ./
@@ -82,21 +83,4 @@ jobs:
           # commit and push
           git add .
           git commit -m "platform (${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.sha }}) by wasmcat-bot automation push 🚀"
-          git push -f
-        
-          # - name: Pushing wasm-js-bindings branch
-          #   uses: JamesIves/github-pages-deploy-action@v4
-          #   with:
-          #     repository-name: FindoraNetwork/wasm-js-bindings
-          #     branch: ${{ steps.vars.outputs.branch }}
-          #     folder: ${{ steps.vars.outputs.tmp }}
-          #     token: ${{ secrets.ACCESS_TOKEN }}
-          #     ssh-key: ${{ secrets.DEPLOY_KEY }}
-          #     git-config-name: wasmcat-bot
-          #     git-config-email: wasmcat-bot@users.noreply.github.com
-          #     single-commit: true
-          #     clean-exclude: |
-          #       .gitignore
-          #       .DS_Store
-          #       LICENSE
-          #     commit-message: "platform (${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.sha }}) by wasmcat-bot automation push 🚀"
+          git push -f origin
