@@ -32,6 +32,7 @@ use {
     parking_lot::{Mutex, RwLock},
     protobuf::RepeatedField,
     ruc::*,
+    serde_json::json,
     std::{
         fs,
         ops::Deref,
@@ -104,7 +105,68 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
 }
 
 pub fn query(s: &mut ABCISubmissionServer, req: &RequestQuery) -> ResponseQuery {
-    s.account_base_app.write().query(req)
+    let log_found = || "found".to_string();
+    match req.path.as_str() {
+        "/delegations" => {
+            let mut resp = ResponseQuery::default();
+
+            let la = s.la.read();
+            let state = la.get_committed_state().read();
+            let staking = state.get_staking();
+            let h = staking.cur_height();
+
+            let info = serde_json::to_string(&json!({
+                "delegations": staking.get_global_delegation_records()
+            }))
+            .unwrap();
+
+            resp.height = h as i64;
+            resp.log = log_found();
+            resp.info = info;
+            resp
+        }
+        "/validators" => {
+            let mut resp = ResponseQuery::default();
+            let la = s.la.read();
+            let state = la.get_committed_state().read();
+            let staking = state.get_staking();
+            let height = staking.cur_height();
+            let validators = match staking.validator_get_effective_at_height(height) {
+                Some(v) => v,
+                _ => {
+                    resp.log = format!("Validators is not found at height {}.", height);
+                    resp.code = 404;
+                    return resp;
+                }
+            };
+
+            resp.log = log_found();
+            resp.info =
+                serde_json::to_string(&json!({ "validators": validators })).unwrap();
+            resp
+        }
+        "/block" => {
+            let mut resp = ResponseQuery::default();
+            let height = req.height;
+            if height <= 0 {
+                resp.log = "Bad request, height must be set.".to_owned();
+                resp.code = 400;
+                resp
+            } else {
+                let la = s.la.read();
+                let state = la.get_committed_state().read();
+                if let Some(block) = state.blocks.get(height as _) {
+                    resp.info = log_found();
+                    resp.info = serde_json::to_string(&block).unwrap();
+                } else {
+                    resp.info = format!("Block is not found at height {}.", height);
+                    resp.code = 404;
+                }
+                resp
+            }
+        }
+        _ => s.account_base_app.write().query(req),
+    }
 }
 
 pub fn init_chain(

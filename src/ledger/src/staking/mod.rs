@@ -1616,6 +1616,11 @@ impl Staking {
     pub fn get_global_delegation_amount_mut(&mut self) -> &mut Amount {
         &mut self.delegation_info.global_amount
     }
+
+    ///Get all the delegation records.
+    pub fn get_global_delegation_records(&self) -> &BTreeMap<XfrPublicKey, Delegation> {
+        &self.delegation_info.global_delegation_records_map
+    }
 }
 
 /// self-description of staker
