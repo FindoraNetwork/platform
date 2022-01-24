@@ -5,9 +5,14 @@ jobs:
   build-push:
     concurrency: wasmcat-ci-${GITHUB_REF##*/}
     runs-on: ubuntu-latest
-    # accepting any branches push but not pull_request and pull_request push
-    if: github.event_name != 'pull_request' || github.event.pull_request.number == 0
+      # # accepting any branches push but not pull_request and pull_request push
+      # if: github.event_name != 'pull_request' && github.event.pull_request.number == 0
     steps:
+      - name: Printout
+        run: |
+          echo ${{ github.event_name }}
+          echo ${{ github.event.pull_request.number }}
+
       - name: Checkout platform branch
         uses: actions/checkout@v2
 
