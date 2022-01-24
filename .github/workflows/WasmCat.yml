@@ -3,7 +3,7 @@ on: [push]
 
 jobs:
   build-push:
-    concurrency: wasmcat-ci-${GITHUB_REF#refs/heads/}
+    concurrency: wasmcat-ci-${{ github.ref }}
     runs-on: ubuntu-latest
       # # accepting any branches push but not pull_request and pull_request push
       # if: github.event_name != 'pull_request' && github.event.pull_request.number == 0
