@@ -28,9 +28,9 @@ indexmap = { version = "1.6.2", features = ["serde"] }
 fp-types = { path = "../components/contracts/primitives/types" }
 ethabi = { git = "https://github.com/rust-ethereum/ethabi.git", branch = "master" }
 
-ruc = "0.6.6"
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
-zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
+ruc = "1.0"
+zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4x" }
+zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4x" }
 bulletproofs = { package = "bulletproofs", git = "https://github.com/FindoraNetwork/bp", branch = "batch_verification", features = ["yoloproofs"] }
 fbnc = { version = "0.2.9", default-features = false}
 
