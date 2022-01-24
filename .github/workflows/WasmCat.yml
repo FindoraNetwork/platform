@@ -1,6 +1,5 @@
 name: Wasm Building And Pushing
 on: [push]
-
 jobs:
   build-push:
     concurrency: wasmcat-ci-${{ github.ref }}
