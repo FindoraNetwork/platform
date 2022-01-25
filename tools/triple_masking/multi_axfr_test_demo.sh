@@ -7,10 +7,10 @@ set +e
 rm anon-keys-temp2.keys
 echo "
 {
-  \"axfr_secret_key\": \"EdQbauUfT4ig3Km8SH2MUfEwYq9Re0670KrsL-dt0wAByb3lQ2hsG31quzP_6cqbEshrjkJg_WhIyzPEUCaQzQ==\",
-  \"axfr_public_key\": \"Acm95UNobBt9arsz_-nKmxLIa45CYP1oSMszxFAmkM0=\",
-  \"enc_key\": \"0MTSVCEvwoVfW3NirjENvAuXtjTyBHYWE283c_i_C1Y=\",
-  \"dec_key\": \"IDZNwpZohkun5MKGRF360YyyBFUbzkGq49Zn6oIg9VI=\"
+  \"axfr_secret_key\": \"MwdsbYhTp4Io062nV7E2HkJfsnaTCZpkdjr6aijv2Aem3KjuGWqf4TLB_-20b305Ja3Pop8NS8tgMNUOVXUL5Q==\",
+  \"axfr_public_key\": \"ptyo7hlqn-Eywf_ttG99OSWtz6KfDUvLYDDVDlV1C-U=\",
+  \"enc_key\": \"SAmB7Oji4sAgENLaLb4PFclxQL_DRrEkXcYp6eXuXwI=\",
+  \"dec_key\": \"AEq1ZUFk_fB__YaNjQ3D2taGOnMZAx4adpB6RbnPj24=\"
 }" >> anon-keys-temp2.keys
 sleep 5
 set -e
@@ -26,27 +26,27 @@ tail -n 2 randomizers > randomizer_file
 randomiser1=$(awk 'FNR>=1 && FNR<=1' randomizer_file)
 echo "\n\n Owned Abars after Bar to Abar conversion 1"
 sleep 20
-target/release/fn owned-abars -p evHEjxtneSR-bEHuhEGov7Qg0hZSFhPxBP0QrYi1IG4= -r $randomiser1
+target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r $randomiser1
 randomiser2=$(awk 'FNR>=2 && FNR<=2' randomizer_file)
 echo "\n\n Owned Abars after Bar to Abar conversion 2"
 sleep 20
-target/release/fn owned-abars -p Acm95UNobBt9arsz_-nKmxLIa45CYP1oSMszxFAmkM0= -r $randomiser2
+target/release/fn owned-abars -p ptyo7hlqn-Eywf_ttG99OSWtz6KfDUvLYDDVDlV1C-U= -r $randomiser2
 #randomiser3=$(awk 'FNR>=3 && FNR<=3' randomizer_file)
 #echo "\n\n Owned Abars after Bar to Abar conversion 3"
 #sleep 20
-#target/release/fn owned-abars -p evHEjxtneSR-bEHuhEGov7Qg0hZSFhPxBP0QrYi1IG4= -r $randomiser3
+#target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r $randomiser3
 
 sleep 5
-echo "keQ0N8bNYef_3GhCrxgLwZKdiRl6QoTwYj6PLsW3DQR68cSPG2d5JH5sQe6EQai_tCDSFlIWE_EE_RCtiLUgbg==
-EdQbauUfT4ig3Km8SH2MUfEwYq9Re0670KrsL-dt0wAByb3lQ2hsG31quzP_6cqbEshrjkJg_WhIyzPEUCaQzQ==" > axfr_secretkey_file
-echo "gN6-nw3NeHM3QBPnevuWmzsfP64X3u6j6ybPCQqHSXA=
-IDZNwpZohkun5MKGRF360YyyBFUbzkGq49Zn6oIg9VI=" > decryption_key_file
-echo "1ASVNYLgW2SzBEmAnHfaiJwVBd0M72aRhcReJluZo9M=
-ovO3hR4HeZ_arSGhiLAFUeN9jPsxjajcNiRsV8dNjIg=
-IEJkCPKple-s18YzlKQkSj-rBdXKvbPFSRssUHgXtVE=" > to_axfr_public_key_file
-echo "S9xkhvejemaNuzzZB0l5NnTf9l2Xt4nurnlKiRsPBB8=
-e9d0qy8z2D3npp-pfXNcnolZBYXik6m0GhnDjK5Hvnk=
-VU3YEMaEqXDs5yA27s1IDUPrT-hHxK2xHM9UIA7EyVU=" > to_enc_key_file
+echo "J7PqRhmBOE_gadFs4rB4lcKuz_YoWa5VSlALyKuZdQjNBryPSYZhRczonGNY3-mp86LWW8TJ6clirfk4gk03Tw==
+MwdsbYhTp4Io062nV7E2HkJfsnaTCZpkdjr6aijv2Aem3KjuGWqf4TLB_-20b305Ja3Pop8NS8tgMNUOVXUL5Q==" > axfr_secretkey_file
+echo "4GNC0J_qOXV2kww5BC5bOCyrTEfCodX5BoFaj06uN1s=
+AEq1ZUFk_fB__YaNjQ3D2taGOnMZAx4adpB6RbnPj24=" > decryption_key_file
+echo "BdECoTzLNQHlKq1oGMI2kdh27yp_I2CZen0FGYLFkM0=
+EPGl5qbD_6mq7Zn8Ni1Z1LnR0WInFiHSnQ1P7qiaU4w=
+6dJt8oDrtXt3z-7__dOcDn7Q9lM8jd2RST0FJIfGspc=" > to_axfr_public_key_file
+echo "Ox5L-mGxzOFfd4fef7WZGJMdO-EKBVnnJypZiEl_9FQ=
+ra4lQ6KhMhfLO1leXpI2Dj7qQcasbSOqNIVFAIRDHxw=
+GrvIiB1yXLajRr5V5yZggPOmSelQ1Ga9zxWTzp0RnB8=" > to_enc_key_file
 echo "100000000
 200000000
 119980000" > amount_file
@@ -61,13 +61,13 @@ randomiser4=$(awk 'FNR>=1 && FNR<=1' randomizer_file2)
 echo "\n\n Owned Abars for Receiver1 after Batch Anon Transfer"
 sleep 20
 echo $randomiser4 > /dev/null
-target/release/fn owned-abars -p 1ASVNYLgW2SzBEmAnHfaiJwVBd0M72aRhcReJluZo9M= -r $randomiser4
+target/release/fn owned-abars -p BdECoTzLNQHlKq1oGMI2kdh27yp_I2CZen0FGYLFkM0= -r $randomiser4
 
 randomiser5=$(awk 'FNR>=3 && FNR<=3' randomizer_file2)
 echo "\n\n Owned Abars for Receiver3 after Batch Anon Transfer"
 sleep 20
 echo $randomiser5 > /dev/null
-target/release/fn owned-abars -p IEJkCPKple-s18YzlKQkSj-rBdXKvbPFSRssUHgXtVE= -r $randomiser5
+target/release/fn owned-abars -p 6dJt8oDrtXt3z-7__dOcDn7Q9lM8jd2RST0FJIfGspc= -r $randomiser5
 
 sleep 2
 echo "\n\n\n Fetch merkle proof for Batch Anon Transfer"
