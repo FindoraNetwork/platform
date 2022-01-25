@@ -22,10 +22,10 @@ rm mnemonic-temp.keys anon-keys-temp.keys
 echo "double quit tape enough charge fancy mandate ostrich this program laundry insect either escape cement van turtle loud immense load tip spike inquiry spice" >> mnemonic-temp.keys
 echo "
 {
-  \"axfr_secret_key\": \"keQ0N8bNYef_3GhCrxgLwZKdiRl6QoTwYj6PLsW3DQR68cSPG2d5JH5sQe6EQai_tCDSFlIWE_EE_RCtiLUgbg==\",
-  \"axfr_public_key\": \"evHEjxtneSR-bEHuhEGov7Qg0hZSFhPxBP0QrYi1IG4=\",
-  \"enc_key\": \"LcZyndaw20-7FxmkNGorHpEbTYfWSaIFsiocDScD7nk=\",
-  \"dec_key\": \"gN6-nw3NeHM3QBPnevuWmzsfP64X3u6j6ybPCQqHSXA=\"
+  \"axfr_secret_key\": \"J7PqRhmBOE_gadFs4rB4lcKuz_YoWa5VSlALyKuZdQjNBryPSYZhRczonGNY3-mp86LWW8TJ6clirfk4gk03Tw==\",
+  \"axfr_public_key\": \"zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08=\",
+  \"enc_key\": \"Gu558brzFchoqQR9oi8QP54KZKSQ18Djzt82C4YUyFg=\",
+  \"dec_key\": \"4GNC0J_qOXV2kww5BC5bOCyrTEfCodX5BoFaj06uN1s=\"
 }" >> anon-keys-temp.keys
 
 set -e
@@ -37,4 +37,4 @@ sleep 1
 target/release/fn convert-bar-to-abar --anon-keys ./anon-keys-temp.keys  --txo-sid 3
 
 echo "Bar 2 Abar Conversion demo script executed successfully!"
-echo "To check generated Abar run \`target/release/fn owned-abars -p evHEjxtneSR-bEHuhEGov7Qg0hZSFhPxBP0QrYi1IG4= -r RANDOMIZER_STRING\`"
+echo "To check generated Abar run \`target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r RANDOMIZER_STRING\`"

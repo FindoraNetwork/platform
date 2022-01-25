@@ -529,10 +529,8 @@ impl TransactionBuilder {
         outputs: &[OpenAnonBlindAssetRecord],
         input_keypairs: &[AXfrKeyPair],
     ) -> Result<(&mut Self, AXfrNote)> {
-        let mut prng = ChaChaRng::from_entropy(); // TODO: removing this, CRS would be pre generated in a file
+        let mut prng = ChaChaRng::from_entropy();
         let depth: usize = 41;
-        //--Sergio--
-        //let depth: usize = 10;
         let user_params = UserParams::new(
             inputs.len(),
             outputs.len(),
@@ -1328,6 +1326,7 @@ mod tests {
         zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record},
         zei::xfr::sig::XfrKeyPair,
         zei::xfr::structs::AssetType as AT,
+        zeialgebra::groups::Scalar,
     };
 
     // Defines an asset type
@@ -1770,8 +1769,7 @@ mod tests {
         assert!(block_result.is_ok());
 
         for n in block.new_nullifiers.iter() {
-            let _str =
-                base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
+            let _str = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
         }
         let txn_sid_result = ledger_state.finish_block(block);
         assert!(txn_sid_result.is_ok());
@@ -1902,8 +1900,7 @@ mod tests {
         assert!(block_result.is_ok());
 
         for n in block.new_nullifiers.iter() {
-            let _str =
-                base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
+            let _str = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
         }
 
         let txn_sid_result = ledger_state.finish_block(block);
@@ -1955,8 +1952,7 @@ mod tests {
         let _ = block.add_txn_effect(compute_effect);
 
         for n in block.new_nullifiers.iter() {
-            let _str =
-                base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
+            let _str = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
         }
         let _txn_sid = ledger_state.finish_block(block).unwrap();
 
@@ -2005,8 +2001,7 @@ mod tests {
         let _ = block1.add_txn_effect(compute_effect1);
 
         for n in block1.new_nullifiers.iter() {
-            let _str =
-                base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
+            let _str = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
         }
         let _txn_sid1 = ledger_state.finish_block(block1).unwrap();
     }

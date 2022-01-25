@@ -71,7 +71,7 @@ use {
     zei_accumulators::merkle_tree::{
         ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof,
     },
-    zeialgebra::bls12_381::BLSScalar,
+    zeialgebra::{bls12_381::BLSScalar, groups::Scalar},
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
@@ -312,8 +312,7 @@ impl LedgerState {
         mut tx_block: Vec<FinalizedTransaction>,
     ) -> Result<Vec<FinalizedTransaction>> {
         for n in new_nullifiers.iter() {
-            let str =
-                base64::encode_config(&n.get_scalar().to_bytes(), base64::URL_SAFE);
+            let str = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
             let d: Key = Key::from_base64(&str).c(d!())?;
 
             // if the nullifier hash is present in our nullifier set, fail the block
