@@ -1,3 +1,5 @@
+#![allow(clippy::unused_unit)]
+
 use core::fmt::Display;
 use ethereum::{LegacyTransactionMessage, TransactionV0 as Transaction};
 use ethereum_types::{H160, H256};
