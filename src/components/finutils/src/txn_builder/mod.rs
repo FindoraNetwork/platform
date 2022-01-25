@@ -1715,6 +1715,90 @@ mod tests {
     }
 
     #[test]
+    //This contains only the positive tests with the fees included
+    fn axfr_create_verify_unit_positive_tests_with_fees() {
+        let mut ledger_state = LedgerState::tmp_ledger();
+        let _ledger_status = ledger_state.get_status();
+
+        let mut prng = ChaChaRng::from_seed([0u8; 32]);
+
+        let amount = 10i64;
+        let amount_nonneg = Amount::from_nonnegative_i64(amount);
+        assert!(amount_nonneg.is_ok());
+
+        let fee_amount = 8i64;
+        let fee_amount_nonneg = Amount::from_nonnegative_i64(fee_amount);
+        assert!(fee_amount_nonneg.is_ok());
+
+        let amount_output = amount + fee_amount;
+        let amount_output_nonneg = Amount::from_nonnegative_i64(amount_output);
+        assert!(amount_output_nonneg.is_ok());
+
+        //Here the Asset Type is generated as a 32 byte and each of them are zero
+        let asset_type = AT::from_identical_byte(0);
+
+        // simulate input abar
+        let (mut oabar, keypair_in, _dec_key_in, _) =
+            gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type);
+
+        // simulate input fee abar
+        let (mut oabar_fee, keypair_in_fee, _dec_key_in, _) =
+            gen_oabar_and_keys(&mut prng, fee_amount_nonneg.unwrap(), asset_type);
+
+        let abar = AnonBlindAssetRecord::from_oabar(&oabar);
+        
+        let fee_abar = AnonBlindAssetRecord::from_oabar(&oabar_fee);
+
+        let asset_type_out = AT::from_identical_byte(0);
+
+        //Simulate output abar
+        let (oabar_out, _keypair_out, _dec_key_out, _) =
+            gen_oabar_and_keys(&mut prng, amount_output_nonneg.unwrap(), asset_type_out);
+
+        let _abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
+
+        let mut builder = TransactionBuilder::from_seq_id(1);
+
+        let _owner_memo = oabar.get_owner_memo().unwrap();
+
+        // add abar to merkle tree
+        let uid = ledger_state.add_abar(&abar).unwrap();
+        ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
+
+        let _ = ledger_state.compute_and_save_state_commitment_data(1); //It is not necessary
+        let mut mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
+        oabar.update_mt_leaf_info(mt_leaf_info);
+
+        // add fee abar to merkle tree
+        let uid = ledger_state.add_abar(&fee_abar).unwrap();
+        ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
+
+        let _ = ledger_state.compute_and_save_state_commitment_data(2); //It is not necessary
+        mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
+        oabar_fee.update_mt_leaf_info(mt_leaf_info);
+
+        let result =
+            builder.add_operation_anon_transfer(&[oabar, oabar_fee], &[oabar_out], &[keypair_in, keypair_in_fee]);
+
+        assert!(result.is_ok());
+
+        let txn = builder.take_transaction();
+        let compute_effect = TxnEffect::compute_effect(txn).unwrap();
+        let mut block = BlockEffect::default();
+        let block_result = block.add_txn_effect(compute_effect);
+        //let block_result = block.add_txn_effect(compute_effect, true);
+
+        assert!(block_result.is_ok());
+
+        for n in block.new_nullifiers.iter() {
+            let _str = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+        }
+        let txn_sid_result = ledger_state.finish_block(block);
+        assert!(txn_sid_result.is_ok());
+        let _txn_sid_result = txn_sid_result.unwrap();
+    }
+
+    #[test]
     //This contains only the positive tests
     fn axfr_create_verify_unit_positive_tests() {
         let mut ledger_state = LedgerState::tmp_ledger();
@@ -2005,6 +2089,31 @@ mod tests {
         }
         let _txn_sid1 = ledger_state.finish_block(block1).unwrap();
     }
+
+    /*fn gen_oabar_and_keys_with_fees<R: CryptoRng + RngCore>(
+        prng: &mut R,
+        //amount: u64,
+        amount: Vec<Amount>,
+        asset_type: AT,
+    ) -> (
+        OpenAnonBlindAssetRecord,
+        AXfrKeyPair,
+        XSecretKey,
+        XPublicKey,
+    ) {
+        let keypair = AXfrKeyPair::generate(prng);
+        let dec_key = XSecretKey::new(prng);
+        let enc_key = XPublicKey::from(&dec_key);
+        let oabar = OpenAnonBlindAssetRecordBuilder::new()
+            .amount(u64::from(amount))
+            .asset_type(asset_type)
+            .pub_key(keypair.pub_key())
+            .finalize(prng, &enc_key)
+            .unwrap()
+            .build()
+            .unwrap();
+        (oabar, keypair, dec_key, enc_key)
+    }*/
 
     fn gen_oabar_and_keys<R: CryptoRng + RngCore>(
         prng: &mut R,
