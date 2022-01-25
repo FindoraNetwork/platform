@@ -30,7 +30,7 @@ fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
 
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.3b" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.4" }
 
 [dev-dependencies]
 baseapp = { path = "../../baseapp" }
