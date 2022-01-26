@@ -1,5 +1,7 @@
 name: Wasm Building And Pushing
-on: [push]
+on: 
+  push:
+    branches: ['**_wasm']
 
 jobs:
   build-push:
