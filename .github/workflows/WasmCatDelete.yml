@@ -1,0 +1,39 @@
+name: Wasm Delete Destination Branch
+on: 
+  delete:
+    branches: ['**_wasm']
+
+jobs:
+  delete:
+    concurrency: wasmcat-ci-${{ github.ref }}
+    runs-on: ubuntu-latest
+    # check again this is a delete branch event 
+    if: github.event.ref_type == 'branch'
+    steps:
+      - name: Checkout platform branch
+        uses: actions/checkout@v2
+
+      - name: Extract vars
+        id: vars
+        run: |
+          echo "::set-output name=branch::${GITHUB_REF#refs/heads/}"
+          echo "::set-output name=sha::${GITHUB_SHA}"
+          echo "::set-output name=tmp::$(mktemp -d)"
+
+      - name: Delete wasm-js-bindings branch
+        run: |
+          set -x
+          workspace=$(mktemp -d)
+          cd $workspace
+
+          git config --global user.email "wasmcat-bot@users.noreply.github.com"
+          git config --global user.name "wasmcat-bot"
+
+          # clone the main branch
+          git clone --depth 1 https://${{secrets.ACCESS_TOKEN}}@github.com/FindoraNetwork/wasm-js-bindings
+          cd wasm-js-bindings
+
+          # check target branch exists then we delete it
+          if git ls-remote --heads --exit-code origin ${{ steps.vars.outputs.branch }}; then
+            git push -d origin ${{ steps.vars.outputs.branch }}   
+          fi
