@@ -52,7 +52,7 @@ use {
     },
     zei::{
         serialization::ZeiFromToBytes,
-        xfr::sig::{XfrKeyPair, XfrPublicKey, XFR_SECRET_KEY_LENGTH},
+        xfr::sig::{XfrKeyPair, XfrPublicKey},
     },
 };
 
@@ -251,14 +251,22 @@ impl Staking {
 
     #[inline(always)]
     // just make a (look like) "random" public key.
-    fn gen_consensus_tmp_pubkey2(pk: &XfrPublicKey) -> XfrPublicKey {
+    fn gen_consensus_tmp_pubkey2(
+        pk: &XfrPublicKey,
+        mask: &XfrPublicKey,
+    ) -> XfrPublicKey {
         let bytes = pk.as_bytes();
+        let mask = mask.as_bytes();
+
         let len = bytes.len();
-        let mut templete = [0_u8; XFR_SECRET_KEY_LENGTH];
+
+        debug_assert!(mask.len() == len);
+
+        let mut templete = [0_u8; 32];
         for i in 0..len {
             unsafe {
                 *templete.get_unchecked_mut(i) =
-                    bytes.get_unchecked(i) ^ bytes.get_unchecked(len - i - 1);
+                    mask.get_unchecked(i) ^ bytes.get_unchecked(i)
             }
         }
         XfrPublicKey::zei_from_bytes(&templete).unwrap()
@@ -791,9 +799,8 @@ impl Staking {
             // unwrap is safe here
             let v = self.validator_get_current_one_by_id(addr).unwrap();
             let mut auto_ud_list = Vec::with_capacity(64);
-
+            let mut cr = self.cr;
             if h < CFG.checkpoint.undelegation_fix_height {
-                let mut cr = self.cr;
                 self.validator_get_current_one_by_id(addr)
                     .unwrap()
                     .delegators
@@ -808,18 +815,21 @@ impl Staking {
                             ),
                         ));
                     });
-                self.cr = cr;
             } else {
                 for (pk, d) in self.delegation_info.global_delegation_records_map.iter()
                 {
                     if d.delegations.contains_key(addr) && pk != addr {
                         let am = d.delegations.get(addr).unwrap();
-                        let id = Self::gen_consensus_tmp_pubkey2(pk);
+                        let id = Self::gen_consensus_tmp_pubkey2(
+                            pk,
+                            &Self::gen_consensus_tmp_pubkey(&mut cr),
+                        );
                         let pu = PartialUnDelegation::new(*am, id, v.td_addr.clone());
                         auto_ud_list.push((*pk, pu));
                     }
                 }
             }
+            self.cr = cr;
 
             auto_ud_list.iter().for_each(|(addr, pu)| {
                 ruc::info_omit!(self.undelegate_partially(addr, pu));
