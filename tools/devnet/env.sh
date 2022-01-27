@@ -10,7 +10,7 @@ export FIN_DEBUG="${FIN_DEBUG:=$TMP_DEBUG}"
 export DEVNET="$FIN_DEBUG/devnet"
 
 # binary config
-BIN_CFG_DEFAULT=release
+BIN_CFG_DEFAULT=debug
 BIN_CFG="${BIN_CFG:=$BIN_CFG_DEFAULT}"
 BIN="target/$BIN_CFG"
 
