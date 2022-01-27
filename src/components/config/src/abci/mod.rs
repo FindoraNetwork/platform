@@ -26,6 +26,7 @@ pub struct CheckPointConfig {
     pub ff_addr_extra_fix_height: u64,
     pub nonconfidential_balance_fix_height: u64,
     pub unbond_block_cnt: u64,
+    pub undelegation_fix_height: u64,
 }
 
 impl CheckPointConfig {
@@ -50,6 +51,7 @@ impl CheckPointConfig {
                                 ff_addr_extra_fix_height: 0,
                                 nonconfidential_balance_fix_height: 0,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
+                                undelegation_fix_height: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -64,6 +66,7 @@ impl CheckPointConfig {
                                 ff_addr_extra_fix_height: 1200000,
                                 nonconfidential_balance_fix_height: 1210000,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
+                                undelegation_fix_height: 1501000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();

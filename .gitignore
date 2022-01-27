@@ -29,3 +29,5 @@ seq_id.str
 utxo.map
 
 *.tmp
+
+checkpoint.toml
