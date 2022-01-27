@@ -1307,6 +1307,9 @@ impl AnonTransferOperationBuilder {
 #[cfg(test)]
 #[allow(missing_docs)]
 mod tests {
+    use zei::anon_xfr::config::FEE_CALCULATING_FUNC;
+    //use zeialgebra::bls12_381::BLSScalar;
+    //use zeialgebra::groups::Zero;
     use {
         super::*,
         crate::txn_builder::amount::Amount,
@@ -1720,13 +1723,16 @@ mod tests {
         let mut ledger_state = LedgerState::tmp_ledger();
         let _ledger_status = ledger_state.get_status();
 
+        //let zero = BLSScalar::zero();
+
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
 
         let amount = 10i64;
         let amount_nonneg = Amount::from_nonnegative_i64(amount);
         assert!(amount_nonneg.is_ok());
 
-        let fee_amount = 8i64;
+        let fee_amount = FEE_CALCULATING_FUNC( 2 , 1 ) as i64;
+        //let fee_amount = 8i64;
         let fee_amount_nonneg = Amount::from_nonnegative_i64(fee_amount);
         assert!(fee_amount_nonneg.is_ok());
 
@@ -1735,7 +1741,8 @@ mod tests {
         assert!(amount_output_nonneg.is_ok());
 
         //Here the Asset Type is generated as a 32 byte and each of them are zero
-        let asset_type = AT::from_identical_byte(0);
+        //let asset_type = AT::from_identical_byte(0);
+        let asset_type = ASSET_TYPE_FRA;
 
         // simulate input abar
         let (mut oabar, keypair_in, _dec_key_in, _) =
@@ -1770,15 +1777,20 @@ mod tests {
         oabar.update_mt_leaf_info(mt_leaf_info);
 
         // add fee abar to merkle tree
-        let uid = ledger_state.add_abar(&fee_abar).unwrap();
+        let uid_fee = ledger_state.add_abar(&fee_abar).unwrap();
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
 
         let _ = ledger_state.compute_and_save_state_commitment_data(2); //It is not necessary
-        mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
+        mt_leaf_info = ledger_state.get_abar_proof(uid_fee).unwrap();
         oabar_fee.update_mt_leaf_info(mt_leaf_info);
 
+        let vec_inputs = vec![oabar,oabar_fee];
+        let vec_oututs = vec![oabar_out];
+        let vec_keys= vec![keypair_in,keypair_in_fee];
+
         let result =
-            builder.add_operation_anon_transfer(&[oabar, oabar_fee], &[oabar_out], &[keypair_in, keypair_in_fee]);
+            builder.add_operation_anon_transfer(&vec_inputs, &vec_oututs, &vec_keys);
+            //builder.add_operation_anon_transfer(&[oabar, oabar_fee], &[oabar_out], &[keypair_in, keypair_in_fee]);
 
         assert!(result.is_ok());
 
@@ -1884,6 +1896,8 @@ mod tests {
 
         //Here the Asset Type is generated as a 32 byte and each of them are zero
         let asset_type = AT::from_identical_byte(0);
+
+
 
         // simulate input abar
         let (oabar, keypair_in, _dec_key_in, _) =
