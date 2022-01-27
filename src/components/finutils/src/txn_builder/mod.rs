@@ -1736,7 +1736,8 @@ mod tests {
         let fee_amount_nonneg = Amount::from_nonnegative_i64(fee_amount);
         assert!(fee_amount_nonneg.is_ok());
 
-        let amount_output = amount + fee_amount;
+        //let amount_output = amount + fee_amount;
+        let amount_output = amount;
         let amount_output_nonneg = Amount::from_nonnegative_i64(amount_output);
         assert!(amount_output_nonneg.is_ok());
 
@@ -1756,7 +1757,8 @@ mod tests {
         
         let fee_abar = AnonBlindAssetRecord::from_oabar(&oabar_fee);
 
-        let asset_type_out = AT::from_identical_byte(0);
+        //let asset_type_out = AT::from_identical_byte(0);
+        let asset_type_out = ASSET_TYPE_FRA;
 
         //Simulate output abar
         let (oabar_out, _keypair_out, _dec_key_out, _) =
@@ -1773,7 +1775,7 @@ mod tests {
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
 
         let _ = ledger_state.compute_and_save_state_commitment_data(1); //It is not necessary
-        let mut mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
+        let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
         oabar.update_mt_leaf_info(mt_leaf_info);
 
         // add fee abar to merkle tree
@@ -1781,18 +1783,19 @@ mod tests {
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
 
         let _ = ledger_state.compute_and_save_state_commitment_data(2); //It is not necessary
-        mt_leaf_info = ledger_state.get_abar_proof(uid_fee).unwrap();
-        oabar_fee.update_mt_leaf_info(mt_leaf_info);
+        let mt_leaf_fee_info = ledger_state.get_abar_proof(uid_fee).unwrap();
+        oabar_fee.update_mt_leaf_info(mt_leaf_fee_info);
 
-        let vec_inputs = vec![oabar,oabar_fee];
+        let vec_inputs = vec![oabar, oabar_fee];
         let vec_oututs = vec![oabar_out];
-        let vec_keys= vec![keypair_in,keypair_in_fee];
+        let vec_keys= vec![keypair_in, keypair_in_fee];
 
         let result =
             builder.add_operation_anon_transfer(&vec_inputs, &vec_oututs, &vec_keys);
             //builder.add_operation_anon_transfer(&[oabar, oabar_fee], &[oabar_out], &[keypair_in, keypair_in_fee]);
 
-        assert!(result.is_ok());
+        let _r = result.unwrap();
+        //assert!(result.is_ok());
 
         let txn = builder.take_transaction();
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
