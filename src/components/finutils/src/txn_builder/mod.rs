@@ -1772,23 +1772,30 @@ mod tests {
 
         // add abar to merkle tree
         let uid = ledger_state.add_abar(&abar).unwrap();
-        ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-
-        let _ = ledger_state.compute_and_save_state_commitment_data(1); //It is not necessary
-        let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
-        oabar.update_mt_leaf_info(mt_leaf_info);
-
-        // add fee abar to merkle tree
         let uid_fee = ledger_state.add_abar(&fee_abar).unwrap();
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
+        let _ = ledger_state.compute_and_save_state_commitment_data(1);
+        //ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
 
-        let _ = ledger_state.compute_and_save_state_commitment_data(2); //It is not necessary
+        //let _ = ledger_state.compute_and_save_state_commitment_data(2);
+
+        let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
         let mt_leaf_fee_info = ledger_state.get_abar_proof(uid_fee).unwrap();
+
+        // add fee abar to merkle tree
+        oabar.update_mt_leaf_info(mt_leaf_info);
+
         oabar_fee.update_mt_leaf_info(mt_leaf_fee_info);
+        //let _ = ledger_state.compute_and_save_state_commitment_data(2);
+
+
+
 
         let vec_inputs = vec![oabar, oabar_fee];
         let vec_oututs = vec![oabar_out];
         let vec_keys= vec![keypair_in, keypair_in_fee];
+
+
 
         let result =
             builder.add_operation_anon_transfer(&vec_inputs, &vec_oututs, &vec_keys);
