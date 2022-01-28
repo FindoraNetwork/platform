@@ -1790,13 +1790,9 @@ mod tests {
         //let _ = ledger_state.compute_and_save_state_commitment_data(2);
 
 
-
-
         let vec_inputs = vec![oabar, oabar_fee];
         let vec_oututs = vec![oabar_out];
         let vec_keys= vec![keypair_in, keypair_in_fee];
-
-
 
         let result =
             builder.add_operation_anon_transfer(&vec_inputs, &vec_oututs, &vec_keys);
@@ -1820,7 +1816,7 @@ mod tests {
         assert!(txn_sid_result.is_ok());
         let _txn_sid_result = txn_sid_result.unwrap();
     }
-
+    /*
     #[test]
     //This contains only the positive tests
     fn axfr_create_verify_unit_positive_tests() {
@@ -1881,7 +1877,7 @@ mod tests {
         let txn_sid_result = ledger_state.finish_block(block);
         assert!(txn_sid_result.is_ok());
         let _txn_sid_result = txn_sid_result.unwrap();
-    }
+    }*/
 
     //Negative tests added
     #[test]
