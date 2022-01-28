@@ -1773,6 +1773,7 @@ mod tests {
         // add abar to merkle tree
         let uid = ledger_state.add_abar(&abar).unwrap();
         let uid_fee = ledger_state.add_abar(&fee_abar).unwrap();
+
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
         let _ = ledger_state.compute_and_save_state_commitment_data(1);
         //ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
@@ -1801,8 +1802,8 @@ mod tests {
             builder.add_operation_anon_transfer(&vec_inputs, &vec_oututs, &vec_keys);
             //builder.add_operation_anon_transfer(&[oabar, oabar_fee], &[oabar_out], &[keypair_in, keypair_in_fee]);
 
-        let _r = result.unwrap();
-        //assert!(result.is_ok());
+        //let _r = result.unwrap();
+        assert!(result.is_ok());
 
         let txn = builder.take_transaction();
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
