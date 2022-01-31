@@ -79,7 +79,7 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         mem::swap(&mut exited, self);
         self.metadata.swallow_discard(exited.metadata)?;
 
-        if self.ctx.header.height < CFG.checkpoint.evm_substate_height {
+        if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
             let _ = mem::replace(self.ctx.state.write().deref_mut(), exited.substate);
         } else {
             info!(target: "evm", "EVM stack exit_discard(), height: {:?}", self.ctx.header.height);
