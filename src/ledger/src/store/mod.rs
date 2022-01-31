@@ -529,6 +529,14 @@ impl LedgerState {
         Ok(create_mt_leaf_info(t))
     }
 
+    /// Check if the nullifier hash is present in nullifier set
+    #[inline(always)]
+    pub fn check_nullifier_hash(&self, hash: String) -> Result<bool> {
+        let d: Key = Key::from_base64(&hash).c(d!())?;
+        let is_null_present = self.nullifier_set.read().get(&d).c(d!())?.is_some();
+        Ok(is_null_present)
+    }
+
     // Initialize a logged Merkle tree for the ledger.
     // We might be creating a new tree or opening an existing one.
     #[inline(always)]

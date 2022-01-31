@@ -32,16 +32,17 @@ bech32 = "0.7.2"
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
 
-zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-ftm-v3-sync" }
 ruc = "1.0"
-zeialgebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
-crypto = { package = "crypto", git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zeialgebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", branch = "develop-ftm-v3-sync" }
+crypto = { package = "crypto", git = "https://github.com/FindoraNetwork/zei", branch = "develop-ftm-v3-sync" }
 
 finutils = { path = "../finutils", default-features = false }
 globutils = { path = "../../libs/globutils" }
 credentials = { path = "../../libs/credentials" }
 cryptohash = { path = "../../libs/cryptohash" }
 ledger = { path = "../../ledger" }
+sparse_merkle_tree = { path = "../../libs/sparse_merkle_tree" }
 
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = { path = "../contracts/primitives/types" }
