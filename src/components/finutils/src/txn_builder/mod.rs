@@ -61,7 +61,7 @@ use {
             ConfidentialAC, Credential,
         },
         serialization::ZeiFromToBytes,
-        setup::{PublicParams, UserParams, DEFAULT_BP_NUM_GENS},
+        setup::{PublicParams, UserParams},
         xfr::{
             asset_record::{
                 build_blind_asset_record, build_open_asset_record,
@@ -535,7 +535,6 @@ impl TransactionBuilder {
             inputs.len(),
             outputs.len(),
             Option::from(depth),
-            DEFAULT_BP_NUM_GENS,
         );
 
         let (body, keypairs) =
@@ -1254,14 +1253,11 @@ impl AnonTransferOperationBuilder {
     /// build generates the anon transfer body with the Zero Knowledge Proof.
     pub fn build(&mut self) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
-        let user_params = UserParams::from_file_if_exists(
+        let user_params = UserParams::new(
             self.inputs.len(),
             self.outputs.len(),
             Some(41),
-            DEFAULT_BP_NUM_GENS,
-            None,
-        )
-        .c(d!())?;
+        );
 
         let (body, diversified_keypairs) = gen_anon_xfr_body(
             &mut prng,

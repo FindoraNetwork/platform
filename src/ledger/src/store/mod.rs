@@ -61,7 +61,7 @@ use {
             verify_anon_xfr_body,
         },
         serialization::ZeiFromToBytes,
-        setup::{NodeParams, UserParams, DEFAULT_BP_NUM_GENS},
+        setup::{NodeParams, UserParams},
         xfr::{
             lib::XfrNotePolicies,
             sig::XfrPublicKey,
@@ -1653,14 +1653,11 @@ impl LedgerStatus {
         // here with LedgerStatus available.
         for axfr_body in txn_effect.axfr_bodies.iter() {
             // TODO: maybe load user_params in memory for inp_op mapping
-            let user_params = UserParams::from_file_if_exists(
+            let user_params = UserParams::new(
                 axfr_body.inputs.len(),
                 axfr_body.outputs.len(),
                 Some(41),
-                DEFAULT_BP_NUM_GENS,
-                None,
-            )
-            .unwrap();
+            );
             let node_params = NodeParams::from(user_params);
             let abar_version = axfr_body.proof.merkle_root_version;
             verify_anon_xfr_body(
