@@ -8,10 +8,11 @@ use evm::{
 };
 use fp_core::{context::Context, macros::Get};
 use fp_evm::{Log, Vicinity};
-use fp_storage::BorrowMut;
+use fp_storage::{BorrowMut, DerefMut};
 use fp_traits::{account::AccountAsset, evm::BlockHashMapping};
 use fp_utils::timestamp_converter;
 use std::{collections::btree_set::BTreeSet, marker::PhantomData, mem};
+use storage::{db::FinDB, state::State};
 
 pub struct FindoraStackSubstate<'context, 'config> {
     pub ctx: &'context Context,
@@ -19,6 +20,7 @@ pub struct FindoraStackSubstate<'context, 'config> {
     pub deletes: BTreeSet<H160>,
     pub logs: Vec<Log>,
     pub parent: Option<Box<FindoraStackSubstate<'context, 'config>>>,
+    pub substate: State<FinDB>,
 }
 
 impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
@@ -31,21 +33,27 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
     }
 
     pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
+        let substate = (*self.ctx.state.read()).substate();
+
         let mut entering = Self {
             ctx: self.ctx,
             metadata: self.metadata.spit_child(gas_limit, is_static),
             parent: None,
             deletes: BTreeSet::new(),
             logs: Vec::new(),
+            substate,
         };
         mem::swap(&mut entering, self);
 
         self.parent = Some(Box::new(entering));
+<<<<<<< HEAD
 
         // start_transaction();
         if self.ctx.header.height < CFG.checkpoint.nonce_reentrant_fix_height {
             self.ctx.state.write().commit_session();
         }
+=======
+>>>>>>> caed5141a5671a8d110814a0ae206d766e8949d6
     }
 
     pub fn exit_commit(&mut self) -> Result<(), ExitError> {
@@ -56,9 +64,12 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         self.logs.append(&mut exited.logs);
         self.deletes.append(&mut exited.deletes);
 
+<<<<<<< HEAD
         if self.ctx.header.height < CFG.checkpoint.nonce_reentrant_fix_height {
             self.ctx.state.write().commit_session();
         }
+=======
+>>>>>>> caed5141a5671a8d110814a0ae206d766e8949d6
         Ok(())
     }
 
@@ -67,9 +78,15 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         mem::swap(&mut exited, self);
         self.metadata.swallow_revert(exited.metadata)?;
 
+<<<<<<< HEAD
         if self.ctx.header.height < CFG.checkpoint.nonce_reentrant_fix_height {
             self.ctx.state.write().discard_session();
         }
+=======
+        let _ = mem::replace(self.ctx.state.write().deref_mut(), exited.substate);
+
+        // self.ctx.state.write().discard_session();
+>>>>>>> caed5141a5671a8d110814a0ae206d766e8949d6
         Ok(())
     }
 
@@ -78,9 +95,15 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         mem::swap(&mut exited, self);
         self.metadata.swallow_discard(exited.metadata)?;
 
+<<<<<<< HEAD
         if self.ctx.header.height < CFG.checkpoint.nonce_reentrant_fix_height {
             self.ctx.state.write().discard_session();
         }
+=======
+        let _ = mem::replace(self.ctx.state.write().deref_mut(), exited.substate);
+
+        // self.ctx.state.write().discard_session();
+>>>>>>> caed5141a5671a8d110814a0ae206d766e8949d6
         Ok(())
     }
 
@@ -126,6 +149,7 @@ impl<'context, 'vicinity, 'config, C: Config>
         vicinity: &'vicinity Vicinity,
         metadata: StackSubstateMetadata<'config>,
     ) -> Self {
+        let substate = (*ctx.state.read()).substate();
         Self {
             ctx,
             vicinity,
@@ -135,6 +159,7 @@ impl<'context, 'vicinity, 'config, C: Config>
                 deletes: BTreeSet::new(),
                 logs: Vec::new(),
                 parent: None,
+                substate,
             },
             _marker: PhantomData,
         }

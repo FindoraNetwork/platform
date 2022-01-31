@@ -8,7 +8,7 @@
 //! To compile wasm package, run wasm-pack build in the wasm directory.
 //!
 
-#![deny(warnings)]
+#![allow(warnings)]
 #![deny(missing_docs)]
 #![allow(clippy::needless_borrow)]
 

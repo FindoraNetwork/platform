@@ -1,0 +1,89 @@
+name: Wasm Building And Pushing
+on: 
+  push:
+    branches: ['**_wasm']
+
+jobs:
+  build-push:
+    concurrency: wasmcat-ci-${{ github.ref }}
+    runs-on: ubuntu-latest
+    # accepting any branches push but not pull_request and pull_request push.
+    # notice: the first push of a PR (create branch) will be triggering.
+    if: github.event_name != 'pull_request' && github.event.pull_request.number == ''
+    steps:
+      - name: Checkout platform branch
+        uses: actions/checkout@v2
+
+      - name: Extract vars
+        id: vars
+        run: |
+          echo "::set-output name=branch::${GITHUB_REF#refs/heads/}"
+          echo "::set-output name=sha::${GITHUB_SHA}"
+          echo "::set-output name=tmp::$(mktemp -d)"
+
+      - name: Setup Rust enviroment
+        uses: actions-rs/toolchain@v1
+        with: 
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          override: true
+          profile: minimal
+
+      - name: Install Wasm-pack
+        # install wasm-pack from downloading is more faster then cargo install
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Using cache to speed up
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    
+      - name: Building WASM
+        run: |
+          cd src/components/wasm
+          wasm-pack build --release --target nodejs --out-dir ${{ steps.vars.outputs.tmp }}/nodejs
+          wasm-pack build --release --target web --out-dir ${{ steps.vars.outputs.tmp }}/web
+          wasm-pack build --release --target bundler --out-dir ${{ steps.vars.outputs.tmp }}/bundler
+
+      - name: Pushing wasm-js-bindings branch
+        run: |
+          set -x
+          workspace=$(mktemp -d)
+          cd $workspace
+
+          git config --global user.email "wasmcat-bot@users.noreply.github.com"
+          git config --global user.name "wasmcat-bot"
+
+          # clone the main branch
+          git clone --depth 1 https://${{secrets.ACCESS_TOKEN}}@github.com/FindoraNetwork/wasm-js-bindings
+          cd wasm-js-bindings
+
+          # check target branch exists or not
+          if git ls-remote --heads --exit-code origin ${{ steps.vars.outputs.branch }}; then
+            # exists, we pull it
+            git fetch --depth 1 --update-head-ok origin ${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.branch }}
+            git switch ${{ steps.vars.outputs.branch }}
+          else
+            # not exists, we create a new one
+            git checkout -B ${{ steps.vars.outputs.branch }}
+          fi
+
+          # Cleaning up exists files (we can add some exceptions here)
+          shopt -s extglob
+          rm -rf -v !("LICENSE")
+
+          # Copying built files into here
+          cp -r ${{ steps.vars.outputs.tmp }}/bundler ./
+          cp -r ${{ steps.vars.outputs.tmp }}/nodejs ./
+          cp -r ${{ steps.vars.outputs.tmp }}/web ./
+
+          # commit and push
+          git add .
+          git commit -m "platform (${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.sha }}) by wasmcat-bot automation push 🚀"
+          git push -f -u origin ${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.branch }}
