@@ -62,7 +62,6 @@ use {
     rand_core::SeedableRng,
     ruc::{d, err::RucResult},
     serde::{Deserialize, Serialize},
-    sparse_merkle_tree::Key,
     std::convert::From,
     wasm_bindgen::prelude::*,
     zei::{
@@ -930,11 +929,14 @@ pub fn gen_nullifier_hash(
         &oabar.get_asset_type(),
         mt_leaf_info.get_zei_mt_leaf_info().uid,
     );
-    let str = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
-    let mut d: Key = Key::from_base64(&str).c(d!()).unwrap();
-    let nullifier_hash = d.get_digest_mut();
+    let input = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+    let nullifier_hash = sha256::Digest::from_slice(
+        &base64::decode_config(&input, base64::URL_SAFE)
+            .c(d!())
+            .unwrap(),
+    );
 
-    Ok(serde_json::to_string(nullifier_hash).unwrap())
+    Ok(serde_json::to_string(&nullifier_hash).unwrap())
 }
 
 #[wasm_bindgen]
