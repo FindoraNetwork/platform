@@ -317,6 +317,12 @@ impl QueryServer {
         Some(self.ledger_cloned.get_abar_proof(atxo_sid).unwrap())
     }
 
+    /// Returns a bool value from the given hash
+    #[inline(always)]
+    pub fn check_nullifier_hash(&self, null_hash: String) -> Option<bool> {
+        Some(self.ledger_cloned.check_nullifier_hash(null_hash).unwrap())
+    }
+
     /// retrieve block reward rate at specified block height
     #[inline(always)]
     pub fn query_block_rewards_rate(&self, height: &BlockHeight) -> Option<[u128; 2]> {

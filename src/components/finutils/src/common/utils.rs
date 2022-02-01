@@ -639,6 +639,25 @@ pub fn get_abar_proof(atxo_sid: &ATxoSID) -> Result<Option<MTLeafInfo>> {
         .and_then(|b| serde_json::from_slice(&b).c(d!()))
 }
 
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn check_nullifier_hash(null_hash: &String) -> Result<Option<bool>> {
+    let url = format!(
+        "{}:8667/check_nullifier_hash/{}",
+        get_serv_addr().c(d!())?,
+        null_hash
+    );
+
+    attohttpc::get(&url)
+        .send()
+        .c(d!())?
+        .error_for_status()
+        .c(d!())?
+        .bytes()
+        .c(d!())
+        .and_then(|b| serde_json::from_slice(&b).c(d!()))
+}
+
 /// Delegation info(and staking info if `pk` is a validator).
 pub fn get_delegation_info(pk: &XfrPublicKey) -> Result<DelegationInfo> {
     let url = format!(
