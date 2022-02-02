@@ -544,6 +544,89 @@ impl TransactionBuilder {
         Ok((self, note))
     }
 
+
+    /*
+    1. get_owned_abars
+    2. find input combination with amount + 1 FRA
+    3. calculate fees with ip, op+2
+    4. create output list with receiver op, fee blackhole op, money back op
+    5. create ip list
+    6. call add_operation_anon_transfer with lists & private key
+    */
+
+
+    pub fn add_operation_fra_fees(
+        &mut self,
+        inputs: &[OpenAnonBlindAssetRecord],
+        outputs: &[OpenAnonBlindAssetRecord],
+        pub_key: &AXfrPubKey,
+
+    ) -> Result<(&mut self, &[OpenAnonBlindAssetRecord], &[OpenAnonBlindAssetRecord])> {
+        let list_of_abar = get_owned_abars(pub_key);
+        let mut sum_input = 0;
+        let mut sum_output = 0;
+
+        for input in inputs
+        {
+            if let ASSET_TYPE_FRA = input.get_asset_type() {
+                sum_input += input.get_amount();
+            }
+        }
+
+        for output in outputs
+        {
+            if let ASSET_TYPE_FRA = input.get_asset_type() {
+                sum_output += input.get_amount();
+            }
+        }
+
+
+        //Here we add the fees output to the black hole address in the calculation
+        let fees = FEE_CALCULATING_FUNC (inputs.len() as u32, outputs.input_len() as u32 + 1 );
+
+        if sum_input - sum_output == fees {
+            //Create the new output to the black_hole_addres
+            //It means that the fees are paid exactly
+            let output_fees_burt = OpenAnonBlindAssetRecord
+        }
+        //Thi is the case where inputs is greater than output + fees, so
+        // lets say X = inputs - (outputs + fees)
+        //We need to have two additional outputs one for the fees to the black_hole_address
+        // and one more for X to the sender's address (the change)
+        else {
+            let fees = FEE_CALCULATING_FUNC (inputs.len() as u32, outputs.input_len() as u32 + 2 );
+            //Create out put fees ------> black_hole
+            //Create out X fees ------> sender's address
+
+        }
+
+        OK(self, inputs, outputs)
+
+    }
+
+
+    //This function is going to do the same  as the above function but
+    //selecting the best input combination to minimize the change (Minimum Coin Change Problem)
+    pub fn add_operation_auto_fees(
+        &mut self,
+        pub_key: &XfrPublicKey,
+        s_key: &XSecretKey,
+    ) -> Result<(&mut self, &[OpenAnonBlindAssetRecord])>
+    {
+        self.transaction().
+        Okay(self, )
+    }
+
+    pub fn add_operation_non_fra(
+        &mut self,
+        pub_key: &XfrPublicKey,
+        s_key: &XSecretKey,
+    ) -> Result<&mut self>{
+
+        Okay(self)
+    }
+
+
     /// Add a operation to delegating finddra accmount to a tendermint validator.
     /// The transfer operation to BLACK_HOLE_PUBKEY_STAKING should be sent along with.
     pub fn add_operation_delegation(
