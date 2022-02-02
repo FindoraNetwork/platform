@@ -1308,6 +1308,7 @@ mod tests {
         rand_core::SeedableRng,
         std::ops::Neg,
         zei::anon_xfr::bar_to_from_abar::verify_bar_to_abar_note,
+        zei::anon_xfr::config::FEE_CALCULATING_FUNC,
         zei::anon_xfr::structs::{
             AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
         },
@@ -1705,8 +1706,8 @@ mod tests {
     }
 
     #[test]
-    //This contains only the positive tests
-    fn axfr_create_verify_unit_positive_tests() {
+    //This contains only the positive tests with the fees included
+    fn axfr_create_verify_unit_positive_tests_with_fees() {
         let mut ledger_state = LedgerState::tmp_ledger();
         let _ledger_status = ledger_state.get_status();
 
@@ -1716,20 +1717,31 @@ mod tests {
         let amount_nonneg = Amount::from_nonnegative_i64(amount);
         assert!(amount_nonneg.is_ok());
 
-        //Here the Asset Type is generated as a 32 byte and each of them are zero
-        let asset_type = AT::from_identical_byte(0);
+        let fee_amount = FEE_CALCULATING_FUNC(2, 1) as i64;
+        let fee_amount_nonneg = Amount::from_nonnegative_i64(fee_amount);
+        assert!(fee_amount_nonneg.is_ok());
+
+        let amount_output = amount;
+        let amount_output_nonneg = Amount::from_nonnegative_i64(amount_output);
+        assert!(amount_output_nonneg.is_ok());
+
+        let asset_type = ASSET_TYPE_FRA;
 
         // simulate input abar
         let (mut oabar, keypair_in, _dec_key_in, _) =
             gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type);
 
+        // simulate input fee abar
+        let (mut oabar_fee, keypair_in_fee, _dec_key_in, _) =
+            gen_oabar_and_keys(&mut prng, fee_amount_nonneg.unwrap(), asset_type);
         let abar = AnonBlindAssetRecord::from_oabar(&oabar);
 
-        let asset_type_out = AT::from_identical_byte(0);
+        let fee_abar = AnonBlindAssetRecord::from_oabar(&oabar_fee);
+        let asset_type_out = ASSET_TYPE_FRA;
 
         //Simulate output abar
         let (oabar_out, _keypair_out, _dec_key_out, _) =
-            gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type_out);
+            gen_oabar_and_keys(&mut prng, amount_output_nonneg.unwrap(), asset_type_out);
 
         let _abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
 
@@ -1737,16 +1749,25 @@ mod tests {
 
         let _owner_memo = oabar.get_owner_memo().unwrap();
 
-        // add abar to merkle tree
+        // add abars to merkle tree
         let uid = ledger_state.add_abar(&abar).unwrap();
-        ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
+        let uid_fee = ledger_state.add_abar(&fee_abar).unwrap();
 
-        let _ = ledger_state.compute_and_save_state_commitment_data(1); //It is not necessary
+        ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
+        let _ = ledger_state.compute_and_save_state_commitment_data(1);
+
         let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
+        let mt_leaf_fee_info = ledger_state.get_abar_proof(uid_fee).unwrap();
+
         oabar.update_mt_leaf_info(mt_leaf_info);
+        oabar_fee.update_mt_leaf_info(mt_leaf_fee_info);
+
+        let vec_inputs = vec![oabar, oabar_fee];
+        let vec_oututs = vec![oabar_out];
+        let vec_keys = vec![keypair_in, keypair_in_fee];
 
         let result =
-            builder.add_operation_anon_transfer(&[oabar], &[oabar_out], &[keypair_in]);
+            builder.add_operation_anon_transfer(&vec_inputs, &vec_oututs, &vec_keys);
 
         assert!(result.is_ok());
 
@@ -1754,7 +1775,6 @@ mod tests {
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
         let mut block = BlockEffect::default();
         let block_result = block.add_txn_effect(compute_effect);
-        //let block_result = block.add_txn_effect(compute_effect, true);
 
         assert!(block_result.is_ok());
 
