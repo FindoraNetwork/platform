@@ -531,11 +531,8 @@ impl TransactionBuilder {
     ) -> Result<(&mut Self, AXfrNote)> {
         let mut prng = ChaChaRng::from_entropy();
         let depth: usize = 41;
-        let user_params = UserParams::new(
-            inputs.len(),
-            outputs.len(),
-            Option::from(depth),
-        );
+        let user_params =
+            UserParams::new(inputs.len(), outputs.len(), Option::from(depth));
 
         let (body, keypairs) =
             gen_anon_xfr_body(&mut prng, &user_params, inputs, outputs, input_keypairs)
@@ -1253,11 +1250,8 @@ impl AnonTransferOperationBuilder {
     /// build generates the anon transfer body with the Zero Knowledge Proof.
     pub fn build(&mut self) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
-        let user_params = UserParams::new(
-            self.inputs.len(),
-            self.outputs.len(),
-            Some(41),
-        );
+        let user_params =
+            UserParams::new(self.inputs.len(), self.outputs.len(), Some(41));
 
         let (body, diversified_keypairs) = gen_anon_xfr_body(
             &mut prng,

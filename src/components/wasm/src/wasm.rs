@@ -65,6 +65,11 @@ use {
     std::convert::From,
     wasm_bindgen::prelude::*,
     zei::{
+        anon_xfr::{
+            keys::{AXfrKeyPair, AXfrPubKey},
+            nullifier,
+            structs::{AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder},
+        },
         serialization::ZeiFromToBytes,
         xfr::{
             asset_record::{open_blind_asset_record as open_bar, AssetRecordType},
@@ -76,7 +81,7 @@ use {
             },
         },
     },
-    zeialgebra::jubjub::JubjubScalar,
+    zeialgebra::{groups::Scalar, jubjub::JubjubScalar},
 };
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
@@ -869,6 +874,79 @@ pub fn get_anon_balance(
     Ok(oabar.get_amount())
 }
 
+/// Get OABAR (Open ABAR) using the ABAR, OwnerMemo and MTLeafInfo
+/// @param {AnonBlindAssetRecord} abar - ABAR which needs to be opened
+/// @param {OwnerMemo} memo - memo corresponding to the abar
+/// @param keypair {AXfrKeyPair} - AXfrKeyPair of the ABAR owner
+/// @param dec_key {XSecretKey} - Decryption key of the abar owner to open the Owner Memo
+/// @param MTLeafInfo {mt_leaf_info} - the Merkle proof of the ABAR from commitment tree
+/// @throws Will throw an error if abar fails to open
+#[wasm_bindgen]
+pub fn get_open_abar(
+    abar: AnonBlindAssetRecord,
+    memo: OwnerMemo,
+    keypair: AXfrKeyPair,
+    dec_key: XSecretKey,
+    mt_leaf_info: MTLeafInfo,
+) -> Result<JsValue, JsValue> {
+    let oabar =
+        OpenAnonBlindAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair, &dec_key)
+            .c(d!())
+            .map_err(error_to_jsvalue)?
+            .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+            .build()
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
+
+    let json = JsValue::from_serde(&oabar)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+    Ok(json)
+    //Ok(serde_json::to_string(&oabar).unwrap())
+}
+
+/// Generate nullifier hash using ABAR, OwnerMemo and MTLeafInfo
+/// @param {AnonBlindAssetRecord} abar - ABAR for which balance needs to be queried
+/// @param {OwnerMemo} memo - memo corresponding to the abar
+/// @param keypair {AXfrKeyPair} - AXfrKeyPair of the ABAR owner
+/// @param randomized_keypair {AXfrKeyPair} - Randomized AXfrKeyPair of the ABAR owner
+/// @param dec_key {XSecretKey} - Decryption key of the abar owner to open the Owner Memo
+/// @param MTLeafInfo {mt_leaf_info} - the Merkle proof of the ABAR from commitment tree
+/// @throws Will throw an error if abar fails to open
+#[wasm_bindgen]
+pub fn gen_nullifier_hash(
+    abar: AnonBlindAssetRecord,
+    memo: OwnerMemo,
+    keypair: AXfrKeyPair,
+    randomized_keypair: AXfrKeyPair,
+    dec_key: XSecretKey,
+    mt_leaf_info: MTLeafInfo,
+) -> Result<String, JsValue> {
+    let oabar =
+        OpenAnonBlindAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair, &dec_key)
+            .c(d!())
+            .map_err(error_to_jsvalue)?
+            .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+            .build()
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
+
+    let n = nullifier(
+        &randomized_keypair,
+        oabar.get_amount(),
+        &oabar.get_asset_type(),
+        mt_leaf_info.get_zei_mt_leaf_info().uid,
+    );
+    let input = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+    let nullifier_hash = sha256::Digest::from_slice(
+        &base64::decode_config(&input, base64::URL_SAFE)
+            .c(d!())
+            .unwrap(),
+    );
+
+    Ok(serde_json::to_string(&nullifier_hash).unwrap())
+}
+
 #[wasm_bindgen]
 #[derive(Default)]
 /// Structure that enables clients to construct complex transfers.
@@ -1606,8 +1684,6 @@ use rand::{thread_rng, Rng};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
-use zei::anon_xfr::keys::{AXfrKeyPair, AXfrPubKey};
-use zei::anon_xfr::structs::{AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder};
 
 #[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.
