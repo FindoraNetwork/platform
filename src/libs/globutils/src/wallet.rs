@@ -216,7 +216,7 @@ pub fn x_public_key_from_base64(pk: &str) -> Result<XPublicKey> {
 }
 
 #[inline(always)]
-/// Convert an anon public key to base64
+/// Convert a x public key to base64
 pub fn x_public_key_to_base64(key: &XPublicKey) -> String {
     base64::encode_config(&XPublicKey::zei_to_bytes(key), base64::URL_SAFE)
 }
@@ -230,7 +230,7 @@ pub fn anon_secret_key_from_base64(sk: &str) -> Result<AXfrKeyPair> {
 }
 
 #[inline(always)]
-/// Convert an anon public key to base64
+/// Convert an anon secret key to base64
 pub fn anon_secret_key_to_base64(key: &AXfrKeyPair) -> String {
     base64::encode_config(&AXfrKeyPair::zei_to_bytes(key), base64::URL_SAFE)
 }

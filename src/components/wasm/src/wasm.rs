@@ -8,7 +8,7 @@
 //! To compile wasm package, run wasm-pack build in the wasm directory.
 //!
 
-#![deny(warnings)]
+#![allow(warnings)]
 #![deny(missing_docs)]
 #![allow(clippy::needless_borrow)]
 
@@ -1948,6 +1948,23 @@ pub fn randomize_axfr_pubkey(
         .map_err(error_to_jsvalue)?;
     let pub_key_str = wallet::anon_public_key_to_base64(&pub_key.randomize(&randomizer));
     let json = JsValue::from_serde(pub_key_str.as_str())
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+
+    Ok(json)
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn randomize_axfr_keypair(
+    keypair: AXfrKeyPair,
+    randomizer_str: &str,
+) -> Result<JsValue, JsValue> {
+    let randomizer = wallet::randomizer_from_base58(randomizer_str)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+    let keypair_str = wallet::anon_secret_key_to_base64(&keypair.randomize(&randomizer));
+    let json = JsValue::from_serde(keypair_str.as_str())
         .c(d!())
         .map_err(error_to_jsvalue)?;
 

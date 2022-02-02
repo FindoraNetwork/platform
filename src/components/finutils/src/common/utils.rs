@@ -641,7 +641,7 @@ pub fn get_abar_proof(atxo_sid: &ATxoSID) -> Result<Option<MTLeafInfo>> {
 
 #[inline(always)]
 #[allow(missing_docs)]
-pub fn check_nullifier_hash(null_hash: &String) -> Result<Option<bool>> {
+pub fn check_nullifier_hash(null_hash: &str) -> Result<Option<bool>> {
     let url = format!(
         "{}:8667/check_nullifier_hash/{}",
         get_serv_addr().c(d!())?,
