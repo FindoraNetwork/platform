@@ -1297,9 +1297,6 @@ impl AnonTransferOperationBuilder {
 #[cfg(test)]
 #[allow(missing_docs)]
 mod tests {
-    use zei::anon_xfr::config::FEE_CALCULATING_FUNC;
-    //use zeialgebra::bls12_381::BLSScalar;
-    //use zeialgebra::groups::Zero;
     use {
         super::*,
         crate::txn_builder::amount::Amount,
@@ -1311,6 +1308,7 @@ mod tests {
         rand_core::SeedableRng,
         std::ops::Neg,
         zei::anon_xfr::bar_to_from_abar::verify_bar_to_abar_note,
+        zei::anon_xfr::config::FEE_CALCULATING_FUNC,
         zei::anon_xfr::structs::{
             AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
         },
@@ -1713,8 +1711,6 @@ mod tests {
         let mut ledger_state = LedgerState::tmp_ledger();
         let _ledger_status = ledger_state.get_status();
 
-        //let zero = BLSScalar::zero();
-
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
 
         let amount = 10i64;
@@ -1722,17 +1718,13 @@ mod tests {
         assert!(amount_nonneg.is_ok());
 
         let fee_amount = FEE_CALCULATING_FUNC(2, 1) as i64;
-        //let fee_amount = 8i64;
         let fee_amount_nonneg = Amount::from_nonnegative_i64(fee_amount);
         assert!(fee_amount_nonneg.is_ok());
 
-        //let amount_output = amount + fee_amount;
         let amount_output = amount;
         let amount_output_nonneg = Amount::from_nonnegative_i64(amount_output);
         assert!(amount_output_nonneg.is_ok());
 
-        //Here the Asset Type is generated as a 32 byte and each of them are zero
-        //let asset_type = AT::from_identical_byte(0);
         let asset_type = ASSET_TYPE_FRA;
 
         // simulate input abar
@@ -1742,12 +1734,9 @@ mod tests {
         // simulate input fee abar
         let (mut oabar_fee, keypair_in_fee, _dec_key_in, _) =
             gen_oabar_and_keys(&mut prng, fee_amount_nonneg.unwrap(), asset_type);
-
         let abar = AnonBlindAssetRecord::from_oabar(&oabar);
 
         let fee_abar = AnonBlindAssetRecord::from_oabar(&oabar_fee);
-
-        //let asset_type_out = AT::from_identical_byte(0);
         let asset_type_out = ASSET_TYPE_FRA;
 
         //Simulate output abar
@@ -1760,24 +1749,18 @@ mod tests {
 
         let _owner_memo = oabar.get_owner_memo().unwrap();
 
-        // add abar to merkle tree
+        // add abars to merkle tree
         let uid = ledger_state.add_abar(&abar).unwrap();
         let uid_fee = ledger_state.add_abar(&fee_abar).unwrap();
 
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
         let _ = ledger_state.compute_and_save_state_commitment_data(1);
-        //ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-
-        //let _ = ledger_state.compute_and_save_state_commitment_data(2);
 
         let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
         let mt_leaf_fee_info = ledger_state.get_abar_proof(uid_fee).unwrap();
 
-        // add fee abar to merkle tree
         oabar.update_mt_leaf_info(mt_leaf_info);
-
         oabar_fee.update_mt_leaf_info(mt_leaf_fee_info);
-        //let _ = ledger_state.compute_and_save_state_commitment_data(2);
 
         let vec_inputs = vec![oabar, oabar_fee];
         let vec_oututs = vec![oabar_out];
@@ -1785,16 +1768,13 @@ mod tests {
 
         let result =
             builder.add_operation_anon_transfer(&vec_inputs, &vec_oututs, &vec_keys);
-        //builder.add_operation_anon_transfer(&[oabar, oabar_fee], &[oabar_out], &[keypair_in, keypair_in_fee]);
 
-        //let _r = result.unwrap();
         assert!(result.is_ok());
 
         let txn = builder.take_transaction();
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
         let mut block = BlockEffect::default();
         let block_result = block.add_txn_effect(compute_effect);
-        //let block_result = block.add_txn_effect(compute_effect, true);
 
         assert!(block_result.is_ok());
 
