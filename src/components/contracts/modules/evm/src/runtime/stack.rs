@@ -1,4 +1,5 @@
 use crate::{storage::*, AddressMapping, App, Config};
+use config::abci::global_cfg::CFG;
 use ethereum_types::{H160, H256, U256};
 use evm::{
     backend::Backend,
@@ -10,6 +11,7 @@ use fp_evm::{Log, Vicinity};
 use fp_storage::{BorrowMut, DerefMut};
 use fp_traits::{account::AccountAsset, evm::BlockHashMapping};
 use fp_utils::timestamp_converter;
+use log::info;
 use std::{collections::btree_set::BTreeSet, marker::PhantomData, mem};
 use storage::{db::FinDB, state::State};
 
@@ -63,9 +65,12 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         mem::swap(&mut exited, self);
         self.metadata.swallow_revert(exited.metadata)?;
 
-        let _ = mem::replace(self.ctx.state.write().deref_mut(), exited.substate);
+        if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
+            let _ = mem::replace(self.ctx.state.write().deref_mut(), exited.substate);
+        } else {
+            info!(target: "evm", "EVM stack exit_revert(), height: {:?}", self.ctx.header.height);
+        }
 
-        // self.ctx.state.write().discard_session();
         Ok(())
     }
 
@@ -74,9 +79,12 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         mem::swap(&mut exited, self);
         self.metadata.swallow_discard(exited.metadata)?;
 
-        let _ = mem::replace(self.ctx.state.write().deref_mut(), exited.substate);
+        if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
+            let _ = mem::replace(self.ctx.state.write().deref_mut(), exited.substate);
+        } else {
+            info!(target: "evm", "EVM stack exit_discard(), height: {:?}", self.ctx.header.height);
+        }
 
-        // self.ctx.state.write().discard_session();
         Ok(())
     }
 
