@@ -55,7 +55,7 @@ impl CheckPointConfig {
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
-                                evm_substate_height: 1688000,
+                                evm_substate_height: 1729700,
                                 disable_evm_block_height: 1483286,
                                 enable_frc20_height: 1501000,
                                 evm_first_block_height: 0,
