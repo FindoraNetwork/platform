@@ -46,7 +46,7 @@ use {
     zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
     zei::{
         anon_xfr::{
-            bar_to_from_abar::{BarToAbarBody, BarToAbarNote},
+            bar_to_abar::{BarToAbarBody, BarToAbarNote},
             keys::AXfrPubKey,
             structs::AXfrNote,
         },

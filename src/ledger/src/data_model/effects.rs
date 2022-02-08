@@ -4,7 +4,7 @@ use {
             AnonTransferOps, AssetType, AssetTypeCode, BarToAbarOps, DefineAsset,
             IssueAsset, IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
             TransferAsset, TransferType, TxOutput, TxnTempSID, TxoRef, TxoSID,
-            UpdateMemo, ASSET_TYPE_FRA, TX_FEE_MIN,
+            UpdateMemo,
         },
         staking::{
             self,
@@ -27,10 +27,9 @@ use {
         collections::{HashMap, HashSet},
         sync::Arc,
     },
-    zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
     zei::{
         anon_xfr::{
-            bar_to_from_abar::verify_bar_to_abar_note,
+            bar_to_abar::verify_bar_to_abar_note,
             structs::{AXfrBody, AnonBlindAssetRecord, Nullifier},
         },
         serialization::ZeiFromToBytes,
@@ -555,7 +554,8 @@ impl TxnEffect {
         let user_params = UserParams::eq_committed_vals_params();
         let node_params = NodeParams::from(user_params);
 
-        let mut fee = 0u64;
+        /*
+        TODO: charge fee
         if bar_to_abar.note.body.input.get_record_type()
             == NonConfidentialAmount_NonConfidentialAssetType
             && bar_to_abar.note.body.input.asset_type.get_asset_type()
@@ -563,7 +563,8 @@ impl TxnEffect {
         {
             fee = TX_FEE_MIN;
         }
-        verify_bar_to_abar_note(&node_params, &bar_to_abar.note, &key, fee).c(d!())?;
+        */
+        verify_bar_to_abar_note(&node_params, &bar_to_abar.note, &key).c(d!())?;
 
         self.input_txos.insert(
             bar_to_abar.txo_sid,

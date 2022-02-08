@@ -48,10 +48,9 @@ use {
     },
     tendermint::PrivateKey,
     zei::anon_xfr::structs::AXfrBody,
-    zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
     zei::{
         anon_xfr::{
-            bar_to_from_abar::gen_bar_to_abar_body,
+            bar_to_abar::gen_bar_to_abar_body,
             gen_anon_xfr_body,
             keys::{AXfrKeyPair, AXfrPubKey},
             structs::{AXfrNote, OpenAnonBlindAssetRecord},
@@ -495,13 +494,15 @@ impl TransactionBuilder {
         let mut prng = ChaChaRng::from_entropy();
         let user_params = UserParams::eq_committed_vals_params();
 
-        let mut fee = 0u64;
+        /*
+        TODO: charge fee
         if input_record.get_record_type()
             == NonConfidentialAmount_NonConfidentialAssetType
             && input_record.asset_type == ASSET_TYPE_FRA
         {
             fee = TX_FEE_MIN;
         }
+        */
 
         let (body, r) = gen_bar_to_abar_body(
             &mut prng,
@@ -509,7 +510,6 @@ impl TransactionBuilder {
             input_record,
             abar_pub_key,
             enc_key,
-            fee,
         )
         .c(d!())?;
 
