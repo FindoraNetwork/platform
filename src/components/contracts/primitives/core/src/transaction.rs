@@ -158,11 +158,10 @@ where
                 if res.code == 0 {
                     Extra::post_execute(ctx, pre, &res)?;
                     ctx.state.write().commit_session();
-                    ctx.db.write().commit_session();
                 } else {
                     ctx.state.write().discard_session();
-                    ctx.db.write().discard_session();
                 }
+                ctx.db.write().commit_session();
                 Ok(res)
             }
             Err(e) => {
@@ -178,6 +177,10 @@ where
 #[derive(PartialEq, Debug, Clone, Default)]
 pub struct ActionResult {
     /// code: 0 is succeed, others is failed
+    /// 1 - Failed to execute EVM function
+    /// 2 - EVM ExitReason::Error
+    /// 3 - EVM ExitReason::Revert
+    /// 4 - EVM ExitReason::Fatal
     pub code: u32,
     /// Data is any data returned from message or handler execution.
     pub data: Vec<u8>,

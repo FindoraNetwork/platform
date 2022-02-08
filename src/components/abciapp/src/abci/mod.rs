@@ -5,7 +5,6 @@
 #![deny(warnings)]
 #![allow(clippy::needless_borrow)]
 
-mod config;
 mod server;
 pub mod staking;
 
@@ -13,7 +12,7 @@ use {
     crate::api::{
         query_server::query_api, submission_server::submission_api::SubmissionApi,
     },
-    config::{global_cfg::CFG, ABCIConfig},
+    config::abci::{global_cfg::CFG, ABCIConfig},
     futures::executor::ThreadPool,
     lazy_static::lazy_static,
     ruc::*,
@@ -81,7 +80,7 @@ pub fn run() -> Result<()> {
 
     let mut web3_rpc: Box<dyn std::any::Any + Send> = Box::new(());
     if CFG.enable_eth_api_service {
-        let base_app = app.account_base_app.read().derive_app();
+        let base_app = app.account_base_app.clone();
         let evm_http = format!("{}:{}", config.abci_host, config.evm_http_port);
         let evm_ws = format!("{}:{}", config.abci_host, config.evm_ws_port);
         let tendermint_rpc = format!(

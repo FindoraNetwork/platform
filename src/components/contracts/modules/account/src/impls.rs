@@ -17,9 +17,11 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         who: &Address,
         height: Option<u64>,
     ) -> Option<SmartAccount> {
-        match height {
-            Some(ver) => AccountStore::get_ver(ctx.state.read().borrow(), who, ver),
-            None => AccountStore::get(ctx.state.read().borrow(), who),
+        let version = height.unwrap_or(0);
+        if version == 0 {
+            AccountStore::get(ctx.state.read().borrow(), who)
+        } else {
+            AccountStore::get_ver(ctx.state.read().borrow(), who, version)
         }
     }
 

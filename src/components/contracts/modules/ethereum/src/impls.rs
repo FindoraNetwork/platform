@@ -1,5 +1,6 @@
 use crate::storage::*;
 use crate::{App, Config, ContractLog, TransactionExecuted};
+use config::abci::global_cfg::CFG;
 use ethereum::{
     BlockV0 as Block, LegacyTransactionMessage, Receipt, TransactionV0 as Transaction,
 };
@@ -14,7 +15,7 @@ use fp_storage::{Borrow, BorrowMut};
 use fp_types::crypto::HA256;
 use fp_types::{actions::evm as EvmAction, crypto::secp256k1_ecdsa_recover};
 use fp_utils::{proposer_converter, timestamp_converter};
-use log::debug;
+use log::{debug, info};
 use ruc::*;
 use sha3::{Digest, Keccak256};
 
@@ -36,11 +37,11 @@ impl<C: Config> App<C> {
     }
 
     pub fn store_block(&mut self, ctx: &mut Context, block_number: U256) -> Result<()> {
-        #[cfg(feature = "debug_env")]
-        const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::from(142_5000);
-
-        #[cfg(not(feature = "debug_env"))]
-        const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::zero();
+        // #[cfg(feature = "debug_env")]
+        // const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::from(142_5000);
+        //
+        // #[cfg(not(feature = "debug_env"))]
+        // const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::zero();
 
         let mut transactions: Vec<Transaction> = Vec::new();
         let mut statuses: Vec<TransactionStatus> = Vec::new();
@@ -51,7 +52,7 @@ impl<C: Config> App<C> {
         let pending_txs: Vec<(Transaction, TransactionStatus, Receipt)> =
             PendingTransactions::take(ctx.db.write().borrow_mut()).unwrap_or_default();
 
-        if block_number < EVM_FIRST_BLOCK_HEIGHT
+        if block_number < U256::from(CFG.checkpoint.evm_first_block_height)
             || (pending_txs.is_empty() && self.disable_eth_empty_blocks)
         {
             is_store_block = false;
@@ -177,9 +178,10 @@ impl<C: Config> App<C> {
 
         let (to, contract_address, info) = execute_ret.unwrap();
 
-        let (reason, status, used_gas) = match info.clone() {
+        let (reason, data, status, used_gas) = match info.clone() {
             CallOrCreateInfo::Call(info) => (
                 info.exit_reason,
+                info.value.clone(),
                 TransactionStatus {
                     transaction_hash,
                     transaction_index,
@@ -197,6 +199,7 @@ impl<C: Config> App<C> {
             ),
             CallOrCreateInfo::Create(info) => (
                 info.exit_reason,
+                vec![],
                 TransactionStatus {
                     transaction_hash,
                     transaction_index,
@@ -215,7 +218,7 @@ impl<C: Config> App<C> {
         };
 
         for log in &status.logs {
-            debug!(target: "evm", "transaction status log: block: {:?}, address: {:?}, topics: {:?}, data: {:?}",
+            debug!(target: "ethereum", "transaction status log: block: {:?}, address: {:?}, topics: {:?}, data: {:?}",
                 ctx.header.height, log.address, log.topics.clone(), log.data.clone());
 
             events.push(Event::emit_event(
@@ -226,6 +229,31 @@ impl<C: Config> App<C> {
                     data: log.data.clone(),
                 },
             ));
+        }
+
+        let (code, message) = match reason {
+            ExitReason::Succeed(_) => (0, String::new()),
+            // code 1 indicates `Failed to execute evm function`, see above
+            ExitReason::Error(_) => (2, "EVM error".to_string()),
+            ExitReason::Revert(_) => {
+                let mut message =
+                    "VM Exception while processing transaction: revert".to_string();
+                // A minimum size of error function selector (4) + offset (32) + string length (32)
+                // should contain a utf-8 encoded revert reason.
+                if data.len() > 68 {
+                    let message_len = data[36..68].iter().sum::<u8>();
+                    let body: &[u8] = &data[68..68 + message_len as usize];
+                    if let Ok(reason) = std::str::from_utf8(body) {
+                        message = format!("{} {}", message, reason);
+                    }
+                }
+                (3, message)
+            }
+            ExitReason::Fatal(_) => (4, "EVM Fatal error".to_string()),
+        };
+
+        if code != 0 {
+            info!(target: "ethereum", "evm execute result: reason {:?} status {:?} used_gas {}", reason, status, used_gas);
         }
 
         let receipt = ethereum::Receipt {
@@ -244,7 +272,7 @@ impl<C: Config> App<C> {
         PendingTransactions::put(ctx.db.write().borrow_mut(), &pending_txs)?;
 
         TransactionIndex::insert(
-            ctx.state.write().borrow_mut(),
+            ctx.db.write().borrow_mut(),
             &HA256::new(transaction_hash),
             &(ctx.header.height.into(), transaction_index),
         )?;
@@ -261,9 +289,9 @@ impl<C: Config> App<C> {
         ));
 
         Ok(ActionResult {
-            code: 0,
+            code,
             data: serde_json::to_vec(&info).unwrap_or_default(),
-            log: "".to_string(),
+            log: message,
             gas_wanted: gas_limit.low_u64(),
             gas_used: used_gas.low_u64(),
             events,
@@ -373,7 +401,7 @@ impl<C: Config> App<C> {
 
     /// The index of the transaction in the block
     pub fn transaction_index(ctx: &Context, hash: H256) -> Option<(U256, u32)> {
-        TransactionIndex::get(ctx.state.read().borrow(), &HA256::new(hash))
+        TransactionIndex::get(ctx.db.read().borrow(), &HA256::new(hash))
     }
 
     fn logs_bloom(logs: Vec<ethereum::Log>, bloom: &mut Bloom) {
@@ -390,5 +418,21 @@ impl<C: Config> App<C> {
             return Some(hash.h256());
         }
         None
+    }
+
+    pub fn migrate(ctx: &mut Context) -> Result<()> {
+        //Migrate existing transaction indices from chain-state to rocksdb.
+        let txn_idxs: Vec<(HA256, (U256, u32))> =
+            TransactionIndex::iterate(ctx.state.read().borrow());
+        let txn_idxs_cnt = txn_idxs.len();
+
+        for idx in txn_idxs {
+            TransactionIndex::insert(ctx.db.write().borrow_mut(), &idx.0, &idx.1)?;
+            debug!(target: "ethereum", "hash: 0x{}, block: {}, index: {}", idx.0.to_string(), idx.1 .0, idx.1 .1);
+        }
+        ctx.db.write().commit_session();
+        info!(target: "ethereum", "{} transaction indexes migrated to db", txn_idxs_cnt);
+
+        Ok(())
     }
 }

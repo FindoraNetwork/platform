@@ -4,7 +4,7 @@ use fp_core::context::RunTxMode;
 use fp_evm::BlockId;
 use fp_types::assemble::convert_unchecked_transaction;
 use fp_utils::tx::EvmRawTxWrapper;
-use log::{debug, error};
+use log::{debug, error, info};
 use primitive_types::U256;
 use ruc::*;
 
@@ -48,7 +48,7 @@ impl abci::Application for crate::BaseApp {
             return err_resp("Empty query path!".to_string());
         }
 
-        let ctx = self.create_query_context(req.height as u64, req.prove);
+        let ctx = self.create_query_context(Some(req.height as u64), req.prove);
         if let Err(e) = ctx {
             return err_resp(format!("Cannot create query context with err: {}!", e));
         }
@@ -68,7 +68,7 @@ impl abci::Application for crate::BaseApp {
         if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
             raw_tx = tx;
         } else {
-            debug!(target: "baseapp", "Transaction evm tag check failed");
+            info!(target: "baseapp", "Transaction evm tag check failed");
             resp.code = 1;
             resp.log = String::from("Transaction evm tag check failed");
             return resp;
@@ -77,10 +77,20 @@ impl abci::Application for crate::BaseApp {
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
             let check_fn = |mode: RunTxMode| {
                 let ctx = self.retrieve_context(mode).clone();
-                if let Err(e) = self.modules.process_tx::<SignedExtra>(ctx, tx) {
-                    debug!(target: "baseapp", "Transaction check error: {}", e);
-                    resp.code = 1;
-                    resp.log = format!("Transaction check error: {}", e);
+                let result = self.modules.process_tx::<SignedExtra>(ctx, tx);
+                match result {
+                    Ok(ar) => {
+                        resp.code = ar.code;
+                        if ar.code != 0 {
+                            info!(target: "baseapp", "Transaction check error, action result {:?}", ar);
+                            resp.log = ar.log;
+                        }
+                    }
+                    Err(e) => {
+                        info!(target: "baseapp", "Transaction check error: {}", e);
+                        resp.code = 1;
+                        resp.log = format!("Transaction check error: {}", e);
+                    }
                 }
             };
             match req.get_field_type() {
@@ -88,7 +98,7 @@ impl abci::Application for crate::BaseApp {
                 CheckTxType::Recheck => check_fn(RunTxMode::ReCheck),
             }
         } else {
-            debug!(target: "baseapp", "Could not unpack transaction");
+            info!(target: "baseapp", "Could not unpack transaction");
         }
         resp
     }
@@ -131,7 +141,7 @@ impl abci::Application for crate::BaseApp {
         if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
             raw_tx = tx;
         } else {
-            debug!(target: "baseapp", "Transaction deliver tx unwrap evm tag failed");
+            info!(target: "baseapp", "Transaction deliver tx unwrap evm tag failed");
             resp.code = 1;
             resp.log = String::from("Transaction deliver tx unwrap evm tag failed");
             return resp;
@@ -143,7 +153,11 @@ impl abci::Application for crate::BaseApp {
             let ret = self.modules.process_tx::<SignedExtra>(ctx, tx);
             match ret {
                 Ok(ar) => {
-                    debug!(target: "baseapp", "deliver tx succeed result: {:?}", ar);
+                    if ar.code != 0 {
+                        info!(target: "baseapp", "deliver tx with result: {:?}", ar);
+                    } else {
+                        debug!(target: "baseapp", "deliver tx succeed with result: {:?}", ar);
+                    }
                     resp.code = ar.code;
                     resp.data = ar.data;
                     resp.log = ar.log;

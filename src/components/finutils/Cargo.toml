@@ -21,16 +21,15 @@ rand_chacha = "0.2.0"
 curve25519-dalek = { version = "3.0", features = ["serde"] }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"] }
 
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
-ruc = "0.6.6"
+zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4x" }
+ruc = "1.0"
 
 ledger = { path = "../../ledger" }
 globutils = { path = "../../libs/globutils" }
 credentials = { path = "../../libs/credentials" }
 
-baseapp = { path = "../contracts/baseapp", optional = true }
 eth_checksum = { version = "0.1.2", optional = true }
-fp-core = { path = "../contracts/primitives/core", optional = true }
+fp-core = { path = "../contracts/primitives/core", default-features = false }
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = { path = "../contracts/primitives/types" }
 
@@ -44,9 +43,7 @@ vergen = "=3.1.0"
 [features]
 default = ["std"]
 std = [
-    "baseapp",
     "eth_checksum",
-    "fp-core",
     "tendermint-rpc"
 ]
 abci_mock = ["ledger/abci_mock"]

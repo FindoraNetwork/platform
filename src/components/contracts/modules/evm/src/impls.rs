@@ -42,11 +42,15 @@ impl<C: Config> App<C> {
         address: &HA160,
         height: Option<u64>,
     ) -> Option<Vec<u8>> {
-        match height {
-            Some(ver) => {
-                AccountCodes::get_ver_bytes(ctx.state.read().borrow(), address, ver)
-            }
-            None => AccountCodes::get_bytes(ctx.state.read().borrow(), address),
+        if address.0 == H160::from_low_u64_be(0x1000) {
+            return Some(b"fra".to_vec());
+        }
+
+        let version = height.unwrap_or(0);
+        if version == 0 {
+            AccountCodes::get_bytes(ctx.state.read().borrow(), address)
+        } else {
+            AccountCodes::get_ver_bytes(ctx.state.read().borrow(), address, version)
         }
     }
 
@@ -57,11 +61,11 @@ impl<C: Config> App<C> {
         index: &HA256,
         height: Option<u64>,
     ) -> Option<H256> {
-        match height {
-            Some(ver) => {
-                AccountStorages::get_ver(ctx.state.read().borrow(), address, index, ver)
-            }
-            None => AccountStorages::get(ctx.state.read().borrow(), address, index),
+        let version = height.unwrap_or(0);
+        if version == 0 {
+            AccountStorages::get(ctx.state.read().borrow(), address, index)
+        } else {
+            AccountStorages::get_ver(ctx.state.read().borrow(), address, index, version)
         }
     }
 

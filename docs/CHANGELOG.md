@@ -10,7 +10,41 @@
 
 ## Change log
 
+#### v0.3.12-release
+
+- EVM error code handling
+- Pending nonce fix
+
+#### v0.3.8-release
+
+- FRC20 update height to `149_7500`.
+
 > Functions that have been added.
+
+#### v0.3.7-release
+
+- Update height to `148_3286`.
+
+#### v0.3.6-release
+
+- Temporary disable EVM function.
+
+#### v0.3.4-release
+
+- fix IERC20 compability.
+
+#### v0.3.3-release
+
+- update height to 142_9000.
+- Fix lost utxo info in utxo.
+
+#### v0.3.2-release
+
+- Force internal transfer's receiver must be ETH address.
+
+#### v0.3.1-release
+
+- adjust target height to `142_5000`.
 
 #### v0.3.0-release
 
