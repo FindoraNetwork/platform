@@ -5,6 +5,12 @@ import argparse
 import subprocess
 
 
+def private_key_to_address(private_key):
+    w3 = Web3(HTTPProvider(to_web3_url(local)))
+    account = w3.eth.account.privateKeyToAccount(private_key)
+    return account.address
+
+
 def get_fra_balance(sec_key):
     out_str = subprocess.check_output(['fn', 'account', '-s', sec_key])
     parsed = out_str.split()
@@ -28,7 +34,7 @@ def get_balance(arguments):
         balance = get_erc20_balance(addr)
     elif sec_key is not None:
         balance = get_fra_balance(sec_key)
-    print('{}balance is {} wei {}'.format(OKBLUE, balance, ENDC))
+    print('{}balance is {} {}'.format(OKBLUE, balance, ENDC))
     return balance
 
 
@@ -44,8 +50,9 @@ def verify_balance(arguments):
 
 def transfer(arguments):
     w3 = Web3(HTTPProvider(to_web3_url(local)))
+    address = private_key_to_address(arguments['from_priv_key'])
     signed_txn = w3.eth.account.sign_transaction(dict(
-            nonce=w3.eth.get_transaction_count(arguments['from_addr']),
+            nonce=w3.eth.get_transaction_count(address),
             gas=100000,
             gasPrice=10000000000,
             to=arguments['to_addr'],
@@ -55,13 +62,14 @@ def transfer(arguments):
         ),
         arguments['from_priv_key'],
     )
-    w3.eth.send_raw_transaction(signed_txn.rawTransaction)
+    txn_hash = w3.eth.send_raw_transaction(signed_txn.rawTransaction)
+    print("Transaction Hash: ", txn_hash.hex())
     return
 
 
 if __name__ == "__main__":
     # initialize commands
-    cmd_list = {'balance': get_balance, 'verify-balance': verify_balance, 'transfer': transfer}  # 'transfer': transfer
+    cmd_list = {'balance': get_balance, 'verify-balance': verify_balance, 'transfer': transfer}
 
     # Initialize Parser
     parser = argparse.ArgumentParser()
@@ -80,7 +88,6 @@ if __name__ == "__main__":
 
     # Initialize Transfer Parser
     parser_transfer = subparsers.add_parser('transfer', help='transfer funds between two erc20 addresses')
-    parser_transfer.add_argument('--from_addr', help='address to transfer funds from')
     parser_transfer.add_argument('--from_priv_key', help='address to transfer funds from')
     parser_transfer.add_argument('--to_addr', help='address to transfer funds to')
     parser_transfer.add_argument('--amount', help='amount of funds to transfer')
