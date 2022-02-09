@@ -558,13 +558,11 @@ impl TransactionBuilder {
     */
 
 
-    pub fn add_operation_fra_fees(
+    pub fn add_operation_anon_transfer_fees_remainder(
         &mut self,
         inputs: &[OpenAnonBlindAssetRecord],
         outputs: &[OpenAnonBlindAssetRecord],
-        //pub_key: &AXfrPubKey,
         input_keypairs: &[AXfrKeyPair],
-        //s_key: XSecretKey,
         pu_key: XPublicKey,
     ) -> Result<(&mut Self, AXfrNote)> {
 
@@ -596,45 +594,36 @@ impl TransactionBuilder {
             }
         }
 
-        //assert!((sum_input > sum_output).is_okay());
-
 
         //Here we add the output to return the change to the sender address in the calculation
-        let mut fees = FEE_CALCULATING_FUNC (inputs.len() as u32, outputs.len() as u32);
+        let fees = FEE_CALCULATING_FUNC (inputs.len() as u32, outputs.len() as u32 + 1);
 
-        let mut remainder = sum_input as i64 - sum_output as i64 - fees as i64;
+        let remainder = sum_input as i64 - sum_output as i64 - fees as i64;
 
         let mut vec_outputs = outputs.to_vec();
 
-        if remainder > 0 {
+        let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
+            .amount(remainder as u64)
+            .asset_type(ASSET_TYPE_FRA)
+            .pub_key(input_keypairs[0].pub_key())
+            .finalize(&mut prng, &pu_key)
+            .unwrap()
+            .build()
+            .unwrap();
 
-            fees = FEE_CALCULATING_FUNC (inputs.len() as u32, outputs.len() as u32 + 1);
+        //Add oabar to outputs
+        vec_outputs.push(oabar_money_back);
 
-            remainder = sum_input as i64- sum_output as i64 - fees as i64;
-
-            let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
-                .amount(remainder as u64)
-                .asset_type(ASSET_TYPE_FRA)
-                .pub_key(input_keypairs[1].pub_key())
-                .finalize(&mut prng, &pu_key)
-                .unwrap()
-                .build()
-                .unwrap();
-
-            //Add oabar to outputs
-            vec_outputs.push(oabar_money_back);
-        }
-
-        let outputs_2 = &vec_outputs[..];
+        let outputs_plus_remainder = &vec_outputs[..];
 
         let user_params = UserParams::new(
             inputs.len(),
-            outputs_2.len(),
+            outputs_plus_remainder.len(),
             Option::from(depth),
         );
 
         let (body, keypairs) =
-            gen_anon_xfr_body(&mut prng, &user_params, inputs, outputs_2, input_keypairs)
+            gen_anon_xfr_body(&mut prng, &user_params, inputs,outputs_plus_remainder, input_keypairs)
                 .c(d!())?;
         let note = AXfrNote::generate_note_from_body(body, keypairs).c(d!())?;
         let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
@@ -644,6 +633,56 @@ impl TransactionBuilder {
     }
 
 
+    pub fn add_operation_anon_transfer_fees(
+        &mut self,
+        inputs: &[OpenAnonBlindAssetRecord],
+        outputs: &[OpenAnonBlindAssetRecord],
+        input_keypairs: &[AXfrKeyPair],
+    ) -> Result<(&mut Self, AXfrNote)> {
+
+        let mut prng = ChaChaRng::from_entropy();
+        let depth: usize = 41;
+
+        let mut sum_input = 0;
+        let mut sum_output = 0;
+
+
+        for input in inputs
+        {
+            if let ASSET_TYPE_FRA = input.get_asset_type() {
+                sum_input += input.get_amount();
+            }
+        }
+
+
+        for output in outputs
+        {
+            if let ASSET_TYPE_FRA = output.get_asset_type() {
+                sum_output += output.get_amount();
+            }
+        }
+
+
+        //Here we add the output to return the change to the sender address in the calculation
+        let fees = FEE_CALCULATING_FUNC (inputs.len() as u32, outputs.len() as u32) as u64;
+
+        assert_eq!(sum_input, sum_output + fees);
+
+        let user_params = UserParams::new(
+            inputs.len(),
+            outputs.len(),
+            Option::from(depth),
+        );
+
+        let (body, keypairs) =
+            gen_anon_xfr_body(&mut prng, &user_params, inputs,outputs, input_keypairs)
+                .c(d!())?;
+        let note = AXfrNote::generate_note_from_body(body, keypairs).c(d!())?;
+        let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
+        let op = Operation::TransferAnonAsset(Box::new(inp));
+        self.txn.add_operation(op);
+        Ok((self, note))
+    }
 
     /// Add a operation to delegating finddra accmount to a tendermint validator.
     /// The transfer operation to BLACK_HOLE_PUBKEY_STAKING should be sent along with.
@@ -1887,12 +1926,9 @@ mod tests {
         let _txn_sid_result = txn_sid_result.unwrap();
     }
 
-    /*
-    Serge
-     */
     #[test]
     //This contains only the positive tests with the fees included
-    fn axfr_create_verify_unit_positive_tests_with_fees_2() {
+    fn axfr_create_verify_unit_positive_tests_with_fees_remainder() {
         let mut ledger_state = LedgerState::tmp_ledger();
         let _ledger_status = ledger_state.get_status();
 
@@ -1968,7 +2004,7 @@ mod tests {
 
         let result =
             //builder.add_operation_anon_transfer(&vec_inputs, &vec_oututs, &vec_keys);
-            builder.add_operation_fra_fees(&vec_inputs, &vec_oututs, &vec_keys, enc_key_in);
+            builder.add_operation_anon_transfer_fees_remainder(&vec_inputs, &vec_oututs, &vec_keys, enc_key_in);
 
         //let _r = result.unwrap();
         assert!(result.is_ok());
@@ -1988,11 +2024,6 @@ mod tests {
         assert!(txn_sid_result.is_ok());
         let _txn_sid_result = txn_sid_result.unwrap();
     }
-
-
-    /*
-    =============================================
-     */
 
 
     //Negative tests added
