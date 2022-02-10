@@ -578,6 +578,74 @@ impl Staking {
         }
     }
 
+    ///replace_staker
+    pub fn check_and_replace_staker(
+        &mut self,
+        original_pk: &XfrPublicKey,
+        new_public_key: XfrPublicKey,
+    ) -> Result<()> {
+        for (_h, entry) in self.delegation_info.end_height_map.iter() {
+            if entry.contains(original_pk) || entry.contains(&new_public_key) {
+                return Err(eg!("Can't replace staker during unstaking."));
+            }
+        }
+
+        //check if it exists a validator here.
+        let validators_data = self
+            .validator_get_current_mut()
+            .ok_or_else(|| eg!("No validator at all."))?;
+
+        //can't override existing validator.
+        if validators_data.body.contains_key(&new_public_key) {
+            return Err(eg!("Validator already exists."));
+        }
+
+        let mut validator = validators_data
+            .body
+            .remove(original_pk)
+            .ok_or_else(|| eg!("Validator not found."))?;
+
+        debug_assert!(&validator.id == original_pk);
+
+        //replace staker of tendermint validator.
+        *validators_data
+            .addr_td_to_app
+            .get_mut(&td_addr_to_string(&validator.td_addr))
+            .c(d!())? = new_public_key;
+
+        //replace staker
+        validator.id = new_public_key;
+
+        //replace delegator
+        if let Some(am) = validator.delegators.remove(original_pk) {
+            validator.delegators.insert(new_public_key, am);
+        }
+
+        validators_data.body.insert(new_public_key, validator);
+
+        let delegation_info = &mut self.delegation_info;
+
+        //deal with delegation
+        let mut d = delegation_info
+            .global_delegation_records_map
+            .remove(original_pk)
+            .c(d!(eg!("impossible")))?;
+
+        //change id
+        d.id = new_public_key;
+        delegation_info
+            .global_delegation_records_map
+            .insert(new_public_key, d);
+
+        for (_pk, d) in delegation_info.global_delegation_records_map.iter_mut() {
+            if let Some(am) = d.delegations.remove(original_pk) {
+                d.delegations.insert(new_public_key, am);
+            }
+        }
+
+        Ok(())
+    }
+
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn validator_check_power_x(
