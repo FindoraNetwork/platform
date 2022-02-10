@@ -557,7 +557,9 @@ impl TransactionBuilder {
     6. call add_operation_anon_transfer with lists & private key
     */
 
-
+    ///This function works as add_operation_anon_transfer but this implement fees,
+    /// Remainder is computed as remainder = sum_inputs - sum_outputs - fees
+    /// all this related to the asset type for fees which are fixed as FRA asset type
     pub fn add_operation_anon_transfer_fees_remainder(
         &mut self,
         inputs: &[OpenAnonBlindAssetRecord],
@@ -586,7 +588,6 @@ impl TransactionBuilder {
             }
         }
 
-
         for output in outputs
         {
             if let ASSET_TYPE_FRA = output.get_asset_type() {
@@ -594,11 +595,11 @@ impl TransactionBuilder {
             }
         }
 
-
         //Here we add the output to return the change to the sender address in the calculation
         let fees = FEE_CALCULATING_FUNC (inputs.len() as u32, outputs.len() as u32 + 1);
 
         let remainder = sum_input as i64 - sum_output as i64 - fees as i64;
+
 
         let mut vec_outputs = outputs.to_vec();
 
@@ -633,6 +634,7 @@ impl TransactionBuilder {
     }
 
 
+    ///This function works as add_operation_anon_transfer but this implement fees,
     pub fn add_operation_anon_transfer_fees(
         &mut self,
         inputs: &[OpenAnonBlindAssetRecord],
@@ -1853,7 +1855,7 @@ mod tests {
 
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
 
-        let amount = 10i64;
+        let amount = 2000000i64;
         let amount_nonneg = Amount::from_nonnegative_i64(amount);
         assert!(amount_nonneg.is_ok());
 
@@ -1862,6 +1864,7 @@ mod tests {
         assert!(fee_amount_nonneg.is_ok());
 
         let amount_output = amount;
+        //let amount_output = 1000000i64;
         let amount_output_nonneg = Amount::from_nonnegative_i64(amount_output);
         assert!(amount_output_nonneg.is_ok());
 
