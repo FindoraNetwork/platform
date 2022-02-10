@@ -557,6 +557,13 @@ subcommands:
             takes_value: true
             value_name: XFR PUBLIC KEY
             required: true
+        - fee-xfr-seckey:
+            help: Xfr secret key for fee payment
+            short: fxs
+            long: fee-xfr-seckey
+            takes_value: true
+            value_name: XFR SECRET KEY
+            required: false
         - confidential-amount:
             help: mask the amount sent on the transaction log
             long: confidential-amount

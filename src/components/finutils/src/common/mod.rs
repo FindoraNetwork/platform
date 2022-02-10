@@ -814,6 +814,7 @@ pub fn convert_abar2bar(
     r: &str,
     dec_key: String,
     to_xfr_public_key: &str,
+    fee_xfr_seckey: Option<&str>,
     confidential_am: bool,
     confidential_ty: bool,
 ) -> Result<()> {
@@ -823,6 +824,7 @@ pub fn convert_abar2bar(
         wallet::x_secret_key_from_base64(dec_key.as_str()).c(d!("invalid dec_key"))?;
     let to = wallet::public_key_from_bech32(to_xfr_public_key)
         .c(d!("invalid 'to-xfr-public-key'"))?;
+    let fee_secret_key = restore_keypair_from_str_with_default(fee_xfr_seckey)?;
 
     let r = wallet::randomizer_from_base58(r).c(d!())?;
     let randomized_from_pub_key = from.pub_key().randomize(&r);
@@ -848,12 +850,7 @@ pub fn convert_abar2bar(
         _ => AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
     };
 
-    let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
-    builder
-        .add_operation_abar_to_bar(&oabar_in, &from, &to, art)
-        .c(d!())?;
-
-    send_tx(&builder.take_transaction()).c(d!())?;
+    utils::generate_abar2bar_op(&oabar_in, &from, &to, art, &fee_secret_key).c(d!())?;
     Ok(())
 }
 

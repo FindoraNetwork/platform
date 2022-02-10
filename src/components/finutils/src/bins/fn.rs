@@ -468,6 +468,12 @@ fn run() -> Result<()> {
         let randomizer = m.value_of("randomizer");
         let dec_key = anon_keys.dec_key;
         let to_xfr_public_key = m.value_of("to-xfr-public-key");
+        let fee_xfr_seckey = match m.value_of("fee-xfr-seckey") {
+            Some(path) => {
+                Some(fs::read_to_string(path).c(d!("Failed to read seckey file"))?)
+            }
+            None => None,
+        };
 
         if randomizer.is_none() || to_xfr_public_key.is_none() {
             println!("{}", m.usage());
@@ -477,6 +483,7 @@ fn run() -> Result<()> {
                 randomizer.unwrap(),
                 dec_key,
                 to_xfr_public_key.unwrap(),
+                fee_xfr_seckey.as_deref(),
                 m.is_present("confidential-amount"),
                 m.is_present("confidential-type"),
             )
