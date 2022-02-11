@@ -36,6 +36,7 @@ use {
     },
     ruc::*,
     std::{fmt, fs},
+    tendermint::PublicKey,
 };
 
 fn main() {
@@ -396,6 +397,18 @@ fn run() -> Result<()> {
         let address = m.value_of("addr");
         let eth_key = m.value_of("eth-key");
         transfer_from_account(amount.parse::<u64>().c(d!())?, address, eth_key)?
+    } else if let Some(m) = matches.subcommand_matches("replace") {
+        let target = m.value_of("target").c(d!())?;
+        let new_td_addr = if let Some(new_td_addr_str) = m.value_of("td_address") {
+            let bytes =
+                hex::decode(new_td_addr_str).c(d!("`td_address` is invalid hex."))?;
+            let _ = PublicKey::from_raw_ed25519(&bytes)
+                .c(d!("Invalid tendermint address"))?;
+            Some(bytes)
+        } else {
+            None
+        };
+        common::replace_staker(target, new_td_addr)?;
     } else {
         println!("{}", matches.usage());
     }

@@ -32,6 +32,7 @@ use {
         parse_td_validator_keys,
     },
     zei::{
+        serialization::ZeiFromToBytes,
         setup::PublicParams,
         xfr::{
             asset_record::AssetRecordType,
@@ -770,4 +771,19 @@ pub fn show_asset(addr: &str) -> Result<()> {
 /// Return the built version.
 pub fn version() -> &'static str {
     concat!(env!("VERGEN_SHA"), " ", env!("VERGEN_BUILD_DATE"))
+}
+
+///operation to replace the staker.
+pub fn replace_staker(target_addr: &str, new_td_addr: Option<Vec<u8>>) -> Result<()> {
+    let bytes = hex::decode(target_addr).c(d!("Invalid hex."))?;
+    let target_pubkey =
+        XfrPublicKey::zei_from_bytes(&bytes).c(d!("Invalid public key."))?;
+
+    let keypair = get_keypair()?;
+
+    let mut builder = utils::new_tx_builder().c(d!())?;
+
+    builder.add_operation_replace_staker(&keypair, target_pubkey, new_td_addr)?;
+    //[TODO]
+    Ok(())
 }
