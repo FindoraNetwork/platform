@@ -24,10 +24,12 @@ impl ReplaceStakerOps {
     pub fn new(
         keypair: &XfrKeyPair,
         new_public_key: XfrPublicKey,
+        new_tendermint_addr: Option<Vec<u8>>,
         nonce: NoReplayToken,
     ) -> Self {
         let body = Data {
             new_public_key,
+            new_tendermint_addr,
             nonce,
         };
 
@@ -54,8 +56,11 @@ impl ReplaceStakerOps {
         _tx: &Transaction,
     ) -> Result<()> {
         self.verify()?;
-        staking_simulator
-            .check_and_replace_staker(&self.pubkey, self.body.new_public_key)
+        staking_simulator.check_and_replace_staker(
+            &self.pubkey,
+            self.body.new_public_key,
+            self.body.new_tendermint_addr.clone(),
+        )
     }
 
     #[inline(always)]
@@ -81,6 +86,7 @@ impl ReplaceStakerOps {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Data {
     pub new_public_key: XfrPublicKey,
+    pub new_tendermint_addr: Option<Vec<u8>>,
     nonce: NoReplayToken,
 }
 
