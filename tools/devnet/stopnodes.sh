@@ -18,7 +18,7 @@ for node in $nodes
 do
     abci=`pgrep -f "abcid $DEVNET/$node$" | tr "\n" " " | xargs echo -n`
     tdmt=`pgrep -f "tendermint node --home $DEVNET/$node$"`
-    if [ ! -z "$abci" ] && ([ -z "$Node" ] || [ "$Node" = "$node" ]); then
+    if ([ -n "$abci" ] || [ -n "$tdmt" ]) && ([ -z "$Node" ] || [ "$Node" = "$node" ]); then
         if [ "$killed" = false ]; then
             echo -n "killed abci: "
             killed=true
