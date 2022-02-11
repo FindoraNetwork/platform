@@ -7,9 +7,6 @@
 
 mod amount;
 
-//use crypto::basics::hybrid_encryption::XSecretKey;
-use zei::anon_xfr::config::FEE_CALCULATING_FUNC;
-use zei::anon_xfr::structs::OpenAnonBlindAssetRecordBuilder;
 use {
     credentials::CredUserSecretKey,
     crypto::basics::hybrid_encryption::XPublicKey,
@@ -54,9 +51,12 @@ use {
     zei::{
         anon_xfr::{
             bar_to_abar::gen_bar_to_abar_body,
+            config::FEE_CALCULATING_FUNC,
             gen_anon_xfr_body,
             keys::{AXfrKeyPair, AXfrPubKey},
-            structs::{AXfrNote, OpenAnonBlindAssetRecord},
+            structs::{
+                AXfrNote, OpenAnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
+            },
         },
         api::anon_creds::{
             ac_confidential_open_commitment, ACCommitment, ACCommitmentKey,
@@ -1387,7 +1387,7 @@ mod tests {
         rand_chacha::ChaChaRng,
         rand_core::SeedableRng,
         std::ops::Neg,
-        zei::anon_xfr::bar_to_from_abar::verify_bar_to_abar_note,
+        zei::anon_xfr::bar_to_abar::verify_bar_to_abar_note,
         zei::anon_xfr::config::FEE_CALCULATING_FUNC,
         zei::anon_xfr::structs::{
             AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
@@ -1780,7 +1780,7 @@ mod tests {
             let user_params = UserParams::eq_committed_vals_params();
             let node_params = NodeParams::from(user_params);
             let result =
-                verify_bar_to_abar_note(&node_params, &note.note, from.get_pk_ref(), 0);
+                verify_bar_to_abar_note(&node_params, &note.note, from.get_pk_ref());
             assert!(result.is_ok());
         }
     }
