@@ -586,10 +586,10 @@ impl Staking {
         new_tendermint_params: Option<(Vec<u8>, Vec<u8>)>,
     ) -> Result<()> {
         for (h, entry) in self.delegation_info.end_height_map.iter() {
-            if entry.contains(original_pk) || entry.contains(&new_public_key) {
-                if *h != BLOCK_HEIGHT_MAX {
-                    return Err(eg!("Can't replace staker during unstaking."));
-                }
+            if (entry.contains(original_pk) || entry.contains(&new_public_key))
+                && *h != BLOCK_HEIGHT_MAX
+            {
+                return Err(eg!("Can't replace staker during unstaking."));
             }
         }
 
