@@ -583,7 +583,7 @@ impl Staking {
         &mut self,
         original_pk: &XfrPublicKey,
         new_public_key: XfrPublicKey,
-        new_tendermint_addr: Option<Vec<u8>>,
+        new_tendermint_params: Option<(Vec<u8>, Vec<u8>)>,
     ) -> Result<()> {
         for (h, entry) in self.delegation_info.end_height_map.iter() {
             if entry.contains(original_pk) || entry.contains(&new_public_key) {
@@ -605,12 +605,15 @@ impl Staking {
 
         let mut validator = validators_data
             .body
-            .remove(original_pk)
-            .ok_or_else(|| eg!("Validator not found."))?;
+            .get(original_pk)
+            .ok_or_else(|| eg!("Validator not found."))?
+            .clone();
+
+        validators_data.body.get_mut(original_pk).unwrap().td_power = 0;
 
         debug_assert!(&validator.id == original_pk);
 
-        if let Some(new_td_addr) = new_tendermint_addr {
+        if let Some((new_td_addr, new_td_pubkey)) = new_tendermint_params {
             //remove old td address.
             validators_data
                 .addr_td_to_app
@@ -622,6 +625,7 @@ impl Staking {
 
             //change the td addr
             validator.td_addr = new_td_addr;
+            validator.td_pubkey = new_td_pubkey;
         } else {
             *validators_data
                 .addr_td_to_app

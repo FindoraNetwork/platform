@@ -481,3 +481,9 @@ subcommands:
             takes_value: true
             value_name: TENDERMINT ADDRESS
             required: false
+        - td_pubkey:
+            help: the tendermint public key that you may want to replace.
+            long: td_pubkey
+            takes_value: true
+            value_name: TENDERMINT PUBKEY
+            required: false

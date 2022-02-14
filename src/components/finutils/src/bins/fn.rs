@@ -401,19 +401,29 @@ fn run() -> Result<()> {
             .value_of("target")
             .c(d!())
             .and_then(wallet::public_key_from_base64)?;
-        let new_td_addr = if let Some(new_td_addr_str) = m.value_of("td_address") {
-            let bytes =
-                hex::decode(new_td_addr_str).c(d!("`td_address` is invalid hex."))?;
+        let new_td_addr_pk = if let Some(new_td_address_str) = m.value_of("td_address") {
+            let new_td_address = hex::decode(new_td_address_str)
+                .c(d!("`td_address` is invalid hex. "))?;
 
-            if bytes.len() != 20 {
-                return Err(eg!("Invalid tendermint address"));
+            if new_td_address.len() != 20 {
+                return Err(eg!("Invalid tendermint address."));
             }
 
-            Some(bytes)
+            if let Some(new_td_pk) = m.value_of("td_pubkey") {
+                let pk_bytes =
+                    base64::decode(new_td_pk).c(d!("`td_pubkey` is invalid base64."))?;
+
+                let _ = tendermint::PublicKey::from_raw_ed25519(&pk_bytes)
+                    .c(d!("Invalid tendermint public key."))?;
+
+                Some((new_td_address, pk_bytes))
+            } else {
+                return Err(eg!("missing `td_pubkey`"));
+            }
         } else {
             None
         };
-        common::replace_staker(target, new_td_addr)?;
+        common::replace_staker(target, new_td_addr_pk)?;
     } else {
         println!("{}", matches.usage());
     }

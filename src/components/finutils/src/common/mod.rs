@@ -775,7 +775,7 @@ pub fn version() -> &'static str {
 ///operation to replace the staker.
 pub fn replace_staker(
     target_pubkey: XfrPublicKey,
-    new_td_addr: Option<Vec<u8>>,
+    new_td_addr_pk: Option<(Vec<u8>, Vec<u8>)>,
 ) -> Result<()> {
     let keypair = get_keypair()?;
 
@@ -785,7 +785,7 @@ pub fn replace_staker(
         builder.add_operation(op);
     })?;
 
-    builder.add_operation_replace_staker(&keypair, target_pubkey, new_td_addr)?;
+    builder.add_operation_replace_staker(&keypair, target_pubkey, new_td_addr_pk)?;
     let tx = builder.take_transaction();
     utils::send_tx(&tx).c(d!())?;
     Ok(())

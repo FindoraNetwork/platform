@@ -24,12 +24,17 @@ impl ReplaceStakerOps {
     pub fn new(
         keypair: &XfrKeyPair,
         new_public_key: XfrPublicKey,
-        new_tendermint_addr: Option<Vec<u8>>,
+        new_tendermint_params: Option<(Vec<u8>, Vec<u8>)>,
         nonce: NoReplayToken,
     ) -> Self {
+        let new_tendermint_params = new_tendermint_params.map(|p| TendermintParams {
+            address: p.0,
+            pubkey: p.1,
+        });
+
         let body = Data {
             new_public_key,
-            new_tendermint_addr,
+            new_tendermint_params,
             nonce,
         };
 
@@ -44,8 +49,11 @@ impl ReplaceStakerOps {
 
     ///verify the body with the public key
     pub fn verify(&self) -> Result<()> {
-        if let Some(new_td_addr) = &self.body.new_tendermint_addr {
-            if new_td_addr.len() != 20 {
+        if let Some(new_params) = &self.body.new_tendermint_params {
+            let _ = tendermint::PublicKey::from_raw_ed25519(&new_params.pubkey)
+                .c(d!("Invalid tendermint public key."))?;
+
+            if new_params.address.len() != 20 {
                 return Err(eg!("Invalid tendermint address."));
             }
         }
@@ -65,7 +73,10 @@ impl ReplaceStakerOps {
         dbg!(staking_simulator.check_and_replace_staker(
             &self.pubkey,
             self.body.new_public_key,
-            self.body.new_tendermint_addr.clone(),
+            self.body
+                .new_tendermint_params
+                .clone()
+                .map(|p| (p.address, p.pubkey)),
         ))
     }
 
@@ -92,8 +103,15 @@ impl ReplaceStakerOps {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Data {
     pub new_public_key: XfrPublicKey,
-    pub new_tendermint_addr: Option<Vec<u8>>,
+    pub new_tendermint_params: Option<TendermintParams>,
     nonce: NoReplayToken,
+}
+
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct TendermintParams {
+    address: Vec<u8>,
+    pubkey: Vec<u8>,
 }
 
 impl Data {
