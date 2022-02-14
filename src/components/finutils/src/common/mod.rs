@@ -32,7 +32,6 @@ use {
         parse_td_validator_keys,
     },
     zei::{
-        serialization::ZeiFromToBytes,
         setup::PublicParams,
         xfr::{
             asset_record::AssetRecordType,
@@ -774,10 +773,7 @@ pub fn version() -> &'static str {
 }
 
 ///operation to replace the staker.
-pub fn replace_staker(target_addr: &str, new_td_addr: Option<Vec<u8>>) -> Result<()> {
-    let bytes = hex::decode(target_addr).c(d!("Invalid hex."))?;
-    let target_pubkey =
-        XfrPublicKey::zei_from_bytes(&bytes).c(d!("Invalid public key."))?;
+pub fn replace_staker(target_pubkey: XfrPublicKey, new_td_addr: Option<Vec<u8>>) -> Result<()> {
 
     let keypair = get_keypair()?;
 
