@@ -398,7 +398,10 @@ fn run() -> Result<()> {
         let eth_key = m.value_of("eth-key");
         transfer_from_account(amount.parse::<u64>().c(d!())?, address, eth_key)?
     } else if let Some(m) = matches.subcommand_matches("replace") {
-        let target = m.value_of("target").c(d!())?;
+        let target = m
+            .value_of("target")
+            .c(d!())
+            .and_then(wallet::public_key_from_base64)?;
         let new_td_addr = if let Some(new_td_addr_str) = m.value_of("td_address") {
             let bytes =
                 hex::decode(new_td_addr_str).c(d!("`td_address` is invalid hex."))?;
