@@ -404,9 +404,11 @@ fn run() -> Result<()> {
         let new_td_addr = if let Some(new_td_addr_str) = m.value_of("td_address") {
             let bytes =
                 hex::decode(new_td_addr_str).c(d!("`td_address` is invalid hex."))?;
+
             if bytes.len() != 20 {
                 return Err(eg!("Invalid tendermint address"));
             }
+
             Some(bytes)
         } else {
             None

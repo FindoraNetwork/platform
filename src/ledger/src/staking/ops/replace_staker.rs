@@ -49,7 +49,6 @@ impl ReplaceStakerOps {
                 return Err(eg!("Invalid tendermint address."));
             }
         }
-
         self.pubkey
             .verify(&self.body.to_bytes(), &self.signature)
             .c(d!("Verification failed."))?;
