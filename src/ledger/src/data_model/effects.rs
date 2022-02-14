@@ -679,6 +679,7 @@ impl BlockEffect {
             i.check_run(&mut self.staking_simulator, &txn_effect.txn)
                 .c(d!())?;
         }
+
         for i in txn_effect.delegations.iter() {
             i.check_run(&mut self.staking_simulator, &txn_effect.txn)
                 .c(d!())?;

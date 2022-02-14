@@ -585,9 +585,11 @@ impl Staking {
         new_public_key: XfrPublicKey,
         new_tendermint_addr: Option<Vec<u8>>,
     ) -> Result<()> {
-        for (_h, entry) in self.delegation_info.end_height_map.iter() {
+        for (h, entry) in self.delegation_info.end_height_map.iter() {
             if entry.contains(original_pk) || entry.contains(&new_public_key) {
-                return Err(eg!("Can't replace staker during unstaking."));
+                if *h != BLOCK_HEIGHT_MAX {
+                    return Err(eg!("Can't replace staker during unstaking."));
+                }
             }
         }
 

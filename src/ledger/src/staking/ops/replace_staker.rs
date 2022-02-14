@@ -45,7 +45,7 @@ impl ReplaceStakerOps {
     ///verify the body with the public key
     pub fn verify(&self) -> Result<()> {
         if let Some(new_td_addr) = &self.body.new_tendermint_addr {
-            if tendermint::PublicKey::from_raw_ed25519(&new_td_addr).is_none() {
+            if new_td_addr.len() != 20 {
                 return Err(eg!("Invalid tendermint address."));
             }
         }
@@ -63,11 +63,11 @@ impl ReplaceStakerOps {
         _tx: &Transaction,
     ) -> Result<()> {
         self.verify()?;
-        staking_simulator.check_and_replace_staker(
+        dbg!(staking_simulator.check_and_replace_staker(
             &self.pubkey,
             self.body.new_public_key,
             self.body.new_tendermint_addr.clone(),
-        )
+        ))
     }
 
     #[inline(always)]
