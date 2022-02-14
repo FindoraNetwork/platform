@@ -44,9 +44,16 @@ impl ReplaceStakerOps {
 
     ///verify the body with the public key
     pub fn verify(&self) -> Result<()> {
+        if let Some(new_td_addr) = &self.body.new_tendermint_addr {
+            if tendermint::PublicKey::from_raw_ed25519(&new_td_addr).is_none() {
+                return Err(eg!("Invalid tendermint address."));
+            }
+        }
+
         self.pubkey
             .verify(&self.body.to_bytes(), &self.signature)
-            .c(d!("Verification failed."))
+            .c(d!("Verification failed."))?;
+        Ok(())
     }
 
     #[allow(missing_docs)]

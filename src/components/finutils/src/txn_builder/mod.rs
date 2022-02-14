@@ -627,7 +627,6 @@ impl TransactionBuilder {
         new_public_key: XfrPublicKey,
         new_td_addr: Option<Vec<u8>>,
     ) -> Result<&mut Self> {
-        //[TODO]
         let ops = ReplaceStakerOps::new(
             keypair,
             new_public_key,

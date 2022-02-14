@@ -784,6 +784,7 @@ pub fn replace_staker(target_addr: &str, new_td_addr: Option<Vec<u8>>) -> Result
     let mut builder = utils::new_tx_builder().c(d!())?;
 
     builder.add_operation_replace_staker(&keypair, target_pubkey, new_td_addr)?;
-    //[TODO]
+    let tx = builder.take_transaction();
+    utils::send_tx(&tx).c(d!())?;
     Ok(())
 }
