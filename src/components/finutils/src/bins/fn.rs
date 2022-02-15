@@ -396,7 +396,7 @@ fn run() -> Result<()> {
         let address = m.value_of("addr");
         let eth_key = m.value_of("eth-key");
         transfer_from_account(amount.parse::<u64>().c(d!())?, address, eth_key)?
-    } else if let Some(m) = matches.subcommand_matches("replace") {
+    } else if let Some(m) = matches.subcommand_matches("replace_staker") {
         let target = m
             .value_of("target")
             .c(d!())
