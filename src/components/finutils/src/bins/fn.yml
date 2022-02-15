@@ -465,7 +465,7 @@ subcommands:
             required: true
   - gen-eth-key:
       about: Generate an Ethereum address
-  - replace:
+  - replace_staker:
       about: Replace the staker of the validator with target address
       args:
         - target:
