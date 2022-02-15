@@ -552,14 +552,13 @@ subcommands:
             required: true
         - to-xfr-public-key:
             help: Xfr public key of the receiver
-            short: tp
+            short: t
             long: to-xfr-public-key
             takes_value: true
             value_name: XFR PUBLIC KEY
             required: true
         - fee-xfr-seckey:
             help: Xfr secret key for fee payment
-            short: fxs
             long: fee-xfr-seckey
             takes_value: true
             value_name: XFR SECRET KEY
@@ -589,14 +588,12 @@ subcommands:
             required: true
         - to-axfr-public-key:
             help: Axfr public key of the receiver
-            short: tp
             long: to-axfr-public-key
             takes_value: true
             value_name: PUBLIC KEY
             required: true
         - to-enc-key:
             help: Receiver encryption key for anon transfer
-            short: te
             long: to-enc-key
             takes_value: true
             value_name: ENCRYPTION KEY
@@ -634,14 +631,12 @@ subcommands:
             required: true
         - to-axfr-public-key-file:
             help: Axfr public keys of the receivers
-            short: tp
             long: to-axfr-public-key-file
             takes_value: true
             value_name: PUBLIC KEY
             required: true
         - to-enc-key-file:
             help: Receivers encryption keys for anon transfer
-            short: te
             long: to-enc-key-file
             takes_value: true
             value_name: ENCRYPTION KEY
