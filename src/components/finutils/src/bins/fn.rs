@@ -410,7 +410,6 @@ fn run() -> Result<()> {
         //     }
 
         //     if let Some(new_td_pk) = m.value_of("td_pubkey") {
-        //         return Err(eg!(""));
         //         let pk_bytes =
         //             base64::decode(new_td_pk).c(d!("`td_pubkey` is invalid base64."))?;
 
