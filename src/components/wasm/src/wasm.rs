@@ -1995,6 +1995,16 @@ pub fn x_secretkey_from_string(key_str: &str) -> Result<XSecretKey, JsValue> {
         .map_err(error_to_jsvalue)
 }
 
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn abar_from_json(json: JsValue) -> Result<AnonBlindAssetRecord, JsValue> {
+
+    let abar: AnonBlindAssetRecord =
+        json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
+
+    Ok(abar)
+}
+
 #[cfg(test)]
 #[allow(missing_docs)]
 mod test {

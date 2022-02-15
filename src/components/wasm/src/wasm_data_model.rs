@@ -1,3 +1,4 @@
+use zei::anon_xfr::structs::AnonBlindAssetRecord;
 use {
     core::fmt::Display,
     credentials::{
