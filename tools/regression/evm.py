@@ -5,8 +5,7 @@ import argparse
 import subprocess
 
 
-def private_key_to_address(private_key):
-    w3 = Web3(HTTPProvider(to_web3_url(local)))
+def private_key_to_address(private_key, w3):
     account = w3.eth.account.privateKeyToAccount(private_key)
     return account.address
 
@@ -17,8 +16,8 @@ def get_fra_balance(sec_key):
     return int(parsed[1])
 
 
-def get_erc20_balance(address):
-    w3 = Web3(HTTPProvider(to_web3_url(local)))
+def get_erc20_balance(address, url):
+    w3 = Web3(HTTPProvider(to_web3_url(url)))
     try:
         return w3.eth.get_balance(address)
     except:
@@ -31,7 +30,7 @@ def get_balance(arguments):
     addr = arguments['addr']
     sec_key = arguments['sec_key']
     if addr is not None:
-        balance = get_erc20_balance(addr)
+        balance = get_erc20_balance(addr, arguments['url'])
     elif sec_key is not None:
         balance = get_fra_balance(sec_key)
     print('{}balance is {} {}'.format(OKBLUE, balance, ENDC))
@@ -49,8 +48,8 @@ def verify_balance(arguments):
 
 
 def transfer(arguments):
-    w3 = Web3(HTTPProvider(to_web3_url(local)))
-    address = private_key_to_address(arguments['from_priv_key'])
+    w3 = Web3(HTTPProvider(to_web3_url(arguments['url'])))
+    address = private_key_to_address(arguments['from_priv_key'], w3)
     signed_txn = w3.eth.account.sign_transaction(dict(
             nonce=w3.eth.get_transaction_count(address),
             gas=100000,
@@ -73,6 +72,7 @@ if __name__ == "__main__":
 
     # Initialize Parser
     parser = argparse.ArgumentParser()
+    parser.add_argument('--url', default=local, help='web3 rpc endpoint')
     subparsers = parser.add_subparsers(dest='subparsers', help='sub-command help')
 
     # Initialize Balance Parser
