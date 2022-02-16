@@ -69,7 +69,7 @@ impl ReplaceStakerOps {
         staking_simulator: &mut Staking,
         _tx: &Transaction,
     ) -> Result<()> {
-        self.verify()?;
+        dbg!(self.verify()?);
         dbg!(staking_simulator.check_and_replace_staker(
             &self.pubkey,
             self.body.new_public_key,

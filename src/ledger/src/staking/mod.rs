@@ -50,7 +50,8 @@ use {
             Arc,
         },
     },
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
+    zei::serialization::ZeiFromToBytes,
+    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
 
 // height, reward rate
@@ -605,45 +606,48 @@ impl Staking {
             return Err(eg!("Staker already exists."));
         }
 
-        let mut validator;
+        let mut validator = validators_data
+            .body
+            .remove(original_pk)
+            .ok_or_else(|| eg!("Validator not found."))?;
 
-        if let Some((new_td_addr, new_td_pubkey)) = new_tendermint_params {
-            validator = validators_data
-                .body
-                .get(original_pk)
-                .ok_or_else(|| eg!("Validator not found."))?
-                .clone();
+        match new_tendermint_params {
+            Some((new_td_addr, new_td_pubkey))
+                if new_td_addr != validator.td_addr
+                    && validator.td_pubkey != new_td_pubkey =>
+            {
+                let mut tmp_validator = validator.clone();
+                tmp_validator.td_power = 0;
+                tmp_validator.delegators.clear();
 
-            //remove old td address.
-            validators_data
-                .addr_td_to_app
-                .remove(&td_addr_to_string(&validator.td_addr));
-            //insert new one.
-            validators_data
-                .addr_td_to_app
-                .insert(td_addr_to_string(&new_td_addr), new_public_key);
+                //gen a temp key.
+                let tmp_key = XfrSecretKey::zei_from_bytes(original_pk.as_bytes())?
+                    .into_keypair()
+                    .get_pk();
 
-            debug_assert!(&validator.id == original_pk);
+                validators_data.body.insert(tmp_key, tmp_validator);
 
-            let v_old = validators_data.body.get_mut(original_pk).unwrap();
-            v_old.td_power = 0;
-            v_old.delegators.clear();
+                //remove old td address.
+                validators_data
+                    .addr_td_to_app
+                    .remove(&td_addr_to_string(&validator.td_addr));
+                //insert new one.
+                validators_data
+                    .addr_td_to_app
+                    .insert(td_addr_to_string(&new_td_addr), new_public_key);
 
-            //change the td addr
-            validator.td_addr = new_td_addr;
-            validator.td_pubkey = new_td_pubkey;
-        } else {
-            validator = validators_data
-                .body
-                .remove(original_pk)
-                .ok_or_else(|| eg!("Validator not found."))?;
-
-            *validators_data
-                .addr_td_to_app
-                .get_mut(&td_addr_to_string(&validator.td_addr))
-                .c(d!())? = new_public_key;
-        }
-
+                debug_assert!(&validator.id == original_pk);
+                //change the td addr
+                validator.td_addr = new_td_addr;
+                validator.td_pubkey = new_td_pubkey;
+            }
+            _ => {
+                *validators_data
+                    .addr_td_to_app
+                    .get_mut(&td_addr_to_string(&validator.td_addr))
+                    .c(d!())? = new_public_key;
+            }
+        };
         //replace staker
         validator.id = new_public_key;
 
