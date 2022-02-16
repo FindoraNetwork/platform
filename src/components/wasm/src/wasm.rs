@@ -937,14 +937,8 @@ pub fn gen_nullifier_hash(
         &oabar.get_asset_type(),
         mt_leaf_info.get_zei_mt_leaf_info().uid,
     );
-    let input = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
-    let nullifier_hash = sha256::Digest::from_slice(
-        &base64::decode_config(&input, base64::URL_SAFE)
-            .c(d!())
-            .unwrap(),
-    );
-
-    Ok(serde_json::to_string(&nullifier_hash).unwrap())
+    let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+    Ok(hash)
 }
 
 #[wasm_bindgen]
