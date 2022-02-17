@@ -27,6 +27,7 @@ use {
                 delegation::DelegationOps,
                 fra_distribution::FraDistributionOps,
                 governance::{ByzantineKind, GovernanceOps},
+                replace_staker::ReplaceStakerOps,
                 undelegation::UnDelegationOps,
                 update_staker::UpdateStakerOps,
                 update_validator::UpdateValidatorOps,
@@ -617,6 +618,23 @@ impl TransactionBuilder {
         UpdateValidatorOps::new(kps, h, v_set, self.txn.body.no_replay_token)
             .c(d!())
             .map(move |op| self.add_operation(Operation::UpdateValidator(op)))
+    }
+
+    /// Add an operation to replace the staker of validator.
+    pub fn add_operation_replace_staker(
+        &mut self,
+        keypair: &XfrKeyPair,
+        new_public_key: XfrPublicKey,
+        new_td_addr: Option<(Vec<u8>, Vec<u8>)>,
+    ) -> Result<&mut Self> {
+        let ops = ReplaceStakerOps::new(
+            keypair,
+            new_public_key,
+            new_td_addr,
+            self.txn.body.no_replay_token,
+        );
+        self.add_operation(Operation::ReplaceStaker(ops));
+        Ok(self)
     }
 
     /// Add a operation convert utxo asset to account balance.

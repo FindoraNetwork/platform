@@ -1,3 +1,5 @@
+#![allow(clippy::unused_unit)]
+
 use core::fmt::Display;
 use ethereum::{LegacyTransactionMessage, TransactionV0 as Transaction};
 use ethereum_types::{H160, H256};
@@ -31,7 +33,6 @@ pub fn recover_signer(transaction: &Transaction) -> Option<H160> {
     )))
 }
 
-#[wasm_bindgen]
 pub fn recover_tx_signer(raw_tx: String) -> Result<String, JsValue> {
     let tx_bytes = base64::decode_config(&raw_tx, base64::URL_SAFE)
         .c(d!())
@@ -51,7 +52,6 @@ pub fn recover_tx_signer(raw_tx: String) -> Result<String, JsValue> {
     }
 }
 
-#[wasm_bindgen]
 pub fn evm_tx_hash(raw_tx: String) -> Result<String, JsValue> {
     let tx_bytes = base64::decode_config(&raw_tx, base64::URL_SAFE)
         .c(d!())

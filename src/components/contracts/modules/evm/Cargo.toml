@@ -29,6 +29,8 @@ fp-storage = { path = "../../primitives/storage" }
 fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
+config = { path = "../../../config"}
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.4" }
 
 [dev-dependencies]
 baseapp = { path = "../../baseapp" }

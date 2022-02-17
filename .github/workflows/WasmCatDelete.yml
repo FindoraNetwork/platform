@@ -1,0 +1,28 @@
+name: Wasm Delete Destination Branch
+# https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#delete-event-delete
+# delete event will only be triggered by default branch contains this action
+on: delete
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    # check again this is a delete branch event 
+    if: github.event.ref_type == 'branch'
+    steps:
+      - name: Delete wasm-js-bindings branch
+        run: |
+          set -x
+          workspace=$(mktemp -d)
+          cd $workspace
+
+          git config --global user.email "wasmcat-bot@users.noreply.github.com"
+          git config --global user.name "wasmcat-bot"
+
+          # clone the main branch
+          git clone --depth 1 https://${{secrets.ACCESS_TOKEN}}@github.com/FindoraNetwork/wasm-js-bindings
+          cd wasm-js-bindings
+
+          # check target branch exists then we delete it
+          if git ls-remote --heads --exit-code origin ${{ github.event.ref }}; then
+            git push -d origin ${{ github.event.ref }}
+          fi
