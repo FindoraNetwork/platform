@@ -29,6 +29,7 @@ use {
     config::abci::global_cfg::CFG,
     cosig::CoSigRule,
     cryptohash::sha256::{self, Digest},
+    curve25519_dalek::{edwards::EdwardsPoint, scalar::Scalar, traits::Identity},
     fbnc::{new_mapx, Mapx},
     globutils::wallet,
     indexmap::IndexMap,
@@ -103,11 +104,15 @@ lazy_static! {
     ///A hard-coded key for "blacklist", that blacklist delegate a validator means nobody can delegate it.
     pub static ref  LOCK_KEY: XfrPublicKey = {
         let bytes : [u8;32]=[
-            8,  8, 8,   8, 8, 8,  8, 8, 88,  8, 8, 8, 8, 8,   8,  8,
-            8, 8, 8, 8, 8, 8,  8,  8, 8,   8,  8, 8, 8,   8,   8, 8
+            8,  8, 8,  8, 8, 88,  8, 8, 8,  8, 8, 88, 8, 8,   8,  8,
+            8, 88, 8, 8, 8, 8,  8,  8, 8,  8,  8, 8, 8,   88,   8, 8
         ];
 
-        XfrPublicKey::zei_from_bytes(&bytes).unwrap()
+        let scalar = Scalar::from_bits(bytes);
+        let point = EdwardsPoint::identity() * scalar;
+        let compressed_y = point.compress();
+
+        XfrPublicKey::zei_from_bytes(compressed_y.as_bytes()).unwrap()
     };
 }
 
