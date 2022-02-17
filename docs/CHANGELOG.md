@@ -12,7 +12,7 @@
 
 #### v0.3.19-release
 
-- Enable EVM substate at height `178_7600`.
+- Enable EVM substate at height `179_9800`.
 - Feature of staker replacement
 
 #### v0.3.12-release
