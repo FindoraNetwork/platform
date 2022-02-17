@@ -29,6 +29,7 @@ use {
     config::abci::global_cfg::CFG,
     cosig::CoSigRule,
     cryptohash::sha256::{self, Digest},
+    curve25519_dalek::{edwards::EdwardsPoint, scalar::Scalar, traits::Identity},
     fbnc::{new_mapx, Mapx},
     globutils::wallet,
     indexmap::IndexMap,
@@ -269,7 +270,12 @@ impl Staking {
                     mask.get_unchecked(i) ^ bytes.get_unchecked(i)
             }
         }
-        XfrPublicKey::zei_from_bytes(&templete).unwrap()
+
+        let scalar = Scalar::from_bits(templete);
+        let point = EdwardsPoint::identity() * scalar;
+        let compressed_y = point.compress();
+
+        XfrPublicKey::zei_from_bytes(compressed_y.as_bytes()).unwrap()
     }
 
     #[inline(always)]
