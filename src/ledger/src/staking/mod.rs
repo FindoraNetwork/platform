@@ -597,6 +597,104 @@ impl Staking {
         }
     }
 
+    ///replace_staker
+    pub fn check_and_replace_staker(
+        &mut self,
+        original_pk: &XfrPublicKey,
+        new_public_key: XfrPublicKey,
+        new_tendermint_params: Option<(Vec<u8>, Vec<u8>)>,
+    ) -> Result<()> {
+        for (h, entry) in self.delegation_info.end_height_map.iter() {
+            if (entry.contains(original_pk) || entry.contains(&new_public_key))
+                && *h != BLOCK_HEIGHT_MAX
+            {
+                return Err(eg!("Can't replace staker during unstaking."));
+            }
+        }
+
+        //check if it exists a validator here.
+        let validators_data = self
+            .validator_get_current_mut()
+            .ok_or_else(|| eg!("No validator at all."))?;
+
+        //can't override existing validator.
+        if validators_data.body.contains_key(&new_public_key)
+            && (*original_pk != new_public_key)
+        {
+            return Err(eg!("Staker already exists."));
+        }
+
+        let mut validator;
+
+        if let Some((new_td_addr, new_td_pubkey)) = new_tendermint_params {
+            validator = validators_data
+                .body
+                .get(original_pk)
+                .ok_or_else(|| eg!("Validator not found."))?
+                .clone();
+
+            //remove old td address.
+            validators_data
+                .addr_td_to_app
+                .remove(&td_addr_to_string(&validator.td_addr));
+            //insert new one.
+            validators_data
+                .addr_td_to_app
+                .insert(td_addr_to_string(&new_td_addr), new_public_key);
+
+            debug_assert!(&validator.id == original_pk);
+
+            let v_old = validators_data.body.get_mut(original_pk).unwrap();
+            v_old.td_power = 0;
+            v_old.delegators.clear();
+
+            //change the td addr
+            validator.td_addr = new_td_addr;
+            validator.td_pubkey = new_td_pubkey;
+        } else {
+            validator = validators_data
+                .body
+                .remove(original_pk)
+                .ok_or_else(|| eg!("Validator not found."))?;
+
+            *validators_data
+                .addr_td_to_app
+                .get_mut(&td_addr_to_string(&validator.td_addr))
+                .c(d!())? = new_public_key;
+        }
+
+        //replace staker
+        validator.id = new_public_key;
+
+        //replace delegator
+        if let Some(am) = validator.delegators.remove(original_pk) {
+            validator.delegators.insert(new_public_key, am);
+        }
+
+        validators_data.body.insert(new_public_key, validator);
+
+        let delegation_info = &mut self.delegation_info;
+
+        //deal with delegation
+        let mut d = delegation_info
+            .global_delegation_records_map
+            .remove(original_pk)
+            .c(d!(eg!("impossible")))?;
+
+        //change id
+        d.id = new_public_key;
+        delegation_info
+            .global_delegation_records_map
+            .insert(new_public_key, d);
+
+        for (_pk, d) in delegation_info.global_delegation_records_map.iter_mut() {
+            if let Some(am) = d.delegations.remove(original_pk) {
+                d.delegations.insert(new_public_key, am);
+            }
+        }
+        Ok(())
+    }
+
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn validator_check_power_x(
@@ -1688,6 +1786,11 @@ impl Staking {
     #[allow(missing_docs)]
     pub fn get_global_delegation_amount_mut(&mut self) -> &mut Amount {
         &mut self.delegation_info.global_amount
+    }
+
+    ///Get all the delegation records.
+    pub fn get_global_delegation_records(&self) -> &BTreeMap<XfrPublicKey, Delegation> {
+        &self.delegation_info.global_delegation_records_map
     }
 }
 

@@ -465,3 +465,25 @@ subcommands:
             required: true
   - gen-eth-key:
       about: Generate an Ethereum address
+  - replace_staker:
+      about: Replace the staker of the validator with target address
+      args:
+        - target:
+            help: the public key of new staker, you must be the staker of the validator, you could use `fn setup` to configure your secret key and public key.
+            short: t
+            long: target
+            takes_value: true
+            value_name: TARGET PUBLIC KEY
+            required: true
+        - td_address:
+            help: the tendermint address that you may want to replace.
+            long: td_address
+            takes_value: true
+            value_name: TENDERMINT ADDRESS
+            required: false
+        - td_pubkey:
+            help: the tendermint public key that you may want to replace.
+            long: td_pubkey
+            takes_value: true
+            value_name: TENDERMINT PUBKEY
+            required: false
