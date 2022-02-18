@@ -90,11 +90,7 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
 
     drop(state);
 
-    println!("\n\n");
-    println!("==========================================");
     println!("======== Last committed height: {} ========", h);
-    println!("==========================================");
-    println!("\n\n");
 
     if la.all_commited() {
         la.begin_block();
