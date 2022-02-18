@@ -775,60 +775,6 @@ pub fn get_serialized_address(address: String) -> Result<String, JsValue> {
     String::from_utf8(sa).map_err(error_to_jsvalue)
 }
 
-/// AnonKeys is used to store keys for Anon proofs
-#[wasm_bindgen]
-pub struct AnonKeys {
-    axfr_secret_key: String,
-    axfr_public_key: String,
-    enc_key: String,
-    dec_key: String,
-}
-
-/// AnonKeys is a struct to store keys required for anon transfer
-#[wasm_bindgen]
-#[allow(missing_docs)]
-impl AnonKeys {
-    #[wasm_bindgen(getter)]
-    pub fn axfr_secret_key(&self) -> String {
-        self.axfr_secret_key.clone()
-    }
-
-    #[wasm_bindgen(setter)]
-    pub fn set_axfr_secret_key(&mut self, axfr_secret_key: String) {
-        self.axfr_secret_key = axfr_secret_key;
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn axfr_public_key(&self) -> String {
-        self.axfr_public_key.clone()
-    }
-
-    #[wasm_bindgen(setter)]
-    pub fn set_axfr_public_key(&mut self, axfr_public_key: String) {
-        self.axfr_public_key = axfr_public_key;
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn enc_key(&self) -> String {
-        self.enc_key.clone()
-    }
-
-    #[wasm_bindgen(setter)]
-    pub fn set_enc_key(&mut self, enc_key: String) {
-        self.enc_key = enc_key;
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn dec_key(&self) -> String {
-        self.dec_key.clone()
-    }
-
-    #[wasm_bindgen(setter)]
-    pub fn set_dec_key(&mut self, dec_key: String) {
-        self.dec_key = dec_key;
-    }
-}
-
 /// Generate new anonymous keys
 #[wasm_bindgen]
 pub fn gen_anon_keys() -> Result<AnonKeys, JsValue> {
@@ -1992,7 +1938,6 @@ pub fn x_secretkey_from_string(key_str: &str) -> Result<XSecretKey, JsValue> {
 #[wasm_bindgen]
 #[allow(missing_docs)]
 pub fn abar_from_json(json: JsValue) -> Result<AnonBlindAssetRecord, JsValue> {
-
     let abar: AnonBlindAssetRecord =
         json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
 
