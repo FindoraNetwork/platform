@@ -12,7 +12,7 @@ echo "\n\n Owned Abars after Bar to Abar conversion"
 sleep 20 #Do not remove/decrease
 target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r $randomiser
 
-target/release/fn convert-abar-to-bar --anon-keys ./anon-keys-temp.keys -r $randomiser --to-xfr-public-key  fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
+target/release/fn convert-abar-to-bar --anon-keys ./anon-keys-temp.keys -r $randomiser --to-wallet-address  fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
 
 sleep 10
 

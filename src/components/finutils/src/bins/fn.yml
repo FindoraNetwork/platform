@@ -550,12 +550,18 @@ subcommands:
             takes_value: true
             value_name: RANDOMIZER
             required: true
-        - to-xfr-public-key:
-            help: Xfr public key of the receiver
+        - to-pubkey:
+            help: base64-formated `XfrPublicKey` of the receiver
             short: t
-            long: to-xfr-public-key
+            long: to-pubkey
             takes_value: true
-            value_name: XFR PUBLIC KEY
+            value_name: PubKey
+        - to-wallet-address:
+            help: Xfr public key of the receiver
+            short: T
+            long: to-wallet-address
+            takes_value: true
+            value_name: XFR WALLET ADDRESS
             required: true
         - fee-xfr-seckey:
             help: Xfr secret key for fee payment

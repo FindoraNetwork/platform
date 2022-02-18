@@ -467,7 +467,15 @@ fn run() -> Result<()> {
         let axfr_secret_key = anon_keys.axfr_secret_key;
         let randomizer = m.value_of("randomizer");
         let dec_key = anon_keys.dec_key;
-        let to_xfr_public_key = m.value_of("to-xfr-public-key");
+        let to = m
+            .value_of("to-xfr-pubkey")
+            .c(d!())
+            .and_then(|pk| wallet::public_key_from_base64(pk).c(d!()))
+            .or_else(|_| {
+                m.value_of("to-wallet-address").c(d!()).and_then(|addr| {
+                    wallet::public_key_from_bech32(addr).c(d!("invalid wallet address"))
+                })
+            })?;
         let fee_xfr_seckey = match m.value_of("fee-xfr-seckey") {
             Some(path) => {
                 Some(fs::read_to_string(path).c(d!("Failed to read seckey file"))?)
@@ -475,14 +483,14 @@ fn run() -> Result<()> {
             None => None,
         };
 
-        if randomizer.is_none() || to_xfr_public_key.is_none() {
+        if randomizer.is_none() {
             println!("{}", m.usage());
         } else {
             common::convert_abar2bar(
                 axfr_secret_key,
                 randomizer.unwrap(),
                 dec_key,
-                to_xfr_public_key.unwrap(),
+                &to,
                 fee_xfr_seckey.as_deref(),
                 m.is_present("confidential-amount"),
                 m.is_present("confidential-type"),
