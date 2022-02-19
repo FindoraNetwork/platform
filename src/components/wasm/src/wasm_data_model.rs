@@ -754,11 +754,12 @@ impl MTLeafInfo {
 
 /// AnonKeys is used to store keys for Anon proofs
 #[wasm_bindgen]
+#[derive(Serialize, Deserialize)]
 pub struct AnonKeys {
-    axfr_secret_key: String,
-    axfr_public_key: String,
-    enc_key: String,
-    dec_key: String,
+    pub(crate) axfr_secret_key: String,
+    pub(crate) axfr_public_key: String,
+    pub(crate) enc_key: String,
+    pub(crate) dec_key: String,
 }
 
 /// AnonKeys is a struct to store keys required for anon transfer
@@ -771,7 +772,7 @@ impl AnonKeys {
     }
 
     pub fn to_json(&self) -> Result<JsValue, JsValue> {
-        serde_json::to_string(&self.object)
+        serde_json::to_string(&self)
             .map(|s| JsValue::from_str(&s))
             .c(d!())
             .map_err(error_to_jsvalue)

@@ -1624,6 +1624,7 @@ use rand::{thread_rng, Rng};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
+use crate::wasm_data_model::AnonKeys;
 
 #[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.
