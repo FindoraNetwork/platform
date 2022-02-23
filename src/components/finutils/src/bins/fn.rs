@@ -388,7 +388,7 @@ fn run() -> Result<()> {
         let sec_key = m.value_of("sec-key");
         if sec_key.is_some() {
             //Asset defaults to fra
-            common::show_account(sec_key.as_deref(), None).c(d!())?;
+            common::show_account(sec_key, None).c(d!())?;
         }
         if address.is_some() {
             let (account, info) = contract_account_info(address)?;
