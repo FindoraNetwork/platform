@@ -272,3 +272,6 @@ snapshot:
 	@./tools/devnet/snapshot.sh
 
 devnet: reset snapshot
+
+devnet_bridge: devnet
+	@./tools/devnet/startbridge.sh
