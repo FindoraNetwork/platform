@@ -271,6 +271,9 @@ reset:
 snapshot:
 	@./tools/devnet/snapshot.sh
 
+evmtest:
+	@./tools/regression/evm/testevm.sh
+
 devnet: reset snapshot
 
 devnet_bridge: devnet
