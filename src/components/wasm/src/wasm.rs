@@ -222,7 +222,7 @@ impl FeeInputs {
     #[allow(missing_docs)]
     pub fn new() -> Self {
         FeeInputs {
-            inner: Vec::new(),
+            inner: Vec::with_capacity(10),
         }
     }
 
