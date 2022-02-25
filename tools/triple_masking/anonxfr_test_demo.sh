@@ -1,6 +1,6 @@
+
 set -e
 ./tools/triple_masking/bar_to_abar_convert.sh
-
 randomiser1=$(tail -n 1 randomizers)
 echo "\n\n Owned Abars after Bar to Abar conversion"
 sleep 20 #Do not remove/decrease

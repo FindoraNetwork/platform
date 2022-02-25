@@ -11,7 +11,7 @@ echo "
   \"axfr_public_key\": \"ptyo7hlqn-Eywf_ttG99OSWtz6KfDUvLYDDVDlV1C-U=\",
   \"enc_key\": \"SAmB7Oji4sAgENLaLb4PFclxQL_DRrEkXcYp6eXuXwI=\",
   \"dec_key\": \"AEq1ZUFk_fB__YaNjQ3D2taGOnMZAx4adpB6RbnPj24=\"
-}" >> anon-keys-temp2.keys
+}" > anon-keys-temp2.keys
 sleep 5
 set -e
 
