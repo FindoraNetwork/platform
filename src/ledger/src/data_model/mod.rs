@@ -43,7 +43,6 @@ use {
         result::Result as StdResult,
     },
     unicode_normalization::UnicodeNormalization,
-    zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
     zei::{
         anon_xfr::{
             bar_to_abar::{BarToAbarBody, BarToAbarNote},
@@ -1780,14 +1779,8 @@ impl Transaction {
                     }
                 } else if let Operation::TransferAnonAsset(_) = ops {
                     return true;
-                } else if let Operation::BarToAbar(ref x) = ops {
-                    if x.note.body.input.get_record_type()
-                        == NonConfidentialAmount_NonConfidentialAssetType
-                        && x.note.body.input.asset_type
-                            == XfrAssetType::NonConfidential(ASSET_TYPE_FRA)
-                    {
-                        return true;
-                    }
+                } else if let Operation::BarToAbar(_) = ops {
+                    return true;
                 } else if matches!(ops, Operation::UpdateValidator(_)) {
                     return true;
                 }
