@@ -278,3 +278,6 @@ run_bar_to_abar_demo: devnet
 
 run_anon_transfer_demo: devnet
 	@./tools/triple_masking/anonxfr_test_demo.sh
+
+run_multi_anon_transfer_demo: devnet
+	@./tools/triple_masking/multi_axfr_test_demo.sh
