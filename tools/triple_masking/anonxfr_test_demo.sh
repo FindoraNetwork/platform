@@ -24,7 +24,7 @@ target/release/fn anon-transfer --amount 189990000 --anon-keys ./anon-keys-temp.
 
 randomiser2=$(tail -n 1 randomizers)
 echo "\n\n Owned Abars for Receiver1 after Anon Transfer 1"
-sleep 40
+sleep 30
 echo $randomiser2 > /dev/null
 target/release/fn owned-abars -p ptyo7hlqn-Eywf_ttG99OSWtz6KfDUvLYDDVDlV1C-U= -r $randomiser2
 
@@ -34,7 +34,7 @@ target/release/fn anon-transfer --amount 169990000 --anon-keys ./anon-keys-temp2
 
 randomiser3=$(tail -n 1 randomizers)
 echo "\n\n Owned Abars for Receiver2 after Anon Transfer 2"
-sleep 40
+sleep 30
 echo $randomiser3 > /dev/null
 target/release/fn owned-abars -p BdECoTzLNQHlKq1oGMI2kdh27yp_I2CZen0FGYLFkM0= -r $randomiser3
 

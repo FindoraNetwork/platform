@@ -9,7 +9,6 @@
 pub mod evm;
 pub mod utils;
 
-//use std::iter::from_fn;
 use {
     crate::api::DelegationInfo,
     crate::common::utils::{new_tx_builder, send_tx},
@@ -822,6 +821,7 @@ pub fn gen_oabar_add_op(
         .c(d!("invalid 'from-axfr-secret-key'"))?;
     let from_secret_key =
         wallet::x_secret_key_from_base64(dec_key.as_str()).c(d!("invalid dec_key"))?;
+    let from_public_key = XPublicKey::from(&from_secret_key);
     let axfr_amount = amount.parse::<u64>().c(d!("error parsing amount"))?;
     let to = wallet::anon_public_key_from_base64(to_axfr_public_key)
         .c(d!("invalid 'to-axfr-public-key'"))?;
@@ -834,8 +834,6 @@ pub fn gen_oabar_add_op(
     let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
     let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
 
-
-
     let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
         &axtxo_abar[0].1,
         owner_memo,
@@ -847,8 +845,6 @@ pub fn gen_oabar_add_op(
     .build()
     .unwrap();
 
-
-
     let mut prng = ChaChaRng::from_entropy();
     let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
         .amount(axfr_amount)
@@ -859,17 +855,15 @@ pub fn gen_oabar_add_op(
         .build()
         .unwrap();
 
-    let senders_public_key = XPublicKey::from(&from_secret_key);
-
     let r_out = oabar_out.get_key_rand_factor();
-
-    let oabar_in_array = [oabar_in];
-    let oabar_out_array = [oabar_out];
-    let from_array = [from];
-
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
     let (_, note) = builder
-        .add_operation_anon_transfer_fees_remainder(&oabar_in_array, &oabar_out_array, &from_array, senders_public_key)
+        .add_operation_anon_transfer_fees_remainder(
+            &[oabar_in],
+            &[oabar_out],
+            &[from],
+            from_public_key,
+        )
         .c(d!())?;
 
     send_tx(&builder.take_transaction()).c(d!())?;
@@ -914,9 +908,6 @@ pub fn gen_oabar_add_op_x(
         let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
         let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
 
-
-
-
         let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
             &axtxo_abar[0].1,
             owner_memo,
@@ -931,8 +922,8 @@ pub fn gen_oabar_add_op_x(
         oabars_in.push(oabar_in);
     }
 
-    //We are using the last key the user is using
-    let senders_public_key = XPublicKey::from(dec_keys.last().unwrap());
+    let from_public_key = XPublicKey::from(dec_keys.last().unwrap());
+    // Note - if multiple anon keys are used, we consider the last key in the list for remainder
 
     let rcvr_count = to_axfr_public_keys.len();
     let mut oabars_out = Vec::new();
@@ -955,8 +946,12 @@ pub fn gen_oabar_add_op_x(
 
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
     let (_, note) = builder
-        .add_operation_anon_transfer_fees_remainder(&oabars_in[..], &oabars_out[..], &axfr_secret_keys, senders_public_key)
-        //.add_operation_anon_transfer(&oabars_in[..], &oabars_out[..], &axfr_secret_keys)
+        .add_operation_anon_transfer_fees_remainder(
+            &oabars_in[..],
+            &oabars_out[..],
+            &axfr_secret_keys,
+            from_public_key,
+        )
         .c(d!())?;
 
     send_tx(&builder.take_transaction()).c(d!())?;

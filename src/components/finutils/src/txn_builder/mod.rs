@@ -566,7 +566,7 @@ impl TransactionBuilder {
         /*
         In general we will have that the sum of FRA inputs is going to be greater
         than output + fees, let's say remainder = inputs - (outputs + fees), the remainder amount
-        is going tobe returned to the sender (the change) whenever the remainder is greater than zero,
+        is going to be returned to the sender (the change) whenever the remainder is greater than zero,
         so in that case we need to add this new output
         */
 
@@ -582,7 +582,7 @@ impl TransactionBuilder {
             }
         }
 
-        //Here we add the output to return the change to the sender address in the calculation
+        //Here we add the output to return the change to the sender's address
         let fees = FEE_CALCULATING_FUNC(inputs.len() as u32, outputs.len() as u32 + 1);
 
         let remainder = sum_input as i64 - sum_output as i64 - fees as i64;

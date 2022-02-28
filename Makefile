@@ -281,4 +281,3 @@ run_anon_transfer_demo: devnet
 
 run_multi_anon_transfer_demo: devnet
 	@./tools/triple_masking/multi_axfr_test_demo.sh
-

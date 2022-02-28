@@ -19,18 +19,11 @@ sleep 5
 # setup the new wallet
 set +e
 
-FILE_MNEMONIC="./mnemonic-temp.keys"
-FILE_ANON_KEYS="./anon-keys-temp.keys"
+FILE_MNEMONIC="mnemonic-temp.keys"
+FILE_ANON_KEYS="anon-keys-temp.keys"
 #rm mnemonic-temp.keys anon-keys-temp.keys
 
-if test -f $FILE_MNEMONIC; then
-    rm $FILE_MNEMONIC
-
-echo "double quit tape enough charge fancy mandate ostrich this program laundry insect either escape cement van turtle
-loud immense load tip spike inquiry spice" > $FILE_MNEMONIC
-
-if test -f $FILE_ANON_KEYS; then
-    rm $FILE_ANON_KEYS
+echo "double quit tape enough charge fancy mandate ostrich this program laundry insect either escape cement van turtle loud immense load tip spike inquiry spice" > $FILE_MNEMONIC
 
 echo "
 {
@@ -46,7 +39,7 @@ echo "==========================================================================
 target/release/fn setup -O $FILE_MNEMONIC -S http://0.0.0.0
 # convert bar to abar
 sleep 1
-target/release/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS  --txo-sid 3
+target/release/fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid 3
 
 echo "Bar 2 Abar Conversion demo script executed successfully!"
 echo "To check generated Abar run \`target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r RANDOMIZER_STRING\`"

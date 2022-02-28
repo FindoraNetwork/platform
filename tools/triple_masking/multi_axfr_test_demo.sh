@@ -59,13 +59,13 @@ target/release/fn anon-transfer-batch -n amount_file -s axfr_secretkey_file -d d
 tail -n 3 randomizers > randomizer_file2
 randomiser4=$(awk 'FNR>=1 && FNR<=1' randomizer_file2)
 echo "\n\n Owned Abars for Receiver1 after Batch Anon Transfer"
-sleep 40
+sleep 30
 echo $randomiser4 > /dev/null
 target/release/fn owned-abars -p BdECoTzLNQHlKq1oGMI2kdh27yp_I2CZen0FGYLFkM0= -r $randomiser4
 
 randomiser5=$(awk 'FNR>=3 && FNR<=3' randomizer_file2)
 echo "\n\n Owned Abars for Receiver3 after Batch Anon Transfer"
-sleep 40
+sleep 30
 echo $randomiser5 > /dev/null
 target/release/fn owned-abars -p 6dJt8oDrtXt3z-7__dOcDn7Q9lM8jd2RST0FJIfGspc= -r $randomiser5
 
