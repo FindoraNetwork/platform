@@ -556,7 +556,7 @@ impl TransactionBuilder {
         outputs: &[OpenAnonBlindAssetRecord],
         input_keypairs: &[AXfrKeyPair],
         pu_key: XPublicKey,
-    ) -> Result<(&mut Self, AXfrNote)> {
+    ) -> Result<(&mut Self, AXfrNote, OpenAnonBlindAssetRecord)> {
         let mut prng = ChaChaRng::from_entropy();
         let depth: usize = 41;
 
@@ -575,7 +575,6 @@ impl TransactionBuilder {
                 sum_input += input.get_amount();
             }
         }
-
         for output in outputs {
             if let ASSET_TYPE_FRA = output.get_asset_type() {
                 sum_output += output.get_amount();
@@ -584,9 +583,11 @@ impl TransactionBuilder {
 
         //Here we add the output to return the change to the sender's address
         let fees = FEE_CALCULATING_FUNC(inputs.len() as u32, outputs.len() as u32 + 1);
-
         let remainder = sum_input as i64 - sum_output as i64 - fees as i64;
-
+        println!(
+            "Transaction Fee: {:?}\nRemainder Amount: {:?}",
+            fees, remainder
+        );
         let mut vec_outputs = outputs.to_vec();
 
         let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
@@ -599,8 +600,7 @@ impl TransactionBuilder {
             .unwrap();
 
         //Add oabar to outputs
-        vec_outputs.push(oabar_money_back);
-
+        vec_outputs.push(oabar_money_back.clone());
         let outputs_plus_remainder = &vec_outputs[..];
 
         let user_params = UserParams::new(
@@ -621,7 +621,7 @@ impl TransactionBuilder {
         let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
         let op = Operation::TransferAnonAsset(Box::new(inp));
         self.txn.add_operation(op);
-        Ok((self, note))
+        Ok((self, note, oabar_money_back))
     }
 
     /// Add a operation to delegating finddra accmount to a tendermint validator.

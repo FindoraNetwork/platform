@@ -24,6 +24,8 @@ nohup.out
 
 *.keys
 randomizers
+sent_randomizers
+owned_randomizers
 
 tools/tendermint
 seq_id.str

@@ -848,7 +848,6 @@ pub fn get_open_abar(
         .c(d!())
         .map_err(error_to_jsvalue)?;
     Ok(json)
-    //Ok(serde_json::to_string(&oabar).unwrap())
 }
 
 /// Generate nullifier hash using ABAR, OwnerMemo and MTLeafInfo
@@ -1616,6 +1615,7 @@ pub fn trace_assets(
 // Author: Chao Ma, github.com/chaosma. //
 //////////////////////////////////////////
 
+use crate::wasm_data_model::AnonKeys;
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
 use crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey};
@@ -1624,7 +1624,6 @@ use rand::{thread_rng, Rng};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
-use crate::wasm_data_model::AnonKeys;
 
 #[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.

@@ -36,9 +36,10 @@ use {
         get_block_height, get_local_block_height, get_validator_detail,
         parse_td_validator_keys,
     },
-    zei::anon_xfr::keys::{AXfrKeyPair, AXfrPubKey},
-    zei::anon_xfr::structs::{
-        AnonBlindAssetRecord, MTLeafInfo, OpenAnonBlindAssetRecordBuilder,
+    zei::anon_xfr::{
+        keys::{AXfrKeyPair, AXfrPubKey},
+        nullifier,
+        structs::{AnonBlindAssetRecord, MTLeafInfo, OpenAnonBlindAssetRecordBuilder},
     },
     zei::xfr::structs::OwnerMemo,
     zei::{
@@ -48,7 +49,7 @@ use {
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
         },
     },
-    zeialgebra::jubjub::JubjubScalar,
+    zeialgebra::{groups::Scalar, jubjub::JubjubScalar},
 };
 
 lazy_static! {
@@ -857,7 +858,7 @@ pub fn gen_oabar_add_op(
 
     let r_out = oabar_out.get_key_rand_factor();
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
-    let (_, note) = builder
+    let (_, note, rem_oabar) = builder
         .add_operation_anon_transfer_fees_remainder(
             &[oabar_in],
             &[oabar_out],
@@ -875,11 +876,28 @@ pub fn gen_oabar_add_op(
     let mut file = fs::OpenOptions::new()
         .append(true)
         .create(true)
-        .open("randomizers")
+        .open("sent_randomizers")
         .expect("cannot open randomizers file");
     std::io::Write::write_all(
         &mut file,
         ("\n".to_owned() + &wallet::randomizer_to_base58(&r_out)).as_bytes(),
+    )
+    .expect("randomizer write failed");
+
+    println!(
+        "\x1b[31;01m Remainder Randomizer: {}\x1b[00m",
+        wallet::randomizer_to_base58(&rem_oabar.get_key_rand_factor())
+    );
+    let mut file = fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open("owned_randomizers")
+        .expect("cannot open randomizers file");
+    std::io::Write::write_all(
+        &mut file,
+        ("\n".to_owned()
+            + &wallet::randomizer_to_base58(&rem_oabar.get_key_rand_factor()))
+            .as_bytes(),
     )
     .expect("randomizer write failed");
 
@@ -945,7 +963,7 @@ pub fn gen_oabar_add_op_x(
     }
 
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
-    let (_, note) = builder
+    let (_, note, rem_oabar) = builder
         .add_operation_anon_transfer_fees_remainder(
             &oabars_in[..],
             &oabars_out[..],
@@ -965,7 +983,7 @@ pub fn gen_oabar_add_op_x(
         let mut file = fs::OpenOptions::new()
             .append(true)
             .create(true)
-            .open("randomizers")
+            .open("sent_randomizers")
             .expect("cannot open randomizers file");
         std::io::Write::write_all(
             &mut file,
@@ -973,6 +991,23 @@ pub fn gen_oabar_add_op_x(
         )
         .expect("randomizer write failed");
     }
+    println!(
+        "\x1b[31;01m Remainder Randomizer: {}\x1b[00m",
+        wallet::randomizer_to_base58(&rem_oabar.get_key_rand_factor())
+    );
+    let mut file = fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open("owned_randomizers")
+        .expect("cannot open randomizers file");
+    std::io::Write::write_all(
+        &mut file,
+        ("\n".to_owned()
+            + &wallet::randomizer_to_base58(&rem_oabar.get_key_rand_factor()))
+            .as_bytes(),
+    )
+    .expect("randomizer write failed");
+
     println!("Signed AxfrNote: {:?}", serde_json::to_string_pretty(&note));
     Ok(())
 }
@@ -1008,83 +1043,46 @@ pub fn get_owned_utxos() -> Result<Vec<TxoSID>> {
     Ok(list)
 }
 
+/// Check the spending status of an ABAR from AnonKeys and randomizer
+pub fn check_abar_status(
+    from: AXfrKeyPair,
+    r: JubjubScalar,
+    from_secret_key: XSecretKey,
+    axtxo_abar: Vec<(ATxoSID, AnonBlindAssetRecord)>,
+) -> Result<()> {
+    let diversified_from_key = from.randomize(&r);
+    let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
+    let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
+    let mt_leaf_uid = mt_leaf_info.uid;
+
+    let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
+        &axtxo_abar[0].1,
+        owner_memo,
+        &from,
+        &from_secret_key,
+    )
+    .unwrap()
+    .mt_leaf_info(mt_leaf_info)
+    .build()
+    .unwrap();
+
+    let n = nullifier(
+        &diversified_from_key,
+        oabar.get_amount(),
+        &oabar.get_asset_type(),
+        mt_leaf_uid,
+    );
+    let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+    let null_status = utils::check_nullifier_hash(&hash).c(d!())?.unwrap();
+    if null_status {
+        println!("The ABAR corresponding to this randomizer is already spent");
+    } else {
+        println!("The ABAR corresponding to this randomizer is unspent and has a balance {:?}", oabar.get_amount());
+    }
+    Ok(())
+}
+
 /// Return the built version.
 pub fn version() -> &'static str {
     concat!(env!("VERGEN_SHA"), " ", env!("VERGEN_BUILD_DATE"))
 }
-
-/* #[cfg(test)]
-mod tests {
-    use super::*;
-    use zei::serialization::ZeiFromToBytes;
-
-    #[test]
-    fn test_gen_oabar_add_anon_tx_single() {
-        let amount = "10";
-        let mut prng = ChaChaRng::from_entropy();
-        let keypair = AXfrKeyPair::generate(&mut prng);
-        let axfr_secret_key = base64::encode(keypair.zei_to_bytes().as_slice());
-        let secret_key = XSecretKey::new(&mut prng);
-        let dec_key = base64::encode(secret_key.zei_to_bytes().as_slice());
-
-        let mut prng = ChaChaRng::from_entropy();
-        let to_keypair = AXfrKeyPair::generate(&mut prng);
-        let to_axfr_public_key =
-            base64::encode(to_keypair.pub_key().zei_to_bytes().as_slice());
-        let to_secret_key = XSecretKey::new(&mut prng);
-        let to_enc_key =
-            base64::encode(XPublicKey::from(&to_secret_key).zei_to_bytes().as_slice());
-
-        let result = gen_oabar_add_op(
-            &axfr_secret_key,
-            &dec_key,
-            amount,
-            &to_axfr_public_key,
-            &to_enc_key,
-        );
-        // The result is an error because a temp ledger is used and
-        //the fn get_owned_abars returns nothing
-
-        assert!(result.is_ok()); // TODO - Test again when temp ledger is replaced
-    }
-
-    #[test]
-    fn test_gen_oabar_add_anon_tx_multi() {
-        let amounts = vec![String::from("10"), String::from("15"), String::from("20")];
-        let n_payees = amounts.len();
-
-        let mut axfr_secret_keys = Vec::new();
-        let mut dec_keys = Vec::new();
-        let mut to_axfr_public_keys = Vec::new();
-        let mut to_enc_keys = Vec::new();
-        let n_payers = 2;
-        for _ in 1..n_payers {
-            let mut prng = ChaChaRng::from_entropy();
-            let axfr_secret_key = AXfrKeyPair::generate(&mut prng);
-            let dec_key = XSecretKey::new(&mut prng);
-            axfr_secret_keys.push(axfr_secret_key);
-            dec_keys.push(dec_key);
-        }
-        for _ in 1..n_payees {
-            let mut prng = ChaChaRng::from_entropy();
-            let to_keypair = AXfrKeyPair::generate(&mut prng);
-            let to_axfr_public_key = to_keypair.pub_key();
-            let to_secret_key = XSecretKey::new(&mut prng);
-            let to_enc_key = XPublicKey::from(&to_secret_key);
-            to_axfr_public_keys.push(to_axfr_public_key);
-            to_enc_keys.push(to_enc_key);
-        }
-
-        let result = gen_oabar_add_op_x(
-            axfr_secret_keys,
-            dec_keys,
-            to_axfr_public_keys,
-            to_enc_keys,
-            amounts,
-        );
-        // The result is an error because a temp ledger is used and
-        //the fn get_owned_abars returns nothing
-
-        assert!(result.is_ok()); // TODO - Test again when temp ledger is replaced
-    }
-} */

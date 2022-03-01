@@ -22,7 +22,7 @@ target/release/fn convert-bar-to-abar --anon-keys ./anon-keys-temp2.keys  --txo-
 #sleep 10
 #target/release/fn convert-bar-to-abar --anon-keys ./anon-keys-temp2.keys  --txo-sid 9 2> /dev/null
 
-tail -n 2 randomizers > randomizer_file
+tail -n 2 owned_randomizers > randomizer_file
 randomiser1=$(awk 'FNR>=1 && FNR<=1' randomizer_file)
 echo "\n\n Owned Abars after Bar to Abar conversion 1"
 sleep 20
@@ -56,7 +56,7 @@ echo "--------------------------------------------------------------------------
 sleep 5
 target/release/fn anon-transfer-batch -n amount_file -s axfr_secretkey_file -d decryption_key_file --to-axfr-public-key-file to_axfr_public_key_file --to-enc-key-file to_enc_key_file -r randomizer_file
 
-tail -n 3 randomizers > randomizer_file2
+tail -n 3 sent_randomizers > randomizer_file2
 randomiser4=$(awk 'FNR>=1 && FNR<=1' randomizer_file2)
 echo "\n\n Owned Abars for Receiver1 after Batch Anon Transfer"
 sleep 30
