@@ -34,7 +34,7 @@ storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.4
 
 [dev-dependencies]
 baseapp = { path = "../../baseapp" }
-ethabi = { git = "https://github.com/rust-ethereum/ethabi.git", branch = "master" }
+ethabi = "16.0.0"
 ethereum = { version = "0.9.0", default-features = false, features = ["with-serde"] }
 fp-mocks = { path = "../../primitives/mocks" }
 hex = "0.4.2"
