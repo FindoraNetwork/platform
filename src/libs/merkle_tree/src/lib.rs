@@ -2317,11 +2317,11 @@ mod tests {
         assert!(mem::size_of::<BlockHeader>() == HASH_SIZE);
         assert!(mem::size_of::<Block>() == BLOCK_SIZE);
 
-        if AppendOnlyMerkle::open(&"no such file".to_string()).is_ok() {
+        if AppendOnlyMerkle::open(&"no such file").is_ok() {
             panic!("Open found a non-existent tree.");
         }
 
-        if AppendOnlyMerkle::create(&".".to_string()).is_ok() {
+        if AppendOnlyMerkle::create(&".").is_ok() {
             panic!("Created a tree from \".\".");
         }
 
