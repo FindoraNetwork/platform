@@ -47,7 +47,6 @@ use {
         collections::{BTreeMap, HashSet},
     },
     tendermint::PrivateKey,
-    zei::anon_xfr::structs::AXfrBody,
     zei::{
         anon_xfr::{
             bar_to_abar::gen_bar_to_abar_body,
@@ -55,7 +54,7 @@ use {
             gen_anon_xfr_body,
             keys::{AXfrKeyPair, AXfrPubKey},
             structs::{
-                AXfrNote, OpenAnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
+                AXfrBody, AXfrNote, OpenAnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
             },
         },
         api::anon_creds::{
@@ -85,6 +84,9 @@ macro_rules! no_transfer_err {
         ("Transaction has not yet been finalized".to_string())
     };
 }
+
+/// Depth of abar merkle tree
+pub const MERKLE_TREE_DEPTH: usize = 40;
 
 /// Definition of a fee operation, as a inner data structure of FeeInputs
 pub struct FeeInput {
@@ -533,7 +535,7 @@ impl TransactionBuilder {
         input_keypairs: &[AXfrKeyPair],
     ) -> Result<(&mut Self, AXfrNote)> {
         let mut prng = ChaChaRng::from_entropy();
-        let depth: usize = 41;
+        let depth: usize = MERKLE_TREE_DEPTH;
         let user_params =
             UserParams::new(inputs.len(), outputs.len(), Option::from(depth));
 
@@ -558,7 +560,7 @@ impl TransactionBuilder {
         pu_key: XPublicKey,
     ) -> Result<(&mut Self, AXfrNote, OpenAnonBlindAssetRecord)> {
         let mut prng = ChaChaRng::from_entropy();
-        let depth: usize = 41;
+        let depth: usize = MERKLE_TREE_DEPTH;
 
         let mut sum_input = 0;
         let mut sum_output = 0;
@@ -1331,7 +1333,7 @@ impl AnonTransferOperationBuilder {
     pub fn build(&mut self) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
         let user_params =
-            UserParams::new(self.inputs.len(), self.outputs.len(), Some(41));
+            UserParams::new(self.inputs.len(), self.outputs.len(), Some(MERKLE_TREE_DEPTH));
 
         let (body, diversified_keypairs) = gen_anon_xfr_body(
             &mut prng,

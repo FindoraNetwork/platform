@@ -8,6 +8,7 @@ mod test;
 pub mod utils;
 
 pub use fbnc;
+use zei_accumulators::merkle_tree::TREE_DEPTH;
 
 use {
     crate::{
@@ -69,7 +70,7 @@ use {
         },
     },
     zei_accumulators::merkle_tree::{
-        ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof,
+        ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath
     },
     zeialgebra::{bls12_381::BLSScalar, groups::Scalar},
 };
@@ -509,7 +510,7 @@ impl LedgerState {
         let store = ImmutablePrefixedStore::new("abar_store", &abar_query_state);
         let mt = ImmutablePersistentMerkleTree::new(store)?;
 
-        mt.get_current_root_hash().c(d!(
+        mt.get_root().c(d!(
             "probably due to badly constructed tree or data corruption"
         ))
     }
@@ -1664,7 +1665,7 @@ impl LedgerStatus {
             let user_params = UserParams::new(
                 axfr_body.inputs.len(),
                 axfr_body.outputs.len(),
-                Some(41),
+                Some(TREE_DEPTH),
             );
             let node_params = NodeParams::from(user_params);
             let abar_version = axfr_body.proof.merkle_root_version;
@@ -1830,8 +1831,8 @@ pub fn create_mt_leaf_info(proof: Proof) -> MTLeafInfo {
                 .map(|e| MTNode {
                     siblings1: e.siblings1,
                     siblings2: e.siblings2,
-                    is_left_child: e.is_left_child,
-                    is_right_child: e.is_right_child,
+                    is_left_child: (e.path == TreePath::Left) as u8,
+                    is_right_child: (e.path == TreePath::Right) as u8,
                 })
                 .collect(),
         },
