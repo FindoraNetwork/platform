@@ -245,9 +245,9 @@ impl FeeInputs {
         tr: TxoRef,
         ar: ClientAssetRecord,
         om: Option<OwnerMemo>,
-        kp: XfrKeyPair,
+        kp: &XfrKeyPair,
     ) -> Self {
-        self.inner.push(FeeInput { am, tr, ar, om, kp });
+        self.inner.push(FeeInput { am, tr, ar, om, kp: kp.clone() });
         self
     }
 }
