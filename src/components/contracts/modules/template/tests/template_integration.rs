@@ -19,7 +19,7 @@ fn run_all_tests() {
         100_0000_0000_0000_0000_u64.into(),
         0,
     );
-    test_abci_check_tx();
+    //test_abci_check_tx();     The check_tx is no longer simulating the transaction
     test_abci_begin_block();
     test_abci_deliver_tx();
     test_abci_end_block();
@@ -56,35 +56,35 @@ fn test_abci_init_chain() {
     );
 }
 
-fn test_abci_check_tx() {
-    let mut req = RequestCheckTx::default();
-
-    let function = Action::Template(TemplateAction::SetValue(10));
-    let tx = serde_json::to_vec(&build_signed_transaction(
-        function,
-        &ALICE_XFR,
-        U256::zero(),
-    ))
-    .unwrap();
-    req.tx = EvmRawTxWrapper::wrap(&tx);
-    let resp = BASE_APP.lock().unwrap().check_tx(&req);
-    assert_eq!(
-        resp.code, 0,
-        "check tx failed, code: {}, log: {}",
-        resp.code, resp.log
-    );
-
-    // check tx fee
-    assert_eq!(
-        module_account::App::<BaseApp>::balance(
-            &BASE_APP.lock().unwrap().check_state,
-            &ALICE_XFR.pub_key.into()
-        ),
-        U256::from(100_0000_0000_0000_0000_u64).saturating_sub(
-            <BaseApp as module_account::Config>::FeeCalculator::min_fee()
-        )
-    );
-}
+// fn test_abci_check_tx() {
+//     let mut req = RequestCheckTx::default();
+//
+//     let function = Action::Template(TemplateAction::SetValue(10));
+//     let tx = serde_json::to_vec(&build_signed_transaction(
+//         function,
+//         &ALICE_XFR,
+//         U256::zero(),
+//     ))
+//     .unwrap();
+//     req.tx = EvmRawTxWrapper::wrap(&tx);
+//     let resp = BASE_APP.lock().unwrap().check_tx(&req);
+//     assert_eq!(
+//         resp.code, 0,
+//         "check tx failed, code: {}, log: {}",
+//         resp.code, resp.log
+//     );
+//
+//     // check tx fee
+//     assert_eq!(
+//         module_account::App::<BaseApp>::balance(
+//             &BASE_APP.lock().unwrap().check_state,
+//             &ALICE_XFR.pub_key.into()
+//         ),
+//         U256::from(100_0000_0000_0000_0000_u64).saturating_sub(
+//             <BaseApp as module_account::Config>::FeeCalculator::min_fee()
+//         )
+//     );
+// }
 
 fn test_abci_begin_block() {
     let mut req = RequestBeginBlock::default();
