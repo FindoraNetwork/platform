@@ -24,14 +24,15 @@
 
 #![deny(warnings)]
 #![deny(missing_docs)]
-#[allow(clippy::init_numbered_fields)]
+
 #[cfg(test)]
 mod test;
 
 use {
-    cryptohash::sha256::{self, Digest, DIGESTBYTES},
     globutils::Commas,
     ruc::*,
+    sodiumoxide::crypto::hash::sha256,
+    sodiumoxide::crypto::hash::sha256::{Digest, DIGESTBYTES},
     std::{
         cmp,
         collections::{HashMap, HashSet},
@@ -225,12 +226,9 @@ impl SparseMap {
     /// in the download. The checksum of blocks that were
     /// downloaded are checked as well, so that further query
     /// results are from validated blocks.
-    #[allow(clippy::init_numbered_fields)]
     pub fn validate_checksum(&self) -> bool {
         let mut checksum_data = EMPTY_CHECKSUM;
-        let mut digest = Digest {
-            0: [0_u8; DIGESTBYTES],
-        };
+        let mut digest = Digest([0_u8; DIGESTBYTES]);
 
         // For each block, compute the checksum.
         for i in 0..self.headers.len() {
@@ -604,7 +602,6 @@ type StoredState = (usize, Vec<BitBlock>, Vec<i64>, Vec<bool>, Vec<u32>);
 impl BitMap {
     /// Create a new bit map. The caller should pass a File
     /// structure opened to an empty file.
-    #[allow(clippy::init_numbered_fields)]
     pub fn create(mut data: File) -> Result<BitMap> {
         let file_size = data.seek(SeekFrom::End(0)).c(d!())?;
 
@@ -617,9 +614,7 @@ impl BitMap {
             size: 0,
             blocks: Vec::new(),
             checksum_data: Vec::new(),
-            checksum: Digest {
-                0: [0_u8; DIGESTBYTES],
-            },
+            checksum: Digest([0_u8; DIGESTBYTES]),
             dirty: Vec::new(),
             checksum_valid: Vec::new(),
             set_bits: Vec::new(),
@@ -632,7 +627,6 @@ impl BitMap {
 
     /// Open an existing bitmap. The caller is responsible
     /// for opening the file.
-    #[allow(clippy::init_numbered_fields)]
     pub fn open(mut data: File) -> Result<BitMap> {
         let (count, block_vector, state_vector, checksum_vector, set_vector) =
             BitMap::read_file(&mut data).c(d!())?;
@@ -642,9 +636,7 @@ impl BitMap {
             size: count,
             blocks: block_vector,
             checksum_data: Vec::new(),
-            checksum: Digest {
-                0: [0_u8; DIGESTBYTES],
-            },
+            checksum: Digest([0_u8; DIGESTBYTES]),
             dirty: state_vector,
             checksum_valid: checksum_vector,
             set_bits: set_vector,
@@ -913,16 +905,13 @@ impl BitMap {
     /// final sha256 value computed, or an array of zeros, if no blocks
     /// exist in the bitmap.
     ///
-    #[allow(clippy::init_numbered_fields)]
     pub fn compute_checksum(&mut self) -> Digest {
         if self.first_invalid >= self.blocks.len() {
             return self.checksum;
         }
 
         // This value should never be used.
-        let mut digest = Digest {
-            0: [0_u8; DIGESTBYTES],
-        };
+        let mut digest = Digest([0_u8; DIGESTBYTES]);
 
         // For each block not yet computed.
         for i in self.first_invalid..self.blocks.len() {
@@ -1226,7 +1215,6 @@ impl BitMap {
     }
 
     // Decode the global information from the byte stream.
-    #[allow(clippy::init_numbered_fields)]
     fn decode_descriptor(bytes: &[u8], start: usize) -> (usize, u64, Digest) {
         // Pull the version number out of the slice.
         let mut index = start;
@@ -1240,9 +1228,7 @@ impl BitMap {
         index += 8;
 
         // Now pull the checksum for the tree out of the structure.
-        let mut checksum = Digest {
-            0: [0u8; DIGESTBYTES],
-        };
+        let mut checksum = Digest([0_u8; DIGESTBYTES]);
         checksum.0[..DIGESTBYTES].clone_from_slice(&bytes[index..index + DIGESTBYTES]);
 
         index += DIGESTBYTES;

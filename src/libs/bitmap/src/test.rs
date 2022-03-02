@@ -1,8 +1,8 @@
 #![allow(missing_docs)]
 
 use super::*;
-use cryptohash::sha256::{Digest, DIGESTBYTES};
 use rand::Rng;
+use sodiumoxide::crypto::hash::sha256::{Digest, DIGESTBYTES};
 use std::fs;
 use std::fs::OpenOptions;
 use std::mem;
@@ -142,11 +142,7 @@ fn test_basic_bitmap() {
     }
 
     // Check our definition of the checksum of an empty tree.
-    if bitmap.compute_checksum()
-        != (Digest {
-            0: [0_u8; DIGESTBYTES],
-        })
-    {
+    if bitmap.compute_checksum() != (Digest([0_u8; DIGESTBYTES])) {
         panic!("compute_checksum() failed on an empty tree");
     }
 
