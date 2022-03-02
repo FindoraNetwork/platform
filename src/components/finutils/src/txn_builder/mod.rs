@@ -150,7 +150,7 @@ impl TransactionBuilder {
             .body
             .operations
             .iter()
-            .map(|new| match new {
+            .flat_map(|new| match new {
                 Operation::TransferAsset(d) => {
                     seek!(d)
                 }
@@ -162,7 +162,6 @@ impl TransactionBuilder {
                     .collect(),
                 _ => Vec::new(),
             })
-            .flatten()
             .rev()
             .collect()
     }
@@ -409,8 +408,7 @@ impl TransactionBuilder {
         output_records: &[AssetRecord],
         _output_identity_commitments: Vec<Option<ACCommitment>>,
     ) -> Result<&mut Self> {
-        let mut prng: ChaChaRng;
-        prng = ChaChaRng::from_entropy();
+        let mut prng = ChaChaRng::from_entropy();
         let mut input_asset_records = vec![];
         for (oar, tracing_policy) in
             input_records.iter().zip(input_tracing_policies.iter())

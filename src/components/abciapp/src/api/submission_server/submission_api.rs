@@ -65,15 +65,14 @@ where
 {
     let submission_server = data.write();
     let txn_status = submission_server.get_txn_status(&TxnHandle(info.clone()));
-    let res;
-    if let Some(status) = txn_status {
-        res = serde_json::to_string(&status)?;
+    let res = if let Some(status) = txn_status {
+        serde_json::to_string(&status)?
     } else {
-        res = format!(
+        format!(
             "No transaction with handle {} found. Please retry with a new handle.",
             &info
-        );
-    }
+        )
+    };
 
     Ok(res)
 }

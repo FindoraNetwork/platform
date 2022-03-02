@@ -64,15 +64,14 @@ impl abci::Application for crate::BaseApp {
     fn check_tx(&mut self, req: &RequestCheckTx) -> ResponseCheckTx {
         let mut resp = ResponseCheckTx::new();
 
-        let raw_tx;
-        if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
-            raw_tx = tx;
+        let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
+            tx
         } else {
             info!(target: "baseapp", "Transaction evm tag check failed");
             resp.code = 1;
             resp.log = String::from("Transaction evm tag check failed");
             return resp;
-        }
+        };
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
             let check_fn = |mode: RunTxMode| {
@@ -137,15 +136,14 @@ impl abci::Application for crate::BaseApp {
     fn deliver_tx(&mut self, req: &RequestDeliverTx) -> ResponseDeliverTx {
         let mut resp = ResponseDeliverTx::new();
 
-        let raw_tx;
-        if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
-            raw_tx = tx;
+        let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
+            tx
         } else {
             info!(target: "baseapp", "Transaction deliver tx unwrap evm tag failed");
             resp.code = 1;
             resp.log = String::from("Transaction deliver tx unwrap evm tag failed");
             return resp;
-        }
+        };
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
             let ctx = self.retrieve_context(RunTxMode::Deliver).clone();
