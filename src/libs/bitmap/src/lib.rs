@@ -24,7 +24,6 @@
 
 #![deny(warnings)]
 #![deny(missing_docs)]
-#[allow(clippy::init_numbered_fields)]
 #[cfg(test)]
 mod test;
 
@@ -226,7 +225,6 @@ impl SparseMap {
     /// in the download. The checksum of blocks that were
     /// downloaded are checked as well, so that further query
     /// results are from validated blocks.
-    #[allow(clippy::init_numbered_fields)]
     pub fn validate_checksum(&self) -> bool {
         let mut checksum_data = EMPTY_CHECKSUM;
         let mut digest = Digest([0_u8; DIGESTBYTES]);
@@ -603,7 +601,6 @@ type StoredState = (usize, Vec<BitBlock>, Vec<i64>, Vec<bool>, Vec<u32>);
 impl BitMap {
     /// Create a new bit map. The caller should pass a File
     /// structure opened to an empty file.
-    #[allow(clippy::init_numbered_fields)]
     pub fn create(mut data: File) -> Result<BitMap> {
         let file_size = data.seek(SeekFrom::End(0)).c(d!())?;
 
@@ -629,7 +626,6 @@ impl BitMap {
 
     /// Open an existing bitmap. The caller is responsible
     /// for opening the file.
-    #[allow(clippy::init_numbered_fields)]
     pub fn open(mut data: File) -> Result<BitMap> {
         let (count, block_vector, state_vector, checksum_vector, set_vector) =
             BitMap::read_file(&mut data).c(d!())?;
@@ -908,7 +904,6 @@ impl BitMap {
     /// final sha256 value computed, or an array of zeros, if no blocks
     /// exist in the bitmap.
     ///
-    #[allow(clippy::init_numbered_fields)]
     pub fn compute_checksum(&mut self) -> Digest {
         if self.first_invalid >= self.blocks.len() {
             return self.checksum;
@@ -1219,7 +1214,6 @@ impl BitMap {
     }
 
     // Decode the global information from the byte stream.
-    #[allow(clippy::init_numbered_fields)]
     fn decode_descriptor(bytes: &[u8], start: usize) -> (usize, u64, Digest) {
         // Pull the version number out of the slice.
         let mut index = start;
