@@ -1567,7 +1567,7 @@ impl FinalizedTransaction {
             .body
             .operations
             .iter_mut()
-            .map(|new| match new {
+            .flat_map(|new| match new {
                 Operation::TransferAsset(d) => d.body.outputs.iter_mut().collect(),
                 Operation::MintFra(d) => {
                     d.entries.iter_mut().map(|et| &mut et.utxo).collect()
@@ -1577,7 +1577,6 @@ impl FinalizedTransaction {
                 }
                 _ => Vec::new(),
             })
-            .flatten()
             .zip(ids.iter())
             .for_each(|(o, id)| {
                 o.id = Some(*id);
