@@ -54,12 +54,12 @@ use {
         store::{ImmutablePrefixedStore, PrefixedStore},
     },
     zei::{
-        abar_to_bar::verify_abar_to_bar_body,
         anon_xfr::{
             hash_abar,
             keys::AXfrPubKey,
             structs::{AnonBlindAssetRecord, MTLeafInfo, MTNode, MTPath, Nullifier},
             verify_anon_xfr_body,
+            abar_to_bar::verify_abar_to_bar_body,
         },
         serialization::ZeiFromToBytes,
         setup::{NodeParams, UserParams},
