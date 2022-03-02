@@ -222,7 +222,7 @@ impl FeeInputs {
     #[allow(missing_docs)]
     pub fn new() -> Self {
         FeeInputs {
-            inner: Vec::with_capacity(1),
+            inner: Vec::with_capacity(10),
         }
     }
 
@@ -830,60 +830,6 @@ pub fn get_serialized_address(address: String) -> Result<String, JsValue> {
     String::from_utf8(sa).map_err(error_to_jsvalue)
 }
 
-/// AnonKeys is used to store keys for Anon proofs
-#[wasm_bindgen]
-pub struct AnonKeys {
-    axfr_secret_key: String,
-    axfr_public_key: String,
-    enc_key: String,
-    dec_key: String,
-}
-
-/// AnonKeys is a struct to store keys required for anon transfer
-#[wasm_bindgen]
-#[allow(missing_docs)]
-impl AnonKeys {
-    #[wasm_bindgen(getter)]
-    pub fn axfr_secret_key(&self) -> String {
-        self.axfr_secret_key.clone()
-    }
-
-    #[wasm_bindgen(setter)]
-    pub fn set_axfr_secret_key(&mut self, axfr_secret_key: String) {
-        self.axfr_secret_key = axfr_secret_key;
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn axfr_public_key(&self) -> String {
-        self.axfr_public_key.clone()
-    }
-
-    #[wasm_bindgen(setter)]
-    pub fn set_axfr_public_key(&mut self, axfr_public_key: String) {
-        self.axfr_public_key = axfr_public_key;
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn enc_key(&self) -> String {
-        self.enc_key.clone()
-    }
-
-    #[wasm_bindgen(setter)]
-    pub fn set_enc_key(&mut self, enc_key: String) {
-        self.enc_key = enc_key;
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn dec_key(&self) -> String {
-        self.dec_key.clone()
-    }
-
-    #[wasm_bindgen(setter)]
-    pub fn set_dec_key(&mut self, dec_key: String) {
-        self.dec_key = dec_key;
-    }
-}
-
 /// Generate new anonymous keys
 #[wasm_bindgen]
 pub fn gen_anon_keys() -> Result<AnonKeys, JsValue> {
@@ -957,7 +903,6 @@ pub fn get_open_abar(
         .c(d!())
         .map_err(error_to_jsvalue)?;
     Ok(json)
-    //Ok(serde_json::to_string(&oabar).unwrap())
 }
 
 /// Generate nullifier hash using ABAR, OwnerMemo and MTLeafInfo
@@ -992,14 +937,8 @@ pub fn gen_nullifier_hash(
         &oabar.get_asset_type(),
         mt_leaf_info.get_zei_mt_leaf_info().uid,
     );
-    let input = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
-    let nullifier_hash = sha256::Digest::from_slice(
-        &base64::decode_config(&input, base64::URL_SAFE)
-            .c(d!())
-            .unwrap(),
-    );
-
-    Ok(serde_json::to_string(&nullifier_hash).unwrap())
+    let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+    Ok(hash)
 }
 
 #[wasm_bindgen]
@@ -1731,6 +1670,7 @@ pub fn trace_assets(
 // Author: Chao Ma, github.com/chaosma. //
 //////////////////////////////////////////
 
+use crate::wasm_data_model::AnonKeys;
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
 use crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey};
@@ -2048,6 +1988,15 @@ pub fn x_secretkey_from_string(key_str: &str) -> Result<XSecretKey, JsValue> {
     wallet::x_secret_key_from_base64(key_str)
         .c(d!())
         .map_err(error_to_jsvalue)
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn abar_from_json(json: JsValue) -> Result<AnonBlindAssetRecord, JsValue> {
+    let abar: AnonBlindAssetRecord =
+        json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
+
+    Ok(abar)
 }
 
 #[cfg(test)]

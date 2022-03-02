@@ -48,14 +48,16 @@ use {
         collections::{BTreeMap, HashSet},
     },
     tendermint::PrivateKey,
-    zei::anon_xfr::structs::AXfrBody,
     zei::{
         anon_xfr::{
             abar_to_bar::gen_abar_to_bar_note,
             bar_to_abar::gen_bar_to_abar_body,
+            config::FEE_CALCULATING_FUNC,
             gen_anon_xfr_body,
             keys::{AXfrKeyPair, AXfrPubKey},
-            structs::{AXfrNote, OpenAnonBlindAssetRecord},
+            structs::{
+                AXfrBody, AXfrNote, OpenAnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
+            },
         },
         api::anon_creds::{
             ac_confidential_open_commitment, ACCommitment, ACCommitmentKey,
@@ -84,6 +86,9 @@ macro_rules! no_transfer_err {
         ("Transaction has not yet been finalized".to_string())
     };
 }
+
+/// Depth of abar merkle tree
+pub const MERKLE_TREE_DEPTH: usize = 40;
 
 /// Definition of a fee operation, as a inner data structure of FeeInputs
 pub struct FeeInput {
@@ -561,7 +566,7 @@ impl TransactionBuilder {
         input_keypairs: &[AXfrKeyPair],
     ) -> Result<(&mut Self, AXfrNote)> {
         let mut prng = ChaChaRng::from_entropy();
-        let depth: usize = 41;
+        let depth: usize = MERKLE_TREE_DEPTH;
         let user_params =
             UserParams::new(inputs.len(), outputs.len(), Option::from(depth));
 
@@ -573,6 +578,83 @@ impl TransactionBuilder {
         let op = Operation::TransferAnonAsset(Box::new(inp));
         self.txn.add_operation(op);
         Ok((self, note))
+    }
+
+    ///This function works as add_operation_anon_transfer but this implement fees,
+    /// Remainder is computed as remainder = sum_inputs - sum_outputs - fees
+    /// all this related to the asset type for fees which are fixed as FRA asset type
+    pub fn add_operation_anon_transfer_fees_remainder(
+        &mut self,
+        inputs: &[OpenAnonBlindAssetRecord],
+        outputs: &[OpenAnonBlindAssetRecord],
+        input_keypairs: &[AXfrKeyPair],
+        pu_key: XPublicKey,
+    ) -> Result<(&mut Self, AXfrNote, OpenAnonBlindAssetRecord)> {
+        let mut prng = ChaChaRng::from_entropy();
+        let depth: usize = MERKLE_TREE_DEPTH;
+
+        let mut sum_input = 0;
+        let mut sum_output = 0;
+
+        /*
+        In general we will have that the sum of FRA inputs is going to be greater
+        than output + fees, let's say remainder = inputs - (outputs + fees), the remainder amount
+        is going to be returned to the sender (the change) whenever the remainder is greater than zero,
+        so in that case we need to add this new output
+        */
+
+        for input in inputs {
+            if let ASSET_TYPE_FRA = input.get_asset_type() {
+                sum_input += input.get_amount();
+            }
+        }
+        for output in outputs {
+            if let ASSET_TYPE_FRA = output.get_asset_type() {
+                sum_output += output.get_amount();
+            }
+        }
+
+        //Here we add the output to return the change to the sender's address
+        let fees = FEE_CALCULATING_FUNC(inputs.len() as u32, outputs.len() as u32 + 1);
+        let remainder = sum_input as i64 - sum_output as i64 - fees as i64;
+        println!(
+            "Transaction Fee: {:?}\nRemainder Amount: {:?}",
+            fees, remainder
+        );
+        let mut vec_outputs = outputs.to_vec();
+
+        let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
+            .amount(remainder as u64)
+            .asset_type(ASSET_TYPE_FRA)
+            .pub_key(input_keypairs[0].pub_key())
+            .finalize(&mut prng, &pu_key)
+            .unwrap()
+            .build()
+            .unwrap();
+
+        //Add oabar to outputs
+        vec_outputs.push(oabar_money_back.clone());
+        let outputs_plus_remainder = &vec_outputs[..];
+
+        let user_params = UserParams::new(
+            inputs.len(),
+            outputs_plus_remainder.len(),
+            Option::from(depth),
+        );
+
+        let (body, keypairs) = gen_anon_xfr_body(
+            &mut prng,
+            &user_params,
+            inputs,
+            outputs_plus_remainder,
+            input_keypairs,
+        )
+        .c(d!())?;
+        let note = AXfrNote::generate_note_from_body(body, keypairs).c(d!())?;
+        let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
+        let op = Operation::TransferAnonAsset(Box::new(inp));
+        self.txn.add_operation(op);
+        Ok((self, note, oabar_money_back))
     }
 
     /// Add a operation to delegating finddra accmount to a tendermint validator.
@@ -1282,7 +1364,7 @@ impl AnonTransferOperationBuilder {
     pub fn build(&mut self) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
         let user_params =
-            UserParams::new(self.inputs.len(), self.outputs.len(), Some(41));
+            UserParams::new(self.inputs.len(), self.outputs.len(), Some(MERKLE_TREE_DEPTH));
 
         let (body, diversified_keypairs) = gen_anon_xfr_body(
             &mut prng,
@@ -1744,7 +1826,7 @@ mod tests {
 
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
 
-        let amount = 10i64;
+        let amount = 6000000i64;
         let amount_nonneg = Amount::from_nonnegative_i64(amount);
         assert!(amount_nonneg.is_ok());
 
@@ -1752,14 +1834,15 @@ mod tests {
         let fee_amount_nonneg = Amount::from_nonnegative_i64(fee_amount);
         assert!(fee_amount_nonneg.is_ok());
 
-        let amount_output = amount;
+        //let amount_output = amount;
+        let amount_output = 1000000i64;
         let amount_output_nonneg = Amount::from_nonnegative_i64(amount_output);
         assert!(amount_output_nonneg.is_ok());
 
         let asset_type = ASSET_TYPE_FRA;
 
         // simulate input abar
-        let (mut oabar, keypair_in, _dec_key_in, _) =
+        let (mut oabar, keypair_in, _dec_key_in, enc_key_in) =
             gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type);
 
         // simulate input fee abar
@@ -1797,8 +1880,13 @@ mod tests {
         let vec_oututs = vec![oabar_out];
         let vec_keys = vec![keypair_in, keypair_in_fee];
 
-        let result =
-            builder.add_operation_anon_transfer(&vec_inputs, &vec_oututs, &vec_keys);
+        let result = builder.add_operation_anon_transfer_fees_remainder(
+            &vec_inputs,
+            &vec_oututs,
+            &vec_keys,
+            enc_key_in,
+        );
+        //builder.add_operation_anon_transfer(&vec_inputs, &vec_oututs, &vec_keys);
 
         assert!(result.is_ok());
 

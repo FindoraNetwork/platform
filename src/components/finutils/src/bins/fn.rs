@@ -446,7 +446,7 @@ fn run() -> Result<()> {
             let mut file = fs::OpenOptions::new()
                 .append(true)
                 .create(true)
-                .open("randomizers")
+                .open("owned_randomizers")
                 .expect("cannot open randomizers file");
             std::io::Write::write_all(
                 &mut file,
@@ -703,6 +703,35 @@ fn run() -> Result<()> {
             let mt_leaf_info = common::get_mtleaf_info(atxo_sid.unwrap()).c(d!())?;
             println!("{:?}", serde_json::to_string_pretty(&mt_leaf_info));
         }
+    } else if let Some(m) = matches.subcommand_matches("check-abar-status") {
+        let anon_keys = match m.value_of("anon-keys") {
+            Some(path) => {
+                let f =
+                    fs::read_to_string(path).c(d!("Failed to read anon-keys file"))?;
+                let keys = serde_json::from_str::<AnonKeys>(f.as_str()).c(d!())?;
+                keys
+            }
+            None => return Err(eg!("path for anon-keys file not found")),
+        };
+        let randomizer_str = m.value_of("randomizer");
+
+        // create derived public key
+        let randomizer = wallet::randomizer_from_base58(randomizer_str.unwrap())?;
+        let axfr_public_key =
+            wallet::anon_public_key_from_base64(anon_keys.axfr_public_key.as_str())?;
+        let axfr_secret_key =
+            wallet::anon_secret_key_from_base64(anon_keys.axfr_secret_key.as_str())
+                .c(d!())?;
+        let dec_key = wallet::x_secret_key_from_base64(anon_keys.dec_key.as_str())?;
+        let derived_public_key = axfr_public_key.randomize(&randomizer);
+
+        println!(
+            "Derived Public Key:   {}",
+            wallet::anon_public_key_to_base64(&derived_public_key)
+        );
+
+        let list = common::get_owned_abars(&derived_public_key).c(d!())?;
+        common::check_abar_status(axfr_secret_key, randomizer, dec_key, list).c(d!())?;
     } else {
         println!("{}", matches.usage());
     }

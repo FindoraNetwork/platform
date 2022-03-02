@@ -664,3 +664,20 @@ subcommands:
             takes_value: true
             value_name: ATXO SID
             required: true
+  - check-abar-status:
+      about: Check the spending status and balance of ABAR
+      args:
+        - randomizer:
+            help: Jubjub Scalar which was used to randmoize public key
+            short: r
+            long: randomizer
+            takes_value: true
+            value_name: JUBJUB SCALAR
+            required: true
+        - anon-keys:
+            help: Anon keys file path of the sender
+            short: a
+            long: anon-keys
+            takes_value: true
+            value_name: ANON KEYS PATH
+            required: true
