@@ -10,6 +10,7 @@ mod effects;
 mod test;
 
 pub use effects::{BlockEffect, TxnEffect};
+use zei::anon_xfr::abar_to_bar::AbarToBarNote;
 
 use {
     crate::converter::ConvertAccount,
@@ -1304,6 +1305,39 @@ impl BarToAbarOps {
     }
 }
 
+/// Operation for converting a Blind Asset Record to a Anonymous record
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AbarToBarOps {
+    /// the note which contains the inp/op and ZKP
+    pub note: AbarToBarNote,
+    nonce: NoReplayToken,
+}
+
+impl AbarToBarOps {
+    /// Generates a new BarToAbarOps object
+    pub fn new(
+        abar_to_bar_note: &AbarToBarNote,
+        nonce: NoReplayToken,
+    ) -> Result<AbarToBarOps> {
+        Ok(AbarToBarOps {
+            note: abar_to_bar_note.clone(),
+            nonce,
+        })
+    }
+
+    #[inline(always)]
+    /// Sets the nonce for the operation
+    pub fn set_nonce(&mut self, nonce: NoReplayToken) {
+        self.nonce = nonce;
+    }
+
+    #[inline(always)]
+    /// Fetches the nonce of the operation
+    pub fn get_nonce(&self) -> NoReplayToken {
+        self.nonce
+    }
+}
+
 /// A struct to hold the transfer ops
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AnonTransferOps {
@@ -1360,6 +1394,8 @@ pub enum Operation {
     ConvertAccount(ConvertAccount),
     /// Anonymous conversion operation
     BarToAbar(Box<BarToAbarOps>),
+    /// De-anonymize ABAR operation
+    AbarToBar(Box<AbarToBarOps>),
     /// Anonymous transfer operation
     TransferAnonAsset(Box<AnonTransferOps>),
 }
@@ -1390,6 +1426,7 @@ fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
         Operation::UpdateMemo(i) => i.body.no_replay_token = no_replay_token,
         Operation::ConvertAccount(i) => i.set_nonce(no_replay_token),
         Operation::BarToAbar(i) => i.set_nonce(no_replay_token),
+        Operation::AbarToBar(i) => i.set_nonce(no_replay_token),
         Operation::TransferAnonAsset(i) => i.set_nonce(no_replay_token),
         _ => {}
     }
@@ -1738,6 +1775,7 @@ impl Transaction {
         self.check_fee() && !self.is_coinbase_tx()
     }
 
+    #[allow(clippy::if_same_then_else)]
     /// A simple fee checker
     ///
     /// The check logic is as follows:

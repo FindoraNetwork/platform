@@ -270,6 +270,11 @@ where
                     key: i.note.body.input.public_key,
                 });
             }
+            Operation::AbarToBar(i) => {
+                related_addresses.insert(XfrAddress {
+                    key: i.note.body.output.public_key,
+                });
+            }
             Operation::TransferAnonAsset(_) => {
                 // Anon
             }

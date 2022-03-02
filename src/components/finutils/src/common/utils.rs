@@ -22,14 +22,14 @@ use {
     serde::{self, Deserialize, Serialize},
     std::collections::HashMap,
     tendermint::{PrivateKey, PublicKey},
-    zei::anon_xfr::structs::AnonBlindAssetRecord,
-    zei::anon_xfr::{keys::AXfrPubKey, structs::MTLeafInfo},
-    zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-    zei::xfr::structs::OpenAssetRecord,
+    zei::anon_xfr::{
+        keys::{AXfrKeyPair, AXfrPubKey},
+        structs::{AnonBlindAssetRecord, MTLeafInfo, OpenAnonBlindAssetRecord},
+    },
     zei::xfr::{
         asset_record::{open_blind_asset_record, AssetRecordType},
         sig::{XfrKeyPair, XfrPublicKey},
-        structs::{AssetRecordTemplate, OwnerMemo},
+        structs::{AssetRecordTemplate, OpenAssetRecord, OwnerMemo},
     },
     zeialgebra::jubjub::JubjubScalar,
 };
@@ -545,6 +545,7 @@ pub(crate) fn get_owned_abars(
         get_serv_addr().c(d!())?,
         wallet::anon_public_key_to_base64(addr)
     );
+    println!("URL: {:?}", url);
 
     attohttpc::get(&url)
         .send()
@@ -727,15 +728,32 @@ pub fn generate_bar2abar_op(
         )
         .c(d!())?;
 
-    if input_record.get_record_type() != NonConfidentialAmount_NonConfidentialAssetType
-        || input_record.asset_type != ASSET_TYPE_FRA
-    {
-        let feeop = gen_fee_bar_to_abar(auth_key_pair, txo_sid).c(d!())?;
-        builder.add_operation(feeop);
-    }
+    let feeop = gen_fee_bar_to_abar(auth_key_pair, txo_sid).c(d!())?;
+    builder.add_operation(feeop);
 
     send_tx(&builder.take_transaction()).c(d!())?;
     Ok(r)
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn generate_abar2bar_op(
+    oabar_in: &OpenAnonBlindAssetRecord,
+    from: &AXfrKeyPair,
+    to: &XfrPublicKey,
+    art: AssetRecordType,
+    fee_keypair: &XfrKeyPair,
+) -> Result<()> {
+    let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
+    builder
+        .add_operation_abar_to_bar(oabar_in, from, to, art)
+        .c(d!())?;
+
+    let feeop = gen_fee_op(fee_keypair).c(d!())?;
+    builder.add_operation(feeop);
+
+    send_tx(&builder.take_transaction()).c(d!())?;
+    Ok(())
 }
 
 #[inline(always)]

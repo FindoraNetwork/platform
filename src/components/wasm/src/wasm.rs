@@ -486,6 +486,61 @@ impl TransactionBuilder {
         Ok(self)
     }
 
+    /// Adds an operation to transaction builder which converts an abar to a bar.
+    ///
+    /// @param {AnonBlindAssetRecord} input - the ABAR to be converted
+    /// @param {OwnerMemo} owner_memo - the corresponding owner_memo of the ABAR to be converted
+    /// @param {MTLeafInfo} mt_leaf_info - the Merkle Proof of the ABAR
+    /// @param {AXfrKeyPair} from_keypair - the owners Anon Key pair
+    /// @param {XSecretKey} from_dec_key - the owners decryption key
+    /// @param {XfrPublic} recipient - the BAR owner public key
+    /// @param {bool} conf_amount - whether the BAR amount should be confidential
+    /// @param {bool} conf_type - whether the BAR asset type should be confidential
+    pub fn add_operation_abar_to_bar(
+        mut self,
+        input: AnonBlindAssetRecord,
+        owner_memo: OwnerMemo,
+        mt_leaf_info: MTLeafInfo,
+        from_keypair: AXfrKeyPair,
+        from_dec_key: XSecretKey,
+        recipient: XfrPublicKey,
+        conf_amount: bool,
+        conf_type: bool,
+    ) -> Result<TransactionBuilder, JsValue> {
+        let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
+            &input,
+            owner_memo.memo,
+            &from_keypair,
+            &from_dec_key,
+        )
+        .c(d!())
+        .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
+        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .build()
+        .c(d!())
+        .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?;
+
+        let art = match (conf_amount, conf_type) {
+            (true, true) => AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
+            (true, false) => {
+                AssetRecordType::ConfidentialAmount_NonConfidentialAssetType
+            }
+            (false, true) => {
+                AssetRecordType::NonConfidentialAmount_ConfidentialAssetType
+            }
+            _ => AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+        };
+
+        self.get_builder_mut()
+            .add_operation_abar_to_bar(&oabar, &from_keypair, &recipient, art)
+            .c(d!())
+            .map_err(|e| {
+                JsValue::from_str(&format!("Could not add operation: {}", e))
+            })?;
+
+        Ok(self)
+    }
+
     /// Returns a list of randomizer base58 strings as json
     pub fn get_randomizers(&self) -> JsValue {
         let r = RandomizerStringArray {

@@ -809,6 +809,50 @@ pub fn convert_bar2abar(
     Ok(r)
 }
 
+/// Convert an ABAR to a BLind Asset Record
+pub fn convert_abar2bar(
+    axfr_secret_key: String,
+    r: &str,
+    dec_key: String,
+    to: &XfrPublicKey,
+    fee_xfr_seckey: Option<&str>,
+    confidential_am: bool,
+    confidential_ty: bool,
+) -> Result<()> {
+    let from = wallet::anon_secret_key_from_base64(axfr_secret_key.as_str())
+        .c(d!("invalid 'from-axfr-secret-key'"))?;
+    let from_secret_key =
+        wallet::x_secret_key_from_base64(dec_key.as_str()).c(d!("invalid dec_key"))?;
+    let fee_secret_key = restore_keypair_from_str_with_default(fee_xfr_seckey)?;
+
+    let r = wallet::randomizer_from_base58(r).c(d!())?;
+    let randomized_from_pub_key = from.pub_key().randomize(&r);
+    let axtxo_abar = utils::get_owned_abars(&randomized_from_pub_key).c(d!())?;
+    let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
+    let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
+
+    let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
+        &axtxo_abar[0].1,
+        owner_memo,
+        &from,
+        &from_secret_key,
+    )
+    .unwrap()
+    .mt_leaf_info(mt_leaf_info)
+    .build()
+    .unwrap();
+
+    let art = match (confidential_am, confidential_ty) {
+        (true, true) => AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
+        (true, false) => AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
+        (false, true) => AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
+        _ => AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+    };
+
+    utils::generate_abar2bar_op(&oabar_in, &from, to, art, &fee_secret_key).c(d!())?;
+    Ok(())
+}
+
 /// Generate OABAR and add anonymous transfer operation
 pub fn gen_oabar_add_op(
     axfr_secret_key: String,
@@ -830,8 +874,8 @@ pub fn gen_oabar_add_op(
         wallet::x_public_key_from_base64(to_enc_key).c(d!("invalid to_enc_key"))?;
 
     let r = wallet::randomizer_from_base58(r).c(d!())?;
-    let diversified_from_pub_key = from.pub_key().randomize(&r);
-    let axtxo_abar = utils::get_owned_abars(&diversified_from_pub_key).c(d!())?;
+    let randomized_from_pub_key = from.pub_key().randomize(&r);
+    let axtxo_abar = utils::get_owned_abars(&randomized_from_pub_key).c(d!())?;
     let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
     let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
 

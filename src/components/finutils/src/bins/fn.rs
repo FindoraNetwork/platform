@@ -454,6 +454,49 @@ fn run() -> Result<()> {
             )
             .expect("randomizer write failed");
         }
+    } else if let Some(m) = matches.subcommand_matches("convert-abar-to-bar") {
+        let anon_keys = match m.value_of("anon-keys") {
+            Some(path) => {
+                let f =
+                    fs::read_to_string(path).c(d!("Failed to read anon-keys file"))?;
+                let keys = serde_json::from_str::<AnonKeys>(f.as_str()).c(d!())?;
+                keys
+            }
+            None => return Err(eg!("path for anon-keys file not found")),
+        };
+        let axfr_secret_key = anon_keys.axfr_secret_key;
+        let randomizer = m.value_of("randomizer");
+        let dec_key = anon_keys.dec_key;
+        let to = m
+            .value_of("to-xfr-pubkey")
+            .c(d!())
+            .and_then(|pk| wallet::public_key_from_base64(pk).c(d!()))
+            .or_else(|_| {
+                m.value_of("to-wallet-address").c(d!()).and_then(|addr| {
+                    wallet::public_key_from_bech32(addr).c(d!("invalid wallet address"))
+                })
+            })?;
+        let fee_xfr_seckey = match m.value_of("fee-xfr-seckey") {
+            Some(path) => {
+                Some(fs::read_to_string(path).c(d!("Failed to read seckey file"))?)
+            }
+            None => None,
+        };
+
+        if randomizer.is_none() {
+            println!("{}", m.usage());
+        } else {
+            common::convert_abar2bar(
+                axfr_secret_key,
+                randomizer.unwrap(),
+                dec_key,
+                &to,
+                fee_xfr_seckey.as_deref(),
+                m.is_present("confidential-amount"),
+                m.is_present("confidential-type"),
+            )
+            .c(d!())?;
+        }
     } else if let Some(m) = matches.subcommand_matches("gen-anon-keys") {
         let mut prng = ChaChaRng::from_entropy();
         let keypair = AXfrKeyPair::generate(&mut prng);
