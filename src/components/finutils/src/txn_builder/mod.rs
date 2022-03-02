@@ -538,7 +538,7 @@ impl TransactionBuilder {
         asset_record_type: AssetRecordType,
     ) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
-        let user_params = UserParams::abar_to_bar_params(41);
+        let user_params = UserParams::abar_to_bar_params(MERKLE_TREE_DEPTH);
 
         let note = gen_abar_to_bar_note(
             &mut prng,
