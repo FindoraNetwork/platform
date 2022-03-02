@@ -29,9 +29,10 @@
 mod test;
 
 use {
-    cryptohash::sha256::{self, Digest, DIGESTBYTES},
     globutils::Commas,
     ruc::*,
+    sodiumoxide::crypto::hash::sha256,
+    sodiumoxide::crypto::hash::sha256::{Digest, DIGESTBYTES},
     std::{
         cmp,
         collections::{HashMap, HashSet},
@@ -228,9 +229,7 @@ impl SparseMap {
     #[allow(clippy::init_numbered_fields)]
     pub fn validate_checksum(&self) -> bool {
         let mut checksum_data = EMPTY_CHECKSUM;
-        let mut digest = Digest {
-            0: [0_u8; DIGESTBYTES],
-        };
+        let mut digest = Digest([0_u8; DIGESTBYTES]);
 
         // For each block, compute the checksum.
         for i in 0..self.headers.len() {
@@ -617,9 +616,7 @@ impl BitMap {
             size: 0,
             blocks: Vec::new(),
             checksum_data: Vec::new(),
-            checksum: Digest {
-                0: [0_u8; DIGESTBYTES],
-            },
+            checksum: Digest([0_u8; DIGESTBYTES]),
             dirty: Vec::new(),
             checksum_valid: Vec::new(),
             set_bits: Vec::new(),
@@ -642,9 +639,7 @@ impl BitMap {
             size: count,
             blocks: block_vector,
             checksum_data: Vec::new(),
-            checksum: Digest {
-                0: [0_u8; DIGESTBYTES],
-            },
+            checksum: Digest([0_u8; DIGESTBYTES]),
             dirty: state_vector,
             checksum_valid: checksum_vector,
             set_bits: set_vector,
@@ -920,9 +915,7 @@ impl BitMap {
         }
 
         // This value should never be used.
-        let mut digest = Digest {
-            0: [0_u8; DIGESTBYTES],
-        };
+        let mut digest = Digest([0_u8; DIGESTBYTES]);
 
         // For each block not yet computed.
         for i in self.first_invalid..self.blocks.len() {
@@ -1240,9 +1233,7 @@ impl BitMap {
         index += 8;
 
         // Now pull the checksum for the tree out of the structure.
-        let mut checksum = Digest {
-            0: [0u8; DIGESTBYTES],
-        };
+        let mut checksum = Digest([0_u8; DIGESTBYTES]);
         checksum.0[..DIGESTBYTES].clone_from_slice(&bytes[index..index + DIGESTBYTES]);
 
         index += DIGESTBYTES;
