@@ -112,7 +112,7 @@ pub fn query(s: &mut ABCISubmissionServer, req: &RequestQuery) -> ResponseQuery 
             let h = staking.cur_height();
 
             let info = serde_json::to_string(&json!({
-                "delegations": staking.get_global_delegation_records(),
+                "global_delegation_records_map": staking.get_global_delegation_records(),
                 "validator_addr_map": staking.validator_get_current().map(|v|v.get_validator_addr_map())
             }))
             .unwrap();
