@@ -298,7 +298,6 @@ pub fn deliver_tx(
                             td_height, tx
                         );
                     }
-
                     if *KEEP_HIST {
                         // set attr(tags) if any, only needed on a fullnode
                         let attr = utils::gen_tendermint_attr(&tx);

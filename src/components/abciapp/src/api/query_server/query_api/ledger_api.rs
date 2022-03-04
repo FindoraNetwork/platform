@@ -394,8 +394,7 @@ pub async fn get_validator_delegation_history(
                     c2.clear();
                     if let Some((h, v)) = delegation_amount_hist
                         .as_ref()
-                        .map(|dah| dah.get_closest_smaller(&hi))
-                        .flatten()
+                        .and_then(|dah| dah.get_closest_smaller(&hi))
                     {
                         c2.insert(h, Some(v));
                     } else {
@@ -407,8 +406,7 @@ pub async fn get_validator_delegation_history(
                     c3.clear();
                     if let Some((h, v)) = self_delegation_amount_hist
                         .as_ref()
-                        .map(|sdah| sdah.get_closest_smaller(&hi))
-                        .flatten()
+                        .and_then(|sdah| sdah.get_closest_smaller(&hi))
                     {
                         c3.insert(h, Some(v));
                     } else {
