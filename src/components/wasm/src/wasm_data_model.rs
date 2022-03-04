@@ -43,7 +43,6 @@ pub struct PublicParams {
 }
 
 #[allow(clippy::new_without_default)]
-#[wasm_bindgen]
 impl PublicParams {
     /// Generates a new set of parameters.
     pub fn new() -> PublicParams {
@@ -66,7 +65,6 @@ pub struct TxoRef {
     pub(crate) txo_ref: PlatformTxoRef,
 }
 
-#[wasm_bindgen]
 impl TxoRef {
     /// Creates a relative txo reference as a JSON string. Relative txo references are offset
     /// backwards from the operation they appear in -- 0 is the most recent, (n-1) is the first output
@@ -116,7 +114,6 @@ impl AuthenticatedAssetRecord {
     }
 }
 
-#[wasm_bindgen]
 impl AuthenticatedAssetRecord {
     /// Given a serialized state commitment, returns true if the
     /// authenticated UTXO proofs validate correctly and false otherwise. If the proofs validate, the
@@ -162,7 +159,6 @@ impl ClientAssetRecord {
     }
 }
 
-#[wasm_bindgen]
 impl ClientAssetRecord {
     /// Builds a client record from a JSON-encoded JavaScript value.
     ///
@@ -209,7 +205,6 @@ pub struct AssetTracerKeyPair {
     pub(crate) keypair: ZeiAssetTracerKeyPair,
 }
 
-#[wasm_bindgen]
 impl AssetTracerKeyPair {
     /// Creates a new tracer key pair.
     pub fn new() -> Self {
@@ -247,7 +242,6 @@ pub struct OwnerMemo {
     pub(crate) memo: ZeiOwnerMemo,
 }
 
-#[wasm_bindgen]
 impl OwnerMemo {
     /// Builds an owner memo from a JSON-serialized JavaScript value.
     /// @param {JsValue} val - JSON owner memo fetched from query server with the `get_owner_memo/{sid}` route,
@@ -325,7 +319,6 @@ pub struct CredentialRevealSig {
     pub(crate) sig: CredRevealSig,
 }
 
-#[wasm_bindgen]
 impl CredentialRevealSig {
     /// Returns the underlying credential commitment.
     /// @see {@link module:Findora-Wasm.wasm_credential_verify_commitment|wasm_credential_verify_commitment} for information about how to verify a
@@ -355,7 +348,6 @@ pub struct CredentialCommitmentData {
     pub(crate) commitment_key: CredentialCommitmentKey,
 }
 
-#[wasm_bindgen]
 impl CredentialCommitmentData {
     /// Returns the underlying credential commitment.
     /// @see {@link module:Findora-Wasm.wasm_credential_verify_commitment|wasm_credential_verify_commitment} for information about how to verify a
@@ -431,7 +423,6 @@ pub struct AssetType {
     pub(crate) asset_type: PlatformAssetType,
 }
 
-#[wasm_bindgen]
 impl AssetType {
     /// Builds an asset type from a JSON-encoded JavaScript value.
     /// @param {JsValue} val - JSON-encoded asset type fetched from ledger server with the `asset_token/{code}` route.
@@ -501,7 +492,6 @@ impl CredentialRevealSig {
     }
 }
 
-#[wasm_bindgen]
 /// Key pair of a credential issuer
 impl CredentialIssuerKeyPair {
     /// Returns the credential issuer's public key.
@@ -522,7 +512,6 @@ impl CredentialIssuerKeyPair {
     }
 }
 
-#[wasm_bindgen]
 impl CredentialUserKeyPair {
     /// Returns the credential issuer's public key.
     pub fn get_pk(&self) -> CredUserPublicKey {
@@ -548,7 +537,6 @@ pub struct SignatureRules {
     pub(crate) sig_rules: PlatformSignatureRules,
 }
 
-#[wasm_bindgen]
 impl SignatureRules {
     /// Creates a new set of co-signature rules.
     ///
@@ -594,7 +582,6 @@ pub struct TracingPolicy {
     pub(crate) policy: ZeiTracingPolicy,
 }
 
-#[wasm_bindgen]
 impl TracingPolicy {
     pub fn new_with_tracing(tracing_key: &AssetTracerKeyPair) -> Self {
         let policy = ZeiTracingPolicy {
@@ -655,7 +642,6 @@ pub struct AssetRules {
     pub(crate) rules: PlatformAssetRules,
 }
 
-#[wasm_bindgen]
 impl AssetRules {
     /// Create a default set of asset rules. See class description for defaults.
     pub fn new() -> AssetRules {

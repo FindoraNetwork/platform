@@ -26,6 +26,7 @@ use {
         },
         SNAPSHOT_ENTRIES_DIR,
     },
+    config::abci::global_cfg::CFG,
     cosig::CoSigRule,
     cryptohash::sha256::{self, Digest},
     fbnc::{new_mapx, Mapx},
@@ -168,7 +169,7 @@ pub const MAX_POWER_PERCENT_PER_VALIDATOR: [u128; 2] = [1, 5];
 pub const BLOCK_INTERVAL: u64 = 15 + 1;
 
 /// The lock time after the delegation expires, about 21 days.
-pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
+//pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
 
 // minimal number of validators
 pub(crate) const VALIDATORS_MIN: usize = 5;
@@ -329,9 +330,7 @@ impl Staking {
         &self,
         id: &XfrPublicKey,
     ) -> Option<&Validator> {
-        self.validator_get_current()
-            .map(|vd| vd.body.get(id))
-            .flatten()
+        self.validator_get_current().and_then(|vd| vd.body.get(id))
     }
 
     #[inline(always)]
@@ -347,8 +346,7 @@ impl Staking {
         id: &XfrPublicKey,
     ) -> Option<&mut Validator> {
         self.validator_get_current_mut()
-            .map(|vd| vd.body.get_mut(id))
-            .flatten()
+            .and_then(|vd| vd.body.get_mut(id))
     }
 
     /// Get the validators that will be used for the specified height.
@@ -453,12 +451,12 @@ impl Staking {
     fn validator_clean_invalid_items(&mut self) {
         let h = self.cur_height;
 
-        if UNBOND_BLOCK_CNT > h {
+        if CFG.checkpoint.unbond_block_cnt > h {
             return;
         }
 
         if let Some(old) = self
-            .validator_get_effective_at_height(h - UNBOND_BLOCK_CNT)
+            .validator_get_effective_at_height(h - CFG.checkpoint.unbond_block_cnt)
             .map(|ovd| {
                 ovd.body
                     .iter()
@@ -518,8 +516,7 @@ impl Staking {
     fn validator_align_power(&mut self, vid: &XfrPublicKey) {
         if let Some(self_delegation_am) = self
             .delegation_get(vid)
-            .map(|d| d.validator_entry(vid))
-            .flatten()
+            .and_then(|d| d.validator_entry(vid))
         {
             if let Some(v) = self.validator_get_current_mut_one_by_id(vid) {
                 if 0 < v.td_power {
@@ -749,7 +746,7 @@ impl Staking {
             if BLOCK_HEIGHT_MAX == d.end_height {
                 if d.end_height != h {
                     orig_h = Some(d.end_height);
-                    d.end_height = h + UNBOND_BLOCK_CNT;
+                    d.end_height = h + CFG.checkpoint.unbond_block_cnt;
                 }
             } else {
                 return Err(eg!("delegator is not bonded"));
@@ -803,7 +800,7 @@ impl Staking {
                 .map(|set| set.remove(addr));
             self.delegation_info
                 .end_height_map
-                .entry(h + UNBOND_BLOCK_CNT)
+                .entry(h + CFG.checkpoint.unbond_block_cnt)
                 .or_insert_with(BTreeSet::new)
                 .insert(*addr);
         }
@@ -866,7 +863,7 @@ impl Staking {
                     receiver_pk: Some(d.id),
                     tmp_delegators: map! {B},
                     start_height: d.start_height,
-                    end_height: h + UNBOND_BLOCK_CNT,
+                    end_height: h + CFG.checkpoint.unbond_block_cnt,
                     state: DelegationState::Bond,
                     rwd_amount: 0,
                     delegation_rwd_cnt: 0,
@@ -895,7 +892,7 @@ impl Staking {
             .insert(pu.new_delegator_id, new_tmp_delegator);
         self.delegation_info
             .end_height_map
-            .entry(h + UNBOND_BLOCK_CNT)
+            .entry(h + CFG.checkpoint.unbond_block_cnt)
             .or_insert_with(BTreeSet::new)
             .insert(pu.new_delegator_id);
 
@@ -1128,8 +1125,7 @@ impl Staking {
         self.delegation_info
             .end_height_map
             .range(..=h)
-            .map(|(_, addr)| addr)
-            .flatten()
+            .flat_map(|(_, addr)| addr)
             .copied()
             .collect::<Vec<_>>()
             .into_iter()
@@ -1995,11 +1991,11 @@ impl Delegation {
         is_delegation_rwd: bool,
         coinbase_bl: Amount,
     ) -> Result<u64> {
-        #[cfg(feature = "debug_env")]
-        const ZERO_AMOUNT_FIX_HEIGHT: BlockHeight = 0;
-
-        #[cfg(not(feature = "debug_env"))]
-        const ZERO_AMOUNT_FIX_HEIGHT: BlockHeight = 120_0000;
+        // #[cfg(feature = "debug_env")]
+        // const ZERO_AMOUNT_FIX_HEIGHT: BlockHeight = 0;
+        //
+        // #[cfg(not(feature = "debug_env"))]
+        // const ZERO_AMOUNT_FIX_HEIGHT: BlockHeight = 120_0000;
 
         if self.end_height < cur_height || DelegationState::Bond != self.state {
             return Ok(0);
@@ -2019,7 +2015,7 @@ impl Delegation {
             .c(d!())
             .and_then(|mut am| {
                 if 0 == am {
-                    if ZERO_AMOUNT_FIX_HEIGHT < cur_height {
+                    if CFG.checkpoint.zero_amount_fix_height < cur_height {
                         return Ok(0);
                     } else {
                         return Err(eg!("set rewards on zero amount"));
@@ -2079,32 +2075,32 @@ fn calculate_delegation_rewards(
     is_delegation_rwd: bool,
     cur_height: BlockHeight,
 ) -> Result<Amount> {
-    #[cfg(feature = "debug_env")]
-    const APY_FIX_HEIGHT: BlockHeight = 0;
+    // #[cfg(feature = "debug_env")]
+    // const APY_FIX_HEIGHT: BlockHeight = 0;
 
-    #[cfg(feature = "debug_env")]
-    const OVERFLOW_FIX_HEIGHT: BlockHeight = 0;
+    // #[cfg(feature = "debug_env")]
+    // const OVERFLOW_FIX_HEIGHT: BlockHeight = 0;
 
-    #[cfg(feature = "debug_env")]
-    const SECOND_FIX_HEIGHT: BlockHeight = 0;
+    // #[cfg(feature = "debug_env")]
+    // const SECOND_FIX_HEIGHT: BlockHeight = 0;
 
-    #[cfg(not(feature = "debug_env"))]
-    const APY_FIX_HEIGHT: BlockHeight = 117_7000;
+    // #[cfg(not(feature = "debug_env"))]
+    // const APY_FIX_HEIGHT: BlockHeight = 117_7000;
 
     // logic apply at about 2021-11-11 14:30
-    #[cfg(not(feature = "debug_env"))]
-    const OVERFLOW_FIX_HEIGHT: BlockHeight = 124_7000;
+    // #[cfg(not(feature = "debug_env"))]
+    // const OVERFLOW_FIX_HEIGHT: BlockHeight = 124_7000;
 
-    #[cfg(not(feature = "debug_env"))]
-    const SECOND_FIX_HEIGHT: BlockHeight = 139_8000;
+    // #[cfg(not(feature = "debug_env"))]
+    // const SECOND_FIX_HEIGHT: BlockHeight = 142_9000;
 
-    if OVERFLOW_FIX_HEIGHT < cur_height {
+    if CFG.checkpoint.overflow_fix_height < cur_height {
         let am = BigUint::from(amount);
         let total_am = BigUint::from(total_amount);
         let global_am = BigUint::from(global_amount);
         let block_itv = BLOCK_INTERVAL as u128;
 
-        let second_per_year: u128 = if SECOND_FIX_HEIGHT < cur_height {
+        let second_per_year: u128 = if CFG.checkpoint.second_fix_height < cur_height {
             365 * 24 * 3600
         } else {
             356 * 24 * 3600
@@ -2117,7 +2113,7 @@ fn calculate_delegation_rewards(
             a1 / a2
         };
 
-        let n = if APY_FIX_HEIGHT < cur_height {
+        let n = if CFG.checkpoint.apy_fix_height < cur_height {
             if is_delegation_rwd {
                 // global_amount * am * return_rate[0] * block_itv / (return_rate[1] * (365 * 24 * 3600) * total_amount)
                 let a1 = global_am * am * return_rate[0] * block_itv;
@@ -2149,7 +2145,7 @@ fn calculate_delegation_rewards(
                 })
         };
 
-        if APY_FIX_HEIGHT < cur_height {
+        if CFG.checkpoint.apy_fix_height < cur_height {
             if is_delegation_rwd {
                 // # For delegation rewards:
                 //

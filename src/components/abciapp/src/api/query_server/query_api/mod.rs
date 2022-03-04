@@ -57,12 +57,11 @@ pub async fn get_address(
 ) -> actix_web::Result<String, actix_web::error::Error> {
     let server = data.read();
     let address_res = server.get_address_of_sid(TxoSID(*info));
-    let res;
-    if let Some(address) = address_res {
-        res = serde_json::to_string(&address)?;
+    let res = if let Some(address) = address_res {
+        serde_json::to_string(&address)?
     } else {
-        res = format!("No utxo {} found. Please retry with a new utxo.", &info);
-    }
+        format!("No utxo {} found. Please retry with a new utxo.", &info)
+    };
     Ok(res)
 }
 

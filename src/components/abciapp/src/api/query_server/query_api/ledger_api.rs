@@ -5,6 +5,7 @@
 use {
     super::server::QueryServer,
     actix_web::{error, web},
+    config::abci::global_cfg::CFG,
     finutils::api::{
         DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
         ValidatorDetail, ValidatorList,
@@ -17,7 +18,7 @@ use {
         },
         staking::{
             DelegationRwdDetail, DelegationState, Staking, TendermintAddr,
-            TendermintAddrRef, UNBOND_BLOCK_CNT,
+            TendermintAddrRef,
         },
     },
     parking_lot::RwLock,
@@ -394,8 +395,7 @@ pub async fn get_validator_delegation_history(
                     c2.clear();
                     if let Some((h, v)) = delegation_amount_hist
                         .as_ref()
-                        .map(|dah| dah.get_closest_smaller(&hi))
-                        .flatten()
+                        .and_then(|dah| dah.get_closest_smaller(&hi))
                     {
                         c2.insert(h, Some(v));
                     } else {
@@ -407,8 +407,7 @@ pub async fn get_validator_delegation_history(
                     c3.clear();
                     if let Some((h, v)) = self_delegation_amount_hist
                         .as_ref()
-                        .map(|sdah| sdah.get_closest_smaller(&hi))
-                        .flatten()
+                        .and_then(|sdah| sdah.get_closest_smaller(&hi))
                     {
                         c3.insert(h, Some(v));
                     } else {
@@ -637,7 +636,8 @@ pub async fn query_delegation_info(
                 }
                 DelegationState::Bond => {
                     if staking.cur_height()
-                        > d.end_height().saturating_sub(UNBOND_BLOCK_CNT)
+                        > d.end_height()
+                            .saturating_sub(CFG.checkpoint.unbond_block_cnt)
                     {
                         mem::swap(&mut bond_amount, &mut unbond_amount);
                     }

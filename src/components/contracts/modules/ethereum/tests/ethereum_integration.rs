@@ -139,7 +139,7 @@ fn test_abci_query() {
     let ctx = BASE_APP
         .lock()
         .unwrap()
-        .create_query_context(3, false)
+        .create_query_context(Some(3), false)
         .unwrap();
     assert_eq!(
         module_account::App::<BaseApp>::balance(&ctx, &ALICE_ECDSA.account_id),

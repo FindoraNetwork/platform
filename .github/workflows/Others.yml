@@ -2,7 +2,7 @@ name: Others
 on:
   push:
     tags:
-      - '*-release'
+      - 'test-ci'
 env:
   CARGO_TERM_COLOR: always
 jobs:

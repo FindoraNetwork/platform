@@ -1,7 +1,7 @@
 ///! Transaction signature extension for transaction verification and validity check.
 use crate::BaseApp;
 use fp_core::{
-    context::{Context, RunTxMode},
+    context::Context,
     transaction::{ActionResult, SignedExtension},
 };
 use fp_traits::account::{AccountAsset, FeeCalculator};
@@ -75,16 +75,12 @@ impl SignedExtension for CheckFee {
             }
         };
 
-        if RunTxMode::Check == ctx.run_mode {
-            // deduct tx fee prevent attacks
-            module_account::App::<BaseApp>::burn(ctx, who, tx_fee)?;
-        } else {
-            // check tx fee
-            let amount = module_account::App::<BaseApp>::balance(ctx, who);
-            if amount < tx_fee {
-                return Err(eg!("Insufficient balance payment fee."));
-            }
+        // check tx fee
+        let amount = module_account::App::<BaseApp>::balance(ctx, who);
+        if amount < tx_fee {
+            return Err(eg!("Insufficient balance for transaction fee."));
         }
+
         Ok(())
     }
 

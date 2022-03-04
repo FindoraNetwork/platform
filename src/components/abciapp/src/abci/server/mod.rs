@@ -4,7 +4,7 @@
 
 use {
     crate::{
-        abci::{config::global_cfg::CFG, server::callback::TENDERMINT_BLOCK_HEIGHT},
+        abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
         api::submission_server::SubmissionServer,
     },
     abci::{
@@ -14,6 +14,7 @@ use {
         ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
     },
     baseapp::BaseApp as AccountBaseAPP,
+    config::abci::global_cfg::CFG,
     ledger::store::LedgerState,
     parking_lot::RwLock,
     rand_chacha::ChaChaRng,

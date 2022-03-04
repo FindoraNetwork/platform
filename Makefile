@@ -271,6 +271,9 @@ reset:
 snapshot:
 	@./tools/devnet/snapshot.sh
 
+evmtest:
+	@./tools/regression/evm/testevm.sh
+
 devnet: reset snapshot
 
 run_bar_to_abar_demo: devnet
@@ -281,3 +284,6 @@ run_anon_transfer_demo: devnet
 
 run_multi_anon_transfer_demo: devnet
 	@./tools/triple_masking/multi_axfr_test_demo.sh
+	
+devnet_bridge: devnet
+	@./tools/devnet/startbridge.sh

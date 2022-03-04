@@ -6,10 +6,7 @@ mod utils;
 
 use {
     crate::{
-        abci::{
-            config::global_cfg::CFG, server::ABCISubmissionServer, staking, IN_SAFE_ITV,
-            POOL,
-        },
+        abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV, POOL},
         api::{
             query_server::BLOCK_CREATED,
             submission_server::{convert_tx, try_tx_catalog, TxCatalog},
@@ -21,6 +18,7 @@ use {
         ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
         ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
     },
+    config::abci::global_cfg::CFG,
     fp_storage::hash::{Sha256, StorageHasher},
     lazy_static::lazy_static,
     ledger::{
@@ -55,6 +53,18 @@ lazy_static! {
         Arc::new(RwLock::new(new_mapx!("tx_history")));
 }
 
+// #[cfg(feature = "debug_env")]
+// pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 1;
+//
+// #[cfg(not(feature = "debug_env"))]
+// pub const DISBALE_EVM_BLOCK_HEIGHT: i64 = 148_3286;
+//
+// #[cfg(feature = "debug_env")]
+// pub const ENABLE_FRC20_HEIGHT: i64 = 1;
+//
+// #[cfg(not(feature = "debug_env"))]
+// pub const ENABLE_FRC20_HEIGHT: i64 = 150_1000;
+
 pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let mut resp = ResponseInfo::new();
 
@@ -68,8 +78,14 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
     resp.set_last_block_height(h);
     if 0 < h {
-        let cs_hash = s.account_base_app.write().info(req).last_block_app_hash;
-        resp.set_last_block_app_hash(app_hash("info", h, la_hash, cs_hash));
+        if CFG.checkpoint.disable_evm_block_height < h
+            && h < CFG.checkpoint.enable_frc20_height
+        {
+            resp.set_last_block_app_hash(la_hash);
+        } else {
+            let cs_hash = s.account_base_app.write().info(req).last_block_app_hash;
+            resp.set_last_block_app_hash(app_hash("info", h, la_hash, cs_hash));
+        }
     }
 
     drop(state);
@@ -102,7 +118,10 @@ pub fn init_chain(
 pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseCheckTx {
     let mut resp = ResponseCheckTx::new();
 
-    let tx_catalog = try_tx_catalog(req.get_tx());
+    let tx_catalog = try_tx_catalog(req.get_tx(), false);
+
+    let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+
     match tx_catalog {
         TxCatalog::FindoraTx => {
             if matches!(req.field_type, CheckTxType::New) {
@@ -120,7 +139,17 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
             }
             resp
         }
-        TxCatalog::EvmTx => s.account_base_app.write().check_tx(req),
+        TxCatalog::EvmTx => {
+            if CFG.checkpoint.disable_evm_block_height < td_height
+                && td_height < CFG.checkpoint.enable_frc20_height
+            {
+                resp.code = 2;
+                resp.log = "EVM is disabled".to_owned();
+                resp
+            } else {
+                s.account_base_app.write().check_tx(req)
+            }
+        }
         TxCatalog::Unknown => {
             resp.code = 1;
             resp.log = "Unknown transaction".to_owned();
@@ -175,7 +204,13 @@ pub fn begin_block(
         pnk!(la.update_staking_simulator());
     }
 
-    s.account_base_app.write().begin_block(req)
+    if CFG.checkpoint.disable_evm_block_height < header.height
+        && header.height < CFG.checkpoint.enable_frc20_height
+    {
+        ResponseBeginBlock::default()
+    } else {
+        s.account_base_app.write().begin_block(req)
+    }
 }
 
 pub fn deliver_tx(
@@ -184,7 +219,10 @@ pub fn deliver_tx(
 ) -> ResponseDeliverTx {
     let mut resp = ResponseDeliverTx::new();
 
-    let tx_catalog = try_tx_catalog(req.get_tx());
+    let tx_catalog = try_tx_catalog(req.get_tx(), true);
+    let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+    const EVM_FIRST_BLOCK_HEIGHT: i64 = 142_5000;
+
     match tx_catalog {
         TxCatalog::FindoraTx => {
             if let Ok(tx) = convert_tx(req.get_tx()) {
@@ -194,6 +232,13 @@ pub fn deliver_tx(
                 });
 
                 if tx.valid_in_abci() {
+                    // Log print for monitor purpose
+                    if td_height < EVM_FIRST_BLOCK_HEIGHT {
+                        println!(
+                            "EVM transaction(FindoraTx) detected at early height {}: {:?}",
+                            td_height, tx
+                        );
+                    }
                     if *KEEP_HIST {
                         // set attr(tags) if any, only needed on a fullnode
                         let attr = utils::gen_tendermint_attr(&tx);
@@ -202,11 +247,22 @@ pub fn deliver_tx(
                         }
                     }
 
-                    if is_convert_account(&tx) {
+                    if CFG.checkpoint.disable_evm_block_height < td_height
+                        && td_height < CFG.checkpoint.enable_frc20_height
+                    {
+                        if is_convert_account(&tx) {
+                            resp.code = 2;
+                            resp.log = "EVM is disabled".to_owned();
+                            return resp;
+                        } else if let Err(e) = s.la.write().cache_transaction(tx) {
+                            resp.code = 1;
+                            resp.log = e.to_string();
+                        }
+                    } else if is_convert_account(&tx) {
                         if let Err(err) =
                             s.account_base_app.write().deliver_findora_tx(&tx)
                         {
-                            log::debug!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
+                            log::info!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
 
                             resp.code = 1;
                             resp.log =
@@ -258,7 +314,22 @@ pub fn deliver_tx(
             resp
         }
         TxCatalog::EvmTx => {
-            return s.account_base_app.write().deliver_tx(req);
+            if CFG.checkpoint.disable_evm_block_height < td_height
+                && td_height < CFG.checkpoint.enable_frc20_height
+            {
+                resp.code = 2;
+                resp.log = "EVM is disabled".to_owned();
+                resp
+            } else {
+                // Log print for monitor purpose
+                if td_height < EVM_FIRST_BLOCK_HEIGHT {
+                    println!(
+                        "EVM transaction(EvmTx) detected at early height {}: {:?}",
+                        td_height, req
+                    );
+                }
+                return s.account_base_app.write().deliver_tx(req);
+            }
         }
         TxCatalog::Unknown => {
             resp.code = 1;
@@ -277,6 +348,8 @@ pub fn end_block(
 
     let begin_block_req = REQ_BEGIN_BLOCK.lock();
     let header = pnk!(begin_block_req.header.as_ref());
+
+    let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
 
     IN_SAFE_ITV.swap(false, Ordering::Relaxed);
     let mut la = s.la.write();
@@ -311,7 +384,11 @@ pub fn end_block(
         &begin_block_req.byzantine_validators.as_slice(),
     );
 
-    let _ = s.account_base_app.write().end_block(req);
+    if td_height <= CFG.checkpoint.disable_evm_block_height
+        || td_height >= CFG.checkpoint.enable_frc20_height
+    {
+        let _ = s.account_base_app.write().end_block(req);
+    }
 
     resp
 }
@@ -336,7 +413,15 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     let mut r = ResponseCommit::new();
     let la_hash = state.get_state_commitment().0.as_ref().to_vec();
     let cs_hash = s.account_base_app.write().commit(req).data;
-    r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
+
+    if CFG.checkpoint.disable_evm_block_height < td_height
+        && td_height < CFG.checkpoint.enable_frc20_height
+    {
+        r.set_data(la_hash);
+    } else {
+        r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
+    }
+
     r
 }
 
@@ -348,7 +433,7 @@ fn app_hash(
     mut la_hash: Vec<u8>,
     mut cs_hash: Vec<u8>,
 ) -> Vec<u8> {
-    log::debug!(target: "abciapp",
+    log::info!(target: "abciapp",
         "app_hash_{}: {}_{}, height: {}",
         when,
         hex::encode(la_hash.clone()),

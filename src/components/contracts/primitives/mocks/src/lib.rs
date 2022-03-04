@@ -53,7 +53,7 @@ pub fn test_mint_balance(who: &Address, balance: U256, height: u64) {
     let ctx = BASE_APP
         .lock()
         .unwrap()
-        .create_query_context(height, false)
+        .create_query_context(Some(height), false)
         .unwrap();
     assert_eq!(module_account::App::<BaseApp>::balance(&ctx, who), balance);
 }

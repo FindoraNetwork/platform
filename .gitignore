@@ -30,5 +30,6 @@ owned_randomizers
 tools/tendermint
 seq_id.str
 utxo.map
+checkpoint.toml
 
 *.tmp

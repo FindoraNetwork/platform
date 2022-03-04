@@ -117,7 +117,6 @@ jobs:
         PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
       shell: bash
       run: |
-        $(aws ecr get-login --region us-west-2 --no-include-email)
         aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${PUBLIC_ECR_URL}
     - name: Push images
       env:
@@ -203,34 +202,6 @@ jobs:
         echo "Image tag: ${IMAGE_TAG}"
         make clean_image_dockerhub
     #  # =========END build the goleveldb and push to dockerhub ===
-    - name: Push wasm-js-bindings
-      shell: bash
-      run: |
-        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-        TAGV="${TAGS#refs/tags/}"
-        export WASM_VERSION="${TAGV:-release}"
-        export COMMIT_HASH="${GITHUB_SHA::7}"
-        export IMAGE_TAG="${TAGV:-main}"
-        export BRANCH_NAME="release"
-        export WASM_DIR="/tmp/wasm-js-bindings"
-        if [ ! -d "${WASM_DIR}" ]; then git clone git@github.com:FindoraNetwork/wasm-js-bindings.git "${WASM_DIR}"; fi
-        pushd "${WASM_DIR}"
-        git checkout "${BRANCH_NAME}" || git checkout -b "${BRANCH_NAME}"
-        git pull origin "${BRANCH_NAME}" || true
-        if [ ! -d "${WASM_DIR}/nodejs" ]; then mkdir "${WASM_DIR}/nodejs"; fi
-        if [ ! -d "${WASM_DIR}/web" ]; then mkdir "${WASM_DIR}/web"; fi
-        if [ ! -d "${WASM_DIR}/bundler" ]; then mkdir "${WASM_DIR}/bundler"; fi
-        popd
-        make ci_build_wasm_js_bindings
-        pushd "${WASM_DIR}"
-        if [ "$(git diff)" != "" ]; then
-            git add .
-            git commit -m "version: ${WASM_VERSION}, hash: ${COMMIT_HASH}, build date: $(date +"%Y%m%d")"
-            git push -f origin "${BRANCH_NAME}"
-        fi
-        git tag -f "${WASM_VERSION}"
-        git push -f origin "${WASM_VERSION}"
-        popd
     - name: Clean binary images
       env:
         GITHUB_CONTEXT: ${{ toJSON(github) }}

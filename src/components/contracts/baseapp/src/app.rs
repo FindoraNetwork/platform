@@ -4,7 +4,7 @@ use fp_core::context::RunTxMode;
 use fp_evm::BlockId;
 use fp_types::assemble::convert_unchecked_transaction;
 use fp_utils::tx::EvmRawTxWrapper;
-use log::{debug, error};
+use log::{debug, error, info};
 use primitive_types::U256;
 use ruc::*;
 
@@ -48,7 +48,7 @@ impl abci::Application for crate::BaseApp {
             return err_resp("Empty query path!".to_string());
         }
 
-        let ctx = self.create_query_context(req.height as u64, req.prove);
+        let ctx = self.create_query_context(Some(req.height as u64), req.prove);
         if let Err(e) = ctx {
             return err_resp(format!("Cannot create query context with err: {}!", e));
         }
@@ -64,23 +64,32 @@ impl abci::Application for crate::BaseApp {
     fn check_tx(&mut self, req: &RequestCheckTx) -> ResponseCheckTx {
         let mut resp = ResponseCheckTx::new();
 
-        let raw_tx;
-        if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
-            raw_tx = tx;
+        let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
+            tx
         } else {
-            debug!(target: "baseapp", "Transaction evm tag check failed");
+            info!(target: "baseapp", "Transaction evm tag check failed");
             resp.code = 1;
             resp.log = String::from("Transaction evm tag check failed");
             return resp;
-        }
+        };
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
             let check_fn = |mode: RunTxMode| {
                 let ctx = self.retrieve_context(mode).clone();
-                if let Err(e) = self.modules.process_tx::<SignedExtra>(ctx, tx) {
-                    debug!(target: "baseapp", "Transaction check error: {}", e);
-                    resp.code = 1;
-                    resp.log = format!("Transaction check error: {}", e);
+                let result = self.modules.process_tx::<SignedExtra>(ctx, tx);
+                match result {
+                    Ok(ar) => {
+                        resp.code = ar.code;
+                        if ar.code != 0 {
+                            info!(target: "baseapp", "Transaction check error, action result {:?}", ar);
+                            resp.log = ar.log;
+                        }
+                    }
+                    Err(e) => {
+                        info!(target: "baseapp", "Transaction check error: {}", e);
+                        resp.code = 1;
+                        resp.log = format!("Transaction check error: {}", e);
+                    }
                 }
             };
             match req.get_field_type() {
@@ -88,7 +97,7 @@ impl abci::Application for crate::BaseApp {
                 CheckTxType::Recheck => check_fn(RunTxMode::ReCheck),
             }
         } else {
-            debug!(target: "baseapp", "Could not unpack transaction");
+            info!(target: "baseapp", "Could not unpack transaction");
         }
         resp
     }
@@ -127,15 +136,14 @@ impl abci::Application for crate::BaseApp {
     fn deliver_tx(&mut self, req: &RequestDeliverTx) -> ResponseDeliverTx {
         let mut resp = ResponseDeliverTx::new();
 
-        let raw_tx;
-        if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
-            raw_tx = tx;
+        let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
+            tx
         } else {
-            debug!(target: "baseapp", "Transaction deliver tx unwrap evm tag failed");
+            info!(target: "baseapp", "Transaction deliver tx unwrap evm tag failed");
             resp.code = 1;
             resp.log = String::from("Transaction deliver tx unwrap evm tag failed");
             return resp;
-        }
+        };
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
             let ctx = self.retrieve_context(RunTxMode::Deliver).clone();
@@ -143,7 +151,11 @@ impl abci::Application for crate::BaseApp {
             let ret = self.modules.process_tx::<SignedExtra>(ctx, tx);
             match ret {
                 Ok(ar) => {
-                    debug!(target: "baseapp", "deliver tx succeed result: {:?}", ar);
+                    if ar.code != 0 {
+                        info!(target: "baseapp", "deliver tx with result: {:?}", ar);
+                    } else {
+                        debug!(target: "baseapp", "deliver tx succeed with result: {:?}", ar);
+                    }
                     resp.code = ar.code;
                     resp.data = ar.data;
                     resp.log = ar.log;
@@ -181,14 +193,7 @@ impl abci::Application for crate::BaseApp {
         self.check_state = self.deliver_state.copy_with_new_state();
 
         let block_height = self.deliver_state.block_header().height as u64;
-
-        self.deliver_state
-            .db
-            .write()
-            .commit(block_height)
-            .unwrap_or_else(|_| {
-                panic!("Failed to commit chain db at height: {}", block_height)
-            });
+        let mut ctx = self.retrieve_context(RunTxMode::Deliver).clone();
 
         // Write the DeliverTx state into branched storage and commit the Store.
         // The write to the DeliverTx state writes all state transitions to the root
@@ -200,6 +205,18 @@ impl abci::Application for crate::BaseApp {
             .commit(block_height)
             .unwrap_or_else(|_| {
                 panic!("Failed to commit chain state at height: {}", block_height)
+            });
+
+        // Commit module data based on root_hash
+        let _ = ruc::info!(self.modules.commit(&mut ctx, block_height, &root_hash));
+
+        // Commit non chain-state data
+        self.deliver_state
+            .db
+            .write()
+            .commit(block_height)
+            .unwrap_or_else(|_| {
+                panic!("Failed to commit chain db at height: {}", block_height)
             });
 
         // Reset the deliver state
