@@ -68,7 +68,10 @@ use {
         anon_xfr::{
             keys::{AXfrKeyPair, AXfrPubKey},
             nullifier,
-            structs::{AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder},
+            structs::{
+                AnonBlindAssetRecord, OpenAnonBlindAssetRecord,
+                OpenAnonBlindAssetRecordBuilder,
+            },
         },
         serialization::ZeiFromToBytes,
         xfr::{
@@ -247,7 +250,13 @@ impl FeeInputs {
         om: Option<OwnerMemo>,
         kp: &XfrKeyPair,
     ) -> Self {
-        self.inner.push(FeeInput { am, tr, ar, om, kp: kp.clone() });
+        self.inner.push(FeeInput {
+            am,
+            tr,
+            ar,
+            om,
+            kp: kp.clone(),
+        });
         self
     }
 }
@@ -576,6 +585,7 @@ impl TransactionBuilder {
         to_amount: u64,
     ) -> Result<TransactionBuilder, JsValue> {
         let mut prng = ChaChaRng::from_entropy();
+        let from_public_key = XPublicKey::from(&from_dec_key);
         let input_oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
             &input,
             owner_memo.memo,
@@ -589,9 +599,9 @@ impl TransactionBuilder {
         .c(d!())
         .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?;
 
-        if input_oabar.get_amount() != to_amount {
+        if input_oabar.get_amount() <= to_amount {
             return Err(JsValue::from_str(&format!(
-                "Transfer amount doesn't match input abar: {}",
+                "Insufficient amount for the input abar: {}",
                 input_oabar.get_amount()
             )));
         }
@@ -607,17 +617,23 @@ impl TransactionBuilder {
             .map_err(|e| {
                 JsValue::from_str(&format!("Could not add operation: {}", e))
             })?;
+        let r1 = output_oabar.get_key_rand_factor();
+        self.randomizers.push(r1);
 
-        self.get_builder_mut()
-            .add_operation_anon_transfer(
+        let (_, note, rem_oabar) = self
+            .get_builder_mut()
+            .add_operation_anon_transfer_fees_remainder(
                 &[input_oabar],
                 &[output_oabar],
                 &[from_keypair],
+                from_public_key,
             )
             .c(d!())
             .map_err(|e| {
                 JsValue::from_str(&format!("Could not add operation: {}", e))
             })?;
+        let r2 = rem_oabar.get_key_rand_factor();
+        self.randomizers.push(r2);
 
         Ok(self)
     }
@@ -1285,6 +1301,20 @@ impl AnonTransferOperationBuilder {
 
         self.get_builder_mut()
             .add_output(oabar_out)
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
+
+        Ok(self)
+    }
+
+    /// set_from_pubkey is used to set destination public key for remainder abar to get back the remainder amount
+    /// @param from_pubkey {XPublicKey} - The encryption public key of sender
+    pub fn set_from_pubkey(
+        mut self,
+        from_pubkey: XPublicKey,
+    ) -> Result<AnonTransferOperationBuilder, JsValue> {
+        self.get_builder_mut()
+            .set_from_pubkey(from_pubkey)
             .c(d!())
             .map_err(error_to_jsvalue)?;
 

@@ -55,11 +55,11 @@ use {
     },
     zei::{
         anon_xfr::{
+            abar_to_bar::verify_abar_to_bar_body,
             hash_abar,
             keys::AXfrPubKey,
             structs::{AnonBlindAssetRecord, MTLeafInfo, MTNode, MTPath, Nullifier},
             verify_anon_xfr_body,
-            abar_to_bar::verify_abar_to_bar_body,
         },
         serialization::ZeiFromToBytes,
         setup::{NodeParams, UserParams},
@@ -70,7 +70,7 @@ use {
         },
     },
     zei_accumulators::merkle_tree::{
-        ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath, TREE_DEPTH
+        ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath, TREE_DEPTH,
     },
     zeialgebra::{bls12_381::BLSScalar, groups::Scalar},
 };

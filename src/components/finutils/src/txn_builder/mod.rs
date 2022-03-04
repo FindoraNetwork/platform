@@ -56,7 +56,8 @@ use {
             gen_anon_xfr_body,
             keys::{AXfrKeyPair, AXfrPubKey},
             structs::{
-                AXfrBody, AXfrNote, OpenAnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
+                AXfrBody, AXfrNote, OpenAnonBlindAssetRecord,
+                OpenAnonBlindAssetRecordBuilder,
             },
         },
         api::anon_creds::{
@@ -1308,7 +1309,7 @@ pub struct AnonTransferOperationBuilder {
     inputs: Vec<OpenAnonBlindAssetRecord>,
     outputs: Vec<OpenAnonBlindAssetRecord>,
     keypairs: Vec<AXfrKeyPair>,
-
+    from_pubkey: Option<XPublicKey>,
     body: Option<AXfrBody>,
     diversified_keypairs: Vec<AXfrKeyPair>,
     randomizers: Vec<JubjubScalar>,
@@ -1327,6 +1328,7 @@ impl AnonTransferOperationBuilder {
             inputs: Vec::default(),
             outputs: Vec::default(),
             keypairs: Vec::default(),
+            from_pubkey: None,
             body: None,
             diversified_keypairs: Vec::default(),
             randomizers: Vec::default(),
@@ -1360,11 +1362,52 @@ impl AnonTransferOperationBuilder {
         self.randomizers.clone()
     }
 
+    /// set public key of sender for remainder
+    pub fn set_from_pubkey(&mut self, from_pubkey: XPublicKey) -> Result<&mut Self> {
+        self.from_pubkey = Some(from_pubkey);
+        Ok(self)
+    }
+
     /// build generates the anon transfer body with the Zero Knowledge Proof.
     pub fn build(&mut self) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
-        let user_params =
-            UserParams::new(self.inputs.len(), self.outputs.len(), Some(MERKLE_TREE_DEPTH));
+        let user_params = UserParams::new(
+            self.inputs.len(),
+            self.outputs.len(),
+            Some(MERKLE_TREE_DEPTH),
+        );
+
+        let mut sum_input = 0;
+        let mut sum_output = 0;
+        for input in self.inputs.clone() {
+            if let ASSET_TYPE_FRA = input.get_asset_type() {
+                sum_input += input.get_amount();
+            }
+        }
+        for output in self.outputs.clone() {
+            if let ASSET_TYPE_FRA = output.get_asset_type() {
+                sum_output += output.get_amount();
+            }
+        }
+        let fees = FEE_CALCULATING_FUNC(
+            self.inputs.len() as u32,
+            self.outputs.len() as u32 + 1,
+        );
+        let remainder = sum_input as i64 - sum_output as i64 - fees as i64;
+
+        let rem_from_pubkey = self.from_pubkey.clone().c(d!())?;
+        let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
+            .amount(remainder as u64)
+            .asset_type(ASSET_TYPE_FRA)
+            .pub_key(self.keypairs[0].pub_key())
+            .finalize(&mut prng, &rem_from_pubkey)
+            .unwrap()
+            .build()
+            .unwrap();
+
+        let randomizer = oabar_money_back.get_key_rand_factor();
+        self.outputs.push(oabar_money_back.clone());
+        self.randomizers.push(randomizer);
 
         let (body, diversified_keypairs) = gen_anon_xfr_body(
             &mut prng,
