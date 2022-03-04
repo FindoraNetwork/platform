@@ -424,8 +424,8 @@ impl<C: Config> App<C> {
         None
     }
 
-    pub fn migrate(ctx: &mut Context) -> Result<()> {
-        //Migrate existing transaction indices from chain-state to rocksdb.
+    //Migrate existing transaction indices from chain-state to rocksdb.
+    fn migrate_txn_idxs(ctx: &mut Context) -> Result<()> {
         let txn_idxs: Vec<(HA256, (U256, u32))> =
             TransactionIndex::iterate(ctx.state.read().borrow());
         let txn_idxs_cnt = txn_idxs.len();
@@ -436,7 +436,25 @@ impl<C: Config> App<C> {
         }
         ctx.db.write().commit_session();
         info!(target: "ethereum", "{} transaction indexes migrated to db", txn_idxs_cnt);
+        Ok(())
+    }
 
+    //Find the first block with a non zero state_root.
+    //  If there are no transactions in the block, proceed with migration.
+    //  Otherwise return without any modifications.
+    fn migrate_block_data(ctx: &mut Context) -> Result<()> {
+        // 1. Find range of blocks using current block number
+        // 2. Find out if the first block with transactions has a non-zero state_root
+        //      if so, return
+        // 3. Populate the state_root of the latest block with the current root hash of the state
+        // 4. Loop in descending order from latest block to the first block with transactions
+        //      replace state_root of block x with state_root of block x + 1
+        Ok(())
+    }
+
+    pub fn migrate(ctx: &mut Context) -> Result<()> {
+        Self::migrate_txn_idxs(ctx)?;
+        Self::migrate_block_data(ctx)?;
         Ok(())
     }
 }
