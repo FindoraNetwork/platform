@@ -30,3 +30,5 @@ utxo.map
 checkpoint.toml
 
 *.tmp
+
+checkpoint.toml

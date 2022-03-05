@@ -29,6 +29,7 @@ use {
     config::abci::global_cfg::CFG,
     cosig::CoSigRule,
     cryptohash::sha256::{self, Digest},
+    curve25519_dalek::{edwards::EdwardsPoint, scalar::Scalar, traits::Identity},
     fbnc::{new_mapx, Mapx},
     globutils::wallet,
     indexmap::IndexMap,
@@ -50,7 +51,10 @@ use {
             Arc,
         },
     },
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
+    zei::{
+        serialization::ZeiFromToBytes,
+        xfr::sig::{XfrKeyPair, XfrPublicKey},
+    },
 };
 
 // height, reward rate
@@ -242,7 +246,36 @@ impl Staking {
 
     #[inline(always)]
     fn gen_consensus_tmp_pubkey(cr: &mut ConsensusRng) -> XfrPublicKey {
+        //it's not really random.
         XfrKeyPair::generate(cr).get_pk()
+    }
+
+    #[inline(always)]
+    // just make a (look like) "random" public key.
+    fn gen_consensus_tmp_pubkey2(
+        pk: &XfrPublicKey,
+        mask: &XfrPublicKey,
+    ) -> XfrPublicKey {
+        let bytes = pk.as_bytes();
+        let mask = mask.as_bytes();
+
+        let len = bytes.len();
+
+        debug_assert!(mask.len() == len);
+
+        let mut templete = [0_u8; 32];
+        for i in 0..len {
+            unsafe {
+                *templete.get_unchecked_mut(i) =
+                    mask.get_unchecked(i) ^ bytes.get_unchecked(i)
+            }
+        }
+
+        let scalar = Scalar::from_bits(templete);
+        let point = EdwardsPoint::identity() * scalar;
+        let compressed_y = point.compress();
+
+        XfrPublicKey::zei_from_bytes(compressed_y.as_bytes()).unwrap()
     }
 
     #[inline(always)]
@@ -867,27 +900,39 @@ impl Staking {
 
         // undelegate for the related delegators automaticlly
         if is_validator {
-            let mut auto_ud_list = vec![];
-
             // unwrap is safe here
             let v = self.validator_get_current_one_by_id(addr).unwrap();
-
-            // unwrap is safe here
+            let mut auto_ud_list = Vec::with_capacity(64);
             let mut cr = self.cr;
-            self.validator_get_current_one_by_id(addr)
-                .unwrap()
-                .delegators
-                .iter()
-                .for_each(|(pk, am)| {
-                    auto_ud_list.push((
-                        *pk,
-                        PartialUnDelegation::new(
-                            *am,
-                            Self::gen_consensus_tmp_pubkey(&mut cr),
-                            v.td_addr.clone(),
-                        ),
-                    ));
-                });
+            if h < CFG.checkpoint.undelegation_fix_height {
+                self.validator_get_current_one_by_id(addr)
+                    .unwrap()
+                    .delegators
+                    .iter()
+                    .for_each(|(pk, am)| {
+                        auto_ud_list.push((
+                            *pk,
+                            PartialUnDelegation::new(
+                                *am,
+                                Self::gen_consensus_tmp_pubkey(&mut cr),
+                                v.td_addr.clone(),
+                            ),
+                        ));
+                    });
+            } else {
+                for (pk, d) in self.delegation_info.global_delegation_records_map.iter()
+                {
+                    if d.delegations.contains_key(addr) && pk != addr {
+                        let am = d.delegations.get(addr).unwrap();
+                        let id = Self::gen_consensus_tmp_pubkey2(
+                            pk,
+                            &Self::gen_consensus_tmp_pubkey(&mut cr),
+                        );
+                        let pu = PartialUnDelegation::new(*am, id, v.td_addr.clone());
+                        auto_ud_list.push((*pk, pu));
+                    }
+                }
+            }
             self.cr = cr;
 
             auto_ud_list.iter().for_each(|(addr, pu)| {
@@ -918,7 +963,13 @@ impl Staking {
         addr: &XfrPublicKey,
         pu: &PartialUnDelegation,
     ) -> Result<()> {
+        let unbond_block = CFG.checkpoint.unbond_block_cnt;
+
         if self.delegation_has_addr(&pu.new_delegator_id) {
+            self.delegation_info
+                .global_delegation_records_map
+                .get(&addr)
+                .unwrap();
             return Err(eg!("Receiver address already exists"));
         }
 
@@ -965,7 +1016,7 @@ impl Staking {
                     receiver_pk: Some(d.id),
                     tmp_delegators: map! {B},
                     start_height: d.start_height,
-                    end_height: h + CFG.checkpoint.unbond_block_cnt,
+                    end_height: h + unbond_block,
                     state: DelegationState::Bond,
                     rwd_amount: 0,
                     delegation_rwd_cnt: 0,
@@ -994,7 +1045,7 @@ impl Staking {
             .insert(pu.new_delegator_id, new_tmp_delegator);
         self.delegation_info
             .end_height_map
-            .entry(h + CFG.checkpoint.unbond_block_cnt)
+            .entry(h + unbond_block)
             .or_insert_with(BTreeSet::new)
             .insert(pu.new_delegator_id);
 
@@ -1037,6 +1088,11 @@ impl Staking {
                     .global_delegation_records_map
                     .get_mut(&receiver)
                 {
+                    if self.cur_height > CFG.checkpoint.undelegation_fix_height {
+                        if let Some((target_addr, _)) = d.delegations.iter().next() {
+                            orig_d.delegations.remove(target_addr);
+                        };
+                    }
                     orig_d.tmp_delegators.remove(addr);
                 }
             }
@@ -1591,26 +1647,24 @@ impl Staking {
             .values()
             .sum::<Amount>();
         let gda = self.get_global_delegation_amount();
-        self.delegation_get_mut(proposer)
-            .c(d!())
-            .and_then(|d| {
-                // Self delegation + total_delegation_amount_of_validator
-                let tdaov = d.delegations.get(proposer).copied().unwrap_or(0)
-                    + total_delegation_amount_of_validator;
-                d.set_delegation_rewards(
-                    proposer,
-                    h,
-                    p,
-                    [0, 100],
-                    [0, 0],
-                    tdaov,
-                    gda,
-                    false,
-                    cbl,
-                )
-                .c(d!())
-            })
-            .map(|_| ())
+        let d = self.delegation_get_mut(proposer).c(d!())?;
+        // Self delegation + total_delegation_amount_of_validator
+        let tdaov = d.delegations.get(proposer).copied().unwrap_or(0)
+            + total_delegation_amount_of_validator;
+        d.set_delegation_rewards(
+            proposer,
+            h,
+            p,
+            [0, 100],
+            [0, 0],
+            tdaov,
+            gda,
+            false,
+            cbl,
+        )
+        .c(d!())?;
+
+        Ok(())
     }
 
     #[cfg(not(target_arch = "wasm32"))]
