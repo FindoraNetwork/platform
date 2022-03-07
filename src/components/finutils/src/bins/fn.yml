@@ -414,7 +414,7 @@ subcommands:
   #          value_name: WALLET
   #          required: true
   - account:
-      about: Return user contract account information
+      about: Return user contract account information or fra balance if secret key is provided
       args:
         - addr:
             help: findora account(eg:fra1rkv...) or Ethereum address(g:0xd3Bf...)
@@ -422,7 +422,12 @@ subcommands:
             long: addr
             takes_value: true
             value_name: WALLET ADDRESS
-            required: true
+        - sec-key:
+            help: base64-formatted `XfrPrivateKey`
+            short: s
+            long: sec-key
+            takes_value: true
+            value_name: SECRET KEY
   - contract-deposit:
       about: Transfer FRA from a Findora account to the specified Ethereum address
       args:

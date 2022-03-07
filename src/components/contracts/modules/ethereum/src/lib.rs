@@ -4,7 +4,6 @@
 mod basic;
 mod impls;
 
-use abci::{RequestEndBlock, ResponseEndBlock};
 use ethereum_types::{H160, H256, U256};
 use evm::Config as EvmConfig;
 use fp_core::{
@@ -116,13 +115,13 @@ impl<C: Config> Default for App<C> {
 }
 
 impl<C: Config> AppModule for App<C> {
-    fn end_block(
+    fn commit(
         &mut self,
         ctx: &mut Context,
-        req: &RequestEndBlock,
-    ) -> ResponseEndBlock {
-        let _ = ruc::info!(self.store_block(ctx, U256::from(req.height)));
-        Default::default()
+        height: U256,
+        root_hash: &[u8],
+    ) -> Result<()> {
+        self.store_block(ctx, height, root_hash)
     }
 }
 

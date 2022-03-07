@@ -199,7 +199,7 @@ pub trait NetworkRoute {
     // SubmissionRoutes::TxnStatus.with_arg_template("str") = "/submit_transaction/{str}"
     fn with_arg_template(&self, arg: &str) -> String {
         let mut endpoint = self.route();
-        endpoint += &("/".to_owned() + &"{".to_owned() + arg + &"}".to_owned());
+        endpoint += &("/".to_owned() + "{" + arg + "}");
         endpoint
     }
 }

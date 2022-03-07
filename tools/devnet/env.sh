@@ -2,6 +2,7 @@
 RED='\033[31m'
 GRN="\033[32m"
 YEL='\033[33m'
+BLU='\033[34m'
 NC='\033[0m'
 
 # paths
@@ -10,7 +11,7 @@ export FIN_DEBUG="${FIN_DEBUG:=$TMP_DEBUG}"
 export DEVNET="$FIN_DEBUG/devnet"
 
 # binary config
-BIN_CFG_DEFAULT=release
+BIN_CFG_DEFAULT=debug
 BIN_CFG="${BIN_CFG:=$BIN_CFG_DEFAULT}"
 BIN="target/$BIN_CFG"
 

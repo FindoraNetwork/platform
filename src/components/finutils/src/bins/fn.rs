@@ -385,8 +385,15 @@ fn run() -> Result<()> {
         );
     } else if let Some(m) = matches.subcommand_matches("account") {
         let address = m.value_of("addr");
-        let (account, info) = contract_account_info(address)?;
-        println!("AccountId: {}\n{:#?}\n", account, info);
+        let sec_key = m.value_of("sec-key");
+        if sec_key.is_some() {
+            //Asset defaults to fra
+            common::show_account(sec_key, None).c(d!())?;
+        }
+        if address.is_some() {
+            let (account, info) = contract_account_info(address)?;
+            println!("AccountId: {}\n{:#?}\n", account, info);
+        }
     } else if let Some(m) = matches.subcommand_matches("contract-deposit") {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");

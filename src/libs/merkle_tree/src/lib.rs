@@ -803,19 +803,15 @@ impl AppendOnlyMerkle {
         let mut last_block_full = false;
 
         for block_id in 0..block_count {
-            let block;
-
-            match self.reconstruct(level, block_id) {
-                Ok(b) => {
-                    block = b;
-                }
+            let block = match self.reconstruct(level, block_id) {
+                Ok(b) => b,
                 Err(x) => {
                     return Err(eg!(format!(
                         "Reconstruction of block {} at level {} failed:  {}",
                         block_id, level, x
                     )));
                 }
-            }
+            };
 
             last_block_full = block.full();
             self.blocks[level].push(block);
@@ -1613,19 +1609,18 @@ impl AppendOnlyMerkle {
         let block_id = id / LEAVES_IN_BLOCK;
         let block_index = id % LEAVES_IN_BLOCK;
         let last = HASHES_IN_BLOCK - 1;
-        let block_root_hash;
 
-        match dictionary.get(level, block_id) {
+        let block_root_hash = match dictionary.get(level, block_id) {
             Some(entry) => {
                 entry.push(hashes, block_index, &[]);
-                block_root_hash = entry.hashes[last];
+                entry.hashes[last]
             }
             None => {
                 let block = &self.blocks[level][id / LEAVES_IN_BLOCK];
                 block.push(hashes, block_index, &[]);
-                block_root_hash = block.hashes[last];
+                block.hashes[last]
             }
-        }
+        };
 
         block_root_hash
     }
@@ -2322,11 +2317,11 @@ mod tests {
         assert!(mem::size_of::<BlockHeader>() == HASH_SIZE);
         assert!(mem::size_of::<Block>() == BLOCK_SIZE);
 
-        if AppendOnlyMerkle::open(&"no such file".to_string()).is_ok() {
+        if AppendOnlyMerkle::open(&"no such file").is_ok() {
             panic!("Open found a non-existent tree.");
         }
 
-        if AppendOnlyMerkle::create(&".".to_string()).is_ok() {
+        if AppendOnlyMerkle::create(&".").is_ok() {
             panic!("Created a tree from \".\".");
         }
 

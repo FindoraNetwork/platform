@@ -485,8 +485,7 @@ impl LedgerState {
         // Fetch total delegation amount for this validator ( Self stake + Stake from delegators )
         let total_delegation_amount_of_validator = s
             .delegation_get(&pk)
-            .map(|d| d.delegations.get(&pk))
-            .flatten()
+            .and_then(|d| d.delegations.get(&pk))
             .copied()
             .unwrap_or(0)
             + s.validator_get_current_one_by_id(&pk)
@@ -796,8 +795,7 @@ impl LedgerState {
                             .txn
                             .get_owner_memos_ref()
                             .get(au.utxo_location.0)
-                            .map(|i| i.cloned())
-                            .flatten(),
+                            .and_then(|i| i.cloned()),
                     ),
                 )
             })
