@@ -73,6 +73,8 @@ pub mod storage {
     generate_storage!(Ethereum, CurrentReceipts => Map<HA256, Vec<Receipt>>);
     // The ethereum history transaction statuses with block number.
     generate_storage!(Ethereum, CurrentTransactionStatuses => Map<HA256, Vec<TransactionStatus>>);
+    // Flag indicating whether data migration has been executed
+    generate_storage!(Ethereum, Migrated => Map<String, bool>);
 }
 
 #[derive(Event)]
