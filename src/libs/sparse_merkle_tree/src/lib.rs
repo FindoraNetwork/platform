@@ -412,25 +412,19 @@ mod tests {
     pub fn l256(hex: &str) -> Digest {
         assert!(hex.len() % 2 == 0 && hex.len() <= 64);
         let hex = hex.to_string() + &"0".repeat(64 - hex.len());
-        Digest {
-            0: <[u8; 32]>::from_hex(&hex).unwrap(),
-        }
+        Digest(<[u8; 32]>::from_hex(&hex).unwrap())
     }
 
     // `hex` is the last a few bytes of the desired 32 bytes (the rest bytes are zeros).
     pub fn r256(hex: &str) -> Digest {
         assert!(hex.len() % 2 == 0 && hex.len() <= 64);
         let hex = "0".repeat(64 - hex.len()) + hex;
-        Digest {
-            0: <[u8; 32]>::from_hex(&hex).unwrap(),
-        }
+        Digest(<[u8; 32]>::from_hex(&hex).unwrap())
     }
 
     // `hex` must be a 64-byte long hex string.
     pub fn b256(hex: &str) -> Digest {
-        Digest {
-            0: <[u8; 32]>::from_hex(hex).unwrap(),
-        }
+        Digest(<[u8; 32]>::from_hex(hex).unwrap())
     }
 
     pub fn max256() -> Digest {
@@ -474,7 +468,7 @@ mod tests {
             u64_into_byteslice(&mut result[l..r], *arg);
         }
 
-        Digest { 0: result }
+        Digest(result)
     }
 
     fn new_rocks_db() -> TempRocksDB {
