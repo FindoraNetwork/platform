@@ -1,8 +1,8 @@
 #![allow(missing_docs)]
 
 use super::*;
+use cryptohash::sha256::{Digest, DIGESTBYTES};
 use rand::Rng;
-use sodiumoxide::crypto::hash::sha256::{Digest, DIGESTBYTES};
 use std::fs;
 use std::fs::OpenOptions;
 use std::mem;
