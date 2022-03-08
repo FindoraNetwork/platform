@@ -28,10 +28,9 @@
 mod test;
 
 use {
+    cryptohash::sha256::{self, Digest, DIGESTBYTES},
     globutils::Commas,
     ruc::*,
-    sodiumoxide::crypto::hash::sha256,
-    sodiumoxide::crypto::hash::sha256::{Digest, DIGESTBYTES},
     std::{
         cmp,
         collections::{HashMap, HashSet},
