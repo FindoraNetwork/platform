@@ -87,7 +87,7 @@ pub mod sha256 {
 pub mod sha256 {
     use sodiumoxide::crypto::hash::sha256;
     pub const DIGESTBYTES: usize = sha256::DIGESTBYTES;
-    pub type Digest = sha256::Digest;
+    pub use sha256::Digest;
 
     #[inline(always)]
     #[allow(missing_docs)]
