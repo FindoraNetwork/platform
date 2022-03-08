@@ -1404,7 +1404,7 @@ impl AnonTransferOperationBuilder {
             .unwrap();
 
         let randomizer = oabar_money_back.get_key_rand_factor();
-        self.outputs.push(oabar_money_back.clone());
+        self.outputs.push(oabar_money_back);
         self.randomizers.push(randomizer);
 
         let (body, diversified_keypairs) = gen_anon_xfr_body(

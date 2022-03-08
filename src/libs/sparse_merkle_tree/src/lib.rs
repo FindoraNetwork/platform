@@ -6,11 +6,10 @@
 #![deny(warnings)]
 #![allow(clippy::needless_borrow)]
 
-use cryptohash::sha256;
+use cryptohash::sha256::{self, DIGESTBYTES};
 use rand::Rng;
 use ruc::*;
 use serde::{Deserialize, Serialize};
-use sha256::DIGESTBYTES;
 
 use parking_lot::RwLock;
 pub use sha256::Digest;
@@ -27,7 +26,7 @@ const NODE_PREFIX: &[u8] = b"node";
 const HASH_PREFIX: &[u8] = b"hash";
 const SMT256_DB: &str = "smt256-db";
 const ZERO_256: [u8; DIGESTBYTES] = [0; DIGESTBYTES];
-pub const ZERO_DIGEST: Digest = Digest { 0: ZERO_256 };
+pub const ZERO_DIGEST: Digest = Digest(ZERO_256);
 
 // Compute the hash of two hashes. This Merkle tree is a binary
 // representation, so this is a common operation.
@@ -381,27 +380,21 @@ pub mod helpers {
 
     // `hex` must be a 64-byte long hex string.
     pub fn b256(hex: &str) -> Digest {
-        Digest {
-            0: <[u8; 32]>::from_hex(hex).unwrap(),
-        }
+        Digest(<[u8; 32]>::from_hex(hex).unwrap())
     }
 
     // `hex` is the first a few bytes of the desired 32 bytes (the rest bytes are zeros).
     pub fn l256(hex: &str) -> Digest {
         debug_assert!(hex.len() % 2 == 0 && hex.len() <= 64);
         let hex = hex.to_string() + &"0".repeat(64 - hex.len());
-        Digest {
-            0: <[u8; 32]>::from_hex(&hex).unwrap(),
-        }
+        Digest(<[u8; 32]>::from_hex(&hex).unwrap())
     }
 
     // `hex` is the last a few bytes of the desired 32 bytes (the rest bytes are zeros).
     pub fn r256(hex: &str) -> Digest {
         debug_assert!(hex.len() % 2 == 0 && hex.len() <= 64);
         let hex = "0".repeat(64 - hex.len()) + hex;
-        Digest {
-            0: <[u8; 32]>::from_hex(&hex).unwrap(),
-        }
+        Digest(<[u8; 32]>::from_hex(&hex).unwrap())
     }
 }
 
