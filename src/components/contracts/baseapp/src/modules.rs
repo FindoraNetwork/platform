@@ -114,12 +114,11 @@ impl ModuleManager {
 
         let checked = tx.clone().check()?;
 
-        match &mut tx.function {
-            Action::XHub(XHubAction::NonConfidentialTransfer(transfer)) => {
-                transfer.hash = hash;
-            }
-            _ => (),
-        };
+        if let Action::XHub(XHubAction::NonConfidentialTransfer(transfer)) =
+            &mut tx.function
+        {
+            transfer.hash = hash;
+        }
 
         match tx.function.clone() {
             actions::Action::Ethereum(action) => Self::dispatch::<
