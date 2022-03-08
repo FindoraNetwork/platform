@@ -9,7 +9,7 @@ use fp_core::{
 };
 use fp_traits::evm::DecimalsMapping;
 use fp_types::{
-    actions,
+    actions::{self, xhub::Action as XHubAction, Action},
     assemble::{convert_unsigned_transaction, CheckedTransaction, UncheckedTransaction},
     crypto::Address,
 };
@@ -103,9 +103,24 @@ impl ModuleManager {
     >(
         &mut self,
         ctx: Context,
-        tx: UncheckedTransaction<Extra>,
+        mut tx: UncheckedTransaction<Extra>,
     ) -> Result<ActionResult> {
+        let hash = match &mut tx.function {
+            Action::XHub(XHubAction::NonConfidentialTransfer(transfer)) => {
+                transfer.hash.take()
+            }
+            _ => None,
+        };
+
         let checked = tx.clone().check()?;
+
+        match &mut tx.function {
+            Action::XHub(XHubAction::NonConfidentialTransfer(transfer)) => {
+                transfer.hash = hash;
+            }
+            _ => (),
+        };
+
         match tx.function.clone() {
             actions::Action::Ethereum(action) => Self::dispatch::<
                 actions::ethereum::Action,
@@ -142,6 +157,7 @@ impl ModuleManager {
         Module: ValidateUnsigned<Call = Call>,
         Module: Executable<Origin = Address, Call = Call>,
         Extra: SignedExtension<AccountId = Address> + Clone,
+        Call: std::fmt::Debug,
     {
         let origin_tx = convert_unsigned_transaction::<Call, Extra>(action, tx);
 

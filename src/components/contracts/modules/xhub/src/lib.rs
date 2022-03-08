@@ -30,7 +30,7 @@ mod storage {
 
     // The following data is stored in non-state rocksdb
     // account balance transfer to utxo waiting to be mint.
-    generate_storage!(XHub, PendingUTXOs => Value<Vec<NonConfidentialOutput>>);
+    generate_storage!(XHub, PendingUTXOs => Value<(Vec<NonConfidentialOutput>, Option<String>)>);
 }
 
 pub struct App<C> {

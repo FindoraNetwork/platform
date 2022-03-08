@@ -2,6 +2,7 @@ use crate::extensions::SignedExtra;
 use abci::*;
 use fp_core::context::RunTxMode;
 use fp_evm::BlockId;
+use fp_types::actions::{xhub::Action as XHubAction, Action};
 use fp_types::assemble::convert_unchecked_transaction;
 use fp_utils::tx::EvmRawTxWrapper;
 use log::{debug, error, info};
@@ -145,7 +146,15 @@ impl abci::Application for crate::BaseApp {
             return resp;
         };
 
-        if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
+        if let Ok(mut tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
+            match &mut tx.function {
+                Action::XHub(XHubAction::NonConfidentialTransfer(transfer)) => {
+                    let hash = sodiumoxide::crypto::hash::sha256::hash(req.get_tx());
+                    transfer.hash = Some(hex::encode(&hash))
+                }
+                _ => (),
+            };
+
             let ctx = self.retrieve_context(RunTxMode::Deliver).clone();
 
             let ret = self.modules.process_tx::<SignedExtra>(ctx, tx);

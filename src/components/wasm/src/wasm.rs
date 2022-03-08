@@ -582,6 +582,7 @@ pub fn transfer_to_utxo_from_account(
         NonConfidentialTransfer {
             input_value: amount,
             outputs: vec![output],
+            hash: None,
         },
     ));
 

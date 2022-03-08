@@ -11,6 +11,8 @@ pub enum Action {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NonConfidentialTransfer {
     pub input_value: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hash: Option<String>,
     pub outputs: Vec<NonConfidentialOutput>,
 }
 

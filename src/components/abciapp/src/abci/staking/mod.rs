@@ -308,22 +308,26 @@ pub fn system_mint_pay(
         .collect::<Vec<_>>();
 
     // add account mint_entries.
-    let mut mints = if let Some(account_mint) = account_base_app.consume_mint() {
-        account_mint
-            .iter()
-            .map(|mint| {
-                MintEntry::new(
-                    MintKind::Other,
-                    mint.target,
-                    None,
-                    mint.amount,
-                    mint.asset,
-                )
-            })
-            .collect::<Vec<MintEntry>>()
-    } else {
-        Vec::new()
-    };
+    let (mut mints, hash) =
+        if let Some((account_mint, hash)) = account_base_app.consume_mint() {
+            (
+                account_mint
+                    .iter()
+                    .map(|mint| {
+                        MintEntry::new(
+                            MintKind::Other,
+                            mint.target,
+                            None,
+                            mint.amount,
+                            mint.asset,
+                        )
+                    })
+                    .collect::<Vec<MintEntry>>(),
+                hash,
+            )
+        } else {
+            (Vec::new(), None)
+        };
 
     mint_entries.append(&mut mints);
 
@@ -335,6 +339,7 @@ pub fn system_mint_pay(
         Some(Transaction::from_operation_coinbase_mint(
             mint_ops,
             la.get_state_commitment().1,
+            hash,
         ))
     }
 }
