@@ -19,7 +19,7 @@ use log::{debug, info};
 use ruc::*;
 use sha3::{Digest, Keccak256};
 
-const BLOCK_MIGRATE_STR: &str = "block_migrate";
+const BLOCK_MIGRATE: &str = "block_migrate";
 
 impl<C: Config> App<C> {
     pub fn recover_signer(transaction: &Transaction) -> Option<H160> {
@@ -486,7 +486,7 @@ impl<C: Config> App<C> {
             if block.is_none() {
                 return Err(eg!(
                     "migrate_block_data: unable to get block at height {:?}",
-                    i
+                    k
                 ));
             }
             let mut block_data = block.unwrap();
@@ -502,8 +502,10 @@ impl<C: Config> App<C> {
     }
 
     pub fn migrate(ctx: &mut Context) -> Result<()> {
+        //Migrate transaction indices
         Self::migrate_txn_idxs(ctx)?;
-        let key = String::from(BLOCK_MIGRATE_STR);
+        //Migrate state root data for blocks
+        let key = String::from(BLOCK_MIGRATE);
         if !Migrated::contains_key(ctx.db.read().borrow(), key.borrow()) {
             Self::migrate_block_data(ctx)?;
             Migrated::insert(ctx.db.write().borrow_mut(), key.borrow(), &true)?;
