@@ -6,7 +6,6 @@ use ethereum::TransactionV0 as Transaction;
 use primitive_types::U256;
 use ruc::*;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
 
 // Same as baseapp/src/extensions/SignedExtra used by wasm
 pub type SignedExtra = (CheckNonce, CheckFee);
@@ -43,7 +42,6 @@ pub fn convert_unsigned_transaction<Action, Extra>(
     action: Action,
     tx: CheckedTransaction<Extra>,
 ) -> transaction::CheckedTransaction<Address, Action, Extra>
-where
 {
     transaction::CheckedTransaction {
         signed: tx.signed,

@@ -1314,7 +1314,6 @@ pub struct Transaction {
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
     pub signatures: Vec<SignatureOf<TransactionBody>>,
-
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<String>,
 }
@@ -1325,7 +1324,6 @@ pub struct FinalizedTransaction {
     pub txn: Transaction,
     pub tx_id: TxnSID,
     pub txo_ids: Vec<TxoSID>,
-
     pub merkle_id: u64,
 }
 
