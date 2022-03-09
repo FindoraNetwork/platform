@@ -144,6 +144,37 @@ fn test_eth_db_migrate_block_data() {
             .state_root
     );
 
+    //-----------------------------------------------------------------------------------------
+    //Call migrate again on the app to make sure block state roots remain the same
+    let _ = module_ethereum::App::<BaseApp>::migrate(ctx.borrow_mut());
+
+    //Confirm state root has shifted from block 6 to 5
+    assert_eq!(
+        blocks[5].as_ref().unwrap().header.state_root,
+        app.current_block(ctx.borrow(), Some(BlockId::Number(U256::from(5))))
+            .unwrap()
+            .header
+            .state_root
+    );
+
+    //Confirm state root of block 9 is equal to state root of previous block 10
+    assert_eq!(
+        blocks[9].as_ref().unwrap().header.state_root,
+        app.current_block(ctx.borrow(), Some(BlockId::Number(U256::from(9))))
+            .unwrap()
+            .header
+            .state_root
+    );
+
+    //Confirm state root of block 10 is equal to current_root_hash
+    assert_eq!(
+        H256::from_slice(current_root_hash.as_slice()),
+        app.current_block(ctx.borrow(), Some(BlockId::Number(U256::from(10))))
+            .unwrap()
+            .header
+            .state_root
+    );
+
     // println!(
     //     "BLOCKS: {:?}, number: {:?}",
     //     blocks[9].as_ref().unwrap().header.state_root,
