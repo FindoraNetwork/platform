@@ -145,7 +145,8 @@ fn test_eth_db_migrate_block_data() {
     );
 
     //-----------------------------------------------------------------------------------------
-    //Call migrate again on the app to make sure block state roots remain the same
+    //Call migrate again on the app to make sure block state roots remain the same.
+    //Migration of state root should only happen once.
     let _ = module_ethereum::App::<BaseApp>::migrate(ctx.borrow_mut());
 
     //Confirm state root has shifted from block 6 to 5
