@@ -444,7 +444,7 @@ impl<C: Config> App<C> {
     //Find the first block with a non zero state_root.
     //Create range between the first non zero state_root to the latest block
     //Loop in descending order from latest block to the first block with non-zero state_root
-    // Replace state root of block x with state root from block x + 1
+    //Replace state root of block x with state root from block x + 1
     fn migrate_block_data(ctx: &mut Context) -> Result<()> {
         // 1. Find range of blocks that require adjustments
         let mut first_block = U256::from(1);
@@ -467,7 +467,7 @@ impl<C: Config> App<C> {
             }
             // check if state_root is non-zero
             if !block.unwrap().header.state_root.is_zero() {
-                first_block = U256::from(i);
+                first_block = i;
                 break;
             }
             i += U256::from(1);
@@ -490,14 +490,15 @@ impl<C: Config> App<C> {
                 ));
             }
             let mut block_data = block.unwrap();
+
             // Replace state root of block x with state root from block x + 1
-            let temp_state_root = block_data.header.state_root;
-            block_data.header.state_root = prev_state_root;
-            prev_state_root = temp_state_root;
+            std::mem::swap(&mut block_data.header.state_root, &mut prev_state_root);
 
             CurrentBlock::insert(ctx.db.write().borrow_mut(), &hash, &block_data)?;
             k -= U256::from(1);
         }
+        ctx.db.write().commit_session();
+        info!(target: "ethereum", "state root adjusted for evm block store");
         Ok(())
     }
 
