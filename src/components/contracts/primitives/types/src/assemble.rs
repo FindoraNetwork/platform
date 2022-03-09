@@ -41,8 +41,7 @@ pub type CheckedTransaction<Extra> =
 pub fn convert_unsigned_transaction<Action, Extra>(
     action: Action,
     tx: CheckedTransaction<Extra>,
-) -> transaction::CheckedTransaction<Address, Action, Extra>
-{
+) -> transaction::CheckedTransaction<Address, Action, Extra> {
     transaction::CheckedTransaction {
         signed: tx.signed,
         function: action,

@@ -10,10 +10,6 @@
 
 ## Change log
 
-#### v0.3.17-release
-
-- Enable EVM substate at height`177_5600`.
-
 #### v0.3.12-release
 
 - EVM error code handling

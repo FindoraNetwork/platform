@@ -11,8 +11,6 @@ mod test;
 
 pub use effects::{BlockEffect, TxnEffect};
 
-use crate::staking::ops::replace_staker::ReplaceStakerOps;
-
 use {
     crate::converter::ConvertAccount,
     crate::staking::{
@@ -1249,8 +1247,6 @@ pub enum Operation {
     MintFra(MintFraOps),
     /// Convert UTXOs to EVM Account balance
     ConvertAccount(ConvertAccount),
-    ///replace staker.
-    ReplaceStaker(ReplaceStakerOps),
 }
 
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {

@@ -147,12 +147,12 @@ impl abci::Application for crate::BaseApp {
         };
 
         if let Ok(mut tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
-
-            if let Action::XHub(XHubAction::NonConfidentialTransfer(transfer)) = &mut tx.function {
+            if let Action::XHub(XHubAction::NonConfidentialTransfer(transfer)) =
+                &mut tx.function
+            {
                 let hash = sodiumoxide::crypto::hash::sha256::hash(req.get_tx());
                 transfer.hash = Some(hex::encode(&hash));
             }
-
 
             let ctx = self.retrieve_context(RunTxMode::Deliver).clone();
 
