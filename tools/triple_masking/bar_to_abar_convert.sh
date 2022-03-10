@@ -1,5 +1,4 @@
 
-set -e
 
 echo "\n\n\n Simple transfer 1"
 echo "------------------------------------------------------------------------------"
@@ -17,7 +16,6 @@ target/release/fn transfer --amount 210000000 --asset FRA -T fra1ck6mu4fgmh7n3g0
 sleep 5
 
 # setup the new wallet
-set +e
 
 FILE_MNEMONIC="mnemonic-temp.keys"
 FILE_ANON_KEYS="anon-keys-temp.keys"
