@@ -23,11 +23,11 @@ use fp_evm::BlockId;
 use fp_traits::{
     account::{AccountAsset, FeeCalculator},
     base::BaseProvider,
-    evm::{EthereumAddressMapping, EthereumDecimalsMapping},
+    evm::{DecimalsMapping, EthereumAddressMapping, EthereumDecimalsMapping},
 };
 use fp_types::{actions::xhub::NonConfidentialOutput, actions::Action, crypto::Address};
 use lazy_static::lazy_static;
-use ledger::data_model::Transaction as FindoraTransaction;
+use ledger::data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA};
 use notify::*;
 use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
@@ -122,7 +122,7 @@ impl module_evm::Config for BaseApp {
         evm_precompile_basic::Identity,
         evm_precompile_modexp::Modexp,
         evm_precompile_basic::ECRecoverPublicKey,
-        evm_precompile_sha3fips::Sha3FIPS256,
+        // evm_precompile_sha3fips::Sha3FIPS256,
         evm_precompile_sha3fips::Sha3FIPS512,
         evm_precompile_frc20::FRC20<Self>,
     );
@@ -302,7 +302,27 @@ impl BaseApp {
     }
 
     pub fn consume_mint(&mut self) -> Option<Vec<NonConfidentialOutput>> {
-        Some(self.modules.evm_module.consume_mint())
+        let outputs = self.modules.evm_module.consume_mint();
+
+        for output in &outputs {
+            if output.asset == ASSET_TYPE_FRA {
+                let address =
+                    Address::from(self.modules.evm_module.contracts.bridge_address);
+                if let Some(amount) =
+                    EthereumDecimalsMapping::from_native_token(U256::from(output.amount))
+                {
+                    if let Err(e) = module_account::App::<Self>::burn(
+                        &self.deliver_state,
+                        &address,
+                        amount,
+                    ) {
+                        log::error!("Error when burn account: {:?}", e);
+                    }
+                }
+            }
+        }
+
+        Some(outputs)
     }
 }
 
