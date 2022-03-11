@@ -134,6 +134,35 @@ impl<C: Config> ActionRunner<C> {
             logs: state.substate.logs,
         })
     }
+
+    pub fn inital_system_contract(
+        ctx: &Context,
+        bytecode: Vec<u8>,
+        gas_limit: u64,
+        source: H160,
+        salt: H256,
+    ) -> Result<()> {
+        let config = evm::Config::istanbul();
+
+        let vicinity = Vicinity {
+            gas_price: U256::one(),
+            origin: source,
+        };
+        let metadata = StackSubstateMetadata::new(gas_limit, &config);
+        let state = FindoraStackState::<C>::new(ctx, &vicinity, metadata);
+
+        let mut executor =
+            StackExecutor::new_with_precompile(state, &config, C::Precompiles::execute);
+
+        let result =
+            executor.transact_create2(source, U256::zero(), bytecode, salt, gas_limit);
+
+        if let ExitReason::Succeed(_) = result {
+            Ok(())
+        } else {
+            Err(eg!("Deploy system error: {:?}", result))
+        }
+    }
 }
 
 impl<C: Config> Runner for ActionRunner<C> {

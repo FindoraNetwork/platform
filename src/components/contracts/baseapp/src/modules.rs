@@ -14,7 +14,8 @@ use fp_types::{
     crypto::Address,
 };
 use ledger::{
-    converter::check_convert_account, data_model::Transaction as FindoraTransaction,
+    converter::check_convert_account,
+    data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA},
 };
 use ruc::*;
 use serde::Serialize;
@@ -125,10 +126,20 @@ impl ModuleManager {
         ctx: &Context,
         tx: &FindoraTransaction,
     ) -> Result<()> {
-        let (owner, amount) = check_convert_account(tx)?;
+        let (owner, amount, asset) = check_convert_account(tx)?;
         let balance = EthereumDecimalsMapping::from_native_token(U256::from(amount))
             .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
-        module_account::App::<BaseApp>::mint(ctx, &Address::from(owner), balance)
+
+        let owner = Address::from(owner);
+
+        if asset == ASSET_TYPE_FRA {
+            module_account::App::<BaseApp>::mint(ctx, &owner, balance)?;
+            module_evm::App::<BaseApp>::withdraw_fra(&owner, balance)?;
+        } else {
+            module_evm::App::<BaseApp>::withdraw_frc20(asset.0, &owner, balance)?;
+        }
+
+        Ok(())
     }
 }
 

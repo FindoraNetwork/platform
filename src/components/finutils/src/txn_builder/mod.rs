@@ -629,6 +629,7 @@ impl TransactionBuilder {
             nonce: self.txn.body.no_replay_token,
             receiver: addr,
             value: amount,
+            asset_type: None,
         }));
         Ok(self)
     }

@@ -5,8 +5,10 @@ mod basic;
 pub mod impls;
 pub mod precompile;
 pub mod runtime;
+pub mod utils;
 
 use abci::{RequestQuery, ResponseQuery};
+use config::abci::global_cfg::CFG;
 use ethereum_types::U256;
 use fp_core::{
     context::Context,
@@ -73,6 +75,20 @@ impl<C: Config> Default for App<C> {
     }
 }
 
+impl<C: Config> App<C> {
+    pub fn withdraw_frc20(
+        _asset: [u8; 32],
+        _address: &Address,
+        _value: U256,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn withdraw_fra(_address: &Address, _value: U256) -> Result<()> {
+        Ok(())
+    }
+}
+
 impl<C: Config> AppModule for App<C> {
     fn query_route(
         &self,
@@ -95,6 +111,28 @@ impl<C: Config> AppModule for App<C> {
             }
             _ => resp,
         }
+    }
+
+    fn begin_block(&mut self, ctx: &mut Context, _req: &abci::RequestBeginBlock) {
+        let height = CFG.checkpoint.prismxx_inital_height;
+
+        if ctx.header.height == height {
+            // Deploy contract here.
+        }
+    }
+
+    fn end_block(
+        &mut self,
+        _ctx: &mut Context,
+        _req: &abci::RequestEndBlock,
+    ) -> abci::ResponseEndBlock {
+        let height = CFG.checkpoint.prismxx_inital_height;
+
+        if height < _ctx.header.height {
+            // Got data
+        }
+
+        Default::default()
     }
 }
 
