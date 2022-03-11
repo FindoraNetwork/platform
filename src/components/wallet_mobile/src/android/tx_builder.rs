@@ -319,6 +319,35 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddTrans
 }
 
 #[no_mangle]
+/// Adds a serialized transfer-account operation to transaction builder instance.
+/// @param {string} amount - amount to transfer.
+/// @param {XfrKeyPair} keypair - FRA account key pair.
+/// @param {String} address - FRA account key pair.
+/// @throws Will throw an error if `address` is invalid.
+pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddTransferToAccount(
+    env: JNIEnv,
+    _: JClass,
+    builder: jlong,
+    amount: jint,
+    keypair: jlong,
+    address: JString,
+) -> jlong {
+    let builder = &*(builder as *mut TransactionBuilder);
+    let addr: String = env
+        .get_string(address)
+        .expect("Couldn't get java string!")
+        .into();
+
+    let fra_kp = &*(keypair as *mut XfrKeyPair);
+
+    builder
+        .clone()
+        .add_transfer_to_account_operation(amount as u64, Some(addr), fra_kp)
+        .unwrap();
+    Box::into_raw(Box::new(builder)) as jlong
+}
+
+#[no_mangle]
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderSign(
     _env: JNIEnv,
     _: JClass,

@@ -534,7 +534,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderBa
     builder: jlong,
 ) -> jlong {
     let builder = &*(builder as *mut TransferOperationBuilder);
-    Box::into_raw(Box::new(builder.clone().balance().unwrap())) as jlong
+    Box::into_raw(Box::new(builder.clone().balance(None).unwrap())) as jlong
 }
 
 #[no_mangle]
@@ -606,7 +606,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_fraGetMinimalFee(
     _: JClass,
 ) -> jvalue {
     jvalue {
-        _data: fra_get_minimal_fee(),
+        j: fra_get_minimal_fee() as jlong,
     }
 }
 
@@ -660,7 +660,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_getDelegationMinAmount(
     _: JClass,
 ) -> jvalue {
     jvalue {
-        _data: get_delegation_min_amount(),
+        j: get_delegation_min_amount() as jlong,
     }
 }
 
@@ -670,6 +670,6 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_getDelegationMaxAmount(
     _: JClass,
 ) -> jvalue {
     jvalue {
-        _data: get_delegation_max_amount(),
+        j: get_delegation_max_amount() as jlong,
     }
 }

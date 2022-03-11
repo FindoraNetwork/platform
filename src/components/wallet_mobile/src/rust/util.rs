@@ -21,7 +21,6 @@ pub fn string_to_c_char(r_string: String) -> *mut c_char {
 
 #[cfg(target_arch = "wasm32")]
 #[inline(always)]
-pub fn error_to_jsvalue<T: Display>(e: T) -> JsVal
-ue {
+pub fn error_to_jsvalue<T: Display>(e: T) -> JsVal {
     JsValue::from_str(&e.to_string())
 }

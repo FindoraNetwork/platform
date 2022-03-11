@@ -3,6 +3,7 @@ pub mod fee;
 pub mod free;
 pub mod tx_builder;
 pub mod tx_op_builder;
+pub mod evm_tx_builder;
 
 use crate::rust::types;
 use crate::rust::*;

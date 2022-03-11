@@ -133,7 +133,7 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_output_no_tr
 pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_balance(
     builder: *const TransferOperationBuilder,
 ) -> *mut TransferOperationBuilder {
-    if let Ok(info) = (*builder).clone().balance() {
+    if let Ok(info) = (*builder).clone().balance(None) {
         Box::into_raw(Box::new(info))
     } else {
         std::ptr::null_mut()

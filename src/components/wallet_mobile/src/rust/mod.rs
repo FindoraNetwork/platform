@@ -7,6 +7,7 @@ mod data_model;
 mod tests;
 pub mod transaction;
 pub mod types;
+pub mod account;
 mod util;
 
 pub use crypto::*;

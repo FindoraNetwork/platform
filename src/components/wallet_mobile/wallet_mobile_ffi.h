@@ -60,6 +60,8 @@ typedef struct CredentialIssuerKeyPair CredentialIssuerKeyPair;
  */
 typedef struct CredentialUserKeyPair CredentialUserKeyPair;
 
+typedef struct EVMTransactionBuilder EVMTransactionBuilder;
+
 typedef struct FeeInputs FeeInputs;
 
 typedef struct OpenAssetRecord OpenAssetRecord;
@@ -558,6 +560,18 @@ struct TransactionBuilder *findora_ffi_transaction_builder_add_operation_claim_c
 struct TransactionBuilder *findora_ffi_transaction_builder_add_transfer_operation(const struct TransactionBuilder *builder,
                                                                                   const char *op);
 
+/**
+ * Adds a serialized transfer account operation to a transaction builder instance.
+ * @param {string} address - a String which is hex-encoded EVM address or base64 encoded xfr public key or bech32 encoded xfr public key.
+ * @param {unsigned long long} amount - Amount to be transfered.
+ * @param {XfrKeyPair} kp - Fra ownner key pair.
+ * @return null if `address` or 'kp' is incorrect.
+ */
+struct TransactionBuilder *findora_ffi_transaction_builder_add_transfer_account_operation(const struct TransactionBuilder *builder,
+                                                                                          const char *address,
+                                                                                          uint64_t amount,
+                                                                                          const struct XfrKeyPair *kp);
+
 struct TransactionBuilder *findora_ffi_transaction_builder_sign(const struct TransactionBuilder *builder,
                                                                 const struct XfrKeyPair *kp);
 
@@ -663,5 +677,25 @@ char *findora_ffi_transfer_operation_builder_builder(const struct TransferOperat
  * Wraps around TransferOperationBuilder to extract an operation expression as JSON.
  */
 char *findora_ffi_transfer_operation_builder_transaction(const struct TransferOperationBuilder *builder);
+
+/**
+ * Construct a EVM Transaction that transfer account balance to UTXO.
+ * @param {unsigned long long} amount - Amount to transfer.
+ * @param {XfrKeyPair} fra_kp - Fra key pair.
+ * @param {String} address - EVM address.
+ * @param {String} eth_phrase - The account mnemonic.
+ * @param {String} nonce - Json encoded U256(256 bits unsigned integer).
+ */
+struct EVMTransactionBuilder *findora_ffi_new_withdraw_transaction(uint64_t amount,
+                                                                   const struct XfrKeyPair *fra_kp,
+                                                                   const char *address,
+                                                                   const char *eth_phrase,
+                                                                   const char *nonce);
+
+/**
+ * Consume the transaction then generate the base64 encoded transaction data.
+ * **Danger:**, this will make the tx pointer a dangling pointer.
+ */
+const char *findora_ffi_evm_transaction_data_consumed(struct EVMTransactionBuilder *tx);
 
 #endif /* wallet_mobile_ffi_h */
