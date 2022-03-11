@@ -587,7 +587,7 @@ impl TransactionBuilder {
         inputs: &[OpenAnonBlindAssetRecord],
         outputs: &[OpenAnonBlindAssetRecord],
         input_keypairs: &[AXfrKeyPair],
-        pu_key: XPublicKey,
+        enc_key: XPublicKey,
     ) -> Result<(&mut Self, AXfrNote, Vec<OpenAnonBlindAssetRecord>)> {
         let mut prng = ChaChaRng::from_entropy();
         let depth: usize = MERKLE_TREE_DEPTH;
@@ -638,7 +638,7 @@ impl TransactionBuilder {
                     .amount(remainder as u64)
                     .asset_type(asset_type)
                     .pub_key(remainder_pk)
-                    .finalize(&mut prng, &pu_key)
+                    .finalize(&mut prng, &enc_key)
                     .unwrap()
                     .build()
                     .unwrap();
@@ -662,7 +662,7 @@ impl TransactionBuilder {
                 .amount(fra_remainder as u64)
                 .asset_type(ASSET_TYPE_FRA)
                 .pub_key(remainder_pk)
-                .finalize(&mut prng, &pu_key)
+                .finalize(&mut prng, &enc_key)
                 .unwrap()
                 .build()
                 .unwrap();
