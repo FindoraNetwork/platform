@@ -136,7 +136,7 @@ fn parse_truple_result(tuple: Vec<Token>) -> Result<NonConfidentialOutput> {
         if let Token::FixedBytes(bytes) = v {
             let mut inner = [0u8; 32];
 
-            inner.copy_from_slice(&bytes);
+            inner.copy_from_slice(bytes);
 
             AssetType(inner)
         } else {
