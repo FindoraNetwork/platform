@@ -51,10 +51,14 @@ echo "100000000
 100000000
 119980000" > amount_file
 
+echo "" > asset_file
+echo "" >> asset_file
+echo "" >> asset_file
+
 echo "\n\n\n Batch Anonymous Transfer from Senders to Receivers"
 echo "------------------------------------------------------------------------------"
 sleep 5
-target/release/fn anon-transfer-batch -n amount_file -s axfr_secretkey_file -d decryption_key_file --to-axfr-public-key-file to_axfr_public_key_file --to-enc-key-file to_enc_key_file -r randomizer_file
+target/release/fn anon-transfer-batch -n amount_file -a asset_file -s axfr_secretkey_file -d decryption_key_file --to-axfr-public-key-file to_axfr_public_key_file --to-enc-key-file to_enc_key_file -r randomizer_file
 
 tail -n 3 sent_randomizers > randomizer_file2
 randomiser4=$(awk 'FNR>=1 && FNR<=1' randomizer_file2)
