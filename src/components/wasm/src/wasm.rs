@@ -613,7 +613,7 @@ impl TransactionBuilder {
         let r1 = output_oabar.get_key_rand_factor();
         self.randomizers.push(r1);
 
-        let (_, note, rem_oabar) = self
+        let (_, note, rem_oabars) = self
             .get_builder_mut()
             .add_operation_anon_transfer_fees_remainder(
                 &[input_oabar],
@@ -625,8 +625,10 @@ impl TransactionBuilder {
             .map_err(|e| {
                 JsValue::from_str(&format!("Could not add operation: {}", e))
             })?;
-        let r2 = rem_oabar.get_key_rand_factor();
-        self.randomizers.push(r2);
+
+        for rem_oabar in rem_oabars {
+            self.randomizers.push(rem_oabar.get_key_rand_factor());
+        }
 
         Ok(self)
     }

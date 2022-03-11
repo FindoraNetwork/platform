@@ -45,7 +45,7 @@ use {
     serde::{Deserialize, Serialize},
     std::{
         cmp::Ordering,
-        collections::{BTreeMap, HashSet},
+        collections::{BTreeMap, HashMap, HashSet},
     },
     tendermint::PrivateKey,
     zei::{
@@ -588,51 +588,89 @@ impl TransactionBuilder {
         outputs: &[OpenAnonBlindAssetRecord],
         input_keypairs: &[AXfrKeyPair],
         pu_key: XPublicKey,
-    ) -> Result<(&mut Self, AXfrNote, OpenAnonBlindAssetRecord)> {
+    ) -> Result<(&mut Self, AXfrNote, Vec<OpenAnonBlindAssetRecord>)> {
         let mut prng = ChaChaRng::from_entropy();
         let depth: usize = MERKLE_TREE_DEPTH;
 
-        let mut sum_input = 0;
-        let mut sum_output = 0;
-
+        let mut vec_outputs = outputs.to_vec();
+        let mut vec_changes = vec![];
+        let mut remainders = HashMap::new();
         /*
         In general we will have that the sum of FRA inputs is going to be greater
         than output + fees, let's say remainder = inputs - (outputs + fees), the remainder amount
         is going to be returned to the sender (the change) whenever the remainder is greater than zero,
         so in that case we need to add this new output
-        */
+         */
 
         for input in inputs {
-            if let ASSET_TYPE_FRA = input.get_asset_type() {
-                sum_input += input.get_amount();
-            }
+            remainders
+                .entry(input.get_asset_type())
+                .and_modify(|rem| *rem += input.get_amount() as i64)
+                .or_insert(input.get_amount() as i64);
         }
         for output in outputs {
-            if let ASSET_TYPE_FRA = output.get_asset_type() {
-                sum_output += output.get_amount();
-            }
+            remainders
+                .entry(output.get_asset_type())
+                .and_modify(|rem| *rem -= output.get_amount() as i64)
+                .or_insert(-(output.get_amount() as i64));
+        }
+
+        let fra_rem = remainders.remove(&ASSET_TYPE_FRA);
+        if fra_rem.is_none() {
+            return Err(eg!("Must include a FRA ABAR to pay FEE!"));
         }
 
         //Here we add the output to return the change to the sender's address
-        let fees = FEE_CALCULATING_FUNC(inputs.len() as u32, outputs.len() as u32 + 1);
-        let remainder = sum_input as i64 - sum_output as i64 - fees as i64;
-        println!(
-            "Transaction Fee: {:?}\nRemainder Amount: {:?}",
-            fees, remainder
-        );
-        let mut vec_outputs = outputs.to_vec();
+        for (asset_type, remainder) in remainders {
+            println!(
+                "Transaction Asset: {:?} Remainder Amount: {:?}",
+                base64::encode(&asset_type.0),
+                remainder
+            );
 
-        let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
-            .amount(remainder as u64)
-            .asset_type(ASSET_TYPE_FRA)
-            .pub_key(input_keypairs[0].pub_key())
-            .finalize(&mut prng, &pu_key)
-            .unwrap()
-            .build()
-            .unwrap();
+            if remainder < 0 {
+                return Err(eg!("Transfer Asset token excess balance!"));
+            }
 
-        //Add oabar to outputs
-        vec_outputs.push(oabar_money_back.clone());
+            if remainder > 0 {
+                let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
+                    .amount(remainder as u64)
+                    .asset_type(asset_type)
+                    .pub_key(input_keypairs[0].pub_key())
+                    .finalize(&mut prng, &pu_key)
+                    .unwrap()
+                    .build()
+                    .unwrap();
+
+                //Add oabar to outputs
+                vec_outputs.push(oabar_money_back.clone());
+                vec_changes.push(oabar_money_back);
+            }
+        }
+
+        let fees =
+            FEE_CALCULATING_FUNC(inputs.len() as u32, vec_outputs.len() as u32 + 1)
+                as i64;
+        let fra_remainder = fra_rem.unwrap() - fees; // safe. checked.
+        if fra_remainder < 0 {
+            return Err(eg!("FRA token excess balance!"));
+        }
+        if fra_remainder > 0 {
+            println!("Transaction FRA Remainder Amount: {:?}", fra_remainder);
+            let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
+                .amount(fra_remainder as u64)
+                .asset_type(ASSET_TYPE_FRA)
+                .pub_key(input_keypairs[0].pub_key())
+                .finalize(&mut prng, &pu_key)
+                .unwrap()
+                .build()
+                .unwrap();
+
+            //Add oabar to outputs
+            vec_outputs.push(oabar_money_back.clone());
+            vec_changes.push(oabar_money_back);
+        }
+
         let outputs_plus_remainder = &vec_outputs[..];
 
         let user_params = UserParams::new(
@@ -653,7 +691,7 @@ impl TransactionBuilder {
         let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
         let op = Operation::TransferAnonAsset(Box::new(inp));
         self.txn.add_operation(op);
-        Ok((self, note, oabar_money_back))
+        Ok((self, note, vec_changes))
     }
 
     /// Add a operation to delegating finddra accmount to a tendermint validator.

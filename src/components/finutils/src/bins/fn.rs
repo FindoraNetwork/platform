@@ -616,6 +616,7 @@ fn run() -> Result<()> {
         let to_axfr_public_key = m.value_of("to-axfr-public-key");
         let to_enc_key = m.value_of("to-enc-key");
         let amount = m.value_of("amount");
+        let fra_randomizer = m.value_of("fra-randomizer");
 
         if randomizer.is_none()
             || to_axfr_public_key.is_none()
@@ -627,6 +628,7 @@ fn run() -> Result<()> {
             common::gen_oabar_add_op(
                 axfr_secret_key,
                 randomizer.unwrap(),
+                fra_randomizer,
                 dec_key,
                 amount.unwrap(),
                 to_axfr_public_key.unwrap(),

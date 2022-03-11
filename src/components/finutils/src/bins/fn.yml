@@ -597,6 +597,11 @@ subcommands:
             takes_value: true
             value_name: RANDOMIZER
             required: true
+        - fra-randomizer:
+            help: Randomizer for the input FRA Anon BAR
+            long: fra-randomizer
+            takes_value: true
+            value_name: FRA RANDOMIZER
         - to-axfr-public-key:
             help: Axfr public key of the receiver
             long: to-axfr-public-key

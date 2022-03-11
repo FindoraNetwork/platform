@@ -875,6 +875,7 @@ pub fn convert_abar2bar(
 pub fn gen_oabar_add_op(
     axfr_secret_key: String,
     r: &str,
+    fra_r: Option<&str>,
     dec_key: String,
     amount: &str,
     to_axfr_public_key: &str,
@@ -891,45 +892,55 @@ pub fn gen_oabar_add_op(
     let enc_key_out =
         wallet::x_public_key_from_base64(to_enc_key).c(d!("invalid to_enc_key"))?;
 
-    let r = wallet::randomizer_from_base58(r).c(d!())?;
-    let randomized_from_pub_key = from.pub_key().randomize(&r);
-    let axtxo_abar = utils::get_owned_abars(&randomized_from_pub_key).c(d!())?;
-    let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
-    let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
-    let mt_leaf_uid = mt_leaf_info.uid;
-
-    let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
-        &axtxo_abar[0].1,
-        owner_memo,
-        &from,
-        &from_secret_key,
-    )
-    .unwrap()
-    .mt_leaf_info(mt_leaf_info)
-    .build()
-    .unwrap();
-
-    // check oabar is unspent.
-    let n = nullifier(
-        &from.randomize(&r),
-        oabar_in.get_amount(),
-        &oabar_in.get_asset_type(),
-        mt_leaf_uid,
-    );
-    let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
-    let null_status = utils::check_nullifier_hash(&hash)
-        .c(d!())?
-        .ok_or(d!("The ABAR corresponding to this randomizer is missing"))?;
-    if null_status {
-        return Err(eg!(
-            "The ABAR corresponding to this randomizer is already spent"
-        ));
+    let mut randomizers = vec![r];
+    if let Some(fra) = fra_r {
+        randomizers.push(fra);
     }
+    let mut inputs = vec![];
+    for r in randomizers {
+        let r = wallet::randomizer_from_base58(r).c(d!())?;
+        let randomized_from_pub_key = from.pub_key().randomize(&r);
+        let axtxo_abar = utils::get_owned_abars(&randomized_from_pub_key).c(d!())?;
+        let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
+        let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
+        let mt_leaf_uid = mt_leaf_info.uid;
+
+        let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
+            &axtxo_abar[0].1,
+            owner_memo,
+            &from,
+            &from_secret_key,
+        )
+        .unwrap()
+        .mt_leaf_info(mt_leaf_info)
+        .build()
+        .unwrap();
+
+        // check oabar is unspent.
+        let n = nullifier(
+            &from.randomize(&r),
+            oabar_in.get_amount(),
+            &oabar_in.get_asset_type(),
+            mt_leaf_uid,
+        );
+        let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+        let null_status = utils::check_nullifier_hash(&hash)
+            .c(d!())?
+            .ok_or(d!("The ABAR corresponding to this randomizer is missing"))?;
+        if null_status {
+            return Err(eg!(
+                "The ABAR corresponding to this randomizer is already spent"
+            ));
+        }
+        inputs.push(oabar_in);
+    }
+
+    let froms = vec![from; inputs.len()];
 
     let mut prng = ChaChaRng::from_entropy();
     let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
         .amount(axfr_amount)
-        .asset_type(oabar_in.get_asset_type())
+        .asset_type(inputs[0].get_asset_type())
         .pub_key(to)
         .finalize(&mut prng, &enc_key_out)
         .unwrap()
@@ -938,11 +949,11 @@ pub fn gen_oabar_add_op(
 
     let r_out = oabar_out.get_key_rand_factor();
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
-    let (_, note, rem_oabar) = builder
+    let (_, note, rem_oabars) = builder
         .add_operation_anon_transfer_fees_remainder(
-            &[oabar_in],
+            &inputs,
             &[oabar_out],
-            &[from],
+            &froms,
             from_public_key,
         )
         .c(d!())?;
@@ -964,22 +975,27 @@ pub fn gen_oabar_add_op(
     )
     .expect("randomizer write failed");
 
-    println!(
-        "\x1b[31;01m Remainder Randomizer: {}\x1b[00m",
-        wallet::randomizer_to_base58(&rem_oabar.get_key_rand_factor())
-    );
+    for rem_oabar in rem_oabars.iter() {
+        println!(
+            "\x1b[31;01m Remainder Randomizer: {}\x1b[00m",
+            wallet::randomizer_to_base58(&rem_oabar.get_key_rand_factor())
+        );
+    }
+
     let mut file = fs::OpenOptions::new()
         .append(true)
         .create(true)
         .open("owned_randomizers")
         .expect("cannot open randomizers file");
-    std::io::Write::write_all(
-        &mut file,
-        ("\n".to_owned()
-            + &wallet::randomizer_to_base58(&rem_oabar.get_key_rand_factor()))
-            .as_bytes(),
-    )
-    .expect("randomizer write failed");
+    for rem_oabar in rem_oabars.iter() {
+        std::io::Write::write_all(
+            &mut file,
+            ("\n".to_owned()
+                + &wallet::randomizer_to_base58(&rem_oabar.get_key_rand_factor()))
+                .as_bytes(),
+        )
+        .expect("randomizer write failed");
+    }
 
     println!("Signed AxfrNote: {:?}", serde_json::to_string_pretty(&note));
     Ok(())
@@ -1061,7 +1077,7 @@ pub fn gen_oabar_add_op_x(
     }
 
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
-    let (_, note, rem_oabar) = builder
+    let (_, note, rem_oabars) = builder
         .add_operation_anon_transfer_fees_remainder(
             &oabars_in[..],
             &oabars_out[..],
@@ -1089,22 +1105,27 @@ pub fn gen_oabar_add_op_x(
         )
         .expect("randomizer write failed");
     }
-    println!(
-        "\x1b[31;01m Remainder Randomizer: {}\x1b[00m",
-        wallet::randomizer_to_base58(&rem_oabar.get_key_rand_factor())
-    );
+
+    for rem_oabar in rem_oabars.iter() {
+        println!(
+            "\x1b[31;01m Remainder Randomizer: {}\x1b[00m",
+            wallet::randomizer_to_base58(&rem_oabar.get_key_rand_factor())
+        );
+    }
     let mut file = fs::OpenOptions::new()
         .append(true)
         .create(true)
         .open("owned_randomizers")
         .expect("cannot open randomizers file");
-    std::io::Write::write_all(
-        &mut file,
-        ("\n".to_owned()
-            + &wallet::randomizer_to_base58(&rem_oabar.get_key_rand_factor()))
-            .as_bytes(),
-    )
-    .expect("randomizer write failed");
+    for rem_oabar in rem_oabars.iter() {
+        std::io::Write::write_all(
+            &mut file,
+            ("\n".to_owned()
+                + &wallet::randomizer_to_base58(&rem_oabar.get_key_rand_factor()))
+                .as_bytes(),
+        )
+        .expect("randomizer write failed");
+    }
 
     println!("Signed AxfrNote: {:?}", serde_json::to_string_pretty(&note));
     Ok(())
