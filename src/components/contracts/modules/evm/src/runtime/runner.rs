@@ -195,8 +195,8 @@ impl<C: Config> ActionRunner<C> {
         let mut executor =
             StackExecutor::new_with_precompile(state, &config, C::Precompiles::execute);
 
-        let (result, data) = executor
-            .transact_call(source, target, value, input, gas_limit);
+        let (result, data) =
+            executor.transact_call(source, target, value, input, gas_limit);
 
         // TODO: process deletes and logs.
 

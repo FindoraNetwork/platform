@@ -29,6 +29,7 @@ use fp_types::{
 };
 use precompile::PrecompileSet;
 use ruc::*;
+use runtime::runner::ActionRunner;
 use std::marker::PhantomData;
 use system_contracts::SystemContracts;
 
@@ -69,7 +70,7 @@ pub mod storage {
 pub struct App<C> {
     phantom: PhantomData<C>,
     pending_outputs: Vec<NonConfidentialOutput>,
-    contracts: SystemContracts,
+    pub contracts: SystemContracts,
 }
 
 impl<C: Config> Default for App<C> {
@@ -85,20 +86,42 @@ impl<C: Config> Default for App<C> {
 impl<C: Config> App<C> {
     pub fn withdraw_frc20(
         &self,
+        ctx: &Context,
         _asset: [u8; 32],
         _address: &Address,
         _value: U256,
     ) -> Result<()> {
+        let function = self.contracts.bridge.function("withdrawERC20").c(d!())?;
+
+        let asset = Token::Bytes(Vec::from(_asset));
+        let address = Token::Address(H160::from_slice(_address.as_ref()));
+        let value = Token::Uint(_value);
+
+        let input = function.encode_input(&[asset, address, value]).c(d!())?;
+
+        let _ = ActionRunner::<C>::execute_systemc_contract(
+            ctx, input, H160::zero(), 9999999, self.contracts.bridge_address, U256::zero(),
+        )?;
+
         Ok(())
     }
 
-    pub fn withdraw_fra(&self, _address: &Address, _value: U256) -> Result<()> {
+    pub fn withdraw_fra(
+        &self,
+        ctx: &Context,
+        _address: &Address,
+        _value: U256,
+    ) -> Result<()> {
         let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
 
         let address = Token::Address(H160::from_slice(_address.as_ref()));
         let value = Token::Uint(_value);
 
-        let _input = function.encode_input(&[address, value]).c(d!())?;
+        let input = function.encode_input(&[address, value]).c(d!())?;
+
+        let _ = ActionRunner::<C>::execute_systemc_contract(
+            ctx, input, H160::zero(), 9999999, self.contracts.bridge_address, U256::zero(),
+        )?;
 
         Ok(())
     }
@@ -150,7 +173,7 @@ impl<C: Config> AppModule for App<C> {
         let height = CFG.checkpoint.prismxx_inital_height;
 
         if height < _ctx.header.height {
-            
+
             // Got data
         }
 

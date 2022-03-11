@@ -2,9 +2,12 @@ use ethereum_types::{H160, H256};
 use fp_core::context::Context;
 use ruc::*;
 
-use crate::{runner::ActionRunner, Config, system_contracts::SystemContracts};
+use crate::{runner::ActionRunner, system_contracts::SystemContracts, Config};
 
-pub fn deploy_contract<C: Config>(ctx: &Context, contracts: &mut SystemContracts) -> Result<()> {
+pub fn deploy_contract<C: Config>(
+    ctx: &Context,
+    contracts: &mut SystemContracts,
+) -> Result<()> {
     let source = H160::zero();
 
     let salt = H256::zero();
@@ -14,7 +17,8 @@ pub fn deploy_contract<C: Config>(ctx: &Context, contracts: &mut SystemContracts
 
     let bytecode = hex::decode(&bytecode_str[2..].trim()).c(d!())?;
 
-    let addr = ActionRunner::<C>::inital_system_contract(ctx, bytecode, 9999999, source, salt)?;
+    let addr =
+        ActionRunner::<C>::inital_system_contract(ctx, bytecode, 9999999, source, salt)?;
     contracts.asset_address = addr;
 
     // Deploy Ledger here.
@@ -22,7 +26,8 @@ pub fn deploy_contract<C: Config>(ctx: &Context, contracts: &mut SystemContracts
 
     let bytecode = hex::decode(&bytecode_str[2..].trim()).c(d!())?;
 
-    let addr = ActionRunner::<C>::inital_system_contract(ctx, bytecode, 9999999, source, salt)?;
+    let addr =
+        ActionRunner::<C>::inital_system_contract(ctx, bytecode, 9999999, source, salt)?;
     contracts.ledger_address = addr;
 
     // Deploy Bridge here.
@@ -30,7 +35,8 @@ pub fn deploy_contract<C: Config>(ctx: &Context, contracts: &mut SystemContracts
 
     let bytecode = hex::decode(&bytecode_str[2..].trim()).c(d!())?;
 
-    let addr = ActionRunner::<C>::inital_system_contract(ctx, bytecode, 9999999, source, salt)?;
+    let addr =
+        ActionRunner::<C>::inital_system_contract(ctx, bytecode, 9999999, source, salt)?;
     contracts.bridge_address = addr;
 
     // TODO: inital value here.

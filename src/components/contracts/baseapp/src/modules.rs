@@ -133,10 +133,13 @@ impl ModuleManager {
         let owner = Address::from(owner);
 
         if asset == ASSET_TYPE_FRA {
-            module_account::App::<BaseApp>::mint(ctx, &owner, balance)?;
-            self.evm_module.withdraw_fra(&owner, balance)?;
+            let bridge_address = self.evm_module.contracts.bridge_address;
+            let ba = Address::from(bridge_address);
+
+            module_account::App::<BaseApp>::mint(ctx, &ba, balance)?;
+            self.evm_module.withdraw_fra(ctx, &owner, balance)?;
         } else {
-            self.evm_module.withdraw_frc20(asset.0, &owner, balance)?;
+            self.evm_module.withdraw_frc20(ctx, asset.0, &owner, balance)?;
         }
 
         Ok(())
