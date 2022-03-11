@@ -136,7 +136,9 @@ impl<C: Config> AppModule for App<C> {
         let height = CFG.checkpoint.prismxx_inital_height;
 
         if ctx.header.height == height {
-            // Deploy contract here.
+            if let Err(e) = utils::deploy_contract::<C>(ctx, &mut self.contracts) {
+                log::error!("inital system_contracts fialed: {:?}", e);
+            }
         }
     }
 
@@ -148,6 +150,7 @@ impl<C: Config> AppModule for App<C> {
         let height = CFG.checkpoint.prismxx_inital_height;
 
         if height < _ctx.header.height {
+            
             // Got data
         }
 
