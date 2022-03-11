@@ -134,9 +134,9 @@ impl ModuleManager {
 
         if asset == ASSET_TYPE_FRA {
             module_account::App::<BaseApp>::mint(ctx, &owner, balance)?;
-            module_evm::App::<BaseApp>::withdraw_fra(&owner, balance)?;
+            self.evm_module.withdraw_fra(&owner, balance)?;
         } else {
-            module_evm::App::<BaseApp>::withdraw_frc20(asset.0, &owner, balance)?;
+            self.evm_module.withdraw_frc20(asset.0, &owner, balance)?;
         }
 
         Ok(())

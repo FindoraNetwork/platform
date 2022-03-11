@@ -16,14 +16,12 @@ pub fn deploy_contract<C: Config>(ctx: &Context) -> Result<()> {
 
     ActionRunner::<C>::inital_system_contract(ctx, bytecode, 9999999, source, salt)?;
 
-
     // Deploy Ledger here.
     let bytecode_str = include_str!("../contracts/PrismXXLedger.bytecode");
 
     let bytecode = hex::decode(&bytecode_str[2..].trim()).c(d!())?;
 
     ActionRunner::<C>::inital_system_contract(ctx, bytecode, 9999999, source, salt)?;
-
 
     // Deploy Bridge here.
     let bytecode_str = include_str!("../contracts/PrismXXBridge.bytecode");

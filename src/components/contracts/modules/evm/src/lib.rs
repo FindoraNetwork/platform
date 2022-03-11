@@ -5,11 +5,13 @@ mod basic;
 pub mod impls;
 pub mod precompile;
 pub mod runtime;
+pub mod system_contracts;
 pub mod utils;
 
 use abci::{RequestQuery, ResponseQuery};
 use config::abci::global_cfg::CFG;
-use ethereum_types::U256;
+use ethabi::Token;
+use ethereum_types::{H160, U256};
 use fp_core::{
     context::Context,
     macros::Get,
@@ -22,12 +24,13 @@ use fp_traits::{
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
 };
 use fp_types::{
-    actions::evm::Action,
+    actions::{evm::Action, xhub::NonConfidentialOutput},
     crypto::{Address, HA160},
 };
 use precompile::PrecompileSet;
 use ruc::*;
 use std::marker::PhantomData;
+use system_contracts::SystemContracts;
 
 pub use runtime::*;
 
@@ -65,18 +68,23 @@ pub mod storage {
 
 pub struct App<C> {
     phantom: PhantomData<C>,
+    pending_outputs: Vec<NonConfidentialOutput>,
+    contracts: SystemContracts,
 }
 
 impl<C: Config> Default for App<C> {
     fn default() -> Self {
         App {
             phantom: Default::default(),
+            pending_outputs: Vec::new(),
+            contracts: pnk!(SystemContracts::new()),
         }
     }
 }
 
 impl<C: Config> App<C> {
     pub fn withdraw_frc20(
+        &self,
         _asset: [u8; 32],
         _address: &Address,
         _value: U256,
@@ -84,8 +92,19 @@ impl<C: Config> App<C> {
         Ok(())
     }
 
-    pub fn withdraw_fra(_address: &Address, _value: U256) -> Result<()> {
+    pub fn withdraw_fra(&self, _address: &Address, _value: U256) -> Result<()> {
+        let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
+
+        let address = Token::Address(H160::from_slice(_address.as_ref()));
+        let value = Token::Uint(_value);
+
+        let _input = function.encode_input(&[address, value]).c(d!())?;
+
         Ok(())
+    }
+
+    pub fn consume_mint(&mut self) -> Vec<NonConfidentialOutput> {
+        std::mem::take(&mut self.pending_outputs)
     }
 }
 

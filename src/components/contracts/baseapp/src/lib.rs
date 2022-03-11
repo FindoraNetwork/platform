@@ -302,7 +302,7 @@ impl BaseApp {
     }
 
     pub fn consume_mint(&mut self) -> Option<Vec<NonConfidentialOutput>> {
-        module_xhub::App::<BaseApp>::consume_mint(&self.deliver_state)
+        Some(self.modules.evm_module.consume_mint())
     }
 }
 

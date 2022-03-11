@@ -157,8 +157,42 @@ impl<C: Config> ActionRunner<C> {
         let result =
             executor.transact_create2(source, U256::zero(), bytecode, salt, gas_limit);
 
+        // TODO: process deletes and logs.
+
         if let ExitReason::Succeed(_) = result {
             Ok(())
+        } else {
+            Err(eg!("Deploy system error: {:?}", result))
+        }
+    }
+
+    pub fn execute_systemc_contract(
+        ctx: &Context,
+        input: Vec<u8>,
+        source: H160,
+        gas_limit: u64,
+        target: H160,
+        value: U256,
+    ) -> Result<Vec<u8>> {
+        let config = evm::Config::istanbul();
+
+        let vicinity = Vicinity {
+            gas_price: U256::one(),
+            origin: source,
+        };
+        let metadata = StackSubstateMetadata::new(gas_limit, &config);
+        let state = FindoraStackState::<C>::new(ctx, &vicinity, metadata);
+
+        let mut executor =
+            StackExecutor::new_with_precompile(state, &config, C::Precompiles::execute);
+
+        let (result, data) = executor
+            .transact_call(source, target, value, input, gas_limit);
+
+        // TODO: process deletes and logs.
+
+        if let ExitReason::Succeed(_) = result {
+            Ok(data)
         } else {
             Err(eg!("Deploy system error: {:?}", result))
         }
