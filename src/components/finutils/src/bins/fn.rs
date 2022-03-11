@@ -397,7 +397,8 @@ fn run() -> Result<()> {
     } else if let Some(m) = matches.subcommand_matches("contract-deposit") {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");
-        transfer_to_account(amount.parse::<u64>().c(d!())?, address)?
+        let asset = m.value_of("asset");
+        transfer_to_account(amount.parse::<u64>().c(d!())?, asset, address)?
     } else if let Some(m) = matches.subcommand_matches("contract-withdraw") {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");
