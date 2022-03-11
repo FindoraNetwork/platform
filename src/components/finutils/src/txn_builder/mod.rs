@@ -595,6 +595,7 @@ impl TransactionBuilder {
         let mut vec_outputs = outputs.to_vec();
         let mut vec_changes = vec![];
         let mut remainders = HashMap::new();
+        let remainder_pk = input_keypairs.last().unwrap().pub_key();
         /*
         In general we will have that the sum of FRA inputs is going to be greater
         than output + fees, let's say remainder = inputs - (outputs + fees), the remainder amount
@@ -636,7 +637,7 @@ impl TransactionBuilder {
                 let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
                     .amount(remainder as u64)
                     .asset_type(asset_type)
-                    .pub_key(input_keypairs[0].pub_key())
+                    .pub_key(remainder_pk)
                     .finalize(&mut prng, &pu_key)
                     .unwrap()
                     .build()
@@ -660,7 +661,7 @@ impl TransactionBuilder {
             let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
                 .amount(fra_remainder as u64)
                 .asset_type(ASSET_TYPE_FRA)
-                .pub_key(input_keypairs[0].pub_key())
+                .pub_key(remainder_pk)
                 .finalize(&mut prng, &pu_key)
                 .unwrap()
                 .build()

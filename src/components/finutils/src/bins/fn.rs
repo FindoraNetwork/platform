@@ -32,7 +32,7 @@ use {
     fp_utils::ecdsa::SecpPair,
     globutils::wallet,
     ledger::{
-        data_model::{ATxoSID, AssetTypeCode, FRA_DECIMALS},
+        data_model::{ATxoSID, AssetTypeCode, ASSET_TYPE_FRA, FRA_DECIMALS},
         staking::StakerMemo,
     },
     rand_chacha::ChaChaRng,
@@ -683,6 +683,22 @@ fn run() -> Result<()> {
                 .c(d!())
                 .map(|ams| ams.lines().map(String::from).collect::<Vec<String>>())
         })?;
+        let assets = m.value_of("asset-file").c(d!()).and_then(|f| {
+            let token_code = |asset: &str| {
+                if asset.to_uppercase() == "FRA" {
+                    AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    }
+                } else {
+                    AssetTypeCode::new_from_base64(asset).unwrap_or(AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    })
+                }
+            };
+            fs::read_to_string(f)
+                .c(d!())
+                .map(|ams| ams.lines().map(token_code).collect::<Vec<AssetTypeCode>>())
+        })?;
 
         if axfr_secret_keys.is_empty()
             || dec_keys.is_empty()
@@ -690,6 +706,7 @@ fn run() -> Result<()> {
             || to_enc_keys.is_empty()
             || randomizers.is_empty()
             || amounts.is_empty()
+            || assets.is_empty()
         {
             println!("{}", m.usage());
         } else {
@@ -700,6 +717,7 @@ fn run() -> Result<()> {
                 to_enc_keys,
                 randomizers,
                 amounts,
+                assets,
             )
             .c(d!())?;
         }

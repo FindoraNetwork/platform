@@ -664,6 +664,13 @@ subcommands:
             takes_value: true
             value_name: Amount
             required: true
+        - asset-file:
+            help: Relative asset code type.
+            short: a
+            long: asset-file
+            takes_value: true
+            value_name: Asset
+            required: true
   - anon-fetch-merkle-proof:
       about: Query to fetch mtleaf info
       args:

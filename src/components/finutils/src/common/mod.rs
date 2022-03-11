@@ -1002,6 +1002,7 @@ pub fn gen_oabar_add_op(
 }
 
 /// Batch anon transfer - Generate OABAR and add anonymous transfer operation
+/// Note - if multiple anon keys are used, we consider the last key in the list for remainder.
 pub fn gen_oabar_add_op_x(
     axfr_secret_keys: Vec<AXfrKeyPair>,
     dec_keys: Vec<XSecretKey>,
@@ -1009,8 +1010,21 @@ pub fn gen_oabar_add_op_x(
     to_enc_keys: Vec<XPublicKey>,
     randomizers: Vec<String>,
     amounts: Vec<String>,
+    assets: Vec<AssetTypeCode>,
 ) -> Result<()> {
     let sender_count = axfr_secret_keys.len();
+    let recvier_count = to_axfr_public_keys.len();
+
+    if sender_count != randomizers.len()
+        || sender_count != dec_keys.len()
+        || recvier_count != amounts.len()
+        || recvier_count != assets.len()
+    {
+        return Err(eg!(
+            "The Parameters: from-sk/dec-keys/randomizers or to-pk/to-enc-keys not match!"
+        ));
+    }
+
     let mut oabars_in = Vec::new();
     for i in 0..sender_count {
         let from = &axfr_secret_keys[i];
@@ -1054,19 +1068,17 @@ pub fn gen_oabar_add_op_x(
         oabars_in.push(oabar_in);
     }
 
-    let from_public_key = XPublicKey::from(dec_keys.last().unwrap());
-    // Note - if multiple anon keys are used, we consider the last key in the list for remainder
-
-    let rcvr_count = to_axfr_public_keys.len();
     let mut oabars_out = Vec::new();
-    for i in 0..rcvr_count {
+    for i in 0..recvier_count {
         let mut prng = ChaChaRng::from_entropy();
         let to = to_axfr_public_keys[i];
         let enc_key_out = &to_enc_keys[i];
         let axfr_amount = amounts[i].parse::<u64>().c(d!("error parsing amount"))?;
+        let asset_type = assets[i];
 
         let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
             .amount(axfr_amount)
+            .asset_type(asset_type.val)
             .pub_key(to)
             .finalize(&mut prng, enc_key_out)
             .unwrap()
@@ -1076,6 +1088,7 @@ pub fn gen_oabar_add_op_x(
         oabars_out.push(oabar_out);
     }
 
+    let from_public_key = XPublicKey::from(dec_keys.last().unwrap());
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
     let (_, note, rem_oabars) = builder
         .add_operation_anon_transfer_fees_remainder(
