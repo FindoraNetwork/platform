@@ -830,6 +830,7 @@ pub fn convert_abar2bar(
     let axtxo_abar = utils::get_owned_abars(&randomized_from_pub_key).c(d!())?;
     let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
     let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
+    let mt_leaf_uid = mt_leaf_info.uid;
 
     let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
         &axtxo_abar[0].1,
@@ -841,6 +842,23 @@ pub fn convert_abar2bar(
     .mt_leaf_info(mt_leaf_info)
     .build()
     .unwrap();
+
+    // check oabar is unspent.
+    let n = nullifier(
+        &from.randomize(&r),
+        oabar_in.get_amount(),
+        &oabar_in.get_asset_type(),
+        mt_leaf_uid,
+    );
+    let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+    let null_status = utils::check_nullifier_hash(&hash)
+        .c(d!())?
+        .ok_or(d!("The ABAR corresponding to this randomizer is missing"))?;
+    if null_status {
+        return Err(eg!(
+            "The ABAR corresponding to this randomizer is already spent"
+        ));
+    }
 
     let art = match (confidential_am, confidential_ty) {
         (true, true) => AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
@@ -878,6 +896,7 @@ pub fn gen_oabar_add_op(
     let axtxo_abar = utils::get_owned_abars(&randomized_from_pub_key).c(d!())?;
     let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
     let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
+    let mt_leaf_uid = mt_leaf_info.uid;
 
     let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
         &axtxo_abar[0].1,
@@ -889,6 +908,23 @@ pub fn gen_oabar_add_op(
     .mt_leaf_info(mt_leaf_info)
     .build()
     .unwrap();
+
+    // check oabar is unspent.
+    let n = nullifier(
+        &from.randomize(&r),
+        oabar_in.get_amount(),
+        &oabar_in.get_asset_type(),
+        mt_leaf_uid,
+    );
+    let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+    let null_status = utils::check_nullifier_hash(&hash)
+        .c(d!())?
+        .ok_or(d!("The ABAR corresponding to this randomizer is missing"))?;
+    if null_status {
+        return Err(eg!(
+            "The ABAR corresponding to this randomizer is already spent"
+        ));
+    }
 
     let mut prng = ChaChaRng::from_entropy();
     let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
@@ -969,6 +1005,7 @@ pub fn gen_oabar_add_op_x(
         let axtxo_abar = utils::get_owned_abars(&diversified_from_pub_key).c(d!())?;
         let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!())?.unwrap();
         let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
+        let mt_leaf_uid = mt_leaf_info.uid;
 
         let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
             &axtxo_abar[0].1,
@@ -980,6 +1017,23 @@ pub fn gen_oabar_add_op_x(
         .mt_leaf_info(mt_leaf_info)
         .build()
         .unwrap();
+
+        // check oabar is unspent.
+        let n = nullifier(
+            &from.randomize(&r),
+            oabar_in.get_amount(),
+            &oabar_in.get_asset_type(),
+            mt_leaf_uid,
+        );
+        let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+        let null_status = utils::check_nullifier_hash(&hash)
+            .c(d!())?
+            .ok_or(d!("The ABAR corresponding to this randomizer is missing"))?;
+        if null_status {
+            return Err(eg!(
+                "The ABAR corresponding to this randomizer is already spent"
+            ));
+        }
 
         oabars_in.push(oabar_in);
     }
