@@ -1310,9 +1310,9 @@ impl AnonTransferOperationBuilder {
         Ok(self)
     }
 
-    /// set_from_pubkey is used to set destination public key for remainder abar to get back the remainder amount
+    /// set_fra_remainder_receiver is used to set destination public key for remainder abar to get back the remainder amount
     /// @param from_pubkey {XPublicKey} - The encryption public key of sender
-    pub fn set_from_pubkey(
+    pub fn set_fra_remainder_receiver(
         mut self,
         from_pubkey: XPublicKey,
     ) -> Result<AnonTransferOperationBuilder, JsValue> {
@@ -1338,8 +1338,8 @@ impl AnonTransferOperationBuilder {
         JsValue::from_serde(&r).unwrap()
     }
 
-    /// create is used to build proof and sign the Transfer Operation
-    pub fn create(mut self) -> Result<AnonTransferOperationBuilder, JsValue> {
+    /// build_and_sign is used to build proof and sign the Transfer Operation
+    pub fn build_and_sign(mut self) -> Result<AnonTransferOperationBuilder, JsValue> {
         self.get_builder_mut()
             .build()
             .c(d!())
