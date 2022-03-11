@@ -93,7 +93,7 @@ impl<C: Config> App<C> {
     ) -> Result<()> {
         let function = self.contracts.bridge.function("withdrawERC20").c(d!())?;
 
-        let asset = Token::Bytes(Vec::from(_asset));
+        let asset = Token::FixedBytes(Vec::from(_asset));
         let address = Token::Address(H160::from_slice(_address.as_ref()));
         let value = Token::Uint(_value);
 
@@ -177,14 +177,17 @@ impl<C: Config> AppModule for App<C> {
 
     fn end_block(
         &mut self,
-        _ctx: &mut Context,
+        ctx: &mut Context,
         _req: &abci::RequestEndBlock,
     ) -> abci::ResponseEndBlock {
         let height = CFG.checkpoint.prismxx_inital_height;
 
-        if height < _ctx.header.height {
-
-            // Got data
+        if height < ctx.header.height {
+            if let Err(e) =
+                utils::fetch_mint::<C>(ctx, &self.contracts, &mut self.pending_outputs)
+            {
+                log::error!("Collect mint ops error: {:?}", e);
+            }
         }
 
         Default::default()

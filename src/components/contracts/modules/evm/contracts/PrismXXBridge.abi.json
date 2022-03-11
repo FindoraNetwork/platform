@@ -59,13 +59,6 @@
   },
   {
     "inputs": [],
-    "name": "clearOps",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "consumeMint",
     "outputs": [
       {
@@ -91,7 +84,7 @@
         "type": "tuple[]"
       }
     ],
-    "stateMutability": "view",
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
