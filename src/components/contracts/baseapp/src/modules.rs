@@ -139,7 +139,8 @@ impl ModuleManager {
             module_account::App::<BaseApp>::mint(ctx, &ba, balance)?;
             self.evm_module.withdraw_fra(ctx, &owner, balance)?;
         } else {
-            self.evm_module.withdraw_frc20(ctx, asset.0, &owner, balance)?;
+            self.evm_module
+                .withdraw_frc20(ctx, asset.0, &owner, balance)?;
         }
 
         Ok(())

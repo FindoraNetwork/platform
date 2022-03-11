@@ -100,7 +100,12 @@ impl<C: Config> App<C> {
         let input = function.encode_input(&[asset, address, value]).c(d!())?;
 
         let _ = ActionRunner::<C>::execute_systemc_contract(
-            ctx, input, H160::zero(), 9999999, self.contracts.bridge_address, U256::zero(),
+            ctx,
+            input,
+            H160::zero(),
+            9999999,
+            self.contracts.bridge_address,
+            U256::zero(),
         )?;
 
         Ok(())
@@ -120,7 +125,12 @@ impl<C: Config> App<C> {
         let input = function.encode_input(&[address, value]).c(d!())?;
 
         let _ = ActionRunner::<C>::execute_systemc_contract(
-            ctx, input, H160::zero(), 9999999, self.contracts.bridge_address, U256::zero(),
+            ctx,
+            input,
+            H160::zero(),
+            9999999,
+            self.contracts.bridge_address,
+            U256::zero(),
         )?;
 
         Ok(())
