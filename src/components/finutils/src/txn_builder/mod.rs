@@ -1184,7 +1184,10 @@ impl TransferOperationBuilder {
             .iter()
             .fold(0, |acc, ar| acc + ar.open_asset_record.amount);
         if spend_total != output_total {
-            return Err(eg!(format!("Spend total != output, {} != {}", spend_total, output_total)));
+            return Err(eg!(format!(
+                "Spend total != output, {} != {}",
+                spend_total, output_total
+            )));
         }
         self.output_records.append(&mut partially_consumed_inputs);
 
