@@ -88,19 +88,23 @@ impl<C: Config> App<C> {
         &self,
         ctx: &Context,
         _asset: [u8; 32],
-        _address: &Address,
+        _from: &Address,
+        _to: &Address,
         _value: U256,
     ) -> Result<()> {
         let function = self.contracts.bridge.function("withdrawERC20").c(d!())?;
 
         let asset = Token::FixedBytes(Vec::from(_asset));
 
-        let bytes: &[u8] = _address.as_ref();
+        let bytes: &[u8] = _from.as_ref();
+        let from = Token::Address(H160::from_slice(&bytes[..20]));
 
-        let address = Token::Address(H160::from_slice(&bytes[..20]));
+        let bytes: &[u8] = _to.as_ref();
+        let to = Token::Address(H160::from_slice(&bytes[..20]));
+
         let value = Token::Uint(_value);
 
-        let input = function.encode_input(&[asset, address, value]).c(d!())?;
+        let input = function.encode_input(&[asset, from, to, value]).c(d!())?;
 
         let _ = ActionRunner::<C>::execute_systemc_contract(
             ctx,
@@ -117,17 +121,23 @@ impl<C: Config> App<C> {
     pub fn withdraw_fra(
         &self,
         ctx: &Context,
-        _address: &Address,
+        _from: &Address,
+        _to: &Address,
         _value: U256,
     ) -> Result<()> {
         let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
 
-        let bytes: &[u8] = _address.as_ref();
+        let bytes: &[u8] = _from.as_ref();
+        let from = Token::FixedBytes(bytes.to_vec());
 
-        let address = Token::Address(H160::from_slice(&bytes[..20]));
+        let bytes: &[u8] = _to.as_ref();
+
+        let to = Token::Address(H160::from_slice(&bytes[4..24]));
         let value = Token::Uint(_value);
 
-        let input = function.encode_input(&[address, value]).c(d!())?;
+        println!("{:?}, {:?}, {:?}", from, to, value);
+
+        let input = function.encode_input(&[from, to, value]).c(d!())?;
 
         let _ = ActionRunner::<C>::execute_systemc_contract(
             ctx,
@@ -177,9 +187,10 @@ impl<C: Config> AppModule for App<C> {
             if let Err(e) = utils::deploy_contract::<C>(ctx, &mut self.contracts) {
                 pd!(e);
             }
-            println!("Asset contract address: {:?}", self.contracts.asset_address);
-            println!("Ledger contract address: {:?}", self.contracts.ledger_address);
-            println!("Bridge contract address: {:?}", self.contracts.bridge_address);
+            println!(
+                "Bridge contract address: {:?}",
+                self.contracts.bridge_address
+            );
         }
     }
 

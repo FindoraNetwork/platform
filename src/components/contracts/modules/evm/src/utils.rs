@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use ethabi::Token;
 use ethereum_types::{H160, H256, U256};
 use fp_core::context::Context;
@@ -15,78 +17,19 @@ pub fn deploy_contract<C: Config>(
     ctx: &Context,
     contracts: &mut SystemContracts,
 ) -> Result<()> {
-    let source = H160::zero();
+    let source = H160::from_str("0xe95034bE56fbd7D70000B310323B6Be684A49acb").c(d!())?;
 
     let salt = H256::zero();
-
-    // Deploy Asset here.
-    let bytecode_str = include_str!("../contracts/PrismXXAsset.bytecode");
-
-    let bytecode = hex::decode(&bytecode_str[2..].trim()).c(d!())?;
-
-    let addr =
-        ActionRunner::<C>::inital_system_contract(ctx, bytecode, 9999999, source, salt)?;
-    contracts.asset_address = addr;
-
-    // Deploy Ledger here.
-    let bytecode_str = include_str!("../contracts/PrismXXLedger.bytecode");
-
-    let bytecode = hex::decode(&bytecode_str[2..].trim()).c(d!())?;
-
-    let addr =
-        ActionRunner::<C>::inital_system_contract(ctx, bytecode, 9999999, source, salt)?;
-    contracts.ledger_address = addr;
 
     // Deploy Bridge here.
     let bytecode_str = include_str!("../contracts/PrismXXBridge.bytecode");
 
     let bytecode = hex::decode(&bytecode_str[2..].trim()).c(d!())?;
 
-    let addr =
-        ActionRunner::<C>::inital_system_contract(ctx, bytecode, 9999999, source, salt)?;
+    let addr = ActionRunner::<C>::inital_system_contract(
+        ctx, bytecode, 9999999999, source, salt,
+    )?;
     contracts.bridge_address = addr;
-
-    // set birdge's asset.
-    let bridge = contracts.bridge.function("adminSetAsset").c(d!())?;
-    let input = bridge
-        .encode_input(&[Token::Address(contracts.asset_address)])
-        .c(d!())?;
-    ActionRunner::<C>::execute_systemc_contract(
-        ctx,
-        input,
-        source,
-        99999999,
-        contracts.bridge_address,
-        U256::zero(),
-    )?;
-
-    // set birdge's ledger.
-    let bridge = contracts.bridge.function("adminSetLedger").c(d!())?;
-    let input = bridge
-        .encode_input(&[Token::Address(contracts.ledger_address)])
-        .c(d!())?;
-    ActionRunner::<C>::execute_systemc_contract(
-        ctx,
-        input,
-        source,
-        99999999,
-        contracts.bridge_address,
-        U256::zero(),
-    )?;
-
-    // set ledegr's bridge.
-    let ledger = contracts.ledger.function("adminSetBridge").c(d!())?;
-    let input = ledger
-        .encode_input(&[Token::Address(contracts.bridge_address)])
-        .c(d!())?;
-    ActionRunner::<C>::execute_systemc_contract(
-        ctx,
-        input,
-        source,
-        99999999,
-        contracts.ledger_address,
-        U256::zero(),
-    )?;
 
     Ok(())
 }

@@ -203,7 +203,7 @@ impl<C: Config> ActionRunner<C> {
         if let ExitReason::Succeed(_) = result {
             Ok(data)
         } else {
-            Err(eg!("Deploy system error: {:?}", result))
+            Err(eg!("Execute system error: {:?}", result))
         }
     }
 }

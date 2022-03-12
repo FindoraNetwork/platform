@@ -53,7 +53,7 @@ impl CheckPointConfig {
                                 ff_addr_extra_fix_height: 0,
                                 nonconfidential_balance_fix_height: 0,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
-                                prismxx_inital_height: 5,
+                                prismxx_inital_height: 1,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {

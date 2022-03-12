@@ -303,6 +303,7 @@ impl BaseApp {
 
     pub fn consume_mint(&mut self) -> Option<Vec<NonConfidentialOutput>> {
         let outputs = self.modules.evm_module.consume_mint();
+        // TODO: Add xhub compact.
 
         for output in &outputs {
             if output.asset == ASSET_TYPE_FRA {
@@ -321,6 +322,8 @@ impl BaseApp {
                 }
             }
         }
+
+        println!("Pending Output is: {:?}", outputs);
 
         Some(outputs)
     }

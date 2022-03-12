@@ -60,7 +60,9 @@ pub fn is_convert_account(tx: &Transaction) -> bool {
 }
 
 #[allow(missing_docs)]
-pub fn check_convert_account(tx: &Transaction) -> Result<(MultiSigner, u64, AssetType)> {
+pub fn check_convert_account(
+    tx: &Transaction,
+) -> Result<(XfrPublicKey, MultiSigner, u64, AssetType)> {
     let signer;
     let target;
     let expected_value;
@@ -127,5 +129,5 @@ pub fn check_convert_account(tx: &Transaction) -> Result<(MultiSigner, u64, Asse
         ));
     }
 
-    Ok((target, expected_value, expected_asset))
+    Ok((signer, target, expected_value, expected_asset))
 }

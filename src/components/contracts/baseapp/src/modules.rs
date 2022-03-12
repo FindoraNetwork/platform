@@ -126,21 +126,22 @@ impl ModuleManager {
         ctx: &Context,
         tx: &FindoraTransaction,
     ) -> Result<()> {
-        let (owner, amount, asset) = check_convert_account(tx)?;
+        let (from, to, amount, asset) = check_convert_account(tx)?;
         let balance = EthereumDecimalsMapping::from_native_token(U256::from(amount))
             .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
 
-        let owner = Address::from(owner);
+        let from = Address::from(from);
+        let owner = Address::from(to);
 
         if asset == ASSET_TYPE_FRA {
             let bridge_address = self.evm_module.contracts.bridge_address;
             let ba = Address::from(bridge_address);
 
             module_account::App::<BaseApp>::mint(ctx, &ba, balance)?;
-            self.evm_module.withdraw_fra(ctx, &owner, balance)?;
+            self.evm_module.withdraw_fra(ctx, &from, &owner, balance)?;
         } else {
             self.evm_module
-                .withdraw_frc20(ctx, asset.0, &owner, balance)?;
+                .withdraw_frc20(ctx, asset.0, &from, &owner, balance)?;
         }
 
         Ok(())
