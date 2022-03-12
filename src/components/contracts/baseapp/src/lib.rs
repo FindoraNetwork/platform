@@ -122,7 +122,7 @@ impl module_evm::Config for BaseApp {
         evm_precompile_basic::Identity,
         evm_precompile_modexp::Modexp,
         evm_precompile_basic::ECRecoverPublicKey,
-        // evm_precompile_sha3fips::Sha3FIPS256,
+        evm_precompile_sha3fips::Sha3FIPS256,
         evm_precompile_sha3fips::Sha3FIPS512,
         evm_precompile_frc20::FRC20<Self>,
     );

@@ -81,7 +81,7 @@ build_release_musl_goleveldb: tendermint_goleveldb
 	$(call pack,release,x86_64-unknown-linux-musl)
 
 build_release_debug: tendermint_goleveldb
-	cargo build --features="debug_env" --release --bins -p abciapp -p finutils
+	cargo build --features debug_env --release --bins -p abciapp -p finutils
 	$(call pack,release)
 
 tendermint_cleveldb:

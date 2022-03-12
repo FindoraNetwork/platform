@@ -94,7 +94,10 @@ impl<C: Config> App<C> {
         let function = self.contracts.bridge.function("withdrawERC20").c(d!())?;
 
         let asset = Token::FixedBytes(Vec::from(_asset));
-        let address = Token::Address(H160::from_slice(_address.as_ref()));
+
+        let bytes: &[u8] = _address.as_ref();
+
+        let address = Token::Address(H160::from_slice(&bytes[..20]));
         let value = Token::Uint(_value);
 
         let input = function.encode_input(&[asset, address, value]).c(d!())?;
@@ -119,7 +122,9 @@ impl<C: Config> App<C> {
     ) -> Result<()> {
         let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
 
-        let address = Token::Address(H160::from_slice(_address.as_ref()));
+        let bytes: &[u8] = _address.as_ref();
+
+        let address = Token::Address(H160::from_slice(&bytes[..20]));
         let value = Token::Uint(_value);
 
         let input = function.encode_input(&[address, value]).c(d!())?;
@@ -170,8 +175,11 @@ impl<C: Config> AppModule for App<C> {
 
         if ctx.header.height == height {
             if let Err(e) = utils::deploy_contract::<C>(ctx, &mut self.contracts) {
-                log::error!("inital system_contracts fialed: {:?}", e);
+                pd!(e);
             }
+            println!("Asset contract address: {:?}", self.contracts.asset_address);
+            println!("Ledger contract address: {:?}", self.contracts.ledger_address);
+            println!("Bridge contract address: {:?}", self.contracts.bridge_address);
         }
     }
 

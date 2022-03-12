@@ -146,7 +146,7 @@ impl<C: Config> ActionRunner<C> {
         let config = evm::Config::istanbul();
 
         let vicinity = Vicinity {
-            gas_price: U256::one(),
+            gas_price: U256::zero(),
             origin: source,
         };
         let metadata = StackSubstateMetadata::new(gas_limit, &config);
