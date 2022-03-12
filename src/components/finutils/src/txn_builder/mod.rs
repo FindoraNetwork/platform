@@ -235,11 +235,17 @@ impl TransactionBuilder {
         let mut kps = vec![];
         let mut opb = TransferOperationBuilder::default();
 
+        let mut am = TX_FEE_MIN;
         for i in inputs.inner.into_iter() {
             open_blind_asset_record(&i.ar.record, &i.om, &i.kp)
                 .c(d!())
                 .and_then(|oar| {
-                    opb.add_input(i.tr, oar, None, None, i.am)
+                    if oar.asset_type != ASSET_TYPE_FRA {
+                        return Err(eg!("Incorrect fee input asset_type, expected Findora AssetType record"));
+                    }
+                    let n = alt!(oar.amount > am, am, oar.amount);
+                    am = am.saturating_sub(oar.amount);
+                    opb.add_input(i.tr, oar, None, None, n)
                         .map(|_| {
                             kps.push(i.kp);
                         })
@@ -1178,7 +1184,7 @@ impl TransferOperationBuilder {
             .iter()
             .fold(0, |acc, ar| acc + ar.open_asset_record.amount);
         if spend_total != output_total {
-            return Err(eg!(format!("{} != {}", spend_total, output_total)));
+            return Err(eg!(format!("Spend total != output, {} != {}", spend_total, output_total)));
         }
         self.output_records.append(&mut partially_consumed_inputs);
 
