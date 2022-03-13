@@ -34,6 +34,7 @@ fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
 config = { path = "../../../config"}
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.4" }
+ledger = { path = "../../../../ledger" }
 
 [dev-dependencies]
 baseapp = { path = "../../baseapp" }

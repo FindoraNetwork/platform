@@ -67,6 +67,7 @@ fn run() -> Result<()> {
                 }
                 None => None,
             };
+
             // FRA asset is the default case
             let asset = if let Some(code) = m.value_of("asset") {
                 match code.to_lowercase().as_str() {
