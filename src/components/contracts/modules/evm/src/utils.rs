@@ -3,7 +3,7 @@ use std::str::FromStr;
 use ethabi::Token;
 use ethereum_types::{H160, H256, U256};
 use fp_core::context::Context;
-use fp_traits::evm::{EthereumDecimalsMapping, DecimalsMapping};
+use fp_traits::evm::{DecimalsMapping, EthereumDecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialOutput;
 use ledger::data_model::ASSET_TYPE_FRA;
 use ruc::*;
