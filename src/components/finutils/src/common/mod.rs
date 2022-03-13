@@ -674,14 +674,13 @@ fn gen_delegate_tx(
 /// Create a custom asset for a findora account. If no token code string provided,
 /// it will generate a random new one.
 pub fn create_asset(
-    sk_str: Option<&str>,
     memo: &str,
     decimal: u8,
     max_units: Option<u64>,
     transferable: bool,
     token_code: Option<&str>,
 ) -> Result<()> {
-    let kp = restore_keypair_from_str_with_default(sk_str)?;
+    let kp = get_keypair().c(d!())?;
 
     let code = if token_code.is_none() {
         AssetTypeCode::gen_random()
@@ -765,9 +764,12 @@ pub fn issue_asset_x(
 pub fn show_asset(addr: &str) -> Result<()> {
     let pk = wallet::public_key_from_bech32(addr).c(d!())?;
     let assets = utils::get_created_assets(&pk).c(d!())?;
-    assets
-        .iter()
-        .for_each(|asset| println!("{}", asset.body.asset.code.to_base64()));
+    for asset in assets {
+        let base64 = asset.body.asset.code.to_base64();
+        let h = hex::encode(asset.body.asset.code.val.0);
+        println!("Base64: {}, Hex: {}", base64, h);
+    }
+
     Ok(())
 }
 

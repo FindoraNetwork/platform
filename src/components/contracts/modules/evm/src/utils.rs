@@ -3,7 +3,6 @@ use std::str::FromStr;
 use ethabi::Token;
 use ethereum_types::{H160, H256, U256};
 use fp_core::context::Context;
-use fp_traits::evm::{DecimalsMapping, EthereumDecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialOutput;
 use ruc::*;
 use zei::{
@@ -101,7 +100,7 @@ fn parse_truple_result(tuple: Vec<Token>) -> Result<NonConfidentialOutput> {
 
     let amount = if let Some(v) = tuple.get(2) {
         if let Token::Uint(i) = v {
-            EthereumDecimalsMapping::convert_to_native_token(*i).as_u64()
+            i.as_u64()
         } else {
             return Err(eg!("Asset Must be FixedBytes"));
         }

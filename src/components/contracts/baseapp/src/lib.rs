@@ -305,6 +305,8 @@ impl BaseApp {
         let outputs = self.modules.evm_module.consume_mint();
         // TODO: Add xhub compact.
 
+        println!("Pending Output is: {:?}", outputs);
+
         for output in &outputs {
             if output.asset == ASSET_TYPE_FRA {
                 let address =
@@ -322,8 +324,6 @@ impl BaseApp {
                 }
             }
         }
-
-        println!("Pending Output is: {:?}", outputs);
 
         Some(outputs)
     }

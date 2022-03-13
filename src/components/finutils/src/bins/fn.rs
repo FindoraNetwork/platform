@@ -126,12 +126,6 @@ fn run() -> Result<()> {
         common::undelegate(seckey.as_deref(), param).c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("asset") {
         if m.is_present("create") {
-            let seckey = match m.value_of("seckey") {
-                Some(path) => {
-                    Some(fs::read_to_string(path).c(d!("Failed to read seckey file"))?)
-                }
-                None => None,
-            };
             let memo = m.value_of("memo");
             if memo.is_none() {
                 println!("{}", m.usage());
@@ -154,7 +148,6 @@ fn run() -> Result<()> {
             };
             let token_code = m.value_of("code");
             common::create_asset(
-                seckey.as_deref(),
                 memo.unwrap(),
                 decimal,
                 max_units,
