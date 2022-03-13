@@ -160,13 +160,34 @@ impl<C: Config> ActionRunner<C> {
         let result =
             executor.transact_create2(source, U256::zero(), bytecode, salt, gas_limit);
 
-        // TODO: process deletes and logs.
-
         let addr = executor.create_address(evm::CreateScheme::Create2 {
             caller: source,
             salt,
             code_hash: H256::from_slice(&code_hash),
         });
+
+        let state = executor.into_state();
+
+        for address in state.substate.deletes {
+            log::debug!(
+                target: "evm",
+                "Deleting account at {:?}",
+                address
+            );
+            App::<C>::remove_account(ctx, &address.into())
+        }
+
+        for log in &state.substate.logs {
+            log::trace!(
+                target: "evm",
+                "Inserting log for {:?}, topics ({}) {:?}, data ({}): {:?}]",
+                log.address,
+                log.topics.len(),
+                log.topics,
+                log.data.len(),
+                log.data
+            );
+        }
 
         if let ExitReason::Succeed(_) = result {
             Ok(addr)
@@ -198,7 +219,28 @@ impl<C: Config> ActionRunner<C> {
         let (result, data) =
             executor.transact_call(source, target, value, input, gas_limit);
 
-        // TODO: process deletes and logs.
+        let state = executor.into_state();
+
+        for address in state.substate.deletes {
+            log::debug!(
+                target: "evm",
+                "Deleting account at {:?}",
+                address
+            );
+            App::<C>::remove_account(ctx, &address.into())
+        }
+
+        for log in &state.substate.logs {
+            log::trace!(
+                target: "evm",
+                "Inserting log for {:?}, topics ({}) {:?}, data ({}): {:?}]",
+                log.address,
+                log.topics.len(),
+                log.topics,
+                log.data.len(),
+                log.data
+            );
+        }
 
         if let ExitReason::Succeed(_) = result {
             Ok(data)

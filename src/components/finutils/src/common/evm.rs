@@ -40,24 +40,26 @@ pub fn transfer_to_account(
     let mut builder = utils::new_tx_builder()?;
 
     let kp = get_keypair()?;
+
+    let asset = if let Some(asset) = asset {
+        let asset = AssetTypeCode::new_from_base64(asset)?;
+        Some(asset)
+    } else {
+        None
+    };
+
     let transfer_op = utils::gen_transfer_op(
         &kp,
         vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
-        None,
+        asset,
         false,
         false,
         Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
     )?;
+
     let target_address = match address {
         Some(s) => MultiSigner::from_str(s).c(d!())?,
         None => MultiSigner::Xfr(kp.get_pk()),
-    };
-
-    let asset = if let Some(asset) = asset {
-        let asset = AssetTypeCode::new_from_base64(asset)?;
-        Some(asset.val)
-    } else {
-        None
     };
 
     builder

@@ -301,8 +301,14 @@ impl BaseApp {
         self.modules.process_findora_tx(&self.deliver_state, tx)
     }
 
-    pub fn consume_mint(&mut self) -> Option<Vec<NonConfidentialOutput>> {
-        let outputs = self.modules.evm_module.consume_mint();
+    pub fn consume_mint(&self) -> Option<Vec<NonConfidentialOutput>> {
+        let mut outputs = self.modules.evm_module.consume_mint(&self.deliver_state);
+        let outputs2 = module_xhub::App::<Self>::consume_mint(&self.deliver_state);
+
+        if let Some(mut e) = outputs2 {
+            outputs.append(&mut e);
+        }
+
         // TODO: Add xhub compact.
 
         println!("Pending Output is: {:?}", outputs);

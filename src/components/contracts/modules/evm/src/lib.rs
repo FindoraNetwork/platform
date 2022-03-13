@@ -69,7 +69,6 @@ pub mod storage {
 
 pub struct App<C> {
     phantom: PhantomData<C>,
-    pending_outputs: Vec<NonConfidentialOutput>,
     pub contracts: SystemContracts,
 }
 
@@ -77,7 +76,6 @@ impl<C: Config> Default for App<C> {
     fn default() -> Self {
         App {
             phantom: Default::default(),
-            pending_outputs: Vec::new(),
             contracts: pnk!(SystemContracts::new()),
         }
     }
@@ -151,8 +149,20 @@ impl<C: Config> App<C> {
         Ok(())
     }
 
-    pub fn consume_mint(&mut self) -> Vec<NonConfidentialOutput> {
-        std::mem::take(&mut self.pending_outputs)
+    pub fn consume_mint(&self, ctx: &Context) -> Vec<NonConfidentialOutput> {
+        let height = CFG.checkpoint.prismxx_inital_height;
+
+        let mut pending_outputs = Vec::new();
+
+        if height < ctx.header.height {
+            if let Err(e) =
+                utils::fetch_mint::<C>(ctx, &self.contracts, &mut pending_outputs)
+            {
+                log::error!("Collect mint ops error: {:?}", e);
+            }
+        }
+
+        pending_outputs
     }
 }
 
@@ -192,24 +202,6 @@ impl<C: Config> AppModule for App<C> {
                 self.contracts.bridge_address
             );
         }
-    }
-
-    fn end_block(
-        &mut self,
-        ctx: &mut Context,
-        _req: &abci::RequestEndBlock,
-    ) -> abci::ResponseEndBlock {
-        let height = CFG.checkpoint.prismxx_inital_height;
-
-        if height < ctx.header.height {
-            if let Err(e) =
-                utils::fetch_mint::<C>(ctx, &self.contracts, &mut self.pending_outputs)
-            {
-                log::error!("Collect mint ops error: {:?}", e);
-            }
-        }
-
-        Default::default()
     }
 }
 

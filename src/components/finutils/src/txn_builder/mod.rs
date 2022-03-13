@@ -5,8 +5,6 @@
 #![deny(warnings)]
 #![allow(clippy::needless_borrow)]
 
-use zei::xfr::structs::AssetType;
-
 use {
     credentials::CredUserSecretKey,
     curve25519_dalek::scalar::Scalar,
@@ -624,7 +622,7 @@ impl TransactionBuilder {
         &mut self,
         kp: &XfrKeyPair,
         addr: MultiSigner,
-        asset: Option<AssetType>,
+        asset: Option<AssetTypeCode>,
         amount: u64,
     ) -> Result<&mut Self> {
         self.add_operation(Operation::ConvertAccount(ConvertAccount {
@@ -632,7 +630,7 @@ impl TransactionBuilder {
             nonce: self.txn.body.no_replay_token,
             receiver: addr,
             value: amount,
-            asset_type: asset,
+            asset_type: asset.map(|a| a.val),
         }));
         Ok(self)
     }

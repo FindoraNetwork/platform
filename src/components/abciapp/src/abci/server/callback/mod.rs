@@ -262,7 +262,7 @@ pub fn deliver_tx(
                         if let Err(err) =
                             s.account_base_app.write().deliver_findora_tx(&tx)
                         {
-                            log::info!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
+                            log::error!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
 
                             resp.code = 1;
                             resp.log =
