@@ -1851,7 +1851,7 @@ mod tests {
         let txn = builder.take_transaction();
 
         if let Operation::BarToAbar(note) = txn.body.operations[0].clone() {
-            let node_params = NodeParams::bar_to_abar_params();
+            let node_params = NodeParams::bar_to_abar_params().unwrap();
             let result =
                 verify_bar_to_abar_note(&node_params, &note.note, from.get_pk_ref());
             assert!(result.is_ok());
