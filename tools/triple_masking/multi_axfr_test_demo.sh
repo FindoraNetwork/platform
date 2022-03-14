@@ -77,5 +77,5 @@ sleep 2
 echo "\n\n\n Fetch merkle proof for Batch Anon Transfer"
 echo "------------------------------------------------------------------------------"
 target/release/fn anon-fetch-merkle-proof -a 3
-rm axfr_secretkey_file decryption_key_file randomizer_file randomizer_file2 to_axfr_public_key_file to_enc_key_file amount_file
+rm axfr_secretkey_file decryption_key_file randomizer_file randomizer_file2 to_axfr_public_key_file to_enc_key_file amount_file asset_file
 echo "\n\n Batch Anonymous Transfer demo script executed successfully!"
