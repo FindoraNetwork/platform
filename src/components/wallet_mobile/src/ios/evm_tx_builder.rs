@@ -61,10 +61,19 @@ pub extern "C" fn findora_ffi_new_withdraw_transaction(
 }
 
 #[no_mangle]
-/// Consume the transaction then generate the base64 encoded transaction data.
-/// **Danger:**, this will make the tx pointer a dangling pointer.
-pub unsafe extern "C" fn findora_ffi_evm_transaction_data_consumed(
+/// Generate the base64 encoded transaction data.
+pub unsafe extern "C" fn findora_ffi_evm_transaction_data(
     tx: *mut EVMTransactionBuilder,
 ) -> *const c_char {
-    string_to_c_char(EVMTransactionBuilder::from_ptr(tx).into_serialized_transaction_base64())
+    let tx = &*tx;
+    string_to_c_char(tx.serialized_transaction_base64())
+}
+
+#[no_mangle]
+/// Free the memory.
+/// **Danger:**, this will make the tx pointer a dangling pointer.
+pub unsafe extern "C" fn findora_ffi_free_evm_transaction(
+    tx: *mut EVMTransactionBuilder,
+)  {
+    let _ = Box::from_raw(tx);
 }

@@ -693,9 +693,14 @@ struct EVMTransactionBuilder *findora_ffi_new_withdraw_transaction(uint64_t amou
                                                                    const char *nonce);
 
 /**
- * Consume the transaction then generate the base64 encoded transaction data.
+ * Generate the base64 encoded transaction data.
+ */
+const char *findora_ffi_evm_transaction_data(struct EVMTransactionBuilder *tx);
+
+/**
+ * Free the memory.
  * **Danger:**, this will make the tx pointer a dangling pointer.
  */
-const char *findora_ffi_evm_transaction_data_consumed(struct EVMTransactionBuilder *tx);
+void findora_ffi_free_evm_transaction(struct EVMTransactionBuilder *tx);
 
 #endif /* wallet_mobile_ffi_h */

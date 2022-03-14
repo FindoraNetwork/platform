@@ -131,10 +131,10 @@ impl EVMTransactionBuilder {
         Ok(EVMTransactionBuilder { tx })
     }
 
-    pub fn into_serialized_transaction_base64(self) -> String {
-        let txn = match self.tx {
+    pub fn serialized_transaction_base64(&self) -> String {
+        let txn = match &self.tx {
             EVMTransactionKind::Unchecked(tx_unchecked) => {
-                serde_json::to_vec(&tx_unchecked).unwrap()
+                serde_json::to_vec(tx_unchecked).unwrap()
             }
         };
 
