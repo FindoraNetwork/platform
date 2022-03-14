@@ -79,7 +79,6 @@ impl ModuleManager {
         let mut resp: ResponseEndBlock = Default::default();
         // Note: adding new modules need to be updated.
         self.account_module.end_block(ctx, req);
-        self.ethereum_module.end_block(ctx, req);
         self.evm_module.end_block(ctx, req);
         self.xhub_module.end_block(ctx, req);
         let resp_template = self.template_module.end_block(ctx, req);
@@ -87,6 +86,16 @@ impl ModuleManager {
             resp.validator_updates = resp_template.validator_updates;
         }
         resp
+    }
+
+    pub fn commit(
+        &mut self,
+        ctx: &mut Context,
+        height: u64,
+        root_hash: &[u8],
+    ) -> Result<()> {
+        self.ethereum_module
+            .commit(ctx, U256::from(height), root_hash)
     }
 
     pub fn process_tx<
@@ -138,10 +147,7 @@ impl ModuleManager {
 
         origin_tx.validate::<Module>(ctx)?;
 
-        if RunTxMode::Deliver == ctx.run_mode
-            || RunTxMode::Check == ctx.run_mode
-            || RunTxMode::ReCheck == ctx.run_mode
-        {
+        if RunTxMode::Deliver == ctx.run_mode {
             return origin_tx.apply::<Module>(ctx);
         }
         Ok(ActionResult::default())

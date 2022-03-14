@@ -16,6 +16,7 @@ members = [
     "src/components/contracts/modules/account",
     "src/components/contracts/modules/ethereum",
     "src/components/contracts/modules/evm",
+    "src/components/contracts/modules/evm/test-vector-support",
     "src/components/contracts/modules/evm/precompile/basic",
     "src/components/contracts/modules/evm/precompile/frc20",
     "src/components/contracts/modules/evm/precompile/modexp",
