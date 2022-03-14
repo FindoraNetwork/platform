@@ -63,7 +63,7 @@ use {
             verify_anon_xfr_body,
         },
         serialization::ZeiFromToBytes,
-        setup::{NodeParams, UserParams},
+        setup::NodeParams,
         xfr::{
             lib::XfrNotePolicies,
             sig::XfrPublicKey,
@@ -71,7 +71,7 @@ use {
         },
     },
     zei_accumulators::merkle_tree::{
-        ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath, TREE_DEPTH,
+        ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath,
     },
     zeialgebra::{bls12_381::BLSScalar, groups::Scalar},
 };
@@ -1670,13 +1670,8 @@ impl LedgerStatus {
         // An axfr_body requires abar merkle root hash for AxfrNote verification. This is done
         // here with LedgerStatus available.
         for axfr_body in txn_effect.axfr_bodies.iter() {
-            // TODO: maybe load user_params in memory for inp_op mapping
-            let user_params = UserParams::new(
-                axfr_body.inputs.len(),
-                axfr_body.outputs.len(),
-                Some(TREE_DEPTH),
-            );
-            let node_params = NodeParams::from(user_params);
+            let node_params =
+                NodeParams::load(axfr_body.inputs.len(), axfr_body.outputs.len())?;
             let abar_version = axfr_body.proof.merkle_root_version;
             verify_anon_xfr_body(
                 &node_params,
@@ -1688,8 +1683,7 @@ impl LedgerStatus {
         }
 
         for abar_conv in &txn_effect.abar_conv_inputs {
-            let user_params = UserParams::abar_to_bar_params(41);
-            let node_params = NodeParams::from(user_params);
+            let node_params = NodeParams::abar_to_bar_params()?;
             let abar_version: usize = abar_conv.proof.get_merkle_root_version();
 
             verify_abar_to_bar_body(
