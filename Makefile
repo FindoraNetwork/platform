@@ -284,6 +284,9 @@ run_anon_transfer_demo: devnet
 
 run_multi_anon_transfer_demo: devnet
 	@./tools/triple_masking/multi_axfr_test_demo.sh
-	
+
+run_anon_asset_mixing_demo: devnet
+	@./tools/triple_masking/assets_mixing_test_demo.sh
+
 devnet_bridge: devnet
 	@./tools/devnet/startbridge.sh

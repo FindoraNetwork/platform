@@ -78,8 +78,8 @@ target/release/fn wallet --show
 echo "\n\n FRA Bar To Abar ..."
 echo "==============================================================================="
 target/release/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS_1 --txo-sid 3 2> /dev/null
-echo "waiting blockchain 20s..."
-sleep 20
+echo "waiting blockchain 5s..."
+sleep 5
 # txo-sid = 9
 
 echo "\n\n Create Asset 1 ..."
@@ -122,22 +122,22 @@ echo "\n ***** Issue Asset & FRA successfully! ***** "
 echo "\n\n Asset 1 Bar To Abar ..."
 echo "==============================================================================="
 target/release/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS_1 --txo-sid 14 2> /dev/null
-echo "waiting blockchain 30s..."
-sleep 30
+echo "waiting blockchain 5s..."
+sleep 5
 
 echo "\n\n Asset 2 Bar To Abar ..."
 echo "==============================================================================="
 target/release/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS_1 --txo-sid 17 2> /dev/null
-echo "waiting blockchain 30s..."
-sleep 30
+echo "waiting blockchain 5s..."
+sleep 5
 
 echo "\n\n Anon transfer Asset 1 ..."
 echo "==============================================================================="
 RANDOMIZER=$(awk 'FNR==3' owned_randomizers)
 FRA_RANDMOIZER=$(awk 'FNR==2' owned_randomizers)
 target/release/fn anon-transfer --amount 50000000 --anon-keys $FILE_ANON_KEYS_1 --randomizer $RANDOMIZER --fra-randomizer $FRA_RANDMOIZER --to-axfr-public-key $ANON_PK_2 --to-enc-key $ANON_ENC_2 2> /dev/null
-echo "waiting blockchain 60s..."
-sleep 60
+echo "waiting blockchain 5s..."
+sleep 5
 
 echo "\n\n Anon transfer batch: Asset 1 & Asset 2 & FRA ..."
 echo "input  => key1 * FRA + key1 * asset2 + key2 * asset1"
@@ -185,8 +185,8 @@ echo 10000000 >> $BATCH_AMOUNT
 echo 10000000 >> $BATCH_AMOUNT
 
 target/release/fn anon-transfer-batch --axfr-secretkey-file $BATCH_SK --decryption-key-file $BATCH_DEC --randomizer-file $BATCH_R --to-axfr-public-key-file $BATCH_PK --to-enc-key-file $BATCH_ENC --amount-file $BATCH_AMOUNT --asset-file $BATCH_ASSET 2> /dev/null
-echo "waiting blockchain 60s..."
-sleep 60
+echo "waiting blockchain 5s..."
+sleep 5
 
 echo "checking..."
 target/release/fn owned-abars --axfr-public-key $ANON_PK_2 -r $(awk 'FNR==3' sent_randomizers)
