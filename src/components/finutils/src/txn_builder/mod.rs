@@ -498,7 +498,7 @@ impl TransactionBuilder {
         enc_key: &XPublicKey,
     ) -> Result<(&mut Self, JubjubScalar)> {
         let mut prng = ChaChaRng::from_entropy();
-        let user_params = UserParams::eq_committed_vals_params();
+        let user_params = UserParams::eq_committed_vals_params()?;
 
         /*
         TODO: charge fee
@@ -537,7 +537,7 @@ impl TransactionBuilder {
         asset_record_type: AssetRecordType,
     ) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
-        let user_params = UserParams::abar_to_bar_params(MERKLE_TREE_DEPTH);
+        let user_params = UserParams::abar_to_bar_params(MERKLE_TREE_DEPTH)?;
 
         let note = gen_abar_to_bar_note(
             &mut prng,
@@ -567,7 +567,7 @@ impl TransactionBuilder {
         let mut prng = ChaChaRng::from_entropy();
         let depth: usize = MERKLE_TREE_DEPTH;
         let user_params =
-            UserParams::new(inputs.len(), outputs.len(), Option::from(depth));
+            UserParams::new(inputs.len(), outputs.len(), Option::from(depth))?;
 
         let (body, keypairs) =
             gen_anon_xfr_body(&mut prng, &user_params, inputs, outputs, input_keypairs)
@@ -639,7 +639,7 @@ impl TransactionBuilder {
             inputs.len(),
             outputs_plus_remainder.len(),
             Option::from(depth),
-        );
+        )?;
 
         let (body, keypairs) = gen_anon_xfr_body(
             &mut prng,
@@ -1373,7 +1373,7 @@ impl AnonTransferOperationBuilder {
             self.inputs.len(),
             self.outputs.len(),
             Some(MERKLE_TREE_DEPTH),
-        );
+        )?;
 
         let mut sum_input = 0;
         let mut sum_output = 0;

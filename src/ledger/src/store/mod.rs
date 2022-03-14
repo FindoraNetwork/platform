@@ -71,7 +71,7 @@ use {
         },
     },
     zei_accumulators::merkle_tree::{
-        ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath, TREE_DEPTH,
+        ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath,
     },
     zeialgebra::{bls12_381::BLSScalar, groups::Scalar},
 };
