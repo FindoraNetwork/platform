@@ -511,7 +511,7 @@ impl TransactionBuilder {
             let code =
                 AssetTypeCode::new_from_base64(&asset).map_err(error_to_jsvalue)?;
 
-            Some(code.val)
+            Some(code)
         } else {
             None
         };
