@@ -4,7 +4,7 @@ use crate::rust::{account::EVMTransactionBuilder, c_char_to_string, string_to_c_
 
 use zei::xfr::sig::XfrKeyPair;
 
-use fp_types::{ U256};
+use fp_types::U256;
 
 #[no_mangle]
 /// Construct a EVM Transaction that transfer account balance to UTXO.
@@ -33,7 +33,7 @@ pub extern "C" fn findora_ffi_new_withdraw_transaction(
 
     let address = {
         let addr = c_char_to_string(address);
-        if addr.len() == 0 {
+        if addr.is_empty() {
             None
         } else {
             Some(addr)
@@ -42,7 +42,7 @@ pub extern "C" fn findora_ffi_new_withdraw_transaction(
 
     let eth_phrase = {
         let phrase = c_char_to_string(eth_phrase);
-        if phrase.len() == 0 {
+        if phrase.is_empty() {
             None
         } else {
             Some(phrase)
@@ -61,6 +61,7 @@ pub extern "C" fn findora_ffi_new_withdraw_transaction(
 }
 
 #[no_mangle]
+/// # Safety
 /// Generate the base64 encoded transaction data.
 pub unsafe extern "C" fn findora_ffi_evm_transaction_data(
     tx: *mut EVMTransactionBuilder,
@@ -70,10 +71,11 @@ pub unsafe extern "C" fn findora_ffi_evm_transaction_data(
 }
 
 #[no_mangle]
+/// # Safety
 /// Free the memory.
 /// **Danger:**, this will make the tx pointer a dangling pointer.
 pub unsafe extern "C" fn findora_ffi_free_evm_transaction(
     tx: *mut EVMTransactionBuilder,
-)  {
+) {
     let _ = Box::from_raw(tx);
 }

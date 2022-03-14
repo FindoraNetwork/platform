@@ -260,16 +260,15 @@ pub extern "C" fn findora_ffi_transaction_builder_add_transfer_account_operation
     kp: &XfrKeyPair,
 ) -> *mut TransactionBuilder {
     let addr_stirng = c_char_to_string(address);
-    let addr = if addr_stirng.len() == 0 {
+    let addr = if addr_stirng.is_empty() {
         None
     } else {
         Some(addr_stirng)
     };
-    if let Ok(builder) = builder.clone().add_transfer_to_account_operation(
-        amount,
-        addr,
-        kp,
-    ) {
+    if let Ok(builder) = builder
+        .clone()
+        .add_transfer_to_account_operation(amount, addr, kp)
+    {
         Box::into_raw(Box::new(builder))
     } else {
         std::ptr::null_mut()

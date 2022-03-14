@@ -5,6 +5,7 @@ use jni::JNIEnv;
 use zei::xfr::sig::XfrKeyPair;
 
 #[no_mangle]
+/// # Safety
 /// Construct a EVM Transaction that transfer account balance to UTXO.
 /// @param {unsigned long long} amount - Amount to transfer.
 /// @param {XfrKeyPair} fra_kp - Fra key pair.
@@ -25,7 +26,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transfer_from_account_evmT
             .get_string(address)
             .expect("Couldn't create java string!")
             .into();
-        if a.len() == 0 {
+        if a.is_empty() {
             None
         } else {
             Some(a)
@@ -37,7 +38,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transfer_from_account_evmT
             .get_string(eth_phrase)
             .expect("Couldn't create java string!")
             .into();
-        if a.len() == 0 {
+        if a.is_empty() {
             None
         } else {
             Some(a)
@@ -66,6 +67,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transfer_from_account_evmT
 }
 
 #[no_mangle]
+/// # Safety
 /// Extracts the serialized form of the evm transaction.
 pub unsafe extern "system" fn Java_com_findora_JniApi_evmTransactionBuilderTransaction(
     env: JNIEnv,
@@ -80,6 +82,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_evmTransactionBuilderTrans
 }
 
 #[no_mangle]
+/// # Safety
 ///Free the memory.
 ///**Danger**: do this make the builder a dangling pointer.
 pub unsafe extern "system" fn Java_com_findora_JniApi_free_evmTransactionBuilder(

@@ -1,13 +1,13 @@
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+pub mod account;
 mod crypto;
 mod data_model;
 #[cfg(test)]
 mod tests;
 pub mod transaction;
 pub mod types;
-pub mod account;
 mod util;
 
 pub use crypto::*;

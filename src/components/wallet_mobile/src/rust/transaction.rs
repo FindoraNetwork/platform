@@ -521,7 +521,10 @@ impl TransferOperationBuilder {
     /// Wraps around TransferOperationBuilder to ensure the transfer inputs and outputs are balanced.
     /// This function will add change outputs for all unspent portions of input records.
     /// @throws Will throw an error if the transaction cannot be balanced.
-    pub fn balance(mut self, asset: Option<AssetRecordType>) -> RucResult<TransferOperationBuilder> {
+    pub fn balance(
+        mut self,
+        asset: Option<AssetRecordType>,
+    ) -> RucResult<TransferOperationBuilder> {
         self.get_builder_mut().balance(asset)?;
         Ok(self)
     }

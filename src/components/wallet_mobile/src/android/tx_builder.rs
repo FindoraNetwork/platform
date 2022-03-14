@@ -5,6 +5,7 @@ use jni::JNIEnv;
 use zei::xfr::sig::XfrKeyPair;
 
 #[no_mangle]
+/// # Safety
 /// @param am: amount to pay
 /// @param kp: owner's XfrKeyPair
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddFeeRelativeAuto(
@@ -39,6 +40,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddFeeRe
 // }
 
 #[no_mangle]
+/// # Safety
 /// As the last operation of any transaction,
 /// add a static fee to the transaction.
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddFee(
@@ -54,6 +56,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddFee(
 }
 
 #[no_mangle]
+/// # Safety
 /// A simple fee checker for mainnet v1.0.
 ///
 /// SEE [check_fee](ledger::data_model::Transaction::check_fee)
@@ -67,6 +70,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderCheckFee
 }
 
 #[no_mangle]
+/// # Safety
 /// Create a new transaction builder.
 /// @param {BigInt} seq_id - Unique sequence ID to prevent replay attacks.
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderNew(
@@ -78,6 +82,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderNew(
 }
 
 #[no_mangle]
+/// # Safety
 /// Wraps around TransactionBuilder to add an asset definition operation to a transaction builder instance.
 /// @example <caption> Error handling </caption>
 /// try {
@@ -120,6 +125,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
 }
 
 #[no_mangle]
+/// # Safety
 /// Wraps around TransactionBuilder to add an asset issuance to a transaction builder instance.
 ///
 /// Use this function for simple one-shot issuances.
@@ -164,6 +170,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddBasic
 }
 
 #[no_mangle]
+/// # Safety
 /// Adds an operation to the transaction builder that adds a hash to the ledger's custom data
 /// store.
 /// @param {XfrKeyPair} auth_key_pair - Asset creator key pair.
@@ -198,6 +205,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOperationDelegate(
     env: JNIEnv,
     _: JClass,
@@ -225,6 +234,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOperationUndelegate(
     _env: JNIEnv,
     _: JClass,
@@ -238,6 +249,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOperationUndelegatePartially(
     env: JNIEnv,
     _: JClass,
@@ -269,6 +282,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOperationClaim(
     _env: JNIEnv,
     _: JClass,
@@ -282,6 +297,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOperationClaimCustom(
     _env: JNIEnv,
     _: JClass,
@@ -299,6 +316,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Adds a serialized transfer asset operation to a transaction builder instance.
 /// @param {string} op - a JSON-serialized transfer operation.
 /// @see {@link module:Findora-Wasm~TransferOperationBuilder} for details on constructing a transfer operation.
@@ -319,6 +338,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddTrans
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Adds a serialized transfer-account operation to transaction builder instance.
 /// @param {string} amount - amount to transfer.
 /// @param {XfrKeyPair} keypair - FRA account key pair.
@@ -348,6 +369,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddTrans
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderSign(
     _env: JNIEnv,
     _: JClass,
@@ -361,6 +384,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderSign(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Extracts the serialized form of a transaction.
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderTransaction(
     env: JNIEnv,
@@ -375,6 +400,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderTransact
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Calculates transaction handle.
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderTransactionHandle(
     env: JNIEnv,
@@ -389,6 +416,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderTransact
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Fetches a client record from a transaction.
 /// @param {number} idx - Record to fetch. Records are added to the transaction builder sequentially.
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderGetOwnerRecord(
@@ -402,6 +431,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderGetOwner
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Fetches an owner memo from a transaction
 /// @param {number} idx - Owner memo to fetch. Owner memos are added to the transaction builder sequentially.
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderGetOwnerMemo(

@@ -146,11 +146,9 @@ impl EVMTransactionBuilder {
         Box::into_raw(Box::new(self))
     }
 
+    /// # Safety
+    /// Construct `EVMTransactionBuilder` from raw pointer.
     pub unsafe fn from_ptr(raw: *mut EVMTransactionBuilder) -> Box<Self> {
         Box::from_raw(raw)
-    }
-
-    pub unsafe fn free_evm_transaction(raw: *mut EVMTransactionBuilder) {
-        let _ = Self::from_ptr(raw);
     }
 }
