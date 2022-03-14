@@ -35,7 +35,7 @@ use {
             structs::{AXfrBody, AnonBlindAssetRecord, Nullifier},
         },
         serialization::ZeiFromToBytes,
-        setup::{NodeParams, PublicParams, UserParams},
+        setup::{NodeParams, PublicParams},
         xfr::{
             lib::verify_xfr_body,
             sig::XfrPublicKey,
@@ -559,8 +559,7 @@ impl TxnEffect {
     ///
     fn add_bar_to_abar(&mut self, bar_to_abar: &BarToAbarOps) -> Result<()> {
         let key = bar_to_abar.note.body.input.public_key;
-        let user_params = UserParams::eq_committed_vals_params();
-        let node_params = NodeParams::from(user_params);
+        let node_params = NodeParams::bar_to_abar_params()?;
 
         /*
         TODO: charge fee
