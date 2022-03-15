@@ -194,7 +194,7 @@ impl<C: Config> AppModule for App<C> {
         let height = CFG.checkpoint.prismxx_inital_height;
 
         if ctx.header.height == height {
-            if let Err(e) = utils::deploy_contract::<C>(ctx, &mut self.contracts) {
+            if let Err(e) = utils::deploy_contract::<C>(ctx, &self.contracts) {
                 pd!(e);
                 return;
             }
@@ -203,7 +203,7 @@ impl<C: Config> AppModule for App<C> {
                 self.contracts.bridge_address
             );
 
-            ctx.state.write().discard_session();
+            ctx.state.write().commit_session();
         }
     }
 }

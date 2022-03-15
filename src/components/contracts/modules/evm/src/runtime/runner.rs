@@ -10,7 +10,6 @@ use fp_core::{context::Context, ensure};
 use fp_evm::*;
 use fp_traits::evm::{FeeCalculator, OnChargeEVMTransaction};
 use fp_types::actions::evm::*;
-use fp_utils::hashing::keccak_256;
 use ruc::*;
 use sha3::{Digest, Keccak256};
 use std::marker::PhantomData;
@@ -142,7 +141,7 @@ impl<C: Config> ActionRunner<C> {
         gas_limit: u64,
         source: H160,
         salt: H256,
-    ) -> Result<H160> {
+    ) -> Result<()> {
         let config = evm::Config::istanbul();
 
         let vicinity = Vicinity {
@@ -155,16 +154,8 @@ impl<C: Config> ActionRunner<C> {
         let mut executor =
             StackExecutor::new_with_precompile(state, &config, C::Precompiles::execute);
 
-        let code_hash = keccak_256(&bytecode);
-
         let result =
             executor.transact_create2(source, U256::zero(), bytecode, salt, gas_limit);
-
-        let addr = executor.create_address(evm::CreateScheme::Create2 {
-            caller: source,
-            salt,
-            code_hash: H256::from_slice(&code_hash),
-        });
 
         let state = executor.into_state();
 
@@ -190,7 +181,7 @@ impl<C: Config> ActionRunner<C> {
         }
 
         if let ExitReason::Succeed(_) = result {
-            Ok(addr)
+            Ok(())
         } else {
             Err(eg!("Deploy system error: {:?}", result))
         }

@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use ethabi::Token;
 use ethereum_types::{H160, H256, U256};
 use fp_core::context::Context;
@@ -7,6 +5,7 @@ use fp_traits::evm::{DecimalsMapping, EthereumDecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialOutput;
 use ledger::data_model::ASSET_TYPE_FRA;
 use ruc::*;
+use sha3::{Keccak256, Digest};
 use zei::{
     serialization::ZeiFromToBytes,
     xfr::{sig::XfrPublicKey, structs::AssetType},
@@ -16,21 +15,16 @@ use crate::{runner::ActionRunner, system_contracts::SystemContracts, Config};
 
 pub fn deploy_contract<C: Config>(
     ctx: &Context,
-    contracts: &mut SystemContracts,
+    contracts: &SystemContracts,
 ) -> Result<()> {
-    let source = H160::from_str("0xe95034bE56fbd7D70000B310323B6Be684A49acb").c(d!())?;
-
-    let salt = H256::zero();
-
     // Deploy Bridge here.
     let bytecode_str = include_str!("../contracts/PrismXXBridge.bytecode");
 
     let bytecode = hex::decode(&bytecode_str[2..].trim()).c(d!())?;
 
-    let addr = ActionRunner::<C>::inital_system_contract(
-        ctx, bytecode, 9999999999, source, salt,
+    ActionRunner::<C>::inital_system_contract(
+        ctx, bytecode, 9999999999, contracts.owner, contracts.salt,
     )?;
-    contracts.bridge_address = addr;
 
     Ok(())
 }
@@ -121,4 +115,13 @@ fn parse_truple_result(tuple: Vec<Token>) -> Result<NonConfidentialOutput> {
         amount,
         target,
     })
+}
+
+pub fn compute_create2(caller: H160, salt: H256, code_hash: H256) -> H160 {
+    let mut hasher = Keccak256::new();
+    hasher.input(&[0xff]);
+    hasher.input(&caller[..]);
+    hasher.input(&salt[..]);
+    hasher.input(&code_hash[..]);
+    H256::from_slice(hasher.result().as_slice()).into()
 }
