@@ -63,7 +63,7 @@ jobs:
     - name: evm test
       shell: bash
       run: |
-        make evm test
+        make evmtest
         
     - name: Prepare key
       shell: bash
