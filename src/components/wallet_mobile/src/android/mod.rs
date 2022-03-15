@@ -1,4 +1,5 @@
 mod constructor;
+mod evm_tx_builder;
 mod transfer;
 mod tx_builder;
 
@@ -151,6 +152,8 @@ pub extern "system" fn Java_com_findora_JniApi_keypairFromStr(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Returns bech32 encoded representation of an XfrPublicKey.
 pub unsafe extern "system" fn Java_com_findora_JniApi_publicKeyToBech32(
     env: JNIEnv,
@@ -164,6 +167,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_publicKeyToBech32(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Extracts the public key as a string from a transfer key pair.
 pub unsafe extern "system" fn Java_com_findora_JniApi_getPubKeyStr(
     env: JNIEnv,
@@ -179,6 +184,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_getPubKeyStr(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Extracts the private key as a string from a transfer key pair.
 pub unsafe extern "system" fn Java_com_findora_JniApi_getPrivKeyStr(
     env: JNIEnv,
@@ -194,6 +201,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_getPrivKeyStr(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Restore the XfrKeyPair from a mnemonic with a default bip44-path,
 /// that is "m/44'/917'/0'/0/0" ("m/44'/coin'/account'/change/address").
 pub extern "system" fn Java_com_findora_JniApi_restoreKeypairFromMnemonicDefault(
@@ -213,6 +222,8 @@ pub extern "system" fn Java_com_findora_JniApi_restoreKeypairFromMnemonicDefault
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Expresses a transfer key pair as a hex-encoded string.
 /// To decode the string, use `keypair_from_str` function.
 pub unsafe extern "system" fn Java_com_findora_JniApi_keypairToStr(
@@ -244,6 +255,8 @@ pub extern "system" fn Java_com_findora_JniApi_createKeypairFromSecret(
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "system" fn Java_com_findora_JniApi_getPkFromKeypair(
     _env: JNIEnv,
     _: JClass,
@@ -297,6 +310,8 @@ pub extern "system" fn Java_com_findora_JniApi_base64ToBech32(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Returns a object containing decrypted owner record information,
 /// where `amount` is the decrypted asset amount, and `asset_type` is the decrypted asset type code.
 ///
@@ -313,13 +328,12 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_openClientAssetRecord(
     keypair_ptr: jlong,
 ) -> jlong {
     let record = &*(record_ptr as *mut ClientAssetRecord);
-    let owner_memo;
-    if 0 == owner_memo_ptr {
-        owner_memo = None;
+    let owner_memo = if 0 == owner_memo_ptr {
+        None
     } else {
         let memo = &*(owner_memo_ptr as *mut OwnerMemo);
-        owner_memo = Some(memo.clone());
-    }
+        Some(memo.clone())
+    };
     let keypair = &*(keypair_ptr as *mut types::XfrKeyPair);
     let oar = rs_open_client_asset_record(record, owner_memo, keypair).unwrap();
     Box::into_raw(Box::new(types::OpenAssetRecord::from(oar))) as jlong

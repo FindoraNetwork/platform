@@ -2,11 +2,13 @@
 //! # binary process
 //!
 
-use abciapp::abci;
-use ruc::*;
-use std::{
-    sync::{atomic::Ordering, mpsc::channel},
-    thread,
+use {
+    abciapp::abci,
+    ruc::*,
+    std::{
+        sync::{atomic::Ordering, mpsc::channel},
+        thread,
+    },
 };
 
 fn main() {

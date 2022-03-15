@@ -17,10 +17,16 @@
 
 use core::cmp::min;
 use evm::{ExitError, ExitSucceed};
-use module_evm::precompile::LinearCostPrecompile;
+use module_evm::precompile::{LinearCostPrecompile, PrecompileId};
 
 /// The identity precompile.
 pub struct Identity;
+
+impl PrecompileId for Identity {
+    fn contract_id() -> u64 {
+        0x4
+    }
+}
 
 impl LinearCostPrecompile for Identity {
     const BASE: u64 = 15;
@@ -36,6 +42,12 @@ impl LinearCostPrecompile for Identity {
 
 /// The ecrecover precompile.
 pub struct ECRecover;
+
+impl PrecompileId for ECRecover {
+    fn contract_id() -> u64 {
+        0x1
+    }
+}
 
 impl LinearCostPrecompile for ECRecover {
     const BASE: u64 = 3000;
@@ -72,6 +84,12 @@ impl LinearCostPrecompile for ECRecover {
 /// The ripemd precompile.
 pub struct Ripemd160;
 
+impl PrecompileId for Ripemd160 {
+    fn contract_id() -> u64 {
+        0x3
+    }
+}
+
 impl LinearCostPrecompile for Ripemd160 {
     const BASE: u64 = 600;
     const WORD: u64 = 120;
@@ -91,6 +109,12 @@ impl LinearCostPrecompile for Ripemd160 {
 /// The sha256 precompile.
 pub struct Sha256;
 
+impl PrecompileId for Sha256 {
+    fn contract_id() -> u64 {
+        0x2
+    }
+}
+
 impl LinearCostPrecompile for Sha256 {
     const BASE: u64 = 60;
     const WORD: u64 = 12;
@@ -107,6 +131,12 @@ impl LinearCostPrecompile for Sha256 {
 /// The ECRecoverPublicKey precompile.
 /// Similar to ECRecover, but returns the pubkey (not the corresponding Ethereum address)
 pub struct ECRecoverPublicKey;
+
+impl PrecompileId for ECRecoverPublicKey {
+    fn contract_id() -> u64 {
+        0x6
+    }
+}
 
 impl LinearCostPrecompile for ECRecoverPublicKey {
     const BASE: u64 = 3000;

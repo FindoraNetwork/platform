@@ -9,10 +9,11 @@ export PROTOC = $(shell which protoc)
 
 export STAKING_INITIAL_VALIDATOR_CONFIG = $(shell pwd)/src/ledger/src/staking/init/staking_config.json
 export STAKING_INITIAL_VALIDATOR_CONFIG_DEBUG_ENV = $(shell pwd)/src/ledger/src/staking/init/staking_config_debug_env.json
-export STAKING_INITIAL_VALIDATOR_CONFIG_ABCI_MOCK = $(shell pwd)/src/ledger/src/staking/init/staking_config_abci_mock.json
 
 FIN_DEBUG ?= /tmp/findora
 export ENABLE_QUERY_SERVICE = true
+
+EXTERNAL_ADDRESS = ""
 
 ifndef CARGO_TARGET_DIR
 	export CARGO_TARGET_DIR=target
@@ -44,6 +45,15 @@ define pack
 	cp -f /tmp/findorad $(1)/$(bin_dir)/
 	cp -f /tmp/findorad ~/.cargo/bin/
 endef
+
+install: stop_all build_release_goleveldb
+	cp -f release/bin/* /usr/local/bin/
+	bash -x tools/systemd_services/install.sh $(EXTERNAL_ADDRESS)
+
+stop_all:
+	- pkill abcid
+	- pkill tendermint
+	- pkill findorad
 
 # Build for cleveldb
 build: tendermint_cleveldb
@@ -90,16 +100,16 @@ tendermint_goleveldb:
 test:
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
 
-testall:
-	cargo test --release --features="abci_mock" -- --test-threads=1 # --nocapture
-
 coverage:
-	cargo tarpaulin --timeout=900 --branch --workspace --release --features="abci_mock" \
+	cargo tarpaulin --timeout=900 --branch --workspace --release \
 		|| cargo install cargo-tarpaulin \
-		&& cargo tarpaulin --timeout=900 --branch --workspace --release --features="abci_mock"
+		&& cargo tarpaulin --timeout=900 --branch --workspace --release
 
 staking_cfg:
-	cargo run --bin staking_cfg_generator
+	bash tools/update_staking_cfg.sh
+
+staking_cfg_debug:
+	bash tools/update_staking_cfg_debug.sh
 
 bench:
 	cargo bench --workspace
@@ -107,7 +117,7 @@ bench:
 lint:
 	cargo clippy --workspace
 	cargo clippy --workspace --no-default-features
-	cargo clippy --features="abci_mock" --workspace --tests
+	cargo clippy --workspace --tests
 
 update:
 	cargo update
@@ -135,6 +145,7 @@ debug_env: stop_debug_env build_release_debug
 	mkdir $(FIN_DEBUG)
 	cp tools/debug_env.tar.gz $(FIN_DEBUG)/
 	cd $(FIN_DEBUG) && tar -xpf debug_env.tar.gz && mv debug_env devnet
+	fn setup -S 'http://localhost'
 	./tools/devnet/startnodes.sh
 
 run_staking_demo: stop_debug_env
@@ -145,6 +156,9 @@ start_debug_env:
 
 stop_debug_env:
 	bash ./tools/devnet/stopnodes.sh
+
+join_debug_env: stop_debug_env build_release_debug
+	bash tools/node_init.sh debug_env
 
 join_qa01: stop_debug_env build_release_goleveldb
 	bash tools/node_init.sh qa01
@@ -257,4 +271,10 @@ reset:
 snapshot:
 	@./tools/devnet/snapshot.sh
 
+evmtest:
+	@./tools/regression/evm/testevm.sh
+
 devnet: reset snapshot
+
+devnet_bridge: devnet
+	@./tools/devnet/startbridge.sh

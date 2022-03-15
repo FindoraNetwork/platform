@@ -2,28 +2,30 @@
 //! Some handful function and data structure for findora cli tools
 //!
 
-use crate::{
-    api::{DelegationInfo, ValidatorDetail},
-    common::get_serv_addr,
-    txn_builder::{TransactionBuilder, TransferOperationBuilder},
-};
-use globutils::{wallet, HashOf, SignatureOf};
-use ledger::{
-    data_model::{
-        AssetType, AssetTypeCode, DefineAsset, Operation, StateCommitmentData,
-        Transaction, TransferType, TxoRef, TxoSID, Utxo, ASSET_TYPE_FRA,
-        BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+use {
+    crate::{
+        api::{DelegationInfo, ValidatorDetail},
+        common::get_serv_addr,
+        txn_builder::{TransactionBuilder, TransferOperationBuilder},
     },
-    staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
-};
-use ruc::*;
-use serde::{self, Deserialize, Serialize};
-use std::collections::HashMap;
-use tendermint::{PrivateKey, PublicKey};
-use zei::xfr::{
-    asset_record::{open_blind_asset_record, AssetRecordType},
-    sig::{XfrKeyPair, XfrPublicKey},
-    structs::{AssetRecordTemplate, OwnerMemo},
+    globutils::{wallet, HashOf, SignatureOf},
+    ledger::{
+        data_model::{
+            AssetType, AssetTypeCode, DefineAsset, Operation, StateCommitmentData,
+            Transaction, TransferType, TxoRef, TxoSID, Utxo, ASSET_TYPE_FRA,
+            BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+        },
+        staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
+    },
+    ruc::*,
+    serde::{self, Deserialize, Serialize},
+    std::collections::HashMap,
+    tendermint::{PrivateKey, PublicKey},
+    zei::xfr::{
+        asset_record::{open_blind_asset_record, AssetRecordType},
+        sig::{XfrKeyPair, XfrPublicKey},
+        structs::{AssetRecordTemplate, OwnerMemo},
+    },
 };
 
 ///////////////////////////////////////
@@ -103,6 +105,7 @@ pub fn transfer_batch(
         token_code,
         confidential_am,
         confidential_ty,
+        None,
     )
     .c(d!())?;
     builder.add_operation(op);
@@ -118,6 +121,7 @@ pub fn gen_transfer_op(
     token_code: Option<AssetTypeCode>,
     confidential_am: bool,
     confidential_ty: bool,
+    balance_type: Option<AssetRecordType>,
 ) -> Result<Operation> {
     gen_transfer_op_x(
         owner_kp,
@@ -126,6 +130,7 @@ pub fn gen_transfer_op(
         true,
         confidential_am,
         confidential_ty,
+        balance_type,
     )
     .c(d!())
 }
@@ -138,6 +143,7 @@ pub fn gen_transfer_op_x(
     auto_fee: bool,
     confidential_am: bool,
     confidential_ty: bool,
+    balance_type: Option<AssetRecordType>,
 ) -> Result<Operation> {
     let mut op_fee: u64 = 0;
     if auto_fee {
@@ -231,7 +237,7 @@ pub fn gen_transfer_op_x(
     }
 
     trans_builder
-        .balance()
+        .balance(balance_type)
         .c(d!())?
         .create(TransferType::Standard)
         .c(d!())?
@@ -245,7 +251,7 @@ pub fn gen_transfer_op_x(
 #[inline(always)]
 #[allow(missing_docs)]
 pub fn gen_fee_op(owner_kp: &XfrKeyPair) -> Result<Operation> {
-    gen_transfer_op(owner_kp, vec![], None, false, false).c(d!())
+    gen_transfer_op(owner_kp, vec![], None, false, false, None).c(d!())
 }
 
 /////////////////////////////////////////
@@ -394,22 +400,10 @@ pub fn get_created_assets(addr: &XfrPublicKey) -> Result<Vec<DefineAsset>> {
         .and_then(|b| serde_json::from_slice::<Vec<DefineAsset>>(&b).c(d!()))
 }
 
+#[inline(always)]
 #[allow(missing_docs)]
 pub fn get_balance(kp: &XfrKeyPair) -> Result<u64> {
-    let balance = get_owned_utxos(kp.get_pk_ref())
-        .c(d!())?
-        .values()
-        .map(|(utxo, owner_memo)| {
-            open_blind_asset_record(&utxo.0.record, owner_memo, kp)
-                .c(d!())
-                .map(|obr| obr.amount)
-        })
-        .collect::<Result<Vec<_>>>()
-        .c(d!())?
-        .iter()
-        .sum();
-
-    Ok(balance)
+    get_asset_balance(kp, None).c(d!())
 }
 
 /// Retrieve Utxos of a findora keypair and calcultate the balance of the specified asset
@@ -535,15 +529,15 @@ pub fn get_validator_detail(td_addr: TendermintAddrRef) -> Result<ValidatorDetai
         .and_then(|b| serde_json::from_slice::<ValidatorDetail>(&b).c(d!()))
 }
 
-#[derive(Serialize, Deserialize)]
 #[allow(missing_docs)]
+#[derive(Serialize, Deserialize)]
 pub struct ValidatorKey {
-    pub(crate) address: String,
-    pub(crate) pub_key: PublicKey,
-    pub(crate) priv_key: PrivateKey,
+    pub address: String,
+    pub pub_key: PublicKey,
+    pub priv_key: PrivateKey,
 }
 
 /// Restore validator key from a string
-pub fn parse_td_validator_keys(key_data: String) -> Result<ValidatorKey> {
-    serde_json::from_str(key_data.as_str()).c(d!())
+pub fn parse_td_validator_keys(key_data: &str) -> Result<ValidatorKey> {
+    serde_json::from_str(key_data).c(d!())
 }

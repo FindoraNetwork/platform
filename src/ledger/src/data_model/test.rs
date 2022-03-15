@@ -1,14 +1,16 @@
 #![cfg(test)]
 #![allow(missing_docs)]
-use super::*;
-use curve25519_dalek::ristretto::CompressedRistretto;
-use rand_core::SeedableRng;
-use std::cmp::min;
-use zei::{
-    ristretto,
-    xfr::structs::{AssetTypeAndAmountProof, XfrBody, XfrProofs},
+use {
+    super::*,
+    curve25519_dalek::ristretto::CompressedRistretto,
+    rand_core::SeedableRng,
+    std::cmp::min,
+    zei::{
+        ristretto,
+        xfr::structs::{AssetTypeAndAmountProof, XfrBody, XfrProofs},
+    },
+    zeiutils::msg_eq,
 };
-use zeiutils::err_eq;
 
 const UTF8_ASSET_TYPES_WORK: bool = false;
 
@@ -57,7 +59,7 @@ fn test_base64_from_to_utf8_safe() {
         let result = AssetTypeCode::new_from_utf8_safe(code);
         match result {
             Err(e) => {
-                err_eq!("...", e);
+                msg_eq!("...", e);
             }
             _ => panic!("InputsError expected."),
         }

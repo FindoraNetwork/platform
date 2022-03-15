@@ -10,7 +10,7 @@ use evm_precompile_utils::{
 use fp_traits::{account::AccountAsset, evm::AddressMapping};
 use log::debug;
 use module_evm::{
-    precompile::{FinState, Precompile},
+    precompile::{FinState, Precompile, PrecompileId},
     Config,
 };
 use slices::u8_slice;
@@ -55,6 +55,12 @@ const GAS_TRANSFER_FROM: u64 = 6610;
 
 pub struct FRC20<C> {
     _marker: PhantomData<C>,
+}
+
+impl<C: Config> PrecompileId for FRC20<C> {
+    fn contract_id() -> u64 {
+        0x1000
+    }
 }
 
 #[evm_precompile_utils::generate_function_selector]

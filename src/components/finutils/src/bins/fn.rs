@@ -25,14 +25,18 @@
 
 #![deny(warnings)]
 
-use clap::{crate_authors, load_yaml, App};
-use finutils::common;
-use finutils::common::evm::*;
-use fp_utils::ecdsa::SecpPair;
-use globutils::wallet;
-use ledger::data_model::{AssetTypeCode, FRA_DECIMALS};
-use ruc::*;
-use std::{fmt, fs};
+use {
+    clap::{crate_authors, load_yaml, App},
+    finutils::common::{self, evm::*},
+    fp_utils::ecdsa::SecpPair,
+    globutils::wallet,
+    ledger::{
+        data_model::{AssetTypeCode, FRA_DECIMALS},
+        staking::StakerMemo,
+    },
+    ruc::*,
+    std::{fmt, fs},
+};
 
 fn main() {
     if let Err(e) = run() {
@@ -192,8 +196,36 @@ fn run() -> Result<()> {
             println!("{}", help);
         }
     } else if let Some(m) = matches.subcommand_matches("staker-update") {
+        let vm = if let Some(memo) = m.value_of("validator-memo") {
+            Some(serde_json::from_str(memo).c(d!())?)
+        } else {
+            match (
+                m.value_of("validator-memo-name"),
+                m.value_of("validator-memo-desc"),
+                m.value_of("validator-memo-website"),
+                m.value_of("validator-memo-logo"),
+            ) {
+                (None, None, None, None) => None,
+                (name, desc, website, logo) => {
+                    let mut memo = StakerMemo::default();
+                    if let Some(n) = name {
+                        memo.name = n.to_owned();
+                    }
+                    if let Some(d) = desc {
+                        memo.desc = d.to_owned();
+                    }
+                    if let Some(w) = website {
+                        memo.website = w.to_owned();
+                    }
+                    if let Some(l) = logo {
+                        memo.logo = l.to_owned();
+                    }
+                    Some(memo)
+                }
+            }
+        };
+
         let cr = m.value_of("commission-rate");
-        let vm = m.value_of("validator-memo");
         if vm.is_none() && cr.is_none() {
             println!("{}", m.usage());
             println!(
@@ -353,8 +385,15 @@ fn run() -> Result<()> {
         );
     } else if let Some(m) = matches.subcommand_matches("account") {
         let address = m.value_of("addr");
-        let (account, info) = contract_account_info(address)?;
-        println!("AccountId: {}\n{:#?}\n", account, info);
+        let sec_key = m.value_of("sec-key");
+        if sec_key.is_some() {
+            //Asset defaults to fra
+            common::show_account(sec_key, None).c(d!())?;
+        }
+        if address.is_some() {
+            let (account, info) = contract_account_info(address)?;
+            println!("AccountId: {}\n{:#?}\n", account, info);
+        }
     } else if let Some(m) = matches.subcommand_matches("contract-deposit") {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");
@@ -364,6 +403,34 @@ fn run() -> Result<()> {
         let address = m.value_of("addr");
         let eth_key = m.value_of("eth-key");
         transfer_from_account(amount.parse::<u64>().c(d!())?, address, eth_key)?
+    } else if let Some(m) = matches.subcommand_matches("replace_staker") {
+        let target = m
+            .value_of("target")
+            .c(d!())
+            .and_then(wallet::public_key_from_base64)?;
+        // let new_td_addr_pk = if let Some(new_td_address_str) = m.value_of("td_address") {
+        //     let new_td_address = hex::decode(new_td_address_str)
+        //         .c(d!("`td_address` is invalid hex. "))?;
+
+        //     if new_td_address.len() != 20 {
+        //         return Err(eg!("Invalid tendermint address."));
+        //     }
+
+        //     if let Some(new_td_pk) = m.value_of("td_pubkey") {
+        //         let pk_bytes =
+        //             base64::decode(new_td_pk).c(d!("`td_pubkey` is invalid base64."))?;
+
+        //         let _ = tendermint::PublicKey::from_raw_ed25519(&pk_bytes)
+        //             .c(d!("Invalid tendermint public key."))?;
+
+        //         Some((new_td_address, pk_bytes))
+        //     } else {
+        //         return Err(eg!("missing `td_pubkey`"));
+        //     }
+        // } else {
+        //     None
+        // };
+        common::replace_staker(target, None)?;
     } else {
         println!("{}", matches.usage());
     }

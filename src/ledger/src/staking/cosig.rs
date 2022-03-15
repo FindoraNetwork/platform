@@ -4,19 +4,21 @@
 //! Aka Multi-Signature, it is originally used to support `Governance` and `ValidatorUpdate`.
 //!
 
-use super::MAX_TOTAL_POWER;
-use crate::{
-    data_model::NoReplayToken,
-    staking::{Staking, ValidatorData},
+use {
+    super::MAX_TOTAL_POWER,
+    crate::{
+        data_model::NoReplayToken,
+        staking::{Staking, ValidatorData},
+    },
+    cryptohash::sha256::{self, Digest},
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    std::{
+        collections::BTreeMap,
+        fmt::{self, Debug},
+    },
+    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
-use cryptohash::sha256::{self, Digest};
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::BTreeMap,
-    fmt::{self, Debug},
-};
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature};
 
 /// A common structure for data with co-signatures.
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
@@ -212,11 +214,13 @@ impl fmt::Display for CoSigErr {
 #[cfg(test)]
 #[allow(missing_docs)]
 mod test {
-    use super::*;
-    use crate::staking::{Validator, ValidatorKind};
-    use rand_chacha::ChaChaRng;
-    use rand_core::SeedableRng;
-    use ruc::pnk;
+    use {
+        super::*,
+        crate::staking::{Validator, ValidatorKind},
+        rand_chacha::ChaChaRng,
+        rand_core::SeedableRng,
+        ruc::pnk,
+    };
 
     #[derive(Default, Debug, Deserialize, Serialize)]
     struct Data {
@@ -249,7 +253,7 @@ mod test {
                     kp.get_pk(),
                     [1, 5],
                     Default::default(),
-                    ValidatorKind::Initor,
+                    ValidatorKind::Initiator,
                 )
             })
             .collect::<Result<Vec<_>>>();

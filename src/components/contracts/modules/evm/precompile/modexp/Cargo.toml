@@ -2,7 +2,7 @@
 name = "evm-precompile-modexp"
 version = "0.1.0"
 authors = ["FindoraNetwork"]
-edition = "2018"
+edition = "2021"
 homepage = "https://findora.org/technology"
 repository = "https://github.com/findoranetwork/platform/"
 description = "MODEXP precompiles for EVM module."
@@ -12,3 +12,8 @@ readme = "README.md"
 evm = { version = "0.29.0", default-features = false, features = ["with-serde"] }
 module-evm = { path = "../../../../modules/evm"}
 num = { version = "0.3", features = ["alloc"] }
+
+[dev-dependencies]
+hex = "0.4.2"
+fp-mocks = { path = "../../../../primitives/mocks" }
+pallet-evm-test-vector-support = { version = "0.1.0", path = "../../test-vector-support" }

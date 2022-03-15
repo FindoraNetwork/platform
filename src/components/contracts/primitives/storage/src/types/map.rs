@@ -70,6 +70,11 @@ where
             .unwrap()
     }
 
+    /// Load the value associated with the given key from the map.
+    pub fn get_bytes<D: MerkleDB>(state: &State<D>, key: &Key) -> Option<Vec<u8>> {
+        Instance::get::<D>(state, Self::build_key_for(key).as_slice()).unwrap()
+    }
+
     /// Load versioned value associated with the given key from the map.
     pub fn get_ver<D: MerkleDB>(
         state: &State<D>,
@@ -84,6 +89,37 @@ where
         .unwrap()
     }
 
+    /// Load versioned value associated with the given key from the map.
+    pub fn get_ver_bytes<D: MerkleDB>(
+        state: &State<D>,
+        key: &Key,
+        height: u64,
+    ) -> Option<Vec<u8>> {
+        Instance::get_v::<D>(state, Self::build_key_for(key).as_slice(), height).unwrap()
+    }
+
+    /// Load the unique key value pair with specified prefix.
+    pub fn get_unique_prefix<D: MerkleDB>(
+        state: &State<D>,
+        prefix: &Key,
+    ) -> Option<(Key, Value)> {
+        let prefix = Prefix::new(Self::build_key_for(prefix).as_slice());
+
+        let kv_map = Instance::iter_cur(state, prefix);
+        for (k, v) in kv_map {
+            let key_str = String::from_utf8_lossy(k.as_slice()).to_string();
+            let key_list: Vec<_> = key_str.split(DB_SEPARATOR).collect();
+
+            let key = Self::parse_key_for(key_list);
+            let raw_value = serde_json::from_slice::<Value>(v.as_slice()).ok();
+
+            if let (Ok(k), Some(v)) = (key, raw_value) {
+                return Some((k, v));
+            }
+        }
+        None
+    }
+
     /// Store a value to be associated with the given key from the map.
     pub fn insert<D: MerkleDB>(
         state: &mut State<D>,
@@ -91,6 +127,15 @@ where
         val: &Value,
     ) -> Result<()> {
         Instance::set_obj::<Value, D>(state, Self::build_key_for(key).as_slice(), val)
+    }
+
+    /// Store a serialized value to be associated with the given key from the map.
+    pub fn insert_bytes<D: MerkleDB>(
+        state: &mut State<D>,
+        key: &Key,
+        val: Vec<u8>,
+    ) -> Result<()> {
+        Instance::set::<D>(state, Self::build_key_for(key).as_slice(), val)
     }
 
     /// Remove the value under a key.

@@ -15,14 +15,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(test)]
+mod tests;
+
 use core::cmp::max;
 use core::ops::BitAnd;
 use evm::{executor::PrecompileOutput, Context, ExitError, ExitSucceed};
-use module_evm::precompile::{FinState, Precompile};
+use module_evm::precompile::{FinState, Precompile, PrecompileId};
 use num::{BigUint, FromPrimitive, One, ToPrimitive, Zero};
 use std::cmp::Ordering;
 
 pub struct Modexp;
+
+impl PrecompileId for Modexp {
+    fn contract_id() -> u64 {
+        0x5
+    }
+}
 
 const MIN_GAS_COST: u64 = 200;
 

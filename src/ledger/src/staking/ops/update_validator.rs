@@ -5,15 +5,17 @@
 //! by using a multi-signature transaction.
 //!
 
-use crate::{
-    data_model::NoReplayToken,
-    staking::{
-        cosig::CoSigOp, BlockHeight, Staking, Validator, ValidatorData,
-        COSIG_THRESHOLD_DEFAULT, VALIDATORS_MIN,
+use {
+    crate::{
+        data_model::NoReplayToken,
+        staking::{
+            cosig::CoSigOp, BlockHeight, Staking, Validator, ValidatorData,
+            COSIG_THRESHOLD_DEFAULT, VALIDATORS_MIN,
+        },
     },
+    ruc::*,
+    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
-use ruc::*;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
 /// Used as the inner object of a `UpdateValidator Operation`.
 pub type UpdateValidatorOps = CoSigOp<Data>;

@@ -60,6 +60,8 @@ typedef struct CredentialIssuerKeyPair CredentialIssuerKeyPair;
  */
 typedef struct CredentialUserKeyPair CredentialUserKeyPair;
 
+typedef struct EVMTransactionBuilder EVMTransactionBuilder;
+
 typedef struct FeeInputs FeeInputs;
 
 typedef struct OpenAssetRecord OpenAssetRecord;
@@ -156,6 +158,10 @@ struct XfrPublicKey *findora_ffi_get_null_pk(void);
 char *findora_ffi_generate_mnemonic_custom(uint8_t words_len,
                                            const char *lang);
 
+/**
+ * # Safety
+ *
+ */
 char *findora_ffi_decryption_pbkdf2_aes256gcm(char *enc_key_pair, const char *password);
 
 struct ByteBuffer findora_ffi_encryption_pbkdf2_aes256gcm(const char *key_pair,
@@ -168,56 +174,89 @@ struct ByteBuffer findora_ffi_encryption_pbkdf2_aes256gcm(const char *key_pair,
 struct XfrKeyPair *findora_ffi_keypair_from_str(const char *key_pair_str);
 
 /**
+ * # Safety
+ *
  * Returns bech32 encoded representation of an XfrPublicKey.
  */
 char *findora_ffi_public_key_to_bech32(const struct XfrPublicKey *key);
 
 /**
+ * # Safety
+ *
  * Extracts the public key as a string from a transfer key pair.
  */
 char *findora_ffi_get_pub_key_str(const struct XfrKeyPair *key);
 
 /**
+ * # Safety
+ *
  * Extracts the private key as a string from a transfer key pair.
  */
 char *findora_ffi_get_priv_key_str(const struct XfrKeyPair *key);
 
 /**
+ * # Safety
+ *
  * Restore the XfrKeyPair from a mnemonic with a default bip44-path,
  * that is "m/44'/917'/0'/0/0" ("m/44'/coin'/account'/change/address").
  */
 struct XfrKeyPair *findora_ffi_restore_keypair_from_mnemonic_default(const char *phrase);
 
 /**
+ * # Safety
+ *
  * Expresses a transfer key pair as a hex-encoded string.
  * To decode the string, use `keypair_from_str` function.
  */
 char *findora_ffi_keypair_to_str(const struct XfrKeyPair *key_pair);
 
+/**
+ * # Safety
+ *
+ */
 struct XfrKeyPair *findora_ffi_create_keypair_from_secret(const char *sk_str);
 
+/**
+ * # Safety
+ *
+ */
 struct XfrPublicKey *findora_ffi_get_pk_from_keypair(const struct XfrKeyPair *key_pair);
 
 /**
+ * # Safety
+ *
  * Creates a new transfer key pair.
  */
 struct XfrKeyPair *findora_ffi_new_keypair(void);
 
+/**
+ * # Safety
+ *
+ */
 char *findora_ffi_bech32_to_base64(const char *pk);
 
+/**
+ * # Safety
+ *
+ */
 char *findora_ffi_base64_to_bech32(const char *pk);
 
 /**
+ * # Safety
  * Builds an asset type from a JSON-encoded JavaScript value.
  */
 struct AssetType *findora_ffi_asset_type_from_json(const char *asset_type_json);
 
 /**
+ * # Safety
+ *
  * Fetch the tracing policies associated with this asset type.
  */
 struct TracingPolicies *findora_ffi_asset_type_get_tracing_policies(const struct AssetType *asset_type);
 
 /**
+ * # Safety
+ *
  * Converts a base64 encoded public key string to a public key.
  */
 struct XfrPublicKey *findora_ffi_public_key_from_base64(const char *pk);
@@ -247,6 +286,8 @@ struct TxoRef *findora_ffi_txo_ref_relative(uint64_t idx);
 struct TxoRef *findora_ffi_txo_ref_absolute(uint64_t idx);
 
 /**
+ * # Safety
+ *
  * Returns a object containing decrypted owner record information,
  * where `amount` is the decrypted asset amount, and `asset_type` is the decrypted asset type code.
  *
@@ -261,6 +302,8 @@ struct OpenAssetRecord *findora_ffi_open_client_asset_record(const struct Client
                                                              const struct XfrKeyPair *keypair);
 
 /**
+ * # Safety
+ *
  * pub enum AssetRecordType {
  *     NonConfidentialAmount_ConfidentialAssetType = 0,
  *     ConfidentialAmount_NonConfidentialAssetType = 1,
@@ -270,13 +313,27 @@ struct OpenAssetRecord *findora_ffi_open_client_asset_record(const struct Client
  */
 int32_t findora_ffi_open_client_asset_record_get_record_type(const struct OpenAssetRecord *record);
 
+/**
+ * # Safety
+ *
+ */
 char *findora_ffi_open_client_asset_record_get_asset_type(const struct OpenAssetRecord *record);
 
+/**
+ * # Safety
+ *
+ */
 uint64_t findora_ffi_open_client_asset_record_get_amount(const struct OpenAssetRecord *record);
 
+/**
+ * # Safety
+ *
+ */
 struct XfrPublicKey *findora_ffi_open_client_asset_record_get_pub_key(const struct OpenAssetRecord *record);
 
 /**
+ * # Safety
+ *
  * Builds a client record from a JSON-encoded JavaScript value.
  *
  * @param {JsValue} val - JSON-encoded autehtnicated asset record fetched from ledger server with the `utxo_sid/{sid}` route,
@@ -300,6 +357,8 @@ struct XfrPublicKey *findora_ffi_open_client_asset_record_get_pub_key(const stru
 struct ClientAssetRecord *findora_ffi_client_asset_record_from_json(const char *val);
 
 /**
+ * # Safety
+ *
  * Builds an owner memo from a JSON-serialized JavaScript value.
  * @param {JsValue} val - JSON owner memo fetched from query server with the `get_owner_memo/{sid}` route,
  * where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route. See the example below.
@@ -401,6 +460,33 @@ struct AssetRules *findora_ffi_asset_rules_set_decimals(const struct AssetRules 
                                                         uint8_t decimals);
 
 /**
+ * Construct a EVM Transaction that transfer account balance to UTXO.
+ * @param {unsigned long long} amount - Amount to transfer.
+ * @param {XfrKeyPair} fra_kp - Fra key pair.
+ * @param {String} address - EVM address.
+ * @param {String} eth_phrase - The account mnemonic.
+ * @param {String} nonce - Json encoded U256(256 bits unsigned integer).
+ */
+struct EVMTransactionBuilder *findora_ffi_new_withdraw_transaction(uint64_t amount,
+                                                                   const struct XfrKeyPair *fra_kp,
+                                                                   const char *address,
+                                                                   const char *eth_phrase,
+                                                                   const char *nonce);
+
+/**
+ * # Safety
+ * Generate the base64 encoded transaction data.
+ */
+const char *findora_ffi_evm_transaction_data(struct EVMTransactionBuilder *tx);
+
+/**
+ * # Safety
+ * Free the memory.
+ * **Danger:**, this will make the tx pointer a dangling pointer.
+ */
+void findora_ffi_free_evm_transaction(struct EVMTransactionBuilder *tx);
+
+/**
  * Fee smaller than this value will be denied.
  */
 uint64_t findora_ffi_fra_get_minimal_fee(void);
@@ -412,6 +498,10 @@ struct XfrPublicKey *findora_ffi_fra_get_dest_pubkey(void);
 
 struct FeeInputs *findora_ffi_fee_inputs_new(void);
 
+/**
+ * # Safety
+ *
+ */
 void findora_ffi_fee_inputs_append(struct FeeInputs *ptr,
                                    uint64_t am,
                                    const struct TxoRef *tr,
@@ -432,8 +522,16 @@ uint64_t findora_ffi_get_delegation_min_amount(void);
 
 uint64_t findora_ffi_get_delegation_max_amount(void);
 
+/**
+ * # Safety
+ *
+ */
 void findora_ffi_xfr_public_key_free(struct XfrPublicKey *ptr);
 
+/**
+ * # Safety
+ *
+ */
 void findora_ffi_fee_inputs_free(struct FeeInputs *ptr);
 
 /**
@@ -558,6 +656,18 @@ struct TransactionBuilder *findora_ffi_transaction_builder_add_operation_claim_c
 struct TransactionBuilder *findora_ffi_transaction_builder_add_transfer_operation(const struct TransactionBuilder *builder,
                                                                                   const char *op);
 
+/**
+ * Adds a serialized transfer account operation to a transaction builder instance.
+ * @param {string} address - a String which is hex-encoded EVM address or base64 encoded xfr public key or bech32 encoded xfr public key.
+ * @param {unsigned long long} amount - Amount to be transfered.
+ * @param {XfrKeyPair} kp - Fra ownner key pair.
+ * @return null if `address` or 'kp' is incorrect.
+ */
+struct TransactionBuilder *findora_ffi_transaction_builder_add_transfer_account_operation(const struct TransactionBuilder *builder,
+                                                                                          const char *address,
+                                                                                          uint64_t amount,
+                                                                                          const struct XfrKeyPair *kp);
+
 struct TransactionBuilder *findora_ffi_transaction_builder_sign(const struct TransactionBuilder *builder,
                                                                 const struct XfrKeyPair *kp);
 
@@ -591,11 +701,15 @@ struct OwnerMemo *findora_ffi_transaction_builder_get_owner_memo(const struct Tr
 struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_new(void);
 
 /**
+ * # Safety
+ *
  * Debug function that does not need to go into the docs.
  */
 char *findora_ffi_transfer_operation_builder_debug(const struct TransferOperationBuilder *builder);
 
 /**
+ * # Safety
+ *
  * Wraps around TransferOperationBuilder to add an input to a transfer operation builder.
  */
 struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_add_input_with_tracing(const struct TransferOperationBuilder *builder,
@@ -607,6 +721,8 @@ struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_add_inpu
                                                                                                uint64_t amount);
 
 /**
+ * # Safety
+ *
  * Wraps around TransferOperationBuilder to add an input to a transfer operation builder.
  */
 struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_add_input_no_tracing(const struct TransferOperationBuilder *builder,
@@ -617,6 +733,8 @@ struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_add_inpu
                                                                                              uint64_t amount);
 
 /**
+ * # Safety
+ *
  * Wraps around TransferOperationBuilder to add an output to a transfer operation builder.
  */
 struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_add_output_with_tracing(const struct TransferOperationBuilder *builder,
@@ -628,6 +746,8 @@ struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_add_outp
                                                                                                 bool conf_type);
 
 /**
+ * # Safety
+ *
  * Wraps around TransferOperationBuilder to add an output to a transfer operation builder.
  */
 struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_add_output_no_tracing(const struct TransferOperationBuilder *builder,
@@ -638,6 +758,8 @@ struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_add_outp
                                                                                               bool conf_type);
 
 /**
+ * # Safety
+ *
  * Wraps around TransferOperationBuilder to ensure the transfer inputs and outputs are balanced.
  * This function will add change outputs for all unspent portions of input records.
  * @throws Will throw an error if the transaction cannot be balanced.
@@ -645,11 +767,15 @@ struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_add_outp
 struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_balance(const struct TransferOperationBuilder *builder);
 
 /**
+ * # Safety
+ *
  * Wraps around TransferOperationBuilder to finalize the transaction.
  */
 struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_create(const struct TransferOperationBuilder *builder);
 
 /**
+ * # Safety
+ *
  * Wraps around TransferOperationBuilder to add a signature to the operation.
  *
  * All input owners must sign.
@@ -657,9 +783,15 @@ struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_create(c
 struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_sign(const struct TransferOperationBuilder *builder,
                                                                              const struct XfrKeyPair *kp);
 
+/**
+ * # Safety
+ *
+ */
 char *findora_ffi_transfer_operation_builder_builder(const struct TransferOperationBuilder *builder);
 
 /**
+ * # Safety
+ *
  * Wraps around TransferOperationBuilder to extract an operation expression as JSON.
  */
 char *findora_ffi_transfer_operation_builder_transaction(const struct TransferOperationBuilder *builder);

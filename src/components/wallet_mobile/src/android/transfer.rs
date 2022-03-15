@@ -7,6 +7,7 @@ use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::OwnerMemo as ZeiOwnerMemo;
 
 #[no_mangle]
+/// # Safety
 /// Builds an asset type from a JSON-encoded JavaScript value.
 /// @param {JsValue} val - JSON-encoded asset type fetched from ledger server with the `asset_token/{code}` route.
 /// Note: The first field of an asset type is `properties`. See the example below.
@@ -44,6 +45,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_assetTypeFromJson(
 }
 
 #[no_mangle]
+/// # Safety
 /// Fetch the tracing policies associated with this asset type.
 /// @returns {TracingPolicies}
 pub unsafe extern "system" fn Java_com_findora_JniApi_assetTypeGetTracingPolicies(
@@ -57,6 +59,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_assetTypeGetTracingPolicie
 }
 
 #[no_mangle]
+/// # Safety
 /// Converts a base64 encoded public key string to a public key.
 /// @param {string} pk
 /// @returns {XfrPublicKey}
@@ -75,6 +78,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_publicKeyFromBase64(
 }
 
 #[no_mangle]
+/// # Safety
 /// Creates a relative txo reference as a JSON string. Relative txo references are offset
 /// backwards from the operation they appear in -- 0 is the most recent, (n-1) is the first output
 /// of the transaction.
@@ -94,6 +98,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_txoRefRelative(
 }
 
 #[no_mangle]
+/// # Safety
 /// Creates an absolute transaction reference as a JSON string.
 ///
 /// Use absolute txo indexing when referring to an output that has been assigned a utxo index (i.e.
@@ -111,6 +116,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_txoRefAbsolute(
 }
 
 #[no_mangle]
+/// # Safety
 /// Builds a client record from a JSON-encoded JavaScript value.
 ///
 /// @param {JsValue} val - JSON-encoded autehtnicated asset record fetched from ledger server with the `utxo_sid/{sid}` route,
@@ -146,6 +152,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_clientAssetRecordFromJson(
 }
 
 #[no_mangle]
+/// # Safety
 /// ClientAssetRecord ==> JsValue
 pub unsafe extern "system" fn Java_com_findora_JniApi_clientAssetRecordToJson(
     env: JNIEnv,
@@ -160,6 +167,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_clientAssetRecordToJson(
 }
 
 #[no_mangle]
+/// # Safety
 /// Builds an owner memo from a JSON-serialized JavaScript value.
 /// @param {JsValue} val - JSON owner memo fetched from query server with the `get_owner_memo/{sid}` route,
 /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route. See the example below.
@@ -184,6 +192,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_ownerMemoFromJson(
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "system" fn Java_com_findora_JniApi_assetTracerKeyPairNew(
     _env: JNIEnv,
     _: JClass,
@@ -192,6 +202,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_assetTracerKeyPairNew(
 }
 
 #[no_mangle]
+/// # Safety
 /// Create a new transfer operation builder.
 /// @returns {TransferOperationBuilder}
 pub extern "system" fn Java_com_findora_JniApi_transferOperationBuilderNew(
@@ -202,6 +213,7 @@ pub extern "system" fn Java_com_findora_JniApi_transferOperationBuilderNew(
 }
 
 #[no_mangle]
+/// # Safety
 /// Debug function that does not need to go into the docs.
 pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderDebug(
     env: JNIEnv,
@@ -216,6 +228,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderDe
 }
 
 #[no_mangle]
+/// # Safety
 /// Wraps around TransferOperationBuilder to add an input to a transfer operation builder.
 //  @param {TxoRef} txo_ref - Absolute or relative utxo reference
 //  @param {string} asset_record - Serialized client asset record to serve as transfer input. This record must exist on the
@@ -251,13 +264,12 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
     let builder = &*(builder as *mut TransferOperationBuilder);
     let txo_ref = *(txo_ref_ptr as *mut TxoRef);
     let asset_record = &*(asset_record_ptr as *mut ClientAssetRecord);
-    let owner_memo;
-    if 0 == owner_memo_ptr {
-        owner_memo = None;
+    let owner_memo = if 0 == owner_memo_ptr {
+        None
     } else {
         let memo = &*(owner_memo_ptr as *mut OwnerMemo);
-        owner_memo = Some(memo.clone());
-    }
+        Some(memo.clone())
+    };
     let tracing_policies = &*(tracing_policies_ptr as *mut TracingPolicies);
     let key = &*(key_ptr as *mut XfrKeyPair);
     let amount: String = env
@@ -280,6 +292,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
 }
 
 #[no_mangle]
+/// # Safety
 /// Wraps around TransferOperationBuilder to add an input to a transfer operation builder.
 // * @param {TxoRef} txo_ref - Absolute or relative utxo reference
 // * @param {string} asset_record - Serialized client asset record to serve as transfer input. This record must exist on the
@@ -310,13 +323,12 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
     let builder = &*(builder as *mut TransferOperationBuilder);
     let txo_ref = *(txo_ref_ptr as *mut TxoRef);
     let asset_record = &*(asset_record_ptr as *mut ClientAssetRecord);
-    let owner_memo;
-    if 0 == owner_memo_ptr {
-        owner_memo = None;
+    let owner_memo = if 0 == owner_memo_ptr {
+        None
     } else {
         let memo = &*(owner_memo_ptr as *mut OwnerMemo);
-        owner_memo = Some(memo.clone());
-    }
+        Some(memo.clone())
+    };
     let key = &*(key_ptr as *mut XfrKeyPair);
     let amount: String = env
         .get_string(amount)
@@ -337,6 +349,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
 }
 
 #[no_mangle]
+/// # Safety
 /// Wraps around TransferOperationBuilder to add an output to a transfer operation builder.
 // * @param {BigInt} amount - amount to transfer to the recipient.
 // * @param {XfrPublicKey} recipient - public key of the recipient.
@@ -391,6 +404,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
 }
 
 #[no_mangle]
+/// # Safety
 /// Wraps around TransferOperationBuilder to add an output to a transfer operation builder.
 // * @param {BigInt} amount - amount to transfer to the recipient
 // * @param {XfrPublicKey} recipient - public key of the recipient
@@ -439,6 +453,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAddInput(
     _env: JNIEnv,
     _: JClass,
@@ -453,20 +469,18 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
     let builder = &*(builder as *mut TransferOperationBuilder);
     let txo_ref = *(txo_ref_ptr as *mut TxoRef);
     let asset_record = &*(asset_record_ptr as *mut ClientAssetRecord);
-    let owner_memo;
-    if 0 == owner_memo_ptr {
-        owner_memo = None;
+    let owner_memo = if 0 == owner_memo_ptr {
+        None
     } else {
         let memo = &*(owner_memo_ptr as *mut OwnerMemo);
-        owner_memo = Some(memo.clone());
-    }
-    let tracing_policies;
-    if 0 == tracing_policies_ptr {
-        tracing_policies = None;
+        Some(memo.clone())
+    };
+    let tracing_policies = if 0 == tracing_policies_ptr {
+        None
     } else {
         let policies = &*(tracing_policies_ptr as *mut TracingPolicies);
-        tracing_policies = Some(policies);
-    }
+        Some(policies)
+    };
     let key = &*(key_ptr as *mut XfrKeyPair);
 
     let builder = builder
@@ -484,6 +498,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAddOutput(
     env: JNIEnv,
     _: JClass,
@@ -496,13 +512,12 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
     conf_type: jboolean,
 ) -> jlong {
     let builder = &*(builder as *mut TransferOperationBuilder);
-    let tracing_policies;
-    if 0 == tracing_policies_ptr {
-        tracing_policies = None;
+    let tracing_policies = if 0 == tracing_policies_ptr {
+        None
     } else {
         let policies = &*(tracing_policies_ptr as *mut TracingPolicies);
-        tracing_policies = Some(policies);
-    }
+        Some(policies)
+    };
     let recipient = &*(recipient as *mut XfrPublicKey);
     let code: String = env
         .get_string(code)
@@ -524,6 +539,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
 }
 
 #[no_mangle]
+/// # Safety
 /// Wraps around TransferOperationBuilder to ensure the transfer inputs and outputs are balanced.
 /// This function will add change outputs for all unspent portions of input records.
 /// @throws Will throw an error if the transaction cannot be balanced.
@@ -534,10 +550,11 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderBa
     builder: jlong,
 ) -> jlong {
     let builder = &*(builder as *mut TransferOperationBuilder);
-    Box::into_raw(Box::new(builder.clone().balance().unwrap())) as jlong
+    Box::into_raw(Box::new(builder.clone().balance(None).unwrap())) as jlong
 }
 
 #[no_mangle]
+/// # Safety
 /// Wraps around TransferOperationBuilder to finalize the transaction.
 /// @throws Will throw an error if input and output amounts do not add up.
 /// @throws Will throw an error if not all record owners have signed the transaction.
@@ -552,6 +569,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderCr
 }
 
 #[no_mangle]
+/// # Safety
 /// Wraps around TransferOperationBuilder to add a signature to the operation.
 ///
 /// All input owners must sign.
@@ -572,6 +590,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderSi
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderBuilder(
     env: JNIEnv,
     _: JClass,
@@ -585,6 +605,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderBu
 }
 
 #[no_mangle]
+/// # Safety
 /// Wraps around TransferOperationBuilder to extract an operation expression as JSON.
 pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderTransaction(
     env: JNIEnv,
@@ -599,6 +620,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderTr
 }
 
 #[no_mangle]
+/// # Safety
 /// Fee smaller than this value will be denied.
 /// @returns {BigInt}
 pub unsafe extern "system" fn Java_com_findora_JniApi_fraGetMinimalFee(
@@ -606,11 +628,12 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_fraGetMinimalFee(
     _: JClass,
 ) -> jvalue {
     jvalue {
-        _data: fra_get_minimal_fee(),
+        j: fra_get_minimal_fee() as jlong,
     }
 }
 
 #[no_mangle]
+/// # Safety
 /// The destination for fee to be transfered to.
 /// @returns {XfrPublicKey}
 pub unsafe extern "system" fn Java_com_findora_JniApi_fraGetDestPubkey(
@@ -621,6 +644,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_fraGetDestPubkey(
 }
 
 #[no_mangle]
+/// # Safety
 /// The system address used to reveive delegation principals.
 pub unsafe extern "system" fn Java_com_findora_JniApi_getDelegationTargetAddress(
     env: JNIEnv,
@@ -633,6 +657,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_getDelegationTargetAddress
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "system" fn Java_com_findora_JniApi_getCoinbaseAddress(
     env: JNIEnv,
     _: JClass,
@@ -644,6 +670,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_getCoinbaseAddress(
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "system" fn Java_com_findora_JniApi_getCoinbasePrincipalAddress(
     env: JNIEnv,
     _: JClass,
@@ -655,21 +683,25 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_getCoinbasePrincipalAddres
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "system" fn Java_com_findora_JniApi_getDelegationMinAmount(
     _env: JNIEnv,
     _: JClass,
 ) -> jvalue {
     jvalue {
-        _data: get_delegation_min_amount(),
+        j: get_delegation_min_amount() as jlong,
     }
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "system" fn Java_com_findora_JniApi_getDelegationMaxAmount(
     _env: JNIEnv,
     _: JClass,
 ) -> jvalue {
     jvalue {
-        _data: get_delegation_max_amount(),
+        j: get_delegation_max_amount() as jlong,
     }
 }

@@ -10,11 +10,10 @@ use finutils::txn_builder::{
 use globutils::HashOf;
 use ledger::{
     data_model::{
-        AssetTypeCode, AuthenticatedTransaction, Operation, TransferType, TxOutput,
+        gen_random_keypair, AssetTypeCode, AuthenticatedTransaction, Operation,
+        TransferType, TxOutput,
     },
-    staking::{
-        gen_random_keypair, td_addr_to_bytes, PartialUnDelegation, TendermintAddr,
-    },
+    staking::{td_addr_to_bytes, PartialUnDelegation, TendermintAddr},
 };
 use ruc::{eg, Result as RucResult};
 use serde_json::Result;
@@ -522,8 +521,11 @@ impl TransferOperationBuilder {
     /// Wraps around TransferOperationBuilder to ensure the transfer inputs and outputs are balanced.
     /// This function will add change outputs for all unspent portions of input records.
     /// @throws Will throw an error if the transaction cannot be balanced.
-    pub fn balance(mut self) -> RucResult<TransferOperationBuilder> {
-        self.get_builder_mut().balance()?;
+    pub fn balance(
+        mut self,
+        asset: Option<AssetRecordType>,
+    ) -> RucResult<TransferOperationBuilder> {
+        self.get_builder_mut().balance(asset)?;
         Ok(self)
     }
 

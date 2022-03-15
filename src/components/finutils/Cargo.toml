@@ -1,18 +1,18 @@
 [package]
 name = "finutils"
-version = "0.2.0"
+version = "0.2.11"
 authors = ["FindoraNetwork"]
 build = "build.rs"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
-tendermint = "0.19.0"
+tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a" }
 tokio = "1.10.1"
 hex = "0.4.2"
 base64 = "0.10"
 clap = { version = "2.33.3", features = ["yaml"] }
 lazy_static = "1.4.0"
-attohttpc = { version = "0.16.3", default-features = false, features = ["compress", "json", "tls-rustls"] }
+attohttpc = { version = "0.18", default-features = false, features = ["compress", "json", "tls-rustls"] }
 serde_json = "1.0.40"
 serde = { version = "1.0.124", features = ["derive"] }
 rand = "0.8"
@@ -21,20 +21,19 @@ rand_chacha = "0.2.0"
 curve25519-dalek = { version = "3.0", features = ["serde"] }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"] }
 
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
-ruc = "0.6.5"
+zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4x" }
+ruc = "1.0"
 
 ledger = { path = "../../ledger" }
 globutils = { path = "../../libs/globutils" }
 credentials = { path = "../../libs/credentials" }
 
-baseapp = { path = "../contracts/baseapp", optional = true }
 eth_checksum = { version = "0.1.2", optional = true }
-fp-core = { path = "../contracts/primitives/core", optional = true }
+fp-core = { path = "../contracts/primitives/core", default-features = false }
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = { path = "../contracts/primitives/types" }
 
-tendermint-rpc = { version = "0.19.0", features = ["http-client", "websocket-client"], optional = true }
+tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rpc", features = ["http-client", "websocket-client"], optional = true, tag = "v0.19.0a" }
 
 [dev-dependencies]
 
@@ -44,13 +43,12 @@ vergen = "=3.1.0"
 [features]
 default = ["std"]
 std = [
-    "baseapp",
     "eth_checksum",
-    "fp-core",
     "tendermint-rpc"
 ]
 abci_mock = ["ledger/abci_mock"]
 debug_env = ["ledger/debug_env"]
+genstx = []
 
 [[bin]]
 name = "fn"
@@ -58,7 +56,7 @@ path = "src/bins/fn.rs"
 
 [[bin]]
 name = "stt"
-path = "src/bins/stt.rs"
+path = "src/bins/stt/stt.rs"
 
 [[bin]]
 name = "key_generator"

@@ -10,13 +10,11 @@ use fp_core::{
 use fp_traits::evm::DecimalsMapping;
 use fp_types::{
     actions,
-    actions::account::MintOutput,
     assemble::{convert_unsigned_transaction, CheckedTransaction, UncheckedTransaction},
     crypto::Address,
 };
 use ledger::{
-    converter::check_convert_tx,
-    data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA},
+    converter::check_convert_account, data_model::Transaction as FindoraTransaction,
 };
 use ruc::*;
 use serde::Serialize;
@@ -27,6 +25,7 @@ pub struct ModuleManager {
     pub(crate) account_module: module_account::App<BaseApp>,
     pub(crate) ethereum_module: module_ethereum::App<BaseApp>,
     pub(crate) evm_module: module_evm::App<BaseApp>,
+    pub(crate) xhub_module: module_xhub::App<BaseApp>,
     pub(crate) template_module: module_template::App<BaseApp>,
 }
 
@@ -52,6 +51,8 @@ impl ModuleManager {
             self.ethereum_module.query_route(ctx, path, req)
         } else if module_name == module_evm::MODULE_NAME {
             self.evm_module.query_route(ctx, path, req)
+        } else if module_name == module_xhub::MODULE_NAME {
+            self.xhub_module.query_route(ctx, path, req)
         } else if module_name == module_template::MODULE_NAME {
             self.template_module.query_route(ctx, path, req)
         } else {
@@ -66,6 +67,7 @@ impl ModuleManager {
         self.account_module.begin_block(ctx, req);
         self.ethereum_module.begin_block(ctx, req);
         self.evm_module.begin_block(ctx, req);
+        self.xhub_module.begin_block(ctx, req);
         self.template_module.begin_block(ctx, req);
     }
 
@@ -77,13 +79,23 @@ impl ModuleManager {
         let mut resp: ResponseEndBlock = Default::default();
         // Note: adding new modules need to be updated.
         self.account_module.end_block(ctx, req);
-        self.ethereum_module.end_block(ctx, req);
         self.evm_module.end_block(ctx, req);
+        self.xhub_module.end_block(ctx, req);
         let resp_template = self.template_module.end_block(ctx, req);
         if !resp_template.validator_updates.is_empty() {
             resp.validator_updates = resp_template.validator_updates;
         }
         resp
+    }
+
+    pub fn commit(
+        &mut self,
+        ctx: &mut Context,
+        height: u64,
+        root_hash: &[u8],
+    ) -> Result<()> {
+        self.ethereum_module
+            .commit(ctx, U256::from(height), root_hash)
     }
 
     pub fn process_tx<
@@ -113,30 +125,10 @@ impl ModuleManager {
         ctx: &Context,
         tx: &FindoraTransaction,
     ) -> Result<()> {
-        let (owner, assets) = check_convert_tx(tx)?;
-        for (asset, amount) in assets.iter() {
-            ensure!(
-                *asset == ASSET_TYPE_FRA,
-                "Invalid asset type only support FRA"
-            );
-            let balance =
-                EthereumDecimalsMapping::from_native_token(U256::from(*amount))
-                    .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
-            module_account::App::<BaseApp>::mint(
-                ctx,
-                &Address::from(owner.clone()),
-                balance,
-            )?;
-        }
-        Ok(())
-    }
-
-    pub fn consume_mint(
-        &mut self,
-        ctx: &Context,
-        size: usize,
-    ) -> Result<Vec<MintOutput>> {
-        module_account::App::<BaseApp>::consume_mint(ctx, size)
+        let (owner, amount) = check_convert_account(tx)?;
+        let balance = EthereumDecimalsMapping::from_native_token(U256::from(amount))
+            .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
+        module_account::App::<BaseApp>::mint(ctx, &Address::from(owner), balance)
     }
 }
 

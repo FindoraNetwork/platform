@@ -2,26 +2,28 @@
 //! # Helper Utils
 //!
 
-use super::{
-    IssuerKeyPair, IssuerPublicKey, LedgerState, TracingPolicies, TracingPolicy,
-    TransferType, XfrNotePolicies,
-};
-use crate::data_model::{
-    Asset, AssetRules, AssetTypeCode, ConfidentialMemo, DefineAsset, DefineAssetBody,
-    IssueAsset, IssueAssetBody, Memo, Operation, Transaction, TransferAsset,
-    TransferAssetBody, TxOutput, TxnEffect, TxnSID, TxoRef, TxoSID,
-};
-use globutils::SignatureOf;
-use rand_core::{CryptoRng, RngCore};
-use ruc::*;
-use std::fmt::Debug;
-use zei::{
-    setup::PublicParams,
-    xfr::{
-        asset_record::AssetRecordType,
-        asset_record::{build_blind_asset_record, open_blind_asset_record},
-        sig::{XfrKeyPair, XfrPublicKey},
-        structs::{AssetRecord, AssetRecordTemplate},
+use {
+    super::{
+        IssuerKeyPair, IssuerPublicKey, LedgerState, TracingPolicies, TracingPolicy,
+        TransferType, XfrNotePolicies,
+    },
+    crate::data_model::{
+        Asset, AssetRules, AssetTypeCode, ConfidentialMemo, DefineAsset,
+        DefineAssetBody, IssueAsset, IssueAssetBody, Memo, Operation, Transaction,
+        TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxnSID, TxoRef, TxoSID,
+    },
+    globutils::SignatureOf,
+    rand_core::{CryptoRng, RngCore},
+    ruc::*,
+    std::fmt::Debug,
+    zei::{
+        setup::PublicParams,
+        xfr::{
+            asset_record::AssetRecordType,
+            asset_record::{build_blind_asset_record, open_blind_asset_record},
+            sig::{XfrKeyPair, XfrPublicKey},
+            structs::{AssetRecord, AssetRecordTemplate},
+        },
     },
 };
 
@@ -107,7 +109,7 @@ pub fn apply_transaction(
     match TxnEffect::compute_effect(tx) {
         Ok(effect) => {
             let mut block = ledger.start_block().unwrap();
-            let temp_sid = ledger.apply_transaction(&mut block, effect, false).unwrap();
+            let temp_sid = ledger.apply_transaction(&mut block, effect).unwrap();
             ledger
                 .finish_block(block)
                 .unwrap()

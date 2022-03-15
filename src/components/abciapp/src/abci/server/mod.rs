@@ -2,28 +2,30 @@
 //! # define abci and impl tendermint abci
 //!
 
-use crate::abci::config::global_cfg::CFG;
-use crate::{
-    abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
-    api::submission_server::SubmissionServer,
+use {
+    crate::{
+        abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
+        api::submission_server::SubmissionServer,
+    },
+    abci::{
+        RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx,
+        RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery,
+        ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
+        ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
+    },
+    baseapp::BaseApp as AccountBaseAPP,
+    config::abci::global_cfg::CFG,
+    ledger::store::LedgerState,
+    parking_lot::RwLock,
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::*,
+    std::{
+        path::Path,
+        sync::{atomic::Ordering, Arc},
+    },
+    tx_sender::TendermintForward,
 };
-use abci::{
-    RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx, RequestEndBlock,
-    RequestInfo, RequestInitChain, RequestQuery, ResponseBeginBlock, ResponseCheckTx,
-    ResponseCommit, ResponseDeliverTx, ResponseEndBlock, ResponseInfo,
-    ResponseInitChain, ResponseQuery,
-};
-use baseapp::BaseApp as AccountBaseAPP;
-use ledger::store::LedgerState;
-use parking_lot::RwLock;
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
-use ruc::*;
-use std::{
-    path::Path,
-    sync::{atomic::Ordering, Arc},
-};
-use tx_sender::TendermintForward;
 
 pub use tx_sender::forward_txn_with_mode;
 
@@ -53,13 +55,13 @@ impl ABCISubmissionServer {
             None => {
                 pnk!(AccountBaseAPP::new(
                     tempfile::tempdir().unwrap().path(),
-                    CFG.enable_eth_empty_blocks
+                    CFG.disable_eth_empty_blocks
                 ))
             }
             Some(basedir) => {
                 pnk!(AccountBaseAPP::new(
                     Path::new(basedir),
-                    CFG.enable_eth_empty_blocks
+                    CFG.disable_eth_empty_blocks
                 ))
             }
         };

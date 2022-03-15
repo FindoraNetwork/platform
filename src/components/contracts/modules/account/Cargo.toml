@@ -2,7 +2,7 @@
 name = "module-account"
 version = "0.1.0"
 authors = ["FindoraNetwork"]
-edition = "2018"
+edition = "2021"
 homepage = "https://findora.org/technology"
 repository = "https://github.com/findoranetwork/platform/"
 description = "Findora module supporting smart account function"
@@ -10,13 +10,12 @@ readme = "README.md"
 
 [dependencies]
 abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
-ledger = { path = "../../../../ledger" }
 log = "0.4"
-primitive-types = { version = "0.10.0", default-features = false, features = ["rlp", "byteorder", "serde"] }
-ruc = "0.6.2"
+primitive-types = { version = "0.10.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
+ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0.64"
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.1a" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.4" }
 
 # primitives, don't depend on any modules
 fp-core = { path = "../../primitives/core" }
@@ -27,4 +26,4 @@ fp-types = { path = "../../primitives/types" }
 [dev-dependencies]
 parking_lot = "0.11.1"
 rand_chacha = "0.2.0"
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
+zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4x" }

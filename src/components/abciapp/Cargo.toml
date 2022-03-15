@@ -1,9 +1,9 @@
 [package]
 name = "abciapp"
-version = "0.2.0"
+version = "0.2.11"
 authors = ["FindoraNetwork"]
 build = "build.rs"
-edition = "2018"
+edition = "2021"
 
 [[bin]]
 name = "findorad"
@@ -21,7 +21,7 @@ log = "0.4.8"
 rand = "0.8"
 rand_chacha = "0.2.0"
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
-attohttpc = { version = "0.16.3", default-features = false, features = ["compress", "json", "tls-rustls"] }
+attohttpc = { version = "0.18", default-features = false, features = ["compress", "json", "tls-rustls"] }
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0.40"
 lazy_static = "1.4.0"
@@ -41,10 +41,10 @@ percent-encoding = "2.1.0"
 
 nix = "0.22.1"
 
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4e" }
-ruc = "0.6.5"
+zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4x" }
+ruc = { version = "1.0.5", default-features = false, features = ["compact"] }
 abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
-
+config = { path = "../config"}
 ledger = { path = "../../ledger" }
 cryptohash = { path = "../../libs/cryptohash" }
 globutils = { path = "../../libs/globutils" }
@@ -68,4 +68,3 @@ vergen = "=3.1.0"
 default = ["diskcache"]
 diskcache = ["ledger/diskcache"]
 debug_env = ["ledger/debug_env"]
-abci_mock = ["ledger/abci_mock"]

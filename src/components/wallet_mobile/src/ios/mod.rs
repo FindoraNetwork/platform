@@ -1,4 +1,5 @@
 pub mod asset_rules;
+pub mod evm_tx_builder;
 pub mod fee;
 pub mod free;
 pub mod tx_builder;
@@ -83,14 +84,16 @@ pub extern "C" fn findora_ffi_generate_mnemonic_custom(
 }
 
 #[no_mangle]
-pub extern "C" fn findora_ffi_decryption_pbkdf2_aes256gcm(
+/// # Safety
+///
+pub unsafe extern "C" fn findora_ffi_decryption_pbkdf2_aes256gcm(
     enc_key_pair: *mut c_char,
     password: *const c_char,
 ) -> *mut c_char {
     assert!(!enc_key_pair.is_null());
     assert!(!password.is_null());
 
-    let c_str = unsafe { CString::from_raw(enc_key_pair) };
+    let c_str = CString::from_raw(enc_key_pair);
     let plaintext =
         decryption_pbkdf2_aes256gcm(c_str.into_bytes(), c_char_to_string(password));
     string_to_c_char(plaintext)
@@ -166,6 +169,8 @@ pub extern "C" fn findora_ffi_keypair_from_str(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Returns bech32 encoded representation of an XfrPublicKey.
 pub unsafe extern "C" fn findora_ffi_public_key_to_bech32(
     key: *const types::XfrPublicKey,
@@ -176,6 +181,8 @@ pub unsafe extern "C" fn findora_ffi_public_key_to_bech32(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Extracts the public key as a string from a transfer key pair.
 pub unsafe extern "C" fn findora_ffi_get_pub_key_str(
     key: *const types::XfrKeyPair,
@@ -186,6 +193,8 @@ pub unsafe extern "C" fn findora_ffi_get_pub_key_str(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Extracts the private key as a string from a transfer key pair.
 pub unsafe extern "C" fn findora_ffi_get_priv_key_str(
     key: *const types::XfrKeyPair,
@@ -196,6 +205,8 @@ pub unsafe extern "C" fn findora_ffi_get_priv_key_str(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Restore the XfrKeyPair from a mnemonic with a default bip44-path,
 /// that is "m/44'/917'/0'/0/0" ("m/44'/coin'/account'/change/address").
 pub unsafe extern "C" fn findora_ffi_restore_keypair_from_mnemonic_default(
@@ -214,6 +225,8 @@ pub unsafe extern "C" fn findora_ffi_restore_keypair_from_mnemonic_default(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Expresses a transfer key pair as a hex-encoded string.
 /// To decode the string, use `keypair_from_str` function.
 pub unsafe extern "C" fn findora_ffi_keypair_to_str(
@@ -225,6 +238,8 @@ pub unsafe extern "C" fn findora_ffi_keypair_to_str(
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "C" fn findora_ffi_create_keypair_from_secret(
     sk_str: *const c_char,
 ) -> *mut types::XfrKeyPair {
@@ -239,6 +254,8 @@ pub unsafe extern "C" fn findora_ffi_create_keypair_from_secret(
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "C" fn findora_ffi_get_pk_from_keypair(
     key_pair: *const types::XfrKeyPair,
 ) -> *mut types::XfrPublicKey {
@@ -250,6 +267,8 @@ pub unsafe extern "C" fn findora_ffi_get_pk_from_keypair(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Creates a new transfer key pair.
 pub unsafe extern "C" fn findora_ffi_new_keypair() -> *mut types::XfrKeyPair {
     let boxed_data = Box::new(types::XfrKeyPair::from(new_keypair()));
@@ -257,6 +276,8 @@ pub unsafe extern "C" fn findora_ffi_new_keypair() -> *mut types::XfrKeyPair {
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "C" fn findora_ffi_bech32_to_base64(pk: *const c_char) -> *mut c_char {
     if let Ok(info) = rs_bech32_to_base64(c_char_to_string(pk).as_str()) {
         string_to_c_char(info)
@@ -266,6 +287,8 @@ pub unsafe extern "C" fn findora_ffi_bech32_to_base64(pk: *const c_char) -> *mut
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "C" fn findora_ffi_base64_to_bech32(pk: *const c_char) -> *mut c_char {
     if let Ok(info) = rs_base64_to_bech32(c_char_to_string(pk).as_str()) {
         string_to_c_char(info)
@@ -275,11 +298,12 @@ pub unsafe extern "C" fn findora_ffi_base64_to_bech32(pk: *const c_char) -> *mut
 }
 
 #[no_mangle]
+/// # Safety
 /// Builds an asset type from a JSON-encoded JavaScript value.
-pub extern "C" fn findora_ffi_asset_type_from_json(
+pub unsafe extern "C" fn findora_ffi_asset_type_from_json(
     asset_type_json: *const c_char,
 ) -> *mut AssetType {
-    let asset_type_json = unsafe { CStr::from_ptr(asset_type_json) };
+    let asset_type_json = CStr::from_ptr(asset_type_json);
     let asset_type: PlatformAssetType =
         serde_json::from_str(asset_type_json.to_str().unwrap_or("")).unwrap();
 
@@ -291,6 +315,8 @@ pub extern "C" fn findora_ffi_asset_type_from_json(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Fetch the tracing policies associated with this asset type.
 pub unsafe extern "C" fn findora_ffi_asset_type_get_tracing_policies(
     asset_type: *const AssetType,
@@ -300,11 +326,13 @@ pub unsafe extern "C" fn findora_ffi_asset_type_get_tracing_policies(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Converts a base64 encoded public key string to a public key.
-pub extern "C" fn findora_ffi_public_key_from_base64(
+pub unsafe extern "C" fn findora_ffi_public_key_from_base64(
     pk: *const c_char,
 ) -> *mut types::XfrPublicKey {
-    let pk = unsafe { CStr::from_ptr(pk) };
+    let pk = CStr::from_ptr(pk);
     if let Ok(info) = rs_public_key_from_base64(pk.to_str().unwrap_or("")) {
         Box::into_raw(Box::new(types::XfrPublicKey::from(info)))
     } else {
@@ -339,6 +367,8 @@ pub extern "C" fn findora_ffi_txo_ref_absolute(idx: u64) -> *mut TxoRef {
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Returns a object containing decrypted owner record information,
 /// where `amount` is the decrypted asset amount, and `asset_type` is the decrypted asset type code.
 ///
@@ -352,12 +382,11 @@ pub unsafe extern "C" fn findora_ffi_open_client_asset_record(
     owner_memo: *const OwnerMemo,
     keypair: *const types::XfrKeyPair,
 ) -> *mut types::OpenAssetRecord {
-    let memo;
-    if owner_memo.is_null() {
-        memo = None
+    let memo = if owner_memo.is_null() {
+        None
     } else {
-        memo = Some((*owner_memo).clone())
-    }
+        Some((*owner_memo).clone())
+    };
     if let Ok(info) = rs_open_client_asset_record(&*record, memo, &**keypair) {
         Box::into_raw(Box::new(info.into()))
     } else {
@@ -366,6 +395,8 @@ pub unsafe extern "C" fn findora_ffi_open_client_asset_record(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// pub enum AssetRecordType {
 ///     NonConfidentialAmount_ConfidentialAssetType = 0,
 ///     ConfidentialAmount_NonConfidentialAssetType = 1,
@@ -379,6 +410,8 @@ pub unsafe extern "C" fn findora_ffi_open_client_asset_record_get_record_type(
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "C" fn findora_ffi_open_client_asset_record_get_asset_type(
     record: *const types::OpenAssetRecord,
 ) -> *mut c_char {
@@ -390,6 +423,8 @@ pub unsafe extern "C" fn findora_ffi_open_client_asset_record_get_asset_type(
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "C" fn findora_ffi_open_client_asset_record_get_amount(
     record: *const types::OpenAssetRecord,
 ) -> u64 {
@@ -397,6 +432,8 @@ pub unsafe extern "C" fn findora_ffi_open_client_asset_record_get_amount(
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "C" fn findora_ffi_open_client_asset_record_get_pub_key(
     record: *const types::OpenAssetRecord,
 ) -> *mut types::XfrPublicKey {
@@ -406,6 +443,8 @@ pub unsafe extern "C" fn findora_ffi_open_client_asset_record_get_pub_key(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Builds a client record from a JSON-encoded JavaScript value.
 ///
 /// @param {JsValue} val - JSON-encoded autehtnicated asset record fetched from ledger server with the `utxo_sid/{sid}` route,
@@ -429,13 +468,15 @@ pub unsafe extern "C" fn findora_ffi_client_asset_record_from_json(
     val: *const c_char,
 ) -> *mut ClientAssetRecord {
     if let Ok(info) = ClientAssetRecord::from_json(c_char_to_string(val).as_str()) {
-        Box::into_raw(Box::new(info.into()))
+        Box::into_raw(Box::new(info))
     } else {
         std::ptr::null_mut()
     }
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Builds an owner memo from a JSON-serialized JavaScript value.
 /// @param {JsValue} val - JSON owner memo fetched from query server with the `get_owner_memo/{sid}` route,
 /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route. See the example below.

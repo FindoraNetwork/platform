@@ -2,7 +2,7 @@
 name = "baseapp"
 version = "0.1.0"
 authors = ["FindoraNetwork"]
-edition = "2018"
+edition = "2021"
 homepage = "https://findora.org/technology"
 repository = "https://github.com/findoranetwork/platform/"
 description = "Base application for tendermint abci"
@@ -17,12 +17,12 @@ lazy_static = "1.4.0"
 ledger = { path = "../../../ledger" }
 log = "0.4"
 parking_lot = "0.11.1"
-primitive-types = { version = "0.10.0", default-features = false, features = ["rlp", "byteorder", "serde"] }
+primitive-types = { version = "0.10.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
 protobuf = "2.16"
-ruc = "0.6.2"
+ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0.40"
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.1a" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.4" }
 
 # primitives
 fp-core = { path = "../primitives/core" }
@@ -36,6 +36,7 @@ module-account = { path = "../modules/account"}
 module-ethereum = { path = "../modules/ethereum"}
 module-evm = { path = "../modules/evm"}
 module-template = { path = "../modules/template"}
+module-xhub = { path = "../modules/xhub"}
 
 evm-precompile-basic = { path = "../modules/evm/precompile/basic" }
 evm-precompile-frc20 = { path = "../modules/evm/precompile/frc20" }

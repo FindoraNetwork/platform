@@ -1,4 +1,7 @@
-use crate::rust::*;
+use crate::rust::{
+    c_char_to_string, string_to_c_char, AssetRules, ClientAssetRecord, FeeInputs,
+    OwnerMemo, PublicParams, TransactionBuilder,
+};
 use std::os::raw::c_char;
 use zei::xfr::sig::XfrKeyPair;
 
@@ -239,6 +242,34 @@ pub extern "C" fn findora_ffi_transaction_builder_add_transfer_operation(
 ) -> *mut TransactionBuilder {
     if let Ok(info) = builder.clone().add_transfer_operation(c_char_to_string(op)) {
         Box::into_raw(Box::new(info))
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
+/// Adds a serialized transfer account operation to a transaction builder instance.
+/// @param {string} address - a String which is hex-encoded EVM address or base64 encoded xfr public key or bech32 encoded xfr public key.
+/// @param {unsigned long long} amount - Amount to be transfered.
+/// @param {XfrKeyPair} kp - Fra ownner key pair.
+/// @return null if `address` or 'kp' is incorrect.
+#[no_mangle]
+pub extern "C" fn findora_ffi_transaction_builder_add_transfer_account_operation(
+    builder: &TransactionBuilder,
+    address: *const c_char,
+    amount: u64,
+    kp: &XfrKeyPair,
+) -> *mut TransactionBuilder {
+    let addr_stirng = c_char_to_string(address);
+    let addr = if addr_stirng.is_empty() {
+        None
+    } else {
+        Some(addr_stirng)
+    };
+    if let Ok(builder) = builder
+        .clone()
+        .add_transfer_to_account_operation(amount, addr, kp)
+    {
+        Box::into_raw(Box::new(builder))
     } else {
         std::ptr::null_mut()
     }

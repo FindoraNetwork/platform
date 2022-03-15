@@ -32,7 +32,7 @@ stopnodes=$(dirname "$0")/stopnodes.sh
 echo -e "${GRN}step-1: run network------------------------------------------------${NC}"
 ./$cleannodes
 ./$startnodes
-sleep 3
+sleep $BLOCK_INTERVAL
 echo
 
 # init network

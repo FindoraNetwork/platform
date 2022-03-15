@@ -4,23 +4,26 @@
 //! Data representation required when users propose a delegation.
 //!
 
-use crate::{
-    data_model::{
-        NoReplayToken, Operation, Transaction, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
+use {
+    crate::{
+        data_model::{
+            NoReplayToken, Operation, Transaction, ASSET_TYPE_FRA,
+            BLACK_HOLE_PUBKEY_STAKING,
+        },
+        staking::{
+            deny_relative_inputs, td_addr_to_string, Amount, Staking, TendermintAddr,
+            Validator, STAKING_VALIDATOR_MIN_POWER,
+        },
     },
-    staking::{
-        deny_relative_inputs, td_addr_to_string, Amount, Staking, TendermintAddr,
-        Validator, STAKING_VALIDATOR_MIN_POWER,
+    ed25519_dalek::Signer,
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    std::collections::HashSet,
+    tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},
+    zei::xfr::{
+        sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
+        structs::{XfrAmount, XfrAssetType},
     },
-};
-use ed25519_dalek::Signer;
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature};
-use zei::xfr::{
-    sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
-    structs::{XfrAmount, XfrAssetType},
 };
 
 /// Used as the inner object of a `Delegation Operation`.

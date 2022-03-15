@@ -3,10 +3,8 @@ use crate::App;
 use fp_core::{account::SmartAccount, context::Context};
 use fp_storage::{Borrow, BorrowMut};
 use fp_traits::account::AccountAsset;
-use fp_types::actions::account::MintOutput;
 use fp_types::crypto::Address;
 use fp_types::U256;
-use ledger::data_model::ASSET_TYPE_FRA;
 use parking_lot::RwLock;
 use rand_chacha::rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -100,7 +98,10 @@ fn test_account_of() {
     //Verify after commit block 1
     assert!(ctx.state.write().commit(1).is_ok());
     assert_eq!(App::<()>::account_of(&ctx, &addr, None), Some(sa1.clone()));
-    assert_eq!(App::<()>::account_of(&ctx, &addr, Some(0)), None);
+    assert_eq!(
+        App::<()>::account_of(&ctx, &addr, Some(0)),
+        Some(sa1.clone())
+    );
     assert_eq!(
         App::<()>::account_of(&ctx, &addr, Some(1)),
         Some(sa1.clone())
@@ -119,7 +120,10 @@ fn test_account_of() {
     //Verify after commit block 2
     assert!(ctx.state.write().commit(2).is_ok());
     assert_eq!(App::<()>::account_of(&ctx, &addr, None), Some(sa2.clone()));
-    assert_eq!(App::<()>::account_of(&ctx, &addr, Some(0)), None);
+    assert_eq!(
+        App::<()>::account_of(&ctx, &addr, Some(0)),
+        Some(sa2.clone())
+    );
     assert!(App::<()>::account_of(&ctx, &addr, Some(1)) == Some(sa1.clone()));
     assert!(App::<()>::account_of(&ctx, &addr, Some(2)) == Some(sa2.clone()));
 
@@ -136,7 +140,10 @@ fn test_account_of() {
     //Verify after commit block 3
     assert!(ctx.state.write().commit(3).is_ok());
     assert_eq!(App::<()>::account_of(&ctx, &addr, None), Some(sa3.clone()));
-    assert_eq!(App::<()>::account_of(&ctx, &addr, Some(0)), None);
+    assert_eq!(
+        App::<()>::account_of(&ctx, &addr, Some(0)),
+        Some(sa3.clone())
+    );
     assert_eq!(App::<()>::account_of(&ctx, &addr, Some(1)), Some(sa1));
     assert_eq!(App::<()>::account_of(&ctx, &addr, Some(2)), Some(sa2));
     assert_eq!(App::<()>::account_of(&ctx, &addr, Some(3)), Some(sa3));
@@ -368,93 +375,4 @@ fn test_account_refund() {
     assert!(App::<()>::refund(&ctx, &address, 700.into()).is_ok());
     assert_eq!(App::<()>::balance(&ctx, &address), 1200.into());
     assert_eq!(App::<()>::reserved_balance(&ctx, &address), 300.into());
-}
-
-#[test]
-fn test_add_mint() {
-    //Setup state and db
-    let ctx = setup();
-
-    //Setup Output Vector
-    let mut outputs = Vec::new();
-    for n in 1..4 {
-        let mut output = MintOutput {
-            asset: ASSET_TYPE_FRA,
-            amount: n * 100,
-            ..Default::default()
-        };
-
-        let mut prng = ChaChaRng::from_entropy();
-        output.target = XfrKeyPair::generate(&mut prng).pub_key;
-
-        outputs.push(output)
-    }
-
-    //Add mint outputs and check if it was stored correctly
-    let mut ref_outputs = outputs.clone();
-    assert!(App::<()>::add_mint(&ctx, outputs).is_ok());
-    assert_eq!(
-        MintOutputs::get(ctx.db.read().borrow()).unwrap(),
-        ref_outputs
-    );
-
-    assert!(ctx.state.write().commit(100).is_ok());
-
-    //Append mint outputs and read if it was stored
-    let mut new_outputs = Vec::new();
-    let mut output_new = MintOutput {
-        asset: ASSET_TYPE_FRA,
-        amount: 416,
-        ..Default::default()
-    };
-
-    let mut prng = ChaChaRng::from_entropy();
-    output_new.target = XfrKeyPair::generate(&mut prng).pub_key;
-    new_outputs.push(output_new);
-
-    //Outputs are moved, need to make a copy to assert
-    let mut ref_new_outputs = new_outputs.clone();
-    assert!(App::<()>::add_mint(&ctx, new_outputs).is_ok());
-
-    //Confirm new output was appended to output list
-    ref_outputs.append(&mut ref_new_outputs);
-    assert_eq!(
-        MintOutputs::get(ctx.db.read().borrow()).unwrap(),
-        ref_outputs
-    );
-}
-
-#[test]
-fn test_consume_mint() {
-    //Setup state and db
-    let ctx = setup();
-    const OUTPUTS_LEN: usize = 5;
-
-    //Setup Output Vector
-    let mut outputs = Vec::new();
-    for n in 1..OUTPUTS_LEN {
-        let mut output = MintOutput {
-            asset: ASSET_TYPE_FRA,
-            amount: (n * 100) as u64,
-            ..Default::default()
-        };
-
-        let mut prng = ChaChaRng::from_entropy();
-        output.target = XfrKeyPair::generate(&mut prng).pub_key;
-
-        outputs.push(output)
-    }
-    let mut ref_outputs = outputs.clone();
-
-    //Add mint outputs
-    assert!(App::<()>::add_mint(&ctx, outputs).is_ok());
-
-    //Consume mint outputs < total len
-    let consumed = App::<()>::consume_mint(&ctx, 1).unwrap();
-    let avail_outputs = ref_outputs.split_off(1);
-    assert_eq!(consumed, ref_outputs);
-
-    //Consume mint outputs >= total len
-    let consumed = App::<()>::consume_mint(&ctx, OUTPUTS_LEN).unwrap();
-    assert_eq!(consumed, avail_outputs);
 }

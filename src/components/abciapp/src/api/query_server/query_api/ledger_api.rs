@@ -2,25 +2,31 @@
 //! # Access Ledger Data
 //!
 
-use super::server::QueryServer;
-use actix_web::{error, web};
-use finutils::api::{
-    DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
-    ValidatorDetail, ValidatorList,
-};
-use globutils::HashOf;
-use ledger::{
-    data_model::{
-        AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData, TxnSID,
-        TxoSID, UnAuthenticatedUtxo, Utxo,
+use {
+    super::server::QueryServer,
+    actix_web::{error, web},
+    config::abci::global_cfg::CFG,
+    finutils::api::{
+        DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
+        ValidatorDetail, ValidatorList,
     },
-    staking::{DelegationRwdDetail, DelegationState, TendermintAddr, UNBOND_BLOCK_CNT},
+    globutils::HashOf,
+    ledger::{
+        data_model::{
+            AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData, TxnSID,
+            TxoSID, UnAuthenticatedUtxo, Utxo,
+        },
+        staking::{
+            DelegationRwdDetail, DelegationState, Staking, TendermintAddr,
+            TendermintAddrRef,
+        },
+    },
+    parking_lot::RwLock,
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    std::{collections::BTreeMap, mem, sync::Arc},
+    zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
 };
-use parking_lot::RwLock;
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, mem, sync::Arc};
-use zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo};
 
 /// Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]
@@ -225,25 +231,25 @@ pub async fn query_validators(
         let validators_list = validators
             .iter()
             .flat_map(|(tendermint_addr, pk)| {
-                validator_data.get_powered_validator_by_id(pk).map(|v| {
-                    let rank = if v.td_power == 0 {
-                        validator_data.body.len()
-                    } else {
+                validator_data
+                    .get_validator_by_id(pk)
+                    .filter(|v| v.td_power != 0)
+                    .map(|v| {
                         let mut power_list = validator_data
                             .body
                             .values()
                             .map(|v| v.td_power)
                             .collect::<Vec<_>>();
                         power_list.sort_unstable();
-                        power_list.len() - power_list.binary_search(&v.td_power).unwrap()
-                    };
-                    Validator::new(
-                        tendermint_addr.clone(),
-                        rank as u64,
-                        staking.delegation_has_addr(&pk),
-                        &v,
-                    )
-                })
+                        let rank = power_list.len()
+                            - power_list.binary_search(&v.td_power).unwrap();
+                        Validator::new(
+                            tendermint_addr.clone(),
+                            rank as u64,
+                            staking.delegation_has_addr(&pk),
+                            &v,
+                        )
+                    })
             })
             .collect();
         return Ok(web::Json(ValidatorList::new(
@@ -259,7 +265,7 @@ pub async fn query_validators(
 #[derive(Deserialize, Debug)]
 pub struct DelegationRwdQueryParams {
     address: String,
-    height: u64,
+    height: Option<u64>,
 }
 
 /// get delegation reward according to `DelegationRwdQueryParams`
@@ -270,24 +276,29 @@ pub async fn get_delegation_reward(
     // Convert from base64 representation
     let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
     let qs = data.read();
 
+    let hdr = qs
+        .ledger_cloned
+        .api_cache
+        .as_ref()
+        .unwrap()
+        .staking_delegation_rwd_hist
+        .get(&key)
+        .c(d!())
+        .map_err(|e| error::ErrorNotFound(e.to_string()))?;
+
+    let h = qs.ledger_cloned.get_tendermint_height();
+
+    let mut req_h = info.height.unwrap_or(h);
+    alt!(req_h > h, req_h = h);
+
     Ok(web::Json(
-        (0..=info.height)
-            .into_iter()
-            .rev()
-            .filter_map(|i| {
-                qs.ledger_cloned
-                    .api_cache
-                    .staking_delegation_rwd_hist
-                    .get(&key)
-                    .map(|rh| rh.get(&i))
-            })
-            .flatten()
-            .take(1)
-            .collect(),
+        hdr.get_closest_smaller(&req_h)
+            .map(|(_, r)| vec![r])
+            .unwrap_or_default(),
     ))
 }
 
@@ -295,8 +306,8 @@ pub async fn get_delegation_reward(
 #[derive(Deserialize, Debug)]
 pub struct ValidatorDelegationQueryParams {
     address: TendermintAddr,
-    epoch_size: u32,
-    epoch_cnt: u8,
+    epoch_size: Option<u64>,
+    epoch_cnt: Option<u64>,
 }
 
 #[allow(missing_docs)]
@@ -317,72 +328,107 @@ pub async fn get_validator_delegation_history(
     let staking = ledger.get_staking();
 
     let v_id = staking
-        .validator_td_addr_to_app_pk(info.address.as_ref())
+        .validator_td_addr_to_app_pk(&info.address)
         .c(d!())
         .map_err(error::ErrorBadRequest)?;
-    let v_self_delegation = staking
-        .delegation_get(&v_id)
-        .ok_or_else(|| error::ErrorBadRequest("not exists"))?;
-    let delegation_amount_hist =
-        ledger.api_cache.staking_delegation_amount_hist.get(&v_id);
-
-    let self_delegation = v_self_delegation
-        .entries
-        .iter()
-        .filter(|(k, _)| **k == v_id)
-        .map(|(_, n)| n)
-        .sum();
-    let delegated = v_self_delegation.delegators.values().sum::<u64>();
-
-    let mut history = vec![ValidatorDelegation {
-        return_rate: ledger.staking_get_block_rewards_rate(),
-        delegated,
-        self_delegation,
-    }];
 
     let h = staking.cur_height();
-    let epoch_size = info.epoch_size as u64;
-    (1..=info.epoch_cnt as u64)
-        .into_iter()
-        .filter_map(|i| {
-            if h >= i * epoch_size
-                && h - i * epoch_size >= v_self_delegation.start_height
-            {
-                Some(h - i * epoch_size)
-            } else {
-                None
-            }
-        })
-        .for_each(|h| {
-            history.push(ValidatorDelegation {
-                return_rate: qs
-                    .query_block_rewards_rate(&h)
-                    .unwrap_or(history.last().unwrap().return_rate), //unwrap is safe here
-                delegated: delegation_amount_hist
-                    .as_ref()
-                    .map(|dah| {
-                        if dah.is_empty()
-                            || dah.iter().take(1).all(|(i, _)| {
-                                #[cfg(not(feature = "diskcache"))]
-                                let i = *i;
-                                i > h
-                            })
-                        {
-                            0
-                        } else {
-                            dah.get(&h).unwrap_or(history.last().unwrap().delegated)
-                        }
-                    })
-                    .unwrap_or(0),
-                self_delegation: delegation_amount_hist
-                    .as_ref()
-                    .map(|dah| dah.get(&h))
-                    .flatten()
-                    .unwrap_or(history.last().unwrap().self_delegation),
-            })
-        });
 
-    Ok(web::Json(history))
+    let start_height = staking
+        .delegation_get(&v_id)
+        .ok_or_else(|| error::ErrorBadRequest("not exists"))?
+        .start_height;
+
+    let staking_global_rate_hist = &qs
+        .ledger_cloned
+        .api_cache
+        .as_ref()
+        .unwrap()
+        .staking_global_rate_hist;
+
+    let delegation_amount_hist = ledger
+        .api_cache
+        .as_ref()
+        .unwrap()
+        .staking_delegation_amount_hist
+        .get(&v_id);
+
+    let self_delegation_amount_hist = ledger
+        .api_cache
+        .as_ref()
+        .unwrap()
+        .staking_self_delegation_hist
+        .get(&v_id);
+
+    let mut esiz = info.epoch_size.unwrap_or(10);
+    alt!(esiz > h, esiz = h);
+    alt!(0 == esiz, esiz = 1);
+
+    let ecnt_max = h.saturating_sub(start_height) / esiz;
+    let mut ecnt = info
+        .epoch_cnt
+        .map(|n| min!(n, ecnt_max))
+        .unwrap_or(min!(16, ecnt_max));
+
+    alt!(ecnt > h, ecnt = h);
+    alt!(ecnt > 1024, ecnt = 1024);
+    alt!(0 == ecnt, ecnt = 1);
+
+    let mut c1 = map! { B 1 + h => None};
+    let mut c2 = map! { B 1 + h => None};
+    let mut c3 = map! { B 1 + h => None};
+    let res = (0..ecnt)
+        .map(|i| h - i * esiz)
+        .filter_map(|hi| {
+            if c1.range(..=hi).next().is_none() {
+                c1.clear();
+                if let Some((h, v)) = staking_global_rate_hist.get_closest_smaller(&hi) {
+                    c1.insert(h, Some(v));
+                } else {
+                    c1.insert(0, None);
+                }
+            }
+
+            c1.values().copied().next().flatten().map(|return_rate| {
+                if c2.range(..=hi).next().is_none() {
+                    c2.clear();
+                    if let Some((h, v)) = delegation_amount_hist
+                        .as_ref()
+                        .and_then(|dah| dah.get_closest_smaller(&hi))
+                    {
+                        c2.insert(h, Some(v));
+                    } else {
+                        c2.insert(0, None);
+                    }
+                }
+
+                if c3.range(..=hi).next().is_none() {
+                    c3.clear();
+                    if let Some((h, v)) = self_delegation_amount_hist
+                        .as_ref()
+                        .and_then(|sdah| sdah.get_closest_smaller(&hi))
+                    {
+                        c3.insert(h, Some(v));
+                    } else {
+                        c3.insert(0, None);
+                    }
+                }
+
+                ValidatorDelegation {
+                    return_rate,
+                    delegated: c2.values().copied().next().flatten().unwrap_or_default(),
+                    self_delegation: c3
+                        .values()
+                        .copied()
+                        .next()
+                        .flatten()
+                        .unwrap_or_default(),
+                }
+            })
+        })
+        .collect();
+
+    Ok(web::Json(res))
 }
 
 #[allow(missing_docs)]
@@ -423,8 +469,7 @@ pub async fn get_delegators_with_params(
         .c(d!())
         .map_err(error::ErrorBadRequest)?;
 
-    let list = staking
-        .validator_get_delegator_list(info.address.as_ref(), start, end)
+    let list = validator_get_delegator_list(staking, info.address.as_ref(), start, end)
         .c(d!())
         .map_err(error::ErrorNotFound)?;
 
@@ -447,8 +492,7 @@ pub async fn query_delegator_list(
     let ledger = &qs.ledger_cloned;
     let staking = ledger.get_staking();
 
-    let list = staking
-        .validator_get_delegator_list(addr.as_ref(), 0, usize::MAX)
+    let list = validator_get_delegator_list(staking, addr.as_ref(), 0, usize::MAX)
         .c(d!())
         .map_err(error::ErrorNotFound)?;
 
@@ -471,54 +515,70 @@ pub async fn query_validator_detail(
     let ledger = &qs.ledger_cloned;
     let staking = ledger.get_staking();
 
-    let v_id = staking
-        .validator_td_addr_to_app_pk(addr.as_ref())
-        .c(d!())
+    // Get Pub key from from the provided tendermint address
+    let v_pub_key = info!(staking.validator_td_addr_to_app_pk(addr.as_ref()))
         .map_err(error::ErrorBadRequest)?;
-    let v_self_delegation = staking
-        .delegation_get(&v_id)
-        .ok_or_else(|| error::ErrorBadRequest("not exists"))?;
+    // Get Self delegation for the validator
+    // v_self_delegation is the delegation details for the validator
+    let v_self_delegation =
+        info!(staking.delegation_get(&v_pub_key)).map_err(error::ErrorBadRequest)?;
 
     if let Some(vd) = staking.validator_get_current() {
-        if let Some(v) = vd.body.get(&v_id) {
-            if 0 < v.td_power {
+        if let Some(v) = vd.body.get(&v_pub_key) {
+            let voting_power_rank = if 0 == v.td_power {
+                100_0000 + vd.body.len()
+            } else {
                 let mut power_list =
                     vd.body.values().map(|v| v.td_power).collect::<Vec<_>>();
                 power_list.sort_unstable();
-                let voting_power_rank =
-                    power_list.len() - power_list.binary_search(&v.td_power).unwrap();
-                let realtime_rate = ledger.staking_get_block_rewards_rate();
-                let expected_annualization = [
-                    realtime_rate[0] as u128
-                        * v_self_delegation.proposer_rwd_cnt as u128,
-                    realtime_rate[1] as u128
-                        * (1 + staking.cur_height() - v_self_delegation.start_height)
-                            as u128,
-                ];
-
-                let resp = ValidatorDetail {
-                    addr: addr.into_inner(),
-                    is_online: v.signed_last_block,
-                    voting_power: v.td_power,
-                    voting_power_rank,
-                    commission_rate: v.get_commission_rate(),
-                    self_staking: v_self_delegation
-                        .entries
-                        .iter()
-                        .filter(|(k, _)| **k == v_id)
-                        .map(|(_, n)| n)
-                        .sum(),
-                    fra_rewards: v_self_delegation.rwd_amount,
-                    memo: v.memo.clone(),
-                    start_height: v_self_delegation.start_height,
-                    cur_height: staking.cur_height(),
-                    block_signed_cnt: v.signed_cnt,
-                    block_proposed_cnt: v_self_delegation.proposer_rwd_cnt,
-                    expected_annualization,
-                    kind: v.kind(),
-                };
-                return Ok(web::Json(resp));
+                power_list.len() - power_list.binary_search(&v.td_power).unwrap()
+            };
+            // Network Realtime APY
+            let network_realtime_apy = ledger.staking_get_block_rewards_rate();
+            // Validator Realtime APY calculation
+            // Validator Consistency Factor = (Number of blocks proposed by validator / Total blocks the validator witnessed by validator  *  total staked by all validators / staked by validator)
+            // Validator Realtime APY =  Validator Consistency Factor * Network_Realtime_APY
+            // For a perfect validator consistency factor will be 1.
+            let validator_realtime_apy = [
+                network_realtime_apy[0] as u128
+                    * v_self_delegation.proposer_rwd_cnt as u128
+                    * staking.get_global_delegation_amount() as u128,
+                network_realtime_apy[1] as u128
+                    * (1 + staking.cur_height() - v_self_delegation.start_height)
+                        as u128
+                    * v.td_power as u128,
+            ];
+            // fra_rewards: all delegators rewards including self-delegation
+            let mut fra_rewards = v_self_delegation.rwd_amount;
+            for (delegator, _) in &v.delegators {
+                let delegation = staking
+                    .delegation_get(&delegator)
+                    .ok_or_else(|| error::ErrorBadRequest("not exists"))?;
+                fra_rewards += delegation.rwd_amount;
             }
+            let resp = ValidatorDetail {
+                addr: addr.into_inner(),
+                is_online: v.signed_last_block,
+                voting_power: v.td_power,
+                voting_power_rank,
+                commission_rate: v.get_commission_rate(),
+                self_staking: v_self_delegation
+                    .delegations
+                    .iter()
+                    .filter(|(k, _)| **k == v_pub_key)
+                    .map(|(_, n)| n)
+                    .sum(),
+                fra_rewards,
+                memo: v.memo.clone(),
+                start_height: v_self_delegation.start_height,
+                cur_height: staking.cur_height(),
+                block_signed_cnt: v.signed_cnt,
+                block_proposed_cnt: v_self_delegation.proposer_rwd_cnt,
+                validator_realtime_apy,
+                kind: v.kind(),
+                delegator_cnt: v.delegators.len() as u64,
+            };
+            return Ok(web::Json(resp));
         }
     }
 
@@ -532,7 +592,7 @@ pub async fn query_delegation_info(
 ) -> actix_web::Result<web::Json<DelegationInfo>> {
     let pk = globutils::wallet::public_key_from_base64(address.as_str())
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))?;
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
     let qs = data.read();
     let ledger = &qs.ledger_cloned;
@@ -556,7 +616,7 @@ pub async fn query_delegation_info(
         .map(|d| {
             let mut bond_amount = d.amount();
             let bond_entries: Vec<(String, u64)> = d
-                .entries
+                .delegations
                 .iter()
                 .filter_map(|(pk, am)| {
                     staking
@@ -575,7 +635,8 @@ pub async fn query_delegation_info(
                 }
                 DelegationState::Bond => {
                     if staking.cur_height()
-                        > d.end_height().saturating_sub(UNBOND_BLOCK_CNT)
+                        > d.end_height()
+                            .saturating_sub(CFG.checkpoint.unbond_block_cnt)
                     {
                         mem::swap(&mut bond_amount, &mut unbond_amount);
                     }
@@ -624,7 +685,7 @@ pub async fn query_owned_utxos(
     let ledger = &qs.ledger_cloned;
     globutils::wallet::public_key_from_base64(owner.as_str())
         .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))
         .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk))))
 }
 
@@ -665,5 +726,30 @@ impl NetworkRoute for ApiRoutes {
             ApiRoutes::ValidatorDetail => "validator_detail",
         };
         "/".to_owned() + endpoint
+    }
+}
+
+#[allow(missing_docs)]
+pub fn validator_get_delegator_list<'a>(
+    s: &'a Staking,
+    validator: TendermintAddrRef,
+    start: usize,
+    mut end: usize,
+) -> Result<Vec<(&'a XfrPublicKey, &'a u64)>> {
+    let validator = s.validator_td_addr_to_app_pk(validator).c(d!())?;
+
+    if let Some(v) = s.validator_get_current_one_by_id(&validator) {
+        if start >= v.delegators.len() || start > end {
+            return Err(eg!("Index out of range"));
+        }
+        if end > v.delegators.len() {
+            end = v.delegators.len();
+        }
+
+        Ok((start..end)
+            .filter_map(|i| v.delegators.get_index(i))
+            .collect())
+    } else {
+        Err(eg!("Not a validator or non-existing node address"))
     }
 }

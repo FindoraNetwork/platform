@@ -5,28 +5,31 @@
 #![deny(warnings)]
 #![allow(clippy::needless_borrow)]
 
-mod config;
 mod server;
 pub mod staking;
 
-use crate::api::{
-    query_server::query_api, submission_server::submission_api::SubmissionApi,
+use {
+    crate::api::{
+        query_server::query_api, submission_server::submission_api::SubmissionApi,
+    },
+    config::abci::{global_cfg::CFG, ABCIConfig},
+    futures::executor::ThreadPool,
+    lazy_static::lazy_static,
+    ruc::*,
+    std::{
+        env, fs,
+        net::SocketAddr,
+        sync::{atomic::AtomicBool, Arc},
+        thread,
+    },
 };
-use lazy_static::lazy_static;
-use ruc::*;
-use std::{
-    env, fs,
-    net::SocketAddr,
-    sync::{atomic::AtomicBool, Arc},
-    thread,
-};
-
-use config::{global_cfg::CFG, ABCIConfig};
 
 lazy_static! {
     /// if `true`,
     /// we can exit safely without the risk of breaking data
     pub static ref IN_SAFE_ITV: AtomicBool = AtomicBool::new(true);
+    /// A shared pool of the ABCI area
+    pub static ref POOL: ThreadPool = pnk!(ThreadPool::new());
 }
 
 /// Starting findorad
@@ -41,6 +44,10 @@ pub fn run() -> Result<()> {
 
     env::set_var("BNC_DATA_DIR", format!("{}/__bnc__", &config.ledger_dir));
 
+    if CFG.enable_query_service {
+        env::set_var("FINDORAD_KEEP_HIST", "1");
+    }
+
     let app = server::ABCISubmissionServer::new(
         basedir,
         format!("{}:{}", config.tendermint_host, config.tendermint_port),
@@ -49,8 +56,6 @@ pub fn run() -> Result<()> {
     let submission_service_hdr = Arc::clone(&app.la);
 
     if CFG.enable_query_service {
-        env::set_var("FINDORAD_KEEP_HIST", "1");
-
         let query_service_hdr = submission_service_hdr.read().borrowable_ledger_state();
         pnk!(query_api::service::start_query_server(
             Arc::clone(&query_service_hdr),
@@ -82,13 +87,8 @@ pub fn run() -> Result<()> {
             "http://{}:{}",
             config.tendermint_host, config.tendermint_port
         );
-        web3_rpc = fc_rpc::start_web3_service(
-            evm_http,
-            evm_ws,
-            tendermint_rpc,
-            base_app,
-            10000,
-        );
+        web3_rpc =
+            fc_rpc::start_web3_service(evm_http, evm_ws, tendermint_rpc, base_app);
     }
 
     let addr_str = format!("{}:{}", config.abci_host, config.abci_port);

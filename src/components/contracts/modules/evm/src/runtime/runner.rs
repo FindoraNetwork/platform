@@ -90,10 +90,11 @@ impl<C: Config> ActionRunner<C> {
         let actual_fee = executor.fee(gas_price);
         log::debug!(
             target: "evm",
-            "Execution {:?} [source: {:?}, value: {}, gas_limit: {}, actual_fee: {}]",
+            "Execution {:?} [source: {:?}, value: {}, gas_price {}, gas_limit: {}, actual_fee: {}]",
             reason,
             source,
             value,
+            gas_price,
             gas_limit,
             actual_fee
         );
@@ -111,7 +112,7 @@ impl<C: Config> ActionRunner<C> {
                 "Deleting account at {:?}",
                 address
             );
-            App::<C>::remove_account(ctx, &address)
+            App::<C>::remove_account(ctx, &address.into())
         }
 
         for log in &state.substate.logs {

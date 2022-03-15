@@ -8,11 +8,13 @@
 
 #![allow(missing_docs)]
 
-use crate::data_model::AssetTypeCode;
-use fixed::types::I20F12;
-use serde::{Deserialize, Serialize};
-use zei::xfr::sig::XfrPublicKey;
-use zei::xfr::structs::AssetType;
+use {
+    crate::data_model::AssetTypeCode,
+    fixed::types::I20F12,
+    serde::{Deserialize, Serialize},
+    zei::xfr::sig::XfrPublicKey,
+    zei::xfr::structs::AssetType,
+};
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct IdVar(pub u64);

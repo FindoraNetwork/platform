@@ -2,7 +2,7 @@
 name = "module-ethereum"
 version = "0.1.0"
 authors = ["FindoraNetwork"]
-edition = "2018"
+edition = "2021"
 homepage = "https://findora.org/technology"
 repository = "https://github.com/findoranetwork/platform/"
 description = "Findora module supporting execute ethereum transaction"
@@ -13,12 +13,10 @@ abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
 ethereum = { version = "0.9.0", default-features = false, features = ["with-serde"] }
 ethereum-types = { version = "0.12", default-features = false }
 evm = { version = "0.29.0", default-features = false, features = ["with-serde"] }
-lazy_static = "1.4.0"
 log = "0.4"
-parking_lot = "0.11.1"
 rand = "0.8"
 rlp = "0.5"
-ruc = "0.6.2"
+ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0.64"
 sha3 = "0.8"
@@ -31,8 +29,13 @@ fp-storage = { path = "../../primitives/storage" }
 fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
-
+config = { path = "../../../config"}
 [dev-dependencies]
 baseapp = { path = "../../baseapp" }
 fp-mocks = { path = "../../primitives/mocks" }
 module-account = { path = "../account" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.4" }
+
+[features]
+default = []
+debug_env = []

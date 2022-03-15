@@ -2,10 +2,12 @@
 //! This module defines findora ledger/query rpc apis for server and client.
 //!
 
-use ledger::staking::{
-    self, StakerMemo, TendermintAddr, MAX_POWER_PERCENT_PER_VALIDATOR,
+use {
+    ledger::staking::{
+        self, StakerMemo, TendermintAddr, MAX_POWER_PERCENT_PER_VALIDATOR,
+    },
+    serde::{Deserialize, Serialize},
 };
-use serde::{Deserialize, Serialize};
 
 /// A list of basic validator information of current height
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -90,7 +92,9 @@ pub struct ValidatorDetail {
     /// block proposed by this validator
     pub block_proposed_cnt: u64,
     /// expected annulation of thi validator
-    pub expected_annualization: [u128; 2],
+    pub validator_realtime_apy: [u128; 2],
+    /// total number of its delegators
+    pub delegator_cnt: u64,
 }
 
 #[allow(missing_docs)]
@@ -195,7 +199,7 @@ pub trait NetworkRoute {
     // SubmissionRoutes::TxnStatus.with_arg_template("str") = "/submit_transaction/{str}"
     fn with_arg_template(&self, arg: &str) -> String {
         let mut endpoint = self.route();
-        endpoint += &("/".to_owned() + &"{".to_owned() + arg + &"}".to_owned());
+        endpoint += &("/".to_owned() + "{" + arg + "}");
         endpoint
     }
 }

@@ -154,11 +154,11 @@ fn test_deploy_commit(contract_address: H160) {
     let ctx = BASE_APP
         .lock()
         .unwrap()
-        .create_query_context(0, false)
+        .create_query_context(Some(0), false)
         .unwrap();
     assert!(AccountCodes::contains_key(
         ctx.state.read().borrow(),
-        &contract_address
+        &contract_address.into()
     ));
 }
 

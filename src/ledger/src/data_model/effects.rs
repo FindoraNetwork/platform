@@ -1,37 +1,39 @@
-use crate::{
-    data_model::{
-        AssetType, AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Memo,
-        NoReplayToken, Operation, Transaction, TransferAsset, TransferType, TxOutput,
-        TxnTempSID, TxoRef, TxoSID, UpdateMemo,
-    },
-    staking::{
-        self,
-        ops::{
-            claim::ClaimOps, delegation::DelegationOps,
-            fra_distribution::FraDistributionOps, governance::GovernanceOps,
-            undelegation::UnDelegationOps, update_staker::UpdateStakerOps,
-            update_validator::UpdateValidatorOps,
+use {
+    crate::{
+        data_model::{
+            AssetType, AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Memo,
+            NoReplayToken, Operation, Transaction, TransferAsset, TransferType,
+            TxOutput, TxnTempSID, TxoRef, TxoSID, UpdateMemo,
+        },
+        staking::{
+            self,
+            ops::{
+                claim::ClaimOps, delegation::DelegationOps,
+                fra_distribution::FraDistributionOps, governance::GovernanceOps,
+                replace_staker::ReplaceStakerOps, undelegation::UnDelegationOps,
+                update_staker::UpdateStakerOps, update_validator::UpdateValidatorOps,
+            },
         },
     },
-};
-use globutils::HashOf;
-use lazy_static::lazy_static;
-use parking_lot::Mutex;
-use rand_chacha::{ChaCha20Rng, ChaChaRng};
-use rand_core::SeedableRng;
-use ruc::*;
-use serde::Serialize;
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
-use zei::{
-    serialization::ZeiFromToBytes,
-    setup::PublicParams,
-    xfr::{
-        lib::verify_xfr_body,
-        sig::XfrPublicKey,
-        structs::{XfrAmount, XfrAssetType},
+    globutils::HashOf,
+    lazy_static::lazy_static,
+    parking_lot::Mutex,
+    rand_chacha::{ChaCha20Rng, ChaChaRng},
+    rand_core::SeedableRng,
+    ruc::*,
+    serde::Serialize,
+    std::{
+        collections::{HashMap, HashSet},
+        sync::Arc,
+    },
+    zei::{
+        serialization::ZeiFromToBytes,
+        setup::PublicParams,
+        xfr::{
+            lib::verify_xfr_body,
+            sig::XfrPublicKey,
+            structs::{XfrAmount, XfrAssetType},
+        },
     },
 };
 
@@ -88,6 +90,8 @@ pub struct TxnEffect {
     pub fra_distributions: Vec<FraDistributionOps>,
     /// Staking operations
     pub update_stakers: Vec<UpdateStakerOps>,
+    /// replace staker operations
+    pub replace_stakers: Vec<ReplaceStakerOps>,
 }
 
 impl TxnEffect {
@@ -155,6 +159,11 @@ impl TxnEffect {
                     check_nonce!(i);
                     i.verify().c(d!())?;
                     te.update_stakers.push(i.clone());
+                }
+                Operation::ReplaceStaker(i) => {
+                    check_nonce!(i);
+                    i.verify().c(d!())?;
+                    te.replace_stakers.push(i.clone());
                 }
                 Operation::UpdateValidator(i) => {
                     check_nonce!(i);
@@ -570,12 +579,8 @@ impl BlockEffect {
     ///   if `txn` would not interfere with any transaction in the block, the
     ///       new temp SID representing the transaction.
     ///   Otherwise, Err(...)
-    pub fn add_txn_effect(
-        &mut self,
-        txn_effect: TxnEffect,
-        is_loading: bool,
-    ) -> Result<TxnTempSID> {
-        self.check_txn_effect(&txn_effect, is_loading).c(d!())?;
+    pub fn add_txn_effect(&mut self, txn_effect: TxnEffect) -> Result<TxnTempSID> {
+        self.check_txn_effect(&txn_effect).c(d!())?;
 
         // By construction, no_replay_tokens entries are unique
         self.no_replay_tokens
@@ -610,11 +615,7 @@ impl BlockEffect {
         Ok(temp_sid)
     }
 
-    fn check_txn_effect(
-        &mut self,
-        txn_effect: &TxnEffect,
-        is_loading: bool,
-    ) -> Result<()> {
+    fn check_txn_effect(&mut self, txn_effect: &TxnEffect) -> Result<()> {
         // Check that no inputs are consumed twice
         for (input_sid, _) in txn_effect.input_txos.iter() {
             if self.input_txos.contains_key(&input_sid) {
@@ -663,9 +664,7 @@ impl BlockEffect {
         }
 
         // NOTE: set at the last position
-        if !is_loading {
-            self.check_staking(&txn_effect).c(d!())?;
-        }
+        self.check_staking(&txn_effect).c(d!())?;
 
         Ok(())
     }
@@ -675,6 +674,12 @@ impl BlockEffect {
             i.check_run(&mut self.staking_simulator, &txn_effect.txn)
                 .c(d!())?;
         }
+
+        for i in txn_effect.replace_stakers.iter() {
+            i.check_run(&mut self.staking_simulator, &txn_effect.txn)
+                .c(d!())?;
+        }
+
         for i in txn_effect.delegations.iter() {
             i.check_run(&mut self.staking_simulator, &txn_effect.txn)
                 .c(d!())?;

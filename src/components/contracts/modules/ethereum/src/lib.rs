@@ -4,8 +4,6 @@
 mod basic;
 mod impls;
 
-use abci::{RequestEndBlock, ResponseEndBlock};
-use ethereum::{Receipt, TransactionV0 as Transaction};
 use ethereum_types::{H160, H256, U256};
 use evm::Config as EvmConfig;
 use fp_core::{
@@ -16,26 +14,18 @@ use fp_core::{
     transaction::{ActionResult, Executable, ValidateUnsigned},
 };
 use fp_events::*;
-use fp_evm::{BlockId, Runner, TransactionStatus};
+use fp_evm::{BlockId, Runner};
 use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
 };
 use fp_types::{actions::ethereum::Action, crypto::Address};
-use lazy_static::lazy_static;
-use parking_lot::Mutex;
 use ruc::*;
-use std::{marker::PhantomData, sync::Arc};
+use std::marker::PhantomData;
 
 pub const MODULE_NAME: &str = "ethereum";
 
 static ISTANBUL_CONFIG: EvmConfig = EvmConfig::istanbul();
-
-lazy_static! {
-    /// Current building block's transactions and receipts.
-    static ref PENDING_TRANSACTIONS: Arc<Mutex<Vec<(Transaction, TransactionStatus, Receipt)>>> =
-        Arc::new(Mutex::new(Vec::new()));
-}
 
 pub trait Config {
     /// Account module interface to read/write account assets.
@@ -61,25 +51,28 @@ pub trait Config {
 }
 
 pub mod storage {
-    use ethereum::{BlockV0 as Block, Receipt};
-    use ethereum_types::{H256, U256};
+    use ethereum::{BlockV0 as Block, Receipt, TransactionV0 as Transaction};
+    use ethereum_types::U256;
     use fp_evm::TransactionStatus;
     use fp_storage::*;
+    use fp_types::crypto::HA256;
 
     // Mapping for transaction hash and at block number with index.
-    generate_storage!(Ethereum, TransactionIndex => Map<H256, (U256, u32)>);
+    generate_storage!(Ethereum, TransactionIndex => Map<HA256, (U256, u32)>);
 
     // The following data is stored in stateless rocksdb
+    // Current building block's transactions and receipts.
+    generate_storage!(Ethereum, PendingTransactions => Value<Vec<(Transaction, TransactionStatus, Receipt)>>);
     // The current Ethereum block number.
     generate_storage!(Ethereum, CurrentBlockNumber => Value<U256>);
     // Mapping for block number and hashes.
-    generate_storage!(Ethereum, BlockHash => Map<U256, H256>);
+    generate_storage!(Ethereum, BlockHash => Map<U256, HA256>);
     // The ethereum history blocks with block number.
-    generate_storage!(Ethereum, CurrentBlock => Map<H256, Block>);
+    generate_storage!(Ethereum, CurrentBlock => Map<HA256, Block>);
     // The ethereum history receipts with block number.
-    generate_storage!(Ethereum, CurrentReceipts => Map<H256, Vec<Receipt>>);
+    generate_storage!(Ethereum, CurrentReceipts => Map<HA256, Vec<Receipt>>);
     // The ethereum history transaction statuses with block number.
-    generate_storage!(Ethereum, CurrentTransactionStatuses => Map<H256, Vec<TransactionStatus>>);
+    generate_storage!(Ethereum, CurrentTransactionStatuses => Map<HA256, Vec<TransactionStatus>>);
 }
 
 #[derive(Event)]
@@ -99,15 +92,14 @@ pub struct ContractLog {
 }
 
 pub struct App<C> {
-    /// Whether to store empty ethereum blocks when no evm contract transaction.
-    enable_eth_empty_blocks: bool,
+    disable_eth_empty_blocks: bool,
     phantom: PhantomData<C>,
 }
 
 impl<C: Config> App<C> {
     pub fn new(empty_block: bool) -> Self {
         App {
-            enable_eth_empty_blocks: empty_block,
+            disable_eth_empty_blocks: empty_block,
             phantom: Default::default(),
         }
     }
@@ -116,22 +108,20 @@ impl<C: Config> App<C> {
 impl<C: Config> Default for App<C> {
     fn default() -> Self {
         App {
-            enable_eth_empty_blocks: false,
+            disable_eth_empty_blocks: false,
             phantom: Default::default(),
         }
     }
 }
 
 impl<C: Config> AppModule for App<C> {
-    fn end_block(
+    fn commit(
         &mut self,
         ctx: &mut Context,
-        req: &RequestEndBlock,
-    ) -> ResponseEndBlock {
-        if PENDING_TRANSACTIONS.lock().len() > 0 || self.enable_eth_empty_blocks {
-            let _ = ruc::info!(self.store_block(ctx, U256::from(req.height)));
-        }
-        Default::default()
+        height: U256,
+        root_hash: &[u8],
+    ) -> Result<()> {
+        self.store_block(ctx, height, root_hash)
     }
 }
 
@@ -165,13 +155,22 @@ impl<C: Config> ValidateUnsigned for App<C> {
                     C::ChainId::get()
                 )));
             }
+        } else {
+            return Err(eg!("Must provide chainId".to_string()));
         }
 
         let origin = Self::recover_signer(transaction)
             .ok_or_else(|| eg!("InvalidSignature, can not recover signer address"))?;
 
-        if transaction.gas_limit > C::BlockGasLimit::get() {
-            return Err(eg!("InvalidGasLimit: the gas limit too large"));
+        // Same as go ethereum, Min gas limit is 21000.
+        if transaction.gas_limit < U256::from(21000)
+            || transaction.gas_limit > C::BlockGasLimit::get()
+        {
+            return Err(eg!(format!(
+                "InvalidGasLimit: got {}, the gas limit must be in range [21000, {}]",
+                transaction.gas_limit,
+                C::BlockGasLimit::get()
+            )));
         }
 
         if transaction.gas_price < C::FeeCalculator::min_gas_price() {

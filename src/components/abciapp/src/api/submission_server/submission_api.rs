@@ -2,17 +2,19 @@
 //! # interface of operating tx
 //!
 
-use super::{SubmissionServer, TxnForward, TxnHandle};
-use actix_cors::Cors;
-use actix_web::{error, middleware, web, App, HttpServer};
-use finutils::api::NetworkRoute;
-use ledger::data_model::Transaction;
-use log::info;
-use parking_lot::RwLock;
-use rand_core::{CryptoRng, RngCore};
-use ruc::*;
-use std::result::Result as StdResult;
-use std::sync::Arc;
+use {
+    super::{SubmissionServer, TxnForward, TxnHandle},
+    actix_cors::Cors,
+    actix_web::{error, middleware, web, App, HttpServer},
+    finutils::api::NetworkRoute,
+    ledger::data_model::Transaction,
+    log::info,
+    parking_lot::RwLock,
+    rand_core::{CryptoRng, RngCore},
+    ruc::*,
+    std::result::Result as StdResult,
+    std::sync::Arc,
+};
 
 /// Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]
@@ -47,7 +49,7 @@ where
         .map(web::Json)
         .map_err(|e| {
             e.print(None);
-            error::ErrorBadRequest(e.generate_log(None))
+            error::ErrorBadRequest(e.to_string())
         })
 }
 
@@ -63,15 +65,14 @@ where
 {
     let submission_server = data.write();
     let txn_status = submission_server.get_txn_status(&TxnHandle(info.clone()));
-    let res;
-    if let Some(status) = txn_status {
-        res = serde_json::to_string(&status)?;
+    let res = if let Some(status) = txn_status {
+        serde_json::to_string(&status)?
     } else {
-        res = format!(
+        format!(
             "No transaction with handle {} found. Please retry with a new handle.",
             &info
-        );
-    }
+        )
+    };
 
     Ok(res)
 }

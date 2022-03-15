@@ -1,4 +1,5 @@
 use crate::{storage::*, AddressMapping, App, Config};
+use config::abci::global_cfg::CFG;
 use ethereum_types::{H160, H256, U256};
 use evm::{
     backend::Backend,
@@ -7,10 +8,12 @@ use evm::{
 };
 use fp_core::{context::Context, macros::Get};
 use fp_evm::{Log, Vicinity};
-use fp_storage::BorrowMut;
+use fp_storage::{BorrowMut, DerefMut};
 use fp_traits::{account::AccountAsset, evm::BlockHashMapping};
 use fp_utils::timestamp_converter;
+use log::info;
 use std::{collections::btree_set::BTreeSet, marker::PhantomData, mem};
+use storage::{db::FinDB, state::State};
 
 pub struct FindoraStackSubstate<'context, 'config> {
     pub ctx: &'context Context,
@@ -18,6 +21,7 @@ pub struct FindoraStackSubstate<'context, 'config> {
     pub deletes: BTreeSet<H160>,
     pub logs: Vec<Log>,
     pub parent: Option<Box<FindoraStackSubstate<'context, 'config>>>,
+    pub substate: State<FinDB>,
 }
 
 impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
@@ -30,19 +34,19 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
     }
 
     pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
+        let substate = (*self.ctx.state.read()).substate();
+
         let mut entering = Self {
             ctx: self.ctx,
             metadata: self.metadata.spit_child(gas_limit, is_static),
             parent: None,
             deletes: BTreeSet::new(),
             logs: Vec::new(),
+            substate,
         };
         mem::swap(&mut entering, self);
 
         self.parent = Some(Box::new(entering));
-
-        // start_transaction();
-        self.ctx.state.write().commit_session();
     }
 
     pub fn exit_commit(&mut self) -> Result<(), ExitError> {
@@ -53,7 +57,6 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         self.logs.append(&mut exited.logs);
         self.deletes.append(&mut exited.deletes);
 
-        self.ctx.state.write().commit_session();
         Ok(())
     }
 
@@ -62,7 +65,12 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         mem::swap(&mut exited, self);
         self.metadata.swallow_revert(exited.metadata)?;
 
-        self.ctx.state.write().discard_session();
+        if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
+            let _ = mem::replace(self.ctx.state.write().deref_mut(), exited.substate);
+        } else {
+            info!(target: "evm", "EVM stack exit_revert(), height: {:?}", self.ctx.header.height);
+        }
+
         Ok(())
     }
 
@@ -71,7 +79,12 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         mem::swap(&mut exited, self);
         self.metadata.swallow_discard(exited.metadata)?;
 
-        self.ctx.state.write().discard_session();
+        if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
+            let _ = mem::replace(self.ctx.state.write().deref_mut(), exited.substate);
+        } else {
+            info!(target: "evm", "EVM stack exit_discard(), height: {:?}", self.ctx.header.height);
+        }
+
         Ok(())
     }
 
@@ -117,6 +130,7 @@ impl<'context, 'vicinity, 'config, C: Config>
         vicinity: &'vicinity Vicinity,
         metadata: StackSubstateMetadata<'config>,
     ) -> Self {
+        let substate = (*ctx.state.read()).substate();
         Self {
             ctx,
             vicinity,
@@ -126,6 +140,7 @@ impl<'context, 'vicinity, 'config, C: Config>
                 deletes: BTreeSet::new(),
                 logs: Vec::new(),
                 parent: None,
+                substate,
             },
             _marker: PhantomData,
         }
@@ -186,11 +201,12 @@ impl<'context, 'vicinity, 'config, C: Config> Backend
     }
 
     fn code(&self, address: H160) -> Vec<u8> {
-        App::<C>::account_codes(self.ctx, &address, None).unwrap_or_default()
+        App::<C>::account_codes(self.ctx, &address.into(), None).unwrap_or_default()
     }
 
     fn storage(&self, address: H160, index: H256) -> H256 {
-        App::<C>::account_storages(self.ctx, &address, &index, None).unwrap_or_default()
+        App::<C>::account_storages(self.ctx, &address.into(), &index.into(), None)
+            .unwrap_or_default()
     }
 
     fn original_storage(&self, _address: H160, _index: H256) -> Option<H256> {
@@ -226,7 +242,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
     }
 
     fn is_empty(&self, address: H160) -> bool {
-        App::<C>::is_account_empty(self.ctx, &address)
+        App::<C>::is_account_empty(self.ctx, &address.into())
     }
 
     fn deleted(&self, address: H160) -> bool {
@@ -248,8 +264,8 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
             );
             AccountStorages::remove(
                 self.ctx.state.write().borrow_mut(),
-                &address,
-                &index,
+                &address.into(),
+                &index.into(),
             );
         } else {
             log::debug!(
@@ -261,8 +277,8 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
             );
             if let Err(e) = AccountStorages::insert(
                 self.ctx.state.write().borrow_mut(),
-                &address,
-                &index,
+                &address.into(),
+                &index.into(),
                 &value,
             ) {
                 log::error!(
@@ -278,7 +294,10 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
     }
 
     fn reset_storage(&mut self, address: H160) {
-        AccountStorages::remove_prefix(self.ctx.state.write().borrow_mut(), &address);
+        AccountStorages::remove_prefix(
+            self.ctx.state.write().borrow_mut(),
+            &address.into(),
+        );
     }
 
     fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>) {
@@ -297,7 +316,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
            code_len,
             address
         );
-        if let Err(e) = App::<C>::create_account(self.ctx, address, code) {
+        if let Err(e) = App::<C>::create_account(self.ctx, address.into(), code) {
             log::error!(
                 target: "evm",
                 "Failed inserting code ({} bytes) at {:?}, error: {:?}",

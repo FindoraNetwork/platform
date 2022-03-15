@@ -1,0 +1,15 @@
+[Unit]
+Description="Tendermint Daemon"
+Requires=abcid.service
+After=network.target abcid.service
+
+[Service]
+Restart=on-failure
+RestartSec=5s
+
+ExecStart=/usr/local/bin/tendermint node --home /data/findora
+
+LimitNOFILE=200000
+
+[Install]
+WantedBy=multi-user.target

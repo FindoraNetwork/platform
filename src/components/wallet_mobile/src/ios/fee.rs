@@ -20,6 +20,8 @@ pub extern "C" fn findora_ffi_fee_inputs_new() -> *mut FeeInputs {
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "C" fn findora_ffi_fee_inputs_append(
     ptr: *mut FeeInputs,
     am: u64,
@@ -31,12 +33,11 @@ pub unsafe extern "C" fn findora_ffi_fee_inputs_append(
     assert!(!ptr.is_null());
     let input = &mut *ptr;
 
-    let om_op;
-    if om.is_null() {
-        om_op = None;
+    let om_op = if om.is_null() {
+        None
     } else {
-        om_op = Some((*om).clone());
-    }
+        Some((*om).clone())
+    };
 
     input.append(am, *tr, (*ar).clone(), om_op, (**kp).clone());
 }

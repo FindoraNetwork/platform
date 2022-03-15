@@ -1,5 +1,5 @@
 use ethereum::{BlockV0 as Block, Receipt};
-use fp_core::{account::SmartAccount, context::Context};
+use fp_core::account::SmartAccount;
 use fp_evm::BlockId;
 use fp_types::crypto::Address;
 use primitive_types::{H160, H256, U256};
@@ -7,12 +7,7 @@ use ruc::*;
 
 /// Provide query and call interface provided by each module.
 pub trait BaseProvider {
-    fn account_of(
-        &self,
-        who: &Address,
-        height: Option<u64>,
-        ctx: Option<Context>,
-    ) -> Result<SmartAccount>;
+    fn account_of(&self, who: &Address, height: Option<u64>) -> Result<SmartAccount>;
 
     fn current_block(&self, id: Option<BlockId>) -> Option<Block>;
 

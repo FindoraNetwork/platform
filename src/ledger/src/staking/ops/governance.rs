@@ -7,15 +7,17 @@
 //! **NOTE**: always use the same multi-signature rules as `UpdateValidator`.
 //!
 
-use crate::{
-    data_model::NoReplayToken,
-    staking::{cosig::CoSigOp, Staking, TendermintAddrRef},
+use {
+    crate::{
+        data_model::NoReplayToken,
+        staking::{cosig::CoSigOp, Staking, TendermintAddrRef, BLOCK_HEIGHT_MAX},
+    },
+    lazy_static::lazy_static,
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    std::collections::BTreeMap,
+    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
-use lazy_static::lazy_static;
-use ruc::*;
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
 lazy_static! {
     // The current MVP version is a fixed rule,
@@ -149,6 +151,9 @@ impl Rule {
 }
 
 /// Penalize the FRAs by a specified address.
+///
+/// Any validator who has unstaked itself should not be punished,
+/// its delegators should not be punished also.
 #[inline(always)]
 pub fn governance_penalty_tendermint_auto(
     staking: &mut Staking,
@@ -161,7 +166,16 @@ pub fn governance_penalty_tendermint_auto(
         .c(d!())
         .and_then(|pk| {
             staking
-                .governance_penalty_by_pubkey(&pk, rule.gen_penalty_percent())
+                .delegation_get(&pk)
+                .map(|d| d.end_height)
                 .c(d!())
+                .and_then(|h| {
+                    if BLOCK_HEIGHT_MAX != h {
+                        return Ok(());
+                    }
+                    staking
+                        .governance_penalty_by_pubkey(&pk, rule.gen_penalty_percent())
+                        .c(d!())
+                })
         })
 }

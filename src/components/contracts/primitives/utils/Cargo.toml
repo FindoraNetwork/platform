@@ -2,7 +2,7 @@
 name = "fp-utils"
 version = "0.1.0"
 authors = ["FindoraNetwork"]
-edition = "2018"
+edition = "2021"
 homepage = "https://findora.org/technology"
 repository = "https://github.com/findoranetwork/platform/"
 description = "Findora Primitive utility functions"
@@ -16,10 +16,10 @@ blake2-rfc = "0.2.18"
 byteorder = "1.4.3"
 hex = "0.4.2"
 libsecp256k1 = { version = "0.5", features = ["static-context", "hmac"] }
-primitive-types = { version = "0.10.0", default-features = false, features = ["rlp", "byteorder", "serde"] }
+primitive-types = { version = "0.10.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
 protobuf = "2.16"
 rand = "0.7.2"
-ruc = "0.6.2"
+ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 sha2 = "0.9.5"
 sha3 = "0.8"

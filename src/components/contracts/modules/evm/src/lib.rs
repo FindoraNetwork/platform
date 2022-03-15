@@ -7,7 +7,7 @@ pub mod precompile;
 pub mod runtime;
 
 use abci::{RequestQuery, ResponseQuery};
-use ethereum_types::{H160, U256};
+use ethereum_types::U256;
 use fp_core::{
     context::Context,
     macros::Get,
@@ -19,7 +19,10 @@ use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
 };
-use fp_types::{actions::evm::Action, crypto::Address};
+use fp_types::{
+    actions::evm::Action,
+    crypto::{Address, HA160},
+};
 use precompile::PrecompileSet;
 use ruc::*;
 use std::marker::PhantomData;
@@ -48,13 +51,14 @@ pub trait Config {
 }
 
 pub mod storage {
-    use ethereum_types::{H160, H256};
+    use ethereum_types::H256;
     use fp_storage::*;
+    use fp_types::crypto::{HA160, HA256};
 
     // The code corresponding to the contract account.
-    generate_storage!(EVM, AccountCodes => Map<H160, Vec<u8>>);
+    generate_storage!(EVM, AccountCodes => Map<HA160, Vec<u8>>);
     // Storage root hash related to the contract account.
-    generate_storage!(EVM, AccountStorages => DoubleMap<H160, H256, H256>);
+    generate_storage!(EVM, AccountStorages => DoubleMap<HA160, HA256, H256>);
 }
 
 pub struct App<C> {
@@ -84,7 +88,7 @@ impl<C: Config> AppModule for App<C> {
         }
         match path[0] {
             "contract-number" => {
-                let contracts: Vec<(H160, Vec<u8>)> =
+                let contracts: Vec<(HA160, Vec<u8>)> =
                     storage::AccountCodes::iterate(ctx.state.read().borrow());
                 resp.value = serde_json::to_vec(&contracts.len()).unwrap_or_default();
                 resp
@@ -103,6 +107,6 @@ impl<C: Config> Executable for App<C> {
         _call: Self::Call,
         _ctx: &Context,
     ) -> Result<ActionResult> {
-        todo!()
+        Err(eg!("Unsupported evm action!"))
     }
 }

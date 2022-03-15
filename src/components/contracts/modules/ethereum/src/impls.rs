@@ -1,5 +1,6 @@
 use crate::storage::*;
-use crate::{App, Config, ContractLog, TransactionExecuted, PENDING_TRANSACTIONS};
+use crate::{App, Config, ContractLog, TransactionExecuted};
+use config::abci::global_cfg::CFG;
 use ethereum::{
     BlockV0 as Block, LegacyTransactionMessage, Receipt, TransactionV0 as Transaction,
 };
@@ -11,9 +12,10 @@ use fp_core::{
 use fp_events::Event;
 use fp_evm::{BlockId, CallOrCreateInfo, Runner, TransactionStatus};
 use fp_storage::{Borrow, BorrowMut};
+use fp_types::crypto::HA256;
 use fp_types::{actions::evm as EvmAction, crypto::secp256k1_ecdsa_recover};
 use fp_utils::{proposer_converter, timestamp_converter};
-use log::debug;
+use log::{debug, info};
 use ruc::*;
 use sha3::{Digest, Keccak256};
 
@@ -34,15 +36,34 @@ impl<C: Config> App<C> {
         )))
     }
 
-    pub fn store_block(&mut self, ctx: &mut Context, block_number: U256) -> Result<()> {
+    pub fn store_block(
+        &mut self,
+        ctx: &mut Context,
+        block_number: U256,
+        root_hash: &[u8],
+    ) -> Result<()> {
+        // #[cfg(feature = "debug_env")]
+        // const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::from(142_5000);
+        //
+        // #[cfg(not(feature = "debug_env"))]
+        // const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::zero();
+
         let mut transactions: Vec<Transaction> = Vec::new();
         let mut statuses: Vec<TransactionStatus> = Vec::new();
         let mut receipts: Vec<Receipt> = Vec::new();
         let mut logs_bloom = Bloom::default();
+        let mut is_store_block = true;
 
-        for (transaction, status, receipt) in
-            PENDING_TRANSACTIONS.lock().clone().into_iter()
+        let pending_txs: Vec<(Transaction, TransactionStatus, Receipt)> =
+            PendingTransactions::take(ctx.db.write().borrow_mut()).unwrap_or_default();
+
+        if block_number < U256::from(CFG.checkpoint.evm_first_block_height)
+            || (pending_txs.is_empty() && self.disable_eth_empty_blocks)
         {
+            is_store_block = false;
+        }
+
+        for (transaction, status, receipt) in pending_txs {
             Self::logs_bloom(receipt.logs.clone(), &mut logs_bloom);
             transactions.push(transaction);
             statuses.push(status);
@@ -51,13 +72,12 @@ impl<C: Config> App<C> {
 
         let ommers = Vec::<ethereum::Header>::new();
         let receipts_root =
-            ethereum::util::ordered_trie_root(receipts.iter().map(|r| rlp::encode(r)));
+            ethereum::util::ordered_trie_root(receipts.iter().map(rlp::encode));
         let block_timestamp = ctx.header.time.clone().unwrap_or_default();
 
         let mut state_root = H256::default();
-        let root_hash = ctx.state.read().root_hash();
         if !root_hash.is_empty() {
-            state_root = H256::from_slice(&root_hash);
+            state_root = H256::from_slice(root_hash);
         }
 
         let partial_header = ethereum::PartialHeader {
@@ -84,20 +104,23 @@ impl<C: Config> App<C> {
             nonce: H64::default(),
         };
         let block = Block::new(partial_header, transactions, ommers);
-        let block_hash = block.header.hash();
+        let block_hash = HA256::new(block.header.hash());
 
         CurrentBlockNumber::put(ctx.db.write().borrow_mut(), &block_number)?;
         BlockHash::insert(ctx.db.write().borrow_mut(), &block_number, &block_hash)?;
-
-        PENDING_TRANSACTIONS.lock().clear();
-
-        CurrentBlock::insert(ctx.db.write().borrow_mut(), &block_hash, &block)?;
-        CurrentReceipts::insert(ctx.db.write().borrow_mut(), &block_hash, &receipts)?;
-        CurrentTransactionStatuses::insert(
-            ctx.db.write().borrow_mut(),
-            &block_hash,
-            &statuses,
-        )?;
+        if is_store_block {
+            CurrentBlock::insert(ctx.db.write().borrow_mut(), &block_hash, &block)?;
+            CurrentReceipts::insert(
+                ctx.db.write().borrow_mut(),
+                &block_hash,
+                &receipts,
+            )?;
+            CurrentTransactionStatuses::insert(
+                ctx.db.write().borrow_mut(),
+                &block_hash,
+                &statuses,
+            )?;
+        }
 
         debug!(target: "ethereum", "store new ethereum block: {}", block_number);
         Ok(())
@@ -114,7 +137,9 @@ impl<C: Config> App<C> {
         let transaction_hash =
             H256::from_slice(Keccak256::digest(&rlp::encode(&transaction)).as_slice());
 
-        let transaction_index = PENDING_TRANSACTIONS.lock().len() as u32;
+        let mut pending_txs: Vec<_> =
+            PendingTransactions::get(ctx.db.read().borrow()).unwrap_or_default();
+        let transaction_index = pending_txs.len() as u32;
 
         let gas_limit = transaction.gas_limit;
 
@@ -157,9 +182,10 @@ impl<C: Config> App<C> {
 
         let (to, contract_address, info) = execute_ret.unwrap();
 
-        let (reason, status, used_gas) = match info.clone() {
+        let (reason, data, status, used_gas) = match info.clone() {
             CallOrCreateInfo::Call(info) => (
                 info.exit_reason,
+                info.value.clone(),
                 TransactionStatus {
                     transaction_hash,
                     transaction_index,
@@ -177,6 +203,7 @@ impl<C: Config> App<C> {
             ),
             CallOrCreateInfo::Create(info) => (
                 info.exit_reason,
+                vec![],
                 TransactionStatus {
                     transaction_hash,
                     transaction_index,
@@ -195,7 +222,7 @@ impl<C: Config> App<C> {
         };
 
         for log in &status.logs {
-            debug!(target: "evm", "transaction status log: block: {:?}, address: {:?}, topics: {:?}, data: {:?}",
+            debug!(target: "ethereum", "transaction status log: block: {:?}, address: {:?}, topics: {:?}, data: {:?}",
                 ctx.header.height, log.address, log.topics.clone(), log.data.clone());
 
             events.push(Event::emit_event(
@@ -206,6 +233,31 @@ impl<C: Config> App<C> {
                     data: log.data.clone(),
                 },
             ));
+        }
+
+        let (code, message) = match reason {
+            ExitReason::Succeed(_) => (0, String::new()),
+            // code 1 indicates `Failed to execute evm function`, see above
+            ExitReason::Error(_) => (2, "EVM error".to_string()),
+            ExitReason::Revert(_) => {
+                let mut message =
+                    "VM Exception while processing transaction: revert".to_string();
+                // A minimum size of error function selector (4) + offset (32) + string length (32)
+                // should contain a utf-8 encoded revert reason.
+                if data.len() > 68 {
+                    let message_len = data[36..68].iter().sum::<u8>();
+                    let body: &[u8] = &data[68..68 + message_len as usize];
+                    if let Ok(reason) = std::str::from_utf8(body) {
+                        message = format!("{} {}", message, reason);
+                    }
+                }
+                (3, message)
+            }
+            ExitReason::Fatal(_) => (4, "EVM Fatal error".to_string()),
+        };
+
+        if code != 0 {
+            info!(target: "ethereum", "evm execute result: reason {:?} status {:?} used_gas {}", reason, status, used_gas);
         }
 
         let receipt = ethereum::Receipt {
@@ -220,13 +272,12 @@ impl<C: Config> App<C> {
             logs: status.logs.clone(),
         };
 
-        PENDING_TRANSACTIONS
-            .lock()
-            .push((transaction, status, receipt));
+        pending_txs.push((transaction, status, receipt));
+        PendingTransactions::put(ctx.db.write().borrow_mut(), &pending_txs)?;
 
         TransactionIndex::insert(
-            ctx.state.write().borrow_mut(),
-            &transaction_hash,
+            ctx.db.write().borrow_mut(),
+            &HA256::new(transaction_hash),
             &(ctx.header.height.into(), transaction_index),
         )?;
 
@@ -242,9 +293,9 @@ impl<C: Config> App<C> {
         ));
 
         Ok(ActionResult {
-            code: 0,
+            code,
             data: serde_json::to_vec(&info).unwrap_or_default(),
-            log: "".to_string(),
+            log: message,
             gas_wanted: gas_limit.low_u64(),
             gas_used: used_gas.low_u64(),
             events,
@@ -306,13 +357,13 @@ impl<C: Config> App<C> {
         ctx: &Context,
         id: Option<BlockId>,
     ) -> Option<Vec<TransactionStatus>> {
-        let hash = Self::block_hash(ctx, id).unwrap_or_default();
+        let hash = HA256::new(Self::block_hash(ctx, id).unwrap_or_default());
         CurrentTransactionStatuses::get(ctx.db.read().borrow(), &hash)
     }
 
     /// Get the block with given block id.
     pub fn current_block(&self, ctx: &Context, id: Option<BlockId>) -> Option<Block> {
-        let hash = Self::block_hash(ctx, id).unwrap_or_default();
+        let hash = HA256::new(Self::block_hash(ctx, id).unwrap_or_default());
         CurrentBlock::get(ctx.db.read().borrow(), &hash)
     }
 
@@ -322,14 +373,14 @@ impl<C: Config> App<C> {
         ctx: &Context,
         id: Option<BlockId>,
     ) -> Option<Vec<ethereum::Receipt>> {
-        let hash = Self::block_hash(ctx, id).unwrap_or_default();
+        let hash = HA256::new(Self::block_hash(ctx, id).unwrap_or_default());
         CurrentReceipts::get(ctx.db.read().borrow(), &hash)
     }
 
     /// Get current block hash
     pub fn current_block_hash(ctx: &Context) -> Option<H256> {
         if let Some(number) = CurrentBlockNumber::get(ctx.db.read().borrow()) {
-            BlockHash::get(ctx.db.read().borrow(), &number)
+            Self::get_hash(ctx, number)
         } else {
             None
         }
@@ -345,7 +396,7 @@ impl<C: Config> App<C> {
         if let Some(id) = id {
             match id {
                 BlockId::Hash(h) => Some(h),
-                BlockId::Number(n) => BlockHash::get(ctx.db.read().borrow(), &n),
+                BlockId::Number(n) => Self::get_hash(ctx, n),
             }
         } else {
             Self::current_block_hash(ctx)
@@ -354,7 +405,7 @@ impl<C: Config> App<C> {
 
     /// The index of the transaction in the block
     pub fn transaction_index(ctx: &Context, hash: H256) -> Option<(U256, u32)> {
-        TransactionIndex::get(ctx.state.read().borrow(), &hash)
+        TransactionIndex::get(ctx.db.read().borrow(), &HA256::new(hash))
     }
 
     fn logs_bloom(logs: Vec<ethereum::Log>, bloom: &mut Bloom) {
@@ -364,5 +415,28 @@ impl<C: Config> App<C> {
                 bloom.accrue(BloomInput::Raw(&topic[..]));
             }
         }
+    }
+
+    fn get_hash(ctx: &Context, number: U256) -> Option<H256> {
+        if let Some(hash) = BlockHash::get(ctx.db.read().borrow(), &number) {
+            return Some(hash.h256());
+        }
+        None
+    }
+
+    pub fn migrate(ctx: &mut Context) -> Result<()> {
+        //Migrate existing transaction indices from chain-state to rocksdb.
+        let txn_idxs: Vec<(HA256, (U256, u32))> =
+            TransactionIndex::iterate(ctx.state.read().borrow());
+        let txn_idxs_cnt = txn_idxs.len();
+
+        for idx in txn_idxs {
+            TransactionIndex::insert(ctx.db.write().borrow_mut(), &idx.0, &idx.1)?;
+            debug!(target: "ethereum", "hash: 0x{}, block: {}, index: {}", idx.0.to_string(), idx.1 .0, idx.1 .1);
+        }
+        ctx.db.write().commit_session();
+        info!(target: "ethereum", "{} transaction indexes migrated to db", txn_idxs_cnt);
+
+        Ok(())
     }
 }

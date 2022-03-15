@@ -11,6 +11,8 @@ pub extern "C" fn findora_ffi_transfer_operation_builder_new(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Debug function that does not need to go into the docs.
 pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_debug(
     builder: *const TransferOperationBuilder,
@@ -19,6 +21,8 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_debug(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Wraps around TransferOperationBuilder to add an input to a transfer operation builder.
 pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_input_with_tracing(
     builder: *const TransferOperationBuilder,
@@ -29,12 +33,11 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_input_with_t
     key: *const XfrKeyPair,
     amount: u64,
 ) -> *mut TransferOperationBuilder {
-    let memo;
-    if owner_memo.is_null() {
-        memo = None
+    let memo = if owner_memo.is_null() {
+        None
     } else {
-        memo = Some((*owner_memo).clone())
-    }
+        Some((*owner_memo).clone())
+    };
     if let Ok(info) = (*builder).clone().add_input_with_tracing(
         *txo_ref,
         (*asset_record).clone(),
@@ -50,6 +53,8 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_input_with_t
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Wraps around TransferOperationBuilder to add an input to a transfer operation builder.
 pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_input_no_tracing(
     builder: *const TransferOperationBuilder,
@@ -59,12 +64,11 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_input_no_tra
     key: *const XfrKeyPair,
     amount: u64,
 ) -> *mut TransferOperationBuilder {
-    let memo;
-    if owner_memo.is_null() {
-        memo = None
+    let memo = if owner_memo.is_null() {
+        None
     } else {
-        memo = Some((*owner_memo).clone())
-    }
+        Some((*owner_memo).clone())
+    };
     if let Ok(info) = (*builder).clone().add_input_no_tracing(
         *txo_ref,
         &*asset_record,
@@ -79,6 +83,8 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_input_no_tra
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Wraps around TransferOperationBuilder to add an output to a transfer operation builder.
 pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_output_with_tracing(
     builder: *const TransferOperationBuilder,
@@ -104,6 +110,8 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_output_with_
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Wraps around TransferOperationBuilder to add an output to a transfer operation builder.
 pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_output_no_tracing(
     builder: *const TransferOperationBuilder,
@@ -127,13 +135,15 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_output_no_tr
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Wraps around TransferOperationBuilder to ensure the transfer inputs and outputs are balanced.
 /// This function will add change outputs for all unspent portions of input records.
 /// @throws Will throw an error if the transaction cannot be balanced.
 pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_balance(
     builder: *const TransferOperationBuilder,
 ) -> *mut TransferOperationBuilder {
-    if let Ok(info) = (*builder).clone().balance() {
+    if let Ok(info) = (*builder).clone().balance(None) {
         Box::into_raw(Box::new(info))
     } else {
         std::ptr::null_mut()
@@ -141,6 +151,8 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_balance(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Wraps around TransferOperationBuilder to finalize the transaction.
 pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_create(
     builder: *const TransferOperationBuilder,
@@ -153,6 +165,8 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_create(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Wraps around TransferOperationBuilder to add a signature to the operation.
 ///
 /// All input owners must sign.
@@ -168,6 +182,8 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_sign(
 }
 
 #[no_mangle]
+/// # Safety
+///
 pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_builder(
     builder: *const TransferOperationBuilder,
 ) -> *mut c_char {
@@ -175,6 +191,8 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_builder(
 }
 
 #[no_mangle]
+/// # Safety
+///
 /// Wraps around TransferOperationBuilder to extract an operation expression as JSON.
 pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_transaction(
     builder: *const TransferOperationBuilder,

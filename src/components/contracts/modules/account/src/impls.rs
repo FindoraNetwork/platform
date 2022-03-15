@@ -1,15 +1,9 @@
 use crate::storage::*;
 use crate::{App, Config};
-use fp_core::{
-    account::SmartAccount, context::Context, ensure, transaction::ActionResult,
-};
+use fp_core::{account::SmartAccount, context::Context};
 use fp_storage::{Borrow, BorrowMut};
-use fp_traits::{
-    account::AccountAsset,
-    evm::{DecimalsMapping, EthereumDecimalsMapping},
-};
-use fp_types::{actions::account::MintOutput, crypto::Address};
-use ledger::data_model::ASSET_TYPE_FRA;
+use fp_traits::account::AccountAsset;
+use fp_types::crypto::Address;
 use primitive_types::U256;
 use ruc::*;
 
@@ -23,9 +17,11 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         who: &Address,
         height: Option<u64>,
     ) -> Option<SmartAccount> {
-        match height {
-            Some(ver) => AccountStore::get_ver(ctx.state.read().borrow(), who, ver),
-            None => AccountStore::get(ctx.state.read().borrow(), who),
+        let version = height.unwrap_or(0);
+        if version == 0 {
+            AccountStore::get(ctx.state.read().borrow(), who)
+        } else {
+            AccountStore::get_ver(ctx.state.read().borrow(), who, version)
         }
     }
 
@@ -156,66 +152,6 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         spender: &Address,
         amount: U256,
     ) -> Result<()> {
-        if amount.is_zero() {
-            return Ok(());
-        }
-
         Allowances::insert(ctx.state.write().borrow_mut(), owner, spender, &amount)
-    }
-}
-
-impl<C: Config> App<C> {
-    pub fn transfer_to_utxo(
-        ctx: &Context,
-        sender: Address,
-        outputs: Vec<MintOutput>,
-    ) -> Result<ActionResult> {
-        let mut asset_amount = 0;
-        for output in &outputs {
-            ensure!(
-                output.asset == ASSET_TYPE_FRA,
-                "Invalid asset type only support FRA"
-            );
-            asset_amount += output.amount;
-        }
-
-        log::debug!(target: "account", "transfer to UTXO amount is: {} FRA", asset_amount);
-
-        let amount =
-            EthereumDecimalsMapping::from_native_token(U256::from(asset_amount))
-                .ok_or_else(|| eg!("The transfer to UTXO amount is too large"))?;
-
-        let sa = Self::account_of(ctx, &sender, None).c(d!("account does not exist"))?;
-        if sa.balance < amount {
-            return Err(eg!("insufficient balance"));
-        }
-
-        if !amount.is_zero() {
-            Self::burn(ctx, &sender, amount)?;
-            Self::add_mint(ctx, outputs)?;
-        }
-        Ok(ActionResult::default())
-    }
-
-    pub(crate) fn add_mint(ctx: &Context, mut outputs: Vec<MintOutput>) -> Result<()> {
-        let ops = if let Some(mut ori_outputs) = MintOutputs::get(ctx.db.read().borrow())
-        {
-            ori_outputs.append(&mut outputs);
-            ori_outputs
-        } else {
-            outputs
-        };
-        MintOutputs::put(ctx.db.write().borrow_mut(), &ops)
-    }
-
-    pub fn consume_mint(ctx: &Context, size: usize) -> Result<Vec<MintOutput>> {
-        let mut outputs = MintOutputs::get(ctx.db.read().borrow()).unwrap_or_default();
-        if outputs.len() > size {
-            let vec2 = outputs.split_off(size);
-            MintOutputs::put(ctx.db.write().borrow_mut(), &vec2)?;
-        } else {
-            MintOutputs::delete(ctx.db.write().borrow_mut());
-        }
-        Ok(outputs)
     }
 }

@@ -148,19 +148,10 @@ pub struct Filter {
 
 /// Helper for Filter matching.
 /// Supports conditional indexed parameters and wildcards.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct FilteredParams {
     pub filter: Option<Filter>,
     pub flat_topics: Vec<FlatTopic>,
-}
-
-impl Default for FilteredParams {
-    fn default() -> Self {
-        FilteredParams {
-            filter: None,
-            flat_topics: Vec::new(),
-        }
-    }
 }
 
 impl FilteredParams {

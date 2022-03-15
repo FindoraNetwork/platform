@@ -9,31 +9,29 @@ mod whoami;
 #[cfg(test)]
 mod test;
 
-#[cfg(test)]
-#[cfg(feature = "abci_mock")]
-pub mod abci_mock_test;
-
-use crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT;
-use abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate};
-use baseapp::BaseApp as AccountBaseApp;
-use lazy_static::lazy_static;
-use ledger::{
-    data_model::{Operation, Transaction, ASSET_TYPE_FRA},
-    staking::{
-        ops::{
-            governance::{governance_penalty_tendermint_auto, ByzantineKind},
-            mint_fra::{MintEntry, MintFraOps, MintKind},
+use {
+    crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
+    abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate},
+    baseapp::BaseApp as AccountBaseApp,
+    lazy_static::lazy_static,
+    ledger::{
+        data_model::{Operation, Transaction, ASSET_TYPE_FRA},
+        staking::{
+            ops::{
+                governance::{governance_penalty_tendermint_auto, ByzantineKind},
+                mint_fra::{MintEntry, MintFraOps, MintKind},
+            },
+            td_addr_to_string, Staking, VALIDATOR_UPDATE_BLOCK_ITV,
         },
-        td_addr_to_string, Staking, VALIDATOR_UPDATE_BLOCK_ITV,
+        store::LedgerState,
     },
-    store::LedgerState,
-};
-use ruc::*;
-use serde::Serialize;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    ops::{Deref, DerefMut},
-    sync::atomic::Ordering,
+    ruc::*,
+    serde::Serialize,
+    std::{
+        collections::{BTreeMap, BTreeSet},
+        ops::{Deref, DerefMut},
+        sync::atomic::Ordering,
+    },
 };
 
 // The top 50~ candidate validators
@@ -163,7 +161,7 @@ pub fn system_ops(
     ruc::info_omit!(set_rewards(
         la,
         &header.proposer_address,
-        last_commit_info.map(|lci| get_last_vote_percent(lci))
+        last_commit_info.map(get_last_vote_percent)
     ));
 
     // tendermint primary governances
@@ -222,6 +220,7 @@ pub fn system_ops(
 
 /// Get the actual voted power of last block.
 fn get_last_vote_percent(last_commit_info: &LastCommitInfo) -> [u64; 2] {
+    // Returns Voted in last block and Total Voting power (including signed_last_block = false)
     last_commit_info
         .votes
         .iter()
@@ -259,7 +258,7 @@ struct ByzantineInfo<'a> {
 
 /// Auto governance.
 fn system_governance(staking: &mut Staking, bz: &ByzantineInfo) -> Result<()> {
-    ruc::pd!(serde_json::to_string(&bz).unwrap());
+    // ruc::pd!(serde_json::to_string(&bz).unwrap());
     let kind = match bz.kind {
         "DUPLICATE_VOTE" => ByzantineKind::DuplicateVote,
         "LIGHT_CLIENT_ATTACK" => ByzantineKind::LightClientAttack,
@@ -309,8 +308,7 @@ pub fn system_mint_pay(
         .collect::<Vec<_>>();
 
     // add account mint_entries.
-    const MAX_MINT_PAY: usize = 64;
-    let mut vec = if let Ok(account_mint) = account_base_app.consume_mint(MAX_MINT_PAY) {
+    let mut mints = if let Some(account_mint) = account_base_app.consume_mint() {
         account_mint
             .iter()
             .map(|mint| {
@@ -327,7 +325,7 @@ pub fn system_mint_pay(
         Vec::new()
     };
 
-    mint_entries.append(&mut vec);
+    mint_entries.append(&mut mints);
 
     if mint_entries.is_empty() {
         None
