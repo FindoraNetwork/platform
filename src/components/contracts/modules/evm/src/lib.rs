@@ -196,11 +196,14 @@ impl<C: Config> AppModule for App<C> {
         if ctx.header.height == height {
             if let Err(e) = utils::deploy_contract::<C>(ctx, &mut self.contracts) {
                 pd!(e);
+                return;
             }
             println!(
                 "Bridge contract address: {:?}",
                 self.contracts.bridge_address
             );
+
+            ctx.state.write().discard_session();
         }
     }
 }
