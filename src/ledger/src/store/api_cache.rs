@@ -281,6 +281,9 @@ where
             Operation::TransferAnonAsset(_) => {
                 // Anon
             }
+            Operation::AnonymousFee(_) => {
+                // Anon Fee
+            }
             Operation::ConvertAccount(i) => {
                 related_addresses.insert(XfrAddress {
                     key: i.get_related_address(),

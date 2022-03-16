@@ -57,6 +57,7 @@ use {
     zei::{
         anon_xfr::{
             abar_to_bar::verify_abar_to_bar_body,
+            anon_fee::verify_anon_fee_body,
             hash_abar,
             keys::AXfrPubKey,
             structs::{AnonBlindAssetRecord, MTLeafInfo, MTNode, MTPath, Nullifier},
@@ -1682,6 +1683,20 @@ impl LedgerStatus {
                 &node_params,
                 axfr_body,
                 // Unwrap Now to get the code to compile . Change in Zei later to accept Option<BLSScalar>
+                &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
+            )
+            .c(d!())?;
+        }
+
+        // An anon_fee_body requires abar merkle root hash for AnonFeeNote verification. This is done
+        // here with LedgerStatus available.
+        for anon_fee_body in txn_effect.anon_fee_bodies.iter() {
+            let user_params = UserParams::new(1, 1, Some(TREE_DEPTH));
+            let node_params = NodeParams::from(user_params);
+            let abar_version = anon_fee_body.proof.merkle_root_version;
+            verify_anon_fee_body(
+                &node_params,
+                anon_fee_body,
                 &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
             )
             .c(d!())?;

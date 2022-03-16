@@ -739,18 +739,22 @@ pub fn generate_bar2abar_op(
 #[allow(missing_docs)]
 pub fn generate_abar2bar_op(
     oabar_in: &OpenAnonBlindAssetRecord,
+    fee_oabar: &OpenAnonBlindAssetRecord,
+    out_fee_oabar: &OpenAnonBlindAssetRecord,
     from: &AXfrKeyPair,
     to: &XfrPublicKey,
     art: AssetRecordType,
-    fee_keypair: &XfrKeyPair,
 ) -> Result<()> {
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
     builder
         .add_operation_abar_to_bar(oabar_in, from, to, art)
         .c(d!())?;
 
-    let feeop = gen_fee_op(fee_keypair).c(d!())?;
-    builder.add_operation(feeop);
+    /* let feeop = gen_fee_op(fee_keypair).c(d!())?;
+    builder.add_operation(feeop); */
+    builder
+        .add_operation_anon_fee(fee_oabar, out_fee_oabar, from)
+        .c(d!())?;
 
     send_tx(&builder.take_transaction()).c(d!())?;
     Ok(())

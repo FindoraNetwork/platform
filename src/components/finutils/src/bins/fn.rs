@@ -483,12 +483,7 @@ fn run() -> Result<()> {
                     wallet::public_key_from_bech32(addr).c(d!("invalid wallet address"))
                 })
             })?;
-        let fee_xfr_seckey = match m.value_of("fee-xfr-seckey") {
-            Some(path) => {
-                Some(fs::read_to_string(path).c(d!("Failed to read seckey file"))?)
-            }
-            None => None,
-        };
+        let fee_randomizer = m.value_of("fee-randomizer");
 
         if randomizer.is_none() {
             println!("{}", m.usage());
@@ -498,7 +493,7 @@ fn run() -> Result<()> {
                 randomizer.unwrap(),
                 dec_key,
                 &to,
-                fee_xfr_seckey.as_deref(),
+                fee_randomizer.unwrap(),
                 m.is_present("confidential-amount"),
                 m.is_present("confidential-type"),
             )

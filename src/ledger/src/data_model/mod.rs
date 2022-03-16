@@ -46,6 +46,7 @@ use {
     unicode_normalization::UnicodeNormalization,
     zei::{
         anon_xfr::{
+            anon_fee::AnonFeeNote,
             bar_to_abar::{BarToAbarBody, BarToAbarNote},
             keys::AXfrPubKey,
             structs::AXfrNote,
@@ -1363,6 +1364,31 @@ impl AnonTransferOps {
     }
 }
 
+/// A struct to hold the anon fee used for abar to bar conversion
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AnonFeeOps {
+    /// The note which holds the signatures, the ZKF and memo
+    pub note: AnonFeeNote,
+    nonce: NoReplayToken,
+}
+impl AnonFeeOps {
+    /// Generates the anon fee note
+    pub fn new(note: AnonFeeNote, nonce: NoReplayToken) -> Result<AnonFeeOps> {
+        Ok(AnonFeeOps { note, nonce })
+    }
+
+    #[inline(always)]
+    #[allow(dead_code)]
+    fn set_nonce(&mut self, nonce: NoReplayToken) {
+        self.nonce = nonce;
+    }
+
+    #[inline(always)]
+    fn get_nonce(&self) -> NoReplayToken {
+        self.nonce
+    }
+}
+
 /// Operation list supported in findora network
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
@@ -1398,6 +1424,8 @@ pub enum Operation {
     AbarToBar(Box<AbarToBarOps>),
     /// Anonymous transfer operation
     TransferAnonAsset(Box<AnonTransferOps>),
+    /// Anonymous fee operation for abar to bar xfr
+    AnonymousFee(Box<AnonFeeOps>),
 }
 
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
@@ -1428,6 +1456,7 @@ fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
         Operation::BarToAbar(i) => i.set_nonce(no_replay_token),
         Operation::AbarToBar(i) => i.set_nonce(no_replay_token),
         Operation::TransferAnonAsset(i) => i.set_nonce(no_replay_token),
+        Operation::AnonymousFee(i) => i.set_nonce(no_replay_token),
         _ => {}
     }
 }
