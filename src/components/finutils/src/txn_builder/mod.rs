@@ -236,11 +236,17 @@ impl TransactionBuilder {
         let mut kps = vec![];
         let mut opb = TransferOperationBuilder::default();
 
+        let mut am = TX_FEE_MIN;
         for i in inputs.inner.into_iter() {
             open_blind_asset_record(&i.ar.record, &i.om, &i.kp)
                 .c(d!())
                 .and_then(|oar| {
-                    opb.add_input(i.tr, oar, None, None, i.am)
+                    if oar.asset_type != ASSET_TYPE_FRA {
+                        return Err(eg!("Incorrect fee input asset_type, expected Findora AssetType record"));
+                    }
+                    let n = alt!(oar.amount > am, am, oar.amount);
+                    am = am.saturating_sub(oar.amount);
+                    opb.add_input(i.tr, oar, None, None, n)
                         .map(|_| {
                             kps.push(i.kp);
                         })
@@ -499,7 +505,7 @@ impl TransactionBuilder {
         enc_key: &XPublicKey,
     ) -> Result<(&mut Self, JubjubScalar)> {
         let mut prng = ChaChaRng::from_entropy();
-        let user_params = UserParams::eq_committed_vals_params();
+        let user_params = UserParams::eq_committed_vals_params()?;
 
         /*
         TODO: charge fee
@@ -538,7 +544,7 @@ impl TransactionBuilder {
         asset_record_type: AssetRecordType,
     ) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
-        let user_params = UserParams::abar_to_bar_params(MERKLE_TREE_DEPTH);
+        let user_params = UserParams::abar_to_bar_params(MERKLE_TREE_DEPTH)?;
 
         let note = gen_abar_to_bar_note(
             &mut prng,
@@ -590,7 +596,7 @@ impl TransactionBuilder {
         let mut prng = ChaChaRng::from_entropy();
         let depth: usize = MERKLE_TREE_DEPTH;
         let user_params =
-            UserParams::new(inputs.len(), outputs.len(), Option::from(depth));
+            UserParams::new(inputs.len(), outputs.len(), Option::from(depth))?;
 
         let (body, keypairs) =
             gen_anon_xfr_body(&mut prng, &user_params, inputs, outputs, input_keypairs)
@@ -662,7 +668,7 @@ impl TransactionBuilder {
             inputs.len(),
             outputs_plus_remainder.len(),
             Option::from(depth),
-        );
+        )?;
 
         let (body, keypairs) = gen_anon_xfr_body(
             &mut prng,
@@ -1201,7 +1207,10 @@ impl TransferOperationBuilder {
             .iter()
             .fold(0, |acc, ar| acc + ar.open_asset_record.amount);
         if spend_total != output_total {
-            return Err(eg!(format!("{} != {}", spend_total, output_total)));
+            return Err(eg!(format!(
+                "Spend total != output, {} != {}",
+                spend_total, output_total
+            )));
         }
         self.output_records.append(&mut partially_consumed_inputs);
 
@@ -1396,7 +1405,7 @@ impl AnonTransferOperationBuilder {
             self.inputs.len(),
             self.outputs.len(),
             Some(MERKLE_TREE_DEPTH),
-        );
+        )?;
 
         let mut sum_input = 0;
         let mut sum_output = 0;
@@ -1874,8 +1883,7 @@ mod tests {
         let txn = builder.take_transaction();
 
         if let Operation::BarToAbar(note) = txn.body.operations[0].clone() {
-            let user_params = UserParams::eq_committed_vals_params();
-            let node_params = NodeParams::from(user_params);
+            let node_params = NodeParams::bar_to_abar_params().unwrap();
             let result =
                 verify_bar_to_abar_note(&node_params, &note.note, from.get_pk_ref());
             assert!(result.is_ok());
