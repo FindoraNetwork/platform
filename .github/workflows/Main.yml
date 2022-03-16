@@ -61,6 +61,12 @@ jobs:
     #   shell: bash
     #   run: |
     #     make build
+
+    - name: evm test
+      shell: bash
+      run: |
+        make evmtest
+        
     - name: Prepare key
       shell: bash
       run: |
