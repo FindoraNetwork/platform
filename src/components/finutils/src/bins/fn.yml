@@ -597,6 +597,11 @@ subcommands:
             takes_value: true
             value_name: RANDOMIZER
             required: true
+        - fra-randomizer:
+            help: Randomizer for the input FRA Anon BAR
+            long: fra-randomizer
+            takes_value: true
+            value_name: FRA RANDOMIZER
         - to-axfr-public-key:
             help: Axfr public key of the receiver
             long: to-axfr-public-key
@@ -608,14 +613,14 @@ subcommands:
             long: to-enc-key
             takes_value: true
             value_name: ENCRYPTION KEY
-            required: true  
+            required: true
         - amount:
             help: how much units to transfer
             short: n
             long: amount
             takes_value: true
             value_name: Amount
-            required: true      
+            required: true
   - anon-transfer-batch:
       about: Anonymous Transfer of tokens from multiple inputs to multiple outputs
       args:
@@ -632,7 +637,7 @@ subcommands:
             long: randomizer-file
             takes_value: true
             value_name: RANDOMIZER
-            required: true        
+            required: true
         - decryption-key-file:
             help: Decryption Keys for anon transfer
             short: d
@@ -651,13 +656,20 @@ subcommands:
             long: to-enc-key-file
             takes_value: true
             value_name: ENCRYPTION KEY
-            required: true           
+            required: true
         - amount-file:
             help: how much units to transfer for each receiver
             short: n
             long: amount-file
             takes_value: true
             value_name: Amount
+            required: true
+        - asset-file:
+            help: Relative asset code type.
+            short: a
+            long: asset-file
+            takes_value: true
+            value_name: Asset
             required: true
   - anon-fetch-merkle-proof:
       about: Query to fetch mtleaf info

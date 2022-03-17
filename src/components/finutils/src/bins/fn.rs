@@ -32,7 +32,7 @@ use {
     fp_utils::ecdsa::SecpPair,
     globutils::wallet,
     ledger::{
-        data_model::{ATxoSID, AssetTypeCode, FRA_DECIMALS},
+        data_model::{ATxoSID, AssetTypeCode, ASSET_TYPE_FRA, FRA_DECIMALS},
         staking::StakerMemo,
     },
     rand_chacha::ChaChaRng,
@@ -616,6 +616,7 @@ fn run() -> Result<()> {
         let to_axfr_public_key = m.value_of("to-axfr-public-key");
         let to_enc_key = m.value_of("to-enc-key");
         let amount = m.value_of("amount");
+        let fra_randomizer = m.value_of("fra-randomizer");
 
         if randomizer.is_none()
             || to_axfr_public_key.is_none()
@@ -627,6 +628,7 @@ fn run() -> Result<()> {
             common::gen_oabar_add_op(
                 axfr_secret_key,
                 randomizer.unwrap(),
+                fra_randomizer,
                 dec_key,
                 amount.unwrap(),
                 to_axfr_public_key.unwrap(),
@@ -681,6 +683,22 @@ fn run() -> Result<()> {
                 .c(d!())
                 .map(|ams| ams.lines().map(String::from).collect::<Vec<String>>())
         })?;
+        let assets = m.value_of("asset-file").c(d!()).and_then(|f| {
+            let token_code = |asset: &str| {
+                if asset.to_uppercase() == "FRA" {
+                    AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    }
+                } else {
+                    AssetTypeCode::new_from_base64(asset).unwrap_or(AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    })
+                }
+            };
+            fs::read_to_string(f)
+                .c(d!())
+                .map(|ams| ams.lines().map(token_code).collect::<Vec<AssetTypeCode>>())
+        })?;
 
         if axfr_secret_keys.is_empty()
             || dec_keys.is_empty()
@@ -688,6 +706,7 @@ fn run() -> Result<()> {
             || to_enc_keys.is_empty()
             || randomizers.is_empty()
             || amounts.is_empty()
+            || assets.is_empty()
         {
             println!("{}", m.usage());
         } else {
@@ -698,6 +717,7 @@ fn run() -> Result<()> {
                 to_enc_keys,
                 randomizers,
                 amounts,
+                assets,
             )
             .c(d!())?;
         }
