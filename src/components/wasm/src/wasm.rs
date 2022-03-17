@@ -66,6 +66,7 @@ use {
     wasm_bindgen::prelude::*,
     zei::{
         anon_xfr::{
+            anon_fee::ANON_FEE_MIN,
             keys::{AXfrKeyPair, AXfrPubKey},
             nullifier,
             structs::{
@@ -547,6 +548,57 @@ impl TransactionBuilder {
                 JsValue::from_str(&format!("Could not add operation: {}", e))
             })?;
 
+        Ok(self)
+    }
+
+    /// Adds an anon fee operation to transaction builder for abar to a bar.
+    ///
+    /// @param {AnonBlindAssetRecord} input - the ABAR to be used for fee
+    /// @param {OwnerMemo} owner_memo - the corresponding owner_memo of the fee ABAR
+    /// @param {MTLeafInfo} mt_leaf_info - the Merkle Proof of the ABAR
+    /// @param {AXfrKeyPair} from_keypair - the owners Anon Key pair
+    /// @param {XSecretKey} from_dec_key - the owners decryption key
+    pub fn add_operation_anon_fee(
+        mut self,
+        input: AnonBlindAssetRecord,
+        owner_memo: OwnerMemo,
+        mt_leaf_info: MTLeafInfo,
+        from_keypair: AXfrKeyPair,
+        from_dec_key: XSecretKey,
+    ) -> Result<TransactionBuilder, JsValue> {
+        let fee_oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
+            &input,
+            owner_memo.memo,
+            &from_keypair,
+            &from_dec_key,
+        )
+        .c(d!())
+        .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
+        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .build()
+        .c(d!())
+        .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?;
+
+        let mut prng = ChaChaRng::from_entropy();
+        let from_public_key = XPublicKey::from(&from_dec_key);
+        let rem_oabar = OpenAnonBlindAssetRecordBuilder::new()
+            .amount(fee_oabar.get_amount() - ANON_FEE_MIN)
+            .asset_type(fee_oabar.get_asset_type())
+            .pub_key(from_keypair.pub_key())
+            .finalize(&mut prng, &from_public_key)
+            .unwrap()
+            .build()
+            .unwrap();
+
+        self.get_builder_mut()
+            .add_operation_anon_fee(&fee_oabar, &rem_oabar, &from_keypair)
+            .c(d!())
+            .map_err(|e| {
+                JsValue::from_str(&format!("Could not add operation: {}", e))
+            })?;
+
+        let r = rem_oabar.get_key_rand_factor();
+        self.randomizers.push(r);
         Ok(self)
     }
 

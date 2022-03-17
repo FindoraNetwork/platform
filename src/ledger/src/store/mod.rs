@@ -1686,8 +1686,7 @@ impl LedgerStatus {
         // An anon_fee_body requires abar merkle root hash for AnonFeeNote verification. This is done
         // here with LedgerStatus available.
         for anon_fee_body in txn_effect.anon_fee_bodies.iter() {
-            let user_params = UserParams::new(1, 1, Some(TREE_DEPTH));
-            let node_params = NodeParams::from(user_params);
+            let node_params = NodeParams::anon_fee_params()?;
             let abar_version = anon_fee_body.proof.merkle_root_version;
             verify_anon_fee_body(
                 &node_params,

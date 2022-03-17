@@ -572,8 +572,7 @@ impl TransactionBuilder {
         input_keypair: &AXfrKeyPair,
     ) -> Result<(&mut Self, AnonFeeNote)> {
         let mut prng = ChaChaRng::from_entropy();
-        let depth: usize = MERKLE_TREE_DEPTH;
-        let user_params = UserParams::new(1, 1, Option::from(depth));
+        let user_params = UserParams::anon_fee_params(MERKLE_TREE_DEPTH)?;
 
         let (body, keypairs) =
             gen_anon_fee_body(&mut prng, &user_params, input, output, input_keypair)

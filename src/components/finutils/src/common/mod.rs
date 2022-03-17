@@ -881,6 +881,23 @@ pub fn convert_abar2bar(
 
     utils::generate_abar2bar_op(&oabar_in, &fee_oabar, &out_fee_oabar, &from, to, art)
         .c(d!())?;
+
+    println!(
+        "\x1b[31;01m Fee Remainder Randomizer: {}\x1b[00m",
+        wallet::randomizer_to_base58(&out_fee_oabar.get_key_rand_factor())
+    );
+    let mut file = fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open("owned_randomizers")
+        .expect("cannot open randomizers file");
+    std::io::Write::write_all(
+        &mut file,
+        ("\n".to_owned()
+            + &wallet::randomizer_to_base58(&out_fee_oabar.get_key_rand_factor()))
+            .as_bytes(),
+    )
+    .expect("randomizer write failed");
     Ok(())
 }
 
