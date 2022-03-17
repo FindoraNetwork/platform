@@ -301,7 +301,9 @@ impl BaseApp {
         self.modules.process_findora_tx(&self.deliver_state, tx)
     }
 
-    pub fn consume_mint(&mut self) -> Option<Vec<NonConfidentialOutput>> {
+    pub fn consume_mint(
+        &mut self,
+    ) -> Option<(Vec<NonConfidentialOutput>, Option<String>)> {
         module_xhub::App::<BaseApp>::consume_mint(&self.deliver_state)
     }
 }

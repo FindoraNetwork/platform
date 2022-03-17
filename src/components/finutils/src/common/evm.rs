@@ -127,6 +127,7 @@ pub fn transfer_from_account(
     let account_call = AccountAction::NonConfidentialTransfer(NonConfidentialTransfer {
         input_value: amount,
         outputs: vec![output],
+        hash: None,
     });
     let action = Action::XHub(account_call);
     let extra = (CheckNonce::new(nonce), CheckFee::new(None));

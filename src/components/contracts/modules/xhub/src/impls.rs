@@ -43,7 +43,7 @@ impl<C: Config> App<C> {
 
         if !amount.is_zero() {
             C::AccountAsset::burn(ctx, &sender, amount)?;
-            Self::add_mint(ctx, call.outputs)?;
+            Self::add_mint(ctx, call.outputs, call.hash)?;
         }
         Ok(ActionResult::default())
     }
@@ -51,18 +51,22 @@ impl<C: Config> App<C> {
     pub(crate) fn add_mint(
         ctx: &Context,
         mut outputs: Vec<NonConfidentialOutput>,
+        hash: Option<String>,
     ) -> Result<()> {
-        let ops =
-            if let Some(mut ori_outputs) = PendingUTXOs::get(ctx.db.read().borrow()) {
-                ori_outputs.append(&mut outputs);
-                ori_outputs
-            } else {
-                outputs
-            };
-        PendingUTXOs::put(ctx.db.write().borrow_mut(), &ops)
+        let ops = if let Some((mut ori_outputs, _)) =
+            PendingUTXOs::get(ctx.db.read().borrow())
+        {
+            ori_outputs.append(&mut outputs);
+            ori_outputs
+        } else {
+            outputs
+        };
+        PendingUTXOs::put(ctx.db.write().borrow_mut(), &(ops, hash))
     }
 
-    pub fn consume_mint(ctx: &Context) -> Option<Vec<NonConfidentialOutput>> {
+    pub fn consume_mint(
+        ctx: &Context,
+    ) -> Option<(Vec<NonConfidentialOutput>, Option<String>)> {
         PendingUTXOs::take(ctx.db.write().borrow_mut())
     }
 }

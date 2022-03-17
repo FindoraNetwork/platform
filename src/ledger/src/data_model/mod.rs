@@ -1310,6 +1310,8 @@ pub struct Transaction {
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
     pub signatures: Vec<SignatureOf<TransactionBody>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hash: Option<String>,
 }
 
 #[allow(missing_docs)]
@@ -1318,7 +1320,6 @@ pub struct FinalizedTransaction {
     pub txn: Transaction,
     pub tx_id: TxnSID,
     pub txo_ids: Vec<TxoSID>,
-
     pub merkle_id: u64,
 }
 
@@ -1698,6 +1699,7 @@ impl Transaction {
         Transaction {
             body: TransactionBody::from_token(no_replay_token),
             signatures: Vec::new(),
+            hash: None,
         }
     }
 
@@ -1711,13 +1713,18 @@ impl Transaction {
 
     /// Create a transaction from coinbase operation
     #[inline(always)]
-    pub fn from_operation_coinbase_mint(op: Operation, seq_id: u64) -> Self {
+    pub fn from_operation_coinbase_mint(
+        op: Operation,
+        seq_id: u64,
+        hash: Option<String>,
+    ) -> Self {
         let mut tx = Transaction {
             body: TransactionBody::from_token(NoReplayToken::unsafe_new(
                 seq_id.saturating_add(1357).saturating_mul(89),
                 seq_id,
             )),
             signatures: Vec::new(),
+            hash,
         };
         tx.add_operation(op);
         tx
