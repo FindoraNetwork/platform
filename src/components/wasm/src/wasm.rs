@@ -160,6 +160,16 @@ pub fn get_null_pk() -> XfrPublicKey {
 pub struct RandomizerStringArray {
     randomizers: Vec<String>,
 }
+/*
+#[wasm_bindgen]
+pub struct OBlindAssetRecord{
+    oabar: OpenAnonBlindAssetRecord,
+}
+
+impl OBlindAssetRecord{
+    pub fn get_oabar(&self) -> &OpenAnonBlindAssetRecord{&self.oabar}
+}
+ */
 
 #[wasm_bindgen]
 /// Structure that allows users to construct arbitrary transactions.
@@ -1312,6 +1322,12 @@ impl AnonTransferOperationBuilder {
         Ok(self)
     }
 
+    /// get_expected_fee is used to gather extra FRA that needs to be spent to make the transaction
+    /// have enough fees.
+    pub fn get_expected_fee(&self) -> u64 {
+        self.get_builder().extra_fee_estimation()
+    }
+
     /// set_fra_remainder_receiver is used to set destination public key for remainder abar to get back the remainder amount
     /// @param from_pubkey {XPublicKey} - The encryption public key of sender
     pub fn set_fra_remainder_receiver(
@@ -1710,10 +1726,15 @@ use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
 use crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey};
 use ledger::data_model::TxoSID;
+use ledger::staking::Amount;
 use rand::{thread_rng, Rng};
+use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
+use zei::anon_xfr::config::FEE_CALCULATING_FUNC;
+use zei::xfr::structs::AssetType;
+//use ledger::store::LedgerState;
 
 #[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.
@@ -2038,6 +2059,83 @@ pub fn abar_from_json(json: JsValue) -> Result<AnonBlindAssetRecord, JsValue> {
 #[allow(missing_docs)]
 mod test {
     use super::*;
+    use wasm_bindgen_test::*;
+
+    #[wasm_bindgen_test]
+    //This contains only the positive tests with the fees included
+    fn extra_fee_test() {
+        let mut prng = ChaChaRng::from_seed([0u8; 32]);
+
+        let amount = 6000000000u64;
+
+        //let amount_output = amount / 3;
+        let amount_output = amount;
+
+        let asset_type = ASSET_TYPE_FRA;
+
+        // simulate input abar
+        let (mut oabar, keypair_in, _dec_key_in, enc_key_in) =
+            gen_oabar_and_keys(&mut prng, amount, asset_type);
+
+        let asset_type_out = ASSET_TYPE_FRA;
+
+        //Simulate output abar
+        let (mut oabar_out, _keypair_out, _dec_key_out, _) =
+            gen_oabar_and_keys(&mut prng, amount_output, asset_type_out);
+
+        let mut ts = AnonTransferOperationBuilder::new(1);
+
+        ts.get_builder_mut().add_input(oabar, keypair_in);
+
+        ts.get_builder_mut().add_output(oabar_out);
+
+        /*
+        Extra_fee_estimation works as follows
+        1.- compute estimated_fees
+        2.- compute FRA_excess
+               fra_excess = fra_input_sum - fra_output_sum;
+            if (fra_excess >= estimated_fees)  => 0
+            else (estimated_fees >  fra_excess) => new_fees_estimation(n + 1 inputs, m + 1 outputs)
+         */
+
+        let estimated_fees_gt_fra_excess = ts.get_expected_fee();
+
+        assert!(estimated_fees_gt_fra_excess > 0);
+
+        let (mut oabar_2, keypair_in_2, _, _) =
+            gen_oabar_and_keys(&mut prng, 2 * amount, asset_type);
+
+        ts.get_builder_mut().add_input(oabar_2, keypair_in_2);
+
+        let fra_excess_gt_fees_estimation = ts.get_expected_fee();
+
+        assert_eq!(fra_excess_gt_fees_estimation, 0);
+    }
+
+    fn gen_oabar_and_keys<R: CryptoRng + RngCore>(
+        prng: &mut R,
+        //amount: u64,
+        amount: u64,
+        asset_type: AssetType,
+    ) -> (
+        OpenAnonBlindAssetRecord,
+        AXfrKeyPair,
+        XSecretKey,
+        XPublicKey,
+    ) {
+        let keypair = AXfrKeyPair::generate(prng);
+        let dec_key = XSecretKey::new(prng);
+        let enc_key = XPublicKey::from(&dec_key);
+        let oabar = OpenAnonBlindAssetRecordBuilder::new()
+            .amount(u64::from(amount))
+            .asset_type(asset_type)
+            .pub_key(keypair.pub_key())
+            .finalize(prng, &enc_key)
+            .unwrap()
+            .build()
+            .unwrap();
+        (oabar, keypair, dec_key, enc_key)
+    }
 
     #[test]
     fn t_keypair_conversion() {

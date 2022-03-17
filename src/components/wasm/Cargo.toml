@@ -72,3 +72,4 @@ wasm-bindgen = { version = "0.2.62", features = ["serde-serialize"] }
 # Must enable the "js"-feature,
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
+wasm-bindgen-test = "0.3.0"
