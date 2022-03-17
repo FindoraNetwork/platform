@@ -1364,6 +1364,42 @@ impl AnonTransferOperationBuilder {
         Ok(self)
     }
 
+    #[allow(missing_docs)]
+    pub fn extra_fee_estimation(&self) -> u64 {
+        let estimated_fees =
+            FEE_CALCULATING_FUNC(self.inputs.len() as u32, self.outputs.len() as u32)
+                as u64;
+
+        let mut fra_input_sum: u64 = 0;
+        let mut fra_output_sum: u64 = 0;
+
+        for input in &self.inputs {
+            if let ASSET_TYPE_FRA = input.get_asset_type() {
+                fra_input_sum += input.get_amount();
+            }
+        }
+
+        for output in &self.outputs {
+            if let ASSET_TYPE_FRA = output.get_asset_type() {
+                fra_output_sum += output.get_amount();
+            }
+        }
+
+        let fra_excess = fra_input_sum - fra_output_sum;
+
+        let boolean = estimated_fees > fra_excess;
+
+        let outcome = match boolean {
+            true => FEE_CALCULATING_FUNC(
+                self.inputs.len() as u32 + 1,
+                self.outputs.len() as u32 + 1,
+            ) as u64,
+            false => 0u64,
+        };
+
+        outcome
+    }
+
     /// get_randomizers fetches the randomizers for the different outputs.
     pub fn get_randomizers(&self) -> Vec<JubjubScalar> {
         self.randomizers.clone()
