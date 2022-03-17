@@ -1,6 +1,5 @@
-use finutils::common::utils;
-use ledger::data_model::{ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING};
-use zei::xfr::{asset_record::AssetRecordType, sig::XfrKeyPair};
+use ledger::data_model::ASSET_TYPE_FRA;
+use zei::xfr::sig::XfrKeyPair;
 
 use super::transaction::TransactionBuilder;
 
@@ -47,21 +46,12 @@ impl TransactionBuilder {
         address: Option<String>,
         keypair: &XfrKeyPair,
     ) -> RucResult<Self> {
-        let transfer_op = utils::gen_transfer_op(
-            keypair,
-            vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
-            None,
-            false,
-            false,
-            Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
-        )?;
         let target_address = match address {
             Some(s) => MultiSigner::from_str(&s)?,
             None => MultiSigner::Xfr(keypair.get_pk()),
         };
 
         self.get_builder_mut()
-            .add_operation(transfer_op)
             .add_operation_convert_account(keypair, target_address, amount)?
             .sign(keypair);
 
