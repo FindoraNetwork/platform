@@ -1320,6 +1320,12 @@ impl AnonTransferOperationBuilder {
         Ok(self)
     }
 
+    /// get_expected_fee is used to gather extra FRA that needs to be spent to make the transaction
+    /// have enough fees.
+    pub fn get_expected_fee(&self) -> u64 {
+        self.get_builder().extra_fee_estimation()
+    }
+
     /// set_fra_remainder_receiver is used to set destination public key for remainder abar to get back the remainder amount
     /// @param from_pubkey {XPublicKey} - The encryption public key of sender
     pub fn set_fra_remainder_receiver(
@@ -2090,7 +2096,7 @@ mod test {
             else (estimated_fees >  fra_excess) => new_fees_estimation(n + 1 inputs, m + 1 outputs)
          */
 
-        let estimated_fees_gt_fra_excess = ts.op_builder.extra_fee_estimation();
+        let estimated_fees_gt_fra_excess = ts.get_expected_fee();
 
         assert!(estimated_fees_gt_fra_excess > 0);
 
@@ -2099,7 +2105,7 @@ mod test {
 
         ts.get_builder_mut().add_input(oabar_2, keypair_in_2);
 
-        let fra_excess_gt_fees_estimation = ts.op_builder.extra_fee_estimation();
+        let fra_excess_gt_fees_estimation = ts.get_expected_fee();
 
         assert_eq!(fra_excess_gt_fees_estimation, 0);
     }
