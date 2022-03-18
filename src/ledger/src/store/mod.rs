@@ -1697,6 +1697,10 @@ impl LedgerStatus {
         }
 
         for abar_conv in &txn_effect.abar_conv_inputs {
+            if txn_effect.anon_fee_bodies.len() == 0 {
+                return Err(eg!("Abar to Bar conversion missing anon fee"));
+            }
+
             let node_params = NodeParams::abar_to_bar_params()?;
             let abar_version: usize = abar_conv.proof.get_merkle_root_version();
 

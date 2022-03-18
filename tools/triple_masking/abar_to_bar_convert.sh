@@ -17,9 +17,10 @@ echo "
 sleep 5
 set -e
 
+target/release/fn owned-utxos
 echo "\n\n\n Bar To Abar Conversion for fee ABAR"
 sleep 10
-target/release/fn convert-bar-to-abar --anon-keys ./anon-keys-temp2.keys  --txo-sid 6 2> /dev/null
+target/release/fn convert-bar-to-abar --anon-keys ./anon-keys-temp.keys  --txo-sid 9 2> /dev/null
 
 tail -n 2 owned_randomizers > randomizer_file
 randomiser=$(awk 'FNR>=1 && FNR<=1' randomizer_file)
@@ -29,7 +30,7 @@ target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r
 fee_randomiser=$(awk 'FNR>=2 && FNR<=2' randomizer_file)
 echo "\n\n Owned Abars after Bar to Abar conversion 2"
 sleep 20
-target/release/fn owned-abars -p ptyo7hlqn-Eywf_ttG99OSWtz6KfDUvLYDDVDlV1C-U= -r $fee_randomiser
+target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r $fee_randomiser
 
 echo "\n\n\n ABAR To BAR Conversion"
 echo "------------------------------------------------------------------------------"

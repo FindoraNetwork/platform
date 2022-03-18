@@ -805,7 +805,7 @@ pub fn convert_bar2abar(
     let oar =
         utils::get_oar(&from, TxoSID(sid)).c(d!("error fetching open asset record"))?;
 
-    let r = utils::generate_bar2abar_op(&from, &to, TxoSID(sid), &oar, &enc_key)?;
+    let r = utils::generate_bar2abar_op(&from, &to, TxoSID(sid), &oar, &enc_key).c(d!("Bar to abar failed"))?;
 
     Ok(r)
 }
