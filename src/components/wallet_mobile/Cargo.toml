@@ -40,6 +40,7 @@ fp-utils = { path = "../contracts/primitives/utils" }
 globutils = { path = "../../libs/globutils" }
 credentials = { path = "../../libs/credentials" }
 cryptohash = { path = "../../libs/cryptohash" }
+
 ledger = { path = "../../ledger" }
 
 [dependencies.web-sys]

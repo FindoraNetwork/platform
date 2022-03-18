@@ -4,6 +4,8 @@ use jni::sys::{jlong, jstring};
 use jni::JNIEnv;
 use zei::xfr::sig::XfrKeyPair;
 
+use super::{jStringToString, parseU64};
+
 #[no_mangle]
 /// # Safety
 /// Construct a EVM Transaction that transfer account balance to UTXO.
@@ -15,17 +17,14 @@ use zei::xfr::sig::XfrKeyPair;
 pub unsafe extern "system" fn Java_com_findora_JniApi_transfer_from_account_evmTransactionBuilder(
     env: JNIEnv,
     _: JClass,
-    amount: jlong,
+    amount: JString,
     address: JString,
     fra_kp: jlong,
     eth_phrase: JString,
     nonce: JString,
 ) -> jlong {
     let address = {
-        let a: String = env
-            .get_string(address)
-            .expect("Couldn't create java string!")
-            .into();
+        let a = jStringToString(env, address);
         if a.is_empty() {
             None
         } else {
@@ -34,10 +33,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transfer_from_account_evmT
     };
 
     let eth_phrase = {
-        let a: String = env
-            .get_string(eth_phrase)
-            .expect("Couldn't create java string!")
-            .into();
+        let a = jStringToString(env, eth_phrase);
         if a.is_empty() {
             None
         } else {
@@ -45,18 +41,14 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transfer_from_account_evmT
         }
     };
 
-    let nonce = {
-        let a: String = env
-            .get_string(nonce)
-            .expect("Couldn't create java string!")
-            .into();
-        serde_json::from_str(&a).unwrap()
-    };
+    let nonce = serde_json::from_str(&jStringToString(env, nonce)).unwrap();
+
+    let amount = parseU64(env, amount);
 
     let fra_kp = &*(fra_kp as *mut XfrKeyPair);
 
     let tx = EVMTransactionBuilder::new_transfer_from_account(
-        amount as u64,
+        amount,
         address,
         fra_kp,
         eth_phrase,

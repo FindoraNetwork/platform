@@ -4,9 +4,10 @@ use jni::sys::{jboolean, jint, jlong, jstring, JNI_TRUE};
 use jni::JNIEnv;
 use zei::xfr::sig::XfrKeyPair;
 
+use super::parseU64;
+
 #[no_mangle]
 /// # Safety
-/// @param am: amount to pay
 /// @param kp: owner's XfrKeyPair
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddFeeRelativeAuto(
     _env: JNIEnv,
@@ -143,8 +144,8 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddBasic
     builder: jlong,
     key_pair: jlong,
     code: JString,
-    seq_num: jint,
-    amount: jint,
+    seq_num: jlong,
+    amount: JString,
     conf_amount: jboolean,
     zei_params: jlong,
 ) -> jlong {
@@ -161,7 +162,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddBasic
             key_pair,
             code,
             seq_num as u64,
-            amount as u64,
+            parseU64(env, amount),
             conf_amount == JNI_TRUE,
             zei_params,
         )
@@ -221,14 +222,11 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
         .get_string(validator)
         .expect("Couldn't get java string!")
         .into();
-    let am: String = env
-        .get_string(amount)
-        .expect("Couldn't get java string!")
-        .into();
+
 
     let builder = builder
         .clone()
-        .add_operation_delegate(keypair, am.parse::<u64>().unwrap(), validator)
+        .add_operation_delegate(keypair, parseU64(env, amount), validator)
         .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }
@@ -261,10 +259,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
 ) -> jlong {
     let builder = &*(builder as *mut TransactionBuilder);
     let keypair = &*(keypair as *mut XfrKeyPair);
-    let am: String = env
-        .get_string(am)
-        .expect("Couldn't get java string!")
-        .into();
+
 
     let validator: String = env
         .get_string(validator)
@@ -274,7 +269,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
         .clone()
         .add_operation_undelegate_partially(
             keypair,
-            am.parse::<u64>().unwrap(),
+            parseU64(env, am),
             validator,
         )
         .unwrap();
@@ -300,17 +295,17 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
 /// # Safety
 ///
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOperationClaimCustom(
-    _env: JNIEnv,
+    env: JNIEnv,
     _: JClass,
     builder: jlong,
     keypair: jlong,
-    am: jint,
+    am: JString,
 ) -> jlong {
     let builder = &*(builder as *mut TransactionBuilder);
     let keypair = &*(keypair as *mut XfrKeyPair);
     let builder = builder
         .clone()
-        .add_operation_claim_custom(keypair, am as u64)
+        .add_operation_claim_custom(keypair, parseU64(env,am))
         .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }
@@ -349,7 +344,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddTrans
     env: JNIEnv,
     _: JClass,
     builder: jlong,
-    amount: jint,
+    amount: JString,
     keypair: jlong,
     address: JString,
 ) -> jlong {
@@ -363,7 +358,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddTrans
 
     builder
         .clone()
-        .add_transfer_to_account_operation(amount as u64, Some(addr), fra_kp)
+        .add_transfer_to_account_operation(parseU64(env, amount), Some(addr), fra_kp)
         .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }
