@@ -57,6 +57,7 @@ use {
     zei::{
         anon_xfr::{
             abar_to_bar::verify_abar_to_bar_body,
+            anon_fee::verify_anon_fee_body,
             hash_abar,
             keys::AXfrPubKey,
             structs::{AnonBlindAssetRecord, MTLeafInfo, MTNode, MTPath, Nullifier},
@@ -1682,7 +1683,24 @@ impl LedgerStatus {
             .c(d!())?;
         }
 
+        // An anon_fee_body requires abar merkle root hash for AnonFeeNote verification. This is done
+        // here with LedgerStatus available.
+        for anon_fee_body in txn_effect.anon_fee_bodies.iter() {
+            let node_params = NodeParams::anon_fee_params()?;
+            let abar_version = anon_fee_body.proof.merkle_root_version;
+            verify_anon_fee_body(
+                &node_params,
+                anon_fee_body,
+                &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
+            )
+            .c(d!())?;
+        }
+
         for abar_conv in &txn_effect.abar_conv_inputs {
+            if txn_effect.anon_fee_bodies.is_empty() {
+                return Err(eg!("Abar to Bar conversion missing anon fee"));
+            }
+
             let node_params = NodeParams::abar_to_bar_params()?;
             let abar_version: usize = abar_conv.proof.get_merkle_root_version();
 

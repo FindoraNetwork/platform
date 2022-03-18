@@ -7,7 +7,6 @@
 
 mod amount;
 
-use ledger::data_model::AbarToBarOps;
 use {
     credentials::CredUserSecretKey,
     crypto::basics::hybrid_encryption::XPublicKey,
@@ -17,9 +16,10 @@ use {
     ledger::{
         converter::ConvertAccount,
         data_model::{
-            AnonTransferOps, AssetRules, AssetTypeCode, BarToAbarOps, ConfidentialMemo,
-            DefineAsset, DefineAssetBody, IndexedSignature, IssueAsset, IssueAssetBody,
-            IssuerKeyPair, IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
+            AbarToBarOps, AnonFeeOps, AnonTransferOps, AssetRules, AssetTypeCode,
+            BarToAbarOps, ConfidentialMemo, DefineAsset, DefineAssetBody,
+            IndexedSignature, IssueAsset, IssueAssetBody, IssuerKeyPair,
+            IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
             TransactionBody, TransferAsset, TransferAssetBody, TransferType, TxOutput,
             TxoRef, TxoSID, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA,
             BLACK_HOLE_PUBKEY, TX_FEE_MIN,
@@ -51,6 +51,7 @@ use {
     zei::{
         anon_xfr::{
             abar_to_bar::gen_abar_to_bar_note,
+            anon_fee::{gen_anon_fee_body, AnonFeeNote},
             bar_to_abar::gen_bar_to_abar_body,
             config::FEE_CALCULATING_FUNC,
             gen_anon_xfr_body,
@@ -560,6 +561,27 @@ impl TransactionBuilder {
         let op = Operation::AbarToBar(Box::from(abar_to_bar));
         self.txn.add_operation(op);
         Ok(self)
+    }
+
+    /// Add an operation to charge fee anonymously for ABAR to BAR transfer
+    #[allow(dead_code)]
+    pub fn add_operation_anon_fee(
+        &mut self,
+        input: &OpenAnonBlindAssetRecord,
+        output: &OpenAnonBlindAssetRecord,
+        input_keypair: &AXfrKeyPair,
+    ) -> Result<(&mut Self, AnonFeeNote)> {
+        let mut prng = ChaChaRng::from_entropy();
+        let user_params = UserParams::anon_fee_params(MERKLE_TREE_DEPTH)?;
+
+        let (body, keypairs) =
+            gen_anon_fee_body(&mut prng, &user_params, input, output, input_keypair)
+                .c(d!())?;
+        let note = AnonFeeNote::generate_note_from_body(body, keypairs).c(d!())?;
+        let inp = AnonFeeOps::new(note.clone(), self.no_replay_token).c(d!())?;
+        let op = Operation::AnonymousFee(Box::new(inp));
+        self.txn.add_operation(op);
+        Ok((self, note))
     }
 
     /// Add an operation to transfer assets held in Anonymous Blind Asset Record.
@@ -1426,17 +1448,14 @@ impl AnonTransferOperationBuilder {
 
         let fra_excess = fra_input_sum - fra_output_sum;
 
-        let boolean = estimated_fees > fra_excess;
-
-        let outcome = match boolean {
-            true => FEE_CALCULATING_FUNC(
+        if estimated_fees > fra_excess {
+            FEE_CALCULATING_FUNC(
                 self.inputs.len() as u32 + 1,
                 self.outputs.len() as u32 + 1,
-            ) as u64,
-            false => 0u64,
-        };
-
-        outcome
+            ) as u64
+        } else {
+            0u64
+        }
     }
 
     /// get_randomizers fetches the randomizers for the different outputs.

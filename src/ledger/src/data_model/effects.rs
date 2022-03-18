@@ -3,10 +3,10 @@ use zei::anon_xfr::abar_to_bar::AbarToBarBody;
 use {
     crate::{
         data_model::{
-            AnonTransferOps, AssetType, AssetTypeCode, BarToAbarOps, DefineAsset,
-            IssueAsset, IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
-            TransferAsset, TransferType, TxOutput, TxnTempSID, TxoRef, TxoSID,
-            UpdateMemo,
+            AnonFeeOps, AnonTransferOps, AssetType, AssetTypeCode, BarToAbarOps,
+            DefineAsset, IssueAsset, IssuerPublicKey, Memo, NoReplayToken, Operation,
+            Transaction, TransferAsset, TransferType, TxOutput, TxnTempSID, TxoRef,
+            TxoSID, UpdateMemo,
         },
         staking::{
             self,
@@ -31,6 +31,7 @@ use {
     },
     zei::{
         anon_xfr::{
+            anon_fee::AnonFeeBody,
             bar_to_abar::verify_bar_to_abar_note,
             structs::{AXfrBody, AnonBlindAssetRecord, Nullifier},
         },
@@ -103,6 +104,8 @@ pub struct TxnEffect {
     pub abar_conv_inputs: Vec<AbarToBarBody>,
     /// New anon transfer bodies
     pub axfr_bodies: Vec<AXfrBody>,
+    /// New anon fee bodies
+    pub anon_fee_bodies: Vec<AnonFeeBody>,
 }
 
 impl TxnEffect {
@@ -213,6 +216,10 @@ impl TxnEffect {
                 Operation::TransferAnonAsset(i) => {
                     check_nonce!(i);
                     te.add_anon_transfer(i).c(d!())?;
+                }
+                Operation::AnonymousFee(i) => {
+                    check_nonce!(i);
+                    te.add_anon_fee_op(i).c(d!())?;
                 }
             }
         }
@@ -634,6 +641,16 @@ impl TxnEffect {
 
         Ok(())
     }
+
+    fn add_anon_fee_op(&mut self, anon_fee: &AnonFeeOps) -> Result<()> {
+        // verify anon_fee_note signatures
+        anon_fee.note.verify_signatures().c(d!())?;
+
+        // push
+        self.anon_fee_bodies.push(anon_fee.note.body.clone());
+
+        Ok(())
+    }
 }
 
 /// Check tx in the context of a block, partially.
@@ -734,6 +751,14 @@ impl BlockEffect {
                 current_txn_abars.push(abar)
             }
         }
+
+        for anon_fee_body in txn_effect.anon_fee_bodies {
+            let (n, _) = anon_fee_body.input;
+            self.new_nullifiers.push(n);
+
+            let op_abar = anon_fee_body.output;
+            current_txn_abars.push(op_abar)
+        }
         self.output_abars.push(current_txn_abars);
 
         Ok(temp_sid)
@@ -757,6 +782,17 @@ impl BlockEffect {
         }
         for inputs in txn_effect.abar_conv_inputs.iter() {
             if self.new_nullifiers.contains(&inputs.input.0) {
+                return Err(eg!());
+            }
+            if txn_effect.anon_fee_bodies.is_empty() {
+                return Err(eg!());
+            }
+        }
+
+        // Check that no nullifier are created twice in same block
+        for anon_fee_body in txn_effect.anon_fee_bodies.iter() {
+            let (nullifier, _) = anon_fee_body.input;
+            if self.new_nullifiers.contains(&nullifier) {
                 return Err(eg!());
             }
         }
