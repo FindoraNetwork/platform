@@ -728,7 +728,8 @@ pub fn generate_bar2abar_op(
         )
         .c(d!("Failed to generate operation bar to abar"))?;
 
-    let feeop = gen_fee_bar_to_abar(auth_key_pair, txo_sid).c(d!("Failed to generate fee"))?;
+    let feeop =
+        gen_fee_bar_to_abar(auth_key_pair, txo_sid).c(d!("Failed to generate fee"))?;
     builder.add_operation(feeop);
 
     send_tx(&builder.take_transaction()).c(d!("Failed to submit Bar to Abar txn"))?;

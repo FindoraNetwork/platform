@@ -161,16 +161,6 @@ pub fn get_null_pk() -> XfrPublicKey {
 pub struct RandomizerStringArray {
     randomizers: Vec<String>,
 }
-/*
-#[wasm_bindgen]
-pub struct OBlindAssetRecord{
-    oabar: OpenAnonBlindAssetRecord,
-}
-
-impl OBlindAssetRecord{
-    pub fn get_oabar(&self) -> &OpenAnonBlindAssetRecord{&self.oabar}
-}
- */
 
 #[wasm_bindgen]
 /// Structure that allows users to construct arbitrary transactions.
@@ -1784,9 +1774,6 @@ use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
-use zei::anon_xfr::config::FEE_CALCULATING_FUNC;
-use zei::xfr::structs::AssetType;
-//use ledger::store::LedgerState;
 
 #[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.
@@ -2166,9 +2153,8 @@ mod test {
 
     fn gen_oabar_and_keys<R: CryptoRng + RngCore>(
         prng: &mut R,
-        //amount: u64,
         amount: u64,
-        asset_type: AssetType,
+        asset_type: ZeiAssetType,
     ) -> (
         OpenAnonBlindAssetRecord,
         AXfrKeyPair,

@@ -1448,17 +1448,14 @@ impl AnonTransferOperationBuilder {
 
         let fra_excess = fra_input_sum - fra_output_sum;
 
-        let boolean = estimated_fees > fra_excess;
-
-        let outcome = match boolean {
-            true => FEE_CALCULATING_FUNC(
+        if estimated_fees > fra_excess {
+            FEE_CALCULATING_FUNC(
                 self.inputs.len() as u32 + 1,
                 self.outputs.len() as u32 + 1,
-            ) as u64,
-            false => 0u64,
-        };
-
-        outcome
+            ) as u64
+        } else {
+            0u64
+        }
     }
 
     /// get_randomizers fetches the randomizers for the different outputs.

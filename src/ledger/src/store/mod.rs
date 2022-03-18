@@ -1697,7 +1697,7 @@ impl LedgerStatus {
         }
 
         for abar_conv in &txn_effect.abar_conv_inputs {
-            if txn_effect.anon_fee_bodies.len() == 0 {
+            if txn_effect.anon_fee_bodies.is_empty() {
                 return Err(eg!("Abar to Bar conversion missing anon fee"));
             }
 
