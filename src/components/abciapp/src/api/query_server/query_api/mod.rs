@@ -16,11 +16,9 @@ use {
     ledger::{
         data_model::{
             b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
-            TxnIDHash, TxnSID, TxoSID, XfrAddress, BLACK_HOLE_PUBKEY,
+            TxnIDHash, TxnSID, TxoSID, XfrAddress,
         },
-        staking::{
-            ops::mint_fra::MintEntry, FF_PK_EXTRA_120_0000, FRA, FRA_TOTAL_AMOUNT,
-        },
+        staking::{ops::mint_fra::MintEntry, FF_PK_EXTRA_120_0000, FRA},
     },
     ledger_api::*,
     log::info,
@@ -414,45 +412,14 @@ pub async fn get_related_xfrs(
 
 #[allow(missing_docs)]
 #[allow(clippy::unnecessary_wraps)]
-
 pub async fn get_circulating_supply(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> actix_web::Result<web::Json<BTreeMap<&'static str, f64>>, actix_web::error::Error> {
     let l = data.read();
-    let fra = FRA as f64;
 
-    let cs = l.ledger_cloned.staking_get_global_unlocked_amount() as f64 / fra;
-    let gd = l.ledger_cloned.get_staking().get_global_delegation_amount() as f64 / fra;
-    let rr = l.ledger_cloned.staking_get_block_rewards_rate();
-    let rr = rr[0] as f64 / rr[1] as f64;
-
-    let res = map! { B
-        "global_return_rate" => rr,
-        "global_circulating_supply" => cs,
-        "global_delegation_amount" => gd
-    };
-
-    Ok(web::Json(res))
-}
-
-/// return
-/// global_circulating_supply
-/// global_adjusted_circulating_supply
-/// global_total_supply
-pub async fn get_total_supply(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-) -> actix_web::Result<web::Json<BTreeMap<&'static str, f64>>, actix_web::error::Error> {
-    let l = data.read();
-    let burn_pubkey = *BLACK_HOLE_PUBKEY;
-    let extra_pubkey = *FF_PK_EXTRA_120_0000;
-
-    let burn_balance = l
-        .ledger_cloned
-        .get_nonconfidential_balance(&burn_pubkey)
-        .unwrap_or(0);
     let extra_balance = l
         .ledger_cloned
-        .get_nonconfidential_balance(&extra_pubkey)
+        .get_nonconfidential_balance(&*FF_PK_EXTRA_120_0000)
         .unwrap_or(0);
 
     let fra = FRA as f64;
@@ -462,12 +429,16 @@ pub async fn get_total_supply(
 
     let cs = big_8 as f64 / fra;
     let acs = big_9 as f64 / fra;
-    let ts = (FRA_TOTAL_AMOUNT - burn_balance) as f64 / fra;
+
+    let gd = l.ledger_cloned.get_staking().get_global_delegation_amount() as f64 / fra;
+    let rr = l.ledger_cloned.staking_get_block_rewards_rate();
+    let rr = rr[0] as f64 / rr[1] as f64;
 
     let res = map! { B
         "global_circulating_supply" => cs,
+        "global_return_rate" => rr,
         "global_adjusted_circulating_supply" => acs,
-        "global_total_supply" => ts
+        "global_delegation_amount" => gd
     };
 
     Ok(web::Json(res))
@@ -490,10 +461,6 @@ impl QueryApi {
                 .data(Arc::clone(&server))
                 .route("/ping", web::get().to(ping))
                 .route("/version", web::get().to(version))
-                .service(
-                    web::resource("get_total_supply")
-                        .route(web::get().to(get_total_supply)),
-                )
                 .service(
                     web::resource("circulating_supply")
                         .route(web::get().to(get_circulating_supply)),
