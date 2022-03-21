@@ -1,8 +1,11 @@
 use std::os::raw::c_char;
-
-use crate::rust::{account::EVMTransactionBuilder, c_char_to_string, string_to_c_char};
-
 use zei::xfr::sig::XfrKeyPair;
+
+use crate::rust::{
+    self, account::EVMTransactionBuilder, c_char_to_string, string_to_c_char,
+};
+
+use super::parse_u64;
 
 use fp_types::U256;
 
@@ -14,7 +17,7 @@ use fp_types::U256;
 /// @param {String} eth_phrase - The account mnemonic.
 /// @param {String} nonce - Json encoded U256(256 bits unsigned integer).
 pub extern "C" fn findora_ffi_new_withdraw_transaction(
-    amount: u64,
+    amount: *const c_char,
     fra_kp: &XfrKeyPair,
     address: *const c_char,
     eth_phrase: *const c_char,
@@ -50,7 +53,11 @@ pub extern "C" fn findora_ffi_new_withdraw_transaction(
     };
 
     match EVMTransactionBuilder::new_transfer_from_account(
-        amount, address, fra_kp, eth_phrase, nonce,
+        parse_u64(amount),
+        address,
+        fra_kp,
+        eth_phrase,
+        nonce,
     ) {
         Ok(tx) => tx.into_ptr(),
         Err(e) => {
@@ -78,4 +85,15 @@ pub unsafe extern "C" fn findora_ffi_free_evm_transaction(
     tx: *mut EVMTransactionBuilder,
 ) {
     let _ = Box::from_raw(tx);
+}
+
+#[no_mangle]
+/// Serialize ethereum address used to abci query nonce.
+pub extern "C" fn get_serialized_address(address: *const c_char) -> *const c_char {
+    let addr = c_char_to_string(address);
+    if let Ok(data) = rust::account::get_serialized_address(&addr) {
+        string_to_c_char(data)
+    } else {
+        core::ptr::null()
+    }
 }

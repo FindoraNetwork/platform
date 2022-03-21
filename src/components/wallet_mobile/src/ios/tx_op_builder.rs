@@ -1,7 +1,9 @@
-use crate::rust::TransferOperationBuilder;
-use crate::rust::*;
 use std::os::raw::c_char;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
+
+use super::parse_u64;
+use crate::rust::TransferOperationBuilder;
+use crate::rust::*;
 
 #[no_mangle]
 /// Create a new transfer operation builder.
@@ -31,8 +33,9 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_input_with_t
     owner_memo: *const OwnerMemo,
     tracing_policies: *const TracingPolicies,
     key: *const XfrKeyPair,
-    amount: u64,
+    amount: *const c_char,
 ) -> *mut TransferOperationBuilder {
+    let amount = parse_u64(amount);
     let memo = if owner_memo.is_null() {
         None
     } else {
@@ -62,8 +65,9 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_input_no_tra
     asset_record: *const ClientAssetRecord,
     owner_memo: *const OwnerMemo,
     key: *const XfrKeyPair,
-    amount: u64,
+    amount: *const c_char,
 ) -> *mut TransferOperationBuilder {
+    let amount = parse_u64(amount);
     let memo = if owner_memo.is_null() {
         None
     } else {
@@ -88,13 +92,14 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_input_no_tra
 /// Wraps around TransferOperationBuilder to add an output to a transfer operation builder.
 pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_output_with_tracing(
     builder: *const TransferOperationBuilder,
-    amount: u64,
+    amount: *const c_char,
     recipient: *const XfrPublicKey,
     tracing_policies: *const TracingPolicies,
     code: *const c_char,
     conf_amount: bool,
     conf_type: bool,
 ) -> *mut TransferOperationBuilder {
+    let amount = parse_u64(amount);
     if let Ok(info) = (*builder).clone().add_output_with_tracing(
         amount,
         &*recipient,
@@ -115,12 +120,13 @@ pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_output_with_
 /// Wraps around TransferOperationBuilder to add an output to a transfer operation builder.
 pub unsafe extern "C" fn findora_ffi_transfer_operation_builder_add_output_no_tracing(
     builder: *const TransferOperationBuilder,
-    amount: u64,
+    amount: *const c_char,
     recipient: &XfrPublicKey,
     code: *const c_char,
     conf_amount: bool,
     conf_type: bool,
 ) -> *mut TransferOperationBuilder {
+    let amount = parse_u64(amount);
     if let Ok(info) = (*builder).clone().add_output_no_tracing(
         amount,
         &*recipient,

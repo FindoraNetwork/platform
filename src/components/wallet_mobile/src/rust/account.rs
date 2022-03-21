@@ -1,4 +1,6 @@
+use core::str::FromStr;
 use ledger::data_model::ASSET_TYPE_FRA;
+use ruc::Result;
 use zei::xfr::sig::XfrKeyPair;
 
 use super::transaction::TransactionBuilder;
@@ -17,9 +19,6 @@ use fp_types::{
 
 use fp_utils::{ecdsa::SecpPair, tx::EvmRawTxWrapper};
 
-use core::str::FromStr;
-
-use ruc::Result as RucResult;
 #[allow(missing_docs)]
 pub enum Keypair {
     Ed25519(XfrKeyPair),
@@ -45,7 +44,7 @@ impl TransactionBuilder {
         amount: u64,
         address: Option<String>,
         keypair: &XfrKeyPair,
-    ) -> RucResult<Self> {
+    ) -> Result<Self> {
         let target_address = match address {
             Some(s) => MultiSigner::from_str(&s)?,
             None => MultiSigner::Xfr(keypair.get_pk()),
@@ -75,7 +74,7 @@ impl EVMTransactionBuilder {
         fra_kp: &XfrKeyPair,
         eth_phrase: Option<String>,
         nonce: U256,
-    ) -> RucResult<EVMTransactionBuilder> {
+    ) -> Result<EVMTransactionBuilder> {
         let target = match address {
             Some(s) => {
                 if let Ok(address) = globutils::wallet::public_key_from_base64(&s) {
@@ -141,4 +140,12 @@ impl EVMTransactionBuilder {
     pub unsafe fn from_ptr(raw: *mut EVMTransactionBuilder) -> Box<Self> {
         Box::from_raw(raw)
     }
+}
+
+/// Serialize ethereum address used to abci query nonce.
+pub fn get_serialized_address(address: &str) -> Result<String> {
+    let ms = MultiSigner::from_str(address)?;
+    let account: Address = ms.into();
+    let sa = serde_json::to_string(&account).unwrap();
+    Ok(sa)
 }

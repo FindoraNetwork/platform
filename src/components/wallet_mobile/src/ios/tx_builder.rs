@@ -1,12 +1,13 @@
+use std::os::raw::c_char;
+use zei::xfr::sig::XfrKeyPair;
+
+use super::parse_u64;
 use crate::rust::{
     c_char_to_string, string_to_c_char, AssetRules, ClientAssetRecord, FeeInputs,
     OwnerMemo, PublicParams, TransactionBuilder,
 };
-use std::os::raw::c_char;
-use zei::xfr::sig::XfrKeyPair;
 
 #[no_mangle]
-/// @param am: amount to pay
 /// @param kp: owner's XfrKeyPair
 pub extern "C" fn findora_ffi_transaction_builder_add_fee_relative_auto(
     builder: &TransactionBuilder,
@@ -114,10 +115,11 @@ pub extern "C" fn findora_ffi_transaction_builder_add_basic_issue_asset(
     key_pair: &XfrKeyPair,
     code: *const c_char,
     seq_num: u64,
-    amount: u64,
+    amount: *const c_char,
     conf_amount: bool,
     zei_params: &PublicParams,
 ) -> *mut TransactionBuilder {
+    let amount = parse_u64(amount);
     if let Ok(info) = builder.clone().add_basic_issue_asset(
         key_pair,
         c_char_to_string(code),
@@ -162,9 +164,10 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_update_memo(
 pub extern "C" fn findora_ffi_transaction_builder_add_operation_delegate(
     builder: &TransactionBuilder,
     keypair: &XfrKeyPair,
-    amount: u64,
+    amount: *const c_char,
     validator: *const c_char,
 ) -> *mut TransactionBuilder {
+    let amount = parse_u64(amount);
     if let Ok(info) = builder.clone().add_operation_delegate(
         keypair,
         amount,
@@ -192,9 +195,10 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_undelegate(
 pub extern "C" fn findora_ffi_transaction_builder_add_operation_undelegate_partially(
     builder: &TransactionBuilder,
     keypair: &XfrKeyPair,
-    am: u64,
+    am: *const c_char,
     target_validator: *const c_char,
 ) -> *mut TransactionBuilder {
+    let am = parse_u64(am);
     if let Ok(info) = builder.clone().add_operation_undelegate_partially(
         keypair,
         am,
@@ -222,8 +226,9 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_claim(
 pub extern "C" fn findora_ffi_transaction_builder_add_operation_claim_custom(
     builder: &TransactionBuilder,
     keypair: &XfrKeyPair,
-    am: u64,
+    am: *const c_char,
 ) -> *mut TransactionBuilder {
+    let am = parse_u64(am);
     if let Ok(info) = builder.clone().add_operation_claim_custom(keypair, am) {
         Box::into_raw(Box::new(info))
     } else {
@@ -256,9 +261,10 @@ pub extern "C" fn findora_ffi_transaction_builder_add_transfer_operation(
 pub extern "C" fn findora_ffi_transaction_builder_add_transfer_account_operation(
     builder: &TransactionBuilder,
     address: *const c_char,
-    amount: u64,
+    amount: *const c_char,
     kp: &XfrKeyPair,
 ) -> *mut TransactionBuilder {
+    let amount = parse_u64(amount);
     let addr_stirng = c_char_to_string(address);
     let addr = if addr_stirng.is_empty() {
         None

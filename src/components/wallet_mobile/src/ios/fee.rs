@@ -2,6 +2,8 @@ use crate::rust::types;
 use crate::rust::*;
 use std::os::raw::c_char;
 
+use super::parse_u64;
+
 #[no_mangle]
 /// Fee smaller than this value will be denied.
 pub extern "C" fn findora_ffi_fra_get_minimal_fee() -> u64 {
@@ -24,12 +26,13 @@ pub extern "C" fn findora_ffi_fee_inputs_new() -> *mut FeeInputs {
 ///
 pub unsafe extern "C" fn findora_ffi_fee_inputs_append(
     ptr: *mut FeeInputs,
-    am: u64,
+    am: *const c_char,
     tr: *const TxoRef,
     ar: *const ClientAssetRecord,
     om: *const OwnerMemo,
     kp: *const types::XfrKeyPair,
 ) {
+    let am = parse_u64(am);
     assert!(!ptr.is_null());
     let input = &mut *ptr;
 

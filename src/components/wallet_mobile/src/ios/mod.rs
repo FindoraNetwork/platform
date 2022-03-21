@@ -1,5 +1,5 @@
 pub mod asset_rules;
-pub mod evm_tx_builder;
+pub mod evm;
 pub mod fee;
 pub mod free;
 pub mod tx_builder;
@@ -552,4 +552,8 @@ pub extern "C" fn findora_ffi_cred_issuer_public_key_get_sk(
     pair: &CredentialUserKeyPair,
 ) -> *mut types::CredUserSecretKey {
     Box::into_raw(Box::new(types::CredUserSecretKey::from(pair.get_sk())))
+}
+
+pub(super) fn parse_u64(n: *const c_char) -> u64 {
+    c_char_to_string(n).parse().expect("Invalid u64.")
 }
