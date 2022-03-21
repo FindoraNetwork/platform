@@ -467,7 +467,7 @@ struct AssetRules *findora_ffi_asset_rules_set_decimals(const struct AssetRules 
  * @param {String} eth_phrase - The account mnemonic.
  * @param {String} nonce - Json encoded U256(256 bits unsigned integer).
  */
-struct EVMTransactionBuilder *findora_ffi_new_withdraw_transaction(uint64_t amount,
+struct EVMTransactionBuilder *findora_ffi_new_withdraw_transaction(const char *amount,
                                                                    const struct XfrKeyPair *fra_kp,
                                                                    const char *address,
                                                                    const char *eth_phrase,
@@ -487,6 +487,11 @@ const char *findora_ffi_evm_transaction_data(struct EVMTransactionBuilder *tx);
 void findora_ffi_free_evm_transaction(struct EVMTransactionBuilder *tx);
 
 /**
+ * Serialize ethereum address used to abci query nonce.
+ */
+const char *get_serialized_address(const char *address);
+
+/**
  * Fee smaller than this value will be denied.
  */
 uint64_t findora_ffi_fra_get_minimal_fee(void);
@@ -503,7 +508,7 @@ struct FeeInputs *findora_ffi_fee_inputs_new(void);
  *
  */
 void findora_ffi_fee_inputs_append(struct FeeInputs *ptr,
-                                   uint64_t am,
+                                   const char *am,
                                    const struct TxoRef *tr,
                                    const struct ClientAssetRecord *ar,
                                    const struct OwnerMemo *om,
@@ -535,7 +540,6 @@ void findora_ffi_xfr_public_key_free(struct XfrPublicKey *ptr);
 void findora_ffi_fee_inputs_free(struct FeeInputs *ptr);
 
 /**
- * @param am: amount to pay
  * @param kp: owner's XfrKeyPair
  */
 struct TransactionBuilder *findora_ffi_transaction_builder_add_fee_relative_auto(const struct TransactionBuilder *builder,
@@ -608,7 +612,7 @@ struct TransactionBuilder *findora_ffi_transaction_builder_add_basic_issue_asset
                                                                                  const struct XfrKeyPair *key_pair,
                                                                                  const char *code,
                                                                                  uint64_t seq_num,
-                                                                                 uint64_t amount,
+                                                                                 const char *amount,
                                                                                  bool conf_amount,
                                                                                  const struct PublicParams *zei_params);
 
@@ -629,7 +633,7 @@ struct TransactionBuilder *findora_ffi_transaction_builder_add_operation_update_
 
 struct TransactionBuilder *findora_ffi_transaction_builder_add_operation_delegate(const struct TransactionBuilder *builder,
                                                                                   const struct XfrKeyPair *keypair,
-                                                                                  uint64_t amount,
+                                                                                  const char *amount,
                                                                                   const char *validator);
 
 struct TransactionBuilder *findora_ffi_transaction_builder_add_operation_undelegate(const struct TransactionBuilder *builder,
@@ -637,7 +641,7 @@ struct TransactionBuilder *findora_ffi_transaction_builder_add_operation_undeleg
 
 struct TransactionBuilder *findora_ffi_transaction_builder_add_operation_undelegate_partially(const struct TransactionBuilder *builder,
                                                                                               const struct XfrKeyPair *keypair,
-                                                                                              uint64_t am,
+                                                                                              const char *am,
                                                                                               const char *target_validator);
 
 struct TransactionBuilder *findora_ffi_transaction_builder_add_operation_claim(const struct TransactionBuilder *builder,
@@ -645,7 +649,7 @@ struct TransactionBuilder *findora_ffi_transaction_builder_add_operation_claim(c
 
 struct TransactionBuilder *findora_ffi_transaction_builder_add_operation_claim_custom(const struct TransactionBuilder *builder,
                                                                                       const struct XfrKeyPair *keypair,
-                                                                                      uint64_t am);
+                                                                                      const char *am);
 
 /**
  * Adds a serialized transfer asset operation to a transaction builder instance.
@@ -665,7 +669,7 @@ struct TransactionBuilder *findora_ffi_transaction_builder_add_transfer_operatio
  */
 struct TransactionBuilder *findora_ffi_transaction_builder_add_transfer_account_operation(const struct TransactionBuilder *builder,
                                                                                           const char *address,
-                                                                                          uint64_t amount,
+                                                                                          const char *amount,
                                                                                           const struct XfrKeyPair *kp);
 
 struct TransactionBuilder *findora_ffi_transaction_builder_sign(const struct TransactionBuilder *builder,
@@ -718,7 +722,7 @@ struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_add_inpu
                                                                                                const struct OwnerMemo *owner_memo,
                                                                                                const struct TracingPolicies *tracing_policies,
                                                                                                const struct XfrKeyPair *key,
-                                                                                               uint64_t amount);
+                                                                                               const char *amount);
 
 /**
  * # Safety
@@ -730,7 +734,7 @@ struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_add_inpu
                                                                                              const struct ClientAssetRecord *asset_record,
                                                                                              const struct OwnerMemo *owner_memo,
                                                                                              const struct XfrKeyPair *key,
-                                                                                             uint64_t amount);
+                                                                                             const char *amount);
 
 /**
  * # Safety
@@ -738,7 +742,7 @@ struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_add_inpu
  * Wraps around TransferOperationBuilder to add an output to a transfer operation builder.
  */
 struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_add_output_with_tracing(const struct TransferOperationBuilder *builder,
-                                                                                                uint64_t amount,
+                                                                                                const char *amount,
                                                                                                 const struct XfrPublicKey *recipient,
                                                                                                 const struct TracingPolicies *tracing_policies,
                                                                                                 const char *code,
@@ -751,7 +755,7 @@ struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_add_outp
  * Wraps around TransferOperationBuilder to add an output to a transfer operation builder.
  */
 struct TransferOperationBuilder *findora_ffi_transfer_operation_builder_add_output_no_tracing(const struct TransferOperationBuilder *builder,
-                                                                                              uint64_t amount,
+                                                                                              const char *amount,
                                                                                               const struct XfrPublicKey *recipient,
                                                                                               const char *code,
                                                                                               bool conf_amount,

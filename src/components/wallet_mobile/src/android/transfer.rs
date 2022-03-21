@@ -6,7 +6,7 @@ use ledger::data_model::AssetType as PlatformAssetType;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use zei::xfr::structs::OwnerMemo as ZeiOwnerMemo;
 
-use super::{parseU64, jStringToString};
+use super::{jStringToString, parseU64};
 
 #[no_mangle]
 /// # Safety
@@ -329,18 +329,11 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
         Some(memo.clone())
     };
     let key = &*(key_ptr as *mut XfrKeyPair);
-    let amount = parseU64(env,amount);
-
+    let amount = parseU64(env, amount);
 
     let builder = builder
         .clone()
-        .add_input_no_tracing(
-            txo_ref,
-            asset_record,
-            owner_memo,
-            key,
-            amount,
-        )
+        .add_input_no_tracing(txo_ref, asset_record, owner_memo, key, amount)
         .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }
@@ -422,7 +415,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transferOperationBuilderAd
     let builder = &*(builder as *mut TransferOperationBuilder);
     let recipient = &*(recipient as *mut XfrPublicKey);
     let amount = parseU64(env, amount);
-    let code = jStringToString(env,code);
+    let code = jStringToString(env, code);
 
     let builder = builder
         .clone()

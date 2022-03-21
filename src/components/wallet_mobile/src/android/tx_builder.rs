@@ -223,7 +223,6 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
         .expect("Couldn't get java string!")
         .into();
 
-
     let builder = builder
         .clone()
         .add_operation_delegate(keypair, parseU64(env, amount), validator)
@@ -260,18 +259,13 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
     let builder = &*(builder as *mut TransactionBuilder);
     let keypair = &*(keypair as *mut XfrKeyPair);
 
-
     let validator: String = env
         .get_string(validator)
         .expect("Couldn't get java string!")
         .into();
     let builder = builder
         .clone()
-        .add_operation_undelegate_partially(
-            keypair,
-            parseU64(env, am),
-            validator,
-        )
+        .add_operation_undelegate_partially(keypair, parseU64(env, am), validator)
         .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }
@@ -305,7 +299,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
     let keypair = &*(keypair as *mut XfrKeyPair);
     let builder = builder
         .clone()
-        .add_operation_claim_custom(keypair, parseU64(env,am))
+        .add_operation_claim_custom(keypair, parseU64(env, am))
         .unwrap();
     Box::into_raw(Box::new(builder)) as jlong
 }

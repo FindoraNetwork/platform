@@ -1,4 +1,4 @@
-use crate::rust::account::EVMTransactionBuilder;
+use crate::rust::account::{get_serialized_address, EVMTransactionBuilder};
 use jni::objects::{JClass, JString};
 use jni::sys::{jlong, jstring};
 use jni::JNIEnv;
@@ -48,11 +48,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transfer_from_account_evmT
     let fra_kp = &*(fra_kp as *mut XfrKeyPair);
 
     let tx = EVMTransactionBuilder::new_transfer_from_account(
-        amount,
-        address,
-        fra_kp,
-        eth_phrase,
-        nonce,
+        amount, address, fra_kp, eth_phrase, nonce,
     )
     .unwrap();
     Box::into_raw(Box::new(tx)) as jlong
@@ -83,4 +79,18 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_free_evmTransactionBuilder
     builder: jlong,
 ) {
     let _ = Box::from_raw(builder as *mut EVMTransactionBuilder);
+}
+
+#[no_mangle]
+/// Serialize ethereum address used to abci query nonce.
+pub extern "system" fn Java_com_findora_JniApi_getSerializedAddress(
+    env: JNIEnv,
+    _: JClass,
+    address: JString,
+) -> jstring {
+    let addr = jStringToString(env, address);
+    let data = get_serialized_address(&addr).unwrap();
+    env.new_string(data)
+        .expect("Couldn't create java String!")
+        .into_inner()
 }

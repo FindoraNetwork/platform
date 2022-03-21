@@ -1,5 +1,5 @@
 mod constructor;
-mod evm_tx_builder;
+mod evm;
 mod transfer;
 mod tx_builder;
 
@@ -395,13 +395,14 @@ pub extern "system" fn Java_com_findora_JniApi_openClientAssetRecordGetPubKey(
     Box::into_raw(Box::new(types::XfrPublicKey::from(*record.get_pub_key()))) as jlong
 }
 
-
-pub(super) fn jStringToString(env: JNIEnv, s: JString)->String{
+pub(super) fn jStringToString(env: JNIEnv, s: JString) -> String {
     env.get_string(s)
-    .expect("Couldn't create rust String!")
-    .into()
+        .expect("Couldn't create rust String!")
+        .into()
 }
 
-pub(super) fn parseU64(env: JNIEnv, amount: JString)->u64 {
-    jStringToString(env, amount).parse().expect("Parse u64 error.")
+pub(super) fn parseU64(env: JNIEnv, amount: JString) -> u64 {
+    jStringToString(env, amount)
+        .parse()
+        .expect("Parse u64 error.")
 }
