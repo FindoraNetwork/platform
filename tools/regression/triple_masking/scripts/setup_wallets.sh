@@ -15,7 +15,7 @@ echo "
 fn setup -O mnemonic-temp.keys -S http://0.0.0.0
 
 echo "New BAR wallet with Balance:"
-target/debug/fn wallet --show
+target/release/fn wallet --show
 
 
 rm anon-keys-temp2.keys

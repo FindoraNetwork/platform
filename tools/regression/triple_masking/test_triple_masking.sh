@@ -17,7 +17,7 @@ echo -e "${YEL}Run test cases and verify results${NC}"
 
 ./$TRIPLE_MASKING_SCRIPTS_PATH/create_test_bars.sh
 #Verify
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 840000000
+python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 1050000000
 echo
 
 ./$TRIPLE_MASKING_SCRIPTS_PATH/setup_wallets.sh
@@ -32,7 +32,7 @@ fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid 3
 sleep 20
 
 #Verify
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 629990000
+python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 839990000
 echo
 
 randomiser1=$(tail -n 1 owned_randomizers)
@@ -67,7 +67,7 @@ echo "--------------------------------------------------------------------------
 fn anon-fetch-merkle-proof -a 2
 
 #Verify
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 629990000
+python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 839990000
 echo
 
 fn owned-utxos
@@ -77,20 +77,26 @@ echo "==========================================================================
 # convert bar to abar
 sleep 1
 fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid 9
-
-sleep 20
+sleep 5
+fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid 12
+sleep 5
 
 #Verify
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 419980000
+python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 419970000
 echo
 
-randomiser=$(tail -n 1 owned_randomizers)
-echo "\n\n Owned Abars "
-sleep 20 #Do not remove/decrease
-target/debug/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r $randomiser
+tail -n 2 owned_randomizers > randomizer_file
+randomiser=$(awk 'FNR>=1 && FNR<=1' randomizer_file)
+echo "\n\n Owned Abars after Bar to Abar conversion 1"
+sleep 20
+target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r $randomiser
+fee_randomiser=$(awk 'FNR>=2 && FNR<=2' randomizer_file)
+echo "\n\n Owned Abars after Bar to Abar conversion 2"
+sleep 20
+target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r $fee_randomiser
 
-target/debug/fn convert-abar-to-bar --anon-keys ./anon-keys-temp.keys -r $randomiser --to-wallet-address  fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
-
+target/release/fn convert-abar-to-bar --anon-keys ./anon-keys-temp.keys -r $randomiser -F $fee_randomiser --to-wallet-address  fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
+sleep 20
 #Verify
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 419980000
+python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 629980000
 echo
