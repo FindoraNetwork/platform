@@ -14,7 +14,7 @@ use super::{jStringToString, parseU64};
 /// @param {String} address - EVM address.
 /// @param {String} eth_phrase - The account mnemonic.
 /// @param {String} nonce - Json encoded U256(256 bits unsigned integer).
-pub unsafe extern "system" fn Java_com_findora_JniApi_transfer_from_account_evmTransactionBuilder(
+pub unsafe extern "system" fn Java_com_findora_JniApi_newEvmTransactionTransferFromAccount(
     env: JNIEnv,
     _: JClass,
     amount: JString,

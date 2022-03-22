@@ -258,7 +258,7 @@ pub extern "C" fn findora_ffi_transaction_builder_add_transfer_operation(
 /// @param {XfrKeyPair} kp - Fra ownner key pair.
 /// @return null if `address` or 'kp' is incorrect.
 #[no_mangle]
-pub extern "C" fn findora_ffi_transaction_builder_add_transfer_to_account_operation(
+pub extern "C" fn findora_ffi_transaction_builder_add_operation_convert_account(
     builder: &TransactionBuilder,
     address: *const c_char,
     amount: *const c_char,

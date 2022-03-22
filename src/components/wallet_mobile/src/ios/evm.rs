@@ -16,7 +16,7 @@ use fp_types::U256;
 /// @param {String} address - EVM address.
 /// @param {String} eth_phrase - The account mnemonic.
 /// @param {String} nonce - Json encoded U256(256 bits unsigned integer).
-pub extern "C" fn findora_ffi_new_withdraw_transaction(
+pub extern "C" fn findora_ffi_new_evm_transaction_transfer_from_account(
     amount: *const c_char,
     fra_kp: &XfrKeyPair,
     address: *const c_char,

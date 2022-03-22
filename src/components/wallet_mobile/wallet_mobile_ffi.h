@@ -467,11 +467,11 @@ struct AssetRules *findora_ffi_asset_rules_set_decimals(const struct AssetRules 
  * @param {String} eth_phrase - The account mnemonic.
  * @param {String} nonce - Json encoded U256(256 bits unsigned integer).
  */
-struct EVMTransactionBuilder *findora_ffi_new_withdraw_transaction(const char *amount,
-                                                                   const struct XfrKeyPair *fra_kp,
-                                                                   const char *address,
-                                                                   const char *eth_phrase,
-                                                                   const char *nonce);
+struct EVMTransactionBuilder *findora_ffi_new_evm_transaction_transfer_from_account(const char *amount,
+                                                                                    const struct XfrKeyPair *fra_kp,
+                                                                                    const char *address,
+                                                                                    const char *eth_phrase,
+                                                                                    const char *nonce);
 
 /**
  * # Safety
@@ -667,10 +667,10 @@ struct TransactionBuilder *findora_ffi_transaction_builder_add_transfer_operatio
  * @param {XfrKeyPair} kp - Fra ownner key pair.
  * @return null if `address` or 'kp' is incorrect.
  */
-struct TransactionBuilder *findora_ffi_transaction_builder_add_transfer_to_account_operation(const struct TransactionBuilder *builder,
-                                                                                             const char *address,
-                                                                                             const char *amount,
-                                                                                             const struct XfrKeyPair *kp);
+struct TransactionBuilder *findora_ffi_transaction_builder_add_operation_convert_account(const struct TransactionBuilder *builder,
+                                                                                         const char *address,
+                                                                                         const char *amount,
+                                                                                         const struct XfrKeyPair *kp);
 
 struct TransactionBuilder *findora_ffi_transaction_builder_sign(const struct TransactionBuilder *builder,
                                                                 const struct XfrKeyPair *kp);
