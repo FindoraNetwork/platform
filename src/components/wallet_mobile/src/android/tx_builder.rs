@@ -334,7 +334,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddTrans
 /// @param {XfrKeyPair} keypair - FRA account key pair.
 /// @param {String} address - FRA account key pair.
 /// @throws Will throw an error if `address` is invalid.
-pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddTransferToAccount(
+pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddTransferToAccountOperation(
     env: JNIEnv,
     _: JClass,
     builder: jlong,
