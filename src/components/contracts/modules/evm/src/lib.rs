@@ -95,7 +95,7 @@ impl<C: Config> App<C> {
         let asset = Token::FixedBytes(Vec::from(_asset));
 
         let bytes: &[u8] = _from.as_ref();
-        let from = Token::Address(H160::from_slice(&bytes[..20]));
+        let from = Token::FixedBytes(bytes.to_vec());
 
         let bytes: &[u8] = _to.as_ref();
         let to = Token::Address(H160::from_slice(&bytes[..20]));
