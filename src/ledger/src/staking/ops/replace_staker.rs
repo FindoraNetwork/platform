@@ -70,14 +70,14 @@ impl ReplaceStakerOps {
         _tx: &Transaction,
     ) -> Result<()> {
         self.verify()?;
-        dbg!(staking_simulator.check_and_replace_staker(
+        staking_simulator.check_and_replace_staker(
             &self.pubkey,
             self.body.new_public_key,
             self.body
                 .new_tendermint_params
                 .clone()
                 .map(|p| (p.address, p.pubkey)),
-        ))
+        )
     }
 
     #[inline(always)]

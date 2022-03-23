@@ -25,6 +25,7 @@ use fp_traits::{
 };
 use fp_types::{
     actions::{evm::Action, xhub::NonConfidentialOutput},
+    assemble::OptionalHash,
     crypto::{Address, HA160},
 };
 use precompile::PrecompileSet;
@@ -216,6 +217,7 @@ impl<C: Config> Executable for App<C> {
         _origin: Option<Self::Origin>,
         _call: Self::Call,
         _ctx: &Context,
+        _hash: OptionalHash,
     ) -> Result<ActionResult> {
         Err(eg!("Unsupported evm action!"))
     }

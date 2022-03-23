@@ -162,7 +162,6 @@ impl ModuleManager {
         let origin_tx = convert_unsigned_transaction::<Call, Extra>(action, tx);
 
         origin_tx.validate::<Module>(ctx)?;
-
         if RunTxMode::Deliver == ctx.run_mode {
             return origin_tx.apply::<Module>(ctx);
         }

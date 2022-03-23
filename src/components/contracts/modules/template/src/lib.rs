@@ -12,7 +12,7 @@ use fp_core::{
 // use fp_storage::{hash::StoragePrefixKey, Deref, StatelessStore};
 use abci::{RequestQuery, ResponseQuery};
 use fp_storage::{Borrow, BorrowMut};
-use fp_types::{actions::template::Action, crypto::Address};
+use fp_types::{actions::template::Action, assemble::OptionalHash, crypto::Address};
 use ruc::Result;
 use std::marker::PhantomData;
 
@@ -77,6 +77,7 @@ impl<C: Config> Executable for App<C> {
         _origin: Option<Self::Origin>,
         call: Self::Call,
         ctx: &Context,
+        _hash: OptionalHash,
     ) -> Result<ActionResult> {
         match call {
             Action::SetValue(v) => ValueStore::put(ctx.state.write().borrow_mut(), &v)

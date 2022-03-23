@@ -4,6 +4,7 @@ use fp_core::{context::Context, ensure, transaction::ActionResult};
 use fp_storage::{Borrow, BorrowMut};
 use fp_traits::{account::AccountAsset, evm::DecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialTransfer;
+use fp_types::assemble::OptionalHash;
 use fp_types::{actions::xhub::NonConfidentialOutput, crypto::Address};
 use ledger::data_model::ASSET_TYPE_FRA;
 use log::debug;
@@ -14,6 +15,7 @@ impl<C: Config> App<C> {
     pub fn transfer_to_nonconfidential_utxo(
         ctx: &Context,
         sender: Address,
+        mut hash: OptionalHash,
         call: NonConfidentialTransfer,
     ) -> Result<ActionResult> {
         let mut transfer_amount = 0;
@@ -43,7 +45,7 @@ impl<C: Config> App<C> {
 
         if !amount.is_zero() {
             C::AccountAsset::burn(ctx, &sender, amount)?;
-            Self::add_mint(ctx, call.outputs)?;
+            Self::add_mint(ctx, call.outputs, hash.take())?;
         }
         Ok(ActionResult::default())
     }
@@ -51,18 +53,22 @@ impl<C: Config> App<C> {
     pub(crate) fn add_mint(
         ctx: &Context,
         mut outputs: Vec<NonConfidentialOutput>,
+        hash: Option<String>,
     ) -> Result<()> {
-        let ops =
-            if let Some(mut ori_outputs) = PendingUTXOs::get(ctx.db.read().borrow()) {
-                ori_outputs.append(&mut outputs);
-                ori_outputs
-            } else {
-                outputs
-            };
+        let ops = if let Some((mut ori_outputs, _)) =
+            PendingUTXOs::get(ctx.db.read().borrow())
+        {
+            ori_outputs.append(&mut outputs);
+            (ori_outputs, hash)
+        } else {
+            (outputs, hash)
+        };
         PendingUTXOs::put(ctx.db.write().borrow_mut(), &ops)
     }
 
-    pub fn consume_mint(ctx: &Context) -> Option<Vec<NonConfidentialOutput>> {
+    pub fn consume_mint(
+        ctx: &Context,
+    ) -> Option<(Vec<NonConfidentialOutput>, Option<String>)> {
         PendingUTXOs::take(ctx.db.write().borrow_mut())
     }
 }

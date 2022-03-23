@@ -2,7 +2,8 @@ use crate::extensions::SignedExtra;
 use abci::*;
 use fp_core::context::RunTxMode;
 use fp_evm::BlockId;
-use fp_types::assemble::convert_unchecked_transaction;
+use fp_types::assemble::{convert_unchecked_transaction, OptionalHash};
+use fp_utils::hashing::sha2_256;
 use fp_utils::tx::EvmRawTxWrapper;
 use log::{debug, error, info};
 use primitive_types::U256;
@@ -145,8 +146,10 @@ impl abci::Application for crate::BaseApp {
             return resp;
         };
 
-        if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
+        if let Ok(mut tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
             let ctx = self.retrieve_context(RunTxMode::Deliver).clone();
+            let tx_hash = hex::encode(&sha2_256(raw_tx));
+            tx.hash = OptionalHash::Hash(tx_hash);
 
             let ret = self.modules.process_tx::<SignedExtra>(ctx, tx);
             match ret {

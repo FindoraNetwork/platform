@@ -45,6 +45,7 @@ pub fn convert_unsigned_transaction<Action, Extra>(
     transaction::CheckedTransaction {
         signed: tx.signed,
         function: action,
+        hash: tx.hash,
     }
 }
 
@@ -64,4 +65,34 @@ pub fn convert_ethereum_transaction<Extra>(
     Ok(UncheckedTransaction::<Extra>::new_unsigned(
         Action::Ethereum(EtherAction::Transact(tx)),
     ))
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+///store a hash for trasnfer.
+pub enum OptionalHash {
+    None,
+    Hash(String),
+}
+
+impl OptionalHash {
+    pub fn is_none(&self) -> bool {
+        match self {
+            Self::None => true,
+            _ => false,
+        }
+    }
+
+    pub fn take(&mut self) -> Option<String> {
+        let ori = core::mem::replace(self, Self::None);
+        match ori {
+            Self::None => None,
+            Self::Hash(hash) => Some(hash),
+        }
+    }
+}
+
+impl Default for OptionalHash {
+    fn default() -> Self {
+        OptionalHash::None
+    }
 }

@@ -10,7 +10,7 @@ use fp_core::{
     transaction::{ActionResult, Executable},
 };
 use fp_traits::{account::AccountAsset, evm::DecimalsMapping};
-use fp_types::{actions::xhub::Action, crypto::Address};
+use fp_types::{actions::xhub::Action, assemble::OptionalHash, crypto::Address};
 use ruc::*;
 use std::marker::PhantomData;
 
@@ -30,7 +30,7 @@ mod storage {
 
     // The following data is stored in non-state rocksdb
     // account balance transfer to utxo waiting to be mint.
-    generate_storage!(XHub, PendingUTXOs => Value<Vec<NonConfidentialOutput>>);
+    generate_storage!(XHub, PendingUTXOs => Value<(Vec<NonConfidentialOutput>, Option<String>)>);
 }
 
 pub struct App<C> {
@@ -55,11 +55,12 @@ impl<C: Config> Executable for App<C> {
         origin: Option<Self::Origin>,
         call: Self::Call,
         ctx: &Context,
+        hash: OptionalHash,
     ) -> Result<ActionResult> {
         match call {
             Action::NonConfidentialTransfer(action) => {
                 if let Some(sender) = origin {
-                    Self::transfer_to_nonconfidential_utxo(ctx, sender, action)
+                    Self::transfer_to_nonconfidential_utxo(ctx, sender, hash, action)
                 } else {
                     Err(eg!("invalid transaction origin"))
                 }

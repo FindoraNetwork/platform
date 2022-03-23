@@ -1,4 +1,7 @@
-use crate::crypto::{IdentifyAccount, Verify};
+use crate::{
+    assemble::OptionalHash,
+    crypto::{IdentifyAccount, Verify},
+};
 use core::fmt::Debug;
 use ruc::*;
 use serde::{Deserialize, Serialize};
@@ -10,6 +13,9 @@ pub struct UncheckedTransaction<Address, Call, Signature, Extra> {
     pub signature: Option<(Address, Signature, Extra)>,
     /// The function that should be called.
     pub function: Call,
+    #[serde(skip_serializing_if = "OptionalHash::is_none")]
+    #[serde(default = "OptionalHash::default")]
+    pub hash: OptionalHash,
 }
 
 impl<Address, Call, Signature, Extra>
@@ -24,6 +30,7 @@ impl<Address, Call, Signature, Extra>
         Self {
             signature: Some((signed, signature, extra)),
             function,
+            hash: OptionalHash::None,
         }
     }
 
@@ -31,6 +38,7 @@ impl<Address, Call, Signature, Extra>
         Self {
             signature: None,
             function,
+            hash: OptionalHash::None,
         }
     }
 }
@@ -56,11 +64,13 @@ where
                 CheckedTransaction {
                     signed: Some((signed, extra)),
                     function: self.function,
+                    hash: self.hash,
                 }
             }
             None => CheckedTransaction {
                 signed: None,
                 function: self.function,
+                hash: self.hash,
             },
         })
     }
@@ -74,4 +84,8 @@ pub struct CheckedTransaction<Address, Call, Extra> {
 
     /// The function that should be called.
     pub function: Call,
+
+    ///hash of raw tx
+    #[serde(skip_serializing_if = "OptionalHash::is_none")]
+    pub hash: OptionalHash,
 }
