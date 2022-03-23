@@ -235,7 +235,6 @@ pub fn deliver_tx(
                             td_height, tx
                         );
                     }
-
                     if *KEEP_HIST {
                         // set attr(tags) if any, only needed on a fullnode
                         let attr = utils::gen_tendermint_attr(&tx);
@@ -259,7 +258,7 @@ pub fn deliver_tx(
                         if let Err(err) =
                             s.account_base_app.write().deliver_findora_tx(&tx)
                         {
-                            log::info!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
+                            log::error!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
 
                             resp.code = 1;
                             resp.log =
@@ -351,6 +350,12 @@ pub fn end_block(
     IN_SAFE_ITV.swap(false, Ordering::Relaxed);
     let mut la = s.la.write();
 
+    if td_height <= CFG.checkpoint.disable_evm_block_height
+        || td_height >= CFG.checkpoint.enable_frc20_height
+    {
+        let _ = s.account_base_app.write().end_block(req);
+    }
+
     // mint coinbase, cache system transactions to ledger
     {
         let laa = la.get_committed_state().read();
@@ -380,12 +385,6 @@ pub fn end_block(
         begin_block_req.last_commit_info.as_ref(),
         &begin_block_req.byzantine_validators.as_slice(),
     );
-
-    if td_height <= CFG.checkpoint.disable_evm_block_height
-        || td_height >= CFG.checkpoint.enable_frc20_height
-    {
-        let _ = s.account_base_app.write().end_block(req);
-    }
 
     resp
 }

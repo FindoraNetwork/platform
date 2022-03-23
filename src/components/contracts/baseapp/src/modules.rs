@@ -14,7 +14,8 @@ use fp_types::{
     crypto::Address,
 };
 use ledger::{
-    converter::check_convert_account, data_model::Transaction as FindoraTransaction,
+    converter::check_convert_account,
+    data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA},
 };
 use ruc::*;
 use serde::Serialize;
@@ -79,7 +80,6 @@ impl ModuleManager {
         let mut resp: ResponseEndBlock = Default::default();
         // Note: adding new modules need to be updated.
         self.account_module.end_block(ctx, req);
-        self.ethereum_module.end_block(ctx, req);
         self.evm_module.end_block(ctx, req);
         self.xhub_module.end_block(ctx, req);
         let resp_template = self.template_module.end_block(ctx, req);
@@ -87,6 +87,16 @@ impl ModuleManager {
             resp.validator_updates = resp_template.validator_updates;
         }
         resp
+    }
+
+    pub fn commit(
+        &mut self,
+        ctx: &mut Context,
+        height: u64,
+        root_hash: &[u8],
+    ) -> Result<()> {
+        self.ethereum_module
+            .commit(ctx, U256::from(height), root_hash)
     }
 
     pub fn process_tx<
@@ -116,10 +126,25 @@ impl ModuleManager {
         ctx: &Context,
         tx: &FindoraTransaction,
     ) -> Result<()> {
-        let (owner, amount) = check_convert_account(tx)?;
+        let (from, to, amount, asset) = check_convert_account(tx)?;
         let balance = EthereumDecimalsMapping::from_native_token(U256::from(amount))
             .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
-        module_account::App::<BaseApp>::mint(ctx, &Address::from(owner), balance)
+
+        let from = Address::from(from);
+        let owner = Address::from(to);
+
+        if asset == ASSET_TYPE_FRA {
+            let bridge_address = self.evm_module.contracts.bridge_address;
+            let ba = Address::from(bridge_address);
+
+            module_account::App::<BaseApp>::mint(ctx, &ba, balance)?;
+            self.evm_module.withdraw_fra(ctx, &from, &owner, balance)?;
+        } else {
+            self.evm_module
+                .withdraw_frc20(ctx, asset.0, &from, &owner, balance)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -138,10 +163,7 @@ impl ModuleManager {
 
         origin_tx.validate::<Module>(ctx)?;
 
-        if RunTxMode::Deliver == ctx.run_mode
-            || RunTxMode::Check == ctx.run_mode
-            || RunTxMode::ReCheck == ctx.run_mode
-        {
+        if RunTxMode::Deliver == ctx.run_mode {
             return origin_tx.apply::<Module>(ctx);
         }
         Ok(ActionResult::default())

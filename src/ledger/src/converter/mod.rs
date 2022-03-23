@@ -8,7 +8,7 @@ use ruc::*;
 use serde::{Deserialize, Serialize};
 use zei::xfr::{
     sig::XfrPublicKey,
-    structs::{XfrAmount, XfrAssetType},
+    structs::{AssetType, XfrAmount, XfrAssetType},
 };
 
 /// Use this operation to transfer.
@@ -25,6 +25,10 @@ pub struct ConvertAccount {
     /// convert UTXOs value
     #[serde(with = "serde_strz")]
     pub value: u64,
+
+    /// convert asset type.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub asset_type: Option<AssetType>,
 }
 
 #[allow(missing_docs)]
@@ -56,10 +60,13 @@ pub fn is_convert_account(tx: &Transaction) -> bool {
 }
 
 #[allow(missing_docs)]
-pub fn check_convert_account(tx: &Transaction) -> Result<(MultiSigner, u64)> {
+pub fn check_convert_account(
+    tx: &Transaction,
+) -> Result<(XfrPublicKey, MultiSigner, u64, AssetType)> {
     let signer;
     let target;
     let expected_value;
+    let expected_asset;
 
     if let Some(Operation::ConvertAccount(ca)) = tx.body.operations.last() {
         if ca.nonce != tx.body.no_replay_token {
@@ -77,6 +84,11 @@ pub fn check_convert_account(tx: &Transaction) -> Result<(MultiSigner, u64)> {
         signer = ca.signer;
         target = ca.receiver.clone();
         expected_value = ca.value;
+        if let Some(at) = ca.asset_type {
+            expected_asset = at;
+        } else {
+            expected_asset = ASSET_TYPE_FRA;
+        }
     } else {
         return Err(eg!(
             "TransferUTXOsToEVM error: invalid ConvertAccount operation"
@@ -100,7 +112,7 @@ pub fn check_convert_account(tx: &Transaction) -> Result<(MultiSigner, u64)> {
             }
             if let XfrAssetType::NonConfidential(ty) = o.record.asset_type {
                 if o.record.public_key == *BLACK_HOLE_PUBKEY_STAKING
-                    && ty == ASSET_TYPE_FRA
+                    && ty == expected_asset
                 {
                     if let XfrAmount::NonConfidential(amount) = o.record.amount {
                         convert_amount += amount;
@@ -117,5 +129,5 @@ pub fn check_convert_account(tx: &Transaction) -> Result<(MultiSigner, u64)> {
         ));
     }
 
-    Ok((target, expected_value))
+    Ok((signer, target, expected_value, expected_asset))
 }
