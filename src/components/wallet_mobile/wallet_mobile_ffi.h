@@ -60,8 +60,6 @@ typedef struct CredentialIssuerKeyPair CredentialIssuerKeyPair;
  */
 typedef struct CredentialUserKeyPair CredentialUserKeyPair;
 
-typedef struct EVMTransactionBuilder EVMTransactionBuilder;
-
 typedef struct FeeInputs FeeInputs;
 
 typedef struct OpenAssetRecord OpenAssetRecord;
@@ -460,31 +458,16 @@ struct AssetRules *findora_ffi_asset_rules_set_decimals(const struct AssetRules 
                                                         uint8_t decimals);
 
 /**
- * Construct a EVM Transaction that transfer account balance to UTXO.
- * @param {unsigned long long} amount - Amount to transfer.
- * @param {XfrKeyPair} fra_kp - Fra key pair.
- * @param {String} address - EVM address.
- * @param {String} eth_phrase - The account mnemonic.
- * @param {String} nonce - Json encoded U256(256 bits unsigned integer).
+ * Construct a serialzed EVM Transaction that transfer account balance to UTXO.
+ * @param {XfrPublicKey} recipient - UTXO Asset receiver.
+ * @param {u64} amount - Transfer amount.
+ * @param {string} sk - Ethereum wallet private key.
+ * @param {U256} nonce - Transaction nonce for sender.
  */
-struct EVMTransactionBuilder *findora_ffi_new_evm_transaction_transfer_from_account(const char *amount,
-                                                                                    const struct XfrKeyPair *fra_kp,
-                                                                                    const char *address,
-                                                                                    const char *eth_phrase,
-                                                                                    const char *nonce);
-
-/**
- * # Safety
- * Generate the base64 encoded transaction data.
- */
-const char *findora_ffi_evm_transaction_data(struct EVMTransactionBuilder *tx);
-
-/**
- * # Safety
- * Free the memory.
- * **Danger:**, this will make the tx pointer a dangling pointer.
- */
-void findora_ffi_free_evm_transaction(struct EVMTransactionBuilder *tx);
+const char *findora_ffi_transfer_to_utxo_from_account(const struct XfrPublicKey *recipient,
+                                                      const char *amount,
+                                                      const char *sk,
+                                                      const char *nonce);
 
 /**
  * Serialize ethereum address used to abci query nonce.

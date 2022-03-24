@@ -1,15 +1,13 @@
 use core::str::FromStr;
 use ledger::data_model::ASSET_TYPE_FRA;
-use ruc::Result;
-use zei::xfr::sig::XfrKeyPair;
+use ruc::{d, Result, RucResult};
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
 use super::transaction::TransactionBuilder;
 
 use fp_types::{
     actions::{
-        xhub::{
-            Action as AccountAction, NonConfidentialOutput, NonConfidentialTransfer,
-        },
+        xhub::{Action as XhubAction, NonConfidentialOutput, NonConfidentialTransfer},
         Action,
     },
     assemble::{CheckFee, CheckNonce, SignedExtra, UncheckedTransaction},
@@ -68,56 +66,40 @@ pub enum EVMTransactionKind {
 
 impl EVMTransactionBuilder {
     /// transfer to uxto assets from account(ed25519 or ecdsa address) balance.
-    pub fn new_transfer_from_account(
+
+    pub fn new_transfer_to_utxo_from_account(
+        recipient: XfrPublicKey,
         amount: u64,
-        address: Option<String>,
-        fra_kp: &XfrKeyPair,
-        eth_phrase: Option<String>,
+        sk: String,
         nonce: U256,
-    ) -> Result<EVMTransactionBuilder> {
-        let target = match address {
-            Some(s) => {
-                if let Ok(address) = globutils::wallet::public_key_from_base64(&s) {
-                    address
-                } else {
-                    globutils::wallet::public_key_from_bech32(&s)?
-                }
-            }
-            None => fra_kp.get_pk(),
-        };
+    ) -> Result<String> {
+        let seed = hex::decode(sk).c(d!())?;
+        let mut s = [0u8; 32];
+        s.copy_from_slice(&seed);
+        let kp = SecpPair::from_seed(&s);
 
         let output = NonConfidentialOutput {
-            target,
+            target: recipient,
             amount,
             asset: ASSET_TYPE_FRA,
         };
-
-        let (signer, keypair) = if let Some(key_path) = eth_phrase {
-            let kp = SecpPair::from_phrase(&key_path, None)?.0;
-            let signer = Address::from(kp.address());
-            (signer, Keypair::Ecdsa(kp))
-        } else {
-            let signer = Address::from(fra_kp.get_pk());
-            (signer, Keypair::Ed25519(fra_kp.clone()))
-        };
-
-        let account_call =
-            AccountAction::NonConfidentialTransfer(NonConfidentialTransfer {
+        let action = Action::XHub(XhubAction::NonConfidentialTransfer(
+            NonConfidentialTransfer {
                 input_value: amount,
                 outputs: vec![output],
-            });
-        let action = Action::XHub(account_call);
+            },
+        ));
+
         let extra = (CheckNonce::new(nonce), CheckFee::new(None));
-        let msg = serde_json::to_vec(&(&action, &extra)).unwrap();
+        let msg = serde_json::to_vec(&(action.clone(), extra.clone())).c(d!())?;
+        let signature = MultiSignature::from(kp.sign(&msg));
+        let signer = Address::from(kp.address());
 
-        let signature = keypair.sign(msg.as_slice());
+        let tx = UncheckedTransaction::new_signed(action, signer, signature, extra);
+        let res = serde_json::to_string(&tx).c(d!())?;
 
-        let tx_unchecked =
-            UncheckedTransaction::new_signed(action, signer, signature, extra);
-
-        let tx = EVMTransactionKind::Unchecked(tx_unchecked);
-
-        Ok(EVMTransactionBuilder { tx })
+        let tx_with_tag = EvmRawTxWrapper::wrap(res.as_bytes());
+        String::from_utf8(tx_with_tag).c(d!())
     }
 
     pub fn serialized_transaction_base64(&self) -> String {
