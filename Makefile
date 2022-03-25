@@ -41,7 +41,7 @@ define pack
 		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
 	cp $(1)/$(bin_dir)/* ~/.cargo/bin/
-	cd $(1)/$(bin_dir)/ && findorad pack
+	cd $(1)/$(bin_dir)/ && ./findorad pack
 	cp -f /tmp/findorad $(1)/$(bin_dir)/
 	cp -f /tmp/findorad ~/.cargo/bin/
 endef

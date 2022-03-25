@@ -18,9 +18,6 @@ set -e
 echo "\n\n\n Bar To Abar Conversion 2"
 sleep 10
 target/release/fn convert-bar-to-abar --anon-keys ./anon-keys-temp2.keys  --txo-sid 6 2> /dev/null
-#echo "\n\n\n Bar To Abar Conversion 3"
-#sleep 10
-#target/release/fn convert-bar-to-abar --anon-keys ./anon-keys-temp2.keys  --txo-sid 9 2> /dev/null
 
 tail -n 2 owned_randomizers > randomizer_file
 randomiser1=$(awk 'FNR>=1 && FNR<=1' randomizer_file)
@@ -31,10 +28,6 @@ randomiser2=$(awk 'FNR>=2 && FNR<=2' randomizer_file)
 echo "\n\n Owned Abars after Bar to Abar conversion 2"
 sleep 20
 target/release/fn owned-abars -p ptyo7hlqn-Eywf_ttG99OSWtz6KfDUvLYDDVDlV1C-U= -r $randomiser2
-#randomiser3=$(awk 'FNR>=3 && FNR<=3' randomizer_file)
-#echo "\n\n Owned Abars after Bar to Abar conversion 3"
-#sleep 20
-#target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r $randomiser3
 
 sleep 5
 echo "J7PqRhmBOE_gadFs4rB4lcKuz_YoWa5VSlALyKuZdQjNBryPSYZhRczonGNY3-mp86LWW8TJ6clirfk4gk03Tw==

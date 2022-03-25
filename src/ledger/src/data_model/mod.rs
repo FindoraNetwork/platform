@@ -1271,16 +1271,23 @@ pub struct BarToAbarOps {
 
 impl BarToAbarOps {
     /// Generates a new BarToAbarOps object
+    /// # Arguments
+    /// * bar_to_abar_body - The BarToAbarBody of the conversion
+    /// * signing_key      - XfrKeyPair of the converting BAR
+    /// * txo_sid          - the TxoSID of the converting BAR
+    /// * nonce
     pub fn new(
         bar_to_abar_body: BarToAbarBody,
         signing_key: &XfrKeyPair,
         txo_sid: TxoSID,
         nonce: NoReplayToken,
     ) -> Result<BarToAbarOps> {
-        // sign the body
+        // serialize the body
         let msg = bincode::serialize(&bar_to_abar_body)
             .map_err(|_| ZeiError::SerializationError)
             .c(d!())?;
+
+        // sign the body
         let signature = signing_key.sign(&msg);
 
         Ok(BarToAbarOps {

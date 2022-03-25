@@ -494,8 +494,13 @@ impl TransactionBuilder {
         self
     }
 
-    /// Add an operation to convert a Blind Asset Record to a Anonymous record.
-    #[allow(dead_code)]
+    /// Add an operation to convert a Blind Asset Record to a Anonymous record and return the Randomizer
+    /// # Arguments
+    /// * `auth_key_pair` -  XfrKeyPair of the owner BAR for conversion
+    /// * `abar_pub_key`  -  AXfrPubKey of the receiver ABAR after conversion
+    /// * `txo_sid`       -  TxoSID of the BAR to convert
+    /// * `input_record`  -  OpenAssetRecord of the BAR to convert
+    /// * `enc_key`       -  XPublicKey of OwnerMemo encryption of receiver
     pub fn add_operation_bar_to_abar(
         &mut self,
         auth_key_pair: &XfrKeyPair,
@@ -505,18 +510,11 @@ impl TransactionBuilder {
         enc_key: &XPublicKey,
     ) -> Result<(&mut Self, JubjubScalar)> {
         let mut prng = ChaChaRng::from_entropy();
+
+        // generate params for Bar to Abar conversion
         let user_params = UserParams::eq_committed_vals_params()?;
 
-        /*
-        TODO: charge fee
-        if input_record.get_record_type()
-            == NonConfidentialAmount_NonConfidentialAssetType
-            && input_record.asset_type == ASSET_TYPE_FRA
-        {
-            fee = TX_FEE_MIN;
-        }
-        */
-
+        // generate the BarToAbarBody with the ZKP
         let (body, r) = gen_bar_to_abar_body(
             &mut prng,
             &user_params,
@@ -526,16 +524,22 @@ impl TransactionBuilder {
         )
         .c(d!())?;
 
+        // Create the BarToAbarOps with BarToAbarBody and signature
         let bar_to_abar =
             BarToAbarOps::new(body, auth_key_pair, txo_sid, self.no_replay_token)?;
 
+        // Add the generated operation to the transaction
         let op = Operation::BarToAbar(Box::from(bar_to_abar));
         self.txn.add_operation(op);
         Ok((self, r))
     }
 
     /// Create a new operation to convert from Anonymous record to Blind Asset Record
-    #[allow(dead_code)]
+    /// # Arguments
+    /// * input - ABAR to be converted
+    /// * input_keypair - owner keypair of ABAR to be converted
+    /// * bar_pub_key   - Pubkey of the receiver of the new BAR
+    /// * asset_record_type - The type of confidentiality of new BAR
     pub fn add_operation_abar_to_bar(
         &mut self,
         input: &OpenAnonBlindAssetRecord,
@@ -546,6 +550,7 @@ impl TransactionBuilder {
         let mut prng = ChaChaRng::from_entropy();
         let user_params = UserParams::abar_to_bar_params(MERKLE_TREE_DEPTH)?;
 
+        // Generate note
         let note = gen_abar_to_bar_note(
             &mut prng,
             &user_params,
@@ -556,14 +561,20 @@ impl TransactionBuilder {
         )
         .c(d!())?;
 
+        // Create operation
         let abar_to_bar = AbarToBarOps::new(&note, self.no_replay_token).c(d!())?;
-
         let op = Operation::AbarToBar(Box::from(abar_to_bar));
+
+        // Add operation to transaction
         self.txn.add_operation(op);
         Ok(self)
     }
 
     /// Add an operation to charge fee anonymously for ABAR to BAR transfer
+    /// # Arguments
+    /// * input - input Abar for fee payment
+    /// * output - balance back after payment of fee
+    /// * input_keypair - AXfrKeyPair of the fee payer
     #[allow(dead_code)]
     pub fn add_operation_anon_fee(
         &mut self,
@@ -574,12 +585,16 @@ impl TransactionBuilder {
         let mut prng = ChaChaRng::from_entropy();
         let user_params = UserParams::anon_fee_params(MERKLE_TREE_DEPTH)?;
 
+        // Generate AnonFee note
         let (body, keypairs) =
             gen_anon_fee_body(&mut prng, &user_params, input, output, input_keypair)
                 .c(d!())?;
         let note = AnonFeeNote::generate_note_from_body(body, keypairs).c(d!())?;
+
+        // create Operation
         let inp = AnonFeeOps::new(note.clone(), self.no_replay_token).c(d!())?;
         let op = Operation::AnonymousFee(Box::new(inp));
+
         self.txn.add_operation(op);
         Ok((self, note))
     }

@@ -709,7 +709,13 @@ pub fn parse_td_validator_keys(key_data: &str) -> Result<ValidatorKey> {
 }
 
 #[inline(always)]
-#[allow(missing_docs)]
+/// Generates a BarToAbar Operation and an accompanying FeeOP and sends it to the network and return the Randomizer
+/// # Arguments
+/// * `auth_key_pair` -  XfrKeyPair of the owner BAR for conversion
+/// * `abar_pub_key`  -  AXfrPubKey of the receiver ABAR after conversion
+/// * `txo_sid`       -  TxoSID of the BAR to convert
+/// * `input_record`  -  OpenAssetRecord of the BAR to convert
+/// * `enc_key`       -  XPublicKey of OwnerMemo encryption of receiver
 pub fn generate_bar2abar_op(
     auth_key_pair: &XfrKeyPair,
     abar_pub_key: &AXfrPubKey,
@@ -717,6 +723,7 @@ pub fn generate_bar2abar_op(
     input_record: &OpenAssetRecord,
     enc_key: &XPublicKey,
 ) -> Result<JubjubScalar> {
+    // add operation bar_to_abar in a new Tx Builder
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
     let (_, r) = builder
         .add_operation_bar_to_abar(
@@ -728,16 +735,28 @@ pub fn generate_bar2abar_op(
         )
         .c(d!("Failed to generate operation bar to abar"))?;
 
+    // Add a transparent fee operation for conversion which is required to process the bar
+    // In this step a transparent FRA AssetRecord is chosen from user owned UTXOs to pay the fee.
+    // If the user doesn't own such a UTXO then this method throws an error.
     let feeop =
         gen_fee_bar_to_abar(auth_key_pair, txo_sid).c(d!("Failed to generate fee"))?;
     builder.add_operation(feeop);
 
+    // submit transaction to network
     send_tx(&builder.take_transaction()).c(d!("Failed to submit Bar to Abar txn"))?;
+
     Ok(r)
 }
 
 #[inline(always)]
-#[allow(missing_docs)]
+/// Create AbarToBar transaction with given Open ABAR & Open Bar and submit it to network
+/// # Arguments
+/// * oabar_in      - Abar to convert in open form
+/// * fee_oabar     - Abar to pay anon fee in open form
+/// * out_fee_oabar - Abar to get balance back after paying fee
+/// * from          - AXfrKeyPair of person converting ABAR
+/// * to            - XfrPublicKey of person receiving new BAR
+/// * art           - AssetRecordType of the new BAR
 pub fn generate_abar2bar_op(
     oabar_in: &OpenAnonBlindAssetRecord,
     fee_oabar: &OpenAnonBlindAssetRecord,
@@ -747,16 +766,17 @@ pub fn generate_abar2bar_op(
     art: AssetRecordType,
 ) -> Result<()> {
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
+    // create and add AbarToBar Operation
     builder
         .add_operation_abar_to_bar(oabar_in, from, to, art)
         .c(d!())?;
 
-    /* let feeop = gen_fee_op(fee_keypair).c(d!())?;
-    builder.add_operation(feeop); */
+    // create and add AnonFee Operation
     builder
         .add_operation_anon_fee(fee_oabar, out_fee_oabar, from)
         .c(d!())?;
 
+    // submit transaction
     send_tx(&builder.take_transaction()).c(d!())?;
     Ok(())
 }
