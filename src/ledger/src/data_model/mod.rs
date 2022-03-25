@@ -10,7 +10,6 @@ mod effects;
 mod test;
 
 pub use effects::{BlockEffect, TxnEffect};
-use zei::anon_xfr::abar_to_bar::AbarToBarNote;
 
 use {
     crate::converter::ConvertAccount,
@@ -46,6 +45,7 @@ use {
     unicode_normalization::UnicodeNormalization,
     zei::{
         anon_xfr::{
+            abar_to_bar::AbarToBarNote,
             anon_fee::AnonFeeNote,
             bar_to_abar::{BarToAbarBody, BarToAbarNote},
             keys::AXfrPubKey,
