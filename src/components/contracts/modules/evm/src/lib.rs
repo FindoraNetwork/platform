@@ -89,6 +89,7 @@ impl<C: Config> App<C> {
         _from: &Address,
         _to: &Address,
         _value: U256,
+        _lowlevel: Vec<u8>,
     ) -> Result<()> {
         let function = self.contracts.bridge.function("withdrawERC20").c(d!())?;
 
@@ -102,9 +103,13 @@ impl<C: Config> App<C> {
 
         let value = Token::Uint(_value);
 
-        println!("{}, {}, {}, {}", asset, from, to, value);
+        let lowlevel = Token::Bytes(_lowlevel);
 
-        let input = function.encode_input(&[asset, from, to, value]).c(d!())?;
+        println!("{}, {}, {}, {}, {}", asset, from, to, value, lowlevel);
+
+        let input = function
+            .encode_input(&[asset, from, to, value, lowlevel])
+            .c(d!())?;
 
         let _ = ActionRunner::<C>::execute_systemc_contract(
             ctx,
@@ -124,6 +129,7 @@ impl<C: Config> App<C> {
         _from: &Address,
         _to: &Address,
         _value: U256,
+        _lowlevel: Vec<u8>,
     ) -> Result<()> {
         let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
 
@@ -134,10 +140,13 @@ impl<C: Config> App<C> {
 
         let to = Token::Address(H160::from_slice(&bytes[4..24]));
         let value = Token::Uint(_value);
+        let lowlevel = Token::Bytes(_lowlevel);
 
-        println!("{:?}, {:?}, {:?}", from, to, value);
+        println!("{:?}, {:?}, {:?}, {:?}", from, to, value, lowlevel);
 
-        let input = function.encode_input(&[from, to, value]).c(d!())?;
+        let input = function
+            .encode_input(&[from, to, value, lowlevel])
+            .c(d!())?;
 
         let _ = ActionRunner::<C>::execute_systemc_contract(
             ctx,

@@ -126,7 +126,7 @@ impl ModuleManager {
         ctx: &Context,
         tx: &FindoraTransaction,
     ) -> Result<()> {
-        let (from, to, amount, asset) = check_convert_account(tx)?;
+        let (from, to, amount, asset, lowlevel) = check_convert_account(tx)?;
 
         let from = Address::from(from);
         let owner = Address::from(to);
@@ -138,7 +138,8 @@ impl ModuleManager {
             let ba = Address::from(bridge_address);
 
             module_account::App::<BaseApp>::mint(ctx, &ba, balance)?;
-            self.evm_module.withdraw_fra(ctx, &from, &owner, balance)?;
+            self.evm_module
+                .withdraw_fra(ctx, &from, &owner, balance, lowlevel)?;
         } else {
             self.evm_module.withdraw_frc20(
                 ctx,
@@ -146,6 +147,7 @@ impl ModuleManager {
                 &from,
                 &owner,
                 U256::from(amount),
+                lowlevel,
             )?;
         }
 

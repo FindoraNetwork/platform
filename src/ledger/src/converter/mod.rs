@@ -29,6 +29,10 @@ pub struct ConvertAccount {
     /// convert asset type.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub asset_type: Option<AssetType>,
+
+    /// convert asset lowlevel data.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lowlevel_data: Option<Vec<u8>>,
 }
 
 #[allow(missing_docs)]
@@ -62,11 +66,12 @@ pub fn is_convert_account(tx: &Transaction) -> bool {
 #[allow(missing_docs)]
 pub fn check_convert_account(
     tx: &Transaction,
-) -> Result<(XfrPublicKey, MultiSigner, u64, AssetType)> {
+) -> Result<(XfrPublicKey, MultiSigner, u64, AssetType, Vec<u8>)> {
     let signer;
     let target;
     let expected_value;
     let expected_asset;
+    let expected_lowlevel;
 
     if let Some(Operation::ConvertAccount(ca)) = tx.body.operations.last() {
         if ca.nonce != tx.body.no_replay_token {
@@ -88,6 +93,11 @@ pub fn check_convert_account(
             expected_asset = at;
         } else {
             expected_asset = ASSET_TYPE_FRA;
+        }
+        if let Some(l) = &ca.lowlevel_data {
+            expected_lowlevel = l.clone();
+        } else {
+            expected_lowlevel = Vec::new();
         }
     } else {
         return Err(eg!(
@@ -129,5 +139,11 @@ pub fn check_convert_account(
         ));
     }
 
-    Ok((signer, target, expected_value, expected_asset))
+    Ok((
+        signer,
+        target,
+        expected_value,
+        expected_asset,
+        expected_lowlevel,
+    ))
 }

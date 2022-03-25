@@ -624,6 +624,7 @@ impl TransactionBuilder {
         addr: MultiSigner,
         asset: Option<AssetTypeCode>,
         amount: u64,
+        lowlevel_data: Option<Vec<u8>>,
     ) -> Result<&mut Self> {
         self.add_operation(Operation::ConvertAccount(ConvertAccount {
             signer: kp.get_pk(),
@@ -631,6 +632,7 @@ impl TransactionBuilder {
             receiver: addr,
             value: amount,
             asset_type: asset.map(|a| a.val),
+            lowlevel_data,
         }));
         Ok(self)
     }
