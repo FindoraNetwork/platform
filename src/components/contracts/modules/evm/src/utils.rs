@@ -5,7 +5,7 @@ use fp_traits::evm::{DecimalsMapping, EthereumDecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialOutput;
 use ledger::data_model::ASSET_TYPE_FRA;
 use ruc::*;
-use sha3::{Keccak256, Digest};
+use sha3::{Digest, Keccak256};
 use zei::{
     serialization::ZeiFromToBytes,
     xfr::{sig::XfrPublicKey, structs::AssetType},
@@ -23,7 +23,11 @@ pub fn deploy_contract<C: Config>(
     let bytecode = hex::decode(&bytecode_str[2..].trim()).c(d!())?;
 
     ActionRunner::<C>::inital_system_contract(
-        ctx, bytecode, 9999999999, contracts.owner, contracts.salt,
+        ctx,
+        bytecode,
+        9999999999,
+        contracts.owner,
+        contracts.salt,
     )?;
 
     Ok(())

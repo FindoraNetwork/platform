@@ -21,7 +21,8 @@ impl SystemContracts {
         let abi_str = include_str!("../contracts/PrismXXBridge.abi.json");
         let bridge = Contract::load(abi_str.as_bytes()).c(d!())?;
 
-        let owner = H160::from_str("0xe95034bE56fbd7D70000B310323B6Be684A49acb").c(d!())?;
+        let owner =
+            H160::from_str("0xe95034bE56fbd7D70000B310323B6Be684A49acb").c(d!())?;
 
         let bytecode_str = include_str!("../contracts/PrismXXBridge.bytecode");
 
@@ -31,13 +32,14 @@ impl SystemContracts {
 
         let code_hash = keccak_256(&bytecode);
 
-        let bridge_address = utils::compute_create2(owner, salt, H256::from_slice(&code_hash));
+        let bridge_address =
+            utils::compute_create2(owner, salt, H256::from_slice(&code_hash));
 
         Ok(Self {
             bridge,
             bridge_address,
             owner,
-            salt
+            salt,
         })
     }
 }
