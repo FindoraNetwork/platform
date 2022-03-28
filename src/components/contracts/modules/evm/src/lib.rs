@@ -91,7 +91,7 @@ impl<C: Config> App<C> {
         _value: U256,
         _lowlevel: Vec<u8>,
     ) -> Result<()> {
-        let function = self.contracts.bridge.function("withdrawERC20").c(d!())?;
+        let function = self.contracts.bridge.function("withdrawFRC20").c(d!())?;
 
         let asset = Token::FixedBytes(Vec::from(_asset));
 
