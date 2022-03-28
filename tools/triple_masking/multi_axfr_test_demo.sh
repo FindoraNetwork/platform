@@ -17,7 +17,9 @@ set -e
 
 echo "\n\n\n Bar To Abar Conversion 2"
 sleep 10
-target/release/fn convert-bar-to-abar --anon-keys ./anon-keys-temp2.keys  --txo-sid 6 2> /dev/null
+
+TXO_SID=$(target/release/fn owned-utxos | head -4 | tail -1 | cut  -f1)
+target/release/fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID 2> /dev/null
 
 tail -n 2 owned_randomizers > randomizer_file
 randomiser1=$(awk 'FNR>=1 && FNR<=1' randomizer_file)
