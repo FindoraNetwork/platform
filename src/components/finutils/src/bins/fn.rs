@@ -392,7 +392,13 @@ fn run() -> Result<()> {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");
         let asset = m.value_of("asset");
-        transfer_to_account(amount.parse::<u64>().c(d!())?, asset, address)?
+        let lowlevel_data = m.value_of("lowlevel_data");
+        transfer_to_account(
+            amount.parse::<u64>().c(d!())?,
+            asset,
+            address,
+            lowlevel_data,
+        )?
     } else if let Some(m) = matches.subcommand_matches("contract-withdraw") {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");

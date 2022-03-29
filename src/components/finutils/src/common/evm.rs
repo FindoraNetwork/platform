@@ -36,6 +36,7 @@ pub fn transfer_to_account(
     amount: u64,
     asset: Option<&str>,
     address: Option<&str>,
+    lowlevel_data: Option<&str>,
 ) -> Result<()> {
     let mut builder = utils::new_tx_builder()?;
 
@@ -44,6 +45,13 @@ pub fn transfer_to_account(
     let asset = if let Some(asset) = asset {
         let asset = AssetTypeCode::new_from_base64(asset)?;
         Some(asset)
+    } else {
+        None
+    };
+
+    let lowlevel_data = if let Some(data) = lowlevel_data {
+        let data = hex::decode(data).c(d!())?;
+        Some(data)
     } else {
         None
     };
@@ -64,7 +72,13 @@ pub fn transfer_to_account(
 
     builder
         .add_operation(transfer_op)
-        .add_operation_convert_account(&kp, target_address, asset, amount)?
+        .add_operation_convert_account(
+            &kp,
+            target_address,
+            asset,
+            amount,
+            lowlevel_data,
+        )?
         .sign(&kp);
     utils::send_tx(&builder.take_transaction())?;
     Ok(())

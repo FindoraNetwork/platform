@@ -314,6 +314,34 @@
 		"inputs": [
 			{
 				"internalType": "bytes32",
+				"name": "_from",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "address payable",
+				"name": "_to",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_value",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bytes",
+				"name": "_data",
+				"type": "bytes"
+			}
+		],
+		"name": "withdrawFRA",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
 				"name": "_asset",
 				"type": "bytes32"
 			},
@@ -331,32 +359,14 @@
 				"internalType": "uint256",
 				"name": "_value",
 				"type": "uint256"
-			}
-		],
-		"name": "withdrawERC20",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "bytes32",
-				"name": "_from",
-				"type": "bytes32"
 			},
 			{
-				"internalType": "address payable",
-				"name": "_to",
-				"type": "address"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_value",
-				"type": "uint256"
+				"internalType": "bytes",
+				"name": "_data",
+				"type": "bytes"
 			}
 		],
-		"name": "withdrawFRA",
+		"name": "withdrawFRC20",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
