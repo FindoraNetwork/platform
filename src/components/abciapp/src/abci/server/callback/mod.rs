@@ -69,6 +69,7 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let mut resp = ResponseInfo::new();
 
     let mut la = s.la.write();
+
     let state = la.get_committed_state().write();
 
     let commitment = state.get_state_commitment();

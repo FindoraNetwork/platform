@@ -197,7 +197,6 @@ start_localnode: stop_debug_env
 # 	docker rmi $(ECR_URL)/$(ENV)/abci_validator_node:latest
 # endif
 
-
 ci_build_binary_rust_base:
 	docker build -t binary-rust-base -f container/Dockerfile-binary-rust-base .
 
