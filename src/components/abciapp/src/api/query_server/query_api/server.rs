@@ -314,13 +314,13 @@ impl QueryServer {
     /// Returns the merkle proof from the given ATxoSID
     #[inline(always)]
     pub fn get_abar_proof(&self, atxo_sid: ATxoSID) -> Option<MTLeafInfo> {
-        Some(self.ledger_cloned.get_abar_proof(atxo_sid).unwrap())
+        self.ledger_cloned.get_abar_proof(atxo_sid).ok()
     }
 
     /// Returns a bool value from the given hash
     #[inline(always)]
     pub fn check_nullifier_hash(&self, null_hash: String) -> Option<bool> {
-        Some(self.ledger_cloned.check_nullifier_hash(null_hash).unwrap())
+        self.ledger_cloned.check_nullifier_hash(null_hash).ok()
     }
 
     /// retrieve block reward rate at specified block height
