@@ -12,6 +12,8 @@ mod test;
 pub use effects::{BlockEffect, TxnEffect};
 use zei::anon_xfr::abar_to_bar::AbarToBarNote;
 
+use crate::staking::ops::replace_staker::ReplaceStakerOps;
+
 use {
     crate::converter::ConvertAccount,
     crate::staking::{
@@ -1426,6 +1428,8 @@ pub enum Operation {
     TransferAnonAsset(Box<AnonTransferOps>),
     /// Anonymous fee operation for abar to bar xfr
     AnonymousFee(Box<AnonFeeOps>),
+    ///replace staker.
+    ReplaceStaker(ReplaceStakerOps),
 }
 
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {

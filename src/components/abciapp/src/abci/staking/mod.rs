@@ -258,7 +258,7 @@ struct ByzantineInfo<'a> {
 
 /// Auto governance.
 fn system_governance(staking: &mut Staking, bz: &ByzantineInfo) -> Result<()> {
-    ruc::pd!(serde_json::to_string(&bz).unwrap());
+    // ruc::pd!(serde_json::to_string(&bz).unwrap());
     let kind = match bz.kind {
         "DUPLICATE_VOTE" => ByzantineKind::DuplicateVote,
         "LIGHT_CLIENT_ATTACK" => ByzantineKind::LightClientAttack,

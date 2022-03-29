@@ -13,8 +13,8 @@ use {
             ops::{
                 claim::ClaimOps, delegation::DelegationOps,
                 fra_distribution::FraDistributionOps, governance::GovernanceOps,
-                undelegation::UnDelegationOps, update_staker::UpdateStakerOps,
-                update_validator::UpdateValidatorOps,
+                replace_staker::ReplaceStakerOps, undelegation::UnDelegationOps,
+                update_staker::UpdateStakerOps, update_validator::UpdateValidatorOps,
             },
         },
     },
@@ -106,6 +106,8 @@ pub struct TxnEffect {
     pub axfr_bodies: Vec<AXfrBody>,
     /// New anon fee bodies
     pub anon_fee_bodies: Vec<AnonFeeBody>,
+    /// replace staker operations
+    pub replace_stakers: Vec<ReplaceStakerOps>,
 }
 
 impl TxnEffect {
@@ -173,6 +175,11 @@ impl TxnEffect {
                     check_nonce!(i);
                     i.verify().c(d!())?;
                     te.update_stakers.push(i.clone());
+                }
+                Operation::ReplaceStaker(i) => {
+                    check_nonce!(i);
+                    i.verify().c(d!())?;
+                    te.replace_stakers.push(i.clone());
                 }
                 Operation::UpdateValidator(i) => {
                     check_nonce!(i);
@@ -848,6 +855,12 @@ impl BlockEffect {
             i.check_run(&mut self.staking_simulator, &txn_effect.txn)
                 .c(d!())?;
         }
+
+        for i in txn_effect.replace_stakers.iter() {
+            i.check_run(&mut self.staking_simulator, &txn_effect.txn)
+                .c(d!())?;
+        }
+
         for i in txn_effect.delegations.iter() {
             i.check_run(&mut self.staking_simulator, &txn_effect.txn)
                 .c(d!())?;

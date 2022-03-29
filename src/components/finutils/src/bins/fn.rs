@@ -754,6 +754,34 @@ fn run() -> Result<()> {
 
         let list = common::get_owned_abars(&derived_public_key).c(d!())?;
         common::check_abar_status(axfr_secret_key, randomizer, dec_key, list).c(d!())?;
+    } else if let Some(m) = matches.subcommand_matches("replace_staker") {
+        let target = m
+            .value_of("target")
+            .c(d!())
+            .and_then(wallet::public_key_from_base64)?;
+        // let new_td_addr_pk = if let Some(new_td_address_str) = m.value_of("td_address") {
+        //     let new_td_address = hex::decode(new_td_address_str)
+        //         .c(d!("`td_address` is invalid hex. "))?;
+
+        //     if new_td_address.len() != 20 {
+        //         return Err(eg!("Invalid tendermint address."));
+        //     }
+
+        //     if let Some(new_td_pk) = m.value_of("td_pubkey") {
+        //         let pk_bytes =
+        //             base64::decode(new_td_pk).c(d!("`td_pubkey` is invalid base64."))?;
+
+        //         let _ = tendermint::PublicKey::from_raw_ed25519(&pk_bytes)
+        //             .c(d!("Invalid tendermint public key."))?;
+
+        //         Some((new_td_address, pk_bytes))
+        //     } else {
+        //         return Err(eg!("missing `td_pubkey`"));
+        //     }
+        // } else {
+        //     None
+        // };
+        common::replace_staker(target, None)?;
     } else {
         println!("{}", matches.usage());
     }
