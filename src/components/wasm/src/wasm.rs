@@ -1398,6 +1398,12 @@ impl AnonTransferOperationBuilder {
         JsValue::from_serde(&r).unwrap()
     }
 
+    /// get_randomizer_map returns a hashmap of all the randomizers mapped to public key, asset, amount
+    pub fn get_randomizer_map(&self) -> JsValue {
+        let randomizer_map = self.get_builder().get_randomizer_map();
+        JsValue::from_serde(&randomizer_map).unwrap()
+    }
+
     /// build_and_sign is used to build proof and sign the Transfer Operation
     pub fn build_and_sign(mut self) -> Result<AnonTransferOperationBuilder, JsValue> {
         self.get_builder_mut()

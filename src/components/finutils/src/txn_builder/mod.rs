@@ -5,14 +5,12 @@
 #![deny(warnings)]
 #![allow(clippy::needless_borrow)]
 
-mod amount;
-
 use {
     credentials::CredUserSecretKey,
     crypto::basics::hybrid_encryption::XPublicKey,
     curve25519_dalek::scalar::Scalar,
     fp_types::crypto::MultiSigner,
-    globutils::SignatureOf,
+    globutils::{wallet, SignatureOf},
     ledger::{
         converter::ConvertAccount,
         data_model::{
@@ -76,8 +74,8 @@ use {
             lib::XfrNotePolicies,
             sig::{XfrKeyPair, XfrPublicKey},
             structs::{
-                AssetRecord, AssetRecordTemplate, BlindAssetRecord, OpenAssetRecord,
-                OwnerMemo, TracingPolicies, TracingPolicy,
+                AssetRecord, AssetRecordTemplate, AssetType, BlindAssetRecord,
+                OpenAssetRecord, OwnerMemo, TracingPolicies, TracingPolicy,
             },
         },
     },
@@ -1481,6 +1479,20 @@ impl AnonTransferOperationBuilder {
         self.randomizers.clone()
     }
 
+    /// get a hashmap of randomizer, public key, asset, amount
+    pub fn get_randomizer_map(&self) -> HashMap<String, (AXfrPubKey, AssetType, u64)> {
+        let mut randomizer_map = HashMap::new();
+        for out_abar in self.outputs.iter() {
+            let abar_rand =
+                wallet::randomizer_to_base58(&out_abar.get_key_rand_factor());
+            let abar_pkey = *out_abar.pub_key_ref();
+            let abar_asset = out_abar.get_asset_type();
+            let abar_amt = out_abar.get_amount();
+            randomizer_map.insert(abar_rand, (abar_pkey, abar_asset, abar_amt));
+        }
+        randomizer_map
+    }
+
     /// set public key of sender for remainder
     pub fn set_from_pubkey(&mut self, from_pubkey: XPublicKey) -> Result<&mut Self> {
         self.from_pubkey = Some(from_pubkey);
@@ -1574,14 +1586,12 @@ impl AnonTransferOperationBuilder {
 mod tests {
     use {
         super::*,
-        crate::txn_builder::amount::Amount,
         crypto::basics::commitments::ristretto_pedersen::RistrettoPedersenGens,
         crypto::basics::hybrid_encryption::XSecretKey,
         ledger::data_model::{ATxoSID, BlockEffect, TxnEffect, TxoRef},
         ledger::store::{utils::fra_gen_initial_tx, LedgerState},
         rand_chacha::ChaChaRng,
         rand_core::SeedableRng,
-        std::ops::Neg,
         zei::anon_xfr::bar_to_abar::verify_bar_to_abar_note,
         zei::anon_xfr::config::FEE_CALCULATING_FUNC,
         zei::anon_xfr::structs::{
@@ -1986,29 +1996,18 @@ mod tests {
         let _ledger_status = ledger_state.get_status();
 
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
-
-        let amount = 6000000i64;
-        let amount_nonneg = Amount::from_nonnegative_i64(amount);
-        assert!(amount_nonneg.is_ok());
-
-        let fee_amount = FEE_CALCULATING_FUNC(2, 1) as i64;
-        let fee_amount_nonneg = Amount::from_nonnegative_i64(fee_amount);
-        assert!(fee_amount_nonneg.is_ok());
-
-        //let amount_output = amount;
-        let amount_output = 1000000i64;
-        let amount_output_nonneg = Amount::from_nonnegative_i64(amount_output);
-        assert!(amount_output_nonneg.is_ok());
-
+        let amount = 6000000u64;
+        let fee_amount = FEE_CALCULATING_FUNC(2, 1) as u64;
+        let amount_output = 1000000u64;
         let asset_type = ASSET_TYPE_FRA;
 
         // simulate input abar
         let (mut oabar, keypair_in, _dec_key_in, enc_key_in) =
-            gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type);
+            gen_oabar_and_keys(&mut prng, amount, asset_type);
 
         // simulate input fee abar
         let (mut oabar_fee, keypair_in_fee, _dec_key_in, _) =
-            gen_oabar_and_keys(&mut prng, fee_amount_nonneg.unwrap(), asset_type);
+            gen_oabar_and_keys(&mut prng, fee_amount, asset_type);
         let abar = AnonBlindAssetRecord::from_oabar(&oabar);
 
         let fee_abar = AnonBlindAssetRecord::from_oabar(&oabar_fee);
@@ -2016,7 +2015,7 @@ mod tests {
 
         //Simulate output abar
         let (oabar_out, _keypair_out, _dec_key_out, _) =
-            gen_oabar_and_keys(&mut prng, amount_output_nonneg.unwrap(), asset_type_out);
+            gen_oabar_and_keys(&mut prng, amount_output, asset_type_out);
 
         let _abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
 
@@ -2074,30 +2073,18 @@ mod tests {
         let _ledger_status = ledger_state.get_status();
 
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
-
-        let amount = 10i64;
-        //negative test for amount
-        let amount_nonneg = Amount::from_nonnegative_i64(amount);
-        assert!(amount_nonneg.is_ok());
-
-        // Creates a non-negative Amount from an i64.
-        //
-        // Returns an error if the amount is outside the range `{0..MAX_MONEY}`.
-        let amount_neg = Amount::from_nonnegative_i64(amount.neg());
-
-        //Here we catch the exception, so we can ensure that we do not allow negative amounts
-        assert!(amount_neg.is_err());
+        let amount = 10u64;
 
         //Here the Asset Type is generated as a 32 byte and each of them are zero
         let asset_type = AT::from_identical_byte(0);
 
         // simulate input abar
         let (oabar, keypair_in, _dec_key_in, _) =
-            gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type);
+            gen_oabar_and_keys(&mut prng, amount, asset_type);
 
         //simulate another oabar just to get new keypair
         let (_, another_keypair, _, _) =
-            gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type);
+            gen_oabar_and_keys(&mut prng, amount, asset_type);
 
         //negative test for input keypairs
         assert_eq!(keypair_in.pub_key(), *oabar.pub_key_ref());
@@ -2110,7 +2097,7 @@ mod tests {
 
         //Simulate output abar
         let (oabar_out, _keypair_out, _dec_key_out, _) =
-            gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type_out);
+            gen_oabar_and_keys(&mut prng, amount, asset_type_out);
 
         let _abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
         let mut builder = TransactionBuilder::from_seq_id(1);
@@ -2129,10 +2116,10 @@ mod tests {
         let wrong_asset_type_out = AT::from_identical_byte(1);
 
         let (oabar, keypair_in, _dec_key_in, _) =
-            gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type);
+            gen_oabar_and_keys(&mut prng, amount, asset_type);
 
         let (oabar_out, _keypair_out, _dec_key_out, _) =
-            gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), wrong_asset_type_out);
+            gen_oabar_and_keys(&mut prng, amount, wrong_asset_type_out);
 
         let wrong_asset_type_result =
             builder.add_operation_anon_transfer(&[oabar], &[oabar_out], &[keypair_in]);
@@ -2142,10 +2129,10 @@ mod tests {
 
         //The happy path
         let (mut oabar, keypair_in, _dec_key_in, _) =
-            gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type);
+            gen_oabar_and_keys(&mut prng, amount, asset_type);
 
         let (oabar_out, _keypair_out, _dec_key_out, _) =
-            gen_oabar_and_keys(&mut prng, amount_nonneg.unwrap(), asset_type_out);
+            gen_oabar_and_keys(&mut prng, amount, asset_type_out);
 
         let abar = AnonBlindAssetRecord::from_oabar(&oabar);
 
@@ -2207,12 +2194,11 @@ mod tests {
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
 
         let amount = 10u64;
-        let amount_nonneg = Amount::from_u64(amount).unwrap();
         let asset_type = AT::from_identical_byte(0);
 
         // simulate input abar
         let (mut oabar, keypair_in, _dec_key_in, _) =
-            gen_oabar_and_keys(&mut prng, amount_nonneg, asset_type);
+            gen_oabar_and_keys(&mut prng, amount, asset_type);
         let abar = AnonBlindAssetRecord::from_oabar(&oabar);
         assert_eq!(keypair_in.pub_key(), *oabar.pub_key_ref());
         let rand_keypair_in = keypair_in.randomize(&oabar.get_key_rand_factor());
@@ -2228,7 +2214,7 @@ mod tests {
         oabar.update_mt_leaf_info(mt_leaf_info);
 
         let (oabar_out, _keypair_out, _dec_key_out, _) =
-            gen_oabar_and_keys(&mut prng, amount_nonneg, asset_type);
+            gen_oabar_and_keys(&mut prng, amount, asset_type);
         let _abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
         let mut builder = TransactionBuilder::from_seq_id(1);
 
@@ -2248,7 +2234,7 @@ mod tests {
 
         let mut prng1 = ChaChaRng::from_seed([0u8; 32]);
 
-        let amount1 = Amount::from_u64(10u64).unwrap();
+        let amount1 = 10u64;
 
         let asset_type1 = AT::from_identical_byte(0);
 
@@ -2298,8 +2284,7 @@ mod tests {
 
     fn gen_oabar_and_keys<R: CryptoRng + RngCore>(
         prng: &mut R,
-        //amount: u64,
-        amount: Amount,
+        amount: u64,
         asset_type: AT,
     ) -> (
         OpenAnonBlindAssetRecord,
@@ -2311,7 +2296,7 @@ mod tests {
         let dec_key = XSecretKey::new(prng);
         let enc_key = XPublicKey::from(&dec_key);
         let oabar = OpenAnonBlindAssetRecordBuilder::new()
-            .amount(u64::from(amount))
+            .amount(amount)
             .asset_type(asset_type)
             .pub_key(keypair.pub_key())
             .finalize(prng, &enc_key)
