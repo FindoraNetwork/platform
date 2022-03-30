@@ -55,20 +55,25 @@ impl<C: Config> App<C> {
         mut outputs: Vec<NonConfidentialOutput>,
         hash: Option<String>,
     ) -> Result<()> {
-        let ops = if let Some((mut ori_outputs, _)) =
-            PendingUTXOs::get(ctx.db.read().borrow())
-        {
-            ori_outputs.append(&mut outputs);
-            (ori_outputs, hash)
-        } else {
-            (outputs, hash)
-        };
+        let ops =
+            if let Some(mut ori_outputs) = PendingUTXOs::get(ctx.db.read().borrow()) {
+                ori_outputs.append(&mut outputs);
+                ori_outputs
+            } else {
+                outputs
+            };
+
+        *ctx.tx_hash.lock() = hash;
         PendingUTXOs::put(ctx.db.write().borrow_mut(), &ops)
     }
 
     pub fn consume_mint(
         ctx: &Context,
     ) -> Option<(Vec<NonConfidentialOutput>, Option<String>)> {
-        PendingUTXOs::take(ctx.db.write().borrow_mut())
+        if let Some(outputs) = PendingUTXOs::take(ctx.db.write().borrow_mut()) {
+            Some((outputs, ctx.tx_hash.lock().take()))
+        } else {
+            None
+        }
     }
 }
