@@ -27,7 +27,8 @@ echo "\n\n\n Bar To Abar Conversion"
 echo "==============================================================================="
 # convert bar to abar
 sleep 1
-fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid 3
+TXO_SID=$(fn owned-utxos | head -4 | tail -1 | cut  -f1)
+fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
 
 sleep 20
 
@@ -76,9 +77,12 @@ echo "\n\n\n Bar To Abar Conversion"
 echo "==============================================================================="
 # convert bar to abar
 sleep 1
-fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid 9
+
+TXO_SID=$(fn owned-utxos | head -4 | tail -1 | cut  -f1)
+fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
 sleep 5
-fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid 12
+TXO_SID=$(fn owned-utxos | head -4 | tail -1 | cut  -f1)
+fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
 sleep 5
 
 #Verify

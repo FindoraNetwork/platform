@@ -1696,20 +1696,25 @@ impl LedgerStatus {
             .c(d!())?;
         }
 
+        // Abar conversion needs abar merkle tree root hash for verification of spent ABAR merkle proof.
+        // This is done here with merkle root available.
         for abar_conv in &txn_effect.abar_conv_inputs {
+            // Abar to Bar conversion is invalid without an anon_fee.
             if txn_effect.anon_fee_bodies.is_empty() {
                 return Err(eg!("Abar to Bar conversion missing anon fee"));
             }
 
+            // Get verifier params
             let node_params = NodeParams::abar_to_bar_params()?;
             let abar_version: usize = abar_conv.proof.get_merkle_root_version();
 
+            // verify zk proof with merkle root
             verify_abar_to_bar_body(
                 &node_params,
                 abar_conv,
                 &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
             )
-            .c(d!())?;
+            .c(d!("Abar to Bar conversion proof verification failed"))?;
         }
 
         Ok(())
