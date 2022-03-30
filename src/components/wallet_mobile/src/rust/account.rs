@@ -49,7 +49,7 @@ impl TransactionBuilder {
         };
 
         self.get_builder_mut()
-            .add_operation_convert_account(keypair, target_address, amount)?
+            .add_operation_convert_account(keypair, target_address, None, amount, None)?
             .sign(keypair);
 
         Ok(self)

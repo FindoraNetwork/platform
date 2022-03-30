@@ -148,7 +148,7 @@ impl abci::Application for crate::BaseApp {
 
         if let Ok(mut tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
             let ctx = self.retrieve_context(RunTxMode::Deliver).clone();
-            let tx_hash = hex::encode(&sha2_256(raw_tx));
+            let tx_hash = hex::encode(&sha2_256(req.get_tx()));
             tx.hash = OptionalHash::Hash(tx_hash);
 
             let ret = self.modules.process_tx::<SignedExtra>(ctx, tx);

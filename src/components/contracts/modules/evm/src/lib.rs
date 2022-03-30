@@ -161,7 +161,10 @@ impl<C: Config> App<C> {
         Ok(())
     }
 
-    pub fn consume_mint(&self, ctx: &Context) -> Vec<NonConfidentialOutput> {
+    pub fn consume_mint(
+        &self,
+        ctx: &Context,
+    ) -> (Vec<NonConfidentialOutput>, Option<String>) {
         let height = CFG.checkpoint.prismxx_inital_height;
 
         let mut pending_outputs = Vec::new();
@@ -174,7 +177,7 @@ impl<C: Config> App<C> {
             }
         }
 
-        pending_outputs
+        (pending_outputs, ctx.tx_hash.lock().take())
     }
 }
 

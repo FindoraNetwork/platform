@@ -4,7 +4,7 @@ use storage::{
     state::{ChainState, State},
 };
 
-pub use parking_lot::RwLock;
+pub use parking_lot::{Mutex, RwLock};
 pub use std::sync::Arc;
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash, Copy)]
@@ -27,6 +27,7 @@ pub struct Context {
     pub run_mode: RunTxMode,
     pub header: Header,
     pub header_hash: Vec<u8>,
+    pub tx_hash: Arc<Mutex<Option<String>>>,
 }
 
 impl Context {
@@ -40,6 +41,7 @@ impl Context {
             run_mode: RunTxMode::None,
             header: Default::default(),
             header_hash: vec![],
+            tx_hash: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -50,6 +52,7 @@ impl Context {
             run_mode: RunTxMode::None,
             header: self.header.clone(),
             header_hash: self.header_hash(),
+            tx_hash: self.tx_hash.clone(),
         }
     }
 
@@ -63,6 +66,7 @@ impl Context {
             run_mode: RunTxMode::None,
             header: self.header.clone(),
             header_hash: self.header_hash(),
+            tx_hash: self.tx_hash.clone(),
         }
     }
 }

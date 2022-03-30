@@ -308,9 +308,9 @@ impl BaseApp {
     }
 
     pub fn consume_mint(&self) -> Option<(Vec<NonConfidentialOutput>, Option<String>)> {
-        let mut outputs = self.modules.evm_module.consume_mint(&self.deliver_state);
+        let (mut outputs, mut hash) =
+            self.modules.evm_module.consume_mint(&self.deliver_state);
         let outputs2 = module_xhub::App::<Self>::consume_mint(&self.deliver_state);
-        let mut hash = None;
         if let Some((mut e, _hash)) = outputs2 {
             outputs.append(&mut e);
             hash = _hash;

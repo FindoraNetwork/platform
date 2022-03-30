@@ -133,10 +133,11 @@ impl<C: Config> Executable for App<C> {
         origin: Option<Self::Origin>,
         call: Self::Call,
         ctx: &Context,
-        _hash: OptionalHash,
+        mut hash: OptionalHash,
     ) -> Result<ActionResult> {
         ensure!(origin.is_none(), "InvalidTransaction: IllegalOrigin");
 
+        *ctx.tx_hash.lock() = hash.take();
         match call {
             Action::Transact(tx) => Self::do_transact(ctx, tx),
         }
