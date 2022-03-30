@@ -1458,6 +1458,7 @@ impl AnonTransferOperationBuilder {
 
     #[allow(missing_docs)]
     pub fn extra_fee_estimation(&self) -> u64 {
+
         let estimated_fees =
             FEE_CALCULATING_FUNC(self.inputs.len() as u32, self.outputs.len() as u32)
                 as u64;
@@ -1466,24 +1467,34 @@ impl AnonTransferOperationBuilder {
         let mut fra_output_sum: u64 = 0;
 
         for input in &self.inputs {
-            if let ASSET_TYPE_FRA = input.get_asset_type() {
+            if ASSET_TYPE_FRA == input.get_asset_type() {
                 fra_input_sum += input.get_amount();
             }
         }
 
         for output in &self.outputs {
-            if let ASSET_TYPE_FRA = output.get_asset_type() {
+            if ASSET_TYPE_FRA == output.get_asset_type() {
                 fra_output_sum += output.get_amount();
             }
+        }
+
+        if fra_output_sum > fra_input_sum {
+            let fra_deficient = fra_output_sum - fra_input_sum;
+            let new_estimated_fee =  FEE_CALCULATING_FUNC(
+                self.inputs.len() as u32 + 1,
+                self.outputs.len() as u32 + 1,
+            ) as u64;
+            return new_estimated_fee + fra_deficient;
         }
 
         let fra_excess = fra_input_sum - fra_output_sum;
 
         if estimated_fees > fra_excess {
-            FEE_CALCULATING_FUNC(
+            let new_estimated_fee = FEE_CALCULATING_FUNC(
                 self.inputs.len() as u32 + 1,
                 self.outputs.len() as u32 + 1,
-            ) as u64
+            ) as u64;
+            new_estimated_fee - fra_excess
         } else {
             0u64
         }
