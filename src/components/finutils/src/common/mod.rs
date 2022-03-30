@@ -777,3 +777,22 @@ pub fn show_asset(addr: &str) -> Result<()> {
 pub fn version() -> &'static str {
     concat!(env!("VERGEN_SHA"), " ", env!("VERGEN_BUILD_DATE"))
 }
+
+///operation to replace the staker.
+pub fn replace_staker(
+    target_pubkey: XfrPublicKey,
+    new_td_addr_pk: Option<(Vec<u8>, Vec<u8>)>,
+) -> Result<()> {
+    let keypair = get_keypair()?;
+
+    let mut builder = utils::new_tx_builder().c(d!())?;
+
+    utils::gen_fee_op(&keypair).c(d!()).map(|op| {
+        builder.add_operation(op);
+    })?;
+
+    builder.add_operation_replace_staker(&keypair, target_pubkey, new_td_addr_pk)?;
+    let tx = builder.take_transaction();
+    utils::send_tx(&tx).c(d!())?;
+    Ok(())
+}

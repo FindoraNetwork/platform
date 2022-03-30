@@ -69,6 +69,7 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let mut resp = ResponseInfo::new();
 
     let mut la = s.la.write();
+
     let state = la.get_committed_state().write();
 
     let commitment = state.get_state_commitment();
@@ -90,11 +91,7 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
 
     drop(state);
 
-    println!("\n\n");
-    println!("==========================================");
     println!("======== Last committed height: {} ========", h);
-    println!("==========================================");
-    println!("\n\n");
 
     if la.all_commited() {
         la.begin_block();
