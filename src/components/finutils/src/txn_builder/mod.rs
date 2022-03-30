@@ -1517,11 +1517,6 @@ impl AnonTransferOperationBuilder {
     /// build generates the anon transfer body with the Zero Knowledge Proof.
     pub fn build(&mut self) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
-        let user_params = UserParams::new(
-            self.inputs.len(),
-            self.outputs.len(),
-            Some(MERKLE_TREE_DEPTH),
-        )?;
 
         let mut sum_input = 0;
         let mut sum_output = 0;
@@ -1554,6 +1549,12 @@ impl AnonTransferOperationBuilder {
         let randomizer = oabar_money_back.get_key_rand_factor();
         self.outputs.push(oabar_money_back);
         self.randomizers.push(randomizer);
+
+        let user_params = UserParams::new(
+            self.inputs.len(),
+            self.outputs.len(),
+            Some(MERKLE_TREE_DEPTH),
+        )?;
 
         let (body, diversified_keypairs) = gen_anon_xfr_body(
             &mut prng,
