@@ -511,7 +511,7 @@ impl TransactionBuilder {
         input: AnonBlindAssetRecord,
         owner_memo: OwnerMemo,
         mt_leaf_info: MTLeafInfo,
-        from_keypair: AXfrKeyPair,
+        from_keypair: &AXfrKeyPair,
         from_dec_key: XSecretKey,
         recipient: XfrPublicKey,
         conf_amount: bool,
@@ -520,7 +520,7 @@ impl TransactionBuilder {
         let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
             &input,
             owner_memo.memo,
-            &from_keypair,
+            &from_keypair.clone(),
             &from_dec_key,
         )
         .c(d!())
@@ -542,7 +542,7 @@ impl TransactionBuilder {
         };
 
         self.get_builder_mut()
-            .add_operation_abar_to_bar(&oabar, &from_keypair, &recipient, art)
+            .add_operation_abar_to_bar(&oabar, &from_keypair.clone(), &recipient, art)
             .c(d!())
             .map_err(|e| {
                 JsValue::from_str(&format!("Could not add operation: {}", e))
@@ -563,13 +563,13 @@ impl TransactionBuilder {
         input: AnonBlindAssetRecord,
         owner_memo: OwnerMemo,
         mt_leaf_info: MTLeafInfo,
-        from_keypair: AXfrKeyPair,
+        from_keypair: &AXfrKeyPair,
         from_dec_key: XSecretKey,
     ) -> Result<TransactionBuilder, JsValue> {
         let fee_oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
             &input,
             owner_memo.memo,
-            &from_keypair,
+            &from_keypair.clone(),
             &from_dec_key,
         )
         .c(d!())
@@ -591,7 +591,7 @@ impl TransactionBuilder {
             .unwrap();
 
         self.get_builder_mut()
-            .add_operation_anon_fee(&fee_oabar, &rem_oabar, &from_keypair)
+            .add_operation_anon_fee(&fee_oabar, &rem_oabar, &from_keypair.clone())
             .c(d!())
             .map_err(|e| {
                 JsValue::from_str(&format!("Could not add operation: {}", e))
