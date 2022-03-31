@@ -1531,24 +1531,32 @@ impl AnonTransferOperationBuilder {
         let mut sum_input = 0;
         let mut sum_output = 0;
         for input in self.inputs.clone() {
-            if let ASSET_TYPE_FRA = input.get_asset_type() {
+            if ASSET_TYPE_FRA == input.get_asset_type() {
                 sum_input += input.get_amount();
             }
         }
         for output in self.outputs.clone() {
-            if let ASSET_TYPE_FRA = output.get_asset_type() {
+            if ASSET_TYPE_FRA == output.get_asset_type() {
                 sum_output += output.get_amount();
             }
         }
         let fees = FEE_CALCULATING_FUNC(
             self.inputs.len() as u32,
             self.outputs.len() as u32 + 1,
-        );
-        let remainder = sum_input as i64 - sum_output as i64 - fees as i64;
+        ) as u64;
+        use web_sys::console;
+        let t = format!("Remainder: NA\tsum_input: {:?}\tsum_output: {:?}\tfees: {:?}",
+                         sum_input, sum_output, fees);
+        console::log_1(&t.into());
+        if sum_output + fees > sum_input {
+            return Err(eg!("Insufficient FRA balance to pay fees"))
+        }
+        let remainder = sum_input - sum_output - fees;
+
 
         let rem_from_pubkey = self.from_pubkey.clone().c(d!())?;
         let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
-            .amount(remainder as u64)
+            .amount(remainder)
             .asset_type(ASSET_TYPE_FRA)
             .pub_key(self.keypairs[0].pub_key())
             .finalize(&mut prng, &rem_from_pubkey)
