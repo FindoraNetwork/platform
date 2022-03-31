@@ -1415,6 +1415,7 @@ pub struct AnonTransferOperationBuilder {
     note: Option<AXfrNote>,
 
     nonce: NoReplayToken,
+    txn: Transaction,
 }
 
 impl AnonTransferOperationBuilder {
@@ -1433,6 +1434,7 @@ impl AnonTransferOperationBuilder {
             randomizers: Vec::default(),
             note: None,
             nonce: no_replay_token,
+            txn: Transaction::from_seq_id(seq_id),
         }
     }
 
@@ -1544,15 +1546,10 @@ impl AnonTransferOperationBuilder {
             self.inputs.len() as u32,
             self.outputs.len() as u32 + 1,
         ) as u64;
-        use web_sys::console;
-        let t = format!("Remainder: NA\tsum_input: {:?}\tsum_output: {:?}\tfees: {:?}",
-                         sum_input, sum_output, fees);
-        console::log_1(&t.into());
         if sum_output + fees > sum_input {
-            return Err(eg!("Insufficient FRA balance to pay fees"))
+            return Err(eg!("Insufficient FRA balance to pay fees"));
         }
         let remainder = sum_input - sum_output - fees;
-
 
         let rem_from_pubkey = self.from_pubkey.clone().c(d!())?;
         let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
@@ -1602,16 +1599,25 @@ impl AnonTransferOperationBuilder {
         Ok(self)
     }
 
+    /// Add operation to the transaction
+    pub fn build_txn(&mut self) -> Result<&mut Self> {
+        self.txn
+            .add_operation(Operation::TransferAnonAsset(Box::from(
+                AnonTransferOps::new(self.note.as_ref().unwrap().clone(), self.nonce)
+                    .unwrap(),
+            )));
+
+        Ok(self)
+    }
+
     /// transaction method wraps the anon transfer note in an Operation and returns it
-    pub fn transaction(&self) -> Result<Operation> {
+    #[allow(missing_docs)]
+    pub fn serialize_str(&self) -> Result<String> {
         if self.note.is_none() {
             return Err(eg!("Anon transfer not built and signed"));
         }
-
-        Ok(Operation::TransferAnonAsset(Box::from(
-            AnonTransferOps::new(self.note.as_ref().unwrap().clone(), self.nonce)
-                .unwrap(),
-        )))
+        // Unwrap is safe because the underlying transaction is guaranteed to be serializable.
+        serde_json::to_string(&self.txn).c(d!())
     }
 }
 

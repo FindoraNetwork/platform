@@ -1416,18 +1416,21 @@ impl AnonTransferOperationBuilder {
             .c(d!())
             .map_err(error_to_jsvalue)?;
 
+        self.get_builder_mut()
+            .build_txn()
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
+
         Ok(self)
     }
 
     /// transaction returns the prepared Anon Transfer Operation
     /// @param nonce {NoReplayToken} - nonce of the txn to be added to the operation
     pub fn transaction(self) -> Result<String, JsValue> {
-        let op = self
-            .get_builder()
-            .transaction()
+        self.get_builder()
+            .serialize_str()
             .c(d!())
-            .map_err(error_to_jsvalue)?;
-        Ok(serde_json::to_string(&op).unwrap())
+            .map_err(error_to_jsvalue)
     }
 }
 
