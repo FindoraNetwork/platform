@@ -179,6 +179,14 @@ pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
     base64::encode_config(&ZeiFromToBytes::zei_to_bytes(key), base64::URL_SAFE)
 }
 
+/// Convert publickey to hex.
+#[inline(always)]
+pub fn public_key_to_hex(key: &XfrPublicKey) -> String {
+    let s = hex::encode(&ZeiFromToBytes::zei_to_bytes(key));
+
+    String::from("0x") + &s
+}
+
 /// Restore a XfrPublicKey from base64 human-readable address
 #[inline(always)]
 pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey> {
