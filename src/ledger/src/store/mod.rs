@@ -1242,55 +1242,81 @@ impl LedgerState {
 pub struct LedgerStatus {
     /// the file path of the snapshot
     pub snapshot_file: String,
-    // all currently-unspent TXOs
+    /// all currently-unspent TXOs
+    #[serde(default = "default_status_utxos")]
     utxos: Mapxnk<TxoSID, Utxo>,
+    /// all non-confidential balances
+    #[serde(default = "default_status_nonconfidential_balances")]
     nonconfidential_balances: Mapx<XfrPublicKey, u64>,
+    /// all owned utxos
+    #[serde(default = "default_status_owned_utxos")]
     owned_utxos: Mapx<XfrPublicKey, HashSet<TxoSID>>,
     /// all existing ax_utxos
+    #[serde(default = "default_status_ax_utxos")]
     ax_utxos: Mapx<ATxoSID, AnonBlindAssetRecord>,
     /// all owned abars
+    #[serde(default = "default_status_owned_ax_utxos")]
     owned_ax_utxos: Mapx<AXfrPubKey, HashSet<ATxoSID>>,
     /// all spent TXOs
+    #[serde(default = "default_status_spent_utxos")]
     pub spent_utxos: Mapxnk<TxoSID, Utxo>,
-    // Map a TXO to its output position in a transaction
+    /// Map a TXO to its output position in a transaction
+    #[serde(default = "default_status_txo_to_txn_location")]
     txo_to_txn_location: Mapxnk<TxoSID, (TxnSID, OutputPosition)>,
     /// Map a Anonymous TXO to its output position in a transaction
+    #[serde(default = "default_status_ax_txo_to_txn_location")]
     ax_txo_to_txn_location: Mapx<ATxoSID, (TxnSID, OutputPosition)>,
-    // State commitment history.
-    // The BitDigest at index i is the state commitment of the ledger at block height  i + 1.
+    /// State commitment history.
+    /// The BitDigest at index i is the state commitment of the ledger at block height  i + 1.
+    #[serde(default = "default_status_state_commitment_versions")]
     state_commitment_versions: Vecx<HashOf<Option<StateCommitmentData>>>,
-    // Abar commitment versions for verifying proofs
+    /// Abar commitment versions for verifying proofs
+    #[serde(default = "default_status_abar_commitment_versions")]
     abar_commitment_versions: Vecx<BLSScalar>,
-    // Anon state commitment versions
+    /// Anon state commitment versions
+    #[serde(default = "default_status_anon_state_commitment_versions")]
     anon_state_commitment_versions: Vecx<HashOf<Option<AnonStateCommitmentData>>>,
-    // Registered asset types
+    /// Registered asset types
+    #[serde(default = "default_status_asset_types")]
     asset_types: Mapx<AssetTypeCode, AssetType>,
-    // Issuance number is always increasing
+    /// Issuance number is always increasing
+    #[serde(default = "default_status_issuance_num")]
     issuance_num: Mapx<AssetTypeCode, u64>,
-    // Issuance amounts for assets with limits
+    /// Issuance amounts for assets with limits
+    #[serde(default = "default_status_issuance_amounts")]
     issuance_amounts: Mapx<AssetTypeCode, u64>,
-    // Should be equal to the count of transactions
+    /// Should be equal to the count of transactions
+    #[serde(default = "default_status_next_txn")]
     next_txn: TxnSID,
-    // Should be equal to the count of TXOs
+    /// Should be equal to the count of TXOs
+    #[serde(default = "default_status_next_txo")]
     next_txo: TxoSID,
-    // Should be equal to the count of ABARs
+    /// Should be equal to the count of ABARs
+    #[serde(default = "default_status_next_atxo")]
     next_atxo: ATxoSID,
-    // Each block corresponds to such a summary structure
+    /// Each block corresponds to such a summary structure
+    #[serde(default = "default_status_state_commitment_data")]
     state_commitment_data: Option<StateCommitmentData>,
-    // Anon state commitment
+    /// Anon state commitment
+    #[serde(default = "default_status_anon_state_commitment_data")]
     anon_state_commitment_data: Option<AnonStateCommitmentData>,
-    // number of non-empty blocks, equal to: <block count of tendermint> - <pulse count>
+    /// number of non-empty blocks, equal to: <block count of tendermint> - <pulse count>
+    #[serde(default = "default_status_block_commit_count")]
     block_commit_count: u64,
-    // Hash of the transactions in the most recent block
+    /// Hash of the transactions in the most recent block
+    #[serde(default = "default_status_txns_in_block_hash")]
     txns_in_block_hash: Option<HashOf<Vec<Transaction>>>,
-    // Sliding window of operations for replay attack prevention
+    /// Sliding window of operations for replay attack prevention
+    #[serde(default = "default_status_sliding_set")]
     sliding_set: SlidingSet<[u8; 8]>,
-    // POS-related implementations
+    /// POS-related implementations
+    #[serde(default = "default_status_staking")]
     staking: Staking,
-    // tendermint commit height
+    /// tendermint commit height
+    #[serde(default = "default_status_td_commit_height")]
     td_commit_height: u64,
-
-    // An obsolete feature, ignore it!
+    /// An obsolete feature, ignore it!
+    #[serde(default = "default_status_tracing_policies")]
     tracing_policies: HashMap<AssetTypeCode, TracingPolicy>,
 }
 
@@ -1409,60 +1435,35 @@ impl LedgerStatus {
     }
 
     fn create(snapshot_file: &str) -> Result<LedgerStatus> {
-        let utxos_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/utxo";
-        let ax_utxos_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/ax_utxos";
-        let nonconfidential_balances_path =
-            SNAPSHOT_ENTRIES_DIR.to_owned() + "/nonconfidential_balances";
-        let spent_utxos_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/spent_utxos";
-        let txo_to_txn_location_path =
-            SNAPSHOT_ENTRIES_DIR.to_owned() + "/txo_to_txn_location";
-        let atxo_to_txn_location_path =
-            SNAPSHOT_ENTRIES_DIR.to_owned() + "/atxo_to_txn_location";
-        let issuance_amounts_path =
-            SNAPSHOT_ENTRIES_DIR.to_owned() + "/issuance_amounts";
-        let state_commitment_versions_path =
-            SNAPSHOT_ENTRIES_DIR.to_owned() + "/state_commitment_versions";
-        let abar_commitment_versions_path =
-            SNAPSHOT_ENTRIES_DIR.to_owned() + "/abar_commitment_versions";
-        let anon_state_commitment_versions_path =
-            SNAPSHOT_ENTRIES_DIR.to_owned() + "/anon_state_commitment_versions";
-        let asset_types_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/asset_types";
-        let issuance_num_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/issuance_num";
-        let owned_utxos_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/owned_utxos";
-        let owned_ax_utxos_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/owned_ax_utxos";
-
-        let ledger = LedgerStatus {
+        Ok(LedgerStatus {
             snapshot_file: snapshot_file.to_owned(),
-            sliding_set: SlidingSet::<[u8; 8]>::new(TRANSACTION_WINDOW_WIDTH as usize),
-            utxos: new_mapxnk!(utxos_path.as_str()),
-            nonconfidential_balances: new_mapx!(nonconfidential_balances_path.as_str()),
-            owned_utxos: new_mapx!(owned_utxos_path.as_str()),
-            ax_utxos: new_mapx!(ax_utxos_path.as_str()),
-            owned_ax_utxos: new_mapx!(owned_ax_utxos_path.as_str()),
-            spent_utxos: new_mapxnk!(spent_utxos_path.as_str()),
-            txo_to_txn_location: new_mapxnk!(txo_to_txn_location_path.as_str()),
-            issuance_amounts: new_mapx!(issuance_amounts_path.as_str()),
-            state_commitment_versions: new_vecx!(state_commitment_versions_path.as_str()),
-            abar_commitment_versions: new_vecx!(abar_commitment_versions_path.as_str()),
-            anon_state_commitment_versions: new_vecx!(
-                anon_state_commitment_versions_path.as_str()
-            ),
-            asset_types: new_mapx!(asset_types_path.as_str()),
-            tracing_policies: map! {},
-            issuance_num: new_mapx!(issuance_num_path.as_str()),
-            next_txn: TxnSID(0),
-            next_txo: TxoSID(0),
-            next_atxo: ATxoSID(0),
-            txns_in_block_hash: None,
-            state_commitment_data: None,
-            anon_state_commitment_data: None,
-            block_commit_count: 0,
-            staking: Staking::new(),
-            td_commit_height: 0,
-            ax_txo_to_txn_location: new_mapx!(atxo_to_txn_location_path.as_str()),
-        };
-
-        Ok(ledger)
+            sliding_set: default_status_sliding_set(),
+            utxos: default_status_utxos(),
+            nonconfidential_balances: default_status_nonconfidential_balances(),
+            owned_utxos: default_status_owned_utxos(),
+            ax_utxos: default_status_ax_utxos(),
+            owned_ax_utxos: default_status_owned_ax_utxos(),
+            spent_utxos: default_status_spent_utxos(),
+            txo_to_txn_location: default_status_txo_to_txn_location(),
+            ax_txo_to_txn_location: default_status_ax_txo_to_txn_location(),
+            issuance_amounts: default_status_issuance_amounts(),
+            state_commitment_versions: default_status_state_commitment_versions(),
+            abar_commitment_versions: default_status_abar_commitment_versions(),
+            anon_state_commitment_versions:
+                default_status_anon_state_commitment_versions(),
+            asset_types: default_status_asset_types(),
+            tracing_policies: default_status_tracing_policies(),
+            issuance_num: default_status_issuance_num(),
+            next_txn: default_status_next_txn(),
+            next_txo: default_status_next_txo(),
+            next_atxo: default_status_next_atxo(),
+            txns_in_block_hash: default_status_txns_in_block_hash(),
+            state_commitment_data: default_status_state_commitment_data(),
+            anon_state_commitment_data: default_status_anon_state_commitment_data(),
+            block_commit_count: default_status_block_commit_count(),
+            staking: default_status_staking(),
+            td_commit_height: default_status_td_commit_height(),
+        })
     }
 
     #[inline(always)]
@@ -1879,4 +1880,106 @@ pub fn create_mt_leaf_info(proof: Proof) -> MTLeafInfo {
         root_version: proof.root_version,
         uid: proof.uid,
     }
+}
+
+fn default_status_utxos() -> Mapxnk<TxoSID, Utxo> {
+    new_mapxnk!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/utxo")
+}
+
+fn default_status_owned_utxos() -> Mapx<XfrPublicKey, HashSet<TxoSID>> {
+    new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/owned_utxos")
+}
+
+fn default_status_nonconfidential_balances() -> Mapx<XfrPublicKey, u64> {
+    new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/nonconfidential_balances")
+}
+
+fn default_status_ax_utxos() -> Mapx<ATxoSID, AnonBlindAssetRecord> {
+    new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/ax_utxos")
+}
+
+fn default_status_owned_ax_utxos() -> Mapx<AXfrPubKey, HashSet<ATxoSID>> {
+    new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/owned_ax_utxos")
+}
+
+fn default_status_spent_utxos() -> Mapxnk<TxoSID, Utxo> {
+    new_mapxnk!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/spent_utxos")
+}
+
+fn default_status_txo_to_txn_location() -> Mapxnk<TxoSID, (TxnSID, OutputPosition)> {
+    new_mapxnk!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/txo_to_txn_location")
+}
+
+fn default_status_ax_txo_to_txn_location() -> Mapx<ATxoSID, (TxnSID, OutputPosition)> {
+    new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/atxo_to_txn_location")
+}
+
+fn default_status_issuance_amounts() -> Mapx<AssetTypeCode, u64> {
+    new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/issuance_amounts")
+}
+
+fn default_status_state_commitment_versions() -> Vecx<HashOf<Option<StateCommitmentData>>>
+{
+    new_vecx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/state_commitment_versions")
+}
+
+fn default_status_abar_commitment_versions() -> Vecx<BLSScalar> {
+    new_vecx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/abar_commitment_versions")
+}
+
+fn default_status_anon_state_commitment_versions(
+) -> Vecx<HashOf<Option<AnonStateCommitmentData>>> {
+    new_vecx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/anon_state_commitment_versions")
+}
+
+fn default_status_asset_types() -> Mapx<AssetTypeCode, AssetType> {
+    new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/asset_types")
+}
+
+fn default_status_tracing_policies() -> HashMap<AssetTypeCode, TracingPolicy> {
+    map! {}
+}
+
+fn default_status_issuance_num() -> Mapx<AssetTypeCode, u64> {
+    new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/issuance_num")
+}
+
+fn default_status_next_txn() -> TxnSID {
+    TxnSID(0)
+}
+
+fn default_status_next_txo() -> TxoSID {
+    TxoSID(0)
+}
+
+fn default_status_next_atxo() -> ATxoSID {
+    ATxoSID(0)
+}
+
+fn default_status_txns_in_block_hash() -> Option<HashOf<Vec<Transaction>>> {
+    None
+}
+
+fn default_status_state_commitment_data() -> Option<StateCommitmentData> {
+    None
+}
+
+fn default_status_anon_state_commitment_data() -> Option<AnonStateCommitmentData> {
+    None
+}
+
+fn default_status_block_commit_count() -> u64 {
+    0
+}
+
+fn default_status_staking() -> Staking {
+    Staking::new()
+}
+
+fn default_status_td_commit_height() -> u64 {
+    0
+}
+
+fn default_status_sliding_set() -> SlidingSet<[u8; 8]> {
+    SlidingSet::<[u8; 8]>::new(TRANSACTION_WINDOW_WIDTH as usize)
 }

@@ -1512,6 +1512,7 @@ pub struct FinalizedTransaction {
     pub txn: Transaction,
     pub tx_id: TxnSID,
     pub txo_ids: Vec<TxoSID>,
+    #[serde(default)]
     pub atxo_ids: Vec<ATxoSID>,
 
     pub merkle_id: u64,
