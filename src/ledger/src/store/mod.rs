@@ -1048,33 +1048,24 @@ impl LedgerState {
     pub fn get_abar_memo(&self, ax_id: ATxoSID) -> Option<OwnerMemo> {
         let txn_location = self.status.ax_txo_to_txn_location.get(&ax_id).unwrap();
         let authenticated_txn = self.get_transaction(txn_location.0).unwrap();
-        let mut memo: Vec<OwnerMemo> = authenticated_txn
+        let memo: Vec<OwnerMemo> = authenticated_txn
             .finalized_txn
             .txn
             .body
             .operations
             .iter()
-            .filter_map(|o| match o {
-                Operation::BarToAbar(body) => Some(body.note.body.memo.clone()),
-                _ => None,
+            .flat_map(|o| match o {
+                Operation::BarToAbar(body) => vec![body.note.body.memo.clone()],
+                Operation::TransferAnonAsset(body) => {
+                    body.note.body.owner_memos.clone()
+                },
+                Operation::AnonymousFee(body) => {
+                    println!("AnonymousFee {:?}", body.note.body.owner_memo);
+                    vec![body.note.body.owner_memo.clone()]
+                },
+                _ => vec![],
             })
             .collect::<Vec<OwnerMemo>>();
-
-        memo.append(
-            &mut authenticated_txn
-                .finalized_txn
-                .txn
-                .body
-                .operations
-                .iter()
-                .filter_map(|o| match o {
-                    Operation::TransferAnonAsset(body) => {
-                        body.note.body.owner_memos.get(txn_location.1 .0).cloned()
-                    }
-                    _ => None,
-                })
-                .collect::<Vec<OwnerMemo>>(),
-        );
 
         if memo.is_empty() {
             return None;

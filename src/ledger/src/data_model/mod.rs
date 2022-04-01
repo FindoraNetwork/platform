@@ -1859,6 +1859,8 @@ impl Transaction {
                     return true;
                 } else if let Operation::BarToAbar(_) = ops {
                     return true;
+                } else if let Operation::AbarToBar(_) = ops {
+                    return true;
                 } else if matches!(ops, Operation::UpdateValidator(_)) {
                     return true;
                 }
