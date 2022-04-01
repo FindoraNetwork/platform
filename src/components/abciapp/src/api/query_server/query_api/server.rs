@@ -280,7 +280,7 @@ impl QueryServer {
             .as_ref()
             .unwrap()
             .txn_hash_to_sid
-            .get(&txn_hash)
+            .get(&txn_hash.to_uppercase())
     }
 
     /// Returns most recent commits at query_server side.
