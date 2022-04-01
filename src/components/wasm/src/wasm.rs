@@ -512,7 +512,7 @@ impl TransactionBuilder {
         owner_memo: OwnerMemo,
         mt_leaf_info: MTLeafInfo,
         from_keypair: &AXfrKeyPair,
-        from_dec_key: XSecretKey,
+        from_dec_key: &XSecretKey,
         recipient: XfrPublicKey,
         conf_amount: bool,
         conf_type: bool,
@@ -521,7 +521,7 @@ impl TransactionBuilder {
             &input,
             owner_memo.memo,
             &from_keypair.clone(),
-            &from_dec_key,
+            &from_dec_key.clone(),
         )
         .c(d!())
         .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
@@ -564,13 +564,13 @@ impl TransactionBuilder {
         owner_memo: OwnerMemo,
         mt_leaf_info: MTLeafInfo,
         from_keypair: &AXfrKeyPair,
-        from_dec_key: XSecretKey,
+        from_dec_key: &XSecretKey,
     ) -> Result<TransactionBuilder, JsValue> {
         let fee_oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
             &input,
             owner_memo.memo,
             &from_keypair.clone(),
-            &from_dec_key,
+            &from_dec_key.clone(),
         )
         .c(d!())
         .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
@@ -630,8 +630,8 @@ impl TransactionBuilder {
         input: AnonBlindAssetRecord,
         owner_memo: OwnerMemo,
         mt_leaf_info: MTLeafInfo,
-        from_keypair: AXfrKeyPair,
-        from_dec_key: XSecretKey,
+        from_keypair: &AXfrKeyPair,
+        from_dec_key: &XSecretKey,
         to_pub_key: AXfrPubKey,
         to_enc_key: XPublicKey,
         to_amount: u64,
@@ -641,8 +641,8 @@ impl TransactionBuilder {
         let input_oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
             &input,
             owner_memo.memo,
-            &from_keypair,
-            &from_dec_key,
+            &from_keypair.clone(),
+            &from_dec_key.clone(),
         )
         .c(d!())
         .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
@@ -677,8 +677,8 @@ impl TransactionBuilder {
             .add_operation_anon_transfer_fees_remainder(
                 &[input_oabar],
                 &[output_oabar],
-                &[from_keypair],
-                from_public_key,
+                &[from_keypair.clone()],
+                from_public_key.clone(),
             )
             .c(d!())
             .map_err(|e| {
@@ -1313,12 +1313,15 @@ impl AnonTransferOperationBuilder {
         mut self,
         abar: AnonBlindAssetRecord,
         memo: OwnerMemo,
-        keypair: AXfrKeyPair,
-        dec_key: XSecretKey,
+        keypair: &AXfrKeyPair,
+        dec_key: &XSecretKey,
         mt_leaf_info: MTLeafInfo,
     ) -> Result<AnonTransferOperationBuilder, JsValue> {
         let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
-            &abar, memo.memo, &keypair, &dec_key,
+            &abar,
+            memo.memo,
+            &keypair.clone(),
+            &dec_key.clone(),
         )
         .c(d!())
         .map_err(error_to_jsvalue)?
@@ -1328,7 +1331,7 @@ impl AnonTransferOperationBuilder {
         .map_err(error_to_jsvalue)?;
 
         self.get_builder_mut()
-            .add_input(oabar, keypair)
+            .add_input(oabar, keypair.clone())
             .c(d!())
             .map_err(error_to_jsvalue)?;
 
@@ -1351,7 +1354,7 @@ impl AnonTransferOperationBuilder {
         let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
             .amount(amount)
             .pub_key(to)
-            .finalize(&mut prng, &to_enc_key)
+            .finalize(&mut prng, &to_enc_key.clone())
             .unwrap()
             .build()
             .unwrap();

@@ -47,3 +47,10 @@ target/release/fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $
 
 echo "Bar 2 Abar Conversion demo script executed successfully!"
 echo "To check generated Abar run \`target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r RANDOMIZER_STRING\`"
+
+sleep 15
+TXO_SID=$(target/release/fn owned-utxos | head -4 | tail -1 | cut  -f1)
+target/release/fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
+
+echo "Bar 2 Abar Conversion demo script executed successfully!"
+echo "To check generated Abar run \`target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r RANDOMIZER_STRING\`"
