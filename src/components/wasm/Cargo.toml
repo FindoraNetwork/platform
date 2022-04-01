@@ -32,8 +32,10 @@ bech32 = "0.7.2"
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
 
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4x" }
+zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.5a" }
 ruc = "1.0"
+zeialgebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.5a" }
+crypto = { package = "crypto", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.5a" }
 
 finutils = { path = "../finutils", default-features = false }
 globutils = { path = "../../libs/globutils" }
@@ -70,3 +72,4 @@ wasm-bindgen = { version = "0.2.62", features = ["serde-serialize"] }
 # Must enable the "js"-feature,
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
+wasm-bindgen-test = "0.3.0"

@@ -46,6 +46,14 @@ use {
     },
     unicode_normalization::UnicodeNormalization,
     zei::{
+        anon_xfr::{
+            abar_to_bar::AbarToBarNote,
+            anon_fee::AnonFeeNote,
+            bar_to_abar::{BarToAbarBody, BarToAbarNote},
+            keys::AXfrPubKey,
+            structs::AXfrNote,
+        },
+        errors::ZeiError,
         serialization::ZeiFromToBytes,
         xfr::{
             lib::{gen_xfr_body, XfrNotePolicies},
@@ -57,6 +65,7 @@ use {
             },
         },
     },
+    zeialgebra::bls12_381::BLSScalar,
 };
 
 const RANDOM_CODE_LENGTH: usize = 16;
@@ -414,6 +423,22 @@ impl Hash for XfrAddress {
 
 #[allow(missing_docs)]
 #[derive(
+    Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize,
+)]
+pub struct AXfrAddress {
+    pub key: AXfrPubKey,
+}
+
+#[allow(clippy::derive_hash_xor_eq)]
+impl Hash for AXfrAddress {
+    #[inline(always)]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.key.zei_to_bytes().hash(state);
+    }
+}
+
+#[allow(missing_docs)]
+#[derive(
     Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Ord, PartialOrd, Serialize,
 )]
 pub struct IssuerPublicKey {
@@ -711,6 +736,22 @@ impl NumKey for TxoSID {
 
 #[allow(missing_docs)]
 pub type TxoSIDList = Vec<TxoSID>;
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Deserialize,
+    Eq,
+    Hash,
+    PartialEq,
+    Serialize,
+    Ord,
+    PartialOrd,
+)]
+#[allow(missing_docs)]
+pub struct ATxoSID(pub u64);
 
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -1220,6 +1261,143 @@ impl UpdateMemo {
     }
 }
 
+/// Operation for converting a Blind Asset Record to a Anonymous record
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BarToAbarOps {
+    /// the note which contains the inp/op and ZKP
+    pub note: BarToAbarNote,
+    /// The TxoSID of the the input BAR
+    pub txo_sid: TxoSID,
+    nonce: NoReplayToken,
+}
+
+impl BarToAbarOps {
+    /// Generates a new BarToAbarOps object
+    /// # Arguments
+    /// * bar_to_abar_body - The BarToAbarBody of the conversion
+    /// * signing_key      - XfrKeyPair of the converting BAR
+    /// * txo_sid          - the TxoSID of the converting BAR
+    /// * nonce
+    pub fn new(
+        bar_to_abar_body: BarToAbarBody,
+        signing_key: &XfrKeyPair,
+        txo_sid: TxoSID,
+        nonce: NoReplayToken,
+    ) -> Result<BarToAbarOps> {
+        // serialize the body
+        let msg = bincode::serialize(&bar_to_abar_body)
+            .map_err(|_| ZeiError::SerializationError)
+            .c(d!())?;
+
+        // sign the body
+        let signature = signing_key.sign(&msg);
+
+        Ok(BarToAbarOps {
+            note: BarToAbarNote {
+                body: bar_to_abar_body,
+                signature,
+            },
+            txo_sid,
+            nonce,
+        })
+    }
+
+    #[inline(always)]
+    /// Sets the nonce for the operation
+    pub fn set_nonce(&mut self, nonce: NoReplayToken) {
+        self.nonce = nonce;
+    }
+
+    #[inline(always)]
+    /// Fetches the nonce of the operation
+    pub fn get_nonce(&self) -> NoReplayToken {
+        self.nonce
+    }
+}
+
+/// Operation for converting a Blind Asset Record to a Anonymous record
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AbarToBarOps {
+    /// the note which contains the inp/op and ZKP
+    pub note: AbarToBarNote,
+    nonce: NoReplayToken,
+}
+
+impl AbarToBarOps {
+    /// Generates a new BarToAbarOps object
+    pub fn new(
+        abar_to_bar_note: &AbarToBarNote,
+        nonce: NoReplayToken,
+    ) -> Result<AbarToBarOps> {
+        Ok(AbarToBarOps {
+            note: abar_to_bar_note.clone(),
+            nonce,
+        })
+    }
+
+    #[inline(always)]
+    /// Sets the nonce for the operation
+    pub fn set_nonce(&mut self, nonce: NoReplayToken) {
+        self.nonce = nonce;
+    }
+
+    #[inline(always)]
+    /// Fetches the nonce of the operation
+    pub fn get_nonce(&self) -> NoReplayToken {
+        self.nonce
+    }
+}
+
+/// A struct to hold the transfer ops
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AnonTransferOps {
+    /// The note which holds the signatures, the ZKF and memo
+    pub note: AXfrNote,
+    nonce: NoReplayToken,
+}
+impl AnonTransferOps {
+    /// Generates the anon transfer note
+    pub fn new(note: AXfrNote, nonce: NoReplayToken) -> Result<AnonTransferOps> {
+        Ok(AnonTransferOps { note, nonce })
+    }
+
+    #[inline(always)]
+    #[allow(dead_code)]
+    fn set_nonce(&mut self, nonce: NoReplayToken) {
+        self.nonce = nonce;
+    }
+
+    #[inline(always)]
+    fn get_nonce(&self) -> NoReplayToken {
+        self.nonce
+    }
+}
+
+/// A struct to hold the anon fee used for abar to bar conversion
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AnonFeeOps {
+    /// The note which holds the signatures, the ZKF and memo
+    pub note: AnonFeeNote,
+    nonce: NoReplayToken,
+}
+impl AnonFeeOps {
+    /// Generates the anon fee note
+    pub fn new(note: AnonFeeNote, nonce: NoReplayToken) -> Result<AnonFeeOps> {
+        Ok(AnonFeeOps { note, nonce })
+    }
+
+    #[inline(always)]
+    #[allow(dead_code)]
+    fn set_nonce(&mut self, nonce: NoReplayToken) {
+        self.nonce = nonce;
+    }
+
+    #[inline(always)]
+    fn get_nonce(&self) -> NoReplayToken {
+        self.nonce
+    }
+}
+
 /// Operation list supported in findora network
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
@@ -1249,6 +1427,14 @@ pub enum Operation {
     MintFra(MintFraOps),
     /// Convert UTXOs to EVM Account balance
     ConvertAccount(ConvertAccount),
+    /// Anonymous conversion operation
+    BarToAbar(Box<BarToAbarOps>),
+    /// De-anonymize ABAR operation
+    AbarToBar(Box<AbarToBarOps>),
+    /// Anonymous transfer operation
+    TransferAnonAsset(Box<AnonTransferOps>),
+    /// Anonymous fee operation for abar to bar xfr
+    AnonymousFee(Box<AnonFeeOps>),
     ///replace staker.
     ReplaceStaker(ReplaceStakerOps),
 }
@@ -1278,6 +1464,10 @@ fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
         }
         Operation::UpdateMemo(i) => i.body.no_replay_token = no_replay_token,
         Operation::ConvertAccount(i) => i.set_nonce(no_replay_token),
+        Operation::BarToAbar(i) => i.set_nonce(no_replay_token),
+        Operation::AbarToBar(i) => i.set_nonce(no_replay_token),
+        Operation::TransferAnonAsset(i) => i.set_nonce(no_replay_token),
+        Operation::AnonymousFee(i) => i.set_nonce(no_replay_token),
         _ => {}
     }
 }
@@ -1322,6 +1512,7 @@ pub struct FinalizedTransaction {
     pub txn: Transaction,
     pub tx_id: TxnSID,
     pub txo_ids: Vec<TxoSID>,
+    pub atxo_ids: Vec<ATxoSID>,
 
     pub merkle_id: u64,
 }
@@ -1623,6 +1814,7 @@ impl Transaction {
         self.check_fee() && !self.is_coinbase_tx()
     }
 
+    #[allow(clippy::if_same_then_else)]
     /// A simple fee checker
     ///
     /// The check logic is as follows:
@@ -1662,6 +1854,10 @@ impl Transaction {
                     if x.body.code.val == ASSET_TYPE_FRA {
                         return true;
                     }
+                } else if let Operation::TransferAnonAsset(_) = ops {
+                    return true;
+                } else if let Operation::BarToAbar(_) = ops {
+                    return true;
                 } else if matches!(ops, Operation::UpdateValidator(_)) {
                     return true;
                 }
@@ -1840,6 +2036,23 @@ pub struct StateCommitmentData {
 }
 
 impl StateCommitmentData {
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn compute_commitment(&self) -> HashOf<Option<Self>> {
+        HashOf::new(&Some(self).cloned())
+    }
+}
+
+/// Commitment data for Anon merkle trees
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AnonStateCommitmentData {
+    /// Root hash of the latest committed version of abar merkle tree
+    pub abar_root_hash: BLSScalar,
+    /// Root hash of the nullifier set merkle tree
+    pub nullifier_root_hash: BitDigest,
+}
+
+impl AnonStateCommitmentData {
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn compute_commitment(&self) -> HashOf<Option<Self>> {
