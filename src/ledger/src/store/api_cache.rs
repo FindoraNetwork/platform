@@ -676,30 +676,24 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
             }
         }
 
-        let conv_memos = curr_txn.body.operations.iter().filter_map(|o| match o {
+        let abar_memos = curr_txn.body.operations.iter().flat_map(|o| match o {
             Operation::BarToAbar(b) => {
-                Some((b.note.body.output.public_key, b.note.body.memo.clone()))
+                vec![(b.note.body.output.public_key, b.note.body.memo.clone())]
+            },
+            Operation::TransferAnonAsset(b) =>
+                b.note
+                    .body
+                    .outputs
+                    .iter()
+                    .zip(b.note.body.owner_memos.clone())
+                    .map(|(op, memo)| (op.public_key, memo)).collect(),
+            Operation::AnonymousFee(b) => {
+                vec![(b.note.body.output.public_key, b.note.body.owner_memo.clone())]
             }
-            _ => None,
+            _ => vec![],
         });
-        let abar_memos = curr_txn
-            .body
-            .operations
-            .iter()
-            .filter_map(|o| match o {
-                Operation::TransferAnonAsset(b) => Some(
-                    b.note
-                        .body
-                        .outputs
-                        .iter()
-                        .zip(b.note.body.owner_memos.clone())
-                        .map(|(op, memo)| (op.public_key, memo)),
-                ),
-                _ => None,
-            })
-            .flatten();
 
-        for (a, id) in conv_memos.chain(abar_memos).zip(atxo_sids) {
+        for (a, id) in abar_memos.zip(atxo_sids) {
             ledger
                 .api_cache
                 .as_mut()

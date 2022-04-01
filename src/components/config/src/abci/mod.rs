@@ -348,6 +348,7 @@ pub mod global_cfg {
             .value_of("checkpoint-file")
             .map(|v| v.to_owned())
             .unwrap_or_else(|| String::from("./checkpoint.toml"));
+        println!("{}", checkpoint_path);
 
         let res = Config {
             abci_host: ah,
