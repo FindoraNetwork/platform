@@ -1512,14 +1512,10 @@ pub struct FinalizedTransaction {
     pub txn: Transaction,
     pub tx_id: TxnSID,
     pub txo_ids: Vec<TxoSID>,
-    #[serde(default = "default_tx_atxo_ids")]
+    #[serde(default)]
     pub atxo_ids: Vec<ATxoSID>,
 
     pub merkle_id: u64,
-}
-
-fn default_tx_atxo_ids() -> Vec<ATxoSID> {
-    vec![]
 }
 
 /// Note: if the utxo field of this struct is changed, update the comment for ClientAssetRecord::from_json in wasm_data_model.rs as well.
