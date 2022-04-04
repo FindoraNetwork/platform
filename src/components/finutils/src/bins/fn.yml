@@ -510,6 +510,23 @@ subcommands:
             takes_value: true
             value_name: PUBLIC KEY
             required: true
+  - anon-balance:
+      about: List Anon balance and spending status for a public key and a list of randomizers
+      args:
+        - randomizers:
+            help: comma separated list of Jubjub Scalars which was used to randmoize public key in base58 form
+            short: r
+            long: randomizers
+            takes_value: true
+            value_name: JUBJUB SCALAR
+            required: true
+        - anon-keys:
+            help: Anon keys file path of the sender
+            short: a
+            long: anon-keys
+            takes_value: true
+            value_name: ANON KEYS PATH
+            required: true
   - owned-open-abars:
       about: List Open Anon UTXOs for a public key, randomizer pair
       args:
