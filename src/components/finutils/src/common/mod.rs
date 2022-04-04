@@ -1340,7 +1340,6 @@ pub fn check_abar_status(
     Ok(())
 }
 
-
 /// Prints a dainty list of Abar info with spent status for a given AxfrKeyPair and a list of
 /// randomizers.
 pub fn anon_balance(
@@ -1348,18 +1347,18 @@ pub fn anon_balance(
     axfr_public_key: AXfrPubKey,
     dec_key: XSecretKey,
     randomizers_list: &str,
-) -> Result<()>{
-
+) -> Result<()> {
     let axfr_public_key_str = wallet::anon_public_key_to_base64(&axfr_public_key);
-    println!("Abar data for pubkey: {}, randomizers: {}",
-             axfr_public_key_str,
-             randomizers_list);
+    println!(
+        "Abar data for pubkey: {}, randomizers: {}",
+        axfr_public_key_str, randomizers_list
+    );
     println!();
     println!("TxoSID\tAmount\t\t\t\tAssetType\t\t\tis_spent\t\tAXfrPublicKey\t\t\t\t\tRandomizer");
     let div = "===========================================================";
     println!("{}{}{}", div, div, div);
     randomizers_list
-        .split(",")
+        .split(',')
         .try_for_each(|r| -> ruc::Result<()> {
             let randomizer = wallet::randomizer_from_base58(r).c(d!())?;
             let derived_public_key = axfr_public_key.randomize(&randomizer);
@@ -1372,10 +1371,9 @@ pub fn anon_balance(
                     &axfr_secret_key,
                     &dec_key,
                 )
-                    .unwrap()
-                    .build()
-                    .unwrap();
-
+                .unwrap()
+                .build()
+                .unwrap();
 
                 let n = nullifier(
                     &axfr_secret_key.randomize(&randomizer),
@@ -1386,9 +1384,18 @@ pub fn anon_balance(
                 let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
                 let null_status = utils::check_nullifier_hash(&hash).c(d!())?.unwrap();
 
-                println!("{}\t{}\t{}\t{}\t{}\t{}", sid.0, oabar.get_amount(), AssetTypeCode {
-                    val: oabar.get_asset_type()
-                }.to_base64(), null_status, axfr_public_key_str, r);
+                println!(
+                    "{}\t{}\t{}\t{}\t{}\t{}",
+                    sid.0,
+                    oabar.get_amount(),
+                    AssetTypeCode {
+                        val: oabar.get_asset_type()
+                    }
+                    .to_base64(),
+                    null_status,
+                    axfr_public_key_str,
+                    r
+                );
                 Ok(())
             })?;
             Ok(())

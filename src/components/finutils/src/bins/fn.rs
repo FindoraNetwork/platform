@@ -40,7 +40,7 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     std::fs::File,
-    std::{fmt, fs, borrow::Borrow},
+    std::{borrow::Borrow, fmt, fs},
     zei::anon_xfr::keys::AXfrKeyPair,
     zei::anon_xfr::structs::{
         AnonBlindAssetRecord, OpenAnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
@@ -532,18 +532,18 @@ fn run() -> Result<()> {
     } else if let Some(m) = matches.subcommand_matches("anon-balance") {
         let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
         // Generates a list of owned Abars (both spent and unspent)
-        let randomizers_list = m.value_of("randomizers")
-            .expect(format!("Randomizer list missing \n {}", m.usage()).as_str());
+        let randomizers_list = m
+            .value_of("randomizers")
+            .unwrap_or_else(|| panic!("Randomizer list missing \n {}", m.usage()));
 
-        let axfr_public_key = wallet::anon_public_key_from_base64(
-            anon_keys.axfr_public_key.as_str()
-        ).c(d!())?;
-        let axfr_secret_key = wallet::anon_secret_key_from_base64(
-            anon_keys.axfr_secret_key.as_str()
-        ).c(d!())?;
-        let dec_key = wallet::x_secret_key_from_base64(
-            anon_keys.dec_key.as_str()
-        ).c(d!())?;
+        let axfr_public_key =
+            wallet::anon_public_key_from_base64(anon_keys.axfr_public_key.as_str())
+                .c(d!())?;
+        let axfr_secret_key =
+            wallet::anon_secret_key_from_base64(anon_keys.axfr_secret_key.as_str())
+                .c(d!())?;
+        let dec_key =
+            wallet::x_secret_key_from_base64(anon_keys.dec_key.as_str()).c(d!())?;
 
         common::anon_balance(
             axfr_secret_key,
@@ -551,7 +551,6 @@ fn run() -> Result<()> {
             dec_key,
             randomizers_list,
         )?;
-
     } else if let Some(m) = matches.subcommand_matches("owned-open-abars") {
         let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
         let randomizer_str = m.value_of("randomizer");
