@@ -93,6 +93,7 @@ pub struct ContractLog {
     pub data: Vec<u8>,
 }
 
+#[derive(Clone)]
 pub struct App<C> {
     disable_eth_empty_blocks: bool,
     phantom: PhantomData<C>,
