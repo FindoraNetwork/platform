@@ -33,6 +33,7 @@ pub mod callback;
 pub mod tx_sender;
 
 /// findora impl of tendermint abci
+#[derive(Clone)]
 pub struct ABCISubmissionServer {
     pub la: Arc<RwLock<SubmissionServer<ChaChaRng, TendermintForward>>>,
     pub account_base_app: Arc<RwLock<AccountBaseAPP>>,
