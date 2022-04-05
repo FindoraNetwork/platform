@@ -1354,9 +1354,11 @@ pub fn anon_balance(
         axfr_public_key_str, randomizers_list
     );
     println!();
-    println!("TxoSID\tAmount\t\t\t\tAssetType\t\t\tis_spent\t\tAXfrPublicKey\t\t\t\t\tRandomizer");
-    let div = "===========================================================";
-    println!("{}{}{}", div, div, div);
+    println!(
+        "{0: <8} | {1: <18} | {2: <45} | {3: <9} | {4: <45} | {5: <45}",
+        "ATxoSID","Amount", "AssetType", "IsSpent", "AXfrPublicKey", "Randomizer"
+    );
+    println!("{:-^1$}", "", 184);
     randomizers_list
         .split(',')
         .try_for_each(|r| -> ruc::Result<()> {
@@ -1383,15 +1385,14 @@ pub fn anon_balance(
                 );
                 let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
                 let null_status = utils::check_nullifier_hash(&hash).c(d!())?.unwrap();
-
                 println!(
-                    "{}\t{}\t{}\t{}\t{}\t{}",
+                    "{0: <8} | {1: <18} | {2: <45} | {3: <9} | {4: <45} | {5: <45}",
                     sid.0,
                     oabar.get_amount(),
                     AssetTypeCode {
                         val: oabar.get_asset_type()
                     }
-                    .to_base64(),
+                        .to_base64(),
                     null_status,
                     axfr_public_key_str,
                     r
