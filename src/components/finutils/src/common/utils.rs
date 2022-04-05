@@ -545,7 +545,6 @@ pub(crate) fn get_owned_abars(
         get_serv_addr().c(d!())?,
         wallet::anon_public_key_to_base64(addr)
     );
-    println!("URL: {:?}", url);
 
     attohttpc::get(&url)
         .send()
