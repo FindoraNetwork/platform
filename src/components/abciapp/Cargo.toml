@@ -44,7 +44,7 @@ nix = "0.22.1"
 zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.5a" }
 zeialgebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.5a" }
 ruc = "1.0"
-abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
+abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
 config = { path = "../config"}
 ledger = { path = "../../ledger" }
 cryptohash = { path = "../../libs/cryptohash" }

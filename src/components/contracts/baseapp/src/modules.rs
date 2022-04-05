@@ -20,7 +20,7 @@ use ledger::{
 use ruc::*;
 use serde::Serialize;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ModuleManager {
     // Ordered module list
     pub(crate) account_module: module_account::App<BaseApp>,

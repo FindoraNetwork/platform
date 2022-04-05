@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::utils;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SystemContracts {
     pub bridge: Contract,
     pub bridge_address: H160,
