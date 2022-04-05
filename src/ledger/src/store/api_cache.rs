@@ -679,16 +679,20 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
         let abar_memos = curr_txn.body.operations.iter().flat_map(|o| match o {
             Operation::BarToAbar(b) => {
                 vec![(b.note.body.output.public_key, b.note.body.memo.clone())]
-            },
-            Operation::TransferAnonAsset(b) =>
-                b.note
-                    .body
-                    .outputs
-                    .iter()
-                    .zip(b.note.body.owner_memos.clone())
-                    .map(|(op, memo)| (op.public_key, memo)).collect(),
+            }
+            Operation::TransferAnonAsset(b) => b
+                .note
+                .body
+                .outputs
+                .iter()
+                .zip(b.note.body.owner_memos.clone())
+                .map(|(op, memo)| (op.public_key, memo))
+                .collect(),
             Operation::AnonymousFee(b) => {
-                vec![(b.note.body.output.public_key, b.note.body.owner_memo.clone())]
+                vec![(
+                    b.note.body.output.public_key,
+                    b.note.body.owner_memo.clone(),
+                )]
             }
             _ => vec![],
         });
