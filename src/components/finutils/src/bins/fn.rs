@@ -595,24 +595,29 @@ fn run() -> Result<()> {
             "(AtxoSID, ABAR, OABAR)   :  {}",
             serde_json::to_string(&list).c(d!())?
         );
-    } else if let Some(_m) = matches.subcommand_matches("owned-utxos") {
-        let list = common::get_owned_utxos()?;
+    } else if let Some(m) = matches.subcommand_matches("owned-utxos") {
+        // All assets are shown in the default case
+        let asset = m.value_of("asset");
+
+        // fetch filtered list by asset
+        let list = common::get_owned_utxos(asset)?;
         let pk = wallet::public_key_to_base64(get_keypair().unwrap().pub_key.borrow());
 
+        // Print UTXO table
         println!("Owned utxos for {:?}", pk);
+        println!("{:-^1$}", "", 100);
         println!(
-            "======================================================================="
+            "{0: <8} | {1: <18} | {2: <45} ",
+            "ATxoSID","Amount", "AssetType"
         );
-        println!("TxoSID\tAmount\t\t\t\tAssetType");
         for (a, b, c) in list.iter() {
             println!(
-                "{:?}\t{:?}\t{:?}",
+                "{0: <8} | {1: <18} | {2: <45} ",
                 a.0,
                 b.get_amount().unwrap(),
                 AssetTypeCode {
                     val: c.get_asset_type().unwrap()
-                }
-                .to_base64()
+                }.to_base64()
             );
         }
     } else if let Some(m) = matches.subcommand_matches("anon-transfer") {
