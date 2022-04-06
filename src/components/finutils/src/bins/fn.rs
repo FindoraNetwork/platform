@@ -631,7 +631,6 @@ fn run() -> Result<()> {
         let amount = m.value_of("amount");
 
         if randomizer.is_none()
-            || fee_randomizer.is_none()
             || to_axfr_public_key.is_none()
             || to_enc_key.is_none()
             || amount.is_none()

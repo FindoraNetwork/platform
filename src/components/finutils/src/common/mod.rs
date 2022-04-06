@@ -1127,20 +1127,20 @@ pub fn gen_oabar_add_op_x(
     assets: Vec<AssetTypeCode>,
 ) -> Result<()> {
     let sender_count = axfr_secret_keys.len();
-    let recvier_count = to_axfr_public_keys.len();
+    let receiver_count = to_axfr_public_keys.len();
 
     // check if input counts tally
     if sender_count != randomizers.len()
         || sender_count != dec_keys.len()
-        || recvier_count != amounts.len()
-        || recvier_count != assets.len()
+        || receiver_count != amounts.len()
+        || receiver_count != assets.len()
     {
         return Err(eg!(
             "The Parameters: from-sk/dec-keys/randomizers or to-pk/to-enc-keys not match!"
         ));
     }
 
-    // CReate Input Open Abars with input keys, radomizers and Owner memos
+    // Create Input Open Abars with input keys, radomizers and Owner memos
     let mut oabars_in = Vec::new();
     for i in 0..sender_count {
         // Create randomized public key
@@ -1188,9 +1188,9 @@ pub fn gen_oabar_add_op_x(
         oabars_in.push(oabar_in);
     }
 
-    // Create ouput Open ABARs
+    // Create output Open ABARs
     let mut oabars_out = Vec::new();
-    for i in 0..recvier_count {
+    for i in 0..receiver_count {
         let mut prng = ChaChaRng::from_entropy();
         let to = to_axfr_public_keys[i];
         let enc_key_out = &to_enc_keys[i];
@@ -1224,17 +1224,18 @@ pub fn gen_oabar_add_op_x(
     // Send the transaction to the network
     send_tx(&builder.take_transaction()).c(d!())?;
 
+    // Append receiver's randomizer to `sent_randomizers` file
+    let mut file = fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open("sent_randomizers")
+        .expect("cannot open sent_randomizers file");
     for oabar_out in oabars_out {
         let r_out = oabar_out.get_key_rand_factor();
         println!(
             "\x1b[31;01m Randomizer: {}\x1b[00m",
             wallet::randomizer_to_base58(&r_out)
         );
-        let mut file = fs::OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open("sent_randomizers")
-            .expect("cannot open randomizers file");
         std::io::Write::write_all(
             &mut file,
             ("\n".to_owned() + &wallet::randomizer_to_base58(&r_out)).as_bytes(),
@@ -1242,18 +1243,17 @@ pub fn gen_oabar_add_op_x(
         .expect("randomizer write failed");
     }
 
+    // Append sender's fee balance randomizer to `owned_randomizers` file
+    let mut file = fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open("owned_randomizers")
+        .expect("cannot open owned_randomizers file");
     for rem_oabar in rem_oabars.iter() {
         println!(
             "\x1b[31;01m Remainder Randomizer: {}\x1b[00m",
             wallet::randomizer_to_base58(&rem_oabar.get_key_rand_factor())
         );
-    }
-    let mut file = fs::OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open("owned_randomizers")
-        .expect("cannot open randomizers file");
-    for rem_oabar in rem_oabars.iter() {
         std::io::Write::write_all(
             &mut file,
             ("\n".to_owned()
@@ -1356,7 +1356,7 @@ pub fn anon_balance(
     println!();
     println!(
         "{0: <8} | {1: <18} | {2: <45} | {3: <9} | {4: <45} | {5: <45}",
-        "ATxoSID","Amount", "AssetType", "IsSpent", "AXfrPublicKey", "Randomizer"
+        "ATxoSID", "Amount", "AssetType", "IsSpent", "AXfrPublicKey", "Randomizer"
     );
     println!("{:-^1$}", "", 184);
     randomizers_list
@@ -1392,7 +1392,7 @@ pub fn anon_balance(
                     AssetTypeCode {
                         val: oabar.get_asset_type()
                     }
-                        .to_base64(),
+                    .to_base64(),
                     null_status,
                     axfr_public_key_str,
                     r

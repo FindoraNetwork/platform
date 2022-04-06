@@ -3,18 +3,6 @@ set -e
 echo "\n\n Owned UTXOs of the converter"
 target/release/fn owned-utxos
 
-set +e
-rm anon-keys-temp2.keys
-echo "
-{
-  \"axfr_secret_key\": \"MwdsbYhTp4Io062nV7E2HkJfsnaTCZpkdjr6aijv2Aem3KjuGWqf4TLB_-20b305Ja3Pop8NS8tgMNUOVXUL5Q==\",
-  \"axfr_public_key\": \"ptyo7hlqn-Eywf_ttG99OSWtz6KfDUvLYDDVDlV1C-U=\",
-  \"enc_key\": \"SAmB7Oji4sAgENLaLb4PFclxQL_DRrEkXcYp6eXuXwI=\",
-  \"dec_key\": \"AEq1ZUFk_fB__YaNjQ3D2taGOnMZAx4adpB6RbnPj24=\"
-}" > anon-keys-temp2.keys
-sleep 5
-set -e
-
 echo "\n\n\n Bar To Abar Conversion 2"
 sleep 10
 
@@ -29,13 +17,13 @@ target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r
 randomiser2=$(awk 'FNR>=2 && FNR<=2' randomizer_file)
 echo "\n\n Owned Abars after Bar to Abar conversion 2"
 sleep 20
-target/release/fn owned-abars -p ptyo7hlqn-Eywf_ttG99OSWtz6KfDUvLYDDVDlV1C-U= -r $randomiser2
+target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r $randomiser2
 
 sleep 5
 echo "J7PqRhmBOE_gadFs4rB4lcKuz_YoWa5VSlALyKuZdQjNBryPSYZhRczonGNY3-mp86LWW8TJ6clirfk4gk03Tw==
-MwdsbYhTp4Io062nV7E2HkJfsnaTCZpkdjr6aijv2Aem3KjuGWqf4TLB_-20b305Ja3Pop8NS8tgMNUOVXUL5Q==" > axfr_secretkey_file
+J7PqRhmBOE_gadFs4rB4lcKuz_YoWa5VSlALyKuZdQjNBryPSYZhRczonGNY3-mp86LWW8TJ6clirfk4gk03Tw==" > axfr_secretkey_file
 echo "4GNC0J_qOXV2kww5BC5bOCyrTEfCodX5BoFaj06uN1s=
-AEq1ZUFk_fB__YaNjQ3D2taGOnMZAx4adpB6RbnPj24=" > decryption_key_file
+4GNC0J_qOXV2kww5BC5bOCyrTEfCodX5BoFaj06uN1s=" > decryption_key_file
 echo "BdECoTzLNQHlKq1oGMI2kdh27yp_I2CZen0FGYLFkM0=
 EPGl5qbD_6mq7Zn8Ni1Z1LnR0WInFiHSnQ1P7qiaU4w=
 6dJt8oDrtXt3z-7__dOcDn7Q9lM8jd2RST0FJIfGspc=" > to_axfr_public_key_file

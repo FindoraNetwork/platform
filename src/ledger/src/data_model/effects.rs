@@ -98,7 +98,7 @@ pub struct TxnEffect {
     pub fra_distributions: Vec<FraDistributionOps>,
     /// Staking operations
     pub update_stakers: Vec<UpdateStakerOps>,
-    /// Newly create Anon Blind Asset Records
+    /// Newly created Anon Blind Asset Records
     pub bar_conv_abars: Vec<AnonBlindAssetRecord>,
     /// Body of Abar to Bar conversions
     pub abar_conv_inputs: Vec<AbarToBarBody>,
@@ -595,7 +595,7 @@ impl TxnEffect {
         Ok(())
     }
 
-    /// A abar to bar note is valid iff
+    /// An abar to bar note is valid iff
     /// 1. the signature is correct,
     /// 2. the ZKP can be verified,
     /// 3. the input ABARs are unspent. (checked in finish block)
@@ -624,9 +624,16 @@ impl TxnEffect {
         Ok(())
     }
 
+    /// An anon transfer note is valid iff
+    /// 1. no double spending in the txn,
+    /// 2. the signature is correct,
+    /// 3. ZKP can be verified,
+    /// 4. the input ABARs are unspent. (checked in finish block)
+    /// # Arguments
+    /// * anon_transfer - The Operation for Anon Transfer
+    /// returns an error if validation fails
     fn add_anon_transfer(&mut self, anon_transfer: &AnonTransferOps) -> Result<()> {
         // verify nullifiers not double spent within txn
-
         for i in &anon_transfer.note.body.inputs {
             if self
                 .axfr_bodies
@@ -641,17 +648,24 @@ impl TxnEffect {
         // verify axfr_note signatures
         anon_transfer.note.verify().c(d!())?;
 
-        // push
+        // collect body in TxnEffect to verify ZKP later with merkle root
         self.axfr_bodies.push(anon_transfer.note.body.clone());
 
         Ok(())
     }
 
+    /// An anon fee note is valid iff
+    /// 1. the signature is correct,
+    /// 2. ZKP can be verified,
+    /// 3. the input ABARs are unspent. (checked in finish block)
+    /// # Arguments
+    /// * anon_fee - The Operation for Anon Fee
+    /// returns an error if validation fails
     fn add_anon_fee_op(&mut self, anon_fee: &AnonFeeOps) -> Result<()> {
         // verify anon_fee_note signatures
         anon_fee.note.verify_signatures().c(d!())?;
 
-        // push
+        // collect body in TxnEffect to verify ZKP later with merkle root
         self.anon_fee_bodies.push(anon_fee.note.body.clone());
 
         Ok(())
