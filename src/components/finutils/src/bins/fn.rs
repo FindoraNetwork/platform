@@ -608,7 +608,7 @@ fn run() -> Result<()> {
         println!("{:-^1$}", "", 100);
         println!(
             "{0: <8} | {1: <18} | {2: <45} ",
-            "ATxoSID","Amount", "AssetType"
+            "ATxoSID", "Amount", "AssetType"
         );
         for (a, b, c) in list.iter() {
             println!(
@@ -617,7 +617,8 @@ fn run() -> Result<()> {
                 b.get_amount().unwrap(),
                 AssetTypeCode {
                     val: c.get_asset_type().unwrap()
-                }.to_base64()
+                }
+                .to_base64()
             );
         }
     } else if let Some(m) = matches.subcommand_matches("anon-transfer") {

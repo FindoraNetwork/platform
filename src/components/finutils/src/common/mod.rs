@@ -20,7 +20,7 @@ use {
     ledger::{
         data_model::{
             gen_random_keypair, ATxoSID, AssetRules, AssetTypeCode, Transaction, TxoSID,
-            BLACK_HOLE_PUBKEY_STAKING, ASSET_TYPE_FRA
+            ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
         },
         staking::{
             check_delegation_amount, td_addr_to_bytes, td_pubkey_to_td_addr,
@@ -1151,7 +1151,9 @@ pub fn gen_oabar_add_op_x(
 
         // Get OwnerMemo
         let axtxo_abar = utils::get_owned_abars(&from_pub_key_randomized).c(d!())?;
-        let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0).c(d!(randomizers[i]))?.unwrap();
+        let owner_memo = utils::get_abar_memo(&axtxo_abar[0].0)
+            .c(d!(randomizers[i]))?
+            .unwrap();
         // Get Merkle Proof
         let mt_leaf_info = utils::get_abar_proof(&axtxo_abar[0].0).c(d!())?.unwrap();
         let mt_leaf_uid = mt_leaf_info.uid;
@@ -1287,7 +1289,9 @@ pub fn get_abar_memo(uid: &ATxoSID) -> Result<Option<OwnerMemo>> {
 }
 
 /// Fetches list of owned TxoSIDs from LedgerStatus
-pub fn get_owned_utxos(asset: Option<&str>) -> Result<Vec<(TxoSID, XfrAmount, XfrAssetType)>> {
+pub fn get_owned_utxos(
+    asset: Option<&str>,
+) -> Result<Vec<(TxoSID, XfrAmount, XfrAssetType)>> {
     // get KeyPair from current setup wallet
     let kp = get_keypair().c(d!())?;
 
@@ -1301,23 +1305,25 @@ pub fn get_owned_utxos(asset: Option<&str>) -> Result<Vec<(TxoSID, XfrAmount, Xf
         };
     }
 
-    let list: Vec<(TxoSID, XfrAmount, XfrAssetType)> = utils::get_owned_utxos(&kp.pub_key)?
-        .iter()
-        .filter(|a| {
-            // Filter by asset type if given or read all
-            if asset.is_none() {
-                return true
-            } else {
-                match a.1.clone().0 .0.record.asset_type {
-                    XfrAssetType::Confidential(_) => false,
-                    XfrAssetType::NonConfidential(x) => asset_type == x.clone()
+    let list: Vec<(TxoSID, XfrAmount, XfrAssetType)> =
+        utils::get_owned_utxos(&kp.pub_key)?
+            .iter()
+            .filter(|a| {
+                // Filter by asset type if given or read all
+                if asset.is_none() {
+                    return true;
+                } else {
+                    match a.1.clone().0 .0.record.asset_type {
+                        XfrAssetType::Confidential(_) => false,
+                        XfrAssetType::NonConfidential(x) => asset_type == x.clone(),
+                    }
                 }
-            }
-        })
-        .map(|a| {
-            let record = a.1.clone().0 .0.record;
-            (*a.0, record.amount, record.asset_type)
-        }).collect();
+            })
+            .map(|a| {
+                let record = a.1.clone().0 .0.record;
+                (*a.0, record.amount, record.asset_type)
+            })
+            .collect();
 
     Ok(list)
 }
@@ -1377,7 +1383,7 @@ pub fn anon_balance(
     println!();
     println!(
         "{0: <8} | {1: <18} | {2: <45} | {3: <9} | {4: <45} | {5: <45}",
-        "ATxoSID","Amount", "AssetType", "IsSpent", "AXfrPublicKey", "Randomizer"
+        "ATxoSID", "Amount", "AssetType", "IsSpent", "AXfrPublicKey", "Randomizer"
     );
     println!("{:-^1$}", "", 184);
     randomizers_list
@@ -1413,7 +1419,7 @@ pub fn anon_balance(
                     AssetTypeCode {
                         val: oabar.get_asset_type()
                     }
-                        .to_base64(),
+                    .to_base64(),
                     null_status,
                     axfr_public_key_str,
                     r
