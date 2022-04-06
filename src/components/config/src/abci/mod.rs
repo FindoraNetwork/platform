@@ -123,16 +123,31 @@ pub struct ABCIConfigStr {
 impl TryFrom<ABCIConfigStr> for ABCIConfig {
     type Error = Box<dyn RucError>;
     fn try_from(cfg: ABCIConfigStr) -> Result<Self> {
-        let ledger_port = cfg.ledger_port.parse::<u16>().c(d!())?;
+        let ledger_port = cfg
+            .ledger_port
+            .parse::<u16>()
+            .c(d!("Invalid ledger port."))?;
         let query_port = ledger_port - 1;
-        let evm_http_port = cfg.evm_http_port.parse::<u16>().c(d!())?;
-        let evm_ws_port = cfg.evm_ws_port.parse::<u16>().c(d!())?;
+        let evm_http_port = cfg
+            .evm_http_port
+            .parse::<u16>()
+            .c(d!("Invalid evm http port."))?;
+        let evm_ws_port = cfg
+            .evm_ws_port
+            .parse::<u16>()
+            .c(d!("Invalid evm ws port."))?;
         Ok(ABCIConfig {
             abci_host: cfg.abci_host,
-            abci_port: cfg.abci_port.parse::<u16>().c(d!())?,
+            abci_port: cfg.abci_port.parse::<u16>().c(d!("Invalid abci port."))?,
             tendermint_host: cfg.tendermint_host,
-            tendermint_port: cfg.tendermint_port.parse::<u16>().c(d!())?,
-            submission_port: cfg.submission_port.parse::<u16>().c(d!())?,
+            tendermint_port: cfg
+                .tendermint_port
+                .parse::<u16>()
+                .c(d!("Invalid tendermint port."))?,
+            submission_port: cfg
+                .submission_port
+                .parse::<u16>()
+                .c(d!("Invalid submission port."))?,
             ledger_port,
             query_port,
             evm_http_port,
@@ -176,9 +191,10 @@ impl ABCIConfig {
 
     pub fn from_file() -> Result<ABCIConfig> {
         let config_path = Path::new(&CFG.ledger_dir).join("abci.toml");
-        let file_contents = fs::read_to_string(config_path).c(d!())?;
-        let toml_string = toml::from_str::<ABCIConfigStr>(&file_contents).c(d!())?;
-        let config = ABCIConfig::try_from(toml_string).c(d!())?;
+        let file_contents = fs::read_to_string(config_path).map_err(|e| d!("{}", e))?;
+        let toml_string =
+            toml::from_str::<ABCIConfigStr>(&file_contents).map_err(|e| d!("{}", e))?;
+        let config = ABCIConfig::try_from(toml_string).map_err(|e| d!("{}", e))?;
         Ok(config)
     }
 }
@@ -281,7 +297,7 @@ pub mod global_cfg {
             .or_else(|| env::var("ABCI_PORT").ok())
             .unwrap_or_else(|| "26658".to_owned())
             .parse::<u16>()
-            .c(d!())?;
+            .c(d!("Invalid `abcid-port`."))?;
         let th = m
             .value_of("tendermint-host")
             .map(|v| v.to_owned())
@@ -293,21 +309,21 @@ pub mod global_cfg {
             .or_else(|| env::var("TENDERMINT_PORT").ok())
             .unwrap_or_else(|| "26657".to_owned())
             .parse::<u16>()
-            .c(d!())?;
+            .c(d!("Invalid `tendermint-port`."))?;
         let ssp = m
             .value_of("submission-service-port")
             .map(|v| v.to_owned())
             .or_else(|| env::var("SUBMISSION_PORT").ok())
             .unwrap_or_else(|| "8669".to_owned())
             .parse::<u16>()
-            .c(d!())?;
+            .c(d!("Invalid `submission-service-port`."))?;
         let lsp = m
             .value_of("ledger-service-port")
             .map(|v| v.to_owned())
             .or_else(|| env::var("LEDGER_PORT").ok())
             .unwrap_or_else(|| "8668".to_owned())
             .parse::<u16>()
-            .c(d!())?;
+            .c(d!("Invalid `ledger-service-port`."))?;
         let eqs = m.is_present("enable-query-service")
             || env::var("ENABLE_QUERY_SERVICE").is_ok();
         let tnsa = m
@@ -336,14 +352,14 @@ pub mod global_cfg {
             .or_else(|| env::var("EVM_HTTP_PORT").ok())
             .unwrap_or_else(|| "8545".to_owned())
             .parse::<u16>()
-            .c(d!())?;
+            .c(d!("Invalid `evm-http-port`."))?;
         let ewp = m
             .value_of("evm-ws-port")
             .map(|v| v.to_owned())
             .or_else(|| env::var("EVM_WS_PORT").ok())
             .unwrap_or_else(|| "8546".to_owned())
             .parse::<u16>()
-            .c(d!())?;
+            .c(d!("Invalid `evm-ws-port`."))?;
         let checkpoint_path = m
             .value_of("checkpoint-file")
             .map(|v| v.to_owned())
@@ -366,7 +382,7 @@ pub mod global_cfg {
             tendermint_node_key_config_path: tnkcp,
             ledger_dir: ld,
             #[cfg(target_os = "linux")]
-            btmcfg: parse_btmcfg(&m).c(d!())?,
+            btmcfg: parse_btmcfg(&m).map_err(|e| d!("{}", e))?,
             checkpoint: CheckPointConfig::from_file(&checkpoint_path).unwrap(),
         };
 
@@ -393,25 +409,31 @@ pub mod global_cfg {
                 .value_of("snapshot-itv")
                 .unwrap_or("10")
                 .parse::<u64>()
-                .c(d!())?;
+                .c(d!("Invalid `snapshot-itv`."))?;
             res.cap = m
                 .value_of("snapshot-cap")
                 .unwrap_or("100")
                 .parse::<u64>()
-                .c(d!())?;
+                .c(d!("Invalid `snapshot-cap`."))?;
 
             if let Some(sm) = m.value_of("snapshot-mode") {
-                res.mode = SnapMode::from_string(sm).c(d!())?;
+                res.mode = SnapMode::from_string(sm).map_err(|e| d!("{}", e))?;
                 if !matches!(res.mode, SnapMode::External) {
-                    res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
+                    res.target = m
+                        .value_of("snapshot-target")
+                        .c(d!("Missing `snapshot-target`."))?
+                        .to_owned();
                 }
             } else {
-                res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
-                res.mode = res.guess_mode().c(d!())?;
+                res.target = m
+                    .value_of("snapshot-target")
+                    .c(d!("Missing `snapshot-target`."))?
+                    .to_owned();
+                res.mode = res.guess_mode().map_err(|e| d!("{}", e))?;
             }
 
             if let Some(sa) = m.value_of("snapshot-algo") {
-                res.algo = SnapAlgo::from_string(sa).c(d!())?;
+                res.algo = SnapAlgo::from_string(sa).map_err(|e| d!("{}", e))?;
                 res.itv.checked_pow(STEP_CNT as u32).c(d!())?;
             }
         }
@@ -422,16 +444,19 @@ pub mod global_cfg {
             || m.is_present("snapshot-rollback-to-exact")
         {
             // this field should be parsed at the top
-            res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
+            res.target = m
+                .value_of("snapshot-target")
+                .c(d!("Missing `snapshot-target`."))?
+                .to_owned();
 
             // the guess should always success in this scene
-            res.mode = res.guess_mode().c(d!())?;
+            res.mode = res.guess_mode().map_err(|e| d!("{}", e))?;
 
             if m.is_present("snapshot-list") {
-                list_snapshots(&res).c(d!())?;
+                list_snapshots(&res).map_err(|e| d!("{}", e))?;
             }
 
-            check_rollback(m, &res).c(d!())?;
+            check_rollback(m, &res).map_err(|e| d!("{}", e))?;
         }
 
         Ok(res)
@@ -442,7 +467,7 @@ pub mod global_cfg {
     fn list_snapshots(cfg: &BtmCfg) -> Result<()> {
         println!("Available snapshots are listed below:");
         cfg.get_sorted_snapshots()
-            .c(d!())?
+            .map_err(|e| d!("{}", e))?
             .into_iter()
             .rev()
             .for_each(|h| {
@@ -472,12 +497,11 @@ pub mod global_cfg {
                 .or_else(|| m.value_of("snapshot-rollback-to").map(|h| (Some(h), false)))
                 .unwrap_or((None, false));
             let h = if let Some(h) = h {
-                Some(h.parse::<u64>().c(d!())?)
+                Some(h.parse::<u64>().c(d!("Invalid height."))?)
             } else {
                 None
             };
-            cfg.rollback(h, strict).c(d!())?;
-
+            cfg.rollback(h, strict).map_err(|e| d!("{}", e))?;
             exit(0);
         }
         Ok(())
