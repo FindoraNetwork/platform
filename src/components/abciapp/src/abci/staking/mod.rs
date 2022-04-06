@@ -312,13 +312,7 @@ pub fn system_mint_pay(
         account_mint
             .iter()
             .map(|mint| {
-                MintEntry::new(
-                    MintKind::Other,
-                    mint.target,
-                    None,
-                    mint.amount,
-                    mint.asset,
-                )
+                MintEntry::new(MintKind::EVM, mint.target, None, mint.amount, mint.asset)
             })
             .collect::<Vec<MintEntry>>()
     } else {

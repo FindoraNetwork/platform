@@ -104,5 +104,7 @@ impl MintEntry {
 pub enum MintKind {
     Claim,
     UnStake,
+    #[serde(rename = "Evm2Native")]
+    EVM,
     Other,
 }
