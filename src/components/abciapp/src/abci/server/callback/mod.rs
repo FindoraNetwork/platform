@@ -3,7 +3,6 @@
 //!
 
 mod utils;
-
 use {
     crate::{
         abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV, POOL},
@@ -23,7 +22,7 @@ use {
     lazy_static::lazy_static,
     ledger::{
         converter::is_convert_account,
-        staking::KEEP_HIST,
+        staking::{Delegation, TendermintAddr, KEEP_HIST},
         store::{
             api_cache,
             fbnc::{new_mapx, Mapx},
@@ -32,8 +31,10 @@ use {
     parking_lot::{Mutex, RwLock},
     protobuf::RepeatedField,
     ruc::*,
+    serde::Serialize,
     serde_json::json,
     std::{
+        collections::BTreeMap,
         fs,
         ops::Deref,
         sync::{
@@ -41,6 +42,7 @@ use {
             Arc,
         },
     },
+    zei::xfr::sig::XfrPublicKey,
 };
 
 pub(crate) static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
@@ -52,6 +54,11 @@ lazy_static! {
     // avoid on-chain-existing transactions to be stored again
     static ref TX_HISTORY: Arc<RwLock<Mapx<Vec<u8>, bool>>> =
         Arc::new(RwLock::new(new_mapx!("tx_history")));
+
+    static ref ENABLE_STAKING_QUERY:bool =
+        std::env::var("ENABLE_STAKING_QUERY")
+            .map(|s| s.parse::<bool>().unwrap_or(false))
+            .unwrap_or(false);
 }
 
 // #[cfg(feature = "debug_env")]
@@ -102,67 +109,95 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
 
 pub fn query(s: &mut ABCISubmissionServer, req: &RequestQuery) -> ResponseQuery {
     let log_found = || "found".to_string();
-    match req.path.as_str() {
-        "/delegations" => {
-            let mut resp = ResponseQuery::default();
+    if *ENABLE_STAKING_QUERY {
+        let mut resp = ResponseQuery::default();
 
-            let la = s.la.read();
-            let state = la.get_committed_state().read();
-            let staking = state.get_staking();
-            let h = staking.cur_height();
-
-            let info = serde_json::to_string(&json!({
-                "global_delegation_records_map": staking.get_global_delegation_records(),
-                "validator_addr_map": staking.validator_get_current().map(|v|v.get_validator_addr_map())
-            }))
-            .unwrap();
-
-            resp.height = h as i64;
-            resp.log = log_found();
-            resp.info = info;
-            resp
-        }
-        "/validators" => {
-            let mut resp = ResponseQuery::default();
-            let la = s.la.read();
-            let state = la.get_committed_state().read();
-            let staking = state.get_staking();
-            let height = staking.cur_height();
-            let validators = match staking.validator_get_effective_at_height(height) {
-                Some(v) => v,
-                _ => {
-                    resp.log = format!("Validators is not found at height {}.", height);
-                    resp.code = 404;
-                    return resp;
-                }
-            };
-
-            resp.log = log_found();
-            resp.info =
-                serde_json::to_string(&json!({ "validators": validators })).unwrap();
-            resp
-        }
-        "/block" => {
-            let mut resp = ResponseQuery::default();
-            let height = req.height;
-            if height <= 0 {
-                resp.log = "Bad request, height must be set.".to_owned();
-                resp.code = 400;
-                resp
-            } else {
+        match req.path.as_str() {
+            "/delegations" => {
                 let la = s.la.read();
                 let state = la.get_committed_state().read();
-                if let Some(block) = state.blocks.get(height as _) {
-                    resp.info = log_found();
-                    resp.info = serde_json::to_string(&block).unwrap();
-                } else {
-                    resp.info = format!("Block is not found at height {}.", height);
-                    resp.code = 404;
+                let staking = state.get_staking();
+                let h = staking.cur_height();
+
+                //reduce fraction.
+                let return_rate = &state.staking_get_block_rewards_rate();
+
+                #[derive(Serialize)]
+                struct DelegationResponse<'a> {
+                    global_delegation_records_map:
+                        &'a BTreeMap<XfrPublicKey, Delegation>,
+                    validator_addr_map:
+                        Option<&'a BTreeMap<TendermintAddr, XfrPublicKey>>,
+                    return_rate: &'a [u128],
                 }
+
+                let info = serde_json::to_string(&DelegationResponse {
+                    global_delegation_records_map: staking
+                        .get_global_delegation_records(),
+                    validator_addr_map: staking
+                        .validator_get_current()
+                        .map(|v| v.get_validator_addr_map()),
+                    return_rate,
+                })
+                .unwrap();
+
+                resp.height = h as i64;
+                resp.log = log_found();
+                resp.info = info;
                 resp
             }
+            "/validators" => {
+                let la = s.la.read();
+                let state = la.get_committed_state().read();
+                let staking = state.get_staking();
+                let height = staking.cur_height();
+                let validators = match staking.validator_get_effective_at_height(height)
+                {
+                    Some(v) => v,
+                    _ => {
+                        resp.log =
+                            format!("Validators is not found at height {}.", height);
+                        resp.code = 404;
+                        return resp;
+                    }
+                };
+
+                resp.log = log_found();
+                resp.info =
+                    serde_json::to_string(&json!({ "validators": validators })).unwrap();
+                resp
+            }
+            "/block" => {
+                let height = req.height;
+                if height <= 0 {
+                    resp.log = "Bad request, height must be set.".to_owned();
+                    resp.code = 400;
+                    resp
+                } else {
+                    let la = s.la.read();
+                    let state = la.get_committed_state().read();
+                    if let Some(block) = state.blocks.get(height as _) {
+                        resp.info = log_found();
+                        resp.info = serde_json::to_string(&block).unwrap();
+                    } else {
+                        resp.info = format!("Block is not found at height {}.", height);
+                        resp.code = 404;
+                    }
+                    resp
+                }
+            }
+            _ => s.account_base_app.write().query(req),
         }
-        _ => s.account_base_app.write().query(req),
+    } else {
+        match req.path.as_str() {
+            "/delegations" | "/validators" | "/block" => {
+                let mut resp = ResponseQuery::default();
+                resp.code = 403;
+                resp.log = "Delegation info is disabled, set env var `ENABLE_STAKING_QUERY=true` to enable it.".to_owned();
+                resp
+            }
+            _ => s.account_base_app.write().query(req),
+        }
     }
 }
 
