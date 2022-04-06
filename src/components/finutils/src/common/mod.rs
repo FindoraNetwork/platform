@@ -1297,8 +1297,8 @@ pub fn get_owned_utxos(
 
     // Parse Asset Type for filtering if provided
     let mut asset_type = ASSET_TYPE_FRA;
-    if asset.is_some() {
-        asset_type = if asset.unwrap().to_uppercase() == "FRA" {
+    if let Some(a) = asset {
+        asset_type = if a.to_uppercase() == "FRA" {
             ASSET_TYPE_FRA
         } else {
             AssetTypeCode::new_from_base64(asset.unwrap()).unwrap().val
@@ -1311,11 +1311,11 @@ pub fn get_owned_utxos(
             .filter(|a| {
                 // Filter by asset type if given or read all
                 if asset.is_none() {
-                    return true;
+                    true
                 } else {
                     match a.1.clone().0 .0.record.asset_type {
                         XfrAssetType::Confidential(_) => false,
-                        XfrAssetType::NonConfidential(x) => asset_type == x.clone(),
+                        XfrAssetType::NonConfidential(x) => asset_type == x,
                     }
                 }
             })
