@@ -8,12 +8,13 @@ use {
         common::get_serv_addr,
         txn_builder::{TransactionBuilder, TransferOperationBuilder},
     },
+    crypto::basics::hybrid_encryption::XPublicKey,
     globutils::{wallet, HashOf, SignatureOf},
     ledger::{
         data_model::{
-            AssetType, AssetTypeCode, DefineAsset, Operation, StateCommitmentData,
-            Transaction, TransferType, TxoRef, TxoSID, Utxo, ASSET_TYPE_FRA,
-            BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+            ATxoSID, AssetType, AssetTypeCode, DefineAsset, Operation,
+            StateCommitmentData, Transaction, TransferType, TxoRef, TxoSID, Utxo,
+            ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
         staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
     },
@@ -21,11 +22,16 @@ use {
     serde::{self, Deserialize, Serialize},
     std::collections::HashMap,
     tendermint::{PrivateKey, PublicKey},
+    zei::anon_xfr::{
+        keys::{AXfrKeyPair, AXfrPubKey},
+        structs::{AnonBlindAssetRecord, MTLeafInfo, OpenAnonBlindAssetRecord},
+    },
     zei::xfr::{
         asset_record::{open_blind_asset_record, AssetRecordType},
         sig::{XfrKeyPair, XfrPublicKey},
-        structs::{AssetRecordTemplate, OwnerMemo},
+        structs::{AssetRecordTemplate, OpenAssetRecord, OwnerMemo},
     },
+    zeialgebra::jubjub::JubjubScalar,
 };
 
 ///////////////////////////////////////
@@ -254,6 +260,88 @@ pub fn gen_fee_op(owner_kp: &XfrKeyPair) -> Result<Operation> {
     gen_transfer_op(owner_kp, vec![], None, false, false, None).c(d!())
 }
 
+/// fee for bar to abar conversion
+#[inline(always)]
+pub fn gen_fee_bar_to_abar(
+    owner_kp: &XfrKeyPair,
+    avoid_input: TxoSID,
+) -> Result<Operation> {
+    let mut op_fee: u64 = TX_FEE_MIN;
+    let mut trans_builder = TransferOperationBuilder::new();
+    trans_builder
+        .add_output(
+            &AssetRecordTemplate::with_no_asset_tracing(
+                TX_FEE_MIN,
+                ASSET_TYPE_FRA,
+                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                *BLACK_HOLE_PUBKEY,
+            ),
+            None,
+            None,
+            None,
+        )
+        .c(d!())?;
+
+    let utxos = get_owned_utxos(owner_kp.get_pk_ref()).c(d!())?.into_iter();
+    for (sid, (utxo, owner_memo)) in utxos {
+        let oar =
+            open_blind_asset_record(&utxo.0.record, &owner_memo, owner_kp).c(d!())?;
+
+        if op_fee == 0 {
+            break;
+        }
+        if oar.asset_type == ASSET_TYPE_FRA
+            && oar.get_record_type()
+                == AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType
+            && op_fee != 0
+            && sid != avoid_input
+        {
+            let i_am = oar.amount;
+            if oar.amount <= op_fee {
+                op_fee -= i_am;
+
+                trans_builder
+                    .add_input(TxoRef::Absolute(sid), oar, None, None, i_am)
+                    .c(d!())?;
+            } else {
+                trans_builder
+                    .add_input(TxoRef::Absolute(sid), oar, None, None, i_am)
+                    .c(d!())?;
+
+                trans_builder
+                    .add_output(
+                        &AssetRecordTemplate::with_no_asset_tracing(
+                            i_am - op_fee,
+                            ASSET_TYPE_FRA,
+                            AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                            owner_kp.pub_key,
+                        ),
+                        None,
+                        None,
+                        None,
+                    )
+                    .c(d!())?;
+
+                op_fee = 0;
+            }
+        }
+    }
+
+    if op_fee != 0 {
+        return Err(eg!("Insufficient balance to pay Txn fees"));
+    }
+
+    trans_builder
+        .balance(None)
+        .c(d!())?
+        .create(TransferType::Standard)
+        .c(d!())?
+        .sign(owner_kp)
+        .c(d!())?
+        .transaction()
+        .c(d!())
+}
+
 /////////////////////////////////////////
 // Part 2: utils for query infomations //
 /////////////////////////////////////////
@@ -426,7 +514,8 @@ pub fn get_asset_balance(kp: &XfrKeyPair, asset: Option<AssetTypeCode>) -> Resul
     Ok(balance)
 }
 
-fn get_owned_utxos(
+#[allow(missing_docs)]
+pub fn get_owned_utxos(
     addr: &XfrPublicKey,
 ) -> Result<HashMap<TxoSID, (Utxo, Option<OwnerMemo>)>> {
     let url = format!(
@@ -445,6 +534,27 @@ fn get_owned_utxos(
         .and_then(|b| {
             serde_json::from_slice::<HashMap<TxoSID, (Utxo, Option<OwnerMemo>)>>(&b)
                 .c(d!())
+        })
+}
+
+pub(crate) fn get_owned_abars(
+    addr: &AXfrPubKey,
+) -> Result<Vec<(ATxoSID, AnonBlindAssetRecord)>> {
+    let url = format!(
+        "{}:8668/owned_abars/{}",
+        get_serv_addr().c(d!())?,
+        wallet::anon_public_key_to_base64(addr)
+    );
+
+    attohttpc::get(&url)
+        .send()
+        .c(d!())?
+        .error_for_status()
+        .c(d!())?
+        .bytes()
+        .c(d!())
+        .and_then(|b| {
+            serde_json::from_slice::<Vec<(ATxoSID, AnonBlindAssetRecord)>>(&b).c(d!())
         })
 }
 
@@ -481,6 +591,61 @@ pub fn get_owner_memo_batch(ids: &[TxoSID]) -> Result<Vec<Option<OwnerMemo>>> {
         "{}:8667/get_owner_memo_batch/{}",
         get_serv_addr().c(d!())?,
         ids
+    );
+
+    attohttpc::get(&url)
+        .send()
+        .c(d!())?
+        .error_for_status()
+        .c(d!())?
+        .bytes()
+        .c(d!())
+        .and_then(|b| serde_json::from_slice(&b).c(d!()))
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn get_abar_memo(id: &ATxoSID) -> Result<Option<OwnerMemo>> {
+    let id = id.0.to_string();
+    let url = format!("{}:8667/get_abar_memo/{}", get_serv_addr().c(d!())?, id);
+
+    attohttpc::get(&url)
+        .send()
+        .c(d!())?
+        .error_for_status()
+        .c(d!())?
+        .bytes()
+        .c(d!())
+        .and_then(|b| serde_json::from_slice(&b).c(d!()))
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn get_abar_proof(atxo_sid: &ATxoSID) -> Result<Option<MTLeafInfo>> {
+    let atxo_sid = atxo_sid.0.to_string();
+    let url = format!(
+        "{}:8667/get_abar_proof/{}",
+        get_serv_addr().c(d!())?,
+        atxo_sid
+    );
+
+    attohttpc::get(&url)
+        .send()
+        .c(d!())?
+        .error_for_status()
+        .c(d!())?
+        .bytes()
+        .c(d!())
+        .and_then(|b| serde_json::from_slice(&b).c(d!()))
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn check_nullifier_hash(null_hash: &str) -> Result<Option<bool>> {
+    let url = format!(
+        "{}:8667/check_nullifier_hash/{}",
+        get_serv_addr().c(d!())?,
+        null_hash
     );
 
     attohttpc::get(&url)
@@ -540,4 +705,96 @@ pub struct ValidatorKey {
 /// Restore validator key from a string
 pub fn parse_td_validator_keys(key_data: &str) -> Result<ValidatorKey> {
     serde_json::from_str(key_data).c(d!())
+}
+
+#[inline(always)]
+/// Generates a BarToAbar Operation and an accompanying FeeOP and sends it to the network and return the Randomizer
+/// # Arguments
+/// * `auth_key_pair` -  XfrKeyPair of the owner BAR for conversion
+/// * `abar_pub_key`  -  AXfrPubKey of the receiver ABAR after conversion
+/// * `txo_sid`       -  TxoSID of the BAR to convert
+/// * `input_record`  -  OpenAssetRecord of the BAR to convert
+/// * `enc_key`       -  XPublicKey of OwnerMemo encryption of receiver
+pub fn generate_bar2abar_op(
+    auth_key_pair: &XfrKeyPair,
+    abar_pub_key: &AXfrPubKey,
+    txo_sid: TxoSID,
+    input_record: &OpenAssetRecord,
+    enc_key: &XPublicKey,
+) -> Result<JubjubScalar> {
+    // add operation bar_to_abar in a new Tx Builder
+    let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
+    let (_, r) = builder
+        .add_operation_bar_to_abar(
+            auth_key_pair,
+            abar_pub_key,
+            txo_sid,
+            input_record,
+            enc_key,
+        )
+        .c(d!("Failed to generate operation bar to abar"))?;
+
+    // Add a transparent fee operation for conversion which is required to process the bar
+    // In this step a transparent FRA AssetRecord is chosen from user owned UTXOs to pay the fee.
+    // If the user doesn't own such a UTXO then this method throws an error.
+    let feeop =
+        gen_fee_bar_to_abar(auth_key_pair, txo_sid).c(d!("Failed to generate fee"))?;
+    builder.add_operation(feeop);
+
+    // submit transaction to network
+    send_tx(&builder.take_transaction()).c(d!("Failed to submit Bar to Abar txn"))?;
+
+    Ok(r)
+}
+
+#[inline(always)]
+/// Create AbarToBar transaction with given Open ABAR & Open Bar and submit it to network
+/// # Arguments
+/// * oabar_in      - Abar to convert in open form
+/// * fee_oabar     - Abar to pay anon fee in open form
+/// * out_fee_oabar - Abar to get balance back after paying fee
+/// * from          - AXfrKeyPair of person converting ABAR
+/// * to            - XfrPublicKey of person receiving new BAR
+/// * art           - AssetRecordType of the new BAR
+pub fn generate_abar2bar_op(
+    oabar_in: &OpenAnonBlindAssetRecord,
+    fee_oabar: &OpenAnonBlindAssetRecord,
+    out_fee_oabar: &OpenAnonBlindAssetRecord,
+    from: &AXfrKeyPair,
+    to: &XfrPublicKey,
+    art: AssetRecordType,
+) -> Result<()> {
+    let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
+    // create and add AbarToBar Operation
+    builder
+        .add_operation_abar_to_bar(oabar_in, from, to, art)
+        .c(d!())?;
+
+    // create and add AnonFee Operation
+    builder
+        .add_operation_anon_fee(fee_oabar, out_fee_oabar, from)
+        .c(d!())?;
+
+    // submit transaction
+    send_tx(&builder.take_transaction()).c(d!())?;
+    Ok(())
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn get_oar(owner_kp: &XfrKeyPair, txo_sid: TxoSID) -> Result<OpenAssetRecord> {
+    let utxos = get_owned_utxos(owner_kp.get_pk_ref()).c(d!())?.into_iter();
+
+    for (sid, (utxo, owner_memo)) in utxos {
+        if sid != txo_sid {
+            continue;
+        }
+
+        let oar =
+            open_blind_asset_record(&utxo.0.record, &owner_memo, owner_kp).c(d!())?;
+
+        return Ok(oar);
+    }
+
+    Err(eg!("utxo not found"))
 }
