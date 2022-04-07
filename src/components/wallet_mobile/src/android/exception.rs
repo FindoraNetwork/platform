@@ -1,6 +1,6 @@
 #![allow(clippy::needless_return)]
 
-use core::fmt::Debug;
+use core::fmt::Display;
 use jni::sys::jobject;
 use jni::JNIEnv;
 
@@ -20,19 +20,23 @@ pub(super) fn ThrowExceptionImpl<T, E>(
     result: Result<T, E>,
 ) -> Result<T, jobject>
 where
-    E: Debug,
+    E: Display,
 {
     match result {
         Ok(t) => Ok(t),
         Err(e) => {
-            let null = core::ptr::null_mut() as jobject;
             let exception_occurred = env.exception_occurred().unwrap();
             if !exception_occurred.is_null() {
+                println!("Uncleared Exception.");
                 env.exception_describe().unwrap();
-                return Err(null);
+                env.exception_clear().unwrap();
             }
-            env.throw_new("java/lang/Exception", format!("{:?}", e))
+
+            env.throw_new("java/lang/Exception", format!("{}", e))
                 .unwrap();
+
+            let null = core::ptr::null_mut() as jobject;
+
             return Err(null);
         }
     }
