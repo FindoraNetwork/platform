@@ -1777,16 +1777,17 @@ impl LedgerStatus {
                     let txo_sid = next_txo;
                     next_txo += 1;
                     if let Some(tx_output) = txo {
-                        self.owned_utxos
-                            .entry(tx_output.record.public_key)
-                            .or_insert_with(HashSet::new)
-                            .insert(TxoSID(txo_sid));
+                        let public_key = tx_output.record.public_key;
                         let utxo = Utxo(tx_output);
                         *self
                             .nonconfidential_balances
                             .entry(utxo.0.record.public_key)
                             .or_insert(0) += utxo.get_nonconfidential_balance();
                         self.utxos.insert(TxoSID(txo_sid), utxo);
+                        self.owned_utxos
+                            .entry(public_key)
+                            .or_insert_with(HashSet::new)
+                            .insert(TxoSID(txo_sid));
                         txn_utxo_sids.push(TxoSID(txo_sid));
                     }
                 }
