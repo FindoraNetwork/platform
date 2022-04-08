@@ -1356,7 +1356,7 @@ pub fn anon_balance(
     println!();
     println!(
         "{0: <8} | {1: <18} | {2: <45} | {3: <9} | {4: <45} | {5: <45}",
-        "ATxoSID","Amount", "AssetType", "IsSpent", "AXfrPublicKey", "Randomizer"
+        "ATxoSID", "Amount", "AssetType", "IsSpent", "AXfrPublicKey", "Randomizer"
     );
     println!("{:-^1$}", "", 184);
     randomizers_list
@@ -1392,7 +1392,7 @@ pub fn anon_balance(
                     AssetTypeCode {
                         val: oabar.get_asset_type()
                     }
-                        .to_base64(),
+                    .to_base64(),
                     null_status,
                     axfr_public_key_str,
                     r

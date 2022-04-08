@@ -5,8 +5,6 @@ edition = "2021"
 
 
 [dependencies]
-
-attohttpc = { version = "0.18", default-features = false, features = ["compress", "json", "tls-rustls"] }
 clap = "2.33.3"
 lazy_static = { version = "1.2.0" }
 ruc = "1.0"
@@ -20,6 +18,9 @@ globutils = { path = "../../libs/globutils" }
 
 [target.'cfg(target_os= "linux")'.dependencies]
 btm = "0.1.6"
+
+[target.'cfg(not(any(target_arch = "wasm32", target_arch = "aarch64")))'.dependencies]
+attohttpc = { version = "0.18", default-features = false, features = ["compress", "json", "tls-rustls"] }
 
 [build-dependencies]
 vergen = "=3.1.0"
