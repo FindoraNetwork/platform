@@ -396,7 +396,7 @@ fn run() -> Result<()> {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");
         let asset = m.value_of("asset");
-        let lowlevel_data = m.value_of("lowlevel_data");
+        let lowlevel_data = m.value_of("lowlevel-data");
         transfer_to_account(
             amount.parse::<u64>().c(d!())?,
             asset,
