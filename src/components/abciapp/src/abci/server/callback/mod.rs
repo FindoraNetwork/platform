@@ -6,7 +6,10 @@ mod utils;
 
 use {
     crate::{
-        abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV, IS_EXITING, POOL},
+        abci::{
+            server::ABCISubmissionServer, staking, IN_SAFE_ITV, IS_EXITING, POOL,
+            PROFILER_ENABLED,
+        },
         api::{
             query_server::BLOCK_CREATED,
             submission_server::{convert_tx, try_tx_catalog, TxCatalog},
@@ -33,6 +36,7 @@ use {
     protobuf::RepeatedField,
     ruc::*,
     std::{
+        cell::RefCell,
         fs,
         ops::Deref,
         sync::{
@@ -51,6 +55,9 @@ lazy_static! {
     // avoid on-chain-existing transactions to be stored again
     static ref TX_HISTORY: Arc<RwLock<Mapx<Vec<u8>, bool>>> =
         Arc::new(RwLock::new(new_mapx!("tx_history")));
+
+    static ref PROFILER_GUARD: Mutex<RefCell<Option<(u64, pprof::ProfilerGuard<'static>)>>> = Mutex::new(RefCell::new(None));
+
 }
 
 // #[cfg(feature = "debug_env")]
@@ -167,6 +174,52 @@ pub fn begin_block(
 
     IN_SAFE_ITV.store(true, Ordering::Release);
 
+    let header = pnk!(req.header.as_ref());
+    {
+        let mut guard_locked = PROFILER_GUARD.lock();
+        let guard = guard_locked.get_mut();
+        if PROFILER_ENABLED.load(Ordering::Relaxed) {
+            match pprof::ProfilerGuard::new(100) {
+                Ok(profiler) => {
+                    log::warn!(target: "abciapp", "starting profiler at height {}", header.height);
+                    *guard = Some((header.height as u64, profiler));
+                }
+                Err(e) if e.to_string().contains("start running") => {
+                    log::debug!(target: "abciapp", "Create profiler while running profiler exists at height {}", header.height);
+                }
+                Err(e) => {
+                    log::warn!(target: "abciapp", "cannot create profiler at height {}: {:?}", header.height, e);
+                    *guard = None;
+                }
+            }
+        } else {
+            if guard
+                .as_ref()
+                .and_then(|(h, guard)| match guard.report().build() {
+                    Ok(report) if !report.data.is_empty() => Some((h, report)),
+                    _ => None,
+                })
+                .and_then(|(h, report)| {
+                    fs::File::create(format!(
+                        "{}/flamegraph.h{}.svg",
+                        &CFG.ledger_dir, h
+                    ))
+                    .map(|file| (report, file))
+                    .ok()
+                })
+                .and_then(|(report, file)| report.flamegraph(file).ok())
+                .is_some()
+            {
+                log::info!(target: "abciapp", "write flamegraph.h{}.svg", header.height);
+            }
+
+            if guard.is_some() {
+                // stop current profiler now if it exists
+                log::warn!(target: "abciapp", "stopping profiler at height {}", header.height);
+                *guard = None;
+            }
+        }
+    }
     #[cfg(target_os = "linux")]
     {
         // snapshot the last block
