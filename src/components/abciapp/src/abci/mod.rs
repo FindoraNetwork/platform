@@ -8,6 +8,8 @@
 mod server;
 pub mod staking;
 
+pub use server::PROFILER_ENABLED;
+
 use {
     crate::api::{
         query_server::query_api, submission_server::submission_api::SubmissionApi,
