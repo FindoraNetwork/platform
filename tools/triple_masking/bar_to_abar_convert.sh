@@ -19,7 +19,6 @@ sleep 5
 
 FILE_MNEMONIC="mnemonic-temp.keys"
 FILE_ANON_KEYS="anon-keys-temp.keys"
-#rm mnemonic-temp.keys anon-keys-temp.keys
 
 echo "double quit tape enough charge fancy mandate ostrich this program laundry insect either escape cement van turtle loud immense load tip spike inquiry spice" > $FILE_MNEMONIC
 

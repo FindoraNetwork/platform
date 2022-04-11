@@ -1,25 +1,4 @@
-set -e
-./tools/triple_masking/bar_to_abar_convert.sh
-echo "\n\n Owned UTXOs of the converter"
-target/release/fn owned-utxos
-
-echo "\n\n\n Bar To Abar Conversion 2"
-sleep 10
-
-TXO_SID=$(target/release/fn owned-utxos | head -4 | tail -1 | cut  -f1)
-target/release/fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID 2> /dev/null
-
-tail -n 2 owned_randomizers > randomizer_file
-randomiser1=$(awk 'FNR>=1 && FNR<=1' randomizer_file)
-echo "\n\n Owned Abars after Bar to Abar conversion 1"
-sleep 20
-target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r $randomiser1
-randomiser2=$(awk 'FNR>=2 && FNR<=2' randomizer_file)
-echo "\n\n Owned Abars after Bar to Abar conversion 2"
-sleep 20
-target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r $randomiser2
-
-sleep 5
+# If breaking because of blockchain, increase the sleep time
 echo "J7PqRhmBOE_gadFs4rB4lcKuz_YoWa5VSlALyKuZdQjNBryPSYZhRczonGNY3-mp86LWW8TJ6clirfk4gk03Tw==
 J7PqRhmBOE_gadFs4rB4lcKuz_YoWa5VSlALyKuZdQjNBryPSYZhRczonGNY3-mp86LWW8TJ6clirfk4gk03Tw==" > axfr_secretkey_file
 echo "4GNC0J_qOXV2kww5BC5bOCyrTEfCodX5BoFaj06uN1s=
@@ -33,10 +12,24 @@ GrvIiB1yXLajRr5V5yZggPOmSelQ1Ga9zxWTzp0RnB8=" > to_enc_key_file
 echo "100000000
 100000000
 119980000" > amount_file
-
 echo "" > asset_file
 echo "" >> asset_file
 echo "" >> asset_file
+
+echo "\n ***** Accounts setup successful! ***** "
+set -e
+./tools/triple_masking/bar_to_abar_convert.sh
+
+tail -n 2 owned_randomizers > randomizer_file
+randomiser1=$(awk 'FNR==1' randomizer_file)
+echo "\n\n Owned Abars after Bar to Abar conversion 1"
+sleep 20
+target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r $randomiser1
+
+randomiser2=$(awk 'FNR==2' randomizer_file)
+echo "\n\n Owned Abars after Bar to Abar conversion 2"
+sleep 20
+target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r $randomiser2
 
 echo "\n\n\n Batch Anonymous Transfer from Senders to Receivers"
 echo "------------------------------------------------------------------------------"
@@ -44,16 +37,14 @@ sleep 5
 target/release/fn anon-transfer-batch -n amount_file -a asset_file -s axfr_secretkey_file -d decryption_key_file --to-axfr-public-key-file to_axfr_public_key_file --to-enc-key-file to_enc_key_file -r randomizer_file
 
 tail -n 3 sent_randomizers > randomizer_file2
-randomiser4=$(awk 'FNR>=1 && FNR<=1' randomizer_file2)
+randomiser4=$(awk 'FNR==1' randomizer_file2)
 echo "\n\n Owned Abars for Receiver1 after Batch Anon Transfer"
 sleep 30
-echo $randomiser4 > /dev/null
 target/release/fn owned-abars -p BdECoTzLNQHlKq1oGMI2kdh27yp_I2CZen0FGYLFkM0= -r $randomiser4
 
-randomiser5=$(awk 'FNR>=3 && FNR<=3' randomizer_file2)
+randomiser5=$(awk 'FNR==3' randomizer_file2)
 echo "\n\n Owned Abars for Receiver3 after Batch Anon Transfer"
 sleep 30
-echo $randomiser5 > /dev/null
 target/release/fn owned-abars -p 6dJt8oDrtXt3z-7__dOcDn7Q9lM8jd2RST0FJIfGspc= -r $randomiser5
 
 sleep 2
