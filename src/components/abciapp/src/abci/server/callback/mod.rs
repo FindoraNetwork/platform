@@ -33,6 +33,7 @@ use {
     protobuf::RepeatedField,
     ruc::*,
     std::{
+        cell::RefCell,
         fs,
         ops::Deref,
         sync::{
@@ -51,6 +52,9 @@ lazy_static! {
     // avoid on-chain-existing transactions to be stored again
     static ref TX_HISTORY: Arc<RwLock<Mapx<Vec<u8>, bool>>> =
         Arc::new(RwLock::new(new_mapx!("tx_history")));
+
+    static ref PROFILER_GUARD: Mutex<RefCell<Option<(u64, pprof::ProfilerGuard<'static>)>>> = Mutex::new(RefCell::new(None));
+
 }
 
 // #[cfg(feature = "debug_env")]
@@ -167,6 +171,21 @@ pub fn begin_block(
 
     IN_SAFE_ITV.store(true, Ordering::Release);
 
+    let header = pnk!(req.header.as_ref());
+    {
+        let mut guard_locked = PROFILER_GUARD.lock();
+        let guard = guard_locked.get_mut();
+        if let Some((h, _)) = guard.as_ref() {
+            if h != &(header.height as u64) {
+                panic!("something is very wrong!")
+            }
+        } else {
+            *guard = Some((
+                header.height as u64,
+                pprof::ProfilerGuard::new(100).unwrap(),
+            ));
+        }
+    }
     #[cfg(target_os = "linux")]
     {
         // snapshot the last block
@@ -407,6 +426,28 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         r.set_data(la_hash);
     } else {
         r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
+    }
+    {
+        let mut guard_locked = PROFILER_GUARD.lock();
+        let guard = guard_locked.get_mut();
+        if let Some(_) = guard
+            .as_ref()
+            .and_then(|(_, guard)| guard.report().build().ok())
+            .and_then(|report| {
+                std::fs::File::create(format!(
+                    "{}/flamegraph.h{}.svg",
+                    &CFG.ledger_dir, td_height
+                ))
+                .map(|file| (report, file))
+                .ok()
+            })
+            .and_then(|(report, file)| report.flamegraph(file).ok())
+        {
+            log::info!(target: "abciapp", "write flamegraph.h{}.svg", td_height);
+        } else {
+            log::error!(target: "abciapp", "failed to write flamegraph.h{}.svg", td_height);
+        }
+        *guard = None;
     }
 
     IN_SAFE_ITV.store(false, Ordering::Release);
