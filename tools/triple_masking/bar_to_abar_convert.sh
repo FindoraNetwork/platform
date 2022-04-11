@@ -40,13 +40,13 @@ target/release/fn wallet --show
 echo "\n\n\n Bar To Abar Conversion 1"
 echo "==============================================================================="
 sleep 1
-TXO_SID=$(target/release/fn owned-utxos | head -4 | tail -1 | cut  -f1)
+TXO_SID=$(target/release/fn owned-utxos | head -4 | tail -1 |  awk -F ' ' '{print $1}')
 target/release/fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
 
 echo "\n\n\n Bar To Abar Conversion 2"
 echo "==============================================================================="
 sleep 5
-TXO_SID=$(target/release/fn owned-utxos | head -4 | tail -1 | cut  -f1)
+TXO_SID=$(target/release/fn owned-utxos | head -4 | tail -1 | awk -F ' ' '{print $1}')
 target/release/fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
 
 echo "Bar 2 Abar Conversion demo script executed successfully!"

@@ -140,6 +140,7 @@ impl ModuleManager {
             module_account::App::<BaseApp>::mint(ctx, &ba, balance)?;
             self.evm_module
                 .withdraw_fra(ctx, &from, &owner, balance, lowlevel)?;
+            // Add here.
         } else {
             self.evm_module.withdraw_frc20(
                 ctx,
@@ -149,6 +150,7 @@ impl ModuleManager {
                 U256::from(amount),
                 lowlevel,
             )?;
+            // Add here
         }
 
         Ok(())

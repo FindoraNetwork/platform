@@ -105,7 +105,7 @@ impl<C: Config> App<C> {
 
         let lowlevel = Token::Bytes(_lowlevel);
 
-        println!("{}, {}, {}, {}, {}", asset, from, to, value, lowlevel);
+        // println!("{}, {}, {}, {}, {}", asset, from, to, value, lowlevel);
 
         let input = function
             .encode_input(&[asset, from, to, value, lowlevel])
@@ -142,7 +142,7 @@ impl<C: Config> App<C> {
         let value = Token::Uint(_value);
         let lowlevel = Token::Bytes(_lowlevel);
 
-        println!("{:?}, {:?}, {:?}, {:?}", from, to, value, lowlevel);
+        // println!("{:?}, {:?}, {:?}, {:?}", from, to, value, lowlevel);
 
         let input = function
             .encode_input(&[from, to, value, lowlevel])

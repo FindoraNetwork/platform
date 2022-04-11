@@ -1477,9 +1477,10 @@ impl AnonTransferOperationBuilder {
 
     #[allow(missing_docs)]
     pub fn extra_fee_estimation(&self) -> u64 {
-        let estimated_fees =
-            FEE_CALCULATING_FUNC(self.inputs.len() as u32, self.outputs.len() as u32)
-                as u64;
+        let estimated_fees = FEE_CALCULATING_FUNC(
+            self.inputs.len() as u32,
+            (self.outputs.len() + 1) as u32,
+        ) as u64;
 
         let mut fra_input_sum: u64 = 0;
         let mut fra_output_sum: u64 = 0;

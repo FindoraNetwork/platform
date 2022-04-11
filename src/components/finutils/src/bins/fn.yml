@@ -546,6 +546,12 @@ subcommands:
             required: true
   - owned-utxos:
       about: List owned UTXOs for a public key
+      args:
+        - asset:
+            help: asset code which you want to tansfer
+            long: asset
+            takes_value: true
+            value_name: ASSET
   - convert-bar-to-abar:
       about: Convert a BAR to Anon BAR for yourself
       args:
