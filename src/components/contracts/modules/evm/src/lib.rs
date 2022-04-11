@@ -5,9 +5,13 @@ mod basic;
 pub mod impls;
 pub mod precompile;
 pub mod runtime;
+pub mod system_contracts;
+pub mod utils;
 
 use abci::{RequestQuery, ResponseQuery};
-use ethereum_types::U256;
+use config::abci::global_cfg::CFG;
+use ethabi::Token;
+use ethereum_types::{H160, U256};
 use fp_core::{
     context::Context,
     macros::Get,
@@ -20,12 +24,14 @@ use fp_traits::{
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
 };
 use fp_types::{
-    actions::evm::Action,
+    actions::{evm::Action, xhub::NonConfidentialOutput},
     crypto::{Address, HA160},
 };
 use precompile::PrecompileSet;
 use ruc::*;
+use runtime::runner::ActionRunner;
 use std::marker::PhantomData;
+use system_contracts::SystemContracts;
 
 pub use runtime::*;
 
@@ -63,13 +69,111 @@ pub mod storage {
 
 pub struct App<C> {
     phantom: PhantomData<C>,
+    pub contracts: SystemContracts,
 }
 
 impl<C: Config> Default for App<C> {
     fn default() -> Self {
         App {
             phantom: Default::default(),
+            contracts: pnk!(SystemContracts::new()),
         }
+    }
+}
+
+impl<C: Config> App<C> {
+    pub fn withdraw_frc20(
+        &self,
+        ctx: &Context,
+        _asset: [u8; 32],
+        _from: &Address,
+        _to: &Address,
+        _value: U256,
+        _lowlevel: Vec<u8>,
+    ) -> Result<()> {
+        let function = self.contracts.bridge.function("withdrawFRC20").c(d!())?;
+
+        let asset = Token::FixedBytes(Vec::from(_asset));
+
+        let bytes: &[u8] = _from.as_ref();
+        let from = Token::FixedBytes(bytes.to_vec());
+
+        let bytes: &[u8] = _to.as_ref();
+        let to = Token::Address(H160::from_slice(&bytes[4..24]));
+
+        let value = Token::Uint(_value);
+
+        let lowlevel = Token::Bytes(_lowlevel);
+
+        // println!("{}, {}, {}, {}, {}", asset, from, to, value, lowlevel);
+
+        let input = function
+            .encode_input(&[asset, from, to, value, lowlevel])
+            .c(d!())?;
+
+        let _ = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            H160::zero(),
+            9999999,
+            self.contracts.bridge_address,
+            U256::zero(),
+        )?;
+
+        Ok(())
+    }
+
+    pub fn withdraw_fra(
+        &self,
+        ctx: &Context,
+        _from: &Address,
+        _to: &Address,
+        _value: U256,
+        _lowlevel: Vec<u8>,
+    ) -> Result<()> {
+        let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
+
+        let bytes: &[u8] = _from.as_ref();
+        let from = Token::FixedBytes(bytes.to_vec());
+
+        let bytes: &[u8] = _to.as_ref();
+
+        let to = Token::Address(H160::from_slice(&bytes[4..24]));
+        let value = Token::Uint(_value);
+        let lowlevel = Token::Bytes(_lowlevel);
+
+        // println!("{:?}, {:?}, {:?}, {:?}", from, to, value, lowlevel);
+
+        let input = function
+            .encode_input(&[from, to, value, lowlevel])
+            .c(d!())?;
+
+        let _ = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            H160::zero(),
+            9999999,
+            self.contracts.bridge_address,
+            U256::zero(),
+        )?;
+
+        Ok(())
+    }
+
+    pub fn consume_mint(&self, ctx: &Context) -> Vec<NonConfidentialOutput> {
+        let height = CFG.checkpoint.prismxx_inital_height;
+
+        let mut pending_outputs = Vec::new();
+
+        if height < ctx.header.height {
+            if let Err(e) =
+                utils::fetch_mint::<C>(ctx, &self.contracts, &mut pending_outputs)
+            {
+                log::error!("Collect mint ops error: {:?}", e);
+            }
+        }
+
+        pending_outputs
     }
 }
 
@@ -94,6 +198,23 @@ impl<C: Config> AppModule for App<C> {
                 resp
             }
             _ => resp,
+        }
+    }
+
+    fn begin_block(&mut self, ctx: &mut Context, _req: &abci::RequestBeginBlock) {
+        let height = CFG.checkpoint.prismxx_inital_height;
+
+        if ctx.header.height == height {
+            if let Err(e) = utils::deploy_contract::<C>(ctx, &self.contracts) {
+                pd!(e);
+                return;
+            }
+            println!(
+                "Bridge contract address: {:?}",
+                self.contracts.bridge_address
+            );
+
+            ctx.state.write().commit_session();
         }
     }
 }

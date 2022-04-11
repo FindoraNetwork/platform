@@ -12,10 +12,13 @@ serde_json = "1.0"
 time = "0.1"
 rand = "0.8"
 cryptohash = { path = "../cryptohash" }
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4x" }
+zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.5a" }
+crypto = { package = "crypto", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.5a" }
+zeialgebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.5a" }
 hex = "0.4.2"
 
 base64 = "0.10"
+bs58 = "0.4.0"
 bip0039 = "0.7.3"
 bech32 = "0.7.2"
 ed25519-dalek-bip32 = { git = "https://github.com/FindoraNetwork/ed25519-dalek-bip32", branch = "feat-allow-nohardened" }

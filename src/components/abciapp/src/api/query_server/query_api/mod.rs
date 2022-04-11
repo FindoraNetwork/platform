@@ -15,8 +15,8 @@ use {
     globutils::wallet,
     ledger::{
         data_model::{
-            b64dec, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
-            TxnIDHash, TxnSID, TxoSID, XfrAddress, BLACK_HOLE_PUBKEY,
+            b64dec, ATxoSID, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction,
+            TxOutput, TxnIDHash, TxnSID, TxoSID, XfrAddress, BLACK_HOLE_PUBKEY,
         },
         staking::{
             ops::mint_fra::MintEntry, FF_PK_EXTRA_120_0000, FRA, FRA_TOTAL_AMOUNT,
@@ -33,6 +33,7 @@ use {
         sync::Arc,
     },
     zei::{
+        anon_xfr::structs::MTLeafInfo,
         serialization::ZeiFromToBytes,
         xfr::{sig::XfrPublicKey, structs::OwnerMemo},
     },
@@ -93,6 +94,16 @@ pub async fn get_owner_memo_batch(
     Ok(web::Json(resp))
 }
 
+/// Returns the owner memo required to decrypt the asset record stored at given index, if it exists.
+#[allow(clippy::unnecessary_wraps)]
+async fn get_abar_memo(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    info: web::Path<u64>,
+) -> actix_web::Result<web::Json<Option<OwnerMemo>>, actix_web::error::Error> {
+    let server = data.read();
+    Ok(web::Json(server.get_abar_memo(ATxoSID(*info))))
+}
+
 /// Returns an array of the utxo sids currently spendable by a given address
 pub async fn get_owned_utxos(
     data: web::Data<Arc<RwLock<QueryServer>>>,
@@ -106,6 +117,37 @@ pub async fn get_owned_utxos(
         .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk)).keys().copied().collect()))
 }
 
+/// Returns an array of the ATxo Sids currently spendable by a given address
+async fn get_owned_abars(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    owner: web::Path<String>,
+) -> actix_web::Result<web::Json<HashSet<ATxoSID>>> {
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
+    //let read = qs.state.as_ref().unwrap().read();
+    globutils::wallet::anon_public_key_from_base64(owner.as_str())
+        .c(d!())
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
+        .map(|pk| web::Json(ledger.get_owned_abars(&pk).iter().map(|a| a.0).collect()))
+}
+/// Returns the merkle proof for anonymous transactions
+async fn get_abar_proof(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    info: web::Path<u64>,
+) -> actix_web::Result<web::Json<Option<MTLeafInfo>>, actix_web::error::Error> {
+    let server = data.read();
+    Ok(web::Json(server.get_abar_proof(ATxoSID(*info))))
+}
+
+/// Checks if a nullifier hash is present in nullifier set
+async fn check_nullifier_hash(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    info: web::Path<String>,
+) -> actix_web::Result<web::Json<Option<bool>>, actix_web::error::Error> {
+    let server = data.read();
+    Ok(web::Json(server.check_nullifier_hash((*info).clone())))
+}
+
 /// Define interface type
 #[allow(missing_docs)]
 pub enum QueryServerRoutes {
@@ -113,6 +155,10 @@ pub enum QueryServerRoutes {
     GetOwnerMemo,
     GetOwnerMemoBatch,
     GetOwnedUtxos,
+    GetOwnedAbars,
+    GetAbarMemo,
+    GetAbarProof,
+    CheckNullifierHash,
     GetCreatedAssets,
     GetIssuedRecords,
     GetIssuedRecordsByCode,
@@ -131,8 +177,12 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetRelatedTxns => "get_related_txns",
             QueryServerRoutes::GetRelatedXfrs => "get_related_xfrs",
             QueryServerRoutes::GetOwnedUtxos => "get_owned_utxos",
+            QueryServerRoutes::GetOwnedAbars => "get_owned_abars",
             QueryServerRoutes::GetOwnerMemo => "get_owner_memo",
             QueryServerRoutes::GetOwnerMemoBatch => "get_owner_memo_batch",
+            QueryServerRoutes::GetAbarMemo => "get_abar_memo",
+            QueryServerRoutes::GetAbarProof => "get_abar_proof",
+            QueryServerRoutes::CheckNullifierHash => "check_nullifier_hash",
             QueryServerRoutes::GetCreatedAssets => "get_created_assets",
             QueryServerRoutes::GetIssuedRecords => "get_issued_records",
             QueryServerRoutes::GetIssuedRecordsByCode => "get_issued_records_by_code",
@@ -507,6 +557,10 @@ impl QueryApi {
                     web::get().to(get_owned_utxos),
                 )
                 .route(
+                    &QueryServerRoutes::GetOwnedAbars.with_arg_template("address"),
+                    web::get().to(get_owned_abars),
+                )
+                .route(
                     &QueryServerRoutes::GetOwnerMemo.with_arg_template("txo_sid"),
                     web::get().to(get_owner_memo),
                 )
@@ -514,6 +568,19 @@ impl QueryApi {
                     &QueryServerRoutes::GetOwnerMemoBatch
                         .with_arg_template("txo_sid_list"),
                     web::get().to(get_owner_memo_batch),
+                )
+                .route(
+                    &QueryServerRoutes::GetAbarMemo.with_arg_template("atxo_sid"),
+                    web::get().to(get_abar_memo),
+                )
+                .route(
+                    &QueryServerRoutes::GetAbarProof.with_arg_template("atxo_sid"),
+                    web::get().to(get_abar_proof),
+                )
+                .route(
+                    &QueryServerRoutes::CheckNullifierHash
+                        .with_arg_template("null_hash"),
+                    web::get().to(check_nullifier_hash),
                 )
                 .route(
                     &QueryServerRoutes::GetRelatedTxns.with_arg_template("address"),
@@ -599,6 +666,10 @@ impl QueryApi {
                 .route(
                     &ApiRoutes::OwnedUtxos.with_arg_template("owner"),
                     web::get().to(query_owned_utxos),
+                )
+                .route(
+                    &ApiRoutes::OwnedAbars.with_arg_template("owner"),
+                    web::get().to(query_owned_abars),
                 )
                 .route(
                     &ApiRoutes::ValidatorList.route(),

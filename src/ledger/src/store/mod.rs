@@ -12,9 +12,10 @@ pub use fbnc;
 use {
     crate::{
         data_model::{
-            AssetType, AssetTypeCode, AuthenticatedBlock, AuthenticatedTransaction,
-            AuthenticatedUtxo, AuthenticatedUtxoStatus, BlockEffect, BlockSID,
-            FinalizedBlock, FinalizedTransaction, IssuerKeyPair, IssuerPublicKey,
+            ATxoSID, AnonStateCommitmentData, AssetType, AssetTypeCode,
+            AuthenticatedBlock, AuthenticatedTransaction, AuthenticatedUtxo,
+            AuthenticatedUtxoStatus, BlockEffect, BlockSID, FinalizedBlock,
+            FinalizedTransaction, IssuerKeyPair, IssuerPublicKey, Operation,
             OutputPosition, StateCommitmentData, Transaction, TransferType, TxnEffect,
             TxnSID, TxnTempSID, TxoSID, UnAuthenticatedUtxo, Utxo, UtxoStatus,
             BLACK_HOLE_PUBKEY,
@@ -38,6 +39,7 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     sliding_set::SlidingSet,
+    sparse_merkle_tree::{Key, SmtMap256},
     std::{
         collections::{BTreeMap, HashMap, HashSet},
         env,
@@ -47,11 +49,32 @@ use {
         ops::{Deref, DerefMut},
         sync::Arc,
     },
-    zei::xfr::{
-        lib::XfrNotePolicies,
-        sig::XfrPublicKey,
-        structs::{OwnerMemo, TracingPolicies, TracingPolicy},
+    storage::{
+        db::RocksDB,
+        state::{ChainState, State},
+        store::{ImmutablePrefixedStore, PrefixedStore},
     },
+    zei::{
+        anon_xfr::{
+            abar_to_bar::verify_abar_to_bar_body,
+            anon_fee::verify_anon_fee_body,
+            hash_abar,
+            keys::AXfrPubKey,
+            structs::{AnonBlindAssetRecord, MTLeafInfo, MTNode, MTPath, Nullifier},
+            verify_anon_xfr_body,
+        },
+        serialization::ZeiFromToBytes,
+        setup::NodeParams,
+        xfr::{
+            lib::XfrNotePolicies,
+            sig::XfrPublicKey,
+            structs::{OwnerMemo, TracingPolicies, TracingPolicy},
+        },
+    },
+    zei_accumulators::merkle_tree::{
+        ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath,
+    },
+    zeialgebra::{bls12_381::BLSScalar, groups::Scalar},
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
@@ -83,6 +106,10 @@ pub struct LedgerState {
     txn_merkle: Arc<RwLock<AppendOnlyMerkle>>,
     // Bitmap tracing all the live TXOs
     utxo_map: Arc<RwLock<BitMap>>,
+    // Merkle Tree with all the ABARs created till now
+    abar_state: Arc<RwLock<State<RocksDB>>>,
+    // Sparse Merkle Tree to hold nullifier Set
+    nullifier_set: Arc<RwLock<SmtMap256<RocksDB>>>,
 }
 
 impl LedgerState {
@@ -182,7 +209,12 @@ impl LedgerState {
         Ok(())
     }
 
-    fn update_state(&mut self, mut block: BlockEffect, tsm: &TmpSidMap) -> Result<()> {
+    fn update_state(
+        &mut self,
+        mut block: BlockEffect,
+        tsm: &TmpSidMap,
+        next_txn_sid: usize,
+    ) -> Result<()> {
         let mut tx_block = Vec::new();
 
         // Update the transaction Merkle tree
@@ -202,6 +234,7 @@ impl LedgerState {
                 txn: txn.clone(),
                 tx_id: txn_sid,
                 txo_ids: txo_sids.clone(),
+                atxo_ids: vec![],
                 merkle_id,
             });
 
@@ -213,10 +246,21 @@ impl LedgerState {
         }
         drop(txn_merkle);
 
+        tx_block = self
+            .update_anon_stores(
+                block.new_nullifiers.clone(),
+                block.output_abars.clone(),
+                next_txn_sid,
+                tx_block,
+            )
+            .c(d!())?;
+
         // Checkpoint
         let block_merkle_id = self.checkpoint(&block).c(d!())?;
         block.temp_sids.clear();
         block.txns.clear();
+        block.output_abars.clear();
+        block.new_nullifiers.clear();
 
         let block_idx = self.blocks.len();
         tx_block.iter().enumerate().for_each(|(tx_idx, tx)| {
@@ -252,12 +296,70 @@ impl LedgerState {
             }
         }
 
+        let backup_next_txn_sid = self.status.next_txn.0;
         let (tsm, base_sid, max_sid) = self.status.apply_block_effects(&mut block);
 
         self.update_utxo_map(base_sid, max_sid, &block.temp_sids, &tsm)
             .c(d!())
-            .and_then(|_| self.update_state(block, &tsm).c(d!()))
+            .and_then(|_| self.update_state(block, &tsm, backup_next_txn_sid).c(d!()))
             .map(|_| tsm)
+    }
+
+    /// Apply the changes from current block
+    /// to the merkle trees holding anonymous data
+    pub fn update_anon_stores(
+        &mut self,
+        new_nullifiers: Vec<Nullifier>,
+        output_abars: Vec<Vec<AnonBlindAssetRecord>>,
+        backup_next_txn_sid: usize,
+        mut tx_block: Vec<FinalizedTransaction>,
+    ) -> Result<Vec<FinalizedTransaction>> {
+        for n in new_nullifiers.iter() {
+            let str = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+            let d: Key = Key::from_base64(&str).c(d!())?;
+
+            // if the nullifier hash is present in our nullifier set, fail the block
+            if self.nullifier_set.read().get(&d).c(d!())?.is_some() {
+                return Err(eg!("Nullifier hash already present in set"));
+            }
+            self.nullifier_set
+                .write()
+                .set(&d, Some(n.zei_to_bytes()))
+                .c(d!())?;
+        }
+
+        let mut txn_sid = TxnSID(backup_next_txn_sid);
+        for (txn_abars, txn) in output_abars.iter().zip(tx_block.iter_mut()) {
+            let mut op_position = OutputPosition(0);
+            let mut atxo_ids: Vec<ATxoSID> = vec![];
+            for abar in txn_abars {
+                println!(
+                    "ABAR setting in LedgerStatus: {}",
+                    base64::encode_config(
+                        abar.public_key.zei_to_bytes().as_slice(),
+                        base64::URL_SAFE
+                    )
+                );
+                let uid = self.add_abar(&abar).c(d!())?;
+                self.status.ax_utxos.insert(uid, abar.clone());
+                self.status
+                    .owned_ax_utxos
+                    .entry(abar.public_key)
+                    .or_insert_with(HashSet::new)
+                    .insert(uid);
+                self.status
+                    .ax_txo_to_txn_location
+                    .insert(uid, (txn_sid, op_position));
+
+                atxo_ids.push(uid);
+                self.status.next_atxo = ATxoSID(uid.0 + 1);
+                op_position = OutputPosition(op_position.0 + 1);
+            }
+            txn.atxo_ids = atxo_ids;
+            txn_sid = TxnSID(txn_sid.0 + 1);
+        }
+
+        Ok(tx_block)
     }
 
     #[inline(always)]
@@ -307,7 +409,8 @@ impl LedgerState {
     //  1. Compute the hash of transactions in the block and update txns_in_block_hash
     //  2. Append txns_in_block_hash to block_merkle
     #[inline(always)]
-    fn compute_and_append_txns_hash(&mut self, block: &BlockEffect) -> u64 {
+    #[allow(missing_docs)]
+    pub fn compute_and_append_txns_hash(&mut self, block: &BlockEffect) -> u64 {
         // 1. Compute the hash of transactions in the block and update txns_in_block_hash
         let txns_in_block_hash = block.compute_txns_in_block_hash();
         self.status.txns_in_block_hash = Some(txns_in_block_hash.clone());
@@ -323,7 +426,8 @@ impl LedgerState {
         ret
     }
 
-    fn compute_and_save_state_commitment_data(&mut self, pulse_count: u64) {
+    #[allow(missing_docs)]
+    pub fn compute_and_save_state_commitment_data(&mut self, pulse_count: u64) {
         let state_commitment_data = StateCommitmentData {
             bitmap: self.utxo_map.write().compute_checksum(),
             block_merkle: self.block_merkle.read().get_root_hash(),
@@ -349,7 +453,91 @@ impl LedgerState {
             .state_commitment_versions
             .push(state_commitment_data.compute_commitment());
         self.status.state_commitment_data = Some(state_commitment_data);
+
+        // Commit Anon tree changes here following Tendermint protocol
+        pnk!(self.commit_anon_changes().c(d!()));
+        pnk!(self.commit_nullifier_changes().c(d!()));
+
+        let abar_root_hash =
+            self.get_abar_root_hash().expect("failed to read root hash");
+        self.status.abar_commitment_versions.push(abar_root_hash);
+        let anon_state_commitment_data = AnonStateCommitmentData {
+            abar_root_hash,
+            nullifier_root_hash: self
+                .nullifier_set
+                .read()
+                .merkle_root()
+                .unwrap_or(sparse_merkle_tree::ZERO_DIGEST),
+        };
+        self.status
+            .anon_state_commitment_versions
+            .push(anon_state_commitment_data.compute_commitment());
+        self.status.anon_state_commitment_data = Some(anon_state_commitment_data);
+
         self.status.incr_block_commit_count();
+    }
+
+    #[inline(always)]
+    /// Adds a new abar to session cache and updates merkle hashes of ancestors
+    pub fn add_abar(&mut self, abar: &AnonBlindAssetRecord) -> Result<ATxoSID> {
+        let mut abar_state_val = self.abar_state.write();
+        let store = PrefixedStore::new("abar_store", &mut abar_state_val);
+        let mut mt = PersistentMerkleTree::new(store)?;
+
+        mt.add_commitment_hash(hash_abar(mt.entry_count(), abar))
+            .map(ATxoSID)
+    }
+
+    #[inline(always)]
+    /// writes the changes from session cache to the RocksDB store
+    pub fn commit_anon_changes(&mut self) -> Result<u64> {
+        let mut abar_state_val = self.abar_state.write();
+        let store = PrefixedStore::new("abar_store", &mut abar_state_val);
+        let mut mt = PersistentMerkleTree::new(store)?;
+
+        mt.commit()
+    }
+
+    #[inline(always)]
+    /// writes the changes from session cache to the RocksDB store
+    pub fn commit_nullifier_changes(&mut self) -> Result<u64> {
+        self.nullifier_set.write().commit()
+    }
+
+    #[inline(always)]
+    /// Fetches the root hash of the committed merkle tree of abar commitments directly from committed
+    /// state and ignore session cache
+    pub fn get_abar_root_hash(&self) -> Result<BLSScalar> {
+        let abar_query_state = State::new(self.abar_state.read().chain_state(), false);
+        let store = ImmutablePrefixedStore::new("abar_store", &abar_query_state);
+        let mt = ImmutablePersistentMerkleTree::new(store)?;
+
+        mt.get_root().c(d!(
+            "probably due to badly constructed tree or data corruption"
+        ))
+    }
+
+    #[inline(always)]
+    /// Generates a MTLeafInfo from the latest committed version of tree from committed state and
+    /// ignore session cache
+    pub fn get_abar_proof(&self, id: ATxoSID) -> Result<MTLeafInfo> {
+        let abar_query_state = State::new(self.abar_state.read().chain_state(), false);
+        let store = ImmutablePrefixedStore::new("abar_store", &abar_query_state);
+        let mt = ImmutablePersistentMerkleTree::new(store)?;
+
+        println!("get_abar_proof: {:?}", id);
+        let mut t = mt.generate_proof(id.0)?;
+        t.root_version = self.status.get_current_abar_version();
+
+        Ok(create_mt_leaf_info(t))
+    }
+
+    /// Check if the nullifier hash is present in nullifier set
+    #[inline(always)]
+    pub fn check_nullifier_hash(&self, hash: String) -> Result<bool> {
+        let d: Key = Key::from_base64(&hash).c(d!())?;
+        let is_null_present = self.nullifier_set.read().get(&d).c(d!())?.is_some();
+        Ok(is_null_present)
     }
 
     // Initialize a logged Merkle tree for the ledger.
@@ -373,6 +561,21 @@ impl LedgerState {
             .and_then(|f| BitMap::open(f).c(d!()))
     }
 
+    // Initialize a persistent merkle tree for ABAR store.
+    #[inline(always)]
+    fn init_abar_state(path: &str) -> Result<State<RocksDB>> {
+        let fdb = RocksDB::open(path).c(d!("failed to open db"))?;
+        let cs = Arc::new(RwLock::new(ChainState::new(fdb, "abar_db".to_string(), 0)));
+        Ok(State::new(cs, false))
+    }
+
+    // Initialize persistent Sparse Merkle tree for the Nullifier set
+    #[inline(always)]
+    fn init_nullifier_smt(path: &str) -> Result<SmtMap256<RocksDB>> {
+        let rdb = RocksDB::open(path).c(d!("failed to open db"))?;
+        Ok(SmtMap256::new(rdb))
+    }
+
     /// Initialize a new Ledger structure.
     pub fn new(basedir: &str, prefix: Option<&str>) -> Result<LedgerState> {
         let prefix = if let Some(p) = prefix {
@@ -384,8 +587,10 @@ impl LedgerState {
         let block_merkle_path = format!("{}/{}block_merkle", basedir, &prefix);
         let txn_merkle_path = format!("{}/{}txn_merkle", basedir, &prefix);
         let utxo_map_path = format!("{}/{}utxo_map", basedir, &prefix);
+        let abar_store_path = format!("{}/{}abar_store", basedir, &prefix);
+        let nullifier_store_path = format!("{}/{}nullifier_store", basedir, &prefix);
 
-        // These iterms will be set under ${BNC_DATA_DIR}
+        // These items will be set under ${BNC_DATA_DIR}
         fs::create_dir_all(&basedir).c(d!())?;
         let snapshot_file = format!("{}ledger_status", &prefix);
 
@@ -394,6 +599,12 @@ impl LedgerState {
 
         let blocks_path = prefix.clone() + "blocks";
         let tx_to_block_location_path = prefix.clone() + "tx_to_block_location";
+
+        let mut abar_state = LedgerState::init_abar_state(&abar_store_path).c(d!())?;
+
+        // Initializing Merkle tree to set Empty tree root hash, which is a hash of null children
+        let store = PrefixedStore::new("abar_store", &mut abar_state);
+        let _ = PersistentMerkleTree::new(store)?;
 
         let mut ledger = LedgerState {
             status: LedgerStatus::new(&basedir, &snapshot_file).c(d!())?,
@@ -410,6 +621,10 @@ impl LedgerState {
             )),
             block_ctx: Some(BlockEffect::default()),
             api_cache: alt!(*KEEP_HIST, Some(ApiCache::new(&prefix)), None),
+            abar_state: Arc::new(RwLock::new(abar_state)),
+            nullifier_set: Arc::new(RwLock::new(
+                LedgerState::init_nullifier_smt(&nullifier_store_path).c(d!())?,
+            )),
         };
 
         ledger.status.refresh_data();
@@ -804,6 +1019,58 @@ impl LedgerState {
         Ok(res)
     }
 
+    /// Get all abars with sid which are associated with a diversified public key
+    #[allow(dead_code)]
+    pub fn get_owned_abars(
+        &self,
+        addr: &AXfrPubKey,
+    ) -> Vec<(ATxoSID, AnonBlindAssetRecord)> {
+        println!(
+            "Public Key: {:?}",
+            base64::encode_config(addr.zei_to_bytes().as_slice(), base64::URL_SAFE)
+        );
+
+        if let Some(set) = self.status.owned_ax_utxos.get(addr) {
+            return set
+                .iter()
+                .map(|sid| {
+                    let abar = self.status.ax_utxos.get(sid).unwrap();
+                    (*sid, abar)
+                })
+                .collect();
+        }
+
+        vec![]
+    }
+
+    /// Get the owner memo of a abar by ATxoSID
+    #[allow(dead_code)]
+    pub fn get_abar_memo(&self, ax_id: ATxoSID) -> Option<OwnerMemo> {
+        let txn_location = self.status.ax_txo_to_txn_location.get(&ax_id).unwrap();
+        let authenticated_txn = self.get_transaction(txn_location.0).unwrap();
+        let memo: Vec<OwnerMemo> = authenticated_txn
+            .finalized_txn
+            .txn
+            .body
+            .operations
+            .iter()
+            .flat_map(|o| match o {
+                Operation::BarToAbar(body) => vec![body.note.body.memo.clone()],
+                Operation::TransferAnonAsset(body) => body.note.body.owner_memos.clone(),
+                Operation::AnonymousFee(body) => {
+                    println!("AnonymousFee {:?}", body.note.body.owner_memo);
+                    vec![body.note.body.owner_memo.clone()]
+                }
+                _ => vec![],
+            })
+            .collect::<Vec<OwnerMemo>>();
+
+        if memo.is_empty() {
+            return None;
+        }
+        Some(memo.get(txn_location.1 .0).unwrap().clone())
+    }
+
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn get_issuance_num(&self, code: &AssetTypeCode) -> Option<u64> {
@@ -829,6 +1096,20 @@ impl LedgerState {
         let commitment = self
             .status
             .state_commitment_versions
+            .last()
+            .unwrap_or_else(|| HashOf::new(&None));
+        (commitment, block_count)
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn get_anon_state_commitment(
+        &self,
+    ) -> (HashOf<Option<AnonStateCommitmentData>>, u64) {
+        let block_count = self.status.block_commit_count;
+        let commitment = self
+            .status
+            .anon_state_commitment_versions
             .last()
             .unwrap_or_else(|| HashOf::new(&None));
         (commitment, block_count)
@@ -950,41 +1231,81 @@ impl LedgerState {
 pub struct LedgerStatus {
     /// the file path of the snapshot
     pub snapshot_file: String,
-    // all currently-unspent TXOs
+    /// all currently-unspent TXOs
+    #[serde(default = "default_status_utxos")]
     utxos: Mapxnk<TxoSID, Utxo>,
+    /// all non-confidential balances
+    #[serde(default = "default_status_nonconfidential_balances")]
     nonconfidential_balances: Mapx<XfrPublicKey, u64>,
+    /// all owned utxos
+    #[serde(default = "default_status_owned_utxos")]
     owned_utxos: Mapx<XfrPublicKey, HashSet<TxoSID>>,
+    /// all existing ax_utxos
+    #[serde(default = "default_status_ax_utxos")]
+    ax_utxos: Mapx<ATxoSID, AnonBlindAssetRecord>,
+    /// all owned abars
+    #[serde(default = "default_status_owned_ax_utxos")]
+    owned_ax_utxos: Mapx<AXfrPubKey, HashSet<ATxoSID>>,
     /// all spent TXOs
+    #[serde(default = "default_status_spent_utxos")]
     pub spent_utxos: Mapxnk<TxoSID, Utxo>,
-    // Map a TXO to its output position in a transaction
+    /// Map a TXO to its output position in a transaction
+    #[serde(default = "default_status_txo_to_txn_location")]
     txo_to_txn_location: Mapxnk<TxoSID, (TxnSID, OutputPosition)>,
-    // State commitment history.
-    // The BitDigest at index i is the state commitment of the ledger at block height  i + 1.
+    /// Map a Anonymous TXO to its output position in a transaction
+    #[serde(default = "default_status_ax_txo_to_txn_location")]
+    ax_txo_to_txn_location: Mapx<ATxoSID, (TxnSID, OutputPosition)>,
+    /// State commitment history.
+    /// The BitDigest at index i is the state commitment of the ledger at block height  i + 1.
+    #[serde(default = "default_status_state_commitment_versions")]
     state_commitment_versions: Vecx<HashOf<Option<StateCommitmentData>>>,
-    // Registered asset types
+    /// Abar commitment versions for verifying proofs
+    #[serde(default = "default_status_abar_commitment_versions")]
+    abar_commitment_versions: Vecx<BLSScalar>,
+    /// Anon state commitment versions
+    #[serde(default = "default_status_anon_state_commitment_versions")]
+    anon_state_commitment_versions: Vecx<HashOf<Option<AnonStateCommitmentData>>>,
+    /// Registered asset types
+    #[serde(default = "default_status_asset_types")]
     asset_types: Mapx<AssetTypeCode, AssetType>,
-    // Issuance number is always increasing
+    /// Issuance number is always increasing
+    #[serde(default = "default_status_issuance_num")]
     issuance_num: Mapx<AssetTypeCode, u64>,
-    // Issuance amounts for assets with limits
+    /// Issuance amounts for assets with limits
+    #[serde(default = "default_status_issuance_amounts")]
     issuance_amounts: Mapx<AssetTypeCode, u64>,
-    // Should be equal to the count of transactions
+    /// Should be equal to the count of transactions
+    #[serde(default = "default_status_next_txn")]
     next_txn: TxnSID,
-    // Should be equal to the count of TXOs
+    /// Should be equal to the count of TXOs
+    #[serde(default = "default_status_next_txo")]
     next_txo: TxoSID,
-    // Each block corresponds to such a summary structure
+    /// Should be equal to the count of ABARs
+    #[serde(default = "default_status_next_atxo")]
+    next_atxo: ATxoSID,
+    /// Each block corresponds to such a summary structure
+    #[serde(default = "default_status_state_commitment_data")]
     state_commitment_data: Option<StateCommitmentData>,
-    // number of non-empty blocks, equal to: <block count of tendermint> - <pulse count>
+    /// Anon state commitment
+    #[serde(default = "default_status_anon_state_commitment_data")]
+    anon_state_commitment_data: Option<AnonStateCommitmentData>,
+    /// number of non-empty blocks, equal to: <block count of tendermint> - <pulse count>
+    #[serde(default = "default_status_block_commit_count")]
     block_commit_count: u64,
-    // Hash of the transactions in the most recent block
+    /// Hash of the transactions in the most recent block
+    #[serde(default = "default_status_txns_in_block_hash")]
     txns_in_block_hash: Option<HashOf<Vec<Transaction>>>,
-    // Sliding window of operations for replay attack prevention
+    /// Sliding window of operations for replay attack prevention
+    #[serde(default = "default_status_sliding_set")]
     sliding_set: SlidingSet<[u8; 8]>,
-    // POS-related implementations
+    /// POS-related implementations
+    #[serde(default = "default_status_staking")]
     staking: Staking,
-    // tendermint commit height
+    /// tendermint commit height
+    #[serde(default = "default_status_td_commit_height")]
     td_commit_height: u64,
-
-    // An obsolete feature, ignore it!
+    /// An obsolete feature, ignore it!
+    #[serde(default = "default_status_tracing_policies")]
     tracing_policies: HashMap<AssetTypeCode, TracingPolicy>,
 }
 
@@ -996,6 +1317,22 @@ impl LedgerStatus {
             .get(addr)
             .map(|v| v.iter().cloned().collect())
             .unwrap_or_default()
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn get_owned_abars_ids(&self, addr: &AXfrPubKey) -> Vec<ATxoSID> {
+        self.ax_utxos
+            .iter()
+            .filter(|(_, axutxo)| &axutxo.public_key == addr)
+            .map(|(sid, _)| sid.clone().to_owned())
+            .collect()
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn get_abar(&self, uid: ATxoSID) -> Option<AnonBlindAssetRecord> {
+        self.ax_utxos.get(&uid)
     }
 
     #[inline(always)]
@@ -1020,6 +1357,34 @@ impl LedgerStatus {
     #[allow(missing_docs)]
     fn get_asset_type(&self, code: &AssetTypeCode) -> Option<AssetType> {
         self.asset_types.get(code)
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    #[allow(dead_code)]
+    fn get_latest_abar_hash(&self) -> Option<BLSScalar> {
+        self.abar_commitment_versions.last()
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    #[allow(dead_code)]
+    pub fn add_abar_commitment(&mut self, hash: BLSScalar) {
+        self.abar_commitment_versions.push(hash)
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    #[allow(dead_code)]
+    fn get_versioned_abar_hash(&self, version: usize) -> Option<BLSScalar> {
+        self.abar_commitment_versions.get(version)
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    #[allow(dead_code)]
+    fn get_current_abar_version(&self) -> usize {
+        self.abar_commitment_versions.len() - 1
     }
 
     fn fast_invariant_check(&self) -> Result<()> {
@@ -1059,43 +1424,35 @@ impl LedgerStatus {
     }
 
     fn create(snapshot_file: &str) -> Result<LedgerStatus> {
-        let utxos_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/utxo";
-        let nonconfidential_balances_path =
-            SNAPSHOT_ENTRIES_DIR.to_owned() + "/nonconfidential_balances";
-        let spent_utxos_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/spent_utxos";
-        let txo_to_txn_location_path =
-            SNAPSHOT_ENTRIES_DIR.to_owned() + "/txo_to_txn_location";
-        let issuance_amounts_path =
-            SNAPSHOT_ENTRIES_DIR.to_owned() + "/issuance_amounts";
-        let state_commitment_versions_path =
-            SNAPSHOT_ENTRIES_DIR.to_owned() + "/state_commitment_versions";
-        let asset_types_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/asset_types";
-        let issuance_num_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/issuance_num";
-        let owned_utxos_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/owned_utxos";
-
-        let ledger = LedgerStatus {
+        Ok(LedgerStatus {
             snapshot_file: snapshot_file.to_owned(),
-            sliding_set: SlidingSet::<[u8; 8]>::new(TRANSACTION_WINDOW_WIDTH as usize),
-            utxos: new_mapxnk!(utxos_path.as_str()),
-            nonconfidential_balances: new_mapx!(nonconfidential_balances_path.as_str()),
-            owned_utxos: new_mapx!(owned_utxos_path.as_str()),
-            spent_utxos: new_mapxnk!(spent_utxos_path.as_str()),
-            txo_to_txn_location: new_mapxnk!(txo_to_txn_location_path.as_str()),
-            issuance_amounts: new_mapx!(issuance_amounts_path.as_str()),
-            state_commitment_versions: new_vecx!(state_commitment_versions_path.as_str()),
-            asset_types: new_mapx!(asset_types_path.as_str()),
-            tracing_policies: map! {},
-            issuance_num: new_mapx!(issuance_num_path.as_str()),
-            next_txn: TxnSID(0),
-            next_txo: TxoSID(0),
-            txns_in_block_hash: None,
-            state_commitment_data: None,
-            block_commit_count: 0,
-            staking: Staking::new(),
-            td_commit_height: 0,
-        };
-
-        Ok(ledger)
+            sliding_set: default_status_sliding_set(),
+            utxos: default_status_utxos(),
+            nonconfidential_balances: default_status_nonconfidential_balances(),
+            owned_utxos: default_status_owned_utxos(),
+            ax_utxos: default_status_ax_utxos(),
+            owned_ax_utxos: default_status_owned_ax_utxos(),
+            spent_utxos: default_status_spent_utxos(),
+            txo_to_txn_location: default_status_txo_to_txn_location(),
+            ax_txo_to_txn_location: default_status_ax_txo_to_txn_location(),
+            issuance_amounts: default_status_issuance_amounts(),
+            state_commitment_versions: default_status_state_commitment_versions(),
+            abar_commitment_versions: default_status_abar_commitment_versions(),
+            anon_state_commitment_versions:
+                default_status_anon_state_commitment_versions(),
+            asset_types: default_status_asset_types(),
+            tracing_policies: default_status_tracing_policies(),
+            issuance_num: default_status_issuance_num(),
+            next_txn: default_status_next_txn(),
+            next_txo: default_status_next_txo(),
+            next_atxo: default_status_next_atxo(),
+            txns_in_block_hash: default_status_txns_in_block_hash(),
+            state_commitment_data: default_status_state_commitment_data(),
+            anon_state_commitment_data: default_status_anon_state_commitment_data(),
+            block_commit_count: default_status_block_commit_count(),
+            staking: default_status_staking(),
+            td_commit_height: default_status_td_commit_height(),
+        })
     }
 
     #[inline(always)]
@@ -1301,6 +1658,55 @@ impl LedgerStatus {
             }
         }
 
+        // An axfr_body requires abar merkle root hash for AxfrNote verification. This is done
+        // here with LedgerStatus available.
+        for axfr_body in txn_effect.axfr_bodies.iter() {
+            let node_params =
+                NodeParams::load(axfr_body.inputs.len(), axfr_body.outputs.len())?;
+            let abar_version = axfr_body.proof.merkle_root_version;
+            verify_anon_xfr_body(
+                &node_params,
+                axfr_body,
+                // Unwrap Now to get the code to compile . Change in Zei later to accept Option<BLSScalar>
+                &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
+            )
+            .c(d!())?;
+        }
+
+        // An anon_fee_body requires abar merkle root hash for AnonFeeNote verification. This is done
+        // here with LedgerStatus available.
+        for anon_fee_body in txn_effect.anon_fee_bodies.iter() {
+            let node_params = NodeParams::anon_fee_params()?;
+            let abar_version = anon_fee_body.proof.merkle_root_version;
+            verify_anon_fee_body(
+                &node_params,
+                anon_fee_body,
+                &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
+            )
+            .c(d!())?;
+        }
+
+        // Abar conversion needs abar merkle tree root hash for verification of spent ABAR merkle proof.
+        // This is done here with merkle root available.
+        for abar_conv in &txn_effect.abar_conv_inputs {
+            // Abar to Bar conversion is invalid without an anon_fee.
+            if txn_effect.anon_fee_bodies.is_empty() {
+                return Err(eg!("Abar to Bar conversion missing anon fee"));
+            }
+
+            // Get verifier params
+            let node_params = NodeParams::abar_to_bar_params()?;
+            let abar_version: usize = abar_conv.proof.get_merkle_root_version();
+
+            // verify zk proof with merkle root
+            verify_abar_to_bar_body(
+                &node_params,
+                abar_conv,
+                &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
+            )
+            .c(d!("Abar to Bar conversion proof verification failed"))?;
+        }
+
         Ok(())
     }
 
@@ -1371,16 +1777,17 @@ impl LedgerStatus {
                     let txo_sid = next_txo;
                     next_txo += 1;
                     if let Some(tx_output) = txo {
-                        self.owned_utxos
-                            .entry(tx_output.record.public_key)
-                            .or_insert_with(HashSet::new)
-                            .insert(TxoSID(txo_sid));
+                        let public_key = tx_output.record.public_key;
                         let utxo = Utxo(tx_output);
                         *self
                             .nonconfidential_balances
                             .entry(utxo.0.record.public_key)
                             .or_insert(0) += utxo.get_nonconfidential_balance();
                         self.utxos.insert(TxoSID(txo_sid), utxo);
+                        self.owned_utxos
+                            .entry(public_key)
+                            .or_insert_with(HashSet::new)
+                            .insert(TxoSID(txo_sid));
                         txn_utxo_sids.push(TxoSID(txo_sid));
                     }
                 }
@@ -1442,4 +1849,127 @@ pub struct LoggedBlock {
 /// Flush data to disk
 pub fn flush_data() {
     fbnc::flush_data();
+}
+
+/// convert merkle tree proof to Zei compatible proofs
+pub fn create_mt_leaf_info(proof: Proof) -> MTLeafInfo {
+    MTLeafInfo {
+        path: MTPath {
+            nodes: proof
+                .nodes
+                .iter()
+                .map(|e| MTNode {
+                    siblings1: e.siblings1,
+                    siblings2: e.siblings2,
+                    is_left_child: (e.path == TreePath::Left) as u8,
+                    is_right_child: (e.path == TreePath::Right) as u8,
+                })
+                .collect(),
+        },
+        root: proof.root,
+        root_version: proof.root_version,
+        uid: proof.uid,
+    }
+}
+
+fn default_status_utxos() -> Mapxnk<TxoSID, Utxo> {
+    new_mapxnk!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/utxo")
+}
+
+fn default_status_owned_utxos() -> Mapx<XfrPublicKey, HashSet<TxoSID>> {
+    new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/owned_utxos")
+}
+
+fn default_status_nonconfidential_balances() -> Mapx<XfrPublicKey, u64> {
+    new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/nonconfidential_balances")
+}
+
+fn default_status_ax_utxos() -> Mapx<ATxoSID, AnonBlindAssetRecord> {
+    new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/ax_utxos")
+}
+
+fn default_status_owned_ax_utxos() -> Mapx<AXfrPubKey, HashSet<ATxoSID>> {
+    new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/owned_ax_utxos")
+}
+
+fn default_status_spent_utxos() -> Mapxnk<TxoSID, Utxo> {
+    new_mapxnk!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/spent_utxos")
+}
+
+fn default_status_txo_to_txn_location() -> Mapxnk<TxoSID, (TxnSID, OutputPosition)> {
+    new_mapxnk!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/txo_to_txn_location")
+}
+
+fn default_status_ax_txo_to_txn_location() -> Mapx<ATxoSID, (TxnSID, OutputPosition)> {
+    new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/atxo_to_txn_location")
+}
+
+fn default_status_issuance_amounts() -> Mapx<AssetTypeCode, u64> {
+    new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/issuance_amounts")
+}
+
+fn default_status_state_commitment_versions() -> Vecx<HashOf<Option<StateCommitmentData>>>
+{
+    new_vecx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/state_commitment_versions")
+}
+
+fn default_status_abar_commitment_versions() -> Vecx<BLSScalar> {
+    new_vecx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/abar_commitment_versions")
+}
+
+fn default_status_anon_state_commitment_versions(
+) -> Vecx<HashOf<Option<AnonStateCommitmentData>>> {
+    new_vecx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/anon_state_commitment_versions")
+}
+
+fn default_status_asset_types() -> Mapx<AssetTypeCode, AssetType> {
+    new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/asset_types")
+}
+
+fn default_status_tracing_policies() -> HashMap<AssetTypeCode, TracingPolicy> {
+    map! {}
+}
+
+fn default_status_issuance_num() -> Mapx<AssetTypeCode, u64> {
+    new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/issuance_num")
+}
+
+fn default_status_next_txn() -> TxnSID {
+    TxnSID(0)
+}
+
+fn default_status_next_txo() -> TxoSID {
+    TxoSID(0)
+}
+
+fn default_status_next_atxo() -> ATxoSID {
+    ATxoSID(0)
+}
+
+fn default_status_txns_in_block_hash() -> Option<HashOf<Vec<Transaction>>> {
+    None
+}
+
+fn default_status_state_commitment_data() -> Option<StateCommitmentData> {
+    None
+}
+
+fn default_status_anon_state_commitment_data() -> Option<AnonStateCommitmentData> {
+    None
+}
+
+fn default_status_block_commit_count() -> u64 {
+    0
+}
+
+fn default_status_staking() -> Staking {
+    Staking::new()
+}
+
+fn default_status_td_commit_height() -> u64 {
+    0
+}
+
+fn default_status_sliding_set() -> SlidingSet<[u8; 8]> {
+    SlidingSet::<[u8; 8]>::new(TRANSACTION_WINDOW_WIDTH as usize)
 }

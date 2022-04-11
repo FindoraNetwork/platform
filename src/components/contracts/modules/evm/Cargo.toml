@@ -21,6 +21,9 @@ ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0.64"
 sha3 = { version = "0.8", default-features = false }
+hex = "0.4.2"
+ethabi = "16.0.0"
+zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.5a" }
 
 # primitives, don't depend on any modules
 fp-core = { path = "../../primitives/core" }
@@ -31,13 +34,12 @@ fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
 config = { path = "../../../config"}
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.4" }
+ledger = { path = "../../../../ledger" }
 
 [dev-dependencies]
 baseapp = { path = "../../baseapp" }
-ethabi = "16.0.0"
 ethereum = { version = "0.9.0", default-features = false, features = ["with-serde"] }
 fp-mocks = { path = "../../primitives/mocks" }
-hex = "0.4.2"
 module-account = { path = "../account" }
 module-ethereum = { path = "../ethereum" }
 serde_json = "1.0.64"

@@ -13,8 +13,8 @@ use {
     globutils::HashOf,
     ledger::{
         data_model::{
-            AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData, TxnSID,
-            TxoSID, UnAuthenticatedUtxo, Utxo,
+            ATxoSID, AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData,
+            TxnSID, TxoSID, UnAuthenticatedUtxo, Utxo,
         },
         staking::{
             DelegationRwdDetail, DelegationState, Staking, TendermintAddr,
@@ -25,6 +25,7 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{collections::BTreeMap, mem, sync::Arc},
+    zei::anon_xfr::structs::AnonBlindAssetRecord,
     zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
 };
 
@@ -689,6 +690,19 @@ pub async fn query_owned_utxos(
         .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk))))
 }
 
+// query utxos according `public_key`
+pub(super) async fn query_owned_abars(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    owner: web::Path<String>,
+) -> actix_web::Result<web::Json<Vec<(ATxoSID, AnonBlindAssetRecord)>>> {
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
+    globutils::wallet::anon_public_key_from_base64(owner.as_str())
+        .c(d!())
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
+        .map(|pk| web::Json(ledger.get_owned_abars(&pk)))
+}
+
 #[allow(missing_docs)]
 pub enum ApiRoutes {
     UtxoSid,
@@ -701,6 +715,7 @@ pub enum ApiRoutes {
     TxnSidLight,
     GlobalStateVersion,
     OwnedUtxos,
+    OwnedAbars,
     ValidatorList,
     DelegationInfo,
     DelegatorList,
@@ -724,6 +739,7 @@ impl NetworkRoute for ApiRoutes {
             ApiRoutes::DelegationInfo => "delegation_info",
             ApiRoutes::DelegatorList => "delegator_list",
             ApiRoutes::ValidatorDetail => "validator_detail",
+            ApiRoutes::OwnedAbars => "owned_abars",
         };
         "/".to_owned() + endpoint
     }
