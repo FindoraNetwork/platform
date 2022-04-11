@@ -82,14 +82,14 @@ use {
     zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
 
+/// Depth of abar merkle tree
+pub use zei::anon_xfr::TREE_DEPTH as MERKLE_TREE_DEPTH;
+
 macro_rules! no_transfer_err {
     () => {
         ("Transaction has not yet been finalized".to_string())
     };
 }
-
-/// Depth of abar merkle tree
-pub const MERKLE_TREE_DEPTH: usize = 40;
 
 /// Definition of a fee operation, as a inner data structure of FeeInputs
 pub struct FeeInput {
