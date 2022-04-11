@@ -2,18 +2,19 @@
 //! # interface of operating tx
 //!
 
+use actix_cors::Cors;
 use {
     super::{SubmissionServer, TxnForward, TxnHandle},
-    actix_cors::Cors,
+    crate::{abci::PROFILER_ENABLED, api::configure::*},
     actix_web::{error, middleware, web, App, HttpServer},
     finutils::api::NetworkRoute,
     ledger::data_model::Transaction,
-    tracing::info,
     parking_lot::RwLock,
     rand_core::{CryptoRng, RngCore},
     ruc::*,
     std::result::Result as StdResult,
-    std::sync::Arc,
+    std::sync::{atomic::Ordering, Arc},
+    tracing::info,
 };
 
 /// Ping route to check for liveness of API
@@ -30,6 +31,31 @@ async fn version() -> actix_web::Result<String> {
         option_env!("VERGEN_SHA_EXTERN").unwrap_or(env!("VERGEN_SHA")),
         env!("VERGEN_BUILD_DATE")
     ))
+}
+
+/// configure
+async fn configure(body: web::Json<Configuration>) -> StdResult<String, error::Error> {
+    let config = body.into_inner();
+    info!("{:?}", config);
+    let res = match config.component.to_lowercase().as_ref() {
+        "profiler" => {
+            let param =
+                serde_json::from_slice::<ProfilerParam>(config.parameters.as_slice())
+                    .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
+            PROFILER_ENABLED.swap(param.enable, Ordering::AcqRel);
+            Ok("ok".to_string())
+        }
+        _ => Err(error::ErrorBadRequest("Not supported!".to_string())),
+    };
+
+    res
+}
+
+/// Get profile result
+async fn profile(body: web::Json<u64>) -> actix_web::Result<String> {
+    let height = body.into_inner();
+
+    Ok(format!("profile {}", height))
 }
 
 /// Sending transactions to tendermint
@@ -85,6 +111,8 @@ pub struct SubmissionApi;
 pub enum SubmissionRoutes {
     SubmitTransaction,
     TxnStatus,
+    Config,
+    Profile,
     Ping,
     Version,
 }
@@ -94,6 +122,8 @@ impl NetworkRoute for SubmissionRoutes {
         let endpoint = match *self {
             SubmissionRoutes::SubmitTransaction => "submit_transaction",
             SubmissionRoutes::TxnStatus => "txn_status",
+            SubmissionRoutes::Config => "configuration",
+            SubmissionRoutes::Profile => "profile",
             SubmissionRoutes::Ping => "ping",
             SubmissionRoutes::Version => "version",
         };
@@ -125,6 +155,8 @@ impl SubmissionApi {
                 )
                 .route(&SubmissionRoutes::Ping.route(), web::get().to(ping))
                 .route(&SubmissionRoutes::Version.route(), web::get().to(version))
+                .route(&SubmissionRoutes::Config.route(), web::post().to(configure))
+                .route(&SubmissionRoutes::Profile.route(), web::get().to(profile))
                 .route(
                     &SubmissionRoutes::TxnStatus.with_arg_template("handle"),
                     web::get().to(txn_status::<RNG, TF>),
