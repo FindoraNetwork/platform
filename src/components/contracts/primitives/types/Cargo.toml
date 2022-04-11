@@ -19,11 +19,12 @@ ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0"
 sha3 = "0.8"
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.5a" }
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-refactoring" }
+zei-algebra = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-refactoring" }
 fixed-hash = "0.7.0"
 
 # primitives
 fp-utils = { path = "../utils" }
 
 [dev-dependencies]
-rand_chacha = "0.2.0"
+rand_chacha = "0.3"

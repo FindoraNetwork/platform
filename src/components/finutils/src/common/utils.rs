@@ -8,7 +8,6 @@ use {
         common::get_serv_addr,
         txn_builder::{TransactionBuilder, TransferOperationBuilder},
     },
-    crypto::basics::hybrid_encryption::XPublicKey,
     globutils::{wallet, HashOf, SignatureOf},
     ledger::{
         data_model::{
@@ -31,7 +30,8 @@ use {
         sig::{XfrKeyPair, XfrPublicKey},
         structs::{AssetRecordTemplate, OpenAssetRecord, OwnerMemo},
     },
-    zeialgebra::jubjub::JubjubScalar,
+    zei_algebra::jubjub::JubjubScalar,
+    zei_crypto::basic::hybrid_encryption::XPublicKey,
 };
 
 ///////////////////////////////////////

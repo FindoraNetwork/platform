@@ -63,18 +63,17 @@ use {
             structs::{AnonBlindAssetRecord, MTLeafInfo, MTNode, MTPath, Nullifier},
             verify_anon_xfr_body,
         },
-        serialization::ZeiFromToBytes,
-        setup::NodeParams,
+        setup::VerifierParams,
         xfr::{
-            lib::XfrNotePolicies,
             sig::XfrPublicKey,
             structs::{OwnerMemo, TracingPolicies, TracingPolicy},
+            XfrNotePolicies,
         },
     },
     zei_accumulators::merkle_tree::{
         ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath,
     },
-    zeialgebra::{bls12_381::BLSScalar, groups::Scalar},
+    zei_algebra::{bls12_381::BLSScalar, prelude::*},
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
@@ -1662,7 +1661,7 @@ impl LedgerStatus {
         // here with LedgerStatus available.
         for axfr_body in txn_effect.axfr_bodies.iter() {
             let node_params =
-                NodeParams::load(axfr_body.inputs.len(), axfr_body.outputs.len())?;
+                VerifierParams::load(axfr_body.inputs.len(), axfr_body.outputs.len())?;
             let abar_version = axfr_body.proof.merkle_root_version;
             verify_anon_xfr_body(
                 &node_params,
@@ -1676,7 +1675,7 @@ impl LedgerStatus {
         // An anon_fee_body requires abar merkle root hash for AnonFeeNote verification. This is done
         // here with LedgerStatus available.
         for anon_fee_body in txn_effect.anon_fee_bodies.iter() {
-            let node_params = NodeParams::anon_fee_params()?;
+            let node_params = VerifierParams::anon_fee_params()?;
             let abar_version = anon_fee_body.proof.merkle_root_version;
             verify_anon_fee_body(
                 &node_params,
@@ -1695,7 +1694,7 @@ impl LedgerStatus {
             }
 
             // Get verifier params
-            let node_params = NodeParams::abar_to_bar_params()?;
+            let node_params = VerifierParams::abar_to_bar_params()?;
             let abar_version: usize = abar_conv.proof.get_merkle_root_version();
 
             // verify zk proof with merkle root

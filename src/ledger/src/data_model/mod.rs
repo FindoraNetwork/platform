@@ -54,18 +54,19 @@ use {
             structs::AXfrNote,
         },
         errors::ZeiError,
-        serialization::ZeiFromToBytes,
         xfr::{
-            lib::{gen_xfr_body, XfrNotePolicies},
+            gen_xfr_body,
             sig::{XfrKeyPair, XfrPublicKey},
             structs::{
                 AssetRecord, AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo,
                 TracingPolicies, TracingPolicy, XfrAmount, XfrAssetType, XfrBody,
                 ASSET_TYPE_LENGTH,
             },
+            XfrNotePolicies,
         },
     },
-    zeialgebra::bls12_381::BLSScalar,
+    zei_algebra::bls12_381::BLSScalar,
+    zei_algebra::serialization::ZeiFromToBytes,
 };
 
 const RANDOM_CODE_LENGTH: usize = 16;

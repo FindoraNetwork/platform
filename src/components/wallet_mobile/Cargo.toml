@@ -24,15 +24,16 @@ futures = "0.1.20"
 getrandom = { version = "0.2", features = ["js"] }
 hex = "0.3.2"
 js-sys = "0.3.27"
-rand = { version = "0.7", features = ["wasm-bindgen"] }
-rand_chacha = "0.2.0"
-rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
+rand_chacha = "0.3"
+rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
 ring = "0.16.19"
 ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_derive = "^1.0.59"
 serde_json = "1.0"
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.5a" }
+
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-refactoring" }
+zei-algebra = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-refactoring" }
 
 finutils = { path = "../finutils", default-features = false, features = []}
 fp-types = { path = "../contracts/primitives/types" }
@@ -67,7 +68,3 @@ safer-ffi = "0.0.6"
 [build-dependencies]
 cbindgen = "0.20"
 vergen = "3.1.0"
-
-[dev-dependencies]
-getrandom = { version = "0.2", features = ["js"] }
-

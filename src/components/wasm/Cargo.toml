@@ -17,9 +17,8 @@ wasm-opt = false
 base64 = "0.10"
 hex = "0.3.2"
 js-sys = "0.3.27"
-rand_chacha = "0.2.0"
-rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
-rand = { version = "0.7", features = ["wasm-bindgen"] }
+rand_chacha = "0.3"
+rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0"
 wasm-bindgen = { version = "0.2.62", features = ["serde-serialize"] }
@@ -27,15 +26,15 @@ wasm-bindgen = { version = "0.2.62", features = ["serde-serialize"] }
 ring = "0.16.19"
 aes-gcm = "0.8.0"
 bech32 = "0.7.2"
+ruc = "1.0"
 
 # Must enable the "js"-feature,
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
 
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.5a" }
-ruc = "1.0"
-zeialgebra = { package = "algebra", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.5a" }
-crypto = { package = "crypto", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.5a" }
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-refactoring" }
+zei-algebra = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-refactoring" }
+zei-crypto = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-refactoring" }
 
 finutils = { path = "../finutils", default-features = false }
 globutils = { path = "../../libs/globutils" }

@@ -27,7 +27,6 @@
 
 use {
     clap::{crate_authors, load_yaml, App},
-    crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey},
     finutils::common::{self, evm::*, get_keypair},
     fp_utils::ecdsa::SecpPair,
     globutils::wallet,
@@ -45,6 +44,7 @@ use {
     zei::anon_xfr::structs::{
         AnonBlindAssetRecord, OpenAnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
     },
+    zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
 };
 
 fn main() {

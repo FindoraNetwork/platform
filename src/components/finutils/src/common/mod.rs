@@ -9,12 +9,10 @@
 pub mod evm;
 pub mod utils;
 
-use zei::xfr::structs::{XfrAmount, XfrAssetType};
 use {
     crate::api::DelegationInfo,
     crate::common::utils::{new_tx_builder, send_tx},
     crate::txn_builder::TransactionBuilder,
-    crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey},
     globutils::wallet,
     lazy_static::lazy_static,
     ledger::{
@@ -37,21 +35,23 @@ use {
         get_block_height, get_local_block_height, get_validator_detail,
         parse_td_validator_keys,
     },
-    zei::anon_xfr::{
-        anon_fee::ANON_FEE_MIN,
-        keys::{AXfrKeyPair, AXfrPubKey},
-        nullifier,
-        structs::{AnonBlindAssetRecord, MTLeafInfo, OpenAnonBlindAssetRecordBuilder},
-    },
-    zei::xfr::structs::OwnerMemo,
     zei::{
-        setup::PublicParams,
+        anon_xfr::{
+            anon_fee::ANON_FEE_MIN,
+            keys::{AXfrKeyPair, AXfrPubKey},
+            nullifier,
+            structs::{
+                AnonBlindAssetRecord, MTLeafInfo, OpenAnonBlindAssetRecordBuilder,
+            },
+        },
         xfr::{
             asset_record::AssetRecordType,
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+            structs::{OwnerMemo, XfrAmount, XfrAssetType},
         },
     },
-    zeialgebra::{groups::Scalar, jubjub::JubjubScalar},
+    zei_algebra::{jubjub::JubjubScalar, prelude::*},
+    zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
 };
 
 lazy_static! {
@@ -764,7 +764,6 @@ pub fn issue_asset_x(
             builder.get_seq_id(),
             amount,
             confidentiality_flags,
-            &PublicParams::default(),
         )
         .c(d!())?;
     utils::gen_fee_op(kp)

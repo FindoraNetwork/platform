@@ -1,12 +1,10 @@
-use crate::data_model::AbarToBarOps;
-use zei::anon_xfr::abar_to_bar::AbarToBarBody;
 use {
     crate::{
         data_model::{
-            AnonFeeOps, AnonTransferOps, AssetType, AssetTypeCode, BarToAbarOps,
-            DefineAsset, IssueAsset, IssuerPublicKey, Memo, NoReplayToken, Operation,
-            Transaction, TransferAsset, TransferType, TxOutput, TxnTempSID, TxoRef,
-            TxoSID, UpdateMemo,
+            AbarToBarOps, AnonFeeOps, AnonTransferOps, AssetType, AssetTypeCode,
+            BarToAbarOps, DefineAsset, IssueAsset, IssuerPublicKey, Memo, NoReplayToken,
+            Operation, Transaction, TransferAsset, TransferType, TxOutput, TxnTempSID,
+            TxoRef, TxoSID, UpdateMemo,
         },
         staking::{
             self,
@@ -31,25 +29,26 @@ use {
     },
     zei::{
         anon_xfr::{
+            abar_to_bar::AbarToBarBody,
             anon_fee::AnonFeeBody,
             bar_to_abar::verify_bar_to_abar_note,
             structs::{AXfrBody, AnonBlindAssetRecord, Nullifier},
         },
-        serialization::ZeiFromToBytes,
-        setup::{NodeParams, PublicParams},
+        setup::{BulletproofParams, VerifierParams},
         xfr::{
-            lib::verify_xfr_body,
             sig::XfrPublicKey,
             structs::{XfrAmount, XfrAssetType},
+            verify_xfr_body,
         },
     },
+    zei_algebra::serialization::ZeiFromToBytes,
 };
 
 lazy_static! {
     static ref PRNG: Arc<Mutex<ChaCha20Rng>> =
         Arc::new(Mutex::new(ChaChaRng::from_entropy()));
-    static ref PARAMS: Arc<Mutex<PublicParams>> =
-        Arc::new(Mutex::new(PublicParams::default()));
+    static ref PARAMS: Arc<Mutex<BulletproofParams>> =
+        Arc::new(Mutex::new(BulletproofParams::default()));
 }
 
 /// Check operations in the context of a tx, partially.
@@ -576,7 +575,7 @@ impl TxnEffect {
     fn add_bar_to_abar(&mut self, bar_to_abar: &BarToAbarOps) -> Result<()> {
         let key = bar_to_abar.note.body.input.public_key;
         // fetch the verifier Node Params for PlonkProof
-        let node_params = NodeParams::bar_to_abar_params()?;
+        let node_params = VerifierParams::bar_to_abar_params()?;
         // verify the Plonk proof and signature
         verify_bar_to_abar_note(&node_params, &bar_to_abar.note, &key).c(d!())?;
 

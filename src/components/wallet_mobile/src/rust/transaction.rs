@@ -225,7 +225,6 @@ impl TransactionBuilder {
         seq_num: u64,
         amount: u64,
         conf_amount: bool,
-        zei_params: &PublicParams,
     ) -> RucResult<TransactionBuilder> {
         let asset_token = AssetTypeCode::new_from_base64(&code)?;
 
@@ -239,7 +238,6 @@ impl TransactionBuilder {
             seq_num,
             amount,
             confidentiality_flags,
-            zei_params.get_ref(),
         )?;
         Ok(self)
     }

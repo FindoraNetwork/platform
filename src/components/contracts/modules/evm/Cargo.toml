@@ -23,7 +23,8 @@ serde_json = "1.0.64"
 sha3 = { version = "0.8", default-features = false }
 hex = "0.4.2"
 ethabi = "16.0.0"
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.5a" }
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-refactoring" }
+zei-algebra = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-refactoring" }
 
 # primitives, don't depend on any modules
 fp-core = { path = "../../primitives/core" }

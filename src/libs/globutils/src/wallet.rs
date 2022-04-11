@@ -4,19 +4,17 @@
 //! Separating mnemonic to a standalone library is needed by tests.
 //!
 
-use {
-    bech32::{self, FromBase32, ToBase32},
-    bip0039::{Count, Language, Mnemonic},
-    crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey},
-    ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey},
-    ruc::*,
-    zei::{
-        anon_xfr::keys::{AXfrKeyPair, AXfrPubKey},
-        serialization::ZeiFromToBytes,
-        xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
-    },
-    zeialgebra::jubjub::JubjubScalar,
+use bech32::{self, FromBase32, ToBase32};
+use bip0039::{Count, Language, Mnemonic};
+use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
+use ruc::*;
+use zei::{
+    anon_xfr::keys::{AXfrKeyPair, AXfrPubKey},
+    xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
+use zei_algebra::jubjub::JubjubScalar;
+use zei_algebra::serialization::ZeiFromToBytes;
+use zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey};
 
 /// Randomly generate a 12words-length mnemonic.
 #[inline(always)]

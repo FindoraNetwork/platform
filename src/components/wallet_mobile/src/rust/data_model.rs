@@ -20,39 +20,12 @@ use rand_core::SeedableRng;
 use ruc::Result as RUCResult;
 use ruc::{d, err::RucResult};
 use serde::{Deserialize, Serialize};
-use zei::setup::PublicParams as ZeiPublicParams;
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::{
     AssetTracerDecKeys, AssetTracerEncKeys, AssetTracerKeyPair as ZeiAssetTracerKeyPair,
     BlindAssetRecord, IdentityRevealPolicy, OwnerMemo as ZeiOwnerMemo,
     TracingPolicies as ZeiTracingPolicies, TracingPolicy as ZeiTracingPolicy,
 };
-
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-/// Public parameters necessary for generating asset records. Generating this is expensive and
-/// should be done as infrequently as possible.
-/// @see {@link module:Findora-Wasm~TransactionBuilder#add_basic_issue_asset|add_basic_issue_asset}
-/// for information using public parameters to create issuance asset records.
-pub struct PublicParams {
-    pub(crate) params: ZeiPublicParams,
-}
-
-#[allow(clippy::new_without_default)]
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-impl PublicParams {
-    /// Generates a new set of parameters.
-    pub fn new() -> PublicParams {
-        PublicParams {
-            params: ZeiPublicParams::default(),
-        }
-    }
-}
-
-impl PublicParams {
-    pub fn get_ref(&self) -> &ZeiPublicParams {
-        &self.params
-    }
-}
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 /// Indicates whether the TXO ref is an absolute or relative value.

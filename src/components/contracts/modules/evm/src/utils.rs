@@ -6,10 +6,8 @@ use fp_types::actions::xhub::NonConfidentialOutput;
 use ledger::data_model::ASSET_TYPE_FRA;
 use ruc::*;
 use sha3::{Digest, Keccak256};
-use zei::{
-    serialization::ZeiFromToBytes,
-    xfr::{sig::XfrPublicKey, structs::AssetType},
-};
+use zei::xfr::{sig::XfrPublicKey, structs::AssetType};
+use zei_algebra::serialization::ZeiFromToBytes;
 
 use crate::{runner::ActionRunner, system_contracts::SystemContracts, Config};
 

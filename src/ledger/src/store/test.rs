@@ -8,10 +8,9 @@ use {
         Transaction, TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxoRef,
         TxoSID, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
     },
-    crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey},
     rand_core::SeedableRng,
-    zei::anon_xfr::{keys::AXfrKeyPair, structs::OpenAnonBlindAssetRecordBuilder},
     zei::{
+        anon_xfr::{keys::AXfrKeyPair, structs::OpenAnonBlindAssetRecordBuilder},
         setup::PublicParams,
         xfr::{
             asset_record::{
@@ -21,7 +20,8 @@ use {
             structs::{AssetRecord, AssetRecordTemplate},
         },
     },
-    zeialgebra::groups::{One, Zero},
+    zei_algebra::groups::{One, Zero},
+    zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
 };
 
 #[cfg(test)]
