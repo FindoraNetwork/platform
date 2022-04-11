@@ -34,9 +34,9 @@ use {
     },
     zei::{
         anon_xfr::structs::MTLeafInfo,
-        serialization::ZeiFromToBytes,
         xfr::{sig::XfrPublicKey, structs::OwnerMemo},
     },
+    zei_algebra::serialization::ZeiFromToBytes,
 };
 
 /// Returns the git commit hash and commit date of this build
