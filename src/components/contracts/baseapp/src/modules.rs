@@ -166,10 +166,6 @@ impl ModuleManager {
             )?
         };
 
-        println!("tx: {:?}", tx);
-        println!("tx_status: {:?}", tx_status);
-        println!("receipt: {:?}", receipt);
-
         TransactionIndex::insert(
             &mut *ctx.db.write(),
             &HA256::new(tx_status.transaction_hash),
