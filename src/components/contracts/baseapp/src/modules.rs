@@ -11,13 +11,13 @@ use fp_traits::evm::DecimalsMapping;
 use fp_types::{
     actions,
     assemble::{convert_unsigned_transaction, CheckedTransaction, UncheckedTransaction},
-    crypto::Address,
+    crypto::{Address, HA256},
 };
 use ledger::{
     converter::check_convert_account,
     data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA},
 };
-use module_ethereum::storage::PendingTransactions;
+use module_ethereum::storage::{PendingTransactions, TransactionIndex};
 use ruc::*;
 use serde::Serialize;
 
@@ -166,8 +166,15 @@ impl ModuleManager {
             )?
         };
 
+        TransactionIndex::insert(
+            &mut *ctx.db.write(),
+            &HA256::new(tx_status.transaction_hash),
+            &(U256::from(ctx.header.height), tx_status.transaction_index),
+        )?;
+
         pending_txs.push((tx, tx_status, receipt));
         PendingTransactions::put(&mut *ctx.db.write(), &pending_txs)?;
+
         Ok(())
     }
 }
