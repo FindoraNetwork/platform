@@ -87,7 +87,7 @@ fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
 sleep 5
 
 #Verify
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 419970000
+python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 419980000
 echo
 
 tail -n 2 owned_randomizers > randomizer_file

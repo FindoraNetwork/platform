@@ -599,6 +599,12 @@ impl TransactionBuilder {
     }
 
     /// Add an operation to transfer assets held in Anonymous Blind Asset Record.
+    /// Note - Input and output amounts should be balanced, including FRA implicit fee
+    /// Use op add_operation_anon_transfer_fees_remainder for automatic remainder and fee handling
+    /// # Arguments
+    /// * inputs - List of input ABARs to be used for the transfer
+    /// * outputs - List of output ABARs
+    /// * input_keypairs - list of AXfrKeyPair of the sender
     #[allow(dead_code)]
     pub fn add_operation_anon_transfer(
         &mut self,
@@ -611,6 +617,7 @@ impl TransactionBuilder {
         let user_params =
             UserParams::new(inputs.len(), outputs.len(), Option::from(depth))?;
 
+        // generate note and add the operation to the transaction
         let (body, keypairs) =
             gen_anon_xfr_body(&mut prng, &user_params, inputs, outputs, input_keypairs)
                 .c(d!())?;
@@ -621,9 +628,12 @@ impl TransactionBuilder {
         Ok((self, note))
     }
 
-    ///This function works as add_operation_anon_transfer but this implement fees,
-    /// Remainder is computed as remainder = sum_inputs - sum_outputs - fees
-    /// all this related to the asset type for fees which are fixed as FRA asset type
+    /// Create an operation for ABAR transfer and generates remainder abars for balance amounts
+    /// # Arguments
+    /// * inputs - List of input ABARs to be used for the transfer
+    /// * outputs - List of output ABARs
+    /// * input_keypairs - list of AXfrKeyPair of the sender
+    /// * enc_key - The encryption key of the sender to send the remainder abar
     pub fn add_operation_anon_transfer_fees_remainder(
         &mut self,
         inputs: &[OpenAnonBlindAssetRecord],
@@ -637,33 +647,32 @@ impl TransactionBuilder {
         let mut vec_outputs = outputs.to_vec();
         let mut vec_changes = vec![];
         let mut remainders = HashMap::new();
+        // If multiple keypairs are present, the last keypair is considered for remainder
         let remainder_pk = input_keypairs.last().unwrap().pub_key();
-        /*
-        In general we will have that the sum of FRA inputs is going to be greater
-        than output + fees, let's say remainder = inputs - (outputs + fees), the remainder amount
-        is going to be returned to the sender (the change) whenever the remainder is greater than zero,
-        so in that case we need to add this new output
-         */
 
+        // Create a remainders hashmap with remainder amount for each asset type
         for input in inputs {
+            // add each input amount to the asset type entry
             remainders
                 .entry(input.get_asset_type())
                 .and_modify(|rem| *rem += input.get_amount() as i64)
                 .or_insert(input.get_amount() as i64);
         }
         for output in outputs {
+            // subtract each output amount from the asset type entry
             remainders
                 .entry(output.get_asset_type())
                 .and_modify(|rem| *rem -= output.get_amount() as i64)
                 .or_insert(-(output.get_amount() as i64));
         }
 
+        // Check if atleast one input is of FRA asset type
         let fra_rem = remainders.remove(&ASSET_TYPE_FRA);
         if fra_rem.is_none() {
             return Err(eg!("Must include a FRA ABAR to pay FEE!"));
         }
 
-        //Here we add the output to return the change to the sender's address
+        // Create remainder OABARs for non-FRA asset types
         for (asset_type, remainder) in remainders {
             println!(
                 "Transaction Asset: {:?} Remainder Amount: {:?}",
@@ -685,12 +694,13 @@ impl TransactionBuilder {
                     .build()
                     .unwrap();
 
-                //Add oabar to outputs
+                // Add the oabar to list of outputs and a list of new oabars created
                 vec_outputs.push(oabar_money_back.clone());
                 vec_changes.push(oabar_money_back);
             }
         }
 
+        // Calculate implicit fees that will get deducted and subtract from FRA remainder
         let fees =
             FEE_CALCULATING_FUNC(inputs.len() as u32, vec_outputs.len() as u32 + 1)
                 as i64;
@@ -709,7 +719,7 @@ impl TransactionBuilder {
                 .build()
                 .unwrap();
 
-            //Add oabar to outputs
+            // Add FRA remainder oabar to outputs
             vec_outputs.push(oabar_money_back.clone());
             vec_changes.push(oabar_money_back);
         }
@@ -722,6 +732,7 @@ impl TransactionBuilder {
             Option::from(depth),
         )?;
 
+        // generate note and add the operation to the transaction
         let (body, keypairs) = gen_anon_xfr_body(
             &mut prng,
             &user_params,
@@ -734,6 +745,8 @@ impl TransactionBuilder {
         let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
         let op = Operation::TransferAnonAsset(Box::new(inp));
         self.txn.add_operation(op);
+
+        // return a list of all new remainder abars generated
         Ok((self, note, vec_changes))
     }
 

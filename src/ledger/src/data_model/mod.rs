@@ -1361,12 +1361,14 @@ impl AnonTransferOps {
         Ok(AnonTransferOps { note, nonce })
     }
 
+    /// Sets the nonce for the operation
     #[inline(always)]
     #[allow(dead_code)]
     fn set_nonce(&mut self, nonce: NoReplayToken) {
         self.nonce = nonce;
     }
 
+    /// Fetches the nonce of the operation
     #[inline(always)]
     fn get_nonce(&self) -> NoReplayToken {
         self.nonce
@@ -1386,12 +1388,14 @@ impl AnonFeeOps {
         Ok(AnonFeeOps { note, nonce })
     }
 
+    /// Sets the nonce for the operation
     #[inline(always)]
     #[allow(dead_code)]
     fn set_nonce(&mut self, nonce: NoReplayToken) {
         self.nonce = nonce;
     }
 
+    /// Fetches the nonce of the operation
     #[inline(always)]
     fn get_nonce(&self) -> NoReplayToken {
         self.nonce

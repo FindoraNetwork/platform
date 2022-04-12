@@ -1661,29 +1661,35 @@ impl LedgerStatus {
         // An axfr_body requires abar merkle root hash for AxfrNote verification. This is done
         // here with LedgerStatus available.
         for axfr_body in txn_effect.axfr_bodies.iter() {
+            // Get verifier params for corresponding length of inputs and outputs
             let node_params =
                 NodeParams::load(axfr_body.inputs.len(), axfr_body.outputs.len())?;
             let abar_version = axfr_body.proof.merkle_root_version;
+
+            // verify zk proof with merkle root
             verify_anon_xfr_body(
                 &node_params,
                 axfr_body,
                 // Unwrap Now to get the code to compile . Change in Zei later to accept Option<BLSScalar>
                 &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
             )
-            .c(d!())?;
+            .c(d!("Anon Transfer proof verification failed"))?;
         }
 
         // An anon_fee_body requires abar merkle root hash for AnonFeeNote verification. This is done
         // here with LedgerStatus available.
         for anon_fee_body in txn_effect.anon_fee_bodies.iter() {
+            // Get verifier params for anon fee
             let node_params = NodeParams::anon_fee_params()?;
             let abar_version = anon_fee_body.proof.merkle_root_version;
+
+            // verify zk proof with merkle root
             verify_anon_fee_body(
                 &node_params,
                 anon_fee_body,
                 &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
             )
-            .c(d!())?;
+            .c(d!("Anon Fee proof verification failed"))?;
         }
 
         // Abar conversion needs abar merkle tree root hash for verification of spent ABAR merkle proof.
