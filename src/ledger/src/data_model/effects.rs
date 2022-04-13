@@ -621,7 +621,7 @@ impl TxnEffect {
             if self
                 .axfr_bodies
                 .iter()
-                .flat_map(|ab| ab.inputs.iter().map(|i| i))
+                .flat_map(|ab| ab.inputs.iter())
                 .any(|n| n == i)
             {
                 return Err(eg!("Transaction has duplicate nullifiers"));

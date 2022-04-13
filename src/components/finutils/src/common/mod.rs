@@ -953,8 +953,8 @@ pub fn convert_abar2bar(
 /// Generate OABAR and add anonymous transfer operation
 /// # Arguments
 /// * axfr_secret_key - AXfrKeyPair in base64 form
-/// * r               - Commitment in base64 form
-/// * fee_r           - Commitment for paying fee
+/// * com             - Commitment in base64 form
+/// * com_fra         - Commitment for paying fee
 /// * dec_key         - XPublicKey to encrypt OwnerMemo
 /// * amount          - amount to transfer
 pub fn gen_oabar_add_op(
@@ -1055,7 +1055,7 @@ pub fn gen_oabar_add_op(
 
     send_tx(&builder.take_transaction()).c(d!())?;
 
-    let com_out = if note.outputs.len() > 0 {
+    let com_out = if !note.outputs.is_empty() {
         Some(note.outputs[0].commitment)
     } else {
         None
@@ -1169,7 +1169,7 @@ pub fn gen_oabar_add_op_x(
 
         // check oabar is unspent.
         let n = nullifier(
-            &from,
+            from,
             oabar_in.get_amount(),
             &oabar_in.get_asset_type(),
             mt_leaf_uid,

@@ -1310,7 +1310,7 @@ pub struct AbarToBarOps {
 impl AbarToBarOps {
     /// Generates a new BarToAbarOps object
     pub fn new(note: AbarToBarNote, nonce: NoReplayToken) -> Result<AbarToBarOps> {
-        Ok(AbarToBarOps { note: note, nonce })
+        Ok(AbarToBarOps { note, nonce })
     }
 
     #[inline(always)]

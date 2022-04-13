@@ -1422,7 +1422,7 @@ impl AnonTransferOperationBuilder {
         JsValue::from_serde(&commitment_map).unwrap()
     }
 
-    /// build_and_sign is used to build proof the Transfer Operation
+    /// build is used to build proof the Transfer Operation
     pub fn build(mut self) -> Result<AnonTransferOperationBuilder, JsValue> {
         self.get_builder_mut()
             .build()
