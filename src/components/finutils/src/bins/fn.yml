@@ -494,31 +494,24 @@ subcommands:
             takes_value: true
             value_name: File Path
   - owned-abars:
-      about: List Anon UTXOs for a public key, randomizer pair
+      about: Get Anon UTXOs for a keypair use commitment
       args:
-        - randomizer:
-            help: Jubjub Scalar which was used to randmoize public key
-            short: r
-            long: randomizer
+        - commitment:
+            help: Commitment of the ABAR
+            short: c
+            long: commitment
             takes_value: true
-            value_name: JUBJUB SCALAR
-            required: true
-        - axfr-public-key:
-            help: Axfr public key of the account to query
-            short: p
-            long: axfr-public-key
-            takes_value: true
-            value_name: PUBLIC KEY
+            value_name: COMMITMENT
             required: true
   - anon-balance:
-      about: List Anon balance and spending status for a public key and a list of randomizers
+      about: List Anon balance and spending status for a public key and a list of commitments
       args:
-        - randomizers:
-            help: comma separated list of Jubjub Scalars which was used to randmoize public key in base58 form
-            short: r
-            long: randomizers
+        - commitments:
+            help: the list of commitments in base64 form.
+            short: c
+            long: commitments
             takes_value: true
-            value_name: JUBJUB SCALAR
+            value_name: COMMITMENT
             required: true
         - anon-keys:
             help: Anon keys file path of the sender
@@ -528,14 +521,14 @@ subcommands:
             value_name: ANON KEYS PATH
             required: true
   - owned-open-abars:
-      about: List Open Anon UTXOs for a public key, randomizer pair
+      about: Get Open Anon UTXOs for a keypair use commitment
       args:
-        - randomizer:
-            help: Jubjub Scalar which was used to randmoize public key
-            short: r
-            long: randomizer
+        - commitment:
+            help: The commitment of ABAR
+            short: c
+            long: commitment
             takes_value: true
-            value_name: JUBJUB SCALAR
+            value_name: COMMITMENT
             required: true
         - anon-keys:
             help: Anon keys file path of the sender
@@ -585,20 +578,20 @@ subcommands:
             takes_value: true
             value_name: ANON KEYS PATH
             required: true
-        - randomizer:
-            help: Randomizer for the input Anon BAR
-            short: r
-            long: randomizer
+        - commitment:
+            help: Commitment for the input Anon BAR
+            short: c
+            long: commitment
             takes_value: true
-            value_name: RANDOMIZER
+            value_name: COMMITMENT
             required: true
-        - fee-randomizer:
-            help: Randomizer for the FRA ABAR to pay fee
+        - fee-commitment:
+            help: Commitment for the FRA ABAR to pay fee
             short: F
-            long: fee-randomizer
+            long: fee-commitment
             takes_value: true
-            value_name: FEE RANDOMIZER
-            required: true        
+            value_name: FEE COMMITMENT
+            required: true
         - to-pubkey:
             help: base64-formated `XfrPublicKey` of the receiver
             short: t
@@ -628,18 +621,18 @@ subcommands:
             takes_value: true
             value_name: ANON KEYS PATH
             required: true
-        - randomizer:
-            help: Randomizer for the input Anon BAR
-            short: r
-            long: randomizer
+        - commitment:
+            help: Commitment for the input Anon BAR
+            short: c
+            long: commitment
             takes_value: true
-            value_name: RANDOMIZER
+            value_name: COMMITMENT
             required: true
-        - fra-randomizer:
-            help: Randomizer for the input FRA Anon BAR
-            long: fra-randomizer
+        - fra-commitment:
+            help: Commitment for the input FRA Anon BAR
+            long: fra-commitment
             takes_value: true
-            value_name: FRA RANDOMIZER
+            value_name: FRA COMMITMENT
         - to-axfr-public-key:
             help: Axfr public key of the receiver
             long: to-axfr-public-key
@@ -669,12 +662,12 @@ subcommands:
             takes_value: true
             value_name: SECRET KEY
             required: true
-        - randomizer-file:
-            help: Randomizers for the input Anon BARs
-            short: r
-            long: randomizer-file
+        - commitment-file:
+            help: Commitments for the input Anon BARs
+            short: c
+            long: commitment-file
             takes_value: true
-            value_name: RANDOMIZER
+            value_name: COMMITMENT
             required: true
         - decryption-key-file:
             help: Decryption Keys for anon transfer
@@ -722,12 +715,12 @@ subcommands:
   - check-abar-status:
       about: Check the spending status and balance of ABAR
       args:
-        - randomizer:
-            help: Jubjub Scalar which was used to randmoize public key
-            short: r
-            long: randomizer
+        - commitment:
+            help: Commitment of the ABAR
+            short: c
+            long: commitment
             takes_value: true
-            value_name: JUBJUB SCALAR
+            value_name: COMMITMENT
             required: true
         - anon-keys:
             help: Anon keys file path of the sender

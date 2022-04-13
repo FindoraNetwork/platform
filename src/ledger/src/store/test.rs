@@ -791,10 +791,17 @@ fn test_update_anon_stores() {
         Nullifier::one() as Nullifier,
     ];
 
-    let oab = OpenAnonBlindAssetRecordBuilder::new();
     let enc_key = &XPublicKey::from(&XSecretKey::new(&mut prng));
     let pub_key = AXfrKeyPair::generate(&mut prng).pub_key();
-    let oabar = oab
+    let oabar = OpenAnonBlindAssetRecordBuilder::new()
+        .amount(123)
+        .asset_type(zei::xfr::structs::AssetType([39u8; 32]))
+        .pub_key(pub_key.to_owned())
+        .finalize(&mut prng, enc_key)
+        .unwrap()
+        .build()
+        .unwrap();
+    let oabar2 = OpenAnonBlindAssetRecordBuilder::new()
         .amount(123)
         .asset_type(zei::xfr::structs::AssetType([39u8; 32]))
         .pub_key(pub_key.to_owned())
@@ -803,16 +810,11 @@ fn test_update_anon_stores() {
         .build()
         .unwrap();
     let output_abars = vec![
-        vec![
-            AnonBlindAssetRecord::from_oabar(&oabar),
-            AnonBlindAssetRecord::from_oabar(&oabar),
-        ],
-        vec![
-            AnonBlindAssetRecord::from_oabar(&oabar),
-            AnonBlindAssetRecord::from_oabar(&oabar),
-        ],
+        vec![AnonBlindAssetRecord::from_oabar(&oabar)],
+        vec![AnonBlindAssetRecord::from_oabar(&oabar2)],
     ];
-    let new_pub_key = oabar.pub_key_ref().randomize(&oabar.get_key_rand_factor());
+    let new_com = oabar.compute_commitment();
+    let new_com2 = oabar2.compute_commitment();
     let tx_block = vec![
         FinalizedTransaction {
             txn: Default::default(),
@@ -848,31 +850,16 @@ fn test_update_anon_stores() {
     assert!(state.nullifier_set.read().get(&d0).unwrap().is_some());
     assert!(state.nullifier_set.read().get(&d1).unwrap().is_some());
 
-    assert_eq!(state.status.next_atxo.0, 4);
+    assert_eq!(state.status.next_atxo.0, 2);
     assert_eq!(
         state.status.ax_txo_to_txn_location.get(&ATxoSID(0)),
         Some((TxnSID(0), OutputPosition(0)))
     );
     assert_eq!(
         state.status.ax_txo_to_txn_location.get(&ATxoSID(1)),
-        Some((TxnSID(0), OutputPosition(1)))
-    );
-    assert_eq!(
-        state.status.ax_txo_to_txn_location.get(&ATxoSID(2)),
         Some((TxnSID(1), OutputPosition(0)))
     );
-    assert_eq!(
-        state.status.ax_txo_to_txn_location.get(&ATxoSID(3)),
-        Some((TxnSID(1), OutputPosition(1)))
-    );
 
-    let mut set = HashSet::new();
-    set.insert(ATxoSID(0));
-    set.insert(ATxoSID(1));
-    set.insert(ATxoSID(2));
-    set.insert(ATxoSID(3));
-    assert_eq!(
-        state.status.owned_ax_utxos.get(&new_pub_key.clone()),
-        Some(set)
-    );
+    assert_eq!(state.status.owned_ax_utxos.get(&new_com), Some(ATxoSID(0)));
+    assert_eq!(state.status.owned_ax_utxos.get(&new_com2), Some(ATxoSID(1)));
 }

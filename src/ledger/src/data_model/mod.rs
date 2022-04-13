@@ -47,13 +47,9 @@ use {
     unicode_normalization::UnicodeNormalization,
     zei::{
         anon_xfr::{
-            abar_to_bar::AbarToBarNote,
-            anon_fee::AnonFeeNote,
-            bar_to_abar::{BarToAbarBody, BarToAbarNote},
-            keys::AXfrPubKey,
-            structs::AXfrNote,
+            abar_to_bar::AbarToBarNote, anon_fee::AnonFeeNote,
+            bar_to_abar::BarToAbarNote, keys::AXfrPubKey, structs::AXfrNote,
         },
-        errors::ZeiError,
         xfr::{
             gen_xfr_body,
             sig::{XfrKeyPair, XfrPublicKey},
@@ -1275,29 +1271,16 @@ pub struct BarToAbarOps {
 impl BarToAbarOps {
     /// Generates a new BarToAbarOps object
     /// # Arguments
-    /// * bar_to_abar_body - The BarToAbarBody of the conversion
-    /// * signing_key      - XfrKeyPair of the converting BAR
+    /// * bar_to_abar_note - The BarToAbarNote of the conversion
     /// * txo_sid          - the TxoSID of the converting BAR
     /// * nonce
     pub fn new(
-        bar_to_abar_body: BarToAbarBody,
-        signing_key: &XfrKeyPair,
+        note: BarToAbarNote,
         txo_sid: TxoSID,
         nonce: NoReplayToken,
     ) -> Result<BarToAbarOps> {
-        // serialize the body
-        let msg = bincode::serialize(&bar_to_abar_body)
-            .map_err(|_| ZeiError::SerializationError)
-            .c(d!())?;
-
-        // sign the body
-        let signature = signing_key.sign(&msg);
-
         Ok(BarToAbarOps {
-            note: BarToAbarNote {
-                body: bar_to_abar_body,
-                signature,
-            },
+            note,
             txo_sid,
             nonce,
         })
@@ -1326,14 +1309,8 @@ pub struct AbarToBarOps {
 
 impl AbarToBarOps {
     /// Generates a new BarToAbarOps object
-    pub fn new(
-        abar_to_bar_note: &AbarToBarNote,
-        nonce: NoReplayToken,
-    ) -> Result<AbarToBarOps> {
-        Ok(AbarToBarOps {
-            note: abar_to_bar_note.clone(),
-            nonce,
-        })
+    pub fn new(note: AbarToBarNote, nonce: NoReplayToken) -> Result<AbarToBarOps> {
+        Ok(AbarToBarOps { note: note, nonce })
     }
 
     #[inline(always)]

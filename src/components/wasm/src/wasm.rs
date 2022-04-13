@@ -70,7 +70,7 @@ use {
             keys::{AXfrKeyPair, AXfrPubKey},
             nullifier,
             structs::{
-                AnonBlindAssetRecord, OpenAnonBlindAssetRecord,
+                AnonBlindAssetRecord, Commitment, OpenAnonBlindAssetRecord,
                 OpenAnonBlindAssetRecordBuilder,
             },
         },
@@ -84,10 +84,7 @@ use {
             trace_assets as zei_trace_assets,
         },
     },
-    zei_algebra::{
-        jubjub::JubjubScalar,
-        prelude::{Scalar, ZeiFromToBytes},
-    },
+    zei_algebra::prelude::{Scalar, ZeiFromToBytes},
 };
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
@@ -158,17 +155,17 @@ pub fn get_null_pk() -> XfrPublicKey {
     XfrPublicKey::zei_from_bytes(&[0; 32]).unwrap()
 }
 
-/// struct to return list of randomizer strings
+/// struct to return list of commitment strings
 #[derive(Serialize, Deserialize)]
-pub struct RandomizerStringArray {
-    randomizers: Vec<String>,
+pub struct CommitmentStringArray {
+    commitments: Vec<String>,
 }
 
 #[wasm_bindgen]
 /// Structure that allows users to construct arbitrary transactions.
 pub struct TransactionBuilder {
     transaction_builder: PlatformTransactionBuilder,
-    randomizers: Vec<JubjubScalar>,
+    commitments: Vec<Commitment>,
 }
 
 impl TransactionBuilder {
@@ -325,7 +322,7 @@ impl TransactionBuilder {
     pub fn new(seq_id: u64) -> Self {
         TransactionBuilder {
             transaction_builder: PlatformTransactionBuilder::from_seq_id(seq_id),
-            randomizers: Default::default(),
+            commitments: Default::default(),
         }
     }
 
@@ -477,7 +474,7 @@ impl TransactionBuilder {
             JsValue::from_str(&format!("Could not open asset record: {}", e))
         })?;
 
-        let (_, r) = self
+        let (_, c) = self
             .get_builder_mut()
             .add_operation_bar_to_abar(
                 auth_key_pair,
@@ -491,7 +488,7 @@ impl TransactionBuilder {
                 JsValue::from_str(&format!("Could not add operation: {}", e))
             })?;
 
-        self.randomizers.push(r);
+        self.commitments.push(c);
         Ok(self)
     }
 
@@ -596,18 +593,18 @@ impl TransactionBuilder {
                 JsValue::from_str(&format!("Could not add operation: {}", e))
             })?;
 
-        let r = rem_oabar.get_key_rand_factor();
-        self.randomizers.push(r);
+        let c = rem_oabar.compute_commitment();
+        self.commitments.push(c);
         Ok(self)
     }
 
-    /// Returns a list of randomizer base58 strings as json
-    pub fn get_randomizers(&self) -> JsValue {
-        let r = RandomizerStringArray {
-            randomizers: self
-                .randomizers
+    /// Returns a list of commitment base64 strings as json
+    pub fn get_commitments(&self) -> JsValue {
+        let r = CommitmentStringArray {
+            commitments: self
+                .commitments
                 .iter()
-                .map(wallet::randomizer_to_base58)
+                .map(wallet::commitment_to_base64)
                 .collect(),
         };
 
@@ -668,8 +665,8 @@ impl TransactionBuilder {
             .map_err(|e| {
                 JsValue::from_str(&format!("Could not add operation: {}", e))
             })?;
-        let r1 = output_oabar.get_key_rand_factor();
-        self.randomizers.push(r1);
+        let r1 = output_oabar.compute_commitment();
+        self.commitments.push(r1);
 
         let (_, note, rem_oabars) = self
             .get_builder_mut()
@@ -685,7 +682,7 @@ impl TransactionBuilder {
             })?;
 
         for rem_oabar in rem_oabars {
-            self.randomizers.push(rem_oabar.get_key_rand_factor());
+            self.commitments.push(rem_oabar.compute_commitment());
         }
 
         Ok(self)
@@ -1405,35 +1402,30 @@ impl AnonTransferOperationBuilder {
         Ok(self)
     }
 
-    /// get_randomizers returns a list of all the randomizers for receiver public keys
-    pub fn get_randomizers(&self) -> JsValue {
-        let r = RandomizerStringArray {
-            randomizers: self
+    /// get_commitments returns a list of all the commitments for receiver public keys
+    pub fn get_commitments(&self) -> JsValue {
+        let r = CommitmentStringArray {
+            commitments: self
                 .get_builder()
-                .get_randomizers()
+                .get_commitments()
                 .iter()
-                .map(wallet::randomizer_to_base58)
+                .map(wallet::commitment_to_base64)
                 .collect(),
         };
 
         JsValue::from_serde(&r).unwrap()
     }
 
-    /// get_randomizer_map returns a hashmap of all the randomizers mapped to public key, asset, amount
-    pub fn get_randomizer_map(&self) -> JsValue {
-        let randomizer_map = self.get_builder().get_randomizer_map();
-        JsValue::from_serde(&randomizer_map).unwrap()
+    /// get_commitment_map returns a hashmap of all the commitments mapped to public key, asset, amount
+    pub fn get_commitment_map(&self) -> JsValue {
+        let commitment_map = self.get_builder().get_commitment_map();
+        JsValue::from_serde(&commitment_map).unwrap()
     }
 
-    /// build_and_sign is used to build proof and sign the Transfer Operation
-    pub fn build_and_sign(mut self) -> Result<AnonTransferOperationBuilder, JsValue> {
+    /// build_and_sign is used to build proof the Transfer Operation
+    pub fn build(mut self) -> Result<AnonTransferOperationBuilder, JsValue> {
         self.get_builder_mut()
             .build()
-            .c(d!())
-            .map_err(error_to_jsvalue)?;
-
-        self.get_builder_mut()
-            .sign()
             .c(d!())
             .map_err(error_to_jsvalue)?;
 
@@ -2054,40 +2046,6 @@ pub fn axfr_pubkey_from_string(key_str: &str) -> Result<AXfrPubKey, JsValue> {
     wallet::anon_public_key_from_base64(key_str)
         .c(d!())
         .map_err(error_to_jsvalue)
-}
-
-#[wasm_bindgen]
-#[allow(missing_docs)]
-pub fn randomize_axfr_pubkey(
-    pub_key: AXfrPubKey,
-    randomizer_str: &str,
-) -> Result<JsValue, JsValue> {
-    let randomizer = wallet::randomizer_from_base58(randomizer_str)
-        .c(d!())
-        .map_err(error_to_jsvalue)?;
-    let pub_key_str = wallet::anon_public_key_to_base64(&pub_key.randomize(&randomizer));
-    let json = JsValue::from_serde(pub_key_str.as_str())
-        .c(d!())
-        .map_err(error_to_jsvalue)?;
-
-    Ok(json)
-}
-
-#[wasm_bindgen]
-#[allow(missing_docs)]
-pub fn randomize_axfr_keypair(
-    keypair: AXfrKeyPair,
-    randomizer_str: &str,
-) -> Result<JsValue, JsValue> {
-    let randomizer = wallet::randomizer_from_base58(randomizer_str)
-        .c(d!())
-        .map_err(error_to_jsvalue)?;
-    let keypair_str = wallet::anon_secret_key_to_base64(&keypair.randomize(&randomizer));
-    let json = JsValue::from_serde(keypair_str.as_str())
-        .c(d!())
-        .map_err(error_to_jsvalue)?;
-
-    Ok(json)
 }
 
 #[wasm_bindgen]

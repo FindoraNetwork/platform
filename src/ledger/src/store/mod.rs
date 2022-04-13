@@ -56,12 +56,13 @@ use {
     },
     zei::{
         anon_xfr::{
-            abar_to_bar::verify_abar_to_bar_body,
-            anon_fee::verify_anon_fee_body,
+            abar_to_bar::verify_abar_to_bar_note,
+            anon_fee::verify_anon_fee_note,
             hash_abar,
-            keys::AXfrPubKey,
-            structs::{AnonBlindAssetRecord, MTLeafInfo, MTNode, MTPath, Nullifier},
-            verify_anon_xfr_body,
+            structs::{
+                AnonBlindAssetRecord, Commitment, MTLeafInfo, MTNode, MTPath, Nullifier,
+            },
+            verify_anon_xfr_note,
         },
         setup::VerifierParams,
         xfr::{
@@ -332,20 +333,9 @@ impl LedgerState {
             let mut op_position = OutputPosition(0);
             let mut atxo_ids: Vec<ATxoSID> = vec![];
             for abar in txn_abars {
-                println!(
-                    "ABAR setting in LedgerStatus: {}",
-                    base64::encode_config(
-                        abar.public_key.zei_to_bytes().as_slice(),
-                        base64::URL_SAFE
-                    )
-                );
                 let uid = self.add_abar(&abar).c(d!())?;
                 self.status.ax_utxos.insert(uid, abar.clone());
-                self.status
-                    .owned_ax_utxos
-                    .entry(abar.public_key)
-                    .or_insert_with(HashSet::new)
-                    .insert(uid);
+                self.status.owned_ax_utxos.insert(abar.commitment, uid);
                 self.status
                     .ax_txo_to_txn_location
                     .insert(uid, (txn_sid, op_position));
@@ -1020,26 +1010,8 @@ impl LedgerState {
 
     /// Get all abars with sid which are associated with a diversified public key
     #[allow(dead_code)]
-    pub fn get_owned_abars(
-        &self,
-        addr: &AXfrPubKey,
-    ) -> Vec<(ATxoSID, AnonBlindAssetRecord)> {
-        println!(
-            "Public Key: {:?}",
-            base64::encode_config(addr.zei_to_bytes().as_slice(), base64::URL_SAFE)
-        );
-
-        if let Some(set) = self.status.owned_ax_utxos.get(addr) {
-            return set
-                .iter()
-                .map(|sid| {
-                    let abar = self.status.ax_utxos.get(sid).unwrap();
-                    (*sid, abar)
-                })
-                .collect();
-        }
-
-        vec![]
+    pub fn get_owned_abar(&self, com: &Commitment) -> Option<ATxoSID> {
+        self.status.owned_ax_utxos.get(com)
     }
 
     /// Get the owner memo of a abar by ATxoSID
@@ -1055,10 +1027,10 @@ impl LedgerState {
             .iter()
             .flat_map(|o| match o {
                 Operation::BarToAbar(body) => vec![body.note.body.memo.clone()],
-                Operation::TransferAnonAsset(body) => body.note.body.owner_memos.clone(),
+                Operation::TransferAnonAsset(body) => body.note.owner_memos.clone(),
                 Operation::AnonymousFee(body) => {
-                    println!("AnonymousFee {:?}", body.note.body.owner_memo);
-                    vec![body.note.body.owner_memo.clone()]
+                    println!("AnonymousFee {:?}", body.note.owner_memo);
+                    vec![body.note.owner_memo.clone()]
                 }
                 _ => vec![],
             })
@@ -1244,7 +1216,7 @@ pub struct LedgerStatus {
     ax_utxos: Mapx<ATxoSID, AnonBlindAssetRecord>,
     /// all owned abars
     #[serde(default = "default_status_owned_ax_utxos")]
-    owned_ax_utxos: Mapx<AXfrPubKey, HashSet<ATxoSID>>,
+    owned_ax_utxos: Mapx<Commitment, ATxoSID>,
     /// all spent TXOs
     #[serde(default = "default_status_spent_utxos")]
     pub spent_utxos: Mapxnk<TxoSID, Utxo>,
@@ -1320,12 +1292,8 @@ impl LedgerStatus {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn get_owned_abars_ids(&self, addr: &AXfrPubKey) -> Vec<ATxoSID> {
-        self.ax_utxos
-            .iter()
-            .filter(|(_, axutxo)| &axutxo.public_key == addr)
-            .map(|(sid, _)| sid.clone().to_owned())
-            .collect()
+    pub fn get_owned_abar(&self, com: &Commitment) -> Option<ATxoSID> {
+        self.owned_ax_utxos.get(com)
     }
 
     #[inline(always)]
@@ -1663,7 +1631,7 @@ impl LedgerStatus {
             let node_params =
                 VerifierParams::load(axfr_body.inputs.len(), axfr_body.outputs.len())?;
             let abar_version = axfr_body.proof.merkle_root_version;
-            verify_anon_xfr_body(
+            verify_anon_xfr_note(
                 &node_params,
                 axfr_body,
                 // Unwrap Now to get the code to compile . Change in Zei later to accept Option<BLSScalar>
@@ -1677,7 +1645,7 @@ impl LedgerStatus {
         for anon_fee_body in txn_effect.anon_fee_bodies.iter() {
             let node_params = VerifierParams::anon_fee_params()?;
             let abar_version = anon_fee_body.proof.merkle_root_version;
-            verify_anon_fee_body(
+            verify_anon_fee_note(
                 &node_params,
                 anon_fee_body,
                 &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
@@ -1695,10 +1663,10 @@ impl LedgerStatus {
 
             // Get verifier params
             let node_params = VerifierParams::abar_to_bar_params()?;
-            let abar_version: usize = abar_conv.proof.get_merkle_root_version();
+            let abar_version: usize = abar_conv.body.merkle_root_version;
 
             // verify zk proof with merkle root
-            verify_abar_to_bar_body(
+            verify_abar_to_bar_note(
                 &node_params,
                 abar_conv,
                 &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
@@ -1887,7 +1855,7 @@ fn default_status_ax_utxos() -> Mapx<ATxoSID, AnonBlindAssetRecord> {
     new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/ax_utxos")
 }
 
-fn default_status_owned_ax_utxos() -> Mapx<AXfrPubKey, HashSet<ATxoSID>> {
+fn default_status_owned_ax_utxos() -> Mapx<Commitment, ATxoSID> {
     new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/owned_ax_utxos")
 }
 

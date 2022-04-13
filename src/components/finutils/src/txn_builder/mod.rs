@@ -53,13 +53,13 @@ use {
         },
         anon_xfr::{
             abar_to_bar::gen_abar_to_bar_note,
-            anon_fee::{gen_anon_fee_body, AnonFeeNote},
-            bar_to_abar::gen_bar_to_abar_body,
+            anon_fee::{gen_anon_fee_note, AnonFeeNote},
+            bar_to_abar::gen_bar_to_abar_note,
             config::FEE_CALCULATING_FUNC,
-            gen_anon_xfr_body,
+            gen_anon_xfr_note,
             keys::{AXfrKeyPair, AXfrPubKey},
             structs::{
-                AXfrBody, AXfrNote, OpenAnonBlindAssetRecord,
+                AXfrNote, Commitment, OpenAnonBlindAssetRecord,
                 OpenAnonBlindAssetRecordBuilder,
             },
         },
@@ -77,7 +77,7 @@ use {
             XfrNotePolicies,
         },
     },
-    zei_algebra::{jubjub::JubjubScalar, prelude::*},
+    zei_algebra::prelude::*,
     zei_crypto::basic::hybrid_encryption::XPublicKey,
     zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
@@ -493,7 +493,7 @@ impl TransactionBuilder {
         self
     }
 
-    /// Add an operation to convert a Blind Asset Record to a Anonymous record and return the Randomizer
+    /// Add an operation to convert a Blind Asset Record to a Anonymous record and return the Commitment
     /// # Arguments
     /// * `auth_key_pair` -  XfrKeyPair of the owner BAR for conversion
     /// * `abar_pub_key`  -  AXfrPubKey of the receiver ABAR after conversion
@@ -507,30 +507,31 @@ impl TransactionBuilder {
         txo_sid: TxoSID,
         input_record: &OpenAssetRecord,
         enc_key: &XPublicKey,
-    ) -> Result<(&mut Self, JubjubScalar)> {
+    ) -> Result<(&mut Self, Commitment)> {
         let mut prng = ChaChaRng::from_entropy();
 
         // generate params for Bar to Abar conversion
-        let user_params = ProverParams::eq_committed_vals_params()?;
+        let prover_params = ProverParams::eq_committed_vals_params()?;
 
-        // generate the BarToAbarBody with the ZKP
-        let (body, r) = gen_bar_to_abar_body(
+        // generate the BarToAbarNote with the ZKP
+        let note = gen_bar_to_abar_note(
             &mut prng,
-            &user_params,
+            &prover_params,
             input_record,
+            auth_key_pair,
             abar_pub_key,
             enc_key,
         )
         .c(d!())?;
+        let c = note.body.output.commitment;
 
-        // Create the BarToAbarOps with BarToAbarBody and signature
-        let bar_to_abar =
-            BarToAbarOps::new(body, auth_key_pair, txo_sid, self.no_replay_token)?;
+        // Create the BarToAbarOps
+        let bar_to_abar = BarToAbarOps::new(note, txo_sid, self.no_replay_token)?;
 
         // Add the generated operation to the transaction
         let op = Operation::BarToAbar(Box::from(bar_to_abar));
         self.txn.add_operation(op);
-        Ok((self, r))
+        Ok((self, c))
     }
 
     /// Create a new operation to convert from Anonymous record to Blind Asset Record
@@ -561,7 +562,7 @@ impl TransactionBuilder {
         .c(d!())?;
 
         // Create operation
-        let abar_to_bar = AbarToBarOps::new(&note, self.no_replay_token).c(d!())?;
+        let abar_to_bar = AbarToBarOps::new(note, self.no_replay_token).c(d!())?;
         let op = Operation::AbarToBar(Box::from(abar_to_bar));
 
         // Add operation to transaction
@@ -582,14 +583,12 @@ impl TransactionBuilder {
         input_keypair: &AXfrKeyPair,
     ) -> Result<(&mut Self, AnonFeeNote)> {
         let mut prng = ChaChaRng::from_entropy();
-        let user_params = ProverParams::anon_fee_params(MERKLE_TREE_DEPTH)?;
+        let prover_params = ProverParams::anon_fee_params(MERKLE_TREE_DEPTH)?;
 
         // Generate AnonFee note
-        let (body, keypairs) =
-            gen_anon_fee_body(&mut prng, &user_params, input, output, input_keypair)
-                .c(d!())?;
         let note =
-            AnonFeeNote::generate_note_from_body(&mut prng, body, keypairs).c(d!())?;
+            gen_anon_fee_note(&mut prng, &prover_params, input, output, input_keypair)
+                .c(d!())?;
 
         // create Operation
         let inp = AnonFeeOps::new(note.clone(), self.no_replay_token).c(d!())?;
@@ -609,14 +608,18 @@ impl TransactionBuilder {
     ) -> Result<(&mut Self, AXfrNote)> {
         let mut prng = ChaChaRng::from_entropy();
         let depth: usize = MERKLE_TREE_DEPTH;
-        let user_params =
+        let prover_params =
             ProverParams::new(inputs.len(), outputs.len(), Option::from(depth))?;
 
-        let (body, keypairs) =
-            gen_anon_xfr_body(&mut prng, &user_params, inputs, outputs, input_keypairs)
-                .c(d!())?;
-        let note =
-            AXfrNote::generate_note_from_body(&mut prng, body, keypairs).c(d!())?;
+        let note = gen_anon_xfr_note(
+            &mut prng,
+            &prover_params,
+            inputs,
+            outputs,
+            input_keypairs,
+        )
+        .c(d!())?;
+
         let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
         let op = Operation::TransferAnonAsset(Box::new(inp));
         self.txn.add_operation(op);
@@ -718,22 +721,21 @@ impl TransactionBuilder {
 
         let outputs_plus_remainder = &vec_outputs[..];
 
-        let user_params = ProverParams::new(
+        let prover_params = ProverParams::new(
             inputs.len(),
             outputs_plus_remainder.len(),
             Option::from(depth),
         )?;
 
-        let (body, keypairs) = gen_anon_xfr_body(
+        let note = gen_anon_xfr_note(
             &mut prng,
-            &user_params,
+            &prover_params,
             inputs,
             outputs_plus_remainder,
             input_keypairs,
         )
         .c(d!())?;
-        let note =
-            AXfrNote::generate_note_from_body(&mut prng, body, keypairs).c(d!())?;
+
         let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
         let op = Operation::TransferAnonAsset(Box::new(inp));
         self.txn.add_operation(op);
@@ -1416,10 +1418,8 @@ pub struct AnonTransferOperationBuilder {
     outputs: Vec<OpenAnonBlindAssetRecord>,
     keypairs: Vec<AXfrKeyPair>,
     from_pubkey: Option<XPublicKey>,
-    body: Option<AXfrBody>,
-    diversified_keypairs: Vec<AXfrKeyPair>,
-    randomizers: Vec<JubjubScalar>,
     note: Option<AXfrNote>,
+    commitments: Vec<Commitment>,
 
     nonce: NoReplayToken,
     txn: Transaction,
@@ -1436,10 +1436,8 @@ impl AnonTransferOperationBuilder {
             outputs: Vec::default(),
             keypairs: Vec::default(),
             from_pubkey: None,
-            body: None,
-            diversified_keypairs: Vec::default(),
-            randomizers: Vec::default(),
             note: None,
+            commitments: Vec::default(),
             nonce: no_replay_token,
             txn: Transaction::from_seq_id(seq_id),
         }
@@ -1459,9 +1457,8 @@ impl AnonTransferOperationBuilder {
 
     /// add_output is used to add a output record to the Anon Transfer factory
     pub fn add_output(&mut self, abar: OpenAnonBlindAssetRecord) -> Result<&mut Self> {
-        let randomizer = abar.get_key_rand_factor();
+        self.commitments.push(abar.compute_commitment());
         self.outputs.push(abar);
-        self.randomizers.push(randomizer);
         Ok(self)
     }
 
@@ -1509,23 +1506,22 @@ impl AnonTransferOperationBuilder {
         }
     }
 
-    /// get_randomizers fetches the randomizers for the different outputs.
-    pub fn get_randomizers(&self) -> Vec<JubjubScalar> {
-        self.randomizers.clone()
+    /// get_commitments fetches the commitments for the different outputs.
+    pub fn get_commitments(&self) -> Vec<Commitment> {
+        self.commitments.clone()
     }
 
-    /// get a hashmap of randomizer, public key, asset, amount
-    pub fn get_randomizer_map(&self) -> HashMap<String, (AXfrPubKey, AssetType, u64)> {
-        let mut randomizer_map = HashMap::new();
+    /// get a hashmap of commitment, public key, asset, amount
+    pub fn get_commitment_map(&self) -> HashMap<String, (AXfrPubKey, AssetType, u64)> {
+        let mut commitment_map = HashMap::new();
         for out_abar in self.outputs.iter() {
-            let abar_rand =
-                wallet::randomizer_to_base58(&out_abar.get_key_rand_factor());
+            let abar_rand = wallet::commitment_to_base64(&out_abar.compute_commitment());
             let abar_pkey = *out_abar.pub_key_ref();
             let abar_asset = out_abar.get_asset_type();
             let abar_amt = out_abar.get_amount();
-            randomizer_map.insert(abar_rand, (abar_pkey, abar_asset, abar_amt));
+            commitment_map.insert(abar_rand, (abar_pkey, abar_asset, abar_amt));
         }
-        randomizer_map
+        commitment_map
     }
 
     /// set public key of sender for remainder
@@ -1569,42 +1565,26 @@ impl AnonTransferOperationBuilder {
             .build()
             .unwrap();
 
-        let randomizer = oabar_money_back.get_key_rand_factor();
+        let commitment = oabar_money_back.compute_commitment();
         self.outputs.push(oabar_money_back);
-        self.randomizers.push(randomizer);
+        self.commitments.push(commitment);
 
-        let user_params = ProverParams::new(
+        let prover_params = ProverParams::new(
             self.inputs.len(),
             self.outputs.len(),
             Some(MERKLE_TREE_DEPTH),
         )?;
 
-        let (body, diversified_keypairs) = gen_anon_xfr_body(
+        let note = gen_anon_xfr_note(
             &mut prng,
-            &user_params,
+            &prover_params,
             self.inputs.as_slice(),
             self.outputs.as_slice(),
             self.keypairs.as_slice(),
         )
         .c(d!())?;
 
-        self.body = Some(body);
-        self.diversified_keypairs = diversified_keypairs;
-
-        Ok(self)
-    }
-
-    /// sign method signs the anon transfer body and creates a anon-note for the operation
-    pub fn sign(&mut self) -> Result<&mut Self> {
-        let mut prng = ChaChaRng::from_entropy();
-        self.note = Some(
-            AXfrNote::generate_note_from_body(
-                &mut prng,
-                self.body.as_ref().unwrap().clone(),
-                self.diversified_keypairs.clone(),
-            )
-            .c(d!())?,
-        );
+        self.note = Some(note);
 
         Ok(self)
     }
@@ -2251,8 +2231,6 @@ mod tests {
             gen_oabar_and_keys(&mut prng, amount, asset_type);
         let abar = AnonBlindAssetRecord::from_oabar(&oabar);
         assert_eq!(keypair_in.pub_key(), *oabar.pub_key_ref());
-        let rand_keypair_in = keypair_in.randomize(&oabar.get_key_rand_factor());
-        assert_eq!(rand_keypair_in.pub_key(), abar.public_key);
 
         let _owner_memo = oabar.get_owner_memo().unwrap();
 
@@ -2295,8 +2273,6 @@ mod tests {
         let abar1 = AnonBlindAssetRecord::from_oabar(&oabar1);
 
         assert_eq!(keypair_in1.pub_key(), *oabar1.pub_key_ref());
-        let rand_keypair_in1 = keypair_in1.randomize(&oabar1.get_key_rand_factor());
-        assert_eq!(rand_keypair_in1.pub_key(), abar1.public_key);
 
         let _owner_memo1 = oabar1.get_owner_memo().unwrap();
 

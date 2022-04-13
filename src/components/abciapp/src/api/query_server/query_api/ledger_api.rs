@@ -690,17 +690,23 @@ pub async fn query_owned_utxos(
         .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk))))
 }
 
-// query utxos according `public_key`
-pub(super) async fn query_owned_abars(
+// query utxos according `commitment`
+pub(super) async fn query_owned_abar(
     data: web::Data<Arc<RwLock<QueryServer>>>,
-    owner: web::Path<String>,
-) -> actix_web::Result<web::Json<Vec<(ATxoSID, AnonBlindAssetRecord)>>> {
+    com: web::Path<String>,
+) -> actix_web::Result<web::Json<Option<(ATxoSID, AnonBlindAssetRecord)>>> {
     let qs = data.read();
     let ledger = &qs.ledger_cloned;
-    globutils::wallet::anon_public_key_from_base64(owner.as_str())
+    globutils::wallet::commitment_from_base64(com.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
-        .map(|pk| web::Json(ledger.get_owned_abars(&pk)))
+        .map(|com| {
+            web::Json(
+                ledger
+                    .get_owned_abar(&com)
+                    .map(|a| (a, AnonBlindAssetRecord { commitment: com })),
+            )
+        })
 }
 
 #[allow(missing_docs)]
