@@ -602,7 +602,6 @@ fn run() -> Result<()> {
         let amount = m.value_of("amount");
 
         if commitment.is_none()
-            || fee_commitment.is_none()
             || to_axfr_public_key.is_none()
             || to_enc_key.is_none()
             || amount.is_none()

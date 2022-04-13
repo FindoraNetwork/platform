@@ -26,6 +26,9 @@ nohup.out
 randomizers
 sent_randomizers
 owned_randomizers
+sent_commitments
+owned_commitments
+tmp_file
 **/.wasm.sh
 
 tools/tendermint
