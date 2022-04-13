@@ -16,7 +16,7 @@ Compiled by [platform/componets/wallet_mobile](https://github.com/FindoraNetwork
 ### Wasm
 ```
 cd components/wallet_mobile
-wasm-pack build             
+wasm-pack build
 ```
 
 ### Android

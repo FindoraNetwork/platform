@@ -1125,20 +1125,20 @@ pub fn gen_oabar_add_op_x(
     assets: Vec<AssetTypeCode>,
 ) -> Result<()> {
     let sender_count = axfr_secret_keys.len();
-    let recvier_count = to_axfr_public_keys.len();
+    let receiver_count = to_axfr_public_keys.len();
 
     // check if input counts tally
     if sender_count != commitments.len()
         || sender_count != dec_keys.len()
-        || recvier_count != amounts.len()
-        || recvier_count != assets.len()
+        || receiver_count != amounts.len()
+        || receiver_count != assets.len()
     {
         return Err(eg!(
             "The Parameters: from-sk/dec-keys/commitments or to-pk/to-enc-keys not match!"
         ));
     }
 
-    // CReate Input Open Abars with input keys, radomizers and Owner memos
+    // Create Input Open Abars with input keys, radomizers and Owner memos
     let mut oabars_in = Vec::new();
     for i in 0..sender_count {
         // Create randomized public key
@@ -1187,9 +1187,9 @@ pub fn gen_oabar_add_op_x(
         oabars_in.push(oabar_in);
     }
 
-    // Create ouput Open ABARs
+    // Create output Open ABARs
     let mut oabars_out = Vec::new();
-    for i in 0..recvier_count {
+    for i in 0..receiver_count {
         let mut prng = ChaChaRng::from_entropy();
         let to = to_axfr_public_keys[i];
         let enc_key_out = &to_enc_keys[i];
@@ -1223,25 +1223,27 @@ pub fn gen_oabar_add_op_x(
     // Send the transaction to the network
     send_tx(&builder.take_transaction()).c(d!())?;
 
+    // Append receiver's commitment to `sent_commitments` file
+    let mut s_file = fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open("sent_commitments")
+        .expect("cannot open commitments file");
     for oabar_out in oabars_out {
         let c_out = oabar_out.compute_commitment();
         println!(
             "\x1b[31;01m Commitment: {}\x1b[00m",
             wallet::commitment_to_base64(&c_out)
         );
-        let mut file = fs::OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open("sent_commitments")
-            .expect("cannot open commitments file");
+
         std::io::Write::write_all(
-            &mut file,
+            &mut s_file,
             ("\n".to_owned() + &wallet::commitment_to_base64(&c_out)).as_bytes(),
         )
         .expect("commitment write failed");
     }
 
-    let mut file = fs::OpenOptions::new()
+    let mut o_file = fs::OpenOptions::new()
         .append(true)
         .create(true)
         .open("owned_commitments")
@@ -1254,7 +1256,7 @@ pub fn gen_oabar_add_op_x(
             wallet::commitment_to_base64(&c_rem)
         );
         std::io::Write::write_all(
-            &mut file,
+            &mut o_file,
             ("\n".to_owned() + &wallet::commitment_to_base64(&c_rem)).as_bytes(),
         )
         .expect("commitment write failed");

@@ -42,7 +42,7 @@ pub fn fetch_mint<C: Config>(
     let source = H160::zero();
     let target = contracts.bridge_address;
 
-    let ret = ActionRunner::<C>::execute_systemc_contract(
+    let (ret, _, _) = ActionRunner::<C>::execute_systemc_contract(
         ctx,
         input,
         source,
