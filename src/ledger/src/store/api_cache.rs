@@ -673,9 +673,9 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
             Operation::BarToAbar(b) => {
                 vec![b.note.body.memo.clone()]
             }
-            Operation::TransferAnonAsset(b) => b.note.owner_memos.clone(),
+            Operation::TransferAnonAsset(b) => b.note.body.owner_memos.clone(),
             Operation::AnonymousFee(b) => {
-                vec![b.note.owner_memo.clone()]
+                vec![b.note.body.owner_memo.clone()]
             }
             _ => vec![],
         });

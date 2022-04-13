@@ -1055,8 +1055,8 @@ pub fn gen_oabar_add_op(
 
     send_tx(&builder.take_transaction()).c(d!())?;
 
-    let com_out = if !note.outputs.is_empty() {
-        Some(note.outputs[0].commitment)
+    let com_out = if !note.body.outputs.is_empty() {
+        Some(note.body.outputs[0].commitment)
     } else {
         None
     };

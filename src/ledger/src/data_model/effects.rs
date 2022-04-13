@@ -617,11 +617,11 @@ impl TxnEffect {
     fn add_anon_transfer(&mut self, anon_transfer: &AnonTransferOps) -> Result<()> {
         // verify nullifiers not double spent within txn
 
-        for i in &anon_transfer.note.inputs {
+        for i in &anon_transfer.note.body.inputs {
             if self
                 .axfr_bodies
                 .iter()
-                .flat_map(|ab| ab.inputs.iter())
+                .flat_map(|ab| ab.body.inputs.iter())
                 .any(|n| n == i)
             {
                 return Err(eg!("Transaction has duplicate nullifiers"));
@@ -732,19 +732,19 @@ impl BlockEffect {
             self.new_nullifiers.push(inputs.body.input);
         }
 
-        for axfr_body in txn_effect.axfr_bodies {
-            for n in axfr_body.inputs {
+        for axfr_note in txn_effect.axfr_bodies {
+            for n in axfr_note.body.inputs {
                 self.new_nullifiers.push(n);
             }
-            for abar in axfr_body.outputs {
+            for abar in axfr_note.body.outputs {
                 current_txn_abars.push(abar)
             }
         }
 
-        for anon_fee_body in txn_effect.anon_fee_bodies {
-            self.new_nullifiers.push(anon_fee_body.input);
+        for anon_fee_note in txn_effect.anon_fee_bodies {
+            self.new_nullifiers.push(anon_fee_note.body.input);
 
-            let op_abar = anon_fee_body.output;
+            let op_abar = anon_fee_note.body.output;
             current_txn_abars.push(op_abar)
         }
         self.output_abars.push(current_txn_abars);
@@ -762,8 +762,8 @@ impl BlockEffect {
 
         // Check that no nullifier are created twice in same block
         // for anon_transfer and abar to bar conversion
-        for axfr_body in txn_effect.axfr_bodies.iter() {
-            for nullifier in axfr_body.inputs.iter() {
+        for axfr_note in txn_effect.axfr_bodies.iter() {
+            for nullifier in axfr_note.body.inputs.iter() {
                 if self.new_nullifiers.contains(nullifier) {
                     return Err(eg!());
                 }
@@ -779,8 +779,8 @@ impl BlockEffect {
         }
 
         // Check that no nullifier are created twice in same block
-        for anon_fee_body in txn_effect.anon_fee_bodies.iter() {
-            if self.new_nullifiers.contains(&anon_fee_body.input) {
+        for anon_fee_note in txn_effect.anon_fee_bodies.iter() {
+            if self.new_nullifiers.contains(&anon_fee_note.body.input) {
                 return Err(eg!());
             }
         }

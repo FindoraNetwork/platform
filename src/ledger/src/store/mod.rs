@@ -1027,10 +1027,10 @@ impl LedgerState {
             .iter()
             .flat_map(|o| match o {
                 Operation::BarToAbar(body) => vec![body.note.body.memo.clone()],
-                Operation::TransferAnonAsset(body) => body.note.owner_memos.clone(),
+                Operation::TransferAnonAsset(body) => body.note.body.owner_memos.clone(),
                 Operation::AnonymousFee(body) => {
-                    println!("AnonymousFee {:?}", body.note.owner_memo);
-                    vec![body.note.owner_memo.clone()]
+                    println!("AnonymousFee {:?}", body.note.body.owner_memo);
+                    vec![body.note.body.owner_memo.clone()]
                 }
                 _ => vec![],
             })
@@ -1627,13 +1627,15 @@ impl LedgerStatus {
 
         // An axfr_body requires abar merkle root hash for AxfrNote verification. This is done
         // here with LedgerStatus available.
-        for axfr_body in txn_effect.axfr_bodies.iter() {
-            let node_params =
-                VerifierParams::load(axfr_body.inputs.len(), axfr_body.outputs.len())?;
-            let abar_version = axfr_body.proof.merkle_root_version;
+        for axfr_note in txn_effect.axfr_bodies.iter() {
+            let node_params = VerifierParams::load(
+                axfr_note.body.inputs.len(),
+                axfr_note.body.outputs.len(),
+            )?;
+            let abar_version = axfr_note.body.merkle_root_version;
             verify_anon_xfr_note(
                 &node_params,
-                axfr_body,
+                axfr_note,
                 // Unwrap Now to get the code to compile . Change in Zei later to accept Option<BLSScalar>
                 &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
             )
@@ -1642,12 +1644,12 @@ impl LedgerStatus {
 
         // An anon_fee_body requires abar merkle root hash for AnonFeeNote verification. This is done
         // here with LedgerStatus available.
-        for anon_fee_body in txn_effect.anon_fee_bodies.iter() {
+        for anon_fee_note in txn_effect.anon_fee_bodies.iter() {
             let node_params = VerifierParams::anon_fee_params()?;
-            let abar_version = anon_fee_body.proof.merkle_root_version;
+            let abar_version = anon_fee_note.body.merkle_root_version;
             verify_anon_fee_note(
                 &node_params,
-                anon_fee_body,
+                anon_fee_note,
                 &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
             )
             .c(d!())?;
