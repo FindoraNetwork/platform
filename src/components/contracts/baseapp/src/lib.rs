@@ -297,8 +297,13 @@ impl BaseApp {
         ctx.header = header;
     }
 
-    pub fn deliver_findora_tx(&mut self, tx: &FindoraTransaction) -> Result<()> {
-        self.modules.process_findora_tx(&self.deliver_state, tx)
+    pub fn deliver_findora_tx(
+        &mut self,
+        tx: &FindoraTransaction,
+        hash: &[u8],
+    ) -> Result<()> {
+        self.modules
+            .process_findora_tx(&self.deliver_state, tx, H256::from_slice(hash))
     }
 
     pub fn consume_mint(&self) -> Option<Vec<NonConfidentialOutput>> {

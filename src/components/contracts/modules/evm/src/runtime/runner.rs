@@ -194,7 +194,7 @@ impl<C: Config> ActionRunner<C> {
         gas_limit: u64,
         target: H160,
         value: U256,
-    ) -> Result<Vec<u8>> {
+    ) -> Result<(Vec<u8>, Vec<Log>, U256)> {
         let config = evm::Config::istanbul();
 
         let vicinity = Vicinity {
@@ -210,6 +210,7 @@ impl<C: Config> ActionRunner<C> {
         let (result, data) =
             executor.transact_call(source, target, value, input, gas_limit);
 
+        let gas_used = U256::from(executor.used_gas());
         let state = executor.into_state();
 
         for address in state.substate.deletes {
@@ -234,7 +235,7 @@ impl<C: Config> ActionRunner<C> {
         }
 
         if let ExitReason::Succeed(_) = result {
-            Ok(data)
+            Ok((data, state.substate.logs, gas_used))
         } else {
             Err(eg!("Execute system error: {:?}", result))
         }
