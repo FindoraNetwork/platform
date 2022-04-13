@@ -997,7 +997,6 @@ pub fn get_open_abar(
 /// @param {AnonBlindAssetRecord} abar - ABAR for which balance needs to be queried
 /// @param {OwnerMemo} memo - memo corresponding to the abar
 /// @param keypair {AXfrKeyPair} - AXfrKeyPair of the ABAR owner
-/// @param randomized_keypair {AXfrKeyPair} - Randomized AXfrKeyPair of the ABAR owner
 /// @param dec_key {XSecretKey} - Decryption key of the abar owner to open the Owner Memo
 /// @param MTLeafInfo {mt_leaf_info} - the Merkle proof of the ABAR from commitment tree
 /// @throws Will throw an error if abar fails to open
@@ -1006,7 +1005,6 @@ pub fn gen_nullifier_hash(
     abar: AnonBlindAssetRecord,
     memo: OwnerMemo,
     keypair: AXfrKeyPair,
-    randomized_keypair: AXfrKeyPair,
     dec_key: XSecretKey,
     mt_leaf_info: MTLeafInfo,
 ) -> Result<String, JsValue> {
@@ -1020,7 +1018,7 @@ pub fn gen_nullifier_hash(
             .map_err(error_to_jsvalue)?;
 
     let n = nullifier(
-        &randomized_keypair,
+        &keypair,
         oabar.get_amount(),
         &oabar.get_asset_type(),
         mt_leaf_info.get_zei_mt_leaf_info().uid,

@@ -988,10 +988,9 @@ pub fn gen_oabar_add_op(
     let mut inputs = vec![];
     // For each commitment add input to transfer operation
     for com in commitments {
-        // generate randomized public key
         let c = wallet::commitment_from_base64(com).c(d!())?;
 
-        // get unspent ABARs & their Merkle proof for randomized public key
+        // get unspent ABARs & their Merkle proof for commitment
         let axtxo_abar = utils::get_owned_abar(&c).c(d!())?;
         let owner_memo = utils::get_abar_memo(&axtxo_abar.0).c(d!())?.unwrap();
         let mt_leaf_info = utils::get_abar_proof(&axtxo_abar.0).c(d!())?.unwrap();
@@ -1141,7 +1140,6 @@ pub fn gen_oabar_add_op_x(
     // Create Input Open Abars with input keys, radomizers and Owner memos
     let mut oabars_in = Vec::new();
     for i in 0..sender_count {
-        // Create randomized public key
         let from = &axfr_secret_keys[i];
         let from_secret_key = &dec_keys[i];
         let c = wallet::commitment_from_base64(commitments[i].as_str()).c(d!())?;
