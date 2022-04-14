@@ -8,7 +8,9 @@ use {
         Transaction, TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxoRef,
         TxoSID, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
     },
+    crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey},
     rand_core::SeedableRng,
+    zei::anon_xfr::{keys::AXfrKeyPair, structs::OpenAnonBlindAssetRecordBuilder},
     zei::{
         setup::PublicParams,
         xfr::{
@@ -19,6 +21,7 @@ use {
             structs::{AssetRecord, AssetRecordTemplate},
         },
     },
+    zeialgebra::groups::{One, Zero},
 };
 
 #[cfg(test)]
@@ -29,6 +32,8 @@ fn abort_block(block: BlockEffect) -> HashMap<TxnTempSID, Transaction> {
         block.temp_sids.drain(..).zip(txns).collect();
 
     block.txos.clear();
+    block.output_abars.clear();
+    block.new_nullifiers.clear();
     block.input_txos.clear();
     block.new_asset_codes.clear();
     block.new_issuance_nums.clear();
@@ -786,4 +791,101 @@ fn test_check_fee_with_ledger() {
     let effect = TxnEffect::compute_effect(tx).unwrap();
     let mut block = ledger.start_block().unwrap();
     assert!(ledger.apply_transaction(&mut block, effect).is_err());
+}
+
+#[test]
+fn test_update_anon_stores() {
+    let mut prng = ChaChaRng::from_seed([0u8; 32]);
+
+    let mut state = LedgerState::tmp_ledger();
+
+    let nullifiers = vec![
+        Nullifier::zero() as Nullifier,
+        Nullifier::one() as Nullifier,
+    ];
+
+    let oab = OpenAnonBlindAssetRecordBuilder::new();
+    let enc_key = &XPublicKey::from(&XSecretKey::new(&mut prng));
+    let pub_key = AXfrKeyPair::generate(&mut prng).pub_key();
+    let oabar = oab
+        .amount(123)
+        .asset_type(zei::xfr::structs::AssetType([39u8; 32]))
+        .pub_key(pub_key.to_owned())
+        .finalize(&mut prng, enc_key)
+        .unwrap()
+        .build()
+        .unwrap();
+    let output_abars = vec![
+        vec![
+            AnonBlindAssetRecord::from_oabar(&oabar),
+            AnonBlindAssetRecord::from_oabar(&oabar),
+        ],
+        vec![
+            AnonBlindAssetRecord::from_oabar(&oabar),
+            AnonBlindAssetRecord::from_oabar(&oabar),
+        ],
+    ];
+    let new_pub_key = oabar.pub_key_ref().randomize(&oabar.get_key_rand_factor());
+    let tx_block = vec![
+        FinalizedTransaction {
+            txn: Default::default(),
+            tx_id: Default::default(),
+            txo_ids: vec![],
+            atxo_ids: vec![],
+            merkle_id: 0,
+        },
+        FinalizedTransaction {
+            txn: Default::default(),
+            tx_id: Default::default(),
+            txo_ids: vec![],
+            atxo_ids: vec![],
+            merkle_id: 0,
+        },
+    ];
+
+    let str0 = base64::encode_config(&BLSScalar::zero().to_bytes(), base64::URL_SAFE);
+    let d0: Key = Key::from_base64(&str0).unwrap();
+    assert!(state.nullifier_set.read().get(&d0).unwrap().is_none());
+
+    let str1 = base64::encode_config(&BLSScalar::one().to_bytes(), base64::URL_SAFE);
+    let d1: Key = Key::from_base64(&str1).unwrap();
+    assert!(state.nullifier_set.read().get(&d1).unwrap().is_none());
+
+    let res = state.update_anon_stores(nullifiers, output_abars, 0, tx_block);
+    assert!(res.is_ok());
+
+    let res2 = state.commit_anon_changes();
+    assert!(res2.is_ok());
+    assert_eq!(res2.unwrap(), 1);
+
+    assert!(state.nullifier_set.read().get(&d0).unwrap().is_some());
+    assert!(state.nullifier_set.read().get(&d1).unwrap().is_some());
+
+    assert_eq!(state.status.next_atxo.0, 4);
+    assert_eq!(
+        state.status.ax_txo_to_txn_location.get(&ATxoSID(0)),
+        Some((TxnSID(0), OutputPosition(0)))
+    );
+    assert_eq!(
+        state.status.ax_txo_to_txn_location.get(&ATxoSID(1)),
+        Some((TxnSID(0), OutputPosition(1)))
+    );
+    assert_eq!(
+        state.status.ax_txo_to_txn_location.get(&ATxoSID(2)),
+        Some((TxnSID(1), OutputPosition(0)))
+    );
+    assert_eq!(
+        state.status.ax_txo_to_txn_location.get(&ATxoSID(3)),
+        Some((TxnSID(1), OutputPosition(1)))
+    );
+
+    let mut set = HashSet::new();
+    set.insert(ATxoSID(0));
+    set.insert(ATxoSID(1));
+    set.insert(ATxoSID(2));
+    set.insert(ATxoSID(3));
+    assert_eq!(
+        state.status.owned_ax_utxos.get(&new_pub_key.clone()),
+        Some(set)
+    );
 }

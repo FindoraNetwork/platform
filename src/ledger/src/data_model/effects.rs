@@ -1,9 +1,12 @@
+use crate::data_model::AbarToBarOps;
+use zei::anon_xfr::abar_to_bar::AbarToBarBody;
 use {
     crate::{
         data_model::{
-            AssetType, AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Memo,
-            NoReplayToken, Operation, Transaction, TransferAsset, TransferType,
-            TxOutput, TxnTempSID, TxoRef, TxoSID, UpdateMemo,
+            AnonFeeOps, AnonTransferOps, AssetType, AssetTypeCode, BarToAbarOps,
+            DefineAsset, IssueAsset, IssuerPublicKey, Memo, NoReplayToken, Operation,
+            Transaction, TransferAsset, TransferType, TxOutput, TxnTempSID, TxoRef,
+            TxoSID, UpdateMemo,
         },
         staking::{
             self,
@@ -27,8 +30,13 @@ use {
         sync::Arc,
     },
     zei::{
+        anon_xfr::{
+            anon_fee::AnonFeeBody,
+            bar_to_abar::verify_bar_to_abar_note,
+            structs::{AXfrBody, AnonBlindAssetRecord, Nullifier},
+        },
         serialization::ZeiFromToBytes,
-        setup::PublicParams,
+        setup::{NodeParams, PublicParams},
         xfr::{
             lib::verify_xfr_body,
             sig::XfrPublicKey,
@@ -90,6 +98,14 @@ pub struct TxnEffect {
     pub fra_distributions: Vec<FraDistributionOps>,
     /// Staking operations
     pub update_stakers: Vec<UpdateStakerOps>,
+    /// Newly created Anon Blind Asset Records
+    pub bar_conv_abars: Vec<AnonBlindAssetRecord>,
+    /// Body of Abar to Bar conversions
+    pub abar_conv_inputs: Vec<AbarToBarBody>,
+    /// New anon transfer bodies
+    pub axfr_bodies: Vec<AXfrBody>,
+    /// New anon fee bodies
+    pub anon_fee_bodies: Vec<AnonFeeBody>,
     /// replace staker operations
     pub replace_stakers: Vec<ReplaceStakerOps>,
 }
@@ -195,6 +211,22 @@ impl TxnEffect {
                 }
                 Operation::ConvertAccount(i) => {
                     check_nonce!(i)
+                }
+                Operation::BarToAbar(i) => {
+                    check_nonce!(i);
+                    te.add_bar_to_abar(i).c(d!())?;
+                }
+                Operation::AbarToBar(i) => {
+                    check_nonce!(i);
+                    te.add_abar_to_bar(i).c(d!())?;
+                }
+                Operation::TransferAnonAsset(i) => {
+                    check_nonce!(i);
+                    te.add_anon_transfer(i).c(d!())?;
+                }
+                Operation::AnonymousFee(i) => {
+                    check_nonce!(i);
+                    te.add_anon_fee_op(i).c(d!())?;
                 }
             }
         }
@@ -533,6 +565,111 @@ impl TxnEffect {
 
         Ok(())
     }
+
+    /// A bar to abar note is valid iff
+    /// 1. the signature is correct,
+    /// 2. the ZKP can be verified,
+    /// 3. the input txos are unspent. (checked in finish block)
+    /// # Arguments
+    /// * `bar_to_abar` - the BarToAbar Operation body
+    /// returns error if validation fails
+    fn add_bar_to_abar(&mut self, bar_to_abar: &BarToAbarOps) -> Result<()> {
+        let key = bar_to_abar.note.body.input.public_key;
+        // fetch the verifier Node Params for PlonkProof
+        let node_params = NodeParams::bar_to_abar_params()?;
+        // verify the Plonk proof and signature
+        verify_bar_to_abar_note(&node_params, &bar_to_abar.note, &key).c(d!())?;
+
+        // list input_txo to spend
+        self.input_txos.insert(
+            bar_to_abar.txo_sid,
+            TxOutput {
+                id: None,
+                record: bar_to_abar.note.body.input.clone(),
+                lien: None,
+            },
+        );
+        // push new ABAR created
+        self.bar_conv_abars
+            .push(bar_to_abar.note.body.output.clone());
+        Ok(())
+    }
+
+    /// An abar to bar note is valid iff
+    /// 1. the signature is correct,
+    /// 2. the ZKP can be verified,
+    /// 3. the input ABARs are unspent. (checked in finish block)
+    /// # Arguments
+    /// * abar_to_bar - The Operation for AbarToBar
+    /// returns an error if validation fails
+    fn add_abar_to_bar(&mut self, abar_to_bar: &AbarToBarOps) -> Result<()> {
+        let body = abar_to_bar.note.body.clone();
+
+        // serialize body and verify the signature
+        let msg: Vec<u8> = bincode::serialize(&body).c(d!("Serialization error!"))?;
+        body.input
+            .1
+            .verify(msg.as_slice(), &abar_to_bar.note.signature)
+            .c(d!("AbarToBar signature verification failed"))?;
+
+        // collect body in TxnEffect to verify ZKP later with merkle root
+        self.abar_conv_inputs.push(body.clone());
+        // collect newly created BARs
+        self.txos.push(Some(TxOutput {
+            id: None,
+            record: body.output,
+            lien: None,
+        }));
+
+        Ok(())
+    }
+
+    /// An anon transfer note is valid iff
+    /// 1. no double spending in the txn,
+    /// 2. the signature is correct,
+    /// 3. ZKP can be verified,
+    /// 4. the input ABARs are unspent. (checked in finish block)
+    /// # Arguments
+    /// * anon_transfer - The Operation for Anon Transfer
+    /// returns an error if validation fails
+    fn add_anon_transfer(&mut self, anon_transfer: &AnonTransferOps) -> Result<()> {
+        // verify nullifiers not double spent within txn
+        for i in &anon_transfer.note.body.inputs {
+            if self
+                .axfr_bodies
+                .iter()
+                .flat_map(|ab| ab.inputs.iter().map(|i| i.0))
+                .any(|n| n == i.0)
+            {
+                return Err(eg!("Transaction has duplicate nullifiers"));
+            }
+        }
+
+        // verify axfr_note signatures
+        anon_transfer.note.verify().c(d!())?;
+
+        // collect body in TxnEffect to verify ZKP later with merkle root
+        self.axfr_bodies.push(anon_transfer.note.body.clone());
+
+        Ok(())
+    }
+
+    /// An anon fee note is valid iff
+    /// 1. the signature is correct,
+    /// 2. ZKP can be verified,
+    /// 3. the input ABARs are unspent. (checked in finish block)
+    /// # Arguments
+    /// * anon_fee - The Operation for Anon Fee
+    /// returns an error if validation fails
+    fn add_anon_fee_op(&mut self, anon_fee: &AnonFeeOps) -> Result<()> {
+        // verify anon_fee_note signatures
+        anon_fee.note.verify_signatures().c(d!())?;
+
+        // collect body in TxnEffect to verify ZKP later with merkle root
+        self.anon_fee_bodies.push(anon_fee.note.body.clone());
+
+        Ok(())
+    }
 }
 
 /// Check tx in the context of a block, partially.
@@ -548,8 +685,12 @@ pub struct BlockEffect {
     /// Internally-spent TXOs are None, UTXOs are Some(...)
     /// Should line up element-wise with `txns`
     pub txos: Vec<Vec<Option<TxOutput>>>,
+    /// New ABARs created
+    pub output_abars: Vec<Vec<AnonBlindAssetRecord>>,
     /// Which TXOs this consumes
     pub input_txos: HashMap<TxoSID, TxOutput>,
+    /// Which new nullifiers are created
+    pub new_nullifiers: Vec<Nullifier>,
     /// Which new asset types this defines
     pub new_asset_codes: HashMap<AssetTypeCode, AssetType>,
     /// Which new TXO issuance sequence numbers are used, in sorted order
@@ -612,6 +753,33 @@ impl BlockEffect {
             self.memo_updates.insert(code, memo);
         }
 
+        let mut current_txn_abars: Vec<AnonBlindAssetRecord> = vec![];
+        for abar in txn_effect.bar_conv_abars {
+            current_txn_abars.push(abar);
+        }
+
+        for inputs in txn_effect.abar_conv_inputs {
+            self.new_nullifiers.push(inputs.input.0);
+        }
+
+        for axfr_body in txn_effect.axfr_bodies {
+            for (n, _) in axfr_body.inputs {
+                self.new_nullifiers.push(n);
+            }
+            for abar in axfr_body.outputs {
+                current_txn_abars.push(abar)
+            }
+        }
+
+        for anon_fee_body in txn_effect.anon_fee_bodies {
+            let (n, _) = anon_fee_body.input;
+            self.new_nullifiers.push(n);
+
+            let op_abar = anon_fee_body.output;
+            current_txn_abars.push(op_abar)
+        }
+        self.output_abars.push(current_txn_abars);
+
         Ok(temp_sid)
     }
 
@@ -619,6 +787,32 @@ impl BlockEffect {
         // Check that no inputs are consumed twice
         for (input_sid, _) in txn_effect.input_txos.iter() {
             if self.input_txos.contains_key(&input_sid) {
+                return Err(eg!());
+            }
+        }
+
+        // Check that no nullifier are created twice in same block
+        // for anon_transfer and abar to bar conversion
+        for axfr_body in txn_effect.axfr_bodies.iter() {
+            for (nullifier, _) in axfr_body.inputs.iter() {
+                if self.new_nullifiers.contains(nullifier) {
+                    return Err(eg!());
+                }
+            }
+        }
+        for inputs in txn_effect.abar_conv_inputs.iter() {
+            if self.new_nullifiers.contains(&inputs.input.0) {
+                return Err(eg!());
+            }
+            if txn_effect.anon_fee_bodies.is_empty() {
+                return Err(eg!("Abar to Bar conversion missing anon fee"));
+            }
+        }
+
+        // Check that no nullifier are created twice in same block
+        for anon_fee_body in txn_effect.anon_fee_bodies.iter() {
+            let (nullifier, _) = anon_fee_body.input;
+            if self.new_nullifiers.contains(&nullifier) {
                 return Err(eg!());
             }
         }

@@ -22,7 +22,7 @@ impl SystemContracts {
         let bridge = Contract::load(abi_str.as_bytes()).c(d!())?;
 
         let owner =
-            H160::from_str("0xE6936861789dBA96C7BE976D0D242d05CdBE39aA").c(d!())?;
+            H160::from_str("0xe95034bE56fbd7D70000B310323B6Be684A49acb").c(d!())?;
 
         let bytecode_str = include_str!("../contracts/PrismXXBridge.bytecode");
 

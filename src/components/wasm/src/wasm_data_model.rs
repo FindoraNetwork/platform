@@ -1,3 +1,4 @@
+use zei::anon_xfr::structs::AnonBlindAssetRecord;
 use {
     core::fmt::Display,
     credentials::{
@@ -16,6 +17,7 @@ use {
     ruc::{d, err::RucResult},
     serde::{Deserialize, Serialize},
     wasm_bindgen::prelude::*,
+    zei::anon_xfr::structs::MTLeafInfo as ZeiMTLeafInfo,
     zei::{
         setup::PublicParams as ZeiPublicParams,
         xfr::{
@@ -718,4 +720,101 @@ impl AssetRules {
 #[inline(always)]
 pub(crate) fn error_to_jsvalue<T: Display>(e: T) -> JsValue {
     JsValue::from_str(&e.to_string())
+}
+
+#[wasm_bindgen]
+#[derive(Default, Clone)]
+pub struct MTLeafInfo {
+    object: ZeiMTLeafInfo,
+}
+
+impl MTLeafInfo {
+    pub fn get_zei_mt_leaf_info(&self) -> &ZeiMTLeafInfo {
+        &self.object
+    }
+}
+
+#[wasm_bindgen]
+impl MTLeafInfo {
+    pub fn from_json(json: &JsValue) -> Result<MTLeafInfo, JsValue> {
+        let mt_leaf_info: ZeiMTLeafInfo =
+            json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
+        Ok(MTLeafInfo {
+            object: mt_leaf_info,
+        })
+    }
+
+    pub fn to_json(&self) -> Result<JsValue, JsValue> {
+        serde_json::to_string(&self.object)
+            .map(|s| JsValue::from_str(&s))
+            .c(d!())
+            .map_err(error_to_jsvalue)
+    }
+}
+
+/// AnonKeys is used to store keys for Anon proofs
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize)]
+pub struct AnonKeys {
+    pub(crate) axfr_secret_key: String,
+    pub(crate) axfr_public_key: String,
+    pub(crate) enc_key: String,
+    pub(crate) dec_key: String,
+}
+
+/// AnonKeys is a struct to store keys required for anon transfer
+#[wasm_bindgen]
+#[allow(missing_docs)]
+impl AnonKeys {
+    pub fn from_json(json: &JsValue) -> Result<AnonKeys, JsValue> {
+        let anon_keys: AnonKeys = json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
+        Ok(anon_keys)
+    }
+
+    pub fn to_json(&self) -> Result<JsValue, JsValue> {
+        serde_json::to_string(&self)
+            .map(|s| JsValue::from_str(&s))
+            .c(d!())
+            .map_err(error_to_jsvalue)
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn axfr_secret_key(&self) -> String {
+        self.axfr_secret_key.clone()
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_axfr_secret_key(&mut self, axfr_secret_key: String) {
+        self.axfr_secret_key = axfr_secret_key;
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn axfr_public_key(&self) -> String {
+        self.axfr_public_key.clone()
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_axfr_public_key(&mut self, axfr_public_key: String) {
+        self.axfr_public_key = axfr_public_key;
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn enc_key(&self) -> String {
+        self.enc_key.clone()
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_enc_key(&mut self, enc_key: String) {
+        self.enc_key = enc_key;
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn dec_key(&self) -> String {
+        self.dec_key.clone()
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_dec_key(&mut self, dec_key: String) {
+        self.dec_key = dec_key;
+    }
 }

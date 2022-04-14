@@ -19,6 +19,7 @@ use {
         ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
     },
     config::abci::global_cfg::CFG,
+    cryptohash::sha256,
     fp_storage::hash::{Sha256, StorageHasher},
     lazy_static::lazy_static,
     ledger::{
@@ -256,8 +257,9 @@ pub fn deliver_tx(
                             resp.log = e.to_string();
                         }
                     } else if is_convert_account(&tx) {
+                        let hash = sha256::hash(req.get_tx());
                         if let Err(err) =
-                            s.account_base_app.write().deliver_findora_tx(&tx)
+                            s.account_base_app.write().deliver_findora_tx(&tx, &hash.0)
                         {
                             log::error!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
 
