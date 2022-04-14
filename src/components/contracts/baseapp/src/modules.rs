@@ -92,7 +92,7 @@ impl ModuleManager {
     pub fn process_tx<
         Extra: Clone + Serialize + SignedExtension<AccountId = Address>,
     >(
-        &mut self,
+        &self,
         ctx: Context,
         tx: UncheckedTransaction<Extra>,
     ) -> Result<ActionResult> {
