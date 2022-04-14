@@ -329,11 +329,10 @@ impl TransactionBuilder {
     /// Deserialize transaction builder from string.
     pub fn from_string(s: String) -> Result<TransactionBuilder, JsValue> {
         let transaction_builder = serde_json::from_str(&s).map_err(error_to_jsvalue)?;
-        let randomizers = Default::default();
 
         Ok(TransactionBuilder {
             transaction_builder,
-            randomizers,
+            commitments: Default::default(),
         })
     }
 
