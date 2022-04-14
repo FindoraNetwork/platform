@@ -70,10 +70,7 @@ impl<C: Config> App<C> {
     pub fn consume_mint(
         ctx: &Context,
     ) -> Option<(Vec<NonConfidentialOutput>, Option<String>)> {
-        if let Some(outputs) = PendingUTXOs::take(ctx.db.write().borrow_mut()) {
-            Some((outputs, ctx.tx_hash.lock().take()))
-        } else {
-            None
-        }
+        PendingUTXOs::take(ctx.db.write().borrow_mut())
+            .map(|outputs| (outputs, ctx.tx_hash.lock().take()))
     }
 }
