@@ -13,8 +13,8 @@ use {
         },
     },
     abci::{
-        Application, CheckTxType, RequestBeginBlock, RequestCheckTx, RequestCommit,
-        RequestDeliverTx, RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery,
+        CheckTxType, RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx,
+        RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery,
         ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
         ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
     },
@@ -143,7 +143,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                 resp.log = "EVM is disabled".to_owned();
                 resp
             } else {
-                s.account_base_app.write().check_tx(req)
+                s.account_base_app.read().check_tx(req)
             }
         }
         TxCatalog::Unknown => {
