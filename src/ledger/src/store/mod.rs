@@ -144,7 +144,7 @@ impl LedgerState {
     ) -> Result<TxnTempSID> {
         let tx = txe.txn.clone();
         self.status
-            .check_txn_effects(&txe)
+            .check_txn_effects(&txe, &self.nullifier_set)
             .c(d!())
             .and_then(|_| block.add_txn_effect(txe).c(d!()))
             .map(|tmpid| {
@@ -1249,6 +1249,9 @@ pub struct LedgerStatus {
     /// all spent TXOs
     #[serde(default = "default_status_spent_utxos")]
     pub spent_utxos: Mapxnk<TxoSID, Utxo>,
+    // all spent abars
+    //#[serde(default = "default_status_spent_abars")]
+    //pub spent_abars: Mapxnk<Nullifier>,
     /// Map a TXO to its output position in a transaction
     #[serde(default = "default_status_txo_to_txn_location")]
     txo_to_txn_location: Mapxnk<TxoSID, (TxnSID, OutputPosition)>,
@@ -1433,6 +1436,7 @@ impl LedgerStatus {
             ax_utxos: default_status_ax_utxos(),
             owned_ax_utxos: default_status_owned_ax_utxos(),
             spent_utxos: default_status_spent_utxos(),
+            //spent_abars: default_status_spent_abars(),
             txo_to_txn_location: default_status_txo_to_txn_location(),
             ax_txo_to_txn_location: default_status_ax_txo_to_txn_location(),
             issuance_amounts: default_status_issuance_amounts(),
@@ -1470,7 +1474,11 @@ impl LedgerStatus {
     //
     //  ledger.check_txn_effects(txn_effect);
     //  block.add_txn_effect(txn_effect);
-    fn check_txn_effects(&self, txn_effect: &TxnEffect) -> Result<()> {
+    fn check_txn_effects(
+        &self,
+        txn_effect: &TxnEffect,
+        nullifier_set: &Arc<RwLock<SmtMap256<RocksDB>>>,
+    ) -> Result<()> {
         // The current transactions seq_id must be within the sliding window over seq_ids
         let (rand, seq_id) = (
             txn_effect.txn.body.no_replay_token.get_rand(),
@@ -1661,6 +1669,19 @@ impl LedgerStatus {
         // An axfr_body requires abar merkle root hash for AxfrNote verification. This is done
         // here with LedgerStatus available.
         for axfr_body in txn_effect.axfr_bodies.iter() {
+            for input in &axfr_body.inputs {
+                //if self.spent_abars.get(&input).is_some() {
+                //return Err(eg!("Input abar must be unspent"));
+                //}
+                let str = base64::encode_config(&input.0.to_bytes(), base64::URL_SAFE);
+                let d: Key = Key::from_base64(&str).c(d!())?;
+
+                // if the nullifier hash is present in our nullifier set, fail the block
+                if nullifier_set.read().get(&d).c(d!())?.is_some() {
+                    return Err(eg!("Nullifier hash already present in set"));
+                }
+            }
+
             // Get verifier params for corresponding length of inputs and outputs
             let node_params =
                 NodeParams::load(axfr_body.inputs.len(), axfr_body.outputs.len())?;
@@ -1679,6 +1700,20 @@ impl LedgerStatus {
         // An anon_fee_body requires abar merkle root hash for AnonFeeNote verification. This is done
         // here with LedgerStatus available.
         for anon_fee_body in txn_effect.anon_fee_bodies.iter() {
+            //if self.spent_abars.get(&input).is_some() {
+            //return Err(eg!("Input abar must be unspent"));
+            //}
+            let str = base64::encode_config(
+                &anon_fee_body.input.0.to_bytes(),
+                base64::URL_SAFE,
+            );
+            let d: Key = Key::from_base64(&str).c(d!())?;
+
+            // if the nullifier hash is present in our nullifier set, fail the block
+            if nullifier_set.read().get(&d).c(d!())?.is_some() {
+                return Err(eg!("Nullifier hash already present in set"));
+            }
+
             // Get verifier params for anon fee
             let node_params = NodeParams::anon_fee_params()?;
             let abar_version = anon_fee_body.proof.merkle_root_version;
@@ -1695,6 +1730,18 @@ impl LedgerStatus {
         // Abar conversion needs abar merkle tree root hash for verification of spent ABAR merkle proof.
         // This is done here with merkle root available.
         for abar_conv in &txn_effect.abar_conv_inputs {
+            //if self.spent_abars.get(&input).is_some() {
+            //return Err(eg!("Input abar must be unspent"));
+            //}
+            let str =
+                base64::encode_config(&abar_conv.input.0.to_bytes(), base64::URL_SAFE);
+            let d: Key = Key::from_base64(&str).c(d!())?;
+
+            // if the nullifier hash is present in our nullifier set, fail the block
+            if nullifier_set.read().get(&d).c(d!())?.is_some() {
+                return Err(eg!("Nullifier hash already present in set"));
+            }
+
             // Abar to Bar conversion is invalid without an anon_fee.
             if txn_effect.anon_fee_bodies.is_empty() {
                 return Err(eg!("Abar to Bar conversion missing anon fee"));
@@ -1901,6 +1948,10 @@ fn default_status_owned_ax_utxos() -> Mapx<AXfrPubKey, HashSet<ATxoSID>> {
 fn default_status_spent_utxos() -> Mapxnk<TxoSID, Utxo> {
     new_mapxnk!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/spent_utxos")
 }
+
+//fn default_status_spent_abars() -> Vecx<Nullifier> {
+//    new_mapxnk!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/spent_abars")
+//}
 
 fn default_status_txo_to_txn_location() -> Mapxnk<TxoSID, (TxnSID, OutputPosition)> {
     new_mapxnk!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/txo_to_txn_location")
