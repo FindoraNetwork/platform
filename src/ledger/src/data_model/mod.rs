@@ -47,7 +47,8 @@ use {
     unicode_normalization::UnicodeNormalization,
     zei::{
         anon_xfr::{
-            abar_to_bar::AbarToBarNote, bar_to_abar::BarToAbarNote, keys::AXfrPubKey, structs::AXfrNote,
+            abar_to_bar::AbarToBarNote, bar_to_abar::BarToAbarNote, keys::AXfrPubKey,
+            structs::AXfrNote,
         },
         xfr::{
             gen_xfr_body,

@@ -1,10 +1,10 @@
 use {
     crate::{
         data_model::{
-            AbarToBarOps, AnonTransferOps, AssetType, AssetTypeCode,
-            BarToAbarOps, DefineAsset, IssueAsset, IssuerPublicKey, Memo, NoReplayToken,
-            Operation, Transaction, TransferAsset, TransferType, TxOutput, TxnTempSID,
-            TxoRef, TxoSID, UpdateMemo,
+            AbarToBarOps, AnonTransferOps, AssetType, AssetTypeCode, BarToAbarOps,
+            DefineAsset, IssueAsset, IssuerPublicKey, Memo, NoReplayToken, Operation,
+            Transaction, TransferAsset, TransferType, TxOutput, TxnTempSID, TxoRef,
+            TxoSID, UpdateMemo,
         },
         staking::{
             self,
@@ -630,7 +630,6 @@ impl TxnEffect {
         self.axfr_bodies.push(anon_transfer.note.clone());
         Ok(())
     }
-
 }
 
 /// Check tx in the context of a block, partially.

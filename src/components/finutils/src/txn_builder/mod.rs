@@ -13,13 +13,12 @@ use {
     ledger::{
         converter::ConvertAccount,
         data_model::{
-            AbarToBarOps, AnonTransferOps, AssetRules, AssetTypeCode,
-            BarToAbarOps, ConfidentialMemo, DefineAsset, DefineAssetBody,
-            IndexedSignature, IssueAsset, IssueAssetBody, IssuerKeyPair,
-            IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
-            TransactionBody, TransferAsset, TransferAssetBody, TransferType, TxOutput,
-            TxoRef, TxoSID, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA,
-            BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+            AbarToBarOps, AnonTransferOps, AssetRules, AssetTypeCode, BarToAbarOps,
+            ConfidentialMemo, DefineAsset, DefineAssetBody, IndexedSignature,
+            IssueAsset, IssueAssetBody, IssuerKeyPair, IssuerPublicKey, Memo,
+            NoReplayToken, Operation, Transaction, TransactionBody, TransferAsset,
+            TransferAssetBody, TransferType, TxOutput, TxoRef, TxoSID, UpdateMemo,
+            UpdateMemoBody, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
         staking::{
             is_valid_tendermint_addr,
@@ -81,9 +80,9 @@ use {
     zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
 
+use ledger::data_model::BAR_TO_ABAR_TX_FEE_MIN;
 /// Depth of abar merkle tree
 pub use zei::anon_xfr::TREE_DEPTH as MERKLE_TREE_DEPTH;
-use ledger::data_model::BAR_TO_ABAR_TX_FEE_MIN;
 
 macro_rules! no_transfer_err {
     () => {
@@ -237,13 +236,20 @@ impl TransactionBuilder {
 
     /// As the last operation of bar_to_abar transaction,
     /// add a static fee to the transaction.
-    pub fn add_fee_bar_to_abar(&mut self, inputs: FeeInputs) -> Result<&mut TransactionBuilder> {
+    pub fn add_fee_bar_to_abar(
+        &mut self,
+        inputs: FeeInputs,
+    ) -> Result<&mut TransactionBuilder> {
         self.add_fee_custom(inputs, BAR_TO_ABAR_TX_FEE_MIN)
     }
 
     /// As the last operation of any transaction,
     /// add a custom static fee to the transaction.
-    pub fn add_fee_custom(&mut self, inputs: FeeInputs, fee: u64) -> Result<&mut TransactionBuilder> {
+    pub fn add_fee_custom(
+        &mut self,
+        inputs: FeeInputs,
+        fee: u64,
+    ) -> Result<&mut TransactionBuilder> {
         let mut kps = vec![];
         let mut opb = TransferOperationBuilder::default();
 

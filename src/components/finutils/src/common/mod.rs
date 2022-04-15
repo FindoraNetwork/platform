@@ -899,8 +899,7 @@ pub fn convert_abar2bar(
     };
 
     // Build AbarToBar Transaction and submit
-    utils::generate_abar2bar_op(&oabar_in, &from, to, art)
-        .c(d!())?;
+    utils::generate_abar2bar_op(&oabar_in, &from, to, art).c(d!())?;
 
     Ok(())
 }

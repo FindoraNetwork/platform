@@ -312,7 +312,10 @@ impl TransactionBuilder {
 
     /// As the last operation of BarToAbar transaction,
     /// add a static fee to the transaction.
-    pub fn add_fee_bar_to_abar(mut self, inputs: FeeInputs) -> Result<TransactionBuilder, JsValue> {
+    pub fn add_fee_bar_to_abar(
+        mut self,
+        inputs: FeeInputs,
+    ) -> Result<TransactionBuilder, JsValue> {
         self.transaction_builder
             .add_fee_bar_to_abar(inputs.into())
             .c(d!())

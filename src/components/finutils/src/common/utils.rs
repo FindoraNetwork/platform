@@ -2,6 +2,7 @@
 //! Some handful function and data structure for findora cli tools
 //!
 
+use ledger::data_model::BAR_TO_ABAR_TX_FEE_MIN;
 use {
     crate::{
         api::{DelegationInfo, ValidatorDetail},
@@ -34,7 +35,6 @@ use {
     },
     zei_crypto::basic::hybrid_encryption::XPublicKey,
 };
-use ledger::data_model::BAR_TO_ABAR_TX_FEE_MIN;
 
 ///////////////////////////////////////
 // Part 1: utils for transfer assets //
