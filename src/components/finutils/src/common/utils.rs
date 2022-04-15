@@ -34,6 +34,7 @@ use {
     },
     zei_crypto::basic::hybrid_encryption::XPublicKey,
 };
+use ledger::data_model::BAR_TO_ABAR_TX_FEE_MIN;
 
 ///////////////////////////////////////
 // Part 1: utils for transfer assets //
@@ -267,12 +268,12 @@ pub fn gen_fee_bar_to_abar(
     owner_kp: &XfrKeyPair,
     avoid_input: TxoSID,
 ) -> Result<Operation> {
-    let mut op_fee: u64 = TX_FEE_MIN;
+    let mut op_fee: u64 = BAR_TO_ABAR_TX_FEE_MIN;
     let mut trans_builder = TransferOperationBuilder::new();
     trans_builder
         .add_output(
             &AssetRecordTemplate::with_no_asset_tracing(
-                TX_FEE_MIN,
+                BAR_TO_ABAR_TX_FEE_MIN,
                 ASSET_TYPE_FRA,
                 AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                 *BLACK_HOLE_PUBKEY,

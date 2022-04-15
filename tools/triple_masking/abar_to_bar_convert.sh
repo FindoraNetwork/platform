@@ -9,7 +9,7 @@ target/release/fn wallet --show
 
 tail -n 2 owned_commitments > commitment_file
 commitment=$(awk 'FNR==1' commitment_file)
-echo "\n\n Owned Abars after Bar to Abar conversion 1"
+echo "\n\n Owned Abars after Bar to Abar conversion"
 sleep 20
 target/release/fn owned-abars -c $commitment
 

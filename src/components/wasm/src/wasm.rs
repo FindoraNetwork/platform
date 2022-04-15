@@ -310,6 +310,16 @@ impl TransactionBuilder {
         Ok(self)
     }
 
+    /// As the last operation of BarToAbar transaction,
+    /// add a static fee to the transaction.
+    pub fn add_fee_bar_to_abar(mut self, inputs: FeeInputs) -> Result<TransactionBuilder, JsValue> {
+        self.transaction_builder
+            .add_fee_bar_to_abar(inputs.into())
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
+        Ok(self)
+    }
+
     /// A simple fee checker for mainnet v1.0.
     ///
     /// SEE [check_fee](ledger::data_model::Transaction::check_fee)

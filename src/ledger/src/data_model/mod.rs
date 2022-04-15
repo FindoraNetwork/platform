@@ -1748,7 +1748,9 @@ lazy_static! {
 }
 
 /// see [**mainnet-v0.1 defination**](https://www.notion.so/findora/Transaction-Fees-Analysis-d657247b70f44a699d50e1b01b8a2287)
-pub const TX_FEE_MIN: u64 = 1_0000;
+pub const TX_FEE_MIN: u64 = 10_000; // 0.01 FRA
+/// Double the
+pub const BAR_TO_ABAR_TX_FEE_MIN: u64 = 20_000; // 0.02 FRA (2*TX_FEE_MIN)
 
 impl Transaction {
     #[inline(always)]
@@ -1781,6 +1783,15 @@ impl Transaction {
         //
         // But it seems enough when we combine it with limiting
         // the payload size of submission-server's http-requests.
+
+        let mut min_fee = TX_FEE_MIN;
+        // Charge double the min fee if the transaction is BarToAbar
+        for op in self.body.operations.iter() {
+            if let Operation::BarToAbar(_a) = op {
+                min_fee = BAR_TO_ABAR_TX_FEE_MIN;
+            }
+        }
+
         self.is_coinbase_tx()
             || self.body.operations.iter().any(|ops| {
                 if let Operation::TransferAsset(ref x) = ops {
@@ -1790,7 +1801,7 @@ impl Transaction {
                                 && *BLACK_HOLE_PUBKEY == o.record.public_key
                             {
                                 if let XfrAmount::NonConfidential(am) = o.record.amount {
-                                    if am > (TX_FEE_MIN - 1) {
+                                    if am > (min_fee - 1) {
                                         return true;
                                     }
                                 }

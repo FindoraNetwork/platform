@@ -83,6 +83,7 @@ use {
 
 /// Depth of abar merkle tree
 pub use zei::anon_xfr::TREE_DEPTH as MERKLE_TREE_DEPTH;
+use ledger::data_model::BAR_TO_ABAR_TX_FEE_MIN;
 
 macro_rules! no_transfer_err {
     () => {
@@ -231,10 +232,22 @@ impl TransactionBuilder {
     /// As the last operation of any transaction,
     /// add a static fee to the transaction.
     pub fn add_fee(&mut self, inputs: FeeInputs) -> Result<&mut TransactionBuilder> {
+        self.add_fee_custom(inputs, TX_FEE_MIN)
+    }
+
+    /// As the last operation of bar_to_abar transaction,
+    /// add a static fee to the transaction.
+    pub fn add_fee_bar_to_abar(&mut self, inputs: FeeInputs) -> Result<&mut TransactionBuilder> {
+        self.add_fee_custom(inputs, BAR_TO_ABAR_TX_FEE_MIN)
+    }
+
+    /// As the last operation of any transaction,
+    /// add a custom static fee to the transaction.
+    pub fn add_fee_custom(&mut self, inputs: FeeInputs, fee: u64) -> Result<&mut TransactionBuilder> {
         let mut kps = vec![];
         let mut opb = TransferOperationBuilder::default();
 
-        let mut am = TX_FEE_MIN;
+        let mut am = fee;
         for i in inputs.inner.into_iter() {
             open_blind_asset_record(&i.ar.record, &i.om, &i.kp)
                 .c(d!())
