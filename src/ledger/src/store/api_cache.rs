@@ -10,8 +10,7 @@ use {
         },
         staking::{
             ops::mint_fra::MintEntry, Amount, BlockHeight, DelegationRwdDetail,
-            CHAN_D_AMOUNT_HIST, CHAN_D_RWD_HIST, CHAN_GLOB_RATE_HIST,
-            CHAN_V_SELF_D_HIST, KEEP_HIST,
+            CHAN_D_AMOUNT_HIST, CHAN_GLOB_RATE_HIST, CHAN_V_SELF_D_HIST, KEEP_HIST,
         },
         store::LedgerState,
     },
@@ -165,6 +164,8 @@ impl ApiCache {
     }
 
     /// Cache history style data
+    ///
+    /// Note: This function's data will migrate to findora scanner.
     pub fn cache_hist_data(&mut self) {
         CHAN_GLOB_RATE_HIST.1.lock().try_iter().for_each(|(h, r)| {
             self.staking_global_rate_hist.insert(h, r);
@@ -198,32 +199,32 @@ impl ApiCache {
                     .insert(h, r);
             });
 
-        CHAN_D_RWD_HIST.1.lock().try_iter().for_each(|(pk, h, r)| {
-            #[allow(unused_mut)]
-            let mut dd =
-                self.staking_delegation_rwd_hist
-                    .entry(pk)
-                    .or_insert(new_mapxnk!(format!(
-                        "staking_delegation_rwd_hist_subdata/{}",
-                        wallet::public_key_to_base64(&pk)
-                    )));
-            let mut dd = dd.entry(h).or_insert_with(DelegationRwdDetail::default);
-
-            dd.block_height = r.block_height;
-            dd.amount += r.amount;
-            dd.penalty_amount += r.penalty_amount;
-
-            alt!(0 < r.bond, dd.bond = r.bond);
-            alt!(r.return_rate.is_some(), dd.return_rate = r.return_rate);
-            alt!(
-                r.commission_rate.is_some(),
-                dd.commission_rate = r.commission_rate
-            );
-            alt!(
-                r.global_delegation_percent.is_some(),
-                dd.global_delegation_percent = r.global_delegation_percent
-            );
-        });
+        //         CHAN_D_RWD_HIST.1.lock().try_iter().for_each(|(pk, h, r)| {
+        // #[allow(unused_mut)]
+        // let mut dd =
+        //     self.staking_delegation_rwd_hist
+        //         .entry(pk)
+        //         .or_insert(new_mapxnk!(format!(
+        //             "staking_delegation_rwd_hist_subdata/{}",
+        //             wallet::public_key_to_base64(&pk)
+        //         )));
+        // let mut dd = dd.entry(h).or_insert_with(DelegationRwdDetail::default);
+        //
+        // dd.block_height = r.block_height;
+        // dd.amount += r.amount;
+        // dd.penalty_amount += r.penalty_amount;
+        //
+        // alt!(0 < r.bond, dd.bond = r.bond);
+        // alt!(r.return_rate.is_some(), dd.return_rate = r.return_rate);
+        // alt!(
+        //     r.commission_rate.is_some(),
+        //     dd.commission_rate = r.commission_rate
+        // );
+        // alt!(
+        //     r.global_delegation_percent.is_some(),
+        //     dd.global_delegation_percent = r.global_delegation_percent
+        // );
+        //         });
     }
 }
 

@@ -316,8 +316,6 @@ impl BaseApp {
 
         // TODO: Add xhub compact.
 
-        println!("Pending Output is: {:?}", outputs);
-
         for output in &outputs {
             if output.asset == ASSET_TYPE_FRA {
                 let address =

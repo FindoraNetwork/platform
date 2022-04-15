@@ -326,6 +326,7 @@ impl LedgerState {
                 .write()
                 .set(&d, Some(n.zei_to_bytes()))
                 .c(d!())?;
+            self.status.spent_abars.insert(*n, ());
         }
 
         let mut txn_sid = TxnSID(backup_next_txn_sid);
@@ -1220,6 +1221,9 @@ pub struct LedgerStatus {
     /// all spent TXOs
     #[serde(default = "default_status_spent_utxos")]
     pub spent_utxos: Mapxnk<TxoSID, Utxo>,
+    /// all spent abars
+    #[serde(default = "default_status_spent_abars")]
+    pub spent_abars: Mapx<Nullifier, ()>,
     /// Map a TXO to its output position in a transaction
     #[serde(default = "default_status_txo_to_txn_location")]
     txo_to_txn_location: Mapxnk<TxoSID, (TxnSID, OutputPosition)>,
@@ -1400,6 +1404,7 @@ impl LedgerStatus {
             ax_utxos: default_status_ax_utxos(),
             owned_ax_utxos: default_status_owned_ax_utxos(),
             spent_utxos: default_status_spent_utxos(),
+            spent_abars: default_status_spent_abars(),
             txo_to_txn_location: default_status_txo_to_txn_location(),
             ax_txo_to_txn_location: default_status_ax_txo_to_txn_location(),
             issuance_amounts: default_status_issuance_amounts(),
@@ -1625,53 +1630,69 @@ impl LedgerStatus {
             }
         }
 
-        // An axfr_body requires abar merkle root hash for AxfrNote verification. This is done
+        // An axfr_body requires versioned merkle root hash for verification.
         // here with LedgerStatus available.
         for axfr_note in txn_effect.axfr_bodies.iter() {
+            for input in &axfr_note.body.inputs {
+                if self.spent_abars.get(&input).is_some() {
+                    return Err(eg!("Input abar must be unspent"));
+                }
+            }
+
             let verifier_params = VerifierParams::load(
                 axfr_note.body.inputs.len(),
                 axfr_note.body.outputs.len(),
             )?;
             let abar_version = axfr_note.body.merkle_root_version;
-            verify_anon_xfr_note(
-                &verifier_params,
-                axfr_note,
-                // Unwrap Now to get the code to compile . Change in Zei later to accept Option<BLSScalar>
-                &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
-            )
-            .c(d!("Anon Transfer proof verification failed"))?;
+            let version_root = self
+                .get_versioned_abar_hash(abar_version)
+                .ok_or(eg!("merkle version is invalid"))?;
+            verify_anon_xfr_note(&verifier_params, axfr_note, &version_root)
+                .c(d!("Anon Transfer proof verification failed"))?;
         }
 
-        // An anon_fee_body requires abar merkle root hash for AnonFeeNote verification. This is done
-        // here with LedgerStatus available.
+        // An axfr_fee requires versioned merkle root hash for verification.
+        let anon_fee_verifier_params = VerifierParams::anon_fee_params()?;
         for anon_fee_note in txn_effect.anon_fee_bodies.iter() {
-            let verifier_params = VerifierParams::anon_fee_params()?;
+            if self.spent_abars.get(&anon_fee_note.body.input).is_some() {
+                return Err(eg!("Input abar must be unspent"));
+            }
+
             let abar_version = anon_fee_note.body.merkle_root_version;
+            let version_root = self
+                .get_versioned_abar_hash(abar_version)
+                .ok_or(eg!("merkle version is invalid"))?;
             verify_anon_fee_note(
-                &verifier_params,
+                &anon_fee_verifier_params,
                 anon_fee_note,
-                &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
+                &version_root,
             )
             .c(d!("Anon Fee proof verification failed"))?;
         }
 
-        // Abar conversion needs abar merkle tree root hash for verification of spent ABAR merkle proof.
-        // This is done here with merkle root available.
+        // An axfr_abar_conv requires versioned merkle root hash for verification.
+        let abar_to_bar_verifier_params = VerifierParams::abar_to_bar_params()?;
         for abar_conv in &txn_effect.abar_conv_inputs {
+            if self.spent_abars.get(&abar_conv.body.input).is_some() {
+                return Err(eg!("Input abar must be unspent"));
+            }
+
             // Abar to Bar conversion is invalid without an anon_fee.
             if txn_effect.anon_fee_bodies.is_empty() {
                 return Err(eg!("Abar to Bar conversion missing anon fee"));
             }
 
             // Get verifier params
-            let verifier_params = VerifierParams::abar_to_bar_params()?;
             let abar_version: usize = abar_conv.body.merkle_root_version;
+            let version_root = self
+                .get_versioned_abar_hash(abar_version)
+                .ok_or(eg!("merkle version is invalid"))?;
 
             // verify zk proof with merkle root
             verify_abar_to_bar_note(
-                &verifier_params,
+                &abar_to_bar_verifier_params,
                 abar_conv,
-                &self.get_versioned_abar_hash(abar_version as usize).unwrap(),
+                &version_root,
             )
             .c(d!("Abar to Bar conversion proof verification failed"))?;
         }
@@ -1863,6 +1884,10 @@ fn default_status_owned_ax_utxos() -> Mapx<Commitment, ATxoSID> {
 
 fn default_status_spent_utxos() -> Mapxnk<TxoSID, Utxo> {
     new_mapxnk!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/spent_utxos")
+}
+
+fn default_status_spent_abars() -> Mapx<Nullifier, ()> {
+    new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/spent_abars")
 }
 
 fn default_status_txo_to_txn_location() -> Mapxnk<TxoSID, (TxnSID, OutputPosition)> {

@@ -40,7 +40,7 @@ actix-web = "3.3.2"
 percent-encoding = "2.1.0"
 
 nix = "0.22.1"
-ruc = "1.0"
+ruc = { version = "1.0.5", default-features = false, features = ["compact"] }
 
 zei = "0.1"
 zei-algebra = "0.1"
@@ -70,3 +70,4 @@ vergen = "=3.1.0"
 default = ["diskcache"]
 diskcache = ["ledger/diskcache"]
 debug_env = ["ledger/debug_env", "config/debug_env"]
+
