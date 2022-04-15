@@ -459,7 +459,7 @@ fn run() -> Result<()> {
         let dec_key = anon_keys.dec_key;
         // get the BAR receiver address
         let to = m
-            .value_of("to-xfr-pubkey")
+            .value_of("to-pubkey")
             .c(d!())
             .and_then(wallet::public_key_from_base64)
             .or_else(|_| {
