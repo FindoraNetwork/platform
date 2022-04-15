@@ -42,8 +42,8 @@ percent-encoding = "2.1.0"
 nix = "0.22.1"
 ruc = "1.0"
 
-zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-refactoring" }
-zei-algebra = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-refactoring" }
+zei = "0.1"
+zei-algebra = "0.1"
 
 abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
 config = { path = "../config"}

@@ -31,10 +31,10 @@ fp-types = { path = "../components/contracts/primitives/types" }
 itertools = "0.8"
 ruc = "1.0"
 
-zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-refactoring" }
-zei-crypto = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-refactoring" }
-zei-algebra = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-refactoring" }
-bulletproofs = { git = "https://github.com/FindoraNetwork/bp", branch = 'develop-refactoring' }
+zei = "0.1"
+zei-crypto = "0.1"
+zei-algebra = "0.1"
+bulletproofs = "2.0"
 
 fbnc = { version = "0.2.9", default-features = false}
 
@@ -65,7 +65,7 @@ parking_lot = "0.11.1"
 fs2 = "0.4"
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.4" }
 sparse_merkle_tree = { path = "../libs/sparse_merkle_tree" }
-zei-accumulators = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-refactoring" }
+zei-accumulators = "0.1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 parking_lot = { version = "0.11.1", features = ["wasm-bindgen"] }

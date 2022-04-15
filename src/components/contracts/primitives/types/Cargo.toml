@@ -11,6 +11,7 @@ readme = "README.md"
 [dependencies]
 bech32 = "0.7.2"
 ethereum = { version = "0.9.0", default-features = false, features = ["with-serde"] }
+fixed-hash = "0.7.0"
 hex = "0.4.2"
 globutils = { path = "../../../../libs/globutils" }
 libsecp256k1 = { version = "0.5", features = ["static-context", "hmac"] }
@@ -19,9 +20,8 @@ ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0"
 sha3 = "0.8"
-zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-refactoring" }
-zei-algebra = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-refactoring" }
-fixed-hash = "0.7.0"
+zei = "0.1"
+zei-algebra = "0.1"
 
 # primitives
 fp-utils = { path = "../utils" }
