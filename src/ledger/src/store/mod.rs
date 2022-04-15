@@ -57,7 +57,6 @@ use {
     zei::{
         anon_xfr::{
             abar_to_bar::verify_abar_to_bar_note,
-            anon_fee::verify_anon_fee_note,
             hash_abar,
             structs::{
                 AnonBlindAssetRecord, Commitment, MTLeafInfo, MTNode, MTPath, Nullifier,
@@ -1029,10 +1028,6 @@ impl LedgerState {
             .flat_map(|o| match o {
                 Operation::BarToAbar(body) => vec![body.note.body.memo.clone()],
                 Operation::TransferAnonAsset(body) => body.note.body.owner_memos.clone(),
-                Operation::AnonymousFee(body) => {
-                    println!("AnonymousFee {:?}", body.note.body.owner_memo);
-                    vec![body.note.body.owner_memo.clone()]
-                }
                 _ => vec![],
             })
             .collect::<Vec<OwnerMemo>>();
@@ -1651,35 +1646,11 @@ impl LedgerStatus {
                 .c(d!("Anon Transfer proof verification failed"))?;
         }
 
-        // An axfr_fee requires versioned merkle root hash for verification.
-        let anon_fee_verifier_params = VerifierParams::anon_fee_params()?;
-        for anon_fee_note in txn_effect.anon_fee_bodies.iter() {
-            if self.spent_abars.get(&anon_fee_note.body.input).is_some() {
-                return Err(eg!("Input abar must be unspent"));
-            }
-
-            let abar_version = anon_fee_note.body.merkle_root_version;
-            let version_root = self
-                .get_versioned_abar_hash(abar_version)
-                .ok_or(eg!("merkle version is invalid"))?;
-            verify_anon_fee_note(
-                &anon_fee_verifier_params,
-                anon_fee_note,
-                &version_root,
-            )
-            .c(d!("Anon Fee proof verification failed"))?;
-        }
-
         // An axfr_abar_conv requires versioned merkle root hash for verification.
         let abar_to_bar_verifier_params = VerifierParams::abar_to_bar_params()?;
         for abar_conv in &txn_effect.abar_conv_inputs {
             if self.spent_abars.get(&abar_conv.body.input).is_some() {
                 return Err(eg!("Input abar must be unspent"));
-            }
-
-            // Abar to Bar conversion is invalid without an anon_fee.
-            if txn_effect.anon_fee_bodies.is_empty() {
-                return Err(eg!("Abar to Bar conversion missing anon fee"));
             }
 
             // Get verifier params

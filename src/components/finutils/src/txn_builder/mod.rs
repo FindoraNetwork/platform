@@ -13,7 +13,7 @@ use {
     ledger::{
         converter::ConvertAccount,
         data_model::{
-            AbarToBarOps, AnonFeeOps, AnonTransferOps, AssetRules, AssetTypeCode,
+            AbarToBarOps, AnonTransferOps, AssetRules, AssetTypeCode,
             BarToAbarOps, ConfidentialMemo, DefineAsset, DefineAssetBody,
             IndexedSignature, IssueAsset, IssueAssetBody, IssuerKeyPair,
             IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
@@ -53,7 +53,6 @@ use {
         },
         anon_xfr::{
             abar_to_bar::gen_abar_to_bar_note,
-            anon_fee::{gen_anon_fee_note, AnonFeeNote},
             bar_to_abar::gen_bar_to_abar_note,
             config::FEE_CALCULATING_FUNC,
             gen_anon_xfr_note,
@@ -568,34 +567,6 @@ impl TransactionBuilder {
         // Add operation to transaction
         self.txn.add_operation(op);
         Ok(self)
-    }
-
-    /// Add an operation to charge fee anonymously for ABAR to BAR transfer
-    /// # Arguments
-    /// * input - input Abar for fee payment
-    /// * output - balance back after payment of fee
-    /// * input_keypair - AXfrKeyPair of the fee payer
-    #[allow(dead_code)]
-    pub fn add_operation_anon_fee(
-        &mut self,
-        input: &OpenAnonBlindAssetRecord,
-        output: &OpenAnonBlindAssetRecord,
-        input_keypair: &AXfrKeyPair,
-    ) -> Result<(&mut Self, AnonFeeNote)> {
-        let mut prng = ChaChaRng::from_entropy();
-        let prover_params = ProverParams::anon_fee_params(MERKLE_TREE_DEPTH)?;
-
-        // Generate AnonFee note
-        let note =
-            gen_anon_fee_note(&mut prng, &prover_params, input, output, input_keypair)
-                .c(d!())?;
-
-        // create Operation
-        let inp = AnonFeeOps::new(note.clone(), self.no_replay_token).c(d!())?;
-        let op = Operation::AnonymousFee(Box::new(inp));
-
-        self.txn.add_operation(op);
-        Ok((self, note))
     }
 
     /// Add an operation to transfer assets held in Anonymous Blind Asset Record.

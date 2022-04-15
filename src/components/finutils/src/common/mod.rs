@@ -37,7 +37,6 @@ use {
     },
     zei::{
         anon_xfr::{
-            anon_fee::ANON_FEE_MIN,
             keys::{AXfrKeyPair, AXfrPubKey},
             nullifier,
             structs::{
@@ -842,7 +841,6 @@ pub fn convert_abar2bar(
     com: &str,
     dec_key: String,
     to: &XfrPublicKey,
-    com_fra: &str,
     confidential_am: bool,
     confidential_ty: bool,
 ) -> Result<()> {
@@ -851,7 +849,6 @@ pub fn convert_abar2bar(
         .c(d!("invalid 'from-axfr-secret-key'"))?;
     let from_secret_key =
         wallet::x_secret_key_from_base64(dec_key.as_str()).c(d!("invalid dec_key"))?;
-    let from_public_key = XPublicKey::from(&from_secret_key);
 
     // Get the owned ABAR from pub_key and commitment
     let com = wallet::commitment_from_base64(com).c(d!())?;
@@ -893,33 +890,6 @@ pub fn convert_abar2bar(
         ));
     }
 
-    // Get Fee OwnerMemo & Merkle Proof
-    let com_fra = wallet::commitment_from_base64(com_fra).c(d!())?;
-    let fee_axtxo_abar = utils::get_owned_abar(&com_fra).c(d!())?;
-    let fee_owner_memo = utils::get_abar_memo(&fee_axtxo_abar.0).c(d!())?.unwrap();
-    let fee_mt_leaf_info = utils::get_abar_proof(&fee_axtxo_abar.0).c(d!())?.unwrap();
-
-    let fee_oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
-        &fee_axtxo_abar.1,
-        fee_owner_memo,
-        &from,
-        &from_secret_key,
-    )
-    .unwrap()
-    .mt_leaf_info(fee_mt_leaf_info)
-    .build()
-    .unwrap();
-
-    let mut prng = ChaChaRng::from_entropy();
-    let out_fee_oabar = OpenAnonBlindAssetRecordBuilder::new()
-        .amount(fee_oabar.get_amount() - ANON_FEE_MIN)
-        .asset_type(fee_oabar.get_asset_type())
-        .pub_key(from.pub_key())
-        .finalize(&mut prng, &from_public_key)
-        .unwrap()
-        .build()
-        .unwrap();
-
     // Create New AssetRecordType for new BAR
     let art = match (confidential_am, confidential_ty) {
         (true, true) => AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
@@ -929,24 +899,9 @@ pub fn convert_abar2bar(
     };
 
     // Build AbarToBar Transaction and submit
-    utils::generate_abar2bar_op(&oabar_in, &fee_oabar, &out_fee_oabar, &from, to, art)
+    utils::generate_abar2bar_op(&oabar_in, &from, to, art)
         .c(d!())?;
 
-    let com_out_fee = out_fee_oabar.compute_commitment();
-    println!(
-        "\x1b[31;01m Fee Remainder Commitment: {}\x1b[00m",
-        wallet::commitment_to_base64(&com_out_fee)
-    );
-    let mut file = fs::OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open("owned_commitments")
-        .expect("cannot open commitment file");
-    std::io::Write::write_all(
-        &mut file,
-        ("\n".to_owned() + &wallet::commitment_to_base64(&com_out_fee)).as_bytes(),
-    )
-    .expect("commitment write failed");
     Ok(())
 }
 

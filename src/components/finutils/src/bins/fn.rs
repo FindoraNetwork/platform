@@ -468,9 +468,8 @@ fn run() -> Result<()> {
 
         // get the commitments for abar conversion and anon_fee
         let commitment = m.value_of("commitment");
-        let fee_commitment = m.value_of("fee-commitment");
 
-        if commitment.is_none() || fee_commitment.is_none() {
+        if commitment.is_none() {
             println!("{}", m.usage());
         } else {
             // Build transaction and submit to network
@@ -479,7 +478,6 @@ fn run() -> Result<()> {
                 commitment.unwrap(),
                 dec_key,
                 &to,
-                fee_commitment.unwrap(),
                 m.is_present("confidential-amount"),
                 m.is_present("confidential-type"),
             )

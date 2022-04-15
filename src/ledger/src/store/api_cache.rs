@@ -276,9 +276,6 @@ where
             Operation::TransferAnonAsset(_) => {
                 // Anon
             }
-            Operation::AnonymousFee(_) => {
-                // Anon Fee
-            }
             Operation::ConvertAccount(i) => {
                 related_addresses.insert(XfrAddress {
                     key: i.get_related_address(),
@@ -675,9 +672,6 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
                 vec![b.note.body.memo.clone()]
             }
             Operation::TransferAnonAsset(b) => b.note.body.owner_memos.clone(),
-            Operation::AnonymousFee(b) => {
-                vec![b.note.body.owner_memo.clone()]
-            }
             _ => vec![],
         });
 

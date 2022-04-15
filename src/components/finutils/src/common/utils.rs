@@ -760,8 +760,6 @@ pub fn generate_bar2abar_op(
 /// * art           - AssetRecordType of the new BAR
 pub fn generate_abar2bar_op(
     oabar_in: &OpenAnonBlindAssetRecord,
-    fee_oabar: &OpenAnonBlindAssetRecord,
-    out_fee_oabar: &OpenAnonBlindAssetRecord,
     from: &AXfrKeyPair,
     to: &XfrPublicKey,
     art: AssetRecordType,
@@ -770,11 +768,6 @@ pub fn generate_abar2bar_op(
     // create and add AbarToBar Operation
     builder
         .add_operation_abar_to_bar(oabar_in, from, to, art)
-        .c(d!())?;
-
-    // create and add AnonFee Operation
-    builder
-        .add_operation_anon_fee(fee_oabar, out_fee_oabar, from)
         .c(d!())?;
 
     // submit transaction
