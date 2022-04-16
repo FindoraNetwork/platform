@@ -2,6 +2,7 @@
 //! Some handful function and data structure for findora cli tools
 //!
 
+use ledger::data_model::BAR_TO_ABAR_TX_FEE_MIN;
 use {
     crate::{
         api::{DelegationInfo, ValidatorDetail},
@@ -267,12 +268,12 @@ pub fn gen_fee_bar_to_abar(
     owner_kp: &XfrKeyPair,
     avoid_input: TxoSID,
 ) -> Result<Operation> {
-    let mut op_fee: u64 = TX_FEE_MIN;
+    let mut op_fee: u64 = BAR_TO_ABAR_TX_FEE_MIN;
     let mut trans_builder = TransferOperationBuilder::new();
     trans_builder
         .add_output(
             &AssetRecordTemplate::with_no_asset_tracing(
-                TX_FEE_MIN,
+                BAR_TO_ABAR_TX_FEE_MIN,
                 ASSET_TYPE_FRA,
                 AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                 *BLACK_HOLE_PUBKEY,
@@ -760,8 +761,6 @@ pub fn generate_bar2abar_op(
 /// * art           - AssetRecordType of the new BAR
 pub fn generate_abar2bar_op(
     oabar_in: &OpenAnonBlindAssetRecord,
-    fee_oabar: &OpenAnonBlindAssetRecord,
-    out_fee_oabar: &OpenAnonBlindAssetRecord,
     from: &AXfrKeyPair,
     to: &XfrPublicKey,
     art: AssetRecordType,
@@ -770,11 +769,6 @@ pub fn generate_abar2bar_op(
     // create and add AbarToBar Operation
     builder
         .add_operation_abar_to_bar(oabar_in, from, to, art)
-        .c(d!())?;
-
-    // create and add AnonFee Operation
-    builder
-        .add_operation_anon_fee(fee_oabar, out_fee_oabar, from)
         .c(d!())?;
 
     // submit transaction

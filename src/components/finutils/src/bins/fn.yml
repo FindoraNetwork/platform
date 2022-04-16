@@ -585,13 +585,6 @@ subcommands:
             takes_value: true
             value_name: COMMITMENT
             required: true
-        - fee-commitment:
-            help: Commitment for the FRA ABAR to pay fee
-            short: F
-            long: fee-commitment
-            takes_value: true
-            value_name: FEE COMMITMENT
-            required: true
         - to-pubkey:
             help: base64-formated `XfrPublicKey` of the receiver
             short: t

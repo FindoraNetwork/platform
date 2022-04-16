@@ -13,13 +13,12 @@ use {
     ledger::{
         converter::ConvertAccount,
         data_model::{
-            AbarToBarOps, AnonFeeOps, AnonTransferOps, AssetRules, AssetTypeCode,
-            BarToAbarOps, ConfidentialMemo, DefineAsset, DefineAssetBody,
-            IndexedSignature, IssueAsset, IssueAssetBody, IssuerKeyPair,
-            IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
-            TransactionBody, TransferAsset, TransferAssetBody, TransferType, TxOutput,
-            TxoRef, TxoSID, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA,
-            BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+            AbarToBarOps, AnonTransferOps, AssetRules, AssetTypeCode, BarToAbarOps,
+            ConfidentialMemo, DefineAsset, DefineAssetBody, IndexedSignature,
+            IssueAsset, IssueAssetBody, IssuerKeyPair, IssuerPublicKey, Memo,
+            NoReplayToken, Operation, Transaction, TransactionBody, TransferAsset,
+            TransferAssetBody, TransferType, TxOutput, TxoRef, TxoSID, UpdateMemo,
+            UpdateMemoBody, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
         staking::{
             is_valid_tendermint_addr,
@@ -53,7 +52,6 @@ use {
         },
         anon_xfr::{
             abar_to_bar::gen_abar_to_bar_note,
-            anon_fee::{gen_anon_fee_note, AnonFeeNote},
             bar_to_abar::gen_bar_to_abar_note,
             config::FEE_CALCULATING_FUNC,
             gen_anon_xfr_note,
@@ -82,6 +80,7 @@ use {
     zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
 
+use ledger::data_model::BAR_TO_ABAR_TX_FEE_MIN;
 /// Depth of abar merkle tree
 pub use zei::anon_xfr::TREE_DEPTH as MERKLE_TREE_DEPTH;
 
@@ -232,10 +231,29 @@ impl TransactionBuilder {
     /// As the last operation of any transaction,
     /// add a static fee to the transaction.
     pub fn add_fee(&mut self, inputs: FeeInputs) -> Result<&mut TransactionBuilder> {
+        self.add_fee_custom(inputs, TX_FEE_MIN)
+    }
+
+    /// As the last operation of bar_to_abar transaction,
+    /// add a static fee to the transaction.
+    pub fn add_fee_bar_to_abar(
+        &mut self,
+        inputs: FeeInputs,
+    ) -> Result<&mut TransactionBuilder> {
+        self.add_fee_custom(inputs, BAR_TO_ABAR_TX_FEE_MIN)
+    }
+
+    /// As the last operation of any transaction,
+    /// add a custom static fee to the transaction.
+    pub fn add_fee_custom(
+        &mut self,
+        inputs: FeeInputs,
+        fee: u64,
+    ) -> Result<&mut TransactionBuilder> {
         let mut kps = vec![];
         let mut opb = TransferOperationBuilder::default();
 
-        let mut am = TX_FEE_MIN;
+        let mut am = fee;
         for i in inputs.inner.into_iter() {
             open_blind_asset_record(&i.ar.record, &i.om, &i.kp)
                 .c(d!())
@@ -568,34 +586,6 @@ impl TransactionBuilder {
         // Add operation to transaction
         self.txn.add_operation(op);
         Ok(self)
-    }
-
-    /// Add an operation to charge fee anonymously for ABAR to BAR transfer
-    /// # Arguments
-    /// * input - input Abar for fee payment
-    /// * output - balance back after payment of fee
-    /// * input_keypair - AXfrKeyPair of the fee payer
-    #[allow(dead_code)]
-    pub fn add_operation_anon_fee(
-        &mut self,
-        input: &OpenAnonBlindAssetRecord,
-        output: &OpenAnonBlindAssetRecord,
-        input_keypair: &AXfrKeyPair,
-    ) -> Result<(&mut Self, AnonFeeNote)> {
-        let mut prng = ChaChaRng::from_entropy();
-        let prover_params = ProverParams::anon_fee_params(MERKLE_TREE_DEPTH)?;
-
-        // Generate AnonFee note
-        let note =
-            gen_anon_fee_note(&mut prng, &prover_params, input, output, input_keypair)
-                .c(d!())?;
-
-        // create Operation
-        let inp = AnonFeeOps::new(note.clone(), self.no_replay_token).c(d!())?;
-        let op = Operation::AnonymousFee(Box::new(inp));
-
-        self.txn.add_operation(op);
-        Ok((self, note))
     }
 
     /// Add an operation to transfer assets held in Anonymous Blind Asset Record.

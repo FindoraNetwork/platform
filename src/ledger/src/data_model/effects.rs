@@ -1,10 +1,10 @@
 use {
     crate::{
         data_model::{
-            AbarToBarOps, AnonFeeOps, AnonTransferOps, AssetType, AssetTypeCode,
-            BarToAbarOps, DefineAsset, IssueAsset, IssuerPublicKey, Memo, NoReplayToken,
-            Operation, Transaction, TransferAsset, TransferType, TxOutput, TxnTempSID,
-            TxoRef, TxoSID, UpdateMemo,
+            AbarToBarOps, AnonTransferOps, AssetType, AssetTypeCode, BarToAbarOps,
+            DefineAsset, IssueAsset, IssuerPublicKey, Memo, NoReplayToken, Operation,
+            Transaction, TransferAsset, TransferType, TxOutput, TxnTempSID, TxoRef,
+            TxoSID, UpdateMemo,
         },
         staking::{
             self,
@@ -30,7 +30,6 @@ use {
     zei::{
         anon_xfr::{
             abar_to_bar::AbarToBarNote,
-            anon_fee::AnonFeeNote,
             bar_to_abar::verify_bar_to_abar_note,
             structs::{AXfrNote, AnonBlindAssetRecord, Nullifier},
         },
@@ -103,8 +102,6 @@ pub struct TxnEffect {
     pub abar_conv_inputs: Vec<AbarToBarNote>,
     /// New anon transfer bodies
     pub axfr_bodies: Vec<AXfrNote>,
-    /// New anon fee bodies
-    pub anon_fee_bodies: Vec<AnonFeeNote>,
     /// replace staker operations
     pub replace_stakers: Vec<ReplaceStakerOps>,
 }
@@ -222,10 +219,6 @@ impl TxnEffect {
                 Operation::TransferAnonAsset(i) => {
                     check_nonce!(i);
                     te.add_anon_transfer(i).c(d!())?;
-                }
-                Operation::AnonymousFee(i) => {
-                    check_nonce!(i);
-                    te.add_anon_fee_op(i).c(d!())?;
                 }
             }
         }
@@ -637,18 +630,6 @@ impl TxnEffect {
         self.axfr_bodies.push(anon_transfer.note.clone());
         Ok(())
     }
-
-    /// An anon fee note is valid iff
-    /// 1. the signature is correct,
-    /// 2. ZKP can be verified,
-    /// 3. the input ABARs are unspent. (checked in finish block)
-    /// # Arguments
-    /// * anon_fee - The Operation for Anon Fee
-    /// returns an error if validation fails
-    fn add_anon_fee_op(&mut self, anon_fee: &AnonFeeOps) -> Result<()> {
-        self.anon_fee_bodies.push(anon_fee.note.clone());
-        Ok(())
-    }
 }
 
 /// Check tx in the context of a block, partially.
@@ -750,12 +731,6 @@ impl BlockEffect {
             }
         }
 
-        for anon_fee_note in txn_effect.anon_fee_bodies {
-            self.new_nullifiers.push(anon_fee_note.body.input);
-
-            let op_abar = anon_fee_note.body.output;
-            current_txn_abars.push(op_abar)
-        }
         self.output_abars.push(current_txn_abars);
 
         Ok(temp_sid)
@@ -780,16 +755,6 @@ impl BlockEffect {
         }
         for inputs in txn_effect.abar_conv_inputs.iter() {
             if self.new_nullifiers.contains(&inputs.body.input) {
-                return Err(eg!());
-            }
-            if txn_effect.anon_fee_bodies.is_empty() {
-                return Err(eg!("Abar to Bar conversion missing anon fee"));
-            }
-        }
-
-        // Check that no nullifier are created twice in same block
-        for anon_fee_note in txn_effect.anon_fee_bodies.iter() {
-            if self.new_nullifiers.contains(&anon_fee_note.body.input) {
                 return Err(eg!());
             }
         }
