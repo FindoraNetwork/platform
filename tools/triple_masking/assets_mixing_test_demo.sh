@@ -50,8 +50,8 @@ echo "
   \"dec_key\": \"EHr6smaDNCEgCmz2DfkNtnXcDow0QS6Dg9ZXhd_EKH0=\"
 }" > $FILE_ANON_KEYS_3
 
-rm owned_randomizers
-rm sent_randomizers
+rm owned_commitments
+rm sent_commitments
 echo "\n ***** Setup accounts successfully! ***** "
 
 set -e
@@ -138,13 +138,13 @@ sleep 15
 
 echo "\n\n Anon transfer Asset 1 ..."
 echo "==============================================================================="
-RANDOMIZER=$(awk 'FNR==3' owned_randomizers)
-FRA_RANDMOIZER=$(awk 'FNR==2' owned_randomizers)
+COMMITMENT=$(awk 'FNR==3' owned_commitments)
+FRA_COMMITMENT=$(awk 'FNR==2' owned_commitments)
 target/release/fn anon-transfer    \
   --amount 50000000                \
   --anon-keys $FILE_ANON_KEYS_1    \
-  --randomizer $RANDOMIZER         \
-  --fra-randomizer $FRA_RANDMOIZER \
+  --commitment $COMMITMENT         \
+  --fra-commitment $FRA_COMMITMENT \
   --to-axfr-public-key $ANON_PK_2  \
   --to-enc-key $ANON_ENC_2
 echo "waiting blockchain 15s..."
@@ -155,14 +155,14 @@ echo "==========================================================================
 echo "input  => key1 * FRA + key1 * asset2 + key2 * asset1"
 echo "output => key2 * FRA + key2 * asset2 + key3 * asset1"
 
-ANON_KEY_1_FRA_RANDOMIZER=$(awk 'FNR==6' owned_randomizers)     # FRA
-ANON_KEY_1_ASSET_1_RANDOMIZER=$(awk 'FNR==5' owned_randomizers) # ASSET 1
-ANON_KEY_1_ASSET_2_RANDOMIZER=$(awk 'FNR==4' owned_randomizers) # ASSET 2
-ANON_KEY_2_ASSET_1_RANDOMIZER=$(awk 'FNR==2' sent_randomizers)  # ASSET 1
+ANON_KEY_1_FRA_COMMITMENT=$(awk 'FNR==6' owned_commitments)     # FRA
+ANON_KEY_1_ASSET_1_COMMITMENT=$(awk 'FNR==5' owned_commitments) # ASSET 1
+ANON_KEY_1_ASSET_2_COMMITMENT=$(awk 'FNR==4' owned_commitments) # ASSET 2
+ANON_KEY_2_ASSET_1_COMMITMENT=$(awk 'FNR==2' sent_commitments)  # ASSET 1
 
 BATCH_SK="batch_sk.keys"
 BATCH_DEC="batch_dec.keys"
-BATCH_R="batch_r.keys"
+BATCH_C="batch_c.keys"
 BATCH_PK="batch_pk.keys"
 BATCH_ENC="batch_enc.keys"
 BATCH_AMOUNT="batch_amount.keys"
@@ -176,9 +176,9 @@ echo $ANON_DEC_1 > $BATCH_DEC
 echo $ANON_DEC_1 >> $BATCH_DEC
 echo $ANON_DEC_2 >> $BATCH_DEC
 
-echo $ANON_KEY_1_FRA_RANDOMIZER > $BATCH_R
-echo $ANON_KEY_1_ASSET_2_RANDOMIZER >> $BATCH_R
-echo $ANON_KEY_2_ASSET_1_RANDOMIZER >> $BATCH_R
+echo $ANON_KEY_1_FRA_COMMITMENT > $BATCH_C
+echo $ANON_KEY_1_ASSET_2_COMMITMENT >> $BATCH_C
+echo $ANON_KEY_2_ASSET_1_COMMITMENT >> $BATCH_C
 
 echo $ANON_PK_2 > $BATCH_PK
 echo $ANON_PK_2 >> $BATCH_PK
@@ -201,7 +201,7 @@ echo ""
 target/release/fn anon-transfer-batch \
   --axfr-secretkey-file $BATCH_SK     \
   --decryption-key-file $BATCH_DEC    \
-  --randomizer-file $BATCH_R          \
+  --commitment-file $BATCH_C          \
   --to-axfr-public-key-file $BATCH_PK \
   --to-enc-key-file $BATCH_ENC        \
   --amount-file $BATCH_AMOUNT         \
@@ -210,9 +210,9 @@ echo "waiting blockchain 5s..."
 sleep 15
 
 echo "checking..."
-target/release/fn owned-abars --axfr-public-key $ANON_PK_2 -r $(awk 'FNR==3' sent_randomizers)
-target/release/fn owned-abars --axfr-public-key $ANON_PK_2 -r $(awk 'FNR==4' sent_randomizers)
-target/release/fn owned-abars --axfr-public-key $ANON_PK_3 -r $(awk 'FNR==5' sent_randomizers)
+target/release/fn owned-abars -c $(awk 'FNR==3' sent_commitments)
+target/release/fn owned-abars -c $(awk 'FNR==4' sent_commitments)
+target/release/fn owned-abars -c $(awk 'FNR==5' sent_commitments)
 
-rm $BATCH_SK $BATCH_DEC $BATCH_R $BATCH_PK $BATCH_ENC $BATCH_AMOUNT $BATCH_ASSET
+rm $BATCH_SK $BATCH_DEC $BATCH_C $BATCH_PK $BATCH_ENC $BATCH_AMOUNT $BATCH_ASSET
 echo "\n ***** Test all successfully! ***** "

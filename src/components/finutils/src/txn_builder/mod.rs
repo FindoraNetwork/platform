@@ -7,20 +7,18 @@
 
 use {
     credentials::CredUserSecretKey,
-    crypto::basics::hybrid_encryption::XPublicKey,
     curve25519_dalek::scalar::Scalar,
     fp_types::crypto::MultiSigner,
     globutils::{wallet, SignatureOf},
     ledger::{
         converter::ConvertAccount,
         data_model::{
-            AbarToBarOps, AnonFeeOps, AnonTransferOps, AssetRules, AssetTypeCode,
-            BarToAbarOps, ConfidentialMemo, DefineAsset, DefineAssetBody,
-            IndexedSignature, IssueAsset, IssueAssetBody, IssuerKeyPair,
-            IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
-            TransactionBody, TransferAsset, TransferAssetBody, TransferType, TxOutput,
-            TxoRef, TxoSID, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA,
-            BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+            AbarToBarOps, AnonTransferOps, AssetRules, AssetTypeCode, BarToAbarOps,
+            ConfidentialMemo, DefineAsset, DefineAssetBody, IndexedSignature,
+            IssueAsset, IssueAssetBody, IssuerKeyPair, IssuerPublicKey, Memo,
+            NoReplayToken, Operation, Transaction, TransactionBody, TransferAsset,
+            TransferAssetBody, TransferType, TxOutput, TxoRef, TxoSID, UpdateMemo,
+            UpdateMemoBody, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
         staking::{
             is_valid_tendermint_addr,
@@ -48,48 +46,49 @@ use {
     },
     tendermint::PrivateKey,
     zei::{
-        anon_xfr::{
-            abar_to_bar::gen_abar_to_bar_note,
-            anon_fee::{gen_anon_fee_body, AnonFeeNote},
-            bar_to_abar::gen_bar_to_abar_body,
-            config::FEE_CALCULATING_FUNC,
-            gen_anon_xfr_body,
-            keys::{AXfrKeyPair, AXfrPubKey},
-            structs::{
-                AXfrBody, AXfrNote, OpenAnonBlindAssetRecord,
-                OpenAnonBlindAssetRecordBuilder,
-            },
-        },
-        api::anon_creds::{
+        anon_creds::{
             ac_confidential_open_commitment, ACCommitment, ACCommitmentKey,
             ConfidentialAC, Credential,
         },
-        serialization::ZeiFromToBytes,
-        setup::{PublicParams, UserParams},
+        anon_xfr::{
+            abar_to_bar::gen_abar_to_bar_note,
+            bar_to_abar::gen_bar_to_abar_note,
+            config::FEE_CALCULATING_FUNC,
+            gen_anon_xfr_note,
+            keys::{AXfrKeyPair, AXfrPubKey},
+            structs::{
+                AXfrNote, Commitment, OpenAnonBlindAssetRecord,
+                OpenAnonBlindAssetRecordBuilder,
+            },
+        },
+        setup::ProverParams,
         xfr::{
             asset_record::{
                 build_blind_asset_record, build_open_asset_record,
                 open_blind_asset_record, AssetRecordType,
             },
-            lib::XfrNotePolicies,
             sig::{XfrKeyPair, XfrPublicKey},
             structs::{
                 AssetRecord, AssetRecordTemplate, AssetType, BlindAssetRecord,
                 OpenAssetRecord, OwnerMemo, TracingPolicies, TracingPolicy,
             },
+            XfrNotePolicies,
         },
     },
-    zeialgebra::jubjub::JubjubScalar,
+    zei_algebra::prelude::*,
+    zei_crypto::basic::hybrid_encryption::XPublicKey,
+    zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
+
+use ledger::data_model::BAR_TO_ABAR_TX_FEE_MIN;
+/// Depth of abar merkle tree
+pub use zei::anon_xfr::TREE_DEPTH as MERKLE_TREE_DEPTH;
 
 macro_rules! no_transfer_err {
     () => {
         ("Transaction has not yet been finalized".to_string())
     };
 }
-
-/// Depth of abar merkle tree
-pub const MERKLE_TREE_DEPTH: usize = 40;
 
 /// Definition of a fee operation, as a inner data structure of FeeInputs
 pub struct FeeInput {
@@ -232,10 +231,29 @@ impl TransactionBuilder {
     /// As the last operation of any transaction,
     /// add a static fee to the transaction.
     pub fn add_fee(&mut self, inputs: FeeInputs) -> Result<&mut TransactionBuilder> {
+        self.add_fee_custom(inputs, TX_FEE_MIN)
+    }
+
+    /// As the last operation of bar_to_abar transaction,
+    /// add a static fee to the transaction.
+    pub fn add_fee_bar_to_abar(
+        &mut self,
+        inputs: FeeInputs,
+    ) -> Result<&mut TransactionBuilder> {
+        self.add_fee_custom(inputs, BAR_TO_ABAR_TX_FEE_MIN)
+    }
+
+    /// As the last operation of any transaction,
+    /// add a custom static fee to the transaction.
+    pub fn add_fee_custom(
+        &mut self,
+        inputs: FeeInputs,
+        fee: u64,
+    ) -> Result<&mut TransactionBuilder> {
         let mut kps = vec![];
         let mut opb = TransferOperationBuilder::default();
 
-        let mut am = TX_FEE_MIN;
+        let mut am = fee;
         for i in inputs.inner.into_iter() {
             open_blind_asset_record(&i.ar.record, &i.om, &i.kp)
                 .c(d!())
@@ -324,7 +342,6 @@ impl TransactionBuilder {
         seq_num: u64,
         amount: u64,
         confidentiality_flags: AssetRecordType,
-        zei_params: &PublicParams,
     ) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
         let ar = AssetRecordTemplate::with_no_asset_tracing(
@@ -334,8 +351,9 @@ impl TransactionBuilder {
             key_pair.get_pk(),
         );
 
+        let pc_gens = RistrettoPedersenCommitment::default();
         let (ba, _, owner_memo) =
-            build_blind_asset_record(&mut prng, &zei_params.pc_gens, &ar, vec![]);
+            build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
         self.add_operation_issue_asset(
             key_pair,
             token_code,
@@ -493,7 +511,7 @@ impl TransactionBuilder {
         self
     }
 
-    /// Add an operation to convert a Blind Asset Record to a Anonymous record and return the Randomizer
+    /// Add an operation to convert a Blind Asset Record to a Anonymous record and return the Commitment
     /// # Arguments
     /// * `auth_key_pair` -  XfrKeyPair of the owner BAR for conversion
     /// * `abar_pub_key`  -  AXfrPubKey of the receiver ABAR after conversion
@@ -507,30 +525,31 @@ impl TransactionBuilder {
         txo_sid: TxoSID,
         input_record: &OpenAssetRecord,
         enc_key: &XPublicKey,
-    ) -> Result<(&mut Self, JubjubScalar)> {
+    ) -> Result<(&mut Self, Commitment)> {
         let mut prng = ChaChaRng::from_entropy();
 
         // generate params for Bar to Abar conversion
-        let user_params = UserParams::eq_committed_vals_params()?;
+        let prover_params = ProverParams::eq_committed_vals_params()?;
 
-        // generate the BarToAbarBody with the ZKP
-        let (body, r) = gen_bar_to_abar_body(
+        // generate the BarToAbarNote with the ZKP
+        let note = gen_bar_to_abar_note(
             &mut prng,
-            &user_params,
+            &prover_params,
             input_record,
+            auth_key_pair,
             abar_pub_key,
             enc_key,
         )
         .c(d!())?;
+        let c = note.body.output.commitment;
 
-        // Create the BarToAbarOps with BarToAbarBody and signature
-        let bar_to_abar =
-            BarToAbarOps::new(body, auth_key_pair, txo_sid, self.no_replay_token)?;
+        // Create the BarToAbarOps
+        let bar_to_abar = BarToAbarOps::new(note, txo_sid, self.no_replay_token)?;
 
         // Add the generated operation to the transaction
         let op = Operation::BarToAbar(Box::from(bar_to_abar));
         self.txn.add_operation(op);
-        Ok((self, r))
+        Ok((self, c))
     }
 
     /// Create a new operation to convert from Anonymous record to Blind Asset Record
@@ -547,7 +566,7 @@ impl TransactionBuilder {
         asset_record_type: AssetRecordType,
     ) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
-        let user_params = UserParams::abar_to_bar_params(MERKLE_TREE_DEPTH)?;
+        let user_params = ProverParams::abar_to_bar_params(MERKLE_TREE_DEPTH)?;
 
         // Generate note
         let note = gen_abar_to_bar_note(
@@ -561,41 +580,12 @@ impl TransactionBuilder {
         .c(d!())?;
 
         // Create operation
-        let abar_to_bar = AbarToBarOps::new(&note, self.no_replay_token).c(d!())?;
+        let abar_to_bar = AbarToBarOps::new(note, self.no_replay_token).c(d!())?;
         let op = Operation::AbarToBar(Box::from(abar_to_bar));
 
         // Add operation to transaction
         self.txn.add_operation(op);
         Ok(self)
-    }
-
-    /// Add an operation to charge fee anonymously for ABAR to BAR transfer
-    /// # Arguments
-    /// * input - input Abar for fee payment
-    /// * output - balance back after payment of fee
-    /// * input_keypair - AXfrKeyPair of the fee payer
-    #[allow(dead_code)]
-    pub fn add_operation_anon_fee(
-        &mut self,
-        input: &OpenAnonBlindAssetRecord,
-        output: &OpenAnonBlindAssetRecord,
-        input_keypair: &AXfrKeyPair,
-    ) -> Result<(&mut Self, AnonFeeNote)> {
-        let mut prng = ChaChaRng::from_entropy();
-        let user_params = UserParams::anon_fee_params(MERKLE_TREE_DEPTH)?;
-
-        // Generate AnonFee note
-        let (body, keypairs) =
-            gen_anon_fee_body(&mut prng, &user_params, input, output, input_keypair)
-                .c(d!())?;
-        let note = AnonFeeNote::generate_note_from_body(body, keypairs).c(d!())?;
-
-        // create Operation
-        let inp = AnonFeeOps::new(note.clone(), self.no_replay_token).c(d!())?;
-        let op = Operation::AnonymousFee(Box::new(inp));
-
-        self.txn.add_operation(op);
-        Ok((self, note))
     }
 
     /// Add an operation to transfer assets held in Anonymous Blind Asset Record.
@@ -614,14 +604,18 @@ impl TransactionBuilder {
     ) -> Result<(&mut Self, AXfrNote)> {
         let mut prng = ChaChaRng::from_entropy();
         let depth: usize = MERKLE_TREE_DEPTH;
-        let user_params =
-            UserParams::new(inputs.len(), outputs.len(), Option::from(depth))?;
+        let prover_params =
+            ProverParams::new(inputs.len(), outputs.len(), Option::from(depth))?;
 
-        // generate note and add the operation to the transaction
-        let (body, keypairs) =
-            gen_anon_xfr_body(&mut prng, &user_params, inputs, outputs, input_keypairs)
-                .c(d!())?;
-        let note = AXfrNote::generate_note_from_body(body, keypairs).c(d!())?;
+        let note = gen_anon_xfr_note(
+            &mut prng,
+            &prover_params,
+            inputs,
+            outputs,
+            input_keypairs,
+        )
+        .c(d!())?;
+
         let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
         let op = Operation::TransferAnonAsset(Box::new(inp));
         self.txn.add_operation(op);
@@ -726,22 +720,21 @@ impl TransactionBuilder {
 
         let outputs_plus_remainder = &vec_outputs[..];
 
-        let user_params = UserParams::new(
+        let prover_params = ProverParams::new(
             inputs.len(),
             outputs_plus_remainder.len(),
             Option::from(depth),
         )?;
 
-        // generate note and add the operation to the transaction
-        let (body, keypairs) = gen_anon_xfr_body(
+        let note = gen_anon_xfr_note(
             &mut prng,
-            &user_params,
+            &prover_params,
             inputs,
             outputs_plus_remainder,
             input_keypairs,
         )
         .c(d!())?;
-        let note = AXfrNote::generate_note_from_body(body, keypairs).c(d!())?;
+
         let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
         let op = Operation::TransferAnonAsset(Box::new(inp));
         self.txn.add_operation(op);
@@ -1015,10 +1008,10 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
         }
     };
     // 2. Use record template and ciphertexts to build open asset record
-    let params = PublicParams::default();
+    let pc_gens = RistrettoPedersenCommitment::default();
     let (open_asset_record, asset_tracing_memos, owner_memo) = build_open_asset_record(
         prng,
-        &params.pc_gens,
+        &pc_gens,
         template,
         vec![attr_ctext.unwrap_or_default()],
     );
@@ -1426,10 +1419,8 @@ pub struct AnonTransferOperationBuilder {
     outputs: Vec<OpenAnonBlindAssetRecord>,
     keypairs: Vec<AXfrKeyPair>,
     from_pubkey: Option<XPublicKey>,
-    body: Option<AXfrBody>,
-    diversified_keypairs: Vec<AXfrKeyPair>,
-    randomizers: Vec<JubjubScalar>,
     note: Option<AXfrNote>,
+    commitments: Vec<Commitment>,
 
     nonce: NoReplayToken,
     txn: Transaction,
@@ -1446,10 +1437,8 @@ impl AnonTransferOperationBuilder {
             outputs: Vec::default(),
             keypairs: Vec::default(),
             from_pubkey: None,
-            body: None,
-            diversified_keypairs: Vec::default(),
-            randomizers: Vec::default(),
             note: None,
+            commitments: Vec::default(),
             nonce: no_replay_token,
             txn: Transaction::from_seq_id(seq_id),
         }
@@ -1469,9 +1458,8 @@ impl AnonTransferOperationBuilder {
 
     /// add_output is used to add a output record to the Anon Transfer factory
     pub fn add_output(&mut self, abar: OpenAnonBlindAssetRecord) -> Result<&mut Self> {
-        let randomizer = abar.get_key_rand_factor();
+        self.commitments.push(abar.compute_commitment());
         self.outputs.push(abar);
-        self.randomizers.push(randomizer);
         Ok(self)
     }
 
@@ -1519,23 +1507,22 @@ impl AnonTransferOperationBuilder {
         }
     }
 
-    /// get_randomizers fetches the randomizers for the different outputs.
-    pub fn get_randomizers(&self) -> Vec<JubjubScalar> {
-        self.randomizers.clone()
+    /// get_commitments fetches the commitments for the different outputs.
+    pub fn get_commitments(&self) -> Vec<Commitment> {
+        self.commitments.clone()
     }
 
-    /// get a hashmap of randomizer, public key, asset, amount
-    pub fn get_randomizer_map(&self) -> HashMap<String, (AXfrPubKey, AssetType, u64)> {
-        let mut randomizer_map = HashMap::new();
+    /// get a hashmap of commitment, public key, asset, amount
+    pub fn get_commitment_map(&self) -> HashMap<String, (AXfrPubKey, AssetType, u64)> {
+        let mut commitment_map = HashMap::new();
         for out_abar in self.outputs.iter() {
-            let abar_rand =
-                wallet::randomizer_to_base58(&out_abar.get_key_rand_factor());
+            let abar_rand = wallet::commitment_to_base64(&out_abar.compute_commitment());
             let abar_pkey = *out_abar.pub_key_ref();
             let abar_asset = out_abar.get_asset_type();
             let abar_amt = out_abar.get_amount();
-            randomizer_map.insert(abar_rand, (abar_pkey, abar_asset, abar_amt));
+            commitment_map.insert(abar_rand, (abar_pkey, abar_asset, abar_amt));
         }
-        randomizer_map
+        commitment_map
     }
 
     /// set public key of sender for remainder
@@ -1579,40 +1566,26 @@ impl AnonTransferOperationBuilder {
             .build()
             .unwrap();
 
-        let randomizer = oabar_money_back.get_key_rand_factor();
+        let commitment = oabar_money_back.compute_commitment();
         self.outputs.push(oabar_money_back);
-        self.randomizers.push(randomizer);
+        self.commitments.push(commitment);
 
-        let user_params = UserParams::new(
+        let prover_params = ProverParams::new(
             self.inputs.len(),
             self.outputs.len(),
             Some(MERKLE_TREE_DEPTH),
         )?;
 
-        let (body, diversified_keypairs) = gen_anon_xfr_body(
+        let note = gen_anon_xfr_note(
             &mut prng,
-            &user_params,
+            &prover_params,
             self.inputs.as_slice(),
             self.outputs.as_slice(),
             self.keypairs.as_slice(),
         )
         .c(d!())?;
 
-        self.body = Some(body);
-        self.diversified_keypairs = diversified_keypairs;
-
-        Ok(self)
-    }
-
-    /// sign method signs the anon transfer body and creates a anon-note for the operation
-    pub fn sign(&mut self) -> Result<&mut Self> {
-        self.note = Some(
-            AXfrNote::generate_note_from_body(
-                self.body.as_ref().unwrap().clone(),
-                self.diversified_keypairs.clone(),
-            )
-            .c(d!())?,
-        );
+        self.note = Some(note);
 
         Ok(self)
     }
@@ -1644,8 +1617,6 @@ impl AnonTransferOperationBuilder {
 mod tests {
     use {
         super::*,
-        crypto::basics::commitments::ristretto_pedersen::RistrettoPedersenGens,
-        crypto::basics::hybrid_encryption::XSecretKey,
         ledger::data_model::{ATxoSID, BlockEffect, TxnEffect, TxoRef},
         ledger::store::{utils::fra_gen_initial_tx, LedgerState},
         rand_chacha::ChaChaRng,
@@ -1655,12 +1626,14 @@ mod tests {
         zei::anon_xfr::structs::{
             AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
         },
-        zei::setup::{NodeParams, PublicParams},
+        zei::setup::VerifierParams,
         zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record},
         zei::xfr::sig::XfrKeyPair,
         zei::xfr::structs::AssetType as AT,
-        zeialgebra::groups::Scalar,
+        zei_algebra::prelude::Scalar,
+        zei_crypto::basic::hybrid_encryption::XSecretKey,
+        zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
     };
 
     // Defines an asset type
@@ -1690,7 +1663,7 @@ mod tests {
 
     fn test_transfer_op_builder_inner() -> Result<()> {
         let mut prng = ChaChaRng::from_entropy();
-        let params = PublicParams::default();
+        let pc_gens = RistrettoPedersenCommitment::default();
         let code_1 = AssetTypeCode::gen_random();
         let code_2 = AssetTypeCode::gen_random();
         let alice = XfrKeyPair::generate(&mut prng);
@@ -1711,9 +1684,9 @@ mod tests {
             bob.get_pk(),
         );
         let (ba_1, _, memo1) =
-            build_blind_asset_record(&mut prng, &params.pc_gens, &ar_1, vec![]);
+            build_blind_asset_record(&mut prng, &pc_gens, &ar_1, vec![]);
         let (ba_2, _, memo2) =
-            build_blind_asset_record(&mut prng, &params.pc_gens, &ar_2, vec![]);
+            build_blind_asset_record(&mut prng, &pc_gens, &ar_2, vec![]);
 
         // Attempt to spend too much
         let mut invalid_outputs_transfer_op = TransferOperationBuilder::new();
@@ -2023,7 +1996,7 @@ mod tests {
             AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
             from.get_pk(),
         );
-        let pc_gens = RistrettoPedersenGens::default();
+        let pc_gens = RistrettoPedersenCommitment::default();
         let (bar, _, memo) = build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
         let dummy_input = open_blind_asset_record(&bar, &memo, &from).unwrap();
 
@@ -2040,7 +2013,7 @@ mod tests {
         let txn = builder.take_transaction();
 
         if let Operation::BarToAbar(note) = txn.body.operations[0].clone() {
-            let node_params = NodeParams::bar_to_abar_params().unwrap();
+            let node_params = VerifierParams::bar_to_abar_params().unwrap();
             let result =
                 verify_bar_to_abar_note(&node_params, &note.note, from.get_pk_ref());
             assert!(result.is_ok());
@@ -2259,8 +2232,6 @@ mod tests {
             gen_oabar_and_keys(&mut prng, amount, asset_type);
         let abar = AnonBlindAssetRecord::from_oabar(&oabar);
         assert_eq!(keypair_in.pub_key(), *oabar.pub_key_ref());
-        let rand_keypair_in = keypair_in.randomize(&oabar.get_key_rand_factor());
-        assert_eq!(rand_keypair_in.pub_key(), abar.public_key);
 
         let _owner_memo = oabar.get_owner_memo().unwrap();
 
@@ -2303,8 +2274,6 @@ mod tests {
         let abar1 = AnonBlindAssetRecord::from_oabar(&oabar1);
 
         assert_eq!(keypair_in1.pub_key(), *oabar1.pub_key_ref());
-        let rand_keypair_in1 = keypair_in1.randomize(&oabar1.get_key_rand_factor());
-        assert_eq!(rand_keypair_in1.pub_key(), abar1.public_key);
 
         let _owner_memo1 = oabar1.get_owner_memo().unwrap();
 

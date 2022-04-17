@@ -1,4 +1,3 @@
-use zei::anon_xfr::structs::AnonBlindAssetRecord;
 use {
     core::fmt::Display,
     credentials::{
@@ -17,47 +16,17 @@ use {
     ruc::{d, err::RucResult},
     serde::{Deserialize, Serialize},
     wasm_bindgen::prelude::*,
-    zei::anon_xfr::structs::MTLeafInfo as ZeiMTLeafInfo,
-    zei::{
-        setup::PublicParams as ZeiPublicParams,
-        xfr::{
-            sig::XfrPublicKey,
-            structs::{
-                AssetTracerDecKeys, AssetTracerEncKeys,
-                AssetTracerKeyPair as ZeiAssetTracerKeyPair, BlindAssetRecord,
-                IdentityRevealPolicy, OwnerMemo as ZeiOwnerMemo,
-                TracingPolicies as ZeiTracingPolicies,
-                TracingPolicy as ZeiTracingPolicy,
-            },
+    zei::anon_xfr::structs::{AnonBlindAssetRecord, MTLeafInfo as ZeiMTLeafInfo},
+    zei::xfr::{
+        sig::XfrPublicKey,
+        structs::{
+            AssetTracerDecKeys, AssetTracerEncKeys,
+            AssetTracerKeyPair as ZeiAssetTracerKeyPair, BlindAssetRecord,
+            IdentityRevealPolicy, OwnerMemo as ZeiOwnerMemo,
+            TracingPolicies as ZeiTracingPolicies, TracingPolicy as ZeiTracingPolicy,
         },
     },
 };
-
-#[wasm_bindgen]
-/// Public parameters necessary for generating asset records. Generating this is expensive and
-/// should be done as infrequently as possible.
-/// @see {@link module:Findora-Wasm~TransactionBuilder#add_basic_issue_asset|add_basic_issue_asset}
-/// for information using public parameters to create issuance asset records.
-pub struct PublicParams {
-    pub(crate) params: ZeiPublicParams,
-}
-
-#[allow(clippy::new_without_default)]
-#[wasm_bindgen]
-impl PublicParams {
-    /// Generates a new set of parameters.
-    pub fn new() -> PublicParams {
-        PublicParams {
-            params: ZeiPublicParams::default(),
-        }
-    }
-}
-
-impl PublicParams {
-    pub fn get_ref(&self) -> &ZeiPublicParams {
-        &self.params
-    }
-}
 
 #[wasm_bindgen]
 /// Indicates whether the TXO ref is an absolute or relative value.

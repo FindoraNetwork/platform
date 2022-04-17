@@ -56,12 +56,18 @@ opt-level = 1
 overflow-checks = false
 
 [patch.crates-io]
-ark-ec = { git = "https://github.com/FindoraNetwork/ark-algebra", rev = "d91da41" }
-ark-ff = { git = "https://github.com/FindoraNetwork/ark-algebra", rev = "d91da41" }
-ark-serialize = { git = "https://github.com/FindoraNetwork/ark-algebra", rev = "d91da41" }
-ark-std = { git = "https://github.com/FindoraNetwork/ark-std", rev = "891786e" }
-ark-bls12-381 = { git = "https://github.com/FindoraNetwork/ark-curves", rev = "51ee6d3" }
-ark-ed-on-bls12-381 = { git = "https://github.com/FindoraNetwork/ark-curves", rev = "51ee6d3" }
-curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek", rev = "a2df655" }
-ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek", rev = "ad461f4" }
-x25519-dalek = { git = "https://github.com/FindoraNetwork/x25519-dalek", rev = "53bb1a3" }
+ark-ec = { git = "https://github.com/FindoraNetwork/ark-algebra" }
+ark-ff = { git = "https://github.com/FindoraNetwork/ark-algebra" }
+ark-serialize = { git = "https://github.com/FindoraNetwork/ark-algebra" }
+ark-std = { git = "https://github.com/FindoraNetwork/ark-std" }
+ark-bls12-381 = { git = "https://github.com/FindoraNetwork/ark-curves" }
+ark-ed-on-bls12-381 = { git = "https://github.com/FindoraNetwork/ark-curves" }
+curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek" }
+ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek" }
+x25519-dalek = { git = "https://github.com/FindoraNetwork/x25519-dalek" }
+bulletproofs = { git = "https://github.com/FindoraNetwork/bp" }
+zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.7" }
+zei-accumulators = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.7" }
+zei-algebra = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.7" }
+zei-crypto = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.7" }
+zei-plonk = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.7" }

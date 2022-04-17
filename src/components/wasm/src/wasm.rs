@@ -20,7 +20,7 @@ use {
         AttributeDefinition, ClientAssetRecord, Credential, CredentialCommitment,
         CredentialCommitmentData, CredentialCommitmentKey, CredentialIssuerKeyPair,
         CredentialPoK, CredentialRevealSig, CredentialSignature, CredentialUserKeyPair,
-        MTLeafInfo, OwnerMemo, PublicParams, TracingPolicies, TxoRef,
+        MTLeafInfo, OwnerMemo, TracingPolicies, TxoRef,
     },
     core::str::FromStr,
     credentials::{
@@ -70,22 +70,21 @@ use {
             keys::{AXfrKeyPair, AXfrPubKey},
             nullifier,
             structs::{
-                AnonBlindAssetRecord, OpenAnonBlindAssetRecord,
+                AnonBlindAssetRecord, Commitment, OpenAnonBlindAssetRecord,
                 OpenAnonBlindAssetRecordBuilder,
             },
         },
-        serialization::ZeiFromToBytes,
         xfr::{
             asset_record::{open_blind_asset_record as open_bar, AssetRecordType},
-            lib::trace_assets as zei_trace_assets,
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
             structs::{
                 AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody,
                 ASSET_TYPE_LENGTH,
             },
+            trace_assets as zei_trace_assets,
         },
     },
-    zeialgebra::{groups::Scalar, jubjub::JubjubScalar},
+    zei_algebra::prelude::{Scalar, ZeiFromToBytes},
 };
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
@@ -156,17 +155,17 @@ pub fn get_null_pk() -> XfrPublicKey {
     XfrPublicKey::zei_from_bytes(&[0; 32]).unwrap()
 }
 
-/// struct to return list of randomizer strings
+/// struct to return list of commitment strings
 #[derive(Serialize, Deserialize)]
-pub struct RandomizerStringArray {
-    randomizers: Vec<String>,
+pub struct CommitmentStringArray {
+    commitments: Vec<String>,
 }
 
 #[wasm_bindgen]
 /// Structure that allows users to construct arbitrary transactions.
 pub struct TransactionBuilder {
     transaction_builder: PlatformTransactionBuilder,
-    randomizers: Vec<JubjubScalar>,
+    commitments: Vec<Commitment>,
 }
 
 impl TransactionBuilder {
@@ -311,6 +310,19 @@ impl TransactionBuilder {
         Ok(self)
     }
 
+    /// As the last operation of BarToAbar transaction,
+    /// add a static fee to the transaction.
+    pub fn add_fee_bar_to_abar(
+        mut self,
+        inputs: FeeInputs,
+    ) -> Result<TransactionBuilder, JsValue> {
+        self.transaction_builder
+            .add_fee_bar_to_abar(inputs.into())
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
+        Ok(self)
+    }
+
     /// A simple fee checker for mainnet v1.0.
     ///
     /// SEE [check_fee](ledger::data_model::Transaction::check_fee)
@@ -323,18 +335,17 @@ impl TransactionBuilder {
     pub fn new(seq_id: u64) -> Self {
         TransactionBuilder {
             transaction_builder: PlatformTransactionBuilder::from_seq_id(seq_id),
-            randomizers: Default::default(),
+            commitments: Default::default(),
         }
     }
 
     /// Deserialize transaction builder from string.
     pub fn from_string(s: String) -> Result<TransactionBuilder, JsValue> {
         let transaction_builder = serde_json::from_str(&s).map_err(error_to_jsvalue)?;
-        let randomizers = Default::default();
 
         Ok(TransactionBuilder {
             transaction_builder,
-            randomizers,
+            commitments: Default::default(),
         })
     }
 
@@ -408,7 +419,6 @@ impl TransactionBuilder {
     /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
     /// @param {BigInt} amount - Amount to be issued.
     /// @param {boolean} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
-    /// @param {PublicParams} zei_params - Public parameters necessary to generate asset records.
     pub fn add_basic_issue_asset(
         mut self,
         key_pair: &XfrKeyPair,
@@ -416,7 +426,6 @@ impl TransactionBuilder {
         seq_num: u64,
         amount: u64,
         conf_amount: bool,
-        zei_params: &PublicParams,
     ) -> Result<TransactionBuilder, JsValue> {
         let asset_token = AssetTypeCode::new_from_base64(&code)
             .c(d!())
@@ -433,7 +442,6 @@ impl TransactionBuilder {
                 seq_num,
                 amount,
                 confidentiality_flags,
-                zei_params.get_ref(),
             )
             .c(d!())
             .map_err(error_to_jsvalue)?;
@@ -489,7 +497,7 @@ impl TransactionBuilder {
             JsValue::from_str(&format!("Could not open asset record: {}", e))
         })?;
 
-        let (_, r) = self
+        let (_, c) = self
             .get_builder_mut()
             .add_operation_bar_to_abar(
                 auth_key_pair,
@@ -503,7 +511,7 @@ impl TransactionBuilder {
                 JsValue::from_str(&format!("Could not add operation: {}", e))
             })?;
 
-        self.randomizers.push(r);
+        self.commitments.push(c);
         Ok(self)
     }
 
@@ -562,64 +570,13 @@ impl TransactionBuilder {
         Ok(self)
     }
 
-    /// Adds an anon fee operation to transaction builder for abar to a bar.
-    ///
-    /// @param {AnonBlindAssetRecord} input - the ABAR to be used for fee
-    /// @param {OwnerMemo} owner_memo - the corresponding owner_memo of the fee ABAR
-    /// @param {MTLeafInfo} mt_leaf_info - the Merkle Proof of the ABAR
-    /// @param {AXfrKeyPair} from_keypair - the owners Anon Key pair
-    /// @param {XSecretKey} from_dec_key - the owners decryption key
-    pub fn add_operation_anon_fee(
-        mut self,
-        input: AnonBlindAssetRecord,
-        owner_memo: OwnerMemo,
-        mt_leaf_info: MTLeafInfo,
-        from_keypair: &AXfrKeyPair,
-        from_dec_key: &XSecretKey,
-    ) -> Result<TransactionBuilder, JsValue> {
-        let fee_oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
-            &input,
-            owner_memo.memo,
-            &from_keypair.clone(),
-            &from_dec_key.clone(),
-        )
-        .c(d!())
-        .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
-        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
-        .build()
-        .c(d!())
-        .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?;
-
-        let mut prng = ChaChaRng::from_entropy();
-        let from_public_key = XPublicKey::from(&from_dec_key);
-        let rem_oabar = OpenAnonBlindAssetRecordBuilder::new()
-            .amount(fee_oabar.get_amount() - ANON_FEE_MIN)
-            .asset_type(fee_oabar.get_asset_type())
-            .pub_key(from_keypair.pub_key())
-            .finalize(&mut prng, &from_public_key)
-            .unwrap()
-            .build()
-            .unwrap();
-
-        self.get_builder_mut()
-            .add_operation_anon_fee(&fee_oabar, &rem_oabar, &from_keypair.clone())
-            .c(d!())
-            .map_err(|e| {
-                JsValue::from_str(&format!("Could not add operation: {}", e))
-            })?;
-
-        let r = rem_oabar.get_key_rand_factor();
-        self.randomizers.push(r);
-        Ok(self)
-    }
-
-    /// Returns a list of randomizer base58 strings as json
-    pub fn get_randomizers(&self) -> JsValue {
-        let r = RandomizerStringArray {
-            randomizers: self
-                .randomizers
+    /// Returns a list of commitment base64 strings as json
+    pub fn get_commitments(&self) -> JsValue {
+        let r = CommitmentStringArray {
+            commitments: self
+                .commitments
                 .iter()
-                .map(wallet::randomizer_to_base58)
+                .map(wallet::commitment_to_base64)
                 .collect(),
         };
 
@@ -680,8 +637,8 @@ impl TransactionBuilder {
             .map_err(|e| {
                 JsValue::from_str(&format!("Could not add operation: {}", e))
             })?;
-        let r1 = output_oabar.get_key_rand_factor();
-        self.randomizers.push(r1);
+        let r1 = output_oabar.compute_commitment();
+        self.commitments.push(r1);
 
         let (_, note, rem_oabars) = self
             .get_builder_mut()
@@ -697,7 +654,7 @@ impl TransactionBuilder {
             })?;
 
         for rem_oabar in rem_oabars {
-            self.randomizers.push(rem_oabar.get_key_rand_factor());
+            self.commitments.push(rem_oabar.compute_commitment());
         }
 
         Ok(self)
@@ -1012,7 +969,6 @@ pub fn get_open_abar(
 /// @param {AnonBlindAssetRecord} abar - ABAR for which balance needs to be queried
 /// @param {OwnerMemo} memo - memo corresponding to the abar
 /// @param keypair {AXfrKeyPair} - AXfrKeyPair of the ABAR owner
-/// @param randomized_keypair {AXfrKeyPair} - Randomized AXfrKeyPair of the ABAR owner
 /// @param dec_key {XSecretKey} - Decryption key of the abar owner to open the Owner Memo
 /// @param MTLeafInfo {mt_leaf_info} - the Merkle proof of the ABAR from commitment tree
 /// @throws Will throw an error if abar fails to open
@@ -1021,7 +977,6 @@ pub fn gen_nullifier_hash(
     abar: AnonBlindAssetRecord,
     memo: OwnerMemo,
     keypair: AXfrKeyPair,
-    randomized_keypair: AXfrKeyPair,
     dec_key: XSecretKey,
     mt_leaf_info: MTLeafInfo,
 ) -> Result<String, JsValue> {
@@ -1035,7 +990,7 @@ pub fn gen_nullifier_hash(
             .map_err(error_to_jsvalue)?;
 
     let n = nullifier(
-        &randomized_keypair,
+        &keypair,
         oabar.get_amount(),
         &oabar.get_asset_type(),
         mt_leaf_info.get_zei_mt_leaf_info().uid,
@@ -1417,35 +1372,30 @@ impl AnonTransferOperationBuilder {
         Ok(self)
     }
 
-    /// get_randomizers returns a list of all the randomizers for receiver public keys
-    pub fn get_randomizers(&self) -> JsValue {
-        let r = RandomizerStringArray {
-            randomizers: self
+    /// get_commitments returns a list of all the commitments for receiver public keys
+    pub fn get_commitments(&self) -> JsValue {
+        let r = CommitmentStringArray {
+            commitments: self
                 .get_builder()
-                .get_randomizers()
+                .get_commitments()
                 .iter()
-                .map(wallet::randomizer_to_base58)
+                .map(wallet::commitment_to_base64)
                 .collect(),
         };
 
         JsValue::from_serde(&r).unwrap()
     }
 
-    /// get_randomizer_map returns a hashmap of all the randomizers mapped to public key, asset, amount
-    pub fn get_randomizer_map(&self) -> JsValue {
-        let randomizer_map = self.get_builder().get_randomizer_map();
-        JsValue::from_serde(&randomizer_map).unwrap()
+    /// get_commitment_map returns a hashmap of all the commitments mapped to public key, asset, amount
+    pub fn get_commitment_map(&self) -> JsValue {
+        let commitment_map = self.get_builder().get_commitment_map();
+        JsValue::from_serde(&commitment_map).unwrap()
     }
 
-    /// build_and_sign is used to build proof and sign the Transfer Operation
-    pub fn build_and_sign(mut self) -> Result<AnonTransferOperationBuilder, JsValue> {
+    /// build is used to build proof the Transfer Operation
+    pub fn build(mut self) -> Result<AnonTransferOperationBuilder, JsValue> {
         self.get_builder_mut()
             .build()
-            .c(d!())
-            .map_err(error_to_jsvalue)?;
-
-        self.get_builder_mut()
-            .sign()
             .c(d!())
             .map_err(error_to_jsvalue)?;
 
@@ -1808,14 +1758,14 @@ pub fn trace_assets(
 use crate::wasm_data_model::AnonKeys;
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
-use crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey};
+use getrandom::getrandom;
 use ledger::data_model::TxoSID;
 use ledger::staking::Amount;
-use rand::{thread_rng, Rng};
 use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
+use zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey};
 
 #[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.
@@ -1851,10 +1801,9 @@ pub fn encryption_pbkdf2_aes256gcm(key_pair: String, password: String) -> Vec<u8
     const CREDENTIAL_LEN: usize = 32;
     const IV_LEN: usize = 12;
     let n_iter = NonZeroU32::new(32).unwrap();
-    let mut rng = thread_rng();
 
     let mut salt = [0u8; CREDENTIAL_LEN];
-    rng.fill(&mut salt);
+    getrandom(&mut salt).unwrap();
     let mut derived_key = [0u8; CREDENTIAL_LEN];
     pbkdf2::derive(
         pbkdf2::PBKDF2_HMAC_SHA512,
@@ -1865,7 +1814,7 @@ pub fn encryption_pbkdf2_aes256gcm(key_pair: String, password: String) -> Vec<u8
     );
 
     let mut iv = [0u8; IV_LEN];
-    rng.fill(&mut iv);
+    getrandom(&mut iv).unwrap();
 
     let cipher = Aes256Gcm::new(GenericArray::from_slice(&derived_key));
     let ciphertext = cipher
@@ -2067,40 +2016,6 @@ pub fn axfr_pubkey_from_string(key_str: &str) -> Result<AXfrPubKey, JsValue> {
     wallet::anon_public_key_from_base64(key_str)
         .c(d!())
         .map_err(error_to_jsvalue)
-}
-
-#[wasm_bindgen]
-#[allow(missing_docs)]
-pub fn randomize_axfr_pubkey(
-    pub_key: AXfrPubKey,
-    randomizer_str: &str,
-) -> Result<JsValue, JsValue> {
-    let randomizer = wallet::randomizer_from_base58(randomizer_str)
-        .c(d!())
-        .map_err(error_to_jsvalue)?;
-    let pub_key_str = wallet::anon_public_key_to_base64(&pub_key.randomize(&randomizer));
-    let json = JsValue::from_serde(pub_key_str.as_str())
-        .c(d!())
-        .map_err(error_to_jsvalue)?;
-
-    Ok(json)
-}
-
-#[wasm_bindgen]
-#[allow(missing_docs)]
-pub fn randomize_axfr_keypair(
-    keypair: AXfrKeyPair,
-    randomizer_str: &str,
-) -> Result<JsValue, JsValue> {
-    let randomizer = wallet::randomizer_from_base58(randomizer_str)
-        .c(d!())
-        .map_err(error_to_jsvalue)?;
-    let keypair_str = wallet::anon_secret_key_to_base64(&keypair.randomize(&randomizer));
-    let json = JsValue::from_serde(keypair_str.as_str())
-        .c(d!())
-        .map_err(error_to_jsvalue)?;
-
-    Ok(json)
 }
 
 #[wasm_bindgen]

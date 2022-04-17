@@ -5,9 +5,8 @@
 use {
     crate::{
         data_model::{
-            ATxoSID, AXfrAddress, AssetTypeCode, DefineAsset, IssueAsset,
-            IssuerPublicKey, Operation, Transaction, TxOutput, TxnIDHash, TxnSID,
-            TxoSID, XfrAddress,
+            ATxoSID, AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Operation,
+            Transaction, TxOutput, TxnIDHash, TxnSID, TxoSID, XfrAddress,
         },
         staking::{
             ops::mint_fra::MintEntry, Amount, BlockHeight, DelegationRwdDetail,
@@ -49,8 +48,6 @@ pub struct ApiCache {
     pub abar_memos: Mapx<ATxoSID, OwnerMemo>,
     /// ownship of txo
     pub utxos_to_map_index: Mapxnk<TxoSID, XfrAddress>,
-    /// ownship of atxo
-    pub atxos_to_map_index: Mapx<ATxoSID, AXfrAddress>,
     /// txo(spent, unspent) to authenticated txn (sid, hash)
     pub txo_to_txnid: Mapxnk<TxoSID, TxnIDHash>,
     /// atxo to authenticated txn (sid, hash)
@@ -102,10 +99,6 @@ impl ApiCache {
             abar_memos: new_mapx!(format!("api_cache/{}abar_memos", prefix)),
             utxos_to_map_index: new_mapxnk!(format!(
                 "api_cache/{}utxos_to_map_index",
-                prefix
-            )),
-            atxos_to_map_index: new_mapx!(format!(
-                "api_cache/{}atxos_to_map_index",
                 prefix
             )),
             txo_to_txnid: new_mapxnk!(format!("api_cache/{}txo_to_txnid", prefix)),
@@ -282,9 +275,6 @@ where
             }
             Operation::TransferAnonAsset(_) => {
                 // Anon
-            }
-            Operation::AnonymousFee(_) => {
-                // Anon Fee
             }
             Operation::ConvertAccount(i) => {
                 related_addresses.insert(XfrAddress {
@@ -679,38 +669,14 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
 
         let abar_memos = curr_txn.body.operations.iter().flat_map(|o| match o {
             Operation::BarToAbar(b) => {
-                vec![(b.note.body.output.public_key, b.note.body.memo.clone())]
+                vec![b.note.body.memo.clone()]
             }
-            Operation::TransferAnonAsset(b) => b
-                .note
-                .body
-                .outputs
-                .iter()
-                .zip(b.note.body.owner_memos.clone())
-                .map(|(op, memo)| (op.public_key, memo))
-                .collect(),
-            Operation::AnonymousFee(b) => {
-                vec![(
-                    b.note.body.output.public_key,
-                    b.note.body.owner_memo.clone(),
-                )]
-            }
+            Operation::TransferAnonAsset(b) => b.note.body.owner_memos.clone(),
             _ => vec![],
         });
 
         for (a, id) in abar_memos.zip(atxo_sids) {
-            ledger
-                .api_cache
-                .as_mut()
-                .unwrap()
-                .atxos_to_map_index
-                .insert(*id, AXfrAddress { key: a.0 });
-            ledger
-                .api_cache
-                .as_mut()
-                .unwrap()
-                .abar_memos
-                .insert(*id, a.1);
+            ledger.api_cache.as_mut().unwrap().abar_memos.insert(*id, a);
             let hash = curr_txn.hash_tm().hex().to_uppercase();
             ledger
                 .api_cache

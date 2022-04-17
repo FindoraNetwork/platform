@@ -2,13 +2,13 @@
 //! Some handful function and data structure for findora cli tools
 //!
 
+use ledger::data_model::BAR_TO_ABAR_TX_FEE_MIN;
 use {
     crate::{
         api::{DelegationInfo, ValidatorDetail},
         common::get_serv_addr,
         txn_builder::{TransactionBuilder, TransferOperationBuilder},
     },
-    crypto::basics::hybrid_encryption::XPublicKey,
     globutils::{wallet, HashOf, SignatureOf},
     ledger::{
         data_model::{
@@ -24,14 +24,16 @@ use {
     tendermint::{PrivateKey, PublicKey},
     zei::anon_xfr::{
         keys::{AXfrKeyPair, AXfrPubKey},
-        structs::{AnonBlindAssetRecord, MTLeafInfo, OpenAnonBlindAssetRecord},
+        structs::{
+            AnonBlindAssetRecord, Commitment, MTLeafInfo, OpenAnonBlindAssetRecord,
+        },
     },
     zei::xfr::{
         asset_record::{open_blind_asset_record, AssetRecordType},
         sig::{XfrKeyPair, XfrPublicKey},
         structs::{AssetRecordTemplate, OpenAssetRecord, OwnerMemo},
     },
-    zeialgebra::jubjub::JubjubScalar,
+    zei_crypto::basic::hybrid_encryption::XPublicKey,
 };
 
 ///////////////////////////////////////
@@ -266,12 +268,12 @@ pub fn gen_fee_bar_to_abar(
     owner_kp: &XfrKeyPair,
     avoid_input: TxoSID,
 ) -> Result<Operation> {
-    let mut op_fee: u64 = TX_FEE_MIN;
+    let mut op_fee: u64 = BAR_TO_ABAR_TX_FEE_MIN;
     let mut trans_builder = TransferOperationBuilder::new();
     trans_builder
         .add_output(
             &AssetRecordTemplate::with_no_asset_tracing(
-                TX_FEE_MIN,
+                BAR_TO_ABAR_TX_FEE_MIN,
                 ASSET_TYPE_FRA,
                 AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
                 *BLACK_HOLE_PUBKEY,
@@ -537,13 +539,12 @@ pub fn get_owned_utxos(
         })
 }
 
-pub(crate) fn get_owned_abars(
-    addr: &AXfrPubKey,
-) -> Result<Vec<(ATxoSID, AnonBlindAssetRecord)>> {
+/// Return the ABAR by commitment.
+pub fn get_owned_abar(com: &Commitment) -> Result<(ATxoSID, AnonBlindAssetRecord)> {
     let url = format!(
         "{}:8668/owned_abars/{}",
         get_serv_addr().c(d!())?,
-        wallet::anon_public_key_to_base64(addr)
+        wallet::commitment_to_base64(com)
     );
 
     attohttpc::get(&url)
@@ -554,7 +555,9 @@ pub(crate) fn get_owned_abars(
         .bytes()
         .c(d!())
         .and_then(|b| {
-            serde_json::from_slice::<Vec<(ATxoSID, AnonBlindAssetRecord)>>(&b).c(d!())
+            serde_json::from_slice::<Option<(ATxoSID, AnonBlindAssetRecord)>>(&b)
+                .c(d!())?
+                .ok_or(eg!("missing abar"))
         })
 }
 
@@ -721,10 +724,10 @@ pub fn generate_bar2abar_op(
     txo_sid: TxoSID,
     input_record: &OpenAssetRecord,
     enc_key: &XPublicKey,
-) -> Result<JubjubScalar> {
+) -> Result<Commitment> {
     // add operation bar_to_abar in a new Tx Builder
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
-    let (_, r) = builder
+    let (_, c) = builder
         .add_operation_bar_to_abar(
             auth_key_pair,
             abar_pub_key,
@@ -744,7 +747,7 @@ pub fn generate_bar2abar_op(
     // submit transaction to network
     send_tx(&builder.take_transaction()).c(d!("Failed to submit Bar to Abar txn"))?;
 
-    Ok(r)
+    Ok(c)
 }
 
 #[inline(always)]
@@ -758,8 +761,6 @@ pub fn generate_bar2abar_op(
 /// * art           - AssetRecordType of the new BAR
 pub fn generate_abar2bar_op(
     oabar_in: &OpenAnonBlindAssetRecord,
-    fee_oabar: &OpenAnonBlindAssetRecord,
-    out_fee_oabar: &OpenAnonBlindAssetRecord,
     from: &AXfrKeyPair,
     to: &XfrPublicKey,
     art: AssetRecordType,
@@ -768,11 +769,6 @@ pub fn generate_abar2bar_op(
     // create and add AbarToBar Operation
     builder
         .add_operation_abar_to_bar(oabar_in, from, to, art)
-        .c(d!())?;
-
-    // create and add AnonFee Operation
-    builder
-        .add_operation_anon_fee(fee_oabar, out_fee_oabar, from)
         .c(d!())?;
 
     // submit transaction
