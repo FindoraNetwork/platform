@@ -237,7 +237,11 @@ impl<C: Config> ActionRunner<C> {
         if let ExitReason::Succeed(_) = result {
             Ok((data, state.substate.logs, gas_used))
         } else {
-            Err(eg!("Execute system error: {:?}", result))
+            Err(eg!(
+                "Execute system error: {:?}, data is: {}",
+                result,
+                hex::encode(data)
+            ))
         }
     }
 }
