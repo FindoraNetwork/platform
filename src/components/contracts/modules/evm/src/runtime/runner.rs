@@ -237,6 +237,7 @@ impl<C: Config> ActionRunner<C> {
         if let ExitReason::Succeed(_) = result {
             Ok((data, state.substate.logs, gas_used))
         } else {
+            // TODO: store error execution on pending tx.
             Err(eg!(
                 "Execute system error: {:?}, data is: {}",
                 result,
