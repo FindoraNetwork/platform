@@ -134,7 +134,9 @@ impl TryFrom<ABCIConfigStr> for ABCIConfig {
             query_port,
             evm_http_port,
             evm_ws_port,
-            ledger_dir: cfg.ledger_dir.unwrap_or_else(|| pnk!(env::var("LEDGER_DIR"))),
+            ledger_dir: cfg
+                .ledger_dir
+                .unwrap_or_else(|| pnk!(env::var("LEDGER_DIR"))),
         })
     }
 }
