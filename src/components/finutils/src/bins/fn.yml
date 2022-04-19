@@ -597,7 +597,8 @@ subcommands:
             long: to-wallet-address
             takes_value: true
             value_name: XFR WALLET ADDRESS
-            required: true
+            conflicts_with:
+              - to-pubkey
         - confidential-amount:
             help: mask the amount sent on the transaction log
             long: confidential-amount
