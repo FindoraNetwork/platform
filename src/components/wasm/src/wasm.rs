@@ -1296,15 +1296,15 @@ impl AnonTransferOperationBuilder {
     /// @throws Will throw an error if abar fails to open, input fails to get added to Operation
     pub fn add_input(
         mut self,
-        abar: AnonBlindAssetRecord,
-        memo: OwnerMemo,
+        abar: &AnonBlindAssetRecord,
+        memo: &OwnerMemo,
         keypair: &AXfrKeyPair,
         dec_key: &XSecretKey,
         mt_leaf_info: MTLeafInfo,
     ) -> Result<AnonTransferOperationBuilder, JsValue> {
         let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
-            &abar,
-            memo.memo,
+            &abar.clone(),
+            memo.memo.clone(),
             &keypair.clone(),
             &dec_key.clone(),
         )
@@ -1331,13 +1331,18 @@ impl AnonTransferOperationBuilder {
     pub fn add_output(
         mut self,
         amount: u64,
+        asset_type: String,
         to: AXfrPubKey,
         to_enc_key: XPublicKey,
     ) -> Result<AnonTransferOperationBuilder, JsValue> {
         let mut prng = ChaChaRng::from_entropy();
 
+        let at = AssetTypeCode::new_from_base64(asset_type.as_str())
+            .map_err(error_to_jsvalue)?;
+
         let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
             .amount(amount)
+            .asset_type(at.val)
             .pub_key(to)
             .finalize(&mut prng, &to_enc_key.clone())
             .unwrap()
@@ -1755,11 +1760,12 @@ pub fn trace_assets(
 // Author: Chao Ma, github.com/chaosma. //
 //////////////////////////////////////////
 
-use crate::wasm_data_model::AnonKeys;
+use crate::wasm_data_model::{AmountAssetType, AnonKeys};
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
 use getrandom::getrandom;
-use ledger::data_model::TxoSID;
+use js_sys::JsString;
+use ledger::data_model::{AssetType, TxoSID};
 use ledger::staking::Amount;
 use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
@@ -2049,6 +2055,34 @@ pub fn abar_from_json(json: JsValue) -> Result<AnonBlindAssetRecord, JsValue> {
         json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
 
     Ok(abar)
+}
+
+#[wasm_bindgen]
+/// Decrypts an ABAR with owner memo and decryption key
+pub fn open_abar(
+    abar: AnonBlindAssetRecord,
+    memo: OwnerMemo,
+    keypair: &AXfrKeyPair,
+    dec_key: &XSecretKey,
+) -> Result<AmountAssetType, JsValue> {
+    let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
+        &abar,
+        memo.memo,
+        &keypair.clone(),
+        &dec_key.clone(),
+    )
+    .map_err(error_to_jsvalue)?
+    .build()
+    .map_err(error_to_jsvalue)?;
+
+    let at = AssetTypeCode {
+        val: oabar.get_asset_type(),
+    };
+
+    Ok(AmountAssetType {
+        amount: oabar.get_amount(),
+        asset_type: at.to_base64(),
+    })
 }
 
 #[cfg(test)]

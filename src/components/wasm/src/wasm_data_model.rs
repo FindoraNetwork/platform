@@ -1,3 +1,4 @@
+use js_sys::JsString;
 use {
     core::fmt::Display,
     credentials::{
@@ -718,6 +719,20 @@ impl MTLeafInfo {
             .map(|s| JsValue::from_str(&s))
             .c(d!())
             .map_err(error_to_jsvalue)
+    }
+}
+
+#[wasm_bindgen]
+pub struct AmountAssetType {
+    pub amount: u64,
+    pub(crate) asset_type: String,
+}
+
+#[wasm_bindgen]
+impl AmountAssetType {
+    #[wasm_bindgen(getter)]
+    pub fn asset_type(&self) -> String {
+        self.asset_type.clone()
     }
 }
 
