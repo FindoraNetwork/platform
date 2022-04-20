@@ -1765,7 +1765,7 @@ use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
 use getrandom::getrandom;
 use js_sys::JsString;
-use ledger::data_model::{AssetType, TxoSID};
+use ledger::data_model::{AssetType, BAR_TO_ABAR_TX_FEE_MIN, TxoSID};
 use ledger::staking::Amount;
 use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
@@ -1978,6 +1978,12 @@ pub fn fra_get_asset_code() -> String {
 #[wasm_bindgen]
 pub fn fra_get_minimal_fee() -> u64 {
     TX_FEE_MIN
+}
+
+/// Fee smaller than this value will be denied.
+#[wasm_bindgen]
+pub fn fra_get_minimal_fee_for_bar_to_abar() -> u64 {
+    BAR_TO_ABAR_TX_FEE_MIN
 }
 
 /// The destination for fee to be transfered to.
