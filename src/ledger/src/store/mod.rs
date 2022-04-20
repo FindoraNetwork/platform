@@ -1659,6 +1659,22 @@ impl LedgerStatus {
                 .get_versioned_abar_hash(abar_version)
                 .ok_or(eg!("merkle version is invalid"))?;
 
+            println!("============= merkle version: {:?}", abar_version);
+            println!("============= merkle root-v: {:?}", version_root);
+            println!(
+                "============= merkle root-a: {:?}",
+                abar_conv.body.merkle_root
+            );
+            let len = self.abar_commitment_versions.len();
+            let start = if len - 10 > 0 { len - 10 } else { 0 };
+            for i in start..len {
+                println!(
+                    "============= merkle last-{}: {:?}",
+                    i,
+                    self.get_versioned_abar_hash(i)
+                );
+            }
+
             // verify zk proof with merkle root
             verify_abar_to_bar_note(
                 &abar_to_bar_verifier_params,
