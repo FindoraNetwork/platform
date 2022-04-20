@@ -1337,7 +1337,8 @@ impl AnonTransferOperationBuilder {
     ) -> Result<AnonTransferOperationBuilder, JsValue> {
         let mut prng = ChaChaRng::from_entropy();
 
-        let at = AssetTypeCode::new_from_base64(asset_type.as_str()).map_err(error_to_jsvalue)?;
+        let at = AssetTypeCode::new_from_base64(asset_type.as_str())
+            .map_err(error_to_jsvalue)?;
 
         let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
             .amount(amount)
@@ -1763,13 +1764,13 @@ use crate::wasm_data_model::{AmountAssetType, AnonKeys};
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
 use getrandom::getrandom;
+use js_sys::JsString;
 use ledger::data_model::{AssetType, TxoSID};
 use ledger::staking::Amount;
 use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
-use js_sys::JsString;
 use zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey};
 
 #[wasm_bindgen]
@@ -2068,17 +2069,19 @@ pub fn open_abar(
         &abar,
         memo.memo,
         &keypair.clone(),
-        &dec_key.clone()
+        &dec_key.clone(),
     )
-        .map_err(error_to_jsvalue)?
-        .build()
-        .map_err(error_to_jsvalue)?;
+    .map_err(error_to_jsvalue)?
+    .build()
+    .map_err(error_to_jsvalue)?;
 
-    let at = AssetTypeCode{ val: oabar.get_asset_type() };
+    let at = AssetTypeCode {
+        val: oabar.get_asset_type(),
+    };
 
-    Ok(AmountAssetType{
+    Ok(AmountAssetType {
         amount: oabar.get_amount(),
-        asset_type: at.to_base64()
+        asset_type: at.to_base64(),
     })
 }
 
