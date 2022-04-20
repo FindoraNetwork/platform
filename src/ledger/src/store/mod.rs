@@ -1660,9 +1660,9 @@ impl LedgerStatus {
                 .ok_or(eg!("merkle version is invalid"))?;
 
             println!("============= merkle version: {:?}", abar_version);
-            println!("============= merkle root-1: {:?}", version_root);
+            println!("============= merkle root-v: {:?}", version_root);
             println!(
-                "============= merkle root-2: {:?}",
+                "============= merkle root-a: {:?}",
                 abar_conv.body.merkle_root
             );
             let len = self.abar_commitment_versions.len();
