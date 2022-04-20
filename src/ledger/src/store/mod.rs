@@ -61,7 +61,7 @@ use {
             structs::{
                 AnonBlindAssetRecord, Commitment, MTLeafInfo, MTNode, MTPath, Nullifier,
             },
-            verify_anon_xfr_note,
+            verify_anon_xfr_note, TREE_DEPTH as MERKLE_TREE_DEPTH,
         },
         setup::VerifierParams,
         xfr::{
@@ -77,6 +77,7 @@ use {
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
+const VERSION_WINDOW: u64 = 100;
 
 type TmpSidMap = HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)>;
 
@@ -143,7 +144,7 @@ impl LedgerState {
     ) -> Result<TxnTempSID> {
         let tx = txe.txn.clone();
         self.status
-            .check_txn_effects(&txe)
+            .check_txn_effects(&txe, &self.abar_state)
             .c(d!())
             .and_then(|_| block.add_txn_effect(txe).c(d!()))
             .map(|tmpid| {
@@ -449,7 +450,6 @@ impl LedgerState {
 
         let abar_root_hash =
             self.get_abar_root_hash().expect("failed to read root hash");
-        self.status.abar_commitment_versions.push(abar_root_hash);
         let anon_state_commitment_data = AnonStateCommitmentData {
             abar_root_hash,
             nullifier_root_hash: self
@@ -501,7 +501,7 @@ impl LedgerState {
         let store = ImmutablePrefixedStore::new("abar_store", &abar_query_state);
         let mt = ImmutablePersistentMerkleTree::new(store)?;
 
-        mt.get_root().c(d!(
+        mt.get_root_with_depth(MERKLE_TREE_DEPTH).c(d!(
             "probably due to badly constructed tree or data corruption"
         ))
     }
@@ -514,10 +514,7 @@ impl LedgerState {
         let store = ImmutablePrefixedStore::new("abar_store", &abar_query_state);
         let mt = ImmutablePersistentMerkleTree::new(store)?;
 
-        println!("get_abar_proof: {:?}", id);
-        let mut t = mt.generate_proof(id.0)?;
-        t.root_version = self.status.get_current_abar_version();
-
+        let t = mt.generate_proof_with_depth(id.0, MERKLE_TREE_DEPTH)?;
         Ok(create_mt_leaf_info(t))
     }
 
@@ -554,7 +551,11 @@ impl LedgerState {
     #[inline(always)]
     fn init_abar_state(path: &str) -> Result<State<RocksDB>> {
         let fdb = RocksDB::open(path).c(d!("failed to open db"))?;
-        let cs = Arc::new(RwLock::new(ChainState::new(fdb, "abar_db".to_string(), 0)));
+        let cs = Arc::new(RwLock::new(ChainState::new(
+            fdb,
+            "abar_db".to_string(),
+            VERSION_WINDOW,
+        )));
         Ok(State::new(cs, false))
     }
 
@@ -1229,9 +1230,6 @@ pub struct LedgerStatus {
     /// The BitDigest at index i is the state commitment of the ledger at block height  i + 1.
     #[serde(default = "default_status_state_commitment_versions")]
     state_commitment_versions: Vecx<HashOf<Option<StateCommitmentData>>>,
-    /// Abar commitment versions for verifying proofs
-    #[serde(default = "default_status_abar_commitment_versions")]
-    abar_commitment_versions: Vecx<BLSScalar>,
     /// Anon state commitment versions
     #[serde(default = "default_status_anon_state_commitment_versions")]
     anon_state_commitment_versions: Vecx<HashOf<Option<AnonStateCommitmentData>>>,
@@ -1325,34 +1323,6 @@ impl LedgerStatus {
         self.asset_types.get(code)
     }
 
-    #[inline(always)]
-    #[allow(missing_docs)]
-    #[allow(dead_code)]
-    fn get_latest_abar_hash(&self) -> Option<BLSScalar> {
-        self.abar_commitment_versions.last()
-    }
-
-    #[inline(always)]
-    #[allow(missing_docs)]
-    #[allow(dead_code)]
-    pub fn add_abar_commitment(&mut self, hash: BLSScalar) {
-        self.abar_commitment_versions.push(hash)
-    }
-
-    #[inline(always)]
-    #[allow(missing_docs)]
-    #[allow(dead_code)]
-    fn get_versioned_abar_hash(&self, version: usize) -> Option<BLSScalar> {
-        self.abar_commitment_versions.get(version)
-    }
-
-    #[inline(always)]
-    #[allow(missing_docs)]
-    #[allow(dead_code)]
-    fn get_current_abar_version(&self) -> usize {
-        self.abar_commitment_versions.len() - 1
-    }
-
     fn fast_invariant_check(&self) -> Result<()> {
         let cnt_eq =
             self.block_commit_count == self.state_commitment_versions.len() as u64;
@@ -1404,7 +1374,6 @@ impl LedgerStatus {
             ax_txo_to_txn_location: default_status_ax_txo_to_txn_location(),
             issuance_amounts: default_status_issuance_amounts(),
             state_commitment_versions: default_status_state_commitment_versions(),
-            abar_commitment_versions: default_status_abar_commitment_versions(),
             anon_state_commitment_versions:
                 default_status_anon_state_commitment_versions(),
             asset_types: default_status_asset_types(),
@@ -1437,7 +1406,11 @@ impl LedgerStatus {
     //
     //  ledger.check_txn_effects(txn_effect);
     //  block.add_txn_effect(txn_effect);
-    fn check_txn_effects(&self, txn_effect: &TxnEffect) -> Result<()> {
+    fn check_txn_effects(
+        &self,
+        txn_effect: &TxnEffect,
+        abar_state: &Arc<RwLock<State<RocksDB>>>,
+    ) -> Result<()> {
         // The current transactions seq_id must be within the sliding window over seq_ids
         let (rand, seq_id) = (
             txn_effect.txn.body.no_replay_token.get_rand(),
@@ -1625,6 +1598,11 @@ impl LedgerStatus {
             }
         }
 
+        // current merkle tree version.
+        let abar_query_state = State::new(abar_state.read().chain_state(), false);
+        let store = ImmutablePrefixedStore::new("abar_store", &abar_query_state);
+        let abar_mt = ImmutablePersistentMerkleTree::new(store)?;
+
         // An axfr_body requires versioned merkle root hash for verification.
         // here with LedgerStatus available.
         for axfr_note in txn_effect.axfr_bodies.iter() {
@@ -1639,9 +1617,12 @@ impl LedgerStatus {
                 axfr_note.body.outputs.len(),
             )?;
             let abar_version = axfr_note.body.merkle_root_version;
-            let version_root = self
-                .get_versioned_abar_hash(abar_version)
-                .ok_or(eg!("merkle version is invalid"))?;
+            if abar_mt.version() - abar_version > VERSION_WINDOW {
+                return Err(eg!("Proof is old, need rebuild!"));
+            }
+            let version_root = abar_mt
+                .get_root_with_depth_and_version(MERKLE_TREE_DEPTH, abar_version)?;
+
             verify_anon_xfr_note(&verifier_params, axfr_note, &version_root)
                 .c(d!("Anon Transfer proof verification failed"))?;
         }
@@ -1654,10 +1635,12 @@ impl LedgerStatus {
             }
 
             // Get verifier params
-            let abar_version: usize = abar_conv.body.merkle_root_version;
-            let version_root = self
-                .get_versioned_abar_hash(abar_version)
-                .ok_or(eg!("merkle version is invalid"))?;
+            let abar_version = abar_conv.body.merkle_root_version;
+            if abar_mt.version() - abar_version > VERSION_WINDOW {
+                return Err(eg!("Proof is old, need rebuild!"));
+            }
+            let version_root = abar_mt
+                .get_root_with_depth_and_version(MERKLE_TREE_DEPTH, abar_version)?;
 
             println!("============= merkle version: {:?}", abar_version);
             println!("============= merkle root-v: {:?}", version_root);
@@ -1665,15 +1648,6 @@ impl LedgerStatus {
                 "============= merkle root-a: {:?}",
                 abar_conv.body.merkle_root
             );
-            let len = self.abar_commitment_versions.len();
-            let start = if len - 10 > 0 { len - 10 } else { 0 };
-            for i in start..len {
-                println!(
-                    "============= merkle last-{}: {:?}",
-                    i,
-                    self.get_versioned_abar_hash(i)
-                );
-            }
 
             // verify zk proof with merkle root
             verify_abar_to_bar_note(
@@ -1892,10 +1866,6 @@ fn default_status_issuance_amounts() -> Mapx<AssetTypeCode, u64> {
 fn default_status_state_commitment_versions() -> Vecx<HashOf<Option<StateCommitmentData>>>
 {
     new_vecx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/state_commitment_versions")
-}
-
-fn default_status_abar_commitment_versions() -> Vecx<BLSScalar> {
-    new_vecx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/abar_commitment_versions")
 }
 
 fn default_status_anon_state_commitment_versions(
