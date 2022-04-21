@@ -273,7 +273,7 @@ impl TransactionBuilder {
 
         opb.add_output(
             &AssetRecordTemplate::with_no_asset_tracing(
-                TX_FEE_MIN,
+                fee,
                 ASSET_TYPE_FRA,
                 AssetRecordType::from_flags(false, false),
                 *BLACK_HOLE_PUBKEY,
