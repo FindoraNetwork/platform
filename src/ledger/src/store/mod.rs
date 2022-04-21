@@ -1642,13 +1642,6 @@ impl LedgerStatus {
             let version_root = abar_mt
                 .get_root_with_depth_and_version(MERKLE_TREE_DEPTH, abar_version)?;
 
-            println!("============= merkle version: {:?}", abar_version);
-            println!("============= merkle root-v: {:?}", version_root);
-            println!(
-                "============= merkle root-a: {:?}",
-                abar_conv.body.merkle_root
-            );
-
             // verify zk proof with merkle root
             verify_abar_to_bar_note(
                 &abar_to_bar_verifier_params,
