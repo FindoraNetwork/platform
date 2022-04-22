@@ -16,7 +16,7 @@ set -e
 commitment1=$(tail -n 1 owned_commitments)
 echo "\n\n Owned Abars after Bar to Abar conversion 1"
 sleep 20
-target/release/fn owned-abars -c $commitment1
+target/release/fn owned-abars --commitment $commitment1
 
 echo "\n\n\n Anonymous Transfer from Sender1 to Receiver1"
 echo "------------------------------------------------------------------------------"
@@ -25,7 +25,7 @@ target/release/fn anon-transfer --amount 189990000 --anon-keys ./$FILE_ANON_KEYS
 commitment2=$(tail -n 1 sent_commitments)
 echo "\n\n Owned Abars for Receiver1 after Anon Transfer 1"
 sleep 30
-target/release/fn owned-abars -c $commitment2
+target/release/fn owned-abars --commitment $commitment2
 
 echo "\n\n\n Anonymous Transfer from Receiver1 (Sender2) to Receiver2"
 echo "------------------------------------------------------------------------------"
@@ -34,7 +34,7 @@ target/release/fn anon-transfer --amount 169990000 --anon-keys ./$FILE_ANON_KEYS
 commitment3=$(tail -n 1 sent_commitments)
 echo "\n\n Owned Abars for Receiver2 after Anon Transfer 2"
 sleep 30
-target/release/fn owned-abars -c $commitment3
+target/release/fn owned-abars --commitment $commitment3
 
 sleep 2
 echo "\n\n\n Fetch merkle proof for Anon Transfer 2"
