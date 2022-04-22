@@ -24,12 +24,12 @@ tail -n 2 owned_commitments > commitment_file
 commitment1=$(awk 'FNR==1' commitment_file)
 echo "\n\n Owned Abars after Bar to Abar conversion 1"
 sleep 20
-target/release/fn owned-abars -c $commitment1
+target/release/fn owned-abars --commitment $commitment1
 
 commitment2=$(awk 'FNR==2' commitment_file)
 echo "\n\n Owned Abars after Bar to Abar conversion 2"
 sleep 20
-target/release/fn owned-abars -c $commitment2
+target/release/fn owned-abars --commitment $commitment2
 
 echo "\n\n\n Batch Anonymous Transfer from Senders to Receivers"
 echo "------------------------------------------------------------------------------"
@@ -40,12 +40,12 @@ tail -n 3 sent_commitments > commitment_file2
 commitment4=$(awk 'FNR==1' commitment_file2)
 echo "\n\n Owned Abars for Receiver1 after Batch Anon Transfer"
 sleep 30
-target/release/fn owned-abars -c $commitment4
+target/release/fn owned-abars --commitment $commitment4
 
 commitment5=$(awk 'FNR==3' commitment_file2)
 echo "\n\n Owned Abars for Receiver3 after Batch Anon Transfer"
 sleep 30
-target/release/fn owned-abars -c $commitment5
+target/release/fn owned-abars --commitment $commitment5
 
 sleep 2
 echo "\n\n\n Fetch merkle proof for Batch Anon Transfer"

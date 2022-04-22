@@ -218,6 +218,7 @@ subcommands:
             long: to-pubkey
             takes_value: true
             value_name: PubKey
+            allow_hyphen_values: true
         - to-wallet-address:
             help: fra prefixed address of FindoraNetwork
             short: T
@@ -503,6 +504,7 @@ subcommands:
             takes_value: true
             value_name: COMMITMENT
             required: true
+            allow_hyphen_values: true
   - anon-balance:
       about: List Anon balance and spending status for a public key and a list of commitments
       args:
@@ -513,6 +515,7 @@ subcommands:
             takes_value: true
             value_name: COMMITMENT
             required: true
+            allow_hyphen_values: true
         - anon-keys:
             help: Anon keys file path of the sender
             short: a
@@ -530,6 +533,7 @@ subcommands:
             takes_value: true
             value_name: COMMITMENT
             required: true
+            allow_hyphen_values: true
         - anon-keys:
             help: Anon keys file path of the sender
             short: a
@@ -585,12 +589,14 @@ subcommands:
             takes_value: true
             value_name: COMMITMENT
             required: true
+            allow_hyphen_values: true
         - to-pubkey:
             help: base64-formated `XfrPublicKey` of the receiver
             short: t
             long: to-pubkey
             takes_value: true
             value_name: PubKey
+            allow_hyphen_values: true
         - to-wallet-address:
             help: Xfr public key of the receiver
             short: T
@@ -622,17 +628,20 @@ subcommands:
             takes_value: true
             value_name: COMMITMENT
             required: true
+            allow_hyphen_values: true
         - fra-commitment:
             help: Commitment for the input FRA Anon BAR
             long: fra-commitment
             takes_value: true
             value_name: FRA COMMITMENT
+            allow_hyphen_values: true
         - to-axfr-public-key:
             help: Axfr public key of the receiver
             long: to-axfr-public-key
             takes_value: true
             value_name: PUBLIC KEY
             required: true
+            allow_hyphen_values: true
         - to-enc-key:
             help: Receiver encryption key for anon transfer
             long: to-enc-key
@@ -716,6 +725,7 @@ subcommands:
             takes_value: true
             value_name: COMMITMENT
             required: true
+            allow_hyphen_values: true
         - anon-keys:
             help: Anon keys file path of the sender
             short: a
@@ -733,6 +743,7 @@ subcommands:
             takes_value: true
             value_name: TARGET PUBLIC KEY
             required: true
+            allow_hyphen_values: true
         - td_address:
             help: the tendermint address that you may want to replace.
             long: td_address
@@ -745,3 +756,4 @@ subcommands:
             takes_value: true
             value_name: TENDERMINT PUBKEY
             required: false
+            allow_hyphen_values: true

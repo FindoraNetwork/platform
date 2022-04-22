@@ -39,7 +39,7 @@ echo
 commitment1=$(tail -n 1 owned_commitments)
 echo "\n\n Owned Abars after Bar to Abar conversion"
 sleep 20 #Do not remove/decrease
-fn owned-abars -c $commitment1
+fn owned-abars --commitment $commitment1
 
 
 echo "\n\n\n Anonymous Transfer from Sender1 to Receiver1"
@@ -50,7 +50,7 @@ commitment2=$(tail -n 1 sent_commitments)
 echo "\n\n Owned Abars for Receiver1 after Anon Transfer 1"
 sleep 30
 echo $commitment2 > /dev/null
-fn owned-abars -c $commitment2
+fn owned-abars --commitment $commitment2
 
 echo "\n\n\n Anonymous Transfer from Receiver1 (Sender2) to Receiver2"
 echo "------------------------------------------------------------------------------"
@@ -60,7 +60,7 @@ commitment3=$(tail -n 1 sent_commitments)
 echo "\n\n Owned Abars for Receiver2 after Anon Transfer 2"
 sleep 30
 echo $commitment3 > /dev/null
-fn owned-abars -c $commitment3
+fn owned-abars --commitment $commitment3
 
 sleep 2
 echo "\n\n\n Fetch merkle proof for Anon Transfer 2"
@@ -94,13 +94,13 @@ tail -n 2 owned_commitments > commitment_file
 commitment=$(awk 'FNR>=1 && FNR<=1' commitment_file)
 echo "\n\n Owned Abars after Bar to Abar conversion 1"
 sleep 20
-target/release/fn owned-abars -c $commitment
+target/release/fn owned-abars --commitment $commitment
 fee_commitment=$(awk 'FNR>=2 && FNR<=2' commitment_file)
 echo "\n\n Owned Abars after Bar to Abar conversion 2"
 sleep 20
-target/release/fn owned-abars -c $fee_commitment
+target/release/fn owned-abars --commitment $fee_commitment
 
-target/release/fn convert-abar-to-bar --anon-keys ./anon-keys-temp.keys -c $commitment -F $fee_commitment --to-wallet-address  fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
+target/release/fn convert-abar-to-bar --anon-keys ./anon-keys-temp.keys --commitment $commitment --to-wallet-address  fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
 sleep 20
 #Verify
 python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 629980000

@@ -210,9 +210,9 @@ echo "waiting blockchain 5s..."
 sleep 15
 
 echo "checking..."
-target/release/fn owned-abars -c $(awk 'FNR==3' sent_commitments)
-target/release/fn owned-abars -c $(awk 'FNR==4' sent_commitments)
-target/release/fn owned-abars -c $(awk 'FNR==5' sent_commitments)
+target/release/fn owned-abars --commitment $(awk 'FNR==3' sent_commitments)
+target/release/fn owned-abars --commitment $(awk 'FNR==4' sent_commitments)
+target/release/fn owned-abars --commitment $(awk 'FNR==5' sent_commitments)
 
 rm $BATCH_SK $BATCH_DEC $BATCH_C $BATCH_PK $BATCH_ENC $BATCH_AMOUNT $BATCH_ASSET
 echo "\n ***** Test all successfully! ***** "
