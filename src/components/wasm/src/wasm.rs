@@ -1250,11 +1250,9 @@ impl TransferOperationBuilder {
     }
 
     #[allow(missing_docs)]
-    pub fn from_string(s: String) -> Result<Self, JsValue> {
-        let this = serde_json::from_str(&s)
-            .c(d!())?
-            .map_err(error_to_jsvalue)?;
-        this
+    pub fn from_string(s: String) -> Result<TransferOperationBuilder, JsValue> {
+        let op_builder = serde_json::from_str(&s).c(d!()).map_err(error_to_jsvalue)?;
+        Ok(TransferOperationBuilder { op_builder })
     }
 
     /// Wraps around TransferOperationBuilder to extract an operation expression as JSON.
