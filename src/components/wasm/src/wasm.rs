@@ -1251,7 +1251,9 @@ impl TransferOperationBuilder {
 
     #[allow(missing_docs)]
     pub fn from_string(s: String) -> Result<Self, JsValue> {
-        let this = serde_json::from_str(&s).c(d!())?.map_err(error_to_jsvalue)?;
+        let this = serde_json::from_str(&s)
+            .c(d!())?
+            .map_err(error_to_jsvalue)?;
         this
     }
 
@@ -1771,7 +1773,7 @@ use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
 use getrandom::getrandom;
 use js_sys::JsString;
-use ledger::data_model::{AssetType, BAR_TO_ABAR_TX_FEE_MIN, TxoSID};
+use ledger::data_model::{AssetType, TxoSID, BAR_TO_ABAR_TX_FEE_MIN};
 use ledger::staking::Amount;
 use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
