@@ -1249,6 +1249,12 @@ impl TransferOperationBuilder {
         serde_json::to_string(self.get_builder()).unwrap()
     }
 
+    #[allow(missing_docs)]
+    pub fn from_string(s: String) -> Result<Self, JsValue> {
+        let this = serde_json::from_str(&s).c(d!())?.map_err(error_to_jsvalue)?;
+        this
+    }
+
     /// Wraps around TransferOperationBuilder to extract an operation expression as JSON.
     pub fn transaction(&self) -> Result<String, JsValue> {
         let op = self
