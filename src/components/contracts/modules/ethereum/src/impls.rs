@@ -7,13 +7,18 @@ use ethereum::{
 use ethereum_types::{Bloom, BloomInput, H160, H256, H64, U256};
 use evm::{ExitFatal, ExitReason};
 use fp_core::{
-    context::Context, macros::Get, module::AppModuleBasic, transaction::ActionResult,
+    context::{Context, RunTxMode},
+    macros::Get,
+    module::AppModuleBasic,
+    transaction::ActionResult,
 };
 use fp_events::Event;
 use fp_evm::{BlockId, CallOrCreateInfo, Runner, TransactionStatus};
 use fp_storage::{Borrow, BorrowMut};
-use fp_types::crypto::HA256;
-use fp_types::{actions::evm as EvmAction, crypto::secp256k1_ecdsa_recover};
+use fp_types::{
+    actions::evm as EvmAction,
+    crypto::{secp256k1_ecdsa_recover, HA256},
+};
 use fp_utils::{proposer_converter, timestamp_converter};
 use log::{debug, info};
 use ruc::*;
@@ -126,6 +131,7 @@ impl<C: Config> App<C> {
         debug!(target: "ethereum", "transact ethereum transaction: {:?}", transaction);
 
         let mut events = vec![];
+        let just_check = ctx.run_mode != RunTxMode::Deliver;
 
         let source = Self::recover_signer(&transaction)
             .ok_or_else(|| eg!("ExecuteTransaction: InvalidSignature"))?;
@@ -133,8 +139,11 @@ impl<C: Config> App<C> {
         let transaction_hash =
             H256::from_slice(Keccak256::digest(&rlp::encode(&transaction)).as_slice());
 
-        let mut pending_txs: Vec<_> =
-            PendingTransactions::get(ctx.db.read().borrow()).unwrap_or_default();
+        let mut pending_txs: Vec<_> = if just_check {
+            vec![]
+        } else {
+            PendingTransactions::get(ctx.db.read().borrow()).unwrap_or_default()
+        };
         let transaction_index = pending_txs.len() as u32;
 
         let gas_limit = transaction.gas_limit;
@@ -268,14 +277,16 @@ impl<C: Config> App<C> {
             logs: status.logs.clone(),
         };
 
-        pending_txs.push((transaction, status, receipt));
-        PendingTransactions::put(ctx.db.write().borrow_mut(), &pending_txs)?;
+        if !just_check {
+            pending_txs.push((transaction, status, receipt));
+            PendingTransactions::put(ctx.db.write().borrow_mut(), &pending_txs)?;
 
-        TransactionIndex::insert(
-            ctx.db.write().borrow_mut(),
-            &HA256::new(transaction_hash),
-            &(ctx.header.height.into(), transaction_index),
-        )?;
+            TransactionIndex::insert(
+                ctx.db.write().borrow_mut(),
+                &HA256::new(transaction_hash),
+                &(ctx.header.height.into(), transaction_index),
+            )?;
+        }
 
         events.push(Event::emit_event(
             Self::name(),

@@ -430,7 +430,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     {
         let mut guard_locked = PROFILER_GUARD.lock();
         let guard = guard_locked.get_mut();
-        if let Some(_) = guard
+        if guard
             .as_ref()
             .and_then(|(_, guard)| guard.report().build().ok())
             .and_then(|report| {
@@ -442,6 +442,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
                 .ok()
             })
             .and_then(|(report, file)| report.flamegraph(file).ok())
+            .is_some()
         {
             log::info!(target: "abciapp", "write flamegraph.h{}.svg", td_height);
         } else {
