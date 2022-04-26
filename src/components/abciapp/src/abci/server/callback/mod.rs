@@ -168,11 +168,14 @@ pub fn begin_block(
         let guard = guard_locked.get_mut();
         if guard
             .as_ref()
-            .and_then(|(_, guard)| guard.report().build().ok())
-            .and_then(|report| {
+            .and_then(|(h, guard)| match guard.report().build() {
+                Ok(report) if !report.data.is_empty() => Some((h, report)),
+                _ => None,
+            })
+            .and_then(|(h, report)| {
                 std::fs::File::create(format!(
                     "{}/flamegraph.h{}.svg",
-                    &CFG.ledger_dir, header.height
+                    &CFG.ledger_dir, h
                 ))
                 .map(|file| (report, file))
                 .ok()
@@ -182,10 +185,16 @@ pub fn begin_block(
         {
             log::info!(target: "abciapp", "write flamegraph.h{}.svg", header.height);
         }
-        *guard = Some((
-            header.height as u64,
-            pprof::ProfilerGuard::new(100).unwrap(),
-        ));
+        // stop current profiler
+        *guard = None;
+
+        *guard = match pprof::ProfilerGuard::new(100) {
+            Ok(profiler) => Some((header.height as u64, profiler)),
+            Err(e) => {
+                log::error!(target: "abciapp", "cannot create profiler for height {}: {:?}", header.height, e);
+                None
+            }
+        };
     }
     #[cfg(target_os = "linux")]
     {
