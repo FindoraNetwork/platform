@@ -1,4 +1,4 @@
-use crate::context::Context;
+use crate::context::{Context, RunTxMode};
 use abci::Event;
 use fp_types::transaction::CheckedTransaction;
 use impl_trait_for_tuples::impl_for_tuples;
@@ -151,6 +151,17 @@ where
             U::pre_execute(ctx, &self.function)?;
             (None, Default::default())
         };
+        // For context we don't need to persistent anything
+        if ctx.run_mode != RunTxMode::Deliver {
+            let res = U::execute(maybe_who, self.function, ctx);
+            if let Ok(r) = res.as_ref() {
+                if r.code == 0 {
+                    // FIXME: empty function now
+                    Extra::post_execute(ctx, pre, r)?;
+                }
+            }
+            return res;
+        }
         ctx.state.write().commit_session();
 
         match U::execute(maybe_who, self.function, ctx) {
