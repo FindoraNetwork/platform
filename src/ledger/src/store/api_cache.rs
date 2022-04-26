@@ -411,23 +411,21 @@ pub fn check_lost_data(ledger: &mut LedgerState) -> Result<()> {
                         .get_transaction_light(
                             utxo.authenticated_txn.finalized_txn.tx_id,
                         )
-                        .unwrap();
+                        .c(d!())?;
                     let tx_hash = ftx.txn.hash_tm().hex().to_uppercase();
                     let owner_memos = ftx.txn.get_owner_memos_ref();
-                    let addresses: Vec<XfrAddress> = ftx
-                        .txo_ids
-                        .iter()
-                        .map(|sid| XfrAddress {
-                            key: ((ledger
-                                .get_utxo_light(*sid)
-                                .or_else(|| ledger.get_spent_utxo_light(*sid))
-                                .unwrap()
-                                .utxo)
-                                .0)
-                                .record
-                                .public_key,
-                        })
-                        .collect();
+                    let mut addresses: Vec<XfrAddress> = vec![];
+                    for sid in ftx.txo_ids.iter() {
+                        let key = ledger
+                            .get_utxo_light(*sid)
+                            .or_else(|| ledger.get_spent_utxo_light(*sid))
+                            .c(d!())?
+                            .utxo
+                            .0
+                            .record
+                            .public_key;
+                        addresses.push(XfrAddress { key });
+                    }
 
                     for (txo_sid, (address, owner_memo)) in ftx
                         .txo_ids
@@ -503,23 +501,21 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
         let curr_txn = ledger.get_transaction_light(txn_sid).c(d!())?.txn;
         // get the transaction, ownership addresses, and memos associated with each transaction
         let (addresses, owner_memos) = {
-            let addresses: Vec<XfrAddress> = txo_sids
-                .iter()
-                .map(|sid| XfrAddress {
-                    key: ((ledger
-                        .get_utxo_light(*sid)
-                        .or_else(|| ledger.get_spent_utxo_light(*sid))
-                        .unwrap()
-                        .utxo)
-                        .0)
-                        .record
-                        .public_key,
-                })
-                .collect();
+            let mut _addresses: Vec<XfrAddress> = vec![];
+            for sid in txo_sids.iter() {
+                let key = ledger
+                    .get_utxo_light(*sid)
+                    .or_else(|| ledger.get_spent_utxo_light(*sid))
+                    .c(d!())?
+                    .utxo
+                    .0
+                    .record
+                    .public_key;
+                _addresses.push(XfrAddress { key });
+            }
 
             let owner_memos = curr_txn.get_owner_memos_ref();
-
-            (addresses, owner_memos)
+            (_addresses, owner_memos)
         };
 
         let classify_op = |op: &Operation| {
