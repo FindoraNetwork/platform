@@ -865,16 +865,18 @@ impl LedgerState {
     /// Get a utxo along with the transaction which it belongs
     /// Avoid ledger query operation to reduce latency
     pub fn get_utxo_light(&self, id: TxoSID) -> Option<UnAuthenticatedUtxo> {
-        let utxo = self.status.get_utxo(id);
-        if let Some(utxo) = utxo {
+        if let Some(utxo) = self.status.get_utxo(id) {
             let txn_location = self.status.txo_to_txn_location.get(&id).unwrap();
-            let txn = self.get_transaction_light(txn_location.0).unwrap();
-            let utxo_location = txn_location.1;
-            Some(UnAuthenticatedUtxo {
-                utxo,
-                txn,
-                utxo_location,
-            })
+            if let Ok(txn) = self.get_transaction_light(txn_location.0) {
+                let utxo_location = txn_location.1;
+                Some(UnAuthenticatedUtxo {
+                    utxo,
+                    txn,
+                    utxo_location,
+                })
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -908,13 +910,16 @@ impl LedgerState {
         let utxo = self.status.get_spent_utxo(addr);
         if let Some(utxo) = utxo {
             let txn_location = self.status.txo_to_txn_location.get(&addr).unwrap();
-            let txn = self.get_transaction_light(txn_location.0).unwrap();
-            let utxo_location = txn_location.1;
-            Some(UnAuthenticatedUtxo {
-                utxo,
-                txn,
-                utxo_location,
-            })
+            if let Ok(txn) = self.get_transaction_light(txn_location.0) {
+                let utxo_location = txn_location.1;
+                Some(UnAuthenticatedUtxo {
+                    utxo,
+                    txn,
+                    utxo_location,
+                })
+            } else {
+                None
+            }
         } else {
             None
         }
