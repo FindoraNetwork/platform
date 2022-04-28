@@ -6,7 +6,10 @@ mod utils;
 
 use {
     crate::{
-        abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV, IS_EXITING, POOL},
+        abci::{
+            server::ABCISubmissionServer, staking, IN_SAFE_ITV, IS_EXITING, POOL,
+            PROFILER_ENABLED,
+        },
         api::{
             query_server::BLOCK_CREATED,
             submission_server::{convert_tx, try_tx_catalog, TxCatalog},
@@ -175,34 +178,45 @@ pub fn begin_block(
     {
         let mut guard_locked = PROFILER_GUARD.lock();
         let guard = guard_locked.get_mut();
-        if guard
-            .as_ref()
-            .and_then(|(h, guard)| match guard.report().build() {
-                Ok(report) if !report.data.is_empty() => Some((h, report)),
-                _ => None,
-            })
-            .and_then(|(h, report)| {
-                std::fs::File::create(format!(
-                    "{}/flamegraph.h{}.svg",
-                    &CFG.ledger_dir, h
-                ))
-                .map(|file| (report, file))
-                .ok()
-            })
-            .and_then(|(report, file)| report.flamegraph(file).ok())
-            .is_some()
-        {
-            log::info!(target: "abciapp", "write flamegraph.h{}.svg", header.height);
-        }
-        // stop current profiler
-        *guard = None;
-
-        *guard = match pprof::ProfilerGuard::new(100) {
-            Ok(profiler) => Some((header.height as u64, profiler)),
-            Err(e) => {
-                log::error!(target: "abciapp", "cannot create profiler for height {}: {:?}", header.height, e);
-                None
+        *guard = if PROFILER_ENABLED.load(Ordering::Relaxed) {
+            match pprof::ProfilerGuard::new(100) {
+                Ok(profiler) => {
+                    log::warn!(target: "abciapp", "starting profiler at height {}", header.height);
+                    Some((header.height as u64, profiler))
+                }
+                Err(e) if e.to_string().contains("start running") => {
+                    log::debug!(target: "abciapp", "Create profiler while running profiler exists at height {}", header.height);
+                    None
+                }
+                Err(e) => {
+                    log::warn!(target: "abciapp", "cannot create profiler at height {}: {:?}", header.height, e);
+                    None
+                }
             }
+        } else {
+            if guard
+                .as_ref()
+                .and_then(|(h, guard)| match guard.report().build() {
+                    Ok(report) if !report.data.is_empty() => Some((h, report)),
+                    _ => None,
+                })
+                .and_then(|(h, report)| {
+                    std::fs::File::create(format!(
+                        "{}/flamegraph.h{}.svg",
+                        &CFG.ledger_dir, h
+                    ))
+                    .map(|file| (report, file))
+                    .ok()
+                })
+                .and_then(|(report, file)| report.flamegraph(file).ok())
+                .is_some()
+            {
+                log::info!(target: "abciapp", "write flamegraph.h{}.svg", header.height);
+            }
+
+            // stop current profiler now if it exists
+            log::warn!(target: "abciapp", "stopping profiler at height {}", header.height);
+            None
         };
     }
     #[cfg(target_os = "linux")]
