@@ -1032,7 +1032,7 @@ impl LedgerState {
             .operations
             .iter()
             .flat_map(|o| match o {
-                Operation::BarToAbar(body) => vec![body.note.body.memo.clone()],
+                Operation::BarToAbar(body) => vec![body.memo()],
                 Operation::TransferAnonAsset(body) => body.note.body.owner_memos.clone(),
                 _ => vec![],
             })

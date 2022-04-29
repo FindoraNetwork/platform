@@ -30,10 +30,9 @@ use {
     zei::{
         anon_xfr::{
             abar_to_bar::AbarToBarNote,
-            bar_to_abar::verify_bar_to_abar_note,
             structs::{AXfrNote, AnonBlindAssetRecord, Nullifier},
         },
-        setup::{BulletproofParams, VerifierParams},
+        setup::{BulletproofParams},
         xfr::{
             sig::XfrPublicKey,
             structs::{XfrAmount, XfrAssetType},
@@ -566,24 +565,21 @@ impl TxnEffect {
     /// * `bar_to_abar` - the BarToAbar Operation body
     /// returns error if validation fails
     fn add_bar_to_abar(&mut self, bar_to_abar: &BarToAbarOps) -> Result<()> {
-        let key = bar_to_abar.note.body.input.public_key;
-        // fetch the verifier Node Params for PlonkProof
-        let node_params = VerifierParams::bar_to_abar_params()?;
-        // verify the Plonk proof and signature
-        verify_bar_to_abar_note(&node_params, &bar_to_abar.note, &key).c(d!())?;
+        // verify the note signature & Plonk proof
+        bar_to_abar.verify()?;
 
         // list input_txo to spend
         self.input_txos.insert(
             bar_to_abar.txo_sid,
             TxOutput {
                 id: None,
-                record: bar_to_abar.note.body.input.clone(),
+                record: bar_to_abar.input_record(),
                 lien: None,
             },
         );
         // push new ABAR created
         self.bar_conv_abars
-            .push(bar_to_abar.note.body.output.clone());
+            .push(bar_to_abar.output_record());
         Ok(())
     }
 

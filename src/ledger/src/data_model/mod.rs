@@ -9,6 +9,8 @@ mod __trash__;
 mod effects;
 mod test;
 
+use zei::anon_xfr::ar_to_abar::{ArToAbarNote, verify_ar_to_abar_note};
+use zei::anon_xfr::structs::AnonBlindAssetRecord;
 pub use effects::{BlockEffect, TxnEffect};
 
 use crate::staking::ops::replace_staker::ReplaceStakerOps;
@@ -48,8 +50,9 @@ use {
     zei::{
         anon_xfr::{
             abar_to_bar::AbarToBarNote, bar_to_abar::BarToAbarNote, keys::AXfrPubKey,
-            structs::AXfrNote,
+            structs::AXfrNote, bar_to_abar::verify_bar_to_abar_note
         },
+        setup::VerifierParams,
         xfr::{
             gen_xfr_body,
             sig::{XfrKeyPair, XfrPublicKey},
@@ -61,8 +64,10 @@ use {
             XfrNotePolicies,
         },
     },
-    zei_algebra::bls12_381::BLSScalar,
-    zei_algebra::serialization::ZeiFromToBytes,
+    zei_algebra::{
+        bls12_381::BLSScalar,
+        serialization::ZeiFromToBytes
+    },
 };
 
 const RANDOM_CODE_LENGTH: usize = 16;
@@ -1258,11 +1263,21 @@ impl UpdateMemo {
     }
 }
 
+/// A note which enumerates the transparent and confidential BAR to
+/// Anon Asset record conversion.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum BarAnonConvNote {
+    /// A transfer note with ZKP for a confidential asset record
+    BarNote(BarToAbarNote),
+    /// A transfer note with ZKP for a non-confidential asset record
+    ArNote(ArToAbarNote),
+}
+
 /// Operation for converting a Blind Asset Record to a Anonymous record
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BarToAbarOps {
     /// the note which contains the inp/op and ZKP
-    pub note: BarToAbarNote,
+    pub note: BarAnonConvNote,
     /// The TxoSID of the the input BAR
     pub txo_sid: TxoSID,
     nonce: NoReplayToken,
@@ -1275,7 +1290,7 @@ impl BarToAbarOps {
     /// * txo_sid          - the TxoSID of the converting BAR
     /// * nonce
     pub fn new(
-        note: BarToAbarNote,
+        note: BarAnonConvNote,
         txo_sid: TxoSID,
         nonce: NoReplayToken,
     ) -> Result<BarToAbarOps> {
@@ -1284,6 +1299,60 @@ impl BarToAbarOps {
             txo_sid,
             nonce,
         })
+    }
+
+    /// verifies the signatures and proof of the note
+    pub fn verify(&self) -> Result<()> {
+        match &self.note {
+            BarAnonConvNote::BarNote(note) => {
+                // fetch the verifier Node Params for PlonkProof
+                let node_params = VerifierParams::bar_to_abar_params()?;
+                // verify the Plonk proof and signature
+                verify_bar_to_abar_note(&node_params, &note, &note.body.input.public_key).c(d!())
+            }
+            BarAnonConvNote::ArNote(note) => {
+                // fetch the verifier Node Params for PlonkProof
+                let node_params = VerifierParams::ar_to_abar_params()?;
+                // verify the Plonk proof and signature
+                verify_ar_to_abar_note(&node_params, note).c(d!())
+            }
+        }
+    }
+
+    /// provides a copy of the input record in the note
+    pub fn input_record(&self) -> BlindAssetRecord {
+        match &self.note {
+            BarAnonConvNote::BarNote(n) => {
+                n.body.input.clone()
+            }
+            BarAnonConvNote::ArNote(n) => {
+                n.body.input.clone()
+            }
+        }
+    }
+
+    /// provides a copy of the output record of the note.
+    pub fn output_record(&self) -> AnonBlindAssetRecord {
+        match &self.note {
+            BarAnonConvNote::BarNote(n) => {
+                n.body.output.clone()
+            }
+            BarAnonConvNote::ArNote(n) => {
+                n.body.output.clone()
+            }
+        }
+    }
+
+    /// provides a copy of the OwnerMemo in the note
+    pub fn memo(&self) -> OwnerMemo {
+        match &self.note {
+            BarAnonConvNote::BarNote(n) => {
+                n.body.memo.clone()
+            }
+            BarAnonConvNote::ArNote(n) => {
+                n.body.memo.clone()
+            }
+        }
     }
 
     #[inline(always)]

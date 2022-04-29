@@ -20,8 +20,8 @@ ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0"
 sha3 = "0.8"
-zei = "0.1"
-zei-algebra = "0.1"
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "ar_to_abar" }
+zei-algebra = { git = "https://github.com/FindoraNetwork/zei", branch = "ar_to_abar", package = "zei-algebra" }
 
 # primitives
 fp-utils = { path = "../utils" }

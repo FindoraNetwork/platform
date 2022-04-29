@@ -42,8 +42,8 @@ percent-encoding = "2.1.0"
 nix = "0.22.1"
 ruc = { version = "1.0.5", default-features = false, features = ["compact"] }
 
-zei = "0.1"
-zei-algebra = "0.1"
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "ar_to_abar" }
+zei-algebra = { git = "https://github.com/FindoraNetwork/zei", branch = "ar_to_abar", package = "zei-algebra" }
 
 abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
 config = { path = "../config"}

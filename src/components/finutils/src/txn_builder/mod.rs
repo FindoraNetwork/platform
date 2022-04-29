@@ -52,6 +52,7 @@ use {
         },
         anon_xfr::{
             abar_to_bar::gen_abar_to_bar_note,
+            ar_to_abar::gen_ar_to_abar_note,
             bar_to_abar::gen_bar_to_abar_note,
             config::FEE_CALCULATING_FUNC,
             gen_anon_xfr_note,
@@ -80,7 +81,7 @@ use {
     zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
 
-use ledger::data_model::BAR_TO_ABAR_TX_FEE_MIN;
+use ledger::data_model::{BAR_TO_ABAR_TX_FEE_MIN, BarAnonConvNote};
 /// Depth of abar merkle tree
 pub use zei::anon_xfr::TREE_DEPTH as MERKLE_TREE_DEPTH;
 
@@ -525,26 +526,25 @@ impl TransactionBuilder {
         txo_sid: TxoSID,
         input_record: &OpenAssetRecord,
         enc_key: &XPublicKey,
+        is_bar_transparent: bool,
     ) -> Result<(&mut Self, Commitment)> {
-        let mut prng = ChaChaRng::from_entropy();
-
-        // generate params for Bar to Abar conversion
-        let prover_params = ProverParams::eq_committed_vals_params()?;
 
         // generate the BarToAbarNote with the ZKP
-        let note = gen_bar_to_abar_note(
-            &mut prng,
-            &prover_params,
+        let (note, c) = gen_bar_conv_note(
             input_record,
             auth_key_pair,
             abar_pub_key,
             enc_key,
+            is_bar_transparent
         )
         .c(d!())?;
-        let c = note.body.output.commitment;
 
         // Create the BarToAbarOps
-        let bar_to_abar = BarToAbarOps::new(note, txo_sid, self.no_replay_token)?;
+        let bar_to_abar = BarToAbarOps::new(
+            note,
+            txo_sid,
+            self.no_replay_token
+        )?;
 
         // Add the generated operation to the transaction
         let op = Operation::BarToAbar(Box::from(bar_to_abar));
@@ -1037,6 +1037,48 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
         ),
         open_asset_record.type_blind.0,
     ))
+}
+
+fn gen_bar_conv_note(
+    input_record: &OpenAssetRecord,
+    auth_key_pair: &XfrKeyPair,
+    abar_pub_key: &AXfrPubKey,
+    enc_key: &XPublicKey,
+    is_bar_transparent: bool,
+) -> Result<(BarAnonConvNote, Commitment)> {
+    let mut prng = ChaChaRng::from_entropy();
+
+    if is_bar_transparent {
+        let prover_params = ProverParams::ar_to_abar_params()?;
+
+        // generate the BarToAbarNote with the ZKP
+        let note = gen_ar_to_abar_note(
+            &mut prng,
+            &prover_params,
+            input_record,
+            auth_key_pair,
+            abar_pub_key,
+            enc_key,
+        ).c(d!())?;
+
+        let c = note.body.output.commitment;
+        Ok((BarAnonConvNote::ArNote(note), c))
+    } else {
+        // generate params for Bar to Abar conversion
+        let prover_params = ProverParams::eq_committed_vals_params()?;
+
+        // generate the BarToAbarNote with the ZKP
+        let note = gen_bar_to_abar_note(
+            &mut prng,
+            &prover_params,
+            input_record,
+            auth_key_pair,
+            abar_pub_key,
+            enc_key,
+        ).c(d!())?;
+        let c = note.body.output.commitment;
+        Ok((BarAnonConvNote::BarNote(note), c))
+    }
 }
 
 /// TransferOperationBuilder constructs transfer operations using the factory pattern
@@ -2007,15 +2049,14 @@ mod tests {
                 TxoSID(123),
                 &dummy_input,
                 &XPublicKey::from(&to_enc_key),
+                false,
             )
             .is_ok();
 
         let txn = builder.take_transaction();
 
         if let Operation::BarToAbar(note) = txn.body.operations[0].clone() {
-            let node_params = VerifierParams::bar_to_abar_params().unwrap();
-            let result =
-                verify_bar_to_abar_note(&node_params, &note.note, from.get_pk_ref());
+            let result = note.verify(from.pub_key);
             assert!(result.is_ok());
         }
     }

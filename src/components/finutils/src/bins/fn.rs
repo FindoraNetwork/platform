@@ -574,14 +574,14 @@ fn run() -> Result<()> {
             "ATxoSID", "Amount", "AssetType"
         );
         for (a, b, c) in list.iter() {
+            let amt = b.get_amount().map_or_else(|| "Confidential".to_string(), |a| a.to_string());
+            let at = c.get_asset_type().map_or_else(|| "Confidential".to_string(), |at| AssetTypeCode{ val: at }.to_base64());
+
             println!(
                 "{0: <8} | {1: <18} | {2: <45} ",
                 a.0,
-                b.get_amount().unwrap(),
-                AssetTypeCode {
-                    val: c.get_asset_type().unwrap()
-                }
-                .to_base64()
+                amt,
+                at
             );
         }
     } else if let Some(m) = matches.subcommand_matches("anon-transfer") {
