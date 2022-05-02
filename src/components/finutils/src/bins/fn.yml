@@ -429,6 +429,11 @@ subcommands:
             long: sec-key
             takes_value: true
             value_name: SECRET KEY
+        - asset:
+            help: code of asset, such as `fra`
+            long: asset
+            takes_value: true
+            value_name: ASSET
   - contract-deposit:
       about: Transfer FRA from a Findora account to the specified Ethereum address
       args:
@@ -497,14 +502,26 @@ subcommands:
   - owned-abars:
       about: Get Anon UTXOs for a keypair use commitment
       args:
-        - commitment:
+        - commitments:
             help: Commitment of the ABAR
             short: c
-            long: commitment
+            long: commitments
             takes_value: true
             value_name: COMMITMENT
             required: true
             allow_hyphen_values: true
+        - anon-keys:
+            help: Anon keys file path of the sender
+            short: a
+            long: anon-keys
+            takes_value: true
+            value_name: ANON KEYS PATH
+            required: true
+        - asset:
+            help: code of asset, such as `fra`
+            long: asset
+            takes_value: true
+            value_name: ASSET
   - anon-balance:
       about: List Anon balance and spending status for a public key and a list of commitments
       args:
@@ -523,6 +540,11 @@ subcommands:
             takes_value: true
             value_name: ANON KEYS PATH
             required: true
+        - asset:
+            help: code of asset, such as `fra`
+            long: asset
+            takes_value: true
+            value_name: ASSET
   - owned-open-abars:
       about: Get Open Anon UTXOs for a keypair use commitment
       args:
