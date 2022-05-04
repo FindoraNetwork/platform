@@ -2,8 +2,6 @@
 //! Some handful function and data structure for findora cli tools
 //!
 
-use zei::xfr::structs::BlindAssetRecord;
-use ledger::data_model::BAR_TO_ABAR_TX_FEE_MIN;
 use {
     crate::{
         api::{DelegationInfo, ValidatorDetail},
@@ -13,7 +11,7 @@ use {
     globutils::{wallet, HashOf, SignatureOf},
     ledger::{
         data_model::{
-            ATxoSID, AssetType, AssetTypeCode, DefineAsset, Operation,
+            ATxoSID, AssetType, AssetTypeCode, DefineAsset, Operation, BAR_TO_ABAR_TX_FEE_MIN,
             StateCommitmentData, Transaction, TransferType, TxoRef, TxoSID, Utxo,
             ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
@@ -32,7 +30,7 @@ use {
     zei::xfr::{
         asset_record::{open_blind_asset_record, AssetRecordType},
         sig::{XfrKeyPair, XfrPublicKey},
-        structs::{AssetRecordTemplate, OpenAssetRecord, OwnerMemo},
+        structs::{AssetRecordTemplate, BlindAssetRecord, OpenAssetRecord, OwnerMemo},
     },
     zei_crypto::basic::hybrid_encryption::XPublicKey,
 };
@@ -781,7 +779,10 @@ pub fn generate_abar2bar_op(
 
 #[inline(always)]
 #[allow(missing_docs)]
-pub fn get_oar(owner_kp: &XfrKeyPair, txo_sid: TxoSID) -> Result<(OpenAssetRecord, BlindAssetRecord)> {
+pub fn get_oar(
+    owner_kp: &XfrKeyPair,
+    txo_sid: TxoSID,
+) -> Result<(OpenAssetRecord, BlindAssetRecord)> {
     let utxos = get_owned_utxos(owner_kp.get_pk_ref()).c(d!())?.into_iter();
 
     for (sid, (utxo, owner_memo)) in utxos {

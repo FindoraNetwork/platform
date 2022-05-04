@@ -13,12 +13,13 @@ use {
     ledger::{
         converter::ConvertAccount,
         data_model::{
-            AbarToBarOps, AnonTransferOps, AssetRules, AssetTypeCode, BarToAbarOps,
-            ConfidentialMemo, DefineAsset, DefineAssetBody, IndexedSignature,
-            IssueAsset, IssueAssetBody, IssuerKeyPair, IssuerPublicKey, Memo,
-            NoReplayToken, Operation, Transaction, TransactionBody, TransferAsset,
-            TransferAssetBody, TransferType, TxOutput, TxoRef, TxoSID, UpdateMemo,
-            UpdateMemoBody, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+            AbarConvNote, AbarToBarOps, AnonTransferOps, AssetRules, AssetTypeCode,
+            BarAnonConvNote, BarToAbarOps, ConfidentialMemo, DefineAsset,
+            DefineAssetBody, IndexedSignature, IssueAsset, IssueAssetBody,
+            IssuerKeyPair, IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
+            TransactionBody, TransferAsset, TransferAssetBody, TransferType, TxOutput,
+            TxoRef, TxoSID, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA,
+            BAR_TO_ABAR_TX_FEE_MIN, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
         staking::{
             is_valid_tendermint_addr,
@@ -52,6 +53,7 @@ use {
         },
         anon_xfr::{
             abar_to_bar::gen_abar_to_bar_note,
+            abar_to_ar::gen_abar_to_ar_note,
             ar_to_abar::gen_ar_to_abar_note,
             bar_to_abar::gen_bar_to_abar_note,
             config::FEE_CALCULATING_FUNC,
@@ -61,6 +63,7 @@ use {
                 AXfrNote, Commitment, OpenAnonBlindAssetRecord,
                 OpenAnonBlindAssetRecordBuilder,
             },
+            TREE_DEPTH as MERKLE_TREE_DEPTH,
         },
         setup::ProverParams,
         xfr::{
@@ -70,8 +73,9 @@ use {
             },
             sig::{XfrKeyPair, XfrPublicKey},
             structs::{
-                AssetRecord, AssetRecordTemplate, AssetType, BlindAssetRecord,
-                OpenAssetRecord, OwnerMemo, TracingPolicies, TracingPolicy,
+                AssetRecord, AssetRecordTemplate,
+                AssetType, BlindAssetRecord, OpenAssetRecord, OwnerMemo,
+                TracingPolicies, TracingPolicy,
             },
             XfrNotePolicies,
         },
@@ -80,10 +84,6 @@ use {
     zei_crypto::basic::hybrid_encryption::XPublicKey,
     zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
-
-use ledger::data_model::{BAR_TO_ABAR_TX_FEE_MIN, BarAnonConvNote};
-/// Depth of abar merkle tree
-pub use zei::anon_xfr::TREE_DEPTH as MERKLE_TREE_DEPTH;
 
 macro_rules! no_transfer_err {
     () => {
@@ -528,23 +528,18 @@ impl TransactionBuilder {
         enc_key: &XPublicKey,
         is_bar_transparent: bool,
     ) -> Result<(&mut Self, Commitment)> {
-
         // generate the BarToAbarNote with the ZKP
         let (note, c) = gen_bar_conv_note(
             input_record,
             auth_key_pair,
             abar_pub_key,
             enc_key,
-            is_bar_transparent
+            is_bar_transparent,
         )
         .c(d!())?;
 
         // Create the BarToAbarOps
-        let bar_to_abar = BarToAbarOps::new(
-            note,
-            txo_sid,
-            self.no_replay_token
-        )?;
+        let bar_to_abar = BarToAbarOps::new(note, txo_sid, self.no_replay_token)?;
 
         // Add the generated operation to the transaction
         let op = Operation::BarToAbar(Box::from(bar_to_abar));
@@ -565,19 +560,8 @@ impl TransactionBuilder {
         bar_pub_key: &XfrPublicKey,
         asset_record_type: AssetRecordType,
     ) -> Result<&mut Self> {
-        let mut prng = ChaChaRng::from_entropy();
-        let user_params = ProverParams::abar_to_bar_params(MERKLE_TREE_DEPTH)?;
-
-        // Generate note
-        let note = gen_abar_to_bar_note(
-            &mut prng,
-            &user_params,
-            &input,
-            &input_keypair,
-            bar_pub_key,
-            asset_record_type,
-        )
-        .c(d!())?;
+        let note =
+            gen_abar_conv_note(input, input_keypair, bar_pub_key, asset_record_type)?;
 
         // Create operation
         let abar_to_bar = AbarToBarOps::new(note, self.no_replay_token).c(d!())?;
@@ -1059,7 +1043,8 @@ fn gen_bar_conv_note(
             auth_key_pair,
             abar_pub_key,
             enc_key,
-        ).c(d!())?;
+        )
+        .c(d!())?;
 
         let c = note.body.output.commitment;
         Ok((BarAnonConvNote::ArNote(note), c))
@@ -1075,10 +1060,53 @@ fn gen_bar_conv_note(
             auth_key_pair,
             abar_pub_key,
             enc_key,
-        ).c(d!())?;
+        )
+        .c(d!())?;
         let c = note.body.output.commitment;
         Ok((BarAnonConvNote::BarNote(note), c))
     }
+}
+
+fn gen_abar_conv_note(
+    input: &OpenAnonBlindAssetRecord,
+    input_keypair: &AXfrKeyPair,
+    bar_pub_key: &XfrPublicKey,
+    asset_record_type: AssetRecordType,
+) -> Result<AbarConvNote> {
+    let mut prng = ChaChaRng::from_entropy();
+
+    // Generate note
+    let note: AbarConvNote = match asset_record_type {
+        AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType => {
+            let user_params = ProverParams::abar_to_ar_params(MERKLE_TREE_DEPTH)?;
+            let n = gen_abar_to_ar_note(
+                &mut prng,
+                &user_params,
+                &input,
+                &input_keypair,
+                bar_pub_key,
+            )
+            .c(d!())?;
+            AbarConvNote::AbarToAr(n)
+        }
+        _ => {
+            println!("{:?}", asset_record_type);
+            let user_params = ProverParams::abar_to_bar_params(MERKLE_TREE_DEPTH)?;
+            let n = gen_abar_to_bar_note(
+                &mut prng,
+                &user_params,
+                &input,
+                &input_keypair,
+                bar_pub_key,
+                asset_record_type,
+            )
+            .c(d!())?;
+            println!("note {:?}", n);
+            AbarConvNote::AbarToBar(n)
+        }
+    };
+
+    Ok(note)
 }
 
 /// TransferOperationBuilder constructs transfer operations using the factory pattern
@@ -1669,7 +1697,6 @@ mod tests {
             AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
         },
         zei::setup::VerifierParams,
-        zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record},
         zei::xfr::sig::XfrKeyPair,
         zei::xfr::structs::AssetType as AT,

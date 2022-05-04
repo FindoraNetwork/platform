@@ -9,8 +9,6 @@ mod __trash__;
 mod effects;
 mod test;
 
-use zei::anon_xfr::ar_to_abar::{ArToAbarNote, verify_ar_to_abar_note};
-use zei::anon_xfr::structs::AnonBlindAssetRecord;
 pub use effects::{BlockEffect, TxnEffect};
 
 use crate::staking::ops::replace_staker::ReplaceStakerOps;
@@ -49,8 +47,12 @@ use {
     unicode_normalization::UnicodeNormalization,
     zei::{
         anon_xfr::{
-            abar_to_bar::AbarToBarNote, bar_to_abar::BarToAbarNote, keys::AXfrPubKey,
-            structs::AXfrNote, bar_to_abar::verify_bar_to_abar_note
+            abar_to_ar::{verify_abar_to_ar_note, AbarToArNote},
+            abar_to_bar::{verify_abar_to_bar_note, AbarToBarNote},
+            ar_to_abar::{verify_ar_to_abar_note, ArToAbarNote},
+            bar_to_abar::{verify_bar_to_abar_note, BarToAbarNote},
+            keys::AXfrPubKey,
+            structs::{AXfrNote, AnonBlindAssetRecord, Nullifier},
         },
         setup::VerifierParams,
         xfr::{
@@ -64,10 +66,7 @@ use {
             XfrNotePolicies,
         },
     },
-    zei_algebra::{
-        bls12_381::BLSScalar,
-        serialization::ZeiFromToBytes
-    },
+    zei_algebra::{bls12_381::BLSScalar, serialization::ZeiFromToBytes},
 };
 
 const RANDOM_CODE_LENGTH: usize = 16;
@@ -1308,7 +1307,8 @@ impl BarToAbarOps {
                 // fetch the verifier Node Params for PlonkProof
                 let node_params = VerifierParams::bar_to_abar_params()?;
                 // verify the Plonk proof and signature
-                verify_bar_to_abar_note(&node_params, &note, &note.body.input.public_key).c(d!())
+                verify_bar_to_abar_note(&node_params, &note, &note.body.input.public_key)
+                    .c(d!())
             }
             BarAnonConvNote::ArNote(note) => {
                 // fetch the verifier Node Params for PlonkProof
@@ -1322,36 +1322,24 @@ impl BarToAbarOps {
     /// provides a copy of the input record in the note
     pub fn input_record(&self) -> BlindAssetRecord {
         match &self.note {
-            BarAnonConvNote::BarNote(n) => {
-                n.body.input.clone()
-            }
-            BarAnonConvNote::ArNote(n) => {
-                n.body.input.clone()
-            }
+            BarAnonConvNote::BarNote(n) => n.body.input.clone(),
+            BarAnonConvNote::ArNote(n) => n.body.input.clone(),
         }
     }
 
     /// provides a copy of the output record of the note.
     pub fn output_record(&self) -> AnonBlindAssetRecord {
         match &self.note {
-            BarAnonConvNote::BarNote(n) => {
-                n.body.output.clone()
-            }
-            BarAnonConvNote::ArNote(n) => {
-                n.body.output.clone()
-            }
+            BarAnonConvNote::BarNote(n) => n.body.output.clone(),
+            BarAnonConvNote::ArNote(n) => n.body.output.clone(),
         }
     }
 
     /// provides a copy of the OwnerMemo in the note
     pub fn memo(&self) -> OwnerMemo {
         match &self.note {
-            BarAnonConvNote::BarNote(n) => {
-                n.body.memo.clone()
-            }
-            BarAnonConvNote::ArNote(n) => {
-                n.body.memo.clone()
-            }
+            BarAnonConvNote::BarNote(n) => n.body.memo.clone(),
+            BarAnonConvNote::ArNote(n) => n.body.memo.clone(),
         }
     }
 
@@ -1368,17 +1356,96 @@ impl BarToAbarOps {
     }
 }
 
+/// AbarConvNote
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum AbarConvNote {
+    /// Conversion to a amount or type confidential BAR
+    AbarToBar(AbarToBarNote),
+    /// Conversion to a transparent BAR
+    AbarToAr(AbarToArNote),
+}
+
+impl AbarConvNote {
+    /// Verifies the ZKP based on the type of conversion
+    pub fn verify(&self, merkle_root: BLSScalar) -> Result<()> {
+        match self {
+            AbarConvNote::AbarToBar(note) => {
+                // An axfr_abar_conv requires versioned merkle root hash for verification.
+                let abar_to_bar_verifier_params = VerifierParams::abar_to_bar_params()?;
+                // verify zk proof with merkle root
+                verify_abar_to_bar_note(
+                    &abar_to_bar_verifier_params,
+                    &note,
+                    &merkle_root,
+                )
+                .c(d!("Abar to Bar conversion proof verification failed"))
+            }
+            AbarConvNote::AbarToAr(note) => {
+                // An axfr_abar_conv requires versioned merkle root hash for verification.
+                let abar_to_ar_verifier_params = VerifierParams::abar_to_ar_params()?;
+                // verify zk proof with merkle root
+                verify_abar_to_ar_note(&abar_to_ar_verifier_params, &note, &merkle_root)
+                    .c(d!("Abar to AR conversion proof verification failed"))
+            }
+        }
+    }
+
+    /// input nullifier in the note body
+    pub fn get_input(&self) -> Nullifier {
+        match self {
+            AbarConvNote::AbarToBar(note) => note.body.input,
+            AbarConvNote::AbarToAr(note) => note.body.input,
+        }
+    }
+
+    /// merkle root version of the proof
+    pub fn get_merkle_root_version(&self) -> u64 {
+        match self {
+            AbarConvNote::AbarToBar(note) => note.body.merkle_root_version,
+            AbarConvNote::AbarToAr(note) => note.body.merkle_root_version,
+        }
+    }
+
+    /// public key of the note body
+    pub fn get_public_key(&self) -> XfrPublicKey {
+        match self {
+            AbarConvNote::AbarToBar(note) => note.body.output.public_key,
+            AbarConvNote::AbarToAr(note) => note.body.output.public_key,
+        }
+    }
+
+    /// output BAR of the note body
+    pub fn get_output(&self) -> BlindAssetRecord {
+        match self {
+            AbarConvNote::AbarToBar(note) => note.body.output.clone(),
+            AbarConvNote::AbarToAr(note) => note.body.output.clone(),
+        }
+    }
+
+    /// gets address of owner memo in the note body
+    pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+        match self {
+            AbarConvNote::AbarToBar(note) => {
+                vec![note.body.memo.as_ref()]
+            }
+            AbarConvNote::AbarToAr(note) => {
+                vec![note.body.memo.as_ref()]
+            }
+        }
+    }
+}
+
 /// Operation for converting a Blind Asset Record to a Anonymous record
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AbarToBarOps {
     /// the note which contains the inp/op and ZKP
-    pub note: AbarToBarNote,
+    pub note: AbarConvNote,
     nonce: NoReplayToken,
 }
 
 impl AbarToBarOps {
     /// Generates a new BarToAbarOps object
-    pub fn new(note: AbarToBarNote, nonce: NoReplayToken) -> Result<AbarToBarOps> {
+    pub fn new(note: AbarConvNote, nonce: NoReplayToken) -> Result<AbarToBarOps> {
         Ok(AbarToBarOps { note, nonce })
     }
 
@@ -1995,6 +2062,9 @@ impl Transaction {
                 }
                 Operation::IssueAsset(issue_asset) => {
                     memos.append(&mut issue_asset.get_owner_memos_ref());
+                }
+                Operation::AbarToBar(abar_to_bar) => {
+                    memos.append(&mut abar_to_bar.note.get_owner_memos_ref());
                 }
                 _ => {}
             }

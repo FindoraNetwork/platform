@@ -496,7 +496,8 @@ impl TransactionBuilder {
         .map_err(|e| {
             JsValue::from_str(&format!("Could not open asset record: {}", e))
         })?;
-        let is_bar_transparent = oar.get_record_type() == NonConfidentialAmount_NonConfidentialAssetType;
+        let is_bar_transparent =
+            oar.get_record_type() == NonConfidentialAmount_NonConfidentialAssetType;
 
         let (_, c) = self
             .get_builder_mut()
@@ -506,7 +507,7 @@ impl TransactionBuilder {
                 TxoSID(txo_sid),
                 &oar,
                 enc_key,
-                is_bar_transparent
+                is_bar_transparent,
             )
             .c(d!())
             .map_err(|e| {

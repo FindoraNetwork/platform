@@ -1,10 +1,10 @@
 use {
     crate::{
         data_model::{
-            AbarToBarOps, AnonTransferOps, AssetType, AssetTypeCode, BarToAbarOps,
-            DefineAsset, IssueAsset, IssuerPublicKey, Memo, NoReplayToken, Operation,
-            Transaction, TransferAsset, TransferType, TxOutput, TxnTempSID, TxoRef,
-            TxoSID, UpdateMemo,
+            AbarConvNote, AbarToBarOps, AnonTransferOps, AssetType, AssetTypeCode,
+            BarToAbarOps, DefineAsset, IssueAsset, IssuerPublicKey, Memo, NoReplayToken,
+            Operation, Transaction, TransferAsset, TransferType, TxOutput, TxnTempSID,
+            TxoRef, TxoSID, UpdateMemo,
         },
         staking::{
             self,
@@ -28,11 +28,8 @@ use {
         sync::Arc,
     },
     zei::{
-        anon_xfr::{
-            abar_to_bar::AbarToBarNote,
-            structs::{AXfrNote, AnonBlindAssetRecord, Nullifier},
-        },
-        setup::{BulletproofParams},
+        anon_xfr::structs::{AXfrNote, AnonBlindAssetRecord, Nullifier},
+        setup::BulletproofParams,
         xfr::{
             sig::XfrPublicKey,
             structs::{XfrAmount, XfrAssetType},
@@ -98,7 +95,7 @@ pub struct TxnEffect {
     /// Newly created Anon Blind Asset Records
     pub bar_conv_abars: Vec<AnonBlindAssetRecord>,
     /// Body of Abar to Bar conversions
-    pub abar_conv_inputs: Vec<AbarToBarNote>,
+    pub abar_conv_inputs: Vec<Box<AbarConvNote>>,
     /// New anon transfer bodies
     pub axfr_bodies: Vec<AXfrNote>,
     /// replace staker operations
@@ -578,8 +575,7 @@ impl TxnEffect {
             },
         );
         // push new ABAR created
-        self.bar_conv_abars
-            .push(bar_to_abar.output_record());
+        self.bar_conv_abars.push(bar_to_abar.output_record());
         Ok(())
     }
 
@@ -592,11 +588,12 @@ impl TxnEffect {
     /// returns an error if validation fails
     fn add_abar_to_bar(&mut self, abar_to_bar: &AbarToBarOps) -> Result<()> {
         // collect body in TxnEffect to verify ZKP later with merkle root
-        self.abar_conv_inputs.push(abar_to_bar.note.clone());
+        self.abar_conv_inputs
+            .push(Box::from(abar_to_bar.note.clone()));
         // collect newly created BARs
         self.txos.push(Some(TxOutput {
             id: None,
-            record: abar_to_bar.note.body.output.clone(),
+            record: abar_to_bar.note.get_output(),
             lien: None,
         }));
 
@@ -714,8 +711,8 @@ impl BlockEffect {
             current_txn_abars.push(abar);
         }
 
-        for inputs in txn_effect.abar_conv_inputs {
-            self.new_nullifiers.push(inputs.body.input);
+        for inputs in txn_effect.abar_conv_inputs.iter() {
+            self.new_nullifiers.push(inputs.get_input().clone());
         }
 
         for axfr_note in txn_effect.axfr_bodies {
@@ -750,7 +747,7 @@ impl BlockEffect {
             }
         }
         for inputs in txn_effect.abar_conv_inputs.iter() {
-            if self.new_nullifiers.contains(&inputs.body.input) {
+            if self.new_nullifiers.contains(&inputs.get_input().clone()) {
                 return Err(eg!());
             }
         }

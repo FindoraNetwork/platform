@@ -820,7 +820,8 @@ pub fn convert_bar2abar(
     // Get OpenAssetRecord from given Owner XfrKeyPair and TxoSID
     let record =
         utils::get_oar(&from, TxoSID(sid)).c(d!("error fetching open asset record"))?;
-    let is_bar_transparent = record.1.get_record_type() == NonConfidentialAmount_NonConfidentialAssetType;
+    let is_bar_transparent =
+        record.1.get_record_type() == NonConfidentialAmount_NonConfidentialAssetType;
 
     // Generate the transaction and transmit it to network
     let c = utils::generate_bar2abar_op(
@@ -829,8 +830,9 @@ pub fn convert_bar2abar(
         TxoSID(sid),
         &record.0,
         &enc_key,
-        is_bar_transparent
-    ).c(d!("Bar to abar failed"))?;
+        is_bar_transparent,
+    )
+    .c(d!("Bar to abar failed"))?;
 
     Ok(c)
 }

@@ -56,7 +56,6 @@ use {
     },
     zei::{
         anon_xfr::{
-            abar_to_bar::verify_abar_to_bar_note,
             hash_abar,
             structs::{
                 AnonBlindAssetRecord, Commitment, MTLeafInfo, MTNode, MTPath, Nullifier,
@@ -1633,14 +1632,13 @@ impl LedgerStatus {
         }
 
         // An axfr_abar_conv requires versioned merkle root hash for verification.
-        let abar_to_bar_verifier_params = VerifierParams::abar_to_bar_params()?;
         for abar_conv in &txn_effect.abar_conv_inputs {
-            if self.spent_abars.get(&abar_conv.body.input).is_some() {
+            if self.spent_abars.get(&abar_conv.get_input()).is_some() {
                 return Err(eg!("Input abar must be unspent"));
             }
 
             // Get verifier params
-            let abar_version = abar_conv.body.merkle_root_version;
+            let abar_version = abar_conv.get_merkle_root_version();
             if abar_mt.version() - abar_version > VERSION_WINDOW {
                 return Err(eg!("Proof is old, need rebuild!"));
             }
@@ -1648,12 +1646,7 @@ impl LedgerStatus {
                 .get_root_with_depth_and_version(MERKLE_TREE_DEPTH, abar_version)?;
 
             // verify zk proof with merkle root
-            verify_abar_to_bar_note(
-                &abar_to_bar_verifier_params,
-                abar_conv,
-                &version_root,
-            )
-            .c(d!("Abar to Bar conversion proof verification failed"))?;
+            abar_conv.verify(version_root)?;
         }
 
         Ok(())
