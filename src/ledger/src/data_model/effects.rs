@@ -588,8 +588,7 @@ impl TxnEffect {
     /// returns an error if validation fails
     fn add_abar_to_bar(&mut self, abar_to_bar: &AbarToBarOps) -> Result<()> {
         // collect body in TxnEffect to verify ZKP later with merkle root
-        self.abar_conv_inputs
-            .push(abar_to_bar.note.clone());
+        self.abar_conv_inputs.push(abar_to_bar.note.clone());
         // collect newly created BARs
         self.txos.push(Some(TxOutput {
             id: None,

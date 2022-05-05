@@ -1267,9 +1267,9 @@ impl UpdateMemo {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BarAnonConvNote {
     /// A transfer note with ZKP for a confidential asset record
-    BarNote(BarToAbarNote),
+    BarNote(Box<BarToAbarNote>),
     /// A transfer note with ZKP for a non-confidential asset record
-    ArNote(ArToAbarNote),
+    ArNote(Box<ArToAbarNote>),
 }
 
 /// Operation for converting a Blind Asset Record to a Anonymous record
@@ -1360,9 +1360,9 @@ impl BarToAbarOps {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum AbarConvNote {
     /// Conversion to a amount or type confidential BAR
-    AbarToBar(AbarToBarNote),
+    AbarToBar(Box<AbarToBarNote>),
     /// Conversion to a transparent BAR
-    AbarToAr(AbarToArNote),
+    AbarToAr(Box<AbarToArNote>),
 }
 
 impl AbarConvNote {

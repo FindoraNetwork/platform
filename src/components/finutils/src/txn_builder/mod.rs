@@ -1046,7 +1046,7 @@ fn gen_bar_conv_note(
         .c(d!())?;
 
         let c = note.body.output.commitment;
-        Ok((BarAnonConvNote::ArNote(note), c))
+        Ok((BarAnonConvNote::ArNote(Box::new(note)), c))
     } else {
         // generate params for Bar to Abar conversion
         let prover_params = ProverParams::bar_to_abar_params()?;
@@ -1062,7 +1062,7 @@ fn gen_bar_conv_note(
         )
         .c(d!())?;
         let c = note.body.output.commitment;
-        Ok((BarAnonConvNote::BarNote(note), c))
+        Ok((BarAnonConvNote::BarNote(Box::new(note)), c))
     }
 }
 
@@ -1086,7 +1086,7 @@ fn gen_abar_conv_note(
                 bar_pub_key,
             )
             .c(d!())?;
-            AbarConvNote::AbarToAr(n)
+            AbarConvNote::AbarToAr(Box::new(n))
         }
         _ => {
             println!("{:?}", asset_record_type);
@@ -1101,7 +1101,7 @@ fn gen_abar_conv_note(
             )
             .c(d!())?;
             println!("note {:?}", n);
-            AbarConvNote::AbarToBar(n)
+            AbarConvNote::AbarToBar(Box::new(n))
         }
     };
 
@@ -1690,19 +1690,22 @@ mod tests {
         ledger::store::{utils::fra_gen_initial_tx, LedgerState},
         rand_chacha::ChaChaRng,
         rand_core::SeedableRng,
-        zei::anon_xfr::config::FEE_CALCULATING_FUNC,
-        zei::anon_xfr::structs::{
-            AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
+        zei::anon_xfr::{
+            config::FEE_CALCULATING_FUNC,
+            structs::{
+                AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
+            }
         },
-        zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record},
-        zei::xfr::sig::XfrKeyPair,
-        zei::xfr::structs::AssetType as AT,
+        zei::xfr::asset_record::{
+            AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+            build_blind_asset_record, open_blind_asset_record,
+            sig::XfrKeyPair, structs::AssetType as AT
+        },
         zei_algebra::prelude::Scalar,
-        zei_crypto::basic::hybrid_encryption::XSecretKey,
-        zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
-        zei::xfr::asset_record::AssetRecordType::{
-            NonConfidentialAmount_NonConfidentialAssetType,
-        }
+        zei_crypto::basic::{
+            hybrid_encryption::XSecretKey,
+            ristretto_pedersen_comm::RistrettoPedersenCommitment
+        },
     };
 
     // Defines an asset type
