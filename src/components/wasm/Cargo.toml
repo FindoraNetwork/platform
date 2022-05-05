@@ -32,9 +32,9 @@ ruc = "1.0"
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
 
-zei = { git = "https://github.com/FindoraNetwork/zei", branch = "ar_to_abar" }
-zei-algebra = { git = "https://github.com/FindoraNetwork/zei", branch = "ar_to_abar", package = "zei-algebra" }
-zei-crypto = { git = "https://github.com/FindoraNetwork/zei", branch = "ar_to_abar", package = "zei-crypto" }
+zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.9" }
+zei-algebra = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.9" }
+zei-crypto = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.9" }
 
 finutils = { path = "../finutils", default-features = false }
 globutils = { path = "../../libs/globutils" }

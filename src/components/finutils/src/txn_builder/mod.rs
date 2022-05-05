@@ -1050,7 +1050,7 @@ fn gen_bar_conv_note(
         Ok((BarAnonConvNote::ArNote(note), c))
     } else {
         // generate params for Bar to Abar conversion
-        let prover_params = ProverParams::eq_committed_vals_params()?;
+        let prover_params = ProverParams::bar_to_abar_params()?;
 
         // generate the BarToAbarNote with the ZKP
         let note = gen_bar_to_abar_note(
