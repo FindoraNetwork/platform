@@ -178,19 +178,18 @@ pub fn begin_block(
     {
         let mut guard_locked = PROFILER_GUARD.lock();
         let guard = guard_locked.get_mut();
-        *guard = if PROFILER_ENABLED.load(Ordering::Relaxed) {
+        if PROFILER_ENABLED.load(Ordering::Relaxed) {
             match pprof::ProfilerGuard::new(100) {
                 Ok(profiler) => {
                     log::warn!(target: "abciapp", "starting profiler at height {}", header.height);
-                    Some((header.height as u64, profiler))
+                    *guard = Some((header.height as u64, profiler));
                 }
                 Err(e) if e.to_string().contains("start running") => {
                     log::debug!(target: "abciapp", "Create profiler while running profiler exists at height {}", header.height);
-                    None
                 }
                 Err(e) => {
                     log::warn!(target: "abciapp", "cannot create profiler at height {}: {:?}", header.height, e);
-                    None
+                    *guard = None;
                 }
             }
         } else {
@@ -201,7 +200,7 @@ pub fn begin_block(
                     _ => None,
                 })
                 .and_then(|(h, report)| {
-                    std::fs::File::create(format!(
+                    fs::File::create(format!(
                         "{}/flamegraph.h{}.svg",
                         &CFG.ledger_dir, h
                     ))
@@ -214,10 +213,12 @@ pub fn begin_block(
                 log::info!(target: "abciapp", "write flamegraph.h{}.svg", header.height);
             }
 
-            // stop current profiler now if it exists
-            log::warn!(target: "abciapp", "stopping profiler at height {}", header.height);
-            None
-        };
+            if guard.is_some() {
+                // stop current profiler now if it exists
+                log::warn!(target: "abciapp", "stopping profiler at height {}", header.height);
+                *guard = None;
+            }
+        }
     }
     #[cfg(target_os = "linux")]
     {
