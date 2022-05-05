@@ -52,8 +52,8 @@ use {
             ConfidentialAC, Credential,
         },
         anon_xfr::{
-            abar_to_bar::gen_abar_to_bar_note,
             abar_to_ar::gen_abar_to_ar_note,
+            abar_to_bar::gen_abar_to_bar_note,
             ar_to_abar::gen_ar_to_abar_note,
             bar_to_abar::gen_bar_to_abar_note,
             config::FEE_CALCULATING_FUNC,
@@ -73,9 +73,8 @@ use {
             },
             sig::{XfrKeyPair, XfrPublicKey},
             structs::{
-                AssetRecord, AssetRecordTemplate,
-                AssetType, BlindAssetRecord, OpenAssetRecord, OwnerMemo,
-                TracingPolicies, TracingPolicy,
+                AssetRecord, AssetRecordTemplate, AssetType, BlindAssetRecord,
+                OpenAssetRecord, OwnerMemo, TracingPolicies, TracingPolicy,
             },
             XfrNotePolicies,
         },
@@ -1691,18 +1690,19 @@ mod tests {
         ledger::store::{utils::fra_gen_initial_tx, LedgerState},
         rand_chacha::ChaChaRng,
         rand_core::SeedableRng,
-        zei::anon_xfr::bar_to_abar::verify_bar_to_abar_note,
         zei::anon_xfr::config::FEE_CALCULATING_FUNC,
         zei::anon_xfr::structs::{
             AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
         },
-        zei::setup::VerifierParams,
         zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record},
         zei::xfr::sig::XfrKeyPair,
         zei::xfr::structs::AssetType as AT,
         zei_algebra::prelude::Scalar,
         zei_crypto::basic::hybrid_encryption::XSecretKey,
         zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
+        zei::xfr::asset_record::AssetRecordType::{
+            NonConfidentialAmount_NonConfidentialAssetType,
+        }
     };
 
     // Defines an asset type
@@ -2083,7 +2083,7 @@ mod tests {
         let txn = builder.take_transaction();
 
         if let Operation::BarToAbar(note) = txn.body.operations[0].clone() {
-            let result = note.verify(from.pub_key);
+            let result = note.verify();
             assert!(result.is_ok());
         }
     }

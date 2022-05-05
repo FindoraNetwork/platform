@@ -95,7 +95,7 @@ pub struct TxnEffect {
     /// Newly created Anon Blind Asset Records
     pub bar_conv_abars: Vec<AnonBlindAssetRecord>,
     /// Body of Abar to Bar conversions
-    pub abar_conv_inputs: Vec<Box<AbarConvNote>>,
+    pub abar_conv_inputs: Vec<AbarConvNote>,
     /// New anon transfer bodies
     pub axfr_bodies: Vec<AXfrNote>,
     /// replace staker operations
@@ -589,7 +589,7 @@ impl TxnEffect {
     fn add_abar_to_bar(&mut self, abar_to_bar: &AbarToBarOps) -> Result<()> {
         // collect body in TxnEffect to verify ZKP later with merkle root
         self.abar_conv_inputs
-            .push(Box::from(abar_to_bar.note.clone()));
+            .push(abar_to_bar.note.clone());
         // collect newly created BARs
         self.txos.push(Some(TxOutput {
             id: None,
@@ -712,7 +712,7 @@ impl BlockEffect {
         }
 
         for inputs in txn_effect.abar_conv_inputs.iter() {
-            self.new_nullifiers.push(inputs.get_input().clone());
+            self.new_nullifiers.push(inputs.get_input());
         }
 
         for axfr_note in txn_effect.axfr_bodies {

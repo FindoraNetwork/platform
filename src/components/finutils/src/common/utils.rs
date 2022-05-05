@@ -11,9 +11,9 @@ use {
     globutils::{wallet, HashOf, SignatureOf},
     ledger::{
         data_model::{
-            ATxoSID, AssetType, AssetTypeCode, DefineAsset, Operation, BAR_TO_ABAR_TX_FEE_MIN,
+            ATxoSID, AssetType, AssetTypeCode, DefineAsset, Operation,
             StateCommitmentData, Transaction, TransferType, TxoRef, TxoSID, Utxo,
-            ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+            ASSET_TYPE_FRA, BAR_TO_ABAR_TX_FEE_MIN, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
         staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
     },
