@@ -160,7 +160,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddBasic
         .get_string(code)
         .expect("Couldn't get java string!")
         .into();
-    let zei_params = &*(zei_params as *mut PublicParams);
+
     let amount = throw_exception!(env, parseU64(env, amount));
 
     let builder = throw_exception!(

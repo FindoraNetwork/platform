@@ -19,7 +19,7 @@ globutils = { path = "../../libs/globutils" }
 [target.'cfg(target_os= "linux")'.dependencies]
 btm = "0.1.6"
 
-[target.'cfg(not(any(target_arch = "wasm32", target_arch = "aarch64")))'.dependencies]
+[target.'cfg(not(any(target_arch = "wasm32", target_arch = "aarch64", target_arch = "arm")))'.dependencies]
 attohttpc = { version = "0.18", default-features = false, features = ["compress", "json", "tls-rustls"] }
 
 [build-dependencies]

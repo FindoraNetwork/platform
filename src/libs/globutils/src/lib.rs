@@ -22,7 +22,7 @@ use {
 /// Perform a synchronize http get request with attohttpc,
 /// and parse the response as a String
 #[inline(always)]
-#[cfg(not(any(target_arch = "wasm32", target_arch = "aarch64")))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "aarch64", target_arch = "arm")))]
 pub fn http_get_request(query: &str) -> StdResult<String, attohttpc::Error> {
     attohttpc::get(query).send()?.error_for_status()?.text()
 }

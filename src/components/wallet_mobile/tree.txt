@@ -1,0 +1,1052 @@
+wallet_mobile v0.1.0 (/mnt/d/projects/platform/src/components/wallet_mobile)
+├── aes-gcm v0.8.0
+│   ├── aead v0.3.2
+│   │   └── generic-array v0.14.5
+│   │       └── typenum v1.15.0
+│   │       [build-dependencies]
+│   │       └── version_check v0.9.4
+│   ├── aes v0.6.0
+│   │   ├── aes-soft v0.6.4
+│   │   │   ├── cipher v0.2.5
+│   │   │   │   └── generic-array v0.14.5 (*)
+│   │   │   └── opaque-debug v0.3.0
+│   │   └── cipher v0.2.5 (*)
+│   ├── cipher v0.2.5 (*)
+│   ├── ctr v0.6.0
+│   │   └── cipher v0.2.5 (*)
+│   ├── ghash v0.3.1
+│   │   ├── opaque-debug v0.3.0
+│   │   └── polyval v0.4.5
+│   │       ├── opaque-debug v0.3.0
+│   │       └── universal-hash v0.4.1
+│   │           ├── generic-array v0.14.5 (*)
+│   │           └── subtle v2.4.1
+│   └── subtle v2.4.1
+├── base64 v0.10.1
+│   └── byteorder v1.4.3
+├── bech32 v0.7.3
+├── credentials v0.2.11 (/mnt/d/projects/platform/src/libs/credentials)
+│   ├── linear-map v1.2.0
+│   │   ├── serde v1.0.137
+│   │   │   └── serde_derive v1.0.137 (proc-macro)
+│   │   │       ├── proc-macro2 v1.0.37
+│   │   │       │   └── unicode-xid v0.2.3
+│   │   │       ├── quote v1.0.18
+│   │   │       │   └── proc-macro2 v1.0.37 (*)
+│   │   │       └── syn v1.0.92
+│   │   │           ├── proc-macro2 v1.0.37 (*)
+│   │   │           ├── quote v1.0.18 (*)
+│   │   │           └── unicode-xid v0.2.3
+│   │   └── serde_test v1.0.137
+│   │       └── serde v1.0.137 (*)
+│   ├── rand_chacha v0.3.1
+│   │   ├── ppv-lite86 v0.2.16
+│   │   └── rand_core v0.6.3
+│   │       └── getrandom v0.2.6
+│   │           ├── cfg-if v1.0.0
+│   │           └── libc v0.2.125
+│   ├── rand_core v0.6.3 (*)
+│   ├── ruc v1.0.7
+│   │   ├── nix v0.23.1
+│   │   │   ├── bitflags v1.3.2
+│   │   │   ├── cfg-if v1.0.0
+│   │   │   ├── libc v0.2.125
+│   │   │   └── memoffset v0.6.5
+│   │   │       [build-dependencies]
+│   │   │       └── autocfg v1.1.0
+│   │   ├── once_cell v1.10.0
+│   │   ├── rand v0.8.5
+│   │   │   ├── libc v0.2.125
+│   │   │   ├── rand_chacha v0.3.1 (*)
+│   │   │   └── rand_core v0.6.3 (*)
+│   │   └── time v0.3.9
+│   │       ├── itoa v1.0.1
+│   │       ├── libc v0.2.125
+│   │       └── num_threads v0.1.5
+│   ├── serde v1.0.137 (*)
+│   ├── serde_derive v1.0.137 (proc-macro) (*)
+│   ├── wasm-bindgen v0.2.73
+│   │   ├── cfg-if v1.0.0
+│   │   ├── serde v1.0.137 (*)
+│   │   ├── serde_json v1.0.81
+│   │   │   ├── itoa v1.0.1
+│   │   │   ├── ryu v1.0.9
+│   │   │   └── serde v1.0.137 (*)
+│   │   └── wasm-bindgen-macro v0.2.73 (proc-macro)
+│   │       ├── quote v1.0.18 (*)
+│   │       └── wasm-bindgen-macro-support v0.2.73
+│   │           ├── proc-macro2 v1.0.37 (*)
+│   │           ├── quote v1.0.18 (*)
+│   │           ├── syn v1.0.92 (*)
+│   │           ├── wasm-bindgen-backend v0.2.73
+│   │           │   ├── bumpalo v3.9.1
+│   │           │   ├── lazy_static v1.4.0
+│   │           │   ├── log v0.4.17
+│   │           │   │   └── cfg-if v1.0.0
+│   │           │   ├── proc-macro2 v1.0.37 (*)
+│   │           │   ├── quote v1.0.18 (*)
+│   │           │   ├── syn v1.0.92 (*)
+│   │           │   └── wasm-bindgen-shared v0.2.73
+│   │           └── wasm-bindgen-shared v0.2.73
+│   └── zei v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b)
+│       ├── bincode v1.3.3
+│       │   └── serde v1.0.137 (*)
+│       ├── bulletproofs v2.0.0 (https://github.com/FindoraNetwork/bp#e4935c5a)
+│       │   ├── byteorder v1.4.3
+│       │   ├── clear_on_drop v0.2.5
+│       │   │   [build-dependencies]
+│       │   │   └── cc v1.0.73
+│       │   ├── curve25519-dalek v3.2.0 (https://github.com/FindoraNetwork/curve25519-dalek#5f1e49c8)
+│       │   │   ├── byteorder v1.4.3
+│       │   │   ├── digest v0.10.3
+│       │   │   │   ├── block-buffer v0.10.2
+│       │   │   │   │   └── generic-array v0.14.5 (*)
+│       │   │   │   └── crypto-common v0.1.3
+│       │   │   │       ├── generic-array v0.14.5 (*)
+│       │   │   │       └── typenum v1.15.0
+│       │   │   ├── rand_core v0.6.3 (*)
+│       │   │   ├── scale-info v1.0.0
+│       │   │   │   ├── cfg-if v1.0.0
+│       │   │   │   ├── derive_more v0.99.17 (proc-macro)
+│       │   │   │   │   ├── proc-macro2 v1.0.37 (*)
+│       │   │   │   │   ├── quote v1.0.18 (*)
+│       │   │   │   │   └── syn v1.0.92 (*)
+│       │   │   │   ├── parity-scale-codec v2.3.1
+│       │   │   │   │   ├── arrayvec v0.7.2
+│       │   │   │   │   ├── bitvec v0.20.4
+│       │   │   │   │   │   ├── funty v1.1.0
+│       │   │   │   │   │   ├── radium v0.6.2
+│       │   │   │   │   │   ├── tap v1.0.1
+│       │   │   │   │   │   └── wyz v0.2.0
+│       │   │   │   │   ├── byte-slice-cast v1.2.1
+│       │   │   │   │   ├── impl-trait-for-tuples v0.2.2 (proc-macro)
+│       │   │   │   │   │   ├── proc-macro2 v1.0.37 (*)
+│       │   │   │   │   │   ├── quote v1.0.18 (*)
+│       │   │   │   │   │   └── syn v1.0.92 (*)
+│       │   │   │   │   ├── parity-scale-codec-derive v2.3.1 (proc-macro)
+│       │   │   │   │   │   ├── proc-macro-crate v1.1.3
+│       │   │   │   │   │   │   ├── thiserror v1.0.31
+│       │   │   │   │   │   │   │   └── thiserror-impl v1.0.31 (proc-macro)
+│       │   │   │   │   │   │   │       ├── proc-macro2 v1.0.37 (*)
+│       │   │   │   │   │   │   │       ├── quote v1.0.18 (*)
+│       │   │   │   │   │   │   │       └── syn v1.0.92 (*)
+│       │   │   │   │   │   │   └── toml v0.5.9
+│       │   │   │   │   │   │       └── serde v1.0.137
+│       │   │   │   │   │   │           └── serde_derive v1.0.137 (proc-macro) (*)
+│       │   │   │   │   │   ├── proc-macro2 v1.0.37 (*)
+│       │   │   │   │   │   ├── quote v1.0.18 (*)
+│       │   │   │   │   │   └── syn v1.0.92 (*)
+│       │   │   │   │   └── serde v1.0.137 (*)
+│       │   │   │   └── scale-info-derive v1.0.0 (proc-macro)
+│       │   │   │       ├── proc-macro-crate v1.1.3 (*)
+│       │   │   │       ├── proc-macro2 v1.0.37 (*)
+│       │   │   │       ├── quote v1.0.18 (*)
+│       │   │   │       └── syn v1.0.92 (*)
+│       │   │   ├── serde v1.0.137 (*)
+│       │   │   ├── subtle v2.4.1
+│       │   │   └── zeroize v1.3.0
+│       │   │       └── zeroize_derive v1.3.2 (proc-macro)
+│       │   │           ├── proc-macro2 v1.0.37 (*)
+│       │   │           ├── quote v1.0.18 (*)
+│       │   │           ├── syn v1.0.92 (*)
+│       │   │           └── synstructure v0.12.6
+│       │   │               ├── proc-macro2 v1.0.37 (*)
+│       │   │               ├── quote v1.0.18 (*)
+│       │   │               ├── syn v1.0.92 (*)
+│       │   │               └── unicode-xid v0.2.3
+│       │   ├── digest v0.10.3 (*)
+│       │   ├── merlin v3.0.0
+│       │   │   ├── byteorder v1.4.3
+│       │   │   ├── keccak v0.1.0
+│       │   │   ├── rand_core v0.6.3 (*)
+│       │   │   └── zeroize v1.3.0 (*)
+│       │   ├── rand v0.8.5 (*)
+│       │   ├── rand_core v0.6.3 (*)
+│       │   ├── serde v1.0.137 (*)
+│       │   ├── serde_derive v1.0.137 (proc-macro) (*)
+│       │   ├── sha3 v0.10.1
+│       │   │   ├── digest v0.10.3 (*)
+│       │   │   └── keccak v0.1.0
+│       │   ├── subtle v2.4.1
+│       │   └── thiserror v1.0.31
+│       │       └── thiserror-impl v1.0.31 (proc-macro) (*)
+│       ├── curve25519-dalek v3.2.0 (https://github.com/FindoraNetwork/curve25519-dalek#5f1e49c8) (*)
+│       ├── digest v0.10.3 (*)
+│       ├── ed25519-dalek v1.0.1 (https://github.com/FindoraNetwork/ed25519-dalek#80e009cc)
+│       │   ├── curve25519-dalek v3.2.0 (https://github.com/FindoraNetwork/curve25519-dalek#5f1e49c8) (*)
+│       │   ├── ed25519 v1.4.1
+│       │   │   ├── serde v1.0.137 (*)
+│       │   │   └── signature v1.3.2
+│       │   │       ├── digest v0.9.0
+│       │   │       │   └── generic-array v0.14.5 (*)
+│       │   │       └── rand_core v0.6.3 (*)
+│       │   ├── rand v0.8.5 (*)
+│       │   ├── serde v1.0.137 (*)
+│       │   ├── serde_bytes v0.11.6
+│       │   │   └── serde v1.0.137 (*)
+│       │   ├── sha2 v0.10.2
+│       │   │   ├── cfg-if v1.0.0
+│       │   │   └── digest v0.10.3 (*)
+│       │   └── zeroize v1.3.0 (*)
+│       ├── lazy_static v1.4.0
+│       ├── linear-map v1.2.0 (*)
+│       ├── merlin v3.0.0 (*)
+│       ├── num-bigint v0.4.3
+│       │   ├── num-integer v0.1.45
+│       │   │   └── num-traits v0.2.15
+│       │   │       [build-dependencies]
+│       │   │       └── autocfg v1.1.0
+│       │   │   [build-dependencies]
+│       │   │   └── autocfg v1.1.0
+│       │   ├── num-traits v0.2.15 (*)
+│       │   └── rand v0.8.5 (*)
+│       │   [build-dependencies]
+│       │   └── autocfg v1.1.0
+│       ├── num-integer v0.1.45 (*)
+│       ├── num-traits v0.2.15 (*)
+│       ├── rand_chacha v0.3.1 (*)
+│       ├── rand_core v0.6.3 (*)
+│       ├── rmp-serde v1.1.0
+│       │   ├── byteorder v1.4.3
+│       │   ├── rmp v0.8.11
+│       │   │   ├── byteorder v1.4.3
+│       │   │   ├── num-traits v0.2.15 (*)
+│       │   │   └── paste v1.0.7 (proc-macro)
+│       │   └── serde v1.0.137 (*)
+│       ├── ruc v1.0.7 (*)
+│       ├── serde v1.0.137 (*)
+│       ├── serde_derive v1.0.137 (proc-macro) (*)
+│       ├── serde_str v0.1.0
+│       │   └── serde v1.0.137 (*)
+│       ├── sha2 v0.10.2 (*)
+│       ├── wasm-bindgen v0.2.73 (*)
+│       ├── zei-algebra v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b)
+│       │   ├── ark-bls12-381 v0.3.0 (https://github.com/FindoraNetwork/ark-curves#45e974cc)
+│       │   │   ├── ark-ec v0.3.0 (https://github.com/FindoraNetwork/ark-algebra#51986001)
+│       │   │   │   ├── ark-ff v0.3.0 (https://github.com/FindoraNetwork/ark-algebra#51986001)
+│       │   │   │   │   ├── ark-ff-asm v0.3.0 (proc-macro) (https://github.com/FindoraNetwork/ark-algebra#51986001)
+│       │   │   │   │   │   ├── quote v1.0.18 (*)
+│       │   │   │   │   │   └── syn v1.0.92 (*)
+│       │   │   │   │   ├── ark-ff-macros v0.3.0 (proc-macro) (https://github.com/FindoraNetwork/ark-algebra#51986001)
+│       │   │   │   │   │   ├── num-bigint v0.4.3
+│       │   │   │   │   │   │   ├── num-integer v0.1.45
+│       │   │   │   │   │   │   │   └── num-traits v0.2.15
+│       │   │   │   │   │   │   │       [build-dependencies]
+│       │   │   │   │   │   │   │       └── autocfg v1.1.0
+│       │   │   │   │   │   │   │   [build-dependencies]
+│       │   │   │   │   │   │   │   └── autocfg v1.1.0
+│       │   │   │   │   │   │   ├── num-traits v0.2.15 (*)
+│       │   │   │   │   │   │   └── rand v0.8.5
+│       │   │   │   │   │   │       ├── libc v0.2.125
+│       │   │   │   │   │   │       ├── rand_chacha v0.3.1
+│       │   │   │   │   │   │       │   ├── ppv-lite86 v0.2.16
+│       │   │   │   │   │   │       │   └── rand_core v0.6.3
+│       │   │   │   │   │   │       │       └── getrandom v0.2.6
+│       │   │   │   │   │   │       │           ├── cfg-if v1.0.0
+│       │   │   │   │   │   │       │           └── libc v0.2.125
+│       │   │   │   │   │   │       └── rand_core v0.6.3 (*)
+│       │   │   │   │   │   │   [build-dependencies]
+│       │   │   │   │   │   │   └── autocfg v1.1.0
+│       │   │   │   │   │   ├── num-traits v0.2.15 (*)
+│       │   │   │   │   │   ├── quote v1.0.18 (*)
+│       │   │   │   │   │   └── syn v1.0.92 (*)
+│       │   │   │   │   ├── ark-serialize v0.3.0 (https://github.com/FindoraNetwork/ark-algebra#51986001)
+│       │   │   │   │   │   ├── ark-std v0.3.0 (https://github.com/FindoraNetwork/ark-std#0d65d766)
+│       │   │   │   │   │   │   ├── num-traits v0.2.15 (*)
+│       │   │   │   │   │   │   └── rand v0.8.5 (*)
+│       │   │   │   │   │   └── digest v0.10.3 (*)
+│       │   │   │   │   ├── ark-std v0.3.0 (https://github.com/FindoraNetwork/ark-std#0d65d766) (*)
+│       │   │   │   │   ├── derivative v2.2.0 (proc-macro)
+│       │   │   │   │   │   ├── proc-macro2 v1.0.37 (*)
+│       │   │   │   │   │   ├── quote v1.0.18 (*)
+│       │   │   │   │   │   └── syn v1.0.92 (*)
+│       │   │   │   │   ├── num-bigint v0.4.3 (*)
+│       │   │   │   │   ├── num-traits v0.2.15 (*)
+│       │   │   │   │   ├── paste v1.0.7 (proc-macro)
+│       │   │   │   │   └── zeroize v1.3.0 (*)
+│       │   │   │   │   [build-dependencies]
+│       │   │   │   │   └── rustc_version v0.4.0
+│       │   │   │   │       └── semver v1.0.9
+│       │   │   │   ├── ark-serialize v0.3.0 (https://github.com/FindoraNetwork/ark-algebra#51986001) (*)
+│       │   │   │   ├── ark-std v0.3.0 (https://github.com/FindoraNetwork/ark-std#0d65d766) (*)
+│       │   │   │   ├── derivative v2.2.0 (proc-macro) (*)
+│       │   │   │   ├── num-traits v0.2.15 (*)
+│       │   │   │   └── zeroize v1.3.0 (*)
+│       │   │   ├── ark-ff v0.3.0 (https://github.com/FindoraNetwork/ark-algebra#51986001) (*)
+│       │   │   └── ark-std v0.3.0 (https://github.com/FindoraNetwork/ark-std#0d65d766) (*)
+│       │   ├── ark-ec v0.3.0 (https://github.com/FindoraNetwork/ark-algebra#51986001) (*)
+│       │   ├── ark-ed-on-bls12-381 v0.3.0 (https://github.com/FindoraNetwork/ark-curves#45e974cc)
+│       │   │   ├── ark-bls12-381 v0.3.0 (https://github.com/FindoraNetwork/ark-curves#45e974cc) (*)
+│       │   │   ├── ark-ec v0.3.0 (https://github.com/FindoraNetwork/ark-algebra#51986001) (*)
+│       │   │   ├── ark-ff v0.3.0 (https://github.com/FindoraNetwork/ark-algebra#51986001) (*)
+│       │   │   └── ark-std v0.3.0 (https://github.com/FindoraNetwork/ark-std#0d65d766) (*)
+│       │   ├── ark-ff v0.3.0 (https://github.com/FindoraNetwork/ark-algebra#51986001) (*)
+│       │   ├── ark-serialize v0.3.0 (https://github.com/FindoraNetwork/ark-algebra#51986001) (*)
+│       │   ├── ark-std v0.3.0 (https://github.com/FindoraNetwork/ark-std#0d65d766) (*)
+│       │   ├── base64 v0.13.0
+│       │   ├── bulletproofs v2.0.0 (https://github.com/FindoraNetwork/bp#e4935c5a) (*)
+│       │   ├── byteorder v1.4.3
+│       │   ├── curve25519-dalek v3.2.0 (https://github.com/FindoraNetwork/curve25519-dalek#5f1e49c8) (*)
+│       │   ├── digest v0.10.3 (*)
+│       │   ├── itertools v0.10.3
+│       │   │   └── either v1.6.1
+│       │   ├── num-bigint v0.4.3 (*)
+│       │   ├── num-integer v0.1.45 (*)
+│       │   ├── rand_chacha v0.3.1 (*)
+│       │   ├── ruc v1.0.7 (*)
+│       │   ├── serde v1.0.137 (*)
+│       │   ├── wasm-bindgen v0.2.73 (*)
+│       │   └── x25519-dalek v1.2.0 (https://github.com/FindoraNetwork/x25519-dalek#b3aed38f)
+│       │       ├── curve25519-dalek v3.2.0 (https://github.com/FindoraNetwork/curve25519-dalek#5f1e49c8) (*)
+│       │       ├── rand_core v0.6.3 (*)
+│       │       └── zeroize v1.3.0 (*)
+│       ├── zei-crypto v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b)
+│       │   ├── aes v0.8.1
+│       │   │   ├── cfg-if v1.0.0
+│       │   │   └── cipher v0.4.3
+│       │   │       ├── crypto-common v0.1.3 (*)
+│       │   │       └── inout v0.1.3
+│       │   │           └── generic-array v0.14.5 (*)
+│       │   ├── bulletproofs v2.0.0 (https://github.com/FindoraNetwork/bp#e4935c5a) (*)
+│       │   ├── ctr v0.9.1
+│       │   │   └── cipher v0.4.3 (*)
+│       │   ├── curve25519-dalek v3.2.0 (https://github.com/FindoraNetwork/curve25519-dalek#5f1e49c8) (*)
+│       │   ├── digest v0.10.3 (*)
+│       │   ├── ed25519-dalek v1.0.1 (https://github.com/FindoraNetwork/ed25519-dalek#80e009cc) (*)
+│       │   ├── itertools v0.10.3 (*)
+│       │   ├── merlin v3.0.0 (*)
+│       │   ├── num-bigint v0.4.3 (*)
+│       │   ├── num-integer v0.1.45 (*)
+│       │   ├── num-traits v0.2.15 (*)
+│       │   ├── rand v0.8.5 (*)
+│       │   ├── rand_chacha v0.3.1 (*)
+│       │   ├── rand_core v0.6.3 (*)
+│       │   ├── ruc v1.0.7 (*)
+│       │   ├── serde v1.0.137 (*)
+│       │   ├── serde_derive v1.0.137 (proc-macro) (*)
+│       │   ├── sha2 v0.10.2 (*)
+│       │   ├── wasm-bindgen v0.2.73 (*)
+│       │   ├── x25519-dalek v1.2.0 (https://github.com/FindoraNetwork/x25519-dalek#b3aed38f) (*)
+│       │   └── zei-algebra v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b) (*)
+│       └── zei-plonk v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b)
+│           ├── bincode v1.3.3 (*)
+│           ├── merlin v3.0.0 (*)
+│           ├── num-bigint v0.4.3 (*)
+│           ├── num-integer v0.1.45 (*)
+│           ├── rand_chacha v0.3.1 (*)
+│           ├── serde v1.0.137 (*)
+│           ├── serde_derive v1.0.137 (proc-macro) (*)
+│           ├── zei-algebra v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b) (*)
+│           └── zei-crypto v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b) (*)
+├── cryptohash v0.2.11 (/mnt/d/projects/platform/src/libs/cryptohash)
+│   ├── arrayref v0.3.6
+│   ├── base64 v0.10.1 (*)
+│   ├── byteorder v1.4.3
+│   ├── fixed v0.4.6
+│   │   ├── half v1.8.2
+│   │   ├── serde v1.0.137 (*)
+│   │   └── typenum v1.15.0
+│   ├── fs2 v0.4.3
+│   │   └── libc v0.2.125
+│   ├── rand_chacha v0.3.1 (*)
+│   ├── rand_core v0.6.3 (*)
+│   ├── ruc v1.0.7 (*)
+│   ├── serde v1.0.137 (*)
+│   ├── serde_derive v1.0.137 (proc-macro) (*)
+│   ├── serde_json v1.0.81 (*)
+│   └── sha2 v0.8.2
+│       ├── block-buffer v0.7.3
+│       │   ├── block-padding v0.1.5
+│       │   │   └── byte-tools v0.3.1
+│       │   ├── byte-tools v0.3.1
+│       │   ├── byteorder v1.4.3
+│       │   └── generic-array v0.12.4
+│       │       └── typenum v1.15.0
+│       ├── digest v0.8.1
+│       │   └── generic-array v0.12.4 (*)
+│       ├── fake-simd v0.1.2
+│       └── opaque-debug v0.2.3
+├── ffi-support v0.4.4
+│   ├── lazy_static v1.4.0
+│   └── log v0.4.17
+│       └── cfg-if v1.0.0
+├── finutils v0.2.11 (/mnt/d/projects/platform/src/components/finutils)
+│   ├── attohttpc v0.18.0
+│   │   ├── flate2 v1.0.23
+│   │   │   ├── cfg-if v1.0.0
+│   │   │   ├── crc32fast v1.3.2
+│   │   │   │   └── cfg-if v1.0.0
+│   │   │   ├── libc v0.2.125
+│   │   │   └── miniz_oxide v0.5.1
+│   │   │       └── adler v1.0.2
+│   │   ├── http v0.2.7
+│   │   │   ├── bytes v1.1.0
+│   │   │   ├── fnv v1.0.7
+│   │   │   └── itoa v1.0.1
+│   │   ├── log v0.4.17 (*)
+│   │   ├── rustls v0.20.4
+│   │   │   ├── log v0.4.17 (*)
+│   │   │   ├── ring v0.16.20
+│   │   │   │   ├── libc v0.2.125
+│   │   │   │   ├── once_cell v1.10.0
+│   │   │   │   ├── spin v0.5.2
+│   │   │   │   └── untrusted v0.7.1
+│   │   │   │   [build-dependencies]
+│   │   │   │   └── cc v1.0.73
+│   │   │   ├── sct v0.7.0
+│   │   │   │   ├── ring v0.16.20 (*)
+│   │   │   │   └── untrusted v0.7.1
+│   │   │   └── webpki v0.22.0
+│   │   │       ├── ring v0.16.20 (*)
+│   │   │       └── untrusted v0.7.1
+│   │   ├── serde v1.0.137 (*)
+│   │   ├── serde_json v1.0.81 (*)
+│   │   ├── url v2.2.2
+│   │   │   ├── form_urlencoded v1.0.1
+│   │   │   │   ├── matches v0.1.9
+│   │   │   │   └── percent-encoding v2.1.0
+│   │   │   ├── idna v0.2.3
+│   │   │   │   ├── matches v0.1.9
+│   │   │   │   ├── unicode-bidi v0.3.8
+│   │   │   │   └── unicode-normalization v0.1.19
+│   │   │   │       └── tinyvec v1.6.0
+│   │   │   │           └── tinyvec_macros v0.1.0
+│   │   │   ├── matches v0.1.9
+│   │   │   └── percent-encoding v2.1.0
+│   │   ├── webpki v0.22.0 (*)
+│   │   ├── webpki-roots v0.22.3
+│   │   │   └── webpki v0.22.0 (*)
+│   │   └── wildmatch v2.1.0
+│   ├── base64 v0.10.1 (*)
+│   ├── clap v2.34.0
+│   │   ├── ansi_term v0.12.1
+│   │   ├── atty v0.2.14
+│   │   │   └── libc v0.2.125
+│   │   ├── bitflags v1.3.2
+│   │   ├── strsim v0.8.0
+│   │   ├── textwrap v0.11.0
+│   │   │   └── unicode-width v0.1.9
+│   │   ├── unicode-width v0.1.9
+│   │   ├── vec_map v0.8.2
+│   │   └── yaml-rust v0.3.5
+│   ├── credentials v0.2.11 (/mnt/d/projects/platform/src/libs/credentials) (*)
+│   ├── curve25519-dalek v3.2.0 (https://github.com/FindoraNetwork/curve25519-dalek#5f1e49c8) (*)
+│   ├── fp-core v0.1.0 (/mnt/d/projects/platform/src/components/contracts/primitives/core)
+│   │   ├── ethereum v0.9.0
+│   │   │   ├── bytes v1.1.0
+│   │   │   ├── ethereum-types v0.12.1
+│   │   │   │   ├── ethbloom v0.11.1
+│   │   │   │   │   ├── crunchy v0.2.2
+│   │   │   │   │   ├── fixed-hash v0.7.0
+│   │   │   │   │   │   ├── byteorder v1.4.3
+│   │   │   │   │   │   ├── rand v0.8.5 (*)
+│   │   │   │   │   │   ├── rustc-hex v2.1.0
+│   │   │   │   │   │   └── static_assertions v1.1.0
+│   │   │   │   │   ├── impl-rlp v0.3.0
+│   │   │   │   │   │   └── rlp v0.5.1
+│   │   │   │   │   │       ├── bytes v1.1.0
+│   │   │   │   │   │       └── rustc-hex v2.1.0
+│   │   │   │   │   ├── impl-serde v0.3.2
+│   │   │   │   │   │   └── serde v1.0.137 (*)
+│   │   │   │   │   └── tiny-keccak v2.0.2
+│   │   │   │   │       └── crunchy v0.2.2
+│   │   │   │   ├── fixed-hash v0.7.0 (*)
+│   │   │   │   ├── impl-rlp v0.3.0 (*)
+│   │   │   │   ├── impl-serde v0.3.2 (*)
+│   │   │   │   ├── primitive-types v0.10.1
+│   │   │   │   │   ├── fixed-hash v0.7.0 (*)
+│   │   │   │   │   ├── impl-codec v0.5.1
+│   │   │   │   │   │   └── parity-scale-codec v2.3.1 (*)
+│   │   │   │   │   ├── impl-rlp v0.3.0 (*)
+│   │   │   │   │   ├── impl-serde v0.3.2 (*)
+│   │   │   │   │   └── uint v0.9.3
+│   │   │   │   │       ├── byteorder v1.4.3
+│   │   │   │   │       ├── crunchy v0.2.2
+│   │   │   │   │       ├── hex v0.4.3
+│   │   │   │   │       └── static_assertions v1.1.0
+│   │   │   │   └── uint v0.9.3 (*)
+│   │   │   ├── hash-db v0.15.2
+│   │   │   ├── hash256-std-hasher v0.15.2
+│   │   │   │   └── crunchy v0.2.2
+│   │   │   ├── rlp v0.5.1 (*)
+│   │   │   ├── rlp-derive v0.1.0 (proc-macro)
+│   │   │   │   ├── proc-macro2 v1.0.37 (*)
+│   │   │   │   ├── quote v1.0.18 (*)
+│   │   │   │   └── syn v1.0.92 (*)
+│   │   │   ├── serde v1.0.137 (*)
+│   │   │   ├── sha3 v0.9.1
+│   │   │   │   ├── block-buffer v0.9.0
+│   │   │   │   │   ├── block-padding v0.2.1
+│   │   │   │   │   └── generic-array v0.14.5 (*)
+│   │   │   │   ├── digest v0.9.0 (*)
+│   │   │   │   ├── keccak v0.1.0
+│   │   │   │   └── opaque-debug v0.3.0
+│   │   │   └── triehash v0.8.4
+│   │   │       ├── hash-db v0.15.2
+│   │   │       └── rlp v0.5.1 (*)
+│   │   ├── fp-types v0.1.0 (/mnt/d/projects/platform/src/components/contracts/primitives/types)
+│   │   │   ├── bech32 v0.7.3
+│   │   │   ├── ethereum v0.9.0 (*)
+│   │   │   ├── fixed-hash v0.7.0 (*)
+│   │   │   ├── fp-utils v0.1.0 (/mnt/d/projects/platform/src/components/contracts/primitives/utils)
+│   │   │   │   ├── base64 v0.10.1 (*)
+│   │   │   │   ├── bip0039 v0.8.0
+│   │   │   │   │   ├── hmac v0.11.0
+│   │   │   │   │   │   ├── crypto-mac v0.11.1
+│   │   │   │   │   │   │   ├── generic-array v0.14.5 (*)
+│   │   │   │   │   │   │   └── subtle v2.4.1
+│   │   │   │   │   │   └── digest v0.9.0 (*)
+│   │   │   │   │   ├── pbkdf2 v0.8.0
+│   │   │   │   │   │   ├── crypto-mac v0.11.1 (*)
+│   │   │   │   │   │   └── password-hash v0.2.3
+│   │   │   │   │   │       ├── base64ct v1.5.0
+│   │   │   │   │   │       ├── rand_core v0.6.3 (*)
+│   │   │   │   │   │       └── subtle v2.4.1
+│   │   │   │   │   ├── rand v0.8.5 (*)
+│   │   │   │   │   ├── sha2 v0.9.9
+│   │   │   │   │   │   ├── block-buffer v0.9.0 (*)
+│   │   │   │   │   │   ├── cfg-if v1.0.0
+│   │   │   │   │   │   ├── digest v0.9.0 (*)
+│   │   │   │   │   │   └── opaque-debug v0.3.0
+│   │   │   │   │   ├── unicode-normalization v0.1.19 (*)
+│   │   │   │   │   └── zeroize v1.3.0 (*)
+│   │   │   │   ├── bip32 v0.2.2
+│   │   │   │   │   ├── bs58 v0.4.0
+│   │   │   │   │   │   └── sha2 v0.9.9 (*)
+│   │   │   │   │   ├── hkd32 v0.6.0
+│   │   │   │   │   │   ├── hmac v0.11.0 (*)
+│   │   │   │   │   │   ├── once_cell v1.10.0
+│   │   │   │   │   │   ├── pbkdf2 v0.8.0 (*)
+│   │   │   │   │   │   ├── rand_core v0.6.3 (*)
+│   │   │   │   │   │   ├── sha2 v0.9.9 (*)
+│   │   │   │   │   │   └── zeroize v1.3.0 (*)
+│   │   │   │   │   ├── hmac v0.11.0 (*)
+│   │   │   │   │   ├── k256 v0.9.6
+│   │   │   │   │   │   ├── cfg-if v1.0.0
+│   │   │   │   │   │   ├── ecdsa v0.12.4
+│   │   │   │   │   │   │   ├── der v0.4.5
+│   │   │   │   │   │   │   ├── elliptic-curve v0.10.6
+│   │   │   │   │   │   │   │   ├── crypto-bigint v0.2.11
+│   │   │   │   │   │   │   │   │   ├── generic-array v0.14.5 (*)
+│   │   │   │   │   │   │   │   │   ├── rand_core v0.6.3 (*)
+│   │   │   │   │   │   │   │   │   ├── subtle v2.4.1
+│   │   │   │   │   │   │   │   │   └── zeroize v1.3.0 (*)
+│   │   │   │   │   │   │   │   ├── ff v0.10.1
+│   │   │   │   │   │   │   │   │   ├── rand_core v0.6.3 (*)
+│   │   │   │   │   │   │   │   │   └── subtle v2.4.1
+│   │   │   │   │   │   │   │   ├── generic-array v0.14.5 (*)
+│   │   │   │   │   │   │   │   ├── group v0.10.0
+│   │   │   │   │   │   │   │   │   ├── ff v0.10.1 (*)
+│   │   │   │   │   │   │   │   │   ├── rand_core v0.6.3 (*)
+│   │   │   │   │   │   │   │   │   └── subtle v2.4.1
+│   │   │   │   │   │   │   │   ├── rand_core v0.6.3 (*)
+│   │   │   │   │   │   │   │   ├── subtle v2.4.1
+│   │   │   │   │   │   │   │   └── zeroize v1.3.0 (*)
+│   │   │   │   │   │   │   ├── hmac v0.11.0 (*)
+│   │   │   │   │   │   │   └── signature v1.3.2 (*)
+│   │   │   │   │   │   ├── elliptic-curve v0.10.6 (*)
+│   │   │   │   │   │   ├── sha2 v0.9.9 (*)
+│   │   │   │   │   │   └── sha3 v0.9.1 (*)
+│   │   │   │   │   ├── ripemd160 v0.9.1
+│   │   │   │   │   │   ├── block-buffer v0.9.0 (*)
+│   │   │   │   │   │   ├── digest v0.9.0 (*)
+│   │   │   │   │   │   └── opaque-debug v0.3.0
+│   │   │   │   │   ├── sha2 v0.9.9 (*)
+│   │   │   │   │   ├── subtle v2.4.1
+│   │   │   │   │   └── zeroize v1.3.0 (*)
+│   │   │   │   ├── blake2-rfc v0.2.18
+│   │   │   │   │   ├── arrayvec v0.4.12
+│   │   │   │   │   │   └── nodrop v0.1.14
+│   │   │   │   │   └── constant_time_eq v0.1.5
+│   │   │   │   ├── byteorder v1.4.3
+│   │   │   │   ├── futures v0.3.21
+│   │   │   │   │   ├── futures-channel v0.3.21
+│   │   │   │   │   │   ├── futures-core v0.3.21
+│   │   │   │   │   │   └── futures-sink v0.3.21
+│   │   │   │   │   ├── futures-core v0.3.21
+│   │   │   │   │   ├── futures-executor v0.3.21
+│   │   │   │   │   │   ├── futures-core v0.3.21
+│   │   │   │   │   │   ├── futures-task v0.3.21
+│   │   │   │   │   │   └── futures-util v0.3.21
+│   │   │   │   │   │       ├── futures-channel v0.3.21 (*)
+│   │   │   │   │   │       ├── futures-core v0.3.21
+│   │   │   │   │   │       ├── futures-io v0.3.21
+│   │   │   │   │   │       ├── futures-macro v0.3.21 (proc-macro)
+│   │   │   │   │   │       │   ├── proc-macro2 v1.0.37 (*)
+│   │   │   │   │   │       │   ├── quote v1.0.18 (*)
+│   │   │   │   │   │       │   └── syn v1.0.92 (*)
+│   │   │   │   │   │       ├── futures-sink v0.3.21
+│   │   │   │   │   │       ├── futures-task v0.3.21
+│   │   │   │   │   │       ├── memchr v2.5.0
+│   │   │   │   │   │       ├── pin-project-lite v0.2.9
+│   │   │   │   │   │       ├── pin-utils v0.1.0
+│   │   │   │   │   │       └── slab v0.4.6
+│   │   │   │   │   ├── futures-io v0.3.21
+│   │   │   │   │   ├── futures-sink v0.3.21
+│   │   │   │   │   ├── futures-task v0.3.21
+│   │   │   │   │   └── futures-util v0.3.21 (*)
+│   │   │   │   ├── hex v0.4.3
+│   │   │   │   ├── libsecp256k1 v0.5.0
+│   │   │   │   │   ├── arrayref v0.3.6
+│   │   │   │   │   ├── base64 v0.12.3
+│   │   │   │   │   ├── digest v0.9.0 (*)
+│   │   │   │   │   ├── hmac-drbg v0.3.0
+│   │   │   │   │   │   ├── digest v0.9.0 (*)
+│   │   │   │   │   │   ├── generic-array v0.14.5 (*)
+│   │   │   │   │   │   └── hmac v0.8.1
+│   │   │   │   │   │       ├── crypto-mac v0.8.0
+│   │   │   │   │   │       │   ├── generic-array v0.14.5 (*)
+│   │   │   │   │   │       │   └── subtle v2.4.1
+│   │   │   │   │   │       └── digest v0.9.0 (*)
+│   │   │   │   │   ├── libsecp256k1-core v0.2.2
+│   │   │   │   │   │   ├── crunchy v0.2.2
+│   │   │   │   │   │   ├── digest v0.9.0 (*)
+│   │   │   │   │   │   └── subtle v2.4.1
+│   │   │   │   │   ├── rand v0.7.3
+│   │   │   │   │   │   ├── getrandom v0.1.16
+│   │   │   │   │   │   │   ├── cfg-if v1.0.0
+│   │   │   │   │   │   │   └── libc v0.2.125
+│   │   │   │   │   │   ├── libc v0.2.125
+│   │   │   │   │   │   ├── rand_chacha v0.2.2
+│   │   │   │   │   │   │   ├── ppv-lite86 v0.2.16
+│   │   │   │   │   │   │   └── rand_core v0.5.1
+│   │   │   │   │   │   │       └── getrandom v0.1.16 (*)
+│   │   │   │   │   │   └── rand_core v0.5.1 (*)
+│   │   │   │   │   ├── serde v1.0.137 (*)
+│   │   │   │   │   ├── sha2 v0.9.9 (*)
+│   │   │   │   │   └── typenum v1.15.0
+│   │   │   │   │   [build-dependencies]
+│   │   │   │   │   ├── libsecp256k1-gen-ecmult v0.2.1
+│   │   │   │   │   │   └── libsecp256k1-core v0.2.2
+│   │   │   │   │   │       ├── crunchy v0.2.2
+│   │   │   │   │   │       ├── digest v0.9.0
+│   │   │   │   │   │       │   └── generic-array v0.14.5
+│   │   │   │   │   │       │       └── typenum v1.15.0
+│   │   │   │   │   │       │       [build-dependencies]
+│   │   │   │   │   │       │       └── version_check v0.9.4
+│   │   │   │   │   │       └── subtle v2.4.1
+│   │   │   │   │   └── libsecp256k1-gen-genmult v0.2.1
+│   │   │   │   │       └── libsecp256k1-core v0.2.2 (*)
+│   │   │   │   ├── primitive-types v0.10.1 (*)
+│   │   │   │   ├── protobuf v2.16.2
+│   │   │   │   ├── rand v0.8.5 (*)
+│   │   │   │   ├── ruc v1.0.7 (*)
+│   │   │   │   ├── serde v1.0.137 (*)
+│   │   │   │   ├── sha2 v0.9.9 (*)
+│   │   │   │   ├── sha3 v0.8.2
+│   │   │   │   │   ├── block-buffer v0.7.3 (*)
+│   │   │   │   │   ├── byte-tools v0.3.1
+│   │   │   │   │   ├── digest v0.8.1 (*)
+│   │   │   │   │   ├── keccak v0.1.0
+│   │   │   │   │   └── opaque-debug v0.2.3
+│   │   │   │   ├── tiny-keccak v2.0.2 (*)
+│   │   │   │   └── twox-hash v1.6.2
+│   │   │   │       ├── cfg-if v1.0.0
+│   │   │   │       ├── rand v0.8.5 (*)
+│   │   │   │       └── static_assertions v1.1.0
+│   │   │   ├── globutils v0.2.11 (/mnt/d/projects/platform/src/libs/globutils)
+│   │   │   │   ├── attohttpc v0.18.0 (*)
+│   │   │   │   ├── base64 v0.10.1 (*)
+│   │   │   │   ├── bech32 v0.7.3
+│   │   │   │   ├── bip0039 v0.7.3
+│   │   │   │   │   ├── hmac v0.10.1
+│   │   │   │   │   │   ├── crypto-mac v0.10.1
+│   │   │   │   │   │   │   ├── generic-array v0.14.5 (*)
+│   │   │   │   │   │   │   └── subtle v2.4.1
+│   │   │   │   │   │   └── digest v0.9.0 (*)
+│   │   │   │   │   ├── pbkdf2 v0.7.5
+│   │   │   │   │   │   ├── crypto-mac v0.10.1 (*)
+│   │   │   │   │   │   └── password-hash v0.1.4
+│   │   │   │   │   │       ├── base64ct v1.5.0
+│   │   │   │   │   │       └── rand_core v0.6.3 (*)
+│   │   │   │   │   ├── rand v0.8.5 (*)
+│   │   │   │   │   ├── sha2 v0.9.9 (*)
+│   │   │   │   │   ├── unicode-normalization v0.1.19 (*)
+│   │   │   │   │   └── zeroize v1.3.0 (*)
+│   │   │   │   ├── cryptohash v0.2.11 (/mnt/d/projects/platform/src/libs/cryptohash) (*)
+│   │   │   │   ├── ed25519-dalek-bip32 v0.1.1 (https://github.com/FindoraNetwork/ed25519-dalek-bip32?branch=feat-allow-nohardened#5fdba542)
+│   │   │   │   │   ├── derivation-path v0.1.3
+│   │   │   │   │   │   └── failure v0.1.8
+│   │   │   │   │   │       ├── backtrace v0.3.65
+│   │   │   │   │   │       │   ├── addr2line v0.17.0
+│   │   │   │   │   │       │   │   └── gimli v0.26.1
+│   │   │   │   │   │       │   ├── cfg-if v1.0.0
+│   │   │   │   │   │       │   ├── libc v0.2.125
+│   │   │   │   │   │       │   ├── miniz_oxide v0.5.1 (*)
+│   │   │   │   │   │       │   ├── object v0.28.3
+│   │   │   │   │   │       │   │   └── memchr v2.5.0
+│   │   │   │   │   │       │   └── rustc-demangle v0.1.21
+│   │   │   │   │   │       │   [build-dependencies]
+│   │   │   │   │   │       │   └── cc v1.0.73
+│   │   │   │   │   │       └── failure_derive v0.1.8 (proc-macro)
+│   │   │   │   │   │           ├── proc-macro2 v1.0.37 (*)
+│   │   │   │   │   │           ├── quote v1.0.18 (*)
+│   │   │   │   │   │           ├── syn v1.0.92 (*)
+│   │   │   │   │   │           └── synstructure v0.12.6 (*)
+│   │   │   │   │   ├── ed25519-dalek v1.0.1 (https://github.com/FindoraNetwork/ed25519-dalek#80e009cc) (*)
+│   │   │   │   │   ├── failure v0.1.8 (*)
+│   │   │   │   │   ├── hmac v0.9.0
+│   │   │   │   │   │   ├── crypto-mac v0.9.1
+│   │   │   │   │   │   │   ├── generic-array v0.14.5 (*)
+│   │   │   │   │   │   │   └── subtle v2.4.1
+│   │   │   │   │   │   └── digest v0.9.0 (*)
+│   │   │   │   │   └── sha2 v0.9.9 (*)
+│   │   │   │   ├── hex v0.4.3
+│   │   │   │   ├── percent-encoding v2.1.0
+│   │   │   │   ├── rand v0.8.5 (*)
+│   │   │   │   ├── ruc v1.0.7 (*)
+│   │   │   │   ├── serde v1.0.137 (*)
+│   │   │   │   ├── serde_json v1.0.81 (*)
+│   │   │   │   ├── time v0.1.44
+│   │   │   │   │   └── libc v0.2.125
+│   │   │   │   ├── tracing v0.1.34
+│   │   │   │   │   ├── cfg-if v1.0.0
+│   │   │   │   │   ├── pin-project-lite v0.2.9
+│   │   │   │   │   ├── tracing-attributes v0.1.21 (proc-macro)
+│   │   │   │   │   │   ├── proc-macro2 v1.0.37 (*)
+│   │   │   │   │   │   ├── quote v1.0.18 (*)
+│   │   │   │   │   │   └── syn v1.0.92 (*)
+│   │   │   │   │   └── tracing-core v0.1.26
+│   │   │   │   │       └── lazy_static v1.4.0
+│   │   │   │   ├── tracing-subscriber v0.2.25
+│   │   │   │   │   ├── ansi_term v0.12.1
+│   │   │   │   │   ├── chrono v0.4.19
+│   │   │   │   │   │   ├── libc v0.2.125
+│   │   │   │   │   │   ├── num-integer v0.1.45 (*)
+│   │   │   │   │   │   ├── num-traits v0.2.15 (*)
+│   │   │   │   │   │   ├── serde v1.0.137 (*)
+│   │   │   │   │   │   └── time v0.1.44 (*)
+│   │   │   │   │   ├── lazy_static v1.4.0
+│   │   │   │   │   ├── matchers v0.0.1
+│   │   │   │   │   │   └── regex-automata v0.1.10
+│   │   │   │   │   │       └── regex-syntax v0.6.25
+│   │   │   │   │   ├── regex v1.5.5
+│   │   │   │   │   │   └── regex-syntax v0.6.25
+│   │   │   │   │   ├── serde v1.0.137 (*)
+│   │   │   │   │   ├── serde_json v1.0.81 (*)
+│   │   │   │   │   ├── sharded-slab v0.1.4
+│   │   │   │   │   │   └── lazy_static v1.4.0
+│   │   │   │   │   ├── smallvec v1.8.0
+│   │   │   │   │   ├── thread_local v1.1.4
+│   │   │   │   │   │   └── once_cell v1.10.0
+│   │   │   │   │   ├── tracing v0.1.34 (*)
+│   │   │   │   │   ├── tracing-core v0.1.26 (*)
+│   │   │   │   │   ├── tracing-log v0.1.3
+│   │   │   │   │   │   ├── lazy_static v1.4.0
+│   │   │   │   │   │   ├── log v0.4.17 (*)
+│   │   │   │   │   │   └── tracing-core v0.1.26 (*)
+│   │   │   │   │   └── tracing-serde v0.1.3
+│   │   │   │   │       ├── serde v1.0.137 (*)
+│   │   │   │   │       └── tracing-core v0.1.26 (*)
+│   │   │   │   ├── zei v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b) (*)
+│   │   │   │   ├── zei-algebra v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b) (*)
+│   │   │   │   └── zei-crypto v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b) (*)
+│   │   │   ├── hex v0.4.3
+│   │   │   ├── libsecp256k1 v0.5.0 (*)
+│   │   │   ├── primitive-types v0.10.1 (*)
+│   │   │   ├── ruc v1.0.7 (*)
+│   │   │   ├── serde v1.0.137 (*)
+│   │   │   ├── serde_json v1.0.81 (*)
+│   │   │   ├── sha3 v0.8.2 (*)
+│   │   │   ├── zei v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b) (*)
+│   │   │   └── zei-algebra v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b) (*)
+│   │   ├── impl-trait-for-tuples v0.2.2 (proc-macro) (*)
+│   │   ├── parking_lot v0.11.2
+│   │   │   ├── instant v0.1.12
+│   │   │   │   └── cfg-if v1.0.0
+│   │   │   ├── lock_api v0.4.7
+│   │   │   │   └── scopeguard v1.1.0
+│   │   │   │   [build-dependencies]
+│   │   │   │   └── autocfg v1.1.0
+│   │   │   └── parking_lot_core v0.8.5
+│   │   │       ├── cfg-if v1.0.0
+│   │   │       ├── instant v0.1.12 (*)
+│   │   │       ├── libc v0.2.125
+│   │   │       └── smallvec v1.8.0
+│   │   ├── primitive-types v0.10.1 (*)
+│   │   ├── ruc v1.0.7 (*)
+│   │   ├── serde v1.0.137 (*)
+│   │   └── serde_with v1.13.0
+│   │       ├── rustversion v1.0.6 (proc-macro)
+│   │       ├── serde v1.0.137 (*)
+│   │       └── serde_with_macros v1.5.2 (proc-macro)
+│   │           ├── darling v0.13.4
+│   │           │   ├── darling_core v0.13.4
+│   │           │   │   ├── fnv v1.0.7
+│   │           │   │   ├── ident_case v1.0.1
+│   │           │   │   ├── proc-macro2 v1.0.37 (*)
+│   │           │   │   ├── quote v1.0.18 (*)
+│   │           │   │   ├── strsim v0.10.0
+│   │           │   │   └── syn v1.0.92 (*)
+│   │           │   └── darling_macro v0.13.4 (proc-macro)
+│   │           │       ├── darling_core v0.13.4 (*)
+│   │           │       ├── quote v1.0.18 (*)
+│   │           │       └── syn v1.0.92 (*)
+│   │           ├── proc-macro2 v1.0.37 (*)
+│   │           ├── quote v1.0.18 (*)
+│   │           └── syn v1.0.92 (*)
+│   ├── fp-types v0.1.0 (/mnt/d/projects/platform/src/components/contracts/primitives/types) (*)
+│   ├── fp-utils v0.1.0 (/mnt/d/projects/platform/src/components/contracts/primitives/utils) (*)
+│   ├── globutils v0.2.11 (/mnt/d/projects/platform/src/libs/globutils) (*)
+│   ├── hex v0.4.3
+│   ├── lazy_static v1.4.0
+│   ├── ledger v0.2.11 (/mnt/d/projects/platform/src/ledger)
+│   │   ├── base64 v0.10.1 (*)
+│   │   ├── bincode v1.3.3 (*)
+│   │   ├── bitmap v0.2.11 (/mnt/d/projects/platform/src/libs/bitmap)
+│   │   │   ├── arrayref v0.3.6
+│   │   │   ├── cryptohash v0.2.11 (/mnt/d/projects/platform/src/libs/cryptohash) (*)
+│   │   │   ├── globutils v0.2.11 (/mnt/d/projects/platform/src/libs/globutils) (*)
+│   │   │   ├── itertools v0.8.2
+│   │   │   │   └── either v1.6.1
+│   │   │   ├── log v0.4.17 (*)
+│   │   │   ├── parking_lot v0.11.2 (*)
+│   │   │   ├── rand v0.8.5 (*)
+│   │   │   ├── rand_chacha v0.3.1 (*)
+│   │   │   ├── ruc v1.0.7 (*)
+│   │   │   ├── serde v1.0.137 (*)
+│   │   │   ├── serde_json v1.0.81 (*)
+│   │   │   └── time v0.1.44 (*)
+│   │   ├── bulletproofs v2.0.0 (https://github.com/FindoraNetwork/bp#e4935c5a) (*)
+│   │   ├── byteorder v1.4.3
+│   │   ├── config v0.1.0 (/mnt/d/projects/platform/src/components/config)
+│   │   │   ├── attohttpc v0.18.0 (*)
+│   │   │   ├── clap v2.34.0 (*)
+│   │   │   ├── globutils v0.2.11 (/mnt/d/projects/platform/src/libs/globutils) (*)
+│   │   │   ├── lazy_static v1.4.0
+│   │   │   ├── ruc v1.0.7 (*)
+│   │   │   ├── serde v1.0.137 (*)
+│   │   │   ├── serde-strz v1.1.1
+│   │   │   │   └── serde v1.0.137 (*)
+│   │   │   ├── serde_derive v1.0.137 (proc-macro) (*)
+│   │   │   ├── serde_json v1.0.81 (*)
+│   │   │   └── toml v0.5.9
+│   │   │       └── serde v1.0.137 (*)
+│   │   │   [build-dependencies]
+│   │   │   └── vergen v3.1.0
+│   │   │       ├── bitflags v1.3.2
+│   │   │       └── chrono v0.4.19
+│   │   │           ├── libc v0.2.125
+│   │   │           ├── num-integer v0.1.45 (*)
+│   │   │           ├── num-traits v0.2.15 (*)
+│   │   │           ├── serde v1.0.137 (*)
+│   │   │           └── time v0.1.44
+│   │   │               └── libc v0.2.125
+│   │   │       [build-dependencies]
+│   │   │       └── chrono v0.4.19 (*)
+│   │   ├── credentials v0.2.11 (/mnt/d/projects/platform/src/libs/credentials) (*)
+│   │   ├── cryptohash v0.2.11 (/mnt/d/projects/platform/src/libs/cryptohash) (*)
+│   │   ├── curve25519-dalek v3.2.0 (https://github.com/FindoraNetwork/curve25519-dalek#5f1e49c8) (*)
+│   │   ├── ed25519-dalek v1.0.1 (https://github.com/FindoraNetwork/ed25519-dalek#80e009cc) (*)
+│   │   ├── fbnc v0.2.10
+│   │   │   ├── bincode v1.3.3 (*)
+│   │   │   ├── lazy_static v1.4.0
+│   │   │   ├── num_cpus v1.13.1
+│   │   │   │   └── libc v0.2.125
+│   │   │   ├── rand v0.8.5 (*)
+│   │   │   ├── ruc v1.0.7 (*)
+│   │   │   ├── serde v1.0.137 (*)
+│   │   │   └── serde_json v1.0.81 (*)
+│   │   ├── fixed v0.4.6 (*)
+│   │   ├── fp-types v0.1.0 (/mnt/d/projects/platform/src/components/contracts/primitives/types) (*)
+│   │   ├── fs2 v0.4.3 (*)
+│   │   ├── globutils v0.2.11 (/mnt/d/projects/platform/src/libs/globutils) (*)
+│   │   ├── hex v0.3.2
+│   │   ├── indexmap v1.8.1
+│   │   │   ├── hashbrown v0.11.2
+│   │   │   └── serde v1.0.137 (*)
+│   │   │   [build-dependencies]
+│   │   │   └── autocfg v1.1.0
+│   │   ├── itertools v0.8.2 (*)
+│   │   ├── lazy_static v1.4.0
+│   │   ├── log v0.4.17 (*)
+│   │   ├── num-bigint v0.4.3 (*)
+│   │   ├── parking_lot v0.11.2 (*)
+│   │   ├── rand v0.8.5 (*)
+│   │   ├── rand_chacha v0.3.1 (*)
+│   │   ├── rand_core v0.6.3 (*)
+│   │   ├── ruc v1.0.7 (*)
+│   │   ├── serde v1.0.137 (*)
+│   │   ├── serde-strz v1.1.1 (*)
+│   │   ├── serde_derive v1.0.137 (proc-macro) (*)
+│   │   ├── serde_json v1.0.81 (*)
+│   │   ├── sha2 v0.8.2 (*)
+│   │   ├── sliding_set v0.2.11 (/mnt/d/projects/platform/src/libs/sliding_set)
+│   │   │   ├── bincode v1.3.3 (*)
+│   │   │   ├── cryptohash v0.2.11 (/mnt/d/projects/platform/src/libs/cryptohash) (*)
+│   │   │   ├── rand v0.8.5 (*)
+│   │   │   ├── ruc v1.0.7 (*)
+│   │   │   ├── serde v1.0.137 (*)
+│   │   │   ├── serde_derive v1.0.137 (proc-macro) (*)
+│   │   │   └── serde_json v1.0.81 (*)
+│   │   ├── tendermint v0.19.0 (https://github.com/FindoraNetwork/tendermint-rs?tag=v0.19.0a#026dd1b0)
+│   │   │   ├── anomaly v0.2.0 (https://github.com/FindoraNetwork/anomaly.git?branch=main#fc622a5d)
+│   │   │   │   └── backtrace v0.3.65 (*)
+│   │   │   ├── async-trait v0.1.53 (proc-macro)
+│   │   │   │   ├── proc-macro2 v1.0.37 (*)
+│   │   │   │   ├── quote v1.0.18 (*)
+│   │   │   │   └── syn v1.0.92 (*)
+│   │   │   ├── bytes v1.1.0
+│   │   │   ├── chrono v0.4.19 (*)
+│   │   │   ├── ed25519 v1.4.1 (*)
+│   │   │   ├── ed25519-dalek v1.0.1 (https://github.com/FindoraNetwork/ed25519-dalek#80e009cc) (*)
+│   │   │   ├── funty v1.1.0
+│   │   │   ├── futures v0.3.21 (*)
+│   │   │   ├── num-traits v0.2.15 (*)
+│   │   │   ├── once_cell v1.10.0
+│   │   │   ├── prost v0.7.0
+│   │   │   │   ├── bytes v1.1.0
+│   │   │   │   └── prost-derive v0.7.0 (proc-macro)
+│   │   │   │       ├── anyhow v1.0.57
+│   │   │   │       ├── itertools v0.9.0
+│   │   │   │       │   └── either v1.6.1
+│   │   │   │       ├── proc-macro2 v1.0.37 (*)
+│   │   │   │       ├── quote v1.0.18 (*)
+│   │   │   │       └── syn v1.0.92 (*)
+│   │   │   ├── prost-types v0.7.0
+│   │   │   │   ├── bytes v1.1.0
+│   │   │   │   └── prost v0.7.0 (*)
+│   │   │   ├── serde v1.0.137 (*)
+│   │   │   ├── serde_bytes v0.11.6 (*)
+│   │   │   ├── serde_json v1.0.81 (*)
+│   │   │   ├── serde_repr v0.1.8 (proc-macro)
+│   │   │   │   ├── proc-macro2 v1.0.37 (*)
+│   │   │   │   ├── quote v1.0.18 (*)
+│   │   │   │   └── syn v1.0.92 (*)
+│   │   │   ├── sha2 v0.9.9 (*)
+│   │   │   ├── signature v1.3.2 (*)
+│   │   │   ├── subtle v2.4.1
+│   │   │   ├── subtle-encoding v0.5.1
+│   │   │   │   └── zeroize v1.3.0 (*)
+│   │   │   ├── tendermint-proto v0.19.0 (https://github.com/FindoraNetwork/tendermint-rs?tag=v0.19.0a#026dd1b0)
+│   │   │   │   ├── anomaly v0.2.0 (https://github.com/FindoraNetwork/anomaly.git?branch=main#fc622a5d) (*)
+│   │   │   │   ├── bytes v1.1.0
+│   │   │   │   ├── chrono v0.4.19 (*)
+│   │   │   │   ├── num-derive v0.3.3 (proc-macro)
+│   │   │   │   │   ├── proc-macro2 v1.0.37 (*)
+│   │   │   │   │   ├── quote v1.0.18 (*)
+│   │   │   │   │   └── syn v1.0.92 (*)
+│   │   │   │   ├── num-traits v0.2.15 (*)
+│   │   │   │   ├── prost v0.7.0 (*)
+│   │   │   │   ├── prost-types v0.7.0 (*)
+│   │   │   │   ├── serde v1.0.137 (*)
+│   │   │   │   ├── serde_bytes v0.11.6 (*)
+│   │   │   │   ├── subtle-encoding v0.5.1 (*)
+│   │   │   │   └── thiserror v1.0.31 (*)
+│   │   │   ├── thiserror v1.0.31 (*)
+│   │   │   ├── toml v0.5.9 (*)
+│   │   │   ├── url v2.2.2 (*)
+│   │   │   └── zeroize v1.3.0 (*)
+│   │   ├── time v0.2.27
+│   │   │   ├── const_fn v0.4.9 (proc-macro)
+│   │   │   ├── libc v0.2.125
+│   │   │   ├── standback v0.2.17
+│   │   │   │   [build-dependencies]
+│   │   │   │   └── version_check v0.9.4
+│   │   │   └── time-macros v0.1.1
+│   │   │       ├── proc-macro-hack v0.5.19 (proc-macro)
+│   │   │       └── time-macros-impl v0.1.2 (proc-macro)
+│   │   │           ├── proc-macro-hack v0.5.19 (proc-macro)
+│   │   │           ├── proc-macro2 v1.0.37 (*)
+│   │   │           ├── quote v1.0.18 (*)
+│   │   │           ├── standback v0.2.17
+│   │   │           │   [build-dependencies]
+│   │   │           │   └── version_check v0.9.4
+│   │   │           └── syn v1.0.92 (*)
+│   │   │   [build-dependencies]
+│   │   │   └── version_check v0.9.4
+│   │   ├── unicode-normalization v0.1.19 (*)
+│   │   ├── zei v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b) (*)
+│   │   ├── zei-algebra v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b) (*)
+│   │   └── zei-crypto v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b) (*)
+│   │   [build-dependencies]
+│   │   └── vergen v3.1.0 (*)
+│   ├── parking_lot v0.11.2 (*)
+│   ├── rand v0.8.5 (*)
+│   ├── rand_chacha v0.3.1 (*)
+│   ├── rand_core v0.6.3 (*)
+│   ├── ruc v1.0.7 (*)
+│   ├── serde v1.0.137 (*)
+│   ├── serde_json v1.0.81 (*)
+│   ├── tendermint v0.19.0 (https://github.com/FindoraNetwork/tendermint-rs?tag=v0.19.0a#026dd1b0) (*)
+│   ├── tokio v1.18.1
+│   │   └── pin-project-lite v0.2.9
+│   ├── wasm-bindgen v0.2.73 (*)
+│   ├── zei v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b) (*)
+│   ├── zei-algebra v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b) (*)
+│   └── zei-crypto v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b) (*)
+│   [build-dependencies]
+│   └── vergen v3.1.0 (*)
+├── fp-types v0.1.0 (/mnt/d/projects/platform/src/components/contracts/primitives/types) (*)
+├── fp-utils v0.1.0 (/mnt/d/projects/platform/src/components/contracts/primitives/utils) (*)
+├── futures v0.1.31
+├── getrandom v0.2.6 (*)
+├── globutils v0.2.11 (/mnt/d/projects/platform/src/libs/globutils) (*)
+├── hex v0.3.2
+├── jni v0.19.0
+│   ├── cesu8 v1.1.0
+│   ├── combine v4.6.4
+│   │   ├── bytes v1.1.0
+│   │   └── memchr v2.5.0
+│   ├── jni-sys v0.3.0
+│   ├── log v0.4.17 (*)
+│   └── thiserror v1.0.31 (*)
+│   [build-dependencies]
+│   └── walkdir v2.3.2
+│       └── same-file v1.0.6
+├── js-sys v0.3.50
+│   └── wasm-bindgen v0.2.73 (*)
+├── ledger v0.2.11 (/mnt/d/projects/platform/src/ledger) (*)
+├── rand_chacha v0.3.1 (*)
+├── rand_core v0.6.3 (*)
+├── ring v0.16.20 (*)
+├── ruc v1.0.7 (*)
+├── safer-ffi v0.0.6
+│   ├── libc v0.2.125
+│   ├── mini_paste v0.1.11
+│   │   └── mini_paste-proc_macro v0.1.11 (proc-macro)
+│   └── safer_ffi-proc_macro v0.0.6 (proc-macro)
+├── serde v1.0.137 (*)
+├── serde_derive v1.0.137 (proc-macro) (*)
+├── serde_json v1.0.81 (*)
+├── web-sys v0.3.50
+│   ├── js-sys v0.3.50 (*)
+│   └── wasm-bindgen v0.2.73 (*)
+├── zei v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b) (*)
+└── zei-algebra v0.1.4 (https://github.com/FindoraNetwork/zei?tag=v0.1.8#1d5a7d9b) (*)
+[build-dependencies]
+├── cbindgen v0.20.0
+│   ├── clap v2.34.0
+│   │   ├── ansi_term v0.12.1
+│   │   ├── atty v0.2.14
+│   │   │   └── libc v0.2.125
+│   │   ├── bitflags v1.3.2
+│   │   ├── strsim v0.8.0
+│   │   ├── textwrap v0.11.0
+│   │   │   └── unicode-width v0.1.9
+│   │   ├── unicode-width v0.1.9
+│   │   ├── vec_map v0.8.2
+│   │   └── yaml-rust v0.3.5
+│   ├── heck v0.3.3
+│   │   └── unicode-segmentation v1.9.0
+│   ├── indexmap v1.8.1
+│   │   ├── hashbrown v0.11.2
+│   │   └── serde v1.0.137 (*)
+│   │   [build-dependencies]
+│   │   └── autocfg v1.1.0
+│   ├── log v0.4.17 (*)
+│   ├── proc-macro2 v1.0.37 (*)
+│   ├── quote v1.0.18 (*)
+│   ├── serde v1.0.137 (*)
+│   ├── serde_json v1.0.81
+│   │   ├── itoa v1.0.1
+│   │   ├── ryu v1.0.9
+│   │   └── serde v1.0.137 (*)
+│   ├── syn v1.0.92 (*)
+│   ├── tempfile v3.3.0
+│   │   ├── cfg-if v1.0.0
+│   │   ├── fastrand v1.7.0
+│   │   ├── libc v0.2.125
+│   │   └── remove_dir_all v0.5.3
+│   └── toml v0.5.9 (*)
+└── vergen v3.1.0 (*)

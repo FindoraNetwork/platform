@@ -12,7 +12,11 @@
 #![deny(missing_docs)]
 #![allow(clippy::upper_case_acronyms)]
 
-#[cfg(not(any(target_arch = "wasm32", target_arch = "aarch64")))]
+#[cfg(not(any(
+    target_arch = "wasm32",
+    target_arch = "aarch64",
+    target_arch = "arm"
+)))]
 use {num_bigint::BigUint, std::convert::TryFrom};
 
 pub mod cosig;
@@ -1566,7 +1570,11 @@ impl Staking {
         &self.coinbase.distribution_plan
     }
 
-    #[cfg(not(any(target_arch = "wasm32", target_arch = "aarch64")))]
+    #[cfg(not(any(
+        target_arch = "wasm32",
+        target_arch = "aarch64",
+        target_arch = "arm"
+    )))]
     /// set_proposer_rewards sets the rewards for the block proposer
     /// All rewards are allocated to the proposer only
     pub(crate) fn set_proposer_rewards(
@@ -1608,7 +1616,11 @@ impl Staking {
             .map(|_| ())
     }
 
-    #[cfg(not(any(target_arch = "wasm32", target_arch = "aarch64")))]
+    #[cfg(not(any(
+        target_arch = "wasm32",
+        target_arch = "aarch64",
+        target_arch = "arm"
+    )))]
     fn get_proposer_rewards_rate(vote_percent: [u64; 2]) -> Result<[u128; 2]> {
         let p = [vote_percent[0] as u128, vote_percent[1] as u128];
         // p[0] = Validator power which voted for this block
@@ -2060,7 +2072,11 @@ impl Delegation {
     }
 
     #[inline(always)]
-    #[cfg(not(any(target_arch = "wasm32", target_arch = "aarch64")))]
+    #[cfg(not(any(
+        target_arch = "wasm32",
+        target_arch = "aarch64",
+        target_arch = "arm"
+    )))]
     pub(crate) fn validator_entry_exists(&self, validator: &XfrPublicKey) -> bool {
         self.delegations.contains_key(validator)
     }
@@ -2080,7 +2096,11 @@ impl Delegation {
     // > **NOTE:**
     // > use 'AssignAdd' instead of 'Assign'
     // > to keep compatible with the logic of governance penalty.
-    #[cfg(not(any(target_arch = "wasm32", target_arch = "aarch64")))]
+    #[cfg(not(any(
+        target_arch = "wasm32",
+        target_arch = "aarch64",
+        target_arch = "arm"
+    )))]
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn set_delegation_rewards(
         &mut self,
@@ -2169,7 +2189,7 @@ impl Delegation {
 
 // Calculate the amount(in FRA units) that
 // should be paid to the owner of this delegation.
-#[cfg(not(any(target_arch = "wasm32", target_arch = "aarch64")))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "aarch64", target_arch = "arm")))]
 fn calculate_delegation_rewards(
     return_rate: [u128; 2],
     amount: Amount,

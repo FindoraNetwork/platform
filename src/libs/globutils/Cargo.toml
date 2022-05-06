@@ -28,7 +28,7 @@ tracing-subscriber = "0.2.4"
 rand_chacha = "0.3"
 rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
 
-[target.'cfg(not(any(target_arch = "wasm32", target_arch = "aarch64")))'.dependencies]
+[target.'cfg(not(any(target_arch = "wasm32", target_arch = "aarch64", target_arch = "arm")))'.dependencies]
 attohttpc = { version = "0.18", default-features = false, features = ["compress", "json", "tls-rustls"] }
 
 [features]
