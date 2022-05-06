@@ -72,10 +72,13 @@ impl<C: Config> App<C> {
     /// Get the account basic in EVM format.
     pub fn account_basic(ctx: &Context, address: &H160) -> Account {
         let account_id = C::AddressMapping::convert_to_account_id(*address);
-        let nonce = C::AccountAsset::nonce(ctx, &account_id);
-        let balance = C::AccountAsset::balance(ctx, &account_id);
+        let account =
+            C::AccountAsset::account_of(ctx, &account_id, None).unwrap_or_default();
 
-        Account { balance, nonce }
+        Account {
+            balance: account.balance,
+            nonce: account.nonce,
+        }
     }
 
     /// Get the block proposer.
