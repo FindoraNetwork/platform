@@ -71,14 +71,6 @@ typedef struct OpenAssetRecord OpenAssetRecord;
 typedef struct OwnerMemo OwnerMemo;
 
 /**
- * Public parameters necessary for generating asset records. Generating this is expensive and
- * should be done as infrequently as possible.
- * @see {@link module:Findora-Wasm~TransactionBuilder#add_basic_issue_asset|add_basic_issue_asset}
- * for information using public parameters to create issuance asset records.
- */
-typedef struct PublicParams PublicParams;
-
-/**
  * Stores threshold and weights for a multisignature requirement.
  */
 typedef struct SignatureRules SignatureRules;
@@ -589,15 +581,13 @@ struct TransactionBuilder *findora_ffi_transaction_builder_add_operation_create_
  * @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
  * @param {BigInt} amount - Amount to be issued.
  * @param {boolean} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
- * @param {PublicParams} zei_params - Public parameters necessary to generate asset records.
  */
 struct TransactionBuilder *findora_ffi_transaction_builder_add_basic_issue_asset(const struct TransactionBuilder *builder,
                                                                                  const struct XfrKeyPair *key_pair,
                                                                                  const char *code,
                                                                                  uint64_t seq_num,
                                                                                  const char *amount,
-                                                                                 bool conf_amount,
-                                                                                 const struct PublicParams *zei_params);
+                                                                                 bool conf_amount);
 
 /**
  * Adds an operation to the transaction builder that adds a hash to the ledger's custom data

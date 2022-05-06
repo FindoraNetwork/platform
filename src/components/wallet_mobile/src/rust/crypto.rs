@@ -11,6 +11,7 @@ use credentials::{
     CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
 };
 use cryptohash::sha256;
+use getrandom::getrandom;
 use globutils::wallet;
 use ledger::{
     data_model::{
@@ -19,20 +20,19 @@ use ledger::{
     },
     staking::{MAX_DELEGATION_AMOUNT, MIN_DELEGATION_AMOUNT},
 };
-use rand::{thread_rng, Rng};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use ring::pbkdf2;
 use ruc::Result;
 use std::num::NonZeroU32;
 use std::str;
-use zei::serialization::ZeiFromToBytes;
 use zei::xfr::asset_record::open_blind_asset_record as open_bar;
-use zei::xfr::lib::trace_assets as zei_trace_assets;
 use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 use zei::xfr::structs::{
     AssetType as ZeiAssetType, OpenAssetRecord, XfrBody, ASSET_TYPE_LENGTH,
 };
+use zei::xfr::trace_assets as zei_trace_assets;
+use zei_algebra::serialization::ZeiFromToBytes;
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 /// Generates random Base64 encoded asset type as a Base64 string. Used in asset definitions.
@@ -103,8 +103,8 @@ pub fn get_priv_key_str(key_pair: &XfrKeyPair) -> String {
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 /// Creates a new transfer key pair.
 pub fn new_keypair() -> XfrKeyPair {
-    let mut small_rng = rand::thread_rng();
-    XfrKeyPair::generate(&mut small_rng)
+    let mut prng = ChaChaRng::from_entropy();
+    XfrKeyPair::generate(&mut prng)
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -319,10 +319,9 @@ pub fn encryption_pbkdf2_aes256gcm(key_pair: String, password: String) -> Vec<u8
     const CREDENTIAL_LEN: usize = 32;
     const IV_LEN: usize = 12;
     let n_iter = NonZeroU32::new(32).unwrap();
-    let mut rng = thread_rng();
 
     let mut salt = [0u8; CREDENTIAL_LEN];
-    rng.fill(&mut salt);
+    getrandom(&mut salt).unwrap();
     let mut derived_key = [0u8; CREDENTIAL_LEN];
     pbkdf2::derive(
         pbkdf2::PBKDF2_HMAC_SHA512,
@@ -333,7 +332,7 @@ pub fn encryption_pbkdf2_aes256gcm(key_pair: String, password: String) -> Vec<u8
     );
 
     let mut iv = [0u8; IV_LEN];
-    rng.fill(&mut iv);
+    getrandom(&mut iv).unwrap();
 
     let cipher = Aes256Gcm::new(GenericArray::from_slice(&derived_key));
     let ciphertext = cipher

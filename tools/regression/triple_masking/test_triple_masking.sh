@@ -27,7 +27,7 @@ echo "\n\n\n Bar To Abar Conversion"
 echo "==============================================================================="
 # convert bar to abar
 sleep 1
-TXO_SID=$(fn owned-utxos | head -4 | tail -1 | cut  -f1)
+TXO_SID=$(target/release/fn owned-utxos | head -4 | tail -1 |  awk -F ' ' '{print $1}')
 fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
 
 sleep 20
@@ -36,31 +36,31 @@ sleep 20
 python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 839990000
 echo
 
-randomiser1=$(tail -n 1 owned_randomizers)
+commitment1=$(tail -n 1 owned_commitments)
 echo "\n\n Owned Abars after Bar to Abar conversion"
 sleep 20 #Do not remove/decrease
-fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r $randomiser1
+fn owned-abars --commitment $commitment1
 
 
 echo "\n\n\n Anonymous Transfer from Sender1 to Receiver1"
 echo "------------------------------------------------------------------------------"
-fn anon-transfer --amount 189990000 --anon-keys ./anon-keys-temp.keys --to-axfr-public-key ptyo7hlqn-Eywf_ttG99OSWtz6KfDUvLYDDVDlV1C-U= --to-enc-key SAmB7Oji4sAgENLaLb4PFclxQL_DRrEkXcYp6eXuXwI= --randomizer $randomiser1
+fn anon-transfer --amount 189990000 --anon-keys ./anon-keys-temp.keys --to-axfr-public-key ptyo7hlqn-Eywf_ttG99OSWtz6KfDUvLYDDVDlV1C-U= --to-enc-key SAmB7Oji4sAgENLaLb4PFclxQL_DRrEkXcYp6eXuXwI= --commitment $commitment1
 
-randomiser2=$(tail -n 1 sent_randomizers)
+commitment2=$(tail -n 1 sent_commitments)
 echo "\n\n Owned Abars for Receiver1 after Anon Transfer 1"
 sleep 30
-echo $randomiser2 > /dev/null
-fn owned-abars -p ptyo7hlqn-Eywf_ttG99OSWtz6KfDUvLYDDVDlV1C-U= -r $randomiser2
+echo $commitment2 > /dev/null
+fn owned-abars --commitment $commitment2
 
 echo "\n\n\n Anonymous Transfer from Receiver1 (Sender2) to Receiver2"
 echo "------------------------------------------------------------------------------"
-fn anon-transfer --amount 169990000 --anon-keys ./anon-keys-temp2.keys --to-axfr-public-key BdECoTzLNQHlKq1oGMI2kdh27yp_I2CZen0FGYLFkM0= --to-enc-key Ox5L-mGxzOFfd4fef7WZGJMdO-EKBVnnJypZiEl_9FQ= --randomizer $randomiser2
+fn anon-transfer --amount 169990000 --anon-keys ./anon-keys-temp2.keys --to-axfr-public-key BdECoTzLNQHlKq1oGMI2kdh27yp_I2CZen0FGYLFkM0= --to-enc-key Ox5L-mGxzOFfd4fef7WZGJMdO-EKBVnnJypZiEl_9FQ= --commitment $commitment2
 
-randomiser3=$(tail -n 1 sent_randomizers)
+commitment3=$(tail -n 1 sent_commitments)
 echo "\n\n Owned Abars for Receiver2 after Anon Transfer 2"
 sleep 30
-echo $randomiser3 > /dev/null
-fn owned-abars -p BdECoTzLNQHlKq1oGMI2kdh27yp_I2CZen0FGYLFkM0= -r $randomiser3
+echo $commitment3 > /dev/null
+fn owned-abars --commitment $commitment3
 
 sleep 2
 echo "\n\n\n Fetch merkle proof for Anon Transfer 2"
@@ -78,28 +78,29 @@ echo "==========================================================================
 # convert bar to abar
 sleep 1
 
-TXO_SID=$(fn owned-utxos | head -4 | tail -1 | cut  -f1)
+TXO_SID=$(target/release/fn owned-utxos | head -4 | tail -1 |  awk -F ' ' '{print $1}')
 fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
 sleep 5
-TXO_SID=$(fn owned-utxos | head -4 | tail -1 | cut  -f1)
+
+TXO_SID=$(target/release/fn owned-utxos | head -4 | tail -1 |  awk -F ' ' '{print $1}')
 fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
 sleep 5
 
 #Verify
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 419970000
+python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 419980000
 echo
 
-tail -n 2 owned_randomizers > randomizer_file
-randomiser=$(awk 'FNR>=1 && FNR<=1' randomizer_file)
+tail -n 2 owned_commitments > commitment_file
+commitment=$(awk 'FNR>=1 && FNR<=1' commitment_file)
 echo "\n\n Owned Abars after Bar to Abar conversion 1"
 sleep 20
-target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r $randomiser
-fee_randomiser=$(awk 'FNR>=2 && FNR<=2' randomizer_file)
+target/release/fn owned-abars --commitment $commitment
+fee_commitment=$(awk 'FNR>=2 && FNR<=2' commitment_file)
 echo "\n\n Owned Abars after Bar to Abar conversion 2"
 sleep 20
-target/release/fn owned-abars -p zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08= -r $fee_randomiser
+target/release/fn owned-abars --commitment $fee_commitment
 
-target/release/fn convert-abar-to-bar --anon-keys ./anon-keys-temp.keys -r $randomiser -F $fee_randomiser --to-wallet-address  fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
+target/release/fn convert-abar-to-bar --anon-keys ./anon-keys-temp.keys --commitment $commitment --to-wallet-address  fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
 sleep 20
 #Verify
 python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 629980000

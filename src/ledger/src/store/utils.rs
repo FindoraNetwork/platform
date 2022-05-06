@@ -14,14 +14,12 @@ use {
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::*,
-    zei::{
-        setup::PublicParams,
-        xfr::{
-            asset_record::{build_blind_asset_record, AssetRecordType},
-            sig::XfrKeyPair,
-            structs::AssetRecordTemplate,
-        },
+    zei::xfr::{
+        asset_record::{build_blind_asset_record, AssetRecordType},
+        sig::XfrKeyPair,
+        structs::AssetRecordTemplate,
     },
+    zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
 
 /// Define and Issue FRA.
@@ -58,13 +56,12 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
         fra_owner_kp.get_pk(),
     );
 
-    let params = PublicParams::default();
-
+    let pc_gens = RistrettoPedersenCommitment::default();
     let outputs = (0..2)
         .map(|_| {
             let (ba, _, _) = build_blind_asset_record(
                 &mut ChaChaRng::from_entropy(),
-                &params.pc_gens,
+                &pc_gens,
                 &template,
                 vec![],
             );

@@ -210,11 +210,11 @@ mod issue {
         },
         rand_chacha::rand_core::SeedableRng,
         rand_chacha::ChaChaRng,
-        zei::setup::PublicParams,
         zei::xfr::{
             asset_record::{build_blind_asset_record, AssetRecordType},
             structs::AssetRecordTemplate,
         },
+        zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
     };
 
     pub fn issue() -> Result<()> {
@@ -235,12 +235,12 @@ mod issue {
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
             root_kp.get_pk(),
         );
-        let params = PublicParams::default();
+        let pc_gens = RistrettoPedersenCommitment::default();
         let outputs = (0..2)
             .map(|_| {
                 let (ba, _, _) = build_blind_asset_record(
                     &mut ChaChaRng::from_entropy(),
-                    &params.pc_gens,
+                    &pc_gens,
                     &template,
                     vec![],
                 );

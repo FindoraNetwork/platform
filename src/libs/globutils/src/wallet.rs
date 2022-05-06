@@ -4,19 +4,19 @@
 //! Separating mnemonic to a standalone library is needed by tests.
 //!
 
-use {
-    bech32::{self, FromBase32, ToBase32},
-    bip0039::{Count, Language, Mnemonic},
-    crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey},
-    ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey},
-    ruc::*,
-    zei::{
-        anon_xfr::keys::{AXfrKeyPair, AXfrPubKey},
-        serialization::ZeiFromToBytes,
-        xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+use bech32::{self, FromBase32, ToBase32};
+use bip0039::{Count, Language, Mnemonic};
+use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
+use ruc::*;
+use zei::{
+    anon_xfr::{
+        keys::{AXfrKeyPair, AXfrPubKey},
+        structs::Commitment,
     },
-    zeialgebra::jubjub::JubjubScalar,
+    xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
+use zei_algebra::serialization::ZeiFromToBytes;
+use zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey};
 
 /// Randomly generate a 12words-length mnemonic.
 #[inline(always)]
@@ -210,12 +210,6 @@ pub fn anon_public_key_to_base64(key: &AXfrPubKey) -> String {
 }
 
 #[inline(always)]
-/// Convert a randomizer to base58
-pub fn randomizer_to_base58(r: &JubjubScalar) -> String {
-    bs58::encode(&JubjubScalar::zei_to_bytes(r)).into_string()
-}
-
-#[inline(always)]
 /// Restore a x public key from base64
 pub fn x_public_key_from_base64(pk: &str) -> Result<XPublicKey> {
     base64::decode_config(pk, base64::URL_SAFE)
@@ -258,12 +252,17 @@ pub fn x_secret_key_to_base64(key: &XSecretKey) -> String {
 }
 
 #[inline(always)]
-/// Restore a randomizer from base58
-pub fn randomizer_from_base58(sk: &str) -> Result<JubjubScalar> {
-    bs58::decode(sk)
-        .into_vec()
+/// Restore a Commitment from base64
+pub fn commitment_from_base64(com: &str) -> Result<Commitment> {
+    base64::decode_config(com, base64::URL_SAFE)
         .c(d!())
-        .and_then(|bytes| JubjubScalar::zei_from_bytes(&bytes).c(d!()))
+        .and_then(|bytes| Commitment::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Convert a Commitment to base64
+pub fn commitment_to_base64(com: &Commitment) -> String {
+    base64::encode_config(&Commitment::zei_to_bytes(com), base64::URL_SAFE)
 }
 
 /// Convert a XfrPublicKey to bech32 human-readable address

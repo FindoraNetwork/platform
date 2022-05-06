@@ -34,9 +34,9 @@ use {
     },
     zei::{
         anon_xfr::structs::MTLeafInfo,
-        serialization::ZeiFromToBytes,
         xfr::{sig::XfrPublicKey, structs::OwnerMemo},
     },
+    zei_algebra::serialization::ZeiFromToBytes,
 };
 
 /// Returns the git commit hash and commit date of this build
@@ -117,18 +117,18 @@ pub async fn get_owned_utxos(
         .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk)).keys().copied().collect()))
 }
 
-/// Returns an array of the ATxo Sids currently spendable by a given address
-async fn get_owned_abars(
+/// Returns the ATxo Sid currently spendable by a given commitment
+async fn get_owned_abar(
     data: web::Data<Arc<RwLock<QueryServer>>>,
-    owner: web::Path<String>,
-) -> actix_web::Result<web::Json<HashSet<ATxoSID>>> {
+    com: web::Path<String>,
+) -> actix_web::Result<web::Json<Option<ATxoSID>>> {
     let qs = data.read();
     let ledger = &qs.ledger_cloned;
     //let read = qs.state.as_ref().unwrap().read();
-    globutils::wallet::anon_public_key_from_base64(owner.as_str())
+    globutils::wallet::commitment_from_base64(com.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
-        .map(|pk| web::Json(ledger.get_owned_abars(&pk).iter().map(|a| a.0).collect()))
+        .map(|com| web::Json(ledger.get_owned_abar(&com)))
 }
 /// Returns the merkle proof for anonymous transactions
 async fn get_abar_proof(
@@ -177,7 +177,7 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetRelatedTxns => "get_related_txns",
             QueryServerRoutes::GetRelatedXfrs => "get_related_xfrs",
             QueryServerRoutes::GetOwnedUtxos => "get_owned_utxos",
-            QueryServerRoutes::GetOwnedAbars => "get_owned_abars",
+            QueryServerRoutes::GetOwnedAbars => "get_owned_abar",
             QueryServerRoutes::GetOwnerMemo => "get_owner_memo",
             QueryServerRoutes::GetOwnerMemoBatch => "get_owner_memo_batch",
             QueryServerRoutes::GetAbarMemo => "get_abar_memo",
@@ -557,8 +557,8 @@ impl QueryApi {
                     web::get().to(get_owned_utxos),
                 )
                 .route(
-                    &QueryServerRoutes::GetOwnedAbars.with_arg_template("address"),
-                    web::get().to(get_owned_abars),
+                    &QueryServerRoutes::GetOwnedAbars.with_arg_template("commitment"),
+                    web::get().to(get_owned_abar),
                 )
                 .route(
                     &QueryServerRoutes::GetOwnerMemo.with_arg_template("txo_sid"),
@@ -669,7 +669,7 @@ impl QueryApi {
                 )
                 .route(
                     &ApiRoutes::OwnedAbars.with_arg_template("owner"),
-                    web::get().to(query_owned_abars),
+                    web::get().to(query_owned_abar),
                 )
                 .route(
                     &ApiRoutes::ValidatorList.route(),

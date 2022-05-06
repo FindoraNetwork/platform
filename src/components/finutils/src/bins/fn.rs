@@ -27,12 +27,11 @@
 
 use {
     clap::{crate_authors, load_yaml, App},
-    crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey},
-    finutils::common::{self, evm::*, get_keypair},
+    finutils::common::{self, evm::*, get_keypair, utils},
     fp_utils::ecdsa::SecpPair,
     globutils::wallet,
     ledger::{
-        data_model::{ATxoSID, AssetTypeCode, ASSET_TYPE_FRA, FRA_DECIMALS},
+        data_model::{AssetTypeCode, ASSET_TYPE_FRA, FRA_DECIMALS},
         staking::StakerMemo,
     },
     rand_chacha::ChaChaRng,
@@ -42,9 +41,8 @@ use {
     std::fs::File,
     std::{borrow::Borrow, fmt, fs},
     zei::anon_xfr::keys::AXfrKeyPair,
-    zei::anon_xfr::structs::{
-        AnonBlindAssetRecord, OpenAnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
-    },
+    zei::anon_xfr::structs::OpenAnonBlindAssetRecordBuilder,
+    zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
 };
 
 fn main() {
@@ -396,7 +394,7 @@ fn run() -> Result<()> {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");
         let asset = m.value_of("asset");
-        let lowlevel_data = m.value_of("lowlevel_data");
+        let lowlevel_data = m.value_of("lowlevel-data");
         transfer_to_account(
             amount.parse::<u64>().c(d!())?,
             asset,
@@ -435,22 +433,22 @@ fn run() -> Result<()> {
             )
             .c(d!())?;
 
-            // Print randomizer to terminal
+            // Print commitment to terminal
             println!(
-                "\x1b[31;01m Randomizer: {}\x1b[00m",
-                wallet::randomizer_to_base58(&r)
+                "\x1b[31;01m Commitment: {}\x1b[00m",
+                wallet::commitment_to_base64(&r)
             );
-            // write the randomizer base58 form to the owned_randomizers file
+            // write the commitment base64 form to the owned_commitments file
             let mut file = fs::OpenOptions::new()
                 .append(true)
                 .create(true)
-                .open("owned_randomizers")
-                .expect("cannot open randomizers file");
+                .open("owned_commitments")
+                .expect("cannot open commitments file");
             std::io::Write::write_all(
                 &mut file,
-                ("\n".to_owned() + &wallet::randomizer_to_base58(&r)).as_bytes(),
+                ("\n".to_owned() + &wallet::commitment_to_base64(&r)).as_bytes(),
             )
-            .expect("randomizer write failed");
+            .expect("commitment write failed");
         }
     } else if let Some(m) = matches.subcommand_matches("convert-abar-to-bar") {
         // get anon keys for conversion
@@ -459,7 +457,7 @@ fn run() -> Result<()> {
         let dec_key = anon_keys.dec_key;
         // get the BAR receiver address
         let to = m
-            .value_of("to-xfr-pubkey")
+            .value_of("to-pubkey")
             .c(d!())
             .and_then(wallet::public_key_from_base64)
             .or_else(|_| {
@@ -468,20 +466,18 @@ fn run() -> Result<()> {
                 })
             })?;
 
-        // get the randomizers for abar conversion and anon_fee
-        let randomizer = m.value_of("randomizer");
-        let fee_randomizer = m.value_of("fee-randomizer");
+        // get the commitments for abar conversion and anon_fee
+        let commitment = m.value_of("commitment");
 
-        if randomizer.is_none() || fee_randomizer.is_none() {
+        if commitment.is_none() {
             println!("{}", m.usage());
         } else {
             // Build transaction and submit to network
             common::convert_abar2bar(
                 axfr_secret_key,
-                randomizer.unwrap(),
+                commitment.unwrap(),
                 dec_key,
                 &to,
-                fee_randomizer.unwrap(),
                 m.is_present("confidential-amount"),
                 m.is_present("confidential-type"),
             )
@@ -509,104 +505,77 @@ fn run() -> Result<()> {
         println!("Keys :\n {}", serde_json::to_string_pretty(&keys).unwrap());
     } else if let Some(m) = matches.subcommand_matches("owned-abars") {
         // Generates a list of owned Abars (both spent and unspent)
-        let randomizer_str = m.value_of("randomizer");
-        let axfr_public_key_str = m.value_of("axfr-public-key");
+        let commitment_str = m.value_of("commitment");
 
         // create derived public key
-        let randomizer = wallet::randomizer_from_base58(randomizer_str.unwrap())?;
-        let axfr_public_key =
-            wallet::anon_public_key_from_base64(axfr_public_key_str.unwrap())?;
-        let derived_public_key = axfr_public_key.randomize(&randomizer);
-
-        println!(
-            "Derived Public Key:   {}",
-            wallet::anon_public_key_to_base64(&derived_public_key)
-        );
+        let commitment = wallet::commitment_from_base64(commitment_str.unwrap())?;
 
         // get results from query server and print
-        let list = common::get_owned_abars(&derived_public_key).c(d!())?;
+        let abar = utils::get_owned_abar(&commitment).c(d!())?;
         println!(
             "(AtxoSID, ABAR)   :  {}",
-            serde_json::to_string(&list).c(d!())?
+            serde_json::to_string(&abar).c(d!())?
         );
     } else if let Some(m) = matches.subcommand_matches("anon-balance") {
-        let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
         // Generates a list of owned Abars (both spent and unspent)
-        let randomizers_list = m
-            .value_of("randomizers")
-            .unwrap_or_else(|| panic!("Randomizer list missing \n {}", m.usage()));
-
-        let axfr_public_key =
-            wallet::anon_public_key_from_base64(anon_keys.axfr_public_key.as_str())
-                .c(d!())?;
+        let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
         let axfr_secret_key =
             wallet::anon_secret_key_from_base64(anon_keys.axfr_secret_key.as_str())
                 .c(d!())?;
         let dec_key =
             wallet::x_secret_key_from_base64(anon_keys.dec_key.as_str()).c(d!())?;
 
-        common::anon_balance(
-            axfr_secret_key,
-            axfr_public_key,
-            dec_key,
-            randomizers_list,
-        )?;
+        let commitments_list = m
+            .value_of("commitments")
+            .unwrap_or_else(|| panic!("Commitment list missing \n {}", m.usage()));
+
+        common::anon_balance(axfr_secret_key, dec_key, commitments_list)?;
     } else if let Some(m) = matches.subcommand_matches("owned-open-abars") {
         let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
-        let randomizer_str = m.value_of("randomizer");
+        let commitment_str = m.value_of("commitment");
 
         // create derived public key
-        let randomizer = wallet::randomizer_from_base58(randomizer_str.unwrap())?;
-        let axfr_public_key =
-            wallet::anon_public_key_from_base64(anon_keys.axfr_public_key.as_str())?;
+        let commitment = wallet::commitment_from_base64(commitment_str.unwrap())?;
         let axfr_secret_key =
             wallet::anon_secret_key_from_base64(anon_keys.axfr_secret_key.as_str())
                 .c(d!())?;
         let dec_key = wallet::x_secret_key_from_base64(anon_keys.dec_key.as_str())?;
-        let derived_public_key = axfr_public_key.randomize(&randomizer);
-
-        println!(
-            "Derived Public Key:   {}",
-            wallet::anon_public_key_to_base64(&derived_public_key)
-        );
 
         // get results from query server and print
-        let list = common::get_owned_abars(&derived_public_key).c(d!())?;
-
-        let list = list
-            .iter()
-            .map(|(uid, abar)| {
-                let memo = common::get_abar_memo(uid).unwrap().unwrap();
-                let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
-                    abar,
-                    memo,
-                    &axfr_secret_key,
-                    &dec_key,
-                )
-                .unwrap()
-                .build()
-                .unwrap();
-                (uid, abar, oabar)
-            })
-            .collect::<Vec<(&ATxoSID, &AnonBlindAssetRecord, OpenAnonBlindAssetRecord)>>(
-            );
+        let (uid, abar) = utils::get_owned_abar(&commitment).c(d!())?;
+        let memo = utils::get_abar_memo(&uid).unwrap().unwrap();
+        let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
+            &abar,
+            memo,
+            &axfr_secret_key,
+            &dec_key,
+        )
+        .unwrap()
+        .build()
+        .unwrap();
 
         println!(
             "(AtxoSID, ABAR, OABAR)   :  {}",
-            serde_json::to_string(&list).c(d!())?
+            serde_json::to_string(&(uid, abar, oabar)).c(d!())?
         );
-    } else if let Some(_m) = matches.subcommand_matches("owned-utxos") {
-        let list = common::get_owned_utxos()?;
+    } else if let Some(m) = matches.subcommand_matches("owned-utxos") {
+        // All assets are shown in the default case
+        let asset = m.value_of("asset");
+
+        // fetch filtered list by asset
+        let list = common::get_owned_utxos(asset)?;
         let pk = wallet::public_key_to_base64(get_keypair().unwrap().pub_key.borrow());
 
+        // Print UTXO table
         println!("Owned utxos for {:?}", pk);
+        println!("{:-^1$}", "", 100);
         println!(
-            "======================================================================="
+            "{0: <8} | {1: <18} | {2: <45} ",
+            "ATxoSID", "Amount", "AssetType"
         );
-        println!("TxoSID\tAmount\t\t\t\tAssetType");
         for (a, b, c) in list.iter() {
             println!(
-                "{:?}\t{:?}\t{:?}",
+                "{0: <8} | {1: <18} | {2: <45} ",
                 a.0,
                 b.get_amount().unwrap(),
                 AssetTypeCode {
@@ -621,17 +590,16 @@ fn run() -> Result<()> {
         let axfr_secret_key = anon_keys.axfr_secret_key;
         let dec_key = anon_keys.dec_key;
 
-        // get randomizers
-        let randomizer = m.value_of("randomizer");
-        let fee_randomizer = m.value_of("fra-randomizer");
+        // get commitments
+        let commitment = m.value_of("commitment");
+        let fee_commitment = m.value_of("fra-commitment");
 
         // get receiver keys and amount
         let to_axfr_public_key = m.value_of("to-axfr-public-key");
         let to_enc_key = m.value_of("to-enc-key");
         let amount = m.value_of("amount");
 
-        if randomizer.is_none()
-            || fee_randomizer.is_none()
+        if commitment.is_none()
             || to_axfr_public_key.is_none()
             || to_enc_key.is_none()
             || amount.is_none()
@@ -641,8 +609,8 @@ fn run() -> Result<()> {
             // build transaction and submit
             common::gen_oabar_add_op(
                 axfr_secret_key,
-                randomizer.unwrap(),
-                fee_randomizer,
+                commitment.unwrap(),
+                fee_commitment,
                 dec_key,
                 amount.unwrap(),
                 to_axfr_public_key.unwrap(),
@@ -687,7 +655,7 @@ fn run() -> Result<()> {
                     .c(d!("invalid file"))
             })
         })?;
-        let randomizers = m.value_of("randomizer-file").c(d!()).and_then(|f| {
+        let commitments = m.value_of("commitment-file").c(d!()).and_then(|f| {
             fs::read_to_string(f)
                 .c(d!())
                 .map(|rms| rms.lines().map(String::from).collect::<Vec<String>>())
@@ -718,7 +686,7 @@ fn run() -> Result<()> {
             || dec_keys.is_empty()
             || to_axfr_public_keys.is_empty()
             || to_enc_keys.is_empty()
-            || randomizers.is_empty()
+            || commitments.is_empty()
             || amounts.is_empty()
             || assets.is_empty()
         {
@@ -729,7 +697,7 @@ fn run() -> Result<()> {
                 dec_keys,
                 to_axfr_public_keys,
                 to_enc_keys,
-                randomizers,
+                commitments,
                 amounts,
                 assets,
             )
@@ -754,25 +722,16 @@ fn run() -> Result<()> {
             }
             None => return Err(eg!("path for anon-keys file not found")),
         };
-        let randomizer_str = m.value_of("randomizer");
+        let commitment_str = m.value_of("commitment");
+        let commitment = wallet::commitment_from_base64(commitment_str.unwrap())?;
 
-        // create derived public key
-        let randomizer = wallet::randomizer_from_base58(randomizer_str.unwrap())?;
-        let axfr_public_key =
-            wallet::anon_public_key_from_base64(anon_keys.axfr_public_key.as_str())?;
         let axfr_secret_key =
             wallet::anon_secret_key_from_base64(anon_keys.axfr_secret_key.as_str())
                 .c(d!())?;
         let dec_key = wallet::x_secret_key_from_base64(anon_keys.dec_key.as_str())?;
-        let derived_public_key = axfr_public_key.randomize(&randomizer);
 
-        println!(
-            "Derived Public Key:   {}",
-            wallet::anon_public_key_to_base64(&derived_public_key)
-        );
-
-        let list = common::get_owned_abars(&derived_public_key).c(d!())?;
-        common::check_abar_status(axfr_secret_key, randomizer, dec_key, list).c(d!())?;
+        let abar = utils::get_owned_abar(&commitment).c(d!())?;
+        common::check_abar_status(axfr_secret_key, dec_key, abar).c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("replace_staker") {
         let target = m
             .value_of("target")

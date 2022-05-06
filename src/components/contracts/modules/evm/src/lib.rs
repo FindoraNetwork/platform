@@ -1,5 +1,6 @@
 #![deny(warnings)]
 #![allow(missing_docs)]
+#![allow(clippy::too_many_arguments)]
 
 mod basic;
 pub mod impls;
@@ -11,7 +12,7 @@ pub mod utils;
 use abci::{RequestQuery, ResponseQuery};
 use config::abci::global_cfg::CFG;
 use ethabi::Token;
-use ethereum_types::{H160, U256};
+use ethereum_types::{Bloom, BloomInput, H160, H256, U256};
 use fp_core::{
     context::Context,
     macros::Get,
@@ -23,6 +24,11 @@ use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
 };
+
+use fp_evm::TransactionStatus;
+
+use ethereum::{Log, Receipt, TransactionAction, TransactionSignature, TransactionV0};
+
 use fp_types::{
     actions::{evm::Action, xhub::NonConfidentialOutput},
     crypto::{Address, HA160},
@@ -90,7 +96,9 @@ impl<C: Config> App<C> {
         _to: &Address,
         _value: U256,
         _lowlevel: Vec<u8>,
-    ) -> Result<()> {
+        transaction_index: u32,
+        transaction_hash: H256,
+    ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
         let function = self.contracts.bridge.function("withdrawFRC20").c(d!())?;
 
         let asset = Token::FixedBytes(Vec::from(_asset));
@@ -105,22 +113,41 @@ impl<C: Config> App<C> {
 
         let lowlevel = Token::Bytes(_lowlevel);
 
-        println!("{}, {}, {}, {}, {}", asset, from, to, value, lowlevel);
+        // println!("{}, {}, {}, {}, {}", asset, from, to, value, lowlevel);
 
         let input = function
             .encode_input(&[asset, from, to, value, lowlevel])
             .c(d!())?;
 
-        let _ = ActionRunner::<C>::execute_systemc_contract(
+        let from = H160::zero();
+        let gas_limit = 9999999;
+        let value = U256::zero();
+
+        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
-            input,
-            H160::zero(),
-            9999999,
+            input.clone(),
+            from,
+            gas_limit,
             self.contracts.bridge_address,
-            U256::zero(),
+            value,
         )?;
 
-        Ok(())
+        let action = TransactionAction::Call(self.contracts.bridge_address);
+        let gas_price = U256::one();
+
+        Ok(Self::system_transaction(
+            transaction_hash,
+            input,
+            value,
+            action,
+            U256::from(gas_limit),
+            gas_price,
+            used_gas,
+            transaction_index,
+            from,
+            self.contracts.bridge_address,
+            logs,
+        ))
     }
 
     pub fn withdraw_fra(
@@ -130,7 +157,9 @@ impl<C: Config> App<C> {
         _to: &Address,
         _value: U256,
         _lowlevel: Vec<u8>,
-    ) -> Result<()> {
+        transaction_index: u32,
+        transaction_hash: H256,
+    ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
         let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
 
         let bytes: &[u8] = _from.as_ref();
@@ -142,22 +171,41 @@ impl<C: Config> App<C> {
         let value = Token::Uint(_value);
         let lowlevel = Token::Bytes(_lowlevel);
 
-        println!("{:?}, {:?}, {:?}, {:?}", from, to, value, lowlevel);
+        // println!("{:?}, {:?}, {:?}, {:?}", from, to, value, lowlevel);
 
         let input = function
             .encode_input(&[from, to, value, lowlevel])
             .c(d!())?;
 
-        let _ = ActionRunner::<C>::execute_systemc_contract(
+        let gas_limit = 9999999;
+        let value = U256::zero();
+        let gas_price = U256::one();
+        let from = H160::zero();
+
+        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
-            input,
-            H160::zero(),
-            9999999,
+            input.clone(),
+            from,
+            gas_limit,
             self.contracts.bridge_address,
-            U256::zero(),
+            value,
         )?;
 
-        Ok(())
+        let action = TransactionAction::Call(self.contracts.bridge_address);
+
+        Ok(Self::system_transaction(
+            transaction_hash,
+            input,
+            value,
+            action,
+            U256::from(gas_limit),
+            gas_price,
+            used_gas,
+            transaction_index,
+            from,
+            self.contracts.bridge_address,
+            logs,
+        ))
     }
 
     pub fn consume_mint(&self, ctx: &Context) -> Vec<NonConfidentialOutput> {
@@ -174,6 +222,67 @@ impl<C: Config> App<C> {
         }
 
         pending_outputs
+    }
+
+    fn logs_bloom(logs: &[ethereum::Log], bloom: &mut Bloom) {
+        for log in logs {
+            bloom.accrue(BloomInput::Raw(&log.address[..]));
+            for topic in log.topics.iter() {
+                bloom.accrue(BloomInput::Raw(&topic[..]));
+            }
+        }
+    }
+
+    fn system_transaction(
+        transaction_hash: H256,
+        input: Vec<u8>,
+        value: U256,
+        action: TransactionAction,
+        gas_limit: U256,
+        gas_price: U256,
+        used_gas: U256,
+        transaction_index: u32,
+        from: H160,
+        to: H160,
+        logs: Vec<Log>,
+    ) -> (TransactionV0, TransactionStatus, Receipt) {
+        let signature_fake = H256([
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+        ]);
+        let tx = TransactionV0 {
+            nonce: U256::zero(),
+            gas_price,
+            gas_limit,
+            value,
+            signature: TransactionSignature::new(28, signature_fake, signature_fake)
+                .unwrap(),
+            input,
+            action,
+        };
+
+        let mut logs_bloom = Bloom::default();
+        Self::logs_bloom(&logs, &mut logs_bloom);
+
+        let tx_status = TransactionStatus {
+            transaction_hash,
+            transaction_index,
+            from,
+            to: Some(to),
+            contract_address: Some(to),
+            logs,
+            logs_bloom,
+        };
+
+        let receipt = Receipt {
+            state_root: H256::from_low_u64_be(1), //ExitReason::Succeed(_) => H256::from_low_u64_be(1),
+            used_gas,
+            logs_bloom: tx_status.logs_bloom,
+            logs: tx_status.logs.clone(),
+        };
+
+        (tx, tx_status, receipt)
     }
 }
 

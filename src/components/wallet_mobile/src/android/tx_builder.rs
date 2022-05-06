@@ -144,7 +144,6 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
 /// @param {BigInt} seq_num - Issuance sequence number. Every subsequent issuance of a given asset type must have a higher sequence number than before.
 /// @param {BigInt} amount - Amount to be issued.
 /// @param {boolean} conf_amount - `true` means the asset amount is confidential, and `false` means it's nonconfidential.
-/// @param {PublicParams} zei_params - Public parameters necessary to generate asset records.
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddBasicIssueAsset(
     env: JNIEnv,
     _: JClass,
@@ -154,7 +153,6 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddBasic
     seq_num: jlong,
     amount: JString,
     conf_amount: jboolean,
-    zei_params: jlong,
 ) -> jlong {
     let builder = &*(builder as *mut TransactionBuilder);
     let key_pair = &*(key_pair as *mut XfrKeyPair);
@@ -173,7 +171,6 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddBasic
             seq_num as u64,
             amount,
             conf_amount == JNI_TRUE,
-            zei_params,
         )
     );
     Box::into_raw(Box::new(builder)) as jlong

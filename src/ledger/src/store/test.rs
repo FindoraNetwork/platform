@@ -8,11 +8,9 @@ use {
         Transaction, TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxoRef,
         TxoSID, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
     },
-    crypto::basics::hybrid_encryption::{XPublicKey, XSecretKey},
     rand_core::SeedableRng,
-    zei::anon_xfr::{keys::AXfrKeyPair, structs::OpenAnonBlindAssetRecordBuilder},
     zei::{
-        setup::PublicParams,
+        anon_xfr::{keys::AXfrKeyPair, structs::OpenAnonBlindAssetRecordBuilder},
         xfr::{
             asset_record::{
                 build_blind_asset_record, open_blind_asset_record, AssetRecordType,
@@ -21,7 +19,9 @@ use {
             structs::{AssetRecord, AssetRecordTemplate},
         },
     },
-    zeialgebra::groups::{One, Zero},
+    zei_algebra::prelude::{One, Zero},
+    zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
+    zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
 
 #[cfg(test)]
@@ -147,7 +147,6 @@ fn test_asset_creation_invalid_public_key() {
 #[test]
 fn test_asset_transfer() {
     let mut ledger = LedgerState::tmp_ledger();
-    let params = PublicParams::default();
 
     let code = AssetTypeCode::gen_random();
     let mut prng = ChaChaRng::from_entropy();
@@ -178,12 +177,9 @@ fn test_asset_transfer() {
         art,
         key_pair.get_pk(),
     );
-    let (ba, _, _) = build_blind_asset_record(
-        &mut ledger.get_prng(),
-        &params.pc_gens,
-        &template,
-        vec![],
-    );
+    let pc_gens = RistrettoPedersenCommitment::default();
+    let (ba, _, _) =
+        build_blind_asset_record(&mut ledger.get_prng(), &pc_gens, &template, vec![]);
     let second_ba = ba.clone();
 
     let asset_issuance_body = IssueAssetBody::new(
@@ -343,8 +339,6 @@ fn test_asset_creation_invalid_signature() {
 fn asset_issued() {
     let mut ledger = LedgerState::tmp_ledger();
 
-    let params = PublicParams::default();
-
     assert!(ledger.get_state_commitment() == (HashOf::new(&None), 0));
     let token_code1 = AssetTypeCode::gen_random();
     let keypair = build_keys(&mut ledger.get_prng());
@@ -373,8 +367,9 @@ fn asset_issued() {
         *keypair.get_pk_ref(),
     );
 
+    let pc_gens = RistrettoPedersenCommitment::default();
     let (ba, _, _) =
-        build_blind_asset_record(&mut ledger.get_prng(), &params.pc_gens, &ar, vec![]);
+        build_blind_asset_record(&mut ledger.get_prng(), &pc_gens, &ar, vec![]);
     let asset_issuance_body = IssueAssetBody::new(
         &token_code1,
         0,
@@ -475,7 +470,6 @@ fn asset_issued() {
 #[test]
 pub fn test_transferable() {
     let mut ledger = LedgerState::tmp_ledger();
-    let params = PublicParams::default();
     let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
     let alice = XfrKeyPair::generate(&mut ledger.get_prng());
     let bob = XfrKeyPair::generate(&mut ledger.get_prng());
@@ -494,7 +488,6 @@ pub fn test_transferable() {
     apply_transaction(&mut ledger, tx);
     let (tx, _) = create_issue_and_transfer_txn(
         &mut ledger,
-        &params,
         &code,
         100,
         &issuer,
@@ -594,7 +587,6 @@ pub fn test_transferable() {
     .unwrap();
     let (mut tx, ar) = create_issue_and_transfer_txn(
         &mut ledger,
-        &params,
         &code,
         100,
         &issuer,
@@ -626,7 +618,6 @@ pub fn test_transferable() {
 #[test]
 pub fn test_max_units() {
     let mut ledger = LedgerState::tmp_ledger();
-    let params = PublicParams::default();
 
     let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
 
@@ -644,7 +635,6 @@ pub fn test_max_units() {
     apply_transaction(&mut ledger, tx);
     let tx = create_issuance_txn(
         &mut ledger,
-        &params,
         &code,
         50,
         0,
@@ -656,7 +646,6 @@ pub fn test_max_units() {
         // Ensure that a single overlfowing transaction fails
         let tx = create_issuance_txn(
             &mut ledger,
-            &params,
             &code,
             51,
             1,
@@ -672,7 +661,6 @@ pub fn test_max_units() {
         // Ensure that cap can be reached
         let tx = create_issuance_txn(
             &mut ledger,
-            &params,
             &code,
             50,
             1,
@@ -686,7 +674,6 @@ pub fn test_max_units() {
         // Cant try to exceed asset cap by issuing confidentially
         let tx = create_issuance_txn(
             &mut ledger,
-            &params,
             &code,
             1,
             2,
@@ -804,10 +791,17 @@ fn test_update_anon_stores() {
         Nullifier::one() as Nullifier,
     ];
 
-    let oab = OpenAnonBlindAssetRecordBuilder::new();
     let enc_key = &XPublicKey::from(&XSecretKey::new(&mut prng));
     let pub_key = AXfrKeyPair::generate(&mut prng).pub_key();
-    let oabar = oab
+    let oabar = OpenAnonBlindAssetRecordBuilder::new()
+        .amount(123)
+        .asset_type(zei::xfr::structs::AssetType([39u8; 32]))
+        .pub_key(pub_key.to_owned())
+        .finalize(&mut prng, enc_key)
+        .unwrap()
+        .build()
+        .unwrap();
+    let oabar2 = OpenAnonBlindAssetRecordBuilder::new()
         .amount(123)
         .asset_type(zei::xfr::structs::AssetType([39u8; 32]))
         .pub_key(pub_key.to_owned())
@@ -816,16 +810,11 @@ fn test_update_anon_stores() {
         .build()
         .unwrap();
     let output_abars = vec![
-        vec![
-            AnonBlindAssetRecord::from_oabar(&oabar),
-            AnonBlindAssetRecord::from_oabar(&oabar),
-        ],
-        vec![
-            AnonBlindAssetRecord::from_oabar(&oabar),
-            AnonBlindAssetRecord::from_oabar(&oabar),
-        ],
+        vec![AnonBlindAssetRecord::from_oabar(&oabar)],
+        vec![AnonBlindAssetRecord::from_oabar(&oabar2)],
     ];
-    let new_pub_key = oabar.pub_key_ref().randomize(&oabar.get_key_rand_factor());
+    let new_com = oabar.compute_commitment();
+    let new_com2 = oabar2.compute_commitment();
     let tx_block = vec![
         FinalizedTransaction {
             txn: Default::default(),
@@ -861,31 +850,16 @@ fn test_update_anon_stores() {
     assert!(state.nullifier_set.read().get(&d0).unwrap().is_some());
     assert!(state.nullifier_set.read().get(&d1).unwrap().is_some());
 
-    assert_eq!(state.status.next_atxo.0, 4);
+    assert_eq!(state.status.next_atxo.0, 2);
     assert_eq!(
         state.status.ax_txo_to_txn_location.get(&ATxoSID(0)),
         Some((TxnSID(0), OutputPosition(0)))
     );
     assert_eq!(
         state.status.ax_txo_to_txn_location.get(&ATxoSID(1)),
-        Some((TxnSID(0), OutputPosition(1)))
-    );
-    assert_eq!(
-        state.status.ax_txo_to_txn_location.get(&ATxoSID(2)),
         Some((TxnSID(1), OutputPosition(0)))
     );
-    assert_eq!(
-        state.status.ax_txo_to_txn_location.get(&ATxoSID(3)),
-        Some((TxnSID(1), OutputPosition(1)))
-    );
 
-    let mut set = HashSet::new();
-    set.insert(ATxoSID(0));
-    set.insert(ATxoSID(1));
-    set.insert(ATxoSID(2));
-    set.insert(ATxoSID(3));
-    assert_eq!(
-        state.status.owned_ax_utxos.get(&new_pub_key.clone()),
-        Some(set)
-    );
+    assert_eq!(state.status.owned_ax_utxos.get(&new_com), Some(ATxoSID(0)));
+    assert_eq!(state.status.owned_ax_utxos.get(&new_com2), Some(ATxoSID(1)));
 }

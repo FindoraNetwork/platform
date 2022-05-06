@@ -1,9 +1,7 @@
-use crate::data_model::AbarToBarOps;
-use zei::anon_xfr::abar_to_bar::AbarToBarBody;
 use {
     crate::{
         data_model::{
-            AnonFeeOps, AnonTransferOps, AssetType, AssetTypeCode, BarToAbarOps,
+            AbarToBarOps, AnonTransferOps, AssetType, AssetTypeCode, BarToAbarOps,
             DefineAsset, IssueAsset, IssuerPublicKey, Memo, NoReplayToken, Operation,
             Transaction, TransferAsset, TransferType, TxOutput, TxnTempSID, TxoRef,
             TxoSID, UpdateMemo,
@@ -31,25 +29,25 @@ use {
     },
     zei::{
         anon_xfr::{
-            anon_fee::AnonFeeBody,
+            abar_to_bar::AbarToBarNote,
             bar_to_abar::verify_bar_to_abar_note,
-            structs::{AXfrBody, AnonBlindAssetRecord, Nullifier},
+            structs::{AXfrNote, AnonBlindAssetRecord, Nullifier},
         },
-        serialization::ZeiFromToBytes,
-        setup::{NodeParams, PublicParams},
+        setup::{BulletproofParams, VerifierParams},
         xfr::{
-            lib::verify_xfr_body,
             sig::XfrPublicKey,
             structs::{XfrAmount, XfrAssetType},
+            verify_xfr_body,
         },
     },
+    zei_algebra::serialization::ZeiFromToBytes,
 };
 
 lazy_static! {
     static ref PRNG: Arc<Mutex<ChaCha20Rng>> =
         Arc::new(Mutex::new(ChaChaRng::from_entropy()));
-    static ref PARAMS: Arc<Mutex<PublicParams>> =
-        Arc::new(Mutex::new(PublicParams::default()));
+    static ref PARAMS: Arc<Mutex<BulletproofParams>> =
+        Arc::new(Mutex::new(BulletproofParams::default()));
 }
 
 /// Check operations in the context of a tx, partially.
@@ -98,14 +96,12 @@ pub struct TxnEffect {
     pub fra_distributions: Vec<FraDistributionOps>,
     /// Staking operations
     pub update_stakers: Vec<UpdateStakerOps>,
-    /// Newly create Anon Blind Asset Records
+    /// Newly created Anon Blind Asset Records
     pub bar_conv_abars: Vec<AnonBlindAssetRecord>,
     /// Body of Abar to Bar conversions
-    pub abar_conv_inputs: Vec<AbarToBarBody>,
+    pub abar_conv_inputs: Vec<AbarToBarNote>,
     /// New anon transfer bodies
-    pub axfr_bodies: Vec<AXfrBody>,
-    /// New anon fee bodies
-    pub anon_fee_bodies: Vec<AnonFeeBody>,
+    pub axfr_bodies: Vec<AXfrNote>,
     /// replace staker operations
     pub replace_stakers: Vec<ReplaceStakerOps>,
 }
@@ -223,10 +219,6 @@ impl TxnEffect {
                 Operation::TransferAnonAsset(i) => {
                     check_nonce!(i);
                     te.add_anon_transfer(i).c(d!())?;
-                }
-                Operation::AnonymousFee(i) => {
-                    check_nonce!(i);
-                    te.add_anon_fee_op(i).c(d!())?;
                 }
             }
         }
@@ -576,7 +568,7 @@ impl TxnEffect {
     fn add_bar_to_abar(&mut self, bar_to_abar: &BarToAbarOps) -> Result<()> {
         let key = bar_to_abar.note.body.input.public_key;
         // fetch the verifier Node Params for PlonkProof
-        let node_params = NodeParams::bar_to_abar_params()?;
+        let node_params = VerifierParams::bar_to_abar_params()?;
         // verify the Plonk proof and signature
         verify_bar_to_abar_note(&node_params, &bar_to_abar.note, &key).c(d!())?;
 
@@ -595,7 +587,7 @@ impl TxnEffect {
         Ok(())
     }
 
-    /// A abar to bar note is valid iff
+    /// An abar to bar note is valid iff
     /// 1. the signature is correct,
     /// 2. the ZKP can be verified,
     /// 3. the input ABARs are unspent. (checked in finish block)
@@ -603,57 +595,39 @@ impl TxnEffect {
     /// * abar_to_bar - The Operation for AbarToBar
     /// returns an error if validation fails
     fn add_abar_to_bar(&mut self, abar_to_bar: &AbarToBarOps) -> Result<()> {
-        let body = abar_to_bar.note.body.clone();
-
-        // serialize body and verify the signature
-        let msg: Vec<u8> = bincode::serialize(&body).c(d!("Serialization error!"))?;
-        body.input
-            .1
-            .verify(msg.as_slice(), &abar_to_bar.note.signature)
-            .c(d!("AbarToBar signature verification failed"))?;
-
         // collect body in TxnEffect to verify ZKP later with merkle root
-        self.abar_conv_inputs.push(body.clone());
+        self.abar_conv_inputs.push(abar_to_bar.note.clone());
         // collect newly created BARs
         self.txos.push(Some(TxOutput {
             id: None,
-            record: body.output,
+            record: abar_to_bar.note.body.output.clone(),
             lien: None,
         }));
 
         Ok(())
     }
 
+    /// An anon transfer note is valid iff
+    /// 1. no double spending in the txn,
+    /// 2. the signature is correct,
+    /// 3. ZKP can be verified,
+    /// 4. the input ABARs are unspent. (checked in finish block)
+    /// # Arguments
+    /// * anon_transfer - The Operation for Anon Transfer
+    /// returns an error if validation fails
     fn add_anon_transfer(&mut self, anon_transfer: &AnonTransferOps) -> Result<()> {
         // verify nullifiers not double spent within txn
-
         for i in &anon_transfer.note.body.inputs {
             if self
                 .axfr_bodies
                 .iter()
-                .flat_map(|ab| ab.inputs.iter().map(|i| i.0))
-                .any(|n| n == i.0)
+                .flat_map(|ab| ab.body.inputs.iter())
+                .any(|n| n == i)
             {
                 return Err(eg!("Transaction has duplicate nullifiers"));
             }
         }
-
-        // verify axfr_note signatures
-        anon_transfer.note.verify().c(d!())?;
-
-        // push
-        self.axfr_bodies.push(anon_transfer.note.body.clone());
-
-        Ok(())
-    }
-
-    fn add_anon_fee_op(&mut self, anon_fee: &AnonFeeOps) -> Result<()> {
-        // verify anon_fee_note signatures
-        anon_fee.note.verify_signatures().c(d!())?;
-
-        // push
-        self.anon_fee_bodies.push(anon_fee.note.body.clone());
-
+        self.axfr_bodies.push(anon_transfer.note.clone());
         Ok(())
     }
 }
@@ -745,25 +719,18 @@ impl BlockEffect {
         }
 
         for inputs in txn_effect.abar_conv_inputs {
-            self.new_nullifiers.push(inputs.input.0);
+            self.new_nullifiers.push(inputs.body.input);
         }
 
-        for axfr_body in txn_effect.axfr_bodies {
-            for (n, _) in axfr_body.inputs {
+        for axfr_note in txn_effect.axfr_bodies {
+            for n in axfr_note.body.inputs {
                 self.new_nullifiers.push(n);
             }
-            for abar in axfr_body.outputs {
+            for abar in axfr_note.body.outputs {
                 current_txn_abars.push(abar)
             }
         }
 
-        for anon_fee_body in txn_effect.anon_fee_bodies {
-            let (n, _) = anon_fee_body.input;
-            self.new_nullifiers.push(n);
-
-            let op_abar = anon_fee_body.output;
-            current_txn_abars.push(op_abar)
-        }
         self.output_abars.push(current_txn_abars);
 
         Ok(temp_sid)
@@ -779,26 +746,15 @@ impl BlockEffect {
 
         // Check that no nullifier are created twice in same block
         // for anon_transfer and abar to bar conversion
-        for axfr_body in txn_effect.axfr_bodies.iter() {
-            for (nullifier, _) in axfr_body.inputs.iter() {
+        for axfr_note in txn_effect.axfr_bodies.iter() {
+            for nullifier in axfr_note.body.inputs.iter() {
                 if self.new_nullifiers.contains(nullifier) {
                     return Err(eg!());
                 }
             }
         }
         for inputs in txn_effect.abar_conv_inputs.iter() {
-            if self.new_nullifiers.contains(&inputs.input.0) {
-                return Err(eg!());
-            }
-            if txn_effect.anon_fee_bodies.is_empty() {
-                return Err(eg!("Abar to Bar conversion missing anon fee"));
-            }
-        }
-
-        // Check that no nullifier are created twice in same block
-        for anon_fee_body in txn_effect.anon_fee_bodies.iter() {
-            let (nullifier, _) = anon_fee_body.input;
-            if self.new_nullifiers.contains(&nullifier) {
+            if self.new_nullifiers.contains(&inputs.body.input) {
                 return Err(eg!());
             }
         }

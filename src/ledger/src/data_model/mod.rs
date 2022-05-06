@@ -47,25 +47,22 @@ use {
     unicode_normalization::UnicodeNormalization,
     zei::{
         anon_xfr::{
-            abar_to_bar::AbarToBarNote,
-            anon_fee::AnonFeeNote,
-            bar_to_abar::{BarToAbarBody, BarToAbarNote},
-            keys::AXfrPubKey,
+            abar_to_bar::AbarToBarNote, bar_to_abar::BarToAbarNote, keys::AXfrPubKey,
             structs::AXfrNote,
         },
-        errors::ZeiError,
-        serialization::ZeiFromToBytes,
         xfr::{
-            lib::{gen_xfr_body, XfrNotePolicies},
+            gen_xfr_body,
             sig::{XfrKeyPair, XfrPublicKey},
             structs::{
                 AssetRecord, AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo,
                 TracingPolicies, TracingPolicy, XfrAmount, XfrAssetType, XfrBody,
                 ASSET_TYPE_LENGTH,
             },
+            XfrNotePolicies,
         },
     },
-    zeialgebra::bls12_381::BLSScalar,
+    zei_algebra::bls12_381::BLSScalar,
+    zei_algebra::serialization::ZeiFromToBytes,
 };
 
 const RANDOM_CODE_LENGTH: usize = 16;
@@ -1274,29 +1271,16 @@ pub struct BarToAbarOps {
 impl BarToAbarOps {
     /// Generates a new BarToAbarOps object
     /// # Arguments
-    /// * bar_to_abar_body - The BarToAbarBody of the conversion
-    /// * signing_key      - XfrKeyPair of the converting BAR
+    /// * bar_to_abar_note - The BarToAbarNote of the conversion
     /// * txo_sid          - the TxoSID of the converting BAR
     /// * nonce
     pub fn new(
-        bar_to_abar_body: BarToAbarBody,
-        signing_key: &XfrKeyPair,
+        note: BarToAbarNote,
         txo_sid: TxoSID,
         nonce: NoReplayToken,
     ) -> Result<BarToAbarOps> {
-        // serialize the body
-        let msg = bincode::serialize(&bar_to_abar_body)
-            .map_err(|_| ZeiError::SerializationError)
-            .c(d!())?;
-
-        // sign the body
-        let signature = signing_key.sign(&msg);
-
         Ok(BarToAbarOps {
-            note: BarToAbarNote {
-                body: bar_to_abar_body,
-                signature,
-            },
+            note,
             txo_sid,
             nonce,
         })
@@ -1325,14 +1309,8 @@ pub struct AbarToBarOps {
 
 impl AbarToBarOps {
     /// Generates a new BarToAbarOps object
-    pub fn new(
-        abar_to_bar_note: &AbarToBarNote,
-        nonce: NoReplayToken,
-    ) -> Result<AbarToBarOps> {
-        Ok(AbarToBarOps {
-            note: abar_to_bar_note.clone(),
-            nonce,
-        })
+    pub fn new(note: AbarToBarNote, nonce: NoReplayToken) -> Result<AbarToBarOps> {
+        Ok(AbarToBarOps { note, nonce })
     }
 
     #[inline(always)]
@@ -1361,37 +1339,14 @@ impl AnonTransferOps {
         Ok(AnonTransferOps { note, nonce })
     }
 
+    /// Sets the nonce for the operation
     #[inline(always)]
     #[allow(dead_code)]
     fn set_nonce(&mut self, nonce: NoReplayToken) {
         self.nonce = nonce;
     }
 
-    #[inline(always)]
-    fn get_nonce(&self) -> NoReplayToken {
-        self.nonce
-    }
-}
-
-/// A struct to hold the anon fee used for abar to bar conversion
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct AnonFeeOps {
-    /// The note which holds the signatures, the ZKF and memo
-    pub note: AnonFeeNote,
-    nonce: NoReplayToken,
-}
-impl AnonFeeOps {
-    /// Generates the anon fee note
-    pub fn new(note: AnonFeeNote, nonce: NoReplayToken) -> Result<AnonFeeOps> {
-        Ok(AnonFeeOps { note, nonce })
-    }
-
-    #[inline(always)]
-    #[allow(dead_code)]
-    fn set_nonce(&mut self, nonce: NoReplayToken) {
-        self.nonce = nonce;
-    }
-
+    /// Fetches the nonce of the operation
     #[inline(always)]
     fn get_nonce(&self) -> NoReplayToken {
         self.nonce
@@ -1433,8 +1388,6 @@ pub enum Operation {
     AbarToBar(Box<AbarToBarOps>),
     /// Anonymous transfer operation
     TransferAnonAsset(Box<AnonTransferOps>),
-    /// Anonymous fee operation for abar to bar xfr
-    AnonymousFee(Box<AnonFeeOps>),
     ///replace staker.
     ReplaceStaker(ReplaceStakerOps),
 }
@@ -1467,7 +1420,6 @@ fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
         Operation::BarToAbar(i) => i.set_nonce(no_replay_token),
         Operation::AbarToBar(i) => i.set_nonce(no_replay_token),
         Operation::TransferAnonAsset(i) => i.set_nonce(no_replay_token),
-        Operation::AnonymousFee(i) => i.set_nonce(no_replay_token),
         _ => {}
     }
 }
@@ -1797,7 +1749,9 @@ lazy_static! {
 }
 
 /// see [**mainnet-v0.1 defination**](https://www.notion.so/findora/Transaction-Fees-Analysis-d657247b70f44a699d50e1b01b8a2287)
-pub const TX_FEE_MIN: u64 = 1_0000;
+pub const TX_FEE_MIN: u64 = 10_000; // 0.01 FRA
+/// Double the
+pub const BAR_TO_ABAR_TX_FEE_MIN: u64 = 20_000; // 0.02 FRA (2*TX_FEE_MIN)
 
 impl Transaction {
     #[inline(always)]
@@ -1830,6 +1784,15 @@ impl Transaction {
         //
         // But it seems enough when we combine it with limiting
         // the payload size of submission-server's http-requests.
+
+        let mut min_fee = TX_FEE_MIN;
+        // Charge double the min fee if the transaction is BarToAbar
+        for op in self.body.operations.iter() {
+            if let Operation::BarToAbar(_a) = op {
+                min_fee = BAR_TO_ABAR_TX_FEE_MIN;
+            }
+        }
+
         self.is_coinbase_tx()
             || self.body.operations.iter().any(|ops| {
                 if let Operation::TransferAsset(ref x) = ops {
@@ -1839,7 +1802,7 @@ impl Transaction {
                                 && *BLACK_HOLE_PUBKEY == o.record.public_key
                             {
                                 if let XfrAmount::NonConfidential(am) = o.record.amount {
-                                    if am > (TX_FEE_MIN - 1) {
+                                    if am > (min_fee - 1) {
                                         return true;
                                     }
                                 }
