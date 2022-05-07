@@ -111,7 +111,7 @@ where
             let key_list: Vec<_> = key_str.split(DB_SEPARATOR).collect();
 
             let key = Self::parse_key_for(key_list);
-            let raw_value = serde_json::from_slice::<Value>(v.as_slice()).ok();
+            let raw_value = bincode::deserialize::<Value>(v.as_slice()).ok();
 
             if let (Ok(k), Some(v)) = (key, raw_value) {
                 return Some((k, v));
@@ -157,7 +157,7 @@ where
             let key_list: Vec<_> = key_str.split(DB_SEPARATOR).collect();
 
             let key = Self::parse_key_for(key_list);
-            let raw_value = serde_json::from_slice::<Value>(v.as_slice()).ok();
+            let raw_value = bincode::deserialize::<Value>(v.as_slice()).ok();
 
             if let (Ok(k), Some(v)) = (key, raw_value) {
                 res.push((k, v))
