@@ -43,7 +43,7 @@ use storage::{
 lazy_static! {
     /// An identifier that distinguishes different EVM chains.
     static ref EVM_CAHIN_ID: u64 = std::env::var("EVM_CHAIN_ID").map(
-        |id| id.as_str().parse::<u64>().unwrap()).unwrap_or(523);
+        |id| id.as_str().parse::<u64>().unwrap()).unwrap_or(2152);
 }
 
 const APP_NAME: &str = "findora";
