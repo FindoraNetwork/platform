@@ -1280,7 +1280,7 @@ impl Staking {
     fn delegation_process_finished_before_height(&mut self, h: BlockHeight) {
         self.delegation_info
             .end_height_map
-            .range(0..=h)
+            .range(0..h)
             .map(|(k, v)| (k.to_owned(), (*v).clone()))
             .collect::<Vec<_>>()
             .iter()
