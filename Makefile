@@ -173,7 +173,7 @@ join_mainnet: stop_debug_env build_release_goleveldb
 	bash tools/node_init.sh mainnet
 
 start_localnode: stop_debug_env
-	bash tools/node_init.sh _ _
+	bash -x tools/node_init.sh _ _
 
 # ci_build_image:
 # 	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \

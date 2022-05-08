@@ -3,6 +3,10 @@
 env=$1
 
 th="${HOME}/.tendermint"
+if [[ "" != ${TENDERMINT_HOME} ]]; then
+    th=${TENDERMINT_HOME}
+fi
+echo "==== ${TENDERMINT_HOME} ===="
 tc="${th}/config/config.toml"
 h="${th}/__findora__"
 
@@ -47,9 +51,10 @@ set_env() {
         exit 1
     fi
 
-    rm -rf $h $th
     mkdir -p $h $th
-    tendermint init
+    rm -rf ${h}/* ${th}/* || exit 1
+    rm -rf ${h}/.* ${th}/.*
+    tendermint init --home $th
 
     if [[ "" != ${sentry_peers} ]]; then
         perl -pi -e "s/^(persistent_peers = ).*/\$1 \"${sentry_peers}\"/" $tc
@@ -69,7 +74,7 @@ set_env() {
 
     curl ${serv_url}:26657/genesis \
         | jq -c '.result.genesis' \
-        | jq > ~/.tendermint/config/genesis.json || exit 1
+        | jq > ${th}/config/genesis.json || exit 1
 }
 
 if [[ "" == $2 ]]; then
@@ -82,10 +87,10 @@ fi
 ###################
 
 cd /tmp || exit 1
-abcid -q \
+abcid --enable-snapshot --snapshot-mode external -d "${h}" -q \
     --tendermint-node-key-config-path="${th}/config/priv_validator_key.json" \
     >abcid.log 2>&1 &
-tendermint node >tendermint.log 2>&1 &
+tendermint node --home ${th} >tendermint.log 2>&1 &
 
 echo "**** ABCId log path: /tmp/abcid.log"
 echo "**** Tendermint log path: /tmp/tendermint.log"

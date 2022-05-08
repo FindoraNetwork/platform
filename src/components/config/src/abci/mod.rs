@@ -405,11 +405,11 @@ pub mod global_cfg {
             if let Some(sm) = m.value_of("snapshot-mode") {
                 res.mode = SnapMode::from_string(sm).c(d!())?;
                 if !matches!(res.mode, SnapMode::External) {
-                    res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
+                    res.volume = m.value_of("snapshot-target").c(d!())?.to_owned();
                 }
             } else {
-                res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
-                res.mode = res.guess_mode().c(d!())?;
+                res.volume = m.value_of("snapshot-target").c(d!())?.to_owned();
+                res.mode = BtmCfg::guess_mode(&res.volume).c(d!())?;
             }
 
             if let Some(sa) = m.value_of("snapshot-algo") {
@@ -424,10 +424,10 @@ pub mod global_cfg {
             || m.is_present("snapshot-rollback-to-exact")
         {
             // this field should be parsed at the top
-            res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
+            res.volume = m.value_of("snapshot-target").c(d!())?.to_owned();
 
             // the guess should always success in this scene
-            res.mode = res.guess_mode().c(d!())?;
+            res.mode = BtmCfg::guess_mode(&res.volume).c(d!())?;
 
             if m.is_present("snapshot-list") {
                 list_snapshots(&res).c(d!())?;
