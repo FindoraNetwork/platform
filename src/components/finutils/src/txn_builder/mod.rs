@@ -1696,10 +1696,10 @@ mod tests {
                 AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
             }
         },
+        zei::xfr::structs::AssetType as AT,
         zei::xfr::asset_record::{
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
             build_blind_asset_record, open_blind_asset_record,
-            sig::XfrKeyPair, structs::AssetType as AT
         },
         zei_algebra::prelude::Scalar,
         zei_crypto::basic::{
@@ -2064,7 +2064,7 @@ mod tests {
 
         let ar = AssetRecordTemplate::with_no_asset_tracing(
             10u64,
-            AT::from_identical_byte(1u8),
+            AT([1u8;32]),
             AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
             from.get_pk(),
         );
