@@ -15,6 +15,10 @@ def get_fra_balance(sec_key):
     parsed = out_str.split()
     return int(parsed[1])
 
+def get_asset_balance(sec_key, asset):
+    out_str = subprocess.check_output(['fn', 'wallet', '--show', '-s', sec_key, '--asset', asset])
+    parsed = out_str.split()
+    return int(parsed[1])
 
 def get_erc20_balance(address, url):
     w3 = Web3(HTTPProvider(to_web3_url(url)))
@@ -29,10 +33,14 @@ def get_balance(arguments):
     balance = ""
     addr = arguments['addr']
     sec_key = arguments['sec_key']
+    asset = arguments['asset']
     if addr is not None:
         balance = get_erc20_balance(addr, arguments['url'])
     elif sec_key is not None:
-        balance = get_fra_balance(sec_key)
+        if asset is not None:
+            balance = get_asset_balance(sec_key, asset)
+        else:
+            balance = get_fra_balance(sec_key)
     print('{}balance is {} {}'.format(OKBLUE, balance, ENDC))
     return balance
 

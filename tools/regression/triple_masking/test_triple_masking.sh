@@ -103,5 +103,5 @@ target/release/fn owned-abars -c $commitment
 target/release/fn convert-abar-to-bar --anon-keys ./anon-keys-temp.keys -c $commitment --to-wallet-address  fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
 sleep 20
 #Verify
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 629960000
+python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 629960000 --asset AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 echo
