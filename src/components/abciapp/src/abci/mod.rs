@@ -30,6 +30,8 @@ lazy_static! {
     pub static ref IN_SAFE_ITV: AtomicBool = AtomicBool::new(true);
     /// A shared pool of the ABCI area
     pub static ref POOL: ThreadPool = pnk!(ThreadPool::new());
+    /// if is exiting, we should not do anything.
+    pub static ref IS_EXITING: AtomicBool = AtomicBool::new(false);
 }
 
 /// Starting findorad

@@ -6,7 +6,7 @@ mod utils;
 
 use {
     crate::{
-        abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV, POOL},
+        abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV, IS_EXITING, POOL},
         api::{
             query_server::BLOCK_CREATED,
             submission_server::{convert_tx, try_tx_catalog, TxCatalog},
@@ -158,6 +158,15 @@ pub fn begin_block(
     s: &mut ABCISubmissionServer,
     req: &RequestBeginBlock,
 ) -> ResponseBeginBlock {
+    if IS_EXITING.load(Ordering::Acquire) {
+        //beacuse ResponseBeginBlock doesn't define the code,
+        //we can't tell tendermint that begin block is impossibled,
+        //we use thread::sleep to wait to exit, it's looks unsound.
+        std::thread::sleep(std::time::Duration::from_secs(10));
+    }
+
+    IN_SAFE_ITV.store(true, Ordering::Release);
+
     #[cfg(target_os = "linux")]
     {
         // snapshot the last block
@@ -177,8 +186,6 @@ pub fn begin_block(
         *created = true;
         BLOCK_CREATED.1.notify_one();
     }
-
-    IN_SAFE_ITV.swap(true, Ordering::Relaxed);
 
     let header = pnk!(req.header.as_ref());
     TENDERMINT_BLOCK_HEIGHT.swap(header.height, Ordering::Relaxed);
@@ -348,7 +355,6 @@ pub fn end_block(
 
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
 
-    IN_SAFE_ITV.swap(false, Ordering::Relaxed);
     let mut la = s.la.write();
 
     // mint coinbase, cache system transactions to ledger
@@ -419,6 +425,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
     }
 
+    IN_SAFE_ITV.store(false, Ordering::Release);
     r
 }
 
