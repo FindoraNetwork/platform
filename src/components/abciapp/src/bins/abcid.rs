@@ -25,7 +25,9 @@ fn main() {
     let (tx, rx) = channel();
 
     pnk!(ctrlc::set_handler(move || {
-        while !abci::IN_SAFE_ITV.load(Ordering::SeqCst) {
+        println!("Waiting to exit.");
+        abci::IS_EXITING.store(true, Ordering::Release);
+        while abci::IN_SAFE_ITV.load(Ordering::SeqCst) {
             sleep_ms!(1);
         }
         pnk!(tx.send(()));
@@ -33,6 +35,7 @@ fn main() {
 
     pnk!(rx.recv());
 
+    println!("Exiting...");
     thread.thread().unpark();
     thread.join().unwrap();
 }
