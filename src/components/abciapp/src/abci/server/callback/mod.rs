@@ -159,6 +159,9 @@ pub fn begin_block(
     req: &RequestBeginBlock,
 ) -> ResponseBeginBlock {
     if IS_EXITING.load(Ordering::Acquire) {
+        //beacuse ResponseBeginBlock doesn't define the code,
+        //we can't tell tendermint that begin block is impossibled,
+        //we use thread::sleep to wait to exit, it's looks unsound.
         std::thread::sleep(std::time::Duration::from_secs(10));
     }
 
