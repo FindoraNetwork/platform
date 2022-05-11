@@ -746,7 +746,7 @@ impl BlockEffect {
             }
         }
         for inputs in txn_effect.abar_conv_inputs.iter() {
-            if self.new_nullifiers.contains(&inputs.get_input().clone()) {
+            if self.new_nullifiers.contains(&inputs.get_input()) {
                 return Err(eg!());
             }
         }
