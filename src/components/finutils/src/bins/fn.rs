@@ -382,9 +382,19 @@ fn run() -> Result<()> {
     } else if let Some(m) = matches.subcommand_matches("account") {
         let address = m.value_of("addr");
         let sec_key = m.value_of("sec-key");
+
+        // FRA asset is the default case
+        let asset = if let Some(code) = m.value_of("asset") {
+            match code.to_lowercase().as_str() {
+                "fra" => None,
+                _ => Some(code),
+            }
+        } else {
+            None
+        };
         if sec_key.is_some() {
             //Asset defaults to fra
-            common::show_account(sec_key, None).c(d!())?;
+            common::show_account(sec_key, asset).c(d!())?;
         }
         if address.is_some() {
             let (account, info) = contract_account_info(address)?;

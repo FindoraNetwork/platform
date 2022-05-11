@@ -16,7 +16,7 @@ def get_fra_balance(sec_key):
     return int(parsed[1])
 
 def get_asset_balance(sec_key, asset):
-    out_str = subprocess.check_output(['fn', 'wallet', '--show', '-s', sec_key, '--asset', asset])
+    out_str = subprocess.check_output(['fn', 'account', '-s', sec_key, '--asset', asset])
     parsed = out_str.split()
     return int(parsed[1])
 
@@ -93,6 +93,7 @@ if __name__ == "__main__":
     parser_verify_balance.add_argument('--addr', help='address to query')
     parser_verify_balance.add_argument('--sec-key', help='secret key of FRA account')
     parser_verify_balance.add_argument('--amount', default='0', help='expected balance for given address')
+    parser_verify_balance.add_argument('--asset', help='asset to query balance of')
 
     # Initialize Transfer Parser
     parser_transfer = subparsers.add_parser('transfer', help='transfer funds between two erc20 addresses')
