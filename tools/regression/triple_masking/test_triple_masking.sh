@@ -80,14 +80,14 @@ sleep 1
 
 TXO_SID=$(target/release/fn owned-utxos | head -4 | tail -1 |  awk -F ' ' '{print $1}')
 fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
-sleep 5
+sleep 20
 
 #TXO_SID=$(target/release/fn owned-utxos | head -4 | tail -1 |  awk -F ' ' '{print $1}')
 #fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
 #sleep 5
 
 #Verify
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 629960000
+python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 629980000
 echo
 
 tail -n 2 owned_commitments > commitment_file
@@ -101,7 +101,7 @@ target/release/fn owned-abars -c $commitment
 #target/release/fn owned-abars -c $fee_commitment
 
 target/release/fn convert-abar-to-bar --anon-keys ./anon-keys-temp.keys -c $commitment --to-wallet-address  fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
-sleep 20
+sleep 40
 #Verify
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 629960000 --asset AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 629980000 --asset AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 echo
