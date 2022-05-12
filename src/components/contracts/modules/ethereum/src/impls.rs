@@ -455,6 +455,7 @@ impl<C: Config> App<C> {
             TransactionIndex::insert(ctx.db.write().borrow_mut(), &idx.0, &idx.1)?;
             debug!(target: "ethereum", "hash: 0x{}, block: {}, index: {}", idx.0.to_string(), idx.1 .0, idx.1 .1);
         }
+        // newer commit_session, no need to return value now
         ctx.db.write().commit_session();
         info!(target: "ethereum", "{} transaction indexes migrated to db", txn_idxs_cnt);
 

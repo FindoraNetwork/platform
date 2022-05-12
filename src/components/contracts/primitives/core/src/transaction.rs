@@ -162,16 +162,19 @@ where
             }
             return res;
         }
+        // newer commit_session, no need to return value now
         ctx.state.write().commit_session();
 
         match U::execute(maybe_who, self.function, ctx) {
             Ok(res) => {
                 if res.code == 0 {
                     Extra::post_execute(ctx, pre, &res)?;
+                    // newer commit_session, no need to return value now
                     ctx.state.write().commit_session();
                 } else {
                     ctx.state.write().discard_session();
                 }
+                // newer commit_session, no need to return value now
                 ctx.db.write().commit_session();
                 Ok(res)
             }
