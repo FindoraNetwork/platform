@@ -27,6 +27,7 @@ pub struct CheckPointConfig {
     pub ff_addr_extra_fix_height: u64,
     pub nonconfidential_balance_fix_height: u64,
     pub unbond_block_cnt: u64,
+    #[serde(skip_deserializing)]
     pub fix_unpaid_delegation_height: u64,
 }
 
