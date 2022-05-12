@@ -65,9 +65,6 @@ pub mod storage {
     // Mapping for transaction hash and at block number with index.
     generate_storage!(Ethereum, TransactionIndex => Map<HA256, (U256, u32)>);
 
-    // The following data is stored in stateless rocksdb
-    // Current building block's transactions and receipts.
-    //generate_storage!(Ethereum, PendingTransactions => Value<Vec<(Transaction, TransactionStatus, Receipt)>>);
     // The current Ethereum block number.
     generate_storage!(Ethereum, CurrentBlockNumber => Value<U256>);
     // Mapping for block number and hashes.
@@ -79,6 +76,8 @@ pub mod storage {
     // The ethereum history transaction statuses with block number.
     generate_storage!(Ethereum, CurrentTransactionStatuses => Map<HA256, Vec<TransactionStatus>>);
 
+    // The following data is stored in in-memory array
+    // Current building block's transactions and receipts.
     type PendingTransactions =
         Mutex<RefCell<Option<Vec<(Transaction, TransactionStatus, Receipt)>>>>;
 
@@ -208,7 +207,8 @@ impl<C: Config> ValidateUnsigned for App<C> {
         }
 
         let account_id = C::AddressMapping::convert_to_account_id(origin);
-        let account = C::AccountAsset::account_of(ctx, &account_id, None).c(d!())?;
+        let account =
+            C::AccountAsset::account_of(ctx, &account_id, None).unwrap_or_default();
         let nonce = account.nonce;
         let balance = account.balance;
 
