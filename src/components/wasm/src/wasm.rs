@@ -496,6 +496,8 @@ impl TransactionBuilder {
         .map_err(|e| {
             JsValue::from_str(&format!("Could not open asset record: {}", e))
         })?;
+        let is_bar_transparent =
+            oar.get_record_type() == NonConfidentialAmount_NonConfidentialAssetType;
 
         let (_, c) = self
             .get_builder_mut()
@@ -505,6 +507,7 @@ impl TransactionBuilder {
                 TxoSID(txo_sid),
                 &oar,
                 enc_key,
+                is_bar_transparent,
             )
             .c(d!())
             .map_err(|e| {
@@ -1777,6 +1780,7 @@ use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
+use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
 use zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey};
 
 #[wasm_bindgen]

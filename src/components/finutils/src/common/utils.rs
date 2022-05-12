@@ -2,7 +2,6 @@
 //! Some handful function and data structure for findora cli tools
 //!
 
-use ledger::data_model::BAR_TO_ABAR_TX_FEE_MIN;
 use {
     crate::{
         api::{DelegationInfo, ValidatorDetail},
@@ -14,7 +13,7 @@ use {
         data_model::{
             ATxoSID, AssetType, AssetTypeCode, DefineAsset, Operation,
             StateCommitmentData, Transaction, TransferType, TxoRef, TxoSID, Utxo,
-            ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+            ASSET_TYPE_FRA, BAR_TO_ABAR_TX_FEE_MIN, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
         staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
     },
@@ -31,7 +30,7 @@ use {
     zei::xfr::{
         asset_record::{open_blind_asset_record, AssetRecordType},
         sig::{XfrKeyPair, XfrPublicKey},
-        structs::{AssetRecordTemplate, OpenAssetRecord, OwnerMemo},
+        structs::{AssetRecordTemplate, BlindAssetRecord, OpenAssetRecord, OwnerMemo},
     },
     zei_crypto::basic::hybrid_encryption::XPublicKey,
 };
@@ -724,6 +723,7 @@ pub fn generate_bar2abar_op(
     txo_sid: TxoSID,
     input_record: &OpenAssetRecord,
     enc_key: &XPublicKey,
+    is_bar_transparent: bool,
 ) -> Result<Commitment> {
     // add operation bar_to_abar in a new Tx Builder
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
@@ -734,6 +734,7 @@ pub fn generate_bar2abar_op(
             txo_sid,
             input_record,
             enc_key,
+            is_bar_transparent,
         )
         .c(d!("Failed to generate operation bar to abar"))?;
 
@@ -778,7 +779,10 @@ pub fn generate_abar2bar_op(
 
 #[inline(always)]
 #[allow(missing_docs)]
-pub fn get_oar(owner_kp: &XfrKeyPair, txo_sid: TxoSID) -> Result<OpenAssetRecord> {
+pub fn get_oar(
+    owner_kp: &XfrKeyPair,
+    txo_sid: TxoSID,
+) -> Result<(OpenAssetRecord, BlindAssetRecord)> {
     let utxos = get_owned_utxos(owner_kp.get_pk_ref()).c(d!())?.into_iter();
 
     for (sid, (utxo, owner_memo)) in utxos {
@@ -789,7 +793,7 @@ pub fn get_oar(owner_kp: &XfrKeyPair, txo_sid: TxoSID) -> Result<OpenAssetRecord
         let oar =
             open_blind_asset_record(&utxo.0.record, &owner_memo, owner_kp).c(d!())?;
 
-        return Ok(oar);
+        return Ok((oar, utxo.0.record));
     }
 
     Err(eg!("utxo not found"))

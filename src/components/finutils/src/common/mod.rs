@@ -9,6 +9,7 @@
 pub mod evm;
 pub mod utils;
 
+use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
 use {
     crate::api::DelegationInfo,
     crate::common::utils::{new_tx_builder, send_tx},
@@ -817,12 +818,21 @@ pub fn convert_bar2abar(
     let sid = txo_sid.parse::<u64>().c(d!("error parsing TxoSID"))?;
 
     // Get OpenAssetRecord from given Owner XfrKeyPair and TxoSID
-    let oar =
+    let record =
         utils::get_oar(&from, TxoSID(sid)).c(d!("error fetching open asset record"))?;
+    let is_bar_transparent =
+        record.1.get_record_type() == NonConfidentialAmount_NonConfidentialAssetType;
 
     // Generate the transaction and transmit it to network
-    let c = utils::generate_bar2abar_op(&from, &to, TxoSID(sid), &oar, &enc_key)
-        .c(d!("Bar to abar failed"))?;
+    let c = utils::generate_bar2abar_op(
+        &from,
+        &to,
+        TxoSID(sid),
+        &record.0,
+        &enc_key,
+        is_bar_transparent,
+    )
+    .c(d!("Bar to abar failed"))?;
 
     Ok(c)
 }

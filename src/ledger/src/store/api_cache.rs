@@ -265,12 +265,12 @@ where
             Operation::MintFra(i) => staking_gen!(i),
             Operation::BarToAbar(i) => {
                 related_addresses.insert(XfrAddress {
-                    key: i.note.body.input.public_key,
+                    key: i.input_record().public_key,
                 });
             }
             Operation::AbarToBar(i) => {
                 related_addresses.insert(XfrAddress {
-                    key: i.note.body.output.public_key,
+                    key: i.note.get_public_key(),
                 });
             }
             Operation::TransferAnonAsset(_) => {
@@ -665,7 +665,7 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
 
         let abar_memos = curr_txn.body.operations.iter().flat_map(|o| match o {
             Operation::BarToAbar(b) => {
-                vec![b.note.body.memo.clone()]
+                vec![b.memo()]
             }
             Operation::TransferAnonAsset(b) => b.note.body.owner_memos.clone(),
             _ => vec![],
