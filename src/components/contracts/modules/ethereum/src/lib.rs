@@ -195,7 +195,8 @@ impl<C: Config> ValidateUnsigned for App<C> {
         }
 
         let account_id = C::AddressMapping::convert_to_account_id(origin);
-        let account = C::AccountAsset::account_of(ctx, &account_id, None).c(d!())?;
+        let account =
+            C::AccountAsset::account_of(ctx, &account_id, None).unwrap_or_default();
         let nonce = account.nonce;
         let balance = account.balance;
 
