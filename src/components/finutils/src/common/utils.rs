@@ -543,7 +543,7 @@ pub fn get_owned_abar(com: &Commitment) -> Result<(ATxoSID, AnonBlindAssetRecord
     let url = format!(
         "{}:8668/owned_abars/{}",
         get_serv_addr().c(d!())?,
-        wallet::commitment_to_base64(com)
+        wallet::commitment_to_base58(com)
     );
 
     attohttpc::get(&url)

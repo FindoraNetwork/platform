@@ -861,7 +861,7 @@ pub fn convert_abar2bar(
         wallet::x_secret_key_from_base64(dec_key.as_str()).c(d!("invalid dec_key"))?;
 
     // Get the owned ABAR from pub_key and commitment
-    let com = wallet::commitment_from_base64(com).c(d!())?;
+    let com = wallet::commitment_from_base58(com).c(d!())?;
     let axtxo_abar = utils::get_owned_abar(&com).c(d!())?;
 
     // get OwnerMemo and Merkle Proof of ABAR
@@ -899,6 +899,7 @@ pub fn convert_abar2bar(
             "The ABAR corresponding to this commitment is already spent"
         ));
     }
+    println!("Nullifier: {}", wallet::nullifier_to_base58(&n));
 
     // Create New AssetRecordType for new BAR
     let art = match (confidential_am, confidential_ty) {
@@ -952,7 +953,7 @@ pub fn gen_oabar_add_op(
     let mut inputs = vec![];
     // For each commitment add input to transfer operation
     for com in commitments {
-        let c = wallet::commitment_from_base64(com).c(d!())?;
+        let c = wallet::commitment_from_base58(com).c(d!())?;
 
         // get unspent ABARs & their Merkle proof for commitment
         let axtxo_abar = utils::get_owned_abar(&c).c(d!())?;
@@ -990,6 +991,8 @@ pub fn gen_oabar_add_op(
                 com
             ));
         }
+
+        println!("Nullifier: {}", wallet::nullifier_to_base58(&n));
         inputs.push(oabar_in);
     }
 
@@ -1027,7 +1030,7 @@ pub fn gen_oabar_add_op(
     if let Some(com) = com_out {
         println!(
             "\x1b[31;01m Commitment: {}\x1b[00m",
-            wallet::commitment_to_base64(&com)
+            wallet::commitment_to_base58(&com)
         );
 
         // Append receiver's commitment to `sent_commitment` file
@@ -1038,7 +1041,7 @@ pub fn gen_oabar_add_op(
             .expect("cannot open commitments file");
         std::io::Write::write_all(
             &mut file,
-            ("\n".to_owned() + &wallet::commitment_to_base64(&com)).as_bytes(),
+            ("\n".to_owned() + &wallet::commitment_to_base58(&com)).as_bytes(),
         )
         .expect("commitment write failed");
     }
@@ -1053,12 +1056,12 @@ pub fn gen_oabar_add_op(
         let c = rem_oabar.compute_commitment();
         println!(
             "\x1b[31;01m Remainder Commitment: {}\x1b[00m",
-            wallet::commitment_to_base64(&c)
+            wallet::commitment_to_base58(&c)
         );
 
         std::io::Write::write_all(
             &mut file,
-            ("\n".to_owned() + &wallet::commitment_to_base64(&c)).as_bytes(),
+            ("\n".to_owned() + &wallet::commitment_to_base58(&c)).as_bytes(),
         )
         .expect("commitment write failed");
     }
@@ -1106,7 +1109,7 @@ pub fn gen_oabar_add_op_x(
     for i in 0..sender_count {
         let from = &axfr_secret_keys[i];
         let from_secret_key = &dec_keys[i];
-        let c = wallet::commitment_from_base64(commitments[i].as_str()).c(d!())?;
+        let c = wallet::commitment_from_base58(commitments[i].as_str()).c(d!())?;
 
         // Get OwnerMemo
         let axtxo_abar = utils::get_owned_abar(&c).c(d!())?;
@@ -1145,6 +1148,7 @@ pub fn gen_oabar_add_op_x(
                 "The ABAR corresponding to this commitment is already spent"
             ));
         }
+        println!("Nullifier: {}", wallet::nullifier_to_base58(&n));
 
         oabars_in.push(oabar_in);
     }
@@ -1195,12 +1199,12 @@ pub fn gen_oabar_add_op_x(
         let c_out = oabar_out.compute_commitment();
         println!(
             "\x1b[31;01m Commitment: {}\x1b[00m",
-            wallet::commitment_to_base64(&c_out)
+            wallet::commitment_to_base58(&c_out)
         );
 
         std::io::Write::write_all(
             &mut s_file,
-            ("\n".to_owned() + &wallet::commitment_to_base64(&c_out)).as_bytes(),
+            ("\n".to_owned() + &wallet::commitment_to_base58(&c_out)).as_bytes(),
         )
         .expect("commitment write failed");
     }
@@ -1215,11 +1219,11 @@ pub fn gen_oabar_add_op_x(
 
         println!(
             "\x1b[31;01m Remainder Commitment: {}\x1b[00m",
-            wallet::commitment_to_base64(&c_rem)
+            wallet::commitment_to_base58(&c_rem)
         );
         std::io::Write::write_all(
             &mut o_file,
-            ("\n".to_owned() + &wallet::commitment_to_base64(&c_rem)).as_bytes(),
+            ("\n".to_owned() + &wallet::commitment_to_base58(&c_rem)).as_bytes(),
         )
         .expect("commitment write failed");
     }
@@ -1331,7 +1335,7 @@ pub fn anon_balance(
     commitments_list
         .split(',')
         .try_for_each(|com| -> ruc::Result<()> {
-            let commitment = wallet::commitment_from_base64(com).c(d!())?;
+            let commitment = wallet::commitment_from_base58(com).c(d!())?;
             let (sid, abar) = utils::get_owned_abar(&commitment).c(d!())?;
             let memo = utils::get_abar_memo(&sid).unwrap().unwrap();
             let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(

@@ -8,6 +8,7 @@ use bech32::{self, FromBase32, ToBase32};
 use bip0039::{Count, Language, Mnemonic};
 use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
 use ruc::*;
+use zei::anon_xfr::structs::Nullifier;
 use zei::{
     anon_xfr::{
         keys::{AXfrKeyPair, AXfrPubKey},
@@ -15,6 +16,7 @@ use zei::{
     },
     xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
+use zei_algebra::bls12_381::BLSScalar;
 use zei_algebra::serialization::ZeiFromToBytes;
 use zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey};
 
@@ -253,16 +255,32 @@ pub fn x_secret_key_to_base64(key: &XSecretKey) -> String {
 
 #[inline(always)]
 /// Restore a Commitment from base64
-pub fn commitment_from_base64(com: &str) -> Result<Commitment> {
-    base64::decode_config(com, base64::URL_SAFE)
+pub fn commitment_from_base58(com: &str) -> Result<Commitment> {
+    bs58::decode(com)
+        .into_vec()
         .c(d!())
         .and_then(|bytes| Commitment::zei_from_bytes(&bytes).c(d!()))
 }
 
 #[inline(always)]
 /// Convert a Commitment to base64
-pub fn commitment_to_base64(com: &Commitment) -> String {
-    base64::encode_config(&Commitment::zei_to_bytes(com), base64::URL_SAFE)
+pub fn commitment_to_base58(com: &Commitment) -> String {
+    bs58::encode(&Commitment::zei_to_bytes(com)).into_string()
+}
+
+#[inline(always)]
+/// Restore a Commitment from base58
+pub fn nullifier_from_base58(com: &str) -> Result<Commitment> {
+    bs58::decode(com)
+        .into_vec()
+        .c(d!())
+        .and_then(|bytes| BLSScalar::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Convert a Nullifier to base58
+pub fn nullifier_to_base58(n: &Nullifier) -> String {
+    bs58::encode(&Commitment::zei_to_bytes(n)).into_string()
 }
 
 /// Convert a XfrPublicKey to bech32 human-readable address

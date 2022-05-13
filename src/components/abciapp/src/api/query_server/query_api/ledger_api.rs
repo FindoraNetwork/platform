@@ -697,7 +697,7 @@ pub(super) async fn query_owned_abar(
 ) -> actix_web::Result<web::Json<Option<(ATxoSID, AnonBlindAssetRecord)>>> {
     let qs = data.read();
     let ledger = &qs.ledger_cloned;
-    globutils::wallet::commitment_from_base64(com.as_str())
+    globutils::wallet::commitment_from_base58(com.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
         .map(|com| {

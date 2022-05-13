@@ -579,7 +579,7 @@ impl TransactionBuilder {
             commitments: self
                 .commitments
                 .iter()
-                .map(wallet::commitment_to_base64)
+                .map(wallet::commitment_to_base58)
                 .collect(),
         };
 
@@ -998,7 +998,7 @@ pub fn gen_nullifier_hash(
         &oabar.get_asset_type(),
         mt_leaf_info.get_zei_mt_leaf_info().uid,
     );
-    let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+    let hash = wallet::nullifier_to_base58(&n);
     Ok(hash)
 }
 
@@ -1393,7 +1393,7 @@ impl AnonTransferOperationBuilder {
                 .get_builder()
                 .get_commitments()
                 .iter()
-                .map(wallet::commitment_to_base64)
+                .map(wallet::commitment_to_base58)
                 .collect(),
         };
 
@@ -1994,6 +1994,12 @@ pub fn fra_get_minimal_fee() -> u64 {
 #[wasm_bindgen]
 pub fn fra_get_minimal_fee_for_bar_to_abar() -> u64 {
     BAR_TO_ABAR_TX_FEE_MIN
+}
+
+/// Anon fee for a given number of inputs & outputs
+#[wasm_bindgen]
+pub fn get_anon_fee(n_inputs: u32, n_outputs: u32) -> u32 {
+    PlatformAnonTransferOperationBuilder::get_anon_fee(n_inputs, n_outputs)
 }
 
 /// The destination for fee to be transfered to.

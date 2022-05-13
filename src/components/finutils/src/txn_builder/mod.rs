@@ -1585,7 +1585,7 @@ impl AnonTransferOperationBuilder {
     pub fn get_commitment_map(&self) -> HashMap<String, (AXfrPubKey, AssetType, u64)> {
         let mut commitment_map = HashMap::new();
         for out_abar in self.outputs.iter() {
-            let abar_rand = wallet::commitment_to_base64(&out_abar.compute_commitment());
+            let abar_rand = wallet::commitment_to_base58(&out_abar.compute_commitment());
             let abar_pkey = *out_abar.pub_key_ref();
             let abar_asset = out_abar.get_asset_type();
             let abar_amt = out_abar.get_amount();
@@ -1670,8 +1670,12 @@ impl AnonTransferOperationBuilder {
         Ok(self)
     }
 
+    /// Calculates the Anon fee given the number of inputs and outputs
+    pub fn get_anon_fee(n_inputs: u32, n_outputs: u32) -> u32 {
+        FEE_CALCULATING_FUNC(n_inputs, n_outputs)
+    }
+
     /// transaction method wraps the anon transfer note in an Operation and returns it
-    #[allow(missing_docs)]
     pub fn serialize_str(&self) -> Result<String> {
         if self.note.is_none() {
             return Err(eg!("Anon transfer not built and signed"));
@@ -1692,19 +1696,17 @@ mod tests {
         rand_core::SeedableRng,
         zei::anon_xfr::{
             config::FEE_CALCULATING_FUNC,
-            structs::{
-                AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
-            }
+            structs::{AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder},
+        },
+        zei::xfr::asset_record::{
+            build_blind_asset_record, open_blind_asset_record,
+            AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         },
         zei::xfr::structs::AssetType as AT,
-        zei::xfr::asset_record::{
-            AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-            build_blind_asset_record, open_blind_asset_record,
-        },
         zei_algebra::prelude::Scalar,
         zei_crypto::basic::{
             hybrid_encryption::XSecretKey,
-            ristretto_pedersen_comm::RistrettoPedersenCommitment
+            ristretto_pedersen_comm::RistrettoPedersenCommitment,
         },
     };
 
@@ -2064,7 +2066,7 @@ mod tests {
 
         let ar = AssetRecordTemplate::with_no_asset_tracing(
             10u64,
-            AT([1u8;32]),
+            AT([1u8; 32]),
             AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
             from.get_pk(),
         );
