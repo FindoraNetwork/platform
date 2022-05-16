@@ -51,14 +51,14 @@ def transfer(arguments):
     w3 = Web3(HTTPProvider(to_web3_url(arguments['url'])))
     address = private_key_to_address(arguments['from_priv_key'], w3)
     signed_txn = w3.eth.account.sign_transaction(dict(
-            nonce=w3.eth.get_transaction_count(address),
-            gas=100000,
-            gasPrice=10000000000,
-            to=arguments['to_addr'],
-            value=int(arguments['amount']),
-            data=b'',
-            chainId=523,
-        ),
+        nonce=w3.eth.get_transaction_count(address, 'pending'),
+        gas=100000,
+        gasPrice=10000000000,
+        to=arguments['to_addr'],
+        value=int(arguments['amount']),
+        data=b'',
+        chainId=523,
+    ),
         arguments['from_priv_key'],
     )
     txn_hash = w3.eth.send_raw_transaction(signed_txn.rawTransaction)
