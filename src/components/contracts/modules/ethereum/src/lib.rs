@@ -158,10 +158,12 @@ impl<C: Config> Executable for App<C> {
 impl<C: Config> ValidateUnsigned for App<C> {
     type Call = Action;
 
-    /// Validate the call right before execute.
-    ///
-    /// Currently we just return OK for Findora ethereum transaction
-    fn pre_execute(_ctx: &Context, _call: &Self::Call) -> Result<()> {
+    fn pre_execute(ctx: &Context, call: &Self::Call) -> Result<()> {
+        let Action::Transact(transaction) = call;
+        let origin = Self::recover_signer(transaction)
+            .ok_or_else(|| eg!("InvalidSignature, can not recover signer address"))?;
+        let account_id = C::AddressMapping::convert_to_account_id(origin);
+        C::AccountAsset::inc_nonce(ctx, &account_id)?;
         Ok(())
     }
 

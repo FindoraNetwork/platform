@@ -110,9 +110,7 @@ pub trait ValidateUnsigned {
     /// Validate the call right before execute.
     ///
     /// Changes made to storage WILL be persisted if the call returns `Ok`.
-    fn pre_execute(ctx: &Context, call: &Self::Call) -> Result<()> {
-        Self::validate_unsigned(ctx, call)
-    }
+    fn pre_execute(ctx: &Context, call: &Self::Call) -> Result<()>;
 
     /// Return the validity of the call
     ///
@@ -151,19 +149,13 @@ where
             U::pre_execute(ctx, &self.function)?;
             (None, Default::default())
         };
-        // For context we don't need to persistent anything
-        if ctx.run_mode != RunTxMode::Deliver {
-            let res = U::execute(maybe_who, self.function, ctx);
-            if let Ok(r) = res.as_ref() {
-                if r.code == 0 {
-                    // FIXME: empty function now
-                    Extra::post_execute(ctx, pre, r)?;
-                }
-            }
-            return res;
-        }
         // newer commit_session, no need to return value now
         ctx.state.write().commit_session();
+
+        // The transaction is only executed if the run mode is Deliver
+        if ctx.run_mode == RunTxMode::Check {
+            return Ok(ActionResult::default());
+        }
 
         match U::execute(maybe_who, self.function, ctx) {
             Ok(res) => {
