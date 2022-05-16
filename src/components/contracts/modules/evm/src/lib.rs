@@ -31,6 +31,7 @@ use ethereum::{Log, Receipt, TransactionAction, TransactionSignature, Transactio
 
 use fp_types::{
     actions::{evm::Action, xhub::NonConfidentialOutput},
+    assemble::OptionalHash,
     crypto::{Address, HA160},
 };
 use precompile::PrecompileSet;
@@ -208,7 +209,7 @@ impl<C: Config> App<C> {
         ))
     }
 
-    pub fn consume_mint(&self, ctx: &Context) -> Vec<NonConfidentialOutput> {
+    pub fn consume_mint(&self, ctx: &Context) -> (Vec<NonConfidentialOutput>, Option<String>) {
         let height = CFG.checkpoint.prismxx_inital_height;
 
         let mut pending_outputs = Vec::new();
@@ -221,7 +222,7 @@ impl<C: Config> App<C> {
             }
         }
 
-        pending_outputs
+        (pending_outputs, ctx.tx_hash.lock().take())
     }
 
     fn logs_bloom(logs: &[ethereum::Log], bloom: &mut Bloom) {
@@ -336,6 +337,7 @@ impl<C: Config> Executable for App<C> {
         _origin: Option<Self::Origin>,
         _call: Self::Call,
         _ctx: &Context,
+        _hash: OptionalHash,
     ) -> Result<ActionResult> {
         Err(eg!("Unsupported evm action!"))
     }

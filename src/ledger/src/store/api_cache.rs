@@ -623,6 +623,14 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
             };
         }
 
+        let hash = {
+            if let Some(hash) = &curr_txn.hash {
+                hash.to_uppercase()
+            } else {
+                curr_txn.hash_tm().hex().to_uppercase()
+            }
+        };
+
         // Add new utxos (this handles both transfers and issuances)
         for (txo_sid, (address, owner_memo)) in txo_sids
             .iter()
@@ -634,7 +642,7 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
                 .unwrap()
                 .utxos_to_map_index
                 .insert(*txo_sid, *address);
-            let hash = curr_txn.hash_tm().hex().to_uppercase();
+
             ledger
                 .api_cache
                 .as_mut()

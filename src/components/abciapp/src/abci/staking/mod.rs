@@ -13,6 +13,7 @@ use {
     crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
     abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate},
     baseapp::BaseApp as AccountBaseApp,
+    config::abci::global_cfg::CFG,
     lazy_static::lazy_static,
     ledger::{
         data_model::{Operation, Transaction, ASSET_TYPE_FRA},
@@ -308,34 +309,48 @@ pub fn system_mint_pay(
         .collect::<Vec<_>>();
 
     // add account mint_entries.
-    let mut mints = if let Some(account_mint) = account_base_app.consume_mint() {
-        account_mint
-            .iter()
-            .map(|mint| {
-                MintEntry::new(
-                    MintKind::Other,
-                    mint.target,
-                    None,
-                    mint.amount,
-                    mint.asset,
-                )
-            })
-            .collect::<Vec<MintEntry>>()
-    } else {
-        Vec::new()
-    };
+    let (mut mints, hash) =
+        if let Some((account_mint, hash)) = account_base_app.consume_mint() {
+            (
+                account_mint
+                    .iter()
+                    .map(|mint| {
+                        MintEntry::new(
+                            MintKind::Other,
+                            mint.target,
+                            None,
+                            mint.amount,
+                            mint.asset,
+                        )
+                    })
+                    .collect::<Vec<MintEntry>>(),
+                hash,
+            )
+        } else {
+            (Vec::new(), None)
+        };
 
     mint_entries.append(&mut mints);
 
     if mint_entries.is_empty() {
         None
     } else {
-        let mint_ops =
-            Operation::MintFra(MintFraOps::new(staking.cur_height(), mint_entries));
-        Some(Transaction::from_operation_coinbase_mint(
-            mint_ops,
-            la.get_state_commitment().1,
-        ))
+        let cur_height = staking.cur_height();
+        let mint_ops = Operation::MintFra(MintFraOps::new(cur_height, mint_entries));
+        let tx = if cur_height >= CFG.checkpoint.prismxx_inital_height as u64 {
+            Transaction::from_operation_coinbase_mint(
+                mint_ops,
+                la.get_state_commitment().1,
+                hash,
+            )
+        } else {
+            Transaction::from_operation_coinbase_mint(
+                mint_ops,
+                la.get_state_commitment().1,
+                None,
+            )
+        };
+        Some(tx)
     }
 }
 

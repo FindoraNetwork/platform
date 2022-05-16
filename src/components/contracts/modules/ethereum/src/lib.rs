@@ -19,7 +19,7 @@ use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
 };
-use fp_types::{actions::ethereum::Action, crypto::Address};
+use fp_types::{actions::ethereum::Action, assemble::OptionalHash, crypto::Address};
 use ruc::*;
 use std::marker::PhantomData;
 
@@ -133,9 +133,11 @@ impl<C: Config> Executable for App<C> {
         origin: Option<Self::Origin>,
         call: Self::Call,
         ctx: &Context,
+        mut hash: OptionalHash,
     ) -> Result<ActionResult> {
         ensure!(origin.is_none(), "InvalidTransaction: IllegalOrigin");
 
+        *ctx.tx_hash.lock() = hash.take();
         match call {
             Action::Transact(tx) => Self::do_transact(ctx, tx),
         }

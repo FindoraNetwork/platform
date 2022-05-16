@@ -1,6 +1,6 @@
 use crate::context::Context;
 use abci::Event;
-use fp_types::transaction::CheckedTransaction;
+use fp_types::{assemble::OptionalHash, transaction::CheckedTransaction};
 use impl_trait_for_tuples::impl_for_tuples;
 use ruc::*;
 use std::fmt::Debug;
@@ -17,6 +17,7 @@ pub trait Executable {
         origin: Option<Self::Origin>,
         call: Self::Call,
         ctx: &Context,
+        hash: OptionalHash,
     ) -> Result<ActionResult>;
 }
 
@@ -153,7 +154,7 @@ where
         };
         ctx.state.write().commit_session();
 
-        match U::execute(maybe_who, self.function, ctx) {
+        match U::execute(maybe_who, self.function, ctx, self.hash) {
             Ok(res) => {
                 if res.code == 0 {
                     Extra::post_execute(ctx, pre, &res)?;

@@ -25,7 +25,10 @@ use fp_traits::{
     base::BaseProvider,
     evm::{DecimalsMapping, EthereumAddressMapping, EthereumDecimalsMapping},
 };
-use fp_types::{actions::xhub::NonConfidentialOutput, actions::Action, crypto::Address};
+use fp_types::{
+    actions::xhub::NonConfidentialOutput, actions::Action, assemble::OptionalHash,
+    crypto::Address,
+};
 use lazy_static::lazy_static;
 use ledger::data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA};
 use notify::*;
@@ -225,17 +228,20 @@ impl Executable for BaseApp {
         origin: Option<Self::Origin>,
         call: Self::Call,
         ctx: &Context,
+        hash: OptionalHash,
     ) -> Result<ActionResult> {
         match call {
             Action::Ethereum(action) => {
-                module_ethereum::App::<Self>::execute(origin, action, ctx)
+                module_ethereum::App::<Self>::execute(origin, action, ctx, hash)
             }
-            Action::Evm(action) => module_evm::App::<Self>::execute(origin, action, ctx),
+            Action::Evm(action) => {
+                module_evm::App::<Self>::execute(origin, action, ctx, hash)
+            }
             Action::XHub(action) => {
-                module_xhub::App::<Self>::execute(origin, action, ctx)
+                module_xhub::App::<Self>::execute(origin, action, ctx, hash)
             }
             Action::Template(action) => {
-                module_template::App::<Self>::execute(origin, action, ctx)
+                module_template::App::<Self>::execute(origin, action, ctx, hash)
             }
         }
     }
@@ -306,12 +312,13 @@ impl BaseApp {
             .process_findora_tx(&self.deliver_state, tx, H256::from_slice(hash))
     }
 
-    pub fn consume_mint(&self) -> Option<Vec<NonConfidentialOutput>> {
-        let mut outputs = self.modules.evm_module.consume_mint(&self.deliver_state);
+    pub fn consume_mint(&self) -> Option<(Vec<NonConfidentialOutput>, Option<String>)> {
+        let (mut outputs, mut hash) =
+            self.modules.evm_module.consume_mint(&self.deliver_state);
         let outputs2 = module_xhub::App::<Self>::consume_mint(&self.deliver_state);
-
-        if let Some(mut e) = outputs2 {
+        if let Some((mut e, _hash)) = outputs2 {
             outputs.append(&mut e);
+            hash = _hash;
         }
 
         // TODO: Add xhub compact.
@@ -334,7 +341,7 @@ impl BaseApp {
             }
         }
 
-        Some(outputs)
+        Some((outputs, hash))
     }
 }
 
