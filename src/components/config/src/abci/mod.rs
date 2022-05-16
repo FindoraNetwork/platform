@@ -69,7 +69,7 @@ impl CheckPointConfig {
                                 ff_addr_extra_fix_height: 1200000,
                                 nonconfidential_balance_fix_height: 1210000,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
-                                fix_unpaid_delegation_height: 2252043,
+                                fix_unpaid_delegation_height: 2261885,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
