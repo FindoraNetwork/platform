@@ -32,8 +32,8 @@ serde = { version = "1.0.124", features = ["derive"] }
 serde_derive = "^1.0.59"
 serde_json = "1.0"
 
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.9" }
-zei-algebra = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.9" }
+zei = "0.1"
+zei-algebra = "0.1"
 
 finutils = { path = "../finutils", default-features = false, features = []}
 fp-types = { path = "../contracts/primitives/types" }
