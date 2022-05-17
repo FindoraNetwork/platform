@@ -33,11 +33,11 @@ define pack
 	mkdir $(1)
 	cd $(1); for i in $(subdirs); do mkdir $$i; done
 	cp \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/findorad \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/abcid \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/findorad \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/abcid \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
 		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
 	cp $(1)/$(bin_dir)/* ~/.cargo/bin/
