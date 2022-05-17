@@ -49,14 +49,22 @@ pub fn new_tx_builder() -> Result<TransactionBuilder> {
 #[allow(missing_docs)]
 pub fn send_tx(tx: &Transaction) -> Result<()> {
     let url = format!("{}:8669/submit_transaction", get_serv_addr().c(d!())?);
-    attohttpc::post(&url)
+
+    let tx_bytes = serde_json::to_vec(tx).c(d!())?;
+
+    let _ = attohttpc::post(&url)
         .header(attohttpc::header::CONTENT_TYPE, "application/json")
-        .bytes(&serde_json::to_vec(tx).c(d!())?)
+        .bytes(&tx_bytes)
         .send()
         .c(d!("fail to send transaction"))?
         .error_for_status()
-        .c(d!())
-        .map(|_| ())
+        .c(d!())?;
+
+    let tx_hash = sha2::Sha256::digest(tx_bytes);
+
+    println!("{}", hex::encode(tx_hash));
+
+    Ok(())
 }
 
 /// Fee is needless in a `UpdateValidator` operation
@@ -346,6 +354,8 @@ pub fn gen_fee_bar_to_abar(
 /////////////////////////////////////////
 // Part 2: utils for query infomations //
 /////////////////////////////////////////
+
+use sha2::Digest;
 
 #[derive(Serialize, Deserialize, Debug)]
 // tendermint status repsonse, "Tm" is short for "tendermint"
