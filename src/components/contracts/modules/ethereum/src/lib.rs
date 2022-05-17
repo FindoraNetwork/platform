@@ -158,6 +158,13 @@ impl<C: Config> Executable for App<C> {
 impl<C: Config> ValidateUnsigned for App<C> {
     type Call = Action;
 
+    /// Validate the call right before execute.
+    ///
+    /// Currently we just return OK for Findora ethereum transaction
+    fn pre_execute(_ctx: &Context, _call: &Self::Call) -> Result<()> {
+        Ok(())
+    }
+
     fn validate_unsigned(ctx: &Context, call: &Self::Call) -> Result<()> {
         let Action::Transact(transaction) = call;
         if let Some(chain_id) = transaction.signature.chain_id() {
