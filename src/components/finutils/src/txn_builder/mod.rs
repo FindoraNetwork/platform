@@ -1692,19 +1692,17 @@ mod tests {
         rand_core::SeedableRng,
         zei::anon_xfr::{
             config::FEE_CALCULATING_FUNC,
-            structs::{
-                AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
-            }
+            structs::{AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder},
+        },
+        zei::xfr::asset_record::{
+            build_blind_asset_record, open_blind_asset_record,
+            AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         },
         zei::xfr::structs::AssetType as AT,
-        zei::xfr::asset_record::{
-            AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-            build_blind_asset_record, open_blind_asset_record,
-        },
         zei_algebra::prelude::Scalar,
         zei_crypto::basic::{
             hybrid_encryption::XSecretKey,
-            ristretto_pedersen_comm::RistrettoPedersenCommitment
+            ristretto_pedersen_comm::RistrettoPedersenCommitment,
         },
     };
 
@@ -2064,7 +2062,7 @@ mod tests {
 
         let ar = AssetRecordTemplate::with_no_asset_tracing(
             10u64,
-            AT([1u8;32]),
+            AT([1u8; 32]),
             AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
             from.get_pk(),
         );
