@@ -75,13 +75,13 @@ fn test_abci_check_tx() {
     );
 
     // check balance
-    // fees are not deducted since tx is not simulated
+    // fees are deducted since tx is simulated for pre-execution
     assert_eq!(
         module_account::App::<BaseApp>::balance(
             &BASE_APP.lock().unwrap().check_state,
             &ALICE_XFR.pub_key.into()
         ),
-        U256::from(100_0000_0000_0000_0000_u64)
+        U256::from(99_0000_0000_0000_0000_u64)
     );
 }
 
