@@ -2074,7 +2074,7 @@ pub fn x_secretkey_from_string(key_str: &str) -> Result<XSecretKey, JsValue> {
 #[allow(missing_docs)]
 pub fn abar_from_json(json: JsValue) -> Result<AnonBlindAssetRecord, JsValue> {
     let abar: ABARJson = json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
-    let c = wallet::nullifier_from_base58(abar.commitment.as_str())
+    let c = wallet::commitment_from_base58(abar.commitment.as_str())
         .c(d!())
         .map_err(error_to_jsvalue)?;
 

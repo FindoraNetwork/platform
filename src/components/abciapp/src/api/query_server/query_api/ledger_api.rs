@@ -10,7 +10,7 @@ use {
         DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
         ValidatorDetail, ValidatorList,
     },
-    globutils::{wallet, HashOf},
+    globutils::{HashOf},
     ledger::{
         data_model::{
             ATxoSID, AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData,
@@ -25,11 +25,12 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{
-        collections::{BTreeMap, HashMap},
+        collections::{BTreeMap},
         mem,
         sync::Arc,
     },
     zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+    zei::anon_xfr::structs::AnonBlindAssetRecord
 };
 
 /// Ping route to check for liveness of API
@@ -697,21 +698,14 @@ pub async fn query_owned_utxos(
 pub(super) async fn query_owned_abar(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     com: web::Path<String>,
-) -> actix_web::Result<web::Json<Option<(ATxoSID, HashMap<String, String>)>>> {
+) -> actix_web::Result<web::Json<Option<(ATxoSID, AnonBlindAssetRecord)>>> {
     let qs = data.read();
     let ledger = &qs.ledger_cloned;
     globutils::wallet::commitment_from_base58(com.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
         .map(|com| {
-            web::Json(ledger.get_owned_abar(&com).map(|a| {
-                let mut abar = HashMap::new();
-                abar.insert(
-                    String::from("commitment"),
-                    wallet::commitment_to_base58(&com),
-                );
-                (a, abar)
-            }))
+            web::Json(ledger.get_owned_abar(&com).map(|a| (a, AnonBlindAssetRecord{commitment: com})))
         })
 }
 
