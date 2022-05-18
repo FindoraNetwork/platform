@@ -146,6 +146,15 @@ impl<C: Config> Executable for App<C> {
 impl<C: Config> ValidateUnsigned for App<C> {
     type Call = Action;
 
+    fn pre_execute(ctx: &Context, call: &Self::Call) -> Result<()> {
+        let Action::Transact(transaction) = call;
+        let origin = Self::recover_signer(transaction)
+            .ok_or_else(|| eg!("InvalidSignature, can not recover signer address"))?;
+        let account_id = C::AddressMapping::convert_to_account_id(origin);
+        C::AccountAsset::inc_nonce(ctx, &account_id)?;
+        Ok(())
+    }
+
     fn validate_unsigned(ctx: &Context, call: &Self::Call) -> Result<()> {
         let Action::Transact(transaction) = call;
         if let Some(chain_id) = transaction.signature.chain_id() {
