@@ -832,12 +832,12 @@ fn test_update_anon_stores() {
         },
     ];
 
-    let str0 = base64::encode_config(&BLSScalar::zero().to_bytes(), base64::URL_SAFE);
-    let d0: Key = Key::from_base64(&str0).unwrap();
+    let str0 = bs58::encode(&BLSScalar::zero().zei_to_bytes()).into_string();
+    let d0: Key = Key::from_base58(&str0).unwrap();
     assert!(state.nullifier_set.read().get(&d0).unwrap().is_none());
 
-    let str1 = base64::encode_config(&BLSScalar::one().to_bytes(), base64::URL_SAFE);
-    let d1: Key = Key::from_base64(&str1).unwrap();
+    let str1 = bs58::encode(&BLSScalar::one().zei_to_bytes()).into_string();
+    let d1: Key = Key::from_base58(&str1).unwrap();
     assert!(state.nullifier_set.read().get(&d1).unwrap().is_none());
 
     let res = state.update_anon_stores(nullifiers, output_abars, 0, tx_block);

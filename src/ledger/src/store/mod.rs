@@ -9,6 +9,7 @@ pub mod utils;
 
 pub use fbnc;
 
+use globutils::wallet;
 use {
     crate::{
         data_model::{
@@ -314,8 +315,7 @@ impl LedgerState {
         mut tx_block: Vec<FinalizedTransaction>,
     ) -> Result<Vec<FinalizedTransaction>> {
         for n in new_nullifiers.iter() {
-            let str = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
-            let d: Key = Key::from_base64(&str).c(d!())?;
+            let d: Key = Key::from_bytes(n.zei_to_bytes()).c(d!())?;
 
             // if the nullifier hash is present in our nullifier set, fail the block
             if self.nullifier_set.read().get(&d).c(d!())?.is_some() {
@@ -520,7 +520,8 @@ impl LedgerState {
     /// Check if the nullifier hash is present in nullifier set
     #[inline(always)]
     pub fn check_nullifier_hash(&self, hash: String) -> Result<bool> {
-        let d: Key = Key::from_base64(&hash).c(d!())?;
+        let n = wallet::nullifier_from_base58(hash.as_str())?;
+        let d: Key = Key::from_bytes(n.zei_to_bytes()).c(d!())?;
         let is_null_present = self.nullifier_set.read().get(&d).c(d!())?.is_some();
         Ok(is_null_present)
     }
