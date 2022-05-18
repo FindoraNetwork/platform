@@ -802,3 +802,8 @@ impl AnonKeys {
         self.dec_key = dec_key;
     }
 }
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct ABARJson {
+    pub commitment: String,
+}

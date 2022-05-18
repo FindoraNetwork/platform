@@ -1769,7 +1769,7 @@ pub fn trace_assets(
 // Author: Chao Ma, github.com/chaosma. //
 //////////////////////////////////////////
 
-use crate::wasm_data_model::{AmountAssetType, AnonKeys};
+use crate::wasm_data_model::{ABARJson, AmountAssetType, AnonKeys};
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
 use getrandom::getrandom;
@@ -2073,10 +2073,12 @@ pub fn x_secretkey_from_string(key_str: &str) -> Result<XSecretKey, JsValue> {
 #[wasm_bindgen]
 #[allow(missing_docs)]
 pub fn abar_from_json(json: JsValue) -> Result<AnonBlindAssetRecord, JsValue> {
-    let abar: AnonBlindAssetRecord =
-        json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
+    let abar: ABARJson = json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
+    let c = wallet::nullifier_from_base58(abar.commitment.as_str())
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
 
-    Ok(abar)
+    Ok(AnonBlindAssetRecord { commitment: c })
 }
 
 #[wasm_bindgen]
