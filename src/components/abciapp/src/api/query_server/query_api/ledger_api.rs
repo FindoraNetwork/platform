@@ -32,6 +32,8 @@ use {
     zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
     zei::anon_xfr::structs::AnonBlindAssetRecord
 };
+use globutils::wallet;
+use ledger::data_model::ABARData;
 
 /// Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]
@@ -709,6 +711,24 @@ pub(super) async fn query_owned_abar(
         })
 }
 
+// query utxos according `commitment`
+pub(super) async fn query_owned_abar_data(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    com: web::Path<String>,
+) -> actix_web::Result<web::Json<Option<(ATxoSID, ABARData)>>> {
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
+    globutils::wallet::commitment_from_base58(com.as_str())
+        .c(d!())
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
+        .map(|com| {
+            web::Json(ledger.get_owned_abar(&com).map(|a| {
+                let c = wallet::commitment_to_base58(&com);
+                (a, ABARData{commitment: c})
+            }))
+        })
+}
+
 #[allow(missing_docs)]
 pub enum ApiRoutes {
     UtxoSid,
@@ -722,6 +742,7 @@ pub enum ApiRoutes {
     GlobalStateVersion,
     OwnedUtxos,
     OwnedAbars,
+    OwnedAbarData,
     ValidatorList,
     DelegationInfo,
     DelegatorList,
@@ -746,6 +767,7 @@ impl NetworkRoute for ApiRoutes {
             ApiRoutes::DelegatorList => "delegator_list",
             ApiRoutes::ValidatorDetail => "validator_detail",
             ApiRoutes::OwnedAbars => "owned_abars",
+            ApiRoutes::OwnedAbarData => "owned_abar_data"
         };
         "/".to_owned() + endpoint
     }

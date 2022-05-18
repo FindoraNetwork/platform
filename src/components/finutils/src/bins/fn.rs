@@ -44,6 +44,7 @@ use {
     zei::anon_xfr::structs::OpenAnonBlindAssetRecordBuilder,
     zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
 };
+use finutils::common::utils::get_abar_data;
 
 fn main() {
     if let Err(e) = run() {
@@ -511,10 +512,11 @@ fn run() -> Result<()> {
         let commitment = wallet::commitment_from_base58(commitment_str.unwrap())?;
 
         // get results from query server and print
-        let abar = utils::get_owned_abar(&commitment).c(d!())?;
+        let (sid, abar) = utils::get_owned_abar(&commitment).c(d!())?;
+        let abar_data = get_abar_data(abar);
         println!(
             "(AtxoSID, ABAR)   :  {}",
-            serde_json::to_string(&abar).c(d!())?
+            serde_json::to_string(&(sid, abar_data)).c(d!())?
         );
     } else if let Some(m) = matches.subcommand_matches("anon-balance") {
         // Generates a list of owned Abars (both spent and unspent)

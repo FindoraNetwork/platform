@@ -803,7 +803,3 @@ impl AnonKeys {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub(crate) struct ABARJson {
-    pub commitment: String,
-}

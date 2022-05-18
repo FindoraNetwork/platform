@@ -2190,3 +2190,9 @@ impl RngCore for ConsensusRng {
 pub fn gen_random_keypair() -> XfrKeyPair {
     XfrKeyPair::generate(&mut ChaChaRng::from_entropy())
 }
+
+#[derive(Serialize, Deserialize)]
+#[allow(missing_docs)]
+pub struct ABARData {
+    pub commitment: String,
+}
