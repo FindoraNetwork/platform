@@ -16,7 +16,7 @@ export ENABLE_QUERY_SERVICE = true
 EXTERNAL_ADDRESS = ""
 
 ifndef CARGO_TARGET_DIR
-	export CARGO_TARGET_DIR=target
+	export CARGO_TARGET_DIR=/tmp/cargo_target_dir/findora/platform
 endif
 
 $(info ====== Build root is "$(CARGO_TARGET_DIR)" ======)
@@ -130,10 +130,10 @@ fmtall:
 
 clean:
 	cargo clean
-	rm -rf tools/tendermint .git/modules/tools/tendermint
-	rm -rf debug release Cargo.lock
+	rm -rf debug release
 
 cleanall: clean
+	rm -rf tools/tendermint .git/modules/tools/tendermint
 	git clean -fdx
 
 wasm:
