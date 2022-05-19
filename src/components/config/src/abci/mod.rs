@@ -28,6 +28,8 @@ pub struct CheckPointConfig {
     pub nonconfidential_balance_fix_height: u64,
     pub unbond_block_cnt: u64,
     pub prismxx_inital_height: i64,
+    // Note: This field only used to qa02.
+    pub qa02_upgradable_prism_bridge: i64,
 }
 
 impl CheckPointConfig {
@@ -54,6 +56,7 @@ impl CheckPointConfig {
                                 nonconfidential_balance_fix_height: 0,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
                                 prismxx_inital_height: 1,
+                                qa02_upgradable_prism_bridge: 1,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -70,6 +73,7 @@ impl CheckPointConfig {
                                 nonconfidential_balance_fix_height: 1210000,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
                                 prismxx_inital_height: 1733700,
+                                qa02_upgradable_prism_bridge: 40000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
