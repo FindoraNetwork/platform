@@ -24,7 +24,8 @@ impl SystemContracts {
         let owner =
             H160::from_str("0xe95034bE56fbd7D70000B310323B6Be684A49acb").c(d!())?;
 
-        let bytecode_str = include_str!("../contracts/PrismXXBridge.bytecode");
+        // Driect use this bytecode, beacuse we will remove on mainnet
+        let bytecode_str = include_str!("../contracts/PrismXXProxy.bytecode");
 
         let salt = H256::zero();
 
