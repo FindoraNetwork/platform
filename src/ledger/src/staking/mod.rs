@@ -1278,10 +1278,13 @@ impl Staking {
     //
     // @param h: included
     fn delegation_process_finished_before_height(&mut self, h: BlockHeight) {
-        self.delegation_info
-            .end_height_map
-            .range(0..=h)
-            .map(|(k, v)| (k.to_owned(), (*v).clone()))
+        let r = if CFG.checkpoint.fix_unpaid_delegation_height > h {
+            self.delegation_info.end_height_map.range(0..=h)
+        } else {
+            self.delegation_info.end_height_map.range(0..h)
+        };
+
+        r.map(|(k, v)| (k.to_owned(), (*v).clone()))
             .collect::<Vec<_>>()
             .iter()
             .for_each(|(h, addrs)| {

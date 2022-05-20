@@ -111,10 +111,18 @@ pub async fn get_owned_utxos(
 ) -> actix_web::Result<web::Json<HashSet<TxoSID>>> {
     let qs = data.read();
     let ledger = &qs.ledger_cloned;
-    wallet::public_key_from_base64(owner.as_str())
-        .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.to_string()))
-        .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk)).keys().copied().collect()))
+
+    let pk = wallet::public_key_from_base64(owner.as_str())
+        .map_err(actix_web::error::ErrorServiceUnavailable)?;
+
+    let utxos = ledger
+        .get_owned_utxos(&pk)
+        .map_err(actix_web::error::ErrorServiceUnavailable)?
+        .keys()
+        .copied()
+        .collect();
+
+    Ok(web::Json(utxos))
 }
 
 /// Returns the ATxo Sid currently spendable by a given commitment
