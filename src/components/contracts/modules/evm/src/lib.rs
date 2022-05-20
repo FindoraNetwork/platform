@@ -314,7 +314,30 @@ impl<C: Config> AppModule for App<C> {
         let height = CFG.checkpoint.prismxx_inital_height;
 
         if ctx.header.height == height {
-            if let Err(e) = utils::deploy_contract::<C>(ctx, &self.contracts) {
+            let bytecode_str = include_str!("../contracts/PrismXXBridge.bytecode");
+
+            if let Err(e) =
+                utils::deploy_contract::<C>(ctx, &self.contracts, bytecode_str)
+            {
+                pd!(e);
+                return;
+            }
+            println!(
+                "Bridge contract address: {:?}",
+                self.contracts.bridge_address
+            );
+
+            ctx.state.write().commit_session();
+        }
+
+        let redeploy_height = CFG.checkpoint.qa02_upgradable_prism_bridge;
+
+        if ctx.header.height == redeploy_height {
+            let bytecode_str = include_str!("../contracts/PrismXXProxy.bytecode");
+
+            if let Err(e) =
+                utils::deploy_contract::<C>(ctx, &self.contracts, bytecode_str)
+            {
                 pd!(e);
                 return;
             }

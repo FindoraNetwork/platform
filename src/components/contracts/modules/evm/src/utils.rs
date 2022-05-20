@@ -14,10 +14,9 @@ use crate::{runner::ActionRunner, system_contracts::SystemContracts, Config};
 pub fn deploy_contract<C: Config>(
     ctx: &Context,
     contracts: &SystemContracts,
+    bytecode_str: &str,
 ) -> Result<()> {
     // Deploy Bridge here.
-    let bytecode_str = include_str!("../contracts/PrismXXBridge.bytecode");
-
     let bytecode = hex::decode(&bytecode_str[2..].trim()).c(d!())?;
 
     ActionRunner::<C>::inital_system_contract(
