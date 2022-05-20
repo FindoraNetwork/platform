@@ -22,7 +22,7 @@ impl SystemContracts {
         let bridge = Contract::load(abi_str.as_bytes()).c(d!())?;
 
         let owner =
-            H160::from_str("0xe95034bE56fbd7D70000B310323B6Be684A49acb").c(d!())?;
+            H160::from_str("0x72488bAa718F52B76118C79168E55c209056A2E6").c(d!())?;
 
         // Driect use this bytecode, beacuse we will remove on mainnet
         let bytecode_str = include_str!("../contracts/PrismXXProxy.bytecode");
