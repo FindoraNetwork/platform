@@ -32,7 +32,7 @@ fn base_transfer_fee() -> U256 {
 fn build_transfer_transaction(to: H160, balance: U256) -> UncheckedTransaction<()> {
     let tx = UnsignedTransaction {
         nonce: module_account::App::<BaseApp>::nonce(
-            &BASE_APP.lock().unwrap().check_state,
+            &BASE_APP.lock().unwrap().deliver_state,
             &ALICE_ECDSA.account_id,
         ),
         gas_price: <BaseApp as module_ethereum::Config>::FeeCalculator::min_gas_price(),

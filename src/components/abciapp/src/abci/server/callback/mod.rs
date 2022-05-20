@@ -319,14 +319,14 @@ pub fn deliver_tx(
                         }
 
                         if s.la.write().cache_transaction(tx).is_ok() {
-                            // newer commit_session, no need to return value now
+                            // newer commit_session
                             s.account_base_app
                                 .read()
                                 .deliver_state
                                 .state
                                 .write()
                                 .commit_session();
-                            // newer commit_session, no need to return value now
+                            // newer commit_session
                             s.account_base_app
                                 .read()
                                 .deliver_state

@@ -120,7 +120,7 @@ fn test_deploy_check_tx() {
 
 fn test_deploy_deliver_tx() -> (H160, ethabi::Contract) {
     let mut req = RequestDeliverTx::default();
-    let (tx, contract_abi) = build_erc20_deploy_transaction("erc20", "FRA", 1.into());
+    let (tx, contract_abi) = build_erc20_deploy_transaction("erc20", "FRA", 0.into());
 
     let tx = serde_json::to_vec(&tx).unwrap();
     req.tx = EvmRawTxWrapper::wrap(&tx);
@@ -168,7 +168,7 @@ fn test_mint_check_tx(contract: ERC20) {
         contract,
         BOB_ECDSA.address,
         10000.into(),
-        2.into(),
+        1.into(),
     ))
     .unwrap();
     req.tx = EvmRawTxWrapper::wrap(&tx);
@@ -186,7 +186,7 @@ fn test_mint_deliver_tx(contract: ERC20) {
         contract,
         BOB_ECDSA.address,
         10000.into(),
-        3.into(),
+        1.into(),
     ))
     .unwrap();
     req.tx = EvmRawTxWrapper::wrap(&tx);
@@ -226,7 +226,7 @@ fn test_transfer_deliver_tx(contract: ERC20) {
         contract,
         ALICE_ECDSA.address,
         100.into(),
-        1.into(),
+        0.into(),
         U256::zero(),
         BOB_ECDSA.private_key,
     ))
@@ -245,7 +245,7 @@ fn test_transfer_deliver_tx(contract: ERC20) {
 fn test_balance_of_deliver_tx(contract: ERC20, who: H160) -> U256 {
     let mut req = RequestDeliverTx::default();
     let tx =
-        serde_json::to_vec(&build_erc20_balance_of_transaction(contract, who, 5.into()))
+        serde_json::to_vec(&build_erc20_balance_of_transaction(contract, who, 2.into()))
             .unwrap();
     req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().deliver_tx(&req);

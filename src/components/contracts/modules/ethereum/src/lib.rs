@@ -7,6 +7,7 @@ mod impls;
 use abci::{RequestEndBlock, ResponseEndBlock};
 use ethereum_types::{H160, H256, U256};
 use evm::Config as EvmConfig;
+use fp_core::context::RunTxMode;
 use fp_core::{
     context::Context,
     ensure,
@@ -159,11 +160,14 @@ impl<C: Config> ValidateUnsigned for App<C> {
     type Call = Action;
 
     fn pre_execute(ctx: &Context, call: &Self::Call) -> Result<()> {
-        let Action::Transact(transaction) = call;
-        let origin = Self::recover_signer(transaction)
-            .ok_or_else(|| eg!("InvalidSignature, can not recover signer address"))?;
-        let account_id = C::AddressMapping::convert_to_account_id(origin);
-        C::AccountAsset::inc_nonce(ctx, &account_id)?;
+        if ctx.run_mode == RunTxMode::Check {
+            let Action::Transact(transaction) = call;
+            let origin = Self::recover_signer(transaction).ok_or_else(|| {
+                eg!("InvalidSignature, can not recover signer address")
+            })?;
+            let account_id = C::AddressMapping::convert_to_account_id(origin);
+            C::AccountAsset::inc_nonce(ctx, &account_id)?;
+        }
         Ok(())
     }
 

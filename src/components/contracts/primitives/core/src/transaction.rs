@@ -149,7 +149,7 @@ where
             U::pre_execute(ctx, &self.function)?;
             (None, Default::default())
         };
-        // newer commit_session, no need to return value now
+        // newer commit_session
         ctx.state.write().commit_session();
 
         // The transaction is only executed if the run mode is Deliver
@@ -161,12 +161,12 @@ where
             Ok(res) => {
                 if res.code == 0 {
                     Extra::post_execute(ctx, pre, &res)?;
-                    // newer commit_session, no need to return value now
+                    // newer commit_session
                     ctx.state.write().commit_session();
                 } else {
                     ctx.state.write().discard_session();
                 }
-                // newer commit_session, no need to return value now
+                // newer commit_session
                 ctx.db.write().commit_session();
                 Ok(res)
             }
