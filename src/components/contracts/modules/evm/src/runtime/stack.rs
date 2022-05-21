@@ -36,7 +36,7 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
     pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
         let substate = (*self.ctx.state.read()).substate();
 
-        let mut entering = Self {
+        let entering = Self {
             ctx: self.ctx,
             metadata: self.metadata.spit_child(gas_limit, is_static),
             parent: None,
@@ -44,7 +44,9 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
             logs: Vec::new(),
             substate,
         };
-        mem::swap(&mut entering, self);
+        // mem::swap(&mut entering, self);
+
+        self.ctx.state.write().commit_session();
 
         self.parent = Some(Box::new(entering));
     }
@@ -56,6 +58,8 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         self.metadata.swallow_commit(exited.metadata)?;
         self.logs.append(&mut exited.logs);
         self.deletes.append(&mut exited.deletes);
+
+        self.ctx.state.write().commit_session();
 
         Ok(())
     }
@@ -70,6 +74,7 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         } else {
             info!(target: "evm", "EVM stack exit_revert(), height: {:?}", self.ctx.header.height);
         }
+        self.ctx.state.write().discard_session();
 
         Ok(())
     }
@@ -84,6 +89,7 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         } else {
             info!(target: "evm", "EVM stack exit_discard(), height: {:?}", self.ctx.header.height);
         }
+        self.ctx.state.write().discard_session();
 
         Ok(())
     }
