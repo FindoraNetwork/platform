@@ -271,8 +271,10 @@ impl<C: Config> App<C> {
         pending_txs.push((transaction, status, receipt));
         PendingTransactions::put(ctx.db.write().borrow_mut(), &pending_txs)?;
 
+        // Searching
+            // ctx.state.write().borrow_mut(),
         TransactionIndex::insert(
-            ctx.db.write().borrow_mut(),
+            ctx.state.write().borrow_mut(),
             &HA256::new(transaction_hash),
             &(ctx.header.height.into(), transaction_index),
         )?;
