@@ -150,7 +150,7 @@ impl BaseApp {
             Arc::new(RwLock::new(ChainState::new(rdb, "rocks_db".to_owned(), 0)));
 
         //Migrate any existing data from one database to the other.
-        BaseApp::migrate_initial_db(chain_state.clone(), chain_db.clone())?;
+        // BaseApp::migrate_initial_db(chain_state.clone(), chain_db.clone())?;
 
         Ok(BaseApp {
             name: APP_NAME.to_string(),
