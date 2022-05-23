@@ -168,7 +168,7 @@ fn test_mint_check_tx(contract: ERC20) {
         contract,
         BOB_ECDSA.address,
         10000.into(),
-        3.into(),
+        2.into(),
     ))
     .unwrap();
     req.tx = EvmRawTxWrapper::wrap(&tx);
