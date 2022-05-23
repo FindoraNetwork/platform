@@ -2,6 +2,8 @@
 //! # Access Ledger Data
 //!
 
+use globutils::wallet;
+use ledger::data_model::ABARData;
 use {
     super::server::QueryServer,
     actix_web::{error, web},
@@ -697,7 +699,7 @@ pub(super) async fn query_owned_abar(
 ) -> actix_web::Result<web::Json<Option<(ATxoSID, AnonBlindAssetRecord)>>> {
     let qs = data.read();
     let ledger = &qs.ledger_cloned;
-    globutils::wallet::commitment_from_base64(com.as_str())
+    globutils::wallet::commitment_from_base58(com.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
         .map(|com| {
@@ -706,6 +708,24 @@ pub(super) async fn query_owned_abar(
                     .get_owned_abar(&com)
                     .map(|a| (a, AnonBlindAssetRecord { commitment: com })),
             )
+        })
+}
+
+// query utxos according `commitment`
+pub(super) async fn query_owned_abar_data(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    com: web::Path<String>,
+) -> actix_web::Result<web::Json<Option<(ATxoSID, ABARData)>>> {
+    let qs = data.read();
+    let ledger = &qs.ledger_cloned;
+    globutils::wallet::commitment_from_base58(com.as_str())
+        .c(d!())
+        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
+        .map(|com| {
+            web::Json(ledger.get_owned_abar(&com).map(|a| {
+                let c = wallet::commitment_to_base58(&com);
+                (a, ABARData { commitment: c })
+            }))
         })
 }
 
@@ -722,6 +742,7 @@ pub enum ApiRoutes {
     GlobalStateVersion,
     OwnedUtxos,
     OwnedAbars,
+    OwnedAbarData,
     ValidatorList,
     DelegationInfo,
     DelegatorList,
@@ -746,6 +767,7 @@ impl NetworkRoute for ApiRoutes {
             ApiRoutes::DelegatorList => "delegator_list",
             ApiRoutes::ValidatorDetail => "validator_detail",
             ApiRoutes::OwnedAbars => "owned_abars",
+            ApiRoutes::OwnedAbarData => "owned_abar_data",
         };
         "/".to_owned() + endpoint
     }

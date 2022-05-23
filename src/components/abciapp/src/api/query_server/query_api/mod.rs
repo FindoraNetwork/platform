@@ -133,7 +133,7 @@ async fn get_owned_abar(
     let qs = data.read();
     let ledger = &qs.ledger_cloned;
     //let read = qs.state.as_ref().unwrap().read();
-    globutils::wallet::commitment_from_base64(com.as_str())
+    globutils::wallet::commitment_from_base58(com.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
         .map(|com| web::Json(ledger.get_owned_abar(&com)))
@@ -678,6 +678,10 @@ impl QueryApi {
                 .route(
                     &ApiRoutes::OwnedAbars.with_arg_template("owner"),
                     web::get().to(query_owned_abar),
+                )
+                .route(
+                    &ApiRoutes::OwnedAbarData.with_arg_template("owner"),
+                    web::get().to(query_owned_abar_data),
                 )
                 .route(
                     &ApiRoutes::ValidatorList.route(),

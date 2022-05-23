@@ -1585,7 +1585,7 @@ impl AnonTransferOperationBuilder {
     pub fn get_commitment_map(&self) -> HashMap<String, (AXfrPubKey, AssetType, u64)> {
         let mut commitment_map = HashMap::new();
         for out_abar in self.outputs.iter() {
-            let abar_rand = wallet::commitment_to_base64(&out_abar.compute_commitment());
+            let abar_rand = wallet::commitment_to_base58(&out_abar.compute_commitment());
             let abar_pkey = *out_abar.pub_key_ref();
             let abar_asset = out_abar.get_asset_type();
             let abar_amt = out_abar.get_amount();
@@ -1670,8 +1670,12 @@ impl AnonTransferOperationBuilder {
         Ok(self)
     }
 
+    /// Calculates the Anon fee given the number of inputs and outputs
+    pub fn get_anon_fee(n_inputs: u32, n_outputs: u32) -> u32 {
+        FEE_CALCULATING_FUNC(n_inputs, n_outputs)
+    }
+
     /// transaction method wraps the anon transfer note in an Operation and returns it
-    #[allow(missing_docs)]
     pub fn serialize_str(&self) -> Result<String> {
         if self.note.is_none() {
             return Err(eg!("Anon transfer not built and signed"));

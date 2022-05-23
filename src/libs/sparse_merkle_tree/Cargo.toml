@@ -10,7 +10,7 @@ path = "src/lib.rs"
 [dependencies]
 ruc = "1.0"
 arrayref = "0.3.5"
-base64 = "0.10"
+bs58 = "0.4"
 bls12_381 = "0.2.0"
 cryptohash = { path = "../cryptohash" }
 hex = "0.3.2"

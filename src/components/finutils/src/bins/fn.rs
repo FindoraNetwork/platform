@@ -25,6 +25,7 @@
 
 #![deny(warnings)]
 
+use finutils::common::utils::get_abar_data;
 use {
     clap::{crate_authors, load_yaml, App},
     finutils::common::{self, evm::*, get_keypair, utils},
@@ -436,7 +437,7 @@ fn run() -> Result<()> {
             // Print commitment to terminal
             println!(
                 "\x1b[31;01m Commitment: {}\x1b[00m",
-                wallet::commitment_to_base64(&r)
+                wallet::commitment_to_base58(&r)
             );
             // write the commitment base64 form to the owned_commitments file
             let mut file = fs::OpenOptions::new()
@@ -446,7 +447,7 @@ fn run() -> Result<()> {
                 .expect("cannot open commitments file");
             std::io::Write::write_all(
                 &mut file,
-                ("\n".to_owned() + &wallet::commitment_to_base64(&r)).as_bytes(),
+                ("\n".to_owned() + &wallet::commitment_to_base58(&r)).as_bytes(),
             )
             .expect("commitment write failed");
         }
@@ -508,13 +509,14 @@ fn run() -> Result<()> {
         let commitment_str = m.value_of("commitment");
 
         // create derived public key
-        let commitment = wallet::commitment_from_base64(commitment_str.unwrap())?;
+        let commitment = wallet::commitment_from_base58(commitment_str.unwrap())?;
 
         // get results from query server and print
-        let abar = utils::get_owned_abar(&commitment).c(d!())?;
+        let (sid, abar) = utils::get_owned_abar(&commitment).c(d!())?;
+        let abar_data = get_abar_data(abar);
         println!(
             "(AtxoSID, ABAR)   :  {}",
-            serde_json::to_string(&abar).c(d!())?
+            serde_json::to_string(&(sid, abar_data)).c(d!())?
         );
     } else if let Some(m) = matches.subcommand_matches("anon-balance") {
         // Generates a list of owned Abars (both spent and unspent)
@@ -535,7 +537,7 @@ fn run() -> Result<()> {
         let commitment_str = m.value_of("commitment");
 
         // create derived public key
-        let commitment = wallet::commitment_from_base64(commitment_str.unwrap())?;
+        let commitment = wallet::commitment_from_base58(commitment_str.unwrap())?;
         let axfr_secret_key =
             wallet::anon_secret_key_from_base64(anon_keys.axfr_secret_key.as_str())
                 .c(d!())?;
@@ -723,7 +725,7 @@ fn run() -> Result<()> {
             None => return Err(eg!("path for anon-keys file not found")),
         };
         let commitment_str = m.value_of("commitment");
-        let commitment = wallet::commitment_from_base64(commitment_str.unwrap())?;
+        let commitment = wallet::commitment_from_base58(commitment_str.unwrap())?;
 
         let axfr_secret_key =
             wallet::anon_secret_key_from_base64(anon_keys.axfr_secret_key.as_str())

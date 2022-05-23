@@ -2,6 +2,7 @@
 //! Some handful function and data structure for findora cli tools
 //!
 
+use ledger::data_model::ABARData;
 use {
     crate::{
         api::{DelegationInfo, ValidatorDetail},
@@ -553,7 +554,7 @@ pub fn get_owned_abar(com: &Commitment) -> Result<(ATxoSID, AnonBlindAssetRecord
     let url = format!(
         "{}:8668/owned_abars/{}",
         get_serv_addr().c(d!())?,
-        wallet::commitment_to_base64(com)
+        wallet::commitment_to_base58(com)
     );
 
     attohttpc::get(&url)
@@ -807,4 +808,12 @@ pub fn get_oar(
     }
 
     Err(eg!("utxo not found"))
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn get_abar_data(abar: AnonBlindAssetRecord) -> ABARData {
+    ABARData {
+        commitment: wallet::commitment_to_base58(&abar.commitment),
+    }
 }

@@ -579,7 +579,7 @@ impl TransactionBuilder {
             commitments: self
                 .commitments
                 .iter()
-                .map(wallet::commitment_to_base64)
+                .map(wallet::commitment_to_base58)
                 .collect(),
         };
 
@@ -998,7 +998,7 @@ pub fn gen_nullifier_hash(
         &oabar.get_asset_type(),
         mt_leaf_info.get_zei_mt_leaf_info().uid,
     );
-    let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+    let hash = wallet::nullifier_to_base58(&n);
     Ok(hash)
 }
 
@@ -1393,7 +1393,7 @@ impl AnonTransferOperationBuilder {
                 .get_builder()
                 .get_commitments()
                 .iter()
-                .map(wallet::commitment_to_base64)
+                .map(wallet::commitment_to_base58)
                 .collect(),
         };
 
@@ -1774,7 +1774,7 @@ use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
 use getrandom::getrandom;
 use js_sys::JsString;
-use ledger::data_model::{AssetType, TxoSID, BAR_TO_ABAR_TX_FEE_MIN};
+use ledger::data_model::{ABARData, AssetType, TxoSID, BAR_TO_ABAR_TX_FEE_MIN};
 use ledger::staking::Amount;
 use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
@@ -1996,6 +1996,12 @@ pub fn fra_get_minimal_fee_for_bar_to_abar() -> u64 {
     BAR_TO_ABAR_TX_FEE_MIN
 }
 
+/// Anon fee for a given number of inputs & outputs
+#[wasm_bindgen]
+pub fn get_anon_fee(n_inputs: u32, n_outputs: u32) -> u32 {
+    PlatformAnonTransferOperationBuilder::get_anon_fee(n_inputs, n_outputs)
+}
+
 /// The destination for fee to be transfered to.
 #[wasm_bindgen]
 pub fn fra_get_dest_pubkey() -> XfrPublicKey {
@@ -2067,10 +2073,12 @@ pub fn x_secretkey_from_string(key_str: &str) -> Result<XSecretKey, JsValue> {
 #[wasm_bindgen]
 #[allow(missing_docs)]
 pub fn abar_from_json(json: JsValue) -> Result<AnonBlindAssetRecord, JsValue> {
-    let abar: AnonBlindAssetRecord =
-        json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
+    let abar: ABARData = json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
+    let c = wallet::commitment_from_base58(abar.commitment.as_str())
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
 
-    Ok(abar)
+    Ok(AnonBlindAssetRecord { commitment: c })
 }
 
 #[wasm_bindgen]
