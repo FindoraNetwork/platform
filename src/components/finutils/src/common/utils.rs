@@ -2,6 +2,7 @@
 //! Some handful function and data structure for findora cli tools
 //!
 
+use ledger::data_model::ABARData;
 use {
     crate::{
         api::{DelegationInfo, ValidatorDetail},
@@ -34,7 +35,6 @@ use {
     },
     zei_crypto::basic::hybrid_encryption::XPublicKey,
 };
-use ledger::data_model::ABARData;
 
 ///////////////////////////////////////
 // Part 1: utils for transfer assets //
@@ -800,11 +800,10 @@ pub fn get_oar(
     Err(eg!("utxo not found"))
 }
 
-
 #[inline(always)]
 #[allow(missing_docs)]
 pub fn get_abar_data(abar: AnonBlindAssetRecord) -> ABARData {
-    ABARData{
-        commitment: wallet::commitment_to_base58(&abar.commitment)
+    ABARData {
+        commitment: wallet::commitment_to_base58(&abar.commitment),
     }
 }

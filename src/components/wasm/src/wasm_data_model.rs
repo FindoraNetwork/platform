@@ -802,4 +802,3 @@ impl AnonKeys {
         self.dec_key = dec_key;
     }
 }
-

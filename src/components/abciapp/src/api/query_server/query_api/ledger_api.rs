@@ -2,6 +2,8 @@
 //! # Access Ledger Data
 //!
 
+use globutils::wallet;
+use ledger::data_model::ABARData;
 use {
     super::server::QueryServer,
     actix_web::{error, web},
@@ -10,7 +12,7 @@ use {
         DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
         ValidatorDetail, ValidatorList,
     },
-    globutils::{HashOf},
+    globutils::HashOf,
     ledger::{
         data_model::{
             ATxoSID, AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData,
@@ -24,16 +26,10 @@ use {
     parking_lot::RwLock,
     ruc::*,
     serde::{Deserialize, Serialize},
-    std::{
-        collections::{BTreeMap},
-        mem,
-        sync::Arc,
-    },
+    std::{collections::BTreeMap, mem, sync::Arc},
+    zei::anon_xfr::structs::AnonBlindAssetRecord,
     zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
-    zei::anon_xfr::structs::AnonBlindAssetRecord
 };
-use globutils::wallet;
-use ledger::data_model::ABARData;
 
 /// Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]
@@ -707,7 +703,11 @@ pub(super) async fn query_owned_abar(
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
         .map(|com| {
-            web::Json(ledger.get_owned_abar(&com).map(|a| (a, AnonBlindAssetRecord{commitment: com})))
+            web::Json(
+                ledger
+                    .get_owned_abar(&com)
+                    .map(|a| (a, AnonBlindAssetRecord { commitment: com })),
+            )
         })
 }
 
@@ -724,7 +724,7 @@ pub(super) async fn query_owned_abar_data(
         .map(|com| {
             web::Json(ledger.get_owned_abar(&com).map(|a| {
                 let c = wallet::commitment_to_base58(&com);
-                (a, ABARData{commitment: c})
+                (a, ABARData { commitment: c })
             }))
         })
 }
@@ -767,7 +767,7 @@ impl NetworkRoute for ApiRoutes {
             ApiRoutes::DelegatorList => "delegator_list",
             ApiRoutes::ValidatorDetail => "validator_detail",
             ApiRoutes::OwnedAbars => "owned_abars",
-            ApiRoutes::OwnedAbarData => "owned_abar_data"
+            ApiRoutes::OwnedAbarData => "owned_abar_data",
         };
         "/".to_owned() + endpoint
     }
