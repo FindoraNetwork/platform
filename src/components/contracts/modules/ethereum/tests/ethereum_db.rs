@@ -83,6 +83,8 @@ fn test_eth_db_migrate_txn_index() {
     }
 }
 
+// Set evm_first_block_height = 1 to run this test
+#[ignore]
 #[test]
 fn test_eth_db_migrate_block_data() {
     let mut ctx = setup();

@@ -447,13 +447,13 @@ impl<C: Config> App<C> {
     //Replace state root of block x with state root from block x + 1
     fn migrate_block_data(ctx: &mut Context) -> Result<()> {
         // 1. Find range of blocks that require adjustments
-        let mut first_block = U256::from(1);
+        let mut first_block = U256::from(CFG.checkpoint.evm_first_block_height);
         let current_block_num =
             CurrentBlockNumber::get(ctx.db.read().borrow()).unwrap_or_default();
         if current_block_num <= first_block {
             return Err(eg!("migrate_block_data: could not get latest block number"));
         }
-        let mut i = U256::from(1);
+        let mut i = U256::from(CFG.checkpoint.evm_first_block_height);
         while i <= current_block_num {
             // get block data for block (i)
             let id = Some(BlockId::Number(i));
@@ -510,6 +510,7 @@ impl<C: Config> App<C> {
         if !Migrated::contains_key(ctx.db.read().borrow(), key.borrow()) {
             Self::migrate_block_data(ctx)?;
             Migrated::insert(ctx.db.write().borrow_mut(), key.borrow(), &true)?;
+            ctx.db.write().commit_session();
         }
         Ok(())
     }
