@@ -8,20 +8,13 @@ source $TRIPLE_MASKING_SCRIPTS_PATH/env.sh
 SLEEP_INTERVAL=($"BLOCK_INTERVAL" + 1)
 TM_SLEEP=20
 
-#Setup environment
-./$EVM_SCRIPTS_PATH/setup.sh
-
 #Run Tests
-echo -e "${YEL}Run test cases and verify results${NC}"
+echo -e "${YEL}Run asset mixing test cases and verify results${NC}"
 
-set -e
-./$TRIPLE_MASKING_SCRIPTS_PATH/create_test_bars.sh
-#Verify FRA balance
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 840000000
-echo
-set +e
 
-FRA_ACCOUNT="fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5"
+
+FRA_ACCOUNT="fra1peaqwykz6vgpvhxfu60w6lngqw6jvwr0f8cyzzvmaqa3dn6xsy4qan9rne"
+BAR_SEC_KEY="KtbqhEo_FJaQoq2fV5K4niayxz_VK8LHJBqU1eV5x0o="
 
 ANON_SK_1="J7PqRhmBOE_gadFs4rB4lcKuz_YoWa5VSlALyKuZdQjNBryPSYZhRczonGNY3-mp86LWW8TJ6clirfk4gk03Tw=="
 ANON_PK_1="zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08="
@@ -43,8 +36,17 @@ FILE_ANON_KEYS_1="anon-keys-temp_1.keys"
 FILE_ANON_KEYS_2="anon-keys-temp_2.keys"
 FILE_ANON_KEYS_3="anon-keys-temp_3.keys"
 
-# FRA: fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
-echo "double quit tape enough charge fancy mandate ostrich this program laundry insect either escape cement van turtle loud immense load tip spike inquiry spice" > $FILE_MNEMONIC
+
+set -e
+./$TRIPLE_MASKING_SCRIPTS_PATH/create_test_bars.sh $FRA_ACCOUNT
+#Verify FRA balance
+python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 840000000
+echo
+set +e
+
+
+# FRA: fra1peaqwykz6vgpvhxfu60w6lngqw6jvwr0f8cyzzvmaqa3dn6xsy4qan9rne
+echo "proof zero oven patrol correct toss silent repair suffer dose equip patch enrich unfold track sea network reduce input aware wild feed inject key" > $FILE_MNEMONIC
 
 echo "
 {
@@ -78,12 +80,14 @@ echo "\n ***** Setup accounts successfully! ***** "
 
 set -e
 
+$BIN/fn setup -O "$TM_REGRESSION_PATH"/mnemonic.key > /dev/null
+
 echo "\n\n FRA Bar To Abar ..."
 echo "==============================================================================="
 TXO_SID=$(target/release/fn owned-utxos | head -4 | tail -1 |  awk -F ' ' '{print $1}')
 target/release/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS_1 --txo-sid "$TXO_SID"
 echo "waiting blockchain 20s..."
-sleep $TM_SLEEP
+sleep 30
 
 #Verify FRA balance
 python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 629980000
@@ -235,9 +239,8 @@ echo "waiting for transaction to complete..."
 sleep $TM_SLEEP
 
 echo "checking..."
-target/release/fn owned-abars -c $(awk 'FNR==3' sent_commitments) --anon-keys ./$FILE_ANON_KEYS_2
-target/release/fn owned-abars -c $(awk 'FNR==4' sent_commitments) --anon-keys ./$FILE_ANON_KEYS_2
-# target/release/fn owned-abars -c $(awk 'FNR==5' sent_commitments) --anon-keys ./$FILE_ANON_KEYS_3
+target/release/fn owned-abars --commitments $(awk 'FNR==3,FNR==4' sent_commitments | awk -v d="," '{s=(NR==1?s:s d)$0}END{print s}') --anon-keys ./$FILE_ANON_KEYS_2
+target/release/fn owned-abars --commitments $(awk 'FNR==5' sent_commitments) --anon-keys $FILE_ANON_KEYS_3
 
 python $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments "$(awk 'FNR==3' sent_commitments)" --amount 10000000
 python $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments "$(awk 'FNR==4' sent_commitments)" --amount 10000000 --asset "$ASSET2"

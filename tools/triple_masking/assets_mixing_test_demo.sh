@@ -86,37 +86,36 @@ sleep 5
 echo "\n\n Create Asset 1 ..."
 echo "------------------------------------------------------------------------------"
 target/release/fn asset --create --memo "asset1" --transferable 2> /dev/null
-echo "waiting blockchain 5s..."
-sleep 5
+echo "waiting blockchain 15s..."
+sleep 15
 
 echo "\n\n Create Asset 2 ..."
 echo "------------------------------------------------------------------------------"
 target/release/fn asset --create --memo "asset2" --transferable 2> /dev/null
-echo "waiting blockchain 5s..."
+echo "waiting blockchain 15s..."
 sleep 15
 
-echo "\n\n Bilding assets ..."
+echo "\n\n Building assets ..."
 echo "------------------------------------------------------------------------------"
 target/release/fn asset --show --addr $FRA_ACCOUNT > tmp_file
 ASSET1=$(awk 'FNR==1' tmp_file | awk -F ' ' '{print $2}'| sed 's/,*$//g')
 ASSET2=$(awk 'FNR==2' tmp_file | awk -F ' ' '{print $2}'| sed 's/,*$//g')
-echo $ASSET1
-echo $ASSET2
+echo "$ASSET1"
+echo "$ASSET2"
 # rm tmp_file
 
 echo "\n\n Issue Asset 1 ..."
 echo "------------------------------------------------------------------------------"
 target/release/fn asset --issue --code $ASSET1 --amount 100000000
-echo "waiting blockchain 5s..."
+echo "waiting blockchain 15s..."
 sleep 15
 # txo-sid = 14(asset1) & 16
 
 echo "\n\n\n Issue Asset 2 ..."
 echo "------------------------------------------------------------------------------"
-target/release/fn asset --issue --code $ASSET2 --amount 100000000
+target/release/fn asset --issue --code "$ASSET2" --amount 100000000
 echo "waiting blockchain 15s..."
 sleep 15
-# txo-sid = 17(asset2) & 19
 
 echo "\n ***** Issue Asset & FRA successfully! ***** "
 sleep 5
@@ -126,7 +125,7 @@ echo "\n\n Asset 1 Bar To Abar ..."
 echo "==============================================================================="
 TXO_SID=$(target/release/fn owned-utxos --asset "$ASSET1" | head -4 | tail -1 | awk -F ' ' '{print $1}')
 target/release/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS_1 --txo-sid "$TXO_SID"
-echo "waiting blockchain 5s..."
+echo "waiting blockchain 15s..."
 sleep 15
 
 echo "\n\n Asset 2 Bar To Abar ..."
@@ -206,13 +205,12 @@ target/release/fn anon-transfer-batch \
   --to-enc-key-file $BATCH_ENC        \
   --amount-file $BATCH_AMOUNT         \
   --asset-file $BATCH_ASSET
-echo "waiting blockchain 5s..."
+echo "waiting blockchain 15s..."
 sleep 15
 
 echo "checking..."
-target/release/fn owned-abars --commitment $(awk 'FNR==3' sent_commitments)
-target/release/fn owned-abars --commitment $(awk 'FNR==4' sent_commitments)
-target/release/fn owned-abars --commitment $(awk 'FNR==5' sent_commitments)
+target/release/fn owned-abars --commitments $(awk 'FNR==3,FNR==4' sent_commitments | awk -v d="," '{s=(NR==1?s:s d)$0}END{print s}') --anon-keys $FILE_ANON_KEYS_2
+target/release/fn owned-abars --commitments $(awk 'FNR==5' sent_commitments) --anon-keys $FILE_ANON_KEYS_3
 
 rm $BATCH_SK $BATCH_DEC $BATCH_C $BATCH_PK $BATCH_ENC $BATCH_AMOUNT $BATCH_ASSET
 echo "\n ***** Test all successfully! ***** "

@@ -16,25 +16,21 @@ set -e
 commitment1=$(tail -n 1 owned_commitments)
 echo "\n\n Owned Abars after Bar to Abar conversion 1"
 sleep 20
-target/release/fn owned-abars --commitment $commitment1
+target/release/fn owned-abars --commitments $commitment1 --anon-keys ./$FILE_ANON_KEYS
 
 echo "\n\n\n Anonymous Transfer from Sender1 to Receiver1"
 echo "------------------------------------------------------------------------------"
-target/release/fn anon-transfer --amount 189990000 --anon-keys ./$FILE_ANON_KEYS --to-axfr-public-key ptyo7hlqn-Eywf_ttG99OSWtz6KfDUvLYDDVDlV1C-U= --to-enc-key SAmB7Oji4sAgENLaLb4PFclxQL_DRrEkXcYp6eXuXwI= --commitment $commitment1
+target/release/fn anon-transfer --amount 189990000 --anon-keys ./$FILE_ANON_KEYS --to-axfr-public-key ptyo7hlqn-Eywf_ttG99OSWtz6KfDUvLYDDVDlV1C-U= --to-enc-key SAmB7Oji4sAgENLaLb4PFclxQL_DRrEkXcYp6eXuXwI= --commitment "$commitment1"
 
 commitment2=$(tail -n 1 sent_commitments)
-echo "\n\n Owned Abars for Receiver1 after Anon Transfer 1"
+echo -e "\n\n Owned Abars for Receiver1 after Anon Transfer 1"
 sleep 30
-target/release/fn owned-abars --commitment $commitment2
+target/release/fn owned-abars --commitments "$commitment2" --anon-keys ./$FILE_ANON_KEYS_2
 
 echo "\n\n\n Anonymous Transfer from Receiver1 (Sender2) to Receiver2"
 echo "------------------------------------------------------------------------------"
-target/release/fn anon-transfer --amount 169990000 --anon-keys ./$FILE_ANON_KEYS_2 --to-axfr-public-key BdECoTzLNQHlKq1oGMI2kdh27yp_I2CZen0FGYLFkM0= --to-enc-key Ox5L-mGxzOFfd4fef7WZGJMdO-EKBVnnJypZiEl_9FQ= --commitment $commitment2
+target/release/fn anon-transfer --amount 169990000 --anon-keys ./$FILE_ANON_KEYS_2 --to-axfr-public-key BdECoTzLNQHlKq1oGMI2kdh27yp_I2CZen0FGYLFkM0= --to-enc-key Ox5L-mGxzOFfd4fef7WZGJMdO-EKBVnnJypZiEl_9FQ= --commitment "$commitment2"
 
-commitment3=$(tail -n 1 sent_commitments)
-echo "\n\n Owned Abars for Receiver2 after Anon Transfer 2"
-sleep 30
-target/release/fn owned-abars --commitment $commitment3
 
 sleep 2
 echo "\n\n\n Fetch merkle proof for Anon Transfer 2"

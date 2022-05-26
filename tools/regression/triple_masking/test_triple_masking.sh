@@ -5,6 +5,7 @@ set -e
 # run setup scripts
 EVM_SCRIPTS_PATH="tools/regression/evm/scripts"
 TRIPLE_MASKING_SCRIPTS_PATH="tools/regression/triple_masking/scripts"
+
 source $EVM_SCRIPTS_PATH/env.sh
 source $TRIPLE_MASKING_SCRIPTS_PATH/env.sh
 # Setup environment
@@ -18,7 +19,7 @@ TM_SLEEP=25 # If breaking, increase the sleep time
 echo -e "${YEL}Run test cases and verifying results${NC}"
 
 
-./$TRIPLE_MASKING_SCRIPTS_PATH/create_test_bars.sh
+./$TRIPLE_MASKING_SCRIPTS_PATH/create_test_bars.sh fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
 # Verify
 python "$REGRESSION_PATH"/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 840000000
 echo
@@ -105,3 +106,5 @@ sleep $TM_SLEEP
 echo -e "\n ***** Verifying balances ***** "
 python "$REGRESSION_PATH"/evm.py verify-balance --sec-key "$BAR_SEC_KEY" --amount 629960000
 python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./"$FILE_ANON_KEYS" --commitments "$commitment4" --amount 0
+
+./"$TM_REGRESSION_PATH"/asset_mixing_test.sh
