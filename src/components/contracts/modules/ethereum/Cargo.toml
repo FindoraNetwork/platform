@@ -35,7 +35,7 @@ config = { path = "../../../config"}
 baseapp = { path = "../../baseapp" }
 fp-mocks = { path = "../../primitives/mocks" }
 module-account = { path = "../account" }
-storage = { git = "https://github.com/FindoraNetwork/storage.git", branch = "tps-v1" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", branch = "tps-v2" }
 
 [features]
 default = []

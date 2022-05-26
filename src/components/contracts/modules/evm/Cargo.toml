@@ -32,7 +32,7 @@ fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
 config = { path = "../../../config"}
-storage = { git = "https://github.com/FindoraNetwork/storage.git", branch = "tps-v1" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", branch = "tps-v2" }
 
 [dev-dependencies]
 baseapp = { path = "../../baseapp" }
