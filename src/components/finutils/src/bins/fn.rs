@@ -25,7 +25,6 @@
 
 #![deny(warnings)]
 
-use finutils::common::utils::get_abar_data;
 use {
     clap::{crate_authors, load_yaml, App},
     finutils::common::{self, evm::*, get_keypair, utils},

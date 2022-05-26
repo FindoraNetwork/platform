@@ -50,4 +50,4 @@ TXO_SID=$(target/release/fn owned-utxos | head -4 | tail -1 | awk -F ' ' '{print
 target/release/fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
 
 echo "Bar 2 Abar Conversion demo script executed successfully!"
-echo "To check generated Abars run \`target/release/fn owned-abars --commitment COMMITMENT_STRING\`"
+echo "To check generated Abars run \`target/release/fn owned-abars --anon-keys ./$FILE_ANON_KEYS --commitments COMMITMENT_STRING \`"

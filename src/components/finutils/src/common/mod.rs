@@ -52,7 +52,6 @@ use {
             structs::{XfrAmount, XfrAssetType},
         },
     },
-    zei_algebra::prelude::*,
     zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
 };
 
@@ -890,7 +889,7 @@ pub fn convert_abar2bar(
         &oabar_in.get_asset_type(),
         mt_leaf_uid,
     );
-    let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+    let hash = wallet::nullifier_to_base58(&n);
     // check if hash is present in nullifier set
     let null_status = utils::check_nullifier_hash(&hash)
         .c(d!())?
@@ -981,7 +980,7 @@ pub fn gen_oabar_add_op(
             &oabar_in.get_asset_type(),
             mt_leaf_uid,
         );
-        let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+        let hash = wallet::nullifier_to_base58(&n);
         let null_status = utils::check_nullifier_hash(&hash).c(d!())?.ok_or(d!(
             "The ABAR corresponding to this commitment is missing {}",
             com
@@ -1140,7 +1139,7 @@ pub fn gen_oabar_add_op_x(
             &oabar_in.get_asset_type(),
             mt_leaf_uid,
         );
-        let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+        let hash = wallet::nullifier_to_base58(&n);
         let null_status = utils::check_nullifier_hash(&hash)
             .c(d!())?
             .ok_or(d!("The ABAR corresponding to this commitment is missing"))?;
@@ -1309,7 +1308,7 @@ pub fn check_abar_status(
         &oabar.get_asset_type(),
         mt_leaf_uid,
     );
-    let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+    let hash = wallet::nullifier_to_base58(&n);
     let null_status = utils::check_nullifier_hash(&hash).c(d!())?.unwrap();
     if null_status {
         println!("The ABAR corresponding to this commitment is already spent");
@@ -1355,7 +1354,7 @@ pub fn get_owned_abars(
                 &oabar.get_asset_type(),
                 sid.0,
             );
-            let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+            let hash = wallet::nullifier_to_base58(&n);
             let null_status = utils::check_nullifier_hash(&hash).c(d!())?.unwrap();
             println!(
                 "{0: <8} | {1: <18} | {2: <45} | {3: <9} | {4: <45}",
@@ -1397,7 +1396,7 @@ pub fn anon_balance(
     commitments_list
         .split(',')
         .try_for_each(|com| -> ruc::Result<()> {
-            let commitment = wallet::commitment_from_base64(com).c(d!())?;
+            let commitment = wallet::commitment_from_base58(com).c(d!())?;
 
             let result = utils::get_owned_abar(&commitment);
             match result {
@@ -1426,7 +1425,7 @@ pub fn anon_balance(
                         &oabar.get_asset_type(),
                         sid.0,
                     );
-                    let hash = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+                    let hash = wallet::nullifier_to_base58(&n);
                     let is_spent = utils::check_nullifier_hash(&hash).c(d!())?.unwrap();
                     if !is_spent && oabar.get_asset_type() == asset_type {
                         balance += oabar.get_amount();
