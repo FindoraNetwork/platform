@@ -240,12 +240,12 @@ sleep $TM_SLEEP
 
 echo "checking..."
 target/release/fn owned-abars --commitments $(awk 'FNR==3,FNR==4' sent_commitments | awk -v d="," '{s=(NR==1?s:s d)$0}END{print s}') --anon-keys ./$FILE_ANON_KEYS_2
-target/release/fn owned-abars --commitments $(awk 'FNR==5' sent_commitments) --anon-keys $FILE_ANON_KEYS_3
+target/release/fn owned-abars --commitments $(awk 'FNR==5' sent_commitments) --anon-keys ./$FILE_ANON_KEYS_3
 
-python $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments "$(awk 'FNR==3' sent_commitments)" --amount 10000000
-python $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments "$(awk 'FNR==4' sent_commitments)" --amount 10000000 --asset "$ASSET2"
-# python $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_3 --commitments "$(awk 'FNR==5' sent_commitments)" --amount 10000000 --asset "$ASSET1"
+python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments "$(awk 'FNR==3' sent_commitments)" --amount 10000000
+python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments "$(awk 'FNR==4' sent_commitments)" --amount 10000000 --asset "$ASSET2"
+# python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_3 --commitments "$(awk 'FNR==5' sent_commitments)" --amount 10000000 --asset "$ASSET1"
 
 
 rm $BATCH_SK $BATCH_DEC $BATCH_C $BATCH_PK $BATCH_ENC $BATCH_AMOUNT $BATCH_ASSET
-echo "\n ***** Test all successfully! ***** "
+echo -e "\n ***** Test all successfully! ***** "
