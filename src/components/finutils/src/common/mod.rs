@@ -51,7 +51,6 @@ use {
             structs::{XfrAmount, XfrAssetType},
         },
     },
-    zei_algebra::prelude::*,
     zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
 };
 

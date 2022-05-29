@@ -1703,7 +1703,6 @@ mod tests {
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         },
         zei::xfr::structs::AssetType as AT,
-        zei_algebra::prelude::Scalar,
         zei_crypto::basic::{
             hybrid_encryption::XSecretKey,
             ristretto_pedersen_comm::RistrettoPedersenCommitment,

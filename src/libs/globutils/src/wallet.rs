@@ -16,7 +16,6 @@ use zei::{
     },
     xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
-use zei_algebra::bls12_381::BLSScalar;
 use zei_algebra::serialization::ZeiFromToBytes;
 use zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey};
 
