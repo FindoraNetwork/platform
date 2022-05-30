@@ -16,7 +16,6 @@ use zei::{
     },
     xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
-use zei_algebra::bls12_381::BLSScalar;
 use zei_algebra::serialization::ZeiFromToBytes;
 use zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey};
 
@@ -270,17 +269,17 @@ pub fn commitment_to_base58(com: &Commitment) -> String {
 
 #[inline(always)]
 /// Restore a Commitment from base58
-pub fn nullifier_from_base58(com: &str) -> Result<Commitment> {
+pub fn nullifier_from_base58(com: &str) -> Result<Nullifier> {
     bs58::decode(com)
         .into_vec()
         .c(d!())
-        .and_then(|bytes| BLSScalar::zei_from_bytes(&bytes).c(d!()))
+        .and_then(|bytes| Nullifier::zei_from_bytes(&bytes).c(d!()))
 }
 
 #[inline(always)]
 /// Convert a Nullifier to base58
 pub fn nullifier_to_base58(n: &Nullifier) -> String {
-    bs58::encode(&Commitment::zei_to_bytes(n)).into_string()
+    bs58::encode(&Nullifier::zei_to_bytes(n)).into_string()
 }
 
 /// Convert a XfrPublicKey to bech32 human-readable address

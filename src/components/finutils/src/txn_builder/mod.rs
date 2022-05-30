@@ -1703,7 +1703,6 @@ mod tests {
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         },
         zei::xfr::structs::AssetType as AT,
-        zei_algebra::prelude::Scalar,
         zei_crypto::basic::{
             hybrid_encryption::XSecretKey,
             ristretto_pedersen_comm::RistrettoPedersenCommitment,
@@ -2162,7 +2161,7 @@ mod tests {
         assert!(block_result.is_ok());
 
         for n in block.new_nullifiers.iter() {
-            let _str = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+            let _str = wallet::nullifier_to_base58(&n);
         }
         let txn_sid_result = ledger_state.finish_block(block);
         assert!(txn_sid_result.is_ok());
@@ -2281,7 +2280,7 @@ mod tests {
         assert!(block_result.is_ok());
 
         for n in block.new_nullifiers.iter() {
-            let _str = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+            let _str = wallet::nullifier_to_base58(&n);
         }
 
         let txn_sid_result = ledger_state.finish_block(block);
@@ -2330,7 +2329,7 @@ mod tests {
         let _ = block.add_txn_effect(compute_effect);
 
         for n in block.new_nullifiers.iter() {
-            let _str = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+            let _str = wallet::nullifier_to_base58(&n);
         }
         let _txn_sid = ledger_state.finish_block(block).unwrap();
 
@@ -2377,7 +2376,7 @@ mod tests {
         let _ = block1.add_txn_effect(compute_effect1);
 
         for n in block1.new_nullifiers.iter() {
-            let _str = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+            let _str = wallet::nullifier_to_base58(&n);
         }
         let _txn_sid1 = ledger_state.finish_block(block1).unwrap();
     }
