@@ -1,5 +1,6 @@
-use crate::context::Context;
+use crate::context::{Context, RunTxMode};
 use abci::Event;
+use config::abci::global_cfg::CFG;
 use fp_types::transaction::CheckedTransaction;
 use impl_trait_for_tuples::impl_for_tuples;
 use ruc::*;
@@ -110,9 +111,7 @@ pub trait ValidateUnsigned {
     /// Validate the call right before execute.
     ///
     /// Changes made to storage WILL be persisted if the call returns `Ok`.
-    fn pre_execute(ctx: &Context, call: &Self::Call) -> Result<()> {
-        Self::validate_unsigned(ctx, call)
-    }
+    fn pre_execute(ctx: &Context, call: &Self::Call) -> Result<()>;
 
     /// Return the validity of the call
     ///
@@ -152,6 +151,13 @@ where
             (None, Default::default())
         };
         ctx.state.write().commit_session();
+
+        if ctx.header.height >= CFG.checkpoint.evm_checktx_nonce {
+            // The transaction is only executed if the run mode is Deliver
+            if ctx.run_mode == RunTxMode::Check {
+                return Ok(ActionResult::default());
+            }
+        }
 
         match U::execute(maybe_who, self.function, ctx) {
             Ok(res) => {
