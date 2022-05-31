@@ -90,7 +90,7 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
 
     drop(state);
 
-    println!("======== Last committed height: {} ========", h);
+    log::info!(target: "abciapp", "======== Last committed height: {} ========", h);
 
     if la.all_commited() {
         la.begin_block();
@@ -237,7 +237,7 @@ pub fn deliver_tx(
                 if tx.valid_in_abci() {
                     // Log print for monitor purpose
                     if td_height < EVM_FIRST_BLOCK_HEIGHT {
-                        println!(
+                        log::info!(target: "abciapp",
                             "EVM transaction(FindoraTx) detected at early height {}: {:?}",
                             td_height, tx
                         );
@@ -327,9 +327,12 @@ pub fn deliver_tx(
             } else {
                 // Log print for monitor purpose
                 if td_height < EVM_FIRST_BLOCK_HEIGHT {
-                    println!(
+                    log::info!(
+                        target:
+                        "abciapp",
                         "EVM transaction(EvmTx) detected at early height {}: {:?}",
-                        td_height, req
+                        td_height,
+                        req
                     );
                 }
                 return s.account_base_app.write().deliver_tx(req);
