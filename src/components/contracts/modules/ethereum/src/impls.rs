@@ -271,8 +271,10 @@ impl<C: Config> App<C> {
         pending_txs.push((transaction, status, receipt));
         PendingTransactions::put(ctx.db.write().borrow_mut(), &pending_txs)?;
 
+        // Searching
+            // ctx.state.write().borrow_mut(),
         TransactionIndex::insert(
-            ctx.db.write().borrow_mut(),
+            ctx.state.write().borrow_mut(),
             &HA256::new(transaction_hash),
             &(ctx.header.height.into(), transaction_index),
         )?;
@@ -401,7 +403,9 @@ impl<C: Config> App<C> {
 
     /// The index of the transaction in the block
     pub fn transaction_index(ctx: &Context, hash: H256) -> Option<(U256, u32)> {
-        TransactionIndex::get(ctx.db.read().borrow(), &HA256::new(hash))
+        // Searching
+        // TransactionIndex::get(ctx.db.read().borrow(), &HA256::new(hash))
+        TransactionIndex::get(ctx.state.read().borrow(), &HA256::new(hash))
     }
 
     fn logs_bloom(logs: Vec<ethereum::Log>, bloom: &mut Bloom) {
