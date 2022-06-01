@@ -680,10 +680,6 @@ impl QueryApi {
                     web::get().to(query_owned_abar),
                 )
                 .route(
-                    &ApiRoutes::OwnedAbarData.with_arg_template("owner"),
-                    web::get().to(query_owned_abar_data),
-                )
-                .route(
                     &ApiRoutes::ValidatorList.route(),
                     web::get().to(query_validators),
                 )

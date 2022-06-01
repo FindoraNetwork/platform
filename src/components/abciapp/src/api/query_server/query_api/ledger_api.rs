@@ -27,7 +27,6 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{collections::BTreeMap, mem, sync::Arc},
-    zei::anon_xfr::structs::AnonBlindAssetRecord,
     zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
 };
 
@@ -696,25 +695,6 @@ pub async fn query_owned_utxos(
 pub(super) async fn query_owned_abar(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     com: web::Path<String>,
-) -> actix_web::Result<web::Json<Option<(ATxoSID, AnonBlindAssetRecord)>>> {
-    let qs = data.read();
-    let ledger = &qs.ledger_cloned;
-    globutils::wallet::commitment_from_base58(com.as_str())
-        .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.generate_log(None)))
-        .map(|com| {
-            web::Json(
-                ledger
-                    .get_owned_abar(&com)
-                    .map(|a| (a, AnonBlindAssetRecord { commitment: com })),
-            )
-        })
-}
-
-// query utxos according `commitment`
-pub(super) async fn query_owned_abar_data(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-    com: web::Path<String>,
 ) -> actix_web::Result<web::Json<Option<(ATxoSID, ABARData)>>> {
     let qs = data.read();
     let ledger = &qs.ledger_cloned;
@@ -742,7 +722,6 @@ pub enum ApiRoutes {
     GlobalStateVersion,
     OwnedUtxos,
     OwnedAbars,
-    OwnedAbarData,
     ValidatorList,
     DelegationInfo,
     DelegatorList,
@@ -767,7 +746,6 @@ impl NetworkRoute for ApiRoutes {
             ApiRoutes::DelegatorList => "delegator_list",
             ApiRoutes::ValidatorDetail => "validator_detail",
             ApiRoutes::OwnedAbars => "owned_abars",
-            ApiRoutes::OwnedAbarData => "owned_abar_data",
         };
         "/".to_owned() + endpoint
     }
