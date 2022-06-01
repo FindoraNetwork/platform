@@ -31,6 +31,7 @@ pub struct CheckPointConfig {
     // Note: This field only used to qa02.
     pub qa02_upgradable_prism_bridge: i64,
     pub fix_unpaid_delegation_height: u64,
+    pub evm_checktx_nonce: i64,
 }
 
 impl CheckPointConfig {
@@ -59,6 +60,7 @@ impl CheckPointConfig {
                                 prismxx_inital_height: 1,
                                 qa02_upgradable_prism_bridge: 10,
                                 fix_unpaid_delegation_height: 0,
+                                evm_checktx_nonce: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -77,6 +79,7 @@ impl CheckPointConfig {
                                 prismxx_inital_height: 1733700,
                                 qa02_upgradable_prism_bridge: 40000,
                                 fix_unpaid_delegation_height: 2261885,
+                                evm_checktx_nonce: 3000000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
