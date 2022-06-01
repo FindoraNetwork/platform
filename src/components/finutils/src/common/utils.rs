@@ -565,9 +565,14 @@ pub fn get_owned_abar(com: &Commitment) -> Result<(ATxoSID, AnonBlindAssetRecord
         .bytes()
         .c(d!())
         .and_then(|b| {
-            serde_json::from_slice::<Option<(ATxoSID, AnonBlindAssetRecord)>>(&b)
+            serde_json::from_slice::<Option<(ATxoSID, ABARData)>>(&b)
                 .c(d!())?
                 .ok_or(eg!("missing abar"))
+        })
+        .and_then(|(sid, data)| {
+            wallet::commitment_from_base58(&data.commitment)
+                .map(|commitment| (sid, AnonBlindAssetRecord { commitment }))
+                .map_err(|_| eg!("commitment invalid"))
         })
 }
 
