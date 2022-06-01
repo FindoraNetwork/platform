@@ -25,7 +25,6 @@
 
 #![deny(warnings)]
 
-use finutils::common::utils::get_abar_data;
 use {
     clap::{crate_authors, load_yaml, App},
     finutils::common::{self, evm::*, get_keypair, utils},
@@ -383,9 +382,19 @@ fn run() -> Result<()> {
     } else if let Some(m) = matches.subcommand_matches("account") {
         let address = m.value_of("addr");
         let sec_key = m.value_of("sec-key");
+
+        // FRA asset is the default case
+        let asset = if let Some(code) = m.value_of("asset") {
+            match code.to_lowercase().as_str() {
+                "fra" => None,
+                _ => Some(code),
+            }
+        } else {
+            None
+        };
         if sec_key.is_some() {
             //Asset defaults to fra
-            common::show_account(sec_key, None).c(d!())?;
+            common::show_account(sec_key, asset).c(d!())?;
         }
         if address.is_some() {
             let (account, info) = contract_account_info(address)?;
@@ -506,20 +515,6 @@ fn run() -> Result<()> {
         println!("Keys :\n {}", serde_json::to_string_pretty(&keys).unwrap());
     } else if let Some(m) = matches.subcommand_matches("owned-abars") {
         // Generates a list of owned Abars (both spent and unspent)
-        let commitment_str = m.value_of("commitment");
-
-        // create derived public key
-        let commitment = wallet::commitment_from_base58(commitment_str.unwrap())?;
-
-        // get results from query server and print
-        let (sid, abar) = utils::get_owned_abar(&commitment).c(d!())?;
-        let abar_data = get_abar_data(abar);
-        println!(
-            "(AtxoSID, ABAR)   :  {}",
-            serde_json::to_string(&(sid, abar_data)).c(d!())?
-        );
-    } else if let Some(m) = matches.subcommand_matches("anon-balance") {
-        // Generates a list of owned Abars (both spent and unspent)
         let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
         let axfr_secret_key =
             wallet::anon_secret_key_from_base64(anon_keys.axfr_secret_key.as_str())
@@ -531,7 +526,22 @@ fn run() -> Result<()> {
             .value_of("commitments")
             .unwrap_or_else(|| panic!("Commitment list missing \n {}", m.usage()));
 
-        common::anon_balance(axfr_secret_key, dec_key, commitments_list)?;
+        common::get_owned_abars(axfr_secret_key, dec_key, commitments_list)?;
+    } else if let Some(m) = matches.subcommand_matches("anon-balance") {
+        // Generates a list of owned Abars (both spent and unspent)
+        let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
+        let axfr_secret_key =
+            wallet::anon_secret_key_from_base64(anon_keys.axfr_secret_key.as_str())
+                .c(d!())?;
+        let dec_key =
+            wallet::x_secret_key_from_base64(anon_keys.dec_key.as_str()).c(d!())?;
+        let asset = m.value_of("asset");
+
+        let commitments_list = m
+            .value_of("commitments")
+            .unwrap_or_else(|| panic!("Commitment list missing \n {}", m.usage()));
+
+        common::anon_balance(axfr_secret_key, dec_key, commitments_list, asset)?;
     } else if let Some(m) = matches.subcommand_matches("owned-open-abars") {
         let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
         let commitment_str = m.value_of("commitment");

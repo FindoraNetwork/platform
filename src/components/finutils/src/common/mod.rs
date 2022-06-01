@@ -9,7 +9,6 @@
 pub mod evm;
 pub mod utils;
 
-use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
 use {
     crate::api::DelegationInfo,
     crate::common::utils::{new_tx_builder, send_tx},
@@ -46,7 +45,9 @@ use {
             },
         },
         xfr::{
-            asset_record::AssetRecordType,
+            asset_record::{
+                AssetRecordType, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType
+            },
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
             structs::{XfrAmount, XfrAssetType},
         },
@@ -1319,7 +1320,7 @@ pub fn check_abar_status(
 
 /// Prints a dainty list of Abar info with spent status for a given AxfrKeyPair and a list of
 /// commitments.
-pub fn anon_balance(
+pub fn get_owned_abars(
     axfr_secret_key: AXfrKeyPair,
     dec_key: XSecretKey,
     commitments_list: &str,
@@ -1370,6 +1371,72 @@ pub fn anon_balance(
             Ok(())
         })?;
 
+    Ok(())
+}
+
+/// Prints a dainty list of Abar info with spent status for a given AxfrKeyPair and a list of
+/// commitments.
+pub fn anon_balance(
+    axfr_secret_key: AXfrKeyPair,
+    dec_key: XSecretKey,
+    commitments_list: &str,
+    asset: Option<&str>,
+) -> Result<()> {
+    // Parse Asset Type for filtering if provided
+    let mut asset_type = ASSET_TYPE_FRA;
+    if let Some(a) = asset {
+        asset_type = if a.to_uppercase() == "FRA" {
+            ASSET_TYPE_FRA
+        } else {
+            AssetTypeCode::new_from_base64(asset.unwrap()).unwrap().val
+        };
+    }
+
+    let mut balance = 0u64;
+    commitments_list
+        .split(',')
+        .try_for_each(|com| -> ruc::Result<()> {
+            let commitment = wallet::commitment_from_base58(com).c(d!())?;
+
+            let result = utils::get_owned_abar(&commitment);
+            match result {
+                Err(e) => {
+                    if e.msg_eq(eg!("missing abar").as_ref()) {
+                        Ok(())
+                    } else {
+                        Err(e)
+                    }
+                }
+                Ok((sid, abar)) => {
+                    let memo = utils::get_abar_memo(&sid).unwrap().unwrap();
+                    let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
+                        &abar,
+                        memo,
+                        &axfr_secret_key,
+                        &dec_key,
+                    )
+                    .unwrap()
+                    .build()
+                    .unwrap();
+
+                    let n = nullifier(
+                        &axfr_secret_key,
+                        oabar.get_amount(),
+                        &oabar.get_asset_type(),
+                        sid.0,
+                    );
+                    let hash = wallet::nullifier_to_base58(&n);
+                    let is_spent = utils::check_nullifier_hash(&hash).c(d!())?.unwrap();
+                    if !is_spent && oabar.get_asset_type() == asset_type {
+                        balance += oabar.get_amount();
+                    }
+
+                    Ok(())
+                }
+            }
+        })?;
+
+    println!("{}: {}", asset.unwrap_or("FRA"), balance);
     Ok(())
 }
 

@@ -273,6 +273,9 @@ snapshot:
 evmtest:
 	@./tools/regression/evm/testevm.sh
 
+tmtest:
+	@./tools/regression/triple_masking/test_triple_masking.sh
+
 devnet: reset snapshot
 
 run_bar_to_abar_demo: devnet
