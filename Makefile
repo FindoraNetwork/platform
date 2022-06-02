@@ -264,6 +264,12 @@ endif
 clean_binary_dockerhub:
 	docker rmi findorad-binary-image:$(IMAGE_TAG)
 
+build_musl_build:
+	docker build -t musl_build_findroa  -f container/Dockerfile-finutils-musl-build .
+
+run_musl_build:
+	docker run --rm -v $(shell pwd):/volume musl_build_findroa
+
 reset:
 	@./tools/devnet/stopnodes.sh
 	@./tools/devnet/resetnodes.sh 1 1

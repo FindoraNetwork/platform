@@ -1,0 +1,8 @@
+FROM clux/muslrust
+
+ENV OPENSSL_DIR /musl
+
+CMD cd /volume && rustup target add x86_64-unknown-linux-musl && cargo build --release --bins -p finutils --target=x86_64-unknown-linux-musl
+
+# docker build . -t musl_build_findroa
+# docker run --rm -v $PWD:/volume musl_build_findroa
