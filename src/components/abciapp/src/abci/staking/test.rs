@@ -1,5 +1,8 @@
 #![allow(missing_docs)]
 
+#[cfg(test)]
+use config::abci::global_cfg::create_abci_mock_config;
+
 use {
     finutils::txn_builder::{TransactionBuilder, TransferOperationBuilder},
     ledger::{
@@ -23,6 +26,7 @@ use {
 
 #[test]
 fn staking_block_rewards_rate() {
+    create_abci_mock_config();
     pnk!(check_block_rewards_rate());
 }
 

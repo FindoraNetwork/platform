@@ -4,6 +4,7 @@ mod utils;
 
 use abci::*;
 use baseapp::{BaseApp, ChainId};
+use config::abci::global_cfg::create_abci_mock_config;
 use ethereum_types::{H160, H256, U256};
 use fp_evm::{CallOrCreateInfo, Runner};
 use fp_mocks::*;
@@ -68,8 +69,14 @@ fn build_erc20_balance_of_transaction(
     UncheckedTransaction::new_unsigned(function)
 }
 
+fn setup() {
+    create_abci_mock_config();
+}
+
 #[test]
 fn erc20_works() {
+    setup();
+
     test_mint_balance(
         &ALICE_ECDSA.account_id,
         100_0000_0000_0000_0000_u64.into(),

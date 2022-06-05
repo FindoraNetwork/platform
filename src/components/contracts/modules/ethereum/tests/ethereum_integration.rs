@@ -4,6 +4,7 @@
 
 use abci::*;
 use baseapp::{BaseApp, ChainId};
+use config::abci::global_cfg::create_abci_mock_config;
 use ethereum_types::{H160, U256};
 use fp_mocks::*;
 use fp_traits::{account::AccountAsset, evm::FeeCalculator};
@@ -15,12 +16,17 @@ use fp_utils::tx::EvmRawTxWrapper;
 
 #[test]
 fn run_all_tests() {
+    setup();
     test_abci_check_tx();
     test_abci_begin_block();
     test_abci_deliver_tx();
     test_abci_end_block();
     test_abci_commit();
     test_abci_query()
+}
+
+fn setup() {
+    create_abci_mock_config();
 }
 
 fn base_transfer_fee() -> U256 {

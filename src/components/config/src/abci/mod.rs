@@ -190,14 +190,11 @@ pub mod global_cfg {
     use crate::abci::CheckPointConfig;
     #[cfg(target_os = "linux")]
     use btm::BtmCfg;
-    #[cfg(not(test))]
     #[cfg(target_os = "linux")]
     use btm::{SnapAlgo, SnapMode, STEP_CNT};
-    #[cfg(not(test))]
     use clap::{crate_authors, App, Arg, ArgMatches};
     use lazy_static::lazy_static;
     use ruc::*;
-    #[cfg(not(test))]
     use std::{env, process::exit};
 
     lazy_static! {
@@ -226,15 +223,19 @@ pub mod global_cfg {
         pub checkpoint: CheckPointConfig,
     }
 
-    #[cfg(test)]
-    fn get_config() -> Result<Config> {
-        Ok(Config {
-            ledger_dir: globutils::fresh_tmp_dir().to_string_lossy().into_owned(),
+    pub fn create_abci_mock_config() {
+        use std::{fs::File, io::Write};
+
+        let config = CheckPointConfig {
+            unbond_block_cnt: 3600 * 24 * 21 / 16,
             ..Default::default()
-        })
+        };
+        let mut file =
+            File::create("checkpoint.toml").expect("failed to create checkpoint.toml");
+        let content = toml::to_string(&config).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
     }
 
-    #[cfg(not(test))]
     fn get_config() -> Result<Config> {
         let m = App::new("abcid")
             .version(env!("VERGEN_SHA"))
@@ -375,7 +376,6 @@ pub mod global_cfg {
         Ok(res)
     }
 
-    #[cfg(not(test))]
     fn print_version(m: &ArgMatches) {
         if m.is_present("version") {
             println!("{}", env!("VERGEN_SHA"));
@@ -383,7 +383,6 @@ pub mod global_cfg {
         }
     }
 
-    #[cfg(not(test))]
     #[cfg(target_os = "linux")]
     fn parse_btmcfg(m: &ArgMatches) -> Result<BtmCfg> {
         let mut res = BtmCfg::new();
@@ -439,7 +438,6 @@ pub mod global_cfg {
         Ok(res)
     }
 
-    #[cfg(not(test))]
     #[cfg(target_os = "linux")]
     fn list_snapshots(cfg: &BtmCfg) -> Result<()> {
         println!("Available snapshots are listed below:");
@@ -453,7 +451,6 @@ pub mod global_cfg {
         exit(0);
     }
 
-    #[cfg(not(test))]
     #[cfg(target_os = "linux")]
     fn check_rollback(m: &ArgMatches, cfg: &BtmCfg) -> Result<()> {
         const HINTS: &str = r#"    NOTE:

@@ -24,3 +24,4 @@ fp-utils = { path = "../../primitives/utils" }
 fp-mocks = { path = "../../primitives/mocks" }
 fp-traits = { path = "../../primitives/traits" }
 module-account = { path = "../../modules/account" }
+config = { path = "../../../config" }

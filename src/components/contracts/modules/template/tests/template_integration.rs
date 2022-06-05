@@ -2,6 +2,7 @@
 
 //! Template module integration tests.
 use abci::*;
+use config::abci::global_cfg::create_abci_mock_config;
 use fp_mocks::*;
 use fp_traits::account::{AccountAsset, FeeCalculator};
 use fp_types::{actions::template::Action as TemplateAction, actions::Action, U256};
@@ -10,8 +11,13 @@ use module_template::ValueStore;
 pub use std::borrow::Borrow;
 use std::convert::TryInto;
 
+fn setup() {
+    create_abci_mock_config();
+}
+
 #[test]
 fn run_all_tests() {
+    setup();
     test_abci_info();
     test_abci_init_chain();
     test_mint_balance(
