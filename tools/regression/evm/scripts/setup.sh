@@ -13,4 +13,4 @@ $BIN/fn setup -S http://0.0.0.0 > /dev/null
 echo Regression path: $REGRESSION_EVM_PATH
 $BIN/fn setup -O $REGRESSION_EVM_PATH/mnemonic.key > /dev/null
 $BIN/stt init -i $BLOCK_INTERVAL -s
-sleep 10
+sleep 15
