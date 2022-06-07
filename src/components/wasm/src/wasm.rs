@@ -1772,6 +1772,7 @@ pub fn trace_assets(
 use crate::wasm_data_model::{AmountAssetType, AnonKeys};
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
+use base64::URL_SAFE;
 use getrandom::getrandom;
 use js_sys::JsString;
 use ledger::data_model::{ABARData, AssetType, TxoSID, BAR_TO_ABAR_TX_FEE_MIN};
@@ -1809,6 +1810,17 @@ pub fn bech32_to_base64(pk: &str) -> Result<String, JsValue> {
 pub fn base64_to_bech32(pk: &str) -> Result<String, JsValue> {
     let pub_key = public_key_from_base64(pk)?;
     Ok(public_key_to_bech32(&pub_key))
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn base64_to_base58(data: &str) -> Result<String, JsValue> {
+    let byts = base64::decode_config(data, URL_SAFE)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+
+    let dat = bs58::encode(byts).into_string();
+    Ok(dat)
 }
 
 #[wasm_bindgen]
