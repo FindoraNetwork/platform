@@ -1772,6 +1772,7 @@ pub fn trace_assets(
 use crate::wasm_data_model::{AmountAssetType, AnonKeys};
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
+use base64::URL_SAFE;
 use getrandom::getrandom;
 use js_sys::JsString;
 use ledger::data_model::{ABARData, AssetType, TxoSID, BAR_TO_ABAR_TX_FEE_MIN};
@@ -1780,7 +1781,6 @@ use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
-use base64::URL_SAFE;
 use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
 use zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey};
 

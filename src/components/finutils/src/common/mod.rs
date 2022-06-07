@@ -46,7 +46,8 @@ use {
         },
         xfr::{
             asset_record::{
-                AssetRecordType, AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType
+                AssetRecordType,
+                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
             },
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
             structs::{XfrAmount, XfrAssetType},
