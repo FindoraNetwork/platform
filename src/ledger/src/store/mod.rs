@@ -78,7 +78,8 @@ use {
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
 const VERSION_WINDOW: u64 = 100;
-const GENESIS_ANON_HASH: &str = "2501917d72f915a3afb91ae561a0e4230d5d4edbb9b62fb7e2ea41f18c3038b5";
+const GENESIS_ANON_HASH: &str =
+    "2501917d72f915a3afb91ae561a0e4230d5d4edbb9b62fb7e2ea41f18c3038b5";
 
 type TmpSidMap = HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)>;
 
@@ -1086,10 +1087,7 @@ impl LedgerState {
         let block_count = self.status.block_commit_count;
         let commitment = self.status.anon_state_commitment_versions.last();
 
-        let hash = commitment.map_or_else(
-            || Vec::new(),
-            |c| c.as_ref().to_vec()
-        );
+        let hash = commitment.map_or_else(Vec::new, |c| c.as_ref().to_vec());
         (hash, block_count)
     }
 

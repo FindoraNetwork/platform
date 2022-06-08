@@ -313,8 +313,8 @@ pub fn deliver_tx(
                             .db
                             .write()
                             .discard_session();
-                    } else if is_tm_transaction(&txn) &&
-                        td_height < CFG.checkpoint.enable_triple_masking_height
+                    } else if is_tm_transaction(&txn)
+                        && td_height < CFG.checkpoint.enable_triple_masking_height
                     {
                         log::info!(target: "abciapp",
                             "Triple Masking transaction(FindoraTx) detected at early height {}: {:?}",
