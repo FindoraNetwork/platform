@@ -585,11 +585,13 @@ impl TransactionBuilder {
         outputs: &[OpenAnonBlindAssetRecord],
         input_keypairs: &[AXfrKeyPair],
     ) -> Result<(&mut Self, AXfrNote)> {
+        // generate prover params
         let mut prng = ChaChaRng::from_entropy();
         let depth: usize = MERKLE_TREE_DEPTH;
         let prover_params =
             ProverParams::new(inputs.len(), outputs.len(), Option::from(depth))?;
 
+        // generate anon transfer note
         let note = gen_anon_xfr_note(
             &mut prng,
             &prover_params,
@@ -599,6 +601,7 @@ impl TransactionBuilder {
         )
         .c(d!())?;
 
+        // add operation
         let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
         let op = Operation::TransferAnonAsset(Box::new(inp));
         self.txn.add_operation(op);
@@ -658,7 +661,7 @@ impl TransactionBuilder {
             );
 
             if remainder < 0 {
-                return Err(eg!("Transfer Asset token excess balance!"));
+                return Err(eg!("Transfer Asset token input less than output!"));
             }
 
             if remainder > 0 {
@@ -683,7 +686,7 @@ impl TransactionBuilder {
                 as i64;
         let fra_remainder = fra_rem.unwrap() - fees; // safe. checked.
         if fra_remainder < 0 {
-            return Err(eg!("FRA token excess balance!"));
+            return Err(eg!("insufficient FRA to pay fees!"));
         }
         if fra_remainder > 0 {
             println!("Transaction FRA Remainder Amount: {:?}", fra_remainder);

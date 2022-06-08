@@ -923,7 +923,7 @@ pub fn convert_abar2bar(
 /// * com_fra         - Commitment for paying fee
 /// * dec_key         - XPublicKey to encrypt OwnerMemo
 /// * amount          - amount to transfer
-pub fn gen_oabar_add_op(
+pub fn gen_anon_transfer_op(
     axfr_secret_key: String,
     com: &str,
     com_fra: Option<&str>,

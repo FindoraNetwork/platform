@@ -461,6 +461,8 @@ impl LedgerState {
         };
 
         let anon_hash = anon_state_commitment_data.compute_commitment();
+        // don't push anon_state_commitment until any anon transactions is committed.
+        // This is to make sure the app hash changes occur for all nodes at the same time
         if anon_hash.hex() != GENESIS_ANON_HASH {
             self.status.anon_state_commitment_versions.push(anon_hash);
         }

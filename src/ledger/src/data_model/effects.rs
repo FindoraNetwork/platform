@@ -705,15 +705,18 @@ impl BlockEffect {
             self.memo_updates.insert(code, memo);
         }
 
+        // collect ABARs generated from BAR to ABAR
         let mut current_txn_abars: Vec<AnonBlindAssetRecord> = vec![];
         for abar in txn_effect.bar_conv_abars {
             current_txn_abars.push(abar);
         }
 
+        // collect Nullifiers generated from ABAR to BAR
         for inputs in txn_effect.abar_conv_inputs.iter() {
             self.new_nullifiers.push(inputs.get_input());
         }
 
+        // collect ABARs and Nullifiers from Anon Transfers
         for axfr_note in txn_effect.axfr_bodies {
             for n in axfr_note.body.inputs {
                 self.new_nullifiers.push(n);
