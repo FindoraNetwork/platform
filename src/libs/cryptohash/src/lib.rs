@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 pub const HASH_SIZE: usize = 32;
 
 #[allow(missing_docs)]
-#[cfg(target_arch = "wasm32")]
+// #[cfg(target_arch = "wasm32")]
 pub mod sha256 {
     use {
         arrayref::array_ref,
@@ -82,19 +82,19 @@ pub mod sha256 {
     }
 }
 
-#[allow(missing_docs)]
-#[cfg(not(target_arch = "wasm32"))]
-pub mod sha256 {
-    use sodiumoxide::crypto::hash::sha256;
-    pub const DIGESTBYTES: usize = sha256::DIGESTBYTES;
-    pub use sha256::Digest;
+// #[allow(missing_docs)]
+// #[cfg(not(target_arch = "wasm32"))]
+// pub mod sha256 {
+//     use sodiumoxide::crypto::hash::sha256;
+//     pub const DIGESTBYTES: usize = sha256::DIGESTBYTES;
+//     pub use sha256::Digest;
 
-    #[inline(always)]
-    #[allow(missing_docs)]
-    pub fn hash(m: &[u8]) -> Digest {
-        sha256::hash(m)
-    }
-}
+//     #[inline(always)]
+//     #[allow(missing_docs)]
+//     pub fn hash(m: &[u8]) -> Digest {
+//         sha256::hash(m)
+//     }
+// }
 
 ///
 /// Define the structure containing a hash value for the tree.
