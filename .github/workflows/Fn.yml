@@ -1,8 +1,10 @@
 name: FN
 on:
   push:
-    tags:
-      - '*-fn'
+    # tags:
+    #   - '*-fn'
+    branches:
+      - "add-fn-build"
 env:
   CARGO_TERM_COLOR: always
 jobs:
