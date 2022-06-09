@@ -272,3 +272,14 @@ snapshot:
 	@./tools/devnet/snapshot.sh
 
 devnet: reset snapshot
+
+# fn build
+build_musl_fn_linux:
+	docker build -t musl_fn_linux -f container/Dockerfile-fn-musl-linux .
+	docker run -d --rm --name fn musl_fn
+	docker cp fn:/volume/target/x86_64-unknown-linux-musl/release/fn ./static/bin/linux/fn
+	docker stop -t 0 fn && docker rm -f fn
+
+build_musl_fn_macos:
+	docker build -t musl_fn_macos_base container/Dockerfile-fn-musl-macos-base .
+	docker build -t muql_fn_macos container/Dockerfile-fn-musl-macos .
