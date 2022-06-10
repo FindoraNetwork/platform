@@ -78,6 +78,8 @@ use {
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
 const VERSION_WINDOW: u64 = 100;
+const GENESIS_ANON_HASH: &str =
+    "2501917d72f915a3afb91ae561a0e4230d5d4edbb9b62fb7e2ea41f18c3038b5";
 
 type TmpSidMap = HashMap<TxnTempSID, (TxnSID, Vec<TxoSID>)>;
 
@@ -449,6 +451,7 @@ impl LedgerState {
 
         let abar_root_hash =
             self.get_abar_root_hash().expect("failed to read root hash");
+
         let anon_state_commitment_data = AnonStateCommitmentData {
             abar_root_hash,
             nullifier_root_hash: self
@@ -457,9 +460,13 @@ impl LedgerState {
                 .merkle_root()
                 .unwrap_or(sparse_merkle_tree::ZERO_DIGEST),
         };
-        self.status
-            .anon_state_commitment_versions
-            .push(anon_state_commitment_data.compute_commitment());
+
+        let anon_hash = anon_state_commitment_data.compute_commitment();
+        // don't push anon_state_commitment until any anon transactions is committed.
+        // This is to make sure the app hash changes occur for all nodes at the same time
+        if anon_hash.hex() != GENESIS_ANON_HASH {
+            self.status.anon_state_commitment_versions.push(anon_hash);
+        }
         self.status.anon_state_commitment_data = Some(anon_state_commitment_data);
 
         self.status.incr_block_commit_count();
@@ -1076,16 +1083,12 @@ impl LedgerState {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn get_anon_state_commitment(
-        &self,
-    ) -> (HashOf<Option<AnonStateCommitmentData>>, u64) {
+    pub fn get_anon_state_commitment(&self) -> (Vec<u8>, u64) {
         let block_count = self.status.block_commit_count;
-        let commitment = self
-            .status
-            .anon_state_commitment_versions
-            .last()
-            .unwrap_or_else(|| HashOf::new(&None));
-        (commitment, block_count)
+        let commitment = self.status.anon_state_commitment_versions.last();
+
+        let hash = commitment.map_or_else(Vec::new, |c| c.as_ref().to_vec());
+        (hash, block_count)
     }
 
     /// Get utxo status and its proof data

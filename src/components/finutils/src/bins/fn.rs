@@ -619,7 +619,7 @@ fn run() -> Result<()> {
             println!("{}", m.usage());
         } else {
             // build transaction and submit
-            common::gen_oabar_add_op(
+            common::gen_anon_transfer_op(
                 axfr_secret_key,
                 commitment.unwrap(),
                 fee_commitment,

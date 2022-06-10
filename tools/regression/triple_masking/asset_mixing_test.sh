@@ -194,7 +194,7 @@ echo 10000000 >> $BATCH_AMOUNT
 echo 10000000 >> $BATCH_AMOUNT
 
 echo ""
-echo ""
+echo "Sending multi-asset transaction..."
 target/release/fn anon-transfer-batch \
   --axfr-secretkey-file $BATCH_SK     \
   --decryption-key-file $BATCH_DEC    \
@@ -202,7 +202,7 @@ target/release/fn anon-transfer-batch \
   --to-axfr-public-key-file $BATCH_PK \
   --to-enc-key-file $BATCH_ENC        \
   --amount-file $BATCH_AMOUNT         \
-  --asset-file $BATCH_ASSET
+  --asset-file $BATCH_ASSET         > /dev/null
 echo "waiting for transaction to complete..."
 sleep $TM_SLEEP
 
@@ -212,7 +212,7 @@ target/release/fn owned-abars --commitments $(awk 'FNR==5' sent_commitments) --a
 
 python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments "$(awk 'FNR==3' sent_commitments)" --amount 10000000
 python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments "$(awk 'FNR==4' sent_commitments)" --amount 10000000 --asset "$ASSET2"
-# python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_3 --commitments "$(awk 'FNR==5' sent_commitments)" --amount 10000000 --asset "$ASSET1"
+python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_3 --commitments "$(awk 'FNR==5' sent_commitments)" --amount 10000000 --asset "$ASSET1"
 
 
 rm $BATCH_SK $BATCH_DEC $BATCH_C $BATCH_PK $BATCH_ENC $BATCH_AMOUNT $BATCH_ASSET
