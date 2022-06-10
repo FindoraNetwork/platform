@@ -35,10 +35,10 @@ jobs:
       run: |
         make build_musl_fn_linux
 
-    # - name: Build fn for Macos 
-    #   shell: bash
-    #   run: |
-    #     make build_musl_fn_macos
+    - name: Build fn for Macos 
+      shell: bash
+      run: |
+        make build_musl_fn_macos
 
     - name: Create release
       uses: "marvinpinto/action-automatic-releases@latest"
