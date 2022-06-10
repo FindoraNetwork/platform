@@ -40,7 +40,8 @@ jobs:
     #   run: |
     #     make build_musl_fn_macos
 
-    - uses: "marvinpinto/action-automatic-releases@latest"
+    - name: Create release
+      uses: "marvinpinto/action-automatic-releases@latest"
       with:
         repo_token: "${{ secrets.GITHUB_TOKEN }}"
         automatic_release_tag: "latest"
