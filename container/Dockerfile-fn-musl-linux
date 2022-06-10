@@ -1,5 +1,5 @@
 FROM clux/muslrust
-ENV WORK_DIR /platform
+ENV WORK_DIR /volume/platform
 COPY . $WORK_DIR
 WORKDIR $WORK_DIR
 ENV OPENSSL_DIR /musl
