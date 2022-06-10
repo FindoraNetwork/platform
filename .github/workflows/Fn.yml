@@ -11,7 +11,7 @@ jobs:
   build:
     strategy:
       matrix:
-        platform: [aws]
+        platform: [scalable]
     runs-on: ${{ matrix.platform }}
     env:
       ENV: dev
