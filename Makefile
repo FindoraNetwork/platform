@@ -273,7 +273,7 @@ snapshot:
 
 devnet: reset snapshot
 
-fn build
+# fn build
 build_musl_fn_linux:
 	docker build -t musl_fn_linux -f container/Dockerfile-fn-musl-linux .
 	docker run -d --rm --name fn_linux musl_fn_linux

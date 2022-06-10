@@ -25,10 +25,10 @@ jobs:
         override: true
         components: rustfmt
         
-    - name: Prepare key
-      shell: bash
-      run: |
-        tar -C ~/.ssh -zcf key.tar.gz ./
+    # - name: Prepare key
+    #   shell: bash
+    #   run: |
+    #     tar -C ~/.ssh -zcf key.tar.gz ./
         
     # - name: Build fn for Linux 
     #   shell: bash
