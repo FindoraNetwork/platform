@@ -37,8 +37,7 @@ jobs:
       run: |
         make build_musl_fn_macos
 
-    - name: Create release
-      uses: "marvinpinto/action-automatic-releases@latest"
+    - name: prepare the tag infomation
       env:
         GITHUB_CONTEXT: ${{ toJSON(github) }}
       run: |
@@ -46,6 +45,10 @@ jobs:
         TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
         TAGV="${TAGS#refs/tags/}"
         echo "Tag: ${TAGV}"
+
+    - name: Create release
+      uses: "marvinpinto/action-automatic-releases@latest"
+
       with:
         repo_token: "${{ secrets.GITHUB_TOKEN }}"
         automatic_release_tag: "latest"
@@ -54,6 +57,5 @@ jobs:
         files: |
           fn
           fn_macos
-
 
 
