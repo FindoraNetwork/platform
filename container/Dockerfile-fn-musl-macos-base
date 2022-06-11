@@ -9,7 +9,8 @@ RUN apt -y install \
     libmpc-dev \
     libmpfr-dev \
     libgmp-dev \
-    wget
+    wget \
+    cmake
 RUN rustup target add x86_64-apple-darwin
 RUN git clone https://github.com/tpoechtrager/osxcross /opt/osxcross
 ENV WORK_DIR /opt/osxcross
