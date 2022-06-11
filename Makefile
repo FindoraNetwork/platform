@@ -281,7 +281,6 @@ build_musl_fn_linux:
 	docker stop -t 0 fn_linux && docker rm -f fn_linux
 
 build_musl_fn_macos:
-	docker build -t musl_fn_macos_base container/Dockerfile-fn-musl-macos-base .
-	docker build -t muql_fn_macos container/Dockerfile-fn-musl-macos .
-	docker run -d --rm --name fn_macos container/Dockerfile-fn-musl-macos .
+	docker build -t musl_fn_macos_base -f container/Dockerfile-fn-musl-macos-base .
+	docker build -t musl_fn_macos -f container/Dockerfile-fn-musl-macos .
 	# docker cp fn_macos:/volume/target/
