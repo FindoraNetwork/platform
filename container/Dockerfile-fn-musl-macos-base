@@ -17,6 +17,6 @@ ENV WORK_DIR /opt/osxcross
 WORKDIR $WORK_DIR
 RUN wget -nc https://s3.dockerproject.org/darwin/v2/MacOSX10.10.sdk.tar.xz
 RUN mv MacOSX10.10.sdk.tar.xz tarballs/
-RUN UNATTENDED=yes OSX_VERSION_MIN=10.7 ./build.sh
+RUN CC=clang UNATTENDED=yes OSX_VERSION_MIN=10.7 ./build.sh
 RUN echo -e "[target.x86_64-apple-darwin] \nlinker = \"x86_64-apple-darwin14-clang\" \nar = \"x86_64-apple-darwin14-ar\"" >> /root/.cargo/config
 
