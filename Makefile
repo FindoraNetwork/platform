@@ -280,8 +280,9 @@ build_musl_fn_linux:
 	docker cp fn_linux:/volume/target/x86_64-unknown-linux-musl/release/fn fn_linux
 	docker stop -t 0 fn_linux && docker rm -f fn_linux && docker rmi musl_fn_linux
 
-build_musl_fn_macos:
+build_musl_fn_macos_base:
 	docker build -t musl_fn_macos_base -f container/Dockerfile-fn-musl-macos-base .
+build_musl_fn_macos:
 	docker build -t musl_fn_macos -f container/Dockerfile-fn-musl-macos .
 	docker run -d -rm --name fn_macos musl_fn_macos
 	docker cp fn_macos:/volume/target/x86_64-apple-darwin/release/fn fn_macos

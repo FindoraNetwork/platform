@@ -27,6 +27,11 @@ jobs:
       run: |
         make build_musl_fn_linux
 
+    - name: Build environment for Macos 
+      shell: bash
+      run: |
+        make build_musl_fn_macos_base
+
     - name: Build fn for Macos 
       shell: bash
       run: |
