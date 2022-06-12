@@ -1,5 +1,7 @@
 FROM musl_fn_macos_base
-
+RUN echo [target.x86_64-apple-darwin] >> /root/.cargo/config
+RUN echo linker = \"x86_64-apple-darwin14-clang\" >> /root/.cargo/config
+RUN echo ar = \"x86_64-apple-darwin14-ar\" >> /root/.cargo/config
 RUN git clone https://github.com/FindoraNetwork/platform.git /volume
 ENV WORK_DIR /volume
 WORKDIR $WORK_DIR
