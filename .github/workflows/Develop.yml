@@ -1,10 +1,7 @@
 name: Develop
 on:
   push:
-    tags:
-      - '*'
   pull_request:
-    # types: [closed]
     branches:
       - develop
 env:
@@ -96,6 +93,9 @@ jobs:
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
         export TOBRANCH="${GITHUB_BASE_REF}"
+        if [ "${TOBRANCH}" == "null" ]; then
+          export TOBRANCH="${{env.ENV}}
+        fi
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
         echo "Image tag: ${IMAGE_TAG}"
@@ -115,6 +115,9 @@ jobs:
           export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
+        if [ "${TOBRANCH}" == "null" ]; then
+          export TOBRANCH="${{env.ENV}}
+        fi
         export TOBRANCH="${GITHUB_BASE_REF}"
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
@@ -142,6 +145,9 @@ jobs:
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
         export TOBRANCH="${GITHUB_BASE_REF}"
+        if [ "${TOBRANCH}" == "null" ]; then
+          export TOBRANCH="${{env.ENV}}
+        fi
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_push_image
