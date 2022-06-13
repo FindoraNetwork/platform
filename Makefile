@@ -284,5 +284,5 @@ build_musl_fn_macos_base:
 	docker build -t musl_fn_macos_base -f container/Dockerfile-fn-musl-macos-base .
 build_musl_fn_macos:
 	docker build -t musl_fn_macos -f container/Dockerfile-fn-musl-macos .
-	docker run -d -rm --name fn_macos musl_fn_macos
+	docker run -d --rm --name fn_macos musl_fn_macos
 	docker cp fn_macos:/volume/target/x86_64-apple-darwin/release/fn fn_macos
