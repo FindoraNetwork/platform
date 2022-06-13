@@ -42,9 +42,7 @@ pub mod sha256 {
     #[inline(always)]
     pub fn hash(m: &[u8]) -> Digest {
         let temp = Sha256::digest(m);
-        Digest {
-            0: *array_ref!(&temp, 0, 32),
-        }
+        Digest(*array_ref!(&temp, 0, 32))
     }
 
     impl AsRef<[u8]> for Digest {
