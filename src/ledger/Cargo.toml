@@ -59,7 +59,7 @@ features = ["f16", "serde"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 parking_lot = "0.11.1"
-# sodiumoxide = "0.2.1"
+sodiumoxide = "0.2.1"
 fs2 = "0.4"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
