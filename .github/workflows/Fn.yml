@@ -27,15 +27,15 @@ jobs:
     #   run: |
     #     make build_musl_fn_linux
 
-    - name: Build environment for Macos 
-      shell: bash
-      run: |
-        make build_musl_fn_macos_base
+    # - name: Build environment for Macos 
+    #   shell: bash
+    #   run: |
+    #     make build_musl_fn_macos_base
 
-    - name: Build fn for Macos 
-      shell: bash
-      run: |
-        make build_musl_fn_macos
+    # - name: Build fn for Macos 
+    #   shell: bash
+    #   run: |
+    #     make build_musl_fn_macos
 
     - name: prepare the tag infomation
       env:
@@ -43,7 +43,7 @@ jobs:
       run: |
         echo "REF: ${GITHUB_REF}"
         TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-        TAGV="${TAGS#refs/tags/}"
+        export TAGV="${TAGS#refs/tags/}"
         echo "Tag: ${TAGV}"
 
     - name: Create release
@@ -54,6 +54,6 @@ jobs:
         automatic_release_tag: "latest"
         prerelease: true
         title: ${TAGV}
-        files: |
-          fn
-          fn_macos
+        # files: |
+        #   fn
+        #   fn_macos
