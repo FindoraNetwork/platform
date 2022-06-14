@@ -51,6 +51,7 @@ const CHAIN_STATE_PATH: &str = "state.db";
 const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
 const CHAIN_STATE_MIN_VERSIONS: u64 = 4 * 60 * 24 * 90;
 
+#[derive(Clone)]
 pub struct BaseApp {
     /// application name from abci.Info
     pub name: String,

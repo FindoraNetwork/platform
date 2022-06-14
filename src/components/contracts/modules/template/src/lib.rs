@@ -29,6 +29,7 @@ mod storage {
     generate_storage!(Template, ValueStore => Value<u64>);
 }
 
+#[derive(Clone)]
 pub struct App<C> {
     phantom: PhantomData<C>,
 }
