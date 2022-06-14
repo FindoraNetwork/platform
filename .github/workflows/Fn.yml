@@ -22,38 +22,27 @@ jobs:
         components: rustfmt
         
 
-    # - name: Build fn for Linux 
-    #   shell: bash
-    #   run: |
-    #     make build_musl_fn_linux
-
-    # - name: Build environment for Macos 
-    #   shell: bash
-    #   run: |
-    #     make build_musl_fn_macos_base
-
-    # - name: Build fn for Macos 
-    #   shell: bash
-    #   run: |
-    #     make build_musl_fn_macos
-
-    - name: prepare the tag infomation
-      env:
-        GITHUB_CONTEXT: ${{ toJSON(github) }}
+    - name: Build fn for Linux 
+      shell: bash
       run: |
-        echo "REF: ${GITHUB_REF}"
-        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-        export TAGV="${TAGS#refs/tags/}"
-        echo "Tag: ${TAGV}"
+        make build_musl_fn_linux
+
+    - name: Build environment for Macos 
+      shell: bash
+      run: |
+        make build_musl_fn_macos_base
+
+    - name: Build fn for Macos 
+      shell: bash
+      run: |
+        make build_musl_fn_macos
 
     - name: Create release
       uses: "marvinpinto/action-automatic-releases@latest"
-
       with:
         repo_token: "${{ secrets.GITHUB_TOKEN }}"
         automatic_release_tag: "latest"
         prerelease: true
-        title: ${TAGV}
-        # files: |
-        #   fn
-        #   fn_macos
+        files: |
+          fn_linux
+          fn_macos
