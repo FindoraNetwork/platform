@@ -32,10 +32,8 @@ use {
         collections::{BTreeMap, HashSet},
         sync::Arc,
     },
-    zei::{
-        serialization::ZeiFromToBytes,
-        xfr::{sig::XfrPublicKey, structs::OwnerMemo},
-    },
+    zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+    zei_algebra::serialization::ZeiFromToBytes,
 };
 
 /// Returns the git commit hash and commit date of this build

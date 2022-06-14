@@ -217,8 +217,8 @@ mod test {
     use {
         super::*,
         crate::staking::{Validator, ValidatorKind},
+        rand::SeedableRng,
         rand_chacha::ChaChaRng,
-        rand_core::SeedableRng,
         ruc::pnk,
     };
 

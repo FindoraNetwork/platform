@@ -33,8 +33,8 @@ use {
     globutils::{HashOf, ProofOf},
     merkle_tree::AppendOnlyMerkle,
     parking_lot::RwLock,
+    rand::SeedableRng,
     rand_chacha::ChaChaRng,
-    rand_core::SeedableRng,
     ruc::*,
     serde::{Deserialize, Serialize},
     sliding_set::SlidingSet,
@@ -48,9 +48,9 @@ use {
         sync::Arc,
     },
     zei::xfr::{
-        lib::XfrNotePolicies,
         sig::XfrPublicKey,
         structs::{OwnerMemo, TracingPolicies, TracingPolicy},
+        XfrNotePolicies,
     },
 };
 

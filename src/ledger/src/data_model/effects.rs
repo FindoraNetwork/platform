@@ -18,8 +18,8 @@ use {
     globutils::HashOf,
     lazy_static::lazy_static,
     parking_lot::Mutex,
+    rand::SeedableRng,
     rand_chacha::{ChaCha20Rng, ChaChaRng},
-    rand_core::SeedableRng,
     ruc::*,
     serde::Serialize,
     std::{
@@ -27,21 +27,21 @@ use {
         sync::Arc,
     },
     zei::{
-        serialization::ZeiFromToBytes,
-        setup::PublicParams,
+        setup::BulletproofParams,
         xfr::{
-            lib::verify_xfr_body,
             sig::XfrPublicKey,
             structs::{XfrAmount, XfrAssetType},
+            verify_xfr_body,
         },
     },
+    zei_algebra::serialization::ZeiFromToBytes,
 };
 
 lazy_static! {
     static ref PRNG: Arc<Mutex<ChaCha20Rng>> =
         Arc::new(Mutex::new(ChaChaRng::from_entropy()));
-    static ref PARAMS: Arc<Mutex<PublicParams>> =
-        Arc::new(Mutex::new(PublicParams::default()));
+    static ref PARAMS: Arc<Mutex<BulletproofParams>> =
+        Arc::new(Mutex::new(BulletproofParams::default()));
 }
 
 /// Check operations in the context of a tx, partially.

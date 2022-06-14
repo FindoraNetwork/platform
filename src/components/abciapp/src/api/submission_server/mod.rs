@@ -11,7 +11,7 @@ use {
         store::LedgerState,
     },
     parking_lot::RwLock,
-    rand_core::{CryptoRng, RngCore},
+    rand::{CryptoRng, RngCore},
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{collections::HashMap, fmt, sync::Arc},

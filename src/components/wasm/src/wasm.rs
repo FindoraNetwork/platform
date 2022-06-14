@@ -44,6 +44,7 @@ use {
         U256,
     },
     fp_utils::{ecdsa::SecpPair, tx::EvmRawTxWrapper},
+    getrandom::getrandom,
     globutils::{wallet, HashOf},
     ledger::{
         data_model::{
@@ -56,23 +57,20 @@ use {
             MAX_DELEGATION_AMOUNT, MIN_DELEGATION_AMOUNT,
         },
     },
+    rand::SeedableRng,
     rand_chacha::ChaChaRng,
-    rand_core::SeedableRng,
     ruc::{d, err::RucResult},
     std::str::FromStr,
     wasm_bindgen::prelude::*,
-    zei::{
-        serialization::ZeiFromToBytes,
-        xfr::{
-            asset_record::{open_blind_asset_record as open_bar, AssetRecordType},
-            lib::trace_assets as zei_trace_assets,
-            sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
-            structs::{
-                AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody,
-                ASSET_TYPE_LENGTH,
-            },
+    zei::xfr::{
+        asset_record::{open_blind_asset_record as open_bar, AssetRecordType},
+        sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+        structs::{
+            AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody, ASSET_TYPE_LENGTH,
         },
+        trace_assets as zei_trace_assets,
     },
+    zei_algebra::serialization::ZeiFromToBytes,
 };
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
@@ -1241,10 +1239,11 @@ pub fn encryption_pbkdf2_aes256gcm(key_pair: String, password: String) -> Vec<u8
     const CREDENTIAL_LEN: usize = 32;
     const IV_LEN: usize = 12;
     let n_iter = NonZeroU32::new(32).unwrap();
-    let mut rng = thread_rng();
+    // let mut rng = thread_rng();
 
     let mut salt = [0u8; CREDENTIAL_LEN];
-    rng.fill(&mut salt);
+    getrandom(&mut salt).unwrap();
+    // rng.fill(&mut salt);
     let mut derived_key = [0u8; CREDENTIAL_LEN];
     pbkdf2::derive(
         pbkdf2::PBKDF2_HMAC_SHA512,
@@ -1255,7 +1254,8 @@ pub fn encryption_pbkdf2_aes256gcm(key_pair: String, password: String) -> Vec<u8
     );
 
     let mut iv = [0u8; IV_LEN];
-    rng.fill(&mut iv);
+    getrandom(&mut iv).unwrap();
+    // rng.fill(&mut iv);
 
     let cipher = Aes256Gcm::new(GenericArray::from_slice(&derived_key));
     let ciphertext = cipher

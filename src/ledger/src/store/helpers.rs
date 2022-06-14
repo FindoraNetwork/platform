@@ -13,18 +13,16 @@ use {
         TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxnSID, TxoRef, TxoSID,
     },
     globutils::SignatureOf,
-    rand_core::{CryptoRng, RngCore},
+    rand::{CryptoRng, RngCore},
     ruc::*,
     std::fmt::Debug,
-    zei::{
-        setup::PublicParams,
-        xfr::{
-            asset_record::AssetRecordType,
-            asset_record::{build_blind_asset_record, open_blind_asset_record},
-            sig::{XfrKeyPair, XfrPublicKey},
-            structs::{AssetRecord, AssetRecordTemplate},
-        },
+    zei::xfr::{
+        asset_record::AssetRecordType,
+        asset_record::{build_blind_asset_record, open_blind_asset_record},
+        sig::{XfrKeyPair, XfrPublicKey},
+        structs::{AssetRecord, AssetRecordTemplate},
     },
+    zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
 
 /// Create a transaction to define a custom asset
@@ -129,7 +127,6 @@ pub fn apply_transaction(
 #[allow(missing_docs)]
 pub fn create_issue_and_transfer_txn(
     ledger: &mut LedgerState,
-    params: &PublicParams,
     code: &AssetTypeCode,
     amount: u64,
     issuer_keys: &XfrKeyPair,
@@ -143,12 +140,9 @@ pub fn create_issue_and_transfer_txn(
         AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         issuer_keys.get_pk(),
     );
-    let (ba, _tracer_memo, owner_memo) = build_blind_asset_record(
-        &mut ledger.get_prng(),
-        &params.pc_gens,
-        &ar_template,
-        vec![],
-    );
+    let pc_gens = RistrettoPedersenCommitment::default();
+    let (ba, _tracer_memo, owner_memo) =
+        build_blind_asset_record(&mut ledger.get_prng(), &pc_gens, &ar_template, vec![]);
 
     let asset_issuance_body = IssueAssetBody::new(
         &code,
@@ -208,7 +202,6 @@ pub fn create_issue_and_transfer_txn(
 #[allow(missing_docs)]
 pub fn create_issue_and_transfer_txn_with_asset_tracing(
     ledger: &mut LedgerState,
-    params: &PublicParams,
     code: &AssetTypeCode,
     amount: u64,
     issuer_keys: &XfrKeyPair,
@@ -231,9 +224,11 @@ pub fn create_issue_and_transfer_txn_with_asset_tracing(
         issuer_keys.get_pk(),
         tracing_policies.clone(),
     );
+
+    let pc_gens = RistrettoPedersenCommitment::default();
     let (ba, _tracer_memo, owner_memo) = build_blind_asset_record(
         &mut ledger.get_prng(),
-        &params.pc_gens,
+        &pc_gens,
         &ar_template,
         vec![vec![]],
     );
@@ -305,7 +300,6 @@ pub fn create_issue_and_transfer_txn_with_asset_tracing(
 #[allow(missing_docs)]
 pub fn create_issuance_txn(
     ledger: &mut LedgerState,
-    params: &PublicParams,
     code: &AssetTypeCode,
     amount: u64,
     seq_num: u64,
@@ -319,12 +313,10 @@ pub fn create_issuance_txn(
         record_type,
         issuer_keys.get_pk(),
     );
-    let (ba, _tracer_memo, _owner_memo) = build_blind_asset_record(
-        &mut ledger.get_prng(),
-        &params.pc_gens,
-        &ar_template,
-        vec![],
-    );
+
+    let pc_gens = RistrettoPedersenCommitment::default();
+    let (ba, _tracer_memo, _owner_memo) =
+        build_blind_asset_record(&mut ledger.get_prng(), &pc_gens, &ar_template, vec![]);
 
     let asset_issuance_body = IssueAssetBody::new(
         &code,
