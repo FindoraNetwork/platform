@@ -29,6 +29,7 @@ use {
     config::abci::global_cfg::CFG,
     cosig::CoSigRule,
     cryptohash::sha256::{self, Digest},
+    curve25519_dalek::{edwards::EdwardsPoint, scalar::Scalar, traits::Identity},
     fbnc::{new_mapx, Mapx},
     globutils::wallet,
     indexmap::IndexMap,
@@ -50,7 +51,10 @@ use {
             Arc,
         },
     },
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
+    zei::{
+        serialization::ZeiFromToBytes,
+        xfr::sig::{XfrKeyPair, XfrPublicKey},
+    },
 };
 
 // height, reward rate
@@ -96,6 +100,20 @@ lazy_static! {
     pub static ref CHAN_D_AMOUNT_HIST: DAHCP = chan!();
     #[allow(missing_docs)]
     pub static ref CHAN_D_RWD_HIST: DRHCP = chan!();
+
+    ///A hard-coded key for "blacklist", that blacklist delegate a validator means nobody can delegate it.
+    pub static ref  LOCK_KEY: XfrPublicKey = {
+        let bytes : [u8;32]=[
+            8,  8, 8,  8, 8, 88,  8, 8, 8,  8, 8, 88, 8, 8,   8,  8,
+            8, 88, 8, 8, 8, 8,  8,  8, 8,  8,  8, 8, 8,   88,   8, 8
+        ];
+
+        let scalar = Scalar::from_bits(bytes);
+        let point = EdwardsPoint::identity() * scalar;
+        let compressed_y = point.compress();
+
+        XfrPublicKey::zei_from_bytes(compressed_y.as_bytes()).unwrap()
+    };
 }
 
 // Reserved accounts of Findora Foundation.
@@ -199,6 +217,12 @@ pub type TendermintAddrBytes = Vec<u8>;
 // type TendermintAddrBytesRef<'a> = &'a [u8];
 
 type ValidatorInfo = BTreeMap<BlockHeight, ValidatorData>;
+
+#[cfg(feature = "debug_env")]
+const CHECK_DELEGATE_LOCK: u64 = 0;
+
+#[cfg(not(feature = "debug_env"))]
+const CHECK_DELEGATE_LOCK: u64 = 180_0000;
 
 /// Staking entry
 ///
@@ -733,6 +757,7 @@ impl Staking {
     ) -> Result<()> {
         let validator = self.validator_td_addr_to_app_pk(validator).c(d!())?;
         let end_height = BLOCK_HEIGHT_MAX;
+        let h = self.cur_height;
 
         // check everything in advance before changing the data
         {
@@ -743,9 +768,34 @@ impl Staking {
             }
             check_delegation_amount(am, true).c(d!())?;
             self.validator_check_power(am, &validator).c(d!())?;
+
+            if h >= CHECK_DELEGATE_LOCK {
+                if owner != validator {
+                    //To avoid impacting consensus, this map is constructed the first time undelegating happen.
+                    if let Some(lock_delegation) = self
+                        .delegation_info
+                        .global_delegation_records_map
+                        .get(&*LOCK_KEY)
+                    {
+                        if lock_delegation.delegations.contains_key(&validator) {
+                            return Err(eg!(
+                                "Validator is locked, delegating is impossible."
+                            ));
+                        }
+                    }
+                } else {
+                    //unlock the validator if there exists a lock, remember that we are doing delegation now.
+                    if let Some(lock_delegation) = self
+                        .delegation_info
+                        .global_delegation_records_map
+                        .get_mut(&*LOCK_KEY)
+                    {
+                        lock_delegation.delegations.remove(&validator);
+                    }
+                }
+            }
         }
 
-        let h = self.cur_height;
         let new = || Delegation {
             delegations: map! {B validator => 0},
             id: owner,
@@ -863,6 +913,26 @@ impl Staking {
 
         // undelegate for the related delegators automaticlly
         if is_validator {
+            if h >= CHECK_DELEGATE_LOCK {
+                self.delegation_info
+                    .global_delegation_records_map
+                    .entry(*LOCK_KEY)
+                    .or_insert_with(|| Delegation {
+                        delegations: BTreeMap::new(),
+                        id: *LOCK_KEY,
+                        receiver_pk: None,
+                        tmp_delegators: BTreeMap::new(),
+                        start_height: h,
+                        end_height: BLOCK_HEIGHT_MAX,
+                        state: DelegationState::Bond,
+                        rwd_amount: 0,
+                        proposer_rwd_cnt: 0,
+                        delegation_rwd_cnt: 0,
+                    })
+                    .delegations
+                    .insert(*addr, 0);
+            }
+
             let mut auto_ud_list = vec![];
 
             // unwrap is safe here
@@ -1034,6 +1104,14 @@ impl Staking {
                     .get_mut(&receiver)
                 {
                     orig_d.tmp_delegators.remove(addr);
+                }
+
+                if let Some(lock_delegation) = self
+                    .delegation_info
+                    .global_delegation_records_map
+                    .get_mut(&*LOCK_KEY)
+                {
+                    lock_delegation.delegations.remove(&receiver);
                 }
             }
             Ok(d)
