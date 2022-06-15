@@ -35,7 +35,8 @@ fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
 config = { path = "../../../config"}
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.4" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", branch = "refactor" }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", branch = "refactor" }
 ledger = { path = "../../../../ledger" }
 
 [dev-dependencies]

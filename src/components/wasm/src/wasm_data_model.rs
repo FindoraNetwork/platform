@@ -302,7 +302,7 @@ impl CredentialRevealSig {
     /// credential commitment.
     pub fn get_commitment(&self) -> CredentialCommitment {
         CredentialCommitment {
-            commitment: self.sig.sig_commitment.clone(),
+            commitment: self.sig.cm.clone(),
         }
     }
     /// Returns the underlying proof of knowledge that the credential is valid.
@@ -310,7 +310,7 @@ impl CredentialRevealSig {
     /// credential commitment.
     pub fn get_pok(&self) -> CredentialPoK {
         CredentialPoK {
-            pok: self.sig.pok.clone(),
+            pok: self.sig.proof_open.clone(),
         }
     }
 }
