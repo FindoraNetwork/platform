@@ -480,6 +480,7 @@ impl TransactionBuilder {
     /// @param {ClientAssetRecord} input_record -
     pub fn add_operation_bar_to_abar(
         mut self,
+        seed: String,
         auth_key_pair: &XfrKeyPair,
         abar_pubkey: &AXfrPubKey,
         txo_sid: u64,
@@ -487,6 +488,8 @@ impl TransactionBuilder {
         owner_memo: Option<OwnerMemo>,
         enc_key: &XPublicKey,
     ) -> Result<TransactionBuilder, JsValue> {
+        use hex::FromHex;
+
         let oar = open_bar(
             input_record.get_bar_ref(),
             &owner_memo.map(|memo| memo.get_memo_ref().clone()),
@@ -499,9 +502,12 @@ impl TransactionBuilder {
         let is_bar_transparent =
             oar.get_record_type() == NonConfidentialAmount_NonConfidentialAssetType;
 
+        let mut seed = <[u8; 32]>::from_hex(seed).c(d!()).map_err(|e| JsValue::from_str(&format!("Failed to parse seed from hex: {}", e)))?;
+
         let (_, c) = self
             .get_builder_mut()
             .add_operation_bar_to_abar(
+                seed,
                 auth_key_pair,
                 &abar_pubkey,
                 TxoSID(txo_sid),

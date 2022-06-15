@@ -742,9 +742,15 @@ pub fn generate_bar2abar_op(
     is_bar_transparent: bool,
 ) -> Result<Commitment> {
     // add operation bar_to_abar in a new Tx Builder
+
+    let mut seed = [0u8; 32];
+
+    getrandom::getrandom(&mut seed).c(d!())?;
+
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
     let (_, c) = builder
         .add_operation_bar_to_abar(
+            seed,
             auth_key_pair,
             abar_pub_key,
             txo_sid,

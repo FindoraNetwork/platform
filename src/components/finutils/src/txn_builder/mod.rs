@@ -520,6 +520,7 @@ impl TransactionBuilder {
     /// * `enc_key`       -  XPublicKey of OwnerMemo encryption of receiver
     pub fn add_operation_bar_to_abar(
         &mut self,
+        seed: [u8; 32],
         auth_key_pair: &XfrKeyPair,
         abar_pub_key: &AXfrPubKey,
         txo_sid: TxoSID,
@@ -529,6 +530,7 @@ impl TransactionBuilder {
     ) -> Result<(&mut Self, Commitment)> {
         // generate the BarToAbarNote with the ZKP
         let (note, c) = gen_bar_conv_note(
+            seed,
             input_record,
             auth_key_pair,
             abar_pub_key,
@@ -1026,13 +1028,15 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
 }
 
 fn gen_bar_conv_note(
+    seed: [u8;32],
     input_record: &OpenAssetRecord,
     auth_key_pair: &XfrKeyPair,
     abar_pub_key: &AXfrPubKey,
     enc_key: &XPublicKey,
     is_bar_transparent: bool,
 ) -> Result<(BarAnonConvNote, Commitment)> {
-    let mut prng = ChaChaRng::from_entropy();
+    // let mut prng = ChaChaRng::from_entropy();
+    let mut prng = ChaChaRng::from_seed(seed);
 
     if is_bar_transparent {
         let prover_params = ProverParams::ar_to_abar_params()?;
@@ -2076,8 +2080,13 @@ mod tests {
         let (bar, _, memo) = build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
         let dummy_input = open_blind_asset_record(&bar, &memo, &from).unwrap();
 
+        let mut seed = [0u8; 32];
+
+        getrandom::getrandom(&mut seed).unwrap();
+
         let _ = builder
             .add_operation_bar_to_abar(
+                seed,
                 &from,
                 &to,
                 TxoSID(123),
