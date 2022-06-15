@@ -83,6 +83,7 @@ jobs:
     - name: Build binary image
       env:
         GITHUB_CONTEXT: ${{ toJSON(github) }}
+        ENV: ${{ env.ENV }}
       shell: bash
       run: |
         COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
@@ -92,10 +93,7 @@ jobs:
           export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
-        export TOBRANCH="${GITHUB_BASE_REF}"
-        if [ "${TOBRANCH}" == "null" ]; then
-          export TOBRANCH="${{env.ENV}}
-        fi
+        export TOBRANCH="dev"
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
         echo "Image tag: ${IMAGE_TAG}"
@@ -115,10 +113,7 @@ jobs:
           export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
-        if [ "${TOBRANCH}" == "null" ]; then
-          export TOBRANCH="${{env.ENV}}
-        fi
-        export TOBRANCH="${GITHUB_BASE_REF}"
+        export TOBRANCH="dev"
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image
@@ -144,49 +139,46 @@ jobs:
           export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
-        export TOBRANCH="${GITHUB_BASE_REF}"
-        if [ "${TOBRANCH}" == "null" ]; then
-          export TOBRANCH="${{env.ENV}}
-        fi
+        export TOBRANCH="dev"
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_push_image
-    - name: Clean images
-      env:
-        PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
-        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
-        ENV: ${{ env.ENV }}
-        GITHUB_CONTEXT: ${{ toJSON(github) }}
-      shell: bash
-      run: |
-        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
-        if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA}"
-        else
-          export COMMIT_HASH=${COMMIT_HASH}
-        fi
-        export BRANCH="${GITHUB_HEAD_REF}"
-        export TOBRANCH="${GITHUB_BASE_REF}"
-        export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
-        echo "Image tag: ${IMAGE_TAG}"
-        make clean_image
-    - name: Clean binary images
-      shell: bash
-      env:
-        GITHUB_CONTEXT: ${{ toJSON(github) }}
-      run: |
-        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
-        if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA}"
-        else
-          export COMMIT_HASH=${COMMIT_HASH}
-        fi
-        export BRANCH="${GITHUB_HEAD_REF}"
-        export TOBRANCH="${GITHUB_BASE_REF}"
-        export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
-        echo "Image tag: ${IMAGE_TAG}"
-        make clean_binary_dockerhub
-    - name: Clean garbage
-      shell: bash
-      run: |
-        rm -rf /tmp/*>/dev/null 2>&1 || true
+    # - name: Clean images
+    #   env:
+    #     PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
+    #     PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
+    #     ENV: ${{ env.ENV }}
+    #     GITHUB_CONTEXT: ${{ toJSON(github) }}
+    #   shell: bash
+    #   run: |
+    #     COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+    #     if [ "${COMMIT_HASH}" == "null" ]; then
+    #       export COMMIT_HASH="${GITHUB_SHA}"
+    #     else
+    #       export COMMIT_HASH=${COMMIT_HASH}
+    #     fi
+    #     export BRANCH="${GITHUB_HEAD_REF}"
+    #     export TOBRANCH="${GITHUB_BASE_REF}"
+    #     export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
+    #     echo "Image tag: ${IMAGE_TAG}"
+    #     make clean_image
+    # - name: Clean binary images
+    #   shell: bash
+    #   env:
+    #     GITHUB_CONTEXT: ${{ toJSON(github) }}
+    #   run: |
+    #     COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
+    #     if [ "${COMMIT_HASH}" == "null" ]; then
+    #       export COMMIT_HASH="${GITHUB_SHA}"
+    #     else
+    #       export COMMIT_HASH=${COMMIT_HASH}
+    #     fi
+    #     export BRANCH="${GITHUB_HEAD_REF}"
+    #     export TOBRANCH="${GITHUB_BASE_REF}"
+    #     export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
+    #     echo "Image tag: ${IMAGE_TAG}"
+    #     make clean_binary_dockerhub
+    # - name: Clean garbage
+    #   shell: bash
+    #   run: |
+    #     rm -rf /tmp/*>/dev/null 2>&1 || true
