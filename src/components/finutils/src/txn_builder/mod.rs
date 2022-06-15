@@ -1028,7 +1028,7 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
 }
 
 fn gen_bar_conv_note(
-    seed: [u8;32],
+    seed: [u8; 32],
     input_record: &OpenAssetRecord,
     auth_key_pair: &XfrKeyPair,
     abar_pub_key: &AXfrPubKey,

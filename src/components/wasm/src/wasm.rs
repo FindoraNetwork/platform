@@ -502,7 +502,9 @@ impl TransactionBuilder {
         let is_bar_transparent =
             oar.get_record_type() == NonConfidentialAmount_NonConfidentialAssetType;
 
-        let mut seed = <[u8; 32]>::from_hex(seed).c(d!()).map_err(|e| JsValue::from_str(&format!("Failed to parse seed from hex: {}", e)))?;
+        let mut seed = <[u8; 32]>::from_hex(seed).c(d!()).map_err(|e| {
+            JsValue::from_str(&format!("Failed to parse seed from hex: {}", e))
+        })?;
 
         let (_, c) = self
             .get_builder_mut()
