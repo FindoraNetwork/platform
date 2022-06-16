@@ -286,8 +286,8 @@ build_musl_fn_macos:
 	docker build -t musl_fn_macos -f container/Dockerfile-fn-musl-macos .
 	docker run -d --rm --name fn_macos musl_fn_macos
 	docker cp fn_macos:/volume/target/x86_64-apple-darwin/release/fn fn_macos
-
+ 
 build_musl_fn_win:
 	docker build -t musl_fn_win -f container/Dockerfile-fn-musl-windows .
 	docker run -d --rm --name fn_windows musl_fn_win
-	docker cp fn_windows:/volume/target/x86_64-pc-windows-gnu/release/fn fn_windows
+	docker cp fn_windows:/volume/target/x86_64-pc-windows-gnu/release/fn.exe fn_windows.exe

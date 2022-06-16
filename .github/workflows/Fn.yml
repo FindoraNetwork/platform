@@ -49,4 +49,4 @@ jobs:
         files: |
           fn_linux
           fn_macos
-          fn_windows
+          fn_windows.exe
