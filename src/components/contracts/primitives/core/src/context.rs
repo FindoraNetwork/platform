@@ -1,11 +1,15 @@
 use abci::Header;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 use storage::{
     db::{FinDB, RocksDB},
     state::{ChainState, State},
 };
 
 pub use parking_lot::RwLock;
-pub use std::sync::Arc;
+use primitive_types::{H160, H256};
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash, Copy)]
 pub enum RunTxMode {
@@ -27,6 +31,7 @@ pub struct Context {
     pub run_mode: RunTxMode,
     pub header: Header,
     pub header_hash: Vec<u8>,
+    pub txn_signers: Arc<Mutex<HashMap<H256, Option<H160>>>>,
 }
 
 impl Context {
@@ -40,6 +45,7 @@ impl Context {
             run_mode: RunTxMode::None,
             header: Default::default(),
             header_hash: vec![],
+            txn_signers: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -50,6 +56,7 @@ impl Context {
             run_mode: RunTxMode::None,
             header: self.header.clone(),
             header_hash: self.header_hash(),
+            txn_signers: self.txn_signers.clone(),
         }
     }
 
@@ -63,6 +70,7 @@ impl Context {
             run_mode: RunTxMode::None,
             header: self.header.clone(),
             header_hash: self.header_hash(),
+            txn_signers: self.txn_signers.clone(),
         }
     }
 }
