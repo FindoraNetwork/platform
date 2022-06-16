@@ -32,9 +32,7 @@ use notify::*;
 use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
 use ruc::{eg, Result};
-use std::borrow::BorrowMut;
-use std::path::Path;
-use std::sync::Arc;
+use std::{borrow::BorrowMut, path::Path, sync::Arc};
 use storage::{
     db::{FinDB, RocksDB},
     state::ChainState,

@@ -193,6 +193,9 @@ impl crate::BaseApp {
     }
 
     pub fn commit(&mut self, _req: &RequestCommit) -> ResponseCommit {
+        // Clone newly checked txn_signers cache to deliver_state
+        // Previous cache is dropped here.
+        self.deliver_state.txn_signers = self.check_state.txn_signers.clone();
         // Reset the Check state to the latest committed.
         self.check_state = self.deliver_state.copy_with_new_state();
 
