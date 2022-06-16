@@ -25,6 +25,28 @@ use ruc::*;
 use sha3::{Digest, Keccak256};
 
 impl<C: Config> App<C> {
+    pub fn recover_signer_fast(
+        ctx: &Context,
+        transaction: &Transaction,
+    ) -> Option<H160> {
+        let transaction_hash =
+            H256::from_slice(Keccak256::digest(&rlp::encode(transaction)).as_slice());
+
+        if let Ok(mut txn_signers) = ctx.txn_signers.lock() {
+            *txn_signers
+                .entry(transaction_hash)
+                .or_insert_with(|| Self::recover_signer(transaction))
+        } else {
+            // cannot obtain lock, fall back to slow path
+            log::warn!(
+                target:
+                "ethereum",
+                "Cannot obtain lock, fallback to recover_signer slow path"
+            );
+            Self::recover_signer(transaction)
+        }
+    }
+
     pub fn recover_signer(transaction: &Transaction) -> Option<H160> {
         let mut sig = [0u8; 65];
         let mut msg = [0u8; 32];
@@ -138,7 +160,7 @@ impl<C: Config> App<C> {
         let mut events = vec![];
         let just_check = ctx.run_mode != RunTxMode::Deliver;
 
-        let source = Self::recover_signer(&transaction)
+        let source = Self::recover_signer_fast(ctx, &transaction)
             .ok_or_else(|| eg!("ExecuteTransaction: InvalidSignature"))?;
 
         let transaction_hash =
