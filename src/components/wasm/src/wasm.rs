@@ -13,6 +13,7 @@
 #![allow(clippy::needless_borrow)]
 
 mod wasm_data_model;
+mod wasm_result;
 
 use {
     crate::wasm_data_model::{
@@ -546,11 +547,13 @@ impl TransactionBuilder {
             &from_dec_key.clone(),
         )
         .c(d!())
-        .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
+        .to_wasm_result("Builder from_abar error")
+        .map_err(error_to_jsvalue)?
         .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
         .build()
         .c(d!())
-        .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?;
+        .to_wasm_result("Builder build error")
+        .map_err(error_to_jsvalue)?;
 
         let art = match (conf_amount, conf_type) {
             (true, true) => AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
@@ -566,9 +569,8 @@ impl TransactionBuilder {
         self.get_builder_mut()
             .add_operation_abar_to_bar(&oabar, &from_keypair.clone(), &recipient, art)
             .c(d!())
-            .map_err(|e| {
-                JsValue::from_str(&format!("Could not add operation: {}", e))
-            })?;
+            .to_wasm_result("builder add_operation_abar_to_bar error")
+            .map_err(error_to_jsvalue)?;
 
         Ok(self)
     }
@@ -1769,7 +1771,10 @@ pub fn trace_assets(
 // Author: Chao Ma, github.com/chaosma. //
 //////////////////////////////////////////
 
-use crate::wasm_data_model::{AmountAssetType, AnonKeys};
+use crate::{
+    wasm_data_model::{AmountAssetType, AnonKeys},
+    wasm_result::WasmResulTrait,
+};
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
 use base64::URL_SAFE;

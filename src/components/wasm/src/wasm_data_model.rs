@@ -1,4 +1,6 @@
 use js_sys::JsString;
+
+use crate::wasm_result::WasmResulTrait;
 use {
     core::fmt::Display,
     credentials::{
@@ -155,7 +157,11 @@ impl ClientAssetRecord {
     /// fetch an asset record from the ledger server.
     pub fn from_json(val: &JsValue) -> Result<ClientAssetRecord, JsValue> {
         Ok(ClientAssetRecord {
-            txo: val.into_serde().c(d!()).map_err(error_to_jsvalue)?,
+            txo: val
+                .into_serde()
+                .c(d!())
+                .to_wasm_result("format json error")
+                .map_err(error_to_jsvalue)?,
         })
     }
 
@@ -707,8 +713,11 @@ impl MTLeafInfo {
 #[wasm_bindgen]
 impl MTLeafInfo {
     pub fn from_json(json: &JsValue) -> Result<MTLeafInfo, JsValue> {
-        let mt_leaf_info: ZeiMTLeafInfo =
-            json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
+        let mt_leaf_info: ZeiMTLeafInfo = json
+            .into_serde()
+            .c(d!())
+            .to_wasm_result("format json error")
+            .map_err(error_to_jsvalue)?;
         Ok(MTLeafInfo {
             object: mt_leaf_info,
         })
