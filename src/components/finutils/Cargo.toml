@@ -70,3 +70,7 @@ path = "src/bins/key_generator.rs"
 [[bin]]
 name = "staking_cfg_generator"
 path = "src/bins/cfg_generator.rs"
+
+[[bin]]
+name = "bench"
+path = "src/bins/bench.rs"

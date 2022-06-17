@@ -916,6 +916,79 @@ pub fn convert_abar2bar(
     Ok(())
 }
 
+///Build a transaction of abar2bar
+pub fn abar2bar_tx(
+    axfr_secret_key: String,
+    com: &Commitment,
+    dec_key: String,
+    to: &XfrPublicKey,
+    confidential_am: bool,
+    confidential_ty: bool,
+) -> Result<Transaction> {
+    // parse anon keys
+    let from = wallet::anon_secret_key_from_base64(axfr_secret_key.as_str())
+        .c(d!("invalid 'from-axfr-secret-key'"))?;
+    let from_secret_key =
+        wallet::x_secret_key_from_base64(dec_key.as_str()).c(d!("invalid dec_key"))?;
+
+    let axtxo_abar = utils::get_owned_abar(&com).c(d!())?;
+
+    // get OwnerMemo and Merkle Proof of ABAR
+    let owner_memo = utils::get_abar_memo(&axtxo_abar.0).c(d!())?.unwrap();
+    let mt_leaf_info = utils::get_abar_proof(&axtxo_abar.0).c(d!())?.unwrap();
+    let mt_leaf_uid = mt_leaf_info.uid;
+
+    // Open ABAR with dec_key and OwnerMemo & attach merkle proof
+    let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
+        &axtxo_abar.1,
+        owner_memo,
+        &from,
+        &from_secret_key,
+    )
+    .unwrap()
+    .mt_leaf_info(mt_leaf_info)
+    .build()
+    .unwrap();
+
+    // check oabar is unspent. If already spent return error
+    // create nullifier
+    let n = nullifier(
+        &from,
+        oabar_in.get_amount(),
+        &oabar_in.get_asset_type(),
+        mt_leaf_uid,
+    );
+    let hash = wallet::nullifier_to_base58(&n);
+    // check if hash is present in nullifier set
+    let null_status = utils::check_nullifier_hash(&hash)
+        .c(d!())?
+        .ok_or(d!("The ABAR corresponding to this commitment is missing"))?;
+    if null_status {
+        return Err(eg!(
+            "The ABAR corresponding to this commitment is already spent"
+        ));
+    }
+    println!("Nullifier: {}", wallet::nullifier_to_base58(&n));
+
+    // Create New AssetRecordType for new BAR
+    let art = match (confidential_am, confidential_ty) {
+        (true, true) => AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
+        (true, false) => AssetRecordType::ConfidentialAmount_NonConfidentialAssetType,
+        (false, true) => AssetRecordType::NonConfidentialAmount_ConfidentialAssetType,
+        _ => AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+    };
+
+    // Build AbarToBar Transaction and submit
+
+    let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
+    // create and add AbarToBar Operation
+    builder
+        .add_operation_abar_to_bar(&oabar_in, &from, to, art)
+        .c(d!())?;
+
+    Ok(builder.take_transaction())
+}
+
 /// Generate OABAR and add anonymous transfer operation
 /// # Arguments
 /// * axfr_secret_key - AXfrKeyPair in base64 form
