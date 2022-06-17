@@ -302,6 +302,19 @@ pub fn deliver_tx(
                             .db
                             .write()
                             .discard_session();
+                    } else if CFG.checkpoint.utxo_checktx_height < td_height {
+                        match tx.check_tx() {
+                            Ok(_) => {
+                                if let Err(e) = s.la.write().cache_transaction(tx) {
+                                    resp.code = 1;
+                                    resp.log = e.to_string();
+                                }
+                            }
+                            Err(e) => {
+                                resp.code = 1;
+                                resp.log = e.to_string();
+                            }
+                        }
                     } else if let Err(e) = s.la.write().cache_transaction(tx) {
                         resp.code = 1;
                         resp.log = e.to_string();
