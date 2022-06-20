@@ -32,7 +32,12 @@ use notify::*;
 use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
 use ruc::{eg, Result};
-use std::{borrow::BorrowMut, path::Path, sync::Arc};
+use std::{
+    borrow::BorrowMut,
+    collections::HashMap,
+    path::Path,
+    sync::{Arc, Mutex},
+};
 use storage::{
     db::{FinDB, RocksDB},
     state::ChainState,
@@ -294,6 +299,7 @@ impl BaseApp {
         ctx.run_mode = RunTxMode::None;
         ctx.header_hash = header_hash;
         ctx.header = header;
+        ctx.txn_signers = Arc::new(Mutex::new(HashMap::new()));
     }
 
     pub fn deliver_findora_tx(&mut self, tx: &FindoraTransaction) -> Result<()> {

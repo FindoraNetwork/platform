@@ -8,7 +8,6 @@ use storage::{
     state::{ChainState, State},
 };
 
-use lazy_static::lazy_static;
 pub use parking_lot::RwLock;
 use primitive_types::{H160, H256};
 
@@ -23,11 +22,6 @@ pub enum RunTxMode {
     Simulate = 3,
     /// Deliver a transaction
     Deliver = 4,
-}
-
-lazy_static! {
-    static ref TXN_SIGNERS: Arc<Mutex<HashMap<H256, Option<H160>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
 }
 
 #[derive(Clone)]
@@ -51,7 +45,7 @@ impl Context {
             run_mode: RunTxMode::None,
             header: Default::default(),
             header_hash: vec![],
-            txn_signers: TXN_SIGNERS.clone(),
+            txn_signers: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
