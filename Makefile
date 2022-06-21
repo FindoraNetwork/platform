@@ -296,4 +296,4 @@ build_musl_fn_win:
 	docker run -d --rm --name fn_windows musl_fn_win
 	docker cp fn_windows:/volume/target/x86_64-pc-windows-gnu/release/fn.exe fn.exe
 	tar -czvf fn_windows.tar.gz fn.exe
-	rm fn.ext
+	rm fn.exe
