@@ -47,7 +47,7 @@ sliding_set = { path = "../libs/sliding_set" }
 [features]
 default = []
 diskcache = ["fbnc/diskcache"]
-debug_env = []
+debug_env = ["config/debug_env"]
 abci_mock = []
 
 [dev-dependencies]
