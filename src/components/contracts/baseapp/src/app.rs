@@ -196,8 +196,10 @@ impl crate::BaseApp {
         // Clone newly checked txn_signers cache to deliver_state
         // Previous cache is dropped here.
         self.deliver_state.txn_signers = self.check_state.txn_signers.clone();
+
         // Reset the Check state to the latest committed.
         self.check_state = self.deliver_state.copy_with_new_state();
+        self.check_state.run_mode = RunTxMode::Check;
 
         let block_height = self.deliver_state.block_header().height as u64;
 

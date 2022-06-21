@@ -1,6 +1,6 @@
 use baseapp::BaseApp;
 use ethereum::{TransactionAction, TransactionSignature, TransactionV0};
-use fp_core::context::Context;
+use fp_core::context::{Context, RunTxMode};
 use fp_storage::{Borrow, BorrowMut, RwLock};
 use fp_types::crypto::HA256;
 use fp_types::{H256, U256};
@@ -37,7 +37,7 @@ fn setup() -> Context {
         0,
     )));
 
-    Context::new(chain_state, chain_db)
+    Context::new(chain_state, chain_db, RunTxMode::None)
 }
 
 #[test]

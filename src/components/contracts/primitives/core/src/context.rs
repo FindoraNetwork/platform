@@ -38,11 +38,12 @@ impl Context {
     pub fn new(
         state_merkle: Arc<RwLock<ChainState<FinDB>>>,
         state_db: Arc<RwLock<ChainState<RocksDB>>>,
+        run_mode: RunTxMode,
     ) -> Self {
         Context {
             state: Arc::new(RwLock::new(State::new(state_merkle, true))),
             db: Arc::new(RwLock::new(State::new(state_db, false))),
-            run_mode: RunTxMode::None,
+            run_mode,
             header: Default::default(),
             header_hash: vec![],
             txn_signers: Arc::new(Mutex::new(HashMap::new())),
@@ -53,7 +54,7 @@ impl Context {
         Context {
             state: Arc::new(RwLock::new(self.state.read().copy())),
             db: Arc::new(RwLock::new(self.db.read().copy())),
-            run_mode: RunTxMode::None,
+            run_mode: self.run_mode,
             header: self.header.clone(),
             header_hash: self.header_hash(),
             txn_signers: if self.run_mode == RunTxMode::Check {
@@ -71,7 +72,7 @@ impl Context {
                 true,
             ))),
             db: Arc::new(RwLock::new(State::new(self.db.read().chain_state(), false))),
-            run_mode: RunTxMode::None,
+            run_mode: self.run_mode,
             header: self.header.clone(),
             header_hash: self.header_hash(),
             txn_signers: if self.run_mode == RunTxMode::Check {

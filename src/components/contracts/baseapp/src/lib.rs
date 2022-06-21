@@ -157,8 +157,12 @@ impl BaseApp {
             app_version: 1,
             chain_state: chain_state.clone(),
             chain_db: chain_db.clone(),
-            check_state: Context::new(chain_state.clone(), chain_db.clone()),
-            deliver_state: Context::new(chain_state, chain_db),
+            check_state: Context::new(
+                chain_state.clone(),
+                chain_db.clone(),
+                RunTxMode::Check,
+            ),
+            deliver_state: Context::new(chain_state, chain_db, RunTxMode::Deliver),
             modules: ModuleManager {
                 ethereum_module: module_ethereum::App::<Self>::new(empty_block),
                 ..Default::default()
@@ -177,8 +181,12 @@ impl BaseApp {
             app_version: 1,
             chain_state: chain_state.clone(),
             chain_db: chain_db.clone(),
-            check_state: Context::new(chain_state.clone(), chain_db.clone()),
-            deliver_state: Context::new(chain_state, chain_db),
+            check_state: Context::new(
+                chain_state.clone(),
+                chain_db.clone(),
+                RunTxMode::Check,
+            ),
+            deliver_state: Context::new(chain_state, chain_db, RunTxMode::Deliver),
             modules: ModuleManager::default(),
             event_notify: self.event_notify.clone(),
         }
@@ -190,7 +198,7 @@ impl BaseApp {
         state_db: Arc<RwLock<ChainState<RocksDB>>>,
     ) -> Result<()> {
         //Create context.
-        let mut ctx = Context::new(state_merkle, state_db);
+        let mut ctx = Context::new(state_merkle, state_db, RunTxMode::None);
         let height = ctx.db.read().height()?;
 
         //Migrate data for ethereum module.
@@ -291,7 +299,6 @@ impl BaseApp {
     }
 
     fn update_state(ctx: &mut Context, header: Header, header_hash: Vec<u8>) {
-        ctx.run_mode = RunTxMode::None;
         ctx.header_hash = header_hash;
         ctx.header = header;
     }

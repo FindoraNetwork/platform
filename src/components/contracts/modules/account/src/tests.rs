@@ -1,6 +1,9 @@
 use crate::storage::*;
 use crate::App;
-use fp_core::{account::SmartAccount, context::Context};
+use fp_core::{
+    account::SmartAccount,
+    context::{Context, RunTxMode},
+};
 use fp_storage::{Borrow, BorrowMut};
 use fp_traits::account::AccountAsset;
 use fp_types::crypto::Address;
@@ -40,7 +43,7 @@ fn setup() -> Context {
         0,
     )));
 
-    Context::new(chain_state, chain_db)
+    Context::new(chain_state, chain_db, RunTxMode::None)
 }
 
 #[test]
