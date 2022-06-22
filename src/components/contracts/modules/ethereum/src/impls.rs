@@ -41,7 +41,7 @@ impl<C: Config> App<C> {
             log::warn!(
                 target:
                 "ethereum",
-                "Cannot obtain lock, fallback to recover_signer slow path"
+                "Cannot obtain lock, fallback to slow path to recover signer"
             );
             Self::recover_signer(transaction)
         }
