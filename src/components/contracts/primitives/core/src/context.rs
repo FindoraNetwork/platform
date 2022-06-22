@@ -45,7 +45,7 @@ impl Context {
             run_mode: RunTxMode::None,
             header: Default::default(),
             header_hash: vec![],
-            txn_signers: Arc::new(Mutex::new(HashMap::new())),
+            txn_signers: Default::default(),
         }
     }
 
@@ -56,7 +56,7 @@ impl Context {
             run_mode: RunTxMode::None,
             header: self.header.clone(),
             header_hash: self.header_hash(),
-            txn_signers: self.txn_signers.clone(),
+            txn_signers: Default::default(),
         }
     }
 
@@ -70,7 +70,7 @@ impl Context {
             run_mode: RunTxMode::None,
             header: self.header.clone(),
             header_hash: self.header_hash(),
-            txn_signers: self.txn_signers.clone(),
+            txn_signers: Default::default(),
         }
     }
 }
