@@ -36,11 +36,17 @@ jobs:
       run: |
         make build_musl_fn_macos
 
+    - name: Build fn for Windows
+      shell: bash
+      run: |
+        make build_musl_fn_win
+
     - name: Create release
       uses: "marvinpinto/action-automatic-releases@latest"
       with:
         repo_token: "${{ secrets.GITHUB_TOKEN }}"
         prerelease: true
         files: |
-          fn_linux
-          fn_macos
+          fn_linux.tar.gz
+          fn_macos.tar.gz
+          fn_windows.tar.gz
