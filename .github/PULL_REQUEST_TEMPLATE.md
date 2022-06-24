@@ -6,7 +6,10 @@
 * **The major changes of this PR**
 
 
+* **The major impacts of this PR**
+  - [x] Impact Findora SDK?
+  - [x] Impact Web3 API?
+  - [x] Impact mainnet data compability?
 
 * **Extra documentations**
-
 
