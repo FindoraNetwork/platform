@@ -9,7 +9,7 @@
 * **The major impacts of this PR**
   - [ ] Impact Findora SDK?
   - [ ] Impact Web3 API?
-  - [ ] Impact mainnet data compability?
+  - [ ] Impact mainnet data compatibility?
 
 * **Extra documentations**
 
