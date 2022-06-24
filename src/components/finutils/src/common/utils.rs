@@ -741,6 +741,29 @@ pub fn generate_bar2abar_op(
     enc_key: &XPublicKey,
     is_bar_transparent: bool,
 ) -> Result<Commitment> {
+    let (tx, c) = generate_bar2abar_tx(
+        auth_key_pair,
+        abar_pub_key,
+        txo_sid,
+        input_record,
+        enc_key,
+        is_bar_transparent,
+    )?;
+    // submit transaction to network
+    send_tx(&tx).c(d!("Failed to submit Bar to Abar txn"))?;
+
+    Ok(c)
+}
+
+/// Generate a BarToAbar Transaction.
+pub fn generate_bar2abar_tx(
+    auth_key_pair: &XfrKeyPair,
+    abar_pub_key: &AXfrPubKey,
+    txo_sid: TxoSID,
+    input_record: &OpenAssetRecord,
+    enc_key: &XPublicKey,
+    is_bar_transparent: bool,
+) -> Result<(Transaction, Commitment)> {
     // add operation bar_to_abar in a new Tx Builder
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
     let (_, c) = builder
@@ -761,10 +784,7 @@ pub fn generate_bar2abar_op(
         gen_fee_bar_to_abar(auth_key_pair, txo_sid).c(d!("Failed to generate fee"))?;
     builder.add_operation(feeop);
 
-    // submit transaction to network
-    send_tx(&builder.take_transaction()).c(d!("Failed to submit Bar to Abar txn"))?;
-
-    Ok(c)
+    Ok((builder.take_transaction(), c))
 }
 
 #[inline(always)]

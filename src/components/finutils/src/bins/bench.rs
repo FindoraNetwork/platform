@@ -7,20 +7,20 @@ use zei::xfr::{
     structs::{OpenAssetRecord, XfrAssetType},
 };
 
+use rayon::prelude::*;
+
 use zei::anon_xfr::structs::Commitment;
 
 use finutils::common::{self, transfer_asset_batch_x, utils};
 use globutils::wallet;
 
-use ledger::data_model::{
-    gen_random_keypair, ATxoSID, AssetRules, AssetTypeCode, Transaction, TxoSID, Utxo,
-    ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
-};
+use ledger::data_model::{Transaction, TxoSID, ASSET_TYPE_FRA};
 
 use serde::{Deserialize, Serialize};
 
 use std::fs;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 fn main() -> Result<()> {
@@ -40,7 +40,6 @@ fn main() -> Result<()> {
                         .long("mnemB")
                         .value_name("Mnemonic File")
                         .help("Mnemonic file")
-                        .required(true)
                         .takes_value(true),
                 )
                 .arg(
@@ -58,6 +57,20 @@ fn main() -> Result<()> {
                         .value_name("KEY FILE")
                         .help("File that contains a list of mnemonics.")
                         .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("amount")
+                        .long("amount")
+                        .value_name("amount to transfer")
+                        .help("Amount of FRA to transfer.")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("interval_secs")
+                        .long("interval_secs")
+                        .value_name("Anon-key File")
+                        .help("Interval of sending transaction, seconds.")
                         .takes_value(true),
                 ),
         )
@@ -88,6 +101,19 @@ fn main() -> Result<()> {
                         .help("File contains anon-key.")
                         .required(true)
                         .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("interval_secs")
+                        .long("interval_secs")
+                        .value_name("Anon-key File")
+                        .help("Interval of sending transaction, seconds.")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("threads")
+                        .long("threads")
+                        .value_name("Threads")
+                        .takes_value(true),
                 ),
         )
         .subcommand(
@@ -107,22 +133,111 @@ fn main() -> Result<()> {
                         .help("File contains anon-key.")
                         .required(true)
                         .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("interval_secs")
+                        .long("interval_secs")
+                        .value_name("Anon-key File")
+                        .help("Interval of sending transaction, seconds.")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("threads")
+                        .long("threads")
+                        .value_name("Threads")
+                        .takes_value(true),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("anon-transfer")
+                .arg(
+                    Arg::with_name("commitments")
+                        .long("commitments")
+                        .value_name("Commitments File")
+                        .help("list that contains public keys and commitments.")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("fee-commitments")
+                        .long("fee-commitments")
+                        .value_name("Commitments File")
+                        .help("list that contains public keys and commitments.")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("anon-keys")
+                        .long("anon-keys")
+                        .value_name("Anon-key File")
+                        .help("File contains anon-key.")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("to-anon-keys")
+                        .long("to-anon-keys")
+                        .value_name("Anon-key File")
+                        .help("File contains anon-key.")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("interval_secs")
+                        .long("interval_secs")
+                        .value_name("Anon-key File")
+                        .help("Interval of sending transaction, seconds.")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("threads")
+                        .long("threads")
+                        .value_name("Threads")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("amount")
+                        .long("amount")
+                        .value_name("Amount")
+                        .help("Amount to transfer.")
+                        .takes_value(true),
                 ),
         )
         .get_matches();
 
     if let Some(matches) = _matches.subcommand_matches("gen-utxos") {
         let key_pair_a = get_keypair(matches.value_of("mnemA").unwrap())?;
-        let key_pair_b = get_keypair(matches.value_of("mnemB").unwrap())?;
+        let key_pair_b = match matches.value_of("mnemB") {
+            Some(m) => Some(get_keypair(m)?),
+            None => None,
+        };
         let key_file = matches.value_of("keys").unwrap();
 
         let keys = read_keys(key_file)?;
 
+        let interval: u64 = matches
+            .value_of("interval_secs")
+            .unwrap_or("16")
+            .parse()
+            .unwrap();
+        let amount: u64 = matches
+            .value_of("amount")
+            .unwrap_or("100000000")
+            .parse()
+            .unwrap();
+
         let batch_size: usize = matches.value_of("batch-size").unwrap().parse().unwrap();
-        println!("Generating UTXOs.");
+
         for i in 0..2 {
-            println!("Round {}.", i + 1);
-            generate_utxos(&key_pair_a, &key_pair_b, &keys, batch_size)?;
+            println!("Generating Utxos, Round {}.", i + 1);
+            generate_utxos(
+                &key_pair_a,
+                key_pair_b.as_ref(),
+                &keys,
+                batch_size,
+                amount,
+                Duration::from_secs(interval),
+            )?;
         }
     } else if let Some(matches) = _matches.subcommand_matches("gen-keys") {
         let n: u64 = matches.value_of("n").unwrap().parse().unwrap();
@@ -138,20 +253,74 @@ fn main() -> Result<()> {
 
         let keys = read_keys(key_file)?;
 
+        let interval: u64 = matches
+            .value_of("interval_secs")
+            .unwrap_or("4")
+            .parse()
+            .unwrap();
+
         let anon_keys =
             parse_anon_key_from_path(matches.value_of("anon-keys").unwrap())?;
 
-        test_bar2abar(keys, anon_keys)?;
+        let threads: usize = matches.value_of("threads").unwrap_or("4").parse().unwrap();
+
+        for i in 0..2 {
+            println!("Bar to Abar Round {}", i + 1);
+            test_bar2abar(&keys, &anon_keys, i, Duration::from_secs(interval), threads)?;
+            std::thread::sleep(Duration::from_secs(16));
+        }
     } else if let Some(matches) = _matches.subcommand_matches("abar2bar") {
         let anon_keys =
             parse_anon_key_from_path(matches.value_of("anon-keys").unwrap())?;
 
-        let commitments_file = matches.value_of("commitments").unwrap();
-        let data = fs::read(commitments_file).c(d!())?;
-        let commitments: Vec<PubkeyCommitment> =
-            serde_json::from_slice(&data).c(d!())?;
+        let threads: usize = matches.value_of("threads").unwrap_or("4").parse().unwrap();
 
-        test_abar2bar(anon_keys, commitments)?;
+        let interval: u64 = matches
+            .value_of("interval_secs")
+            .unwrap_or("4")
+            .parse()
+            .unwrap();
+
+        let commitments_file = matches.value_of("commitments").unwrap();
+        let commitments: Vec<PubkeyCommitment> = read_pk_commitments(commitments_file)?;
+
+        test_abar2bar(
+            anon_keys,
+            commitments,
+            Duration::from_secs(interval),
+            threads,
+        )?;
+    } else if let Some(matches) = _matches.subcommand_matches("anon-transfer") {
+        let commitments = read_pk_commitments(matches.value_of("commitments").unwrap())?;
+        let fee_commitments =
+            read_pk_commitments(matches.value_of("fee-commitments").unwrap())?;
+
+        let anon_keys =
+            parse_anon_key_from_path(matches.value_of("anon-keys").unwrap())?;
+        let to_anon_keys =
+            parse_anon_key_from_path(matches.value_of("to-anon-keys").unwrap())?;
+
+        let interval: u64 = matches
+            .value_of("interval_secs")
+            .unwrap_or("4")
+            .parse()
+            .unwrap();
+
+        let threads: usize = matches.value_of("threads").unwrap_or("4").parse().unwrap();
+
+        let amount = matches.value_of("amount").unwrap_or("1000000");
+
+        let axfr_amount = amount.parse::<u64>().c(d!("error parsing amount"))?;
+
+        test_anon_transfer(
+            anon_keys,
+            commitments,
+            fee_commitments,
+            to_anon_keys,
+            axfr_amount,
+            Duration::from_secs(interval),
+            threads,
+        )?;
     } else {
         panic!("Unknown subcommands.")
     }
@@ -187,23 +356,25 @@ fn read_keys(path: impl AsRef<Path>) -> Result<Vec<XfrKeyPair>> {
 
 fn generate_utxos(
     key_pair_a: &XfrKeyPair,
-    key_pair_b: &XfrKeyPair,
+    key_pair_b: Option<&XfrKeyPair>,
     keys: &[XfrKeyPair],
     batch_size: usize,
+    am: u64,
+    interval: Duration,
 ) -> Result<()> {
-    let am = 10_000000;
     let len = keys.len();
     for i in 0..(len / batch_size) {
         let pks: Vec<XfrPublicKey> = (&keys[i * batch_size..(i + 1) * batch_size])
             .iter()
             .map(|kp| kp.get_pk())
             .collect();
-        if i % 2 == 0 {
-            transfer_asset_batch_x(key_pair_a, &pks, None, am, false, false)?;
-        } else {
-            transfer_asset_batch_x(key_pair_b, &pks, None, am, false, false)?;
-            std::thread::sleep(Duration::from_secs(16));
+
+        transfer_asset_batch_x(key_pair_a, &pks, None, am, false, false)?;
+        if let Some(kp) = key_pair_b {
+            transfer_asset_batch_x(kp, &pks, None, am, false, false)?;
         }
+
+        std::thread::sleep(interval);
     }
 
     if len % batch_size != 0 {
@@ -218,7 +389,13 @@ fn generate_utxos(
     Ok(())
 }
 
-fn test_bar2abar(keys: Vec<XfrKeyPair>, anon_keys: AnonKeys) -> Result<()> {
+fn test_bar2abar(
+    keys: &[XfrKeyPair],
+    anon_keys: &AnonKeys,
+    round: usize,
+    interval: Duration,
+    threads: usize,
+) -> Result<()> {
     let mut valid_keys: Vec<(XfrKeyPair, TxoSID, OpenAssetRecord)> =
         Vec::with_capacity(1024);
 
@@ -242,66 +419,165 @@ fn test_bar2abar(keys: Vec<XfrKeyPair>, anon_keys: AnonKeys) -> Result<()> {
 
         if list.len() >= 2 {
             let last = list.pop().unwrap();
-            valid_keys.push((kp, last.0, last.1));
-            println!("kp {}:{}", valid_keys.len(), list.len() + 1);
+            valid_keys.push((kp.clone(), last.0, last.1));
+            println!(
+                "keypair No.{}: utxo count: {}",
+                valid_keys.len(),
+                list.len() + 1
+            );
+        } else {
+            println!("omit...");
         }
     }
 
-    let mut commitments: Vec<PubkeyCommitment> = Vec::with_capacity(1024);
+    let commitments: Arc<Mutex<Vec<PubkeyCommitment>>> =
+        Arc::new(Mutex::new(Vec::with_capacity(1024)));
 
-    let target_addr = anon_keys.axfr_public_key;
-    let owner_enc_key = anon_keys.enc_key;
+    let target_addr = &anon_keys.axfr_public_key;
+    let owner_enc_key = &anon_keys.enc_key;
 
-    let to = wallet::anon_public_key_from_base64(&target_addr)
+    let to = wallet::anon_public_key_from_base64(target_addr)
         .c(d!("invalid 'target-addr'"))?;
     // parse receiver XPubKey
-    let enc_key = wallet::x_public_key_from_base64(&owner_enc_key)
+    let enc_key = wallet::x_public_key_from_base64(owner_enc_key)
         .c(d!("invalid owner_enc_key"))?;
 
-    for (from, sid, oar) in valid_keys.into_iter() {
-        //Generate the transaction and transmit it to network
-        match utils::generate_bar2abar_op(&from, &to, sid, &oar, &enc_key, true) {
-            Ok(c) => {
-                commitments.push(PubkeyCommitment {
-                    pubkey: from.pub_key,
-                    commitment: c,
-                });
-                println!("sid: {}", sid);
-            }
-            Err(e) => {
-                println!("{}", e);
-            }
-        }
-    }
+    let txes: Vec<(_, _, _)> = valid_keys
+        .into_par_iter()
+        .map(|(from, sid, oar)| {
+            let (tx, c) =
+                utils::generate_bar2abar_tx(&from, &to, sid, &oar, &enc_key, true)
+                    .unwrap();
+            (tx, c, from)
+        })
+        .collect();
 
-    write_commitments(&commitments)?;
+    let txes = Arc::new(Mutex::new(txes));
+    let mut handles = vec![];
+    for _ in 0..threads {
+        let txes = txes.clone();
+        let commitments = commitments.clone();
+        let h = std::thread::spawn(move || {
+            while let Some((tx, c, from)) = txes.lock().unwrap().pop() {
+                //Generate the transaction and transmit it to network
+                match utils::send_tx(&tx) {
+                    Ok(_) => {
+                        commitments.lock().unwrap().push(PubkeyCommitment {
+                            pubkey: from.pub_key,
+                            commitment: c,
+                        });
+                    }
+                    Err(e) => {
+                        println!("{}", e);
+                    }
+                }
+                std::thread::sleep(interval);
+            }
+        });
+        handles.push(h);
+    }
+    for h in handles {
+        h.join().unwrap();
+    }
+    write_commitments(&*commitments.lock().unwrap(), round)?;
     Ok(())
 }
 
-fn test_abar2bar(anon_keys: AnonKeys, commitments: Vec<PubkeyCommitment>) -> Result<()> {
+fn test_abar2bar(
+    anon_keys: AnonKeys,
+    commitments: Vec<PubkeyCommitment>,
+    interval: Duration,
+    threads: usize,
+) -> Result<()> {
     let axfr_secret_key = anon_keys.axfr_secret_key;
     let dec_key = anon_keys.dec_key;
-    let mut txes = Vec::with_capacity(1024);
 
-    for pk_commitment in commitments {
-        let commitment = &pk_commitment.commitment;
-        let to = &pk_commitment.pubkey;
-        // Build transaction and submit to network
-        let tx = common::abar2bar_tx(
-            axfr_secret_key.clone(),
-            commitment,
-            dec_key.clone(),
-            to,
-            false,
-            false,
-        )
-        .c(d!())?;
+    let txes: Vec<Result<Transaction>> = commitments
+        .into_par_iter()
+        .map(|pk_commitment| {
+            let commitment = &pk_commitment.commitment;
+            let to = &pk_commitment.pubkey;
+            // Build transaction and submit to network
+            let tx = common::abar2bar_tx(
+                axfr_secret_key.clone(),
+                commitment,
+                dec_key.clone(),
+                to,
+                false,
+                false,
+            )
+            .c(d!());
 
-        txes.push(tx);
+            tx
+        })
+        .collect();
+
+    let txes = Arc::new(Mutex::new(txes));
+    let mut handles = Vec::new();
+    for _ in 0..threads {
+        let txes = txes.clone();
+        let h = std::thread::spawn(move || {
+            while let Some(tx) = txes.lock().unwrap().pop() {
+                match tx {
+                    Ok(t) => utils::send_tx(&t).unwrap(),
+                    Err(e) => println!("{}", e),
+                }
+                std::thread::sleep(interval);
+            }
+        });
+
+        handles.push(h);
     }
 
-    for tx in txes {
-        utils::send_tx(&tx).c(d!())?;
+    for h in handles.into_iter() {
+        h.join().unwrap();
+    }
+    Ok(())
+}
+
+fn test_anon_transfer(
+    anon_keys: AnonKeys,
+    commitments: Vec<PubkeyCommitment>,
+    fee_commitments: Vec<PubkeyCommitment>,
+    to_anon_keys: AnonKeys,
+    axfr_amount: u64,
+    interval: Duration,
+    threads: usize,
+) -> Result<()> {
+    let txes: Vec<Result<_>> = commitments
+        .into_par_iter()
+        .zip(fee_commitments.into_par_iter())
+        .map(|(com1, com2)| {
+            common::gen_anon_transfer_tx(
+                &anon_keys.axfr_secret_key,
+                &com1.commitment,
+                Some(&com2.commitment),
+                &anon_keys.dec_key,
+                axfr_amount,
+                &to_anon_keys.axfr_public_key,
+                &to_anon_keys.enc_key,
+            )
+        })
+        .collect();
+
+    let txes = Arc::new(Mutex::new(txes));
+    let mut handles = vec![];
+    for _ in 0..threads {
+        let txes = txes.clone();
+        let h = std::thread::spawn(move || {
+            while let Some(tx) = txes.lock().unwrap().pop() {
+                match tx {
+                    Ok((t, _, _)) => utils::send_tx(&t).unwrap(),
+                    Err(e) => println!("{}", e),
+                };
+                std::thread::sleep(interval);
+            }
+        });
+        handles.push(h);
+    }
+
+    for h in handles.into_iter() {
+        h.join().unwrap();
     }
 
     Ok(())
@@ -312,9 +588,9 @@ fn parse_anon_key_from_path(path: &str) -> Result<AnonKeys> {
     serde_json::from_slice::<AnonKeys>(&f).c(d!())
 }
 
-fn write_commitments(cmts: &[PubkeyCommitment]) -> Result<()> {
+fn write_commitments(cmts: &[PubkeyCommitment], round: usize) -> Result<()> {
     let data = serde_json::to_string(&cmts).c(d!())?;
-    fs::write("commitments.json", &data).c(d!())?;
+    fs::write(format!("commitments_{}.json", round), &data).c(d!())?;
     Ok(())
 }
 
@@ -330,4 +606,11 @@ pub struct AnonKeys {
 struct PubkeyCommitment {
     pubkey: XfrPublicKey,
     commitment: Commitment,
+}
+
+fn read_pk_commitments(path: impl AsRef<Path>) -> Result<Vec<PubkeyCommitment>> {
+    let data = fs::read(path).c(d!())?;
+    let commitments: Vec<PubkeyCommitment> = serde_json::from_slice(&data).c(d!())?;
+
+    Ok(commitments)
 }

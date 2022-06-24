@@ -40,8 +40,8 @@ use {
             keys::{AXfrKeyPair, AXfrPubKey},
             nullifier,
             structs::{
-                AnonBlindAssetRecord, Commitment, MTLeafInfo,
-                OpenAnonBlindAssetRecordBuilder,
+                AXfrNote, AnonBlindAssetRecord, Commitment, MTLeafInfo,
+                OpenAnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
             },
         },
         xfr::{
@@ -996,104 +996,34 @@ pub fn abar2bar_tx(
 /// * com_fra         - Commitment for paying fee
 /// * dec_key         - XPublicKey to encrypt OwnerMemo
 /// * amount          - amount to transfer
+#[allow(unused_variables)]
 pub fn gen_anon_transfer_op(
     axfr_secret_key: String,
     com: &str,
     com_fra: Option<&str>,
-    dec_key: String,
+    dec_key: &str,
     amount: &str,
     to_axfr_public_key: &str,
     to_enc_key: &str,
 ) -> Result<()> {
-    // parse sender keys
-    let from = wallet::anon_secret_key_from_base64(axfr_secret_key.as_str())
-        .c(d!("invalid 'from-axfr-secret-key'"))?;
-    let from_secret_key =
-        wallet::x_secret_key_from_base64(dec_key.as_str()).c(d!("invalid dec_key"))?;
-    // sender public key to recieve balance after fee
-    let from_public_key = XPublicKey::from(&from_secret_key);
+    let com = wallet::commitment_from_base58(com).c(d!())?;
+    let com_fra = match com_fra {
+        Some(c) => Some(wallet::commitment_from_base58(c).c(d!())?),
+        None => None,
+    };
 
     let axfr_amount = amount.parse::<u64>().c(d!("error parsing amount"))?;
-
-    let to = wallet::anon_public_key_from_base64(to_axfr_public_key)
-        .c(d!("invalid 'to-axfr-public-key'"))?;
-    let enc_key_out =
-        wallet::x_public_key_from_base64(to_enc_key).c(d!("invalid to_enc_key"))?;
-
-    let mut commitments = vec![com];
-    if let Some(fra) = com_fra {
-        commitments.push(fra);
-    }
-    let mut inputs = vec![];
-    // For each commitment add input to transfer operation
-    for com in commitments {
-        let c = wallet::commitment_from_base58(com).c(d!())?;
-
-        // get unspent ABARs & their Merkle proof for commitment
-        let axtxo_abar = utils::get_owned_abar(&c).c(d!())?;
-        let owner_memo = utils::get_abar_memo(&axtxo_abar.0).c(d!())?.unwrap();
-        let mt_leaf_info = utils::get_abar_proof(&axtxo_abar.0).c(d!())?.unwrap();
-        let mt_leaf_uid = mt_leaf_info.uid;
-
-        // Create Open ABAR from input information
-        let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
-            &axtxo_abar.1,
-            owner_memo,
-            &from,
-            &from_secret_key,
-        )
-        .unwrap()
-        .mt_leaf_info(mt_leaf_info)
-        .build()
-        .unwrap();
-
-        // check oabar is unspent.
-        let n = nullifier(
-            &from,
-            oabar_in.get_amount(),
-            &oabar_in.get_asset_type(),
-            mt_leaf_uid,
-        );
-        let hash = wallet::nullifier_to_base58(&n);
-        let null_status = utils::check_nullifier_hash(&hash).c(d!())?.ok_or(d!(
-            "The ABAR corresponding to this commitment is missing {}",
-            com
-        ))?;
-        if null_status {
-            return Err(eg!(
-                "The ABAR corresponding to this commitment is already spent {}",
-                com
-            ));
-        }
-
-        println!("Nullifier: {}", wallet::nullifier_to_base58(&n));
-        inputs.push(oabar_in);
-    }
-
-    let froms = vec![from; inputs.len()];
-
-    // build output
-    let mut prng = ChaChaRng::from_entropy();
-    let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
-        .amount(axfr_amount)
-        .asset_type(inputs[0].get_asset_type())
-        .pub_key(to)
-        .finalize(&mut prng, &enc_key_out)
-        .unwrap()
-        .build()
-        .unwrap();
-
-    let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
-    let (_, note, rem_oabars) = builder
-        .add_operation_anon_transfer_fees_remainder(
-            &inputs,
-            &[oabar_out],
-            &froms,
-            from_public_key,
-        )
-        .c(d!())?;
-
-    send_tx(&builder.take_transaction()).c(d!())?;
+    
+    let (tx, note, rem_oabars) = gen_anon_transfer_tx(
+        &axfr_secret_key,
+        &com,
+        com_fra.as_ref(),
+        dec_key,
+        axfr_amount,
+        to_axfr_public_key,
+        to_enc_key,
+    )?;
+    send_tx(&tx).c(d!())?;
 
     let com_out = if !note.body.outputs.is_empty() {
         Some(note.body.outputs[0].commitment)
@@ -1142,6 +1072,105 @@ pub fn gen_anon_transfer_op(
 
     println!("AxfrNote: {:?}", serde_json::to_string_pretty(&note));
     Ok(())
+}
+
+/// anonymous transfer transaction
+pub fn gen_anon_transfer_tx(
+    axfr_secret_key: &str,
+    com: &Commitment,
+    com_fra: Option<&Commitment>,
+    dec_key: &str,
+    axfr_amount: u64,
+    to_axfr_public_key: &str,
+    to_enc_key: &str,
+) -> Result<(Transaction, AXfrNote, Vec<OpenAnonBlindAssetRecord>)> {
+    // parse sender keys
+    let from = wallet::anon_secret_key_from_base64(&axfr_secret_key)
+        .c(d!("invalid 'from-axfr-secret-key'"))?;
+    let from_secret_key =
+        wallet::x_secret_key_from_base64(dec_key).c(d!("invalid dec_key"))?;
+    // sender public key to recieve balance after fee
+    let from_public_key = XPublicKey::from(&from_secret_key);
+
+    let to = wallet::anon_public_key_from_base64(to_axfr_public_key)
+        .c(d!("invalid 'to-axfr-public-key'"))?;
+    let enc_key_out =
+        wallet::x_public_key_from_base64(to_enc_key).c(d!("invalid to_enc_key"))?;
+
+    let mut commitments = vec![com];
+    if let Some(fra) = com_fra {
+        commitments.push(fra);
+    }
+    let mut inputs = vec![];
+    // For each commitment add input to transfer operation
+    for com in commitments {
+        //let c = wallet::commitment_from_base58(com).c(d!())?;
+
+        // get unspent ABARs & their Merkle proof for commitment
+        let axtxo_abar = utils::get_owned_abar(com).c(d!())?;
+        let owner_memo = utils::get_abar_memo(&axtxo_abar.0).c(d!())?.unwrap();
+        let mt_leaf_info = utils::get_abar_proof(&axtxo_abar.0).c(d!())?.unwrap();
+        let mt_leaf_uid = mt_leaf_info.uid;
+
+        // Create Open ABAR from input information
+        let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
+            &axtxo_abar.1,
+            owner_memo,
+            &from,
+            &from_secret_key,
+        )
+        .unwrap()
+        .mt_leaf_info(mt_leaf_info)
+        .build()
+        .unwrap();
+
+        // check oabar is unspent.
+        let n = nullifier(
+            &from,
+            oabar_in.get_amount(),
+            &oabar_in.get_asset_type(),
+            mt_leaf_uid,
+        );
+        let hash = wallet::nullifier_to_base58(&n);
+        let null_status = utils::check_nullifier_hash(&hash).c(d!())?.ok_or(d!(
+            "The ABAR corresponding to this commitment is missing {}",
+            wallet::commitment_to_base58(com)
+        ))?;
+        if null_status {
+            return Err(eg!(
+                "The ABAR corresponding to this commitment is already spent {}",
+                wallet::commitment_to_base58(com)
+            ));
+        }
+
+        println!("Nullifier: {}", wallet::nullifier_to_base58(&n));
+        inputs.push(oabar_in);
+    }
+
+    let froms = vec![from; inputs.len()];
+
+    // build output
+    let mut prng = ChaChaRng::from_entropy();
+    let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
+        .amount(axfr_amount)
+        .asset_type(inputs[0].get_asset_type())
+        .pub_key(to)
+        .finalize(&mut prng, &enc_key_out)
+        .unwrap()
+        .build()
+        .unwrap();
+
+    let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
+    let (_, note, rem_oabars) = builder
+        .add_operation_anon_transfer_fees_remainder(
+            &inputs,
+            &[oabar_out],
+            &froms,
+            from_public_key,
+        )
+        .c(d!())?;
+
+    Ok((builder.take_transaction(), note, rem_oabars))
 }
 
 /// Batch anon transfer - Generate OABAR and add anonymous transfer operation

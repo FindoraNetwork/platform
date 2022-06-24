@@ -623,7 +623,7 @@ fn run() -> Result<()> {
                 axfr_secret_key,
                 commitment.unwrap(),
                 fee_commitment,
-                dec_key,
+                &dec_key,
                 amount.unwrap(),
                 to_axfr_public_key.unwrap(),
                 to_enc_key.unwrap(),
