@@ -32,6 +32,7 @@ use {
     config::abci::global_cfg::CFG,
     cryptohash::sha256::Digest as BitDigest,
     fbnc::{new_mapx, new_mapxnk, new_vecx, Mapx, Mapxnk, Vecx},
+    fin_db::RocksDB,
     globutils::{HashOf, ProofOf},
     merkle_tree::AppendOnlyMerkle,
     parking_lot::RwLock,
@@ -51,7 +52,6 @@ use {
         sync::Arc,
     },
     storage::{
-        db::RocksDB,
         state::{ChainState, State},
         store::{ImmutablePrefixedStore, PrefixedStore},
     },
