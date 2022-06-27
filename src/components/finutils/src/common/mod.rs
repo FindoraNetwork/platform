@@ -38,10 +38,9 @@ use {
     zei::{
         anon_xfr::{
             keys::{AXfrKeyPair, AXfrPubKey},
-            nullifier,
+            nullify_with_native_address,
             structs::{
-                AnonBlindAssetRecord, Commitment, MTLeafInfo,
-                OpenAnonBlindAssetRecordBuilder,
+                AnonAssetRecord, Commitment, MTLeafInfo, OpenAnonAssetRecordBuilder,
             },
         },
         xfr::{
@@ -53,7 +52,6 @@ use {
             structs::{XfrAmount, XfrAssetType},
         },
     },
-    zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
 };
 
 lazy_static! {
@@ -792,12 +790,10 @@ pub fn show_asset(addr: &str) -> Result<()> {
 /// # Arguments
 /// * owner_sk - Optional secret key Xfr in json form
 /// * target_addr - ABAR receiving AXfr pub key after conversion in base64
-/// * owner_enc_key - XPublicKey of receiver in base64 form for OwnerMemo encryption
 /// * TxoSID - sid of BAR to convert
 pub fn convert_bar2abar(
     owner_sk: Option<&String>,
     target_addr: String,
-    owner_enc_key: String,
     txo_sid: &str,
 ) -> Result<Commitment> {
     // parse sender XfrSecretKey or generate from Mnemonic setup with wallet
@@ -813,9 +809,6 @@ pub fn convert_bar2abar(
     // parse receiver AxfrPubKey
     let to = wallet::anon_public_key_from_base64(target_addr.as_str())
         .c(d!("invalid 'target-addr'"))?;
-    // parse receiver XPubKey
-    let enc_key = wallet::x_public_key_from_base64(owner_enc_key.as_str())
-        .c(d!("invalid owner_enc_key"))?;
     let sid = txo_sid.parse::<u64>().c(d!("error parsing TxoSID"))?;
 
     // Get OpenAssetRecord from given Owner XfrKeyPair and TxoSID
@@ -830,7 +823,6 @@ pub fn convert_bar2abar(
         &to,
         TxoSID(sid),
         &record.0,
-        &enc_key,
         is_bar_transparent,
     )
     .c(d!("Bar to abar failed"))?;
@@ -842,7 +834,6 @@ pub fn convert_bar2abar(
 /// # Arguments
 /// * axfr_secret_key - the anon_secret_key in base64
 /// * com             - commitment of ABAR in base64
-/// * dec_key         - XSecretKey for OwnerMemo decryption in base64
 /// * to              - Bar receiver's XfrPublicKey pointer
 /// * com_fra         - commitment of the FRA ABAR to pay fee in base64
 /// * confidential_am - if the output BAR should have confidential amount
@@ -850,7 +841,6 @@ pub fn convert_bar2abar(
 pub fn convert_abar2bar(
     axfr_secret_key: String,
     com: &str,
-    dec_key: String,
     to: &XfrPublicKey,
     confidential_am: bool,
     confidential_ty: bool,
@@ -858,8 +848,6 @@ pub fn convert_abar2bar(
     // parse anon keys
     let from = wallet::anon_secret_key_from_base64(axfr_secret_key.as_str())
         .c(d!("invalid 'from-axfr-secret-key'"))?;
-    let from_secret_key =
-        wallet::x_secret_key_from_base64(dec_key.as_str()).c(d!("invalid dec_key"))?;
 
     // Get the owned ABAR from pub_key and commitment
     let com = wallet::commitment_from_base58(com).c(d!())?;
@@ -871,20 +859,16 @@ pub fn convert_abar2bar(
     let mt_leaf_uid = mt_leaf_info.uid;
 
     // Open ABAR with dec_key and OwnerMemo & attach merkle proof
-    let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
-        &axtxo_abar.1,
-        owner_memo,
-        &from,
-        &from_secret_key,
-    )
-    .unwrap()
-    .mt_leaf_info(mt_leaf_info)
-    .build()
-    .unwrap();
+    let oabar_in =
+        OpenAnonAssetRecordBuilder::from_abar(&axtxo_abar.1, owner_memo, &from)
+            .unwrap()
+            .mt_leaf_info(mt_leaf_info)
+            .build()
+            .unwrap();
 
     // check oabar is unspent. If already spent return error
     // create nullifier
-    let n = nullifier(
+    let n = nullify_with_native_address(
         &from,
         oabar_in.get_amount(),
         &oabar_in.get_asset_type(),
@@ -921,31 +905,23 @@ pub fn convert_abar2bar(
 /// * axfr_secret_key - AXfrKeyPair in base64 form
 /// * com             - Commitment in base64 form
 /// * com_fra         - Commitment for paying fee
-/// * dec_key         - XPublicKey to encrypt OwnerMemo
 /// * amount          - amount to transfer
+/// * to_axfr_public_key - AXfrPublicKey in base64 form
 pub fn gen_anon_transfer_op(
     axfr_secret_key: String,
     com: &str,
     com_fra: Option<&str>,
-    dec_key: String,
     amount: &str,
     to_axfr_public_key: &str,
-    to_enc_key: &str,
 ) -> Result<()> {
     // parse sender keys
     let from = wallet::anon_secret_key_from_base64(axfr_secret_key.as_str())
         .c(d!("invalid 'from-axfr-secret-key'"))?;
-    let from_secret_key =
-        wallet::x_secret_key_from_base64(dec_key.as_str()).c(d!("invalid dec_key"))?;
-    // sender public key to recieve balance after fee
-    let from_public_key = XPublicKey::from(&from_secret_key);
 
     let axfr_amount = amount.parse::<u64>().c(d!("error parsing amount"))?;
 
     let to = wallet::anon_public_key_from_base64(to_axfr_public_key)
         .c(d!("invalid 'to-axfr-public-key'"))?;
-    let enc_key_out =
-        wallet::x_public_key_from_base64(to_enc_key).c(d!("invalid to_enc_key"))?;
 
     let mut commitments = vec![com];
     if let Some(fra) = com_fra {
@@ -963,19 +939,15 @@ pub fn gen_anon_transfer_op(
         let mt_leaf_uid = mt_leaf_info.uid;
 
         // Create Open ABAR from input information
-        let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
-            &axtxo_abar.1,
-            owner_memo,
-            &from,
-            &from_secret_key,
-        )
-        .unwrap()
-        .mt_leaf_info(mt_leaf_info)
-        .build()
-        .unwrap();
+        let oabar_in =
+            OpenAnonAssetRecordBuilder::from_abar(&axtxo_abar.1, owner_memo, &from)
+                .unwrap()
+                .mt_leaf_info(mt_leaf_info)
+                .build()
+                .unwrap();
 
         // check oabar is unspent.
-        let n = nullifier(
+        let n = nullify_with_native_address(
             &from,
             oabar_in.get_amount(),
             &oabar_in.get_asset_type(),
@@ -1001,23 +973,18 @@ pub fn gen_anon_transfer_op(
 
     // build output
     let mut prng = ChaChaRng::from_entropy();
-    let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
+    let oabar_out = OpenAnonAssetRecordBuilder::new()
         .amount(axfr_amount)
         .asset_type(inputs[0].get_asset_type())
-        .pub_key(to)
-        .finalize(&mut prng, &enc_key_out)
+        .pub_key(&to)
+        .finalize(&mut prng)
         .unwrap()
         .build()
         .unwrap();
 
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
     let (_, note, rem_oabars) = builder
-        .add_operation_anon_transfer_fees_remainder(
-            &inputs,
-            &[oabar_out],
-            &froms,
-            from_public_key,
-        )
+        .add_operation_anon_transfer_fees_remainder(&inputs, &[oabar_out], &froms)
         .c(d!())?;
 
     send_tx(&builder.take_transaction()).c(d!())?;
@@ -1084,9 +1051,7 @@ pub fn gen_anon_transfer_op(
 /// returns an error if Operation build fails
 pub fn gen_oabar_add_op_x(
     axfr_secret_keys: Vec<AXfrKeyPair>,
-    dec_keys: Vec<XSecretKey>,
     to_axfr_public_keys: Vec<AXfrPubKey>,
-    to_enc_keys: Vec<XPublicKey>,
     commitments: Vec<String>,
     amounts: Vec<String>,
     assets: Vec<AssetTypeCode>,
@@ -1096,7 +1061,6 @@ pub fn gen_oabar_add_op_x(
 
     // check if input counts tally
     if sender_count != commitments.len()
-        || sender_count != dec_keys.len()
         || receiver_count != amounts.len()
         || receiver_count != assets.len()
     {
@@ -1109,7 +1073,6 @@ pub fn gen_oabar_add_op_x(
     let mut oabars_in = Vec::new();
     for i in 0..sender_count {
         let from = &axfr_secret_keys[i];
-        let from_secret_key = &dec_keys[i];
         let c = wallet::commitment_from_base58(commitments[i].as_str()).c(d!())?;
 
         // Get OwnerMemo
@@ -1122,19 +1085,15 @@ pub fn gen_oabar_add_op_x(
         let mt_leaf_uid = mt_leaf_info.uid;
 
         // Build Abar
-        let oabar_in = OpenAnonBlindAssetRecordBuilder::from_abar(
-            &axtxo_abar.1,
-            owner_memo,
-            from,
-            from_secret_key,
-        )
-        .unwrap()
-        .mt_leaf_info(mt_leaf_info)
-        .build()
-        .unwrap();
+        let oabar_in =
+            OpenAnonAssetRecordBuilder::from_abar(&axtxo_abar.1, owner_memo, from)
+                .unwrap()
+                .mt_leaf_info(mt_leaf_info)
+                .build()
+                .unwrap();
 
         // check oabar is unspent.
-        let n = nullifier(
+        let n = nullify_with_native_address(
             from,
             oabar_in.get_amount(),
             &oabar_in.get_asset_type(),
@@ -1159,15 +1118,14 @@ pub fn gen_oabar_add_op_x(
     for i in 0..receiver_count {
         let mut prng = ChaChaRng::from_entropy();
         let to = to_axfr_public_keys[i];
-        let enc_key_out = &to_enc_keys[i];
         let axfr_amount = amounts[i].parse::<u64>().c(d!("error parsing amount"))?;
         let asset_type = assets[i];
 
-        let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
+        let oabar_out = OpenAnonAssetRecordBuilder::new()
             .amount(axfr_amount)
             .asset_type(asset_type.val)
-            .pub_key(to)
-            .finalize(&mut prng, enc_key_out)
+            .pub_key(&to)
+            .finalize(&mut prng)
             .unwrap()
             .build()
             .unwrap();
@@ -1176,14 +1134,12 @@ pub fn gen_oabar_add_op_x(
     }
 
     // Add a output for fees balance
-    let from_encryption_key = XPublicKey::from(dec_keys.last().unwrap());
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
     let (_, note, rem_oabars) = builder
         .add_operation_anon_transfer_fees_remainder(
             &oabars_in[..],
             &oabars_out[..],
             &axfr_secret_keys,
-            from_encryption_key,
         )
         .c(d!())?;
 
@@ -1285,25 +1241,19 @@ pub fn get_owned_utxos(
 /// Check the spending status of an ABAR from AnonKeys and commitment
 pub fn check_abar_status(
     from: AXfrKeyPair,
-    from_secret_key: XSecretKey,
-    axtxo_abar: (ATxoSID, AnonBlindAssetRecord),
+    axtxo_abar: (ATxoSID, AnonAssetRecord),
 ) -> Result<()> {
     let owner_memo = utils::get_abar_memo(&axtxo_abar.0).c(d!())?.unwrap();
     let mt_leaf_info = utils::get_abar_proof(&axtxo_abar.0).c(d!())?.unwrap();
     let mt_leaf_uid = mt_leaf_info.uid;
 
-    let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
-        &axtxo_abar.1,
-        owner_memo,
-        &from,
-        &from_secret_key,
-    )
-    .unwrap()
-    .mt_leaf_info(mt_leaf_info)
-    .build()
-    .unwrap();
+    let oabar = OpenAnonAssetRecordBuilder::from_abar(&axtxo_abar.1, owner_memo, &from)
+        .unwrap()
+        .mt_leaf_info(mt_leaf_info)
+        .build()
+        .unwrap();
 
-    let n = nullifier(
+    let n = nullify_with_native_address(
         &from,
         oabar.get_amount(),
         &oabar.get_asset_type(),
@@ -1323,7 +1273,6 @@ pub fn check_abar_status(
 /// commitments.
 pub fn get_owned_abars(
     axfr_secret_key: AXfrKeyPair,
-    dec_key: XSecretKey,
     commitments_list: &str,
 ) -> Result<()> {
     println!("Abar data for commitments: {}", commitments_list);
@@ -1339,17 +1288,13 @@ pub fn get_owned_abars(
             let commitment = wallet::commitment_from_base58(com).c(d!())?;
             let (sid, abar) = utils::get_owned_abar(&commitment).c(d!())?;
             let memo = utils::get_abar_memo(&sid).unwrap().unwrap();
-            let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
-                &abar,
-                memo,
-                &axfr_secret_key,
-                &dec_key,
-            )
-            .unwrap()
-            .build()
-            .unwrap();
+            let oabar =
+                OpenAnonAssetRecordBuilder::from_abar(&abar, memo, &axfr_secret_key)
+                    .unwrap()
+                    .build()
+                    .unwrap();
 
-            let n = nullifier(
+            let n = nullify_with_native_address(
                 &axfr_secret_key,
                 oabar.get_amount(),
                 &oabar.get_asset_type(),
@@ -1379,7 +1324,6 @@ pub fn get_owned_abars(
 /// commitments.
 pub fn anon_balance(
     axfr_secret_key: AXfrKeyPair,
-    dec_key: XSecretKey,
     commitments_list: &str,
     asset: Option<&str>,
 ) -> Result<()> {
@@ -1410,17 +1354,16 @@ pub fn anon_balance(
                 }
                 Ok((sid, abar)) => {
                     let memo = utils::get_abar_memo(&sid).unwrap().unwrap();
-                    let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
+                    let oabar = OpenAnonAssetRecordBuilder::from_abar(
                         &abar,
                         memo,
                         &axfr_secret_key,
-                        &dec_key,
                     )
                     .unwrap()
                     .build()
                     .unwrap();
 
-                    let n = nullifier(
+                    let n = nullify_with_native_address(
                         &axfr_secret_key,
                         oabar.get_amount(),
                         &oabar.get_asset_type(),

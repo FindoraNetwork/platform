@@ -10,7 +10,7 @@ use {
     },
     rand_core::SeedableRng,
     zei::{
-        anon_xfr::{keys::AXfrKeyPair, structs::OpenAnonBlindAssetRecordBuilder},
+        anon_xfr::{keys::AXfrKeyPair, structs::OpenAnonAssetRecordBuilder},
         xfr::{
             asset_record::{
                 build_blind_asset_record, open_blind_asset_record, AssetRecordType,
@@ -20,7 +20,6 @@ use {
         },
     },
     zei_algebra::prelude::{One, Zero},
-    zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
     zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
 
@@ -791,27 +790,26 @@ fn test_update_anon_stores() {
         Nullifier::one() as Nullifier,
     ];
 
-    let enc_key = &XPublicKey::from(&XSecretKey::new(&mut prng));
-    let pub_key = AXfrKeyPair::generate(&mut prng).pub_key();
-    let oabar = OpenAnonBlindAssetRecordBuilder::new()
+    let pub_key = AXfrKeyPair::generate(&mut prng).get_pub_key();
+    let oabar = OpenAnonAssetRecordBuilder::new()
         .amount(123)
         .asset_type(zei::xfr::structs::AssetType([39u8; 32]))
-        .pub_key(pub_key.to_owned())
-        .finalize(&mut prng, enc_key)
+        .pub_key(&pub_key)
+        .finalize(&mut prng)
         .unwrap()
         .build()
         .unwrap();
-    let oabar2 = OpenAnonBlindAssetRecordBuilder::new()
+    let oabar2 = OpenAnonAssetRecordBuilder::new()
         .amount(123)
         .asset_type(zei::xfr::structs::AssetType([39u8; 32]))
-        .pub_key(pub_key.to_owned())
-        .finalize(&mut prng, enc_key)
+        .pub_key(&pub_key)
+        .finalize(&mut prng)
         .unwrap()
         .build()
         .unwrap();
     let output_abars = vec![
-        vec![AnonBlindAssetRecord::from_oabar(&oabar)],
-        vec![AnonBlindAssetRecord::from_oabar(&oabar2)],
+        vec![AnonAssetRecord::from_oabar(&oabar)],
+        vec![AnonAssetRecord::from_oabar(&oabar2)],
     ];
     let new_com = oabar.compute_commitment();
     let new_com2 = oabar2.compute_commitment();

@@ -47,12 +47,13 @@ use {
     unicode_normalization::UnicodeNormalization,
     zei::{
         anon_xfr::{
+            abar_to_abar::AXfrNote,
             abar_to_ar::{verify_abar_to_ar_note, AbarToArNote},
             abar_to_bar::{verify_abar_to_bar_note, AbarToBarNote},
             ar_to_abar::{verify_ar_to_abar_note, ArToAbarNote},
             bar_to_abar::{verify_bar_to_abar_note, BarToAbarNote},
             keys::AXfrPubKey,
-            structs::{AXfrNote, AnonBlindAssetRecord, Nullifier},
+            structs::{AnonAssetRecord, AxfrOwnerMemo, Nullifier},
         },
         setup::VerifierParams,
         xfr::{
@@ -1328,15 +1329,15 @@ impl BarToAbarOps {
     }
 
     /// provides a copy of the output record of the note.
-    pub fn output_record(&self) -> AnonBlindAssetRecord {
+    pub fn output_record(&self) -> AnonAssetRecord {
         match &self.note {
             BarAnonConvNote::BarNote(n) => n.body.output.clone(),
             BarAnonConvNote::ArNote(n) => n.body.output.clone(),
         }
     }
 
-    /// provides a copy of the OwnerMemo in the note
-    pub fn memo(&self) -> OwnerMemo {
+    /// provides a copy of the AxfrOwnerMemo in the note
+    pub fn axfr_memo(&self) -> AxfrOwnerMemo {
         match &self.note {
             BarAnonConvNote::BarNote(n) => n.body.memo.clone(),
             BarAnonConvNote::ArNote(n) => n.body.memo.clone(),
@@ -1888,6 +1889,12 @@ lazy_static! {
 pub const TX_FEE_MIN: u64 = 10_000; // 0.01 FRA
 /// Double the
 pub const BAR_TO_ABAR_TX_FEE_MIN: u64 = 20_000; // 0.02 FRA (2*TX_FEE_MIN)
+
+/// Calculate the FEE with inputs and outputs number.
+pub const FEE_CALCULATING_FUNC: fn(u32, u32) -> u32 = |x: u32, y: u32| {
+    let extra_outputs = y.checked_sub(x).unwrap_or(0);
+    50_0000 + 10_0000 * x + 20_0000 * y + (10_000 * extra_outputs)
+};
 
 impl Transaction {
     #[inline(always)]

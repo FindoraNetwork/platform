@@ -28,7 +28,10 @@ use {
         sync::Arc,
     },
     zei::{
-        anon_xfr::structs::{AXfrNote, AnonBlindAssetRecord, Nullifier},
+        anon_xfr::{
+            abar_to_abar::AXfrNote,
+            structs::{AnonAssetRecord, Nullifier},
+        },
         setup::BulletproofParams,
         xfr::{
             sig::XfrPublicKey,
@@ -93,7 +96,7 @@ pub struct TxnEffect {
     /// Staking operations
     pub update_stakers: Vec<UpdateStakerOps>,
     /// Newly created Anon Blind Asset Records
-    pub bar_conv_abars: Vec<AnonBlindAssetRecord>,
+    pub bar_conv_abars: Vec<AnonAssetRecord>,
     /// Body of Abar to Bar conversions
     pub abar_conv_inputs: Vec<AbarConvNote>,
     /// New anon transfer bodies
@@ -638,7 +641,7 @@ pub struct BlockEffect {
     /// Should line up element-wise with `txns`
     pub txos: Vec<Vec<Option<TxOutput>>>,
     /// New ABARs created
-    pub output_abars: Vec<Vec<AnonBlindAssetRecord>>,
+    pub output_abars: Vec<Vec<AnonAssetRecord>>,
     /// Which TXOs this consumes
     pub input_txos: HashMap<TxoSID, TxOutput>,
     /// Which new nullifiers are created
@@ -706,7 +709,7 @@ impl BlockEffect {
         }
 
         // collect ABARs generated from BAR to ABAR
-        let mut current_txn_abars: Vec<AnonBlindAssetRecord> = vec![];
+        let mut current_txn_abars: Vec<AnonAssetRecord> = vec![];
         for abar in txn_effect.bar_conv_abars {
             current_txn_abars.push(abar);
         }

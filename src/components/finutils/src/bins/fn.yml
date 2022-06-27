@@ -664,12 +664,6 @@ subcommands:
             value_name: PUBLIC KEY
             required: true
             allow_hyphen_values: true
-        - to-enc-key:
-            help: Receiver encryption key for anon transfer
-            long: to-enc-key
-            takes_value: true
-            value_name: ENCRYPTION KEY
-            required: true
         - amount:
             help: how much units to transfer
             short: n
@@ -694,24 +688,11 @@ subcommands:
             takes_value: true
             value_name: COMMITMENT
             required: true
-        - decryption-key-file:
-            help: Decryption Keys for anon transfer
-            short: d
-            long: decryption-key-file
-            takes_value: true
-            value_name: DECRYPTION KEY
-            required: true
         - to-axfr-public-key-file:
             help: Axfr public keys of the receivers
             long: to-axfr-public-key-file
             takes_value: true
             value_name: PUBLIC KEY
-            required: true
-        - to-enc-key-file:
-            help: Receivers encryption keys for anon transfer
-            long: to-enc-key-file
-            takes_value: true
-            value_name: ENCRYPTION KEY
             required: true
         - amount-file:
             help: how much units to transfer for each receiver

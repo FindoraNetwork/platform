@@ -19,7 +19,7 @@ use {
             IssuerKeyPair, IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
             TransactionBody, TransferAsset, TransferAssetBody, TransferType, TxOutput,
             TxoRef, TxoSID, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA,
-            BAR_TO_ABAR_TX_FEE_MIN, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+            BAR_TO_ABAR_TX_FEE_MIN, BLACK_HOLE_PUBKEY, FEE_CALCULATING_FUNC, TX_FEE_MIN,
         },
         staking::{
             is_valid_tendermint_addr,
@@ -52,17 +52,13 @@ use {
             ConfidentialAC, Credential,
         },
         anon_xfr::{
+            abar_to_abar::{gen_anon_xfr_note, AXfrNote},
             abar_to_ar::gen_abar_to_ar_note,
             abar_to_bar::gen_abar_to_bar_note,
             ar_to_abar::gen_ar_to_abar_note,
             bar_to_abar::gen_bar_to_abar_note,
-            config::FEE_CALCULATING_FUNC,
-            gen_anon_xfr_note,
             keys::{AXfrKeyPair, AXfrPubKey},
-            structs::{
-                AXfrNote, Commitment, OpenAnonBlindAssetRecord,
-                OpenAnonBlindAssetRecordBuilder,
-            },
+            structs::{Commitment, OpenAnonAssetRecord, OpenAnonAssetRecordBuilder},
             TREE_DEPTH as MERKLE_TREE_DEPTH,
         },
         setup::ProverParams,
@@ -80,7 +76,6 @@ use {
         },
     },
     zei_algebra::prelude::*,
-    zei_crypto::basic::hybrid_encryption::XPublicKey,
     zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
 
@@ -517,7 +512,7 @@ impl TransactionBuilder {
     /// * `abar_pub_key`  -  AXfrPubKey of the receiver ABAR after conversion
     /// * `txo_sid`       -  TxoSID of the BAR to convert
     /// * `input_record`  -  OpenAssetRecord of the BAR to convert
-    /// * `enc_key`       -  XPublicKey of OwnerMemo encryption of receiver
+    /// * `is_bar_transparent`  -  if transparent bar (ar)
     pub fn add_operation_bar_to_abar(
         &mut self,
         seed: [u8; 32],
@@ -525,7 +520,6 @@ impl TransactionBuilder {
         abar_pub_key: &AXfrPubKey,
         txo_sid: TxoSID,
         input_record: &OpenAssetRecord,
-        enc_key: &XPublicKey,
         is_bar_transparent: bool,
     ) -> Result<(&mut Self, Commitment)> {
         // generate the BarToAbarNote with the ZKP
@@ -534,7 +528,6 @@ impl TransactionBuilder {
             input_record,
             auth_key_pair,
             abar_pub_key,
-            enc_key,
             is_bar_transparent,
         )
         .c(d!())?;
@@ -556,7 +549,7 @@ impl TransactionBuilder {
     /// * asset_record_type - The type of confidentiality of new BAR
     pub fn add_operation_abar_to_bar(
         &mut self,
-        input: &OpenAnonBlindAssetRecord,
+        input: &OpenAnonAssetRecord,
         input_keypair: &AXfrKeyPair,
         bar_pub_key: &XfrPublicKey,
         asset_record_type: AssetRecordType,
@@ -583,8 +576,8 @@ impl TransactionBuilder {
     #[allow(dead_code)]
     pub fn add_operation_anon_transfer(
         &mut self,
-        inputs: &[OpenAnonBlindAssetRecord],
-        outputs: &[OpenAnonBlindAssetRecord],
+        inputs: &[OpenAnonAssetRecord],
+        outputs: &[OpenAnonAssetRecord],
         input_keypairs: &[AXfrKeyPair],
     ) -> Result<(&mut Self, AXfrNote)> {
         // generate prover params
@@ -593,12 +586,15 @@ impl TransactionBuilder {
         let prover_params =
             ProverParams::new(inputs.len(), outputs.len(), Option::from(depth))?;
 
+        let fee = FEE_CALCULATING_FUNC(inputs.len() as u32, outputs.len() as u32);
+
         // generate anon transfer note
         let note = gen_anon_xfr_note(
             &mut prng,
             &prover_params,
             inputs,
             outputs,
+            fee,
             input_keypairs,
         )
         .c(d!())?;
@@ -618,11 +614,10 @@ impl TransactionBuilder {
     /// * enc_key - The encryption key of the sender to send the remainder abar
     pub fn add_operation_anon_transfer_fees_remainder(
         &mut self,
-        inputs: &[OpenAnonBlindAssetRecord],
-        outputs: &[OpenAnonBlindAssetRecord],
+        inputs: &[OpenAnonAssetRecord],
+        outputs: &[OpenAnonAssetRecord],
         input_keypairs: &[AXfrKeyPair],
-        enc_key: XPublicKey,
-    ) -> Result<(&mut Self, AXfrNote, Vec<OpenAnonBlindAssetRecord>)> {
+    ) -> Result<(&mut Self, AXfrNote, Vec<OpenAnonAssetRecord>)> {
         let mut prng = ChaChaRng::from_entropy();
         let depth: usize = MERKLE_TREE_DEPTH;
 
@@ -630,7 +625,7 @@ impl TransactionBuilder {
         let mut vec_changes = vec![];
         let mut remainders = HashMap::new();
         // If multiple keypairs are present, the last keypair is considered for remainder
-        let remainder_pk = input_keypairs.last().unwrap().pub_key();
+        let remainder_pk = input_keypairs.last().unwrap().get_pub_key();
 
         // Create a remainders hashmap with remainder amount for each asset type
         for input in inputs {
@@ -667,11 +662,11 @@ impl TransactionBuilder {
             }
 
             if remainder > 0 {
-                let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
+                let oabar_money_back = OpenAnonAssetRecordBuilder::new()
                     .amount(remainder as u64)
                     .asset_type(asset_type)
-                    .pub_key(remainder_pk)
-                    .finalize(&mut prng, &enc_key)
+                    .pub_key(&remainder_pk)
+                    .finalize(&mut prng)
                     .unwrap()
                     .build()
                     .unwrap();
@@ -684,19 +679,18 @@ impl TransactionBuilder {
 
         // Calculate implicit fees that will get deducted and subtract from FRA remainder
         let fees =
-            FEE_CALCULATING_FUNC(inputs.len() as u32, vec_outputs.len() as u32 + 1)
-                as i64;
-        let fra_remainder = fra_rem.unwrap() - fees; // safe. checked.
+            FEE_CALCULATING_FUNC(inputs.len() as u32, vec_outputs.len() as u32 + 1);
+        let fra_remainder = fra_rem.unwrap() - (fees as i64); // safe. checked.
         if fra_remainder < 0 {
             return Err(eg!("insufficient FRA to pay fees!"));
         }
         if fra_remainder > 0 {
             println!("Transaction FRA Remainder Amount: {:?}", fra_remainder);
-            let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
+            let oabar_money_back = OpenAnonAssetRecordBuilder::new()
                 .amount(fra_remainder as u64)
                 .asset_type(ASSET_TYPE_FRA)
-                .pub_key(remainder_pk)
-                .finalize(&mut prng, &enc_key)
+                .pub_key(&remainder_pk)
+                .finalize(&mut prng)
                 .unwrap()
                 .build()
                 .unwrap();
@@ -719,6 +713,7 @@ impl TransactionBuilder {
             &prover_params,
             inputs,
             outputs_plus_remainder,
+            fees,
             input_keypairs,
         )
         .c(d!())?;
@@ -1032,7 +1027,6 @@ fn gen_bar_conv_note(
     input_record: &OpenAssetRecord,
     auth_key_pair: &XfrKeyPair,
     abar_pub_key: &AXfrPubKey,
-    enc_key: &XPublicKey,
     is_bar_transparent: bool,
 ) -> Result<(BarAnonConvNote, Commitment)> {
     // let mut prng = ChaChaRng::from_entropy();
@@ -1048,7 +1042,6 @@ fn gen_bar_conv_note(
             input_record,
             auth_key_pair,
             abar_pub_key,
-            enc_key,
         )
         .c(d!())?;
 
@@ -1065,7 +1058,6 @@ fn gen_bar_conv_note(
             input_record,
             auth_key_pair,
             abar_pub_key,
-            enc_key,
         )
         .c(d!())?;
         let c = note.body.output.commitment;
@@ -1074,7 +1066,7 @@ fn gen_bar_conv_note(
 }
 
 fn gen_abar_conv_note(
-    input: &OpenAnonBlindAssetRecord,
+    input: &OpenAnonAssetRecord,
     input_keypair: &AXfrKeyPair,
     bar_pub_key: &XfrPublicKey,
     asset_record_type: AssetRecordType,
@@ -1491,10 +1483,9 @@ impl TransferOperationBuilder {
 /// This is used for the wasm interface in building a multi-input/output anon transfer operation.
 #[derive(Default)]
 pub struct AnonTransferOperationBuilder {
-    inputs: Vec<OpenAnonBlindAssetRecord>,
-    outputs: Vec<OpenAnonBlindAssetRecord>,
+    inputs: Vec<OpenAnonAssetRecord>,
+    outputs: Vec<OpenAnonAssetRecord>,
     keypairs: Vec<AXfrKeyPair>,
-    from_pubkey: Option<XPublicKey>,
     note: Option<AXfrNote>,
     commitments: Vec<Commitment>,
 
@@ -1512,7 +1503,6 @@ impl AnonTransferOperationBuilder {
             inputs: Vec::default(),
             outputs: Vec::default(),
             keypairs: Vec::default(),
-            from_pubkey: None,
             note: None,
             commitments: Vec::default(),
             nonce: no_replay_token,
@@ -1524,7 +1514,7 @@ impl AnonTransferOperationBuilder {
     /// an ABAR and a Keypair as input
     pub fn add_input(
         &mut self,
-        abar: OpenAnonBlindAssetRecord,
+        abar: OpenAnonAssetRecord,
         secret_key: AXfrKeyPair,
     ) -> Result<&mut Self> {
         self.inputs.push(abar);
@@ -1533,7 +1523,7 @@ impl AnonTransferOperationBuilder {
     }
 
     /// add_output is used to add a output record to the Anon Transfer factory
-    pub fn add_output(&mut self, abar: OpenAnonBlindAssetRecord) -> Result<&mut Self> {
+    pub fn add_output(&mut self, abar: OpenAnonAssetRecord) -> Result<&mut Self> {
         self.commitments.push(abar.compute_commitment());
         self.outputs.push(abar);
         Ok(self)
@@ -1601,12 +1591,6 @@ impl AnonTransferOperationBuilder {
         commitment_map
     }
 
-    /// set public key of sender for remainder
-    pub fn set_from_pubkey(&mut self, from_pubkey: XPublicKey) -> Result<&mut Self> {
-        self.from_pubkey = Some(from_pubkey);
-        Ok(self)
-    }
-
     /// build generates the anon transfer body with the Zero Knowledge Proof.
     pub fn build(&mut self) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
@@ -1626,18 +1610,17 @@ impl AnonTransferOperationBuilder {
         let fees = FEE_CALCULATING_FUNC(
             self.inputs.len() as u32,
             self.outputs.len() as u32 + 1,
-        ) as u64;
-        if sum_output + fees > sum_input {
+        );
+        if sum_output + (fees as u64) > sum_input {
             return Err(eg!("Insufficient FRA balance to pay fees"));
         }
-        let remainder = sum_input - sum_output - fees;
+        let remainder = sum_input - sum_output - (fees as u64);
 
-        let rem_from_pubkey = self.from_pubkey.clone().c(d!())?;
-        let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
+        let oabar_money_back = OpenAnonAssetRecordBuilder::new()
             .amount(remainder)
             .asset_type(ASSET_TYPE_FRA)
-            .pub_key(self.keypairs[0].pub_key())
-            .finalize(&mut prng, &rem_from_pubkey)
+            .pub_key(&self.keypairs[0].get_pub_key())
+            .finalize(&mut prng)
             .unwrap()
             .build()
             .unwrap();
@@ -1657,6 +1640,7 @@ impl AnonTransferOperationBuilder {
             &prover_params,
             self.inputs.as_slice(),
             self.outputs.as_slice(),
+            fees,
             self.keypairs.as_slice(),
         )
         .c(d!())?;
@@ -1701,19 +1685,13 @@ mod tests {
         ledger::store::{utils::fra_gen_initial_tx, LedgerState},
         rand_chacha::ChaChaRng,
         rand_core::SeedableRng,
-        zei::anon_xfr::{
-            config::FEE_CALCULATING_FUNC,
-            structs::{AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder},
-        },
+        zei::anon_xfr::structs::{AnonAssetRecord, OpenAnonAssetRecordBuilder},
         zei::xfr::asset_record::{
             build_blind_asset_record, open_blind_asset_record,
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         },
         zei::xfr::structs::AssetType as AT,
-        zei_crypto::basic::{
-            hybrid_encryption::XSecretKey,
-            ristretto_pedersen_comm::RistrettoPedersenCommitment,
-        },
+        zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
     };
 
     // Defines an asset type
@@ -2067,8 +2045,7 @@ mod tests {
 
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
         let from = XfrKeyPair::generate(&mut prng);
-        let to = AXfrKeyPair::generate(&mut prng).pub_key();
-        let to_enc_key = XSecretKey::new(&mut prng);
+        let to = AXfrKeyPair::generate(&mut prng).get_pub_key();
 
         let ar = AssetRecordTemplate::with_no_asset_tracing(
             10u64,
@@ -2091,7 +2068,6 @@ mod tests {
                 &to,
                 TxoSID(123),
                 &dummy_input,
-                &XPublicKey::from(&to_enc_key),
                 false,
             )
             .is_ok();
@@ -2117,22 +2093,21 @@ mod tests {
         let asset_type = ASSET_TYPE_FRA;
 
         // simulate input abar
-        let (mut oabar, keypair_in, _dec_key_in, enc_key_in) =
-            gen_oabar_and_keys(&mut prng, amount, asset_type);
+        let (mut oabar, keypair_in) = gen_oabar_and_keys(&mut prng, amount, asset_type);
 
         // simulate input fee abar
-        let (mut oabar_fee, keypair_in_fee, _dec_key_in, _) =
+        let (mut oabar_fee, keypair_in_fee) =
             gen_oabar_and_keys(&mut prng, fee_amount, asset_type);
-        let abar = AnonBlindAssetRecord::from_oabar(&oabar);
+        let abar = AnonAssetRecord::from_oabar(&oabar);
 
-        let fee_abar = AnonBlindAssetRecord::from_oabar(&oabar_fee);
+        let fee_abar = AnonAssetRecord::from_oabar(&oabar_fee);
         let asset_type_out = ASSET_TYPE_FRA;
 
         //Simulate output abar
-        let (oabar_out, _keypair_out, _dec_key_out, _) =
+        let (oabar_out, _keypair_out) =
             gen_oabar_and_keys(&mut prng, amount_output, asset_type_out);
 
-        let _abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
+        let _abar_out = AnonAssetRecord::from_oabar(&oabar_out);
 
         let mut builder = TransactionBuilder::from_seq_id(1);
 
@@ -2159,7 +2134,6 @@ mod tests {
             &vec_inputs,
             &vec_oututs,
             &vec_keys,
-            enc_key_in,
         );
         //builder.add_operation_anon_transfer(&vec_inputs, &vec_oututs, &vec_keys);
 
@@ -2194,27 +2168,25 @@ mod tests {
         let asset_type = AT::from_identical_byte(0);
 
         // simulate input abar
-        let (oabar, keypair_in, _dec_key_in, _) =
-            gen_oabar_and_keys(&mut prng, amount, asset_type);
+        let (oabar, keypair_in) = gen_oabar_and_keys(&mut prng, amount, asset_type);
 
         //simulate another oabar just to get new keypair
-        let (_, another_keypair, _, _) =
-            gen_oabar_and_keys(&mut prng, amount, asset_type);
+        let (_, another_keypair) = gen_oabar_and_keys(&mut prng, amount, asset_type);
 
         //negative test for input keypairs
-        assert_eq!(keypair_in.pub_key(), *oabar.pub_key_ref());
+        assert_eq!(keypair_in.get_pub_key(), *oabar.pub_key_ref());
 
-        assert_ne!(keypair_in.pub_key(), another_keypair.pub_key());
+        assert_ne!(keypair_in.get_pub_key(), another_keypair.get_pub_key());
 
-        assert_ne!(another_keypair.pub_key(), *oabar.pub_key_ref());
+        assert_ne!(another_keypair.get_pub_key(), *oabar.pub_key_ref());
 
         let asset_type_out = AT::from_identical_byte(0);
 
         //Simulate output abar
-        let (oabar_out, _keypair_out, _dec_key_out, _) =
+        let (oabar_out, _keypair_out) =
             gen_oabar_and_keys(&mut prng, amount, asset_type_out);
 
-        let _abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
+        let _abar_out = AnonAssetRecord::from_oabar(&oabar_out);
         let mut builder = TransactionBuilder::from_seq_id(1);
 
         let wrong_key_result = builder.add_operation_anon_transfer(
@@ -2230,10 +2202,9 @@ mod tests {
         //negative test for asset type
         let wrong_asset_type_out = AT::from_identical_byte(1);
 
-        let (oabar, keypair_in, _dec_key_in, _) =
-            gen_oabar_and_keys(&mut prng, amount, asset_type);
+        let (oabar, keypair_in) = gen_oabar_and_keys(&mut prng, amount, asset_type);
 
-        let (oabar_out, _keypair_out, _dec_key_out, _) =
+        let (oabar_out, _keypair_out) =
             gen_oabar_and_keys(&mut prng, amount, wrong_asset_type_out);
 
         let wrong_asset_type_result =
@@ -2243,21 +2214,20 @@ mod tests {
         assert!(wrong_asset_type_result.is_err());
 
         //The happy path
-        let (mut oabar, keypair_in, _dec_key_in, _) =
-            gen_oabar_and_keys(&mut prng, amount, asset_type);
+        let (mut oabar, keypair_in) = gen_oabar_and_keys(&mut prng, amount, asset_type);
 
-        let (oabar_out, _keypair_out, _dec_key_out, _) =
+        let (oabar_out, _keypair_out) =
             gen_oabar_and_keys(&mut prng, amount, asset_type_out);
 
-        let abar = AnonBlindAssetRecord::from_oabar(&oabar);
+        let abar = AnonAssetRecord::from_oabar(&oabar);
 
         //negative test for owner memo
         let owner_memo = oabar.get_owner_memo().unwrap();
 
-        let new_xfrkeys = XfrKeyPair::generate(&mut prng);
+        let new_xfrkeys = AXfrKeyPair::generate(&mut prng);
 
         //Trying to decrypt asset type and amount from owner memo using wrong keys
-        let result_decrypt = owner_memo.decrypt_amount_and_asset_type(&new_xfrkeys);
+        let result_decrypt = owner_memo.decrypt(&new_xfrkeys.get_view_key());
         assert!(result_decrypt.is_err());
 
         // add abar to merkle tree
@@ -2312,10 +2282,9 @@ mod tests {
         let asset_type = AT::from_identical_byte(0);
 
         // simulate input abar
-        let (mut oabar, keypair_in, _dec_key_in, _) =
-            gen_oabar_and_keys(&mut prng, amount, asset_type);
-        let abar = AnonBlindAssetRecord::from_oabar(&oabar);
-        assert_eq!(keypair_in.pub_key(), *oabar.pub_key_ref());
+        let (mut oabar, keypair_in) = gen_oabar_and_keys(&mut prng, amount, asset_type);
+        let abar = AnonAssetRecord::from_oabar(&oabar);
+        assert_eq!(keypair_in.get_pub_key(), *oabar.pub_key_ref());
 
         let _owner_memo = oabar.get_owner_memo().unwrap();
 
@@ -2326,9 +2295,9 @@ mod tests {
         let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
         oabar.update_mt_leaf_info(mt_leaf_info);
 
-        let (oabar_out, _keypair_out, _dec_key_out, _) =
+        let (oabar_out, _keypair_out) =
             gen_oabar_and_keys(&mut prng, amount, asset_type);
-        let _abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
+        let _abar_out = AnonAssetRecord::from_oabar(&oabar_out);
         let mut builder = TransactionBuilder::from_seq_id(1);
 
         let _ = builder
@@ -2352,12 +2321,12 @@ mod tests {
         let asset_type1 = AT::from_identical_byte(0);
 
         // simulate input abar
-        let (mut oabar1, keypair_in1, _dec_key_in1, _) =
+        let (mut oabar1, keypair_in1) =
             gen_oabar_and_keys(&mut prng1, amount1, asset_type1);
 
-        let abar1 = AnonBlindAssetRecord::from_oabar(&oabar1);
+        let abar1 = AnonAssetRecord::from_oabar(&oabar1);
 
-        assert_eq!(keypair_in1.pub_key(), *oabar1.pub_key_ref());
+        assert_eq!(keypair_in1.get_pub_key(), *oabar1.pub_key_ref());
 
         let _owner_memo1 = oabar1.get_owner_memo().unwrap();
 
@@ -2373,10 +2342,10 @@ mod tests {
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
         let _ = ledger_state.compute_and_save_state_commitment_data(2);
 
-        let (oabar_out1, _keypair_out1, _dec_key_out1, _) =
+        let (oabar_out1, _keypair_out1) =
             gen_oabar_and_keys(&mut prng1, amount1, asset_type1);
 
-        let _abar_out1 = AnonBlindAssetRecord::from_oabar(&oabar_out1);
+        let _abar_out1 = AnonAssetRecord::from_oabar(&oabar_out1);
         let mut builder1 = TransactionBuilder::from_seq_id(1);
         let _ = builder1
             .add_operation_anon_transfer(&[oabar1], &[oabar_out1], &[keypair_in1])
@@ -2397,23 +2366,16 @@ mod tests {
         prng: &mut R,
         amount: u64,
         asset_type: AT,
-    ) -> (
-        OpenAnonBlindAssetRecord,
-        AXfrKeyPair,
-        XSecretKey,
-        XPublicKey,
-    ) {
+    ) -> (OpenAnonAssetRecord, AXfrKeyPair) {
         let keypair = AXfrKeyPair::generate(prng);
-        let dec_key = XSecretKey::new(prng);
-        let enc_key = XPublicKey::from(&dec_key);
-        let oabar = OpenAnonBlindAssetRecordBuilder::new()
+        let oabar = OpenAnonAssetRecordBuilder::new()
             .amount(amount)
             .asset_type(asset_type)
-            .pub_key(keypair.pub_key())
-            .finalize(prng, &enc_key)
+            .pub_key(&keypair.get_pub_key())
+            .finalize(prng)
             .unwrap()
             .build()
             .unwrap();
-        (oabar, keypair, dec_key, enc_key)
+        (oabar, keypair)
     }
 }

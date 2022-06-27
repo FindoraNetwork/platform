@@ -15,7 +15,10 @@ use {
     parking_lot::{Condvar, Mutex, RwLock},
     ruc::*,
     std::{collections::HashSet, sync::Arc},
-    zei::{anon_xfr::structs::MTLeafInfo, xfr::structs::OwnerMemo},
+    zei::{
+        anon_xfr::structs::{AxfrOwnerMemo, MTLeafInfo},
+        xfr::structs::OwnerMemo,
+    },
 };
 
 lazy_static! {
@@ -302,7 +305,7 @@ impl QueryServer {
 
     /// Returns the abar owner memo required to decrypt the asset record stored at given index, if it exists.
     #[inline(always)]
-    pub fn get_abar_memo(&self, atxo_sid: ATxoSID) -> Option<OwnerMemo> {
+    pub fn get_abar_memo(&self, atxo_sid: ATxoSID) -> Option<AxfrOwnerMemo> {
         self.ledger_cloned
             .api_cache
             .as_ref()

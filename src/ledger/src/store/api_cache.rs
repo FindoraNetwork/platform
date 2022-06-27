@@ -19,7 +19,10 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
-    zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+    zei::{
+        anon_xfr::structs::AxfrOwnerMemo,
+        xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+    },
 };
 
 type Issuances = Vec<(TxOutput, Option<OwnerMemo>)>;
@@ -45,7 +48,7 @@ pub struct ApiCache {
     /// used in confidential tx
     pub owner_memos: Mapxnk<TxoSID, OwnerMemo>,
     /// used in anonymous tx
-    pub abar_memos: Mapx<ATxoSID, OwnerMemo>,
+    pub abar_memos: Mapx<ATxoSID, AxfrOwnerMemo>,
     /// ownship of txo
     pub utxos_to_map_index: Mapxnk<TxoSID, XfrAddress>,
     /// txo(spent, unspent) to authenticated txn (sid, hash)
@@ -665,7 +668,7 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
 
         let abar_memos = curr_txn.body.operations.iter().flat_map(|o| match o {
             Operation::BarToAbar(b) => {
-                vec![b.memo()]
+                vec![b.axfr_memo()]
             }
             Operation::TransferAnonAsset(b) => b.note.body.owner_memos.clone(),
             _ => vec![],
