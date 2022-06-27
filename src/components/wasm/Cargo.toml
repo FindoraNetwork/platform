@@ -28,6 +28,8 @@ ring = "0.16.19"
 aes-gcm = "0.8.0"
 bech32 = "0.7.2"
 ruc = "1.0"
+thiserror = "1.0.31"
+anyhow = "1.0.57"
 
 # Must enable the "js"-feature,
 # OR the compiling will fail.
