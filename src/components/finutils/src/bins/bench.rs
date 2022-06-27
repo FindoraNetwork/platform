@@ -9,6 +9,8 @@ use zei::xfr::{
 
 use rayon::prelude::*;
 
+use stopwatch::Stopwatch;
+
 use zei::anon_xfr::structs::Commitment;
 
 use finutils::common::{self, transfer_asset_batch_x, utils};
@@ -442,25 +444,44 @@ fn test_bar2abar(
     let enc_key = wallet::x_public_key_from_base64(owner_enc_key)
         .c(d!("invalid owner_enc_key"))?;
 
+    println!("Generating transactions...");
     let txes: Vec<(_, _, _)> = valid_keys
-        .into_par_iter()
+        .into_iter()
         .map(|(from, sid, oar)| {
-            let (tx, c) =
-                utils::generate_bar2abar_tx(&from, &to, sid, &oar, &enc_key, true)
-                    .unwrap();
-            (tx, c, from)
+            match utils::generate_bar2abar_tx(&from, &to, sid, &oar, &enc_key, true) {
+                Ok((tx, c)) => Ok((tx, c, from)),
+                Err(e) => {
+                    println!("{}", &e);
+                    Err(e)
+                }
+            }
         })
+        .filter(|r| r.is_ok())
+        .map(|r| r.unwrap())
         .collect();
 
     let txes = Arc::new(Mutex::new(txes));
     let mut handles = vec![];
-    for _ in 0..threads {
+    for i in 0..threads {
         let txes = txes.clone();
         let commitments = commitments.clone();
-        let h = std::thread::spawn(move || {
-            while let Some((tx, c, from)) = txes.lock().unwrap().pop() {
-                //Generate the transaction and transmit it to network
-                match utils::send_tx(&tx) {
+        let h = std::thread::spawn(move || loop {
+            let res = { txes.lock().unwrap().pop() };
+            if res.is_none() {
+                return;
+            }
+            let (tx, c, from) = res.unwrap();
+            //Generate the transaction and transmit it to network
+            println!("Thread-{} Sending tx ...", i);
+            let sw = Stopwatch::start_new();
+            match utils::send_tx(&tx) {
+                Ok(_) => {
+                    commitments.lock().unwrap().push(PubkeyCommitment {
+                        pubkey: from.pub_key,
+                        commitment: c,
+                    });
+                }
+                Err(_) => match utils::send_tx(&tx) {
                     Ok(_) => {
                         commitments.lock().unwrap().push(PubkeyCommitment {
                             pubkey: from.pub_key,
@@ -470,9 +491,10 @@ fn test_bar2abar(
                     Err(e) => {
                         println!("{}", e);
                     }
-                }
-                std::thread::sleep(interval);
+                },
             }
+            println!("Thread-{} Sending tx took {}ms", i, sw.elapsed_ms());
+            std::thread::sleep(interval);
         });
         handles.push(h);
     }
@@ -491,7 +513,7 @@ fn test_abar2bar(
 ) -> Result<()> {
     let axfr_secret_key = anon_keys.axfr_secret_key;
     let dec_key = anon_keys.dec_key;
-
+    println!("Generating transactions...");
     let txes: Vec<Result<Transaction>> = commitments
         .into_par_iter()
         .map(|pk_commitment| {
@@ -514,16 +536,27 @@ fn test_abar2bar(
 
     let txes = Arc::new(Mutex::new(txes));
     let mut handles = Vec::new();
-    for _ in 0..threads {
+    for i in 0..threads {
         let txes = txes.clone();
-        let h = std::thread::spawn(move || {
-            while let Some(tx) = txes.lock().unwrap().pop() {
-                match tx {
-                    Ok(t) => utils::send_tx(&t).unwrap(),
-                    Err(e) => println!("{}", e),
-                }
-                std::thread::sleep(interval);
+        let h = std::thread::spawn(move || loop {
+            let tx = { txes.lock().unwrap().pop() };
+            if tx.is_none() {
+                return;
             }
+            match tx.unwrap() {
+                Ok(t) => {
+                    println!("Thread-{} Sending tx ...", i);
+                    let sw = Stopwatch::start_new();
+                    if utils::send_tx(&t).is_err() {
+                        if let Err(e) = utils::send_tx(&t) {
+                            println!("{}", e);
+                        }
+                    }
+                    println!("Thread-{} Sending tx took {}ms", i, sw.elapsed_ms());
+                }
+                Err(e) => println!("{}", e),
+            }
+            std::thread::sleep(interval);
         });
 
         handles.push(h);
@@ -544,9 +577,10 @@ fn test_anon_transfer(
     interval: Duration,
     threads: usize,
 ) -> Result<()> {
+    println!("Generating transactions...");
     let txes: Vec<Result<_>> = commitments
-        .into_par_iter()
-        .zip(fee_commitments.into_par_iter())
+        .into_iter()
+        .zip(fee_commitments.into_iter())
         .map(|(com1, com2)| {
             common::gen_anon_transfer_tx(
                 &anon_keys.axfr_secret_key,
@@ -562,16 +596,28 @@ fn test_anon_transfer(
 
     let txes = Arc::new(Mutex::new(txes));
     let mut handles = vec![];
-    for _ in 0..threads {
+    for i in 0..threads {
         let txes = txes.clone();
-        let h = std::thread::spawn(move || {
-            while let Some(tx) = txes.lock().unwrap().pop() {
-                match tx {
-                    Ok((t, _, _)) => utils::send_tx(&t).unwrap(),
-                    Err(e) => println!("{}", e),
-                };
-                std::thread::sleep(interval);
+        let h = std::thread::spawn(move || loop {
+            let tx = { txes.lock().unwrap().pop() };
+            if tx.is_none() {
+                return;
             }
+
+            match tx.unwrap() {
+                Ok((t, _, _)) => {
+                    println!("Thread-{} Sending tx ...", i);
+                    let sw = Stopwatch::start_new();
+                    if let Err(_) = utils::send_tx(&t) {
+                        if let Err(e) = utils::send_tx(&t) {
+                            println!("{}", e);
+                        }
+                    }
+                    println!("Thread-{} Sending tx took {}ms", i, sw.elapsed_ms());
+                }
+                Err(e) => println!("{}", e),
+            };
+            std::thread::sleep(interval);
         });
         handles.push(h);
     }

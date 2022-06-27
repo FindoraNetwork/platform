@@ -23,6 +23,7 @@ rayon = "1.5"
 parking_lot = "0.11.1"
 curve25519-dalek = { version = "3.0", features = ["serde"] }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"] }
+stopwatch = "0.0.7"
 
 zei = "0.1"
 zei-crypto = "0.1"

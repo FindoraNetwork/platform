@@ -1013,7 +1013,7 @@ pub fn gen_anon_transfer_op(
     };
 
     let axfr_amount = amount.parse::<u64>().c(d!("error parsing amount"))?;
-    
+
     let (tx, note, rem_oabars) = gen_anon_transfer_tx(
         &axfr_secret_key,
         &com,
