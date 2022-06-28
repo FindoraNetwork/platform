@@ -32,19 +32,23 @@ impl<C: Config> App<C> {
         let transaction_hash =
             H256::from_slice(Keccak256::digest(&rlp::encode(transaction)).as_slice());
 
-        if let Ok(mut txn_signers) = ctx.txn_signers.lock() {
-            *txn_signers
-                .entry(transaction_hash)
-                .or_insert_with(|| Self::recover_signer(transaction))
-        } else {
-            // cannot obtain lock, fall back to slow path
-            log::warn!(
-                target:
-                "ethereum",
-                "Cannot obtain lock, fallback to slow path to recover signer"
-            );
-            Self::recover_signer(transaction)
+        // Check historical cache firstly for Deliver Context, while holding read lock
+        if ctx.run_mode == RunTxMode::Deliver {
+            let history_1 = ctx.eth_cache.history_1.read();
+            let history_n = ctx.eth_cache.history_n.read();
+
+            if let Some(signer) = history_1
+                .get(&transaction_hash)
+                .or_else(|| history_n.get(&transaction_hash))
+            {
+                return *signer;
+            }
         }
+
+        let mut txn_signers = ctx.eth_cache.current.write();
+        *txn_signers
+            .entry(transaction_hash)
+            .or_insert_with(|| Self::recover_signer(transaction))
     }
 
     pub fn recover_signer(transaction: &Transaction) -> Option<H160> {

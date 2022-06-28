@@ -1,8 +1,5 @@
 use abci::Header;
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, sync::Arc};
 use storage::{
     db::{FinDB, RocksDB},
     state::{ChainState, State},
@@ -24,6 +21,15 @@ pub enum RunTxMode {
     Deliver = 4,
 }
 
+pub type SignerCache = HashMap<H256, Option<H160>>;
+
+#[derive(Clone, Default)]
+pub struct EthereumCache {
+    pub current: Arc<RwLock<SignerCache>>,
+    pub history_1: Arc<RwLock<SignerCache>>,
+    pub history_n: Arc<RwLock<SignerCache>>,
+}
+
 #[derive(Clone)]
 pub struct Context {
     pub state: Arc<RwLock<State<FinDB>>>,
@@ -31,7 +37,7 @@ pub struct Context {
     pub run_mode: RunTxMode,
     pub header: Header,
     pub header_hash: Vec<u8>,
-    pub txn_signers: Arc<Mutex<HashMap<H256, Option<H160>>>>,
+    pub eth_cache: EthereumCache,
 }
 
 impl Context {
@@ -45,7 +51,7 @@ impl Context {
             run_mode: RunTxMode::None,
             header: Default::default(),
             header_hash: vec![],
-            txn_signers: Default::default(),
+            eth_cache: Default::default(),
         }
     }
 
@@ -56,7 +62,11 @@ impl Context {
             run_mode: RunTxMode::None,
             header: self.header.clone(),
             header_hash: self.header_hash(),
-            txn_signers: Default::default(),
+            eth_cache: if self.run_mode == RunTxMode::Check {
+                self.eth_cache.clone()
+            } else {
+                Default::default()
+            },
         }
     }
 
@@ -70,7 +80,11 @@ impl Context {
             run_mode: RunTxMode::None,
             header: self.header.clone(),
             header_hash: self.header_hash(),
-            txn_signers: Default::default(),
+            eth_cache: if self.run_mode == RunTxMode::Check {
+                self.eth_cache.clone()
+            } else {
+                Default::default()
+            },
         }
     }
 }

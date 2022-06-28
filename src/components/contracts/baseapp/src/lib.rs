@@ -171,7 +171,7 @@ impl BaseApp {
         let chain_state = self.chain_state.clone();
         let chain_db = self.chain_db.clone();
 
-        BaseApp {
+        let mut app = BaseApp {
             name: APP_NAME.to_string(),
             version: "1.0.0".to_string(),
             app_version: 1,
@@ -181,7 +181,11 @@ impl BaseApp {
             deliver_state: Context::new(chain_state, chain_db),
             modules: ModuleManager::default(),
             event_notify: self.event_notify.clone(),
-        }
+        };
+        app.check_state.run_mode = RunTxMode::Check;
+        app.deliver_state.run_mode = RunTxMode::Deliver;
+
+        app
     }
 
     //Migrate any pre-existing data from one database to the other if necessary
@@ -257,9 +261,17 @@ impl BaseApp {
         // query from pending state if height is not provided
         // query from latest state otherwise, including versioned data
         if height.is_none() {
-            Ok(self.check_state.copy_with_state())
+            Ok({
+                let mut ctx = self.check_state.copy_with_state();
+                ctx.run_mode = RunTxMode::Check;
+                ctx
+            })
         } else {
-            Ok(self.check_state.copy_with_new_state())
+            Ok({
+                let mut ctx = self.check_state.copy_with_new_state();
+                ctx.run_mode = RunTxMode::Check;
+                ctx
+            })
         }
     }
 
@@ -291,10 +303,8 @@ impl BaseApp {
     }
 
     fn update_state(ctx: &mut Context, header: Header, header_hash: Vec<u8>) {
-        ctx.run_mode = RunTxMode::None;
         ctx.header_hash = header_hash;
         ctx.header = header;
-        ctx.txn_signers = Default::default();
     }
 
     pub fn deliver_findora_tx(&mut self, tx: &FindoraTransaction) -> Result<()> {

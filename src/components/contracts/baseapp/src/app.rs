@@ -132,6 +132,14 @@ impl crate::BaseApp {
             req.hash.clone(),
         );
 
+        // Clone newest cache from check_state to deliver_state
+        // No wary, These clones just are adding reference count.
+        self.deliver_state.eth_cache.current = Default::default();
+        self.deliver_state.eth_cache.history_n =
+            self.deliver_state.eth_cache.history_1.clone();
+        self.deliver_state.eth_cache.history_1 =
+            self.check_state.eth_cache.current.clone();
+
         self.modules.begin_block(&mut self.deliver_state, req);
 
         ResponseBeginBlock::default()
@@ -195,6 +203,7 @@ impl crate::BaseApp {
     pub fn commit(&mut self, _req: &RequestCommit) -> ResponseCommit {
         // Reset the Check state to the latest committed.
         self.check_state = self.deliver_state.copy_with_new_state();
+        self.check_state.run_mode = RunTxMode::Check;
 
         let block_height = self.deliver_state.block_header().height as u64;
 
