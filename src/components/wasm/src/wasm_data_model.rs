@@ -155,7 +155,10 @@ impl ClientAssetRecord {
     /// fetch an asset record from the ledger server.
     pub fn from_json(val: &JsValue) -> Result<ClientAssetRecord, JsValue> {
         Ok(ClientAssetRecord {
-            txo: val.into_serde().c(d!()).map_err(error_to_jsvalue)?,
+            txo: val
+                .into_serde()
+                .c(d!())
+                .map_err(|_| JsValue::from_str("format json error"))?,
         })
     }
 
@@ -707,8 +710,10 @@ impl MTLeafInfo {
 #[wasm_bindgen]
 impl MTLeafInfo {
     pub fn from_json(json: &JsValue) -> Result<MTLeafInfo, JsValue> {
-        let mt_leaf_info: ZeiMTLeafInfo =
-            json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
+        let mt_leaf_info: ZeiMTLeafInfo = json
+            .into_serde()
+            .c(d!())
+            .map_err(|_| JsValue::from_str("format json error"))?;
         Ok(MTLeafInfo {
             object: mt_leaf_info,
         })
