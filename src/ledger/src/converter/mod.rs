@@ -3,13 +3,18 @@
 use crate::data_model::{
     NoReplayToken, Operation, Transaction, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
 };
-use fp_types::crypto::MultiSigner;
+use fp_types::{crypto::MultiSigner, H160, H256};
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use zei::xfr::{
     sig::XfrPublicKey,
     structs::{AssetType, XfrAmount, XfrAssetType},
 };
+
+pub enum EVMAssetInfo {
+    ERC20(H160),
+    NFT(H160, H256),
+}
 
 /// Use this operation to transfer.
 ///
@@ -27,8 +32,12 @@ pub struct ConvertAccount {
     pub value: u64,
 
     /// convert asset type.
+    /// Note: deprecated
     #[serde(skip_serializing_if = "Option::is_none")]
     pub asset_type: Option<AssetType>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evm_asset_info: Option<EVMAssetInfo>,
 
     /// convert asset lowlevel data.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -47,6 +56,10 @@ impl ConvertAccount {
 
     pub fn get_related_address(&self) -> XfrPublicKey {
         self.signer
+    }
+
+    pub fn get_asset_type(&self) -> AssetType {
+        AssetType::default()
     }
 }
 
