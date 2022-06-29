@@ -109,7 +109,11 @@ pub fn transfer_batch(
     )
     .c(d!())?;
     builder.add_operation(op);
-    send_tx(&builder.take_transaction()).c(d!())
+
+    let mut tx = builder.take_transaction();
+    tx.sign(owner_kp);
+
+    send_tx(&tx).c(d!())
 }
 
 /// @target_list: use `Vec` but `HashMap` ?
