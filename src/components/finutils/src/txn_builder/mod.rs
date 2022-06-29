@@ -14,8 +14,8 @@ use {
         converter::ConvertAccount,
         data_model::{
             AbarConvNote, AbarToBarOps, AnonTransferOps, AssetRules, AssetTypeCode,
-            BarAnonConvNote, BarToAbarOps, ConfidentialMemo, DefineAsset,
-            DefineAssetBody, IndexedSignature, IssueAsset, IssueAssetBody,
+            AssetTypePrefix, BarAnonConvNote, BarToAbarOps, ConfidentialMemo,
+            DefineAsset, DefineAssetBody, IndexedSignature, IssueAsset, IssueAssetBody,
             IssuerKeyPair, IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
             TransactionBody, TransferAsset, TransferAssetBody, TransferType, TxOutput,
             TxoRef, TxoSID, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA,
@@ -36,6 +36,7 @@ use {
             td_addr_to_string, BlockHeight, PartialUnDelegation, StakerMemo,
             TendermintAddr, Validator,
         },
+        store::fbnc::NumKey,
     },
     rand_chacha::ChaChaRng,
     rand_core::{CryptoRng, RngCore, SeedableRng},
@@ -398,11 +399,15 @@ impl TransactionBuilder {
             Some(code) => code,
             None => AssetTypeCode::gen_random(),
         };
+
+        let mut asset_code = AssetTypePrefix::UserDefined.bytes();
+        asset_code.append(&mut token_code.to_bytes());
+
         let iss_keypair = IssuerKeyPair { keypair: &key_pair };
         self.txn.add_operation(Operation::DefineAsset(
             DefineAsset::new(
                 DefineAssetBody::new(
-                    &token_code,
+                    asset_code.as_slice(),
                     &IssuerPublicKey {
                         key: *key_pair.get_pk_ref(),
                     },

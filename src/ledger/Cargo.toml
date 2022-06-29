@@ -37,6 +37,8 @@ zei-crypto = "0.1"
 zei-algebra = "0.1"
 bulletproofs = "2.0"
 
+tiny-keccak = { version = "2.0", features = ["keccak"] }
+
 fbnc = { version = "0.2.9", default-features = false}
 
 num-bigint = "0.4.3"

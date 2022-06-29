@@ -1020,21 +1020,47 @@ impl IssueAssetBody {
 
 #[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum AssetTypePrefix {
+    UserDefined,
+    ERC20,
+    NFT,
+}
+
+impl AssetTypePrefix {
+    #[allow(missing_docs)]
+    pub fn bytes(&self) -> Vec<u8> {
+        let code = match self {
+            AssetTypePrefix::UserDefined => "56",
+            AssetTypePrefix::ERC20 => "77",
+            AssetTypePrefix::NFT => "02",
+        };
+        let code = format!("{:0>64}", code);
+        hex::decode(code).unwrap()
+    }
+}
+
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DefineAssetBody {
     pub asset: Box<Asset>,
 }
-
+use tiny_keccak::{Hasher as KeccakHasher, Keccak};
 impl DefineAssetBody {
     #[allow(missing_docs)]
     pub fn new(
-        token_code: &AssetTypeCode,
+        token_code: &[u8],
         issuer_key: &IssuerPublicKey,
         asset_rules: AssetRules,
         memo: Option<Memo>,
         confidential_memo: Option<ConfidentialMemo>,
     ) -> Result<DefineAssetBody> {
+        let mut keccak = Keccak::v256();
+        keccak.update(token_code);
+        let mut output = [0u8; 32];
+        keccak.finalize(&mut output);
+
         let mut asset_def: Asset = Default::default();
-        asset_def.code = *token_code;
+        asset_def.code = AssetTypeCode::new_from_vec(output.to_vec());
         asset_def.issuer = *issuer_key;
         asset_def.asset_rules = asset_rules;
         asset_def.policy = None;

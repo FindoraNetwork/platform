@@ -2,6 +2,8 @@
 //! # Helper Utils
 //!
 
+use crate::data_model::AssetTypePrefix;
+use fbnc::NumKey;
 use {
     super::{
         IssuerKeyPair, IssuerPublicKey, LedgerState, TracingPolicies, TracingPolicy,
@@ -36,8 +38,18 @@ pub fn create_definition_transaction(
     let issuer_key = IssuerPublicKey {
         key: *keypair.get_pk_ref(),
     };
-    let asset_body =
-        DefineAssetBody::new(&code, &issuer_key, asset_rules, memo, None).c(d!())?;
+
+    let mut asset_code = AssetTypePrefix::UserDefined.bytes();
+    asset_code.append(&mut code.to_bytes());
+
+    let asset_body = DefineAssetBody::new(
+        asset_code.as_slice(),
+        &issuer_key,
+        asset_rules,
+        memo,
+        None,
+    )
+    .c(d!())?;
     let asset_create =
         DefineAsset::new(asset_body, &IssuerKeyPair { keypair: &keypair }).c(d!())?;
     Ok(Transaction::from_operation(
