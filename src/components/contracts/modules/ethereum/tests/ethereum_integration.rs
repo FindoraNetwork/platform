@@ -73,7 +73,7 @@ fn test_abci_check_tx() {
     let tx2 = serde_json::to_vec(&build_transfer_transaction(
         BOB_ECDSA.address,
         10.into(),
-        U256::from(1),
+        U256::from(0),
     ))
     .unwrap();
     req.tx = EvmRawTxWrapper::wrap(&tx2);

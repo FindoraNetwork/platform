@@ -107,7 +107,7 @@ fn erc20_works() {
 fn test_deploy_check_tx() {
     let mut req = RequestCheckTx::default();
     let tx =
-        serde_json::to_vec(&build_erc20_deploy_transaction("erc20", "FRA", 1.into()).0)
+        serde_json::to_vec(&build_erc20_deploy_transaction("erc20", "FRA", 0.into()).0)
             .unwrap();
     req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
@@ -168,7 +168,7 @@ fn test_mint_check_tx(contract: ERC20) {
         contract,
         BOB_ECDSA.address,
         10000.into(),
-        2.into(),
+        1.into(),
     ))
     .unwrap();
     req.tx = EvmRawTxWrapper::wrap(&tx);
@@ -206,7 +206,7 @@ fn test_transfer_check_tx(contract: ERC20) {
         contract,
         ALICE_ECDSA.address,
         100.into(),
-        1.into(),
+        0.into(),
         U256::zero(),
         BOB_ECDSA.private_key,
     ))
