@@ -61,6 +61,10 @@ impl ConvertAccount {
     pub fn get_asset_type(&self) -> AssetType {
         AssetType::default()
     }
+
+    pub fn is_valid(&self) -> bool {
+        self.asset_type.is_some() ^ self.evm_asset_info.is_some()
+    }
 }
 
 #[allow(missing_docs)]
