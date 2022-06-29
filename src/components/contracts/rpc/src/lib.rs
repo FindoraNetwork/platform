@@ -63,9 +63,17 @@ pub fn start_web3_service(
         )
     };
 
+    let thread_pool_size = std::env::var("WEB3_MAX_HTTP_THREADS").map_or(None, |id| {
+        Some(
+            id.as_str()
+                .parse::<usize>()
+                .expect("Web3 max http threads should be valid integer"),
+        )
+    });
+
     let http_server = start_http(
         &evm_http.parse().unwrap(),
-        None,
+        thread_pool_size,
         Some(&vec!["*".to_string()]),
         io(),
         None,
