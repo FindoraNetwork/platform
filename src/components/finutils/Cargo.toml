@@ -24,9 +24,9 @@ curve25519-dalek = { version = "3.0", features = ["serde"] }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"] }
 getrandom = "0.2"
 
-zei = "0.1"
-zei-crypto = "0.1"
-zei-algebra = "0.1"
+zei = "0.2"
+zei-crypto = "0.2"
+zei-algebra = "0.2"
 
 ledger = { path = "../../ledger" }
 globutils = { path = "../../libs/globutils" }
