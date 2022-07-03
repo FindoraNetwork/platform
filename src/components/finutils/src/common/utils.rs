@@ -75,7 +75,7 @@ pub fn set_initial_validators() -> Result<()> {
     let vs = get_inital_validators().c(d!())?;
     builder.add_operation_update_validator(&[], 1, vs).c(d!())?;
 
-    send_tx(&builder.take_transaction()).c(d!())
+    send_tx(&builder.take_transaction()?).c(d!())
 }
 
 #[inline(always)]
@@ -124,7 +124,7 @@ pub fn transfer_batch(
     )
     .c(d!())?;
     builder.add_operation(op);
-    send_tx(&builder.take_transaction()).c(d!())
+    send_tx(&builder.take_transaction()?).c(d!())
 }
 
 /// @target_list: use `Vec` but `HashMap` ?
@@ -765,7 +765,7 @@ pub fn generate_bar2abar_op(
     builder.add_operation(feeop);
 
     // submit transaction to network
-    send_tx(&builder.take_transaction()).c(d!("Failed to submit Bar to Abar txn"))?;
+    send_tx(&builder.take_transaction()?).c(d!("Failed to submit Bar to Abar txn"))?;
 
     Ok(c)
 }
@@ -792,7 +792,7 @@ pub fn generate_abar2bar_op(
         .c(d!())?;
 
     // submit transaction
-    send_tx(&builder.take_transaction()).c(d!())?;
+    send_tx(&builder.take_transaction()?).c(d!())?;
     Ok(())
 }
 

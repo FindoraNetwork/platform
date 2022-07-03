@@ -72,8 +72,8 @@ bulletproofs = { git = "https://github.com/FindoraNetwork/bp" }
 #zei-crypto = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.9" }
 #zei-plonk = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.9" }
 
-zei = { git = "https://github.com/FindoraNetwork/zei", branch = "hotfix" }
-zei-accumulators = { git = "https://github.com/FindoraNetwork/zei", branch = "hotfix" }
-zei-algebra = { git = "https://github.com/FindoraNetwork/zei", branch = "hotfix" }
-zei-crypto = { git = "https://github.com/FindoraNetwork/zei", branch = "hotfix" }
-zei-plonk = { git = "https://github.com/FindoraNetwork/zei", branch = "hotfix" }
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zei-accumulators = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zei-algebra = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zei-crypto = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zei-plonk = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }

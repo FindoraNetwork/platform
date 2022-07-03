@@ -27,6 +27,7 @@ use {
     __trash__::{Policy, PolicyGlobals, TxnPolicyData},
     bitmap::SparseMap,
     cryptohash::{sha256::Digest as BitDigest, HashValue},
+    digest::{consts::U64, Digest},
     fbnc::NumKey,
     globutils::{HashOf, ProofOf, Serialized, SignatureOf},
     lazy_static::lazy_static,
@@ -1368,7 +1369,11 @@ pub enum AbarConvNote {
 
 impl AbarConvNote {
     /// Verifies the ZKP based on the type of conversion
-    pub fn verify(&self, merkle_root: BLSScalar) -> Result<()> {
+    pub fn verify<D: Digest<OutputSize = U64> + Default>(
+        &self,
+        merkle_root: BLSScalar,
+        hasher: D,
+    ) -> Result<()> {
         match self {
             AbarConvNote::AbarToBar(note) => {
                 // An axfr_abar_conv requires versioned merkle root hash for verification.
@@ -1378,6 +1383,7 @@ impl AbarConvNote {
                     &abar_to_bar_verifier_params,
                     &note,
                     &merkle_root,
+                    hasher,
                 )
                 .c(d!("Abar to Bar conversion proof verification failed"))
             }
@@ -1385,8 +1391,13 @@ impl AbarConvNote {
                 // An axfr_abar_conv requires versioned merkle root hash for verification.
                 let abar_to_ar_verifier_params = VerifierParams::abar_to_ar_params()?;
                 // verify zk proof with merkle root
-                verify_abar_to_ar_note(&abar_to_ar_verifier_params, &note, &merkle_root)
-                    .c(d!("Abar to AR conversion proof verification failed"))
+                verify_abar_to_ar_note(
+                    &abar_to_ar_verifier_params,
+                    &note,
+                    &merkle_root,
+                    hasher,
+                )
+                .c(d!("Abar to AR conversion proof verification failed"))
             }
         }
     }
@@ -1431,6 +1442,18 @@ impl AbarConvNote {
             }
             AbarConvNote::AbarToAr(note) => {
                 vec![note.body.memo.as_ref()]
+            }
+        }
+    }
+
+    /// get serialized bytes for signature and prove (only ABAR body).
+    pub fn digest(&self) -> Vec<u8> {
+        match self {
+            AbarConvNote::AbarToBar(note) => {
+                Serialized::new(&note.body).as_ref().to_vec()
+            }
+            AbarConvNote::AbarToAr(note) => {
+                Serialized::new(&note.body).as_ref().to_vec()
             }
         }
     }
@@ -1529,29 +1552,42 @@ pub enum Operation {
     ReplaceStaker(ReplaceStakerOps),
 }
 
+impl Operation {
+    /// get serialized bytes for signature and prove.
+    pub fn digest(&self) -> Vec<u8> {
+        match self {
+            Operation::UpdateStaker(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::Delegation(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::UnDelegation(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::Claim(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::FraDistribution(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::UpdateValidator(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::Governance(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::UpdateMemo(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::ConvertAccount(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::BarToAbar(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::ReplaceStaker(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::TransferAsset(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::IssueAsset(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::DefineAsset(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::MintFra(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::AbarToBar(i) => i.note.digest(),
+            Operation::TransferAnonAsset(i) => {
+                Serialized::new(&i.note.body).as_ref().to_vec()
+            }
+        }
+    }
+}
+
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
     match op {
-        Operation::UpdateStaker(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::Delegation(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::UnDelegation(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::Claim(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::FraDistribution(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::UpdateValidator(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::Governance(i) => {
-            i.set_nonce(no_replay_token);
-        }
+        Operation::UpdateStaker(i) => i.set_nonce(no_replay_token),
+        Operation::Delegation(i) => i.set_nonce(no_replay_token),
+        Operation::UnDelegation(i) => i.set_nonce(no_replay_token),
+        Operation::Claim(i) => i.set_nonce(no_replay_token),
+        Operation::FraDistribution(i) => i.set_nonce(no_replay_token),
+        Operation::UpdateValidator(i) => i.set_nonce(no_replay_token),
+        Operation::Governance(i) => i.set_nonce(no_replay_token),
         Operation::UpdateMemo(i) => i.body.no_replay_token = no_replay_token,
         Operation::ConvertAccount(i) => i.set_nonce(no_replay_token),
         Operation::BarToAbar(i) => i.set_nonce(no_replay_token),
@@ -1583,6 +1619,19 @@ impl TransactionBody {
         let mut result = TransactionBody::default();
         result.no_replay_token = no_replay_token;
         result
+    }
+
+    /// get serialized bytes for signature and prove.
+    pub fn digest(&self) -> Vec<u8> {
+        let mut bytes = vec![];
+        bytes.extend_from_slice(Serialized::new(&self.no_replay_token).as_ref());
+        bytes.extend_from_slice(Serialized::new(&self.credentials).as_ref());
+        bytes.extend_from_slice(Serialized::new(&self.policy_options).as_ref());
+        bytes.extend_from_slice(Serialized::new(&self.memos).as_ref());
+        for o in &self.operations {
+            bytes.extend_from_slice(&o.digest());
+        }
+        bytes
     }
 }
 

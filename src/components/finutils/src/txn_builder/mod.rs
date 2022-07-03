@@ -8,8 +8,9 @@
 use {
     credentials::CredUserSecretKey,
     curve25519_dalek::scalar::Scalar,
+    digest::Digest,
     fp_types::crypto::MultiSigner,
-    globutils::{wallet, SignatureOf},
+    globutils::{wallet, Serialized, SignatureOf},
     ledger::{
         converter::ConvertAccount,
         data_model::{
@@ -41,6 +42,7 @@ use {
     rand_core::{CryptoRng, RngCore, SeedableRng},
     ruc::*,
     serde::{Deserialize, Serialize},
+    sha2::Sha512,
     std::{
         cmp::Ordering,
         collections::{BTreeMap, HashMap, HashSet},
@@ -52,9 +54,13 @@ use {
             ConfidentialAC, Credential,
         },
         anon_xfr::{
-            abar_to_abar::{gen_anon_xfr_note, AXfrNote},
-            abar_to_ar::gen_abar_to_ar_note,
-            abar_to_bar::gen_abar_to_bar_note,
+            abar_to_abar::{finish_anon_xfr_note, init_anon_xfr_note, AXfrPreNote},
+            abar_to_ar::{
+                finish_abar_to_ar_note, init_abar_to_ar_note, AbarToArPreNote,
+            },
+            abar_to_bar::{
+                finish_abar_to_bar_note, init_abar_to_bar_note, AbarToBarPreNote,
+            },
             ar_to_abar::gen_ar_to_abar_note,
             bar_to_abar::gen_bar_to_abar_note,
             keys::{AXfrKeyPair, AXfrPubKey},
@@ -131,6 +137,12 @@ pub struct TransactionBuilder {
     outputs: u64,
     #[allow(missing_docs)]
     pub no_replay_token: NoReplayToken,
+    #[serde(skip)]
+    abar_bar_cache: Vec<AbarToBarPreNote>,
+    #[serde(skip)]
+    abar_ar_cache: Vec<AbarToArPreNote>,
+    #[serde(skip)]
+    abar_abar_cache: Vec<AXfrPreNote>,
 }
 
 impl TransactionBuilder {
@@ -318,6 +330,9 @@ impl TransactionBuilder {
         TransactionBuilder {
             txn: Transaction::from_seq_id(seq_id),
             outputs: 0,
+            abar_abar_cache: vec![],
+            abar_bar_cache: vec![],
+            abar_ar_cache: vec![],
             no_replay_token,
         }
     }
@@ -371,8 +386,99 @@ impl TransactionBuilder {
     }
 
     #[allow(missing_docs)]
-    pub fn take_transaction(self) -> Transaction {
-        self.txn
+    pub fn take_transaction(mut self) -> Result<Transaction> {
+        let mut prng = ChaChaRng::from_entropy();
+
+        // hasher txn. (IMPORTANT! KEEP THE same order)
+        let mut hasher = Sha512::new();
+        let mut bytes = self.txn.body.digest();
+        for i in &self.abar_abar_cache {
+            bytes.extend_from_slice(Serialized::new(&i.body).as_ref());
+        }
+        for i in &self.abar_bar_cache {
+            bytes.extend_from_slice(Serialized::new(&i.body).as_ref());
+        }
+        for i in &self.abar_ar_cache {
+            bytes.extend_from_slice(Serialized::new(&i.body).as_ref());
+        }
+        hasher.update(bytes);
+
+        // finish abar to abar
+        if self.abar_abar_cache.len() > 0 {
+            let mut params: HashMap<(usize, usize), ProverParams> = HashMap::new();
+            for pre_note in self.abar_abar_cache {
+                let key = (pre_note.body.inputs.len(), pre_note.body.outputs.len());
+                let param = if let Some(key) = params.get(&key) {
+                    key
+                } else {
+                    let param = ProverParams::new(
+                        key.0,
+                        key.1,
+                        Option::from(MERKLE_TREE_DEPTH),
+                    )?;
+                    params.insert(key, param);
+                    params.get(&key).unwrap() // safe, checked.
+                };
+
+                let note =
+                    finish_anon_xfr_note(&mut prng, param, pre_note, hasher.clone())?;
+
+                // Add operation
+                let inp = AnonTransferOps::new(note, self.no_replay_token).c(d!())?;
+                let op = Operation::TransferAnonAsset(Box::new(inp));
+                self.txn.add_operation(op);
+            }
+        }
+
+        // finish abar to bar
+        if self.abar_bar_cache.len() > 0 {
+            let params = ProverParams::abar_to_bar_params(MERKLE_TREE_DEPTH)?;
+            for pre_note in self.abar_bar_cache {
+                let note = finish_abar_to_bar_note(
+                    &mut prng,
+                    &params,
+                    pre_note,
+                    hasher.clone(),
+                )?;
+
+                // Create operation
+                let conv = AbarToBarOps::new(
+                    AbarConvNote::AbarToBar(Box::new(note)),
+                    self.no_replay_token,
+                )
+                .c(d!())?;
+                let op = Operation::AbarToBar(Box::from(conv));
+
+                // Add operation to transaction
+                self.txn.add_operation(op);
+            }
+        }
+
+        // finish abar to ar
+        if self.abar_ar_cache.len() > 0 {
+            let params = ProverParams::abar_to_ar_params(MERKLE_TREE_DEPTH)?;
+            for pre_note in self.abar_ar_cache {
+                let note = finish_abar_to_ar_note(
+                    &mut prng,
+                    &params,
+                    pre_note,
+                    hasher.clone(),
+                )?;
+
+                // Create operation
+                let conv = AbarToBarOps::new(
+                    AbarConvNote::AbarToAr(Box::new(note)),
+                    self.no_replay_token,
+                )
+                .c(d!())?;
+                let op = Operation::AbarToBar(Box::from(conv));
+
+                // Add operation to transaction
+                self.txn.add_operation(op);
+            }
+        }
+
+        Ok(self.txn)
     }
 
     /// Append a transaction memo
@@ -554,15 +660,25 @@ impl TransactionBuilder {
         bar_pub_key: &XfrPublicKey,
         asset_record_type: AssetRecordType,
     ) -> Result<&mut Self> {
-        let note =
-            gen_abar_conv_note(input, input_keypair, bar_pub_key, asset_record_type)?;
+        let mut prng = ChaChaRng::from_entropy();
+        match asset_record_type {
+            AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType => {
+                let note =
+                    init_abar_to_ar_note(&mut prng, input, input_keypair, bar_pub_key)?;
+                self.abar_ar_cache.push(note);
+            }
+            _ => {
+                let note = init_abar_to_bar_note(
+                    &mut prng,
+                    input,
+                    input_keypair,
+                    bar_pub_key,
+                    asset_record_type,
+                )?;
+                self.abar_bar_cache.push(note);
+            }
+        }
 
-        // Create operation
-        let abar_to_bar = AbarToBarOps::new(note, self.no_replay_token).c(d!())?;
-        let op = Operation::AbarToBar(Box::from(abar_to_bar));
-
-        // Add operation to transaction
-        self.txn.add_operation(op);
         Ok(self)
     }
 
@@ -579,30 +695,13 @@ impl TransactionBuilder {
         inputs: &[OpenAnonAssetRecord],
         outputs: &[OpenAnonAssetRecord],
         input_keypairs: &[AXfrKeyPair],
-    ) -> Result<(&mut Self, AXfrNote)> {
-        // generate prover params
-        let mut prng = ChaChaRng::from_entropy();
-        let depth: usize = MERKLE_TREE_DEPTH;
-        let prover_params =
-            ProverParams::new(inputs.len(), outputs.len(), Option::from(depth))?;
-
+    ) -> Result<(&mut Self, AXfrPreNote)> {
         let fee = FEE_CALCULATING_FUNC(inputs.len() as u32, outputs.len() as u32);
 
         // generate anon transfer note
-        let note = gen_anon_xfr_note(
-            &mut prng,
-            &prover_params,
-            inputs,
-            outputs,
-            fee,
-            input_keypairs,
-        )
-        .c(d!())?;
+        let note = init_anon_xfr_note(inputs, outputs, fee, input_keypairs).c(d!())?;
+        self.abar_abar_cache.push(note.clone());
 
-        // add operation
-        let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
-        let op = Operation::TransferAnonAsset(Box::new(inp));
-        self.txn.add_operation(op);
         Ok((self, note))
     }
 
@@ -617,9 +716,8 @@ impl TransactionBuilder {
         inputs: &[OpenAnonAssetRecord],
         outputs: &[OpenAnonAssetRecord],
         input_keypairs: &[AXfrKeyPair],
-    ) -> Result<(&mut Self, AXfrNote, Vec<OpenAnonAssetRecord>)> {
+    ) -> Result<(&mut Self, AXfrPreNote, Vec<OpenAnonAssetRecord>)> {
         let mut prng = ChaChaRng::from_entropy();
-        let depth: usize = MERKLE_TREE_DEPTH;
 
         let mut vec_outputs = outputs.to_vec();
         let mut vec_changes = vec![];
@@ -700,27 +798,9 @@ impl TransactionBuilder {
             vec_changes.push(oabar_money_back);
         }
 
-        let outputs_plus_remainder = &vec_outputs[..];
-
-        let prover_params = ProverParams::new(
-            inputs.len(),
-            outputs_plus_remainder.len(),
-            Option::from(depth),
-        )?;
-
-        let note = gen_anon_xfr_note(
-            &mut prng,
-            &prover_params,
-            inputs,
-            outputs_plus_remainder,
-            fees,
-            input_keypairs,
-        )
-        .c(d!())?;
-
-        let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
-        let op = Operation::TransferAnonAsset(Box::new(inp));
-        self.txn.add_operation(op);
+        let note =
+            init_anon_xfr_note(inputs, &vec_outputs, fees, input_keypairs).c(d!())?;
+        self.abar_abar_cache.push(note.clone());
 
         // return a list of all new remainder abars generated
         Ok((self, note, vec_changes))
@@ -1063,48 +1143,6 @@ fn gen_bar_conv_note(
         let c = note.body.output.commitment;
         Ok((BarAnonConvNote::BarNote(Box::new(note)), c))
     }
-}
-
-fn gen_abar_conv_note(
-    input: &OpenAnonAssetRecord,
-    input_keypair: &AXfrKeyPair,
-    bar_pub_key: &XfrPublicKey,
-    asset_record_type: AssetRecordType,
-) -> Result<AbarConvNote> {
-    let mut prng = ChaChaRng::from_entropy();
-
-    // Generate note
-    let note: AbarConvNote = match asset_record_type {
-        AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType => {
-            let user_params = ProverParams::abar_to_ar_params(MERKLE_TREE_DEPTH)?;
-            let n = gen_abar_to_ar_note(
-                &mut prng,
-                &user_params,
-                &input,
-                &input_keypair,
-                bar_pub_key,
-            )
-            .c(d!())?;
-            AbarConvNote::AbarToAr(Box::new(n))
-        }
-        _ => {
-            println!("{:?}", asset_record_type);
-            let user_params = ProverParams::abar_to_bar_params(MERKLE_TREE_DEPTH)?;
-            let n = gen_abar_to_bar_note(
-                &mut prng,
-                &user_params,
-                &input,
-                &input_keypair,
-                bar_pub_key,
-                asset_record_type,
-            )
-            .c(d!())?;
-            println!("note {:?}", n);
-            AbarConvNote::AbarToBar(Box::new(n))
-        }
-    };
-
-    Ok(note)
 }
 
 /// TransferOperationBuilder constructs transfer operations using the factory pattern
@@ -1486,7 +1524,7 @@ pub struct AnonTransferOperationBuilder {
     inputs: Vec<OpenAnonAssetRecord>,
     outputs: Vec<OpenAnonAssetRecord>,
     keypairs: Vec<AXfrKeyPair>,
-    note: Option<AXfrNote>,
+    note: Option<AXfrPreNote>,
     commitments: Vec<Commitment>,
 
     nonce: NoReplayToken,
@@ -1629,15 +1667,7 @@ impl AnonTransferOperationBuilder {
         self.outputs.push(oabar_money_back);
         self.commitments.push(commitment);
 
-        let prover_params = ProverParams::new(
-            self.inputs.len(),
-            self.outputs.len(),
-            Some(MERKLE_TREE_DEPTH),
-        )?;
-
-        let note = gen_anon_xfr_note(
-            &mut prng,
-            &prover_params,
+        let note = init_anon_xfr_note(
             self.inputs.as_slice(),
             self.outputs.as_slice(),
             fees,
@@ -1651,14 +1681,29 @@ impl AnonTransferOperationBuilder {
     }
 
     /// Add operation to the transaction
-    pub fn build_txn(&mut self) -> Result<&mut Self> {
-        self.txn
-            .add_operation(Operation::TransferAnonAsset(Box::from(
-                AnonTransferOps::new(self.note.as_ref().unwrap().clone(), self.nonce)
-                    .unwrap(),
-            )));
+    pub fn build_txn(&mut self) -> Result<()> {
+        let mut prng = ChaChaRng::from_entropy();
+        let param = ProverParams::new(
+            self.inputs.len(),
+            self.outputs.len(),
+            Some(MERKLE_TREE_DEPTH),
+        )?;
 
-        Ok(self)
+        let pre_note = self.note.clone().unwrap();
+        let mut hasher = Sha512::new();
+
+        let mut bytes = self.txn.body.digest();
+        bytes.extend_from_slice(Serialized::new(&pre_note.body).as_ref());
+        hasher.update(bytes);
+
+        let note = finish_anon_xfr_note(&mut prng, &param, pre_note, hasher)?;
+
+        // Add operation
+        let inp = AnonTransferOps::new(note, self.nonce).c(d!())?;
+        let op = Operation::TransferAnonAsset(Box::new(inp));
+        self.txn.add_operation(op);
+
+        Ok(())
     }
 
     /// Calculates the Anon fee given the number of inputs and outputs
@@ -2072,7 +2117,7 @@ mod tests {
             )
             .is_ok();
 
-        let txn = builder.take_transaction();
+        let txn = builder.take_transaction().unwrap();
 
         if let Operation::BarToAbar(note) = txn.body.operations[0].clone() {
             let result = note.verify();
@@ -2139,7 +2184,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let txn = builder.take_transaction();
+        let txn = builder.take_transaction().unwrap();
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
         let mut block = BlockEffect::default();
         let block_result = block.add_txn_effect(compute_effect);
@@ -2251,7 +2296,7 @@ mod tests {
         //negative test for builder
         assert!(result.is_ok());
 
-        let txn = builder.take_transaction();
+        let txn = builder.take_transaction().unwrap();
 
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
 
@@ -2304,7 +2349,7 @@ mod tests {
             .add_operation_anon_transfer(&[oabar], &[oabar_out], &[keypair_in])
             .is_ok();
 
-        let txn = builder.take_transaction();
+        let txn = builder.take_transaction().unwrap();
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
         let mut block = BlockEffect::default();
         let _ = block.add_txn_effect(compute_effect);
@@ -2351,7 +2396,7 @@ mod tests {
             .add_operation_anon_transfer(&[oabar1], &[oabar_out1], &[keypair_in1])
             .is_ok();
 
-        let txn1 = builder1.take_transaction();
+        let txn1 = builder1.take_transaction().unwrap();
         let compute_effect1 = TxnEffect::compute_effect(txn1).unwrap();
         let mut block1 = BlockEffect::default();
         let _ = block1.add_txn_effect(compute_effect1);

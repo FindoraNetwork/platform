@@ -97,7 +97,7 @@ pub fn staker_update(cr: Option<&str>, memo: Option<StakerMemo>) -> Result<()> {
         .c(d!())
         .map(|op| builder.add_operation(op))?;
 
-    utils::send_tx(&builder.take_transaction()).c(d!())
+    utils::send_tx(&builder.take_transaction()?).c(d!())
 }
 
 /// Perform a staking operation to add current tendermint node to validator list
@@ -160,7 +160,7 @@ pub fn stake(
     .c(d!())
     .map(|principal_op| builder.add_operation(principal_op))?;
 
-    utils::send_tx(&builder.take_transaction()).c(d!())
+    utils::send_tx(&builder.take_transaction()?).c(d!())
 }
 
 /// Append more FRA token to the specified tendermint node
@@ -196,7 +196,7 @@ pub fn stake_append(
     .c(d!())
     .map(|principal_op| builder.add_operation(principal_op))?;
 
-    utils::send_tx(&builder.take_transaction()).c(d!())
+    utils::send_tx(&builder.take_transaction()?).c(d!())
 }
 
 /// Withdraw Fra token from findora network for a staker
@@ -243,7 +243,7 @@ pub fn unstake(
         }
     })?;
 
-    utils::send_tx(&builder.take_transaction()).c(d!())
+    utils::send_tx(&builder.take_transaction()?).c(d!())
 }
 
 /// Claim rewards from findora network
@@ -263,7 +263,7 @@ pub fn claim(am: Option<&str>, sk_str: Option<&str>) -> Result<()> {
         builder.add_operation_claim(&kp, am);
     })?;
 
-    utils::send_tx(&builder.take_transaction()).c(d!())
+    utils::send_tx(&builder.take_transaction()?).c(d!())
 }
 
 /// Show information of current node, including following sections:
@@ -659,7 +659,7 @@ fn gen_undelegate_tx(
         builder.add_operation_undelegation(owner_kp, None);
     }
 
-    Ok(builder.take_transaction())
+    Ok(builder.take_transaction()?)
 }
 
 fn gen_delegate_tx(
@@ -683,7 +683,7 @@ fn gen_delegate_tx(
         builder.add_operation_delegation(owner_kp, amount, validator.to_owned());
     })?;
 
-    Ok(builder.take_transaction())
+    Ok(builder.take_transaction()?)
 }
 /// Create a custom asset for a findora account. If no token code string provided,
 /// it will generate a random new one.
@@ -732,7 +732,7 @@ pub fn create_asset_x(
         .c(d!())
         .map(|op| builder.add_operation(op))?;
 
-    utils::send_tx(&builder.take_transaction()).map(|_| code)
+    utils::send_tx(&builder.take_transaction()?).map(|_| code)
 }
 
 /// Issue a custom asset with specified amount
@@ -770,7 +770,7 @@ pub fn issue_asset_x(
         .c(d!())
         .map(|op| builder.add_operation(op))?;
 
-    utils::send_tx(&builder.take_transaction())
+    utils::send_tx(&builder.take_transaction()?)
 }
 
 /// Show a list of custom asset token created by a findora account
@@ -987,7 +987,7 @@ pub fn gen_anon_transfer_op(
         .add_operation_anon_transfer_fees_remainder(&inputs, &[oabar_out], &froms)
         .c(d!())?;
 
-    send_tx(&builder.take_transaction()).c(d!())?;
+    send_tx(&builder.take_transaction()?).c(d!())?;
 
     let com_out = if !note.body.outputs.is_empty() {
         Some(note.body.outputs[0].commitment)
@@ -1034,7 +1034,7 @@ pub fn gen_anon_transfer_op(
         .expect("commitment write failed");
     }
 
-    println!("AxfrNote: {:?}", serde_json::to_string_pretty(&note));
+    println!("AxfrNote: {:?}", serde_json::to_string_pretty(&note.body));
     Ok(())
 }
 
@@ -1144,7 +1144,7 @@ pub fn gen_oabar_add_op_x(
         .c(d!())?;
 
     // Send the transaction to the network
-    send_tx(&builder.take_transaction()).c(d!())?;
+    send_tx(&builder.take_transaction()?).c(d!())?;
 
     // Append receiver's commitment to `sent_commitments` file
     let mut s_file = fs::OpenOptions::new()
@@ -1185,7 +1185,7 @@ pub fn gen_oabar_add_op_x(
         .expect("commitment write failed");
     }
 
-    println!("AxfrNote: {:?}", serde_json::to_string_pretty(&note));
+    println!("AxfrNote: {:?}", serde_json::to_string_pretty(&note.body));
     Ok(())
 }
 
@@ -1403,7 +1403,7 @@ pub fn replace_staker(
     })?;
 
     builder.add_operation_replace_staker(&keypair, target_pubkey, new_td_addr_pk)?;
-    let tx = builder.take_transaction();
+    let tx = builder.take_transaction()?;
     utils::send_tx(&tx).c(d!())?;
     Ok(())
 }

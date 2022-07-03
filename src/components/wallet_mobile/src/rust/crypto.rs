@@ -2,7 +2,7 @@
 use wasm_bindgen::prelude::*;
 
 use super::data_model::*;
-use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
+use aes_gcm::aead::{generic_array::GenericArray, Aead, KeyInit};
 use aes_gcm::Aes256Gcm;
 use credentials::{
     credential_commit, credential_issuer_key_gen, credential_open_commitment,

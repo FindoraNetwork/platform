@@ -31,6 +31,7 @@ use {
     bitmap::{BitMap, SparseMap},
     config::abci::global_cfg::CFG,
     cryptohash::sha256::Digest as BitDigest,
+    digest::Digest,
     fbnc::{new_mapx, new_mapxnk, new_vecx, Mapx, Mapxnk, Vecx},
     fin_db::RocksDB,
     globutils::{HashOf, ProofOf},
@@ -40,6 +41,7 @@ use {
     rand_core::SeedableRng,
     ruc::*,
     serde::{Deserialize, Serialize},
+    sha2::Sha512,
     sliding_set::SlidingSet,
     sparse_merkle_tree::{Key, SmtMap256},
     std::{
@@ -1620,6 +1622,9 @@ impl LedgerStatus {
         let store = ImmutablePrefixedStore::new("abar_store", &abar_query_state);
         let abar_mt = ImmutablePersistentMerkleTree::new(store)?;
 
+        let mut hasher = Sha512::new();
+        hasher.update(txn_effect.txn.body.digest());
+
         // An axfr_body requires versioned merkle root hash for verification.
         // here with LedgerStatus available.
         for axfr_note in txn_effect.axfr_bodies.iter() {
@@ -1640,8 +1645,13 @@ impl LedgerStatus {
             let version_root = abar_mt
                 .get_root_with_depth_and_version(MERKLE_TREE_DEPTH, abar_version)?;
 
-            verify_anon_xfr_note(&verifier_params, axfr_note, &version_root)
-                .c(d!("Anon Transfer proof verification failed"))?;
+            verify_anon_xfr_note(
+                &verifier_params,
+                axfr_note,
+                &version_root,
+                hasher.clone(),
+            )
+            .c(d!("Anon Transfer proof verification failed"))?;
         }
 
         // An axfr_abar_conv requires versioned merkle root hash for verification.
@@ -1659,7 +1669,7 @@ impl LedgerStatus {
                 .get_root_with_depth_and_version(MERKLE_TREE_DEPTH, abar_version)?;
 
             // verify zk proof with merkle root
-            abar_conv.verify(version_root)?;
+            abar_conv.verify(version_root, hasher.clone())?;
         }
 
         Ok(())

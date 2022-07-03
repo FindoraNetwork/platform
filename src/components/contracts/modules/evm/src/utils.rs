@@ -120,9 +120,9 @@ fn parse_truple_result(tuple: Vec<Token>) -> Result<NonConfidentialOutput> {
 
 pub fn compute_create2(caller: H160, salt: H256, code_hash: H256) -> H160 {
     let mut hasher = Keccak256::new();
-    hasher.input(&[0xff]);
-    hasher.input(&caller[..]);
-    hasher.input(&salt[..]);
-    hasher.input(&code_hash[..]);
-    H256::from_slice(hasher.result().as_slice()).into()
+    hasher.update(&[0xff]);
+    hasher.update(&caller[..]);
+    hasher.update(&salt[..]);
+    hasher.update(&code_hash[..]);
+    H256::from_slice(hasher.finalize().as_slice()).into()
 }

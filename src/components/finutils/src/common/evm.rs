@@ -80,7 +80,7 @@ pub fn transfer_to_account(
             lowlevel_data,
         )?
         .sign(&kp);
-    utils::send_tx(&builder.take_transaction())?;
+    utils::send_tx(&builder.take_transaction()?)?;
     Ok(())
 }
 
