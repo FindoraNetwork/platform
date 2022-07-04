@@ -25,7 +25,7 @@ wasm-bindgen = { version = "0.2.62", features = ["serde-serialize"] }
 bs58 = "0.4"
 
 ring = "0.16.19"
-aes-gcm = "0.10.0-pre"
+aes-gcm = '=0.10.0-pre'
 bech32 = "0.7.2"
 ruc = "1.0"
 
