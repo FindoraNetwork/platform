@@ -177,7 +177,7 @@ echo $ASSET1 >> $BATCH_ASSET
 
 echo 10000000 > $BATCH_AMOUNT
 echo 10000000 >> $BATCH_AMOUNT
-echo 10000000 >> $BATCH_AMOUNT
+echo 50000000 >> $BATCH_AMOUNT
 
 echo ""
 echo "Sending multi-asset transaction..."
@@ -196,7 +196,7 @@ target/release/fn owned-abars --commitments $(awk 'FNR==5' sent_commitments) --a
 
 python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments "$(awk 'FNR==3' sent_commitments)" --amount 10000000
 python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments "$(awk 'FNR==4' sent_commitments)" --amount 10000000 --asset "$ASSET2"
-python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_3 --commitments "$(awk 'FNR==5' sent_commitments)" --amount 10000000 --asset "$ASSET1"
+python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_3 --commitments "$(awk 'FNR==5' sent_commitments)" --amount 50000000 --asset "$ASSET1"
 
 
 rm $BATCH_SK $BATCH_C $BATCH_PK $BATCH_AMOUNT $BATCH_ASSET

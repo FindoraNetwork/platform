@@ -30,12 +30,12 @@ target/release/fn owned-abars --commitments "$commitment2" --anon-keys $FILE_ANO
 
 echo -e "\n\n\n Batch Anonymous Transfer from Senders to Receivers"
 echo "------------------------------------------------------------------------------"
-sleep 5
-target/release/fn anon-transfer-batch -n amount_file -a asset_file -s axfr_secretkey_file -d decryption_key_file --to-axfr-public-key-file to_axfr_public_key_file --to-enc-key-file to_enc_key_file -c commitment_file
-
 sleep 2
+target/release/fn anon-transfer-batch -n amount_file -a asset_file -s axfr_secretkey_file --to-axfr-public-key-file to_axfr_public_key_file -c commitment_file
+
+sleep 5
 echo -e "\n\n\n Fetch merkle proof for Batch Anon Transfer"
 echo "------------------------------------------------------------------------------"
 target/release/fn anon-fetch-merkle-proof -a 3
-rm axfr_secretkey_file decryption_key_file commitment_file commitment_file2 to_axfr_public_key_file to_enc_key_file amount_file asset_file
+rm axfr_secretkey_file commitment_file to_axfr_public_key_file amount_file asset_file
 echo -e "\n\n Batch Anonymous Transfer demo script executed successfully!"

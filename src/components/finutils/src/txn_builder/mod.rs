@@ -798,6 +798,12 @@ impl TransactionBuilder {
             vec_changes.push(oabar_money_back);
         }
 
+        if vec_outputs.len() > 5 {
+            return Err(eg!(
+                "Total outputs (incl. remainders) cannot be greater than 5"
+            ));
+        }
+
         let note =
             init_anon_xfr_note(inputs, &vec_outputs, fees, input_keypairs).c(d!())?;
         self.abar_abar_cache.push(note.clone());
@@ -1666,6 +1672,12 @@ impl AnonTransferOperationBuilder {
         let commitment = oabar_money_back.compute_commitment();
         self.outputs.push(oabar_money_back);
         self.commitments.push(commitment);
+
+        if self.outputs.len() > 5 {
+            return Err(eg!(
+                "Total outputs (incl. remainders) cannot be greater than 5"
+            ));
+        }
 
         let note = init_anon_xfr_note(
             self.inputs.as_slice(),
