@@ -41,6 +41,19 @@ impl UnDelegationOps {
             .and_then(|pu| staking.undelegate(&self.pubkey, pu).c(d!()))
     }
 
+    #[allow(missing_docs)]
+    pub fn get_undelegate_amount(
+        &self,
+        txn: &Transaction,
+        staking_simulator: &Staking,
+    ) -> (u64, u64) {
+        Self::check_context(txn).map_or((0u64, 0u64), |pu| {
+            pu.map_or((0u64, 0u64), |p| {
+                staking_simulator.get_undelegate_amount(&self.pubkey, p)
+            })
+        })
+    }
+
     /// Verify signature.
     #[inline(always)]
     pub fn verify(&self) -> Result<()> {

@@ -906,6 +906,26 @@ impl Staking {
         Ok(())
     }
 
+    #[allow(missing_docs)]
+    pub fn get_undelegate_amount(
+        &self,
+        addr: &XfrPublicKey,
+        pu: &PartialUnDelegation,
+    ) -> (u64, u64) {
+        let _is_validator = self.addr_is_validator(addr);
+        let target_validator =
+            self.validator_td_addr_to_app_pk(&td_addr_to_string(&pu.target_validator));
+
+        target_validator.map_or((pu.am, 0u64), |validator| {
+            if let Some(d) = self.delegation_info.global_delegation_records_map.get(addr)
+            {
+                if let Some(am) = d.delegations.get(&validator) {
+                    return (pu.am, *am);
+                }
+            }
+            (pu.am, 0u64)
+        })
+    }
     // A partial undelegation implementation:
     // - split the original delegator to two smaller instances
     // - do a complete undelegation to the new(tmp) delegation address
@@ -944,11 +964,10 @@ impl Staking {
                 .c(d!("Target validator does not exist"))?;
 
             actual_am = if pu.am > *am {
-                ruc::pd!(format!(
+                return Err(eg!(
                     "Amount exceeds limits, requested: {}, total: {}, use the value of `total`",
                     pu.am, *am
                 ));
-                *am
             } else {
                 pu.am
             };

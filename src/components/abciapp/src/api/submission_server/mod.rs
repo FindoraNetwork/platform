@@ -244,6 +244,20 @@ where
     }
 
     #[allow(missing_docs)]
+    pub fn cmp_undelegate_amount(&self, txn: &Transaction) -> bool {
+        let block = self.block.as_ref().unwrap();
+        TxnEffect::compute_effect(txn.clone()).map_or(false, |txn_effect| {
+            for ud in txn_effect.undelegations.iter() {
+                let ret = ud.get_undelegate_amount(txn, &block.staking_simulator);
+                if ret.0 > ret.1 {
+                    return false;
+                }
+            }
+            true
+        })
+    }
+
+    #[allow(missing_docs)]
     pub fn get_fwder(&self) -> &TF {
         &self.txn_forwarder
     }
