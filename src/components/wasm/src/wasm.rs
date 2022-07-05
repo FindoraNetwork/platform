@@ -549,11 +549,18 @@ impl TransactionBuilder {
             &from_keypair.clone(),
         )
         .c(d!())
-        .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
+        .map_err(|e| {
+            JsValue::from_str(&format!(
+                "Builder from_abar error: {}",
+                e.get_lowest_msg()
+            ))
+        })?
         .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
         .build()
         .c(d!())
-        .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?;
+        .map_err(|e| {
+            JsValue::from_str(&format!("Builder build error: {}", e.get_lowest_msg()))
+        })?;
 
         let art = match (conf_amount, conf_type) {
             (true, true) => AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
@@ -570,7 +577,10 @@ impl TransactionBuilder {
             .add_operation_abar_to_bar(&oabar, &from_keypair.clone(), &recipient, art)
             .c(d!())
             .map_err(|e| {
-                JsValue::from_str(&format!("Could not add operation: {}", e))
+                JsValue::from_str(&format!(
+                    "builder add_operation_abar_to_bar error: {}",
+                    e.get_lowest_msg()
+                ))
             })?;
 
         Ok(self)
