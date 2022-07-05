@@ -858,7 +858,7 @@ pub fn convert_abar2bar(
     let mt_leaf_info = utils::get_abar_proof(&axtxo_abar.0).c(d!())?.unwrap();
     let mt_leaf_uid = mt_leaf_info.uid;
 
-    // Open ABAR with dec_key and OwnerMemo & attach merkle proof
+    // Open ABAR with OwnerMemo & attach merkle proof
     let oabar_in =
         OpenAnonAssetRecordBuilder::from_abar(&axtxo_abar.1, owner_memo, &from)
             .unwrap()
@@ -1042,7 +1042,6 @@ pub fn gen_anon_transfer_op(
 /// Note - if multiple anon keys are used, we consider the last key in the list for remainder.
 /// # Arguments
 /// * axfr_secret_keys    - list of secret keys for senders' ABAR UTXOs
-/// * dec_keys            - list of decryption keys for senders' ABARs
 /// * to_axfr_public_keys - receiver AXfr Public keys
 /// * to_enc_keys         - List of receiver Encryption keys
 /// * commitments         - List of sender commitments in base64 format

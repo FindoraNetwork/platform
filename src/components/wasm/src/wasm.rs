@@ -1291,7 +1291,6 @@ impl AnonTransferOperationBuilder {
         abar: &AnonAssetRecord,
         memo: &AxfrOwnerMemo,
         keypair: &AXfrKeyPair,
-        dec_key: &XSecretKey,
         mt_leaf_info: MTLeafInfo,
     ) -> Result<AnonTransferOperationBuilder, JsValue> {
         let oabar = OpenAnonAssetRecordBuilder::from_abar(
