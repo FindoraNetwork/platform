@@ -39,7 +39,8 @@ fn test_abci_info() {
 fn test_abci_init_chain() {
     let mut req = RequestInitChain::default();
     req.chain_id = "findora test".to_string();
-    let _ = BASE_APP.lock().unwrap().init_chain(&req);
+    // let _ =
+    BASE_APP.lock().unwrap().init_chain(&req);
 
     assert_eq!(
         &BASE_APP
@@ -91,11 +92,14 @@ fn test_abci_begin_block() {
     let mut header = Header::default();
     header.height = 1;
     req.set_header(header.clone());
-    let _ = BASE_APP.lock().unwrap().begin_block(&req);
-    let _ = BASE_APP.lock().unwrap().commit(&RequestCommit::new());
+    // let _ =
+    BASE_APP.lock().unwrap().begin_block(&req);
+    // let _ =
+    BASE_APP.lock().unwrap().commit(&RequestCommit::new());
     header.height = 2;
     req.set_header(header);
-    let _ = BASE_APP.lock().unwrap().begin_block(&req);
+    // let _ =
+    BASE_APP.lock().unwrap().begin_block(&req);
 }
 
 fn test_abci_deliver_tx() {
@@ -126,11 +130,13 @@ fn test_abci_deliver_tx() {
 fn test_abci_end_block() {
     let mut req = RequestEndBlock::default();
     req.height = 2;
-    let _ = BASE_APP.lock().unwrap().end_block(&req);
+    // let _ =
+    BASE_APP.lock().unwrap().end_block(&req);
 }
 
 fn test_abci_commit() {
-    let _ = BASE_APP.lock().unwrap().commit(&RequestCommit::new());
+    // let _ =
+    BASE_APP.lock().unwrap().commit(&RequestCommit::new());
     assert_eq!(
         BASE_APP
             .lock()

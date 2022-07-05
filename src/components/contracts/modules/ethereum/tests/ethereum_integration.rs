@@ -91,7 +91,8 @@ fn test_abci_begin_block() {
     let mut header = Header::default();
     header.height = 3;
     req.set_header(header);
-    let _ = BASE_APP.lock().unwrap().begin_block(&req);
+    // let _ =
+    BASE_APP.lock().unwrap().begin_block(&req);
 }
 
 fn test_abci_deliver_tx() {
@@ -135,11 +136,13 @@ fn test_abci_deliver_tx() {
 fn test_abci_end_block() {
     let mut req = RequestEndBlock::default();
     req.height = 3;
-    let _ = BASE_APP.lock().unwrap().end_block(&req);
+    // let _ =
+    BASE_APP.lock().unwrap().end_block(&req);
 }
 
 fn test_abci_commit() {
-    let _ = BASE_APP.lock().unwrap().commit(&RequestCommit::new());
+    // let _ =
+    BASE_APP.lock().unwrap().commit(&RequestCommit::new());
     assert_eq!(
         BASE_APP
             .lock()

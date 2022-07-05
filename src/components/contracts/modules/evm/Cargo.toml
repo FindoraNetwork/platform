@@ -11,10 +11,10 @@ readme = "README.md"
 [dependencies]
 abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
 ethereum-types = { version = "0.12", default-features = false }
-evm = { version = "0.29.0", default-features = false, features = ["with-serde"] }
-evm-runtime = { version = "0.30.0", default-features = false }
-evm-gasometer = { version = "0.30.0", default-features = false }
-ethereum = { version = "0.9.0", default-features = false, features = ["with-serde"] }
+evm = { version = "0.33.0", default-features = false, features = ["with-serde"] }
+evm-runtime = { version = "0.33.0", default-features = false }
+evm-gasometer = { version = "0.33.0", default-features = false }
+ethereum = { version = "0.10.0", default-features = false, features = ["with-serde"] }
 impl-trait-for-tuples = "0.2"
 log = "0.4"
 rlp = { version = "0.5", default-features = false }
@@ -37,6 +37,7 @@ fp-utils = { path = "../../primitives/utils" }
 config = { path = "../../../config"}
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.4" }
 ledger = { path = "../../../../ledger" }
+
 
 [dev-dependencies]
 baseapp = { path = "../../baseapp" }

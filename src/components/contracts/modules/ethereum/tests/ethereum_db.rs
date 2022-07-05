@@ -60,9 +60,11 @@ fn test_eth_db_migrate_txn_index() {
 
         let transaction_hash =
             H256::from_slice(Keccak256::digest(&rlp::encode(&txn)).as_slice());
+
         //Save Transaction index
         txns.push((HA256::new(transaction_hash), (U256::from(i), i)));
-        let _ = TransactionIndex::insert(
+        // let _ =
+        TransactionIndex::insert(
             ctx.state.write().borrow_mut(),
             &HA256::new(transaction_hash),
             &(U256::from(i), i),
@@ -70,7 +72,8 @@ fn test_eth_db_migrate_txn_index() {
     }
 
     //Call migrate on ethereum module.
-    let _ = module_ethereum::App::<BaseApp>::migrate(ctx.borrow_mut());
+    // let _ =
+    module_ethereum::App::<BaseApp>::migrate(ctx.borrow_mut());
 
     //Confirm transaction index values were migrated to rocksdb instance from the context.
     for txn in txns {

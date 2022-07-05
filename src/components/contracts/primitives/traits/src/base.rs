@@ -1,4 +1,4 @@
-use ethereum::{BlockV0 as Block, Receipt};
+use ethereum::{BlockV2 as Block, Receipt};
 use fp_core::account::SmartAccount;
 use fp_evm::BlockId;
 use fp_types::crypto::Address;
@@ -32,4 +32,9 @@ pub trait BaseProvider {
         index: H256,
         height: Option<u64>,
     ) -> Option<H256>;
+
+    /// Return the base fee at the given height.
+    fn base_fee(&self, id: Option<BlockId>) -> Option<U256>;
+    /// Return `true` if the request BlockId is post-eip1559.
+    fn is_eip1559(&self, id: Option<BlockId>) -> bool;
 }

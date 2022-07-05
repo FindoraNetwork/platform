@@ -75,6 +75,10 @@ build_release_goleveldb: tendermint_goleveldb
 	cargo build --release --bins -p abciapp -p finutils
 	$(call pack,release)
 
+check: tendermint_goleveldb
+	cargo check --release --bins -p abciapp -p finutils
+	$(call pack,release)
+
 # Build for goleveldb
 build_release_musl_goleveldb: tendermint_goleveldb
 	cargo build --release --bins -p abciapp -p finutils --target=x86_64-unknown-linux-musl

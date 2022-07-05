@@ -381,7 +381,8 @@ pub fn end_block(
     if td_height <= CFG.checkpoint.disable_evm_block_height
         || td_height >= CFG.checkpoint.enable_frc20_height
     {
-        let _ = s.account_base_app.write().end_block(req);
+        // let _ =
+        s.account_base_app.write().end_block(req);
     }
 
     // mint coinbase, cache system transactions to ledger

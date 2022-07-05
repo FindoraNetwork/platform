@@ -12,7 +12,8 @@ mod notify;
 
 use crate::modules::ModuleManager;
 use abci::Header;
-use ethereum::BlockV0 as Block;
+use ethereum::BlockV2 as Block;
+use evm_precompile_runtime::{self, FindoraPrecompiles};
 use fp_core::{
     account::SmartAccount,
     context::{Context, RunTxMode},
@@ -50,6 +51,23 @@ const APP_NAME: &str = "findora";
 const CHAIN_STATE_PATH: &str = "state.db";
 const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
 const CHAIN_STATE_MIN_VERSIONS: u64 = 4 * 60 * 24 * 90;
+
+const INITIAL_BASE_FEE: u64 = 1000000000;
+const ELASTICITY_MULTIPLIER: u64 = 2;
+const BASE_FEE_MAX_CHANGE_DENOMINATOR: u64 = 8;
+
+#[inline(always)]
+pub fn get_initial_base_fee() -> U256 {
+    U256::from(INITIAL_BASE_FEE)
+}
+#[inline(always)]
+pub fn get_elasticity_multiplier() -> U256 {
+    U256::from(ELASTICITY_MULTIPLIER)
+}
+#[inline(always)]
+pub fn get_base_fee_max_change_denominator() -> U256 {
+    U256::from(BASE_FEE_MAX_CHANGE_DENOMINATOR)
+}
 
 pub struct BaseApp {
     /// application name from abci.Info
@@ -107,6 +125,10 @@ impl module_ethereum::Config for BaseApp {
     type Runner = module_evm::runtime::runner::ActionRunner<Self>;
 }
 
+parameter_types! {
+    pub PrecompilesValue: FindoraPrecompiles<BaseApp> = FindoraPrecompiles::<_>::new();
+}
+
 impl module_evm::Config for BaseApp {
     type AccountAsset = module_account::App<Self>;
     type AddressMapping = EthereumAddressMapping;
@@ -126,6 +148,8 @@ impl module_evm::Config for BaseApp {
         evm_precompile_sha3fips::Sha3FIPS512,
         evm_precompile_frc20::FRC20<Self>,
     );
+    type PrecompilesType = FindoraPrecompiles<Self>;
+    type PrecompilesValue = PrecompilesValue;
 }
 
 impl module_xhub::Config for BaseApp {
@@ -422,5 +446,61 @@ impl BaseProvider for BaseApp {
         } else {
             None
         }
+    }
+
+    /// Return the base fee at the given height.
+    #[allow(clippy::comparison_chain, clippy::question_mark)]
+    fn base_fee(&self, id: Option<BlockId>) -> Option<U256> {
+        let mut comp_gas = std::vec::Vec::new();
+        let block = self.current_block(id)?;
+        let mut parent_block =
+            self.current_block(Some(BlockId::Hash(block.header.parent_hash)));
+        if parent_block.is_none() {
+            return None;
+        }
+        let parent_gas_used = parent_block.as_ref().unwrap().header.gas_used;
+        let parent_gas_target = parent_block.as_ref().unwrap().header.gas_limit
+            / get_elasticity_multiplier();
+        comp_gas.push((parent_gas_used, parent_gas_target));
+
+        while parent_block.as_ref().is_some() {
+            parent_block = self.current_block(Some(BlockId::Hash(
+                parent_block.as_ref().unwrap().header.parent_hash,
+            )));
+            let parent_gas_used = parent_block.as_ref().unwrap().header.gas_used;
+            let parent_gas_target = parent_block.as_ref().unwrap().header.gas_limit
+                / get_elasticity_multiplier();
+            comp_gas.push((parent_gas_used, parent_gas_target));
+        }
+
+        let mut base_fee = get_initial_base_fee();
+        comp_gas.pop();
+        while !comp_gas.is_empty() {
+            let (parent_gas_used, parent_gas_target) = comp_gas.pop().unwrap();
+            if parent_gas_used > parent_gas_target {
+                let gas_used_delta = parent_gas_used - parent_gas_target;
+                let base_fee_delta = std::cmp::max(
+                    base_fee * gas_used_delta
+                        / parent_gas_target
+                        / get_base_fee_max_change_denominator(),
+                    U256::from(1),
+                );
+                base_fee += base_fee_delta;
+            } else if parent_gas_used < parent_gas_target {
+                let gas_used_delta = parent_gas_target - parent_gas_used;
+                let base_fee_delta = base_fee * gas_used_delta
+                    / parent_gas_target
+                    / get_base_fee_max_change_denominator();
+                base_fee -= base_fee_delta;
+            }
+        }
+
+        Some(base_fee)
+    }
+
+    /// Return `true` if the request BlockId is post-eip1559.
+    /// Do not be used.
+    fn is_eip1559(&self, _id: Option<BlockId>) -> bool {
+        false
     }
 }

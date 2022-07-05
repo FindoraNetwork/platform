@@ -1,5 +1,5 @@
 use baseapp::BaseApp;
-use ethereum::{BlockV0 as EthereumBlock, Receipt};
+use ethereum::{BlockV2 as EthereumBlock, Receipt};
 use ethereum_types::{H256, U256};
 use fp_evm::BlockId;
 use fp_rpc_core::{
@@ -226,12 +226,15 @@ impl SubscriptionResult {
         let mut log_index: u32 = 0;
         for (receipt_index, receipt) in receipts.into_iter().enumerate() {
             let transaction_hash: Option<H256> = if !receipt.logs.is_empty() {
-                Some(H256::from_slice(
-                    Keccak256::digest(&rlp::encode(
-                        &block.transactions[receipt_index as usize],
-                    ))
-                    .as_slice(),
-                ))
+                let transaction = &block.transactions[receipt_index as usize];
+                Some(transaction.hash())
+
+                // Some(H256::from_slice(
+                //     Keccak256::digest(&rlp::encode(
+                //         &block.transactions[receipt_index as usize],
+                //     ))
+                //     .as_slice(),
+                // ))
             } else {
                 None
             };

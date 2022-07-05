@@ -149,7 +149,8 @@ fn test_deploy_deliver_tx() -> (H160, ethabi::Contract) {
 }
 
 fn test_deploy_commit(contract_address: H160) {
-    let _ = BASE_APP.lock().unwrap().commit(&RequestCommit::new());
+    // let _ =
+    BASE_APP.lock().unwrap().commit(&RequestCommit::new());
 
     let ctx = BASE_APP
         .lock()

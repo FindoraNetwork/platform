@@ -1,6 +1,6 @@
 use crate::{filter_block_logs, internal_err};
 use baseapp::BaseApp;
-use ethereum::BlockV0 as EthereumBlock;
+use ethereum::BlockV2 as EthereumBlock;
 use ethereum_types::{H256, U256};
 use fp_evm::{BlockId, TransactionStatus};
 use fp_rpc_core::types::{

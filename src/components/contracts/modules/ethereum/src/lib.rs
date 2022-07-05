@@ -4,6 +4,7 @@
 mod basic;
 mod impls;
 
+use ethereum::TransactionV2 as Transaction;
 use ethereum_types::{H160, H256, U256};
 use evm::Config as EvmConfig;
 use fp_core::context::RunTxMode;
@@ -52,7 +53,7 @@ pub trait Config {
 }
 
 pub mod storage {
-    use ethereum::{BlockV0 as Block, Receipt, TransactionV0 as Transaction};
+    use ethereum::{BlockV2 as Block, Receipt, TransactionV2 as Transaction};
     use ethereum_types::U256;
     use fp_evm::TransactionStatus;
     use fp_storage::*;
@@ -160,53 +161,73 @@ impl<C: Config> ValidateUnsigned for App<C> {
 
     fn validate_unsigned(ctx: &Context, call: &Self::Call) -> Result<()> {
         let Action::Transact(transaction) = call;
-        if let Some(chain_id) = transaction.signature.chain_id() {
-            if chain_id != C::ChainId::get() {
-                return Err(eg!(format!(
-                    "InvalidChainId, got {}, but expected {}",
-                    chain_id,
-                    C::ChainId::get()
-                )));
+
+        let (nonce, gas_price, gas_limit, value, chain_id);
+
+        match transaction {
+            Transaction::Legacy(t) => {
+                nonce = t.nonce;
+                gas_price = t.gas_price;
+                gas_limit = t.gas_limit;
+                value = t.value;
+                chain_id = match t.signature.chain_id() {
+                    Some(chain_id) => chain_id,
+                    None => return Err(eg!("Must provide chainId")),
+                };
             }
-        } else {
-            return Err(eg!("Must provide chainId".to_string()));
+            Transaction::EIP1559(t) => {
+                nonce = t.nonce;
+                gas_limit = t.gas_limit;
+                gas_price = t.max_fee_per_gas;
+                value = t.value;
+                chain_id = t.chain_id;
+            }
+            _ => {
+                return Err(eg!("Transaction Type Error"));
+            }
+        }
+
+        if chain_id != C::ChainId::get() {
+            return Err(eg!(format!(
+                "InvalidChainId, got {}, but expected {}",
+                chain_id,
+                C::ChainId::get()
+            )));
         }
 
         let origin = Self::recover_signer(transaction)
             .ok_or_else(|| eg!("InvalidSignature, can not recover signer address"))?;
 
         // Same as go ethereum, Min gas limit is 21000.
-        if transaction.gas_limit < U256::from(21000)
-            || transaction.gas_limit > C::BlockGasLimit::get()
-        {
+        if gas_limit < U256::from(21000) || gas_limit > C::BlockGasLimit::get() {
             return Err(eg!(format!(
                 "InvalidGasLimit: got {}, the gas limit must be in range [21000, {}]",
-                transaction.gas_limit,
+                gas_limit,
                 C::BlockGasLimit::get()
             )));
         }
 
-        if transaction.gas_price < C::FeeCalculator::min_gas_price() {
+        if gas_price < C::FeeCalculator::min_gas_price() {
             return Err(eg!(format!(
                 "InvalidGasPrice: got {}, but the minimum gas price is {}",
-                transaction.gas_price,
+                gas_price,
                 C::FeeCalculator::min_gas_price()
             )));
         }
 
         let account_id = C::AddressMapping::convert_to_account_id(origin);
-        let nonce = C::AccountAsset::nonce(ctx, &account_id);
+        let nonce2 = C::AccountAsset::nonce(ctx, &account_id);
         let balance = C::AccountAsset::balance(ctx, &account_id);
 
-        if transaction.nonce < nonce {
+        if nonce < nonce2 {
             return Err(eg!(format!(
                 "InvalidNonce: origin: {:?}, got {}, but expected {}",
-                origin, transaction.nonce, nonce
+                origin, nonce, nonce2
             )));
         }
 
-        let fee = transaction.gas_price.saturating_mul(transaction.gas_limit);
-        let total_payment = transaction.value.saturating_add(fee);
+        let fee = gas_price.saturating_mul(gas_limit);
+        let total_payment = value.saturating_add(fee);
         if balance < total_payment {
             return Err(eg!(format!(
                 "InsufficientBalance, origin: {:?}, actual balance {}, but expected payment {}",

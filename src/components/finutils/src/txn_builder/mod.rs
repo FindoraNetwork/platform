@@ -518,6 +518,7 @@ impl TransactionBuilder {
     /// * `txo_sid`       -  TxoSID of the BAR to convert
     /// * `input_record`  -  OpenAssetRecord of the BAR to convert
     /// * `enc_key`       -  XPublicKey of OwnerMemo encryption of receiver
+    #[allow(clippy::too_many_arguments)]
     pub fn add_operation_bar_to_abar(
         &mut self,
         seed: [u8; 32],
@@ -2143,7 +2144,8 @@ mod tests {
         let uid_fee = ledger_state.add_abar(&fee_abar).unwrap();
 
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-        let _ = ledger_state.compute_and_save_state_commitment_data(1);
+        // let _ =
+        ledger_state.compute_and_save_state_commitment_data(1);
 
         let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
         let mt_leaf_fee_info = ledger_state.get_abar_proof(uid_fee).unwrap();
@@ -2322,7 +2324,8 @@ mod tests {
         // add abar to merkle tree
         let uid = ledger_state.add_abar(&abar).unwrap();
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-        let _ = ledger_state.compute_and_save_state_commitment_data(1);
+        // let _ =
+        ledger_state.compute_and_save_state_commitment_data(1);
         let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
         oabar.update_mt_leaf_info(mt_leaf_info);
 
@@ -2364,14 +2367,16 @@ mod tests {
         // add abar to merkle tree
         let uid1 = ledger_state.add_abar(&abar1).unwrap();
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-        let _ = ledger_state.compute_and_save_state_commitment_data(2);
+        // let _ =
+        ledger_state.compute_and_save_state_commitment_data(2);
         let mt_leaf_info1 = ledger_state.get_abar_proof(uid1).unwrap();
         oabar1.update_mt_leaf_info(mt_leaf_info1);
 
         // add abar to merkle tree for negative amount
 
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-        let _ = ledger_state.compute_and_save_state_commitment_data(2);
+        // let _ =
+        ledger_state.compute_and_save_state_commitment_data(2);
 
         let (oabar_out1, _keypair_out1, _dec_key_out1, _) =
             gen_oabar_and_keys(&mut prng1, amount1, asset_type1);

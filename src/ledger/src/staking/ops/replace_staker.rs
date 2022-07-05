@@ -50,7 +50,8 @@ impl ReplaceStakerOps {
     ///verify the body with the public key
     pub fn verify(&self) -> Result<()> {
         if let Some(new_params) = &self.body.new_tendermint_params {
-            let _ = tendermint::PublicKey::from_raw_ed25519(&new_params.pubkey)
+            // let _ =
+            tendermint::PublicKey::from_raw_ed25519(&new_params.pubkey)
                 .c(d!("Invalid tendermint public key."))?;
 
             if new_params.address.len() != 20 {

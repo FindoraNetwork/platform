@@ -601,7 +601,8 @@ impl LedgerState {
 
         // Initializing Merkle tree to set Empty tree root hash, which is a hash of null children
         let store = PrefixedStore::new("abar_store", &mut abar_state);
-        let _ = PersistentMerkleTree::new(store)?;
+        // let _ =
+        PersistentMerkleTree::new(store)?;
 
         let mut ledger = LedgerState {
             status: LedgerStatus::new(&basedir, &snapshot_file).c(d!())?,

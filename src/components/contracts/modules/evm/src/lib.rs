@@ -27,8 +27,9 @@ use fp_traits::{
 
 use fp_evm::TransactionStatus;
 
-use ethereum::{Log, Receipt, TransactionAction, TransactionSignature, TransactionV0};
+use ethereum::{Log, Receipt, TransactionAction, TransactionSignature, TransactionV2};
 
+use evm::executor::stack::PrecompileSet as EvmPrecompileSet;
 use fp_types::{
     actions::{evm::Action, xhub::NonConfidentialOutput},
     crypto::{Address, HA160},
@@ -60,6 +61,8 @@ pub trait Config {
     type FeeCalculator: FeeCalculator;
     /// Precompiles associated with this EVM engine.
     type Precompiles: PrecompileSet;
+    type PrecompilesType: EvmPrecompileSet;
+    type PrecompilesValue: Get<Self::PrecompilesType>;
 }
 
 pub mod storage {
@@ -98,7 +101,7 @@ impl<C: Config> App<C> {
         _lowlevel: Vec<u8>,
         transaction_index: u32,
         transaction_hash: H256,
-    ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
+    ) -> Result<(TransactionV2, TransactionStatus, Receipt)> {
         let function = self.contracts.bridge.function("withdrawFRC20").c(d!())?;
 
         let asset = Token::FixedBytes(Vec::from(_asset));
@@ -159,7 +162,7 @@ impl<C: Config> App<C> {
         _lowlevel: Vec<u8>,
         transaction_index: u32,
         transaction_hash: H256,
-    ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
+    ) -> Result<(TransactionV2, TransactionStatus, Receipt)> {
         let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
 
         let bytes: &[u8] = _from.as_ref();
@@ -245,13 +248,13 @@ impl<C: Config> App<C> {
         from: H160,
         to: H160,
         logs: Vec<Log>,
-    ) -> (TransactionV0, TransactionStatus, Receipt) {
+    ) -> (TransactionV2, TransactionStatus, Receipt) {
         let signature_fake = H256([
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
         ]);
-        let tx = TransactionV0 {
+        let tx = TransactionV2::Legacy(ethereum::LegacyTransaction {
             nonce: U256::zero(),
             gas_price,
             gas_limit,
@@ -260,7 +263,7 @@ impl<C: Config> App<C> {
                 .unwrap(),
             input,
             action,
-        };
+        });
 
         let mut logs_bloom = Bloom::default();
         Self::logs_bloom(&logs, &mut logs_bloom);

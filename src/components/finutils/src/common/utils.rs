@@ -53,7 +53,8 @@ pub fn send_tx(tx: &Transaction) -> Result<()> {
 
     let tx_bytes = serde_json::to_vec(tx).c(d!())?;
 
-    let _ = attohttpc::post(&url)
+    // let _ =
+    attohttpc::post(&url)
         .header(attohttpc::header::CONTENT_TYPE, "application/json")
         .bytes(&tx_bytes)
         .send()
