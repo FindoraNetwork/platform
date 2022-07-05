@@ -144,7 +144,7 @@ impl ModuleManager {
             let ba = Address::from(bridge_address);
 
             module_account::App::<BaseApp>::mint(ctx, &ba, balance)?;
-            self.evm_module.withdraw_fra(
+            match self.evm_module.withdraw_fra(
                 ctx,
                 &from,
                 &owner,
@@ -152,7 +152,14 @@ impl ModuleManager {
                 lowlevel,
                 transaction_index,
                 hash,
-            )?
+            ) {
+                Ok(r) => r,
+                Err(e) => {
+                    // Revert mint in failed.
+                    ctx.state.write().discard_session();
+                    return Err(e);
+                }
+            }
         } else {
             self.evm_module.withdraw_frc20(
                 ctx,
