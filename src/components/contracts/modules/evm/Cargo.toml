@@ -21,11 +21,11 @@ rlp = { version = "0.5", default-features = false }
 ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0.64"
-sha3 = { version = "0.8", default-features = false }
+sha3 = { version = "0.10", default-features = false }
 hex = "0.4.2"
 ethabi = "16.0.0"
-zei = "0.1"
-zei-algebra = "0.1"
+zei = "0.2"
+zei-algebra = "0.2"
 
 # primitives, don't depend on any modules
 fp-core = { path = "../../primitives/core" }
@@ -35,7 +35,8 @@ fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
 config = { path = "../../../config"}
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.4" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.0" }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.0" }
 ledger = { path = "../../../../ledger" }
 
 [dev-dependencies]

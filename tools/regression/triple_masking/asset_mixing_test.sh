@@ -14,20 +14,17 @@ echo -e "${YEL}Run asset mixing test cases and verify results${NC}"
 FRA_ACCOUNT="fra1peaqwykz6vgpvhxfu60w6lngqw6jvwr0f8cyzzvmaqa3dn6xsy4qan9rne"
 BAR_SEC_KEY="KtbqhEo_FJaQoq2fV5K4niayxz_VK8LHJBqU1eV5x0o="
 
-ANON_SK_1="J7PqRhmBOE_gadFs4rB4lcKuz_YoWa5VSlALyKuZdQjNBryPSYZhRczonGNY3-mp86LWW8TJ6clirfk4gk03Tw=="
-ANON_PK_1="zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08="
-ANON_ENC_1="Gu558brzFchoqQR9oi8QP54KZKSQ18Djzt82C4YUyFg="
-ANON_DEC_1="4GNC0J_qOXV2kww5BC5bOCyrTEfCodX5BoFaj06uN1s="
+ANON_SK_1="Ccv2h8u1g__HJBrsA8npcs4CiDQ_UHI-JGZCjXbu9Un8HU3qSTf3PdLEFvs1XwauSltgruFv-IRVFpaQkeIIAgRoRPXncS1VHYzRpQlghzgCcQKJnic90DFDiYxSPVjg"
+ANON_VK_1="_B1N6kk39z3SxBb7NV8GrkpbYK7hb_iEVRaWkJHiCAI="
+ANON_PK_1="BGhE9edxLVUdjNGlCWCHOAJxAomeJz3QMUOJjFI9WOA="
 
-ANON_SK_2="MwdsbYhTp4Io062nV7E2HkJfsnaTCZpkdjr6aijv2Aem3KjuGWqf4TLB_-20b305Ja3Pop8NS8tgMNUOVXUL5Q=="
-ANON_PK_2="ptyo7hlqn-Eywf_ttG99OSWtz6KfDUvLYDDVDlV1C-U="
-ANON_ENC_2="SAmB7Oji4sAgENLaLb4PFclxQL_DRrEkXcYp6eXuXwI="
-ANON_DEC_2="AEq1ZUFk_fB__YaNjQ3D2taGOnMZAx4adpB6RbnPj24="
+ANON_SK_2="h4MuWol8pWuNIMxPHwJ0ZAoF_n51QScj6AultG5IHU3yL-LR02XXw58uudwom_tahcy1e0oadfOw3oLxSs64A9yTOKFC1NqT6e-fWGEO-QpSZzf8otV7POguvdejoKhL"
+ANON_VK_2="8i_i0dNl18OfLrncKJv7WoXMtXtKGnXzsN6C8UrOuAM="
+ANON_PK_2="3JM4oULU2pPp759YYQ75ClJnN_yi1Xs86C6916OgqEs="
 
-ANON_SK_3="vw41h9OciN5cDh8QSPFEodSA5AnuHxxcV5SKJ_q-JQMGUX_qogo-lXUvhnXo1gYuP8YsoJJro7kNloXx8wfDSA=="
-ANON_PK_3="BlF_6qIKPpV1L4Z16NYGLj_GLKCSa6O5DZaF8fMHw0g="
-ANON_ENC_3="NBY5yIhdriJVq-7BS59J2IxBgLhewr8TEE6suNc1elA="
-ANON_DEC_3="OKh4F5o_Mw0eKi0xU8lQhi_lXMVd-hem7N12lvSy_WU="
+ANON_SK_3="bRrcmHV-87-na2jKuOEQZmVyLE6q4oVdCiMoWdqVHwOqkAlAXybyeheaNCyWw7j0lz4vlnxP5nUNpbnSwF3tBiXKJs7KF1X9zc9ZUy_3U8-2YnyrGSWbQ-QIpNVmBGvy"
+ANON_VK_3="qpAJQF8m8noXmjQslsO49Jc-L5Z8T-Z1DaW50sBd7QY="
+ANON_PK_3="JcomzsoXVf3Nz1lTL_dTz7ZifKsZJZtD5Aik1WYEa_I="
 
 FILE_ANON_KEYS="anon-keys-temp_1.keys"
 FILE_ANON_KEYS_2="anon-keys-temp_2.keys"
@@ -142,8 +139,7 @@ target/release/fn anon-transfer    \
   --anon-keys $FILE_ANON_KEYS    \
   --commitment $COMMITMENT         \
   --fra-commitment $FRA_COMMITMENT \
-  --to-axfr-public-key $ANON_PK_2  \
-  --to-enc-key $ANON_ENC_2
+  --to-axfr-public-key $ANON_PK_2
 echo "waiting for transaction to complete..."
 sleep $TM_SLEEP
 
@@ -158,20 +154,14 @@ ANON_KEY_1_ASSET_2_COMMITMENT=$(awk 'FNR==4' owned_commitments) # ASSET 2
 ANON_KEY_2_ASSET_1_COMMITMENT=$(awk 'FNR==2' sent_commitments)  # ASSET 1
 
 BATCH_SK="batch_sk.keys"
-BATCH_DEC="batch_dec.keys"
 BATCH_C="batch_c.keys"
 BATCH_PK="batch_pk.keys"
-BATCH_ENC="batch_enc.keys"
 BATCH_AMOUNT="batch_amount.keys"
 BATCH_ASSET="batch_asset.keys"
 
 echo $ANON_SK_1 > $BATCH_SK
 echo $ANON_SK_1 >> $BATCH_SK
 echo $ANON_SK_2 >> $BATCH_SK
-
-echo $ANON_DEC_1 > $BATCH_DEC
-echo $ANON_DEC_1 >> $BATCH_DEC
-echo $ANON_DEC_2 >> $BATCH_DEC
 
 echo $ANON_KEY_1_FRA_COMMITMENT > $BATCH_C
 echo $ANON_KEY_1_ASSET_2_COMMITMENT >> $BATCH_C
@@ -181,26 +171,20 @@ echo $ANON_PK_2 > $BATCH_PK
 echo $ANON_PK_2 >> $BATCH_PK
 echo $ANON_PK_3 >> $BATCH_PK
 
-echo $ANON_ENC_2 > $BATCH_ENC
-echo $ANON_ENC_2 >> $BATCH_ENC
-echo $ANON_ENC_3 >> $BATCH_ENC
-
 echo "" > $BATCH_ASSET
 echo $ASSET2 >> $BATCH_ASSET
 echo $ASSET1 >> $BATCH_ASSET
 
 echo 10000000 > $BATCH_AMOUNT
 echo 10000000 >> $BATCH_AMOUNT
-echo 10000000 >> $BATCH_AMOUNT
+echo 50000000 >> $BATCH_AMOUNT
 
 echo ""
 echo "Sending multi-asset transaction..."
 target/release/fn anon-transfer-batch \
   --axfr-secretkey-file $BATCH_SK     \
-  --decryption-key-file $BATCH_DEC    \
   --commitment-file $BATCH_C          \
   --to-axfr-public-key-file $BATCH_PK \
-  --to-enc-key-file $BATCH_ENC        \
   --amount-file $BATCH_AMOUNT         \
   --asset-file $BATCH_ASSET         > /dev/null
 echo "waiting for transaction to complete..."
@@ -212,8 +196,8 @@ target/release/fn owned-abars --commitments $(awk 'FNR==5' sent_commitments) --a
 
 python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments "$(awk 'FNR==3' sent_commitments)" --amount 10000000
 python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments "$(awk 'FNR==4' sent_commitments)" --amount 10000000 --asset "$ASSET2"
-python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_3 --commitments "$(awk 'FNR==5' sent_commitments)" --amount 10000000 --asset "$ASSET1"
+python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_3 --commitments "$(awk 'FNR==5' sent_commitments)" --amount 50000000 --asset "$ASSET1"
 
 
-rm $BATCH_SK $BATCH_DEC $BATCH_C $BATCH_PK $BATCH_ENC $BATCH_AMOUNT $BATCH_ASSET
+rm $BATCH_SK $BATCH_C $BATCH_PK $BATCH_AMOUNT $BATCH_ASSET
 echo -e "\n ***** Test all successfully! ***** "

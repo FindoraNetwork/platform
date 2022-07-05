@@ -11,7 +11,7 @@ use ruc::*;
 use zei::anon_xfr::structs::Nullifier;
 use zei::{
     anon_xfr::{
-        keys::{AXfrKeyPair, AXfrPubKey},
+        keys::{AXfrKeyPair, AXfrPubKey, AXfrViewKey},
         structs::Commitment,
     },
     xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
@@ -208,6 +208,20 @@ pub fn anon_public_key_from_base64(pk: &str) -> Result<AXfrPubKey> {
 /// Convert an anon public key to base64
 pub fn anon_public_key_to_base64(key: &AXfrPubKey) -> String {
     base64::encode_config(&AXfrPubKey::zei_to_bytes(key), base64::URL_SAFE)
+}
+
+#[inline(always)]
+/// Restore a anon view key from base64
+pub fn anon_view_key_from_base64(key: &str) -> Result<AXfrViewKey> {
+    base64::decode_config(key, base64::URL_SAFE)
+        .c(d!())
+        .and_then(|bytes| AXfrViewKey::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Convert an anon view key to base64
+pub fn anon_view_key_to_base64(key: &AXfrViewKey) -> String {
+    base64::encode_config(&AXfrViewKey::zei_to_bytes(key), base64::URL_SAFE)
 }
 
 #[inline(always)]

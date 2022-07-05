@@ -121,9 +121,9 @@ impl Credential {
             u32_attrs[*pos..*pos + *len].clone_from_slice(&u32_vec);
         }
         Ok(ZeiCredential {
-            signature: self.signature.clone(),
-            attributes: u32_attrs,
-            issuer_pub_key: self.issuer_pub_key.ac_pub_key.clone(),
+            sig: self.signature.clone(),
+            attrs: u32_attrs,
+            ipk: self.issuer_pub_key.ac_pub_key.clone(),
         })
     }
 }
@@ -146,7 +146,7 @@ pub fn credential_issuer_key_gen<R: CryptoRng + RngCore>(
         map.insert(key.clone(), ((num_attrs, num_sub_attr), *len));
         num_attrs += num_sub_attr;
     }
-    let (issuer_pub_key, issuer_sec_key) = ac_keygen_issuer(prng, num_attrs);
+    let (issuer_sec_key, issuer_pub_key) = ac_keygen_issuer(prng, num_attrs);
 
     (
         CredIssuerPublicKey {
@@ -168,7 +168,7 @@ pub fn credential_user_key_gen<R: CryptoRng + RngCore>(
     prng: &mut R,
     issuer_pub_key: &CredIssuerPublicKey,
 ) -> (CredUserPublicKey, CredUserSecretKey) {
-    let (pk, sk) = ac_keygen_user(prng, &issuer_pub_key.ac_pub_key);
+    let (sk, pk) = ac_keygen_user(prng, &issuer_pub_key.ac_pub_key);
     (CredUserPublicKey(pk), CredUserSecretKey(sk))
 }
 
