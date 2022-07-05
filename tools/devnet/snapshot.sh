@@ -11,7 +11,7 @@ mkdir -p $WALLET
 rm -rf $WALLET/mnenomic.key
 rm -rf $WALLET/snapshot.tar.gz
 echo "$MNEMONIC" > $WALLET/mnenomic.key
-4
+
 # show and confirm genesis keypair
 echo -e "${GRN}step-0: keypair-------------------------------------------------${NC}"
 echo -e "mnemonic    = ${YEL}$MNEMONIC${NC}"
