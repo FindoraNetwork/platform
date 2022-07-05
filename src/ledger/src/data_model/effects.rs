@@ -1,3 +1,6 @@
+use crate::data_model::{AssetTypePrefix, ASSET_TYPE_FRA};
+use fbnc::NumKey;
+use fp_utils::hashing::keccak_256;
 use {
     crate::{
         data_model::{
@@ -235,7 +238,14 @@ impl TxnEffect {
         // (1)
         def.signature.verify(&def.pubkey.key, &def.body).c(d!())?;
 
-        let code = def.body.asset.code;
+        let code = if def.body.asset.code.val == ASSET_TYPE_FRA {
+            def.body.asset.code
+        } else {
+            let mut asset_code = AssetTypePrefix::UserDefined.bytes();
+            asset_code.append(&mut def.body.asset.code.to_bytes());
+            AssetTypeCode::new_from_vec(keccak_256(asset_code.as_slice()).to_vec())
+        };
+
         let token = AssetType {
             properties: *def.body.asset.clone(),
             ..Default::default()
@@ -276,7 +286,14 @@ impl TxnEffect {
             return Err(eg!());
         }
 
-        let code = iss.body.code;
+        let code = if iss.body.code.val == ASSET_TYPE_FRA {
+            iss.body.code
+        } else {
+            let mut asset_code = AssetTypePrefix::UserDefined.bytes();
+            asset_code.append(&mut iss.body.code.to_bytes());
+            AssetTypeCode::new_from_vec(keccak_256(asset_code.as_slice()).to_vec())
+        };
+
         let seq_num = iss.body.seq_num;
 
         self.asset_types_involved.insert(code);

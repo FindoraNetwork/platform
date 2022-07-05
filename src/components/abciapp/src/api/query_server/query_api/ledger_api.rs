@@ -688,7 +688,12 @@ pub async fn query_owned_utxos(
     globutils::wallet::public_key_from_base64(owner.as_str())
         .c(d!())
         .map_err(|e| error::ErrorBadRequest(e.to_string()))
-        .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk))))
+        .and_then(|pk| {
+            ledger
+                .get_owned_utxos(&pk)
+                .map_err(|e| error::ErrorBadRequest(e.to_string()))
+        })
+        .map(|res| web::Json(res))
 }
 
 // query utxos according `commitment`

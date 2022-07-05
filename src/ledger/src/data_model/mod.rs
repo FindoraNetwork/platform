@@ -1021,6 +1021,27 @@ impl IssueAssetBody {
 }
 
 #[allow(missing_docs)]
+#[derive(Clone, Debug, Deserialize)]
+pub enum AssetTypePrefix {
+    UserDefined,
+    ERC20,
+    NFT,
+}
+
+impl AssetTypePrefix {
+    #[allow(missing_docs)]
+    pub fn bytes(&self) -> Vec<u8> {
+        let code = match self {
+            AssetTypePrefix::UserDefined => "56",
+            AssetTypePrefix::ERC20 => "77",
+            AssetTypePrefix::NFT => "02",
+        };
+
+        hex::decode(format!("{:0>64}", code)).unwrap()
+    }
+}
+
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DefineAssetBody {
     pub asset: Box<Asset>,
