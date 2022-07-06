@@ -317,12 +317,12 @@ impl QueryServer {
     /// Returns the owner memos required to decrypt the asset record stored at between start and end,
     /// include start and end, limit 100.
     #[inline(always)]
-    pub fn get_abar_memos(&self, start: u64, end: u64) -> Vec<AxfrOwnerMemo> {
+    pub fn get_abar_memos(&self, start: u64, end: u64) -> Vec<(u64, AxfrOwnerMemo)> {
         let mut memos = vec![];
         let cache = self.ledger_cloned.api_cache.as_ref().unwrap();
         for i in start..=end {
             if let Some(memo) = cache.abar_memos.get(&ATxoSID(i)) {
-                memos.push(memo);
+                memos.push((i, memo));
             }
         }
         memos

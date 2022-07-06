@@ -109,7 +109,7 @@ async fn get_abar_memo(
 async fn get_abar_memos(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     query: web::Query<HashMap<String, u64>>,
-) -> actix_web::Result<web::Json<Vec<AxfrOwnerMemo>>, actix_web::error::Error> {
+) -> actix_web::Result<web::Json<Vec<(u64, AxfrOwnerMemo)>>, actix_web::error::Error> {
     match (query.get("start"), query.get("end")) {
         (Some(start), Some(end)) => {
             if end < start || end - start > 100 {
