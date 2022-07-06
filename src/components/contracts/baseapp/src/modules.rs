@@ -17,9 +17,9 @@ use ledger::{
     converter::check_convert_account,
     data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA},
 };
-use module_ethereum::storage::{PendingTransactions, TransactionIndex};
 use ruc::*;
 use serde::Serialize;
+use module_ethereum::storage::{TransactionIndex, DELIVER_PENDING_TRANSACTIONS};
 
 #[derive(Default, Clone)]
 pub struct ModuleManager {
@@ -133,9 +133,11 @@ impl ModuleManager {
         let from = Address::from(from);
         let owner = Address::from(to);
 
-        let mut pending_txs: Vec<_> =
-            PendingTransactions::get(&*ctx.db.read()).unwrap_or_default();
+        let mut pending_txs = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
+        // if let Some(pending_txs)
+        // let transaction_index = pending_txs.as_ref().unwrap_or_default().len() as u32;
         let transaction_index = pending_txs.len() as u32;
+
 
         let (tx, tx_status, receipt) = if asset == ASSET_TYPE_FRA {
             let balance = EthereumDecimalsMapping::from_native_token(U256::from(amount))
@@ -180,7 +182,6 @@ impl ModuleManager {
         )?;
 
         pending_txs.push((tx, tx_status, receipt));
-        PendingTransactions::put(&mut *ctx.db.write(), &pending_txs)?;
 
         Ok(())
     }

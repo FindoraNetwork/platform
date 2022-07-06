@@ -99,7 +99,7 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
 
     drop(state);
 
-    log::info!(target: "abciapp", "======== Last committed height: {} ========", h);
+    log::info!(target: "abciapp", "======== Last committed height: {} ========", td_height);
 
     if la.all_commited() {
         la.begin_block();
@@ -324,9 +324,9 @@ pub fn deliver_tx(
                         resp.log = "Triple Masking is disabled".to_owned();
                         return resp;
                     } else if CFG.checkpoint.utxo_checktx_height < td_height {
-                        match tx.check_tx() {
+                        match txn.check_tx() {
                             Ok(_) => {
-                                if let Err(e) = s.la.write().cache_transaction(tx) {
+                                if let Err(e) = s.la.write().cache_transaction(txn) {
                                     resp.code = 1;
                                     resp.log = e.to_string();
                                 }
@@ -336,7 +336,7 @@ pub fn deliver_tx(
                                 resp.log = e.to_string();
                             }
                         }
-                    } else if let Err(e) = s.la.write().cache_transaction(tx) {
+                    } else if let Err(e) = s.la.write().cache_transaction(txn) {
                         resp.code = 1;
                         resp.log = e.to_string();
                     }
