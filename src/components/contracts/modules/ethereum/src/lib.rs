@@ -60,7 +60,6 @@ pub mod storage {
     use fp_storage::*;
     use fp_types::crypto::HA256;
     use lazy_static::lazy_static;
-    use std::cell::RefCell;
     use std::sync::Mutex;
 
     // Mapping for transaction hash and at block number with index.
@@ -79,12 +78,11 @@ pub mod storage {
 
     // The following data is stored in in-memory array
     // Current building block's transactions and receipts.
-    type PendingTransactions =
-        Mutex<RefCell<Option<Vec<(Transaction, TransactionStatus, Receipt)>>>>;
+    type PendingTransactions = Mutex<Vec<(Transaction, TransactionStatus, Receipt)>>;
 
     lazy_static! {
         pub static ref DELIVER_PENDING_TRANSACTIONS: PendingTransactions =
-            Mutex::new(RefCell::new(None));
+            Mutex::new(vec![]);
     }
 }
 

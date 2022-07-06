@@ -80,12 +80,9 @@ impl<C: Config> App<C> {
         let mut logs_bloom = Bloom::default();
         let mut is_store_block = true;
 
-        let pending_txs: Vec<(Transaction, TransactionStatus, Receipt)> = {
-            let mut txns_guard = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
-            let txns = txns_guard.get_mut();
-            let pending_txns = txns.clone();
-            *txns = None;
-            pending_txns.unwrap_or_default()
+        let pending_txs = {
+            let mut txns = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
+            std::mem::take(&mut *txns)
         };
 
         if block_number < U256::from(CFG.checkpoint.evm_first_block_height)
@@ -173,9 +170,8 @@ impl<C: Config> App<C> {
         let transaction_index = if just_check {
             0
         } else {
-            let mut txns_guard = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
-            let txns = txns_guard.get_mut();
-            txns.as_ref().map_or(0, |txns| txns.len()) as u32
+            let txns = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
+            txns.len() as u32
         };
 
         let gas_limit = transaction.gas_limit;
@@ -311,14 +307,8 @@ impl<C: Config> App<C> {
 
         if !just_check {
             {
-                let mut pending_txs_guard =
-                    DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
-                let pending_txs = pending_txs_guard.get_mut();
-                if let Some(txs) = pending_txs {
-                    txs.push((transaction, status, receipt));
-                } else {
-                    *pending_txs = Some(vec![(transaction, status, receipt)]);
-                };
+                let mut pending_txs = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
+                pending_txs.push((transaction, status, receipt));
             }
 
             TransactionIndex::insert(
