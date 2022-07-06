@@ -29,7 +29,7 @@ use {
     serde::{Deserialize, Serialize},
     server::QueryServer,
     std::{
-        collections::{BTreeMap, HashSet},
+        collections::{BTreeMap, HashMap, HashSet},
         sync::Arc,
     },
     zei::{
@@ -104,6 +104,25 @@ async fn get_abar_memo(
     Ok(web::Json(server.get_abar_memo(ATxoSID(*info))))
 }
 
+/// Returns the owner memos required to decrypt the asset record stored at between start and end,
+/// include start and end, limit 100.
+async fn get_abar_memos(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    query: web::Query<HashMap<String, u64>>,
+) -> actix_web::Result<web::Json<Vec<AxfrOwnerMemo>>, actix_web::error::Error> {
+    match (query.get("start"), query.get("end")) {
+        (Some(start), Some(end)) => {
+            if end < start || end - start > 100 {
+                // return limit 100 error.
+                return Err(actix_web::error::ErrorBadRequest("Limit 100"));
+            }
+            let server = data.read();
+            Ok(web::Json(server.get_abar_memos(*start, *end)))
+        }
+        _ => Err(actix_web::error::ErrorBadRequest("Missing start and end")),
+    }
+}
+
 /// Returns an array of the utxo sids currently spendable by a given address
 pub async fn get_owned_utxos(
     data: web::Data<Arc<RwLock<QueryServer>>>,
@@ -165,6 +184,7 @@ pub enum QueryServerRoutes {
     GetOwnedUtxos,
     GetOwnedAbars,
     GetAbarMemo,
+    GetAbarMemos,
     GetAbarProof,
     CheckNullifierHash,
     GetCreatedAssets,
@@ -189,6 +209,7 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetOwnerMemo => "get_owner_memo",
             QueryServerRoutes::GetOwnerMemoBatch => "get_owner_memo_batch",
             QueryServerRoutes::GetAbarMemo => "get_abar_memo",
+            QueryServerRoutes::GetAbarMemos => "get_abar_memos",
             QueryServerRoutes::GetAbarProof => "get_abar_proof",
             QueryServerRoutes::CheckNullifierHash => "check_nullifier_hash",
             QueryServerRoutes::GetCreatedAssets => "get_created_assets",
@@ -580,6 +601,10 @@ impl QueryApi {
                 .route(
                     &QueryServerRoutes::GetAbarMemo.with_arg_template("atxo_sid"),
                     web::get().to(get_abar_memo),
+                )
+                .route(
+                    &QueryServerRoutes::GetAbarMemos.route(),
+                    web::get().to(get_abar_memos),
                 )
                 .route(
                     &QueryServerRoutes::GetAbarProof.with_arg_template("atxo_sid"),

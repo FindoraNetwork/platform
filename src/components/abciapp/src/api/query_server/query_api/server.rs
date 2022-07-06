@@ -314,6 +314,20 @@ impl QueryServer {
             .get(&atxo_sid)
     }
 
+    /// Returns the owner memos required to decrypt the asset record stored at between start and end,
+    /// include start and end, limit 100.
+    #[inline(always)]
+    pub fn get_abar_memos(&self, start: u64, end: u64) -> Vec<AxfrOwnerMemo> {
+        let mut memos = vec![];
+        let cache = self.ledger_cloned.api_cache.as_ref().unwrap();
+        for i in start..=end {
+            if let Some(memo) = cache.abar_memos.get(&ATxoSID(i)) {
+                memos.push(memo);
+            }
+        }
+        memos
+    }
+
     /// Returns the merkle proof from the given ATxoSID
     #[inline(always)]
     pub fn get_abar_proof(&self, atxo_sid: ATxoSID) -> Option<MTLeafInfo> {
