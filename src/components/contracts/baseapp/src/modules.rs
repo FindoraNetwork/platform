@@ -21,7 +21,7 @@ use module_ethereum::storage::{PendingTransactions, TransactionIndex};
 use ruc::*;
 use serde::Serialize;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ModuleManager {
     // Ordered module list
     pub(crate) account_module: module_account::App<BaseApp>,
@@ -103,7 +103,7 @@ impl ModuleManager {
     pub fn process_tx<
         Extra: Clone + Serialize + SignedExtension<AccountId = Address>,
     >(
-        &mut self,
+        &self,
         ctx: Context,
         tx: UncheckedTransaction<Extra>,
     ) -> Result<ActionResult> {

@@ -57,13 +57,13 @@ pub mod storage {
     use fp_evm::TransactionStatus;
     use fp_storage::*;
     use fp_types::crypto::HA256;
+    use lazy_static::lazy_static;
+    use std::cell::RefCell;
+    use std::sync::Mutex;
 
     // Mapping for transaction hash and at block number with index.
     generate_storage!(Ethereum, TransactionIndex => Map<HA256, (U256, u32)>);
 
-    // The following data is stored in stateless rocksdb
-    // Current building block's transactions and receipts.
-    generate_storage!(Ethereum, PendingTransactions => Value<Vec<(Transaction, TransactionStatus, Receipt)>>);
     // The current Ethereum block number.
     generate_storage!(Ethereum, CurrentBlockNumber => Value<U256>);
     // Mapping for block number and hashes.
@@ -74,6 +74,16 @@ pub mod storage {
     generate_storage!(Ethereum, CurrentReceipts => Map<HA256, Vec<Receipt>>);
     // The ethereum history transaction statuses with block number.
     generate_storage!(Ethereum, CurrentTransactionStatuses => Map<HA256, Vec<TransactionStatus>>);
+
+    // The following data is stored in in-memory array
+    // Current building block's transactions and receipts.
+    type PendingTransactions =
+        Mutex<RefCell<Option<Vec<(Transaction, TransactionStatus, Receipt)>>>>;
+
+    lazy_static! {
+        pub static ref DELIVER_PENDING_TRANSACTIONS: PendingTransactions =
+            Mutex::new(RefCell::new(None));
+    }
 }
 
 #[derive(Event)]
@@ -92,6 +102,7 @@ pub struct ContractLog {
     pub data: Vec<u8>,
 }
 
+#[derive(Clone)]
 pub struct App<C> {
     disable_eth_empty_blocks: bool,
     phantom: PhantomData<C>,
@@ -147,7 +158,9 @@ impl<C: Config> ValidateUnsigned for App<C> {
     type Call = Action;
 
     fn pre_execute(ctx: &Context, call: &Self::Call) -> Result<()> {
-        if ctx.run_mode == RunTxMode::Check {
+        if ctx.header.height >= CFG.checkpoint.evm_checktx_nonce
+            && ctx.run_mode == RunTxMode::Check
+        {
             let Action::Transact(transaction) = call;
             let origin = Self::recover_signer(transaction).ok_or_else(|| {
                 eg!("InvalidSignature, can not recover signer address")
@@ -155,6 +168,7 @@ impl<C: Config> ValidateUnsigned for App<C> {
             let account_id = C::AddressMapping::convert_to_account_id(origin);
             C::AccountAsset::inc_nonce(ctx, &account_id)?;
         }
+
         Ok(())
     }
 
@@ -195,8 +209,10 @@ impl<C: Config> ValidateUnsigned for App<C> {
         }
 
         let account_id = C::AddressMapping::convert_to_account_id(origin);
-        let nonce = C::AccountAsset::nonce(ctx, &account_id);
-        let balance = C::AccountAsset::balance(ctx, &account_id);
+        let account =
+            C::AccountAsset::account_of(ctx, &account_id, None).unwrap_or_default();
+        let nonce = account.nonce;
+        let balance = account.balance;
 
         if transaction.nonce < nonce {
             return Err(eg!(format!(
