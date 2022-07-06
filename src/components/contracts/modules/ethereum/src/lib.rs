@@ -23,6 +23,7 @@ use fp_traits::{
 use fp_types::{actions::ethereum::Action, crypto::Address};
 use ruc::*;
 use std::marker::PhantomData;
+use config::abci::global_cfg::CFG;
 
 pub const MODULE_NAME: &str = "ethereum";
 

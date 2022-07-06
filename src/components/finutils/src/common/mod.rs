@@ -13,7 +13,6 @@ use {
     crate::api::DelegationInfo,
     crate::common::utils::{new_tx_builder, send_tx},
     crate::txn_builder::TransactionBuilder,
-    fp_utils::hashing::keccak_256,
     globutils::wallet,
     lazy_static::lazy_static,
     ledger::{
@@ -99,7 +98,7 @@ pub fn staker_update(cr: Option<&str>, memo: Option<StakerMemo>) -> Result<()> {
         .c(d!())
         .map(|op| builder.add_operation(op))?;
 
-    let mut tx = builder.take_transaction();
+    let mut tx = builder.take_transaction()?;
     tx.sign(&kp);
 
     utils::send_tx(&tx).c(d!())
@@ -165,7 +164,7 @@ pub fn stake(
     .c(d!())
     .map(|principal_op| builder.add_operation(principal_op))?;
 
-    let mut tx = builder.take_transaction();
+    let mut tx = builder.take_transaction()?;
     tx.sign(&kp);
 
     utils::send_tx(&tx).c(d!())
@@ -251,7 +250,7 @@ pub fn unstake(
         }
     })?;
 
-    let mut tx = builder.take_transaction();
+    let mut tx = builder.take_transaction()?;
     tx.sign(&kp);
 
     utils::send_tx(&tx).c(d!())
@@ -274,7 +273,7 @@ pub fn claim(am: Option<&str>, sk_str: Option<&str>) -> Result<()> {
         builder.add_operation_claim(&kp, am);
     })?;
 
-    let mut tx = builder.take_transaction();
+    let mut tx = builder.take_transaction()?;
     tx.sign(&kp);
 
     utils::send_tx(&tx).c(d!())
@@ -673,7 +672,7 @@ fn gen_undelegate_tx(
         builder.add_operation_undelegation(owner_kp, None);
     }
 
-    let mut tx = builder.take_transaction();
+    let mut tx = builder.take_transaction()?;
     tx.sign(owner_kp);
 
     Ok(tx)
@@ -700,7 +699,7 @@ fn gen_delegate_tx(
         builder.add_operation_delegation(owner_kp, amount, validator.to_owned());
     })?;
 
-    let mut tx = builder.take_transaction();
+    let mut tx = builder.take_transaction()?;
     tx.sign(owner_kp);
 
     Ok(tx)
@@ -758,7 +757,7 @@ pub fn create_asset_x(
         .c(d!())
         .map(|op| builder.add_operation(op))?;
 
-    let mut tx = builder.take_transaction().map(|_| AssetTypeCode::new_from_vec(keccak_256(asset_code.as_slice()).to_vec()));
+    let mut tx = builder.take_transaction()?;
     tx.sign(kp);
 
     utils::send_tx(&tx).map(|_| code)
@@ -799,7 +798,7 @@ pub fn issue_asset_x(
         .c(d!())
         .map(|op| builder.add_operation(op))?;
 
-    let mut tx = builder.take_transaction();
+    let mut tx = builder.take_transaction()?;
     tx.sign(kp);
 
     utils::send_tx(&tx)
@@ -1434,7 +1433,7 @@ pub fn replace_staker(
     })?;
 
     builder.add_operation_replace_staker(&keypair, target_pubkey, new_td_addr_pk)?;
-    let mut tx = builder.take_transaction();
+    let mut tx = builder.take_transaction()?;
     tx.sign(&keypair);
 
     utils::send_tx(&tx).c(d!())?;

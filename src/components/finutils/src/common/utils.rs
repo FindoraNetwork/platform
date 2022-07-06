@@ -125,7 +125,7 @@ pub fn transfer_batch(
     .c(d!())?;
     builder.add_operation(op);
 
-    let mut tx = builder.take_transaction();
+    let mut tx = builder.take_transaction()?;
     tx.sign(owner_kp);
 
     send_tx(&tx).c(d!())
