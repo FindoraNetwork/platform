@@ -44,7 +44,7 @@ pub fn create_definition_transaction(
         DefineAsset::new(asset_body, &IssuerKeyPair { keypair: &keypair }).c(d!())?;
 
     let code = if code.val == ASSET_TYPE_FRA {
-        code.clone()
+        *code
     } else {
         let mut asset_code = AssetTypePrefix::UserDefined.bytes();
         asset_code.append(&mut code.to_bytes());

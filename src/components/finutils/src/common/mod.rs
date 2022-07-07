@@ -727,7 +727,6 @@ pub fn create_asset(
         .c(d!())
         .map(|code| {
             println!("type: {}", code.to_base64());
-            ()
         })
 }
 

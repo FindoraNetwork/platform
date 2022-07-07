@@ -404,7 +404,7 @@ impl TransactionBuilder {
         hasher.update(bytes);
 
         // finish abar to abar
-        if self.abar_abar_cache.len() > 0 {
+        if !self.abar_abar_cache.is_empty() {
             let mut params: HashMap<(usize, usize), ProverParams> = HashMap::new();
             for pre_note in self.abar_abar_cache {
                 let key = (pre_note.body.inputs.len(), pre_note.body.outputs.len());
@@ -431,7 +431,7 @@ impl TransactionBuilder {
         }
 
         // finish abar to bar
-        if self.abar_bar_cache.len() > 0 {
+        if !self.abar_bar_cache.is_empty() {
             let params = ProverParams::abar_to_bar_params(MERKLE_TREE_DEPTH)?;
             for pre_note in self.abar_bar_cache {
                 let note = finish_abar_to_bar_note(
@@ -455,7 +455,7 @@ impl TransactionBuilder {
         }
 
         // finish abar to ar
-        if self.abar_ar_cache.len() > 0 {
+        if !self.abar_ar_cache.is_empty() {
             let params = ProverParams::abar_to_ar_params(MERKLE_TREE_DEPTH)?;
             for pre_note in self.abar_ar_cache {
                 let note = finish_abar_to_ar_note(
@@ -618,7 +618,10 @@ impl TransactionBuilder {
     /// * `abar_pub_key`  -  AXfrPubKey of the receiver ABAR after conversion
     /// * `txo_sid`       -  TxoSID of the BAR to convert
     /// * `input_record`  -  OpenAssetRecord of the BAR to convert
+    /// * `enc_key`       -  XPublicKey of OwnerMemo encryption of receiver
     /// * `is_bar_transparent`  -  if transparent bar (ar)
+        #[allow(clippy::too_many_arguments)]
+
     pub fn add_operation_bar_to_abar(
         &mut self,
         seed: [u8; 32],
@@ -2175,7 +2178,8 @@ mod tests {
         let uid_fee = ledger_state.add_abar(&fee_abar).unwrap();
 
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-        let _ = ledger_state.compute_and_save_state_commitment_data(1);
+        // let _ =
+        ledger_state.compute_and_save_state_commitment_data(1);
 
         let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
         let mt_leaf_fee_info = ledger_state.get_abar_proof(uid_fee).unwrap();
@@ -2348,7 +2352,8 @@ mod tests {
         // add abar to merkle tree
         let uid = ledger_state.add_abar(&abar).unwrap();
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-        let _ = ledger_state.compute_and_save_state_commitment_data(1);
+        // let _ =
+        ledger_state.compute_and_save_state_commitment_data(1);
         let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
         oabar.update_mt_leaf_info(mt_leaf_info);
 
@@ -2390,14 +2395,16 @@ mod tests {
         // add abar to merkle tree
         let uid1 = ledger_state.add_abar(&abar1).unwrap();
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-        let _ = ledger_state.compute_and_save_state_commitment_data(2);
+        // let _ =
+        ledger_state.compute_and_save_state_commitment_data(2);
         let mt_leaf_info1 = ledger_state.get_abar_proof(uid1).unwrap();
         oabar1.update_mt_leaf_info(mt_leaf_info1);
 
         // add abar to merkle tree for negative amount
 
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-        let _ = ledger_state.compute_and_save_state_commitment_data(2);
+        // let _ =
+        ledger_state.compute_and_save_state_commitment_data(2);
 
         let (oabar_out1, _keypair_out1) =
             gen_oabar_and_keys(&mut prng1, amount1, asset_type1);
