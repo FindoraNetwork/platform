@@ -23,16 +23,8 @@ jobs:
         toolchain: stable
         override: true
         components: rustfmt
-    - name: Slack Notification
-      uses: rtCamp/action-slack-notify@v2
-      env:
-        SLACK_CHANNEL: general
-        SLACK_COLOR: ${{ job.status }} # or a specific color like 'good' or '#ff00ff'
-        SLACK_ICON: https://findora.org/wp-content/uploads/2022/06/Group.svg
-        SLACK_MESSAGE: 'Nightly build status'
-        SLACK_TITLE: Nightly Build
-        SLACK_USERNAME: Nightly Build Monitoring
-        SLACK_WEBHOOK: ${{ secrets.SLACK_APP_WEBHOOK }}
+
+
 
 
     - name: check fmt
@@ -46,17 +38,6 @@ jobs:
       run: |
         curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
         make test_status
-
-
-    - name: Notify slack fail
-      if: failure()
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFICATIONS_BOT_TOKEN }}
-      uses: voxmedia/github-action-slack-notify-build@v1
-      with:
-        channel: engineering-v2
-        status: FAILED
-        color: danger
 
     # remove the test code in develop build
     # run tests
@@ -154,3 +135,14 @@ jobs:
         make ci_push_image
 
 
+    - name: Slack Notification if FAIL
+      uses: rtCamp/action-slack-notify@v2
+      if: failure()
+      env:
+        SLACK_CHANNEL: engineering-v2
+        SLACK_COLOR: ${{ job.status }} # or a specific color like 'good' or '#ff00ff'
+        SLACK_ICON: https://findora.org/wp-content/uploads/2022/06/Group.svg
+        SLACK_MESSAGE: 'Click the action URL to see the detail. It may cause the test fail or image build error!'
+        SLACK_TITLE: Nightly Build ${{ job.status }}
+        SLACK_USERNAME: Nightly Build Monitoring
+        SLACK_WEBHOOK: ${{ secrets.SLACK_APP_WEBHOOK }}
