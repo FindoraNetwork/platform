@@ -105,7 +105,7 @@ def transfer(arguments):
         to=arguments['to_addr'],
         value=int(arguments['amount']),
         data=b'',
-        chainId=2152,
+        chainId=w3.eth.chainId,
     ),
         arguments['from_priv_key'],
     )
