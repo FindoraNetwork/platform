@@ -404,7 +404,7 @@ impl TransactionBuilder {
         hasher.update(bytes);
 
         // finish abar to abar
-        if self.abar_abar_cache.len() > 0 {
+        if !self.abar_abar_cache.is_empty() {
             let mut params: HashMap<(usize, usize), ProverParams> = HashMap::new();
             for pre_note in self.abar_abar_cache {
                 let key = (pre_note.body.inputs.len(), pre_note.body.outputs.len());
@@ -431,7 +431,7 @@ impl TransactionBuilder {
         }
 
         // finish abar to bar
-        if self.abar_bar_cache.len() > 0 {
+        if !self.abar_bar_cache.is_empty() {
             let params = ProverParams::abar_to_bar_params(MERKLE_TREE_DEPTH)?;
             for pre_note in self.abar_bar_cache {
                 let note = finish_abar_to_bar_note(
@@ -455,7 +455,7 @@ impl TransactionBuilder {
         }
 
         // finish abar to ar
-        if self.abar_ar_cache.len() > 0 {
+        if !self.abar_ar_cache.is_empty() {
             let params = ProverParams::abar_to_ar_params(MERKLE_TREE_DEPTH)?;
             for pre_note in self.abar_ar_cache {
                 let note = finish_abar_to_ar_note(

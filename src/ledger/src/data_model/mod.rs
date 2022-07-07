@@ -1962,7 +1962,7 @@ pub const BAR_TO_ABAR_TX_FEE_MIN: u64 = 20_000; // 0.02 FRA (2*TX_FEE_MIN)
 
 /// Calculate the FEE with inputs and outputs number.
 pub const FEE_CALCULATING_FUNC: fn(u32, u32) -> u32 = |x: u32, y: u32| {
-    let extra_outputs = y.checked_sub(x).unwrap_or(0);
+    let extra_outputs = y.saturating_sub(x);
     50_0000 + 10_0000 * x + 20_0000 * y + (10_000 * extra_outputs)
 };
 
