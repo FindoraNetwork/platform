@@ -4,6 +4,7 @@
 mod basic;
 mod impls;
 
+use config::abci::global_cfg::CFG;
 use ethereum_types::{H160, H256, U256};
 use evm::Config as EvmConfig;
 use fp_core::context::RunTxMode;
@@ -23,7 +24,6 @@ use fp_traits::{
 use fp_types::{actions::ethereum::Action, crypto::Address};
 use ruc::*;
 use std::marker::PhantomData;
-use config::abci::global_cfg::CFG;
 
 pub const MODULE_NAME: &str = "ethereum";
 
@@ -78,8 +78,7 @@ pub mod storage {
 
     // The following data is stored in in-memory array
     // Current building block's transactions and receipts.
-    pub type PendingTransactions =
-        Mutex<Vec<(Transaction, TransactionStatus, Receipt)>>;
+    pub type PendingTransactions = Mutex<Vec<(Transaction, TransactionStatus, Receipt)>>;
 
     lazy_static! {
         pub static ref DELIVER_PENDING_TRANSACTIONS: PendingTransactions =
