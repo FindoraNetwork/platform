@@ -2245,8 +2245,8 @@ impl Transaction {
                 Operation::MintFra(_) => {}
                 Operation::ConvertAccount(_) => {}
                 Operation::BarToAbar(_) => {}
-                Operation::AbarToBar(_) => {},
-                Operation::TransferAnonAsset(_) => {},
+                Operation::AbarToBar(_) => {}
+                Operation::TransferAnonAsset(_) => {}
                 Operation::ReplaceStaker(o) => {
                     verify(
                         &self.signatures[(index + offset)],

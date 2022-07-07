@@ -84,7 +84,7 @@ impl QueryServer {
             .unwrap()
             .created_assets
             .get(issuer)
-            .map(|d| d.iter().map(|(c, v)| (c,v)).collect())
+            .map(|d| d.iter().map(|(c, v)| (c, v)).collect())
     }
 
     /// get coinbase based on address and sorting rules and start and end position

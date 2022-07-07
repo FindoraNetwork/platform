@@ -7,11 +7,13 @@ use {
         TransferType, XfrNotePolicies,
     },
     crate::data_model::{
-        Asset, AssetRules, AssetTypeCode, ConfidentialMemo, DefineAsset,
-        DefineAssetBody, IssueAsset, IssueAssetBody, Memo, Operation, Transaction,
-        TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxnSID, TxoRef, TxoSID,
-        AssetTypePrefix, ASSET_TYPE_FRA,
+        Asset, AssetRules, AssetTypeCode, AssetTypePrefix, ConfidentialMemo,
+        DefineAsset, DefineAssetBody, IssueAsset, IssueAssetBody, Memo, Operation,
+        Transaction, TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxnSID,
+        TxoRef, TxoSID, ASSET_TYPE_FRA,
     },
+    fbnc::NumKey,
+    fp_utils::hashing::keccak_256,
     globutils::SignatureOf,
     rand_core::{CryptoRng, RngCore},
     ruc::*,
@@ -23,8 +25,6 @@ use {
         structs::{AssetRecord, AssetRecordTemplate, AssetType},
     },
     zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
-    fp_utils::hashing::keccak_256,
-    fbnc::NumKey,
 };
 
 /// Create a transaction to define a custom asset
