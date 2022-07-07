@@ -15,7 +15,7 @@ jobs:
       ENV: dev
       PRIVATE_ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
       PUBLIC_ECR_URL: public.ecr.aws/k6m5b6e2
-      SLACK_APP_WEBHOOK: https://hooks.slack.com/services/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
+
     steps:
     - uses: actions/checkout@v2
     - uses: actions-rs/toolchain@v1
@@ -34,7 +34,7 @@ jobs:
         SLACK_USERNAME: Nightly Build Monitoring
         SLACK_WEBHOOK: ${{ secrets.SLACK_APP_WEBHOOK }}
 
-        
+
     - name: check fmt
       shell: bash
       run: |
@@ -46,6 +46,17 @@ jobs:
       run: |
         curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
         make test_status
+
+
+    - name: Notify slack fail
+      if: failure()
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFICATIONS_BOT_TOKEN }}
+      uses: voxmedia/github-action-slack-notify-build@v1
+      with:
+        channel: engineering-v2
+        status: FAILED
+        color: danger
 
     # remove the test code in develop build
     # run tests
