@@ -17,9 +17,9 @@ use ledger::{
     converter::check_convert_account,
     data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA},
 };
-use module_ethereum::storage::{TransactionIndex, DELIVER_PENDING_TRANSACTIONS};
 use ruc::*;
 use serde::Serialize;
+use module_ethereum::storage::{TransactionIndex, DELIVER_PENDING_TRANSACTIONS};
 
 #[derive(Default, Clone)]
 pub struct ModuleManager {
@@ -137,6 +137,7 @@ impl ModuleManager {
         // if let Some(pending_txs)
         // let transaction_index = pending_txs.as_ref().unwrap_or_default().len() as u32;
         let transaction_index = pending_txs.len() as u32;
+
 
         let (tx, tx_status, receipt) = if asset == ASSET_TYPE_FRA {
             let balance = EthereumDecimalsMapping::from_native_token(U256::from(amount))

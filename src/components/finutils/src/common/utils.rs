@@ -486,9 +486,7 @@ pub fn get_asset_type(code: &str) -> Result<AssetType> {
 }
 
 /// Retrieve a list of assets created by the specified findora account
-pub fn get_created_assets(
-    addr: &XfrPublicKey,
-) -> Result<Vec<(AssetTypeCode, DefineAsset)>> {
+pub fn get_created_assets(addr: &XfrPublicKey) -> Result<Vec<(AssetTypeCode, DefineAsset)>> {
     let url = format!(
         "{}:8667/get_created_assets/{}",
         get_serv_addr().c(d!())?,
@@ -502,9 +500,7 @@ pub fn get_created_assets(
         .c(d!())?
         .bytes()
         .c(d!())
-        .and_then(|b| {
-            serde_json::from_slice::<Vec<(AssetTypeCode, DefineAsset)>>(&b).c(d!())
-        })
+        .and_then(|b| serde_json::from_slice::<Vec<(AssetTypeCode, DefineAsset)>>(&b).c(d!()))
 }
 
 #[inline(always)]

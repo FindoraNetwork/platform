@@ -13,7 +13,6 @@ use {
     crate::api::DelegationInfo,
     crate::common::utils::{new_tx_builder, send_tx},
     crate::txn_builder::TransactionBuilder,
-    fp_utils::hashing::keccak_256,
     globutils::wallet,
     lazy_static::lazy_static,
     ledger::{
@@ -51,9 +50,10 @@ use {
                 AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
             },
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
-            structs::{AssetType, XfrAmount, XfrAssetType},
+            structs::{XfrAmount, XfrAssetType, AssetType},
         },
     },
+    fp_utils::hashing::keccak_256,
 };
 
 lazy_static! {
@@ -760,9 +760,7 @@ pub fn create_asset_x(
     let mut tx = builder.take_transaction()?;
     tx.sign(kp);
 
-    utils::send_tx(&tx).map(|_| AssetTypeCode {
-        val: AssetType(keccak_256(&asset_code)),
-    })
+    utils::send_tx(&tx).map(|_| AssetTypeCode{ val: AssetType(keccak_256(&asset_code)) })
 }
 
 /// Issue a custom asset with specified amount

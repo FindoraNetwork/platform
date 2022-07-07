@@ -286,7 +286,8 @@ impl<C: Config> App<C> {
 
         if !just_check {
             {
-                let mut pending_txs = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
+                let mut pending_txs =
+                    DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
                 pending_txs.push((transaction, status, receipt))
             }
 
