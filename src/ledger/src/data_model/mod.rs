@@ -1811,76 +1811,49 @@ impl Transaction {
         Err(eg!())
     }
 
-    // !! WARNING !!:
-    //
-    // This implementation has obvious security risk vulnerabilities, such as the index out-of-bounds can be easily constructed, thus causing many nodes to panic.
-    // I comment it out for now, please the original author communicate with me in time.
-    //
-    // -- FanHui, hui@findora.org, Aug 25, 2022
+
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn check_tx(&self) -> Result<()> {
-        // let mut offset = 0;
 
-        // let verify = |sign: &SignatureOf<TransactionBody>,
-        //               pk: &XfrPublicKey,
-        //               val: &TransactionBody|
-        //  -> Result<()> { sign.verify(pk, val) };
-
-        // for (index, operation) in self.body.operations.iter().enumerate() {
-        //     match operation {
-        //         Operation::TransferAsset(o) => {
-        //             let pks = o.get_owner_addresses();
-        //             offset = pks.len() - 1;
-        //             let tx_sign_list = &self.signatures[index..=(index + offset)];
-
-        //             for (idx, tx_sign) in tx_sign_list.iter().enumerate() {
-        //                 verify(tx_sign, &pks[idx], &self.body)?;
-        //             }
-        //         }
-        //         Operation::IssueAsset(o) => {
-        //             verify(
-        //                 &self.signatures[(index + offset)],
-        //                 &o.pubkey.key,
-        //                 &self.body,
-        //             )?;
-        //         }
-        //         Operation::DefineAsset(o) => {
-        //             verify(
-        //                 &self.signatures[(index + offset)],
-        //                 &o.pubkey.key,
-        //                 &self.body,
-        //             )?;
-        //         }
-        //         Operation::UpdateMemo(o) => {
-        //             verify(&self.signatures[(index + offset)], &o.pubkey, &self.body)?;
-        //         }
-        //         Operation::UpdateStaker(o) => {
-        //             verify(&self.signatures[(index + offset)], &o.pubkey, &self.body)?;
-        //         }
-        //         Operation::Delegation(o) => {
-        //             verify(&self.signatures[(index + offset)], &o.pubkey, &self.body)?;
-        //         }
-        //         Operation::UnDelegation(o) => {
-        //             verify(&self.signatures[(index + offset)], &o.pubkey, &self.body)?;
-        //         }
-        //         Operation::Claim(o) => {
-        //             verify(&self.signatures[(index + offset)], &o.pubkey, &self.body)?;
-        //         }
-        //         Operation::UpdateValidator(_) => {}
-        //         Operation::Governance(_) => {}
-        //         Operation::FraDistribution(_) => {}
-        //         Operation::MintFra(_) => {}
-        //         Operation::ConvertAccount(_) => {}
-        //         Operation::ReplaceStaker(o) => {
-        //             verify(
-        //                 &self.signatures[(index + offset)],
-        //                 &o.get_related_pubkeys()[0],
-        //                 &self.body,
-        //             )?;
-        //         }
-        //     }
-        // }
+        for operation in self.body.operations.iter() {
+            match operation {
+                Operation::TransferAsset(o) => {
+                    for pk in o.get_owner_addresses().iter() {
+                        self.check_has_signature(pk)?;
+                    }
+                }
+                Operation::IssueAsset(o) => {
+                    self.check_has_signature(&o.pubkey.key)?;
+                }
+                Operation::DefineAsset(o) => {
+                    self.check_has_signature(&o.pubkey.key)?;
+                }
+                Operation::UpdateMemo(o) => {
+                    self.check_has_signature(&o.pubkey)?;
+                }
+                Operation::UpdateStaker(o) => {
+                    self.check_has_signature(&o.pubkey)?;
+                }
+                Operation::Delegation(o) => {
+                    self.check_has_signature(&o.pubkey)?;
+                }
+                Operation::UnDelegation(o) => {
+                    self.check_has_signature(&o.pubkey)?;
+                }
+                Operation::Claim(o) => {
+                    self.check_has_signature(&o.pubkey)?;
+                }
+                Operation::UpdateValidator(_) => {}
+                Operation::Governance(_) => {}
+                Operation::FraDistribution(_) => {}
+                Operation::MintFra(_) => {}
+                Operation::ConvertAccount(_) => {}
+                Operation::ReplaceStaker(o) => {
+                    self.check_has_signature(&o.get_related_pubkeys()[0])?;
+                }
+            }
+        }
 
         Ok(())
     }
