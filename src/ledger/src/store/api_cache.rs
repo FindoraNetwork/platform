@@ -1,17 +1,11 @@
 //!
 //! # Cached data for APIs
 //!
-
-use crate::data_model::{AssetTypePrefix, ASSET_TYPE_FRA};
-use config::abci::global_cfg::CFG;
-use fbnc::NumKey;
-use fp_utils::hashing::keccak_256;
-use zei::xfr::structs::AssetType;
 use {
     crate::{
         data_model::{
             ATxoSID, AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Operation,
-            Transaction, TxOutput, TxnIDHash, TxnSID, TxoSID, XfrAddress,
+            Transaction, TxOutput, TxnIDHash, TxnSID, TxoSID, XfrAddress, AssetTypePrefix, ASSET_TYPE_FRA
         },
         staking::{
             ops::mint_fra::MintEntry, Amount, BlockHeight, DelegationRwdDetail,
@@ -26,8 +20,13 @@ use {
     std::collections::HashSet,
     zei::{
         anon_xfr::structs::AxfrOwnerMemo,
-        xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+        xfr::{sig::XfrPublicKey, structs::{
+            OwnerMemo, AssetType
+        }},
     },
+    fp_utils::hashing::keccak_256,
+    fbnc::NumKey,
+    config::abci::global_cfg::CFG,
 };
 
 type Issuances = Vec<(TxOutput, Option<OwnerMemo>)>;
@@ -136,10 +135,9 @@ impl ApiCache {
     /// Add created asset
     #[inline(always)]
     pub fn add_created_asset(&mut self, creation: &DefineAsset, cur_height: u64) {
+
         let asset_code = creation.body.asset.code;
-        let code = if asset_code.val == ASSET_TYPE_FRA
-            || CFG.checkpoint.utxo_asset_prefix_height < cur_height
-        {
+        let code = if asset_code.val == ASSET_TYPE_FRA || CFG.checkpoint.utxo_asset_prefix_height > cur_height {
             creation.body.asset.code
         } else {
             let mut asset_code = AssetTypePrefix::UserDefined.bytes();
