@@ -1,8 +1,10 @@
 name: Nightly
 on:
-  push:
-    branches:
-      - nightly-build
+  # push:
+  #   branches:
+  #     - nightly-build
+  schedule:
+    - cron: '0 0 17 * *'
 env:
   CARGO_TERM_COLOR: always
 jobs:
@@ -23,6 +25,7 @@ jobs:
         toolchain: stable
         override: true
         components: rustfmt
+        ref: nightly-build
 
 
 
@@ -31,13 +34,13 @@ jobs:
       shell: bash
       run: |
         cargo fmt -- --check
-    - name: test_status
-      env:
-        DBG: true
-      shell: bash
-      run: |
-        curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-        make test_status
+    # - name: test_status
+    #   env:
+    #     DBG: true
+    #   shell: bash
+    #   run: |
+    #     curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+    #     make test_status
 
     # remove the test code in develop build
     # run tests
