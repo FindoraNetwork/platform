@@ -11,27 +11,27 @@ def private_key_to_address(private_key, w3):
 
 
 def get_fra_balance(sec_key):
-    out_str = subprocess.check_output(['target/release/fn', 'account', '-s', sec_key])
+    out_str = subprocess.check_output(['target/debug/fn', 'account', '-s', sec_key])
     parsed = out_str.split()
     return int(parsed[1])
 
 
 def get_fra_anon_balance(anon_keys_path, commitments):
     out_str = subprocess.check_output(
-        ['target/release/fn', 'anon-balance', '--anon-keys', anon_keys_path, '--commitments', commitments])
+        ['target/debug/fn', 'anon-balance', '--anon-keys', anon_keys_path, '--commitments', commitments])
     parsed = out_str.split()
     return int(parsed[1])
 
 
 def get_asset_balance(sec_key, asset):
-    out_str = subprocess.check_output(['target/release/fn', 'account', '-s', sec_key, '--asset', asset])
+    out_str = subprocess.check_output(['target/debug/fn', 'account', '-s', sec_key, '--asset', asset])
     parsed = out_str.split()
     return int(parsed[1])
 
 
 def get_asset_anon_balance(anon_keys_path, commitments, asset):
     out_str = subprocess.check_output(
-        ['target/release/fn', 'anon-balance', '--anon-keys', anon_keys_path, '--commitments', commitments,
+        ['target/debug/fn', 'anon-balance', '--anon-keys', anon_keys_path, '--commitments', commitments,
          '--asset', asset])
     parsed = out_str.split()
     return int(parsed[1])
@@ -105,7 +105,7 @@ def transfer(arguments):
         to=arguments['to_addr'],
         value=int(arguments['amount']),
         data=b'',
-        chainId=523,
+        chainId=2152,
     ),
         arguments['from_priv_key'],
     )

@@ -60,7 +60,7 @@ impl CheckPointConfig {
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
                                 prismxx_inital_height: 1,
                                 enable_triple_masking_height: 0,
-                                qa02_upgradable_prism_bridge: 10,
+                                qa02_upgradable_prism_bridge: 2,
                                 fix_unpaid_delegation_height: 0,
                                 evm_checktx_nonce: 0,
                             };
