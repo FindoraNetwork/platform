@@ -2,7 +2,10 @@
 //! # Cached data for APIs
 //!
 
+use crate::data_model::{AssetTypePrefix, ASSET_TYPE_FRA};
+use config::abci::global_cfg::CFG;
 use fbnc::NumKey;
+use fp_utils::hashing::keccak_256;
 use zei::xfr::structs::AssetType;
 use {
     crate::{
@@ -26,9 +29,6 @@ use {
         xfr::{sig::XfrPublicKey, structs::OwnerMemo},
     },
 };
-use config::abci::global_cfg::CFG;
-use fp_utils::hashing::keccak_256;
-use crate::data_model::{ASSET_TYPE_FRA, AssetTypePrefix};
 
 type Issuances = Vec<(TxOutput, Option<OwnerMemo>)>;
 
@@ -136,9 +136,10 @@ impl ApiCache {
     /// Add created asset
     #[inline(always)]
     pub fn add_created_asset(&mut self, creation: &DefineAsset, cur_height: u64) {
-
         let asset_code = creation.body.asset.code;
-        let code = if asset_code.val == ASSET_TYPE_FRA || CFG.checkpoint.utxo_asset_prefix_height < cur_height {
+        let code = if asset_code.val == ASSET_TYPE_FRA
+            || CFG.checkpoint.utxo_asset_prefix_height < cur_height
+        {
             creation.body.asset.code
         } else {
             let mut asset_code = AssetTypePrefix::UserDefined.bytes();
@@ -626,11 +627,10 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
         for op in &curr_txn.body.operations {
             match op {
                 Operation::DefineAsset(define_asset) => {
-                    ledger
-                        .api_cache
-                        .as_mut()
-                        .unwrap()
-                        .add_created_asset(&define_asset, ledger.status.td_commit_height);
+                    ledger.api_cache.as_mut().unwrap().add_created_asset(
+                        &define_asset,
+                        ledger.status.td_commit_height,
+                    );
                 }
                 Operation::IssueAsset(issue_asset) => {
                     ledger
