@@ -15,7 +15,10 @@ use {
     parking_lot::{Condvar, Mutex, RwLock},
     ruc::*,
     std::{collections::HashSet, sync::Arc},
-    zei::{anon_xfr::structs::MTLeafInfo, xfr::structs::OwnerMemo},
+    zei::{
+        anon_xfr::structs::{AxfrOwnerMemo, MTLeafInfo},
+        xfr::structs::OwnerMemo,
+    },
 };
 
 lazy_static! {
@@ -74,14 +77,14 @@ impl QueryServer {
     pub fn get_created_assets(
         &self,
         issuer: &IssuerPublicKey,
-    ) -> Option<Vec<DefineAsset>> {
+    ) -> Option<Vec<(AssetTypeCode, DefineAsset)>> {
         self.ledger_cloned
             .api_cache
             .as_ref()
             .unwrap()
             .created_assets
             .get(issuer)
-            .map(|d| d.iter().map(|(_, v)| v).collect())
+            .map(|d| d.iter().map(|(c, v)| (c,v)).collect())
     }
 
     /// get coinbase based on address and sorting rules and start and end position
@@ -302,7 +305,7 @@ impl QueryServer {
 
     /// Returns the abar owner memo required to decrypt the asset record stored at given index, if it exists.
     #[inline(always)]
-    pub fn get_abar_memo(&self, atxo_sid: ATxoSID) -> Option<OwnerMemo> {
+    pub fn get_abar_memo(&self, atxo_sid: ATxoSID) -> Option<AxfrOwnerMemo> {
         self.ledger_cloned
             .api_cache
             .as_ref()

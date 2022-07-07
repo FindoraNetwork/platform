@@ -73,6 +73,7 @@ pub mod storage {
     generate_storage!(EVM, AccountStorages => DoubleMap<HA160, HA256, H256>);
 }
 
+#[derive(Clone)]
 pub struct App<C> {
     phantom: PhantomData<C>,
     pub contracts: SystemContracts,

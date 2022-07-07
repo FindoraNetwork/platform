@@ -43,7 +43,7 @@ python $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS
 
 
 echo -e "\n ***** Anonymous Transfer from Sender1 to Receiver1 ***** "
-target/release/fn anon-transfer --amount 189990000 --anon-keys ./$FILE_ANON_KEYS --to-axfr-public-key ptyo7hlqn-Eywf_ttG99OSWtz6KfDUvLYDDVDlV1C-U= --to-enc-key SAmB7Oji4sAgENLaLb4PFclxQL_DRrEkXcYp6eXuXwI= --commitment $commitment1 > /dev/null
+target/release/fn anon-transfer --amount 189990000 --anon-keys ./$FILE_ANON_KEYS --to-axfr-public-key 3JM4oULU2pPp759YYQ75ClJnN_yi1Xs86C6916OgqEs= --commitment $commitment1 > /dev/null
 sleep $TM_SLEEP
 
 commitment2=$(tail -n 1 sent_commitments)
@@ -57,7 +57,7 @@ python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KE
 
 
 echo -e "\n ***** Anonymous Transfer from Receiver1 (Sender2) to Receiver2 ***** "
-target/release/fn anon-transfer --amount 169990000 --anon-keys ./$FILE_ANON_KEYS_2 --to-axfr-public-key BlF_6qIKPpV1L4Z16NYGLj_GLKCSa6O5DZaF8fMHw0g= --to-enc-key NBY5yIhdriJVq-7BS59J2IxBgLhewr8TEE6suNc1elA= --commitment $commitment2 > /dev/null
+target/release/fn anon-transfer --amount 169990000 --anon-keys ./$FILE_ANON_KEYS_2 --to-axfr-public-key JcomzsoXVf3Nz1lTL_dTz7ZifKsZJZtD5Aik1WYEa_I= --commitment $commitment2 > /dev/null
 sleep $TM_SLEEP
 
 commitment3=$(tail -n 1 sent_commitments)
