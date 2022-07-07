@@ -33,7 +33,7 @@ use {
         sync::Arc,
     },
     zei::{
-        anon_xfr::structs::{AxfrOwnerMemo, MTLeafInfo},
+        anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
         xfr::{sig::XfrPublicKey, structs::OwnerMemo},
     },
     zei_algebra::serialization::ZeiFromToBytes,
@@ -123,6 +123,15 @@ async fn get_abar_memos(
     }
 }
 
+/// Return the abar commitment by sid.
+async fn get_abar_commitment(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    info: web::Path<u64>,
+) -> actix_web::Result<web::Json<Option<Commitment>>, actix_web::error::Error> {
+    let server = data.read();
+    Ok(web::Json(server.get_abar_commitment(ATxoSID(*info))))
+}
+
 /// Returns an array of the utxo sids currently spendable by a given address
 pub async fn get_owned_utxos(
     data: web::Data<Arc<RwLock<QueryServer>>>,
@@ -183,6 +192,7 @@ pub enum QueryServerRoutes {
     GetOwnerMemoBatch,
     GetOwnedUtxos,
     GetOwnedAbars,
+    GetAbarCommitment,
     GetAbarMemo,
     GetAbarMemos,
     GetAbarProof,
@@ -208,6 +218,7 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetOwnedAbars => "get_owned_abar",
             QueryServerRoutes::GetOwnerMemo => "get_owner_memo",
             QueryServerRoutes::GetOwnerMemoBatch => "get_owner_memo_batch",
+            QueryServerRoutes::GetAbarCommitment => "get_abar_commitment",
             QueryServerRoutes::GetAbarMemo => "get_abar_memo",
             QueryServerRoutes::GetAbarMemos => "get_abar_memos",
             QueryServerRoutes::GetAbarProof => "get_abar_proof",
@@ -597,6 +608,10 @@ impl QueryApi {
                     &QueryServerRoutes::GetOwnerMemoBatch
                         .with_arg_template("txo_sid_list"),
                     web::get().to(get_owner_memo_batch),
+                )
+                .route(
+                    &QueryServerRoutes::GetAbarCommitment.with_arg_template("atxo_sid"),
+                    web::get().to(get_abar_commitment),
                 )
                 .route(
                     &QueryServerRoutes::GetAbarMemo.with_arg_template("atxo_sid"),

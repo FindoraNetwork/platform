@@ -16,7 +16,7 @@ use {
     ruc::*,
     std::{collections::HashSet, sync::Arc},
     zei::{
-        anon_xfr::structs::{AxfrOwnerMemo, MTLeafInfo},
+        anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
         xfr::structs::OwnerMemo,
     },
 };
@@ -326,6 +326,11 @@ impl QueryServer {
             }
         }
         memos
+    }
+
+    /// Returns the abar commitment by given index, if it exists.
+    pub fn get_abar_commitment(&self, atxo_sid: ATxoSID) -> Option<Commitment> {
+        self.ledger_cloned.get_abar(&atxo_sid)
     }
 
     /// Returns the merkle proof from the given ATxoSID
