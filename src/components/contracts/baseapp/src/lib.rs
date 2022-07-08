@@ -13,7 +13,9 @@ mod notify;
 use crate::modules::ModuleManager;
 use abci::Header;
 use ethereum::BlockV0 as Block;
+use evm_precompile::{self, FindoraPrecompiles};
 use fin_db::{FinDB, RocksDB};
+use fp_core::context::Context as Context2;
 use fp_core::{
     account::SmartAccount,
     context::{Context, RunTxMode},
@@ -106,6 +108,26 @@ impl module_ethereum::Config for BaseApp {
     type Runner = module_evm::runtime::runner::ActionRunner<Self>;
 }
 
+// parameter_types! {
+//     pub PrecompilesValue: FindoraPrecompiles<BaseApp> = FindoraPrecompiles::<_>::new();
+// }
+
+pub struct PrecompilesValue;
+
+impl PrecompilesValue {
+    #[doc = " Returns the value of this parameter type."]
+    pub fn get(ctx: Context2) -> FindoraPrecompiles<BaseApp> {
+        FindoraPrecompiles::<_>::new(ctx)
+    }
+}
+impl<I: From<FindoraPrecompiles<BaseApp>>> fp_core::macros::Get2<I>
+    for PrecompilesValue
+{
+    fn get(ctx: Context2) -> I {
+        I::from(FindoraPrecompiles::<_>::new(ctx))
+    }
+}
+
 impl module_evm::Config for BaseApp {
     type AccountAsset = module_account::App<Self>;
     type AddressMapping = EthereumAddressMapping;
@@ -125,6 +147,8 @@ impl module_evm::Config for BaseApp {
         evm_precompile_sha3fips::Sha3FIPS512,
         evm_precompile_frc20::FRC20<Self>,
     );
+    type PrecompilesType = FindoraPrecompiles<Self>;
+    type PrecompilesValue = PrecompilesValue;
 }
 
 impl module_xhub::Config for BaseApp {

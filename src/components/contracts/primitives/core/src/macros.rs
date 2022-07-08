@@ -1,3 +1,16 @@
+use crate::context::Context as Contex2;
+
+pub trait Get2<T> {
+    /// Return the current value.
+    fn get(ctx: Contex2) -> T;
+}
+
+// impl<T: Default> Get2<T> for () {
+//     fn get(_ctx: Contex2) -> T {
+//         T::default()
+//     }
+// }
+
 /// A trait for querying a single value from a type.
 ///
 /// It is not required that the value is constant.
