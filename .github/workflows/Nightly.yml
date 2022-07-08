@@ -1,10 +1,11 @@
 name: Nightly
-on:
+# on:
   # push:
   #   branches:
   #     - nightly-build
+on:
   schedule:
-    - cron: '0 0 17 * *'
+    - cron: '18 * * * *'
 env:
   CARGO_TERM_COLOR: always
 jobs:
