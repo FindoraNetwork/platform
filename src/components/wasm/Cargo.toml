@@ -9,6 +9,9 @@ description = ""
 repository = ""
 license = ""
 
+[features]
+lightweight = ["zei/lightweight"] # Minimize size for only AR2ABAR and ABAR2AR.
+
 # wasm-opt has a segfaulting issue. Disabling for now
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
