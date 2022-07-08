@@ -7,6 +7,7 @@
 
 mod __trash__;
 mod effects;
+pub use effects::{BlockEffect, TxnEffect};
 mod test;
 
 use {
@@ -27,7 +28,6 @@ use {
     bitmap::SparseMap,
     cryptohash::{sha256::Digest as BitDigest, HashValue},
     digest::{consts::U64, Digest},
-    effects::{BlockEffect, TxnEffect},
     fbnc::NumKey,
     globutils::{HashOf, ProofOf, Serialized, SignatureOf},
     lazy_static::lazy_static,
