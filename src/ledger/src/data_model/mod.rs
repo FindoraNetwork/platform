@@ -9,25 +9,25 @@ mod __trash__;
 mod effects;
 mod test;
 
-pub use effects::{BlockEffect, TxnEffect};
-
-use crate::staking::ops::replace_staker::ReplaceStakerOps;
-
 use {
-    crate::converter::ConvertAccount,
-    crate::staking::{
-        ops::{
-            claim::ClaimOps, delegation::DelegationOps,
-            fra_distribution::FraDistributionOps, governance::GovernanceOps,
-            mint_fra::MintFraOps, undelegation::UnDelegationOps,
-            update_staker::UpdateStakerOps, update_validator::UpdateValidatorOps,
+    crate::{
+        converter::ConvertAccount,
+        staking::{
+            ops::{
+                claim::ClaimOps, delegation::DelegationOps,
+                fra_distribution::FraDistributionOps, governance::GovernanceOps,
+                mint_fra::MintFraOps, replace_staker::ReplaceStakerOps,
+                undelegation::UnDelegationOps, update_staker::UpdateStakerOps,
+                update_validator::UpdateValidatorOps,
+            },
+            Staking,
         },
-        Staking,
     },
     __trash__::{Policy, PolicyGlobals, TxnPolicyData},
     bitmap::SparseMap,
     cryptohash::{sha256::Digest as BitDigest, HashValue},
     digest::{consts::U64, Digest},
+    effects::{BlockEffect, TxnEffect},
     fbnc::NumKey,
     globutils::{HashOf, ProofOf, Serialized, SignatureOf},
     lazy_static::lazy_static,
@@ -2192,7 +2192,6 @@ impl Transaction {
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn check_tx(&self) -> Result<()> {
-
         for operation in self.body.operations.iter() {
             match operation {
                 Operation::TransferAsset(o) => {
@@ -2227,8 +2226,8 @@ impl Transaction {
                 Operation::MintFra(_) => {}
                 Operation::ConvertAccount(_) => {}
                 Operation::BarToAbar(_) => {}
-                Operation::AbarToBar(_) => {},
-                Operation::TransferAnonAsset(_) => {},
+                Operation::AbarToBar(_) => {}
+                Operation::TransferAnonAsset(_) => {}
                 Operation::ReplaceStaker(o) => {
                     self.check_has_signature(&o.get_related_pubkeys()[0])?;
                 }
