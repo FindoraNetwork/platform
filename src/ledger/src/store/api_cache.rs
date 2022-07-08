@@ -25,9 +25,10 @@ use {
     std::collections::HashSet,
     zei::{
         anon_xfr::structs::AxfrOwnerMemo,
-        xfr::{sig::XfrPublicKey, structs::{
-            OwnerMemo, AssetType
-        }},
+        xfr::{
+            sig::XfrPublicKey,
+            structs::{AssetType, OwnerMemo},
+        },
     },
 };
 

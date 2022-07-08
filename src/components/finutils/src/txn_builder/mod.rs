@@ -620,7 +620,7 @@ impl TransactionBuilder {
     /// * `input_record`  -  OpenAssetRecord of the BAR to convert
     /// * `enc_key`       -  XPublicKey of OwnerMemo encryption of receiver
     /// * `is_bar_transparent`  -  if transparent bar (ar)
-        #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
 
     pub fn add_operation_bar_to_abar(
         &mut self,
