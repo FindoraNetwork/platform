@@ -5,7 +5,7 @@ name: Nightly
   #     - nightly-build
 on:
   schedule:
-    - cron: '56 * * * *'
+    - cron: '0 5 * * *'
 env:
   CARGO_TERM_COLOR: always
 jobs:
@@ -26,7 +26,7 @@ jobs:
         toolchain: stable
         override: true
         components: rustfmt
-        ref: nightly-build
+        ref: develop
 
 
 
