@@ -45,10 +45,10 @@ jobs:
 
     # remove the test code in develop build
     # run tests
-    - name: lint
-      shell: bash
-      run: |
-        make lint
+    # - name: lint
+    #   shell: bash
+    #   run: |
+    #     make lint
 
     - name: test
       shell: bash
