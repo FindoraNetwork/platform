@@ -299,6 +299,9 @@ pub fn deliver_tx(
                                 .write()
                                 .commit_session();
                             return resp;
+                        } else {
+                            resp.code = 1;
+                            resp.log = "cache_transaction failed".to_owned();
                         }
 
                         s.account_base_app

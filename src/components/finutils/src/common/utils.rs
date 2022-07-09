@@ -772,8 +772,12 @@ pub fn generate_bar2abar_op(
         gen_fee_bar_to_abar(auth_key_pair, txo_sid).c(d!("Failed to generate fee"))?;
     builder.add_operation(feeop);
 
+    let mut tx = builder.take_transaction()?;
+
+    tx.sign(auth_key_pair);
+
     // submit transaction to network
-    send_tx(&builder.take_transaction()?).c(d!("Failed to submit Bar to Abar txn"))?;
+    send_tx(&tx).c(d!("Failed to submit Bar to Abar txn"))?;
 
     Ok(c)
 }

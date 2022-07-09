@@ -7,22 +7,22 @@
 
 mod __trash__;
 mod effects;
+pub use effects::{BlockEffect, TxnEffect};
 mod test;
 
-pub use effects::{BlockEffect, TxnEffect};
-
-use crate::staking::ops::replace_staker::ReplaceStakerOps;
-
 use {
-    crate::converter::ConvertAccount,
-    crate::staking::{
-        ops::{
-            claim::ClaimOps, delegation::DelegationOps,
-            fra_distribution::FraDistributionOps, governance::GovernanceOps,
-            mint_fra::MintFraOps, undelegation::UnDelegationOps,
-            update_staker::UpdateStakerOps, update_validator::UpdateValidatorOps,
+    crate::{
+        converter::ConvertAccount,
+        staking::{
+            ops::{
+                claim::ClaimOps, delegation::DelegationOps,
+                fra_distribution::FraDistributionOps, governance::GovernanceOps,
+                mint_fra::MintFraOps, replace_staker::ReplaceStakerOps,
+                undelegation::UnDelegationOps, update_staker::UpdateStakerOps,
+                update_validator::UpdateValidatorOps,
+            },
+            Staking,
         },
-        Staking,
     },
     __trash__::{Policy, PolicyGlobals, TxnPolicyData},
     bitmap::SparseMap,
@@ -1962,7 +1962,7 @@ pub const BAR_TO_ABAR_TX_FEE_MIN: u64 = 20_000; // 0.02 FRA (2*TX_FEE_MIN)
 
 /// Calculate the FEE with inputs and outputs number.
 pub const FEE_CALCULATING_FUNC: fn(u32, u32) -> u32 = |x: u32, y: u32| {
-    let extra_outputs = y.checked_sub(x).unwrap_or(0);
+    let extra_outputs = y.saturating_sub(x);
     50_0000 + 10_0000 * x + 20_0000 * y + (10_000 * extra_outputs)
 };
 
@@ -2192,52 +2192,33 @@ impl Transaction {
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn check_tx(&self) -> Result<()> {
-        let mut offset = 0;
-
-        let verify = |sign: &SignatureOf<TransactionBody>,
-                      pk: &XfrPublicKey,
-                      val: &TransactionBody|
-         -> Result<()> { sign.verify(pk, val) };
-
-        for (index, operation) in self.body.operations.iter().enumerate() {
+        for operation in self.body.operations.iter() {
             match operation {
                 Operation::TransferAsset(o) => {
-                    let pks = o.get_owner_addresses();
-                    offset = pks.len() - 1;
-                    let tx_sign_list = &self.signatures[index..=(index + offset)];
-
-                    for (idx, tx_sign) in tx_sign_list.iter().enumerate() {
-                        verify(tx_sign, &pks[idx], &self.body)?;
+                    for pk in o.get_owner_addresses().iter() {
+                        self.check_has_signature(pk)?;
                     }
                 }
                 Operation::IssueAsset(o) => {
-                    verify(
-                        &self.signatures[(index + offset)],
-                        &o.pubkey.key,
-                        &self.body,
-                    )?;
+                    self.check_has_signature(&o.pubkey.key)?;
                 }
                 Operation::DefineAsset(o) => {
-                    verify(
-                        &self.signatures[(index + offset)],
-                        &o.pubkey.key,
-                        &self.body,
-                    )?;
+                    self.check_has_signature(&o.pubkey.key)?;
                 }
                 Operation::UpdateMemo(o) => {
-                    verify(&self.signatures[(index + offset)], &o.pubkey, &self.body)?;
+                    self.check_has_signature(&o.pubkey)?;
                 }
                 Operation::UpdateStaker(o) => {
-                    verify(&self.signatures[(index + offset)], &o.pubkey, &self.body)?;
+                    self.check_has_signature(&o.pubkey)?;
                 }
                 Operation::Delegation(o) => {
-                    verify(&self.signatures[(index + offset)], &o.pubkey, &self.body)?;
+                    self.check_has_signature(&o.pubkey)?;
                 }
                 Operation::UnDelegation(o) => {
-                    verify(&self.signatures[(index + offset)], &o.pubkey, &self.body)?;
+                    self.check_has_signature(&o.pubkey)?;
                 }
                 Operation::Claim(o) => {
-                    verify(&self.signatures[(index + offset)], &o.pubkey, &self.body)?;
+                    self.check_has_signature(&o.pubkey)?;
                 }
                 Operation::UpdateValidator(_) => {}
                 Operation::Governance(_) => {}
@@ -2248,11 +2229,7 @@ impl Transaction {
                 Operation::AbarToBar(_) => {}
                 Operation::TransferAnonAsset(_) => {}
                 Operation::ReplaceStaker(o) => {
-                    verify(
-                        &self.signatures[(index + offset)],
-                        &o.get_related_pubkeys()[0],
-                        &self.body,
-                    )?;
+                    self.check_has_signature(&o.get_related_pubkeys()[0])?;
                 }
             }
         }

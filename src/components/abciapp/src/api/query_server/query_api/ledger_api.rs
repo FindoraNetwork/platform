@@ -693,7 +693,7 @@ pub async fn query_owned_utxos(
                 .get_owned_utxos(&pk)
                 .map_err(|e| error::ErrorBadRequest(e.to_string()))
         })
-        .map(|res| web::Json(res))
+        .map(web::Json)
 }
 
 // query utxos according `commitment`
