@@ -56,7 +56,7 @@ stop_all:
 	- pkill findorad
 
 # Build debug
-debug:
+dbg:
 	cargo build --features debug_env --bins -p abciapp -p finutils
 
 # Build for cleveldb
