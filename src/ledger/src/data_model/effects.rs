@@ -1,3 +1,7 @@
+use crate::data_model::{AssetTypePrefix, ASSET_TYPE_FRA};
+use fbnc::NumKey;
+use fp_utils::hashing::keccak_256;
+use zei::xfr::structs::AssetType as ZeiAssetType;
 use {
     crate::{
         data_model::{
@@ -28,7 +32,10 @@ use {
         sync::Arc,
     },
     zei::{
-        anon_xfr::structs::{AXfrNote, AnonBlindAssetRecord, Nullifier},
+        anon_xfr::{
+            abar_to_abar::AXfrNote,
+            structs::{AnonAssetRecord, Nullifier},
+        },
         setup::BulletproofParams,
         xfr::{
             sig::XfrPublicKey,
@@ -93,7 +100,7 @@ pub struct TxnEffect {
     /// Staking operations
     pub update_stakers: Vec<UpdateStakerOps>,
     /// Newly created Anon Blind Asset Records
-    pub bar_conv_abars: Vec<AnonBlindAssetRecord>,
+    pub bar_conv_abars: Vec<AnonAssetRecord>,
     /// Body of Abar to Bar conversions
     pub abar_conv_inputs: Vec<AbarConvNote>,
     /// New anon transfer bodies
@@ -232,7 +239,16 @@ impl TxnEffect {
         // (1)
         def.signature.verify(&def.pubkey.key, &def.body).c(d!())?;
 
-        let code = def.body.asset.code;
+        let code = if def.body.asset.code.val == ASSET_TYPE_FRA {
+            def.body.asset.code
+        } else {
+            let mut asset_code = AssetTypePrefix::UserDefined.bytes();
+            asset_code.append(&mut def.body.asset.code.to_bytes());
+            AssetTypeCode {
+                val: ZeiAssetType(keccak_256(&asset_code)),
+            }
+        };
+
         let token = AssetType {
             properties: *def.body.asset.clone(),
             ..Default::default()
@@ -274,6 +290,7 @@ impl TxnEffect {
         }
 
         let code = iss.body.code;
+
         let seq_num = iss.body.seq_num;
 
         self.asset_types_involved.insert(code);
@@ -323,6 +340,24 @@ impl TxnEffect {
             if output.record.asset_type != XfrAssetType::NonConfidential(code.val) {
                 return Err(eg!());
             }
+            // match output.record.asset_type {
+            //     XfrAssetType::Confidential(_) => {
+            //         return Err(eg!());
+            //     }
+            //     XfrAssetType::NonConfidential(at) => {
+            //         if at == ASSET_TYPE_FRA && at.0 != code.val.0 {
+            //             return Err(eg!());
+            //         } else if at != ASSET_TYPE_FRA {
+            //             let mut asset_code = AssetTypePrefix::UserDefined.bytes();
+            //             asset_code.append(&mut at.0.to_vec());
+            //             let act = AssetTypeCode::new_from_vec(keccak_256(asset_code.as_slice()).to_vec());
+            //
+            //             if act.val != code.val {
+            //                 return Err(eg!());
+            //             }
+            //         }
+            //     }
+            // };
 
             if let XfrAmount::NonConfidential(amt) = output.record.amount {
                 let issuance_amount = self.issuance_amounts.entry(code).or_insert(0);
@@ -638,7 +673,7 @@ pub struct BlockEffect {
     /// Should line up element-wise with `txns`
     pub txos: Vec<Vec<Option<TxOutput>>>,
     /// New ABARs created
-    pub output_abars: Vec<Vec<AnonBlindAssetRecord>>,
+    pub output_abars: Vec<Vec<AnonAssetRecord>>,
     /// Which TXOs this consumes
     pub input_txos: HashMap<TxoSID, TxOutput>,
     /// Which new nullifiers are created
@@ -706,7 +741,7 @@ impl BlockEffect {
         }
 
         // collect ABARs generated from BAR to ABAR
-        let mut current_txn_abars: Vec<AnonBlindAssetRecord> = vec![];
+        let mut current_txn_abars: Vec<AnonAssetRecord> = vec![];
         for abar in txn_effect.bar_conv_abars {
             current_txn_abars.push(abar);
         }

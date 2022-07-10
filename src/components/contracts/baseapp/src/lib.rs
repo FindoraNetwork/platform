@@ -13,6 +13,7 @@ mod notify;
 use crate::modules::ModuleManager;
 use abci::Header;
 use ethereum::BlockV0 as Block;
+use fin_db::{FinDB, RocksDB};
 use fp_core::{
     account::SmartAccount,
     context::{Context, RunTxMode},
@@ -35,10 +36,7 @@ use ruc::{eg, Result};
 use std::borrow::BorrowMut;
 use std::path::Path;
 use std::sync::Arc;
-use storage::{
-    db::{FinDB, RocksDB},
-    state::ChainState,
-};
+use storage::state::ChainState;
 
 lazy_static! {
     /// An identifier that distinguishes different EVM chains.
@@ -51,6 +49,7 @@ const CHAIN_STATE_PATH: &str = "state.db";
 const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
 const CHAIN_STATE_MIN_VERSIONS: u64 = 4 * 60 * 24 * 90;
 
+#[derive(Clone)]
 pub struct BaseApp {
     /// application name from abci.Info
     pub name: String,

@@ -31,7 +31,9 @@ use {
     bitmap::{BitMap, SparseMap},
     config::abci::global_cfg::CFG,
     cryptohash::sha256::Digest as BitDigest,
+    digest::Digest,
     fbnc::{new_mapx, new_mapxnk, new_vecx, Mapx, Mapxnk, Vecx},
+    fin_db::RocksDB,
     globutils::{HashOf, ProofOf},
     merkle_tree::AppendOnlyMerkle,
     parking_lot::RwLock,
@@ -39,6 +41,7 @@ use {
     rand_core::SeedableRng,
     ruc::*,
     serde::{Deserialize, Serialize},
+    sha2::Sha512,
     sliding_set::SlidingSet,
     sparse_merkle_tree::{Key, SmtMap256},
     std::{
@@ -51,17 +54,17 @@ use {
         sync::Arc,
     },
     storage::{
-        db::RocksDB,
         state::{ChainState, State},
         store::{ImmutablePrefixedStore, PrefixedStore},
     },
     zei::{
         anon_xfr::{
-            hash_abar,
+            abar_to_abar::verify_anon_xfr_note,
             structs::{
-                AnonBlindAssetRecord, Commitment, MTLeafInfo, MTNode, MTPath, Nullifier,
+                AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, MTNode, MTPath,
+                Nullifier,
             },
-            verify_anon_xfr_note, TREE_DEPTH as MERKLE_TREE_DEPTH,
+            TREE_DEPTH as MERKLE_TREE_DEPTH,
         },
         setup::VerifierParams,
         xfr::{
@@ -74,6 +77,7 @@ use {
         ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath,
     },
     zei_algebra::{bls12_381::BLSScalar, prelude::*},
+    zei_crypto::basic::rescue::RescueInstance,
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
@@ -312,7 +316,7 @@ impl LedgerState {
     pub fn update_anon_stores(
         &mut self,
         new_nullifiers: Vec<Nullifier>,
-        output_abars: Vec<Vec<AnonBlindAssetRecord>>,
+        output_abars: Vec<Vec<AnonAssetRecord>>,
         backup_next_txn_sid: usize,
         mut tx_block: Vec<FinalizedTransaction>,
     ) -> Result<Vec<FinalizedTransaction>> {
@@ -474,13 +478,20 @@ impl LedgerState {
 
     #[inline(always)]
     /// Adds a new abar to session cache and updates merkle hashes of ancestors
-    pub fn add_abar(&mut self, abar: &AnonBlindAssetRecord) -> Result<ATxoSID> {
+    pub fn add_abar(&mut self, abar: &AnonAssetRecord) -> Result<ATxoSID> {
         let mut abar_state_val = self.abar_state.write();
         let store = PrefixedStore::new("abar_store", &mut abar_state_val);
         let mut mt = PersistentMerkleTree::new(store)?;
 
-        mt.add_commitment_hash(hash_abar(mt.entry_count(), abar))
-            .map(ATxoSID)
+        let hasher = RescueInstance::new();
+        let leaf = hasher.rescue(&[
+            BLSScalar::from(mt.entry_count()),
+            abar.commitment,
+            BLSScalar::zero(),
+            BLSScalar::zero(),
+        ])[0];
+
+        mt.add_commitment_hash(leaf).map(ATxoSID)
     }
 
     #[inline(always)]
@@ -1029,21 +1040,21 @@ impl LedgerState {
 
     /// Get the owner memo of a abar by ATxoSID
     #[allow(dead_code)]
-    pub fn get_abar_memo(&self, ax_id: ATxoSID) -> Option<OwnerMemo> {
+    pub fn get_abar_memo(&self, ax_id: ATxoSID) -> Option<AxfrOwnerMemo> {
         let txn_location = self.status.ax_txo_to_txn_location.get(&ax_id).unwrap();
         let authenticated_txn = self.get_transaction(txn_location.0).unwrap();
-        let memo: Vec<OwnerMemo> = authenticated_txn
+        let memo: Vec<AxfrOwnerMemo> = authenticated_txn
             .finalized_txn
             .txn
             .body
             .operations
             .iter()
             .flat_map(|o| match o {
-                Operation::BarToAbar(body) => vec![body.memo()],
+                Operation::BarToAbar(body) => vec![body.axfr_memo()],
                 Operation::TransferAnonAsset(body) => body.note.body.owner_memos.clone(),
                 _ => vec![],
             })
-            .collect::<Vec<OwnerMemo>>();
+            .collect::<Vec<AxfrOwnerMemo>>();
 
         if memo.is_empty() {
             return None;
@@ -1218,7 +1229,7 @@ pub struct LedgerStatus {
     owned_utxos: Mapx<XfrPublicKey, HashSet<TxoSID>>,
     /// all existing ax_utxos
     #[serde(default = "default_status_ax_utxos")]
-    ax_utxos: Mapx<ATxoSID, AnonBlindAssetRecord>,
+    ax_utxos: Mapx<ATxoSID, AnonAssetRecord>,
     /// all owned abars
     #[serde(default = "default_status_owned_ax_utxos")]
     owned_ax_utxos: Mapx<Commitment, ATxoSID>,
@@ -1303,7 +1314,7 @@ impl LedgerStatus {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn get_abar(&self, uid: ATxoSID) -> Option<AnonBlindAssetRecord> {
+    pub fn get_abar(&self, uid: ATxoSID) -> Option<AnonAssetRecord> {
         self.ax_utxos.get(&uid)
     }
 
@@ -1611,6 +1622,9 @@ impl LedgerStatus {
         let store = ImmutablePrefixedStore::new("abar_store", &abar_query_state);
         let abar_mt = ImmutablePersistentMerkleTree::new(store)?;
 
+        let mut hasher = Sha512::new();
+        hasher.update(txn_effect.txn.body.digest());
+
         // An axfr_body requires versioned merkle root hash for verification.
         // here with LedgerStatus available.
         for axfr_note in txn_effect.axfr_bodies.iter() {
@@ -1631,8 +1645,13 @@ impl LedgerStatus {
             let version_root = abar_mt
                 .get_root_with_depth_and_version(MERKLE_TREE_DEPTH, abar_version)?;
 
-            verify_anon_xfr_note(&verifier_params, axfr_note, &version_root)
-                .c(d!("Anon Transfer proof verification failed"))?;
+            verify_anon_xfr_note(
+                &verifier_params,
+                axfr_note,
+                &version_root,
+                hasher.clone(),
+            )
+            .c(d!("Anon Transfer proof verification failed"))?;
         }
 
         // An axfr_abar_conv requires versioned merkle root hash for verification.
@@ -1650,7 +1669,7 @@ impl LedgerStatus {
                 .get_root_with_depth_and_version(MERKLE_TREE_DEPTH, abar_version)?;
 
             // verify zk proof with merkle root
-            abar_conv.verify(version_root)?;
+            abar_conv.verify(version_root, hasher.clone())?;
         }
 
         Ok(())
@@ -1830,7 +1849,7 @@ fn default_status_nonconfidential_balances() -> Mapx<XfrPublicKey, u64> {
     new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/nonconfidential_balances")
 }
 
-fn default_status_ax_utxos() -> Mapx<ATxoSID, AnonBlindAssetRecord> {
+fn default_status_ax_utxos() -> Mapx<ATxoSID, AnonAssetRecord> {
     new_mapx!(SNAPSHOT_ENTRIES_DIR.to_owned() + "/ax_utxos")
 }
 
