@@ -56,8 +56,13 @@ stop_all:
 	- pkill findorad
 
 # Build debug
-build:
+debug:
 	cargo build --features debug_env --bins -p abciapp -p finutils
+
+# Build for cleveldb
+build: tendermint_cleveldb
+	cargo build --bins -p abciapp -p finutils
+	$(call pack,debug)
 
 # Build for cleveldb
 build_release: tendermint_cleveldb
