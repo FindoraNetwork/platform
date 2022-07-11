@@ -71,7 +71,9 @@ pub fn fetch_mint<C: Config>(
 }
 
 fn parse_truple_result(tuple: Vec<Token>) -> Result<NonConfidentialOutput> {
-    let asset = if let Token::FixedBytes(bytes) = tuple.get(0).ok_or(eg!("Asset Must be FixedBytes"))? {
+    let asset = if let Token::FixedBytes(bytes) =
+        tuple.get(0).ok_or(eg!("Asset Must be FixedBytes"))?
+    {
         let mut inner = [0u8; 32];
 
         inner.copy_from_slice(bytes);
@@ -81,17 +83,20 @@ fn parse_truple_result(tuple: Vec<Token>) -> Result<NonConfidentialOutput> {
         return Err(eg!("Asset Must be FixedBytes"));
     };
 
-    let target = if let Token::FixedBytes(bytes) = tuple.get(1).ok_or(eg!("Target must be FixedBytes"))? {
+    let target = if let Token::FixedBytes(bytes) =
+        tuple.get(1).ok_or(eg!("Target must be FixedBytes"))?
+    {
         XfrPublicKey::zei_from_bytes(bytes)?
     } else {
         return Err(eg!("Asset Must be FixedBytes"));
     };
 
-    let amount = if let Token::Uint(i) = tuple.get(2).ok_or(eg!("No asset in index 2"))? {
-        i
-    } else {
-        return Err(eg!("Amount must be uint"));
-    };
+    let amount =
+        if let Token::Uint(i) = tuple.get(2).ok_or(eg!("No asset in index 2"))? {
+            i
+        } else {
+            return Err(eg!("Amount must be uint"));
+        };
 
     let amount = if asset == ASSET_TYPE_FRA {
         EthereumDecimalsMapping::convert_to_native_token(*amount).as_u64()
@@ -108,7 +113,7 @@ fn parse_truple_result(tuple: Vec<Token>) -> Result<NonConfidentialOutput> {
 
     let max_supply =
         if let Token::Uint(num) = tuple.get(4).ok_or(eg!("No asset in index 4"))? {
-            *num
+            EthereumDecimalsMapping::convert_to_native_token(*num).as_u64()
         } else {
             return Err(eg!("Max supply must be uint"));
         };

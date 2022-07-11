@@ -1,4 +1,3 @@
-use primitive_types::U256;
 use serde::{Deserialize, Serialize};
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::AssetType;
@@ -22,5 +21,5 @@ pub struct NonConfidentialOutput {
     pub amount: u64,
     pub target: XfrPublicKey,
     pub decimal: u8,
-    pub max_supply: U256,
+    pub max_supply: u64,
 }

@@ -130,7 +130,7 @@ pub fn transfer_from_account(
         amount,
         asset: ASSET_TYPE_FRA,
         decimal: 6,
-        max_supply: U256::zero(),
+        max_supply: 0,
     };
 
     let (signer, kp) = if let Some(key_path) = eth_phrase {

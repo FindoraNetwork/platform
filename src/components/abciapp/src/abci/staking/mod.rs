@@ -4,6 +4,8 @@
 //! Business logic based on [**Ledger Staking**](ledger::staking).
 //!
 
+use ledger::data_model::{AssetTypeCode, IssuerPublicKey, BLACK_HOLE_PUBKEY_STAKING, AssetType};
+
 mod whoami;
 
 #[cfg(test)]
@@ -271,9 +273,51 @@ fn system_governance(staking: &mut Staking, bz: &ByzantineInfo) -> Result<()> {
 
 /// Pay for freed 'Delegations' and 'FraDistributions'.
 pub fn system_mint_pay(
-    la: &LedgerState,
+    la: &mut LedgerState,
     account_base_app: &mut AccountBaseApp,
 ) -> Option<Transaction> {
+        let mut mints = Vec::new();
+
+        if let Some(account_mint) = account_base_app.consume_mint() {
+            for mint in account_mint {
+
+                let atc = AssetTypeCode { val: mint.asset.clone() };
+                let at = if let Some(mut at) = la.get_asset_type(&atc) {
+                    at.properties.issuer = IssuerPublicKey{ key: *BLACK_HOLE_PUBKEY_STAKING };
+
+                    if mint.max_supply != 0 {
+                        at.properties.asset_rules.max_units = Some(mint.max_supply);
+                    }
+
+                    at
+                } else {
+                    let mut at = AssetType::default();
+                    at.properties.issuer = IssuerPublicKey{ key: *BLACK_HOLE_PUBKEY_STAKING };
+
+                    if mint.max_supply != 0 {
+                        at.properties.asset_rules.max_units = Some(mint.max_supply);
+                    }
+
+                    at.properties.code = AssetTypeCode { val: mint.asset };
+
+                    at
+                };
+
+                la.insert_asset_type(atc, at);
+
+
+                let mint_entry = MintEntry::new(
+                    MintKind::Other,
+                    mint.target,
+                    None,
+                    mint.amount,
+                    mint.asset,
+                );
+
+                mints.push(mint_entry);
+            }
+        }
+
     let staking = la.get_staking();
     let mut limit = staking.coinbase_balance() as i128;
 
@@ -307,25 +351,7 @@ pub fn system_mint_pay(
         .take(NUM_TO_PAY)
         .collect::<Vec<_>>();
 
-    // add account mint_entries.
-    let mut mints = if let Some(account_mint) = account_base_app.consume_mint() {
-        account_mint
-            .iter()
-            .map(|mint| {
-                MintEntry::new(
-                    MintKind::Other,
-                    mint.target,
-                    None,
-                    mint.amount,
-                    mint.asset,
-                )
-            })
-            .collect::<Vec<MintEntry>>()
-    } else {
-        Vec::new()
-    };
-
-    mint_entries.append(&mut mints);
+        mint_entries.append(&mut mints);
 
     if mint_entries.is_empty() {
         None

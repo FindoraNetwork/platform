@@ -83,7 +83,7 @@ impl EVMTransactionBuilder {
             amount,
             asset: ASSET_TYPE_FRA,
             decimal: 6,
-            max_supply: U256::zero(),
+            max_supply: 0,
         };
         let action = Action::XHub(XhubAction::NonConfidentialTransfer(
             NonConfidentialTransfer {
