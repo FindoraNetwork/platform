@@ -129,6 +129,8 @@ pub fn transfer_from_account(
         target,
         amount,
         asset: ASSET_TYPE_FRA,
+        decimal: 6,
+        max_supply: U256::zero(),
     };
 
     let (signer, kp) = if let Some(key_path) = eth_phrase {

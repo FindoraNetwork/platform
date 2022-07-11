@@ -847,6 +847,8 @@ pub fn transfer_to_utxo_from_account(
         target: recipient,
         amount,
         asset: ASSET_TYPE_FRA,
+        decimal: 6,
+        max_supply: U256::zero(),
     };
     let action = Action::XHub(XHubAction::NonConfidentialTransfer(
         NonConfidentialTransfer {
