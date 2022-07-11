@@ -12,6 +12,7 @@ if [ ! -z "$1" ] && [ ! -z "$2" ]; then
 fi
 
 # create folder if necessary
+mkdir -p $HOME/.findora
 mkdir -p $DEVNET
 
 # clean nodes
