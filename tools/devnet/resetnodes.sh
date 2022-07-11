@@ -11,6 +11,9 @@ if [ ! -z "$1" ] && [ ! -z "$2" ]; then
     N=$2
 fi
 
+# create folder if necessary
+mkdir -p $DEVNET
+
 # clean nodes
 rm -rf $DEVNET/*
 

@@ -9,6 +9,11 @@ if [ ! -z "$1" ]; then
     Node="node$1"
 fi
 
+# finish if devnet never created
+if [ ! -d "$DEVNET" ]; then
+    exit 0
+fi
+
 # stop abcis
 nodes=`ls -l $DEVNET | grep node  | awk '(NR>0){print $9}' | sort -V`
 
