@@ -128,6 +128,28 @@ pub fn transfer_batch(
     send_tx(&builder.take_transaction()).c(d!())
 }
 
+#[allow(missing_docs)]
+pub fn transfer_batch_tx(
+    owner_kp: &XfrKeyPair,
+    target_list: Vec<(&XfrPublicKey, u64)>,
+    token_code: Option<AssetTypeCode>,
+    confidential_am: bool,
+    confidential_ty: bool,
+) -> Result<Transaction> {
+    let mut builder = new_tx_builder().c(d!())?;
+    let op = gen_transfer_op(
+        owner_kp,
+        target_list,
+        token_code,
+        confidential_am,
+        confidential_ty,
+        None,
+    )
+    .c(d!())?;
+    builder.add_operation(op);
+    Ok(builder.take_transaction())
+}
+
 /// @target_list: use `Vec` but `HashMap` ?
 ///     there might be multi entries to one address
 #[inline(always)]
@@ -292,7 +314,12 @@ pub fn gen_fee_bar_to_abar(
         )
         .c(d!())?;
 
-    let utxos = get_owned_utxos(owner_kp.get_pk_ref()).c(d!())?.into_iter();
+    let mut _utxos = get_owned_utxos(owner_kp.get_pk_ref());
+    if _utxos.is_err() {
+        _utxos = get_owned_utxos(owner_kp.get_pk_ref());
+    }
+
+    let utxos = _utxos?.into_iter();
     for (sid, (utxo, owner_memo)) in utxos {
         let oar =
             open_blind_asset_record(&utxo.0.record, &owner_memo, owner_kp).c(d!())?;

@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate log;
+
 use clap::{App, Arg, SubCommand};
 
 use ruc::{d, Result, RucResult};
@@ -26,6 +29,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 fn main() -> Result<()> {
+    env_logger::init();
+
     let _matches = App::new("Triple masking bench")
         .subcommand(
             SubCommand::with_name("gen-utxos")
@@ -74,6 +79,82 @@ fn main() -> Result<()> {
                         .value_name("Anon-key File")
                         .help("Interval of sending transaction, seconds.")
                         .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("threads")
+                        .long("threads")
+                        .value_name("Threads")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("confidential_am")
+                        .long("confidential_am")
+                        .value_name("Boolean")
+                        .help("Is confidential amount?.")
+                        .takes_value(false),
+                )
+                .arg(
+                    Arg::with_name("confidential_ty")
+                        .long("confidential_ty")
+                        .value_name("Boolean")
+                        .help("Is confidential Asset type?.")
+                        .takes_value(false),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("cross-transfer")
+                .arg(
+                    Arg::with_name("batch-size")
+                        .short("n")
+                        .long("batch-size")
+                        .value_name("Batch Size")
+                        .help("Numbers of transfer in a transaction.")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("keys")
+                        .long("keys")
+                        .value_name("KEY FILE")
+                        .help("File that contains a list of mnemonics.")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("amount")
+                        .long("amount")
+                        .value_name("amount to transfer")
+                        .help("Amount of FRA to transfer.")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("interval_secs")
+                        .long("interval_secs")
+                        .required(true)
+                        .value_name("Anon-key File")
+                        .help("Interval of sending transaction, seconds.")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("threads")
+                        .long("threads")
+                        .required(true)
+                        .value_name("Threads")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("confidential_am")
+                        .long("confidential_am")
+                        .value_name("Boolean")
+                        .help("Is confidential amount?.")
+                        .takes_value(false),
+                )
+                .arg(
+                    Arg::with_name("confidential_ty")
+                        .long("confidential_ty")
+                        .value_name("Boolean")
+                        .help("Is confidential Asset type?.")
+                        .takes_value(false),
                 ),
         )
         .subcommand(
@@ -107,6 +188,7 @@ fn main() -> Result<()> {
                 .arg(
                     Arg::with_name("interval_secs")
                         .long("interval_secs")
+                        .required(true)
                         .value_name("Anon-key File")
                         .help("Interval of sending transaction, seconds.")
                         .takes_value(true),
@@ -114,6 +196,7 @@ fn main() -> Result<()> {
                 .arg(
                     Arg::with_name("threads")
                         .long("threads")
+                        .required(true)
                         .value_name("Threads")
                         .takes_value(true),
                 ),
@@ -187,6 +270,7 @@ fn main() -> Result<()> {
                 .arg(
                     Arg::with_name("interval_secs")
                         .long("interval_secs")
+                        .required(true)
                         .value_name("Anon-key File")
                         .help("Interval of sending transaction, seconds.")
                         .takes_value(true),
@@ -194,6 +278,7 @@ fn main() -> Result<()> {
                 .arg(
                     Arg::with_name("threads")
                         .long("threads")
+                        .required(true)
                         .value_name("Threads")
                         .takes_value(true),
                 )
@@ -228,6 +313,14 @@ fn main() -> Result<()> {
             .parse()
             .unwrap();
 
+        let confidential_am = matches.is_present("confidential_am");
+        let confidential_ty = matches.is_present("confidential_ty");
+
+        println!(
+            "Is confidential amount:{}, confidential asset type {}",
+            confidential_am, confidential_ty
+        );
+
         let batch_size: usize = matches.value_of("batch-size").unwrap().parse().unwrap();
 
         for i in 0..2 {
@@ -239,6 +332,8 @@ fn main() -> Result<()> {
                 batch_size,
                 amount,
                 Duration::from_secs(interval),
+                confidential_am,
+                confidential_ty,
             )?;
         }
     } else if let Some(matches) = _matches.subcommand_matches("gen-keys") {
@@ -255,16 +350,12 @@ fn main() -> Result<()> {
 
         let keys = read_keys(key_file)?;
 
-        let interval: u64 = matches
-            .value_of("interval_secs")
-            .unwrap_or("4")
-            .parse()
-            .unwrap();
+        let interval: u64 = matches.value_of("interval_secs").unwrap().parse().unwrap();
 
         let anon_keys =
             parse_anon_key_from_path(matches.value_of("anon-keys").unwrap())?;
 
-        let threads: usize = matches.value_of("threads").unwrap_or("4").parse().unwrap();
+        let threads: usize = matches.value_of("threads").unwrap().parse().unwrap();
 
         for i in 0..2 {
             println!("Bar to Abar Round {}", i + 1);
@@ -302,13 +393,9 @@ fn main() -> Result<()> {
         let to_anon_keys =
             parse_anon_key_from_path(matches.value_of("to-anon-keys").unwrap())?;
 
-        let interval: u64 = matches
-            .value_of("interval_secs")
-            .unwrap_or("4")
-            .parse()
-            .unwrap();
+        let interval: u64 = matches.value_of("interval_secs").unwrap().parse().unwrap();
 
-        let threads: usize = matches.value_of("threads").unwrap_or("4").parse().unwrap();
+        let threads: usize = matches.value_of("threads").unwrap().parse().unwrap();
 
         let amount = matches.value_of("amount").unwrap_or("1000000");
 
@@ -322,6 +409,38 @@ fn main() -> Result<()> {
             axfr_amount,
             Duration::from_secs(interval),
             threads,
+        )?;
+    } else if let Some(matches) = _matches.subcommand_matches("cross-transfer") {
+        let threads: usize = matches.value_of("threads").unwrap().parse().unwrap();
+        let amount: u64 = matches
+            .value_of("amount")
+            .unwrap_or("1000000")
+            .parse()
+            .unwrap();
+
+        let key_file = matches.value_of("keys").unwrap();
+
+        let key_pairs = read_keys(key_file)?;
+        let interval: u64 = matches.value_of("interval_secs").unwrap().parse().unwrap();
+
+        let batch_size: usize = matches.value_of("batch-size").unwrap().parse().unwrap();
+
+        let confidential_am = matches.is_present("confidential_am");
+        let confidential_ty = matches.is_present("confidential_ty");
+
+        println!(
+            "Is confidential amount:{}, confidential asset type {}",
+            confidential_am, confidential_ty
+        );
+
+        cross_transfer(
+            &key_pairs,
+            batch_size,
+            threads,
+            amount,
+            Duration::from_secs(interval),
+            confidential_am,
+            confidential_ty,
         )?;
     } else {
         panic!("Unknown subcommands.")
@@ -363,6 +482,8 @@ fn generate_utxos(
     batch_size: usize,
     am: u64,
     interval: Duration,
+    confidential_am: bool,
+    confidential_ty: bool,
 ) -> Result<()> {
     let len = keys.len();
     for i in 0..(len / batch_size) {
@@ -385,7 +506,82 @@ fn generate_utxos(
             .iter()
             .map(|kp| kp.get_pk())
             .collect();
-        transfer_asset_batch_x(&key_pair_a, &pks, None, am, false, false)?;
+        transfer_asset_batch_x(
+            &key_pair_a,
+            &pks,
+            None,
+            am,
+            confidential_am,
+            confidential_ty,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn cross_transfer(
+    key_pairs: &[XfrKeyPair],
+    batch_size: usize,
+    threads: usize,
+    am: u64,
+    interval: Duration,
+    confidential_am: bool,
+    confidential_ty: bool,
+) -> Result<()> {
+    let len = key_pairs.len();
+    let mut txes: Vec<_> = Vec::with_capacity(1024);
+    info!("Generating tx...");
+    for (i, from) in key_pairs.iter().enumerate() {
+        let mut targets: Vec<(_, _)> = Vec::with_capacity(32);
+        for j in (i + 1)..(i + 1 + batch_size) {
+            targets.push((key_pairs.get(j % len).unwrap().get_pk(), am));
+        }
+
+        let targets: Vec<_> = targets.iter().map(|(pk, am)| (pk, *am)).collect();
+        txes.push(utils::transfer_batch_tx(
+            from,
+            targets,
+            None,
+            confidential_am,
+            confidential_ty,
+        ));
+
+        if (i + 1) % 10 == 0 {
+            info!("Generated {}.", i + 1)
+        }
+    }
+
+    let txes = Arc::new(Mutex::new(txes));
+
+    let mut handles = Vec::new();
+    for i in 0..threads {
+        let txes = txes.clone();
+        let h = std::thread::spawn(move || loop {
+            let tx = { txes.lock().unwrap().pop() };
+            if tx.is_none() {
+                return;
+            }
+            match tx.unwrap() {
+                Ok(t) => {
+                    info!("Thread-{} Sending tx ...", i);
+                    let sw = Stopwatch::start_new();
+                    if utils::send_tx(&t).is_err() {
+                        if let Err(e) = utils::send_tx(&t) {
+                            error!("{}", e);
+                        }
+                    }
+                    info!("Thread-{} Sending tx took {}ms", i, sw.elapsed_ms());
+                }
+                Err(e) => error!("{}", e),
+            }
+            std::thread::sleep(interval);
+        });
+
+        handles.push(h);
+    }
+
+    for h in handles.into_iter() {
+        h.join().unwrap();
     }
 
     Ok(())
@@ -402,33 +598,42 @@ fn test_bar2abar(
         Vec::with_capacity(1024);
 
     for kp in keys.into_iter() {
-        let mut list: Vec<(TxoSID, OpenAssetRecord)> =
-            utils::get_owned_utxos(&kp.pub_key)?
-                .iter()
-                .filter(|a| {
-                    // Filter by FRA
-                    match a.1.clone().0 .0.record.asset_type {
-                        XfrAssetType::Confidential(_) => false,
-                        XfrAssetType::NonConfidential(x) => ASSET_TYPE_FRA == x,
-                    }
-                })
-                .map(|(a, (utxo, owner_memo))| {
-                    let oar = open_blind_asset_record(&utxo.0.record, &owner_memo, &kp)
-                        .unwrap();
-                    (*a, oar)
-                })
-                .collect();
+        let mut utxo = utils::get_owned_utxos(&kp.pub_key);
+        if utxo.is_err() {
+            utxo = utils::get_owned_utxos(&kp.pub_key);
+        }
+        match utxo {
+            Ok(u) => {
+                let mut list: Vec<(TxoSID, OpenAssetRecord)> = u
+                    .iter()
+                    .filter(|a| {
+                        // Filter by FRA
+                        match a.1.clone().0 .0.record.asset_type {
+                            XfrAssetType::Confidential(_) => false,
+                            XfrAssetType::NonConfidential(x) => ASSET_TYPE_FRA == x,
+                        }
+                    })
+                    .map(|(a, (utxo, owner_memo))| {
+                        let oar =
+                            open_blind_asset_record(&utxo.0.record, &owner_memo, &kp)
+                                .unwrap();
+                        (*a, oar)
+                    })
+                    .collect();
 
-        if list.len() >= 2 {
-            let last = list.pop().unwrap();
-            valid_keys.push((kp.clone(), last.0, last.1));
-            println!(
-                "keypair No.{}: utxo count: {}",
-                valid_keys.len(),
-                list.len() + 1
-            );
-        } else {
-            println!("omit...");
+                if list.len() >= 2 {
+                    let last = list.pop().unwrap();
+                    valid_keys.push((kp.clone(), last.0, last.1));
+                    println!(
+                        "keypair No.{}: utxo count: {}",
+                        valid_keys.len(),
+                        list.len() + 1
+                    );
+                } else {
+                    println!("omit...");
+                }
+            }
+            Err(e) => println!("{:?}, omit...", e),
         }
     }
 
@@ -472,7 +677,7 @@ fn test_bar2abar(
             }
             let (tx, c, from) = res.unwrap();
             //Generate the transaction and transmit it to network
-            println!("Thread-{} Sending tx ...", i);
+            info!("Thread-{} Sending tx ...", i);
             let sw = Stopwatch::start_new();
             match utils::send_tx(&tx) {
                 Ok(_) => {
@@ -489,11 +694,11 @@ fn test_bar2abar(
                         });
                     }
                     Err(e) => {
-                        println!("{}", e);
+                        error!("{}", e);
                     }
                 },
             }
-            println!("Thread-{} Sending tx took {}ms", i, sw.elapsed_ms());
+            info!("Thread-{} Sending tx took {}ms", i, sw.elapsed_ms());
             std::thread::sleep(interval);
         });
         handles.push(h);
@@ -545,14 +750,14 @@ fn test_abar2bar(
             }
             match tx.unwrap() {
                 Ok(t) => {
-                    println!("Thread-{} Sending tx ...", i);
+                    info!("Thread-{} Sending tx ...", i);
                     let sw = Stopwatch::start_new();
                     if utils::send_tx(&t).is_err() {
                         if let Err(e) = utils::send_tx(&t) {
                             println!("{}", e);
                         }
                     }
-                    println!("Thread-{} Sending tx took {}ms", i, sw.elapsed_ms());
+                    info!("Thread-{} Sending tx took {}ms", i, sw.elapsed_ms());
                 }
                 Err(e) => println!("{}", e),
             }
@@ -577,10 +782,10 @@ fn test_anon_transfer(
     interval: Duration,
     threads: usize,
 ) -> Result<()> {
-    println!("Generating transactions...");
+    info!("Generating transactions...");
     let txes: Vec<Result<_>> = commitments
-        .into_iter()
-        .zip(fee_commitments.into_iter())
+        .into_par_iter()
+        .zip(fee_commitments.into_par_iter())
         .map(|(com1, com2)| {
             common::gen_anon_transfer_tx(
                 &anon_keys.axfr_secret_key,
@@ -606,14 +811,14 @@ fn test_anon_transfer(
 
             match tx.unwrap() {
                 Ok((t, _, _)) => {
-                    println!("Thread-{} Sending tx ...", i);
+                    info!("Thread-{} Sending tx ...", i);
                     let sw = Stopwatch::start_new();
                     if let Err(_) = utils::send_tx(&t) {
                         if let Err(e) = utils::send_tx(&t) {
                             println!("{}", e);
                         }
                     }
-                    println!("Thread-{} Sending tx took {}ms", i, sw.elapsed_ms());
+                    info!("Thread-{} Sending tx took {}ms", i, sw.elapsed_ms());
                 }
                 Err(e) => println!("{}", e),
             };
