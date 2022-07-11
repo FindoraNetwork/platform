@@ -31,10 +31,10 @@ jobs:
 
 
 
-    - name: check fmt
-      shell: bash
-      run: |
-        cargo fmt -- --check
+    # - name: check fmt
+    #   shell: bash
+    #   run: |
+    #     cargo fmt -- --check
     # - name: test_status
     #   env:
     #     DBG: true
@@ -50,15 +50,15 @@ jobs:
     #   run: |
     #     make lint
 
-    - name: test
-      shell: bash
-      run: |
-        make test
+    # - name: test
+    #   shell: bash
+    #   run: |
+    #     make test
 
-    - name: evm test
-      shell: bash
-      run: |
-        make evmtest
+    # - name: evm test
+    #   shell: bash
+    #   run: |
+    #     make evmtest
         
     - name: Prepare key
       shell: bash
