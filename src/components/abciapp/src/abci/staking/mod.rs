@@ -4,7 +4,9 @@
 //! Business logic based on [**Ledger Staking**](ledger::staking).
 //!
 
-use ledger::data_model::{AssetTypeCode, IssuerPublicKey, BLACK_HOLE_PUBKEY_STAKING, AssetType};
+use ledger::data_model::{
+    AssetType, AssetTypeCode, IssuerPublicKey, BLACK_HOLE_PUBKEY_STAKING,
+};
 
 mod whoami;
 
@@ -276,47 +278,53 @@ pub fn system_mint_pay(
     la: &mut LedgerState,
     account_base_app: &mut AccountBaseApp,
 ) -> Option<Transaction> {
-        let mut mints = Vec::new();
+    let mut mints = Vec::new();
 
-        if let Some(account_mint) = account_base_app.consume_mint() {
-            for mint in account_mint {
+    if let Some(account_mint) = account_base_app.consume_mint() {
+        for mint in account_mint {
+            println!("{:?}", mint);
 
-                let atc = AssetTypeCode { val: mint.asset.clone() };
-                let at = if let Some(mut at) = la.get_asset_type(&atc) {
-                    at.properties.issuer = IssuerPublicKey{ key: *BLACK_HOLE_PUBKEY_STAKING };
-
-                    if mint.max_supply != 0 {
-                        at.properties.asset_rules.max_units = Some(mint.max_supply);
-                    }
-
-                    at
-                } else {
-                    let mut at = AssetType::default();
-                    at.properties.issuer = IssuerPublicKey{ key: *BLACK_HOLE_PUBKEY_STAKING };
-
-                    if mint.max_supply != 0 {
-                        at.properties.asset_rules.max_units = Some(mint.max_supply);
-                    }
-
-                    at.properties.code = AssetTypeCode { val: mint.asset };
-
-                    at
+            let atc = AssetTypeCode {
+                val: mint.asset.clone(),
+            };
+            let at = if let Some(mut at) = la.get_asset_type(&atc) {
+                at.properties.issuer = IssuerPublicKey {
+                    key: *BLACK_HOLE_PUBKEY_STAKING,
                 };
 
-                la.insert_asset_type(atc, at);
+                if mint.max_supply != 0 {
+                    at.properties.asset_rules.max_units = Some(mint.max_supply);
+                }
 
+                at
+            } else {
+                let mut at = AssetType::default();
+                at.properties.issuer = IssuerPublicKey {
+                    key: *BLACK_HOLE_PUBKEY_STAKING,
+                };
 
-                let mint_entry = MintEntry::new(
-                    MintKind::Other,
-                    mint.target,
-                    None,
-                    mint.amount,
-                    mint.asset,
-                );
+                if mint.max_supply != 0 {
+                    at.properties.asset_rules.max_units = Some(mint.max_supply);
+                }
 
-                mints.push(mint_entry);
-            }
+                at.properties.code = AssetTypeCode { val: mint.asset };
+
+                at
+            };
+
+            la.insert_asset_type(atc, at);
+
+            let mint_entry = MintEntry::new(
+                MintKind::Other,
+                mint.target,
+                None,
+                mint.amount,
+                mint.asset,
+            );
+
+            mints.push(mint_entry);
         }
+    }
 
     let staking = la.get_staking();
     let mut limit = staking.coinbase_balance() as i128;
@@ -351,7 +359,7 @@ pub fn system_mint_pay(
         .take(NUM_TO_PAY)
         .collect::<Vec<_>>();
 
-        mint_entries.append(&mut mints);
+    mint_entries.append(&mut mints);
 
     if mint_entries.is_empty() {
         None

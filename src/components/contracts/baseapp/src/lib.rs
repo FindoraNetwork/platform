@@ -313,8 +313,6 @@ impl BaseApp {
             outputs.append(&mut e);
         }
 
-        // TODO: Add xhub compact.
-
         for output in &outputs {
             if output.asset == ASSET_TYPE_FRA {
                 let address =
