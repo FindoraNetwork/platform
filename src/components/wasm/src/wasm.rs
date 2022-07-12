@@ -16,12 +16,12 @@ mod wasm_data_model;
 
 use {
     crate::wasm_data_model::{
-        error_to_jsvalue, AssetRules, AssetTracerKeyPair, AttributeAssignment,
-        AttributeDefinition, AxfrOwnerMemo, ClientAssetRecord, Credential,
-        CredentialCommitment, CredentialCommitmentData, CredentialCommitmentKey,
-        CredentialIssuerKeyPair, CredentialPoK, CredentialRevealSig,
-        CredentialSignature, CredentialUserKeyPair, MTLeafInfo, OwnerMemo,
-        TracingPolicies, TxoRef,
+        error_to_jsvalue, AssetRules, AssetTracerKeyPair, AssetType,
+        AttributeAssignment, AttributeDefinition, AxfrOwnerMemo, AxfrOwnerMemoInfo,
+        ClientAssetRecord, Credential, CredentialCommitment, CredentialCommitmentData,
+        CredentialCommitmentKey, CredentialIssuerKeyPair, CredentialPoK,
+        CredentialRevealSig, CredentialSignature, CredentialUserKeyPair, MTLeafInfo,
+        OwnerMemo, TracingPolicies, TxoRef,
     },
     core::str::FromStr,
     credentials::{
@@ -67,13 +67,15 @@ use {
     wasm_bindgen::prelude::*,
     zei::{
         anon_xfr::{
+            decrypt_memo,
             keys::{AXfrKeyPair, AXfrPubKey, AXfrViewKey},
-            nullify_with_native_address,
+            nullify_with_native_address, parse_memo,
             structs::{
                 AnonAssetRecord, Commitment, OpenAnonAssetRecord,
                 OpenAnonAssetRecordBuilder,
             },
         },
+        primitives::asymmetric_encryption::dh_decrypt,
         xfr::{
             asset_record::{open_blind_asset_record as open_bar, AssetRecordType},
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
@@ -84,7 +86,11 @@ use {
             trace_assets as zei_trace_assets,
         },
     },
-    zei_algebra::prelude::{Scalar, ZeiFromToBytes},
+    zei_algebra::{
+        bls12_381::BLSScalar,
+        jubjub::{JubjubPoint, JubjubScalar},
+        prelude::{Scalar, ZeiFromToBytes},
+    },
 };
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
@@ -1750,7 +1756,7 @@ use aes_gcm::Aes256Gcm;
 use base64::URL_SAFE;
 use getrandom::getrandom;
 use js_sys::JsString;
-use ledger::data_model::{ABARData, AssetType, TxoSID, BAR_TO_ABAR_TX_FEE_MIN};
+use ledger::data_model::{ABARData, TxoSID, BAR_TO_ABAR_TX_FEE_MIN};
 use ledger::staking::Amount;
 use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
@@ -2097,6 +2103,74 @@ pub fn open_abar(
         amount: oabar.get_amount(),
         asset_type: at.to_base64(),
     })
+}
+
+#[wasm_bindgen]
+/// Decrypts the owner anon memo.
+/// * `memo` - Owner anon memo to decrypt
+/// * `key_pair` - Owner anon keypair
+/// * `abar` - Associated anonymous blind asset record to check memo info against.
+/// Return Error if memo info does not match the commitment or public key.
+/// Return Ok(amount, asset_type, blinding) otherwise.
+pub fn decrypt_axfr_memo(
+    memo: &AxfrOwnerMemo,
+    key_pair: &AXfrKeyPair,
+    abar: &AnonAssetRecord,
+) -> Result<AxfrOwnerMemoInfo, JsValue> {
+    let (amount, asset_type, blind) = decrypt_memo(&memo.memo, key_pair, abar)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+    Ok(AxfrOwnerMemoInfo {
+        amount,
+        blind,
+        asset_type: AssetTypeCode { val: asset_type }.to_base64(),
+    })
+}
+
+#[wasm_bindgen]
+/// Try to decrypt the owner memo to check if it is own.
+/// * `memo` - Owner anon memo need to decrypt.
+/// * `key_pair` - the memo bytes.
+/// Return Ok(amount, asset_type, blinding) if memo is own.
+pub fn try_decrypt_axfr_memo(
+    memo: &AxfrOwnerMemo,
+    key_pair: &AXfrKeyPair,
+) -> Result<Vec<u8>, JsValue> {
+    dh_decrypt(
+        &key_pair.get_view_key_scalar(),
+        &memo.memo.point,
+        &memo.memo.ctext,
+    )
+    .c(d!())
+    .map_err(error_to_jsvalue)
+}
+
+#[wasm_bindgen]
+/// Parse the owner memo from bytes.
+/// * `bytes` - the memo plain bytes.
+/// * `key_pair` - the memo bytes.
+/// * `abar` - Associated anonymous blind asset record to check memo info against.
+/// Return Error if memo info does not match the commitment.
+/// Return Ok(amount, asset_type, blinding) otherwise.
+pub fn parse_axfr_memo(
+    bytes: &[u8],
+    key_pair: &AXfrKeyPair,
+    abar: &AnonAssetRecord,
+) -> Result<AxfrOwnerMemoInfo, JsValue> {
+    let (amount, asset_type, blind) = parse_memo(bytes, key_pair, abar)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+    Ok(AxfrOwnerMemoInfo {
+        amount,
+        blind,
+        asset_type: AssetTypeCode { val: asset_type }.to_base64(),
+    })
+}
+
+#[wasm_bindgen]
+/// Convert Commitment to AnonAssetRecord.
+pub fn commitment_to_aar(commitment: Commitment) -> AnonAssetRecord {
+    AnonAssetRecord { commitment }
 }
 
 #[cfg(test)]
