@@ -789,6 +789,14 @@ impl TransactionBuilder {
         Ok(self)
     }
 
+    /// Builds the anon operations from pre-notes
+    pub fn build(mut self) -> Result<TransactionBuilder, JsValue> {
+        self.get_builder_mut().build()
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
+        Ok(self)
+    }
+
     #[allow(missing_docs)]
     pub fn sign(mut self, kp: &XfrKeyPair) -> Result<TransactionBuilder, JsValue> {
         self.get_builder_mut().sign(kp);
@@ -797,7 +805,6 @@ impl TransactionBuilder {
 
     /// Extracts the serialized form of a transaction.
     pub fn transaction(&mut self) -> String {
-        self.get_builder_mut().build().unwrap();
         self.get_builder().serialize_str()
     }
 
