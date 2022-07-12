@@ -791,7 +791,8 @@ impl TransactionBuilder {
 
     /// Builds the anon operations from pre-notes
     pub fn build(mut self) -> Result<TransactionBuilder, JsValue> {
-        self.get_builder_mut().build()
+        self.get_builder_mut()
+            .build()
             .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
