@@ -29,37 +29,6 @@ jobs:
         ref: develop
 
 
-
-
-    # - name: check fmt
-    #   shell: bash
-    #   run: |
-    #     cargo fmt -- --check
-    # - name: test_status
-    #   env:
-    #     DBG: true
-    #   shell: bash
-    #   run: |
-    #     curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-    #     make test_status
-
-    # remove the test code in develop build
-    # run tests
-    # - name: lint
-    #   shell: bash
-    #   run: |
-    #     make lint
-
-    # - name: test
-    #   shell: bash
-    #   run: |
-    #     make test
-
-    # - name: evm test
-    #   shell: bash
-    #   run: |
-    #     make evmtest
-        
     - name: Prepare key
       shell: bash
       run: |
