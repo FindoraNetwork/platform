@@ -51,9 +51,9 @@ use {
     globutils::{wallet, HashOf},
     ledger::{
         data_model::{
-            gen_random_keypair, AssetTypeCode, AuthenticatedTransaction, Operation,
-            TransferType, TxOutput, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
-            BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN, AssetTypePrefix,
+            gen_random_keypair, AssetTypeCode, AssetTypePrefix,
+            AuthenticatedTransaction, Operation, TransferType, TxOutput, ASSET_TYPE_FRA,
+            BLACK_HOLE_PUBKEY, BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
         },
         staking::{
             td_addr_to_bytes, PartialUnDelegation, TendermintAddr,
@@ -76,8 +76,10 @@ use {
             },
         },
         xfr::{
-            asset_record::{open_blind_asset_record as open_bar, AssetRecordType,
-                           AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType},
+            asset_record::{
+                open_blind_asset_record as open_bar, AssetRecordType,
+                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+            },
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
             structs::{
                 AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody,
@@ -87,7 +89,7 @@ use {
         },
     },
     zei_algebra::prelude::{Scalar, ZeiFromToBytes},
-    zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey}
+    zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
 };
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
@@ -117,7 +119,6 @@ pub fn random_asset_type() -> String {
 #[wasm_bindgen]
 /// Creates a new asset code with prefixing-hashing the original code to query the ledger.
 pub fn hash_asset_code(asset_code_string: String) -> Result<String, JsValue> {
-
     let original_asset_code = AssetTypeCode::new_from_base64(&asset_code_string)
         .c(d!())
         .map_err(error_to_jsvalue)?;
@@ -1785,7 +1786,6 @@ use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
-
 
 #[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.
