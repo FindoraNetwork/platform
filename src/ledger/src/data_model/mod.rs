@@ -74,6 +74,8 @@ use {
 const RANDOM_CODE_LENGTH: usize = 16;
 const MAX_DECIMALS_LENGTH: u8 = 19;
 
+const MAX_TRANSFER_TARGETS: usize = 10 + 1;
+
 #[inline(always)]
 fn b64enc<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
     base64::encode_config(input, base64::URL_SAFE)
@@ -2044,6 +2046,19 @@ impl Transaction {
             })
     }
 
+    /// check transfer limits
+    pub fn check_transfer_limits(&self) -> bool {
+        for op in self.body.operations.iter() {
+            if let Operation::TransferAsset(x) = op {
+                if x.body.outputs.len() > MAX_TRANSFER_TARGETS {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+
     /// findora hash
     #[inline(always)]
     pub fn hash(&self, id: TxnSID) -> HashOf<(TxnSID, Transaction)> {
@@ -2195,6 +2210,11 @@ impl Transaction {
         for operation in self.body.operations.iter() {
             match operation {
                 Operation::TransferAsset(o) => {
+                    //[TODO] may specify a height
+                    if o.body.outputs.len() > MAX_TRANSFER_TARGETS {
+                        return Err(eg!("Targets of transfering  exceed the limit."));
+                    }
+
                     for pk in o.get_owner_addresses().iter() {
                         self.check_has_signature(pk)?;
                     }

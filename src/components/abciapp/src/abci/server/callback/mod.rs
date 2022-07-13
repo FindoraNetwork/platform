@@ -142,6 +142,13 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                     {
                         resp.code = 1;
                         resp.log = "Triple Masking is disabled".to_owned();
+                    } else if td_height > CFG.checkpoint.utxo_checktx_height
+                        && !txn.check_transfer_limits()
+                    {
+                        //TODO, may specify a height.
+                        resp.code = 1;
+                        resp.log =
+                            "Targets of transfering  exceed the limit.".to_owned();
                     }
                 } else {
                     resp.log = "Invalid format".to_owned();
