@@ -13,7 +13,7 @@ export DEVNET="$FIN_DEBUG/devnet"
 # binary config
 BIN_CFG_DEFAULT=debug
 BIN_CFG="${BIN_CFG:=$BIN_CFG_DEFAULT}"
-BIN="target/$BIN_CFG"
+export BIN="target/$BIN_CFG"
 
 # logs
 ABCI_LOG_LEVEL="abciapp=info,baseapp=info,account=info,ethereum=info,evm=info,eth_rpc=info"
@@ -24,6 +24,7 @@ PRIV_KEY="o9gXFI5ft1VOkzYhvFpgUTWVoskM1CEih0zJcm3-EAQ="
 
 # other
 export BLOCK_INTERVAL="5"
+export ENDPOINT="http://0.0.0.0"
 
 # show envs
 if [ "$1" == "s" ]; then

@@ -275,6 +275,11 @@ snapshot:
 	@./tools/devnet/snapshot.sh
 
 evmtest:
+	@./tools/regression/evm/scripts/setup.sh
+	@./tools/regression/evm/testevm.sh
+	@./tools/regression/evm/scripts/teardown.sh
+
+evmtest_nightly:
 	@./tools/regression/evm/testevm.sh
 
 tmtest:
