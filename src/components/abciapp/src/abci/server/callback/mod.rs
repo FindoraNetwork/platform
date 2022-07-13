@@ -128,6 +128,12 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                     } else if TX_HISTORY.read().contains_key(&tx.hash_tm_rawbytes()) {
                         resp.log = "Historical transaction".to_owned();
                         resp.code = 1;
+                    } else if td_height > CFG.checkpoint.utxo_checktx_height
+                        && !tx.check_transfer_limits()
+                    {
+                        resp.code = 1;
+                        resp.log =
+                            "Targets of transfering  exceed the limit.".to_owned();
                     }
                 } else {
                     resp.log = "Invalid format".to_owned();
