@@ -426,8 +426,12 @@ impl TransactionBuilder {
                     params.get(&key).unwrap() // safe, checked.
                 };
 
-                let note =
-                    finish_anon_xfr_note(&mut prng, param, pre_note.clone(), hasher.clone())?;
+                let note = finish_anon_xfr_note(
+                    &mut prng,
+                    param,
+                    pre_note.clone(),
+                    hasher.clone(),
+                )?;
 
                 // Add operation
                 let inp = AnonTransferOps::new(note, self.no_replay_token).c(d!())?;
@@ -452,7 +456,7 @@ impl TransactionBuilder {
                     AbarConvNote::AbarToBar(Box::new(note)),
                     self.no_replay_token,
                 )
-                    .c(d!())?;
+                .c(d!())?;
                 let op = Operation::AbarToBar(Box::from(conv));
 
                 // Add operation to transaction
@@ -476,7 +480,7 @@ impl TransactionBuilder {
                     AbarConvNote::AbarToAr(Box::new(note)),
                     self.no_replay_token,
                 )
-                    .c(d!())?;
+                .c(d!())?;
                 let op = Operation::AbarToBar(Box::from(conv));
 
                 // Add operation to transaction
