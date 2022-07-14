@@ -14,3 +14,5 @@ prismxx_inital_height = 1
 qa02_upgradable_prism_bridge = 0
 fix_unpaid_delegation_height = 0
 evm_checktx_nonce = 0
+utxo_checktx_height = 0
+utxo_asset_prefix_height = 0
