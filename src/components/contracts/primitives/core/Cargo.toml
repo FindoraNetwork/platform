@@ -16,8 +16,10 @@ parking_lot = "0.12"
 primitive-types = { version = "0.10.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
 ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.0", optional = true }
-fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.0", optional = true }
+#storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.0", optional = true }
+#fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.0", optional = true }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", branch = "fix-cache", optional = true }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", branch = "fix-cache", optional = true }
 serde_with = { version = "1.9.4"}
 
 # primitives
