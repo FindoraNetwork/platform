@@ -1064,7 +1064,7 @@ impl LedgerState {
                 if memo.is_empty() {
                     return None;
                 }
-                return memo.get(txn_location.1 .0).map(|x| x.clone());
+                return memo.get(txn_location.1 .0).cloned();
             };
         };
         None
