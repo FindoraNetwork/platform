@@ -32,7 +32,7 @@ impl<C: Config> App<C> {
         let transaction_hash =
             H256::from_slice(Keccak256::digest(&rlp::encode(transaction)).as_slice());
 
-        // Check historical cache firstly for Deliver Context, while holding read lock
+        // Check historical cache first for Deliver Context, while holding the read lock
         if ctx.run_mode == RunTxMode::Deliver {
             let history_1 = ctx.eth_cache.history_1.read();
             let history_n = ctx.eth_cache.history_n.read();

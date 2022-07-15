@@ -133,10 +133,11 @@ impl crate::BaseApp {
         );
 
         // Clone newest cache from check_state to deliver_state
-        // No wary, These clones just are adding reference count.
+        // Oldest cache will be dropped, currently drop cache two blocks ago
         self.deliver_state.eth_cache.current = Default::default();
         self.deliver_state.eth_cache.history_n =
             self.deliver_state.eth_cache.history_1.clone();
+        // Deliver_state history_1 cache will share the newest transactions from check_state
         self.deliver_state.eth_cache.history_1 =
             self.check_state.eth_cache.current.clone();
 
@@ -202,6 +203,7 @@ impl crate::BaseApp {
 
     pub fn commit(&mut self, _req: &RequestCommit) -> ResponseCommit {
         // Reset the Check state to the latest committed.
+        // Cache data are dropped and cleared in check_state
         self.check_state = self.deliver_state.copy_with_new_state();
         self.check_state.run_mode = RunTxMode::Check;
 
@@ -227,7 +229,7 @@ impl crate::BaseApp {
                 panic!("Failed to commit chain state at height: {}", block_height)
             });
 
-        // Reset the deliver state
+        // Reset the deliver state, but keep the ethereum cache
         Self::update_state(&mut self.deliver_state, Default::default(), vec![]);
 
         pnk!(self
