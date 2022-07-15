@@ -86,16 +86,36 @@ build_release_debug: tendermint_goleveldb
 
 tendermint_cleveldb:
 	- rm $(shell which tendermint)
-	bash tools/download_tendermint.sh 'tools/tendermint'
-	mkdir -p $(shell go env GOPATH)/bin
-	cd tools/tendermint \
-		&& $(MAKE) build TENDERMINT_BUILD_OPTIONS=cleveldb \
-		&& cp build/tendermint $(shell go env GOPATH)/bin/
+
+ifeq ($(OS),Windows_NT)
+	bash tools/download_tendermint.sh 'Windows'
+else
+ 	ifeq ($(shell uname),Darwin)
+		bash tools/download_tendermint.sh 'MacOs'
+else
+		bash tools/download_tendermint.sh 'Unix'
+ 	endif
+endif
+
+	cp ./tools/tendermint $(shell go env GOPATH)/bin/
+	rm -f ./tools/tendermint
 
 tendermint_goleveldb:
+
 	- rm $(shell which tendermint)
-	bash tools/download_tendermint.sh 'tools/tendermint'
-	cd tools/tendermint && $(MAKE) install
+
+ifeq ($(OS),Windows_NT)
+	bash tools/download_tendermint.sh 'Windows'
+else
+ 	ifeq ($(shell uname),Darwin)
+		bash tools/download_tendermint.sh 'MacOs'
+else
+		bash tools/download_tendermint.sh 'Unix'
+ 	endif
+endif
+
+	cp ./tools/tendermint $(shell go env GOPATH)/bin/
+	rm -f ./tools/tendermint
 
 test:
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
