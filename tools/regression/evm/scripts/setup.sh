@@ -11,8 +11,6 @@ sleep $SLEEP_INTERVAL
 ./$DEVNET_TOOLS_PATH/cleannodes.sh
 ./$DEVNET_TOOLS_PATH/startnodes.sh
 sleep $SLEEP_INTERVAL
-$BIN/fn setup -S $ENDPOINT > /dev/null
 echo Regression path: $REGRESSION_EVM_PATH
-$BIN/fn setup -O $REGRESSION_EVM_PATH/mnemonic.key > /dev/null
 $BIN/stt init -i $BLOCK_INTERVAL -s
 sleep $SLEEP_INTERVAL
