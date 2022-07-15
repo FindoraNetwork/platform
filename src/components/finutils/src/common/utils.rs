@@ -75,7 +75,7 @@ pub fn set_initial_validators() -> Result<()> {
     let vs = get_inital_validators().c(d!())?;
     builder.add_operation_update_validator(&[], 1, vs).c(d!())?;
 
-    send_tx(&builder.take_transaction()?).c(d!())
+    send_tx(&builder.build_and_take_transaction()?).c(d!())
 }
 
 #[inline(always)]
@@ -125,7 +125,7 @@ pub fn transfer_batch(
     .c(d!())?;
     builder.add_operation(op);
 
-    let mut tx = builder.take_transaction()?;
+    let mut tx = builder.build_and_take_transaction()?;
     tx.sign(owner_kp);
 
     send_tx(&tx).c(d!())
@@ -772,8 +772,12 @@ pub fn generate_bar2abar_op(
         gen_fee_bar_to_abar(auth_key_pair, txo_sid).c(d!("Failed to generate fee"))?;
     builder.add_operation(feeop);
 
+    let mut tx = builder.build_and_take_transaction()?;
+
+    tx.sign(auth_key_pair);
+
     // submit transaction to network
-    send_tx(&builder.take_transaction()?).c(d!("Failed to submit Bar to Abar txn"))?;
+    send_tx(&tx).c(d!("Failed to submit Bar to Abar txn"))?;
 
     Ok(c)
 }
@@ -800,7 +804,7 @@ pub fn generate_abar2bar_op(
         .c(d!())?;
 
     // submit transaction
-    send_tx(&builder.take_transaction()?).c(d!())?;
+    send_tx(&builder.build_and_take_transaction()?).c(d!())?;
     Ok(())
 }
 
