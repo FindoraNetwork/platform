@@ -5,14 +5,18 @@ YEL='\033[33m'
 BLU='\033[34m'
 NC='\033[0m'
 
-# endpoint
-export BLOCK_INTERVAL="5"
-export ENDPOINT="http://0.0.0.0"
+# default environment values
+DEFAULT_BIN_CFG="debug"
+DEFAULT_BLOCK_INTERVAL="5"
+DEFAULT_ENDPOINT="http://0.0.0.0"
 
 # binary config
-BIN_CFG_DEFAULT=debug
-BIN_CFG="${BIN_CFG:=$BIN_CFG_DEFAULT}"
+BIN_CFG="${BIN_CFG:=$DEFAULT_BIN_CFG}"
 export BIN="target/$BIN_CFG"
+
+# block interval and endpoint
+export BLOCK_INTERVAL="${BLOCK_INTERVAL:=$DEFAULT_BLOCK_INTERVAL}"
+export ENDPOINT="${ENDPOINT:=$DEFAULT_ENDPOINT}"
 
 # paths
 TMP_DEBUG=/tmp/findora
@@ -33,14 +37,15 @@ mkdir -p $DEVNET
 echo "$MNEMONIC" > $WALLET/mnenomic.key
 
 # setup endpoint
-$BIN/fn setup -S http://0.0.0.0 > /dev/null
+$BIN/fn setup -S $ENDPOINT > /dev/null
 $BIN/fn setup -O $WALLET/mnenomic.key > /dev/null
 
 # show envs
 if [ "$1" == "s" ]; then
+    echo "BIN_CFG     = $BIN_CFG"
+    echo "INTERVAL    = $BLOCK_INTERVAL"
     echo "ENDPOINT    = $ENDPOINT"
     echo "WALLET      = $WALLET/mnenomic.key"
     echo "DEVNET      = $DEVNET"
-    echo "BIN_CFG     = $BIN_CFG"
     echo "PRIVATE_KEY = $PRIV_KEY"
 fi
