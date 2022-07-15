@@ -266,7 +266,7 @@ mod issue {
             IssueAsset::new(aib, &IssuerKeyPair { keypair: &root_kp }).c(d!())?;
 
         builder.add_operation(Operation::IssueAsset(asset_issuance_operation));
-        builder.take_transaction()
+        builder.build_and_take_transaction()
     }
 }
 
@@ -303,7 +303,7 @@ mod delegate {
             builder.add_operation_delegation(owner_kp, amount, validator.to_owned());
         })?;
 
-        builder.take_transaction()
+        builder.build_and_take_transaction()
     }
 }
 
@@ -339,7 +339,7 @@ mod undelegate {
             }
         })?;
 
-        builder.take_transaction()
+        builder.build_and_take_transaction()
     }
 }
 
@@ -356,7 +356,7 @@ mod claim {
             builder.add_operation_claim(owner_kp, amount);
         })?;
 
-        builder.take_transaction()
+        builder.build_and_take_transaction()
     }
 }
 

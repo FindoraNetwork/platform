@@ -1,6 +1,7 @@
 use crate::data_model::{AssetTypePrefix, ASSET_TYPE_FRA};
 use fbnc::NumKey;
 use fp_utils::hashing::keccak_256;
+use zei::xfr::structs::AssetType as ZeiAssetType;
 use {
     crate::{
         data_model::{
@@ -243,7 +244,9 @@ impl TxnEffect {
         } else {
             let mut asset_code = AssetTypePrefix::UserDefined.bytes();
             asset_code.append(&mut def.body.asset.code.to_bytes());
-            AssetTypeCode::new_from_vec(keccak_256(asset_code.as_slice()).to_vec())
+            AssetTypeCode {
+                val: ZeiAssetType(keccak_256(&asset_code)),
+            }
         };
 
         let token = AssetType {
@@ -286,13 +289,7 @@ impl TxnEffect {
             return Err(eg!());
         }
 
-        let code = if iss.body.code.val == ASSET_TYPE_FRA {
-            iss.body.code
-        } else {
-            let mut asset_code = AssetTypePrefix::UserDefined.bytes();
-            asset_code.append(&mut iss.body.code.to_bytes());
-            AssetTypeCode::new_from_vec(keccak_256(asset_code.as_slice()).to_vec())
-        };
+        let code = iss.body.code;
 
         let seq_num = iss.body.seq_num;
 
@@ -343,6 +340,24 @@ impl TxnEffect {
             if output.record.asset_type != XfrAssetType::NonConfidential(code.val) {
                 return Err(eg!());
             }
+            // match output.record.asset_type {
+            //     XfrAssetType::Confidential(_) => {
+            //         return Err(eg!());
+            //     }
+            //     XfrAssetType::NonConfidential(at) => {
+            //         if at == ASSET_TYPE_FRA && at.0 != code.val.0 {
+            //             return Err(eg!());
+            //         } else if at != ASSET_TYPE_FRA {
+            //             let mut asset_code = AssetTypePrefix::UserDefined.bytes();
+            //             asset_code.append(&mut at.0.to_vec());
+            //             let act = AssetTypeCode::new_from_vec(keccak_256(asset_code.as_slice()).to_vec());
+            //
+            //             if act.val != code.val {
+            //                 return Err(eg!());
+            //             }
+            //         }
+            //     }
+            // };
 
             if let XfrAmount::NonConfidential(amt) = output.record.amount {
                 let issuance_amount = self.issuance_amounts.entry(code).or_insert(0);

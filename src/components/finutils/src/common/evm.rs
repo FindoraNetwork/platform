@@ -81,7 +81,7 @@ pub fn transfer_to_account(
         )?
         .sign(&kp);
 
-    let mut tx = builder.take_transaction()?;
+    let mut tx = builder.build_and_take_transaction()?;
     tx.sign(&kp);
 
     utils::send_tx(&tx)?;

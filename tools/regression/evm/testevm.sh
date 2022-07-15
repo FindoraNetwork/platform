@@ -15,7 +15,7 @@ echo -e "${BLU}test case 1 - contract deposit${NC}"
 fn contract-deposit --addr $ETH_ADDR --amount 888000000
 sleep $SLEEP_INTERVAL
 #Verify
-python $REGRESSION_PATH/evm.py verify-balance --addr $ETH_ADDR --amount 888000000000000000000
+python3 $REGRESSION_PATH/evm.py verify-balance --addr $ETH_ADDR --amount 888000000000000000000
 echo
 
 #--------------------------test case 2 - contract withdraw---------------------------
@@ -23,15 +23,15 @@ echo -e "${BLU}test case 2 - contract withdraw${NC}"
 fn contract-withdraw --addr $FRA_DEST_ADDR --amount 88000000 --eth-key "$ETH_KEY"
 sleep $SLEEP_INTERVAL
 #Verify
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $FRA_SEC_KEY --amount 88000000
+python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $FRA_SEC_KEY --amount 88000000
 echo
 
 #--------------------------test case 3 - ERC20 transfer-----------------------------
 echo -e "${BLU}test case 3 - transfer between erc20 addresses${NC}"
-python $REGRESSION_PATH/evm.py transfer --from_priv_key $ETH_PK --to_addr $ETH_DEST_ADDR --amount 8000000000000000000
+python3 $REGRESSION_PATH/evm.py transfer --from_priv_key $ETH_PK --to_addr $ETH_DEST_ADDR --amount 8000000000000000000
 sleep $SLEEP_INTERVAL
 #Verify
-python $REGRESSION_PATH/evm.py verify-balance --addr $ETH_DEST_ADDR --amount 8000000000000000000
+python3 $REGRESSION_PATH/evm.py verify-balance --addr $ETH_DEST_ADDR --amount 8000000000000000000
 echo
 
 #Clean up environment

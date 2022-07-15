@@ -1,17 +1,19 @@
 //!
 //! # Helper Utils
 //!
-
 use {
     super::{
         IssuerKeyPair, IssuerPublicKey, LedgerState, TracingPolicies, TracingPolicy,
         TransferType, XfrNotePolicies,
     },
     crate::data_model::{
-        Asset, AssetRules, AssetTypeCode, ConfidentialMemo, DefineAsset,
-        DefineAssetBody, IssueAsset, IssueAssetBody, Memo, Operation, Transaction,
-        TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxnSID, TxoRef, TxoSID,
+        Asset, AssetRules, AssetTypeCode, AssetTypePrefix, ConfidentialMemo,
+        DefineAsset, DefineAssetBody, IssueAsset, IssueAssetBody, Memo, Operation,
+        Transaction, TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxnSID,
+        TxoRef, TxoSID, ASSET_TYPE_FRA,
     },
+    fbnc::NumKey,
+    fp_utils::hashing::keccak_256,
     globutils::SignatureOf,
     rand_core::{CryptoRng, RngCore},
     ruc::*,
@@ -20,7 +22,7 @@ use {
         asset_record::AssetRecordType,
         asset_record::{build_blind_asset_record, open_blind_asset_record},
         sig::{XfrKeyPair, XfrPublicKey},
-        structs::{AssetRecord, AssetRecordTemplate},
+        structs::{AssetRecord, AssetRecordTemplate, AssetType},
     },
     zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
@@ -32,7 +34,7 @@ pub fn create_definition_transaction(
     asset_rules: AssetRules,
     memo: Option<Memo>,
     seq_id: u64,
-) -> Result<Transaction> {
+) -> Result<(Transaction, AssetTypeCode)> {
     let issuer_key = IssuerPublicKey {
         key: *keypair.get_pk_ref(),
     };
@@ -40,9 +42,20 @@ pub fn create_definition_transaction(
         DefineAssetBody::new(&code, &issuer_key, asset_rules, memo, None).c(d!())?;
     let asset_create =
         DefineAsset::new(asset_body, &IssuerKeyPair { keypair: &keypair }).c(d!())?;
-    Ok(Transaction::from_operation(
-        Operation::DefineAsset(asset_create),
-        seq_id,
+
+    let code = if code.val == ASSET_TYPE_FRA {
+        *code
+    } else {
+        let mut asset_code = AssetTypePrefix::UserDefined.bytes();
+        asset_code.append(&mut code.to_bytes());
+        AssetTypeCode {
+            val: AssetType(keccak_256(&asset_code)),
+        }
+    };
+
+    Ok((
+        Transaction::from_operation(Operation::DefineAsset(asset_create), seq_id),
+        code,
     ))
 }
 
@@ -59,7 +72,13 @@ pub fn asset_creation_body(
     asset_rules: AssetRules,
     memo: Option<Memo>,
     confidential_memo: Option<ConfidentialMemo>,
-) -> DefineAssetBody {
+) -> (DefineAssetBody, AssetTypeCode) {
+    let mut asset_code = AssetTypePrefix::UserDefined.bytes();
+    asset_code.append(&mut token_code.to_bytes());
+    let new_token_code = AssetTypeCode {
+        val: AssetType(keccak_256(&asset_code)),
+    };
+
     let mut token = Asset {
         code: *token_code,
         issuer: IssuerPublicKey { key: *issuer_key },
@@ -79,9 +98,12 @@ pub fn asset_creation_body(
         token.confidential_memo = ConfidentialMemo {};
     }
 
-    DefineAssetBody {
-        asset: Box::new(token),
-    }
+    (
+        DefineAssetBody {
+            asset: Box::new(token),
+        },
+        new_token_code,
+    )
 }
 
 #[allow(missing_docs)]

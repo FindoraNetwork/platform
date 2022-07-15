@@ -31,6 +31,7 @@ use {
         CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
     },
     cryptohash::sha256,
+    fbnc::NumKey,
     finutils::txn_builder::{
         AnonTransferOperationBuilder as PlatformAnonTransferOperationBuilder,
         FeeInput as PlatformFeeInput, FeeInputs as PlatformFeeInputs,
@@ -46,13 +47,13 @@ use {
         crypto::{Address, MultiSignature, MultiSigner},
         U256,
     },
-    fp_utils::{ecdsa::SecpPair, tx::EvmRawTxWrapper},
+    fp_utils::{ecdsa::SecpPair, hashing::keccak_256, tx::EvmRawTxWrapper},
     globutils::{wallet, HashOf},
     ledger::{
         data_model::{
-            gen_random_keypair, AssetTypeCode, AuthenticatedTransaction, Operation,
-            TransferType, TxOutput, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
-            BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
+            gen_random_keypair, AssetTypeCode, AssetTypePrefix,
+            AuthenticatedTransaction, Operation, TransferType, TxOutput, ASSET_TYPE_FRA,
+            BLACK_HOLE_PUBKEY, BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
         },
         staking::{
             td_addr_to_bytes, PartialUnDelegation, TendermintAddr,
@@ -77,7 +78,10 @@ use {
         },
         primitives::asymmetric_encryption::dh_decrypt,
         xfr::{
-            asset_record::{open_blind_asset_record as open_bar, AssetRecordType},
+            asset_record::{
+                open_blind_asset_record as open_bar, AssetRecordType,
+                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+            },
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
             structs::{
                 AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody,
@@ -91,6 +95,7 @@ use {
         jubjub::{JubjubPoint, JubjubScalar},
         prelude::{Scalar, ZeiFromToBytes},
     },
+    zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
 };
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
@@ -115,6 +120,22 @@ pub fn build_id() -> String {
 /// asset type
 pub fn random_asset_type() -> String {
     AssetTypeCode::gen_random().to_base64()
+}
+
+#[wasm_bindgen]
+/// Creates a new asset code with prefixing-hashing the original code to query the ledger.
+pub fn hash_asset_code(asset_code_string: String) -> Result<String, JsValue> {
+    let original_asset_code = AssetTypeCode::new_from_base64(&asset_code_string)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+
+    let mut asset_code = AssetTypePrefix::UserDefined.bytes();
+    asset_code.append(&mut original_asset_code.to_bytes());
+    let derived_asset_code = AssetTypeCode {
+        val: ZeiAssetType(keccak_256(&asset_code)),
+    };
+
+    Ok(derived_asset_code.to_base64())
 }
 
 #[wasm_bindgen]
@@ -795,6 +816,15 @@ impl TransactionBuilder {
         Ok(self)
     }
 
+    /// Builds the anon operations from pre-notes
+    pub fn build(mut self) -> Result<TransactionBuilder, JsValue> {
+        self.get_builder_mut()
+            .build()
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
+        Ok(self)
+    }
+
     #[allow(missing_docs)]
     pub fn sign(mut self, kp: &XfrKeyPair) -> Result<TransactionBuilder, JsValue> {
         self.get_builder_mut().sign(kp);
@@ -802,7 +832,7 @@ impl TransactionBuilder {
     }
 
     /// Extracts the serialized form of a transaction.
-    pub fn transaction(&self) -> String {
+    pub fn transaction(&mut self) -> String {
         self.get_builder().serialize_str()
     }
 
@@ -1762,8 +1792,6 @@ use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
-use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
-use zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey};
 
 #[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.

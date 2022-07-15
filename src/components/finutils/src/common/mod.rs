@@ -13,6 +13,7 @@ use {
     crate::api::DelegationInfo,
     crate::common::utils::{new_tx_builder, send_tx},
     crate::txn_builder::TransactionBuilder,
+    fp_utils::hashing::keccak_256,
     globutils::wallet,
     lazy_static::lazy_static,
     ledger::{
@@ -50,7 +51,7 @@ use {
                 AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
             },
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
-            structs::{XfrAmount, XfrAssetType},
+            structs::{AssetType, XfrAmount, XfrAssetType},
         },
     },
 };
@@ -98,7 +99,7 @@ pub fn staker_update(cr: Option<&str>, memo: Option<StakerMemo>) -> Result<()> {
         .c(d!())
         .map(|op| builder.add_operation(op))?;
 
-    let mut tx = builder.take_transaction()?;
+    let mut tx = builder.build_and_take_transaction()?;
     tx.sign(&kp);
 
     utils::send_tx(&tx).c(d!())
@@ -164,7 +165,7 @@ pub fn stake(
     .c(d!())
     .map(|principal_op| builder.add_operation(principal_op))?;
 
-    let mut tx = builder.take_transaction()?;
+    let mut tx = builder.build_and_take_transaction()?;
     tx.sign(&kp);
 
     utils::send_tx(&tx).c(d!())
@@ -203,7 +204,7 @@ pub fn stake_append(
     .c(d!())
     .map(|principal_op| builder.add_operation(principal_op))?;
 
-    utils::send_tx(&builder.take_transaction()?).c(d!())
+    utils::send_tx(&builder.build_and_take_transaction()?).c(d!())
 }
 
 /// Withdraw Fra token from findora network for a staker
@@ -250,7 +251,7 @@ pub fn unstake(
         }
     })?;
 
-    let mut tx = builder.take_transaction()?;
+    let mut tx = builder.build_and_take_transaction()?;
     tx.sign(&kp);
 
     utils::send_tx(&tx).c(d!())
@@ -273,7 +274,7 @@ pub fn claim(am: Option<&str>, sk_str: Option<&str>) -> Result<()> {
         builder.add_operation_claim(&kp, am);
     })?;
 
-    let mut tx = builder.take_transaction()?;
+    let mut tx = builder.build_and_take_transaction()?;
     tx.sign(&kp);
 
     utils::send_tx(&tx).c(d!())
@@ -672,7 +673,7 @@ fn gen_undelegate_tx(
         builder.add_operation_undelegation(owner_kp, None);
     }
 
-    let mut tx = builder.take_transaction()?;
+    let mut tx = builder.build_and_take_transaction()?;
     tx.sign(owner_kp);
 
     Ok(tx)
@@ -699,7 +700,7 @@ fn gen_delegate_tx(
         builder.add_operation_delegation(owner_kp, amount, validator.to_owned());
     })?;
 
-    let mut tx = builder.take_transaction()?;
+    let mut tx = builder.build_and_take_transaction()?;
     tx.sign(owner_kp);
 
     Ok(tx)
@@ -726,7 +727,6 @@ pub fn create_asset(
         .c(d!())
         .map(|code| {
             println!("type: {}", code.to_base64());
-            ()
         })
 }
 
@@ -757,10 +757,12 @@ pub fn create_asset_x(
         .c(d!())
         .map(|op| builder.add_operation(op))?;
 
-    let mut tx = builder.take_transaction()?;
+    let mut tx = builder.build_and_take_transaction()?;
     tx.sign(kp);
 
-    utils::send_tx(&tx).map(|_| code)
+    utils::send_tx(&tx).map(|_| AssetTypeCode {
+        val: AssetType(keccak_256(&asset_code)),
+    })
 }
 
 /// Issue a custom asset with specified amount
@@ -798,7 +800,7 @@ pub fn issue_asset_x(
         .c(d!())
         .map(|op| builder.add_operation(op))?;
 
-    let mut tx = builder.take_transaction()?;
+    let mut tx = builder.build_and_take_transaction()?;
     tx.sign(kp);
 
     utils::send_tx(&tx)
@@ -808,9 +810,9 @@ pub fn issue_asset_x(
 pub fn show_asset(addr: &str) -> Result<()> {
     let pk = wallet::public_key_from_bech32(addr).c(d!())?;
     let assets = utils::get_created_assets(&pk).c(d!())?;
-    for asset in assets {
-        let base64 = asset.body.asset.code.to_base64();
-        let h = hex::encode(asset.body.asset.code.val.0);
+    for (code, _asset) in assets {
+        let base64 = code.to_base64();
+        let h = hex::encode(code.val.0);
         println!("Base64: {}, Hex: {}", base64, h);
     }
 
@@ -1018,7 +1020,7 @@ pub fn gen_anon_transfer_op(
         .add_operation_anon_transfer_fees_remainder(&inputs, &[oabar_out], &froms)
         .c(d!())?;
 
-    send_tx(&builder.take_transaction()?).c(d!())?;
+    send_tx(&builder.build_and_take_transaction()?).c(d!())?;
 
     let com_out = if !note.body.outputs.is_empty() {
         Some(note.body.outputs[0].commitment)
@@ -1174,7 +1176,7 @@ pub fn gen_oabar_add_op_x(
         .c(d!())?;
 
     // Send the transaction to the network
-    send_tx(&builder.take_transaction()?).c(d!())?;
+    send_tx(&builder.build_and_take_transaction()?).c(d!())?;
 
     // Append receiver's commitment to `sent_commitments` file
     let mut s_file = fs::OpenOptions::new()
@@ -1433,7 +1435,7 @@ pub fn replace_staker(
     })?;
 
     builder.add_operation_replace_staker(&keypair, target_pubkey, new_td_addr_pk)?;
-    let mut tx = builder.take_transaction()?;
+    let mut tx = builder.build_and_take_transaction()?;
     tx.sign(&keypair);
 
     utils::send_tx(&tx).c(d!())?;
