@@ -14,9 +14,9 @@ RUN rustup toolchain install stable && \
 RUN mkdir /binary
 RUN mkdir -p /binary/cleveldb && mkdir -p /binary/goleveldb
 
-# RUN make fmt
-# RUN make lint
-# RUN make test
+RUN make fmt
+RUN make lint
+RUN make test
 
 RUN mkdir -p /root/.cargo/bin/ && \
     DBG=true make build && \
