@@ -864,7 +864,13 @@ impl LedgerState {
         if let Some(utxo) = self.status.get_utxo(id) {
             if let Some(txn_location) = self.status.txo_to_txn_location.get(&id) {
                 if let Ok(authenticated_txn) = self.get_transaction(txn_location.0) {
-                    let authenticated_spent_status = self.get_utxo_status(id);
+                    let authenticated_spent_status = match self.get_utxo_status(id) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            log::error!("{}", e);
+                            return None;
+                        }
+                    };
                     let state_commitment_data =
                         self.status.state_commitment_data.as_ref().unwrap().clone();
                     let utxo_location = txn_location.1;
@@ -905,7 +911,13 @@ impl LedgerState {
         if let Some(utxo) = utxo {
             if let Some(txn_location) = self.status.txo_to_txn_location.get(&addr) {
                 if let Ok(authenticated_txn) = self.get_transaction(txn_location.0) {
-                    let authenticated_spent_status = self.get_utxo_status(addr);
+                    let authenticated_spent_status = match self.get_utxo_status(addr) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            log::error!("{}", e);
+                            return None;
+                        }
+                    };
                     let state_commitment_data =
                         self.status.state_commitment_data.as_ref().unwrap().clone();
                     let utxo_location = txn_location.1;
@@ -949,18 +961,29 @@ impl LedgerState {
             if let Some(utxo) = utxo {
                 if let Some(txn_location) = self.status.txo_to_txn_location.get(sid) {
                     if let Ok(authenticated_txn) = self.get_transaction(txn_location.0) {
-                        let authenticated_spent_status = self.get_utxo_status(*sid);
-                        let state_commitment_data =
-                            self.status.state_commitment_data.as_ref().unwrap().clone();
-                        let utxo_location = txn_location.1;
-                        let auth_utxo = AuthenticatedUtxo {
-                            utxo,
-                            authenticated_txn,
-                            authenticated_spent_status,
-                            utxo_location,
-                            state_commitment_data,
+                        match self.get_utxo_status(*sid) {
+                            Ok(authenticated_spent_status) => {
+                                let state_commitment_data = self
+                                    .status
+                                    .state_commitment_data
+                                    .as_ref()
+                                    .unwrap()
+                                    .clone();
+                                let utxo_location = txn_location.1;
+                                let auth_utxo = AuthenticatedUtxo {
+                                    utxo,
+                                    authenticated_txn,
+                                    authenticated_spent_status,
+                                    utxo_location,
+                                    state_commitment_data,
+                                };
+                                utxos.push(Some(auth_utxo));
+                            }
+                            Err(e) => {
+                                log::error!("{}", e);
+                                utxos.push(None);
+                            }
                         };
-                        utxos.push(Some(auth_utxo))
                     } else {
                         utxos.push(None);
                     };
@@ -1111,15 +1134,15 @@ impl LedgerState {
     }
 
     /// Get utxo status and its proof data
-    pub fn get_utxo_status(&self, addr: TxoSID) -> AuthenticatedUtxoStatus {
-        let state_commitment_data = self.status.state_commitment_data.as_ref().unwrap();
+    pub fn get_utxo_status(&self, addr: TxoSID) -> Result<AuthenticatedUtxoStatus> {
+        let state_commitment_data =
+            self.status.state_commitment_data.as_ref().c(d!())?;
         let utxo_map_bytes;
         let status;
         if addr.0 < state_commitment_data.txo_count {
             utxo_map_bytes = Some(self.utxo_map.read().serialize(0));
-            let utxo_map =
-                SparseMap::new(&utxo_map_bytes.as_ref().unwrap().clone()).unwrap();
-            status = if utxo_map.query(addr.0).unwrap() {
+            let utxo_map = SparseMap::new(utxo_map_bytes.as_ref().c(d!())?)?;
+            status = if utxo_map.query(addr.0)? {
                 UtxoStatus::Unspent
             } else {
                 UtxoStatus::Spent
@@ -1129,13 +1152,13 @@ impl LedgerState {
             utxo_map_bytes = None;
         }
 
-        AuthenticatedUtxoStatus {
+        Ok(AuthenticatedUtxoStatus {
             status,
             state_commitment_data: state_commitment_data.clone(),
             state_commitment: state_commitment_data.compute_commitment(),
             utxo_sid: addr,
             utxo_map_bytes,
-        }
+        })
     }
 
     #[inline(always)]
