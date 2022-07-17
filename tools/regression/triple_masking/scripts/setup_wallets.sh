@@ -1,5 +1,5 @@
 #rm mnemonic-temp.keys anon-keys-temp.keys
-
+source tools/regression/triple_masking/scripts/env.sh
 # These wallets would be used to move Anonymous funds around
 
 echo "double quit tape enough charge fancy mandate ostrich this program laundry insect either escape cement van turtle loud immense load tip spike inquiry spice" > mnemonic-temp.keys
@@ -11,10 +11,10 @@ echo "
   \"pub_key\": \"BGhE9edxLVUdjNGlCWCHOAJxAomeJz3QMUOJjFI9WOA=\"
 }" > "$FILE_ANON_KEYS"
 
-fn setup -O mnemonic-temp.keys -S http://0.0.0.0
+$BIN/fn setup -O mnemonic-temp.keys -S $ENDPOINT
 
 echo "New BAR wallet with Balance:"
-target/release/fn wallet --show
+$BIN/fn wallet --show
 
 
 rm anon-keys-temp2.keys
