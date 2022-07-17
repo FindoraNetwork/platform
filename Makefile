@@ -55,6 +55,10 @@ stop_all:
 	- pkill tendermint
 	- pkill findorad
 
+# Build debug
+dbg:
+	cargo build --features debug_env --bins -p abciapp -p finutils
+
 # Build for cleveldb
 build: tendermint_cleveldb
 	cargo build --bins -p abciapp -p finutils
@@ -272,6 +276,10 @@ snapshot:
 
 evmtest:
 	@./tools/regression/evm/scripts/setup.sh
+	@./tools/regression/evm/testevm.sh
+	@./tools/regression/evm/scripts/teardown.sh
+
+evmtest_nightly:
 	@./tools/regression/evm/testevm.sh
 	@./tools/regression/evm/scripts/teardown.sh
 

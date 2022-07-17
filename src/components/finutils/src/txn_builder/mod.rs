@@ -386,7 +386,13 @@ impl TransactionBuilder {
     }
 
     #[allow(missing_docs)]
-    pub fn take_transaction(mut self) -> Result<Transaction> {
+    pub fn build_and_take_transaction(&mut self) -> Result<Transaction> {
+        self.build()?;
+        Ok(self.txn.clone())
+    }
+
+    /// Build a transaction from various pre-notes of operations
+    pub fn build(&mut self) -> Result<()> {
         let mut prng = ChaChaRng::from_entropy();
 
         // hasher txn. (IMPORTANT! KEEP THE same order)
@@ -406,7 +412,7 @@ impl TransactionBuilder {
         // finish abar to abar
         if !self.abar_abar_cache.is_empty() {
             let mut params: HashMap<(usize, usize), ProverParams> = HashMap::new();
-            for pre_note in self.abar_abar_cache {
+            for pre_note in &self.abar_abar_cache {
                 let key = (pre_note.body.inputs.len(), pre_note.body.outputs.len());
                 let param = if let Some(key) = params.get(&key) {
                     key
@@ -420,8 +426,12 @@ impl TransactionBuilder {
                     params.get(&key).unwrap() // safe, checked.
                 };
 
-                let note =
-                    finish_anon_xfr_note(&mut prng, param, pre_note, hasher.clone())?;
+                let note = finish_anon_xfr_note(
+                    &mut prng,
+                    param,
+                    pre_note.clone(),
+                    hasher.clone(),
+                )?;
 
                 // Add operation
                 let inp = AnonTransferOps::new(note, self.no_replay_token).c(d!())?;
@@ -433,11 +443,11 @@ impl TransactionBuilder {
         // finish abar to bar
         if !self.abar_bar_cache.is_empty() {
             let params = ProverParams::abar_to_bar_params(MERKLE_TREE_DEPTH)?;
-            for pre_note in self.abar_bar_cache {
+            for pre_note in &self.abar_bar_cache {
                 let note = finish_abar_to_bar_note(
                     &mut prng,
                     &params,
-                    pre_note,
+                    pre_note.clone(),
                     hasher.clone(),
                 )?;
 
@@ -457,11 +467,11 @@ impl TransactionBuilder {
         // finish abar to ar
         if !self.abar_ar_cache.is_empty() {
             let params = ProverParams::abar_to_ar_params(MERKLE_TREE_DEPTH)?;
-            for pre_note in self.abar_ar_cache {
+            for pre_note in &self.abar_ar_cache {
                 let note = finish_abar_to_ar_note(
                     &mut prng,
                     &params,
-                    pre_note,
+                    pre_note.clone(),
                     hasher.clone(),
                 )?;
 
@@ -478,7 +488,7 @@ impl TransactionBuilder {
             }
         }
 
-        Ok(self.txn)
+        Ok(())
     }
 
     /// Append a transaction memo
@@ -2132,7 +2142,7 @@ mod tests {
             )
             .is_ok();
 
-        let txn = builder.take_transaction().unwrap();
+        let txn = builder.build_and_take_transaction().unwrap();
 
         if let Operation::BarToAbar(note) = txn.body.operations[0].clone() {
             let result = note.verify();
@@ -2200,7 +2210,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let txn = builder.take_transaction().unwrap();
+        let txn = builder.build_and_take_transaction().unwrap();
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
         let mut block = BlockEffect::default();
         let block_result = block.add_txn_effect(compute_effect);
@@ -2312,7 +2322,7 @@ mod tests {
         //negative test for builder
         assert!(result.is_ok());
 
-        let txn = builder.take_transaction().unwrap();
+        let txn = builder.build_and_take_transaction().unwrap();
 
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
 
@@ -2366,7 +2376,7 @@ mod tests {
             .add_operation_anon_transfer(&[oabar], &[oabar_out], &[keypair_in])
             .is_ok();
 
-        let txn = builder.take_transaction().unwrap();
+        let txn = builder.build_and_take_transaction().unwrap();
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
         let mut block = BlockEffect::default();
         let _ = block.add_txn_effect(compute_effect);
@@ -2415,7 +2425,7 @@ mod tests {
             .add_operation_anon_transfer(&[oabar1], &[oabar_out1], &[keypair_in1])
             .is_ok();
 
-        let txn1 = builder1.take_transaction().unwrap();
+        let txn1 = builder1.build_and_take_transaction().unwrap();
         let compute_effect1 = TxnEffect::compute_effect(txn1).unwrap();
         let mut block1 = BlockEffect::default();
         let _ = block1.add_txn_effect(compute_effect1);
