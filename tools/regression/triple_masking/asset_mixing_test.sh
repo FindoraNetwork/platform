@@ -3,10 +3,9 @@ set +e
 
 EVM_SCRIPTS_PATH="tools/regression/evm/scripts"
 TRIPLE_MASKING_SCRIPTS_PATH="tools/regression/triple_masking/scripts"
-source $EVM_SCRIPTS_PATH/env.sh
 source $TRIPLE_MASKING_SCRIPTS_PATH/env.sh
-SLEEP_INTERVAL=($"BLOCK_INTERVAL" + 1)
-TM_SLEEP=20
+
+let TM_SLEEP=($BLOCK_INTERVAL + 5) #TM_SLEEP=20
 
 #Run Tests
 echo -e "${YEL}Run asset mixing test cases and verify results${NC}"
@@ -33,7 +32,11 @@ FILE_ANON_KEYS_3="anon-keys-temp_3.keys"
 set -e
 ./$TRIPLE_MASKING_SCRIPTS_PATH/create_test_bars.sh $FRA_ACCOUNT
 #Verify FRA balance
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 840000000
+python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 840000000
+if [ $? != 0 ];
+then
+    exit 1
+fi
 echo
 set +e
 
@@ -49,32 +52,40 @@ $BIN/fn setup -O "$TM_REGRESSION_PATH"/mnemonic.key > /dev/null
 
 echo "\n\n FRA Bar To Abar ..."
 echo "==============================================================================="
-TXO_SID=$(target/release/fn owned-utxos | head -4 | tail -1 |  awk -F ' ' '{print $1}')
-target/release/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS --txo-sid "$TXO_SID"
+TXO_SID=$($BIN/fn owned-utxos | head -4 | tail -1 |  awk -F ' ' '{print $1}')
+$BIN/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS --txo-sid "$TXO_SID"
 echo "waiting blockchain 20s..."
 sleep 30
 
 #Verify FRA balance
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 629980000
+python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 629980000
+if [ $? != 0 ];
+then
+    exit 1
+fi
 commitment1=$(tail -n 1 owned_commitments)
-python $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS --commitments $commitment1 --amount 210000000
+python3 $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS --commitments $commitment1 --amount 210000000
+if [ $? != 0 ];
+then
+    exit 1
+fi
 echo
 
 echo "\n\n Create Asset 1 ..."
 echo "------------------------------------------------------------------------------"
-target/release/fn asset --create --memo "asset1" --transferable 2> /dev/null
+$BIN/fn asset --create --memo "asset1" --transferable 2> /dev/null
 echo "waiting blockchain 20s..."
 sleep $TM_SLEEP
 
 echo "\n\n Create Asset 2 ..."
 echo "------------------------------------------------------------------------------"
-target/release/fn asset --create --memo "asset2" --transferable 2> /dev/null
+$BIN/fn asset --create --memo "asset2" --transferable 2> /dev/null
 echo "waiting blockchain 20s..."
 sleep $TM_SLEEP
 
 echo "\n\n Building assets ..."
 echo "------------------------------------------------------------------------------"
-target/release/fn asset --show --addr $FRA_ACCOUNT > tmp_file
+$BIN/fn asset --show --addr $FRA_ACCOUNT > tmp_file
 ASSET1=$(awk 'FNR==1' tmp_file | awk -F ' ' '{print $2}'| sed 's/,*$//g')
 ASSET2=$(awk 'FNR==2' tmp_file | awk -F ' ' '{print $2}'| sed 's/,*$//g')
 echo $ASSET1
@@ -82,59 +93,87 @@ echo $ASSET2
 
 echo "\n\n Issue Asset 1 ..."
 echo "------------------------------------------------------------------------------"
-target/release/fn asset --issue --code $ASSET1 --amount 100000000
+$BIN/fn asset --issue --code $ASSET1 --amount 100000000
 echo "waiting blockchain 20s..."
 sleep $TM_SLEEP
 
 echo "\n\n\n Issue Asset 2 ..."
 echo "------------------------------------------------------------------------------"
-target/release/fn asset --issue --code $ASSET2 --amount 100000000
+$BIN/fn asset --issue --code $ASSET2 --amount 100000000
 echo "waiting blockchain 20s..."
 sleep $TM_SLEEP
 
 echo "\n ***** Issue Asset & FRA successfully! ***** "
 
 #Verify balance for custom assets
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 100000000 --asset $ASSET1
+python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 100000000 --asset $ASSET1
+if [ $? != 0 ];
+then
+    exit 1
+fi
 echo
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 100000000 --asset $ASSET2
+python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 100000000 --asset $ASSET2
+if [ $? != 0 ];
+then
+    exit 1
+fi
 echo
 
-target/release/fn owned-utxos
+$BIN/fn owned-utxos
 
 echo "\n\n Asset 1 Bar To Abar ..."
 echo "==============================================================================="
-TXO_SID=$(target/release/fn owned-utxos --asset "$ASSET1" | head -4 | tail -1 | awk -F ' ' '{print $1}')
-target/release/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS --txo-sid "$TXO_SID"
+TXO_SID=$($BIN/fn owned-utxos --asset "$ASSET1" | head -4 | tail -1 | awk -F ' ' '{print $1}')
+$BIN/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS --txo-sid "$TXO_SID"
 echo "waiting blockchain 20s..."
 sleep $TM_SLEEP
 
 echo "\n\n Asset 2 Bar To Abar ..."
 echo "==============================================================================="
-TXO_SID=$(target/release/fn owned-utxos --asset "$ASSET2" | head -4 | tail -1 | awk -F ' ' '{print $1}')
-target/release/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS --txo-sid "$TXO_SID"
+TXO_SID=$($BIN/fn owned-utxos --asset "$ASSET2" | head -4 | tail -1 | awk -F ' ' '{print $1}')
+$BIN/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS --txo-sid "$TXO_SID"
 echo "waiting blockchain 20s..."
 sleep $TM_SLEEP
 
 #Verify balance for custom assets
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 0 --asset $ASSET1
+python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 0 --asset $ASSET1
+if [ $? != 0 ];
+then
+    exit 1
+fi
 commitmentAsset1=$(tail -n 2 owned_commitments | head -n 1)
-python $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS --commitments $commitmentAsset1 --amount 100000000 --asset $ASSET1
+python3 $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS --commitments $commitmentAsset1 --amount 100000000 --asset $ASSET1
+if [ $? != 0 ];
+then
+    exit 1
+fi
 echo
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 0 --asset $ASSET2
+python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 0 --asset $ASSET2
+if [ $? != 0 ];
+then
+    exit 1
+fi
 commitmentAsset2=$(tail -n 1 owned_commitments)
-python $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS --commitments $commitmentAsset2 --amount 100000000 --asset $ASSET2
+python3 $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS --commitments $commitmentAsset2 --amount 100000000 --asset $ASSET2
+if [ $? != 0 ];
+then
+    exit 1
+fi
 echo
 
 #Verify FRA balance
-python $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 629900000
+python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 629900000
+if [ $? != 0 ];
+then
+    exit 1
+fi
 echo
 
 echo "\n\n Anon transfer Asset 1 ..."
 echo "==============================================================================="
 COMMITMENT=$(awk 'FNR==3' owned_commitments)
 FRA_COMMITMENT=$(awk 'FNR==2' owned_commitments)
-target/release/fn anon-transfer    \
+$BIN/fn anon-transfer    \
   --amount 50000000                \
   --anon-keys $FILE_ANON_KEYS    \
   --commitment $COMMITMENT         \
@@ -181,7 +220,7 @@ echo 50000000 >> $BATCH_AMOUNT
 
 echo ""
 echo "Sending multi-asset transaction..."
-target/release/fn anon-transfer-batch \
+$BIN/fn anon-transfer-batch \
   --axfr-secretkey-file $BATCH_SK     \
   --commitment-file $BATCH_C          \
   --to-axfr-public-key-file $BATCH_PK \
@@ -191,12 +230,24 @@ echo "waiting for transaction to complete..."
 sleep $TM_SLEEP
 
 echo "checking..."
-target/release/fn owned-abars --commitments $(awk 'FNR==3,FNR==4' sent_commitments | awk -v d="," '{s=(NR==1?s:s d)$0}END{print s}') --anon-keys ./$FILE_ANON_KEYS_2
-target/release/fn owned-abars --commitments $(awk 'FNR==5' sent_commitments) --anon-keys ./$FILE_ANON_KEYS_3
+$BIN/fn owned-abars --commitments $(awk 'FNR==3,FNR==4' sent_commitments | awk -v d="," '{s=(NR==1?s:s d)$0}END{print s}') --anon-keys ./$FILE_ANON_KEYS_2
+$BIN/fn owned-abars --commitments $(awk 'FNR==5' sent_commitments) --anon-keys ./$FILE_ANON_KEYS_3
 
-python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments "$(awk 'FNR==3' sent_commitments)" --amount 10000000
-python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments "$(awk 'FNR==4' sent_commitments)" --amount 10000000 --asset "$ASSET2"
-python "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_3 --commitments "$(awk 'FNR==5' sent_commitments)" --amount 50000000 --asset "$ASSET1"
+python3 "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments "$(awk 'FNR==3' sent_commitments)" --amount 10000000
+if [ $? != 0 ];
+then
+    exit 1
+fi
+python3 "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments "$(awk 'FNR==4' sent_commitments)" --amount 10000000 --asset "$ASSET2"
+if [ $? != 0 ];
+then
+    exit 1
+fi
+python3 "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_3 --commitments "$(awk 'FNR==5' sent_commitments)" --amount 50000000 --asset "$ASSET1"
+if [ $? != 0 ];
+then
+    exit 1
+fi
 
 
 rm $BATCH_SK $BATCH_C $BATCH_PK $BATCH_AMOUNT $BATCH_ASSET
