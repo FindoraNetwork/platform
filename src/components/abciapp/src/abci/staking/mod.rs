@@ -283,9 +283,7 @@ pub fn system_mint_pay(
     if let Some(account_mint) = account_base_app.consume_mint() {
         for mint in account_mint {
             if mint.asset != ASSET_TYPE_FRA {
-                let atc = AssetTypeCode {
-                    val: mint.asset,
-                };
+                let atc = AssetTypeCode { val: mint.asset };
                 let at = if let Some(mut at) = la.get_asset_type(&atc) {
                     at.properties.issuer = IssuerPublicKey {
                         key: *BLACK_HOLE_PUBKEY_STAKING,
