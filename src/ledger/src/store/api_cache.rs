@@ -368,7 +368,7 @@ pub fn check_lost_data(ledger: &mut LedgerState) -> Result<()> {
         return Ok(());
     }
 
-    let mut api_cache = ledger.api_cache.take().ok_or(eg!("Missing Api cache."))?;
+    let mut api_cache = ledger.api_cache.take().unwrap();
 
     if last_txn_sid < cur_txn_sid {
         for index in last_txn_sid..cur_txn_sid {
@@ -467,7 +467,7 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
 
     check_lost_data(ledger)?;
 
-    let mut api_cache = ledger.api_cache.take().ok_or(eg!("Missing Api cache."))?;
+    let mut api_cache = ledger.api_cache.take().unwrap();
 
     api_cache.cache_hist_data();
 
