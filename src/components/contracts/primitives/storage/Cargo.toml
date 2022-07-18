@@ -22,4 +22,4 @@ fin_db = { git = "https://github.com/FindoraNetwork/storage.git", branch = "feat
 fp-core = { path = "../core" }
 
 [dev-dependencies]
-temp_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.1" }
+temp_db = { git = "https://github.com/FindoraNetwork/storage.git", branch = "feat-evm-stack" }
