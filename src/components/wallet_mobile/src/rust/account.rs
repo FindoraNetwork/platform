@@ -82,6 +82,8 @@ impl EVMTransactionBuilder {
             target: recipient,
             amount,
             asset: ASSET_TYPE_FRA,
+            decimal: 6,
+            max_supply: 0,
         };
         let action = Action::XHub(XhubAction::NonConfidentialTransfer(
             NonConfidentialTransfer {
