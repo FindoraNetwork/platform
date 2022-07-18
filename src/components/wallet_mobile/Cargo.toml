@@ -16,7 +16,7 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 wasm-opt = false
 
 [dependencies]
-aes-gcm = "0.8.0"
+aes-gcm = '=0.10.0-pre'
 base64 = "0.10"
 bech32 = "0.7.2"
 ffi-support = "0.4"
@@ -32,8 +32,8 @@ serde = { version = "1.0.124", features = ["derive"] }
 serde_derive = "^1.0.59"
 serde_json = "1.0"
 
-zei = "0.1"
-zei-algebra = "0.1"
+zei = "0.2"
+zei-algebra = "0.2"
 
 finutils = { path = "../finutils", default-features = false, features = []}
 fp-types = { path = "../contracts/primitives/types" }

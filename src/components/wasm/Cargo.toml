@@ -25,7 +25,7 @@ wasm-bindgen = { version = "0.2.62", features = ["serde-serialize"] }
 bs58 = "0.4"
 
 ring = "0.16.19"
-aes-gcm = "0.8.0"
+aes-gcm = '=0.10.0-pre'
 bech32 = "0.7.2"
 ruc = "1.0"
 
@@ -33,9 +33,9 @@ ruc = "1.0"
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
 
-zei = "0.1"
-zei-algebra = "0.1"
-zei-crypto = "0.1"
+zei = "0.2"
+zei-algebra = "0.2"
+zei-crypto = "0.2"
 
 finutils = { path = "../finutils", default-features = false }
 globutils = { path = "../../libs/globutils" }
@@ -45,6 +45,8 @@ ledger = { path = "../../ledger" }
 
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = { path = "../contracts/primitives/types" }
+
+fbnc = { version = "0.2.9", default-features = false}
 
 [lib]
 crate-type = ["cdylib", "rlib"]

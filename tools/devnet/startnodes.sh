@@ -21,7 +21,7 @@ if [ -z "$Node" ] || ([ ! -z "$Node" ] && [ "$Node" = "$node" ]); then
         ENABLE_LEDGER_SERVICE=true \
         ENABLE_ETH_API_SERVICE=true \
         ENABLE_QUERY_SERVICE=true \
-        release/bin/abcid $DEVNET/$node >> $DEVNET/$node/abcid.log 2>&1  &
+        $BIN/abcid $DEVNET/$node >> $DEVNET/$node/abcid.log 2>&1  &
 fi
 done
 

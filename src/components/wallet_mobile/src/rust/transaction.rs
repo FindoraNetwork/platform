@@ -335,7 +335,8 @@ impl TransactionBuilder {
     }
 
     /// Extracts the serialized form of a transaction.
-    pub fn transaction(&self) -> String {
+    pub fn transaction(&mut self) -> String {
+        self.get_builder_mut().build().unwrap();
         self.get_builder().serialize_str()
     }
 

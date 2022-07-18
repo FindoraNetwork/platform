@@ -17,10 +17,11 @@ mod wasm_data_model;
 use {
     crate::wasm_data_model::{
         error_to_jsvalue, AssetRules, AssetTracerKeyPair, AttributeAssignment,
-        AttributeDefinition, ClientAssetRecord, Credential, CredentialCommitment,
-        CredentialCommitmentData, CredentialCommitmentKey, CredentialIssuerKeyPair,
-        CredentialPoK, CredentialRevealSig, CredentialSignature, CredentialUserKeyPair,
-        MTLeafInfo, OwnerMemo, TracingPolicies, TxoRef,
+        AttributeDefinition, AxfrOwnerMemo, ClientAssetRecord, Credential,
+        CredentialCommitment, CredentialCommitmentData, CredentialCommitmentKey,
+        CredentialIssuerKeyPair, CredentialPoK, CredentialRevealSig,
+        CredentialSignature, CredentialUserKeyPair, MTLeafInfo, OwnerMemo,
+        TracingPolicies, TxoRef,
     },
     core::str::FromStr,
     credentials::{
@@ -30,6 +31,7 @@ use {
         CredUserPublicKey, CredUserSecretKey, Credential as PlatformCredential,
     },
     cryptohash::sha256,
+    fbnc::NumKey,
     finutils::txn_builder::{
         AnonTransferOperationBuilder as PlatformAnonTransferOperationBuilder,
         FeeInput as PlatformFeeInput, FeeInputs as PlatformFeeInputs,
@@ -45,13 +47,13 @@ use {
         crypto::{Address, MultiSignature, MultiSigner},
         U256,
     },
-    fp_utils::{ecdsa::SecpPair, tx::EvmRawTxWrapper},
+    fp_utils::{ecdsa::SecpPair, hashing::keccak_256, tx::EvmRawTxWrapper},
     globutils::{wallet, HashOf},
     ledger::{
         data_model::{
-            gen_random_keypair, AssetTypeCode, AuthenticatedTransaction, Operation,
-            TransferType, TxOutput, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
-            BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
+            gen_random_keypair, AssetTypeCode, AssetTypePrefix,
+            AuthenticatedTransaction, Operation, TransferType, TxOutput, ASSET_TYPE_FRA,
+            BLACK_HOLE_PUBKEY, BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
         },
         staking::{
             td_addr_to_bytes, PartialUnDelegation, TendermintAddr,
@@ -66,16 +68,18 @@ use {
     wasm_bindgen::prelude::*,
     zei::{
         anon_xfr::{
-            anon_fee::ANON_FEE_MIN,
-            keys::{AXfrKeyPair, AXfrPubKey},
-            nullifier,
+            keys::{AXfrKeyPair, AXfrPubKey, AXfrViewKey},
+            nullify_with_native_address,
             structs::{
-                AnonBlindAssetRecord, Commitment, OpenAnonBlindAssetRecord,
-                OpenAnonBlindAssetRecordBuilder,
+                AnonAssetRecord, Commitment, OpenAnonAssetRecord,
+                OpenAnonAssetRecordBuilder,
             },
         },
         xfr::{
-            asset_record::{open_blind_asset_record as open_bar, AssetRecordType},
+            asset_record::{
+                open_blind_asset_record as open_bar, AssetRecordType,
+                AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+            },
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
             structs::{
                 AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody,
@@ -85,6 +89,7 @@ use {
         },
     },
     zei_algebra::prelude::{Scalar, ZeiFromToBytes},
+    zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
 };
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
@@ -109,6 +114,22 @@ pub fn build_id() -> String {
 /// asset type
 pub fn random_asset_type() -> String {
     AssetTypeCode::gen_random().to_base64()
+}
+
+#[wasm_bindgen]
+/// Creates a new asset code with prefixing-hashing the original code to query the ledger.
+pub fn hash_asset_code(asset_code_string: String) -> Result<String, JsValue> {
+    let original_asset_code = AssetTypeCode::new_from_base64(&asset_code_string)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+
+    let mut asset_code = AssetTypePrefix::UserDefined.bytes();
+    asset_code.append(&mut original_asset_code.to_bytes());
+    let derived_asset_code = AssetTypeCode {
+        val: ZeiAssetType(keccak_256(&asset_code)),
+    };
+
+    Ok(derived_asset_code.to_base64())
 }
 
 #[wasm_bindgen]
@@ -486,7 +507,6 @@ impl TransactionBuilder {
         txo_sid: u64,
         input_record: &ClientAssetRecord,
         owner_memo: Option<OwnerMemo>,
-        enc_key: &XPublicKey,
     ) -> Result<TransactionBuilder, JsValue> {
         use hex::FromHex;
 
@@ -514,7 +534,6 @@ impl TransactionBuilder {
                 &abar_pubkey,
                 TxoSID(txo_sid),
                 &oar,
-                enc_key,
                 is_bar_transparent,
             )
             .c(d!())
@@ -528,30 +547,27 @@ impl TransactionBuilder {
 
     /// Adds an operation to transaction builder which converts an abar to a bar.
     ///
-    /// @param {AnonBlindAssetRecord} input - the ABAR to be converted
-    /// @param {OwnerMemo} owner_memo - the corresponding owner_memo of the ABAR to be converted
+    /// @param {AnonAssetRecord} input - the ABAR to be converted
+    /// @param {AxfrOwnerMemo} axfr owner_memo - the corresponding owner_memo of the ABAR to be converted
     /// @param {MTLeafInfo} mt_leaf_info - the Merkle Proof of the ABAR
     /// @param {AXfrKeyPair} from_keypair - the owners Anon Key pair
-    /// @param {XSecretKey} from_dec_key - the owners decryption key
     /// @param {XfrPublic} recipient - the BAR owner public key
     /// @param {bool} conf_amount - whether the BAR amount should be confidential
     /// @param {bool} conf_type - whether the BAR asset type should be confidential
     pub fn add_operation_abar_to_bar(
         mut self,
-        input: AnonBlindAssetRecord,
-        owner_memo: OwnerMemo,
+        input: AnonAssetRecord,
+        owner_memo: AxfrOwnerMemo,
         mt_leaf_info: MTLeafInfo,
         from_keypair: &AXfrKeyPair,
-        from_dec_key: &XSecretKey,
         recipient: XfrPublicKey,
         conf_amount: bool,
         conf_type: bool,
     ) -> Result<TransactionBuilder, JsValue> {
-        let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
+        let oabar = OpenAnonAssetRecordBuilder::from_abar(
             &input,
             owner_memo.memo,
             &from_keypair.clone(),
-            &from_dec_key.clone(),
         )
         .c(d!())
         .map_err(|e| {
@@ -606,32 +622,26 @@ impl TransactionBuilder {
 
     /// Adds an operation to transaction builder which transfer a Anon Blind Asset Record
     ///
-    /// @param {AnonBlindAssetRecord} input - input abar
-    /// @param {OwnerMemo} owner_memo - input owner memo
+    /// @param {AnonAssetRecord} input - input abar
+    /// @param {AxfrOwnerMemo} axfr owner_memo - input owner memo
     /// @param {AXfrKeyPair} from_keypair - abar sender's private key
-    /// @param {XSecretKey} from_dec_key - sender's abar decryption key
     /// @param {AXfrPubKey} to_pub_key - receiver's Anon public key
-    /// @param {XPublicKey} to_enc_key - receiver's encryption public key
     /// @param {u64} to_amount - amount to send to receiver
     #[allow(clippy::too_many_arguments)]
     pub fn add_operation_anon_transfer(
         mut self,
-        input: AnonBlindAssetRecord,
-        owner_memo: OwnerMemo,
+        input: AnonAssetRecord,
+        owner_memo: AxfrOwnerMemo,
         mt_leaf_info: MTLeafInfo,
         from_keypair: &AXfrKeyPair,
-        from_dec_key: &XSecretKey,
         to_pub_key: AXfrPubKey,
-        to_enc_key: XPublicKey,
         to_amount: u64,
     ) -> Result<TransactionBuilder, JsValue> {
         let mut prng = ChaChaRng::from_entropy();
-        let from_public_key = XPublicKey::from(&from_dec_key);
-        let input_oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
+        let input_oabar = OpenAnonAssetRecordBuilder::from_abar(
             &input,
             owner_memo.memo,
             &from_keypair.clone(),
-            &from_dec_key.clone(),
         )
         .c(d!())
         .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
@@ -647,11 +657,11 @@ impl TransactionBuilder {
             )));
         }
 
-        let output_oabar = OpenAnonBlindAssetRecordBuilder::new()
+        let output_oabar = OpenAnonAssetRecordBuilder::new()
             .amount(to_amount)
             .asset_type(input_oabar.get_asset_type())
-            .pub_key(to_pub_key)
-            .finalize(&mut prng, &to_enc_key)
+            .pub_key(&to_pub_key)
+            .finalize(&mut prng)
             .c(d!())
             .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
             .build()
@@ -667,7 +677,6 @@ impl TransactionBuilder {
                 &[input_oabar],
                 &[output_oabar],
                 &[from_keypair.clone()],
-                from_public_key.clone(),
             )
             .c(d!())
             .map_err(|e| {
@@ -801,6 +810,15 @@ impl TransactionBuilder {
         Ok(self)
     }
 
+    /// Builds the anon operations from pre-notes
+    pub fn build(mut self) -> Result<TransactionBuilder, JsValue> {
+        self.get_builder_mut()
+            .build()
+            .c(d!())
+            .map_err(error_to_jsvalue)?;
+        Ok(self)
+    }
+
     #[allow(missing_docs)]
     pub fn sign(mut self, kp: &XfrKeyPair) -> Result<TransactionBuilder, JsValue> {
         self.get_builder_mut().sign(kp);
@@ -808,7 +826,7 @@ impl TransactionBuilder {
     }
 
     /// Extracts the serialized form of a transaction.
-    pub fn transaction(&self) -> String {
+    pub fn transaction(&mut self) -> String {
         self.get_builder().serialize_str()
     }
 
@@ -916,69 +934,60 @@ pub fn get_serialized_address(address: String) -> Result<String, JsValue> {
 pub fn gen_anon_keys() -> Result<AnonKeys, JsValue> {
     let mut prng = ChaChaRng::from_entropy();
     let keypair = AXfrKeyPair::generate(&mut prng);
-    let secret_key = XSecretKey::new(&mut prng);
-    let public_key = XPublicKey::from(&secret_key);
 
     let keys = AnonKeys {
-        axfr_secret_key: wallet::anon_secret_key_to_base64(&keypair),
-        axfr_public_key: wallet::anon_public_key_to_base64(&keypair.pub_key()),
-        enc_key: wallet::x_public_key_to_base64(&public_key),
-        dec_key: wallet::x_secret_key_to_base64(&secret_key),
+        spend_key: wallet::anon_secret_key_to_base64(&keypair),
+        pub_key: wallet::anon_public_key_to_base64(&keypair.get_pub_key()),
+        view_key: wallet::anon_view_key_to_base64(&keypair.get_view_key()),
     };
 
     Ok(keys)
 }
 
 /// Get balance for an Anonymous Blind Asset Record
-/// @param {AnonBlindAssetRecord} abar - ABAR for which balance needs to be queried
-/// @param {OwnerMemo} memo - memo corresponding to the abar
+/// @param {AnonAssetRecord} abar - ABAR for which balance needs to be queried
+/// @param {AxfrOwnerMemo} memo - memo corresponding to the abar
 /// @param keypair {AXfrKeyPair} - AXfrKeyPair of the ABAR owner
-/// @param dec_key {XSecretKey} - Decryption key of the abar owner to open the Owner Memo
 /// @param MTLeafInfo {mt_leaf_info} - the Merkle proof of the ABAR from commitment tree
 /// @throws Will throw an error if abar fails to open
 #[wasm_bindgen]
 pub fn get_anon_balance(
-    abar: AnonBlindAssetRecord,
-    memo: OwnerMemo,
+    abar: AnonAssetRecord,
+    memo: AxfrOwnerMemo,
     keypair: AXfrKeyPair,
-    dec_key: XSecretKey,
     mt_leaf_info: MTLeafInfo,
 ) -> Result<u64, JsValue> {
-    let oabar =
-        OpenAnonBlindAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair, &dec_key)
-            .c(d!())
-            .map_err(error_to_jsvalue)?
-            .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
-            .build()
-            .c(d!())
-            .map_err(error_to_jsvalue)?;
+    let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair)
+        .c(d!())
+        .map_err(error_to_jsvalue)?
+        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .build()
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
 
     Ok(oabar.get_amount())
 }
 
 /// Get OABAR (Open ABAR) using the ABAR, OwnerMemo and MTLeafInfo
-/// @param {AnonBlindAssetRecord} abar - ABAR which needs to be opened
-/// @param {OwnerMemo} memo - memo corresponding to the abar
+/// @param {AnonAssetRecord} abar - ABAR which needs to be opened
+/// @param {AxfrOwnerMemo} memo - memo corresponding to the abar
 /// @param keypair {AXfrKeyPair} - AXfrKeyPair of the ABAR owner
-/// @param dec_key {XSecretKey} - Decryption key of the abar owner to open the Owner Memo
 /// @param MTLeafInfo {mt_leaf_info} - the Merkle proof of the ABAR from commitment tree
 /// @throws Will throw an error if abar fails to open
 #[wasm_bindgen]
 pub fn get_open_abar(
-    abar: AnonBlindAssetRecord,
-    memo: OwnerMemo,
+    abar: AnonAssetRecord,
+    memo: AxfrOwnerMemo,
     keypair: AXfrKeyPair,
-    dec_key: XSecretKey,
     mt_leaf_info: MTLeafInfo,
 ) -> Result<JsValue, JsValue> {
-    let oabar =
-        OpenAnonBlindAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair, &dec_key)
-            .c(d!())
-            .map_err(error_to_jsvalue)?
-            .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
-            .build()
-            .c(d!())
-            .map_err(error_to_jsvalue)?;
+    let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair)
+        .c(d!())
+        .map_err(error_to_jsvalue)?
+        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .build()
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
 
     let json = JsValue::from_serde(&oabar)
         .c(d!())
@@ -987,30 +996,27 @@ pub fn get_open_abar(
 }
 
 /// Generate nullifier hash using ABAR, OwnerMemo and MTLeafInfo
-/// @param {AnonBlindAssetRecord} abar - ABAR for which balance needs to be queried
-/// @param {OwnerMemo} memo - memo corresponding to the abar
+/// @param {AnonAssetRecord} abar - ABAR for which balance needs to be queried
+/// @param {AxfrOwnerMemo} memo - memo corresponding to the abar
 /// @param keypair {AXfrKeyPair} - AXfrKeyPair of the ABAR owner
-/// @param dec_key {XSecretKey} - Decryption key of the abar owner to open the Owner Memo
 /// @param MTLeafInfo {mt_leaf_info} - the Merkle proof of the ABAR from commitment tree
 /// @throws Will throw an error if abar fails to open
 #[wasm_bindgen]
 pub fn gen_nullifier_hash(
-    abar: AnonBlindAssetRecord,
-    memo: OwnerMemo,
+    abar: AnonAssetRecord,
+    memo: AxfrOwnerMemo,
     keypair: AXfrKeyPair,
-    dec_key: XSecretKey,
     mt_leaf_info: MTLeafInfo,
 ) -> Result<String, JsValue> {
-    let oabar =
-        OpenAnonBlindAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair, &dec_key)
-            .c(d!())
-            .map_err(error_to_jsvalue)?
-            .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
-            .build()
-            .c(d!())
-            .map_err(error_to_jsvalue)?;
+    let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair)
+        .c(d!())
+        .map_err(error_to_jsvalue)?
+        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .build()
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
 
-    let n = nullifier(
+    let n = nullify_with_native_address(
         &keypair,
         oabar.get_amount(),
         &oabar.get_asset_type(),
@@ -1315,25 +1321,22 @@ impl AnonTransferOperationBuilder {
     }
 
     /// add_input is used to add a new input source for Anon Transfer
-    /// @param {AnonBlindAssetRecord} abar - input ABAR to transfer
-    /// @param {OwnerMemo} memo - memo corresponding to the input abar
+    /// @param {AnonAssetRecord} abar - input ABAR to transfer
+    /// @param {AxfrOwnerMemo} memo - memo corresponding to the input abar
     /// @param keypair {AXfrKeyPair} - AXfrKeyPair of the ABAR owner
-    /// @param dec_key {XSecretKey} - Decryption key of the abar owner to open the Owner Memo
     /// @param MTLeafInfo {mt_leaf_info} - the Merkle proof of the ABAR from commitment tree
     /// @throws Will throw an error if abar fails to open, input fails to get added to Operation
     pub fn add_input(
         mut self,
-        abar: &AnonBlindAssetRecord,
-        memo: &OwnerMemo,
+        abar: &AnonAssetRecord,
+        memo: &AxfrOwnerMemo,
         keypair: &AXfrKeyPair,
-        dec_key: &XSecretKey,
         mt_leaf_info: MTLeafInfo,
     ) -> Result<AnonTransferOperationBuilder, JsValue> {
-        let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
+        let oabar = OpenAnonAssetRecordBuilder::from_abar(
             &abar.clone(),
             memo.memo.clone(),
             &keypair.clone(),
-            &dec_key.clone(),
         )
         .c(d!())
         .map_err(error_to_jsvalue)?
@@ -1353,25 +1356,23 @@ impl AnonTransferOperationBuilder {
     /// add_output is used to add a output to the Anon Transfer
     /// @param amount {u64} - amount to be sent to the receiver
     /// @param to {AXfrPubKey} - original pub key of receiver
-    /// @param to_enc_key {XPublicKey} - The encryption public key of receiver.
     /// @throws error if ABAR fails to be built
     pub fn add_output(
         mut self,
         amount: u64,
         asset_type: String,
         to: AXfrPubKey,
-        to_enc_key: XPublicKey,
     ) -> Result<AnonTransferOperationBuilder, JsValue> {
         let mut prng = ChaChaRng::from_entropy();
 
         let at = AssetTypeCode::new_from_base64(asset_type.as_str())
             .map_err(error_to_jsvalue)?;
 
-        let oabar_out = OpenAnonBlindAssetRecordBuilder::new()
+        let oabar_out = OpenAnonAssetRecordBuilder::new()
             .amount(amount)
             .asset_type(at.val)
-            .pub_key(to)
-            .finalize(&mut prng, &to_enc_key.clone())
+            .pub_key(&to)
+            .finalize(&mut prng)
             .unwrap()
             .build()
             .unwrap();
@@ -1388,20 +1389,6 @@ impl AnonTransferOperationBuilder {
     /// have enough fees.
     pub fn get_expected_fee(&self) -> u64 {
         self.get_builder().extra_fee_estimation()
-    }
-
-    /// set_fra_remainder_receiver is used to set destination public key for remainder abar to get back the remainder amount
-    /// @param from_pubkey {XPublicKey} - The encryption public key of sender
-    pub fn set_fra_remainder_receiver(
-        mut self,
-        from_pubkey: XPublicKey,
-    ) -> Result<AnonTransferOperationBuilder, JsValue> {
-        self.get_builder_mut()
-            .set_from_pubkey(from_pubkey)
-            .c(d!())
-            .map_err(error_to_jsvalue)?;
-
-        Ok(self)
     }
 
     /// get_commitments returns a list of all the commitments for receiver public keys
@@ -1799,8 +1786,6 @@ use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
 use std::num::NonZeroU32;
 use std::str;
-use zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType;
-use zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey};
 
 #[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.
@@ -2078,6 +2063,14 @@ pub fn axfr_pubkey_from_string(key_str: &str) -> Result<AXfrPubKey, JsValue> {
 
 #[wasm_bindgen]
 #[allow(missing_docs)]
+pub fn axfr_viewkey_from_string(key_str: &str) -> Result<AXfrViewKey, JsValue> {
+    wallet::anon_view_key_from_base64(key_str)
+        .c(d!())
+        .map_err(error_to_jsvalue)
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
 pub fn axfr_keypair_from_string(key_str: &str) -> Result<AXfrKeyPair, JsValue> {
     wallet::anon_secret_key_from_base64(key_str)
         .c(d!())
@@ -2102,32 +2095,27 @@ pub fn x_secretkey_from_string(key_str: &str) -> Result<XSecretKey, JsValue> {
 
 #[wasm_bindgen]
 #[allow(missing_docs)]
-pub fn abar_from_json(json: JsValue) -> Result<AnonBlindAssetRecord, JsValue> {
+pub fn abar_from_json(json: JsValue) -> Result<AnonAssetRecord, JsValue> {
     let abar: ABARData = json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
     let c = wallet::commitment_from_base58(abar.commitment.as_str())
         .c(d!())
         .map_err(error_to_jsvalue)?;
 
-    Ok(AnonBlindAssetRecord { commitment: c })
+    Ok(AnonAssetRecord { commitment: c })
 }
 
 #[wasm_bindgen]
 /// Decrypts an ABAR with owner memo and decryption key
 pub fn open_abar(
-    abar: AnonBlindAssetRecord,
-    memo: OwnerMemo,
+    abar: AnonAssetRecord,
+    memo: AxfrOwnerMemo,
     keypair: &AXfrKeyPair,
-    dec_key: &XSecretKey,
 ) -> Result<AmountAssetType, JsValue> {
-    let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
-        &abar,
-        memo.memo,
-        &keypair.clone(),
-        &dec_key.clone(),
-    )
-    .map_err(error_to_jsvalue)?
-    .build()
-    .map_err(error_to_jsvalue)?;
+    let oabar =
+        OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair.clone())
+            .map_err(error_to_jsvalue)?
+            .build()
+            .map_err(error_to_jsvalue)?;
 
     let at = AssetTypeCode {
         val: oabar.get_asset_type(),
@@ -2158,13 +2146,12 @@ mod test {
         let asset_type = ASSET_TYPE_FRA;
 
         // simulate input abar
-        let (mut oabar, keypair_in, _dec_key_in, enc_key_in) =
-            gen_oabar_and_keys(&mut prng, amount, asset_type);
+        let (mut oabar, keypair_in) = gen_oabar_and_keys(&mut prng, amount, asset_type);
 
         let asset_type_out = ASSET_TYPE_FRA;
 
         //Simulate output abar
-        let (mut oabar_out, _keypair_out, _dec_key_out, _) =
+        let (mut oabar_out, _keypair_out) =
             gen_oabar_and_keys(&mut prng, amount_output, asset_type_out);
 
         let mut ts = AnonTransferOperationBuilder::new(1);
@@ -2186,7 +2173,7 @@ mod test {
 
         assert!(estimated_fees_gt_fra_excess > 0);
 
-        let (mut oabar_2, keypair_in_2, _, _) =
+        let (mut oabar_2, keypair_in_2) =
             gen_oabar_and_keys(&mut prng, 2 * amount, asset_type);
 
         ts.get_builder_mut().add_input(oabar_2, keypair_in_2);
@@ -2200,24 +2187,17 @@ mod test {
         prng: &mut R,
         amount: u64,
         asset_type: ZeiAssetType,
-    ) -> (
-        OpenAnonBlindAssetRecord,
-        AXfrKeyPair,
-        XSecretKey,
-        XPublicKey,
-    ) {
+    ) -> (OpenAnonAssetRecord, AXfrKeyPair) {
         let keypair = AXfrKeyPair::generate(prng);
-        let dec_key = XSecretKey::new(prng);
-        let enc_key = XPublicKey::from(&dec_key);
-        let oabar = OpenAnonBlindAssetRecordBuilder::new()
+        let oabar = OpenAnonAssetRecordBuilder::new()
             .amount(u64::from(amount))
             .asset_type(asset_type)
-            .pub_key(keypair.pub_key())
-            .finalize(prng, &enc_key)
+            .pub_key(&keypair.get_pub_key())
+            .finalize(prng)
             .unwrap()
             .build()
             .unwrap();
-        (oabar, keypair, dec_key, enc_key)
+        (oabar, keypair)
     }
 
     #[test]

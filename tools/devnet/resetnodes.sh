@@ -4,7 +4,7 @@
 source tools/devnet/env.sh || exit 1
 
 # get params if provided
-V="3"
+V="1"
 N="1"
 if [ ! -z "$1" ] && [ ! -z "$2" ]; then
     V=$1

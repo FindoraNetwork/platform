@@ -30,9 +30,10 @@ pub struct CheckPointConfig {
     pub prismxx_inital_height: i64,
     pub enable_triple_masking_height: i64,
     // Note: This field only used to qa02.
-    pub qa02_upgradable_prism_bridge: i64,
     pub fix_unpaid_delegation_height: u64,
     pub evm_checktx_nonce: i64,
+    pub utxo_checktx_height: i64,
+    pub utxo_asset_prefix_height: u64,
 }
 
 impl CheckPointConfig {
@@ -60,9 +61,10 @@ impl CheckPointConfig {
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
                                 prismxx_inital_height: 1,
                                 enable_triple_masking_height: 0,
-                                qa02_upgradable_prism_bridge: 10,
                                 fix_unpaid_delegation_height: 0,
                                 evm_checktx_nonce: 0,
+                                utxo_checktx_height: 0,
+                                utxo_asset_prefix_height: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -80,9 +82,10 @@ impl CheckPointConfig {
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
                                 prismxx_inital_height: 1733700,
                                 enable_triple_masking_height: 22510000,
-                                qa02_upgradable_prism_bridge: 40000,
                                 fix_unpaid_delegation_height: 2261885,
                                 evm_checktx_nonce: 3000000,
+                                utxo_checktx_height: 2524270,
+                                utxo_asset_prefix_height: 2524270,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();

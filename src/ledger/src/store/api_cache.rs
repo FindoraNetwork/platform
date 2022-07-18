@@ -5,8 +5,9 @@
 use {
     crate::{
         data_model::{
-            ATxoSID, AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Operation,
-            Transaction, TxOutput, TxnIDHash, TxnSID, TxoSID, XfrAddress,
+            ATxoSID, AssetTypeCode, AssetTypePrefix, DefineAsset, IssueAsset,
+            IssuerPublicKey, Operation, Transaction, TxOutput, TxnIDHash, TxnSID,
+            TxoSID, XfrAddress, ASSET_TYPE_FRA,
         },
         staking::{
             ops::mint_fra::MintEntry, Amount, BlockHeight, DelegationRwdDetail,
@@ -14,12 +15,21 @@ use {
         },
         store::LedgerState,
     },
+    config::abci::global_cfg::CFG,
+    fbnc::NumKey,
     fbnc::{new_mapx, new_mapxnk, Mapx, Mapxnk},
+    fp_utils::hashing::keccak_256,
     globutils::wallet,
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
-    zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+    zei::{
+        anon_xfr::structs::AxfrOwnerMemo,
+        xfr::{
+            sig::XfrPublicKey,
+            structs::{AssetType, OwnerMemo},
+        },
+    },
 };
 
 type Issuances = Vec<(TxOutput, Option<OwnerMemo>)>;
@@ -45,7 +55,7 @@ pub struct ApiCache {
     /// used in confidential tx
     pub owner_memos: Mapxnk<TxoSID, OwnerMemo>,
     /// used in anonymous tx
-    pub abar_memos: Mapx<ATxoSID, OwnerMemo>,
+    pub abar_memos: Mapx<ATxoSID, AxfrOwnerMemo>,
     /// ownship of txo
     pub utxos_to_map_index: Mapxnk<TxoSID, XfrAddress>,
     /// txo(spent, unspent) to authenticated txn (sid, hash)
@@ -127,7 +137,20 @@ impl ApiCache {
 
     /// Add created asset
     #[inline(always)]
-    pub fn add_created_asset(&mut self, creation: &DefineAsset) {
+    pub fn add_created_asset(&mut self, creation: &DefineAsset, cur_height: u64) {
+        let asset_code = creation.body.asset.code;
+        let code = if asset_code.val == ASSET_TYPE_FRA
+            || CFG.checkpoint.utxo_asset_prefix_height > cur_height
+        {
+            creation.body.asset.code
+        } else {
+            let mut asset_code = AssetTypePrefix::UserDefined.bytes();
+            asset_code.append(&mut creation.body.asset.code.to_bytes());
+            AssetTypeCode {
+                val: AssetType(keccak_256(&asset_code)),
+            }
+        };
+
         let prefix = self.prefix.clone();
         let issuer = creation.pubkey;
         self.created_assets
@@ -139,7 +162,7 @@ impl ApiCache {
                     issuer.to_base64()
                 ))
             })
-            .insert(creation.body.asset.code, creation.clone());
+            .insert(code, creation.clone());
     }
 
     /// Cache issuance records
@@ -606,11 +629,10 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
         for op in &curr_txn.body.operations {
             match op {
                 Operation::DefineAsset(define_asset) => {
-                    ledger
-                        .api_cache
-                        .as_mut()
-                        .unwrap()
-                        .add_created_asset(&define_asset);
+                    ledger.api_cache.as_mut().unwrap().add_created_asset(
+                        &define_asset,
+                        ledger.status.td_commit_height,
+                    );
                 }
                 Operation::IssueAsset(issue_asset) => {
                     ledger
@@ -665,7 +687,7 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
 
         let abar_memos = curr_txn.body.operations.iter().flat_map(|o| match o {
             Operation::BarToAbar(b) => {
-                vec![b.memo()]
+                vec![b.axfr_memo()]
             }
             Operation::TransferAnonAsset(b) => b.note.body.owner_memos.clone(),
             _ => vec![],

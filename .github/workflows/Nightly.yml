@@ -1,8 +1,11 @@
-name: Develop
+name: Nightly
+# on:
+#   push:
+#     branches:
+#       - nightly-build
 on:
-  pull_request:
-    branches:
-      - develop
+  schedule:
+    - cron: '0 0 * * *'
 env:
   CARGO_TERM_COLOR: always
 jobs:
@@ -15,6 +18,7 @@ jobs:
       ENV: dev
       PRIVATE_ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
       PUBLIC_ECR_URL: public.ecr.aws/k6m5b6e2
+
     steps:
     - uses: actions/checkout@v2
     - uses: actions-rs/toolchain@v1
@@ -22,49 +26,8 @@ jobs:
         toolchain: stable
         override: true
         components: rustfmt
-    # - name: check fmt
-    #   shell: bash
-    #   run: |
-    #     cargo fmt -- --check
-    # - name: test_status
-    #   env:
-    #     DBG: true
-    #   shell: bash
-    #   run: |
-    #     curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-    #     make test_status
-    ## It need to install protobuf-compiler for build environment.
-    ## Enable this when build by container.
-    # - name: Install protobuf-compiler
-    #   shell: bash
-    #   run: |
-    #     apt install protobuf-compiler
-    # - name: install rustwasm
-    #   shell: bash
-    #   run: |
-    #     curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-    # - name: add go
-    #   shell: bash
-    #   run: |
-    #     mkdir $(pwd)/opt && cd $(pwd)/opt && wget https://golang.google.cn/dl/go1.15.7.linux-amd64.tar.gz && tar -xpf go1.15.7.linux-amd64.tar.gz && echo "$(pwd)/go/bin" >> $GITHUB_PATH
+        ref: nightly-build
 
-    # remove the test code in develop build
-    # run tests
-    # - name: lint
-    #   shell: bash
-    #   run: |
-    #     make lint
-
-    # - name: test
-    #   shell: bash
-    #   run: |
-    #     make test
-
-    # - name: evm test
-    #   shell: bash
-    #   run: |
-    #     make evmtest
-        
     - name: Prepare key
       shell: bash
       run: |
@@ -92,7 +55,7 @@ jobs:
           export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
-        export TOBRANCH="dev"
+        export TOBRANCH="nightly"
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
         echo "Image tag: ${IMAGE_TAG}"
@@ -112,7 +75,7 @@ jobs:
           export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
-        export TOBRANCH="dev"
+        export TOBRANCH="nightly"
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image
@@ -138,46 +101,20 @@ jobs:
           export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
-        export TOBRANCH="dev"
+        export TOBRANCH="nightly"
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_push_image
-    # - name: Clean images
+
+
+    # - name: Slack Notification if FAIL
+    #   uses: rtCamp/action-slack-notify@v2
+    #   if: failure()
     #   env:
-    #     PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
-    #     PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
-    #     ENV: ${{ env.ENV }}
-    #     GITHUB_CONTEXT: ${{ toJSON(github) }}
-    #   shell: bash
-    #   run: |
-    #     COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
-    #     if [ "${COMMIT_HASH}" == "null" ]; then
-    #       export COMMIT_HASH="${GITHUB_SHA}"
-    #     else
-    #       export COMMIT_HASH=${COMMIT_HASH}
-    #     fi
-    #     export BRANCH="${GITHUB_HEAD_REF}"
-    #     export TOBRANCH="${GITHUB_BASE_REF}"
-    #     export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
-    #     echo "Image tag: ${IMAGE_TAG}"
-    #     make clean_image
-    # - name: Clean binary images
-    #   shell: bash
-    #   env:
-    #     GITHUB_CONTEXT: ${{ toJSON(github) }}
-    #   run: |
-    #     COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
-    #     if [ "${COMMIT_HASH}" == "null" ]; then
-    #       export COMMIT_HASH="${GITHUB_SHA}"
-    #     else
-    #       export COMMIT_HASH=${COMMIT_HASH}
-    #     fi
-    #     export BRANCH="${GITHUB_HEAD_REF}"
-    #     export TOBRANCH="${GITHUB_BASE_REF}"
-    #     export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
-    #     echo "Image tag: ${IMAGE_TAG}"
-    #     make clean_binary_dockerhub
-    # - name: Clean garbage
-    #   shell: bash
-    #   run: |
-    #     rm -rf /tmp/*>/dev/null 2>&1 || true
+    #     SLACK_CHANNEL: engineering-v2
+    #     SLACK_COLOR: ${{ job.status }} # or a specific color like 'good' or '#ff00ff'
+    #     SLACK_ICON: https://findora.org/wp-content/uploads/2022/06/Group.svg
+    #     SLACK_MESSAGE: 'Click the action URL to see the detail. It may cause the test fail or image build error!'
+    #     SLACK_TITLE: Nightly Build ${{ job.status }}
+    #     SLACK_USERNAME: Nightly Build Monitoring
+    #     SLACK_WEBHOOK: ${{ secrets.SLACK_APP_WEBHOOK }}

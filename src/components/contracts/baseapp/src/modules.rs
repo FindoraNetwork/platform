@@ -17,11 +17,11 @@ use ledger::{
     converter::check_convert_account,
     data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA},
 };
-use module_ethereum::storage::{PendingTransactions, TransactionIndex};
+use module_ethereum::storage::{TransactionIndex, DELIVER_PENDING_TRANSACTIONS};
 use ruc::*;
 use serde::Serialize;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ModuleManager {
     // Ordered module list
     pub(crate) account_module: module_account::App<BaseApp>,
@@ -103,7 +103,7 @@ impl ModuleManager {
     pub fn process_tx<
         Extra: Clone + Serialize + SignedExtension<AccountId = Address>,
     >(
-        &mut self,
+        &self,
         ctx: Context,
         tx: UncheckedTransaction<Extra>,
     ) -> Result<ActionResult> {
@@ -133,8 +133,9 @@ impl ModuleManager {
         let from = Address::from(from);
         let owner = Address::from(to);
 
-        let mut pending_txs: Vec<_> =
-            PendingTransactions::get(&*ctx.db.read()).unwrap_or_default();
+        let mut pending_txs = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
+        // if let Some(pending_txs)
+        // let transaction_index = pending_txs.as_ref().unwrap_or_default().len() as u32;
         let transaction_index = pending_txs.len() as u32;
 
         let (tx, tx_status, receipt) = if asset == ASSET_TYPE_FRA {
@@ -144,7 +145,7 @@ impl ModuleManager {
             let ba = Address::from(bridge_address);
 
             module_account::App::<BaseApp>::mint(ctx, &ba, balance)?;
-            self.evm_module.withdraw_fra(
+            match self.evm_module.withdraw_fra(
                 ctx,
                 &from,
                 &owner,
@@ -152,7 +153,14 @@ impl ModuleManager {
                 lowlevel,
                 transaction_index,
                 hash,
-            )?
+            ) {
+                Ok(r) => r,
+                Err(e) => {
+                    // Revert mint in failed.
+                    ctx.state.write().discard_session();
+                    return Err(e);
+                }
+            }
         } else {
             self.evm_module.withdraw_frc20(
                 ctx,
@@ -173,7 +181,6 @@ impl ModuleManager {
         )?;
 
         pending_txs.push((tx, tx_status, receipt));
-        PendingTransactions::put(&mut *ctx.db.write(), &pending_txs)?;
 
         Ok(())
     }

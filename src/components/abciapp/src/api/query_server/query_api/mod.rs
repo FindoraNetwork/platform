@@ -33,7 +33,7 @@ use {
         sync::Arc,
     },
     zei::{
-        anon_xfr::structs::MTLeafInfo,
+        anon_xfr::structs::{AxfrOwnerMemo, MTLeafInfo},
         xfr::{sig::XfrPublicKey, structs::OwnerMemo},
     },
     zei_algebra::serialization::ZeiFromToBytes,
@@ -99,7 +99,7 @@ pub async fn get_owner_memo_batch(
 async fn get_abar_memo(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<u64>,
-) -> actix_web::Result<web::Json<Option<OwnerMemo>>, actix_web::error::Error> {
+) -> actix_web::Result<web::Json<Option<AxfrOwnerMemo>>, actix_web::error::Error> {
     let server = data.read();
     Ok(web::Json(server.get_abar_memo(ATxoSID(*info))))
 }
@@ -207,7 +207,7 @@ impl NetworkRoute for QueryServerRoutes {
 pub async fn get_created_assets(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
-) -> actix_web::Result<web::Json<Vec<DefineAsset>>> {
+) -> actix_web::Result<web::Json<Vec<(AssetTypeCode, DefineAsset)>>> {
     // Convert from base64 representation
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
