@@ -10,7 +10,7 @@ use {
     ledger::data_model::Transaction,
     log::info,
     parking_lot::RwLock,
-    rand_core::{CryptoRng, RngCore},
+    rand::{CryptoRng, RngCore},
     ruc::*,
     std::result::Result as StdResult,
     std::sync::Arc,

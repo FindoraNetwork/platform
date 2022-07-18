@@ -11,13 +11,13 @@ use {
         AuthenticatedUtxo, SignatureRules as PlatformSignatureRules, TxOutput,
         TxoRef as PlatformTxoRef, TxoSID,
     },
+    rand::SeedableRng,
     rand_chacha::ChaChaRng,
-    rand_core::SeedableRng,
     ruc::{d, err::RucResult},
     serde::{Deserialize, Serialize},
     wasm_bindgen::prelude::*,
     zei::{
-        setup::PublicParams as ZeiPublicParams,
+        setup::BulletproofParams as ZeiPublicParams,
         xfr::{
             sig::XfrPublicKey,
             structs::{

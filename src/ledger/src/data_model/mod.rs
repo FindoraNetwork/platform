@@ -31,8 +31,8 @@ use {
     globutils::{HashOf, ProofOf, Serialized, SignatureOf},
     lazy_static::lazy_static,
     rand::Rng,
+    rand::{CryptoRng, RngCore, SeedableRng},
     rand_chacha::{rand_core, ChaChaRng},
-    rand_core::{CryptoRng, RngCore, SeedableRng},
     ruc::*,
     serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer},
     std::{
@@ -45,18 +45,16 @@ use {
         result::Result as StdResult,
     },
     unicode_normalization::UnicodeNormalization,
-    zei::{
-        serialization::ZeiFromToBytes,
-        xfr::{
-            lib::{gen_xfr_body, XfrNotePolicies},
-            sig::{XfrKeyPair, XfrPublicKey},
-            structs::{
-                AssetRecord, AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo,
-                TracingPolicies, TracingPolicy, XfrAmount, XfrAssetType, XfrBody,
-                ASSET_TYPE_LENGTH,
-            },
+    zei::xfr::{
+        sig::{XfrKeyPair, XfrPublicKey},
+        structs::{
+            AssetRecord, AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo,
+            TracingPolicies, TracingPolicy, XfrAmount, XfrAssetType, XfrBody,
+            ASSET_TYPE_LENGTH,
         },
+        {gen_xfr_body, XfrNotePolicies},
     },
+    zei_algebra::serialization::ZeiFromToBytes,
 };
 
 const RANDOM_CODE_LENGTH: usize = 16;

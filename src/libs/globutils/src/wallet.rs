@@ -9,10 +9,8 @@ use {
     bip0039::{Count, Language, Mnemonic},
     ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey},
     ruc::*,
-    zei::{
-        serialization::ZeiFromToBytes,
-        xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
-    },
+    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+    zei_algebra::serialization::ZeiFromToBytes,
 };
 
 /// Randomly generate a 12words-length mnemonic.
@@ -215,7 +213,7 @@ fn bech32dec(input: &str) -> Result<Vec<u8>> {
 #[cfg(test)]
 #[allow(missing_docs)]
 mod test {
-    use {super::*, rand_core::SeedableRng};
+    use {super::*, rand::SeedableRng};
 
     #[test]
     fn t_generate_mnemonic() {

@@ -8,17 +8,15 @@ use {
         Transaction, TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxoRef,
         TxoSID, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
     },
-    rand_core::SeedableRng,
-    zei::{
-        setup::PublicParams,
-        xfr::{
-            asset_record::{
-                build_blind_asset_record, open_blind_asset_record, AssetRecordType,
-            },
-            sig::XfrKeyPair,
-            structs::{AssetRecord, AssetRecordTemplate},
+    rand::SeedableRng,
+    zei::xfr::{
+        asset_record::{
+            build_blind_asset_record, open_blind_asset_record, AssetRecordType,
         },
+        sig::XfrKeyPair,
+        structs::{AssetRecord, AssetRecordTemplate},
     },
+    zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
 
 #[cfg(test)]
@@ -142,7 +140,6 @@ fn test_asset_creation_invalid_public_key() {
 #[test]
 fn test_asset_transfer() {
     let mut ledger = LedgerState::tmp_ledger();
-    let params = PublicParams::default();
 
     let code = AssetTypeCode::gen_random();
     let mut prng = ChaChaRng::from_entropy();
@@ -173,12 +170,10 @@ fn test_asset_transfer() {
         art,
         key_pair.get_pk(),
     );
-    let (ba, _, _) = build_blind_asset_record(
-        &mut ledger.get_prng(),
-        &params.pc_gens,
-        &template,
-        vec![],
-    );
+
+    let pc_gens = RistrettoPedersenCommitment::default();
+    let (ba, _, _) =
+        build_blind_asset_record(&mut ledger.get_prng(), &pc_gens, &template, vec![]);
     let second_ba = ba.clone();
 
     let asset_issuance_body = IssueAssetBody::new(
@@ -338,8 +333,6 @@ fn test_asset_creation_invalid_signature() {
 fn asset_issued() {
     let mut ledger = LedgerState::tmp_ledger();
 
-    let params = PublicParams::default();
-
     assert!(ledger.get_state_commitment() == (HashOf::new(&None), 0));
     let token_code1 = AssetTypeCode::gen_random();
     let keypair = build_keys(&mut ledger.get_prng());
@@ -368,8 +361,9 @@ fn asset_issued() {
         *keypair.get_pk_ref(),
     );
 
+    let pc_gens = RistrettoPedersenCommitment::default();
     let (ba, _, _) =
-        build_blind_asset_record(&mut ledger.get_prng(), &params.pc_gens, &ar, vec![]);
+        build_blind_asset_record(&mut ledger.get_prng(), &pc_gens, &ar, vec![]);
     let asset_issuance_body = IssueAssetBody::new(
         &token_code1,
         0,
@@ -470,7 +464,6 @@ fn asset_issued() {
 #[test]
 pub fn test_transferable() {
     let mut ledger = LedgerState::tmp_ledger();
-    let params = PublicParams::default();
     let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
     let alice = XfrKeyPair::generate(&mut ledger.get_prng());
     let bob = XfrKeyPair::generate(&mut ledger.get_prng());
@@ -489,7 +482,6 @@ pub fn test_transferable() {
     apply_transaction(&mut ledger, tx);
     let (tx, _) = create_issue_and_transfer_txn(
         &mut ledger,
-        &params,
         &code,
         100,
         &issuer,
@@ -589,7 +581,6 @@ pub fn test_transferable() {
     .unwrap();
     let (mut tx, ar) = create_issue_and_transfer_txn(
         &mut ledger,
-        &params,
         &code,
         100,
         &issuer,
@@ -621,8 +612,6 @@ pub fn test_transferable() {
 #[test]
 pub fn test_max_units() {
     let mut ledger = LedgerState::tmp_ledger();
-    let params = PublicParams::default();
-
     let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
 
     // Define fiat token
@@ -639,7 +628,6 @@ pub fn test_max_units() {
     apply_transaction(&mut ledger, tx);
     let tx = create_issuance_txn(
         &mut ledger,
-        &params,
         &code,
         50,
         0,
@@ -651,7 +639,6 @@ pub fn test_max_units() {
         // Ensure that a single overlfowing transaction fails
         let tx = create_issuance_txn(
             &mut ledger,
-            &params,
             &code,
             51,
             1,
@@ -667,7 +654,6 @@ pub fn test_max_units() {
         // Ensure that cap can be reached
         let tx = create_issuance_txn(
             &mut ledger,
-            &params,
             &code,
             50,
             1,
@@ -681,7 +667,6 @@ pub fn test_max_units() {
         // Cant try to exceed asset cap by issuing confidentially
         let tx = create_issuance_txn(
             &mut ledger,
-            &params,
             &code,
             1,
             2,

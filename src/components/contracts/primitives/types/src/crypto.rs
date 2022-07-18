@@ -10,8 +10,8 @@ use ruc::{d, eg, RucResult};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
 use std::ops::{Deref, DerefMut};
-use zei::serialization::ZeiFromToBytes;
 use zei::xfr::sig::{XfrPublicKey, XfrSignature};
+use zei_algebra::serialization::ZeiFromToBytes;
 
 /// An opaque 32-byte cryptographic identifier.
 #[derive(

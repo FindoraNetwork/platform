@@ -10,17 +10,15 @@ use {
         data_model::TxOutput,
         staking::{Amount, FRA},
     },
+    rand::SeedableRng,
     rand_chacha::ChaChaRng,
-    rand_core::SeedableRng,
     serde::{Deserialize, Serialize},
-    zei::{
-        setup::PublicParams,
-        xfr::{
-            asset_record::{build_blind_asset_record, AssetRecordType},
-            sig::XfrPublicKey,
-            structs::{AssetRecordTemplate, AssetType, OwnerMemo},
-        },
+    zei::xfr::{
+        asset_record::{build_blind_asset_record, AssetRecordType},
+        sig::XfrPublicKey,
+        structs::{AssetRecordTemplate, AssetType, OwnerMemo},
     },
+    zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
 
 /// 420 million FRAs
@@ -80,7 +78,8 @@ impl MintEntry {
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
             receiver_pk.unwrap_or(target_pk),
         );
-        let pc_gens = PublicParams::default().pc_gens;
+        // let pc_gens = BulletproofParams::default().pc_gens;
+        let pc_gens = RistrettoPedersenCommitment::default();
         let (ba, _, _) = build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
 
         let utxo = TxOutput {

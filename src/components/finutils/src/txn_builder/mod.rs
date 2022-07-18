@@ -36,8 +36,8 @@ use {
             TendermintAddr, Validator,
         },
     },
+    rand::{CryptoRng, RngCore, SeedableRng},
     rand_chacha::ChaChaRng,
-    rand_core::{CryptoRng, RngCore, SeedableRng},
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{
@@ -46,25 +46,26 @@ use {
     },
     tendermint::PrivateKey,
     zei::{
-        api::anon_creds::{
+        anon_creds::{
             ac_confidential_open_commitment, ACCommitment, ACCommitmentKey,
             ConfidentialAC, Credential,
         },
-        serialization::ZeiFromToBytes,
-        setup::PublicParams,
+        setup::BulletproofParams,
         xfr::{
             asset_record::{
                 build_blind_asset_record, build_open_asset_record,
                 open_blind_asset_record, AssetRecordType,
             },
-            lib::XfrNotePolicies,
             sig::{XfrKeyPair, XfrPublicKey},
             structs::{
                 AssetRecord, AssetRecordTemplate, BlindAssetRecord, OpenAssetRecord,
                 OwnerMemo, TracingPolicies, TracingPolicy,
             },
+            XfrNotePolicies,
         },
     },
+    zei_algebra::prelude::*,
+    zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
 
 macro_rules! no_transfer_err {
@@ -300,7 +301,7 @@ impl TransactionBuilder {
         seq_num: u64,
         amount: u64,
         confidentiality_flags: AssetRecordType,
-        zei_params: &PublicParams,
+        _zei_params: &BulletproofParams,
     ) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
         let ar = AssetRecordTemplate::with_no_asset_tracing(
@@ -310,8 +311,9 @@ impl TransactionBuilder {
             key_pair.get_pk(),
         );
 
+        let pc_gens = RistrettoPedersenCommitment::default();
         let (ba, _, owner_memo) =
-            build_blind_asset_record(&mut prng, &zei_params.pc_gens, &ar, vec![]);
+            build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
         self.add_operation_issue_asset(
             key_pair,
             token_code,
@@ -730,10 +732,10 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
         }
     };
     // 2. Use record template and ciphertexts to build open asset record
-    let params = PublicParams::default();
+    let pc_gens = RistrettoPedersenCommitment::default();
     let (open_asset_record, asset_tracing_memos, owner_memo) = build_open_asset_record(
         prng,
-        &params.pc_gens,
+        &pc_gens,
         template,
         vec![attr_ctext.unwrap_or_default()],
     );
@@ -1137,9 +1139,8 @@ mod tests {
         super::*,
         ledger::data_model::{TxnEffect, TxoRef},
         ledger::store::{utils::fra_gen_initial_tx, LedgerState},
+        rand::SeedableRng,
         rand_chacha::ChaChaRng,
-        rand_core::SeedableRng,
-        zei::setup::PublicParams,
         zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record},
         zei::xfr::sig::XfrKeyPair,
@@ -1172,7 +1173,7 @@ mod tests {
 
     fn test_transfer_op_builder_inner() -> Result<()> {
         let mut prng = ChaChaRng::from_entropy();
-        let params = PublicParams::default();
+        let pc_gens = RistrettoPedersenCommitment::default();
         let code_1 = AssetTypeCode::gen_random();
         let code_2 = AssetTypeCode::gen_random();
         let alice = XfrKeyPair::generate(&mut prng);
@@ -1193,9 +1194,9 @@ mod tests {
             bob.get_pk(),
         );
         let (ba_1, _, memo1) =
-            build_blind_asset_record(&mut prng, &params.pc_gens, &ar_1, vec![]);
+            build_blind_asset_record(&mut prng, &pc_gens, &ar_1, vec![]);
         let (ba_2, _, memo2) =
-            build_blind_asset_record(&mut prng, &params.pc_gens, &ar_2, vec![]);
+            build_blind_asset_record(&mut prng, &pc_gens, &ar_2, vec![]);
 
         // Attempt to spend too much
         let mut invalid_outputs_transfer_op = TransferOperationBuilder::new();

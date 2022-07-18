@@ -17,8 +17,8 @@ use {
     config::abci::global_cfg::CFG,
     ledger::store::LedgerState,
     parking_lot::RwLock,
+    rand::SeedableRng,
     rand_chacha::ChaChaRng,
-    rand_core::SeedableRng,
     ruc::*,
     std::{
         path::Path,
