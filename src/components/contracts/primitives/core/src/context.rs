@@ -1,9 +1,7 @@
 use abci::Header;
 use std::{collections::HashMap, sync::Arc};
-use storage::{
-    db::{FinDB, RocksDB},
-    state::{ChainState, State},
-};
+use fin_db::{FinDB, RocksDB};
+use storage::state::{ChainState, State};
 
 pub use parking_lot::RwLock;
 use primitive_types::{H160, H256};

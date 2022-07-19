@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 pub const HASH_SIZE: usize = 32;
 
 #[allow(missing_docs)]
-// #[cfg(target_arch = "wasm32")]
 pub mod sha256 {
     use {
         arrayref::array_ref,
@@ -73,6 +72,9 @@ pub mod sha256 {
     impl Digest {
         #[inline(always)]
         pub fn from_slice(slice: &[u8]) -> Option<Self> {
+            if slice.len() != DIGESTBYTES {
+                return None;
+            }
             let mut buf = [0_u8; DIGESTBYTES];
             buf[0..DIGESTBYTES].clone_from_slice(slice);
             Some(Digest(buf))

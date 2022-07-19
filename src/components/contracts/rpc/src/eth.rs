@@ -786,6 +786,8 @@ impl EthApi for EthApiImpl {
             index = idx as usize
         }
 
+        println!("{:?}, {:?}", id, index);
+
         let block = self.account_base_app.read().current_block(id.clone());
         let statuses = self
             .account_base_app
@@ -1173,8 +1175,14 @@ fn transaction_build(
         Err(_e) => None,
     };
 
+    let hash = if let Some(status) = &status {
+        status.transaction_hash
+    } else {
+        H256::from_slice(Keccak256::digest(&rlp::encode(&transaction)).as_slice())
+    };
+
     Transaction {
-        hash: H256::from_slice(Keccak256::digest(&rlp::encode(&transaction)).as_slice()),
+        hash,
         nonce: transaction.nonce,
         block_hash: block.as_ref().map(|block| {
             H256::from_slice(Keccak256::digest(&rlp::encode(&block.header)).as_slice())

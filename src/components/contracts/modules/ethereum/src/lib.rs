@@ -4,7 +4,6 @@
 mod basic;
 mod impls;
 
-use abci::{RequestEndBlock, ResponseEndBlock};
 use config::abci::global_cfg::CFG;
 use ethereum_types::{H160, H256, U256};
 use evm::Config as EvmConfig;
@@ -79,7 +78,6 @@ pub mod storage {
     // The following data is stored in in-memory array
     // Current building block's transactions and receipts.
     type PendingTransactions = Mutex<Vec<(Transaction, TransactionStatus, Receipt)>>;
-
     lazy_static! {
         pub static ref DELIVER_PENDING_TRANSACTIONS: PendingTransactions =
             Mutex::new(vec![]);
@@ -127,13 +125,13 @@ impl<C: Config> Default for App<C> {
 }
 
 impl<C: Config> AppModule for App<C> {
-    fn end_block(
+    fn commit(
         &mut self,
         ctx: &mut Context,
-        req: &RequestEndBlock,
-    ) -> ResponseEndBlock {
-        let _ = ruc::info!(self.store_block(ctx, U256::from(req.height)));
-        Default::default()
+        height: U256,
+        root_hash: &[u8],
+    ) -> Result<()> {
+        self.store_block(ctx, height, root_hash)
     }
 }
 

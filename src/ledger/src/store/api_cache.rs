@@ -5,8 +5,9 @@
 use {
     crate::{
         data_model::{
-            AssetTypeCode, DefineAsset, IssueAsset, IssuerPublicKey, Operation,
-            Transaction, TxOutput, TxnIDHash, TxnSID, TxoSID, XfrAddress,
+            ATxoSID, AssetTypeCode, AssetTypePrefix, DefineAsset, IssueAsset,
+            IssuerPublicKey, Operation, Transaction, TxOutput, TxnIDHash, TxnSID,
+            TxoSID, XfrAddress, ASSET_TYPE_FRA,
         },
         staking::{
             ops::mint_fra::MintEntry, Amount, BlockHeight, DelegationRwdDetail,
@@ -14,12 +15,21 @@ use {
         },
         store::LedgerState,
     },
+    config::abci::global_cfg::CFG,
+    fbnc::NumKey,
     fbnc::{new_mapx, new_mapxnk, Mapx, Mapxnk},
+    fp_utils::hashing::keccak_256,
     globutils::wallet,
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
-    zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+    zei::{
+        anon_xfr::structs::AxfrOwnerMemo,
+        xfr::{
+            sig::XfrPublicKey,
+            structs::{AssetType, OwnerMemo},
+        },
+    },
 };
 
 type Issuances = Vec<(TxOutput, Option<OwnerMemo>)>;
@@ -44,10 +54,14 @@ pub struct ApiCache {
     pub token_code_issuances: Mapx<AssetTypeCode, Issuances>,
     /// used in confidential tx
     pub owner_memos: Mapxnk<TxoSID, OwnerMemo>,
+    /// used in anonymous tx
+    pub abar_memos: Mapx<ATxoSID, AxfrOwnerMemo>,
     /// ownship of txo
     pub utxos_to_map_index: Mapxnk<TxoSID, XfrAddress>,
     /// txo(spent, unspent) to authenticated txn (sid, hash)
     pub txo_to_txnid: Mapxnk<TxoSID, TxnIDHash>,
+    /// atxo to authenticated txn (sid, hash)
+    pub atxo_to_txnid: Mapx<ATxoSID, TxnIDHash>,
     /// txn sid to txn hash
     pub txn_sid_to_hash: Mapxnk<TxnSID, String>,
     /// txn hash to txn sid
@@ -92,11 +106,13 @@ impl ApiCache {
                 prefix
             )),
             owner_memos: new_mapxnk!(format!("api_cache/{}owner_memos", prefix)),
+            abar_memos: new_mapx!(format!("api_cache/{}abar_memos", prefix)),
             utxos_to_map_index: new_mapxnk!(format!(
                 "api_cache/{}utxos_to_map_index",
                 prefix
             )),
             txo_to_txnid: new_mapxnk!(format!("api_cache/{}txo_to_txnid", prefix)),
+            atxo_to_txnid: new_mapx!(format!("api_cache/{}atxo_to_txnid", prefix)),
             txn_sid_to_hash: new_mapxnk!(format!("api_cache/{}txn_sid_to_hash", prefix)),
             txn_hash_to_sid: new_mapx!(format!("api_cache/{}txn_hash_to_sid", prefix)),
             staking_global_rate_hist: new_mapxnk!(format!(
@@ -121,9 +137,25 @@ impl ApiCache {
 
     /// Add created asset
     #[inline(always)]
-    pub fn add_created_asset(&mut self, creation: &DefineAsset) {
+    pub fn add_created_asset(&mut self, creation: &DefineAsset, cur_height: u64) {
+        let asset_code = creation.body.asset.code;
+        let code = if asset_code.val == ASSET_TYPE_FRA
+            || CFG.checkpoint.utxo_asset_prefix_height > cur_height
+        {
+            creation.body.asset.code
+        } else {
+            let mut asset_code = AssetTypePrefix::UserDefined.bytes();
+            asset_code.append(&mut creation.body.asset.code.to_bytes());
+            AssetTypeCode {
+                val: AssetType(keccak_256(&asset_code)),
+            }
+        };
+
+        let mut creation_new = creation.clone();
+        creation_new.body.asset.code = code;
+
         let prefix = self.prefix.clone();
-        let issuer = creation.pubkey;
+        let issuer = creation_new.pubkey;
         self.created_assets
             .entry(issuer)
             .or_insert_with(|| {
@@ -133,7 +165,7 @@ impl ApiCache {
                     issuer.to_base64()
                 ))
             })
-            .insert(creation.body.asset.code, creation.clone());
+            .insert(code, creation_new);
     }
 
     /// Cache issuance records
@@ -257,7 +289,19 @@ where
             Operation::Governance(i) => staking_gen!(i),
             Operation::FraDistribution(i) => staking_gen!(i),
             Operation::MintFra(i) => staking_gen!(i),
-
+            Operation::BarToAbar(i) => {
+                related_addresses.insert(XfrAddress {
+                    key: i.input_record().public_key,
+                });
+            }
+            Operation::AbarToBar(i) => {
+                related_addresses.insert(XfrAddress {
+                    key: i.note.get_public_key(),
+                });
+            }
+            Operation::TransferAnonAsset(_) => {
+                // Anon
+            }
             Operation::ConvertAccount(i) => {
                 related_addresses.insert(XfrAddress {
                     key: i.get_related_address(),
@@ -393,23 +437,21 @@ pub fn check_lost_data(ledger: &mut LedgerState) -> Result<()> {
                         .get_transaction_light(
                             utxo.authenticated_txn.finalized_txn.tx_id,
                         )
-                        .unwrap();
+                        .c(d!())?;
                     let tx_hash = ftx.txn.hash_tm().hex().to_uppercase();
                     let owner_memos = ftx.txn.get_owner_memos_ref();
-                    let addresses: Vec<XfrAddress> = ftx
-                        .txo_ids
-                        .iter()
-                        .map(|sid| XfrAddress {
-                            key: ((ledger
-                                .get_utxo_light(*sid)
-                                .or_else(|| ledger.get_spent_utxo_light(*sid))
-                                .unwrap()
-                                .utxo)
-                                .0)
-                                .record
-                                .public_key,
-                        })
-                        .collect();
+                    let mut addresses: Vec<XfrAddress> = vec![];
+                    for sid in ftx.txo_ids.iter() {
+                        let key = ledger
+                            .get_utxo_light(*sid)
+                            .or_else(|| ledger.get_spent_utxo_light(*sid))
+                            .c(d!())?
+                            .utxo
+                            .0
+                            .record
+                            .public_key;
+                        addresses.push(XfrAddress { key });
+                    }
 
                     for (txo_sid, (address, owner_memo)) in ftx
                         .txo_ids
@@ -477,28 +519,29 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
     let prefix = ledger.api_cache.as_mut().unwrap().prefix.clone();
 
     // Update ownership status
-    for (txn_sid, txo_sids) in block.txns.iter().map(|v| (v.tx_id, v.txo_ids.as_slice()))
+    for (txn_sid, txo_sids, atxo_sids) in block
+        .txns
+        .iter()
+        .map(|v| (v.tx_id, v.txo_ids.as_slice(), v.atxo_ids.as_slice()))
     {
         let curr_txn = ledger.get_transaction_light(txn_sid).c(d!())?.txn;
         // get the transaction, ownership addresses, and memos associated with each transaction
         let (addresses, owner_memos) = {
-            let addresses: Vec<XfrAddress> = txo_sids
-                .iter()
-                .map(|sid| XfrAddress {
-                    key: ((ledger
-                        .get_utxo_light(*sid)
-                        .or_else(|| ledger.get_spent_utxo_light(*sid))
-                        .unwrap()
-                        .utxo)
-                        .0)
-                        .record
-                        .public_key,
-                })
-                .collect();
+            let mut _addresses: Vec<XfrAddress> = vec![];
+            for sid in txo_sids.iter() {
+                let key = ledger
+                    .get_utxo_light(*sid)
+                    .or_else(|| ledger.get_spent_utxo_light(*sid))
+                    .c(d!())?
+                    .utxo
+                    .0
+                    .record
+                    .public_key;
+                _addresses.push(XfrAddress { key });
+            }
 
             let owner_memos = curr_txn.get_owner_memos_ref();
-
-            (addresses, owner_memos)
+            (_addresses, owner_memos)
         };
 
         let classify_op = |op: &Operation| {
@@ -589,11 +632,10 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
         for op in &curr_txn.body.operations {
             match op {
                 Operation::DefineAsset(define_asset) => {
-                    ledger
-                        .api_cache
-                        .as_mut()
-                        .unwrap()
-                        .add_created_asset(&define_asset);
+                    ledger.api_cache.as_mut().unwrap().add_created_asset(
+                        &define_asset,
+                        ledger.status.td_commit_height,
+                    );
                 }
                 Operation::IssueAsset(issue_asset) => {
                     ledger
@@ -644,6 +686,25 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
                     .owner_memos
                     .insert(*txo_sid, (*owner_memo).clone());
             }
+        }
+
+        let abar_memos = curr_txn.body.operations.iter().flat_map(|o| match o {
+            Operation::BarToAbar(b) => {
+                vec![b.axfr_memo()]
+            }
+            Operation::TransferAnonAsset(b) => b.note.body.owner_memos.clone(),
+            _ => vec![],
+        });
+
+        for (a, id) in abar_memos.zip(atxo_sids) {
+            ledger.api_cache.as_mut().unwrap().abar_memos.insert(*id, a);
+            let hash = curr_txn.hash_tm().hex().to_uppercase();
+            ledger
+                .api_cache
+                .as_mut()
+                .unwrap()
+                .atxo_to_txnid
+                .insert(*id, (txn_sid, hash.clone()));
         }
     }
 

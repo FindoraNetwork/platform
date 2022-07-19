@@ -70,7 +70,6 @@
   - Web3 API support.
 
 #### v0.2.12-release
-
 - Fix overflow error for rewards.
 
 #### v0.2.11-release (Yanked at the block height of 124_7000 !)
