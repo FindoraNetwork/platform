@@ -6,15 +6,13 @@ use evm::{
     executor::{StackState, StackSubstateMetadata},
     ExitError, Transfer,
 };
-use fin_db::FinDB;
 use fp_core::{context::Context, macros::Get};
 use fp_evm::{Log, Vicinity};
-use fp_storage::{BorrowMut, DerefMut};
+use fp_storage::BorrowMut;
 use fp_traits::{account::AccountAsset, evm::BlockHashMapping};
 use fp_utils::timestamp_converter;
 use log::info;
 use std::{collections::btree_set::BTreeSet, marker::PhantomData, mem};
-use storage::state::State;
 
 pub struct FindoraStackSubstate<'context, 'config> {
     pub ctx: &'context Context,
@@ -66,12 +64,12 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         mem::swap(&mut exited, self);
         self.metadata.swallow_revert(exited.metadata)?;
 
-        self.ctx.state.write().stack_discard();
-        //if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
-        //    let _ = mem::replace(self.ctx.state.write().deref_mut(), exited.substate);
-        //} else {
-        //    info!(target: "evm", "EVM stack exit_revert(), height: {:?}", self.ctx.header.height);
-        //}
+        if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
+            self.ctx.state.write().stack_discard();
+            //let _ = mem::replace(self.ctx.state.write().deref_mut(), exited.substate);
+        } else {
+            info!(target: "evm", "EVM stack exit_revert(), height: {:?}", self.ctx.header.height);
+        }
 
         Ok(())
     }
@@ -81,12 +79,12 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         mem::swap(&mut exited, self);
         self.metadata.swallow_discard(exited.metadata)?;
 
-        self.ctx.state.write().stack_discard();
-        //if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
+        if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
+            self.ctx.state.write().stack_discard();
         //    let _ = mem::replace(self.ctx.state.write().deref_mut(), exited.substate);
-        //} else {
-        //    info!(target: "evm", "EVM stack exit_discard(), height: {:?}", self.ctx.header.height);
-        //}
+        } else {
+            info!(target: "evm", "EVM stack exit_discard(), height: {:?}", self.ctx.header.height);
+        }
 
         Ok(())
     }
