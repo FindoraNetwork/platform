@@ -249,8 +249,11 @@ impl TxnEffect {
             }
         };
 
+        let mut def_new = def.clone();
+        def_new.body.asset.code = code;
+
         let token = AssetType {
-            properties: *def.body.asset.clone(),
+            properties: *def_new.body.asset.clone(),
             ..Default::default()
         };
 
