@@ -9,6 +9,7 @@ mod app;
 pub mod extensions;
 mod modules;
 mod notify;
+pub mod tm_events;
 
 use crate::modules::ModuleManager;
 use abci::Header;
@@ -312,8 +313,6 @@ impl BaseApp {
         if let Some(mut e) = outputs2 {
             outputs.append(&mut e);
         }
-
-        // TODO: Add xhub compact.
 
         for output in &outputs {
             if output.asset == ASSET_TYPE_FRA {
