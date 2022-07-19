@@ -35,7 +35,6 @@ use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
 use ruc::{eg, Result};
 use std::{borrow::BorrowMut, path::Path, sync::Arc};
-use fin_db::{FinDB, RocksDB};
 use storage::state::ChainState;
 
 lazy_static! {
