@@ -253,7 +253,7 @@ impl TxnEffect {
         def_new.body.asset.code = code;
 
         let token = AssetType {
-            properties: *def_new.body.asset.clone(),
+            properties: *def_new.body.asset,
             ..Default::default()
         };
 
