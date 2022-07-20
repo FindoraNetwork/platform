@@ -1,6 +1,6 @@
 use abci::Header;
-use std::{collections::HashMap, sync::Arc};
 use fin_db::{FinDB, RocksDB};
+use std::{collections::HashMap, sync::Arc};
 use storage::state::{ChainState, State};
 
 pub use parking_lot::RwLock;
@@ -60,11 +60,7 @@ impl Context {
             run_mode: RunTxMode::None,
             header: self.header.clone(),
             header_hash: self.header_hash(),
-            eth_cache: if self.run_mode == RunTxMode::Check {
-                self.eth_cache.clone()
-            } else {
-                Default::default()
-            },
+            eth_cache: Default::default(),
         }
     }
 
@@ -78,11 +74,7 @@ impl Context {
             run_mode: RunTxMode::None,
             header: self.header.clone(),
             header_hash: self.header_hash(),
-            eth_cache: if self.run_mode == RunTxMode::Check {
-                self.eth_cache.clone()
-            } else {
-                Default::default()
-            },
+            eth_cache: Default::default(),
         }
     }
 }

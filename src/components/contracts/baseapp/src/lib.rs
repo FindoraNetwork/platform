@@ -170,7 +170,7 @@ impl BaseApp {
         let chain_state = self.chain_state.clone();
         let chain_db = self.chain_db.clone();
 
-        let mut app = BaseApp {
+        BaseApp {
             name: APP_NAME.to_string(),
             version: "1.0.0".to_string(),
             app_version: 1,
@@ -180,11 +180,7 @@ impl BaseApp {
             deliver_state: Context::new(chain_state, chain_db),
             modules: ModuleManager::default(),
             event_notify: self.event_notify.clone(),
-        };
-        app.check_state.run_mode = RunTxMode::Check;
-        app.deliver_state.run_mode = RunTxMode::Deliver;
-
-        app
+        }
     }
 
     //Migrate any pre-existing data from one database to the other if necessary
@@ -260,17 +256,9 @@ impl BaseApp {
         // query from pending state if height is not provided
         // query from latest state otherwise, including versioned data
         if height.is_none() {
-            Ok({
-                let mut ctx = self.check_state.copy_with_state();
-                ctx.run_mode = RunTxMode::Check;
-                ctx
-            })
+            Ok(self.check_state.copy_with_state())
         } else {
-            Ok({
-                let mut ctx = self.check_state.copy_with_new_state();
-                ctx.run_mode = RunTxMode::Check;
-                ctx
-            })
+            Ok(self.check_state.copy_with_new_state())
         }
     }
 
@@ -304,6 +292,17 @@ impl BaseApp {
     fn update_state(ctx: &mut Context, header: Header, header_hash: Vec<u8>) {
         ctx.header_hash = header_hash;
         ctx.header = header;
+    }
+
+    fn update_deliver_state_cache(&mut self) {
+        // Clone newest cache from check_state to deliver_state
+        // Oldest cache will be dropped, currently drop cache two blocks ago
+        self.deliver_state.eth_cache.current = Default::default();
+        self.deliver_state.eth_cache.history_n =
+            self.deliver_state.eth_cache.history_1.clone();
+        // Deliver_state history_1 cache will share the newest transactions from check_state
+        self.deliver_state.eth_cache.history_1 =
+            self.check_state.eth_cache.current.clone();
     }
 
     pub fn deliver_findora_tx(

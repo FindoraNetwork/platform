@@ -132,14 +132,7 @@ impl crate::BaseApp {
             req.hash.clone(),
         );
 
-        // Clone newest cache from check_state to deliver_state
-        // Oldest cache will be dropped, currently drop cache two blocks ago
-        self.deliver_state.eth_cache.current = Default::default();
-        self.deliver_state.eth_cache.history_n =
-            self.deliver_state.eth_cache.history_1.clone();
-        // Deliver_state history_1 cache will share the newest transactions from check_state
-        self.deliver_state.eth_cache.history_1 =
-            self.check_state.eth_cache.current.clone();
+        self.update_deliver_state_cache();
 
         self.modules.begin_block(&mut self.deliver_state, req);
 
@@ -205,7 +198,6 @@ impl crate::BaseApp {
         // Reset the Check state to the latest committed.
         // Cache data are dropped and cleared in check_state
         self.check_state = self.deliver_state.copy_with_new_state();
-        self.check_state.run_mode = RunTxMode::Check;
 
         let block_height = self.deliver_state.block_header().height as u64;
         let mut ctx = self.retrieve_context(RunTxMode::Deliver).clone();

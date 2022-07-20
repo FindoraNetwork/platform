@@ -49,9 +49,13 @@ impl<C: Config> App<C> {
         // 1- During CheckTx on fresh transaction
         // 2- During DeliverTx if we NEVER see the transaction's signer in history (cache)
         let mut txn_signers = ctx.eth_cache.current.write();
-        *txn_signers
-            .entry(transaction_hash)
-            .or_insert_with(|| Self::recover_signer(transaction))
+        match txn_signers.get(&transaction_hash) {
+            Some(signer) => *signer,
+            None => Self::recover_signer(transaction).map(|signer| {
+                txn_signers.insert(transaction_hash, Some(signer));
+                signer
+            }),
+        }
     }
 
     pub fn recover_signer(transaction: &Transaction) -> Option<H160> {
