@@ -27,7 +27,7 @@ impl SystemContracts {
 
         let salt = H256::zero();
 
-        let bridge_address = if CFG.checkpoint.prism_bridge_address == "" {
+        let bridge_address = if CFG.checkpoint.prism_bridge_address.is_empty() {
             // Driect use this bytecode, beacuse we will remove on mainnet
             let bytecode_str = include_str!("../contracts/PrismXXProxy.bytecode");
 
