@@ -1038,6 +1038,11 @@ impl LedgerState {
         self.status.owned_ax_utxos.get(com)
     }
 
+    /// Get abar commitment with sid
+    pub fn get_abar(&self, sid: &ATxoSID) -> Option<Commitment> {
+        self.status.get_abar(sid).map(|v| v.commitment)
+    }
+
     /// Get the owner memo of a abar by ATxoSID
     #[allow(dead_code)]
     pub fn get_abar_memo(&self, ax_id: ATxoSID) -> Option<AxfrOwnerMemo> {
@@ -1320,8 +1325,8 @@ impl LedgerStatus {
 
     #[inline(always)]
     #[allow(missing_docs)]
-    pub fn get_abar(&self, uid: ATxoSID) -> Option<AnonAssetRecord> {
-        self.ax_utxos.get(&uid)
+    pub fn get_abar(&self, uid: &ATxoSID) -> Option<AnonAssetRecord> {
+        self.ax_utxos.get(uid)
     }
 
     #[inline(always)]
