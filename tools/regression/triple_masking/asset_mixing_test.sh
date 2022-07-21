@@ -1,36 +1,25 @@
 #!/usr/bin/env bash
-set +e
 
-EVM_SCRIPTS_PATH="tools/regression/evm/scripts"
+set -e
+
+# run env scripts
 TRIPLE_MASKING_SCRIPTS_PATH="tools/regression/triple_masking/scripts"
 source $TRIPLE_MASKING_SCRIPTS_PATH/env.sh
 
-let TM_SLEEP=($BLOCK_INTERVAL + 5) #TM_SLEEP=20
+# declare sleep intervals
+let TM_SLEEP=($BLOCK_INTERVAL + 5) # If breaking, increase the sleep time
 
-#Run Tests
-echo -e "${YEL}Run asset mixing test cases and verify results${NC}"
+# generate keys and create test bars
+source $TRIPLE_MASKING_SCRIPTS_PATH/gen_keys_test-bars.sh
 
-FRA_ACCOUNT="fra1peaqwykz6vgpvhxfu60w6lngqw6jvwr0f8cyzzvmaqa3dn6xsy4qan9rne"
-BAR_SEC_KEY="KtbqhEo_FJaQoq2fV5K4niayxz_VK8LHJBqU1eV5x0o="
-
-ANON_SK_1="Ccv2h8u1g__HJBrsA8npcs4CiDQ_UHI-JGZCjXbu9Un8HU3qSTf3PdLEFvs1XwauSltgruFv-IRVFpaQkeIIAgRoRPXncS1VHYzRpQlghzgCcQKJnic90DFDiYxSPVjg"
-ANON_VK_1="_B1N6kk39z3SxBb7NV8GrkpbYK7hb_iEVRaWkJHiCAI="
-ANON_PK_1="BGhE9edxLVUdjNGlCWCHOAJxAomeJz3QMUOJjFI9WOA="
-
-ANON_SK_2="h4MuWol8pWuNIMxPHwJ0ZAoF_n51QScj6AultG5IHU3yL-LR02XXw58uudwom_tahcy1e0oadfOw3oLxSs64A9yTOKFC1NqT6e-fWGEO-QpSZzf8otV7POguvdejoKhL"
-ANON_VK_2="8i_i0dNl18OfLrncKJv7WoXMtXtKGnXzsN6C8UrOuAM="
-ANON_PK_2="3JM4oULU2pPp759YYQ75ClJnN_yi1Xs86C6916OgqEs="
-
-ANON_SK_3="bRrcmHV-87-na2jKuOEQZmVyLE6q4oVdCiMoWdqVHwOqkAlAXybyeheaNCyWw7j0lz4vlnxP5nUNpbnSwF3tBiXKJs7KF1X9zc9ZUy_3U8-2YnyrGSWbQ-QIpNVmBGvy"
-ANON_VK_3="qpAJQF8m8noXmjQslsO49Jc-L5Z8T-Z1DaW50sBd7QY="
-ANON_PK_3="JcomzsoXVf3Nz1lTL_dTz7ZifKsZJZtD5Aik1WYEa_I="
-
-FILE_ANON_KEYS="anon-keys-temp_1.keys"
-FILE_ANON_KEYS_2="anon-keys-temp_2.keys"
-FILE_ANON_KEYS_3="anon-keys-temp_3.keys"
-
+set +e
+rm owned_commitments
+rm sent_commitments
 set -e
-./$TRIPLE_MASKING_SCRIPTS_PATH/create_test_bars.sh $FRA_ACCOUNT
+
+# Run Tests
+echo -e "${YEL}Run test cases and verifying results${NC}"
+
 #Verify FRA balance
 python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 840000000
 if [ $? != 0 ];
@@ -38,24 +27,13 @@ then
     exit 1
 fi
 echo
-set +e
-
-rm owned_commitments
-rm sent_commitments
-
-./$TRIPLE_MASKING_SCRIPTS_PATH/setup_wallets.sh
-echo "\n ***** Setup accounts successfully! ***** "
-
-set -e
-
-$BIN/fn setup -O "$TM_REGRESSION_PATH"/mnemonic.key > /dev/null
 
 echo "\n\n FRA Bar To Abar ..."
 echo "==============================================================================="
 TXO_SID=$($BIN/fn owned-utxos | head -4 | tail -1 |  awk -F ' ' '{print $1}')
 $BIN/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS --txo-sid "$TXO_SID"
-echo "waiting blockchain 20s..."
-sleep 30
+echo "waiting block time..."
+sleep $TM_SLEEP
 
 #Verify FRA balance
 python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 629980000
@@ -74,18 +52,18 @@ echo
 echo "\n\n Create Asset 1 ..."
 echo "------------------------------------------------------------------------------"
 $BIN/fn asset --create --memo "asset1" --transferable 2> /dev/null
-echo "waiting blockchain 20s..."
+echo "waiting block time..."
 sleep $TM_SLEEP
 
 echo "\n\n Create Asset 2 ..."
 echo "------------------------------------------------------------------------------"
 $BIN/fn asset --create --memo "asset2" --transferable 2> /dev/null
-echo "waiting blockchain 20s..."
+echo "waiting block time..."
 sleep $TM_SLEEP
 
 echo "\n\n Building assets ..."
 echo "------------------------------------------------------------------------------"
-$BIN/fn asset --show --addr $FRA_ACCOUNT > tmp_file
+$BIN/fn asset --show --addr $FRA_ADDRESS > tmp_file
 ASSET1=$(awk 'FNR==1' tmp_file | awk -F ' ' '{print $2}'| sed 's/,*$//g')
 ASSET2=$(awk 'FNR==2' tmp_file | awk -F ' ' '{print $2}'| sed 's/,*$//g')
 echo $ASSET1
@@ -94,13 +72,13 @@ echo $ASSET2
 echo "\n\n Issue Asset 1 ..."
 echo "------------------------------------------------------------------------------"
 $BIN/fn asset --issue --code $ASSET1 --amount 100000000
-echo "waiting blockchain 20s..."
+echo "waiting block time..."
 sleep $TM_SLEEP
 
 echo "\n\n\n Issue Asset 2 ..."
 echo "------------------------------------------------------------------------------"
 $BIN/fn asset --issue --code $ASSET2 --amount 100000000
-echo "waiting blockchain 20s..."
+echo "waiting block time..."
 sleep $TM_SLEEP
 
 echo "\n ***** Issue Asset & FRA successfully! ***** "
@@ -125,14 +103,14 @@ echo "\n\n Asset 1 Bar To Abar ..."
 echo "==============================================================================="
 TXO_SID=$($BIN/fn owned-utxos --asset "$ASSET1" | head -4 | tail -1 | awk -F ' ' '{print $1}')
 $BIN/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS --txo-sid "$TXO_SID"
-echo "waiting blockchain 20s..."
+echo "waiting block time..."
 sleep $TM_SLEEP
 
 echo "\n\n Asset 2 Bar To Abar ..."
 echo "==============================================================================="
 TXO_SID=$($BIN/fn owned-utxos --asset "$ASSET2" | head -4 | tail -1 | awk -F ' ' '{print $1}')
 $BIN/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS --txo-sid "$TXO_SID"
-echo "waiting blockchain 20s..."
+echo "waiting block time..."
 sleep $TM_SLEEP
 
 #Verify balance for custom assets
@@ -251,4 +229,4 @@ fi
 
 
 rm $BATCH_SK $BATCH_C $BATCH_PK $BATCH_AMOUNT $BATCH_ASSET
-echo -e "\n ***** Test all successfully! ***** "
+echo -e "\n ***** Tested all successfully! ***** "

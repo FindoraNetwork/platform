@@ -283,6 +283,7 @@ evmtest_nightly:
 	@./tools/regression/evm/testevm.sh
 
 tmtest:
+	@./tools/regression/triple_masking/scripts/setup.sh
 	@./tools/regression/triple_masking/test_triple_masking.sh
 	@./tools/regression/triple_masking/scripts/teardown.sh
 
