@@ -3,14 +3,17 @@ use config::abci::global_cfg::CFG;
 use ethereum_types::{H160, H256, U256};
 use evm::{
     backend::Backend,
-    executor::{StackState, StackSubstateMetadata},
+    executor::stack::{Accessed, StackState, StackSubstateMetadata},
     ExitError, Transfer,
 };
 use fin_db::FinDB;
 use fp_core::{context::Context, macros::Get};
 use fp_evm::{Log, Vicinity};
 use fp_storage::{BorrowMut, DerefMut};
-use fp_traits::{account::AccountAsset, evm::BlockHashMapping};
+use fp_traits::{
+    account::AccountAsset,
+    evm::{BlockHashMapping, FeeCalculator},
+};
 use fp_utils::timestamp_converter;
 use log::info;
 use std::{collections::btree_set::BTreeSet, marker::PhantomData, mem};
@@ -112,6 +115,19 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
             data,
         });
     }
+
+    pub fn recursive_is_cold<F: Fn(&Accessed) -> bool>(&self, f: &F) -> bool {
+        let local_is_accessed =
+            self.metadata.accessed().as_ref().map(f).unwrap_or(false);
+        if local_is_accessed {
+            false
+        } else {
+            self.parent
+                .as_ref()
+                .map(|p| p.recursive_is_cold(f))
+                .unwrap_or(true)
+        }
+    }
 }
 
 /// Findora backend for EVM.
@@ -212,6 +228,9 @@ impl<'context, 'vicinity, 'config, C: Config> Backend
 
     fn original_storage(&self, _address: H160, _index: H256) -> Option<H256> {
         None
+    }
+    fn block_base_fee_per_gas(&self) -> U256 {
+        C::FeeCalculator::min_gas_price()
     }
 }
 
@@ -353,5 +372,16 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
         // EVM module considers all accounts to exist, and distinguish
         // only empty and non-empty accounts. This avoids many of the
         // subtle issues in EIP-161.
+    }
+
+    fn is_cold(&self, address: H160) -> bool {
+        self.substate
+            .recursive_is_cold(&|a| a.accessed_addresses.contains(&address))
+    }
+
+    fn is_storage_cold(&self, address: H160, key: H256) -> bool {
+        self.substate.recursive_is_cold(&|a: &Accessed| {
+            a.accessed_storage.contains(&(address, key))
+        })
     }
 }

@@ -32,7 +32,11 @@ fn test_empty_input() -> std::result::Result<(), ExitError> {
         Err(e) => {
             assert_eq!(
                 e,
-                ExitError::Other("input must contain at least 96 bytes".into())
+                PrecompileFailure::Error {
+                    exit_status: ExitError::Other(
+                        "input must contain at least 96 bytes".into()
+                    )
+                }
             );
             Ok(())
         }
@@ -66,7 +70,12 @@ fn test_insufficient_input() -> std::result::Result<(), ExitError> {
             panic!("Test not expected to pass");
         }
         Err(e) => {
-            assert_eq!(e, ExitError::Other("insufficient input size".into()));
+            assert_eq!(
+                e,
+                PrecompileFailure::Error {
+                    exit_status: ExitError::Other("insufficient input size".into())
+                }
+            );
             Ok(())
         }
     }
@@ -99,7 +108,14 @@ fn test_excessive_input() -> std::result::Result<(), ExitError> {
             panic!("Test not expected to pass");
         }
         Err(e) => {
-            assert_eq!(e, ExitError::Other("unreasonably large base length".into()));
+            assert_eq!(
+                e,
+                PrecompileFailure::Error {
+                    exit_status: ExitError::Other(
+                        "unreasonably large base length".into()
+                    )
+                }
+            );
             Ok(())
         }
     }

@@ -15,7 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use evm::{ExitError, ExitSucceed};
+use evm::executor::stack::PrecompileFailure;
+use evm::ExitSucceed;
 use module_evm::precompile::{LinearCostPrecompile, PrecompileId};
 use tiny_keccak::Hasher;
 
@@ -34,7 +35,7 @@ impl LinearCostPrecompile for Sha3FIPS256 {
     fn execute(
         input: &[u8],
         _: u64,
-    ) -> core::result::Result<(ExitSucceed, Vec<u8>), ExitError> {
+    ) -> core::result::Result<(ExitSucceed, Vec<u8>), PrecompileFailure> {
         let mut output = [0; 32];
         let mut sha3 = tiny_keccak::Sha3::v256();
         sha3.update(input);
@@ -58,7 +59,7 @@ impl LinearCostPrecompile for Sha3FIPS512 {
     fn execute(
         input: &[u8],
         _: u64,
-    ) -> core::result::Result<(ExitSucceed, Vec<u8>), ExitError> {
+    ) -> core::result::Result<(ExitSucceed, Vec<u8>), PrecompileFailure> {
         let mut output = [0; 64];
         let mut sha3 = tiny_keccak::Sha3::v512();
         sha3.update(input);
@@ -70,6 +71,7 @@ impl LinearCostPrecompile for Sha3FIPS512 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use evm::ExitError;
 
     #[test]
     fn test_empty_input() -> std::result::Result<(), ExitError> {
