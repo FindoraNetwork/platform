@@ -31,7 +31,7 @@ use {
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::*,
-    std::{env, fs},
+    std::{env, fs, collections::HashMap},
     tendermint::PrivateKey,
     utils::{
         get_block_height, get_local_block_height, get_validator_detail,
@@ -54,6 +54,7 @@ use {
             structs::{AssetType, XfrAmount, XfrAssetType},
         },
     },
+    zei_algebra::utils::b64enc,
 };
 
 lazy_static! {
@@ -594,14 +595,49 @@ fn restore_keypair_from_str_with_default(sk_str: Option<&str>) -> Result<XfrKeyP
 }
 
 /// Show the asset balance of a findora account
-pub fn show_account(sk_str: Option<&str>, asset: Option<&str>) -> Result<()> {
+pub fn show_account(sk_str: Option<&str>, asset: Option<AssetTypeCode>) -> Result<()> {
     let kp = restore_keypair_from_str_with_default(sk_str)?;
-    let token_code = asset
-        .map(|asset| AssetTypeCode::new_from_base64(asset).c(d!("Invalid asset code")))
-        .transpose()?;
-    let balance = utils::get_asset_balance(&kp, token_code).c(d!())?;
 
-    println!("{}: {}", asset.unwrap_or("FRA"), balance);
+    println!("{0: <45} | {1: <70} | {2: <18} ", "Base64", "Hex", "Amount");
+    if asset.is_none() {
+        let list = get_owned_utxos(Some(kp), asset)?;
+        let mut map = HashMap::new();
+        for (_, b, c) in list {
+            let amt = b.get_amount().map_or_else(|| None, |a| Some(a));
+
+            let at = c.get_asset_type().unwrap_or_default();
+            let at_base64 = b64enc(&at.0);
+            let at_hex = hex::encode(&at.0);
+
+            let key = (at_base64, at_hex);
+
+            if let Some(Some(a)) = map.get_mut(&key) {
+                *a += amt.unwrap_or(0);
+            } else {
+                map.insert(key, amt);
+            }
+        }
+
+        for (key, val) in map.iter() {
+            let v = val.map_or_else(|| "Confidential".to_string(), |a| a.to_string());
+            println!(
+                "{0: <45} | {1: <70} | {2: <18} ",
+                key.0,
+                format!("0x{}", key.1),
+                v
+            );
+        }
+    } else {
+        let balance = utils::get_asset_balance(&kp, asset).c(d!())?;
+        let asset = asset.unwrap(); //safe
+        println!(
+            "{0: <45} | {1: <70} | {2: <18} ",
+            asset.to_base64(),
+            format!("0x{}", asset.to_hex()),
+            balance
+        );
+    }
+
     Ok(())
 }
 
@@ -1233,27 +1269,28 @@ pub fn get_mtleaf_info(atxo_sid: &str) -> Result<MTLeafInfo> {
 
 /// Fetches list of owned TxoSIDs from LedgerStatus
 pub fn get_owned_utxos(
-    asset: Option<&str>,
+    kp: Option<XfrKeyPair>,
+    asset: Option<AssetTypeCode>,
 ) -> Result<Vec<(TxoSID, XfrAmount, XfrAssetType)>> {
     // get KeyPair from current setup wallet
-    let kp = get_keypair().c(d!())?;
+    let kp = if let Some(kp) = kp {
+        kp
+    } else {
+        get_keypair().c(d!())?
+    };
 
-    // Parse Asset Type for filtering if provided
-    let mut asset_type = ASSET_TYPE_FRA;
-    if let Some(a) = asset {
-        asset_type = if a.to_uppercase() == "FRA" {
-            ASSET_TYPE_FRA
-        } else {
-            AssetTypeCode::new_from_base64(asset.unwrap()).unwrap().val
-        };
-    }
+    let (is_all, asset_type) = if let Some(a) = asset {
+        (false, a.val)
+    } else {
+        (true, AssetType::default())
+    };
 
     let list: Vec<(TxoSID, XfrAmount, XfrAssetType)> =
         utils::get_owned_utxos(&kp.pub_key)?
             .iter()
             .filter(|a| {
                 // Filter by asset type if given or read all
-                if asset.is_none() {
+                if is_all {
                     true
                 } else {
                     match a.1.clone().0 .0.record.asset_type {
