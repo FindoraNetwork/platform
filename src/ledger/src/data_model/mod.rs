@@ -8,6 +8,7 @@
 mod __trash__;
 mod effects;
 pub use effects::{BlockEffect, TxnEffect};
+
 mod test;
 
 use {
@@ -265,6 +266,40 @@ impl AssetTypeCode {
     #[inline(always)]
     pub fn to_base64(self) -> String {
         b64enc(&self.val.0)
+    }
+
+    /// Converts a hex-format string to an asset type code.
+    #[inline(always)]
+    pub fn new_from_hex(h: &str) -> Result<Self> {
+        if &h[..2] == "0x" {
+            let asset_hex = &h[2..];
+            match hex::decode(asset_hex) {
+                Ok(mut bin) => {
+                    bin.resize(ASSET_TYPE_LENGTH, 0u8);
+                    let buf =
+                        <[u8; ASSET_TYPE_LENGTH]>::try_from(bin.as_slice()).c(d!())?;
+                    Ok(Self {
+                        val: ZeiAssetType(buf),
+                    })
+                }
+                Err(e) => {
+                    Err(eg!((format!("Failed to deserialize hex '{}': {}", h, e))))
+                }
+            }
+        } else {
+            Err(eg!(format!(
+                "Please add 0x to the beginning of the string: {}",
+                h
+            )))
+        }
+    }
+
+    /// Converts the asset type code to a hex format string.
+    ///
+    /// Used to display the asset type code.
+    #[inline(always)]
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.val.0)
     }
 
     // pub(crate) fn to_bytes(&self) -> Vec<u8> {
