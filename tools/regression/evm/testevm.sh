@@ -10,10 +10,15 @@ echo -e "${YEL}Run test cases and verify results${NC}"
 
 #--------------------------test case 1 - contract deposit--------------------------
 echo -e "${BLU}test case 1 - contract deposit${NC}"
+#Get Initial Balance of $ETH_ADDR
+export OUTPUT=$(python3 $REGRESSION_PATH/evm.py --url $ENDPOINT balance --addr $ETH_ADDR)
+BALANCE=`echo $OUTPUT |awk '{print $3}'`
+#Deposit amount into Eth Address
 $BIN/fn contract-deposit --addr $ETH_ADDR --amount 888000000
 sleep $SLEEP_INTERVAL
+EXPECTED_BALANCE="$( bc <<<" $BALANCE + 888000000000000000000" )"
 #Verify
-python3 $REGRESSION_PATH/evm.py --url $ENDPOINT verify-balance --addr $ETH_ADDR --amount 888000000000000000000
+python3 $REGRESSION_PATH/evm.py --url $ENDPOINT verify-balance --addr $ETH_ADDR --amount $EXPECTED_BALANCE
 if [ $? != 0 ];
 then
     exit 1
@@ -22,10 +27,15 @@ echo
 
 #--------------------------test case 2 - contract withdraw---------------------------
 echo -e "${BLU}test case 2 - contract withdraw${NC}"
+#Get Initial Balance of $ETH_ADDR
+export OUTPUT=$(python3 $REGRESSION_PATH/evm.py --url $ENDPOINT balance --sec-key $FRA_SEC_KEY)
+BALANCE=`echo $OUTPUT |awk '{print $3}'`
+#Withdraw amount from Eth Address
 $BIN/fn contract-withdraw --addr $FRA_DEST_ADDR --amount 88000000 --eth-key "$ETH_KEY"
 sleep $SLEEP_INTERVAL
+EXPECTED_BALANCE="$( bc <<<" $BALANCE + 88000000 " )"
 #Verify
-python3 $REGRESSION_PATH/evm.py --url $ENDPOINT verify-balance --sec-key $FRA_SEC_KEY --amount 88000000
+python3 $REGRESSION_PATH/evm.py --url $ENDPOINT verify-balance --sec-key $FRA_SEC_KEY --amount $EXPECTED_BALANCE
 if [ $? != 0 ];
 then
     exit 1
@@ -34,10 +44,15 @@ echo
 
 #--------------------------test case 3 - ERC20 transfer-----------------------------
 echo -e "${BLU}test case 3 - transfer between erc20 addresses${NC}"
+#Get Initial Balance of $ETH_ADDR
+export OUTPUT=$(python3 $REGRESSION_PATH/evm.py --url $ENDPOINT balance --addr $ETH_DEST_ADDR)
+BALANCE=`echo $OUTPUT |awk '{print $3}'`
+#Transer between ETH Addresses
 python3 $REGRESSION_PATH/evm.py --url $ENDPOINT transfer --from_priv_key $ETH_PK --to_addr $ETH_DEST_ADDR --amount 8000000000000000000
 sleep $SLEEP_INTERVAL
+EXPECTED_BALANCE="$( bc <<<" $BALANCE + 8000000000000000000 " )"
 #Verify
-python3 $REGRESSION_PATH/evm.py --url $ENDPOINT verify-balance --addr $ETH_DEST_ADDR --amount 8000000000000000000
+python3 $REGRESSION_PATH/evm.py --url $ENDPOINT verify-balance --addr $ETH_DEST_ADDR --amount $EXPECTED_BALANCE
 if [ $? != 0 ];
 then
     exit 1

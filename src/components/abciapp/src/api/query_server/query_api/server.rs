@@ -16,7 +16,7 @@ use {
     ruc::*,
     std::{collections::HashSet, sync::Arc},
     zei::{
-        anon_xfr::structs::{AxfrOwnerMemo, MTLeafInfo},
+        anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
         xfr::structs::OwnerMemo,
     },
 };
@@ -312,6 +312,25 @@ impl QueryServer {
             .unwrap()
             .abar_memos
             .get(&atxo_sid)
+    }
+
+    /// Returns the owner memos required to decrypt the asset record stored at between start and end,
+    /// include start and end, limit 100.
+    #[inline(always)]
+    pub fn get_abar_memos(&self, start: u64, end: u64) -> Vec<(u64, AxfrOwnerMemo)> {
+        let mut memos = vec![];
+        let cache = self.ledger_cloned.api_cache.as_ref().unwrap();
+        for i in start..=end {
+            if let Some(memo) = cache.abar_memos.get(&ATxoSID(i)) {
+                memos.push((i, memo));
+            }
+        }
+        memos
+    }
+
+    /// Returns the abar commitment by given index, if it exists.
+    pub fn get_abar_commitment(&self, atxo_sid: ATxoSID) -> Option<Commitment> {
+        self.ledger_cloned.get_abar(&atxo_sid)
     }
 
     /// Returns the merkle proof from the given ATxoSID

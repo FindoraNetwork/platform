@@ -29,6 +29,7 @@ use {
             TracingPolicies as ZeiTracingPolicies, TracingPolicy as ZeiTracingPolicy,
         },
     },
+    zei_algebra::bls12_381::BLSScalar,
 };
 
 #[wasm_bindgen]
@@ -296,6 +297,33 @@ impl AxfrOwnerMemo {
 impl AxfrOwnerMemo {
     pub fn get_memo_ref(&self) -> &ZeiAxfrOwnerMemo {
         &self.memo
+    }
+}
+
+#[wasm_bindgen]
+/// Asset owner memo decrypted info. contains amount, asset_type and blind.
+pub struct AxfrOwnerMemoInfo {
+    pub(crate) amount: u64,
+    pub(crate) asset_type: String,
+    pub(crate) blind: BLSScalar,
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+impl AxfrOwnerMemoInfo {
+    #[wasm_bindgen(getter)]
+    pub fn amount(&self) -> u64 {
+        self.amount
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn asset_type(&self) -> String {
+        self.asset_type.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn blind(&self) -> BLSScalar {
+        self.blind
     }
 }
 

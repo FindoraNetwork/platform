@@ -140,6 +140,7 @@ if __name__ == "__main__":
     parser_balance = subparsers.add_parser('balance', help='query balance of an address')
     parser_balance.add_argument('--addr', help='address to query')
     parser_balance.add_argument('--sec-key', help='secret key of FRA account')
+    parser_balance.add_argument('--asset', help='asset to query balance of')
 
     # Initialize Verify-Balance Parser
     parser_verify_balance = subparsers.add_parser('verify-balance', help='verify balance of an address')

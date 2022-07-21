@@ -207,7 +207,8 @@ impl crate::BaseApp {
             .state
             .write()
             .commit(block_height)
-            .unwrap_or_else(|_| {
+            .unwrap_or_else(|e| {
+                println!("{:?}", e);
                 panic!("Failed to commit chain state at height: {}", block_height)
             });
 

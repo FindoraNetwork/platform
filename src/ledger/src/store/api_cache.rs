@@ -151,8 +151,11 @@ impl ApiCache {
             }
         };
 
+        let mut creation_new = creation.clone();
+        creation_new.body.asset.code = code;
+
         let prefix = self.prefix.clone();
-        let issuer = creation.pubkey;
+        let issuer = creation_new.pubkey;
         self.created_assets
             .entry(issuer)
             .or_insert_with(|| {
@@ -162,7 +165,7 @@ impl ApiCache {
                     issuer.to_base64()
                 ))
             })
-            .insert(code, creation.clone());
+            .insert(code, creation_new);
     }
 
     /// Cache issuance records
