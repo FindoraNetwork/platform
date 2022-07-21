@@ -31,7 +31,7 @@ use {
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::*,
-    std::{env, fs, collections::HashMap},
+    std::{collections::HashMap, env, fs},
     tendermint::PrivateKey,
     utils::{
         get_block_height, get_local_block_height, get_validator_detail,
@@ -599,43 +599,28 @@ pub fn show_account(sk_str: Option<&str>, asset: Option<AssetTypeCode>) -> Resul
     let kp = restore_keypair_from_str_with_default(sk_str)?;
 
     println!("{0: <45} | {1: <70} | {2: <18} ", "Base64", "Hex", "Amount");
-    if asset.is_none() {
-        let list = get_owned_utxos(Some(kp), asset)?;
-        let mut map = HashMap::new();
-        for (_, b, c) in list {
-            let amt = b.get_amount().map_or_else(|| None, |a| Some(a));
+    let list = get_owned_utxos(Some(kp), asset)?;
+    let mut map = HashMap::new();
+    for (_, b, c) in list {
+        let amt = b.get_amount();
 
-            let at = c.get_asset_type().unwrap_or_default();
-            let at_base64 = b64enc(&at.0);
-            let at_hex = hex::encode(&at.0);
+        let at = c.get_asset_type().unwrap_or_default();
+        let at_base64 = b64enc(&at.0);
+        let at_hex = hex::encode(&at.0);
 
-            let key = (at_base64, at_hex);
+        let key = (at_base64, at_hex);
 
-            if let Some(Some(a)) = map.get_mut(&key) {
-                *a += amt.unwrap_or(0);
-            } else {
-                map.insert(key, amt);
-            }
+        if let Some(Some(a)) = map.get_mut(&key) {
+            *a += amt.unwrap_or(0);
+        } else {
+            map.insert(key, amt);
         }
+    }
 
-        for (key, val) in map.iter() {
-            let v = val.map_or_else(|| "Confidential".to_string(), |a| a.to_string());
-            println!(
-                "{0: <45} | {1: <70} | {2: <18} ",
-                key.0,
-                format!("0x{}", key.1),
-                v
-            );
-        }
-    } else {
-        let balance = utils::get_asset_balance(&kp, asset).c(d!())?;
-        let asset = asset.unwrap(); //safe
-        println!(
-            "{0: <45} | {1: <70} | {2: <18} ",
-            asset.to_base64(),
-            format!("0x{}", asset.to_hex()),
-            balance
-        );
+    for (key, val) in map.iter() {
+        let v = val.map_or_else(|| "Confidential".to_string(), |a| a.to_string());
+        let hex = format!("0x{}", key.1);
+        println!("{0: <45} | {1: <70} | {2: <18} ", key.0, hex, v);
     }
 
     Ok(())
