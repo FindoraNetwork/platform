@@ -274,12 +274,12 @@ reset:
 snapshot:
 	@./tools/devnet/snapshot.sh
 
-evmtest:
+prismtest:
 	@./tools/regression/evm/scripts/setup.sh
 	@./tools/regression/evm/testevm.sh
 	@./tools/regression/evm/scripts/teardown.sh
 
-evmtest_nightly:
+prismtest_nightly:
 	@./tools/regression/evm/testevm.sh
 
 tmtest:
