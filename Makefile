@@ -58,6 +58,7 @@ stop_all:
 # Build debug
 dbg:
 	cargo build --features debug_env --bins -p abciapp -p finutils
+	$(call pack,debug)
 
 # Build for cleveldb
 build: tendermint_cleveldb
@@ -144,7 +145,7 @@ wasm:
 	cd src/components/wasm && wasm-pack build
 	tar -zcpf $(WASM_PKG) src/components/wasm/pkg
 
-debug_env: stop_debug_env build_release_debug
+debug_env: stop_debug_env dbg
 	- rm -rf $(FIN_DEBUG)
 	mkdir $(FIN_DEBUG)
 	cp tools/debug_env.tar.gz $(FIN_DEBUG)/
