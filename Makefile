@@ -26,6 +26,7 @@ lib_dir         = lib
 subdirs = $(bin_dir) $(lib_dir)
 
 WASM_PKG = wasm.tar.gz
+WASM_LIGHTWEIGHT_PKG = wasm_lightweight.tar.gz
 lib_files = ./$(WASM_PKG)
 
 define pack
@@ -143,6 +144,10 @@ cleanall: clean
 wasm:
 	cd src/components/wasm && wasm-pack build
 	tar -zcpf $(WASM_PKG) src/components/wasm/pkg
+
+wasm_release_lightweight:
+	cd src/components/wasm && wasm-pack build --release --features=lightweight
+	tar -zcpf $(WASM_LIGHTWEIGHT_PKG) src/components/wasm/pkg
 
 debug_env: stop_debug_env build_release_debug
 	- rm -rf $(FIN_DEBUG)
