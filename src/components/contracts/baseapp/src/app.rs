@@ -132,6 +132,8 @@ impl crate::BaseApp {
             req.hash.clone(),
         );
 
+        self.update_deliver_state_cache();
+
         self.modules.begin_block(&mut self.deliver_state, req);
 
         ResponseBeginBlock::default()
@@ -194,17 +196,11 @@ impl crate::BaseApp {
 
     pub fn commit(&mut self, _req: &RequestCommit) -> ResponseCommit {
         // Reset the Check state to the latest committed.
+        // Cache data are dropped and cleared in check_state
         self.check_state = self.deliver_state.copy_with_new_state();
 
         let block_height = self.deliver_state.block_header().height as u64;
-
-        self.deliver_state
-            .db
-            .write()
-            .commit(block_height)
-            .unwrap_or_else(|_| {
-                panic!("Failed to commit chain db at height: {}", block_height)
-            });
+        let mut ctx = self.retrieve_context(RunTxMode::Deliver).clone();
 
         // Write the DeliverTx state into branched storage and commit the Store.
         // The write to the DeliverTx state writes all state transitions to the root
@@ -214,11 +210,24 @@ impl crate::BaseApp {
             .state
             .write()
             .commit(block_height)
-            .unwrap_or_else(|_| {
+            .unwrap_or_else(|e| {
+                println!("{:?}", e);
                 panic!("Failed to commit chain state at height: {}", block_height)
             });
 
-        // Reset the deliver state
+        // Commit module data based on root_hash
+        let _ = ruc::info!(self.modules.commit(&mut ctx, block_height, &root_hash));
+
+        // Commit non chain-state data
+        self.deliver_state
+            .db
+            .write()
+            .commit(block_height)
+            .unwrap_or_else(|_| {
+                panic!("Failed to commit chain db at height: {}", block_height)
+            });
+
+        // Reset the deliver state, but keep the ethereum cache
         Self::update_state(&mut self.deliver_state, Default::default(), vec![]);
 
         pnk!(self

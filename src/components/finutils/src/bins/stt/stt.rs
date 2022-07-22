@@ -210,11 +210,11 @@ mod issue {
         },
         rand_chacha::rand_core::SeedableRng,
         rand_chacha::ChaChaRng,
-        zei::setup::PublicParams,
         zei::xfr::{
             asset_record::{build_blind_asset_record, AssetRecordType},
             structs::AssetRecordTemplate,
         },
+        zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
     };
 
     pub fn issue() -> Result<()> {
@@ -235,12 +235,12 @@ mod issue {
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
             root_kp.get_pk(),
         );
-        let params = PublicParams::default();
+        let pc_gens = RistrettoPedersenCommitment::default();
         let outputs = (0..2)
             .map(|_| {
                 let (ba, _, _) = build_blind_asset_record(
                     &mut ChaChaRng::from_entropy(),
-                    &params.pc_gens,
+                    &pc_gens,
                     &template,
                     vec![],
                 );
@@ -266,7 +266,7 @@ mod issue {
             IssueAsset::new(aib, &IssuerKeyPair { keypair: &root_kp }).c(d!())?;
 
         builder.add_operation(Operation::IssueAsset(asset_issuance_operation));
-        Ok(builder.take_transaction())
+        builder.build_and_take_transaction()
     }
 }
 
@@ -303,7 +303,7 @@ mod delegate {
             builder.add_operation_delegation(owner_kp, amount, validator.to_owned());
         })?;
 
-        Ok(builder.take_transaction())
+        builder.build_and_take_transaction()
     }
 }
 
@@ -339,7 +339,7 @@ mod undelegate {
             }
         })?;
 
-        Ok(builder.take_transaction())
+        builder.build_and_take_transaction()
     }
 }
 
@@ -356,7 +356,7 @@ mod claim {
             builder.add_operation_claim(owner_kp, amount);
         })?;
 
-        Ok(builder.take_transaction())
+        builder.build_and_take_transaction()
     }
 }
 

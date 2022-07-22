@@ -9,7 +9,7 @@ use {
         ristretto,
         xfr::structs::{AssetTypeAndAmountProof, XfrBody, XfrProofs},
     },
-    zeiutils::msg_eq,
+    zei_algebra::prelude::msg_eq,
 };
 
 const UTF8_ASSET_TYPES_WORK: bool = false;

@@ -4,16 +4,20 @@
 //! Separating mnemonic to a standalone library is needed by tests.
 //!
 
-use {
-    bech32::{self, FromBase32, ToBase32},
-    bip0039::{Count, Language, Mnemonic},
-    ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey},
-    ruc::*,
-    zei::{
-        serialization::ZeiFromToBytes,
-        xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+use bech32::{self, FromBase32, ToBase32};
+use bip0039::{Count, Language, Mnemonic};
+use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
+use ruc::*;
+use zei::anon_xfr::structs::Nullifier;
+use zei::{
+    anon_xfr::{
+        keys::{AXfrKeyPair, AXfrPubKey, AXfrViewKey},
+        structs::Commitment,
     },
+    xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
+use zei_algebra::serialization::ZeiFromToBytes;
+use zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey};
 
 /// Randomly generate a 12words-length mnemonic.
 #[inline(always)]
@@ -176,12 +180,120 @@ pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
     base64::encode_config(&ZeiFromToBytes::zei_to_bytes(key), base64::URL_SAFE)
 }
 
+/// Convert publickey to hex.
+#[inline(always)]
+pub fn public_key_to_hex(key: &XfrPublicKey) -> String {
+    let s = hex::encode(&ZeiFromToBytes::zei_to_bytes(key));
+
+    String::from("0x") + &s
+}
+
 /// Restore a XfrPublicKey from base64 human-readable address
 #[inline(always)]
 pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey> {
     base64::decode_config(pk, base64::URL_SAFE)
         .c(d!())
         .and_then(|bytes| XfrPublicKey::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Restore a anon public key from base64
+pub fn anon_public_key_from_base64(pk: &str) -> Result<AXfrPubKey> {
+    base64::decode_config(pk, base64::URL_SAFE)
+        .c(d!())
+        .and_then(|bytes| AXfrPubKey::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Convert an anon public key to base64
+pub fn anon_public_key_to_base64(key: &AXfrPubKey) -> String {
+    base64::encode_config(&AXfrPubKey::zei_to_bytes(key), base64::URL_SAFE)
+}
+
+#[inline(always)]
+/// Restore a anon view key from base64
+pub fn anon_view_key_from_base64(key: &str) -> Result<AXfrViewKey> {
+    base64::decode_config(key, base64::URL_SAFE)
+        .c(d!())
+        .and_then(|bytes| AXfrViewKey::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Convert an anon view key to base64
+pub fn anon_view_key_to_base64(key: &AXfrViewKey) -> String {
+    base64::encode_config(&AXfrViewKey::zei_to_bytes(key), base64::URL_SAFE)
+}
+
+#[inline(always)]
+/// Restore a x public key from base64
+pub fn x_public_key_from_base64(pk: &str) -> Result<XPublicKey> {
+    base64::decode_config(pk, base64::URL_SAFE)
+        .c(d!())
+        .and_then(|bytes| XPublicKey::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Convert a x public key to base64
+pub fn x_public_key_to_base64(key: &XPublicKey) -> String {
+    base64::encode_config(&XPublicKey::zei_to_bytes(key), base64::URL_SAFE)
+}
+
+#[inline(always)]
+/// Restore a anon secret key from base64
+pub fn anon_secret_key_from_base64(sk: &str) -> Result<AXfrKeyPair> {
+    base64::decode_config(sk, base64::URL_SAFE)
+        .c(d!())
+        .and_then(|bytes| AXfrKeyPair::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Convert an anon secret key to base64
+pub fn anon_secret_key_to_base64(key: &AXfrKeyPair) -> String {
+    base64::encode_config(&AXfrKeyPair::zei_to_bytes(key), base64::URL_SAFE)
+}
+
+#[inline(always)]
+/// Restore a x secret key from base64
+pub fn x_secret_key_from_base64(sk: &str) -> Result<XSecretKey> {
+    base64::decode_config(sk, base64::URL_SAFE)
+        .c(d!())
+        .and_then(|bytes| XSecretKey::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Convert an anon public key to base64
+pub fn x_secret_key_to_base64(key: &XSecretKey) -> String {
+    base64::encode_config(&XSecretKey::zei_to_bytes(key), base64::URL_SAFE)
+}
+
+#[inline(always)]
+/// Restore a Commitment from base64
+pub fn commitment_from_base58(com: &str) -> Result<Commitment> {
+    bs58::decode(com)
+        .into_vec()
+        .c(d!())
+        .and_then(|bytes| Commitment::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Convert a Commitment to base64
+pub fn commitment_to_base58(com: &Commitment) -> String {
+    bs58::encode(&Commitment::zei_to_bytes(com)).into_string()
+}
+
+#[inline(always)]
+/// Restore a Commitment from base58
+pub fn nullifier_from_base58(com: &str) -> Result<Nullifier> {
+    bs58::decode(com)
+        .into_vec()
+        .c(d!())
+        .and_then(|bytes| Nullifier::zei_from_bytes(&bytes).c(d!()))
+}
+
+#[inline(always)]
+/// Convert a Nullifier to base58
+pub fn nullifier_to_base58(n: &Nullifier) -> String {
+    bs58::encode(&Nullifier::zei_to_bytes(n)).into_string()
 }
 
 /// Convert a XfrPublicKey to bech32 human-readable address

@@ -41,7 +41,7 @@ define pack
 		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
 	cp $(1)/$(bin_dir)/* ~/.cargo/bin/
-	cd $(1)/$(bin_dir)/ && findorad pack
+	cd $(1)/$(bin_dir)/ && ./findorad pack
 	cp -f /tmp/findorad $(1)/$(bin_dir)/
 	cp -f /tmp/findorad ~/.cargo/bin/
 endef
@@ -54,6 +54,10 @@ stop_all:
 	- pkill abcid
 	- pkill tendermint
 	- pkill findorad
+
+# Build debug
+dbg:
+	cargo build --features debug_env --bins -p abciapp -p finutils
 
 # Build for cleveldb
 build: tendermint_cleveldb
@@ -81,7 +85,7 @@ build_release_musl_goleveldb: tendermint_goleveldb
 	$(call pack,release,x86_64-unknown-linux-musl)
 
 build_release_debug: tendermint_goleveldb
-	cargo build --features="debug_env" --release --bins -p abciapp -p finutils
+	cargo build --features debug_env --release --bins -p abciapp -p finutils
 	$(call pack,release)
 
 tendermint_cleveldb:
@@ -197,7 +201,6 @@ start_localnode: stop_debug_env
 # 	docker rmi $(ECR_URL)/$(ENV)/abci_validator_node:latest
 # endif
 
-
 ci_build_binary_rust_base:
 	docker build -t binary-rust-base -f container/Dockerfile-binary-rust-base .
 
@@ -271,8 +274,33 @@ reset:
 snapshot:
 	@./tools/devnet/snapshot.sh
 
+evmtest:
+	@./tools/regression/evm/scripts/setup.sh
+	@./tools/regression/evm/testevm.sh
+	@./tools/regression/evm/scripts/teardown.sh
+
+evmtest_nightly:
+	@./tools/regression/evm/testevm.sh
+
+tmtest:
+	@./tools/regression/triple_masking/test_triple_masking.sh
+
 devnet: reset snapshot
 
+run_bar_to_abar_demo: devnet
+	@./tools/triple_masking/bar_to_abar_convert.sh
+
+run_anon_transfer_demo: devnet
+	@./tools/triple_masking/anonxfr_test_demo.sh
+
+run_multi_anon_transfer_demo: devnet
+	@./tools/triple_masking/multi_axfr_test_demo.sh
+
+run_anon_asset_mixing_demo: devnet
+	@./tools/triple_masking/assets_mixing_test_demo.sh
+
+devnet_bridge: devnet
+	@./tools/devnet/startbridge.sh
 # fn build
 build_musl_fn_linux:
 	docker build -t musl_fn_linux -f container/Dockerfile-fn-musl-linux .

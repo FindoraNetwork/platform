@@ -4,7 +4,6 @@
 mod basic;
 mod impls;
 
-use abci::{RequestEndBlock, ResponseEndBlock};
 use config::abci::global_cfg::CFG;
 use ethereum_types::{H160, H256, U256};
 use evm::Config as EvmConfig;
@@ -60,7 +59,6 @@ pub mod storage {
     use fp_storage::*;
     use fp_types::crypto::HA256;
     use lazy_static::lazy_static;
-    use std::cell::RefCell;
     use std::sync::Mutex;
 
     // Mapping for transaction hash and at block number with index.
@@ -79,12 +77,10 @@ pub mod storage {
 
     // The following data is stored in in-memory array
     // Current building block's transactions and receipts.
-    type PendingTransactions =
-        Mutex<RefCell<Option<Vec<(Transaction, TransactionStatus, Receipt)>>>>;
-
+    type PendingTransactions = Mutex<Vec<(Transaction, TransactionStatus, Receipt)>>;
     lazy_static! {
         pub static ref DELIVER_PENDING_TRANSACTIONS: PendingTransactions =
-            Mutex::new(RefCell::new(None));
+            Mutex::new(vec![]);
     }
 }
 
@@ -129,13 +125,13 @@ impl<C: Config> Default for App<C> {
 }
 
 impl<C: Config> AppModule for App<C> {
-    fn end_block(
+    fn commit(
         &mut self,
         ctx: &mut Context,
-        req: &RequestEndBlock,
-    ) -> ResponseEndBlock {
-        let _ = ruc::info!(self.store_block(ctx, U256::from(req.height)));
-        Default::default()
+        height: U256,
+        root_hash: &[u8],
+    ) -> Result<()> {
+        self.store_block(ctx, height, root_hash)
     }
 }
 
@@ -164,9 +160,8 @@ impl<C: Config> ValidateUnsigned for App<C> {
             && ctx.run_mode == RunTxMode::Check
         {
             let Action::Transact(transaction) = call;
-            let origin = Self::recover_signer(transaction).ok_or_else(|| {
-                eg!("InvalidSignature, can not recover signer address")
-            })?;
+            let origin = Self::recover_signer_fast(ctx, transaction)
+                .ok_or_else(|| eg!("ExecuteTransaction: InvalidSignature"))?;
             let account_id = C::AddressMapping::convert_to_account_id(origin);
             C::AccountAsset::inc_nonce(ctx, &account_id)?;
         }
@@ -188,8 +183,8 @@ impl<C: Config> ValidateUnsigned for App<C> {
             return Err(eg!("Must provide chainId".to_string()));
         }
 
-        let origin = Self::recover_signer(transaction)
-            .ok_or_else(|| eg!("InvalidSignature, can not recover signer address"))?;
+        let origin = Self::recover_signer_fast(ctx, transaction)
+            .ok_or_else(|| eg!("ExecuteTransaction: InvalidSignature"))?;
 
         // Same as go ethereum, Min gas limit is 21000.
         if transaction.gas_limit < U256::from(21000)

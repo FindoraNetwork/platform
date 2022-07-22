@@ -3,8 +3,8 @@ use crate::*;
 use sha2::Digest;
 use std::env::temp_dir;
 use std::time::SystemTime;
-use storage::db::TempFinDB;
 use storage::state::{ChainState, State};
+use temp_db::TempFinDB;
 
 fn setup_temp_db() -> Arc<RwLock<State<TempFinDB>>> {
     let time = SystemTime::now()

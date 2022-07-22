@@ -6,7 +6,7 @@ use {
     lazy_static::lazy_static,
     ledger::{
         data_model::{
-            AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
+            ATxoSID, AssetTypeCode, DefineAsset, IssuerPublicKey, Transaction, TxOutput,
             TxnIDHash, TxnSID, TxoSID, XfrAddress,
         },
         staking::{ops::mint_fra::MintEntry, BlockHeight},
@@ -15,7 +15,10 @@ use {
     parking_lot::{Condvar, Mutex, RwLock},
     ruc::*,
     std::{collections::HashSet, sync::Arc},
-    zei::xfr::structs::OwnerMemo,
+    zei::{
+        anon_xfr::structs::{AxfrOwnerMemo, MTLeafInfo},
+        xfr::structs::OwnerMemo,
+    },
 };
 
 lazy_static! {
@@ -74,14 +77,14 @@ impl QueryServer {
     pub fn get_created_assets(
         &self,
         issuer: &IssuerPublicKey,
-    ) -> Option<Vec<DefineAsset>> {
+    ) -> Option<Vec<(AssetTypeCode, DefineAsset)>> {
         self.ledger_cloned
             .api_cache
             .as_ref()
             .unwrap()
             .created_assets
             .get(issuer)
-            .map(|d| d.iter().map(|(_, v)| v).collect())
+            .map(|d| d.iter().map(|(c, v)| (c, v)).collect())
     }
 
     /// get coinbase based on address and sorting rules and start and end position
@@ -298,6 +301,29 @@ impl QueryServer {
             .unwrap()
             .owner_memos
             .get(&txo_sid)
+    }
+
+    /// Returns the abar owner memo required to decrypt the asset record stored at given index, if it exists.
+    #[inline(always)]
+    pub fn get_abar_memo(&self, atxo_sid: ATxoSID) -> Option<AxfrOwnerMemo> {
+        self.ledger_cloned
+            .api_cache
+            .as_ref()
+            .unwrap()
+            .abar_memos
+            .get(&atxo_sid)
+    }
+
+    /// Returns the merkle proof from the given ATxoSID
+    #[inline(always)]
+    pub fn get_abar_proof(&self, atxo_sid: ATxoSID) -> Option<MTLeafInfo> {
+        self.ledger_cloned.get_abar_proof(atxo_sid).ok()
+    }
+
+    /// Returns a bool value from the given hash
+    #[inline(always)]
+    pub fn check_nullifier_hash(&self, null_hash: String) -> Option<bool> {
+        self.ledger_cloned.check_nullifier_hash(null_hash).ok()
     }
 
     /// retrieve block reward rate at specified block height

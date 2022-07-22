@@ -1,5 +1,6 @@
 use crate::storage::*;
 use crate::App;
+use fin_db::{FinDB, RocksDB};
 use fp_core::{account::SmartAccount, context::Context};
 use fp_storage::{Borrow, BorrowMut};
 use fp_traits::account::AccountAsset;
@@ -11,7 +12,6 @@ use rand_chacha::ChaChaRng;
 use std::env::temp_dir;
 use std::sync::Arc;
 use std::time::SystemTime;
-use storage::db::{FinDB, RocksDB};
 use storage::state::ChainState;
 use zei::xfr::sig::XfrKeyPair;
 
