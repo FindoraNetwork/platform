@@ -34,20 +34,13 @@ use zei::xfr::{asset_record::AssetRecordType, sig::XfrKeyPair};
 /// transfer utxo assets to account(ed25519 or ecdsa address) balance.
 pub fn transfer_to_account(
     amount: u64,
-    asset: Option<&str>,
+    asset: Option<AssetTypeCode>,
     address: Option<&str>,
     lowlevel_data: Option<&str>,
 ) -> Result<()> {
     let mut builder = utils::new_tx_builder()?;
 
     let kp = get_keypair()?;
-
-    let asset = if let Some(asset) = asset {
-        let asset = AssetTypeCode::new_from_base64(asset)?;
-        Some(asset)
-    } else {
-        None
-    };
 
     let lowlevel_data = if let Some(data) = lowlevel_data {
         let data = hex::decode(data).c(d!())?;
