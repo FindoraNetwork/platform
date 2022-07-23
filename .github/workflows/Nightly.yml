@@ -52,6 +52,7 @@ jobs:
       run: |
         export DATA=$(date '+%Y-%m-%d')
         export IMAGE_TAG="${BUILD_TYPE}-${DATA}"
+        export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_release_binary_image
     - name: Build findorad images
@@ -62,6 +63,7 @@ jobs:
       run: |
         export DATA=$(date '+%Y-%m-%d')
         export IMAGE_TAG="${BUILD_TYPE}-${DATA}"
+        export VERGEN_SHA_EXTERN="${IMAGE_TAG}"       
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image
     - name: Login ECR
@@ -79,6 +81,7 @@ jobs:
       run: |
         export DATA=$(date '+%Y-%m-%d')
         export IMAGE_TAG="${BUILD_TYPE}-${DATA}"
+        export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_push_image
 
