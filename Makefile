@@ -16,7 +16,7 @@ export ENABLE_QUERY_SERVICE = true
 EXTERNAL_ADDRESS = ""
 
 ifndef CARGO_TARGET_DIR
-	export CARGO_TARGET_DIR=target
+	export CARGO_TARGET_DIR=/tmp/cargo_target_dir/findora/platform
 endif
 
 $(info ====== Build root is "$(CARGO_TARGET_DIR)" ======)
@@ -33,11 +33,11 @@ define pack
 	mkdir $(1)
 	cd $(1); for i in $(subdirs); do mkdir $$i; done
 	cp \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/findorad \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/abcid \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/findorad \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/abcid \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
 		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
 	cp $(1)/$(bin_dir)/* ~/.cargo/bin/
@@ -130,10 +130,10 @@ fmtall:
 
 clean:
 	cargo clean
-	rm -rf tools/tendermint .git/modules/tools/tendermint
-	rm -rf debug release Cargo.lock
+	rm -rf debug release
 
 cleanall: clean
+	rm -rf tools/tendermint .git/modules/tools/tendermint
 	git clean -fdx
 
 wasm:
@@ -173,7 +173,7 @@ join_mainnet: stop_debug_env build_release_goleveldb
 	bash tools/node_init.sh mainnet
 
 start_localnode: stop_debug_env
-	bash tools/node_init.sh _ _
+	bash -x tools/node_init.sh _ _
 
 # ci_build_image:
 # 	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \
