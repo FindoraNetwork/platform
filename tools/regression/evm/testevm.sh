@@ -4,6 +4,30 @@ EVM_SCRIPTS_PATH="tools/regression/evm/scripts"
 source $EVM_SCRIPTS_PATH/env.sh
 let SLEEP_INTERVAL=($BLOCK_INTERVAL + 1)
 
+if [ ! -z "$ENV_FRA_DEST_ADDR" ]
+then
+    FRA_DEST_ADDR="$ENV_FRA_DEST_ADDR"
+fi
+if [ ! -z "$ENV_FRA_SEC_KEY" ]
+then
+    FRA_SEC_KEY="$ENV_FRA_SEC_KEY"
+fi
+if [ ! -z "$ENV_ETH_KEY" ]
+then
+    ETH_KEY="$ENV_ETH_KEY"
+fi
+if [ ! -z "$ENV_ETH_PK" ]
+then
+    ETH_PK="$ENV_ETH_PK"
+fi
+if [ ! -z "$ENV_ETH_ADDR" ]
+then
+    ETH_ADDR="$ENV_ETH_ADDR"
+fi
+if [ ! -z "$ENV_ETH_DEST_ADDR" ]
+then
+    ETH_DEST_ADDR="$ENV_ETH_DEST_ADDR"
+fi
 
 #Run Tests
 echo -e "${YEL}Run test cases and verify results${NC}"

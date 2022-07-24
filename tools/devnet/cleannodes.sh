@@ -22,7 +22,7 @@ do
 if [ -z "$Node" ] || ([ ! -z "$Node" ] && [ "$Node" = "$node" ]); then
     echo -en "$node "
     # abcis
-    ls -d $DEVNET/$node/abci/* | grep -v 'abci.toml' | xargs rm -r
+    ls -d $DEVNET/$node/abci/* | grep -v 'abci.toml' | xargs rm -rf
 
     # tendermint
     rm -rf $DEVNET/$node/data/*.db
