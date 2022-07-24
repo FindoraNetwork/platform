@@ -23,12 +23,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+      with: 
+        ref: develop
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
         override: true
         components: rustfmt
-        ref: develop
+
 
 
     - name: Prepare key
