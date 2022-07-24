@@ -12,6 +12,7 @@ use {
     crate::api::{
         query_server::query_api, submission_server::submission_api::SubmissionApi,
     },
+    baseapp::tm_events::init_url,
     config::abci::{global_cfg::CFG, ABCIConfig},
     futures::executor::ThreadPool,
     lazy_static::lazy_static,
@@ -89,6 +90,7 @@ pub fn run() -> Result<()> {
             "http://{}:{}",
             config.tendermint_host, config.tendermint_port
         );
+        pnk!(init_url(tendermint_rpc.as_str()));
         web3_rpc =
             fc_rpc::start_web3_service(evm_http, evm_ws, tendermint_rpc, base_app);
     }

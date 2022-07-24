@@ -1,8 +1,8 @@
 name: Nightly
 # on:
-  # push:
-  #   branches:
-  #     - nightly-build
+#   push:
+#     branches:
+#       - nightly-build
 on:
   schedule:
     - cron: '0 0 * * *'

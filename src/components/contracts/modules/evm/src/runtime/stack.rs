@@ -6,6 +6,7 @@ use evm::{
     executor::{StackState, StackSubstateMetadata},
     ExitError, Transfer,
 };
+use fin_db::FinDB;
 use fp_core::{context::Context, macros::Get};
 use fp_evm::{Log, Vicinity};
 use fp_storage::{BorrowMut, DerefMut};
@@ -13,7 +14,7 @@ use fp_traits::{account::AccountAsset, evm::BlockHashMapping};
 use fp_utils::timestamp_converter;
 use log::info;
 use std::{collections::btree_set::BTreeSet, marker::PhantomData, mem};
-use storage::{db::FinDB, state::State};
+use storage::state::State;
 
 pub struct FindoraStackSubstate<'context, 'config> {
     pub ctx: &'context Context,
@@ -331,8 +332,11 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
         let source = C::AddressMapping::convert_to_account_id(transfer.source);
         let target = C::AddressMapping::convert_to_account_id(transfer.target);
 
-        C::AccountAsset::transfer(self.ctx, &source, &target, transfer.value)
-            .map_err(|_| ExitError::OutOfFund)
+        let result =
+            C::AccountAsset::transfer(self.ctx, &source, &target, transfer.value)
+                .map_err(|_| ExitError::OutOfFund);
+
+        result
     }
 
     fn reset_balance(&mut self, _address: H160) {

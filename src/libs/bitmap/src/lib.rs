@@ -24,7 +24,6 @@
 
 #![deny(warnings)]
 #![deny(missing_docs)]
-
 #[cfg(test)]
 mod test;
 

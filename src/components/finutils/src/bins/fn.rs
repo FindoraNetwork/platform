@@ -27,15 +27,21 @@
 
 use {
     clap::{crate_authors, load_yaml, App},
-    finutils::common::{self, evm::*},
+    finutils::common::{self, evm::*, get_keypair, utils},
     fp_utils::ecdsa::SecpPair,
     globutils::wallet,
     ledger::{
-        data_model::{AssetTypeCode, FRA_DECIMALS},
+        data_model::{AssetTypeCode, ASSET_TYPE_FRA, FRA_DECIMALS},
         staking::StakerMemo,
     },
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
     ruc::*,
-    std::{fmt, fs},
+    serde::{Deserialize, Serialize},
+    std::fs::File,
+    std::{borrow::Borrow, fmt, fs},
+    zei::anon_xfr::keys::AXfrKeyPair,
+    zei::anon_xfr::structs::OpenAnonAssetRecordBuilder,
 };
 
 fn main() {
@@ -67,6 +73,7 @@ fn run() -> Result<()> {
                 }
                 None => None,
             };
+
             // FRA asset is the default case
             let asset = if let Some(code) = m.value_of("asset") {
                 match code.to_lowercase().as_str() {
@@ -126,12 +133,6 @@ fn run() -> Result<()> {
         common::undelegate(seckey.as_deref(), param).c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("asset") {
         if m.is_present("create") {
-            let seckey = match m.value_of("seckey") {
-                Some(path) => {
-                    Some(fs::read_to_string(path).c(d!("Failed to read seckey file"))?)
-                }
-                None => None,
-            };
             let memo = m.value_of("memo");
             if memo.is_none() {
                 println!("{}", m.usage());
@@ -154,7 +155,6 @@ fn run() -> Result<()> {
             };
             let token_code = m.value_of("code");
             common::create_asset(
-                seckey.as_deref(),
                 memo.unwrap(),
                 decimal,
                 max_units,
@@ -294,12 +294,7 @@ fn run() -> Result<()> {
             common::setup(sa, om, tp).c(d!())?;
         }
     } else if let Some(m) = matches.subcommand_matches("transfer") {
-        let f = match m.value_of("from-seckey") {
-            Some(path) => {
-                Some(fs::read_to_string(path).c(d!("Failed to read seckey file"))?)
-            }
-            None => None,
-        };
+        let f = read_file_path(m.value_of("from-seckey")).c(d!())?;
         let asset = m.value_of("asset").unwrap_or("FRA");
         let t = m
             .value_of("to-pubkey")
@@ -385,17 +380,313 @@ fn run() -> Result<()> {
         );
     } else if let Some(m) = matches.subcommand_matches("account") {
         let address = m.value_of("addr");
-        let (account, info) = contract_account_info(address)?;
-        println!("AccountId: {}\n{:#?}\n", account, info);
+        let sec_key = m.value_of("sec-key");
+
+        // FRA asset is the default case
+        let asset = if let Some(code) = m.value_of("asset") {
+            match code.to_lowercase().as_str() {
+                "fra" => None,
+                _ => Some(code),
+            }
+        } else {
+            None
+        };
+        if sec_key.is_some() {
+            //Asset defaults to fra
+            common::show_account(sec_key, asset).c(d!())?;
+        }
+        if address.is_some() {
+            let (account, info) = contract_account_info(address)?;
+            println!("AccountId: {}\n{:#?}\n", account, info);
+        }
     } else if let Some(m) = matches.subcommand_matches("contract-deposit") {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");
-        transfer_to_account(amount.parse::<u64>().c(d!())?, address)?
+        let asset = m.value_of("asset");
+        let lowlevel_data = m.value_of("lowlevel-data");
+        transfer_to_account(
+            amount.parse::<u64>().c(d!())?,
+            asset,
+            address,
+            lowlevel_data,
+        )?
     } else if let Some(m) = matches.subcommand_matches("contract-withdraw") {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");
         let eth_key = m.value_of("eth-key");
         transfer_from_account(amount.parse::<u64>().c(d!())?, address, eth_key)?
+    } else if let Some(m) = matches.subcommand_matches("convert-bar-to-abar") {
+        // sender Xfr secret key
+        let f = read_file_path(m.value_of("from-seckey")).c(d!())?;
+        let owner_sk = f.as_ref();
+
+        // receiver AXfr secret key parsed & the receiver Axfr address
+        let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
+        let target_addr = anon_keys.pub_key;
+
+        // The TxoSID to be spent for conversion to ABAR(Anon Blind Asset Record)
+        let txo_sid = m.value_of("txo-sid");
+
+        if txo_sid.is_none() {
+            println!("{}", m.usage());
+        } else {
+            // call the convert function to build and send transaction
+            // it takes owner Xfr secret key, Axfr address and TxoSID
+            let r = common::convert_bar2abar(owner_sk, target_addr, txo_sid.unwrap())
+                .c(d!())?;
+
+            // Print commitment to terminal
+            println!(
+                "\x1b[31;01m Commitment: {}\x1b[00m",
+                wallet::commitment_to_base58(&r)
+            );
+            // write the commitment base64 form to the owned_commitments file
+            let mut file = fs::OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open("owned_commitments")
+                .expect("cannot open commitments file");
+            std::io::Write::write_all(
+                &mut file,
+                ("\n".to_owned() + &wallet::commitment_to_base58(&r)).as_bytes(),
+            )
+            .expect("commitment write failed");
+        }
+    } else if let Some(m) = matches.subcommand_matches("convert-abar-to-bar") {
+        // get anon keys for conversion
+        let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
+        let spend_key = anon_keys.spend_key;
+        // get the BAR receiver address
+        let to = m
+            .value_of("to-pubkey")
+            .c(d!())
+            .and_then(wallet::public_key_from_base64)
+            .or_else(|_| {
+                m.value_of("to-wallet-address").c(d!()).and_then(|addr| {
+                    wallet::public_key_from_bech32(addr).c(d!("invalid wallet address"))
+                })
+            })?;
+
+        // get the commitments for abar conversion and anon_fee
+        let commitment = m.value_of("commitment");
+
+        if commitment.is_none() {
+            println!("{}", m.usage());
+        } else {
+            // Build transaction and submit to network
+            common::convert_abar2bar(
+                spend_key,
+                commitment.unwrap(),
+                &to,
+                m.is_present("confidential-amount"),
+                m.is_present("confidential-type"),
+            )
+            .c(d!())?;
+        }
+    } else if let Some(m) = matches.subcommand_matches("gen-anon-keys") {
+        let mut prng = ChaChaRng::from_entropy();
+        let keypair = AXfrKeyPair::generate(&mut prng);
+
+        let keys = AnonKeys {
+            spend_key: wallet::anon_secret_key_to_base64(&keypair),
+            pub_key: wallet::anon_public_key_to_base64(&keypair.get_pub_key()),
+            view_key: wallet::anon_view_key_to_base64(&keypair.get_view_key()),
+        };
+
+        if let Some(path) = m.value_of("file-path") {
+            serde_json::to_writer_pretty(&File::create(path).c(d!())?, &keys).c(d!())?;
+            println!("Keys saved to file: {}", path);
+        }
+
+        // print keys to terminal
+        println!("Keys :\n {}", serde_json::to_string_pretty(&keys).unwrap());
+    } else if let Some(m) = matches.subcommand_matches("owned-abars") {
+        // Generates a list of owned Abars (both spent and unspent)
+        let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
+        let spend_key =
+            wallet::anon_secret_key_from_base64(anon_keys.spend_key.as_str()).c(d!())?;
+
+        let commitments_list = m
+            .value_of("commitments")
+            .unwrap_or_else(|| panic!("Commitment list missing \n {}", m.usage()));
+
+        common::get_owned_abars(spend_key, commitments_list)?;
+    } else if let Some(m) = matches.subcommand_matches("anon-balance") {
+        // Generates a list of owned Abars (both spent and unspent)
+        let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
+        let spend_key =
+            wallet::anon_secret_key_from_base64(anon_keys.spend_key.as_str()).c(d!())?;
+        let asset = m.value_of("asset");
+
+        let commitments_list = m
+            .value_of("commitments")
+            .unwrap_or_else(|| panic!("Commitment list missing \n {}", m.usage()));
+
+        common::anon_balance(spend_key, commitments_list, asset)?;
+    } else if let Some(m) = matches.subcommand_matches("owned-open-abars") {
+        let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
+        let commitment_str = m.value_of("commitment");
+
+        // create derived public key
+        let commitment = wallet::commitment_from_base58(commitment_str.unwrap())?;
+        let spend_key =
+            wallet::anon_secret_key_from_base64(anon_keys.spend_key.as_str()).c(d!())?;
+
+        // get results from query server and print
+        let (uid, abar) = utils::get_owned_abar(&commitment).c(d!())?;
+        let memo = utils::get_abar_memo(&uid).unwrap().unwrap();
+        let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo, &spend_key)
+            .unwrap()
+            .build()
+            .unwrap();
+
+        println!(
+            "(AtxoSID, ABAR, OABAR)   :  {}",
+            serde_json::to_string(&(uid, abar, oabar)).c(d!())?
+        );
+    } else if let Some(m) = matches.subcommand_matches("owned-utxos") {
+        // All assets are shown in the default case
+        let asset = m.value_of("asset");
+
+        // fetch filtered list by asset
+        let list = common::get_owned_utxos(asset)?;
+        let pk = wallet::public_key_to_base64(get_keypair().unwrap().pub_key.borrow());
+
+        // Print UTXO table
+        println!("Owned utxos for {:?}", pk);
+        println!("{:-^1$}", "", 100);
+        println!(
+            "{0: <8} | {1: <18} | {2: <45} ",
+            "ATxoSID", "Amount", "AssetType"
+        );
+        for (a, b, c) in list.iter() {
+            let amt = b
+                .get_amount()
+                .map_or_else(|| "Confidential".to_string(), |a| a.to_string());
+            let at = c.get_asset_type().map_or_else(
+                || "Confidential".to_string(),
+                |at| AssetTypeCode { val: at }.to_base64(),
+            );
+
+            println!("{0: <8} | {1: <18} | {2: <45} ", a.0, amt, at);
+        }
+    } else if let Some(m) = matches.subcommand_matches("anon-transfer") {
+        // get anon keys of sender
+        let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
+        let spend_key = anon_keys.spend_key;
+
+        // get commitments
+        let commitment = m.value_of("commitment");
+        let fee_commitment = m.value_of("fra-commitment");
+
+        // get receiver keys and amount
+        let to_axfr_public_key = m.value_of("to-axfr-public-key");
+        let amount = m.value_of("amount");
+
+        if commitment.is_none() || to_axfr_public_key.is_none() || amount.is_none() {
+            println!("{}", m.usage());
+        } else {
+            // build transaction and submit
+            common::gen_anon_transfer_op(
+                spend_key,
+                commitment.unwrap(),
+                fee_commitment,
+                amount.unwrap(),
+                to_axfr_public_key.unwrap(),
+            )
+            .c(d!())?;
+        }
+    } else if let Some(m) = matches.subcommand_matches("anon-transfer-batch") {
+        let spend_keys = m.value_of("axfr-secretkey-file").c(d!()).and_then(|f| {
+            fs::read_to_string(f).c(d!()).and_then(|sks| {
+                sks.lines()
+                    .map(|sk| wallet::anon_secret_key_from_base64(sk.trim()))
+                    .collect::<Result<Vec<_>>>()
+                    .c(d!("invalid file"))
+            })
+        })?;
+        let to_axfr_public_keys = m
+            .value_of("to-axfr-public-key-file")
+            .c(d!())
+            .and_then(|f| {
+                fs::read_to_string(f).c(d!()).and_then(|pks| {
+                    pks.lines()
+                        .map(|pk| wallet::anon_public_key_from_base64(pk.trim()))
+                        .collect::<Result<Vec<_>>>()
+                        .c(d!("invalid file"))
+                })
+            })?;
+        let commitments = m.value_of("commitment-file").c(d!()).and_then(|f| {
+            fs::read_to_string(f)
+                .c(d!())
+                .map(|rms| rms.lines().map(String::from).collect::<Vec<String>>())
+        })?;
+        let amounts = m.value_of("amount-file").c(d!()).and_then(|f| {
+            fs::read_to_string(f)
+                .c(d!())
+                .map(|ams| ams.lines().map(String::from).collect::<Vec<String>>())
+        })?;
+        let assets = m.value_of("asset-file").c(d!()).and_then(|f| {
+            let token_code = |asset: &str| {
+                if asset.to_uppercase() == "FRA" {
+                    AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    }
+                } else {
+                    AssetTypeCode::new_from_base64(asset).unwrap_or(AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    })
+                }
+            };
+            fs::read_to_string(f)
+                .c(d!())
+                .map(|ams| ams.lines().map(token_code).collect::<Vec<AssetTypeCode>>())
+        })?;
+
+        if spend_keys.is_empty()
+            || to_axfr_public_keys.is_empty()
+            || commitments.is_empty()
+            || amounts.is_empty()
+            || assets.is_empty()
+        {
+            println!("{}", m.usage());
+        } else {
+            common::gen_oabar_add_op_x(
+                spend_keys,
+                to_axfr_public_keys,
+                commitments,
+                amounts,
+                assets,
+            )
+            .c(d!())?;
+        }
+    } else if let Some(m) = matches.subcommand_matches("anon-fetch-merkle-proof") {
+        let atxo_sid = m.value_of("atxo-sid");
+
+        if atxo_sid.is_none() {
+            println!("{}", m.usage());
+        } else {
+            let mt_leaf_info = common::get_mtleaf_info(atxo_sid.unwrap()).c(d!())?;
+            println!("{:?}", serde_json::to_string_pretty(&mt_leaf_info));
+        }
+    } else if let Some(m) = matches.subcommand_matches("check-abar-status") {
+        let anon_keys = match m.value_of("anon-keys") {
+            Some(path) => {
+                let f =
+                    fs::read_to_string(path).c(d!("Failed to read anon-keys file"))?;
+                let keys = serde_json::from_str::<AnonKeys>(f.as_str()).c(d!())?;
+                keys
+            }
+            None => return Err(eg!("path for anon-keys file not found")),
+        };
+        let commitment_str = m.value_of("commitment");
+        let commitment = wallet::commitment_from_base58(commitment_str.unwrap())?;
+
+        let spend_key =
+            wallet::anon_secret_key_from_base64(anon_keys.spend_key.as_str()).c(d!())?;
+
+        let abar = utils::get_owned_abar(&commitment).c(d!())?;
+        common::check_abar_status(spend_key, abar).c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("replace_staker") {
         let target = m
             .value_of("target")
@@ -431,6 +722,24 @@ fn run() -> Result<()> {
     Ok(())
 }
 
+fn read_file_path(path: Option<&str>) -> Result<Option<String>> {
+    Ok(match path {
+        Some(path) => {
+            Some(fs::read_to_string(path).c(d!("Failed to read seckey file"))?)
+        }
+        None => None,
+    })
+}
+
+fn parse_anon_key_from_path(path: Option<&str>) -> Result<AnonKeys> {
+    let f = read_file_path(path).c(d!())?;
+    if f.is_none() {
+        return Err(eg!("Anon keypair path not found"));
+    }
+
+    serde_json::from_str::<AnonKeys>(f.unwrap().as_str()).c(d!())
+}
+
 fn tip_fail(e: impl fmt::Display) {
     eprintln!("\n\x1b[31;01mFAIL !!!\x1b[00m");
     eprintln!(
@@ -443,4 +752,11 @@ fn tip_success() {
     println!(
         "\x1b[35;01mNote\x1b[01m:\n\tYour operations has been executed without local error,\n\tbut the final result may need an asynchronous query.\x1b[00m"
     );
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+pub struct AnonKeys {
+    pub spend_key: String,
+    pub view_key: String,
+    pub pub_key: String,
 }

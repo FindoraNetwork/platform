@@ -8,7 +8,7 @@ edition = "2021"
 ruc = "1.0"
 bincode = "1.2.1"
 cryptohash = { path = "../cryptohash" }
-rand = "0.7.3"
+rand = "0.8"
 serde = "1.0.124"
 serde_derive = "1.0"
 serde_json = "1.0"

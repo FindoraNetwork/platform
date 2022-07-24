@@ -19,7 +19,7 @@ rlp = "0.5"
 ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0.64"
-sha3 = "0.8"
+sha3 = "0.10"
 lazy_static = "1.4.0"
 
 # primitives, don't depend on any modules
@@ -31,11 +31,13 @@ fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
 config = { path = "../../../config"}
+
 [dev-dependencies]
 baseapp = { path = "../../baseapp" }
 fp-mocks = { path = "../../primitives/mocks" }
 module-account = { path = "../account" }
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.5" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.1" }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.1" }
 
 [features]
 default = []

@@ -1,17 +1,19 @@
-use bech32::{FromBase32, ToBase32};
-use core::convert::TryFrom;
-use core::fmt::Formatter;
-use core::str::FromStr;
-use fp_utils::{ecdsa, hashing::keccak_256};
-use globutils::wallet;
-use hex::FromHex;
-use primitive_types::{H160, H256};
-use ruc::{d, eg, RucResult};
-use serde::{Deserialize, Serialize};
-use sha3::{Digest, Keccak256};
-use std::ops::{Deref, DerefMut};
-use zei::serialization::ZeiFromToBytes;
-use zei::xfr::sig::{XfrPublicKey, XfrSignature};
+use {
+    bech32::{FromBase32, ToBase32},
+    core::convert::TryFrom,
+    core::fmt::Formatter,
+    core::str::FromStr,
+    fp_utils::{ecdsa, hashing::keccak_256},
+    globutils::wallet,
+    hex::FromHex,
+    primitive_types::{H160, H256},
+    ruc::{d, eg, RucResult},
+    serde::{Deserialize, Serialize},
+    sha3::{Digest, Keccak256},
+    std::ops::{Deref, DerefMut},
+    zei::xfr::sig::{XfrPublicKey, XfrSignature},
+    zei_algebra::serialization::ZeiFromToBytes,
+};
 
 /// An opaque 32-byte cryptographic identifier.
 #[derive(

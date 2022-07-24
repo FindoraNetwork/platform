@@ -9,6 +9,11 @@ if [ ! -z "$1" ]; then
     Node="node$1"
 fi
 
+# finish if devnet never created
+if [ ! -d "$DEVNET" ]; then
+    exit 0
+fi
+
 # stop abcis
 nodes=`ls -l $DEVNET | grep node  | awk '(NR>0){print $9}' | sort -V`
 
@@ -18,7 +23,7 @@ for node in $nodes
 do
     abci=`pgrep -f "abcid $DEVNET/$node$" | tr "\n" " " | xargs echo -n`
     tdmt=`pgrep -f "tendermint node --home $DEVNET/$node$"`
-    if [ ! -z "$abci" ] && ([ -z "$Node" ] || [ "$Node" = "$node" ]); then
+    if ([ -n "$abci" ] || [ -n "$tdmt" ]) && ([ -z "$Node" ] || [ "$Node" = "$node" ]); then
         if [ "$killed" = false ]; then
             echo -n "killed abci: "
             killed=true

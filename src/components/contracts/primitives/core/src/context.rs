@@ -1,8 +1,6 @@
 use abci::Header;
-use storage::{
-    db::{FinDB, RocksDB},
-    state::{ChainState, State},
-};
+use fin_db::{FinDB, RocksDB};
+use storage::state::{ChainState, State};
 
 pub use parking_lot::RwLock;
 pub use std::sync::Arc;

@@ -1,5 +1,6 @@
 use baseapp::BaseApp;
 use ethereum::{TransactionAction, TransactionSignature, TransactionV0};
+use fin_db::{FinDB, RocksDB};
 use fp_core::context::Context;
 use fp_storage::{Borrow, BorrowMut, RwLock};
 use fp_types::crypto::HA256;
@@ -9,7 +10,6 @@ use sha3::{Digest, Keccak256};
 use std::env::temp_dir;
 use std::sync::Arc;
 use std::time::SystemTime;
-use storage::db::{FinDB, RocksDB};
 use storage::state::ChainState;
 
 fn setup() -> Context {

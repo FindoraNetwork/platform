@@ -4,7 +4,7 @@
 source tools/devnet/env.sh || exit 1
 
 # get params if provided
-V="3"
+V="1"
 N="1"
 if [ ! -z "$1" ] && [ ! -z "$2" ]; then
     V=$1
@@ -24,10 +24,8 @@ do
     mkdir -p $DEVNET/$node/abci
 done
 
-# config nodes and abcis
-script_config=$(dirname "$0")/confignodes.py
 echo -n "setting $(($V+$N)) nodes: "
-python3 $script_config
+./tools/devnet/confignodes.sh
 if [ $? -ne 0 ]; then
     echo -en "${RED}failed${NC}"
 else
