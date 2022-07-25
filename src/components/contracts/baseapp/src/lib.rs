@@ -34,9 +34,7 @@ use notify::*;
 use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
 use ruc::{eg, Result};
-use std::borrow::BorrowMut;
-use std::path::Path;
-use std::sync::Arc;
+use std::{borrow::BorrowMut, path::Path, sync::Arc};
 use storage::state::ChainState;
 
 lazy_static! {
@@ -292,9 +290,19 @@ impl BaseApp {
     }
 
     fn update_state(ctx: &mut Context, header: Header, header_hash: Vec<u8>) {
-        ctx.run_mode = RunTxMode::None;
         ctx.header_hash = header_hash;
         ctx.header = header;
+    }
+
+    fn update_deliver_state_cache(&mut self) {
+        // Clone newest cache from check_state to deliver_state
+        // Oldest cache will be dropped, currently drop cache two blocks ago
+        self.deliver_state.eth_cache.current = Default::default();
+        self.deliver_state.eth_cache.history_n =
+            self.deliver_state.eth_cache.history_1.clone();
+        // Deliver_state history_1 cache will share the newest transactions from check_state
+        self.deliver_state.eth_cache.history_1 =
+            self.check_state.eth_cache.current.clone();
     }
 
     pub fn deliver_findora_tx(
