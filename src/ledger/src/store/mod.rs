@@ -1096,7 +1096,9 @@ impl LedgerState {
     pub fn get_state_commitment(&self) -> (HashOf<Option<StateCommitmentData>>, u64) {
         let block_count = self.status.block_commit_count;
         let commitment = self
-            .status
+            .api_cache
+            .as_ref()
+            .unwrap()
             .state_commitment_versions
             .last()
             .unwrap_or_else(|| HashOf::new(&None));
