@@ -83,6 +83,10 @@ jobs:
           cp -r ${{ steps.vars.outputs.tmp }}/web ./
           cp -r ${{ steps.vars.outputs.tmp }}/lightweight ./
 
+          # debugging purpose
+          ls -lah ${{ steps.vars.outputs.tmp }}/
+          ls -lah ./
+
           # commit and push
           git status
           git add .
