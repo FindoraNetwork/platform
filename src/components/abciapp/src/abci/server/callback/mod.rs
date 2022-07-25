@@ -128,6 +128,9 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                     } else if TX_HISTORY.read().contains_key(&tx.hash_tm_rawbytes()) {
                         resp.log = "Historical transaction".to_owned();
                         resp.code = 1;
+                    } else if !s.la.read().cmp_undelegate_amount(&tx) {
+                        resp.code = 1;
+                        resp.log = "Amount exceeds limits".to_owned();
                     }
                 } else {
                     resp.log = "Invalid format".to_owned();
