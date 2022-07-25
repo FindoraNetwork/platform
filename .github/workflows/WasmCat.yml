@@ -83,12 +83,11 @@ jobs:
           cp -r ${{ steps.vars.outputs.tmp }}/web ./
           cp -r ${{ steps.vars.outputs.tmp }}/lightweight ./
 
-          # debugging purpose
-          ls -lah ${{ steps.vars.outputs.tmp }}/
-          ls -lah ./
-
           # commit and push
+          git add ./bundler 
+          git add ./nodejs 
+          git add ./web
+          git add ./lightweight 
           git status
-          git add .
           git commit -m "platform (${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.sha }}) by wasmcat-bot automation push 🚀"
           git push -f -u origin ${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.branch }}
