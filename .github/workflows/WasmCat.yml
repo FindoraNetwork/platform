@@ -84,6 +84,7 @@ jobs:
           cp -r ${{ steps.vars.outputs.tmp }}/lightweight ./
 
           # commit and push
+          git status
           git add .
           git commit -m "platform (${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.sha }}) by wasmcat-bot automation push 🚀"
           git push -f -u origin ${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.branch }}
