@@ -6,8 +6,8 @@ use {
     crate::{
         data_model::{
             ATxoSID, AssetTypeCode, AssetTypePrefix, DefineAsset, IssueAsset,
-            IssuerPublicKey, Operation, Transaction, TxOutput, TxnIDHash, TxnSID,
-            TxoSID, XfrAddress, ASSET_TYPE_FRA,
+            IssuerPublicKey, Operation, StateCommitmentData, Transaction, TxOutput,
+            TxnIDHash, TxnSID, TxoSID, XfrAddress, ASSET_TYPE_FRA,
         },
         staking::{
             ops::mint_fra::MintEntry, Amount, BlockHeight, DelegationRwdDetail,
@@ -19,7 +19,7 @@ use {
     fbnc::NumKey,
     fbnc::{new_mapx, new_mapxnk, Mapx, Mapxnk},
     fp_utils::hashing::keccak_256,
-    globutils::wallet,
+    globutils::{wallet, HashOf},
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
@@ -80,6 +80,9 @@ pub struct ApiCache {
         Mapx<XfrPublicKey, Mapxnk<BlockHeight, DelegationRwdDetail>>,
     /// there are no transactions lost before last_sid
     pub last_sid: Mapx<String, u64>,
+    /// State commitment history.
+    /// The BitDigest at index i is the state commitment of the ledger at block height  i + 1.
+    pub state_commitment_version: Option<HashOf<Option<StateCommitmentData>>>,
 }
 
 impl ApiCache {
@@ -132,6 +135,7 @@ impl ApiCache {
                 prefix
             )),
             last_sid: new_mapx!(format!("api_cache/{}last_sid", prefix)),
+            state_commitment_version: None,
         }
     }
 
@@ -482,6 +486,10 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
     };
 
     let prefix = api_cache.prefix.clone();
+
+    // Update state commitment versions
+    ledger.api_cache.as_mut().unwrap().state_commitment_version =
+        ledger.status.state_commitment_versions.last();
 
     // Update ownership status
     for (txn_sid, txo_sids, atxo_sids) in block

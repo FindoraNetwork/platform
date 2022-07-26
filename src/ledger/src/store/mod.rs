@@ -292,7 +292,7 @@ impl LedgerState {
 
     /// Finish current block, peform following operations:
     ///    Invalid current input utxos
-    ///    Apply current block to ledger status
+    ///    Apply current block to ledger status    }
     ///    Update Utxo map
     pub fn finish_block(&mut self, mut block: BlockEffect) -> Result<TmpSidMap> {
         {
@@ -397,6 +397,7 @@ impl LedgerState {
     pub fn tmp_ledger() -> LedgerState {
         fbnc::clear();
         let tmp_dir = globutils::fresh_tmp_dir().to_string_lossy().into_owned();
+        env::set_var("FINDORAD_KEEP_HIST", "1");
         LedgerState::new(&tmp_dir, Some("test")).unwrap()
     }
 
@@ -1126,12 +1127,22 @@ impl LedgerState {
     #[allow(missing_docs)]
     pub fn get_state_commitment(&self) -> (HashOf<Option<StateCommitmentData>>, u64) {
         let block_count = self.status.block_commit_count;
-        let commitment = self
-            .status
-            .state_commitment_versions
-            .last()
-            .unwrap_or_else(|| HashOf::new(&None));
-        (commitment, block_count)
+        if !*KEEP_HIST {
+            let mut commitment:HashOf<Option<StateCommitmentData>> = HashOf::new(&None);
+            for a in self.status.state_commitment_versions.iter() {
+                commitment = a.clone();
+            }
+            (commitment, block_count)
+        } else {
+            let commitment = self
+                .api_cache
+                .as_ref()
+                .unwrap()
+                .state_commitment_version
+                .clone()
+                .unwrap_or_else(|| HashOf::new(&None));
+            (commitment, block_count)
+        }
     }
 
     #[inline(always)]
