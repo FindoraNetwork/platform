@@ -40,7 +40,9 @@ impl<C: Config> AccountAsset<Address> for App<C> {
     }
 
     fn inc_nonce(ctx: &Context, who: &Address) -> Result<U256> {
-        let mut sa = Self::account_of(ctx, who, None).c(d!("account does not exist"))?;
+        // let mut sa = Self::account_of(ctx, who, None).c(d!("account does not exist"))?;
+        let mut sa = Self::account_of(ctx, who, None).unwrap_or_default();
+
         sa.nonce = sa.nonce.saturating_add(U256::one());
         AccountStore::insert(ctx.state.write().borrow_mut(), who, &sa).map(|()| sa.nonce)
     }
