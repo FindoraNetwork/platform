@@ -84,10 +84,10 @@ jobs:
           cp -r ${{ steps.vars.outputs.tmp }}/lightweight ./
 
           # commit and push
-          git add ./bundler 
-          git add ./nodejs 
-          git add ./web
-          git add ./lightweight 
+          git add -f ./bundler 
+          git add -f ./nodejs 
+          git add -f ./web
+          git add -f ./lightweight 
           git status
           git commit -m "platform (${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.sha }}) by wasmcat-bot automation push 🚀"
           git push -f -u origin ${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.branch }}
