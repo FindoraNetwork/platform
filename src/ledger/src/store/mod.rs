@@ -397,6 +397,7 @@ impl LedgerState {
     pub fn tmp_ledger() -> LedgerState {
         fbnc::clear();
         let tmp_dir = globutils::fresh_tmp_dir().to_string_lossy().into_owned();
+        env::set_var("FINDORAD_KEEP_HIST", "1");
         LedgerState::new(&tmp_dir, Some("test")).unwrap()
     }
 
