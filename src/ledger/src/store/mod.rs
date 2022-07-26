@@ -862,64 +862,76 @@ impl LedgerState {
     /// Get a utxo along with the transaction, spent status and commitment data which it belongs
     pub fn get_utxo(&self, id: TxoSID) -> Option<AuthenticatedUtxo> {
         if let Some(utxo) = self.status.get_utxo(id) {
-            let txn_location = self.status.txo_to_txn_location.get(&id).unwrap();
-            let authenticated_txn = self.get_transaction(txn_location.0).unwrap();
-            let authenticated_spent_status = self.get_utxo_status(id);
-            let state_commitment_data =
-                self.status.state_commitment_data.as_ref().unwrap().clone();
-            let utxo_location = txn_location.1;
-            Some(AuthenticatedUtxo {
-                utxo,
-                authenticated_txn,
-                authenticated_spent_status,
-                utxo_location,
-                state_commitment_data,
-            })
-        } else {
-            None
+            if let Some(txn_location) = self.status.txo_to_txn_location.get(&id) {
+                if let Ok(authenticated_txn) = self.get_transaction(txn_location.0) {
+                    let authenticated_spent_status = match self.get_utxo_status(id) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            log::error!("{}", e);
+                            return None;
+                        }
+                    };
+                    let state_commitment_data =
+                        self.status.state_commitment_data.as_ref().unwrap().clone();
+                    let utxo_location = txn_location.1;
+                    return Some(AuthenticatedUtxo {
+                        utxo,
+                        authenticated_txn,
+                        authenticated_spent_status,
+                        utxo_location,
+                        state_commitment_data,
+                    });
+                };
+            };
         }
+        None
     }
 
     /// Get a utxo along with the transaction which it belongs
     /// Avoid ledger query operation to reduce latency
     pub fn get_utxo_light(&self, id: TxoSID) -> Option<UnAuthenticatedUtxo> {
         if let Some(utxo) = self.status.get_utxo(id) {
-            let txn_location = self.status.txo_to_txn_location.get(&id).unwrap();
-            if let Ok(txn) = self.get_transaction_light(txn_location.0) {
-                let utxo_location = txn_location.1;
-                Some(UnAuthenticatedUtxo {
-                    utxo,
-                    txn,
-                    utxo_location,
-                })
-            } else {
-                None
-            }
-        } else {
-            None
+            if let Some(txn_location) = self.status.txo_to_txn_location.get(&id) {
+                if let Ok(txn) = self.get_transaction_light(txn_location.0) {
+                    let utxo_location = txn_location.1;
+                    return Some(UnAuthenticatedUtxo {
+                        utxo,
+                        txn,
+                        utxo_location,
+                    });
+                }
+            };
         }
+        None
     }
 
     /// Get a spent utxo along with the transaction, spent status and commitment data which it belongs
     pub fn get_spent_utxo(&self, addr: TxoSID) -> Option<AuthenticatedUtxo> {
         let utxo = self.status.get_spent_utxo(addr);
         if let Some(utxo) = utxo {
-            let txn_location = self.status.txo_to_txn_location.get(&addr).unwrap();
-            let authenticated_txn = self.get_transaction(txn_location.0).unwrap();
-            let authenticated_spent_status = self.get_utxo_status(addr);
-            let state_commitment_data =
-                self.status.state_commitment_data.as_ref().unwrap().clone();
-            let utxo_location = txn_location.1;
-            Some(AuthenticatedUtxo {
-                utxo,
-                authenticated_txn,
-                authenticated_spent_status,
-                utxo_location,
-                state_commitment_data,
-            })
-        } else {
-            None
+            if let Some(txn_location) = self.status.txo_to_txn_location.get(&addr) {
+                if let Ok(authenticated_txn) = self.get_transaction(txn_location.0) {
+                    let authenticated_spent_status = match self.get_utxo_status(addr) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            log::error!("{}", e);
+                            return None;
+                        }
+                    };
+                    let state_commitment_data =
+                        self.status.state_commitment_data.as_ref().unwrap().clone();
+                    let utxo_location = txn_location.1;
+                    return Some(AuthenticatedUtxo {
+                        utxo,
+                        authenticated_txn,
+                        authenticated_spent_status,
+                        utxo_location,
+                        state_commitment_data,
+                    });
+                }
+            }
         }
+        None
     }
 
     /// Get a spent utxo along with the transaction which it belongs
@@ -927,20 +939,18 @@ impl LedgerState {
     pub fn get_spent_utxo_light(&self, addr: TxoSID) -> Option<UnAuthenticatedUtxo> {
         let utxo = self.status.get_spent_utxo(addr);
         if let Some(utxo) = utxo {
-            let txn_location = self.status.txo_to_txn_location.get(&addr).unwrap();
-            if let Ok(txn) = self.get_transaction_light(txn_location.0) {
-                let utxo_location = txn_location.1;
-                Some(UnAuthenticatedUtxo {
-                    utxo,
-                    txn,
-                    utxo_location,
-                })
-            } else {
-                None
+            if let Some(txn_location) = self.status.txo_to_txn_location.get(&addr) {
+                if let Ok(txn) = self.get_transaction_light(txn_location.0) {
+                    let utxo_location = txn_location.1;
+                    return Some(UnAuthenticatedUtxo {
+                        utxo,
+                        txn,
+                        utxo_location,
+                    });
+                }
             }
-        } else {
-            None
         }
+        None
     }
 
     #[allow(missing_docs)]
@@ -949,25 +959,41 @@ impl LedgerState {
         for sid in sid_list.iter() {
             let utxo = self.status.get_utxo(*sid);
             if let Some(utxo) = utxo {
-                let txn_location = self.status.txo_to_txn_location.get(sid).unwrap();
-                let authenticated_txn = self.get_transaction(txn_location.0).unwrap();
-                let authenticated_spent_status = self.get_utxo_status(*sid);
-                let state_commitment_data =
-                    self.status.state_commitment_data.as_ref().unwrap().clone();
-                let utxo_location = txn_location.1;
-                let auth_utxo = AuthenticatedUtxo {
-                    utxo,
-                    authenticated_txn,
-                    authenticated_spent_status,
-                    utxo_location,
-                    state_commitment_data,
+                if let Some(txn_location) = self.status.txo_to_txn_location.get(sid) {
+                    if let Ok(authenticated_txn) = self.get_transaction(txn_location.0) {
+                        match self.get_utxo_status(*sid) {
+                            Ok(authenticated_spent_status) => {
+                                let state_commitment_data = self
+                                    .status
+                                    .state_commitment_data
+                                    .as_ref()
+                                    .unwrap()
+                                    .clone();
+                                let utxo_location = txn_location.1;
+                                let auth_utxo = AuthenticatedUtxo {
+                                    utxo,
+                                    authenticated_txn,
+                                    authenticated_spent_status,
+                                    utxo_location,
+                                    state_commitment_data,
+                                };
+                                utxos.push(Some(auth_utxo));
+                            }
+                            Err(e) => {
+                                log::error!("{}", e);
+                                utxos.push(None);
+                            }
+                        };
+                    } else {
+                        utxos.push(None);
+                    };
+                } else {
+                    utxos.push(None);
                 };
-                utxos.push(Some(auth_utxo))
             } else {
-                utxos.push(None)
+                utxos.push(None);
             }
         }
-
         utxos
     }
 
@@ -1046,25 +1072,30 @@ impl LedgerState {
     /// Get the owner memo of a abar by ATxoSID
     #[allow(dead_code)]
     pub fn get_abar_memo(&self, ax_id: ATxoSID) -> Option<AxfrOwnerMemo> {
-        let txn_location = self.status.ax_txo_to_txn_location.get(&ax_id).unwrap();
-        let authenticated_txn = self.get_transaction(txn_location.0).unwrap();
-        let memo: Vec<AxfrOwnerMemo> = authenticated_txn
-            .finalized_txn
-            .txn
-            .body
-            .operations
-            .iter()
-            .flat_map(|o| match o {
-                Operation::BarToAbar(body) => vec![body.axfr_memo()],
-                Operation::TransferAnonAsset(body) => body.note.body.owner_memos.clone(),
-                _ => vec![],
-            })
-            .collect::<Vec<AxfrOwnerMemo>>();
+        if let Some(txn_location) = self.status.ax_txo_to_txn_location.get(&ax_id) {
+            if let Ok(authenticated_txn) = self.get_transaction(txn_location.0) {
+                let memo: Vec<AxfrOwnerMemo> = authenticated_txn
+                    .finalized_txn
+                    .txn
+                    .body
+                    .operations
+                    .iter()
+                    .flat_map(|o| match o {
+                        Operation::BarToAbar(body) => vec![body.axfr_memo()],
+                        Operation::TransferAnonAsset(body) => {
+                            body.note.body.owner_memos.clone()
+                        }
+                        _ => vec![],
+                    })
+                    .collect::<Vec<AxfrOwnerMemo>>();
 
-        if memo.is_empty() {
-            return None;
-        }
-        Some(memo.get(txn_location.1 .0).unwrap().clone())
+                if memo.is_empty() {
+                    return None;
+                }
+                return memo.get(txn_location.1 .0).cloned();
+            };
+        };
+        None
     }
 
     #[inline(always)]
@@ -1114,15 +1145,15 @@ impl LedgerState {
     }
 
     /// Get utxo status and its proof data
-    pub fn get_utxo_status(&self, addr: TxoSID) -> AuthenticatedUtxoStatus {
-        let state_commitment_data = self.status.state_commitment_data.as_ref().unwrap();
+    pub fn get_utxo_status(&self, addr: TxoSID) -> Result<AuthenticatedUtxoStatus> {
+        let state_commitment_data =
+            self.status.state_commitment_data.as_ref().c(d!())?;
         let utxo_map_bytes;
         let status;
         if addr.0 < state_commitment_data.txo_count {
             utxo_map_bytes = Some(self.utxo_map.read().serialize(0));
-            let utxo_map =
-                SparseMap::new(&utxo_map_bytes.as_ref().unwrap().clone()).unwrap();
-            status = if utxo_map.query(addr.0).unwrap() {
+            let utxo_map = SparseMap::new(utxo_map_bytes.as_ref().c(d!())?)?;
+            status = if utxo_map.query(addr.0)? {
                 UtxoStatus::Unspent
             } else {
                 UtxoStatus::Spent
@@ -1132,13 +1163,13 @@ impl LedgerState {
             utxo_map_bytes = None;
         }
 
-        AuthenticatedUtxoStatus {
+        Ok(AuthenticatedUtxoStatus {
             status,
             state_commitment_data: state_commitment_data.clone(),
             state_commitment: state_commitment_data.compute_commitment(),
             utxo_sid: addr,
             utxo_map_bytes,
-        }
+        })
     }
 
     #[inline(always)]
@@ -1182,20 +1213,23 @@ impl LedgerState {
         match self.blocks.get(addr.0) {
             None => None,
             Some(finalized_block) => {
-                let block_inclusion_proof = ProofOf::new(
-                    self.block_merkle
-                        .read()
-                        .get_proof(finalized_block.merkle_id, 0)
-                        .unwrap(),
-                );
-                let state_commitment_data =
-                    self.status.state_commitment_data.as_ref().unwrap().clone();
-                Some(AuthenticatedBlock {
-                    block: finalized_block,
-                    block_inclusion_proof,
-                    state_commitment_data: state_commitment_data.clone(),
-                    state_commitment: state_commitment_data.compute_commitment(),
-                })
+                if let Ok(proof) = self
+                    .block_merkle
+                    .read()
+                    .get_proof(finalized_block.merkle_id, 0)
+                {
+                    let block_inclusion_proof = ProofOf::new(proof);
+                    let state_commitment_data =
+                        self.status.state_commitment_data.as_ref().unwrap().clone();
+                    Some(AuthenticatedBlock {
+                        block: finalized_block,
+                        block_inclusion_proof,
+                        state_commitment_data: state_commitment_data.clone(),
+                        state_commitment: state_commitment_data.compute_commitment(),
+                    })
+                } else {
+                    None
+                }
             }
         }
     }
@@ -1470,7 +1504,7 @@ impl LedgerStatus {
                 return Err(eg!((format!(
                     "Input must correspond to claimed record: {} != {}",
                     serde_json::to_string(&record).c(d!())?,
-                    serde_json::to_string(inp_record).unwrap()
+                    serde_json::to_string(inp_record).c(d!())?,
                 ))));
             }
             // (2)
