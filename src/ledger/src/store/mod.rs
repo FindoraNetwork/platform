@@ -292,7 +292,7 @@ impl LedgerState {
 
     /// Finish current block, peform following operations:
     ///    Invalid current input utxos
-    ///    Apply current block to ledger status
+    ///    Apply current block to ledger status    }
     ///    Update Utxo map
     pub fn finish_block(&mut self, mut block: BlockEffect) -> Result<TmpSidMap> {
         {
@@ -1095,12 +1095,13 @@ impl LedgerState {
     #[allow(missing_docs)]
     pub fn get_state_commitment(&self) -> (HashOf<Option<StateCommitmentData>>, u64) {
         let block_count = self.status.block_commit_count;
+
         let commitment = self
             .api_cache
             .as_ref()
             .unwrap()
-            .state_commitment_versions
-            .last()
+            .state_commitment_version
+            .clone()
             .unwrap_or_else(|| HashOf::new(&None));
         (commitment, block_count)
     }

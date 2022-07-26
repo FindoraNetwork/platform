@@ -15,24 +15,24 @@ set -e
 commitment1=$(tail -n 1 owned_commitments)
 echo "\n\n Owned Abars after Bar to Abar conversion 1"
 sleep 30
-target/release/fn owned-abars --commitments "$commitment1" --anon-keys ./$FILE_ANON_KEYS
+target/debug/fn owned-abars --commitments "$commitment1" --anon-keys ./$FILE_ANON_KEYS
 
 echo "\n\n\n Anonymous Transfer from Sender1 to Receiver1"
 echo "------------------------------------------------------------------------------"
-target/release/fn anon-transfer --amount 189990000 --anon-keys ./$FILE_ANON_KEYS --to-axfr-public-key 3JM4oULU2pPp759YYQ75ClJnN_yi1Xs86C6916OgqEs= --commitment "$commitment1"
+target/debug/fn anon-transfer --amount 189990000 --anon-keys ./$FILE_ANON_KEYS --to-axfr-public-key 3JM4oULU2pPp759YYQ75ClJnN_yi1Xs86C6916OgqEs= --commitment "$commitment1"
 
 commitment2=$(tail -n 1 sent_commitments)
 echo -e "\n\n Owned Abars for Receiver1 after Anon Transfer 1"
 sleep 30
-target/release/fn owned-abars --commitments "$commitment2" --anon-keys ./$FILE_ANON_KEYS_2
+target/debug/fn owned-abars --commitments "$commitment2" --anon-keys ./$FILE_ANON_KEYS_2
 
 echo "\n\n\n Anonymous Transfer from Receiver1 (Sender2) to Receiver2"
 echo "------------------------------------------------------------------------------"
-target/release/fn anon-transfer --amount 169990000 --anon-keys ./$FILE_ANON_KEYS_2 --to-axfr-public-key JcomzsoXVf3Nz1lTL_dTz7ZifKsZJZtD5Aik1WYEa_I= --commitment "$commitment2"
+target/debug/fn anon-transfer --amount 169990000 --anon-keys ./$FILE_ANON_KEYS_2 --to-axfr-public-key JcomzsoXVf3Nz1lTL_dTz7ZifKsZJZtD5Aik1WYEa_I= --commitment "$commitment2"
 
 
 sleep 2
 echo "\n\n\n Fetch merkle proof for Anon Transfer 2"
 echo "------------------------------------------------------------------------------"
-target/release/fn anon-fetch-merkle-proof -a 2
+target/debug/fn anon-fetch-merkle-proof -a 2
 echo "\n\n Anonymous Transfer demo script executed successfully!"

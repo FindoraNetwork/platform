@@ -17,7 +17,7 @@ use {
     },
     config::abci::global_cfg::CFG,
     fbnc::NumKey,
-    fbnc::{new_mapx, new_mapxnk, new_vecx, Mapx, Mapxnk, Vecx},
+    fbnc::{new_mapx, new_mapxnk, Mapx, Mapxnk},
     fp_utils::hashing::keccak_256,
     globutils::{wallet, HashOf},
     ruc::*,
@@ -82,7 +82,7 @@ pub struct ApiCache {
     pub last_sid: Mapx<String, u64>,
     /// State commitment history.
     /// The BitDigest at index i is the state commitment of the ledger at block height  i + 1.
-    pub state_commitment_versions: Vecx<HashOf<Option<StateCommitmentData>>>,
+    pub state_commitment_version: Option<HashOf<Option<StateCommitmentData>>>,
 }
 
 impl ApiCache {
@@ -135,10 +135,7 @@ impl ApiCache {
                 prefix
             )),
             last_sid: new_mapx!(format!("api_cache/{}last_sid", prefix)),
-            state_commitment_versions: new_vecx!(format!(
-                "api_cache/{}state_commitment_versions",
-                prefix
-            )),
+            state_commitment_version: None,
         }
     }
 
@@ -526,8 +523,7 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
     let prefix = ledger.api_cache.as_mut().unwrap().prefix.clone();
 
     // Update state commitment versions
-    ledger.api_cache.as_mut().unwrap().state_commitment_versions =
-        ledger.status.state_commitment_versions.clone();
+    ledger.api_cache.as_mut().unwrap().state_commitment_version = ledger.status.state_commitment_versions.last();
 
     // Update ownership status
     for (txn_sid, txo_sids, atxo_sids) in block
