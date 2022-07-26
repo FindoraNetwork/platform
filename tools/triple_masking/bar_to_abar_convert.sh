@@ -1,18 +1,18 @@
-
+source ./tools/devnet/env.sh || exit 1
 
 echo "\n\n\n Simple transfer 1"
 echo "------------------------------------------------------------------------------"
-target/debug/fn transfer --amount 210000000 --asset FRA -T fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
+"$BIN"/fn transfer --amount 210000000 --asset FRA -T fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
 sleep 5
 
 echo "\n\n\n Simple transfer 2"
 echo "------------------------------------------------------------------------------"
-target/debug/fn transfer --amount 210000000 --asset FRA -T fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
+"$BIN"/fn transfer --amount 210000000 --asset FRA -T fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
 sleep 5
 
 echo "\n\n\n Simple transfer 3"
 echo "------------------------------------------------------------------------------"
-target/debug/fn transfer --amount 210000000 --asset FRA -T fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
+"$BIN"/fn transfer --amount 210000000 --asset FRA -T fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
 sleep 5
 
 # setup the new wallet
@@ -29,24 +29,24 @@ echo "
   \"pub_key\": \"BGhE9edxLVUdjNGlCWCHOAJxAomeJz3QMUOJjFI9WOA=\"
 }" > $FILE_ANON_KEYS
 
-target/debug/fn setup -O $FILE_MNEMONIC -S http://0.0.0.0
+"$BIN"/fn setup -O $FILE_MNEMONIC -S http://0.0.0.0
 
 set -e
-target/debug/fn owned-utxos
+"$BIN"/fn owned-utxos
 echo "BAR Balance:"
-target/debug/fn wallet --show
+"$BIN"/fn wallet --show
 # convert bar to abar
 echo "\n\n\n Bar To Abar Conversion 1"
 echo "==============================================================================="
 sleep 1
-TXO_SID=$(target/debug/fn owned-utxos | head -4 | tail -1 |  awk -F ' ' '{print $1}')
-target/debug/fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
+TXO_SID=$("$BIN"/fn owned-utxos | head -4 | tail -1 |  awk -F ' ' '{print $1}')
+"$BIN"/fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
 
 echo "\n\n\n Bar To Abar Conversion 2"
 echo "==============================================================================="
 sleep 5
-TXO_SID=$(target/debug/fn owned-utxos | head -4 | tail -1 | awk -F ' ' '{print $1}')
-target/debug/fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
+TXO_SID=$("$BIN"/fn owned-utxos | head -4 | tail -1 | awk -F ' ' '{print $1}')
+"$BIN"/fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
 
 echo "Bar 2 Abar Conversion demo script executed successfully!"
-echo "To check generated Abars run \`target/debug/fn owned-abars --anon-keys ./$FILE_ANON_KEYS --commitments COMMITMENT_STRING \`"
+echo "To check generated Abars run \`"$BIN"/fn owned-abars --anon-keys ./$FILE_ANON_KEYS --commitments COMMITMENT_STRING \`"

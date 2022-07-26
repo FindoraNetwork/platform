@@ -21,21 +21,21 @@ tail -n 2 owned_commitments > commitment_file
 commitment1=$(awk 'FNR==1' commitment_file)
 echo -e "\n\n Owned Abars after Bar to Abar conversion 1"
 sleep 20
-target/debug/fn owned-abars --commitments "$commitment1" --anon-keys $FILE_ANON_KEYS
+"$BIN"/fn owned-abars --commitments "$commitment1" --anon-keys $FILE_ANON_KEYS
 
 commitment2=$(awk 'FNR==2' commitment_file)
 echo "\n\n Owned Abars after Bar to Abar conversion 2"
 sleep 20
-target/debug/fn owned-abars --commitments "$commitment2" --anon-keys $FILE_ANON_KEYS
+"$BIN"/fn owned-abars --commitments "$commitment2" --anon-keys $FILE_ANON_KEYS
 
 echo -e "\n\n\n Batch Anonymous Transfer from Senders to Receivers"
 echo "------------------------------------------------------------------------------"
 sleep 2
-target/debug/fn anon-transfer-batch -n amount_file -a asset_file -s axfr_secretkey_file --to-axfr-public-key-file to_axfr_public_key_file -c commitment_file
+"$BIN"/fn anon-transfer-batch -n amount_file -a asset_file -s axfr_secretkey_file --to-axfr-public-key-file to_axfr_public_key_file -c commitment_file
 
 sleep 5
 echo -e "\n\n\n Fetch merkle proof for Batch Anon Transfer"
 echo "------------------------------------------------------------------------------"
-target/debug/fn anon-fetch-merkle-proof -a 3
+"$BIN"/fn anon-fetch-merkle-proof -a 3
 rm axfr_secretkey_file commitment_file to_axfr_public_key_file amount_file asset_file
 echo -e "\n\n Batch Anonymous Transfer demo script executed successfully!"
