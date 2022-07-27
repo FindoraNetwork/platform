@@ -16,17 +16,20 @@ pub fn init(
     mut interval: u64,
     is_mainnet: bool,
     skip_validator: bool,
-    td_validator_key_list: Option<Vec<String>>,
+    td_key_file: Option<&str>,
+    td_addr_list_file: Option<&str>,
 ) -> Result<()> {
     if 0 == interval {
         interval = BLOCK_INTERVAL;
     }
 
     if !skip_validator {
-        if let Some(key_list) = td_validator_key_list {
+        if let Some(key_file) = td_key_file {
+            println!(">>> Set initial validator set (Customed) ...");
+            common::utils::set_initial_validators_with_list(key_file)?;
         } else {
             println!(">>> Set initial validator set ...");
-            common::set_initial_validators().c(d!())?;
+            common::set_initial_validators(td_addr_list_file).c(d!())?;
         }
     }
 

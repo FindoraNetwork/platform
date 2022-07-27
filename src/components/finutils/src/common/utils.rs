@@ -72,39 +72,33 @@ pub fn send_tx(tx: &Transaction) -> Result<()> {
 
 /// Fee is needless in a `UpdateValidator` operation
 #[inline(always)]
-pub fn set_initial_validators() -> Result<()> {
+pub fn set_initial_validators(td_addr_list_file: Option<&str>) -> Result<()> {
     let mut builder = new_tx_builder().c(d!())?;
 
-    let vs = get_inital_validators().c(d!())?;
+    let vs = get_inital_validators(td_addr_list_file).c(d!())?;
     builder.add_operation_update_validator(&[], 1, vs).c(d!())?;
 
     send_tx(&builder.build_and_take_transaction()?).c(d!())
 }
 
 /// Used in test scenes.
-pub fn set_initial_validators_with_list(key_file_list: Vec<String>) -> Result<()> {
+pub fn set_initial_validators_with_list(key_file: &str) -> Result<()> {
     let mut builder = new_tx_builder().c(d!())?;
     let key_pair = super::get_keypair()?;
 
-    let mut validator_set = vec![];
+    let td_key = load_tendermint_priv_validator_key(key_file)?;
 
-    for key_path in key_file_list {
-        let td_key = load_tendermint_priv_validator_key(key_path)?;
-
-        let v = Validator::new(
-            td_key.pub_key.to_vec(),
-            STAKING_VALIDATOR_MIN_POWER,
-            key_pair.get_pk(),
-            [1, 100],
-            StakerMemo::default(),
-            ValidatorKind::Initiator,
-        )?;
-
-        validator_set.push(v);
-    }
+    let v = Validator::new(
+        td_key.pub_key.to_vec(),
+        STAKING_VALIDATOR_MIN_POWER,
+        key_pair.get_pk(),
+        [1, 100],
+        StakerMemo::default(),
+        ValidatorKind::Initiator,
+    )?;
 
     builder
-        .add_operation_update_validator(&[], 1, validator_set)
+        .add_operation_update_validator(&[], 1, vec![v])
         .c(d!())?;
     send_tx(&builder.build_and_take_transaction()?).c(d!())?;
     Ok(())

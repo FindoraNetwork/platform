@@ -67,13 +67,19 @@ fn run() -> Result<()> {
         .arg_from_usage("-s, --skip-validator 'skip validator initialization'")
         .arg(
             Arg::with_name("td-validator")
-            .long("td-validator")
-            .short("v")
-            .takes_value(true)
-            .multiple(true)
-            .required(false)
-            .help("Tendermit validator list.")
-    );
+                .long("td-validator")
+                .short("v")
+                .takes_value(true)
+                .required(false)
+                .help("Tendermit validator list."),
+        )
+        .arg(
+            Arg::with_name("td-addr-list-file")
+                .long("td-addr-list-file")
+                .takes_value(true)
+                .required(false)
+                .help("Json file that contains Tendermint address list."),
+        );
     let subcmd_test = SubCommand::with_name("test");
     let subcmd_issue = SubCommand::with_name("issue").about("issue FRA on demand");
     let subcmd_delegate = SubCommand::with_name("delegate")
@@ -120,15 +126,20 @@ fn run() -> Result<()> {
             .unwrap_or("0")
             .parse::<u64>()
             .c(d!())?;
+
         let is_mainnet = m.is_present("mainnet");
         let skip_validator = m.is_present("skip-validator");
+        let td_validator = m.value_of("td-validator");
+        let td_addr_list_file = m.value_of("td-addr-list-file");
 
-        let td_validator_list = m.values_of_lossy("td-validator").unwrap();
-
-
-        println!("{:?}", td_validator_list);
-
-        init::init(interval, is_mainnet, skip_validator, None).c(d!())?;
+        init::init(
+            interval,
+            is_mainnet,
+            skip_validator,
+            td_validator,
+            td_addr_list_file,
+        )
+        .c(d!())?;
     } else if matches.is_present("test") {
         init::i_testing::run_all().c(d!())?;
     } else if matches.is_present("issue") {

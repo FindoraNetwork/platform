@@ -60,8 +60,8 @@ impl TryFrom<ValidatorStr> for Validator {
 }
 
 /// generate the initial validator-set
-pub fn get_inital_validators() -> Result<Vec<Validator>> {
-    get_cfg_data().c(d!()).and_then(|i| {
+pub fn get_inital_validators(td_addr_list_file: Option<&str>) -> Result<Vec<Validator>> {
+    get_cfg_data(td_addr_list_file).c(d!()).and_then(|i| {
         i.valiators
             .into_iter()
             .map(|v| Validator::try_from(v).c(d!()))
@@ -72,8 +72,13 @@ pub fn get_inital_validators() -> Result<Vec<Validator>> {
 
 #[allow(missing_docs)]
 #[cfg(not(feature = "debug_env"))]
-pub fn get_cfg_data() -> Result<InitialValidatorInfo> {
-    serde_json::from_slice(&include_bytes!("staking_config.json")[..]).c(d!())
+pub fn get_cfg_data(td_addr_list: Option<&str>) -> Result<InitialValidatorInfo> {
+    if let Some(list_file) = td_addr_list {
+        let bytes = std::fs::read(list_file).c(d!())?;
+        serde_json::from_slice(&bytes).c(d!())
+    } else {
+        serde_json::from_slice(&include_bytes!("staking_config.json")[..]).c(d!())
+    }
 }
 
 #[allow(missing_docs)]
@@ -101,7 +106,7 @@ mod test {
 
     #[test]
     fn staking_tendermint_addr_conversion() {
-        let data = pnk!(get_cfg_data()).valiators;
+        let data = pnk!(get_cfg_data(None)).valiators;
         data.into_iter().for_each(|v| {
             let pk = pnk!(base64::decode(&v.td_pubkey));
             assert_eq!(v.td_addr, td_pubkey_to_td_addr(&pk));
