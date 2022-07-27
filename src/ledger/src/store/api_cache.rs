@@ -488,8 +488,7 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
     let prefix = api_cache.prefix.clone();
 
     // Update state commitment versions
-    api_cache.state_commitment_version =
-        ledger.status.state_commitment_versions.last();
+    api_cache.state_commitment_version = ledger.status.state_commitment_versions.last();
 
     // Update ownership status
     for (txn_sid, txo_sids, atxo_sids) in block
