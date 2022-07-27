@@ -2,7 +2,7 @@
 //! Some handful function and data structure for findora cli tools
 //!
 
-use ledger::data_model::ABARData;
+use ledger::{data_model::ABARData, staking::StakerMemo};
 use {
     crate::{
         api::{DelegationInfo, ValidatorDetail},
@@ -16,7 +16,10 @@ use {
             StateCommitmentData, Transaction, TransferType, TxoRef, TxoSID, Utxo,
             ASSET_TYPE_FRA, BAR_TO_ABAR_TX_FEE_MIN, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
-        staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
+        staking::{
+            init::get_inital_validators, TendermintAddrRef, Validator, ValidatorKind,
+            FRA_TOTAL_AMOUNT, STAKING_VALIDATOR_MIN_POWER,
+        },
     },
     ruc::*,
     serde::{self, Deserialize, Serialize},
@@ -76,6 +79,45 @@ pub fn set_initial_validators() -> Result<()> {
     builder.add_operation_update_validator(&[], 1, vs).c(d!())?;
 
     send_tx(&builder.build_and_take_transaction()?).c(d!())
+}
+
+/// Used in test scenes.
+pub fn set_initial_validators_with_list(key_file_list: Vec<String>) -> Result<()> {
+    let mut builder = new_tx_builder().c(d!())?;
+    let key_pair = super::get_keypair()?;
+
+    let mut validator_set = vec![];
+
+    for key_path in key_file_list {
+        let td_key = load_tendermint_priv_validator_key(key_path)?;
+
+        let v = Validator::new(
+            td_key.pub_key.to_vec(),
+            STAKING_VALIDATOR_MIN_POWER,
+            key_pair.get_pk(),
+            [1, 100],
+            StakerMemo::default(),
+            ValidatorKind::Initiator,
+        )?;
+
+        validator_set.push(v);
+    }
+
+    builder
+        .add_operation_update_validator(&[], 1, validator_set)
+        .c(d!())?;
+    send_tx(&builder.build_and_take_transaction()?).c(d!())?;
+    Ok(())
+}
+
+///load the tendermint key from the `priv_validator_key.json` file.
+pub fn load_tendermint_priv_validator_key(
+    key_path: impl AsRef<std::path::Path>,
+) -> Result<ValidatorKey> {
+    let k =
+        std::fs::read_to_string(key_path).c(d!("can not read key file from path"))?;
+    let v_keys = parse_td_validator_keys(&k).c(d!())?;
+    Ok(v_keys)
 }
 
 #[inline(always)]

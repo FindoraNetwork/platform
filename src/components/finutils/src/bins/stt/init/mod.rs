@@ -12,14 +12,22 @@ use {
     ledger::data_model::TX_FEE_MIN,
 };
 
-pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result<()> {
+pub fn init(
+    mut interval: u64,
+    is_mainnet: bool,
+    skip_validator: bool,
+    td_validator_key_list: Option<Vec<String>>,
+) -> Result<()> {
     if 0 == interval {
         interval = BLOCK_INTERVAL;
     }
 
     if !skip_validator {
-        println!(">>> Set initial validator set ...");
-        common::set_initial_validators().c(d!())?;
+        if let Some(key_list) = td_validator_key_list {
+        } else {
+            println!(">>> Set initial validator set ...");
+            common::set_initial_validators().c(d!())?;
+        }
     }
 
     if is_mainnet {
