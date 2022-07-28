@@ -4,9 +4,9 @@
 use {
     super::{helpers::*, *},
     crate::data_model::{
-        AssetRules, AssetTypeCode, IssueAsset, IssueAssetBody, Memo, Operation,
-        Transaction, TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxoRef,
-        TxoSID, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+        get_abar_commitment, AssetRules, AssetTypeCode, IssueAsset, IssueAssetBody,
+        Memo, Operation, Transaction, TransferAsset, TransferAssetBody, TxOutput,
+        TxnEffect, TxoRef, TxoSID, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
     },
     rand_core::SeedableRng,
     zei::{
@@ -813,8 +813,8 @@ fn test_update_anon_stores() {
         vec![AnonAssetRecord::from_oabar(&oabar)],
         vec![AnonAssetRecord::from_oabar(&oabar2)],
     ];
-    let new_com = oabar.compute_commitment();
-    let new_com2 = oabar2.compute_commitment();
+    let new_com = get_abar_commitment(oabar);
+    let new_com2 = get_abar_commitment(oabar2);
     let tx_block = vec![
         FinalizedTransaction {
             txn: Default::default(),

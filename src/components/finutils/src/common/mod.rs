@@ -18,8 +18,9 @@ use {
     lazy_static::lazy_static,
     ledger::{
         data_model::{
-            gen_random_keypair, ATxoSID, AssetRules, AssetTypeCode, AssetTypePrefix,
-            Transaction, TxoSID, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
+            gen_random_keypair, get_abar_commitment, ATxoSID, AssetRules, AssetTypeCode,
+            AssetTypePrefix, Transaction, TxoSID, ASSET_TYPE_FRA,
+            BLACK_HOLE_PUBKEY_STAKING,
         },
         staking::{
             check_delegation_amount, td_addr_to_bytes, td_pubkey_to_td_addr,
@@ -1052,7 +1053,7 @@ pub fn gen_anon_transfer_op(
         .open("owned_commitments")
         .expect("cannot open commitments file");
     for rem_oabar in rem_oabars.iter() {
-        let c = rem_oabar.compute_commitment();
+        let c = get_abar_commitment(rem_oabar);
         println!(
             "\x1b[31;01m Remainder Commitment: {}\x1b[00m",
             wallet::commitment_to_base58(&c)
@@ -1090,9 +1091,7 @@ pub fn gen_oabar_add_op_x(
     let receiver_count = to_axfr_public_keys.len();
 
     // check if input counts tally
-    if receiver_count != amounts.len()
-        || receiver_count != assets.len()
-    {
+    if receiver_count != amounts.len() || receiver_count != assets.len() {
         return Err(eg!(
             "The Parameters: from-sk/dec-keys/commitments or to-pk/to-enc-keys not match!"
         ));
@@ -1182,7 +1181,7 @@ pub fn gen_oabar_add_op_x(
         .open("sent_commitments")
         .expect("cannot open commitments file");
     for oabar_out in oabars_out {
-        let c_out = oabar_out.compute_commitment();
+        let c_out = get_abar_commitment(oabar_out);
         println!(
             "\x1b[31;01m Commitment: {}\x1b[00m",
             wallet::commitment_to_base58(&c_out)
@@ -1201,7 +1200,7 @@ pub fn gen_oabar_add_op_x(
         .open("owned_commitments")
         .expect("cannot open commitments file");
     for rem_oabar in rem_oabars.iter() {
-        let c_rem = rem_oabar.compute_commitment();
+        let c_rem = get_abar_commitment(rem_oabar);
 
         println!(
             "\x1b[31;01m Remainder Commitment: {}\x1b[00m",

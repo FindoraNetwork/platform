@@ -53,8 +53,9 @@ use {
             abar_to_bar::{verify_abar_to_bar_note, AbarToBarNote},
             ar_to_abar::{verify_ar_to_abar_note, ArToAbarNote},
             bar_to_abar::{verify_bar_to_abar_note, BarToAbarNote},
+            commit,
             keys::AXfrPubKey,
-            structs::{AnonAssetRecord, AxfrOwnerMemo, Nullifier},
+            structs::{AnonAssetRecord, AxfrOwnerMemo, Nullifier, OpenAnonAssetRecord},
         },
         setup::VerifierParams,
         xfr::{
@@ -408,7 +409,7 @@ pub struct XfrAddress {
 impl XfrAddress {
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn to_base64(self) -> String {
-        b64enc(&self.key.as_bytes())
+        b64enc(&self.key.to_bytes())
     }
 
     // pub(crate) fn to_bytes(self) -> Vec<u8> {
@@ -420,7 +421,7 @@ impl XfrAddress {
 impl Hash for XfrAddress {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.key.as_bytes().hash(state);
+        self.key.to_bytes().hash(state);
     }
 }
 
@@ -451,7 +452,7 @@ pub struct IssuerPublicKey {
 impl IssuerPublicKey {
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn to_base64(self) -> String {
-        b64enc(self.key.as_bytes())
+        b64enc(&self.key.to_bytes())
     }
 
     // pub(crate) fn to_bytes(&self) -> Vec<u8> {
@@ -463,7 +464,7 @@ impl IssuerPublicKey {
 impl Hash for IssuerPublicKey {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.key.as_bytes().hash(state);
+        self.key.to_bytes().hash(state);
     }
 }
 
@@ -526,7 +527,7 @@ impl SignatureRules {
         let mut weight_map = HashMap::new();
         // Convert to map
         for (key, weight) in self.weights.iter() {
-            weight_map.insert(key.as_bytes(), *weight);
+            weight_map.insert(key.to_bytes(), *weight);
         }
         // Calculate weighted sum
         for key in keyset.iter() {
@@ -2314,6 +2315,18 @@ impl RngCore for ConsensusRng {
 #[allow(missing_docs)]
 pub fn gen_random_keypair() -> XfrKeyPair {
     XfrKeyPair::generate(&mut ChaChaRng::from_entropy())
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub fn get_abar_commitment(oabar: OpenAnonAssetRecord) -> BLSScalar {
+    commit(
+        oabar.pub_key_ref(),
+        &oabar.get_blind(),
+        oabar.get_amount(),
+        &oabar.get_asset_type(),
+    )
+    .unwrap()
 }
 
 #[derive(Serialize, Deserialize)]

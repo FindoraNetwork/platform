@@ -51,7 +51,7 @@ use {
     globutils::{wallet, HashOf},
     ledger::{
         data_model::{
-            gen_random_keypair, AssetTypeCode, AssetTypePrefix,
+            gen_random_keypair, get_abar_commitment, AssetTypeCode, AssetTypePrefix,
             AuthenticatedTransaction, Operation, TransferType, TxOutput, ASSET_TYPE_FRA,
             BLACK_HOLE_PUBKEY, BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
         },
@@ -674,7 +674,7 @@ impl TransactionBuilder {
             .map_err(|e| {
                 JsValue::from_str(&format!("Could not add operation: {}", e))
             })?;
-        let r1 = output_oabar.compute_commitment();
+        let r1 = get_abar_commitment(output_oabar);
         self.commitments.push(r1);
 
         let (_, note, rem_oabars) = self
@@ -690,7 +690,7 @@ impl TransactionBuilder {
             })?;
 
         for rem_oabar in rem_oabars {
-            self.commitments.push(rem_oabar.compute_commitment());
+            self.commitments.push(get_abar_commitment(rem_oabar));
         }
 
         Ok(self)

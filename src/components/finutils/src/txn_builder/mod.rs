@@ -14,9 +14,9 @@ use {
     ledger::{
         converter::ConvertAccount,
         data_model::{
-            AbarConvNote, AbarToBarOps, AnonTransferOps, AssetRules, AssetTypeCode,
-            BarAnonConvNote, BarToAbarOps, ConfidentialMemo, DefineAsset,
-            DefineAssetBody, IndexedSignature, IssueAsset, IssueAssetBody,
+            get_abar_commitment, AbarConvNote, AbarToBarOps, AnonTransferOps,
+            AssetRules, AssetTypeCode, BarAnonConvNote, BarToAbarOps, ConfidentialMemo,
+            DefineAsset, DefineAssetBody, IndexedSignature, IssueAsset, IssueAssetBody,
             IssuerKeyPair, IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
             TransactionBody, TransferAsset, TransferAssetBody, TransferType, TxOutput,
             TxoRef, TxoSID, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA,
@@ -1581,7 +1581,7 @@ impl AnonTransferOperationBuilder {
 
     /// add_output is used to add a output record to the Anon Transfer factory
     pub fn add_output(&mut self, abar: OpenAnonAssetRecord) -> Result<&mut Self> {
-        self.commitments.push(abar.compute_commitment());
+        self.commitments.push(get_abar_commitment(abar));
         self.outputs.push(abar);
         Ok(self)
     }
@@ -1639,7 +1639,8 @@ impl AnonTransferOperationBuilder {
     pub fn get_commitment_map(&self) -> HashMap<String, (AXfrPubKey, AssetType, u64)> {
         let mut commitment_map = HashMap::new();
         for out_abar in self.outputs.iter() {
-            let abar_rand = wallet::commitment_to_base58(&out_abar.compute_commitment());
+            let abar_rand =
+                wallet::commitment_to_base58(&get_abar_commitment(&out_abar));
             let abar_pkey = *out_abar.pub_key_ref();
             let abar_asset = out_abar.get_asset_type();
             let abar_amt = out_abar.get_amount();
@@ -1682,7 +1683,7 @@ impl AnonTransferOperationBuilder {
             .build()
             .unwrap();
 
-        let commitment = oabar_money_back.compute_commitment();
+        let commitment = get_abar_commitment(oabar_money_back);
         self.outputs.push(oabar_money_back);
         self.commitments.push(commitment);
 
@@ -2247,7 +2248,10 @@ mod tests {
         //negative test for input keypairs
         assert_eq!(keypair_in.get_public_key(), *oabar.pub_key_ref());
 
-        assert_ne!(keypair_in.get_public_key(), another_keypair.get_public_key());
+        assert_ne!(
+            keypair_in.get_public_key(),
+            another_keypair.get_public_key()
+        );
 
         assert_ne!(another_keypair.get_public_key(), *oabar.pub_key_ref());
 
