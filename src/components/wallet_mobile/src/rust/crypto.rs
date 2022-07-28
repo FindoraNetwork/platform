@@ -167,7 +167,7 @@ pub fn rs_wasm_credential_verify_commitment(
         issuer_pub_key,
         commitment.get_ref(),
         pok.get_ref(),
-        xfr_pk.as_bytes(),
+        &xfr_pk.to_bytes(),
     )
 }
 
@@ -248,7 +248,7 @@ pub fn rs_wasm_credential_commit(
         &mut prng,
         user_secret_key,
         credential.get_cred_ref(),
-        user_public_key.as_bytes(),
+        &user_public_key.to_bytes(),
     )?;
     Ok(CredentialCommitmentData {
         commitment: CredentialCommitment { commitment },

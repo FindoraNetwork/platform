@@ -895,7 +895,7 @@ pub fn transfer_to_utxo_from_account(
     let extra = generate_extra(nonce.into(), None);
     let msg = serde_json::to_vec(&(action.clone(), extra.clone()))
         .map_err(error_to_jsvalue)?;
-    let signature = MultiSignature::from(kp.sign(&msg));
+    let signature = MultiSignature::from(kp.sign(&msg)).unwrap();
     let signer = Address::from(kp.address());
 
     let tx = UncheckedTransaction::new_signed(action, signer, signature, extra);
