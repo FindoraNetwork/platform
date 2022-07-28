@@ -69,7 +69,7 @@ use {
     zei::{
         anon_xfr::{
             decrypt_memo,
-            keys::{AXfrKeyPair, AXfrPubKey, AXfrViewKey},
+            keys::{AXfrKeyPair, AXfrPubKey},
             nullify_with_native_address, parse_memo,
             structs::{
                 AnonAssetRecord, Commitment, OpenAnonAssetRecord,
@@ -502,7 +502,7 @@ impl TransactionBuilder {
     /// Adds an operation to the transaction builder that converts a bar to abar.
     ///
     /// @param {XfrKeyPair} auth_key_pair - input bar owner key pair
-    /// @param {AXfrKeyPair} abar_key_pair - abar receiver's public key
+    /// @param {AXfrPubKey} abar_pubkey - abar receiver's public key
     /// @param {TxoSID} input_sid - txo sid of input bar
     /// @param {ClientAssetRecord} input_record -
     pub fn add_operation_bar_to_abar(
@@ -945,8 +945,7 @@ pub fn gen_anon_keys() -> Result<AnonKeys, JsValue> {
 
     let keys = AnonKeys {
         spend_key: wallet::anon_secret_key_to_base64(&keypair),
-        pub_key: wallet::anon_public_key_to_base64(&keypair.get_pub_key()),
-        view_key: wallet::anon_view_key_to_base64(&keypair.get_view_key()),
+        pub_key: wallet::anon_public_key_to_base64(&keypair.get_public_key()),
     };
 
     Ok(keys)
@@ -2071,14 +2070,6 @@ pub fn axfr_pubkey_from_string(key_str: &str) -> Result<AXfrPubKey, JsValue> {
 
 #[wasm_bindgen]
 #[allow(missing_docs)]
-pub fn axfr_viewkey_from_string(key_str: &str) -> Result<AXfrViewKey, JsValue> {
-    wallet::anon_view_key_from_base64(key_str)
-        .c(d!())
-        .map_err(error_to_jsvalue)
-}
-
-#[wasm_bindgen]
-#[allow(missing_docs)]
 pub fn axfr_keypair_from_string(key_str: &str) -> Result<AXfrKeyPair, JsValue> {
     wallet::anon_secret_key_from_base64(key_str)
         .c(d!())
@@ -2268,7 +2259,7 @@ mod test {
         let oabar = OpenAnonAssetRecordBuilder::new()
             .amount(u64::from(amount))
             .asset_type(asset_type)
-            .pub_key(&keypair.get_pub_key())
+            .pub_key(&keypair.get_public_key())
             .finalize(prng)
             .unwrap()
             .build()

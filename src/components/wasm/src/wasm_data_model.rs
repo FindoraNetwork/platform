@@ -239,6 +239,7 @@ impl OwnerMemo {
             val.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         Ok(OwnerMemo {
             memo: ZeiOwnerMemo {
+                key_type: zei_owner_memo.key_type,
                 blind_share: zei_owner_memo.blind_share,
                 lock: zei_owner_memo.lock,
             },
@@ -818,7 +819,6 @@ impl AmountAssetType {
 pub struct AnonKeys {
     pub(crate) spend_key: String,
     pub(crate) pub_key: String,
-    pub(crate) view_key: String,
 }
 
 /// AnonKeys is a struct to store keys required for anon transfer
@@ -855,15 +855,5 @@ impl AnonKeys {
     #[wasm_bindgen(setter)]
     pub fn set_pub_key(&mut self, pub_key: String) {
         self.pub_key = pub_key;
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn view_key(&self) -> String {
-        self.view_key.clone()
-    }
-
-    #[wasm_bindgen(setter)]
-    pub fn set_view_key(&mut self, view_key: String) {
-        self.view_key = view_key;
     }
 }

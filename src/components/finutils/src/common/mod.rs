@@ -1002,8 +1002,6 @@ pub fn gen_anon_transfer_op(
         inputs.push(oabar_in);
     }
 
-    let froms = vec![from; inputs.len()];
-
     // build output
     let mut prng = ChaChaRng::from_entropy();
     let oabar_out = OpenAnonAssetRecordBuilder::new()
@@ -1017,7 +1015,7 @@ pub fn gen_anon_transfer_op(
 
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
     let (_, note, rem_oabars) = builder
-        .add_operation_anon_transfer_fees_remainder(&inputs, &[oabar_out], &froms)
+        .add_operation_anon_transfer_fees_remainder(&inputs, &[oabar_out], &from)
         .c(d!())?;
 
     send_tx(&builder.build_and_take_transaction()?).c(d!())?;
@@ -1074,7 +1072,7 @@ pub fn gen_anon_transfer_op(
 /// Batch anon transfer - Generate OABAR and add anonymous transfer operation
 /// Note - if multiple anon keys are used, we consider the last key in the list for remainder.
 /// # Arguments
-/// * axfr_secret_keys    - list of secret keys for senders' ABAR UTXOs
+/// * axfr_secret_key    - list of secret keys for senders' ABAR UTXOs
 /// * to_axfr_public_keys - receiver AXfr Public keys
 /// * to_enc_keys         - List of receiver Encryption keys
 /// * commitments         - List of sender commitments in base64 format
@@ -1082,18 +1080,17 @@ pub fn gen_anon_transfer_op(
 /// * assets              - List of receiver Asset Types
 /// returns an error if Operation build fails
 pub fn gen_oabar_add_op_x(
-    axfr_secret_keys: Vec<AXfrKeyPair>,
+    axfr_secret_key: AXfrKeyPair,
     to_axfr_public_keys: Vec<AXfrPubKey>,
     commitments: Vec<String>,
     amounts: Vec<String>,
     assets: Vec<AssetTypeCode>,
 ) -> Result<()> {
-    let sender_count = axfr_secret_keys.len();
+    let comm_count = commitments.len();
     let receiver_count = to_axfr_public_keys.len();
 
     // check if input counts tally
-    if sender_count != commitments.len()
-        || receiver_count != amounts.len()
+    if receiver_count != amounts.len()
         || receiver_count != assets.len()
     {
         return Err(eg!(
@@ -1103,8 +1100,8 @@ pub fn gen_oabar_add_op_x(
 
     // Create Input Open Abars with input keys, radomizers and Owner memos
     let mut oabars_in = Vec::new();
-    for i in 0..sender_count {
-        let from = &axfr_secret_keys[i];
+    for i in 0..comm_count {
+        let from = &axfr_secret_key[i];
         let c = wallet::commitment_from_base58(commitments[i].as_str()).c(d!())?;
 
         // Get OwnerMemo
@@ -1171,7 +1168,7 @@ pub fn gen_oabar_add_op_x(
         .add_operation_anon_transfer_fees_remainder(
             &oabars_in[..],
             &oabars_out[..],
-            &axfr_secret_keys,
+            &axfr_secret_key,
         )
         .c(d!())?;
 

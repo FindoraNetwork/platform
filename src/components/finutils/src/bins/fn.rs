@@ -489,8 +489,7 @@ fn run() -> Result<()> {
 
         let keys = AnonKeys {
             spend_key: wallet::anon_secret_key_to_base64(&keypair),
-            pub_key: wallet::anon_public_key_to_base64(&keypair.get_pub_key()),
-            view_key: wallet::anon_view_key_to_base64(&keypair.get_view_key()),
+            pub_key: wallet::anon_public_key_to_base64(&keypair.get_public_key()),
         };
 
         if let Some(path) = m.value_of("file-path") {
@@ -597,14 +596,10 @@ fn run() -> Result<()> {
             .c(d!())?;
         }
     } else if let Some(m) = matches.subcommand_matches("anon-transfer-batch") {
-        let spend_keys = m.value_of("axfr-secretkey-file").c(d!()).and_then(|f| {
-            fs::read_to_string(f).c(d!()).and_then(|sks| {
-                sks.lines()
-                    .map(|sk| wallet::anon_secret_key_from_base64(sk.trim()))
-                    .collect::<Result<Vec<_>>>()
-                    .c(d!("invalid file"))
-            })
-        })?;
+        // get anon keys of sender
+        let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
+        let spend_key = anon_keys.spend_key;
+
         let to_axfr_public_keys = m
             .value_of("to-axfr-public-key-file")
             .c(d!())
@@ -643,8 +638,7 @@ fn run() -> Result<()> {
                 .map(|ams| ams.lines().map(token_code).collect::<Vec<AssetTypeCode>>())
         })?;
 
-        if spend_keys.is_empty()
-            || to_axfr_public_keys.is_empty()
+        if to_axfr_public_keys.is_empty()
             || commitments.is_empty()
             || amounts.is_empty()
             || assets.is_empty()
@@ -652,7 +646,7 @@ fn run() -> Result<()> {
             println!("{}", m.usage());
         } else {
             common::gen_oabar_add_op_x(
-                spend_keys,
+                spend_key,
                 to_axfr_public_keys,
                 commitments,
                 amounts,
@@ -757,6 +751,5 @@ fn tip_success() {
 #[derive(Clone, Deserialize, Serialize)]
 pub struct AnonKeys {
     pub spend_key: String,
-    pub view_key: String,
     pub pub_key: String,
 }

@@ -31,36 +31,30 @@ $BIN/fn wallet --show
 export ANON_KEYPAIR_1=$($BIN/fn gen-anon-keys)
 #echo "$ANON_KEYPAIR_1" |awk 'NR==2 {gsub(" ","");};1' |awk 'NR==1 {gsub("Keys :","");};1'  > "$FILE_ANON_KEYS"
 export ANON_SK_1=`echo "$ANON_KEYPAIR_1" |awk 'NR == 3' |awk '{gsub(/,$/,""); gsub(/"/,""); print $2}'`
-export ANON_VK_1=`echo "$ANON_KEYPAIR_1" |awk 'NR == 4' |awk '{gsub(/,$/,""); gsub(/"/,""); print $2}'`
-export ANON_PK_1=`echo "$ANON_KEYPAIR_1" |awk 'NR == 5' |awk '{gsub(/"/,""); print $2}'`
+export ANON_PK_1=`echo "$ANON_KEYPAIR_1" |awk 'NR == 4' |awk '{gsub(/"/,""); print $2}'`
 echo "
 {
   \"spend_key\": \"$ANON_SK_1\",
-  \"view_key\": \"$ANON_VK_1\",
   \"pub_key\": \"$ANON_PK_1\"
 }" > "$FILE_ANON_KEYS"
 
 export ANON_KEYPAIR_2=$($BIN/fn gen-anon-keys)
 #echo "$ANON_KEYPAIR_2" |awk 'NR > 1' |awk 'NR==1 {$1=$1};1' > "$FILE_ANON_KEYS_2"
 export ANON_SK_2=`echo "$ANON_KEYPAIR_2" |awk 'NR == 3' |awk '{gsub(/,$/,""); gsub(/"/,""); print $2}'`
-export ANON_VK_2=`echo "$ANON_KEYPAIR_2" |awk 'NR == 4' |awk '{gsub(/,$/,""); gsub(/"/,""); print $2}'`
-export ANON_PK_2=`echo "$ANON_KEYPAIR_2" |awk 'NR == 5' |awk '{gsub(/"/,""); print $2}'`
+export ANON_PK_2=`echo "$ANON_KEYPAIR_2" |awk 'NR == 4' |awk '{gsub(/"/,""); print $2}'`
 echo "
 {
   \"spend_key\": \"$ANON_SK_2\",
-  \"view_key\": \"$ANON_VK_2\",
   \"pub_key\": \"$ANON_PK_2\"
 }" > "$FILE_ANON_KEYS_2"
 
 export ANON_KEYPAIR_3=$($BIN/fn gen-anon-keys)
 #echo "$ANON_KEYPAIR_3" |awk 'NR > 1' |awk 'NR==1 {$1=$1};1' > "$FILE_ANON_KEYS_3"
 export ANON_SK_3=`echo "$ANON_KEYPAIR_3" |awk 'NR == 3' |awk '{gsub(/,$/,""); gsub(/"/,""); print $2}'`
-export ANON_VK_3=`echo "$ANON_KEYPAIR_3" |awk 'NR == 4' |awk '{gsub(/,$/,""); gsub(/"/,""); print $2}'`
-export ANON_PK_3=`echo "$ANON_KEYPAIR_3" |awk 'NR == 5' |awk '{gsub(/"/,""); print $2}'`
+export ANON_PK_3=`echo "$ANON_KEYPAIR_3" |awk 'NR == 4' |awk '{gsub(/"/,""); print $2}'`
 echo "
 {
   \"spend_key\": \"$ANON_SK_3\",
-  \"view_key\": \"$ANON_VK_3\",
   \"pub_key\": \"$ANON_PK_3\"
 }" > "$FILE_ANON_KEYS_3"
 sleep 1

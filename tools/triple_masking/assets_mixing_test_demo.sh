@@ -28,21 +28,18 @@ echo "double quit tape enough charge fancy mandate ostrich this program laundry 
 echo "
 {
   \"spend_key\": \"Ccv2h8u1g__HJBrsA8npcs4CiDQ_UHI-JGZCjXbu9Un8HU3qSTf3PdLEFvs1XwauSltgruFv-IRVFpaQkeIIAgRoRPXncS1VHYzRpQlghzgCcQKJnic90DFDiYxSPVjg\",
-  \"view_key\": \"_B1N6kk39z3SxBb7NV8GrkpbYK7hb_iEVRaWkJHiCAI=\",
   \"pub_key\": \"BGhE9edxLVUdjNGlCWCHOAJxAomeJz3QMUOJjFI9WOA=\"
 }" > $FILE_ANON_KEYS_1
 
 echo "
 {
   \"spend_key\": \"h4MuWol8pWuNIMxPHwJ0ZAoF_n51QScj6AultG5IHU3yL-LR02XXw58uudwom_tahcy1e0oadfOw3oLxSs64A9yTOKFC1NqT6e-fWGEO-QpSZzf8otV7POguvdejoKhL\",
-  \"view_key\": \"8i_i0dNl18OfLrncKJv7WoXMtXtKGnXzsN6C8UrOuAM=\",
   \"pub_key\": \"3JM4oULU2pPp759YYQ75ClJnN_yi1Xs86C6916OgqEs=\"
 }" > $FILE_ANON_KEYS_2
 
 echo "
 {
   \"spend_key\": \"bRrcmHV-87-na2jKuOEQZmVyLE6q4oVdCiMoWdqVHwOqkAlAXybyeheaNCyWw7j0lz4vlnxP5nUNpbnSwF3tBiXKJs7KF1X9zc9ZUy_3U8-2YnyrGSWbQ-QIpNVmBGvy\",
-  \"view_key\": \"qpAJQF8m8noXmjQslsO49Jc-L5Z8T-Z1DaW50sBd7QY=\",
   \"pub_key\": \"JcomzsoXVf3Nz1lTL_dTz7ZifKsZJZtD5Aik1WYEa_I=\"
 }" > $FILE_ANON_KEYS_3
 
@@ -152,21 +149,15 @@ echo "output => key2 * FRA + key2 * asset2 + key3 * asset1"
 ANON_KEY_1_FRA_COMMITMENT=$(awk 'FNR==6' owned_commitments)     # FRA
 ANON_KEY_1_ASSET_1_COMMITMENT=$(awk 'FNR==5' owned_commitments) # ASSET 1
 ANON_KEY_1_ASSET_2_COMMITMENT=$(awk 'FNR==4' owned_commitments) # ASSET 2
-ANON_KEY_2_ASSET_1_COMMITMENT=$(awk 'FNR==2' sent_commitments)  # ASSET 1
 
-BATCH_SK="batch_sk.keys"
 BATCH_C="batch_c.keys"
 BATCH_PK="batch_pk.keys"
 BATCH_AMOUNT="batch_amount.keys"
 BATCH_ASSET="batch_asset.keys"
 
-echo $ANON_SK_1 > $BATCH_SK
-echo $ANON_SK_1 >> $BATCH_SK
-echo $ANON_SK_2 >> $BATCH_SK
-
 echo $ANON_KEY_1_FRA_COMMITMENT > $BATCH_C
 echo $ANON_KEY_1_ASSET_2_COMMITMENT >> $BATCH_C
-echo $ANON_KEY_2_ASSET_1_COMMITMENT >> $BATCH_C
+echo $ANON_KEY_1_ASSET_1_COMMITMENT >> $BATCH_C
 
 echo $ANON_PK_2 > $BATCH_PK
 echo $ANON_PK_2 >> $BATCH_PK
@@ -183,7 +174,7 @@ echo 50000000 >> $BATCH_AMOUNT
 echo ""
 echo ""
 "$BIN"/fn anon-transfer-batch \
-  --axfr-secretkey-file $BATCH_SK     \
+  --axfr-secretkey $ANON_SK_1     \
   --commitment-file $BATCH_C          \
   --to-axfr-public-key-file $BATCH_PK \
   --amount-file $BATCH_AMOUNT         \
@@ -195,5 +186,5 @@ echo "checking..."
 "$BIN"/fn owned-abars --commitments $(awk 'FNR==3,FNR==4' sent_commitments | awk -v d="," '{s=(NR==1?s:s d)$0}END{print s}') --anon-keys ./$FILE_ANON_KEYS_2
 "$BIN"/fn owned-abars --commitments $(awk 'FNR==5' sent_commitments) --anon-keys ./$FILE_ANON_KEYS_3
 
-rm $BATCH_SK $BATCH_C $BATCH_PK $BATCH_AMOUNT $BATCH_ASSET
+rm $BATCH_C $BATCH_PK $BATCH_AMOUNT $BATCH_ASSET
 echo "\n ***** Test all successfully! ***** "

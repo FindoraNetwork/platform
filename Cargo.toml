@@ -62,13 +62,15 @@ ark-serialize = { git = "https://github.com/FindoraNetwork/ark-algebra" }
 ark-std = { git = "https://github.com/FindoraNetwork/ark-std" }
 ark-bls12-381 = { git = "https://github.com/FindoraNetwork/ark-curves" }
 ark-ed-on-bls12-381 = { git = "https://github.com/FindoraNetwork/ark-curves" }
+ark-algebra-test-templates = { git = "https://github.com/FindoraNetwork/ark-algebra" }
 curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek" }
 ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek" }
 x25519-dalek = { git = "https://github.com/FindoraNetwork/x25519-dalek" }
 bulletproofs = { git = "https://github.com/FindoraNetwork/bp" }
 
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.2.1" }
-zei-accumulators = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.2.1" }
-zei-algebra = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.2.1" }
-zei-crypto = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.2.1" }
-zei-plonk = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.2.1" }
+
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zei-accumulators = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zei-algebra = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zei-crypto = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }
+zei-plonk = { git = "https://github.com/FindoraNetwork/zei", branch = "develop" }

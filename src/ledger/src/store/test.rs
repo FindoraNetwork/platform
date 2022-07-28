@@ -792,7 +792,7 @@ fn test_update_anon_stores() {
         Nullifier::one() as Nullifier,
     ];
 
-    let pub_key = AXfrKeyPair::generate(&mut prng).get_pub_key();
+    let pub_key = AXfrKeyPair::generate(&mut prng).get_public_key();
     let oabar = OpenAnonAssetRecordBuilder::new()
         .amount(123)
         .asset_type(zei::xfr::structs::AssetType([39u8; 32]))

@@ -5,7 +5,6 @@ FILE_ANON_KEYS_2="anon-keys-temp2.keys"
 echo "
 {
   \"spend_key\": \"h4MuWol8pWuNIMxPHwJ0ZAoF_n51QScj6AultG5IHU3yL-LR02XXw58uudwom_tahcy1e0oadfOw3oLxSs64A9yTOKFC1NqT6e-fWGEO-QpSZzf8otV7POguvdejoKhL\",
-  \"view_key\": \"8i_i0dNl18OfLrncKJv7WoXMtXtKGnXzsN6C8UrOuAM=\",
   \"pub_key\": \"3JM4oULU2pPp759YYQ75ClJnN_yi1Xs86C6916OgqEs=\"
 }" > $FILE_ANON_KEYS_2
 

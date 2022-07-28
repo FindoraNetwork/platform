@@ -674,10 +674,10 @@ subcommands:
   - anon-transfer-batch:
       about: Anonymous Transfer of tokens from multiple inputs to multiple outputs
       args:
-        - axfr-secretkey-file:
-            help: Axfr secret keys of the sender
+        - axfr-secretkey:
+            help: Axfr secret key of the sender
             short: s
-            long: axfr-secretkey-file
+            long: axfr-secretkey
             takes_value: true
             value_name: SECRET KEY
             required: true
