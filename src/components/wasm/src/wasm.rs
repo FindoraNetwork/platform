@@ -76,7 +76,7 @@ use {
                 OpenAnonAssetRecordBuilder,
             },
         },
-        primitives::asymmetric_encryption::dh_decrypt,
+        // primitives::asymmetric_encryption::dh_decrypt,
         xfr::{
             asset_record::{
                 open_blind_asset_record as open_bar, AssetRecordType,
