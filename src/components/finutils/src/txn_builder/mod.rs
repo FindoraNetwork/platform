@@ -82,7 +82,7 @@ use {
         },
     },
     zei_algebra::prelude::*,
-    zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
+    zei_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
 };
 
 macro_rules! no_transfer_err {
@@ -361,7 +361,7 @@ impl TransactionBuilder {
             key_pair.get_pk(),
         );
 
-        let pc_gens = RistrettoPedersenCommitment::default();
+        let pc_gens = PedersenCommitmentRistretto::default();
         let (ba, _, owner_memo) =
             build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
         self.add_operation_issue_asset(
@@ -1090,7 +1090,7 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
         }
     };
     // 2. Use record template and ciphertexts to build open asset record
-    let pc_gens = RistrettoPedersenCommitment::default();
+    let pc_gens = PedersenCommitmentRistretto::default();
     let (open_asset_record, asset_tracing_memos, owner_memo) = build_open_asset_record(
         prng,
         &pc_gens,
@@ -1762,7 +1762,7 @@ mod tests {
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         },
         zei::xfr::structs::AssetType as AT,
-        zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
+        zei_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
     };
 
     // Defines an asset type
@@ -1792,7 +1792,7 @@ mod tests {
 
     fn test_transfer_op_builder_inner() -> Result<()> {
         let mut prng = ChaChaRng::from_entropy();
-        let pc_gens = RistrettoPedersenCommitment::default();
+        let pc_gens = PedersenCommitmentRistretto::default();
         let code_1 = AssetTypeCode::gen_random();
         let code_2 = AssetTypeCode::gen_random();
         let alice = XfrKeyPair::generate(&mut prng);
@@ -2124,7 +2124,7 @@ mod tests {
             AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
             from.get_pk(),
         );
-        let pc_gens = RistrettoPedersenCommitment::default();
+        let pc_gens = PedersenCommitmentRistretto::default();
         let (bar, _, memo) = build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
         let dummy_input = open_blind_asset_record(&bar, &memo, &from).unwrap();
 

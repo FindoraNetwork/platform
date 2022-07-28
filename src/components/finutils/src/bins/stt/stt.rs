@@ -214,7 +214,7 @@ mod issue {
             asset_record::{build_blind_asset_record, AssetRecordType},
             structs::AssetRecordTemplate,
         },
-        zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
+        zei_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
     };
 
     pub fn issue() -> Result<()> {
@@ -235,7 +235,7 @@ mod issue {
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
             root_kp.get_pk(),
         );
-        let pc_gens = RistrettoPedersenCommitment::default();
+        let pc_gens = PedersenCommitmentRistretto::default();
         let outputs = (0..2)
             .map(|_| {
                 let (ba, _, _) = build_blind_asset_record(

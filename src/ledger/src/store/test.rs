@@ -20,7 +20,7 @@ use {
         },
     },
     zei_algebra::prelude::{One, Zero},
-    zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
+    zei_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
 };
 
 #[cfg(test)]
@@ -175,7 +175,7 @@ fn test_asset_transfer() {
         art,
         key_pair.get_pk(),
     );
-    let pc_gens = RistrettoPedersenCommitment::default();
+    let pc_gens = PedersenCommitmentRistretto::default();
     let (ba, _, _) =
         build_blind_asset_record(&mut ledger.get_prng(), &pc_gens, &template, vec![]);
     let second_ba = ba.clone();
@@ -366,7 +366,7 @@ fn asset_issued() {
         *keypair.get_pk_ref(),
     );
 
-    let pc_gens = RistrettoPedersenCommitment::default();
+    let pc_gens = PedersenCommitmentRistretto::default();
     let (ba, _, _) =
         build_blind_asset_record(&mut ledger.get_prng(), &pc_gens, &ar, vec![]);
     let asset_issuance_body = IssueAssetBody::new(

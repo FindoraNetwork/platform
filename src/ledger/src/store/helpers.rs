@@ -24,7 +24,7 @@ use {
         sig::{XfrKeyPair, XfrPublicKey},
         structs::{AssetRecord, AssetRecordTemplate, AssetType},
     },
-    zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
+    zei_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
 };
 
 /// Create a transaction to define a custom asset
@@ -163,7 +163,7 @@ pub fn create_issue_and_transfer_txn(
         issuer_keys.get_pk(),
     );
 
-    let pc_gens = RistrettoPedersenCommitment::default();
+    let pc_gens = PedersenCommitmentRistretto::default();
     let (ba, _tracer_memo, owner_memo) =
         build_blind_asset_record(&mut ledger.get_prng(), &pc_gens, &ar_template, vec![]);
 
@@ -247,7 +247,7 @@ pub fn create_issue_and_transfer_txn_with_asset_tracing(
         issuer_keys.get_pk(),
         tracing_policies.clone(),
     );
-    let pc_gens = RistrettoPedersenCommitment::default();
+    let pc_gens = PedersenCommitmentRistretto::default();
     let (ba, _tracer_memo, owner_memo) = build_blind_asset_record(
         &mut ledger.get_prng(),
         &pc_gens,
@@ -335,7 +335,7 @@ pub fn create_issuance_txn(
         record_type,
         issuer_keys.get_pk(),
     );
-    let pc_gens = RistrettoPedersenCommitment::default();
+    let pc_gens = PedersenCommitmentRistretto::default();
     let (ba, _tracer_memo, _owner_memo) =
         build_blind_asset_record(&mut ledger.get_prng(), &pc_gens, &ar_template, vec![]);
 

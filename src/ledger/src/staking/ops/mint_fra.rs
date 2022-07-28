@@ -18,7 +18,7 @@ use {
         sig::XfrPublicKey,
         structs::{AssetRecordTemplate, AssetType, OwnerMemo},
     },
-    zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
+    zei_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
 };
 
 /// 420 million FRAs
@@ -78,7 +78,7 @@ impl MintEntry {
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
             receiver_pk.unwrap_or(target_pk),
         );
-        let pc_gens = RistrettoPedersenCommitment::default();
+        let pc_gens = PedersenCommitmentRistretto::default();
         let (ba, _, _) = build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
 
         let utxo = TxOutput {

@@ -19,7 +19,7 @@ use {
         sig::XfrKeyPair,
         structs::AssetRecordTemplate,
     },
-    zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
+    zei_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
 };
 
 /// Define and Issue FRA.
@@ -56,7 +56,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
         fra_owner_kp.get_pk(),
     );
 
-    let pc_gens = RistrettoPedersenCommitment::default();
+    let pc_gens = PedersenCommitmentRistretto::default();
     let outputs = (0..2)
         .map(|_| {
             let (ba, _, _) = build_blind_asset_record(
