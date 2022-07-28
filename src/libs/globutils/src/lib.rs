@@ -387,7 +387,7 @@ where
     #[inline(always)]
     pub fn new(xfr: &XfrKeyPair, to_sign: &T) -> Self {
         Self {
-            sig: xfr.get_sk_ref().sign(to_sign.as_ref(), xfr.get_pk_ref()),
+            sig: xfr.get_sk_ref().sign(to_sign.as_ref()).unwrap(),
             phantom: PhantomData,
         }
     }

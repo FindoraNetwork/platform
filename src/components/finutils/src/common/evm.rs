@@ -100,7 +100,7 @@ impl Keypair {
         match self {
             Keypair::Ecdsa(kp) => MultiSignature::from(kp.sign(data)),
             Keypair::Ed25519(kp) => {
-                MultiSignature::from(kp.get_sk_ref().sign(data, kp.get_pk_ref()))
+                MultiSignature::from(kp.get_sk_ref().sign(data).unwrap())
             }
         }
     }

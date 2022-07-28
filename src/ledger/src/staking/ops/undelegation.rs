@@ -68,7 +68,7 @@ impl UnDelegationOps {
         pu: Option<PartialUnDelegation>,
     ) -> Self {
         let body = Data::new(nonce, pu);
-        let signature = keypair.sign(&body.to_bytes());
+        let signature = keypair.sign(&body.to_bytes()).unwrap();
         UnDelegationOps {
             body,
             pubkey: keypair.get_pk(),

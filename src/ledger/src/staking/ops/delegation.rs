@@ -125,7 +125,7 @@ impl DelegationOps {
         nonce: NoReplayToken,
     ) -> Self {
         let body = Box::new(Data::new(validator, new_validator, amount, nonce));
-        let signature = keypair.sign(&body.to_bytes());
+        let signature = keypair.sign(&body.to_bytes()).unwrap();
         let v_signature: Option<Ed25519Signature> = vltor_key
             .and_then(|pk| pk.ed25519_keypair().map(|k| k.sign(&body.to_bytes())));
         DelegationOps {

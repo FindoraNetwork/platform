@@ -67,7 +67,7 @@ pub fn build_signed_transaction(
 
     let signer: Address = who.get_pk().into();
     let msg = serde_json::to_vec(&(function.clone(), extra.clone())).unwrap();
-    let sig = who.get_sk_ref().sign(msg.as_slice(), who.get_pk_ref());
+    let sig = who.get_sk_ref().sign(msg.as_slice()).unwrap();
     let signature = MultiSignature::from(sig);
 
     UncheckedTransaction::new_signed(function, signer, signature, extra)

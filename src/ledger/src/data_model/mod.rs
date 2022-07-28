@@ -427,7 +427,7 @@ impl Hash for XfrAddress {
 
 #[allow(missing_docs)]
 #[derive(
-    Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize,
+    Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize,
 )]
 pub struct AXfrAddress {
     pub key: AXfrPubKey,

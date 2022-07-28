@@ -441,7 +441,7 @@ mod tests {
     fn xfr_sign_verify_work() {
         let mut prng = ChaChaRng::from_entropy();
         let alice = XfrKeyPair::generate(&mut prng);
-        let sig = alice.get_sk_ref().sign(b"hello", alice.get_pk_ref());
+        let sig = alice.get_sk_ref().sign(b"hello").unwrap();
         let signer = MultiSigner::from(alice.get_pk());
         let sig = MultiSignature::from(sig);
         assert!(

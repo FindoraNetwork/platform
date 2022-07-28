@@ -38,7 +38,7 @@ impl ReplaceStakerOps {
             nonce,
         };
 
-        let signature = keypair.sign(&body.to_bytes());
+        let signature = keypair.sign(&body.to_bytes()).unwrap();
 
         ReplaceStakerOps {
             body,
