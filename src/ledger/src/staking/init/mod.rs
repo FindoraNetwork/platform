@@ -60,8 +60,8 @@ impl TryFrom<ValidatorStr> for Validator {
 }
 
 /// generate the initial validator-set
-pub fn get_inital_validators(td_addr_list_file: Option<&str>) -> Result<Vec<Validator>> {
-    get_cfg_data(td_addr_list_file).c(d!()).and_then(|i| {
+pub fn get_inital_validators(staking_info_file: Option<&str>) -> Result<Vec<Validator>> {
+    get_cfg_data(staking_info_file).c(d!()).and_then(|i| {
         i.valiators
             .into_iter()
             .map(|v| Validator::try_from(v).c(d!()))
@@ -72,8 +72,8 @@ pub fn get_inital_validators(td_addr_list_file: Option<&str>) -> Result<Vec<Vali
 
 #[allow(missing_docs)]
 #[cfg(not(feature = "debug_env"))]
-pub fn get_cfg_data(td_addr_list: Option<&str>) -> Result<InitialValidatorInfo> {
-    if let Some(list_file) = td_addr_list {
+pub fn get_cfg_data(staking_info_file: Option<&str>) -> Result<InitialValidatorInfo> {
+    if let Some(list_file) = staking_info_file {
         let bytes = std::fs::read(list_file).c(d!())?;
         serde_json::from_slice(&bytes).c(d!())
     } else {
@@ -83,8 +83,14 @@ pub fn get_cfg_data(td_addr_list: Option<&str>) -> Result<InitialValidatorInfo> 
 
 #[allow(missing_docs)]
 #[cfg(feature = "debug_env")]
-pub fn get_cfg_data() -> Result<InitialValidatorInfo> {
-    serde_json::from_slice(&include_bytes!("staking_config_debug_env.json")[..]).c(d!())
+pub fn get_cfg_data(staking_info_file: Option<&str>) -> Result<InitialValidatorInfo> {
+    if let Some(list_file) = staking_info_file {
+        let bytes = std::fs::read(list_file).c(d!())?;
+        serde_json::from_slice(&bytes).c(d!())
+    } else {
+        serde_json::from_slice(&include_bytes!("staking_config_debug_env.json")[..])
+            .c(d!())
+    }
 }
 
 /// used in `cfg_generator` binary

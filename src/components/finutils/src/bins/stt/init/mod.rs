@@ -16,21 +16,19 @@ pub fn init(
     mut interval: u64,
     is_mainnet: bool,
     skip_validator: bool,
-    td_key_file: Option<&str>,
-    td_addr_list_file: Option<&str>,
+    staking_info_file: Option<&str>,
 ) -> Result<()> {
     if 0 == interval {
         interval = BLOCK_INTERVAL;
     }
 
     if !skip_validator {
-        if let Some(key_file) = td_key_file {
+        if staking_info_file.is_some() {
             println!(">>> Set initial validator set (Customed) ...");
-            common::utils::set_initial_validators_with_list(key_file)?;
         } else {
             println!(">>> Set initial validator set ...");
-            common::set_initial_validators(td_addr_list_file).c(d!())?;
         }
+        common::set_initial_validators(staking_info_file).c(d!())?;
     }
 
     if is_mainnet {
@@ -75,6 +73,10 @@ pub fn init(
 
         println!(">>> Wait 1.2 block ...");
         sleep_n_block!(1.2);
+
+        if staking_info_file.is_some() {
+            return Ok(());
+        }
 
         println!(">>> Re-distribution ...");
         println!(">>> Wait 2.4 block ...");

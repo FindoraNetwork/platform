@@ -2,7 +2,7 @@
 //! Some handful function and data structure for findora cli tools
 //!
 
-use ledger::{data_model::ABARData, staking::StakerMemo};
+use ledger::data_model::ABARData;
 use {
     crate::{
         api::{DelegationInfo, ValidatorDetail},
@@ -16,10 +16,7 @@ use {
             StateCommitmentData, Transaction, TransferType, TxoRef, TxoSID, Utxo,
             ASSET_TYPE_FRA, BAR_TO_ABAR_TX_FEE_MIN, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
-        staking::{
-            init::get_inital_validators, TendermintAddrRef, Validator, ValidatorKind,
-            FRA_TOTAL_AMOUNT, STAKING_VALIDATOR_MIN_POWER,
-        },
+        staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
     },
     ruc::*,
     serde::{self, Deserialize, Serialize},
@@ -72,36 +69,13 @@ pub fn send_tx(tx: &Transaction) -> Result<()> {
 
 /// Fee is needless in a `UpdateValidator` operation
 #[inline(always)]
-pub fn set_initial_validators(td_addr_list_file: Option<&str>) -> Result<()> {
+pub fn set_initial_validators(staking_info_file: Option<&str>) -> Result<()> {
     let mut builder = new_tx_builder().c(d!())?;
 
-    let vs = get_inital_validators(td_addr_list_file).c(d!())?;
+    let vs = get_inital_validators(staking_info_file).c(d!())?;
     builder.add_operation_update_validator(&[], 1, vs).c(d!())?;
 
     send_tx(&builder.build_and_take_transaction()?).c(d!())
-}
-
-/// Used in test scenes.
-pub fn set_initial_validators_with_list(key_file: &str) -> Result<()> {
-    let mut builder = new_tx_builder().c(d!())?;
-    let key_pair = super::get_keypair()?;
-
-    let td_key = load_tendermint_priv_validator_key(key_file)?;
-
-    let v = Validator::new(
-        td_key.pub_key.to_vec(),
-        STAKING_VALIDATOR_MIN_POWER,
-        key_pair.get_pk(),
-        [1, 100],
-        StakerMemo::default(),
-        ValidatorKind::Initiator,
-    )?;
-
-    builder
-        .add_operation_update_validator(&[], 1, vec![v])
-        .c(d!())?;
-    send_tx(&builder.build_and_take_transaction()?).c(d!())?;
-    Ok(())
 }
 
 ///load the tendermint key from the `priv_validator_key.json` file.

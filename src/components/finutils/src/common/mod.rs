@@ -496,8 +496,8 @@ pub fn transfer_asset_batch_x(
 
 /// Mainly for official usage,
 /// and can be also used in test scenes.
-pub fn set_initial_validators(td_addr_list_file: Option<&str>) -> Result<()> {
-    utils::set_initial_validators(td_addr_list_file).c(d!())
+pub fn set_initial_validators(staking_info_file: Option<&str>) -> Result<()> {
+    utils::set_initial_validators(staking_info_file).c(d!())
 }
 
 /// Get the effective address of server
