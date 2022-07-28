@@ -1,3 +1,5 @@
+source ./tools/devnet/env.sh || exit 1
+
 # If breaking because of blockchain, increase the sleep time
 ./tools/triple_masking/bar_to_abar_convert.sh
 FILE_ANON_KEYS="anon-keys-temp.keys"

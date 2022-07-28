@@ -673,7 +673,7 @@ impl TransactionBuilder {
             .map_err(|e| {
                 JsValue::from_str(&format!("Could not add operation: {}", e))
             })?;
-        let r1 = get_abar_commitment(output_oabar);
+        let r1 = get_abar_commitment(output_oabar.clone());
         self.commitments.push(r1);
 
         let (_, note, rem_oabars) = self
@@ -681,7 +681,7 @@ impl TransactionBuilder {
             .add_operation_anon_transfer_fees_remainder(
                 &[input_oabar],
                 &[output_oabar],
-                &[from_keypair.clone()],
+                &from_keypair.clone(),
             )
             .c(d!())
             .map_err(|e| {
@@ -895,7 +895,7 @@ pub fn transfer_to_utxo_from_account(
     let extra = generate_extra(nonce.into(), None);
     let msg = serde_json::to_vec(&(action.clone(), extra.clone()))
         .map_err(error_to_jsvalue)?;
-    let signature = MultiSignature::from(kp.sign(&msg)).unwrap();
+    let signature = MultiSignature::from(kp.sign(&msg));
     let signer = Address::from(kp.address());
 
     let tx = UncheckedTransaction::new_signed(action, signer, signature, extra);
@@ -1027,7 +1027,9 @@ pub fn gen_nullifier_hash(
         oabar.get_amount(),
         &oabar.get_asset_type(),
         mt_leaf_info.get_zei_mt_leaf_info().uid,
-    );
+    )
+    .c(d!())
+    .map_err(error_to_jsvalue)?;
     let hash = wallet::nullifier_to_base58(&n);
     Ok(hash)
 }
@@ -1561,7 +1563,7 @@ pub fn wasm_credential_verify_commitment(
         issuer_pub_key,
         commitment.get_ref(),
         pok.get_ref(),
-        xfr_pk.as_bytes(),
+        &xfr_pk.to_bytes(),
     )
     .c(d!())
     .map_err(error_to_jsvalue)
@@ -1673,7 +1675,7 @@ pub fn wasm_credential_commit(
         &mut prng,
         &user_secret_key,
         credential.get_cred_ref(),
-        &user_public_key.as_bytes(),
+        &user_public_key.to_bytes(),
     )
     .c(d!())
     .map_err(error_to_jsvalue)?;
@@ -2147,7 +2149,7 @@ pub fn decrypt_axfr_memo(
     })
 }
 
-#[wasm_bindgen]
+/* #[wasm_bindgen]
 /// Try to decrypt the owner memo to check if it is own.
 /// * `memo` - Owner anon memo need to decrypt.
 /// * `key_pair` - the memo bytes.
@@ -2157,13 +2159,13 @@ pub fn try_decrypt_axfr_memo(
     key_pair: &AXfrKeyPair,
 ) -> Result<Vec<u8>, JsValue> {
     dh_decrypt(
-        &key_pair.get_view_key_scalar(),
+        key_pair.get_secret_key(),
         &memo.memo.point,
         &memo.memo.ctext,
     )
     .c(d!())
     .map_err(error_to_jsvalue)
-}
+}*/
 
 #[wasm_bindgen]
 /// Parse the owner memo from bytes.

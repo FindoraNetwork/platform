@@ -1,8 +1,10 @@
+source ./tools/devnet/env.sh || exit 1
+
 # If breaking because of blockchain, increase the sleep time
-echo "Ccv2h8u1g__HJBrsA8npcs4CiDQ_UHI-JGZCjXbu9Un8HU3qSTf3PdLEFvs1XwauSltgruFv-IRVFpaQkeIIAgRoRPXncS1VHYzRpQlghzgCcQKJnic90DFDiYxSPVjg" > axfr_secretkey
-echo "BGhE9edxLVUdjNGlCWCHOAJxAomeJz3QMUOJjFI9WOA=
-JcomzsoXVf3Nz1lTL_dTz7ZifKsZJZtD5Aik1WYEa_I=
-6dJt8oDrtXt3z-7__dOcDn7Q9lM8jd2RST0FJIfGspc=" > to_axfr_public_key_file
+echo "6kpJDnAoL-_ZHekWoJBfrCmHnpYRs7WPMxdG_F9hJoQMhcLuDK2su2b4-IdYATM0Ou99yAPYcvSNdLSGnf5hBIA=" > axfr_secretkey
+echo "HZHnGAptuEogWbuOH8PLpMuWwT9f9aSC18r49Tt8nSYA
+Jy2QGLGlfYJTwWwMbQsFtXXQ5nBWoAwR0hISPTAe1zEA
+HZHnGAptuEogWbuOH8PLpMuWwT9f9aSC18r49Tt8nSYA" > to_axfr_public_key_file
 echo "100000000
 100000000
 119980000" > amount_file

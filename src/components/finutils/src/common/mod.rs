@@ -1089,7 +1089,6 @@ pub fn gen_oabar_add_op_x(
     amounts: Vec<String>,
     assets: Vec<AssetTypeCode>,
 ) -> Result<()> {
-    let comm_count = commitments.len();
     let receiver_count = to_axfr_public_keys.len();
 
     // check if input counts tally
@@ -1101,15 +1100,13 @@ pub fn gen_oabar_add_op_x(
 
     // Create Input Open Abars with input keys, radomizers and Owner memos
     let mut oabars_in = Vec::new();
-    for i in 0..comm_count {
+    for comm in commitments {
         let from = &axfr_secret_key;
-        let c = wallet::commitment_from_base58(commitments[i].as_str()).c(d!())?;
+        let c = wallet::commitment_from_base58(comm.as_str()).c(d!())?;
 
         // Get OwnerMemo
         let axtxo_abar = utils::get_owned_abar(&c).c(d!())?;
-        let owner_memo = utils::get_abar_memo(&axtxo_abar.0)
-            .c(d!(commitments[i]))?
-            .unwrap();
+        let owner_memo = utils::get_abar_memo(&axtxo_abar.0).c(d!(comm))?.unwrap();
         // Get Merkle Proof
         let mt_leaf_info = utils::get_abar_proof(&axtxo_abar.0).c(d!())?.unwrap();
         let mt_leaf_uid = mt_leaf_info.uid;

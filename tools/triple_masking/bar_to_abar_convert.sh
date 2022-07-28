@@ -24,8 +24,8 @@ echo "double quit tape enough charge fancy mandate ostrich this program laundry 
 
 echo "
 {
-  \"spend_key\": \"Ccv2h8u1g__HJBrsA8npcs4CiDQ_UHI-JGZCjXbu9Un8HU3qSTf3PdLEFvs1XwauSltgruFv-IRVFpaQkeIIAgRoRPXncS1VHYzRpQlghzgCcQKJnic90DFDiYxSPVjg\",
-  \"pub_key\": \"BGhE9edxLVUdjNGlCWCHOAJxAomeJz3QMUOJjFI9WOA=\"
+  \"spend_key\": \"6kpJDnAoL-_ZHekWoJBfrCmHnpYRs7WPMxdG_F9hJoQMhcLuDK2su2b4-IdYATM0Ou99yAPYcvSNdLSGnf5hBIA=\",
+  \"pub_key\": \"DIXC7gytrLtm-PiHWAEzNDrvfcgD2HL0jXS0hp3-YQSA\"
 }" > $FILE_ANON_KEYS
 
 "$BIN"/fn setup -O $FILE_MNEMONIC -S http://0.0.0.0

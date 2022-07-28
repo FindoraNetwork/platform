@@ -152,7 +152,7 @@ echo "==========================================================================
 COMMITMENT=$(awk 'FNR==3' owned_commitments)
 FRA_COMMITMENT=$(awk 'FNR==2' owned_commitments)
 $BIN/fn anon-transfer    \
-  --amount 50000000                \
+  --amount 40000000                \
   --anon-keys $FILE_ANON_KEYS    \
   --commitment $COMMITMENT         \
   --fra-commitment $FRA_COMMITMENT \
@@ -193,7 +193,7 @@ echo 50000000 >> $BATCH_AMOUNT
 echo ""
 echo "Sending multi-asset transaction..."
 $BIN/fn anon-transfer-batch \
-  --axfr-secretkey $ANON_SK_1     \
+  --anon-keys $FILE_ANON_KEYS     \
   --commitment-file $BATCH_C          \
   --to-axfr-public-key-file $BATCH_PK \
   --amount-file $BATCH_AMOUNT         \

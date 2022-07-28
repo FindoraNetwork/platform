@@ -5,17 +5,14 @@ source ./tools/devnet/env.sh || exit 1
 
 FRA_ACCOUNT="fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5"
 
-ANON_SK_1="Ccv2h8u1g__HJBrsA8npcs4CiDQ_UHI-JGZCjXbu9Un8HU3qSTf3PdLEFvs1XwauSltgruFv-IRVFpaQkeIIAgRoRPXncS1VHYzRpQlghzgCcQKJnic90DFDiYxSPVjg"
-ANON_VK_1="_B1N6kk39z3SxBb7NV8GrkpbYK7hb_iEVRaWkJHiCAI="
-ANON_PK_1="BGhE9edxLVUdjNGlCWCHOAJxAomeJz3QMUOJjFI9WOA="
+ANON_SK_1="6kpJDnAoL-_ZHekWoJBfrCmHnpYRs7WPMxdG_F9hJoQMhcLuDK2su2b4-IdYATM0Ou99yAPYcvSNdLSGnf5hBIA="
+ANON_PK_1="DIXC7gytrLtm-PiHWAEzNDrvfcgD2HL0jXS0hp3-YQSA"
 
-ANON_SK_2="h4MuWol8pWuNIMxPHwJ0ZAoF_n51QScj6AultG5IHU3yL-LR02XXw58uudwom_tahcy1e0oadfOw3oLxSs64A9yTOKFC1NqT6e-fWGEO-QpSZzf8otV7POguvdejoKhL"
-ANON_VK_2="8i_i0dNl18OfLrncKJv7WoXMtXtKGnXzsN6C8UrOuAM="
-ANON_PK_2="3JM4oULU2pPp759YYQ75ClJnN_yi1Xs86C6916OgqEs="
+ANON_SK_2="fGAGGWYkAqcQ1DK7CbQhSbKde8WOcNld1fJlIOaDJmcdkecYCm24SiBZu44fw8uky5bBP1_1pILXyvj1O3ydJgA="
+ANON_PK_2="HZHnGAptuEogWbuOH8PLpMuWwT9f9aSC18r49Tt8nSYA"
 
-ANON_SK_3="bRrcmHV-87-na2jKuOEQZmVyLE6q4oVdCiMoWdqVHwOqkAlAXybyeheaNCyWw7j0lz4vlnxP5nUNpbnSwF3tBiXKJs7KF1X9zc9ZUy_3U8-2YnyrGSWbQ-QIpNVmBGvy"
-ANON_VK_3="qpAJQF8m8noXmjQslsO49Jc-L5Z8T-Z1DaW50sBd7QY="
-ANON_PK_3="JcomzsoXVf3Nz1lTL_dTz7ZifKsZJZtD5Aik1WYEa_I="
+ANON_SK_3="7vgfKzBy8zRfLd_D5ft4ZCj1J0MzGXjfXA-vLt8mi8MnLZAYsaV9glPBbAxtCwW1ddDmcFagDBHSEhI9MB7XMQA="
+ANON_PK_3="Jy2QGLGlfYJTwWwMbQsFtXXQ5nBWoAwR0hISPTAe1zEA"
 
 FILE_MNEMONIC="mnemonic-temp.keys"
 FILE_ANON_KEYS_1="anon-keys-temp_1.keys"
@@ -27,20 +24,20 @@ echo "double quit tape enough charge fancy mandate ostrich this program laundry 
 
 echo "
 {
-  \"spend_key\": \"Ccv2h8u1g__HJBrsA8npcs4CiDQ_UHI-JGZCjXbu9Un8HU3qSTf3PdLEFvs1XwauSltgruFv-IRVFpaQkeIIAgRoRPXncS1VHYzRpQlghzgCcQKJnic90DFDiYxSPVjg\",
-  \"pub_key\": \"BGhE9edxLVUdjNGlCWCHOAJxAomeJz3QMUOJjFI9WOA=\"
+  \"spend_key\": \"6kpJDnAoL-_ZHekWoJBfrCmHnpYRs7WPMxdG_F9hJoQMhcLuDK2su2b4-IdYATM0Ou99yAPYcvSNdLSGnf5hBIA=\",
+  \"pub_key\": \"DIXC7gytrLtm-PiHWAEzNDrvfcgD2HL0jXS0hp3-YQSA\"
 }" > $FILE_ANON_KEYS_1
 
 echo "
 {
-  \"spend_key\": \"h4MuWol8pWuNIMxPHwJ0ZAoF_n51QScj6AultG5IHU3yL-LR02XXw58uudwom_tahcy1e0oadfOw3oLxSs64A9yTOKFC1NqT6e-fWGEO-QpSZzf8otV7POguvdejoKhL\",
-  \"pub_key\": \"3JM4oULU2pPp759YYQ75ClJnN_yi1Xs86C6916OgqEs=\"
+  \"spend_key\": \"fGAGGWYkAqcQ1DK7CbQhSbKde8WOcNld1fJlIOaDJmcdkecYCm24SiBZu44fw8uky5bBP1_1pILXyvj1O3ydJgA=\",
+  \"pub_key\": \"HZHnGAptuEogWbuOH8PLpMuWwT9f9aSC18r49Tt8nSYA\"
 }" > $FILE_ANON_KEYS_2
 
 echo "
 {
-  \"spend_key\": \"bRrcmHV-87-na2jKuOEQZmVyLE6q4oVdCiMoWdqVHwOqkAlAXybyeheaNCyWw7j0lz4vlnxP5nUNpbnSwF3tBiXKJs7KF1X9zc9ZUy_3U8-2YnyrGSWbQ-QIpNVmBGvy\",
-  \"pub_key\": \"JcomzsoXVf3Nz1lTL_dTz7ZifKsZJZtD5Aik1WYEa_I=\"
+  \"spend_key\": \"7vgfKzBy8zRfLd_D5ft4ZCj1J0MzGXjfXA-vLt8mi8MnLZAYsaV9glPBbAxtCwW1ddDmcFagDBHSEhI9MB7XMQA=\",
+  \"pub_key\": \"Jy2QGLGlfYJTwWwMbQsFtXXQ5nBWoAwR0hISPTAe1zEA\"
 }" > $FILE_ANON_KEYS_3
 
 rm owned_commitments
@@ -174,7 +171,7 @@ echo 50000000 >> $BATCH_AMOUNT
 echo ""
 echo ""
 "$BIN"/fn anon-transfer-batch \
-  --axfr-secretkey $ANON_SK_1     \
+  --anon-keys $ANON_SK_1     \
   --commitment-file $BATCH_C          \
   --to-axfr-public-key-file $BATCH_PK \
   --amount-file $BATCH_AMOUNT         \
