@@ -1,7 +1,6 @@
 source ./tools/devnet/env.sh || exit 1
 
 # If breaking because of blockchain, increase the sleep time
-echo "6kpJDnAoL-_ZHekWoJBfrCmHnpYRs7WPMxdG_F9hJoQMhcLuDK2su2b4-IdYATM0Ou99yAPYcvSNdLSGnf5hBIA=" > axfr_secretkey
 echo "HZHnGAptuEogWbuOH8PLpMuWwT9f9aSC18r49Tt8nSYA
 Jy2QGLGlfYJTwWwMbQsFtXXQ5nBWoAwR0hISPTAe1zEA
 HZHnGAptuEogWbuOH8PLpMuWwT9f9aSC18r49Tt8nSYA" > to_axfr_public_key_file
@@ -32,7 +31,7 @@ sleep 20
 echo -e "\n\n\n Batch Anonymous Transfer from Senders to Receivers"
 echo "------------------------------------------------------------------------------"
 sleep 2
-"$BIN"/fn anon-transfer-batch -n amount_file -a asset_file -s axfr_secretkey --to-axfr-public-key-file to_axfr_public_key_file -c commitment_file
+"$BIN"/fn anon-transfer-batch -n amount_file -a asset_file -s $FILE_ANON_KEYS --to-axfr-public-key-file to_axfr_public_key_file -c commitment_file
 
 sleep 5
 echo -e "\n\n\n Fetch merkle proof for Batch Anon Transfer"

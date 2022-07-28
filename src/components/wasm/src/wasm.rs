@@ -76,7 +76,6 @@ use {
                 OpenAnonAssetRecordBuilder,
             },
         },
-        // primitives::asymmetric_encryption::dh_decrypt,
         xfr::{
             asset_record::{
                 open_blind_asset_record as open_bar, AssetRecordType,
@@ -2149,7 +2148,7 @@ pub fn decrypt_axfr_memo(
     })
 }
 
-/* #[wasm_bindgen]
+#[wasm_bindgen]
 /// Try to decrypt the owner memo to check if it is own.
 /// * `memo` - Owner anon memo need to decrypt.
 /// * `key_pair` - the memo bytes.
@@ -2158,14 +2157,14 @@ pub fn try_decrypt_axfr_memo(
     memo: &AxfrOwnerMemo,
     key_pair: &AXfrKeyPair,
 ) -> Result<Vec<u8>, JsValue> {
-    dh_decrypt(
-        key_pair.get_secret_key(),
-        &memo.memo.point,
-        &memo.memo.ctext,
-    )
-    .c(d!())
-    .map_err(error_to_jsvalue)
-}*/
+    let secret_key = key_pair.get_secret_key();
+    let res = memo
+        .get_memo_ref()
+        .decrypt(&secret_key)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+    Ok(res)
+}
 
 #[wasm_bindgen]
 /// Parse the owner memo from bytes.
