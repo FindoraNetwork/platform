@@ -598,7 +598,8 @@ fn run() -> Result<()> {
     } else if let Some(m) = matches.subcommand_matches("anon-transfer-batch") {
         // get anon keys of sender
         let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
-        let spend_key = anon_keys.spend_key;
+        let spend_key =
+            wallet::anon_secret_key_from_base64(anon_keys.spend_key.as_str()).c(d!())?;
 
         let to_axfr_public_keys = m
             .value_of("to-axfr-public-key-file")

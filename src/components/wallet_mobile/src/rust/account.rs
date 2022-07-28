@@ -28,9 +28,7 @@ impl Keypair {
     pub fn sign(&self, data: &[u8]) -> MultiSignature {
         match self {
             Keypair::Ecdsa(kp) => MultiSignature::from(kp.sign(data)),
-            Keypair::Ed25519(kp) => {
-                MultiSignature::from(kp.get_sk_ref().sign(data, kp.get_pk_ref()))
-            }
+            Keypair::Ed25519(kp) => MultiSignature::from(kp.get_sk_ref().sign(data)),
         }
     }
 }

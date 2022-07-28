@@ -70,7 +70,7 @@ use {
         anon_xfr::{
             decrypt_memo,
             keys::{AXfrKeyPair, AXfrPubKey},
-            nullify_with_native_address, parse_memo,
+            nullify, parse_memo,
             structs::{
                 AnonAssetRecord, Commitment, OpenAnonAssetRecord,
                 OpenAnonAssetRecordBuilder,
@@ -92,7 +92,6 @@ use {
     },
     zei_algebra::{
         bls12_381::BLSScalar,
-        jubjub::{JubjubPoint, JubjubScalar},
         prelude::{Scalar, ZeiFromToBytes},
     },
     zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
@@ -1023,7 +1022,7 @@ pub fn gen_nullifier_hash(
         .c(d!())
         .map_err(error_to_jsvalue)?;
 
-    let n = nullify_with_native_address(
+    let n = nullify(
         &keypair,
         oabar.get_amount(),
         &oabar.get_asset_type(),
@@ -1353,7 +1352,7 @@ impl AnonTransferOperationBuilder {
         .map_err(error_to_jsvalue)?;
 
         self.get_builder_mut()
-            .add_input(oabar, keypair.clone())
+            .add_input(oabar)
             .c(d!())
             .map_err(error_to_jsvalue)?;
 
@@ -2223,7 +2222,7 @@ mod test {
 
         let mut ts = AnonTransferOperationBuilder::new(1);
 
-        ts.get_builder_mut().add_input(oabar, keypair_in);
+        ts.get_builder_mut().add_input(oabar);
 
         ts.get_builder_mut().add_output(oabar_out);
 
@@ -2243,7 +2242,7 @@ mod test {
         let (mut oabar_2, keypair_in_2) =
             gen_oabar_and_keys(&mut prng, 2 * amount, asset_type);
 
-        ts.get_builder_mut().add_input(oabar_2, keypair_in_2);
+        ts.get_builder_mut().add_input(oabar_2);
 
         let fra_excess_gt_fees_estimation = ts.get_expected_fee();
 

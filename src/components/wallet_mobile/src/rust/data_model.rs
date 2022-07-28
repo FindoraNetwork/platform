@@ -280,6 +280,7 @@ impl OwnerMemo {
     pub fn from_json(zei_owner_memo: ZeiOwnerMemo) -> RUCResult<OwnerMemo> {
         Ok(OwnerMemo {
             memo: ZeiOwnerMemo {
+                key_type: zei_owner_memo.key_type,
                 blind_share: zei_owner_memo.blind_share,
                 lock: zei_owner_memo.lock,
             },

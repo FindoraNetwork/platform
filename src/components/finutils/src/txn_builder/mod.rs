@@ -205,7 +205,7 @@ impl TransactionBuilder {
             if 0 < am {
                 if let Ok(oar) = open_blind_asset_record(&o, &om, &kp) {
                     if ASSET_TYPE_FRA == oar.asset_type
-                        && kp.get_pk_ref().as_bytes() == o.public_key.as_bytes()
+                        && kp.get_pk_ref().to_bytes() == o.public_key.to_bytes()
                     {
                         let n = alt!(oar.amount > am, am, oar.amount);
                         am = am.saturating_sub(oar.amount);
@@ -294,7 +294,7 @@ impl TransactionBuilder {
         .and_then(|o| o.create(TransferType::Standard).c(d!()))
         .and_then(|o| {
             let cmp = |a: &XfrKeyPair, b: &XfrKeyPair| {
-                a.get_pk().as_bytes().cmp(b.get_pk().as_bytes())
+                a.get_pk().to_bytes().cmp(&b.get_pk().to_bytes())
             };
             kps.sort_by(cmp);
             kps.dedup_by(|a, b| matches!(cmp(a, b), Ordering::Equal));
@@ -735,7 +735,6 @@ impl TransactionBuilder {
         let mut vec_outputs = outputs.to_vec();
         let mut vec_changes = vec![];
         let mut remainders = HashMap::new();
-        // If multiple keypairs are present, the last keypair is considered for remainder
         let remainder_pk = input_keypair.get_public_key();
 
         // Create a remainders hashmap with remainder amount for each asset type
@@ -1542,7 +1541,7 @@ impl TransferOperationBuilder {
 pub struct AnonTransferOperationBuilder {
     inputs: Vec<OpenAnonAssetRecord>,
     outputs: Vec<OpenAnonAssetRecord>,
-    keypairs: AXfrKeyPair,
+    keypair: AXfrKeyPair,
     note: Option<AXfrPreNote>,
     commitments: Vec<Commitment>,
 
@@ -1555,11 +1554,12 @@ impl AnonTransferOperationBuilder {
     pub fn new_from_seq_id(seq_id: u64) -> Self {
         let mut prng = ChaChaRng::from_entropy();
         let no_replay_token = NoReplayToken::new(&mut prng, seq_id);
+        let key_pair = AXfrKeyPair::generate(&mut prng);
 
         AnonTransferOperationBuilder {
             inputs: Vec::default(),
             outputs: Vec::default(),
-            keypairs: Vec::default(),
+            keypair: key_pair,
             note: None,
             commitments: Vec::default(),
             nonce: no_replay_token,
@@ -1569,19 +1569,14 @@ impl AnonTransferOperationBuilder {
 
     /// add_input is used for adding an input source to the Anon Transfer Operation factory, it takes
     /// an ABAR and a Keypair as input
-    pub fn add_input(
-        &mut self,
-        abar: OpenAnonAssetRecord,
-        secret_key: AXfrKeyPair,
-    ) -> Result<&mut Self> {
+    pub fn add_input(&mut self, abar: OpenAnonAssetRecord) -> Result<&mut Self> {
         self.inputs.push(abar);
-        self.keypairs.push(secret_key);
         Ok(self)
     }
 
     /// add_output is used to add a output record to the Anon Transfer factory
     pub fn add_output(&mut self, abar: OpenAnonAssetRecord) -> Result<&mut Self> {
-        self.commitments.push(get_abar_commitment(abar));
+        self.commitments.push(get_abar_commitment(abar.clone()));
         self.outputs.push(abar);
         Ok(self)
     }
@@ -1640,7 +1635,7 @@ impl AnonTransferOperationBuilder {
         let mut commitment_map = HashMap::new();
         for out_abar in self.outputs.iter() {
             let abar_rand =
-                wallet::commitment_to_base58(&get_abar_commitment(&out_abar));
+                wallet::commitment_to_base58(&get_abar_commitment(out_abar.clone()));
             let abar_pkey = *out_abar.pub_key_ref();
             let abar_asset = out_abar.get_asset_type();
             let abar_amt = out_abar.get_amount();
@@ -1683,7 +1678,7 @@ impl AnonTransferOperationBuilder {
             .build()
             .unwrap();
 
-        let commitment = get_abar_commitment(oabar_money_back);
+        let commitment = get_abar_commitment(oabar_money_back.clone());
         self.outputs.push(oabar_money_back);
         self.commitments.push(commitment);
 
@@ -2164,7 +2159,7 @@ mod tests {
         let asset_type = ASSET_TYPE_FRA;
 
         // simulate input abar
-        let (mut oabar, keypair_in) = gen_oabar_and_keys(&mut prng, amount, asset_type);
+        let (mut oabar, _) = gen_oabar_and_keys(&mut prng, amount, asset_type);
 
         // simulate input fee abar
         let (mut oabar_fee, keypair_in) =
@@ -2302,7 +2297,7 @@ mod tests {
         let new_xfrkeys = AXfrKeyPair::generate(&mut prng);
 
         //Trying to decrypt asset type and amount from owner memo using wrong keys
-        let result_decrypt = owner_memo.decrypt(&new_xfrkeys.get_view_key_scalar());
+        let result_decrypt = owner_memo.decrypt(&new_xfrkeys.get_secret_key());
         assert!(result_decrypt.is_err());
 
         // add abar to merkle tree

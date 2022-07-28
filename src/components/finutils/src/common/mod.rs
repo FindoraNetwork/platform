@@ -41,7 +41,7 @@ use {
     zei::{
         anon_xfr::{
             keys::{AXfrKeyPair, AXfrPubKey},
-            nullify_with_native_address,
+            nullify,
             structs::{
                 AnonAssetRecord, Commitment, MTLeafInfo, OpenAnonAssetRecordBuilder,
             },
@@ -902,12 +902,13 @@ pub fn convert_abar2bar(
 
     // check oabar is unspent. If already spent return error
     // create nullifier
-    let n = nullify_with_native_address(
+    let n = nullify(
         &from,
         oabar_in.get_amount(),
         &oabar_in.get_asset_type(),
         mt_leaf_uid,
-    );
+    )
+    .c(d!())?;
     let hash = wallet::nullifier_to_base58(&n);
     // check if hash is present in nullifier set
     let null_status = utils::check_nullifier_hash(&hash)
@@ -981,12 +982,13 @@ pub fn gen_anon_transfer_op(
                 .unwrap();
 
         // check oabar is unspent.
-        let n = nullify_with_native_address(
+        let n = nullify(
             &from,
             oabar_in.get_amount(),
             &oabar_in.get_asset_type(),
             mt_leaf_uid,
-        );
+        )
+        .c(d!())?;
         let hash = wallet::nullifier_to_base58(&n);
         let null_status = utils::check_nullifier_hash(&hash).c(d!())?.ok_or(d!(
             "The ABAR corresponding to this commitment is missing {}",
@@ -1053,7 +1055,7 @@ pub fn gen_anon_transfer_op(
         .open("owned_commitments")
         .expect("cannot open commitments file");
     for rem_oabar in rem_oabars.iter() {
-        let c = get_abar_commitment(rem_oabar);
+        let c = get_abar_commitment(rem_oabar.clone());
         println!(
             "\x1b[31;01m Remainder Commitment: {}\x1b[00m",
             wallet::commitment_to_base58(&c)
@@ -1100,7 +1102,7 @@ pub fn gen_oabar_add_op_x(
     // Create Input Open Abars with input keys, radomizers and Owner memos
     let mut oabars_in = Vec::new();
     for i in 0..comm_count {
-        let from = &axfr_secret_key[i];
+        let from = &axfr_secret_key;
         let c = wallet::commitment_from_base58(commitments[i].as_str()).c(d!())?;
 
         // Get OwnerMemo
@@ -1121,12 +1123,13 @@ pub fn gen_oabar_add_op_x(
                 .unwrap();
 
         // check oabar is unspent.
-        let n = nullify_with_native_address(
+        let n = nullify(
             from,
             oabar_in.get_amount(),
             &oabar_in.get_asset_type(),
             mt_leaf_uid,
-        );
+        )
+        .c(d!())?;
         let hash = wallet::nullifier_to_base58(&n);
         let null_status = utils::check_nullifier_hash(&hash)
             .c(d!())?
@@ -1200,7 +1203,7 @@ pub fn gen_oabar_add_op_x(
         .open("owned_commitments")
         .expect("cannot open commitments file");
     for rem_oabar in rem_oabars.iter() {
-        let c_rem = get_abar_commitment(rem_oabar);
+        let c_rem = get_abar_commitment(rem_oabar.clone());
 
         println!(
             "\x1b[31;01m Remainder Commitment: {}\x1b[00m",
@@ -1281,12 +1284,13 @@ pub fn check_abar_status(
         .build()
         .unwrap();
 
-    let n = nullify_with_native_address(
+    let n = nullify(
         &from,
         oabar.get_amount(),
         &oabar.get_asset_type(),
         mt_leaf_uid,
-    );
+    )
+    .c(d!())?;
     let hash = wallet::nullifier_to_base58(&n);
     let null_status = utils::check_nullifier_hash(&hash).c(d!())?.unwrap();
     if null_status {
@@ -1322,12 +1326,13 @@ pub fn get_owned_abars(
                     .build()
                     .unwrap();
 
-            let n = nullify_with_native_address(
+            let n = nullify(
                 &axfr_secret_key,
                 oabar.get_amount(),
                 &oabar.get_asset_type(),
                 sid.0,
-            );
+            )
+            .c(d!())?;
             let hash = wallet::nullifier_to_base58(&n);
             let null_status = utils::check_nullifier_hash(&hash).c(d!())?.unwrap();
             println!(
@@ -1391,12 +1396,13 @@ pub fn anon_balance(
                     .build()
                     .unwrap();
 
-                    let n = nullify_with_native_address(
+                    let n = nullify(
                         &axfr_secret_key,
                         oabar.get_amount(),
                         &oabar.get_asset_type(),
                         sid.0,
-                    );
+                    )
+                    .c(d!())?;
                     let hash = wallet::nullifier_to_base58(&n);
                     let is_spent = utils::check_nullifier_hash(&hash).c(d!())?.unwrap();
                     if !is_spent && oabar.get_asset_type() == asset_type {
