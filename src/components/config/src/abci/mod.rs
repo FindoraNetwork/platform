@@ -35,6 +35,7 @@ pub struct CheckPointConfig {
     pub utxo_checktx_height: i64,
     pub utxo_asset_prefix_height: u64,
     pub prism_bridge_address: String,
+    pub nonce_bug_fix_height: u64,
 }
 
 impl CheckPointConfig {
@@ -66,6 +67,7 @@ impl CheckPointConfig {
                                 evm_checktx_nonce: 0,
                                 utxo_checktx_height: 0,
                                 utxo_asset_prefix_height: 0,
+                                nonce_bug_fix_height: 0,
                                 prism_bridge_address: String::new(),
                             };
                             #[cfg(not(feature = "debug_env"))]
@@ -88,6 +90,7 @@ impl CheckPointConfig {
                                 evm_checktx_nonce: 3000000,
                                 utxo_checktx_height: 2524270,
                                 utxo_asset_prefix_height: 2524270,
+                                nonce_bug_fix_height: 30000000,
                                 prism_bridge_address: String::new(),
                             };
                             let content = toml::to_string(&config).unwrap();
