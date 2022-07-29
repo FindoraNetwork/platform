@@ -8,7 +8,8 @@ use {
     hex::FromHex,
     primitive_types::{H160, H256},
     ruc::{d, eg, RucResult},
-    serde::{Deserialize, Serialize},
+    serde::{Deserialize, Deserializer, Serialize, Serializer},
+    serde::de::Error,
     sha3::{Digest, Keccak256},
     std::ops::{Deref, DerefMut},
     zei::xfr::sig::{XfrPublicKey, XfrSignature},
@@ -17,9 +18,22 @@ use {
 
 /// An opaque 32-byte cryptographic identifier.
 #[derive(
-    Clone, Eq, PartialEq, Ord, PartialOrd, Default, Hash, Serialize, Deserialize, Debug,
+    Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug,
 )]
-pub struct Address32([u8; 32]);
+pub struct Address32([u8; 34]);
+
+impl Serialize for Address32 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        self.to_string().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Address32 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+        Self::from_str(&String::deserialize(deserializer)?)
+            .map_err(|e| D::Error::custom(format!("{:?}", e)))
+    }
+}
 
 impl AsRef<[u8]> for Address32 {
     fn as_ref(&self) -> &[u8] {
@@ -33,21 +47,27 @@ impl AsMut<[u8]> for Address32 {
     }
 }
 
-impl AsRef<[u8; 32]> for Address32 {
-    fn as_ref(&self) -> &[u8; 32] {
+impl AsRef<[u8; 34]> for Address32 {
+    fn as_ref(&self) -> &[u8; 34] {
         &self.0
     }
 }
 
-impl AsMut<[u8; 32]> for Address32 {
-    fn as_mut(&mut self) -> &mut [u8; 32] {
+impl AsMut<[u8; 34]> for Address32 {
+    fn as_mut(&mut self) -> &mut [u8; 34] {
         &mut self.0
     }
 }
 
-impl From<[u8; 32]> for Address32 {
-    fn from(x: [u8; 32]) -> Self {
+impl From<[u8; 34]> for Address32 {
+    fn from(x: [u8; 34]) -> Self {
         Self(x)
+    }
+}
+
+impl Default for Address32 {
+    fn default() -> Self {
+        Address32::from([0u8; 34])
     }
 }
 
@@ -73,7 +93,7 @@ impl FromStr for Address32 {
 impl<'a> TryFrom<&'a [u8]> for Address32 {
     type Error = ();
     fn try_from(x: &'a [u8]) -> Result<Address32, ()> {
-        if x.len() == 32 {
+        if x.len() == 34 {
             let mut r = Address32::default();
             r.0.copy_from_slice(x);
             Ok(r)
@@ -91,13 +111,16 @@ impl From<XfrPublicKey> for Address32 {
 
 impl From<ecdsa::Public> for Address32 {
     fn from(k: ecdsa::Public) -> Self {
-        keccak_256(k.as_ref()).into()
+        let b = keccak_256(k.as_ref());
+        let mut data = [0u8; 34];
+        data[0..32].copy_from_slice(&b);
+        data.into()
     }
 }
 
 impl From<H160> for Address32 {
     fn from(k: H160) -> Self {
-        let mut data = [0u8; 32];
+        let mut data = [0u8; 34];
         data[0..4].copy_from_slice(b"evm:");
         data[4..24].copy_from_slice(k.as_bytes());
         data.into()
