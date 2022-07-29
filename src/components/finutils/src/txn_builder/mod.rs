@@ -1651,51 +1651,66 @@ impl AnonTransferOperationBuilder {
     /// build generates the anon transfer body with the Zero Knowledge Proof.
     pub fn build(&mut self) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
+        let input_asset_list = self
+            .inputs
+            .iter()
+            .map(|a| a.get_asset_type())
+            .collect::<Vec<AssetType>>();
+        let mut fees_in_fra = 0u32;
 
-        let mut sum_input = 0;
-        let mut sum_output = 0;
-        for input in self.inputs.clone() {
-            if ASSET_TYPE_FRA == input.get_asset_type() {
-                sum_input += input.get_amount();
+        for asset in input_asset_list {
+            let mut sum_input = 0;
+            let mut sum_output = 0;
+            for input in self.inputs.clone() {
+                if asset == input.get_asset_type() {
+                    sum_input += input.get_amount();
+                }
             }
-        }
-        for output in self.outputs.clone() {
-            if ASSET_TYPE_FRA == output.get_asset_type() {
-                sum_output += output.get_amount();
+            for output in self.outputs.clone() {
+                if asset == output.get_asset_type() {
+                    sum_output += output.get_amount();
+                }
             }
-        }
-        let fees = FEE_CALCULATING_FUNC(
-            self.inputs.len() as u32,
-            self.outputs.len() as u32 + 1,
-        );
-        if sum_output + (fees as u64) > sum_input {
-            return Err(eg!("Insufficient FRA balance to pay fees"));
-        }
-        let remainder = sum_input - sum_output - (fees as u64);
 
-        let oabar_money_back = OpenAnonAssetRecordBuilder::new()
-            .amount(remainder)
-            .asset_type(ASSET_TYPE_FRA)
-            .pub_key(&self.keypairs[0].get_pub_key())
-            .finalize(&mut prng)
-            .unwrap()
-            .build()
-            .unwrap();
+            let fees = if asset == ASSET_TYPE_FRA {
+                fees_in_fra = FEE_CALCULATING_FUNC(
+                    self.inputs.len() as u32,
+                    self.outputs.len() as u32 + 1,
+                );
+                fees_in_fra
+            } else {
+                0
+            };
 
-        let commitment = oabar_money_back.compute_commitment();
-        self.outputs.push(oabar_money_back);
-        self.commitments.push(commitment);
+            if sum_output + (fees as u64) > sum_input {
+                return Err(eg!("Insufficient FRA balance to pay fees"));
+            }
+            let remainder = sum_input - sum_output - (fees as u64);
 
-        if self.outputs.len() > 5 {
-            return Err(eg!(
-                "Total outputs (incl. remainders) cannot be greater than 5"
-            ));
+            let oabar_money_back = OpenAnonAssetRecordBuilder::new()
+                .amount(remainder)
+                .asset_type(asset)
+                .pub_key(&self.keypairs[0].get_pub_key())
+                .finalize(&mut prng)
+                .unwrap()
+                .build()
+                .unwrap();
+
+            let commitment = oabar_money_back.compute_commitment();
+            self.outputs.push(oabar_money_back);
+            self.commitments.push(commitment);
+
+            if self.outputs.len() > 5 {
+                return Err(eg!(
+                    "Total outputs (incl. remainders) cannot be greater than 5"
+                ));
+            }
         }
 
         let note = init_anon_xfr_note(
             self.inputs.as_slice(),
             self.outputs.as_slice(),
-            fees,
+            fees_in_fra,
             self.keypairs.as_slice(),
         )
         .c(d!())?;
