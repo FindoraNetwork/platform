@@ -1,11 +1,8 @@
 name: Nightly
-# on:
-#   push:
-#     branches:
-#       - nightly-build
 on:
   schedule:
     - cron: '0 0 * * *'
+
 env:
   CARGO_TERM_COLOR: always
 jobs:
@@ -18,16 +15,17 @@ jobs:
       ENV: dev
       PRIVATE_ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
       PUBLIC_ECR_URL: public.ecr.aws/k6m5b6e2
+      BUILD_TYPE: nightly
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
+      with:
+        ref: develop
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
         override: true
         components: rustfmt
-        ref: develop
-
 
     - name: Prepare key
       shell: bash
@@ -45,39 +43,23 @@ jobs:
         make ci_build_binary_rust_base
     - name: Build binary image
       env:
-        GITHUB_CONTEXT: ${{ toJSON(github) }}
-        ENV: ${{ env.ENV }}
+        BUILD_TYPE: ${{ env.BUILD_TYPE }}
       shell: bash
       run: |
-        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
-        if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA}"
-        else
-          export COMMIT_HASH=${COMMIT_HASH}
-        fi
-        export BRANCH="${GITHUB_HEAD_REF}"
-        export TOBRANCH="nightly"
-        export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
+        export DATA=$(date '+%Y-%m-%d')
+        export IMAGE_TAG="${BUILD_TYPE}-${DATA}"
         export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_dev_binary_image
     - name: Build findorad images
       env:
-        PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
-        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
-        ENV: ${{ env.ENV }}
-        GITHUB_CONTEXT: ${{ toJSON(github) }}
+        BUILD_TYPE: ${{ env.BUILD_TYPE }}
+
       shell: bash
       run: |
-        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
-        if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA}"
-        else
-          export COMMIT_HASH=${COMMIT_HASH}
-        fi
-        export BRANCH="${GITHUB_HEAD_REF}"
-        export TOBRANCH="nightly"
-        export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
+        export DATA=$(date '+%Y-%m-%d')
+        export IMAGE_TAG="${BUILD_TYPE}-${DATA}"
+        export VERGEN_SHA_EXTERN="${IMAGE_TAG}"       
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image
     - name: Login ECR
@@ -89,21 +71,13 @@ jobs:
         
     - name: Push images
       env:
-        PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
-        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
-        ENV: ${{ env.ENV }}
-        GITHUB_CONTEXT: ${{ toJSON(github) }}
+        BUILD_TYPE: ${{ env.BUILD_TYPE }}
+
       shell: bash
       run: |
-        COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
-        if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA}"
-        else
-          export COMMIT_HASH=${COMMIT_HASH}
-        fi
-        export BRANCH="${GITHUB_HEAD_REF}"
-        export TOBRANCH="nightly"
-        export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
+        export DATA=$(date '+%Y-%m-%d')
+        export IMAGE_TAG="${BUILD_TYPE}-${DATA}"
+        export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_push_image
 
