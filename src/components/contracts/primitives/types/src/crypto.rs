@@ -9,72 +9,77 @@ use {
     primitive_types::{H160, H256},
     ruc::{d, eg, RucResult},
     serde::{Deserialize, Serialize},
+    serde_big_array::BigArray,
     sha3::{Digest, Keccak256},
     std::ops::{Deref, DerefMut},
-    zei::xfr::sig::{XfrPublicKey, XfrSignature},
+    zei::xfr::sig::{KeyType, XfrPublicKey, XfrSignature},
     zei_algebra::serialization::ZeiFromToBytes,
 };
 
-/// An opaque 32-byte cryptographic identifier.
-#[derive(
-    Clone, Eq, PartialEq, Ord, PartialOrd, Default, Hash, Serialize, Deserialize, Debug,
-)]
-pub struct Address32([u8; 32]);
+/// An opaque 34-byte cryptographic identifier.
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Debug)]
+pub struct Address34(#[serde(with = "BigArray")] [u8; 34]);
 
-impl AsRef<[u8]> for Address32 {
+impl Default for Address34 {
+    fn default() -> Self {
+        Address34([0u8; 34])
+    }
+}
+
+impl AsRef<[u8]> for Address34 {
     fn as_ref(&self) -> &[u8] {
         &self.0[..]
     }
 }
 
-impl AsMut<[u8]> for Address32 {
+impl AsMut<[u8]> for Address34 {
     fn as_mut(&mut self) -> &mut [u8] {
         &mut self.0[..]
     }
 }
 
-impl AsRef<[u8; 32]> for Address32 {
-    fn as_ref(&self) -> &[u8; 32] {
+impl AsRef<[u8; 34]> for Address34 {
+    fn as_ref(&self) -> &[u8; 34] {
         &self.0
     }
 }
 
-impl AsMut<[u8; 32]> for Address32 {
-    fn as_mut(&mut self) -> &mut [u8; 32] {
+impl AsMut<[u8; 34]> for Address34 {
+    fn as_mut(&mut self) -> &mut [u8; 34] {
         &mut self.0
     }
 }
 
-impl From<[u8; 32]> for Address32 {
-    fn from(x: [u8; 32]) -> Self {
+impl From<[u8; 34]> for Address34 {
+    fn from(x: [u8; 34]) -> Self {
         Self(x)
     }
 }
 
-impl core::fmt::Display for Address32 {
+impl core::fmt::Display for Address34 {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", bech32::encode("fra", self.to_base32()).unwrap())
     }
 }
 
-impl FromStr for Address32 {
+impl FromStr for Address34 {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Address32, ()> {
+    fn from_str(s: &str) -> Result<Address34, ()> {
         let v = bech32::decode(s)
             .and_then(|d| Vec::<u8>::from_base32(&d.1))
             .map_err(|_e| ())?;
-        let mut address_32 = Address32::default();
-        address_32.0.copy_from_slice(v.as_slice());
-        Ok(address_32)
+        let mut address_34 = Address34::default();
+        address_34.0.copy_from_slice(v.as_slice());
+        Ok(address_34)
     }
 }
 
-impl<'a> TryFrom<&'a [u8]> for Address32 {
+impl<'a> TryFrom<&'a [u8]> for Address34 {
     type Error = ();
-    fn try_from(x: &'a [u8]) -> Result<Address32, ()> {
-        if x.len() == 32 {
-            let mut r = Address32::default();
+    fn try_from(x: &'a [u8]) -> Result<Address34, ()> {
+        if x.len() == 34 {
+            let mut r = Address34::default();
             r.0.copy_from_slice(x);
             Ok(r)
         } else {
@@ -83,21 +88,24 @@ impl<'a> TryFrom<&'a [u8]> for Address32 {
     }
 }
 
-impl From<XfrPublicKey> for Address32 {
+impl From<XfrPublicKey> for Address34 {
     fn from(k: XfrPublicKey) -> Self {
-        Address32::try_from(k.zei_to_bytes().as_slice()).unwrap()
+        Address34::try_from(k.zei_to_bytes().as_slice()).unwrap()
     }
 }
 
-impl From<ecdsa::Public> for Address32 {
+impl From<ecdsa::Public> for Address34 {
     fn from(k: ecdsa::Public) -> Self {
-        keccak_256(k.as_ref()).into()
+        let mut bytes = [0u8; 34];
+        bytes[0] = KeyType::Secp256k1.to_byte();
+        bytes[1..34].copy_from_slice(k.as_ref());
+        Address34(bytes)
     }
 }
 
-impl From<H160> for Address32 {
+impl From<H160> for Address34 {
     fn from(k: H160) -> Self {
-        let mut data = [0u8; 32];
+        let mut data = [0u8; 34];
         data[0..4].copy_from_slice(b"evm:");
         data[4..24].copy_from_slice(k.as_bytes());
         data.into()
@@ -250,7 +258,7 @@ impl TryFrom<MultiSignature> for ecdsa::Signature {
 impl Verify for MultiSignature {
     type Signer = MultiSigner;
 
-    fn verify(&self, msg: &[u8], signer: &Address32) -> bool {
+    fn verify(&self, msg: &[u8], signer: &Address34) -> bool {
         match self {
             Self::Xfr(ref sig) => match XfrPublicKey::zei_from_bytes(signer.as_ref()) {
                 Ok(who) => sig.verify(msg, &who),
@@ -259,18 +267,18 @@ impl Verify for MultiSignature {
             // Self::Ecdsa(ref sig) => match sig.recover(msg) {
             //     Some(pubkey) => {
             //         &keccak_256(pubkey.as_ref())
-            //             == <dyn AsRef<[u8; 32]>>::as_ref(signer)
+            //             == <dyn AsRef<[u8; 34]>>::as_ref(signer)
             //     }
             //     _ => false,
             // },
             Self::Ecdsa(ref sig) => {
-                // let mut msg_hashed = [0u8; 32];
+                // let mut msg_hashed = [0u8; 34];
                 // msg_hashed.copy_from_slice(msg);
 
                 let msg_hashed = keccak_256(msg);
                 match secp256k1_ecdsa_recover(sig.as_ref(), &msg_hashed) {
                     Ok(pubkey) => {
-                        Address32::from(H160::from(H256::from_slice(
+                        Address34::from(H160::from(H256::from_slice(
                             Keccak256::digest(&pubkey).as_slice(),
                         ))) == signer.clone()
                     }
@@ -315,7 +323,7 @@ impl FromStr for MultiSigner {
     }
 }
 
-impl From<MultiSigner> for Address32 {
+impl From<MultiSigner> for Address34 {
     fn from(m: MultiSigner) -> Self {
         match m {
             MultiSigner::Ethereum(a) => a.into(),
@@ -383,8 +391,8 @@ impl IdentifyAccount for XfrPublicKey {
 }
 
 impl IdentifyAccount for MultiSigner {
-    type AccountId = Address32;
-    fn into_account(self) -> Address32 {
+    type AccountId = Address34;
+    fn into_account(self) -> Address34 {
         match self {
             MultiSigner::Xfr(who) => who.into(),
             // MultiSigner::Ecdsa(who) => who.into(),
@@ -463,15 +471,15 @@ mod tests {
     }
 
     #[test]
-    fn test_address_32() {
+    fn test_address_34() {
         let mut prng = ChaChaRng::from_entropy();
         let keypair = XfrKeyPair::generate(&mut prng);
         let pubkey = keypair.pub_key;
 
-        let address_32 = Address32::from(pubkey);
-        let address_str = address_32.to_string();
+        let address_34 = Address34::from(pubkey);
+        let address_str = address_34.to_string();
 
-        let new_address = Address32::from_str(address_str.as_str());
+        let new_address = Address34::from_str(address_str.as_str());
         let new_address_str = new_address.unwrap().to_string();
 
         assert_eq!(new_address_str, address_str);
