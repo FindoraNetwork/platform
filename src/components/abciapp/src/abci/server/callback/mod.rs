@@ -372,7 +372,21 @@ pub fn deliver_tx(
                         req
                     );
                 }
-                return s.account_base_app.write().deliver_tx(req);
+                let resp = s.account_base_app.write().deliver_tx(req);
+
+                if 0 == resp.code {
+                    let mut la = s.la.write();
+                    let mut laa = la.get_committed_state().write();
+                    if let Some(tx) = staking::system_prism_mint_pay(
+                        &mut *laa,
+                        &mut *s.account_base_app.write(),
+                    ) {
+                        drop(laa);
+                        // this unwrap should be safe
+                        la.cache_transaction(tx).unwrap();
+                    }
+                }
+                resp
             }
         }
         TxCatalog::Unknown => {
@@ -405,10 +419,8 @@ pub fn end_block(
 
     // mint coinbase, cache system transactions to ledger
     {
-        let mut laa = la.get_committed_state().write();
-        if let Some(tx) =
-            staking::system_mint_pay(&mut *laa, &mut *s.account_base_app.write())
-        {
+        let laa = la.get_committed_state().write();
+        if let Some(tx) = staking::system_mint_pay(&*laa) {
             drop(laa);
             // this unwrap should be safe
             la.cache_transaction(tx).unwrap();
