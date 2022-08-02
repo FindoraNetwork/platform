@@ -1,7 +1,3 @@
-use crate::data_model::{AssetTypePrefix, ASSET_TYPE_FRA};
-use fbnc::NumKey;
-use fp_utils::hashing::keccak_256;
-use zei::xfr::structs::AssetType as ZeiAssetType;
 use {
     crate::{
         data_model::{
@@ -239,15 +235,7 @@ impl TxnEffect {
         // (1)
         def.signature.verify(&def.pubkey.key, &def.body).c(d!())?;
 
-        let code = if def.body.asset.code.val == ASSET_TYPE_FRA {
-            def.body.asset.code
-        } else {
-            let mut asset_code = AssetTypePrefix::UserDefined.bytes();
-            asset_code.append(&mut def.body.asset.code.to_bytes());
-            AssetTypeCode {
-                val: ZeiAssetType(keccak_256(&asset_code)),
-            }
-        };
+        let code = def.body.asset.code;
 
         let mut def_new = def.clone();
         def_new.body.asset.code = code;
@@ -343,24 +331,6 @@ impl TxnEffect {
             if output.record.asset_type != XfrAssetType::NonConfidential(code.val) {
                 return Err(eg!());
             }
-            // match output.record.asset_type {
-            //     XfrAssetType::Confidential(_) => {
-            //         return Err(eg!());
-            //     }
-            //     XfrAssetType::NonConfidential(at) => {
-            //         if at == ASSET_TYPE_FRA && at.0 != code.val.0 {
-            //             return Err(eg!());
-            //         } else if at != ASSET_TYPE_FRA {
-            //             let mut asset_code = AssetTypePrefix::UserDefined.bytes();
-            //             asset_code.append(&mut at.0.to_vec());
-            //             let act = AssetTypeCode::new_from_vec(keccak_256(asset_code.as_slice()).to_vec());
-            //
-            //             if act.val != code.val {
-            //                 return Err(eg!());
-            //             }
-            //         }
-            //     }
-            // };
 
             if let XfrAmount::NonConfidential(amt) = output.record.amount {
                 let issuance_amount = self.issuance_amounts.entry(code).or_insert(0);
