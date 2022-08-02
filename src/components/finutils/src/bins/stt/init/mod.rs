@@ -17,6 +17,7 @@ pub fn init(
     is_mainnet: bool,
     skip_validator: bool,
     staking_info_file: Option<&str>,
+    only_init: bool,
 ) -> Result<()> {
     if 0 == interval {
         interval = BLOCK_INTERVAL;
@@ -29,6 +30,9 @@ pub fn init(
             println!(">>> Set initial validator set ...");
         }
         common::set_initial_validators(staking_info_file).c(d!())?;
+        if only_init {
+            return Ok(());
+        }
     }
 
     if is_mainnet {
