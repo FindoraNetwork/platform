@@ -372,7 +372,7 @@ pub fn deliver_tx(
                         req
                     );
                 }
-                let resp = s.account_base_app.write().deliver_tx(req);
+                let mut resp = s.account_base_app.write().deliver_tx(req);
 
                 if 0 == resp.code {
                     let mut la = s.la.write();
@@ -382,9 +382,23 @@ pub fn deliver_tx(
                         &mut *s.account_base_app.write(),
                     ) {
                         drop(laa);
-                        // this unwrap should be safe
-                        la.cache_transaction(tx).unwrap();
+                        if la.cache_transaction(tx).is_ok() {
+                            return resp;
+                        }
                     }
+                    resp.code = 1;
+                    s.account_base_app
+                        .read()
+                        .deliver_state
+                        .state
+                        .write()
+                        .discard_session();
+                    s.account_base_app
+                        .read()
+                        .deliver_state
+                        .db
+                        .write()
+                        .discard_session();
                 }
                 resp
             }
