@@ -1423,7 +1423,7 @@ impl AnonTransferOperationBuilder {
     pub fn build(mut self) -> Result<AnonTransferOperationBuilder, JsValue> {
         self.get_builder_mut()
             .build()
-            .c(d!())
+            .c(d!("error in txn_builder: build"))
             .map_err(error_to_jsvalue)?;
 
         self.get_builder_mut()
