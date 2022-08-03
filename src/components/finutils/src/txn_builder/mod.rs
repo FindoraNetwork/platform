@@ -1651,11 +1651,13 @@ impl AnonTransferOperationBuilder {
     /// build generates the anon transfer body with the Zero Knowledge Proof.
     pub fn build(&mut self) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
-        let input_asset_list :HashSet<AssetType> = self
+        let input_asset_list: HashSet<AssetType> = self
             .inputs
             .iter()
             .map(|a| a.get_asset_type())
-            .collect::<Vec<AssetType>>().drain(..).collect();
+            .collect::<Vec<AssetType>>()
+            .drain(..)
+            .collect();
         let mut fees_in_fra = 0u32;
 
         for asset in input_asset_list {
