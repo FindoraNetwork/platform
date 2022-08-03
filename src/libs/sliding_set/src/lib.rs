@@ -96,7 +96,9 @@ mod tests {
         let mut names = Vec::new();
         for _ in 0..width * factor {
             let rand_string: String =
-                thread_rng().sample_iter(&Alphanumeric).take(16).collect();
+                thread_rng().sample_iter(&Alphanumeric).take(16).map(|c|{
+                    c.to_string()
+                }).collect();
             names.push(rand_string);
         }
         let digests: Vec<Digest> = names
