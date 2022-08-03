@@ -89,7 +89,7 @@ impl CheckPointConfig {
                                 fix_unpaid_delegation_height: 2261885,
                                 evm_checktx_nonce: 3000000,
                                 utxo_checktx_height: 2524270,
-                                utxo_asset_prefix_height: 2524270,
+                                utxo_asset_prefix_height: 30000000,
                                 nonce_bug_fix_height: 30000000,
                                 prism_bridge_address: String::new(),
                             };
