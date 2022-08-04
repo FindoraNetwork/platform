@@ -601,7 +601,12 @@ impl TransactionBuilder {
         };
 
         self.get_builder_mut()
-            .add_operation_abar_to_bar(&oabar, &from_keypair.clone(), &recipient.clone(), art)
+            .add_operation_abar_to_bar(
+                &oabar,
+                &from_keypair.clone(),
+                &recipient.clone(),
+                art,
+            )
             .c(d!())
             .map_err(|e| {
                 JsValue::from_str(&format!(
