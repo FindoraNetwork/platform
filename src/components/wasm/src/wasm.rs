@@ -519,7 +519,7 @@ impl TransactionBuilder {
         let oar = open_bar(
             input_record.get_bar_ref(),
             &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-            &auth_key_pair,
+            &auth_key_pair.clone(),
         )
         .c(d!())
         .map_err(|e| {
@@ -536,8 +536,8 @@ impl TransactionBuilder {
             .get_builder_mut()
             .add_operation_bar_to_abar(
                 seed,
-                auth_key_pair,
-                &abar_pubkey,
+                &auth_key_pair.clone(),
+                &abar_pubkey.clone(),
                 TxoSID(txo_sid),
                 &oar,
                 is_bar_transparent,
@@ -566,7 +566,7 @@ impl TransactionBuilder {
         owner_memo: AxfrOwnerMemo,
         mt_leaf_info: MTLeafInfo,
         from_keypair: &AXfrKeyPair,
-        recipient: XfrPublicKey,
+        recipient: &XfrPublicKey,
         conf_amount: bool,
         conf_type: bool,
     ) -> Result<TransactionBuilder, JsValue> {
@@ -601,7 +601,7 @@ impl TransactionBuilder {
         };
 
         self.get_builder_mut()
-            .add_operation_abar_to_bar(&oabar, &from_keypair.clone(), &recipient, art)
+            .add_operation_abar_to_bar(&oabar, &from_keypair.clone(), &recipient.clone(), art)
             .c(d!())
             .map_err(|e| {
                 JsValue::from_str(&format!(
@@ -640,7 +640,7 @@ impl TransactionBuilder {
         owner_memo: AxfrOwnerMemo,
         mt_leaf_info: MTLeafInfo,
         from_keypair: &AXfrKeyPair,
-        to_pub_key: AXfrPubKey,
+        to_pub_key: &AXfrPubKey,
         to_amount: u64,
     ) -> Result<TransactionBuilder, JsValue> {
         let mut prng = ChaChaRng::from_entropy();
@@ -666,7 +666,7 @@ impl TransactionBuilder {
         let output_oabar = OpenAnonAssetRecordBuilder::new()
             .amount(to_amount)
             .asset_type(input_oabar.get_asset_type())
-            .pub_key(&to_pub_key)
+            .pub_key(&to_pub_key.clone())
             .finalize(&mut prng)
             .c(d!())
             .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
