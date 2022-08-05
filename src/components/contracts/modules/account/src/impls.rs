@@ -41,12 +41,11 @@ impl<C: Config> AccountAsset<Address> for App<C> {
     }
 
     fn inc_nonce(ctx: &Context, who: &Address) -> Result<U256> {
-        let mut sa;
-        if ctx.header.height as u64 >= CFG.checkpoint.nonce_bug_fix_height {
-            sa = Self::account_of(ctx, who, None).unwrap_or_default();
+        let mut sa = if ctx.header.height as u64 >= CFG.checkpoint.nonce_bug_fix_height {
+            Self::account_of(ctx, who, None).unwrap_or_default()
         } else {
-            sa = Self::account_of(ctx, who, None).c(d!("account does not exist"))?;
-        }
+            Self::account_of(ctx, who, None).c(d!("account does not exist"))?
+        };
 
         sa.nonce = sa.nonce.saturating_add(U256::one());
         AccountStore::insert(ctx.state.write().borrow_mut(), who, &sa).map(|()| sa.nonce)
