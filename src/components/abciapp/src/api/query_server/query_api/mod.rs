@@ -632,6 +632,10 @@ impl QueryApi {
                     web::resource("/validator_delegation")
                         .route(web::get().to(get_validator_delegation_history)),
                 )
+                .service(
+                    web::resource("/staking_info")
+                        .route(web::get().to(query_staking_info)),
+                )
                 .route(
                     &ApiRoutes::ValidatorDetail.with_arg_template("NodeAddress"),
                     web::get().to(query_validator_detail),

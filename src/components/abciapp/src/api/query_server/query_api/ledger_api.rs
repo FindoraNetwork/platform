@@ -4,7 +4,7 @@
 
 use {
     super::server::QueryServer,
-    actix_web::{error, web},
+    actix_web::{error, web, HttpResponse, Responder},
     config::abci::global_cfg::CFG,
     finutils::api::{
         DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
@@ -583,6 +583,17 @@ pub async fn query_validator_detail(
     }
 
     Err(error::ErrorNotFound("not exists"))
+}
+
+/// query staking data
+pub async fn query_staking_info(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+) -> actix_web::Result<impl Responder> {
+    let staking = serde_json::to_string(data.read().ledger_cloned.get_staking())?;
+    let response = HttpResponse::Ok()
+        .set_header("content-type", "application/json")
+        .body(staking);
+    Ok(response)
 }
 
 /// query delegation info according to `public_key`
