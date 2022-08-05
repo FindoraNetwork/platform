@@ -942,7 +942,7 @@ pub fn gen_anon_keys() -> Result<AnonKeys, JsValue> {
     let keypair = AXfrKeyPair::generate(&mut prng);
 
     let keys = AnonKeys {
-        spend_key: wallet::anon_secret_key_to_base64(&keypair),
+        secret_key: wallet::anon_secret_key_to_base64(&keypair),
         pub_key: wallet::anon_public_key_to_base64(&keypair.get_public_key()),
     };
 

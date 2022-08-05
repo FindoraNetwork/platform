@@ -817,7 +817,7 @@ impl AmountAssetType {
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
 pub struct AnonKeys {
-    pub(crate) spend_key: String,
+    pub(crate) secret_key: String,
     pub(crate) pub_key: String,
 }
 
@@ -839,12 +839,12 @@ impl AnonKeys {
 
     #[wasm_bindgen(getter)]
     pub fn spend_key(&self) -> String {
-        self.spend_key.clone()
+        self.secret_key.clone()
     }
 
     #[wasm_bindgen(setter)]
     pub fn set_spend_key(&mut self, spend_key: String) {
-        self.spend_key = spend_key;
+        self.secret_key = spend_key;
     }
 
     #[wasm_bindgen(getter)]
