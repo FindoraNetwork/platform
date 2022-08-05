@@ -9,6 +9,7 @@ mod whoami;
 #[cfg(test)]
 mod test;
 
+use config::abci::global_cfg::CFG;
 use {
     crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
     abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate},
@@ -38,6 +39,8 @@ use {
 // The top 50~ candidate validators
 // will become official validators.
 const VALIDATOR_LIMIT: usize = 58;
+// Modify the validator's validator line to 100
+const VALIDATOR_LIMIT_V2: usize = 100;
 
 lazy_static! {
     /// Tendermint node address, sha256(pubkey)[:20]
@@ -123,9 +126,16 @@ pub fn get_validators(
     // reverse sort
     vs.sort_by(|a, b| b.1.cmp(&a.1));
 
+    let validator_limit =
+        if CFG.checkpoint.validators_limit_v2_height > staking.cur_height() {
+            VALIDATOR_LIMIT
+        } else {
+            VALIDATOR_LIMIT_V2
+        };
+
     // set the power of every extra validators to zero,
     // then tendermint can remove them from consensus logic.
-    vs.iter_mut().skip(VALIDATOR_LIMIT).for_each(|(k, power)| {
+    vs.iter_mut().skip(validator_limit).for_each(|(k, power)| {
         alt!(cur_entries.contains_key(k), *power = 0, *power = -1);
     });
 
@@ -366,7 +376,15 @@ fn gen_offline_punish_list(
         .map(|v| (&v.td_addr, v.td_power))
         .collect::<Vec<_>>();
     vs.sort_by(|a, b| b.1.cmp(&a.1));
-    vs.iter_mut().skip(VALIDATOR_LIMIT).for_each(|(_, power)| {
+
+    let validator_limit =
+        if CFG.checkpoint.validators_limit_v2_height > staking.cur_height() {
+            VALIDATOR_LIMIT
+        } else {
+            VALIDATOR_LIMIT_V2
+        };
+
+    vs.iter_mut().skip(validator_limit).for_each(|(_, power)| {
         *power = 0;
     });
 
