@@ -38,7 +38,6 @@ define pack
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
-		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
 	cp $(1)/$(bin_dir)/* ~/.cargo/bin/
 	cd $(1)/$(bin_dir)/ && findorad pack
@@ -97,8 +96,7 @@ else
  	endif
 endif
 
-	mkdir $(shell go env GOPATH)/bin/
-	cp ./tools/tendermint $(shell go env GOPATH)/bin/
+	cp ./tools/tendermint ./release/bin/
 	rm -f ./tools/tendermint
 
 tendermint_goleveldb:
@@ -115,8 +113,7 @@ else
  	endif
 endif
 
-	mkdir $(shell go env GOPATH)/bin/
-	cp ./tools/tendermint $(shell go env GOPATH)/bin/
+	cp ./tools/tendermint ./release/bin/
 	rm -f ./tools/tendermint
 
 test:
