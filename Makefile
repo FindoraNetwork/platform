@@ -38,11 +38,13 @@ define pack
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
+		./tools/tendermint \
 		$(1)/$(bin_dir)/
 	cp $(1)/$(bin_dir)/* ~/.cargo/bin/
 	cd $(1)/$(bin_dir)/ && findorad pack
 	cp -f /tmp/findorad $(1)/$(bin_dir)/
 	cp -f /tmp/findorad ~/.cargo/bin/
+	rm -f ./tools/tendermint
 endef
 
 install: stop_all build_release_goleveldb
@@ -96,8 +98,6 @@ else
  	endif
 endif
 
-	cp ./tools/tendermint ./release/bin/
-	rm -f ./tools/tendermint
 
 tendermint_goleveldb:
 
@@ -112,9 +112,6 @@ else
 		bash tools/download_tendermint.sh 'Unix'
  	endif
 endif
-
-	cp ./tools/tendermint ./release/bin/
-	rm -f ./tools/tendermint
 
 test:
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
