@@ -97,6 +97,7 @@ else
  	endif
 endif
 
+	mkdir $(shell go env GOPATH)/bin/
 	cp ./tools/tendermint $(shell go env GOPATH)/bin/
 	rm -f ./tools/tendermint
 
@@ -114,6 +115,7 @@ else
  	endif
 endif
 
+	mkdir $(shell go env GOPATH)/bin/
 	cp ./tools/tendermint $(shell go env GOPATH)/bin/
 	rm -f ./tools/tendermint
 
