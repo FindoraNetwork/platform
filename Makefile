@@ -88,30 +88,24 @@ build_release_debug: tendermint_goleveldb
 tendermint_cleveldb:
 	- rm $(shell which tendermint)
 
-ifeq ($(OS),Windows_NT)
-	bash tools/download_tendermint.sh 'Windows'
-else
  	ifeq ($(shell uname),Darwin)
 		bash tools/download_tendermint.sh 'MacOs'
 else
 		bash tools/download_tendermint.sh 'Unix'
  	endif
-endif
+
 
 
 tendermint_goleveldb:
 
 	- rm $(shell which tendermint)
 
-ifeq ($(OS),Windows_NT)
-	bash tools/download_tendermint.sh 'Windows'
-else
  	ifeq ($(shell uname),Darwin)
 		bash tools/download_tendermint.sh 'MacOs'
 else
 		bash tools/download_tendermint.sh 'Unix'
  	endif
-endif
+
 
 test:
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
