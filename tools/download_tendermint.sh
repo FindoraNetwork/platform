@@ -3,11 +3,9 @@
 platform=$1
 
 if [ ! -f "./tools/tendermint.zip" ]; then
-    if [ "MacOs" == "${platform}" ]; then
-      echo "downloading... tendermint-macos"
+    if [ "MacOS" == "${platform}" ]; then
       wget -O ./tools/tendermint.zip "https://github.com/tendermint/tendermint/releases/download/v0.33.9/tendermint_v0.33.9_darwin_amd64.zip"
-    elif [ "Unix" == "${platform}" ]; then
-      echo "downloading... tendermint-linux"
+    elif [ "Linux" == "${platform}" ]; then
       wget -O ./tools/tendermint.zip "https://github.com/tendermint/tendermint/releases/download/v0.33.9/tendermint_v0.33.9_linux_amd64.zip"
     fi
 else

@@ -89,9 +89,9 @@ tendermint_cleveldb:
 	- rm $(shell which tendermint)
 
  	ifeq ($(shell uname),Darwin)
-		bash tools/download_tendermint.sh 'MacOs'
+		bash tools/download_tendermint.sh 'MacOS'
 else
-		bash tools/download_tendermint.sh 'Unix'
+		bash tools/download_tendermint.sh 'Linux'
  	endif
 
 
@@ -101,9 +101,9 @@ tendermint_goleveldb:
 	- rm $(shell which tendermint)
 
  	ifeq ($(shell uname),Darwin)
-		bash tools/download_tendermint.sh 'MacOs'
+		bash tools/download_tendermint.sh 'MacOS'
 else
-		bash tools/download_tendermint.sh 'Unix'
+		bash tools/download_tendermint.sh 'Linux'
  	endif
 
 
