@@ -18,19 +18,19 @@ use {
 
 /// Ping route to check for liveness of API
 #[allow(clippy::unnecessary_wraps)]
-async fn ping() -> actix_web::Result<String> {
-    Ok("success".into())
-}
+// async fn ping() -> actix_web::Result<String> {
+//     Ok("success".into())
+// }
 
 /// Returns the git commit hash and commit date of this build
 #[allow(clippy::unnecessary_wraps)]
-async fn version() -> actix_web::Result<String> {
-    Ok(format!(
-        "Build: {} {}",
-        option_env!("VERGEN_SHA_EXTERN").unwrap_or(env!("VERGEN_SHA")),
-        env!("VERGEN_BUILD_DATE")
-    ))
-}
+// async fn version() -> actix_web::Result<String> {
+//     Ok(format!(
+//         "Build: {} {}",
+//         option_env!("VERGEN_SHA_EXTERN").unwrap_or(env!("VERGEN_SHA")),
+//         env!("VERGEN_BUILD_DATE")
+//     ))
+// }
 
 /// Sending transactions to tendermint
 pub async fn submit_transaction<RNG, TF>(
@@ -123,8 +123,8 @@ impl SubmissionApi {
                     &SubmissionRoutes::SubmitTransaction.route(),
                     web::post().to(submit_transaction::<RNG, TF>),
                 )
-                .route(&SubmissionRoutes::Ping.route(), web::get().to(ping))
-                .route(&SubmissionRoutes::Version.route(), web::get().to(version))
+                // .route(&SubmissionRoutes::Ping.route(), web::get().to(ping))
+                // .route(&SubmissionRoutes::Version.route(), web::get().to(version))
                 .route(
                     &SubmissionRoutes::TxnStatus.with_arg_template("handle"),
                     web::get().to(txn_status::<RNG, TF>),

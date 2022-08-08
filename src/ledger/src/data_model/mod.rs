@@ -408,10 +408,10 @@ pub struct XfrAddress {
 }
 
 impl XfrAddress {
-    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
-    pub(crate) fn to_base64(self) -> String {
-        b64enc(&self.key.to_bytes())
-    }
+    // #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
+    // pub(crate) fn to_base64(self) -> String {
+    //     b64enc(&self.key.to_bytes())
+    // }
 
     // pub(crate) fn to_bytes(self) -> Vec<u8> {
     //     self.key.as_bytes().to_vec()
@@ -449,10 +449,10 @@ pub struct IssuerPublicKey {
 }
 
 impl IssuerPublicKey {
-    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
-    pub(crate) fn to_base64(self) -> String {
-        b64enc(&self.key.to_bytes())
-    }
+    // #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
+    // pub(crate) fn to_base64(self) -> String {
+    //     b64enc(&self.key.to_bytes())
+    // }
 
     // pub(crate) fn to_bytes(&self) -> Vec<u8> {
     //     self.key.as_bytes().to_vec()

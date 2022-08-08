@@ -16,12 +16,9 @@ use {
     ledger::{
         data_model::{
             ATxoSID, AssetType, AssetTypeCode, AuthenticatedUtxo, StateCommitmentData,
-            TxnSID, TxoSID, UnAuthenticatedUtxo, Utxo,
+            TxoSID, Utxo,
         },
-        staking::{
-            DelegationRwdDetail, DelegationState, Staking, TendermintAddr,
-            TendermintAddrRef,
-        },
+        staking::{DelegationState, Staking, TendermintAddr, TendermintAddrRef},
     },
     noah::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
     parking_lot::RwLock,
@@ -59,73 +56,73 @@ pub async fn query_utxo(
 }
 
 /// query utxo according to `TxoSID` return UnAuthenticated Utxo
-pub async fn query_utxo_light(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-    info: web::Path<String>,
-) -> actix_web::Result<web::Json<UnAuthenticatedUtxo>> {
-    let qs = data.read();
-    let ledger = &qs.ledger_cloned;
-    if let Ok(txo_sid) = info.parse::<u64>() {
-        if let Some(txo) = ledger.get_utxo_light(TxoSID(txo_sid)) {
-            Ok(web::Json(txo))
-        } else {
-            Err(actix_web::error::ErrorNotFound(
-                "Specified txo does not currently exist.",
-            ))
-        }
-    } else {
-        Err(actix_web::error::ErrorBadRequest(
-            "Invalid txo sid encoding",
-        ))
-    }
-}
+// pub async fn query_utxo_light(
+//     data: web::Data<Arc<RwLock<QueryServer>>>,
+//     info: web::Path<String>,
+// ) -> actix_web::Result<web::Json<UnAuthenticatedUtxo>> {
+//     let qs = data.read();
+//     let ledger = &qs.ledger_cloned;
+//     if let Ok(txo_sid) = info.parse::<u64>() {
+//         if let Some(txo) = ledger.get_utxo_light(TxoSID(txo_sid)) {
+//             Ok(web::Json(txo))
+//         } else {
+//             Err(actix_web::error::ErrorNotFound(
+//                 "Specified txo does not currently exist.",
+//             ))
+//         }
+//     } else {
+//         Err(actix_web::error::ErrorBadRequest(
+//             "Invalid txo sid encoding",
+//         ))
+//     }
+// }
 
 /// query issuance num according to `AssetTypeCode`
-pub async fn query_asset_issuance_num(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-    info: web::Path<String>,
-) -> actix_web::Result<web::Json<u64>> {
-    let qs = data.read();
-    let ledger = &qs.ledger_cloned;
-    if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
-        if let Some(iss_num) = ledger.get_issuance_num(&token_code) {
-            Ok(web::Json(iss_num))
-        } else {
-            Err(actix_web::error::ErrorNotFound(
-                "Specified asset definition does not currently exist.",
-            ))
-        }
-    } else {
-        Err(actix_web::error::ErrorBadRequest(
-            "Invalid asset definition encoding.",
-        ))
-    }
-}
+// pub async fn query_asset_issuance_num(
+//     data: web::Data<Arc<RwLock<QueryServer>>>,
+//     info: web::Path<String>,
+// ) -> actix_web::Result<web::Json<u64>> {
+//     let qs = data.read();
+//     let ledger = &qs.ledger_cloned;
+//     if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
+//         if let Some(iss_num) = ledger.get_issuance_num(&token_code) {
+//             Ok(web::Json(iss_num))
+//         } else {
+//             Err(actix_web::error::ErrorNotFound(
+//                 "Specified asset definition does not currently exist.",
+//             ))
+//         }
+//     } else {
+//         Err(actix_web::error::ErrorBadRequest(
+//             "Invalid asset definition encoding.",
+//         ))
+//     }
+// }
 
 /// Separate a string of `TxoSID` by ',' and query the corresponding Authenticated utxo
-pub async fn query_utxos(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-    info: web::Path<String>,
-) -> actix_web::Result<web::Json<Vec<Option<AuthenticatedUtxo>>>> {
-    let sid_list = info
-        .as_ref()
-        .split(',')
-        .map(|i| {
-            i.parse::<u64>()
-                .map(TxoSID)
-                .map_err(actix_web::error::ErrorBadRequest)
-        })
-        .collect::<actix_web::Result<Vec<_>, actix_web::error::Error>>()?;
+// pub async fn query_utxos(
+//     data: web::Data<Arc<RwLock<QueryServer>>>,
+//     info: web::Path<String>,
+// ) -> actix_web::Result<web::Json<Vec<Option<AuthenticatedUtxo>>>> {
+//     let sid_list = info
+//         .as_ref()
+//         .split(',')
+//         .map(|i| {
+//             i.parse::<u64>()
+//                 .map(TxoSID)
+//                 .map_err(actix_web::error::ErrorBadRequest)
+//         })
+//         .collect::<actix_web::Result<Vec<_>, actix_web::error::Error>>()?;
 
-    let qs = data.read();
-    let ledger = &qs.ledger_cloned;
+//     let qs = data.read();
+//     let ledger = &qs.ledger_cloned;
 
-    if sid_list.len() > 10 || sid_list.is_empty() {
-        return Err(actix_web::error::ErrorBadRequest("Invalid Query List"));
-    }
+//     if sid_list.len() > 10 || sid_list.is_empty() {
+//         return Err(actix_web::error::ErrorBadRequest("Invalid Query List"));
+//     }
 
-    Ok(web::Json(ledger.get_utxos(sid_list.as_slice())))
-}
+//     Ok(web::Json(ledger.get_utxos(sid_list.as_slice())))
+// }
 
 /// query asset according to `AssetType`
 pub async fn query_asset(
@@ -150,50 +147,50 @@ pub async fn query_asset(
 }
 
 /// query tx according to `TxnSID`
-pub async fn query_txn(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-    info: web::Path<String>,
-) -> actix_web::Result<String> {
-    let qs = data.read();
-    let ledger = &qs.ledger_cloned;
-    if let Ok(txn_sid) = info.parse::<usize>() {
-        if let Ok(mut txn) = ruc::info!(ledger.get_transaction(TxnSID(txn_sid))) {
-            txn.finalized_txn.set_txo_id();
-            Ok(serde_json::to_string(&txn)?)
-        } else {
-            Err(actix_web::error::ErrorNotFound(
-                "Specified transaction does not exist.",
-            ))
-        }
-    } else {
-        Err(actix_web::error::ErrorBadRequest(
-            "Invalid txn sid encoding.",
-        ))
-    }
-}
+// pub async fn query_txn(
+//     data: web::Data<Arc<RwLock<QueryServer>>>,
+//     info: web::Path<String>,
+// ) -> actix_web::Result<String> {
+//     let qs = data.read();
+//     let ledger = &qs.ledger_cloned;
+//     if let Ok(txn_sid) = info.parse::<usize>() {
+//         if let Ok(mut txn) = ruc::info!(ledger.get_transaction(TxnSID(txn_sid))) {
+//             txn.finalized_txn.set_txo_id();
+//             Ok(serde_json::to_string(&txn)?)
+//         } else {
+//             Err(actix_web::error::ErrorNotFound(
+//                 "Specified transaction does not exist.",
+//             ))
+//         }
+//     } else {
+//         Err(actix_web::error::ErrorBadRequest(
+//             "Invalid txn sid encoding.",
+//         ))
+//     }
+// }
 
 /// query tx according to `TxnSID`, lighter and faster version
-pub async fn query_txn_light(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-    info: web::Path<String>,
-) -> actix_web::Result<String> {
-    let qs = data.read();
-    let ledger = &qs.ledger_cloned;
-    if let Ok(txn_sid) = info.parse::<usize>() {
-        if let Ok(mut txn) = ruc::info!(ledger.get_transaction_light(TxnSID(txn_sid))) {
-            txn.set_txo_id();
-            Ok(serde_json::to_string(&txn)?)
-        } else {
-            Err(actix_web::error::ErrorNotFound(
-                "Specified transaction does not exist.",
-            ))
-        }
-    } else {
-        Err(actix_web::error::ErrorBadRequest(
-            "Invalid txn sid encoding.",
-        ))
-    }
-}
+// pub async fn query_txn_light(
+//     data: web::Data<Arc<RwLock<QueryServer>>>,
+//     info: web::Path<String>,
+// ) -> actix_web::Result<String> {
+//     let qs = data.read();
+//     let ledger = &qs.ledger_cloned;
+//     if let Ok(txn_sid) = info.parse::<usize>() {
+//         if let Ok(mut txn) = ruc::info!(ledger.get_transaction_light(TxnSID(txn_sid))) {
+//             txn.set_txo_id();
+//             Ok(serde_json::to_string(&txn)?)
+//         } else {
+//             Err(actix_web::error::ErrorNotFound(
+//                 "Specified transaction does not exist.",
+//             ))
+//         }
+//     } else {
+//         Err(actix_web::error::ErrorBadRequest(
+//             "Invalid txn sid encoding.",
+//         ))
+//     }
+// }
 
 /// query global state, return (apphash, block count, apphash and block count signatures)
 #[allow(clippy::type_complexity)]
@@ -207,15 +204,15 @@ pub async fn query_global_state(
 }
 
 /// query global state version according to `block_height`
-pub async fn query_global_state_version(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-    version: web::Path<u64>,
-) -> web::Json<Option<HashOf<Option<StateCommitmentData>>>> {
-    let qs = data.read();
-    let ledger = &qs.ledger_cloned;
-    let hash = ledger.get_state_commitment_at_block_height(*version);
-    web::Json(hash)
-}
+// pub async fn query_global_state_version(
+//     data: web::Data<Arc<RwLock<QueryServer>>>,
+//     version: web::Path<u64>,
+// ) -> web::Json<Option<HashOf<Option<StateCommitmentData>>>> {
+//     let qs = data.read();
+//     let ledger = &qs.ledger_cloned;
+//     let hash = ledger.get_state_commitment_at_block_height(*version);
+//     web::Json(hash)
+// }
 
 /// Query current validator list,
 /// validtors who have not completed self-deletagion will be filtered out.
@@ -262,46 +259,46 @@ pub async fn query_validators(
     Ok(web::Json(ValidatorList::new(0, vec![])))
 }
 
-#[allow(missing_docs)]
-#[derive(Deserialize, Debug)]
-pub struct DelegationRwdQueryParams {
-    address: String,
-    height: Option<u64>,
-}
+// #[allow(missing_docs)]
+// #[derive(Deserialize, Debug)]
+// pub struct DelegationRwdQueryParams {
+//     address: String,
+//     height: Option<u64>,
+// }
 
 /// get delegation reward according to `DelegationRwdQueryParams`
-pub async fn get_delegation_reward(
-    data: web::Data<Arc<RwLock<QueryServer>>>,
-    web::Query(info): web::Query<DelegationRwdQueryParams>,
-) -> actix_web::Result<web::Json<Vec<DelegationRwdDetail>>> {
-    // Convert from base64 representation
-    let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
-        .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
+// pub async fn get_delegation_reward(
+//     data: web::Data<Arc<RwLock<QueryServer>>>,
+//     web::Query(info): web::Query<DelegationRwdQueryParams>,
+// ) -> actix_web::Result<web::Json<Vec<DelegationRwdDetail>>> {
+//     // Convert from base64 representation
+//     let key: XfrPublicKey = globutils::wallet::public_key_from_base64(&info.address)
+//         .c(d!())
+//         .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
-    let qs = data.read();
+//     let qs = data.read();
 
-    let hdr = qs
-        .ledger_cloned
-        .api_cache
-        .as_ref()
-        .unwrap()
-        .staking_delegation_rwd_hist
-        .get(&key)
-        .c(d!())
-        .map_err(|e| error::ErrorNotFound(e.to_string()))?;
+//     let hdr = qs
+//         .ledger_cloned
+//         .api_cache
+//         .as_ref()
+//         .unwrap()
+//         .staking_delegation_rwd_hist
+//         .get(&key)
+//         .c(d!())
+//         .map_err(|e| error::ErrorNotFound(e.to_string()))?;
 
-    let h = qs.ledger_cloned.get_tendermint_height();
+//     let h = qs.ledger_cloned.get_tendermint_height();
 
-    let mut req_h = info.height.unwrap_or(h);
-    alt!(req_h > h, req_h = h);
+//     let mut req_h = info.height.unwrap_or(h);
+//     alt!(req_h > h, req_h = h);
 
-    Ok(web::Json(
-        hdr.get_closest_smaller(&req_h)
-            .map(|(_, r)| vec![r])
-            .unwrap_or_default(),
-    ))
-}
+//     Ok(web::Json(
+//         hdr.get_closest_smaller(&req_h)
+//             .map(|(_, r)| vec![r])
+//             .unwrap_or_default(),
+//     ))
+// }
 
 #[allow(missing_docs)]
 #[derive(Deserialize, Debug)]
@@ -716,19 +713,19 @@ pub(super) async fn query_owned_abar(
 #[allow(missing_docs)]
 pub enum ApiRoutes {
     UtxoSid,
-    UtxoSidLight,
-    UtxoSidList,
-    AssetIssuanceNum,
+    // UtxoSidLight,
+    // UtxoSidList,
+    // AssetIssuanceNum,
     AssetToken,
     GlobalState,
-    TxnSid,
-    TxnSidLight,
-    GlobalStateVersion,
+    // TxnSid,
+    // TxnSidLight,
+    // GlobalStateVersion,
     OwnedUtxos,
     OwnedAbars,
     ValidatorList,
     DelegationInfo,
-    DelegatorList,
+    // DelegatorList,
     ValidatorDetail,
 }
 
@@ -736,18 +733,18 @@ impl NetworkRoute for ApiRoutes {
     fn route(&self) -> String {
         let endpoint = match *self {
             ApiRoutes::UtxoSid => "utxo_sid",
-            ApiRoutes::UtxoSidLight => "utxo_sid_light",
-            ApiRoutes::UtxoSidList => "utxo_sid_list",
-            ApiRoutes::AssetIssuanceNum => "asset_issuance_num",
+            // ApiRoutes::UtxoSidLight => "utxo_sid_light",
+            // ApiRoutes::UtxoSidList => "utxo_sid_list",
+            // ApiRoutes::AssetIssuanceNum => "asset_issuance_num",
             ApiRoutes::AssetToken => "asset_token",
             ApiRoutes::GlobalState => "global_state",
-            ApiRoutes::TxnSid => "txn_sid",
-            ApiRoutes::TxnSidLight => "txn_sid_light",
-            ApiRoutes::GlobalStateVersion => "global_state_version",
+            // ApiRoutes::TxnSid => "txn_sid",
+            // ApiRoutes::TxnSidLight => "txn_sid_light",
+            // ApiRoutes::GlobalStateVersion => "global_state_version",
             ApiRoutes::OwnedUtxos => "owned_utxos",
             ApiRoutes::ValidatorList => "validator_list",
             ApiRoutes::DelegationInfo => "delegation_info",
-            ApiRoutes::DelegatorList => "delegator_list",
+            // ApiRoutes::DelegatorList => "delegator_list",
             ApiRoutes::ValidatorDetail => "validator_detail",
             ApiRoutes::OwnedAbars => "owned_abars",
         };
