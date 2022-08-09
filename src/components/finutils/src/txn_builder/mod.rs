@@ -2530,4 +2530,51 @@ mod tests {
             .unwrap();
         (oabar, keypair)
     }
+
+    #[test]
+    pub fn test_extra_fee_estimation() {
+        let mut prng = ChaChaRng::from_seed([0u8;32]);
+        let k = AXfrKeyPair::generate(&mut prng);
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(OpenAnonAssetRecordBuilder::new()
+                            .amount(1000000)
+                            .asset_type(ASSET_TYPE_FRA)
+                                    .pub_key(&k.get_pub_key())
+                                    .finalize(&mut prng)
+                                    .unwrap()
+                                    .build()
+                                    .unwrap(), k.clone());
+            let _fee = FEE_CALCULATING_FUNC(1, 1) as u64;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), 0);
+        }
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(OpenAnonAssetRecordBuilder::new()
+                                    .amount(1000000)
+                                    .asset_type(ASSET_TYPE_FRA)
+                                    .pub_key(&k.get_pub_key())
+                                    .finalize(&mut prng)
+                                    .unwrap()
+                                    .build()
+                                    .unwrap(), k.clone());
+
+            let _ = b.add_output(OpenAnonAssetRecordBuilder::new()
+                .amount(1000000)
+                .asset_type(ASSET_TYPE_FRA)
+                .pub_key(&k.get_pub_key())
+                .finalize(&mut prng)
+                .unwrap()
+                .build()
+                .unwrap());
+
+            let fee = FEE_CALCULATING_FUNC(2, 2) as u64;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), fee);
+        }
+
+    }
 }
