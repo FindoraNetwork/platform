@@ -52,3 +52,8 @@ overflow-checks = false
 [profile.dev.package.curve25519-dalek]
 opt-level = 1
 overflow-checks = false
+
+[patch."https://github.com/FindoraNetwork/storage"]
+fin_db = { git = "https:///github.com/FindoraNetwork//storage", tag = "v0.2.2"}
+temp_db = { git = "https:///github.com/FindoraNetwork//storage", tag = "v0.2.2"}
+storage = { git = "https:///github.com/FindoraNetwork//storage", tag = "v0.2.2"}
