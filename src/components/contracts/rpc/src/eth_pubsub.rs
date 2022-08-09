@@ -1,5 +1,5 @@
 use baseapp::BaseApp;
-use ethereum::{BlockV0 as EthereumBlock, Receipt};
+use ethereum::{BlockV0 as EthereumBlock, ReceiptV0 as Receipt};
 use ethereum_types::{H256, U256};
 use fp_evm::BlockId;
 use fp_rpc_core::{

@@ -197,10 +197,10 @@ impl<C: Config> ActionRunner<C> {
             );
         }
 
-        if let ExitReason::Succeed(_) = result {
+        if let ExitReason::Succeed(_) = result.0 {
             Ok(())
         } else {
-            Err(eg!("Deploy system error: {:?}", result))
+            Err(eg!("Deploy system error: {:?}", result.0))
         }
     }
 
@@ -309,13 +309,15 @@ impl<C: Config> Runner for ActionRunner<C> {
                     caller: args.source,
                 });
                 (
-                    executor.transact_create(
-                        args.source,
-                        args.value,
-                        args.init,
-                        args.gas_limit,
-                        access_list,
-                    ),
+                    executor
+                        .transact_create(
+                            args.source,
+                            args.value,
+                            args.init,
+                            args.gas_limit,
+                            access_list,
+                        )
+                        .0,
                     address,
                 )
             },
@@ -346,14 +348,16 @@ impl<C: Config> Runner for ActionRunner<C> {
                     salt: args.salt,
                 });
                 (
-                    executor.transact_create2(
-                        args.source,
-                        args.value,
-                        args.init,
-                        args.salt,
-                        args.gas_limit,
-                        access_list,
-                    ),
+                    executor
+                        .transact_create2(
+                            args.source,
+                            args.value,
+                            args.init,
+                            args.salt,
+                            args.gas_limit,
+                            access_list,
+                        )
+                        .0,
                     address,
                 )
             },

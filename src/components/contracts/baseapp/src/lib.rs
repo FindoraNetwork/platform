@@ -397,7 +397,7 @@ impl BaseProvider for BaseApp {
         }
     }
 
-    fn current_receipts(&self, id: Option<BlockId>) -> Option<Vec<ethereum::Receipt>> {
+    fn current_receipts(&self, id: Option<BlockId>) -> Option<Vec<ethereum::ReceiptV0>> {
         if let Ok(ctx) = self.create_query_context(Some(0), false) {
             self.modules.ethereum_module.current_receipts(&ctx, id)
         } else {
