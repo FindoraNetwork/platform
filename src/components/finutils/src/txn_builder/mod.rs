@@ -1587,46 +1587,90 @@ impl AnonTransferOperationBuilder {
     }
 
     #[allow(missing_docs)]
-    pub fn extra_fee_estimation(&self) -> u64 {
-        let estimated_fees = FEE_CALCULATING_FUNC(
+    pub fn extra_fee_estimation(&self) -> Result<u64> {
+        let input_sums =
+            self.inputs
+                .iter()
+                .fold(HashMap::new(), |mut asset_amounts, i| {
+                    let sum = asset_amounts.entry(i.get_asset_type()).or_insert(0u64);
+                    *sum += i.get_amount();
+                    asset_amounts
+                });
+        let output_sums =
+            self.outputs
+                .iter()
+                .fold(HashMap::new(), |mut asset_amounts, o| {
+                    let sum = asset_amounts.entry(o.get_asset_type()).or_insert(0u64);
+                    *sum += o.get_amount();
+                    asset_amounts
+                });
+
+        let fra_input_sum = input_sums.get(&ASSET_TYPE_FRA).unwrap_or(&0u64).clone();
+        let fra_output_sum = output_sums.get(&ASSET_TYPE_FRA).unwrap_or(&0u64).clone();
+        if output_sums.len() > input_sums.len() {
+            return Err(eg!("Output assets cannot be more than input assets"));
+        }
+
+        let extra_remainders = input_sums.iter().try_fold(
+            0usize,
+            |extra_remainders, (asset, inp_amount)| {
+                if asset.clone() == ASSET_TYPE_FRA {
+                    Ok(extra_remainders)
+                } else {
+                    match output_sums.get(asset) {
+                        None => Ok(extra_remainders + 1),
+                        Some(op_sum) => {
+                            if op_sum == inp_amount {
+                                return Ok(extra_remainders);
+                            } else if op_sum < inp_amount {
+                                return Ok(extra_remainders + 1);
+                            } else {
+                                return Err(eg!("Output cannot be greater than Input"));
+                            }
+                        }
+                    }
+                }
+            },
+        )?;
+
+        let estimated_fees_without_extra = FEE_CALCULATING_FUNC(
             self.inputs.len() as u32,
-            (self.outputs.len() + 1) as u32,
+            (self.outputs.len() + extra_remainders) as u32,
         ) as u64;
 
-        let mut fra_input_sum: u64 = 0;
-        let mut fra_output_sum: u64 = 0;
-
-        for input in &self.inputs {
-            if ASSET_TYPE_FRA == input.get_asset_type() {
-                fra_input_sum += input.get_amount();
-            }
-        }
-
-        for output in &self.outputs {
-            if ASSET_TYPE_FRA == output.get_asset_type() {
-                fra_output_sum += output.get_amount();
-            }
-        }
-
-        if fra_output_sum > fra_input_sum {
-            let fra_deficient = fra_output_sum - fra_input_sum;
-            let new_estimated_fee = FEE_CALCULATING_FUNC(
-                self.inputs.len() as u32 + 1,
-                self.outputs.len() as u32 + 1,
+        if fra_input_sum == (fra_output_sum + estimated_fees_without_extra) {
+            // perfectly balanced case
+            Ok(0u64)
+        } else if fra_input_sum > (fra_output_sum + estimated_fees_without_extra) {
+            let estimated_fees_with_remainder = FEE_CALCULATING_FUNC(
+                self.inputs.len() as u32,
+                (self.outputs.len() + extra_remainders + 1) as u32,
             ) as u64;
-            return new_estimated_fee + fra_deficient;
-        }
 
-        let fra_excess = fra_input_sum - fra_output_sum;
+            return if fra_input_sum >= (fra_output_sum + estimated_fees_with_remainder) {
+                Ok(0u64)
+            } else {
+                let estimated_fees_with_extra_input_and_remainder = FEE_CALCULATING_FUNC(
+                    (self.inputs.len() + 1) as u32,
+                    (self.outputs.len() + extra_remainders + 1) as u32,
+                )
+                    as u64;
 
-        if estimated_fees > fra_excess {
-            let new_estimated_fee = FEE_CALCULATING_FUNC(
-                self.inputs.len() as u32 + 1,
-                self.outputs.len() as u32 + 1,
-            ) as u64;
-            new_estimated_fee - fra_excess
+                Ok(
+                    (fra_output_sum + estimated_fees_with_extra_input_and_remainder)
+                        - fra_input_sum,
+                )
+            };
         } else {
-            0u64
+            // case where input is insufficient
+            let estimated_fees_with_extra_input_and_remainder = FEE_CALCULATING_FUNC(
+                (self.inputs.len() + 1) as u32,
+                (self.outputs.len() + extra_remainders + 1) as u32,
+            ) as u64;
+            Ok(
+                (fra_output_sum + estimated_fees_with_extra_input_and_remainder)
+                    - fra_input_sum,
+            )
         }
     }
 
@@ -1677,35 +1721,52 @@ impl AnonTransferOperationBuilder {
             let fees = if asset == ASSET_TYPE_FRA {
                 fees_in_fra = FEE_CALCULATING_FUNC(
                     self.inputs.len() as u32,
-                    self.outputs.len() as u32 + 1,
+                    self.outputs.len() as u32,
                 );
-                fees_in_fra
+                fees_in_fra as u64
             } else {
-                0
+                0u64
             };
 
-            if sum_output + (fees as u64) > sum_input {
-                return Err(eg!("Insufficient FRA balance to pay fees"));
+            if sum_output + fees > sum_input {
+                return if asset == ASSET_TYPE_FRA {
+                    Err(eg!(
+                        "Insufficient FRA balance to pay fees {} + {} > {}",
+                        sum_output,
+                        fees,
+                        sum_input
+                    ))
+                } else {
+                    Err(eg!(
+                        "Insufficient {:?} balance to pay fees {} + {} > {}",
+                        asset,
+                        sum_output,
+                        fees,
+                        sum_input
+                    ))
+                };
             }
+
             let remainder = sum_input - sum_output - (fees as u64);
+            if remainder > 0 {
+                let oabar_money_back = OpenAnonAssetRecordBuilder::new()
+                    .amount(remainder)
+                    .asset_type(asset)
+                    .pub_key(&self.keypairs[0].get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap();
 
-            let oabar_money_back = OpenAnonAssetRecordBuilder::new()
-                .amount(remainder)
-                .asset_type(asset)
-                .pub_key(&self.keypairs[0].get_pub_key())
-                .finalize(&mut prng)
-                .unwrap()
-                .build()
-                .unwrap();
+                let commitment = oabar_money_back.compute_commitment();
+                self.outputs.push(oabar_money_back);
+                self.commitments.push(commitment);
 
-            let commitment = oabar_money_back.compute_commitment();
-            self.outputs.push(oabar_money_back);
-            self.commitments.push(commitment);
-
-            if self.outputs.len() > 5 {
-                return Err(eg!(
-                    "Total outputs (incl. remainders) cannot be greater than 5"
-                ));
+                if self.outputs.len() > 5 {
+                    return Err(eg!(
+                        "Total outputs (incl. remainders) cannot be greater than 5"
+                    ));
+                }
             }
         }
 

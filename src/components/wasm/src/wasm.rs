@@ -1400,8 +1400,10 @@ impl AnonTransferOperationBuilder {
 
     /// get_expected_fee is used to gather extra FRA that needs to be spent to make the transaction
     /// have enough fees.
-    pub fn get_expected_fee(&self) -> u64 {
-        self.get_builder().extra_fee_estimation()
+    pub fn get_expected_fee(&self) -> Result<u64, JsValue> {
+        self.get_builder()
+            .extra_fee_estimation()
+            .map_err(error_to_jsvalue)
     }
 
     /// get_commitments returns a list of all the commitments for receiver public keys
@@ -2252,7 +2254,7 @@ mod test {
 
         let estimated_fees_gt_fra_excess = ts.get_expected_fee();
 
-        assert!(estimated_fees_gt_fra_excess > 0);
+        assert!(estimated_fees_gt_fra_excess.unwrap() > 0);
 
         let (mut oabar_2, keypair_in_2) =
             gen_oabar_and_keys(&mut prng, 2 * amount, asset_type);
@@ -2261,7 +2263,7 @@ mod test {
 
         let fra_excess_gt_fees_estimation = ts.get_expected_fee();
 
-        assert_eq!(fra_excess_gt_fees_estimation, 0);
+        assert_eq!(fra_excess_gt_fees_estimation, Ok(0));
     }
 
     fn gen_oabar_and_keys<R: CryptoRng + RngCore>(
