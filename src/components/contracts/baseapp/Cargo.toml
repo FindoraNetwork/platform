@@ -28,6 +28,8 @@ once_cell = "1.10.0"
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.1" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.1" }
 
+config = { path = "../../config"}
+
 # primitives
 fp-core = { path = "../primitives/core" }
 fp-evm = { path = "../primitives/evm" }
