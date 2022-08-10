@@ -1574,6 +1574,11 @@ impl AnonTransferOperationBuilder {
         abar: OpenAnonAssetRecord,
         secret_key: AXfrKeyPair,
     ) -> Result<&mut Self> {
+        if self.inputs.len() >= 5 {
+            return Err(eg!(
+                        "Total inputs (incl. fees) cannot be greater than 5"
+                    ));
+        }
         self.inputs.push(abar);
         self.keypairs.push(secret_key);
         Ok(self)
@@ -1581,6 +1586,11 @@ impl AnonTransferOperationBuilder {
 
     /// add_output is used to add a output record to the Anon Transfer factory
     pub fn add_output(&mut self, abar: OpenAnonAssetRecord) -> Result<&mut Self> {
+        if self.outputs.len() >= 5 {
+            return Err(eg!(
+                        "Total outputs (incl. remainders) cannot be greater than 5"
+                    ));
+        }
         self.commitments.push(abar.compute_commitment());
         self.outputs.push(abar);
         Ok(self)
@@ -1790,10 +1800,6 @@ impl AnonTransferOperationBuilder {
                         "Total outputs (incl. remainders) cannot be greater than 5"
                     ));
         }
-        web_sys::console::log_2(
-          &"Inputs and Outputs length\n".into(),
-            &format!("{}             {}\n\n", self.inputs.len(), self.outputs.len()).into(),
-        );
         let note = init_anon_xfr_note(
             self.inputs.as_slice(),
             self.outputs.as_slice(),
