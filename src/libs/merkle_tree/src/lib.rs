@@ -1891,9 +1891,7 @@ impl AppendOnlyMerkle {
 
             match self.files[level].read_exact(buffer) {
                 Ok(()) => Ok(mem::transmute::<_, Block>(s)),
-                Err(e) => {
-                    Err(eg!(e))
-                }
+                Err(e) => Err(eg!(e)),
             }
         }
     }
