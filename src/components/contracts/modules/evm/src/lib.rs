@@ -97,6 +97,31 @@ impl<C: Config> AppModule for App<C> {
             _ => resp,
         }
     }
+
+    fn begin_block(&mut self, ctx: &mut Context, _req: &abci::RequestBeginBlock) {
+        let height = CFG.checkpoint.prismxx_inital_height;
+
+        if ctx.header.height == height {
+            let bytecode_str = include_str!("../contracts/PrismXXProxy.bytecode");
+
+            if let Err(e) =
+                utils::deploy_contract::<C>(ctx, &self.contracts, bytecode_str)
+            {
+                pd!(e);
+                return;
+            }
+            println!(
+                "Bridge contract address: {:?}",
+                self.contracts.bridge_address
+            );
+
+            if !ctx.state.write().cache_mut().good2_commit() {
+                ctx.state.write().cache_mut().discard();
+                pd!(eg!("ctx state commit no good"));
+            }
+            ctx.state.write().commit_session();
+        }
+    }
 }
 
 impl<C: Config> Executable for App<C> {

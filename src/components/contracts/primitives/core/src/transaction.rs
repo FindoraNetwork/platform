@@ -150,6 +150,12 @@ where
             U::pre_execute(ctx, &self.function)?;
             (None, Default::default())
         };
+
+        if !ctx.state.write().cache_mut().good2_commit() {
+            ctx.state.write().cache_mut().discard();
+
+            return Err(eg!("ctx state commit no good"));
+        }
         ctx.state.write().commit_session();
 
         if ctx.header.height >= CFG.checkpoint.evm_checktx_nonce {
@@ -163,11 +169,24 @@ where
             Ok(res) => {
                 if res.code == 0 {
                     Extra::post_execute(ctx, pre, &res)?;
+
+                    if !ctx.state.write().cache_mut().good2_commit() {
+                        ctx.state.write().cache_mut().discard();
+
+                        return Err(eg!("ctx state commit no good"));
+                    }
                     ctx.state.write().commit_session();
                 } else {
                     ctx.state.write().discard_session();
                 }
+
+                if !ctx.db.write().cache_mut().good2_commit() {
+                    ctx.db.write().cache_mut().discard();
+
+                    return Err(eg!("ctx db commit no good"));
+                }
                 ctx.db.write().commit_session();
+
                 Ok(res)
             }
             Err(e) => {
