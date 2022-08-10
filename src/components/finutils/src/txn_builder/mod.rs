@@ -1588,6 +1588,12 @@ impl AnonTransferOperationBuilder {
 
     #[allow(missing_docs)]
     pub fn extra_fee_estimation(&self) -> Result<u64> {
+        if self.inputs.len() > 5 {
+            return Err(eg!(
+                        "Total inputs (incl. fees) cannot be greater than 5"
+                    ));
+        }
+
         let input_sums =
             self.inputs
                 .iter()
@@ -1697,6 +1703,18 @@ impl AnonTransferOperationBuilder {
 
     /// build generates the anon transfer body with the Zero Knowledge Proof.
     pub fn build(&mut self) -> Result<&mut Self> {
+
+        if self.inputs.len() > 5 {
+            return Err(eg!(
+                        "Total inputs (incl. fees) cannot be greater than 5"
+                    ));
+        }
+        if self.outputs.len() > 5 {
+            return Err(eg!(
+                        "Total outputs (incl. remainders) cannot be greater than 5"
+                    ));
+        }
+
         let mut prng = ChaChaRng::from_entropy();
         let input_asset_list: HashSet<AssetType> = self
             .inputs
@@ -1764,15 +1782,18 @@ impl AnonTransferOperationBuilder {
                 let commitment = oabar_money_back.compute_commitment();
                 self.outputs.push(oabar_money_back);
                 self.commitments.push(commitment);
-
-                if self.outputs.len() > 5 {
-                    return Err(eg!(
-                        "Total outputs (incl. remainders) cannot be greater than 5"
-                    ));
-                }
             }
         }
 
+        if self.outputs.len() > 5 {
+            return Err(eg!(
+                        "Total outputs (incl. remainders) cannot be greater than 5"
+                    ));
+        }
+        web_sys::console::log_2(
+          &"Inputs and Outputs length\n".into(),
+            &format!("{}             {}\n\n", self.inputs.len(), self.outputs.len()).into(),
+        );
         let note = init_anon_xfr_note(
             self.inputs.as_slice(),
             self.outputs.as_slice(),
