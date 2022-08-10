@@ -1575,9 +1575,7 @@ impl AnonTransferOperationBuilder {
         secret_key: AXfrKeyPair,
     ) -> Result<&mut Self> {
         if self.inputs.len() >= 5 {
-            return Err(eg!(
-                        "Total inputs (incl. fees) cannot be greater than 5"
-                    ));
+            return Err(eg!("Total inputs (incl. fees) cannot be greater than 5"));
         }
         self.inputs.push(abar);
         self.keypairs.push(secret_key);
@@ -1588,8 +1586,8 @@ impl AnonTransferOperationBuilder {
     pub fn add_output(&mut self, abar: OpenAnonAssetRecord) -> Result<&mut Self> {
         if self.outputs.len() >= 5 {
             return Err(eg!(
-                        "Total outputs (incl. remainders) cannot be greater than 5"
-                    ));
+                "Total outputs (incl. remainders) cannot be greater than 5"
+            ));
         }
         self.commitments.push(abar.compute_commitment());
         self.outputs.push(abar);
@@ -1599,9 +1597,7 @@ impl AnonTransferOperationBuilder {
     #[allow(missing_docs)]
     pub fn extra_fee_estimation(&self) -> Result<u64> {
         if self.inputs.len() > 5 {
-            return Err(eg!(
-                        "Total inputs (incl. fees) cannot be greater than 5"
-                    ));
+            return Err(eg!("Total inputs (incl. fees) cannot be greater than 5"));
         }
 
         let input_sums =
@@ -1713,16 +1709,13 @@ impl AnonTransferOperationBuilder {
 
     /// build generates the anon transfer body with the Zero Knowledge Proof.
     pub fn build(&mut self) -> Result<&mut Self> {
-
         if self.inputs.len() > 5 {
-            return Err(eg!(
-                        "Total inputs (incl. fees) cannot be greater than 5"
-                    ));
+            return Err(eg!("Total inputs (incl. fees) cannot be greater than 5"));
         }
         if self.outputs.len() > 5 {
             return Err(eg!(
-                        "Total outputs (incl. remainders) cannot be greater than 5"
-                    ));
+                "Total outputs (incl. remainders) cannot be greater than 5"
+            ));
         }
 
         let mut prng = ChaChaRng::from_entropy();
@@ -1797,8 +1790,8 @@ impl AnonTransferOperationBuilder {
 
         if self.outputs.len() > 5 {
             return Err(eg!(
-                        "Total outputs (incl. remainders) cannot be greater than 5"
-                    ));
+                "Total outputs (incl. remainders) cannot be greater than 5"
+            ));
         }
         let note = init_anon_xfr_note(
             self.inputs.as_slice(),
