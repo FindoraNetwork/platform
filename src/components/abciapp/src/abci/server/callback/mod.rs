@@ -274,7 +274,54 @@ pub fn deliver_tx(
                             return resp;
                         }
 
-                        if s.la.write().cache_transaction(tx).is_ok() {
+                        if s.la.write().cache_transaction(txn).is_ok() {
+                            if !s
+                                .account_base_app
+                                .read()
+                                .deliver_state
+                                .state
+                                .write()
+                                .cache_mut()
+                                .good2_commit()
+                            {
+                                s.account_base_app
+                                    .read()
+                                    .deliver_state
+                                    .state
+                                    .write()
+                                    .cache_mut()
+                                    .discard();
+
+                                log::error!(target: "abciapp", "deliver_state state commit no good");
+                                resp.code = 1;
+                                resp.log =
+                                    "deliver_state state commit no good".to_string();
+                                return resp;
+                            }
+
+                            if !s
+                                .account_base_app
+                                .read()
+                                .deliver_state
+                                .db
+                                .write()
+                                .cache_mut()
+                                .good2_commit()
+                            {
+                                s.account_base_app
+                                    .read()
+                                    .deliver_state
+                                    .db
+                                    .write()
+                                    .cache_mut()
+                                    .discard();
+
+                                log::error!(target: "abciapp", "deliver_state db commit no good");
+                                resp.code = 1;
+                                resp.log = "deliver_state db commit no good".to_string();
+                                return resp;
+                            }
+
                             s.account_base_app
                                 .read()
                                 .deliver_state
