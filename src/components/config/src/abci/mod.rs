@@ -27,6 +27,7 @@ pub struct CheckPointConfig {
     pub ff_addr_extra_fix_height: u64,
     pub nonconfidential_balance_fix_height: u64,
     pub unbond_block_cnt: u64,
+    pub fix_undelegation_missing_reward_height: i64,
     pub fix_unpaid_delegation_height: u64,
     pub evm_checktx_nonce: i64,
     pub utxo_checktx_height: i64,
@@ -56,6 +57,7 @@ impl CheckPointConfig {
                                 nonconfidential_balance_fix_height: 0,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
                                 fix_unpaid_delegation_height: 0,
+                                fix_undelegation_missing_reward_height: 0,
                                 evm_checktx_nonce: 0,
                                 utxo_checktx_height: 0,
                             };
@@ -73,6 +75,7 @@ impl CheckPointConfig {
                                 ff_addr_extra_fix_height: 1200000,
                                 nonconfidential_balance_fix_height: 1210000,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
+                                fix_undelegation_missing_reward_height: 3000000,
                                 fix_unpaid_delegation_height: 2261885,
                                 evm_checktx_nonce: 3000000,
                                 utxo_checktx_height: 2524270,
