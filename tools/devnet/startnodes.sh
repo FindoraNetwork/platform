@@ -2,6 +2,11 @@
 
 # env
 source ./tools/devnet/env.sh || exit 1
+DEFAULT_BIN_CFG="release"
+export BIN="target/$DEFAULT_BIN_CFG"
+
+$BIN/fn setup -S $ENDPOINT > /dev/null
+$BIN/fn setup -O $WALLET/mnenomic.key > /dev/null
 
 # start one single node if specified
 Node=""
