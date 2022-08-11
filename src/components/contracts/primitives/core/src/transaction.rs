@@ -152,8 +152,7 @@ where
         };
 
         if !ctx.state.write().cache_mut().good2_commit() {
-            ctx.state.write().cache_mut().discard();
-
+            ctx.state.write().discard_session();
             return Err(eg!("ctx state commit no good"));
         }
         ctx.state.write().commit_session();
@@ -171,8 +170,7 @@ where
                     Extra::post_execute(ctx, pre, &res)?;
 
                     if !ctx.state.write().cache_mut().good2_commit() {
-                        ctx.state.write().cache_mut().discard();
-
+                        ctx.state.write().discard_session();
                         return Err(eg!("ctx state commit no good"));
                     }
                     ctx.state.write().commit_session();
@@ -181,8 +179,7 @@ where
                 }
 
                 if !ctx.db.write().cache_mut().good2_commit() {
-                    ctx.db.write().cache_mut().discard();
-
+                    ctx.db.write().discard_session();
                     return Err(eg!("ctx db commit no good"));
                 }
                 ctx.db.write().commit_session();

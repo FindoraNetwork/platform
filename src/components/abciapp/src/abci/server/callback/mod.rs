@@ -275,7 +275,8 @@ pub fn deliver_tx(
                         }
 
                         if s.la.write().cache_transaction(txn).is_ok() {
-                            if !s
+                            // Discard all the cache of State and Db, if either cache is corrupt.
+                            if !(s
                                 .account_base_app
                                 .read()
                                 .deliver_state
@@ -283,6 +284,13 @@ pub fn deliver_tx(
                                 .write()
                                 .cache_mut()
                                 .good2_commit()
+                                && s.account_base_app
+                                    .read()
+                                    .deliver_state
+                                    .db
+                                    .write()
+                                    .cache_mut()
+                                    .good2_commit())
                             {
                                 s.account_base_app
                                     .read()
@@ -292,22 +300,6 @@ pub fn deliver_tx(
                                     .cache_mut()
                                     .discard();
 
-                                log::error!(target: "abciapp", "deliver_state state commit no good");
-                                resp.code = 1;
-                                resp.log =
-                                    "deliver_state state commit no good".to_string();
-                                return resp;
-                            }
-
-                            if !s
-                                .account_base_app
-                                .read()
-                                .deliver_state
-                                .db
-                                .write()
-                                .cache_mut()
-                                .good2_commit()
-                            {
                                 s.account_base_app
                                     .read()
                                     .deliver_state
@@ -316,9 +308,9 @@ pub fn deliver_tx(
                                     .cache_mut()
                                     .discard();
 
-                                log::error!(target: "abciapp", "deliver_state db commit no good");
+                                log::error!(target: "abciapp", "deliver_state failed to commit");
                                 resp.code = 1;
-                                resp.log = "deliver_state db commit no good".to_string();
+                                resp.log = "deliver_state failed to commit".to_string();
                                 return resp;
                             }
 

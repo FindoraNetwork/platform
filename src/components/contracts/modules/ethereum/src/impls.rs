@@ -480,8 +480,7 @@ impl<C: Config> App<C> {
         }
 
         if !ctx.db.write().cache_mut().good2_commit() {
-            ctx.db.write().cache_mut().discard();
-
+            ctx.db.write().discard_session();
             error!(target: "ethereum", "ctx db commit no good");
             return Err(eg!("ctx db commit no good"));
         }

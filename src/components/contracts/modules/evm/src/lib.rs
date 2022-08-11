@@ -116,10 +116,11 @@ impl<C: Config> AppModule for App<C> {
             );
 
             if !ctx.state.write().cache_mut().good2_commit() {
-                ctx.state.write().cache_mut().discard();
+                ctx.state.write().discard_session();
                 pd!(eg!("ctx state commit no good"));
+            } else {
+                ctx.state.write().commit_session();
             }
-            ctx.state.write().commit_session();
         }
     }
 }
