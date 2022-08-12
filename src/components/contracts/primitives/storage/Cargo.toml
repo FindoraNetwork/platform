@@ -9,7 +9,7 @@ description = "Findora Primitive storage structure definition"
 readme = "README.md"
 
 [dependencies]
-parking_lot = "0.11.1"
+parking_lot = "0.12.1"
 paste = "1.0"
 ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
@@ -19,3 +19,6 @@ storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.5
 
 # primitives
 fp-core = { path = "../core" }
+
+[dev-dependencies]
+temp_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.5" }

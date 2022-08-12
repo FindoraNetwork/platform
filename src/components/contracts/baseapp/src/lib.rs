@@ -13,6 +13,7 @@ mod notify;
 use crate::modules::ModuleManager;
 use abci::Header;
 use ethereum::BlockV0 as Block;
+use fin_db::{FinDB, RocksDB};
 use fp_core::{
     account::SmartAccount,
     context::{Context, RunTxMode},
@@ -32,13 +33,8 @@ use notify::*;
 use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
 use ruc::{eg, Result};
-use std::borrow::BorrowMut;
-use std::path::Path;
-use std::sync::Arc;
-use storage::{
-    db::{FinDB, RocksDB},
-    state::ChainState,
-};
+use std::{borrow::BorrowMut, path::Path, sync::Arc};
+use storage::state::ChainState;
 
 lazy_static! {
     /// An identifier that distinguishes different EVM chains.
