@@ -12,7 +12,7 @@ else
   echo "tendermint.zip already exists."
 fi
 
-if ! [ -x "$(command -v unzip)" ]; then
+if [ ! -x "$(command -v unzip)" ]; then
   echo 'error:'
   echo 'please install unzip.' >&2
   exit 1
