@@ -38,12 +38,13 @@ define pack
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
-		$(shell go env GOPATH)/bin/tendermint \
+		./tools/tendermint \
 		$(1)/$(bin_dir)/
 	cp $(1)/$(bin_dir)/* ~/.cargo/bin/
 	cd $(1)/$(bin_dir)/ && findorad pack
 	cp -f /tmp/findorad $(1)/$(bin_dir)/
 	cp -f /tmp/findorad ~/.cargo/bin/
+	rm -f ./tools/tendermint
 endef
 
 install: stop_all build_release_goleveldb
@@ -86,16 +87,25 @@ build_release_debug: tendermint_goleveldb
 
 tendermint_cleveldb:
 	- rm $(shell which tendermint)
-	bash tools/download_tendermint.sh 'tools/tendermint'
-	mkdir -p $(shell go env GOPATH)/bin
-	cd tools/tendermint \
-		&& $(MAKE) build TENDERMINT_BUILD_OPTIONS=cleveldb \
-		&& cp build/tendermint $(shell go env GOPATH)/bin/
+
+ 	ifeq ($(shell uname),Darwin)
+		bash tools/download_tendermint.sh 'MacOS'
+else
+		bash tools/download_tendermint.sh 'Linux'
+ 	endif
+
+
 
 tendermint_goleveldb:
+
 	- rm $(shell which tendermint)
-	bash tools/download_tendermint.sh 'tools/tendermint'
-	cd tools/tendermint && $(MAKE) install
+
+ 	ifeq ($(shell uname),Darwin)
+		bash tools/download_tendermint.sh 'MacOS'
+else
+		bash tools/download_tendermint.sh 'Linux'
+ 	endif
+
 
 test:
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
