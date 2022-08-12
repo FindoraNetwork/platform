@@ -274,7 +274,7 @@ pub fn deliver_tx(
                             return resp;
                         }
 
-                        if s.la.write().cache_transaction(txn).is_ok() {
+                        if s.la.write().cache_transaction(tx).is_ok() {
                             // Discard all the cache of State and Db, if either cache is corrupt.
                             if !(s
                                 .account_base_app
