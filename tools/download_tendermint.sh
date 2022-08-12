@@ -25,7 +25,7 @@ if [ ! -f "./tools/tendermint" ]; then
   rm ./tools/tendermint
   echo 'error:'
   echo 'unzip ./tools/tendermint.zip failed.'
-  echo 'Make sure ./tools/tendermint.zip is a complete file, or try again.' >&2
+  echo 'Make sure ./tools/tendermint.zip is a complete file, please try again.' >&2
   exit 1
 fi
 
