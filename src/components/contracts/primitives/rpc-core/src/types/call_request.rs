@@ -21,7 +21,7 @@ use ethereum_types::{H160, U256};
 use serde::Deserialize;
 
 /// Call request
-#[derive(Debug, Default, PartialEq, Deserialize, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct CallRequest {

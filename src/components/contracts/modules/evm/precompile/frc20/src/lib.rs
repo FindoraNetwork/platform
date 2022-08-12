@@ -64,7 +64,7 @@ impl<C: Config> PrecompileId for FRC20<C> {
 }
 
 #[evm_precompile_utils::generate_function_selector]
-#[derive(Debug, PartialEq, num_enum::TryFromPrimitive, num_enum::IntoPrimitive)]
+#[derive(Debug, PartialEq, Eq, num_enum::TryFromPrimitive, num_enum::IntoPrimitive)]
 pub enum Call {
     Name = "name()",
     Symbol = "symbol()",

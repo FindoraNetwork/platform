@@ -429,7 +429,7 @@ impl FilteredParams {
 }
 
 /// Results of the filter_changes RPC.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum FilterChanges {
     /// New logs.
     Logs(Vec<Log>),
