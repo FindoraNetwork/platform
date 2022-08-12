@@ -7,9 +7,7 @@ use fp_types::crypto::HA256;
 use fp_types::{H256, U256};
 use module_ethereum::storage::TransactionIndex;
 use sha3::{Digest, Keccak256};
-use std::env::temp_dir;
-use std::sync::Arc;
-use std::time::SystemTime;
+use std::{env::temp_dir, sync::Arc, time::SystemTime};
 use storage::state::ChainState;
 
 fn setup() -> Context {
