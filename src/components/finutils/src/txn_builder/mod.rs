@@ -1581,8 +1581,8 @@ impl AnonTransferOperationBuilder {
     }
 
     /// add_keypair is used to specify the input keypair for nullifier generation
-    pub fn add_keypair(&mut self, keypair: AXfrKeyPair) ->&mut Self {
-        self.keypair = Some(keypair.clone());
+    pub fn add_keypair(&mut self, keypair: AXfrKeyPair) -> &mut Self {
+        self.keypair = Some(keypair);
         self
     }
 
