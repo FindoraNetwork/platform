@@ -43,7 +43,7 @@ use storage::{
 lazy_static! {
     /// An identifier that distinguishes different EVM chains.
     static ref EVM_CAHIN_ID: u64 = std::env::var("EVM_CHAIN_ID").map(
-        |id| id.as_str().parse::<u64>().unwrap()).unwrap_or(523);
+        |id| id.as_str().parse::<u64>().unwrap()).unwrap_or(2152);
 }
 
 const APP_NAME: &str = "findora";
@@ -51,6 +51,7 @@ const CHAIN_STATE_PATH: &str = "state.db";
 const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
 const CHAIN_STATE_MIN_VERSIONS: u64 = 4 * 60 * 24 * 90;
 
+#[derive(Clone)]
 pub struct BaseApp {
     /// application name from abci.Info
     pub name: String,

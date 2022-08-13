@@ -10,9 +10,18 @@
 
 ## Change log
 
-#### v0.3.17-release
+#### v0.3.20-release
 
-- Enable EVM substate at height`177_5600`.
+- Reduce log to single line.
+
+#### v0.3.19-release
+
+- Enable EVM substate at height `180_2500`.
+- Feature of staker replacement
+
+#### v0.3.18-release
+
+- Add replace staker.
 
 #### v0.3.12-release
 

@@ -56,12 +56,11 @@ pub async fn get_address(
 ) -> actix_web::Result<String, actix_web::error::Error> {
     let server = data.read();
     let address_res = server.get_address_of_sid(TxoSID(*info));
-    let res;
-    if let Some(address) = address_res {
-        res = serde_json::to_string(&address)?;
+    let res = if let Some(address) = address_res {
+        serde_json::to_string(&address)?
     } else {
-        res = format!("No utxo {} found. Please retry with a new utxo.", &info);
-    }
+        format!("No utxo {} found. Please retry with a new utxo.", &info)
+    };
     Ok(res)
 }
 
@@ -101,10 +100,18 @@ pub async fn get_owned_utxos(
 ) -> actix_web::Result<web::Json<HashSet<TxoSID>>> {
     let qs = data.read();
     let ledger = &qs.ledger_cloned;
-    wallet::public_key_from_base64(owner.as_str())
-        .c(d!())
-        .map_err(|e| error::ErrorBadRequest(e.to_string()))
-        .map(|pk| web::Json(pnk!(ledger.get_owned_utxos(&pk)).keys().copied().collect()))
+
+    let pk = wallet::public_key_from_base64(owner.as_str())
+        .map_err(actix_web::error::ErrorServiceUnavailable)?;
+
+    let utxos = ledger
+        .get_owned_utxos(&pk)
+        .map_err(actix_web::error::ErrorServiceUnavailable)?
+        .keys()
+        .copied()
+        .collect();
+
+    Ok(web::Json(utxos))
 }
 
 /// Define interface type

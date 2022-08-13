@@ -9,7 +9,7 @@ jobs:
   build:
     strategy:
       matrix:
-        platform: [aws]
+        platform: [scalable]
     runs-on: ${{ matrix.platform }}
     env:
       ENV: dev
@@ -61,6 +61,12 @@ jobs:
     #   shell: bash
     #   run: |
     #     make build
+
+    # - name: evm test
+    #   shell: bash
+    #   run: |
+    #     make evmtest
+        
     - name: Prepare key
       shell: bash
       run: |

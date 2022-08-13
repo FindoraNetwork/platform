@@ -27,6 +27,9 @@ pub struct CheckPointConfig {
     pub ff_addr_extra_fix_height: u64,
     pub nonconfidential_balance_fix_height: u64,
     pub unbond_block_cnt: u64,
+    pub fix_unpaid_delegation_height: u64,
+    pub evm_checktx_nonce: i64,
+    pub utxo_checktx_height: i64,
 }
 
 impl CheckPointConfig {
@@ -52,10 +55,13 @@ impl CheckPointConfig {
                                 ff_addr_extra_fix_height: 0,
                                 nonconfidential_balance_fix_height: 0,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
+                                fix_unpaid_delegation_height: 0,
+                                evm_checktx_nonce: 0,
+                                utxo_checktx_height: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
-                                evm_substate_height: 1733700,
+                                evm_substate_height: 1802500,
                                 disable_evm_block_height: 1483286,
                                 enable_frc20_height: 1501000,
                                 evm_first_block_height: 0,
@@ -67,6 +73,9 @@ impl CheckPointConfig {
                                 ff_addr_extra_fix_height: 1200000,
                                 nonconfidential_balance_fix_height: 1210000,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
+                                fix_unpaid_delegation_height: 2261885,
+                                evm_checktx_nonce: 3000000,
+                                utxo_checktx_height: 2524270,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
@@ -134,7 +143,9 @@ impl TryFrom<ABCIConfigStr> for ABCIConfig {
             query_port,
             evm_http_port,
             evm_ws_port,
-            ledger_dir: cfg.ledger_dir.unwrap_or(pnk!(env::var("LEDGER_DIR"))),
+            ledger_dir: cfg
+                .ledger_dir
+                .unwrap_or_else(|| pnk!(env::var("LEDGER_DIR"))),
         })
     }
 }

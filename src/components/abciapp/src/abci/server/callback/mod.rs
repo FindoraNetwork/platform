@@ -6,15 +6,15 @@ mod utils;
 
 use {
     crate::{
-        abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV, POOL},
+        abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV, IS_EXITING, POOL},
         api::{
             query_server::BLOCK_CREATED,
             submission_server::{convert_tx, try_tx_catalog, TxCatalog},
         },
     },
     abci::{
-        Application, CheckTxType, RequestBeginBlock, RequestCheckTx, RequestCommit,
-        RequestDeliverTx, RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery,
+        CheckTxType, RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx,
+        RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery,
         ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
         ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
     },
@@ -90,11 +90,7 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
 
     drop(state);
 
-    println!("\n\n");
-    println!("==========================================");
-    println!("======== Last committed height: {} ========", h);
-    println!("==========================================");
-    println!("\n\n");
+    log::info!(target: "abciapp", "======== Last committed height: {} ========", h);
 
     if la.all_commited() {
         la.begin_block();
@@ -147,7 +143,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                 resp.log = "EVM is disabled".to_owned();
                 resp
             } else {
-                s.account_base_app.write().check_tx(req)
+                s.account_base_app.read().check_tx(req)
             }
         }
         TxCatalog::Unknown => {
@@ -162,6 +158,15 @@ pub fn begin_block(
     s: &mut ABCISubmissionServer,
     req: &RequestBeginBlock,
 ) -> ResponseBeginBlock {
+    if IS_EXITING.load(Ordering::Acquire) {
+        //beacuse ResponseBeginBlock doesn't define the code,
+        //we can't tell tendermint that begin block is impossibled,
+        //we use thread::sleep to wait to exit, it's looks unsound.
+        std::thread::sleep(std::time::Duration::from_secs(10));
+    }
+
+    IN_SAFE_ITV.store(true, Ordering::Release);
+
     #[cfg(target_os = "linux")]
     {
         // snapshot the last block
@@ -181,8 +186,6 @@ pub fn begin_block(
         *created = true;
         BLOCK_CREATED.1.notify_one();
     }
-
-    IN_SAFE_ITV.swap(true, Ordering::Relaxed);
 
     let header = pnk!(req.header.as_ref());
     TENDERMINT_BLOCK_HEIGHT.swap(header.height, Ordering::Relaxed);
@@ -234,7 +237,7 @@ pub fn deliver_tx(
                 if tx.valid_in_abci() {
                     // Log print for monitor purpose
                     if td_height < EVM_FIRST_BLOCK_HEIGHT {
-                        println!(
+                        log::info!(target: "abciapp",
                             "EVM transaction(FindoraTx) detected at early height {}: {:?}",
                             td_height, tx
                         );
@@ -299,6 +302,19 @@ pub fn deliver_tx(
                             .db
                             .write()
                             .discard_session();
+                    } else if CFG.checkpoint.utxo_checktx_height < td_height {
+                        match tx.check_tx() {
+                            Ok(_) => {
+                                if let Err(e) = s.la.write().cache_transaction(tx) {
+                                    resp.code = 1;
+                                    resp.log = e.to_string();
+                                }
+                            }
+                            Err(e) => {
+                                resp.code = 1;
+                                resp.log = e.to_string();
+                            }
+                        }
                     } else if let Err(e) = s.la.write().cache_transaction(tx) {
                         resp.code = 1;
                         resp.log = e.to_string();
@@ -324,9 +340,12 @@ pub fn deliver_tx(
             } else {
                 // Log print for monitor purpose
                 if td_height < EVM_FIRST_BLOCK_HEIGHT {
-                    println!(
+                    log::info!(
+                        target:
+                        "abciapp",
                         "EVM transaction(EvmTx) detected at early height {}: {:?}",
-                        td_height, req
+                        td_height,
+                        req
                     );
                 }
                 return s.account_base_app.write().deliver_tx(req);
@@ -352,7 +371,6 @@ pub fn end_block(
 
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
 
-    IN_SAFE_ITV.swap(false, Ordering::Relaxed);
     let mut la = s.la.write();
 
     // mint coinbase, cache system transactions to ledger
@@ -423,6 +441,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
     }
 
+    IN_SAFE_ITV.store(false, Ordering::Release);
     r
 }
 

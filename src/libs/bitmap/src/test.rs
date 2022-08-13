@@ -142,11 +142,7 @@ fn test_basic_bitmap() {
     }
 
     // Check our definition of the checksum of an empty tree.
-    if bitmap.compute_checksum()
-        != (Digest {
-            0: [0_u8; DIGESTBYTES],
-        })
-    {
+    if bitmap.compute_checksum() != (Digest([0_u8; DIGESTBYTES])) {
         panic!("compute_checksum() failed on an empty tree");
     }
 

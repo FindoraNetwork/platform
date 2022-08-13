@@ -1571,7 +1571,7 @@ impl FinalizedTransaction {
             .body
             .operations
             .iter_mut()
-            .map(|new| match new {
+            .flat_map(|new| match new {
                 Operation::TransferAsset(d) => d.body.outputs.iter_mut().collect(),
                 Operation::MintFra(d) => {
                     d.entries.iter_mut().map(|et| &mut et.utxo).collect()
@@ -1581,7 +1581,6 @@ impl FinalizedTransaction {
                 }
                 _ => Vec::new(),
             })
-            .flatten()
             .zip(ids.iter())
             .for_each(|(o, id)| {
                 o.id = Some(*id);
@@ -1810,6 +1809,74 @@ impl Transaction {
             }
         }
         Err(eg!())
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn check_tx(&self) -> Result<()> {
+        let mut offset = 0;
+
+        let verify = |sign: &SignatureOf<TransactionBody>,
+                      pk: &XfrPublicKey,
+                      val: &TransactionBody|
+         -> Result<()> { sign.verify(pk, val) };
+
+        for (index, operation) in self.body.operations.iter().enumerate() {
+            match operation {
+                Operation::TransferAsset(o) => {
+                    let pks = o.get_owner_addresses();
+                    offset = pks.len() - 1;
+                    let tx_sign_list = &self.signatures[index..=(index + offset)];
+
+                    for (idx, tx_sign) in tx_sign_list.iter().enumerate() {
+                        verify(tx_sign, &pks[idx], &self.body)?;
+                    }
+                }
+                Operation::IssueAsset(o) => {
+                    verify(
+                        &self.signatures[(index + offset)],
+                        &o.pubkey.key,
+                        &self.body,
+                    )?;
+                }
+                Operation::DefineAsset(o) => {
+                    verify(
+                        &self.signatures[(index + offset)],
+                        &o.pubkey.key,
+                        &self.body,
+                    )?;
+                }
+                Operation::UpdateMemo(o) => {
+                    verify(&self.signatures[(index + offset)], &o.pubkey, &self.body)?;
+                }
+                Operation::UpdateStaker(o) => {
+                    verify(&self.signatures[(index + offset)], &o.pubkey, &self.body)?;
+                }
+                Operation::Delegation(o) => {
+                    verify(&self.signatures[(index + offset)], &o.pubkey, &self.body)?;
+                }
+                Operation::UnDelegation(o) => {
+                    verify(&self.signatures[(index + offset)], &o.pubkey, &self.body)?;
+                }
+                Operation::Claim(o) => {
+                    verify(&self.signatures[(index + offset)], &o.pubkey, &self.body)?;
+                }
+                Operation::UpdateValidator(_) => {}
+                Operation::Governance(_) => {}
+                Operation::FraDistribution(_) => {}
+                Operation::MintFra(_) => {}
+                Operation::ConvertAccount(_) => {}
+                Operation::ReplaceStaker(o) => {
+                    verify(
+                        &self.signatures[(index + offset)],
+                        &o.get_related_pubkeys()[0],
+                        &self.body,
+                    )?;
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

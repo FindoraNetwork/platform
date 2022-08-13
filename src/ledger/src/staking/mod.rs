@@ -354,9 +354,7 @@ impl Staking {
         &self,
         id: &XfrPublicKey,
     ) -> Option<&Validator> {
-        self.validator_get_current()
-            .map(|vd| vd.body.get(id))
-            .flatten()
+        self.validator_get_current().and_then(|vd| vd.body.get(id))
     }
 
     #[inline(always)]
@@ -372,8 +370,7 @@ impl Staking {
         id: &XfrPublicKey,
     ) -> Option<&mut Validator> {
         self.validator_get_current_mut()
-            .map(|vd| vd.body.get_mut(id))
-            .flatten()
+            .and_then(|vd| vd.body.get_mut(id))
     }
 
     /// Get the validators that will be used for the specified height.
@@ -543,8 +540,7 @@ impl Staking {
     fn validator_align_power(&mut self, vid: &XfrPublicKey) {
         if let Some(self_delegation_am) = self
             .delegation_get(vid)
-            .map(|d| d.validator_entry(vid))
-            .flatten()
+            .and_then(|d| d.validator_entry(vid))
         {
             if let Some(v) = self.validator_get_current_mut_one_by_id(vid) {
                 if 0 < v.td_power {
@@ -1305,8 +1301,7 @@ impl Staking {
         self.delegation_info
             .end_height_map
             .range(..=h)
-            .map(|(_, addr)| addr)
-            .flatten()
+            .flat_map(|(_, addr)| addr)
             .copied()
             .collect::<Vec<_>>()
             .into_iter()
@@ -1361,10 +1356,13 @@ impl Staking {
     //
     // @param h: included
     fn delegation_process_finished_before_height(&mut self, h: BlockHeight) {
-        self.delegation_info
-            .end_height_map
-            .range(0..=h)
-            .map(|(k, v)| (k.to_owned(), (*v).clone()))
+        let r = if CFG.checkpoint.fix_unpaid_delegation_height > h {
+            self.delegation_info.end_height_map.range(0..=h)
+        } else {
+            self.delegation_info.end_height_map.range(0..h)
+        };
+
+        r.map(|(k, v)| (k.to_owned(), (*v).clone()))
             .collect::<Vec<_>>()
             .iter()
             .for_each(|(h, addrs)| {
