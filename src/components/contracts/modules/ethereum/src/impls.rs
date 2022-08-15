@@ -25,6 +25,39 @@ use ruc::*;
 use sha3::{Digest, Keccak256};
 
 impl<C: Config> App<C> {
+    pub fn recover_signer_fast(
+        ctx: &Context,
+        transaction: &Transaction,
+    ) -> Option<H160> {
+        let transaction_hash =
+            H256::from_slice(Keccak256::digest(&rlp::encode(transaction)).as_slice());
+
+        // Check historical cache first for Deliver Context, while holding the read lock
+        if ctx.run_mode == RunTxMode::Deliver {
+            let history_1 = ctx.eth_cache.history_1.read();
+            let history_n = ctx.eth_cache.history_n.read();
+
+            if let Some(signer) = history_1
+                .get(&transaction_hash)
+                .or_else(|| history_n.get(&transaction_hash))
+            {
+                return *signer;
+            }
+        }
+
+        // recover_signer() calculation is necessary in 2 scenarios:
+        // 1- During CheckTx on fresh transaction
+        // 2- During DeliverTx if we NEVER see the transaction's signer in history (cache)
+        let mut txn_signers = ctx.eth_cache.current.write();
+        match txn_signers.get(&transaction_hash) {
+            Some(signer) => *signer,
+            None => Self::recover_signer(transaction).map(|signer| {
+                txn_signers.insert(transaction_hash, Some(signer));
+                signer
+            }),
+        }
+    }
+
     pub fn recover_signer(transaction: &Transaction) -> Option<H160> {
         let mut sig = [0u8; 65];
         let mut msg = [0u8; 32];
@@ -54,12 +87,9 @@ impl<C: Config> App<C> {
         let mut logs_bloom = Bloom::default();
         let mut is_store_block = true;
 
-        let pending_txs: Vec<(Transaction, TransactionStatus, Receipt)> = {
-            let mut txns_guard = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
-            let txns = txns_guard.get_mut();
-            let pending_txns = txns.clone();
-            *txns = None;
-            pending_txns.unwrap_or_default()
+        let pending_txs = {
+             let mut txns = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
+            std::mem::take(&mut *txns)
         };
 
         if block_number < U256::from(CFG.checkpoint.evm_first_block_height)
@@ -138,7 +168,7 @@ impl<C: Config> App<C> {
         let mut events = vec![];
         let just_check = ctx.run_mode != RunTxMode::Deliver;
 
-        let source = Self::recover_signer(&transaction)
+        let source = Self::recover_signer_fast(ctx, &transaction)
             .ok_or_else(|| eg!("ExecuteTransaction: InvalidSignature"))?;
 
         let transaction_hash =
@@ -147,9 +177,8 @@ impl<C: Config> App<C> {
         let transaction_index = if just_check {
             0
         } else {
-            let mut txns_guard = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
-            let txns = txns_guard.get_mut();
-            txns.as_ref().map_or(0, |txns| txns.len()) as u32
+             let txns = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
+             txns.len() as u32
         };
 
         let gas_limit = transaction.gas_limit;
@@ -285,14 +314,8 @@ impl<C: Config> App<C> {
 
         if !just_check {
             {
-                let mut pending_txs_guard =
-                    DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
-                let pending_txs = pending_txs_guard.get_mut();
-                if let Some(txs) = pending_txs {
-                    txs.push((transaction, status, receipt));
-                } else {
-                    *pending_txs = Some(vec![(transaction, status, receipt)]);
-                };
+                let mut pending_txs = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
+                pending_txs.push((transaction, status, receipt));
             }
 
             TransactionIndex::insert(
