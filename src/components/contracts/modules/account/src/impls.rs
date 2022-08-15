@@ -160,4 +160,12 @@ impl<C: Config> AccountAsset<Address> for App<C> {
     ) -> Result<()> {
         Allowances::insert(ctx.state.write().borrow_mut(), owner, spender, &amount)
     }
+
+    fn insert_evm_fra_address_mapping(
+        ctx: &Context,
+        fra_pk: &Address,
+        evm_address: &Address,
+    ) -> Result<()> {
+        EvmFraAddressMapping::insert(ctx.state.write().borrow_mut(), evm_address, fra_pk)
+    }
 }

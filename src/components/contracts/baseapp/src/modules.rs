@@ -21,6 +21,7 @@ use ledger::{
 use module_ethereum::storage::{TransactionIndex, DELIVER_PENDING_TRANSACTIONS};
 use ruc::*;
 use serde::Serialize;
+use fp_utils::hashing::keccak_256;
 
 #[derive(Default, Clone)]
 pub struct ModuleManager {
@@ -132,7 +133,10 @@ impl ModuleManager {
         let (from, owner, amount, asset, lowlevel) = check_convert_account(tx)?;
 
         if CFG.checkpoint.prismxx_inital_height < ctx.header.height {
-            let from = Address::from(from);
+            let evm_from_bytes = keccak_256(from.as_bytes());
+            let evm_from_addr = Address::from(H160::from_slice(&evm_from_bytes[..20]));
+            let fra_from_addr = Address::from(from);
+
             let owner = Address::from(owner);
 
             let mut pending_txs = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
@@ -146,13 +150,12 @@ impl ModuleManager {
                         .ok_or_else(|| {
                             eg!("The transfer to account amount is too large")
                         })?;
-                let bridge_address = self.evm_module.contracts.bridge_address;
-                let ba = Address::from(bridge_address);
 
-                module_account::App::<BaseApp>::mint(ctx, &ba, balance)?;
+                module_account::App::<BaseApp>::mint(ctx, &evm_from_addr, balance)?;
+                module_account::App::<BaseApp>::insert_evm_fra_address_mapping(ctx, &fra_from_addr, &evm_from_addr)?;
                 match self.evm_module.withdraw_fra(
                     ctx,
-                    &from,
+                    &evm_from_addr,
                     &owner,
                     balance,
                     lowlevel,
@@ -170,7 +173,7 @@ impl ModuleManager {
                 self.evm_module.withdraw_frc20(
                     ctx,
                     asset.0,
-                    &from,
+                    &evm_from_addr,
                     &owner,
                     U256::from(amount),
                     lowlevel,

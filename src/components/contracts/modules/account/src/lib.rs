@@ -40,6 +40,9 @@ mod storage {
     // The owner approve his amount of funds to the spender.
     // owner => spender => amount
     generate_storage!(Account, Allowances => DoubleMap<Address, Address, U256>);
+
+    // evm_address => fra_pk
+    generate_storage!(Account, EvmFraAddressMapping => Map<Address, Address>);
 }
 
 #[derive(Clone)]

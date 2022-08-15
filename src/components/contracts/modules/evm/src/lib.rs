@@ -71,6 +71,8 @@ pub mod storage {
     generate_storage!(EVM, AccountCodes => Map<HA160, Vec<u8>>);
     // Storage root hash related to the contract account.
     generate_storage!(EVM, AccountStorages => DoubleMap<HA160, HA256, H256>);
+
+
 }
 
 #[derive(Clone)]
@@ -105,7 +107,7 @@ impl<C: Config> App<C> {
         let asset = Token::FixedBytes(Vec::from(_asset));
 
         let bytes: &[u8] = _from.as_ref();
-        let from = Token::FixedBytes(bytes.to_vec());
+        let from = Token::Address(H160::from_slice(&bytes[4..24]));
 
         let bytes: &[u8] = _to.as_ref();
         let to = Token::Address(H160::from_slice(&bytes[4..24]));
@@ -164,7 +166,7 @@ impl<C: Config> App<C> {
         let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
 
         let bytes: &[u8] = _from.as_ref();
-        let from = Token::FixedBytes(bytes.to_vec());
+        let from = Token::Address(H160::from_slice(&bytes[4..24]));
 
         let bytes: &[u8] = _to.as_ref();
 
