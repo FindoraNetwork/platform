@@ -71,8 +71,6 @@ pub mod storage {
     generate_storage!(EVM, AccountCodes => Map<HA160, Vec<u8>>);
     // Storage root hash related to the contract account.
     generate_storage!(EVM, AccountStorages => DoubleMap<HA160, HA256, H256>);
-
-
 }
 
 #[derive(Clone)]
@@ -153,7 +151,7 @@ impl<C: Config> App<C> {
         ))
     }
 
-    pub fn withdraw_fra(
+    pub fn evm_call(
         &self,
         ctx: &Context,
         _from: &Address,
@@ -163,50 +161,38 @@ impl<C: Config> App<C> {
         transaction_index: u32,
         transaction_hash: H256,
     ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
-        let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
-
         let bytes: &[u8] = _from.as_ref();
-        let from = Token::Address(H160::from_slice(&bytes[4..24]));
+        let source = H160::from_slice(&bytes[4..24]);
 
         let bytes: &[u8] = _to.as_ref();
-
-        let to = Token::Address(H160::from_slice(&bytes[4..24]));
-        let value = Token::Uint(_value);
-        let lowlevel = Token::Bytes(_lowlevel);
-
-        // println!("{:?}, {:?}, {:?}, {:?}", from, to, value, lowlevel);
-
-        let input = function
-            .encode_input(&[from, to, value, lowlevel])
-            .c(d!())?;
+        let target = H160::from_slice(&bytes[4..24]);
 
         let gas_limit = 9999999;
         let value = U256::zero();
         let gas_price = U256::one();
-        let from = H160::zero();
 
         let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
-            input.clone(),
-            from,
+            _lowlevel.clone(),
+            source,
             gas_limit,
-            self.contracts.bridge_address,
+            target,
             value,
         )?;
 
-        let action = TransactionAction::Call(self.contracts.bridge_address);
+        let action = TransactionAction::Call(target);
 
         Ok(Self::system_transaction(
             transaction_hash,
-            input,
+            _lowlevel.clone(),
             value,
             action,
             U256::from(gas_limit),
             gas_price,
             used_gas,
             transaction_index,
-            from,
-            self.contracts.bridge_address,
+            source,
+            target,
             logs,
         ))
     }

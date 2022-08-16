@@ -14,6 +14,7 @@ use fp_types::{
     assemble::{convert_unsigned_transaction, CheckedTransaction, UncheckedTransaction},
     crypto::{Address, HA256},
 };
+use fp_utils::hashing::keccak_256;
 use ledger::{
     converter::check_convert_account,
     data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA},
@@ -21,7 +22,6 @@ use ledger::{
 use module_ethereum::storage::{TransactionIndex, DELIVER_PENDING_TRANSACTIONS};
 use ruc::*;
 use serde::Serialize;
-use fp_utils::hashing::keccak_256;
 
 #[derive(Default, Clone)]
 pub struct ModuleManager {
@@ -130,14 +130,19 @@ impl ModuleManager {
         tx: &FindoraTransaction,
         hash: H256,
     ) -> Result<()> {
-        let (from, owner, amount, asset, lowlevel) = check_convert_account(tx)?;
+        let (from, target, amount, asset, lowlevel) = check_convert_account(tx)?;
 
         if CFG.checkpoint.prismxx_inital_height < ctx.header.height {
             let evm_from_bytes = keccak_256(from.as_bytes());
             let evm_from_addr = Address::from(H160::from_slice(&evm_from_bytes[..20]));
             let fra_from_addr = Address::from(from);
+            module_account::App::<BaseApp>::insert_evm_fra_address_mapping(
+                ctx,
+                &fra_from_addr,
+                &evm_from_addr,
+            )?;
 
-            let owner = Address::from(owner);
+            let target = Address::from(target);
 
             let mut pending_txs = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
             // if let Some(pending_txs)
@@ -152,11 +157,11 @@ impl ModuleManager {
                         })?;
 
                 module_account::App::<BaseApp>::mint(ctx, &evm_from_addr, balance)?;
-                module_account::App::<BaseApp>::insert_evm_fra_address_mapping(ctx, &fra_from_addr, &evm_from_addr)?;
-                match self.evm_module.withdraw_fra(
+
+                match self.evm_module.evm_call(
                     ctx,
                     &evm_from_addr,
-                    &owner,
+                    &target,
                     balance,
                     lowlevel,
                     transaction_index,
@@ -174,7 +179,7 @@ impl ModuleManager {
                     ctx,
                     asset.0,
                     &evm_from_addr,
-                    &owner,
+                    &target,
                     U256::from(amount),
                     lowlevel,
                     transaction_index,
@@ -194,7 +199,7 @@ impl ModuleManager {
         } else {
             let balance = EthereumDecimalsMapping::from_native_token(U256::from(amount))
                 .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
-            module_account::App::<BaseApp>::mint(ctx, &Address::from(owner), balance)
+            module_account::App::<BaseApp>::mint(ctx, &Address::from(target), balance)
         }
     }
 }
