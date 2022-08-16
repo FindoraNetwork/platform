@@ -88,7 +88,7 @@ impl<C: Config> App<C> {
         let mut is_store_block = true;
 
         let pending_txs = {
-             let mut txns = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
+            let mut txns = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
             std::mem::take(&mut *txns)
         };
 
@@ -177,8 +177,8 @@ impl<C: Config> App<C> {
         let transaction_index = if just_check {
             0
         } else {
-             let txns = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
-             txns.len() as u32
+            let txns = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
+            txns.len() as u32
         };
 
         let gas_limit = transaction.gas_limit;
