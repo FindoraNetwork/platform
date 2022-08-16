@@ -184,7 +184,7 @@ impl<C: Config> App<C> {
 
         Ok(Self::system_transaction(
             transaction_hash,
-            _lowlevel.clone(),
+            _lowlevel,
             value,
             action,
             U256::from(gas_limit),
