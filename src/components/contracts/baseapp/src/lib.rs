@@ -9,6 +9,7 @@ mod app;
 pub mod extensions;
 mod modules;
 mod notify;
+pub mod tm_events;
 
 use crate::modules::ModuleManager;
 use abci::Header;
@@ -331,13 +332,6 @@ impl BaseApp {
 
     pub fn consume_mint(&self) -> Option<Vec<NonConfidentialOutput>> {
         let mut outputs = self.modules.evm_module.consume_mint(&self.deliver_state);
-        let outputs2 = module_xhub::App::<Self>::consume_mint(&self.deliver_state);
-
-        if let Some(mut e) = outputs2 {
-            outputs.append(&mut e);
-        }
-
-        // TODO: Add xhub compact.
 
         for output in &outputs {
             if output.asset == ASSET_TYPE_FRA {
@@ -355,6 +349,12 @@ impl BaseApp {
                     }
                 }
             }
+        }
+
+        let outputs2 = module_xhub::App::<Self>::consume_mint(&self.deliver_state);
+
+        if let Some(mut e) = outputs2 {
+            outputs.append(&mut e);
         }
 
         Some(outputs)

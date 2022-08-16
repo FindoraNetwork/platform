@@ -69,13 +69,23 @@ pub fn send_tx(tx: &Transaction) -> Result<()> {
 
 /// Fee is needless in a `UpdateValidator` operation
 #[inline(always)]
-pub fn set_initial_validators() -> Result<()> {
+pub fn set_initial_validators(staking_info_file: Option<&str>) -> Result<()> {
     let mut builder = new_tx_builder().c(d!())?;
 
-    let vs = get_inital_validators().c(d!())?;
+    let vs = get_inital_validators(staking_info_file).c(d!())?;
     builder.add_operation_update_validator(&[], 1, vs).c(d!())?;
 
     send_tx(&builder.build_and_take_transaction()?).c(d!())
+}
+
+///load the tendermint key from the `priv_validator_key.json` file.
+pub fn load_tendermint_priv_validator_key(
+    key_path: impl AsRef<std::path::Path>,
+) -> Result<ValidatorKey> {
+    let k =
+        std::fs::read_to_string(key_path).c(d!("can not read key file from path"))?;
+    let v_keys = parse_td_validator_keys(&k).c(d!())?;
+    Ok(v_keys)
 }
 
 #[inline(always)]

@@ -496,8 +496,8 @@ pub fn transfer_asset_batch_x(
 
 /// Mainly for official usage,
 /// and can be also used in test scenes.
-pub fn set_initial_validators() -> Result<()> {
-    utils::set_initial_validators().c(d!())
+pub fn set_initial_validators(staking_info_file: Option<&str>) -> Result<()> {
+    utils::set_initial_validators(staking_info_file).c(d!())
 }
 
 /// Get the effective address of server
@@ -525,7 +525,8 @@ pub fn get_keypair() -> Result<XfrKeyPair> {
     }
 }
 
-fn get_td_pubkey() -> Result<Vec<u8>> {
+///Get tendermint public key
+pub(crate) fn get_td_pubkey() -> Result<Vec<u8>> {
     if let Some(key_path) = TD_KEY.as_ref() {
         fs::read_to_string(key_path)
             .c(d!("can not read key file from path"))

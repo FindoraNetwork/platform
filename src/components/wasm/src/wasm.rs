@@ -16,12 +16,12 @@ mod wasm_data_model;
 
 use {
     crate::wasm_data_model::{
-        error_to_jsvalue, AssetRules, AssetTracerKeyPair, AttributeAssignment,
-        AttributeDefinition, AxfrOwnerMemo, ClientAssetRecord, Credential,
-        CredentialCommitment, CredentialCommitmentData, CredentialCommitmentKey,
-        CredentialIssuerKeyPair, CredentialPoK, CredentialRevealSig,
-        CredentialSignature, CredentialUserKeyPair, MTLeafInfo, OwnerMemo,
-        TracingPolicies, TxoRef,
+        error_to_jsvalue, AssetRules, AssetTracerKeyPair, AssetType,
+        AttributeAssignment, AttributeDefinition, AxfrOwnerMemo, AxfrOwnerMemoInfo,
+        ClientAssetRecord, Credential, CredentialCommitment, CredentialCommitmentData,
+        CredentialCommitmentKey, CredentialIssuerKeyPair, CredentialPoK,
+        CredentialRevealSig, CredentialSignature, CredentialUserKeyPair, MTLeafInfo,
+        OwnerMemo, TracingPolicies, TxoRef,
     },
     core::str::FromStr,
     credentials::{
@@ -68,13 +68,15 @@ use {
     wasm_bindgen::prelude::*,
     zei::{
         anon_xfr::{
+            decrypt_memo,
             keys::{AXfrKeyPair, AXfrPubKey, AXfrViewKey},
-            nullify_with_native_address,
+            nullify_with_native_address, parse_memo,
             structs::{
                 AnonAssetRecord, Commitment, OpenAnonAssetRecord,
                 OpenAnonAssetRecordBuilder,
             },
         },
+        primitives::asymmetric_encryption::dh_decrypt,
         xfr::{
             asset_record::{
                 open_blind_asset_record as open_bar, AssetRecordType,
@@ -88,7 +90,11 @@ use {
             trace_assets as zei_trace_assets,
         },
     },
-    zei_algebra::prelude::{Scalar, ZeiFromToBytes},
+    zei_algebra::{
+        bls12_381::BLSScalar,
+        jubjub::{JubjubPoint, JubjubScalar},
+        prelude::{Scalar, ZeiFromToBytes},
+    },
     zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
 };
 
@@ -513,7 +519,7 @@ impl TransactionBuilder {
         let oar = open_bar(
             input_record.get_bar_ref(),
             &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-            &auth_key_pair,
+            &auth_key_pair.clone(),
         )
         .c(d!())
         .map_err(|e| {
@@ -530,8 +536,8 @@ impl TransactionBuilder {
             .get_builder_mut()
             .add_operation_bar_to_abar(
                 seed,
-                auth_key_pair,
-                &abar_pubkey,
+                &auth_key_pair.clone(),
+                &abar_pubkey.clone(),
                 TxoSID(txo_sid),
                 &oar,
                 is_bar_transparent,
@@ -560,7 +566,7 @@ impl TransactionBuilder {
         owner_memo: AxfrOwnerMemo,
         mt_leaf_info: MTLeafInfo,
         from_keypair: &AXfrKeyPair,
-        recipient: XfrPublicKey,
+        recipient: &XfrPublicKey,
         conf_amount: bool,
         conf_type: bool,
     ) -> Result<TransactionBuilder, JsValue> {
@@ -595,7 +601,12 @@ impl TransactionBuilder {
         };
 
         self.get_builder_mut()
-            .add_operation_abar_to_bar(&oabar, &from_keypair.clone(), &recipient, art)
+            .add_operation_abar_to_bar(
+                &oabar,
+                &from_keypair.clone(),
+                &recipient.clone(),
+                art,
+            )
             .c(d!())
             .map_err(|e| {
                 JsValue::from_str(&format!(
@@ -634,7 +645,7 @@ impl TransactionBuilder {
         owner_memo: AxfrOwnerMemo,
         mt_leaf_info: MTLeafInfo,
         from_keypair: &AXfrKeyPair,
-        to_pub_key: AXfrPubKey,
+        to_pub_key: &AXfrPubKey,
         to_amount: u64,
     ) -> Result<TransactionBuilder, JsValue> {
         let mut prng = ChaChaRng::from_entropy();
@@ -660,7 +671,7 @@ impl TransactionBuilder {
         let output_oabar = OpenAnonAssetRecordBuilder::new()
             .amount(to_amount)
             .asset_type(input_oabar.get_asset_type())
-            .pub_key(&to_pub_key)
+            .pub_key(&to_pub_key.clone())
             .finalize(&mut prng)
             .c(d!())
             .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
@@ -877,6 +888,8 @@ pub fn transfer_to_utxo_from_account(
         target: recipient,
         amount,
         asset: ASSET_TYPE_FRA,
+        decimal: 6,
+        max_supply: 0,
     };
     let action = Action::XHub(XHubAction::NonConfidentialTransfer(
         NonConfidentialTransfer {
@@ -1387,8 +1400,10 @@ impl AnonTransferOperationBuilder {
 
     /// get_expected_fee is used to gather extra FRA that needs to be spent to make the transaction
     /// have enough fees.
-    pub fn get_expected_fee(&self) -> u64 {
-        self.get_builder().extra_fee_estimation()
+    pub fn get_expected_fee(&self) -> Result<u64, JsValue> {
+        self.get_builder()
+            .extra_fee_estimation()
+            .map_err(error_to_jsvalue)
     }
 
     /// get_commitments returns a list of all the commitments for receiver public keys
@@ -1415,7 +1430,7 @@ impl AnonTransferOperationBuilder {
     pub fn build(mut self) -> Result<AnonTransferOperationBuilder, JsValue> {
         self.get_builder_mut()
             .build()
-            .c(d!())
+            .c(d!("error in txn_builder: build"))
             .map_err(error_to_jsvalue)?;
 
         self.get_builder_mut()
@@ -1780,7 +1795,7 @@ use aes_gcm::Aes256Gcm;
 use base64::URL_SAFE;
 use getrandom::getrandom;
 use js_sys::JsString;
-use ledger::data_model::{ABARData, AssetType, TxoSID, BAR_TO_ABAR_TX_FEE_MIN};
+use ledger::data_model::{ABARData, TxoSID, BAR_TO_ABAR_TX_FEE_MIN};
 use ledger::staking::Amount;
 use rand_core::{CryptoRng, RngCore};
 use ring::pbkdf2;
@@ -2127,6 +2142,74 @@ pub fn open_abar(
     })
 }
 
+#[wasm_bindgen]
+/// Decrypts the owner anon memo.
+/// * `memo` - Owner anon memo to decrypt
+/// * `key_pair` - Owner anon keypair
+/// * `abar` - Associated anonymous blind asset record to check memo info against.
+/// Return Error if memo info does not match the commitment or public key.
+/// Return Ok(amount, asset_type, blinding) otherwise.
+pub fn decrypt_axfr_memo(
+    memo: &AxfrOwnerMemo,
+    key_pair: &AXfrKeyPair,
+    abar: &AnonAssetRecord,
+) -> Result<AxfrOwnerMemoInfo, JsValue> {
+    let (amount, asset_type, blind) = decrypt_memo(&memo.memo, key_pair, abar)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+    Ok(AxfrOwnerMemoInfo {
+        amount,
+        blind,
+        asset_type: AssetTypeCode { val: asset_type }.to_base64(),
+    })
+}
+
+#[wasm_bindgen]
+/// Try to decrypt the owner memo to check if it is own.
+/// * `memo` - Owner anon memo need to decrypt.
+/// * `key_pair` - the memo bytes.
+/// Return Ok(amount, asset_type, blinding) if memo is own.
+pub fn try_decrypt_axfr_memo(
+    memo: &AxfrOwnerMemo,
+    key_pair: &AXfrKeyPair,
+) -> Result<Vec<u8>, JsValue> {
+    dh_decrypt(
+        &key_pair.get_view_key_scalar(),
+        &memo.memo.point,
+        &memo.memo.ctext,
+    )
+    .c(d!())
+    .map_err(error_to_jsvalue)
+}
+
+#[wasm_bindgen]
+/// Parse the owner memo from bytes.
+/// * `bytes` - the memo plain bytes.
+/// * `key_pair` - the memo bytes.
+/// * `abar` - Associated anonymous blind asset record to check memo info against.
+/// Return Error if memo info does not match the commitment.
+/// Return Ok(amount, asset_type, blinding) otherwise.
+pub fn parse_axfr_memo(
+    bytes: &[u8],
+    key_pair: &AXfrKeyPair,
+    abar: &AnonAssetRecord,
+) -> Result<AxfrOwnerMemoInfo, JsValue> {
+    let (amount, asset_type, blind) = parse_memo(bytes, key_pair, abar)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+    Ok(AxfrOwnerMemoInfo {
+        amount,
+        blind,
+        asset_type: AssetTypeCode { val: asset_type }.to_base64(),
+    })
+}
+
+#[wasm_bindgen]
+/// Convert Commitment to AnonAssetRecord.
+pub fn commitment_to_aar(commitment: Commitment) -> AnonAssetRecord {
+    AnonAssetRecord { commitment }
+}
+
 #[cfg(test)]
 #[allow(missing_docs)]
 mod test {
@@ -2171,7 +2254,7 @@ mod test {
 
         let estimated_fees_gt_fra_excess = ts.get_expected_fee();
 
-        assert!(estimated_fees_gt_fra_excess > 0);
+        assert!(estimated_fees_gt_fra_excess.unwrap() > 0);
 
         let (mut oabar_2, keypair_in_2) =
             gen_oabar_and_keys(&mut prng, 2 * amount, asset_type);
@@ -2180,7 +2263,7 @@ mod test {
 
         let fra_excess_gt_fees_estimation = ts.get_expected_fee();
 
-        assert_eq!(fra_excess_gt_fees_estimation, 0);
+        assert_eq!(fra_excess_gt_fees_estimation, Ok(0));
     }
 
     fn gen_oabar_and_keys<R: CryptoRng + RngCore>(

@@ -22,6 +22,8 @@ fp-storage = { path = "../../primitives/storage" }
 fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 
+config = {path = "../../../config"}
+
 [dev-dependencies]
 parking_lot = "0.12"
 rand_chacha = "0.3"

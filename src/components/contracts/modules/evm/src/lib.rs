@@ -105,7 +105,7 @@ impl<C: Config> App<C> {
         transaction_index: u32,
         transaction_hash: H256,
     ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
-        let function = self.contracts.bridge.function("withdrawFRC20").c(d!())?;
+        let function = self.contracts.bridge.function("withdrawAsset").c(d!())?;
 
         let asset = Token::FixedBytes(Vec::from(_asset));
 

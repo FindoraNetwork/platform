@@ -26,6 +26,7 @@ lib_dir         = lib
 subdirs = $(bin_dir) $(lib_dir)
 
 WASM_PKG = wasm.tar.gz
+WASM_LIGHTWEIGHT_PKG = wasm_lightweight.tar.gz
 lib_files = ./$(WASM_PKG)
 
 define pack
@@ -143,6 +144,10 @@ cleanall: clean
 wasm:
 	cd src/components/wasm && wasm-pack build
 	tar -zcpf $(WASM_PKG) src/components/wasm/pkg
+
+wasm_release_lightweight:
+	cd src/components/wasm && wasm-pack build --release --features=lightweight
+	tar -zcpf $(WASM_LIGHTWEIGHT_PKG) src/components/wasm/pkg
 
 debug_env: stop_debug_env build_release_debug
 	- rm -rf $(FIN_DEBUG)
@@ -274,15 +279,20 @@ reset:
 snapshot:
 	@./tools/devnet/snapshot.sh
 
-evmtest:
+prismtest:
 	@./tools/regression/evm/scripts/setup.sh
 	@./tools/regression/evm/testevm.sh
 	@./tools/regression/evm/scripts/teardown.sh
 
-evmtest_nightly:
+prismtest_nightly:
 	@./tools/regression/evm/testevm.sh
 
 tmtest:
+	@./tools/regression/triple_masking/scripts/setup.sh
+	@./tools/regression/triple_masking/test_triple_masking.sh
+	@./tools/regression/triple_masking/scripts/teardown.sh
+
+tmtest_nightly:
 	@./tools/regression/triple_masking/test_triple_masking.sh
 
 devnet: reset snapshot
