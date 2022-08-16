@@ -2,8 +2,11 @@ use ethabi::Token;
 use ethereum_types::{H160, H256, U256};
 use fp_core::context::Context;
 use fp_traits::evm::{DecimalsMapping, EthereumDecimalsMapping};
-use fp_types::actions::xhub::NonConfidentialOutput;
-use ledger::data_model::ASSET_TYPE_FRA;
+use fp_types::{
+    actions::xhub::{NonConfidentialOutput, ValidatorInfo},
+    crypto::Address,
+};
+use ledger::{data_model::ASSET_TYPE_FRA, staking::ops::governance::ByzantineKind};
 use ruc::*;
 use sha3::{Digest, Keccak256};
 use zei::xfr::{sig::XfrPublicKey, structs::AssetType};
@@ -134,4 +137,109 @@ pub fn compute_create2(caller: H160, salt: H256, code_hash: H256) -> H160 {
     hasher.update(&salt[..]);
     hasher.update(&code_hash[..]);
     H256::from_slice(hasher.finalize().as_slice()).into()
+}
+
+pub fn fetch_validator_info<C: Config>(
+    ctx: &Context,
+    contracts: &SystemContracts,
+    outputs: &mut Vec<ValidatorInfo>,
+) -> Result<()> {
+    let function = contracts.bridge.function("getValidatorInfoList").c(d!())?;
+    let input = function.encode_input(&[]).c(d!())?;
+
+    let source = H160::zero();
+    let target = contracts.bridge_address;
+
+    let (ret, _, _) = ActionRunner::<C>::execute_systemc_contract(
+        ctx,
+        input,
+        source,
+        99999999,
+        target,
+        U256::zero(),
+    )
+    .c(d!())?;
+
+    let result = function.decode_output(&ret).c(d!())?;
+
+    for v1 in result {
+        if let Token::Array(tokens) = v1 {
+            for token in tokens {
+                if let Token::Tuple(tuple) = token {
+                    let output = parse_validator_truple_result(tuple)?;
+
+                    log::info!("Got issue output: {:?}", output);
+
+                    outputs.push(output);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn parse_validator_truple_result(tuple: Vec<Token>) -> Result<ValidatorInfo> {
+    let public_key = if let Token::FixedBytes(bytes) =
+        tuple.get(0).ok_or(eg!("Asset Must be FixedBytes"))?
+    {
+        bytes.clone()
+    } else {
+        return Err(eg!("Asset Must be FixedBytes"));
+    };
+
+    let address = if let Token::Address(addr) =
+        tuple.get(1).ok_or(eg!("Target must be FixedBytes"))?
+    {
+        addr.clone()
+    } else {
+        return Err(eg!("Asset Must be FixedBytes"));
+    };
+
+    let power = if let Token::Uint(i) = tuple.get(2).ok_or(eg!("No asset in index 2"))? {
+        i.as_u64() as i64
+    } else {
+        return Err(eg!("Amount must be uint"));
+    };
+
+    Ok(ValidatorInfo {
+        public_key,
+        address,
+        power,
+    })
+}
+
+pub fn staking_block_trigger<C: Config>(
+    ctx: &Context,
+    contracts: &SystemContracts,
+    _proposer: Address,
+    _signed: Vec<Address>,
+    _byztines: Vec<Address>,
+    _behaviors: Vec<ByzantineKind>,
+) -> Result<()> {
+    let function = contracts.bridge.function("blockTrigger").c(d!())?;
+
+    // let proposer = Token::Address(proposer);
+    // let signed; // = Token::FixedArray(signed);
+    // let byztine; // = Token::FixedArray(byztine);
+    // let behavior = Token::FixedArray(byztine);
+
+    let input = function.encode_input(&[]).c(d!())?;
+    // let input = function
+    //     .encode_input(&[proposer, signed, byztine, behavior])
+    //     .c(d!())?;
+    let source = H160::zero();
+    let target = contracts.bridge_address;
+
+    let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+        ctx,
+        input,
+        source,
+        99999999,
+        target,
+        U256::zero(),
+    )
+    .c(d!())?;
+
+    Ok(())
 }

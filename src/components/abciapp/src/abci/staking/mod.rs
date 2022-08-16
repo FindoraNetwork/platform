@@ -4,6 +4,7 @@
 //! Business logic based on [**Ledger Staking**](ledger::staking).
 //!
 
+use fp_types::H160;
 use ledger::data_model::{
     AssetType, AssetTypeCode, IssuerPublicKey, BLACK_HOLE_PUBKEY_STAKING,
 };
@@ -17,6 +18,7 @@ use {
     crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
     abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate},
     baseapp::BaseApp as AccountBaseApp,
+    fp_types::crypto::Address,
     lazy_static::lazy_static,
     ledger::{
         data_model::{Operation, Transaction, ASSET_TYPE_FRA},
@@ -36,6 +38,8 @@ use {
         ops::{Deref, DerefMut},
         sync::atomic::Ordering,
     },
+    zei::xfr::sig::XfrPublicKey,
+    zei_algebra::serialization::ZeiFromToBytes,
 };
 
 // The top 50~ candidate validators
@@ -222,6 +226,51 @@ pub fn system_ops(
     }
 }
 
+// address proposer,                  header.proposer_address
+// address[] memory signed,           let online_list = lci.votes.iter().filter(|v| v.signed_last_block).flat_map(|info| info.validator.as_ref().map(|v| &v.address)).collect::<BTreeSet<_>>();
+// address[] memory byztine,          begin_block_req.byzantine_validators
+// ByztineBehavior[] memory behavior  begin_block_req.byzantine_validators.field_type
+#[allow(missing_docs)]
+pub fn staking_block_trigger(
+    header: &Header,
+    last_commit_info: Option<&LastCommitInfo>,
+    evs: &[Evidence],
+) {
+    let _proposer = H160::from_slice(&header.proposer_address);
+
+    let mut _signed = if let Some(lci) = last_commit_info.as_ref() {
+        lci.votes
+            .iter()
+            .filter(|v| v.signed_last_block)
+            .flat_map(|info| {
+                info.validator
+                    .as_ref()
+                    .map(|v| H160::from_slice(&v.address))
+            })
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    let mut byztines: Vec<Address> = vec![];
+    let mut behaviors: Vec<ByzantineKind> = vec![];
+    evs.iter()
+        .filter(|ev| ev.validator.is_some())
+        .for_each(|ev| {
+            if !ev.has_validator() {
+                byztines.push(Address::from(
+                    XfrPublicKey::zei_from_bytes(&ev.get_validator().address).unwrap(),
+                ));
+                let behavior = match ev.field_type.as_str() {
+                    "DUPLICATE_VOTE" => ByzantineKind::DuplicateVote,
+                    "LIGHT_CLIENT_ATTACK" => ByzantineKind::LightClientAttack,
+                    "OFF_LINE" => ByzantineKind::OffLine,
+                    "UNKNOWN" => ByzantineKind::Unknown,
+                    _ => ByzantineKind::Unknown,
+                };
+                behaviors.push(behavior);
+            }
+        });
+}
 /// Get the actual voted power of last block.
 fn get_last_vote_percent(last_commit_info: &LastCommitInfo) -> [u64; 2] {
     // Returns Voted in last block and Total Voting power (including signed_last_block = false)

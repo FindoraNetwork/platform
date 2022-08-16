@@ -418,12 +418,17 @@ pub fn end_block(
     if !la.all_commited() && la.block_txn_count() != 0 {
         pnk!(la.end_block());
     }
-
-    if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
-        la.get_committed_state().read().get_staking().deref(),
-        begin_block_req.last_commit_info.as_ref()
-    )) {
-        resp.set_validator_updates(RepeatedField::from_vec(vs));
+    if td_height <= CFG.checkpoint.evm_staking_inital_height {
+        if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
+            la.get_committed_state().read().get_staking().deref(),
+            begin_block_req.last_commit_info.as_ref()
+        )) {
+            resp.set_validator_updates(RepeatedField::from_vec(vs));
+        }
+    } else {
+        if let Some(vs) = s.account_base_app.read().get_validator_info_list() {
+            resp.set_validator_updates(RepeatedField::from_vec(vs));
+        }
     }
 
     staking::system_ops(

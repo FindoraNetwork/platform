@@ -28,6 +28,7 @@ pub struct CheckPointConfig {
     pub nonconfidential_balance_fix_height: u64,
     pub unbond_block_cnt: u64,
     pub prismxx_inital_height: i64,
+    pub evm_staking_inital_height: i64,
     pub enable_triple_masking_height: i64,
     // Note: This field only used to qa02.
     pub fix_unpaid_delegation_height: u64,
@@ -62,6 +63,7 @@ impl CheckPointConfig {
                                 nonconfidential_balance_fix_height: 0,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
                                 prismxx_inital_height: 1,
+                                evm_staking_inital_height: 1,
                                 enable_triple_masking_height: 0,
                                 fix_unpaid_delegation_height: 0,
                                 evm_checktx_nonce: 0,
@@ -85,6 +87,7 @@ impl CheckPointConfig {
                                 nonconfidential_balance_fix_height: 1210000,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
                                 prismxx_inital_height: 30000000,
+                                evm_staking_inital_height: 30000000,
                                 enable_triple_masking_height: 30000000,
                                 fix_unpaid_delegation_height: 2261885,
                                 evm_checktx_nonce: 30000000,

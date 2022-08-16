@@ -30,7 +30,10 @@ use fp_evm::TransactionStatus;
 use ethereum::{Log, Receipt, TransactionAction, TransactionSignature, TransactionV0};
 
 use fp_types::{
-    actions::{evm::Action, xhub::NonConfidentialOutput},
+    actions::{
+        evm::Action,
+        xhub::{NonConfidentialOutput, ValidatorInfo},
+    },
     crypto::{Address, HA160},
 };
 use precompile::PrecompileSet;
@@ -225,6 +228,15 @@ impl<C: Config> App<C> {
         pending_outputs
     }
 
+    pub fn get_validator_info_list(&self, ctx: &Context) -> Vec<ValidatorInfo> {
+        let mut outputs = Vec::new();
+        if let Err(e) =
+            utils::fetch_validator_info::<C>(ctx, &self.contracts, &mut outputs)
+        {
+            log::error!("get validator info list error: {:?}", e);
+        }
+        outputs
+    }
     fn logs_bloom(logs: &[ethereum::Log], bloom: &mut Bloom) {
         for log in logs {
             bloom.accrue(BloomInput::Raw(&log.address[..]));

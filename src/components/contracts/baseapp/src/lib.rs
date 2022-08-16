@@ -12,7 +12,7 @@ mod notify;
 pub mod tm_events;
 
 use crate::modules::ModuleManager;
-use abci::Header;
+use abci::{Header, PubKey, ValidatorUpdate};
 use ethereum::BlockV0 as Block;
 use fin_db::{FinDB, RocksDB};
 use fp_core::{
@@ -334,6 +334,29 @@ impl BaseApp {
         }
 
         Some(outputs)
+    }
+
+    pub fn get_validator_info_list(&self) -> Option<Vec<ValidatorUpdate>> {
+        let outputs = self
+            .modules
+            .evm_module
+            .get_validator_info_list(&self.deliver_state);
+
+        Some(
+            outputs
+                .iter()
+                .filter(|info| info.power >= 0)
+                .map(|info| {
+                    let mut vu = ValidatorUpdate::new();
+                    let mut pk = PubKey::new();
+                    pk.set_field_type("ed25519".to_owned());
+                    pk.set_data(info.public_key.to_vec());
+                    vu.set_power(info.power as i64);
+                    vu.set_pub_key(pk);
+                    vu
+                })
+                .collect(),
+        )
     }
 }
 
