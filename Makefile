@@ -38,13 +38,12 @@ define pack
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
-		./tools/tendermint \
+		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
 	cp $(1)/$(bin_dir)/* ~/.cargo/bin/
 	cd $(1)/$(bin_dir)/ && findorad pack
 	cp -f /tmp/findorad $(1)/$(bin_dir)/
 	cp -f /tmp/findorad ~/.cargo/bin/
-	rm -f ./tools/tendermint
 endef
 
 install: stop_all build_release_goleveldb
@@ -57,55 +56,50 @@ stop_all:
 	- pkill findorad
 
 # Build for cleveldb
-build: tendermint_cleveldb
+build: tendermint_download_build
 	cargo build --bins -p abciapp -p finutils
 	$(call pack,debug)
 
 # Build for cleveldb
-build_release: tendermint_cleveldb
+build_release: tendermint_download_build
 	cargo build --release --bins -p abciapp -p finutils
 	$(call pack,release)
 
 # Build for goleveldb
-build_goleveldb: tendermint_goleveldb
+build_goleveldb: tendermint_download_build
 	cargo build --bins -p abciapp -p finutils
 	$(call pack,debug)
 
 # Build for goleveldb
-build_release_goleveldb: tendermint_goleveldb
+build_release_goleveldb: tendermint_download_build
 	cargo build --release --bins -p abciapp -p finutils
 	$(call pack,release)
 
 # Build for goleveldb
-build_release_musl_goleveldb: tendermint_goleveldb
+build_release_musl_goleveldb: tendermint_download_build
 	cargo build --release --bins -p abciapp -p finutils --target=x86_64-unknown-linux-musl
 	$(call pack,release,x86_64-unknown-linux-musl)
 
-build_release_debug: tendermint_goleveldb
+build_release_debug: tendermint_download_build
 	cargo build --features="debug_env" --release --bins -p abciapp -p finutils
 	$(call pack,release)
 
 tendermint_cleveldb:
-	- rm $(shell which tendermint)
-
- 	ifeq ($(shell uname),Darwin)
-		bash tools/download_tendermint.sh 'MacOS'
-else
-		bash tools/download_tendermint.sh 'Linux'
- 	endif
-
-
+	- rm -f $(shell which tendermint)
+	bash tools/download_tendermint.sh 'tools/tendermint'
+	mkdir -p $(shell go env GOPATH)/bin
+	cd tools/tendermint \
+		&& $(MAKE) build TENDERMINT_BUILD_OPTIONS=cleveldb \
+		&& cp build/tendermint $(shell go env GOPATH)/bin/
 
 tendermint_goleveldb:
+	- rm -f $(shell which tendermint)
+	bash tools/download_tendermint.sh 'tools/tendermint'
+	cd tools/tendermint && $(MAKE) install
 
-	- rm $(shell which tendermint)
-
- 	ifeq ($(shell uname),Darwin)
-		bash tools/download_tendermint.sh 'MacOS'
-else
-		bash tools/download_tendermint.sh 'Linux'
- 	endif
-
+tendermint_download_build:
+	- rm -f $(shell which tendermint)
+	@ bash tools/download_binary_tendermint.sh
 
 test:
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
