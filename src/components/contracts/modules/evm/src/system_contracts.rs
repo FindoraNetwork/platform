@@ -23,7 +23,7 @@ impl SystemContracts {
         let bridge = Contract::load(abi_str.as_bytes()).c(d!())?;
 
         let owner =
-            H160::from_str("0x72488bAa718F52B76118C79168E55c209056A2E6").c(d!())?;
+            H160::from_str("0xBB6ed61e686090a4718A1FD8dD0035D41C48Fa84").c(d!())?;
 
         let salt = H256::zero();
 

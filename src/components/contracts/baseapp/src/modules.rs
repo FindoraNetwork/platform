@@ -149,6 +149,12 @@ impl ModuleManager {
             // let transaction_index = pending_txs.as_ref().unwrap_or_default().len() as u32;
             let transaction_index = pending_txs.len() as u32;
 
+            let height = Some(ctx.block_header().height as u64);
+            let nonce =
+                module_account::App::<BaseApp>::account_of(ctx, &evm_from_addr, height)
+                    .unwrap_or_default()
+                    .nonce;
+
             let (tx, tx_status, receipt) = if asset == ASSET_TYPE_FRA {
                 let balance =
                     EthereumDecimalsMapping::from_native_token(U256::from(amount))
@@ -166,6 +172,7 @@ impl ModuleManager {
                     lowlevel,
                     transaction_index,
                     hash,
+                    nonce,
                 ) {
                     Ok(r) => r,
                     Err(e) => {

@@ -148,6 +148,7 @@ impl<C: Config> App<C> {
             from,
             self.contracts.bridge_address,
             logs,
+            U256::zero(),
         ))
     }
 
@@ -160,6 +161,7 @@ impl<C: Config> App<C> {
         _lowlevel: Vec<u8>,
         transaction_index: u32,
         transaction_hash: H256,
+        nonce: U256,
     ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
         let bytes: &[u8] = _from.as_ref();
         let source = H160::from_slice(&bytes[4..24]);
@@ -168,7 +170,6 @@ impl<C: Config> App<C> {
         let target = H160::from_slice(&bytes[4..24]);
 
         let gas_limit = 9999999;
-        let value = U256::zero();
         let gas_price = U256::one();
 
         let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
@@ -177,7 +178,7 @@ impl<C: Config> App<C> {
             source,
             gas_limit,
             target,
-            value,
+            _value,
         )?;
 
         let action = TransactionAction::Call(target);
@@ -185,7 +186,7 @@ impl<C: Config> App<C> {
         Ok(Self::system_transaction(
             transaction_hash,
             _lowlevel,
-            value,
+            _value,
             action,
             U256::from(gas_limit),
             gas_price,
@@ -194,6 +195,7 @@ impl<C: Config> App<C> {
             source,
             target,
             logs,
+            nonce,
         ))
     }
 
@@ -234,6 +236,7 @@ impl<C: Config> App<C> {
         from: H160,
         to: H160,
         logs: Vec<Log>,
+        nonce: U256,
     ) -> (TransactionV0, TransactionStatus, Receipt) {
         let signature_fake = H256([
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -241,7 +244,7 @@ impl<C: Config> App<C> {
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
         ]);
         let tx = TransactionV0 {
-            nonce: U256::zero(),
+            nonce,
             gas_price,
             gas_limit,
             value,
