@@ -2,6 +2,8 @@
 //! # Impl function of tendermint ABCI
 //!
 
+use fp_types::crypto::Address;
+
 mod utils;
 
 use {
@@ -25,7 +27,7 @@ use {
     ledger::{
         converter::is_convert_account,
         data_model::{Operation, Transaction},
-        staking::KEEP_HIST,
+        staking::{ops::governance::ByzantineKind, KEEP_HIST},
         store::{
             api_cache,
             fbnc::{new_mapx, Mapx},
@@ -42,6 +44,8 @@ use {
             Arc,
         },
     },
+    zei::xfr::sig::XfrPublicKey,
+    zei_algebra::serialization::ZeiFromToBytes,
 };
 
 pub(crate) static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
@@ -418,13 +422,61 @@ pub fn end_block(
     if !la.all_commited() && la.block_txn_count() != 0 {
         pnk!(la.end_block());
     }
-
-    if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
-        la.get_committed_state().read().get_staking().deref(),
-        begin_block_req.last_commit_info.as_ref()
-    )) {
-        resp.set_validator_updates(RepeatedField::from_vec(vs));
+    if td_height <= CFG.checkpoint.evm_staking_inital_height {
+        if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
+            la.get_committed_state().read().get_staking().deref(),
+            begin_block_req.last_commit_info.as_ref()
+        )) {
+            resp.set_validator_updates(RepeatedField::from_vec(vs));
+        }
+    } else {
+        if let Some(vs) = s.account_base_app.read().get_validator_info_list() {
+            resp.set_validator_updates(RepeatedField::from_vec(vs));
+        }
     }
+
+    // address proposer,                  header.proposer_address
+    // address[] memory signed,           let online_list = lci.votes.iter().filter(|v| v.signed_last_block).flat_map(|info| info.validator.as_ref().map(|v| &v.address)).collect::<BTreeSet<_>>();
+    // address[] memory byztine,          begin_block_req.byzantine_validators
+    // ByztineBehavior[] memory behavior  begin_block_req.byzantine_validators.field_type
+
+    let proposer =
+        Address::from(XfrPublicKey::zei_from_bytes(&header.proposer_address).unwrap());
+    let mut signed: Vec<Address> = vec![];
+
+    if let Some(lci) = begin_block_req.last_commit_info.as_ref() {
+        signed = lci
+            .votes
+            .iter()
+            .filter(|v| v.signed_last_block)
+            .flat_map(|info| {
+                info.validator.as_ref().map(|v| {
+                    Address::from(XfrPublicKey::zei_from_bytes(&v.address).unwrap())
+                })
+            })
+            .collect::<Vec<_>>();
+    }
+    let mut byztines: Vec<Address> = vec![];
+    let mut behaviors: Vec<ByzantineKind> = vec![];
+    begin_block_req
+        .byzantine_validators
+        .iter()
+        .filter(|ev| ev.validator.is_some())
+        .for_each(|ev| {
+            if !ev.has_validator() {
+                byztines.push(Address::from(
+                    XfrPublicKey::zei_from_bytes(&ev.get_validator().address).unwrap(),
+                ));
+                let behavior = match ev.field_type.as_str() {
+                    "DUPLICATE_VOTE" => ByzantineKind::DuplicateVote,
+                    "LIGHT_CLIENT_ATTACK" => ByzantineKind::LightClientAttack,
+                    "OFF_LINE" => ByzantineKind::OffLine,
+                    "UNKNOWN" => ByzantineKind::Unknown,
+                    _ => ByzantineKind::Unknown,
+                };
+                behaviors.push(behavior);
+            }
+        });
 
     staking::system_ops(
         &mut *la.get_committed_state().write(),

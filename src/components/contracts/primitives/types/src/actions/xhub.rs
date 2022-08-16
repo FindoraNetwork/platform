@@ -1,3 +1,4 @@
+use primitive_types::H160;
 use serde::{Deserialize, Serialize};
 use zei::xfr::sig::XfrPublicKey;
 use zei::xfr::structs::AssetType;
@@ -24,4 +25,11 @@ pub struct NonConfidentialOutput {
     pub decimal: u8,
     #[serde(skip)]
     pub max_supply: u64,
+}
+/// Evm account balance convert to NonConfidential utxo.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ValidatorInfo {
+    pub public_key: Vec<u8>,
+    pub address: H160,
+    pub power: i64,
 }
