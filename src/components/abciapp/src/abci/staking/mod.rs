@@ -4,8 +4,11 @@
 //! Business logic based on [**Ledger Staking**](ledger::staking).
 //!
 
-use ledger::data_model::{
-    AssetType, AssetTypeCode, IssuerPublicKey, BLACK_HOLE_PUBKEY_STAKING,
+use {
+    fp_types::H160,
+    ledger::data_model::{
+        AssetType, AssetTypeCode, IssuerPublicKey, BLACK_HOLE_PUBKEY_STAKING,
+    },
 };
 
 mod whoami;
@@ -222,6 +225,50 @@ pub fn system_ops(
     }
 }
 
+#[allow(missing_docs)]
+pub fn staking_block_trigger(
+    la: &mut LedgerState,
+    account_base_app: &mut AccountBaseApp,
+    header: &Header,
+    last_commit_info: Option<&LastCommitInfo>,
+    evs: &[Evidence],
+) -> Result<()> {
+    let proposer = H160::from_slice(&header.proposer_address);
+
+    let signed = if let Some(lci) = last_commit_info.as_ref() {
+        lci.votes
+            .iter()
+            .filter(|v| v.signed_last_block)
+            .flat_map(|info| {
+                info.validator
+                    .as_ref()
+                    .map(|v| H160::from_slice(&v.address))
+            })
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    let mut byztines: Vec<H160> = vec![];
+    let mut behaviors: Vec<ByzantineKind> = vec![];
+    evs.iter()
+        .filter(|ev| ev.validator.is_some())
+        .for_each(|ev| {
+            if !ev.has_validator() {
+                byztines.push(H160::from_slice(&ev.get_validator().address));
+                let behavior = match ev.field_type.as_str() {
+                    "DUPLICATE_VOTE" => ByzantineKind::DuplicateVote,
+                    "LIGHT_CLIENT_ATTACK" => ByzantineKind::LightClientAttack,
+                    "OFF_LINE" => ByzantineKind::OffLine,
+                    "UNKNOWN" => ByzantineKind::Unknown,
+                    _ => ByzantineKind::Unknown,
+                };
+                behaviors.push(behavior);
+            }
+        });
+
+    let amount = la.staking_get_global_unlocked_amount();
+    account_base_app.staking_block_trigger(proposer, signed, amount, byztines, behaviors)
+}
 /// Get the actual voted power of last block.
 fn get_last_vote_percent(last_commit_info: &LastCommitInfo) -> [u64; 2] {
     // Returns Voted in last block and Total Voting power (including signed_last_block = false)

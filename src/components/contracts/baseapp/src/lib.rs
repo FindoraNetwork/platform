@@ -12,7 +12,7 @@ mod notify;
 pub mod tm_events;
 
 use crate::modules::ModuleManager;
-use abci::Header;
+use abci::{Header, PubKey, ValidatorUpdate};
 use ethereum::BlockV0 as Block;
 use fin_db::{FinDB, RocksDB};
 use fp_core::{
@@ -29,7 +29,10 @@ use fp_traits::{
 };
 use fp_types::{actions::xhub::NonConfidentialOutput, actions::Action, crypto::Address};
 use lazy_static::lazy_static;
-use ledger::data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA};
+use ledger::{
+    data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA},
+    staking::{ops::governance::ByzantineKind, Amount},
+};
 use notify::*;
 use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
@@ -312,8 +315,9 @@ impl BaseApp {
 
         for output in &outputs {
             if output.asset == ASSET_TYPE_FRA {
-                let address =
-                    Address::from(self.modules.evm_module.contracts.bridge_address);
+                let address = Address::from(
+                    self.modules.evm_module.prismxx_contracts.bridge_address,
+                );
                 if let Some(amount) =
                     EthereumDecimalsMapping::from_native_token(U256::from(output.amount))
                 {
@@ -335,6 +339,56 @@ impl BaseApp {
         }
 
         Some(outputs)
+    }
+
+    pub fn get_validator_info_list(&self) -> Option<Vec<ValidatorUpdate>> {
+        let outputs = self
+            .modules
+            .evm_module
+            .get_validator_info_list(&self.deliver_state);
+
+        Some(
+            outputs
+                .iter()
+                .map(|info| {
+                    let mut vu = ValidatorUpdate::new();
+                    let mut pk = PubKey::new();
+                    pk.set_field_type("ed25519".to_owned());
+                    pk.set_data(info.public_key.to_vec());
+                    vu.set_power(info.power as i64);
+                    vu.set_pub_key(pk);
+                    vu
+                })
+                .collect(),
+        )
+    }
+    pub fn staking_block_trigger(
+        &self,
+        proposer: H160,
+        signed: Vec<H160>,
+        amount: Amount,
+        byztines: Vec<H160>,
+        behaviors: Vec<ByzantineKind>,
+    ) -> Result<()> {
+        self.modules.evm_module.staking_block_trigger(
+            &self.deliver_state,
+            proposer,
+            signed,
+            amount,
+            byztines,
+            behaviors,
+        )
+    }
+
+    pub fn mint_claim_ops(&self) -> Result<()> {
+        for op in self.modules.evm_module.get_claim_ops(&self.deliver_state) {
+            module_account::App::<BaseApp>::mint(
+                &self.deliver_state,
+                &Address::from(op.address),
+                op.amount,
+            )?;
+        }
+        Ok(())
     }
 }
 

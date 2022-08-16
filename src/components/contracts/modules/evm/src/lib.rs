@@ -5,8 +5,9 @@
 mod basic;
 pub mod impls;
 pub mod precompile;
+pub mod prismxx_contracts;
 pub mod runtime;
-pub mod system_contracts;
+pub mod staking_contracts;
 pub mod utils;
 
 use abci::{RequestQuery, ResponseQuery};
@@ -30,14 +31,19 @@ use fp_evm::TransactionStatus;
 use ethereum::{Log, Receipt, TransactionAction, TransactionSignature, TransactionV0};
 
 use fp_types::{
-    actions::{evm::Action, xhub::NonConfidentialOutput},
+    actions::{
+        evm::Action,
+        xhub::{ClaimOpsInfo, NonConfidentialOutput, ValidatorInfo},
+    },
     crypto::{Address, HA160},
 };
+use ledger::staking::{ops::governance::ByzantineKind, Amount};
 use precompile::PrecompileSet;
+use prismxx_contracts::PrismXXContracts;
 use ruc::*;
 use runtime::runner::ActionRunner;
+use staking_contracts::StakingContracts;
 use std::marker::PhantomData;
-use system_contracts::SystemContracts;
 
 pub use runtime::*;
 
@@ -76,14 +82,16 @@ pub mod storage {
 #[derive(Clone)]
 pub struct App<C> {
     phantom: PhantomData<C>,
-    pub contracts: SystemContracts,
+    pub prismxx_contracts: PrismXXContracts,
+    pub staking_contracts: StakingContracts,
 }
 
 impl<C: Config> Default for App<C> {
     fn default() -> Self {
         App {
             phantom: Default::default(),
-            contracts: pnk!(SystemContracts::new()),
+            prismxx_contracts: pnk!(PrismXXContracts::new()),
+            staking_contracts: pnk!(StakingContracts::new()),
         }
     }
 }
@@ -112,7 +120,11 @@ impl<C: Config> App<C> {
         transaction_index: u32,
         transaction_hash: H256,
     ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
-        let function = self.contracts.bridge.function("withdrawAsset").c(d!())?;
+        let function = self
+            .prismxx_contracts
+            .bridge
+            .function("withdrawAsset")
+            .c(d!())?;
 
         let asset = Token::FixedBytes(Vec::from(_asset));
 
@@ -141,11 +153,11 @@ impl<C: Config> App<C> {
             input.clone(),
             from,
             gas_limit,
-            self.contracts.bridge_address,
+            self.prismxx_contracts.bridge_address,
             value,
         )?;
 
-        let action = TransactionAction::Call(self.contracts.bridge_address);
+        let action = TransactionAction::Call(self.prismxx_contracts.bridge_address);
         let gas_price = U256::one();
 
         Ok(Self::system_transaction(
@@ -158,7 +170,7 @@ impl<C: Config> App<C> {
             result.gas_used,
             transaction_index,
             from,
-            self.contracts.bridge_address,
+            self.prismxx_contracts.bridge_address,
             result.logs,
             U256::zero(),
         ))
@@ -214,9 +226,11 @@ impl<C: Config> App<C> {
         let mut pending_outputs = Vec::new();
 
         if height < ctx.header.height {
-            if let Err(e) =
-                utils::fetch_mint::<C>(ctx, &self.contracts, &mut pending_outputs)
-            {
+            if let Err(e) = utils::fetch_mint::<C>(
+                ctx,
+                &self.prismxx_contracts,
+                &mut pending_outputs,
+            ) {
                 log::error!("Collect mint ops error: {:?}", e);
             }
         }
@@ -224,6 +238,47 @@ impl<C: Config> App<C> {
         pending_outputs
     }
 
+    pub fn get_validator_info_list(&self, ctx: &Context) -> Vec<ValidatorInfo> {
+        let mut outputs = Vec::new();
+        if let Err(e) =
+            utils::fetch_validator_info::<C>(ctx, &self.staking_contracts, &mut outputs)
+        {
+            log::error!(target: "abciapp", "get validator info list error: {:?}", e);
+        }
+        outputs
+    }
+    pub fn get_claim_ops(&self, ctx: &Context) -> Vec<ClaimOpsInfo> {
+        let mut outputs = Vec::new();
+        if let Err(e) =
+            utils::fetch_claim_ops::<C>(ctx, &self.staking_contracts, &mut outputs)
+        {
+            log::error!(target: "abciapp", "get claim ops error: {:?}", e);
+        }
+        outputs
+    }
+    pub fn staking_block_trigger(
+        &self,
+        ctx: &Context,
+        proposer: H160,
+        signed: Vec<H160>,
+        amount: Amount,
+        byztines: Vec<H160>,
+        behaviors: Vec<ByzantineKind>,
+    ) -> Result<()> {
+        let ret = utils::staking_block_trigger::<C>(
+            ctx,
+            &self.staking_contracts,
+            proposer,
+            signed,
+            amount,
+            byztines,
+            behaviors,
+        );
+        if let Err(e) = &ret {
+            log::error!(target: "abciapp","staking_block_trigger error: {:?}", e);
+        }
+        ret
+    }
     fn logs_bloom(logs: &[ethereum::Log], bloom: &mut Bloom) {
         for log in logs {
             bloom.accrue(BloomInput::Raw(&log.address[..]));
@@ -312,20 +367,38 @@ impl<C: Config> AppModule for App<C> {
     }
 
     fn begin_block(&mut self, ctx: &mut Context, _req: &abci::RequestBeginBlock) {
-        let height = CFG.checkpoint.prismxx_inital_height;
-
-        if ctx.header.height == height {
+        if ctx.header.height == CFG.checkpoint.prismxx_inital_height {
             let bytecode_str = include_str!("../contracts/PrismXXProxy.bytecode");
 
-            if let Err(e) =
-                utils::deploy_contract::<C>(ctx, &self.contracts, bytecode_str)
-            {
+            if let Err(e) = utils::deploy_prismxx_contract::<C>(
+                ctx,
+                &self.prismxx_contracts,
+                bytecode_str,
+            ) {
                 pd!(e);
                 return;
             }
             println!(
                 "Bridge contract address: {:?}",
-                self.contracts.bridge_address
+                self.prismxx_contracts.bridge_address
+            );
+
+            ctx.state.write().commit_session();
+        }
+        if ctx.header.height == CFG.checkpoint.evm_staking_inital_height {
+            let bytecode_str = include_str!("../contracts/StakingProxy.bytecode");
+
+            if let Err(e) = utils::deploy_staking_contract::<C>(
+                ctx,
+                &self.staking_contracts,
+                bytecode_str,
+            ) {
+                pd!(e);
+                return;
+            }
+            println!(
+                "Staking contract address: {:?}",
+                self.staking_contracts.staking_address
             );
 
             ctx.state.write().commit_session();
