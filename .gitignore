@@ -25,6 +25,7 @@ nohup.out
 *.keys
 
 tools/tendermint
+tools/tendermint.zip
 seq_id.str
 utxo.map
 checkpoint.toml
