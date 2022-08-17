@@ -1406,6 +1406,13 @@ impl AnonTransferOperationBuilder {
             .map_err(error_to_jsvalue)
     }
 
+    /// get_total_fee_estimate
+    pub fn get_total_fee_estimate(&self) -> Result<u64, JsValue> {
+        self.get_builder()
+            .get_total_fee_estimation()
+            .map_err(error_to_jsvalue)
+    }
+
     /// get_commitments returns a list of all the commitments for receiver public keys
     pub fn get_commitments(&self) -> JsValue {
         let r = CommitmentStringArray {
