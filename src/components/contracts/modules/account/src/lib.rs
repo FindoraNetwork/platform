@@ -29,7 +29,8 @@ impl Config for () {
 mod storage {
     use fp_core::account::SmartAccount;
     use fp_types::crypto::Address;
-    use primitive_types::U256;
+    use primitive_types::{H160, U256};
+    use zei::xfr::sig::XfrPublicKey;
 
     use fp_storage::*;
 
@@ -42,7 +43,7 @@ mod storage {
     generate_storage!(Account, Allowances => DoubleMap<Address, Address, U256>);
 
     // evm_address => fra_pk
-    generate_storage!(Account, EvmFraAddressMapping => Map<Address, Address>);
+    generate_storage!(Account, EvmFraAddressMapping => Map<H160, XfrPublicKey>);
 }
 
 #[derive(Clone)]

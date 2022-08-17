@@ -134,12 +134,11 @@ impl ModuleManager {
 
         if CFG.checkpoint.prismxx_inital_height < ctx.header.height {
             let evm_from_bytes = keccak_256(from.as_bytes());
-            let evm_from_addr = Address::from(H160::from_slice(&evm_from_bytes[..20]));
-            let fra_from_addr = Address::from(from);
+            let evm_from = H160::from_slice(&evm_from_bytes[..20]);
+            let evm_from_addr = Address::from(evm_from);
+
             module_account::App::<BaseApp>::insert_evm_fra_address_mapping(
-                ctx,
-                &fra_from_addr,
-                &evm_from_addr,
+                ctx, &from, &evm_from,
             )?;
 
             let target = Address::from(target);

@@ -7,7 +7,9 @@
 use bech32::{self, FromBase32, ToBase32};
 use bip0039::{Count, Language, Mnemonic};
 use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
+use primitive_types::H160;
 use ruc::*;
+use tiny_keccak::{Hasher, Keccak};
 use zei::anon_xfr::structs::Nullifier;
 use zei::{
     anon_xfr::{
@@ -186,6 +188,18 @@ pub fn public_key_to_hex(key: &XfrPublicKey) -> String {
     let s = hex::encode(&ZeiFromToBytes::zei_to_bytes(key));
 
     String::from("0x") + &s
+}
+
+/// Convert publickey to ETH
+#[inline(always)]
+pub fn public_key_to_eth(key: &XfrPublicKey) -> String {
+    let mut keccak = Keccak::v256();
+    keccak.update(key.as_bytes());
+    let mut output = [0u8; 32];
+    keccak.finalize(&mut output);
+    let eth_address = H160::from_slice(&output[..20]);
+
+    format!("{:?}", eth_address)
 }
 
 /// Restore a XfrPublicKey from base64 human-readable address
