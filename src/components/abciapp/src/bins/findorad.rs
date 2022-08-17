@@ -120,14 +120,15 @@ fn node_command() -> Result<()> {
         .spawn()
         .c(d!())?;
 
-    abcid_child.wait().c(d!()).map(|s| println!("{}", s))?;
-    tendermint_child.wait().c(d!()).map(|s| println!("{}", s))?;
-
     ctrlc::set_handler(move || {
         info_omit!(kill(Pid::from_raw(0), Signal::SIGINT));
-        info_omit!(kill(Pid::from_raw(0), Signal::SIGINT));
     })
-    .c(d!())
+    .c(d!())?;
+
+    tendermint_child.wait().c(d!()).map(|s| println!("{}", s))?;
+    abcid_child.wait().c(d!()).map(|s| println!("{}", s))?;
+
+    Ok(())
 }
 
 fn init_command() -> Result<()> {

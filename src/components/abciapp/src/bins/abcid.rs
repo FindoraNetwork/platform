@@ -20,22 +20,21 @@ fn main() {
         env!("VERGEN_BUILD_DATE")
     ));
 
-    let thread = thread::spawn(|| pnk!(abci::run()));
+    let _ = thread::spawn(|| pnk!(abci::run()));
 
     let (tx, rx) = channel();
 
     pnk!(ctrlc::set_handler(move || {
-        println!("Waiting to exit.");
-        abci::IS_EXITING.store(true, Ordering::Release);
-        while abci::IN_SAFE_ITV.load(Ordering::SeqCst) {
-            sleep_ms!(1);
+        if !abci::IS_EXITING.load(Ordering::Acquire) {
+            println!("Exiting...");
+            abci::IS_EXITING.store(true, Ordering::Release);
+            while abci::IN_SAFE_ITV.load(Ordering::SeqCst) {
+                sleep_ms!(1);
+            }
+            pnk!(tx.send(()));
         }
-        pnk!(tx.send(()));
     }));
 
     pnk!(rx.recv());
-
-    println!("Exiting...");
-    thread.thread().unpark();
-    thread.join().unwrap();
+    std::process::exit(0);
 }

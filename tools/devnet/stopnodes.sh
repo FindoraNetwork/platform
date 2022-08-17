@@ -28,8 +28,9 @@ do
             echo -n "killed abci: "
             killed=true
         fi
-        kill -9 $tdmt
-        kill -9 $abci
+        kill  $tdmt | exit 0
+        kill  $abci 
+
         tdmt_pids+=("$tdmt")
         echo -en "${YEL}$abci ${NC}"
     fi
