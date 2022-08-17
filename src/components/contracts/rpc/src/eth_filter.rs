@@ -176,7 +176,7 @@ impl EthFilterApiImpl {
         let mut stream = app.read().event_notify.notification_stream();
 
         while let Some(block_id) = stream.next().await {
-            let latest_block = app.read().current_block_number().unwrap();
+            let latest_block = app.read().current_block_number().unwrap_or_default();
             let (is_new_block, number) = match block_id {
                 BlockId::Hash(_) => (false, U256::zero()),
                 BlockId::Number(number) => (latest_block == number, number),
