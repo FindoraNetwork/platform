@@ -134,11 +134,11 @@ impl ModuleManager {
 
         if CFG.checkpoint.prismxx_inital_height < ctx.header.height {
             let evm_from_bytes = keccak_256(from.as_bytes());
-            let evm_from_addr = Address::from(H160::from_slice(&evm_from_bytes[..20]));
-            let fra_from_addr = Address::from(from);
+            let evm_from_addr = H160::from_slice(&evm_from_bytes[..20]);
+            let from_addr = Address::from(evm_from_addr);
             module_account::App::<BaseApp>::insert_evm_fra_address_mapping(
                 ctx,
-                &fra_from_addr,
+                &from,
                 &evm_from_addr,
             )?;
 
@@ -151,7 +151,7 @@ impl ModuleManager {
 
             let height = Some(ctx.block_header().height as u64);
             let nonce =
-                module_account::App::<BaseApp>::account_of(ctx, &evm_from_addr, height)
+                module_account::App::<BaseApp>::account_of(ctx, &from_addr, height)
                     .unwrap_or_default()
                     .nonce;
 
@@ -162,11 +162,11 @@ impl ModuleManager {
                             eg!("The transfer to account amount is too large")
                         })?;
 
-                module_account::App::<BaseApp>::mint(ctx, &evm_from_addr, balance)?;
+                module_account::App::<BaseApp>::mint(ctx, &from_addr, balance)?;
 
                 match self.evm_module.evm_call(
                     ctx,
-                    &evm_from_addr,
+                    &from_addr,
                     &target,
                     balance,
                     lowlevel,
@@ -185,7 +185,7 @@ impl ModuleManager {
                 self.evm_module.withdraw_frc20(
                     ctx,
                     asset.0,
-                    &evm_from_addr,
+                    &from_addr,
                     &target,
                     U256::from(amount),
                     lowlevel,

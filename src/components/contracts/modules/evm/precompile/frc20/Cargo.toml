@@ -22,3 +22,4 @@ slices = "0.2.0"
 baseapp = { path = "../../../../baseapp" }
 fp-mocks = { path = "../../../../primitives/mocks" }
 sha3 = "0.10"
+globutils = { path = "../../../../../../libs/globutils" }
