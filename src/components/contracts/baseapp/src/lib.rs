@@ -121,7 +121,7 @@ impl PrecompilesValue {
         FindoraPrecompiles::<_>::new(ctx)
     }
 }
-impl<I: From<FindoraPrecompiles<BaseApp>>> fp_core::macros::Get2<I>
+impl<I: From<FindoraPrecompiles<BaseApp>>> fp_core::macros::Get2<I, Context2>
     for PrecompilesValue
 {
     fn get(ctx: Context2) -> I {

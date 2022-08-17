@@ -64,7 +64,7 @@ pub trait Config {
     /// Precompiles associated with this EVM engine.
     type Precompiles: PrecompileSet;
     type PrecompilesType: EvmPrecompileSet;
-    type PrecompilesValue: Get2<Self::PrecompilesType>;
+    type PrecompilesValue: Get2<Self::PrecompilesType, Context>;
 }
 
 pub mod storage {
