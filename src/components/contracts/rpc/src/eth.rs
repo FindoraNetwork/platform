@@ -469,7 +469,7 @@ impl EthApi for EthApiImpl {
             }
             _ => Ok(if let Some(h) = height {
                 if 0 < h && h < *EVM_FIRST_BLOCK_HEIGHT {
-                    Some(dummuy_block(h, full))
+                    Some(dummy_block(h, full))
                 } else {
                     None
                 }
@@ -1383,7 +1383,7 @@ fn native_block_id(number: Option<BlockNumber>) -> Option<BlockId> {
     }
 }
 
-fn dummuy_block(height: u64, full: bool) -> Rich<Block> {
+fn dummy_block(height: u64, full: bool) -> Rich<Block> {
     let hash = if height == *EVM_FIRST_BLOCK_HEIGHT - 1 {
         H256([0; 32])
     } else {
