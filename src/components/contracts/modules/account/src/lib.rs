@@ -7,6 +7,7 @@ mod impls;
 #[cfg(test)]
 mod tests;
 
+use std::borrow::Borrow;
 use abci::{RequestQuery, ResponseQuery};
 use fp_core::{context::Context, module::AppModule};
 use fp_traits::{
@@ -15,6 +16,10 @@ use fp_traits::{
 };
 use fp_types::crypto::Address;
 use std::marker::PhantomData;
+use primitive_types::H160;
+use zei::xfr::sig::XfrPublicKey;
+use fp_traits::evm::AddressMapping;
+use zei_algebra::serialization::ZeiFromToBytes;
 
 pub const MODULE_NAME: &str = "account";
 
@@ -115,5 +120,16 @@ impl<C: Config> AppModule for App<C> {
             }
             _ => resp,
         }
+    }
+}
+
+impl<C: Config> AddressMapping for App<C> {
+    fn convert_to_account_id(address: H160) -> Address {
+        Address::from(address)
+    }
+
+    fn fra_pubkey(ctx: &Context, address: &H160) -> Vec<u8> {
+        let fra_pk: XfrPublicKey = storage::EvmFraAddressMapping::get(ctx.state.read().borrow(), &address).unwrap_or_default();
+        fra_pk.zei_to_bytes()
     }
 }

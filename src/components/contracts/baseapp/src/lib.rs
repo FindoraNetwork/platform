@@ -109,7 +109,7 @@ impl module_ethereum::Config for BaseApp {
 
 impl module_evm::Config for BaseApp {
     type AccountAsset = module_account::App<Self>;
-    type AddressMapping = EthereumAddressMapping;
+    type AddressMapping = module_account::App<Self>;
     type BlockGasLimit = BlockGasLimit;
     type BlockHashMapping = module_ethereum::App<Self>;
     type ChainId = ChainId;
@@ -125,6 +125,7 @@ impl module_evm::Config for BaseApp {
         evm_precompile_sha3fips::Sha3FIPS256,
         evm_precompile_sha3fips::Sha3FIPS512,
         evm_precompile_frc20::FRC20<Self>,
+        evm_precompile_staking::Staking<Self>,
     );
 }
 
