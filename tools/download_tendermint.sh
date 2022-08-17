@@ -1,9 +1,20 @@
 #!/usr/bin/env bash
 
-target_path=$1
+platform=$1
 
-if [[ ! -d "${target_path}/.git" ]]; then
-    rm -rf $target_path
-    url='https://github.com/tendermint/tendermint.git'
-    git clone -b v0.33.9 --depth=1 $url $target_path
+if [ ! -f "./tools/tendermint.zip" ]; then
+    if [ "MacOS" == "${platform}" ]; then
+      wget -O ./tools/tendermint.zip "https://github.com/tendermint/tendermint/releases/download/v0.33.9/tendermint_v0.33.9_darwin_amd64.zip"
+    elif [ "Linux" == "${platform}" ]; then
+      wget -O ./tools/tendermint.zip "https://github.com/tendermint/tendermint/releases/download/v0.33.9/tendermint_v0.33.9_linux_amd64.zip"
+    fi
+else
+    echo "tendermint.zip already exists."
 fi
+
+if ! [ -x "$(unzip -d ./tools/ ./tools/tendermint.zip)" ]; then
+    echo 'please install unzip'
+    exit
+fi
+
+

@@ -51,6 +51,7 @@ const CHAIN_STATE_PATH: &str = "state.db";
 const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
 const CHAIN_STATE_MIN_VERSIONS: u64 = 4 * 60 * 24 * 90;
 
+#[derive(Clone)]
 pub struct BaseApp {
     /// application name from abci.Info
     pub name: String,
@@ -295,6 +296,17 @@ impl BaseApp {
         ctx.run_mode = RunTxMode::None;
         ctx.header_hash = header_hash;
         ctx.header = header;
+    }
+
+    fn update_deliver_state_cache(&mut self) {
+        // Clone newest cache from check_state to deliver_state
+        // Oldest cache will be dropped, currently drop cache two blocks ago
+        self.deliver_state.eth_cache.current = Default::default();
+        self.deliver_state.eth_cache.history_n =
+            self.deliver_state.eth_cache.history_1.clone();
+        // Deliver_state history_1 cache will share the newest transactions from check_state
+        self.deliver_state.eth_cache.history_1 =
+            self.check_state.eth_cache.current.clone();
     }
 
     pub fn deliver_findora_tx(&mut self, tx: &FindoraTransaction) -> Result<()> {

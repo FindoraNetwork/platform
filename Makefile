@@ -38,12 +38,13 @@ define pack
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
-		$(shell go env GOPATH)/bin/tendermint \
+		./tools/tendermint \
 		$(1)/$(bin_dir)/
 	cp $(1)/$(bin_dir)/* ~/.cargo/bin/
 	cd $(1)/$(bin_dir)/ && findorad pack
 	cp -f /tmp/findorad $(1)/$(bin_dir)/
 	cp -f /tmp/findorad ~/.cargo/bin/
+	rm -f ./tools/tendermint
 endef
 
 install: stop_all build_release_goleveldb
@@ -86,16 +87,25 @@ build_release_debug: tendermint_goleveldb
 
 tendermint_cleveldb:
 	- rm $(shell which tendermint)
-	bash tools/download_tendermint.sh 'tools/tendermint'
-	mkdir -p $(shell go env GOPATH)/bin
-	cd tools/tendermint \
-		&& $(MAKE) build TENDERMINT_BUILD_OPTIONS=cleveldb \
-		&& cp build/tendermint $(shell go env GOPATH)/bin/
+
+ 	ifeq ($(shell uname),Darwin)
+		bash tools/download_tendermint.sh 'MacOS'
+else
+		bash tools/download_tendermint.sh 'Linux'
+ 	endif
+
+
 
 tendermint_goleveldb:
+
 	- rm $(shell which tendermint)
-	bash tools/download_tendermint.sh 'tools/tendermint'
-	cd tools/tendermint && $(MAKE) install
+
+ 	ifeq ($(shell uname),Darwin)
+		bash tools/download_tendermint.sh 'MacOS'
+else
+		bash tools/download_tendermint.sh 'Linux'
+ 	endif
+
 
 test:
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
@@ -272,3 +282,28 @@ snapshot:
 	@./tools/devnet/snapshot.sh
 
 devnet: reset snapshot
+
+# fn build
+build_musl_fn_linux:
+	docker build -t musl_fn_linux -f container/Dockerfile-fn-musl-linux .
+	docker run -d --rm --name fn_linux musl_fn_linux
+	docker cp fn_linux:/volume/target/x86_64-unknown-linux-musl/release/fn fn
+	tar -czvf fn_linux.tar.gz fn
+	rm fn
+
+
+build_musl_fn_macos_base:
+	docker build -t musl_fn_macos_base -f container/Dockerfile-fn-musl-macos-base .
+build_musl_fn_macos:
+	docker build -t musl_fn_macos -f container/Dockerfile-fn-musl-macos .
+	docker run -d --rm --name fn_macos musl_fn_macos
+	docker cp fn_macos:/volume/target/x86_64-apple-darwin/release/fn fn
+	tar -czvf fn_macos.tar.gz fn
+	rm fn
+
+build_musl_fn_win:
+	docker build -t musl_fn_win -f container/Dockerfile-fn-musl-windows .
+	docker run -d --rm --name fn_windows musl_fn_win
+	docker cp fn_windows:/volume/target/x86_64-pc-windows-gnu/release/fn.exe fn.exe
+	tar -czvf fn_windows.tar.gz fn.exe
+	rm fn.exe

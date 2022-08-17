@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 pub const HASH_SIZE: usize = 32;
 
 #[allow(missing_docs)]
-#[cfg(target_arch = "wasm32")]
+// #[cfg(target_arch = "wasm32")]
 pub mod sha256 {
     use {
         arrayref::array_ref,
@@ -42,9 +42,7 @@ pub mod sha256 {
     #[inline(always)]
     pub fn hash(m: &[u8]) -> Digest {
         let temp = Sha256::digest(m);
-        Digest {
-            0: *array_ref!(&temp, 0, 32),
-        }
+        Digest(*array_ref!(&temp, 0, 32))
     }
 
     impl AsRef<[u8]> for Digest {
@@ -82,19 +80,19 @@ pub mod sha256 {
     }
 }
 
-#[allow(missing_docs)]
-#[cfg(not(target_arch = "wasm32"))]
-pub mod sha256 {
-    use sodiumoxide::crypto::hash::sha256;
-    pub const DIGESTBYTES: usize = sha256::DIGESTBYTES;
-    pub use sha256::Digest;
+// #[allow(missing_docs)]
+// #[cfg(not(target_arch = "wasm32"))]
+// pub mod sha256 {
+//     use sodiumoxide::crypto::hash::sha256;
+//     pub const DIGESTBYTES: usize = sha256::DIGESTBYTES;
+//     pub use sha256::Digest;
 
-    #[inline(always)]
-    #[allow(missing_docs)]
-    pub fn hash(m: &[u8]) -> Digest {
-        sha256::hash(m)
-    }
-}
+//     #[inline(always)]
+//     #[allow(missing_docs)]
+//     pub fn hash(m: &[u8]) -> Digest {
+//         sha256::hash(m)
+//     }
+// }
 
 ///
 /// Define the structure containing a hash value for the tree.
@@ -105,7 +103,7 @@ pub mod sha256 {
 
 #[repr(C)]
 #[allow(missing_docs)]
-#[derive(Copy, Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct HashValue {
     pub hash: [u8; HASH_SIZE],
 }

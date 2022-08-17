@@ -42,6 +42,7 @@ mod storage {
     generate_storage!(Account, Allowances => DoubleMap<Address, Address, U256>);
 }
 
+#[derive(Clone)]
 pub struct App<C> {
     phantom: PhantomData<C>,
 }
