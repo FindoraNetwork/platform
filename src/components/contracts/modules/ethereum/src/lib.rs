@@ -21,8 +21,23 @@ use fp_traits::{
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
 };
 use fp_types::{actions::ethereum::Action, crypto::Address};
+use lazy_static::lazy_static;
 use ruc::*;
 use std::marker::PhantomData;
+
+lazy_static! {
+    pub static ref EVM_FIRST_BLOCK_HEIGHT: u64 = {
+        let h: u64 = std::env::var("EVM_FIRST_BLOCK_HEIGHT")
+            .map(|h| {
+                h.parse()
+                    .expect("`EVM_FIRST_BLOCK_HEIGHT` is not set correctly.")
+            })
+            .unwrap_or(100);
+        h
+    };
+    pub static ref ENABLE_DUMMY_BLOCK: bool =
+        std::env::var("ENABLE_DUMMY_BLOCK").is_ok();
+}
 
 pub const MODULE_NAME: &str = "ethereum";
 

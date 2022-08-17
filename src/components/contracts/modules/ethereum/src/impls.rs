@@ -1,5 +1,5 @@
 use crate::storage::*;
-use crate::{App, Config, ContractLog, TransactionExecuted};
+use crate::{App, Config, ContractLog, TransactionExecuted, EVM_FIRST_BLOCK_HEIGHT};
 use config::abci::global_cfg::CFG;
 use ethereum::{
     BlockV0 as Block, LegacyTransactionMessage, Receipt, TransactionV0 as Transaction,
@@ -37,12 +37,10 @@ impl<C: Config> App<C> {
     }
 
     pub fn store_block(&mut self, ctx: &mut Context, block_number: U256) -> Result<()> {
-        // #[cfg(feature = "debug_env")]
-        // const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::from(142_5000);
-        //
-        // #[cfg(not(feature = "debug_env"))]
-        // const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::zero();
-
+        // bypass the whole function
+        if block_number < U256::from(*EVM_FIRST_BLOCK_HEIGHT) {
+            return Ok(());
+        }
         let mut transactions: Vec<Transaction> = Vec::new();
         let mut statuses: Vec<TransactionStatus> = Vec::new();
         let mut receipts: Vec<Receipt> = Vec::new();

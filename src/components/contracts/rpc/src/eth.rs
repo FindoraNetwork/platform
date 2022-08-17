@@ -42,16 +42,9 @@ use tokio::runtime::Runtime;
 lazy_static! {
     static ref RT: Runtime =
         Runtime::new().expect("Failed to create thread pool executor");
-    static ref EVM_FIRST_BLOCK_HEIGHT: u64 = {
-        let h: u64 = std::env::var("EVM_FIRST_BLOCK_HEIGHT")
-            .map(|h| {
-                h.parse()
-                    .expect("`EVM_FIRST_BLOCK_HEIGHT` is not set correctly.")
-            })
-            .unwrap_or(1424654);
-        h
-    };
 }
+
+use module_ethereum::{ENABLE_DUMMY_BLOCK, EVM_FIRST_BLOCK_HEIGHT};
 
 pub struct EthApiImpl {
     account_base_app: Arc<RwLock<BaseApp>>,
@@ -468,7 +461,9 @@ impl EthApi for EthApiImpl {
                 )))
             }
             _ => Ok(if let Some(h) = height {
-                if 0 < h && h < *EVM_FIRST_BLOCK_HEIGHT {
+                if !*ENABLE_DUMMY_BLOCK {
+                    None
+                } else if 0 < h && h < *EVM_FIRST_BLOCK_HEIGHT {
                     Some(dummy_block(h, full))
                 } else {
                     None
