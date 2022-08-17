@@ -1691,7 +1691,6 @@ impl AnonTransferOperationBuilder {
 
     #[allow(missing_docs)]
     pub fn get_total_fee_estimation(&self) -> Result<u64> {
-
         let input_sums =
             self.inputs
                 .iter()
@@ -1743,7 +1742,7 @@ impl AnonTransferOperationBuilder {
         let fra_extra_output_sum =
             fra_output_sum + estimated_fees_without_extra_fra_ip_op;
         match fra_input_sum.cmp(&fra_extra_output_sum) {
-            Ordering::Equal => Ok(fra_input_sum-fra_output_sum),
+            Ordering::Equal => Ok(fra_input_sum - fra_output_sum),
             Ordering::Greater => {
                 let estimated_fees_with_fra_remainder = FEE_CALCULATING_FUNC(
                     self.inputs.len() as u32,
