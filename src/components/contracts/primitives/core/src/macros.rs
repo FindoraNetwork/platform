@@ -1,8 +1,7 @@
-use crate::context::Context as Contex2;
 
-pub trait Get2<T> {
+pub trait Get2<T1, T2> {
     /// Return the current value.
-    fn get(ctx: Contex2) -> T;
+    fn get(ctx: T2) -> T1;
 }
 
 // impl<T: Default> Get2<T> for () {
