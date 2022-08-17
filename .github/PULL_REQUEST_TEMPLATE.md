@@ -3,6 +3,10 @@
   - [ ] make lint
   - [ ] make test
 
+
+* **[Manual Nightly](https://jenkins.dev.findora.org/view/integration%20test/job/Manual%20Integration%20Test/) test result link:**
+
+
 * **The major changes of this PR**
 
 
