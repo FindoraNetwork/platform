@@ -4,7 +4,6 @@ use fp_mocks::*;
 
 use evm_precompile_utils::EvmDataWriter;
 use fp_utils::hashing::keccak_256;
-use globutils::wallet::public_key_from_base64;
 use module_evm::precompile::Precompile;
 use zei_algebra::serialization::ZeiFromToBytes;
 
@@ -35,7 +34,9 @@ fn test_fra_pubkey() {
         PrecompileOutput {
             exit_status: ExitSucceed::Returned,
             cost: 0,
-            output: EvmDataWriter::new().write(ALICE_XFR.pub_key.zei_to_bytes()).build(),
+            output: EvmDataWriter::new()
+                .write(ALICE_XFR.pub_key.zei_to_bytes())
+                .build(),
             logs: Default::default(),
         }
     )
