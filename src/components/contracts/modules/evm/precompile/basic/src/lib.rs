@@ -16,11 +16,8 @@
 // limitations under the License.
 
 use core::cmp::min;
-use evm::{Context, ExitError, ExitSucceed};
-use evm::executor::PrecompileOutput;
-use fp_types::H160;
-use module_evm::{Config, precompile::{LinearCostPrecompile, PrecompileId}};
-use module_evm::precompile::{FinState, Precompile};
+use evm::{ExitError, ExitSucceed};
+use module_evm::precompile::{LinearCostPrecompile, PrecompileId};
 
 /// The identity precompile.
 pub struct Identity;
@@ -166,4 +163,3 @@ impl LinearCostPrecompile for ECRecoverPublicKey {
         Ok((ExitSucceed::Returned, pubkey.to_vec()))
     }
 }
-

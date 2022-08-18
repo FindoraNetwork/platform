@@ -37,8 +37,9 @@ pub fn test_insert_address_mapping(evm_address: &H160, fra_pk: &XfrPublicKey) {
     module_account::App::<BaseApp>::insert_evm_fra_address_mapping(
         &BASE_APP.lock().unwrap().deliver_state,
         fra_pk,
-        evm_address
-    ).unwrap();
+        evm_address,
+    )
+    .unwrap();
 }
 
 pub fn test_mint_balance(who: &Address, balance: U256, height: u64) {
