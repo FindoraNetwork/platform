@@ -15,6 +15,7 @@ use {
 #[derive(Serialize, Deserialize, Default, Clone)]
 #[allow(missing_docs)]
 pub struct CheckPointConfig {
+    pub evm_backend_stack_height: i64,
     pub evm_substate_height: i64,
     pub disable_evm_block_height: i64,
     pub enable_frc20_height: i64,
@@ -49,6 +50,7 @@ impl CheckPointConfig {
                         Ok(mut file) => {
                             #[cfg(feature = "debug_env")]
                             let config = CheckPointConfig {
+                                evm_backend_stack_height: 0,
                                 evm_substate_height: 0,
                                 disable_evm_block_height: 0,
                                 enable_frc20_height: 0,
@@ -72,6 +74,7 @@ impl CheckPointConfig {
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
+                                evm_backend_stack_height: 1802501,
                                 evm_substate_height: 1802500,
                                 disable_evm_block_height: 1483286,
                                 enable_frc20_height: 1501000,
@@ -111,6 +114,17 @@ impl CheckPointConfig {
         f.read_to_string(&mut content).unwrap();
         let config: CheckPointConfig = toml::from_str(content.as_str()).unwrap();
         Some(config)
+    }
+
+    pub fn sanity_check(&self) -> bool {
+        //TODO: Please add more sanity checks
+        if self.evm_backend_stack_height < 0 || self.evm_substate_height < 0 {
+            return false;
+        }
+        if self.evm_backend_stack_height < self.evm_substate_height {
+            return false;
+        }
+        true
     }
 }
 
@@ -405,7 +419,13 @@ pub mod global_cfg {
             ledger_dir: ld,
             #[cfg(target_os = "linux")]
             btmcfg: parse_btmcfg(&m).map_err(|e| d!("{}", e))?,
-            checkpoint: CheckPointConfig::from_file(&checkpoint_path).unwrap(),
+            checkpoint: {
+                let cpc = CheckPointConfig::from_file(&checkpoint_path).unwrap();
+                if !cpc.sanity_check() {
+                    return Err(eg!("CheckPointConfig sanity check failed"));
+                }
+                cpc
+            },
         };
 
         Ok(res)
