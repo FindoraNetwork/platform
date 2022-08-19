@@ -6,7 +6,6 @@ use evm::{
     executor::{StackState, StackSubstateMetadata},
     ExitError, Transfer,
 };
-use fin_db::FinDB;
 use fp_core::{context::Context, macros::Get};
 use fp_evm::{Log, Vicinity};
 use fp_storage::BorrowMut;
@@ -14,7 +13,6 @@ use fp_traits::{account::AccountAsset, evm::BlockHashMapping};
 use fp_utils::timestamp_converter;
 use log::info;
 use std::{collections::btree_set::BTreeSet, marker::PhantomData, mem};
-use storage::state::State;
 
 pub struct FindoraStackSubstate<'context, 'config> {
     pub ctx: &'context Context,
