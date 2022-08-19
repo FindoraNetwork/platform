@@ -19,10 +19,12 @@ use {
         ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
     },
     config::abci::global_cfg::CFG,
+    cryptohash::sha256,
     fp_storage::hash::{Sha256, StorageHasher},
     lazy_static::lazy_static,
     ledger::{
         converter::is_convert_account,
+        data_model::{Operation, Transaction},
         staking::KEEP_HIST,
         store::{
             api_cache,
@@ -69,28 +71,35 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
     let mut resp = ResponseInfo::new();
 
     let mut la = s.la.write();
+
     let state = la.get_committed_state().write();
 
     let commitment = state.get_state_commitment();
     let la_hash = commitment.0.as_ref().to_vec();
 
-    let h = state.get_tendermint_height() as i64;
-    TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
-    resp.set_last_block_height(h);
-    if 0 < h {
-        if CFG.checkpoint.disable_evm_block_height < h
-            && h < CFG.checkpoint.enable_frc20_height
+    let td_height = state.get_tendermint_height() as i64;
+    TENDERMINT_BLOCK_HEIGHT.swap(td_height, Ordering::Relaxed);
+    resp.set_last_block_height(td_height);
+    if 0 < td_height {
+        if CFG.checkpoint.disable_evm_block_height < td_height
+            && td_height < CFG.checkpoint.enable_frc20_height
         {
             resp.set_last_block_app_hash(la_hash);
+        } else if td_height < CFG.checkpoint.enable_triple_masking_height {
+            let cs_hash = s.account_base_app.write().info(req).last_block_app_hash;
+            resp.set_last_block_app_hash(app_hash("info", td_height, la_hash, cs_hash));
         } else {
             let cs_hash = s.account_base_app.write().info(req).last_block_app_hash;
-            resp.set_last_block_app_hash(app_hash("info", h, la_hash, cs_hash));
+            let tm_hash = state.get_anon_state_commitment().0;
+            resp.set_last_block_app_hash(app_hash_v2(
+                "info", td_height, la_hash, cs_hash, tm_hash,
+            ));
         }
     }
 
     drop(state);
 
-    log::info!(target: "abciapp", "======== Last committed height: {} ========", h);
+    log::info!(target: "abciapp", "======== Last committed height: {} ========", td_height);
 
     if la.all_commited() {
         la.begin_block();
@@ -121,13 +130,18 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
     match tx_catalog {
         TxCatalog::FindoraTx => {
             if matches!(req.field_type, CheckTxType::New) {
-                if let Ok(tx) = convert_tx(req.get_tx()) {
-                    if !tx.valid_in_abci() {
+                if let Ok(txn) = convert_tx(req.get_tx()) {
+                    if !txn.valid_in_abci() {
                         resp.log = "Should not appear in ABCI".to_owned();
                         resp.code = 1;
-                    } else if TX_HISTORY.read().contains_key(&tx.hash_tm_rawbytes()) {
+                    } else if TX_HISTORY.read().contains_key(&txn.hash_tm_rawbytes()) {
                         resp.log = "Historical transaction".to_owned();
                         resp.code = 1;
+                    } else if is_tm_transaction(&txn)
+                        && td_height < CFG.checkpoint.enable_triple_masking_height
+                    {
+                        resp.code = 1;
+                        resp.log = "Triple Masking is disabled".to_owned();
                     }
                 } else {
                     resp.log = "Invalid format".to_owned();
@@ -159,9 +173,6 @@ pub fn begin_block(
     req: &RequestBeginBlock,
 ) -> ResponseBeginBlock {
     if IS_EXITING.load(Ordering::Acquire) {
-        //beacuse ResponseBeginBlock doesn't define the code,
-        //we can't tell tendermint that begin block is impossibled,
-        //we use thread::sleep to wait to exit, it's looks unsound.
         std::thread::sleep(std::time::Duration::from_secs(10));
     }
 
@@ -228,24 +239,23 @@ pub fn deliver_tx(
 
     match tx_catalog {
         TxCatalog::FindoraTx => {
-            if let Ok(tx) = convert_tx(req.get_tx()) {
-                let txhash = tx.hash_tm_rawbytes();
+            if let Ok(txn) = convert_tx(req.get_tx()) {
+                let txhash = txn.hash_tm_rawbytes();
                 POOL.spawn_ok(async move {
                     TX_HISTORY.write().set_value(txhash, Default::default());
                 });
 
-                if tx.valid_in_abci() {
+                if txn.valid_in_abci() {
                     // Log print for monitor purpose
                     if td_height < EVM_FIRST_BLOCK_HEIGHT {
                         log::info!(target: "abciapp",
                             "EVM transaction(FindoraTx) detected at early height {}: {:?}",
-                            td_height, tx
+                            td_height, txn
                         );
                     }
-
                     if *KEEP_HIST {
                         // set attr(tags) if any, only needed on a fullnode
-                        let attr = utils::gen_tendermint_attr(&tx);
+                        let attr = utils::gen_tendermint_attr(&txn);
                         if !attr.is_empty() {
                             resp.set_events(attr);
                         }
@@ -254,19 +264,20 @@ pub fn deliver_tx(
                     if CFG.checkpoint.disable_evm_block_height < td_height
                         && td_height < CFG.checkpoint.enable_frc20_height
                     {
-                        if is_convert_account(&tx) {
+                        if is_convert_account(&txn) {
                             resp.code = 2;
                             resp.log = "EVM is disabled".to_owned();
                             return resp;
-                        } else if let Err(e) = s.la.write().cache_transaction(tx) {
+                        } else if let Err(e) = s.la.write().cache_transaction(txn) {
                             resp.code = 1;
                             resp.log = e.to_string();
                         }
-                    } else if is_convert_account(&tx) {
+                    } else if is_convert_account(&txn) {
+                        let hash = sha256::hash(req.get_tx());
                         if let Err(err) =
-                            s.account_base_app.write().deliver_findora_tx(&tx)
+                            s.account_base_app.write().deliver_findora_tx(&txn, &hash.0)
                         {
-                            log::info!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
+                            log::error!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
 
                             resp.code = 1;
                             resp.log =
@@ -274,7 +285,7 @@ pub fn deliver_tx(
                             return resp;
                         }
 
-                        if s.la.write().cache_transaction(tx).is_ok() {
+                        if s.la.write().cache_transaction(txn).is_ok() {
                             // Discard all the cache of State and Db, if either cache is corrupt.
                             if !(s
                                 .account_base_app
@@ -327,6 +338,9 @@ pub fn deliver_tx(
                                 .write()
                                 .commit_session();
                             return resp;
+                        } else {
+                            resp.code = 1;
+                            resp.log = "cache_transaction failed".to_owned();
                         }
 
                         s.account_base_app
@@ -341,10 +355,20 @@ pub fn deliver_tx(
                             .db
                             .write()
                             .discard_session();
+                    } else if is_tm_transaction(&txn)
+                        && td_height < CFG.checkpoint.enable_triple_masking_height
+                    {
+                        log::info!(target: "abciapp",
+                            "Triple Masking transaction(FindoraTx) detected at early height {}: {:?}",
+                            td_height, txn
+                        );
+                        resp.code = 2;
+                        resp.log = "Triple Masking is disabled".to_owned();
+                        return resp;
                     } else if CFG.checkpoint.utxo_checktx_height < td_height {
-                        match tx.check_tx() {
+                        match txn.check_tx() {
                             Ok(_) => {
-                                if let Err(e) = s.la.write().cache_transaction(tx) {
+                                if let Err(e) = s.la.write().cache_transaction(txn) {
                                     resp.code = 1;
                                     resp.log = e.to_string();
                                 }
@@ -354,7 +378,7 @@ pub fn deliver_tx(
                                 resp.log = e.to_string();
                             }
                         }
-                    } else if let Err(e) = s.la.write().cache_transaction(tx) {
+                    } else if let Err(e) = s.la.write().cache_transaction(txn) {
                         resp.code = 1;
                         resp.log = e.to_string();
                     }
@@ -412,11 +436,17 @@ pub fn end_block(
 
     let mut la = s.la.write();
 
+    if td_height <= CFG.checkpoint.disable_evm_block_height
+        || td_height >= CFG.checkpoint.enable_frc20_height
+    {
+        let _ = s.account_base_app.write().end_block(req);
+    }
+
     // mint coinbase, cache system transactions to ledger
     {
-        let laa = la.get_committed_state().read();
+        let mut laa = la.get_committed_state().write();
         if let Some(tx) =
-            staking::system_mint_pay(&*laa, &mut *s.account_base_app.write())
+            staking::system_mint_pay(&mut *laa, &mut *s.account_base_app.write())
         {
             drop(laa);
             // this unwrap should be safe
@@ -442,12 +472,6 @@ pub fn end_block(
         &begin_block_req.byzantine_validators.as_slice(),
     );
 
-    if td_height <= CFG.checkpoint.disable_evm_block_height
-        || td_height >= CFG.checkpoint.enable_frc20_height
-    {
-        let _ = s.account_base_app.write().end_block(req);
-    }
-
     resp
 }
 
@@ -470,14 +494,17 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
 
     let mut r = ResponseCommit::new();
     let la_hash = state.get_state_commitment().0.as_ref().to_vec();
+    let tm_hash = state.get_anon_state_commitment().0;
     let cs_hash = s.account_base_app.write().commit(req).data;
 
     if CFG.checkpoint.disable_evm_block_height < td_height
         && td_height < CFG.checkpoint.enable_frc20_height
     {
         r.set_data(la_hash);
-    } else {
+    } else if td_height < CFG.checkpoint.enable_triple_masking_height {
         r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
+    } else {
+        r.set_data(app_hash_v2("commit", td_height, la_hash, cs_hash, tm_hash));
     }
 
     IN_SAFE_ITV.store(false, Ordering::Release);
@@ -507,4 +534,46 @@ fn app_hash(
     } else {
         la_hash
     }
+}
+
+/// Combines ledger state hash and EVM chain state hash
+/// and print app hashes for debugging
+fn app_hash_v2(
+    when: &str,
+    height: i64,
+    mut la_hash: Vec<u8>,
+    mut cs_hash: Vec<u8>,
+    mut tm_hash: Vec<u8>,
+) -> Vec<u8> {
+    log::info!(target: "abciapp",
+        "app_hash_{}: {}_{}_{}, height: {}",
+        when,
+        hex::encode(la_hash.clone()),
+        hex::encode(cs_hash.clone()),
+        hex::encode(tm_hash.clone()),
+        height
+    );
+
+    // append ONLY non-empty EVM chain state hash
+    if !tm_hash.is_empty() || !cs_hash.is_empty() {
+        la_hash.append(&mut cs_hash);
+        la_hash.append(&mut tm_hash);
+
+        Sha256::hash(la_hash.as_slice()).to_vec()
+    } else {
+        la_hash
+    }
+}
+
+fn is_tm_transaction(tx: &Transaction) -> bool {
+    tx.body
+        .operations
+        .iter()
+        .try_for_each(|op| match op {
+            Operation::BarToAbar(_a) => None,
+            Operation::AbarToBar(_a) => None,
+            Operation::TransferAnonAsset(_a) => None,
+            _ => Some(()),
+        })
+        .is_none()
 }

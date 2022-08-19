@@ -23,6 +23,13 @@ Cargo.lock
 nohup.out
 
 *.keys
+randomizers
+sent_randomizers
+owned_randomizers
+sent_commitments
+owned_commitments
+tmp_file
+**/.wasm.sh
 
 tools/tendermint
 tools/tendermint.zip
@@ -31,3 +38,4 @@ utxo.map
 checkpoint.toml
 
 *.tmp
+checkpoint.toml

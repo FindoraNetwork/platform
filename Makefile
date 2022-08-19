@@ -26,6 +26,7 @@ lib_dir         = lib
 subdirs = $(bin_dir) $(lib_dir)
 
 WASM_PKG = wasm.tar.gz
+WASM_LIGHTWEIGHT_PKG = wasm_lightweight.tar.gz
 lib_files = ./$(WASM_PKG)
 
 define pack
@@ -41,7 +42,7 @@ define pack
 		./tools/tendermint \
 		$(1)/$(bin_dir)/
 	cp $(1)/$(bin_dir)/* ~/.cargo/bin/
-	cd $(1)/$(bin_dir)/ && findorad pack
+	cd $(1)/$(bin_dir)/ && ./findorad pack
 	cp -f /tmp/findorad $(1)/$(bin_dir)/
 	cp -f /tmp/findorad ~/.cargo/bin/
 	rm -f ./tools/tendermint
@@ -55,6 +56,10 @@ stop_all:
 	- pkill abcid
 	- pkill tendermint
 	- pkill findorad
+
+# Build debug
+dbg:
+	cargo build --features debug_env --bins -p abciapp -p finutils
 
 # Build for cleveldb
 build: tendermint_cleveldb
@@ -82,7 +87,7 @@ build_release_musl_goleveldb: tendermint_goleveldb
 	$(call pack,release,x86_64-unknown-linux-musl)
 
 build_release_debug: tendermint_goleveldb
-	cargo build --features="debug_env" --release --bins -p abciapp -p finutils
+	cargo build --features debug_env --release --bins -p abciapp -p finutils
 	$(call pack,release)
 
 tendermint_cleveldb:
@@ -150,6 +155,10 @@ wasm:
 	cd src/components/wasm && wasm-pack build
 	tar -zcpf $(WASM_PKG) src/components/wasm/pkg
 
+wasm_release_lightweight:
+	cd src/components/wasm && wasm-pack build --release --features=lightweight
+	tar -zcpf $(WASM_LIGHTWEIGHT_PKG) src/components/wasm/pkg
+
 debug_env: stop_debug_env build_release_debug
 	- rm -rf $(FIN_DEBUG)
 	mkdir $(FIN_DEBUG)
@@ -206,7 +215,6 @@ start_localnode: stop_debug_env
 # ifeq ($(ENV),release)
 # 	docker rmi $(ECR_URL)/$(ENV)/abci_validator_node:latest
 # endif
-
 
 ci_build_binary_rust_base:
 	docker build -t binary-rust-base -f container/Dockerfile-binary-rust-base .
@@ -281,8 +289,38 @@ reset:
 snapshot:
 	@./tools/devnet/snapshot.sh
 
+prismtest:
+	@./tools/regression/evm/scripts/setup.sh
+	@./tools/regression/evm/testevm.sh
+	@./tools/regression/evm/scripts/teardown.sh
+
+prismtest_nightly:
+	@./tools/regression/evm/testevm.sh
+
+tmtest:
+	@./tools/regression/triple_masking/scripts/setup.sh
+	@./tools/regression/triple_masking/test_triple_masking.sh
+	@./tools/regression/triple_masking/scripts/teardown.sh
+
+tmtest_nightly:
+	@./tools/regression/triple_masking/test_triple_masking.sh
+
 devnet: reset snapshot
 
+run_bar_to_abar_demo: devnet
+	@./tools/triple_masking/bar_to_abar_convert.sh
+
+run_anon_transfer_demo: devnet
+	@./tools/triple_masking/anonxfr_test_demo.sh
+
+run_multi_anon_transfer_demo: devnet
+	@./tools/triple_masking/multi_axfr_test_demo.sh
+
+run_anon_asset_mixing_demo: devnet
+	@./tools/triple_masking/assets_mixing_test_demo.sh
+
+devnet_bridge: devnet
+	@./tools/devnet/startbridge.sh
 # fn build
 build_musl_fn_linux:
 	docker build -t musl_fn_linux -f container/Dockerfile-fn-musl-linux .

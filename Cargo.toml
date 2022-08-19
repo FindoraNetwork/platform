@@ -11,10 +11,12 @@ members = [
     "src/components/abciapp",
     "src/components/config",
     "src/components/wasm",
+    "src/components/wallet_mobile",
     "src/components/contracts/baseapp",
     "src/components/contracts/modules/account",
     "src/components/contracts/modules/ethereum",
     "src/components/contracts/modules/evm",
+    "src/components/contracts/modules/evm/test-vector-support",
     "src/components/contracts/modules/evm/precompile/basic",
     "src/components/contracts/modules/evm/precompile/frc20",
     "src/components/contracts/modules/evm/precompile/modexp",
@@ -57,3 +59,21 @@ overflow-checks = false
 fin_db = { git = "https:///github.com/FindoraNetwork//storage", tag = "v0.2.2"}
 temp_db = { git = "https:///github.com/FindoraNetwork//storage", tag = "v0.2.2"}
 storage = { git = "https:///github.com/FindoraNetwork//storage", tag = "v0.2.2"}
+
+[patch.crates-io]
+ark-ec = { git = "https://github.com/FindoraNetwork/ark-algebra" }
+ark-ff = { git = "https://github.com/FindoraNetwork/ark-algebra" }
+ark-serialize = { git = "https://github.com/FindoraNetwork/ark-algebra" }
+ark-std = { git = "https://github.com/FindoraNetwork/ark-std" }
+ark-bls12-381 = { git = "https://github.com/FindoraNetwork/ark-curves" }
+ark-ed-on-bls12-381 = { git = "https://github.com/FindoraNetwork/ark-curves" }
+curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek" }
+ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek" }
+x25519-dalek = { git = "https://github.com/FindoraNetwork/x25519-dalek" }
+bulletproofs = { git = "https://github.com/FindoraNetwork/bp" }
+
+zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.2.2" }
+zei-accumulators = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.2.2" }
+zei-algebra = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.2.2" }
+zei-crypto = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.2.2" }
+zei-plonk = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.2.2" }
