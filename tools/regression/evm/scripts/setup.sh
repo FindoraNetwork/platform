@@ -3,7 +3,7 @@ source tools/regression/evm/scripts/env.sh
 
 echo -e "${YEL}Setup environment for evm testing${NC}"
 
-let SLEEP_INTERVAL=($BLOCK_INTERVAL + 1)
+let SLEEP_INTERVAL=($BLOCK_INTERVAL + 2)
 
 # Start Nodes and initialize wallet
 ./$DEVNET_TOOLS_PATH/resetnodes.sh
