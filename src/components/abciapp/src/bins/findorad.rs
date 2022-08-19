@@ -10,10 +10,7 @@
 use {
     config::findora::{config::CFG, init},
     lazy_static::lazy_static,
-    nix::{
-        sys::signal::{kill, Signal},
-        unistd::{truncate, Pid},
-    },
+    nix::unistd::truncate,
     ruc::*,
     std::{
         convert::TryFrom,
@@ -24,6 +21,7 @@ use {
         os::unix::fs::PermissionsExt,
         path::PathBuf,
         process::{Command, Stdio},
+        sync::mpsc::channel,
     },
 };
 
@@ -120,13 +118,21 @@ fn node_command() -> Result<()> {
         .spawn()
         .c(d!())?;
 
+    let (send, rev) = channel::<()>();
+
     ctrlc::set_handler(move || {
-        info_omit!(kill(Pid::from_raw(0), Signal::SIGINT));
+        //info_omit!(kill(Pid::from_raw(0), Signal::SIGINT));
+        pnk!(abcid_child.kill().c(d!()));
+        pnk!(abcid_child.wait().c(d!()).map(|s| println!("{}", s)));
+
+        pnk!(tendermint_child.kill());
+        pnk!(tendermint_child.wait().c(d!()).map(|s| println!("{}", s)));
+
+        pnk!(send.send(()));
     })
     .c(d!())?;
 
-    tendermint_child.wait().c(d!()).map(|s| println!("{}", s))?;
-    abcid_child.wait().c(d!()).map(|s| println!("{}", s))?;
+    rev.recv().c(d!())?;
 
     Ok(())
 }
