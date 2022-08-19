@@ -240,7 +240,7 @@ impl NetworkRoute for QueryServerRoutes {
 pub async fn get_created_assets(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
-) -> actix_web::Result<web::Json<Vec<(AssetTypeCode, DefineAsset)>>> {
+) -> actix_web::Result<web::Json<Vec<DefineAsset>>> {
     // Convert from base64 representation
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
@@ -249,8 +249,17 @@ pub async fn get_created_assets(
     )
     .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
     let server = data.read();
-    let assets = server.get_created_assets(&IssuerPublicKey { key });
-    Ok(web::Json(assets.unwrap_or_default()))
+    let mut assets_tuple = server
+        .get_created_assets(&IssuerPublicKey { key })
+        .unwrap_or_default();
+
+    let mut das = vec![];
+    for (code, da) in assets_tuple.iter_mut() {
+        da.body.asset.code = *code;
+        das.push(da.clone());
+    }
+
+    Ok(web::Json(das))
 }
 
 /// Returns the list of records issued by a public key

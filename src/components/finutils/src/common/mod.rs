@@ -811,9 +811,9 @@ pub fn issue_asset_x(
 pub fn show_asset(addr: &str) -> Result<()> {
     let pk = wallet::public_key_from_bech32(addr).c(d!())?;
     let assets = utils::get_created_assets(&pk).c(d!())?;
-    for (code, _asset) in assets {
-        let base64 = code.to_base64();
-        let h = hex::encode(code.val.0);
+    for asset in assets {
+        let base64 = asset.body.asset.code.to_base64();
+        let h = hex::encode(asset.body.asset.code.val.0);
         println!("Base64: {}, Hex: {}", base64, h);
     }
 
