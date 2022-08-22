@@ -85,7 +85,7 @@ build_release_debug: tendermint_goleveldb
 	$(call pack,release)
 
 tendermint_cleveldb:
-	- rm $(shell which tendermint)
+	- rm -f $(shell which tendermint)
 	bash tools/download_tendermint.sh 'tools/tendermint'
 	mkdir -p $(shell go env GOPATH)/bin
 	cd tools/tendermint \
@@ -93,12 +93,13 @@ tendermint_cleveldb:
 		&& cp build/tendermint $(shell go env GOPATH)/bin/
 
 tendermint_goleveldb:
-	- rm $(shell which tendermint)
+	- rm -f $(shell which tendermint)
 	bash tools/download_tendermint.sh 'tools/tendermint'
 	cd tools/tendermint && $(MAKE) install
 
 test:
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
+	- find src -name "checkpoint.toml" | xargs rm -f
 
 coverage:
 	cargo tarpaulin --timeout=900 --branch --workspace --release \

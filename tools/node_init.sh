@@ -76,6 +76,8 @@ set_env() {
 
     EVM_CHAIN_ID=$(curl -H 'Content-Type: application/json' --data '{"id":1, "method": "eth_chainId", "jsonrpc": "2.0"}' "${serv_url}:8545" | jq -c '.result' | sed 's/"//g')
     export EVM_CHAIN_ID=$(printf '%d' $EVM_CHAIN_ID)
+
+    curl ${serv_url}:8667/display_checkpoint | jq > /tmp/${env}_checkpoint.toml
 }
 
 if [[ "" == $2 ]]; then
@@ -91,6 +93,7 @@ cd /tmp || exit 1
 echo -e "\033[31;1m==== EVM_CHAIN_ID: $EVM_CHAIN_ID ====\033[0m"
 abcid -q \
     --tendermint-node-key-config-path="${th}/config/priv_validator_key.json" \
+    --checkpoint-file /tmp/${env}_checkpoint.toml \
     >abcid.log 2>&1 &
 tendermint node >tendermint.log 2>&1 &
 
