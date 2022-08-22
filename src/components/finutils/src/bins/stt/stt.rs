@@ -330,7 +330,9 @@ mod delegate {
             builder.add_operation_delegation(owner_kp, amount, validator.to_owned());
         })?;
 
-        builder.build_and_take_transaction()
+        let mut tx = builder.build_and_take_transaction()?;
+        tx.sign(owner_kp);
+        Ok(tx)
     }
 }
 

@@ -41,6 +41,7 @@ use {
             atomic::{AtomicI64, Ordering},
             Arc,
         },
+        time::Duration,
     },
 };
 
@@ -173,7 +174,8 @@ pub fn begin_block(
     req: &RequestBeginBlock,
 ) -> ResponseBeginBlock {
     if IS_EXITING.load(Ordering::Acquire) {
-        std::thread::sleep(std::time::Duration::from_secs(10));
+        //ResponseBeginBlock didn't define return code, just wait to exit.
+        std::thread::sleep(Duration::from_secs(10));
     }
 
     IN_SAFE_ITV.store(true, Ordering::Release);
