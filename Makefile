@@ -32,19 +32,18 @@ define pack
 	- rm -rf $(1)
 	mkdir $(1)
 	cd $(1); for i in $(subdirs); do mkdir $$i; done
-	cp \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/findorad \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/abcid \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
-		./tools/tendermint \
+	cp -f \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/findorad \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/abcid \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
+		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
-	cp $(1)/$(bin_dir)/* ~/.cargo/bin/
+	cp -f $(1)/$(bin_dir)/* ~/.cargo/bin/
 	cd $(1)/$(bin_dir)/ && findorad pack
 	cp -f /tmp/findorad $(1)/$(bin_dir)/
 	cp -f /tmp/findorad ~/.cargo/bin/
-	rm -f ./tools/tendermint
 endef
 
 install: stop_all build_release_goleveldb
@@ -87,25 +86,16 @@ build_release_debug: tendermint_goleveldb
 
 tendermint_cleveldb:
 	- rm $(shell which tendermint)
-
- 	ifeq ($(shell uname),Darwin)
-		bash tools/download_tendermint.sh 'MacOS'
-else
-		bash tools/download_tendermint.sh 'Linux'
- 	endif
-
-
+	bash tools/download_tendermint.sh 'tools/tendermint'
+	mkdir -p $(shell go env GOPATH)/bin
+	cd tools/tendermint \
+		&& $(MAKE) build TENDERMINT_BUILD_OPTIONS=cleveldb \
+		&& cp build/tendermint $(shell go env GOPATH)/bin/
 
 tendermint_goleveldb:
-
 	- rm $(shell which tendermint)
-
- 	ifeq ($(shell uname),Darwin)
-		bash tools/download_tendermint.sh 'MacOS'
-else
-		bash tools/download_tendermint.sh 'Linux'
- 	endif
-
+	bash tools/download_tendermint.sh 'tools/tendermint'
+	cd tools/tendermint && $(MAKE) install
 
 test:
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
@@ -130,6 +120,8 @@ lint:
 	cargo clippy --workspace --tests
 
 update:
+	git submodule update --recursive --init
+	rustup update stable
 	cargo update
 
 fmt:
@@ -140,10 +132,10 @@ fmtall:
 
 clean:
 	cargo clean
-	rm -rf tools/tendermint .git/modules/tools/tendermint
-	rm -rf debug release Cargo.lock
+	rm -rf debug release
 
 cleanall: clean
+	rm -rf tools/tendermint .git/modules/tools/tendermint
 	git clean -fdx
 
 wasm:
@@ -176,6 +168,9 @@ join_qa01: stop_debug_env build_release_goleveldb
 join_qa02: stop_debug_env build_release_goleveldb
 	bash tools/node_init.sh qa02
 
+join_qa03: stop_debug_env build_release_goleveldb
+	bash tools/node_init.sh qa03
+
 join_testnet: stop_debug_env build_release_goleveldb
 	bash tools/node_init.sh testnet
 
@@ -183,7 +178,7 @@ join_mainnet: stop_debug_env build_release_goleveldb
 	bash tools/node_init.sh mainnet
 
 start_localnode: stop_debug_env
-	bash tools/node_init.sh _ _
+	bash -x tools/node_init.sh _ _
 
 # ci_build_image:
 # 	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \
