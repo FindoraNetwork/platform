@@ -33,6 +33,7 @@ use fp_types::{
     actions::{evm::Action, xhub::NonConfidentialOutput},
     crypto::{Address, HA160},
 };
+use fp_utils::hashing::keccak_256;
 use precompile::PrecompileSet;
 use ruc::*;
 use runtime::runner::ActionRunner;
@@ -131,6 +132,7 @@ impl<C: Config> App<C> {
             gas_limit,
             self.contracts.bridge_address,
             value,
+            None,
         )?;
 
         let action = TransactionAction::Call(self.contracts.bridge_address);
@@ -172,6 +174,20 @@ impl<C: Config> App<C> {
         let gas_limit = 9999999;
         let gas_price = U256::one();
 
+        // Calculate the contract address
+        let (target, salt) = if target == H160::zero() {
+            let salt = H256::random();
+            let code_hash = keccak_256(&_lowlevel);
+            let contract_address = utils::compute_create2(
+                source.clone(),
+                salt,
+                H256::from_slice(&code_hash),
+            );
+            (contract_address, Some(salt))
+        } else {
+            (target, None)
+        };
+
         let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
             _lowlevel.clone(),
@@ -179,6 +195,7 @@ impl<C: Config> App<C> {
             gas_limit,
             target,
             _value,
+            salt,
         )?;
 
         let action = TransactionAction::Call(target);
