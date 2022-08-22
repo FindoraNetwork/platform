@@ -194,6 +194,7 @@ impl<C: Config> ActionRunner<C> {
         gas_limit: u64,
         target: H160,
         value: U256,
+        salt: Option<H256>,
     ) -> Result<(Vec<u8>, Vec<Log>, U256)> {
         let config = evm::Config::istanbul();
 
@@ -207,8 +208,14 @@ impl<C: Config> ActionRunner<C> {
         let mut executor =
             StackExecutor::new_with_precompile(state, &config, C::Precompiles::execute);
 
-        let (result, data) =
-            executor.transact_call(source, target, value, input, gas_limit);
+        let (result, data) = if let Some(salt) = salt {
+            (
+                executor.transact_create2(source, value, input, salt, gas_limit),
+                vec![],
+            )
+        } else {
+            executor.transact_call(source, target, value, input, gas_limit)
+        };
 
         let gas_used = U256::from(executor.used_gas());
         let state = executor.into_state();

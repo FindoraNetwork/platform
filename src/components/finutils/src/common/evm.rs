@@ -16,7 +16,7 @@ use fp_types::{
     assemble::{CheckFee, CheckNonce},
     crypto::{Address, MultiSignature, MultiSigner},
     transaction::UncheckedTransaction,
-    U256,
+    H160, U256,
 };
 use fp_utils::ecdsa::SecpPair;
 use fp_utils::tx::EvmRawTxWrapper;
@@ -37,6 +37,7 @@ pub fn transfer_to_account(
     asset: Option<&str>,
     address: Option<&str>,
     lowlevel_data: Option<&str>,
+    deploy: Option<&str>,
 ) -> Result<()> {
     let mut builder = utils::new_tx_builder()?;
 
@@ -65,9 +66,14 @@ pub fn transfer_to_account(
         Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
     )?;
 
-    let target_address = match address {
-        Some(s) => MultiSigner::from_str(s).c(d!())?,
-        None => MultiSigner::Xfr(kp.get_pk()),
+    let target_address = if deploy.is_none() {
+        match address {
+            Some(s) => MultiSigner::from_str(s).c(d!())?,
+            None => MultiSigner::Xfr(kp.get_pk()),
+        }
+    } else {
+        let create = H160::zero();
+        MultiSigner::Ethereum(create)
     };
 
     builder

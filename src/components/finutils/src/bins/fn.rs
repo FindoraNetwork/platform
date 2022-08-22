@@ -404,11 +404,13 @@ fn run() -> Result<()> {
         let address = m.value_of("addr");
         let asset = m.value_of("asset");
         let lowlevel_data = m.value_of("lowlevel-data");
+        let deploy = m.value_of("deploy");
         transfer_to_account(
             amount.parse::<u64>().c(d!())?,
             asset,
             address,
             lowlevel_data,
+            deploy,
         )?
     } else if let Some(m) = matches.subcommand_matches("contract-withdraw") {
         let amount = m.value_of("amount").c(d!())?;
