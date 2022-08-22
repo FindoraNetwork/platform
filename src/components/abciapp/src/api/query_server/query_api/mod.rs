@@ -1,4 +1,5 @@
-   //!
+
+//!
 //! need to transform the data in ledgerState to store
 //!
 
@@ -186,7 +187,7 @@ async fn check_nullifier_hash(
 }
 
 async fn get_max_atxo_sid(
-    data: web::Data<Arc<RwLock<QueryServer>>>
+    data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> actix_web::Result<web::Json<Option<usize>>, actix_web::error::Error> {
     let server = data.read();
     Ok(web::Json(server.max_atxo_sid()))
