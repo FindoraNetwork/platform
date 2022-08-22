@@ -12,7 +12,7 @@ use {
     toml,
 };
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Clone, Serialize, Deserialize, Default)]
 #[allow(missing_docs)]
 pub struct CheckPointConfig {
     pub evm_substate_height: i64,
@@ -99,7 +99,9 @@ impl CheckPointConfig {
 
         let mut content = String::new();
         f.read_to_string(&mut content).unwrap();
-        let config: CheckPointConfig = toml::from_str(content.as_str()).unwrap();
+        let config: CheckPointConfig = toml::from_str(content.as_str())
+            .or_else(|_| serde_json::from_str(content.as_str()))
+            .unwrap();
         Some(config)
     }
 }
