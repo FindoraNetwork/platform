@@ -62,7 +62,7 @@ pub struct EthApiImpl {
 
 impl EthApiImpl {
     pub fn new(
-        url: String,
+        tm_client: Arc<HttpClient>,
         account_base_app: Arc<RwLock<BaseApp>>,
         signers: Vec<SecpPair>,
         max_past_logs: u32,
@@ -70,7 +70,7 @@ impl EthApiImpl {
         Self {
             account_base_app,
             signers,
-            tm_client: Arc::new(HttpClient::new(url.as_str()).unwrap()),
+            tm_client,
             max_past_logs,
         }
     }

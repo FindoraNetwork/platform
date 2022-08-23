@@ -36,8 +36,9 @@ use {
     server::QueryServer,
     std::{
         collections::{BTreeMap, HashMap, HashSet},
-        sync::Arc,
+        sync::{atomic::Ordering, Arc},
     },
+    tendermint_rpc::Client,
 };
 
 /// Returns the git commit hash and commit date of this build
@@ -603,6 +604,32 @@ pub async fn get_checkpoint(
 
     Ok(web::Json(checkpoint))
 }
+#[derive(Serialize, Deserialize)]
+#[allow(missing_docs)]
+pub struct HeathCheck {
+    node_is_catch_up: bool,
+    is_generateing_block: bool,
+    time: String,
+}
+#[allow(missing_docs)]
+pub async fn heath_check(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+) -> actix_web::Result<web::Json<HeathCheck>, actix_web::error::Error> {
+    let server = data.read();
+
+    let rt = tokio::runtime::Runtime::new()?;
+    let status = rt
+        .block_on(server.tm_client.status())
+        .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
+    let block_time = crate::abci::BLOCK_TIMESTAMP.load(Ordering::SeqCst);
+    let last_block_time = crate::abci::LAST_BLOCK_TIMESTAMP.load(Ordering::SeqCst);
+    Ok(web::Json(HeathCheck {
+        node_is_catch_up: !status.sync_info.catching_up,
+        is_generateing_block: crate::abci::IN_SAFE_ITV.load(Ordering::SeqCst),
+        time: format!("{}s", block_time - last_block_time),
+    }))
+}
+
 /// Structures exposed to the outside world
 pub struct QueryApi;
 
@@ -800,6 +827,7 @@ impl QueryApi {
                     web::resource("/display_checkpoint")
                         .route(web::get().to(get_checkpoint)),
                 )
+                .service(web::resource("/heath_check").route(web::get().to(heath_check)))
         });
 
         for (host, port) in addrs.iter() {

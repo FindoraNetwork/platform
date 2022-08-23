@@ -6,7 +6,10 @@ mod utils;
 
 use {
     crate::{
-        abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV, IS_EXITING, POOL},
+        abci::{
+            server::ABCISubmissionServer, staking, BLOCK_TIMESTAMP, IN_SAFE_ITV,
+            IS_EXITING, LAST_BLOCK_TIMESTAMP, POOL,
+        },
         api::{
             query_server::BLOCK_CREATED,
             submission_server::{convert_tx, try_tx_catalog, TxCatalog},
@@ -176,6 +179,11 @@ pub fn begin_block(
         std::thread::sleep(Duration::from_secs(10));
     }
 
+    if !IN_SAFE_ITV.load(Ordering::SeqCst) {
+        LAST_BLOCK_TIMESTAMP
+            .store(BLOCK_TIMESTAMP.load(Ordering::SeqCst), Ordering::Release);
+        BLOCK_TIMESTAMP.store(chrono::Local::now().timestamp(), Ordering::Release);
+    }
     IN_SAFE_ITV.store(true, Ordering::Release);
 
     #[cfg(target_os = "linux")]

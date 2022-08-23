@@ -22,6 +22,7 @@ use parking_lot::RwLock;
 use rustc_hex::ToHex;
 use serde_json::Value;
 use std::sync::Arc;
+use tendermint_rpc::HttpClient;
 
 const MAX_PAST_LOGS: u32 = 10000;
 const MAX_STORED_FILTERS: usize = 500;
@@ -29,7 +30,7 @@ const MAX_STORED_FILTERS: usize = 500;
 pub fn start_web3_service(
     evm_http: String,
     evm_ws: String,
-    tendermint_rpc: String,
+    tm_client: &Arc<HttpClient>,
     app: Arc<RwLock<BaseApp>>,
 ) -> Box<dyn std::any::Any + Send> {
     let app2 = Arc::new(RwLock::new(app.read().derive_app()));
@@ -43,7 +44,7 @@ pub fn start_web3_service(
         rpc_handler(
             (
                 eth::EthApiImpl::new(
-                    tendermint_rpc.clone(),
+                    tm_client.clone(),
                     app.clone(),
                     signers.clone(),
                     MAX_PAST_LOGS,

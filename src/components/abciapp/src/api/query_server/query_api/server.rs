@@ -21,6 +21,7 @@ use {
     parking_lot::{Condvar, Mutex, RwLock},
     ruc::*,
     std::{collections::HashSet, sync::Arc},
+    tendermint_rpc::HttpClient,
 };
 
 lazy_static! {
@@ -32,15 +33,20 @@ lazy_static! {
 
 /// A data container for API
 pub struct QueryServer {
+    pub(crate) tm_client: Arc<HttpClient>,
     pub(crate) ledger: Arc<RwLock<LedgerState>>,
     pub(crate) ledger_cloned: LedgerState,
 }
 
 impl QueryServer {
     /// create query server
-    pub fn new(ledger: Arc<RwLock<LedgerState>>) -> QueryServer {
+    pub fn new(
+        tm_client: &Arc<HttpClient>,
+        ledger: Arc<RwLock<LedgerState>>,
+    ) -> QueryServer {
         let ledger_cloned = ledger.read().clone();
         QueryServer {
+            tm_client: tm_client.clone(),
             ledger,
             ledger_cloned,
         }

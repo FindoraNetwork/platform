@@ -20,9 +20,13 @@ use {
     std::{
         env, fs,
         net::SocketAddr,
-        sync::{atomic::AtomicBool, Arc},
+        sync::{
+            atomic::{AtomicBool, AtomicI64},
+            Arc,
+        },
         thread,
     },
+    tendermint_rpc::HttpClient,
 };
 
 lazy_static! {
@@ -33,6 +37,10 @@ lazy_static! {
     pub static ref POOL: ThreadPool = pnk!(ThreadPool::new());
     /// if is exiting, we should not do anything.
     pub static ref IS_EXITING: AtomicBool = AtomicBool::new(false);
+    ///
+    pub static ref LAST_BLOCK_TIMESTAMP: AtomicI64 = AtomicI64::new(chrono::Local::now().timestamp());
+    ///
+    pub static ref BLOCK_TIMESTAMP: AtomicI64 = AtomicI64::new(chrono::Local::now().timestamp());
 }
 
 /// Starting findorad
@@ -58,9 +66,19 @@ pub fn run() -> Result<()> {
 
     let submission_service_hdr = Arc::clone(&app.la);
 
+    let tendermint_rpc = format!(
+        "http://{}:{}",
+        config.tendermint_host, config.tendermint_port
+    );
+    pnk!(init_url(tendermint_rpc.as_str()));
+
+    let tm_client = Arc::new(pnk!(HttpClient::new(tendermint_rpc.as_str())));
+
     if CFG.enable_query_service {
         let query_service_hdr = submission_service_hdr.read().borrowable_ledger_state();
+
         pnk!(query_api::service::start_query_server(
+            &tm_client,
             Arc::clone(&query_service_hdr),
             &[
                 (&config.abci_host, config.query_port),
@@ -86,13 +104,7 @@ pub fn run() -> Result<()> {
         let base_app = app.account_base_app.clone();
         let evm_http = format!("{}:{}", config.abci_host, config.evm_http_port);
         let evm_ws = format!("{}:{}", config.abci_host, config.evm_ws_port);
-        let tendermint_rpc = format!(
-            "http://{}:{}",
-            config.tendermint_host, config.tendermint_port
-        );
-        pnk!(init_url(tendermint_rpc.as_str()));
-        web3_rpc =
-            fc_rpc::start_web3_service(evm_http, evm_ws, tendermint_rpc, base_app);
+        web3_rpc = fc_rpc::start_web3_service(evm_http, evm_ws, &tm_client, base_app);
     }
 
     let addr_str = format!("{}:{}", config.abci_host, config.abci_port);
