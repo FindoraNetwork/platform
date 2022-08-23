@@ -6,6 +6,7 @@
 //! This module is the library part of FN.
 //!
 
+pub mod dev;
 pub mod evm;
 pub mod utils;
 
