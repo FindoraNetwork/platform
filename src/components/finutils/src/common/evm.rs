@@ -39,58 +39,69 @@ pub fn transfer_to_account(
     lowlevel_data: Option<&str>,
     deploy: Option<&str>,
 ) -> Result<()> {
-    let mut builder = utils::new_tx_builder()?;
+    let rt = tokio::runtime::Runtime::new().c(d!())?;
+    rt.block_on(async {
+        let mut builder = utils::new_tx_builder()?;
 
-    let kp = get_keypair()?;
+        let kp = get_keypair()?;
 
-    let asset = if let Some(asset) = asset {
-        let asset = AssetTypeCode::new_from_base64(asset)?;
-        Some(asset)
-    } else {
-        None
-    };
+        let asset = if let Some(asset) = asset {
+            let asset = AssetTypeCode::new_from_base64(asset)?;
+            Some(asset)
+        } else {
+            None
+        };
 
-    let lowlevel_data = if let Some(data) = lowlevel_data {
-        let data = hex::decode(data).c(d!())?;
-        Some(data)
-    } else {
-        None
-    };
+        let lowlevel_data = if let Some(data) = lowlevel_data {
+            let data = hex::decode(data).c(d!())?;
+            Some(data)
+        } else {
+            None
+        };
 
-    let transfer_op = utils::gen_transfer_op(
-        &kp,
-        vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
-        asset,
-        false,
-        false,
-        Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
-    )?;
+        let addr = get_serv_addr()?;
+        let web3_addr = format!("{}/8545",addr);
 
-    let target_address = if deploy.is_none() {
-        match address {
-            Some(s) => MultiSigner::from_str(s).c(d!())?,
-            None => MultiSigner::Xfr(kp.get_pk()),
-        }
-    } else {
-        let create = H160::zero();
-        MultiSigner::Ethereum(create)
-    };
+        let target_address = if deploy.is_none() {
+            match address {
+                Some(s) => MultiSigner::from_str(s).c(d!())?,
+                None => MultiSigner::Xfr(kp.get_pk()),
+            }
+        } else {
+            let create = H160::zero();
+            MultiSigner::Ethereum(create)
+        };
 
-    builder
-        .add_operation(transfer_op)
-        .add_operation_convert_account(
+        let gas_price = utils::get_gas_price(web3_addr.as_str()).await.c(d!())?;
+        let gas_limit = utils::get_gas_limit(web3_addr.as_str(), )
+
+        let transfer_op = utils::gen_transfer_op(
             &kp,
-            target_address,
+            vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
             asset,
-            amount,
-            lowlevel_data,
-        )?
-        .sign(&kp);
+            false,
+            false,
+            Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
+        )?;
 
-    let mut tx = builder.build_and_take_transaction()?;
-    tx.sign(&kp);
 
-    utils::send_tx(&tx)?;
+
+        builder
+            .add_operation(transfer_op)
+            .add_operation_convert_account(
+                &kp,
+                target_address,
+                asset,
+                amount,
+                lowlevel_data,
+            )?
+            .sign(&kp);
+
+        let mut tx = builder.build_and_take_transaction()?;
+        tx.sign(&kp);
+
+        utils::send_tx(&tx)?;
+    });
     Ok(())
 }
 
