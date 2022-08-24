@@ -109,6 +109,7 @@ impl CheckPointConfig {
 
         let mut content = String::new();
         f.read_to_string(&mut content).unwrap();
+        println!("{}", content);
         let config: CheckPointConfig = toml::from_str(content.as_str()).unwrap();
         Some(config)
     }
