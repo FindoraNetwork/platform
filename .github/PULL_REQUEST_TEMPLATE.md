@@ -7,6 +7,7 @@
 * **make sure that you have executed below Jenkins jobs successfully**
   - [ ] Manual Integration Test
   - [ ] Manual Platform Test
+  - [ ] Manual Compatibility Test
 
 
 * **The major changes of this PR**
