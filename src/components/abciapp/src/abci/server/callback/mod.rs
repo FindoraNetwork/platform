@@ -301,7 +301,7 @@ pub fn deliver_tx(
                                 .write()
                                 .commit_session();
                             return resp;
-                        } else {
+                        } else if td_height > CFG.checkpoint.fix_exec_code {
                             resp.code = 1;
                             resp.log = "cache_transaction failed".to_owned();
                         }
@@ -376,7 +376,7 @@ pub fn deliver_tx(
                 }
                 let mut resp = s.account_base_app.write().deliver_tx(req);
 
-                if 0 == resp.code {
+                if td_height > CFG.checkpoint.fix_prism_mint_pay && 0 == resp.code {
                     let mut la = s.la.write();
                     let mut laa = la.get_committed_state().write();
                     if let Some(tx) = staking::system_prism_mint_pay(
@@ -387,20 +387,20 @@ pub fn deliver_tx(
                         if la.cache_transaction(tx).is_ok() {
                             return resp;
                         }
+                        resp.code = 1;
+                        s.account_base_app
+                            .read()
+                            .deliver_state
+                            .state
+                            .write()
+                            .discard_session();
+                        s.account_base_app
+                            .read()
+                            .deliver_state
+                            .db
+                            .write()
+                            .discard_session();
                     }
-                    resp.code = 1;
-                    s.account_base_app
-                        .read()
-                        .deliver_state
-                        .state
-                        .write()
-                        .discard_session();
-                    s.account_base_app
-                        .read()
-                        .deliver_state
-                        .db
-                        .write()
-                        .discard_session();
                 }
                 resp
             }
@@ -435,8 +435,12 @@ pub fn end_block(
 
     // mint coinbase, cache system transactions to ledger
     {
-        let laa = la.get_committed_state().write();
-        if let Some(tx) = staking::system_mint_pay(&*laa) {
+        let mut laa = la.get_committed_state().write();
+        if let Some(tx) = staking::system_mint_pay(
+            td_height,
+            &mut *laa,
+            &mut *s.account_base_app.write(),
+        ) {
             drop(laa);
             // this unwrap should be safe
             la.cache_transaction(tx).unwrap();
