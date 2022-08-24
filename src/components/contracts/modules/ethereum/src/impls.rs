@@ -20,7 +20,7 @@ use fp_types::{
     crypto::{secp256k1_ecdsa_recover, HA256},
 };
 use fp_utils::{proposer_converter, timestamp_converter};
-use log::{debug, error, info};
+use log::{debug, info};
 use ruc::*;
 use sha3::{Digest, Keccak256};
 
@@ -478,15 +478,7 @@ impl<C: Config> App<C> {
             TransactionIndex::insert(ctx.db.write().borrow_mut(), &idx.0, &idx.1)?;
             debug!(target: "ethereum", "hash: 0x{}, block: {}, index: {}", idx.0.to_string(), idx.1 .0, idx.1 .1);
         }
-
-        if !ctx.db.write().cache_mut().good2_commit() {
-            ctx.db.write().cache_mut().discard();
-
-            error!(target: "ethereum", "ctx db commit no good");
-            return Err(eg!("ctx db commit no good"));
-        }
         ctx.db.write().commit_session();
-
         info!(target: "ethereum", "{} transaction indexes migrated to db", txn_idxs_cnt);
 
         Ok(())
