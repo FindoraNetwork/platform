@@ -111,6 +111,7 @@ impl CheckPointConfig {
         f.read_to_string(&mut content).unwrap();
         println!("{}", content);
         let config: CheckPointConfig = toml::from_str(content.as_str()).unwrap();
+        println!("{:?}", config);
         Some(config)
     }
 }
@@ -408,6 +409,7 @@ pub mod global_cfg {
             btmcfg: parse_btmcfg(&m).map_err(|e| d!("{}", e))?,
             checkpoint: CheckPointConfig::from_file(&checkpoint_path).unwrap(),
         };
+        println!("{:?}", res.checkpoint);
 
         Ok(res)
     }
