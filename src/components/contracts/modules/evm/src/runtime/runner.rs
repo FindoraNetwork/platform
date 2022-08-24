@@ -1,12 +1,15 @@
 use super::stack::FindoraStackState;
-use crate::precompile::PrecompileSet;
+// use crate::precompile::PrecompileSet;
 use crate::{App, Config};
 use ethereum_types::{H160, H256, U256};
 use evm::{
-    executor::{StackExecutor, StackSubstateMetadata},
+    executor::stack::{StackExecutor, StackSubstateMetadata},
     ExitReason,
 };
-use fp_core::{context::Context, ensure};
+use fp_core::{
+    macros::Get2,
+    {context::Context, ensure},
+};
 use fp_evm::*;
 use fp_traits::evm::{FeeCalculator, OnChargeEVMTransaction};
 use fp_types::actions::evm::*;
@@ -22,7 +25,7 @@ pub struct ActionRunner<C: Config> {
 impl<C: Config> ActionRunner<C> {
     #[allow(clippy::too_many_arguments)]
     /// Execute an EVM operation.
-    pub fn execute<'config, F, R>(
+    pub fn execute<'config, 'precompiles, F, R>(
         ctx: &Context,
         source: H160,
         value: U256,
@@ -30,11 +33,17 @@ impl<C: Config> ActionRunner<C> {
         gas_price: Option<U256>,
         nonce: Option<U256>,
         config: &'config evm::Config,
+        precompiles: &'precompiles C::PrecompilesType,
         f: F,
     ) -> Result<ExecutionInfo<R>>
     where
         F: FnOnce(
-            &mut StackExecutor<'config, FindoraStackState<'_, '_, 'config, C>>,
+            &mut StackExecutor<
+                'config,
+                'precompiles,
+                FindoraStackState<'_, '_, 'config, C>,
+                C::PrecompilesType,
+            >,
         ) -> (ExitReason, R),
     {
         // Gas price check is skipped when performing a gas estimation.
@@ -57,7 +66,7 @@ impl<C: Config> ActionRunner<C> {
         let metadata = StackSubstateMetadata::new(gas_limit, config);
         let state = FindoraStackState::new(ctx, &vicinity, metadata);
         let mut executor =
-            StackExecutor::new_with_precompile(state, config, C::Precompiles::execute);
+            StackExecutor::new_with_precompiles(state, config, precompiles);
 
         let total_fee = gas_price
             .checked_mul(U256::from(gas_limit))
@@ -151,11 +160,19 @@ impl<C: Config> ActionRunner<C> {
         let metadata = StackSubstateMetadata::new(gas_limit, &config);
         let state = FindoraStackState::<C>::new(ctx, &vicinity, metadata);
 
+        let precompiles = C::PrecompilesValue::get(ctx.clone());
         let mut executor =
-            StackExecutor::new_with_precompile(state, &config, C::Precompiles::execute);
+            StackExecutor::new_with_precompiles(state, &config, &precompiles);
 
-        let result =
-            executor.transact_create2(source, U256::zero(), bytecode, salt, gas_limit);
+        let access_list = Vec::new();
+        let result = executor.transact_create2(
+            source,
+            U256::zero(),
+            bytecode,
+            salt,
+            gas_limit,
+            access_list,
+        );
 
         let state = executor.into_state();
 
@@ -180,10 +197,10 @@ impl<C: Config> ActionRunner<C> {
             );
         }
 
-        if let ExitReason::Succeed(_) = result {
+        if let ExitReason::Succeed(_) = result.0 {
             Ok(())
         } else {
-            Err(eg!("Deploy system error: {:?}", result))
+            Err(eg!("Deploy system error: {:?}", result.0))
         }
     }
 
@@ -204,11 +221,13 @@ impl<C: Config> ActionRunner<C> {
         let metadata = StackSubstateMetadata::new(gas_limit, &config);
         let state = FindoraStackState::<C>::new(ctx, &vicinity, metadata);
 
+        let precompiles = C::PrecompilesValue::get(ctx.clone());
         let mut executor =
-            StackExecutor::new_with_precompile(state, &config, C::Precompiles::execute);
+            StackExecutor::new_with_precompiles(state, &config, &precompiles);
 
+        let access_list = Vec::new();
         let (result, data) =
-            executor.transact_call(source, target, value, input, gas_limit);
+            executor.transact_call(source, target, value, input, gas_limit, access_list);
 
         let gas_used = U256::from(executor.used_gas());
         let state = executor.into_state();
@@ -249,6 +268,8 @@ impl<C: Config> ActionRunner<C> {
 
 impl<C: Config> Runner for ActionRunner<C> {
     fn call(ctx: &Context, args: Call, config: &evm::Config) -> Result<CallInfo> {
+        let precompiles = C::PrecompilesValue::get(ctx.clone());
+        let access_list = Vec::new();
         Self::execute(
             ctx,
             args.source,
@@ -257,6 +278,7 @@ impl<C: Config> Runner for ActionRunner<C> {
             args.gas_price,
             args.nonce,
             config,
+            &precompiles,
             |executor| {
                 executor.transact_call(
                     args.source,
@@ -264,12 +286,15 @@ impl<C: Config> Runner for ActionRunner<C> {
                     args.value,
                     args.input,
                     args.gas_limit,
+                    access_list,
                 )
             },
         )
     }
 
     fn create(ctx: &Context, args: Create, config: &evm::Config) -> Result<CreateInfo> {
+        let precompiles = C::PrecompilesValue::get(ctx.clone());
+        let access_list = Vec::new();
         Self::execute(
             ctx,
             args.source,
@@ -278,17 +303,21 @@ impl<C: Config> Runner for ActionRunner<C> {
             args.gas_price,
             args.nonce,
             config,
+            &precompiles,
             |executor| {
                 let address = executor.create_address(evm::CreateScheme::Legacy {
                     caller: args.source,
                 });
                 (
-                    executor.transact_create(
-                        args.source,
-                        args.value,
-                        args.init,
-                        args.gas_limit,
-                    ),
+                    executor
+                        .transact_create(
+                            args.source,
+                            args.value,
+                            args.init,
+                            args.gas_limit,
+                            access_list,
+                        )
+                        .0,
                     address,
                 )
             },
@@ -301,6 +330,8 @@ impl<C: Config> Runner for ActionRunner<C> {
         config: &evm::Config,
     ) -> Result<CreateInfo> {
         let code_hash = H256::from_slice(Keccak256::digest(&args.init).as_slice());
+        let precompiles = C::PrecompilesValue::get(ctx.clone());
+        let access_list = Vec::new();
         Self::execute(
             ctx,
             args.source,
@@ -309,6 +340,7 @@ impl<C: Config> Runner for ActionRunner<C> {
             args.gas_price,
             args.nonce,
             config,
+            &precompiles,
             |executor| {
                 let address = executor.create_address(evm::CreateScheme::Create2 {
                     caller: args.source,
@@ -316,13 +348,16 @@ impl<C: Config> Runner for ActionRunner<C> {
                     salt: args.salt,
                 });
                 (
-                    executor.transact_create2(
-                        args.source,
-                        args.value,
-                        args.init,
-                        args.salt,
-                        args.gas_limit,
-                    ),
+                    executor
+                        .transact_create2(
+                            args.source,
+                            args.value,
+                            args.init,
+                            args.salt,
+                            args.gas_limit,
+                            access_list,
+                        )
+                        .0,
                     address,
                 )
             },
