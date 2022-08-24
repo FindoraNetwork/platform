@@ -4,7 +4,10 @@
   - [ ] make test
 
 
-* **[Manual Nightly](https://jenkins.dev.findora.org/view/integration%20test/job/Manual%20Integration%20Test/) test result link:**
+* **make sure that you have executed below Jenkins jobs successfully**
+  - [ ] Manual Integration Test
+  - [ ] Manual Platform Test
+  - [ ] Manual Compatibility Test
 
 
 * **The major changes of this PR**
