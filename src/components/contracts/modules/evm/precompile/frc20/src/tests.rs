@@ -23,7 +23,9 @@ fn selector_less_than_four_bytes() {
             },
             &BASE_APP.lock().unwrap().deliver_state,
         ),
-        Err(error("tried to parse selector out of bounds"))
+        Err(PrecompileFailure::Error {
+            exit_status: error("tried to parse selector out of bounds")
+        })
     );
 }
 
@@ -42,7 +44,9 @@ fn no_selector_exists_but_length_is_right() {
             },
             &BASE_APP.lock().unwrap().deliver_state,
         ),
-        Err(error("unknown selector"))
+        Err(PrecompileFailure::Error {
+            exit_status: error("unknown selector")
+        })
     );
 }
 
