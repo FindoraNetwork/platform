@@ -13,6 +13,7 @@ use {
     crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
     abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate},
     baseapp::BaseApp as AccountBaseApp,
+    config::abci::global_cfg::CFG,
     lazy_static::lazy_static,
     ledger::{
         data_model::{Operation, Transaction, ASSET_TYPE_FRA},
@@ -273,6 +274,7 @@ fn system_governance(staking: &mut Staking, bz: &ByzantineInfo) -> Result<()> {
 pub fn system_mint_pay(
     la: &LedgerState,
     account_base_app: &mut AccountBaseApp,
+    td_height: i64,
 ) -> Option<Transaction> {
     let staking = la.get_staking();
     let mut limit = staking.coinbase_balance() as i128;
@@ -286,16 +288,23 @@ pub fn system_mint_pay(
         .map(|(k, (n, receiver_pk))| {
             MintEntry::new(MintKind::UnStake, k, receiver_pk, n, ASSET_TYPE_FRA)
         })
+        .chain(staking.delegation_get_global_rewards().into_iter().map(
+            |(k, (n, receiver_pk))| {
+                let pk = if CFG.checkpoint.fix_undelegation_missing_reward_height
+                    < td_height
+                {
+                    Some(k)
+                } else {
+                    receiver_pk
+                };
+                MintEntry::new(MintKind::Claim, k, pk, n, ASSET_TYPE_FRA)
+            },
+        ))
         .chain(
             staking
-                .delegation_get_global_rewards()
-                .into_iter()
-                .chain(
-                    staking
-                        .fra_distribution_get_plan()
-                        .iter()
-                        .map(|(k, n)| (*k, *n)),
-                )
+                .fra_distribution_get_plan()
+                .iter()
+                .map(|(k, n)| (*k, *n))
                 .take_while(|(_, n)| {
                     limit -= *n as i128;
                     limit >= 0

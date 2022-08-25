@@ -11,6 +11,7 @@ pub mod service;
 use {
     actix_cors::Cors,
     actix_web::{error, middleware, web, App, HttpServer},
+    config::abci::{global_cfg::CFG, CheckPointConfig},
     finutils::api::NetworkRoute,
     globutils::wallet,
     ledger::{
@@ -481,6 +482,13 @@ pub async fn get_total_supply(
     Ok(web::Json(res))
 }
 
+#[inline(always)]
+#[allow(missing_docs)]
+pub async fn get_checkpoint(
+) -> actix_web::Result<web::Json<CheckPointConfig>, actix_web::error::Error> {
+    Ok(web::Json(CFG.checkpoint.clone()))
+}
+
 /// Structures exposed to the outside world
 pub struct QueryApi;
 
@@ -635,6 +643,10 @@ impl QueryApi {
                 .route(
                     &ApiRoutes::ValidatorDetail.with_arg_template("NodeAddress"),
                     web::get().to(query_validator_detail),
+                )
+                .service(
+                    web::resource("/display_checkpoint")
+                        .route(web::get().to(get_checkpoint)),
                 )
         });
 

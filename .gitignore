@@ -33,3 +33,5 @@ checkpoint.toml
 *.tmp
 
 checkpoint*
+proof_tree
+proof_tree.1

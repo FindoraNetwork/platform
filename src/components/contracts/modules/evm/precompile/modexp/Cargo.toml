@@ -9,6 +9,6 @@ description = "MODEXP precompiles for EVM module."
 readme = "README.md"
 
 [dependencies]
-evm = { version = "0.29.0", default-features = false, features = ["with-serde"] }
+evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
 module-evm = { path = "../../../../modules/evm"}
 num = { version = "0.3", features = ["alloc"] }
