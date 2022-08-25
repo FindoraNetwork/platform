@@ -542,6 +542,7 @@ subcommands:
                   long: abcid-extra-flags
                   takes_value: true
                   value_name: ABCID EXTRA FLAGS
+                  allow_hyphen_values: true
                   required: false
         - destroy:
             about: Destroy an existing env

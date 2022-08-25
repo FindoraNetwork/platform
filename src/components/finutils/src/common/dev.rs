@@ -4,7 +4,7 @@
 //! - @Author: hui@findora.org
 //!
 
-#![allow(warnings)]
+#![deny(warnings)]
 #![allow(missing_docs)]
 
 use lazy_static::lazy_static;
@@ -14,7 +14,6 @@ use nix::{
     },
     unistd::{close, fork, ForkResult},
 };
-use rand::random;
 use ruc::{cmd, *};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -50,6 +49,7 @@ lazy_static! {
         env::var("FN_DEV_HOST_IP").unwrap_or_else(|_| "127.0.0.1".to_owned());
 }
 
+#[derive(Debug)]
 pub struct EnvCfg {
     // the name of this env
     pub name: String,
@@ -147,7 +147,6 @@ pub struct Env {
     checkpoint_file: Option<String>,
 
     // eg,
-    // - `--enable-snapshot`
     // - `--disable-eth-empty-blocks`
     // - ...
     abcid_extra_flags: Option<String>,
@@ -157,11 +156,19 @@ impl Env {
     // - initilize a new env
     // - `genesis.json` will be created
     fn create(cfg: &EnvCfg) -> Result<Env> {
+        let home = format!("{}/{}", ENV_BASE_DIR, &cfg.name);
+
+        if fs::metadata(&home).is_ok() {
+            return Err(eg!("Another env with the same name exists!"));
+        }
+
         let mut env = Env {
             name: cfg.name.clone(),
-            home: format!("{}/{}", ENV_BASE_DIR, &cfg.name),
+            home,
             block_itv_secs: cfg.block_itv_secs,
             evm_chain_id: cfg.evm_chain_id,
+            checkpoint_file: cfg.checkpoint_file.clone(),
+            abcid_extra_flags: cfg.abcid_extra_flags.clone(),
             ..Self::default()
         };
 
@@ -396,14 +403,15 @@ impl Env {
 
     // Allocate unique IDs for nodes within the scope of an env
     fn next_node_id(&mut self) -> NodeId {
+        let id = self.latest_id;
         self.latest_id += 1;
-        self.latest_id
+        id
     }
 
     // Generate a new `genesis.json`
     // based on the collection of initial validators.
     fn gen_genesis(&mut self) -> Result<()> {
-        let tmp_id = self.next_node_id();
+        let tmp_id = NodeId::MAX;
         let tmp_home = format!("{}/{}", &self.home, tmp_id);
 
         let gen = |genesis_file: String| {
@@ -567,7 +575,7 @@ impl Node {
                 }
                 write!(cmd, " >>{}/app.log 2>&1 &", &self.home).unwrap();
 
-                println!("{}", &cmd);
+                fs::write(format!("{}/last_cmd.log", &self.home), &cmd).unwrap();
                 pnk!(exec_spawn(&cmd));
 
                 exit(0);
@@ -636,6 +644,7 @@ struct Ports {
     app_8668: u16,
 }
 
+#[derive(Debug)]
 pub enum Ops {
     Create,
     Destroy,

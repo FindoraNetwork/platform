@@ -432,62 +432,62 @@ fn run() -> Result<()> {
         let mut envcfg = EnvCfg::default();
 
         let ops = if let Some(sm) = m.subcommand_matches("create") {
-            if let Some(name) = sm.value_of("env-name") {
+            if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
             }
-            if let Some(id) = sm.value_of("evm-chain-id") {
+            if let Some(id) = sm.value_of("evm_chain_id") {
                 envcfg.evm_chain_id = id.parse::<u64>().c(d!())?;
             }
-            if let Some(itv) = sm.value_of("block-itv-secs") {
+            if let Some(itv) = sm.value_of("block_itv_secs") {
                 envcfg.block_itv_secs = itv.parse::<u8>().c(d!())?;
             }
-            if let Some(num) = sm.value_of("validator-num") {
+            if let Some(num) = sm.value_of("validator_num") {
                 envcfg.node_num = num.parse::<u8>().c(d!())?;
             }
-            if let Some(file) = sm.value_of("checkpoint-file") {
+            if let Some(file) = sm.value_of("checkpoint_file") {
                 envcfg.checkpoint_file = Some(file.to_owned());
             }
-            if let Some(flags) = sm.value_of("abcid-extra-flags") {
+            if let Some(flags) = sm.value_of("abcid_extra_flags") {
                 envcfg.abcid_extra_flags = Some(flags.to_owned());
             }
             Ops::Create
         } else if let Some(sm) = m.subcommand_matches("destroy") {
-            if let Some(name) = sm.value_of("env-name") {
+            if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
             }
             Ops::Destroy
         } else if let Some(sm) = m.subcommand_matches("start") {
-            if let Some(name) = sm.value_of("env-name") {
+            if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
             }
             Ops::Start
         } else if let Some(sm) = m.subcommand_matches("stop") {
-            if let Some(name) = sm.value_of("env-name") {
+            if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
             }
             Ops::Stop
         } else if let Some(sm) = m.subcommand_matches("add-node") {
-            if let Some(name) = sm.value_of("env-name") {
+            if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
             }
             Ops::AddNode
         } else if let Some(sm) = m.subcommand_matches("del-node") {
-            if let Some(name) = sm.value_of("env-name") {
+            if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
             }
             Ops::DelNode
         } else if let Some(sm) = m.subcommand_matches("info") {
-            if let Some(name) = sm.value_of("env-name") {
+            if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
             }
             Ops::Info
         } else if let Some(sm) = m.subcommand_matches("initpos") {
-            if let Some(name) = sm.value_of("env-name") {
+            if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
             }
             Ops::InitPos
         } else {
-            if let Some(name) = m.value_of("env-name") {
+            if let Some(name) = m.value_of("env_name") {
                 envcfg.name = name.to_owned();
             }
             Ops::default()
