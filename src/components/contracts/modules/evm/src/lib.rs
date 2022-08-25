@@ -164,6 +164,7 @@ impl<C: Config> App<C> {
         transaction_index: u32,
         transaction_hash: H256,
         nonce: U256,
+        gas: Option<(U256, U256)>,
     ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
         let bytes: &[u8] = _from.as_ref();
         let source = H160::from_slice(&bytes[4..24]);
@@ -171,8 +172,11 @@ impl<C: Config> App<C> {
         let bytes: &[u8] = _to.as_ref();
         let target = H160::from_slice(&bytes[4..24]);
 
-        let gas_limit = 9999999;
-        let gas_price = U256::one();
+        let (gas_price, gas_limit) = if let Some((gas_price, gas_limit)) = gas {
+            (gas_price, gas_limit)
+        } else {
+            return Err(eg!("gas is none"));
+        };
 
         // Calculate the contract address
         let (target, salt) = if target == H160::zero() {
@@ -192,7 +196,7 @@ impl<C: Config> App<C> {
             ctx,
             _lowlevel.clone(),
             source,
-            gas_limit,
+            gas_limit.as_u64(),
             target,
             _value,
             salt,
@@ -205,7 +209,7 @@ impl<C: Config> App<C> {
             _lowlevel,
             _value,
             action,
-            U256::from(gas_limit),
+            gas_limit,
             gas_price,
             used_gas,
             transaction_index,

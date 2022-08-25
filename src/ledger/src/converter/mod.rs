@@ -10,6 +10,7 @@ use zei::xfr::{
     sig::XfrPublicKey,
     structs::{AssetType, XfrAmount, XfrAssetType},
 };
+use fp_types::U256;
 
 /// Use this operation to transfer.
 ///
@@ -33,6 +34,10 @@ pub struct ConvertAccount {
     /// convert asset lowlevel data.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lowlevel_data: Option<Vec<u8>>,
+
+    pub gas_price: U256,
+
+    pub gas_limit: U256,
 }
 
 #[allow(missing_docs)]
@@ -66,12 +71,13 @@ pub fn is_convert_account(tx: &Transaction) -> bool {
 #[allow(missing_docs)]
 pub fn check_convert_account(
     tx: &Transaction,
-) -> Result<(XfrPublicKey, MultiSigner, u64, AssetType, Vec<u8>)> {
+) -> Result<(XfrPublicKey, MultiSigner, u64, AssetType, Vec<u8>, Option<(U256, U256)>)> {
     let signer;
     let target;
     let expected_value;
     let expected_asset;
     let expected_lowlevel;
+    let gas;
 
     if let Some(Operation::ConvertAccount(ca)) = tx.body.operations.last() {
         if ca.nonce != tx.body.no_replay_token {
@@ -99,6 +105,8 @@ pub fn check_convert_account(
         } else {
             expected_lowlevel = Vec::new();
         }
+
+        gas = Some((ca.gas_price, ca.gas_limit));
     } else {
         return Err(eg!(
             "TransferUTXOsToEVM error: invalid ConvertAccount operation"
@@ -106,6 +114,7 @@ pub fn check_convert_account(
     }
 
     if let Some(Operation::TransferAsset(t)) = tx.body.operations.first() {
+        gas = None;
         let has_signer = t.get_owner_addresses().iter().any(|&pk| pk == signer);
         if !has_signer {
             return Err(eg!("TransferUTXOsToEVM error: not found signer"));
@@ -145,5 +154,6 @@ pub fn check_convert_account(
         expected_value,
         expected_asset,
         expected_lowlevel,
+        gas,
     ))
 }

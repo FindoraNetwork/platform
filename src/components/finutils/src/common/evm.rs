@@ -30,6 +30,7 @@ use tendermint_rpc::endpoint::abci_query::AbciQuery;
 use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::Runtime;
 use zei::xfr::{asset_record::AssetRecordType, sig::XfrKeyPair};
+use fp_types::crypto::IdentifyAccount;
 
 /// transfer utxo assets to account(ed25519 or ecdsa address) balance.
 pub fn transfer_to_account(
@@ -73,17 +74,24 @@ pub fn transfer_to_account(
         };
 
         let gas_price = utils::get_gas_price(web3_addr.as_str()).await.c(d!())?;
-        let gas_limit = utils::get_gas_limit(web3_addr.as_str(), )
+        let gas_limit = utils::get_gas_limit(
+            web3_addr.as_str(),
+            lowlevel_data.clone(),
+            target_address.into_account().as_byte_slice(),
+            Some(gas_price))
+            .await
+            .c(d!())?;
+        let fee = (gas_price * gas_limit) as u64;
+        println!("gas: {}", fee);
 
         let transfer_op = utils::gen_transfer_op(
             &kp,
-            vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
+            vec![(&BLACK_HOLE_PUBKEY_STAKING, amount + fee)],
             asset,
             false,
             false,
             Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
         )?;
-
 
 
         builder

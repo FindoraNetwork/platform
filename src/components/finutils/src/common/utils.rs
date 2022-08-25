@@ -859,7 +859,7 @@ pub async fn get_gas_price(addr: &str) -> Result<U256> {
 
 #[inline(always)]
 #[allow(missing_docs)]
-pub async fn get_gas_limit(addr: &str, data: Option<&[u8]>, to: &[u8], gas_price: Option<U256>) -> Result<U256> {
+pub async fn get_gas_limit(addr: &str, data: Option<Vec<u8>>, to: &[u8], gas_price: Option<U256>) -> Result<U256> {
     let transport = web3::transports::Http::new(addr).c(d!())?;
     let web3 = web3::Web3::new(transport);
     let gas_price = if let Some(price) = gas_price {
