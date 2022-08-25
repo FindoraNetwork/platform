@@ -7,7 +7,12 @@
 #![deny(warnings)]
 #![allow(missing_docs)]
 
+mod init;
+
 use lazy_static::lazy_static;
+use ledger::staking::{
+    td_addr_to_bytes, Validator as StakingValidator, ValidatorKind, FRA,
+};
 use nix::{
     sys::socket::{
         bind, setsockopt, socket, sockopt, AddressFamily, SockFlag, SockType, SockaddrIn,
@@ -33,6 +38,7 @@ use tendermint::{
     vote::Power as TmPower,
 };
 use toml_edit::{value as toml_value, Document};
+use zei::xfr::sig::XfrKeyPair;
 
 type NodeId = u32;
 
@@ -43,6 +49,12 @@ const INIT_POWER: u32 = 1;
 
 const MB: i64 = 1024 * 1024;
 const GB: i64 = 1024 * MB;
+
+const BANK_ACCOUNT_ADDR: &str =
+    "fra18xkez3fum44jq0zhvwq380rfme7u624cccn3z56fjeex6uuhpq6qv9e4g5";
+const BANK_ACCOUNT_PUBKEY: &str = "Oa2RRTzdayA8V2OBE7xp3n3NKrjGJxFTSZZybXOXCDQ=";
+const BANK_ACCOUNT_SECKEY: &str = "Ew9fMaryTL44ZXnEhcF7hQ-AB-fxgaC8vyCH-hCGtzg=";
+const BANK_ACCOUNT_MNEMONIC: &str = "field ranch pencil chest effort coyote april move injury illegal forest amount bid sound mixture use second pet embrace twice total essay valve loan";
 
 lazy_static! {
     static ref HOST_IP: String =
@@ -61,7 +73,7 @@ pub struct EnvCfg {
     pub block_itv_secs: u8,
 
     // how many initial validators should be created
-    pub node_num: u8,
+    pub initial_validator_num: u8,
 
     pub evm_chain_id: u64,
 
@@ -78,7 +90,7 @@ impl Default for EnvCfg {
             name: ENV_NAME_DEFAULT.to_owned(),
             ops: Ops::default(),
             block_itv_secs: 3,
-            node_num: 4,
+            initial_validator_num: 4,
             evm_chain_id: 2152,
             checkpoint_file: None,
             abcid_extra_flags: None,
@@ -114,9 +126,9 @@ impl EnvCfg {
                 env.print_info();
                 Some(env)
             }),
-            Ops::InitPos => Env::load_cfg(self)
+            Ops::Init => Env::load_cfg(self)
                 .c(d!())
-                .and_then(|mut env| env.init_pos().c(d!()))
+                .and_then(|mut env| env.init().c(d!()))
                 .map(|_| None),
         }
     }
@@ -133,6 +145,10 @@ pub struct Env {
 
     seeds: BTreeMap<NodeId, Node>,
     nodes: BTreeMap<NodeId, Node>,
+
+    // validator informations related to POS
+    initial_validator_num: u8,
+    initial_validators: Vec<InitialValidator>,
 
     // the latest/max id of current nodes
     latest_id: NodeId,
@@ -169,6 +185,7 @@ impl Env {
             evm_chain_id: cfg.evm_chain_id,
             checkpoint_file: cfg.checkpoint_file.clone(),
             abcid_extra_flags: cfg.abcid_extra_flags.clone(),
+            initial_validator_num: cfg.initial_validator_num,
             ..Self::default()
         };
 
@@ -182,7 +199,7 @@ impl Env {
         }
 
         add_initial_nodes!(Seed);
-        for _ in 0..cfg.node_num {
+        for _ in 0..cfg.initial_validator_num {
             add_initial_nodes!(Node);
         }
 
@@ -265,9 +282,13 @@ impl Env {
             .and_then(|_| self.write_cfg().c(d!()))
     }
 
-    // TODO
-    fn init_pos(&mut self) -> Result<()> {
-        todo!()
+    // 1. get validator list by ':26657/validators'
+    // 2. generate coresponding Xfr keypairs by `common::gen_key()`
+    // 3. send out the initial staking transaction
+    fn init(&mut self) -> Result<()> {
+        init::init(self)
+            .c(d!())
+            .and_then(|_| self.write_cfg().c(d!()))
     }
 
     // 1. allocate ports
@@ -515,10 +536,57 @@ impl Env {
     }
 
     fn print_info(&self) {
-        println!("Env name: {}", &self.name);
-        println!("Env home: {}", &self.home);
-        println!("Seed nodes: {:#?}", &self.seeds);
-        println!("Full(validator/full/sentry...) nodes: {:#?}", &self.nodes);
+        println!("==> Env name: {}", &self.name);
+        println!("==> Env home: {}", &self.home);
+        println!("==> Serving on: {}", &*HOST_IP);
+        println!(
+            r#"==> Bank account info:
+    Wallet Address: {}
+    Public key: {}
+    Secret key: {}
+    Mnemonic: {}"#,
+            BANK_ACCOUNT_ADDR,
+            BANK_ACCOUNT_PUBKEY,
+            BANK_ACCOUNT_SECKEY,
+            BANK_ACCOUNT_MNEMONIC
+        );
+        println!(
+            "==> Initial POS settings: {}",
+            serde_json::to_string_pretty(&self.initial_validators).unwrap()
+        );
+        println!("==> Seed nodes: {:#?}", &self.seeds);
+        println!(
+            "==> Full(validator/full/sentry...) nodes: {:#?}",
+            &self.nodes
+        );
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct InitialValidator {
+    tendermint_addr: String,
+    tendermint_pubkey: String,
+
+    xfr_keypair: XfrKeyPair,
+    xfr_mnemonic: String,
+    xfr_wallet_addr: String,
+}
+
+impl TryFrom<&InitialValidator> for StakingValidator {
+    type Error = Box<dyn ruc::RucError>;
+    fn try_from(v: &InitialValidator) -> Result<StakingValidator> {
+        Ok(StakingValidator {
+            td_pubkey: base64::decode(&v.tendermint_pubkey).c(d!())?,
+            td_addr: td_addr_to_bytes(&v.tendermint_addr).c(d!())?,
+            td_power: 500_0000 * FRA,
+            commission_rate: [1, 100],
+            id: v.xfr_keypair.get_pk(),
+            memo: Default::default(),
+            kind: ValidatorKind::Initiator,
+            signed_last_block: false,
+            signed_cnt: 0,
+            delegators: Default::default(),
+        })
     }
 }
 
@@ -653,7 +721,7 @@ pub enum Ops {
     AddNode,
     DelNode,
     Info,
-    InitPos, // TODO
+    Init,
 }
 
 impl Default for Ops {
@@ -782,6 +850,7 @@ impl PortsCache {
 }
 
 fn exec_spawn(cmd: &str) -> Result<()> {
+    let cmd = format!("ulimit -n 100000; {}", cmd);
     Command::new("bash")
         .arg("-c")
         .arg(cmd)

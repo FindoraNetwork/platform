@@ -604,8 +604,8 @@ subcommands:
                   takes_value: true
                   value_name: ENV NAME
                   required: false
-        - initpos:
-            about: Config the initial staking(pos) settings
+        - init:
+            about: Config the initial settings(POS,FRA issuance...)
             args:
               - env_name:
                   help: The name of the target env

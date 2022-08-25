@@ -1,0 +1,136 @@
+use super::{
+    Env, InitialValidator, StakingValidator, BANK_ACCOUNT_SECKEY, FRA, HOST_IP,
+};
+use crate::common::{
+    self,
+    utils::{gen_transfer_op, new_tx_builder, send_tx},
+};
+use ledger::{data_model::BLACK_HOLE_PUBKEY_STAKING, store::utils::fra_gen_initial_tx};
+use ruc::*;
+use serde::Deserialize;
+use zei::xfr::{asset_record::AssetRecordType, sig::XfrSecretKey};
+
+#[derive(Deserialize)]
+struct TmValidators {
+    result: TmValidatorsRet,
+}
+
+#[derive(Deserialize)]
+struct TmValidatorsRet {
+    validators: Vec<TmValidator>,
+}
+
+#[derive(Deserialize)]
+struct TmValidator {
+    address: String,
+    pub_key: TmPubKey,
+}
+
+#[derive(Deserialize)]
+struct TmPubKey {
+    value: String,
+}
+
+pub fn init(env: &mut Env) -> Result<()> {
+    let tmrpc = env.nodes.values().next().c(d!())?.ports.tm_rpc;
+    let page_size = env.initial_validator_num;
+    let tmrpc_endpoint = format!(
+        "http://{}:{}/validators?per_page={}",
+        &*HOST_IP, tmrpc, page_size
+    );
+
+    let tm_validators = attohttpc::get(&tmrpc_endpoint)
+        .send()
+        .c(d!())?
+        .error_for_status()
+        .c(d!())?
+        .bytes()
+        .c(d!())
+        .and_then(|b| serde_json::from_slice::<TmValidators>(&b).c(d!()))?;
+
+    tm_validators.result.validators.into_iter().for_each(|v| {
+        let xfr_key = common::gen_key();
+        let iv = InitialValidator {
+            tendermint_addr: v.address,
+            tendermint_pubkey: v.pub_key.value,
+            xfr_keypair: xfr_key.3,
+            xfr_mnemonic: xfr_key.1,
+            xfr_wallet_addr: xfr_key.0,
+        };
+        env.initial_validators.push(iv);
+    });
+
+    setup_initial_validators(env).c(d!())?;
+
+    macro_rules! sleep_n_block {
+        ($n_block: expr) => {{
+            let n = $n_block as f64;
+            let itv = env.block_itv_secs as f64;
+            sleep_ms!((n * itv * 1000.0) as u64);
+        }};
+    }
+
+    let root_kp =
+        serde_json::from_str::<XfrSecretKey>(&format!("\"{}\"", BANK_ACCOUNT_SECKEY))
+            .c(d!())?
+            .into_keypair();
+    println!(">>> Block interval: {} seconds", env.block_itv_secs);
+
+    println!(">>> Define and issue FRA ...");
+    send_tx(&fra_gen_initial_tx(&root_kp)).c(d!())?;
+
+    println!(">>> Wait 2 block ...");
+    sleep_n_block!(2);
+
+    let target_list = env
+        .initial_validators
+        .iter()
+        .map(|v| (v.xfr_keypair.get_pk_ref(), 500_0000 * FRA))
+        .collect::<Vec<_>>();
+
+    println!(">>> Transfer FRAs to validators ...");
+    common::utils::transfer_batch(&root_kp, target_list, None, true, true).c(d!())?;
+
+    println!(">>> Wait 2 block ...");
+    sleep_n_block!(2);
+
+    println!(">>> Propose self-delegations ...");
+    for (i, v) in env.initial_validators.iter().enumerate() {
+        let mut builder = new_tx_builder().c(d!())?;
+        let am = (400_0000 + i as u64 * 1_0000) * FRA;
+        gen_transfer_op(
+            &v.xfr_keypair,
+            vec![(&BLACK_HOLE_PUBKEY_STAKING, am)],
+            None,
+            false,
+            false,
+            Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
+        )
+        .c(d!())
+        .map(|principal_op| {
+            builder.add_operation(principal_op);
+            builder.add_operation_delegation(
+                &v.xfr_keypair,
+                am,
+                v.tendermint_addr.clone(),
+            );
+        })?;
+
+        send_tx(&builder.take_transaction()).c(d!())?;
+    }
+
+    println!(">>> Init work done !");
+    Ok(())
+}
+
+fn setup_initial_validators(env: &Env) -> Result<()> {
+    let mut builder = new_tx_builder().c(d!())?;
+
+    env.initial_validators
+        .iter()
+        .map(|iv| StakingValidator::try_from(iv).c(d!()))
+        .collect::<Result<Vec<_>>>()
+        .and_then(|vs| builder.add_operation_update_validator(&[], 1, vs).c(d!()))?;
+
+    send_tx(&builder.take_transaction()).c(d!())
+}

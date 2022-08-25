@@ -442,7 +442,12 @@ fn run() -> Result<()> {
                 envcfg.block_itv_secs = itv.parse::<u8>().c(d!())?;
             }
             if let Some(num) = sm.value_of("validator_num") {
-                envcfg.node_num = num.parse::<u8>().c(d!())?;
+                envcfg.initial_validator_num = num.parse::<u8>().c(d!())?;
+                if 64 < envcfg.initial_validator_num {
+                    return Err(eg!(
+                        "The number of initial validators should not exceed 64!"
+                    ));
+                }
             }
             if let Some(file) = sm.value_of("checkpoint_file") {
                 envcfg.checkpoint_file = Some(file.to_owned());
@@ -481,11 +486,11 @@ fn run() -> Result<()> {
                 envcfg.name = name.to_owned();
             }
             Ops::Info
-        } else if let Some(sm) = m.subcommand_matches("initpos") {
+        } else if let Some(sm) = m.subcommand_matches("init") {
             if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
             }
-            Ops::InitPos
+            Ops::Init
         } else {
             if let Some(name) = m.value_of("env_name") {
                 envcfg.name = name.to_owned();
