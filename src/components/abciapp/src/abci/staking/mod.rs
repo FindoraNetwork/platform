@@ -290,8 +290,8 @@ pub fn system_mint_pay(
         })
         .chain(staking.delegation_get_global_rewards().into_iter().map(
             |(k, (n, receiver_pk))| {
-                let pk = if CFG.checkpoint.fix_undelegation_missing_reward_height
-                    < td_height
+                let pk = if td_height
+                    <= CFG.checkpoint.fix_undelegation_missing_reward_height
                 {
                     Some(k)
                 } else {
