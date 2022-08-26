@@ -12,7 +12,7 @@ use {
     toml,
 };
 
-#[derive(Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[allow(missing_docs)]
 pub struct CheckPointConfig {
     pub evm_substate_height: i64,
