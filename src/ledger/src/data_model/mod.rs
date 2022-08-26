@@ -1815,7 +1815,6 @@ impl Transaction {
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn check_tx(&self) -> Result<()> {
-
         for operation in self.body.operations.iter() {
             match operation {
                 Operation::TransferAsset(o) => {
