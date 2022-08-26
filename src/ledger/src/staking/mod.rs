@@ -1931,10 +1931,11 @@ pub struct Validator {
     /// so FRA owners can make an informed choice on which validator to use;
     /// % commision is the % of FRA incentives the validator will take out as a commission fee
     /// for helping FRA owners stake their tokens.
-    pub(crate) commission_rate: [u64; 2],
+    pub commission_rate: [u64; 2],
     /// optional descriptive information
     pub memo: StakerMemo,
-    kind: ValidatorKind,
+    /// Which kind of validator it is
+    pub kind: ValidatorKind,
     /// use this field to mark
     /// if this validator signed last block
     pub signed_last_block: bool,
