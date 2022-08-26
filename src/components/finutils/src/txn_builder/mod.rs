@@ -84,6 +84,7 @@ use {
     zei_algebra::prelude::*,
     zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
+use fp_types::U256;
 
 macro_rules! no_transfer_err {
     () => {
@@ -999,6 +1000,8 @@ impl TransactionBuilder {
         asset: Option<AssetTypeCode>,
         amount: u64,
         lowlevel_data: Option<Vec<u8>>,
+        gas_price: U256,
+        gas_limit: U256,
     ) -> Result<&mut Self> {
         self.add_operation(Operation::ConvertAccount(ConvertAccount {
             signer: kp.get_pk(),
@@ -1007,6 +1010,8 @@ impl TransactionBuilder {
             value: amount,
             asset_type: asset.map(|a| a.val),
             lowlevel_data,
+            gas_price,
+            gas_limit,
         }));
         Ok(self)
     }

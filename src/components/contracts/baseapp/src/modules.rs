@@ -130,7 +130,7 @@ impl ModuleManager {
         tx: &FindoraTransaction,
         hash: H256,
     ) -> Result<()> {
-        let (from, target, amount, asset, lowlevel, gas) = check_convert_account(tx)?;
+        let (from, target, amount, asset, lowlevel, gas_price, gas_limit) = check_convert_account(tx)?;
 
         if CFG.checkpoint.prismxx_inital_height < ctx.header.height {
             let evm_from_bytes = keccak_256(from.as_bytes());
@@ -163,6 +163,7 @@ impl ModuleManager {
 
                 module_account::App::<BaseApp>::mint(ctx, &evm_from_addr, balance)?;
 
+
                 match self.evm_module.evm_call(
                     ctx,
                     &evm_from_addr,
@@ -172,6 +173,8 @@ impl ModuleManager {
                     transaction_index,
                     hash,
                     nonce,
+                    gas_price,
+                    gas_limit,
                 ) {
                     Ok(r) => r,
                     Err(e) => {

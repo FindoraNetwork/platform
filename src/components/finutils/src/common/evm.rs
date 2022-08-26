@@ -20,7 +20,7 @@ use fp_types::{
 };
 use fp_utils::ecdsa::SecpPair;
 use fp_utils::tx::EvmRawTxWrapper;
-use ledger::data_model::AssetTypeCode;
+use ledger::data_model::{AssetTypeCode, BLACK_HOLE_PUBKEY};
 use ledger::data_model::ASSET_TYPE_FRA;
 use ledger::data_model::BLACK_HOLE_PUBKEY_STAKING;
 use ruc::*;
@@ -31,6 +31,7 @@ use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::Runtime;
 use zei::xfr::{asset_record::AssetRecordType, sig::XfrKeyPair};
 use fp_types::crypto::IdentifyAccount;
+use ledger::staking::FRA;
 
 /// transfer utxo assets to account(ed25519 or ecdsa address) balance.
 pub fn transfer_to_account(
@@ -40,58 +41,73 @@ pub fn transfer_to_account(
     lowlevel_data: Option<&str>,
     deploy: Option<&str>,
 ) -> Result<()> {
-    let rt = tokio::runtime::Runtime::new().c(d!())?;
+    let mut builder = utils::new_tx_builder()?;
+
+    let kp = get_keypair()?;
+
+    let asset = if let Some(asset) = asset {
+        let asset = AssetTypeCode::new_from_base64(asset)?;
+        Some(asset)
+    } else {
+        None
+    };
+
+    let lowlevel_data = if let Some(data) = lowlevel_data {
+        let data = hex::decode(data).c(d!())?;
+        Some(data)
+    } else {
+        None
+    };
+
+    let addr = get_serv_addr()?;
+    let web3_addr = format!("{}:8545",addr);
+
+    let (target_address,to) = if deploy.is_none() {
+        match address {
+            Some(s) => {
+                let ms = MultiSigner::from_str(s).c(d!())?;
+                let ms2 = ms.clone();
+                let address = ms2.into_account();
+                let bytes: &[u8] = address.as_ref();
+                let to = bytes[4..24].to_vec();
+                (ms, Some(to))
+            },
+            None => {
+                let ms = MultiSigner::Xfr(kp.get_pk());
+                (ms, None)
+            },
+        }
+    } else {
+        let create = H160::zero();
+        let ms = MultiSigner::Ethereum(create);
+        (ms, None)
+    };
+
+    let rt = Runtime::new().c(d!())?;
     rt.block_on(async {
-        let mut builder = utils::new_tx_builder()?;
-
-        let kp = get_keypair()?;
-
-        let asset = if let Some(asset) = asset {
-            let asset = AssetTypeCode::new_from_base64(asset)?;
-            Some(asset)
-        } else {
-            None
-        };
-
-        let lowlevel_data = if let Some(data) = lowlevel_data {
-            let data = hex::decode(data).c(d!())?;
-            Some(data)
-        } else {
-            None
-        };
-
-        let addr = get_serv_addr()?;
-        let web3_addr = format!("{}/8545",addr);
-
-        let target_address = if deploy.is_none() {
-            match address {
-                Some(s) => MultiSigner::from_str(s).c(d!())?,
-                None => MultiSigner::Xfr(kp.get_pk()),
-            }
-        } else {
-            let create = H160::zero();
-            MultiSigner::Ethereum(create)
-        };
-
-        let gas_price = utils::get_gas_price(web3_addr.as_str()).await.c(d!())?;
-        let gas_limit = utils::get_gas_limit(
+         let gas_price = utils::get_gas_price(web3_addr.as_str()).await.unwrap();
+         let gas_limit = utils::get_gas_limit(
             web3_addr.as_str(),
             lowlevel_data.clone(),
-            target_address.into_account().as_byte_slice(),
+            to,
             Some(gas_price))
             .await
-            .c(d!())?;
-        let fee = (gas_price * gas_limit) as u64;
+            .unwrap();
+
+        let gas_price2 = gas_price.as_u64().saturating_div(FRA);
+        println!("gas price:{:?}",gas_price2);
+        println!("gas limit:{:?}",gas_limit);
+        let fee = gas_price2 * gas_limit.as_u64();
         println!("gas: {}", fee);
 
         let transfer_op = utils::gen_transfer_op(
             &kp,
-            vec![(&BLACK_HOLE_PUBKEY_STAKING, amount + fee)],
+            vec![(&BLACK_HOLE_PUBKEY_STAKING, amount),(&BLACK_HOLE_PUBKEY, fee)],
             asset,
             false,
             false,
             Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
-        )?;
+        ).unwrap();
 
 
         builder
@@ -102,14 +118,21 @@ pub fn transfer_to_account(
                 asset,
                 amount,
                 lowlevel_data,
-            )?
+                gas_price,
+                gas_limit,
+            )
+            .unwrap()
             .sign(&kp);
 
-        let mut tx = builder.build_and_take_transaction()?;
+        let mut tx = builder.build_and_take_transaction().unwrap();
+
         tx.sign(&kp);
 
-        utils::send_tx(&tx)?;
+        utils::send_tx(&tx).unwrap();
     });
+
+
+
     Ok(())
 }
 

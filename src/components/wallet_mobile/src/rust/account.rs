@@ -42,6 +42,8 @@ impl TransactionBuilder {
         amount: u64,
         address: Option<String>,
         keypair: &XfrKeyPair,
+        gas_price: U256,
+        gas_limit: U256,
     ) -> Result<Self> {
         let target_address = match address {
             Some(s) => MultiSigner::from_str(&s)?,
@@ -49,7 +51,7 @@ impl TransactionBuilder {
         };
 
         self.get_builder_mut()
-            .add_operation_convert_account(keypair, target_address, None, amount, None)?
+            .add_operation_convert_account(keypair, target_address, None, amount, None, gas_price, gas_limit)?
             .sign(keypair);
 
         Ok(self)

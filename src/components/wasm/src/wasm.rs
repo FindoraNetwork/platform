@@ -775,6 +775,8 @@ impl TransactionBuilder {
         amount: u64,
         asset: Option<String>,
         lowlevel_data: Option<String>,
+        gas_price: U256,
+        gas_limit: U256,
     ) -> Result<TransactionBuilder, JsValue> {
         let ea = MultiSigner::from_str(&ethereum_address)
             .c(d!())
@@ -800,7 +802,7 @@ impl TransactionBuilder {
         };
 
         self.get_builder_mut()
-            .add_operation_convert_account(keypair, ea, asset, amount, lowlevel_data)
+            .add_operation_convert_account(keypair, ea, asset, amount, lowlevel_data, gas_price, gas_limit)
             .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
