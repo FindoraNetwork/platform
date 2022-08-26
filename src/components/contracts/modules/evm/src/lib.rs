@@ -88,6 +88,18 @@ impl<C: Config> Default for App<C> {
     }
 }
 
+pub struct EvmCallParams {
+    pub from: Address,
+    pub to: Address,
+    pub value: U256,
+    pub low_data: Vec<u8>,
+    pub transaction_index: u32,
+    pub transaction_hash: H256,
+    pub nonce: U256,
+    pub gas_price: U256,
+    pub gas_limit: U256,
+}
+
 impl<C: Config> App<C> {
     pub fn withdraw_frc20(
         &self,
@@ -155,30 +167,21 @@ impl<C: Config> App<C> {
     pub fn evm_call(
         &self,
         ctx: &Context,
-        _from: &Address,
-        _to: &Address,
-        _value: U256,
-        _lowlevel: Vec<u8>,
-        transaction_index: u32,
-        transaction_hash: H256,
-        nonce: U256,
+        params: EvmCallParams,
     ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
-        let bytes: &[u8] = _from.as_ref();
+        let bytes: &[u8] = params.from.as_ref();
         let source = H160::from_slice(&bytes[4..24]);
 
-        let bytes: &[u8] = _to.as_ref();
+        let bytes: &[u8] = params.to.as_ref();
         let target = H160::from_slice(&bytes[4..24]);
-
-        let gas_limit = 9999999;
-        let gas_price = U256::one();
 
         let result = ActionRunner::<C>::execute_systemc_contract(
             ctx,
-            _lowlevel.clone(),
+            params.low_data.clone(),
             source,
-            gas_limit,
+            params.gas_limit.as_u64(),
             target,
-            _value,
+            params.value,
         )?;
 
         let target = if let Some(ca) = result.contract_address {
@@ -190,18 +193,18 @@ impl<C: Config> App<C> {
         let action = TransactionAction::Call(target);
 
         Ok(Self::system_transaction(
-            transaction_hash,
-            _lowlevel,
-            _value,
+            params.transaction_hash,
+            params.low_data,
+            params.value,
             action,
-            U256::from(gas_limit),
-            gas_price,
+            params.gas_limit,
+            params.gas_price,
             result.gas_used,
-            transaction_index,
+            params.transaction_index,
             source,
             target,
             result.logs,
-            nonce,
+            params.nonce,
         ))
     }
 

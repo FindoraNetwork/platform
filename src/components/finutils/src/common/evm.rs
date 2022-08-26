@@ -5,6 +5,7 @@
 use super::get_keypair;
 use super::get_serv_addr;
 use super::utils;
+use crate::txn_builder::OperationConvertAccountInput;
 use fp_core::account::SmartAccount;
 use fp_types::crypto::IdentifyAccount;
 use fp_types::{
@@ -116,15 +117,15 @@ pub fn transfer_to_account(
 
         builder
             .add_operation(transfer_op)
-            .add_operation_convert_account(
-                &kp,
-                target_address,
+            .add_operation_convert_account(OperationConvertAccountInput {
+                kp: kp.clone(),
+                addr: target_address,
                 asset,
                 amount,
                 lowlevel_data,
-                gas_price,
-                gas_limit,
-            )
+                gas_price: gas_price.as_u64(),
+                gas_limit: gas_limit.as_u64(),
+            })
             .unwrap()
             .sign(&kp);
 

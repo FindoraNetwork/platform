@@ -72,7 +72,7 @@ pub fn is_convert_account(tx: &Transaction) -> bool {
 
 /// check_convert_account execute result
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct CheckConvertAccountResult{
+pub struct CheckConvertAccountResult {
     /// tx sender
     pub from: XfrPublicKey,
     /// tx target
@@ -90,9 +90,7 @@ pub struct CheckConvertAccountResult{
 }
 
 #[allow(missing_docs)]
-pub fn check_convert_account(
-    tx: &Transaction,
-) -> Result<CheckConvertAccountResult> {
+pub fn check_convert_account(tx: &Transaction) -> Result<CheckConvertAccountResult> {
     let signer;
     let target;
     let expected_value;
@@ -170,14 +168,13 @@ pub fn check_convert_account(
         ));
     }
 
-    Ok(CheckConvertAccountResult{
+    Ok(CheckConvertAccountResult {
         from: signer,
         to: target,
         value: expected_value,
         asset_type: expected_asset,
         low_data: expected_lowlevel,
         gas_price,
-        gas_limit
+        gas_limit,
     })
-
 }

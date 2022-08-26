@@ -20,6 +20,7 @@ use ledger::{
     data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA},
 };
 use module_ethereum::storage::{TransactionIndex, DELIVER_PENDING_TRANSACTIONS};
+use module_evm::EvmCallParams;
 use ruc::*;
 use serde::Serialize;
 
@@ -138,7 +139,9 @@ impl ModuleManager {
             let evm_from_addr = Address::from(evm_from);
 
             module_account::App::<BaseApp>::insert_evm_fra_address_mapping(
-                ctx, &result.from, &evm_from,
+                ctx,
+                &result.from,
+                &evm_from,
             )?;
 
             let target = Address::from(result.to);
@@ -165,15 +168,17 @@ impl ModuleManager {
 
                 match self.evm_module.evm_call(
                     ctx,
-                    &evm_from_addr,
-                    &target,
-                    balance,
-                    result.low_data,
-                    transaction_index,
-                    hash,
-                    nonce,
-                    result.gas_price,
-                    result.gas_limit,
+                    EvmCallParams {
+                        from: evm_from_addr,
+                        to: target,
+                        value: balance,
+                        low_data: result.low_data,
+                        transaction_index,
+                        transaction_hash: hash,
+                        nonce,
+                        gas_price: result.gas_price,
+                        gas_limit: result.gas_limit,
+                    },
                 ) {
                     Ok(r) => r,
                     Err(e) => {
@@ -205,8 +210,9 @@ impl ModuleManager {
 
             Ok(())
         } else {
-            let balance = EthereumDecimalsMapping::from_native_token(U256::from(result.value))
-                .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
+            let balance =
+                EthereumDecimalsMapping::from_native_token(U256::from(result.value))
+                    .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
             module_account::App::<BaseApp>::mint(ctx, &Address::from(result.to), balance)
         }
     }

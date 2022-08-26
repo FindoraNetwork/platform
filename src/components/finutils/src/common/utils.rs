@@ -876,7 +876,7 @@ pub async fn get_gas_limit(
     let mut build = CallRequest::builder().gas_price(gas_price);
 
     if let Some(data) = data {
-        build = build.data(web3::types::Bytes { 0: data });
+        build = build.data(web3::types::Bytes::from(data));
     }
     if let Some(to) = to {
         build = build.to(web3::types::H160::from_slice(to.as_slice()));
