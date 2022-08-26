@@ -1850,7 +1850,11 @@ impl Transaction {
                 Operation::MintFra(_) => {}
                 Operation::ConvertAccount(_) => {}
                 Operation::ReplaceStaker(o) => {
-                    self.check_has_signature(&o.get_related_pubkeys()[0])?;
+                    if !o.get_related_pubkeys().is_empty() {
+                        for get_related_pubkey in o.get_related_pubkeys() {
+                            self.check_has_signature(&get_related_pubkey)?;
+                        }
+                    }
                 }
             }
         }
