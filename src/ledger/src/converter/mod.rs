@@ -4,13 +4,13 @@ use crate::data_model::{
     NoReplayToken, Operation, Transaction, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
 };
 use fp_types::crypto::MultiSigner;
+use fp_types::U256;
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use zei::xfr::{
     sig::XfrPublicKey,
     structs::{AssetType, XfrAmount, XfrAssetType},
 };
-use fp_types::U256;
 
 /// Use this operation to transfer.
 ///
@@ -39,7 +39,7 @@ pub struct ConvertAccount {
     pub gas_price: U256,
 
     /// gas limit
-    pub gas_limit: U256
+    pub gas_limit: U256,
 }
 
 #[allow(missing_docs)]
@@ -70,10 +70,29 @@ pub fn is_convert_account(tx: &Transaction) -> bool {
         )
 }
 
+/// check_convert_account execute result
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CheckConvertAccountResult{
+    /// tx sender
+    pub from: XfrPublicKey,
+    /// tx target
+    pub to: MultiSigner,
+    /// transfer amount
+    pub value: u64,
+    /// asset type
+    pub asset_type: AssetType,
+    /// evm input data
+    pub low_data: Vec<u8>,
+    /// gas price
+    pub gas_price: U256,
+    /// gas limit
+    pub gas_limit: U256,
+}
+
 #[allow(missing_docs)]
 pub fn check_convert_account(
     tx: &Transaction,
-) -> Result<(XfrPublicKey, MultiSigner, u64, AssetType, Vec<u8>, U256, U256)> {
+) -> Result<CheckConvertAccountResult> {
     let signer;
     let target;
     let expected_value;
@@ -111,7 +130,6 @@ pub fn check_convert_account(
         } else {
             expected_lowlevel = Vec::new();
         }
-
     } else {
         return Err(eg!(
             "TransferUTXOsToEVM error: invalid ConvertAccount operation"
@@ -119,7 +137,6 @@ pub fn check_convert_account(
     }
 
     if let Some(Operation::TransferAsset(t)) = tx.body.operations.first() {
-
         let has_signer = t.get_owner_addresses().iter().any(|&pk| pk == signer);
         if !has_signer {
             return Err(eg!("TransferUTXOsToEVM error: not found signer"));
@@ -153,13 +170,14 @@ pub fn check_convert_account(
         ));
     }
 
-    Ok((
-        signer,
-        target,
-        expected_value,
-        expected_asset,
-        expected_lowlevel,
+    Ok(CheckConvertAccountResult{
+        from: signer,
+        to: target,
+        value: expected_value,
+        asset_type: expected_asset,
+        low_data: expected_lowlevel,
         gas_price,
-        gas_limit,
-    ))
+        gas_limit
+    })
+
 }

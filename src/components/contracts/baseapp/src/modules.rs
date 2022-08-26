@@ -130,18 +130,18 @@ impl ModuleManager {
         tx: &FindoraTransaction,
         hash: H256,
     ) -> Result<()> {
-        let (from, target, amount, asset, lowlevel, gas_price, gas_limit) = check_convert_account(tx)?;
+        let result = check_convert_account(tx)?;
 
         if CFG.checkpoint.prismxx_inital_height < ctx.header.height {
-            let evm_from_bytes = keccak_256(from.as_bytes());
+            let evm_from_bytes = keccak_256(result.from.as_bytes());
             let evm_from = H160::from_slice(&evm_from_bytes[..20]);
             let evm_from_addr = Address::from(evm_from);
 
             module_account::App::<BaseApp>::insert_evm_fra_address_mapping(
-                ctx, &from, &evm_from,
+                ctx, &result.from, &evm_from,
             )?;
 
-            let target = Address::from(target);
+            let target = Address::from(result.to);
 
             let mut pending_txs = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
             // if let Some(pending_txs)
@@ -154,27 +154,26 @@ impl ModuleManager {
                     .unwrap_or_default()
                     .nonce;
 
-            let (tx, tx_status, receipt) = if asset == ASSET_TYPE_FRA {
+            let (tx, tx_status, receipt) = if result.asset_type == ASSET_TYPE_FRA {
                 let balance =
-                    EthereumDecimalsMapping::from_native_token(U256::from(amount))
+                    EthereumDecimalsMapping::from_native_token(U256::from(result.value))
                         .ok_or_else(|| {
                             eg!("The transfer to account amount is too large")
                         })?;
 
                 module_account::App::<BaseApp>::mint(ctx, &evm_from_addr, balance)?;
 
-
                 match self.evm_module.evm_call(
                     ctx,
                     &evm_from_addr,
                     &target,
                     balance,
-                    lowlevel,
+                    result.low_data,
                     transaction_index,
                     hash,
                     nonce,
-                    gas_price,
-                    gas_limit,
+                    result.gas_price,
+                    result.gas_limit,
                 ) {
                     Ok(r) => r,
                     Err(e) => {
@@ -186,11 +185,11 @@ impl ModuleManager {
             } else {
                 self.evm_module.withdraw_frc20(
                     ctx,
-                    asset.0,
+                    result.asset_type.0,
                     &evm_from_addr,
                     &target,
-                    U256::from(amount),
-                    lowlevel,
+                    U256::from(result.value),
+                    result.low_data,
                     transaction_index,
                     hash,
                 )?
@@ -206,9 +205,9 @@ impl ModuleManager {
 
             Ok(())
         } else {
-            let balance = EthereumDecimalsMapping::from_native_token(U256::from(amount))
+            let balance = EthereumDecimalsMapping::from_native_token(U256::from(result.value))
                 .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
-            module_account::App::<BaseApp>::mint(ctx, &Address::from(target), balance)
+            module_account::App::<BaseApp>::mint(ctx, &Address::from(result.to), balance)
         }
     }
 }

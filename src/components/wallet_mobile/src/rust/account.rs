@@ -51,7 +51,15 @@ impl TransactionBuilder {
         };
 
         self.get_builder_mut()
-            .add_operation_convert_account(keypair, target_address, None, amount, None, gas_price, gas_limit)?
+            .add_operation_convert_account(
+                keypair,
+                target_address,
+                None,
+                amount,
+                None,
+                gas_price,
+                gas_limit,
+            )?
             .sign(keypair);
 
         Ok(self)

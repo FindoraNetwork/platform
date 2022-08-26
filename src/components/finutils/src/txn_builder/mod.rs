@@ -5,6 +5,7 @@
 #![deny(warnings)]
 #![allow(clippy::needless_borrow)]
 
+use fp_types::U256;
 use {
     credentials::CredUserSecretKey,
     curve25519_dalek::scalar::Scalar,
@@ -84,7 +85,6 @@ use {
     zei_algebra::prelude::*,
     zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
-use fp_types::U256;
 
 macro_rules! no_transfer_err {
     () => {

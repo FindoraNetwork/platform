@@ -6,6 +6,7 @@ use super::get_keypair;
 use super::get_serv_addr;
 use super::utils;
 use fp_core::account::SmartAccount;
+use fp_types::crypto::IdentifyAccount;
 use fp_types::{
     actions::{
         xhub::{
@@ -20,9 +21,10 @@ use fp_types::{
 };
 use fp_utils::ecdsa::SecpPair;
 use fp_utils::tx::EvmRawTxWrapper;
-use ledger::data_model::{AssetTypeCode, BLACK_HOLE_PUBKEY};
 use ledger::data_model::ASSET_TYPE_FRA;
 use ledger::data_model::BLACK_HOLE_PUBKEY_STAKING;
+use ledger::data_model::{AssetTypeCode, BLACK_HOLE_PUBKEY};
+use ledger::staking::FRA;
 use ruc::*;
 use std::str::FromStr;
 use tendermint::block::Height;
@@ -30,8 +32,6 @@ use tendermint_rpc::endpoint::abci_query::AbciQuery;
 use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::Runtime;
 use zei::xfr::{asset_record::AssetRecordType, sig::XfrKeyPair};
-use fp_types::crypto::IdentifyAccount;
-use ledger::staking::FRA;
 
 /// transfer utxo assets to account(ed25519 or ecdsa address) balance.
 pub fn transfer_to_account(
@@ -60,22 +60,20 @@ pub fn transfer_to_account(
     };
 
     let addr = get_serv_addr()?;
-    let web3_addr = format!("{}:8545",addr);
+    let web3_addr = format!("{}:8545", addr);
 
-    let (target_address,to) = if deploy.is_none() {
+    let (target_address, to) = if deploy.is_none() {
         match address {
             Some(s) => {
                 let ms = MultiSigner::from_str(s).c(d!())?;
-                let ms2 = ms.clone();
-                let address = ms2.into_account();
+                let address = ms.clone().into_account();
                 let bytes: &[u8] = address.as_ref();
-                let to = bytes[4..24].to_vec();
-                (ms, Some(to))
-            },
+                (ms, Some(bytes[4..24].to_vec()))
+            }
             None => {
                 let ms = MultiSigner::Xfr(kp.get_pk());
                 (ms, None)
-            },
+            }
         }
     } else {
         let create = H160::zero();
@@ -85,30 +83,36 @@ pub fn transfer_to_account(
 
     let rt = Runtime::new().c(d!())?;
     rt.block_on(async {
-         let gas_price = utils::get_gas_price(web3_addr.as_str()).await.unwrap();
-         let gas_limit = utils::get_gas_limit(
+        let gas_price = utils::get_gas_price(web3_addr.as_str()).await.unwrap();
+        let gas_limit = utils::get_gas_limit(
             web3_addr.as_str(),
             lowlevel_data.clone(),
             to,
-            Some(gas_price))
-            .await
-            .unwrap();
+            Some(gas_price),
+        )
+        .await
+        .unwrap();
 
-        let gas_price2 = gas_price.as_u64().saturating_div(FRA);
-        println!("gas price:{:?}",gas_price2);
-        println!("gas limit:{:?}",gas_limit);
-        let fee = gas_price2 * gas_limit.as_u64();
-        println!("gas: {}", fee);
+        let gas_price_real = gas_price.as_u64().saturating_div(FRA);
+
+        let fee = gas_price_real * gas_limit.as_u64();
+        println!(
+            "gas price, gas limit, total gas: {}, {:?}, {}",
+            gas_price_real, gas_limit, fee
+        );
 
         let transfer_op = utils::gen_transfer_op(
             &kp,
-            vec![(&BLACK_HOLE_PUBKEY_STAKING, amount),(&BLACK_HOLE_PUBKEY, fee)],
+            vec![
+                (&BLACK_HOLE_PUBKEY_STAKING, amount),
+                (&BLACK_HOLE_PUBKEY, fee),
+            ],
             asset,
             false,
             false,
             Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
-        ).unwrap();
-
+        )
+        .unwrap();
 
         builder
             .add_operation(transfer_op)
@@ -130,8 +134,6 @@ pub fn transfer_to_account(
 
         utils::send_tx(&tx).unwrap();
     });
-
-
 
     Ok(())
 }
