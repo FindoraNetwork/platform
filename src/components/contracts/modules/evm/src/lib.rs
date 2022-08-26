@@ -33,7 +33,6 @@ use fp_types::{
     actions::{evm::Action, xhub::NonConfidentialOutput},
     crypto::{Address, HA160},
 };
-use fp_utils::hashing::keccak_256;
 use precompile::PrecompileSet;
 use ruc::*;
 use runtime::runner::ActionRunner;
@@ -125,14 +124,13 @@ impl<C: Config> App<C> {
         let gas_limit = 9999999;
         let value = U256::zero();
 
-        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
+        let result = ActionRunner::<C>::execute_systemc_contract(
             ctx,
             input.clone(),
             from,
             gas_limit,
             self.contracts.bridge_address,
             value,
-            None,
         )?;
 
         let action = TransactionAction::Call(self.contracts.bridge_address);
@@ -145,11 +143,11 @@ impl<C: Config> App<C> {
             action,
             U256::from(gas_limit),
             gas_price,
-            used_gas,
+            result.gas_used,
             transaction_index,
             from,
             self.contracts.bridge_address,
-            logs,
+            result.logs,
             U256::zero(),
         ))
     }
@@ -174,29 +172,20 @@ impl<C: Config> App<C> {
         let gas_limit = 9999999;
         let gas_price = U256::one();
 
-        // Calculate the contract address
-        let (target, salt) = if target == H160::zero() {
-            let salt = H256::random();
-            let code_hash = keccak_256(&_lowlevel);
-            let contract_address = utils::compute_create2(
-                source.clone(),
-                salt,
-                H256::from_slice(&code_hash),
-            );
-            (contract_address, Some(salt))
-        } else {
-            (target, None)
-        };
-
-        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
+        let result = ActionRunner::<C>::execute_systemc_contract(
             ctx,
             _lowlevel.clone(),
             source,
             gas_limit,
             target,
             _value,
-            salt,
         )?;
+
+        let target = if let Some(ca) = result.contract_address {
+            ca
+        } else {
+            target
+        };
 
         let action = TransactionAction::Call(target);
 
@@ -207,11 +196,11 @@ impl<C: Config> App<C> {
             action,
             U256::from(gas_limit),
             gas_price,
-            used_gas,
+            result.gas_used,
             transaction_index,
             source,
             target,
-            logs,
+            result.logs,
             nonce,
         ))
     }
