@@ -30,7 +30,9 @@ use fp_evm::TransactionStatus;
 
 use evm::executor::stack::PrecompileSet as EvmPrecompileSet;
 
-use ethereum::{Log, ReceiptV0 as Receipt, TransactionAction, TransactionSignature, TransactionV0};
+use ethereum::{
+    Log, ReceiptV0 as Receipt, TransactionAction, TransactionSignature, TransactionV0,
+};
 
 use fp_types::{
     actions::{evm::Action, xhub::NonConfidentialOutput},

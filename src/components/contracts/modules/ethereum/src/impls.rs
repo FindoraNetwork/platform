@@ -2,7 +2,8 @@ use crate::storage::*;
 use crate::{App, Config, ContractLog, TransactionExecuted};
 use config::abci::global_cfg::CFG;
 use ethereum::{
-    BlockV0 as Block, LegacyTransactionMessage, ReceiptV0 as Receipt, TransactionV0 as Transaction,
+    BlockV0 as Block, LegacyTransactionMessage, ReceiptV0 as Receipt,
+    TransactionV0 as Transaction,
 };
 use ethereum_types::{Bloom, BloomInput, H160, H256, H64, U256};
 use evm::{ExitFatal, ExitReason};

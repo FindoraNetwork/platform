@@ -1,4 +1,3 @@
-
 pub trait Get2<T1, T2> {
     /// Return the current value.
     fn get(ctx: T2) -> T1;

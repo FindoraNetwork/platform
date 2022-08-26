@@ -125,7 +125,10 @@ pub fn init(env: &mut Env) -> Result<()> {
             );
         })?;
 
-        send_tx(env, &builder.take_transaction()).c(d!())?;
+        builder
+            .build_and_take_transaction()
+            .c(d!())
+            .and_then(|tx| send_tx(env, &tx).c(d!()))?;
     }
 
     println!(">>> Init work done !");
@@ -141,7 +144,10 @@ fn setup_initial_validators(env: &Env) -> Result<()> {
         .collect::<Result<Vec<_>>>()
         .and_then(|vs| builder.add_operation_update_validator(&[], 1, vs).c(d!()))?;
 
-    send_tx(env, &builder.take_transaction()).c(d!())
+    builder
+        .build_and_take_transaction()
+        .c(d!())
+        .and_then(|tx| send_tx(env, &tx).c(d!()))
 }
 
 fn send_tx(env: &Env, tx: &Transaction) -> Result<()> {
@@ -179,7 +185,7 @@ fn transfer_batch(
     .c(d!())?;
     builder.add_operation(op);
 
-    let mut tx = builder.take_transaction();
+    let mut tx = builder.build_and_take_transaction().c(d!())?;
     tx.sign(owner_kp);
 
     send_tx(env, &tx).c(d!())

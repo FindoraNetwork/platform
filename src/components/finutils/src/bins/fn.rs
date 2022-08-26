@@ -28,8 +28,11 @@
 use {
     clap::{crate_authors, load_yaml, App},
     finutils::common::{
+        self,
         dev::{EnvCfg, Ops},
-        self, evm::*, get_keypair, utils},
+        evm::*,
+        get_keypair, utils,
+    },
     fp_utils::ecdsa::SecpPair,
     globutils::wallet,
     ledger::{
