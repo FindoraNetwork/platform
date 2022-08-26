@@ -163,6 +163,7 @@ pub fn gen_transfer_op_x(
 }
 
 #[allow(missing_docs)]
+#[allow(clippy::too_many_arguments)]
 pub fn gen_transfer_op_xx(
     rpc_endpoint: Option<&str>,
     owner_kp: &XfrKeyPair,
