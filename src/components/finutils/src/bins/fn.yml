@@ -544,6 +544,13 @@ subcommands:
                   value_name: ABCID EXTRA FLAGS
                   allow_hyphen_values: true
                   required: false
+              - host_ip:
+                  help: The IP of your local host, default to 127.0.0.1
+                  short: H
+                  long: host-ip
+                  takes_value: true
+                  value_name: HOST IP
+                  required: false
         - destroy:
             about: Destroy an existing env
             args:

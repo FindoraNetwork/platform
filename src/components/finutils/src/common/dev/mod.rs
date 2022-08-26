@@ -9,7 +9,6 @@
 
 mod init;
 
-use lazy_static::lazy_static;
 use ledger::staking::{
     td_addr_to_bytes, Validator as StakingValidator, ValidatorKind, FRA,
 };
@@ -24,7 +23,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    env,
     fmt::Write,
     fs,
     io::ErrorKind,
@@ -56,32 +54,34 @@ const BANK_ACCOUNT_PUBKEY: &str = "Oa2RRTzdayA8V2OBE7xp3n3NKrjGJxFTSZZybXOXCDQ="
 const BANK_ACCOUNT_SECKEY: &str = "Ew9fMaryTL44ZXnEhcF7hQ-AB-fxgaC8vyCH-hCGtzg=";
 const BANK_ACCOUNT_MNEMONIC: &str = "field ranch pencil chest effort coyote april move injury illegal forest amount bid sound mixture use second pet embrace twice total essay valve loan";
 
-lazy_static! {
-    static ref HOST_IP: String =
-        env::var("FN_DEV_HOST_IP").unwrap_or_else(|_| "127.0.0.1".to_owned());
-}
-
 #[derive(Debug)]
 pub struct EnvCfg {
     // the name of this env
     pub name: String,
 
-    // which operation to trigger
+    // which operation to trigger,
+    // default value: `Ops::Info`
     pub ops: Ops,
 
-    // seconds between two blocks
+    // seconds between two blocks,
+    // default value: 3
     pub block_itv_secs: u8,
 
     // how many initial validators should be created
     pub initial_validator_num: u8,
 
+    // default value: 2152
     pub evm_chain_id: u64,
 
-    // only used in Ops::Create
+    // only used in `Ops::Create`
     pub checkpoint_file: Option<String>,
 
-    // only used in Ops::Create
+    // only used in `Ops::Create`
     pub abcid_extra_flags: Option<String>,
+
+    // initialized once in `Ops::Create`,
+    // default value: "127.0.0.1"
+    pub host_ip: Option<String>,
 }
 
 impl Default for EnvCfg {
@@ -94,6 +94,7 @@ impl Default for EnvCfg {
             evm_chain_id: 2152,
             checkpoint_file: None,
             abcid_extra_flags: None,
+            host_ip: None,
         }
     }
 }
@@ -153,7 +154,8 @@ pub struct Env {
     // the latest/max id of current nodes
     latest_id: NodeId,
 
-    // seconds between two blocks
+    // seconds between two blocks,
+    // default value: 3
     block_itv_secs: u8,
 
     // default value: 2152
@@ -166,6 +168,9 @@ pub struct Env {
     // - `--disable-eth-empty-blocks`
     // - ...
     abcid_extra_flags: Option<String>,
+
+    // default value: "127.0.0.1"
+    host_ip: String,
 }
 
 impl Env {
@@ -186,6 +191,7 @@ impl Env {
             checkpoint_file: cfg.checkpoint_file.clone(),
             abcid_extra_flags: cfg.abcid_extra_flags.clone(),
             initial_validator_num: cfg.initial_validator_num,
+            host_ip: cfg.host_ip.as_deref().unwrap_or("127.0.0.1").to_owned(),
             ..Self::default()
         };
 
@@ -286,6 +292,10 @@ impl Env {
     // 2. generate coresponding Xfr keypairs by `common::gen_key()`
     // 3. send out the initial staking transaction
     fn init(&mut self) -> Result<()> {
+        if !self.initial_validators.is_empty() {
+            return Err(eg!("Already initialized!"));
+        }
+
         init::init(self)
             .c(d!())
             .and_then(|_| self.write_cfg().c(d!()))
@@ -313,9 +323,10 @@ impl Env {
             })
             .and_then(|c| c.parse::<Document>().c(d!()))?;
 
-        cfg["proxy_app"] = toml_value(format!("tcp://{}:{}", &*HOST_IP, ports.app_abci));
+        cfg["proxy_app"] =
+            toml_value(format!("tcp://{}:{}", &self.host_ip, ports.app_abci));
         cfg["rpc"]["laddr"] =
-            toml_value(format!("tcp://{}:{}", &*HOST_IP, ports.tm_rpc));
+            toml_value(format!("tcp://{}:{}", &self.host_ip, ports.tm_rpc));
 
         cfg["p2p"]["addr_book_strict"] = toml_value(false);
         cfg["p2p"]["allow_duplicate_ip"] = toml_value(true);
@@ -323,7 +334,7 @@ impl Env {
         cfg["p2p"]["send_rate"] = toml_value(64 * MB);
         cfg["p2p"]["recv_rate"] = toml_value(64 * MB);
         cfg["p2p"]["laddr"] =
-            toml_value(format!("tcp://{}:{}", &*HOST_IP, ports.tm_p2p));
+            toml_value(format!("tcp://{}:{}", &self.host_ip, ports.tm_p2p));
 
         cfg["consensus"]["timeout_propose"] = toml_value("16s");
         cfg["consensus"]["timeout_propose_delta"] = toml_value("100ms");
@@ -385,6 +396,7 @@ impl Env {
                 .as_deref()
                 .unwrap_or_default()
                 .to_string(),
+            host_ip: self.host_ip.clone(),
         };
 
         match kind {
@@ -405,14 +417,18 @@ impl Env {
             cfg["p2p"]["seeds"] = toml_value(
                 self.seeds
                     .values()
-                    .map(|n| format!("{}@{}:{}", &n.tm_id, &*HOST_IP, n.ports.tm_p2p))
+                    .map(|n| {
+                        format!("{}@{}:{}", &n.tm_id, &self.host_ip, n.ports.tm_p2p)
+                    })
                     .collect::<Vec<_>>()
                     .join(","),
             );
             cfg["p2p"]["persistent_peers"] = toml_value(
                 self.nodes
                     .values()
-                    .map(|n| format!("{}@{}:{}", &n.tm_id, &*HOST_IP, n.ports.tm_p2p))
+                    .map(|n| {
+                        format!("{}@{}:{}", &n.tm_id, &self.host_ip, n.ports.tm_p2p)
+                    })
                     .collect::<Vec<_>>()
                     .join(","),
             );
@@ -538,7 +554,7 @@ impl Env {
     fn print_info(&self) {
         println!("==> Env name: {}", &self.name);
         println!("==> Env home: {}", &self.home);
-        println!("==> Serving on: {}", &*HOST_IP);
+        println!("==> Serving on: {}", &self.host_ip);
         println!(
             r#"==> Bank account info:
     Wallet Address: {}
@@ -578,7 +594,7 @@ impl TryFrom<&InitialValidator> for StakingValidator {
         Ok(StakingValidator {
             td_pubkey: base64::decode(&v.tendermint_pubkey).c(d!())?,
             td_addr: td_addr_to_bytes(&v.tendermint_addr).c(d!())?,
-            td_power: 500_0000 * FRA,
+            td_power: 400_0000 * FRA,
             commission_rate: [1, 100],
             id: v.xfr_keypair.get_pk(),
             memo: Default::default(),
@@ -601,6 +617,8 @@ struct Node {
     evm_chain_id: u64,
     checkpoint_file: Option<String>,
     abcid_extra_flags: String,
+
+    host_ip: String,
 }
 
 impl Node {
@@ -628,7 +646,7 @@ impl Node {
                         {9} \
                     ",
                     self.evm_chain_id,
-                    &*HOST_IP,
+                    &self.host_ip,
                     self.ports.tm_rpc,
                     self.ports.app_abci,
                     self.ports.app_8669,

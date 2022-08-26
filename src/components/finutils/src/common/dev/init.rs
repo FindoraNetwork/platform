@@ -1,14 +1,21 @@
-use super::{
-    Env, InitialValidator, StakingValidator, BANK_ACCOUNT_SECKEY, FRA, HOST_IP,
+use super::{Env, InitialValidator, StakingValidator, BANK_ACCOUNT_SECKEY, FRA};
+use crate::{
+    common::{self, utils::gen_transfer_op_xx},
+    txn_builder::TransactionBuilder,
 };
-use crate::common::{
-    self,
-    utils::{gen_transfer_op, new_tx_builder, send_tx},
+use globutils::{HashOf, SignatureOf};
+use ledger::{
+    data_model::{
+        AssetTypeCode, StateCommitmentData, Transaction, BLACK_HOLE_PUBKEY_STAKING,
+    },
+    store::utils::fra_gen_initial_tx,
 };
-use ledger::{data_model::BLACK_HOLE_PUBKEY_STAKING, store::utils::fra_gen_initial_tx};
 use ruc::*;
 use serde::Deserialize;
-use zei::xfr::{asset_record::AssetRecordType, sig::XfrSecretKey};
+use zei::xfr::{
+    asset_record::AssetRecordType,
+    sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+};
 
 #[derive(Deserialize)]
 struct TmValidators {
@@ -36,12 +43,12 @@ pub fn init(env: &mut Env) -> Result<()> {
     let page_size = env.initial_validator_num;
     let tmrpc_endpoint = format!(
         "http://{}:{}/validators?per_page={}",
-        &*HOST_IP, tmrpc, page_size
+        &env.host_ip, tmrpc, page_size
     );
 
     let tm_validators = attohttpc::get(&tmrpc_endpoint)
         .send()
-        .c(d!())?
+        .c(d!(tmrpc_endpoint))?
         .error_for_status()
         .c(d!())?
         .bytes()
@@ -77,7 +84,7 @@ pub fn init(env: &mut Env) -> Result<()> {
     println!(">>> Block interval: {} seconds", env.block_itv_secs);
 
     println!(">>> Define and issue FRA ...");
-    send_tx(&fra_gen_initial_tx(&root_kp)).c(d!())?;
+    send_tx(env, &fra_gen_initial_tx(&root_kp)).c(d!())?;
 
     println!(">>> Wait 2 block ...");
     sleep_n_block!(2);
@@ -89,19 +96,21 @@ pub fn init(env: &mut Env) -> Result<()> {
         .collect::<Vec<_>>();
 
     println!(">>> Transfer FRAs to validators ...");
-    common::utils::transfer_batch(&root_kp, target_list, None, true, true).c(d!())?;
+    transfer_batch(env, &root_kp, target_list, None, true, true).c(d!())?;
 
     println!(">>> Wait 2 block ...");
     sleep_n_block!(2);
 
     println!(">>> Propose self-delegations ...");
     for (i, v) in env.initial_validators.iter().enumerate() {
-        let mut builder = new_tx_builder().c(d!())?;
+        let mut builder = new_tx_builder(env).c(d!())?;
         let am = (400_0000 + i as u64 * 1_0000) * FRA;
-        gen_transfer_op(
+        gen_transfer_op_xx(
+            Some(&gen_8668_endpoint(env).c(d!())?),
             &v.xfr_keypair,
             vec![(&BLACK_HOLE_PUBKEY_STAKING, am)],
             None,
+            true,
             false,
             false,
             Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
@@ -116,7 +125,7 @@ pub fn init(env: &mut Env) -> Result<()> {
             );
         })?;
 
-        send_tx(&builder.take_transaction()).c(d!())?;
+        send_tx(env, &builder.take_transaction()).c(d!())?;
     }
 
     println!(">>> Init work done !");
@@ -124,7 +133,7 @@ pub fn init(env: &mut Env) -> Result<()> {
 }
 
 fn setup_initial_validators(env: &Env) -> Result<()> {
-    let mut builder = new_tx_builder().c(d!())?;
+    let mut builder = new_tx_builder(env).c(d!())?;
 
     env.initial_validators
         .iter()
@@ -132,5 +141,75 @@ fn setup_initial_validators(env: &Env) -> Result<()> {
         .collect::<Result<Vec<_>>>()
         .and_then(|vs| builder.add_operation_update_validator(&[], 1, vs).c(d!()))?;
 
-    send_tx(&builder.take_transaction()).c(d!())
+    send_tx(env, &builder.take_transaction()).c(d!())
+}
+
+fn send_tx(env: &Env, tx: &Transaction) -> Result<()> {
+    let port = env.nodes.values().next().c(d!())?.ports.app_8669;
+    let rpc_endpoint = format!("http://{}:{}/submit_transaction", &env.host_ip, port);
+    attohttpc::post(&rpc_endpoint)
+        .header(attohttpc::header::CONTENT_TYPE, "application/json")
+        .bytes(&serde_json::to_vec(tx).c(d!())?)
+        .send()
+        .c(d!(rpc_endpoint))?
+        .error_for_status()
+        .c(d!())
+        .map(|_| ())
+}
+
+fn transfer_batch(
+    env: &Env,
+    owner_kp: &XfrKeyPair,
+    target_list: Vec<(&XfrPublicKey, u64)>,
+    token_code: Option<AssetTypeCode>,
+    confidential_am: bool,
+    confidential_ty: bool,
+) -> Result<()> {
+    let mut builder = new_tx_builder(env).c(d!())?;
+    let op = gen_transfer_op_xx(
+        Some(&gen_8668_endpoint(env).c(d!())?),
+        owner_kp,
+        target_list,
+        token_code,
+        true,
+        confidential_am,
+        confidential_ty,
+        None,
+    )
+    .c(d!())?;
+    builder.add_operation(op);
+
+    let mut tx = builder.take_transaction();
+    tx.sign(owner_kp);
+
+    send_tx(env, &tx).c(d!())
+}
+
+fn new_tx_builder(env: &Env) -> Result<TransactionBuilder> {
+    type Resp = (
+        HashOf<Option<StateCommitmentData>>,
+        u64,
+        SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
+    );
+
+    let rpc_endpoint = format!("{}/global_state", gen_8668_endpoint(env).c(d!())?);
+
+    attohttpc::get(&rpc_endpoint)
+        .send()
+        .c(d!(rpc_endpoint))?
+        .error_for_status()
+        .c(d!())?
+        .bytes()
+        .c(d!())
+        .and_then(|b| serde_json::from_slice::<Resp>(&b).c(d!()))
+        .map(|resp| resp.1)
+        .map(TransactionBuilder::from_seq_id)
+}
+
+fn gen_8668_endpoint(env: &Env) -> Result<String> {
+    env.nodes
+        .values()
+        .next()
+        .c(d!())
+        .map(|n| format!("http://{}:{}", &env.host_ip, n.ports.app_8668))
 }

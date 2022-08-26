@@ -1934,7 +1934,7 @@ pub struct Validator {
     pub commission_rate: [u64; 2],
     /// optional descriptive information
     pub memo: StakerMemo,
-    /// Whick kind of validator it is
+    /// Which kind of validator it is
     pub kind: ValidatorKind,
     /// use this field to mark
     /// if this validator signed last block

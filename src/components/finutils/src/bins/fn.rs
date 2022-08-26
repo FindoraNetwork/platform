@@ -455,6 +455,9 @@ fn run() -> Result<()> {
             if let Some(flags) = sm.value_of("abcid_extra_flags") {
                 envcfg.abcid_extra_flags = Some(flags.to_owned());
             }
+            if let Some(ip) = sm.value_of("host_ip") {
+                envcfg.host_ip = Some(ip.to_owned());
+            }
             Ops::Create
         } else if let Some(sm) = m.subcommand_matches("destroy") {
             if let Some(name) = sm.value_of("env_name") {
