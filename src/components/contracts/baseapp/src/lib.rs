@@ -13,8 +13,8 @@ mod notify;
 use crate::modules::ModuleManager;
 use abci::Header;
 use ethereum::BlockV0 as Block;
-use fin_db::{FinDB, RocksDB};
 use evm_precompile::{self, FindoraPrecompiles};
+use fin_db::{FinDB, RocksDB};
 use fp_core::context::Context as Context2;
 use fp_core::{
     account::SmartAccount,
