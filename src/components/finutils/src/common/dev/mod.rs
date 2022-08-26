@@ -260,6 +260,11 @@ impl Env {
     fn destroy(&self) -> Result<()> {
         info_omit!(self.stop());
         sleep_ms!(10);
+
+        for n in self.seeds.values().chain(self.nodes.values()) {
+            n.clean().c(d!())?;
+        }
+
         fs::remove_dir_all(&self.home).c(d!())
     }
 
@@ -284,7 +289,7 @@ impl Env {
             .next()
             .c(d!())
             .and_then(|k| self.nodes.remove(&k).c(d!()))
-            .and_then(|n| n.stop().c(d!()).and_then(|_| n.delete().c(d!())))
+            .and_then(|n| n.stop().c(d!()).and_then(|_| n.clean().c(d!())))
             .and_then(|_| self.write_cfg().c(d!()))
     }
 
@@ -692,6 +697,10 @@ impl Node {
             alt!(outputs.is_empty(), "...", outputs.as_str())
         );
 
+        Ok(())
+    }
+
+    fn clean(&self) -> Result<()> {
         for port in [
             self.ports.web3_http,
             self.ports.web3_ws,
@@ -704,11 +713,7 @@ impl Node {
             PortsCache::remove(port).c(d!())?;
         }
 
-        Ok(())
-    }
-
-    fn delete(self) -> Result<()> {
-        fs::remove_dir_all(self.home).c(d!())
+        fs::remove_dir_all(&self.home).c(d!())
     }
 }
 
