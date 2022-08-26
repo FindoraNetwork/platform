@@ -1,7 +1,7 @@
 name: fn
 version: "1.0"
 author: develop@FindoraNetwork.org
-about: A command line tool in Findora network
+about: A command line tool of the Findora Network
 
 args:
   - version:
@@ -767,3 +767,137 @@ subcommands:
             value_name: TENDERMINT PUBKEY
             required: false
             allow_hyphen_values: true
+  - dev:
+      about: Manage development clusters on your localhost
+      args:
+        - env_name:
+            help: The name of the target env
+            short: e
+            long: env-name
+            takes_value: true
+            value_name: ENV NAME
+            required: false
+      subcommands:
+        - create:
+            about: Create a new env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+              - block_itv_secs:
+                  help: Block interval in seconds
+                  short: i
+                  long: block-itv-secs
+                  takes_value: true
+                  value_name: BLOCK INTERVAL
+                  required: false
+              - validator_num:
+                  help: How many initial validators should be created
+                  short: N
+                  long: validator-num
+                  takes_value: true
+                  value_name: VALIDATOR NUMBER
+                  required: false
+              - evm_chain_id:
+                  help: The chain id in the scope of evm logic
+                  short: I
+                  long: evm-chain-id
+                  takes_value: true
+                  value_name: EVM CHAIN ID
+                  required: false
+              - checkpoint_file:
+                  help: The file path of the checkpoint file
+                  short: c
+                  long: checkpoint-file
+                  takes_value: true
+                  value_name: CHECKPOINT FILE
+                  required: false
+              - abcid_extra_flags:
+                  help: A pair of quotes should be used when specifying extra flags
+                  short: E
+                  long: abcid-extra-flags
+                  takes_value: true
+                  value_name: ABCID EXTRA FLAGS
+                  allow_hyphen_values: true
+                  required: false
+              - host_ip:
+                  help: The IP of your local host, default to 127.0.0.1
+                  short: H
+                  long: host-ip
+                  takes_value: true
+                  value_name: HOST IP
+                  required: false
+        - destroy:
+            about: Destroy an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - start:
+            about: Start an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - stop:
+            about: Stop an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - add-node:
+            about: Attach a new node to an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - del-node:
+            about: Pop a node from an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - info:
+            about: Default operation, show the information of an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - init:
+            about: Config the initial settings(POS,FRA issuance...)
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false

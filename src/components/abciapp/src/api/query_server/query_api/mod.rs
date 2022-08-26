@@ -1,4 +1,3 @@
-
 //!
 //! need to transform the data in ledgerState to store
 //!
