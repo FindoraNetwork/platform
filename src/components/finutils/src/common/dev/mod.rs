@@ -244,7 +244,6 @@ impl Env {
     }
 
     // - stop all processes
-    // - release all occupied ports
     fn stop(&self) -> Result<()> {
         self.nodes
             .values()
@@ -700,6 +699,8 @@ impl Node {
         Ok(())
     }
 
+    // - release all occupied ports
+    // - remove all files related to this node
     fn clean(&self) -> Result<()> {
         for port in [
             self.ports.web3_http,
