@@ -29,8 +29,8 @@ jsonrpc-tcp-server = "18.0"
 libsecp256k1 = { version = "0.5", features = ["static-context", "hmac"] }
 lazy_static = "1.4.0"
 log = "0.4.8"
-parking_lot = "0.11.1"
 rand = "0.8"
+parking_lot = "0.12"
 rlp = "0.5"
 ruc = "1.0"
 rustc-hex = { version = "2.1.0" }
