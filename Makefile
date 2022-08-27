@@ -41,12 +41,10 @@ define pack
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
 		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
-	cp -f $(1)/$(bin_dir)/* ~/.cargo/bin/
-	if [[ "Linux" == `uname -s` ]]; then \
-		cd $(1)/$(bin_dir)/ && findorad pack; \
-		cp -f /tmp/findorad ./; \
-		cp -f /tmp/findorad ~/.cargo/bin/; \
-	fi
+	cp $(1)/$(bin_dir)/* ~/.cargo/bin/
+	cd $(1)/$(bin_dir)/ && ./findorad pack
+	cp -f /tmp/findorad $(1)/$(bin_dir)/
+	cp -f /tmp/findorad ~/.cargo/bin/
 endef
 
 install: stop_all build_release_goleveldb
