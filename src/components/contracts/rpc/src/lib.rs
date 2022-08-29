@@ -5,6 +5,7 @@ mod eth;
 mod eth_filter;
 mod eth_pubsub;
 mod net;
+mod utils;
 mod web3;
 
 use baseapp::BaseApp;
