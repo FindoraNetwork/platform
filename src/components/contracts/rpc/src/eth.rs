@@ -123,17 +123,17 @@ impl EthApiImpl {
         Ok(range)
     }
 
-/*     fn _balance(&self, address: H160, number: Option<BlockNumber>) -> Result<U256> { */
-        /* debug!(target: "eth_rpc", "balance, address:{:?}, number:{:?}", address, number); */
-        /*  */
-        /* let height = self.block_number_to_height(number)?; */
-        /* let account_id = EthereumAddressMapping::convert_to_account_id(address); */
-        /* if let Ok(sa) = self.account_base_app.read().account_of(&account_id, height) { */
-        /*     Ok(sa.balance) */
-        /* } else { */
-        /*     Ok(U256::zero()) */
-        /* } */
-/*     } */
+    /*     fn _balance(&self, address: H160, number: Option<BlockNumber>) -> Result<U256> { */
+    /* debug!(target: "eth_rpc", "balance, address:{:?}, number:{:?}", address, number); */
+    /*  */
+    /* let height = self.block_number_to_height(number)?; */
+    /* let account_id = EthereumAddressMapping::convert_to_account_id(address); */
+    /* if let Ok(sa) = self.account_base_app.read().account_of(&account_id, height) { */
+    /*     Ok(sa.balance) */
+    /* } else { */
+    /*     Ok(U256::zero()) */
+    /* } */
+    /*     } */
 
     fn _accounts(&self) -> Result<Vec<H160>> {
         let mut accounts = Vec::new();
@@ -155,7 +155,6 @@ impl EthApiImpl {
         } else {
             Ok(U256::zero())
         }
-
     }
 }
 
@@ -190,9 +189,8 @@ impl EthApi for EthApiImpl {
         debug!(target: "eth_rpc", "balance, address:{:?}, number:{:?}", address, number);
         let account_base_app = self.account_base_app.clone();
 
-        let task = spawn_blocking(move || {
-            Self::_balance(account_base_app, address, number)
-        });
+        let task =
+            spawn_blocking(move || Self::_balance(account_base_app, address, number));
 
         Box::pin(async move {
             match task.await {
@@ -455,8 +453,7 @@ impl EthApi for EthApiImpl {
         let account_base_app = self.account_base_app.clone();
 
         let task = spawn_blocking(move || {
-            let height = 
-                account_base_app
+            let height = account_base_app
                 .read()
                 .chain_state
                 .read()
@@ -547,9 +544,7 @@ impl EthApi for EthApiImpl {
         let task = spawn_blocking(move || {
             let id = native_block_id(Some(number));
             let block = account_base_app.read().current_block(id.clone());
-            let statuses = account_base_app
-                .read()
-                .current_transaction_statuses(id);
+            let statuses = account_base_app.read().current_transaction_statuses(id);
 
             match (block, statuses) {
                 (Some(block), Some(statuses)) => {
@@ -758,15 +753,16 @@ impl EthApi for EthApiImpl {
                     }
                 }
                 BlockNumber::Earliest => (
-                    Some(BlockId::Number(U256::from(Self::version_range(account_base_app.clone())?.start))),
+                    Some(BlockId::Number(U256::from(
+                        Self::version_range(account_base_app.clone())?.start,
+                    ))),
                     false,
                 ),
                 BlockNumber::Hash {
                     hash,
                     require_canonical: _,
                 } => {
-                    if let Some(block) = 
-account_base_app
+                    if let Some(block) = account_base_app
                         .read()
                         .current_block(Some(BlockId::Hash(hash)))
                     {
@@ -783,9 +779,7 @@ account_base_app
 
             let mut highest = if let Some(gas) = request.gas {
                 gas
-            } else if let Some(block) =
-                account_base_app.read().current_block(block_id)
-            {
+            } else if let Some(block) = account_base_app.read().current_block(block_id) {
                 block.header.gas_limit
             } else {
                 gas_limit
@@ -795,7 +789,8 @@ account_base_app
             if let Some(from) = request.from {
                 let gas_price = request.gas_price.unwrap_or_default();
                 if gas_price > U256::zero() {
-                    let balance = Self::_balance(account_base_app.clone(), from, None).unwrap_or_default();
+                    let balance = Self::_balance(account_base_app.clone(), from, None)
+                        .unwrap_or_default();
                     let mut available = balance;
                     if let Some(value) = request.value {
                         if value > available {
@@ -958,8 +953,7 @@ account_base_app
         let task = spawn_blocking(move || {
             let mut id = None;
             let mut index = 0;
-            if let Some((number, idx)) =
-                account_base_app.read().transaction_index(hash)
+            if let Some((number, idx)) = account_base_app.read().transaction_index(hash)
             {
                 id = Some(BlockId::Number(number));
                 index = idx as usize
@@ -1053,9 +1047,7 @@ account_base_app
             let id = native_block_id(Some(number));
             let index = index.value();
             let block = account_base_app.read().current_block(id.clone());
-            let statuses = account_base_app
-                .read()
-                .current_transaction_statuses(id);
+            let statuses = account_base_app.read().current_transaction_statuses(id);
 
             match (block, statuses) {
                 (Some(block), Some(statuses)) => {
@@ -1088,8 +1080,7 @@ account_base_app
         let task = spawn_blocking(move || {
             let mut id = None;
             let mut index = 0;
-            if let Some((number, idx)) =
-                account_base_app.read().transaction_index(hash)
+            if let Some((number, idx)) = account_base_app.read().transaction_index(hash)
             {
                 id = Some(BlockId::Number(number));
                 index = idx as usize
