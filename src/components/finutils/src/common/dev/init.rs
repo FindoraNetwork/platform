@@ -128,7 +128,10 @@ pub fn init(env: &mut Env) -> Result<()> {
         builder
             .build_and_take_transaction()
             .c(d!())
-            .and_then(|tx| send_tx(env, &tx).c(d!()))?;
+            .and_then(|mut tx| {
+                tx.sign(&v.xfr_keypair);
+                send_tx(env, &tx).c(d!())
+            })?;
     }
 
     println!(">>> Init work done !");
