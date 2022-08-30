@@ -104,7 +104,7 @@ mod waiting {
         fn drop(&mut self) {
             if let Some(server) = self.0.take() {
                 server.close_handle().close();
-                let _ = server.wait();
+                server.wait();
             }
         }
     }
