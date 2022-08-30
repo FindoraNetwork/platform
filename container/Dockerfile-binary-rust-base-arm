@@ -1,0 +1,20 @@
+FROM arm64v8/rust:1.56-slim
+ENV WORK_DIR /platform
+ENV WASM_DIR /tmp/wasm-js-bindings
+
+RUN apt update -y && \
+    apt install -y git make curl wget python3-pip protobuf-compiler musl-tools jq libleveldb-dev clang libclang-dev pkg-config libssl-dev
+RUN pip3 install awscli
+RUN curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+RUN mkdir -p /opt && \
+    cd /opt && \
+    wget https://golang.google.cn/dl/go1.15.7.linux-amd64.tar.gz && \
+    tar -xpf go1.15.7.linux-amd64.tar.gz 
+ENV PATH=$PATH:/opt/go/bin
+
+COPY ./key.tar.gz /key.tar.gz
+
+RUN mkdir -p ~/.ssh && \
+    tar -zxf /key.tar.gz -C ~/.ssh && \
+    chown -R root:root ~/.ssh && \
+    rm -rf /key.tar.gz

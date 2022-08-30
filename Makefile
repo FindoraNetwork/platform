@@ -213,6 +213,9 @@ start_localnode: stop_debug_env
 ci_build_binary_rust_base:
 	docker build -t binary-rust-base -f container/Dockerfile-binary-rust-base .
 
+ci_build_binary_rust_base_arm:
+	docker build -t binary-rust-base-arm -f container/Dockerfile-binary-rust-base-arm .
+
 ci_build_dev_binary_image:
 	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-dev
 	docker build -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-binary-image-dev .
@@ -220,6 +223,10 @@ ci_build_dev_binary_image:
 ci_build_release_binary_image:
 	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-release
 	docker build -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-binary-image-release .
+
+ci_build_release_binary_image_arm:
+	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-release-arm
+	docker build -t findorad-binary-image-arm:$(IMAGE_TAG) -f container/Dockerfile-binary-image-release-arm .
 
 ci_build_image:
 	@ if [ -d "./binary" ]; then \
@@ -256,6 +263,19 @@ ci_build_image_dockerhub:
 ifeq ($(ENV),release)
 	docker tag $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) $(DOCKERHUB_URL)/findorad:latest
 endif
+
+ci_build_image_dockerhub_arm:
+	@ if [ -d "./binary" ]; then \
+		rm -rf ./binary || true; \
+	fi
+	@ docker run --rm -d --name findorad-binary-arm findorad-binary-image-arm:$(IMAGE_TAG)
+	@ docker cp findorad-binary-arm:/binary ./binary
+	@ docker rm -f findorad-binary-arm
+	@ docker build -t $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb-arm .
+ifeq ($(ENV),release)
+	docker tag $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) $(DOCKERHUB_URL)/findorad:latest
+endif
+
 
 ci_push_image_dockerhub:
 	docker push $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG)
