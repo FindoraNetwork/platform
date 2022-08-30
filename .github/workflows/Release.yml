@@ -183,7 +183,7 @@ jobs:
         export IMAGE_TAG="${TAGV:-main}"
         export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
         echo "Image tag: ${IMAGE_TAG}"
-        make ci_build_release_binary_image
+        make ci_build_release_binary_image_arm
 
     - name: Build images dockerhub arm
       env:
