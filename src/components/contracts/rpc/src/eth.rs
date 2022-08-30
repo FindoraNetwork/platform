@@ -29,7 +29,6 @@ use fp_types::{
 use fp_utils::ecdsa::SecpPair;
 use fp_utils::tx::EvmRawTxWrapper;
 use jsonrpc_core::{futures::future, BoxFuture, Result};
-use lazy_static::lazy_static;
 use log::{debug, warn};
 use parking_lot::RwLock;
 use sha3::{Digest, Keccak256};
@@ -39,13 +38,7 @@ use std::ops::Range;
 use std::sync::Arc;
 use tendermint::abci::Code;
 use tendermint_rpc::{Client, HttpClient};
-use tokio::runtime::Runtime;
 use tokio::task::spawn_blocking;
-
-lazy_static! {
-    static ref RT: Runtime =
-        Runtime::new().expect("Failed to create thread pool executor");
-}
 
 pub struct EthApiImpl {
     account_base_app: Arc<RwLock<BaseApp>>,
