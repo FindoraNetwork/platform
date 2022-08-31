@@ -172,7 +172,7 @@ pub const BLOCK_INTERVAL: u64 = 15 + 1;
 //pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
 
 // minimal number of validators
-pub(crate) const VALIDATORS_MIN: usize = 5;
+pub const VALIDATORS_MIN: usize = 5;
 
 /// The minimum weight threshold required
 /// when updating validator information, 9/10.

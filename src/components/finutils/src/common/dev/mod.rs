@@ -10,7 +10,7 @@
 mod init;
 
 use ledger::staking::{
-    td_addr_to_bytes, Validator as StakingValidator, ValidatorKind, FRA,
+    td_addr_to_bytes, Validator as StakingValidator, ValidatorKind, FRA, VALIDATORS_MIN,
 };
 use nix::{
     sys::socket::{
@@ -90,7 +90,7 @@ impl Default for EnvCfg {
             name: ENV_NAME_DEFAULT.to_owned(),
             ops: Ops::default(),
             block_itv_secs: 3,
-            initial_validator_num: 4,
+            initial_validator_num: VALIDATORS_MIN as u8,
             evm_chain_id: 2152,
             checkpoint_file: None,
             abcid_extra_flags: None,

@@ -124,8 +124,9 @@ pub fn init(env: &mut Env) -> Result<()> {
                 v.tendermint_addr.clone(),
             );
         })?;
-
-        send_tx(env, &builder.take_transaction()).c(d!())?;
+        let mut tx = builder.take_transaction();
+        tx.sign(&v.xfr_keypair);
+        send_tx(env, &tx).c(d!())?;
     }
 
     println!(">>> Init work done !");
