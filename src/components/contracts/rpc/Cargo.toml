@@ -13,19 +13,23 @@ abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4
 async-std = "1.9.0"
 baseapp = { path = "../baseapp" }
 base64 = "0.12"
-ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
+ethereum = { version = "0.12.0", default-features = false, features = [
+    "with-serde",
+] }
 ethereum-types = { version = "0.13.1", default-features = false }
-evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
+evm = { version = "0.35.0", default-features = false, features = [
+    "with-serde",
+] }
 fp-rpc-core = { path = "../primitives/rpc-core" }
 fp-rpc-server = { path = "../primitives/rpc-server" }
 futures = { version = "0.3.16", features = ["compat", "thread-pool"] }
 hex-literal = "0.3"
-jsonrpc-core = "18.0"
-jsonrpc-core-client = "18.0"
-jsonrpc-derive = "18.0"
-jsonrpc-pubsub = "18.0"
-jsonrpc-http-server = "18.0"
-jsonrpc-tcp-server = "18.0"
+jsonrpc-core = { git = "https://github.com/shaitao/jsonrpc", package = "jsonrpc-core", branch = "master" }
+jsonrpc-core-client = { git = "https://github.com/shaitao/jsonrpc", package = "jsonrpc-core-client", branch = "master" }
+jsonrpc-derive = { git = "https://github.com/shaitao/jsonrpc", package = "jsonrpc-derive", branch = "master" }
+jsonrpc-pubsub = { git = "https://github.com/shaitao/jsonrpc", package = "jsonrpc-pubsub", branch = "master" }
+jsonrpc-http-server = { git = "https://github.com/shaitao/jsonrpc", package = "jsonrpc-http-server", branch = "master" }
+jsonrpc-tcp-server = { git = "https://github.com/shaitao/jsonrpc", package = "jsonrpc-tcp-server", branch = "master" }
 libsecp256k1 = { version = "0.5", features = ["static-context", "hmac"] }
 lazy_static = "1.4.0"
 log = "0.4.8"
@@ -39,14 +43,17 @@ semver = "1.0.4"
 serde_json = "1.0"
 sha3 = "0.8"
 tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a-fk" }
-tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", features = ["http-client", "websocket-client"], tag = "v0.19.0a-fk" }
+tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", features = [
+    "http-client",
+    "websocket-client",
+], tag = "v0.19.0a-fk" }
 tokio = { version = "1.10.1", features = ["full"] }
 lru = "0.7.0"
 num_cpus = "1.13"
 
 # modules
-module-ethereum = { path = "../modules/ethereum"}
-module-evm = { path = "../modules/evm"}
+module-ethereum = { path = "../modules/ethereum" }
+module-evm = { path = "../modules/evm" }
 
 # primitives
 fp-core = { path = "../primitives/core" }
