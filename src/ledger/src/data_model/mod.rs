@@ -1820,41 +1820,41 @@ impl Transaction {
             match operation {
                 Operation::TransferAsset(o) => {
                     for pk in o.get_owner_addresses().iter() {
-                        self.check_has_signature(pk)?;
+                        self.check_has_signature(pk).c(d!())?;
                     }
                 }
                 Operation::IssueAsset(o) => {
-                    self.check_has_signature(&o.pubkey.key)?;
+                    self.check_has_signature(&o.pubkey.key).c(d!())?;
                 }
                 Operation::DefineAsset(o) => {
-                    self.check_has_signature(&o.pubkey.key)?;
+                    self.check_has_signature(&o.pubkey.key).c(d!())?;
                 }
                 Operation::UpdateMemo(o) => {
-                    self.check_has_signature(&o.pubkey)?;
+                    self.check_has_signature(&o.pubkey).c(d!())?;
                 }
                 Operation::UpdateStaker(o) => {
-                    self.check_has_signature(&o.pubkey)?;
+                    self.check_has_signature(&o.pubkey).c(d!())?;
                 }
                 Operation::Delegation(o) => {
-                    self.check_has_signature(&o.pubkey)?;
+                    self.check_has_signature(&o.pubkey).c(d!())?;
                 }
                 Operation::UnDelegation(o) => {
-                    self.check_has_signature(&o.pubkey)?;
+                    self.check_has_signature(&o.pubkey).c(d!())?;
                 }
                 Operation::Claim(o) => {
-                    self.check_has_signature(&o.pubkey)?;
+                    self.check_has_signature(&o.pubkey).c(d!())?;
                 }
                 Operation::UpdateValidator(_) => {}
                 Operation::Governance(_) => {}
                 Operation::FraDistribution(_) => {}
                 Operation::MintFra(_) => {}
                 Operation::ConvertAccount(o) => {
-                    self.check_has_signature(&o.signer)?;
+                    self.check_has_signature(&o.signer).c(d!())?;
                 }
                 Operation::ReplaceStaker(o) => {
                     if !o.get_related_pubkeys().is_empty() {
                         for get_related_pubkey in o.get_related_pubkeys() {
-                            self.check_has_signature(&get_related_pubkey)?;
+                            self.check_has_signature(&get_related_pubkey).c(d!())?;
                         }
                     }
                 }
