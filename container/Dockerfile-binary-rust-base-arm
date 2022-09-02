@@ -1,4 +1,5 @@
-FROM --platform=linux/arm64/v8 rust:1.56.0-slim
+# FROM --platform=linux/arm64/v8 rust:1.56.0-slim
+FROM --platform=$TARGETPLATFORM rust:1.56.0-slim
 ENV WORK_DIR /platform
 ENV WASM_DIR /tmp/wasm-js-bindings
 

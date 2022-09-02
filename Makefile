@@ -214,7 +214,7 @@ ci_build_binary_rust_base:
 	docker build -t binary-rust-base -f container/Dockerfile-binary-rust-base .
 
 ci_build_binary_rust_base_arm:
-	docker build -t binary-rust-base-arm -f container/Dockerfile-binary-rust-base-arm .
+	docker buildx build --platform linux/arm64/v8 --output=type=docker -t binary-rust-base-arm -f container/Dockerfile-binary-rust-base-arm .
 
 ci_build_dev_binary_image:
 	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-dev
@@ -226,7 +226,7 @@ ci_build_release_binary_image:
 
 ci_build_release_binary_image_arm:
 	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-release-arm
-	docker build -t findorad-binary-image-arm:$(IMAGE_TAG) -f container/Dockerfile-binary-image-release-arm .
+	docker buildx build --platform linux/arm64/v8 --output=type=docker -t findorad-binary-image-arm:$(IMAGE_TAG) -f container/Dockerfile-binary-image-release-arm .
 
 ci_build_image:
 	@ if [ -d "./binary" ]; then \
@@ -259,9 +259,9 @@ ci_build_image_dockerhub:
 	@ docker run --rm -d --name findorad-binary findorad-binary-image:$(IMAGE_TAG)
 	@ docker cp findorad-binary:/binary ./binary
 	@ docker rm -f findorad-binary
-	@ docker build -t $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb .
+	@ docker buildx build --platform linux/amd64 -t $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb . --push
 ifeq ($(ENV),release)
-	docker tag $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) $(DOCKERHUB_URL)/findorad:latest
+	# docker tag $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) $(DOCKERHUB_URL)/findorad:latest
 endif
 
 ci_build_image_dockerhub_arm:
@@ -271,9 +271,9 @@ ci_build_image_dockerhub_arm:
 	@ docker run --rm -d --name findorad-binary-arm findorad-binary-image-arm:$(IMAGE_TAG)
 	@ docker cp findorad-binary-arm:/binary ./binary
 	@ docker rm -f findorad-binary-arm
-	@ docker build -t $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb-arm .
+	@ docker buildx build --platform linux/arm64/v8 --output=type=docker -t $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb-arm . --push
 ifeq ($(ENV),release)
-	docker tag $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) $(DOCKERHUB_URL)/findorad:latest
+	# docker tag $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) $(DOCKERHUB_URL)/findorad:latest
 endif
 
 

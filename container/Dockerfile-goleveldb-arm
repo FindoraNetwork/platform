@@ -1,4 +1,4 @@
-FROM --platform=linux/arm64/v8 debian:11.0-slim
+FROM --platform=$TARGETPLATFORM debian:11.0-slim
 ENV WORK_DIR /platform
 ENV WASM_DIR /tmp/wasm-js-bindings
 
