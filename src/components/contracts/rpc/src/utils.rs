@@ -19,6 +19,7 @@ pub fn convert_error_to_rpc_error(e: impl Debug) -> Error {
     }
 }
 
+#[allow(dead_code)]
 pub fn build_rpc_error() -> Error {
     Error::new(ErrorCode::InternalError)
 }

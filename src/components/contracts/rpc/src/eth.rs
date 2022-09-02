@@ -1,6 +1,5 @@
 use crate::utils::{
-    build_method_not_found, build_rpc_error, convert_error_to_rpc_error,
-    convert_join_error_to_rpc_error,
+    build_method_not_found, convert_error_to_rpc_error, convert_join_error_to_rpc_error,
 };
 use crate::{error_on_execution_failure, internal_err};
 use baseapp::{extensions::SignedExtra, BaseApp};
