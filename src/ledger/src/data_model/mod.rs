@@ -1848,7 +1848,9 @@ impl Transaction {
                 Operation::Governance(_) => {}
                 Operation::FraDistribution(_) => {}
                 Operation::MintFra(_) => {}
-                Operation::ConvertAccount(_) => {}
+                Operation::ConvertAccount(o) => {
+                    self.check_has_signature(&o.signer)?;
+                }
                 Operation::ReplaceStaker(o) => {
                     if !o.get_related_pubkeys().is_empty() {
                         for get_related_pubkey in o.get_related_pubkeys() {
