@@ -185,9 +185,9 @@ impl EthApi for EthApiImpl {
             spawn_blocking(move || Self::_balance(account_base_app, address, number));
 
         Box::pin(async move {
-            match task.await {
-                Ok(r) => return r,
-                Err(e) => return Err(convert_join_error_to_rpc_error(e)),
+            return match task.await {
+                Ok(r) => r,
+                Err(e) => Err(convert_join_error_to_rpc_error(e)),
             }
         })
     }
@@ -399,9 +399,9 @@ impl EthApi for EthApiImpl {
         });
 
         Box::pin(async move {
-            match task.await {
-                Ok(r) => return r,
-                Err(e) => return Err(convert_join_error_to_rpc_error(e)),
+            return match task.await {
+                Ok(r) => r,
+                Err(e) => Err(convert_join_error_to_rpc_error(e)),
             }
         })
     }
@@ -424,9 +424,9 @@ impl EthApi for EthApiImpl {
         });
 
         Box::pin(async move {
-            match task.await {
-                Ok(r) => return r,
-                Err(e) => return Err(convert_join_error_to_rpc_error(e)),
+            return match task.await {
+                Ok(r) => r,
+                Err(e) => Err(convert_join_error_to_rpc_error(e)),
             }
         })
     }
@@ -455,9 +455,9 @@ impl EthApi for EthApiImpl {
         });
 
         Box::pin(async move {
-            match task.await {
-                Ok(r) => return r,
-                Err(e) => return Err(convert_join_error_to_rpc_error(e)),
+            return match task.await {
+                Ok(r) => r,
+                Err(e) => Err(convert_join_error_to_rpc_error(e)),
             }
         })
     }
@@ -481,9 +481,9 @@ impl EthApi for EthApiImpl {
         });
 
         Box::pin(async move {
-            match task.await {
-                Ok(r) => return r,
-                Err(e) => return Err(convert_join_error_to_rpc_error(e)),
+            return match task.await {
+                Ok(r) => r,
+                Err(e) => Err(convert_join_error_to_rpc_error(e)),
             }
         })
     }
@@ -517,9 +517,9 @@ impl EthApi for EthApiImpl {
         });
 
         Box::pin(async move {
-            match task.await {
-                Ok(r) => return r,
-                Err(e) => return Err(convert_join_error_to_rpc_error(e)),
+            return match task.await {
+                Ok(r) => r,
+                Err(e) => Err(convert_join_error_to_rpc_error(e)),
             }
         })
     }
@@ -554,9 +554,9 @@ impl EthApi for EthApiImpl {
         });
 
         Box::pin(async move {
-            match task.await {
-                Ok(r) => return r,
-                Err(e) => return Err(convert_join_error_to_rpc_error(e)),
+            return match task.await {
+                Ok(r) => r,
+                Err(e) => Err(convert_join_error_to_rpc_error(e)),
             }
         })
     }
@@ -584,9 +584,9 @@ impl EthApi for EthApiImpl {
         });
 
         Box::pin(async move {
-            match task.await {
-                Ok(r) => return r,
-                Err(e) => return Err(convert_join_error_to_rpc_error(e)),
+            return match task.await {
+                Ok(r) => r,
+                Err(e) => Err(convert_join_error_to_rpc_error(e)),
             }
         })
     }
@@ -610,9 +610,9 @@ impl EthApi for EthApiImpl {
         });
 
         Box::pin(async move {
-            match task.await {
-                Ok(r) => return r,
-                Err(e) => return Err(convert_join_error_to_rpc_error(e)),
+            return match task.await {
+                Ok(r) => r,
+                Err(e) => Err(convert_join_error_to_rpc_error(e)),
             }
         })
     }
@@ -635,9 +635,9 @@ impl EthApi for EthApiImpl {
         });
 
         Box::pin(async move {
-            match task.await {
-                Ok(r) => return r,
-                Err(e) => return Err(convert_join_error_to_rpc_error(e)),
+            return match task.await {
+                Ok(r) => r,
+                Err(e) => Err(convert_join_error_to_rpc_error(e)),
             }
         })
     }
@@ -674,9 +674,9 @@ impl EthApi for EthApiImpl {
         });
 
         Box::pin(async move {
-            match task.await {
-                Ok(r) => return r,
-                Err(e) => return Err(convert_join_error_to_rpc_error(e)),
+            return match task.await {
+                Ok(r) => r,
+                Err(e) => Err(convert_join_error_to_rpc_error(e)),
             }
         })
     }
@@ -930,9 +930,9 @@ impl EthApi for EthApiImpl {
             Ok(result.used_gas)
         });
         Box::pin(async move {
-            match task.await {
-                Ok(r) => return r,
-                Err(e) => return Err(convert_join_error_to_rpc_error(e)),
+            return match task.await {
+                Ok(r) => r,
+                Err(e) => Err(convert_join_error_to_rpc_error(e)),
             }
         })
     }
@@ -978,9 +978,9 @@ impl EthApi for EthApiImpl {
             }
         });
         Box::pin(async move {
-            match task.await {
-                Ok(r) => return r,
-                Err(e) => return Err(convert_join_error_to_rpc_error(e)),
+            return match task.await {
+                Ok(r) => r,
+                Err(e) => Err(convert_join_error_to_rpc_error(e)),
             }
         })
     }
@@ -1019,9 +1019,9 @@ impl EthApi for EthApiImpl {
             }
         });
         Box::pin(async move {
-            match task.await {
-                Ok(r) => return r,
-                Err(e) => return Err(convert_join_error_to_rpc_error(e)),
+            return match task.await {
+                Ok(r) => r,
+                Err(e) => Err(convert_join_error_to_rpc_error(e)),
             }
         })
     }
@@ -1057,9 +1057,9 @@ impl EthApi for EthApiImpl {
             }
         });
         Box::pin(async move {
-            match task.await {
-                Ok(r) => return r,
-                Err(e) => return Err(convert_join_error_to_rpc_error(e)),
+            return match task.await {
+                Ok(r) => r,
+                Err(e) => Err(convert_join_error_to_rpc_error(e)),
             }
         })
     }
@@ -1165,9 +1165,9 @@ impl EthApi for EthApiImpl {
             }
         });
         Box::pin(async move {
-            match task.await {
-                Ok(r) => return r,
-                Err(e) => return Err(convert_join_error_to_rpc_error(e)),
+            return match task.await {
+                Ok(r) => r,
+                Err(e) => Err(convert_join_error_to_rpc_error(e)),
             }
         })
     }
@@ -1244,9 +1244,9 @@ impl EthApi for EthApiImpl {
             Ok(ret)
         });
         Box::pin(async move {
-            match task.await {
-                Ok(r) => return r,
-                Err(e) => return Err(convert_join_error_to_rpc_error(e)),
+            return match task.await {
+                Ok(r) => r,
+                Err(e) => Err(convert_join_error_to_rpc_error(e)),
             }
         })
     }

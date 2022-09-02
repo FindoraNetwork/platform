@@ -89,6 +89,8 @@ pub fn start_web3_service(
 
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
 mod waiting {
+    use log::debug;
+
     pub struct HttpServer(pub Option<fp_rpc_server::HttpServer>);
     impl Drop for HttpServer {
         fn drop(&mut self) {
@@ -104,7 +106,7 @@ mod waiting {
         fn drop(&mut self) {
             if let Some(server) = self.0.take() {
                 server.close_handle().close();
-                let _ = server.wait();
+                server.wait();
             }
         }
     }
@@ -114,7 +116,7 @@ mod waiting {
         fn drop(&mut self) {
             if let Some(server) = self.0.take() {
                 server.close_handle().close();
-                let _ = server.wait();
+                server.wait().map_err(|e|debug!("WsServer drop err {:?}",e)).ok();
             }
         }
     }
