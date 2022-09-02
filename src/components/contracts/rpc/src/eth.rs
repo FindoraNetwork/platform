@@ -713,7 +713,7 @@ impl EthApi for EthApiImpl {
             match resp {
                 Ok(resp) => {
                     if resp.code != Code::Ok {
-                        return Err(build_rpc_error());
+                        return Err(convert_error_to_rpc_error(resp));
                     }
 
                     Ok(transaction_hash)
