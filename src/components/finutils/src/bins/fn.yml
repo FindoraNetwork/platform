@@ -561,6 +561,8 @@ subcommands:
                   takes_value: true
                   value_name: ENV NAME
                   required: false
+        - destroy-all:
+            about: Destroy all existing ENVs
         - start:
             about: Start an existing env
             args:
@@ -611,6 +613,10 @@ subcommands:
                   takes_value: true
                   value_name: ENV NAME
                   required: false
+        - info-all:
+            about: Show the details of all existing ENVs
+        - list:
+            about: List the names of all existing ENVs
         - init:
             about: Config the initial settings(POS,FRA issuance...)
             args:
@@ -621,3 +627,5 @@ subcommands:
                   takes_value: true
                   value_name: ENV NAME
                   required: false
+        - init-all:
+            about: Apply the `init` operation to all existing ENVs

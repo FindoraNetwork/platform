@@ -464,6 +464,8 @@ fn run() -> Result<()> {
                 envcfg.name = name.to_owned();
             }
             Ops::Destroy
+        } else if m.subcommand_matches("destroy-all").is_some() {
+            Ops::DestroyAll
         } else if let Some(sm) = m.subcommand_matches("start") {
             if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
@@ -489,11 +491,17 @@ fn run() -> Result<()> {
                 envcfg.name = name.to_owned();
             }
             Ops::Info
+        } else if m.subcommand_matches("info-all").is_some() {
+            Ops::InfoAll
+        } else if m.subcommand_matches("list").is_some() {
+            Ops::List
         } else if let Some(sm) = m.subcommand_matches("init") {
             if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
             }
             Ops::Init
+        } else if m.subcommand_matches("init-all").is_some() {
+            Ops::InitAll
         } else {
             if let Some(name) = m.value_of("env_name") {
                 envcfg.name = name.to_owned();

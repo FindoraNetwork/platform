@@ -165,8 +165,16 @@ pub const MAX_TOTAL_POWER: Amount = Amount::MAX / 8;
 /// can not exceed 20% of global power.
 pub const MAX_POWER_PERCENT_PER_VALIDATOR: [u128; 2] = [1, 5];
 
-/// Block time interval, in seconds.
-pub const BLOCK_INTERVAL: u64 = 15 + 1;
+lazy_static! {
+    /// Block time interval, in seconds.
+    pub static ref BLOCK_INTERVAL: u64 = {
+        1 + env::var("FINDORA_BLOCK_ITV")
+            .ok()
+            .as_deref()
+            .unwrap_or("15")
+            .parse::<u64>().unwrap()
+    };
+}
 
 /// The lock time after the delegation expires, about 21 days.
 //pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
@@ -2236,7 +2244,7 @@ fn calculate_delegation_rewards(
         let am = BigUint::from(amount);
         let total_am = BigUint::from(total_amount);
         let global_am = BigUint::from(global_amount);
-        let block_itv = BLOCK_INTERVAL as u128;
+        let block_itv = *BLOCK_INTERVAL as u128;
 
         let second_per_year: u128 = if CFG.checkpoint.second_fix_height < cur_height {
             365 * 24 * 3600
@@ -2271,7 +2279,7 @@ fn calculate_delegation_rewards(
         let am = amount as u128;
         let total_am = total_amount as u128;
         let global_am = global_amount as u128;
-        let block_itv = BLOCK_INTERVAL as u128;
+        let block_itv = *BLOCK_INTERVAL as u128;
 
         let calculate_self_only = || {
             am.checked_mul(return_rate[0])
