@@ -85,6 +85,12 @@ pub struct EnvCfg {
     // initialized once in `Ops::Create`,
     // default value: "127.0.0.1"
     pub host_ip: Option<String>,
+
+    // specify this option if you want to use a custom version of tendermint
+    pub tendermint_bin: Option<String>,
+
+    // specify this option if you want to use a custom version of abcid
+    pub abcid_bin: Option<String>,
 }
 
 impl Default for EnvCfg {
@@ -98,6 +104,8 @@ impl Default for EnvCfg {
             checkpoint_file: None,
             abcid_extra_flags: None,
             host_ip: None,
+            tendermint_bin: None,
+            abcid_bin: None,
         }
     }
 }
@@ -190,6 +198,12 @@ pub struct Env {
 
     // the latest/max id of current nodes
     next_node_id: NodeId,
+
+    // specify this option if you want to use a custom version of tendermint
+    tendermint_bin: String,
+
+    // specify this option if you want to use a custom version of abcid
+    abcid_bin: String,
 }
 
 impl Env {
@@ -211,6 +225,12 @@ impl Env {
             abcid_extra_flags: cfg.abcid_extra_flags.clone(),
             initial_validator_num: cfg.initial_validator_num,
             host_ip: cfg.host_ip.as_deref().unwrap_or("127.0.0.1").to_owned(),
+            tendermint_bin: cfg
+                .tendermint_bin
+                .as_deref()
+                .unwrap_or("tendermint")
+                .to_owned(),
+            abcid_bin: cfg.abcid_bin.as_deref().unwrap_or("abcid").to_owned(),
             ..Self::default()
         };
 
@@ -257,6 +277,8 @@ impl Env {
                     self.evm_chain_id,
                     self.checkpoint_file.as_deref(),
                     self.abcid_extra_flags.as_deref().unwrap_or_default(),
+                    &self.tendermint_bin,
+                    &self.abcid_bin,
                 )
                 .c(d!())?;
             } else if let Some(n) = self.seeds.get_mut(i) {
@@ -266,6 +288,8 @@ impl Env {
                     self.evm_chain_id,
                     self.checkpoint_file.as_deref(),
                     self.abcid_extra_flags.as_deref().unwrap_or_default(),
+                    &self.tendermint_bin,
+                    &self.abcid_bin,
                 )
                 .c(d!())?;
             } else {
@@ -382,9 +406,12 @@ impl Env {
         let mut cfg = fs::read_to_string(&cfg_path)
             .c(d!())
             .or_else(|_| {
-                cmd::exec_output(&format!("tendermint init --home {}", &home))
-                    .c(d!())
-                    .and_then(|_| fs::read_to_string(&cfg_path).c(d!()))
+                cmd::exec_output(&format!(
+                    "{} init --home {}",
+                    &self.tendermint_bin, &home
+                ))
+                .c(d!())
+                .and_then(|_| fs::read_to_string(&cfg_path).c(d!()))
             })
             .and_then(|c| c.parse::<Document>().c(d!()))?;
 
@@ -508,6 +535,8 @@ impl Env {
         let tmp_id = NodeId::MAX;
         let tmp_home = format!("{}/{}", &self.home, tmp_id);
 
+        let cmd = format!("{} init --home {}", &self.tendermint_bin, &tmp_home);
+
         let gen = |genesis_file: String| {
             self.nodes
                 .values()
@@ -552,7 +581,7 @@ impl Env {
                 })
         };
 
-        cmd::exec_output(&format!("tendermint init --home {}", &tmp_home))
+        cmd::exec_output(&cmd)
             .c(d!())
             .and_then(|_| {
                 TmConfig::load_toml_file(&format!("{}/config/config.toml", &tmp_home))
@@ -740,6 +769,7 @@ impl Node {
     // - start node
     // - collect results
     // - update meta
+    #[allow(clippy::too_many_arguments)]
     fn start(
         &mut self,
         host_ip: &str,
@@ -747,13 +777,15 @@ impl Node {
         evm_chain_id: u64,
         checkpoint_file: Option<&str>,
         abcid_extra_flags: &str,
+        tendermint_bin: &str,
+        abcid_bin: &str,
     ) -> Result<()> {
         self.stop().c(d!())?;
         match unsafe { fork() } {
             Ok(ForkResult::Child) => {
                 let mut cmd = format!(
-                    "tendermint node --home {9} >>{9}/tendermint.log 2>&1 & \
-                    EVM_CHAIN_ID={0} FINDORA_BLOCK_ITV={1} abcid \
+                    "{11} node --home {9} >>{9}/tendermint.log 2>&1 & \
+                    EVM_CHAIN_ID={0} FINDORA_BLOCK_ITV={1} {12} \
                         --enable-query-service \
                         --enable-eth-api-service \
                         --tendermint-host {2} \
@@ -777,6 +809,8 @@ impl Node {
                     self.ports.web3_ws,
                     &self.home,
                     abcid_extra_flags,
+                    tendermint_bin,
+                    abcid_bin
                 );
                 if let Some(checkpoint) = checkpoint_file {
                     write!(cmd, r" --checkpoint-file {} \", checkpoint).unwrap();

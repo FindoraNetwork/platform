@@ -551,6 +551,20 @@ subcommands:
                   takes_value: true
                   value_name: HOST IP
                   required: false
+              - tendermint_bin_path:
+                  help: The path of your custom tendermint binary
+                  short: T
+                  long: tendermint-bin-path
+                  takes_value: true
+                  value_name: TENDERMINT BIN PATH
+                  required: false
+              - abcid_bin_path:
+                  help: The path of your custom abcid binary
+                  short: A
+                  long: abcid-bin-path
+                  takes_value: true
+                  value_name: ABCID BIN PATH
+                  required: false
         - destroy:
             about: Destroy an existing env
             args:

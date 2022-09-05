@@ -206,13 +206,15 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -E, --abcid-extra-flags <ABCID EXTRA FLAGS>    A pair of quotes should be used when specifying extra flags
-    -i, --block-itv-secs <BLOCK INTERVAL>          Block interval in seconds
-    -c, --checkpoint-file <CHECKPOINT FILE>        The file path of the checkpoint file
-    -e, --env-name <ENV NAME>                      The name of the target env
-    -I, --evm-chain-id <EVM CHAIN ID>              The chain id in the scope of evm logic
-    -H, --host-ip <HOST IP>                        The IP of your local host, default to 127.0.0.1
-    -N, --validator-num <VALIDATOR NUMBER>         How many initial validators should be created
+    -A, --abcid-bin-path <ABCID BIN PATH>              The path of your custom abcid binary
+    -E, --abcid-extra-flags <ABCID EXTRA FLAGS>        A pair of quotes should be used when specifying extra flags
+    -i, --block-itv-secs <BLOCK INTERVAL>              Block interval in seconds
+    -c, --checkpoint-file <CHECKPOINT FILE>            The file path of the checkpoint file
+    -e, --env-name <ENV NAME>                          The name of the target env
+    -I, --evm-chain-id <EVM CHAIN ID>                  The chain id in the scope of evm logic
+    -H, --host-ip <HOST IP>                            The IP of your local host, default to 127.0.0.1
+    -T, --tendermint-bin-path <TENDERMINT BIN PATH>    The path of your custom tendermint binary
+    -N, --validator-num <VALIDATOR NUMBER>             How many initial validators should be created
 ```
 
 For the issue of remote joint debugging, we can use the `--host-ip` option to specify the listening address of the target ENV.
@@ -222,6 +224,8 @@ A few other commonly used options:
 - `-c, --checkpoint-file`, the path of you custom checkpoint file
 - `-I, --evm-chain-id`, the value of this option will be defined as `${EVM_CHAIN_ID}`
 - `-N, --validator-num`, 5 initial validators will be created by default, you can change the number by this option
+- `-T, --tendermint-bin-path`, use a custom version of the tendermint binary
+- `-A, --abcid-bin-path`, use a custom versioln of the abcid binary
 - `-E, --abcid-extra-flags`, specify extra flags
   - for example, there is a `--disable-eth-empty-blocks` flag in the `abcid` binary, and it will not be set by `fn dev` by default, you can set it like this `fn dev create -E '--disable-eth-empty-blocks'`
 
@@ -234,6 +238,8 @@ fn dev create \
     -N 10 \
     -I 777 \
     -c /tmp/checkpoint.toml \
+    -T /tmp/tendermint-v0.33.8 \
+    -A /tmp/abcid-v0.4.0-preview \
     -E '--disable-eth-empty-blocks'
 ```
 
@@ -244,6 +250,7 @@ fn dev create \
 - the number of initial validator nodes is 10
 - the chain id of evm is 777
 - the path of checkpoint file is '/tmp/checkpoint.toml'
+- use custom binaries of tendermint and abcid
 - `--disable-eth-empty-blocks` is added as an extra flag
 
 The coresponding starting commands of nodes will be(but in one-line style):
