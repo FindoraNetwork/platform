@@ -72,6 +72,8 @@ Below is the information of a custom ENV named 'MyEnv', `fn dev -e MyEnv`:
 {
   "env_name": "MyEnv",
   "env_home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv",
+  "tendermint_bin": "/tmp/tendermint-v0.33.8",
+  "abcid_bin": "/tmp/abcid-v0.4.0-preview",
   "host_ip": "192.168.2.5",
   "bank_account": {
     "wallet_address": "fra18xkez3fum44jq0zhvwq380rfme7u624cccn3z56fjeex6uuhpq6qv9e4g5",
@@ -79,39 +81,8 @@ Below is the information of a custom ENV named 'MyEnv', `fn dev -e MyEnv`:
     "secret_key": "Ew9fMaryTL44ZXnEhcF7hQ-AB-fxgaC8vyCH-hCGtzg=",
     "mnemonic_words": "field ranch pencil chest effort coyote april move injury illegal forest amount bid sound mixture use second pet embrace twice total essay valve loan"
   },
-  "initial_validator_number": 3,
-  "initial_pos_settings": [
-    {
-      "tendermint_addr": "73BDBF3C63E04426253F865D35B4D2A49B14067C",
-      "tendermint_pubkey": "cnKgCfkSpQklo6zvrdsi51wGnUK+L14tkJ1UfFFcubQ=",
-      "xfr_keypair": {
-        "pub_key": "Y09bRu4S-zcJcRMZ53NS3aOEESnngSdyabhk3rMk1oc=",
-        "sec_key": "REHUN5f0P9jfSYINfrzYbfSEL_IcuJD77HEbcbZyIMY="
-      },
-      "xfr_mnemonic": "crumble girl fashion soccer output among decade blind close hen fish harbor lava peasant immense odor offer album shine train raccoon tired section drink",
-      "xfr_wallet_addr": "fra1vd84k3hwztanwzt3zvv7wu6jmk3cgyffu7qjwunfhpjdavey66rs6ae34u"
-    },
-    {
-      "tendermint_addr": "E3DA161A1A76355E3C6A6A28F91CC1C70F74C283",
-      "tendermint_pubkey": "88Cfkyw1nKrV34Gm0A72PZpShUrOidgpoRVeIqzefzk=",
-      "xfr_keypair": {
-        "pub_key": "HbEIkerMF6H8Ms4N3mB4hxkNuq6ME3ywjwOxenCdDcI=",
-        "sec_key": "iAmcC7giQV9QvPE2oSIALx3fVbSvrrkXydBLn3zubvE="
-      },
-      "xfr_mnemonic": "iron useful rebel critic spray banner history medal artist enough expect despair accident busy tilt sad cart digital vacant tomorrow tattoo outer noodle common",
-      "xfr_wallet_addr": "fra1rkcs3y02est6rlpjecxaucrcsuvsmw4w3sfhevy0qwch5uyaphpqnksdqw"
-    },
-    {
-      "tendermint_addr": "E6F78B1FC32EA8A37444DC6E003EE99660BA9EC7",
-      "tendermint_pubkey": "Ehcd16B30gs5+etbVCbjMVWDn/ELjhrP0SrJcmaR/yM=",
-      "xfr_keypair": {
-        "pub_key": "fYiR2ZjTwDCb1QDyqevGgEIilNCAwdoGUuzOL0tNE6s=",
-        "sec_key": "Jq-MrDCPGf0K0VH8rL5R1xb8E6oO9PAV1AyJI4z3-LY="
-      },
-      "xfr_mnemonic": "basic critic follow exhaust rigid worth sponsor chest boss unable bundle entire wife multiply hover miracle three fiber route student never apart during foam",
-      "xfr_wallet_addr": "fra10kyfrkvc60qrpx74qre2n67xsppz99xssrqa5pjjan8z7j6dzw4sl68y8v"
-    }
-  ],
+  "initial_validator_number": 6,
+  "initial_pos_settings": [],
   "block_interval": 1,
   "evm_chain_id": 777,
   "checkpoint_file": "/tmp/checkpoint.toml",
@@ -119,69 +90,114 @@ Below is the information of a custom ENV named 'MyEnv', `fn dev -e MyEnv`:
   "seed_nodes": {
     "0": {
       "id": 0,
-      "tm_id": "6b2b1e45488c6314a8c91251716e36534fb591c8",
+      "tm_id": "7caec7b3a25c3966c6603452c9095a1e2ff19785",
       "home": "/tmp/__FINDORA_DEV__/envs/MyEnv/0",
       "kind": "Seed",
       "ports": {
-        "web3_http": 47633,
-        "web3_ws": 62803,
-        "tm_p2p": 21344,
-        "tm_rpc": 39048,
-        "app_abci": 22262,
-        "app_8669": 47168,
-        "app_8668": 28209
+        "web3_http": 44752,
+        "web3_ws": 30047,
+        "tm_p2p": 37377,
+        "tm_rpc": 23863,
+        "app_abci": 42327,
+        "app_8669": 39832,
+        "app_8668": 45102
       }
     }
   },
   "validator_or_full_nodes": {
     "1": {
       "id": 1,
-      "tm_id": "5d09376ed2f37971181ad98e6e3b2d443580d6b9",
+      "tm_id": "bb81551e737b232285ecd563c499ba56a9335ed8",
       "home": "/tmp/__FINDORA_DEV__/envs/MyEnv/1",
       "kind": "Node",
       "ports": {
-        "web3_http": 25789,
-        "web3_ws": 20950,
-        "tm_p2p": 33684,
-        "tm_rpc": 64524,
-        "app_abci": 33266,
-        "app_8669": 22703,
-        "app_8668": 40368
+        "web3_http": 39118,
+        "web3_ws": 38781,
+        "tm_p2p": 43052,
+        "tm_rpc": 52559,
+        "app_abci": 32767,
+        "app_8669": 45090,
+        "app_8668": 58272
       }
     },
     "2": {
       "id": 2,
-      "tm_id": "6424b547c11c146becee4c3d9f369dcfabff8ee5",
+      "tm_id": "25af74b05bd5a312f64ef2155ad2844e87cbf1a4",
       "home": "/tmp/__FINDORA_DEV__/envs/MyEnv/2",
       "kind": "Node",
       "ports": {
-        "web3_http": 20404,
-        "web3_ws": 55511,
-        "tm_p2p": 36443,
-        "tm_rpc": 54663,
-        "app_abci": 27465,
-        "app_8669": 32295,
-        "app_8668": 37006
+        "web3_http": 30247,
+        "web3_ws": 30301,
+        "tm_p2p": 62187,
+        "tm_rpc": 34517,
+        "app_abci": 59392,
+        "app_8669": 39727,
+        "app_8668": 42059
       }
     },
     "3": {
       "id": 3,
-      "tm_id": "d2b7dc906d7295e1d787bfee81e49f7e7c64aa20",
+      "tm_id": "03eac7c59230e345cfc0a030dbd2c1bad003c75c",
       "home": "/tmp/__FINDORA_DEV__/envs/MyEnv/3",
       "kind": "Node",
       "ports": {
-        "web3_http": 31594,
-        "web3_ws": 65203,
-        "tm_p2p": 62070,
-        "tm_rpc": 46755,
-        "app_abci": 21096,
-        "app_8669": 27923,
-        "app_8668": 51732
+        "web3_http": 62442,
+        "web3_ws": 34670,
+        "tm_p2p": 33516,
+        "tm_rpc": 40108,
+        "app_abci": 62630,
+        "app_8669": 61792,
+        "app_8668": 41703
+      }
+    },
+    "4": {
+      "id": 4,
+      "tm_id": "0892a3c97b664ea35c6f7815b0dc20699a0b2a13",
+      "home": "/tmp/__FINDORA_DEV__/envs/MyEnv/4",
+      "kind": "Node",
+      "ports": {
+        "web3_http": 25335,
+        "web3_ws": 30296,
+        "tm_p2p": 21710,
+        "tm_rpc": 49938,
+        "app_abci": 33458,
+        "app_8669": 42395,
+        "app_8668": 23640
+      }
+    },
+    "5": {
+      "id": 5,
+      "tm_id": "0a184e1f6faddb86cbf42940a739345965021dbe",
+      "home": "/tmp/__FINDORA_DEV__/envs/MyEnv/5",
+      "kind": "Node",
+      "ports": {
+        "web3_http": 38777,
+        "web3_ws": 64178,
+        "tm_p2p": 34144,
+        "tm_rpc": 36390,
+        "app_abci": 30303,
+        "app_8669": 32079,
+        "app_8668": 24219
+      }
+    },
+    "6": {
+      "id": 6,
+      "tm_id": "7bf456af4aa2ae6e933876d2da62a5e6109a141e",
+      "home": "/tmp/__FINDORA_DEV__/envs/MyEnv/6",
+      "kind": "Node",
+      "ports": {
+        "web3_http": 22716,
+        "web3_ws": 22631,
+        "tm_p2p": 47611,
+        "tm_rpc": 57745,
+        "app_abci": 26842,
+        "app_8669": 40852,
+        "app_8668": 54885
       }
     }
   },
-  "tendermint_genesis_config": "{\"app_hash\":\"\",\"chain_id\":\"test-chain-SoyWN0\",\"consensus_params\":{\"block\":{\"max_bytes\":\"22020096\",\"max_gas\":\"-1\",\"time_iota_ms\":\"1000\"},\"evidence\":{\"max_age_duration\":\"172800000000000\",\"max_age_num_blocks\":\"100000\"},\"validator\":{\"pub_key_types\":[\"ed25519\"]}},\"genesis_time\":\"2022-09-05T16:43:57.400461512Z\",\"validators\":[{\"address\":\"E3DA161A1A76355E3C6A6A28F91CC1C70F74C283\",\"name\":\"node-0\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"88Cfkyw1nKrV34Gm0A72PZpShUrOidgpoRVeIqzefzk=\"},\"voting_power\":\"1\"},{\"address\":\"E6F78B1FC32EA8A37444DC6E003EE99660BA9EC7\",\"name\":\"node-1\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"Ehcd16B30gs5+etbVCbjMVWDn/ELjhrP0SrJcmaR/yM=\"},\"voting_power\":\"1\"},{\"address\":\"73BDBF3C63E04426253F865D35B4D2A49B14067C\",\"name\":\"node-2\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"cnKgCfkSpQklo6zvrdsi51wGnUK+L14tkJ1UfFFcubQ=\"},\"voting_power\":\"1\"}]}",
-  "next_node_id": 4
+  "tendermint_genesis_config": "{\"app_hash\":\"\",\"chain_id\":\"test-chain-zfWF7p\",\"consensus_params\":{\"block\":{\"max_bytes\":\"22020096\",\"max_gas\":\"-1\",\"time_iota_ms\":\"1000\"},\"evidence\":{\"max_age_duration\":\"172800000000000\",\"max_age_num_blocks\":\"100000\"},\"validator\":{\"pub_key_types\":[\"ed25519\"]}},\"genesis_time\":\"2022-09-05T18:11:48.125514813Z\",\"validators\":[{\"address\":\"1EC4D45D32369471CFC2D72BA13BBC763F8F7F01\",\"name\":\"node-0\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"1JLCxVB57o6O0kvKO4SqcxnVbbiyy8cOFJZ6VaXNPRE=\"},\"voting_power\":\"1\"},{\"address\":\"7860BD6D1E825C0BD64E58CAAF007028F22EB6EF\",\"name\":\"node-1\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"34JI8V8j/z4wT9MRtpZF3AtNdJxwt8guQfn4lhdnLUM=\"},\"voting_power\":\"1\"},{\"address\":\"AD1EE8FCCB2D69C2FD0E038DA431B0A0264B1F2D\",\"name\":\"node-2\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"ajDU9S6SMwkBtvIyJ838CuGDLq+MN6ZUFjWfRAY2rp4=\"},\"voting_power\":\"1\"},{\"address\":\"860FCA9E795E1982BEAC75F7DBF1A8E55D82749C\",\"name\":\"node-3\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"MJm6lkkwW2ZYd2Z1QTwAK5eLPvmzcFpYAi+PN4XthJ0=\"},\"voting_power\":\"1\"},{\"address\":\"19272E9A28AE77D81A2B2768F1C2B9EA75AC8670\",\"name\":\"node-4\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"3yyNXD503Fctiwmbw8JTk2jdZBDA2Drm9CkSw/VCTvo=\"},\"voting_power\":\"1\"},{\"address\":\"078E2E0F813C3B92032812E6E87A2D3262A55A2C\",\"name\":\"node-5\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"Ygg2h6SAsNSud/PsGSiJ86KjXdeeUa+dqiV4zGPcDok=\"},\"voting_power\":\"1\"}]}",
+  "next_node_id": 7
 }
 ```
 
@@ -235,7 +251,7 @@ fn dev create \
     -H 192.168.2.5 \
     -e MyEnv \
     -i 1 \
-    -N 10 \
+    -N 6 \
     -I 777 \
     -c /tmp/checkpoint.toml \
     -T /tmp/tendermint-v0.33.8 \
@@ -247,7 +263,7 @@ fn dev create \
   - now you can tell the IP address to your frond-end engineers, the joint debugging will be ok
 - the name of this ENV is 'MyEnv'
 - the block interval will be 1s
-- the number of initial validator nodes is 10
+- the number of initial validator nodes is 6
 - the chain id of evm is 777
 - the path of checkpoint file is '/tmp/checkpoint.toml'
 - use custom binaries of tendermint and abcid
@@ -257,12 +273,12 @@ The coresponding starting commands of nodes will be(but in one-line style):
 ```shell
 # cat /tmp/__FINDORA_DEV__/envs/MyEnv/3/fn_dev.log
 
-tendermint node \
+/tmp/tendermint-v0.33.8 node \
     --home /tmp/__FINDORA_DEV__/envs/MyEnv/3 \
     >>/tmp/__FINDORA_DEV__/envs/MyEnv/3/tendermint.log 2>&1 &
 
 EVM_CHAIN_ID=777 FINDORA_BLOCK_ITV=1 \
-abcid --enable-query-service --enable-eth-api-service \
+/tmp/abcid-v0.4.0-preview --enable-query-service --enable-eth-api-service \
     --tendermint-host 192.168.2.5 \
     --tendermint-port 41043 \
     --abcid-port 22480 \
@@ -279,7 +295,11 @@ abcid --enable-query-service --enable-eth-api-service \
 
 #### Management of multiple clusters
 
-Resource allocation and process running between different clusters are completely isolated, so managing multiple clusters, or in other words, managing custom clusters is not much different from the default cluster. The only difference is that you do not have to explicitly specify the env name when managing the default cluster, but for non-default clusters, all operations must explicitly specify the name of the target env.
+Since each cluster can specify its own executing binaries(tendermint & abcid), the multi-cluster mode is of great significance for functional comparison, testing and problem debugging between different versions or between different features.
+
+Managing multiple clusters, or in other words, managing custom clusters is not much different from the default cluster because resource allocation and process running between different clusters are completely isolated in `fn dev`.
+
+The only difference is that you do not have to explicitly specify the env name when managing the default cluster, but for non-default clusters, all operations must explicitly specify the name of the target env.
 
 For example, for the default cluster, `fn dev stop` is equal to `fn dev stop -e DEFAULT`, both styles are ok; but there is only one style for a custom cluster, that is `fn dev stop -e YourCustomEnv`.
 

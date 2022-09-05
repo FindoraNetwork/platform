@@ -159,6 +159,12 @@ pub struct Env {
     #[serde(rename = "env_home_dir")]
     home: String,
 
+    // path of the tendermint binary, default to 'tendermint'
+    tendermint_bin: String,
+
+    // path of the abcid binary, default to 'abcid'
+    abcid_bin: String,
+
     // default value: "127.0.0.1"
     host_ip: String,
 
@@ -198,12 +204,6 @@ pub struct Env {
 
     // the latest/max id of current nodes
     next_node_id: NodeId,
-
-    // specify this option if you want to use a custom version of tendermint
-    tendermint_bin: String,
-
-    // specify this option if you want to use a custom version of abcid
-    abcid_bin: String,
 }
 
 impl Env {
@@ -784,8 +784,8 @@ impl Node {
         match unsafe { fork() } {
             Ok(ForkResult::Child) => {
                 let mut cmd = format!(
-                    "{11} node --home {9} >>{9}/tendermint.log 2>&1 & \
-                    EVM_CHAIN_ID={0} FINDORA_BLOCK_ITV={1} {12} \
+                    "{10} node --home {9} >>{9}/tendermint.log 2>&1 & \
+                    EVM_CHAIN_ID={0} FINDORA_BLOCK_ITV={1} {11} \
                         --enable-query-service \
                         --enable-eth-api-service \
                         --tendermint-host {2} \
@@ -796,8 +796,7 @@ impl Node {
                         --evm-http-port {7} \
                         --evm-ws-port {8} \
                         --ledger-dir {9}/__findora__ \
-                        --tendermint-node-key-config-path {9}/config/priv_validator_key.json \
-                        {10}",
+                        --tendermint-node-key-config-path {9}/config/priv_validator_key.json",
                     evm_chain_id,
                     block_itv,
                     host_ip,
@@ -808,14 +807,18 @@ impl Node {
                     self.ports.web3_http,
                     self.ports.web3_ws,
                     &self.home,
-                    abcid_extra_flags,
                     tendermint_bin,
                     abcid_bin
                 );
                 if let Some(checkpoint) = checkpoint_file {
-                    write!(cmd, r" --checkpoint-file {} \", checkpoint).unwrap();
+                    write!(cmd, r" --checkpoint-file {}", checkpoint).unwrap();
                 }
-                write!(cmd, " >>{}/app.log 2>&1 &", &self.home).unwrap();
+                write!(
+                    cmd,
+                    " {} >>{}/app.log 2>&1 &",
+                    abcid_extra_flags, &self.home
+                )
+                .unwrap();
 
                 pnk!(self.write_cmd_log(&cmd));
                 pnk!(exec_spawn(&cmd));
