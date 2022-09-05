@@ -328,6 +328,10 @@ Inner management operations of `fn dev` will be logged in the `fn_dev.log` file.
 
 ## Compatibility Notes
 
+#### OS compatibility
+
+In theory, it can run well on most Linux and MacOS versions, but it is not suitable for Windows operating systems, and there is currently no compatibility plan for Windows.
+
 #### No breaks to musl compilation
 
 ```shell
