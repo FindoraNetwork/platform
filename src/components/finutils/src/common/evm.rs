@@ -54,7 +54,7 @@ pub fn transfer_to_account(amount: u64, address: Option<&str>) -> Result<()> {
         .sign(&kp);
 
     let mut tx = builder.take_transaction();
-    tx.sign(&kp);
+    tx.sign_to_map(&kp);
 
     utils::send_tx(&tx)?;
     Ok(())

@@ -85,7 +85,7 @@ pub fn staker_update(cr: Option<&str>, memo: Option<StakerMemo>) -> Result<()> {
         .map(|op| builder.add_operation(op))?;
 
     let mut tx = builder.take_transaction();
-    tx.sign(&kp);
+    tx.sign_to_map(&kp);
 
     utils::send_tx(&tx).c(d!())
 }
@@ -151,7 +151,7 @@ pub fn stake(
     .map(|principal_op| builder.add_operation(principal_op))?;
 
     let mut tx = builder.take_transaction();
-    tx.sign(&kp);
+    tx.sign_to_map(&kp);
 
     utils::send_tx(&tx).c(d!())
 }
@@ -188,8 +188,10 @@ pub fn stake_append(
     )
     .c(d!())
     .map(|principal_op| builder.add_operation(principal_op))?;
+    let mut tx = builder.take_transaction();
+    tx.sign_to_map(&kp);
 
-    utils::send_tx(&builder.take_transaction()).c(d!())
+    utils::send_tx(&tx).c(d!())
 }
 
 /// Withdraw Fra token from findora network for a staker
@@ -237,7 +239,7 @@ pub fn unstake(
     })?;
 
     let mut tx = builder.take_transaction();
-    tx.sign(&kp);
+    tx.sign_to_map(&kp);
 
     utils::send_tx(&tx).c(d!())
 }
@@ -260,7 +262,7 @@ pub fn claim(am: Option<&str>, sk_str: Option<&str>) -> Result<()> {
     })?;
 
     let mut tx = builder.take_transaction();
-    tx.sign(&kp);
+    tx.sign_to_map(&kp);
 
     utils::send_tx(&tx).c(d!())
 }
@@ -663,7 +665,7 @@ fn gen_undelegate_tx(
     }
 
     let mut tx = builder.take_transaction();
-    tx.sign(owner_kp);
+    tx.sign_to_map(owner_kp);
 
     Ok(tx)
 }
@@ -690,7 +692,8 @@ fn gen_delegate_tx(
     })?;
 
     let mut tx = builder.take_transaction();
-    tx.sign(owner_kp);
+
+    tx.sign_to_map(owner_kp);
 
     Ok(tx)
 }
@@ -743,7 +746,7 @@ pub fn create_asset_x(
         .map(|op| builder.add_operation(op))?;
 
     let mut tx = builder.take_transaction();
-    tx.sign(kp);
+    tx.sign_to_map(kp);
 
     utils::send_tx(&tx).map(|_| code)
 }
@@ -785,7 +788,7 @@ pub fn issue_asset_x(
         .map(|op| builder.add_operation(op))?;
 
     let mut tx = builder.take_transaction();
-    tx.sign(kp);
+    tx.sign_to_map(kp);
 
     utils::send_tx(&tx)
 }
@@ -820,7 +823,7 @@ pub fn replace_staker(
 
     builder.add_operation_replace_staker(&keypair, target_pubkey, new_td_addr_pk)?;
     let mut tx = builder.take_transaction();
-    tx.sign(&keypair);
+    tx.sign_to_map(&keypair);
 
     utils::send_tx(&tx).c(d!())?;
     Ok(())
