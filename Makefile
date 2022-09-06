@@ -98,6 +98,7 @@ tendermint_goleveldb:
 	cd tools/tendermint && $(MAKE) install
 
 test:
+	- find src -name "checkpoint.toml" | xargs rm -f
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
 	- find src -name "checkpoint.toml" | xargs rm -f
 
