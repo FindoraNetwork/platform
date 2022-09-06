@@ -174,6 +174,7 @@ pub struct Env {
     // validator informations related to POS
     #[serde(rename = "initial_validator_number")]
     initial_validator_num: u8,
+
     #[serde(rename = "initial_pos_settings")]
     initial_validators: Vec<InitialValidator>,
 
@@ -195,15 +196,16 @@ pub struct Env {
 
     #[serde(rename = "seed_nodes")]
     seeds: BTreeMap<NodeId, Node>,
+
     #[serde(rename = "validator_or_full_nodes")]
     nodes: BTreeMap<NodeId, Node>,
+
+    // the latest/max id of current nodes
+    next_node_id: NodeId,
 
     // the contents of `genesis.json` of all nodes
     #[serde(rename = "tendermint_genesis_config")]
     genesis: String,
-
-    // the latest/max id of current nodes
-    next_node_id: NodeId,
 }
 
 impl Env {
@@ -823,7 +825,7 @@ impl Node {
                 )
                 .unwrap();
 
-                pnk!(self.write_cmd_log(&cmd));
+                pnk!(self.write_fn_log(&cmd));
                 pnk!(exec_spawn(&cmd));
 
                 exit(0);
@@ -847,10 +849,10 @@ impl Node {
         );
         let outputs = cmd::exec_output(&cmd).c(d!())?;
         let contents = format!("{}\n{}", &cmd, outputs.as_str());
-        self.write_cmd_log(&contents).c(d!())
+        self.write_fn_log(&contents).c(d!())
     }
 
-    fn write_cmd_log(&self, cmd: &str) -> Result<()> {
+    fn write_fn_log(&self, cmd: &str) -> Result<()> {
         OpenOptions::new()
             .read(true)
             .write(true)
