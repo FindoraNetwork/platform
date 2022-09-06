@@ -759,9 +759,12 @@ impl TryFrom<&InitialValidator> for StakingValidator {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct Node {
     id: NodeId,
+    #[serde(rename = "tendermint_node_id")]
     tm_id: String,
+    #[serde(rename = "home_dir")]
     home: String,
     kind: Kind,
+    #[serde(rename = "occupied_ports")]
     ports: Ports,
 }
 
@@ -883,6 +886,7 @@ impl Node {
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 enum Kind {
+    #[serde(rename = "ValidatorOrFull")]
     Node,
     Seed,
 }
@@ -890,12 +894,19 @@ enum Kind {
 // Active ports of a node
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
 struct Ports {
+    #[serde(rename = "web3_http_service")]
     web3_http: u16,
+    #[serde(rename = "web3_websocket_service")]
     web3_ws: u16,
+    #[serde(rename = "tendermint_p2p_service")]
     tm_p2p: u16,
+    #[serde(rename = "tendermint_rpc_service")]
     tm_rpc: u16,
+    #[serde(rename = "abcid_abci_service")]
     app_abci: u16,
+    #[serde(rename = "abcid_submission_service")]
     app_8669: u16,
+    #[serde(rename = "abcid_ledger_query_service")]
     app_8668: u16,
 }
 

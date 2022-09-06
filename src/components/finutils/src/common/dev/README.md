@@ -82,7 +82,68 @@ Below is the information of a custom ENV named 'MyEnv', `fn dev -e MyEnv`:
     "mnemonic_words": "field ranch pencil chest effort coyote april move injury illegal forest amount bid sound mixture use second pet embrace twice total essay valve loan"
   },
   "initial_validator_number": 6,
-  "initial_pos_settings": [],
+  "initial_pos_settings": [
+    {
+      "tendermint_addr": "27055305231CF6F718AD26485499B3ED1CCC8115",
+      "tendermint_pubkey": "MVQUuYdJzxmYiJnmffxf40jBXXkwwnkLzt0f4XV+NeQ=",
+      "xfr_keypair": {
+        "pub_key": "5vy5t4sG_cbLVJvKQWn7xwd7WSmRQlUX6KW-IvDTLBo=",
+        "sec_key": "fCBBCZCh8-IxCn9rgjoRiX03_SiuI99EouM-VJ9Hu5U="
+      },
+      "xfr_mnemonic": "chat fish hedgehog step help waste charge repeat cram public address visa around iron sponsor silly obvious sail squirrel relief arrive pet toe nominee",
+      "xfr_wallet_addr": "fra1um7tndutqm7udj65n09yz60mcurhkkffj9p929lg5klz9uxn9sdqlv3f2e"
+    },
+    {
+      "tendermint_addr": "33A24EF38E695529EED806CF70751C2CFC61DEAC",
+      "tendermint_pubkey": "bvjpaBraL50Q8rRo+a7HH5HU2YI4lEasxm5CrP/TC6c=",
+      "xfr_keypair": {
+        "pub_key": "MOm22HEhE59rIb9H2Vgg_-Y0EOaIolKUbGcWXdfyZdM=",
+        "sec_key": "AVj4I7G85a_dpETRjZbEYAlAiP7kBGxUx-3YBmYfhDc="
+      },
+      "xfr_mnemonic": "inject clerk accuse crunch absurd piece rely property bird win cave occur panther shaft switch device ketchup amused rather tragic settle celery dose brick",
+      "xfr_wallet_addr": "fra1xr5mdkr3yyfe76epharajkpqllnrgy8x3z3999rvvut9m4ljvhfsjf5375"
+    },
+    {
+      "tendermint_addr": "38AD0AF0258FB751262BD9D835A4D7848B0BC60E",
+      "tendermint_pubkey": "5UzQOmtN9xT7kOLq9w0B4UA1U5dUeuJgzItbGkdepvg=",
+      "xfr_keypair": {
+        "pub_key": "zH51NYSEam0rA8aJTFlyxHY-t3KFAg9uTnZ47l0HTCI=",
+        "sec_key": "S-WS-_maS1beU8fKBpTKBXUzZ8i1-9q44MlXYFiddak="
+      },
+      "xfr_mnemonic": "repeat noise rare rely open crucial awkward firm distance about detect connect style device wagon level check grow bench year toddler rubber sense advice",
+      "xfr_wallet_addr": "fra1e3l82dvys34x62crc6y5cktjc3mradmjs5pq7mjwweuwuhg8fs3qpwjk0r"
+    },
+    {
+      "tendermint_addr": "4F850CA6849EC0B3FC808D912F35CE2DAA222006",
+      "tendermint_pubkey": "l+7AqB4df3ckzpF+7Ku4xh9z+WPzhyzjw99WKE0K9oI=",
+      "xfr_keypair": {
+        "pub_key": "RyqsOAAqHeEGW2AKwywDX7GgOTP5XjMfAnYlufOKmIM=",
+        "sec_key": "CvaTBun0MiEeSErqHMPKRih0ADIu_UUjzuFQ2zdekuw="
+      },
+      "xfr_mnemonic": "harbor all speed train adult alien box steel promote discover desk antique please ship total carry coral deer method nominee blanket ghost brand have",
+      "xfr_wallet_addr": "fra1gu42cwqq9gw7zpjmvq9vxtqrt7c6qwfnl90rx8czwcjmnuu2nzpsmg9205"
+    },
+    {
+      "tendermint_addr": "C81783A1C67AD00C82FF093CE36AFF938185E44B",
+      "tendermint_pubkey": "QPh4cyJnFKpDwDbU0C30hoQfqwvjCN9xDB8OtomhMkE=",
+      "xfr_keypair": {
+        "pub_key": "THNbrDo9hoWDCJKePWhFG3KWDhK7Hd76-envNmOLmOM=",
+        "sec_key": "inIf4M_Pr_9O845CCp_BvMakx-lnjFaNPTvRUMSFv3E="
+      },
+      "xfr_mnemonic": "cricket know material crop wheel merge imitate script sing pioneer honey safe access inquiry wall best sign seed hybrid helmet wheat grocery stone west",
+      "xfr_wallet_addr": "fra1f3e4htp68krgtqcgj20r66z9rdefvrsjhvwaa7hea8hnvcutnr3spzuwm3"
+    },
+    {
+      "tendermint_addr": "FAD1E8BBC00835B88FAA41B54EAA0D2FCE55FEF0",
+      "tendermint_pubkey": "i3QFHggYCqG6ciKmsjAXSt6NKfyUOGjfje5YwYaYOfo=",
+      "xfr_keypair": {
+        "pub_key": "UtKUdsJTYLCbmAXUAWGb97zMyW0HvyADxsrz7T4vmG0=",
+        "sec_key": "o9aYwKN27PC3OPa7GqDpvP5q5WPoJk-qjRp4KTgNeok="
+      },
+      "xfr_mnemonic": "fever cheap upper flash team language town sudden cash nurse orphan dove nation possible bracket coil hello orchard hurdle feature excuse rigid flee basic",
+      "xfr_wallet_addr": "fra12tffgakz2dstpxucqh2qzcvm777vejtdq7ljqq7xete76030npks7w80ku"
+    }
+  ],
   "block_interval": 1,
   "evm_chain_id": 777,
   "checkpoint_file": "/tmp/checkpoint.toml",
@@ -90,113 +151,113 @@ Below is the information of a custom ENV named 'MyEnv', `fn dev -e MyEnv`:
   "seed_nodes": {
     "0": {
       "id": 0,
-      "tm_id": "7caec7b3a25c3966c6603452c9095a1e2ff19785",
-      "home": "/tmp/__FINDORA_DEV__/envs/MyEnv/0",
+      "tendermint_node_id": "91a4fa7b110d051bf9bc832622afb41d97f27997",
+      "home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/0",
       "kind": "Seed",
-      "ports": {
-        "web3_http": 44752,
-        "web3_ws": 30047,
-        "tm_p2p": 37377,
-        "tm_rpc": 23863,
-        "app_abci": 42327,
-        "app_8669": 39832,
-        "app_8668": 45102
+      "occupied_ports": {
+        "web3_http_service": 27411,
+        "web3_websocket_service": 24958,
+        "tendermint_p2p_service": 32670,
+        "tendermint_rpc_service": 56727,
+        "abcid_abci_service": 56761,
+        "abcid_submission_service": 20372,
+        "abcid_ledger_query_service": 30015
       }
     }
   },
   "validator_or_full_nodes": {
     "1": {
       "id": 1,
-      "tm_id": "bb81551e737b232285ecd563c499ba56a9335ed8",
-      "home": "/tmp/__FINDORA_DEV__/envs/MyEnv/1",
-      "kind": "Node",
-      "ports": {
-        "web3_http": 39118,
-        "web3_ws": 38781,
-        "tm_p2p": 43052,
-        "tm_rpc": 52559,
-        "app_abci": 32767,
-        "app_8669": 45090,
-        "app_8668": 58272
+      "tendermint_node_id": "4d4cdfb807697b680bffcf8cfbb6f90c43d60884",
+      "home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/1",
+      "kind": "ValidatorOrFull",
+      "occupied_ports": {
+        "web3_http_service": 29062,
+        "web3_websocket_service": 34909,
+        "tendermint_p2p_service": 46897,
+        "tendermint_rpc_service": 30160,
+        "abcid_abci_service": 40160,
+        "abcid_submission_service": 58302,
+        "abcid_ledger_query_service": 38985
       }
     },
     "2": {
       "id": 2,
-      "tm_id": "25af74b05bd5a312f64ef2155ad2844e87cbf1a4",
-      "home": "/tmp/__FINDORA_DEV__/envs/MyEnv/2",
-      "kind": "Node",
-      "ports": {
-        "web3_http": 30247,
-        "web3_ws": 30301,
-        "tm_p2p": 62187,
-        "tm_rpc": 34517,
-        "app_abci": 59392,
-        "app_8669": 39727,
-        "app_8668": 42059
+      "tendermint_node_id": "4b66d6e9e8e8e9277afda3024eda5474690f68aa",
+      "home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/2",
+      "kind": "ValidatorOrFull",
+      "occupied_ports": {
+        "web3_http_service": 28888,
+        "web3_websocket_service": 31504,
+        "tendermint_p2p_service": 34962,
+        "tendermint_rpc_service": 25973,
+        "abcid_abci_service": 37529,
+        "abcid_submission_service": 39327,
+        "abcid_ledger_query_service": 33283
       }
     },
     "3": {
       "id": 3,
-      "tm_id": "03eac7c59230e345cfc0a030dbd2c1bad003c75c",
-      "home": "/tmp/__FINDORA_DEV__/envs/MyEnv/3",
-      "kind": "Node",
-      "ports": {
-        "web3_http": 62442,
-        "web3_ws": 34670,
-        "tm_p2p": 33516,
-        "tm_rpc": 40108,
-        "app_abci": 62630,
-        "app_8669": 61792,
-        "app_8668": 41703
+      "tendermint_node_id": "ef3e3dddeb5955efc8ef4905184008a28e4482b7",
+      "home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/3",
+      "kind": "ValidatorOrFull",
+      "occupied_ports": {
+        "web3_http_service": 46711,
+        "web3_websocket_service": 31297,
+        "tendermint_p2p_service": 56883,
+        "tendermint_rpc_service": 52160,
+        "abcid_abci_service": 39108,
+        "abcid_submission_service": 26479,
+        "abcid_ledger_query_service": 56173
       }
     },
     "4": {
       "id": 4,
-      "tm_id": "0892a3c97b664ea35c6f7815b0dc20699a0b2a13",
-      "home": "/tmp/__FINDORA_DEV__/envs/MyEnv/4",
-      "kind": "Node",
-      "ports": {
-        "web3_http": 25335,
-        "web3_ws": 30296,
-        "tm_p2p": 21710,
-        "tm_rpc": 49938,
-        "app_abci": 33458,
-        "app_8669": 42395,
-        "app_8668": 23640
+      "tendermint_node_id": "cc55016ba689320bbdb95d5922fc14d02716119e",
+      "home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/4",
+      "kind": "ValidatorOrFull",
+      "occupied_ports": {
+        "web3_http_service": 29555,
+        "web3_websocket_service": 34764,
+        "tendermint_p2p_service": 28830,
+        "tendermint_rpc_service": 33124,
+        "abcid_abci_service": 22525,
+        "abcid_submission_service": 26205,
+        "abcid_ledger_query_service": 25639
       }
     },
     "5": {
       "id": 5,
-      "tm_id": "0a184e1f6faddb86cbf42940a739345965021dbe",
-      "home": "/tmp/__FINDORA_DEV__/envs/MyEnv/5",
-      "kind": "Node",
-      "ports": {
-        "web3_http": 38777,
-        "web3_ws": 64178,
-        "tm_p2p": 34144,
-        "tm_rpc": 36390,
-        "app_abci": 30303,
-        "app_8669": 32079,
-        "app_8668": 24219
+      "tendermint_node_id": "ba1cdbbf61b59520f01ee6769777edc0a4af8a07",
+      "home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/5",
+      "kind": "ValidatorOrFull",
+      "occupied_ports": {
+        "web3_http_service": 55174,
+        "web3_websocket_service": 57460,
+        "tendermint_p2p_service": 47144,
+        "tendermint_rpc_service": 48775,
+        "abcid_abci_service": 29531,
+        "abcid_submission_service": 46879,
+        "abcid_ledger_query_service": 49426
       }
     },
     "6": {
       "id": 6,
-      "tm_id": "7bf456af4aa2ae6e933876d2da62a5e6109a141e",
-      "home": "/tmp/__FINDORA_DEV__/envs/MyEnv/6",
-      "kind": "Node",
-      "ports": {
-        "web3_http": 22716,
-        "web3_ws": 22631,
-        "tm_p2p": 47611,
-        "tm_rpc": 57745,
-        "app_abci": 26842,
-        "app_8669": 40852,
-        "app_8668": 54885
+      "tendermint_node_id": "bda665baeb0a82c8e9892358fe082dd1ead5ff2a",
+      "home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/6",
+      "kind": "ValidatorOrFull",
+      "occupied_ports": {
+        "web3_http_service": 46340,
+        "web3_websocket_service": 64310,
+        "tendermint_p2p_service": 24224,
+        "tendermint_rpc_service": 23894,
+        "abcid_abci_service": 41878,
+        "abcid_submission_service": 50118,
+        "abcid_ledger_query_service": 31215
       }
     }
   },
-  "tendermint_genesis_config": "{\"app_hash\":\"\",\"chain_id\":\"test-chain-zfWF7p\",\"consensus_params\":{\"block\":{\"max_bytes\":\"22020096\",\"max_gas\":\"-1\",\"time_iota_ms\":\"1000\"},\"evidence\":{\"max_age_duration\":\"172800000000000\",\"max_age_num_blocks\":\"100000\"},\"validator\":{\"pub_key_types\":[\"ed25519\"]}},\"genesis_time\":\"2022-09-05T18:11:48.125514813Z\",\"validators\":[{\"address\":\"1EC4D45D32369471CFC2D72BA13BBC763F8F7F01\",\"name\":\"node-0\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"1JLCxVB57o6O0kvKO4SqcxnVbbiyy8cOFJZ6VaXNPRE=\"},\"voting_power\":\"1\"},{\"address\":\"7860BD6D1E825C0BD64E58CAAF007028F22EB6EF\",\"name\":\"node-1\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"34JI8V8j/z4wT9MRtpZF3AtNdJxwt8guQfn4lhdnLUM=\"},\"voting_power\":\"1\"},{\"address\":\"AD1EE8FCCB2D69C2FD0E038DA431B0A0264B1F2D\",\"name\":\"node-2\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"ajDU9S6SMwkBtvIyJ838CuGDLq+MN6ZUFjWfRAY2rp4=\"},\"voting_power\":\"1\"},{\"address\":\"860FCA9E795E1982BEAC75F7DBF1A8E55D82749C\",\"name\":\"node-3\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"MJm6lkkwW2ZYd2Z1QTwAK5eLPvmzcFpYAi+PN4XthJ0=\"},\"voting_power\":\"1\"},{\"address\":\"19272E9A28AE77D81A2B2768F1C2B9EA75AC8670\",\"name\":\"node-4\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"3yyNXD503Fctiwmbw8JTk2jdZBDA2Drm9CkSw/VCTvo=\"},\"voting_power\":\"1\"},{\"address\":\"078E2E0F813C3B92032812E6E87A2D3262A55A2C\",\"name\":\"node-5\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"Ygg2h6SAsNSud/PsGSiJ86KjXdeeUa+dqiV4zGPcDok=\"},\"voting_power\":\"1\"}]}",
+  "tendermint_genesis_config": "{\"app_hash\":\"\",\"chain_id\":\"test-chain-wfnI4D\",\"consensus_params\":{\"block\":{\"max_bytes\":\"22020096\",\"max_gas\":\"-1\",\"time_iota_ms\":\"1000\"},\"evidence\":{\"max_age_duration\":\"172800000000000\",\"max_age_num_blocks\":\"100000\"},\"validator\":{\"pub_key_types\":[\"ed25519\"]}},\"genesis_time\":\"2022-09-06T01:25:39.871204204Z\",\"validators\":[{\"address\":\"38AD0AF0258FB751262BD9D835A4D7848B0BC60E\",\"name\":\"node-0\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"5UzQOmtN9xT7kOLq9w0B4UA1U5dUeuJgzItbGkdepvg=\"},\"voting_power\":\"1\"},{\"address\":\"27055305231CF6F718AD26485499B3ED1CCC8115\",\"name\":\"node-1\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"MVQUuYdJzxmYiJnmffxf40jBXXkwwnkLzt0f4XV+NeQ=\"},\"voting_power\":\"1\"},{\"address\":\"FAD1E8BBC00835B88FAA41B54EAA0D2FCE55FEF0\",\"name\":\"node-2\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"i3QFHggYCqG6ciKmsjAXSt6NKfyUOGjfje5YwYaYOfo=\"},\"voting_power\":\"1\"},{\"address\":\"4F850CA6849EC0B3FC808D912F35CE2DAA222006\",\"name\":\"node-3\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"l+7AqB4df3ckzpF+7Ku4xh9z+WPzhyzjw99WKE0K9oI=\"},\"voting_power\":\"1\"},{\"address\":\"33A24EF38E695529EED806CF70751C2CFC61DEAC\",\"name\":\"node-4\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"bvjpaBraL50Q8rRo+a7HH5HU2YI4lEasxm5CrP/TC6c=\"},\"voting_power\":\"1\"},{\"address\":\"C81783A1C67AD00C82FF093CE36AFF938185E44B\",\"name\":\"node-5\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"QPh4cyJnFKpDwDbU0C30hoQfqwvjCN9xDB8OtomhMkE=\"},\"voting_power\":\"1\"}]}",
   "next_node_id": 7
 }
 ```
