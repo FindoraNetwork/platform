@@ -172,7 +172,7 @@ jobs:
       run: |
         make ci_build_binary_rust_base_arm
 
-    - name: Build binary image
+    - name: Build binary image arm
       env:
         GITHUB_CONTEXT: ${{ toJSON(github) }}
       shell: bash

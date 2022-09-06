@@ -227,6 +227,7 @@ ci_build_release_binary_image:
 	docker build -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-binary-image-release .
 
 ci_build_release_binary_image_arm:
+	docker run --rm --privileged tonistiigi/binfmt:latest --install all
 	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-release-arm
 	docker buildx build --platform linux/arm64/v8 --output=type=docker -t findorad-binary-image-arm:$(IMAGE_TAG) -f container/Dockerfile-binary-image-release-arm .
 
@@ -273,6 +274,8 @@ ci_build_image_dockerhub_arm:
 	@ docker run --rm -d --name findorad-binary-arm findorad-binary-image-arm:$(IMAGE_TAG)
 	@ docker cp findorad-binary-arm:/binary ./binary
 	@ docker rm -f findorad-binary-arm
+	@ docker run --rm --privileged tonistiigi/binfmt:latest --install all
+
 	@ docker buildx build --platform linux/arm64/v8 --output=type=docker -t $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb-arm . --push
 ifeq ($(ENV),release)
 	# docker tag $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) $(DOCKERHUB_URL)/findorad:latest
