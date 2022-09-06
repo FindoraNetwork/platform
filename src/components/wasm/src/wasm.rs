@@ -1392,6 +1392,15 @@ impl AnonTransferOperationBuilder {
         Ok(self)
     }
 
+    /// add_keypair is used to add the sender's keypair for the nullifier generation
+    /// @param to {AXfrKeyPair} - original keypair of sender
+    /// @throws error if ABAR fails to be built
+    pub fn add_keypair(mut self, keypair: &AXfrKeyPair) -> AnonTransferOperationBuilder {
+        self.get_builder_mut().add_keypair(keypair.clone());
+
+        self
+    }
+
     /// get_expected_fee is used to gather extra FRA that needs to be spent to make the transaction
     /// have enough fees.
     pub fn get_expected_fee(&self) -> u64 {

@@ -1541,8 +1541,8 @@ impl TransferOperationBuilder {
 pub struct AnonTransferOperationBuilder {
     inputs: Vec<OpenAnonAssetRecord>,
     outputs: Vec<OpenAnonAssetRecord>,
-    keypair: AXfrKeyPair,
-    note: Option<AXfrPreNote>,
+    keypair: Option<AXfrKeyPair>,
+    pre_note: Option<AXfrPreNote>,
     commitments: Vec<Commitment>,
 
     nonce: NoReplayToken,
@@ -1554,13 +1554,12 @@ impl AnonTransferOperationBuilder {
     pub fn new_from_seq_id(seq_id: u64) -> Self {
         let mut prng = ChaChaRng::from_entropy();
         let no_replay_token = NoReplayToken::new(&mut prng, seq_id);
-        let key_pair = AXfrKeyPair::generate(&mut prng);
 
         AnonTransferOperationBuilder {
             inputs: Vec::default(),
             outputs: Vec::default(),
-            keypair: key_pair,
-            note: None,
+            keypair: None,
+            pre_note: None,
             commitments: Vec::default(),
             nonce: no_replay_token,
             txn: Transaction::from_seq_id(seq_id),
@@ -1579,6 +1578,12 @@ impl AnonTransferOperationBuilder {
         self.commitments.push(get_abar_commitment(abar.clone()));
         self.outputs.push(abar);
         Ok(self)
+    }
+
+    /// add_keypair is used to specify the input keypair for nullifier generation
+    pub fn add_keypair(&mut self, keypair: AXfrKeyPair) -> &mut Self {
+        self.keypair = Some(keypair);
+        self
     }
 
     #[allow(missing_docs)]
@@ -1648,6 +1653,11 @@ impl AnonTransferOperationBuilder {
     pub fn build(&mut self) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
 
+        if self.keypair.is_none() {
+            return Err(eg!("keypair not set for build"));
+        }
+        let keypair = self.keypair.as_ref().unwrap();
+
         let mut sum_input = 0;
         let mut sum_output = 0;
         for input in self.inputs.clone() {
@@ -1672,7 +1682,7 @@ impl AnonTransferOperationBuilder {
         let oabar_money_back = OpenAnonAssetRecordBuilder::new()
             .amount(remainder)
             .asset_type(ASSET_TYPE_FRA)
-            .pub_key(&self.keypair.get_public_key())
+            .pub_key(&keypair.get_public_key())
             .finalize(&mut prng)
             .unwrap()
             .build()
@@ -1692,11 +1702,11 @@ impl AnonTransferOperationBuilder {
             self.inputs.as_slice(),
             self.outputs.as_slice(),
             fees,
-            &self.keypair,
+            &keypair,
         )
         .c(d!())?;
 
-        self.note = Some(note);
+        self.pre_note = Some(note);
 
         Ok(self)
     }
@@ -1710,7 +1720,7 @@ impl AnonTransferOperationBuilder {
             Some(MERKLE_TREE_DEPTH),
         )?;
 
-        let pre_note = self.note.clone().unwrap();
+        let pre_note = self.pre_note.clone().unwrap();
         let mut hasher = Sha512::new();
 
         let mut bytes = self.txn.body.digest();
@@ -1734,7 +1744,7 @@ impl AnonTransferOperationBuilder {
 
     /// transaction method wraps the anon transfer note in an Operation and returns it
     pub fn serialize_str(&self) -> Result<String> {
-        if self.note.is_none() {
+        if self.pre_note.is_none() {
             return Err(eg!("Anon transfer not built and signed"));
         }
         // Unwrap is safe because the underlying transaction is guaranteed to be serializable.
