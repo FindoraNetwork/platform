@@ -23,12 +23,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fmt::Write,
-    fs,
-    io::ErrorKind,
+    fmt::Write as _,
+    fs::{self, OpenOptions},
+    io::{ErrorKind, Write},
     path::PathBuf,
     process::{exit, Command, Stdio},
     str::FromStr,
+    thread,
 };
 use tendermint::{
     config::{PrivValidatorKey as TmValidatorKey, TendermintConfig as TmConfig},
@@ -41,7 +42,7 @@ use zei::xfr::sig::XfrKeyPair;
 type NodeId = u32;
 
 const ENV_BASE_DIR: &str = "/tmp/__FINDORA_DEV__";
-const ENV_NAME_DEFAULT: &str = "default";
+const ENV_NAME_DEFAULT: &str = "DEFAULT";
 
 const INIT_POWER: u32 = 1;
 
@@ -53,6 +54,8 @@ const BANK_ACCOUNT_ADDR: &str =
 const BANK_ACCOUNT_PUBKEY: &str = "Oa2RRTzdayA8V2OBE7xp3n3NKrjGJxFTSZZybXOXCDQ=";
 const BANK_ACCOUNT_SECKEY: &str = "Ew9fMaryTL44ZXnEhcF7hQ-AB-fxgaC8vyCH-hCGtzg=";
 const BANK_ACCOUNT_MNEMONIC: &str = "field ranch pencil chest effort coyote april move injury illegal forest amount bid sound mixture use second pet embrace twice total essay valve loan";
+
+const EXEC_LOG_NAME: &str = "fn_dev.log";
 
 #[derive(Debug)]
 pub struct EnvCfg {
@@ -82,6 +85,12 @@ pub struct EnvCfg {
     // initialized once in `Ops::Create`,
     // default value: "127.0.0.1"
     pub host_ip: Option<String>,
+
+    // specify this option if you want to use a custom version of tendermint
+    pub tendermint_bin: Option<String>,
+
+    // specify this option if you want to use a custom version of abcid
+    pub abcid_bin: Option<String>,
 }
 
 impl Default for EnvCfg {
@@ -95,6 +104,8 @@ impl Default for EnvCfg {
             checkpoint_file: None,
             abcid_extra_flags: None,
             host_ip: None,
+            tendermint_bin: None,
+            abcid_bin: None,
         }
     }
 }
@@ -107,6 +118,7 @@ impl EnvCfg {
                 .c(d!())
                 .and_then(|env| env.destroy().c(d!()))
                 .map(|_| None),
+            Ops::DestroyAll => Env::destroy_all().c(d!()).map(|_| None),
             Ops::Start => Env::load_cfg(self)
                 .c(d!())
                 .and_then(|mut env| env.start(None).c(d!()))
@@ -125,12 +137,15 @@ impl EnvCfg {
                 .map(|_| None),
             Ops::Info => Env::load_cfg(self).c(d!()).map(|env| {
                 env.print_info();
-                Some(env)
+                None
             }),
+            Ops::InfoAll => Env::info_all().c(d!()).map(|_| None),
+            Ops::List => Env::list_all().c(d!()).map(|_| None),
             Ops::Init => Env::load_cfg(self)
                 .c(d!())
                 .and_then(|mut env| env.init().c(d!()))
                 .map(|_| None),
+            Ops::InitAll => Env::init_all().c(d!()).map(|_| None),
         }
     }
 }
@@ -138,24 +153,34 @@ impl EnvCfg {
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
 pub struct Env {
     // the name of this env
+    #[serde(rename = "env_name")]
     name: String,
     // data path of this env
+    #[serde(rename = "env_home_dir")]
     home: String,
-    // the contents of `genesis.json` of all nodes
-    genesis: Vec<u8>,
 
-    seeds: BTreeMap<NodeId, Node>,
-    nodes: BTreeMap<NodeId, Node>,
+    // path of the tendermint binary, default to 'tendermint'
+    tendermint_bin: String,
+
+    // path of the abcid binary, default to 'abcid'
+    abcid_bin: String,
+
+    // default value: "127.0.0.1"
+    host_ip: String,
+
+    // FRA tokens will be issued to this account
+    bank_account: BankAccount,
 
     // validator informations related to POS
+    #[serde(rename = "initial_validator_number")]
     initial_validator_num: u8,
-    initial_validators: Vec<InitialValidator>,
 
-    // the latest/max id of current nodes
-    latest_id: NodeId,
+    #[serde(rename = "initial_pos_settings")]
+    initial_validators: Vec<InitialValidator>,
 
     // seconds between two blocks,
     // default value: 3
+    #[serde(rename = "block_interval")]
     block_itv_secs: u8,
 
     // default value: 2152
@@ -169,15 +194,25 @@ pub struct Env {
     // - ...
     abcid_extra_flags: Option<String>,
 
-    // default value: "127.0.0.1"
-    host_ip: String,
+    #[serde(rename = "seed_nodes")]
+    seeds: BTreeMap<NodeId, Node>,
+
+    #[serde(rename = "validator_or_full_nodes")]
+    nodes: BTreeMap<NodeId, Node>,
+
+    // the latest/max id of current nodes
+    next_node_id: NodeId,
+
+    // the contents of `genesis.json` of all nodes
+    #[serde(rename = "tendermint_genesis_config")]
+    genesis: String,
 }
 
 impl Env {
     // - initilize a new env
     // - `genesis.json` will be created
     fn create(cfg: &EnvCfg) -> Result<Env> {
-        let home = format!("{}/{}", ENV_BASE_DIR, &cfg.name);
+        let home = format!("{}/envs/{}", ENV_BASE_DIR, &cfg.name);
 
         if fs::metadata(&home).is_ok() {
             return Err(eg!("Another env with the same name exists!"));
@@ -192,6 +227,12 @@ impl Env {
             abcid_extra_flags: cfg.abcid_extra_flags.clone(),
             initial_validator_num: cfg.initial_validator_num,
             host_ip: cfg.host_ip.as_deref().unwrap_or("127.0.0.1").to_owned(),
+            tendermint_bin: cfg
+                .tendermint_bin
+                .as_deref()
+                .unwrap_or("tendermint")
+                .to_owned(),
+            abcid_bin: cfg.abcid_bin.as_deref().unwrap_or("abcid").to_owned(),
             ..Self::default()
         };
 
@@ -232,9 +273,27 @@ impl Env {
 
         for i in ids.iter() {
             if let Some(n) = self.nodes.get_mut(i) {
-                n.start().c(d!())?;
+                n.start(
+                    &self.host_ip,
+                    self.block_itv_secs,
+                    self.evm_chain_id,
+                    self.checkpoint_file.as_deref(),
+                    self.abcid_extra_flags.as_deref().unwrap_or_default(),
+                    &self.tendermint_bin,
+                    &self.abcid_bin,
+                )
+                .c(d!())?;
             } else if let Some(n) = self.seeds.get_mut(i) {
-                n.start().c(d!())?;
+                n.start(
+                    &self.host_ip,
+                    self.block_itv_secs,
+                    self.evm_chain_id,
+                    self.checkpoint_file.as_deref(),
+                    self.abcid_extra_flags.as_deref().unwrap_or_default(),
+                    &self.tendermint_bin,
+                    &self.abcid_bin,
+                )
+                .c(d!())?;
             } else {
                 return Err(eg!("not exist"));
             }
@@ -267,6 +326,18 @@ impl Env {
         fs::remove_dir_all(&self.home).c(d!())
     }
 
+    // destroy all existing ENVs
+    fn destroy_all() -> Result<()> {
+        for env in Self::get_all_envs().c(d!())?.iter() {
+            Self::read_cfg(env)
+                .c(d!())?
+                .c(d!("BUG: env not found!"))?
+                .destroy()
+                .c(d!())?;
+        }
+        fs::remove_dir_all(ENV_BASE_DIR).c(d!())
+    }
+
     // seed nodes are kept by system for now,
     // so only the other nodes can be added on demand
     fn attach_node(&mut self) -> Result<()> {
@@ -297,12 +368,28 @@ impl Env {
     // 3. send out the initial staking transaction
     fn init(&mut self) -> Result<()> {
         if !self.initial_validators.is_empty() {
-            return Err(eg!("Already initialized!"));
+            println!("[ {} ] \x1b[31;01mAlready initialized!\x1b[00m", &self.name);
+            return Ok(());
         }
 
         init::init(self)
             .c(d!())
             .and_then(|_| self.write_cfg().c(d!()))
+    }
+
+    // apply the `init` operatio to all existing ENVs
+    fn init_all() -> Result<()> {
+        let env_list = Self::get_all_envs().c(d!())?;
+        thread::scope(|s| {
+            for env in env_list.iter() {
+                s.spawn(|| {
+                    let env = pnk!(Self::read_cfg(env)).c(d!("BUG: env not found!"));
+                    let mut env = pnk!(env);
+                    info_omit!(env.init());
+                });
+            }
+        });
+        Ok(())
     }
 
     // 1. allocate ports
@@ -321,9 +408,12 @@ impl Env {
         let mut cfg = fs::read_to_string(&cfg_path)
             .c(d!())
             .or_else(|_| {
-                cmd::exec_output(&format!("tendermint init --home {}", &home))
-                    .c(d!())
-                    .and_then(|_| fs::read_to_string(&cfg_path).c(d!()))
+                cmd::exec_output(&format!(
+                    "{} init --home {}",
+                    &self.tendermint_bin, &home
+                ))
+                .c(d!())
+                .and_then(|_| fs::read_to_string(&cfg_path).c(d!()))
             })
             .and_then(|c| c.parse::<Document>().c(d!()))?;
 
@@ -393,14 +483,6 @@ impl Env {
             home: format!("{}/{}", &self.home, id),
             kind,
             ports,
-            evm_chain_id: self.evm_chain_id,
-            checkpoint_file: self.checkpoint_file.clone(),
-            abcid_extra_flags: self
-                .abcid_extra_flags
-                .as_deref()
-                .unwrap_or_default()
-                .to_string(),
-            host_ip: self.host_ip.clone(),
         };
 
         match kind {
@@ -444,8 +526,8 @@ impl Env {
 
     // Allocate unique IDs for nodes within the scope of an env
     fn next_node_id(&mut self) -> NodeId {
-        let id = self.latest_id;
-        self.latest_id += 1;
+        let id = self.next_node_id;
+        self.next_node_id += 1;
         id
     }
 
@@ -454,6 +536,8 @@ impl Env {
     fn gen_genesis(&mut self) -> Result<()> {
         let tmp_id = NodeId::MAX;
         let tmp_home = format!("{}/{}", &self.home, tmp_id);
+
+        let cmd = format!("{} init --home {}", &self.tendermint_bin, &tmp_home);
 
         let gen = |genesis_file: String| {
             self.nodes
@@ -494,12 +578,12 @@ impl Env {
                         .and_then(|g| serde_json::from_str::<Value>(&g).c(d!()))
                         .map(|mut g| {
                             g["validators"] = vs;
-                            self.genesis = g.to_string().into_bytes();
+                            self.genesis = g.to_string();
                         })
                 })
         };
 
-        cmd::exec_output(&format!("tendermint init --home {}", &tmp_home))
+        cmd::exec_output(&cmd)
             .c(d!())
             .and_then(|_| {
                 TmConfig::load_toml_file(&format!("{}/config/config.toml", &tmp_home))
@@ -542,11 +626,82 @@ impl Env {
         Ok(())
     }
 
+    fn print_info(&self) {
+        println!("{}", pnk!(serde_json::to_string_pretty(self)));
+    }
+
+    // show the details of all existing ENVs
+    fn info_all() -> Result<()> {
+        for (idx, env) in Self::get_all_envs().c(d!())?.iter().enumerate() {
+            println!("\x1b[31;01m====== ENV No.{} ======\x1b[00m", idx);
+            Self::read_cfg(env)
+                .c(d!())?
+                .c(d!("BUG: env not found!"))?
+                .print_info();
+            println!();
+        }
+        Ok(())
+    }
+
+    // list the names of all existing ENVs
+    fn list_all() -> Result<()> {
+        let list = Self::get_all_envs().c(d!())?;
+
+        if list.is_empty() {
+            println!("\x1b[31;01mNo existing env!\x1b[00m");
+        } else {
+            println!("\x1b[31;01mEnv list:\x1b[00m");
+            list.into_iter().for_each(|env| {
+                println!("  {}", env);
+            });
+        }
+
+        Ok(())
+    }
+
+    fn get_all_envs() -> Result<Vec<String>> {
+        let mut list = vec![];
+
+        let data_dir = format!("{}/envs", ENV_BASE_DIR);
+        fs::create_dir_all(&data_dir).c(d!())?;
+
+        for entry in fs::read_dir(&data_dir).c(d!())? {
+            let entry = entry.c(d!())?;
+            let path = entry.path();
+            if path.is_dir() {
+                let env = path.file_name().c(d!())?.to_string_lossy().into_owned();
+                list.push(env);
+            }
+        }
+
+        list.sort();
+
+        Ok(list)
+    }
+
     fn load_cfg(cfg: &EnvCfg) -> Result<Env> {
-        let p = format!("{}/{}/config.json", ENV_BASE_DIR, &cfg.name);
-        fs::read_to_string(&p)
-            .c(d!())
-            .and_then(|d| serde_json::from_str(&d).c(d!()))
+        Self::read_cfg(&cfg.name).c(d!()).and_then(|env| match env {
+            Some(env) => Ok(env),
+            None => {
+                let msg = "ENV not found";
+                println!();
+                println!("********************");
+                println!("\x1b[01mHINTS: \x1b[33;01m{}\x1b[00m", msg);
+                println!("********************");
+                Err(eg!(msg))
+            }
+        })
+    }
+
+    fn read_cfg(cfg_name: &str) -> Result<Option<Env>> {
+        let p = format!("{}/envs/{}/config.json", ENV_BASE_DIR, cfg_name);
+        match fs::read_to_string(&p) {
+            Ok(d) => Ok(serde_json::from_str(&d).c(d!())?),
+            Err(e) => match e.kind() {
+                ErrorKind::NotFound => Ok(None),
+                _ => Err(eg!(e)),
+            },
+        }
     }
 
     fn write_cfg(&self) -> Result<()> {
@@ -554,31 +709,24 @@ impl Env {
             .c(d!())
             .and_then(|d| fs::write(format!("{}/config.json", &self.home), d).c(d!()))
     }
+}
 
-    fn print_info(&self) {
-        println!("==> Env name: {}", &self.name);
-        println!("==> Env home: {}", &self.home);
-        println!("==> Serving on: {}", &self.host_ip);
-        println!(
-            r#"==> Bank account info:
-    Wallet Address: {}
-    Public key: {}
-    Secret key: {}
-    Mnemonic: {}"#,
-            BANK_ACCOUNT_ADDR,
-            BANK_ACCOUNT_PUBKEY,
-            BANK_ACCOUNT_SECKEY,
-            BANK_ACCOUNT_MNEMONIC
-        );
-        println!(
-            "==> Initial POS settings: {}",
-            serde_json::to_string_pretty(&self.initial_validators).unwrap()
-        );
-        println!("==> Seed nodes: {:#?}", &self.seeds);
-        println!(
-            "==> Full(validator/full/sentry...) nodes: {:#?}",
-            &self.nodes
-        );
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct BankAccount {
+    wallet_address: String,
+    public_key: String,
+    secret_key: String,
+    mnemonic_words: String,
+}
+
+impl Default for BankAccount {
+    fn default() -> Self {
+        Self {
+            wallet_address: BANK_ACCOUNT_ADDR.to_owned(),
+            public_key: BANK_ACCOUNT_PUBKEY.to_owned(),
+            secret_key: BANK_ACCOUNT_SECKEY.to_owned(),
+            mnemonic_words: BANK_ACCOUNT_MNEMONIC.to_owned(),
+        }
     }
 }
 
@@ -613,44 +761,50 @@ impl TryFrom<&InitialValidator> for StakingValidator {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct Node {
     id: NodeId,
+    #[serde(rename = "tendermint_node_id")]
     tm_id: String,
+    #[serde(rename = "home_dir")]
     home: String,
     kind: Kind,
+    #[serde(rename = "occupied_ports")]
     ports: Ports,
-
-    evm_chain_id: u64,
-    checkpoint_file: Option<String>,
-    abcid_extra_flags: String,
-
-    host_ip: String,
 }
 
 impl Node {
     // - start node
     // - collect results
     // - update meta
-    fn start(&mut self) -> Result<()> {
+    #[allow(clippy::too_many_arguments)]
+    fn start(
+        &mut self,
+        host_ip: &str,
+        block_itv: u8,
+        evm_chain_id: u64,
+        checkpoint_file: Option<&str>,
+        abcid_extra_flags: &str,
+        tendermint_bin: &str,
+        abcid_bin: &str,
+    ) -> Result<()> {
+        self.stop().c(d!())?;
         match unsafe { fork() } {
             Ok(ForkResult::Child) => {
                 let mut cmd = format!(
-                    r"
-                    tendermint node --home {8} >>{8}/tendermint.log 2>&1 &
-                    EVM_CHAIN_ID={0} abcid \
+                    "{10} node --home {9} >>{9}/tendermint.log 2>&1 & \
+                    EVM_CHAIN_ID={0} FINDORA_BLOCK_ITV={1} {11} \
                         --enable-query-service \
                         --enable-eth-api-service \
-                        --tendermint-host {1} \
-                        --tendermint-port {2} \
-                        --abcid-port {3} \
-                        --submission-service-port {4} \
-                        --ledger-service-port {5} \
-                        --evm-http-port {6} \
-                        --evm-ws-port {7} \
-                        --ledger-dir {8}/__findora__ \
-                        --tendermint-node-key-config-path {8}/config/priv_validator_key.json \
-                        {9} \
-                    ",
-                    self.evm_chain_id,
-                    &self.host_ip,
+                        --tendermint-host {2} \
+                        --tendermint-port {3} \
+                        --abcid-port {4} \
+                        --submission-service-port {5} \
+                        --ledger-service-port {6} \
+                        --evm-http-port {7} \
+                        --evm-ws-port {8} \
+                        --ledger-dir {9}/__findora__ \
+                        --tendermint-node-key-config-path {9}/config/priv_validator_key.json",
+                    evm_chain_id,
+                    block_itv,
+                    host_ip,
                     self.ports.tm_rpc,
                     self.ports.app_abci,
                     self.ports.app_8669,
@@ -658,14 +812,20 @@ impl Node {
                     self.ports.web3_http,
                     self.ports.web3_ws,
                     &self.home,
-                    &self.abcid_extra_flags,
+                    tendermint_bin,
+                    abcid_bin
                 );
-                if let Some(checkpoint) = self.checkpoint_file.as_ref() {
-                    write!(cmd, r" --checkpoint-file {} \", checkpoint).unwrap();
+                if let Some(checkpoint) = checkpoint_file {
+                    write!(cmd, r" --checkpoint-file {}", checkpoint).unwrap();
                 }
-                write!(cmd, " >>{}/app.log 2>&1 &", &self.home).unwrap();
+                write!(
+                    cmd,
+                    " {} >>{}/app.log 2>&1 &",
+                    abcid_extra_flags, &self.home
+                )
+                .unwrap();
 
-                fs::write(format!("{}/last_cmd.log", &self.home), &cmd).unwrap();
+                pnk!(self.write_fn_log(&cmd));
                 pnk!(exec_spawn(&cmd));
 
                 exit(0);
@@ -687,16 +847,24 @@ impl Node {
              do kill -9 $i; done",
             &self.home
         );
-
         let outputs = cmd::exec_output(&cmd).c(d!())?;
+        let contents = format!("{}\n{}", &cmd, outputs.as_str());
+        self.write_fn_log(&contents).c(d!())
+    }
 
-        println!("\x1b[31;1mCommands:\x1b[0m {}", cmd);
-        println!(
-            "\x1b[31;1mOutputs:\x1b[0m {}",
-            alt!(outputs.is_empty(), "...", outputs.as_str())
-        );
-
-        Ok(())
+    fn write_fn_log(&self, cmd: &str) -> Result<()> {
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .append(true)
+            .create(true)
+            .open(format!("{}/{}", &self.home, EXEC_LOG_NAME))
+            .c(d!())
+            .and_then(|mut f| {
+                f.write_all(format!("\n\n[ {} ]\n", datetime!()).as_bytes())
+                    .c(d!())
+                    .and_then(|_| f.write_all(cmd.as_bytes()).c(d!()))
+            })
     }
 
     // - release all occupied ports
@@ -720,6 +888,7 @@ impl Node {
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 enum Kind {
+    #[serde(rename = "ValidatorOrFull")]
     Node,
     Seed,
 }
@@ -727,12 +896,19 @@ enum Kind {
 // Active ports of a node
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
 struct Ports {
+    #[serde(rename = "web3_http_service")]
     web3_http: u16,
+    #[serde(rename = "web3_websocket_service")]
     web3_ws: u16,
+    #[serde(rename = "tendermint_p2p_service")]
     tm_p2p: u16,
+    #[serde(rename = "tendermint_rpc_service")]
     tm_rpc: u16,
+    #[serde(rename = "abcid_abci_service")]
     app_abci: u16,
+    #[serde(rename = "abcid_submission_service")]
     app_8669: u16,
+    #[serde(rename = "abcid_ledger_query_service")]
     app_8668: u16,
 }
 
@@ -740,12 +916,16 @@ struct Ports {
 pub enum Ops {
     Create,
     Destroy,
+    DestroyAll,
     Start,
     Stop,
     AddNode,
     DelNode,
     Info,
+    InfoAll,
+    List,
     Init,
+    InitAll,
 }
 
 impl Default for Ops {
@@ -885,5 +1065,12 @@ fn exec_spawn(cmd: &str) -> Result<()> {
         .c(d!())?
         .wait()
         .c(d!())
-        .map(|exit_status| println!("{}", exit_status))
+        .and_then(|exit_status| {
+            if let Some(code) = exit_status.code() {
+                if 0 == code {
+                    return Ok(());
+                }
+            }
+            Err(eg!("{}", exit_status))
+        })
 }

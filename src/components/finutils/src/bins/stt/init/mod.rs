@@ -20,7 +20,7 @@ pub fn init(
     only_init: bool,
 ) -> Result<()> {
     if 0 == interval {
-        interval = BLOCK_INTERVAL;
+        interval = *BLOCK_INTERVAL;
     }
 
     if !skip_validator {

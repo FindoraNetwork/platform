@@ -41,7 +41,7 @@ define pack
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
 		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
-	cp $(1)/$(bin_dir)/* ~/.cargo/bin/
+	cp -f $(1)/$(bin_dir)/* ~/.cargo/bin/
 	cd $(1)/$(bin_dir)/ && ./findorad pack
 	cp -f /tmp/findorad $(1)/$(bin_dir)/
 	cp -f /tmp/findorad ~/.cargo/bin/
@@ -107,6 +107,7 @@ tendermint_goleveldb:
 	cd tools/tendermint && $(MAKE) install
 
 test:
+	- find src -name "checkpoint.toml" | xargs rm -f
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
 
 coverage:

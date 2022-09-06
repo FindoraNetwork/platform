@@ -831,6 +831,20 @@ subcommands:
                   takes_value: true
                   value_name: HOST IP
                   required: false
+              - tendermint_bin_path:
+                  help: The path of your custom tendermint binary
+                  short: T
+                  long: tendermint-bin-path
+                  takes_value: true
+                  value_name: TENDERMINT BIN PATH
+                  required: false
+              - abcid_bin_path:
+                  help: The path of your custom abcid binary
+                  short: A
+                  long: abcid-bin-path
+                  takes_value: true
+                  value_name: ABCID BIN PATH
+                  required: false
         - destroy:
             about: Destroy an existing env
             args:
@@ -841,6 +855,8 @@ subcommands:
                   takes_value: true
                   value_name: ENV NAME
                   required: false
+        - destroy-all:
+            about: Destroy all existing ENVs
         - start:
             about: Start an existing env
             args:
@@ -891,6 +907,10 @@ subcommands:
                   takes_value: true
                   value_name: ENV NAME
                   required: false
+        - info-all:
+            about: Show the details of all existing ENVs
+        - list:
+            about: List the names of all existing ENVs
         - init:
             about: Config the initial settings(POS,FRA issuance...)
             args:
@@ -901,3 +921,5 @@ subcommands:
                   takes_value: true
                   value_name: ENV NAME
                   required: false
+        - init-all:
+            about: Apply the `init` operation to all existing ENVs
