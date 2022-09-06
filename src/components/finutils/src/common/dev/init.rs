@@ -81,12 +81,15 @@ pub fn init(env: &mut Env) -> Result<()> {
         serde_json::from_str::<XfrSecretKey>(&format!("\"{}\"", BANK_ACCOUNT_SECKEY))
             .c(d!())?
             .into_keypair();
-    println!(">>> Block interval: {} seconds", env.block_itv_secs);
+    println!(
+        "[ {} ] >>> Block interval: {} seconds",
+        &env.name, env.block_itv_secs
+    );
 
-    println!(">>> Define and issue FRA ...");
+    println!("[ {} ] >>> Define and issue FRA ...", &env.name);
     send_tx(env, &fra_gen_initial_tx(&root_kp)).c(d!())?;
 
-    println!(">>> Wait 2 block ...");
+    println!("[ {} ] >>> Wait 2 block ...", &env.name);
     sleep_n_block!(2);
 
     let target_list = env
@@ -95,13 +98,13 @@ pub fn init(env: &mut Env) -> Result<()> {
         .map(|v| (v.xfr_keypair.get_pk_ref(), 500_0000 * FRA))
         .collect::<Vec<_>>();
 
-    println!(">>> Transfer FRAs to validators ...");
+    println!("[ {} ] >>> Transfer FRAs to validators ...", &env.name);
     transfer_batch(env, &root_kp, target_list, None, true, true).c(d!())?;
 
-    println!(">>> Wait 2 block ...");
+    println!("[ {} ] >>> Wait 2 block ...", &env.name);
     sleep_n_block!(2);
 
-    println!(">>> Propose self-delegations ...");
+    println!("[ {} ] >>> Propose self-delegations ...", &env.name);
     for (i, v) in env.initial_validators.iter().enumerate() {
         let mut builder = new_tx_builder(env).c(d!())?;
         let am = (400_0000 + i as u64 * 1_0000) * FRA;
@@ -129,7 +132,7 @@ pub fn init(env: &mut Env) -> Result<()> {
         send_tx(env, &tx).c(d!())?;
     }
 
-    println!(">>> Init work done !");
+    println!("[ {} ] >>> Init work done !", &env.name);
     Ok(())
 }
 

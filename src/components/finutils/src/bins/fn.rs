@@ -458,12 +458,20 @@ fn run() -> Result<()> {
             if let Some(ip) = sm.value_of("host_ip") {
                 envcfg.host_ip = Some(ip.to_owned());
             }
+            if let Some(tm_bin) = sm.value_of("tendermint_bin_path") {
+                envcfg.tendermint_bin = Some(tm_bin.to_owned());
+            }
+            if let Some(abcid_bin) = sm.value_of("abcid_bin_path") {
+                envcfg.abcid_bin = Some(abcid_bin.to_owned());
+            }
             Ops::Create
         } else if let Some(sm) = m.subcommand_matches("destroy") {
             if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
             }
             Ops::Destroy
+        } else if m.subcommand_matches("destroy-all").is_some() {
+            Ops::DestroyAll
         } else if let Some(sm) = m.subcommand_matches("start") {
             if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
@@ -489,11 +497,17 @@ fn run() -> Result<()> {
                 envcfg.name = name.to_owned();
             }
             Ops::Info
+        } else if m.subcommand_matches("info-all").is_some() {
+            Ops::InfoAll
+        } else if m.subcommand_matches("list").is_some() {
+            Ops::List
         } else if let Some(sm) = m.subcommand_matches("init") {
             if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
             }
             Ops::Init
+        } else if m.subcommand_matches("init-all").is_some() {
+            Ops::InitAll
         } else {
             if let Some(name) = m.value_of("env_name") {
                 envcfg.name = name.to_owned();
