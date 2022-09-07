@@ -1,6 +1,7 @@
 use super::stack::FindoraStackState;
 // use crate::precompile::PrecompileSet;
 use crate::{App, Config};
+use config::abci::global_cfg::CFG;
 use ethereum_types::{H160, H256, U256};
 use evm::{
     executor::stack::{StackExecutor, StackSubstateMetadata},
@@ -46,13 +47,17 @@ impl<C: Config> ActionRunner<C> {
             >,
         ) -> (ExitReason, R),
     {
+        let min_gas_price =
+            if ctx.header.height as u64 > CFG.checkpoint.proper_gas_set_height {
+                C::FeeCalculator::min_gas_price_proper()
+            } else {
+                C::FeeCalculator::min_gas_price()
+            };
+
         // Gas price check is skipped when performing a gas estimation.
         let gas_price = match gas_price {
             Some(gas_price) => {
-                ensure!(
-                    gas_price >= C::FeeCalculator::min_gas_price(),
-                    "GasPriceTooLow"
-                );
+                ensure!(gas_price >= min_gas_price, "GasPriceTooLow");
                 gas_price
             }
             None => Default::default(),

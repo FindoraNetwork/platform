@@ -225,8 +225,13 @@ impl<'context, 'vicinity, 'config, C: Config> Backend
     fn original_storage(&self, _address: H160, _index: H256) -> Option<H256> {
         None
     }
+
     fn block_base_fee_per_gas(&self) -> U256 {
-        C::FeeCalculator::min_gas_price()
+        if self.ctx.header.height as u64 > CFG.checkpoint.proper_gas_set_height {
+            C::FeeCalculator::min_gas_price_proper()
+        } else {
+            C::FeeCalculator::min_gas_price()
+        }
     }
 }
 

@@ -1,3 +1,4 @@
+use config::abci::global_cfg::CFG;
 use core::{convert::From, ops::Div};
 use fp_core::context::Context;
 use fp_types::crypto::Address;
@@ -51,12 +52,18 @@ impl DecimalsMapping for EthereumDecimalsMapping {
 pub trait FeeCalculator {
     /// Return the minimal required gas price.
     fn min_gas_price() -> U256;
+
+    fn min_gas_price_proper() -> U256;
 }
 
 impl FeeCalculator for () {
     fn min_gas_price() -> U256 {
         // 10 GWEI, min gas limit: 21000, min gas price must > 50_0000_0000
         U256::from(100_0000_0000_u64)
+    }
+
+    fn min_gas_price_proper() -> U256 {
+        U256::from(CFG.checkpoint.proper_gas_set_value)
     }
 }
 

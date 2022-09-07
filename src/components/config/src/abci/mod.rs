@@ -36,6 +36,8 @@ pub struct CheckPointConfig {
     pub utxo_asset_prefix_height: u64,
     pub prism_bridge_address: String,
     pub nonce_bug_fix_height: u64,
+    pub proper_gas_set_height: u64,
+    pub proper_gas_set_value: u64,
 }
 
 impl CheckPointConfig {
@@ -69,6 +71,8 @@ impl CheckPointConfig {
                                 utxo_asset_prefix_height: 0,
                                 nonce_bug_fix_height: 0,
                                 prism_bridge_address: String::new(),
+                                proper_gas_set_height: 0,
+                                proper_gas_set_value: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -92,6 +96,8 @@ impl CheckPointConfig {
                                 utxo_asset_prefix_height: 30000000,
                                 nonce_bug_fix_height: 30000000,
                                 prism_bridge_address: String::new(),
+                                proper_gas_set_height: 30000000,
+                                proper_gas_set_value: 100_0000_0000_u64,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
