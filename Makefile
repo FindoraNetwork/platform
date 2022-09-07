@@ -76,7 +76,7 @@ build_goleveldb: tendermint_goleveldb
 	$(call pack,debug)
 
 # Build for goleveldb
-build_release_goleveldb: tendermint_goleveldb
+build_release_goleveldb:
 	cargo build --release --bins -p abciapp -p finutils
 	$(call pack,release)
 

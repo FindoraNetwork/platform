@@ -5,6 +5,8 @@
 #![deny(warnings)]
 #![deny(missing_docs)]
 
+extern crate core;
+
 pub mod logging;
 pub mod wallet;
 

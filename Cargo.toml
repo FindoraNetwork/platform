@@ -69,8 +69,8 @@ x25519-dalek = { git = "https://github.com/FindoraNetwork/x25519-dalek" }
 bulletproofs = { git = "https://github.com/FindoraNetwork/bp" }
 
 
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.2.5" }
-zei-accumulators = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.2.5" }
-zei-algebra = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.2.5" }
-zei-crypto = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.2.5" }
-zei-plonk = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.2.5" }
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "address-folding-gen-key" }
+zei-accumulators = { git = "https://github.com/FindoraNetwork/zei", branch = "address-folding-gen-key" }
+zei-algebra = { git = "https://github.com/FindoraNetwork/zei", branch = "address-folding-gen-key" }
+zei-crypto = { git = "https://github.com/FindoraNetwork/zei", branch = "address-folding-gen-key" }
+zei-plonk = { git = "https://github.com/FindoraNetwork/zei", branch = "address-folding-gen-key" }
