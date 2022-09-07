@@ -15,9 +15,9 @@ RUN mkdir /binary
 RUN mkdir -p /binary/cleveldb && mkdir -p /binary/goleveldb
 
 
-RUN mkdir -p /root/.cargo/bin/ && \
-    make build_release && \
-    if [ -d /platform/release/bin ] ; then mv /platform/release/bin/* /binary/cleveldb ; rm -rf /platform/release/; else mv /platform/debug/bin/* /binary/cleveldb ; rm -rf /platform/debug/ ;fi
+# RUN mkdir -p /root/.cargo/bin/ && \
+#     make build_release && \
+#     if [ -d /platform/release/bin ] ; then mv /platform/release/bin/* /binary/cleveldb ; rm -rf /platform/release/; else mv /platform/debug/bin/* /binary/cleveldb ; rm -rf /platform/debug/ ;fi
 
 RUN mkdir -p /root/.cargo/bin/ && \
     make build_release_goleveldb && \
