@@ -6,7 +6,7 @@ use evm_precompile_utils::{error, EvmDataWriter, LogsBuilder};
 use module_evm::precompile::Precompile;
 use sha3::{Digest, Keccak256};
 
-pub const FRC20_PRECOMPILE_ADDRESS: u64 = 9;
+pub const FRC20_PRECOMPILE_ADDRESS: u64 = 0x1000;
 
 #[test]
 fn selector_less_than_four_bytes() {

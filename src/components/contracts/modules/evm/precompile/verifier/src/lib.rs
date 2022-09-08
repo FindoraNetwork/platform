@@ -1,8 +1,76 @@
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
+use evm::{executor::PrecompileOutput, Context, ExitError, ExitSucceed};
+use evm_precompile_utils::{EvmDataReader, EvmDataWriter, EvmResult, Gasometer};
+use log::debug;
+use module_evm::precompile::{FinState, Precompile, PrecompileId};
+
+// The gas used value is obtained according to the standard erc20 call.
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.3.2/contracts/token/ERC20/ERC20.sol
+//const GAS_NAME: u64 = 3283;
+const GAS_SYMBOL: u64 = 3437;
+// const GAS_DECIMALS: u64 = 243;
+// const GAS_TOTAL_SUPPLY: u64 = 1003;
+// const GAS_BALANCE_OF: u64 = 1350;
+// const GAS_TRANSFER: u64 = 23661;
+// const GAS_ALLOWANCE: u64 = 1624;
+// const GAS_APPROVE: u64 = 20750;
+// const GAS_TRANSFER_FROM: u64 = 6610;
+
+/// The Verifier precompile.
+pub struct Verifier;
+
+impl PrecompileId for Verifier {
+    fn contract_id() -> u64 {
+        0x2000
+    }
+}
+
+#[evm_precompile_utils::generate_function_selector]
+#[derive(Debug, PartialEq, Eq, num_enum::TryFromPrimitive, num_enum::IntoPrimitive)]
+pub enum Call {
+    Verify = "verify()",
+    SupportsInterface = "supportsInterface()",
+}
+
+impl Precompile for Verifier {
+    fn execute(
+        input: &[u8],
+        target_gas: Option<u64>,
+        _context: &Context,
+        _state: &FinState,
+    ) -> Result<PrecompileOutput, ExitError> {
+        let mut input = EvmDataReader::new(input);
+
+        match &input.read_selector()? {
+            Call::Verify => Self::verify(input, target_gas),
+            Call::SupportsInterface => Self::supports_interface(),
+        }
+    }
+}
+
+impl Verifier {
+    fn verify(
+        _input: EvmDataReader,
+        target_gas: Option<u64>,
+    ) -> EvmResult<PrecompileOutput> {
+        let mut gasometer = Gasometer::new(target_gas);
+        gasometer.record_cost(GAS_SYMBOL)?;
+
+        debug!(target: "evm", "Verifier#verify");
+
+        Ok(PrecompileOutput {
+            exit_status: ExitSucceed::Returned,
+            cost: gasometer.used_gas(),
+            output: EvmDataWriter::new().write_raw_bytes("T".as_bytes()).build(),
+            logs: vec![],
+        })
+    }
+
+    fn supports_interface() -> EvmResult<PrecompileOutput> {
+        Ok(PrecompileOutput {
+            exit_status: ExitSucceed::Returned,
+            cost: 0,
+            output: vec![],
+            logs: vec![],
+        })
     }
 }
