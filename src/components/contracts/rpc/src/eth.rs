@@ -1,6 +1,5 @@
 use crate::{error_on_execution_failure, internal_err};
 use baseapp::{extensions::SignedExtra, BaseApp};
-use config::abci::global_cfg::CFG;
 use ethereum::{
     BlockV0 as EthereumBlock, LegacyTransactionMessage as EthereumTransactionMessage,
     LegacyTransactionMessage, TransactionV0 as EthereumTransaction,
@@ -191,27 +190,18 @@ impl EthApi for EthApiImpl {
             Err(e) => return Box::pin(future::err(e)),
         };
 
-        let ctx = match self
-            .account_base_app
-            .read()
-            .create_query_context(None, false)
-            .map_err(|err| {
-                internal_err(format!("create query context error: {:?}", err))
-            }) {
-            Ok(ctx) => ctx,
+        let curr_height = match self.block_number() {
+            Ok(h) => h.as_u64(),
             Err(e) => return Box::pin(future::err(e)),
         };
 
-        let min_gas_price_func: fn() -> U256 =
-            if ctx.header.height as u64 > CFG.checkpoint.proper_gas_set_height {
-                <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price_proper
-            } else {
-                <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price
-            };
-
         let message = EthereumTransactionMessage {
             nonce,
-            gas_price: request.gas_price.unwrap_or_else(min_gas_price_func),
+            gas_price: request.gas_price.unwrap_or_else(|| {
+                <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(
+                    curr_height,
+                )
+            }),
             gas_limit: request.gas.unwrap_or_else(U256::max_value),
             value: request.value.unwrap_or_else(U256::zero),
             input: request.data.map(|s| s.into_vec()).unwrap_or_default(),
@@ -390,19 +380,11 @@ impl EthApi for EthApiImpl {
     }
 
     fn gas_price(&self) -> Result<U256> {
-        let ctx = self
-            .account_base_app
-            .read()
-            .create_query_context(None, false)
-            .map_err(|err| {
-                internal_err(format!("create query context error: {:?}", err))
-            })?;
-
-        if ctx.header.height as u64 > CFG.checkpoint.proper_gas_set_height {
-            Ok(<BaseApp as module_evm::Config>::FeeCalculator::min_gas_price_proper())
-        } else {
-            Ok(<BaseApp as module_evm::Config>::FeeCalculator::min_gas_price())
-        }
+        Ok(
+            <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(
+                self.block_number()?.as_u64(),
+            ),
+        )
     }
 
     fn block_number(&self) -> Result<U256> {

@@ -5,6 +5,8 @@ use fp_types::crypto::Address;
 use primitive_types::{H160, H256, U256};
 use ruc::Result;
 
+const PROPER_GAS_PRICE: u64 = 100_0000_0000_u64;
+
 pub trait AddressMapping {
     fn convert_to_account_id(address: H160) -> Address;
 }
@@ -51,19 +53,17 @@ impl DecimalsMapping for EthereumDecimalsMapping {
 /// Trait that outputs the current transaction gas price.
 pub trait FeeCalculator {
     /// Return the minimal required gas price.
-    fn min_gas_price() -> U256;
-
-    fn min_gas_price_proper() -> U256;
+    fn min_gas_price(height: u64) -> U256;
 }
 
 impl FeeCalculator for () {
-    fn min_gas_price() -> U256 {
+    fn min_gas_price(height: u64) -> U256 {
         // 10 GWEI, min gas limit: 21000, min gas price must > 50_0000_0000
-        U256::from(100_0000_0000_u64)
-    }
-
-    fn min_gas_price_proper() -> U256 {
-        U256::from(CFG.checkpoint.proper_gas_set_value)
+        if height > CFG.checkpoint.proper_gas_set_height {
+            U256::from(PROPER_GAS_PRICE)
+        } else {
+            U256::from(100_0000_0000_u64)
+        }
     }
 }
 

@@ -202,12 +202,7 @@ impl<C: Config> ValidateUnsigned for App<C> {
             )));
         }
 
-        let min_gas_price =
-            if ctx.header.height as u64 > CFG.checkpoint.proper_gas_set_height {
-                C::FeeCalculator::min_gas_price_proper()
-            } else {
-                C::FeeCalculator::min_gas_price()
-            };
+        let min_gas_price = C::FeeCalculator::min_gas_price(ctx.header.height as u64);
 
         if transaction.gas_price < min_gas_price {
             return Err(eg!(format!(

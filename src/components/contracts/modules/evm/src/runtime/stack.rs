@@ -227,11 +227,7 @@ impl<'context, 'vicinity, 'config, C: Config> Backend
     }
 
     fn block_base_fee_per_gas(&self) -> U256 {
-        if self.ctx.header.height as u64 > CFG.checkpoint.proper_gas_set_height {
-            C::FeeCalculator::min_gas_price_proper()
-        } else {
-            C::FeeCalculator::min_gas_price()
-        }
+        C::FeeCalculator::min_gas_price(self.ctx.header.height as u64)
     }
 }
 

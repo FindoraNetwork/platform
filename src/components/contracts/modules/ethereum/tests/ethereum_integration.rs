@@ -25,7 +25,9 @@ fn run_all_tests() {
 
 fn base_transfer_fee() -> U256 {
     U256::from(21000).saturating_mul(
-        <BaseApp as module_ethereum::Config>::FeeCalculator::min_gas_price(),
+        <BaseApp as module_ethereum::Config>::FeeCalculator::min_gas_price(
+            100_0000_0000_u64,
+        ),
     )
 }
 
@@ -36,7 +38,9 @@ fn build_transfer_transaction(
 ) -> UncheckedTransaction<()> {
     let tx = UnsignedTransaction {
         nonce,
-        gas_price: <BaseApp as module_ethereum::Config>::FeeCalculator::min_gas_price(),
+        gas_price: <BaseApp as module_ethereum::Config>::FeeCalculator::min_gas_price(
+            100_0000_0000_u64,
+        ),
         gas_limit: U256::from(0x100000),
         action: ethereum::TransactionAction::Call(to),
         value: balance,
