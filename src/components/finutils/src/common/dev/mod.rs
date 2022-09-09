@@ -141,7 +141,7 @@ impl EnvCfg {
                 env.print_info();
                 None
             }),
-            Ops::ShowAll => Env::info_all().c(d!()).map(|_| None),
+            Ops::ShowAll => Env::show_all().c(d!()).map(|_| None),
             Ops::List => Env::list_all().c(d!()).map(|_| None),
             Ops::Init => Env::load_cfg(self)
                 .c(d!())
@@ -657,7 +657,7 @@ impl Env {
     }
 
     // show the details of all existing ENVs
-    fn info_all() -> Result<()> {
+    fn show_all() -> Result<()> {
         for (idx, env) in Self::get_all_envs().c(d!())?.iter().enumerate() {
             println!("\x1b[31;01m====== ENV No.{} ======\x1b[00m", idx);
             Self::read_cfg(env)
