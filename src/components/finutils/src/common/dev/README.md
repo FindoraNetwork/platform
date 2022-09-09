@@ -64,10 +64,11 @@ Now the cluster can be considered to be a full-featured local network, you can:
 - ...
 
 But wait,
-- Where can I get the FRA token?
-- Where can I get the web-service ports of a target ENV?
-- How to check the staking key of valiadtors?
+- where to get FRA tokens?
+- where to get the web-service ports of a target ENV?
+- where to find all staking related keys of validators?
 - ...
+
 In a word, how to easily get all necessary information?
 
 Don't worry, a `fn dev show` will show you everything you need, you can use a shorter style `fn dev` when using the default cluster, they are equal.
