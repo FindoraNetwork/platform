@@ -63,7 +63,7 @@ pub struct EnvCfg {
     pub name: String,
 
     // which operation to trigger,
-    // default value: `Ops::Info`
+    // default value: `Ops::Show`
     pub ops: Ops,
 
     // seconds between two blocks,
@@ -123,23 +123,25 @@ impl EnvCfg {
                 .c(d!())
                 .and_then(|mut env| env.start(None).c(d!()))
                 .map(|_| None),
+            Ops::StartAll => Env::start_all().c(d!()).map(|_| None),
             Ops::Stop => Env::load_cfg(self)
                 .c(d!())
                 .and_then(|env| env.stop().c(d!()))
                 .map(|_| None),
-            Ops::AddNode => Env::load_cfg(self)
+            Ops::StopAll => Env::stop_all().c(d!()).map(|_| None),
+            Ops::PushNode => Env::load_cfg(self)
                 .c(d!())
-                .and_then(|mut env| env.attach_node().c(d!()))
+                .and_then(|mut env| env.push_node().c(d!()))
                 .map(|_| None),
-            Ops::DelNode => Env::load_cfg(self)
+            Ops::PopNode => Env::load_cfg(self)
                 .c(d!())
                 .and_then(|mut env| env.kick_node().c(d!()))
                 .map(|_| None),
-            Ops::Info => Env::load_cfg(self).c(d!()).map(|env| {
+            Ops::Show => Env::load_cfg(self).c(d!()).map(|env| {
                 env.print_info();
                 None
             }),
-            Ops::InfoAll => Env::info_all().c(d!()).map(|_| None),
+            Ops::ShowAll => Env::info_all().c(d!()).map(|_| None),
             Ops::List => Env::list_all().c(d!()).map(|_| None),
             Ops::Init => Env::load_cfg(self)
                 .c(d!())
@@ -302,6 +304,18 @@ impl Env {
         Ok(())
     }
 
+    // start all existing ENVs
+    fn start_all() -> Result<()> {
+        for env in Self::get_all_envs().c(d!())?.iter() {
+            Self::read_cfg(env)
+                .c(d!())?
+                .c(d!("BUG: env not found!"))?
+                .start(None)
+                .c(d!())?;
+        }
+        Ok(())
+    }
+
     // - stop all processes
     fn stop(&self) -> Result<()> {
         self.nodes
@@ -310,6 +324,18 @@ impl Env {
             .map(|n| n.stop().c(d!()))
             .collect::<Result<Vec<_>>>()
             .map(|_| ())
+    }
+
+    // stop all existing ENVs
+    fn stop_all() -> Result<()> {
+        for env in Self::get_all_envs().c(d!())?.iter() {
+            Self::read_cfg(env)
+                .c(d!())?
+                .c(d!("BUG: env not found!"))?
+                .stop()
+                .c(d!())?;
+        }
+        Ok(())
     }
 
     // destroy all nodes
@@ -340,7 +366,7 @@ impl Env {
 
     // seed nodes are kept by system for now,
     // so only the other nodes can be added on demand
-    fn attach_node(&mut self) -> Result<()> {
+    fn push_node(&mut self) -> Result<()> {
         let id = self.next_node_id();
         let kind = Kind::Node;
         self.alloc_resources(id, kind)
@@ -763,7 +789,7 @@ struct Node {
     id: NodeId,
     #[serde(rename = "tendermint_node_id")]
     tm_id: String,
-    #[serde(rename = "home_dir")]
+    #[serde(rename = "node_home_dir")]
     home: String,
     kind: Kind,
     #[serde(rename = "occupied_ports")]
@@ -918,19 +944,21 @@ pub enum Ops {
     Destroy,
     DestroyAll,
     Start,
+    StartAll,
     Stop,
-    AddNode,
-    DelNode,
-    Info,
-    InfoAll,
-    List,
+    StopAll,
+    PushNode,
+    PopNode,
     Init,
     InitAll,
+    Show,
+    ShowAll,
+    List,
 }
 
 impl Default for Ops {
     fn default() -> Self {
-        Self::Info
+        Self::Show
     }
 }
 

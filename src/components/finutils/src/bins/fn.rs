@@ -477,28 +477,32 @@ fn run() -> Result<()> {
                 envcfg.name = name.to_owned();
             }
             Ops::Start
+        } else if m.subcommand_matches("start-all").is_some() {
+            Ops::StartAll
         } else if let Some(sm) = m.subcommand_matches("stop") {
             if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
             }
             Ops::Stop
-        } else if let Some(sm) = m.subcommand_matches("add-node") {
+        } else if m.subcommand_matches("stop-all").is_some() {
+            Ops::StopAll
+        } else if let Some(sm) = m.subcommand_matches("push-node") {
             if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
             }
-            Ops::AddNode
-        } else if let Some(sm) = m.subcommand_matches("del-node") {
+            Ops::PushNode
+        } else if let Some(sm) = m.subcommand_matches("pop-node") {
             if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
             }
-            Ops::DelNode
-        } else if let Some(sm) = m.subcommand_matches("info") {
+            Ops::PopNode
+        } else if let Some(sm) = m.subcommand_matches("show") {
             if let Some(name) = sm.value_of("env_name") {
                 envcfg.name = name.to_owned();
             }
-            Ops::Info
-        } else if m.subcommand_matches("info-all").is_some() {
-            Ops::InfoAll
+            Ops::Show
+        } else if m.subcommand_matches("show-all").is_some() {
+            Ops::ShowAll
         } else if m.subcommand_matches("list").is_some() {
             Ops::List
         } else if let Some(sm) = m.subcommand_matches("init") {

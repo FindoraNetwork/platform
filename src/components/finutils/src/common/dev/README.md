@@ -22,14 +22,14 @@ OPTIONS:
     -e, --env-name <ENV NAME>    The name of the target env
 
 SUBCOMMANDS:
-    add-node       Attach a new node to an existing env
+    push-node      Attach a new node to an existing env
     create         Create a new env
-    del-node       Pop a node from an existing env
+    pop-node       Pop a node from an existing env
     destroy        Destroy an existing env
     destroy-all    Destroy all existing ENVs
     help           Prints this message or the help of the given subcommand(s)
-    info           Default operation, show the information of an existing env
-    info-all       Show the details of all existing ENVs
+    show           Default operation, show the information of an existing env
+    show-all       Show the details of all existing ENVs
     init           Config the initial settings(POS,FRA issuance...)
     init-all       Apply the `init` operation to all existing ENVs
     list           List the names of all existing ENVs
@@ -63,9 +63,14 @@ Now the cluster can be considered to be a full-featured local network, you can:
 - do evm related operations
 - ...
 
-But wait, where can I get the FRA token? How to check the staking key of valiadtors? In a word, how to easily view these necessary information?
+But wait,
+- Where can I get the FRA token?
+- Where can I get the web-service ports of a target ENV?
+- How to check the staking key of valiadtors?
+- ...
+In a word, how to easily get all necessary information?
 
-Don't worry, a `fn dev info` will show you everything you need, you can use a shorter style `fn dev` when using the default cluster, they are equal.
+Don't worry, a `fn dev show` will show you everything you need, you can use a shorter style `fn dev` when using the default cluster, they are equal.
 
 Below is the information of a custom ENV named 'MyEnv', `fn dev -e MyEnv`:
 ```json
@@ -262,7 +267,7 @@ Below is the information of a custom ENV named 'MyEnv', `fn dev -e MyEnv`:
 }
 ```
 
-You can pause the cluster by `fn dev stop`, and resume it by `fn dev start` at any time; you can also scale up the cluster by `fn dev add-node`, and scale it down by `fn dev del-node`.
+You can pause the cluster by `fn dev stop`, and resume it by `fn dev start` at any time; you can also scale up the cluster by `fn dev push-node`, and scale it down by `fn dev pop-node`.
 
 At last, if you don't need this cluster anymore, you can permanently destroy it with the `fn dev destroy` subcommand.
 
@@ -366,7 +371,7 @@ For example, for the default cluster, `fn dev stop` is equal to `fn dev stop -e 
 
 Also, there are some subcommands designed specifically for multi-cluster management:
 - `fn dev list`, list the names of all existing ENVs
-- `fn dev info-all`, list the details of all existing ENVs
+- `fn dev show-all`, list the details of all existing ENVs
 - `fn dev init-all`, initilize all existing ENVs in batch mode
 - `fn dev destroy-all`, destroy all existing ENVs
 
