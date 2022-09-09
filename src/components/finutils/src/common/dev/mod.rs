@@ -138,7 +138,7 @@ impl EnvCfg {
                 .and_then(|mut env| env.kick_node().c(d!()))
                 .map(|_| None),
             Ops::Show => Env::load_cfg(self).c(d!()).map(|env| {
-                env.print_info();
+                env.show();
                 None
             }),
             Ops::ShowAll => Env::show_all().c(d!()).map(|_| None),
@@ -418,6 +418,39 @@ impl Env {
         Ok(())
     }
 
+    fn show(&self) {
+        println!("{}", pnk!(serde_json::to_string_pretty(self)));
+    }
+
+    // show the details of all existing ENVs
+    fn show_all() -> Result<()> {
+        for (idx, env) in Self::get_all_envs().c(d!())?.iter().enumerate() {
+            println!("\x1b[31;01m====== ENV No.{} ======\x1b[00m", idx);
+            Self::read_cfg(env)
+                .c(d!())?
+                .c(d!("BUG: env not found!"))?
+                .show();
+            println!();
+        }
+        Ok(())
+    }
+
+    // list the names of all existing ENVs
+    fn list_all() -> Result<()> {
+        let list = Self::get_all_envs().c(d!())?;
+
+        if list.is_empty() {
+            println!("\x1b[31;01mNo existing env!\x1b[00m");
+        } else {
+            println!("\x1b[31;01mEnv list:\x1b[00m");
+            list.into_iter().for_each(|env| {
+                println!("  {}", env);
+            });
+        }
+
+        Ok(())
+    }
+
     // 1. allocate ports
     // 2. change configs: ports, seed address, etc.
     // 3. insert new node to the meta of env
@@ -647,39 +680,6 @@ impl Env {
                             fs::write(genesis_path, &self.genesis).c(d!())
                         })
                 })?;
-        }
-
-        Ok(())
-    }
-
-    fn print_info(&self) {
-        println!("{}", pnk!(serde_json::to_string_pretty(self)));
-    }
-
-    // show the details of all existing ENVs
-    fn show_all() -> Result<()> {
-        for (idx, env) in Self::get_all_envs().c(d!())?.iter().enumerate() {
-            println!("\x1b[31;01m====== ENV No.{} ======\x1b[00m", idx);
-            Self::read_cfg(env)
-                .c(d!())?
-                .c(d!("BUG: env not found!"))?
-                .print_info();
-            println!();
-        }
-        Ok(())
-    }
-
-    // list the names of all existing ENVs
-    fn list_all() -> Result<()> {
-        let list = Self::get_all_envs().c(d!())?;
-
-        if list.is_empty() {
-            println!("\x1b[31;01mNo existing env!\x1b[00m");
-        } else {
-            println!("\x1b[31;01mEnv list:\x1b[00m");
-            list.into_iter().for_each(|env| {
-                println!("  {}", env);
-            });
         }
 
         Ok(())
