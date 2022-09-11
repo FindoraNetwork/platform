@@ -285,15 +285,10 @@ pub fn nullifier_to_base58(n: &Nullifier) -> String {
 /// Convert a XfrPublicKey to bech32 human-readable address
 #[inline(always)]
 pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
-
     let bytes = &XfrPublicKey::zei_to_bytes(key);
     match bytes[0] {
-        0u8 => {
-            bech32enc_fra(<&[u8; 32]>::try_from(&bytes[1..33]).unwrap())
-        }
-        1u8 => {
-            bech32enc_eth(<&[u8; 33]>::try_from(&bytes[1..34]).unwrap())
-        }
+        0u8 => bech32enc_fra(<&[u8; 32]>::try_from(&bytes[1..33]).unwrap()),
+        1u8 => bech32enc_eth(<&[u8; 33]>::try_from(&bytes[1..34]).unwrap()),
         2u8 => {
             panic!("public key not supported")
         }
@@ -323,24 +318,24 @@ fn bech32enc_eth<T: AsRef<[u8]> + ToBase32>(input: &T) -> String {
 
 #[inline(always)]
 fn bech32dec(input: &str) -> Result<Vec<u8>> {
-    bech32::decode(input)
-        .c(d!())
-        .and_then(|(hrp, data)| {
-            let mut d = Vec::<u8>::from_base32(&data).c(d!())?;
-            match hrp.as_str() {
-                "fra" => {
-                    let mut a = vec![0u8];
-                    a.append(&mut d);
-                    Ok(a)
-                }
-                "eth" => {
-                    let mut a = vec![0u8];
-                    a.append(&mut d);
-                    Ok(a)
-                }
-                _ => { panic!("address not supported")}
+    bech32::decode(input).c(d!()).and_then(|(hrp, data)| {
+        let mut d = Vec::<u8>::from_base32(&data).c(d!())?;
+        match hrp.as_str() {
+            "fra" => {
+                let mut a = vec![0u8];
+                a.append(&mut d);
+                Ok(a)
             }
-        })
+            "eth" => {
+                let mut a = vec![0u8];
+                a.append(&mut d);
+                Ok(a)
+            }
+            _ => {
+                panic!("address not supported")
+            }
+        }
+    })
 }
 
 /////////////////////////////////////////////////////////////////
