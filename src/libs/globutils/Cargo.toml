@@ -16,6 +16,8 @@ zei = "0.2"
 zei-crypto = "0.2"
 zei-algebra = "0.2"
 hex = "0.4.2"
+bip32 = "0.3.0"
+
 
 base64 = "0.10"
 bip0039 = "0.7.3"

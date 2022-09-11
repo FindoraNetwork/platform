@@ -74,6 +74,20 @@ macro_rules! restore_keypair_from_mnemonic {
     };
 }
 
+fn restore_secp_keypair_from_mnemonic(phrase: &str, lang: &str, p: &BipPath) -> Result<XfrKeyPair> {
+    check_lang(lang)
+        .c(d!())
+        .and_then(|l| Mnemonic::from_phrase_in(l, phrase).map_err(|e| eg!(e)))
+        .map(|m| m.to_seed(""))
+        .and_then(|seed| {
+            let dp = format!("m/44'/{}'/{}'/{}/{}", p.coin, p.account, p.change, p.address);
+            bip32::XPrv::derive_from_path(&seed, &dp.parse::<bip32::DerivationPath>().c(d!())?).c(d!())
+        })
+        .and_then(|kp| {
+            XfrKeyPair::generate_secp256k1_from_bytes(&kp.to_bytes()).c(d!())
+        })
+}
+
 /// Use this struct to express a Bip44/Bip49 path.
 pub struct BipPath {
     coin: u32,
@@ -100,7 +114,7 @@ impl BipPath {
 #[inline(always)]
 pub fn restore_keypair_from_mnemonic_default(phrase: &str) -> Result<XfrKeyPair> {
     const ETH: u32 = 60;
-    restore_keypair_from_mnemonic!(phrase, "en", BipPath::new(ETH, 0, 0, 0), bip44)
+    restore_secp_keypair_from_mnemonic(phrase, "en", &BipPath::new(ETH, 0, 0, 0))
         .c(d!())
 }
 
