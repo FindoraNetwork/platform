@@ -88,14 +88,19 @@ fn test_asset_creation_valid() {
     let mut state = LedgerState::tmp_ledger();
 
     let keypair = build_keys(&mut prng);
+    let code = AssetTypeCode::gen_random();
 
-    let (asset_body, token_code) = asset_creation_body(
-        &AssetTypeCode::gen_random(),
+    let (asset_body, mut token_code) = asset_creation_body(
+        &code,
         keypair.get_pk_ref(),
         AssetRules::default(),
         None,
         None,
     );
+
+    if CFG.checkpoint.utxo_asset_prefix_height > state.get_tendermint_height() {
+        token_code = code;
+    }
 
     let asset_create = asset_creation_operation(&asset_body, &keypair);
     let seq_id = state.get_block_commit_count();
@@ -151,7 +156,7 @@ fn test_asset_transfer() {
     let key_pair = XfrKeyPair::generate(&mut prng);
     let key_pair_adversary = XfrKeyPair::generate(&mut ledger.get_prng());
 
-    let (tx, new_code) = create_definition_transaction(
+    let (tx, mut new_code) = create_definition_transaction(
         &code,
         &key_pair,
         AssetRules::default(),
@@ -159,6 +164,10 @@ fn test_asset_transfer() {
         ledger.get_block_commit_count(),
     )
     .unwrap();
+
+    if CFG.checkpoint.utxo_asset_prefix_height > ledger.get_tendermint_height() {
+        new_code = code;
+    }
 
     let effect = TxnEffect::compute_effect(tx).unwrap();
     {
@@ -342,14 +351,19 @@ fn asset_issued() {
     assert!(ledger.get_state_commitment() == (HashOf::new(&None), 0));
     let keypair = build_keys(&mut ledger.get_prng());
     let seq_id = ledger.get_block_commit_count();
-    let (tx, new_token_code) = create_definition_transaction(
-        &AssetTypeCode::gen_random(),
+    let code = AssetTypeCode::gen_random();
+    let (tx, mut new_token_code) = create_definition_transaction(
+        &code,
         &keypair,
         AssetRules::default(),
         None,
         seq_id,
     )
     .unwrap();
+
+    if CFG.checkpoint.utxo_asset_prefix_height > ledger.get_tendermint_height() {
+        new_token_code = code;
+    }
 
     let effect = TxnEffect::compute_effect(tx).unwrap();
     {
@@ -478,7 +492,7 @@ pub fn test_transferable() {
     // Define fiat token
     let code = AssetTypeCode::gen_random();
     let seq_id = ledger.get_block_commit_count();
-    let (tx, new_code) = create_definition_transaction(
+    let (tx, mut new_code) = create_definition_transaction(
         &code,
         &issuer,
         AssetRules::default().set_transferable(false).clone(),
@@ -486,6 +500,11 @@ pub fn test_transferable() {
         seq_id,
     )
     .unwrap();
+
+    if CFG.checkpoint.utxo_asset_prefix_height > ledger.get_tendermint_height() {
+        new_code = code;
+    }
+
     apply_transaction(&mut ledger, tx);
     let (tx, _) = create_issue_and_transfer_txn(
         &mut ledger,
@@ -625,7 +644,7 @@ pub fn test_max_units() {
     // Define fiat token
     let code = AssetTypeCode::gen_random();
     let seq_id = ledger.get_block_commit_count();
-    let (tx, new_code) = create_definition_transaction(
+    let (tx, mut new_code) = create_definition_transaction(
         &code,
         &issuer,
         AssetRules::default().set_max_units(Some(100)).clone(),
@@ -633,6 +652,11 @@ pub fn test_max_units() {
         seq_id,
     )
     .unwrap();
+
+    if CFG.checkpoint.utxo_asset_prefix_height > ledger.get_tendermint_height() {
+        new_code = code;
+    }
+
     apply_transaction(&mut ledger, tx);
     let tx = create_issuance_txn(
         &mut ledger,

@@ -6,6 +6,7 @@
 //! This module is the library part of FN.
 //!
 
+pub mod dev;
 pub mod evm;
 pub mod utils;
 
@@ -497,8 +498,8 @@ pub fn transfer_asset_batch_x(
 
 /// Mainly for official usage,
 /// and can be also used in test scenes.
-pub fn set_initial_validators() -> Result<()> {
-    utils::set_initial_validators().c(d!())
+pub fn set_initial_validators(staking_info_file: Option<&str>) -> Result<()> {
+    utils::set_initial_validators(staking_info_file).c(d!())
 }
 
 /// Get the effective address of server
@@ -526,7 +527,8 @@ pub fn get_keypair() -> Result<XfrKeyPair> {
     }
 }
 
-fn get_td_pubkey() -> Result<Vec<u8>> {
+///Get tendermint public key
+pub(crate) fn get_td_pubkey() -> Result<Vec<u8>> {
     if let Some(key_path) = TD_KEY.as_ref() {
         fs::read_to_string(key_path)
             .c(d!("can not read key file from path"))
@@ -565,8 +567,8 @@ pub fn convert_commission_rate(cr: f64) -> Result<[u64; 2]> {
 }
 
 #[allow(missing_docs)]
-pub fn gen_key_and_print() {
-    let (m, k, kp) = loop {
+pub fn gen_key() -> (String, String, String, XfrKeyPair) {
+    let (mnemonic, key, kp) = loop {
         let mnemonic = pnk!(wallet::generate_mnemonic_custom(24, "en"));
         let kp = pnk!(wallet::restore_keypair_from_mnemonic_default(&mnemonic));
         if let Some(key) = serde_json::to_string_pretty(&kp)
@@ -576,10 +578,18 @@ pub fn gen_key_and_print() {
             break (mnemonic, key, kp);
         }
     };
+
     let wallet_addr = wallet::public_key_to_bech32(kp.get_pk_ref());
+
+    (wallet_addr, mnemonic, key, kp)
+}
+
+#[allow(missing_docs)]
+pub fn gen_key_and_print() {
+    let (wallet_addr, mnemonic, key, _) = gen_key();
     println!(
         "\n\x1b[31;01mWallet Address:\x1b[00m {}\n\x1b[31;01mMnemonic:\x1b[00m {}\n\x1b[31;01mKey:\x1b[00m {}\n",
-        wallet_addr, m, k
+        wallet_addr, mnemonic, key
     );
 }
 
@@ -811,9 +821,9 @@ pub fn issue_asset_x(
 pub fn show_asset(addr: &str) -> Result<()> {
     let pk = wallet::public_key_from_bech32(addr).c(d!())?;
     let assets = utils::get_created_assets(&pk).c(d!())?;
-    for (code, _asset) in assets {
-        let base64 = code.to_base64();
-        let h = hex::encode(code.val.0);
+    for asset in assets {
+        let base64 = asset.body.asset.code.to_base64();
+        let h = hex::encode(asset.body.asset.code.val.0);
         println!("Base64: {}, Hex: {}", base64, h);
     }
 

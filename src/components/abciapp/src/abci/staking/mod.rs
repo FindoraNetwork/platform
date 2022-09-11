@@ -274,7 +274,7 @@ fn system_governance(staking: &mut Staking, bz: &ByzantineInfo) -> Result<()> {
 }
 
 /// Pay for freed 'Delegations' and 'FraDistributions'.
-pub fn system_mint_pay(
+pub fn system_prism_mint_pay(
     la: &mut LedgerState,
     account_base_app: &mut AccountBaseApp,
 ) -> Option<Transaction> {
@@ -288,11 +288,9 @@ pub fn system_mint_pay(
                     at.properties.issuer = IssuerPublicKey {
                         key: *BLACK_HOLE_PUBKEY_STAKING,
                     };
-
                     if mint.max_supply != 0 {
                         at.properties.asset_rules.max_units = Some(mint.max_supply);
                     }
-
                     at
                 } else {
                     let mut at = AssetType::default();
@@ -324,13 +322,27 @@ pub fn system_mint_pay(
         }
     }
 
+    if mints.is_empty() {
+        None
+    } else {
+        let mint_ops =
+            Operation::MintFra(MintFraOps::new(la.get_staking().cur_height(), mints));
+        Some(Transaction::from_operation_coinbase_mint(
+            mint_ops,
+            la.get_state_commitment().1,
+        ))
+    }
+}
+
+/// Pay for freed 'Delegations' and 'FraDistributions'.
+pub fn system_mint_pay(la: &LedgerState) -> Option<Transaction> {
     let staking = la.get_staking();
     let mut limit = staking.coinbase_balance() as i128;
 
     // at most `NUM_TO_PAY` items to pay per block
     const NUM_TO_PAY: usize = 2048;
 
-    let mut mint_entries = staking
+    let mint_entries = staking
         .delegation_get_global_principal_with_receiver()
         .into_iter()
         .map(|(k, (n, receiver_pk))| {
@@ -356,8 +368,6 @@ pub fn system_mint_pay(
         )
         .take(NUM_TO_PAY)
         .collect::<Vec<_>>();
-
-    mint_entries.append(&mut mints);
 
     if mint_entries.is_empty() {
         None

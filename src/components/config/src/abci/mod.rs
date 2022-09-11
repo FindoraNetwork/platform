@@ -12,7 +12,7 @@ use {
     toml,
 };
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[allow(missing_docs)]
 pub struct CheckPointConfig {
     pub evm_substate_height: i64,
@@ -35,6 +35,7 @@ pub struct CheckPointConfig {
     pub utxo_checktx_height: i64,
     pub utxo_asset_prefix_height: u64,
     pub prism_bridge_address: String,
+    pub nonce_bug_fix_height: u64,
 }
 
 impl CheckPointConfig {
@@ -66,6 +67,7 @@ impl CheckPointConfig {
                                 evm_checktx_nonce: 0,
                                 utxo_checktx_height: 0,
                                 utxo_asset_prefix_height: 0,
+                                nonce_bug_fix_height: 0,
                                 prism_bridge_address: String::new(),
                             };
                             #[cfg(not(feature = "debug_env"))]
@@ -82,12 +84,13 @@ impl CheckPointConfig {
                                 ff_addr_extra_fix_height: 1200000,
                                 nonconfidential_balance_fix_height: 1210000,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
-                                prismxx_inital_height: 1733700,
-                                enable_triple_masking_height: 22510000,
+                                prismxx_inital_height: 30000000,
+                                enable_triple_masking_height: 30000000,
                                 fix_unpaid_delegation_height: 2261885,
-                                evm_checktx_nonce: 3000000,
-                                utxo_checktx_height: 2524270,
-                                utxo_asset_prefix_height: 2524270,
+                                evm_checktx_nonce: 30000000,
+                                utxo_checktx_height: 30000000,
+                                utxo_asset_prefix_height: 30000000,
+                                nonce_bug_fix_height: 30000000,
                                 prism_bridge_address: String::new(),
                             };
                             let content = toml::to_string(&config).unwrap();

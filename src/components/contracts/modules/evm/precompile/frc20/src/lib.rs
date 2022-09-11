@@ -3,12 +3,16 @@ mod tests;
 
 use core::marker::PhantomData;
 use ethereum_types::{H160, U256};
-use evm::{executor::PrecompileOutput, Context, ExitError, ExitSucceed};
+use evm::{
+    executor::stack::{PrecompileFailure, PrecompileOutput},
+    Context, ExitSucceed,
+};
 use evm_precompile_utils::{
     error, Address, EvmDataReader, EvmDataWriter, EvmResult, Gasometer, LogsBuilder,
 };
 use fp_traits::{account::AccountAsset, evm::AddressMapping};
 use log::debug;
+use module_evm::precompile::PrecompileResult;
 use module_evm::{
     precompile::{FinState, Precompile, PrecompileId},
     Config,
@@ -64,7 +68,7 @@ impl<C: Config> PrecompileId for FRC20<C> {
 }
 
 #[evm_precompile_utils::generate_function_selector]
-#[derive(Debug, PartialEq, num_enum::TryFromPrimitive, num_enum::IntoPrimitive)]
+#[derive(Debug, PartialEq, Eq, num_enum::TryFromPrimitive, num_enum::IntoPrimitive)]
 pub enum Call {
     Name = "name()",
     Symbol = "symbol()",
@@ -83,19 +87,54 @@ impl<C: Config> Precompile for FRC20<C> {
         target_gas: Option<u64>,
         context: &Context,
         state: &FinState,
-    ) -> Result<PrecompileOutput, ExitError> {
+    ) -> PrecompileResult {
         let mut input = EvmDataReader::new(input);
+        let selector = match input.read_selector::<Call>() {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(PrecompileFailure::Error { exit_status: e });
+            }
+        };
 
-        match &input.read_selector()? {
-            Call::Name => Self::name(input, target_gas),
-            Call::Symbol => Self::symbol(input, target_gas),
-            Call::Decimals => Self::decimals(input, target_gas),
-            Call::TotalSupply => Self::total_supply(state, input, target_gas),
-            Call::BalanceOf => Self::balance_of(state, input, target_gas),
-            Call::Allowance => Self::allowance(state, input, target_gas),
-            Call::Approve => Self::approve(state, input, target_gas, context),
-            Call::Transfer => Self::transfer(state, input, target_gas, context),
-            Call::TransferFrom => Self::transfer_from(state, input, target_gas, context),
+        match &selector {
+            Call::Name => match Self::name(input, target_gas) {
+                Ok(v) => Ok(v),
+                Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
+            },
+            Call::Symbol => match Self::symbol(input, target_gas) {
+                Ok(v) => Ok(v),
+                Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
+            },
+            Call::Decimals => match Self::decimals(input, target_gas) {
+                Ok(v) => Ok(v),
+                Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
+            },
+            Call::TotalSupply => match Self::total_supply(state, input, target_gas) {
+                Ok(v) => Ok(v),
+                Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
+            },
+            Call::BalanceOf => match Self::balance_of(state, input, target_gas) {
+                Ok(v) => Ok(v),
+                Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
+            },
+            Call::Allowance => match Self::allowance(state, input, target_gas) {
+                Ok(v) => Ok(v),
+                Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
+            },
+            Call::Approve => match Self::approve(state, input, target_gas, context) {
+                Ok(v) => Ok(v),
+                Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
+            },
+            Call::Transfer => match Self::transfer(state, input, target_gas, context) {
+                Ok(v) => Ok(v),
+                Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
+            },
+            Call::TransferFrom => {
+                match Self::transfer_from(state, input, target_gas, context) {
+                    Ok(v) => Ok(v),
+                    Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
+                }
+            }
         }
     }
 }

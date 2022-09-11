@@ -1568,13 +1568,25 @@ impl AnonTransferOperationBuilder {
 
     /// add_input is used for adding an input source to the Anon Transfer Operation factory, it takes
     /// an ABAR and a Keypair as input
-    pub fn add_input(&mut self, abar: OpenAnonAssetRecord) -> Result<&mut Self> {
+    pub fn add_input(
+        &mut self,
+        abar: OpenAnonAssetRecord,
+        secret_key: AXfrKeyPair,
+    ) -> Result<&mut Self> {
+        if self.inputs.len() >= 5 {
+            return Err(eg!("Total inputs (incl. fees) cannot be greater than 5"));
+        }
         self.inputs.push(abar);
         Ok(self)
     }
 
     /// add_output is used to add a output record to the Anon Transfer factory
     pub fn add_output(&mut self, abar: OpenAnonAssetRecord) -> Result<&mut Self> {
+        if self.outputs.len() >= 5 {
+            return Err(eg!(
+                "Total outputs (incl. remainders) cannot be greater than 5"
+            ));
+        }
         self.commitments.push(get_abar_commitment(abar.clone()));
         self.outputs.push(abar);
         Ok(self)
@@ -1587,46 +1599,182 @@ impl AnonTransferOperationBuilder {
     }
 
     #[allow(missing_docs)]
-    pub fn extra_fee_estimation(&self) -> u64 {
-        let estimated_fees = FEE_CALCULATING_FUNC(
+    pub fn extra_fee_estimation(&self) -> Result<u64> {
+        if self.inputs.len() > 5 {
+            return Err(eg!("Total inputs (incl. fees) cannot be greater than 5"));
+        }
+
+        let input_sums =
+            self.inputs
+                .iter()
+                .fold(HashMap::new(), |mut asset_amounts, i| {
+                    let sum = asset_amounts.entry(i.get_asset_type()).or_insert(0u64);
+                    *sum += i.get_amount();
+                    asset_amounts
+                });
+        let output_sums =
+            self.outputs
+                .iter()
+                .fold(HashMap::new(), |mut asset_amounts, o| {
+                    let sum = asset_amounts.entry(o.get_asset_type()).or_insert(0u64);
+                    *sum += o.get_amount();
+                    asset_amounts
+                });
+
+        let fra_input_sum = *input_sums.get(&ASSET_TYPE_FRA).unwrap_or(&0u64);
+        let fra_output_sum = *output_sums.get(&ASSET_TYPE_FRA).unwrap_or(&0u64);
+        if output_sums.len() > input_sums.len() {
+            return Err(eg!("Output assets cannot be more than input assets"));
+        }
+
+        let extra_remainders = input_sums.iter().try_fold(
+            0usize,
+            |extra_remainders, (asset, inp_amount)| {
+                if *asset == ASSET_TYPE_FRA {
+                    Ok(extra_remainders)
+                } else {
+                    match output_sums.get(asset) {
+                        None => Ok(extra_remainders + 1),
+                        Some(op_sum) => match op_sum.cmp(inp_amount) {
+                            Ordering::Equal => Ok(extra_remainders),
+                            Ordering::Less => Ok(extra_remainders + 1),
+                            Ordering::Greater => {
+                                Err(eg!("Output cannot be greater than Input"))
+                            }
+                        },
+                    }
+                }
+            },
+        )?;
+
+        let estimated_fees_without_extra_fra_ip_op = FEE_CALCULATING_FUNC(
             self.inputs.len() as u32,
-            (self.outputs.len() + 1) as u32,
+            (self.outputs.len() + extra_remainders) as u32,
         ) as u64;
 
-        let mut fra_input_sum: u64 = 0;
-        let mut fra_output_sum: u64 = 0;
+        let fra_extra_output_sum =
+            fra_output_sum + estimated_fees_without_extra_fra_ip_op;
+        match fra_input_sum.cmp(&fra_extra_output_sum) {
+            Ordering::Equal => Ok(0u64),
+            Ordering::Greater => {
+                let estimated_fees_with_fra_remainder = FEE_CALCULATING_FUNC(
+                    self.inputs.len() as u32,
+                    (self.outputs.len() + extra_remainders + 1) as u32,
+                ) as u64;
 
-        for input in &self.inputs {
-            if ASSET_TYPE_FRA == input.get_asset_type() {
-                fra_input_sum += input.get_amount();
+                if fra_input_sum >= (fra_output_sum + estimated_fees_with_fra_remainder)
+                {
+                    Ok(0u64)
+                } else {
+                    let estimated_fees_with_extra_input_and_remainder =
+                        FEE_CALCULATING_FUNC(
+                            (self.inputs.len() + 1) as u32,
+                            (self.outputs.len() + extra_remainders + 1) as u32,
+                        ) as u64;
+
+                    Ok(
+                        fra_output_sum + estimated_fees_with_extra_input_and_remainder
+                            - fra_input_sum,
+                    )
+                }
+            }
+            Ordering::Less => {
+                // case where input is insufficient
+                let estimated_fees_with_extra_input_and_remainder = FEE_CALCULATING_FUNC(
+                    (self.inputs.len() + 1) as u32,
+                    (self.outputs.len() + extra_remainders + 1) as u32,
+                )
+                    as u64;
+                Ok(
+                    fra_output_sum + estimated_fees_with_extra_input_and_remainder
+                        - fra_input_sum,
+                )
             }
         }
+    }
 
-        for output in &self.outputs {
-            if ASSET_TYPE_FRA == output.get_asset_type() {
-                fra_output_sum += output.get_amount();
+    #[allow(missing_docs)]
+    pub fn get_total_fee_estimation(&self) -> Result<u64> {
+        let input_sums =
+            self.inputs
+                .iter()
+                .fold(HashMap::new(), |mut asset_amounts, i| {
+                    let sum = asset_amounts.entry(i.get_asset_type()).or_insert(0u64);
+                    *sum += i.get_amount();
+                    asset_amounts
+                });
+        let output_sums =
+            self.outputs
+                .iter()
+                .fold(HashMap::new(), |mut asset_amounts, o| {
+                    let sum = asset_amounts.entry(o.get_asset_type()).or_insert(0u64);
+                    *sum += o.get_amount();
+                    asset_amounts
+                });
+
+        let fra_input_sum = *input_sums.get(&ASSET_TYPE_FRA).unwrap_or(&0u64);
+        let fra_output_sum = *output_sums.get(&ASSET_TYPE_FRA).unwrap_or(&0u64);
+        if output_sums.len() > input_sums.len() {
+            return Err(eg!("Output assets cannot be more than input assets"));
+        }
+
+        let extra_remainders = input_sums.iter().try_fold(
+            0usize,
+            |extra_remainders, (asset, inp_amount)| {
+                if *asset == ASSET_TYPE_FRA {
+                    Ok(extra_remainders)
+                } else {
+                    match output_sums.get(asset) {
+                        None => Ok(extra_remainders + 1),
+                        Some(op_sum) => match op_sum.cmp(inp_amount) {
+                            Ordering::Equal => Ok(extra_remainders),
+                            Ordering::Less => Ok(extra_remainders + 1),
+                            Ordering::Greater => {
+                                Err(eg!("Output cannot be greater than Input"))
+                            }
+                        },
+                    }
+                }
+            },
+        )?;
+
+        let estimated_fees_without_extra_fra_ip_op = FEE_CALCULATING_FUNC(
+            self.inputs.len() as u32,
+            (self.outputs.len() + extra_remainders) as u32,
+        ) as u64;
+
+        let fra_extra_output_sum =
+            fra_output_sum + estimated_fees_without_extra_fra_ip_op;
+        match fra_input_sum.cmp(&fra_extra_output_sum) {
+            Ordering::Equal => Ok(fra_input_sum - fra_output_sum),
+            Ordering::Greater => {
+                let estimated_fees_with_fra_remainder = FEE_CALCULATING_FUNC(
+                    self.inputs.len() as u32,
+                    (self.outputs.len() + extra_remainders + 1) as u32,
+                ) as u64;
+
+                if fra_input_sum >= (fra_output_sum + estimated_fees_with_fra_remainder)
+                {
+                    Ok(estimated_fees_with_fra_remainder)
+                } else {
+                    let estimated_fees_with_extra_input_and_remainder =
+                        FEE_CALCULATING_FUNC(
+                            (self.inputs.len() + 1) as u32,
+                            (self.outputs.len() + extra_remainders + 1) as u32,
+                        ) as u64;
+
+                    Ok(estimated_fees_with_extra_input_and_remainder)
+                }
             }
-        }
-
-        if fra_output_sum > fra_input_sum {
-            let fra_deficient = fra_output_sum - fra_input_sum;
-            let new_estimated_fee = FEE_CALCULATING_FUNC(
-                self.inputs.len() as u32 + 1,
-                self.outputs.len() as u32 + 1,
-            ) as u64;
-            return new_estimated_fee + fra_deficient;
-        }
-
-        let fra_excess = fra_input_sum - fra_output_sum;
-
-        if estimated_fees > fra_excess {
-            let new_estimated_fee = FEE_CALCULATING_FUNC(
-                self.inputs.len() as u32 + 1,
-                self.outputs.len() as u32 + 1,
-            ) as u64;
-            new_estimated_fee - fra_excess
-        } else {
-            0u64
+            Ordering::Less => {
+                // case where input is insufficient
+                let estimated_fees_with_extra_input_and_remainder = FEE_CALCULATING_FUNC(
+                    (self.inputs.len() + 1) as u32,
+                    (self.outputs.len() + extra_remainders + 1) as u32,
+                )
+                    as u64;
+                Ok(estimated_fees_with_extra_input_and_remainder)
+            }
         }
     }
 
@@ -1651,60 +1799,102 @@ impl AnonTransferOperationBuilder {
 
     /// build generates the anon transfer body with the Zero Knowledge Proof.
     pub fn build(&mut self) -> Result<&mut Self> {
-        let mut prng = ChaChaRng::from_entropy();
-
-        if self.keypair.is_none() {
-            return Err(eg!("keypair not set for build"));
+        if self.inputs.len() > 5 {
+            return Err(eg!("Total inputs (incl. fees) cannot be greater than 5"));
         }
-        let keypair = self.keypair.as_ref().unwrap();
-
-        let mut sum_input = 0;
-        let mut sum_output = 0;
-        for input in self.inputs.clone() {
-            if ASSET_TYPE_FRA == input.get_asset_type() {
-                sum_input += input.get_amount();
-            }
-        }
-        for output in self.outputs.clone() {
-            if ASSET_TYPE_FRA == output.get_asset_type() {
-                sum_output += output.get_amount();
-            }
-        }
-        let fees = FEE_CALCULATING_FUNC(
-            self.inputs.len() as u32,
-            self.outputs.len() as u32 + 1,
-        );
-        if sum_output + (fees as u64) > sum_input {
-            return Err(eg!("Insufficient FRA balance to pay fees"));
-        }
-        let remainder = sum_input - sum_output - (fees as u64);
-
-        let oabar_money_back = OpenAnonAssetRecordBuilder::new()
-            .amount(remainder)
-            .asset_type(ASSET_TYPE_FRA)
-            .pub_key(&keypair.get_public_key())
-            .finalize(&mut prng)
-            .unwrap()
-            .build()
-            .unwrap();
-
-        let commitment = get_abar_commitment(oabar_money_back.clone());
-        self.outputs.push(oabar_money_back);
-        self.commitments.push(commitment);
-
         if self.outputs.len() > 5 {
             return Err(eg!(
                 "Total outputs (incl. remainders) cannot be greater than 5"
             ));
         }
 
+        if self.keypair.is_none() {
+            return Err(eg!("keypair not set for build"));
+        }
+        let keypair = self.keypair.as_ref().unwrap();
+        
+        let mut prng = ChaChaRng::from_entropy();
+        let input_asset_list: HashSet<AssetType> = self
+            .inputs
+            .iter()
+            .map(|a| a.get_asset_type())
+            .collect::<Vec<AssetType>>()
+            .drain(..)
+            .collect();
+        let mut fees_in_fra = 0u32;
+
+        for asset in input_asset_list {
+            let mut sum_input = 0;
+            let mut sum_output = 0;
+            for input in self.inputs.clone() {
+                if asset == input.get_asset_type() {
+                    sum_input += input.get_amount();
+                }
+            }
+            for output in self.outputs.clone() {
+                if asset == output.get_asset_type() {
+                    sum_output += output.get_amount();
+                }
+            }
+
+            let fees = if asset == ASSET_TYPE_FRA {
+                fees_in_fra = FEE_CALCULATING_FUNC(
+                    self.inputs.len() as u32,
+                    self.outputs.len() as u32,
+                );
+                fees_in_fra as u64
+            } else {
+                0u64
+            };
+
+            if sum_output + fees > sum_input {
+                return if asset == ASSET_TYPE_FRA {
+                    Err(eg!(
+                        "Insufficient FRA balance to pay fees {} + {} > {}",
+                        sum_output,
+                        fees,
+                        sum_input
+                    ))
+                } else {
+                    Err(eg!(
+                        "Insufficient {:?} balance to pay fees {} + {} > {}",
+                        asset,
+                        sum_output,
+                        fees,
+                        sum_input
+                    ))
+                };
+            }
+
+            let remainder = sum_input - sum_output - (fees as u64);
+            if remainder > 0 {
+                let oabar_money_back = OpenAnonAssetRecordBuilder::new()
+                    .amount(remainder)
+                    .asset_type(asset)
+                    .pub_key(&keypair.get_public_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap();
+
+                let commitment = get_abar_commitment(oabar_money_back.clone());
+                self.outputs.push(oabar_money_back);
+                self.commitments.push(commitment);
+            }
+        }
+
+        if self.outputs.len() > 5 {
+            return Err(eg!(
+                "Total outputs (incl. remainders) cannot be greater than 5"
+            ));
+        }
         let note = init_anon_xfr_note(
             self.inputs.as_slice(),
             self.outputs.as_slice(),
-            fees,
+            fees_in_fra,
             &keypair,
         )
-        .c(d!())?;
+        .c(d!("error from init_anon_xfr_note"))?;
 
         self.pre_note = Some(note);
 
@@ -2318,5 +2508,372 @@ mod tests {
             .build()
             .unwrap();
         (oabar, keypair)
+    }
+
+    #[test]
+    pub fn test_extra_fee_estimation_only_fra() {
+        let mut prng = ChaChaRng::from_seed([0u8; 32]);
+        let k = AXfrKeyPair::generate(&mut prng);
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let _fee = FEE_CALCULATING_FUNC(1, 1) as u64;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), 0);
+        }
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+
+            let _ = b.add_output(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+            );
+
+            let fee = FEE_CALCULATING_FUNC(2, 2) as u64;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), fee);
+        }
+        {
+            // case with perfect balance for fee
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+
+            let _ = b.add_output(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(200000)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+            );
+
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), 0);
+        }
+        {
+            // case where input is insufficient
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(10)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let _ = b.add_output(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(200000)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+            );
+
+            let extra_fra = FEE_CALCULATING_FUNC(2, 2) as u64 + 200000 - 10;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), extra_fra);
+        }
+    }
+
+    #[test]
+    pub fn test_extra_fee_estimation_multi_asset() {
+        let mut prng = ChaChaRng::from_seed([0u8; 32]);
+        let k = AXfrKeyPair::generate(&mut prng);
+
+        let asset1 = AT::from_identical_byte(1u8);
+        let _asset2 = AT::from_identical_byte(2u8);
+
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let extra_fra = FEE_CALCULATING_FUNC(2, 2) as u64;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), extra_fra);
+        }
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1100000)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let extra_fra = FEE_CALCULATING_FUNC(2, 2) as u64 - 1100000;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), extra_fra);
+        }
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let _ = b.add_output(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+            );
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1100000)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let extra_fra = FEE_CALCULATING_FUNC(2, 2) as u64 - 1100000;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), extra_fra);
+        }
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let _ = b.add_output(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+            );
+            let fee = FEE_CALCULATING_FUNC(2, 1) as u64;
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(fee)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let extra_fra = FEE_CALCULATING_FUNC(2, 1) as u64 - fee;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), extra_fra);
+        }
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let _ = b.add_output(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(900000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+            );
+            let fee = FEE_CALCULATING_FUNC(2, 2) as u64;
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(fee)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let extra_fra = FEE_CALCULATING_FUNC(2, 2) as u64 - fee;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), extra_fra);
+        }
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(800000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let _ = b.add_output(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(900000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+            );
+            let fee = FEE_CALCULATING_FUNC(2, 2) as u64;
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(fee)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            assert!(b.extra_fee_estimation().is_err());
+        }
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let _ = b.add_output(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(900000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+            );
+            let fee = FEE_CALCULATING_FUNC(2, 3) as u64;
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(2 * fee)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k,
+            );
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), 0);
+        }
     }
 }

@@ -319,6 +319,15 @@ impl QueryServer {
         self.ledger_cloned.check_nullifier_hash(null_hash).ok()
     }
 
+    /// Returns a int value from the max ATxoSid
+    #[inline(always)]
+    pub fn max_atxo_sid(&self) -> Option<usize> {
+        self.ledger_cloned
+            .api_cache
+            .as_ref()
+            .and_then(|api| Option::from(api.abar_memos.len().saturating_sub(1)))
+    }
+
     /// retrieve block reward rate at specified block height
     #[inline(always)]
     pub fn query_block_rewards_rate(&self, height: &BlockHeight) -> Option<[u128; 2]> {

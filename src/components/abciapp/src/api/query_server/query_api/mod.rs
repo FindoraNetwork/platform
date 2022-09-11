@@ -11,6 +11,7 @@ pub mod service;
 use {
     actix_cors::Cors,
     actix_web::{error, middleware, web, App, HttpServer},
+    config::abci::{global_cfg::CFG, CheckPointConfig},
     finutils::api::NetworkRoute,
     globutils::wallet,
     ledger::{
@@ -184,6 +185,13 @@ async fn check_nullifier_hash(
     Ok(web::Json(server.check_nullifier_hash((*info).clone())))
 }
 
+async fn get_max_atxo_sid(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+) -> actix_web::Result<web::Json<Option<usize>>, actix_web::error::Error> {
+    let server = data.read();
+    Ok(web::Json(server.max_atxo_sid()))
+}
+
 /// Define interface type
 #[allow(missing_docs)]
 pub enum QueryServerRoutes {
@@ -197,6 +205,7 @@ pub enum QueryServerRoutes {
     GetAbarMemos,
     GetAbarProof,
     CheckNullifierHash,
+    GetMaxATxoSid,
     GetCreatedAssets,
     GetIssuedRecords,
     GetIssuedRecordsByCode,
@@ -223,6 +232,7 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetAbarMemos => "get_abar_memos",
             QueryServerRoutes::GetAbarProof => "get_abar_proof",
             QueryServerRoutes::CheckNullifierHash => "check_nullifier_hash",
+            QueryServerRoutes::GetMaxATxoSid => "get_max_atxo_sid",
             QueryServerRoutes::GetCreatedAssets => "get_created_assets",
             QueryServerRoutes::GetIssuedRecords => "get_issued_records",
             QueryServerRoutes::GetIssuedRecordsByCode => "get_issued_records_by_code",
@@ -239,7 +249,7 @@ impl NetworkRoute for QueryServerRoutes {
 pub async fn get_created_assets(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
-) -> actix_web::Result<web::Json<Vec<(AssetTypeCode, DefineAsset)>>> {
+) -> actix_web::Result<web::Json<Vec<DefineAsset>>> {
     // Convert from base64 representation
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
@@ -248,8 +258,17 @@ pub async fn get_created_assets(
     )
     .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
     let server = data.read();
-    let assets = server.get_created_assets(&IssuerPublicKey { key });
-    Ok(web::Json(assets.unwrap_or_default()))
+    let mut assets_tuple = server
+        .get_created_assets(&IssuerPublicKey { key })
+        .unwrap_or_default();
+
+    let mut das = vec![];
+    for (code, da) in assets_tuple.iter_mut() {
+        da.body.asset.code = *code;
+        das.push(da.clone());
+    }
+
+    Ok(web::Json(das))
 }
 
 /// Returns the list of records issued by a public key
@@ -563,6 +582,17 @@ pub async fn get_total_supply(
     Ok(web::Json(res))
 }
 
+#[allow(missing_docs)]
+pub async fn get_checkpoint(
+) -> actix_web::Result<web::Json<CheckPointConfig>, actix_web::error::Error> {
+    let mut checkpoint = CFG.checkpoint.clone();
+
+    if let Ok(sc) = module_evm::system_contracts::SystemContracts::new() {
+        checkpoint.prism_bridge_address = format!("{:?}", sc.bridge_address)
+    }
+
+    Ok(web::Json(checkpoint))
+}
 /// Structures exposed to the outside world
 pub struct QueryApi;
 
@@ -629,6 +659,10 @@ impl QueryApi {
                     &QueryServerRoutes::CheckNullifierHash
                         .with_arg_template("null_hash"),
                     web::get().to(check_nullifier_hash),
+                )
+                .route(
+                    &QueryServerRoutes::GetMaxATxoSid.route(),
+                    web::get().to(get_max_atxo_sid),
                 )
                 .route(
                     &QueryServerRoutes::GetRelatedTxns.with_arg_template("address"),
@@ -746,6 +780,10 @@ impl QueryApi {
                 .route(
                     &ApiRoutes::ValidatorDetail.with_arg_template("NodeAddress"),
                     web::get().to(query_validator_detail),
+                )
+                .service(
+                    web::resource("/display_checkpoint")
+                        .route(web::get().to(get_checkpoint)),
                 )
         });
 

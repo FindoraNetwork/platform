@@ -6,8 +6,8 @@ BLU='\033[34m'
 NC='\033[0m'
 
 # default environment values
-DEFAULT_BIN_CFG="debug"
-DEFAULT_BLOCK_INTERVAL="5"
+DEFAULT_BIN_CFG="release"
+DEFAULT_BLOCK_INTERVAL="2"
 DEFAULT_ENDPOINT="http://0.0.0.0"
 
 # binary config
@@ -18,11 +18,12 @@ export BIN="target/$BIN_CFG"
 export BLOCK_INTERVAL="${BLOCK_INTERVAL:=$DEFAULT_BLOCK_INTERVAL}"
 export ENDPOINT="${ENDPOINT:=$DEFAULT_ENDPOINT}"
 
-# paths
+# paths and misc
 TMP_DEBUG=/tmp/findora
 export FIN_DEBUG="${FIN_DEBUG:=$TMP_DEBUG}"
 export DEVNET="$FIN_DEBUG/devnet"
 export WALLET="$HOME/.findora"
+export EVM_FIRST_BLOCK_HEIGHT="${EVM_FIRST_BLOCK_HEIGHT:=1}"
 
 # logs
 ABCI_LOG_LEVEL="abciapp=info,baseapp=info,account=info,ethereum=info,evm=info,eth_rpc=info"

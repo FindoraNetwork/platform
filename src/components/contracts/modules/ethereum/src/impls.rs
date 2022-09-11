@@ -2,7 +2,8 @@ use crate::storage::*;
 use crate::{App, Config, ContractLog, TransactionExecuted};
 use config::abci::global_cfg::CFG;
 use ethereum::{
-    BlockV0 as Block, LegacyTransactionMessage, Receipt, TransactionV0 as Transaction,
+    BlockV0 as Block, LegacyTransactionMessage, ReceiptV0 as Receipt,
+    TransactionV0 as Transaction,
 };
 use ethereum_types::{Bloom, BloomInput, H160, H256, H64, U256};
 use evm::{ExitFatal, ExitReason};
@@ -272,7 +273,7 @@ impl<C: Config> App<C> {
             info!(target: "ethereum", "evm execute result: reason {:?} status {:?} used_gas {}", reason, status, used_gas);
         }
 
-        let receipt = ethereum::Receipt {
+        let receipt = ethereum::ReceiptV0 {
             state_root: match reason {
                 ExitReason::Succeed(_) => H256::from_low_u64_be(1),
                 ExitReason::Error(_) => H256::from_low_u64_le(0),
@@ -388,7 +389,7 @@ impl<C: Config> App<C> {
         &self,
         ctx: &Context,
         id: Option<BlockId>,
-    ) -> Option<Vec<ethereum::Receipt>> {
+    ) -> Option<Vec<ethereum::ReceiptV0>> {
         let hash = HA256::new(Self::block_hash(ctx, id).unwrap_or_default());
         CurrentReceipts::get(ctx.db.read().borrow(), &hash)
     }

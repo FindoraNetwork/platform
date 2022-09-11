@@ -3,7 +3,7 @@ source tools/regression/triple_masking/scripts/env.sh
 
 echo -e "${YEL}Setup environment for triple masking testing${NC}"
 
-let SLEEP_INTERVAL=($BLOCK_INTERVAL + 1)
+let SLEEP_INTERVAL=($BLOCK_INTERVAL + 2)
 
 # Start Nodes and initialize wallet
 ./$DEVNET_TOOLS_PATH/resetnodes.sh

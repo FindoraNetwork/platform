@@ -84,13 +84,13 @@ sleep $TM_SLEEP
 echo "\n ***** Issue Asset & FRA successfully! ***** "
 
 #Verify balance for custom assets
-python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 100000000 --asset $ASSET1
+python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 100000000 --asset="$ASSET1"
 if [ $? != 0 ];
 then
     exit 1
 fi
 echo
-python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 100000000 --asset $ASSET2
+python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 100000000 --asset="$ASSET2"
 if [ $? != 0 ];
 then
     exit 1
@@ -114,25 +114,25 @@ echo "waiting block time..."
 sleep $TM_SLEEP
 
 #Verify balance for custom assets
-python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 0 --asset $ASSET1
+python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 0 --asset="$ASSET1"
 if [ $? != 0 ];
 then
     exit 1
 fi
 commitmentAsset1=$(tail -n 2 owned_commitments | head -n 1)
-python3 $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS --commitments $commitmentAsset1 --amount 100000000 --asset $ASSET1
+python3 $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS --commitments $commitmentAsset1 --amount 100000000 --asset="$ASSET1"
 if [ $? != 0 ];
 then
     exit 1
 fi
 echo
-python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 0 --asset $ASSET2
+python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 0 --asset="$ASSET2"
 if [ $? != 0 ];
 then
     exit 1
 fi
 commitmentAsset2=$(tail -n 1 owned_commitments)
-python3 $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS --commitments $commitmentAsset2 --amount 100000000 --asset $ASSET2
+python3 $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS --commitments $commitmentAsset2 --amount 100000000 --asset="$ASSET2"
 if [ $? != 0 ];
 then
     exit 1

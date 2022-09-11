@@ -105,7 +105,7 @@ pub mod sha256 {
 
 #[repr(C)]
 #[allow(missing_docs)]
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct HashValue {
     pub hash: [u8; HASH_SIZE],
 }

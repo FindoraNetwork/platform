@@ -12,14 +12,27 @@ use {
     ledger::data_model::TX_FEE_MIN,
 };
 
-pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result<()> {
+pub fn init(
+    mut interval: u64,
+    is_mainnet: bool,
+    skip_validator: bool,
+    staking_info_file: Option<&str>,
+    only_init: bool,
+) -> Result<()> {
     if 0 == interval {
-        interval = BLOCK_INTERVAL;
+        interval = *BLOCK_INTERVAL;
     }
 
     if !skip_validator {
-        println!(">>> Set initial validator set ...");
-        common::set_initial_validators().c(d!())?;
+        if staking_info_file.is_some() {
+            println!(">>> Set initial validator set (Customed) ...");
+        } else {
+            println!(">>> Set initial validator set ...");
+        }
+        common::set_initial_validators(staking_info_file).c(d!())?;
+        if only_init {
+            return Ok(());
+        }
     }
 
     if is_mainnet {
@@ -64,6 +77,10 @@ pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result
 
         println!(">>> Wait 1.2 block ...");
         sleep_n_block!(1.2);
+
+        if staking_info_file.is_some() {
+            return Ok(());
+        }
 
         println!(">>> Re-distribution ...");
         println!(">>> Wait 2.4 block ...");

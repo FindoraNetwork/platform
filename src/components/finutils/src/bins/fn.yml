@@ -1,7 +1,7 @@
 name: fn
 version: "1.0"
 author: develop@FindoraNetwork.org
-about: A command line tool in Findora network
+about: A command line tool of the Findora Network
 
 args:
   - version:
@@ -206,6 +206,7 @@ subcommands:
             long: asset
             takes_value: true
             value_name: ASSET
+            allow_hyphen_values: true
         - from-seckey:
             help: the file which contains base64-formated `XfrPrivateKey` of the receiver
             short: f
@@ -290,6 +291,7 @@ subcommands:
             long: asset
             takes_value: true
             value_name: ASSET
+            allow_hyphen_values: true
             conflicts_with:
               - create
         - seckey:
@@ -360,6 +362,7 @@ subcommands:
             long: code
             takes_value: true
             value_name: ASSET CODE
+            allow_hyphen_values: true
         - addr:
             help: Findora wallet address
             long: addr
@@ -434,6 +437,7 @@ subcommands:
             long: asset
             takes_value: true
             value_name: ASSET
+            allow_hyphen_values: true
   - contract-deposit:
       about: Transfer FRA from a Findora account to the specified Ethereum address
       args:
@@ -522,6 +526,7 @@ subcommands:
             long: asset
             takes_value: true
             value_name: ASSET
+            allow_hyphen_values: true
   - anon-balance:
       about: List Anon balance and spending status for a public key and a list of commitments
       args:
@@ -545,6 +550,7 @@ subcommands:
             long: asset
             takes_value: true
             value_name: ASSET
+            allow_hyphen_values: true
   - owned-open-abars:
       about: Get Open Anon UTXOs for a keypair use commitment
       args:
@@ -571,6 +577,7 @@ subcommands:
             long: asset
             takes_value: true
             value_name: ASSET
+            allow_hyphen_values: true
   - convert-bar-to-abar:
       about: Convert a BAR to Anon BAR for yourself
       args:
@@ -760,3 +767,159 @@ subcommands:
             value_name: TENDERMINT PUBKEY
             required: false
             allow_hyphen_values: true
+  - dev:
+      about: Manage development clusters on your localhost
+      args:
+        - env_name:
+            help: The name of the target env
+            short: e
+            long: env-name
+            takes_value: true
+            value_name: ENV NAME
+            required: false
+      subcommands:
+        - create:
+            about: Create a new env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+              - block_itv_secs:
+                  help: Block interval in seconds
+                  short: i
+                  long: block-itv-secs
+                  takes_value: true
+                  value_name: BLOCK INTERVAL
+                  required: false
+              - validator_num:
+                  help: How many initial validators should be created
+                  short: N
+                  long: validator-num
+                  takes_value: true
+                  value_name: VALIDATOR NUMBER
+                  required: false
+              - evm_chain_id:
+                  help: The chain id in the scope of evm logic
+                  short: I
+                  long: evm-chain-id
+                  takes_value: true
+                  value_name: EVM CHAIN ID
+                  required: false
+              - checkpoint_file:
+                  help: The file path of the checkpoint file
+                  short: c
+                  long: checkpoint-file
+                  takes_value: true
+                  value_name: CHECKPOINT FILE
+                  required: false
+              - abcid_extra_flags:
+                  help: A pair of quotes should be used when specifying extra flags
+                  short: E
+                  long: abcid-extra-flags
+                  takes_value: true
+                  value_name: ABCID EXTRA FLAGS
+                  allow_hyphen_values: true
+                  required: false
+              - host_ip:
+                  help: The IP of your local host, default to 127.0.0.1
+                  short: H
+                  long: host-ip
+                  takes_value: true
+                  value_name: HOST IP
+                  required: false
+              - tendermint_bin_path:
+                  help: The path of your custom tendermint binary
+                  short: T
+                  long: tendermint-bin-path
+                  takes_value: true
+                  value_name: TENDERMINT BIN PATH
+                  required: false
+              - abcid_bin_path:
+                  help: The path of your custom abcid binary
+                  short: A
+                  long: abcid-bin-path
+                  takes_value: true
+                  value_name: ABCID BIN PATH
+                  required: false
+        - destroy:
+            about: Destroy an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - destroy-all:
+            about: Destroy all existing ENVs
+        - start:
+            about: Start an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - stop:
+            about: Stop an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - add-node:
+            about: Attach a new node to an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - del-node:
+            about: Pop a node from an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - info:
+            about: Default operation, show the information of an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - info-all:
+            about: Show the details of all existing ENVs
+        - list:
+            about: List the names of all existing ENVs
+        - init:
+            about: Config the initial settings(POS,FRA issuance...)
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - init-all:
+            about: Apply the `init` operation to all existing ENVs

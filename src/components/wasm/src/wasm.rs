@@ -517,7 +517,7 @@ impl TransactionBuilder {
         let oar = open_bar(
             input_record.get_bar_ref(),
             &owner_memo.map(|memo| memo.get_memo_ref().clone()),
-            &auth_key_pair,
+            &auth_key_pair.clone(),
         )
         .c(d!())
         .map_err(|e| {
@@ -534,8 +534,8 @@ impl TransactionBuilder {
             .get_builder_mut()
             .add_operation_bar_to_abar(
                 seed,
-                auth_key_pair,
-                &abar_pubkey,
+                &auth_key_pair.clone(),
+                &abar_pubkey.clone(),
                 TxoSID(txo_sid),
                 &oar,
                 is_bar_transparent,
@@ -564,7 +564,7 @@ impl TransactionBuilder {
         owner_memo: AxfrOwnerMemo,
         mt_leaf_info: MTLeafInfo,
         from_keypair: &AXfrKeyPair,
-        recipient: XfrPublicKey,
+        recipient: &XfrPublicKey,
         conf_amount: bool,
         conf_type: bool,
     ) -> Result<TransactionBuilder, JsValue> {
@@ -599,7 +599,12 @@ impl TransactionBuilder {
         };
 
         self.get_builder_mut()
-            .add_operation_abar_to_bar(&oabar, &from_keypair.clone(), &recipient, art)
+            .add_operation_abar_to_bar(
+                &oabar,
+                &from_keypair.clone(),
+                &recipient.clone(),
+                art,
+            )
             .c(d!())
             .map_err(|e| {
                 JsValue::from_str(&format!(
@@ -638,7 +643,7 @@ impl TransactionBuilder {
         owner_memo: AxfrOwnerMemo,
         mt_leaf_info: MTLeafInfo,
         from_keypair: &AXfrKeyPair,
-        to_pub_key: AXfrPubKey,
+        to_pub_key: &AXfrPubKey,
         to_amount: u64,
     ) -> Result<TransactionBuilder, JsValue> {
         let mut prng = ChaChaRng::from_entropy();
@@ -664,7 +669,7 @@ impl TransactionBuilder {
         let output_oabar = OpenAnonAssetRecordBuilder::new()
             .amount(to_amount)
             .asset_type(input_oabar.get_asset_type())
-            .pub_key(&to_pub_key)
+            .pub_key(&to_pub_key.clone())
             .finalize(&mut prng)
             .c(d!())
             .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
@@ -1403,8 +1408,17 @@ impl AnonTransferOperationBuilder {
 
     /// get_expected_fee is used to gather extra FRA that needs to be spent to make the transaction
     /// have enough fees.
-    pub fn get_expected_fee(&self) -> u64 {
-        self.get_builder().extra_fee_estimation()
+    pub fn get_expected_fee(&self) -> Result<u64, JsValue> {
+        self.get_builder()
+            .extra_fee_estimation()
+            .map_err(error_to_jsvalue)
+    }
+
+    /// get_total_fee_estimate
+    pub fn get_total_fee_estimate(&self) -> Result<u64, JsValue> {
+        self.get_builder()
+            .get_total_fee_estimation()
+            .map_err(error_to_jsvalue)
     }
 
     /// get_commitments returns a list of all the commitments for receiver public keys
@@ -1431,7 +1445,7 @@ impl AnonTransferOperationBuilder {
     pub fn build(mut self) -> Result<AnonTransferOperationBuilder, JsValue> {
         self.get_builder_mut()
             .build()
-            .c(d!())
+            .c(d!("error in txn_builder: build"))
             .map_err(error_to_jsvalue)?;
 
         self.get_builder_mut()
@@ -2247,7 +2261,7 @@ mod test {
 
         let estimated_fees_gt_fra_excess = ts.get_expected_fee();
 
-        assert!(estimated_fees_gt_fra_excess > 0);
+        assert!(estimated_fees_gt_fra_excess.unwrap() > 0);
 
         let (mut oabar_2, keypair_in_2) =
             gen_oabar_and_keys(&mut prng, 2 * amount, asset_type);
@@ -2256,7 +2270,7 @@ mod test {
 
         let fra_excess_gt_fees_estimation = ts.get_expected_fee();
 
-        assert_eq!(fra_excess_gt_fees_estimation, 0);
+        assert_eq!(fra_excess_gt_fees_estimation, Ok(0));
     }
 
     fn gen_oabar_and_keys<R: CryptoRng + RngCore>(

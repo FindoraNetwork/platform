@@ -29,6 +29,7 @@ echo -e "${GRN}step-1: run network----------------------------------------------
 ./$cleannodes
 ./$startnodes
 sleep $BLOCK_INTERVAL
+sleep 2
 echo
 
 # init network
