@@ -223,9 +223,19 @@ impl Env {
     fn create(cfg: &EnvCfg) -> Result<Env> {
         let home = format!("{}/envs/{}", ENV_BASE_DIR, &cfg.name);
 
+        if cfg.force_create {
+            info_omit!(Env::load_cfg(cfg)
+                .c(d!())
+                .and_then(|env| env.destroy().c(d!())));
+        }
+
+        if fs::metadata(&home).is_ok() {
+            return Err(eg!("Another env with the same name exists!"));
+        }
+
         let mut env = Env {
             name: cfg.name.clone(),
-            home: home.clone(),
+            home,
             block_itv_secs: cfg.block_itv_secs,
             evm_chain_id: cfg.evm_chain_id,
             checkpoint_file: cfg.checkpoint_file.clone(),
@@ -241,16 +251,6 @@ impl Env {
             tendermint_extra_flags: cfg.tendermint_extra_flags.clone(),
             ..Self::default()
         };
-
-        if cfg.force_create {
-            omit!(env.stop());
-            omit!(env.destroy());
-            omit!(fs::remove_dir_all(&home));
-        }
-
-        if fs::metadata(&home).is_ok() {
-            return Err(eg!("Another env with the same name exists!"));
-        }
 
         fs::create_dir_all(&env.home).c(d!())?;
 
