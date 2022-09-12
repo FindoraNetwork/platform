@@ -452,17 +452,23 @@ fn run() -> Result<()> {
             if let Some(file) = sm.value_of("checkpoint_file") {
                 envcfg.checkpoint_file = Some(file.to_owned());
             }
-            if let Some(flags) = sm.value_of("abcid_extra_flags") {
-                envcfg.abcid_extra_flags = Some(flags.to_owned());
-            }
             if let Some(ip) = sm.value_of("host_ip") {
                 envcfg.host_ip = Some(ip.to_owned());
+            }
+            if let Some(abcid_bin) = sm.value_of("abcid_bin_path") {
+                envcfg.abcid_bin = Some(abcid_bin.to_owned());
             }
             if let Some(tm_bin) = sm.value_of("tendermint_bin_path") {
                 envcfg.tendermint_bin = Some(tm_bin.to_owned());
             }
-            if let Some(abcid_bin) = sm.value_of("abcid_bin_path") {
-                envcfg.abcid_bin = Some(abcid_bin.to_owned());
+            if let Some(flags) = sm.value_of("abcid_extra_flags") {
+                envcfg.abcid_extra_flags = Some(flags.to_owned());
+            }
+            if let Some(flags) = sm.value_of("tendermint_extra_flags") {
+                envcfg.tendermint_extra_flags = Some(flags.to_owned());
+            }
+            if sm.is_present("force") {
+                envcfg.force_create = true;
             }
             Ops::Create
         } else if let Some(sm) = m.subcommand_matches("destroy") {

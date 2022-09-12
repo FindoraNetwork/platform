@@ -79,18 +79,23 @@ pub struct EnvCfg {
     // only used in `Ops::Create`
     pub checkpoint_file: Option<String>,
 
-    // only used in `Ops::Create`
-    pub abcid_extra_flags: Option<String>,
-
     // initialized once in `Ops::Create`,
     // default value: "127.0.0.1"
     pub host_ip: Option<String>,
 
+    // specify this option if you want to use a custom version of abcid
+    pub abcid_bin: Option<String>,
+
     // specify this option if you want to use a custom version of tendermint
     pub tendermint_bin: Option<String>,
 
-    // specify this option if you want to use a custom version of abcid
-    pub abcid_bin: Option<String>,
+    // only used in `Ops::Create`
+    pub abcid_extra_flags: Option<String>,
+
+    // only used in `Ops::Create`
+    pub tendermint_extra_flags: Option<String>,
+
+    pub force_create: bool,
 }
 
 impl Default for EnvCfg {
@@ -102,10 +107,12 @@ impl Default for EnvCfg {
             initial_validator_num: VALIDATORS_MIN as u8,
             evm_chain_id: 2152,
             checkpoint_file: None,
-            abcid_extra_flags: None,
             host_ip: None,
-            tendermint_bin: None,
             abcid_bin: None,
+            tendermint_bin: None,
+            abcid_extra_flags: None,
+            tendermint_extra_flags: None,
+            force_create: false,
         }
     }
 }
@@ -161,11 +168,16 @@ pub struct Env {
     #[serde(rename = "env_home_dir")]
     home: String,
 
+    // path of the abcid binary, default to 'abcid'
+    abcid_bin: String,
+
     // path of the tendermint binary, default to 'tendermint'
     tendermint_bin: String,
 
-    // path of the abcid binary, default to 'abcid'
-    abcid_bin: String,
+    // eg: `--disable-eth-empty-blocks`
+    abcid_extra_flags: Option<String>,
+
+    tendermint_extra_flags: Option<String>,
 
     // default value: "127.0.0.1"
     host_ip: String,
@@ -191,11 +203,6 @@ pub struct Env {
     // path of the checkpoint file, if any
     checkpoint_file: Option<String>,
 
-    // eg,
-    // - `--disable-eth-empty-blocks`
-    // - ...
-    abcid_extra_flags: Option<String>,
-
     #[serde(rename = "seed_nodes")]
     seeds: BTreeMap<NodeId, Node>,
 
@@ -216,27 +223,34 @@ impl Env {
     fn create(cfg: &EnvCfg) -> Result<Env> {
         let home = format!("{}/envs/{}", ENV_BASE_DIR, &cfg.name);
 
-        if fs::metadata(&home).is_ok() {
-            return Err(eg!("Another env with the same name exists!"));
-        }
-
         let mut env = Env {
             name: cfg.name.clone(),
-            home,
+            home: home.clone(),
             block_itv_secs: cfg.block_itv_secs,
             evm_chain_id: cfg.evm_chain_id,
             checkpoint_file: cfg.checkpoint_file.clone(),
-            abcid_extra_flags: cfg.abcid_extra_flags.clone(),
             initial_validator_num: cfg.initial_validator_num,
             host_ip: cfg.host_ip.as_deref().unwrap_or("127.0.0.1").to_owned(),
+            abcid_bin: cfg.abcid_bin.as_deref().unwrap_or("abcid").to_owned(),
             tendermint_bin: cfg
                 .tendermint_bin
                 .as_deref()
                 .unwrap_or("tendermint")
                 .to_owned(),
-            abcid_bin: cfg.abcid_bin.as_deref().unwrap_or("abcid").to_owned(),
+            abcid_extra_flags: cfg.abcid_extra_flags.clone(),
+            tendermint_extra_flags: cfg.tendermint_extra_flags.clone(),
             ..Self::default()
         };
+
+        if cfg.force_create {
+            omit!(env.stop());
+            omit!(env.destroy());
+            omit!(fs::remove_dir_all(&home));
+        }
+
+        if fs::metadata(&home).is_ok() {
+            return Err(eg!("Another env with the same name exists!"));
+        }
 
         fs::create_dir_all(&env.home).c(d!())?;
 
@@ -280,9 +294,10 @@ impl Env {
                     self.block_itv_secs,
                     self.evm_chain_id,
                     self.checkpoint_file.as_deref(),
-                    self.abcid_extra_flags.as_deref().unwrap_or_default(),
-                    &self.tendermint_bin,
                     &self.abcid_bin,
+                    &self.tendermint_bin,
+                    self.abcid_extra_flags.as_deref().unwrap_or_default(),
+                    self.tendermint_extra_flags.as_deref().unwrap_or_default(),
                 )
                 .c(d!())?;
             } else if let Some(n) = self.seeds.get_mut(i) {
@@ -291,9 +306,10 @@ impl Env {
                     self.block_itv_secs,
                     self.evm_chain_id,
                     self.checkpoint_file.as_deref(),
-                    self.abcid_extra_flags.as_deref().unwrap_or_default(),
-                    &self.tendermint_bin,
                     &self.abcid_bin,
+                    &self.tendermint_bin,
+                    self.abcid_extra_flags.as_deref().unwrap_or_default(),
+                    self.tendermint_extra_flags.as_deref().unwrap_or_default(),
                 )
                 .c(d!())?;
             } else {
@@ -807,16 +823,17 @@ impl Node {
         block_itv: u8,
         evm_chain_id: u64,
         checkpoint_file: Option<&str>,
-        abcid_extra_flags: &str,
-        tendermint_bin: &str,
         abcid_bin: &str,
+        tendermint_bin: &str,
+        abcid_extra_flags: &str,
+        tendermint_extra_flags: &str,
     ) -> Result<()> {
         self.stop().c(d!())?;
         match unsafe { fork() } {
             Ok(ForkResult::Child) => {
                 let mut cmd = format!(
-                    "{10} node --home {9} >>{9}/tendermint.log 2>&1 & \
-                    EVM_CHAIN_ID={0} FINDORA_BLOCK_ITV={1} {11} \
+                    "{11} node --home {9} {12} >>{9}/tendermint.log 2>&1 & \
+                    EVM_CHAIN_ID={0} FINDORA_BLOCK_ITV={1} {10} \
                         --enable-query-service \
                         --enable-eth-api-service \
                         --tendermint-host {2} \
@@ -838,8 +855,9 @@ impl Node {
                     self.ports.web3_http,
                     self.ports.web3_ws,
                     &self.home,
+                    abcid_bin,
                     tendermint_bin,
-                    abcid_bin
+                    tendermint_extra_flags,
                 );
                 if let Some(checkpoint) = checkpoint_file {
                     write!(cmd, r" --checkpoint-file {}", checkpoint).unwrap();
