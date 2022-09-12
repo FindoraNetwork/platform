@@ -227,6 +227,7 @@ impl Env {
             info_omit!(Env::load_cfg(cfg)
                 .c(d!())
                 .and_then(|env| env.destroy().c(d!())));
+            omit!(fs::remove_dir_all(&home));
         }
 
         if fs::metadata(&home).is_ok() {
@@ -988,7 +989,10 @@ fn alloc_ports(node_kind: &Kind, env_name: &str) -> Result<Ports> {
     let mut res = vec![];
     if matches!(node_kind, Kind::Node)
         && ENV_NAME_DEFAULT == env_name
-        && !PortsCache::contains(RESERVED_PORTS[0]).c(d!())?
+        && RESERVED_PORTS
+            .iter()
+            .copied()
+            .all(|p| !pnk!(PortsCache::contains(p)) && port_is_free(p))
     {
         res = RESERVED_PORTS.to_vec();
     } else {
@@ -1024,23 +1028,35 @@ fn alloc_ports(node_kind: &Kind, env_name: &str) -> Result<Ports> {
 }
 
 fn port_is_free(port: u16) -> bool {
-    info!(check_port(port)).is_ok()
+    let ret = check_port(port);
+    if ret.is_ok() {
+        true
+    } else {
+        println!(
+            "\n\x1b[33;01mNOTE: port {} can NOT be occupied!\x1b[00m",
+            port
+        );
+        info_omit!(ret);
+        false
+    }
 }
 
 fn check_port(port: u16) -> Result<()> {
-    let fd = socket(
-        AddressFamily::Inet,
-        SockType::Datagram,
-        SockFlag::empty(),
-        None,
-    )
-    .c(d!())?;
+    let check = |st: SockType| {
+        let fd = socket(AddressFamily::Inet, st, SockFlag::empty(), None).c(d!())?;
 
-    setsockopt(fd, sockopt::ReuseAddr, &true)
-        .c(d!())
-        .and_then(|_| setsockopt(fd, sockopt::ReusePort, &true).c(d!()))
-        .and_then(|_| bind(fd, &SockaddrIn::new(0, 0, 0, 0, port)).c(d!()))
-        .and_then(|_| close(fd).c(d!()))
+        setsockopt(fd, sockopt::ReuseAddr, &true)
+            .c(d!())
+            .and_then(|_| setsockopt(fd, sockopt::ReusePort, &true).c(d!()))
+            .and_then(|_| bind(fd, &SockaddrIn::new(0, 0, 0, 0, port)).c(d!()))
+            .and_then(|_| close(fd).c(d!()))
+    };
+
+    for st in [SockType::Datagram, SockType::Stream].into_iter() {
+        check(st).c(d!())?;
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize)]
