@@ -326,7 +326,10 @@ pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
 pub fn public_key_from_bech32(addr: &str) -> Result<XfrPublicKey> {
     bech32dec(addr)
         .c(d!())
-        .and_then(|bytes| XfrPublicKey::zei_from_bytes(&bytes).c(d!()))
+        .and_then(|bytes| {
+
+            XfrPublicKey::zei_from_bytes(&bytes).c(d!())
+        })
 }
 
 #[inline(always)]
@@ -347,10 +350,11 @@ fn bech32dec(input: &str) -> Result<Vec<u8>> {
             "fra" => {
                 let mut a = vec![0u8];
                 a.append(&mut d);
+                a.append(&mut vec![0u8]);
                 Ok(a)
             }
             "eth" => {
-                let mut a = vec![0u8];
+                let mut a = vec![1u8];
                 a.append(&mut d);
                 Ok(a)
             }

@@ -838,13 +838,13 @@ impl AnonKeys {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn spend_key(&self) -> String {
+    pub fn secret_key(&self) -> String {
         self.secret_key.clone()
     }
 
     #[wasm_bindgen(setter)]
-    pub fn set_spend_key(&mut self, spend_key: String) {
-        self.secret_key = spend_key;
+    pub fn set_secret_key(&mut self, secret_key: String) {
+        self.secret_key = secret_key;
     }
 
     #[wasm_bindgen(getter)]
