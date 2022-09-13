@@ -9,7 +9,6 @@ mod whoami;
 #[cfg(test)]
 mod test;
 
-use config::abci::global_cfg::CFG;
 use {
     crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
     abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate},
