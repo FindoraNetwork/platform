@@ -107,10 +107,6 @@ impl module_ethereum::Config for BaseApp {
     type Runner = module_evm::runtime::runner::ActionRunner<Self>;
 }
 
-// parameter_types! {
-//     pub PrecompilesValue: FindoraPrecompiles<BaseApp> = FindoraPrecompiles::<_>::new();
-// }
-
 pub struct PrecompilesValue;
 
 impl PrecompilesValue {
@@ -326,6 +322,17 @@ impl BaseApp {
     ) -> Result<()> {
         self.modules
             .process_findora_tx(&self.deliver_state, tx, H256::from_slice(hash))
+    }
+
+    fn update_deliver_state_cache(&mut self) {
+        // Clone newest cache from check_state to deliver_state
+        // Oldest cache will be dropped, currently drop cache two blocks ago
+        self.deliver_state.eth_cache.current = Default::default();
+        self.deliver_state.eth_cache.history_n =
+            self.deliver_state.eth_cache.history_1.clone();
+        // Deliver_state history_1 cache will share the newest transactions from check_state
+        self.deliver_state.eth_cache.history_1 =
+            self.check_state.eth_cache.current.clone();
     }
 
     pub fn consume_mint(&self) -> Option<Vec<NonConfidentialOutput>> {

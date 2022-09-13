@@ -33,12 +33,12 @@ define pack
 	- rm -rf $(1)
 	mkdir $(1)
 	cd $(1); for i in $(subdirs); do mkdir $$i; done
-	cp \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/findorad \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/abcid \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
-		./${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
+	cp -f \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/findorad \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/abcid \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/stt \
+		${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
 		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
 	cp -f $(1)/$(bin_dir)/* ~/.cargo/bin/
@@ -94,7 +94,7 @@ build_release_debug: tendermint_goleveldb
 	$(call pack,release)
 
 tendermint_cleveldb:
-	- rm $(shell which tendermint)
+	- rm -f $(shell which tendermint)
 	bash tools/download_tendermint.sh 'tools/tendermint'
 	mkdir -p $(shell go env GOPATH)/bin
 	cd tools/tendermint \
@@ -102,13 +102,14 @@ tendermint_cleveldb:
 		&& cp build/tendermint $(shell go env GOPATH)/bin/
 
 tendermint_goleveldb:
-	- rm $(shell which tendermint)
+	- rm -f $(shell which tendermint)
 	bash tools/download_tendermint.sh 'tools/tendermint'
 	cd tools/tendermint && $(MAKE) install
 
 test:
 	- find src -name "checkpoint.toml" | xargs rm -f
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
+	- find src -name "checkpoint.toml" | xargs rm -f
 
 coverage:
 	cargo tarpaulin --timeout=900 --branch --workspace --release \
@@ -130,6 +131,8 @@ lint:
 	cargo clippy --workspace --tests
 
 update:
+	git submodule update --recursive --init
+	rustup update stable
 	cargo update
 
 fmt:
@@ -140,10 +143,10 @@ fmtall:
 
 clean:
 	cargo clean
-	rm -rf tools/tendermint .git/modules/tools/tendermint
-	rm -rf debug release Cargo.lock
+	rm -rf debug release
 
 cleanall: clean
+	rm -rf tools/tendermint .git/modules/tools/tendermint
 	git clean -fdx
 
 wasm:
@@ -180,6 +183,9 @@ join_qa01: stop_debug_env build_release_goleveldb
 join_qa02: stop_debug_env build_release_goleveldb
 	bash tools/node_init.sh qa02
 
+join_qa03: stop_debug_env build_release_goleveldb
+	bash tools/node_init.sh qa03
+
 join_testnet: stop_debug_env build_release_goleveldb
 	bash tools/node_init.sh testnet
 
@@ -187,7 +193,7 @@ join_mainnet: stop_debug_env build_release_goleveldb
 	bash tools/node_init.sh mainnet
 
 start_localnode: stop_debug_env
-	bash tools/node_init.sh _ _
+	bash -x tools/node_init.sh _ _
 
 # ci_build_image:
 # 	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \

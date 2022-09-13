@@ -10,10 +10,6 @@ readme = "README.md"
 
 
 
-
-
-
-
 [dependencies]
 evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
 module-evm = { path = "../../../modules/evm"}
@@ -26,3 +22,11 @@ storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.2
 fp-core = { path = "../../../primitives/core" }
 parking_lot = "0.12"
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.2" }
+
+
+
+
+
+
+
+

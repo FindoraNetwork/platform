@@ -352,12 +352,12 @@ pub fn system_mint_pay(la: &LedgerState) -> Option<Transaction> {
             staking
                 .delegation_get_global_rewards()
                 .into_iter()
-                .chain(
-                    staking
-                        .fra_distribution_get_plan()
-                        .iter()
-                        .map(|(k, n)| (*k, *n)),
-                )
+	        .chain(
+	            staking
+	                .fra_distribution_get_plan()
+	                .iter()
+	                .map(|(k, n)| (*k, *n)),
+	    	)
                 .take_while(|(_, n)| {
                     limit -= *n as i128;
                     limit >= 0

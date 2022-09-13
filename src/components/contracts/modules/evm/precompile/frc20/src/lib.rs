@@ -12,9 +12,8 @@ use evm_precompile_utils::{
 };
 use fp_traits::{account::AccountAsset, evm::AddressMapping};
 use log::debug;
-use module_evm::precompile::PrecompileResult;
 use module_evm::{
-    precompile::{FinState, Precompile, PrecompileId},
+    precompile::{FinState, Precompile, PrecompileId, PrecompileResult},
     Config,
 };
 use slices::u8_slice;

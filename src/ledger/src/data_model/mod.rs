@@ -2189,8 +2189,10 @@ impl Transaction {
         Err(eg!())
     }
 
+    /// NOTE: This method is used to verify the signature in the transaction,
+    /// when the user constructs the transaction not only needs to sign each `operation`,
+    /// but also needs to sign the whole transaction, otherwise it will not be passed here
     #[inline(always)]
-    #[allow(missing_docs)]
     pub fn check_tx(&self) -> Result<()> {
         for operation in self.body.operations.iter() {
             match operation {
@@ -2229,7 +2231,12 @@ impl Transaction {
                 Operation::AbarToBar(_) => {}
                 Operation::TransferAnonAsset(_) => {}
                 Operation::ReplaceStaker(o) => {
-                    self.check_has_signature(&o.get_related_pubkeys()[0])?;
+                    // self.check_has_signature(&o.get_related_pubkeys()[0])?;
+                    if !o.get_related_pubkeys().is_empty() {
+                        for get_related_pubkey in o.get_related_pubkeys() {
+                            self.check_has_signature(&get_related_pubkey)?;
+                        }
+                    }
                 }
             }
         }

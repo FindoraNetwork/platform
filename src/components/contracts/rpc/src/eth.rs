@@ -4,7 +4,7 @@ use ethereum::{
     BlockV0 as EthereumBlock, LegacyTransactionMessage as EthereumTransactionMessage,
     LegacyTransactionMessage, TransactionV0 as EthereumTransaction,
 };
-use ethereum_types::{BigEndianHash, H160, H256, H512, H64, U256, U64};
+use ethereum_types::{BigEndianHash, Bloom, H160, H256, H512, H64, U256, U64};
 use evm::{ExitError, ExitReason};
 use fp_evm::{BlockId, Runner, TransactionStatus};
 use fp_rpc_core::types::{
@@ -24,6 +24,7 @@ use fp_types::{
 };
 use fp_utils::ecdsa::SecpPair;
 use fp_utils::tx::EvmRawTxWrapper;
+use hex_literal::hex;
 use jsonrpc_core::{futures::future, BoxFuture, Result};
 use lazy_static::lazy_static;
 use log::{debug, warn};
@@ -41,6 +42,15 @@ use tokio::runtime::Runtime;
 lazy_static! {
     static ref RT: Runtime =
         Runtime::new().expect("Failed to create thread pool executor");
+    static ref EVM_FIRST_BLOCK_HEIGHT: u64 = {
+        let h: u64 = std::env::var("EVM_FIRST_BLOCK_HEIGHT")
+            .map(|h| {
+                h.parse()
+                    .expect("`EVM_FIRST_BLOCK_HEIGHT` is not set correctly.")
+            })
+            .unwrap_or(1424654);
+        h
+    };
 }
 
 pub struct EthApiImpl {
@@ -433,6 +443,12 @@ impl EthApi for EthApiImpl {
     ) -> Result<Option<RichBlock>> {
         debug!(target: "eth_rpc", "block_by_number, number:{:?}, full:{:?}", number, full);
 
+        //check if height exits.
+        let height = match number {
+            BlockNumber::Num(h) => Some(h),
+            _ => None,
+        };
+
         let id = native_block_id(Some(number));
         let block = self.account_base_app.read().current_block(id.clone());
         let statuses = self
@@ -451,7 +467,15 @@ impl EthApi for EthApiImpl {
                     full,
                 )))
             }
-            _ => Ok(None),
+            _ => Ok(if let Some(h) = height {
+                if 0 < h && h < *EVM_FIRST_BLOCK_HEIGHT {
+                    Some(dummy_block(h, full))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }),
         }
     }
 
@@ -1364,5 +1388,64 @@ fn native_block_id(number: Option<BlockNumber>) -> Option<BlockId> {
         BlockNumber::Latest => None,
         BlockNumber::Earliest => Some(BlockId::Number(U256::zero())),
         BlockNumber::Pending => None,
+    }
+}
+
+fn dummy_block(height: u64, full: bool) -> Rich<Block> {
+    let hash = if height == *EVM_FIRST_BLOCK_HEIGHT - 1 {
+        H256([0; 32])
+    } else {
+        H256::from_slice(&sha3::Keccak256::digest(&height.to_le_bytes()))
+    };
+
+    let parent_hash =
+        H256::from_slice(&sha3::Keccak256::digest(&(height - 1).to_le_bytes()));
+
+    let transactions = if full {
+        BlockTransactions::Full(vec![])
+    } else {
+        BlockTransactions::Hashes(vec![])
+    };
+
+    let inner = Block {
+        hash: Some(hash),
+        parent_hash,
+        uncles_hash: H256(hex!(
+            "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+        )),
+        author: H160(hex!("1d8f397fa03b357dc94303086a91ce5c8c7af1e6")),
+        miner: H160(hex!("1d8f397fa03b357dc94303086a91ce5c8c7af1e6")),
+        state_root: H256(hex!(
+            "0000000000000000000000000000000000000000000000000000000000000000"
+        )),
+        transactions_root: H256(hex!(
+            "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+        )),
+        receipts_root: H256(hex!(
+            "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+        )),
+        number: Some(U256::from(height)),
+        gas_used: U256::zero(),
+        gas_limit: U256::from(0xffffffff_u32),
+        extra_data: Bytes::new(vec![]),
+        logs_bloom: Some(Bloom::default()),
+        timestamp: U256::from(0x61b839d9_u32),
+        difficulty: U256::zero(),
+        total_difficulty: U256::zero(),
+        seal_fields: vec![
+            Bytes::new(
+                hex!("0000000000000000000000000000000000000000000000000000000000000000")
+                    .to_vec(),
+            ),
+            Bytes::new(hex!("0000000000000000").to_vec()),
+        ],
+        uncles: vec![],
+        transactions,
+        size: Some(U256::from(0x1_u32)),
+    };
+
+    Rich {
+        inner,
+        extra_info: BTreeMap::new(),
     }
 }

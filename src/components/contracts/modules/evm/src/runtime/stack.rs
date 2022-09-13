@@ -225,6 +225,7 @@ impl<'context, 'vicinity, 'config, C: Config> Backend
     fn original_storage(&self, _address: H160, _index: H256) -> Option<H256> {
         None
     }
+
     fn block_base_fee_per_gas(&self) -> U256 {
         C::FeeCalculator::min_gas_price()
     }

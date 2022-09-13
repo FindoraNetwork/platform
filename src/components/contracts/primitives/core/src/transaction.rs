@@ -150,6 +150,7 @@ where
             U::pre_execute(ctx, &self.function)?;
             (None, Default::default())
         };
+
         ctx.state.write().commit_session();
 
         if ctx.header.height >= CFG.checkpoint.evm_checktx_nonce {
