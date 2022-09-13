@@ -32,6 +32,7 @@ pub struct CheckPointConfig {
     pub evm_checktx_nonce: i64,
     pub utxo_checktx_height: i64,
     pub fix_delegators_am_height: u64,
+    pub validators_limit_v2_height: u64,
 }
 
 impl CheckPointConfig {
@@ -62,6 +63,7 @@ impl CheckPointConfig {
                                 evm_checktx_nonce: 0,
                                 utxo_checktx_height: 0,
                                 fix_delegators_am_height: 0,
+                                validators_limit_v2_height: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -82,6 +84,7 @@ impl CheckPointConfig {
                                 evm_checktx_nonce: 30000000,
                                 utxo_checktx_height: 30000000,
                                 fix_delegators_am_height: 30000000,
+                                validators_limit_v2_height: 30000000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
