@@ -1826,22 +1826,14 @@ impl Transaction {
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn check_has_signature_from_map(&self, public_key: &XfrPublicKey) -> Result<()> {
-        let serialized = Serialized::new(&self.body);
-
-        let mut r = Ok(());
-
         if let Some(sign) = self.pubkey_sign_map.get(public_key) {
-            if sign.0.verify(public_key, &serialized).is_err() {
-                r = Err(eg!());
-            }
+            sign.0.verify(public_key, &Serialized::new(&self.body))
         } else {
-            r = Err(eg!(
+            Err(eg!(
                 "the pubkey not match: {}",
                 public_key_to_base64(public_key)
-            ));
+            ))
         }
-
-        r
     }
 
     /// NOTE: This method is used to verify the signature in the transaction,
