@@ -27,6 +27,6 @@ config = {path = "../../../config"}
 [dev-dependencies]
 parking_lot = "0.12"
 rand_chacha = "0.3"
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.2" }
-fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.2" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
 zei = "0.2"
