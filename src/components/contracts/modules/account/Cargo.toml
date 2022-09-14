@@ -22,9 +22,13 @@ fp-core = { path = "../../primitives/core" }
 fp-storage = { path = "../../primitives/storage" }
 fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
+enterprise-web3 = { path = "../../primitives/enterprise-web3", optional = true  }
 
 [dev-dependencies]
 rand_chacha = "0.2"
 parking_lot = "0.12"
 zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
+
+[features]
+web3_service = ["enterprise-web3"]
