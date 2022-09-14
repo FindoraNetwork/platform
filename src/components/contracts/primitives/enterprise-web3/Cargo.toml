@@ -1,0 +1,13 @@
+[package]
+name = "enterprise-web3"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lazy_static = "1.4.0"
+evm-exporter = { package = "evm-exporter", git = "https://github.com/FindoraNetwork/enterprise-web3.git", branch = "feat-evm"}
+primitive-types = "0.11.1"
+redis = { version = "0.21" }
+ruc = "1.0"

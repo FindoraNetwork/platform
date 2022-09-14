@@ -36,6 +36,7 @@ fp-evm = {path = "../primitives/evm"}
 fp-traits = {path = "../primitives/traits"}
 fp-types = {path = "../primitives/types"}
 fp-utils = {path = "../primitives/utils"}
+enterprise-web3 = { path = "../primitives/enterprise-web3", optional = true  }
 
 # modules
 module-account = {path = "../modules/account"}
@@ -54,3 +55,4 @@ evm-precompile = {path = "../modules/evm/precompile"}
 
 [features]
 abci_mock = []
+web3_service = ["enterprise-web3"]
