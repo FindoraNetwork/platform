@@ -1923,10 +1923,12 @@ pub fn decryption_pbkdf2_aes256gcm(enc_key_pair: Vec<u8>, password: String) -> S
 
 #[wasm_bindgen]
 #[allow(missing_docs)]
-pub fn create_keypair_from_secret(sk_str: String) -> Option<XfrKeyPair> {
-    serde_json::from_str::<XfrSecretKey>(&sk_str)
-        .map(|sk| sk.into_keypair())
-        .ok()
+pub fn create_keypair_from_secret(sk_str: String) -> Result<XfrKeyPair, JsValue> {
+    let sk = serde_json::from_str::<XfrSecretKey>(&sk_str)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+
+    Ok(sk.into_keypair())
 }
 
 #[wasm_bindgen]
