@@ -68,3 +68,8 @@ ark-algebra-test-templates = { git = "https://github.com/FindoraNetwork/ark-alge
 curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek", tag = "v3.2.0-f" }
 ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek", tag = "v1.0.1-f" }
 abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.5" }
+
+[patch."https://github.com/FindoraNetwork/storage"]
+fin_db = { git = "https:///github.com/FindoraNetwork//storage", branch = "FO-996-v2" }
+temp_db = { git = "https:///github.com/FindoraNetwork//storage", branch = "FO-996-v2" }
+storage = { git = "https:///github.com/FindoraNetwork//storage", branch = "FO-996-v2" } 

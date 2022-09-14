@@ -38,6 +38,7 @@ use primitive_types::{H160, H256, U256};
 use ruc::{eg, Result};
 use std::{borrow::BorrowMut, path::Path, sync::Arc};
 use storage::state::ChainState;
+use tracing::{error, info};
 
 lazy_static! {
     /// An identifier that distinguishes different EVM chains.
@@ -162,11 +163,10 @@ impl module_xhub::Config for BaseApp {
 
 impl BaseApp {
     pub fn new(basedir: &Path, empty_block: bool) -> Result<Self> {
-        tracing::info!(
+        info!(
+            target: "baseapp",
             "create new baseapp with basedir {:?}, empty_block {}, history {} blocks",
-            basedir,
-            empty_block,
-            *CHAIN_STATE_MIN_VERSIONS
+            basedir, empty_block, *CHAIN_STATE_MIN_VERSIONS
         );
 
         // Creates a fresh chain state db and history db
@@ -296,6 +296,10 @@ impl BaseApp {
         } else {
             Ok(self.check_state.copy_with_new_state())
         }
+    }
+
+    pub fn create_context_at(&self, height: u64) -> Option<Context> {
+        self.check_state.state_at(height)
     }
 
     /// retrieve the context for the txBytes and other memoized values.
