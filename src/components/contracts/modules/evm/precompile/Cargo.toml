@@ -15,8 +15,6 @@ evm-precompile-basic = {path = "./basic"}
 evm-precompile-frc20 = {path = "./frc20"}
 evm-precompile-modexp = {path = "./modexp"}
 evm-precompile-sha3fips = {path = "./sha3fips"}
-fin_db = {git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.1"}
 fp-core = {path = "../../../primitives/core"}
 module-evm = {path = "../../../modules/evm"}
 parking_lot = "0.12"
-storage = {git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.1"}
