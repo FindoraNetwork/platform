@@ -37,10 +37,11 @@ pub fn transfer_to_account(
     asset: Option<&str>,
     address: Option<&str>,
     lowlevel_data: Option<&str>,
+    is_address_fra: bool,
 ) -> Result<()> {
     let mut builder = utils::new_tx_builder()?;
 
-    let kp = get_keypair()?;
+    let kp = get_keypair(is_address_fra)?;
 
     let asset = if let Some(asset) = asset {
         let asset = AssetTypeCode::new_from_base64(asset)?;
@@ -111,8 +112,9 @@ pub fn transfer_from_account(
     amount: u64,
     address: Option<&str>,
     eth_phrase: Option<&str>,
+    is_address_fra: bool,
 ) -> Result<()> {
-    let fra_kp = get_keypair()?;
+    let fra_kp = get_keypair(is_address_fra)?;
 
     let target = match address {
         Some(s) => {
@@ -210,8 +212,8 @@ fn one_shot_abci_query(
 }
 
 /// Query contract account info by abci/query
-pub fn contract_account_info(address: Option<&str>) -> Result<(Address, SmartAccount)> {
-    let fra_kp = get_keypair()?;
+pub fn contract_account_info(address: Option<&str>, is_address_fra: bool) -> Result<(Address, SmartAccount)> {
+    let fra_kp = get_keypair(is_address_fra)?;
 
     let address = match address {
         Some(s) => MultiSigner::from_str(s).c(d!())?,
