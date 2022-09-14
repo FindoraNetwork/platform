@@ -276,7 +276,11 @@ impl EthApi for EthApiImpl {
         Box::pin(future::ok(transaction_hash))
     }
 
-    fn call(&self, request: CallRequest, _: Option<BlockNumber>) -> Result<Bytes> {
+    fn call(
+        &self,
+        request: CallRequest,
+        block_number: Option<BlockNumber>,
+    ) -> Result<Bytes> {
         debug!(target: "eth_rpc", "call, request:{:?}", request);
 
         let CallRequest {
@@ -289,7 +293,8 @@ impl EthApi for EthApiImpl {
             nonce,
         } = request;
 
-        let block = self.account_base_app.read().current_block(None);
+        let id = native_block_id(block_number.clone());
+        let block = self.account_base_app.read().current_block(id);
         // use given gas limit or query current block's limit
         let gas_limit = match gas {
             Some(amount) => amount,
@@ -306,21 +311,21 @@ impl EthApi for EthApiImpl {
         let mut config = <BaseApp as module_ethereum::Config>::config().clone();
         config.estimate = true;
 
-        let mut ctx = self
-            .account_base_app
-            .read()
-            .create_query_context(None, false)
-            .map_err(|err| {
-                internal_err(format!("create query context error: {:?}", err))
-            })?;
+        let mut ctx = match self.account_base_app.read().create_context_at(height) {
+            Some(ctx) => ctx,
+            None => {
+                return Err("failed to create context".into());
+            }
+        };
         if let Some(block) = block {
             ctx.header
                 .mut_time()
                 .set_seconds(block.header.timestamp as i64);
             ctx.header.height = block.header.number.as_u64() as i64;
-            ctx.header.proposer_address = Vec::from(block.header.beneficiary.as_bytes())
+            ctx.header.proposer_address = Vec::from(block.header.beneficiary.as_bytes());
+        } else {
+            return Err("failed to get block".into());
         }
-
         match to {
             Some(to) => {
                 let call = Call {

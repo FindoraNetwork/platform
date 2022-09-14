@@ -53,6 +53,21 @@ impl Context {
         }
     }
 
+    pub fn state_at(&self, height: u64) -> Option<Self> {
+        let state = self.state.read().state_at(height);
+        let db = self.db.read().state_at(height);
+        match (state, db) {
+            (Ok(state), Ok(db)) => Some(Context {
+                state: Arc::new(RwLock::new(state)),
+                db: Arc::new(RwLock::new(db)),
+                run_mode: RunTxMode::None,
+                header: Default::default(),
+                header_hash: Default::default(),
+            }),
+            _ => None,
+        }
+    }
+
     pub fn copy_with_state(&self) -> Self {
         Context {
             state: Arc::new(RwLock::new(self.state.read().copy())),

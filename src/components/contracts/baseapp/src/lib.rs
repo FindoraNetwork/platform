@@ -287,6 +287,10 @@ impl BaseApp {
         }
     }
 
+    pub fn create_context_at(&self, height: u64) -> Option<Context> {
+        self.check_state.state_at(height)
+    }
+
     /// retrieve the context for the txBytes and other memoized values.
     pub fn retrieve_context(&mut self, mode: RunTxMode) -> &mut Context {
         let ctx = if mode == RunTxMode::Deliver {
