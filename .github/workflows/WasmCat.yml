@@ -2,7 +2,7 @@ name: Wasm Building And Pushing
 on: 
   push:
     branches:
-      -"**"
+      - '**'
 jobs:
   build-push:
     concurrency: wasmcat-ci-${{ github.ref }}
