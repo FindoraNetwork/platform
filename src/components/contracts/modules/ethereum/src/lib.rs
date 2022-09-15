@@ -5,6 +5,7 @@ mod basic;
 mod impls;
 
 use config::abci::global_cfg::CFG;
+use abci::{RequestEndBlock, ResponseEndBlock};
 use ethereum_types::{H160, H256, U256};
 use evm::Config as EvmConfig;
 use fp_core::context::RunTxMode;
@@ -129,13 +130,13 @@ impl<C: Config> Default for App<C> {
 }
 
 impl<C: Config> AppModule for App<C> {
-    fn commit(
+    fn end_block(
         &mut self,
         ctx: &mut Context,
-        height: U256,
-        root_hash: &[u8],
-    ) -> Result<()> {
-        self.store_block(ctx, height, root_hash)
+        req: &RequestEndBlock,
+    ) -> ResponseEndBlock {
+        let _ = ruc::info!(self.store_block(ctx, U256::from(req.height)));
+        Default::default()
     }
 }
 

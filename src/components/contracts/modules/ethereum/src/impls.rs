@@ -46,7 +46,6 @@ impl<C: Config> App<C> {
         &mut self,
         ctx: &mut Context,
         block_number: U256,
-        root_hash: &[u8],
     ) -> Result<()> {
         // #[cfg(feature = "debug_env")]
         // const EVM_FIRST_BLOCK_HEIGHT: U256 = U256::from(142_5000);
@@ -84,8 +83,9 @@ impl<C: Config> App<C> {
         let block_timestamp = ctx.header.time.clone().unwrap_or_default();
 
         let mut state_root = H256::default();
+        let root_hash = ctx.state.read().root_hash();
         if !root_hash.is_empty() {
-            state_root = H256::from_slice(root_hash);
+            state_root = H256::from_slice(&root_hash);
         }
 
         let partial_header = ethereum::PartialHeader {
