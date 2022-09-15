@@ -139,7 +139,7 @@ impl ModuleManager {
             // if let Some(pending_txs)
             // let transaction_index = pending_txs.as_ref().unwrap_or_default().len() as u32;
             let transaction_index = pending_txs.len() as u32;
-
+            let _transaction_index2 = 0;
             let (tx, tx_status, receipt) = if asset == ASSET_TYPE_FRA {
                 let balance =
                     EthereumDecimalsMapping::from_native_token(U256::from(amount))
