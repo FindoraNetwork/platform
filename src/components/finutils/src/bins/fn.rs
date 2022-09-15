@@ -66,11 +66,13 @@ fn run() -> Result<()> {
 
     if matches.is_present("version") {
         println!("{}", env!("VERGEN_SHA"));
-    } else if matches.is_present("genkey") {
-        common::gen_key_and_print();
+    } else if let Some(m) = matches.subcommand_matches("genkey") {
+        let is_address_fra = m.is_present("fra-address");
+        common::gen_key_and_print(is_address_fra);
     } else if let Some(m) = matches.subcommand_matches("wallet") {
         if m.is_present("create") {
-            common::gen_key_and_print();
+            let is_address_fra = m.is_present("fra-address");
+            common::gen_key_and_print(is_address_fra);
         } else if m.is_present("show") {
             let seckey = match m.value_of("seckey") {
                 Some(path) => {

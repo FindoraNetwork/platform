@@ -580,10 +580,14 @@ pub fn convert_commission_rate(cr: f64) -> Result<[u64; 2]> {
 }
 
 #[allow(missing_docs)]
-pub fn gen_key() -> (String, String, String, XfrKeyPair) {
+pub fn gen_key(is_fra_address: bool) -> (String, String, String, XfrKeyPair) {
     let (mnemonic, key, kp) = loop {
         let mnemonic = pnk!(wallet::generate_mnemonic_custom(24, "en"));
-        let kp = pnk!(wallet::restore_keypair_from_mnemonic_default(&mnemonic));
+        let kp: XfrKeyPair = if is_fra_address {
+            pnk!(wallet::restore_keypair_from_mnemonic_ed25519(&mnemonic))
+        } else {
+            pnk!(wallet::restore_keypair_from_mnemonic_default(&mnemonic))
+        };
         if let Some(key) = serde_json::to_string_pretty(&kp)
             .ok()
             .filter(|s| s.matches("\": \"-").next().is_none())
@@ -598,8 +602,8 @@ pub fn gen_key() -> (String, String, String, XfrKeyPair) {
 }
 
 #[allow(missing_docs)]
-pub fn gen_key_and_print() {
-    let (wallet_addr, mnemonic, key, _) = gen_key();
+pub fn gen_key_and_print(is_fra_address: bool) {
+    let (wallet_addr, mnemonic, key, _) = gen_key(is_fra_address);
     println!(
         "\n\x1b[31;01mWallet Address:\x1b[00m {}\n\x1b[31;01mMnemonic:\x1b[00m {}\n\x1b[31;01mKey:\x1b[00m {}\n",
         wallet_addr, mnemonic, key

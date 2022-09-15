@@ -11,6 +11,10 @@ args:
 subcommands:
   - genkey:
       about: Generate a random Findora public key/private key Pair
+      args:
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   - show:
       about: View Validator status and accumulated rewards
       args:
@@ -331,8 +335,6 @@ subcommands:
         - fra-address:
             help: if the fra address version of wallet is used
             long: fra-address
-            conflicts_with:
-              - create
   - asset:
       about: manipulate custom asset
       groups:
