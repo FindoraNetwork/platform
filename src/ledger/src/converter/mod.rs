@@ -67,7 +67,7 @@ pub fn check_convert_account(tx: &Transaction) -> Result<(MultiSigner, u64)> {
                 "TransferUTXOsToEVM error: nonce mismatch no_replay_token"
             ));
         }
-        if tx.check_has_signature(&ca.signer).is_err() {
+        if tx.check_has_signature_from_map(&ca.signer).is_err() {
             return Err(eg!("TransferUTXOsToEVM error: invalid signature"));
         }
         if let MultiSigner::Xfr(_pk) = ca.receiver {
