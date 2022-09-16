@@ -654,7 +654,6 @@ pub struct TransferOperationBuilder {
     op_builder: PlatformTransferOperationBuilder,
 }
 
-
 impl TransferOperationBuilder {
     #[allow(missing_docs)]
     pub fn get_builder(&self) -> &PlatformTransferOperationBuilder {
