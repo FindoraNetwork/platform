@@ -967,6 +967,7 @@ pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
     wallet::public_key_to_base64(key)
 }
 
+#[wasm_bindgen]
 /// Converts a base64 encoded public key string to a public key.
 pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey, JsValue> {
     wallet::public_key_from_base64(pk)
