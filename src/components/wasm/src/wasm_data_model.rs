@@ -40,6 +40,7 @@ pub struct PublicParams {
     pub(crate) params: ZeiPublicParams,
 }
 
+#[wasm_bindgen]
 #[allow(clippy::new_without_default)]
 impl PublicParams {
     /// Generates a new set of parameters.
@@ -206,6 +207,7 @@ pub struct AssetTracerKeyPair {
     pub(crate) keypair: ZeiAssetTracerKeyPair,
 }
 
+#[wasm_bindgen]
 impl AssetTracerKeyPair {
     /// Creates a new tracer key pair.
     pub fn new() -> Self {
