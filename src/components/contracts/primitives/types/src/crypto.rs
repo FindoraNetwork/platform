@@ -17,14 +17,10 @@ use {
 };
 
 /// An opaque 34-byte cryptographic identifier.
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Debug)]
+#[derive(
+    Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Debug, Default,
+)]
 pub struct Address32([u8; 32]);
-
-impl Default for Address32 {
-    fn default() -> Self {
-        Address32([0u8; 32])
-    }
-}
 
 impl AsRef<[u8]> for Address32 {
     fn as_ref(&self) -> &[u8] {

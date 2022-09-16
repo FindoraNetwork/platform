@@ -204,8 +204,14 @@ fn run() -> Result<()> {
             let hidden = m.is_present("hidden");
             let is_address_fra = m.is_present("fra-address");
 
-            common::issue_asset(seckey.as_deref(), code.unwrap(), amount, hidden, is_address_fra)
-                .c(d!())?;
+            common::issue_asset(
+                seckey.as_deref(),
+                code.unwrap(),
+                amount,
+                hidden,
+                is_address_fra,
+            )
+            .c(d!())?;
         } else {
             let help = "fn asset [--create | --issue | --show]";
             println!("{}", help);
@@ -264,7 +270,13 @@ fn run() -> Result<()> {
             if am.is_none() {
                 println!("{}", m.usage());
             } else {
-                common::stake_append(am.unwrap(), staker.as_deref(), td_addr, is_address_fra).c(d!())?;
+                common::stake_append(
+                    am.unwrap(),
+                    staker.as_deref(),
+                    td_addr,
+                    is_address_fra,
+                )
+                .c(d!())?;
             }
         } else {
             let cr = m.value_of("commission-rate");
@@ -277,7 +289,8 @@ fn run() -> Result<()> {
                     "Tips: if you want to raise the power of your node, please use `fn stake --append [OPTIONS]`"
                 );
             } else {
-                common::stake(am.unwrap(), cr.unwrap(), vm, force, is_address_fra).c(d!())?;
+                common::stake(am.unwrap(), cr.unwrap(), vm, force, is_address_fra)
+                    .c(d!())?;
             }
         }
     } else if let Some(m) = matches.subcommand_matches("unstake") {
@@ -443,7 +456,12 @@ fn run() -> Result<()> {
         let address = m.value_of("addr");
         let eth_key = m.value_of("eth-key");
         let is_address_fra = m.is_present("fra-address");
-        transfer_from_account(amount.parse::<u64>().c(d!())?, address, eth_key, is_address_fra)?
+        transfer_from_account(
+            amount.parse::<u64>().c(d!())?,
+            address,
+            eth_key,
+            is_address_fra,
+        )?
     } else if let Some(m) = matches.subcommand_matches("convert-bar-to-abar") {
         // sender Xfr secret key
         let f = read_file_path(m.value_of("from-seckey")).c(d!())?;
@@ -462,8 +480,13 @@ fn run() -> Result<()> {
         } else {
             // call the convert function to build and send transaction
             // it takes owner Xfr secret key, Axfr address and TxoSID
-            let r = common::convert_bar2abar(owner_sk, target_addr, txo_sid.unwrap(), is_address_fra)
-                .c(d!())?;
+            let r = common::convert_bar2abar(
+                owner_sk,
+                target_addr,
+                txo_sid.unwrap(),
+                is_address_fra,
+            )
+            .c(d!())?;
 
             // Print commitment to terminal
             println!(
@@ -580,7 +603,9 @@ fn run() -> Result<()> {
 
         // fetch filtered list by asset
         let list = common::get_owned_utxos(asset, is_address_fra)?;
-        let pk = wallet::public_key_to_base64(get_keypair(is_address_fra).unwrap().pub_key.borrow());
+        let pk = wallet::public_key_to_base64(
+            get_keypair(is_address_fra).unwrap().pub_key.borrow(),
+        );
 
         // Print UTXO table
         println!("Owned utxos for {:?}", pk);

@@ -74,7 +74,11 @@ lazy_static! {
 }
 
 /// Updating the information of a staker includes commission_rate and staker_memo
-pub fn staker_update(cr: Option<&str>, memo: Option<StakerMemo>, is_address_fra: bool) -> Result<()> {
+pub fn staker_update(
+    cr: Option<&str>,
+    memo: Option<StakerMemo>,
+    is_address_fra: bool,
+) -> Result<()> {
     let addr = get_td_pubkey().map(|i| td_pubkey_to_td_addr(&i)).c(d!())?;
     let vd = get_validator_detail(&addr).c(d!())?;
 
@@ -263,7 +267,11 @@ pub fn unstake(
 }
 
 /// Claim rewards from findora network
-pub fn claim(am: Option<&str>, sk_str: Option<&str>, is_address_fra: bool) -> Result<()> {
+pub fn claim(
+    am: Option<&str>,
+    sk_str: Option<&str>,
+    is_address_fra: bool,
+) -> Result<()> {
     let am = if let Some(i) = am {
         Some(i.parse::<u64>().c(d!("'amount' must be an integer"))?)
     } else {
@@ -527,12 +535,15 @@ pub fn get_keypair(is_address_fra: bool) -> Result<XfrKeyPair> {
                 if is_address_fra {
                     wallet::restore_keypair_from_mnemonic_ed25519(k)
                         .c(d!("invalid 'owner-mnemonic'"))
-                        .or_else(|e| wallet::restore_keypair_from_seckey_base64(k).c(d!(e)))
+                        .or_else(|e| {
+                            wallet::restore_keypair_from_seckey_base64(k).c(d!(e))
+                        })
                 } else {
                     wallet::restore_keypair_from_mnemonic_default(k)
                         .c(d!("invalid 'owner-mnemonic'"))
-                        .or_else(|e| wallet::restore_keypair_from_seckey_base64(k).c(d!(e)))
-
+                        .or_else(|e| {
+                            wallet::restore_keypair_from_seckey_base64(k).c(d!(e))
+                        })
                 }
             })
     } else {
@@ -610,19 +621,25 @@ pub fn gen_key_and_print(is_fra_address: bool) {
     );
 }
 
-fn restore_keypair_from_str_with_default(sk_str: Option<&str>, is_fra_address: bool) -> Result<XfrKeyPair> {
+fn restore_keypair_from_str_with_default(
+    sk_str: Option<&str>,
+    is_fra_address: bool,
+) -> Result<XfrKeyPair> {
     if let Some(sk) = sk_str {
         serde_json::from_str::<XfrSecretKey>(&format!("\"{}\"", sk))
             .map(|sk| sk.into_keypair())
             .c(d!("Invalid secret key"))
     } else {
-
         get_keypair(is_fra_address).c(d!())
     }
 }
 
 /// Show the asset balance of a findora account
-pub fn show_account(sk_str: Option<&str>, asset: Option<&str>, is_address_fra: bool) -> Result<()> {
+pub fn show_account(
+    sk_str: Option<&str>,
+    asset: Option<&str>,
+    is_address_fra: bool,
+) -> Result<()> {
     let kp = restore_keypair_from_str_with_default(sk_str, is_address_fra)?;
     let token_code = asset
         .map(|asset| AssetTypeCode::new_from_base64(asset).c(d!("Invalid asset code")))
@@ -635,7 +652,12 @@ pub fn show_account(sk_str: Option<&str>, asset: Option<&str>, is_address_fra: b
 
 #[inline(always)]
 #[allow(missing_docs)]
-pub fn delegate(sk_str: Option<&str>, amount: u64, validator: &str, is_address_fra: bool) -> Result<()> {
+pub fn delegate(
+    sk_str: Option<&str>,
+    amount: u64,
+    validator: &str,
+    is_address_fra: bool,
+) -> Result<()> {
     restore_keypair_from_str_with_default(sk_str, is_address_fra)
         .c(d!())
         .and_then(|kp| delegate_x(&kp, amount, validator).c(d!()))
@@ -651,7 +673,11 @@ pub fn delegate_x(kp: &XfrKeyPair, amount: u64, validator: &str) -> Result<()> {
 
 #[inline(always)]
 #[allow(missing_docs)]
-pub fn undelegate(sk_str: Option<&str>, param: Option<(u64, &str)>, is_address_fra: bool) -> Result<()> {
+pub fn undelegate(
+    sk_str: Option<&str>,
+    param: Option<(u64, &str)>,
+    is_address_fra: bool,
+) -> Result<()> {
     restore_keypair_from_str_with_default(sk_str, is_address_fra)
         .c(d!())
         .and_then(|kp| undelegate_x(&kp, param).c(d!()))
@@ -1260,7 +1286,7 @@ pub fn get_mtleaf_info(atxo_sid: &str) -> Result<MTLeafInfo> {
 /// Fetches list of owned TxoSIDs from LedgerStatus
 pub fn get_owned_utxos(
     asset: Option<&str>,
-    is_address_fra: bool
+    is_address_fra: bool,
 ) -> Result<Vec<(TxoSID, XfrAmount, XfrAssetType)>> {
     // get KeyPair from current setup wallet
     let kp = get_keypair(is_address_fra).c(d!())?;

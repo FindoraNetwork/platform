@@ -212,7 +212,10 @@ fn one_shot_abci_query(
 }
 
 /// Query contract account info by abci/query
-pub fn contract_account_info(address: Option<&str>, is_address_fra: bool) -> Result<(Address, SmartAccount)> {
+pub fn contract_account_info(
+    address: Option<&str>,
+    is_address_fra: bool,
+) -> Result<(Address, SmartAccount)> {
     let fra_kp = get_keypair(is_address_fra)?;
 
     let address = match address {
