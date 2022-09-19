@@ -198,13 +198,7 @@ impl crate::BaseApp {
 
         let block_height = self.deliver_state.block_header().height as u64;
         //let mut ctx = self.retrieve_context(RunTxMode::Deliver).clone(); LOCAL FIXED
-        self.deliver_state
-            .db
-            .write()
-            .commit(block_height)
-            .unwrap_or_else(|_| {
-                panic!("Failed to commit chain db at height: {}", block_height)
-            });
+
         // Write the DeliverTx state into branched storage and commit the Store.
         // The write to the DeliverTx state writes all state transitions to the root
         // Store so when commit() is called is persists those values.
