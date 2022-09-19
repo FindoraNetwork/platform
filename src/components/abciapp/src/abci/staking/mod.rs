@@ -75,12 +75,13 @@ pub fn get_validators(
     // the validator list obtained from `LastCommitInfo` is exactly
     // the same as the current block.
     // So we can use it to filter out non-existing entries.
-    if 0 != TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed) % VALIDATOR_UPDATE_BLOCK_ITV
-    {
+    let cur_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
+    if 0 != cur_height % VALIDATOR_UPDATE_BLOCK_ITV {
         return Ok(None);
     }
 
     // Get existing entries in the last block.
+    // 108
     let last_entries = if let Some(lci) = last_commit_info {
         lci.votes
             .as_slice()
@@ -95,36 +96,6 @@ pub fn get_validators(
     // - current entries == last entries
     let cur_entries = last_entries;
 
-    let mut vs = staking
-        .validator_get_current()
-        .c(d!())?
-        .body
-        .values()
-        .filter(|v| {
-            if let Some(power) = cur_entries.get(&v.td_addr) {
-                // - new power > 0: change existing entries
-                // - new power = 0: remove existing entries
-                // - the power returned by `LastCommitInfo` is impossible
-                // to be zero in the context of tendermint
-                *power as u64 != v.td_power
-            } else {
-                // add new validator
-                //
-                // try to remove non-existing entries is not allowed
-                0 < v.td_power
-            }
-        })
-        // this conversion is safe in the context of tendermint
-        .map(|v| (&v.td_pubkey, v.td_power as i64))
-        .collect::<Vec<_>>();
-
-    if vs.is_empty() {
-        return Ok(None);
-    }
-
-    // reverse sort
-    vs.sort_by(|a, b| b.1.cmp(&a.1));
-
     let validator_limit =
         if CFG.checkpoint.validators_limit_v2_height > staking.cur_height() {
             VALIDATOR_LIMIT
@@ -132,16 +103,99 @@ pub fn get_validators(
             VALIDATOR_LIMIT_V2
         };
 
-    // set the power of every extra validators to zero,
-    // then tendermint can remove them from consensus logic.
-    vs.iter_mut().skip(validator_limit).for_each(|(k, power)| {
-        alt!(cur_entries.contains_key(k), *power = 0, *power = -1);
-    });
+    if cur_height < CFG.checkpoint.fix_update_validators_height {
+        let mut vs = staking
+            .validator_get_current()
+            .c(d!())?
+            .body
+            .values()
+            .filter(|v| {
+                if let Some(power) = cur_entries.get(&v.td_addr) {
+                    // - new power > 0: change existing entries
+                    // - new power = 0: remove existing entries
+                    // - the power returned by `LastCommitInfo` is impossible
+                    // to be zero in the context of tendermint
+                    *power as u64 != v.td_power
+                } else {
+                    // add new validator
+                    //
+                    // try to remove non-existing entries is not allowed
+                    0 < v.td_power
+                }
+            })
+            // this conversion is safe in the context of tendermint
+            .map(|v| (&v.td_pubkey, v.td_power as i64))
+            .collect::<Vec<_>>();
 
-    Ok(Some(
-        vs.iter()
-            .filter(|(_, power)| -1 < *power)
-            .map(|(pubkey, power)| {
+        if vs.is_empty() {
+            return Ok(None);
+        }
+
+        // reverse sort
+        vs.sort_by(|a, b| b.1.cmp(&a.1));
+
+        // set the power of every extra validators to zero,
+        // then tendermint can remove them from consensus logic.
+        vs.iter_mut().skip(VALIDATOR_LIMIT).for_each(|(k, power)| {
+            alt!(cur_entries.contains_key(k), *power = 0, *power = -1);
+        });
+
+        Ok(Some(
+            vs.iter()
+                .filter(|(_, power)| -1 < *power)
+                .map(|(pubkey, power)| {
+                    let mut vu = ValidatorUpdate::new();
+                    let mut pk = PubKey::new();
+                    pk.set_field_type("ed25519".to_owned());
+                    pk.set_data(pubkey.to_vec());
+                    vu.set_power(*power);
+                    vu.set_pub_key(pk);
+                    vu
+                })
+                .collect(),
+        ))
+    } else {
+        let mut vs = staking
+            .validator_get_current()
+            .c(d!())?
+            .body
+            .values()
+            .map(|v| (&v.td_addr, v.td_power as i64, &v.td_pubkey))
+            .collect::<Vec<_>>();
+
+        vs.sort_by(|a, b| b.1.cmp(&a.1));
+
+        // The data after validator_limit is not processed if td.power and abci.power are equal to 0.
+        // Otherwise, the power of this validator is changed to 0.
+        // If the corresponding value is not retrieved from td.v_set list, it is not processed;
+        // If the data before validator_limit is obtained in td.v_set and td.power and abci.power are equal,
+        // then it is not processed, otherwise it is not processed.
+        for (i, (addr, power, _)) in vs.iter_mut().enumerate() {
+            // validator_limit...
+            if i > validator_limit - 1 {
+                if let Some(p) = cur_entries.get(addr) {
+                    if p == power && *p == 0 {
+                        *power = -1;
+                    } else {
+                        *power = 0;
+                    }
+                } else {
+                    *power = -1;
+                }
+            } else {
+                // ...validator_limit
+                if let Some(p) = cur_entries.get(addr) {
+                    if p == power {
+                        *power = -1;
+                    }
+                }
+            }
+        }
+
+        let v = vs
+            .iter()
+            .filter(|(_, power, _)| -1 < *power)
+            .map(|(_, power, pubkey)| {
                 let mut vu = ValidatorUpdate::new();
                 let mut pk = PubKey::new();
                 pk.set_field_type("ed25519".to_owned());
@@ -150,8 +204,14 @@ pub fn get_validators(
                 vu.set_pub_key(pk);
                 vu
             })
-            .collect(),
-    ))
+            .collect::<Vec<ValidatorUpdate>>();
+
+        if v.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Some(v))
+    }
 }
 
 /// Call this function in `EndBlock`,

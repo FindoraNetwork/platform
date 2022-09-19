@@ -33,6 +33,7 @@ pub struct CheckPointConfig {
     pub utxo_checktx_height: i64,
     pub fix_delegators_am_height: u64,
     pub validators_limit_v2_height: u64,
+    pub fix_update_validators_height: i64,
 }
 
 impl CheckPointConfig {
@@ -57,13 +58,14 @@ impl CheckPointConfig {
                                 apy_v7_upgrade_height: 0,
                                 ff_addr_extra_fix_height: 0,
                                 nonconfidential_balance_fix_height: 0,
-                                unbond_block_cnt: 3600 * 24 * 21 / 16,
+                                unbond_block_cnt: 5,
                                 fix_unpaid_delegation_height: 0,
                                 fix_undelegation_missing_reward_height: 0,
                                 evm_checktx_nonce: 0,
                                 utxo_checktx_height: 0,
                                 fix_delegators_am_height: 0,
                                 validators_limit_v2_height: 0,
+                                fix_update_validators_height: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -85,6 +87,7 @@ impl CheckPointConfig {
                                 utxo_checktx_height: 30000000,
                                 fix_delegators_am_height: 30000000,
                                 validators_limit_v2_height: 30000000,
+                                fix_update_validators_height: 30000000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
