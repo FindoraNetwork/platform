@@ -734,21 +734,15 @@ pub fn create_asset(
     decimal: u8,
     max_units: Option<u64>,
     transferable: bool,
-    token_code: Option<&str>,
+    token_code: Option<AssetTypeCode>,
 ) -> Result<()> {
     let kp = get_keypair().c(d!())?;
 
-    let code = if token_code.is_none() {
-        AssetTypeCode::gen_random()
-    } else {
-        AssetTypeCode::new_from_base64(token_code.unwrap())
-            .c(d!("invalid asset code"))?
-    };
-
-    create_asset_x(&kp, memo, decimal, max_units, transferable, Some(code))
+    create_asset_x(&kp, memo, decimal, max_units, transferable, token_code)
         .c(d!())
         .map(|code| {
-            println!("type: {}", code.to_base64());
+            let hex = hex::encode(code.val.0);
+            println!("typeBase64: {}, typeHex: {}", code.to_base64(), hex);
         })
 }
 
@@ -790,12 +784,12 @@ pub fn create_asset_x(
 /// Issue a custom asset with specified amount
 pub fn issue_asset(
     sk_str: Option<&str>,
-    asset: &str,
+    asset: Option<AssetTypeCode>,
     amount: u64,
     hidden: bool,
 ) -> Result<()> {
     let kp = restore_keypair_from_str_with_default(sk_str)?;
-    let code = AssetTypeCode::new_from_base64(asset).c(d!())?;
+    let code = asset.c(d!())?;
     issue_asset_x(&kp, &code, amount, hidden).c(d!())
 }
 
@@ -1380,17 +1374,10 @@ pub fn get_owned_abars(
 pub fn anon_balance(
     axfr_secret_key: AXfrKeyPair,
     commitments_list: &str,
-    asset: Option<&str>,
+    asset: Option<AssetTypeCode>,
 ) -> Result<()> {
     // Parse Asset Type for filtering if provided
-    let mut asset_type = ASSET_TYPE_FRA;
-    if let Some(a) = asset {
-        asset_type = if a.to_uppercase() == "FRA" {
-            ASSET_TYPE_FRA
-        } else {
-            AssetTypeCode::new_from_base64(asset.unwrap()).unwrap().val
-        };
-    }
+    let asset_type = asset.map(|code| code.val).unwrap_or(ASSET_TYPE_FRA);
 
     let mut balance = 0u64;
     commitments_list
@@ -1434,8 +1421,13 @@ pub fn anon_balance(
                 }
             }
         })?;
-
-    println!("{}: {}", asset.unwrap_or("FRA"), balance);
+    println!("{0: <45} | {1: <70} | {2: <18} ", "Base64", "Hex", "Amount");
+    let at_base64 = b64enc(&asset_type.0);
+    let at_hex = hex::encode(&asset_type.0);
+    println!(
+        "{0: <45} | {1: <70} | {2: <18} ",
+        at_base64, at_hex, balance
+    );
     Ok(())
 }
 

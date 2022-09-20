@@ -380,12 +380,16 @@ subcommands:
             takes_value: true
             value_name: ASSET CODE
             allow_hyphen_values: true
+            conflicts_with:
+              - code-hex
         - code-hex:
             help: the hex form of the asset code, eg:0xd3Bf...
             short: h
             long: code-hex
             takes_value: true
             value_name: Code Hex
+            conflicts_with:
+              - code
         - addr:
             help: Findora wallet address
             long: addr
@@ -601,6 +605,13 @@ subcommands:
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
+        - asset-hex:
+            help: the hex form of the asset code, eg:0xd3Bf...
+            long: asset-hex
+            takes_value: true
+            value_name: Asset Hex
+            conflicts_with:
+              - asset
   - owned-open-abars:
       about: Get Open Anon UTXOs for a keypair use commitment
       args:

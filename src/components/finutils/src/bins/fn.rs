@@ -163,7 +163,25 @@ fn run() -> Result<()> {
             } else {
                 None
             };
-            let token_code = m.value_of("code");
+
+            let token_code = if let Some(code) = m.value_of("code") {
+                Some(match code.to_lowercase().as_str() {
+                    "fra" => AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    },
+                    _ => AssetTypeCode::new_from_base64(code).c(d!())?,
+                })
+            } else if let Some(code) = m.value_of("code-hex") {
+                Some(match code.to_lowercase().as_str() {
+                    "fra" => AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    },
+                    _ => AssetTypeCode::new_from_hex(code).c(d!())?,
+                })
+            } else {
+                None
+            };
+
             common::create_asset(
                 memo.unwrap(),
                 decimal,
@@ -187,7 +205,26 @@ fn run() -> Result<()> {
                 }
                 None => None,
             };
-            let code = m.value_of("code");
+            //let code = m.value_of("code");
+
+            let code = if let Some(code) = m.value_of("code") {
+                Some(match code.to_lowercase().as_str() {
+                    "fra" => AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    },
+                    _ => AssetTypeCode::new_from_base64(code).c(d!())?,
+                })
+            } else if let Some(code) = m.value_of("code-hex") {
+                Some(match code.to_lowercase().as_str() {
+                    "fra" => AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    },
+                    _ => AssetTypeCode::new_from_hex(code).c(d!())?,
+                })
+            } else {
+                None
+            };
+
             let amount = m.value_of("amount");
             if code.is_none() || amount.is_none() {
                 println!("{}", m.usage());
@@ -199,8 +236,7 @@ fn run() -> Result<()> {
                 .c(d!("amount should be a 64-bits unsigned integer"))?;
             let hidden = m.is_present("hidden");
 
-            common::issue_asset(seckey.as_deref(), code.unwrap(), amount, hidden)
-                .c(d!())?;
+            common::issue_asset(seckey.as_deref(), code, amount, hidden).c(d!())?;
         } else {
             let help = "fn asset [--create | --issue | --show]";
             println!("{}", help);
@@ -564,7 +600,24 @@ fn run() -> Result<()> {
         let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
         let spend_key =
             wallet::anon_secret_key_from_base64(anon_keys.spend_key.as_str()).c(d!())?;
-        let asset = m.value_of("asset");
+
+        let asset = if let Some(code) = m.value_of("asset") {
+            Some(match code.to_lowercase().as_str() {
+                "fra" => AssetTypeCode {
+                    val: ASSET_TYPE_FRA,
+                },
+                _ => AssetTypeCode::new_from_base64(code).c(d!())?,
+            })
+        } else if let Some(code) = m.value_of("asset-hex") {
+            Some(match code.to_lowercase().as_str() {
+                "fra" => AssetTypeCode {
+                    val: ASSET_TYPE_FRA,
+                },
+                _ => AssetTypeCode::new_from_hex(code).c(d!())?,
+            })
+        } else {
+            None
+        };
 
         let commitments_list = m
             .value_of("commitments")
