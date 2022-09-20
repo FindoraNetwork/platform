@@ -269,6 +269,7 @@ impl<C: Config> Runner for ActionRunner<C> {
     fn call(ctx: &Context, args: Call, config: &evm::Config) -> Result<CallInfo> {
         let precompiles = C::PrecompilesValue::get(ctx.clone());
         let access_list = Vec::new();
+
         Self::execute(
             ctx,
             args.source,
@@ -294,6 +295,7 @@ impl<C: Config> Runner for ActionRunner<C> {
     fn create(ctx: &Context, args: Create, config: &evm::Config) -> Result<CreateInfo> {
         let precompiles = C::PrecompilesValue::get(ctx.clone());
         let access_list = Vec::new();
+
         Self::execute(
             ctx,
             args.source,
@@ -331,6 +333,7 @@ impl<C: Config> Runner for ActionRunner<C> {
         let code_hash = H256::from_slice(Keccak256::digest(&args.init).as_slice());
         let precompiles = C::PrecompilesValue::get(ctx.clone());
         let access_list = Vec::new();
+
         Self::execute(
             ctx,
             args.source,

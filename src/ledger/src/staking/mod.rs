@@ -1335,8 +1335,9 @@ impl Staking {
         }
 
         // punish itself
+        // the delegators under validator do not contain self-delegation message, so give a none on it.
         let am = self.delegation_get(addr).c(d!())?.amount();
-        self.governance_penalty_sub_amount(addr, am * percent[0] / percent[1])
+        self.governance_penalty_sub_amount(None, addr, am * percent[0] / percent[1])
             .c(d!())?;
 
         if self.addr_is_validator(addr) {
@@ -1350,8 +1351,14 @@ impl Staking {
                     .collect::<Vec<_>>()
             };
 
+            // also modify the amount in the delegators under validator,
+            // make the interface delegation_info and delegator_list data the same
             pl().into_iter().for_each(|(pk, p_am)| {
-                ruc::info_omit!(self.governance_penalty_sub_amount(&pk, p_am));
+                ruc::info_omit!(self.governance_penalty_sub_amount(
+                    Some(addr),
+                    &pk,
+                    p_am
+                ));
             });
 
             // punish its vote power
@@ -1367,13 +1374,14 @@ impl Staking {
     #[inline(always)]
     fn governance_penalty_sub_amount(
         &mut self,
-        addr: &XfrPublicKey,
+        validator: Option<&XfrPublicKey>,
+        delegator: &XfrPublicKey,
         mut am: Amount,
     ) -> Result<()> {
         let d = if let Some(d) = self
             .delegation_info
             .global_delegation_records_map
-            .get_mut(addr)
+            .get_mut(delegator)
         {
             d
         } else {
@@ -1412,6 +1420,27 @@ impl Staking {
             // NOTE:
             // punish rewards if principal is not enough
             d.rwd_amount = d.rwd_amount.saturating_sub(am);
+
+            // NOTE:
+            // the current height is greater than the specified height before execution,
+            // because to ensure the compatibility of historical data
+            if CFG.checkpoint.fix_delegators_am_height < self.cur_height {
+                if let Some(v) = validator {
+                    self.validator_get_effective_at_height_mut(self.cur_height)
+                        .c(d!("failed to get effective validators at current height"))
+                        .and_then(|cur| {
+                            cur.body
+                                .get_mut(v)
+                                .map(|v| {
+                                    if let Some(a) = v.delegators.get_mut(delegator) {
+                                        *a -= am;
+                                    }
+                                })
+                                .c(d!("delegator not exists"))
+                        })
+                        .map(|_| ())?;
+                }
+            }
         }
 
         Ok(())

@@ -388,7 +388,7 @@ impl TxnEffect {
 
         // Simplify (4)
         if !trn.body.lien_assignments.is_empty()
-            && trn.body.transfer_type != TransferType::Standard
+            || trn.body.transfer_type != TransferType::Standard
         {
             return Err(eg!());
         }

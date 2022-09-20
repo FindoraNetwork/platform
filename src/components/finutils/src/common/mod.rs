@@ -205,7 +205,9 @@ pub fn stake_append(
     .c(d!())
     .map(|principal_op| builder.add_operation(principal_op))?;
 
-    utils::send_tx(&builder.build_and_take_transaction()?).c(d!())
+    let mut tx = builder.build_and_take_transaction()?;
+    tx.sign(&kp);
+    utils::send_tx(&tx).c(d!())
 }
 
 /// Withdraw Fra token from findora network for a staker
