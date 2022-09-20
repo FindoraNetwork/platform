@@ -170,37 +170,37 @@ pub fn get_validators(
         // If the corresponding value is not retrieved from td.v_set list, it is not processed;
         // If the data before validator_limit is obtained in td.v_set and td.power and abci.power are equal,
         // then it is not processed, otherwise it is not processed.
-        for (i, (addr, power, _)) in vs.iter_mut().enumerate() {
+        let mut update_set = vec![];
+        for (i, (addr, power, td_pk)) in vs.iter().enumerate() {
             // validator_limit...
             if i > validator_limit - 1 {
                 if let Some(p) = cur_entries.get(addr) {
-                    if p == power && *p == 0 {
-                        *power = -1;
-                    } else {
-                        *power = 0;
+                    if *p != 0 {
+                        update_set.push((0, td_pk));
                     }
-                } else {
-                    *power = -1;
                 }
             } else {
                 // ...validator_limit
                 if let Some(p) = cur_entries.get(addr) {
-                    if p == power {
-                        *power = -1;
+                    if *p != *power && *p != 0 {
+                        //update existing validator, even if power == 0.
+                        update_set.push((*power, td_pk));
                     }
+                } else if *power != 0 {
+                    //add new one.
+                    update_set.push((*power, td_pk));
                 }
             }
         }
 
-        let v = vs
-            .iter()
-            .filter(|(_, power, _)| -1 < *power)
-            .map(|(_, power, pubkey)| {
+        let v = update_set
+            .into_iter()
+            .map(|(power, pubkey)| {
                 let mut vu = ValidatorUpdate::new();
                 let mut pk = PubKey::new();
                 pk.set_field_type("ed25519".to_owned());
                 pk.set_data(pubkey.to_vec());
-                vu.set_power(*power);
+                vu.set_power(power);
                 vu.set_pub_key(pk);
                 vu
             })
