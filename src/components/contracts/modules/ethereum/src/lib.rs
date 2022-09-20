@@ -77,7 +77,8 @@ pub mod storage {
     generate_storage!(Ethereum, CurrentReceipts => Map<HA256, Vec<Receipt>>);
     // The ethereum history transaction statuses with block number.
     generate_storage!(Ethereum, CurrentTransactionStatuses => Map<HA256, Vec<TransactionStatus>>);
-
+    // Flag indicating whether data migration has been executed
+    generate_storage!(Ethereum, Migrated => Map<String, bool>);
     // The following data is stored in in-memory array
     // Current building block's transactions and receipts.
     pub type PendingTransactions = Mutex<Vec<(Transaction, TransactionStatus, Receipt)>>;
