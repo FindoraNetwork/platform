@@ -29,6 +29,8 @@ getrandom = "0.2"
 zei = "0.2"
 zei-crypto = "0.2"
 zei-algebra = "0.2"
+nix = "0.25"
+toml_edit = "0.14"
 
 ledger = { path = "../../ledger" }
 globutils = { path = "../../libs/globutils" }
@@ -39,8 +41,8 @@ fp-core = { path = "../contracts/primitives/core", default-features = false }
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = { path = "../contracts/primitives/types" }
 
-tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a" }
-tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rpc", features = ["http-client", "websocket-client"], optional = true, tag = "v0.19.0a" }
+tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a-fk" }
+tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", features = ["http-client", "websocket-client"], optional = true, tag = "v0.19.0a-fk" }
 
 [dev-dependencies]
 

@@ -53,7 +53,9 @@ pub trait Config {
 }
 
 pub mod storage {
-    use ethereum::{BlockV0 as Block, Receipt, TransactionV0 as Transaction};
+    use ethereum::{
+        BlockV0 as Block, ReceiptV0 as Receipt, TransactionV0 as Transaction,
+    };
     use ethereum_types::U256;
     use fp_evm::TransactionStatus;
     use fp_storage::*;

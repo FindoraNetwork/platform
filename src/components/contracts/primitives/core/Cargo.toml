@@ -10,14 +10,14 @@ readme = "README.md"
 
 [dependencies]
 abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4", optional = true }
-ethereum = { version = "0.9.0", default-features = false, features = ["with-serde"] }
+ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
 impl-trait-for-tuples = "0.2"
 parking_lot = "0.12"
-primitive-types = { version = "0.10.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
+primitive-types = { version = "0.11.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
 ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.1", optional = true }
-fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.1", optional = true }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.2", optional = true }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.2", optional = true }
 serde_with = { version = "1.9.4"}
 
 # primitives

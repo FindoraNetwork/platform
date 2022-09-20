@@ -167,6 +167,31 @@ pub fn gen_transfer_op(
 #[allow(missing_docs)]
 pub fn gen_transfer_op_x(
     owner_kp: &XfrKeyPair,
+    target_list: Vec<(&XfrPublicKey, u64)>,
+    token_code: Option<AssetTypeCode>,
+    auto_fee: bool,
+    confidential_am: bool,
+    confidential_ty: bool,
+    balance_type: Option<AssetRecordType>,
+) -> Result<Operation> {
+    gen_transfer_op_xx(
+        None,
+        owner_kp,
+        target_list,
+        token_code,
+        auto_fee,
+        confidential_am,
+        confidential_ty,
+        balance_type,
+    )
+    .c(d!())
+}
+
+#[allow(missing_docs)]
+#[allow(clippy::too_many_arguments)]
+pub fn gen_transfer_op_xx(
+    rpc_endpoint: Option<&str>,
+    owner_kp: &XfrKeyPair,
     mut target_list: Vec<(&XfrPublicKey, u64)>,
     token_code: Option<AssetTypeCode>,
     auto_fee: bool,
@@ -191,7 +216,9 @@ pub fn gen_transfer_op_x(
         op_fee = 0;
     }
     let mut i_am;
-    let utxos = get_owned_utxos(owner_kp.get_pk_ref()).c(d!())?.into_iter();
+    let utxos = get_owned_utxos_x(rpc_endpoint, owner_kp.get_pk_ref())
+        .c(d!())?
+        .into_iter();
 
     for (sid, (utxo, owner_memo)) in utxos {
         let oar =
@@ -543,9 +570,17 @@ pub fn get_asset_balance(kp: &XfrKeyPair, asset: Option<AssetTypeCode>) -> Resul
 pub fn get_owned_utxos(
     addr: &XfrPublicKey,
 ) -> Result<HashMap<TxoSID, (Utxo, Option<OwnerMemo>)>> {
+    get_owned_utxos_x(None, addr).c(d!())
+}
+
+fn get_owned_utxos_x(
+    rpc_endpoint: Option<&str>,
+    addr: &XfrPublicKey,
+) -> Result<HashMap<TxoSID, (Utxo, Option<OwnerMemo>)>> {
+    let default_endpoint = format!("{}:8668", get_serv_addr().c(d!())?);
     let url = format!(
-        "{}:8668/owned_utxos/{}",
-        get_serv_addr().c(d!())?,
+        "{}/owned_utxos/{}",
+        rpc_endpoint.unwrap_or(default_endpoint.as_str()),
         wallet::public_key_to_base64(addr)
     );
 

@@ -185,6 +185,13 @@ async fn check_nullifier_hash(
     Ok(web::Json(server.check_nullifier_hash((*info).clone())))
 }
 
+async fn get_max_atxo_sid(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+) -> actix_web::Result<web::Json<Option<usize>>, actix_web::error::Error> {
+    let server = data.read();
+    Ok(web::Json(server.max_atxo_sid()))
+}
+
 /// Define interface type
 #[allow(missing_docs)]
 pub enum QueryServerRoutes {
@@ -198,6 +205,7 @@ pub enum QueryServerRoutes {
     GetAbarMemos,
     GetAbarProof,
     CheckNullifierHash,
+    GetMaxATxoSid,
     GetCreatedAssets,
     GetIssuedRecords,
     GetIssuedRecordsByCode,
@@ -224,6 +232,7 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetAbarMemos => "get_abar_memos",
             QueryServerRoutes::GetAbarProof => "get_abar_proof",
             QueryServerRoutes::CheckNullifierHash => "check_nullifier_hash",
+            QueryServerRoutes::GetMaxATxoSid => "get_max_atxo_sid",
             QueryServerRoutes::GetCreatedAssets => "get_created_assets",
             QueryServerRoutes::GetIssuedRecords => "get_issued_records",
             QueryServerRoutes::GetIssuedRecordsByCode => "get_issued_records_by_code",
@@ -650,6 +659,10 @@ impl QueryApi {
                     &QueryServerRoutes::CheckNullifierHash
                         .with_arg_template("null_hash"),
                     web::get().to(check_nullifier_hash),
+                )
+                .route(
+                    &QueryServerRoutes::GetMaxATxoSid.route(),
+                    web::get().to(get_max_atxo_sid),
                 )
                 .route(
                     &QueryServerRoutes::GetRelatedTxns.with_arg_template("address"),
