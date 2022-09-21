@@ -16,20 +16,20 @@ def private_key_to_address(private_key, w3):
 
 def get_fra_balance(sec_key):
     out_str = subprocess.check_output([bin_path + '/fn', 'account', '-s', sec_key])
-    parsed = out_str.split('\n')[1].split('|')
+    parsed = out_str.split(b'\n')[1].split(b'|')
     return int(parsed[2])
 
 
 def get_fra_anon_balance(anon_keys_path, commitments):
     out_str = subprocess.check_output(
         [bin_path + '/fn', 'anon-balance', '--anon-keys', anon_keys_path, '--commitments', commitments])
-    parsed = out_str.split('\n')[1].split('|')
+    parsed = out_str.split(b'\n')[1].split(b'|')
     return int(parsed[2])
 
 
 def get_asset_balance(sec_key, asset):
     out_str = subprocess.check_output([bin_path + '/fn', 'account', '-s', sec_key, '--asset', asset])
-    parsed = out_str.split('\n')[1].split('|')
+    parsed = out_str.split(b'\n')[1].split(b'|')
     return int(parsed[2])
 
 
@@ -37,7 +37,7 @@ def get_asset_anon_balance(anon_keys_path, commitments, asset):
     out_str = subprocess.check_output(
         [bin_path + '/fn', 'anon-balance', '--anon-keys', anon_keys_path, '--commitments', commitments,
          '--asset', asset])
-    parsed = out_str.split('\n')[1].split('|')
+    parsed = out_str.split(b'\n')[1].split(b'|')
     return int(parsed[2])
 
 
