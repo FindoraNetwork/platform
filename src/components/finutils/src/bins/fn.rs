@@ -47,6 +47,7 @@ use {
     std::{borrow::Borrow, fmt, fs},
     zei::anon_xfr::keys::AXfrKeyPair,
     zei::anon_xfr::structs::OpenAnonAssetRecordBuilder,
+    zei_algebra::utils::b64enc,
 };
 
 fn main() {
@@ -81,10 +82,19 @@ fn run() -> Result<()> {
 
             // FRA asset is the default case
             let asset = if let Some(code) = m.value_of("asset") {
-                match code.to_lowercase().as_str() {
-                    "fra" => None,
-                    _ => Some(code),
-                }
+                Some(match code.to_lowercase().as_str() {
+                    "fra" => AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    },
+                    _ => AssetTypeCode::new_from_base64(code).c(d!())?,
+                })
+            } else if let Some(code) = m.value_of("asset-hex") {
+                Some(match code.to_lowercase().as_str() {
+                    "fra" => AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    },
+                    _ => AssetTypeCode::new_from_hex(code).c(d!())?,
+                })
             } else {
                 None
             };
@@ -158,7 +168,25 @@ fn run() -> Result<()> {
             } else {
                 None
             };
-            let token_code = m.value_of("code");
+
+            let token_code = if let Some(code) = m.value_of("code") {
+                Some(match code.to_lowercase().as_str() {
+                    "fra" => AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    },
+                    _ => AssetTypeCode::new_from_base64(code).c(d!())?,
+                })
+            } else if let Some(code) = m.value_of("code-hex") {
+                Some(match code.to_lowercase().as_str() {
+                    "fra" => AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    },
+                    _ => AssetTypeCode::new_from_hex(code).c(d!())?,
+                })
+            } else {
+                None
+            };
+
             common::create_asset(
                 memo.unwrap(),
                 decimal,
@@ -182,7 +210,26 @@ fn run() -> Result<()> {
                 }
                 None => None,
             };
-            let code = m.value_of("code");
+            //let code = m.value_of("code");
+
+            let code = if let Some(code) = m.value_of("code") {
+                Some(match code.to_lowercase().as_str() {
+                    "fra" => AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    },
+                    _ => AssetTypeCode::new_from_base64(code).c(d!())?,
+                })
+            } else if let Some(code) = m.value_of("code-hex") {
+                Some(match code.to_lowercase().as_str() {
+                    "fra" => AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    },
+                    _ => AssetTypeCode::new_from_hex(code).c(d!())?,
+                })
+            } else {
+                None
+            };
+
             let amount = m.value_of("amount");
             if code.is_none() || amount.is_none() {
                 println!("{}", m.usage());
@@ -194,8 +241,7 @@ fn run() -> Result<()> {
                 .c(d!("amount should be a 64-bits unsigned integer"))?;
             let hidden = m.is_present("hidden");
 
-            common::issue_asset(seckey.as_deref(), code.unwrap(), amount, hidden)
-                .c(d!())?;
+            common::issue_asset(seckey.as_deref(), code, amount, hidden).c(d!())?;
         } else {
             let help = "fn asset [--create | --issue | --show]";
             println!("{}", help);
@@ -300,7 +346,6 @@ fn run() -> Result<()> {
         }
     } else if let Some(m) = matches.subcommand_matches("transfer") {
         let f = read_file_path(m.value_of("from-seckey")).c(d!())?;
-        let asset = m.value_of("asset").unwrap_or("FRA");
         let t = m
             .value_of("to-pubkey")
             .c(d!())
@@ -315,8 +360,20 @@ fn run() -> Result<()> {
         if am.is_none() {
             println!("{}", m.usage());
         } else {
-            let token_code = if asset.to_uppercase() != "FRA" {
-                Some(AssetTypeCode::new_from_base64(asset).c(d!())?)
+            let token_code = if let Some(code) = m.value_of("asset") {
+                Some(match code.to_lowercase().as_str() {
+                    "fra" => AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    },
+                    _ => AssetTypeCode::new_from_base64(code).c(d!())?,
+                })
+            } else if let Some(code) = m.value_of("asset-hex") {
+                Some(match code.to_lowercase().as_str() {
+                    "fra" => AssetTypeCode {
+                        val: ASSET_TYPE_FRA,
+                    },
+                    _ => AssetTypeCode::new_from_hex(code).c(d!())?,
+                })
             } else {
                 None
             };
@@ -389,10 +446,19 @@ fn run() -> Result<()> {
 
         // FRA asset is the default case
         let asset = if let Some(code) = m.value_of("asset") {
-            match code.to_lowercase().as_str() {
-                "fra" => None,
-                _ => Some(code),
-            }
+            Some(match code.to_lowercase().as_str() {
+                "fra" => AssetTypeCode {
+                    val: ASSET_TYPE_FRA,
+                },
+                _ => AssetTypeCode::new_from_base64(code).c(d!())?,
+            })
+        } else if let Some(code) = m.value_of("asset-hex") {
+            Some(match code.to_lowercase().as_str() {
+                "fra" => AssetTypeCode {
+                    val: ASSET_TYPE_FRA,
+                },
+                _ => AssetTypeCode::new_from_hex(code).c(d!())?,
+            })
         } else {
             None
         };
@@ -407,7 +473,25 @@ fn run() -> Result<()> {
     } else if let Some(m) = matches.subcommand_matches("contract-deposit") {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");
-        let asset = m.value_of("asset");
+
+        let asset = if let Some(code) = m.value_of("asset") {
+            Some(match code.to_lowercase().as_str() {
+                "fra" => AssetTypeCode {
+                    val: ASSET_TYPE_FRA,
+                },
+                _ => AssetTypeCode::new_from_base64(code).c(d!())?,
+            })
+        } else if let Some(code) = m.value_of("asset-hex") {
+            Some(match code.to_lowercase().as_str() {
+                "fra" => AssetTypeCode {
+                    val: ASSET_TYPE_FRA,
+                },
+                _ => AssetTypeCode::new_from_hex(code).c(d!())?,
+            })
+        } else {
+            None
+        };
+
         let lowlevel_data = m.value_of("lowlevel-data");
         transfer_to_account(
             amount.parse::<u64>().c(d!())?,
@@ -521,7 +605,24 @@ fn run() -> Result<()> {
         let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
         let spend_key =
             wallet::anon_secret_key_from_base64(anon_keys.spend_key.as_str()).c(d!())?;
-        let asset = m.value_of("asset");
+
+        let asset = if let Some(code) = m.value_of("asset") {
+            Some(match code.to_lowercase().as_str() {
+                "fra" => AssetTypeCode {
+                    val: ASSET_TYPE_FRA,
+                },
+                _ => AssetTypeCode::new_from_base64(code).c(d!())?,
+            })
+        } else if let Some(code) = m.value_of("asset-hex") {
+            Some(match code.to_lowercase().as_str() {
+                "fra" => AssetTypeCode {
+                    val: ASSET_TYPE_FRA,
+                },
+                _ => AssetTypeCode::new_from_hex(code).c(d!())?,
+            })
+        } else {
+            None
+        };
 
         let commitments_list = m
             .value_of("commitments")
@@ -551,29 +652,47 @@ fn run() -> Result<()> {
         );
     } else if let Some(m) = matches.subcommand_matches("owned-utxos") {
         // All assets are shown in the default case
-        let asset = m.value_of("asset");
+        let asset = if let Some(code) = m.value_of("asset") {
+            Some(match code.to_lowercase().as_str() {
+                "fra" => AssetTypeCode {
+                    val: ASSET_TYPE_FRA,
+                },
+                _ => AssetTypeCode::new_from_base64(code).c(d!())?,
+            })
+        } else if let Some(code) = m.value_of("asset-hex") {
+            Some(match code.to_lowercase().as_str() {
+                "fra" => AssetTypeCode {
+                    val: ASSET_TYPE_FRA,
+                },
+                _ => AssetTypeCode::new_from_hex(code).c(d!())?,
+            })
+        } else {
+            None
+        };
 
         // fetch filtered list by asset
-        let list = common::get_owned_utxos(asset)?;
+        let list = common::get_owned_utxos(None, asset)?;
         let pk = wallet::public_key_to_base64(get_keypair().unwrap().pub_key.borrow());
 
         // Print UTXO table
         println!("Owned utxos for {:?}", pk);
         println!("{:-^1$}", "", 100);
         println!(
-            "{0: <8} | {1: <18} | {2: <45} ",
-            "ATxoSID", "Amount", "AssetType"
+            "{0: <10} | {1: <18} | {2: <45} | {3: <70}",
+            "ATxoSID", "Amount", "AssetType Base64", "AssetType Hex"
         );
         for (a, b, c) in list.iter() {
             let amt = b
                 .get_amount()
                 .map_or_else(|| "Confidential".to_string(), |a| a.to_string());
-            let at = c.get_asset_type().map_or_else(
-                || "Confidential".to_string(),
-                |at| AssetTypeCode { val: at }.to_base64(),
-            );
+            let at = c.get_asset_type().unwrap_or_default();
+            let at_base64 = b64enc(&at.0);
+            let at_hex = format!("0x{}", hex::encode(&at.0));
 
-            println!("{0: <8} | {1: <18} | {2: <45} ", a.0, amt, at);
+            println!(
+                "{0: <10} | {1: <18} | {2: <45} | {3: <70}",
+                a.0, amt, at_base64, at_hex
+            );
         }
     } else if let Some(m) = matches.subcommand_matches("anon-transfer") {
         // get anon keys of sender

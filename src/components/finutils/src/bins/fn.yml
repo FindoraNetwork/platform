@@ -207,6 +207,15 @@ subcommands:
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
+            conflicts_with:
+              - asset-hex
+        - asset-hex:
+            help: the hex form of the asset code, eg:0xd3Bf...
+            long: asset-hex
+            takes_value: true
+            value_name: Asset Hex
+            conflicts_with:
+              - asset
         - from-seckey:
             help: the file which contains base64-formated `XfrPrivateKey` of the receiver
             short: f
@@ -294,6 +303,14 @@ subcommands:
             allow_hyphen_values: true
             conflicts_with:
               - create
+              - asset-hex
+        - asset-hex:
+            help: the hex form of the asset code, eg:0xd3Bf...
+            long: asset-hex
+            takes_value: true
+            value_name: Asset Hex
+            conflicts_with:
+              - asset
         - seckey:
             help: the file which contains base64-formated `XfrPrivateKey` of an existing wallet
             long: seckey
@@ -363,6 +380,16 @@ subcommands:
             takes_value: true
             value_name: ASSET CODE
             allow_hyphen_values: true
+            conflicts_with:
+              - code-hex
+        - code-hex:
+            help: the hex form of the asset code, eg:0xd3Bf...
+            short: h
+            long: code-hex
+            takes_value: true
+            value_name: Code Hex
+            conflicts_with:
+              - code
         - addr:
             help: Findora wallet address
             long: addr
@@ -433,11 +460,20 @@ subcommands:
             takes_value: true
             value_name: SECRET KEY
         - asset:
-            help: code of asset, such as `fra`
+            help: code of asset, such as `fra`, out of fra, the others are in base64 form eg. U_nLS8resJttrUlQyO_0QYZSh1CUKgAp7jA_eHk4bqw=
             long: asset
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
+            conflicts_with:
+              - asset-hex
+        - asset-hex:
+            help: the hex form of the asset code, eg:0xd3Bf...
+            long: asset-hex
+            takes_value: true
+            value_name: Asset Hex
+            conflicts_with:
+              - asset
   - contract-deposit:
       about: Transfer FRA from a Findora account to the specified Ethereum address
       args:
@@ -462,6 +498,15 @@ subcommands:
             takes_value: true
             value_name: ASSET
             required: false
+            conflicts_with:
+              - asset-hex
+        - asset-hex:
+            help: the hex form of the asset code, eg:0xd3Bf...
+            long: asset-hex
+            takes_value: true
+            value_name: Asset Hex
+            conflicts_with:
+              - asset
         - lowlevel-data:
             help: deposit with evm lowlevel call.
             short: l
@@ -527,6 +572,15 @@ subcommands:
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
+            conflicts_with:
+              - asset-hex
+        - asset-hex:
+            help: the hex form of the asset code, eg:0xd3Bf...
+            long: asset-hex
+            takes_value: true
+            value_name: Asset Hex
+            conflicts_with:
+              - asset
   - anon-balance:
       about: List Anon balance and spending status for a public key and a list of commitments
       args:
@@ -551,6 +605,13 @@ subcommands:
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
+        - asset-hex:
+            help: the hex form of the asset code, eg:0xd3Bf...
+            long: asset-hex
+            takes_value: true
+            value_name: Asset Hex
+            conflicts_with:
+              - asset
   - owned-open-abars:
       about: Get Open Anon UTXOs for a keypair use commitment
       args:
@@ -578,6 +639,15 @@ subcommands:
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
+            conflicts_with:
+              - asset-hex
+        - asset-hex:
+            help: the hex form of the asset code, eg:0xd3Bf...
+            long: asset-hex
+            takes_value: true
+            value_name: Asset Hex
+            conflicts_with:
+              - asset
   - convert-bar-to-abar:
       about: Convert a BAR to Anon BAR for yourself
       args:
