@@ -5,7 +5,7 @@ authors = ["FindoraNetwork"]
 edition = "2021"
 
 [dependencies]
-ruc = "1.0"
+ruc = "2.0"
 arrayref = "0.3.5"
 base64 = "0.12"
 byteorder = "1.0.0"
