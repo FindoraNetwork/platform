@@ -57,7 +57,7 @@ fp-storage = { path = "../contracts/primitives/storage" }
 fp-utils = { path = "../contracts/primitives/utils" }
 
 [target.'cfg(target_os= "linux")'.dependencies]
-btm = "0.1.6"
+btm = "0.8.0"
 
 [dev-dependencies]
 
