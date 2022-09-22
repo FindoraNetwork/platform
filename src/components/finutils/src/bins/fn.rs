@@ -681,17 +681,13 @@ fn run() -> Result<()> {
             "{0: <10} | {1: <18} | {2: <45} | {3: <70}",
             "ATxoSID", "Amount", "AssetType Base64", "AssetType Hex"
         );
-        for (a, b, c) in list.iter() {
-            let amt = b
-                .get_amount()
-                .map_or_else(|| "Confidential".to_string(), |a| a.to_string());
-            let at = c.get_asset_type().unwrap_or_default();
+        for (a, amt, at) in list.iter() {
             let at_base64 = b64enc(&at.0);
             let at_hex = format!("0x{}", hex::encode(&at.0));
 
             println!(
                 "{0: <10} | {1: <18} | {2: <45} | {3: <70}",
-                a.0, amt, at_base64, at_hex
+                a.0, *amt, at_base64, at_hex
             );
         }
     } else if let Some(m) = matches.subcommand_matches("anon-transfer") {

@@ -48,11 +48,11 @@ use {
         },
         xfr::{
             asset_record::{
-                AssetRecordType,
+                open_blind_asset_record, AssetRecordType,
                 AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
             },
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
-            structs::{AssetType, XfrAmount, XfrAssetType},
+            structs::AssetType,
         },
     },
     zei_algebra::utils::b64enc,
@@ -607,29 +607,35 @@ fn restore_keypair_from_str_with_default(sk_str: Option<&str>) -> Result<XfrKeyP
 pub fn show_account(sk_str: Option<&str>, asset: Option<AssetTypeCode>) -> Result<()> {
     let kp = restore_keypair_from_str_with_default(sk_str)?;
 
+    let _asset = asset.clone();
+    //let balance = utils::get_asset_balance(&kp, token_code).c(d!())?;
+
     println!("{0: <45} | {1: <70} | {2: <18} ", "Base64", "Hex", "Amount");
     let list = get_owned_utxos(Some(kp), asset)?;
     let mut map = HashMap::new();
-    for (_, b, c) in list {
-        let amt = b.get_amount();
-
-        let at = c.get_asset_type().unwrap_or_default();
+    for (_, amt, at) in list {
         let at_base64 = b64enc(&at.0);
         let at_hex = hex::encode(&at.0);
 
         let key = (at_base64, at_hex);
 
-        if let Some(Some(a)) = map.get_mut(&key) {
-            *a += amt.unwrap_or(0);
+        if let Some(a) = map.get_mut(&key) {
+            *a += amt;
         } else {
             map.insert(key, amt);
         }
     }
 
-    for (key, val) in map.iter() {
-        let v = val.map_or_else(|| "Confidential".to_string(), |a| a.to_string());
-        let hex = format!("0x{}", key.1);
-        println!("{0: <45} | {1: <70} | {2: <18} ", key.0, hex, v);
+    if map.is_empty() {
+        if let Some(asset) = _asset {
+            let at_base64 = asset.to_base64();
+            let at_hex = asset.to_hex();
+            println!("{0: <45} | 0x{1: <70} | {2: <18} ", at_base64, at_hex, 0);
+        }
+    } else {
+        for (key, val) in map.iter() {
+            println!("{0: <45} | 0x{1: <70} | {2: <18} ", key.0, key.1, val);
+        }
     }
 
     Ok(())
@@ -1259,7 +1265,7 @@ pub fn get_mtleaf_info(atxo_sid: &str) -> Result<MTLeafInfo> {
 pub fn get_owned_utxos(
     kp: Option<XfrKeyPair>,
     asset: Option<AssetTypeCode>,
-) -> Result<Vec<(TxoSID, XfrAmount, XfrAssetType)>> {
+) -> Result<Vec<(TxoSID, u64, AssetType)>> {
     // get KeyPair from current setup wallet
     let kp = if let Some(kp) = kp {
         kp
@@ -1273,25 +1279,16 @@ pub fn get_owned_utxos(
         (true, AssetType::default())
     };
 
-    let list: Vec<(TxoSID, XfrAmount, XfrAssetType)> =
-        utils::get_owned_utxos(&kp.pub_key)?
-            .iter()
-            .filter(|a| {
-                // Filter by asset type if given or read all
-                if is_all {
-                    true
-                } else {
-                    match a.1.clone().0 .0.record.asset_type {
-                        XfrAssetType::Confidential(_) => false,
-                        XfrAssetType::NonConfidential(x) => asset_type == x,
-                    }
-                }
-            })
-            .map(|a| {
-                let record = a.1.clone().0 .0.record;
-                (*a.0, record.amount, record.asset_type)
-            })
-            .collect();
+    let utxos = utils::get_owned_utxos(&kp.pub_key)?;
+    let mut list: Vec<(TxoSID, u64, AssetType)> = Vec::with_capacity(utxos.len());
+
+    for (txo_id, (uxto, memo)) in utxos.into_iter() {
+        let record = open_blind_asset_record(&uxto.0.record, &memo, &kp)?;
+        // Filter by asset type
+        if is_all || record.asset_type == asset_type {
+            list.push((TxoSID(txo_id.0), record.amount, record.asset_type));
+        }
+    }
 
     Ok(list)
 }

@@ -30,8 +30,8 @@ def get_fra_anon_balance(anon_keys_path, commitments):
 def get_asset_balance(sec_key, asset):
     out_str = subprocess.check_output([bin_path + '/fn', 'account', '-s', sec_key, '--asset', asset])
     parsed = out_str.split(b'\n')[1].split(b'|')
-    return int(parsed[2])
-
+    res = int(parsed[2])
+    return res
 
 def get_asset_anon_balance(anon_keys_path, commitments, asset):
     out_str = subprocess.check_output(

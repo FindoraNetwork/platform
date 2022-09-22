@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 source tools/regression/triple_masking/scripts/env.sh
 
+export BLOCK_INTERVAL="16"
+
 export KEYPAIR=$($BIN/fn genkey)
 echo "$KEYPAIR"
 export FRA_ADDRESS=$(echo "$KEYPAIR" |awk 'NR == 2' |awk '{print $3}')
