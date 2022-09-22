@@ -13,4 +13,4 @@ sleep $SLEEP_INTERVAL
 sleep $SLEEP_INTERVAL
 echo Regression path: $TM_REGRESSION_PATH
 $BIN/stt init -i $BLOCK_INTERVAL -s
-sleep $SLEEP_INTERVAL
+sleep $SLEEP_INTERVAL + 2
