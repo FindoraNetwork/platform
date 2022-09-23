@@ -215,7 +215,7 @@ ci_build_binary_rust_base:
 
 ci_build_binary_rust_base_arm:
 	# docker start buildx_buildkit_findorad-builder0
-	docker run --rm --privileged tonistiigi/binfmt:latest --install all
+	# docker run --rm --privileged tonistiigi/binfmt:latest --install all
 	docker buildx build --platform linux/arm64/v8 --output=type=docker -t binary-rust-base-arm -f container/Dockerfile-binary-rust-base-arm .
 
 ci_build_dev_binary_image:

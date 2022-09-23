@@ -25,14 +25,7 @@ jobs:
         toolchain: stable
         override: true
         components: rustfmt
-    - name: Login Dockerhub
-      env: 
-        DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
-        DOCKERHUB_TOKEN: ${{secrets.DOCKERHUB_TOKEN}}
-      shell: bash
-      run: |
-        docker login -u ${DOCKERHUB_URL} -p ${DOCKERHUB_TOKEN}
-        
+
     - name: Prepare key
       shell: bash
       run: |
