@@ -369,7 +369,11 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
            code_len,
             address
         );
-        if let Err(e) = App::<C>::create_account(self.ctx, address.into(), code) {
+        #[cfg(feature = "enterprise-web3")]
+        let result = App::<C>::create_account(self.ctx, address.into(), code.clone());
+        #[cfg(not(feature = "enterprise-web3"))]
+        let result = App::<C>::create_account(self.ctx, address.into(), code);
+        if let Err(e) = result {
             tracing::error!(
                 target: "evm",
                 "Failed inserting code ({} bytes) at {:?}, error: {:?}",
@@ -383,7 +387,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                 use enterprise_web3::{CODE_MAP, WEB3_SERVICE_START_HEIGHT};
                 if self.ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
                     let mut code_map = CODE_MAP.lock().expect("get code map fail");
-                    code_map.insert(address, code.clone());
+                    code_map.insert(address, code);
                 }
             }
         }

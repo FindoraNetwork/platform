@@ -78,9 +78,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
 
         #[cfg(feature = "web3_service")]
         {
-            use enterprise_web3::{
-                WEB3_SERVICE_START_HEIGHT,BALANCE_MAP
-            };
+            use enterprise_web3::{BALANCE_MAP, WEB3_SERVICE_START_HEIGHT};
             use primitive_types::H160;
 
             if ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
@@ -120,9 +118,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
 
         #[cfg(feature = "web3_service")]
         {
-            use enterprise_web3::{
-                WEB3_SERVICE_START_HEIGHT, BALANCE_MAP
-            };
+            use enterprise_web3::{BALANCE_MAP, WEB3_SERVICE_START_HEIGHT};
             use primitive_types::H160;
 
             if ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
@@ -159,9 +155,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
 
         #[cfg(feature = "web3_service")]
         {
-            use enterprise_web3::{
-                WEB3_SERVICE_START_HEIGHT, BALANCE_MAP
-            };
+            use enterprise_web3::{BALANCE_MAP, WEB3_SERVICE_START_HEIGHT};
             use primitive_types::H160;
             if ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
                 let mut balance_map = BALANCE_MAP.lock().c(d!())?;
@@ -194,9 +188,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
 
         #[cfg(feature = "web3_service")]
         {
-            use enterprise_web3::{
-                WEB3_SERVICE_START_HEIGHT, BALANCE_MAP
-            };
+            use enterprise_web3::{BALANCE_MAP, WEB3_SERVICE_START_HEIGHT};
             use primitive_types::H160;
 
             if ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
@@ -227,9 +219,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
 
         #[cfg(feature = "web3_service")]
         {
-            use enterprise_web3::{
-                WEB3_SERVICE_START_HEIGHT, BALANCE_MAP
-            };
+            use enterprise_web3::{BALANCE_MAP, WEB3_SERVICE_START_HEIGHT};
             use primitive_types::H160;
             if ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
                 let mut balance_map = BALANCE_MAP.lock().c(d!())?;

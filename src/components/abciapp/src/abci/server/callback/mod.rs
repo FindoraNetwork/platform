@@ -507,10 +507,10 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
 
     #[cfg(feature = "web3_service")]
     {
+        use enterprise_web3::WEB3_SERVICE_START_HEIGHT;
         use std::collections::HashMap;
         use std::mem::replace;
         use std::ops::DerefMut;
-        use enterprise_web3::WEB3_SERVICE_START_HEIGHT;
 
         let height = state.get_tendermint_height() as u32;
         if height as u64 > *WEB3_SERVICE_START_HEIGHT {

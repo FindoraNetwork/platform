@@ -1,5 +1,5 @@
 use evm_exporter::{
-    Block as EnterpriseBlock, Exporter, Receipt as EnterpriseReceipt, Setter,
+    Block as EnterpriseBlock, Exporter, Getter, Receipt as EnterpriseReceipt, Setter,
     State as EnterpriseState, TransactionStatus as EnterpriseTxState,
 };
 use lazy_static::lazy_static;
@@ -38,9 +38,10 @@ fn gen_redis_client() -> Client {
 }
 
 fn load_start_height() -> u64 {
-    let start_height =
-        std::env::var("WEB3_SERVICE_START_HEIGHT").unwrap_or_else(|_|String::from("0"));
-    start_height.parse::<u64>().unwrap()
+    let client = REDIS_CLIENT.lock().c(d!()).unwrap();
+    let con = client.get_connection().c(d!()).unwrap();
+    let mut getter = Getter::new(con, "evm".to_string());
+    getter.latest_height().unwrap() as u64
 }
 
 pub fn get_exporter() -> Result<Exporter<Connection>> {
