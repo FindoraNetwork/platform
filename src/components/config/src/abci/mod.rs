@@ -38,6 +38,7 @@ pub struct CheckPointConfig {
     pub nonce_bug_fix_height: u64,
     pub ci_test_value: u64,
     pub proper_gas_set_height: u64,
+    pub ci_test_value: u64,
 }
 
 impl CheckPointConfig {
@@ -73,6 +74,7 @@ impl CheckPointConfig {
                                 prism_bridge_address: String::new(),
                                 ci_test_value: 0,
                                 proper_gas_set_height: 0,
+                                ci_test_value: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -98,6 +100,7 @@ impl CheckPointConfig {
                                 prism_bridge_address: String::new(),
                                 ci_test_value: 30000000,
                                 proper_gas_set_height: 30000000,
+                                ci_test_value: 30000000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();

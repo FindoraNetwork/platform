@@ -7,7 +7,7 @@ TRIPLE_MASKING_SCRIPTS_PATH="tools/regression/triple_masking/scripts"
 source $TRIPLE_MASKING_SCRIPTS_PATH/env.sh
 
 # declare sleep intervals
-let TM_SLEEP=($BLOCK_INTERVAL + 5) # If breaking, increase the sleep time
+let TM_SLEEP=($BLOCK_INTERVAL + 10) # If breaking, increase the sleep time
 
 # generate keys and create test bars
 source $TRIPLE_MASKING_SCRIPTS_PATH/gen_keys_test-bars.sh
