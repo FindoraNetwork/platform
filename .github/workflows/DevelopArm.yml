@@ -1,4 +1,4 @@
-name: Develop
+name: Develop Arm
 on:
   # pull_request:
   #   branches:
@@ -41,7 +41,7 @@ jobs:
       shell: bash
       run: |
         make ci_build_binary_rust_base_arm
-        
+
     - name: Build binary image
       env:
         GITHUB_CONTEXT: ${{ toJSON(github) }}
