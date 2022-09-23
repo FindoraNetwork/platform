@@ -45,7 +45,9 @@ impl ERC20Constructor {
             .unwrap();
         UnsignedTransaction {
             nonce,
-            gas_price: <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(),
+            gas_price: <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(
+                100_0000_0000_u64,
+            ),
             gas_limit: U256::from(DEFAULT_GAS_LIMIT),
             action: TransactionAction::Create,
             value: Default::default(),
@@ -78,7 +80,9 @@ impl ERC20 {
             .unwrap();
         UnsignedTransaction {
             nonce,
-            gas_price: <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(),
+            gas_price: <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(
+                100_0000_0000_u64,
+            ),
             gas_limit: U256::from(DEFAULT_GAS_LIMIT),
             action: TransactionAction::Call(self.0.address),
             value: Default::default(),
@@ -105,7 +109,9 @@ impl ERC20 {
             .unwrap();
         UnsignedTransaction {
             nonce,
-            gas_price: <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(),
+            gas_price: <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(
+                100_0000_0000_u64,
+            ),
             gas_limit: U256::from(DEFAULT_GAS_LIMIT),
             action: TransactionAction::Call(self.0.address),
             value,
@@ -123,7 +129,9 @@ impl ERC20 {
             .unwrap();
         UnsignedTransaction {
             nonce,
-            gas_price: <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(),
+            gas_price: <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(
+                100_0000_0000_u64,
+            ),
             gas_limit: U256::from(DEFAULT_GAS_LIMIT),
             action: TransactionAction::Call(self.0.address),
             value: Default::default(),

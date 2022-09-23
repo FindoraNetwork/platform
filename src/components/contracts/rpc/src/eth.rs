@@ -190,11 +190,18 @@ impl EthApi for EthApiImpl {
             Err(e) => return Box::pin(future::err(e)),
         };
 
+        let curr_height = match self.block_number() {
+            Ok(h) => h.as_u64(),
+            Err(e) => return Box::pin(future::err(e)),
+        };
+
         let message = EthereumTransactionMessage {
             nonce,
-            gas_price: request.gas_price.unwrap_or_else(
-                <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price,
-            ),
+            gas_price: request.gas_price.unwrap_or_else(|| {
+                <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(
+                    curr_height,
+                )
+            }),
             gas_limit: request.gas.unwrap_or_else(U256::max_value),
             value: request.value.unwrap_or_else(U256::zero),
             input: request.data.map(|s| s.into_vec()).unwrap_or_default(),
@@ -373,7 +380,11 @@ impl EthApi for EthApiImpl {
     }
 
     fn gas_price(&self) -> Result<U256> {
-        Ok(<BaseApp as module_evm::Config>::FeeCalculator::min_gas_price())
+        Ok(
+            <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(
+                self.block_number()?.as_u64(),
+            ),
+        )
     }
 
     fn block_number(&self) -> Result<U256> {

@@ -46,13 +46,12 @@ impl<C: Config> ActionRunner<C> {
             >,
         ) -> (ExitReason, R),
     {
+        let min_gas_price = C::FeeCalculator::min_gas_price(ctx.header.height as u64);
+
         // Gas price check is skipped when performing a gas estimation.
         let gas_price = match gas_price {
             Some(gas_price) => {
-                ensure!(
-                    gas_price >= C::FeeCalculator::min_gas_price(),
-                    "GasPriceTooLow"
-                );
+                ensure!(gas_price >= min_gas_price, "GasPriceTooLow");
                 gas_price
             }
             None => Default::default(),

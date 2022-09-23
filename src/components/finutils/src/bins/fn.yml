@@ -816,14 +816,6 @@ subcommands:
                   takes_value: true
                   value_name: CHECKPOINT FILE
                   required: false
-              - abcid_extra_flags:
-                  help: A pair of quotes should be used when specifying extra flags
-                  short: E
-                  long: abcid-extra-flags
-                  takes_value: true
-                  value_name: ABCID EXTRA FLAGS
-                  allow_hyphen_values: true
-                  required: false
               - host_ip:
                   help: The IP of your local host, default to 127.0.0.1
                   short: H
@@ -831,19 +823,41 @@ subcommands:
                   takes_value: true
                   value_name: HOST IP
                   required: false
+              - abcid_bin_path:
+                  help: The path of your custom abcid binary
+                  short: d
+                  long: abcid-bin-path
+                  takes_value: true
+                  value_name: ABCID BIN PATH
+                  required: false
               - tendermint_bin_path:
                   help: The path of your custom tendermint binary
-                  short: T
+                  short: D
                   long: tendermint-bin-path
                   takes_value: true
                   value_name: TENDERMINT BIN PATH
                   required: false
-              - abcid_bin_path:
-                  help: The path of your custom abcid binary
-                  short: A
-                  long: abcid-bin-path
+              - abcid_extra_flags:
+                  help: A pair of quotes should be used when specifying extra flags
+                  short: x
+                  long: abcid-extra-flags
                   takes_value: true
-                  value_name: ABCID BIN PATH
+                  value_name: ABCID EXTRA FLAGS
+                  allow_hyphen_values: true
+                  required: false
+              - tendermint_extra_flags:
+                  help: A pair of quotes should be used when specifying extra flags
+                  short: X
+                  long: tendermint-extra-flags
+                  takes_value: true
+                  value_name: TENDERMINT EXTRA FLAGS
+                  allow_hyphen_values: true
+                  required: false
+              - force:
+                  help: destroy the target ENV and create a new one
+                  short: f
+                  long: force
+                  takes_value: false
                   required: false
         - destroy:
             about: Destroy an existing env
@@ -867,6 +881,8 @@ subcommands:
                   takes_value: true
                   value_name: ENV NAME
                   required: false
+        - start-all:
+            about: Start all existing ENVs
         - stop:
             about: Stop an existing env
             args:
@@ -877,7 +893,9 @@ subcommands:
                   takes_value: true
                   value_name: ENV NAME
                   required: false
-        - add-node:
+        - stop-all:
+            about: Stop all existing ENVs
+        - push-node:
             about: Attach a new node to an existing env
             args:
               - env_name:
@@ -887,7 +905,7 @@ subcommands:
                   takes_value: true
                   value_name: ENV NAME
                   required: false
-        - del-node:
+        - pop-node:
             about: Pop a node from an existing env
             args:
               - env_name:
@@ -897,7 +915,7 @@ subcommands:
                   takes_value: true
                   value_name: ENV NAME
                   required: false
-        - info:
+        - show:
             about: Default operation, show the information of an existing env
             args:
               - env_name:
@@ -907,7 +925,7 @@ subcommands:
                   takes_value: true
                   value_name: ENV NAME
                   required: false
-        - info-all:
+        - show-all:
             about: Show the details of all existing ENVs
         - list:
             about: List the names of all existing ENVs
