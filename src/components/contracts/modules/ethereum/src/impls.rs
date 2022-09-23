@@ -26,7 +26,7 @@ use ruc::*;
 use sha3::{Digest, Keccak256};
 
 #[cfg(feature = "web3_service")]
-use enterprise_web3::{TxState, BLOCK, RECEIPTS, TXS};
+use enterprise_web3::{TxState, BLOCK, RECEIPTS, TXS, WEB3_SERVICE_START_HEIGHT};
 
 impl<C: Config> App<C> {
     pub fn recover_signer_fast(
@@ -165,40 +165,42 @@ impl<C: Config> App<C> {
             {
                 use ethereum::{BlockAny, FrontierReceiptData, ReceiptAny};
 
-                if let Ok(mut b) = BLOCK.lock() {
-                    if b.is_none() {
-                        let block = BlockAny::from(block);
-                        b.replace(block);
-                    } else {
-                        log::error!("the block is not none");
+                if block_number.as_u64() > *WEB3_SERVICE_START_HEIGHT {
+                    if let Ok(mut b) = BLOCK.lock() {
+                        if b.is_none() {
+                            let block = BlockAny::from(block);
+                            b.replace(block);
+                        } else {
+                            log::error!("the block is not none");
+                        }
                     }
-                }
-                if let Ok(mut txs) = TXS.lock() {
-                    for status in statuses.iter() {
-                        let tx_status = TxState {
-                            transaction_hash: status.transaction_hash,
-                            transaction_index: status.transaction_index,
-                            from: status.from,
-                            to: status.to,
-                            contract_address: status.contract_address,
-                            logs: status.logs.clone(),
-                            logs_bloom: status.logs_bloom.clone(),
-                        };
+                    if let Ok(mut txs) = TXS.lock() {
+                        for status in statuses.iter() {
+                            let tx_status = TxState {
+                                transaction_hash: status.transaction_hash,
+                                transaction_index: status.transaction_index,
+                                from: status.from,
+                                to: status.to,
+                                contract_address: status.contract_address,
+                                logs: status.logs.clone(),
+                                logs_bloom: status.logs_bloom.clone(),
+                            };
 
-                        txs.push(tx_status);
+                            txs.push(tx_status);
+                        }
                     }
-                }
 
-                if let Ok(mut rs) = RECEIPTS.lock() {
-                    for receipt in receipts.iter() {
-                        let f = FrontierReceiptData {
-                            state_root: receipt.state_root,
-                            used_gas: receipt.used_gas,
-                            logs_bloom: receipt.logs_bloom,
-                            logs: receipt.logs.clone(),
-                        };
+                    if let Ok(mut rs) = RECEIPTS.lock() {
+                        for receipt in receipts.iter() {
+                            let f = FrontierReceiptData {
+                                state_root: receipt.state_root,
+                                used_gas: receipt.used_gas,
+                                logs_bloom: receipt.logs_bloom,
+                                logs: receipt.logs.clone(),
+                            };
 
-                        rs.push(ReceiptAny::Frontier(f));
+                            rs.push(ReceiptAny::Frontier(f));
+                        }
                     }
                 }
             }
