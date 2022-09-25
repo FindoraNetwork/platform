@@ -53,13 +53,13 @@ do
     done
 
     POSIX_BACKUP_OPTION=$(sed v < /dev/null 2> /dev/null || echo -n "''")
-    sed -i "$POSIX_BACKUP_OPTION" "13s/proxy_app = .*/proxy_app = \"${base_url}${proxy_app_port}\"/g" $config_toml
-    sed -i "$POSIX_BACKUP_OPTION" "84s/laddr = .*/laddr = \"${base_url}${rpc_laddr_port}\"/g" $config_toml
-    sed -i "$POSIX_BACKUP_OPTION" "163s/laddr = .*/laddr = \"${base_url}${p2p_laddr_port}\"/g" $config_toml
-    sed -i "$POSIX_BACKUP_OPTION" "175s/persistent_peers = .*/persistent_peers = \"${tmp_peer}\"/g" $config_toml
-    sed -i "$POSIX_BACKUP_OPTION" "272s/timeout_commit = .*/timeout_commit = \"${timeout_commit}s\"/g" $config_toml
-    sed -i "$POSIX_BACKUP_OPTION" "279s/create_empty_blocks_interval = .*/create_empty_blocks_interval = \"${blocks_interval}s\"/g" $config_toml
-    sed -i "$POSIX_BACKUP_OPTION" "315s/index_all_keys = .*/index_all_keys = true/g" $config_toml
+    sed -i $POSIX_BACKUP_OPTION "13s/proxy_app = .*/proxy_app = \"${base_url}${proxy_app_port}\"/g" $config_toml
+    sed -i $POSIX_BACKUP_OPTION "84s/laddr = .*/laddr = \"${base_url}${rpc_laddr_port}\"/g" $config_toml
+    sed -i $POSIX_BACKUP_OPTION "163s/laddr = .*/laddr = \"${base_url}${p2p_laddr_port}\"/g" $config_toml
+    sed -i $POSIX_BACKUP_OPTION "175s/persistent_peers = .*/persistent_peers = \"${tmp_peer}\"/g" $config_toml
+    sed -i $POSIX_BACKUP_OPTION "272s/timeout_commit = .*/timeout_commit = \"${timeout_commit}s\"/g" $config_toml
+    sed -i $POSIX_BACKUP_OPTION "279s/create_empty_blocks_interval = .*/create_empty_blocks_interval = \"${blocks_interval}s\"/g" $config_toml
+    sed -i $POSIX_BACKUP_OPTION "315s/index_all_keys = .*/index_all_keys = true/g" $config_toml
 
     abci_toml=$node/abci/abci.toml
     echo 'abci_host = "0.0.0.0"' >> $abci_toml
