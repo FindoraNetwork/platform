@@ -277,8 +277,6 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                 let mut nonce_map = NONCE_MAP.lock().expect("get nonce map error");
                 if let Ok(nonce) = _nonce {
                     nonce_map.insert(address, nonce);
-                } else {
-                    panic!("inc_nonce err:{:?}", _nonce);
                 }
             }
         }
