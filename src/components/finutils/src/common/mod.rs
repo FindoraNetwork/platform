@@ -607,9 +607,6 @@ fn restore_keypair_from_str_with_default(sk_str: Option<&str>) -> Result<XfrKeyP
 pub fn show_account(sk_str: Option<&str>, asset: Option<AssetTypeCode>) -> Result<()> {
     let kp = restore_keypair_from_str_with_default(sk_str)?;
 
-    let _asset = asset.clone();
-    //let balance = utils::get_asset_balance(&kp, token_code).c(d!())?;
-
     println!("{0: <45} | {1: <70} | {2: <18} ", "Base64", "Hex", "Amount");
     let list = get_owned_utxos(Some(kp), asset)?;
     let mut map = HashMap::new();
@@ -627,7 +624,7 @@ pub fn show_account(sk_str: Option<&str>, asset: Option<AssetTypeCode>) -> Resul
     }
 
     if map.is_empty() {
-        if let Some(asset) = _asset {
+        if let Some(asset) = asset {
             let at_base64 = asset.to_base64();
             let at_hex = asset.to_hex();
             println!("{0: <45} | 0x{1: <70} | {2: <18} ", at_base64, at_hex, 0);
