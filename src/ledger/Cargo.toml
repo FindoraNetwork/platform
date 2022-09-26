@@ -66,8 +66,8 @@ features = ["f16", "serde"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 parking_lot = "0.12"
 fs2 = "0.4"
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.2" }
-fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.2" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", branch = "optimize_get_ver", features = ["optimize_get_ver"] }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", branch = "optimize_get_ver" }
 sparse_merkle_tree = { path = "../libs/sparse_merkle_tree" }
 zei-accumulators = "0.2"
 
