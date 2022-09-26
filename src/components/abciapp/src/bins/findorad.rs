@@ -58,7 +58,9 @@ fn node_command() -> Result<()> {
         .arg("--checkpoint-file")
         .arg(&checkpoint_file)
         .arg("--ledger-dir")
-        .arg(&CFG.ledger_dir);
+        .arg(&CFG.ledger_dir)
+        .arg("--trace")
+        .arg(&CFG.trace.to_string());
 
     for (condition, action) in [
         (CFG.enable_query_service, "--enable-query-service"),
@@ -67,6 +69,7 @@ fn node_command() -> Result<()> {
         (CFG.enable_snapshot, "--enable-snapshot"),
         (CFG.snapshot_list, "--snapshot-list"),
         (CFG.snapshot_rollback, "--snapshot-rollback"),
+        (CFG.fresh, "--fresh"),
     ] {
         if condition {
             abcid.arg(action);
