@@ -2,7 +2,7 @@
 
 EVM_SCRIPTS_PATH="tools/regression/evm/scripts"
 source $EVM_SCRIPTS_PATH/env.sh
-let SLEEP_INTERVAL=($BLOCK_INTERVAL + 1)
+let SLEEP_INTERVAL=($BLOCK_INTERVAL + 16)
 
 if [ ! -z "$ENV_FRA_DEST_ADDR" ]
 then
@@ -52,24 +52,26 @@ echo
 #--------------------------test case 2 - contract withdraw---------------------------
 echo -e "${BLU}test case 2 - contract withdraw${NC}"
 #Get Initial Balance of $ETH_ADDR
-export OUTPUT=$(python3 $REGRESSION_PATH/evm.py --url $ENDPOINT balance --sec-key $FRA_SEC_KEY)
+export OUTPUT=$(python3 $REGRESSION_PATH/evm.py --url $ENDPOINT balance --sec-key $FRA_SEC_KEY --asset fra)
 BALANCE=`echo $OUTPUT |awk '{print $3}'`
 #Withdraw amount from Eth Address
 $BIN/fn contract-withdraw --addr $FRA_DEST_ADDR --amount 88000000 --eth-key "$ETH_KEY"
 sleep $SLEEP_INTERVAL
 EXPECTED_BALANCE="$( bc <<<" $BALANCE + 88000000 " )"
+
 #Verify
-python3 $REGRESSION_PATH/evm.py --url $ENDPOINT verify-balance --sec-key $FRA_SEC_KEY --amount $EXPECTED_BALANCE
+python3 $REGRESSION_PATH/evm.py --url $ENDPOINT verify-balance --sec-key $FRA_SEC_KEY --amount $EXPECTED_BALANCE --asset fra
 if [ $? != 0 ];
 then
     exit 1
 fi
 echo
 
+
 #--------------------------test case 3 - ERC20 transfer-----------------------------
 echo -e "${BLU}test case 3 - transfer between erc20 addresses${NC}"
 #Get Initial Balance of $ETH_ADDR
-export OUTPUT=$(python3 $REGRESSION_PATH/evm.py --url $ENDPOINT balance --addr $ETH_DEST_ADDR)
+export OUTPUT=$(python3 $REGRESSION_PATH/evm.py --url $ENDPOINT balance --addr $ETH_DEST_ADDR --asset fra)
 BALANCE=`echo $OUTPUT |awk '{print $3}'`
 #Transer between ETH Addresses
 python3 $REGRESSION_PATH/evm.py --url $ENDPOINT transfer --from_priv_key $ETH_PK --to_addr $ETH_DEST_ADDR --amount 8000000000000000000

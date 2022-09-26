@@ -624,11 +624,18 @@ pub fn show_account(sk_str: Option<&str>, asset: Option<AssetTypeCode>) -> Resul
     }
 
     if map.is_empty() {
-        if let Some(asset) = asset {
-            let at_base64 = asset.to_base64();
-            let at_hex = asset.to_hex();
-            println!("{0: <45} | 0x{1: <70} | {2: <18} ", at_base64, at_hex, 0);
+        let _asset;
+        if let Some(at) = asset {
+            _asset = at;
+        } else {
+            _asset = AssetTypeCode {
+                val: ASSET_TYPE_FRA,
+            };
         }
+
+        let at_base64 = _asset.to_base64();
+        let at_hex = _asset.to_hex();
+        println!("{0: <45} | 0x{1: <70} | {2: <18} ", at_base64, at_hex, 0);
     } else {
         for (key, val) in map.iter() {
             println!("{0: <45} | 0x{1: <70} | {2: <18} ", key.0, key.1, val);
