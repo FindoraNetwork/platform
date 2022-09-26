@@ -26,6 +26,39 @@ use ruc::*;
 use sha3::{Digest, Keccak256};
 
 impl<C: Config> App<C> {
+    pub fn recover_signer_fast(
+        ctx: &Context,
+        transaction: &Transaction,
+    ) -> Option<H160> {
+        let transaction_hash =
+            H256::from_slice(Keccak256::digest(&rlp::encode(transaction)).as_slice());
+
+        // Check historical cache first for Deliver Context, while holding the read lock
+        if ctx.run_mode == RunTxMode::Deliver {
+            let history_1 = ctx.eth_cache.history_1.read();
+            let history_n = ctx.eth_cache.history_n.read();
+
+            if let Some(signer) = history_1
+                .get(&transaction_hash)
+                .or_else(|| history_n.get(&transaction_hash))
+            {
+                return *signer;
+            }
+        }
+
+        // recover_signer() calculation is necessary in 2 scenarios:
+        // 1- During CheckTx on fresh transaction
+        // 2- During DeliverTx if we NEVER see the transaction's signer in history (cache)
+        let mut txn_signers = ctx.eth_cache.current.write();
+        match txn_signers.get(&transaction_hash) {
+            Some(signer) => *signer,
+            None => Self::recover_signer(transaction).map(|signer| {
+                txn_signers.insert(transaction_hash, Some(signer));
+                signer
+            }),
+        }
+    }
+
     pub fn recover_signer(transaction: &Transaction) -> Option<H160> {
         let mut sig = [0u8; 65];
         let mut msg = [0u8; 32];
@@ -140,7 +173,7 @@ impl<C: Config> App<C> {
         let mut events = vec![];
         let just_check = ctx.run_mode != RunTxMode::Deliver;
 
-        let source = Self::recover_signer(&transaction)
+        let source = Self::recover_signer_fast(ctx, &transaction)
             .ok_or_else(|| eg!("ExecuteTransaction: InvalidSignature"))?;
 
         let transaction_hash =

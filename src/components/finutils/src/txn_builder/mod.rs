@@ -1017,7 +1017,7 @@ impl TransactionBuilder {
         self
     }
 
-    /// Signing this transaction with XfrKeyPair
+    /// Signing this transaction with XfrKeyPair, but insert `Transaction.signatures`
     pub fn sign(&mut self, kp: &XfrKeyPair) -> &mut Self {
         self.txn.sign(kp);
         self
@@ -1032,6 +1032,12 @@ impl TransactionBuilder {
         self.txn.check_signature(pk, &sig).c(d!())?;
         self.txn.signatures.push(sig);
         Ok(self)
+    }
+
+    /// Signing this transaction with XfrKeyPair, but insert to `Transaction.pubkey_sign_map`
+    pub fn sign_to_map(&mut self, kp: &XfrKeyPair) -> &mut Self {
+        self.txn.sign_to_map(kp);
+        self
     }
 
     #[allow(missing_docs)]
