@@ -7,7 +7,7 @@ NC='\033[0m'
 
 # default environment values
 DEFAULT_BIN_CFG="release"
-DEFAULT_BLOCK_INTERVAL="2"
+DEFAULT_BLOCK_INTERVAL="16"
 DEFAULT_ENDPOINT="http://0.0.0.0"
 
 # binary config
@@ -35,11 +35,11 @@ PRIV_KEY="o9gXFI5ft1VOkzYhvFpgUTWVoskM1CEih0zJcm3-EAQ="
 # create directories and file
 mkdir -p $WALLET
 mkdir -p $DEVNET
-echo "$MNEMONIC" > $WALLET/mnenomic.key
+echo "$MNEMONIC" >$WALLET/mnenomic.key
 
 # setup endpoint
-$BIN/fn setup -S $ENDPOINT > /dev/null
-$BIN/fn setup -O $WALLET/mnenomic.key > /dev/null
+$BIN/fn setup -S $ENDPOINT >/dev/null
+$BIN/fn setup -O $WALLET/mnenomic.key >/dev/null
 
 # show envs
 if [ "$1" == "s" ]; then

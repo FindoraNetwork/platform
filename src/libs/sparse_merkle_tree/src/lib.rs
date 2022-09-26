@@ -197,7 +197,7 @@ pub struct SmtMap256<D: MerkleDB> {
 impl<D: MerkleDB> SmtMap256<D> {
     /// Returns a new SMT-Map based on the db passed in
     pub fn new(db: D) -> Self {
-        let cs = chain_state::ChainState::new(db, SMT256_DB.to_string(), 0);
+        let cs = chain_state::ChainState::new(db, SMT256_DB.to_string(), 0, false);
         let version = cs.height().unwrap_or(0u64);
         Self {
             kvs: State::new(Arc::new(RwLock::new(cs)), false),

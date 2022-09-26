@@ -576,6 +576,7 @@ impl LedgerState {
             fdb,
             "abar_db".to_string(),
             VERSION_WINDOW,
+            false,
         )));
         Ok(State::new(cs, false))
     }

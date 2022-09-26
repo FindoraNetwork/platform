@@ -48,7 +48,7 @@ lazy_static! {
 const APP_NAME: &str = "findora";
 const CHAIN_STATE_PATH: &str = "state.db";
 const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
-const CHAIN_STATE_MIN_VERSIONS: u64 = 4 * 60 * 24 * 90;
+// const CHAIN_STATE_MIN_VERSIONS: u64 = 4 * 60 * 24 * 90;
 
 #[derive(Clone)]
 pub struct BaseApp {
@@ -156,20 +156,31 @@ impl module_xhub::Config for BaseApp {
 }
 
 impl BaseApp {
-    pub fn new(basedir: &Path, empty_block: bool) -> Result<Self> {
+    pub fn new(
+        basedir: &Path,
+        empty_block: bool,
+        trace: u16,
+        is_fresh: bool,
+    ) -> Result<Self> {
         // Creates a fresh chain state db and history db
         let fdb_path = basedir.join(CHAIN_STATE_PATH);
         let fdb = FinDB::open(fdb_path.as_path())?;
         let chain_state = Arc::new(RwLock::new(ChainState::new(
             fdb,
             "findora_db".to_owned(),
-            CHAIN_STATE_MIN_VERSIONS,
+            // CHAIN_STATE_MIN_VERSIONS,
+            4 * 60 * 24 * trace as u64,
+            is_fresh,
         )));
 
         let rdb_path = basedir.join(CHAIN_HISTORY_DATA_PATH);
         let rdb = RocksDB::open(rdb_path.as_path())?;
-        let chain_db =
-            Arc::new(RwLock::new(ChainState::new(rdb, "rocks_db".to_owned(), 0)));
+        let chain_db = Arc::new(RwLock::new(ChainState::new(
+            rdb,
+            "rocks_db".to_owned(),
+            0,
+            false,
+        )));
 
         //Migrate any existing data from one database to the other.
         BaseApp::migrate_initial_db(chain_state.clone(), chain_db.clone())?;
