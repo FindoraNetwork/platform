@@ -36,7 +36,7 @@ use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
 use ruc::{eg, Result};
 use std::{borrow::BorrowMut, path::Path, sync::Arc};
-use storage::state::ChainState;
+use storage::state::{ChainStateOpts, ChainState};
 use tracing::{error, info};
 
 lazy_static! {
@@ -156,7 +156,12 @@ impl module_xhub::Config for BaseApp {
 }
 
 impl BaseApp {
-    pub fn new(basedir: &Path, empty_block: bool) -> Result<Self> {
+    pub fn new(
+        basedir: &Path,
+        empty_block: bool,
+        trace: u16,
+        is_fresh: bool,
+    ) -> Result<Self> {
         info!(
             target: "baseapp",
             "create new baseapp with basedir {:?}, empty_block {}, history {} blocks",
@@ -166,11 +171,14 @@ impl BaseApp {
         // Creates a fresh chain state db and history db
         let fdb_path = basedir.join(CHAIN_STATE_PATH);
         let fdb = FinDB::open(fdb_path.as_path())?;
-        let chain_state = Arc::new(RwLock::new(ChainState::new(
-            fdb,
-            "findora_db".to_owned(),
-            *CHAIN_STATE_MIN_VERSIONS,
-        )));
+
+        let opts = ChainStateOpts {
+            name: Some("findora_db".to_owned()),
+            ver_window: 4 * 60 * 24 * trace as u64,
+            cleanup_aux: is_fresh,
+            ..Default::default()
+        };
+        let chain_state = Arc::new(RwLock::new(ChainState::create_with_opts(fdb, opts)));
 
         let rdb_path = basedir.join(CHAIN_HISTORY_DATA_PATH);
         let rdb = RocksDB::open(rdb_path.as_path())?;

@@ -32,8 +32,9 @@ fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
 config = { path = "../../../config"}
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
-fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.2" }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.2" }
+ledger = { path = "../../../../ledger" }
 enterprise-web3 = { path = "../../primitives/enterprise-web3", optional = true  }
 
 
