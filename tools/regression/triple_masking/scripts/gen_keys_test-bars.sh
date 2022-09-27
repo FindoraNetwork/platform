@@ -15,6 +15,7 @@ sleep $BLOCK_INTERVAL
 
 $BIN/fn transfer --amount 210000000 --asset FRA -T $FRA_ADDRESS
 sleep $BLOCK_INTERVAL
+sleep $BLOCK_INTERVAL
 
 $BIN/fn transfer --amount 210000000 --asset FRA -T $FRA_ADDRESS --confidential-amount
 sleep $BLOCK_INTERVAL

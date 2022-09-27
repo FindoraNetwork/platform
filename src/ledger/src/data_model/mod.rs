@@ -2003,6 +2003,7 @@ impl Transaction {
             if let Operation::BarToAbar(_a) = op {
                 min_fee = BAR_TO_ABAR_TX_FEE_MIN;
             }
+
         }
 
         self.is_coinbase_tx()
@@ -2020,6 +2021,7 @@ impl Transaction {
                                 }
                             }
                         }
+                        log::error!("Txn failed in check_fee {:?}", self);
                         false
                     });
                 } else if let Operation::DefineAsset(ref x) = ops {
@@ -2039,6 +2041,7 @@ impl Transaction {
                 } else if matches!(ops, Operation::UpdateValidator(_)) {
                     return true;
                 }
+                log::error!("Txn failed in check_fee {:?}", self);
                 false
             })
     }

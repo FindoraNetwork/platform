@@ -229,6 +229,7 @@ where
                 Ok(handle)
             }
             Err(e) => {
+                log::error!("Error in cache_transaction {}", e);
                 self.txn_status
                     .insert(handle, TxnStatus::Rejected(e.to_string()));
                 Err(e)
