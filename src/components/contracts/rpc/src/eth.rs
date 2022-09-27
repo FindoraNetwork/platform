@@ -294,38 +294,31 @@ impl EthApi for EthApiImpl {
         } = request;
 
         let id = native_block_id(block_number.clone());
-        let block = self.account_base_app.read().current_block(id);
+        let block = self
+            .account_base_app
+            .read()
+            .current_block(id)
+            .ok_or(internal_err("failed to get block"))?;
+
         // use given gas limit or query current block's limit
-        let gas_limit = match gas {
-            Some(amount) => amount,
-            None => {
-                if let Some(block) = block.clone() {
-                    block.header.gas_limit
-                } else {
-                    <BaseApp as module_evm::Config>::BlockGasLimit::get()
-                }
-            }
-        };
+        let gas_limit = gas.unwrap_or(block.header.gas_limit);
         let data = data.map(|d| d.0).unwrap_or_default();
 
         let mut config = <BaseApp as module_ethereum::Config>::config().clone();
         config.estimate = true;
 
-        let mut ctx = match self.account_base_app.read().create_context_at(height) {
-            Some(ctx) => ctx,
-            None => {
-                return Err("failed to create context".into());
-            }
-        };
-        if let Some(block) = block {
-            ctx.header
-                .mut_time()
-                .set_seconds(block.header.timestamp as i64);
-            ctx.header.height = block.header.number.as_u64() as i64;
-            ctx.header.proposer_address = Vec::from(block.header.beneficiary.as_bytes());
-        } else {
-            return Err("failed to get block".into());
-        }
+        let mut ctx = self
+            .account_base_app
+            .read()
+            .create_context_at(block.header.number.as_u64())
+            .ok_or(internal_err("failed to create context"))?;
+
+        ctx.header
+            .mut_time()
+            .set_seconds(block.header.timestamp as i64);
+        ctx.header.height = block.header.number.as_u64() as i64;
+        ctx.header.proposer_address = Vec::from(block.header.beneficiary.as_bytes());
+
         match to {
             Some(to) => {
                 let call = Call {
