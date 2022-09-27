@@ -116,7 +116,7 @@ impl ModuleManager {
         ctx: &Context,
         tx: &FindoraTransaction,
     ) -> Result<()> {
-        let (owner, amount) = check_convert_account(tx)?;
+        let (owner, amount) = check_convert_account(tx, ctx.header.height)?;
         let balance = EthereumDecimalsMapping::from_native_token(U256::from(amount))
             .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
         module_account::App::<BaseApp>::mint(ctx, &Address::from(owner), balance)
