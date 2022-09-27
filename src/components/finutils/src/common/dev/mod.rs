@@ -588,6 +588,7 @@ impl Env {
             cfg["p2p"]["persistent_peers"] = toml_value(
                 self.nodes
                     .values()
+                    .filter(|peer| peer.id != n.id)
                     .map(|n| {
                         format!("{}@{}:{}", &n.tm_id, &self.host_ip, n.ports.tm_p2p)
                     })
