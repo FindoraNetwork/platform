@@ -28,7 +28,7 @@ lazy_static = "1.4.0"
 futures = { version = "0.3.16", features = ["thread-pool"] }
 hex = "0.4.2"
 ctrlc = { version = "3.0", features = ["termination"] }
-protobuf = "2.16"
+protobuf = "3.2"
 toml = "0.5.8"
 
 clap = "2.33.3"
