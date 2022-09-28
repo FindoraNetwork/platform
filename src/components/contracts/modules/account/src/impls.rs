@@ -92,7 +92,6 @@ impl<C: Config> AccountAsset<Address> for App<C> {
     }
 
     fn mint(ctx: &Context, target: &Address, balance: U256) -> Result<()> {
-        println!("mint>>>>>>>>>>>>target:{:?}, balance:{:?}", target, balance);
         if balance.is_zero() {
             return Ok(());
         }
@@ -120,7 +119,6 @@ impl<C: Config> AccountAsset<Address> for App<C> {
                 let target_slice: &[u8] = target.as_ref();
                 let target_h160 = H160::from_slice(&target_slice[4..24]);
 
-                println!("mint insert");
                 balance_map.insert(target_h160, target_account.balance);
             }
         }
@@ -198,7 +196,6 @@ impl<C: Config> AccountAsset<Address> for App<C> {
     }
 
     fn refund(ctx: &Context, who: &Address, value: U256) -> Result<()> {
-        println!("refund>>>>>>>>>>>>who:{:?}, value:{:?}", who, value);
         if value.is_zero() {
             return Ok(());
         }

@@ -84,8 +84,12 @@ build_release_debug: tendermint_goleveldb
 	cargo build --features="debug_env" --release --bins -p abciapp -p finutils
 	$(call pack,release)
 
-build_release_web3: tendermint_goleveldb
-	cargo build --features="web3_service" --release --bins -p abciapp -p finutils
+build_release_web3_goleveldb: tendermint_goleveldb
+	cargo build --features="web3_service debug_env" --release --bins -p abciapp -p finutils
+	$(call pack,release)
+
+build_release_web3: tendermint_cleveldb
+	cargo build --features="web3_service debug_env" --release --bins -p abciapp -p finutils
 	$(call pack,release)
 
 tendermint_cleveldb:
