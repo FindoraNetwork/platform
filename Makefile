@@ -321,7 +321,7 @@ build_musl_fn_linux:
 	docker build -t musl_fn_linux -f container/Dockerfile-fn-musl-linux .
 	docker run -d --rm --name fn_linux musl_fn_linux
 	docker cp fn_linux:/volume/target/x86_64-unknown-linux-musl/release/fn fn
-	tar -czvf fn_linux.tar.gz fn
+	# tar -czvf fn_linux.tar.gz fn
 	rm fn
 
 
@@ -330,13 +330,13 @@ build_musl_fn_macos_base:
 build_musl_fn_macos:
 	docker build -t musl_fn_macos -f container/Dockerfile-fn-musl-macos .
 	docker run -d --rm --name fn_macos musl_fn_macos
-	docker cp fn_macos:/volume/target/x86_64-apple-darwin/release/fn fn
-	tar -czvf fn_macos.tar.gz fn
-	rm fn
+	docker cp fn_macos:/volume/target/x86_64-apple-darwin/release/fn fn_macos
+	# tar -czvf fn_macos.tar.gz fn
+	rm fn_macos
 
 build_musl_fn_win:
 	docker build -t musl_fn_win -f container/Dockerfile-fn-musl-windows .
 	docker run -d --rm --name fn_windows musl_fn_win
 	docker cp fn_windows:/volume/target/x86_64-pc-windows-gnu/release/fn.exe fn.exe
-	tar -czvf fn_windows.tar.gz fn.exe
+	# tar -czvf fn_windows.tar.gz fn.exe
 	rm fn.exe
