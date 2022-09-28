@@ -50,7 +50,7 @@ macro_rules! sleep_n_block {
         sleep_ms!((n * itv * 1000.0) as u64);
     }};
     ($n_block: expr) => {
-        sleep_n_block!($n_block, ledger::staking::BLOCK_INTERVAL)
+        sleep_n_block!($n_block, *ledger::staking::BLOCK_INTERVAL)
     };
 }
 

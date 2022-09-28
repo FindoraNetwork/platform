@@ -1,5 +1,6 @@
-use crate::context::Context;
+use crate::context::{Context, RunTxMode};
 use abci::Event;
+use config::abci::global_cfg::CFG;
 use fp_types::transaction::CheckedTransaction;
 use impl_trait_for_tuples::impl_for_tuples;
 use ruc::*;
@@ -110,9 +111,7 @@ pub trait ValidateUnsigned {
     /// Validate the call right before execute.
     ///
     /// Changes made to storage WILL be persisted if the call returns `Ok`.
-    fn pre_execute(ctx: &Context, call: &Self::Call) -> Result<()> {
-        Self::validate_unsigned(ctx, call)
-    }
+    fn pre_execute(ctx: &Context, call: &Self::Call) -> Result<()>;
 
     /// Return the validity of the call
     ///
@@ -151,17 +150,33 @@ where
             U::pre_execute(ctx, &self.function)?;
             (None, Default::default())
         };
+
         ctx.state.write().commit_session();
 
+        if ctx.header.height >= CFG.checkpoint.evm_checktx_nonce {
+            // The transaction is only executed if the run mode is Deliver
+            if ctx.run_mode == RunTxMode::Check {
+                return Ok(ActionResult::default());
+            }
+        }
+
         match U::execute(maybe_who, self.function, ctx) {
-            Ok(res) => {
-                if res.code == 0 {
+            Ok(mut res) => {
+                if !ctx.state.write().cache_mut().good2_commit() {
+                    res.code = 0xff;
+                    res.log = String::from("ctx state is not good to commit");
+
+                    ctx.state.write().discard_session();
+                } else if res.code == 0 {
                     Extra::post_execute(ctx, pre, &res)?;
+
                     ctx.state.write().commit_session();
                 } else {
                     ctx.state.write().discard_session();
                 }
+
                 ctx.db.write().commit_session();
+
                 Ok(res)
             }
             Err(e) => {
@@ -181,6 +196,7 @@ pub struct ActionResult {
     /// 2 - EVM ExitReason::Error
     /// 3 - EVM ExitReason::Revert
     /// 4 - EVM ExitReason::Fatal
+    /// 0xff - context state maybe messed up
     pub code: u32,
     /// Data is any data returned from message or handler execution.
     pub data: Vec<u8>,

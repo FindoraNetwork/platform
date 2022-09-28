@@ -12,7 +12,7 @@ use {
     toml,
 };
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[allow(missing_docs)]
 pub struct CheckPointConfig {
     pub evm_substate_height: i64,
@@ -27,7 +27,12 @@ pub struct CheckPointConfig {
     pub ff_addr_extra_fix_height: u64,
     pub nonconfidential_balance_fix_height: u64,
     pub unbond_block_cnt: u64,
+    pub fix_undelegation_missing_reward_height: i64,
     pub fix_unpaid_delegation_height: u64,
+    pub evm_checktx_nonce: i64,
+    pub utxo_checktx_height: i64,
+    pub fix_delegators_am_height: u64,
+    pub validators_limit_v2_height: u64,
 }
 
 impl CheckPointConfig {
@@ -54,6 +59,11 @@ impl CheckPointConfig {
                                 nonconfidential_balance_fix_height: 0,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
                                 fix_unpaid_delegation_height: 0,
+                                fix_undelegation_missing_reward_height: 0,
+                                evm_checktx_nonce: 0,
+                                utxo_checktx_height: 0,
+                                fix_delegators_am_height: 0,
+                                validators_limit_v2_height: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -69,7 +79,12 @@ impl CheckPointConfig {
                                 ff_addr_extra_fix_height: 1200000,
                                 nonconfidential_balance_fix_height: 1210000,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
+                                fix_undelegation_missing_reward_height: 3000000,
                                 fix_unpaid_delegation_height: 2261885,
+                                evm_checktx_nonce: 30000000,
+                                utxo_checktx_height: 30000000,
+                                fix_delegators_am_height: 30000000,
+                                validators_limit_v2_height: 30000000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
@@ -87,7 +102,9 @@ impl CheckPointConfig {
 
         let mut content = String::new();
         f.read_to_string(&mut content).unwrap();
-        let config: CheckPointConfig = toml::from_str(content.as_str()).unwrap();
+        let config: CheckPointConfig = toml::from_str(content.as_str())
+            .or_else(|_| serde_json::from_str(content.as_str()))
+            .unwrap();
         Some(config)
     }
 }

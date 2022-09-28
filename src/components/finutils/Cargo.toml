@@ -6,10 +6,10 @@ build = "build.rs"
 edition = "2021"
 
 [dependencies]
-tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a" }
+tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a-fk" }
 tokio = "1.10.1"
 hex = "0.4.2"
-base64 = "0.10"
+base64 = "0.12"
 clap = { version = "2.33.3", features = ["yaml"] }
 lazy_static = "1.4.0"
 attohttpc = { version = "0.18", default-features = false, features = ["compress", "json", "tls-rustls"] }
@@ -17,12 +17,14 @@ serde_json = "1.0.40"
 serde = { version = "1.0.124", features = ["derive"] }
 rand = "0.8"
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
-rand_chacha = "0.2.0"
+rand_chacha = "0.2"
 curve25519-dalek = { version = "3.0", features = ["serde"] }
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"] }
 
 zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4x" }
 ruc = "1.0"
+nix = "0.25"
+toml_edit = "0.14"
 
 ledger = { path = "../../ledger" }
 globutils = { path = "../../libs/globutils" }
@@ -33,7 +35,7 @@ fp-core = { path = "../contracts/primitives/core", default-features = false }
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = { path = "../contracts/primitives/types" }
 
-tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rpc", features = ["http-client", "websocket-client"], optional = true, tag = "v0.19.0a" }
+tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", features = ["http-client", "websocket-client"], optional = true, tag = "v0.19.0a-fk" }
 
 [dev-dependencies]
 

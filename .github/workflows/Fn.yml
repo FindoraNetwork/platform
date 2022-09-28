@@ -1,0 +1,52 @@
+name: FN
+on:
+  push:
+    tags:
+      - '*-fn'
+    # branches:
+    #   - "add-fn-build"
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  build:
+    strategy:
+      matrix:
+        platform: [scalable]
+    runs-on: ${{ matrix.platform }}
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+        components: rustfmt
+        
+    - name: Build fn for Linux 
+      shell: bash
+      run: |
+        make build_musl_fn_linux
+
+    - name: Build environment for Macos 
+      shell: bash
+      run: |
+        make build_musl_fn_macos_base
+
+    - name: Build fn for Macos 
+      shell: bash
+      run: |
+        make build_musl_fn_macos
+
+    - name: Build fn for Windows
+      shell: bash
+      run: |
+        make build_musl_fn_win
+
+    - name: Create release
+      uses: "marvinpinto/action-automatic-releases@latest"
+      with:
+        repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        prerelease: true
+        files: |
+          fn_linux.tar.gz
+          fn_macos.tar.gz
+          fn_windows.tar.gz

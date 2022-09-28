@@ -5,8 +5,10 @@ mod basic;
 mod impls;
 
 use abci::{RequestEndBlock, ResponseEndBlock};
+use config::abci::global_cfg::CFG;
 use ethereum_types::{H160, H256, U256};
 use evm::Config as EvmConfig;
+use fp_core::context::RunTxMode;
 use fp_core::{
     context::Context,
     ensure,
@@ -52,18 +54,19 @@ pub trait Config {
 }
 
 pub mod storage {
-    use ethereum::{BlockV0 as Block, Receipt, TransactionV0 as Transaction};
+    use ethereum::{
+        BlockV0 as Block, ReceiptV0 as Receipt, TransactionV0 as Transaction,
+    };
     use ethereum_types::U256;
     use fp_evm::TransactionStatus;
     use fp_storage::*;
     use fp_types::crypto::HA256;
+    use lazy_static::lazy_static;
+    use std::sync::Mutex;
 
     // Mapping for transaction hash and at block number with index.
     generate_storage!(Ethereum, TransactionIndex => Map<HA256, (U256, u32)>);
 
-    // The following data is stored in stateless rocksdb
-    // Current building block's transactions and receipts.
-    generate_storage!(Ethereum, PendingTransactions => Value<Vec<(Transaction, TransactionStatus, Receipt)>>);
     // The current Ethereum block number.
     generate_storage!(Ethereum, CurrentBlockNumber => Value<U256>);
     // Mapping for block number and hashes.
@@ -74,6 +77,15 @@ pub mod storage {
     generate_storage!(Ethereum, CurrentReceipts => Map<HA256, Vec<Receipt>>);
     // The ethereum history transaction statuses with block number.
     generate_storage!(Ethereum, CurrentTransactionStatuses => Map<HA256, Vec<TransactionStatus>>);
+
+    // The following data is stored in in-memory array
+    // Current building block's transactions and receipts.
+    type PendingTransactions = Mutex<Vec<(Transaction, TransactionStatus, Receipt)>>;
+
+    lazy_static! {
+        pub static ref DELIVER_PENDING_TRANSACTIONS: PendingTransactions =
+            Mutex::new(vec![]);
+    }
 }
 
 #[derive(Event)]
@@ -92,6 +104,7 @@ pub struct ContractLog {
     pub data: Vec<u8>,
 }
 
+#[derive(Clone)]
 pub struct App<C> {
     disable_eth_empty_blocks: bool,
     phantom: PhantomData<C>,
@@ -146,6 +159,20 @@ impl<C: Config> Executable for App<C> {
 impl<C: Config> ValidateUnsigned for App<C> {
     type Call = Action;
 
+    fn pre_execute(ctx: &Context, call: &Self::Call) -> Result<()> {
+        if ctx.header.height >= CFG.checkpoint.evm_checktx_nonce
+            && ctx.run_mode == RunTxMode::Check
+        {
+            let Action::Transact(transaction) = call;
+            let origin = Self::recover_signer_fast(ctx, transaction)
+                .ok_or_else(|| eg!("ExecuteTransaction: InvalidSignature"))?;
+            let account_id = C::AddressMapping::convert_to_account_id(origin);
+            C::AccountAsset::inc_nonce(ctx, &account_id)?;
+        }
+
+        Ok(())
+    }
+
     fn validate_unsigned(ctx: &Context, call: &Self::Call) -> Result<()> {
         let Action::Transact(transaction) = call;
         if let Some(chain_id) = transaction.signature.chain_id() {
@@ -160,8 +187,8 @@ impl<C: Config> ValidateUnsigned for App<C> {
             return Err(eg!("Must provide chainId".to_string()));
         }
 
-        let origin = Self::recover_signer(transaction)
-            .ok_or_else(|| eg!("InvalidSignature, can not recover signer address"))?;
+        let origin = Self::recover_signer_fast(ctx, transaction)
+            .ok_or_else(|| eg!("ExecuteTransaction: InvalidSignature"))?;
 
         // Same as go ethereum, Min gas limit is 21000.
         if transaction.gas_limit < U256::from(21000)
@@ -183,8 +210,10 @@ impl<C: Config> ValidateUnsigned for App<C> {
         }
 
         let account_id = C::AddressMapping::convert_to_account_id(origin);
-        let nonce = C::AccountAsset::nonce(ctx, &account_id);
-        let balance = C::AccountAsset::balance(ctx, &account_id);
+        let account =
+            C::AccountAsset::account_of(ctx, &account_id, None).unwrap_or_default();
+        let nonce = account.nonce;
+        let balance = account.balance;
 
         if transaction.nonce < nonce {
             return Err(eg!(format!(

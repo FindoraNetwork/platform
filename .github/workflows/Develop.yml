@@ -1,10 +1,9 @@
 name: Develop
 on:
   push:
-    tags:
-      - '*'
+    branches:
+      - develop
   pull_request:
-    # types: [closed]
     branches:
       - develop
 env:
@@ -13,7 +12,7 @@ jobs:
   build:
     strategy:
       matrix:
-        platform: [aws]
+        platform: [scalable]
     runs-on: ${{ matrix.platform }}
     env:
       ENV: dev
@@ -26,43 +25,13 @@ jobs:
         toolchain: stable
         override: true
         components: rustfmt
-    # - name: check fmt
-    #   shell: bash
-    #   run: |
-    #     cargo fmt -- --check
-    # - name: test_status
-    #   env:
-    #     DBG: true
-    #   shell: bash
-    #   run: |
-    #     curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-    #     make test_status
-    ## It need to install protobuf-compiler for build environment.
-    ## Enable this when build by container.
-    # - name: Install protobuf-compiler
-    #   shell: bash
-    #   run: |
-    #     apt install protobuf-compiler
-    # - name: install rustwasm
-    #   shell: bash
-    #   run: |
-    #     curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-    # - name: add go
-    #   shell: bash
-    #   run: |
-    #     mkdir $(pwd)/opt && cd $(pwd)/opt && wget https://golang.google.cn/dl/go1.15.7.linux-amd64.tar.gz && tar -xpf go1.15.7.linux-amd64.tar.gz && echo "$(pwd)/go/bin" >> $GITHUB_PATH
-    # - name: lint
-    #   shell: bash
-    #   run: |
-    #     make lint
-    # - name: test
-    #   shell: bash
-    #   run: |
-    #     make test
+
+        
     - name: Prepare key
       shell: bash
       run: |
         tar -C ~/.ssh -zcf key.tar.gz ./
+        
     - name: Clean garbage containers and images
       shell: bash
       run: |
@@ -84,7 +53,7 @@ jobs:
           export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
-        export TOBRANCH="${GITHUB_BASE_REF}"
+        export TOBRANCH="${{ env.ENV }}"
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
         echo "Image tag: ${IMAGE_TAG}"
@@ -104,7 +73,7 @@ jobs:
           export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
-        export TOBRANCH="${GITHUB_BASE_REF}"
+        export TOBRANCH="${{ env.ENV }}"
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image
@@ -114,7 +83,7 @@ jobs:
       shell: bash
       run: |
         aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${PUBLIC_ECR_URL}
-    
+        
     - name: Push images
       env:
         PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
@@ -130,7 +99,7 @@ jobs:
           export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
-        export TOBRANCH="${GITHUB_BASE_REF}"
+        export TOBRANCH="${{ env.ENV }}"
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_push_image
@@ -149,7 +118,7 @@ jobs:
           export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
-        export TOBRANCH="${GITHUB_BASE_REF}"
+        export TOBRANCH="${{ env.ENV }}"
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
         make clean_image
@@ -165,7 +134,7 @@ jobs:
           export COMMIT_HASH=${COMMIT_HASH}
         fi
         export BRANCH="${GITHUB_HEAD_REF}"
-        export TOBRANCH="${GITHUB_BASE_REF}"
+        export TOBRANCH="${{ env.ENV }}"
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
         make clean_binary_dockerhub

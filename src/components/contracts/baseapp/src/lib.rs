@@ -13,6 +13,9 @@ mod notify;
 use crate::modules::ModuleManager;
 use abci::Header;
 use ethereum::BlockV0 as Block;
+use evm_precompile::{self, FindoraPrecompiles};
+use fin_db::{FinDB, RocksDB};
+use fp_core::context::Context as Context2;
 use fp_core::{
     account::SmartAccount,
     context::{Context, RunTxMode},
@@ -32,13 +35,8 @@ use notify::*;
 use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
 use ruc::{eg, Result};
-use std::borrow::BorrowMut;
-use std::path::Path;
-use std::sync::Arc;
-use storage::{
-    db::{FinDB, RocksDB},
-    state::ChainState,
-};
+use std::{borrow::BorrowMut, path::Path, sync::Arc};
+use storage::state::ChainState;
 
 lazy_static! {
     /// An identifier that distinguishes different EVM chains.
@@ -55,6 +53,7 @@ const CHAIN_STATE_PATH: &str = "state.db";
 const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
 const BLOCKS_IN_DAY: u64 = 4 * 60 * 24;
 
+#[derive(Clone)]
 pub struct BaseApp {
     /// application name from abci.Info
     pub name: String,
@@ -111,6 +110,22 @@ impl module_ethereum::Config for BaseApp {
     type Runner = module_evm::runtime::runner::ActionRunner<Self>;
 }
 
+pub struct PrecompilesValue;
+
+impl PrecompilesValue {
+    #[doc = " Returns the value of this parameter type."]
+    pub fn get(ctx: Context2) -> FindoraPrecompiles<BaseApp> {
+        FindoraPrecompiles::<_>::new(ctx)
+    }
+}
+impl<I: From<FindoraPrecompiles<BaseApp>>> fp_core::macros::Get2<I, Context2>
+    for PrecompilesValue
+{
+    fn get(ctx: Context2) -> I {
+        I::from(FindoraPrecompiles::<_>::new(ctx))
+    }
+}
+
 impl module_evm::Config for BaseApp {
     type AccountAsset = module_account::App<Self>;
     type AddressMapping = EthereumAddressMapping;
@@ -130,6 +145,8 @@ impl module_evm::Config for BaseApp {
         evm_precompile_sha3fips::Sha3FIPS512,
         evm_precompile_frc20::FRC20<Self>,
     );
+    type PrecompilesType = FindoraPrecompiles<Self>;
+    type PrecompilesValue = PrecompilesValue;
 }
 
 impl module_xhub::Config for BaseApp {
@@ -308,6 +325,17 @@ impl BaseApp {
         ctx.header = header;
     }
 
+    fn update_deliver_state_cache(&mut self) {
+        // Clone newest cache from check_state to deliver_state
+        // Oldest cache will be dropped, currently drop cache two blocks ago
+        self.deliver_state.eth_cache.current = Default::default();
+        self.deliver_state.eth_cache.history_n =
+            self.deliver_state.eth_cache.history_1.clone();
+        // Deliver_state history_1 cache will share the newest transactions from check_state
+        self.deliver_state.eth_cache.history_1 =
+            self.check_state.eth_cache.current.clone();
+    }
+
     pub fn deliver_findora_tx(&mut self, tx: &FindoraTransaction) -> Result<()> {
         self.modules.process_findora_tx(&self.deliver_state, tx)
     }
@@ -353,7 +381,7 @@ impl BaseProvider for BaseApp {
         }
     }
 
-    fn current_receipts(&self, id: Option<BlockId>) -> Option<Vec<ethereum::Receipt>> {
+    fn current_receipts(&self, id: Option<BlockId>) -> Option<Vec<ethereum::ReceiptV0>> {
         if let Ok(ctx) = self.create_query_context(Some(0), false) {
             self.modules.ethereum_module.current_receipts(&ctx, id)
         } else {

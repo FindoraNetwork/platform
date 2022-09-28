@@ -14,7 +14,7 @@ use {
 
 pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result<()> {
     if 0 == interval {
-        interval = BLOCK_INTERVAL;
+        interval = *BLOCK_INTERVAL;
     }
 
     if !skip_validator {

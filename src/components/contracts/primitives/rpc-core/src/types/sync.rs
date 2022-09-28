@@ -22,7 +22,7 @@ use ethereum_types::{H512, U256};
 use serde::{Serialize, Serializer};
 
 /// Sync info
-#[derive(Default, Debug, Serialize, PartialEq)]
+#[derive(Default, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncInfo {
     /// Starting block
@@ -114,7 +114,7 @@ pub struct PipProtocolInfo {
 }
 
 /// Sync status
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum SyncStatus {
     /// Info when syncing
     Info(SyncInfo),

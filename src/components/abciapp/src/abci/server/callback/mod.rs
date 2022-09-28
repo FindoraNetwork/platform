@@ -13,8 +13,8 @@ use {
         },
     },
     abci::{
-        Application, CheckTxType, RequestBeginBlock, RequestCheckTx, RequestCommit,
-        RequestDeliverTx, RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery,
+        CheckTxType, RequestBeginBlock, RequestCheckTx, RequestCommit, RequestDeliverTx,
+        RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery,
         ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
         ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
     },
@@ -90,7 +90,7 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
 
     drop(state);
 
-    println!("======== Last committed height: {} ========", h);
+    log::info!(target: "abciapp", "======== Last committed height: {} ========", h);
 
     if la.all_commited() {
         la.begin_block();
@@ -143,7 +143,7 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
                 resp.log = "EVM is disabled".to_owned();
                 resp
             } else {
-                s.account_base_app.write().check_tx(req)
+                s.account_base_app.read().check_tx(req)
             }
         }
         TxCatalog::Unknown => {
@@ -237,7 +237,7 @@ pub fn deliver_tx(
                 if tx.valid_in_abci() {
                     // Log print for monitor purpose
                     if td_height < EVM_FIRST_BLOCK_HEIGHT {
-                        println!(
+                        log::info!(target: "abciapp",
                             "EVM transaction(FindoraTx) detected at early height {}: {:?}",
                             td_height, tx
                         );
@@ -302,6 +302,19 @@ pub fn deliver_tx(
                             .db
                             .write()
                             .discard_session();
+                    } else if CFG.checkpoint.utxo_checktx_height < td_height {
+                        match tx.check_tx() {
+                            Ok(_) => {
+                                if let Err(e) = s.la.write().cache_transaction(tx) {
+                                    resp.code = 1;
+                                    resp.log = e.to_string();
+                                }
+                            }
+                            Err(e) => {
+                                resp.code = 1;
+                                resp.log = e.to_string();
+                            }
+                        }
                     } else if let Err(e) = s.la.write().cache_transaction(tx) {
                         resp.code = 1;
                         resp.log = e.to_string();
@@ -327,9 +340,12 @@ pub fn deliver_tx(
             } else {
                 // Log print for monitor purpose
                 if td_height < EVM_FIRST_BLOCK_HEIGHT {
-                    println!(
+                    log::info!(
+                        target:
+                        "abciapp",
                         "EVM transaction(EvmTx) detected at early height {}: {:?}",
-                        td_height, req
+                        td_height,
+                        req
                     );
                 }
                 return s.account_base_app.write().deliver_tx(req);
@@ -361,7 +377,7 @@ pub fn end_block(
     {
         let laa = la.get_committed_state().read();
         if let Some(tx) =
-            staking::system_mint_pay(&*laa, &mut *s.account_base_app.write())
+            staking::system_mint_pay(&*laa, &mut *s.account_base_app.write(), td_height)
         {
             drop(laa);
             // this unwrap should be safe

@@ -9,8 +9,8 @@ description = "Findora Primitive Trait definitions for all module interactions"
 readme = "README.md"
 
 [dependencies]
-ethereum = { version = "0.9.0", default-features = false, features = ["with-serde"] }
-primitive-types = { version = "0.10.0", default-features = false, features = ["rlp", "byteorder", "serde"] }
+ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
+primitive-types = { version = "0.11.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
 ruc = "1.0"
 
 # primitives

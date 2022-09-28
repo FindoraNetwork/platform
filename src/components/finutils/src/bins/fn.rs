@@ -27,7 +27,11 @@
 
 use {
     clap::{crate_authors, load_yaml, App},
-    finutils::common::{self, evm::*},
+    finutils::common::{
+        self,
+        dev::{EnvCfg, Ops},
+        evm::*,
+    },
     fp_utils::ecdsa::SecpPair,
     globutils::wallet,
     ledger::{
@@ -424,6 +428,105 @@ fn run() -> Result<()> {
         //     None
         // };
         common::replace_staker(target, None)?;
+    } else if let Some(m) = matches.subcommand_matches("dev") {
+        let mut envcfg = EnvCfg::default();
+
+        let ops = if let Some(sm) = m.subcommand_matches("create") {
+            if let Some(name) = sm.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            if let Some(id) = sm.value_of("evm_chain_id") {
+                envcfg.evm_chain_id = id.parse::<u64>().c(d!())?;
+            }
+            if let Some(itv) = sm.value_of("block_itv_secs") {
+                envcfg.block_itv_secs = itv.parse::<u8>().c(d!())?;
+            }
+            if let Some(num) = sm.value_of("validator_num") {
+                envcfg.initial_validator_num = num.parse::<u8>().c(d!())?;
+                if 64 < envcfg.initial_validator_num {
+                    return Err(eg!(
+                        "The number of initial validators should not exceed 64!"
+                    ));
+                }
+            }
+            if let Some(file) = sm.value_of("checkpoint_file") {
+                envcfg.checkpoint_file = Some(file.to_owned());
+            }
+            if let Some(ip) = sm.value_of("host_ip") {
+                envcfg.host_ip = Some(ip.to_owned());
+            }
+            if let Some(abcid_bin) = sm.value_of("abcid_bin_path") {
+                envcfg.abcid_bin = Some(abcid_bin.to_owned());
+            }
+            if let Some(tm_bin) = sm.value_of("tendermint_bin_path") {
+                envcfg.tendermint_bin = Some(tm_bin.to_owned());
+            }
+            if let Some(flags) = sm.value_of("abcid_extra_flags") {
+                envcfg.abcid_extra_flags = Some(flags.to_owned());
+            }
+            if let Some(flags) = sm.value_of("tendermint_extra_flags") {
+                envcfg.tendermint_extra_flags = Some(flags.to_owned());
+            }
+            if sm.is_present("force") {
+                envcfg.force_create = true;
+            }
+            Ops::Create
+        } else if let Some(sm) = m.subcommand_matches("destroy") {
+            if let Some(name) = sm.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            Ops::Destroy
+        } else if m.subcommand_matches("destroy-all").is_some() {
+            Ops::DestroyAll
+        } else if let Some(sm) = m.subcommand_matches("start") {
+            if let Some(name) = sm.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            Ops::Start
+        } else if m.subcommand_matches("start-all").is_some() {
+            Ops::StartAll
+        } else if let Some(sm) = m.subcommand_matches("stop") {
+            if let Some(name) = sm.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            Ops::Stop
+        } else if m.subcommand_matches("stop-all").is_some() {
+            Ops::StopAll
+        } else if let Some(sm) = m.subcommand_matches("push-node") {
+            if let Some(name) = sm.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            Ops::PushNode
+        } else if let Some(sm) = m.subcommand_matches("pop-node") {
+            if let Some(name) = sm.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            Ops::PopNode
+        } else if let Some(sm) = m.subcommand_matches("show") {
+            if let Some(name) = sm.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            Ops::Show
+        } else if m.subcommand_matches("show-all").is_some() {
+            Ops::ShowAll
+        } else if m.subcommand_matches("list").is_some() {
+            Ops::List
+        } else if let Some(sm) = m.subcommand_matches("init") {
+            if let Some(name) = sm.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            Ops::Init
+        } else if m.subcommand_matches("init-all").is_some() {
+            Ops::InitAll
+        } else {
+            if let Some(name) = m.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            Ops::default()
+        };
+
+        envcfg.ops = ops;
+        envcfg.exec().c(d!())?;
     } else {
         println!("{}", matches.usage());
     }

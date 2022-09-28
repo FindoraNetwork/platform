@@ -19,7 +19,7 @@ use ledger::{
 use ruc::*;
 use serde::Serialize;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ModuleManager {
     // Ordered module list
     pub(crate) account_module: module_account::App<BaseApp>,
@@ -92,7 +92,7 @@ impl ModuleManager {
     pub fn process_tx<
         Extra: Clone + Serialize + SignedExtension<AccountId = Address>,
     >(
-        &mut self,
+        &self,
         ctx: Context,
         tx: UncheckedTransaction<Extra>,
     ) -> Result<ActionResult> {
@@ -116,7 +116,7 @@ impl ModuleManager {
         ctx: &Context,
         tx: &FindoraTransaction,
     ) -> Result<()> {
-        let (owner, amount) = check_convert_account(tx)?;
+        let (owner, amount) = check_convert_account(tx, ctx.header.height)?;
         let balance = EthereumDecimalsMapping::from_native_token(U256::from(amount))
             .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
         module_account::App::<BaseApp>::mint(ctx, &Address::from(owner), balance)
@@ -138,10 +138,7 @@ impl ModuleManager {
 
         origin_tx.validate::<Module>(ctx)?;
 
-        if RunTxMode::Deliver == ctx.run_mode
-            || RunTxMode::Check == ctx.run_mode
-            || RunTxMode::ReCheck == ctx.run_mode
-        {
+        if RunTxMode::Deliver == ctx.run_mode || RunTxMode::Check == ctx.run_mode {
             return origin_tx.apply::<Module>(ctx);
         }
         Ok(ActionResult::default())
