@@ -3,8 +3,11 @@ on: [push]
 
 jobs:
   build-push:
+    strategy:
+      matrix:
+        platform: [aws]
     concurrency: wasmcat-ci-${{ github.ref }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.platform }}
     # accepting any branches push but not pull_request and pull_request push.
     # notice: the first push of a PR (create branch) will be triggering.
     if: github.event_name != 'pull_request' && github.event.pull_request.number == ''
