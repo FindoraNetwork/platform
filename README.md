@@ -9,7 +9,7 @@
 # Findora Platform
 
 - [**Wiki**](https://wiki.findora.org/)
-- [**Change Log**](docs/CHANGELOG.md)
+- [**Change log**](CHANGELOG.md)
 
 ### Licensing
 
