@@ -63,7 +63,8 @@ jobs:
           git config --global user.name "wasmcat-bot"
 
           # clone the main branch
-          git clone --depth 1 https://${{secrets.ACCESS_TOKEN}}@github.com/FindoraNetwork/wasm-js-bindings
+          # git clone --depth 1 https://${{secrets.ACCESS_TOKEN}}@github.com/FindoraNetwork/wasm-js-bindings
+          git clone --depth 1 git@github.com:FindoraNetwork/wasm-js-bindings.git
           cd wasm-js-bindings
 
           # check target branch exists or not
