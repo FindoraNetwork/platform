@@ -24,6 +24,44 @@ then
 fi
 echo
 
+# test eth to fra
+echo -e "\n ***** Test transfer from eth to fra prefix address *****"
+$BIN/fn transfer --amount 209990000 --asset FRA -T $ED_ADDRESS
+sleep $BLOCK_INTERVAL
+
+echo "\n ***** Verifying balances ***** "
+python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $ED_SEC_KEY --amount 210010000
+if [ $? != 0 ];
+then
+    exit 1
+fi
+echo
+python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 630000000
+if [ $? != 0 ];
+then
+    exit 1
+fi
+echo
+
+# test fra to eth
+echo -e "\n ***** Test transfer from fra to eth prefix address *****"
+$BIN/fn transfer --amount 210000000 --asset FRA -f ./$FILE_FRA_KEY -T $FRA_ADDRESS
+sleep $BLOCK_INTERVAL
+
+echo "\n ***** Verifying balances ***** "
+python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $ED_SEC_KEY --amount 0
+if [ $? != 0 ];
+then
+    exit 1
+fi
+echo
+python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 840000000
+if [ $? != 0 ];
+then
+    exit 1
+fi
+echo
+
 # test bar to abar
 echo -e "\n ***** Bar To Abar Conversion *****"
 TXO_SID=$($BIN/fn owned-utxos | head -4 | tail -1 |  awk -F ' ' '{print $1}')

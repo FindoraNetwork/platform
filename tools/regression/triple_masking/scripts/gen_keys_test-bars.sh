@@ -2,15 +2,26 @@
 source tools/regression/triple_masking/scripts/env.sh
 
 export KEYPAIR=$($BIN/fn genkey)
+echo "Generating eth prefix address..."
 echo "$KEYPAIR"
 export FRA_ADDRESS=$(echo "$KEYPAIR" |awk 'NR == 2' |awk '{print $3}')
 export BAR_SEC_KEY=$(echo "$KEYPAIR" |awk 'NR == 6' |awk '{gsub(/"/,""); print $2}')
 
-echo -e "\n ***** 4 times Simple transfer to BAR address from faucet *****"
+export ED_KEYPAIR=$($BIN/fn genkey --fra-address)
+echo "Generating fra prefix address..."
+echo "$ED_KEYPAIR"
+export ED_ADDRESS=$(echo "$ED_KEYPAIR" |awk 'NR == 2' |awk '{print $3}')
+export ED_SEC_KEY=$(echo "$ED_KEYPAIR" |awk 'NR == 6' |awk '{gsub(/"/,""); print $2}')
+echo -n "${ED_SEC_KEY}" > "$FILE_FRA_KEY"
+$BIN/fn transfer --amount 20000 --asset FRA -T $ED_ADDRESS
+sleep $BLOCK_INTERVAL
+
+echo -e "\n ***** 4 times Simple transfer from faucet to eth BAR address *****"
 $BIN/fn transfer --amount 210000000 --asset FRA -T $FRA_ADDRESS
 sleep $BLOCK_INTERVAL
 
 $BIN/fn transfer --amount 210000000 --asset FRA -T $FRA_ADDRESS
+sleep $BLOCK_INTERVAL
 sleep $BLOCK_INTERVAL
 
 $BIN/fn transfer --amount 210000000 --asset FRA -T $FRA_ADDRESS

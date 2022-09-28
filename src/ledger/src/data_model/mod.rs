@@ -2003,7 +2003,6 @@ impl Transaction {
             if let Operation::BarToAbar(_a) = op {
                 min_fee = BAR_TO_ABAR_TX_FEE_MIN;
             }
-
         }
 
         self.is_coinbase_tx()
