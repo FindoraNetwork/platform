@@ -293,12 +293,12 @@ impl EthApi for EthApiImpl {
             nonce,
         } = request;
 
-        let id = native_block_id(block_number.clone());
+        let id = native_block_id(block_number);
         let block = self
             .account_base_app
             .read()
             .current_block(id)
-            .ok_or(internal_err("failed to get block"))?;
+            .ok_or_else(|| internal_err("failed to get block"))?;
 
         // use given gas limit or query current block's limit
         let gas_limit = gas.unwrap_or(block.header.gas_limit);
@@ -311,7 +311,7 @@ impl EthApi for EthApiImpl {
             .account_base_app
             .read()
             .create_context_at(block.header.number.as_u64())
-            .ok_or(internal_err("failed to create context"))?;
+            .ok_or_else(|| internal_err("failed to create context"))?;
 
         ctx.header
             .mut_time()
