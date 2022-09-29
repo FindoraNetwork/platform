@@ -227,6 +227,5 @@ then
     exit 1
 fi
 
-
 rm $BATCH_SK $BATCH_C $BATCH_PK $BATCH_AMOUNT $BATCH_ASSET
 echo -e "\n ***** Tested all successfully! ***** "
