@@ -100,8 +100,8 @@ use {
 /// against.
 const BUILD_ID: &str = concat!(env!("VERGEN_SHA_SHORT"), " ", env!("VERGEN_BUILD_DATE"));
 
-/// Returns the git commit hash and commit date of the commit this library was built against.
 #[wasm_bindgen]
+/// Returns the git commit hash and commit date of the commit this library was built against.
 pub fn build_id() -> String {
     BUILD_ID.to_string()
 }
@@ -109,7 +109,6 @@ pub fn build_id() -> String {
 /////////// TRANSACTION BUILDING ////////////////
 
 //Random Helpers
-
 #[wasm_bindgen]
 /// Generates random Base64 encoded asset type as a Base64 string. Used in asset definitions.
 /// @see {@link
@@ -830,7 +829,18 @@ impl TransactionBuilder {
 
     #[allow(missing_docs)]
     pub fn sign(mut self, kp: &XfrKeyPair) -> Result<TransactionBuilder, JsValue> {
+        self.get_builder_mut().sign_to_map(kp);
+
+        Ok(self)
+    }
+
+    #[allow(missing_docs)]
+    pub fn sign_origin(
+        mut self,
+        kp: &XfrKeyPair,
+    ) -> Result<TransactionBuilder, JsValue> {
         self.get_builder_mut().sign(kp);
+
         Ok(self)
     }
 
@@ -865,12 +875,12 @@ fn generate_extra(nonce: U256, fee: Option<U256>) -> SignedExtra {
     (CheckNonce::new(nonce), CheckFee::new(fee))
 }
 
+#[wasm_bindgen]
 /// Build transfer from account balance to utxo tx.
 /// @param {XfrPublicKey} recipient - UTXO Asset receiver.
 /// @param {u64} amount - Transfer amount.
 /// @param {string} sk - Ethereum wallet private key.
 /// @param {u64} nonce - Transaction nonce for sender.
-#[wasm_bindgen]
 pub fn transfer_to_utxo_from_account(
     recipient: XfrPublicKey,
     amount: u64,
@@ -909,8 +919,8 @@ pub fn transfer_to_utxo_from_account(
     String::from_utf8(tx_with_tag).map_err(error_to_jsvalue)
 }
 
-/// Recover ecdsa private key from mnemonic.
 #[wasm_bindgen]
+/// Recover ecdsa private key from mnemonic.
 pub fn recover_sk_from_mnemonic(
     phrase: String,
     password: String,
@@ -921,8 +931,8 @@ pub fn recover_sk_from_mnemonic(
     Ok(hex::encode(sp.seed()))
 }
 
-/// Recover ethereum address from ecdsa private key, eg. 0x73c71...
 #[wasm_bindgen]
+/// Recover ethereum address from ecdsa private key, eg. 0x73c71...
 pub fn recover_address_from_sk(sk: String) -> Result<String, JsValue> {
     let seed = hex::decode(sk).map_err(error_to_jsvalue)?;
     let mut s = [0u8; 32];
@@ -931,8 +941,8 @@ pub fn recover_address_from_sk(sk: String) -> Result<String, JsValue> {
     Ok(format!("{:?}", pair.address()))
 }
 
-/// Serialize ethereum address used to abci query nonce.
 #[wasm_bindgen]
+/// Serialize ethereum address used to abci query nonce.
 pub fn get_serialized_address(address: String) -> Result<String, JsValue> {
     let ms = MultiSigner::from_str(&address).map_err(error_to_jsvalue)?;
     let account: Address = ms.into();
@@ -1546,12 +1556,12 @@ pub fn keypair_from_str(str: String) -> XfrKeyPair {
     XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap()).unwrap()
 }
 
+#[wasm_bindgen]
 /// Generates a new credential issuer key.
 /// @param {JsValue} attributes - Array of attribute types of the form `[{name: "credit_score",
 /// size: 3}]`. The size refers to byte-size of the credential. In this case, the "credit_score"
 /// attribute is represented as a 3 byte string "760". `attributes` is the list of attribute types
 /// that the issuer can sign off on.
-#[wasm_bindgen]
 pub fn wasm_credential_issuer_key_gen(attributes: JsValue) -> CredentialIssuerKeyPair {
     let mut prng = ChaChaRng::from_entropy();
     let mut attributes: Vec<AttributeDefinition> = attributes.into_serde().unwrap();
@@ -1564,6 +1574,7 @@ pub fn wasm_credential_issuer_key_gen(attributes: JsValue) -> CredentialIssuerKe
     CredentialIssuerKeyPair { pk, sk }
 }
 
+#[wasm_bindgen]
 /// Verifies a credential commitment. Used to confirm that a credential is tied to a ledger
 /// address.
 /// @param {CredIssuerPublicKey} issuer_pub_key - The credential issuer that has attested to the
@@ -1574,7 +1585,6 @@ pub fn wasm_credential_issuer_key_gen(attributes: JsValue) -> CredentialIssuerKe
 /// @throws Will throw an error during verification failure (i.e. the supplied ledger address is
 /// incorrect, the commitment is tied to a different credential issuer, or the proof of knowledge is
 /// invalid, etc.)
-#[wasm_bindgen]
 pub fn wasm_credential_verify_commitment(
     issuer_pub_key: &CredIssuerPublicKey,
     commitment: &CredentialCommitment,
@@ -1591,6 +1601,7 @@ pub fn wasm_credential_verify_commitment(
     .map_err(error_to_jsvalue)
 }
 
+#[wasm_bindgen]
 /// Generates a new reveal proof from a credential commitment key.
 /// @param {CredUserSecretKey} user_secret_key - Secret key of the credential user who owns
 /// the credentials.
@@ -1598,7 +1609,6 @@ pub fn wasm_credential_verify_commitment(
 /// @param {JsValue} reveal_fields - Array of strings representing attribute fields to reveal.
 /// @throws Will throw an error if a reveal proof cannot be generated from the credential
 /// or ```reveal_fields``` fails to deserialize.
-#[wasm_bindgen]
 pub fn wasm_credential_open_commitment(
     user_secret_key: &CredUserSecretKey,
     credential: &Credential,
@@ -1619,10 +1629,10 @@ pub fn wasm_credential_open_commitment(
     Ok(CredentialPoK { pok })
 }
 
+#[wasm_bindgen]
 /// Generates a new credential user key.
 /// @param {CredIssuerPublicKey} issuer_pub_key - The credential issuer that can sign off on this
 /// user's attributes.
-#[wasm_bindgen]
 pub fn wasm_credential_user_key_gen(
     issuer_pub_key: &CredIssuerPublicKey,
 ) -> CredentialUserKeyPair {
@@ -1631,13 +1641,13 @@ pub fn wasm_credential_user_key_gen(
     CredentialUserKeyPair { pk, sk }
 }
 
+#[wasm_bindgen]
 /// Generates a signature on user attributes that can be used to create a credential.
 /// @param {CredIssuerSecretKey} issuer_secret_key - Secret key of credential issuer.
 /// @param {CredUserPublicKey} user_public_key - Public key of credential user.
 /// @param {JsValue} attributes - Array of attribute assignments of the form `[{name: "credit_score",
 /// val: "760"}]`.
 /// @throws Will throw an error if the signature cannot be generated.
-#[wasm_bindgen]
 pub fn wasm_credential_sign(
     issuer_secret_key: &CredIssuerSecretKey,
     user_public_key: &CredUserPublicKey,
@@ -1656,12 +1666,12 @@ pub fn wasm_credential_sign(
     Ok(CredentialSignature { sig })
 }
 
+#[wasm_bindgen]
 /// Generates a signature on user attributes that can be used to create a credential.
 /// @param {CredIssuerPublicKey} issuer_public_key - Public key of credential issuer.
 /// @param {CredentialSignature} signature - Credential issuer signature on attributes.
 /// @param {JsValue} attributes - Array of attribute assignments of the form `[{name: "credit_score",
 /// val: "760"}]'.
-#[wasm_bindgen]
 pub fn create_credential(
     issuer_public_key: &CredIssuerPublicKey,
     signature: &CredentialSignature,
@@ -1681,12 +1691,12 @@ pub fn create_credential(
     }
 }
 
+#[wasm_bindgen]
 /// Generates a credential commitment. A credential commitment can be used to selectively reveal
 /// attribute assignments.
 /// @param {CredUserSecretKey} user_secret_key - Secret key of credential user.
 /// @param {XfrPublicKey} user_public_key - Ledger signing key to link this credential to.
 /// @param {Credential} credential - Credential object.
-#[wasm_bindgen]
 pub fn wasm_credential_commit(
     user_secret_key: &CredUserSecretKey,
     user_public_key: &XfrPublicKey,
@@ -1708,12 +1718,12 @@ pub fn wasm_credential_commit(
     })
 }
 
+#[wasm_bindgen]
 /// Selectively reveals attributes committed to in a credential commitment
 /// @param {CredUserSecretKey} user_sk - Secret key of credential user.
 /// @param {Credential} credential - Credential object.
 /// @param {JsValue} reveal_fields - Array of string names representing credentials to reveal (i.e.
 /// `["credit_score"]`).
-#[wasm_bindgen]
 pub fn wasm_credential_reveal(
     user_sk: &CredUserSecretKey,
     credential: &Credential,
@@ -1733,6 +1743,7 @@ pub fn wasm_credential_reveal(
     })
 }
 
+#[wasm_bindgen]
 /// Verifies revealed attributes from a commitment.
 /// @param {CredIssuerPublicKey} issuer_pub_key - Public key of credential issuer.
 /// @param {JsValue} attributes - Array of attribute assignments to check of the form `[{name: "credit_score",
@@ -1740,7 +1751,6 @@ pub fn wasm_credential_reveal(
 /// @param {CredentialCommitment} commitment - Commitment to the credential.
 /// @param {CredentialPoK} pok - Proof that the credential commitment is valid and commits
 /// to the attribute values being revealed.
-#[wasm_bindgen]
 pub fn wasm_credential_verify(
     issuer_pub_key: &CredIssuerPublicKey,
     attributes: JsValue,
@@ -1764,7 +1774,6 @@ pub fn wasm_credential_verify(
 }
 
 // Asset Tracing
-
 #[wasm_bindgen]
 /// Returns information about traceable assets for a given transfer.
 /// @param {JsValue} xfr_body - JSON of a transfer note from a transfer operation.
@@ -1940,17 +1949,16 @@ pub fn get_pk_from_keypair(kp: &XfrKeyPair) -> XfrPublicKey {
 ///////////////////////////////////////////
 // Author: FanHui(FH), github.com/ktmlm. //
 ///////////////////////////////////////////
-
-/// Randomly generate a 12words-length mnemonic.
 #[wasm_bindgen]
+/// Randomly generate a 12words-length mnemonic.
 pub fn generate_mnemonic_default() -> String {
     wallet::generate_mnemonic_default()
 }
 
+#[wasm_bindgen]
 /// Generate mnemonic with custom length and language.
 /// - @param `wordslen`: acceptable value are one of [ 12, 15, 18, 21, 24 ]
 /// - @param `lang`: acceptable value are one of [ "en", "zh", "zh_traditional", "fr", "it", "ko", "sp", "jp" ]
-#[wasm_bindgen]
 pub fn generate_mnemonic_custom(wordslen: u8, lang: &str) -> Result<String, JsValue> {
     wallet::generate_mnemonic_custom(wordslen, lang)
         .c(d!())
@@ -1985,9 +1993,9 @@ impl From<&BipPath> for wallet::BipPath {
     }
 }
 
+#[wasm_bindgen]
 /// Restore the XfrKeyPair from a mnemonic with a default bip44-path,
 /// that is "m/44'/917'/0'/0/0" ("m/44'/coin'/account'/change/address").
-#[wasm_bindgen]
 pub fn restore_keypair_from_mnemonic_default(
     phrase: &str,
 ) -> Result<XfrKeyPair, JsValue> {
@@ -1996,9 +2004,9 @@ pub fn restore_keypair_from_mnemonic_default(
         .map_err(error_to_jsvalue)
 }
 
+#[wasm_bindgen]
 /// Restore the XfrKeyPair from a mnemonic with a default bip44-path,
 /// that is "m/44'/917'/0'/0/0" ("m/44'/coin'/account'/change/address").
-#[wasm_bindgen]
 pub fn restore_keypair_from_mnemonic_ed25519(
     phrase: &str,
 ) -> Result<XfrKeyPair, JsValue> {
@@ -2007,9 +2015,9 @@ pub fn restore_keypair_from_mnemonic_ed25519(
         .map_err(error_to_jsvalue)
 }
 
+#[wasm_bindgen]
 /// Restore the XfrKeyPair from a mnemonic with custom params,
 /// in bip44 form.
-#[wasm_bindgen]
 pub fn restore_keypair_from_mnemonic_bip44(
     phrase: &str,
     lang: &str,
@@ -2020,9 +2028,9 @@ pub fn restore_keypair_from_mnemonic_bip44(
         .map_err(error_to_jsvalue)
 }
 
+#[wasm_bindgen]
 /// Restore the XfrKeyPair from a mnemonic with custom params,
 /// in bip49 form.
-#[wasm_bindgen]
 pub fn restore_keypair_from_mnemonic_bip49(
     phrase: &str,
     lang: &str,
@@ -2033,8 +2041,8 @@ pub fn restore_keypair_from_mnemonic_bip49(
         .map_err(error_to_jsvalue)
 }
 
-/// ID of FRA, in `String` format.
 #[wasm_bindgen]
+/// ID of FRA, in `String` format.
 pub fn fra_get_asset_code() -> String {
     AssetTypeCode {
         val: ASSET_TYPE_FRA,
@@ -2042,8 +2050,8 @@ pub fn fra_get_asset_code() -> String {
     .to_base64()
 }
 
-/// Fee smaller than this value will be denied.
 #[wasm_bindgen]
+/// Fee smaller than this value will be denied.
 pub fn fra_get_minimal_fee() -> u64 {
     TX_FEE_MIN
 }
@@ -2066,8 +2074,8 @@ pub fn fra_get_dest_pubkey() -> XfrPublicKey {
     *BLACK_HOLE_PUBKEY
 }
 
-/// The system address used to reveive delegation principals.
 #[wasm_bindgen]
+/// The system address used to reveive delegation principals.
 pub fn get_delegation_target_address() -> String {
     get_coinbase_principal_address()
 }

@@ -63,7 +63,7 @@ pub struct EnvCfg {
     pub name: String,
 
     // which operation to trigger,
-    // default value: `Ops::Info`
+    // default value: `Ops::Show`
     pub ops: Ops,
 
     // seconds between two blocks,
@@ -79,18 +79,23 @@ pub struct EnvCfg {
     // only used in `Ops::Create`
     pub checkpoint_file: Option<String>,
 
-    // only used in `Ops::Create`
-    pub abcid_extra_flags: Option<String>,
-
     // initialized once in `Ops::Create`,
     // default value: "127.0.0.1"
     pub host_ip: Option<String>,
 
+    // specify this option if you want to use a custom version of abcid
+    pub abcid_bin: Option<String>,
+
     // specify this option if you want to use a custom version of tendermint
     pub tendermint_bin: Option<String>,
 
-    // specify this option if you want to use a custom version of abcid
-    pub abcid_bin: Option<String>,
+    // only used in `Ops::Create`
+    pub abcid_extra_flags: Option<String>,
+
+    // only used in `Ops::Create`
+    pub tendermint_extra_flags: Option<String>,
+
+    pub force_create: bool,
 }
 
 impl Default for EnvCfg {
@@ -102,10 +107,12 @@ impl Default for EnvCfg {
             initial_validator_num: VALIDATORS_MIN as u8,
             evm_chain_id: 2152,
             checkpoint_file: None,
-            abcid_extra_flags: None,
             host_ip: None,
-            tendermint_bin: None,
             abcid_bin: None,
+            tendermint_bin: None,
+            abcid_extra_flags: None,
+            tendermint_extra_flags: None,
+            force_create: false,
         }
     }
 }
@@ -123,23 +130,25 @@ impl EnvCfg {
                 .c(d!())
                 .and_then(|mut env| env.start(None).c(d!()))
                 .map(|_| None),
+            Ops::StartAll => Env::start_all().c(d!()).map(|_| None),
             Ops::Stop => Env::load_cfg(self)
                 .c(d!())
                 .and_then(|env| env.stop().c(d!()))
                 .map(|_| None),
-            Ops::AddNode => Env::load_cfg(self)
+            Ops::StopAll => Env::stop_all().c(d!()).map(|_| None),
+            Ops::PushNode => Env::load_cfg(self)
                 .c(d!())
-                .and_then(|mut env| env.attach_node().c(d!()))
+                .and_then(|mut env| env.push_node().c(d!()))
                 .map(|_| None),
-            Ops::DelNode => Env::load_cfg(self)
+            Ops::PopNode => Env::load_cfg(self)
                 .c(d!())
                 .and_then(|mut env| env.kick_node().c(d!()))
                 .map(|_| None),
-            Ops::Info => Env::load_cfg(self).c(d!()).map(|env| {
-                env.print_info();
+            Ops::Show => Env::load_cfg(self).c(d!()).map(|env| {
+                env.show();
                 None
             }),
-            Ops::InfoAll => Env::info_all().c(d!()).map(|_| None),
+            Ops::ShowAll => Env::show_all().c(d!()).map(|_| None),
             Ops::List => Env::list_all().c(d!()).map(|_| None),
             Ops::Init => Env::load_cfg(self)
                 .c(d!())
@@ -159,11 +168,16 @@ pub struct Env {
     #[serde(rename = "env_home_dir")]
     home: String,
 
+    // path of the abcid binary, default to 'abcid'
+    abcid_bin: String,
+
     // path of the tendermint binary, default to 'tendermint'
     tendermint_bin: String,
 
-    // path of the abcid binary, default to 'abcid'
-    abcid_bin: String,
+    // eg: `--disable-eth-empty-blocks`
+    abcid_extra_flags: Option<String>,
+
+    tendermint_extra_flags: Option<String>,
 
     // default value: "127.0.0.1"
     host_ip: String,
@@ -189,11 +203,6 @@ pub struct Env {
     // path of the checkpoint file, if any
     checkpoint_file: Option<String>,
 
-    // eg,
-    // - `--disable-eth-empty-blocks`
-    // - ...
-    abcid_extra_flags: Option<String>,
-
     #[serde(rename = "seed_nodes")]
     seeds: BTreeMap<NodeId, Node>,
 
@@ -214,6 +223,13 @@ impl Env {
     fn create(cfg: &EnvCfg) -> Result<Env> {
         let home = format!("{}/envs/{}", ENV_BASE_DIR, &cfg.name);
 
+        if cfg.force_create {
+            info_omit!(Env::load_cfg(cfg)
+                .c(d!())
+                .and_then(|env| env.destroy().c(d!())));
+            omit!(fs::remove_dir_all(&home));
+        }
+
         if fs::metadata(&home).is_ok() {
             return Err(eg!("Another env with the same name exists!"));
         }
@@ -224,15 +240,16 @@ impl Env {
             block_itv_secs: cfg.block_itv_secs,
             evm_chain_id: cfg.evm_chain_id,
             checkpoint_file: cfg.checkpoint_file.clone(),
-            abcid_extra_flags: cfg.abcid_extra_flags.clone(),
             initial_validator_num: cfg.initial_validator_num,
             host_ip: cfg.host_ip.as_deref().unwrap_or("127.0.0.1").to_owned(),
+            abcid_bin: cfg.abcid_bin.as_deref().unwrap_or("abcid").to_owned(),
             tendermint_bin: cfg
                 .tendermint_bin
                 .as_deref()
                 .unwrap_or("tendermint")
                 .to_owned(),
-            abcid_bin: cfg.abcid_bin.as_deref().unwrap_or("abcid").to_owned(),
+            abcid_extra_flags: cfg.abcid_extra_flags.clone(),
+            tendermint_extra_flags: cfg.tendermint_extra_flags.clone(),
             ..Self::default()
         };
 
@@ -278,9 +295,10 @@ impl Env {
                     self.block_itv_secs,
                     self.evm_chain_id,
                     self.checkpoint_file.as_deref(),
-                    self.abcid_extra_flags.as_deref().unwrap_or_default(),
-                    &self.tendermint_bin,
                     &self.abcid_bin,
+                    &self.tendermint_bin,
+                    self.abcid_extra_flags.as_deref().unwrap_or_default(),
+                    self.tendermint_extra_flags.as_deref().unwrap_or_default(),
                 )
                 .c(d!())?;
             } else if let Some(n) = self.seeds.get_mut(i) {
@@ -289,9 +307,10 @@ impl Env {
                     self.block_itv_secs,
                     self.evm_chain_id,
                     self.checkpoint_file.as_deref(),
-                    self.abcid_extra_flags.as_deref().unwrap_or_default(),
-                    &self.tendermint_bin,
                     &self.abcid_bin,
+                    &self.tendermint_bin,
+                    self.abcid_extra_flags.as_deref().unwrap_or_default(),
+                    self.tendermint_extra_flags.as_deref().unwrap_or_default(),
                 )
                 .c(d!())?;
             } else {
@@ -299,6 +318,18 @@ impl Env {
             }
         }
 
+        Ok(())
+    }
+
+    // start all existing ENVs
+    fn start_all() -> Result<()> {
+        for env in Self::get_all_envs().c(d!())?.iter() {
+            Self::read_cfg(env)
+                .c(d!())?
+                .c(d!("BUG: env not found!"))?
+                .start(None)
+                .c(d!())?;
+        }
         Ok(())
     }
 
@@ -310,6 +341,18 @@ impl Env {
             .map(|n| n.stop().c(d!()))
             .collect::<Result<Vec<_>>>()
             .map(|_| ())
+    }
+
+    // stop all existing ENVs
+    fn stop_all() -> Result<()> {
+        for env in Self::get_all_envs().c(d!())?.iter() {
+            Self::read_cfg(env)
+                .c(d!())?
+                .c(d!("BUG: env not found!"))?
+                .stop()
+                .c(d!())?;
+        }
+        Ok(())
     }
 
     // destroy all nodes
@@ -340,7 +383,7 @@ impl Env {
 
     // seed nodes are kept by system for now,
     // so only the other nodes can be added on demand
-    fn attach_node(&mut self) -> Result<()> {
+    fn push_node(&mut self) -> Result<()> {
         let id = self.next_node_id();
         let kind = Kind::Node;
         self.alloc_resources(id, kind)
@@ -389,6 +432,39 @@ impl Env {
                 });
             }
         });
+        Ok(())
+    }
+
+    fn show(&self) {
+        println!("{}", pnk!(serde_json::to_string_pretty(self)));
+    }
+
+    // show the details of all existing ENVs
+    fn show_all() -> Result<()> {
+        for (idx, env) in Self::get_all_envs().c(d!())?.iter().enumerate() {
+            println!("\x1b[31;01m====== ENV No.{} ======\x1b[00m", idx);
+            Self::read_cfg(env)
+                .c(d!())?
+                .c(d!("BUG: env not found!"))?
+                .show();
+            println!();
+        }
+        Ok(())
+    }
+
+    // list the names of all existing ENVs
+    fn list_all() -> Result<()> {
+        let list = Self::get_all_envs().c(d!())?;
+
+        if list.is_empty() {
+            println!("\x1b[31;01mNo existing env!\x1b[00m");
+        } else {
+            println!("\x1b[31;01mEnv list:\x1b[00m");
+            list.into_iter().for_each(|env| {
+                println!("  {}", env);
+            });
+        }
+
         Ok(())
     }
 
@@ -626,39 +702,6 @@ impl Env {
         Ok(())
     }
 
-    fn print_info(&self) {
-        println!("{}", pnk!(serde_json::to_string_pretty(self)));
-    }
-
-    // show the details of all existing ENVs
-    fn info_all() -> Result<()> {
-        for (idx, env) in Self::get_all_envs().c(d!())?.iter().enumerate() {
-            println!("\x1b[31;01m====== ENV No.{} ======\x1b[00m", idx);
-            Self::read_cfg(env)
-                .c(d!())?
-                .c(d!("BUG: env not found!"))?
-                .print_info();
-            println!();
-        }
-        Ok(())
-    }
-
-    // list the names of all existing ENVs
-    fn list_all() -> Result<()> {
-        let list = Self::get_all_envs().c(d!())?;
-
-        if list.is_empty() {
-            println!("\x1b[31;01mNo existing env!\x1b[00m");
-        } else {
-            println!("\x1b[31;01mEnv list:\x1b[00m");
-            list.into_iter().for_each(|env| {
-                println!("  {}", env);
-            });
-        }
-
-        Ok(())
-    }
-
     fn get_all_envs() -> Result<Vec<String>> {
         let mut list = vec![];
 
@@ -763,7 +806,7 @@ struct Node {
     id: NodeId,
     #[serde(rename = "tendermint_node_id")]
     tm_id: String,
-    #[serde(rename = "home_dir")]
+    #[serde(rename = "node_home_dir")]
     home: String,
     kind: Kind,
     #[serde(rename = "occupied_ports")]
@@ -781,16 +824,17 @@ impl Node {
         block_itv: u8,
         evm_chain_id: u64,
         checkpoint_file: Option<&str>,
-        abcid_extra_flags: &str,
-        tendermint_bin: &str,
         abcid_bin: &str,
+        tendermint_bin: &str,
+        abcid_extra_flags: &str,
+        tendermint_extra_flags: &str,
     ) -> Result<()> {
         self.stop().c(d!())?;
         match unsafe { fork() } {
             Ok(ForkResult::Child) => {
                 let mut cmd = format!(
-                    "{10} node --home {9} >>{9}/tendermint.log 2>&1 & \
-                    EVM_CHAIN_ID={0} FINDORA_BLOCK_ITV={1} {11} \
+                    "{11} node --home {9} {12} >>{9}/tendermint.log 2>&1 & \
+                    EVM_CHAIN_ID={0} FINDORA_BLOCK_ITV={1} {10} \
                         --enable-query-service \
                         --enable-eth-api-service \
                         --tendermint-host {2} \
@@ -812,8 +856,9 @@ impl Node {
                     self.ports.web3_http,
                     self.ports.web3_ws,
                     &self.home,
+                    abcid_bin,
                     tendermint_bin,
-                    abcid_bin
+                    tendermint_extra_flags,
                 );
                 if let Some(checkpoint) = checkpoint_file {
                     write!(cmd, r" --checkpoint-file {}", checkpoint).unwrap();
@@ -918,19 +963,21 @@ pub enum Ops {
     Destroy,
     DestroyAll,
     Start,
+    StartAll,
     Stop,
-    AddNode,
-    DelNode,
-    Info,
-    InfoAll,
-    List,
+    StopAll,
+    PushNode,
+    PopNode,
     Init,
     InitAll,
+    Show,
+    ShowAll,
+    List,
 }
 
 impl Default for Ops {
     fn default() -> Self {
-        Self::Info
+        Self::Show
     }
 }
 
@@ -942,7 +989,10 @@ fn alloc_ports(node_kind: &Kind, env_name: &str) -> Result<Ports> {
     let mut res = vec![];
     if matches!(node_kind, Kind::Node)
         && ENV_NAME_DEFAULT == env_name
-        && !PortsCache::contains(RESERVED_PORTS[0]).c(d!())?
+        && RESERVED_PORTS
+            .iter()
+            .copied()
+            .all(|p| !pnk!(PortsCache::contains(p)) && port_is_free(p))
     {
         res = RESERVED_PORTS.to_vec();
     } else {
@@ -978,23 +1028,35 @@ fn alloc_ports(node_kind: &Kind, env_name: &str) -> Result<Ports> {
 }
 
 fn port_is_free(port: u16) -> bool {
-    info!(check_port(port)).is_ok()
+    let ret = check_port(port);
+    if ret.is_ok() {
+        true
+    } else {
+        println!(
+            "\n\x1b[33;01mNOTE: port {} can NOT be occupied!\x1b[00m",
+            port
+        );
+        info_omit!(ret);
+        false
+    }
 }
 
 fn check_port(port: u16) -> Result<()> {
-    let fd = socket(
-        AddressFamily::Inet,
-        SockType::Datagram,
-        SockFlag::empty(),
-        None,
-    )
-    .c(d!())?;
+    let check = |st: SockType| {
+        let fd = socket(AddressFamily::Inet, st, SockFlag::empty(), None).c(d!())?;
 
-    setsockopt(fd, sockopt::ReuseAddr, &true)
-        .c(d!())
-        .and_then(|_| setsockopt(fd, sockopt::ReusePort, &true).c(d!()))
-        .and_then(|_| bind(fd, &SockaddrIn::new(0, 0, 0, 0, port)).c(d!()))
-        .and_then(|_| close(fd).c(d!()))
+        setsockopt(fd, sockopt::ReuseAddr, &true)
+            .c(d!())
+            .and_then(|_| setsockopt(fd, sockopt::ReusePort, &true).c(d!()))
+            .and_then(|_| bind(fd, &SockaddrIn::new(0, 0, 0, 0, port)).c(d!()))
+            .and_then(|_| close(fd).c(d!()))
+    };
+
+    for st in [SockType::Datagram, SockType::Stream].into_iter() {
+        check(st).c(d!())?;
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize)]

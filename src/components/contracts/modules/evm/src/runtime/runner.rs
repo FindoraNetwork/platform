@@ -46,13 +46,12 @@ impl<C: Config> ActionRunner<C> {
             >,
         ) -> (ExitReason, R),
     {
+        let min_gas_price = C::FeeCalculator::min_gas_price(ctx.header.height as u64);
+
         // Gas price check is skipped when performing a gas estimation.
         let gas_price = match gas_price {
             Some(gas_price) => {
-                ensure!(
-                    gas_price >= C::FeeCalculator::min_gas_price(),
-                    "GasPriceTooLow"
-                );
+                ensure!(gas_price >= min_gas_price, "GasPriceTooLow");
                 gas_price
             }
             None => Default::default(),
@@ -270,6 +269,7 @@ impl<C: Config> Runner for ActionRunner<C> {
     fn call(ctx: &Context, args: Call, config: &evm::Config) -> Result<CallInfo> {
         let precompiles = C::PrecompilesValue::get(ctx.clone());
         let access_list = Vec::new();
+
         Self::execute(
             ctx,
             args.source,
@@ -295,6 +295,7 @@ impl<C: Config> Runner for ActionRunner<C> {
     fn create(ctx: &Context, args: Create, config: &evm::Config) -> Result<CreateInfo> {
         let precompiles = C::PrecompilesValue::get(ctx.clone());
         let access_list = Vec::new();
+
         Self::execute(
             ctx,
             args.source,
@@ -332,6 +333,7 @@ impl<C: Config> Runner for ActionRunner<C> {
         let code_hash = H256::from_slice(Keccak256::digest(&args.init).as_slice());
         let precompiles = C::PrecompilesValue::get(ctx.clone());
         let access_list = Vec::new();
+
         Self::execute(
             ctx,
             args.source,

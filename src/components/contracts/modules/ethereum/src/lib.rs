@@ -77,7 +77,8 @@ pub mod storage {
     generate_storage!(Ethereum, CurrentReceipts => Map<HA256, Vec<Receipt>>);
     // The ethereum history transaction statuses with block number.
     generate_storage!(Ethereum, CurrentTransactionStatuses => Map<HA256, Vec<TransactionStatus>>);
-
+    // Flag indicating whether data migration has been executed
+    generate_storage!(Ethereum, Migrated => Map<String, bool>);
     // The following data is stored in in-memory array
     // Current building block's transactions and receipts.
     pub type PendingTransactions = Mutex<Vec<(Transaction, TransactionStatus, Receipt)>>;
@@ -164,9 +165,8 @@ impl<C: Config> ValidateUnsigned for App<C> {
             && ctx.run_mode == RunTxMode::Check
         {
             let Action::Transact(transaction) = call;
-            let origin = Self::recover_signer(transaction).ok_or_else(|| {
-                eg!("InvalidSignature, can not recover signer address")
-            })?;
+            let origin = Self::recover_signer_fast(ctx, transaction)
+                .ok_or_else(|| eg!("ExecuteTransaction: InvalidSignature"))?;
             let account_id = C::AddressMapping::convert_to_account_id(origin);
             C::AccountAsset::inc_nonce(ctx, &account_id)?;
         }
@@ -188,8 +188,8 @@ impl<C: Config> ValidateUnsigned for App<C> {
             return Err(eg!("Must provide chainId".to_string()));
         }
 
-        let origin = Self::recover_signer(transaction)
-            .ok_or_else(|| eg!("InvalidSignature, can not recover signer address"))?;
+        let origin = Self::recover_signer_fast(ctx, transaction)
+            .ok_or_else(|| eg!("ExecuteTransaction: InvalidSignature"))?;
 
         // Same as go ethereum, Min gas limit is 21000.
         if transaction.gas_limit < U256::from(21000)
@@ -202,11 +202,12 @@ impl<C: Config> ValidateUnsigned for App<C> {
             )));
         }
 
-        if transaction.gas_price < C::FeeCalculator::min_gas_price() {
+        let min_gas_price = C::FeeCalculator::min_gas_price(ctx.header.height as u64);
+
+        if transaction.gas_price < min_gas_price {
             return Err(eg!(format!(
                 "InvalidGasPrice: got {}, but the minimum gas price is {}",
-                transaction.gas_price,
-                C::FeeCalculator::min_gas_price()
+                transaction.gas_price, min_gas_price
             )));
         }
 

@@ -22,14 +22,14 @@ OPTIONS:
     -e, --env-name <ENV NAME>    The name of the target env
 
 SUBCOMMANDS:
-    add-node       Attach a new node to an existing env
+    push-node      Attach a new node to an existing env
     create         Create a new env
-    del-node       Pop a node from an existing env
+    pop-node       Pop a node from an existing env
     destroy        Destroy an existing env
     destroy-all    Destroy all existing ENVs
     help           Prints this message or the help of the given subcommand(s)
-    info           Default operation, show the information of an existing env
-    info-all       Show the details of all existing ENVs
+    show           Default operation, show the information of an existing env
+    show-all       Show the details of all existing ENVs
     init           Config the initial settings(POS,FRA issuance...)
     init-all       Apply the `init` operation to all existing ENVs
     list           List the names of all existing ENVs
@@ -63,17 +63,25 @@ Now the cluster can be considered to be a full-featured local network, you can:
 - do evm related operations
 - ...
 
-But wait, where can I get the FRA token? How to check the staking key of valiadtors? In a word, how to easily view these necessary information?
+But wait,
+- where to get FRA tokens?
+- where to get the web-service ports of a target ENV?
+- where to find all staking related keys of validators?
+- ...
 
-Don't worry, a `fn dev info` will show you everything you need, you can use a shorter style `fn dev` when using the default cluster, they are equal.
+In a word, how to easily get all necessary information?
+
+Don't worry, a `fn dev show` will show you everything you need, you can use a shorter style `fn dev` when using the default cluster, they are equal.
 
 Below is the information of a custom ENV named 'MyEnv', `fn dev -e MyEnv`:
 ```json
 {
   "env_name": "MyEnv",
   "env_home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv",
-  "tendermint_bin": "/tmp/tendermint-v0.33.8",
   "abcid_bin": "/tmp/abcid-v0.4.0-preview",
+  "tendermint_bin": "/tmp/tendermint-v0.33.8",
+  "abcid_extra_flags": "--disable-eth-empty-blocks",
+  "tendermint_extra_flags": "validator",
   "host_ip": "192.168.2.5",
   "bank_account": {
     "wallet_address": "fra18xkez3fum44jq0zhvwq380rfme7u624cccn3z56fjeex6uuhpq6qv9e4g5",
@@ -84,185 +92,184 @@ Below is the information of a custom ENV named 'MyEnv', `fn dev -e MyEnv`:
   "initial_validator_number": 6,
   "initial_pos_settings": [
     {
-      "tendermint_addr": "27055305231CF6F718AD26485499B3ED1CCC8115",
-      "tendermint_pubkey": "MVQUuYdJzxmYiJnmffxf40jBXXkwwnkLzt0f4XV+NeQ=",
+      "tendermint_addr": "21D8A1DB770AF7C8CA0BD7BFE223DA5D5E79C238",
+      "tendermint_pubkey": "YGj6VjFE3q0JkWnC2A+hI7S311khjOEMabIS3/RGwS4=",
       "xfr_keypair": {
-        "pub_key": "5vy5t4sG_cbLVJvKQWn7xwd7WSmRQlUX6KW-IvDTLBo=",
-        "sec_key": "fCBBCZCh8-IxCn9rgjoRiX03_SiuI99EouM-VJ9Hu5U="
+        "pub_key": "HWQSmqnQFRmB5mEio5unslslFpdGC1Fg5PAXhfO8rs4=",
+        "sec_key": "SgJLEsHB43dx4LVG93a1L4fdpvd9DJNlsZJ5jsyI-ms="
       },
-      "xfr_mnemonic": "chat fish hedgehog step help waste charge repeat cram public address visa around iron sponsor silly obvious sail squirrel relief arrive pet toe nominee",
-      "xfr_wallet_addr": "fra1um7tndutqm7udj65n09yz60mcurhkkffj9p929lg5klz9uxn9sdqlv3f2e"
+      "xfr_mnemonic": "place pet blue notice normal custom hip waste fish brand assist east bright prepare slice shrimp top slow foot this hair river recycle vocal",
+      "xfr_wallet_addr": "fra1r4jp9x4f6q23nq0xvy328xa8kfdj295hgc94zc8y7qtctuau4m8qpzl2qw"
     },
     {
-      "tendermint_addr": "33A24EF38E695529EED806CF70751C2CFC61DEAC",
-      "tendermint_pubkey": "bvjpaBraL50Q8rRo+a7HH5HU2YI4lEasxm5CrP/TC6c=",
+      "tendermint_addr": "33A15A42B69531F9F0CC86E85FFE864131026DC2",
+      "tendermint_pubkey": "+hIsyU5SN7Vkk7x5IAqnk9wLrVTsomkx3pEKTbjyM6g=",
       "xfr_keypair": {
-        "pub_key": "MOm22HEhE59rIb9H2Vgg_-Y0EOaIolKUbGcWXdfyZdM=",
-        "sec_key": "AVj4I7G85a_dpETRjZbEYAlAiP7kBGxUx-3YBmYfhDc="
+        "pub_key": "EF-5Q9jyQvvMTri9Kj9ysgvzoVRugriwfoKDD7IguZc=",
+        "sec_key": "rS2yiw8q7cnIlEUmsgP_LJRQ1ql2hiGQN702gTUfLwo="
       },
-      "xfr_mnemonic": "inject clerk accuse crunch absurd piece rely property bird win cave occur panther shaft switch device ketchup amused rather tragic settle celery dose brick",
-      "xfr_wallet_addr": "fra1xr5mdkr3yyfe76epharajkpqllnrgy8x3z3999rvvut9m4ljvhfsjf5375"
+      "xfr_mnemonic": "fame nose practice thing fade sure casino torch furnace win emotion later discover spy observe found copper vicious piano ecology again brass pact orange",
+      "xfr_wallet_addr": "fra1zp0mjs7c7fp0hnzwhz7j50mjkg9l8g25d6pt3vr7s2pslv3qhxtse6nmwa"
     },
     {
-      "tendermint_addr": "38AD0AF0258FB751262BD9D835A4D7848B0BC60E",
-      "tendermint_pubkey": "5UzQOmtN9xT7kOLq9w0B4UA1U5dUeuJgzItbGkdepvg=",
+      "tendermint_addr": "72AA455D415F45E9C8D04840729815552693425B",
+      "tendermint_pubkey": "++Glau+loOkKNYpgDClBR6uDvwtqeNnyYm7ieDP72+g=",
       "xfr_keypair": {
-        "pub_key": "zH51NYSEam0rA8aJTFlyxHY-t3KFAg9uTnZ47l0HTCI=",
-        "sec_key": "S-WS-_maS1beU8fKBpTKBXUzZ8i1-9q44MlXYFiddak="
+        "pub_key": "RDccnrOripudYGu0U1G4LFbsLQVFHJFLyMk583YXJlU=",
+        "sec_key": "aXI1nfGe-qcYNV_e13HOCpDUYSPPiJaD1RqJRAi4wQ8="
       },
-      "xfr_mnemonic": "repeat noise rare rely open crucial awkward firm distance about detect connect style device wagon level check grow bench year toddler rubber sense advice",
-      "xfr_wallet_addr": "fra1e3l82dvys34x62crc6y5cktjc3mradmjs5pq7mjwweuwuhg8fs3qpwjk0r"
+      "xfr_mnemonic": "donkey useless climb kiwi stumble link bubble easy elder supreme patch brave pretty target service neutral video lend cradle salute fold nuclear emotion submit",
+      "xfr_wallet_addr": "fra1gsm3e84n4w9fh8tqdw69x5dc93twctg9g5wfzj7geyulxashye2shqygzr"
     },
     {
-      "tendermint_addr": "4F850CA6849EC0B3FC808D912F35CE2DAA222006",
-      "tendermint_pubkey": "l+7AqB4df3ckzpF+7Ku4xh9z+WPzhyzjw99WKE0K9oI=",
+      "tendermint_addr": "950643B058A429CDAA8C21A3055135E62784B87E",
+      "tendermint_pubkey": "KqHuzGEkLAmIARcTxIvrTnPD3a2AJJkZD3xW//eacG4=",
       "xfr_keypair": {
-        "pub_key": "RyqsOAAqHeEGW2AKwywDX7GgOTP5XjMfAnYlufOKmIM=",
-        "sec_key": "CvaTBun0MiEeSErqHMPKRih0ADIu_UUjzuFQ2zdekuw="
+        "pub_key": "kBAE2HklcOeAYnj7XjMZwzFwCq-HxpXR0uuIB9x6vq8=",
+        "sec_key": "9Q09QUFmXSM2Z0tH4sNOBIns0t_wHAzy1t953RSCoA4="
       },
-      "xfr_mnemonic": "harbor all speed train adult alien box steel promote discover desk antique please ship total carry coral deer method nominee blanket ghost brand have",
-      "xfr_wallet_addr": "fra1gu42cwqq9gw7zpjmvq9vxtqrt7c6qwfnl90rx8czwcjmnuu2nzpsmg9205"
+      "xfr_mnemonic": "permit crack cigar expose clutch panel endless absurd story street fox night odor rigid cherry fly lawn jacket ostrich victory field art patch motion",
+      "xfr_wallet_addr": "fra1jqgqfkrey4cw0qrz0ra4uvcecvchqz40slrft5wjawyq0hr6h6hs7efutr"
     },
     {
-      "tendermint_addr": "C81783A1C67AD00C82FF093CE36AFF938185E44B",
-      "tendermint_pubkey": "QPh4cyJnFKpDwDbU0C30hoQfqwvjCN9xDB8OtomhMkE=",
+      "tendermint_addr": "B6979ECE8FE7C7E4BB4C663B8EEFB68CFE63F1AB",
+      "tendermint_pubkey": "kIYP9VAuXw7psmvIG8gI/lBcrvjkHal1KtBGGdCfYeQ=",
       "xfr_keypair": {
-        "pub_key": "THNbrDo9hoWDCJKePWhFG3KWDhK7Hd76-envNmOLmOM=",
-        "sec_key": "inIf4M_Pr_9O845CCp_BvMakx-lnjFaNPTvRUMSFv3E="
+        "pub_key": "D3H5SSU2KAXJIBnnERFQwnRN-e6rXYpArxNHtHdOb2g=",
+        "sec_key": "7oM5MynASfSTqQkGKj0dsJaduNTdqoTPOLPbuL45Kfk="
       },
-      "xfr_mnemonic": "cricket know material crop wheel merge imitate script sing pioneer honey safe access inquiry wall best sign seed hybrid helmet wheat grocery stone west",
-      "xfr_wallet_addr": "fra1f3e4htp68krgtqcgj20r66z9rdefvrsjhvwaa7hea8hnvcutnr3spzuwm3"
+      "xfr_mnemonic": "hedgehog coconut derive pole defy virtual mother cactus game tourist globe moment shine shield fall wagon regret coffee outer crane extra announce push figure",
+      "xfr_wallet_addr": "fra1pacljjf9xc5qtjfqr8n3zy2scf6ym70w4dwc5s90zdrmga6wda5qlawwrv"
     },
     {
-      "tendermint_addr": "FAD1E8BBC00835B88FAA41B54EAA0D2FCE55FEF0",
-      "tendermint_pubkey": "i3QFHggYCqG6ciKmsjAXSt6NKfyUOGjfje5YwYaYOfo=",
+      "tendermint_addr": "C0D10B2FFEDAC3D5E2DE130D7FD87262D1BAAFD4",
+      "tendermint_pubkey": "udCBH/6XQ8bwP8Xh1MUrejBKx6cXHe6n/gmFxSmJZWU=",
       "xfr_keypair": {
-        "pub_key": "UtKUdsJTYLCbmAXUAWGb97zMyW0HvyADxsrz7T4vmG0=",
-        "sec_key": "o9aYwKN27PC3OPa7GqDpvP5q5WPoJk-qjRp4KTgNeok="
+        "pub_key": "8Mjy6lspvMoZ4CxIXKSWP-vRsY-ldDhYggHUqDRxC7g=",
+        "sec_key": "EuvYmOvoaPyYVR7IkTSxIUYhdFPc3AZxB-SzuMpQMAA="
       },
-      "xfr_mnemonic": "fever cheap upper flash team language town sudden cash nurse orphan dove nation possible bracket coil hello orchard hurdle feature excuse rigid flee basic",
-      "xfr_wallet_addr": "fra12tffgakz2dstpxucqh2qzcvm777vejtdq7ljqq7xete76030npks7w80ku"
+      "xfr_mnemonic": "pole woman magic fox initial misery female moral entire tent pistol language drum embrace adapt leisure exact lens budget fit about often foil pyramid",
+      "xfr_wallet_addr": "fra17ry096jm9x7v5x0q93y9efyk8l4arvv0546rskyzq822sdr3pwuql8vavc"
     }
   ],
   "block_interval": 1,
   "evm_chain_id": 777,
   "checkpoint_file": "/tmp/checkpoint.toml",
-  "abcid_extra_flags": "--disable-eth-empty-blocks",
   "seed_nodes": {
     "0": {
       "id": 0,
-      "tendermint_node_id": "91a4fa7b110d051bf9bc832622afb41d97f27997",
-      "home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/0",
+      "tendermint_node_id": "a2d8b4efeb73b2b1d19edfa34d37f53c1f0b6305",
+      "node_home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/0",
       "kind": "Seed",
       "occupied_ports": {
-        "web3_http_service": 27411,
-        "web3_websocket_service": 24958,
-        "tendermint_p2p_service": 32670,
-        "tendermint_rpc_service": 56727,
-        "abcid_abci_service": 56761,
-        "abcid_submission_service": 20372,
-        "abcid_ledger_query_service": 30015
+        "web3_http_service": 26492,
+        "web3_websocket_service": 35589,
+        "tendermint_p2p_service": 22372,
+        "tendermint_rpc_service": 50788,
+        "abcid_abci_service": 21695,
+        "abcid_submission_service": 31755,
+        "abcid_ledger_query_service": 52745
       }
     }
   },
   "validator_or_full_nodes": {
     "1": {
       "id": 1,
-      "tendermint_node_id": "4d4cdfb807697b680bffcf8cfbb6f90c43d60884",
-      "home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/1",
+      "tendermint_node_id": "83eed56e18f33399911857249cb5f6674d140f61",
+      "node_home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/1",
       "kind": "ValidatorOrFull",
       "occupied_ports": {
-        "web3_http_service": 29062,
-        "web3_websocket_service": 34909,
-        "tendermint_p2p_service": 46897,
-        "tendermint_rpc_service": 30160,
-        "abcid_abci_service": 40160,
-        "abcid_submission_service": 58302,
-        "abcid_ledger_query_service": 38985
+        "web3_http_service": 37637,
+        "web3_websocket_service": 26357,
+        "tendermint_p2p_service": 27563,
+        "tendermint_rpc_service": 23568,
+        "abcid_abci_service": 38234,
+        "abcid_submission_service": 54814,
+        "abcid_ledger_query_service": 27921
       }
     },
     "2": {
       "id": 2,
-      "tendermint_node_id": "4b66d6e9e8e8e9277afda3024eda5474690f68aa",
-      "home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/2",
+      "tendermint_node_id": "513a31b3b414865a8b336ba90dfcee2b86ed8653",
+      "node_home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/2",
       "kind": "ValidatorOrFull",
       "occupied_ports": {
-        "web3_http_service": 28888,
-        "web3_websocket_service": 31504,
-        "tendermint_p2p_service": 34962,
-        "tendermint_rpc_service": 25973,
-        "abcid_abci_service": 37529,
-        "abcid_submission_service": 39327,
-        "abcid_ledger_query_service": 33283
+        "web3_http_service": 65261,
+        "web3_websocket_service": 22836,
+        "tendermint_p2p_service": 58687,
+        "tendermint_rpc_service": 42012,
+        "abcid_abci_service": 36935,
+        "abcid_submission_service": 34056,
+        "abcid_ledger_query_service": 36764
       }
     },
     "3": {
       "id": 3,
-      "tendermint_node_id": "ef3e3dddeb5955efc8ef4905184008a28e4482b7",
-      "home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/3",
+      "tendermint_node_id": "cea785e325d76f2eb339e933f8d213acb4514c77",
+      "node_home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/3",
       "kind": "ValidatorOrFull",
       "occupied_ports": {
-        "web3_http_service": 46711,
-        "web3_websocket_service": 31297,
-        "tendermint_p2p_service": 56883,
-        "tendermint_rpc_service": 52160,
-        "abcid_abci_service": 39108,
-        "abcid_submission_service": 26479,
-        "abcid_ledger_query_service": 56173
+        "web3_http_service": 29799,
+        "web3_websocket_service": 35889,
+        "tendermint_p2p_service": 58781,
+        "tendermint_rpc_service": 21344,
+        "abcid_abci_service": 38653,
+        "abcid_submission_service": 30465,
+        "abcid_ledger_query_service": 47821
       }
     },
     "4": {
       "id": 4,
-      "tendermint_node_id": "cc55016ba689320bbdb95d5922fc14d02716119e",
-      "home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/4",
+      "tendermint_node_id": "ee19df1f8405dee803197c6e0cabcc56f24231b0",
+      "node_home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/4",
       "kind": "ValidatorOrFull",
       "occupied_ports": {
-        "web3_http_service": 29555,
-        "web3_websocket_service": 34764,
-        "tendermint_p2p_service": 28830,
-        "tendermint_rpc_service": 33124,
-        "abcid_abci_service": 22525,
-        "abcid_submission_service": 26205,
-        "abcid_ledger_query_service": 25639
+        "web3_http_service": 38117,
+        "web3_websocket_service": 29534,
+        "tendermint_p2p_service": 36869,
+        "tendermint_rpc_service": 32051,
+        "abcid_abci_service": 27732,
+        "abcid_submission_service": 21521,
+        "abcid_ledger_query_service": 41027
       }
     },
     "5": {
       "id": 5,
-      "tendermint_node_id": "ba1cdbbf61b59520f01ee6769777edc0a4af8a07",
-      "home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/5",
+      "tendermint_node_id": "0ade68e5f29b31ad35a1ab41802740eedc7a38de",
+      "node_home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/5",
       "kind": "ValidatorOrFull",
       "occupied_ports": {
-        "web3_http_service": 55174,
-        "web3_websocket_service": 57460,
-        "tendermint_p2p_service": 47144,
-        "tendermint_rpc_service": 48775,
-        "abcid_abci_service": 29531,
-        "abcid_submission_service": 46879,
-        "abcid_ledger_query_service": 49426
+        "web3_http_service": 35378,
+        "web3_websocket_service": 22092,
+        "tendermint_p2p_service": 55933,
+        "tendermint_rpc_service": 34649,
+        "abcid_abci_service": 53370,
+        "abcid_submission_service": 31045,
+        "abcid_ledger_query_service": 29152
       }
     },
     "6": {
       "id": 6,
-      "tendermint_node_id": "bda665baeb0a82c8e9892358fe082dd1ead5ff2a",
-      "home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/6",
+      "tendermint_node_id": "099f9f5c45c46c65a0fe6dcc911cd6ff09b8c40a",
+      "node_home_dir": "/tmp/__FINDORA_DEV__/envs/MyEnv/6",
       "kind": "ValidatorOrFull",
       "occupied_ports": {
-        "web3_http_service": 46340,
-        "web3_websocket_service": 64310,
-        "tendermint_p2p_service": 24224,
-        "tendermint_rpc_service": 23894,
-        "abcid_abci_service": 41878,
-        "abcid_submission_service": 50118,
-        "abcid_ledger_query_service": 31215
+        "web3_http_service": 51964,
+        "web3_websocket_service": 35454,
+        "tendermint_p2p_service": 32413,
+        "tendermint_rpc_service": 53797,
+        "abcid_abci_service": 36495,
+        "abcid_submission_service": 31620,
+        "abcid_ledger_query_service": 43557
       }
     }
   },
-  "tendermint_genesis_config": "{\"app_hash\":\"\",\"chain_id\":\"test-chain-wfnI4D\",\"consensus_params\":{\"block\":{\"max_bytes\":\"22020096\",\"max_gas\":\"-1\",\"time_iota_ms\":\"1000\"},\"evidence\":{\"max_age_duration\":\"172800000000000\",\"max_age_num_blocks\":\"100000\"},\"validator\":{\"pub_key_types\":[\"ed25519\"]}},\"genesis_time\":\"2022-09-06T01:25:39.871204204Z\",\"validators\":[{\"address\":\"38AD0AF0258FB751262BD9D835A4D7848B0BC60E\",\"name\":\"node-0\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"5UzQOmtN9xT7kOLq9w0B4UA1U5dUeuJgzItbGkdepvg=\"},\"voting_power\":\"1\"},{\"address\":\"27055305231CF6F718AD26485499B3ED1CCC8115\",\"name\":\"node-1\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"MVQUuYdJzxmYiJnmffxf40jBXXkwwnkLzt0f4XV+NeQ=\"},\"voting_power\":\"1\"},{\"address\":\"FAD1E8BBC00835B88FAA41B54EAA0D2FCE55FEF0\",\"name\":\"node-2\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"i3QFHggYCqG6ciKmsjAXSt6NKfyUOGjfje5YwYaYOfo=\"},\"voting_power\":\"1\"},{\"address\":\"4F850CA6849EC0B3FC808D912F35CE2DAA222006\",\"name\":\"node-3\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"l+7AqB4df3ckzpF+7Ku4xh9z+WPzhyzjw99WKE0K9oI=\"},\"voting_power\":\"1\"},{\"address\":\"33A24EF38E695529EED806CF70751C2CFC61DEAC\",\"name\":\"node-4\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"bvjpaBraL50Q8rRo+a7HH5HU2YI4lEasxm5CrP/TC6c=\"},\"voting_power\":\"1\"},{\"address\":\"C81783A1C67AD00C82FF093CE36AFF938185E44B\",\"name\":\"node-5\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"QPh4cyJnFKpDwDbU0C30hoQfqwvjCN9xDB8OtomhMkE=\"},\"voting_power\":\"1\"}]}",
-  "next_node_id": 7
+  "next_node_id": 7,
+  "tendermint_genesis_config": "{\"app_hash\":\"\",\"chain_id\":\"test-chain-GIEbMA\",\"consensus_params\":{\"block\":{\"max_bytes\":\"22020096\",\"max_gas\":\"-1\",\"time_iota_ms\":\"1000\"},\"evidence\":{\"max_age_duration\":\"172800000000000\",\"max_age_num_blocks\":\"100000\"},\"validator\":{\"pub_key_types\":[\"ed25519\"]}},\"genesis_time\":\"2022-09-12T13:26:18.175795739Z\",\"validators\":[{\"address\":\"950643B058A429CDAA8C21A3055135E62784B87E\",\"name\":\"node-0\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"KqHuzGEkLAmIARcTxIvrTnPD3a2AJJkZD3xW//eacG4=\"},\"voting_power\":\"1\"},{\"address\":\"72AA455D415F45E9C8D04840729815552693425B\",\"name\":\"node-1\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"++Glau+loOkKNYpgDClBR6uDvwtqeNnyYm7ieDP72+g=\"},\"voting_power\":\"1\"},{\"address\":\"33A15A42B69531F9F0CC86E85FFE864131026DC2\",\"name\":\"node-2\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"+hIsyU5SN7Vkk7x5IAqnk9wLrVTsomkx3pEKTbjyM6g=\"},\"voting_power\":\"1\"},{\"address\":\"B6979ECE8FE7C7E4BB4C663B8EEFB68CFE63F1AB\",\"name\":\"node-3\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"kIYP9VAuXw7psmvIG8gI/lBcrvjkHal1KtBGGdCfYeQ=\"},\"voting_power\":\"1\"},{\"address\":\"C0D10B2FFEDAC3D5E2DE130D7FD87262D1BAAFD4\",\"name\":\"node-4\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"udCBH/6XQ8bwP8Xh1MUrejBKx6cXHe6n/gmFxSmJZWU=\"},\"voting_power\":\"1\"},{\"address\":\"21D8A1DB770AF7C8CA0BD7BFE223DA5D5E79C238\",\"name\":\"node-5\",\"power\":\"1\",\"pub_key\":{\"type\":\"tendermint/PubKeyEd25519\",\"value\":\"YGj6VjFE3q0JkWnC2A+hI7S311khjOEMabIS3/RGwS4=\"},\"voting_power\":\"1\"}]}"
 }
 ```
 
-You can pause the cluster by `fn dev stop`, and resume it by `fn dev start` at any time; you can also scale up the cluster by `fn dev add-node`, and scale it down by `fn dev del-node`.
+You can pause the cluster by `fn dev stop`, and resume it by `fn dev start` at any time; you can also scale up the cluster by `fn dev push-node`, and scale it down by `fn dev pop-node`.
 
 At last, if you don't need this cluster anymore, you can permanently destroy it with the `fn dev destroy` subcommand.
 
@@ -276,22 +283,24 @@ fn-dev-create
 Create a new env
 
 USAGE:
-    fn dev create [OPTIONS]
+    fn dev create [FLAGS] [OPTIONS]
 
 FLAGS:
+    -f, --force      destroy the target ENV and create a new one
     -h, --help       Prints help information
     -V, --version    Prints version information
 
 OPTIONS:
-    -A, --abcid-bin-path <ABCID BIN PATH>              The path of your custom abcid binary
-    -E, --abcid-extra-flags <ABCID EXTRA FLAGS>        A pair of quotes should be used when specifying extra flags
-    -i, --block-itv-secs <BLOCK INTERVAL>              Block interval in seconds
-    -c, --checkpoint-file <CHECKPOINT FILE>            The file path of the checkpoint file
-    -e, --env-name <ENV NAME>                          The name of the target env
-    -I, --evm-chain-id <EVM CHAIN ID>                  The chain id in the scope of evm logic
-    -H, --host-ip <HOST IP>                            The IP of your local host, default to 127.0.0.1
-    -T, --tendermint-bin-path <TENDERMINT BIN PATH>    The path of your custom tendermint binary
-    -N, --validator-num <VALIDATOR NUMBER>             How many initial validators should be created
+    -d, --abcid-bin-path <ABCID BIN PATH>                    The path of your custom abcid binary
+    -x, --abcid-extra-flags <ABCID EXTRA FLAGS>              A pair of quotes should be used when specifying extra flags
+    -i, --block-itv-secs <BLOCK INTERVAL>                    Block interval in seconds
+    -c, --checkpoint-file <CHECKPOINT FILE>                  The file path of the checkpoint file
+    -e, --env-name <ENV NAME>                                The name of the target env
+    -I, --evm-chain-id <EVM CHAIN ID>                        The chain id in the scope of evm logic
+    -H, --host-ip <HOST IP>                                  The IP of your local host, default to 127.0.0.1
+    -D, --tendermint-bin-path <TENDERMINT BIN PATH>          The path of your custom tendermint binary
+    -X, --tendermint-extra-flags <TENDERMINT EXTRA FLAGS>    A pair of quotes should be used when specifying extra flags
+    -N, --validator-num <VALIDATOR NUMBER>                   How many initial validators should be created
 ```
 
 For the issue of remote joint debugging, we can use the `--host-ip` option to specify the listening address of the target ENV.
@@ -301,10 +310,11 @@ A few other commonly used options:
 - `-c, --checkpoint-file`, the path of you custom checkpoint file
 - `-I, --evm-chain-id`, the value of this option will be defined as `${EVM_CHAIN_ID}`
 - `-N, --validator-num`, 5 initial validators will be created by default, you can change the number by this option
-- `-T, --tendermint-bin-path`, use a custom version of the tendermint binary
-- `-A, --abcid-bin-path`, use a custom versioln of the abcid binary
-- `-E, --abcid-extra-flags`, specify extra flags
-  - for example, there is a `--disable-eth-empty-blocks` flag in the `abcid` binary, and it will not be set by `fn dev` by default, you can set it like this `fn dev create -E '--disable-eth-empty-blocks'`
+- `-d, --abcid-bin-path`, use a custom versioln of the abcid binary
+- `-D, --tendermint-bin-path`, use a custom version of the tendermint binary
+- `-x, --abcid-extra-flags`, specify extra flags for abcid
+  - for example, there is a `--disable-eth-empty-blocks` flag in the `abcid` binary, and it will not be set by `fn dev` by default, you can set it like this `fn dev create -x '--disable-eth-empty-blocks'`
+- `-X, --tendermint-extra-flags`, specify extra flags for tendermint
 
 Below is a more complete example with richer options:
 ```shell
@@ -315,9 +325,10 @@ fn dev create \
     -N 6 \
     -I 777 \
     -c /tmp/checkpoint.toml \
-    -T /tmp/tendermint-v0.33.8 \
-    -A /tmp/abcid-v0.4.0-preview \
-    -E '--disable-eth-empty-blocks'
+    -d /tmp/abcid-v0.4.0-preview \
+    -D /tmp/tendermint-v0.33.8 \
+    -x '--disable-eth-empty-blocks' \
+    -X 'validator'
 ```
 
 - all nodes of this ENV will listen on '192.168.2.5'
@@ -328,14 +339,16 @@ fn dev create \
 - the chain id of evm is 777
 - the path of checkpoint file is '/tmp/checkpoint.toml'
 - use custom binaries of tendermint and abcid
-- `--disable-eth-empty-blocks` is added as an extra flag
+- '--disable-eth-empty-blocks' is added as an extra flag for abcid
+- 'validator' is added as an extra flag for tendermint process
 
 The coresponding starting commands of nodes will be(but in one-line style):
 ```shell
 # cat /tmp/__FINDORA_DEV__/envs/MyEnv/3/fn_dev.log
 
 /tmp/tendermint-v0.33.8 node \
-    --home /tmp/__FINDORA_DEV__/envs/MyEnv/3 \
+    --home /tmp/__FINDORA_DEV__/envs/MyEnv/3 validator \
+    validator \
     >>/tmp/__FINDORA_DEV__/envs/MyEnv/3/tendermint.log 2>&1 &
 
 EVM_CHAIN_ID=777 FINDORA_BLOCK_ITV=1 \
@@ -366,7 +379,7 @@ For example, for the default cluster, `fn dev stop` is equal to `fn dev stop -e 
 
 Also, there are some subcommands designed specifically for multi-cluster management:
 - `fn dev list`, list the names of all existing ENVs
-- `fn dev info-all`, list the details of all existing ENVs
+- `fn dev show-all`, list the details of all existing ENVs
 - `fn dev init-all`, initilize all existing ENVs in batch mode
 - `fn dev destroy-all`, destroy all existing ENVs
 
