@@ -51,10 +51,11 @@ merkle_tree = { path = "../libs/merkle_tree" }
 sliding_set = { path = "../libs/sliding_set" }
 
 [features]
-default = []
+default = ["fin_storage"]
 diskcache = ["fbnc/diskcache"]
 debug_env = ["config/debug_env"]
 abci_mock = []
+fin_storage = ["storage", "fin_db"]
 
 [dev-dependencies]
 lazy_static = "1.4.0"
@@ -67,8 +68,8 @@ features = ["f16", "serde"]
 parking_lot = "0.12"
 # sodiumoxide = "0.2.1"
 fs2 = "0.4"
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.2" }
-fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.2" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.2", optional = true }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.2", optional = true }
 sparse_merkle_tree = { path = "../libs/sparse_merkle_tree" }
 zei-accumulators = "0.2"
 

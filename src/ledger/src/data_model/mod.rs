@@ -407,7 +407,7 @@ pub struct XfrAddress {
 }
 
 impl XfrAddress {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn to_base64(self) -> String {
         b64enc(&self.key.as_bytes())
     }
@@ -450,7 +450,7 @@ pub struct IssuerPublicKey {
 }
 
 impl IssuerPublicKey {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn to_base64(self) -> String {
         b64enc(self.key.as_bytes())
     }
@@ -831,7 +831,7 @@ pub enum UtxoStatus {
 pub struct Utxo(pub TxOutput);
 
 impl Utxo {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     #[inline(always)]
     pub(crate) fn get_nonconfidential_balance(&self) -> u64 {
         if let XfrAmount::NonConfidential(n) = self.0.record.amount {

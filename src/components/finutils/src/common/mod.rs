@@ -22,12 +22,12 @@ use {
             gen_random_keypair, ATxoSID, AssetRules, AssetTypeCode, AssetTypePrefix,
             Transaction, TxoSID, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
         },
+        fbnc::NumKey,
         staking::{
             check_delegation_amount, td_addr_to_bytes, td_pubkey_to_td_addr,
             td_pubkey_to_td_addr_bytes, PartialUnDelegation, StakerMemo,
             TendermintAddrRef,
         },
-        store::fbnc::NumKey,
     },
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
