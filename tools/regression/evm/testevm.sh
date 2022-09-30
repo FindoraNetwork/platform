@@ -67,7 +67,6 @@ then
 fi
 echo
 
-
 #--------------------------test case 3 - ERC20 transfer-----------------------------
 echo -e "${BLU}test case 3 - transfer between erc20 addresses${NC}"
 #Get Initial Balance of $ETH_ADDR
