@@ -1,6 +1,10 @@
 name: Wasm Building And Pushing
-on: [push]
-
+on:
+  push:
+    tags:
+      - 'tracing-*'
+      - 'develop'
+      - 'main'
 jobs:
   build-push:
     strategy:
