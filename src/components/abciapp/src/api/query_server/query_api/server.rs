@@ -334,7 +334,7 @@ impl QueryServer {
         self.ledger_cloned
             .api_cache
             .as_ref()
-            .and_then(|api| Option::from(api.height_to_max_atxo.get(&height)))
+            .and_then(|api| api.height_to_max_atxo.get(&height))
     }
 
     /// retrieve block reward rate at specified block height
