@@ -39,7 +39,6 @@ jobs:
     - name: Build rust base image
       shell: bash
       run: |
-        whoami
         make ci_build_binary_rust_base_arm
 
     - name: Build binary image
