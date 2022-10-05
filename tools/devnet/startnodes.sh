@@ -2,7 +2,7 @@
 
 # env
 source ./tools/devnet/env.sh || exit 1
-DEFAULT_BIN_CFG="release"
+DEFAULT_BIN_CFG="debug"
 export BIN="target/$DEFAULT_BIN_CFG"
 
 $BIN/fn setup -S $ENDPOINT > /dev/null

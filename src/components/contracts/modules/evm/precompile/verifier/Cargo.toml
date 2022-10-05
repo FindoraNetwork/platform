@@ -9,5 +9,6 @@ edition = "2021"
 evm = { version = "0.29.0", default-features = false, features = ["with-serde"] }
 module-evm = { path = "../../../../modules/evm"}
 evm-precompile-utils = { path = "../utils"}
+#evm-precompile-utils = { git = "https://github.com/FindoraNetwork/evm-utils", branch = "master"}
 log = "0.4"
 num_enum = { version = "0.5.4", default-features = false }

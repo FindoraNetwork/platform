@@ -1,5 +1,6 @@
 use evm::{executor::PrecompileOutput, Context, ExitError, ExitSucceed};
 use evm_precompile_utils::{EvmDataReader, EvmDataWriter, EvmResult, Gasometer};
+//use evm_precompile_utils::data::IndVerifierKey;
 use log::debug;
 use module_evm::precompile::{FinState, Precompile, PrecompileId};
 
@@ -56,6 +57,10 @@ impl Verifier {
         gasometer.record_cost(GAS_SYMBOL)?;
 
         debug!(target: "evm", "Verifier#verify");
+        //
+        // let _ivk: IndVerifierKey = reader
+        // .read()
+        // .expect("to correctly parse IndexVerifierKey<Fr, MultiPC>");
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
