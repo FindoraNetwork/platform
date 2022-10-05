@@ -222,8 +222,8 @@ ci_build_dev_binary_image:
 	docker build -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-binary-image-dev .
 
 ci_build_dev_binary_image_arm:
-	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-dev
-	docker buildx build --platform linux/arm64/v8 --output=type=docker -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-binary-image-dev .
+	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-dev-arm
+	docker buildx build --platform linux/arm64/v8 --output=type=docker -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-binary-image-dev-arm .
 
 ci_build_release_binary_image:
 	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-release
