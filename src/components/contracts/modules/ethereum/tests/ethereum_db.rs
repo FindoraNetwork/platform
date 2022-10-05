@@ -193,4 +193,3 @@ fn test_eth_db_migrate_block_data() {
     //         .number,
     // );
 }
-

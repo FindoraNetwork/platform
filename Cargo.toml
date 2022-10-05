@@ -37,6 +37,7 @@ members = [
     "src/components/contracts/primitives/utils",
     "src/components/contracts/primitives/wasm",
     "src/components/contracts/rpc",
+    "src/components/contracts/modules/evm/precompile/eip-1962",
 ]
 
 [profile.dev]
