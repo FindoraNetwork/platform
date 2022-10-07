@@ -76,4 +76,4 @@ vergen = "=3.1.0"
 default = ["diskcache"]
 diskcache = ["ledger/diskcache"]
 debug_env = ["ledger/debug_env", "config/debug_env"]
-web3_service = ["enterprise-web3"]
+web3_service = ["enterprise-web3", "baseapp/web3_service"]
