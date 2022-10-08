@@ -300,7 +300,7 @@ pub fn system_prism_mint_pay(
                     };
                     if mint.max_supply != 0 {
                         at.properties.asset_rules.max_units = Some(mint.max_supply);
-                        at.properties.asset_rules.decimal = mint.decimal;
+                        at.properties.asset_rules.decimals = mint.decimal;
                     }
                     at
                 } else {
@@ -311,7 +311,7 @@ pub fn system_prism_mint_pay(
 
                     if mint.max_supply != 0 {
                         at.properties.asset_rules.max_units = Some(mint.max_supply);
-                        at.properties.asset_rules.decimal = mint.decimal;
+                        at.properties.asset_rules.decimals = mint.decimal;
                     }
 
                     at.properties.code = AssetTypeCode { val: mint.asset };
