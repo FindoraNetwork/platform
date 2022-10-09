@@ -90,14 +90,10 @@ impl crate::BaseApp {
                             use enterprise_web3::{
                                 PENDING_CODE_MAP, PENDING_STATE_UPDATE_LIST,
                             };
-                            use std::{
-                                collections::HashMap, mem::replace, ops::DerefMut,
-                            };
+                            use std::{collections::HashMap, mem::replace};
                             let code_map =
                                 if let Ok(mut code_map) = PENDING_CODE_MAP.lock() {
-                                    let m = code_map.deref_mut();
-                                    let map = replace(m, HashMap::new());
-                                    map.clone()
+                                    replace(&mut *code_map, HashMap::new())
                                 } else {
                                     log::error!("{}", "");
                                     Default::default()
@@ -105,9 +101,7 @@ impl crate::BaseApp {
                             let state_list = if let Ok(mut state_list) =
                                 PENDING_STATE_UPDATE_LIST.lock()
                             {
-                                let v = state_list.deref_mut();
-                                let v2 = replace(v, vec![]);
-                                v2.clone()
+                                replace(&mut *state_list, vec![])
                             } else {
                                 log::error!("{}", "");
                                 Default::default()
