@@ -78,7 +78,7 @@ jobs:
         export TOBRANCH="dev"
         export IMAGE_TAG="${TOBRANCH}-${COMMIT_HASH}"
         echo "Image tag: ${IMAGE_TAG}"
-        make ci_build_image
+        make ci_build_image_arm
 
     - name: Login ECR
       env:
