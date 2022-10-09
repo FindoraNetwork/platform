@@ -510,43 +510,34 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         use enterprise_web3::WEB3_SERVICE_START_HEIGHT;
         use std::collections::HashMap;
         use std::mem::replace;
-        use std::ops::DerefMut;
 
         let height = state.get_tendermint_height() as u32;
         if height as u64 > *WEB3_SERVICE_START_HEIGHT {
             let mut setter = enterprise_web3::setter().expect("connection redis failed");
 
             let nonce_map = if let Ok(mut nonce_map) = NONCE_MAP.lock() {
-                let m = nonce_map.deref_mut();
-                let map = replace(m, HashMap::new());
-                map.clone()
+                replace(&mut *nonce_map, HashMap::new())
             } else {
                 log::error!("{}", "");
                 Default::default()
             };
 
             let code_map = if let Ok(mut code_map) = CODE_MAP.lock() {
-                let m = code_map.deref_mut();
-                let map = replace(m, HashMap::new());
-                map.clone()
+                replace(&mut *code_map, HashMap::new())
             } else {
                 log::error!("{}", "");
                 Default::default()
             };
 
             let balance_map = if let Ok(mut balance_map) = BALANCE_MAP.lock() {
-                let m = balance_map.deref_mut();
-                let map = replace(m, HashMap::new());
-                map.clone()
+                replace(&mut *balance_map, HashMap::new())
             } else {
                 log::error!("{}", "");
                 Default::default()
             };
 
             let state_list = if let Ok(mut state_list) = STATE_UPDATE_LIST.lock() {
-                let v = state_list.deref_mut();
-                let v2 = replace(v, vec![]);
-                v2.clone()
+                replace(&mut *state_list, vec![])
             } else {
                 log::error!("{}", "");
                 Default::default()
@@ -559,18 +550,14 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
             };
 
             let txs = if let Ok(mut txs) = TXS.lock() {
-                let v = txs.deref_mut();
-                let v2 = replace(v, vec![]);
-                v2.clone()
+                replace(&mut *txs, vec![])
             } else {
                 log::error!("{}", "");
                 Default::default()
             };
 
             let receipts = if let Ok(mut receipts) = RECEIPTS.lock() {
-                let v = receipts.deref_mut();
-                let v2 = replace(v, vec![]);
-                v2.clone()
+                replace(&mut *receipts, vec![])
             } else {
                 log::error!("{}", "");
                 Default::default()
