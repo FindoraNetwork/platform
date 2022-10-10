@@ -9,6 +9,8 @@
 
 #![deny(warnings)]
 
+use clap::Arg;
+
 mod init;
 
 use {
@@ -50,7 +52,7 @@ macro_rules! sleep_n_block {
         sleep_ms!((n * itv * 1000.0) as u64);
     }};
     ($n_block: expr) => {
-        sleep_n_block!($n_block, ledger::staking::BLOCK_INTERVAL)
+        sleep_n_block!($n_block, *ledger::staking::BLOCK_INTERVAL)
     };
 }
 
@@ -62,7 +64,21 @@ fn run() -> Result<()> {
     let subcmd_init = SubCommand::with_name("init")
         .arg_from_usage("--mainnet")
         .arg_from_usage("-i, --interval=[Interval] 'block interval'")
-        .arg_from_usage("-s, --skip-validator 'skip validator initialization'");
+        .arg_from_usage("-s, --skip-validator 'skip validator initialization'")
+        .arg(
+            Arg::with_name("staking-info-file")
+                .long("staking-info-file")
+                .takes_value(true)
+                .required(false)
+                .help("Json file that contains a list of tendermint address, public key and id(Xfr public key)."),
+        )
+        .arg(
+            Arg::with_name("only-init")
+            .long("only-init")
+            .takes_value(false)
+            .required(false)
+            .help("If this flag is set, only initiate the validators and do nothing.")
+        );
     let subcmd_test = SubCommand::with_name("test");
     let subcmd_issue = SubCommand::with_name("issue").about("issue FRA on demand");
     let subcmd_delegate = SubCommand::with_name("delegate")
@@ -109,9 +125,20 @@ fn run() -> Result<()> {
             .unwrap_or("0")
             .parse::<u64>()
             .c(d!())?;
+
         let is_mainnet = m.is_present("mainnet");
         let skip_validator = m.is_present("skip-validator");
-        init::init(interval, is_mainnet, skip_validator).c(d!())?;
+        let staking_info_file = m.value_of("staking-info-file");
+        let only_init = m.is_present("only-init");
+
+        init::init(
+            interval,
+            is_mainnet,
+            skip_validator,
+            staking_info_file,
+            only_init,
+        )
+        .c(d!())?;
     } else if matches.is_present("test") {
         init::i_testing::run_all().c(d!())?;
     } else if matches.is_present("issue") {
@@ -266,7 +293,7 @@ mod issue {
             IssueAsset::new(aib, &IssuerKeyPair { keypair: &root_kp }).c(d!())?;
 
         builder.add_operation(Operation::IssueAsset(asset_issuance_operation));
-        Ok(builder.take_transaction())
+        builder.build_and_take_transaction()
     }
 }
 
@@ -303,7 +330,9 @@ mod delegate {
             builder.add_operation_delegation(owner_kp, amount, validator.to_owned());
         })?;
 
-        Ok(builder.take_transaction())
+        let mut tx = builder.build_and_take_transaction()?;
+        tx.sign(owner_kp);
+        Ok(tx)
     }
 }
 
@@ -339,7 +368,7 @@ mod undelegate {
             }
         })?;
 
-        Ok(builder.take_transaction())
+        builder.build_and_take_transaction()
     }
 }
 
@@ -356,7 +385,7 @@ mod claim {
             builder.add_operation_claim(owner_kp, amount);
         })?;
 
-        Ok(builder.take_transaction())
+        builder.build_and_take_transaction()
     }
 }
 

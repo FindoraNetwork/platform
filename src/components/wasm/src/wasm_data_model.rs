@@ -17,7 +17,9 @@ use {
     ruc::{d, err::RucResult},
     serde::{Deserialize, Serialize},
     wasm_bindgen::prelude::*,
-    zei::anon_xfr::structs::{AnonBlindAssetRecord, MTLeafInfo as ZeiMTLeafInfo},
+    zei::anon_xfr::structs::{
+        AnonAssetRecord, AxfrOwnerMemo as ZeiAxfrOwnerMemo, MTLeafInfo as ZeiMTLeafInfo,
+    },
     zei::xfr::{
         sig::XfrPublicKey,
         structs::{
@@ -27,6 +29,7 @@ use {
             TracingPolicies as ZeiTracingPolicies, TracingPolicy as ZeiTracingPolicy,
         },
     },
+    zei_algebra::bls12_381::BLSScalar,
 };
 
 #[wasm_bindgen]
@@ -155,7 +158,10 @@ impl ClientAssetRecord {
     /// fetch an asset record from the ledger server.
     pub fn from_json(val: &JsValue) -> Result<ClientAssetRecord, JsValue> {
         Ok(ClientAssetRecord {
-            txo: val.into_serde().c(d!()).map_err(error_to_jsvalue)?,
+            txo: val
+                .into_serde()
+                .c(d!())
+                .map_err(|_| JsValue::from_str("format json error"))?,
         })
     }
 
@@ -253,6 +259,74 @@ impl OwnerMemo {
     }
 }
 
+#[wasm_bindgen]
+#[derive(Deserialize, Clone)]
+/// Asset owner memo. Contains information needed to decrypt an asset record.
+/// @see {@link module:Findora-Wasm.ClientAssetRecord|ClientAssetRecord} for more details about asset records.
+pub struct AxfrOwnerMemo {
+    pub(crate) memo: ZeiAxfrOwnerMemo,
+}
+
+#[wasm_bindgen]
+impl AxfrOwnerMemo {
+    /// Builds an owner memo from a JSON-serialized JavaScript value.
+    /// @param {JsValue} val - JSON owner memo fetched from query server with the `get_owner_memo/{sid}` route,
+    /// where `sid` can be fetched from the query server with the `get_owned_utxos/{address}` route. See the example below.
+    ///
+    /// @example
+    /// {
+    ///   "blind_share":[91,251,44,28,7,221,67,155,175,213,25,183,70,90,119,232,212,238,226,142,159,200,54,19,60,115,38,221,248,202,74,248],
+    ///   "lock":{"ciphertext":[119,54,117,136,125,133,112,193],"encoded_rand":"8KDql2JphPB5WLd7-aYE1bxTQAcweFSmrqymLvPDntM="}
+    /// }
+    pub fn from_json(val: &JsValue) -> Result<AxfrOwnerMemo, JsValue> {
+        let zei_owner_memo: ZeiAxfrOwnerMemo =
+            val.into_serde().c(d!()).map_err(error_to_jsvalue)?;
+        Ok(AxfrOwnerMemo {
+            memo: zei_owner_memo,
+        })
+    }
+
+    /// Creates a clone of the owner memo.
+    pub fn clone(&self) -> Self {
+        AxfrOwnerMemo {
+            memo: self.memo.clone(),
+        }
+    }
+}
+
+impl AxfrOwnerMemo {
+    pub fn get_memo_ref(&self) -> &ZeiAxfrOwnerMemo {
+        &self.memo
+    }
+}
+
+#[wasm_bindgen]
+/// Asset owner memo decrypted info. contains amount, asset_type and blind.
+pub struct AxfrOwnerMemoInfo {
+    pub(crate) amount: u64,
+    pub(crate) asset_type: String,
+    pub(crate) blind: BLSScalar,
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+impl AxfrOwnerMemoInfo {
+    #[wasm_bindgen(getter)]
+    pub fn amount(&self) -> u64 {
+        self.amount
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn asset_type(&self) -> String {
+        self.asset_type.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn blind(&self) -> BLSScalar {
+        self.blind
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub(crate) struct AttributeDefinition {
     pub name: String,
@@ -302,7 +376,7 @@ impl CredentialRevealSig {
     /// credential commitment.
     pub fn get_commitment(&self) -> CredentialCommitment {
         CredentialCommitment {
-            commitment: self.sig.sig_commitment.clone(),
+            commitment: self.sig.cm.clone(),
         }
     }
     /// Returns the underlying proof of knowledge that the credential is valid.
@@ -310,7 +384,7 @@ impl CredentialRevealSig {
     /// credential commitment.
     pub fn get_pok(&self) -> CredentialPoK {
         CredentialPoK {
-            pok: self.sig.pok.clone(),
+            pok: self.sig.proof_open.clone(),
         }
     }
 }
@@ -707,8 +781,10 @@ impl MTLeafInfo {
 #[wasm_bindgen]
 impl MTLeafInfo {
     pub fn from_json(json: &JsValue) -> Result<MTLeafInfo, JsValue> {
-        let mt_leaf_info: ZeiMTLeafInfo =
-            json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
+        let mt_leaf_info: ZeiMTLeafInfo = json
+            .into_serde()
+            .c(d!())
+            .map_err(|_| JsValue::from_str("format json error"))?;
         Ok(MTLeafInfo {
             object: mt_leaf_info,
         })
@@ -740,10 +816,9 @@ impl AmountAssetType {
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize)]
 pub struct AnonKeys {
-    pub(crate) axfr_secret_key: String,
-    pub(crate) axfr_public_key: String,
-    pub(crate) enc_key: String,
-    pub(crate) dec_key: String,
+    pub(crate) spend_key: String,
+    pub(crate) pub_key: String,
+    pub(crate) view_key: String,
 }
 
 /// AnonKeys is a struct to store keys required for anon transfer
@@ -763,42 +838,32 @@ impl AnonKeys {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn axfr_secret_key(&self) -> String {
-        self.axfr_secret_key.clone()
+    pub fn spend_key(&self) -> String {
+        self.spend_key.clone()
     }
 
     #[wasm_bindgen(setter)]
-    pub fn set_axfr_secret_key(&mut self, axfr_secret_key: String) {
-        self.axfr_secret_key = axfr_secret_key;
+    pub fn set_spend_key(&mut self, spend_key: String) {
+        self.spend_key = spend_key;
     }
 
     #[wasm_bindgen(getter)]
-    pub fn axfr_public_key(&self) -> String {
-        self.axfr_public_key.clone()
+    pub fn pub_key(&self) -> String {
+        self.pub_key.clone()
     }
 
     #[wasm_bindgen(setter)]
-    pub fn set_axfr_public_key(&mut self, axfr_public_key: String) {
-        self.axfr_public_key = axfr_public_key;
+    pub fn set_pub_key(&mut self, pub_key: String) {
+        self.pub_key = pub_key;
     }
 
     #[wasm_bindgen(getter)]
-    pub fn enc_key(&self) -> String {
-        self.enc_key.clone()
+    pub fn view_key(&self) -> String {
+        self.view_key.clone()
     }
 
     #[wasm_bindgen(setter)]
-    pub fn set_enc_key(&mut self, enc_key: String) {
-        self.enc_key = enc_key;
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn dec_key(&self) -> String {
-        self.dec_key.clone()
-    }
-
-    #[wasm_bindgen(setter)]
-    pub fn set_dec_key(&mut self, dec_key: String) {
-        self.dec_key = dec_key;
+    pub fn set_view_key(&mut self, view_key: String) {
+        self.view_key = view_key;
     }
 }

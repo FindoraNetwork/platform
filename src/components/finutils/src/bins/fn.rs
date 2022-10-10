@@ -27,7 +27,12 @@
 
 use {
     clap::{crate_authors, load_yaml, App},
-    finutils::common::{self, evm::*, get_keypair, utils},
+    finutils::common::{
+        self,
+        dev::{EnvCfg, Ops},
+        evm::*,
+        get_keypair, utils,
+    },
     fp_utils::ecdsa::SecpPair,
     globutils::wallet,
     ledger::{
@@ -41,8 +46,7 @@ use {
     std::fs::File,
     std::{borrow::Borrow, fmt, fs},
     zei::anon_xfr::keys::AXfrKeyPair,
-    zei::anon_xfr::structs::OpenAnonBlindAssetRecordBuilder,
-    zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
+    zei::anon_xfr::structs::OpenAnonAssetRecordBuilder,
 };
 
 fn main() {
@@ -423,9 +427,7 @@ fn run() -> Result<()> {
 
         // receiver AXfr secret key parsed & the receiver Axfr address
         let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
-        let target_addr = anon_keys.axfr_public_key;
-        // receiver Anon encryption key for Owner memo encryption
-        let owner_enc_key = anon_keys.enc_key;
+        let target_addr = anon_keys.pub_key;
 
         // The TxoSID to be spent for conversion to ABAR(Anon Blind Asset Record)
         let txo_sid = m.value_of("txo-sid");
@@ -434,14 +436,9 @@ fn run() -> Result<()> {
             println!("{}", m.usage());
         } else {
             // call the convert function to build and send transaction
-            // it takes owner Xfr secret key, Axfr address, Enc key and TxoSID
-            let r = common::convert_bar2abar(
-                owner_sk,
-                target_addr,
-                owner_enc_key,
-                txo_sid.unwrap(),
-            )
-            .c(d!())?;
+            // it takes owner Xfr secret key, Axfr address and TxoSID
+            let r = common::convert_bar2abar(owner_sk, target_addr, txo_sid.unwrap())
+                .c(d!())?;
 
             // Print commitment to terminal
             println!(
@@ -463,8 +460,7 @@ fn run() -> Result<()> {
     } else if let Some(m) = matches.subcommand_matches("convert-abar-to-bar") {
         // get anon keys for conversion
         let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
-        let axfr_secret_key = anon_keys.axfr_secret_key;
-        let dec_key = anon_keys.dec_key;
+        let spend_key = anon_keys.spend_key;
         // get the BAR receiver address
         let to = m
             .value_of("to-pubkey")
@@ -484,9 +480,8 @@ fn run() -> Result<()> {
         } else {
             // Build transaction and submit to network
             common::convert_abar2bar(
-                axfr_secret_key,
+                spend_key,
                 commitment.unwrap(),
-                dec_key,
                 &to,
                 m.is_present("confidential-amount"),
                 m.is_present("confidential-type"),
@@ -496,14 +491,11 @@ fn run() -> Result<()> {
     } else if let Some(m) = matches.subcommand_matches("gen-anon-keys") {
         let mut prng = ChaChaRng::from_entropy();
         let keypair = AXfrKeyPair::generate(&mut prng);
-        let secret_key = XSecretKey::new(&mut prng);
-        let public_key = XPublicKey::from(&secret_key);
 
         let keys = AnonKeys {
-            axfr_secret_key: wallet::anon_secret_key_to_base64(&keypair),
-            axfr_public_key: wallet::anon_public_key_to_base64(&keypair.pub_key()),
-            enc_key: wallet::x_public_key_to_base64(&public_key),
-            dec_key: wallet::x_secret_key_to_base64(&secret_key),
+            spend_key: wallet::anon_secret_key_to_base64(&keypair),
+            pub_key: wallet::anon_public_key_to_base64(&keypair.get_pub_key()),
+            view_key: wallet::anon_view_key_to_base64(&keypair.get_view_key()),
         };
 
         if let Some(path) = m.value_of("file-path") {
@@ -516,55 +508,42 @@ fn run() -> Result<()> {
     } else if let Some(m) = matches.subcommand_matches("owned-abars") {
         // Generates a list of owned Abars (both spent and unspent)
         let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
-        let axfr_secret_key =
-            wallet::anon_secret_key_from_base64(anon_keys.axfr_secret_key.as_str())
-                .c(d!())?;
-        let dec_key =
-            wallet::x_secret_key_from_base64(anon_keys.dec_key.as_str()).c(d!())?;
+        let spend_key =
+            wallet::anon_secret_key_from_base64(anon_keys.spend_key.as_str()).c(d!())?;
 
         let commitments_list = m
             .value_of("commitments")
             .unwrap_or_else(|| panic!("Commitment list missing \n {}", m.usage()));
 
-        common::get_owned_abars(axfr_secret_key, dec_key, commitments_list)?;
+        common::get_owned_abars(spend_key, commitments_list)?;
     } else if let Some(m) = matches.subcommand_matches("anon-balance") {
         // Generates a list of owned Abars (both spent and unspent)
         let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
-        let axfr_secret_key =
-            wallet::anon_secret_key_from_base64(anon_keys.axfr_secret_key.as_str())
-                .c(d!())?;
-        let dec_key =
-            wallet::x_secret_key_from_base64(anon_keys.dec_key.as_str()).c(d!())?;
+        let spend_key =
+            wallet::anon_secret_key_from_base64(anon_keys.spend_key.as_str()).c(d!())?;
         let asset = m.value_of("asset");
 
         let commitments_list = m
             .value_of("commitments")
             .unwrap_or_else(|| panic!("Commitment list missing \n {}", m.usage()));
 
-        common::anon_balance(axfr_secret_key, dec_key, commitments_list, asset)?;
+        common::anon_balance(spend_key, commitments_list, asset)?;
     } else if let Some(m) = matches.subcommand_matches("owned-open-abars") {
         let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
         let commitment_str = m.value_of("commitment");
 
         // create derived public key
         let commitment = wallet::commitment_from_base58(commitment_str.unwrap())?;
-        let axfr_secret_key =
-            wallet::anon_secret_key_from_base64(anon_keys.axfr_secret_key.as_str())
-                .c(d!())?;
-        let dec_key = wallet::x_secret_key_from_base64(anon_keys.dec_key.as_str())?;
+        let spend_key =
+            wallet::anon_secret_key_from_base64(anon_keys.spend_key.as_str()).c(d!())?;
 
         // get results from query server and print
         let (uid, abar) = utils::get_owned_abar(&commitment).c(d!())?;
         let memo = utils::get_abar_memo(&uid).unwrap().unwrap();
-        let oabar = OpenAnonBlindAssetRecordBuilder::from_abar(
-            &abar,
-            memo,
-            &axfr_secret_key,
-            &dec_key,
-        )
-        .unwrap()
-        .build()
-        .unwrap();
+        let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo, &spend_key)
+            .unwrap()
+            .build()
+            .unwrap();
 
         println!(
             "(AtxoSID, ABAR, OABAR)   :  {}",
@@ -599,8 +578,7 @@ fn run() -> Result<()> {
     } else if let Some(m) = matches.subcommand_matches("anon-transfer") {
         // get anon keys of sender
         let anon_keys = parse_anon_key_from_path(m.value_of("anon-keys"))?;
-        let axfr_secret_key = anon_keys.axfr_secret_key;
-        let dec_key = anon_keys.dec_key;
+        let spend_key = anon_keys.spend_key;
 
         // get commitments
         let commitment = m.value_of("commitment");
@@ -608,42 +586,26 @@ fn run() -> Result<()> {
 
         // get receiver keys and amount
         let to_axfr_public_key = m.value_of("to-axfr-public-key");
-        let to_enc_key = m.value_of("to-enc-key");
         let amount = m.value_of("amount");
 
-        if commitment.is_none()
-            || to_axfr_public_key.is_none()
-            || to_enc_key.is_none()
-            || amount.is_none()
-        {
+        if commitment.is_none() || to_axfr_public_key.is_none() || amount.is_none() {
             println!("{}", m.usage());
         } else {
             // build transaction and submit
             common::gen_anon_transfer_op(
-                axfr_secret_key,
+                spend_key,
                 commitment.unwrap(),
                 fee_commitment,
-                &dec_key,
                 amount.unwrap(),
                 to_axfr_public_key.unwrap(),
-                to_enc_key.unwrap(),
             )
             .c(d!())?;
         }
     } else if let Some(m) = matches.subcommand_matches("anon-transfer-batch") {
-        let axfr_secret_keys =
-            m.value_of("axfr-secretkey-file").c(d!()).and_then(|f| {
-                fs::read_to_string(f).c(d!()).and_then(|sks| {
-                    sks.lines()
-                        .map(|sk| wallet::anon_secret_key_from_base64(sk.trim()))
-                        .collect::<Result<Vec<_>>>()
-                        .c(d!("invalid file"))
-                })
-            })?;
-        let dec_keys = m.value_of("decryption-key-file").c(d!()).and_then(|f| {
-            fs::read_to_string(f).c(d!()).and_then(|dks| {
-                dks.lines()
-                    .map(|dk| wallet::x_secret_key_from_base64(dk.trim()))
+        let spend_keys = m.value_of("axfr-secretkey-file").c(d!()).and_then(|f| {
+            fs::read_to_string(f).c(d!()).and_then(|sks| {
+                sks.lines()
+                    .map(|sk| wallet::anon_secret_key_from_base64(sk.trim()))
                     .collect::<Result<Vec<_>>>()
                     .c(d!("invalid file"))
             })
@@ -659,14 +621,6 @@ fn run() -> Result<()> {
                         .c(d!("invalid file"))
                 })
             })?;
-        let to_enc_keys = m.value_of("to-enc-key-file").c(d!()).and_then(|f| {
-            fs::read_to_string(f).c(d!()).and_then(|eks| {
-                eks.lines()
-                    .map(|ek| wallet::x_public_key_from_base64(ek.trim()))
-                    .collect::<Result<Vec<_>>>()
-                    .c(d!("invalid file"))
-            })
-        })?;
         let commitments = m.value_of("commitment-file").c(d!()).and_then(|f| {
             fs::read_to_string(f)
                 .c(d!())
@@ -694,10 +648,8 @@ fn run() -> Result<()> {
                 .map(|ams| ams.lines().map(token_code).collect::<Vec<AssetTypeCode>>())
         })?;
 
-        if axfr_secret_keys.is_empty()
-            || dec_keys.is_empty()
+        if spend_keys.is_empty()
             || to_axfr_public_keys.is_empty()
-            || to_enc_keys.is_empty()
             || commitments.is_empty()
             || amounts.is_empty()
             || assets.is_empty()
@@ -705,10 +657,8 @@ fn run() -> Result<()> {
             println!("{}", m.usage());
         } else {
             common::gen_oabar_add_op_x(
-                axfr_secret_keys,
-                dec_keys,
+                spend_keys,
                 to_axfr_public_keys,
-                to_enc_keys,
                 commitments,
                 amounts,
                 assets,
@@ -729,21 +679,18 @@ fn run() -> Result<()> {
             Some(path) => {
                 let f =
                     fs::read_to_string(path).c(d!("Failed to read anon-keys file"))?;
-                let keys = serde_json::from_str::<AnonKeys>(f.as_str()).c(d!())?;
-                keys
+                serde_json::from_str::<AnonKeys>(f.as_str()).c(d!())?
             }
             None => return Err(eg!("path for anon-keys file not found")),
         };
         let commitment_str = m.value_of("commitment");
         let commitment = wallet::commitment_from_base58(commitment_str.unwrap())?;
 
-        let axfr_secret_key =
-            wallet::anon_secret_key_from_base64(anon_keys.axfr_secret_key.as_str())
-                .c(d!())?;
-        let dec_key = wallet::x_secret_key_from_base64(anon_keys.dec_key.as_str())?;
+        let spend_key =
+            wallet::anon_secret_key_from_base64(anon_keys.spend_key.as_str()).c(d!())?;
 
         let abar = utils::get_owned_abar(&commitment).c(d!())?;
-        common::check_abar_status(axfr_secret_key, dec_key, abar).c(d!())?;
+        common::check_abar_status(spend_key, abar).c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("replace_staker") {
         let target = m
             .value_of("target")
@@ -772,6 +719,105 @@ fn run() -> Result<()> {
         //     None
         // };
         common::replace_staker(target, None)?;
+    } else if let Some(m) = matches.subcommand_matches("dev") {
+        let mut envcfg = EnvCfg::default();
+
+        let ops = if let Some(sm) = m.subcommand_matches("create") {
+            if let Some(name) = sm.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            if let Some(id) = sm.value_of("evm_chain_id") {
+                envcfg.evm_chain_id = id.parse::<u64>().c(d!())?;
+            }
+            if let Some(itv) = sm.value_of("block_itv_secs") {
+                envcfg.block_itv_secs = itv.parse::<u8>().c(d!())?;
+            }
+            if let Some(num) = sm.value_of("validator_num") {
+                envcfg.initial_validator_num = num.parse::<u8>().c(d!())?;
+                if 64 < envcfg.initial_validator_num {
+                    return Err(eg!(
+                        "The number of initial validators should not exceed 64!"
+                    ));
+                }
+            }
+            if let Some(file) = sm.value_of("checkpoint_file") {
+                envcfg.checkpoint_file = Some(file.to_owned());
+            }
+            if let Some(ip) = sm.value_of("host_ip") {
+                envcfg.host_ip = Some(ip.to_owned());
+            }
+            if let Some(abcid_bin) = sm.value_of("abcid_bin_path") {
+                envcfg.abcid_bin = Some(abcid_bin.to_owned());
+            }
+            if let Some(tm_bin) = sm.value_of("tendermint_bin_path") {
+                envcfg.tendermint_bin = Some(tm_bin.to_owned());
+            }
+            if let Some(flags) = sm.value_of("abcid_extra_flags") {
+                envcfg.abcid_extra_flags = Some(flags.to_owned());
+            }
+            if let Some(flags) = sm.value_of("tendermint_extra_flags") {
+                envcfg.tendermint_extra_flags = Some(flags.to_owned());
+            }
+            if sm.is_present("force") {
+                envcfg.force_create = true;
+            }
+            Ops::Create
+        } else if let Some(sm) = m.subcommand_matches("destroy") {
+            if let Some(name) = sm.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            Ops::Destroy
+        } else if m.subcommand_matches("destroy-all").is_some() {
+            Ops::DestroyAll
+        } else if let Some(sm) = m.subcommand_matches("start") {
+            if let Some(name) = sm.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            Ops::Start
+        } else if m.subcommand_matches("start-all").is_some() {
+            Ops::StartAll
+        } else if let Some(sm) = m.subcommand_matches("stop") {
+            if let Some(name) = sm.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            Ops::Stop
+        } else if m.subcommand_matches("stop-all").is_some() {
+            Ops::StopAll
+        } else if let Some(sm) = m.subcommand_matches("push-node") {
+            if let Some(name) = sm.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            Ops::PushNode
+        } else if let Some(sm) = m.subcommand_matches("pop-node") {
+            if let Some(name) = sm.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            Ops::PopNode
+        } else if let Some(sm) = m.subcommand_matches("show") {
+            if let Some(name) = sm.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            Ops::Show
+        } else if m.subcommand_matches("show-all").is_some() {
+            Ops::ShowAll
+        } else if m.subcommand_matches("list").is_some() {
+            Ops::List
+        } else if let Some(sm) = m.subcommand_matches("init") {
+            if let Some(name) = sm.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            Ops::Init
+        } else if m.subcommand_matches("init-all").is_some() {
+            Ops::InitAll
+        } else {
+            if let Some(name) = m.value_of("env_name") {
+                envcfg.name = name.to_owned();
+            }
+            Ops::default()
+        };
+
+        envcfg.ops = ops;
+        envcfg.exec().c(d!())?;
     } else {
         println!("{}", matches.usage());
     }
@@ -813,8 +859,7 @@ fn tip_success() {
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct AnonKeys {
-    pub axfr_secret_key: String,
-    pub axfr_public_key: String,
-    pub enc_key: String,
-    pub dec_key: String,
+    pub spend_key: String,
+    pub view_key: String,
+    pub pub_key: String,
 }

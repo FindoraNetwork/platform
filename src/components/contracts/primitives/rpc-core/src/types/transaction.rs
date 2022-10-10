@@ -26,7 +26,7 @@ use std::{
 };
 
 /// Transaction
-#[derive(Debug, Default, Clone, PartialEq, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     /// Hash
@@ -151,7 +151,7 @@ impl Serialize for LocalTransactionStatus {
 }
 
 /// Geth-compatible output for eth_signTransaction method
-#[derive(Debug, Default, Clone, PartialEq, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
 pub struct RichRawTransaction {
     /// Raw transaction RLP
     pub raw: Bytes,

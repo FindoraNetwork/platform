@@ -26,6 +26,7 @@ lib_dir         = lib
 subdirs = $(bin_dir) $(lib_dir)
 
 WASM_PKG = wasm.tar.gz
+WASM_LIGHTWEIGHT_PKG = wasm_lightweight.tar.gz
 lib_files = ./$(WASM_PKG)
 
 define pack
@@ -40,7 +41,7 @@ define pack
 		./${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
 		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
-	cp $(1)/$(bin_dir)/* ~/.cargo/bin/
+	cp -f $(1)/$(bin_dir)/* ~/.cargo/bin/
 	cd $(1)/$(bin_dir)/ && ./findorad pack
 	cp -f /tmp/findorad $(1)/$(bin_dir)/
 	cp -f /tmp/findorad ~/.cargo/bin/
@@ -54,6 +55,14 @@ stop_all:
 	- pkill abcid
 	- pkill tendermint
 	- pkill findorad
+
+# Debug binaries for Nightly
+dbg:
+	cargo build --features debug_env --bins -p abciapp -p finutils
+
+# Release binaries for Nightly
+rls:
+	cargo build --release --features debug_env --bins -p abciapp -p finutils
 
 # Build for cleveldb
 build: tendermint_cleveldb
@@ -98,6 +107,7 @@ tendermint_goleveldb:
 	cd tools/tendermint && $(MAKE) install
 
 test:
+	- find src -name "checkpoint.toml" | xargs rm -f
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
 
 coverage:
@@ -139,6 +149,10 @@ cleanall: clean
 wasm:
 	cd src/components/wasm && wasm-pack build
 	tar -zcpf $(WASM_PKG) src/components/wasm/pkg
+
+wasm_release_lightweight:
+	cd src/components/wasm && wasm-pack build --release --features=lightweight
+	tar -zcpf $(WASM_LIGHTWEIGHT_PKG) src/components/wasm/pkg
 
 debug_env: stop_debug_env build_release_debug
 	- rm -rf $(FIN_DEBUG)
@@ -270,10 +284,20 @@ reset:
 snapshot:
 	@./tools/devnet/snapshot.sh
 
-evmtest:
+prismtest:
+	@./tools/regression/evm/scripts/setup.sh
+	@./tools/regression/evm/testevm.sh
+	@./tools/regression/evm/scripts/teardown.sh
+
+prismtest_nightly:
 	@./tools/regression/evm/testevm.sh
 
 tmtest:
+	@./tools/regression/triple_masking/scripts/setup.sh
+	@./tools/regression/triple_masking/test_triple_masking.sh
+	@./tools/regression/triple_masking/scripts/teardown.sh
+
+tmtest_nightly:
 	@./tools/regression/triple_masking/test_triple_masking.sh
 
 devnet: reset snapshot
@@ -292,3 +316,27 @@ run_anon_asset_mixing_demo: devnet
 
 devnet_bridge: devnet
 	@./tools/devnet/startbridge.sh
+# fn build
+build_musl_fn_linux:
+	docker build -t musl_fn_linux -f container/Dockerfile-fn-musl-linux .
+	docker run -d --rm --name fn_linux musl_fn_linux
+	docker cp fn_linux:/volume/target/x86_64-unknown-linux-musl/release/fn fn
+	tar -czvf fn_linux.tar.gz fn
+	rm fn
+
+
+build_musl_fn_macos_base:
+	docker build -t musl_fn_macos_base -f container/Dockerfile-fn-musl-macos-base .
+build_musl_fn_macos:
+	docker build -t musl_fn_macos -f container/Dockerfile-fn-musl-macos .
+	docker run -d --rm --name fn_macos musl_fn_macos
+	docker cp fn_macos:/volume/target/x86_64-apple-darwin/release/fn fn
+	tar -czvf fn_macos.tar.gz fn
+	rm fn
+
+build_musl_fn_win:
+	docker build -t musl_fn_win -f container/Dockerfile-fn-musl-windows .
+	docker run -d --rm --name fn_windows musl_fn_win
+	docker cp fn_windows:/volume/target/x86_64-pc-windows-gnu/release/fn.exe fn.exe
+	tar -czvf fn_windows.tar.gz fn.exe
+	rm fn.exe

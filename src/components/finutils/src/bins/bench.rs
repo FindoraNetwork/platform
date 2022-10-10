@@ -641,19 +641,17 @@ fn test_bar2abar(
         Arc::new(Mutex::new(Vec::with_capacity(1024)));
 
     let target_addr = &anon_keys.axfr_public_key;
-    let owner_enc_key = &anon_keys.enc_key;
+    let _owner_enc_key = &anon_keys.enc_key;
 
     let to = wallet::anon_public_key_from_base64(target_addr)
         .c(d!("invalid 'target-addr'"))?;
-    // parse receiver XPubKey
-    let enc_key = wallet::x_public_key_from_base64(owner_enc_key)
-        .c(d!("invalid owner_enc_key"))?;
+
 
     println!("Generating transactions...");
     let txes: Vec<(_, _, _)> = valid_keys
         .into_iter()
         .map(|(from, sid, oar)| {
-            match utils::generate_bar2abar_tx(&from, &to, sid, &oar, &enc_key, true) {
+            match utils::generate_bar2abar_tx(&from, &to, sid, &oar,  true) {
                 Ok((tx, c)) => Ok((tx, c, from)),
                 Err(e) => {
                     println!("{}", &e);
@@ -717,7 +715,7 @@ fn test_abar2bar(
     threads: usize,
 ) -> Result<()> {
     let axfr_secret_key = anon_keys.axfr_secret_key;
-    let dec_key = anon_keys.dec_key;
+
     println!("Generating transactions...");
     let txes: Vec<Result<Transaction>> = commitments
         .into_par_iter()
@@ -728,12 +726,10 @@ fn test_abar2bar(
             let tx = common::abar2bar_tx(
                 axfr_secret_key.clone(),
                 commitment,
-                dec_key.clone(),
                 to,
                 false,
                 false,
-            )
-            .c(d!());
+            ).c(d!());
 
             tx
         })
@@ -791,10 +787,8 @@ fn test_anon_transfer(
                 &anon_keys.axfr_secret_key,
                 &com1.commitment,
                 Some(&com2.commitment),
-                &anon_keys.dec_key,
                 axfr_amount,
                 &to_anon_keys.axfr_public_key,
-                &to_anon_keys.enc_key,
             )
         })
         .collect();

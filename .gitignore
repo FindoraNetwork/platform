@@ -34,6 +34,6 @@ tmp_file
 tools/tendermint
 seq_id.str
 utxo.map
-checkpoint.toml
 
 *.tmp
+checkpoint.toml

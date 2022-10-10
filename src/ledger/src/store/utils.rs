@@ -33,7 +33,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
         val: ASSET_TYPE_FRA,
     };
 
-    let mut tx = pnk!(helpers::create_definition_transaction(
+    let (mut tx, _) = pnk!(helpers::create_definition_transaction(
         &fra_code,
         fra_owner_kp,
         AssetRules {
@@ -86,6 +86,8 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
     .unwrap();
 
     tx.add_operation(Operation::IssueAsset(asset_issuance_operation));
+
+    tx.sign_to_map(fra_owner_kp);
 
     tx
 }

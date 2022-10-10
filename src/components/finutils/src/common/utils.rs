@@ -25,7 +25,7 @@ use {
     zei::anon_xfr::{
         keys::{AXfrKeyPair, AXfrPubKey},
         structs::{
-            AnonBlindAssetRecord, Commitment, MTLeafInfo, OpenAnonBlindAssetRecord,
+            AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, OpenAnonAssetRecord,
         },
     },
     zei::xfr::{
@@ -33,7 +33,6 @@ use {
         sig::{XfrKeyPair, XfrPublicKey},
         structs::{AssetRecordTemplate, BlindAssetRecord, OpenAssetRecord, OwnerMemo},
     },
-    zei_crypto::basic::hybrid_encryption::XPublicKey,
 };
 
 ///////////////////////////////////////
@@ -70,13 +69,23 @@ pub fn send_tx(tx: &Transaction) -> Result<()> {
 
 /// Fee is needless in a `UpdateValidator` operation
 #[inline(always)]
-pub fn set_initial_validators() -> Result<()> {
+pub fn set_initial_validators(staking_info_file: Option<&str>) -> Result<()> {
     let mut builder = new_tx_builder().c(d!())?;
 
-    let vs = get_inital_validators().c(d!())?;
+    let vs = get_inital_validators(staking_info_file).c(d!())?;
     builder.add_operation_update_validator(&[], 1, vs).c(d!())?;
 
-    send_tx(&builder.take_transaction()).c(d!())
+    send_tx(&builder.build_and_take_transaction()?).c(d!())
+}
+
+///load the tendermint key from the `priv_validator_key.json` file.
+pub fn load_tendermint_priv_validator_key(
+    key_path: impl AsRef<std::path::Path>,
+) -> Result<ValidatorKey> {
+    let k =
+        std::fs::read_to_string(key_path).c(d!("can not read key file from path"))?;
+    let v_keys = parse_td_validator_keys(&k).c(d!())?;
+    Ok(v_keys)
 }
 
 #[inline(always)]
@@ -125,7 +134,11 @@ pub fn transfer_batch(
     )
     .c(d!())?;
     builder.add_operation(op);
-    send_tx(&builder.take_transaction()).c(d!())
+
+    let mut tx = builder.build_and_take_transaction()?;
+    tx.sign(owner_kp);
+
+    send_tx(&tx).c(d!())
 }
 
 #[allow(missing_docs)]
@@ -147,7 +160,7 @@ pub fn transfer_batch_tx(
     )
     .c(d!())?;
     builder.add_operation(op);
-    Ok(builder.take_transaction())
+    builder.build_and_take_transaction()
 }
 
 /// @target_list: use `Vec` but `HashMap` ?
@@ -176,6 +189,31 @@ pub fn gen_transfer_op(
 #[allow(missing_docs)]
 pub fn gen_transfer_op_x(
     owner_kp: &XfrKeyPair,
+    target_list: Vec<(&XfrPublicKey, u64)>,
+    token_code: Option<AssetTypeCode>,
+    auto_fee: bool,
+    confidential_am: bool,
+    confidential_ty: bool,
+    balance_type: Option<AssetRecordType>,
+) -> Result<Operation> {
+    gen_transfer_op_xx(
+        None,
+        owner_kp,
+        target_list,
+        token_code,
+        auto_fee,
+        confidential_am,
+        confidential_ty,
+        balance_type,
+    )
+    .c(d!())
+}
+
+#[allow(missing_docs)]
+#[allow(clippy::too_many_arguments)]
+pub fn gen_transfer_op_xx(
+    rpc_endpoint: Option<&str>,
+    owner_kp: &XfrKeyPair,
     mut target_list: Vec<(&XfrPublicKey, u64)>,
     token_code: Option<AssetTypeCode>,
     auto_fee: bool,
@@ -200,7 +238,9 @@ pub fn gen_transfer_op_x(
         op_fee = 0;
     }
     let mut i_am;
-    let utxos = get_owned_utxos(owner_kp.get_pk_ref()).c(d!())?.into_iter();
+    let utxos = get_owned_utxos_x(rpc_endpoint, owner_kp.get_pk_ref())
+        .c(d!())?
+        .into_iter();
 
     for (sid, (utxo, owner_memo)) in utxos {
         let oar =
@@ -557,9 +597,17 @@ pub fn get_asset_balance(kp: &XfrKeyPair, asset: Option<AssetTypeCode>) -> Resul
 pub fn get_owned_utxos(
     addr: &XfrPublicKey,
 ) -> Result<HashMap<TxoSID, (Utxo, Option<OwnerMemo>)>> {
+    get_owned_utxos_x(None, addr).c(d!())
+}
+
+fn get_owned_utxos_x(
+    rpc_endpoint: Option<&str>,
+    addr: &XfrPublicKey,
+) -> Result<HashMap<TxoSID, (Utxo, Option<OwnerMemo>)>> {
+    let default_endpoint = format!("{}:8668", get_serv_addr().c(d!())?);
     let url = format!(
-        "{}:8668/owned_utxos/{}",
-        get_serv_addr().c(d!())?,
+        "{}/owned_utxos/{}",
+        rpc_endpoint.unwrap_or(default_endpoint.as_str()),
         wallet::public_key_to_base64(addr)
     );
 
@@ -577,7 +625,7 @@ pub fn get_owned_utxos(
 }
 
 /// Return the ABAR by commitment.
-pub fn get_owned_abar(com: &Commitment) -> Result<(ATxoSID, AnonBlindAssetRecord)> {
+pub fn get_owned_abar(com: &Commitment) -> Result<(ATxoSID, AnonAssetRecord)> {
     let url = format!(
         "{}:8668/owned_abars/{}",
         get_serv_addr().c(d!())?,
@@ -598,7 +646,7 @@ pub fn get_owned_abar(com: &Commitment) -> Result<(ATxoSID, AnonBlindAssetRecord
         })
         .and_then(|(sid, data)| {
             wallet::commitment_from_base58(&data.commitment)
-                .map(|commitment| (sid, AnonBlindAssetRecord { commitment }))
+                .map(|commitment| (sid, AnonAssetRecord { commitment }))
                 .map_err(|_| eg!("commitment invalid"))
         })
 }
@@ -650,7 +698,7 @@ pub fn get_owner_memo_batch(ids: &[TxoSID]) -> Result<Vec<Option<OwnerMemo>>> {
 
 #[inline(always)]
 #[allow(missing_docs)]
-pub fn get_abar_memo(id: &ATxoSID) -> Result<Option<OwnerMemo>> {
+pub fn get_abar_memo(id: &ATxoSID) -> Result<Option<AxfrOwnerMemo>> {
     let id = id.0.to_string();
     let url = format!("{}:8667/get_abar_memo/{}", get_serv_addr().c(d!())?, id);
 
@@ -755,17 +803,16 @@ pub fn parse_td_validator_keys(key_data: &str) -> Result<ValidatorKey> {
 #[inline(always)]
 /// Generates a BarToAbar Operation and an accompanying FeeOP and sends it to the network and return the Randomizer
 /// # Arguments
-/// * `auth_key_pair` -  XfrKeyPair of the owner BAR for conversion
-/// * `abar_pub_key`  -  AXfrPubKey of the receiver ABAR after conversion
-/// * `txo_sid`       -  TxoSID of the BAR to convert
-/// * `input_record`  -  OpenAssetRecord of the BAR to convert
-/// * `enc_key`       -  XPublicKey of OwnerMemo encryption of receiver
+/// * `auth_key_pair`       -  XfrKeyPair of the owner BAR for conversion
+/// * `abar_pub_key`        -  AXfrPubKey of the receiver ABAR after conversion
+/// * `txo_sid`             -  TxoSID of the BAR to convert
+/// * `input_record`        -  OpenAssetRecord of the BAR to convert
+/// * `is_bar_transparent`  -  if transparent bar (ar)
 pub fn generate_bar2abar_op(
     auth_key_pair: &XfrKeyPair,
     abar_pub_key: &AXfrPubKey,
     txo_sid: TxoSID,
     input_record: &OpenAssetRecord,
-    enc_key: &XPublicKey,
     is_bar_transparent: bool,
 ) -> Result<Commitment> {
     let (tx, c) = generate_bar2abar_tx(
@@ -773,7 +820,6 @@ pub fn generate_bar2abar_op(
         abar_pub_key,
         txo_sid,
         input_record,
-        enc_key,
         is_bar_transparent,
     )?;
     // submit transaction to network
@@ -788,18 +834,22 @@ pub fn generate_bar2abar_tx(
     abar_pub_key: &AXfrPubKey,
     txo_sid: TxoSID,
     input_record: &OpenAssetRecord,
-    enc_key: &XPublicKey,
     is_bar_transparent: bool,
 ) -> Result<(Transaction, Commitment)> {
     // add operation bar_to_abar in a new Tx Builder
+
+    let mut seed = [0u8; 32];
+
+    getrandom::getrandom(&mut seed).c(d!())?;
+
     let mut builder: TransactionBuilder = new_tx_builder().c(d!())?;
     let (_, c) = builder
         .add_operation_bar_to_abar(
+            seed,
             auth_key_pair,
             abar_pub_key,
             txo_sid,
             input_record,
-            enc_key,
             is_bar_transparent,
         )
         .c(d!("Failed to generate operation bar to abar"))?;
@@ -811,7 +861,11 @@ pub fn generate_bar2abar_tx(
         gen_fee_bar_to_abar(auth_key_pair, txo_sid).c(d!("Failed to generate fee"))?;
     builder.add_operation(feeop);
 
-    Ok((builder.take_transaction(), c))
+    let mut tx = builder.build_and_take_transaction()?;
+
+    tx.sign(auth_key_pair);
+
+    Ok((tx,c))
 }
 
 #[inline(always)]
@@ -824,7 +878,7 @@ pub fn generate_bar2abar_tx(
 /// * to            - XfrPublicKey of person receiving new BAR
 /// * art           - AssetRecordType of the new BAR
 pub fn generate_abar2bar_op(
-    oabar_in: &OpenAnonBlindAssetRecord,
+    oabar_in: &OpenAnonAssetRecord,
     from: &AXfrKeyPair,
     to: &XfrPublicKey,
     art: AssetRecordType,
@@ -836,7 +890,7 @@ pub fn generate_abar2bar_op(
         .c(d!())?;
 
     // submit transaction
-    send_tx(&builder.take_transaction()).c(d!())?;
+    send_tx(&builder.build_and_take_transaction()?).c(d!())?;
     Ok(())
 }
 
@@ -864,7 +918,7 @@ pub fn get_oar(
 
 #[inline(always)]
 #[allow(missing_docs)]
-pub fn get_abar_data(abar: AnonBlindAssetRecord) -> ABARData {
+pub fn get_abar_data(abar: AnonAssetRecord) -> ABARData {
     ABARData {
         commitment: wallet::commitment_to_base58(&abar.commitment),
     }

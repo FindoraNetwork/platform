@@ -80,7 +80,11 @@ pub fn transfer_to_account(
             lowlevel_data,
         )?
         .sign(&kp);
-    utils::send_tx(&builder.take_transaction())?;
+
+    let mut tx = builder.build_and_take_transaction()?;
+    tx.sign(&kp);
+
+    utils::send_tx(&tx)?;
     Ok(())
 }
 
@@ -125,6 +129,8 @@ pub fn transfer_from_account(
         target,
         amount,
         asset: ASSET_TYPE_FRA,
+        decimal: 6,
+        max_supply: 0,
     };
 
     let (signer, kp) = if let Some(key_path) = eth_phrase {

@@ -33,6 +33,7 @@ mod storage {
     generate_storage!(XHub, PendingUTXOs => Value<Vec<NonConfidentialOutput>>);
 }
 
+#[derive(Clone)]
 pub struct App<C> {
     phantom: PhantomData<C>,
 }

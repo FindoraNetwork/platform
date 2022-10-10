@@ -6,35 +6,39 @@ build = "build.rs"
 edition = "2021"
 
 [dependencies]
-tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a" }
-tokio = "1.10.1"
-hex = "0.4.2"
-base64 = "0.10"
-clap = { version = "2.33.3", features = ["yaml"] }
-lazy_static = "1.4.0"
 attohttpc = { version = "0.18", default-features = false, features = [
     "compress",
     "json",
     "tls-rustls",
 ] }
-serde_json = "1.0.40"
-serde = { version = "1.0.124", features = ["derive"] }
+base64 = "0.12"
+clap = { version = "2.33.3", features = ["yaml"] }
+curve25519-dalek = { version = "3.0", features = ["serde"] }
+digest = '0.10'
+hex = "0.4.2"
+lazy_static = "1.4.0"
+parking_lot = "0.12"
 rand = "0.8"
 rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
 rand_chacha = "0.3"
 ruc = "1.0"
-rayon = "1.5"
-parking_lot = "0.11.1"
-curve25519-dalek = { version = "3.0", features = ["serde"] }
-wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"] }
+serde_json = "1.0.40"
+serde = { version = "1.0.124", features = ["derive"] }
+sha2 = "0.10"
 stopwatch = "0.0.7"
+tokio = "1.10.1"
+wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"] }
+getrandom = "0.2"
 
+env_logger = "0.9"
 log = "0.4"
-env_logger = "0.8"
+rayon = "1.5"
 
-zei = "0.1"
-zei-crypto = "0.1"
-zei-algebra = "0.1"
+zei = "0.2"
+zei-crypto = "0.2"
+zei-algebra = "0.2"
+nix = "0.25"
+toml_edit = "0.14"
 
 ledger = { path = "../../ledger" }
 globutils = { path = "../../libs/globutils" }
@@ -45,12 +49,11 @@ fp-core = { path = "../contracts/primitives/core", default-features = false }
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = { path = "../contracts/primitives/types" }
 
-tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rpc", features = [
+tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a-fk" }
+tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", features = [
     "http-client",
     "websocket-client",
-], optional = true, tag = "v0.19.0a" }
-
-sha2 = "0.10.2"
+], optional = true, tag = "v0.19.0a-fk" }
 
 [dev-dependencies]
 

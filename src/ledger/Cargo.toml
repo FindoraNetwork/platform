@@ -6,13 +6,14 @@ edition = "2021"
 build = "build.rs"
 
 [dependencies]
-base64 = "0.10"
+base64 = "0.12"
 bs58 = "0.4"
 bincode = "1.3.1"
 byteorder = "1.0.0"
 curve25519-dalek = { version = "3.0", features = ["serde"] }
+digest = '0.10'
 ed25519-dalek = "1.0.0"
-hex = "0.3.2"
+hex = "0.4.2"
 lazy_static = { version = "1.2.0" }
 log="*"
 rand = "0.8"
@@ -22,19 +23,20 @@ serde = { version = "1.0.124", features = ["derive"] }
 serde_derive = "1.0"
 serde_json = "1.0"
 serde-strz = "1.1.1"
-sha2 = "0.8.0"
+sha2 = '0.10'
 unicode-normalization = "0.1.13"
-time = "0.2.26"
-tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a" }
+time = "0.3"
+tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a-fk" }
 indexmap = { version = "1.6.2", features = ["serde"] }
 config = { path = "../components/config" }
 fp-types = { path = "../components/contracts/primitives/types" }
+fp-utils = { path = "../components/contracts/primitives/utils" }
 itertools = "0.8"
 ruc = "1.0"
 
-zei = "0.1"
-zei-crypto = "0.1"
-zei-algebra = "0.1"
+zei = "0.2"
+zei-crypto = "0.2"
+zei-algebra = "0.2"
 bulletproofs = "2.0"
 
 fbnc = { version = "0.2.9", default-features = false}
@@ -51,7 +53,7 @@ sliding_set = { path = "../libs/sliding_set" }
 [features]
 default = []
 diskcache = ["fbnc/diskcache"]
-debug_env = []
+debug_env = ["config/debug_env"]
 abci_mock = []
 
 [dev-dependencies]
@@ -62,15 +64,16 @@ version = "0.4.6"
 features = ["f16", "serde"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-parking_lot = "0.11.1"
+parking_lot = "0.12"
+# sodiumoxide = "0.2.1"
 fs2 = "0.4"
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.4" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.2" }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.2" }
 sparse_merkle_tree = { path = "../libs/sparse_merkle_tree" }
-zei-accumulators = "0.1"
+zei-accumulators = "0.2"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-parking_lot = { version = "0.11.1", features = ["wasm-bindgen"] }
-
+parking_lot = { version = "0.11", features = ["wasm-bindgen"] }
 
 [build-dependencies]
 vergen = "=3.1.0"

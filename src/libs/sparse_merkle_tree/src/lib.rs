@@ -409,7 +409,7 @@ mod tests {
     //use std::string::ToString;
     use std::env::temp_dir;
     use std::time::SystemTime;
-    use storage::db::TempRocksDB;
+    use temp_db::TempRocksDB;
 
     // `hex` is the first a few bytes of the desired 32 bytes (the rest bytes are zeros).
     pub fn l256(hex: &str) -> Digest {
@@ -895,7 +895,7 @@ fn test_nullfier() {
     use bls12_381::Scalar;
     use std::env::temp_dir;
     use std::time::SystemTime;
-    use storage::db::TempRocksDB;
+    use temp_db::TempRocksDB;
 
     // Common value used for all nullifiers
     let value = Some(b"nullifier".to_vec());

@@ -3,6 +3,10 @@
 from sdk import *
 import argparse
 import subprocess
+import os
+
+# Environment variables
+bin_path = ''
 
 
 def private_key_to_address(private_key, w3):
@@ -11,30 +15,31 @@ def private_key_to_address(private_key, w3):
 
 
 def get_fra_balance(sec_key):
-    out_str = subprocess.check_output(['target/release/fn', 'account', '-s', sec_key])
+    out_str = subprocess.check_output([bin_path + '/fn', 'account', '-s', sec_key])
     parsed = out_str.split()
     return int(parsed[1])
 
 
 def get_fra_anon_balance(anon_keys_path, commitments):
     out_str = subprocess.check_output(
-        ['target/release/fn', 'anon-balance', '--anon-keys', anon_keys_path, '--commitments', commitments])
+        [bin_path + '/fn', 'anon-balance', '--anon-keys', anon_keys_path, '--commitments', commitments])
     parsed = out_str.split()
     return int(parsed[1])
 
 
 def get_asset_balance(sec_key, asset):
-    out_str = subprocess.check_output(['target/release/fn', 'account', '-s', sec_key, '--asset', asset])
+    out_str = subprocess.check_output([bin_path + '/fn', 'account', '-s', sec_key, '--asset', asset])
     parsed = out_str.split()
     return int(parsed[1])
 
 
 def get_asset_anon_balance(anon_keys_path, commitments, asset):
     out_str = subprocess.check_output(
-        ['target/release/fn', 'anon-balance', '--anon-keys', anon_keys_path, '--commitments', commitments,
+        [bin_path + '/fn', 'anon-balance', '--anon-keys', anon_keys_path, '--commitments', commitments,
          '--asset', asset])
     parsed = out_str.split()
     return int(parsed[1])
+
 
 def get_erc20_balance(address, url):
     w3 = Web3(HTTPProvider(to_web3_url(url)))
@@ -105,7 +110,7 @@ def transfer(arguments):
         to=arguments['to_addr'],
         value=int(arguments['amount']),
         data=b'',
-        chainId=523,
+        chainId=w3.eth.chainId,
     ),
         arguments['from_priv_key'],
     )
@@ -115,6 +120,13 @@ def transfer(arguments):
 
 
 if __name__ == "__main__":
+    # Get environment variables
+    try:
+        bin_path = os.environ['BIN']
+    except:
+        print("error getting environment variables")
+        exit(-1)
+
     # initialize commands
     cmd_list = {'balance': get_balance, 'verify-balance': verify_balance,
                 'verify-anon-balance': verify_anon_balance, 'transfer': transfer}
@@ -128,6 +140,7 @@ if __name__ == "__main__":
     parser_balance = subparsers.add_parser('balance', help='query balance of an address')
     parser_balance.add_argument('--addr', help='address to query')
     parser_balance.add_argument('--sec-key', help='secret key of FRA account')
+    parser_balance.add_argument('--asset', help='asset to query balance of')
 
     # Initialize Verify-Balance Parser
     parser_verify_balance = subparsers.add_parser('verify-balance', help='verify balance of an address')

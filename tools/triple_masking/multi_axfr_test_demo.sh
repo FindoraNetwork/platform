@@ -1,14 +1,9 @@
 # If breaking because of blockchain, increase the sleep time
-echo "J7PqRhmBOE_gadFs4rB4lcKuz_YoWa5VSlALyKuZdQjNBryPSYZhRczonGNY3-mp86LWW8TJ6clirfk4gk03Tw==
-J7PqRhmBOE_gadFs4rB4lcKuz_YoWa5VSlALyKuZdQjNBryPSYZhRczonGNY3-mp86LWW8TJ6clirfk4gk03Tw==" > axfr_secretkey_file
-echo "4GNC0J_qOXV2kww5BC5bOCyrTEfCodX5BoFaj06uN1s=
-4GNC0J_qOXV2kww5BC5bOCyrTEfCodX5BoFaj06uN1s=" > decryption_key_file
-echo "BdECoTzLNQHlKq1oGMI2kdh27yp_I2CZen0FGYLFkM0=
-EPGl5qbD_6mq7Zn8Ni1Z1LnR0WInFiHSnQ1P7qiaU4w=
+echo "Ccv2h8u1g__HJBrsA8npcs4CiDQ_UHI-JGZCjXbu9Un8HU3qSTf3PdLEFvs1XwauSltgruFv-IRVFpaQkeIIAgRoRPXncS1VHYzRpQlghzgCcQKJnic90DFDiYxSPVjg
+Ccv2h8u1g__HJBrsA8npcs4CiDQ_UHI-JGZCjXbu9Un8HU3qSTf3PdLEFvs1XwauSltgruFv-IRVFpaQkeIIAgRoRPXncS1VHYzRpQlghzgCcQKJnic90DFDiYxSPVjg" > axfr_secretkey_file
+echo "BGhE9edxLVUdjNGlCWCHOAJxAomeJz3QMUOJjFI9WOA=
+JcomzsoXVf3Nz1lTL_dTz7ZifKsZJZtD5Aik1WYEa_I=
 6dJt8oDrtXt3z-7__dOcDn7Q9lM8jd2RST0FJIfGspc=" > to_axfr_public_key_file
-echo "Ox5L-mGxzOFfd4fef7WZGJMdO-EKBVnnJypZiEl_9FQ=
-ra4lQ6KhMhfLO1leXpI2Dj7qQcasbSOqNIVFAIRDHxw=
-GrvIiB1yXLajRr5V5yZggPOmSelQ1Ga9zxWTzp0RnB8=" > to_enc_key_file
 echo "100000000
 100000000
 119980000" > amount_file
@@ -26,21 +21,21 @@ tail -n 2 owned_commitments > commitment_file
 commitment1=$(awk 'FNR==1' commitment_file)
 echo -e "\n\n Owned Abars after Bar to Abar conversion 1"
 sleep 20
-target/release/fn owned-abars --commitments "$commitment1" --anon-keys $FILE_ANON_KEYS
+"$BIN"/fn owned-abars --commitments "$commitment1" --anon-keys $FILE_ANON_KEYS
 
 commitment2=$(awk 'FNR==2' commitment_file)
 echo "\n\n Owned Abars after Bar to Abar conversion 2"
 sleep 20
-target/release/fn owned-abars --commitments "$commitment2" --anon-keys $FILE_ANON_KEYS
+"$BIN"/fn owned-abars --commitments "$commitment2" --anon-keys $FILE_ANON_KEYS
 
 echo -e "\n\n\n Batch Anonymous Transfer from Senders to Receivers"
 echo "------------------------------------------------------------------------------"
-sleep 5
-target/release/fn anon-transfer-batch -n amount_file -a asset_file -s axfr_secretkey_file -d decryption_key_file --to-axfr-public-key-file to_axfr_public_key_file --to-enc-key-file to_enc_key_file -c commitment_file
-
 sleep 2
+"$BIN"/fn anon-transfer-batch -n amount_file -a asset_file -s axfr_secretkey_file --to-axfr-public-key-file to_axfr_public_key_file -c commitment_file
+
+sleep 5
 echo -e "\n\n\n Fetch merkle proof for Batch Anon Transfer"
 echo "------------------------------------------------------------------------------"
-target/release/fn anon-fetch-merkle-proof -a 3
-rm axfr_secretkey_file decryption_key_file commitment_file commitment_file2 to_axfr_public_key_file to_enc_key_file amount_file asset_file
+"$BIN"/fn anon-fetch-merkle-proof -a 3
+rm axfr_secretkey_file commitment_file to_axfr_public_key_file amount_file asset_file
 echo -e "\n\n Batch Anonymous Transfer demo script executed successfully!"

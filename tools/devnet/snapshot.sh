@@ -3,13 +3,9 @@
 # env
 source tools/devnet/env.sh || exit 1
 
-# paths
-WALLET="$HOME/.findora"
-
 # clean and recreate mnemonic
 rm -rf $WALLET/mnenomic.key
 rm -rf $WALLET/snapshot.tar.gz
-echo "$MNEMONIC" > $WALLET/mnenomic.key
 
 # show and confirm genesis keypair
 echo -e "${GRN}step-0: keypair-------------------------------------------------${NC}"
@@ -33,15 +29,13 @@ echo -e "${GRN}step-1: run network----------------------------------------------
 ./$cleannodes
 ./$startnodes
 sleep $BLOCK_INTERVAL
+sleep 2
 echo
 
 # init network
 echo -e "${GRN}step-2: init network-----------------------------------------------${NC}"
-$BIN/fn setup -S http://0.0.0.0 > /dev/null
-$BIN/fn setup -O $WALLET/mnenomic.key > /dev/null
-echo -e "host: http://0.0.0.0"
+echo -e "host: $ENDPOINT"
 echo -e "key : $WALLET/mnenomic.key"
-#echo -e "$BIN/stt"
 $BIN/stt init -i $BLOCK_INTERVAL -s
 #./$stopnodes
 echo

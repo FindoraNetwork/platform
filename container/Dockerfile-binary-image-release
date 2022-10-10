@@ -17,7 +17,6 @@ RUN mkdir -p /binary/cleveldb && mkdir -p /binary/goleveldb
 RUN make fmt
 RUN make lint
 RUN make test
-RUN make evmtest
 
 RUN mkdir -p /root/.cargo/bin/ && \
     make build_release && \

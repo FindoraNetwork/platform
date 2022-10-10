@@ -1,22 +1,21 @@
 # If breaking because blockchain, add the sleep time.
 set +e
 
+source ./tools/devnet/env.sh || exit 1
+
 FRA_ACCOUNT="fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5"
 
-ANON_SK_1="J7PqRhmBOE_gadFs4rB4lcKuz_YoWa5VSlALyKuZdQjNBryPSYZhRczonGNY3-mp86LWW8TJ6clirfk4gk03Tw=="
-ANON_PK_1="zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08="
-ANON_ENC_1="Gu558brzFchoqQR9oi8QP54KZKSQ18Djzt82C4YUyFg="
-ANON_DEC_1="4GNC0J_qOXV2kww5BC5bOCyrTEfCodX5BoFaj06uN1s="
+ANON_SK_1="Ccv2h8u1g__HJBrsA8npcs4CiDQ_UHI-JGZCjXbu9Un8HU3qSTf3PdLEFvs1XwauSltgruFv-IRVFpaQkeIIAgRoRPXncS1VHYzRpQlghzgCcQKJnic90DFDiYxSPVjg"
+ANON_VK_1="_B1N6kk39z3SxBb7NV8GrkpbYK7hb_iEVRaWkJHiCAI="
+ANON_PK_1="BGhE9edxLVUdjNGlCWCHOAJxAomeJz3QMUOJjFI9WOA="
 
-ANON_SK_2="MwdsbYhTp4Io062nV7E2HkJfsnaTCZpkdjr6aijv2Aem3KjuGWqf4TLB_-20b305Ja3Pop8NS8tgMNUOVXUL5Q=="
-ANON_PK_2="ptyo7hlqn-Eywf_ttG99OSWtz6KfDUvLYDDVDlV1C-U="
-ANON_ENC_2="SAmB7Oji4sAgENLaLb4PFclxQL_DRrEkXcYp6eXuXwI="
-ANON_DEC_2="AEq1ZUFk_fB__YaNjQ3D2taGOnMZAx4adpB6RbnPj24="
+ANON_SK_2="h4MuWol8pWuNIMxPHwJ0ZAoF_n51QScj6AultG5IHU3yL-LR02XXw58uudwom_tahcy1e0oadfOw3oLxSs64A9yTOKFC1NqT6e-fWGEO-QpSZzf8otV7POguvdejoKhL"
+ANON_VK_2="8i_i0dNl18OfLrncKJv7WoXMtXtKGnXzsN6C8UrOuAM="
+ANON_PK_2="3JM4oULU2pPp759YYQ75ClJnN_yi1Xs86C6916OgqEs="
 
-ANON_SK_3="GlEc6A-SDpkLUY8meGBW4uTPJig_Doq9Nr0qS6SjCQRg0goM6ovtdrfS2Ofch2RQ3sT7fetbQP3NHf65mm5Tsw=="
-ANON_PK_3="YNIKDOqL7Xa30tjn3IdkUN7E-33rW0D9zR3-uZpuU7M="
-ANON_ENC_3="c_FygTv2K-Vdx6VS-b9retJCgnci19w2C1_ZpRCE2CE="
-ANON_DEC_3="EHr6smaDNCEgCmz2DfkNtnXcDow0QS6Dg9ZXhd_EKH0="
+ANON_SK_3="bRrcmHV-87-na2jKuOEQZmVyLE6q4oVdCiMoWdqVHwOqkAlAXybyeheaNCyWw7j0lz4vlnxP5nUNpbnSwF3tBiXKJs7KF1X9zc9ZUy_3U8-2YnyrGSWbQ-QIpNVmBGvy"
+ANON_VK_3="qpAJQF8m8noXmjQslsO49Jc-L5Z8T-Z1DaW50sBd7QY="
+ANON_PK_3="JcomzsoXVf3Nz1lTL_dTz7ZifKsZJZtD5Aik1WYEa_I="
 
 FILE_MNEMONIC="mnemonic-temp.keys"
 FILE_ANON_KEYS_1="anon-keys-temp_1.keys"
@@ -28,26 +27,23 @@ echo "double quit tape enough charge fancy mandate ostrich this program laundry 
 
 echo "
 {
-  \"axfr_secret_key\": \"J7PqRhmBOE_gadFs4rB4lcKuz_YoWa5VSlALyKuZdQjNBryPSYZhRczonGNY3-mp86LWW8TJ6clirfk4gk03Tw==\",
-  \"axfr_public_key\": \"zQa8j0mGYUXM6JxjWN_pqfOi1lvEyenJYq35OIJNN08=\",
-  \"enc_key\": \"Gu558brzFchoqQR9oi8QP54KZKSQ18Djzt82C4YUyFg=\",
-  \"dec_key\": \"4GNC0J_qOXV2kww5BC5bOCyrTEfCodX5BoFaj06uN1s=\"
+  \"spend_key\": \"Ccv2h8u1g__HJBrsA8npcs4CiDQ_UHI-JGZCjXbu9Un8HU3qSTf3PdLEFvs1XwauSltgruFv-IRVFpaQkeIIAgRoRPXncS1VHYzRpQlghzgCcQKJnic90DFDiYxSPVjg\",
+  \"view_key\": \"_B1N6kk39z3SxBb7NV8GrkpbYK7hb_iEVRaWkJHiCAI=\",
+  \"pub_key\": \"BGhE9edxLVUdjNGlCWCHOAJxAomeJz3QMUOJjFI9WOA=\"
 }" > $FILE_ANON_KEYS_1
 
 echo "
 {
-  \"axfr_secret_key\": \"MwdsbYhTp4Io062nV7E2HkJfsnaTCZpkdjr6aijv2Aem3KjuGWqf4TLB_-20b305Ja3Pop8NS8tgMNUOVXUL5Q==\",
-  \"axfr_public_key\": \"ptyo7hlqn-Eywf_ttG99OSWtz6KfDUvLYDDVDlV1C-U=\",
-  \"enc_key\": \"SAmB7Oji4sAgENLaLb4PFclxQL_DRrEkXcYp6eXuXwI=\",
-  \"dec_key\": \"AEq1ZUFk_fB__YaNjQ3D2taGOnMZAx4adpB6RbnPj24=\"
+  \"spend_key\": \"h4MuWol8pWuNIMxPHwJ0ZAoF_n51QScj6AultG5IHU3yL-LR02XXw58uudwom_tahcy1e0oadfOw3oLxSs64A9yTOKFC1NqT6e-fWGEO-QpSZzf8otV7POguvdejoKhL\",
+  \"view_key\": \"8i_i0dNl18OfLrncKJv7WoXMtXtKGnXzsN6C8UrOuAM=\",
+  \"pub_key\": \"3JM4oULU2pPp759YYQ75ClJnN_yi1Xs86C6916OgqEs=\"
 }" > $FILE_ANON_KEYS_2
 
 echo "
 {
-  \"axfr_secret_key\": \"GlEc6A-SDpkLUY8meGBW4uTPJig_Doq9Nr0qS6SjCQRg0goM6ovtdrfS2Ofch2RQ3sT7fetbQP3NHf65mm5Tsw==\",
-  \"axfr_public_key\": \"YNIKDOqL7Xa30tjn3IdkUN7E-33rW0D9zR3-uZpuU7M=\",
-  \"enc_key\": \"c_FygTv2K-Vdx6VS-b9retJCgnci19w2C1_ZpRCE2CE=\",
-  \"dec_key\": \"EHr6smaDNCEgCmz2DfkNtnXcDow0QS6Dg9ZXhd_EKH0=\"
+  \"spend_key\": \"bRrcmHV-87-na2jKuOEQZmVyLE6q4oVdCiMoWdqVHwOqkAlAXybyeheaNCyWw7j0lz4vlnxP5nUNpbnSwF3tBiXKJs7KF1X9zc9ZUy_3U8-2YnyrGSWbQ-QIpNVmBGvy\",
+  \"view_key\": \"qpAJQF8m8noXmjQslsO49Jc-L5Z8T-Z1DaW50sBd7QY=\",
+  \"pub_key\": \"JcomzsoXVf3Nz1lTL_dTz7ZifKsZJZtD5Aik1WYEa_I=\"
 }" > $FILE_ANON_KEYS_3
 
 rm owned_commitments
@@ -58,46 +54,46 @@ set -e
 
 echo "\n\n Transfer FRA to test account..."
 echo "------------------------------------------------------------------------------"
-target/release/fn transfer --amount 100000000 --asset FRA -T $FRA_ACCOUNT
+"$BIN"/fn transfer --amount 100000000 --asset FRA -T $FRA_ACCOUNT
 echo "waiting blockchain 5s..."
 sleep 5
 # txo-sid = 3
 
 echo "\n\n Transfer FRA to pay fee..."
 echo "------------------------------------------------------------------------------"
-target/release/fn transfer --amount 100000000 --asset FRA -T $FRA_ACCOUNT
+"$BIN"/fn transfer --amount 100000000 --asset FRA -T $FRA_ACCOUNT
 echo "waiting blockchain 5s..."
 sleep 5
 # txo-sid = 6
 
-target/release/fn setup -O $FILE_MNEMONIC -S http://0.0.0.0
+"$BIN"/fn setup -O $FILE_MNEMONIC -S http://0.0.0.0
 
 echo "Changed to test account. BAR Balance:"
-target/release/fn wallet --show
+"$BIN"/fn wallet --show
 
 echo "\n\n FRA Bar To Abar ..."
 echo "==============================================================================="
-TXO_SID=$(target/release/fn owned-utxos | head -4 | tail -1 |  awk -F ' ' '{print $1}')
-target/release/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS_1 --txo-sid "$TXO_SID"
+TXO_SID=$("$BIN"/fn owned-utxos | head -4 | tail -1 |  awk -F ' ' '{print $1}')
+"$BIN"/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS_1 --txo-sid "$TXO_SID"
 echo "waiting blockchain 5s..."
 sleep 5
 # txo-sid = 9
 
 echo "\n\n Create Asset 1 ..."
 echo "------------------------------------------------------------------------------"
-target/release/fn asset --create --memo "asset1" --transferable 2> /dev/null
+"$BIN"/fn asset --create --memo "asset1" --transferable 2> /dev/null
 echo "waiting blockchain 15s..."
 sleep 15
 
 echo "\n\n Create Asset 2 ..."
 echo "------------------------------------------------------------------------------"
-target/release/fn asset --create --memo "asset2" --transferable 2> /dev/null
+"$BIN"/fn asset --create --memo "asset2" --transferable 2> /dev/null
 echo "waiting blockchain 15s..."
 sleep 15
 
 echo "\n\n Building assets ..."
 echo "------------------------------------------------------------------------------"
-target/release/fn asset --show --addr $FRA_ACCOUNT > tmp_file
+"$BIN"/fn asset --show --addr $FRA_ACCOUNT > tmp_file
 ASSET1=$(awk 'FNR==1' tmp_file | awk -F ' ' '{print $2}'| sed 's/,*$//g')
 ASSET2=$(awk 'FNR==2' tmp_file | awk -F ' ' '{print $2}'| sed 's/,*$//g')
 echo "$ASSET1"
@@ -106,32 +102,32 @@ echo "$ASSET2"
 
 echo "\n\n Issue Asset 1 ..."
 echo "------------------------------------------------------------------------------"
-target/release/fn asset --issue --code $ASSET1 --amount 100000000
+"$BIN"/fn asset --issue --code $ASSET1 --amount 100000000
 echo "waiting blockchain 15s..."
 sleep 15
 # txo-sid = 14(asset1) & 16
 
 echo "\n\n\n Issue Asset 2 ..."
 echo "------------------------------------------------------------------------------"
-target/release/fn asset --issue --code "$ASSET2" --amount 100000000
+"$BIN"/fn asset --issue --code "$ASSET2" --amount 100000000
 echo "waiting blockchain 15s..."
 sleep 15
 
 echo "\n ***** Issue Asset & FRA successfully! ***** "
 sleep 5
-target/release/fn owned-utxos
+"$BIN"/fn owned-utxos
 
 echo "\n\n Asset 1 Bar To Abar ..."
 echo "==============================================================================="
-TXO_SID=$(target/release/fn owned-utxos --asset "$ASSET1" | head -4 | tail -1 | awk -F ' ' '{print $1}')
-target/release/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS_1 --txo-sid "$TXO_SID"
+TXO_SID=$("$BIN"/fn owned-utxos --asset "$ASSET1" | head -4 | tail -1 | awk -F ' ' '{print $1}')
+"$BIN"/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS_1 --txo-sid "$TXO_SID"
 echo "waiting blockchain 15s..."
 sleep 15
 
 echo "\n\n Asset 2 Bar To Abar ..."
 echo "==============================================================================="
-TXO_SID=$(target/release/fn owned-utxos --asset "$ASSET2" | head -4 | tail -1 | awk -F ' ' '{print $1}')
-target/release/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS_1 --txo-sid "$TXO_SID"
+TXO_SID=$("$BIN"/fn owned-utxos --asset "$ASSET2" | head -4 | tail -1 | awk -F ' ' '{print $1}')
+"$BIN"/fn convert-bar-to-abar --anon-keys $FILE_ANON_KEYS_1 --txo-sid "$TXO_SID"
 echo "waiting blockchain 15s..."
 sleep 15
 
@@ -139,13 +135,12 @@ echo "\n\n Anon transfer Asset 1 ..."
 echo "==============================================================================="
 COMMITMENT=$(awk 'FNR==3' owned_commitments)
 FRA_COMMITMENT=$(awk 'FNR==2' owned_commitments)
-target/release/fn anon-transfer    \
+"$BIN"/fn anon-transfer    \
   --amount 50000000                \
   --anon-keys $FILE_ANON_KEYS_1    \
   --commitment $COMMITMENT         \
   --fra-commitment $FRA_COMMITMENT \
-  --to-axfr-public-key $ANON_PK_2  \
-  --to-enc-key $ANON_ENC_2
+  --to-axfr-public-key $ANON_PK_2
 echo "waiting blockchain 15s..."
 sleep 15
 
@@ -160,20 +155,14 @@ ANON_KEY_1_ASSET_2_COMMITMENT=$(awk 'FNR==4' owned_commitments) # ASSET 2
 ANON_KEY_2_ASSET_1_COMMITMENT=$(awk 'FNR==2' sent_commitments)  # ASSET 1
 
 BATCH_SK="batch_sk.keys"
-BATCH_DEC="batch_dec.keys"
 BATCH_C="batch_c.keys"
 BATCH_PK="batch_pk.keys"
-BATCH_ENC="batch_enc.keys"
 BATCH_AMOUNT="batch_amount.keys"
 BATCH_ASSET="batch_asset.keys"
 
 echo $ANON_SK_1 > $BATCH_SK
 echo $ANON_SK_1 >> $BATCH_SK
 echo $ANON_SK_2 >> $BATCH_SK
-
-echo $ANON_DEC_1 > $BATCH_DEC
-echo $ANON_DEC_1 >> $BATCH_DEC
-echo $ANON_DEC_2 >> $BATCH_DEC
 
 echo $ANON_KEY_1_FRA_COMMITMENT > $BATCH_C
 echo $ANON_KEY_1_ASSET_2_COMMITMENT >> $BATCH_C
@@ -183,34 +172,28 @@ echo $ANON_PK_2 > $BATCH_PK
 echo $ANON_PK_2 >> $BATCH_PK
 echo $ANON_PK_3 >> $BATCH_PK
 
-echo $ANON_ENC_2 > $BATCH_ENC
-echo $ANON_ENC_2 >> $BATCH_ENC
-echo $ANON_ENC_3 >> $BATCH_ENC
-
 echo "" > $BATCH_ASSET
 echo $ASSET2 >> $BATCH_ASSET
 echo $ASSET1 >> $BATCH_ASSET
 
 echo 10000000 > $BATCH_AMOUNT
 echo 10000000 >> $BATCH_AMOUNT
-echo 10000000 >> $BATCH_AMOUNT
+echo 50000000 >> $BATCH_AMOUNT
 
 echo ""
 echo ""
-target/release/fn anon-transfer-batch \
+"$BIN"/fn anon-transfer-batch \
   --axfr-secretkey-file $BATCH_SK     \
-  --decryption-key-file $BATCH_DEC    \
   --commitment-file $BATCH_C          \
   --to-axfr-public-key-file $BATCH_PK \
-  --to-enc-key-file $BATCH_ENC        \
   --amount-file $BATCH_AMOUNT         \
   --asset-file $BATCH_ASSET
 echo "waiting blockchain 15s..."
 sleep 15
 
 echo "checking..."
-target/release/fn owned-abars --commitments $(awk 'FNR==3,FNR==4' sent_commitments | awk -v d="," '{s=(NR==1?s:s d)$0}END{print s}') --anon-keys ./$FILE_ANON_KEYS_2
-target/release/fn owned-abars --commitments $(awk 'FNR==5' sent_commitments) --anon-keys ./$FILE_ANON_KEYS_3
+"$BIN"/fn owned-abars --commitments $(awk 'FNR==3,FNR==4' sent_commitments | awk -v d="," '{s=(NR==1?s:s d)$0}END{print s}') --anon-keys ./$FILE_ANON_KEYS_2
+"$BIN"/fn owned-abars --commitments $(awk 'FNR==5' sent_commitments) --anon-keys ./$FILE_ANON_KEYS_3
 
-rm $BATCH_SK $BATCH_DEC $BATCH_C $BATCH_PK $BATCH_ENC $BATCH_AMOUNT $BATCH_ASSET
+rm $BATCH_SK $BATCH_C $BATCH_PK $BATCH_AMOUNT $BATCH_ASSET
 echo "\n ***** Test all successfully! ***** "

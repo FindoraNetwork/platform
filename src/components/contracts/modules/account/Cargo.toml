@@ -9,13 +9,13 @@ description = "Findora module supporting smart account function"
 readme = "README.md"
 
 [dependencies]
-abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
+abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
 log = "0.4"
-primitive-types = { version = "0.10.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
+primitive-types = { version = "0.11.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
 ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0.64"
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.4" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
 
 # primitives, don't depend on any modules
 fp-core = { path = "../../primitives/core" }
@@ -23,7 +23,11 @@ fp-storage = { path = "../../primitives/storage" }
 fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 
+config = {path = "../../../config"}
+
 [dev-dependencies]
-parking_lot = "0.11.1"
+parking_lot = "0.12"
 rand_chacha = "0.3"
-zei = "0.1"
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
+zei = "0.2"
