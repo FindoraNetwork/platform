@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 eth_pairings = { git = "https://github.com/FindoraNetwork/eip1962", branch = "master" }
+evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
+evm-precompile-utils = { path = "../utils"}
