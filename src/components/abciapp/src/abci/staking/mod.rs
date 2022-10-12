@@ -286,6 +286,7 @@ fn system_governance(staking: &mut Staking, bz: &ByzantineInfo) -> Result<()> {
 pub fn system_prism_mint_pay(
     la: &mut LedgerState,
     account_base_app: &mut AccountBaseApp,
+    td_height: i64,
 ) -> Option<Transaction> {
     let mut mints = Vec::new();
 
@@ -299,7 +300,9 @@ pub fn system_prism_mint_pay(
                     };
                     if mint.max_supply != 0 {
                         at.properties.asset_rules.max_units = Some(mint.max_supply);
-                        at.properties.asset_rules.decimals = mint.decimal;
+                        if td_height <= CFG.checkpoint.qa02_prismxx_asset {
+                            at.properties.asset_rules.decimals = mint.decimal;
+                        }
                     }
                     at
                 } else {
@@ -310,7 +313,9 @@ pub fn system_prism_mint_pay(
 
                     if mint.max_supply != 0 {
                         at.properties.asset_rules.max_units = Some(mint.max_supply);
-                        at.properties.asset_rules.decimals = mint.decimal;
+                        if td_height <= CFG.checkpoint.qa02_prismxx_asset {
+                            at.properties.asset_rules.decimals = mint.decimal;
+                        }
                     }
 
                     at.properties.code = AssetTypeCode { val: mint.asset };
