@@ -1129,22 +1129,12 @@ impl LedgerState {
     #[allow(missing_docs)]
     pub fn get_state_commitment(&self) -> (HashOf<Option<StateCommitmentData>>, u64) {
         let block_count = self.status.block_commit_count;
-        if !*KEEP_HIST {
-            let mut commitment: HashOf<Option<StateCommitmentData>> = HashOf::new(&None);
-            for a in self.status.state_commitment_versions.iter() {
-                commitment = a.clone();
-            }
-            (commitment, block_count)
-        } else {
-            let commitment = self
-                .api_cache
-                .as_ref()
-                .unwrap()
-                .state_commitment_version
-                .clone()
-                .unwrap_or_else(|| HashOf::new(&None));
-            (commitment, block_count)
-        }
+        let commitment = self
+            .status
+            .state_commitment_versions
+            .last()
+            .unwrap_or_else(|| HashOf::new(&None));
+        (commitment, block_count)
     }
 
     #[inline(always)]
