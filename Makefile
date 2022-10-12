@@ -223,7 +223,7 @@ ci_build_dev_binary_image:
 
 ci_build_dev_binary_image_arm:
 	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-dev-arm
-	docker buildx build --platform linux/arm64 --output=type=docker -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-binary-image-dev-arm .
+	docker buildx build --platform linux/arm64/v8 --output=type=docker -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-binary-image-dev-arm .
 
 ci_build_release_binary_image:
 	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-release
@@ -242,7 +242,8 @@ ci_build_image_arm:
 	@ docker cp findorad-binary:/binary ./binary
 	@ docker rm -f findorad-binary
 	# @ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb .
-	@ docker buildx build --platform linux/arm64/v8 -output=type=docker -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb-arm .
+	@ docker buildx build --platform linux/arm64/v8 --output=type=docker -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb-arm .
+
 ifeq ($(ENV),release)
 	docker tag $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
 endif
