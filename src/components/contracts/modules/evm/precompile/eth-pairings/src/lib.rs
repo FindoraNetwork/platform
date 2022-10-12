@@ -1,9 +1,9 @@
 use eth_pairings::public_interface::{perform_operation, ApiError, OperationType};
-use evm::executor::stack::PrecompileOutput;
+use evm::executor::stack::{PrecompileFailure, PrecompileOutput};
 use evm::{Context, ExitError, ExitSucceed};
 use evm_precompile_utils::{EvmDataReader, EvmDataWriter, EvmResult, Gasometer};
 use log::debug;
-use module_evm::precompile::{FinState, Precompile, PrecompileId};
+use module_evm::precompile::{FinState, Precompile, PrecompileId, PrecompileResult};
 
 // The gas used value is obtained according to the standard erc20 call.
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.3.2/contracts/token/ERC20/ERC20.sol
@@ -38,10 +38,20 @@ impl Precompile for EthPairing {
         target_gas: Option<u64>,
         _context: &Context,
         _state: &FinState,
-    ) -> Result<PrecompileOutput, ExitError> {
-        match &input.read_selector()? {
-            Call::ExecuteOperation => Self::execute_operation(input, target_gas),
-            _ => {}
+    ) -> PrecompileResult {
+        let mut input = EvmDataReader::new(input);
+        let selector = match input.read_selector::<Call>() {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(PrecompileFailure::Error { exit_status: e });
+            }
+        };
+
+        match &selector {
+            Call::ExecuteOperation => match Self::execute_operation(input, target_gas) {
+                Ok(v) => Ok(v),
+                Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
+            },
         }
     }
 }
@@ -56,21 +66,23 @@ impl EthPairing {
     }
 
     fn execute_operation(
-        input: &[u8],
+        mut input: EvmDataReader,
         target_gas: Option<u64>,
     ) -> EvmResult<PrecompileOutput> {
         let mut gasometer = Gasometer::new(target_gas);
         gasometer.record_cost(GAS_SYMBOL)?;
 
-        debug!(target: "evm", "EthPairing#opG1add");
-
-        let result = Self::call_public_api_on_vector(input)?;
+        debug!(target: "evm", "EthPairing#executingOp");
+        let result = match Self::call_public_api_on_vector(input.get_slice()) {
+            Ok(res) => res,
+            Err(api_err) => return Err(ExitError::Other(api_err.to_string().into())),
+        };
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
             cost: gasometer.used_gas(),
             output: EvmDataWriter::new()
-                .write_raw_bytes(result.as_bytes())
+                .write_raw_bytes(result.as_slice())
                 .build(),
             logs: vec![],
         })
