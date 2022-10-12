@@ -202,7 +202,7 @@ pub async fn query_global_state(
 ) -> web::Json<(HashOf<Option<StateCommitmentData>>, u64, &'static str)> {
     let qs = data.read();
     let ledger = &qs.ledger_cloned;
-    let (hash, seq_id) = ledger.get_state_commitment();
+    let (hash, seq_id) = ledger.get_state_commitment_from_api_cache();
 
     web::Json((hash, seq_id, "v4UVgkIBpj0eNYI1B1QhTTduJHCIHH126HcdesCxRdLkVGDKrVUPgwmNLCDafTVgC5e4oDhAGjPNt1VhUr6ZCQ=="))
 }
