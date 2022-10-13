@@ -55,7 +55,7 @@ jobs:
         export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_release_binary_image_arm
-        
+
     - name: Login Dockerhub
       env: 
         DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
@@ -77,18 +77,6 @@ jobs:
         export IMAGE_TAG="${TAGV:-main}-arm64"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image_dockerhub_arm
-
-    - name: Clean binary images
-      env:
-        GITHUB_CONTEXT: ${{ toJSON(github) }}
-      shell: bash
-      run: |
-        echo "REF: ${GITHUB_REF}"
-        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-        TAGV="${TAGS#refs/tags/}"
-        export IMAGE_TAG="${TAGV:-main}"
-        echo "Image tag: ${IMAGE_TAG}"
-        make clean_binary_dockerhub
 
 
     - name: Clean garbage
