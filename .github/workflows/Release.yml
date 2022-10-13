@@ -39,140 +39,7 @@ jobs:
       shell: bash
       run: |
         make ci_build_binary_rust_base
-    # - name: Build binary image
-    #   env:
-    #     GITHUB_CONTEXT: ${{ toJSON(github) }}
-    #   shell: bash
-    #   run: |
-    #     echo "REF: ${GITHUB_REF}"
-    #     TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-    #     TAGV="${TAGS#refs/tags/}"
-    #     export IMAGE_TAG="${TAGV:-main}"
-    #     export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
-    #     echo "Image tag: ${IMAGE_TAG}"
-    #     make ci_build_release_binary_image
-
-    # # ========= build the cleveldb and push to public ECR ===
-    # # - name: build cleveldb-version release
-    # #   shell: bash
-    # #   run: |
-    # #     echo "REF: ${GITHUB_REF}"
-    # #     TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-    # #     TAGV="${TAGS#refs/tags/}"
-    # #     export IMAGE_TAG="${TAGV:-main}"
-    # #     export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
-    # #     echo "VERGEN_SHA_EXTERN: ${VERGEN_SHA_EXTERN}"
-    # #     make build_release
-    # - name: Build images
-    #   env:
-    #     PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
-    #     PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
-    #     ENV: release
-    #   shell: bash
-    #   run: |
-    #     echo "REF: ${GITHUB_REF}"
-    #     TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-    #     TAGV="${TAGS#refs/tags/}"
-    #     export IMAGE_TAG="${TAGV:-main}"
-    #     echo "Image tag: ${IMAGE_TAG}"
-    #     make ci_build_image
-    # - name: Login ECR
-    #   env:
-    #     PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
-    #   shell: bash
-    #   run: |
-    #     aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${PUBLIC_ECR_URL}
-    # - name: Push images
-    #   env:
-    #     PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
-    #     PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
-    #     ENV: release
-    #   shell: bash
-    #   run: |
-    #     echo "REF: ${GITHUB_REF}"
-    #     TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-    #     TAGV="${TAGS#refs/tags/}"
-    #     export IMAGE_TAG="${TAGV:-main}"
-    #     echo "Image tag: ${IMAGE_TAG}"
-    #     make ci_push_image
-    # - name: Clean images
-    #   env:
-    #     PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
-    #     PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
-    #     ENV: release
-    #   shell: bash
-    #   run: |
-    #     echo "REF: ${GITHUB_REF}"
-    #     TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-    #     TAGV="${TAGS#refs/tags/}"
-    #     export IMAGE_TAG="${TAGV:-main}"
-    #     echo "Image tag: ${IMAGE_TAG}"
-    #     make clean_image
-    # # ========= END build the cleveldb and push to public ECR ===
-
-    # # ========= build the goleveldb and push to dockerhub ===
-    # # - name: build goleveldb-version release
-    # #   shell: bash
-    # #   run: |
-    # #     echo "REF: ${GITHUB_REF}"
-    # #     TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-    # #     TAGV="${TAGS#refs/tags/}"
-    # #     export IMAGE_TAG="${TAGV:-main}"
-    # #     export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
-    # #     echo "VERGEN_SHA_EXTERN: ${VERGEN_SHA_EXTERN}"
-    # #     make build_release_goleveldb
-    - name: Login Dockerhub
-      env: 
-        DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
-        DOCKERHUB_TOKEN: ${{secrets.DOCKERHUB_TOKEN}}
-      shell: bash
-      run: |
-        docker login -u ${DOCKERHUB_URL} -p ${DOCKERHUB_TOKEN}
-    # - name: Build images dockerhub
-    #   env:
-    #     DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
-    #     ENV: ${{ env.ENV }}
-    #     GITHUB_CONTEXT: ${{ toJSON(github) }}
-    #   shell: bash
-    #   run: |
-    #     echo "REF: ${GITHUB_REF}"
-    #     TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-    #     TAGV="${TAGS#refs/tags/}"
-    #     export IMAGE_TAG="${TAGV:-main}"
-    #     echo "Image tag: ${IMAGE_TAG}"
-    #     make ci_build_image_dockerhub
-    # - name: Push images to dockerhub
-    #   env:
-    #     DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
-    #     ENV: release
-    #   shell: bash
-    #   run: |
-    #     echo "REF: ${GITHUB_REF}"
-    #     TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-    #     TAGV="${TAGS#refs/tags/}"
-    #     export IMAGE_TAG="${TAGV:-main}"
-    #     echo "Image tag: ${IMAGE_TAG}"
-    #     make ci_push_image_dockerhub
-    # - name: Clean images
-    #   env:
-    #     DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
-    #     ENV: release
-    #   shell: bash
-    #   run: |
-    #     echo "REF: ${GITHUB_REF}"
-    #     TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-    #     TAGV="${TAGS#refs/tags/}"
-    #     export IMAGE_TAG="${TAGV:-main}"
-    #     echo "Image tag: ${IMAGE_TAG}"
-    #     make clean_image_dockerhub
-    #   # =========END build the goleveldb and push to dockerhub ==
-    # =============== linux arm 64 ======================
-    - name: Build rust base image arm
-      shell: bash
-      run: |
-        make ci_build_binary_rust_base_arm
-
-    - name: Build binary image arm
+    - name: Build binary image
       env:
         GITHUB_CONTEXT: ${{ toJSON(github) }}
       shell: bash
@@ -180,12 +47,88 @@ jobs:
         echo "REF: ${GITHUB_REF}"
         TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
         TAGV="${TAGS#refs/tags/}"
-        export IMAGE_TAG="${TAGV:-main}-arm64"
+        export IMAGE_TAG="${TAGV:-main}"
         export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
         echo "Image tag: ${IMAGE_TAG}"
-        make ci_build_release_binary_image_arm
+        make ci_build_release_binary_image
 
-    - name: Build images dockerhub arm
+    # ========= build the cleveldb and push to public ECR ===
+    # - name: build cleveldb-version release
+    #   shell: bash
+    #   run: |
+    #     echo "REF: ${GITHUB_REF}"
+    #     TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+    #     TAGV="${TAGS#refs/tags/}"
+    #     export IMAGE_TAG="${TAGV:-main}"
+    #     export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
+    #     echo "VERGEN_SHA_EXTERN: ${VERGEN_SHA_EXTERN}"
+    #     make build_release
+    - name: Build images
+      env:
+        PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
+        ENV: release
+      shell: bash
+      run: |
+        echo "REF: ${GITHUB_REF}"
+        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+        TAGV="${TAGS#refs/tags/}"
+        export IMAGE_TAG="${TAGV:-main}"
+        echo "Image tag: ${IMAGE_TAG}"
+        make ci_build_image
+    - name: Login ECR
+      env:
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
+      shell: bash
+      run: |
+        aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${PUBLIC_ECR_URL}
+    - name: Push images
+      env:
+        PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
+        ENV: release
+      shell: bash
+      run: |
+        echo "REF: ${GITHUB_REF}"
+        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+        TAGV="${TAGS#refs/tags/}"
+        export IMAGE_TAG="${TAGV:-main}"
+        echo "Image tag: ${IMAGE_TAG}"
+        make ci_push_image
+    - name: Clean images
+      env:
+        PRIVATE_ECR_URL: ${{ env.PRIVATE_ECR_URL }}
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
+        ENV: release
+      shell: bash
+      run: |
+        echo "REF: ${GITHUB_REF}"
+        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+        TAGV="${TAGS#refs/tags/}"
+        export IMAGE_TAG="${TAGV:-main}"
+        echo "Image tag: ${IMAGE_TAG}"
+        make clean_image
+    # ========= END build the cleveldb and push to public ECR ===
+
+    # ========= build the goleveldb and push to dockerhub ===
+    # - name: build goleveldb-version release
+    #   shell: bash
+    #   run: |
+    #     echo "REF: ${GITHUB_REF}"
+    #     TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+    #     TAGV="${TAGS#refs/tags/}"
+    #     export IMAGE_TAG="${TAGV:-main}"
+    #     export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
+    #     echo "VERGEN_SHA_EXTERN: ${VERGEN_SHA_EXTERN}"
+    #     make build_release_goleveldb
+    - name: Login Dockerhub
+      env: 
+        DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
+        DOCKERHUB_TOKEN: ${{secrets.DOCKERHUB_TOKEN}}
+      shell: bash
+      run: |
+        docker login -u ${DOCKERHUB_URL} -p ${DOCKERHUB_TOKEN}
+    - name: Build images dockerhub
       env:
         DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
         ENV: ${{ env.ENV }}
@@ -195,22 +138,35 @@ jobs:
         echo "REF: ${GITHUB_REF}"
         TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
         TAGV="${TAGS#refs/tags/}"
-        export IMAGE_TAG="${TAGV:-main}-arm64"
+        export IMAGE_TAG="${TAGV:-main}"
         echo "Image tag: ${IMAGE_TAG}"
-        make ci_build_image_dockerhub_arm
+        make ci_build_image_dockerhub
+    - name: Push images to dockerhub
+      env:
+        DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
+        ENV: release
+      shell: bash
+      run: |
+        echo "REF: ${GITHUB_REF}"
+        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+        TAGV="${TAGS#refs/tags/}"
+        export IMAGE_TAG="${TAGV:-main}"
+        echo "Image tag: ${IMAGE_TAG}"
+        make ci_push_image_dockerhub
+    - name: Clean images
+      env:
+        DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
+        ENV: release
+      shell: bash
+      run: |
+        echo "REF: ${GITHUB_REF}"
+        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+        TAGV="${TAGS#refs/tags/}"
+        export IMAGE_TAG="${TAGV:-main}"
+        echo "Image tag: ${IMAGE_TAG}"
+        make clean_image_dockerhub
+      # =========END build the goleveldb and push to dockerhub ==
 
-    # - name: Push images to dockerhub arm
-    #   env:
-    #     DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
-    #     ENV: release
-    #   shell: bash
-    #   run: |
-    #     echo "REF: ${GITHUB_REF}"
-    #     TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-    #     TAGV="${TAGS#refs/tags/}"
-    #     export IMAGE_TAG="${TAGV:-main}-arm64"
-    #     echo "Image tag: ${IMAGE_TAG}"
-    #     make ci_push_image_dockerhub
 
     - name: Clean binary images
       env:

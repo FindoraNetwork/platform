@@ -188,28 +188,9 @@ join_mainnet: stop_debug_env build_release_goleveldb
 start_localnode: stop_debug_env
 	bash tools/node_init.sh _ _
 
-# ci_build_image:
-# 	@if [ ! -d "release/bin/" ] && [ -d "debug/bin" ]; then \
-# 		mkdir -p release/bin/; \
-# 		cp debug/bin/findorad release/bin/; \
-# 	fi
-# 	docker build -t $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG) -f container/Dockerfile-CI-abci_validator_node .
-# ifeq ($(ENV),release)
-# 	docker tag $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG) $(ECR_URL)/$(ENV)/findorad:latest
-# endif
 
-# ci_push_image:
-# 	docker push $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG)
-# ifeq ($(ENV),release)
-# 	docker push $(ECR_URL)/$(ENV)/abci_validator_node:latest
-# endif
 
-# clean_image:
-# 	docker rmi $(ECR_URL)/$(ENV)/abci_validator_node:$(IMAGE_TAG)
-# ifeq ($(ENV),release)
-# 	docker rmi $(ECR_URL)/$(ENV)/abci_validator_node:latest
-# endif
-
+# ========================== rust base ===========================
 ci_build_binary_rust_base:
 	docker build -t binary-rust-base -f container/Dockerfile-binary-rust-base .
 
@@ -217,22 +198,29 @@ ci_build_binary_rust_base_arm:
 	docker run --rm --privileged tonistiigi/binfmt:latest --install all
 	docker buildx build --platform linux/arm64/v8 --output=type=docker -t binary-rust-base-arm -f container/Dockerfile-binary-rust-base-arm .
 
+# ========================== dev AMD64 ===========================
 ci_build_dev_binary_image:
 	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-dev
 	docker build -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-binary-image-dev .
+	
+ci_build_image:
+	@ if [ -d "./binary" ]; then \
+		rm -rf ./binary || true; \
+	fi
+	@ docker run --rm -d --name findorad-binary findorad-binary-image:$(IMAGE_TAG)
+	@ docker cp findorad-binary:/binary ./binary
+	@ docker rm -f findorad-binary
+	@ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-cleveldb .
+ifeq ($(ENV),release)
+	docker tag $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
+endif
+
+
+# ========================== dev ARM64/v8 ===========================
 
 ci_build_dev_binary_image_arm:
 	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-dev-arm
 	docker buildx build --platform linux/arm64/v8 --output=type=docker -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-binary-image-dev-arm .
-
-ci_build_release_binary_image:
-	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-release
-	docker build -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-binary-image-release .
-
-ci_build_release_binary_image_arm:
-	docker run --rm --privileged tonistiigi/binfmt:latest --install all
-	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-release-arm
-	docker buildx build --platform linux/arm64/v8 --output=type=docker -t findorad-binary-image-arm:$(IMAGE_TAG) -f container/Dockerfile-binary-image-release-arm .
 
 ci_build_image_arm:
 	@ if [ -d "./binary" ]; then \
@@ -248,18 +236,45 @@ ifeq ($(ENV),release)
 	docker tag $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
 endif
 
-ci_build_image:
+# ========================== release AMD64 ===========================
+
+ci_build_release_binary_image:
+	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-release
+	docker build -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-binary-image-release .
+
+ci_build_image_dockerhub:
 	@ if [ -d "./binary" ]; then \
 		rm -rf ./binary || true; \
 	fi
 	@ docker run --rm -d --name findorad-binary findorad-binary-image:$(IMAGE_TAG)
 	@ docker cp findorad-binary:/binary ./binary
 	@ docker rm -f findorad-binary
-	@ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-cleveldb .
-ifeq ($(ENV),release)
-	docker tag $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
-endif
+	@ docker buildx build --platform linux/amd64 -t $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb . --push
+# ifeq ($(ENV),release)
+# 	# docker tag $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) $(DOCKERHUB_URL)/findorad:latest
+# endif
 
+# ========================== release ARM64/v8 ===========================
+
+ci_build_release_binary_image_arm:
+	docker run --rm --privileged tonistiigi/binfmt:latest --install all
+	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-release-arm
+	docker buildx build --platform linux/arm64/v8 --output=type=docker -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-binary-image-release-arm .
+
+ci_build_image_dockerhub_arm:
+	@ if [ -d "./binary" ]; then \
+		rm -rf ./binary || true; \
+	fi
+	@ docker run --rm -d --name findorad-binary findorad-binary-image:$(IMAGE_TAG)
+	@ docker cp findorad-binary-arm:/binary ./binary
+	@ docker rm -f findorad-binary-arm
+	@ docker run --rm --privileged tonistiigi/binfmt:latest --install all
+	@ docker buildx build --platform linux/arm64/v8 -t $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb-arm . --push
+# ifeq ($(ENV),release)
+# 	# docker tag $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) $(DOCKERHUB_URL)/findorad:latest
+# endif
+
+# ========================== push image and clean up===========================
 
 ci_push_image:
 	docker push $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG)
@@ -285,30 +300,12 @@ ifeq ($(ENV),release)
 	# docker tag $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) $(DOCKERHUB_URL)/findorad:latest
 endif
 
-ci_build_image_dockerhub_arm:
-	@ if [ -d "./binary" ]; then \
-		rm -rf ./binary || true; \
-	fi
-	@ docker run --rm -d --name findorad-binary-arm findorad-binary-image-arm:$(IMAGE_TAG)
-	@ docker cp findorad-binary-arm:/binary ./binary
-	@ docker rm -f findorad-binary-arm
-	@ docker run --rm --privileged tonistiigi/binfmt:latest --install all
-
-	@ docker buildx build --platform linux/arm64/v8 --output=type=docker -t $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb-arm . --push
-ifeq ($(ENV),release)
-	# docker tag $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) $(DOCKERHUB_URL)/findorad:latest
-endif
-
 
 ci_push_image_dockerhub:
 	docker push $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG)
 ifeq ($(ENV),release)
 	docker push $(DOCKERHUB_URL)/findorad:latest
 endif
-
-ci_build_wasm_js_bindings:
-	docker run --rm -d --name wasm -v /tmp/wasm-js-bindings:/build/wasm-js-bindings -v $(shell pwd)/container/docker-entrypoint-wasm-js-bindings.sh:/entrypoint.sh findorad-binary-image:$(IMAGE_TAG) /entrypoint.sh
-	docker rm -f wasm findorad-binary || true
 
 clean_image_dockerhub:
 	docker rmi $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG)
@@ -318,6 +315,12 @@ endif
 
 clean_binary_dockerhub:
 	docker rmi findorad-binary-image:$(IMAGE_TAG)
+# ========================== WASM ===========================
+ci_build_wasm_js_bindings:
+	docker run --rm -d --name wasm -v /tmp/wasm-js-bindings:/build/wasm-js-bindings -v $(shell pwd)/container/docker-entrypoint-wasm-js-bindings.sh:/entrypoint.sh findorad-binary-image:$(IMAGE_TAG) /entrypoint.sh
+	docker rm -f wasm findorad-binary || true
+
+
 
 reset:
 	@./tools/devnet/stopnodes.sh

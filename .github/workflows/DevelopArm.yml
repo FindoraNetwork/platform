@@ -5,7 +5,7 @@ on:
   #     - develop
   push:
     branches:
-      - add-arm-build
+      - add-arm-build-xxxxx
 env:
   CARGO_TERM_COLOR: always
 jobs:
