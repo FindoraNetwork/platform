@@ -266,8 +266,8 @@ ci_build_image_dockerhub_arm:
 		rm -rf ./binary || true; \
 	fi
 	@ docker run --rm -d --name findorad-binary findorad-binary-image:$(IMAGE_TAG)
-	@ docker cp findorad-binary-arm:/binary ./binary
-	@ docker rm -f findorad-binary-arm
+	@ docker cp findorad-binary:/binary ./binary
+	@ docker rm -f findorad-binary
 	@ docker run --rm --privileged tonistiigi/binfmt:latest --install all
 	@ docker buildx build --platform linux/arm64/v8 -t $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb-arm . --push
 # ifeq ($(ENV),release)
