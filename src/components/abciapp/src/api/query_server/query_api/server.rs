@@ -17,7 +17,7 @@ use {
     parking_lot::{Condvar, Mutex, RwLock},
     ruc::*,
     std::{collections::HashSet, sync::Arc},
-    zei::{
+    noah::{
         anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
         xfr::structs::OwnerMemo,
     },

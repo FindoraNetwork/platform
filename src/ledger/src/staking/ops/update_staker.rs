@@ -13,7 +13,7 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 
 /// Used as the inner object of a `Staker Update Operation`.

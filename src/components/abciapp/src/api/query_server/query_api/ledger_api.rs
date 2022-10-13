@@ -27,7 +27,7 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{collections::BTreeMap, mem, sync::Arc},
-    zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+    noah::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
 };
 
 /// Ping route to check for liveness of API

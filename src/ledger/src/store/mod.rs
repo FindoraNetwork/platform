@@ -59,7 +59,7 @@ use {
         state::{ChainState, State},
         store::{ImmutablePrefixedStore, PrefixedStore},
     },
-    zei::{
+    noah::{
         anon_xfr::{
             abar_to_abar::verify_anon_xfr_note,
             structs::{
@@ -75,11 +75,11 @@ use {
             XfrNotePolicies,
         },
     },
-    zei_accumulators::merkle_tree::{
+    noah_accumulators::merkle_tree::{
         ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath,
     },
-    zei_algebra::{bls12_381::BLSScalar, prelude::*},
-    zei_crypto::basic::rescue::RescueInstance,
+    noah_algebra::{bls12_381::BLSScalar, prelude::*},
+    noah_crypto::basic::rescue::RescueInstance,
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
@@ -323,7 +323,7 @@ impl LedgerState {
         mut tx_block: Vec<FinalizedTransaction>,
     ) -> Result<Vec<FinalizedTransaction>> {
         for n in new_nullifiers.iter() {
-            let d: Key = Key::from_bytes(n.zei_to_bytes()).c(d!())?;
+            let d: Key = Key::from_bytes(n.noah_to_bytes()).c(d!())?;
 
             // if the nullifier hash is present in our nullifier set, fail the block
             if self.nullifier_set.read().get(&d).c(d!())?.is_some() {
@@ -331,7 +331,7 @@ impl LedgerState {
             }
             self.nullifier_set
                 .write()
-                .set(&d, Some(n.zei_to_bytes()))
+                .set(&d, Some(n.noah_to_bytes()))
                 .c(d!())?;
             self.status.spent_abars.insert(*n, ());
         }
@@ -542,7 +542,7 @@ impl LedgerState {
     #[inline(always)]
     pub fn check_nullifier_hash(&self, hash: String) -> Result<bool> {
         let n = wallet::nullifier_from_base58(hash.as_str())?;
-        let d: Key = Key::from_bytes(n.zei_to_bytes()).c(d!())?;
+        let d: Key = Key::from_bytes(n.noah_to_bytes()).c(d!())?;
         let is_null_present = self.nullifier_set.read().get(&d).c(d!())?.is_some();
         Ok(is_null_present)
     }
@@ -1887,7 +1887,7 @@ pub fn flush_data() {
     fbnc::flush_data();
 }
 
-/// convert merkle tree proof to Zei compatible proofs
+/// convert merkle tree proof to Noah compatible proofs
 pub fn create_mt_leaf_info(proof: Proof) -> MTLeafInfo {
     MTLeafInfo {
         path: MTPath {

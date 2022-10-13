@@ -8,16 +8,16 @@ use bech32::{self, FromBase32, ToBase32};
 use bip0039::{Count, Language, Mnemonic};
 use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
 use ruc::*;
-use zei::anon_xfr::structs::Nullifier;
-use zei::{
+use noah::anon_xfr::structs::Nullifier;
+use noah::{
     anon_xfr::{
         keys::{AXfrKeyPair, AXfrPubKey},
         structs::Commitment,
     },
     xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
-use zei_algebra::serialization::ZeiFromToBytes;
-use zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey};
+use noah_algebra::serialization::NoahFromToBytes;
+use noah_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey};
 
 /// Randomly generate a 12words-length mnemonic.
 #[inline(always)]
@@ -67,7 +67,7 @@ macro_rules! restore_keypair_from_mnemonic {
                     .map_err(|e| eg!(e))
             })
             .and_then(|kp| {
-                XfrSecretKey::zei_from_bytes(&kp.secret_key.to_bytes()[..])
+                XfrSecretKey::noah_from_bytes(&kp.secret_key.to_bytes()[..])
                     .map_err(|e| eg!(e))
             })
             .map(|sk| sk.into_keypair())
@@ -141,7 +141,7 @@ pub fn restore_keypair_from_seckey_base64(sec: &str) -> Result<XfrKeyPair> {
     base64::decode_config(sec, base64::URL_SAFE)
         .c(d!())
         .and_then(|sec| {
-            XfrSecretKey::zei_from_bytes(&sec)
+            XfrSecretKey::noah_from_bytes(&sec)
                 .c(d!())
                 .map(|sec| sec.into_keypair())
         })
@@ -208,13 +208,13 @@ fn check_lang(lang: &str) -> Result<Language> {
 /// Convert a XfrPublicKey to base64 human-readable address
 #[inline(always)]
 pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
-    base64::encode_config(&ZeiFromToBytes::zei_to_bytes(key), base64::URL_SAFE)
+    base64::encode_config(&NoahFromToBytes::noah_to_bytes(key), base64::URL_SAFE)
 }
 
 /// Convert publickey to hex.
 #[inline(always)]
 pub fn public_key_to_hex(key: &XfrPublicKey) -> String {
-    let s = hex::encode(&ZeiFromToBytes::zei_to_bytes(key));
+    let s = hex::encode(&NoahFromToBytes::noah_to_bytes(key));
 
     String::from("0x") + &s
 }
@@ -224,7 +224,7 @@ pub fn public_key_to_hex(key: &XfrPublicKey) -> String {
 pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey> {
     base64::decode_config(pk, base64::URL_SAFE)
         .c(d!())
-        .and_then(|bytes| XfrPublicKey::zei_from_bytes(&bytes).c(d!()))
+        .and_then(|bytes| XfrPublicKey::noah_from_bytes(&bytes).c(d!()))
 }
 
 #[inline(always)]
@@ -232,13 +232,13 @@ pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey> {
 pub fn anon_public_key_from_base64(pk: &str) -> Result<AXfrPubKey> {
     base64::decode_config(pk, base64::URL_SAFE)
         .c(d!())
-        .and_then(|bytes| AXfrPubKey::zei_from_bytes(&bytes).c(d!()))
+        .and_then(|bytes| AXfrPubKey::noah_from_bytes(&bytes).c(d!()))
 }
 
 #[inline(always)]
 /// Convert an anon public key to base64
 pub fn anon_public_key_to_base64(key: &AXfrPubKey) -> String {
-    base64::encode_config(&AXfrPubKey::zei_to_bytes(key), base64::URL_SAFE)
+    base64::encode_config(&AXfrPubKey::noah_to_bytes(key), base64::URL_SAFE)
 }
 
 #[inline(always)]
@@ -246,13 +246,13 @@ pub fn anon_public_key_to_base64(key: &AXfrPubKey) -> String {
 pub fn x_public_key_from_base64(pk: &str) -> Result<XPublicKey> {
     base64::decode_config(pk, base64::URL_SAFE)
         .c(d!())
-        .and_then(|bytes| XPublicKey::zei_from_bytes(&bytes).c(d!()))
+        .and_then(|bytes| XPublicKey::noah_from_bytes(&bytes).c(d!()))
 }
 
 #[inline(always)]
 /// Convert a x public key to base64
 pub fn x_public_key_to_base64(key: &XPublicKey) -> String {
-    base64::encode_config(&XPublicKey::zei_to_bytes(key), base64::URL_SAFE)
+    base64::encode_config(&XPublicKey::noah_to_bytes(key), base64::URL_SAFE)
 }
 
 #[inline(always)]
@@ -260,13 +260,13 @@ pub fn x_public_key_to_base64(key: &XPublicKey) -> String {
 pub fn anon_secret_key_from_base64(sk: &str) -> Result<AXfrKeyPair> {
     base64::decode_config(sk, base64::URL_SAFE)
         .c(d!())
-        .and_then(|bytes| AXfrKeyPair::zei_from_bytes(&bytes).c(d!()))
+        .and_then(|bytes| AXfrKeyPair::noah_from_bytes(&bytes).c(d!()))
 }
 
 #[inline(always)]
 /// Convert an anon secret key to base64
 pub fn anon_secret_key_to_base64(key: &AXfrKeyPair) -> String {
-    base64::encode_config(&AXfrKeyPair::zei_to_bytes(key), base64::URL_SAFE)
+    base64::encode_config(&AXfrKeyPair::noah_to_bytes(key), base64::URL_SAFE)
 }
 
 #[inline(always)]
@@ -274,13 +274,13 @@ pub fn anon_secret_key_to_base64(key: &AXfrKeyPair) -> String {
 pub fn x_secret_key_from_base64(sk: &str) -> Result<XSecretKey> {
     base64::decode_config(sk, base64::URL_SAFE)
         .c(d!())
-        .and_then(|bytes| XSecretKey::zei_from_bytes(&bytes).c(d!()))
+        .and_then(|bytes| XSecretKey::noah_from_bytes(&bytes).c(d!()))
 }
 
 #[inline(always)]
 /// Convert an anon public key to base64
 pub fn x_secret_key_to_base64(key: &XSecretKey) -> String {
-    base64::encode_config(&XSecretKey::zei_to_bytes(key), base64::URL_SAFE)
+    base64::encode_config(&XSecretKey::noah_to_bytes(key), base64::URL_SAFE)
 }
 
 #[inline(always)]
@@ -289,13 +289,13 @@ pub fn commitment_from_base58(com: &str) -> Result<Commitment> {
     bs58::decode(com)
         .into_vec()
         .c(d!())
-        .and_then(|bytes| Commitment::zei_from_bytes(&bytes).c(d!()))
+        .and_then(|bytes| Commitment::noah_from_bytes(&bytes).c(d!()))
 }
 
 #[inline(always)]
 /// Convert a Commitment to base64
 pub fn commitment_to_base58(com: &Commitment) -> String {
-    bs58::encode(&Commitment::zei_to_bytes(com)).into_string()
+    bs58::encode(&Commitment::noah_to_bytes(com)).into_string()
 }
 
 #[inline(always)]
@@ -304,19 +304,19 @@ pub fn nullifier_from_base58(com: &str) -> Result<Nullifier> {
     bs58::decode(com)
         .into_vec()
         .c(d!())
-        .and_then(|bytes| Nullifier::zei_from_bytes(&bytes).c(d!()))
+        .and_then(|bytes| Nullifier::noah_from_bytes(&bytes).c(d!()))
 }
 
 #[inline(always)]
 /// Convert a Nullifier to base58
 pub fn nullifier_to_base58(n: &Nullifier) -> String {
-    bs58::encode(&Nullifier::zei_to_bytes(n)).into_string()
+    bs58::encode(&Nullifier::noah_to_bytes(n)).into_string()
 }
 
 /// Convert a XfrPublicKey to bech32 human-readable address
 #[inline(always)]
 pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
-    let bytes = &XfrPublicKey::zei_to_bytes(key);
+    let bytes = &XfrPublicKey::noah_to_bytes(key);
     match bytes[0] {
         0u8 => bech32enc_fra(<&[u8; 32]>::try_from(&bytes[1..33]).unwrap()),
         1u8 => bech32enc_eth(<&[u8; 33]>::try_from(&bytes[1..34]).unwrap()),
@@ -334,7 +334,7 @@ pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
 pub fn public_key_from_bech32(addr: &str) -> Result<XfrPublicKey> {
     bech32dec(addr)
         .c(d!())
-        .and_then(|bytes| XfrPublicKey::zei_from_bytes(&bytes).c(d!()))
+        .and_then(|bytes| XfrPublicKey::noah_from_bytes(&bytes).c(d!()))
 }
 
 #[inline(always)]

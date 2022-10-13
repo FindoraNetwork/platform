@@ -45,8 +45,8 @@ use {
     serde::{Deserialize, Serialize},
     std::fs::File,
     std::{borrow::Borrow, fmt, fs},
-    zei::anon_xfr::keys::AXfrKeyPair,
-    zei::anon_xfr::structs::OpenAnonAssetRecordBuilder,
+    noah::anon_xfr::keys::AXfrKeyPair,
+    noah::anon_xfr::structs::OpenAnonAssetRecordBuilder,
 };
 
 fn main() {

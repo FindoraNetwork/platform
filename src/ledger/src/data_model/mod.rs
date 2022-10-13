@@ -47,7 +47,7 @@ use {
         result::Result as StdResult,
     },
     unicode_normalization::UnicodeNormalization,
-    zei::{
+    noah::{
         anon_xfr::{
             abar_to_abar::AXfrNote,
             abar_to_ar::{verify_abar_to_ar_note, AbarToArNote},
@@ -63,14 +63,14 @@ use {
             gen_xfr_body,
             sig::{XfrKeyPair, XfrPublicKey},
             structs::{
-                AssetRecord, AssetType as ZeiAssetType, BlindAssetRecord, OwnerMemo,
+                AssetRecord, AssetType as NoahAssetType, BlindAssetRecord, OwnerMemo,
                 TracingPolicies, TracingPolicy, XfrAmount, XfrAssetType, XfrBody,
                 ASSET_TYPE_LENGTH,
             },
             XfrNotePolicies,
         },
     },
-    zei_algebra::{bls12_381::BLSScalar, serialization::ZeiFromToBytes},
+    noah_algebra::{bls12_381::BLSScalar, serialization::NoahFromToBytes},
 };
 
 const RANDOM_CODE_LENGTH: usize = 16;
@@ -105,7 +105,7 @@ fn is_default<T: Default + PartialEq>(x: &T) -> bool {
 /// Findora asset type code
 pub struct AssetTypeCode {
     /// Internal asset type
-    pub val: ZeiAssetType,
+    pub val: NoahAssetType,
 }
 
 impl NumKey for AssetTypeCode {
@@ -116,7 +116,7 @@ impl NumKey for AssetTypeCode {
         let mut b = b.to_owned();
         b.resize(ASSET_TYPE_LENGTH, 0u8);
         Ok(Self {
-            val: ZeiAssetType(
+            val: NoahAssetType(
                 <[u8; ASSET_TYPE_LENGTH]>::try_from(b.as_slice()).c(d!())?,
             ),
         })
@@ -130,7 +130,7 @@ impl Default for AssetTypeCode {
     #[inline(always)]
     fn default() -> Self {
         AssetTypeCode {
-            val: ZeiAssetType([255; ASSET_TYPE_LENGTH]),
+            val: NoahAssetType([255; ASSET_TYPE_LENGTH]),
         }
     }
 }
@@ -158,7 +158,7 @@ impl AssetTypeCode {
     pub fn gen_random_with_rng<R: RngCore + CryptoRng>(prng: &mut R) -> Self {
         let val: [u8; ASSET_TYPE_LENGTH] = prng.gen();
         Self {
-            val: ZeiAssetType(val),
+            val: NoahAssetType(val),
         }
     }
 
@@ -173,7 +173,7 @@ impl AssetTypeCode {
     pub fn new_from_vec(mut bytes: Vec<u8>) -> Self {
         bytes.resize(ASSET_TYPE_LENGTH, 0u8);
         Self {
-            val: ZeiAssetType(
+            val: NoahAssetType(
                 <[u8; ASSET_TYPE_LENGTH]>::try_from(bytes.as_slice()).unwrap(),
             ),
         }
@@ -237,7 +237,7 @@ impl AssetTypeCode {
         as_vec.resize(ASSET_TYPE_LENGTH, 0u8);
         let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(as_vec.as_slice()).unwrap();
         Self {
-            val: ZeiAssetType(buf),
+            val: NoahAssetType(buf),
         }
     }
 
@@ -251,7 +251,7 @@ impl AssetTypeCode {
                 bin.resize(ASSET_TYPE_LENGTH, 0u8);
                 let buf = <[u8; ASSET_TYPE_LENGTH]>::try_from(bin.as_slice()).c(d!())?;
                 Ok(Self {
-                    val: ZeiAssetType(buf),
+                    val: NoahAssetType(buf),
                 })
             }
             Err(e) => Err(eg!((format!(
@@ -436,7 +436,7 @@ pub struct AXfrAddress {
 impl Hash for AXfrAddress {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.key.zei_to_bytes().hash(state);
+        self.key.noah_to_bytes().hash(state);
     }
 }
 
@@ -1945,7 +1945,7 @@ impl FinalizedTransaction {
 }
 
 /// Use pure zero bytes(aka [0, 0, ... , 0]) to express FRA.
-pub const ASSET_TYPE_FRA: ZeiAssetType = ZeiAssetType([0; ASSET_TYPE_LENGTH]);
+pub const ASSET_TYPE_FRA: NoahAssetType = NoahAssetType([0; ASSET_TYPE_LENGTH]);
 
 /// FRA decimals
 pub const FRA_DECIMALS: u8 = 6;
@@ -1953,9 +1953,9 @@ pub const FRA_DECIMALS: u8 = 6;
 lazy_static! {
     /// The destination of Fee is an black hole,
     /// all token transfered to it will be burned.
-    pub static ref BLACK_HOLE_PUBKEY: XfrPublicKey = pnk!(XfrPublicKey::zei_from_bytes(&[0; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
+    pub static ref BLACK_HOLE_PUBKEY: XfrPublicKey = pnk!(XfrPublicKey::noah_from_bytes(&[0; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
     /// BlackHole of Staking
-    pub static ref BLACK_HOLE_PUBKEY_STAKING: XfrPublicKey = pnk!(XfrPublicKey::zei_from_bytes(&[1; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
+    pub static ref BLACK_HOLE_PUBKEY_STAKING: XfrPublicKey = pnk!(XfrPublicKey::noah_from_bytes(&[1; ed25519_dalek::PUBLIC_KEY_LENGTH][..]));
 }
 
 /// see [**mainnet-v0.1 defination**](https://www.notion.so/findora/Transaction-Fees-Analysis-d657247b70f44a699d50e1b01b8a2287)

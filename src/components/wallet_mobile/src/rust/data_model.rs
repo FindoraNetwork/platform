@@ -20,11 +20,11 @@ use rand_core::SeedableRng;
 use ruc::Result as RUCResult;
 use ruc::{d, err::RucResult};
 use serde::{Deserialize, Serialize};
-use zei::xfr::sig::XfrPublicKey;
-use zei::xfr::structs::{
-    AssetTracerDecKeys, AssetTracerEncKeys, AssetTracerKeyPair as ZeiAssetTracerKeyPair,
-    BlindAssetRecord, IdentityRevealPolicy, OwnerMemo as ZeiOwnerMemo,
-    TracingPolicies as ZeiTracingPolicies, TracingPolicy as ZeiTracingPolicy,
+use noah::xfr::sig::XfrPublicKey;
+use noah::xfr::structs::{
+    AssetTracerDecKeys, AssetTracerEncKeys, AssetTracerKeyPair as NoahAssetTracerKeyPair,
+    BlindAssetRecord, IdentityRevealPolicy, OwnerMemo as NoahOwnerMemo,
+    TracingPolicies as NoahTracingPolicies, TracingPolicy as NoahTracingPolicy,
 };
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -211,7 +211,7 @@ impl ClientAssetRecord {
 /// @see {@link module:Findora-Wasm~AssetRules#add_tracing_policy|add_tracing_policy} for information about how to add a tracing policy to
 /// an asset definition.
 pub struct AssetTracerKeyPair {
-    pub(crate) keypair: ZeiAssetTracerKeyPair,
+    pub(crate) keypair: NoahAssetTracerKeyPair,
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -220,7 +220,7 @@ impl AssetTracerKeyPair {
     pub fn new() -> Self {
         let mut small_rng = ChaChaRng::from_entropy();
         AssetTracerKeyPair {
-            keypair: ZeiAssetTracerKeyPair::generate(&mut small_rng),
+            keypair: NoahAssetTracerKeyPair::generate(&mut small_rng),
         }
     }
 }
@@ -239,7 +239,7 @@ impl AssetTracerKeyPair {
         &self.keypair.dec_key
     }
 
-    pub fn get_keys(&self) -> &ZeiAssetTracerKeyPair {
+    pub fn get_keys(&self) -> &NoahAssetTracerKeyPair {
         &self.keypair
     }
 }
@@ -249,7 +249,7 @@ impl AssetTracerKeyPair {
 /// Asset owner memo. Contains information needed to decrypt an asset record.
 /// @see {@link module:Findora-Wasm.ClientAssetRecord|ClientAssetRecord} for more details about asset records.
 pub struct OwnerMemo {
-    pub(crate) memo: ZeiOwnerMemo,
+    pub(crate) memo: NoahOwnerMemo,
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -266,30 +266,30 @@ impl OwnerMemo {
     ///   "lock":{"ciphertext":[119,54,117,136,125,133,112,193],"encoded_rand":"8KDql2JphPB5WLd7-aYE1bxTQAcweFSmrqymLvPDntM="}
     /// }
     pub fn from_json(val: &JsValue) -> Result<OwnerMemo, JsValue> {
-        let zei_owner_memo: ZeiOwnerMemo =
+        let noah_owner_memo: NoahOwnerMemo =
             val.into_serde().c(d!()).map_err(error_to_jsvalue)?;
         Ok(OwnerMemo {
-            memo: ZeiOwnerMemo {
-                blind_share: zei_owner_memo.blind_share,
-                lock: zei_owner_memo.lock,
+            memo: NoahOwnerMemo {
+                blind_share: noah_owner_memo.blind_share,
+                lock: noah_owner_memo.lock,
             },
         })
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn from_json(zei_owner_memo: ZeiOwnerMemo) -> RUCResult<OwnerMemo> {
+    pub fn from_json(noah_owner_memo: NoahOwnerMemo) -> RUCResult<OwnerMemo> {
         Ok(OwnerMemo {
-            memo: ZeiOwnerMemo {
-                key_type: zei_owner_memo.key_type,
-                blind_share_bytes: zei_owner_memo.blind_share_bytes,
-                lock_bytes: zei_owner_memo.lock_bytes,
+            memo: NoahOwnerMemo {
+                key_type: noah_owner_memo.key_type,
+                blind_share_bytes: noah_owner_memo.blind_share_bytes,
+                lock_bytes: noah_owner_memo.lock_bytes,
             },
         })
     }
 }
 
 impl OwnerMemo {
-    pub fn get_memo_ref(&self) -> &ZeiOwnerMemo {
+    pub fn get_memo_ref(&self) -> &NoahOwnerMemo {
         &self.memo
     }
 }
@@ -643,11 +643,11 @@ impl SignatureRules {
 /// A collection of tracing policies. Use this object when constructing asset transfers to generate
 /// the correct tracing proofs for traceable assets.
 pub struct TracingPolicies {
-    pub(crate) policies: ZeiTracingPolicies,
+    pub(crate) policies: NoahTracingPolicies,
 }
 
 impl TracingPolicies {
-    pub fn get_policies_ref(&self) -> &ZeiTracingPolicies {
+    pub fn get_policies_ref(&self) -> &NoahTracingPolicies {
         &self.policies
     }
 }
@@ -656,13 +656,13 @@ impl TracingPolicies {
 /// Tracing policy for asset transfers. Can be configured to track credentials, the asset type and
 /// amount, or both.
 pub struct TracingPolicy {
-    pub(crate) policy: ZeiTracingPolicy,
+    pub(crate) policy: NoahTracingPolicy,
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 impl TracingPolicy {
     pub fn new_with_tracing(tracing_key: &AssetTracerKeyPair) -> Self {
-        let policy = ZeiTracingPolicy {
+        let policy = NoahTracingPolicy {
             enc_keys: tracing_key.get_enc_key().clone(),
             asset_tracing: true,
             identity_tracing: None,
@@ -684,7 +684,7 @@ impl TracingPolicy {
             cred_issuer_pub_key: cred_issuer_key.get_ref().clone(),
             reveal_map,
         };
-        let policy = ZeiTracingPolicy {
+        let policy = NoahTracingPolicy {
             enc_keys: tracing_key.get_enc_key().clone(),
             asset_tracing: tracing,
             identity_tracing: Some(identity_policy),
@@ -703,7 +703,7 @@ impl TracingPolicy {
             cred_issuer_pub_key: cred_issuer_key.get_ref().clone(),
             reveal_map,
         };
-        let policy = ZeiTracingPolicy {
+        let policy = NoahTracingPolicy {
             enc_keys: tracing_key.get_enc_key().clone(),
             asset_tracing: tracing,
             identity_tracing: Some(identity_policy),
@@ -713,7 +713,7 @@ impl TracingPolicy {
 }
 
 impl TracingPolicy {
-    pub fn get_ref(&self) -> &ZeiTracingPolicy {
+    pub fn get_ref(&self) -> &NoahTracingPolicy {
         &self.policy
     }
 }

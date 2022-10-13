@@ -17,9 +17,9 @@ use ledger::{
 };
 use ruc::{eg, Result as RucResult};
 use serde_json::Result;
-use zei::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
-use zei::xfr::structs::AssetRecordTemplate;
+use noah::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
+use noah::xfr::sig::{XfrKeyPair, XfrPublicKey};
+use noah::xfr::structs::AssetRecordTemplate;
 
 /// Given a serialized state commitment and transaction, returns true if the transaction correctly
 /// hashes up to the state commitment and false otherwise.

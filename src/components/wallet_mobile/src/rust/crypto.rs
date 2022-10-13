@@ -26,13 +26,13 @@ use ring::pbkdf2;
 use ruc::Result;
 use std::num::NonZeroU32;
 use std::str;
-use zei::xfr::asset_record::open_blind_asset_record as open_bar;
-use zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
-use zei::xfr::structs::{
-    AssetType as ZeiAssetType, OpenAssetRecord, XfrBody, ASSET_TYPE_LENGTH,
+use noah::xfr::asset_record::open_blind_asset_record as open_bar;
+use noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
+use noah::xfr::structs::{
+    AssetType as NoahAssetType, OpenAssetRecord, XfrBody, ASSET_TYPE_LENGTH,
 };
-use zei::xfr::trace_assets as zei_trace_assets;
-use zei_algebra::serialization::ZeiFromToBytes;
+use noah::xfr::trace_assets as noah_trace_assets;
+use noah_algebra::serialization::NoahFromToBytes;
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 /// Generates random Base64 encoded asset type as a Base64 string. Used in asset definitions.
@@ -47,7 +47,7 @@ pub fn random_asset_type() -> String {
 /// Generates asset type as a Base64 string from given code.
 pub fn rs_asset_type_from_value(code: [u8; ASSET_TYPE_LENGTH]) -> String {
     AssetTypeCode {
-        val: ZeiAssetType(code),
+        val: NoahAssetType(code),
     }
     .to_base64()
 }
@@ -57,7 +57,7 @@ pub fn rs_trace_assets(
     xfr_body: XfrBody,
     tracer_keypair: &AssetTracerKeyPair,
 ) -> Result<Vec<(u64, String)>> {
-    Ok(zei_trace_assets(&xfr_body, tracer_keypair.get_keys())?
+    Ok(noah_trace_assets(&xfr_body, tracer_keypair.get_keys())?
         .iter()
         .map(|(amt, asset_type, _, _)| {
             let asset_type_code = AssetTypeCode { val: *asset_type };
@@ -71,7 +71,7 @@ pub fn rs_trace_assets(
 /// Returns an address to use for cancelling debt tokens in a debt swap.
 /// @ignore
 pub fn get_null_pk() -> XfrPublicKey {
-    XfrPublicKey::zei_from_bytes(&[0; 32]).unwrap()
+    XfrPublicKey::noah_from_bytes(&[0; 32]).unwrap()
 }
 
 /// Returns a JavaScript object containing decrypted owner record information,
@@ -131,14 +131,14 @@ pub fn rs_public_key_from_base64(pk: &str) -> Result<XfrPublicKey> {
 /// Expresses a transfer key pair as a hex-encoded string.
 /// To decode the string, use `keypair_from_str` function.
 pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
-    hex::encode(key_pair.zei_to_bytes())
+    hex::encode(key_pair.noah_to_bytes())
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 /// Constructs a transfer key pair from a hex-encoded string.
 /// The encode a key pair, use `keypair_to_str` function.
 pub fn keypair_from_str(str: String) -> XfrKeyPair {
-    XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap()).unwrap()
+    XfrKeyPair::noah_from_bytes(&hex::decode(str).unwrap()).unwrap()
 }
 
 /// Generates a new credential issuer key.

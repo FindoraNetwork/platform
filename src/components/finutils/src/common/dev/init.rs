@@ -12,7 +12,7 @@ use ledger::{
 };
 use ruc::*;
 use serde::Deserialize;
-use zei::xfr::{
+use noah::xfr::{
     asset_record::AssetRecordType,
     sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };

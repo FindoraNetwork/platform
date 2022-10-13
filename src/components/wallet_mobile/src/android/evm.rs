@@ -2,7 +2,7 @@ use crate::rust::account::{get_serialized_address, EVMTransactionBuilder};
 use jni::objects::{JClass, JString};
 use jni::sys::{jlong, jstring};
 use jni::JNIEnv;
-use zei::xfr::sig::XfrPublicKey;
+use noah::xfr::sig::XfrPublicKey;
 
 use super::{jStringToString, parseU64};
 

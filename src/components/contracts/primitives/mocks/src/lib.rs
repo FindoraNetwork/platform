@@ -20,7 +20,7 @@ use std::env::temp_dir;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::SystemTime;
-use zei::xfr::sig::XfrKeyPair;
+use noah::xfr::sig::XfrKeyPair;
 
 lazy_static! {
     pub static ref BASE_APP: Mutex<BaseApp> =

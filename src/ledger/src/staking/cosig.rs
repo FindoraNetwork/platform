@@ -17,7 +17,7 @@ use {
         collections::BTreeMap,
         fmt::{self, Debug},
     },
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 
 /// A common structure for data with co-signatures.

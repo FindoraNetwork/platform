@@ -14,7 +14,7 @@ use {
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::*,
-    zei::xfr::{
+    noah::xfr::{
         asset_record::{open_blind_asset_record, AssetRecordType},
         sig::{XfrKeyPair, XfrPublicKey},
         structs::{AssetRecordTemplate, XfrAmount},

@@ -11,7 +11,7 @@ use rand_chacha::rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
 use std::{env::temp_dir, sync::Arc, time::SystemTime};
 use storage::state::ChainState;
-use zei::xfr::sig::XfrKeyPair;
+use noah::xfr::sig::XfrKeyPair;
 
 fn setup() -> Context {
     let time = SystemTime::now()

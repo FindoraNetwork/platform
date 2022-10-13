@@ -13,12 +13,12 @@ use {
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     serde::{Deserialize, Serialize},
-    zei::xfr::{
+    noah::xfr::{
         asset_record::{build_blind_asset_record, AssetRecordType},
         sig::XfrPublicKey,
         structs::{AssetRecordTemplate, AssetType, OwnerMemo},
     },
-    zei_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+    noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
 };
 
 /// 420 million FRAs

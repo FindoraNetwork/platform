@@ -6,7 +6,7 @@ use {
     protobuf::RepeatedField,
     serde::Serialize,
     std::time::SystemTime,
-    zei::xfr::structs::{XfrAmount, XfrAssetType},
+    noah::xfr::structs::{XfrAmount, XfrAssetType},
 };
 
 /// generate attr(tags) for index-ops of tendermint

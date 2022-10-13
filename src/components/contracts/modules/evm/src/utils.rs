@@ -6,8 +6,8 @@ use fp_types::actions::xhub::NonConfidentialOutput;
 use ledger::data_model::ASSET_TYPE_FRA;
 use ruc::*;
 use sha3::{Digest, Keccak256};
-use zei::xfr::{sig::XfrPublicKey, structs::AssetType};
-use zei_algebra::serialization::ZeiFromToBytes;
+use noah::xfr::{sig::XfrPublicKey, structs::AssetType};
+use noah_algebra::serialization::NoahFromToBytes;
 
 use crate::{runner::ActionRunner, system_contracts::SystemContracts, Config};
 
@@ -86,7 +86,7 @@ fn parse_truple_result(tuple: Vec<Token>) -> Result<NonConfidentialOutput> {
     let target = if let Token::FixedBytes(bytes) =
         tuple.get(1).ok_or(eg!("Target must be FixedBytes"))?
     {
-        XfrPublicKey::zei_from_bytes(bytes)?
+        XfrPublicKey::noah_from_bytes(bytes)?
     } else {
         return Err(eg!("Asset Must be FixedBytes"));
     };

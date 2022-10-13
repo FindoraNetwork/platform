@@ -12,8 +12,8 @@ use {
     serde::{Deserialize, Serialize},
     sha3::{Digest, Keccak256},
     std::ops::{Deref, DerefMut},
-    zei::xfr::sig::{KeyType, XfrPublicKey, XfrPublicKeyInner, XfrSignature},
-    zei_algebra::serialization::ZeiFromToBytes,
+    noah::xfr::sig::{KeyType, XfrPublicKey, XfrPublicKeyInner, XfrSignature},
+    noah_algebra::serialization::NoahFromToBytes,
 };
 
 /// An opaque 34-byte cryptographic identifier.
@@ -220,7 +220,7 @@ pub trait Verify {
 /// Signature verify that can work with any known signature types..
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MultiSignature {
-    /// An zei xfr signature.
+    /// An noah xfr signature.
     Xfr(XfrSignature),
     /// An ECDSA/SECP256k1 signature.
     Ecdsa(ecdsa::Signature),
@@ -270,7 +270,7 @@ impl Verify for MultiSignature {
                     let mut bytes = [0u8; 34];
                     bytes[0] = KeyType::Ed25519.to_byte();
                     bytes[1..33].copy_from_slice(signer.as_ref());
-                    match XfrPublicKey::zei_from_bytes(&bytes) {
+                    match XfrPublicKey::noah_from_bytes(&bytes) {
                         Ok(who) => sig.verify(msg, &who),
                         _ => false,
                     }
@@ -280,7 +280,7 @@ impl Verify for MultiSignature {
                     bytes[0] = KeyType::Address.to_byte();
                     let signer_bytes: &[u8; 32] = signer.as_ref();
                     bytes[1..21].copy_from_slice(&signer_bytes[0..20]);
-                    match XfrPublicKey::zei_from_bytes(&bytes) {
+                    match XfrPublicKey::noah_from_bytes(&bytes) {
                         Ok(who) => sig.verify(msg, &who),
                         _ => false,
                     }
@@ -322,7 +322,7 @@ impl Verify for MultiSignature {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MultiSigner {
-    /// An zei xfr identity.
+    /// An noah xfr identity.
     Xfr(XfrPublicKey),
     // /// An SECP256k1/ECDSA identity (actually, the keccak 256 hash of the compressed pub key).
     // Ecdsa(ecdsa::Public),
@@ -474,7 +474,7 @@ mod tests {
     use super::*;
     use rand_chacha::rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
-    use zei::xfr::sig::XfrKeyPair;
+    use noah::xfr::sig::XfrKeyPair;
 
     #[test]
     fn xfr_sign_verify_work() {

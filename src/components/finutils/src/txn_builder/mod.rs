@@ -48,7 +48,7 @@ use {
         collections::{BTreeMap, HashMap, HashSet},
     },
     tendermint::PrivateKey,
-    zei::{
+    noah::{
         anon_creds::{
             ac_confidential_open_commitment, ACCommitment, ACCommitmentKey,
             ConfidentialAC, Credential,
@@ -81,8 +81,8 @@ use {
             XfrNotePolicies,
         },
     },
-    zei_algebra::prelude::*,
-    zei_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+    noah_algebra::prelude::*,
+    noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
 };
 
 macro_rules! no_transfer_err {
@@ -1529,11 +1529,11 @@ impl TransferOperationBuilder {
             if !sig.verify(&trn.body) {
                 return Err(eg!(("Invalid signature")));
             }
-            sig_keys.insert(sig.address.key.zei_to_bytes());
+            sig_keys.insert(sig.address.key.noah_to_bytes());
         }
 
         for record in &trn.body.transfer.inputs {
-            if !sig_keys.contains(&record.public_key.zei_to_bytes()) {
+            if !sig_keys.contains(&record.public_key.noah_to_bytes()) {
                 return Err(eg!(("Not all signatures present")));
             }
         }
@@ -1953,13 +1953,13 @@ mod tests {
         ledger::store::{utils::fra_gen_initial_tx, LedgerState},
         rand_chacha::ChaChaRng,
         rand_core::SeedableRng,
-        zei::anon_xfr::structs::{AnonAssetRecord, OpenAnonAssetRecordBuilder},
-        zei::xfr::asset_record::{
+        noah::anon_xfr::structs::{AnonAssetRecord, OpenAnonAssetRecordBuilder},
+        noah::xfr::asset_record::{
             build_blind_asset_record, open_blind_asset_record,
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         },
-        zei::xfr::structs::AssetType as AT,
-        zei_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+        noah::xfr::structs::AssetType as AT,
+        noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
     };
 
     // Defines an asset type
@@ -2177,8 +2177,8 @@ mod tests {
         let fra_owner_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
         let bob_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
         assert_eq!(
-            bob_kp.get_sk().into_keypair().zei_to_bytes(),
-            bob_kp.zei_to_bytes()
+            bob_kp.get_sk().into_keypair().noah_to_bytes(),
+            bob_kp.noah_to_bytes()
         );
 
         let mut tx = fra_gen_initial_tx(&fra_owner_kp);

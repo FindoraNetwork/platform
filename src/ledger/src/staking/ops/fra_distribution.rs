@@ -14,7 +14,7 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::BTreeMap,
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
 
 /// Used as the inner object of a `FraDistribution Operation`.

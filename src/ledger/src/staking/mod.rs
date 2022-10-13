@@ -50,7 +50,7 @@ use {
             Arc,
         },
     },
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
 
 // height, reward rate

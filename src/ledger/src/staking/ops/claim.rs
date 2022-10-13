@@ -8,7 +8,7 @@ use {
     crate::{data_model::NoReplayToken, staking::Staking},
     ruc::*,
     serde::{Deserialize, Serialize},
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 
 /// Used as the inner object of a `Claim Operation`.

@@ -5,21 +5,21 @@ use credentials::{
     CredUserSecretKey as PlatformCredUserSecretKey,
 };
 use std::ops::{Deref, DerefMut};
-use zei::xfr::sig::{XfrKeyPair as ZeiXfrKeyPair, XfrPublicKey as ZeiXfrPublicKey};
-use zei::xfr::structs::OpenAssetRecord as ZeiOpenAssetRecord;
+use noah::xfr::sig::{XfrKeyPair as NoahXfrKeyPair, XfrPublicKey as NoahXfrPublicKey};
+use noah::xfr::structs::OpenAssetRecord as NoahOpenAssetRecord;
 
 ////////////////////////////////////////////////////////////////////////////////
 
-pub struct XfrPublicKey(ZeiXfrPublicKey);
+pub struct XfrPublicKey(NoahXfrPublicKey);
 
-impl From<ZeiXfrPublicKey> for XfrPublicKey {
-    fn from(v: ZeiXfrPublicKey) -> XfrPublicKey {
+impl From<NoahXfrPublicKey> for XfrPublicKey {
+    fn from(v: NoahXfrPublicKey) -> XfrPublicKey {
         XfrPublicKey(v)
     }
 }
 
 impl Deref for XfrPublicKey {
-    type Target = ZeiXfrPublicKey;
+    type Target = NoahXfrPublicKey;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -35,16 +35,16 @@ impl DerefMut for XfrPublicKey {
 ////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone)]
-pub struct XfrKeyPair(ZeiXfrKeyPair);
+pub struct XfrKeyPair(NoahXfrKeyPair);
 
-impl From<ZeiXfrKeyPair> for XfrKeyPair {
-    fn from(v: ZeiXfrKeyPair) -> XfrKeyPair {
+impl From<NoahXfrKeyPair> for XfrKeyPair {
+    fn from(v: NoahXfrKeyPair) -> XfrKeyPair {
         XfrKeyPair(v)
     }
 }
 
 impl Deref for XfrKeyPair {
-    type Target = ZeiXfrKeyPair;
+    type Target = NoahXfrKeyPair;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -60,16 +60,16 @@ impl DerefMut for XfrKeyPair {
 ////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone)]
-pub struct OpenAssetRecord(ZeiOpenAssetRecord);
+pub struct OpenAssetRecord(NoahOpenAssetRecord);
 
-impl From<ZeiOpenAssetRecord> for OpenAssetRecord {
-    fn from(v: ZeiOpenAssetRecord) -> OpenAssetRecord {
+impl From<NoahOpenAssetRecord> for OpenAssetRecord {
+    fn from(v: NoahOpenAssetRecord) -> OpenAssetRecord {
         OpenAssetRecord(v)
     }
 }
 
 impl Deref for OpenAssetRecord {
-    type Target = ZeiOpenAssetRecord;
+    type Target = NoahOpenAssetRecord;
 
     fn deref(&self) -> &Self::Target {
         &self.0

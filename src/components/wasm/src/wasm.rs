@@ -66,7 +66,7 @@ use {
     serde::{Deserialize, Serialize},
     std::convert::From,
     wasm_bindgen::prelude::*,
-    zei::{
+    noah::{
         anon_xfr::{
             decrypt_memo,
             keys::{AXfrKeyPair, AXfrPubKey},
@@ -83,17 +83,17 @@ use {
             },
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
             structs::{
-                AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody,
+                AssetRecordTemplate, AssetType as NoahAssetType, XfrBody,
                 ASSET_TYPE_LENGTH,
             },
-            trace_assets as zei_trace_assets,
+            trace_assets as noah_trace_assets,
         },
     },
-    zei_algebra::{
+    noah_algebra::{
         bls12_381::BLSScalar,
-        prelude::{Scalar, ZeiFromToBytes},
+        prelude::{Scalar, NoahFromToBytes},
     },
-    zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
+    noah_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
 };
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
@@ -129,7 +129,7 @@ pub fn hash_asset_code(asset_code_string: String) -> Result<String, JsValue> {
     let mut asset_code = AssetTypePrefix::UserDefined.bytes();
     asset_code.append(&mut original_asset_code.to_bytes());
     let derived_asset_code = AssetTypeCode {
-        val: ZeiAssetType(keccak_256(&asset_code)),
+        val: NoahAssetType(keccak_256(&asset_code)),
     };
 
     Ok(derived_asset_code.to_base64())
@@ -141,7 +141,7 @@ pub fn asset_type_from_jsvalue(val: &JsValue) -> Result<String, JsValue> {
     let code: [u8; ASSET_TYPE_LENGTH] =
         val.into_serde().c(d!()).map_err(error_to_jsvalue)?;
     Ok(AssetTypeCode {
-        val: ZeiAssetType(code),
+        val: NoahAssetType(code),
     }
     .to_base64())
 }
@@ -176,7 +176,7 @@ pub fn verify_authenticated_txn(
 #[wasm_bindgen]
 /// ...
 pub fn get_null_pk() -> XfrPublicKey {
-    XfrPublicKey::zei_from_bytes(&[0; 32]).unwrap()
+    XfrPublicKey::noah_from_bytes(&[0; 32]).unwrap()
 }
 
 /// struct to return list of commitment strings
@@ -579,7 +579,7 @@ impl TransactionBuilder {
                 e.get_lowest_msg()
             ))
         })?
-        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
         .build()
         .c(d!())
         .map_err(|e| {
@@ -653,7 +653,7 @@ impl TransactionBuilder {
         )
         .c(d!())
         .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
-        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
         .build()
         .c(d!())
         .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?;
@@ -980,7 +980,7 @@ pub fn get_anon_balance(
     let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair)
         .c(d!())
         .map_err(error_to_jsvalue)?
-        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
         .build()
         .c(d!())
         .map_err(error_to_jsvalue)?;
@@ -1004,7 +1004,7 @@ pub fn get_open_abar(
     let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair)
         .c(d!())
         .map_err(error_to_jsvalue)?
-        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
         .build()
         .c(d!())
         .map_err(error_to_jsvalue)?;
@@ -1031,7 +1031,7 @@ pub fn gen_nullifier_hash(
     let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair)
         .c(d!())
         .map_err(error_to_jsvalue)?
-        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
         .build()
         .c(d!())
         .map_err(error_to_jsvalue)?;
@@ -1040,7 +1040,7 @@ pub fn gen_nullifier_hash(
         &keypair,
         oabar.get_amount(),
         &oabar.get_asset_type(),
-        mt_leaf_info.get_zei_mt_leaf_info().uid,
+        mt_leaf_info.get_noah_mt_leaf_info().uid,
     )
     .c(d!())
     .map_err(error_to_jsvalue)?;
@@ -1362,7 +1362,7 @@ impl AnonTransferOperationBuilder {
         )
         .c(d!())
         .map_err(error_to_jsvalue)?
-        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
         .build()
         .c(d!())
         .map_err(error_to_jsvalue)?;
@@ -1546,14 +1546,14 @@ pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey, JsValue> {
 /// Expresses a transfer key pair as a hex-encoded string.
 /// To decode the string, use `keypair_from_str` function.
 pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
-    hex::encode(key_pair.zei_to_bytes())
+    hex::encode(key_pair.noah_to_bytes())
 }
 
 #[wasm_bindgen]
 /// Constructs a transfer key pair from a hex-encoded string.
 /// The encode a key pair, use `keypair_to_str` function.
 pub fn keypair_from_str(str: String) -> XfrKeyPair {
-    XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap()).unwrap()
+    XfrKeyPair::noah_from_bytes(&hex::decode(str).unwrap()).unwrap()
 }
 
 #[wasm_bindgen]
@@ -1787,13 +1787,13 @@ pub fn trace_assets(
     // let candidate_assets: Vec<String> =
     //     candidate_assets.into_serde().c(d!()).map_err(error_to_jsvalue)?;
     let xfr_body: XfrBody = xfr_body.into_serde().c(d!()).map_err(error_to_jsvalue)?;
-    // let candidate_assets: Vec<ZeiAssetType> = candidate_assets
+    // let candidate_assets: Vec<NoahAssetType> = candidate_assets
     //     .iter()
     //     .map(|asset_type_str| {
     //         AssetTypeCode::new_from_str(&asset_type_str.to_string()).val
     //     })
     //     .collect();
-    let record_data = zei_trace_assets(&xfr_body, tracer_keypair.get_keys())
+    let record_data = noah_trace_assets(&xfr_body, tracer_keypair.get_keys())
         .c(d!())
         .map_err(error_to_jsvalue)?;
     let record_data: Vec<(u64, String)> = record_data
@@ -2297,7 +2297,7 @@ mod test {
     fn gen_oabar_and_keys<R: CryptoRng + RngCore>(
         prng: &mut R,
         amount: u64,
-        asset_type: ZeiAssetType,
+        asset_type: NoahAssetType,
     ) -> (OpenAnonAssetRecord, AXfrKeyPair) {
         let keypair = AXfrKeyPair::generate(prng);
         let oabar = OpenAnonAssetRecordBuilder::new()

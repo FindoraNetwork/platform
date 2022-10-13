@@ -23,7 +23,7 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
-    zei::{
+    noah::{
         anon_xfr::structs::AxfrOwnerMemo,
         xfr::{
             sig::XfrPublicKey,

@@ -27,7 +27,7 @@ use {
         collections::{HashMap, HashSet},
         sync::Arc,
     },
-    zei::{
+    noah::{
         anon_xfr::{
             abar_to_abar::AXfrNote,
             structs::{AnonAssetRecord, Nullifier},
@@ -39,7 +39,7 @@ use {
             verify_xfr_body,
         },
     },
-    zei_algebra::serialization::ZeiFromToBytes,
+    noah_algebra::serialization::NoahFromToBytes,
 };
 
 lazy_static! {
@@ -349,10 +349,10 @@ impl TxnEffect {
     //     1) The signatures on the body (a) all are valid and (b)
     //        there is a signature for each input key
     //          - Fully checked here
-    //     2) The UTXOs (a) exist on the ledger and (b) match the zei transaction.
+    //     2) The UTXOs (a) exist on the ledger and (b) match the noah transaction.
     //          - Partially checked here -- anything which hasn't
     //            been checked will appear in `input_txos`
-    //     3) The zei transaction is valid.
+    //     3) The noah transaction is valid.
     //          - Checked here and in check_txn_effects
     //     4) Lien assignments match up
     //          - Checked within a transaction here, recorded for
@@ -374,7 +374,7 @@ impl TxnEffect {
             return Err(eg!());
         }
 
-        // Transfer outputs must match outputs zei transaction
+        // Transfer outputs must match outputs noah transaction
         for (output, record) in trn
             .body
             .outputs
@@ -431,12 +431,12 @@ impl TxnEffect {
                     if !trn.body.verify_body_signature(sig) {
                         return Err(eg!());
                     }
-                    input_keys.insert(sig.address.key.zei_to_bytes());
+                    input_keys.insert(sig.address.key.noah_to_bytes());
                 }
 
                 // (1b) all input record owners have signed
                 for record in trn.body.transfer.inputs.iter() {
-                    if !input_keys.contains(&record.public_key.zei_to_bytes()) {
+                    if !input_keys.contains(&record.public_key.noah_to_bytes()) {
                         return Err(eg!());
                     }
                 }

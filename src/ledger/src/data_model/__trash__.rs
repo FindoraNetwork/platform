@@ -12,8 +12,8 @@ use {
     crate::data_model::AssetTypeCode,
     fixed::types::I20F12,
     serde::{Deserialize, Serialize},
-    zei::xfr::sig::XfrPublicKey,
-    zei::xfr::structs::AssetType,
+    noah::xfr::sig::XfrPublicKey,
+    noah::xfr::structs::AssetType,
 };
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]

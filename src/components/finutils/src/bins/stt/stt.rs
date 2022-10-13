@@ -29,7 +29,7 @@ use {
     ruc::*,
     serde::Serialize,
     std::{collections::BTreeMap, env},
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
 
 lazy_static! {
@@ -237,11 +237,11 @@ mod issue {
         },
         rand_chacha::rand_core::SeedableRng,
         rand_chacha::ChaChaRng,
-        zei::xfr::{
+        noah::xfr::{
             asset_record::{build_blind_asset_record, AssetRecordType},
             structs::AssetRecordTemplate,
         },
-        zei_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+        noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
     };
 
     pub fn issue() -> Result<()> {
@@ -298,7 +298,7 @@ mod issue {
 }
 
 mod delegate {
-    use {super::*, zei::xfr::asset_record::AssetRecordType};
+    use {super::*, noah::xfr::asset_record::AssetRecordType};
 
     pub fn gen_tx(
         user: NameRef,

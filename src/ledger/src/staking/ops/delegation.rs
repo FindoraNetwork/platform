@@ -20,7 +20,7 @@ use {
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
     tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},
-    zei::xfr::{
+    noah::xfr::{
         sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
         structs::{XfrAmount, XfrAssetType},
     },

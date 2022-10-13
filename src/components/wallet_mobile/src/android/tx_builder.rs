@@ -2,7 +2,7 @@ use crate::rust::*;
 use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jint, jlong, jstring, JNI_TRUE};
 use jni::JNIEnv;
-use zei::xfr::sig::XfrKeyPair;
+use noah::xfr::sig::XfrKeyPair;
 
 use super::parseU64;
 

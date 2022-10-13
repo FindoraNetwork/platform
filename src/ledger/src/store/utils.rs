@@ -14,12 +14,12 @@ use {
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::*,
-    zei::xfr::{
+    noah::xfr::{
         asset_record::{build_blind_asset_record, AssetRecordType},
         sig::XfrKeyPair,
         structs::AssetRecordTemplate,
     },
-    zei_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+    noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
 };
 
 /// Define and Issue FRA.

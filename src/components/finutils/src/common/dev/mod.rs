@@ -37,7 +37,7 @@ use tendermint::{
     vote::Power as TmPower,
 };
 use toml_edit::{value as toml_value, Document};
-use zei::xfr::sig::XfrKeyPair;
+use noah::xfr::sig::XfrKeyPair;
 
 type NodeId = u32;
 

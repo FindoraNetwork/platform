@@ -39,7 +39,7 @@ use {
         get_block_height, get_local_block_height, get_validator_detail,
         parse_td_validator_keys,
     },
-    zei::{
+    noah::{
         anon_xfr::{
             keys::{AXfrKeyPair, AXfrPubKey},
             nullify,

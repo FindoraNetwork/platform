@@ -14,7 +14,7 @@ use {
         },
     },
     ruc::*,
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
 
 /// Used as the inner object of a `UpdateValidator Operation`.

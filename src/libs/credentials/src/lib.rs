@@ -11,15 +11,15 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     wasm_bindgen::prelude::*,
-    zei::{
+    noah::{
         anon_creds::{
             ac_commit, ac_commit_with_key, ac_keygen_commitment, ac_keygen_issuer,
             ac_keygen_user, ac_open_commitment, ac_reveal, ac_sign, ac_verify,
             ac_verify_commitment, ACCommitment, ACCommitmentKey, ACIssuerPublicKey,
             ACIssuerSecretKey, ACPoK, ACRevealProof, ACRevealSig, ACSignature,
-            ACUserPublicKey, ACUserSecretKey, Credential as ZeiCredential,
+            ACUserPublicKey, ACUserSecretKey, Credential as NoahCredential,
         },
-        errors::ZeiError,
+        errors::NoahError,
     },
 };
 
@@ -70,7 +70,7 @@ impl CredIssuerPublicKey {
     pub fn get_len(&self, key: &str) -> Result<usize> {
         match self.map.get(key) {
             Some(((_, len), _)) => Ok(*len),
-            None => Err(eg!(ZeiError::ParameterError)),
+            None => Err(eg!(NoahError::ParameterError)),
         }
     }
 }
@@ -109,18 +109,18 @@ pub struct Credential {
 
 impl Credential {
     #[allow(missing_docs)]
-    pub fn to_ac_credential(&self) -> Result<ZeiCredential> {
+    pub fn to_ac_credential(&self) -> Result<NoahCredential> {
         let mut u32_attrs = vec![0u32; self.issuer_pub_key.num_internal_attrs];
         for (key, attr) in &self.attributes {
             let ((pos, len), _) = self
                 .issuer_pub_key
                 .map
                 .get(key)
-                .c(d!(ZeiError::ParameterError))?;
+                .c(d!(NoahError::ParameterError))?;
             let u32_vec = u8_slice_to_u32_vec(attr, *len);
             u32_attrs[*pos..*pos + *len].clone_from_slice(&u32_vec);
         }
-        Ok(ZeiCredential {
+        Ok(NoahCredential {
             sig: self.signature.clone(),
             attrs: u32_attrs,
             ipk: self.issuer_pub_key.ac_pub_key.clone(),
@@ -183,7 +183,7 @@ pub fn credential_sign<R: CryptoRng + RngCore>(
     // A.1 lengths matches
     let keys = attributes.iter().map(|(x, _)| x);
     if keys.len() != issuer_sec_key.map.len() {
-        return Err(eg!(ZeiError::ParameterError));
+        return Err(eg!(NoahError::ParameterError));
     }
 
     // B build list of u32 parameters
@@ -193,10 +193,10 @@ pub fn credential_sign<R: CryptoRng + RngCore>(
         let ((index, u32_len), byte_len) = issuer_sec_key
             .map
             .get(attr_key)
-            .c(d!(ZeiError::ParameterError))?; // A.2 field is contained in secret key
+            .c(d!(NoahError::ParameterError))?; // A.2 field is contained in secret key
                                                // C. check that attribute length matches secret key parameters
         if attr_value.len() != *byte_len {
-            return Err(eg!(ZeiError::ParameterError));
+            return Err(eg!(NoahError::ParameterError));
         }
 
         let u32_attrs = u8_slice_to_u32_vec(attr_value, *u32_len); // attr_to_u32_array(*attr, *len);
@@ -230,7 +230,7 @@ pub fn credential_commit<R: CryptoRng + RngCore>(
     let ac_credential = credential.to_ac_credential().c(d!())?;
     match ac_commit(prng, user_sec_key.get_ref(), &ac_credential, msg).c(d!())? {
         (acc, acp, Some(ack)) => Ok((acc, acp, ack)),
-        _ => Err(eg!(ZeiError::ParameterError)),
+        _ => Err(eg!(NoahError::ParameterError)),
     }
 }
 
@@ -301,7 +301,7 @@ pub fn credential_verify(
         let ((pos, len), _byte_len) = issuer_pub_key
             .map
             .get(field)
-            .c(d!(ZeiError::ParameterError))?;
+            .c(d!(NoahError::ParameterError))?;
         let u32_vec = u8_slice_to_u32_vec(attr, *len);
         let u32_vec_option: Vec<Option<u32>> =
             u32_vec.iter().map(|x| Some(*x)).collect();
@@ -323,7 +323,7 @@ fn reveal_field_to_bitmap(
     // 1. check fields are in public key
     for field in reveal_fields {
         if !issuer_pub_key.map.contains_key(field) {
-            return Err(eg!(ZeiError::ParameterError));
+            return Err(eg!(NoahError::ParameterError));
         }
     }
     let mut reveal_map = vec![false; issuer_pub_key.num_internal_attrs];
