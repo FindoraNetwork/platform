@@ -448,6 +448,8 @@ subcommands:
             takes_value: true
             value_name: WALLET ADDRESS
             required: true
+            conflicts_with:
+              - deploy
         - amount:
             help: deposit asset amount
             short: n
@@ -469,6 +471,15 @@ subcommands:
             takes_value: true
             value_name: LOWLEVEL
             required: false
+        - deploy:
+            help: deploy contract, addr is not required if you need to deploy a contract.
+            short: d
+            long: deploy
+            takes_value: true
+            value_name: DEPLOY
+            required: false
+            conflicts_with:
+              - addr
   - contract-withdraw:
       about: Transfer FRA from an Ethereum address to the specified Findora account
       args:

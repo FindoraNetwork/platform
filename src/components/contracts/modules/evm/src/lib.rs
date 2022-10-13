@@ -88,6 +88,18 @@ impl<C: Config> Default for App<C> {
     }
 }
 
+pub struct EvmCallParams {
+    pub from: Address,
+    pub to: Address,
+    pub value: U256,
+    pub low_data: Vec<u8>,
+    pub transaction_index: u32,
+    pub transaction_hash: H256,
+    pub nonce: U256,
+    pub gas_price: U256,
+    pub gas_limit: U256,
+}
+
 impl<C: Config> App<C> {
     pub fn withdraw_frc20(
         &self,
@@ -105,7 +117,7 @@ impl<C: Config> App<C> {
         let asset = Token::FixedBytes(Vec::from(_asset));
 
         let bytes: &[u8] = _from.as_ref();
-        let from = Token::FixedBytes(bytes.to_vec());
+        let from = Token::Address(H160::from_slice(&bytes[4..24]));
 
         let bytes: &[u8] = _to.as_ref();
         let to = Token::Address(H160::from_slice(&bytes[4..24]));
@@ -124,7 +136,7 @@ impl<C: Config> App<C> {
         let gas_limit = 9999999;
         let value = U256::zero();
 
-        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
+        let result = ActionRunner::<C>::execute_systemc_contract(
             ctx,
             input.clone(),
             from,
@@ -143,69 +155,56 @@ impl<C: Config> App<C> {
             action,
             U256::from(gas_limit),
             gas_price,
-            used_gas,
+            result.gas_used,
             transaction_index,
             from,
             self.contracts.bridge_address,
-            logs,
+            result.logs,
+            U256::zero(),
         ))
     }
 
-    pub fn withdraw_fra(
+    pub fn evm_call(
         &self,
         ctx: &Context,
-        _from: &Address,
-        _to: &Address,
-        _value: U256,
-        _lowlevel: Vec<u8>,
-        transaction_index: u32,
-        transaction_hash: H256,
+        params: EvmCallParams,
     ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
-        let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
+        let bytes: &[u8] = params.from.as_ref();
+        let source = H160::from_slice(&bytes[4..24]);
 
-        let bytes: &[u8] = _from.as_ref();
-        let from = Token::FixedBytes(bytes.to_vec());
+        let bytes: &[u8] = params.to.as_ref();
+        let target = H160::from_slice(&bytes[4..24]);
 
-        let bytes: &[u8] = _to.as_ref();
-
-        let to = Token::Address(H160::from_slice(&bytes[4..24]));
-        let value = Token::Uint(_value);
-        let lowlevel = Token::Bytes(_lowlevel);
-
-        // println!("{:?}, {:?}, {:?}, {:?}", from, to, value, lowlevel);
-
-        let input = function
-            .encode_input(&[from, to, value, lowlevel])
-            .c(d!())?;
-
-        let gas_limit = 9999999;
-        let value = U256::zero();
-        let gas_price = U256::one();
-        let from = H160::zero();
-
-        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
+        let result = ActionRunner::<C>::execute_systemc_contract(
             ctx,
-            input.clone(),
-            from,
-            gas_limit,
-            self.contracts.bridge_address,
-            value,
+            params.low_data.clone(),
+            source,
+            params.gas_limit.as_u64(),
+            target,
+            params.value,
         )?;
 
-        let action = TransactionAction::Call(self.contracts.bridge_address);
+        let target = if let Some(ca) = result.contract_address {
+            ca
+        } else {
+            target
+        };
+
+        let action = TransactionAction::Call(target);
 
         Ok(Self::system_transaction(
-            transaction_hash,
-            input,
-            value,
+            params.transaction_hash,
+            params.low_data,
+            params.value,
             action,
-            U256::from(gas_limit),
-            gas_price,
-            used_gas,
-            transaction_index,
-            from,
-            self.contracts.bridge_address,
-            logs,
+            params.gas_limit,
+            params.gas_price,
+            result.gas_used,
+            params.transaction_index,
+            source,
+            target,
+            result.logs,
+            params.nonce,
         ))
     }
 
@@ -246,6 +245,7 @@ impl<C: Config> App<C> {
         from: H160,
         to: H160,
         logs: Vec<Log>,
+        nonce: U256,
     ) -> (TransactionV0, TransactionStatus, Receipt) {
         let signature_fake = H256([
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -253,7 +253,7 @@ impl<C: Config> App<C> {
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
         ]);
         let tx = TransactionV0 {
-            nonce: U256::zero(),
+            nonce,
             gas_price,
             gas_limit,
             value,

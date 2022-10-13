@@ -4,6 +4,7 @@ use crate::data_model::{
     NoReplayToken, Operation, Transaction, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
 };
 use fp_types::crypto::MultiSigner;
+use fp_types::U256;
 use ruc::*;
 use serde::{Deserialize, Serialize};
 use zei::xfr::{
@@ -33,6 +34,12 @@ pub struct ConvertAccount {
     /// convert asset lowlevel data.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lowlevel_data: Option<Vec<u8>>,
+
+    /// gas price
+    pub gas_price: U256,
+
+    /// gas limit
+    pub gas_limit: U256,
 }
 
 #[allow(missing_docs)]
@@ -63,17 +70,39 @@ pub fn is_convert_account(tx: &Transaction) -> bool {
         )
 }
 
+/// check_convert_account execute result
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CheckConvertAccountResult {
+    /// tx sender
+    pub from: XfrPublicKey,
+    /// tx target
+    pub to: MultiSigner,
+    /// transfer amount
+    pub value: u64,
+    /// asset type
+    pub asset_type: AssetType,
+    /// evm input data
+    pub low_data: Vec<u8>,
+    /// gas price
+    pub gas_price: U256,
+    /// gas limit
+    pub gas_limit: U256,
+}
+
 #[allow(missing_docs)]
-pub fn check_convert_account(
-    tx: &Transaction,
-) -> Result<(XfrPublicKey, MultiSigner, u64, AssetType, Vec<u8>)> {
+pub fn check_convert_account(tx: &Transaction) -> Result<CheckConvertAccountResult> {
     let signer;
     let target;
     let expected_value;
     let expected_asset;
     let expected_lowlevel;
+    let gas_price;
+    let gas_limit;
 
     if let Some(Operation::ConvertAccount(ca)) = tx.body.operations.last() {
+        gas_price = ca.gas_price;
+        gas_limit = ca.gas_limit;
+
         if ca.nonce != tx.body.no_replay_token {
             return Err(eg!(
                 "TransferUTXOsToEVM error: nonce mismatch no_replay_token"
@@ -139,11 +168,13 @@ pub fn check_convert_account(
         ));
     }
 
-    Ok((
-        signer,
-        target,
-        expected_value,
-        expected_asset,
-        expected_lowlevel,
-    ))
+    Ok(CheckConvertAccountResult {
+        from: signer,
+        to: target,
+        value: expected_value,
+        asset_type: expected_asset,
+        low_data: expected_lowlevel,
+        gas_price,
+        gas_limit,
+    })
 }

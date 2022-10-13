@@ -56,6 +56,12 @@ pub trait AccountAsset<Address> {
         spender: &Address,
         amount: U256,
     ) -> Result<()>;
+
+    // fn insert_evm_fra_address_mapping(
+    //     ctx: &Context,
+    //     fra_pk: &Address,
+    //     evm_address: &Address,
+    // ) -> Result<()>;
 }
 
 /// Outputs the current transaction fee.

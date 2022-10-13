@@ -4,7 +4,7 @@ use crate::{App, Config};
 use ethereum_types::{H160, H256, U256};
 use evm::{
     executor::{StackExecutor, StackSubstateMetadata},
-    ExitReason,
+    CreateScheme, ExitReason,
 };
 use fp_core::{context::Context, ensure};
 use fp_evm::*;
@@ -17,6 +17,14 @@ use std::marker::PhantomData;
 #[derive(Default)]
 pub struct ActionRunner<C: Config> {
     _marker: PhantomData<C>,
+}
+
+#[derive(Debug)]
+pub struct ExecuteSystemcContractResult {
+    pub data: Vec<u8>,
+    pub logs: Vec<Log>,
+    pub gas_used: U256,
+    pub contract_address: Option<H160>,
 }
 
 impl<C: Config> ActionRunner<C> {
@@ -194,7 +202,7 @@ impl<C: Config> ActionRunner<C> {
         gas_limit: u64,
         target: H160,
         value: U256,
-    ) -> Result<(Vec<u8>, Vec<Log>, U256)> {
+    ) -> Result<ExecuteSystemcContractResult> {
         let config = evm::Config::istanbul();
 
         let vicinity = Vicinity {
@@ -207,8 +215,23 @@ impl<C: Config> ActionRunner<C> {
         let mut executor =
             StackExecutor::new_with_precompile(state, &config, C::Precompiles::execute);
 
-        let (result, data) =
-            executor.transact_call(source, target, value, input, gas_limit);
+        let contract_address = if target == H160::zero() {
+            Some(StackExecutor::create_address(
+                &executor,
+                CreateScheme::Legacy { caller: source },
+            ))
+        } else {
+            None
+        };
+
+        let (result, data) = if contract_address.is_some() {
+            (
+                executor.transact_create(source, value, input, gas_limit),
+                vec![],
+            )
+        } else {
+            executor.transact_call(source, target, value, input, gas_limit)
+        };
 
         let gas_used = U256::from(executor.used_gas());
         let state = executor.into_state();
@@ -235,7 +258,12 @@ impl<C: Config> ActionRunner<C> {
         }
 
         if let ExitReason::Succeed(_) = result {
-            Ok((data, state.substate.logs, gas_used))
+            Ok(ExecuteSystemcContractResult {
+                data,
+                logs: state.substate.logs,
+                gas_used,
+                contract_address,
+            })
         } else {
             // TODO: store error execution on pending tx later.
             Err(eg!(

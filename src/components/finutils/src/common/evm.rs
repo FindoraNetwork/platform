@@ -5,7 +5,9 @@
 use super::get_keypair;
 use super::get_serv_addr;
 use super::utils;
+use crate::txn_builder::OperationConvertAccountInput;
 use fp_core::account::SmartAccount;
+use fp_types::crypto::IdentifyAccount;
 use fp_types::{
     actions::{
         xhub::{
@@ -16,13 +18,14 @@ use fp_types::{
     assemble::{CheckFee, CheckNonce},
     crypto::{Address, MultiSignature, MultiSigner},
     transaction::UncheckedTransaction,
-    U256,
+    H160, U256,
 };
 use fp_utils::ecdsa::SecpPair;
 use fp_utils::tx::EvmRawTxWrapper;
-use ledger::data_model::AssetTypeCode;
 use ledger::data_model::ASSET_TYPE_FRA;
 use ledger::data_model::BLACK_HOLE_PUBKEY_STAKING;
+use ledger::data_model::{AssetTypeCode, BLACK_HOLE_PUBKEY};
+use ledger::staking::FRA;
 use ruc::*;
 use std::str::FromStr;
 use tendermint::block::Height;
@@ -37,6 +40,7 @@ pub fn transfer_to_account(
     asset: Option<&str>,
     address: Option<&str>,
     lowlevel_data: Option<&str>,
+    deploy: Option<&str>,
 ) -> Result<()> {
     let mut builder = utils::new_tx_builder()?;
 
@@ -56,35 +60,82 @@ pub fn transfer_to_account(
         None
     };
 
-    let transfer_op = utils::gen_transfer_op(
-        &kp,
-        vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
-        asset,
-        false,
-        false,
-        Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
-    )?;
+    let addr = get_serv_addr()?;
+    let web3_addr = format!("{}:8545", addr);
 
-    let target_address = match address {
-        Some(s) => MultiSigner::from_str(s).c(d!())?,
-        None => MultiSigner::Xfr(kp.get_pk()),
+    let (target_address, to) = if deploy.is_none() {
+        match address {
+            Some(s) => {
+                let ms = MultiSigner::from_str(s).c(d!())?;
+                let address = ms.clone().into_account();
+                let bytes: &[u8] = address.as_ref();
+                (ms, Some(bytes[4..24].to_vec()))
+            }
+            None => {
+                let ms = MultiSigner::Xfr(kp.get_pk());
+                (ms, None)
+            }
+        }
+    } else {
+        let create = H160::zero();
+        let ms = MultiSigner::Ethereum(create);
+        (ms, None)
     };
 
-    builder
-        .add_operation(transfer_op)
-        .add_operation_convert_account(
+    let rt = Runtime::new().c(d!())?;
+    rt.block_on(async {
+        let gas_price = utils::get_gas_price(web3_addr.as_str()).await.unwrap();
+        let gas_limit = utils::get_gas_limit(
+            web3_addr.as_str(),
+            lowlevel_data.clone(),
+            to,
+            Some(gas_price),
+        )
+        .await
+        .unwrap();
+
+        let gas_price_real = gas_price.as_u64().saturating_div(FRA);
+
+        let fee = gas_price_real * gas_limit.as_u64();
+        println!(
+            "gas price, gas limit, total gas: {}, {:?}, {}",
+            gas_price_real, gas_limit, fee
+        );
+
+        let transfer_op = utils::gen_transfer_op(
             &kp,
-            target_address,
+            vec![
+                (&BLACK_HOLE_PUBKEY_STAKING, amount),
+                (&BLACK_HOLE_PUBKEY, fee),
+            ],
             asset,
-            amount,
-            lowlevel_data,
-        )?
-        .sign(&kp);
+            false,
+            false,
+            Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
+        )
+        .unwrap();
 
-    let mut tx = builder.build_and_take_transaction()?;
-    tx.sign(&kp);
+        builder
+            .add_operation(transfer_op)
+            .add_operation_convert_account(OperationConvertAccountInput {
+                kp: kp.clone(),
+                addr: target_address,
+                asset,
+                amount,
+                lowlevel_data,
+                gas_price: gas_price.as_u64(),
+                gas_limit: gas_limit.as_u64(),
+            })
+            .unwrap()
+            .sign(&kp);
 
-    utils::send_tx(&tx)?;
+        let mut tx = builder.build_and_take_transaction().unwrap();
+
+        tx.sign(&kp);
+
+        utils::send_tx(&tx).unwrap();
+    });
+
     Ok(())
 }
 

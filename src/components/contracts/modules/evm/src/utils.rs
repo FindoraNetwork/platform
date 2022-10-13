@@ -41,7 +41,7 @@ pub fn fetch_mint<C: Config>(
     let source = H160::zero();
     let target = contracts.bridge_address;
 
-    let (ret, _, _) = ActionRunner::<C>::execute_systemc_contract(
+    let result = ActionRunner::<C>::execute_systemc_contract(
         ctx,
         input,
         source,
@@ -51,7 +51,7 @@ pub fn fetch_mint<C: Config>(
     )
     .c(d!())?;
 
-    let result = function.decode_output(&ret).c(d!())?;
+    let result = function.decode_output(&result.data).c(d!())?;
 
     for v1 in result {
         if let Token::Array(tokens) = v1 {

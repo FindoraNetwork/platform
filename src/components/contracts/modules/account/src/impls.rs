@@ -5,8 +5,9 @@ use fp_core::{account::SmartAccount, context::Context};
 use fp_storage::{Borrow, BorrowMut};
 use fp_traits::account::AccountAsset;
 use fp_types::crypto::Address;
-use primitive_types::U256;
+use primitive_types::{H160, U256};
 use ruc::*;
+use zei::xfr::sig::XfrPublicKey;
 
 impl<C: Config> AccountAsset<Address> for App<C> {
     fn total_issuance(ctx: &Context) -> U256 {
@@ -159,5 +160,16 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         amount: U256,
     ) -> Result<()> {
         Allowances::insert(ctx.state.write().borrow_mut(), owner, spender, &amount)
+    }
+}
+
+/// impl outside of trait
+impl<C: Config> App<C> {
+    pub fn insert_evm_fra_address_mapping(
+        ctx: &Context,
+        fra_pk: &XfrPublicKey,
+        evm_address: &H160,
+    ) -> Result<()> {
+        EvmFraAddressMapping::insert(ctx.state.write().borrow_mut(), evm_address, fra_pk)
     }
 }

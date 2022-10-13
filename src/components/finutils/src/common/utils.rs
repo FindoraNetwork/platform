@@ -370,6 +370,7 @@ pub fn gen_fee_bar_to_abar(
 /////////////////////////////////////////
 
 use sha2::Digest;
+use web3::types::{CallRequest, U256};
 
 #[derive(Serialize, Deserialize, Debug)]
 // tendermint status repsonse, "Tm" is short for "tendermint"
@@ -846,4 +847,41 @@ pub fn get_abar_data(abar: AnonAssetRecord) -> ABARData {
     ABARData {
         commitment: wallet::commitment_to_base58(&abar.commitment),
     }
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub async fn get_gas_price(addr: &str) -> Result<U256> {
+    let transport = web3::transports::Http::new(addr).c(d!())?;
+    let web3 = web3::Web3::new(transport);
+    web3.eth().gas_price().await.c(d!())
+}
+
+#[inline(always)]
+#[allow(missing_docs)]
+pub async fn get_gas_limit(
+    addr: &str,
+    data: Option<Vec<u8>>,
+    to: Option<Vec<u8>>,
+    gas_price: Option<U256>,
+) -> Result<U256> {
+    let transport = web3::transports::Http::new(addr).c(d!())?;
+    let web3 = web3::Web3::new(transport);
+    let gas_price = if let Some(price) = gas_price {
+        price
+    } else {
+        get_gas_price(addr).await?
+    };
+
+    let mut build = CallRequest::builder().gas_price(gas_price);
+
+    if let Some(data) = data {
+        build = build.data(web3::types::Bytes::from(data));
+    }
+    if let Some(to) = to {
+        build = build.to(web3::types::H160::from_slice(to.as_slice()));
+    }
+
+    let req = build.build();
+    web3.eth().estimate_gas(req, None).await.c(d!())
 }

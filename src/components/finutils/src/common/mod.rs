@@ -309,6 +309,10 @@ pub fn show(basic: bool) -> Result<()> {
             "\x1b[31;01mFindora Public Key in hex:\x1b[00m\n{}\n",
             wallet::public_key_to_hex(&i.get_pk())
         );
+        println!(
+            "\x1b[31;01mFindora Public Key Mapping ETH Address:\x1b[00m\n{}\n",
+            wallet::public_key_to_eth(&i.get_pk())
+        )
     });
 
     let self_balance = ruc::info!(utils::get_balance(&kp)).map(|i| {
