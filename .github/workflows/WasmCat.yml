@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - '**'
+    tags:
+      - '*-release'
+
 jobs:
   build-push:
     concurrency: wasmcat-ci-${{ github.ref }}
