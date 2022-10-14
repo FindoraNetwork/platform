@@ -1,5 +1,5 @@
 [package]
-name = "eth-pairings"
+name = "eip-1962"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,3 +12,9 @@ evm-precompile-utils = { path = "../utils"}
 log = "0.4"
 module-evm = { path = "../../../../modules/evm"}
 num_enum = { version = "0.5.4", default-features = false }
+
+[dev-dependencies]
+baseapp = { path = "../../../../baseapp" }
+fp-mocks = { path = "../../../../primitives/mocks" }
+ethereum-types = { version = "0.13.1", default-features = false }
+hex = "0.4"
