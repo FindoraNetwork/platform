@@ -775,6 +775,8 @@ impl TransactionBuilder {
         amount: u64,
         asset: Option<String>,
         lowlevel_data: Option<String>,
+        gas_price: u64,
+        gas_limit: u64,
     ) -> Result<TransactionBuilder, JsValue> {
         let ea = MultiSigner::from_str(&ethereum_address)
             .c(d!())
@@ -800,7 +802,15 @@ impl TransactionBuilder {
         };
 
         self.get_builder_mut()
-            .add_operation_convert_account(keypair, ea, asset, amount, lowlevel_data)
+            .add_operation_convert_account(OperationConvertAccountInput {
+                kp: keypair.clone(),
+                addr: ea,
+                asset,
+                amount,
+                lowlevel_data,
+                gas_price: gas_price.into(),
+                gas_limit: gas_limit.into(),
+            })
             .c(d!())
             .map_err(error_to_jsvalue)?;
         Ok(self)
@@ -1793,6 +1803,7 @@ use crate::wasm_data_model::{AmountAssetType, AnonKeys};
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
 use base64::URL_SAFE;
+use finutils::txn_builder::OperationConvertAccountInput;
 use getrandom::getrandom;
 use js_sys::JsString;
 use ledger::data_model::{ABARData, TxoSID, BAR_TO_ABAR_TX_FEE_MIN};

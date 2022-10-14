@@ -105,6 +105,24 @@ pub struct FeeInput {
     pub kp: XfrKeyPair,
 }
 
+/// add operation convert account input
+pub struct OperationConvertAccountInput {
+    /// sender keypair
+    pub kp: XfrKeyPair,
+    /// target address
+    pub addr: MultiSigner,
+    /// asset
+    pub asset: Option<AssetTypeCode>,
+    /// transfer amount
+    pub amount: u64,
+    /// evm execute bytes
+    pub lowlevel_data: Option<Vec<u8>>,
+    /// gas price
+    pub gas_price: u64,
+    /// gas limit
+    pub gas_limit: u64,
+}
+
 #[derive(Default)]
 #[allow(missing_docs)]
 pub struct FeeInputs {
@@ -994,19 +1012,17 @@ impl TransactionBuilder {
     /// Add a operation convert utxo asset to account balance.
     pub fn add_operation_convert_account(
         &mut self,
-        kp: &XfrKeyPair,
-        addr: MultiSigner,
-        asset: Option<AssetTypeCode>,
-        amount: u64,
-        lowlevel_data: Option<Vec<u8>>,
+        input: OperationConvertAccountInput,
     ) -> Result<&mut Self> {
         self.add_operation(Operation::ConvertAccount(ConvertAccount {
-            signer: kp.get_pk(),
+            signer: input.kp.get_pk(),
             nonce: self.txn.body.no_replay_token,
-            receiver: addr,
-            value: amount,
-            asset_type: asset.map(|a| a.val),
-            lowlevel_data,
+            receiver: input.addr,
+            value: input.amount,
+            asset_type: input.asset.map(|a| a.val),
+            lowlevel_data: input.lowlevel_data,
+            gas_price: input.gas_price.into(),
+            gas_limit: input.gas_limit.into(),
         }));
         Ok(self)
     }
