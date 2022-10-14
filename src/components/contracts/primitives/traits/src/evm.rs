@@ -2,10 +2,13 @@ use core::{convert::From, ops::Div};
 use fp_core::context::Context;
 use fp_types::crypto::Address;
 use primitive_types::{H160, H256, U256};
+
 use ruc::Result;
 
 pub trait AddressMapping {
     fn convert_to_account_id(address: H160) -> Address;
+
+    fn fra_pubkey(ctx: &Context, address: &H160) -> Vec<u8>;
 }
 
 /// Ethereum address mapping.
@@ -14,6 +17,10 @@ pub struct EthereumAddressMapping;
 impl AddressMapping for EthereumAddressMapping {
     fn convert_to_account_id(address: H160) -> Address {
         Address::from(address)
+    }
+
+    fn fra_pubkey(_ctx: &Context, _address: &H160) -> Vec<u8> {
+        todo!()
     }
 }
 

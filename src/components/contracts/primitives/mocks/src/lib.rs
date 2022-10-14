@@ -20,7 +20,7 @@ use std::env::temp_dir;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::SystemTime;
-use zei::xfr::sig::XfrKeyPair;
+use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
 lazy_static! {
     pub static ref BASE_APP: Mutex<BaseApp> =
@@ -31,6 +31,15 @@ lazy_static! {
         XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
     pub static ref BOB_XFR: XfrKeyPair =
         XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+}
+
+pub fn test_insert_address_mapping(evm_address: &H160, fra_pk: &XfrPublicKey) {
+    module_account::App::<BaseApp>::insert_evm_fra_address_mapping(
+        &BASE_APP.lock().unwrap().deliver_state,
+        fra_pk,
+        evm_address,
+    )
+    .unwrap();
 }
 
 pub fn test_mint_balance(who: &Address, balance: U256, height: u64) {

@@ -1,12 +1,14 @@
 [package]
-name = "evm-precompile-frc20"
+name = "evm-precompile-staking"
 version = "0.1.0"
 authors = ["FindoraNetwork"]
 edition = "2021"
 homepage = "https://findora.org/technology"
 repository = "https://github.com/findoranetwork/platform/"
-description = "FRC20 precompiles for EVM module."
+description = "Staking precompiles for EVM module."
 readme = "README.md"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 ethereum-types = { version = "0.12", default-features = false }
@@ -17,9 +19,15 @@ log = "0.4"
 module-evm = { path = "../../../../modules/evm"}
 num_enum = { version = "0.5.4", default-features = false }
 slices = "0.2.0"
+hex = "0.4"
+zei = "0.2"
 
 [dev-dependencies]
 baseapp = { path = "../../../../baseapp" }
 fp-mocks = { path = "../../../../primitives/mocks" }
 sha3 = "0.10"
+hex = "0.4"
+zei = "0.2"
+zei-algebra = "0.2"
+fp-utils = { path = "../../../../primitives/utils" }
 globutils = { path = "../../../../../../libs/globutils" }

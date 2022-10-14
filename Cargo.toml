@@ -23,6 +23,7 @@ members = [
     "src/components/contracts/modules/evm/precompile/sha3fips",
     "src/components/contracts/modules/evm/precompile/utils",
     "src/components/contracts/modules/evm/precompile/utils/macro",
+    "src/components/contracts/modules/evm/precompile/staking",
     "src/components/contracts/modules/xhub",
     "src/components/contracts/modules/template",
     "src/components/contracts/primitives/core",
