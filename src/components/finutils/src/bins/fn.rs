@@ -676,8 +676,7 @@ fn run() -> Result<()> {
             Some(path) => {
                 let f =
                     fs::read_to_string(path).c(d!("Failed to read anon-keys file"))?;
-                let keys = serde_json::from_str::<AnonKeys>(f.as_str()).c(d!())?;
-                keys
+                serde_json::from_str::<AnonKeys>(f.as_str()).c(d!())?
             }
             None => return Err(eg!("path for anon-keys file not found")),
         };

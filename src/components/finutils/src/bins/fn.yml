@@ -206,6 +206,7 @@ subcommands:
             long: asset
             takes_value: true
             value_name: ASSET
+            allow_hyphen_values: true
         - from-seckey:
             help: the file which contains base64-formated `XfrPrivateKey` of the receiver
             short: f
@@ -290,6 +291,7 @@ subcommands:
             long: asset
             takes_value: true
             value_name: ASSET
+            allow_hyphen_values: true
             conflicts_with:
               - create
         - seckey:
@@ -360,6 +362,7 @@ subcommands:
             long: code
             takes_value: true
             value_name: ASSET CODE
+            allow_hyphen_values: true
         - addr:
             help: Findora wallet address
             long: addr
@@ -434,6 +437,7 @@ subcommands:
             long: asset
             takes_value: true
             value_name: ASSET
+            allow_hyphen_values: true
   - contract-deposit:
       about: Transfer FRA from a Findora account to the specified Ethereum address
       args:
@@ -533,6 +537,7 @@ subcommands:
             long: asset
             takes_value: true
             value_name: ASSET
+            allow_hyphen_values: true
   - anon-balance:
       about: List Anon balance and spending status for a public key and a list of commitments
       args:
@@ -556,6 +561,7 @@ subcommands:
             long: asset
             takes_value: true
             value_name: ASSET
+            allow_hyphen_values: true
   - owned-open-abars:
       about: Get Open Anon UTXOs for a keypair use commitment
       args:
@@ -582,6 +588,7 @@ subcommands:
             long: asset
             takes_value: true
             value_name: ASSET
+            allow_hyphen_values: true
   - convert-bar-to-abar:
       about: Convert a BAR to Anon BAR for yourself
       args:

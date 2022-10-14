@@ -16,3 +16,5 @@ fix_unpaid_delegation_height = 0
 evm_checktx_nonce = 0
 utxo_checktx_height = 0
 utxo_asset_prefix_height = 0
+prism_bridge_address = ""
+nonce_bug_fix_height = 0

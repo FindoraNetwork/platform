@@ -2274,7 +2274,7 @@ impl StateCommitmentData {
 }
 
 /// Commitment data for Anon merkle trees
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AnonStateCommitmentData {
     /// Root hash of the latest committed version of abar merkle tree
     pub abar_root_hash: BLSScalar,
