@@ -47,8 +47,8 @@ fn gen_redis_client() -> Client {
 
 fn load_start_height() -> u64 {
     let client = REDIS_CLIENT.lock().c(d!()).unwrap();
-    let con = client.get_connection().c(d!()).unwrap();
-    let mut getter = Getter::new(con, "evm".to_string());
+    let mut conn = client.get_connection().c(d!()).unwrap();
+    let mut getter = Getter::new(&mut conn, "evm".to_string());
     getter.latest_height().unwrap() as u64
 }
 
@@ -56,10 +56,4 @@ pub fn setter() -> Result<Setter<Connection>> {
     let client = REDIS_CLIENT.lock().c(d!())?;
     let con = client.get_connection().c(d!())?;
     Ok(Setter::new(con, "evm".to_string()))
-}
-
-pub fn getter() -> Result<Getter<Connection>> {
-    let client = REDIS_CLIENT.lock().c(d!())?;
-    let con = client.get_connection().c(d!())?;
-    Ok(Getter::new(con, "evm".to_string()))
 }
