@@ -61,7 +61,7 @@ impl Precompile for EthPairing {
 
 impl EthPairing {
     fn call_public_api_on_vector(data: &[u8]) -> Result<Vec<u8>, ApiError> {
-        if data.len() == 0 {
+        if data.is_empty() {
             return Err(ApiError::InputError("input is zero length".to_owned()));
         }
         let op = OperationType::from_u8(data[0]).ok_or(ApiError::MissingValue)?;
