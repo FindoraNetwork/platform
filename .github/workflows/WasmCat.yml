@@ -1,10 +1,17 @@
 name: Wasm Building And Pushing
-on: [push]
-
+on:
+  push:
+    tags:
+      - 'tracing-*'
+      - 'develop'
+      - 'main'
 jobs:
   build-push:
+    strategy:
+      matrix:
+        platform: [aws]
     concurrency: wasmcat-ci-${{ github.ref }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.platform }}
     # accepting any branches push but not pull_request and pull_request push.
     # notice: the first push of a PR (create branch) will be triggering.
     if: github.event_name != 'pull_request' && github.event.pull_request.number == ''
@@ -60,7 +67,8 @@ jobs:
           git config --global user.name "wasmcat-bot"
 
           # clone the main branch
-          git clone --depth 1 https://${{secrets.ACCESS_TOKEN}}@github.com/FindoraNetwork/wasm-js-bindings
+          # git clone --depth 1 https://${{secrets.ACCESS_TOKEN}}@github.com/FindoraNetwork/wasm-js-bindings
+          git clone --depth 1 git@github.com:FindoraNetwork/wasm-js-bindings.git
           cd wasm-js-bindings
 
           # check target branch exists or not
