@@ -54,7 +54,10 @@ macro_rules! restore_keypair_from_mnemonic {
         check_lang($l)
             .c(d!())
             .and_then(|l| Mnemonic::from_phrase_in(l, $phrase).map_err(|e| eg!(e)))
-            .map(|m| m.to_seed(""))
+            .map(|m| {
+                println!("------------{}", m);
+                m.to_seed("")
+            })
             .and_then(|seed| {
                 DerivationPath::$bip($p.coin, $p.account, $p.change, $p.address)
                     .map_err(|e| eg!(e))
