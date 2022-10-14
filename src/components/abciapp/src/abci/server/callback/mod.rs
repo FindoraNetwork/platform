@@ -25,11 +25,9 @@ use {
     ledger::{
         converter::is_convert_account,
         data_model::{Operation, Transaction},
+        fbnc::{new_mapx, Mapx},
         staking::KEEP_HIST,
-        store::{
-            api_cache,
-            fbnc::{new_mapx, Mapx},
-        },
+        store::api_cache,
     },
     parking_lot::{Mutex, RwLock},
     protobuf::RepeatedField,
@@ -183,7 +181,7 @@ pub fn begin_block(
     #[cfg(target_os = "linux")]
     {
         // snapshot the last block
-        ledger::store::fbnc::flush_data();
+        ledger::fbnc::flush_data();
         let last_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
         info_omit!(CFG.btmcfg.snapshot(last_height as u64));
     }
@@ -382,6 +380,7 @@ pub fn deliver_tx(
                     if let Some(tx) = staking::system_prism_mint_pay(
                         &mut *laa,
                         &mut *s.account_base_app.write(),
+                        td_height,
                     ) {
                         drop(laa);
                         if la.cache_transaction(tx).is_ok() {

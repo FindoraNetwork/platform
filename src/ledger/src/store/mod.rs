@@ -5,9 +5,7 @@
 pub mod api_cache;
 pub mod helpers;
 mod test;
-pub mod utils;
 
-pub use fbnc;
 use fbnc::NumKey;
 
 use {
@@ -16,10 +14,9 @@ use {
             ATxoSID, AnonStateCommitmentData, AssetType, AssetTypeCode, AssetTypePrefix,
             AuthenticatedBlock, AuthenticatedTransaction, AuthenticatedUtxo,
             AuthenticatedUtxoStatus, BlockEffect, BlockSID, FinalizedBlock,
-            FinalizedTransaction, IssuerKeyPair, IssuerPublicKey, Operation,
-            OutputPosition, StateCommitmentData, Transaction, TransferType, TxnEffect,
-            TxnSID, TxnTempSID, TxoSID, UnAuthenticatedUtxo, Utxo, UtxoStatus,
-            ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
+            FinalizedTransaction, IssuerPublicKey, Operation, OutputPosition,
+            StateCommitmentData, Transaction, TxnEffect, TxnSID, TxnTempSID, TxoSID,
+            UnAuthenticatedUtxo, Utxo, UtxoStatus, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
         },
         staking::{
             Amount, Power, Staking, TendermintAddrRef, FF_PK_EXTRA_120_0000, FF_PK_LIST,
@@ -1129,22 +1126,12 @@ impl LedgerState {
     #[allow(missing_docs)]
     pub fn get_state_commitment(&self) -> (HashOf<Option<StateCommitmentData>>, u64) {
         let block_count = self.status.block_commit_count;
-        if !*KEEP_HIST {
-            let mut commitment: HashOf<Option<StateCommitmentData>> = HashOf::new(&None);
-            for a in self.status.state_commitment_versions.iter() {
-                commitment = a.clone();
-            }
-            (commitment, block_count)
-        } else {
-            let commitment = self
-                .api_cache
-                .as_ref()
-                .unwrap()
-                .state_commitment_version
-                .clone()
-                .unwrap_or_else(|| HashOf::new(&None));
-            (commitment, block_count)
-        }
+        let commitment = self
+            .status
+            .state_commitment_versions
+            .last()
+            .unwrap_or_else(|| HashOf::new(&None));
+        (commitment, block_count)
     }
 
     #[inline(always)]
