@@ -497,8 +497,6 @@ impl QueryApi {
         server: Arc<RwLock<QueryServer>>,
         addrs: &[(&str, u16)],
     ) -> Result<QueryApi> {
-        let _ = actix_rt::System::new("findora API");
-
         let mut hdr = HttpServer::new(move || {
             App::new()
                 .wrap(middleware::Logger::default())

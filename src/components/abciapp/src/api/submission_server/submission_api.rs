@@ -111,8 +111,6 @@ impl SubmissionApi {
         host: &str,
         port: u16,
     ) -> Result<SubmissionApi> {
-        let _ = actix_rt::System::new("findora API");
-
         HttpServer::new(move || {
             App::new()
                 .wrap(middleware::Logger::default())
