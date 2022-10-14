@@ -22,6 +22,7 @@ evm-precompile-basic = { path = "./basic" }
 evm-precompile-sha3fips = {path = "./sha3fips" }
 evm-precompile-modexp = { path = "./modexp" }
 evm-precompile-frc20 = { path = "./frc20" }
+evm-precompile-eth-pairings = { path = "./eth-pairings" }
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.2" }
 fp-core = { path = "../../../primitives/core" }
 parking_lot = "0.12"

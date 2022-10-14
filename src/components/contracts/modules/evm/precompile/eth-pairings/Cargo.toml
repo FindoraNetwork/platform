@@ -1,5 +1,5 @@
 [package]
-name = "eip-1962"
+name = "evm-precompile-eth-pairings"
 version = "0.1.0"
 edition = "2021"
 
