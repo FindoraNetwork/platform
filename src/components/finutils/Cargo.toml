@@ -32,7 +32,7 @@ zei-algebra = "0.2"
 nix = "0.25"
 toml_edit = "0.14"
 
-ledger = { path = "../../ledger" }
+ledger = { path = "../../ledger", default-features = false }
 globutils = { path = "../../libs/globutils" }
 credentials = { path = "../../libs/credentials" }
 
