@@ -55,7 +55,9 @@ jobs:
           wasm-pack build --release --target nodejs --out-dir ${{ steps.vars.outputs.tmp }}/nodejs
           wasm-pack build --release --target web --out-dir ${{ steps.vars.outputs.tmp }}/web
           wasm-pack build --release --target bundler --out-dir ${{ steps.vars.outputs.tmp }}/bundler
-          wasm-pack build --release --features=lightweight --target web --out-dir ${{ steps.vars.outputs.tmp }}/lightweight
+          wasm-pack build --release --features=lightweight --target nodejs --out-dir ${{ steps.vars.outputs.tmp }}/nodejs-lightweight
+          wasm-pack build --release --features=lightweight --target web --out-dir ${{ steps.vars.outputs.tmp }}/web-lightweight
+          wasm-pack build --release --features=lightweight --target bundler --out-dir ${{ steps.vars.outputs.tmp }}/bundler-lightweight
 
       - name: Pushing wasm-js-bindings branch
         run: |
@@ -89,13 +91,17 @@ jobs:
           cp -r ${{ steps.vars.outputs.tmp }}/bundler ./
           cp -r ${{ steps.vars.outputs.tmp }}/nodejs ./
           cp -r ${{ steps.vars.outputs.tmp }}/web ./
-          cp -r ${{ steps.vars.outputs.tmp }}/lightweight ./
+          cp -r ${{ steps.vars.outputs.tmp }}/nodejs-lightweight ./
+          cp -r ${{ steps.vars.outputs.tmp }}/web-lightweight ./
+          cp -r ${{ steps.vars.outputs.tmp }}/bundler-lightweight ./
 
           # commit and push
           git add -f ./bundler 
           git add -f ./nodejs 
           git add -f ./web
-          git add -f ./lightweight 
+          git add -f ./web-lightweight 
+          git add -f ./nodejs-lightweight 
+          git add -f ./bundler-lightweight 
           git status
           git commit -m "platform (${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.sha }}) by wasmcat-bot automation push 🚀"
           git push -f -u origin ${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.branch }}
