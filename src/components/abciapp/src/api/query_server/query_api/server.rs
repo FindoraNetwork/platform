@@ -344,7 +344,7 @@ impl QueryServer {
         self.ledger_cloned
             .api_cache
             .as_ref()
-            .and_then(|api| Option::from(api.abar_memos.len().saturating_sub(1)))
+            .and_then(|api| api.abar_memos.len().checked_sub(1))
     }
 
     /// Returns an int value for the max ATxoSid at a given block height
@@ -353,7 +353,7 @@ impl QueryServer {
         self.ledger_cloned
             .api_cache
             .as_ref()
-            .and_then(|api| api.height_to_max_atxo.get(&height))
+            .and_then(|api| api.height_to_max_atxo.get(&height).unwrap_or(None))
     }
 
     /// retrieve block reward rate at specified block height

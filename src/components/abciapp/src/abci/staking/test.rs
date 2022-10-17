@@ -22,7 +22,6 @@ use {
     },
 };
 
-
 #[test]
 fn staking_block_rewards_rate() {
     pnk!(check_block_rewards_rate());
