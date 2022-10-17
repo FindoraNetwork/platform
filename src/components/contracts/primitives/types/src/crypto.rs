@@ -1,4 +1,4 @@
-use bech32::{FromBase32, ToBase32};
+use bech32::{FromBase32, ToBase32, Variant};
 use core::convert::TryFrom;
 use core::fmt::Formatter;
 use core::str::FromStr;
@@ -51,7 +51,11 @@ impl From<[u8; 32]> for Address32 {
 
 impl core::fmt::Display for Address32 {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", bech32::encode("fra", self.to_base32()).unwrap())
+        write!(
+            f,
+            "{}",
+            bech32::encode("fra", self.to_base32(), Variant::Bech32).unwrap()
+        )
     }
 }
 
