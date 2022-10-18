@@ -33,8 +33,7 @@ toml = "0.5.8"
 
 clap = "2.33.3"
 
-actix-cors = "0.5.4"
-actix-rt = "1.1.0"
+actix-cors = "0.6"
 actix-service = "2.0.2"
 actix-web = "4.2.1"
 percent-encoding = "2.1.0"
