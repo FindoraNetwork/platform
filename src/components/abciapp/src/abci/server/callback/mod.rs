@@ -24,10 +24,7 @@ use {
     ledger::{
         converter::is_convert_account,
         staking::KEEP_HIST,
-        store::{
-            api_cache,
-            fbnc::{new_mapx, Mapx},
-        },
+        store::fbnc::{new_mapx, Mapx},
     },
     parking_lot::{Mutex, RwLock},
     protobuf::RepeatedField,
@@ -421,7 +418,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     state.set_tendermint_height(td_height as u64);
 
     // cache last block for QueryServer
-    pnk!(api_cache::update_api_cache(&mut state));
+    //pnk!(api_cache::update_api_cache(&mut state));
 
     // snapshot them finally
     let path = format!("{}/{}", &CFG.ledger_dir, &state.get_status().snapshot_file);
