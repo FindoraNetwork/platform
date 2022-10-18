@@ -1,10 +1,13 @@
 name: Wasm Building And Pushing
 on:
+  # push:
+  #   tags:
+  #     - 'tracing-*'
+  #     - 'develop'
+  #     - 'main'
   push:
-    tags:
-      - 'tracing-*'
-      - 'develop'
-      - 'main'
+    branches:
+      - "*"
 jobs:
   build-push:
     strategy:
