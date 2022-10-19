@@ -1,8 +1,9 @@
-use evm::{executor::PrecompileOutput, Context, ExitError, ExitSucceed};
+use evm::{Context, ExitSucceed};
 use evm_precompile_utils::{EvmDataReader, EvmDataWriter, EvmResult, Gasometer};
 //use evm_precompile_utils::data::IndVerifierKey;
+use evm::executor::stack::{PrecompileFailure, PrecompileOutput};
 use log::debug;
-use module_evm::precompile::{FinState, Precompile, PrecompileId};
+use module_evm::precompile::{FinState, Precompile, PrecompileId, PrecompileResult};
 
 // The gas used value is obtained according to the standard erc20 call.
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.3.2/contracts/token/ERC20/ERC20.sol
@@ -38,12 +39,24 @@ impl Precompile for Verifier {
         target_gas: Option<u64>,
         _context: &Context,
         _state: &FinState,
-    ) -> Result<PrecompileOutput, ExitError> {
+    ) -> PrecompileResult {
         let mut input = EvmDataReader::new(input);
+        let selector = match input.read_selector::<Call>() {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(PrecompileFailure::Error { exit_status: e });
+            }
+        };
 
-        match &input.read_selector()? {
-            Call::Verify => Self::verify(input, target_gas),
-            Call::SupportsInterface => Self::supports_interface(),
+        match selector {
+            Call::Verify => match Self::verify(input, target_gas) {
+                Ok(v) => Ok(v),
+                Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
+            },
+            Call::SupportsInterface => match Self::supports_interface() {
+                Ok(v) => Ok(v),
+                Err(e) => Err(PrecompileFailure::Error { exit_status: e }),
+            },
         }
     }
 }
