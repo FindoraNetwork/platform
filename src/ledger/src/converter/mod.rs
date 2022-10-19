@@ -4,12 +4,12 @@ use crate::data_model::{
     NoReplayToken, Operation, Transaction, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
 };
 use fp_types::crypto::MultiSigner;
-use ruc::*;
-use serde::{Deserialize, Serialize};
 use noah::xfr::{
     sig::XfrPublicKey,
     structs::{AssetType, XfrAmount, XfrAssetType},
 };
+use ruc::*;
+use serde::{Deserialize, Serialize};
 
 /// Use this operation to transfer.
 ///

@@ -10,15 +10,15 @@ use {
         data_model::TxOutput,
         staking::{Amount, FRA},
     },
-    rand_chacha::ChaChaRng,
-    rand_core::SeedableRng,
-    serde::{Deserialize, Serialize},
     noah::xfr::{
         asset_record::{build_blind_asset_record, AssetRecordType},
         sig::XfrPublicKey,
         structs::{AssetRecordTemplate, AssetType, OwnerMemo},
     },
     noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    serde::{Deserialize, Serialize},
 };
 
 /// 420 million FRAs

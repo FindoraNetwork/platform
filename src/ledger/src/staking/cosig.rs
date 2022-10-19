@@ -11,13 +11,13 @@ use {
         staking::{Staking, ValidatorData},
     },
     cryptohash::sha256::{self, Digest},
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{
         collections::BTreeMap,
         fmt::{self, Debug},
     },
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 
 /// A common structure for data with co-signatures.

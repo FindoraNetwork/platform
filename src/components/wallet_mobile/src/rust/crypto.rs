@@ -20,12 +20,6 @@ use ledger::{
     },
     staking::{MAX_DELEGATION_AMOUNT, MIN_DELEGATION_AMOUNT},
 };
-use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
-use ring::pbkdf2;
-use ruc::Result;
-use std::num::NonZeroU32;
-use std::str;
 use noah::xfr::asset_record::open_blind_asset_record as open_bar;
 use noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 use noah::xfr::structs::{
@@ -33,6 +27,12 @@ use noah::xfr::structs::{
 };
 use noah::xfr::trace_assets as noah_trace_assets;
 use noah_algebra::serialization::NoahFromToBytes;
+use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
+use ring::pbkdf2;
+use ruc::Result;
+use std::num::NonZeroU32;
+use std::str;
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 /// Generates random Base64 encoded asset type as a Base64 string. Used in asset definitions.

@@ -4,10 +4,10 @@ use fp_core::context::Context;
 use fp_traits::evm::{DecimalsMapping, EthereumDecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialOutput;
 use ledger::data_model::ASSET_TYPE_FRA;
-use ruc::*;
-use sha3::{Digest, Keccak256};
 use noah::xfr::{sig::XfrPublicKey, structs::AssetType};
 use noah_algebra::serialization::NoahFromToBytes;
+use ruc::*;
+use sha3::{Digest, Keccak256};
 
 use crate::{runner::ActionRunner, system_contracts::SystemContracts, Config};
 

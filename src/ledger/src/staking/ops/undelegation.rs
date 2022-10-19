@@ -9,9 +9,9 @@ use {
         data_model::{NoReplayToken, Operation, Transaction},
         staking::{PartialUnDelegation, Staking},
     },
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
     ruc::*,
     serde::{Deserialize, Serialize},
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 
 /// Used as the inner object of a `UnDelegation Operation`.

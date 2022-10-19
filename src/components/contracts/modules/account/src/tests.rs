@@ -6,12 +6,12 @@ use fp_storage::{Borrow, BorrowMut};
 use fp_traits::account::AccountAsset;
 use fp_types::crypto::Address;
 use fp_types::U256;
+use noah::xfr::sig::XfrKeyPair;
 use parking_lot::RwLock;
 use rand_chacha::rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
 use std::{env::temp_dir, sync::Arc, time::SystemTime};
 use storage::state::ChainState;
-use noah::xfr::sig::XfrKeyPair;
 
 fn setup() -> Context {
     let time = SystemTime::now()

@@ -38,16 +38,6 @@ use {
             TendermintAddr, Validator,
         },
     },
-    rand_chacha::ChaChaRng,
-    rand_core::{CryptoRng, RngCore, SeedableRng},
-    ruc::*,
-    serde::{Deserialize, Serialize},
-    sha2::Sha512,
-    std::{
-        cmp::Ordering,
-        collections::{BTreeMap, HashMap, HashSet},
-    },
-    tendermint::PrivateKey,
     noah::{
         anon_creds::{
             ac_confidential_open_commitment, ACCommitment, ACCommitmentKey,
@@ -83,6 +73,15 @@ use {
     },
     noah_algebra::prelude::*,
     noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+    rand_chacha::ChaChaRng,
+    rand_core::{CryptoRng, RngCore, SeedableRng},
+    serde::{Deserialize, Serialize},
+    sha2::Sha512,
+    std::{
+        cmp::Ordering,
+        collections::{BTreeMap, HashMap, HashSet},
+    },
+    tendermint::PrivateKey,
 };
 
 macro_rules! no_transfer_err {
@@ -1952,8 +1951,6 @@ mod tests {
         ledger::data_model::{ATxoSID, BlockEffect, TxnEffect, TxoRef},
         ledger::store::LedgerState,
         ledger::utils::fra_gen_initial_tx,
-        rand_chacha::ChaChaRng,
-        rand_core::SeedableRng,
         noah::anon_xfr::structs::{AnonAssetRecord, OpenAnonAssetRecordBuilder},
         noah::xfr::asset_record::{
             build_blind_asset_record, open_blind_asset_record,
@@ -1961,6 +1958,8 @@ mod tests {
         },
         noah::xfr::structs::AssetType as AT,
         noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+        rand_chacha::ChaChaRng,
+        rand_core::SeedableRng,
     };
 
     // Defines an asset type

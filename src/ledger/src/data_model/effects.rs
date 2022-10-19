@@ -18,15 +18,6 @@ use {
     },
     globutils::HashOf,
     lazy_static::lazy_static,
-    parking_lot::Mutex,
-    rand_chacha::{ChaCha20Rng, ChaChaRng},
-    rand_core::SeedableRng,
-    ruc::*,
-    serde::Serialize,
-    std::{
-        collections::{HashMap, HashSet},
-        sync::Arc,
-    },
     noah::{
         anon_xfr::{
             abar_to_abar::AXfrNote,
@@ -40,6 +31,15 @@ use {
         },
     },
     noah_algebra::serialization::NoahFromToBytes,
+    parking_lot::Mutex,
+    rand_chacha::{ChaCha20Rng, ChaChaRng},
+    rand_core::SeedableRng,
+    ruc::*,
+    serde::Serialize,
+    std::{
+        collections::{HashMap, HashSet},
+        sync::Arc,
+    },
 };
 
 lazy_static! {

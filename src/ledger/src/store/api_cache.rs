@@ -20,9 +20,6 @@ use {
     fbnc::{new_mapx, new_mapxnk, Mapx, Mapxnk},
     fp_utils::hashing::keccak_256,
     globutils::{wallet, HashOf},
-    ruc::*,
-    serde::{Deserialize, Serialize},
-    std::collections::HashSet,
     noah::{
         anon_xfr::structs::AxfrOwnerMemo,
         xfr::{
@@ -30,6 +27,9 @@ use {
             structs::{AssetType, OwnerMemo},
         },
     },
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    std::collections::HashSet,
 };
 
 type Issuances = Vec<(TxOutput, Option<OwnerMemo>)>;

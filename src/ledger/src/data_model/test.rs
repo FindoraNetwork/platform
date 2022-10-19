@@ -3,13 +3,13 @@
 use {
     super::*,
     curve25519_dalek::ristretto::CompressedRistretto,
-    rand_core::SeedableRng,
-    std::cmp::min,
     noah::{
         ristretto,
         xfr::structs::{AssetTypeAndAmountProof, XfrBody, XfrProofs},
     },
     noah_algebra::prelude::msg_eq,
+    rand_core::SeedableRng,
+    std::cmp::min,
 };
 
 const UTF8_ASSET_TYPES_WORK: bool = false;

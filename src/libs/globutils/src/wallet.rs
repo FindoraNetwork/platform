@@ -7,7 +7,6 @@
 use bech32::{self, FromBase32, ToBase32};
 use bip0039::{Count, Language, Mnemonic};
 use ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey};
-use ruc::*;
 use noah::anon_xfr::structs::Nullifier;
 use noah::{
     anon_xfr::{
@@ -18,6 +17,7 @@ use noah::{
 };
 use noah_algebra::serialization::NoahFromToBytes;
 use noah_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey};
+use ruc::*;
 
 /// Randomly generate a 12words-length mnemonic.
 #[inline(always)]

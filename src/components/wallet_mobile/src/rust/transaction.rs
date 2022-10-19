@@ -15,11 +15,11 @@ use ledger::{
     },
     staking::{td_addr_to_bytes, PartialUnDelegation, TendermintAddr},
 };
-use ruc::{eg, Result as RucResult};
-use serde_json::Result;
 use noah::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
 use noah::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use noah::xfr::structs::AssetRecordTemplate;
+use ruc::{eg, Result as RucResult};
+use serde_json::Result;
 
 /// Given a serialized state commitment and transaction, returns true if the transaction correctly
 /// hashes up to the state commitment and false otherwise.

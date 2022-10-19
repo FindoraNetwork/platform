@@ -8,12 +8,12 @@ pub mod tx_op_builder;
 use crate::rust::types;
 use crate::rust::*;
 use ledger::data_model::{AssetType as PlatformAssetType, AssetTypeCode};
+use noah::xfr::structs::ASSET_TYPE_LENGTH;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::ptr;
-use noah::xfr::structs::ASSET_TYPE_LENGTH;
 
 #[no_mangle]
 /// Returns the git commit hash and commit date of the commit this library was built against.

@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use noah::xfr::sig::XfrPublicKey;
 use noah::xfr::structs::AssetType;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Action {

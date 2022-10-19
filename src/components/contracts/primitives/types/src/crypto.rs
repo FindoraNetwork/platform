@@ -7,13 +7,13 @@ use {
     globutils::wallet,
     hex::FromHex,
     libsecp256k1::{recover, Message},
+    noah::xfr::sig::{KeyType, XfrPublicKey, XfrPublicKeyInner, XfrSignature},
+    noah_algebra::serialization::NoahFromToBytes,
     primitive_types::{H160, H256},
     ruc::{d, eg, RucResult},
     serde::{Deserialize, Serialize},
     sha3::{Digest, Keccak256},
     std::ops::{Deref, DerefMut},
-    noah::xfr::sig::{KeyType, XfrPublicKey, XfrPublicKeyInner, XfrSignature},
-    noah_algebra::serialization::NoahFromToBytes,
 };
 
 /// An opaque 34-byte cryptographic identifier.
@@ -472,9 +472,9 @@ pub type Address = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId
 #[cfg(test)]
 mod tests {
     use super::*;
+    use noah::xfr::sig::XfrKeyPair;
     use rand_chacha::rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
-    use noah::xfr::sig::XfrKeyPair;
 
     #[test]
     fn xfr_sign_verify_work() {

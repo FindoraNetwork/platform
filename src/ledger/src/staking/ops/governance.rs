@@ -13,10 +13,10 @@ use {
         staking::{cosig::CoSigOp, Staking, TendermintAddrRef, BLOCK_HEIGHT_MAX},
     },
     lazy_static::lazy_static,
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::BTreeMap,
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
 
 lazy_static! {

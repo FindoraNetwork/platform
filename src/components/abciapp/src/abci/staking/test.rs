@@ -11,17 +11,16 @@ use {
         store::LedgerState,
         utils::fra_gen_initial_tx,
     },
-    rand::random,
-    rand_chacha::ChaChaRng,
-    rand_core::SeedableRng,
-    ruc::*,
     noah::xfr::{
         asset_record::{open_blind_asset_record, AssetRecordType},
         sig::{XfrKeyPair, XfrPublicKey},
         structs::{AssetRecordTemplate, XfrAmount},
     },
+    rand::random,
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::*,
 };
-
 
 #[test]
 fn staking_block_rewards_rate() {

@@ -12,6 +12,7 @@ use fp_traits::account::AccountAsset;
 use fp_traits::evm::{AddressMapping, EthereumAddressMapping};
 use fp_types::crypto::{Address, MultiSignature};
 use lazy_static::lazy_static;
+use noah::xfr::sig::XfrKeyPair;
 use primitive_types::{H160, H256, U256};
 use rand_chacha::{rand_core::SeedableRng, ChaChaRng};
 use rlp::*;
@@ -20,7 +21,6 @@ use std::env::temp_dir;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::SystemTime;
-use noah::xfr::sig::XfrKeyPair;
 
 lazy_static! {
     pub static ref BASE_APP: Mutex<BaseApp> =

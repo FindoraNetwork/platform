@@ -39,14 +39,14 @@ use {
         data_model::{AssetTypeCode, ASSET_TYPE_FRA, FRA_DECIMALS},
         staking::StakerMemo,
     },
+    noah::anon_xfr::keys::AXfrKeyPair,
+    noah::anon_xfr::structs::OpenAnonAssetRecordBuilder,
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::*,
     serde::{Deserialize, Serialize},
     std::fs::File,
     std::{borrow::Borrow, fmt, fs},
-    noah::anon_xfr::keys::AXfrKeyPair,
-    noah::anon_xfr::structs::OpenAnonAssetRecordBuilder,
 };
 
 fn main() {

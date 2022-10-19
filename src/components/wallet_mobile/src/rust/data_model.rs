@@ -14,18 +14,19 @@ use ledger::data_model::{
     SignatureRules as PlatformSignatureRules, TxOutput, TxoRef as PlatformTxoRef,
     TxoSID,
 };
+use noah::xfr::sig::XfrPublicKey;
+use noah::xfr::structs::{
+    AssetTracerDecKeys, AssetTracerEncKeys,
+    AssetTracerKeyPair as NoahAssetTracerKeyPair, BlindAssetRecord,
+    IdentityRevealPolicy, OwnerMemo as NoahOwnerMemo,
+    TracingPolicies as NoahTracingPolicies, TracingPolicy as NoahTracingPolicy,
+};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 #[cfg(not(target_arch = "wasm32"))]
 use ruc::Result as RUCResult;
 use ruc::{d, err::RucResult};
 use serde::{Deserialize, Serialize};
-use noah::xfr::sig::XfrPublicKey;
-use noah::xfr::structs::{
-    AssetTracerDecKeys, AssetTracerEncKeys, AssetTracerKeyPair as NoahAssetTracerKeyPair,
-    BlindAssetRecord, IdentityRevealPolicy, OwnerMemo as NoahOwnerMemo,
-    TracingPolicies as NoahTracingPolicies, TracingPolicy as NoahTracingPolicy,
-};
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 /// Indicates whether the TXO ref is an absolute or relative value.

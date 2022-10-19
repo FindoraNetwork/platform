@@ -15,10 +15,10 @@ use {
         sha256::{self, Digest},
         Proof,
     },
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
     ruc::*,
     serde::{Deserialize, Deserializer, Serialize, Serializer},
     std::{fs, marker::PhantomData, path::PathBuf, result::Result as StdResult},
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 
 /// Perform a synchronize http get request with attohttpc,

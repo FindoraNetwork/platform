@@ -23,11 +23,11 @@ use {
             TendermintAddrRef,
         },
     },
+    noah::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
     parking_lot::RwLock,
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{collections::BTreeMap, mem, sync::Arc},
-    noah::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
 };
 
 /// Ping route to check for liveness of API

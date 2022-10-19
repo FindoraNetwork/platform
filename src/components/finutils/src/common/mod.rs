@@ -30,15 +30,6 @@ use {
             TendermintAddrRef,
         },
     },
-    rand_chacha::ChaChaRng,
-    rand_core::SeedableRng,
-    ruc::*,
-    std::{env, fs},
-    tendermint::PrivateKey,
-    utils::{
-        get_block_height, get_local_block_height, get_validator_detail,
-        parse_td_validator_keys,
-    },
     noah::{
         anon_xfr::{
             keys::{AXfrKeyPair, AXfrPubKey},
@@ -55,6 +46,15 @@ use {
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
             structs::{AssetType, XfrAmount, XfrAssetType},
         },
+    },
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::*,
+    std::{env, fs},
+    tendermint::PrivateKey,
+    utils::{
+        get_block_height, get_local_block_height, get_validator_detail,
+        parse_td_validator_keys,
     },
 };
 

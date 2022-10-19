@@ -60,12 +60,6 @@ use {
             MAX_DELEGATION_AMOUNT, MIN_DELEGATION_AMOUNT,
         },
     },
-    rand_chacha::ChaChaRng,
-    rand_core::SeedableRng,
-    ruc::{d, err::RucResult},
-    serde::{Deserialize, Serialize},
-    std::convert::From,
-    wasm_bindgen::prelude::*,
     noah::{
         anon_xfr::{
             decrypt_memo,
@@ -91,9 +85,15 @@ use {
     },
     noah_algebra::{
         bls12_381::BLSScalar,
-        prelude::{Scalar, NoahFromToBytes},
+        prelude::{NoahFromToBytes, Scalar},
     },
     noah_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::{d, err::RucResult},
+    serde::{Deserialize, Serialize},
+    std::convert::From,
+    wasm_bindgen::prelude::*,
 };
 
 /// Constant defining the git commit hash and commit date of the commit this library was built

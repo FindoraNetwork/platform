@@ -10,12 +10,12 @@ use ledger::{
     },
     utils::fra_gen_initial_tx,
 };
-use ruc::*;
-use serde::Deserialize;
 use noah::xfr::{
     asset_record::AssetRecordType,
     sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
+use ruc::*;
+use serde::Deserialize;
 
 #[derive(Deserialize)]
 struct TmValidators {

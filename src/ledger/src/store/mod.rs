@@ -35,27 +35,6 @@ use {
     globutils::wallet,
     globutils::{HashOf, ProofOf},
     merkle_tree::AppendOnlyMerkle,
-    parking_lot::RwLock,
-    rand_chacha::ChaChaRng,
-    rand_core::SeedableRng,
-    ruc::*,
-    serde::{Deserialize, Serialize},
-    sha2::Sha512,
-    sliding_set::SlidingSet,
-    sparse_merkle_tree::{Key, SmtMap256},
-    std::{
-        collections::{BTreeMap, HashMap, HashSet},
-        env,
-        fs::{self, OpenOptions},
-        io::ErrorKind,
-        mem,
-        ops::{Deref, DerefMut},
-        sync::Arc,
-    },
-    storage::{
-        state::{ChainState, State},
-        store::{ImmutablePrefixedStore, PrefixedStore},
-    },
     noah::{
         anon_xfr::{
             abar_to_abar::verify_anon_xfr_note,
@@ -76,7 +55,27 @@ use {
         ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath,
     },
     noah_algebra::{bls12_381::BLSScalar, prelude::*},
-    noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive381}
+    noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive381},
+    parking_lot::RwLock,
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    serde::{Deserialize, Serialize},
+    sha2::Sha512,
+    sliding_set::SlidingSet,
+    sparse_merkle_tree::{Key, SmtMap256},
+    std::{
+        collections::{BTreeMap, HashMap, HashSet},
+        env,
+        fs::{self, OpenOptions},
+        io::ErrorKind,
+        mem,
+        ops::{Deref, DerefMut},
+        sync::Arc,
+    },
+    storage::{
+        state::{ChainState, State},
+        store::{ImmutablePrefixedStore, PrefixedStore},
+    },
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
@@ -1893,7 +1892,7 @@ fn build_mt_leaf_info_from_proof(proof: Proof, uid: u64) -> MTLeafInfo {
         },
         root: proof.root,
         root_version: proof.root_version,
-        uid: uid,
+        uid,
     };
 }
 

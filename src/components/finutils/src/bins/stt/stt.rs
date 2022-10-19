@@ -26,10 +26,10 @@ use {
         },
         utils::fra_gen_initial_tx,
     },
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
     ruc::*,
     serde::Serialize,
     std::{collections::BTreeMap, env},
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
 
 lazy_static! {
@@ -235,13 +235,13 @@ mod issue {
             },
             staking::FRA_PRE_ISSUE_AMOUNT,
         },
-        rand_chacha::rand_core::SeedableRng,
-        rand_chacha::ChaChaRng,
         noah::xfr::{
             asset_record::{build_blind_asset_record, AssetRecordType},
             structs::AssetRecordTemplate,
         },
         noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+        rand_chacha::rand_core::SeedableRng,
+        rand_chacha::ChaChaRng,
     };
 
     pub fn issue() -> Result<()> {

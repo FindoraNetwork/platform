@@ -7,10 +7,6 @@
 
 use {
     linear_map::LinearMap,
-    rand_core::{CryptoRng, RngCore},
-    ruc::*,
-    serde::{Deserialize, Serialize},
-    wasm_bindgen::prelude::*,
     noah::{
         anon_creds::{
             ac_commit, ac_commit_with_key, ac_keygen_commitment, ac_keygen_issuer,
@@ -21,6 +17,10 @@ use {
         },
         errors::NoahError,
     },
+    rand_core::{CryptoRng, RngCore},
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    wasm_bindgen::prelude::*,
 };
 
 /// Secret key of a credential issuer.
@@ -194,7 +194,7 @@ pub fn credential_sign<R: CryptoRng + RngCore>(
             .map
             .get(attr_key)
             .c(d!(NoahError::ParameterError))?; // A.2 field is contained in secret key
-                                               // C. check that attribute length matches secret key parameters
+                                                // C. check that attribute length matches secret key parameters
         if attr_value.len() != *byte_len {
             return Err(eg!(NoahError::ParameterError));
         }

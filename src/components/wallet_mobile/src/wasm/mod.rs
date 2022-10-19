@@ -4,10 +4,10 @@ use crate::rust::*;
 use credentials::{
     CredIssuerPublicKey, CredIssuerSecretKey, CredUserPublicKey, CredUserSecretKey,
 };
-use ruc::{d, err::RucResult};
-use wasm_bindgen::prelude::*;
 use noah::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use noah::xfr::structs::ASSET_TYPE_LENGTH;
+use ruc::{d, err::RucResult};
+use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 /// Generates asset type as a Base64 string from a JSON-serialized JavaScript value.

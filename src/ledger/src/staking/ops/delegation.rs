@@ -16,14 +16,14 @@ use {
         },
     },
     ed25519_dalek::Signer,
-    ruc::*,
-    serde::{Deserialize, Serialize},
-    std::collections::HashSet,
-    tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},
     noah::xfr::{
         sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
         structs::{XfrAmount, XfrAssetType},
     },
+    ruc::*,
+    serde::{Deserialize, Serialize},
+    std::collections::HashSet,
+    tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},
 };
 
 /// Used as the inner object of a `Delegation Operation`.

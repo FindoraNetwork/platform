@@ -12,13 +12,9 @@ use {
         AuthenticatedUtxo, SignatureRules as PlatformSignatureRules, TxOutput,
         TxoRef as PlatformTxoRef, TxoSID,
     },
-    rand_chacha::ChaChaRng,
-    rand_core::SeedableRng,
-    ruc::{d, err::RucResult},
-    serde::{Deserialize, Serialize},
-    wasm_bindgen::prelude::*,
     noah::anon_xfr::structs::{
-        AnonAssetRecord, AxfrOwnerMemo as NoahAxfrOwnerMemo, MTLeafInfo as NoahMTLeafInfo,
+        AnonAssetRecord, AxfrOwnerMemo as NoahAxfrOwnerMemo,
+        MTLeafInfo as NoahMTLeafInfo,
     },
     noah::xfr::{
         sig::XfrPublicKey,
@@ -30,6 +26,11 @@ use {
         },
     },
     noah_algebra::bls12_381::BLSScalar,
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::{d, err::RucResult},
+    serde::{Deserialize, Serialize},
+    wasm_bindgen::prelude::*,
 };
 
 #[wasm_bindgen]

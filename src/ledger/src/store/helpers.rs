@@ -12,9 +12,6 @@ use {
     fbnc::NumKey,
     fp_utils::hashing::keccak_256,
     globutils::SignatureOf,
-    rand_core::{CryptoRng, RngCore},
-    ruc::*,
-    std::fmt::Debug,
     noah::xfr::{
         asset_record::AssetRecordType,
         asset_record::{build_blind_asset_record, open_blind_asset_record},
@@ -22,6 +19,9 @@ use {
         structs::{AssetRecord, AssetRecordTemplate, AssetType},
     },
     noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+    rand_core::{CryptoRng, RngCore},
+    ruc::*,
+    std::fmt::Debug,
 };
 
 #[inline(always)]

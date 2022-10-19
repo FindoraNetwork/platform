@@ -11,10 +11,10 @@ use {
         data_model::{NoReplayToken, Operation, Transaction},
         staking::{cosig::CoSigOp, Staking},
     },
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::BTreeMap,
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
 
 /// Used as the inner object of a `FraDistribution Operation`.

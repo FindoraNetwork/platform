@@ -13,15 +13,15 @@ use {
     },
     fbnc::NumKey,
     fp_utils::hashing::keccak_256,
-    rand_chacha::ChaChaRng,
-    rand_core::SeedableRng,
-    ruc::*,
     noah::xfr::{
         asset_record::{build_blind_asset_record, AssetRecordType},
         sig::XfrKeyPair,
         structs::{AssetRecordTemplate, AssetType},
     },
     noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::*,
 };
 
 /// Create a transaction to define a custom asset

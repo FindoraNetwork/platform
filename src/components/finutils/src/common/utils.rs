@@ -18,10 +18,6 @@ use {
         },
         staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
     },
-    ruc::*,
-    serde::{self, Deserialize, Serialize},
-    std::collections::HashMap,
-    tendermint::{PrivateKey, PublicKey},
     noah::anon_xfr::{
         keys::{AXfrKeyPair, AXfrPubKey},
         structs::{
@@ -33,6 +29,10 @@ use {
         sig::{XfrKeyPair, XfrPublicKey},
         structs::{AssetRecordTemplate, BlindAssetRecord, OpenAssetRecord, OwnerMemo},
     },
+    ruc::*,
+    serde::{self, Deserialize, Serialize},
+    std::collections::HashMap,
+    tendermint::{PrivateKey, PublicKey},
 };
 
 ///////////////////////////////////////

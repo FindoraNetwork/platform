@@ -1,7 +1,7 @@
 use core::str::FromStr;
 use ledger::data_model::ASSET_TYPE_FRA;
-use ruc::{d, Result, RucResult};
 use noah::xfr::sig::{XfrKeyPair, XfrPublicKey};
+use ruc::{d, Result, RucResult};
 
 use super::transaction::TransactionBuilder;
 

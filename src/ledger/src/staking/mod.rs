@@ -33,6 +33,7 @@ use {
     globutils::wallet,
     indexmap::IndexMap,
     lazy_static::lazy_static,
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
     ops::{
         fra_distribution::FraDistributionOps,
         mint_fra::{MintKind, MINT_AMOUNT_LIMIT},
@@ -50,7 +51,6 @@ use {
             Arc,
         },
     },
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
 
 // height, reward rate

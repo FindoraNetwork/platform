@@ -32,21 +32,6 @@ use {
     globutils::wallet::public_key_to_base64,
     globutils::{HashOf, ProofOf, Serialized, SignatureOf},
     lazy_static::lazy_static,
-    rand::Rng,
-    rand_chacha::{rand_core, ChaChaRng},
-    rand_core::{CryptoRng, RngCore, SeedableRng},
-    ruc::*,
-    serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer},
-    std::{
-        collections::{HashMap, HashSet},
-        convert::TryFrom,
-        fmt,
-        hash::{Hash, Hasher},
-        mem,
-        ops::Deref,
-        result::Result as StdResult,
-    },
-    unicode_normalization::UnicodeNormalization,
     noah::{
         anon_xfr::{
             abar_to_abar::AXfrNote,
@@ -71,6 +56,21 @@ use {
         },
     },
     noah_algebra::{bls12_381::BLSScalar, serialization::NoahFromToBytes},
+    rand::Rng,
+    rand_chacha::{rand_core, ChaChaRng},
+    rand_core::{CryptoRng, RngCore, SeedableRng},
+    ruc::*,
+    serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer},
+    std::{
+        collections::{HashMap, HashSet},
+        convert::TryFrom,
+        fmt,
+        hash::{Hash, Hasher},
+        mem,
+        ops::Deref,
+        result::Result as StdResult,
+    },
+    unicode_normalization::UnicodeNormalization,
 };
 
 const RANDOM_CODE_LENGTH: usize = 16;
@@ -2368,7 +2368,8 @@ pub fn get_abar_commitment(oabar: OpenAnonAssetRecord) -> BLSScalar {
         oabar.get_blind(),
         oabar.get_amount(),
         oabar.get_asset_type().as_scalar(),
-    ).unwrap();
+    )
+    .unwrap();
     c.0
 }
 
