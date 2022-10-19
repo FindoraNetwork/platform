@@ -64,7 +64,7 @@ impl crate::BaseApp {
     pub fn check_tx(&self, req: &RequestCheckTx) -> ResponseCheckTx {
         let mut resp = ResponseCheckTx::new();
 
-        let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
+        let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(&req.tx) {
             tx
         } else {
             info!(target: "baseapp", "Transaction evm tag check failed");
@@ -96,9 +96,14 @@ impl crate::BaseApp {
                     }
                 }
             };
-            match req.get_field_type() {
-                CheckTxType::New => check_fn(RunTxMode::Check),
-                CheckTxType::Recheck => check_fn(RunTxMode::ReCheck),
+            match req.type_.enum_value() {
+                Ok(CheckTxType::New) => check_fn(RunTxMode::Check),
+                Ok(CheckTxType::Recheck) => check_fn(RunTxMode::ReCheck),
+                Err(e) => {
+                    info!(target: "baseapp", "RequestCheckTx type error: {}", e);
+                    resp.code = 1;
+                    resp.log = format!("RequestCheckTx type error: {}", e);
+                }
             }
         } else {
             info!(target: "baseapp", "Could not unpack transaction");
@@ -142,7 +147,7 @@ impl crate::BaseApp {
     pub fn deliver_tx(&mut self, req: &RequestDeliverTx) -> ResponseDeliverTx {
         let mut resp = ResponseDeliverTx::new();
 
-        let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
+        let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(&req.tx) {
             tx
         } else {
             info!(target: "baseapp", "Transaction deliver tx unwrap evm tag failed");
@@ -167,7 +172,7 @@ impl crate::BaseApp {
                     resp.log = ar.log;
                     resp.gas_wanted = ar.gas_wanted as i64;
                     resp.gas_used = ar.gas_used as i64;
-                    resp.events = protobuf::RepeatedField::from_vec(ar.events);
+                    resp.events = ar.events;
                     resp
                 }
                 Err(e) => {

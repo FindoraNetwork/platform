@@ -12,6 +12,7 @@ use fp_types::{
     assemble::UncheckedTransaction,
 };
 use fp_utils::tx::EvmRawTxWrapper;
+use protobuf::MessageField;
 
 #[test]
 fn run_all_tests() {
@@ -90,7 +91,7 @@ fn test_abci_begin_block() {
     req.hash = b"test".to_vec();
     let mut header = Header::default();
     header.height = 3;
-    req.set_header(header);
+    req.header = MessageField::some(header);
     let _ = BASE_APP.lock().unwrap().begin_block(&req);
 }
 

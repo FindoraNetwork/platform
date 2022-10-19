@@ -28,7 +28,7 @@ fn test_emit_event() {
     let pair = AbciPair::default();
 
     let event = Event::emit_event("mock".to_string(), test_struct);
-    assert_eq!(event.get_field_type(), "mock_MockEvent");
+    assert_eq!(event.type_, "mock_MockEvent");
     assert_eq!(
         event.attributes.to_vec(),
         vec![
@@ -58,7 +58,7 @@ fn test_emit_serde_event() {
     let pair = AbciPair::default();
 
     let event = Event::emit_serde_event("mock".to_string(), test_struct);
-    assert_eq!(event.get_field_type(), "mock_MockEvent2");
+    assert_eq!(event.type_, "mock_MockEvent2");
     assert_eq!(
         event.attributes.to_vec(),
         vec![

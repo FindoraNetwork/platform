@@ -358,9 +358,9 @@ impl EthApi for EthApiImpl {
                     internal_err(format!("create query context error: {:?}", err))
                 })?;
             if let Some(block) = block {
-                ctx.header
-                    .mut_time()
-                    .set_seconds(block.header.timestamp as i64);
+                if let Some(time) = ctx.header.time.as_mut() {
+                    time.seconds = block.header.timestamp as i64;
+                }
                 ctx.header.height = block.header.number.as_u64() as i64;
                 ctx.header.proposer_address =
                     Vec::from(block.header.beneficiary.as_bytes())

@@ -3,7 +3,6 @@
 use {
     abci::{Event, Pair},
     ledger::data_model::{Operation, Transaction, TxnSID},
-    protobuf::RepeatedField,
     serde::Serialize,
     std::time::SystemTime,
     zei::xfr::structs::{XfrAmount, XfrAssetType},
@@ -15,42 +14,40 @@ use {
 ///   - "addr.to" => "Json<TagAttr>"
 ///   - "addr.from.<addr>" => "y"
 ///   - "addr.to.<addr>" => "y"
-pub fn gen_tendermint_attr(tx: &Transaction) -> RepeatedField<Event> {
+pub fn gen_tendermint_attr(tx: &Transaction) -> Vec<Event> {
     let mut res = vec![];
 
     // index txs without block info
     let mut ev = Event::new();
-    ev.set_field_type("tx".to_owned());
+    ev.type_ = "tx".to_owned();
 
     let mut kv = vec![Pair::new(), Pair::new()];
-    kv[0].set_key("prehash".as_bytes().to_vec());
-    kv[0].set_value(hex::encode(tx.hash(TxnSID(0))).into_bytes());
-    kv[1].set_key("timestamp".as_bytes().to_vec());
-    kv[1].set_value(
-        SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-            .to_string()
-            .into_bytes(),
-    );
+    kv[0].key = "prehash".as_bytes().to_vec();
+    kv[0].value = hex::encode(tx.hash(TxnSID(0))).into_bytes();
+    kv[1].key = "timestamp".as_bytes().to_vec();
+    kv[1].value = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        .to_string()
+        .into_bytes();
 
-    ev.set_attributes(RepeatedField::from_vec(kv));
+    ev.attributes = kv;
     res.push(ev);
 
     let (from, to) = gen_tendermint_attr_addr(tx);
 
     if !from.is_empty() || !to.is_empty() {
         let mut ev = Event::new();
-        ev.set_field_type("addr".to_owned());
+        ev.type_ = "addr".to_owned();
 
         let mut kv = vec![Pair::new(), Pair::new()];
-        kv[0].set_key("from".as_bytes().to_vec());
-        kv[0].set_value(serde_json::to_vec(&from).unwrap());
-        kv[1].set_key("to".as_bytes().to_vec());
-        kv[1].set_value(serde_json::to_vec(&to).unwrap());
+        kv[0].key = "from".as_bytes().to_vec();
+        kv[0].value = serde_json::to_vec(&from).unwrap();
+        kv[1].key = "to".as_bytes().to_vec();
+        kv[1].value = serde_json::to_vec(&to).unwrap();
 
-        ev.set_attributes(RepeatedField::from_vec(kv));
+        ev.attributes = kv;
         res.push(ev);
 
         macro_rules! index_addr {
@@ -59,16 +56,16 @@ pub fn gen_tendermint_attr(tx: &Transaction) -> RepeatedField<Event> {
                     .into_iter()
                     .map(|i| {
                         let mut p = Pair::new();
-                        p.set_key(i.addr.into_bytes());
-                        p.set_value("y".as_bytes().to_vec());
+                        p.key = i.addr.into_bytes();
+                        p.value = "y".as_bytes().to_vec();
                         p
                     })
                     .collect::<Vec<_>>();
 
                 if !kv.is_empty() {
                     let mut ev = Event::new();
-                    ev.set_field_type($ty.to_owned());
-                    ev.set_attributes(RepeatedField::from_vec(kv));
+                    ev.type_ = $ty.to_owned();
+                    ev.attributes = kv;
                     res.push(ev);
                 }
             };
@@ -77,8 +74,7 @@ pub fn gen_tendermint_attr(tx: &Transaction) -> RepeatedField<Event> {
         index_addr!(from, "addr.from");
         index_addr!(to, "addr.to");
     }
-
-    RepeatedField::from_vec(res)
+    res
 }
 
 // collect informations of inputs and outputs

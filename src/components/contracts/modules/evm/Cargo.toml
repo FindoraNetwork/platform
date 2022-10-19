@@ -9,7 +9,7 @@ description = "Findora module supporting evm smart contract"
 readme = "README.md"
 
 [dependencies]
-abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
+abci = { git = "https://github.com/shaorongqiang/tendermint-abci" }
 ethereum-types = { version = "0.13.1", default-features = false }
 evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
 evm-runtime = { version = "0.30.0", default-features = false }

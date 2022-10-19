@@ -46,13 +46,13 @@ pub fn derive_event(input_struct: TokenStream) -> TokenStream {
                 let mut attributes = Vec::new();
                 #(
                     let mut pair = AbciPair::new();
-                    pair.set_key(#keys.to_string().as_bytes().into());
-                    pair.set_value(format!("{:?}", input_struct.#idents).as_bytes().into());
+                    pair.key = #keys.to_string().as_bytes().into();
+                    pair.value = format!("{:?}", input_struct.#idents).as_bytes().into();
                     attributes.push(pair);
                 )*
                 let mut event = AbciEvent::new();
-                event.set_field_type(format!("{}_{}", field_type, stringify!(#name)));
-                event.set_attributes(RepeatedField::from_vec(attributes));
+                event.type_ = format!("{}_{}", field_type, stringify!(#name));
+                event.attributes = attributes;
                 event
             }
 
@@ -60,13 +60,13 @@ pub fn derive_event(input_struct: TokenStream) -> TokenStream {
                 let mut attributes = Vec::new();
                 #(
                     let mut pair = AbciPair::new();
-                    pair.set_key(#keys.to_string().as_bytes().into());
-                    pair.set_value(to_vec(&input_struct.#idents).unwrap_or(vec![]));
+                    pair.key = #keys.to_string().as_bytes().into();
+                    pair.value = to_vec(&input_struct.#idents).unwrap_or(vec![]);
                     attributes.push(pair);
                 )*
                 let mut event = AbciEvent::new();
-                event.set_field_type(format!("{}_{}", field_type, stringify!(#name)));
-                event.set_attributes(RepeatedField::from_vec(attributes));
+                event.type_ = format!("{}_{}", field_type, stringify!(#name));
+                event.attributes = attributes;
                 event
             }
         }

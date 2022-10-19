@@ -7,6 +7,7 @@ use fp_traits::account::{AccountAsset, FeeCalculator};
 use fp_types::{actions::template::Action as TemplateAction, actions::Action, U256};
 use fp_utils::tx::EvmRawTxWrapper;
 use module_template::ValueStore;
+use protobuf::MessageField;
 pub use std::borrow::Borrow;
 use std::convert::TryInto;
 
@@ -91,11 +92,11 @@ fn test_abci_begin_block() {
     req.hash = b"test".to_vec();
     let mut header = Header::default();
     header.height = 1;
-    req.set_header(header.clone());
+    req.header = MessageField::some(header.clone());
     let _ = BASE_APP.lock().unwrap().begin_block(&req);
     let _ = BASE_APP.lock().unwrap().commit(&RequestCommit::new());
     header.height = 2;
-    req.set_header(header);
+    req.header = MessageField::some(header);
     let _ = BASE_APP.lock().unwrap().begin_block(&req);
 }
 

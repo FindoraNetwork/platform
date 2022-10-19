@@ -30,7 +30,6 @@ use {
         },
     },
     parking_lot::{Mutex, RwLock},
-    protobuf::RepeatedField,
     ruc::*,
     std::{
         fs,
@@ -76,15 +75,15 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
 
     let h = state.get_tendermint_height() as i64;
     TENDERMINT_BLOCK_HEIGHT.swap(h, Ordering::Relaxed);
-    resp.set_last_block_height(h);
+    resp.last_block_height = h;
     if 0 < h {
         if CFG.checkpoint.disable_evm_block_height < h
             && h < CFG.checkpoint.enable_frc20_height
         {
-            resp.set_last_block_app_hash(la_hash);
+            resp.last_block_app_hash = la_hash;
         } else {
             let cs_hash = s.account_base_app.write().info(req).last_block_app_hash;
-            resp.set_last_block_app_hash(app_hash("info", h, la_hash, cs_hash));
+            resp.last_block_app_hash = app_hash("info", h, la_hash, cs_hash);
         }
     }
 
@@ -114,14 +113,14 @@ pub fn init_chain(
 pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseCheckTx {
     let mut resp = ResponseCheckTx::new();
 
-    let tx_catalog = try_tx_catalog(req.get_tx(), false);
+    let tx_catalog = try_tx_catalog(&req.tx, false);
 
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
 
     match tx_catalog {
         TxCatalog::FindoraTx => {
-            if matches!(req.field_type, CheckTxType::New) {
-                if let Ok(tx) = convert_tx(req.get_tx()) {
+            if matches!(req.type_.enum_value(), Ok(CheckTxType::New)) {
+                if let Ok(tx) = convert_tx(&req.tx) {
                     if !tx.valid_in_abci() {
                         resp.log = "Should not appear in ABCI".to_owned();
                         resp.code = 1;
@@ -222,13 +221,13 @@ pub fn deliver_tx(
 ) -> ResponseDeliverTx {
     let mut resp = ResponseDeliverTx::new();
 
-    let tx_catalog = try_tx_catalog(req.get_tx(), true);
+    let tx_catalog = try_tx_catalog(&req.tx, true);
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
     const EVM_FIRST_BLOCK_HEIGHT: i64 = 142_5000;
 
     match tx_catalog {
         TxCatalog::FindoraTx => {
-            if let Ok(tx) = convert_tx(req.get_tx()) {
+            if let Ok(tx) = convert_tx(&req.tx) {
                 let txhash = tx.hash_tm_rawbytes();
                 POOL.spawn_ok(async move {
                     TX_HISTORY.write().set_value(txhash, Default::default());
@@ -247,7 +246,7 @@ pub fn deliver_tx(
                         // set attr(tags) if any, only needed on a fullnode
                         let attr = utils::gen_tendermint_attr(&tx);
                         if !attr.is_empty() {
-                            resp.set_events(attr);
+                            resp.events = attr;
                         }
                     }
 
@@ -393,7 +392,7 @@ pub fn end_block(
         la.get_committed_state().read().get_staking().deref(),
         begin_block_req.last_commit_info.as_ref()
     )) {
-        resp.set_validator_updates(RepeatedField::from_vec(vs));
+        resp.validator_updates = vs;
     }
 
     staking::system_ops(
@@ -436,9 +435,9 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     if CFG.checkpoint.disable_evm_block_height < td_height
         && td_height < CFG.checkpoint.enable_frc20_height
     {
-        r.set_data(la_hash);
+        r.data = la_hash;
     } else {
-        r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
+        r.data = app_hash("commit", td_height, la_hash, cs_hash);
     }
 
     IN_SAFE_ITV.store(false, Ordering::Release);

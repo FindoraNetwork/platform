@@ -3,7 +3,7 @@
 //!
 //! Business logic based on [**Ledger Staking**](ledger::staking).
 //!
-
+//!
 mod whoami;
 
 #[cfg(test)]
@@ -26,6 +26,7 @@ use {
         },
         store::LedgerState,
     },
+    protobuf::MessageField,
     ruc::*,
     serde::Serialize,
     std::{
@@ -144,10 +145,10 @@ pub fn get_validators(
             .map(|(pubkey, power)| {
                 let mut vu = ValidatorUpdate::new();
                 let mut pk = PubKey::new();
-                pk.set_field_type("ed25519".to_owned());
-                pk.set_data(pubkey.to_vec());
-                vu.set_power(*power);
-                vu.set_pub_key(pk);
+                pk.type_ = "ed25519".to_owned();
+                pk.data = pubkey.to_vec();
+                vu.power = *power;
+                vu.pub_key = MessageField::some(pk);
                 vu
             })
             .collect(),
@@ -181,7 +182,7 @@ pub fn system_ops(
             let v = ev.validator.as_ref().unwrap();
             let bz = ByzantineInfo {
                 addr: &td_addr_to_string(&v.address),
-                kind: ev.field_type.as_str(),
+                kind: &ev.type_,
             };
 
             ruc::info_omit!(system_governance(la.get_staking_mut().deref_mut(), &bz));
