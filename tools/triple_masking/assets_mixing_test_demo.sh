@@ -96,7 +96,7 @@ echo "$ASSET2"
 
 echo "\n\n Issue Asset 1 ..."
 echo "------------------------------------------------------------------------------"
-echo $ASSET1
+echo "$ASSET1"
 "$BIN"/fn asset --issue --code "$ASSET1" --amount 100000000
 echo "waiting blockchain 15s..."
 sleep 15
@@ -104,7 +104,7 @@ sleep 15
 
 echo "\n\n\n Issue Asset 2 ..."
 echo "------------------------------------------------------------------------------"
-echo $ASSET2
+echo "$ASSET2"
 "$BIN"/fn asset --issue --code "$ASSET2" --amount 100000000
 echo "waiting blockchain 15s..."
 sleep 15
