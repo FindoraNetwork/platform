@@ -651,7 +651,7 @@ struct TransactionBuilder *findora_ffi_transaction_builder_sign(const struct Tra
 /**
  * Extracts the serialized form of a transaction.
  */
-char *findora_ffi_transaction_builder_transaction(const struct TransactionBuilder *builder);
+char *findora_ffi_transaction_builder_transaction(struct TransactionBuilder *builder);
 
 /**
  * Calculates transaction handle.

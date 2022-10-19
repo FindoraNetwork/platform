@@ -75,16 +75,19 @@ impl Key {
     }
 
     // Method to convert the Key to a base64-encoded string
-    pub fn to_base64(self) -> String {
-        base64::encode_config(&self.0, base64::URL_SAFE)
+    pub fn to_base58(self) -> String {
+        bs58::encode(self.0).into_string()
     }
 
     // Method to create a Key from a base64-encoded string
-    pub fn from_base64(input: &str) -> Result<Key> {
-        let digest =
-            Digest::from_slice(&base64::decode_config(input, base64::URL_SAFE).c(d!())?)
-                .c(d!(base64::DecodeError::InvalidLength))?;
-        //.c(d!( base64::DecodeError::InvalidLength))?;
+    pub fn from_base58(input: &str) -> Result<Key> {
+        let b = bs58::decode(input).into_vec().c(d!())?;
+        Key::from_bytes(b)
+    }
+
+    pub fn from_bytes(b: Vec<u8>) -> Result<Key> {
+        let digest = Digest::from_slice(b.as_slice())
+            .c(d!("Nullifier decoding failed; incorrect number of bytes"))?;
         Ok(Key(digest))
     }
 
@@ -406,7 +409,7 @@ mod tests {
     //use std::string::ToString;
     use std::env::temp_dir;
     use std::time::SystemTime;
-    use storage::db::TempRocksDB;
+    use temp_db::TempRocksDB;
 
     // `hex` is the first a few bytes of the desired 32 bytes (the rest bytes are zeros).
     pub fn l256(hex: &str) -> Digest {
@@ -892,7 +895,7 @@ fn test_nullfier() {
     use bls12_381::Scalar;
     use std::env::temp_dir;
     use std::time::SystemTime;
-    use storage::db::TempRocksDB;
+    use temp_db::TempRocksDB;
 
     // Common value used for all nullifiers
     let value = Some(b"nullifier".to_vec());

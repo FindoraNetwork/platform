@@ -1,3 +1,14 @@
+pub trait Get2<T1, T2> {
+    /// Return the current value.
+    fn get(ctx: T2) -> T1;
+}
+
+// impl<T: Default> Get2<T> for () {
+//     fn get(_ctx: Contex2) -> T {
+//         T::default()
+//     }
+// }
+
 /// A trait for querying a single value from a type.
 ///
 /// It is not required that the value is constant.

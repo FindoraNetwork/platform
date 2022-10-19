@@ -1,10 +1,10 @@
 use {
     crate::{
         data_model::{
-            AbarToBarOps, AnonTransferOps, AssetType, AssetTypeCode, BarToAbarOps,
-            DefineAsset, IssueAsset, IssuerPublicKey, Memo, NoReplayToken, Operation,
-            Transaction, TransferAsset, TransferType, TxOutput, TxnTempSID, TxoRef,
-            TxoSID, UpdateMemo,
+            AbarConvNote, AbarToBarOps, AnonTransferOps, AssetType, AssetTypeCode,
+            BarToAbarOps, DefineAsset, IssueAsset, IssuerPublicKey, Memo, NoReplayToken,
+            Operation, Transaction, TransferAsset, TransferType, TxOutput, TxnTempSID,
+            TxoRef, TxoSID, UpdateMemo,
         },
         staking::{
             self,
@@ -29,11 +29,10 @@ use {
     },
     zei::{
         anon_xfr::{
-            abar_to_bar::AbarToBarNote,
-            bar_to_abar::verify_bar_to_abar_note,
-            structs::{AXfrNote, AnonBlindAssetRecord, Nullifier},
+            abar_to_abar::AXfrNote,
+            structs::{AnonAssetRecord, Nullifier},
         },
-        setup::{BulletproofParams, VerifierParams},
+        setup::BulletproofParams,
         xfr::{
             sig::XfrPublicKey,
             structs::{XfrAmount, XfrAssetType},
@@ -97,9 +96,9 @@ pub struct TxnEffect {
     /// Staking operations
     pub update_stakers: Vec<UpdateStakerOps>,
     /// Newly created Anon Blind Asset Records
-    pub bar_conv_abars: Vec<AnonBlindAssetRecord>,
+    pub bar_conv_abars: Vec<AnonAssetRecord>,
     /// Body of Abar to Bar conversions
-    pub abar_conv_inputs: Vec<AbarToBarNote>,
+    pub abar_conv_inputs: Vec<AbarConvNote>,
     /// New anon transfer bodies
     pub axfr_bodies: Vec<AXfrNote>,
     /// replace staker operations
@@ -237,8 +236,12 @@ impl TxnEffect {
         def.signature.verify(&def.pubkey.key, &def.body).c(d!())?;
 
         let code = def.body.asset.code;
+
+        let mut def_new = def.clone();
+        def_new.body.asset.code = code;
+
         let token = AssetType {
-            properties: *def.body.asset.clone(),
+            properties: *def_new.body.asset,
             ..Default::default()
         };
 
@@ -278,6 +281,7 @@ impl TxnEffect {
         }
 
         let code = iss.body.code;
+
         let seq_num = iss.body.seq_num;
 
         self.asset_types_involved.insert(code);
@@ -384,7 +388,7 @@ impl TxnEffect {
 
         // Simplify (4)
         if !trn.body.lien_assignments.is_empty()
-            && trn.body.transfer_type != TransferType::Standard
+            || trn.body.transfer_type != TransferType::Standard
         {
             return Err(eg!());
         }
@@ -566,24 +570,20 @@ impl TxnEffect {
     /// * `bar_to_abar` - the BarToAbar Operation body
     /// returns error if validation fails
     fn add_bar_to_abar(&mut self, bar_to_abar: &BarToAbarOps) -> Result<()> {
-        let key = bar_to_abar.note.body.input.public_key;
-        // fetch the verifier Node Params for PlonkProof
-        let node_params = VerifierParams::bar_to_abar_params()?;
-        // verify the Plonk proof and signature
-        verify_bar_to_abar_note(&node_params, &bar_to_abar.note, &key).c(d!())?;
+        // verify the note signature & Plonk proof
+        bar_to_abar.verify()?;
 
         // list input_txo to spend
         self.input_txos.insert(
             bar_to_abar.txo_sid,
             TxOutput {
                 id: None,
-                record: bar_to_abar.note.body.input.clone(),
+                record: bar_to_abar.input_record(),
                 lien: None,
             },
         );
         // push new ABAR created
-        self.bar_conv_abars
-            .push(bar_to_abar.note.body.output.clone());
+        self.bar_conv_abars.push(bar_to_abar.output_record());
         Ok(())
     }
 
@@ -600,7 +600,7 @@ impl TxnEffect {
         // collect newly created BARs
         self.txos.push(Some(TxOutput {
             id: None,
-            record: abar_to_bar.note.body.output.clone(),
+            record: abar_to_bar.note.get_output(),
             lien: None,
         }));
 
@@ -646,7 +646,7 @@ pub struct BlockEffect {
     /// Should line up element-wise with `txns`
     pub txos: Vec<Vec<Option<TxOutput>>>,
     /// New ABARs created
-    pub output_abars: Vec<Vec<AnonBlindAssetRecord>>,
+    pub output_abars: Vec<Vec<AnonAssetRecord>>,
     /// Which TXOs this consumes
     pub input_txos: HashMap<TxoSID, TxOutput>,
     /// Which new nullifiers are created
@@ -713,15 +713,18 @@ impl BlockEffect {
             self.memo_updates.insert(code, memo);
         }
 
-        let mut current_txn_abars: Vec<AnonBlindAssetRecord> = vec![];
+        // collect ABARs generated from BAR to ABAR
+        let mut current_txn_abars: Vec<AnonAssetRecord> = vec![];
         for abar in txn_effect.bar_conv_abars {
             current_txn_abars.push(abar);
         }
 
-        for inputs in txn_effect.abar_conv_inputs {
-            self.new_nullifiers.push(inputs.body.input);
+        // collect Nullifiers generated from ABAR to BAR
+        for inputs in txn_effect.abar_conv_inputs.iter() {
+            self.new_nullifiers.push(inputs.get_input());
         }
 
+        // collect ABARs and Nullifiers from Anon Transfers
         for axfr_note in txn_effect.axfr_bodies {
             for n in axfr_note.body.inputs {
                 self.new_nullifiers.push(n);
@@ -754,7 +757,7 @@ impl BlockEffect {
             }
         }
         for inputs in txn_effect.abar_conv_inputs.iter() {
-            if self.new_nullifiers.contains(&inputs.body.input) {
+            if self.new_nullifiers.contains(&inputs.get_input()) {
                 return Err(eg!());
             }
         }

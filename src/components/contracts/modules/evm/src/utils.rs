@@ -14,10 +14,9 @@ use crate::{runner::ActionRunner, system_contracts::SystemContracts, Config};
 pub fn deploy_contract<C: Config>(
     ctx: &Context,
     contracts: &SystemContracts,
+    bytecode_str: &str,
 ) -> Result<()> {
     // Deploy Bridge here.
-    let bytecode_str = include_str!("../contracts/PrismXXBridge.bytecode");
-
     let bytecode = hex::decode(&bytecode_str[2..].trim()).c(d!())?;
 
     ActionRunner::<C>::inital_system_contract(
@@ -72,39 +71,32 @@ pub fn fetch_mint<C: Config>(
 }
 
 fn parse_truple_result(tuple: Vec<Token>) -> Result<NonConfidentialOutput> {
-    let asset = if let Some(v) = tuple.get(0) {
-        if let Token::FixedBytes(bytes) = v {
-            let mut inner = [0u8; 32];
+    let asset = if let Token::FixedBytes(bytes) =
+        tuple.get(0).ok_or(eg!("Asset Must be FixedBytes"))?
+    {
+        let mut inner = [0u8; 32];
 
-            inner.copy_from_slice(bytes);
+        inner.copy_from_slice(bytes);
 
-            AssetType(inner)
-        } else {
-            return Err(eg!("Asset Must be FixedBytes"));
-        }
+        AssetType(inner)
     } else {
-        return Err(eg!("No asset in index 1"));
+        return Err(eg!("Asset Must be FixedBytes"));
     };
 
-    let target = if let Some(v) = tuple.get(1) {
-        if let Token::FixedBytes(bytes) = v {
-            XfrPublicKey::zei_from_bytes(bytes)?
-        } else {
-            return Err(eg!("Asset Must be FixedBytes"));
-        }
+    let target = if let Token::FixedBytes(bytes) =
+        tuple.get(1).ok_or(eg!("Target must be FixedBytes"))?
+    {
+        XfrPublicKey::zei_from_bytes(bytes)?
     } else {
-        return Err(eg!("No asset in index 1"));
+        return Err(eg!("Asset Must be FixedBytes"));
     };
 
-    let amount = if let Some(v) = tuple.get(2) {
-        if let Token::Uint(i) = v {
+    let amount =
+        if let Token::Uint(i) = tuple.get(2).ok_or(eg!("No asset in index 2"))? {
             i
         } else {
-            return Err(eg!("Asset Must be FixedBytes"));
-        }
-    } else {
-        return Err(eg!("No asset in index 1"));
-    };
+            return Err(eg!("Amount must be uint"));
+        };
 
     let amount = if asset == ASSET_TYPE_FRA {
         EthereumDecimalsMapping::convert_to_native_token(*amount).as_u64()
@@ -112,18 +104,34 @@ fn parse_truple_result(tuple: Vec<Token>) -> Result<NonConfidentialOutput> {
         amount.as_u64()
     };
 
+    let decimal =
+        if let Token::Uint(decimal) = tuple.get(3).ok_or(eg!("No asset in index 3"))? {
+            decimal.as_u64() as u8
+        } else {
+            return Err(eg!("Decimal must be uint"));
+        };
+
+    let max_supply =
+        if let Token::Uint(num) = tuple.get(4).ok_or(eg!("No asset in index 4"))? {
+            EthereumDecimalsMapping::convert_to_native_token(*num).as_u64()
+        } else {
+            return Err(eg!("Max supply must be uint"));
+        };
+
     Ok(NonConfidentialOutput {
         asset,
         amount,
         target,
+        decimal,
+        max_supply,
     })
 }
 
 pub fn compute_create2(caller: H160, salt: H256, code_hash: H256) -> H160 {
     let mut hasher = Keccak256::new();
-    hasher.input(&[0xff]);
-    hasher.input(&caller[..]);
-    hasher.input(&salt[..]);
-    hasher.input(&code_hash[..]);
-    H256::from_slice(hasher.result().as_slice()).into()
+    hasher.update(&[0xff]);
+    hasher.update(&caller[..]);
+    hasher.update(&salt[..]);
+    hasher.update(&code_hash[..]);
+    H256::from_slice(hasher.finalize().as_slice()).into()
 }

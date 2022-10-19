@@ -66,8 +66,9 @@ curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek" 
 ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek" }
 x25519-dalek = { git = "https://github.com/FindoraNetwork/x25519-dalek" }
 bulletproofs = { git = "https://github.com/FindoraNetwork/bp" }
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.8" }
-zei-accumulators = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.8" }
-zei-algebra = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.8" }
-zei-crypto = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.8" }
-zei-plonk = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.8" }
+
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-for-platform" }
+zei-accumulators = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-for-platform" }
+zei-algebra = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-for-platform" }
+zei-crypto = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-for-platform" }
+zei-plonk = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-for-platform" }

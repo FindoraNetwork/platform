@@ -135,7 +135,7 @@ extern "C" fn findora_ffi_free_buffer(buf: ByteBuffer) {
     let s = unsafe { std::slice::from_raw_parts_mut(buf.data, len) };
     let s = s.as_mut_ptr();
     unsafe {
-        Box::from_raw(s);
+        let _ = Box::from_raw(s);
     }
 }
 

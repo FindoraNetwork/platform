@@ -1,0 +1,24 @@
+FROM clux/muslrust
+# ref https://wapl.es/rust/2019/02/17/rust-cross-compile-linux-to-macos.html
+RUN apt update
+RUN apt -y install \
+    clang \
+    gcc \
+    g++ \
+    zlib1g-dev \
+    libmpc-dev \
+    libmpfr-dev \
+    libgmp-dev \
+    wget \
+    cmake
+RUN rustup target add x86_64-apple-darwin
+RUN git clone https://github.com/tpoechtrager/osxcross /opt/osxcross
+ENV WORK_DIR /opt/osxcross
+WORKDIR $WORK_DIR
+RUN wget -nc https://s3.dockerproject.org/darwin/v2/MacOSX10.10.sdk.tar.xz
+RUN mv MacOSX10.10.sdk.tar.xz tarballs/
+RUN CC=clang UNATTENDED=yes OSX_VERSION_MIN=10.7 ./build.sh
+RUN echo [target.x86_64-apple-darwin] >> /root/.cargo/config
+RUN echo linker = \"x86_64-apple-darwin14-clang\" >> /root/.cargo/config
+RUN echo ar = \"x86_64-apple-darwin14-ar\" >> /root/.cargo/config
+

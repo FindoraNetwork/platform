@@ -7,14 +7,14 @@ edition = "2021"
 [dependencies]
 ruc = "1.0"
 arrayref = "0.3.5"
-base64 = "0.10"
+base64 = "0.12"
 byteorder = "1.0.0"
 rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
 rand_chacha = "0.3"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_derive = "^1.0.59"
 serde_json = "1.0"
-sha2 = "0.8.0"
+sha2 = "0.10"
 
 [dependencies.fixed]
 version = "0.4.6"

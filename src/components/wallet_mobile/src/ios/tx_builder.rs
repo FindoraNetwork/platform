@@ -293,7 +293,7 @@ pub extern "C" fn findora_ffi_transaction_builder_sign(
 /// Extracts the serialized form of a transaction.
 #[no_mangle]
 pub extern "C" fn findora_ffi_transaction_builder_transaction(
-    builder: &TransactionBuilder,
+    builder: &mut TransactionBuilder,
 ) -> *mut c_char {
     string_to_c_char(builder.transaction())
 }

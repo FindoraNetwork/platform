@@ -8,7 +8,8 @@ use {
             BLACK_HOLE_PUBKEY, TX_FEE_MIN,
         },
         staking::{FF_PK_LIST, FRA_PRE_ISSUE_AMOUNT},
-        store::{utils::fra_gen_initial_tx, LedgerState},
+        store::LedgerState,
+        utils::fra_gen_initial_tx,
     },
     rand::random,
     rand_chacha::ChaChaRng,
@@ -20,6 +21,7 @@ use {
         structs::{AssetRecordTemplate, XfrAmount},
     },
 };
+
 
 #[test]
 fn staking_block_rewards_rate() {
@@ -159,5 +161,5 @@ fn gen_transfer_tx(
         .c(d!())?;
 
     tx_builder.add_operation(op);
-    Ok(tx_builder.take_transaction())
+    tx_builder.build_and_take_transaction()
 }

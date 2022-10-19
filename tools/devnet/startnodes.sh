@@ -2,6 +2,11 @@
 
 # env
 source ./tools/devnet/env.sh || exit 1
+DEFAULT_BIN_CFG="release"
+export BIN="target/$DEFAULT_BIN_CFG"
+
+$BIN/fn setup -S $ENDPOINT > /dev/null
+$BIN/fn setup -O $WALLET/mnenomic.key > /dev/null
 
 # start one single node if specified
 Node=""
@@ -21,7 +26,7 @@ if [ -z "$Node" ] || ([ ! -z "$Node" ] && [ "$Node" = "$node" ]); then
         ENABLE_LEDGER_SERVICE=true \
         ENABLE_ETH_API_SERVICE=true \
         ENABLE_QUERY_SERVICE=true \
-        release/bin/abcid $DEVNET/$node >> $DEVNET/$node/abcid.log 2>&1  &
+        $BIN/abcid $DEVNET/$node >> $DEVNET/$node/abcid.log 2>&1  &
 fi
 done
 

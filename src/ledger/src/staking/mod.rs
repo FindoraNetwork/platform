@@ -12,11 +12,7 @@
 #![deny(missing_docs)]
 #![allow(clippy::upper_case_acronyms)]
 
-#[cfg(not(any(
-    target_arch = "wasm32",
-    target_arch = "aarch64",
-    target_arch = "arm"
-)))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
 use {num_bigint::BigUint, std::convert::TryFrom};
 
 pub mod cosig;
@@ -169,14 +165,22 @@ pub const MAX_TOTAL_POWER: Amount = Amount::MAX / 8;
 /// can not exceed 20% of global power.
 pub const MAX_POWER_PERCENT_PER_VALIDATOR: [u128; 2] = [1, 5];
 
-/// Block time interval, in seconds.
-pub const BLOCK_INTERVAL: u64 = 15 + 1;
+lazy_static! {
+    /// Block time interval, in seconds.
+    pub static ref BLOCK_INTERVAL: u64 = {
+        1 + env::var("FINDORA_BLOCK_ITV")
+            .ok()
+            .as_deref()
+            .unwrap_or("15")
+            .parse::<u64>().unwrap()
+    };
+}
 
 /// The lock time after the delegation expires, about 21 days.
 //pub const UNBOND_BLOCK_CNT: u64 = 3600 * 24 * 21 / BLOCK_INTERVAL;
 
 // minimal number of validators
-pub(crate) const VALIDATORS_MIN: usize = 5;
+pub const VALIDATORS_MIN: usize = 5;
 
 /// The minimum weight threshold required
 /// when updating validator information, 9/10.
@@ -1282,10 +1286,13 @@ impl Staking {
     //
     // @param h: included
     fn delegation_process_finished_before_height(&mut self, h: BlockHeight) {
-        self.delegation_info
-            .end_height_map
-            .range(0..=h)
-            .map(|(k, v)| (k.to_owned(), (*v).clone()))
+        let r = if CFG.checkpoint.fix_unpaid_delegation_height > h {
+            self.delegation_info.end_height_map.range(0..=h)
+        } else {
+            self.delegation_info.end_height_map.range(0..h)
+        };
+
+        r.map(|(k, v)| (k.to_owned(), (*v).clone()))
             .collect::<Vec<_>>()
             .iter()
             .for_each(|(h, addrs)| {
@@ -1328,8 +1335,9 @@ impl Staking {
         }
 
         // punish itself
+        // the delegators under validator do not contain self-delegation message, so give a none on it.
         let am = self.delegation_get(addr).c(d!())?.amount();
-        self.governance_penalty_sub_amount(addr, am * percent[0] / percent[1])
+        self.governance_penalty_sub_amount(None, addr, am * percent[0] / percent[1])
             .c(d!())?;
 
         if self.addr_is_validator(addr) {
@@ -1343,8 +1351,14 @@ impl Staking {
                     .collect::<Vec<_>>()
             };
 
+            // also modify the amount in the delegators under validator,
+            // make the interface delegation_info and delegator_list data the same
             pl().into_iter().for_each(|(pk, p_am)| {
-                ruc::info_omit!(self.governance_penalty_sub_amount(&pk, p_am));
+                ruc::info_omit!(self.governance_penalty_sub_amount(
+                    Some(addr),
+                    &pk,
+                    p_am
+                ));
             });
 
             // punish its vote power
@@ -1360,13 +1374,14 @@ impl Staking {
     #[inline(always)]
     fn governance_penalty_sub_amount(
         &mut self,
-        addr: &XfrPublicKey,
+        validator: Option<&XfrPublicKey>,
+        delegator: &XfrPublicKey,
         mut am: Amount,
     ) -> Result<()> {
         let d = if let Some(d) = self
             .delegation_info
             .global_delegation_records_map
-            .get_mut(addr)
+            .get_mut(delegator)
         {
             d
         } else {
@@ -1405,6 +1420,27 @@ impl Staking {
             // NOTE:
             // punish rewards if principal is not enough
             d.rwd_amount = d.rwd_amount.saturating_sub(am);
+
+            // NOTE:
+            // the current height is greater than the specified height before execution,
+            // because to ensure the compatibility of historical data
+            if CFG.checkpoint.fix_delegators_am_height < self.cur_height {
+                if let Some(v) = validator {
+                    self.validator_get_effective_at_height_mut(self.cur_height)
+                        .c(d!("failed to get effective validators at current height"))
+                        .and_then(|cur| {
+                            cur.body
+                                .get_mut(v)
+                                .map(|v| {
+                                    if let Some(a) = v.delegators.get_mut(delegator) {
+                                        *a -= am;
+                                    }
+                                })
+                                .c(d!("delegator not exists"))
+                        })
+                        .map(|_| ())?;
+                }
+            }
         }
 
         Ok(())
@@ -1570,11 +1606,7 @@ impl Staking {
         &self.coinbase.distribution_plan
     }
 
-    #[cfg(not(any(
-        target_arch = "wasm32",
-        target_arch = "aarch64",
-        target_arch = "arm"
-    )))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     /// set_proposer_rewards sets the rewards for the block proposer
     /// All rewards are allocated to the proposer only
     pub(crate) fn set_proposer_rewards(
@@ -1616,11 +1648,7 @@ impl Staking {
             .map(|_| ())
     }
 
-    #[cfg(not(any(
-        target_arch = "wasm32",
-        target_arch = "aarch64",
-        target_arch = "arm"
-    )))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     fn get_proposer_rewards_rate(vote_percent: [u64; 2]) -> Result<[u128; 2]> {
         let p = [vote_percent[0] as u128, vote_percent[1] as u128];
         // p[0] = Validator power which voted for this block
@@ -1909,10 +1937,11 @@ pub struct Validator {
     /// so FRA owners can make an informed choice on which validator to use;
     /// % commision is the % of FRA incentives the validator will take out as a commission fee
     /// for helping FRA owners stake their tokens.
-    pub(crate) commission_rate: [u64; 2],
+    pub commission_rate: [u64; 2],
     /// optional descriptive information
     pub memo: StakerMemo,
-    kind: ValidatorKind,
+    /// Which kind of validator it is
+    pub kind: ValidatorKind,
     /// use this field to mark
     /// if this validator signed last block
     pub signed_last_block: bool,
@@ -2072,11 +2101,7 @@ impl Delegation {
     }
 
     #[inline(always)]
-    #[cfg(not(any(
-        target_arch = "wasm32",
-        target_arch = "aarch64",
-        target_arch = "arm"
-    )))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn validator_entry_exists(&self, validator: &XfrPublicKey) -> bool {
         self.delegations.contains_key(validator)
     }
@@ -2096,11 +2121,7 @@ impl Delegation {
     // > **NOTE:**
     // > use 'AssignAdd' instead of 'Assign'
     // > to keep compatible with the logic of governance penalty.
-    #[cfg(not(any(
-        target_arch = "wasm32",
-        target_arch = "aarch64",
-        target_arch = "arm"
-    )))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn set_delegation_rewards(
         &mut self,
@@ -2189,7 +2210,7 @@ impl Delegation {
 
 // Calculate the amount(in FRA units) that
 // should be paid to the owner of this delegation.
-#[cfg(not(any(target_arch = "wasm32", target_arch = "aarch64", target_arch = "arm")))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
 fn calculate_delegation_rewards(
     return_rate: [u128; 2],
     amount: Amount,
@@ -2221,7 +2242,7 @@ fn calculate_delegation_rewards(
         let am = BigUint::from(amount);
         let total_am = BigUint::from(total_amount);
         let global_am = BigUint::from(global_amount);
-        let block_itv = BLOCK_INTERVAL as u128;
+        let block_itv = *BLOCK_INTERVAL as u128;
 
         let second_per_year: u128 = if CFG.checkpoint.second_fix_height < cur_height {
             365 * 24 * 3600
@@ -2256,7 +2277,7 @@ fn calculate_delegation_rewards(
         let am = amount as u128;
         let total_am = total_amount as u128;
         let global_am = global_amount as u128;
-        let block_itv = BLOCK_INTERVAL as u128;
+        let block_itv = *BLOCK_INTERVAL as u128;
 
         let calculate_self_only = || {
             am.checked_mul(return_rate[0])

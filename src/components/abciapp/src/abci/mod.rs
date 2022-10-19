@@ -12,6 +12,7 @@ use {
     crate::api::{
         query_server::query_api, submission_server::submission_api::SubmissionApi,
     },
+    baseapp::tm_events::init_url,
     config::abci::{global_cfg::CFG, ABCIConfig},
     futures::executor::ThreadPool,
     lazy_static::lazy_static,
@@ -30,6 +31,8 @@ lazy_static! {
     pub static ref IN_SAFE_ITV: AtomicBool = AtomicBool::new(true);
     /// A shared pool of the ABCI area
     pub static ref POOL: ThreadPool = pnk!(ThreadPool::new());
+    /// if is exiting, we should not do anything.
+    pub static ref IS_EXITING: AtomicBool = AtomicBool::new(false);
 }
 
 /// Starting findorad
@@ -87,6 +90,7 @@ pub fn run() -> Result<()> {
             "http://{}:{}",
             config.tendermint_host, config.tendermint_port
         );
+        pnk!(init_url(tendermint_rpc.as_str()));
         web3_rpc =
             fc_rpc::start_web3_service(evm_http, evm_ws, tendermint_rpc, base_app);
     }

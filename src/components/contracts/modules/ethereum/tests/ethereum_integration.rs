@@ -25,14 +25,22 @@ fn run_all_tests() {
 
 fn base_transfer_fee() -> U256 {
     U256::from(21000).saturating_mul(
-        <BaseApp as module_ethereum::Config>::FeeCalculator::min_gas_price(),
+        <BaseApp as module_ethereum::Config>::FeeCalculator::min_gas_price(
+            100_0000_0000_u64,
+        ),
     )
 }
 
-fn build_transfer_transaction(to: H160, balance: U256) -> UncheckedTransaction<()> {
+fn build_transfer_transaction(
+    to: H160,
+    balance: U256,
+    nonce: U256,
+) -> UncheckedTransaction<()> {
     let tx = UnsignedTransaction {
-        nonce: U256::zero(),
-        gas_price: <BaseApp as module_ethereum::Config>::FeeCalculator::min_gas_price(),
+        nonce,
+        gas_price: <BaseApp as module_ethereum::Config>::FeeCalculator::min_gas_price(
+            100_0000_0000_u64,
+        ),
         gas_limit: U256::from(0x100000),
         action: ethereum::TransactionAction::Call(to),
         value: balance,
@@ -46,9 +54,12 @@ fn build_transfer_transaction(to: H160, balance: U256) -> UncheckedTransaction<(
 
 fn test_abci_check_tx() {
     let mut req = RequestCheckTx::default();
-    let tx =
-        serde_json::to_vec(&build_transfer_transaction(BOB_ECDSA.address, 10.into()))
-            .unwrap();
+    let tx = serde_json::to_vec(&build_transfer_transaction(
+        BOB_ECDSA.address,
+        10.into(),
+        U256::from(0),
+    ))
+    .unwrap();
     req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
     assert!(
@@ -63,6 +74,13 @@ fn test_abci_check_tx() {
         2,
     );
 
+    let tx2 = serde_json::to_vec(&build_transfer_transaction(
+        BOB_ECDSA.address,
+        10.into(),
+        U256::from(0),
+    ))
+    .unwrap();
+    req.tx = EvmRawTxWrapper::wrap(&tx2);
     let resp = BASE_APP.lock().unwrap().check_tx(&req);
     assert_eq!(
         resp.code, 0,
@@ -82,9 +100,12 @@ fn test_abci_begin_block() {
 
 fn test_abci_deliver_tx() {
     let mut req = RequestDeliverTx::default();
-    let tx =
-        serde_json::to_vec(&build_transfer_transaction(BOB_ECDSA.address, 10.into()))
-            .unwrap();
+    let tx = serde_json::to_vec(&build_transfer_transaction(
+        BOB_ECDSA.address,
+        10.into(),
+        U256::from(0),
+    ))
+    .unwrap();
     req.tx = EvmRawTxWrapper::wrap(&tx);
     let resp = BASE_APP.lock().unwrap().deliver_tx(&req);
     assert_eq!(

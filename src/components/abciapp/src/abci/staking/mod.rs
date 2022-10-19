@@ -13,9 +13,13 @@ use {
     crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
     abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate},
     baseapp::BaseApp as AccountBaseApp,
+    config::abci::global_cfg::CFG,
     lazy_static::lazy_static,
     ledger::{
-        data_model::{Operation, Transaction, ASSET_TYPE_FRA},
+        data_model::{
+            AssetType, AssetTypeCode, IssuerPublicKey, Operation, Transaction,
+            ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
+        },
         staking::{
             ops::{
                 governance::{governance_penalty_tendermint_auto, ByzantineKind},
@@ -37,6 +41,8 @@ use {
 // The top 50~ candidate validators
 // will become official validators.
 const VALIDATOR_LIMIT: usize = 58;
+// Modify the validator's validator line to 100
+const VALIDATOR_LIMIT_V2: usize = 100;
 
 lazy_static! {
     /// Tendermint node address, sha256(pubkey)[:20]
@@ -122,9 +128,16 @@ pub fn get_validators(
     // reverse sort
     vs.sort_by(|a, b| b.1.cmp(&a.1));
 
+    let validator_limit =
+        if CFG.checkpoint.validators_limit_v2_height > staking.cur_height() {
+            VALIDATOR_LIMIT
+        } else {
+            VALIDATOR_LIMIT_V2
+        };
+
     // set the power of every extra validators to zero,
     // then tendermint can remove them from consensus logic.
-    vs.iter_mut().skip(VALIDATOR_LIMIT).for_each(|(k, power)| {
+    vs.iter_mut().skip(validator_limit).for_each(|(k, power)| {
         alt!(cur_entries.contains_key(k), *power = 0, *power = -1);
     });
 
@@ -270,10 +283,127 @@ fn system_governance(staking: &mut Staking, bz: &ByzantineInfo) -> Result<()> {
 }
 
 /// Pay for freed 'Delegations' and 'FraDistributions'.
+pub fn system_prism_mint_pay(
+    la: &mut LedgerState,
+    account_base_app: &mut AccountBaseApp,
+    td_height: i64,
+) -> Option<Transaction> {
+    let mut mints = Vec::new();
+
+    if let Some(account_mint) = account_base_app.consume_mint() {
+        for mint in account_mint {
+            if mint.asset != ASSET_TYPE_FRA {
+                let atc = AssetTypeCode { val: mint.asset };
+                let at = if let Some(mut at) = la.get_asset_type(&atc) {
+                    at.properties.issuer = IssuerPublicKey {
+                        key: *BLACK_HOLE_PUBKEY_STAKING,
+                    };
+                    if mint.max_supply != 0 {
+                        at.properties.asset_rules.max_units = Some(mint.max_supply);
+                        if td_height <= CFG.checkpoint.qa02_prismxx_asset {
+                            at.properties.asset_rules.decimals = mint.decimal;
+                        }
+                    }
+                    at
+                } else {
+                    let mut at = AssetType::default();
+                    at.properties.issuer = IssuerPublicKey {
+                        key: *BLACK_HOLE_PUBKEY_STAKING,
+                    };
+
+                    if mint.max_supply != 0 {
+                        at.properties.asset_rules.max_units = Some(mint.max_supply);
+                        if td_height <= CFG.checkpoint.qa02_prismxx_asset {
+                            at.properties.asset_rules.decimals = mint.decimal;
+                        }
+                    }
+
+                    at.properties.code = AssetTypeCode { val: mint.asset };
+
+                    at
+                };
+
+                la.insert_asset_type(atc, at);
+            }
+
+            let mint_entry = MintEntry::new(
+                MintKind::Other,
+                mint.target,
+                None,
+                mint.amount,
+                mint.asset,
+            );
+
+            mints.push(mint_entry);
+        }
+    }
+
+    if mints.is_empty() {
+        None
+    } else {
+        let mint_ops =
+            Operation::MintFra(MintFraOps::new(la.get_staking().cur_height(), mints));
+        Some(Transaction::from_operation_coinbase_mint(
+            mint_ops,
+            la.get_state_commitment().1,
+        ))
+    }
+}
+
+/// Pay for freed 'Delegations' and 'FraDistributions'.
 pub fn system_mint_pay(
-    la: &LedgerState,
+    td_height: i64,
+    la: &mut LedgerState,
     account_base_app: &mut AccountBaseApp,
 ) -> Option<Transaction> {
+    let mut mints = Vec::new();
+
+    if td_height <= CFG.checkpoint.fix_prism_mint_pay {
+        if let Some(account_mint) = account_base_app.consume_mint() {
+            for mint in account_mint {
+                if mint.asset != ASSET_TYPE_FRA {
+                    let atc = AssetTypeCode { val: mint.asset };
+                    let at = if let Some(mut at) = la.get_asset_type(&atc) {
+                        at.properties.issuer = IssuerPublicKey {
+                            key: *BLACK_HOLE_PUBKEY_STAKING,
+                        };
+
+                        if mint.max_supply != 0 {
+                            at.properties.asset_rules.max_units = Some(mint.max_supply);
+                        }
+
+                        at
+                    } else {
+                        let mut at = AssetType::default();
+                        at.properties.issuer = IssuerPublicKey {
+                            key: *BLACK_HOLE_PUBKEY_STAKING,
+                        };
+
+                        if mint.max_supply != 0 {
+                            at.properties.asset_rules.max_units = Some(mint.max_supply);
+                        }
+
+                        at.properties.code = AssetTypeCode { val: mint.asset };
+
+                        at
+                    };
+
+                    la.insert_asset_type(atc, at);
+                }
+
+                let mint_entry = MintEntry::new(
+                    MintKind::Other,
+                    mint.target,
+                    None,
+                    mint.amount,
+                    mint.asset,
+                );
+
+                mints.push(mint_entry);
+            }
+        }
+    }
+
     let staking = la.get_staking();
     let mut limit = staking.coinbase_balance() as i128;
 
@@ -307,24 +437,6 @@ pub fn system_mint_pay(
         .take(NUM_TO_PAY)
         .collect::<Vec<_>>();
 
-    // add account mint_entries.
-    let mut mints = if let Some(account_mint) = account_base_app.consume_mint() {
-        account_mint
-            .iter()
-            .map(|mint| {
-                MintEntry::new(
-                    MintKind::Other,
-                    mint.target,
-                    None,
-                    mint.amount,
-                    mint.asset,
-                )
-            })
-            .collect::<Vec<MintEntry>>()
-    } else {
-        Vec::new()
-    };
-
     mint_entries.append(&mut mints);
 
     if mint_entries.is_empty() {
@@ -357,7 +469,15 @@ fn gen_offline_punish_list(
         .map(|v| (&v.td_addr, v.td_power))
         .collect::<Vec<_>>();
     vs.sort_by(|a, b| b.1.cmp(&a.1));
-    vs.iter_mut().skip(VALIDATOR_LIMIT).for_each(|(_, power)| {
+
+    let validator_limit =
+        if CFG.checkpoint.validators_limit_v2_height > staking.cur_height() {
+            VALIDATOR_LIMIT
+        } else {
+            VALIDATOR_LIMIT_V2
+        };
+
+    vs.iter_mut().skip(validator_limit).for_each(|(_, power)| {
         *power = 0;
     });
 

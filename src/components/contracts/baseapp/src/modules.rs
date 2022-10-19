@@ -1,5 +1,6 @@
 use super::*;
 use abci::*;
+use config::abci::global_cfg::CFG;
 use fp_core::{
     context::Context,
     module::AppModule,
@@ -17,11 +18,11 @@ use ledger::{
     converter::check_convert_account,
     data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA},
 };
-use module_ethereum::storage::{PendingTransactions, TransactionIndex};
+use module_ethereum::storage::{TransactionIndex, DELIVER_PENDING_TRANSACTIONS};
 use ruc::*;
 use serde::Serialize;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ModuleManager {
     // Ordered module list
     pub(crate) account_module: module_account::App<BaseApp>,
@@ -103,7 +104,7 @@ impl ModuleManager {
     pub fn process_tx<
         Extra: Clone + Serialize + SignedExtension<AccountId = Address>,
     >(
-        &mut self,
+        &self,
         ctx: Context,
         tx: UncheckedTransaction<Extra>,
     ) -> Result<ActionResult> {
@@ -128,54 +129,70 @@ impl ModuleManager {
         tx: &FindoraTransaction,
         hash: H256,
     ) -> Result<()> {
-        let (from, to, amount, asset, lowlevel) = check_convert_account(tx)?;
+        let (from, owner, amount, asset, lowlevel) = check_convert_account(tx)?;
 
-        let from = Address::from(from);
-        let owner = Address::from(to);
+        if CFG.checkpoint.prismxx_inital_height < ctx.header.height {
+            let from = Address::from(from);
+            let owner = Address::from(owner);
 
-        let mut pending_txs: Vec<_> =
-            PendingTransactions::get(&*ctx.db.read()).unwrap_or_default();
-        let transaction_index = pending_txs.len() as u32;
+            let mut pending_txs = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
+            // if let Some(pending_txs)
+            // let transaction_index = pending_txs.as_ref().unwrap_or_default().len() as u32;
+            let transaction_index = pending_txs.len() as u32;
 
-        let (tx, tx_status, receipt) = if asset == ASSET_TYPE_FRA {
+            let (tx, tx_status, receipt) = if asset == ASSET_TYPE_FRA {
+                let balance =
+                    EthereumDecimalsMapping::from_native_token(U256::from(amount))
+                        .ok_or_else(|| {
+                            eg!("The transfer to account amount is too large")
+                        })?;
+                let bridge_address = self.evm_module.contracts.bridge_address;
+                let ba = Address::from(bridge_address);
+
+                module_account::App::<BaseApp>::mint(ctx, &ba, balance)?;
+                match self.evm_module.withdraw_fra(
+                    ctx,
+                    &from,
+                    &owner,
+                    balance,
+                    lowlevel,
+                    transaction_index,
+                    hash,
+                ) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        // Revert mint in failed.
+                        ctx.state.write().discard_session();
+                        return Err(e);
+                    }
+                }
+            } else {
+                self.evm_module.withdraw_frc20(
+                    ctx,
+                    asset.0,
+                    &from,
+                    &owner,
+                    U256::from(amount),
+                    lowlevel,
+                    transaction_index,
+                    hash,
+                )?
+            };
+
+            TransactionIndex::insert(
+                &mut *ctx.db.write(),
+                &HA256::new(tx_status.transaction_hash),
+                &(U256::from(ctx.header.height), tx_status.transaction_index),
+            )?;
+
+            pending_txs.push((tx, tx_status, receipt));
+
+            Ok(())
+        } else {
             let balance = EthereumDecimalsMapping::from_native_token(U256::from(amount))
                 .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
-            let bridge_address = self.evm_module.contracts.bridge_address;
-            let ba = Address::from(bridge_address);
-
-            module_account::App::<BaseApp>::mint(ctx, &ba, balance)?;
-            self.evm_module.withdraw_fra(
-                ctx,
-                &from,
-                &owner,
-                balance,
-                lowlevel,
-                transaction_index,
-                hash,
-            )?
-        } else {
-            self.evm_module.withdraw_frc20(
-                ctx,
-                asset.0,
-                &from,
-                &owner,
-                U256::from(amount),
-                lowlevel,
-                transaction_index,
-                hash,
-            )?
-        };
-
-        TransactionIndex::insert(
-            &mut *ctx.db.write(),
-            &HA256::new(tx_status.transaction_hash),
-            &(U256::from(ctx.header.height), tx_status.transaction_index),
-        )?;
-
-        pending_txs.push((tx, tx_status, receipt));
-        PendingTransactions::put(&mut *ctx.db.write(), &pending_txs)?;
-
-        Ok(())
+            module_account::App::<BaseApp>::mint(ctx, &Address::from(owner), balance)
+        }
     }
 }
 

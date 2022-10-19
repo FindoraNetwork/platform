@@ -401,7 +401,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderTransact
     _: JClass,
     builder: jlong,
 ) -> jstring {
-    let builder = &*(builder as *mut TransactionBuilder);
+    let builder = &mut *(builder as *mut TransactionBuilder);
     let output = env
         .new_string(builder.transaction())
         .expect("Couldn't create java string!");

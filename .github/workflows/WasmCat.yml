@@ -1,10 +1,20 @@
 name: Wasm Building And Pushing
-on: [push]
-
+on:
+  # push:
+  #   tags:
+  #     - 'tracing-*'
+  #     - 'develop'
+  #     - 'main'
+  push:
+    branches:
+      - "*"
 jobs:
   build-push:
+    strategy:
+      matrix:
+        platform: [aws]
     concurrency: wasmcat-ci-${{ github.ref }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.platform }}
     # accepting any branches push but not pull_request and pull_request push.
     # notice: the first push of a PR (create branch) will be triggering.
     if: github.event_name != 'pull_request' && github.event.pull_request.number == ''
@@ -48,6 +58,9 @@ jobs:
           wasm-pack build --release --target nodejs --out-dir ${{ steps.vars.outputs.tmp }}/nodejs
           wasm-pack build --release --target web --out-dir ${{ steps.vars.outputs.tmp }}/web
           wasm-pack build --release --target bundler --out-dir ${{ steps.vars.outputs.tmp }}/bundler
+          wasm-pack build --release --features=lightweight --target nodejs --out-dir ${{ steps.vars.outputs.tmp }}/nodejs-lightweight
+          wasm-pack build --release --features=lightweight --target web --out-dir ${{ steps.vars.outputs.tmp }}/web-lightweight
+          wasm-pack build --release --features=lightweight --target bundler --out-dir ${{ steps.vars.outputs.tmp }}/bundler-lightweight
 
       - name: Pushing wasm-js-bindings branch
         run: |
@@ -59,7 +72,8 @@ jobs:
           git config --global user.name "wasmcat-bot"
 
           # clone the main branch
-          git clone --depth 1 https://${{secrets.ACCESS_TOKEN}}@github.com/FindoraNetwork/wasm-js-bindings
+          # git clone --depth 1 https://${{secrets.ACCESS_TOKEN}}@github.com/FindoraNetwork/wasm-js-bindings
+          git clone --depth 1 git@github.com:FindoraNetwork/wasm-js-bindings.git
           cd wasm-js-bindings
 
           # check target branch exists or not
@@ -80,8 +94,21 @@ jobs:
           cp -r ${{ steps.vars.outputs.tmp }}/bundler ./
           cp -r ${{ steps.vars.outputs.tmp }}/nodejs ./
           cp -r ${{ steps.vars.outputs.tmp }}/web ./
+          cp -r ${{ steps.vars.outputs.tmp }}/nodejs-lightweight ./
+          cp -r ${{ steps.vars.outputs.tmp }}/web-lightweight ./
+          cp -r ${{ steps.vars.outputs.tmp }}/bundler-lightweight ./
 
           # commit and push
-          git add .
+          git add -f ./bundler 
+          git add -f ./nodejs 
+          git add -f ./web
+          git add -f ./web-lightweight 
+          git add -f ./nodejs-lightweight 
+          git add -f ./bundler-lightweight 
+          git status
           git commit -m "platform (${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.sha }}) by wasmcat-bot automation push 🚀"
           git push -f -u origin ${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.branch }}
+
+          git tag -a ${{ steps.vars.outputs.branch }} -m "${{ steps.vars.outputs.branch }}"
+          git show ${{ steps.vars.outputs.branch }}
+          git push -u origin ${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.branch }} ${{ steps.vars.outputs.branch }}

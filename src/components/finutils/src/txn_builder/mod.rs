@@ -8,17 +8,19 @@
 use {
     credentials::CredUserSecretKey,
     curve25519_dalek::scalar::Scalar,
+    digest::Digest,
     fp_types::crypto::MultiSigner,
-    globutils::{wallet, SignatureOf},
+    globutils::{wallet, Serialized, SignatureOf},
     ledger::{
         converter::ConvertAccount,
         data_model::{
-            AbarToBarOps, AnonTransferOps, AssetRules, AssetTypeCode, BarToAbarOps,
-            ConfidentialMemo, DefineAsset, DefineAssetBody, IndexedSignature,
-            IssueAsset, IssueAssetBody, IssuerKeyPair, IssuerPublicKey, Memo,
-            NoReplayToken, Operation, Transaction, TransactionBody, TransferAsset,
-            TransferAssetBody, TransferType, TxOutput, TxoRef, TxoSID, UpdateMemo,
-            UpdateMemoBody, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY, TX_FEE_MIN,
+            AbarConvNote, AbarToBarOps, AnonTransferOps, AssetRules, AssetTypeCode,
+            BarAnonConvNote, BarToAbarOps, ConfidentialMemo, DefineAsset,
+            DefineAssetBody, IndexedSignature, IssueAsset, IssueAssetBody,
+            IssuerKeyPair, IssuerPublicKey, Memo, NoReplayToken, Operation, Transaction,
+            TransactionBody, TransferAsset, TransferAssetBody, TransferType, TxOutput,
+            TxoRef, TxoSID, UpdateMemo, UpdateMemoBody, ASSET_TYPE_FRA,
+            BAR_TO_ABAR_TX_FEE_MIN, BLACK_HOLE_PUBKEY, FEE_CALCULATING_FUNC, TX_FEE_MIN,
         },
         staking::{
             is_valid_tendermint_addr,
@@ -40,6 +42,7 @@ use {
     rand_core::{CryptoRng, RngCore, SeedableRng},
     ruc::*,
     serde::{Deserialize, Serialize},
+    sha2::Sha512,
     std::{
         cmp::Ordering,
         collections::{BTreeMap, HashMap, HashSet},
@@ -51,15 +54,18 @@ use {
             ConfidentialAC, Credential,
         },
         anon_xfr::{
-            abar_to_bar::gen_abar_to_bar_note,
-            bar_to_abar::gen_bar_to_abar_note,
-            config::FEE_CALCULATING_FUNC,
-            gen_anon_xfr_note,
-            keys::{AXfrKeyPair, AXfrPubKey},
-            structs::{
-                AXfrNote, Commitment, OpenAnonBlindAssetRecord,
-                OpenAnonBlindAssetRecordBuilder,
+            abar_to_abar::{finish_anon_xfr_note, init_anon_xfr_note, AXfrPreNote},
+            abar_to_ar::{
+                finish_abar_to_ar_note, init_abar_to_ar_note, AbarToArPreNote,
             },
+            abar_to_bar::{
+                finish_abar_to_bar_note, init_abar_to_bar_note, AbarToBarPreNote,
+            },
+            ar_to_abar::gen_ar_to_abar_note,
+            bar_to_abar::gen_bar_to_abar_note,
+            keys::{AXfrKeyPair, AXfrPubKey},
+            structs::{Commitment, OpenAnonAssetRecord, OpenAnonAssetRecordBuilder},
+            TREE_DEPTH as MERKLE_TREE_DEPTH,
         },
         setup::ProverParams,
         xfr::{
@@ -76,13 +82,8 @@ use {
         },
     },
     zei_algebra::prelude::*,
-    zei_crypto::basic::hybrid_encryption::XPublicKey,
     zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
-
-use ledger::data_model::BAR_TO_ABAR_TX_FEE_MIN;
-/// Depth of abar merkle tree
-pub use zei::anon_xfr::TREE_DEPTH as MERKLE_TREE_DEPTH;
 
 macro_rules! no_transfer_err {
     () => {
@@ -136,6 +137,12 @@ pub struct TransactionBuilder {
     outputs: u64,
     #[allow(missing_docs)]
     pub no_replay_token: NoReplayToken,
+    #[serde(skip)]
+    abar_bar_cache: Vec<AbarToBarPreNote>,
+    #[serde(skip)]
+    abar_ar_cache: Vec<AbarToArPreNote>,
+    #[serde(skip)]
+    abar_abar_cache: Vec<AXfrPreNote>,
 }
 
 impl TransactionBuilder {
@@ -323,6 +330,9 @@ impl TransactionBuilder {
         TransactionBuilder {
             txn: Transaction::from_seq_id(seq_id),
             outputs: 0,
+            abar_abar_cache: vec![],
+            abar_bar_cache: vec![],
+            abar_ar_cache: vec![],
             no_replay_token,
         }
     }
@@ -376,8 +386,109 @@ impl TransactionBuilder {
     }
 
     #[allow(missing_docs)]
-    pub fn take_transaction(self) -> Transaction {
-        self.txn
+    pub fn build_and_take_transaction(&mut self) -> Result<Transaction> {
+        self.build()?;
+        Ok(self.txn.clone())
+    }
+
+    /// Build a transaction from various pre-notes of operations
+    pub fn build(&mut self) -> Result<()> {
+        let mut prng = ChaChaRng::from_entropy();
+
+        // hasher txn. (IMPORTANT! KEEP THE same order)
+        let mut hasher = Sha512::new();
+        let mut bytes = self.txn.body.digest();
+        for i in &self.abar_abar_cache {
+            bytes.extend_from_slice(Serialized::new(&i.body).as_ref());
+        }
+        for i in &self.abar_bar_cache {
+            bytes.extend_from_slice(Serialized::new(&i.body).as_ref());
+        }
+        for i in &self.abar_ar_cache {
+            bytes.extend_from_slice(Serialized::new(&i.body).as_ref());
+        }
+        hasher.update(bytes);
+
+        // finish abar to abar
+        if !self.abar_abar_cache.is_empty() {
+            let mut params: HashMap<(usize, usize), ProverParams> = HashMap::new();
+            for pre_note in &self.abar_abar_cache {
+                let key = (pre_note.body.inputs.len(), pre_note.body.outputs.len());
+                let param = if let Some(key) = params.get(&key) {
+                    key
+                } else {
+                    let param = ProverParams::new(
+                        key.0,
+                        key.1,
+                        Option::from(MERKLE_TREE_DEPTH),
+                    )?;
+                    params.insert(key, param);
+                    params.get(&key).unwrap() // safe, checked.
+                };
+
+                let note = finish_anon_xfr_note(
+                    &mut prng,
+                    param,
+                    pre_note.clone(),
+                    hasher.clone(),
+                )?;
+
+                // Add operation
+                let inp = AnonTransferOps::new(note, self.no_replay_token).c(d!())?;
+                let op = Operation::TransferAnonAsset(Box::new(inp));
+                self.txn.add_operation(op);
+            }
+        }
+
+        // finish abar to bar
+        if !self.abar_bar_cache.is_empty() {
+            let params = ProverParams::abar_to_bar_params(MERKLE_TREE_DEPTH)?;
+            for pre_note in &self.abar_bar_cache {
+                let note = finish_abar_to_bar_note(
+                    &mut prng,
+                    &params,
+                    pre_note.clone(),
+                    hasher.clone(),
+                )?;
+
+                // Create operation
+                let conv = AbarToBarOps::new(
+                    AbarConvNote::AbarToBar(Box::new(note)),
+                    self.no_replay_token,
+                )
+                .c(d!())?;
+                let op = Operation::AbarToBar(Box::from(conv));
+
+                // Add operation to transaction
+                self.txn.add_operation(op);
+            }
+        }
+
+        // finish abar to ar
+        if !self.abar_ar_cache.is_empty() {
+            let params = ProverParams::abar_to_ar_params(MERKLE_TREE_DEPTH)?;
+            for pre_note in &self.abar_ar_cache {
+                let note = finish_abar_to_ar_note(
+                    &mut prng,
+                    &params,
+                    pre_note.clone(),
+                    hasher.clone(),
+                )?;
+
+                // Create operation
+                let conv = AbarToBarOps::new(
+                    AbarConvNote::AbarToAr(Box::new(note)),
+                    self.no_replay_token,
+                )
+                .c(d!())?;
+                let op = Operation::AbarToBar(Box::from(conv));
+
+                // Add operation to transaction
+                self.txn.add_operation(op);
+            }
+        }
+
+        Ok(())
     }
 
     /// Append a transaction memo
@@ -518,30 +629,27 @@ impl TransactionBuilder {
     /// * `txo_sid`       -  TxoSID of the BAR to convert
     /// * `input_record`  -  OpenAssetRecord of the BAR to convert
     /// * `enc_key`       -  XPublicKey of OwnerMemo encryption of receiver
+    /// * `is_bar_transparent`  -  if transparent bar (ar)
+    #[allow(clippy::too_many_arguments)]
+
     pub fn add_operation_bar_to_abar(
         &mut self,
+        seed: [u8; 32],
         auth_key_pair: &XfrKeyPair,
         abar_pub_key: &AXfrPubKey,
         txo_sid: TxoSID,
         input_record: &OpenAssetRecord,
-        enc_key: &XPublicKey,
+        is_bar_transparent: bool,
     ) -> Result<(&mut Self, Commitment)> {
-        let mut prng = ChaChaRng::from_entropy();
-
-        // generate params for Bar to Abar conversion
-        let prover_params = ProverParams::eq_committed_vals_params()?;
-
         // generate the BarToAbarNote with the ZKP
-        let note = gen_bar_to_abar_note(
-            &mut prng,
-            &prover_params,
+        let (note, c) = gen_bar_conv_note(
+            seed,
             input_record,
             auth_key_pair,
             abar_pub_key,
-            enc_key,
+            is_bar_transparent,
         )
         .c(d!())?;
-        let c = note.body.output.commitment;
 
         // Create the BarToAbarOps
         let bar_to_abar = BarToAbarOps::new(note, txo_sid, self.no_replay_token)?;
@@ -560,31 +668,30 @@ impl TransactionBuilder {
     /// * asset_record_type - The type of confidentiality of new BAR
     pub fn add_operation_abar_to_bar(
         &mut self,
-        input: &OpenAnonBlindAssetRecord,
+        input: &OpenAnonAssetRecord,
         input_keypair: &AXfrKeyPair,
         bar_pub_key: &XfrPublicKey,
         asset_record_type: AssetRecordType,
     ) -> Result<&mut Self> {
         let mut prng = ChaChaRng::from_entropy();
-        let user_params = ProverParams::abar_to_bar_params(MERKLE_TREE_DEPTH)?;
+        match asset_record_type {
+            AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType => {
+                let note =
+                    init_abar_to_ar_note(&mut prng, input, input_keypair, bar_pub_key)?;
+                self.abar_ar_cache.push(note);
+            }
+            _ => {
+                let note = init_abar_to_bar_note(
+                    &mut prng,
+                    input,
+                    input_keypair,
+                    bar_pub_key,
+                    asset_record_type,
+                )?;
+                self.abar_bar_cache.push(note);
+            }
+        }
 
-        // Generate note
-        let note = gen_abar_to_bar_note(
-            &mut prng,
-            &user_params,
-            &input,
-            &input_keypair,
-            bar_pub_key,
-            asset_record_type,
-        )
-        .c(d!())?;
-
-        // Create operation
-        let abar_to_bar = AbarToBarOps::new(note, self.no_replay_token).c(d!())?;
-        let op = Operation::AbarToBar(Box::from(abar_to_bar));
-
-        // Add operation to transaction
-        self.txn.add_operation(op);
         Ok(self)
     }
 
@@ -598,27 +705,16 @@ impl TransactionBuilder {
     #[allow(dead_code)]
     pub fn add_operation_anon_transfer(
         &mut self,
-        inputs: &[OpenAnonBlindAssetRecord],
-        outputs: &[OpenAnonBlindAssetRecord],
+        inputs: &[OpenAnonAssetRecord],
+        outputs: &[OpenAnonAssetRecord],
         input_keypairs: &[AXfrKeyPair],
-    ) -> Result<(&mut Self, AXfrNote)> {
-        let mut prng = ChaChaRng::from_entropy();
-        let depth: usize = MERKLE_TREE_DEPTH;
-        let prover_params =
-            ProverParams::new(inputs.len(), outputs.len(), Option::from(depth))?;
+    ) -> Result<(&mut Self, AXfrPreNote)> {
+        let fee = FEE_CALCULATING_FUNC(inputs.len() as u32, outputs.len() as u32);
 
-        let note = gen_anon_xfr_note(
-            &mut prng,
-            &prover_params,
-            inputs,
-            outputs,
-            input_keypairs,
-        )
-        .c(d!())?;
+        // generate anon transfer note
+        let note = init_anon_xfr_note(inputs, outputs, fee, input_keypairs).c(d!())?;
+        self.abar_abar_cache.push(note.clone());
 
-        let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
-        let op = Operation::TransferAnonAsset(Box::new(inp));
-        self.txn.add_operation(op);
         Ok((self, note))
     }
 
@@ -630,19 +726,17 @@ impl TransactionBuilder {
     /// * enc_key - The encryption key of the sender to send the remainder abar
     pub fn add_operation_anon_transfer_fees_remainder(
         &mut self,
-        inputs: &[OpenAnonBlindAssetRecord],
-        outputs: &[OpenAnonBlindAssetRecord],
+        inputs: &[OpenAnonAssetRecord],
+        outputs: &[OpenAnonAssetRecord],
         input_keypairs: &[AXfrKeyPair],
-        enc_key: XPublicKey,
-    ) -> Result<(&mut Self, AXfrNote, Vec<OpenAnonBlindAssetRecord>)> {
+    ) -> Result<(&mut Self, AXfrPreNote, Vec<OpenAnonAssetRecord>)> {
         let mut prng = ChaChaRng::from_entropy();
-        let depth: usize = MERKLE_TREE_DEPTH;
 
         let mut vec_outputs = outputs.to_vec();
         let mut vec_changes = vec![];
         let mut remainders = HashMap::new();
         // If multiple keypairs are present, the last keypair is considered for remainder
-        let remainder_pk = input_keypairs.last().unwrap().pub_key();
+        let remainder_pk = input_keypairs.last().unwrap().get_pub_key();
 
         // Create a remainders hashmap with remainder amount for each asset type
         for input in inputs {
@@ -675,15 +769,15 @@ impl TransactionBuilder {
             );
 
             if remainder < 0 {
-                return Err(eg!("Transfer Asset token excess balance!"));
+                return Err(eg!("Transfer Asset token input less than output!"));
             }
 
             if remainder > 0 {
-                let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
+                let oabar_money_back = OpenAnonAssetRecordBuilder::new()
                     .amount(remainder as u64)
                     .asset_type(asset_type)
-                    .pub_key(remainder_pk)
-                    .finalize(&mut prng, &enc_key)
+                    .pub_key(&remainder_pk)
+                    .finalize(&mut prng)
                     .unwrap()
                     .build()
                     .unwrap();
@@ -696,19 +790,18 @@ impl TransactionBuilder {
 
         // Calculate implicit fees that will get deducted and subtract from FRA remainder
         let fees =
-            FEE_CALCULATING_FUNC(inputs.len() as u32, vec_outputs.len() as u32 + 1)
-                as i64;
-        let fra_remainder = fra_rem.unwrap() - fees; // safe. checked.
+            FEE_CALCULATING_FUNC(inputs.len() as u32, vec_outputs.len() as u32 + 1);
+        let fra_remainder = fra_rem.unwrap() - (fees as i64); // safe. checked.
         if fra_remainder < 0 {
-            return Err(eg!("FRA token excess balance!"));
+            return Err(eg!("insufficient FRA to pay fees!"));
         }
         if fra_remainder > 0 {
             println!("Transaction FRA Remainder Amount: {:?}", fra_remainder);
-            let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
+            let oabar_money_back = OpenAnonAssetRecordBuilder::new()
                 .amount(fra_remainder as u64)
                 .asset_type(ASSET_TYPE_FRA)
-                .pub_key(remainder_pk)
-                .finalize(&mut prng, &enc_key)
+                .pub_key(&remainder_pk)
+                .finalize(&mut prng)
                 .unwrap()
                 .build()
                 .unwrap();
@@ -718,26 +811,15 @@ impl TransactionBuilder {
             vec_changes.push(oabar_money_back);
         }
 
-        let outputs_plus_remainder = &vec_outputs[..];
+        if vec_outputs.len() > 5 {
+            return Err(eg!(
+                "Total outputs (incl. remainders) cannot be greater than 5"
+            ));
+        }
 
-        let prover_params = ProverParams::new(
-            inputs.len(),
-            outputs_plus_remainder.len(),
-            Option::from(depth),
-        )?;
-
-        let note = gen_anon_xfr_note(
-            &mut prng,
-            &prover_params,
-            inputs,
-            outputs_plus_remainder,
-            input_keypairs,
-        )
-        .c(d!())?;
-
-        let inp = AnonTransferOps::new(note.clone(), self.no_replay_token).c(d!())?;
-        let op = Operation::TransferAnonAsset(Box::new(inp));
-        self.txn.add_operation(op);
+        let note =
+            init_anon_xfr_note(inputs, &vec_outputs, fees, input_keypairs).c(d!())?;
+        self.abar_abar_cache.push(note.clone());
 
         // return a list of all new remainder abars generated
         Ok((self, note, vec_changes))
@@ -935,7 +1017,7 @@ impl TransactionBuilder {
         self
     }
 
-    /// Signing this transaction with XfrKeyPair
+    /// Signing this transaction with XfrKeyPair, but insert `Transaction.signatures`
     pub fn sign(&mut self, kp: &XfrKeyPair) -> &mut Self {
         self.txn.sign(kp);
         self
@@ -950,6 +1032,12 @@ impl TransactionBuilder {
         self.txn.check_signature(pk, &sig).c(d!())?;
         self.txn.signatures.push(sig);
         Ok(self)
+    }
+
+    /// Signing this transaction with XfrKeyPair, but insert to `Transaction.pubkey_sign_map`
+    pub fn sign_to_map(&mut self, kp: &XfrKeyPair) -> &mut Self {
+        self.txn.sign_to_map(kp);
+        self
     }
 
     #[allow(missing_docs)]
@@ -1037,6 +1125,49 @@ pub(crate) fn build_record_and_get_blinds<R: CryptoRng + RngCore>(
         ),
         open_asset_record.type_blind.0,
     ))
+}
+
+fn gen_bar_conv_note(
+    seed: [u8; 32],
+    input_record: &OpenAssetRecord,
+    auth_key_pair: &XfrKeyPair,
+    abar_pub_key: &AXfrPubKey,
+    is_bar_transparent: bool,
+) -> Result<(BarAnonConvNote, Commitment)> {
+    // let mut prng = ChaChaRng::from_entropy();
+    let mut prng = ChaChaRng::from_seed(seed);
+
+    if is_bar_transparent {
+        let prover_params = ProverParams::ar_to_abar_params()?;
+
+        // generate the BarToAbarNote with the ZKP
+        let note = gen_ar_to_abar_note(
+            &mut prng,
+            &prover_params,
+            input_record,
+            auth_key_pair,
+            abar_pub_key,
+        )
+        .c(d!())?;
+
+        let c = note.body.output.commitment;
+        Ok((BarAnonConvNote::ArNote(Box::new(note)), c))
+    } else {
+        // generate params for Bar to Abar conversion
+        let prover_params = ProverParams::bar_to_abar_params()?;
+
+        // generate the BarToAbarNote with the ZKP
+        let note = gen_bar_to_abar_note(
+            &mut prng,
+            &prover_params,
+            input_record,
+            auth_key_pair,
+            abar_pub_key,
+        )
+        .c(d!())?;
+        let c = note.body.output.commitment;
+        Ok((BarAnonConvNote::BarNote(Box::new(note)), c))
+    }
 }
 
 /// TransferOperationBuilder constructs transfer operations using the factory pattern
@@ -1415,11 +1546,10 @@ impl TransferOperationBuilder {
 /// This is used for the wasm interface in building a multi-input/output anon transfer operation.
 #[derive(Default)]
 pub struct AnonTransferOperationBuilder {
-    inputs: Vec<OpenAnonBlindAssetRecord>,
-    outputs: Vec<OpenAnonBlindAssetRecord>,
+    inputs: Vec<OpenAnonAssetRecord>,
+    outputs: Vec<OpenAnonAssetRecord>,
     keypairs: Vec<AXfrKeyPair>,
-    from_pubkey: Option<XPublicKey>,
-    note: Option<AXfrNote>,
+    note: Option<AXfrPreNote>,
     commitments: Vec<Commitment>,
 
     nonce: NoReplayToken,
@@ -1436,7 +1566,6 @@ impl AnonTransferOperationBuilder {
             inputs: Vec::default(),
             outputs: Vec::default(),
             keypairs: Vec::default(),
-            from_pubkey: None,
             note: None,
             commitments: Vec::default(),
             nonce: no_replay_token,
@@ -1448,62 +1577,206 @@ impl AnonTransferOperationBuilder {
     /// an ABAR and a Keypair as input
     pub fn add_input(
         &mut self,
-        abar: OpenAnonBlindAssetRecord,
+        abar: OpenAnonAssetRecord,
         secret_key: AXfrKeyPair,
     ) -> Result<&mut Self> {
+        if self.inputs.len() >= 5 {
+            return Err(eg!("Total inputs (incl. fees) cannot be greater than 5"));
+        }
         self.inputs.push(abar);
         self.keypairs.push(secret_key);
         Ok(self)
     }
 
     /// add_output is used to add a output record to the Anon Transfer factory
-    pub fn add_output(&mut self, abar: OpenAnonBlindAssetRecord) -> Result<&mut Self> {
+    pub fn add_output(&mut self, abar: OpenAnonAssetRecord) -> Result<&mut Self> {
+        if self.outputs.len() >= 5 {
+            return Err(eg!(
+                "Total outputs (incl. remainders) cannot be greater than 5"
+            ));
+        }
         self.commitments.push(abar.compute_commitment());
         self.outputs.push(abar);
         Ok(self)
     }
 
     #[allow(missing_docs)]
-    pub fn extra_fee_estimation(&self) -> u64 {
-        let estimated_fees = FEE_CALCULATING_FUNC(
+    pub fn extra_fee_estimation(&self) -> Result<u64> {
+        if self.inputs.len() > 5 {
+            return Err(eg!("Total inputs (incl. fees) cannot be greater than 5"));
+        }
+
+        let input_sums =
+            self.inputs
+                .iter()
+                .fold(HashMap::new(), |mut asset_amounts, i| {
+                    let sum = asset_amounts.entry(i.get_asset_type()).or_insert(0u64);
+                    *sum += i.get_amount();
+                    asset_amounts
+                });
+        let output_sums =
+            self.outputs
+                .iter()
+                .fold(HashMap::new(), |mut asset_amounts, o| {
+                    let sum = asset_amounts.entry(o.get_asset_type()).or_insert(0u64);
+                    *sum += o.get_amount();
+                    asset_amounts
+                });
+
+        let fra_input_sum = *input_sums.get(&ASSET_TYPE_FRA).unwrap_or(&0u64);
+        let fra_output_sum = *output_sums.get(&ASSET_TYPE_FRA).unwrap_or(&0u64);
+        if output_sums.len() > input_sums.len() {
+            return Err(eg!("Output assets cannot be more than input assets"));
+        }
+
+        let extra_remainders = input_sums.iter().try_fold(
+            0usize,
+            |extra_remainders, (asset, inp_amount)| {
+                if *asset == ASSET_TYPE_FRA {
+                    Ok(extra_remainders)
+                } else {
+                    match output_sums.get(asset) {
+                        None => Ok(extra_remainders + 1),
+                        Some(op_sum) => match op_sum.cmp(inp_amount) {
+                            Ordering::Equal => Ok(extra_remainders),
+                            Ordering::Less => Ok(extra_remainders + 1),
+                            Ordering::Greater => {
+                                Err(eg!("Output cannot be greater than Input"))
+                            }
+                        },
+                    }
+                }
+            },
+        )?;
+
+        let estimated_fees_without_extra_fra_ip_op = FEE_CALCULATING_FUNC(
             self.inputs.len() as u32,
-            (self.outputs.len() + 1) as u32,
+            (self.outputs.len() + extra_remainders) as u32,
         ) as u64;
 
-        let mut fra_input_sum: u64 = 0;
-        let mut fra_output_sum: u64 = 0;
+        let fra_extra_output_sum =
+            fra_output_sum + estimated_fees_without_extra_fra_ip_op;
+        match fra_input_sum.cmp(&fra_extra_output_sum) {
+            Ordering::Equal => Ok(0u64),
+            Ordering::Greater => {
+                let estimated_fees_with_fra_remainder = FEE_CALCULATING_FUNC(
+                    self.inputs.len() as u32,
+                    (self.outputs.len() + extra_remainders + 1) as u32,
+                ) as u64;
 
-        for input in &self.inputs {
-            if ASSET_TYPE_FRA == input.get_asset_type() {
-                fra_input_sum += input.get_amount();
+                if fra_input_sum >= (fra_output_sum + estimated_fees_with_fra_remainder)
+                {
+                    Ok(0u64)
+                } else {
+                    let estimated_fees_with_extra_input_and_remainder =
+                        FEE_CALCULATING_FUNC(
+                            (self.inputs.len() + 1) as u32,
+                            (self.outputs.len() + extra_remainders + 1) as u32,
+                        ) as u64;
+
+                    Ok(
+                        fra_output_sum + estimated_fees_with_extra_input_and_remainder
+                            - fra_input_sum,
+                    )
+                }
+            }
+            Ordering::Less => {
+                // case where input is insufficient
+                let estimated_fees_with_extra_input_and_remainder = FEE_CALCULATING_FUNC(
+                    (self.inputs.len() + 1) as u32,
+                    (self.outputs.len() + extra_remainders + 1) as u32,
+                )
+                    as u64;
+                Ok(
+                    fra_output_sum + estimated_fees_with_extra_input_and_remainder
+                        - fra_input_sum,
+                )
             }
         }
+    }
 
-        for output in &self.outputs {
-            if ASSET_TYPE_FRA == output.get_asset_type() {
-                fra_output_sum += output.get_amount();
+    #[allow(missing_docs)]
+    pub fn get_total_fee_estimation(&self) -> Result<u64> {
+        let input_sums =
+            self.inputs
+                .iter()
+                .fold(HashMap::new(), |mut asset_amounts, i| {
+                    let sum = asset_amounts.entry(i.get_asset_type()).or_insert(0u64);
+                    *sum += i.get_amount();
+                    asset_amounts
+                });
+        let output_sums =
+            self.outputs
+                .iter()
+                .fold(HashMap::new(), |mut asset_amounts, o| {
+                    let sum = asset_amounts.entry(o.get_asset_type()).or_insert(0u64);
+                    *sum += o.get_amount();
+                    asset_amounts
+                });
+
+        let fra_input_sum = *input_sums.get(&ASSET_TYPE_FRA).unwrap_or(&0u64);
+        let fra_output_sum = *output_sums.get(&ASSET_TYPE_FRA).unwrap_or(&0u64);
+        if output_sums.len() > input_sums.len() {
+            return Err(eg!("Output assets cannot be more than input assets"));
+        }
+
+        let extra_remainders = input_sums.iter().try_fold(
+            0usize,
+            |extra_remainders, (asset, inp_amount)| {
+                if *asset == ASSET_TYPE_FRA {
+                    Ok(extra_remainders)
+                } else {
+                    match output_sums.get(asset) {
+                        None => Ok(extra_remainders + 1),
+                        Some(op_sum) => match op_sum.cmp(inp_amount) {
+                            Ordering::Equal => Ok(extra_remainders),
+                            Ordering::Less => Ok(extra_remainders + 1),
+                            Ordering::Greater => {
+                                Err(eg!("Output cannot be greater than Input"))
+                            }
+                        },
+                    }
+                }
+            },
+        )?;
+
+        let estimated_fees_without_extra_fra_ip_op = FEE_CALCULATING_FUNC(
+            self.inputs.len() as u32,
+            (self.outputs.len() + extra_remainders) as u32,
+        ) as u64;
+
+        let fra_extra_output_sum =
+            fra_output_sum + estimated_fees_without_extra_fra_ip_op;
+        match fra_input_sum.cmp(&fra_extra_output_sum) {
+            Ordering::Equal => Ok(fra_input_sum - fra_output_sum),
+            Ordering::Greater => {
+                let estimated_fees_with_fra_remainder = FEE_CALCULATING_FUNC(
+                    self.inputs.len() as u32,
+                    (self.outputs.len() + extra_remainders + 1) as u32,
+                ) as u64;
+
+                if fra_input_sum >= (fra_output_sum + estimated_fees_with_fra_remainder)
+                {
+                    Ok(estimated_fees_with_fra_remainder)
+                } else {
+                    let estimated_fees_with_extra_input_and_remainder =
+                        FEE_CALCULATING_FUNC(
+                            (self.inputs.len() + 1) as u32,
+                            (self.outputs.len() + extra_remainders + 1) as u32,
+                        ) as u64;
+
+                    Ok(estimated_fees_with_extra_input_and_remainder)
+                }
             }
-        }
-
-        if fra_output_sum > fra_input_sum {
-            let fra_deficient = fra_output_sum - fra_input_sum;
-            let new_estimated_fee = FEE_CALCULATING_FUNC(
-                self.inputs.len() as u32 + 1,
-                self.outputs.len() as u32 + 1,
-            ) as u64;
-            return new_estimated_fee + fra_deficient;
-        }
-
-        let fra_excess = fra_input_sum - fra_output_sum;
-
-        if estimated_fees > fra_excess {
-            let new_estimated_fee = FEE_CALCULATING_FUNC(
-                self.inputs.len() as u32 + 1,
-                self.outputs.len() as u32 + 1,
-            ) as u64;
-            new_estimated_fee - fra_excess
-        } else {
-            0u64
+            Ordering::Less => {
+                // case where input is insufficient
+                let estimated_fees_with_extra_input_and_remainder = FEE_CALCULATING_FUNC(
+                    (self.inputs.len() + 1) as u32,
+                    (self.outputs.len() + extra_remainders + 1) as u32,
+                )
+                    as u64;
+                Ok(estimated_fees_with_extra_input_and_remainder)
+            }
         }
     }
 
@@ -1516,7 +1789,7 @@ impl AnonTransferOperationBuilder {
     pub fn get_commitment_map(&self) -> HashMap<String, (AXfrPubKey, AssetType, u64)> {
         let mut commitment_map = HashMap::new();
         for out_abar in self.outputs.iter() {
-            let abar_rand = wallet::commitment_to_base64(&out_abar.compute_commitment());
+            let abar_rand = wallet::commitment_to_base58(&out_abar.compute_commitment());
             let abar_pkey = *out_abar.pub_key_ref();
             let abar_asset = out_abar.get_asset_type();
             let abar_amt = out_abar.get_amount();
@@ -1525,65 +1798,99 @@ impl AnonTransferOperationBuilder {
         commitment_map
     }
 
-    /// set public key of sender for remainder
-    pub fn set_from_pubkey(&mut self, from_pubkey: XPublicKey) -> Result<&mut Self> {
-        self.from_pubkey = Some(from_pubkey);
-        Ok(self)
-    }
-
     /// build generates the anon transfer body with the Zero Knowledge Proof.
     pub fn build(&mut self) -> Result<&mut Self> {
+        if self.inputs.len() > 5 {
+            return Err(eg!("Total inputs (incl. fees) cannot be greater than 5"));
+        }
+        if self.outputs.len() > 5 {
+            return Err(eg!(
+                "Total outputs (incl. remainders) cannot be greater than 5"
+            ));
+        }
+
         let mut prng = ChaChaRng::from_entropy();
+        let input_asset_list: HashSet<AssetType> = self
+            .inputs
+            .iter()
+            .map(|a| a.get_asset_type())
+            .collect::<Vec<AssetType>>()
+            .drain(..)
+            .collect();
+        let mut fees_in_fra = 0u32;
 
-        let mut sum_input = 0;
-        let mut sum_output = 0;
-        for input in self.inputs.clone() {
-            if ASSET_TYPE_FRA == input.get_asset_type() {
-                sum_input += input.get_amount();
+        for asset in input_asset_list {
+            let mut sum_input = 0;
+            let mut sum_output = 0;
+            for input in self.inputs.clone() {
+                if asset == input.get_asset_type() {
+                    sum_input += input.get_amount();
+                }
+            }
+            for output in self.outputs.clone() {
+                if asset == output.get_asset_type() {
+                    sum_output += output.get_amount();
+                }
+            }
+
+            let fees = if asset == ASSET_TYPE_FRA {
+                fees_in_fra = FEE_CALCULATING_FUNC(
+                    self.inputs.len() as u32,
+                    self.outputs.len() as u32,
+                );
+                fees_in_fra as u64
+            } else {
+                0u64
+            };
+
+            if sum_output + fees > sum_input {
+                return if asset == ASSET_TYPE_FRA {
+                    Err(eg!(
+                        "Insufficient FRA balance to pay fees {} + {} > {}",
+                        sum_output,
+                        fees,
+                        sum_input
+                    ))
+                } else {
+                    Err(eg!(
+                        "Insufficient {:?} balance to pay fees {} + {} > {}",
+                        asset,
+                        sum_output,
+                        fees,
+                        sum_input
+                    ))
+                };
+            }
+
+            let remainder = sum_input - sum_output - (fees as u64);
+            if remainder > 0 {
+                let oabar_money_back = OpenAnonAssetRecordBuilder::new()
+                    .amount(remainder)
+                    .asset_type(asset)
+                    .pub_key(&self.keypairs[0].get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap();
+
+                let commitment = oabar_money_back.compute_commitment();
+                self.outputs.push(oabar_money_back);
+                self.commitments.push(commitment);
             }
         }
-        for output in self.outputs.clone() {
-            if ASSET_TYPE_FRA == output.get_asset_type() {
-                sum_output += output.get_amount();
-            }
+
+        if self.outputs.len() > 5 {
+            return Err(eg!(
+                "Total outputs (incl. remainders) cannot be greater than 5"
+            ));
         }
-        let fees = FEE_CALCULATING_FUNC(
-            self.inputs.len() as u32,
-            self.outputs.len() as u32 + 1,
-        ) as u64;
-        if sum_output + fees > sum_input {
-            return Err(eg!("Insufficient FRA balance to pay fees"));
-        }
-        let remainder = sum_input - sum_output - fees;
-
-        let rem_from_pubkey = self.from_pubkey.clone().c(d!())?;
-        let oabar_money_back = OpenAnonBlindAssetRecordBuilder::new()
-            .amount(remainder)
-            .asset_type(ASSET_TYPE_FRA)
-            .pub_key(self.keypairs[0].pub_key())
-            .finalize(&mut prng, &rem_from_pubkey)
-            .unwrap()
-            .build()
-            .unwrap();
-
-        let commitment = oabar_money_back.compute_commitment();
-        self.outputs.push(oabar_money_back);
-        self.commitments.push(commitment);
-
-        let prover_params = ProverParams::new(
-            self.inputs.len(),
-            self.outputs.len(),
-            Some(MERKLE_TREE_DEPTH),
-        )?;
-
-        let note = gen_anon_xfr_note(
-            &mut prng,
-            &prover_params,
+        let note = init_anon_xfr_note(
             self.inputs.as_slice(),
             self.outputs.as_slice(),
+            fees_in_fra,
             self.keypairs.as_slice(),
         )
-        .c(d!())?;
+        .c(d!("error from init_anon_xfr_note"))?;
 
         self.note = Some(note);
 
@@ -1591,18 +1898,37 @@ impl AnonTransferOperationBuilder {
     }
 
     /// Add operation to the transaction
-    pub fn build_txn(&mut self) -> Result<&mut Self> {
-        self.txn
-            .add_operation(Operation::TransferAnonAsset(Box::from(
-                AnonTransferOps::new(self.note.as_ref().unwrap().clone(), self.nonce)
-                    .unwrap(),
-            )));
+    pub fn build_txn(&mut self) -> Result<()> {
+        let mut prng = ChaChaRng::from_entropy();
+        let param = ProverParams::new(
+            self.inputs.len(),
+            self.outputs.len(),
+            Some(MERKLE_TREE_DEPTH),
+        )?;
 
-        Ok(self)
+        let pre_note = self.note.clone().unwrap();
+        let mut hasher = Sha512::new();
+
+        let mut bytes = self.txn.body.digest();
+        bytes.extend_from_slice(Serialized::new(&pre_note.body).as_ref());
+        hasher.update(bytes);
+
+        let note = finish_anon_xfr_note(&mut prng, &param, pre_note, hasher)?;
+
+        // Add operation
+        let inp = AnonTransferOps::new(note, self.nonce).c(d!())?;
+        let op = Operation::TransferAnonAsset(Box::new(inp));
+        self.txn.add_operation(op);
+
+        Ok(())
+    }
+
+    /// Calculates the Anon fee given the number of inputs and outputs
+    pub fn get_anon_fee(n_inputs: u32, n_outputs: u32) -> u32 {
+        FEE_CALCULATING_FUNC(n_inputs, n_outputs)
     }
 
     /// transaction method wraps the anon transfer note in an Operation and returns it
-    #[allow(missing_docs)]
     pub fn serialize_str(&self) -> Result<String> {
         if self.note.is_none() {
             return Err(eg!("Anon transfer not built and signed"));
@@ -1618,21 +1944,16 @@ mod tests {
     use {
         super::*,
         ledger::data_model::{ATxoSID, BlockEffect, TxnEffect, TxoRef},
-        ledger::store::{utils::fra_gen_initial_tx, LedgerState},
+        ledger::store::LedgerState,
+        ledger::utils::fra_gen_initial_tx,
         rand_chacha::ChaChaRng,
         rand_core::SeedableRng,
-        zei::anon_xfr::bar_to_abar::verify_bar_to_abar_note,
-        zei::anon_xfr::config::FEE_CALCULATING_FUNC,
-        zei::anon_xfr::structs::{
-            AnonBlindAssetRecord, OpenAnonBlindAssetRecordBuilder,
+        zei::anon_xfr::structs::{AnonAssetRecord, OpenAnonAssetRecordBuilder},
+        zei::xfr::asset_record::{
+            build_blind_asset_record, open_blind_asset_record,
+            AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
         },
-        zei::setup::VerifierParams,
-        zei::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-        zei::xfr::asset_record::{build_blind_asset_record, open_blind_asset_record},
-        zei::xfr::sig::XfrKeyPair,
         zei::xfr::structs::AssetType as AT,
-        zei_algebra::prelude::Scalar,
-        zei_crypto::basic::hybrid_encryption::XSecretKey,
         zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
     };
 
@@ -1987,12 +2308,11 @@ mod tests {
 
         let mut prng = ChaChaRng::from_seed([0u8; 32]);
         let from = XfrKeyPair::generate(&mut prng);
-        let to = AXfrKeyPair::generate(&mut prng).pub_key();
-        let to_enc_key = XSecretKey::new(&mut prng);
+        let to = AXfrKeyPair::generate(&mut prng).get_pub_key();
 
         let ar = AssetRecordTemplate::with_no_asset_tracing(
             10u64,
-            AT::from_identical_byte(1u8),
+            AT([1u8; 32]),
             AssetRecordType::ConfidentialAmount_ConfidentialAssetType,
             from.get_pk(),
         );
@@ -2000,22 +2320,25 @@ mod tests {
         let (bar, _, memo) = build_blind_asset_record(&mut prng, &pc_gens, &ar, vec![]);
         let dummy_input = open_blind_asset_record(&bar, &memo, &from).unwrap();
 
+        let mut seed = [0u8; 32];
+
+        getrandom::getrandom(&mut seed).unwrap();
+
         let _ = builder
             .add_operation_bar_to_abar(
+                seed,
                 &from,
                 &to,
                 TxoSID(123),
                 &dummy_input,
-                &XPublicKey::from(&to_enc_key),
+                false,
             )
             .is_ok();
 
-        let txn = builder.take_transaction();
+        let txn = builder.build_and_take_transaction().unwrap();
 
         if let Operation::BarToAbar(note) = txn.body.operations[0].clone() {
-            let node_params = VerifierParams::bar_to_abar_params().unwrap();
-            let result =
-                verify_bar_to_abar_note(&node_params, &note.note, from.get_pk_ref());
+            let result = note.verify();
             assert!(result.is_ok());
         }
     }
@@ -2033,22 +2356,21 @@ mod tests {
         let asset_type = ASSET_TYPE_FRA;
 
         // simulate input abar
-        let (mut oabar, keypair_in, _dec_key_in, enc_key_in) =
-            gen_oabar_and_keys(&mut prng, amount, asset_type);
+        let (mut oabar, keypair_in) = gen_oabar_and_keys(&mut prng, amount, asset_type);
 
         // simulate input fee abar
-        let (mut oabar_fee, keypair_in_fee, _dec_key_in, _) =
+        let (mut oabar_fee, keypair_in_fee) =
             gen_oabar_and_keys(&mut prng, fee_amount, asset_type);
-        let abar = AnonBlindAssetRecord::from_oabar(&oabar);
+        let abar = AnonAssetRecord::from_oabar(&oabar);
 
-        let fee_abar = AnonBlindAssetRecord::from_oabar(&oabar_fee);
+        let fee_abar = AnonAssetRecord::from_oabar(&oabar_fee);
         let asset_type_out = ASSET_TYPE_FRA;
 
         //Simulate output abar
-        let (oabar_out, _keypair_out, _dec_key_out, _) =
+        let (oabar_out, _keypair_out) =
             gen_oabar_and_keys(&mut prng, amount_output, asset_type_out);
 
-        let _abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
+        let _abar_out = AnonAssetRecord::from_oabar(&oabar_out);
 
         let mut builder = TransactionBuilder::from_seq_id(1);
 
@@ -2059,7 +2381,8 @@ mod tests {
         let uid_fee = ledger_state.add_abar(&fee_abar).unwrap();
 
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-        let _ = ledger_state.compute_and_save_state_commitment_data(1);
+        // let _ =
+        ledger_state.compute_and_save_state_commitment_data(1);
 
         let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
         let mt_leaf_fee_info = ledger_state.get_abar_proof(uid_fee).unwrap();
@@ -2075,13 +2398,12 @@ mod tests {
             &vec_inputs,
             &vec_oututs,
             &vec_keys,
-            enc_key_in,
         );
         //builder.add_operation_anon_transfer(&vec_inputs, &vec_oututs, &vec_keys);
 
         assert!(result.is_ok());
 
-        let txn = builder.take_transaction();
+        let txn = builder.build_and_take_transaction().unwrap();
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
         let mut block = BlockEffect::default();
         let block_result = block.add_txn_effect(compute_effect);
@@ -2089,7 +2411,7 @@ mod tests {
         assert!(block_result.is_ok());
 
         for n in block.new_nullifiers.iter() {
-            let _str = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+            let _str = wallet::nullifier_to_base58(&n);
         }
         let txn_sid_result = ledger_state.finish_block(block);
         assert!(txn_sid_result.is_ok());
@@ -2110,27 +2432,25 @@ mod tests {
         let asset_type = AT::from_identical_byte(0);
 
         // simulate input abar
-        let (oabar, keypair_in, _dec_key_in, _) =
-            gen_oabar_and_keys(&mut prng, amount, asset_type);
+        let (oabar, keypair_in) = gen_oabar_and_keys(&mut prng, amount, asset_type);
 
         //simulate another oabar just to get new keypair
-        let (_, another_keypair, _, _) =
-            gen_oabar_and_keys(&mut prng, amount, asset_type);
+        let (_, another_keypair) = gen_oabar_and_keys(&mut prng, amount, asset_type);
 
         //negative test for input keypairs
-        assert_eq!(keypair_in.pub_key(), *oabar.pub_key_ref());
+        assert_eq!(keypair_in.get_pub_key(), *oabar.pub_key_ref());
 
-        assert_ne!(keypair_in.pub_key(), another_keypair.pub_key());
+        assert_ne!(keypair_in.get_pub_key(), another_keypair.get_pub_key());
 
-        assert_ne!(another_keypair.pub_key(), *oabar.pub_key_ref());
+        assert_ne!(another_keypair.get_pub_key(), *oabar.pub_key_ref());
 
         let asset_type_out = AT::from_identical_byte(0);
 
         //Simulate output abar
-        let (oabar_out, _keypair_out, _dec_key_out, _) =
+        let (oabar_out, _keypair_out) =
             gen_oabar_and_keys(&mut prng, amount, asset_type_out);
 
-        let _abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
+        let _abar_out = AnonAssetRecord::from_oabar(&oabar_out);
         let mut builder = TransactionBuilder::from_seq_id(1);
 
         let wrong_key_result = builder.add_operation_anon_transfer(
@@ -2146,10 +2466,9 @@ mod tests {
         //negative test for asset type
         let wrong_asset_type_out = AT::from_identical_byte(1);
 
-        let (oabar, keypair_in, _dec_key_in, _) =
-            gen_oabar_and_keys(&mut prng, amount, asset_type);
+        let (oabar, keypair_in) = gen_oabar_and_keys(&mut prng, amount, asset_type);
 
-        let (oabar_out, _keypair_out, _dec_key_out, _) =
+        let (oabar_out, _keypair_out) =
             gen_oabar_and_keys(&mut prng, amount, wrong_asset_type_out);
 
         let wrong_asset_type_result =
@@ -2159,21 +2478,20 @@ mod tests {
         assert!(wrong_asset_type_result.is_err());
 
         //The happy path
-        let (mut oabar, keypair_in, _dec_key_in, _) =
-            gen_oabar_and_keys(&mut prng, amount, asset_type);
+        let (mut oabar, keypair_in) = gen_oabar_and_keys(&mut prng, amount, asset_type);
 
-        let (oabar_out, _keypair_out, _dec_key_out, _) =
+        let (oabar_out, _keypair_out) =
             gen_oabar_and_keys(&mut prng, amount, asset_type_out);
 
-        let abar = AnonBlindAssetRecord::from_oabar(&oabar);
+        let abar = AnonAssetRecord::from_oabar(&oabar);
 
         //negative test for owner memo
         let owner_memo = oabar.get_owner_memo().unwrap();
 
-        let new_xfrkeys = XfrKeyPair::generate(&mut prng);
+        let new_xfrkeys = AXfrKeyPair::generate(&mut prng);
 
         //Trying to decrypt asset type and amount from owner memo using wrong keys
-        let result_decrypt = owner_memo.decrypt_amount_and_asset_type(&new_xfrkeys);
+        let result_decrypt = owner_memo.decrypt(&new_xfrkeys.get_view_key());
         assert!(result_decrypt.is_err());
 
         // add abar to merkle tree
@@ -2197,7 +2515,7 @@ mod tests {
         //negative test for builder
         assert!(result.is_ok());
 
-        let txn = builder.take_transaction();
+        let txn = builder.build_and_take_transaction().unwrap();
 
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
 
@@ -2208,7 +2526,7 @@ mod tests {
         assert!(block_result.is_ok());
 
         for n in block.new_nullifiers.iter() {
-            let _str = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+            let _str = wallet::nullifier_to_base58(&n);
         }
 
         let txn_sid_result = ledger_state.finish_block(block);
@@ -2228,36 +2546,36 @@ mod tests {
         let asset_type = AT::from_identical_byte(0);
 
         // simulate input abar
-        let (mut oabar, keypair_in, _dec_key_in, _) =
-            gen_oabar_and_keys(&mut prng, amount, asset_type);
-        let abar = AnonBlindAssetRecord::from_oabar(&oabar);
-        assert_eq!(keypair_in.pub_key(), *oabar.pub_key_ref());
+        let (mut oabar, keypair_in) = gen_oabar_and_keys(&mut prng, amount, asset_type);
+        let abar = AnonAssetRecord::from_oabar(&oabar);
+        assert_eq!(keypair_in.get_pub_key(), *oabar.pub_key_ref());
 
         let _owner_memo = oabar.get_owner_memo().unwrap();
 
         // add abar to merkle tree
         let uid = ledger_state.add_abar(&abar).unwrap();
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-        let _ = ledger_state.compute_and_save_state_commitment_data(1);
+        // let _ =
+        ledger_state.compute_and_save_state_commitment_data(1);
         let mt_leaf_info = ledger_state.get_abar_proof(uid).unwrap();
         oabar.update_mt_leaf_info(mt_leaf_info);
 
-        let (oabar_out, _keypair_out, _dec_key_out, _) =
+        let (oabar_out, _keypair_out) =
             gen_oabar_and_keys(&mut prng, amount, asset_type);
-        let _abar_out = AnonBlindAssetRecord::from_oabar(&oabar_out);
+        let _abar_out = AnonAssetRecord::from_oabar(&oabar_out);
         let mut builder = TransactionBuilder::from_seq_id(1);
 
         let _ = builder
             .add_operation_anon_transfer(&[oabar], &[oabar_out], &[keypair_in])
             .is_ok();
 
-        let txn = builder.take_transaction();
+        let txn = builder.build_and_take_transaction().unwrap();
         let compute_effect = TxnEffect::compute_effect(txn).unwrap();
         let mut block = BlockEffect::default();
         let _ = block.add_txn_effect(compute_effect);
 
         for n in block.new_nullifiers.iter() {
-            let _str = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+            let _str = wallet::nullifier_to_base58(&n);
         }
         let _txn_sid = ledger_state.finish_block(block).unwrap();
 
@@ -2268,43 +2586,45 @@ mod tests {
         let asset_type1 = AT::from_identical_byte(0);
 
         // simulate input abar
-        let (mut oabar1, keypair_in1, _dec_key_in1, _) =
+        let (mut oabar1, keypair_in1) =
             gen_oabar_and_keys(&mut prng1, amount1, asset_type1);
 
-        let abar1 = AnonBlindAssetRecord::from_oabar(&oabar1);
+        let abar1 = AnonAssetRecord::from_oabar(&oabar1);
 
-        assert_eq!(keypair_in1.pub_key(), *oabar1.pub_key_ref());
+        assert_eq!(keypair_in1.get_pub_key(), *oabar1.pub_key_ref());
 
         let _owner_memo1 = oabar1.get_owner_memo().unwrap();
 
         // add abar to merkle tree
         let uid1 = ledger_state.add_abar(&abar1).unwrap();
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-        let _ = ledger_state.compute_and_save_state_commitment_data(2);
+        // let _ =
+        ledger_state.compute_and_save_state_commitment_data(2);
         let mt_leaf_info1 = ledger_state.get_abar_proof(uid1).unwrap();
         oabar1.update_mt_leaf_info(mt_leaf_info1);
 
         // add abar to merkle tree for negative amount
 
         ledger_state.compute_and_append_txns_hash(&BlockEffect::default());
-        let _ = ledger_state.compute_and_save_state_commitment_data(2);
+        // let _ =
+        ledger_state.compute_and_save_state_commitment_data(2);
 
-        let (oabar_out1, _keypair_out1, _dec_key_out1, _) =
+        let (oabar_out1, _keypair_out1) =
             gen_oabar_and_keys(&mut prng1, amount1, asset_type1);
 
-        let _abar_out1 = AnonBlindAssetRecord::from_oabar(&oabar_out1);
+        let _abar_out1 = AnonAssetRecord::from_oabar(&oabar_out1);
         let mut builder1 = TransactionBuilder::from_seq_id(1);
         let _ = builder1
             .add_operation_anon_transfer(&[oabar1], &[oabar_out1], &[keypair_in1])
             .is_ok();
 
-        let txn1 = builder1.take_transaction();
+        let txn1 = builder1.build_and_take_transaction().unwrap();
         let compute_effect1 = TxnEffect::compute_effect(txn1).unwrap();
         let mut block1 = BlockEffect::default();
         let _ = block1.add_txn_effect(compute_effect1);
 
         for n in block1.new_nullifiers.iter() {
-            let _str = base64::encode_config(&n.to_bytes(), base64::URL_SAFE);
+            let _str = wallet::nullifier_to_base58(&n);
         }
         let _txn_sid1 = ledger_state.finish_block(block1).unwrap();
     }
@@ -2313,23 +2633,383 @@ mod tests {
         prng: &mut R,
         amount: u64,
         asset_type: AT,
-    ) -> (
-        OpenAnonBlindAssetRecord,
-        AXfrKeyPair,
-        XSecretKey,
-        XPublicKey,
-    ) {
+    ) -> (OpenAnonAssetRecord, AXfrKeyPair) {
         let keypair = AXfrKeyPair::generate(prng);
-        let dec_key = XSecretKey::new(prng);
-        let enc_key = XPublicKey::from(&dec_key);
-        let oabar = OpenAnonBlindAssetRecordBuilder::new()
+        let oabar = OpenAnonAssetRecordBuilder::new()
             .amount(amount)
             .asset_type(asset_type)
-            .pub_key(keypair.pub_key())
-            .finalize(prng, &enc_key)
+            .pub_key(&keypair.get_pub_key())
+            .finalize(prng)
             .unwrap()
             .build()
             .unwrap();
-        (oabar, keypair, dec_key, enc_key)
+        (oabar, keypair)
+    }
+
+    #[test]
+    pub fn test_extra_fee_estimation_only_fra() {
+        let mut prng = ChaChaRng::from_seed([0u8; 32]);
+        let k = AXfrKeyPair::generate(&mut prng);
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let _fee = FEE_CALCULATING_FUNC(1, 1) as u64;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), 0);
+        }
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+
+            let _ = b.add_output(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+            );
+
+            let fee = FEE_CALCULATING_FUNC(2, 2) as u64;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), fee);
+        }
+        {
+            // case with perfect balance for fee
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+
+            let _ = b.add_output(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(200000)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+            );
+
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), 0);
+        }
+        {
+            // case where input is insufficient
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(10)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let _ = b.add_output(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(200000)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+            );
+
+            let extra_fra = FEE_CALCULATING_FUNC(2, 2) as u64 + 200000 - 10;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), extra_fra);
+        }
+    }
+
+    #[test]
+    pub fn test_extra_fee_estimation_multi_asset() {
+        let mut prng = ChaChaRng::from_seed([0u8; 32]);
+        let k = AXfrKeyPair::generate(&mut prng);
+
+        let asset1 = AT::from_identical_byte(1u8);
+        let _asset2 = AT::from_identical_byte(2u8);
+
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let extra_fra = FEE_CALCULATING_FUNC(2, 2) as u64;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), extra_fra);
+        }
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1100000)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let extra_fra = FEE_CALCULATING_FUNC(2, 2) as u64 - 1100000;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), extra_fra);
+        }
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let _ = b.add_output(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+            );
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1100000)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let extra_fra = FEE_CALCULATING_FUNC(2, 2) as u64 - 1100000;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), extra_fra);
+        }
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let _ = b.add_output(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+            );
+            let fee = FEE_CALCULATING_FUNC(2, 1) as u64;
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(fee)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let extra_fra = FEE_CALCULATING_FUNC(2, 1) as u64 - fee;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), extra_fra);
+        }
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let _ = b.add_output(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(900000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+            );
+            let fee = FEE_CALCULATING_FUNC(2, 2) as u64;
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(fee)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let extra_fra = FEE_CALCULATING_FUNC(2, 2) as u64 - fee;
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), extra_fra);
+        }
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(800000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let _ = b.add_output(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(900000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+            );
+            let fee = FEE_CALCULATING_FUNC(2, 2) as u64;
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(fee)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            assert!(b.extra_fee_estimation().is_err());
+        }
+        {
+            let mut b = AnonTransferOperationBuilder::new_from_seq_id(0);
+
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(1000000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k.clone(),
+            );
+            let _ = b.add_output(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(900000)
+                    .asset_type(asset1)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+            );
+            let fee = FEE_CALCULATING_FUNC(2, 3) as u64;
+            let _ = b.add_input(
+                OpenAnonAssetRecordBuilder::new()
+                    .amount(2 * fee)
+                    .asset_type(ASSET_TYPE_FRA)
+                    .pub_key(&k.get_pub_key())
+                    .finalize(&mut prng)
+                    .unwrap()
+                    .build()
+                    .unwrap(),
+                k,
+            );
+            assert!(b.extra_fee_estimation().is_ok());
+            assert_eq!(b.extra_fee_estimation().unwrap(), 0);
+        }
     }
 }

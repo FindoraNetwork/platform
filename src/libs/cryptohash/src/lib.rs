@@ -72,6 +72,9 @@ pub mod sha256 {
     impl Digest {
         #[inline(always)]
         pub fn from_slice(slice: &[u8]) -> Option<Self> {
+            if slice.len() != DIGESTBYTES {
+                return None;
+            }
             let mut buf = [0_u8; DIGESTBYTES];
             buf[0..DIGESTBYTES].clone_from_slice(slice);
             Some(Digest(buf))
@@ -102,7 +105,7 @@ pub mod sha256 {
 
 #[repr(C)]
 #[allow(missing_docs)]
-#[derive(Copy, Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct HashValue {
     pub hash: [u8; HASH_SIZE],
 }

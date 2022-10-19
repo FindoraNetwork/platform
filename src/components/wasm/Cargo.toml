@@ -9,22 +9,26 @@ description = ""
 repository = ""
 license = ""
 
+[features]
+lightweight = ["zei/lightweight"] # Minimize size for only AR2ABAR and ABAR2AR.
+
 # wasm-opt has a segfaulting issue. Disabling for now
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
 
 [dependencies]
-base64 = "0.10"
-hex = "0.3.2"
+base64 = "0.12"
+hex = "0.4.2"
 js-sys = "0.3.27"
 rand_chacha = "0.3"
 rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0"
-wasm-bindgen = { version = "0.2.62", features = ["serde-serialize"] }
+wasm-bindgen = { version = "=0.2.73", features = ["serde-serialize"] }
+bs58 = "0.4"
 
 ring = "0.16.19"
-aes-gcm = "0.8.0"
+aes-gcm = '=0.10.0-pre'
 bech32 = "0.7.2"
 ruc = "1.0"
 
@@ -32,9 +36,9 @@ ruc = "1.0"
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
 
-zei = "0.1"
-zei-algebra = "0.1"
-zei-crypto = "0.1"
+zei = "0.2"
+zei-algebra = "0.2"
+zei-crypto = "0.2"
 
 finutils = { path = "../finutils", default-features = false }
 globutils = { path = "../../libs/globutils" }
@@ -44,6 +48,8 @@ ledger = { path = "../../ledger" }
 
 fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = { path = "../contracts/primitives/types" }
+
+fbnc = { version = "0.2.9", default-features = false}
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -65,7 +71,7 @@ features = [
 serde = "1.0.124"
 serde_json = "1.0.41"
 vergen = "=3.1.0"
-wasm-bindgen = { version = "0.2.62", features = ["serde-serialize"] }
+wasm-bindgen = { version = "=0.2.73", features = ["serde-serialize"] }
 
 [dev-dependencies]
 # Must enable the "js"-feature,

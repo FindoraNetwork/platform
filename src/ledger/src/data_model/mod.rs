@@ -7,27 +7,29 @@
 
 mod __trash__;
 mod effects;
+pub use effects::{BlockEffect, TxnEffect};
 mod test;
 
-pub use effects::{BlockEffect, TxnEffect};
-
-use crate::staking::ops::replace_staker::ReplaceStakerOps;
-
 use {
-    crate::converter::ConvertAccount,
-    crate::staking::{
-        ops::{
-            claim::ClaimOps, delegation::DelegationOps,
-            fra_distribution::FraDistributionOps, governance::GovernanceOps,
-            mint_fra::MintFraOps, undelegation::UnDelegationOps,
-            update_staker::UpdateStakerOps, update_validator::UpdateValidatorOps,
+    crate::{
+        converter::ConvertAccount,
+        staking::{
+            ops::{
+                claim::ClaimOps, delegation::DelegationOps,
+                fra_distribution::FraDistributionOps, governance::GovernanceOps,
+                mint_fra::MintFraOps, replace_staker::ReplaceStakerOps,
+                undelegation::UnDelegationOps, update_staker::UpdateStakerOps,
+                update_validator::UpdateValidatorOps,
+            },
+            Staking,
         },
-        Staking,
     },
     __trash__::{Policy, PolicyGlobals, TxnPolicyData},
     bitmap::SparseMap,
     cryptohash::{sha256::Digest as BitDigest, HashValue},
+    digest::{consts::U64, Digest},
     fbnc::NumKey,
+    globutils::wallet::public_key_to_base64,
     globutils::{HashOf, ProofOf, Serialized, SignatureOf},
     lazy_static::lazy_static,
     rand::Rng,
@@ -47,9 +49,15 @@ use {
     unicode_normalization::UnicodeNormalization,
     zei::{
         anon_xfr::{
-            abar_to_bar::AbarToBarNote, bar_to_abar::BarToAbarNote, keys::AXfrPubKey,
-            structs::AXfrNote,
+            abar_to_abar::AXfrNote,
+            abar_to_ar::{verify_abar_to_ar_note, AbarToArNote},
+            abar_to_bar::{verify_abar_to_bar_note, AbarToBarNote},
+            ar_to_abar::{verify_ar_to_abar_note, ArToAbarNote},
+            bar_to_abar::{verify_bar_to_abar_note, BarToAbarNote},
+            keys::AXfrPubKey,
+            structs::{AnonAssetRecord, AxfrOwnerMemo, Nullifier},
         },
+        setup::VerifierParams,
         xfr::{
             gen_xfr_body,
             sig::{XfrKeyPair, XfrPublicKey},
@@ -61,8 +69,7 @@ use {
             XfrNotePolicies,
         },
     },
-    zei_algebra::bls12_381::BLSScalar,
-    zei_algebra::serialization::ZeiFromToBytes,
+    zei_algebra::{bls12_381::BLSScalar, serialization::ZeiFromToBytes},
 };
 
 const RANDOM_CODE_LENGTH: usize = 16;
@@ -400,11 +407,7 @@ pub struct XfrAddress {
 }
 
 impl XfrAddress {
-    #[cfg(not(any(
-        target_arch = "wasm32",
-        target_arch = "aarch64",
-        target_arch = "arm"
-    )))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn to_base64(self) -> String {
         b64enc(&self.key.as_bytes())
     }
@@ -447,11 +450,7 @@ pub struct IssuerPublicKey {
 }
 
 impl IssuerPublicKey {
-    #[cfg(not(any(
-        target_arch = "wasm32",
-        target_arch = "aarch64",
-        target_arch = "arm"
-    )))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn to_base64(self) -> String {
         b64enc(self.key.as_bytes())
     }
@@ -832,11 +831,7 @@ pub enum UtxoStatus {
 pub struct Utxo(pub TxOutput);
 
 impl Utxo {
-    #[cfg(not(any(
-        target_arch = "wasm32",
-        target_arch = "aarch64",
-        target_arch = "arm"
-    )))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     #[inline(always)]
     pub(crate) fn get_nonconfidential_balance(&self) -> u64 {
         if let XfrAmount::NonConfidential(n) = self.0.record.amount {
@@ -1023,6 +1018,27 @@ impl IssueAssetBody {
             num_outputs: records.len(),
             records: records.to_vec(),
         })
+    }
+}
+
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Deserialize)]
+pub enum AssetTypePrefix {
+    UserDefined,
+    ERC20,
+    NFT,
+}
+
+impl AssetTypePrefix {
+    #[allow(missing_docs)]
+    pub fn bytes(&self) -> Vec<u8> {
+        let code = match self {
+            AssetTypePrefix::UserDefined => "56",
+            AssetTypePrefix::ERC20 => "77",
+            AssetTypePrefix::NFT => "02",
+        };
+
+        hex::decode(format!("{:0>64}", code)).unwrap()
     }
 }
 
@@ -1270,11 +1286,21 @@ impl UpdateMemo {
     }
 }
 
+/// A note which enumerates the transparent and confidential BAR to
+/// Anon Asset record conversion.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum BarAnonConvNote {
+    /// A transfer note with ZKP for a confidential asset record
+    BarNote(Box<BarToAbarNote>),
+    /// A transfer note with ZKP for a non-confidential asset record
+    ArNote(Box<ArToAbarNote>),
+}
+
 /// Operation for converting a Blind Asset Record to a Anonymous record
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BarToAbarOps {
     /// the note which contains the inp/op and ZKP
-    pub note: BarToAbarNote,
+    pub note: BarAnonConvNote,
     /// The TxoSID of the the input BAR
     pub txo_sid: TxoSID,
     nonce: NoReplayToken,
@@ -1287,7 +1313,7 @@ impl BarToAbarOps {
     /// * txo_sid          - the TxoSID of the converting BAR
     /// * nonce
     pub fn new(
-        note: BarToAbarNote,
+        note: BarAnonConvNote,
         txo_sid: TxoSID,
         nonce: NoReplayToken,
     ) -> Result<BarToAbarOps> {
@@ -1296,6 +1322,49 @@ impl BarToAbarOps {
             txo_sid,
             nonce,
         })
+    }
+
+    /// verifies the signatures and proof of the note
+    pub fn verify(&self) -> Result<()> {
+        match &self.note {
+            BarAnonConvNote::BarNote(note) => {
+                // fetch the verifier Node Params for PlonkProof
+                let node_params = VerifierParams::bar_to_abar_params()?;
+                // verify the Plonk proof and signature
+                verify_bar_to_abar_note(&node_params, &note, &note.body.input.public_key)
+                    .c(d!())
+            }
+            BarAnonConvNote::ArNote(note) => {
+                // fetch the verifier Node Params for PlonkProof
+                let node_params = VerifierParams::ar_to_abar_params()?;
+                // verify the Plonk proof and signature
+                verify_ar_to_abar_note(&node_params, note).c(d!())
+            }
+        }
+    }
+
+    /// provides a copy of the input record in the note
+    pub fn input_record(&self) -> BlindAssetRecord {
+        match &self.note {
+            BarAnonConvNote::BarNote(n) => n.body.input.clone(),
+            BarAnonConvNote::ArNote(n) => n.body.input.clone(),
+        }
+    }
+
+    /// provides a copy of the output record of the note.
+    pub fn output_record(&self) -> AnonAssetRecord {
+        match &self.note {
+            BarAnonConvNote::BarNote(n) => n.body.output.clone(),
+            BarAnonConvNote::ArNote(n) => n.body.output.clone(),
+        }
+    }
+
+    /// provides a copy of the AxfrOwnerMemo in the note
+    pub fn axfr_memo(&self) -> AxfrOwnerMemo {
+        match &self.note {
+            BarAnonConvNote::BarNote(n) => n.body.memo.clone(),
+            BarAnonConvNote::ArNote(n) => n.body.memo.clone(),
+        }
     }
 
     #[inline(always)]
@@ -1311,17 +1380,118 @@ impl BarToAbarOps {
     }
 }
 
+/// AbarConvNote
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum AbarConvNote {
+    /// Conversion to a amount or type confidential BAR
+    AbarToBar(Box<AbarToBarNote>),
+    /// Conversion to a transparent BAR
+    AbarToAr(Box<AbarToArNote>),
+}
+
+impl AbarConvNote {
+    /// Verifies the ZKP based on the type of conversion
+    pub fn verify<D: Digest<OutputSize = U64> + Default>(
+        &self,
+        merkle_root: BLSScalar,
+        hasher: D,
+    ) -> Result<()> {
+        match self {
+            AbarConvNote::AbarToBar(note) => {
+                // An axfr_abar_conv requires versioned merkle root hash for verification.
+                let abar_to_bar_verifier_params = VerifierParams::abar_to_bar_params()?;
+                // verify zk proof with merkle root
+                verify_abar_to_bar_note(
+                    &abar_to_bar_verifier_params,
+                    &note,
+                    &merkle_root,
+                    hasher,
+                )
+                .c(d!("Abar to Bar conversion proof verification failed"))
+            }
+            AbarConvNote::AbarToAr(note) => {
+                // An axfr_abar_conv requires versioned merkle root hash for verification.
+                let abar_to_ar_verifier_params = VerifierParams::abar_to_ar_params()?;
+                // verify zk proof with merkle root
+                verify_abar_to_ar_note(
+                    &abar_to_ar_verifier_params,
+                    &note,
+                    &merkle_root,
+                    hasher,
+                )
+                .c(d!("Abar to AR conversion proof verification failed"))
+            }
+        }
+    }
+
+    /// input nullifier in the note body
+    pub fn get_input(&self) -> Nullifier {
+        match self {
+            AbarConvNote::AbarToBar(note) => note.body.input,
+            AbarConvNote::AbarToAr(note) => note.body.input,
+        }
+    }
+
+    /// merkle root version of the proof
+    pub fn get_merkle_root_version(&self) -> u64 {
+        match self {
+            AbarConvNote::AbarToBar(note) => note.body.merkle_root_version,
+            AbarConvNote::AbarToAr(note) => note.body.merkle_root_version,
+        }
+    }
+
+    /// public key of the note body
+    pub fn get_public_key(&self) -> XfrPublicKey {
+        match self {
+            AbarConvNote::AbarToBar(note) => note.body.output.public_key,
+            AbarConvNote::AbarToAr(note) => note.body.output.public_key,
+        }
+    }
+
+    /// output BAR of the note body
+    pub fn get_output(&self) -> BlindAssetRecord {
+        match self {
+            AbarConvNote::AbarToBar(note) => note.body.output.clone(),
+            AbarConvNote::AbarToAr(note) => note.body.output.clone(),
+        }
+    }
+
+    /// gets address of owner memo in the note body
+    pub fn get_owner_memos_ref(&self) -> Vec<Option<&OwnerMemo>> {
+        match self {
+            AbarConvNote::AbarToBar(note) => {
+                vec![note.body.memo.as_ref()]
+            }
+            AbarConvNote::AbarToAr(note) => {
+                vec![note.body.memo.as_ref()]
+            }
+        }
+    }
+
+    /// get serialized bytes for signature and prove (only ABAR body).
+    pub fn digest(&self) -> Vec<u8> {
+        match self {
+            AbarConvNote::AbarToBar(note) => {
+                Serialized::new(&note.body).as_ref().to_vec()
+            }
+            AbarConvNote::AbarToAr(note) => {
+                Serialized::new(&note.body).as_ref().to_vec()
+            }
+        }
+    }
+}
+
 /// Operation for converting a Blind Asset Record to a Anonymous record
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AbarToBarOps {
     /// the note which contains the inp/op and ZKP
-    pub note: AbarToBarNote,
+    pub note: AbarConvNote,
     nonce: NoReplayToken,
 }
 
 impl AbarToBarOps {
     /// Generates a new BarToAbarOps object
-    pub fn new(note: AbarToBarNote, nonce: NoReplayToken) -> Result<AbarToBarOps> {
+    pub fn new(note: AbarConvNote, nonce: NoReplayToken) -> Result<AbarToBarOps> {
         Ok(AbarToBarOps { note, nonce })
     }
 
@@ -1404,29 +1574,42 @@ pub enum Operation {
     ReplaceStaker(ReplaceStakerOps),
 }
 
+impl Operation {
+    /// get serialized bytes for signature and prove.
+    pub fn digest(&self) -> Vec<u8> {
+        match self {
+            Operation::UpdateStaker(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::Delegation(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::UnDelegation(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::Claim(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::FraDistribution(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::UpdateValidator(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::Governance(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::UpdateMemo(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::ConvertAccount(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::BarToAbar(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::ReplaceStaker(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::TransferAsset(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::IssueAsset(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::DefineAsset(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::MintFra(i) => Serialized::new(i).as_ref().to_vec(),
+            Operation::AbarToBar(i) => i.note.digest(),
+            Operation::TransferAnonAsset(i) => {
+                Serialized::new(&i.note.body).as_ref().to_vec()
+            }
+        }
+    }
+}
+
 fn set_no_replay_token(op: &mut Operation, no_replay_token: NoReplayToken) {
     match op {
-        Operation::UpdateStaker(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::Delegation(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::UnDelegation(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::Claim(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::FraDistribution(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::UpdateValidator(i) => {
-            i.set_nonce(no_replay_token);
-        }
-        Operation::Governance(i) => {
-            i.set_nonce(no_replay_token);
-        }
+        Operation::UpdateStaker(i) => i.set_nonce(no_replay_token),
+        Operation::Delegation(i) => i.set_nonce(no_replay_token),
+        Operation::UnDelegation(i) => i.set_nonce(no_replay_token),
+        Operation::Claim(i) => i.set_nonce(no_replay_token),
+        Operation::FraDistribution(i) => i.set_nonce(no_replay_token),
+        Operation::UpdateValidator(i) => i.set_nonce(no_replay_token),
+        Operation::Governance(i) => i.set_nonce(no_replay_token),
         Operation::UpdateMemo(i) => i.body.no_replay_token = no_replay_token,
         Operation::ConvertAccount(i) => i.set_nonce(no_replay_token),
         Operation::BarToAbar(i) => i.set_nonce(no_replay_token),
@@ -1459,6 +1642,19 @@ impl TransactionBody {
         result.no_replay_token = no_replay_token;
         result
     }
+
+    /// get serialized bytes for signature and prove.
+    pub fn digest(&self) -> Vec<u8> {
+        let mut bytes = vec![];
+        bytes.extend_from_slice(Serialized::new(&self.no_replay_token).as_ref());
+        bytes.extend_from_slice(Serialized::new(&self.credentials).as_ref());
+        bytes.extend_from_slice(Serialized::new(&self.policy_options).as_ref());
+        bytes.extend_from_slice(Serialized::new(&self.memos).as_ref());
+        for o in &self.operations {
+            bytes.extend_from_slice(&o.digest());
+        }
+        bytes
+    }
 }
 
 #[allow(missing_docs)]
@@ -1468,6 +1664,9 @@ pub struct Transaction {
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
     pub signatures: Vec<SignatureOf<TransactionBody>>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
+    pub pubkey_sign_map: HashMap<XfrPublicKey, SignatureOf<TransactionBody>>,
 }
 
 #[allow(missing_docs)]
@@ -1765,6 +1964,12 @@ pub const TX_FEE_MIN: u64 = 10_000; // 0.01 FRA
 /// Double the
 pub const BAR_TO_ABAR_TX_FEE_MIN: u64 = 20_000; // 0.02 FRA (2*TX_FEE_MIN)
 
+/// Calculate the FEE with inputs and outputs number.
+pub const FEE_CALCULATING_FUNC: fn(u32, u32) -> u32 = |x: u32, y: u32| {
+    let extra_outputs = y.saturating_sub(x);
+    50_0000 + 10_0000 * x + 20_0000 * y + (10_000 * extra_outputs)
+};
+
 impl Transaction {
     #[inline(always)]
     #[allow(missing_docs)]
@@ -1876,6 +2081,7 @@ impl Transaction {
         Transaction {
             body: TransactionBody::from_token(no_replay_token),
             signatures: Vec::new(),
+            pubkey_sign_map: Default::default(),
         }
     }
 
@@ -1896,6 +2102,7 @@ impl Transaction {
                 seq_id,
             )),
             signatures: Vec::new(),
+            pubkey_sign_map: Default::default(),
         };
         tx.add_operation(op);
         tx
@@ -1912,6 +2119,13 @@ impl Transaction {
     #[allow(missing_docs)]
     pub fn sign(&mut self, keypair: &XfrKeyPair) {
         self.signatures.push(SignatureOf::new(keypair, &self.body));
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn sign_to_map(&mut self, keypair: &XfrKeyPair) {
+        self.pubkey_sign_map
+            .insert(keypair.pub_key, SignatureOf::new(keypair, &self.body));
     }
 
     #[inline(always)]
@@ -1938,6 +2152,9 @@ impl Transaction {
                 }
                 Operation::IssueAsset(issue_asset) => {
                     memos.append(&mut issue_asset.get_owner_memos_ref());
+                }
+                Operation::AbarToBar(abar_to_bar) => {
+                    memos.append(&mut abar_to_bar.note.get_owner_memos_ref());
                 }
                 _ => {}
             }
@@ -1984,6 +2201,84 @@ impl Transaction {
         }
         Err(eg!())
     }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn check_has_signature_from_map(&self, public_key: &XfrPublicKey) -> Result<()> {
+        if let Some(sign) = self.pubkey_sign_map.get(public_key) {
+            sign.0.verify(public_key, &Serialized::new(&self.body))
+        } else {
+            Err(eg!(
+                "the pubkey not match: {}",
+                public_key_to_base64(public_key)
+            ))
+        }
+    }
+
+    /// NOTE: This method is used to verify the signature in the transaction,
+    /// when the user constructs the transaction not only needs to sign each `operation`,
+    /// but also needs to sign the whole transaction, otherwise it will not be passed here
+    #[allow(missing_docs)]
+    #[inline(always)]
+    pub fn check_tx(&self) -> Result<()> {
+        let select_check = |tx: &Transaction, pk: &XfrPublicKey| -> Result<()> {
+            if tx.signatures.is_empty() {
+                tx.check_has_signature_from_map(pk)
+            } else {
+                tx.check_has_signature(pk)
+            }
+        };
+
+        for operation in self.body.operations.iter() {
+            match operation {
+                Operation::TransferAsset(o) => {
+                    for pk in o.get_owner_addresses().iter() {
+                        select_check(self, pk).c(d!())?;
+                    }
+                }
+                Operation::IssueAsset(o) => {
+                    select_check(self, &o.pubkey.key).c(d!())?;
+                }
+                Operation::DefineAsset(o) => {
+                    select_check(self, &o.pubkey.key).c(d!())?;
+                }
+                Operation::UpdateMemo(o) => {
+                    select_check(self, &o.pubkey).c(d!())?;
+                }
+                Operation::UpdateStaker(o) => {
+                    select_check(self, &o.pubkey).c(d!())?;
+                }
+                Operation::Delegation(o) => {
+                    select_check(self, &o.pubkey).c(d!())?;
+                }
+                Operation::UnDelegation(o) => {
+                    select_check(self, &o.pubkey).c(d!())?;
+                }
+                Operation::Claim(o) => {
+                    select_check(self, &o.pubkey).c(d!())?;
+                }
+                Operation::UpdateValidator(_) => {}
+                Operation::Governance(_) => {}
+                Operation::FraDistribution(_) => {}
+                Operation::MintFra(_) => {}
+                Operation::ConvertAccount(o) => {
+                    select_check(self, &o.signer).c(d!())?;
+                }
+                Operation::ReplaceStaker(o) => {
+                    if !o.get_related_pubkeys().is_empty() {
+                        for pk in o.get_related_pubkeys() {
+                            select_check(self, &pk).c(d!())?;
+                        }
+                    }
+                }
+                Operation::BarToAbar(_) => {}
+                Operation::AbarToBar(_) => {}
+                Operation::TransferAnonAsset(_) => {}
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// Current ledger state commitment data
@@ -2022,7 +2317,7 @@ impl StateCommitmentData {
 }
 
 /// Commitment data for Anon merkle trees
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AnonStateCommitmentData {
     /// Root hash of the latest committed version of abar merkle tree
     pub abar_root_hash: BLSScalar,
@@ -2062,4 +2357,10 @@ impl RngCore for ConsensusRng {
 #[allow(missing_docs)]
 pub fn gen_random_keypair() -> XfrKeyPair {
     XfrKeyPair::generate(&mut ChaChaRng::from_entropy())
+}
+
+#[derive(Serialize, Deserialize)]
+#[allow(missing_docs)]
+pub struct ABARData {
+    pub commitment: String,
 }

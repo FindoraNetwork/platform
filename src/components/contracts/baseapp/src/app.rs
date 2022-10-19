@@ -8,11 +8,11 @@ use log::{debug, error, info};
 use primitive_types::U256;
 use ruc::*;
 
-impl abci::Application for crate::BaseApp {
+impl crate::BaseApp {
     /// info implements the ABCI interface.
     /// - Returns chain info (las height and hash where the node left off)
     /// - Tendermint uses info to decide from which height/hash to continue
-    fn info(&mut self, _req: &RequestInfo) -> ResponseInfo {
+    pub fn info(&mut self, _req: &RequestInfo) -> ResponseInfo {
         let mut info: ResponseInfo = Default::default();
         info.data = self.name.clone();
         info.version = self.version.clone();
@@ -27,7 +27,7 @@ impl abci::Application for crate::BaseApp {
     }
 
     /// query implements the ABCI interface.
-    fn query(&mut self, req: &RequestQuery) -> ResponseQuery {
+    pub fn query(&mut self, req: &RequestQuery) -> ResponseQuery {
         let err_resp = |err: String| -> ResponseQuery {
             let mut resp: ResponseQuery = Default::default();
             resp.code = 1;
@@ -61,7 +61,7 @@ impl abci::Application for crate::BaseApp {
     }
 
     /// check_tx implements the ABCI interface and executes a tx in Check/ReCheck mode.
-    fn check_tx(&mut self, req: &RequestCheckTx) -> ResponseCheckTx {
+    pub fn check_tx(&self, req: &RequestCheckTx) -> ResponseCheckTx {
         let mut resp = ResponseCheckTx::new();
 
         let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
@@ -75,7 +75,11 @@ impl abci::Application for crate::BaseApp {
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
             let check_fn = |mode: RunTxMode| {
-                let ctx = self.retrieve_context(mode).clone();
+                let ctx = {
+                    let mut ctx = self.check_state.clone();
+                    ctx.run_mode = mode;
+                    ctx
+                };
                 let result = self.modules.process_tx::<SignedExtra>(ctx, tx);
                 match result {
                     Ok(ar) => {
@@ -103,7 +107,7 @@ impl abci::Application for crate::BaseApp {
     }
 
     /// init_chain implements the ABCI interface.
-    fn init_chain(&mut self, req: &RequestInitChain) -> ResponseInitChain {
+    pub fn init_chain(&mut self, req: &RequestInitChain) -> ResponseInitChain {
         let mut init_header: Header = Default::default();
         init_header.chain_id = req.chain_id.clone();
         init_header.time = req.time.clone();
@@ -116,7 +120,7 @@ impl abci::Application for crate::BaseApp {
     }
 
     /// begin_block implements the ABCI application interface.
-    fn begin_block(&mut self, req: &RequestBeginBlock) -> ResponseBeginBlock {
+    pub fn begin_block(&mut self, req: &RequestBeginBlock) -> ResponseBeginBlock {
         pnk!(self.validate_height(req.header.clone().unwrap_or_default().height));
 
         // Initialize the DeliverTx state. If this is the first block, it should
@@ -128,12 +132,14 @@ impl abci::Application for crate::BaseApp {
             req.hash.clone(),
         );
 
+        self.update_deliver_state_cache();
+
         self.modules.begin_block(&mut self.deliver_state, req);
 
         ResponseBeginBlock::default()
     }
 
-    fn deliver_tx(&mut self, req: &RequestDeliverTx) -> ResponseDeliverTx {
+    pub fn deliver_tx(&mut self, req: &RequestDeliverTx) -> ResponseDeliverTx {
         let mut resp = ResponseDeliverTx::new();
 
         let raw_tx = if let Ok(tx) = EvmRawTxWrapper::unwrap(req.get_tx()) {
@@ -179,17 +185,18 @@ impl abci::Application for crate::BaseApp {
     }
 
     #[cfg(any(feature = "abci_mock", test))]
-    fn end_block(&mut self, _req: &RequestEndBlock) -> ResponseEndBlock {
+    pub fn end_block(&mut self, _req: &RequestEndBlock) -> ResponseEndBlock {
         Default::default()
     }
 
     #[cfg(all(not(feature = "abci_mock"), not(test)))]
-    fn end_block(&mut self, req: &RequestEndBlock) -> ResponseEndBlock {
+    pub fn end_block(&mut self, req: &RequestEndBlock) -> ResponseEndBlock {
         self.modules.end_block(&mut self.deliver_state, req)
     }
 
-    fn commit(&mut self, _req: &RequestCommit) -> ResponseCommit {
+    pub fn commit(&mut self, _req: &RequestCommit) -> ResponseCommit {
         // Reset the Check state to the latest committed.
+        // Cache data are dropped and cleared in check_state
         self.check_state = self.deliver_state.copy_with_new_state();
 
         let block_height = self.deliver_state.block_header().height as u64;
@@ -203,7 +210,8 @@ impl abci::Application for crate::BaseApp {
             .state
             .write()
             .commit(block_height)
-            .unwrap_or_else(|_| {
+            .unwrap_or_else(|e| {
+                println!("{:?}", e);
                 panic!("Failed to commit chain state at height: {}", block_height)
             });
 

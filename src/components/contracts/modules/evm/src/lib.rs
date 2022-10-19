@@ -16,6 +16,7 @@ use ethereum_types::{Bloom, BloomInput, H160, H256, U256};
 use fp_core::{
     context::Context,
     macros::Get,
+    macros::Get2,
     module::AppModule,
     transaction::{ActionResult, Executable},
 };
@@ -27,7 +28,11 @@ use fp_traits::{
 
 use fp_evm::TransactionStatus;
 
-use ethereum::{Log, Receipt, TransactionAction, TransactionSignature, TransactionV0};
+use evm::executor::stack::PrecompileSet as EvmPrecompileSet;
+
+use ethereum::{
+    Log, ReceiptV0 as Receipt, TransactionAction, TransactionSignature, TransactionV0,
+};
 
 use fp_types::{
     actions::{evm::Action, xhub::NonConfidentialOutput},
@@ -60,6 +65,8 @@ pub trait Config {
     type FeeCalculator: FeeCalculator;
     /// Precompiles associated with this EVM engine.
     type Precompiles: PrecompileSet;
+    type PrecompilesType: EvmPrecompileSet;
+    type PrecompilesValue: Get2<Self::PrecompilesType, Context>;
 }
 
 pub mod storage {
@@ -73,6 +80,7 @@ pub mod storage {
     generate_storage!(EVM, AccountStorages => DoubleMap<HA160, HA256, H256>);
 }
 
+#[derive(Clone)]
 pub struct App<C> {
     phantom: PhantomData<C>,
     pub contracts: SystemContracts,
@@ -99,7 +107,7 @@ impl<C: Config> App<C> {
         transaction_index: u32,
         transaction_hash: H256,
     ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
-        let function = self.contracts.bridge.function("withdrawFRC20").c(d!())?;
+        let function = self.contracts.bridge.function("withdrawAsset").c(d!())?;
 
         let asset = Token::FixedBytes(Vec::from(_asset));
 
@@ -314,7 +322,11 @@ impl<C: Config> AppModule for App<C> {
         let height = CFG.checkpoint.prismxx_inital_height;
 
         if ctx.header.height == height {
-            if let Err(e) = utils::deploy_contract::<C>(ctx, &self.contracts) {
+            let bytecode_str = include_str!("../contracts/PrismXXProxy.bytecode");
+
+            if let Err(e) =
+                utils::deploy_contract::<C>(ctx, &self.contracts, bytecode_str)
+            {
                 pd!(e);
                 return;
             }
@@ -323,7 +335,12 @@ impl<C: Config> AppModule for App<C> {
                 self.contracts.bridge_address
             );
 
-            ctx.state.write().commit_session();
+            if !ctx.state.write().cache_mut().good2_commit() {
+                ctx.state.write().discard_session();
+                pd!(eg!("ctx state commit no good"));
+            } else {
+                ctx.state.write().commit_session();
+            }
         }
     }
 }
