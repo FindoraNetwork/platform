@@ -201,8 +201,7 @@ pub async fn query_global_state(
     data: web::Data<Arc<RwLock<QueryServer>>>,
 ) -> web::Json<(HashOf<Option<StateCommitmentData>>, u64, &'static str)> {
     let qs = data.read();
-    let ledger = &qs.ledger_cloned;
-    let (hash, seq_id) = ledger.get_state_commitment();
+    let (hash, seq_id) = qs.get_state_commitment_from_api_cache();
 
     web::Json((hash, seq_id, "v4UVgkIBpj0eNYI1B1QhTTduJHCIHH126HcdesCxRdLkVGDKrVUPgwmNLCDafTVgC5e4oDhAGjPNt1VhUr6ZCQ=="))
 }
@@ -537,19 +536,19 @@ pub async fn query_validator_detail(
             };
             // Network Realtime APY
             let network_realtime_apy = ledger.staking_get_block_rewards_rate();
-            // Validator Realtime APY calculation
-            // Validator Consistency Factor = (Number of blocks proposed by validator / Total blocks the validator witnessed by validator  *  total staked by all validators / staked by validator)
-            // Validator Realtime APY =  Validator Consistency Factor * Network_Realtime_APY
-            // For a perfect validator consistency factor will be 1.
-            let validator_realtime_apy = [
-                network_realtime_apy[0] as u128
-                    * v_self_delegation.proposer_rwd_cnt as u128
-                    * staking.get_global_delegation_amount() as u128,
-                network_realtime_apy[1] as u128
-                    * (1 + staking.cur_height() - v_self_delegation.start_height)
-                        as u128
-                    * v.td_power as u128,
+
+            let commission_rate = v.get_commission_rate();
+
+            // Latest expected Return = % APY (annual) * (1 - commission %)
+            let one_sub_commission_rate = [
+                commission_rate[1] as u128 - commission_rate[0] as u128,
+                commission_rate[1] as u128,
             ];
+            let validator_realtime_apy = [
+                network_realtime_apy[0] * one_sub_commission_rate[0],
+                network_realtime_apy[1] * one_sub_commission_rate[1],
+            ];
+
             // fra_rewards: all delegators rewards including self-delegation
             let mut fra_rewards = v_self_delegation.rwd_amount;
             for (delegator, _) in &v.delegators {
@@ -563,7 +562,7 @@ pub async fn query_validator_detail(
                 is_online: v.signed_last_block,
                 voting_power: v.td_power,
                 voting_power_rank,
-                commission_rate: v.get_commission_rate(),
+                commission_rate,
                 self_staking: v_self_delegation
                     .delegations
                     .iter()

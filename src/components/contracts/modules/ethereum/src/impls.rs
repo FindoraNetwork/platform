@@ -2,7 +2,8 @@ use crate::storage::*;
 use crate::{App, Config, ContractLog, TransactionExecuted};
 use config::abci::global_cfg::CFG;
 use ethereum::{
-    BlockV0 as Block, LegacyTransactionMessage, Receipt, TransactionV0 as Transaction,
+    BlockV0 as Block, LegacyTransactionMessage, ReceiptV0 as Receipt,
+    TransactionV0 as Transaction,
 };
 use ethereum_types::{Bloom, BloomInput, H160, H256, H64, U256};
 use evm::{ExitFatal, ExitReason};
@@ -23,8 +24,42 @@ use fp_utils::{proposer_converter, timestamp_converter};
 use log::{debug, info};
 use ruc::*;
 use sha3::{Digest, Keccak256};
+const BLOCK_MIGRATE: &str = "block_migrate";
 
 impl<C: Config> App<C> {
+    pub fn recover_signer_fast(
+        ctx: &Context,
+        transaction: &Transaction,
+    ) -> Option<H160> {
+        let transaction_hash =
+            H256::from_slice(Keccak256::digest(&rlp::encode(transaction)).as_slice());
+
+        // Check historical cache first for Deliver Context, while holding the read lock
+        if ctx.run_mode == RunTxMode::Deliver {
+            let history_1 = ctx.eth_cache.history_1.read();
+            let history_n = ctx.eth_cache.history_n.read();
+
+            if let Some(signer) = history_1
+                .get(&transaction_hash)
+                .or_else(|| history_n.get(&transaction_hash))
+            {
+                return *signer;
+            }
+        }
+
+        // recover_signer() calculation is necessary in 2 scenarios:
+        // 1- During CheckTx on fresh transaction
+        // 2- During DeliverTx if we NEVER see the transaction's signer in history (cache)
+        let mut txn_signers = ctx.eth_cache.current.write();
+        match txn_signers.get(&transaction_hash) {
+            Some(signer) => *signer,
+            None => Self::recover_signer(transaction).map(|signer| {
+                txn_signers.insert(transaction_hash, Some(signer));
+                signer
+            }),
+        }
+    }
+
     pub fn recover_signer(transaction: &Transaction) -> Option<H160> {
         let mut sig = [0u8; 65];
         let mut msg = [0u8; 32];
@@ -139,7 +174,7 @@ impl<C: Config> App<C> {
         let mut events = vec![];
         let just_check = ctx.run_mode != RunTxMode::Deliver;
 
-        let source = Self::recover_signer(&transaction)
+        let source = Self::recover_signer_fast(ctx, &transaction)
             .ok_or_else(|| eg!("ExecuteTransaction: InvalidSignature"))?;
 
         let transaction_hash =
@@ -272,7 +307,7 @@ impl<C: Config> App<C> {
             info!(target: "ethereum", "evm execute result: reason {:?} status {:?} used_gas {}", reason, status, used_gas);
         }
 
-        let receipt = ethereum::Receipt {
+        let receipt = ethereum::ReceiptV0 {
             state_root: match reason {
                 ExitReason::Succeed(_) => H256::from_low_u64_be(1),
                 ExitReason::Error(_) => H256::from_low_u64_le(0),
@@ -388,7 +423,7 @@ impl<C: Config> App<C> {
         &self,
         ctx: &Context,
         id: Option<BlockId>,
-    ) -> Option<Vec<ethereum::Receipt>> {
+    ) -> Option<Vec<ethereum::ReceiptV0>> {
         let hash = HA256::new(Self::block_hash(ctx, id).unwrap_or_default());
         CurrentReceipts::get(ctx.db.read().borrow(), &hash)
     }
@@ -440,8 +475,8 @@ impl<C: Config> App<C> {
         None
     }
 
-    pub fn migrate(ctx: &mut Context) -> Result<()> {
-        //Migrate existing transaction indices from chain-state to rocksdb.
+    //Migrate existing transaction indices from chain-state to rocksdb.
+    fn migrate_txn_idxs(ctx: &mut Context) -> Result<()> {
         let txn_idxs: Vec<(HA256, (U256, u32))> =
             TransactionIndex::iterate(ctx.state.read().borrow());
         let txn_idxs_cnt = txn_idxs.len();
@@ -453,6 +488,80 @@ impl<C: Config> App<C> {
         ctx.db.write().commit_session();
         info!(target: "ethereum", "{} transaction indexes migrated to db", txn_idxs_cnt);
 
+        Ok(())
+    }
+
+    //Find the first block with a non zero state_root.
+    //Create range between the first non zero state_root to the latest block
+    //Loop in descending order from latest block to the first block with non-zero state_root
+    //Replace state root of block x with state root from block x + 1
+    fn migrate_block_data(ctx: &mut Context) -> Result<()> {
+        // 1. Find range of blocks that require adjustments
+        let mut first_block = U256::from(CFG.checkpoint.evm_first_block_height);
+        let current_block_num =
+            CurrentBlockNumber::get(ctx.db.read().borrow()).unwrap_or_default();
+        if current_block_num <= first_block {
+            return Err(eg!("migrate_block_data: could not get latest block number"));
+        }
+        let mut i = U256::from(CFG.checkpoint.evm_first_block_height);
+        while i <= current_block_num {
+            // get block data for block (i)
+            let id = Some(BlockId::Number(i));
+            let hash = HA256::new(Self::block_hash(ctx, id).unwrap_or_default());
+            let block = CurrentBlock::get(ctx.db.read().borrow(), &hash);
+            if block.is_none() {
+                return Err(eg!(
+                    "migrate_block_data: unable to get block at height {:?}",
+                    i
+                ));
+            }
+            // check if state_root is non-zero
+            if !block.unwrap().header.state_root.is_zero() {
+                first_block = i;
+                break;
+            }
+            i += U256::from(1);
+        }
+
+        // 2. Loop in descending order from latest block to the first block with transactions
+        //      replace state_root of block x with state_root of block x + 1
+        let mut k = current_block_num;
+        let mut prev_state_root =
+            H256::from_slice(ctx.state.read().root_hash().as_slice());
+        while k >= first_block.saturating_sub(U256::from(1)) {
+            // Get Block Data
+            let id = Some(BlockId::Number(k));
+            let hash = HA256::new(Self::block_hash(ctx, id).unwrap_or_default());
+            let block: Option<Block> = CurrentBlock::get(ctx.db.read().borrow(), &hash);
+            if block.is_none() {
+                return Err(eg!(
+                    "migrate_block_data: unable to get block at height {:?}",
+                    k
+                ));
+            }
+            let mut block_data = block.unwrap();
+
+            // Replace state root of block x with state root from block x + 1
+            std::mem::swap(&mut block_data.header.state_root, &mut prev_state_root);
+
+            CurrentBlock::insert(ctx.db.write().borrow_mut(), &hash, &block_data)?;
+            k -= U256::from(1);
+        }
+        ctx.db.write().commit_session();
+        info!(target: "ethereum", "state root adjusted for evm block store");
+        Ok(())
+    }
+
+    pub fn migrate(ctx: &mut Context) -> Result<()> {
+        //Migrate transaction indices
+        Self::migrate_txn_idxs(ctx)?;
+        //Migrate state root data for blocks
+        let key = String::from(BLOCK_MIGRATE);
+        if !Migrated::contains_key(ctx.db.read().borrow(), key.borrow()) {
+            Self::migrate_block_data(ctx)?;
+            Migrated::insert(ctx.db.write().borrow_mut(), key.borrow(), &true)?;
+            ctx.db.write().commit_session();
+        }
         Ok(())
     }
 }

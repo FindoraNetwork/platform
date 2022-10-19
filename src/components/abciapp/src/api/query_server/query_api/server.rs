@@ -2,6 +2,8 @@
 //! data sources for the query api
 //!
 
+use globutils::HashOf;
+use ledger::data_model::StateCommitmentData;
 use {
     lazy_static::lazy_static,
     ledger::{
@@ -302,6 +304,23 @@ impl QueryServer {
         memos
     }
 
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn get_state_commitment_from_api_cache(
+        &self,
+    ) -> (HashOf<Option<StateCommitmentData>>, u64) {
+        let block_count = self.ledger_cloned.get_block_commit_count();
+        let commitment = self
+            .ledger_cloned
+            .api_cache
+            .as_ref()
+            .unwrap()
+            .state_commitment_version
+            .clone()
+            .unwrap_or_else(|| HashOf::new(&None));
+        (commitment, block_count)
+    }
+
     /// Returns the abar commitment by given index, if it exists.
     pub fn get_abar_commitment(&self, atxo_sid: ATxoSID) -> Option<Commitment> {
         self.ledger_cloned.get_abar(&atxo_sid)
@@ -317,6 +336,24 @@ impl QueryServer {
     #[inline(always)]
     pub fn check_nullifier_hash(&self, null_hash: String) -> Option<bool> {
         self.ledger_cloned.check_nullifier_hash(null_hash).ok()
+    }
+
+    /// Returns an int value for the max ATxoSid
+    #[inline(always)]
+    pub fn max_atxo_sid(&self) -> Option<usize> {
+        self.ledger_cloned
+            .api_cache
+            .as_ref()
+            .and_then(|api| Option::from(api.abar_memos.len().saturating_sub(1)))
+    }
+
+    /// Returns an int value for the max ATxoSid at a given block height
+    #[inline(always)]
+    pub fn max_atxo_sid_at_height(&self, height: BlockHeight) -> Option<usize> {
+        self.ledger_cloned
+            .api_cache
+            .as_ref()
+            .and_then(|api| api.height_to_max_atxo.get(&height))
     }
 
     /// retrieve block reward rate at specified block height

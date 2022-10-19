@@ -1017,7 +1017,7 @@ impl TransactionBuilder {
         self
     }
 
-    /// Signing this transaction with XfrKeyPair
+    /// Signing this transaction with XfrKeyPair, but insert `Transaction.signatures`
     pub fn sign(&mut self, kp: &XfrKeyPair) -> &mut Self {
         self.txn.sign(kp);
         self
@@ -1032,6 +1032,12 @@ impl TransactionBuilder {
         self.txn.check_signature(pk, &sig).c(d!())?;
         self.txn.signatures.push(sig);
         Ok(self)
+    }
+
+    /// Signing this transaction with XfrKeyPair, but insert to `Transaction.pubkey_sign_map`
+    pub fn sign_to_map(&mut self, kp: &XfrKeyPair) -> &mut Self {
+        self.txn.sign_to_map(kp);
+        self
     }
 
     #[allow(missing_docs)]
@@ -1689,6 +1695,91 @@ impl AnonTransferOperationBuilder {
         }
     }
 
+    #[allow(missing_docs)]
+    pub fn get_total_fee_estimation(&self) -> Result<u64> {
+        let input_sums =
+            self.inputs
+                .iter()
+                .fold(HashMap::new(), |mut asset_amounts, i| {
+                    let sum = asset_amounts.entry(i.get_asset_type()).or_insert(0u64);
+                    *sum += i.get_amount();
+                    asset_amounts
+                });
+        let output_sums =
+            self.outputs
+                .iter()
+                .fold(HashMap::new(), |mut asset_amounts, o| {
+                    let sum = asset_amounts.entry(o.get_asset_type()).or_insert(0u64);
+                    *sum += o.get_amount();
+                    asset_amounts
+                });
+
+        let fra_input_sum = *input_sums.get(&ASSET_TYPE_FRA).unwrap_or(&0u64);
+        let fra_output_sum = *output_sums.get(&ASSET_TYPE_FRA).unwrap_or(&0u64);
+        if output_sums.len() > input_sums.len() {
+            return Err(eg!("Output assets cannot be more than input assets"));
+        }
+
+        let extra_remainders = input_sums.iter().try_fold(
+            0usize,
+            |extra_remainders, (asset, inp_amount)| {
+                if *asset == ASSET_TYPE_FRA {
+                    Ok(extra_remainders)
+                } else {
+                    match output_sums.get(asset) {
+                        None => Ok(extra_remainders + 1),
+                        Some(op_sum) => match op_sum.cmp(inp_amount) {
+                            Ordering::Equal => Ok(extra_remainders),
+                            Ordering::Less => Ok(extra_remainders + 1),
+                            Ordering::Greater => {
+                                Err(eg!("Output cannot be greater than Input"))
+                            }
+                        },
+                    }
+                }
+            },
+        )?;
+
+        let estimated_fees_without_extra_fra_ip_op = FEE_CALCULATING_FUNC(
+            self.inputs.len() as u32,
+            (self.outputs.len() + extra_remainders) as u32,
+        ) as u64;
+
+        let fra_extra_output_sum =
+            fra_output_sum + estimated_fees_without_extra_fra_ip_op;
+        match fra_input_sum.cmp(&fra_extra_output_sum) {
+            Ordering::Equal => Ok(fra_input_sum - fra_output_sum),
+            Ordering::Greater => {
+                let estimated_fees_with_fra_remainder = FEE_CALCULATING_FUNC(
+                    self.inputs.len() as u32,
+                    (self.outputs.len() + extra_remainders + 1) as u32,
+                ) as u64;
+
+                if fra_input_sum >= (fra_output_sum + estimated_fees_with_fra_remainder)
+                {
+                    Ok(estimated_fees_with_fra_remainder)
+                } else {
+                    let estimated_fees_with_extra_input_and_remainder =
+                        FEE_CALCULATING_FUNC(
+                            (self.inputs.len() + 1) as u32,
+                            (self.outputs.len() + extra_remainders + 1) as u32,
+                        ) as u64;
+
+                    Ok(estimated_fees_with_extra_input_and_remainder)
+                }
+            }
+            Ordering::Less => {
+                // case where input is insufficient
+                let estimated_fees_with_extra_input_and_remainder = FEE_CALCULATING_FUNC(
+                    (self.inputs.len() + 1) as u32,
+                    (self.outputs.len() + extra_remainders + 1) as u32,
+                )
+                    as u64;
+                Ok(estimated_fees_with_extra_input_and_remainder)
+            }
+        }
+    }
+
     /// get_commitments fetches the commitments for the different outputs.
     pub fn get_commitments(&self) -> Vec<Commitment> {
         self.commitments.clone()
@@ -1853,7 +1944,8 @@ mod tests {
     use {
         super::*,
         ledger::data_model::{ATxoSID, BlockEffect, TxnEffect, TxoRef},
-        ledger::store::{utils::fra_gen_initial_tx, LedgerState},
+        ledger::store::LedgerState,
+        ledger::utils::fra_gen_initial_tx,
         rand_chacha::ChaChaRng,
         rand_core::SeedableRng,
         zei::anon_xfr::structs::{AnonAssetRecord, OpenAnonAssetRecordBuilder},

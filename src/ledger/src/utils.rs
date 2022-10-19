@@ -3,24 +3,58 @@
 //!
 
 use {
-    super::helpers,
     crate::{
         data_model::{
-            AssetRules, AssetTypeCode, IssueAsset, IssueAssetBody, IssuerKeyPair, Memo,
-            Operation, Transaction, TxOutput, ASSET_TYPE_FRA, FRA_DECIMALS,
+            AssetRules, AssetTypeCode, AssetTypePrefix, DefineAsset, DefineAssetBody,
+            IssueAsset, IssueAssetBody, IssuerKeyPair, IssuerPublicKey, Memo, Operation,
+            Transaction, TxOutput, ASSET_TYPE_FRA, FRA_DECIMALS,
         },
         staking::FRA_PRE_ISSUE_AMOUNT,
     },
+    fbnc::NumKey,
+    fp_utils::hashing::keccak_256,
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
     ruc::*,
     zei::xfr::{
         asset_record::{build_blind_asset_record, AssetRecordType},
         sig::XfrKeyPair,
-        structs::AssetRecordTemplate,
+        structs::{AssetRecordTemplate, AssetType},
     },
     zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
 };
+
+/// Create a transaction to define a custom asset
+pub fn create_definition_transaction(
+    code: &AssetTypeCode,
+    keypair: &XfrKeyPair,
+    asset_rules: AssetRules,
+    memo: Option<Memo>,
+    seq_id: u64,
+) -> Result<(Transaction, AssetTypeCode)> {
+    let issuer_key = IssuerPublicKey {
+        key: *keypair.get_pk_ref(),
+    };
+    let asset_body =
+        DefineAssetBody::new(&code, &issuer_key, asset_rules, memo, None).c(d!())?;
+    let asset_create =
+        DefineAsset::new(asset_body, &IssuerKeyPair { keypair: &keypair }).c(d!())?;
+
+    let code = if code.val == ASSET_TYPE_FRA {
+        *code
+    } else {
+        let mut asset_code = AssetTypePrefix::UserDefined.bytes();
+        asset_code.append(&mut code.to_bytes());
+        AssetTypeCode {
+            val: AssetType(keccak_256(&asset_code)),
+        }
+    };
+
+    Ok((
+        Transaction::from_operation(Operation::DefineAsset(asset_create), seq_id),
+        code,
+    ))
+}
 
 /// Define and Issue FRA.
 /// Currently this should only be used for tests.
@@ -33,7 +67,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
         val: ASSET_TYPE_FRA,
     };
 
-    let (mut tx, _) = pnk!(helpers::create_definition_transaction(
+    let (mut tx, _) = pnk!(create_definition_transaction(
         &fra_code,
         fra_owner_kp,
         AssetRules {
@@ -87,8 +121,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
 
     tx.add_operation(Operation::IssueAsset(asset_issuance_operation));
 
-    tx.sign(fra_owner_kp);
-    tx.sign(fra_owner_kp);
+    tx.sign_to_map(fra_owner_kp);
 
     tx
 }

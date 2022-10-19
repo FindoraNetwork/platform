@@ -29,6 +29,7 @@ use {
     cryptohash::{sha256::Digest as BitDigest, HashValue},
     digest::{consts::U64, Digest},
     fbnc::NumKey,
+    globutils::wallet::public_key_to_base64,
     globutils::{HashOf, ProofOf, Serialized, SignatureOf},
     lazy_static::lazy_static,
     rand::Rng,
@@ -406,7 +407,7 @@ pub struct XfrAddress {
 }
 
 impl XfrAddress {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn to_base64(self) -> String {
         b64enc(&self.key.as_bytes())
     }
@@ -449,7 +450,7 @@ pub struct IssuerPublicKey {
 }
 
 impl IssuerPublicKey {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn to_base64(self) -> String {
         b64enc(self.key.as_bytes())
     }
@@ -830,7 +831,7 @@ pub enum UtxoStatus {
 pub struct Utxo(pub TxOutput);
 
 impl Utxo {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     #[inline(always)]
     pub(crate) fn get_nonconfidential_balance(&self) -> u64 {
         if let XfrAmount::NonConfidential(n) = self.0.record.amount {
@@ -1663,6 +1664,9 @@ pub struct Transaction {
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
     pub signatures: Vec<SignatureOf<TransactionBody>>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
+    pub pubkey_sign_map: HashMap<XfrPublicKey, SignatureOf<TransactionBody>>,
 }
 
 #[allow(missing_docs)]
@@ -2077,6 +2081,7 @@ impl Transaction {
         Transaction {
             body: TransactionBody::from_token(no_replay_token),
             signatures: Vec::new(),
+            pubkey_sign_map: Default::default(),
         }
     }
 
@@ -2097,6 +2102,7 @@ impl Transaction {
                 seq_id,
             )),
             signatures: Vec::new(),
+            pubkey_sign_map: Default::default(),
         };
         tx.add_operation(op);
         tx
@@ -2113,6 +2119,13 @@ impl Transaction {
     #[allow(missing_docs)]
     pub fn sign(&mut self, keypair: &XfrKeyPair) {
         self.signatures.push(SignatureOf::new(keypair, &self.body));
+    }
+
+    #[inline(always)]
+    #[allow(missing_docs)]
+    pub fn sign_to_map(&mut self, keypair: &XfrKeyPair) {
+        self.pubkey_sign_map
+            .insert(keypair.pub_key, SignatureOf::new(keypair, &self.body));
     }
 
     #[inline(always)]
@@ -2191,46 +2204,76 @@ impl Transaction {
 
     #[inline(always)]
     #[allow(missing_docs)]
+    pub fn check_has_signature_from_map(&self, public_key: &XfrPublicKey) -> Result<()> {
+        if let Some(sign) = self.pubkey_sign_map.get(public_key) {
+            sign.0.verify(public_key, &Serialized::new(&self.body))
+        } else {
+            Err(eg!(
+                "the pubkey not match: {}",
+                public_key_to_base64(public_key)
+            ))
+        }
+    }
+
+    /// NOTE: This method is used to verify the signature in the transaction,
+    /// when the user constructs the transaction not only needs to sign each `operation`,
+    /// but also needs to sign the whole transaction, otherwise it will not be passed here
+    #[allow(missing_docs)]
+    #[inline(always)]
     pub fn check_tx(&self) -> Result<()> {
+        let select_check = |tx: &Transaction, pk: &XfrPublicKey| -> Result<()> {
+            if tx.signatures.is_empty() {
+                tx.check_has_signature_from_map(pk)
+            } else {
+                tx.check_has_signature(pk)
+            }
+        };
+
         for operation in self.body.operations.iter() {
             match operation {
                 Operation::TransferAsset(o) => {
                     for pk in o.get_owner_addresses().iter() {
-                        self.check_has_signature(pk)?;
+                        select_check(self, pk).c(d!())?;
                     }
                 }
                 Operation::IssueAsset(o) => {
-                    self.check_has_signature(&o.pubkey.key)?;
+                    select_check(self, &o.pubkey.key).c(d!())?;
                 }
                 Operation::DefineAsset(o) => {
-                    self.check_has_signature(&o.pubkey.key)?;
+                    select_check(self, &o.pubkey.key).c(d!())?;
                 }
                 Operation::UpdateMemo(o) => {
-                    self.check_has_signature(&o.pubkey)?;
+                    select_check(self, &o.pubkey).c(d!())?;
                 }
                 Operation::UpdateStaker(o) => {
-                    self.check_has_signature(&o.pubkey)?;
+                    select_check(self, &o.pubkey).c(d!())?;
                 }
                 Operation::Delegation(o) => {
-                    self.check_has_signature(&o.pubkey)?;
+                    select_check(self, &o.pubkey).c(d!())?;
                 }
                 Operation::UnDelegation(o) => {
-                    self.check_has_signature(&o.pubkey)?;
+                    select_check(self, &o.pubkey).c(d!())?;
                 }
                 Operation::Claim(o) => {
-                    self.check_has_signature(&o.pubkey)?;
+                    select_check(self, &o.pubkey).c(d!())?;
                 }
                 Operation::UpdateValidator(_) => {}
                 Operation::Governance(_) => {}
                 Operation::FraDistribution(_) => {}
                 Operation::MintFra(_) => {}
-                Operation::ConvertAccount(_) => {}
+                Operation::ConvertAccount(o) => {
+                    select_check(self, &o.signer).c(d!())?;
+                }
+                Operation::ReplaceStaker(o) => {
+                    if !o.get_related_pubkeys().is_empty() {
+                        for pk in o.get_related_pubkeys() {
+                            select_check(self, &pk).c(d!())?;
+                        }
+                    }
+                }
                 Operation::BarToAbar(_) => {}
                 Operation::AbarToBar(_) => {}
                 Operation::TransferAnonAsset(_) => {}
-                Operation::ReplaceStaker(o) => {
-                    self.check_has_signature(&o.get_related_pubkeys()[0])?;
-                }
             }
         }
 

@@ -12,7 +12,7 @@ use {
     toml,
 };
 
-#[derive(Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[allow(missing_docs)]
 pub struct CheckPointConfig {
     pub evm_substate_height: i64,
@@ -29,13 +29,21 @@ pub struct CheckPointConfig {
     pub unbond_block_cnt: u64,
     pub prismxx_inital_height: i64,
     pub enable_triple_masking_height: i64,
-    // Note: This field only used to qa02.
     pub fix_unpaid_delegation_height: u64,
+    pub fix_prism_mint_pay: i64,
+    pub fix_exec_code: i64,
     pub evm_checktx_nonce: i64,
     pub utxo_checktx_height: i64,
     pub utxo_asset_prefix_height: u64,
     pub prism_bridge_address: String,
     pub nonce_bug_fix_height: u64,
+    pub proper_gas_set_height: u64,
+    pub fix_undelegation_missing_reward_height: i64,
+    pub fix_delegators_am_height: u64,
+    pub validators_limit_v2_height: u64,
+
+    // Note: This field only used to qa02.
+    pub qa02_prismxx_asset: i64,
 }
 
 impl CheckPointConfig {
@@ -64,11 +72,18 @@ impl CheckPointConfig {
                                 prismxx_inital_height: 1,
                                 enable_triple_masking_height: 0,
                                 fix_unpaid_delegation_height: 0,
+                                fix_undelegation_missing_reward_height: 0,
+                                fix_prism_mint_pay: 0,
+                                fix_exec_code: 0,
                                 evm_checktx_nonce: 0,
                                 utxo_checktx_height: 0,
                                 utxo_asset_prefix_height: 0,
                                 nonce_bug_fix_height: 0,
                                 prism_bridge_address: String::new(),
+                                proper_gas_set_height: 0,
+                                fix_delegators_am_height: 0,
+                                validators_limit_v2_height: 0,
+                                qa02_prismxx_asset: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -87,11 +102,18 @@ impl CheckPointConfig {
                                 prismxx_inital_height: 30000000,
                                 enable_triple_masking_height: 30000000,
                                 fix_unpaid_delegation_height: 2261885,
+                                fix_prism_mint_pay: 30000000,
+                                fix_exec_code: 30000000,
                                 evm_checktx_nonce: 30000000,
                                 utxo_checktx_height: 30000000,
                                 utxo_asset_prefix_height: 30000000,
                                 nonce_bug_fix_height: 30000000,
                                 prism_bridge_address: String::new(),
+                                proper_gas_set_height: 30000000,
+                                fix_undelegation_missing_reward_height: 3000000,
+                                fix_delegators_am_height: 30000000,
+                                validators_limit_v2_height: 30000000,
+                                qa02_prismxx_asset: 30000000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
@@ -109,7 +131,9 @@ impl CheckPointConfig {
 
         let mut content = String::new();
         f.read_to_string(&mut content).unwrap();
-        let config: CheckPointConfig = toml::from_str(content.as_str()).unwrap();
+        let config: CheckPointConfig = toml::from_str(content.as_str())
+            .or_else(|_| serde_json::from_str(content.as_str()))
+            .unwrap();
         Some(config)
     }
 }

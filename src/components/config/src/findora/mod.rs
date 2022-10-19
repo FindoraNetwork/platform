@@ -6,6 +6,7 @@ pub mod init {
 
     const QA01_GENESIS_URL: &str = "https://dev-qa01.dev.findora.org:26657/genesis";
     const QA02_GENESIS_URL: &str = "https://dev-qa02.dev.findora.org:26657/genesis";
+    const QA03_GENESIS_URL: &str = "https://dev-qa03.dev.findora.org:26657/genesis";
     const TESTNET_GENESIS_URL: &str =
         "https://prod-testnet.prod.findora.org:26657/genesis";
     const MAINNET_GENESIS_URL: &str =
@@ -19,6 +20,7 @@ pub mod init {
         Mainnet,
         Qa01,
         Qa02,
+        Qa03,
     }
 
     impl Default for InitMode {
@@ -47,6 +49,7 @@ pub mod init {
             InitMode::Mainnet => save_genesis(MAINNET_GENESIS_URL, path)?,
             InitMode::Qa01 => save_genesis(QA01_GENESIS_URL, path)?,
             InitMode::Qa02 => save_genesis(QA02_GENESIS_URL, path)?,
+            InitMode::Qa03 => save_genesis(QA03_GENESIS_URL, path)?,
             InitMode::Dev => {}
         }
         Ok(())
@@ -115,6 +118,12 @@ pub mod init {
                 config.replace(
                     "seeds = \"\"",
                     "seeds = \"bd518151ac767d5dd77e228d34f31c581140fbe0@dev-qa02-us-west-2-seed-000-public.dev.findora.org:26656,03deb91289c430fecf6883caaf69c69bb66f7d8e@dev-qa02-us-west-2-seed-001-public.dev.findora.org:26656\"",
+                )
+            }
+            InitMode::Qa03 => {
+                config.replace(
+                    "seeds = \"\"",
+                    "seeds = \"bd518151ac767d5dd77e228d34f31c581140fbe0@dev-qa03-us-west-2-seed-000-public.dev.findora.org:26656,03deb91289c430fecf6883caaf69c69bb66f7d8e@dev-qa03-us-west-2-seed-001-public.dev.findora.org:26656\"",
                 )
             }
             InitMode::Dev => config,
@@ -206,7 +215,8 @@ pub mod config {
                 .arg_from_usage("--mainnet 'Initialize for Findora MainNet.'")
                 .arg_from_usage("--qa01 'Initialize for Findora QA01.'")
                 .arg_from_usage("--qa02 'Initialize for Findora QA02.'")
-                .group(ArgGroup::with_name("environment").args(&["devnet", "testnet", "mainnet", "qa01", "qa02"]))
+                .arg_from_usage("--qa03 'Initialize for Findora QA03.'")
+                .group(ArgGroup::with_name("environment").args(&["devnet", "testnet", "mainnet", "qa01", "qa02", "qa03"]))
                 .arg_from_usage(
                     "-b, --base-dir=[DIR] 'The root directory for tendermint config, aka $TENDERMINT_HOME'",
                 );
@@ -317,6 +327,8 @@ pub mod config {
             InitMode::Qa01
         } else if m.is_present("qa02") {
             InitMode::Qa02
+        } else if m.is_present("qa03") {
+            InitMode::Qa03
         } else {
             InitMode::Dev
         };

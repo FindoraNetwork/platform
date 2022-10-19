@@ -25,11 +25,9 @@ use {
     ledger::{
         converter::is_convert_account,
         data_model::{Operation, Transaction},
+        fbnc::{new_mapx, Mapx},
         staking::KEEP_HIST,
-        store::{
-            api_cache,
-            fbnc::{new_mapx, Mapx},
-        },
+        store::api_cache,
     },
     parking_lot::{Mutex, RwLock},
     protobuf::RepeatedField,
@@ -41,6 +39,7 @@ use {
             atomic::{AtomicI64, Ordering},
             Arc,
         },
+        time::Duration,
     },
 };
 
@@ -173,7 +172,8 @@ pub fn begin_block(
     req: &RequestBeginBlock,
 ) -> ResponseBeginBlock {
     if IS_EXITING.load(Ordering::Acquire) {
-        std::thread::sleep(std::time::Duration::from_secs(10));
+        //ResponseBeginBlock didn't define return code, just wait to exit.
+        std::thread::sleep(Duration::from_secs(10));
     }
 
     IN_SAFE_ITV.store(true, Ordering::Release);
@@ -181,7 +181,7 @@ pub fn begin_block(
     #[cfg(target_os = "linux")]
     {
         // snapshot the last block
-        ledger::store::fbnc::flush_data();
+        ledger::fbnc::flush_data();
         let last_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
         info_omit!(CFG.btmcfg.snapshot(last_height as u64));
     }
@@ -299,7 +299,7 @@ pub fn deliver_tx(
                                 .write()
                                 .commit_session();
                             return resp;
-                        } else {
+                        } else if td_height > CFG.checkpoint.fix_exec_code {
                             resp.code = 1;
                             resp.log = "cache_transaction failed".to_owned();
                         }
@@ -372,7 +372,36 @@ pub fn deliver_tx(
                         req
                     );
                 }
-                return s.account_base_app.write().deliver_tx(req);
+                let mut resp = s.account_base_app.write().deliver_tx(req);
+
+                if td_height > CFG.checkpoint.fix_prism_mint_pay && 0 == resp.code {
+                    let mut la = s.la.write();
+                    let mut laa = la.get_committed_state().write();
+                    if let Some(tx) = staking::system_prism_mint_pay(
+                        &mut *laa,
+                        &mut *s.account_base_app.write(),
+                        td_height,
+                    ) {
+                        drop(laa);
+                        if la.cache_transaction(tx).is_ok() {
+                            return resp;
+                        }
+                        resp.code = 1;
+                        s.account_base_app
+                            .read()
+                            .deliver_state
+                            .state
+                            .write()
+                            .discard_session();
+                        s.account_base_app
+                            .read()
+                            .deliver_state
+                            .db
+                            .write()
+                            .discard_session();
+                    }
+                }
+                resp
             }
         }
         TxCatalog::Unknown => {
@@ -406,9 +435,11 @@ pub fn end_block(
     // mint coinbase, cache system transactions to ledger
     {
         let mut laa = la.get_committed_state().write();
-        if let Some(tx) =
-            staking::system_mint_pay(&mut *laa, &mut *s.account_base_app.write())
-        {
+        if let Some(tx) = staking::system_mint_pay(
+            td_height,
+            &mut *laa,
+            &mut *s.account_base_app.write(),
+        ) {
             drop(laa);
             // this unwrap should be safe
             la.cache_transaction(tx).unwrap();

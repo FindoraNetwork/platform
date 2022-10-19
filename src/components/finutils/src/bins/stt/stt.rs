@@ -24,7 +24,7 @@ use {
             check_delegation_amount, td_addr_to_bytes, BLOCK_INTERVAL, FRA,
             FRA_PRE_ISSUE_AMOUNT,
         },
-        store::utils::fra_gen_initial_tx,
+        utils::fra_gen_initial_tx,
     },
     ruc::*,
     serde::Serialize,
@@ -52,7 +52,7 @@ macro_rules! sleep_n_block {
         sleep_ms!((n * itv * 1000.0) as u64);
     }};
     ($n_block: expr) => {
-        sleep_n_block!($n_block, ledger::staking::BLOCK_INTERVAL)
+        sleep_n_block!($n_block, *ledger::staking::BLOCK_INTERVAL)
     };
 }
 
@@ -330,7 +330,9 @@ mod delegate {
             builder.add_operation_delegation(owner_kp, amount, validator.to_owned());
         })?;
 
-        builder.build_and_take_transaction()
+        let mut tx = builder.build_and_take_transaction()?;
+        tx.sign(owner_kp);
+        Ok(tx)
     }
 }
 

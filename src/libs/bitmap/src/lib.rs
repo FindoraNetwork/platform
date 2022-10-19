@@ -527,7 +527,10 @@ impl Drop for BitMap {
 // value is used to tag dirty blocks.
 #[inline(always)]
 fn time() -> i64 {
-    time::now().to_timespec().sec
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("SystemTime before UNIX EPOCH!")
+        .as_secs() as i64
 }
 
 // Count the number of set bits in a given array using

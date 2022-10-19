@@ -132,6 +132,8 @@ impl crate::BaseApp {
             req.hash.clone(),
         );
 
+        self.update_deliver_state_cache();
+
         self.modules.begin_block(&mut self.deliver_state, req);
 
         ResponseBeginBlock::default()
@@ -194,6 +196,7 @@ impl crate::BaseApp {
 
     pub fn commit(&mut self, _req: &RequestCommit) -> ResponseCommit {
         // Reset the Check state to the latest committed.
+        // Cache data are dropped and cleared in check_state
         self.check_state = self.deliver_state.copy_with_new_state();
 
         let block_height = self.deliver_state.block_header().height as u64;

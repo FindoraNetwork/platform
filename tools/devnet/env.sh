@@ -6,7 +6,7 @@ BLU='\033[34m'
 NC='\033[0m'
 
 # default environment values
-DEFAULT_BIN_CFG="debug"
+DEFAULT_BIN_CFG="release"
 DEFAULT_BLOCK_INTERVAL="2"
 DEFAULT_ENDPOINT="http://0.0.0.0"
 

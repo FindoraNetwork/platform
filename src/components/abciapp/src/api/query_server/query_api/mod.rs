@@ -12,7 +12,6 @@ use {
     actix_cors::Cors,
     actix_web::{error, middleware, web, App, HttpServer},
     config::abci::{global_cfg::CFG, CheckPointConfig},
-    ethereum_types::{H160, H256},
     finutils::api::NetworkRoute,
     globutils::wallet,
     ledger::{
@@ -30,7 +29,6 @@ use {
     ruc::*,
     serde::{Deserialize, Serialize},
     server::QueryServer,
-    std::str::FromStr,
     std::{
         collections::{BTreeMap, HashMap, HashSet},
         sync::Arc,
@@ -187,6 +185,21 @@ async fn check_nullifier_hash(
     Ok(web::Json(server.check_nullifier_hash((*info).clone())))
 }
 
+async fn get_max_atxo_sid(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+) -> actix_web::Result<web::Json<Option<usize>>, actix_web::error::Error> {
+    let server = data.read();
+    Ok(web::Json(server.max_atxo_sid()))
+}
+
+async fn get_max_atxo_sid_at_height(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    info: web::Path<u64>,
+) -> actix_web::Result<web::Json<Option<usize>>, actix_web::error::Error> {
+    let server = data.read();
+    Ok(web::Json(server.max_atxo_sid_at_height(*info)))
+}
+
 /// Define interface type
 #[allow(missing_docs)]
 pub enum QueryServerRoutes {
@@ -200,6 +213,8 @@ pub enum QueryServerRoutes {
     GetAbarMemos,
     GetAbarProof,
     CheckNullifierHash,
+    GetMaxATxoSid,
+    GetMaxATxoSidAtHeight,
     GetCreatedAssets,
     GetIssuedRecords,
     GetIssuedRecordsByCode,
@@ -226,6 +241,8 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetAbarMemos => "get_abar_memos",
             QueryServerRoutes::GetAbarProof => "get_abar_proof",
             QueryServerRoutes::CheckNullifierHash => "check_nullifier_hash",
+            QueryServerRoutes::GetMaxATxoSid => "get_max_atxo_sid",
+            QueryServerRoutes::GetMaxATxoSidAtHeight => "get_max_atxo_sid_at_height",
             QueryServerRoutes::GetCreatedAssets => "get_created_assets",
             QueryServerRoutes::GetIssuedRecords => "get_issued_records",
             QueryServerRoutes::GetIssuedRecordsByCode => "get_issued_records_by_code",
@@ -242,7 +259,7 @@ impl NetworkRoute for QueryServerRoutes {
 pub async fn get_created_assets(
     data: web::Data<Arc<RwLock<QueryServer>>>,
     info: web::Path<String>,
-) -> actix_web::Result<web::Json<Vec<(AssetTypeCode, DefineAsset)>>> {
+) -> actix_web::Result<web::Json<Vec<DefineAsset>>> {
     // Convert from base64 representation
     let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
         &b64dec(&*info)
@@ -251,8 +268,17 @@ pub async fn get_created_assets(
     )
     .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
     let server = data.read();
-    let assets = server.get_created_assets(&IssuerPublicKey { key });
-    Ok(web::Json(assets.unwrap_or_default()))
+    let mut assets_tuple = server
+        .get_created_assets(&IssuerPublicKey { key })
+        .unwrap_or_default();
+
+    let mut das = vec![];
+    for (code, da) in assets_tuple.iter_mut() {
+        da.body.asset.code = *code;
+        das.push(da.clone());
+    }
+
+    Ok(web::Json(das))
 }
 
 /// Returns the list of records issued by a public key
@@ -571,23 +597,10 @@ pub async fn get_checkpoint(
 ) -> actix_web::Result<web::Json<CheckPointConfig>, actix_web::error::Error> {
     let mut checkpoint = CFG.checkpoint.clone();
 
-    if checkpoint.prism_bridge_address.is_empty() {
-        // Driect use this bytecode, beacuse we will remove on mainnet
-        let owner = H160::from_str("0x72488bAa718F52B76118C79168E55c209056A2E6")
-            .unwrap_or_default();
-        let salt = H256::zero();
-        let bytecode_str = include_str!(
-            "../../../../../contracts/modules/evm/contracts/PrismXXProxy.bytecode"
-        );
-        let bytecode = hex::decode(&bytecode_str[2..].trim()).unwrap_or_default();
-        let code_hash = fp_utils::hashing::keccak_256(&bytecode);
-        let code_hash = H256::from_slice(&code_hash);
+    if let Ok(sc) = module_evm::system_contracts::SystemContracts::new() {
+        checkpoint.prism_bridge_address = format!("{:?}", sc.bridge_address)
+    }
 
-        checkpoint.prism_bridge_address = format!(
-            "{:?}",
-            module_evm::utils::compute_create2(owner, salt, code_hash)
-        );
-    };
     Ok(web::Json(checkpoint))
 }
 /// Structures exposed to the outside world
@@ -656,6 +669,15 @@ impl QueryApi {
                     &QueryServerRoutes::CheckNullifierHash
                         .with_arg_template("null_hash"),
                     web::get().to(check_nullifier_hash),
+                )
+                .route(
+                    &QueryServerRoutes::GetMaxATxoSid.route(),
+                    web::get().to(get_max_atxo_sid),
+                )
+                .route(
+                    &QueryServerRoutes::GetMaxATxoSidAtHeight
+                        .with_arg_template("height"),
+                    web::get().to(get_max_atxo_sid_at_height),
                 )
                 .route(
                     &QueryServerRoutes::GetRelatedTxns.with_arg_template("address"),
