@@ -1039,12 +1039,12 @@ pub fn gen_nullifier_hash(
     let n = nullify(
         &keypair,
         oabar.get_amount(),
-        &oabar.get_asset_type(),
+        oabar.get_asset_type().as_scalar(),
         mt_leaf_info.get_noah_mt_leaf_info().uid,
     )
     .c(d!())
     .map_err(error_to_jsvalue)?;
-    let hash = wallet::nullifier_to_base58(&n);
+    let hash = wallet::nullifier_to_base58(&n.0);
     Ok(hash)
 }
 

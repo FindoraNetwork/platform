@@ -2363,13 +2363,13 @@ pub fn gen_random_keypair() -> XfrKeyPair {
 #[inline(always)]
 #[allow(missing_docs)]
 pub fn get_abar_commitment(oabar: OpenAnonAssetRecord) -> BLSScalar {
-    commit(
+    let c = commit(
         oabar.pub_key_ref(),
-        &oabar.get_blind(),
+        oabar.get_blind(),
         oabar.get_amount(),
-        &oabar.get_asset_type(),
-    )
-    .unwrap()
+        oabar.get_asset_type().as_scalar(),
+    ).unwrap();
+    c.0
 }
 
 #[derive(Serialize, Deserialize)]

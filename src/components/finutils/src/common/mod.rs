@@ -964,11 +964,11 @@ pub fn convert_abar2bar(
     let n = nullify(
         &from,
         oabar_in.get_amount(),
-        &oabar_in.get_asset_type(),
+        oabar_in.get_asset_type().as_scalar(),
         mt_leaf_uid,
     )
     .c(d!())?;
-    let hash = wallet::nullifier_to_base58(&n);
+    let hash = wallet::nullifier_to_base58(&n.0);
     // check if hash is present in nullifier set
     let null_status = utils::check_nullifier_hash(&hash)
         .c(d!())?
@@ -978,7 +978,7 @@ pub fn convert_abar2bar(
             "The ABAR corresponding to this commitment is already spent"
         ));
     }
-    println!("Nullifier: {}", wallet::nullifier_to_base58(&n));
+    println!("Nullifier: {}", wallet::nullifier_to_base58(&n.0));
 
     // Create New AssetRecordType for new BAR
     let art = match (confidential_am, confidential_ty) {
@@ -1044,11 +1044,11 @@ pub fn gen_anon_transfer_op(
         let n = nullify(
             &from,
             oabar_in.get_amount(),
-            &oabar_in.get_asset_type(),
+            oabar_in.get_asset_type().as_scalar(),
             mt_leaf_uid,
         )
         .c(d!())?;
-        let hash = wallet::nullifier_to_base58(&n);
+        let hash = wallet::nullifier_to_base58(&n.0);
         let null_status = utils::check_nullifier_hash(&hash).c(d!())?.ok_or(d!(
             "The ABAR corresponding to this commitment is missing {}",
             com
@@ -1060,7 +1060,7 @@ pub fn gen_anon_transfer_op(
             ));
         }
 
-        println!("Nullifier: {}", wallet::nullifier_to_base58(&n));
+        println!("Nullifier: {}", wallet::nullifier_to_base58(&n.0));
         inputs.push(oabar_in);
     }
 
@@ -1182,11 +1182,11 @@ pub fn gen_oabar_add_op_x(
         let n = nullify(
             from,
             oabar_in.get_amount(),
-            &oabar_in.get_asset_type(),
+            oabar_in.get_asset_type().as_scalar(),
             mt_leaf_uid,
         )
         .c(d!())?;
-        let hash = wallet::nullifier_to_base58(&n);
+        let hash = wallet::nullifier_to_base58(&n.0);
         let null_status = utils::check_nullifier_hash(&hash)
             .c(d!())?
             .ok_or(d!("The ABAR corresponding to this commitment is missing"))?;
@@ -1195,7 +1195,7 @@ pub fn gen_oabar_add_op_x(
                 "The ABAR corresponding to this commitment is already spent"
             ));
         }
-        println!("Nullifier: {}", wallet::nullifier_to_base58(&n));
+        println!("Nullifier: {}", wallet::nullifier_to_base58(&n.0));
 
         oabars_in.push(oabar_in);
     }
@@ -1344,11 +1344,11 @@ pub fn check_abar_status(
     let n = nullify(
         &from,
         oabar.get_amount(),
-        &oabar.get_asset_type(),
+        oabar.get_asset_type().as_scalar(),
         mt_leaf_uid,
     )
     .c(d!())?;
-    let hash = wallet::nullifier_to_base58(&n);
+    let hash = wallet::nullifier_to_base58(&n.0);
     let null_status = utils::check_nullifier_hash(&hash).c(d!())?.unwrap();
     if null_status {
         println!("The ABAR corresponding to this commitment is already spent");
@@ -1386,11 +1386,11 @@ pub fn get_owned_abars(
             let n = nullify(
                 &axfr_secret_key,
                 oabar.get_amount(),
-                &oabar.get_asset_type(),
+                oabar.get_asset_type().as_scalar(),
                 sid.0,
             )
             .c(d!())?;
-            let hash = wallet::nullifier_to_base58(&n);
+            let hash = wallet::nullifier_to_base58(&n.0);
             let null_status = utils::check_nullifier_hash(&hash).c(d!())?.unwrap();
             println!(
                 "{0: <8} | {1: <18} | {2: <45} | {3: <9} | {4: <45}",
@@ -1456,11 +1456,11 @@ pub fn anon_balance(
                     let n = nullify(
                         &axfr_secret_key,
                         oabar.get_amount(),
-                        &oabar.get_asset_type(),
+                        oabar.get_asset_type().as_scalar(),
                         sid.0,
                     )
                     .c(d!())?;
-                    let hash = wallet::nullifier_to_base58(&n);
+                    let hash = wallet::nullifier_to_base58(&n.0);
                     let is_spent = utils::check_nullifier_hash(&hash).c(d!())?.unwrap();
                     if !is_spent && oabar.get_asset_type() == asset_type {
                         balance += oabar.get_amount();

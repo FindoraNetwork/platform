@@ -68,11 +68,11 @@ ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek" }
 x25519-dalek = { git = "https://github.com/FindoraNetwork/x25519-dalek" }
 bulletproofs = { git = "https://github.com/FindoraNetwork/bp" }
 
-noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.6" }
-noah-accumulators = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.6" }
-noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.6" }
-noah-crypto = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.6" }
-noah-plonk = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.6" }
+noah = { git = "https://github.com/FindoraNetwork/noah", branch = "mt_info_serde" }
+noah-accumulators = { git = "https://github.com/FindoraNetwork/noah", branch = "mt_info_serde" }
+noah-algebra = { git = "https://github.com/FindoraNetwork/noah", branch = "mt_info_serde" }
+noah-crypto = { git = "https://github.com/FindoraNetwork/noah", branch = "mt_info_serde" }
+noah-plonk = { git = "https://github.com/FindoraNetwork/noah", branch = "mt_info_serde" }
 
 [patch."https://github.com/FindoraNetwork/storage"]
 fin_db = { git = "https:///github.com/FindoraNetwork//storage", tag = "v0.2.2"}

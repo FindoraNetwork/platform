@@ -79,7 +79,7 @@ use {
         ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath,
     },
     noah_algebra::{bls12_381::BLSScalar, prelude::*},
-    noah_crypto::basic::rescue::RescueInstance,
+    noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive381}
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
@@ -486,14 +486,7 @@ impl LedgerState {
         let store = PrefixedStore::new("abar_store", &mut abar_state_val);
         let mut mt = PersistentMerkleTree::new(store)?;
 
-        let hasher = RescueInstance::new();
-        let leaf = hasher.rescue(&[
-            BLSScalar::from(mt.entry_count()),
-            abar.commitment,
-            BLSScalar::zero(),
-            BLSScalar::zero(),
-        ])[0];
-
+        let leaf = hash_abar(mt.entry_count(), abar);
         mt.add_commitment_hash(leaf).map(ATxoSID)
     }
 
@@ -535,7 +528,7 @@ impl LedgerState {
         let mt = ImmutablePersistentMerkleTree::new(store)?;
 
         let t = mt.generate_proof_with_depth(id.0, MERKLE_TREE_DEPTH)?;
-        Ok(create_mt_leaf_info(t))
+        Ok(build_mt_leaf_info_from_proof(t, id.0))
     }
 
     /// Check if the nullifier hash is present in nullifier set
@@ -1887,9 +1880,8 @@ pub fn flush_data() {
     fbnc::flush_data();
 }
 
-/// convert merkle tree proof to Noah compatible proofs
-pub fn create_mt_leaf_info(proof: Proof) -> MTLeafInfo {
-    MTLeafInfo {
+fn build_mt_leaf_info_from_proof(proof: Proof, uid: u64) -> MTLeafInfo {
+    return MTLeafInfo {
         path: MTPath {
             nodes: proof
                 .nodes
@@ -1904,8 +1896,12 @@ pub fn create_mt_leaf_info(proof: Proof) -> MTLeafInfo {
         },
         root: proof.root,
         root_version: proof.root_version,
-        uid: proof.uid,
-    }
+        uid: uid,
+    };
+}
+
+fn hash_abar(uid: u64, abar: &AnonAssetRecord) -> BLSScalar {
+    AnemoiJive381::eval_variable_length_hash(&[BLSScalar::from(uid), abar.commitment])
 }
 
 fn default_status_utxos() -> Mapxnk<TxoSID, Utxo> {

@@ -2,17 +2,17 @@ source ./tools/devnet/env.sh || exit 1
 
 echo "\n\n\n Simple transfer 1"
 echo "------------------------------------------------------------------------------"
-"$BIN"/fn transfer --amount 210000000 --asset FRA -T fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
+"$BIN"/fn transfer --amount 210000000 --asset FRA -T eth1q0gdeyyac8cmu7mwfuq6sgfy63dsvja6t877jwz44lyqjra76uh5sj2faa6
 sleep 5
 
 echo "\n\n\n Simple transfer 2"
 echo "------------------------------------------------------------------------------"
-"$BIN"/fn transfer --amount 210000000 --asset FRA -T fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
+"$BIN"/fn transfer --amount 210000000 --asset FRA -T eth1q0gdeyyac8cmu7mwfuq6sgfy63dsvja6t877jwz44lyqjra76uh5sj2faa6
 sleep 5
 
 echo "\n\n\n Simple transfer 3"
 echo "------------------------------------------------------------------------------"
-"$BIN"/fn transfer --amount 210000000 --asset FRA -T fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
+"$BIN"/fn transfer --amount 210000000 --asset FRA -T eth1q0gdeyyac8cmu7mwfuq6sgfy63dsvja6t877jwz44lyqjra76uh5sj2faa6
 sleep 5
 
 # setup the new wallet
