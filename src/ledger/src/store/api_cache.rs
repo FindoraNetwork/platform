@@ -66,6 +66,8 @@ pub struct ApiCache {
     pub txn_sid_to_hash: Mapxnk<TxnSID, String>,
     /// txn hash to txn sid
     pub txn_hash_to_sid: Mapx<String, TxnSID>,
+    /// max (latest) atxo sid at block height
+    pub height_to_max_atxo: Mapxnk<BlockHeight, usize>,
     /// global rate history
     pub staking_global_rate_hist: Mapxnk<BlockHeight, [u128; 2]>,
     /// - self-delegation amount history
@@ -120,6 +122,10 @@ impl ApiCache {
             txn_hash_to_sid: new_mapx!(format!("api_cache/{}txn_hash_to_sid", prefix)),
             staking_global_rate_hist: new_mapxnk!(format!(
                 "api_cache/{}staking_global_rate_hist",
+                prefix
+            )),
+            height_to_max_atxo: new_mapxnk!(format!(
+                "api_cache/{}height_to_max_atxo",
                 prefix
             )),
             staking_self_delegation_hist: new_mapx!(format!(
@@ -635,6 +641,11 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
             api_cache.atxo_to_txnid.insert(*id, (txn_sid, hash.clone()));
         }
     }
+
+    // Update block height to max atxo mapping
+    let max_atxo = api_cache.abar_memos.len().saturating_sub(1);
+    let block_height = ledger.status.td_commit_height;
+    api_cache.height_to_max_atxo.insert(block_height, max_atxo);
 
     ledger.api_cache = Some(api_cache);
 

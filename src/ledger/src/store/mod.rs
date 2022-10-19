@@ -5,9 +5,7 @@
 pub mod api_cache;
 pub mod helpers;
 mod test;
-pub mod utils;
 
-pub use fbnc;
 use fbnc::NumKey;
 
 use {
@@ -16,10 +14,9 @@ use {
             ATxoSID, AnonStateCommitmentData, AssetType, AssetTypeCode, AssetTypePrefix,
             AuthenticatedBlock, AuthenticatedTransaction, AuthenticatedUtxo,
             AuthenticatedUtxoStatus, BlockEffect, BlockSID, FinalizedBlock,
-            FinalizedTransaction, IssuerKeyPair, IssuerPublicKey, Operation,
-            OutputPosition, StateCommitmentData, Transaction, TransferType, TxnEffect,
-            TxnSID, TxnTempSID, TxoSID, UnAuthenticatedUtxo, Utxo, UtxoStatus,
-            ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
+            FinalizedTransaction, IssuerPublicKey, Operation, OutputPosition,
+            StateCommitmentData, Transaction, TxnEffect, TxnSID, TxnTempSID, TxoSID,
+            UnAuthenticatedUtxo, Utxo, UtxoStatus, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
         },
         staking::{
             Amount, Power, Staking, TendermintAddrRef, FF_PK_EXTRA_120_0000, FF_PK_LIST,

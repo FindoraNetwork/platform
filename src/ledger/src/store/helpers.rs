@@ -2,15 +2,12 @@
 //! # Helper Utils
 //!
 use {
-    super::{
-        IssuerKeyPair, IssuerPublicKey, LedgerState, TracingPolicies, TracingPolicy,
-        TransferType, XfrNotePolicies,
-    },
+    super::{LedgerState, TracingPolicies, TracingPolicy, XfrNotePolicies},
     crate::data_model::{
         Asset, AssetRules, AssetTypeCode, AssetTypePrefix, ConfidentialMemo,
-        DefineAsset, DefineAssetBody, IssueAsset, IssueAssetBody, Memo, Operation,
-        Transaction, TransferAsset, TransferAssetBody, TxOutput, TxnEffect, TxnSID,
-        TxoRef, TxoSID, ASSET_TYPE_FRA,
+        DefineAsset, DefineAssetBody, IssueAsset, IssueAssetBody, IssuerKeyPair,
+        IssuerPublicKey, Memo, Operation, Transaction, TransferAsset, TransferAssetBody,
+        TransferType, TxOutput, TxnEffect, TxnSID, TxoRef, TxoSID,
     },
     fbnc::NumKey,
     fp_utils::hashing::keccak_256,
@@ -26,38 +23,6 @@ use {
     },
     noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
 };
-
-/// Create a transaction to define a custom asset
-pub fn create_definition_transaction(
-    code: &AssetTypeCode,
-    keypair: &XfrKeyPair,
-    asset_rules: AssetRules,
-    memo: Option<Memo>,
-    seq_id: u64,
-) -> Result<(Transaction, AssetTypeCode)> {
-    let issuer_key = IssuerPublicKey {
-        key: *keypair.get_pk_ref(),
-    };
-    let asset_body =
-        DefineAssetBody::new(&code, &issuer_key, asset_rules, memo, None).c(d!())?;
-    let asset_create =
-        DefineAsset::new(asset_body, &IssuerKeyPair { keypair: &keypair }).c(d!())?;
-
-    let code = if code.val == ASSET_TYPE_FRA {
-        *code
-    } else {
-        let mut asset_code = AssetTypePrefix::UserDefined.bytes();
-        asset_code.append(&mut code.to_bytes());
-        AssetTypeCode {
-            val: AssetType(keccak_256(&asset_code)),
-        }
-    };
-
-    Ok((
-        Transaction::from_operation(Operation::DefineAsset(asset_create), seq_id),
-        code,
-    ))
-}
 
 #[inline(always)]
 #[allow(missing_docs)]

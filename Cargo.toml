@@ -74,7 +74,3 @@ noah-algebra = { git = "https://github.com/FindoraNetwork/noah", branch = "mt_in
 noah-crypto = { git = "https://github.com/FindoraNetwork/noah", branch = "mt_info_serde" }
 noah-plonk = { git = "https://github.com/FindoraNetwork/noah", branch = "mt_info_serde" }
 
-[patch."https://github.com/FindoraNetwork/storage"]
-fin_db = { git = "https:///github.com/FindoraNetwork//storage", tag = "v0.2.2"}
-temp_db = { git = "https:///github.com/FindoraNetwork//storage", tag = "v0.2.2"}
-storage = { git = "https:///github.com/FindoraNetwork//storage", tag = "v0.2.2"}

@@ -1950,7 +1950,8 @@ mod tests {
     use {
         super::*,
         ledger::data_model::{ATxoSID, BlockEffect, TxnEffect, TxoRef},
-        ledger::store::{utils::fra_gen_initial_tx, LedgerState},
+        ledger::store::LedgerState,
+        ledger::utils::fra_gen_initial_tx,
         rand_chacha::ChaChaRng,
         rand_core::SeedableRng,
         noah::anon_xfr::structs::{AnonAssetRecord, OpenAnonAssetRecordBuilder},

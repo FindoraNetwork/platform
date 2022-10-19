@@ -36,7 +36,7 @@ use tendermint::{
     validator::Info as TmValidator,
     vote::Power as TmPower,
 };
-use toml_edit::{value as toml_value, Document};
+use toml_edit::{value as toml_value, Array, Document};
 use noah::xfr::sig::XfrKeyPair;
 
 type NodeId = u32;
@@ -497,6 +497,10 @@ impl Env {
             toml_value(format!("tcp://{}:{}", &self.host_ip, ports.app_abci));
         cfg["rpc"]["laddr"] =
             toml_value(format!("tcp://{}:{}", &self.host_ip, ports.tm_rpc));
+
+        let mut arr = Array::new();
+        arr.push("*");
+        cfg["rpc"]["cors_allowed_origins"] = toml_value(arr);
 
         cfg["p2p"]["addr_book_strict"] = toml_value(false);
         cfg["p2p"]["allow_duplicate_ip"] = toml_value(true);

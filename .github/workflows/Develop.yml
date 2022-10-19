@@ -87,7 +87,7 @@ jobs:
       run: |
         COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
         if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA}"
+          export COMMIT_HASH=${GITHUB_SHA}
         else
           export COMMIT_HASH=${COMMIT_HASH}
         fi
@@ -107,7 +107,7 @@ jobs:
       run: |
         COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
         if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA}"
+          export COMMIT_HASH=${GITHUB_SHA}
         else
           export COMMIT_HASH=${COMMIT_HASH}
         fi
@@ -133,7 +133,7 @@ jobs:
       run: |
         COMMIT_HASH=$(echo ${GITHUB_CONTEXT} | jq '.event.pull_request.head.sha')
         if [ "${COMMIT_HASH}" == "null" ]; then
-          export COMMIT_HASH="${GITHUB_SHA}"
+          export COMMIT_HASH=${GITHUB_SHA}
         else
           export COMMIT_HASH=${COMMIT_HASH}
         fi

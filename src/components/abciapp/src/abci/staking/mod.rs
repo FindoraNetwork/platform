@@ -4,10 +4,6 @@
 //! Business logic based on [**Ledger Staking**](ledger::staking).
 //!
 
-use ledger::data_model::{
-    AssetType, AssetTypeCode, IssuerPublicKey, BLACK_HOLE_PUBKEY_STAKING,
-};
-
 mod whoami;
 
 #[cfg(test)]
@@ -20,7 +16,10 @@ use {
     config::abci::global_cfg::CFG,
     lazy_static::lazy_static,
     ledger::{
-        data_model::{Operation, Transaction, ASSET_TYPE_FRA},
+        data_model::{
+            AssetType, AssetTypeCode, IssuerPublicKey, Operation, Transaction,
+            ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
+        },
         staking::{
             ops::{
                 governance::{governance_penalty_tendermint_auto, ByzantineKind},
@@ -287,6 +286,7 @@ fn system_governance(staking: &mut Staking, bz: &ByzantineInfo) -> Result<()> {
 pub fn system_prism_mint_pay(
     la: &mut LedgerState,
     account_base_app: &mut AccountBaseApp,
+    td_height: i64,
 ) -> Option<Transaction> {
     let mut mints = Vec::new();
 
@@ -300,6 +300,9 @@ pub fn system_prism_mint_pay(
                     };
                     if mint.max_supply != 0 {
                         at.properties.asset_rules.max_units = Some(mint.max_supply);
+                        if td_height <= CFG.checkpoint.qa02_prismxx_asset {
+                            at.properties.asset_rules.decimals = mint.decimal;
+                        }
                     }
                     at
                 } else {
@@ -310,6 +313,9 @@ pub fn system_prism_mint_pay(
 
                     if mint.max_supply != 0 {
                         at.properties.asset_rules.max_units = Some(mint.max_supply);
+                        if td_height <= CFG.checkpoint.qa02_prismxx_asset {
+                            at.properties.asset_rules.decimals = mint.decimal;
+                        }
                     }
 
                     at.properties.code = AssetTypeCode { val: mint.asset };
@@ -345,14 +351,66 @@ pub fn system_prism_mint_pay(
 }
 
 /// Pay for freed 'Delegations' and 'FraDistributions'.
-pub fn system_mint_pay(la: &LedgerState) -> Option<Transaction> {
+pub fn system_mint_pay(
+    td_height: i64,
+    la: &mut LedgerState,
+    account_base_app: &mut AccountBaseApp,
+) -> Option<Transaction> {
+    let mut mints = Vec::new();
+
+    if td_height <= CFG.checkpoint.fix_prism_mint_pay {
+        if let Some(account_mint) = account_base_app.consume_mint() {
+            for mint in account_mint {
+                if mint.asset != ASSET_TYPE_FRA {
+                    let atc = AssetTypeCode { val: mint.asset };
+                    let at = if let Some(mut at) = la.get_asset_type(&atc) {
+                        at.properties.issuer = IssuerPublicKey {
+                            key: *BLACK_HOLE_PUBKEY_STAKING,
+                        };
+
+                        if mint.max_supply != 0 {
+                            at.properties.asset_rules.max_units = Some(mint.max_supply);
+                        }
+
+                        at
+                    } else {
+                        let mut at = AssetType::default();
+                        at.properties.issuer = IssuerPublicKey {
+                            key: *BLACK_HOLE_PUBKEY_STAKING,
+                        };
+
+                        if mint.max_supply != 0 {
+                            at.properties.asset_rules.max_units = Some(mint.max_supply);
+                        }
+
+                        at.properties.code = AssetTypeCode { val: mint.asset };
+
+                        at
+                    };
+
+                    la.insert_asset_type(atc, at);
+                }
+
+                let mint_entry = MintEntry::new(
+                    MintKind::Other,
+                    mint.target,
+                    None,
+                    mint.amount,
+                    mint.asset,
+                );
+
+                mints.push(mint_entry);
+            }
+        }
+    }
+
     let staking = la.get_staking();
     let mut limit = staking.coinbase_balance() as i128;
 
     // at most `NUM_TO_PAY` items to pay per block
     const NUM_TO_PAY: usize = 2048;
 
-    let mint_entries = staking
+    let mut mint_entries = staking
         .delegation_get_global_principal_with_receiver()
         .into_iter()
         .map(|(k, (n, receiver_pk))| {
@@ -378,6 +436,8 @@ pub fn system_mint_pay(la: &LedgerState) -> Option<Transaction> {
         )
         .take(NUM_TO_PAY)
         .collect::<Vec<_>>();
+
+    mint_entries.append(&mut mints);
 
     if mint_entries.is_empty() {
         None

@@ -192,6 +192,14 @@ async fn get_max_atxo_sid(
     Ok(web::Json(server.max_atxo_sid()))
 }
 
+async fn get_max_atxo_sid_at_height(
+    data: web::Data<Arc<RwLock<QueryServer>>>,
+    info: web::Path<u64>,
+) -> actix_web::Result<web::Json<Option<usize>>, actix_web::error::Error> {
+    let server = data.read();
+    Ok(web::Json(server.max_atxo_sid_at_height(*info)))
+}
+
 /// Define interface type
 #[allow(missing_docs)]
 pub enum QueryServerRoutes {
@@ -206,6 +214,7 @@ pub enum QueryServerRoutes {
     GetAbarProof,
     CheckNullifierHash,
     GetMaxATxoSid,
+    GetMaxATxoSidAtHeight,
     GetCreatedAssets,
     GetIssuedRecords,
     GetIssuedRecordsByCode,
@@ -233,6 +242,7 @@ impl NetworkRoute for QueryServerRoutes {
             QueryServerRoutes::GetAbarProof => "get_abar_proof",
             QueryServerRoutes::CheckNullifierHash => "check_nullifier_hash",
             QueryServerRoutes::GetMaxATxoSid => "get_max_atxo_sid",
+            QueryServerRoutes::GetMaxATxoSidAtHeight => "get_max_atxo_sid_at_height",
             QueryServerRoutes::GetCreatedAssets => "get_created_assets",
             QueryServerRoutes::GetIssuedRecords => "get_issued_records",
             QueryServerRoutes::GetIssuedRecordsByCode => "get_issued_records_by_code",
@@ -663,6 +673,11 @@ impl QueryApi {
                 .route(
                     &QueryServerRoutes::GetMaxATxoSid.route(),
                     web::get().to(get_max_atxo_sid),
+                )
+                .route(
+                    &QueryServerRoutes::GetMaxATxoSidAtHeight
+                        .with_arg_template("height"),
+                    web::get().to(get_max_atxo_sid_at_height),
                 )
                 .route(
                     &QueryServerRoutes::GetRelatedTxns.with_arg_template("address"),

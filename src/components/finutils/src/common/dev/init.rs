@@ -8,7 +8,7 @@ use ledger::{
     data_model::{
         AssetTypeCode, StateCommitmentData, Transaction, BLACK_HOLE_PUBKEY_STAKING,
     },
-    store::utils::fra_gen_initial_tx,
+    utils::fra_gen_initial_tx,
 };
 use ruc::*;
 use serde::Deserialize;
