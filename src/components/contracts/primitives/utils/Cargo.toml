@@ -21,7 +21,7 @@ protobuf = "2.16"
 rand = "0.8"
 ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
-sha2 = "0.9.5"
+sha2 = "0.10.6"
 sha3 = "0.8"
 bip32 = "0.4.0"
 tiny-keccak = { version = "2.0", features = ["keccak"] }
