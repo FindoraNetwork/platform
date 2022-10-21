@@ -110,5 +110,5 @@ jobs:
           git push -f -u origin ${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.branch }}
 
           git tag -a ${{ steps.vars.outputs.branch }} -m "${{ steps.vars.outputs.branch }}"
-          git show ${{ steps.vars.outputs.branch }}
+          # git show ${{ steps.vars.outputs.branch }}
           git push -u origin ${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.branch }} ${{ steps.vars.outputs.branch }}
