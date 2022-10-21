@@ -32,7 +32,7 @@ fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
 config = { path = "../../../config"}
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.1" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
 
 [dev-dependencies]
