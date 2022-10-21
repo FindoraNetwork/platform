@@ -16,7 +16,7 @@ zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4x" }
 hex = "0.4.2"
 
 base64 = "0.12"
-bip0039 = "0.8.0"
+bip0039 = { version = "0.10.1", features = ["all-languages"] }
 bech32 = "0.7.2"
 ed25519-dalek-bip32 = { git = "https://github.com/FindoraNetwork/ed25519-dalek-bip32", branch = "feat-allow-nohardened" }
 tracing = "0.1.13"
