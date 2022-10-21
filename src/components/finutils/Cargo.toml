@@ -9,7 +9,7 @@ edition = "2021"
 tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a-fk" }
 tokio = "1.10.1"
 hex = "0.4.2"
-base64 = "0.12"
+base64 = "0.13"
 clap = { version = "2.33.3", features = ["yaml"] }
 lazy_static = "1.4.0"
 attohttpc = { version = "0.23", default-features = false, features = ["compress", "json", "tls-rustls"] }
