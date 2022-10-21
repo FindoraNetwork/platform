@@ -40,7 +40,7 @@ tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", feat
 [dev-dependencies]
 
 [build-dependencies]
-vergen = "=3.1.0"
+vergen = "=7.4.2"
 
 [features]
 default = ["std"]
