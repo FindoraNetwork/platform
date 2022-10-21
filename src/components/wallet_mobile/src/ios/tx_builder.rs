@@ -279,6 +279,19 @@ pub extern "C" fn findora_ffi_transaction_builder_add_operation_convert_account(
 }
 
 #[no_mangle]
+pub extern "C" fn findora_ffi_transaction_builder_sign_origin(
+    builder: &TransactionBuilder,
+    kp: &XfrKeyPair,
+) -> *mut TransactionBuilder {
+    if let Ok(info) = builder.clone().sign_origin(kp) {
+        Box::into_raw(Box::new(info))
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
+
+#[no_mangle]
 pub extern "C" fn findora_ffi_transaction_builder_sign(
     builder: &TransactionBuilder,
     kp: &XfrKeyPair,

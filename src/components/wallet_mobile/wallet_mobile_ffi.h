@@ -645,6 +645,9 @@ struct TransactionBuilder *findora_ffi_transaction_builder_add_operation_convert
                                                                                          const char *amount,
                                                                                          const struct XfrKeyPair *kp);
 
+struct TransactionBuilder *findora_ffi_transaction_builder_sign_origin(const struct TransactionBuilder *builder,
+                                                                       const struct XfrKeyPair *kp);
+
 struct TransactionBuilder *findora_ffi_transaction_builder_sign(const struct TransactionBuilder *builder,
                                                                 const struct XfrKeyPair *kp);
 

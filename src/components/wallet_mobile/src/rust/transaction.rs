@@ -330,6 +330,11 @@ impl TransactionBuilder {
     }
 
     pub fn sign(mut self, kp: &XfrKeyPair) -> Result<TransactionBuilder> {
+        self.get_builder_mut().sign_to_map(kp);
+        Ok(self)
+    }
+
+    pub fn sign_origin(mut self, kp: &XfrKeyPair) -> Result<TransactionBuilder> {
         self.get_builder_mut().sign(kp);
         Ok(self)
     }

@@ -380,6 +380,21 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderAddOpera
 #[no_mangle]
 /// # Safety
 ///
+pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderSignOrigin(
+    env: JNIEnv,
+    _: JClass,
+    builder: jlong,
+    kp: jlong,
+) -> jlong {
+    let builder = &*(builder as *mut TransactionBuilder);
+    let kp = &*(kp as *mut XfrKeyPair);
+    let builder = throw_exception!(env, builder.clone().sign_origin(kp));
+    Box::into_raw(Box::new(builder)) as jlong
+}
+
+#[no_mangle]
+/// # Safety
+///
 pub unsafe extern "system" fn Java_com_findora_JniApi_transactionBuilderSign(
     env: JNIEnv,
     _: JClass,
