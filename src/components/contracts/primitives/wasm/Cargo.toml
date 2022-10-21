@@ -15,7 +15,7 @@ wasm-opt = false
 [dependencies]
 base64 = "0.13"
 ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
-ethereum-types = { version = "0.13.1", default-features = false }
+ethereum-types = { version = "0.14.0", default-features = false }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
 rlp = "0.5"
