@@ -805,7 +805,7 @@ pub fn show_asset(addr: &str) -> Result<()> {
 
 /// Return the built version.
 pub fn version() -> &'static str {
-    concat!(env!("VERGEN_SHA"), " ", env!("VERGEN_BUILD_DATE"))
+    concat!(env!("VERGEN_GIT_SHA"), " ", env!("VERGEN_BUILD_DATE"))
 }
 
 ///operation to replace the staker.

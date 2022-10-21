@@ -335,7 +335,7 @@ fn run() -> Result<()> {
         );
 
     let mut cmd = Command::new("fn")
-        .version(env!("VERGEN_SHA"))
+        .version(env!("VERGEN_GIT_SHA"))
         .author("develop@FindoraNetwork.org")
         .about("A command line tool of the Findora Network")
         .subcommand(subcmd_genkey)

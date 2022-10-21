@@ -66,4 +66,4 @@ fs2 = "0.4"
 parking_lot = { version = "0.11.1", features = ["wasm-bindgen"] }
 
 [build-dependencies]
-vergen = "=7.4.2"
+vergen = "7.4.2"

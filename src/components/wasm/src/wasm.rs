@@ -77,7 +77,8 @@ use {
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
 /// against.
-const BUILD_ID: &str = concat!(env!("VERGEN_SHA_SHORT"), " ", env!("VERGEN_BUILD_DATE"));
+const BUILD_ID: &str =
+    concat!(env!("VERGEN_GIT_SHA_SHORT"), " ", env!("VERGEN_BUILD_DATE"));
 
 #[wasm_bindgen]
 /// Returns the git commit hash and commit date of the commit this library was built against.

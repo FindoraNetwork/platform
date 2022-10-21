@@ -1,11 +1,7 @@
-use vergen::{generate_cargo_keys, ConstantsFlags};
-
 fn main() {
-    let mut flags = ConstantsFlags::all();
-    // Tell vergen to use the semver from cargo and not `git describe`
-    flags.set(ConstantsFlags::SEMVER, false);
-    flags.set(ConstantsFlags::SEMVER_FROM_CARGO_PKG, true);
-
-    // Generate the 'cargo:' key output
-    generate_cargo_keys(flags).expect("Unable to generate the cargo keys!");
+    let mut config = vergen::Config::default();
+    *config.build_mut().kind_mut() = vergen::TimestampKind::All;
+    *config.build_mut().semver_mut() = false;
+    *config.git_mut().sha_kind_mut() = vergen::ShaKind::Both;
+    vergen::vergen(config).expect("Unable to generate the cargo keys!");
 }

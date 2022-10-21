@@ -299,7 +299,7 @@ pub mod global_cfg {
     fn get_config() -> Result<Config> {
         let m = Command::new("abcid")
             .bin_name("abcid")
-            .version(env!("VERGEN_SHA"))
+            .version(env!("VERGEN_GIT_SHA"))
             .author(crate_authors!())
             .about("An ABCI node implementation of FindoraNetwork.")
             .args([

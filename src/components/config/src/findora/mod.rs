@@ -225,7 +225,7 @@ pub mod config {
             let pack = Command::new("pack");
 
             Command::new("findorad")
-                .version(env!("VERGEN_SHA"))
+                .version(env!("VERGEN_GIT_SHA"))
                 .author(crate_authors!())
                 .about("An ABCI node implementation of FindoraNetwork.")
                 .subcommand(node)
