@@ -24,7 +24,7 @@ wasm-bindgen = { version = "=0.2.73", features = ["serde-serialize"] }
 zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4x" }
 ruc = "1.0"
 nix = "0.25"
-toml_edit = "0.14"
+toml_edit = "0.15"
 
 ledger = { path = "../../ledger" }
 globutils = { path = "../../libs/globutils" }
