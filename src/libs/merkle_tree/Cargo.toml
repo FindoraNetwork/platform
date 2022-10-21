@@ -7,7 +7,7 @@ edition = "2021"
 [dependencies]
 ruc = "1.0"
 arrayref = "0.3.5"
-base64 = "0.12"
+base64 = "0.13"
 byteorder = "1.0.0"
 chrono = "0.4"
 cryptohash = { path = "../cryptohash" }

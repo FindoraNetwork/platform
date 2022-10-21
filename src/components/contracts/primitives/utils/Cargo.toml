@@ -10,7 +10,7 @@ readme = "README.md"
 
 [dependencies]
 futures = "0.3.16"
-base64 = "0.12"
+base64 = "0.13"
 bip0039 = "0.10.1"
 blake2-rfc = "0.2.18"
 byteorder = "1.4.3"
