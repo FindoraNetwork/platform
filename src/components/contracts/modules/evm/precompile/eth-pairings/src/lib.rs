@@ -8,17 +8,7 @@ use evm_precompile_utils::{EvmDataReader, EvmDataWriter, EvmResult, Gasometer};
 use log::debug;
 use module_evm::precompile::{FinState, Precompile, PrecompileId, PrecompileResult};
 
-// The gas used value is obtained according to the standard erc20 call.
-// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.3.2/contracts/token/ERC20/ERC20.sol
-//const GAS_NAME: u64 = 3283;
-const GAS_SYMBOL: u64 = 3437;
-// const GAS_DECIMALS: u64 = 243;
-// const GAS_TOTAL_SUPPLY: u64 = 1003;
-// const GAS_BALANCE_OF: u64 = 1350;
-// const GAS_TRANSFER: u64 = 23661;
-// const GAS_ALLOWANCE: u64 = 1624;
-// const GAS_APPROVE: u64 = 20750;
-// const GAS_TRANSFER_FROM: u64 = 6610;
+const GAS_EXECUTION: u64 = 3437;
 
 /// The Verifier precompile.
 pub struct EthPairing;
@@ -73,7 +63,7 @@ impl EthPairing {
         target_gas: Option<u64>,
     ) -> EvmResult<PrecompileOutput> {
         let mut gasometer = Gasometer::new(target_gas);
-        gasometer.record_cost(GAS_SYMBOL)?;
+        gasometer.record_cost(GAS_EXECUTION)?;
 
         debug!(target: "evm", "EthPairing#executingOp");
         let result = match Self::call_public_api_on_vector(input.get_slice()) {
