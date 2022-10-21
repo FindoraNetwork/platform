@@ -12,7 +12,7 @@
 mod init;
 
 use {
-    clap::{crate_authors, App, SubCommand},
+    clap::{arg, crate_authors, Command},
     finutils::common,
     globutils::wallet,
     lazy_static::lazy_static,
@@ -59,70 +59,73 @@ fn main() {
 }
 
 fn run() -> Result<()> {
-    let subcmd_init = SubCommand::with_name("init")
-        .arg_from_usage("--mainnet")
-        .arg_from_usage("-i, --interval=[Interval] 'block interval'")
-        .arg_from_usage("-s, --skip-validator 'skip validator initialization'");
-    let subcmd_test = SubCommand::with_name("test");
-    let subcmd_issue = SubCommand::with_name("issue").about("issue FRA on demand");
-    let subcmd_delegate = SubCommand::with_name("delegate")
-        .arg_from_usage("-u, --user=[User] 'user name of delegator'")
-        .arg_from_usage("-n, --amount=[Amount] 'how much FRA units to delegate'")
-        .arg_from_usage("-v, --validator=[Validator] 'which validator to delegate to'");
-    let subcmd_undelegate = SubCommand::with_name("undelegate")
-        .arg_from_usage("-u, --user=[User] 'user name of the delegator'")
-        .arg_from_usage("-n, --amount=[Amount] 'how much FRA to undelegate, needed for partial undelegation'")
-        .arg_from_usage("-v, --validator=[Validator] 'which validator to undelegate from, needed for partial undelegation'");
-    let subcmd_claim = SubCommand::with_name("claim")
-        .arg_from_usage("-u, --user=[User] 'user name of delegator'")
-        .arg_from_usage("-n, --amount=[Amount] 'how much FRA to claim'");
-    let subcmd_transfer = SubCommand::with_name("transfer")
-        .arg_from_usage("-f, --from-user=[User] 'transfer sender'")
-        .arg_from_usage("-t, --to-user=[User] 'transfer receiver'")
-        .arg_from_usage("-n, --amount=[Amount] 'how much FRA to transfer'");
-    let subcmd_show = SubCommand::with_name("show")
-        .arg_from_usage("-r, --root-mnemonic 'show the pre-defined root mnemonic'")
-        .arg_from_usage("-U, --user-list 'show the pre-defined user list'")
-        .arg_from_usage("-v, --validator-list 'show the pre-defined validator list'")
-        .arg_from_usage("-u, --user=[User] 'user name of delegator'");
+    let subcmd_init = Command::new("init").args([
+        arg!(--mainnet),
+        arg!(-i --interval <Interval> "block interval."),
+        arg!(-s --"skip-validator" "skip validator initialization."),
+    ]);
+    let subcmd_test = Command::new("test");
+    let subcmd_issue = Command::new("issue").about("issue FRA on demand");
+    let mut subcmd_delegate = Command::new("delegate").args([
+        arg!(-u --user <InterUserval> "user name of delegator"),
+        arg!(-n --amount <Amount> "how much FRA units to delegate."),
+        arg!(-v --validator <Validator> "which validator to delegate to."),
+    ]);
+    let mut subcmd_undelegate = Command::new("undelegate").args([
+        arg!(-u --user <InterUserval> "user name of delegator"),
+        arg!(-n --amount <Amount> "how much FRA to undelegate, needed for partial undelegation."),
+        arg!(-v --validator <Validator> "which validator to undelegate from, needed for partial undelegation."),
+    ]);
+    let mut subcmd_claim = Command::new("claim").args([
+        arg!(-u --user <InterUserval> "user name of delegator"),
+        arg!(-n --amount <Amount> "how much FRA to claim."),
+    ]);
+    let mut subcmd_transfer = Command::new("transfer").args([
+        arg!(-f --"from-user" <User> "transfer sender"),
+        arg!(-t --"to-user" <User> "transfer receiver."),
+        arg!(-n --amount <Amount> "how much FRA to transfer."),
+    ]);
+    let mut subcmd_show = Command::new("show").args([
+        arg!(-r --"root-mnemonic" "show the pre-defined root mnemonic"),
+        arg!(-U --"user-list" "show the pre-defined user list."),
+        arg!(-v --"validator-list" "show the pre-defined validator list."),
+        arg!(-u --user <InterUserval> "user name of delegator"),
+    ]);
 
-    let matches = App::new("stt")
+    let mut cmd = Command::new("stt")
         .version(common::version())
         .author(crate_authors!())
         .about("A manual test tool for the staking function.")
-        .arg_from_usage("-v, --version")
         .subcommand(subcmd_init)
         .subcommand(subcmd_test)
         .subcommand(subcmd_issue)
-        .subcommand(subcmd_delegate)
-        .subcommand(subcmd_undelegate)
-        .subcommand(subcmd_claim)
-        .subcommand(subcmd_transfer)
-        .subcommand(subcmd_show)
-        .get_matches();
+        .subcommand(subcmd_delegate.clone())
+        .subcommand(subcmd_undelegate.clone())
+        .subcommand(subcmd_claim.clone())
+        .subcommand(subcmd_transfer.clone())
+        .subcommand(subcmd_show.clone());
+    let matches = cmd.clone().get_matches();
 
-    if matches.is_present("version") {
-        println!("{}", env!("VERGEN_SHA"));
-    } else if let Some(m) = matches.subcommand_matches("init") {
+    if let Some(m) = matches.subcommand_matches("init") {
         let interval = m
-            .value_of("interval")
-            .unwrap_or("0")
+            .get_one::<String>("interval")
+            .unwrap_or(&"0".to_string())
             .parse::<u64>()
             .c(d!())?;
-        let is_mainnet = m.is_present("mainnet");
-        let skip_validator = m.is_present("skip-validator");
+        let is_mainnet = m.get_flag("mainnet");
+        let skip_validator = m.get_flag("skip-validator");
         init::init(interval, is_mainnet, skip_validator).c(d!())?;
-    } else if matches.is_present("test") {
+    } else if matches.subcommand_matches("test").is_some() {
         init::i_testing::run_all().c(d!())?;
-    } else if matches.is_present("issue") {
+    } else if matches.subcommand_matches("issue").is_some() {
         issue::issue().c(d!())?;
     } else if let Some(m) = matches.subcommand_matches("delegate") {
-        let user = m.value_of("user");
-        let amount = m.value_of("amount");
-        let validator = m.value_of("validator");
+        let user = m.get_one::<String>("user");
+        let amount = m.get_one::<String>("amount");
+        let validator = m.get_one::<String>("validator");
 
         if user.is_none() || amount.is_none() || validator.is_none() {
-            println!("{}", m.usage());
+            subcmd_delegate.print_help().unwrap();
         } else {
             let amount = amount.unwrap().parse::<u64>().c(d!())?;
             delegate::gen_tx(user.unwrap(), amount, validator.unwrap())
@@ -130,15 +133,15 @@ fn run() -> Result<()> {
                 .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
         }
     } else if let Some(m) = matches.subcommand_matches("undelegate") {
-        let user = m.value_of("user");
-        let amount = m.value_of("amount");
-        let validator = m.value_of("validator");
+        let user = m.get_one::<String>("user");
+        let amount = m.get_one::<String>("amount");
+        let validator = m.get_one::<String>("validator").map(|val| val.as_str());
 
         if user.is_none()
             || user.unwrap().trim().is_empty()
             || matches!((amount, validator), (Some(_), None) | (None, Some(_)))
         {
-            println!("{}", m.usage());
+            subcmd_undelegate.print_help().unwrap();
         } else {
             let amount = amount.and_then(|am| am.parse::<u64>().ok());
             undelegate::gen_tx(user.unwrap(), amount, validator)
@@ -146,12 +149,12 @@ fn run() -> Result<()> {
                 .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
         }
     } else if let Some(m) = matches.subcommand_matches("claim") {
-        let user = m.value_of("user");
+        let user = m.get_one::<String>("user");
 
         if user.is_none() {
-            println!("{}", m.usage());
+            subcmd_claim.print_help().unwrap();
         } else {
-            let amount = if let Some(am) = m.value_of("amount") {
+            let amount = if let Some(am) = m.get_one::<String>("amount") {
                 Some(am.parse::<u64>().c(d!())?)
             } else {
                 None
@@ -161,9 +164,9 @@ fn run() -> Result<()> {
                 .and_then(|tx| common::utils::send_tx(&tx).c(d!()))?;
         }
     } else if let Some(m) = matches.subcommand_matches("transfer") {
-        let from = m.value_of("from-user");
-        let to = m.value_of("to-user");
-        let amount = m.value_of("amount");
+        let from = m.get_one::<String>("from-user");
+        let to = m.get_one::<String>("to-user");
+        let amount = m.get_one::<String>("amount");
 
         match (from, to, amount) {
             (Some(sender), Some(receiver), Some(am)) => {
@@ -177,22 +180,22 @@ fn run() -> Result<()> {
                     .c(d!())?;
             }
             _ => {
-                println!("{}", m.usage());
+                subcmd_transfer.print_help().unwrap();
             }
         }
     } else if let Some(m) = matches.subcommand_matches("show") {
-        let rm = m.is_present("root-mnemonic");
-        let ul = m.is_present("user-list");
-        let vl = m.is_present("validator-list");
-        let u = m.value_of("user");
+        let rm = m.get_flag("root-mnemonic");
+        let ul = m.get_flag("user-list");
+        let vl = m.get_flag("validator-list");
+        let u = m.get_one::<String>("user").map(|val| val.as_str());
 
         if rm || ul || vl || u.is_some() {
             print_info(rm, ul, vl, u).c(d!())?;
         } else {
-            println!("{}", m.usage());
+            subcmd_show.print_help().unwrap();
         }
     } else {
-        println!("{}", matches.usage());
+        cmd.print_help().unwrap();
     }
 
     Ok(())

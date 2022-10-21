@@ -255,7 +255,7 @@ pub mod global_cfg {
     #[cfg(target_os = "linux")]
     use btm::{SnapAlgo, SnapMode, STEP_CNT};
     #[cfg(not(test))]
-    use clap::{crate_authors, App, Arg, ArgMatches};
+    use clap::{arg, crate_authors, Arg, ArgMatches, Command};
     use lazy_static::lazy_static;
     use ruc::*;
     #[cfg(not(test))]
@@ -297,119 +297,119 @@ pub mod global_cfg {
 
     #[cfg(not(test))]
     fn get_config() -> Result<Config> {
-        let m = App::new("abcid")
+        let m = Command::new("abcid")
+            .bin_name("abcid")
             .version(env!("VERGEN_SHA"))
             .author(crate_authors!())
             .about("An ABCI node implementation of FindoraNetwork.")
-            .arg_from_usage("--abcid-host=[ABCId IP]")
-            .arg_from_usage("--abcid-port=[ABCId Port]")
-            .arg_from_usage("--tendermint-host=[Tendermint IP]")
-            .arg_from_usage("--tendermint-port=[Tendermint Port]")
-            .arg_from_usage("--submission-service-port=[Submission Service Port]")
-            .arg_from_usage("--ledger-service-port=[Ledger Service Port]")
-            .arg_from_usage("-q, --enable-query-service")
-            .arg_from_usage("--disable-eth-empty-blocks 'not generate empty ethereum blocks when no evm transaction'")
-            .arg_from_usage("--enable-eth-api-service")
-            .arg_from_usage("--evm-http-port=[EVM Web3 Http Port]")
-            .arg_from_usage("--evm-ws-port=[EVM Web3 WS Port]")
-            .arg_from_usage("--tendermint-node-self-addr=[Address] 'the address of your tendermint node, in upper-hex format'")
-            .arg_from_usage("--tendermint-node-key-config-path=[Path] 'such as: ${HOME}/.tendermint/config/priv_validator_key.json'")
-            .arg_from_usage("-d, --ledger-dir=[Path]")
-            .arg_from_usage("--checkpoint-file=[Path]")
-            .arg_from_usage("--enable-snapshot 'global switch for enabling snapshot functions'")
-            .arg_from_usage("--snapshot-list 'list all available snapshots in the form of block height'")
-            .arg_from_usage("--snapshot-target=[TargetPath] 'a data volume containing both ledger data and tendermint data'")
-            .arg_from_usage("--snapshot-itv=[Iterval] 'interval between adjacent snapshots, default to 10 blocks'")
-            .arg_from_usage("--snapshot-cap=[Capacity] 'the maximum number of snapshots that will be stored, default to 100'")
-            .arg_from_usage("--snapshot-mode=[Mode] 'zfs/btrfs/external, will try a guess if missing'")
-            .arg_from_usage("--snapshot-algo=[Algo] 'fair/fade, default to `fair`'")
-            .arg_from_usage("--snapshot-rollback 'rollback to the last available snapshot'")
-            .arg_from_usage("-r, --snapshot-rollback-to=[Height] 'rollback to a custom height, will try the closest smaller height if the target does not exist'")
-            .arg_from_usage("-R, --snapshot-rollback-to-exact=[Height] 'rollback to a custom height exactly, an error will be reported if the target does not exist'")
-            .arg(Arg::with_name("_a").long("ignored").hidden(true))
-            .arg(Arg::with_name("_b").long("nocapture").hidden(true))
-            .arg(Arg::with_name("_c").long("test-threads").hidden(true))
-            .arg(Arg::with_name("INPUT").multiple(true).hidden(true))
+            .args([
+                arg!(--"abcid-host" <"ABCId IP">),
+                arg!(--"abcid-port" <"ABCId Port">),
+                arg!(--"tendermint-host" <"Tendermint IP">),
+                arg!(--"tendermint-port" <"Tendermint Port">),
+                arg!(--"submission-service-port" <"Submission Service Port">),
+                arg!(--"ledger-service-port" <"Ledger Service Port">),
+                arg!(-q --"enable-query-service"),
+                arg!(--"disable-eth-empty-blocks" "not generate empty ethereum blocks when no evm transaction"),
+                arg!(--"enable-eth-api-service"),
+                arg!(--"evm-http-port" <"EVM Web3 Http Port">),
+                arg!(--"evm-ws-port" <"EVM Web3 WS Port">),
+                arg!(--"tendermint-node-self-addr" <"Address"> "the address of your tendermint node, in upper-hex format"),
+                arg!(--"tendermint-node-key-config-path" <"Path"> "such as: ${HOME}/.tendermint/config/priv_validator_key.json"),
+                arg!(-d --"ledger-dir" <"Path">),
+                arg!(--"checkpoint-file" <"Path">),
+                arg!(--"enable-snapshot" "global switch for enabling snapshot functions"),
+                arg!(--"snapshot-list" "list all available snapshots in the form of block height"),
+                arg!(--"snapshot-target" <"TargetPath"> "a data volume containing both ledger data and tendermint data"),
+                arg!(--"snapshot-itv" <"Iterval"> "interval between adjacent snapshots, default to 10 blocks"),
+                arg!(--"snapshot-cap" <"Capacity"> "the maximum number of snapshots that will be stored, default to 100"),
+                arg!(--"snapshot-mode" <"Mode"> "zfs/btrfs/external, will try a guess if missing"),
+                arg!(--"snapshot-algo" <"Algo"> "fair/fade, default to `fair`"),
+                arg!(--"snapshot-rollback" "rollback to the last available snapshot"),
+                arg!(-r --"snapshot-rollback-to" <"Height"> "rollback to a custom height, will try the closest smaller height if the target does not exist"),
+                arg!(-R --"snapshot-rollback-to-exact" <"Height"> "rollback to a custom height exactly, an error will be reported if the target does not exist"),
+            ])
+            .arg(Arg::new("_a").long("ignored").hide(true))
+            .arg(Arg::new("_b").long("nocapture").hide(true))
+            .arg(Arg::new("_c").long("test-threads").hide(true))
+            .arg(Arg::new("INPUT").hide(true))
             .get_matches();
-
-        print_version(&m);
-
         let ah = m
-            .value_of("abcid-host")
+            .get_one::<String>("abcid-host")
             .map(|v| v.to_owned())
             .or_else(|| env::var("ABCI_HOST").ok())
             .unwrap_or_else(|| "0.0.0.0".to_owned());
         let ap = m
-            .value_of("abcid-port")
+            .get_one::<String>("abcid-port")
             .map(|v| v.to_owned())
             .or_else(|| env::var("ABCI_PORT").ok())
             .unwrap_or_else(|| "26658".to_owned())
             .parse::<u16>()
             .c(d!())?;
         let th = m
-            .value_of("tendermint-host")
+            .get_one::<String>("tendermint-host")
             .map(|v| v.to_owned())
             .or_else(|| env::var("TENDERMINT_HOST").ok())
             .unwrap_or_else(|| "0.0.0.0".to_owned());
         let tp = m
-            .value_of("tendermint-port")
+            .get_one::<String>("tendermint-port")
             .map(|v| v.to_owned())
             .or_else(|| env::var("TENDERMINT_PORT").ok())
             .unwrap_or_else(|| "26657".to_owned())
             .parse::<u16>()
             .c(d!())?;
         let ssp = m
-            .value_of("submission-service-port")
+            .get_one::<String>("submission-service-port")
             .map(|v| v.to_owned())
             .or_else(|| env::var("SUBMISSION_PORT").ok())
             .unwrap_or_else(|| "8669".to_owned())
             .parse::<u16>()
             .c(d!())?;
         let lsp = m
-            .value_of("ledger-service-port")
+            .get_one::<String>("ledger-service-port")
             .map(|v| v.to_owned())
             .or_else(|| env::var("LEDGER_PORT").ok())
             .unwrap_or_else(|| "8668".to_owned())
             .parse::<u16>()
             .c(d!())?;
-        let eqs = m.is_present("enable-query-service")
+        let eqs = m.get_flag("enable-query-service")
             || env::var("ENABLE_QUERY_SERVICE").is_ok();
         let tnsa = m
-            .value_of("tendermint-node-self-addr")
+            .get_one::<String>("tendermint-node-self-addr")
             .map(|v| v.to_owned())
             .or_else(|| env::var("TD_NODE_SELF_ADDR").ok());
         let tnkcp = m
-            .value_of("tendermint-node-key-abci-path")
+            .get_one::<String>("tendermint-node-key-abci-path")
             .map(|v| v.to_owned())
             .or_else(|| env::var("TENDERMINT_NODE_KEY_CONFIG_PATH").ok());
         let ld = m
-            .value_of("ledger-dir")
+            .get_one::<String>("ledger-dir")
             .map(|v| v.to_owned())
             .unwrap_or_else(|| {
                 env::var("LEDGER_DIR").unwrap_or_else(|_| {
                     format!("{}/.tendermint/__findora__", pnk!(env::var("HOME")))
                 })
             });
-        let eeb = m.is_present("disable-eth-empty-blocks")
+        let eeb = m.get_flag("disable-eth-empty-blocks")
             || env::var("DISABLE_ETH_EMPTY_BLOCKS").is_ok();
-        let eas = m.is_present("enable-eth-api-service")
+        let eas = m.get_flag("enable-eth-api-service")
             || env::var("ENABLE_ETH_API_SERVICE").is_ok();
         let ehp = m
-            .value_of("evm-http-port")
+            .get_one::<String>("evm-http-port")
             .map(|v| v.to_owned())
             .or_else(|| env::var("EVM_HTTP_PORT").ok())
             .unwrap_or_else(|| "8545".to_owned())
             .parse::<u16>()
             .c(d!())?;
         let ewp = m
-            .value_of("evm-ws-port")
+            .get_one::<String>("evm-ws-port")
             .map(|v| v.to_owned())
             .or_else(|| env::var("EVM_WS_PORT").ok())
             .unwrap_or_else(|| "8546".to_owned())
             .parse::<u16>()
             .c(d!())?;
         let checkpoint_path = m
-            .value_of("checkpoint-file")
+            .get_one::<String>("checkpoint-file")
             .map(|v| v.to_owned())
             .unwrap_or_else(|| String::from("./checkpoint.toml"));
 
@@ -437,66 +437,56 @@ pub mod global_cfg {
     }
 
     #[cfg(not(test))]
-    fn print_version(m: &ArgMatches) {
-        if m.is_present("version") {
-            println!("{}", env!("VERGEN_SHA"));
-            exit(0);
-        }
-    }
-
-    #[cfg(not(test))]
     #[cfg(target_os = "linux")]
     fn parse_btmcfg(m: &ArgMatches) -> Result<BtmCfg> {
         let mut res = BtmCfg::new();
-
-        res.enable = m.is_present("enable-snapshot");
-
+        res.enable = m.get_flag("enable-snapshot");
         if res.enable {
             res.itv = m
-                .value_of("snapshot-itv")
-                .unwrap_or("10")
+                .get_one::<String>("snapshot-itv")
+                .unwrap_or(&"10".to_string())
                 .parse::<u64>()
                 .c(d!())?;
             res.cap = m
-                .value_of("snapshot-cap")
-                .unwrap_or("100")
+                .get_one::<String>("snapshot-cap")
+                .unwrap_or(&"100".to_string())
                 .parse::<u64>()
                 .c(d!())?;
 
-            if let Some(sm) = m.value_of("snapshot-mode") {
+            if let Some(sm) = m.get_one::<String>("snapshot-mode") {
                 res.mode = SnapMode::from_string(sm).c(d!())?;
                 if !matches!(res.mode, SnapMode::External) {
-                    res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
+                    res.target =
+                        m.get_one::<String>("snapshot-target").c(d!())?.to_owned();
                 }
             } else {
-                res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
+                res.target = m.get_one::<String>("snapshot-target").c(d!())?.to_owned();
                 res.mode = res.guess_mode().c(d!())?;
             }
 
-            if let Some(sa) = m.value_of("snapshot-algo") {
+            if let Some(sa) = m.get_one::<String>("snapshot-algo") {
                 res.algo = SnapAlgo::from_string(sa).c(d!())?;
                 res.itv.checked_pow(STEP_CNT as u32).c(d!())?;
             }
         }
-
-        if m.is_present("snapshot-list")
-            || m.is_present("snapshot-rollback")
-            || m.is_present("snapshot-rollback-to")
-            || m.is_present("snapshot-rollback-to-exact")
+        if m.get_flag("snapshot-list")
+            || m.get_flag("snapshot-rollback")
+            || m.get_one::<String>("snapshot-rollback-to").is_some()
+            || m.get_one::<String>("snapshot-rollback-to-exact").is_some()
         {
             // this field should be parsed at the top
-            res.target = m.value_of("snapshot-target").c(d!())?.to_owned();
+            res.target = m.get_one::<String>("snapshot-target").c(d!())?.to_owned();
 
             // the guess should always success in this scene
             res.mode = res.guess_mode().c(d!())?;
 
-            if m.is_present("snapshot-list") {
+            if m.get_flag("snapshot-list") {
                 list_snapshots(&res).c(d!())?;
             }
 
             check_rollback(m, &res).c(d!())?;
         }
-
+        println!("3");
         Ok(res)
     }
 
@@ -523,16 +513,19 @@ pub mod global_cfg {
             such as findorad, abcid, tendermint, etc.
         "#;
 
-        if m.is_present("snapshot-rollback")
-            || m.is_present("snapshot-rollback-to")
-            || m.is_present("snapshot-rollback-to-exact")
+        if m.get_flag("snapshot-rollback")
+            || m.get_one::<String>("snapshot-rollback-to").is_some()
+            || m.get_one::<String>("snapshot-rollback-to-exact").is_some()
         {
             println!("\x1b[31;01m\n{}\x1b[00m", HINTS);
 
             let (h, strict) = m
-                .value_of("snapshot-rollback-to-exact")
+                .get_one::<String>("snapshot-rollback-to-exact")
                 .map(|h| (Some(h), true))
-                .or_else(|| m.value_of("snapshot-rollback-to").map(|h| (Some(h), false)))
+                .or_else(|| {
+                    m.get_one::<String>("snapshot-rollback-to")
+                        .map(|h| (Some(h), false))
+                })
                 .unwrap_or((None, false));
             let h = if let Some(h) = h {
                 Some(h.parse::<u64>().c(d!())?)
