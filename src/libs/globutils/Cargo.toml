@@ -17,7 +17,7 @@ hex = "0.4.2"
 
 base64 = "0.12"
 bip0039 = { version = "0.10.1", features = ["all-languages"] }
-bech32 = "0.7.2"
+bech32 = "0.9.1"
 ed25519-dalek-bip32 = { git = "https://github.com/FindoraNetwork/ed25519-dalek-bip32", branch = "feat-allow-nohardened" }
 tracing = "0.1.13"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }

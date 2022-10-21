@@ -5,7 +5,7 @@
 //!
 
 use {
-    bech32::{self, FromBase32, ToBase32},
+    bech32::{self, FromBase32, ToBase32, Variant},
     bip0039::{Count, Language, Mnemonic},
     ed25519_dalek_bip32::{DerivationPath, ExtendedSecretKey},
     ruc::*,
@@ -200,14 +200,14 @@ pub fn public_key_from_bech32(addr: &str) -> Result<XfrPublicKey> {
 
 #[inline(always)]
 fn bech32enc<T: AsRef<[u8]> + ToBase32>(input: &T) -> String {
-    bech32::encode("fra", input.to_base32()).unwrap()
+    bech32::encode("fra", input.to_base32(), Variant::Bech32).unwrap()
 }
 
 #[inline(always)]
 fn bech32dec(input: &str) -> Result<Vec<u8>> {
     bech32::decode(input)
         .c(d!())
-        .and_then(|(_, data)| Vec::<u8>::from_base32(&data).c(d!()))
+        .and_then(|(_, data, _)| Vec::<u8>::from_base32(&data).c(d!()))
 }
 
 /////////////////////////////////////////////////////////////////
