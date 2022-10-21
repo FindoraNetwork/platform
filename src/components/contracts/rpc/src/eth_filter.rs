@@ -17,6 +17,7 @@ use lru::LruCache;
 use parking_lot::RwLock;
 use std::{
     collections::BTreeMap,
+    num::NonZeroUsize,
     sync::{Arc, Mutex},
     time,
 };
@@ -388,6 +389,10 @@ pub struct EthBlockDataCache {
 impl EthBlockDataCache {
     /// Create a new cache with provided cache sizes.
     pub fn new(blocks_cache_size: usize, statuses_cache_size: usize) -> Self {
+        let blocks_cache_size = NonZeroUsize::new(blocks_cache_size)
+            .unwrap_or(unsafe { NonZeroUsize::new_unchecked(BLOCK_CACHE_SIZE) });
+        let statuses_cache_size = NonZeroUsize::new(statuses_cache_size)
+            .unwrap_or(unsafe { NonZeroUsize::new_unchecked(STATS_CACHE_SIZE) });
         Self {
             blocks: parking_lot::Mutex::new(LruCache::new(blocks_cache_size)),
             statuses: parking_lot::Mutex::new(LruCache::new(statuses_cache_size)),

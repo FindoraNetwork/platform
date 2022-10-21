@@ -11,11 +11,11 @@ readme = "README.md"
 
 [dependencies]
 futures = "0.3.16"
-jsonrpc-core = "18.0.0"
-pubsub = { package = "jsonrpc-pubsub", version = "18.0.0" }
+jsonrpc-core = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-core" }
+pubsub = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-pubsub" }
 log = "0.4.8"
 serde_json = "1.0.41"
 
-http = { package = "jsonrpc-http-server", version = "18.0.0" }
-ipc = { package = "jsonrpc-ipc-server", version = "18.0.0" }
-ws = { package = "jsonrpc-ws-server", version = "18.0.0" }
+http = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-http-server" }
+ipc = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-ipc-server" }
+ws = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-ws-server" }
