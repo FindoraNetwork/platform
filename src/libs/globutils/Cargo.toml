@@ -5,7 +5,7 @@ authors = ["FindoraNetwork"]
 edition = "2021"
 
 [dependencies]
-ruc = "1.0"
+ruc = "2.0"
 percent-encoding = "2.1.0"
 serde = "1.0.124"
 serde_json = "1.0"
