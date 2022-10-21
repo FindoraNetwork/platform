@@ -26,4 +26,4 @@ fixed-hash = "0.8.0"
 fp-utils = { path = "../utils" }
 
 [dev-dependencies]
-rand_chacha = "0.2"
+rand_chacha = "0.3"
