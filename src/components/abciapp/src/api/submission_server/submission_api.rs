@@ -5,7 +5,11 @@
 use {
     super::{SubmissionServer, TxnForward, TxnHandle},
     actix_cors::Cors,
-    actix_web::{error, middleware, web, App, HttpServer},
+    actix_web::{
+        error, middleware, rt,
+        web::{self, Data},
+        App, HttpServer,
+    },
     finutils::api::NetworkRoute,
     ledger::data_model::Transaction,
     log::info,
@@ -111,28 +115,35 @@ impl SubmissionApi {
         host: &str,
         port: u16,
     ) -> Result<SubmissionApi> {
-        let _ = actix_rt::System::new("findora API");
-
-        HttpServer::new(move || {
-            App::new()
-                .wrap(middleware::Logger::default())
-                .wrap(Cors::permissive().supports_credentials())
-                .data(web::JsonConfig::default().limit(2048 * 1024))
-                .data(submission_server.clone())
-                .route(
-                    &SubmissionRoutes::SubmitTransaction.route(),
-                    web::post().to(submit_transaction::<RNG, TF>),
-                )
-                .route(&SubmissionRoutes::Ping.route(), web::get().to(ping))
-                .route(&SubmissionRoutes::Version.route(), web::get().to(version))
-                .route(
-                    &SubmissionRoutes::TxnStatus.with_arg_template("handle"),
-                    web::get().to(txn_status::<RNG, TF>),
-                )
-        })
-        .bind(&format!("{}:{}", host, port))
-        .c(d!())?
-        .run();
+        rt::System::new()
+            .block_on(
+                HttpServer::new(move || {
+                    App::new()
+                        .wrap(middleware::Logger::default())
+                        .wrap(Cors::permissive().supports_credentials())
+                        .app_data(Data::new(
+                            web::JsonConfig::default().limit(2048 * 1024),
+                        ))
+                        .app_data(Data::new(submission_server.clone()))
+                        .route(
+                            &SubmissionRoutes::SubmitTransaction.route(),
+                            web::post().to(submit_transaction::<RNG, TF>),
+                        )
+                        .route(&SubmissionRoutes::Ping.route(), web::get().to(ping))
+                        .route(
+                            &SubmissionRoutes::Version.route(),
+                            web::get().to(version),
+                        )
+                        .route(
+                            &SubmissionRoutes::TxnStatus.with_arg_template("handle"),
+                            web::get().to(txn_status::<RNG, TF>),
+                        )
+                })
+                .bind(&format!("{}:{}", host, port))
+                .c(d!())?
+                .run(),
+            )
+            .c(d!())?;
 
         info!("Submission server started");
 

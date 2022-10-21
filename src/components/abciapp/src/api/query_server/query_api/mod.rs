@@ -10,7 +10,11 @@ pub mod service;
 
 use {
     actix_cors::Cors,
-    actix_web::{error, middleware, web, App, HttpServer},
+    actix_web::{
+        error, middleware, rt,
+        web::{self, Data},
+        App, HttpServer,
+    },
     config::abci::{global_cfg::CFG, CheckPointConfig},
     finutils::api::NetworkRoute,
     globutils::wallet,
@@ -32,6 +36,7 @@ use {
     std::{
         collections::{BTreeMap, HashSet},
         sync::Arc,
+        thread,
     },
     zei::{
         serialization::ZeiFromToBytes,
@@ -493,17 +498,15 @@ pub async fn get_checkpoint(
 pub struct QueryApi;
 
 impl QueryApi {
-    pub(crate) fn create(
+    pub(crate) async fn bind_and_listen(
         server: Arc<RwLock<QueryServer>>,
-        addrs: &[(&str, u16)],
-    ) -> Result<QueryApi> {
-        let _ = actix_rt::System::new("findora API");
-
+        addrs: Vec<(String, u16)>,
+    ) -> std::io::Result<()> {
         let mut hdr = HttpServer::new(move || {
             App::new()
                 .wrap(middleware::Logger::default())
                 .wrap(Cors::permissive().supports_credentials())
-                .data(Arc::clone(&server))
+                .app_data(Data::new(Arc::clone(&server)))
                 .route("/ping", web::get().to(ping))
                 .route("/version", web::get().to(version))
                 .service(
@@ -651,10 +654,21 @@ impl QueryApi {
         });
 
         for (host, port) in addrs.iter() {
-            hdr = hdr.bind(&format!("{}:{}", host, port)).c(d!())?
+            hdr = hdr.bind(&format!("{}:{}", host, port))?
         }
-
-        hdr.run();
+        hdr.run().await
+    }
+    pub(crate) fn create(
+        server: Arc<RwLock<QueryServer>>,
+        addrs: &[(&str, u16)],
+    ) -> Result<QueryApi> {
+        let addrs = addrs
+            .iter()
+            .map(|(ip, port)| (ip.to_string(), *port))
+            .collect::<Vec<_>>();
+        thread::spawn(move || {
+            pnk!(rt::System::new().block_on(Self::bind_and_listen(server, addrs)));
+        });
 
         info!("Query server started");
 
