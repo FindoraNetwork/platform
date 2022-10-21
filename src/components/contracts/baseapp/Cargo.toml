@@ -23,7 +23,7 @@ ruc = "1.0"
 serde = {version = "1.0.124", features = ["derive"]}
 serde_json = "1.0.40"
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
-fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.1" }
 
 # primitives
 fp-core = {path = "../primitives/core"}
