@@ -2,7 +2,7 @@ use crate::*;
 use ethereum_types::H160;
 use fp_mocks::*;
 
-//Test from eth-pairings (eip1962) repository https://github.com/FindoraNetwork/eip1962
+// Test from eth-pairings (eip1962) repository https://github.com/FindoraNetwork/eip1962
 #[test]
 fn test_g1_mul() {
     use hex;
