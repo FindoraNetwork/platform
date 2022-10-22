@@ -26,5 +26,5 @@ fp-types = { path = "../../primitives/types" }
 [dev-dependencies]
 rand_chacha = "0.2"
 parking_lot = "0.12"
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4x" }
+zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.2.5" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
