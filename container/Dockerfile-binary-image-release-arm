@@ -1,0 +1,26 @@
+FROM --platform=linux/arm64 binary-rust-base-arm
+ENV WORK_DIR /platform
+ENV WASM_DIR /tmp/wasm-js-bindings
+ENV VERGEN_SHA_EXTERN release_build
+ENV PATH=$PATH:/root/.cargo/bin/
+
+COPY . $WORK_DIR
+WORKDIR $WORK_DIR
+
+RUN rustup toolchain install stable && \
+    rustup component add clippy --toolchain stable && \
+    rustup component add rustfmt
+
+RUN mkdir /binary
+RUN mkdir -p /binary/cleveldb && mkdir -p /binary/goleveldb
+
+
+# RUN mkdir -p /root/.cargo/bin/ && \
+#     make build_release && \
+#     if [ -d /platform/release/bin ] ; then mv /platform/release/bin/* /binary/cleveldb ; rm -rf /platform/release/; else mv /platform/debug/bin/* /binary/cleveldb ; rm -rf /platform/debug/ ;fi
+
+RUN mkdir -p /root/.cargo/bin/ && \
+    make build_release_goleveldb && \
+    if [ -d /platform/release/bin ] ; then mv /platform/release/bin/* /binary/goleveldb ; rm -rf /platform/release/; else mv /platform/debug/bin/* /binary/goleveldb ; rm -rf /platform/debug/ ;fi
+
+CMD ["sleep", "999999"]

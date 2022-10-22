@@ -1,0 +1,85 @@
+name: Release-Arm
+on:
+  push:
+    tags:
+      - '*-release'
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  build:
+    strategy:
+      matrix:
+        platform: [aws-arm]
+    runs-on: ${{ matrix.platform }}
+    env:
+      ENV: release
+      PRIVATE_ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
+      PUBLIC_ECR_URL: public.ecr.aws/k6m5b6e2
+      DOCKERHUB_URL: findoranetwork
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+        components: rustfmt
+
+        
+    - name: Prepare key
+      shell: bash
+      run: |
+        tar -C ~/.ssh -zcf key.tar.gz ./
+
+    - name: Clean garbage containers and images
+      shell: bash
+      run: |
+        docker rm $(docker ps -a | grep -v "^CONTAINER" | awk '{print $1}') || true
+        docker rmi -f $(docker images -f "dangling=true" -q) || true
+
+
+    # =============== linux arm 64 ======================
+    - name: Build rust base image arm
+      shell: bash
+      run: |
+        make ci_build_binary_rust_base_arm
+
+    - name: Build binary image arm
+      env:
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
+      shell: bash
+      run: |
+        echo "REF: ${GITHUB_REF}"
+        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+        TAGV="${TAGS#refs/tags/}"
+        export IMAGE_TAG="${TAGV:-main}-arm64"
+        export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
+        echo "Image tag: ${IMAGE_TAG}"
+        make ci_build_release_binary_image_arm
+
+    - name: Login Dockerhub
+      env: 
+        DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
+        DOCKERHUB_TOKEN: ${{secrets.DOCKERHUB_TOKEN}}
+      shell: bash
+      run: |
+        docker login -u ${DOCKERHUB_URL} -p ${DOCKERHUB_TOKEN}
+
+    - name: Build findorad dockerhub arm
+      env:
+        DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
+        ENV: ${{ env.ENV }}
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
+      shell: bash
+      run: |
+        echo "REF: ${GITHUB_REF}"
+        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+        TAGV="${TAGS#refs/tags/}"
+        export IMAGE_TAG="${TAGV:-main}-arm64"
+        echo "Image tag: ${IMAGE_TAG}"
+        make ci_build_image_dockerhub_arm
+
+
+    - name: Clean garbage
+      shell: bash
+      run: |
+        docker system prune -a --volumes

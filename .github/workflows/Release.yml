@@ -23,46 +23,7 @@ jobs:
         toolchain: stable
         override: true
         components: rustfmt
-    # - name: check fmt
-    #   shell: bash
-    #   run: |
-    #     cargo fmt -- --check
-    # - name: test_status
-    #   env:
-    #     DBG: true
-    #   shell: bash
-    #   run: |
-    #     curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-    #     make test_status
-    ## It need to install protobuf-compiler for build environment.
-    ## Enable this when build by container.
-    # - name: Install protobuf-compiler
-    #   shell: bash
-    #   run: |
-    #     apt install protobuf-compiler
-    # - name: install rustwasm
-    #   shell: bash
-    #   run: |
-    #     curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-    # - name: add go
-    #   shell: bash
-    #   run: |
-    #     mkdir $(pwd)/opt && cd $(pwd)/opt && wget https://golang.google.cn/dl/go1.15.7.linux-amd64.tar.gz && tar -xpf go1.15.7.linux-amd64.tar.gz && echo "$(pwd)/go/bin" >> $GITHUB_PATH
-    # # run tests
-    # - name: lint
-    #   shell: bash
-    #   run: |
-    #     make lint
 
-    # - name: test
-    #   shell: bash
-    #   run: |
-    #     make test
-
-    # - name: evm test
-    #   shell: bash
-    #   run: |
-    #     make evmtest
         
     - name: Prepare key
       shell: bash
@@ -180,43 +141,47 @@ jobs:
         export IMAGE_TAG="${TAGV:-main}"
         echo "Image tag: ${IMAGE_TAG}"
         make ci_build_image_dockerhub
-    - name: Push images to dockerhub
-      env:
-        DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
-        ENV: release
-      shell: bash
-      run: |
-        echo "REF: ${GITHUB_REF}"
-        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-        TAGV="${TAGS#refs/tags/}"
-        export IMAGE_TAG="${TAGV:-main}"
-        echo "Image tag: ${IMAGE_TAG}"
-        make ci_push_image_dockerhub
-    - name: Clean images
-      env:
-        DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
-        ENV: release
-      shell: bash
-      run: |
-        echo "REF: ${GITHUB_REF}"
-        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-        TAGV="${TAGS#refs/tags/}"
-        export IMAGE_TAG="${TAGV:-main}"
-        echo "Image tag: ${IMAGE_TAG}"
-        make clean_image_dockerhub
-    #  # =========END build the goleveldb and push to dockerhub ===
-    - name: Clean binary images
-      env:
-        GITHUB_CONTEXT: ${{ toJSON(github) }}
-      shell: bash
-      run: |
-        echo "REF: ${GITHUB_REF}"
-        TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
-        TAGV="${TAGS#refs/tags/}"
-        export IMAGE_TAG="${TAGV:-main}"
-        echo "Image tag: ${IMAGE_TAG}"
-        make clean_binary_dockerhub
-    - name: Clean garbage
-      shell: bash
-      run: |
-        rm -rf /tmp/*>/dev/null 2>&1 || true
+    # - name: Push images to dockerhub
+    #   env:
+    #     DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
+    #     ENV: release
+    #   shell: bash
+    #   run: |
+    #     echo "REF: ${GITHUB_REF}"
+    #     TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+    #     TAGV="${TAGS#refs/tags/}"
+    #     export IMAGE_TAG="${TAGV:-main}"
+    #     echo "Image tag: ${IMAGE_TAG}"
+    #     make ci_push_image_dockerhub
+    # - name: Clean images
+    #   env:
+    #     DOCKERHUB_URL: ${{env.DOCKERHUB_URL}}
+    #     ENV: release
+    #   shell: bash
+    #   run: |
+    #     echo "REF: ${GITHUB_REF}"
+    #     TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+    #     TAGV="${TAGS#refs/tags/}"
+    #     export IMAGE_TAG="${TAGV:-main}"
+    #     echo "Image tag: ${IMAGE_TAG}"
+    #     make clean_image_dockerhub
+      # =========END build the goleveldb and push to dockerhub ==
+
+
+    # - name: Clean binary images
+    #   env:
+    #     GITHUB_CONTEXT: ${{ toJSON(github) }}
+    #   shell: bash
+    #   run: |
+    #     echo "REF: ${GITHUB_REF}"
+    #     TAGS=$(grep "refs/tags" <<< ${GITHUB_REF}) || true
+    #     TAGV="${TAGS#refs/tags/}"
+    #     export IMAGE_TAG="${TAGV:-main}"
+    #     echo "Image tag: ${IMAGE_TAG}"
+    #     make clean_binary_dockerhub
+
+
+    # - name: Clean garbage
+    #   shell: bash
+    #   run: |
+    #     rm -rf /tmp/*>/dev/null 2>&1 || true
