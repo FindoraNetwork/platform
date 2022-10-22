@@ -42,7 +42,7 @@ fp-utils = { path = "../contracts/primitives/utils" }
 fp-types = { path = "../contracts/primitives/types" }
 
 tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a-fk" }
-tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", features = ["http-client", "websocket-client"], optional = true, tag = "v0.19.0a-fk" }
+tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", features = ["http-client", "websocket-client"], optional = true, tag = "v0.23.0-internal" }
 
 [dev-dependencies]
 
