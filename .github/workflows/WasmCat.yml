@@ -1,10 +1,5 @@
 name: Wasm Building And Pushing
 on:
-  # push:
-  #   tags:
-  #     - 'tracing-*'
-  #     - 'develop'
-  #     - 'main'
   push:
     branches:
       - "*"
