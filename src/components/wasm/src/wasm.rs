@@ -51,7 +51,7 @@ use {
     globutils::{wallet, HashOf},
     ledger::{
         data_model::{
-            gen_random_keypair, AssetTypeCode, AssetTypePrefix,
+            gen_random_keypair, get_abar_commitment, AssetTypeCode, AssetTypePrefix,
             AuthenticatedTransaction, Operation, TransferType, TxOutput, ASSET_TYPE_FRA,
             BLACK_HOLE_PUBKEY, BLACK_HOLE_PUBKEY_STAKING, TX_FEE_MIN,
         },
@@ -60,23 +60,16 @@ use {
             MAX_DELEGATION_AMOUNT, MIN_DELEGATION_AMOUNT,
         },
     },
-    rand_chacha::ChaChaRng,
-    rand_core::SeedableRng,
-    ruc::{d, err::RucResult},
-    serde::{Deserialize, Serialize},
-    std::convert::From,
-    wasm_bindgen::prelude::*,
-    zei::{
+    noah::{
         anon_xfr::{
             decrypt_memo,
-            keys::{AXfrKeyPair, AXfrPubKey, AXfrViewKey},
-            nullify_with_native_address, parse_memo,
+            keys::{AXfrKeyPair, AXfrPubKey},
+            nullify, parse_memo,
             structs::{
                 AnonAssetRecord, Commitment, OpenAnonAssetRecord,
                 OpenAnonAssetRecordBuilder,
             },
         },
-        primitives::asymmetric_encryption::dh_decrypt,
         xfr::{
             asset_record::{
                 open_blind_asset_record as open_bar, AssetRecordType,
@@ -84,18 +77,23 @@ use {
             },
             sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
             structs::{
-                AssetRecordTemplate, AssetType as ZeiAssetType, XfrBody,
+                AssetRecordTemplate, AssetType as NoahAssetType, XfrBody,
                 ASSET_TYPE_LENGTH,
             },
-            trace_assets as zei_trace_assets,
+            trace_assets as noah_trace_assets,
         },
     },
-    zei_algebra::{
+    noah_algebra::{
         bls12_381::BLSScalar,
-        jubjub::{JubjubPoint, JubjubScalar},
-        prelude::{Scalar, ZeiFromToBytes},
+        prelude::{NoahFromToBytes, Scalar},
     },
-    zei_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
+    noah_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey},
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::{d, err::RucResult},
+    serde::{Deserialize, Serialize},
+    std::convert::From,
+    wasm_bindgen::prelude::*,
 };
 
 /// Constant defining the git commit hash and commit date of the commit this library was built
@@ -131,7 +129,7 @@ pub fn hash_asset_code(asset_code_string: String) -> Result<String, JsValue> {
     let mut asset_code = AssetTypePrefix::UserDefined.bytes();
     asset_code.append(&mut original_asset_code.to_bytes());
     let derived_asset_code = AssetTypeCode {
-        val: ZeiAssetType(keccak_256(&asset_code)),
+        val: NoahAssetType(keccak_256(&asset_code)),
     };
 
     Ok(derived_asset_code.to_base64())
@@ -143,7 +141,7 @@ pub fn asset_type_from_jsvalue(val: &JsValue) -> Result<String, JsValue> {
     let code: [u8; ASSET_TYPE_LENGTH] =
         val.into_serde().c(d!()).map_err(error_to_jsvalue)?;
     Ok(AssetTypeCode {
-        val: ZeiAssetType(code),
+        val: NoahAssetType(code),
     }
     .to_base64())
 }
@@ -178,7 +176,7 @@ pub fn verify_authenticated_txn(
 #[wasm_bindgen]
 /// ...
 pub fn get_null_pk() -> XfrPublicKey {
-    XfrPublicKey::zei_from_bytes(&[0; 32]).unwrap()
+    XfrPublicKey::noah_from_bytes(&[0; 32]).unwrap()
 }
 
 /// struct to return list of commitment strings
@@ -501,7 +499,7 @@ impl TransactionBuilder {
     /// Adds an operation to the transaction builder that converts a bar to abar.
     ///
     /// @param {XfrKeyPair} auth_key_pair - input bar owner key pair
-    /// @param {AXfrKeyPair} abar_key_pair - abar receiver's public key
+    /// @param {AXfrPubKey} abar_pubkey - abar receiver's public key
     /// @param {TxoSID} input_sid - txo sid of input bar
     /// @param {ClientAssetRecord} input_record -
     pub fn add_operation_bar_to_abar(
@@ -581,7 +579,7 @@ impl TransactionBuilder {
                 e.get_lowest_msg()
             ))
         })?
-        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
         .build()
         .c(d!())
         .map_err(|e| {
@@ -655,7 +653,7 @@ impl TransactionBuilder {
         )
         .c(d!())
         .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?
-        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
         .build()
         .c(d!())
         .map_err(|e| JsValue::from_str(&format!("Could not add operation: {}", e)))?;
@@ -678,7 +676,7 @@ impl TransactionBuilder {
             .map_err(|e| {
                 JsValue::from_str(&format!("Could not add operation: {}", e))
             })?;
-        let r1 = output_oabar.compute_commitment();
+        let r1 = get_abar_commitment(output_oabar.clone());
         self.commitments.push(r1);
 
         let (_, note, rem_oabars) = self
@@ -686,7 +684,7 @@ impl TransactionBuilder {
             .add_operation_anon_transfer_fees_remainder(
                 &[input_oabar],
                 &[output_oabar],
-                &[from_keypair.clone()],
+                &from_keypair.clone(),
             )
             .c(d!())
             .map_err(|e| {
@@ -694,7 +692,7 @@ impl TransactionBuilder {
             })?;
 
         for rem_oabar in rem_oabars {
-            self.commitments.push(rem_oabar.compute_commitment());
+            self.commitments.push(get_abar_commitment(rem_oabar));
         }
 
         Ok(self)
@@ -959,9 +957,8 @@ pub fn gen_anon_keys() -> Result<AnonKeys, JsValue> {
     let keypair = AXfrKeyPair::generate(&mut prng);
 
     let keys = AnonKeys {
-        spend_key: wallet::anon_secret_key_to_base64(&keypair),
-        pub_key: wallet::anon_public_key_to_base64(&keypair.get_pub_key()),
-        view_key: wallet::anon_view_key_to_base64(&keypair.get_view_key()),
+        secret_key: wallet::anon_secret_key_to_base64(&keypair),
+        pub_key: wallet::anon_public_key_to_base64(&keypair.get_public_key()),
     };
 
     Ok(keys)
@@ -983,7 +980,7 @@ pub fn get_anon_balance(
     let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair)
         .c(d!())
         .map_err(error_to_jsvalue)?
-        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
         .build()
         .c(d!())
         .map_err(error_to_jsvalue)?;
@@ -1007,7 +1004,7 @@ pub fn get_open_abar(
     let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair)
         .c(d!())
         .map_err(error_to_jsvalue)?
-        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
         .build()
         .c(d!())
         .map_err(error_to_jsvalue)?;
@@ -1034,18 +1031,20 @@ pub fn gen_nullifier_hash(
     let oabar = OpenAnonAssetRecordBuilder::from_abar(&abar, memo.memo, &keypair)
         .c(d!())
         .map_err(error_to_jsvalue)?
-        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
         .build()
         .c(d!())
         .map_err(error_to_jsvalue)?;
 
-    let n = nullify_with_native_address(
+    let n = nullify(
         &keypair,
         oabar.get_amount(),
-        &oabar.get_asset_type(),
-        mt_leaf_info.get_zei_mt_leaf_info().uid,
-    );
-    let hash = wallet::nullifier_to_base58(&n);
+        oabar.get_asset_type().as_scalar(),
+        mt_leaf_info.get_noah_mt_leaf_info().uid,
+    )
+    .c(d!())
+    .map_err(error_to_jsvalue)?;
+    let hash = wallet::nullifier_to_base58(&n.0);
     Ok(hash)
 }
 
@@ -1363,13 +1362,13 @@ impl AnonTransferOperationBuilder {
         )
         .c(d!())
         .map_err(error_to_jsvalue)?
-        .mt_leaf_info(mt_leaf_info.get_zei_mt_leaf_info().clone())
+        .mt_leaf_info(mt_leaf_info.get_noah_mt_leaf_info().clone())
         .build()
         .c(d!())
         .map_err(error_to_jsvalue)?;
 
         self.get_builder_mut()
-            .add_input(oabar, keypair.clone())
+            .add_input(oabar)
             .c(d!())
             .map_err(error_to_jsvalue)?;
 
@@ -1406,6 +1405,15 @@ impl AnonTransferOperationBuilder {
             .map_err(error_to_jsvalue)?;
 
         Ok(self)
+    }
+
+    /// add_keypair is used to add the sender's keypair for the nullifier generation
+    /// @param to {AXfrKeyPair} - original keypair of sender
+    /// @throws error if ABAR fails to be built
+    pub fn add_keypair(mut self, keypair: &AXfrKeyPair) -> AnonTransferOperationBuilder {
+        self.get_builder_mut().add_keypair(keypair.clone());
+
+        self
     }
 
     /// get_expected_fee is used to gather extra FRA that needs to be spent to make the transaction
@@ -1538,14 +1546,14 @@ pub fn public_key_from_base64(pk: &str) -> Result<XfrPublicKey, JsValue> {
 /// Expresses a transfer key pair as a hex-encoded string.
 /// To decode the string, use `keypair_from_str` function.
 pub fn keypair_to_str(key_pair: &XfrKeyPair) -> String {
-    hex::encode(key_pair.zei_to_bytes())
+    hex::encode(key_pair.noah_to_bytes())
 }
 
 #[wasm_bindgen]
 /// Constructs a transfer key pair from a hex-encoded string.
 /// The encode a key pair, use `keypair_to_str` function.
 pub fn keypair_from_str(str: String) -> XfrKeyPair {
-    XfrKeyPair::zei_from_bytes(&hex::decode(str).unwrap()).unwrap()
+    XfrKeyPair::noah_from_bytes(&hex::decode(str).unwrap()).unwrap()
 }
 
 #[wasm_bindgen]
@@ -1587,7 +1595,7 @@ pub fn wasm_credential_verify_commitment(
         issuer_pub_key,
         commitment.get_ref(),
         pok.get_ref(),
-        xfr_pk.as_bytes(),
+        &xfr_pk.to_bytes(),
     )
     .c(d!())
     .map_err(error_to_jsvalue)
@@ -1699,7 +1707,7 @@ pub fn wasm_credential_commit(
         &mut prng,
         &user_secret_key,
         credential.get_cred_ref(),
-        &user_public_key.as_bytes(),
+        &user_public_key.to_bytes(),
     )
     .c(d!())
     .map_err(error_to_jsvalue)?;
@@ -1779,13 +1787,13 @@ pub fn trace_assets(
     // let candidate_assets: Vec<String> =
     //     candidate_assets.into_serde().c(d!()).map_err(error_to_jsvalue)?;
     let xfr_body: XfrBody = xfr_body.into_serde().c(d!()).map_err(error_to_jsvalue)?;
-    // let candidate_assets: Vec<ZeiAssetType> = candidate_assets
+    // let candidate_assets: Vec<NoahAssetType> = candidate_assets
     //     .iter()
     //     .map(|asset_type_str| {
     //         AssetTypeCode::new_from_str(&asset_type_str.to_string()).val
     //     })
     //     .collect();
-    let record_data = zei_trace_assets(&xfr_body, tracer_keypair.get_keys())
+    let record_data = noah_trace_assets(&xfr_body, tracer_keypair.get_keys())
         .c(d!())
         .map_err(error_to_jsvalue)?;
     let record_data: Vec<(u64, String)> = record_data
@@ -1924,10 +1932,12 @@ pub fn decryption_pbkdf2_aes256gcm(enc_key_pair: Vec<u8>, password: String) -> S
 
 #[wasm_bindgen]
 #[allow(missing_docs)]
-pub fn create_keypair_from_secret(sk_str: String) -> Option<XfrKeyPair> {
-    serde_json::from_str::<XfrSecretKey>(&sk_str)
-        .map(|sk| sk.into_keypair())
-        .ok()
+pub fn create_keypair_from_secret(sk_str: String) -> Result<XfrKeyPair, JsValue> {
+    let sk = serde_json::from_str::<XfrSecretKey>(&sk_str)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+
+    Ok(sk.into_keypair())
 }
 
 #[wasm_bindgen]
@@ -1990,6 +2000,17 @@ pub fn restore_keypair_from_mnemonic_default(
     phrase: &str,
 ) -> Result<XfrKeyPair, JsValue> {
     wallet::restore_keypair_from_mnemonic_default(phrase)
+        .c(d!())
+        .map_err(error_to_jsvalue)
+}
+
+#[wasm_bindgen]
+/// Restore the XfrKeyPair from a mnemonic with a default bip44-path,
+/// that is "m/44'/917'/0'/0/0" ("m/44'/coin'/account'/change/address").
+pub fn restore_keypair_from_mnemonic_ed25519(
+    phrase: &str,
+) -> Result<XfrKeyPair, JsValue> {
+    wallet::restore_keypair_from_mnemonic_ed25519(phrase)
         .c(d!())
         .map_err(error_to_jsvalue)
 }
@@ -2093,14 +2114,6 @@ pub fn axfr_pubkey_from_string(key_str: &str) -> Result<AXfrPubKey, JsValue> {
 
 #[wasm_bindgen]
 #[allow(missing_docs)]
-pub fn axfr_viewkey_from_string(key_str: &str) -> Result<AXfrViewKey, JsValue> {
-    wallet::anon_view_key_from_base64(key_str)
-        .c(d!())
-        .map_err(error_to_jsvalue)
-}
-
-#[wasm_bindgen]
-#[allow(missing_docs)]
 pub fn axfr_keypair_from_string(key_str: &str) -> Result<AXfrKeyPair, JsValue> {
     wallet::anon_secret_key_from_base64(key_str)
         .c(d!())
@@ -2188,13 +2201,13 @@ pub fn try_decrypt_axfr_memo(
     memo: &AxfrOwnerMemo,
     key_pair: &AXfrKeyPair,
 ) -> Result<Vec<u8>, JsValue> {
-    dh_decrypt(
-        &key_pair.get_view_key_scalar(),
-        &memo.memo.point,
-        &memo.memo.ctext,
-    )
-    .c(d!())
-    .map_err(error_to_jsvalue)
+    let secret_key = key_pair.get_secret_key();
+    let res = memo
+        .get_memo_ref()
+        .decrypt(&secret_key)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+    Ok(res)
 }
 
 #[wasm_bindgen]
@@ -2254,7 +2267,7 @@ mod test {
 
         let mut ts = AnonTransferOperationBuilder::new(1);
 
-        ts.get_builder_mut().add_input(oabar, keypair_in);
+        ts.get_builder_mut().add_input(oabar);
 
         ts.get_builder_mut().add_output(oabar_out);
 
@@ -2274,7 +2287,7 @@ mod test {
         let (mut oabar_2, keypair_in_2) =
             gen_oabar_and_keys(&mut prng, 2 * amount, asset_type);
 
-        ts.get_builder_mut().add_input(oabar_2, keypair_in_2);
+        ts.get_builder_mut().add_input(oabar_2);
 
         let fra_excess_gt_fees_estimation = ts.get_expected_fee();
 
@@ -2284,13 +2297,13 @@ mod test {
     fn gen_oabar_and_keys<R: CryptoRng + RngCore>(
         prng: &mut R,
         amount: u64,
-        asset_type: ZeiAssetType,
+        asset_type: NoahAssetType,
     ) -> (OpenAnonAssetRecord, AXfrKeyPair) {
         let keypair = AXfrKeyPair::generate(prng);
         let oabar = OpenAnonAssetRecordBuilder::new()
             .amount(u64::from(amount))
             .asset_type(asset_type)
-            .pub_key(&keypair.get_pub_key())
+            .pub_key(&keypair.get_public_key())
             .finalize(prng)
             .unwrap()
             .build()

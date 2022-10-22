@@ -25,6 +25,11 @@ use {
     },
     ledger_api::*,
     log::info,
+    noah::{
+        anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
+        xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+    },
+    noah_algebra::serialization::NoahFromToBytes,
     parking_lot::RwLock,
     ruc::*,
     serde::{Deserialize, Serialize},
@@ -33,11 +38,6 @@ use {
         collections::{BTreeMap, HashMap, HashSet},
         sync::Arc,
     },
-    zei::{
-        anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
-        xfr::{sig::XfrPublicKey, structs::OwnerMemo},
-    },
-    zei_algebra::serialization::ZeiFromToBytes,
 };
 
 /// Returns the git commit hash and commit date of this build
@@ -261,7 +261,7 @@ pub async fn get_created_assets(
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<DefineAsset>>> {
     // Convert from base64 representation
-    let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
+    let key: XfrPublicKey = XfrPublicKey::noah_from_bytes(
         &b64dec(&*info)
             .c(d!())
             .map_err(|e| error::ErrorBadRequest(e.to_string()))?,
@@ -288,7 +288,7 @@ pub async fn get_issued_records(
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<Vec<(TxOutput, Option<OwnerMemo>)>>> {
     // Convert from base64 representation
-    let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
+    let key: XfrPublicKey = XfrPublicKey::noah_from_bytes(
         &b64dec(&*info)
             .c(d!())
             .map_err(|e| error::ErrorBadRequest(e.to_string()))?,
@@ -498,7 +498,7 @@ pub async fn get_related_txns(
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxnSID>>> {
     // Convert from base64 representation
-    let key: XfrPublicKey = XfrPublicKey::zei_from_bytes(
+    let key: XfrPublicKey = XfrPublicKey::noah_from_bytes(
         &b64dec(&*info)
             .c(d!())
             .map_err(|e| error::ErrorBadRequest(e.to_string()))?,

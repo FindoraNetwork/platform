@@ -3,10 +3,10 @@
 use {
     abci::{Event, Pair},
     ledger::data_model::{Operation, Transaction, TxnSID},
+    noah::xfr::structs::{XfrAmount, XfrAssetType},
     protobuf::RepeatedField,
     serde::Serialize,
     std::time::SystemTime,
-    zei::xfr::structs::{XfrAmount, XfrAssetType},
 };
 
 /// generate attr(tags) for index-ops of tendermint

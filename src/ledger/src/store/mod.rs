@@ -35,10 +35,30 @@ use {
     globutils::wallet,
     globutils::{HashOf, ProofOf},
     merkle_tree::AppendOnlyMerkle,
+    noah::{
+        anon_xfr::{
+            abar_to_abar::verify_anon_xfr_note,
+            structs::{
+                AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, MTNode, MTPath,
+                Nullifier,
+            },
+            TREE_DEPTH as MERKLE_TREE_DEPTH,
+        },
+        setup::VerifierParams,
+        xfr::{
+            sig::XfrPublicKey,
+            structs::{OwnerMemo, TracingPolicies, TracingPolicy},
+            XfrNotePolicies,
+        },
+    },
+    noah_accumulators::merkle_tree::{
+        ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath,
+    },
+    noah_algebra::{bls12_381::BLSScalar, prelude::*},
+    noah_crypto::basic::anemoi_jive::{AnemoiJive, AnemoiJive381},
     parking_lot::RwLock,
     rand_chacha::ChaChaRng,
     rand_core::SeedableRng,
-    ruc::*,
     serde::{Deserialize, Serialize},
     sha2::Sha512,
     sliding_set::SlidingSet,
@@ -56,27 +76,6 @@ use {
         state::{ChainState, State},
         store::{ImmutablePrefixedStore, PrefixedStore},
     },
-    zei::{
-        anon_xfr::{
-            abar_to_abar::verify_anon_xfr_note,
-            structs::{
-                AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, MTNode, MTPath,
-                Nullifier,
-            },
-            TREE_DEPTH as MERKLE_TREE_DEPTH,
-        },
-        setup::VerifierParams,
-        xfr::{
-            sig::XfrPublicKey,
-            structs::{OwnerMemo, TracingPolicies, TracingPolicy},
-            XfrNotePolicies,
-        },
-    },
-    zei_accumulators::merkle_tree::{
-        ImmutablePersistentMerkleTree, PersistentMerkleTree, Proof, TreePath,
-    },
-    zei_algebra::{bls12_381::BLSScalar, prelude::*},
-    zei_crypto::basic::rescue::RescueInstance,
 };
 
 const TRANSACTION_WINDOW_WIDTH: u64 = 128;
@@ -320,7 +319,7 @@ impl LedgerState {
         mut tx_block: Vec<FinalizedTransaction>,
     ) -> Result<Vec<FinalizedTransaction>> {
         for n in new_nullifiers.iter() {
-            let d: Key = Key::from_bytes(n.zei_to_bytes()).c(d!())?;
+            let d: Key = Key::from_bytes(n.noah_to_bytes()).c(d!())?;
 
             // if the nullifier hash is present in our nullifier set, fail the block
             if self.nullifier_set.read().get(&d).c(d!())?.is_some() {
@@ -328,7 +327,7 @@ impl LedgerState {
             }
             self.nullifier_set
                 .write()
-                .set(&d, Some(n.zei_to_bytes()))
+                .set(&d, Some(n.noah_to_bytes()))
                 .c(d!())?;
             self.status.spent_abars.insert(*n, ());
         }
@@ -483,14 +482,7 @@ impl LedgerState {
         let store = PrefixedStore::new("abar_store", &mut abar_state_val);
         let mut mt = PersistentMerkleTree::new(store)?;
 
-        let hasher = RescueInstance::new();
-        let leaf = hasher.rescue(&[
-            BLSScalar::from(mt.entry_count()),
-            abar.commitment,
-            BLSScalar::zero(),
-            BLSScalar::zero(),
-        ])[0];
-
+        let leaf = hash_abar(mt.entry_count(), abar);
         mt.add_commitment_hash(leaf).map(ATxoSID)
     }
 
@@ -532,14 +524,14 @@ impl LedgerState {
         let mt = ImmutablePersistentMerkleTree::new(store)?;
 
         let t = mt.generate_proof_with_depth(id.0, MERKLE_TREE_DEPTH)?;
-        Ok(create_mt_leaf_info(t))
+        Ok(build_mt_leaf_info_from_proof(t, id.0))
     }
 
     /// Check if the nullifier hash is present in nullifier set
     #[inline(always)]
     pub fn check_nullifier_hash(&self, hash: String) -> Result<bool> {
         let n = wallet::nullifier_from_base58(hash.as_str())?;
-        let d: Key = Key::from_bytes(n.zei_to_bytes()).c(d!())?;
+        let d: Key = Key::from_bytes(n.noah_to_bytes()).c(d!())?;
         let is_null_present = self.nullifier_set.read().get(&d).c(d!())?.is_some();
         Ok(is_null_present)
     }
@@ -1884,9 +1876,8 @@ pub fn flush_data() {
     fbnc::flush_data();
 }
 
-/// convert merkle tree proof to Zei compatible proofs
-pub fn create_mt_leaf_info(proof: Proof) -> MTLeafInfo {
-    MTLeafInfo {
+fn build_mt_leaf_info_from_proof(proof: Proof, uid: u64) -> MTLeafInfo {
+    return MTLeafInfo {
         path: MTPath {
             nodes: proof
                 .nodes
@@ -1901,8 +1892,12 @@ pub fn create_mt_leaf_info(proof: Proof) -> MTLeafInfo {
         },
         root: proof.root,
         root_version: proof.root_version,
-        uid: proof.uid,
-    }
+        uid,
+    };
+}
+
+fn hash_abar(uid: u64, abar: &AnonAssetRecord) -> BLSScalar {
+    AnemoiJive381::eval_variable_length_hash(&[BLSScalar::from(uid), abar.commitment])
 }
 
 fn default_status_utxos() -> Mapxnk<TxoSID, Utxo> {

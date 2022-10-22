@@ -10,12 +10,12 @@ use ledger::{
     },
     utils::fra_gen_initial_tx,
 };
-use ruc::*;
-use serde::Deserialize;
-use zei::xfr::{
+use noah::xfr::{
     asset_record::AssetRecordType,
     sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
 };
+use ruc::*;
+use serde::Deserialize;
 
 #[derive(Deserialize)]
 struct TmValidators {
@@ -56,7 +56,7 @@ pub fn init(env: &mut Env) -> Result<()> {
         .and_then(|b| serde_json::from_slice::<TmValidators>(&b).c(d!()))?;
 
     tm_validators.result.validators.into_iter().for_each(|v| {
-        let xfr_key = common::gen_key();
+        let xfr_key = common::gen_key(false);
         let iv = InitialValidator {
             tendermint_addr: v.address,
             tendermint_pubkey: v.pub_key.value,

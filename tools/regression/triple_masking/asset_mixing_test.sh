@@ -168,21 +168,15 @@ echo "output => key2 * FRA + key2 * asset2 + key3 * asset1"
 ANON_KEY_1_FRA_COMMITMENT=$(awk 'FNR==6' owned_commitments)     # FRA
 ANON_KEY_1_ASSET_1_COMMITMENT=$(awk 'FNR==5' owned_commitments) # ASSET 1
 ANON_KEY_1_ASSET_2_COMMITMENT=$(awk 'FNR==4' owned_commitments) # ASSET 2
-ANON_KEY_2_ASSET_1_COMMITMENT=$(awk 'FNR==2' sent_commitments)  # ASSET 1
 
-BATCH_SK="batch_sk.keys"
 BATCH_C="batch_c.keys"
 BATCH_PK="batch_pk.keys"
 BATCH_AMOUNT="batch_amount.keys"
 BATCH_ASSET="batch_asset.keys"
 
-echo $ANON_SK_1 > $BATCH_SK
-echo $ANON_SK_1 >> $BATCH_SK
-echo $ANON_SK_2 >> $BATCH_SK
-
 echo $ANON_KEY_1_FRA_COMMITMENT > $BATCH_C
 echo $ANON_KEY_1_ASSET_2_COMMITMENT >> $BATCH_C
-echo $ANON_KEY_2_ASSET_1_COMMITMENT >> $BATCH_C
+echo $ANON_KEY_1_ASSET_1_COMMITMENT >> $BATCH_C
 
 echo $ANON_PK_2 > $BATCH_PK
 echo $ANON_PK_2 >> $BATCH_PK
@@ -199,7 +193,7 @@ echo 50000000 >> $BATCH_AMOUNT
 echo ""
 echo "Sending multi-asset transaction..."
 $BIN/fn anon-transfer-batch \
-  --axfr-secretkey-file $BATCH_SK     \
+  --anon-keys $FILE_ANON_KEYS     \
   --commitment-file $BATCH_C          \
   --to-axfr-public-key-file $BATCH_PK \
   --amount-file $BATCH_AMOUNT         \
@@ -228,5 +222,5 @@ then
 fi
 
 
-rm $BATCH_SK $BATCH_C $BATCH_PK $BATCH_AMOUNT $BATCH_ASSET
+rm $BATCH_C $BATCH_PK $BATCH_AMOUNT $BATCH_ASSET
 echo -e "\n ***** Tested all successfully! ***** "

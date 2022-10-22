@@ -18,6 +18,7 @@ use nix::{
     },
     unistd::{close, fork, ForkResult},
 };
+use noah::xfr::sig::XfrKeyPair;
 use ruc::{cmd, *};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -37,7 +38,6 @@ use tendermint::{
     vote::Power as TmPower,
 };
 use toml_edit::{value as toml_value, Array, Document};
-use zei::xfr::sig::XfrKeyPair;
 
 type NodeId = u32;
 

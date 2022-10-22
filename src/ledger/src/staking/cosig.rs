@@ -11,13 +11,13 @@ use {
         staking::{Staking, ValidatorData},
     },
     cryptohash::sha256::{self, Digest},
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{
         collections::BTreeMap,
         fmt::{self, Debug},
     },
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 
 /// A common structure for data with co-signatures.
@@ -53,7 +53,7 @@ where
             .c(d!())
             .map(|msg| {
                 let k = kp.get_pk();
-                let v = CoSig::new(kp.get_pk(), kp.sign(&msg));
+                let v = CoSig::new(kp.get_pk(), kp.sign(&msg).unwrap());
                 self.cosigs.insert(k, v);
             })
     }
@@ -64,7 +64,7 @@ where
         let msg = bincode::serialize(&(self.nonce, &self.data)).c(d!())?;
         kps.iter().for_each(|kp| {
             let k = kp.get_pk();
-            let v = CoSig::new(kp.get_pk(), kp.sign(&msg));
+            let v = CoSig::new(kp.get_pk(), kp.sign(&msg).unwrap());
             self.cosigs.insert(k, v);
         });
         Ok(())

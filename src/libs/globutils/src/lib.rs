@@ -5,6 +5,8 @@
 #![deny(warnings)]
 #![deny(missing_docs)]
 
+extern crate core;
+
 pub mod logging;
 pub mod wallet;
 
@@ -13,10 +15,10 @@ use {
         sha256::{self, Digest},
         Proof,
     },
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
     ruc::*,
     serde::{Deserialize, Deserializer, Serialize, Serializer},
     std::{fs, marker::PhantomData, path::PathBuf, result::Result as StdResult},
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
 };
 
 /// Perform a synchronize http get request with attohttpc,
@@ -387,7 +389,7 @@ where
     #[inline(always)]
     pub fn new(xfr: &XfrKeyPair, to_sign: &T) -> Self {
         Self {
-            sig: xfr.get_sk_ref().sign(to_sign.as_ref(), xfr.get_pk_ref()),
+            sig: xfr.get_sk_ref().sign(to_sign.as_ref()).unwrap(),
             phantom: PhantomData,
         }
     }

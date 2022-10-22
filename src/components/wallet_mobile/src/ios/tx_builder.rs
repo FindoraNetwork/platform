@@ -1,5 +1,5 @@
+use noah::xfr::sig::XfrKeyPair;
 use std::os::raw::c_char;
-use zei::xfr::sig::XfrKeyPair;
 
 use super::parse_u64;
 use crate::rust::{

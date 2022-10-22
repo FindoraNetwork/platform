@@ -1,4 +1,5 @@
 export FILE_MNEMONIC="mnemonic-temp.keys"
+export FILE_FRA_KEY="bar-key-fra-temp.keys"
 export FILE_ANON_KEYS="anon-keys-temp.keys"
 export FILE_ANON_KEYS_2="anon-keys-temp2.keys"
 export FILE_ANON_KEYS_3="anon-keys-temp3.keys"

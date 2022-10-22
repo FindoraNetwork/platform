@@ -2,17 +2,17 @@ source ./tools/devnet/env.sh || exit 1
 
 echo "\n\n\n Simple transfer 1"
 echo "------------------------------------------------------------------------------"
-"$BIN"/fn transfer --amount 210000000 --asset FRA -T fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
+"$BIN"/fn transfer --amount 210000000 --asset FRA -T eth1q0gdeyyac8cmu7mwfuq6sgfy63dsvja6t877jwz44lyqjra76uh5sj2faa6
 sleep 5
 
 echo "\n\n\n Simple transfer 2"
 echo "------------------------------------------------------------------------------"
-"$BIN"/fn transfer --amount 210000000 --asset FRA -T fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
+"$BIN"/fn transfer --amount 210000000 --asset FRA -T eth1q0gdeyyac8cmu7mwfuq6sgfy63dsvja6t877jwz44lyqjra76uh5sj2faa6
 sleep 5
 
 echo "\n\n\n Simple transfer 3"
 echo "------------------------------------------------------------------------------"
-"$BIN"/fn transfer --amount 210000000 --asset FRA -T fra1ck6mu4fgmh7n3g0y5jm0zjrq6hwgckut9q2tf5fpwhrdgkhgdp9qhla5t5
+"$BIN"/fn transfer --amount 210000000 --asset FRA -T eth1q0gdeyyac8cmu7mwfuq6sgfy63dsvja6t877jwz44lyqjra76uh5sj2faa6
 sleep 5
 
 # setup the new wallet
@@ -24,9 +24,8 @@ echo "double quit tape enough charge fancy mandate ostrich this program laundry 
 
 echo "
 {
-  \"spend_key\": \"Ccv2h8u1g__HJBrsA8npcs4CiDQ_UHI-JGZCjXbu9Un8HU3qSTf3PdLEFvs1XwauSltgruFv-IRVFpaQkeIIAgRoRPXncS1VHYzRpQlghzgCcQKJnic90DFDiYxSPVjg\",
-  \"view_key\": \"_B1N6kk39z3SxBb7NV8GrkpbYK7hb_iEVRaWkJHiCAI=\",
-  \"pub_key\": \"BGhE9edxLVUdjNGlCWCHOAJxAomeJz3QMUOJjFI9WOA=\"
+  \"spend_key\": \"6kpJDnAoL-_ZHekWoJBfrCmHnpYRs7WPMxdG_F9hJoQMhcLuDK2su2b4-IdYATM0Ou99yAPYcvSNdLSGnf5hBIA=\",
+  \"pub_key\": \"DIXC7gytrLtm-PiHWAEzNDrvfcgD2HL0jXS0hp3-YQSA\"
 }" > $FILE_ANON_KEYS
 
 "$BIN"/fn setup -O $FILE_MNEMONIC -S http://0.0.0.0

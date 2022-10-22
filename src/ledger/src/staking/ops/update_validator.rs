@@ -13,8 +13,8 @@ use {
             COSIG_THRESHOLD_DEFAULT, VALIDATORS_MIN,
         },
     },
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
     ruc::*,
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
 
 /// Used as the inner object of a `UpdateValidator Operation`.

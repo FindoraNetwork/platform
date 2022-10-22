@@ -26,9 +26,9 @@ tokio = "1.10.1"
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"] }
 getrandom = "0.2"
 
-zei = "0.2"
-zei-crypto = "0.2"
-zei-algebra = "0.2"
+noah = "0.2"
+noah-crypto = "0.2"
+noah-algebra = "0.2"
 nix = "0.25"
 toml_edit = "0.14"
 

@@ -4,14 +4,13 @@
 use {
     super::{helpers::*, *},
     crate::data_model::{
-        AssetRules, AssetTypeCode, IssueAsset, IssueAssetBody, IssuerKeyPair, Memo,
-        Operation, Transaction, TransferAsset, TransferAssetBody, TransferType,
-        TxOutput, TxnEffect, TxoRef, TxoSID, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY,
-        TX_FEE_MIN,
+        get_abar_commitment, AssetRules, AssetTypeCode, IssueAsset, IssueAssetBody,
+        IssuerKeyPair, Memo, Operation, Transaction, TransferAsset, TransferAssetBody,
+        TransferType, TxOutput, TxnEffect, TxoRef, TxoSID, ASSET_TYPE_FRA,
+        BLACK_HOLE_PUBKEY, TX_FEE_MIN,
     },
     crate::utils::{self, *},
-    rand_core::SeedableRng,
-    zei::{
+    noah::{
         anon_xfr::{keys::AXfrKeyPair, structs::OpenAnonAssetRecordBuilder},
         xfr::{
             asset_record::{
@@ -21,8 +20,9 @@ use {
             structs::{AssetRecord, AssetRecordTemplate},
         },
     },
-    zei_algebra::prelude::{One, Zero},
-    zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
+    noah_algebra::prelude::{One, Zero},
+    noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+    rand_core::SeedableRng,
 };
 
 #[cfg(test)]
@@ -186,7 +186,7 @@ fn test_asset_transfer() {
         art,
         key_pair.get_pk(),
     );
-    let pc_gens = RistrettoPedersenCommitment::default();
+    let pc_gens = PedersenCommitmentRistretto::default();
     let (ba, _, _) =
         build_blind_asset_record(&mut ledger.get_prng(), &pc_gens, &template, vec![]);
     let second_ba = ba.clone();
@@ -382,7 +382,7 @@ fn asset_issued() {
         *keypair.get_pk_ref(),
     );
 
-    let pc_gens = RistrettoPedersenCommitment::default();
+    let pc_gens = PedersenCommitmentRistretto::default();
     let (ba, _, _) =
         build_blind_asset_record(&mut ledger.get_prng(), &pc_gens, &ar, vec![]);
     let asset_issuance_body = IssueAssetBody::new(
@@ -818,10 +818,10 @@ fn test_update_anon_stores() {
         Nullifier::one() as Nullifier,
     ];
 
-    let pub_key = AXfrKeyPair::generate(&mut prng).get_pub_key();
+    let pub_key = AXfrKeyPair::generate(&mut prng).get_public_key();
     let oabar = OpenAnonAssetRecordBuilder::new()
         .amount(123)
-        .asset_type(zei::xfr::structs::AssetType([39u8; 32]))
+        .asset_type(noah::xfr::structs::AssetType([39u8; 32]))
         .pub_key(&pub_key)
         .finalize(&mut prng)
         .unwrap()
@@ -829,7 +829,7 @@ fn test_update_anon_stores() {
         .unwrap();
     let oabar2 = OpenAnonAssetRecordBuilder::new()
         .amount(123)
-        .asset_type(zei::xfr::structs::AssetType([39u8; 32]))
+        .asset_type(noah::xfr::structs::AssetType([39u8; 32]))
         .pub_key(&pub_key)
         .finalize(&mut prng)
         .unwrap()
@@ -839,8 +839,8 @@ fn test_update_anon_stores() {
         vec![AnonAssetRecord::from_oabar(&oabar)],
         vec![AnonAssetRecord::from_oabar(&oabar2)],
     ];
-    let new_com = oabar.compute_commitment();
-    let new_com2 = oabar2.compute_commitment();
+    let new_com = get_abar_commitment(oabar);
+    let new_com2 = get_abar_commitment(oabar2);
     let tx_block = vec![
         FinalizedTransaction {
             txn: Default::default(),
@@ -858,11 +858,11 @@ fn test_update_anon_stores() {
         },
     ];
 
-    let str0 = bs58::encode(&BLSScalar::zero().zei_to_bytes()).into_string();
+    let str0 = bs58::encode(&BLSScalar::zero().noah_to_bytes()).into_string();
     let d0: Key = Key::from_base58(&str0).unwrap();
     assert!(state.nullifier_set.read().get(&d0).unwrap().is_none());
 
-    let str1 = bs58::encode(&BLSScalar::one().zei_to_bytes()).into_string();
+    let str1 = bs58::encode(&BLSScalar::one().noah_to_bytes()).into_string();
     let d1: Key = Key::from_base58(&str1).unwrap();
     assert!(state.nullifier_set.read().get(&d1).unwrap().is_none());
 

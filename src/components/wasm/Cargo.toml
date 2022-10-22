@@ -10,7 +10,7 @@ repository = ""
 license = ""
 
 [features]
-lightweight = ["zei/lightweight"] # Minimize size for only AR2ABAR and ABAR2AR.
+lightweight = ["noah/lightweight"] # Minimize size for only AR2ABAR and ABAR2AR.
 
 # wasm-opt has a segfaulting issue. Disabling for now
 [package.metadata.wasm-pack.profile.release]
@@ -24,7 +24,7 @@ rand_chacha = "0.3"
 rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0"
-wasm-bindgen = { version = "=0.2.73", features = ["serde-serialize"] }
+wasm-bindgen = { version = "0.2.83", features = ["serde-serialize"] }
 bs58 = "0.4"
 
 ring = "0.16.19"
@@ -36,9 +36,9 @@ ruc = "1.0"
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
 
-zei = "0.2"
-zei-algebra = "0.2"
-zei-crypto = "0.2"
+noah = "0.2"
+noah-algebra = "0.2"
+noah-crypto = "0.2"
 
 finutils = { path = "../finutils", default-features = false }
 globutils = { path = "../../libs/globutils" }
@@ -71,7 +71,7 @@ features = [
 serde = "1.0.124"
 serde_json = "1.0.41"
 vergen = "=3.1.0"
-wasm-bindgen = { version = "=0.2.73", features = ["serde-serialize"] }
+wasm-bindgen = { version = "0.2.83", features = ["serde-serialize"] }
 
 [dev-dependencies]
 # Must enable the "js"-feature,

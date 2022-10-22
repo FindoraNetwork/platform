@@ -63,13 +63,15 @@ ark-serialize = { git = "https://github.com/FindoraNetwork/ark-algebra" }
 ark-std = { git = "https://github.com/FindoraNetwork/ark-std" }
 ark-bls12-381 = { git = "https://github.com/FindoraNetwork/ark-curves" }
 ark-ed-on-bls12-381 = { git = "https://github.com/FindoraNetwork/ark-curves" }
+ark-algebra-test-templates = { git = "https://github.com/FindoraNetwork/ark-algebra" }
 curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek" }
 ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek" }
 x25519-dalek = { git = "https://github.com/FindoraNetwork/x25519-dalek" }
 bulletproofs = { git = "https://github.com/FindoraNetwork/bp" }
 
-zei = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-for-platform" }
-zei-accumulators = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-for-platform" }
-zei-algebra = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-for-platform" }
-zei-crypto = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-for-platform" }
-zei-plonk = { git = "https://github.com/FindoraNetwork/zei", branch = "develop-for-platform" }
+noah = { git = "https://github.com/FindoraNetwork/noah", branch = "mt_info_serde" }
+noah-accumulators = { git = "https://github.com/FindoraNetwork/noah", branch = "mt_info_serde" }
+noah-algebra = { git = "https://github.com/FindoraNetwork/noah", branch = "mt_info_serde" }
+noah-crypto = { git = "https://github.com/FindoraNetwork/noah", branch = "mt_info_serde" }
+noah-plonk = { git = "https://github.com/FindoraNetwork/noah", branch = "mt_info_serde" }
+

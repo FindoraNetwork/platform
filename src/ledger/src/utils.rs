@@ -13,15 +13,15 @@ use {
     },
     fbnc::NumKey,
     fp_utils::hashing::keccak_256,
-    rand_chacha::ChaChaRng,
-    rand_core::SeedableRng,
-    ruc::*,
-    zei::xfr::{
+    noah::xfr::{
         asset_record::{build_blind_asset_record, AssetRecordType},
         sig::XfrKeyPair,
         structs::{AssetRecordTemplate, AssetType},
     },
-    zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
+    noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+    rand_chacha::ChaChaRng,
+    rand_core::SeedableRng,
+    ruc::*,
 };
 
 /// Create a transaction to define a custom asset
@@ -90,7 +90,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
         fra_owner_kp.get_pk(),
     );
 
-    let pc_gens = RistrettoPedersenCommitment::default();
+    let pc_gens = PedersenCommitmentRistretto::default();
     let outputs = (0..2)
         .map(|_| {
             let (ba, _, _) = build_blind_asset_record(

@@ -80,7 +80,7 @@ build_goleveldb: tendermint_goleveldb
 	$(call pack,debug)
 
 # Build for goleveldb
-build_release_goleveldb: tendermint_goleveldb
+build_release_goleveldb:
 	cargo build --release --bins -p abciapp -p finutils
 	$(call pack,release)
 
@@ -94,7 +94,6 @@ build_release_debug: tendermint_goleveldb
 	$(call pack,release)
 
 tendermint_cleveldb:
-	- rm $(shell which tendermint)
 	bash tools/download_tendermint.sh 'tools/tendermint'
 	mkdir -p $(shell go env GOPATH)/bin
 	cd tools/tendermint \
@@ -102,7 +101,6 @@ tendermint_cleveldb:
 		&& cp build/tendermint $(shell go env GOPATH)/bin/
 
 tendermint_goleveldb:
-	- rm $(shell which tendermint)
 	bash tools/download_tendermint.sh 'tools/tendermint'
 	cd tools/tendermint && $(MAKE) install
 

@@ -6,18 +6,19 @@ use {
     fp_utils::{ecdsa, hashing::keccak_256},
     globutils::wallet,
     hex::FromHex,
+    libsecp256k1::{recover, Message},
+    noah::xfr::sig::{KeyType, XfrPublicKey, XfrPublicKeyInner, XfrSignature},
+    noah_algebra::serialization::NoahFromToBytes,
     primitive_types::{H160, H256},
     ruc::{d, eg, RucResult},
     serde::{Deserialize, Serialize},
     sha3::{Digest, Keccak256},
     std::ops::{Deref, DerefMut},
-    zei::xfr::sig::{XfrPublicKey, XfrSignature},
-    zei_algebra::serialization::ZeiFromToBytes,
 };
 
-/// An opaque 32-byte cryptographic identifier.
+/// An opaque 34-byte cryptographic identifier.
 #[derive(
-    Clone, Eq, PartialEq, Ord, PartialOrd, Default, Hash, Serialize, Deserialize, Debug,
+    Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Debug, Default,
 )]
 pub struct Address32([u8; 32]);
 
@@ -85,7 +86,19 @@ impl<'a> TryFrom<&'a [u8]> for Address32 {
 
 impl From<XfrPublicKey> for Address32 {
     fn from(k: XfrPublicKey) -> Self {
-        Address32::try_from(k.zei_to_bytes().as_slice()).unwrap()
+        let mut bytes = [0u8; 32];
+        match k.inner() {
+            XfrPublicKeyInner::Ed25519(pk) => {
+                bytes.copy_from_slice(pk.as_bytes());
+            }
+            XfrPublicKeyInner::Secp256k1(pk) => {
+                bytes.copy_from_slice(&keccak_256(&pk.serialize_compressed()));
+            }
+            XfrPublicKeyInner::Address(pk) => {
+                bytes[0..20].copy_from_slice(pk);
+            }
+        }
+        Address32(bytes)
     }
 }
 
@@ -207,7 +220,7 @@ pub trait Verify {
 /// Signature verify that can work with any known signature types..
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MultiSignature {
-    /// An zei xfr signature.
+    /// An noah xfr signature.
     Xfr(XfrSignature),
     /// An ECDSA/SECP256k1 signature.
     Ecdsa(ecdsa::Signature),
@@ -252,9 +265,35 @@ impl Verify for MultiSignature {
 
     fn verify(&self, msg: &[u8], signer: &Address32) -> bool {
         match self {
-            Self::Xfr(ref sig) => match XfrPublicKey::zei_from_bytes(signer.as_ref()) {
-                Ok(who) => sig.verify(msg, &who),
-                _ => false,
+            Self::Xfr(ref sig) => match sig {
+                XfrSignature::Ed25519(_) => {
+                    let mut bytes = [0u8; 34];
+                    bytes[0] = KeyType::Ed25519.to_byte();
+                    bytes[1..33].copy_from_slice(signer.as_ref());
+                    match XfrPublicKey::noah_from_bytes(&bytes) {
+                        Ok(who) => sig.verify(msg, &who),
+                        _ => false,
+                    }
+                }
+                XfrSignature::Address(..) => {
+                    let mut bytes = [0u8; 34];
+                    bytes[0] = KeyType::Address.to_byte();
+                    let signer_bytes: &[u8; 32] = signer.as_ref();
+                    bytes[1..21].copy_from_slice(&signer_bytes[0..20]);
+                    match XfrPublicKey::noah_from_bytes(&bytes) {
+                        Ok(who) => sig.verify(msg, &who),
+                        _ => false,
+                    }
+                }
+                XfrSignature::Secp256k1(sign, rec) => {
+                    let msg_hashed = keccak_256(msg);
+                    let message = Message::parse(&msg_hashed);
+                    if let Ok(reco) = recover(&message, sign, rec) {
+                        keccak_256(&reco.serialize_compressed()) == signer.as_ref()
+                    } else {
+                        false
+                    }
+                }
             },
             // Self::Ecdsa(ref sig) => match sig.recover(msg) {
             //     Some(pubkey) => {
@@ -283,7 +322,7 @@ impl Verify for MultiSignature {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MultiSigner {
-    /// An zei xfr identity.
+    /// An noah xfr identity.
     Xfr(XfrPublicKey),
     // /// An SECP256k1/ECDSA identity (actually, the keccak 256 hash of the compressed pub key).
     // Ecdsa(ecdsa::Public),
@@ -433,15 +472,15 @@ pub type Address = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId
 #[cfg(test)]
 mod tests {
     use super::*;
+    use noah::xfr::sig::XfrKeyPair;
     use rand_chacha::rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
-    use zei::xfr::sig::XfrKeyPair;
 
     #[test]
     fn xfr_sign_verify_work() {
         let mut prng = ChaChaRng::from_entropy();
         let alice = XfrKeyPair::generate(&mut prng);
-        let sig = alice.get_sk_ref().sign(b"hello", alice.get_pk_ref());
+        let sig = alice.get_sk_ref().sign(b"hello").unwrap();
         let signer = MultiSigner::from(alice.get_pk());
         let sig = MultiSignature::from(sig);
         assert!(

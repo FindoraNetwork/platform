@@ -11,6 +11,10 @@ args:
 subcommands:
   - genkey:
       about: Generate a random Findora public key/private key Pair
+      args:
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   - show:
       about: View Validator status and accumulated rewards
       args:
@@ -18,6 +22,9 @@ subcommands:
             help: show basic account info
             short: b
             long: basic
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   - setup:
       about: Setup environment variables for staking transactions
       args:
@@ -80,6 +87,9 @@ subcommands:
         - force:
             help: ignore warning and stake FRAs to your target node
             long: force
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
       groups:
         - staking-flags:
             args:
@@ -119,6 +129,9 @@ subcommands:
             long: validator-memo-logo
             takes_value: true
             value_name: Logo
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   - unstake:
       about: Unstake tokens (i.e. unbond tokens) from a Validator
       args:
@@ -140,6 +153,9 @@ subcommands:
             long: amount
             takes_value: true
             value_name: Amount
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   - claim:
       about: Claim accumulated FRA rewards
       args:
@@ -154,6 +170,9 @@ subcommands:
             long: seckey
             takes_value: true
             value_name: SECRET KEY
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   - delegate:
       about: Delegating operations
       args:
@@ -179,6 +198,9 @@ subcommands:
             conflicts_with:
               - amount
               - validator
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   - undelegate:
       about: Undelegating operations
       args:
@@ -198,6 +220,9 @@ subcommands:
             long: validator
             takes_value: true
             value_name: VALIDATOR ADDRESS
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   - transfer:
       about: Transfer tokens from one address to another
       args:
@@ -241,6 +266,9 @@ subcommands:
         - confidential-type:
             help: mask the asset type sent on the transaction log
             long: confidential-type
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   - transfer-batch:
       about: Transfer tokens from one address to many others
       args:
@@ -275,6 +303,9 @@ subcommands:
         - confidential-type:
             help: mask the asset type sent on the transaction log
             long: confidential-type
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   - wallet:
       about: manipulates a findora wallet
       args:
@@ -301,6 +332,9 @@ subcommands:
             value_name: SECRET KEY
             conflicts_with:
               - create
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   - asset:
       about: manipulate custom asset
       groups:
@@ -399,6 +433,9 @@ subcommands:
         - hidden:
             help: hidden asset amount when issuing asset on ledger
             long: hidden
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   #- history
   #    about: query operating history
   #    args:
@@ -438,6 +475,9 @@ subcommands:
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   - contract-deposit:
       about: Transfer FRA from a Findora account to the specified Ethereum address
       args:
@@ -469,6 +509,9 @@ subcommands:
             takes_value: true
             value_name: LOWLEVEL
             required: false
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   - contract-withdraw:
       about: Transfer FRA from an Ethereum address to the specified Findora account
       args:
@@ -492,6 +535,9 @@ subcommands:
             takes_value: true
             value_name: MNEMONIC
             required: true
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   - gen-eth-key:
       about: Generate an Ethereum address
   - gen-anon-keys:
@@ -578,6 +624,9 @@ subcommands:
             takes_value: true
             value_name: ASSET
             allow_hyphen_values: true
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   - convert-bar-to-abar:
       about: Convert a BAR to Anon BAR for yourself
       args:
@@ -601,6 +650,9 @@ subcommands:
             takes_value: true
             value_name: TXO SID
             required: true
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   - convert-abar-to-bar:
       about: Convert a ABAR to BAR
       args:
@@ -681,10 +733,10 @@ subcommands:
   - anon-transfer-batch:
       about: Anonymous Transfer of tokens from multiple inputs to multiple outputs
       args:
-        - axfr-secretkey-file:
-            help: Axfr secret keys of the sender
+        - anon-keys:
+            help: Anon keys file path of the sender
             short: s
-            long: axfr-secretkey-file
+            long: anon-keys
             takes_value: true
             value_name: SECRET KEY
             required: true
@@ -767,6 +819,9 @@ subcommands:
             value_name: TENDERMINT PUBKEY
             required: false
             allow_hyphen_values: true
+        - fra-address:
+            help: if the fra address version of wallet is used
+            long: fra-address
   - dev:
       about: Manage development clusters on your localhost
       args:

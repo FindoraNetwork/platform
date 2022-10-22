@@ -18,21 +18,21 @@ use {
         },
         staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
     },
-    ruc::*,
-    serde::{self, Deserialize, Serialize},
-    std::collections::HashMap,
-    tendermint::{PrivateKey, PublicKey},
-    zei::anon_xfr::{
+    noah::anon_xfr::{
         keys::{AXfrKeyPair, AXfrPubKey},
         structs::{
             AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, OpenAnonAssetRecord,
         },
     },
-    zei::xfr::{
+    noah::xfr::{
         asset_record::{open_blind_asset_record, AssetRecordType},
         sig::{XfrKeyPair, XfrPublicKey},
         structs::{AssetRecordTemplate, BlindAssetRecord, OpenAssetRecord, OwnerMemo},
     },
+    ruc::*,
+    serde::{self, Deserialize, Serialize},
+    std::collections::HashMap,
+    tendermint::{PrivateKey, PublicKey},
 };
 
 ///////////////////////////////////////

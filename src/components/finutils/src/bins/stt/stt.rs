@@ -26,10 +26,10 @@ use {
         },
         utils::fra_gen_initial_tx,
     },
+    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
     ruc::*,
     serde::Serialize,
     std::{collections::BTreeMap, env},
-    zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
 
 lazy_static! {
@@ -235,13 +235,13 @@ mod issue {
             },
             staking::FRA_PRE_ISSUE_AMOUNT,
         },
-        rand_chacha::rand_core::SeedableRng,
-        rand_chacha::ChaChaRng,
-        zei::xfr::{
+        noah::xfr::{
             asset_record::{build_blind_asset_record, AssetRecordType},
             structs::AssetRecordTemplate,
         },
-        zei_crypto::basic::ristretto_pedersen_comm::RistrettoPedersenCommitment,
+        noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+        rand_chacha::rand_core::SeedableRng,
+        rand_chacha::ChaChaRng,
     };
 
     pub fn issue() -> Result<()> {
@@ -262,7 +262,7 @@ mod issue {
             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
             root_kp.get_pk(),
         );
-        let pc_gens = RistrettoPedersenCommitment::default();
+        let pc_gens = PedersenCommitmentRistretto::default();
         let outputs = (0..2)
             .map(|_| {
                 let (ba, _, _) = build_blind_asset_record(
@@ -298,7 +298,7 @@ mod issue {
 }
 
 mod delegate {
-    use {super::*, zei::xfr::asset_record::AssetRecordType};
+    use {super::*, noah::xfr::asset_record::AssetRecordType};
 
     pub fn gen_tx(
         user: NameRef,

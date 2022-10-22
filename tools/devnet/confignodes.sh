@@ -14,7 +14,7 @@ default_evm_http_port=8545
 default_evm_ws_port=8546
 port_setp=10
 
-blocks_interval=0
+blocks_interval=5
 timeout_commit=15
 if [ ! -z $BLOCK_INTERVAL ]
 then
