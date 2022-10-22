@@ -31,7 +31,7 @@ indexmap = { version = "1.6.2", features = ["serde"] }
 config = { path = "../components/config" }
 fp-types = { path = "../components/contracts/primitives/types" }
 fp-utils = { path = "../components/contracts/primitives/utils" }
-itertools = "0.8"
+itertools = "0.10"
 ruc = "1.0"
 
 noah = "0.2"
