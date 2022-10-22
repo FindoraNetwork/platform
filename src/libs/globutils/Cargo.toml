@@ -20,7 +20,7 @@ bip32 = "0.3.0"
 
 
 base64 = "0.12"
-bip0039 = "0.8.0"
+bip0039 = { git = "https://github.com/FindoraNetwork/bip0039", branch = "fix_extra_whitespace", features = ["chinese-simplified", "chinese-traditional", "french", "italian", "korean", "spanish", "japanese"] }
 bech32 = "0.7.2"
 ed25519-dalek-bip32 = { git = "https://github.com/FindoraNetwork/ed25519-dalek-bip32", branch = "feat-allow-nohardened" }
 tracing = "0.1.13"
