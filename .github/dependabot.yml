@@ -9,5 +9,7 @@ updates:
 
   - package-ecosystem: "cargo"
     directory: "/"
+    schedule:
+      interval: "daily"
     # security update only
     open-pull-requests-limit: 0
