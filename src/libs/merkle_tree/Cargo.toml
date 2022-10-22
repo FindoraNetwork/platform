@@ -12,7 +12,7 @@ byteorder = "1.0.0"
 chrono = "0.4"
 cryptohash = { path = "../cryptohash" }
 hex = "0.4.2"
-itertools = "0.8.0"
+itertools = "0.10.5"
 lazy_static = { version = "1.2.0" }
 log = "0.4.8"
 rand = "0.8"
