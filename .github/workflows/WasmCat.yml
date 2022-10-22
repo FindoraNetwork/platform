@@ -1,10 +1,5 @@
 name: Wasm Building And Pushing
 on:
-  # push:
-  #   tags:
-  #     - 'tracing-*'
-  #     - 'develop'
-  #     - 'main'
   push:
     branches:
       - "*"
@@ -108,7 +103,3 @@ jobs:
           git status
           git commit -m "platform (${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.sha }}) by wasmcat-bot automation push 🚀"
           git push -f -u origin ${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.branch }}
-
-          git tag -a ${{ steps.vars.outputs.branch }} -m "${{ steps.vars.outputs.branch }}"
-          git show ${{ steps.vars.outputs.branch }}
-          git push -u origin ${{ steps.vars.outputs.branch }}:${{ steps.vars.outputs.branch }} ${{ steps.vars.outputs.branch }}
