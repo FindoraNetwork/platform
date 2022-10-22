@@ -6,3 +6,8 @@ updates:
     open-pull-requests-limit: 20
     schedule:
       interval: "daily"
+
+  - package-ecosystem: "cargo"
+    directory: "/"
+    # security update only
+    open-pull-requests-limit: 0
