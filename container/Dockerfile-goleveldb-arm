@@ -1,0 +1,9 @@
+FROM --platform=$TARGETPLATFORM debian:11.0-slim
+ENV WORK_DIR /platform
+ENV WASM_DIR /tmp/wasm-js-bindings
+
+RUN apt update && apt install -y libleveldb-dev=1.22-3 && rm -rf /var/lib/apt/lists/*
+COPY binary/goleveldb/findorad /usr/local/sbin/findorad
+COPY container/docker-entrypoint-findorad.sh /docker-entrypoint.sh
+WORKDIR /
+ENTRYPOINT ["/docker-entrypoint.sh"]
