@@ -5,6 +5,7 @@ use module_evm::precompile::{Precompile, PrecompileResult};
 use std::marker::PhantomData;
 
 use evm_precompile_basic::{ECRecover, ECRecoverPublicKey, Identity, Ripemd160, Sha256};
+use evm_precompile_eth_pairings::EthPairing;
 use evm_precompile_frc20::FRC20;
 use evm_precompile_modexp::Modexp;
 use evm_precompile_sha3fips::{Sha3FIPS256, Sha3FIPS512};
@@ -72,6 +73,9 @@ where
             }
             a if a == H160::from_low_u64_be(FRC20::<C>::contract_id()) => {
                 Some(FRC20::<C>::execute(input, target_gas, context, ctx))
+            }
+            a if a == H160::from_low_u64_be(EthPairing::contract_id()) => {
+                Some(EthPairing::execute(input, target_gas, context, ctx))
             }
             _ => None,
         }
