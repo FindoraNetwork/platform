@@ -12,7 +12,7 @@ abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4
 baseapp = { path = "../../baseapp" }
 ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
 lazy_static = "1.4.0"
-libsecp256k1 = { version = "0.5", features = ["static-context", "hmac"] }
+libsecp256k1 = { version = "0.7", features = ["static-context", "hmac"] }
 primitive-types = { version = "0.11.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
 rand_chacha = "0.2"
 rlp = "0.5"
