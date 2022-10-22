@@ -16,7 +16,7 @@ noah = "0.2"
 noah-crypto = "0.2"
 noah-algebra = "0.2"
 hex = "0.4.2"
-bip32 = "0.3.0"
+bip32 = "0.4.0"
 
 
 base64 = "0.13"

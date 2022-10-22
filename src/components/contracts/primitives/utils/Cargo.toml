@@ -23,7 +23,7 @@ ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 sha2 = "0.10"
 sha3 = "0.10"
-bip32 = "0.2.1"
+bip32 = "0.4.0"
 tiny-keccak = { version = "2.0", features = ["keccak"] }
 twox-hash = "1.6.0"
 
