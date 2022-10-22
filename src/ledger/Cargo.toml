@@ -61,7 +61,7 @@ fin_storage = ["storage", "fin_db"]
 lazy_static = "1.4.0"
 
 [dependencies.fixed]
-version = "0.4.6"
+version = "1.19.0"
 features = ["f16", "serde"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
