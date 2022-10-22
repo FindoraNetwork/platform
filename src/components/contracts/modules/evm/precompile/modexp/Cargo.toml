@@ -11,7 +11,7 @@ readme = "README.md"
 [dependencies]
 evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
 module-evm = { path = "../../../../modules/evm"}
-num = { version = "0.3", features = ["alloc"] }
+num = { version = "0.4", features = ["alloc"] }
 
 [dev-dependencies]
 hex = "0.4.2"
