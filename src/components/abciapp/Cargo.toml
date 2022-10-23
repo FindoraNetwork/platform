@@ -36,7 +36,7 @@ clap = "2.33.3"
 actix-cors = "0.5.4"
 actix-rt = "1.1.0"
 actix-service = "1.0.6"
-actix-web = "3.3.2"
+actix-web = "4.2.1"
 percent-encoding = "2.1.0"
 
 nix = "0.22.1"
