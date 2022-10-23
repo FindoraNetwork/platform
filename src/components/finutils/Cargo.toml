@@ -21,7 +21,7 @@ rand_chacha = "0.2"
 curve25519-dalek = { version = "3.0", features = ["serde"] }
 wasm-bindgen = { version = "=0.2.73", features = ["serde-serialize"] }
 
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4x" }
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 ruc = "1.0"
 nix = "0.25"
 toml_edit = "0.14"

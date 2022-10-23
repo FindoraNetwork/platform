@@ -30,9 +30,9 @@ config = { path = "../components/config" }
 fp-types = { path = "../components/contracts/primitives/types" }
 
 ruc = "1.0"
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4x" }
-zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4x" }
-bulletproofs = { package = "bulletproofs", git = "https://github.com/FindoraNetwork/bp", branch = "batch_verification", features = ["yoloproofs"] }
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
+zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
+bulletproofs = { package = "bulletproofs", git = "https://github.com/FindoraNetwork/bp", rev = "57633a", features = ["yoloproofs"] }
 fbnc = { version = "0.2.9", default-features = false}
 
 num-bigint = "0.4.3"

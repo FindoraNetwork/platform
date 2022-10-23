@@ -12,7 +12,7 @@ serde_json = "1.0"
 time = "0.3"
 rand = "0.8"
 cryptohash = { path = "../cryptohash" }
-zei = { git = "https://github.com/FindoraNetwork/zei", tag = "v0.1.4x" }
+zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 hex = "0.4.2"
 
 base64 = "0.12"
