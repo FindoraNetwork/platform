@@ -15,7 +15,7 @@ jobs:
     if: github.event_name != 'pull_request' && github.event.pull_request.number == ''
     steps:
       - name: Checkout platform branch
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Extract vars
         id: vars
@@ -37,7 +37,7 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - name: Using cache to speed up
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/bin/
