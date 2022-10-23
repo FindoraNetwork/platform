@@ -16,7 +16,7 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 wasm-opt = false
 
 [dependencies]
-aes-gcm = '=0.10.0-pre'
+aes-gcm = '0.10.1'
 base64 = "0.13"
 bech32 = "0.7.2"
 ffi-support = "0.4"
