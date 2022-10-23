@@ -30,7 +30,7 @@ noah = "0.2"
 noah-crypto = "0.2"
 noah-algebra = "0.2"
 nix = "0.25"
-toml_edit = "0.14"
+toml_edit = "0.15"
 
 ledger = { path = "../../ledger", default-features = false }
 globutils = { path = "../../libs/globutils" }
