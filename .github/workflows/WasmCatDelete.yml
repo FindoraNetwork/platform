@@ -6,7 +6,7 @@ on: delete
 jobs:
   delete:
     runs-on: ubuntu-latest
-    # check again this is a delete branch event 
+    # check again this is a delete-branch event
     if: github.event.ref_type == 'branch'
     steps:
       - name: Delete wasm-js-bindings branch

@@ -16,7 +16,7 @@ jobs:
       PRIVATE_ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
       PUBLIC_ECR_URL: public.ecr.aws/k6m5b6e2
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
