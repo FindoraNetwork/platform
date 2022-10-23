@@ -52,3 +52,9 @@ overflow-checks = false
 [profile.dev.package.curve25519-dalek]
 opt-level = 1
 overflow-checks = false
+
+[patch.crates-io]
+ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek", rev = "ad461f" }
+curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek", rev = "076cf3" }
+x25519-dalek = { git = "https://github.com/FindoraNetwork/x25519-dalek", rev = "ea047a" }
+
