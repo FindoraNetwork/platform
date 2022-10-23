@@ -2404,10 +2404,18 @@ mod test {
         let phrase2 = "museum  combine night carry artefact actress sugar amount kitchen change ill room walk potato beef similar claw fossil gate chalk domain chronic utility engage";
 
         let kp1 = restore_keypair_from_mnemonic_default(phrase1).unwrap();
-        println!("{} {}", serde_json::to_string_pretty(&kp1).unwrap(), wallet::public_key_to_bech32(kp1.get_pk_ref()));
+        println!(
+            "{} {}",
+            serde_json::to_string_pretty(&kp1).unwrap(),
+            wallet::public_key_to_bech32(kp1.get_pk_ref())
+        );
 
         let kp2 = restore_keypair_from_mnemonic_default(phrase2).unwrap();
-        println!("{} {}", serde_json::to_string_pretty(&kp2).unwrap(), wallet::public_key_to_bech32(kp2.get_pk_ref()));
+        println!(
+            "{} {}",
+            serde_json::to_string_pretty(&kp2).unwrap(),
+            wallet::public_key_to_bech32(kp2.get_pk_ref())
+        );
 
         assert_eq!(kp1.get_sk(), kp2.get_sk());
     }
