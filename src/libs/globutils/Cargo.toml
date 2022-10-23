@@ -24,7 +24,7 @@ bip0039 = { git = "https://github.com/FindoraNetwork/bip0039", branch = "fix_ext
 bech32 = "0.7.2"
 ed25519-dalek-bip32 = { git = "https://github.com/FindoraNetwork/ed25519-dalek-bip32", branch = "feat-allow-nohardened" }
 tracing = "0.1.13"
-tracing-subscriber = "0.2.4"
+tracing-subscriber = "0.3.16"
 bs58 = "0.4"
 
 [dev-dependencies]
