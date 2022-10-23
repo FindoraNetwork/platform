@@ -18,7 +18,7 @@ wasm-opt = false
 [dependencies]
 aes-gcm = '0.10.1'
 base64 = "0.13"
-bech32 = "0.7.2"
+bech32 = "0.9.1"
 ffi-support = "0.4"
 futures = "0.1.20"
 getrandom = { version = "0.2", features = ["js"] }
