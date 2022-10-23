@@ -66,11 +66,11 @@ ark-ed-on-bls12-381 = { git = "https://github.com/FindoraNetwork/ark-curves" }
 ark-algebra-test-templates = { git = "https://github.com/FindoraNetwork/ark-algebra" }
 curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek", tag = "v3.2.0-f" }
 ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek", tag = "v1.0.1-f" }
-bulletproofs = { git = "https://github.com/FindoraNetwork/bp" }
+bulletproofs = { git = "https://github.com/FindoraNetwork/bp", tag = "v1.0.1-f" }
 
-noah = { git = "https://github.com/FindoraNetwork/noah" }
-noah-accumulators = { git = "https://github.com/FindoraNetwork/noah" }
-noah-algebra = { git = "https://github.com/FindoraNetwork/noah" }
-noah-crypto = { git = "https://github.com/FindoraNetwork/noah" }
-noah-plonk = { git = "https://github.com/FindoraNetwork/noah" }
+noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
+noah-accumulators = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
+noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
+noah-crypto = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
+noah-plonk = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
 

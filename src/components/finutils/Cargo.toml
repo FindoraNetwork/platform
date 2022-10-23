@@ -9,7 +9,7 @@ edition = "2021"
 attohttpc = { version = "0.18", default-features = false, features = ["compress", "json", "tls-rustls"] }
 base64 = "0.13"
 clap = { version = "2.33.3", features = ["yaml"] }
-curve25519-dalek = { version = "3.0", features = ["serde"] }
+curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek", tag = "v3.2.0-f" }
 digest = '0.10'
 hex = "0.4.2"
 lazy_static = "1.4.0"
@@ -26,9 +26,9 @@ tokio = "1.10.1"
 wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"] }
 getrandom = "0.2"
 
-noah = "0.2"
-noah-crypto = "0.2"
-noah-algebra = "0.2"
+noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
+noah-crypto = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
+noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
 nix = "0.25"
 toml_edit = "0.15"
 
