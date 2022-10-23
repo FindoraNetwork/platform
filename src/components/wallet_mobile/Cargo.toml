@@ -66,5 +66,5 @@ wasm-bindgen = { version = "=0.2.83", features = ["serde-serialize"] }
 safer-ffi = "0.0.6"
 
 [build-dependencies]
-cbindgen = "0.20"
+cbindgen = "0.24"
 vergen = "3.1.0"
