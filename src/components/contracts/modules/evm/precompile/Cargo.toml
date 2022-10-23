@@ -1,0 +1,20 @@
+[package]
+authors = ["FindoraNetwork"]
+description = "MODEXP precompiles for EVM module."
+edition = "2021"
+homepage = "https://findora.org/technology"
+name = "evm-precompile"
+readme = "README.md"
+repository = "https://github.com/findoranetwork/platform/"
+version = "0.1.0"
+
+[dependencies]
+ethereum-types = "0.13.1"
+evm = {version = "0.35.0", default-features = false, features = ["with-serde"]}
+evm-precompile-basic = {path = "./basic"}
+evm-precompile-frc20 = {path = "./frc20"}
+evm-precompile-modexp = {path = "./modexp"}
+evm-precompile-sha3fips = {path = "./sha3fips"}
+fp-core = {path = "../../../primitives/core"}
+module-evm = {path = "../../../modules/evm"}
+parking_lot = "0.12"

@@ -90,5 +90,7 @@ pub fn fra_gen_initial_tx(fra_owner_kp: &XfrKeyPair) -> Transaction {
 
     tx.add_operation(Operation::IssueAsset(asset_issuance_operation));
 
+    tx.sign_to_map(fra_owner_kp);
+
     tx
 }

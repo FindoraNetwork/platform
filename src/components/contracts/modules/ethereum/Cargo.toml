@@ -9,10 +9,10 @@ description = "Findora module supporting execute ethereum transaction"
 readme = "README.md"
 
 [dependencies]
-abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
-ethereum = { version = "0.9.0", default-features = false, features = ["with-serde"] }
-ethereum-types = { version = "0.12", default-features = false }
-evm = { version = "0.29.0", default-features = false, features = ["with-serde"] }
+abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
+ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
+ethereum-types = { version = "0.13.1", default-features = false }
+evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
 log = "0.4"
 rand = "0.8"
 rlp = "0.5"
@@ -20,6 +20,7 @@ ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0.64"
 sha3 = "0.8"
+lazy_static = "1.4.0"
 
 # primitives, don't depend on any modules
 fp-core = { path = "../../primitives/core" }
@@ -34,7 +35,8 @@ config = { path = "../../../config"}
 baseapp = { path = "../../baseapp" }
 fp-mocks = { path = "../../primitives/mocks" }
 module-account = { path = "../account" }
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.4" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
 
 [features]
 default = []

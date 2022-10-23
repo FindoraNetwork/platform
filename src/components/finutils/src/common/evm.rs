@@ -52,7 +52,11 @@ pub fn transfer_to_account(amount: u64, address: Option<&str>) -> Result<()> {
         .add_operation(transfer_op)
         .add_operation_convert_account(&kp, target_address, amount)?
         .sign(&kp);
-    utils::send_tx(&builder.take_transaction())?;
+
+    let mut tx = builder.take_transaction();
+    tx.sign_to_map(&kp);
+
+    utils::send_tx(&tx)?;
     Ok(())
 }
 

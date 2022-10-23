@@ -37,6 +37,9 @@ set_env() {
     elif [[ $env == "qa02" ]]; then
         serv_url="https://dev-qa02.dev.findora.org"
         sentry_peers="b87304454c0a0a0c5ed6c483ac5adc487f3b21f6\@dev-qa02-us-west-2-sentry-000-public.dev.findora.org:26656"
+    elif [[ $env == "qa03" ]]; then
+        serv_url="https://dev-qa03.dev.findora.org"
+        sentry_peers="b87304454c0a0a0c5ed6c483ac5adc487f3b21f6\@dev-qa03-us-west-2-sentry-000-public.dev.findora.org:26656"
     elif [[ $env == "testnet" ]]; then
         serv_url="https://prod-testnet.prod.findora.org"
         sentry_peers="b87304454c0a0a0c5ed6c483ac5adc487f3b21f6\@prod-testnet-us-west-2-sentry-000-public.prod.findora.org:26656,d0c6e3e1589695ae6d650b288caf2efe9a998a50\@prod-testnet-us-west-2-sentry-001-public.prod.findora.org:26656,78661a9979c100e8f1303cbd121cb1b326ff694f\@prod-testnet-us-west-2-sentry-002-public.prod.findora.org:26656,6723af6a3aef14cd7eb5ee8d5d0ac227af1e9651\@prod-testnet-us-west-2-sentry-003-public.prod.findora.org:26656"
@@ -74,7 +77,16 @@ set_env() {
 
     curl ${serv_url}:26657/genesis \
         | jq -c '.result.genesis' \
-        | jq > ${th}/config/genesis.json || exit 1
+        | jq > ~/.tendermint/config/genesis.json || exit 1
+
+    EVM_CHAIN_ID=$(curl -H 'Content-Type: application/json' --data '{"id":1, "method": "eth_chainId", "jsonrpc": "2.0"}' "${serv_url}:8545" | jq -c '.result' | sed 's/"//g')
+    export EVM_CHAIN_ID=$(printf '%d' $EVM_CHAIN_ID)
+
+    curl ${serv_url}:8667/display_checkpoint | jq > /tmp/${env}.checkpoint
+    if [[ 0 != $? || 0 == $(wc -l /tmp/${env}.checkpoint | perl -pe 's/^\s+//g' | grep -o '^[0-9]') ]]; then
+        printf "\nfail to get checkpoint file!\n"
+        exit 1
+    fi
 }
 
 if [[ "" == $2 ]]; then
@@ -87,8 +99,10 @@ fi
 ###################
 
 cd /tmp || exit 1
-abcid --enable-snapshot --snapshot-mode external -d "${h}" -q \
+echo -e "\033[31;1m==== EVM_CHAIN_ID: $EVM_CHAIN_ID ====\033[0m"
+abcid -q \
     --tendermint-node-key-config-path="${th}/config/priv_validator_key.json" \
+    --checkpoint-file /tmp/${env}.checkpoint \
     >abcid.log 2>&1 &
 tendermint node --home ${th} >tendermint.log 2>&1 &
 

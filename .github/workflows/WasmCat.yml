@@ -1,7 +1,10 @@
 name: Wasm Building And Pushing
 on: 
   push:
-    branches: ['**_wasm']
+    branches:
+      - '**'
+    tags:
+      - '*-release'
 
 jobs:
   build-push:

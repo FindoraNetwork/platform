@@ -6,6 +6,7 @@
 //! This module is the library part of FN.
 //!
 
+pub mod dev;
 pub mod evm;
 pub mod utils;
 
@@ -83,7 +84,10 @@ pub fn staker_update(cr: Option<&str>, memo: Option<StakerMemo>) -> Result<()> {
         .c(d!())
         .map(|op| builder.add_operation(op))?;
 
-    utils::send_tx(&builder.take_transaction()).c(d!())
+    let mut tx = builder.take_transaction();
+    tx.sign_to_map(&kp);
+
+    utils::send_tx(&tx).c(d!())
 }
 
 /// Perform a staking operation to add current tendermint node to validator list
@@ -146,7 +150,10 @@ pub fn stake(
     .c(d!())
     .map(|principal_op| builder.add_operation(principal_op))?;
 
-    utils::send_tx(&builder.take_transaction()).c(d!())
+    let mut tx = builder.take_transaction();
+    tx.sign_to_map(&kp);
+
+    utils::send_tx(&tx).c(d!())
 }
 
 /// Append more FRA token to the specified tendermint node
@@ -181,8 +188,10 @@ pub fn stake_append(
     )
     .c(d!())
     .map(|principal_op| builder.add_operation(principal_op))?;
+    let mut tx = builder.take_transaction();
+    tx.sign_to_map(&kp);
 
-    utils::send_tx(&builder.take_transaction()).c(d!())
+    utils::send_tx(&tx).c(d!())
 }
 
 /// Withdraw Fra token from findora network for a staker
@@ -229,7 +238,10 @@ pub fn unstake(
         }
     })?;
 
-    utils::send_tx(&builder.take_transaction()).c(d!())
+    let mut tx = builder.take_transaction();
+    tx.sign_to_map(&kp);
+
+    utils::send_tx(&tx).c(d!())
 }
 
 /// Claim rewards from findora network
@@ -249,7 +261,10 @@ pub fn claim(am: Option<&str>, sk_str: Option<&str>) -> Result<()> {
         builder.add_operation_claim(&kp, am);
     })?;
 
-    utils::send_tx(&builder.take_transaction()).c(d!())
+    let mut tx = builder.take_transaction();
+    tx.sign_to_map(&kp);
+
+    utils::send_tx(&tx).c(d!())
 }
 
 /// Show information of current node, including following sections:
@@ -532,8 +547,8 @@ pub fn convert_commission_rate(cr: f64) -> Result<[u64; 2]> {
 }
 
 #[allow(missing_docs)]
-pub fn gen_key_and_print() {
-    let (m, k, kp) = loop {
+pub fn gen_key() -> (String, String, String, XfrKeyPair) {
+    let (mnemonic, key, kp) = loop {
         let mnemonic = pnk!(wallet::generate_mnemonic_custom(24, "en"));
         let kp = pnk!(wallet::restore_keypair_from_mnemonic_default(&mnemonic));
         if let Some(key) = serde_json::to_string_pretty(&kp)
@@ -543,10 +558,18 @@ pub fn gen_key_and_print() {
             break (mnemonic, key, kp);
         }
     };
+
     let wallet_addr = wallet::public_key_to_bech32(kp.get_pk_ref());
+
+    (wallet_addr, mnemonic, key, kp)
+}
+
+#[allow(missing_docs)]
+pub fn gen_key_and_print() {
+    let (wallet_addr, mnemonic, key, _) = gen_key();
     println!(
         "\n\x1b[31;01mWallet Address:\x1b[00m {}\n\x1b[31;01mMnemonic:\x1b[00m {}\n\x1b[31;01mKey:\x1b[00m {}\n",
-        wallet_addr, m, k
+        wallet_addr, mnemonic, key
     );
 }
 
@@ -641,7 +664,10 @@ fn gen_undelegate_tx(
         builder.add_operation_undelegation(owner_kp, None);
     }
 
-    Ok(builder.take_transaction())
+    let mut tx = builder.take_transaction();
+    tx.sign_to_map(owner_kp);
+
+    Ok(tx)
 }
 
 fn gen_delegate_tx(
@@ -665,7 +691,11 @@ fn gen_delegate_tx(
         builder.add_operation_delegation(owner_kp, amount, validator.to_owned());
     })?;
 
-    Ok(builder.take_transaction())
+    let mut tx = builder.take_transaction();
+
+    tx.sign_to_map(owner_kp);
+
+    Ok(tx)
 }
 /// Create a custom asset for a findora account. If no token code string provided,
 /// it will generate a random new one.
@@ -715,7 +745,10 @@ pub fn create_asset_x(
         .c(d!())
         .map(|op| builder.add_operation(op))?;
 
-    utils::send_tx(&builder.take_transaction()).map(|_| code)
+    let mut tx = builder.take_transaction();
+    tx.sign_to_map(kp);
+
+    utils::send_tx(&tx).map(|_| code)
 }
 
 /// Issue a custom asset with specified amount
@@ -754,7 +787,10 @@ pub fn issue_asset_x(
         .c(d!())
         .map(|op| builder.add_operation(op))?;
 
-    utils::send_tx(&builder.take_transaction())
+    let mut tx = builder.take_transaction();
+    tx.sign_to_map(kp);
+
+    utils::send_tx(&tx)
 }
 
 /// Show a list of custom asset token created by a findora account
@@ -786,7 +822,9 @@ pub fn replace_staker(
     })?;
 
     builder.add_operation_replace_staker(&keypair, target_pubkey, new_td_addr_pk)?;
-    let tx = builder.take_transaction();
+    let mut tx = builder.take_transaction();
+    tx.sign_to_map(&keypair);
+
     utils::send_tx(&tx).c(d!())?;
     Ok(())
 }

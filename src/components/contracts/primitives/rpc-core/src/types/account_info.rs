@@ -23,14 +23,14 @@ use ethereum_types::{Address, Public, H160, H256, U256};
 use serde::Serialize;
 
 /// Account information.
-#[derive(Debug, Default, Clone, PartialEq, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
 pub struct AccountInfo {
     /// Account name
     pub name: String,
 }
 
 /// Data structure with proof for one single storage-entry
-#[derive(Debug, Default, Clone, PartialEq, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StorageProof {
     pub key: U256,
@@ -39,7 +39,7 @@ pub struct StorageProof {
 }
 
 /// Account information.
-#[derive(Debug, Default, Clone, PartialEq, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EthAccount {
     pub address: H160,
@@ -52,7 +52,7 @@ pub struct EthAccount {
 }
 
 /// Extended account information (used by `parity_allAccountInfo`).
-#[derive(Debug, Default, Clone, PartialEq, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
 pub struct ExtAccountInfo {
     /// Account name
     pub name: String,

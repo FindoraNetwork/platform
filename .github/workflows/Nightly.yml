@@ -1,0 +1,95 @@
+name: Nightly
+on:
+  schedule:
+    - cron: '0 0 * * *'
+
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  build:
+    strategy:
+      matrix:
+        platform: [scalable]
+    runs-on: ${{ matrix.platform }}
+    env:
+      ENV: dev
+      PRIVATE_ECR_URL: 358484141435.dkr.ecr.us-west-2.amazonaws.com
+      PUBLIC_ECR_URL: public.ecr.aws/k6m5b6e2
+      BUILD_TYPE: nightly
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: develop
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+        components: rustfmt
+
+    - name: Prepare key
+      shell: bash
+      run: |
+        tar -C ~/.ssh -zcf key.tar.gz ./
+        
+    - name: Clean garbage containers and images
+      shell: bash
+      run: |
+        docker rm $(docker ps -a | grep -v "^CONTAINER" | awk '{print $1}') || true
+        docker rmi -f $(docker images -f "dangling=true" -q) || true
+    - name: Build rust base image
+      shell: bash
+      run: |
+        make ci_build_binary_rust_base
+    - name: Build binary image
+      env:
+        BUILD_TYPE: ${{ env.BUILD_TYPE }}
+      shell: bash
+      run: |
+        export DATA=$(date '+%Y-%m-%d')
+        export IMAGE_TAG="${BUILD_TYPE}-${DATA}"
+        export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
+        echo "Image tag: ${IMAGE_TAG}"
+        make ci_build_dev_binary_image
+    - name: Build findorad images
+      env:
+        BUILD_TYPE: ${{ env.BUILD_TYPE }}
+
+      shell: bash
+      run: |
+        export DATA=$(date '+%Y-%m-%d')
+        export IMAGE_TAG="${BUILD_TYPE}-${DATA}"
+        export VERGEN_SHA_EXTERN="${IMAGE_TAG}"       
+        echo "Image tag: ${IMAGE_TAG}"
+        make ci_build_image
+    - name: Login ECR
+      env:
+        PUBLIC_ECR_URL: ${{ env.PUBLIC_ECR_URL }}
+      shell: bash
+      run: |
+        aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${PUBLIC_ECR_URL}
+        
+    - name: Push images
+      env:
+        BUILD_TYPE: ${{ env.BUILD_TYPE }}
+
+      shell: bash
+      run: |
+        export DATA=$(date '+%Y-%m-%d')
+        export IMAGE_TAG="${BUILD_TYPE}-${DATA}"
+        export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
+        echo "Image tag: ${IMAGE_TAG}"
+        make ci_push_image
+
+
+    - name: Slack Notification if FAIL
+      uses: rtCamp/action-slack-notify@v2
+      if: failure()
+      env:
+        SLACK_CHANNEL: engineering-v2
+        SLACK_COLOR: ${{ job.status }} # or a specific color like 'good' or '#ff00ff'
+        SLACK_ICON: https://findora.org/wp-content/uploads/2022/06/Group.svg
+        SLACK_MESSAGE: 'Click the action URL to see the detail. It may cause the test fail or image build error!'
+        SLACK_TITLE: Nightly Build ${{ job.status }}
+        SLACK_USERNAME: Nightly Build Monitoring
+        SLACK_WEBHOOK: ${{ secrets.SLACK_APP_WEBHOOK }}

@@ -12,23 +12,74 @@ use {
     toml,
 };
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[allow(missing_docs)]
 pub struct CheckPointConfig {
+    // https://github.com/FindoraNetwork/platform/pull/211
+    // Enable evm substate.
     pub evm_substate_height: i64,
+
+    // https://github.com/FindoraNetwork/platform/pull/178
+    // Disable evm.
     pub disable_evm_block_height: i64,
+
+    // https://github.com/FindoraNetwork/platform/pull/181
+    // fix node crash and reset update height.
     pub enable_frc20_height: i64,
+
+    // Commit: d449b7c97850b225cf26c72c8b19ed284d6d7101
     pub evm_first_block_height: i64,
+
+    // Commit: a1cfa708074df18379e0cf01d4df48794c5d100d
+    // Fix a BUG in the calculation of commission.
     pub zero_amount_fix_height: u64,
+
+    // Commit: 69ca4865842a3a1eef628a5ceab5e856c3e866c4,
+    // Rename: a1cfa708074df18379e0cf01d4df48794c5d100d
     pub apy_fix_height: u64,
+
+    // https://github.com/FindoraNetwork/platform/pull/98
+    // Fix delegation rewards overflow using bigint.
     pub overflow_fix_height: u64,
+
+    // Commit c9d2b4f5760cb5bd79848b451fca56c023b1cc71
+    // Sync APY v7 upgrade block height.
     pub second_fix_height: u64,
+
+    // https://github.com/FindoraNetwork/platform/pull/97
+    // Change APY modifier based on v7 rate.
     pub apy_v7_upgrade_height: u64,
+
+    // Commit: a1cfa708074df18379e0cf01d4df48794c5d100d
+    // Add an extra `reserved` address; fix a BUG in the calculation of commission.
     pub ff_addr_extra_fix_height: u64,
+
+    // https://github.com/FindoraNetwork/platform/pull/93
+    // Fix incorrect calculations about nonconfidential balances.
     pub nonconfidential_balance_fix_height: u64,
+
     pub unbond_block_cnt: u64,
+
+    // https://github.com/FindoraNetwork/platform/pull/307
+    // Fix unpaid delegation.
     pub fix_unpaid_delegation_height: u64,
+
+    // https://github.com/FindoraNetwork/platform/pull/430
+    // Fix missing rewards within 21 days after undelegation.
+    pub fix_undelegation_missing_reward_height: i64,
+
+    // https://github.com/FindoraNetwork/platform/pull/316
+    // FO-968: Increment Nonce for CheckTx run mode without executing EVM transaction PORT TO MAIN.
     pub evm_checktx_nonce: i64,
+
+    // https://github.com/FindoraNetwork/platform/pull/345
+    // Fix the problem of utxo transaction body without signature.
+    pub utxo_checktx_height: i64,
+
+    // https://github.com/FindoraNetwork/platform/pull/434
+    // Fix the amount in the delegators that staking did not modify when it punished the validator.
+    pub fix_delegators_am_height: u64,
+    pub validators_limit_v2_height: u64,
 }
 
 impl CheckPointConfig {
@@ -55,7 +106,11 @@ impl CheckPointConfig {
                                 nonconfidential_balance_fix_height: 0,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
                                 fix_unpaid_delegation_height: 0,
+                                fix_undelegation_missing_reward_height: 0,
                                 evm_checktx_nonce: 0,
+                                utxo_checktx_height: 0,
+                                fix_delegators_am_height: 0,
+                                validators_limit_v2_height: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -71,8 +126,12 @@ impl CheckPointConfig {
                                 ff_addr_extra_fix_height: 1200000,
                                 nonconfidential_balance_fix_height: 1210000,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
+                                fix_undelegation_missing_reward_height: 3000000,
                                 fix_unpaid_delegation_height: 2261885,
-                                evm_checktx_nonce: 3000000,
+                                evm_checktx_nonce: 30000000,
+                                utxo_checktx_height: 30000000,
+                                fix_delegators_am_height: 30000000,
+                                validators_limit_v2_height: 30000000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
@@ -90,7 +149,9 @@ impl CheckPointConfig {
 
         let mut content = String::new();
         f.read_to_string(&mut content).unwrap();
-        let config: CheckPointConfig = toml::from_str(content.as_str()).unwrap();
+        let config: CheckPointConfig = toml::from_str(content.as_str())
+            .or_else(|_| serde_json::from_str(content.as_str()))
+            .unwrap();
         Some(config)
     }
 }

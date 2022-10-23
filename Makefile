@@ -32,7 +32,7 @@ define pack
 	- rm -rf $(1)
 	mkdir $(1)
 	cd $(1); for i in $(subdirs); do mkdir $$i; done
-	cp \
+	cp -f \
 		${CARGO_TARGET_DIR}/$(2)/$(1)/findorad \
 		${CARGO_TARGET_DIR}/$(2)/$(1)/abcid \
 		${CARGO_TARGET_DIR}/$(2)/$(1)/fn \
@@ -40,8 +40,8 @@ define pack
 		${CARGO_TARGET_DIR}/$(2)/$(1)/staking_cfg_generator \
 		$(shell go env GOPATH)/bin/tendermint \
 		$(1)/$(bin_dir)/
-	cp $(1)/$(bin_dir)/* ~/.cargo/bin/
-	cd $(1)/$(bin_dir)/ && findorad pack
+	cp -f $(1)/$(bin_dir)/* ~/.cargo/bin/
+	cd $(1)/$(bin_dir)/ && ./findorad pack
 	cp -f /tmp/findorad $(1)/$(bin_dir)/
 	cp -f /tmp/findorad ~/.cargo/bin/
 endef
@@ -85,7 +85,7 @@ build_release_debug: tendermint_goleveldb
 	$(call pack,release)
 
 tendermint_cleveldb:
-	- rm $(shell which tendermint)
+	- rm -f $(shell which tendermint)
 	bash tools/download_tendermint.sh 'tools/tendermint'
 	mkdir -p $(shell go env GOPATH)/bin
 	cd tools/tendermint \
@@ -93,12 +93,14 @@ tendermint_cleveldb:
 		&& cp build/tendermint $(shell go env GOPATH)/bin/
 
 tendermint_goleveldb:
-	- rm $(shell which tendermint)
+	- rm -f $(shell which tendermint)
 	bash tools/download_tendermint.sh 'tools/tendermint'
 	cd tools/tendermint && $(MAKE) install
 
 test:
+	- find src -name "checkpoint.toml" | xargs rm -f
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
+	- find src -name "checkpoint.toml" | xargs rm -f
 
 coverage:
 	cargo tarpaulin --timeout=900 --branch --workspace --release \
@@ -120,6 +122,8 @@ lint:
 	cargo clippy --workspace --tests
 
 update:
+	git submodule update --recursive --init
+	rustup update stable
 	cargo update
 
 fmt:
@@ -165,6 +169,9 @@ join_qa01: stop_debug_env build_release_goleveldb
 
 join_qa02: stop_debug_env build_release_goleveldb
 	bash tools/node_init.sh qa02
+
+join_qa03: stop_debug_env build_release_goleveldb
+	bash tools/node_init.sh qa03
 
 join_testnet: stop_debug_env build_release_goleveldb
 	bash tools/node_init.sh testnet
@@ -272,3 +279,28 @@ snapshot:
 	@./tools/devnet/snapshot.sh
 
 devnet: reset snapshot
+
+# fn build
+build_musl_fn_linux:
+	docker build -t musl_fn_linux -f container/Dockerfile-fn-musl-linux .
+	docker run -d --rm --name fn_linux musl_fn_linux
+	docker cp fn_linux:/volume/target/x86_64-unknown-linux-musl/release/fn fn
+	tar -czvf fn_linux.tar.gz fn
+	rm fn
+
+
+build_musl_fn_macos_base:
+	docker build -t musl_fn_macos_base -f container/Dockerfile-fn-musl-macos-base .
+build_musl_fn_macos:
+	docker build -t musl_fn_macos -f container/Dockerfile-fn-musl-macos .
+	docker run -d --rm --name fn_macos musl_fn_macos
+	docker cp fn_macos:/volume/target/x86_64-apple-darwin/release/fn fn
+	tar -czvf fn_macos.tar.gz fn
+	rm fn
+
+build_musl_fn_win:
+	docker build -t musl_fn_win -f container/Dockerfile-fn-musl-windows .
+	docker run -d --rm --name fn_windows musl_fn_win
+	docker cp fn_windows:/volume/target/x86_64-pc-windows-gnu/release/fn.exe fn.exe
+	tar -czvf fn_windows.tar.gz fn.exe
+	rm fn.exe

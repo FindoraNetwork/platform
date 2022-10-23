@@ -1,11 +1,10 @@
 use abci::Header;
-use storage::{
-    db::{FinDB, RocksDB},
-    state::{ChainState, State},
-};
+use fin_db::{FinDB, RocksDB};
+use primitive_types::{H160, H256};
+use std::{collections::HashMap, sync::Arc};
+use storage::state::{ChainState, State};
 
 pub use parking_lot::RwLock;
-pub use std::sync::Arc;
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash, Copy)]
 pub enum RunTxMode {
@@ -20,6 +19,15 @@ pub enum RunTxMode {
     Deliver = 4,
 }
 
+pub type SignerCache = HashMap<H256, Option<H160>>;
+
+#[derive(Clone, Default)]
+pub struct EthereumCache {
+    pub current: Arc<RwLock<SignerCache>>,
+    pub history_1: Arc<RwLock<SignerCache>>,
+    pub history_n: Arc<RwLock<SignerCache>>,
+}
+
 #[derive(Clone)]
 pub struct Context {
     pub state: Arc<RwLock<State<FinDB>>>,
@@ -27,6 +35,7 @@ pub struct Context {
     pub run_mode: RunTxMode,
     pub header: Header,
     pub header_hash: Vec<u8>,
+    pub eth_cache: EthereumCache,
 }
 
 impl Context {
@@ -40,6 +49,7 @@ impl Context {
             run_mode: RunTxMode::None,
             header: Default::default(),
             header_hash: vec![],
+            eth_cache: Default::default(),
         }
     }
 
@@ -50,6 +60,7 @@ impl Context {
             run_mode: RunTxMode::None,
             header: self.header.clone(),
             header_hash: self.header_hash(),
+            eth_cache: Default::default(),
         }
     }
 
@@ -63,6 +74,7 @@ impl Context {
             run_mode: RunTxMode::None,
             header: self.header.clone(),
             header_hash: self.header_hash(),
+            eth_cache: Default::default(),
         }
     }
 }

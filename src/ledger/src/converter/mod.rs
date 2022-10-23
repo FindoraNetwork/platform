@@ -3,6 +3,7 @@
 use crate::data_model::{
     NoReplayToken, Operation, Transaction, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
 };
+use config::abci::global_cfg::CFG;
 use fp_types::crypto::MultiSigner;
 use ruc::*;
 use serde::{Deserialize, Serialize};
@@ -56,7 +57,10 @@ pub fn is_convert_account(tx: &Transaction) -> bool {
 }
 
 #[allow(missing_docs)]
-pub fn check_convert_account(tx: &Transaction) -> Result<(MultiSigner, u64)> {
+pub fn check_convert_account(
+    tx: &Transaction,
+    height: i64,
+) -> Result<(MultiSigner, u64)> {
     let signer;
     let target;
     let expected_value;
@@ -67,7 +71,11 @@ pub fn check_convert_account(tx: &Transaction) -> Result<(MultiSigner, u64)> {
                 "TransferUTXOsToEVM error: nonce mismatch no_replay_token"
             ));
         }
-        if tx.check_has_signature(&ca.signer).is_err() {
+        if CFG.checkpoint.utxo_checktx_height > height {
+            if tx.check_has_signature(&ca.signer).is_err() {
+                return Err(eg!("TransferUTXOsToEVM error: invalid signature"));
+            }
+        } else if tx.check_has_signature_from_map(&ca.signer).is_err() {
             return Err(eg!("TransferUTXOsToEVM error: invalid signature"));
         }
         if let MultiSigner::Xfr(_pk) = ca.receiver {

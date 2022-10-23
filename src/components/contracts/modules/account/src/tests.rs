@@ -1,5 +1,6 @@
 use crate::storage::*;
 use crate::App;
+use fin_db::{FinDB, RocksDB};
 use fp_core::{account::SmartAccount, context::Context};
 use fp_storage::{Borrow, BorrowMut};
 use fp_traits::account::AccountAsset;
@@ -8,10 +9,7 @@ use fp_types::U256;
 use parking_lot::RwLock;
 use rand_chacha::rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
-use std::env::temp_dir;
-use std::sync::Arc;
-use std::time::SystemTime;
-use storage::db::{FinDB, RocksDB};
+use std::{env::temp_dir, sync::Arc, time::SystemTime};
 use storage::state::ChainState;
 use zei::xfr::sig::XfrKeyPair;
 

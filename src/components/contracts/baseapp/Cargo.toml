@@ -1,47 +1,49 @@
 [package]
-name = "baseapp"
-version = "0.1.0"
 authors = ["FindoraNetwork"]
+description = "Base application for tendermint abci"
 edition = "2021"
 homepage = "https://findora.org/technology"
-repository = "https://github.com/findoranetwork/platform/"
-description = "Base application for tendermint abci"
+name = "baseapp"
 readme = "README.md"
+repository = "https://github.com/findoranetwork/platform/"
+version = "0.1.0"
 
 [dependencies]
-abci = { git = "https://github.com/FindoraNetwork/rust-abci", tag = "v0.7.2" }
-ethereum = { version = "0.9.0", default-features = false, features = ["with-serde"] }
-ethereum-types = { version = "0.12", default-features = false }
+abci = {git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4"}
+ethereum = {version = "0.12.0", default-features = false, features = ["with-serde"]}
+ethereum-types = {version = "0.13.1", default-features = false}
 futures = "0.3.16"
 lazy_static = "1.4.0"
-ledger = { path = "../../../ledger" }
+ledger = {path = "../../../ledger"}
 log = "0.4"
-parking_lot = "0.11.1"
-primitive-types = { version = "0.10.0", default-features = false, features = ["rlp", "byteorder", "serde"] }
+parking_lot = "0.12"
+primitive-types = {version = "0.11.1", default-features = false, features = ["rlp", "byteorder", "serde"]}
 protobuf = "2.16"
 ruc = "1.0"
-serde = { version = "1.0.124", features = ["derive"] }
+serde = {version = "1.0.124", features = ["derive"]}
 serde_json = "1.0.40"
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.1.4" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
 
 # primitives
-fp-core = { path = "../primitives/core" }
-fp-evm = { path = "../primitives/evm" }
-fp-traits = { path = "../primitives/traits" }
-fp-types = { path = "../primitives/types" }
-fp-utils = { path = "../primitives/utils" }
+fp-core = {path = "../primitives/core"}
+fp-evm = {path = "../primitives/evm"}
+fp-traits = {path = "../primitives/traits"}
+fp-types = {path = "../primitives/types"}
+fp-utils = {path = "../primitives/utils"}
 
 # modules
-module-account = { path = "../modules/account"}
-module-ethereum = { path = "../modules/ethereum"}
-module-evm = { path = "../modules/evm"}
-module-template = { path = "../modules/template"}
-module-xhub = { path = "../modules/xhub"}
+module-account = {path = "../modules/account"}
+module-ethereum = {path = "../modules/ethereum"}
+module-evm = {path = "../modules/evm"}
+module-template = {path = "../modules/template"}
+module-xhub = {path = "../modules/xhub"}
 
-evm-precompile-basic = { path = "../modules/evm/precompile/basic" }
-evm-precompile-frc20 = { path = "../modules/evm/precompile/frc20" }
-evm-precompile-modexp = { path = "../modules/evm/precompile/modexp" }
-evm-precompile-sha3fips = { path = "../modules/evm/precompile/sha3fips" }
+evm-precompile = {path = "../modules/evm/precompile"}
+evm-precompile-basic = {path = "../modules/evm/precompile/basic"}
+evm-precompile-frc20 = {path = "../modules/evm/precompile/frc20"}
+evm-precompile-modexp = {path = "../modules/evm/precompile/modexp"}
+evm-precompile-sha3fips = {path = "../modules/evm/precompile/sha3fips"}
 
 [features]
 abci_mock = []
