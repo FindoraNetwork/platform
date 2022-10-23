@@ -36,7 +36,7 @@ impl LinearCostPrecompile for Identity {
     fn execute(
         input: &[u8],
         _: u64,
-    ) -> core::result::Result<(ExitSucceed, Vec<u8>), PrecompileFailure> {
+    ) -> Result<(ExitSucceed, Vec<u8>), PrecompileFailure> {
         Ok((ExitSucceed::Returned, input.to_vec()))
     }
 }
@@ -54,10 +54,7 @@ impl LinearCostPrecompile for ECRecover {
     const BASE: u64 = 3000;
     const WORD: u64 = 0;
 
-    fn execute(
-        i: &[u8],
-        _: u64,
-    ) -> core::result::Result<(ExitSucceed, Vec<u8>), PrecompileFailure> {
+    fn execute(i: &[u8], _: u64) -> Result<(ExitSucceed, Vec<u8>), PrecompileFailure> {
         let mut input = [0u8; 128];
         input[..min(i.len(), 128)].copy_from_slice(&i[..min(i.len(), 128)]);
 
@@ -98,11 +95,11 @@ impl LinearCostPrecompile for Ripemd160 {
     fn execute(
         input: &[u8],
         _cost: u64,
-    ) -> core::result::Result<(ExitSucceed, Vec<u8>), PrecompileFailure> {
-        use ripemd160::Digest;
+    ) -> Result<(ExitSucceed, Vec<u8>), PrecompileFailure> {
+        use ripemd::Digest;
 
         let mut ret = [0u8; 32];
-        ret[12..32].copy_from_slice(&ripemd160::Ripemd160::digest(input));
+        ret[12..32].copy_from_slice(&ripemd::Ripemd160::digest(input));
         Ok((ExitSucceed::Returned, ret.to_vec()))
     }
 }

@@ -11,7 +11,7 @@ readme = "README.md"
 [dependencies]
 evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
 module-evm = { path = "../../../../modules/evm"}
-ripemd160 = "0.10"
+ripemd = "0.1"
 
 # primitives
 #fp-core = { path = "../../../../primitives/core" }
