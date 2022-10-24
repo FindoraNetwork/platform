@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 attohttpc = { version = "0.18", default-features = false, features = ["compress", "json", "tls-rustls"] }
 base64 = "0.13"
-clap = { version = "4.0.18", features = ["yaml"] }
+clap = { version = "4.0.18", features = ["cargo"] }
 curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek", tag = "v3.2.0-f" }
 digest = '0.10'
 hex = "0.4.2"
