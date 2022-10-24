@@ -27,6 +27,11 @@ pub struct CheckPointConfig {
     // fix node crash and reset update height.
     pub enable_frc20_height: i64,
 
+    // https://github.com/FindoraNetwork/platform/pull/191
+    pub tx_revert_on_error_height: i64,
+
+    pub tx_index_migration_height: i64,
+
     // Commit: d449b7c97850b225cf26c72c8b19ed284d6d7101
     pub evm_first_block_height: i64,
 
@@ -96,6 +101,8 @@ impl CheckPointConfig {
                                 evm_substate_height: 0,
                                 disable_evm_block_height: 0,
                                 enable_frc20_height: 0,
+                                tx_revert_on_error_height: 0,
+                                tx_index_migration_height: 0,
                                 evm_first_block_height: 0,
                                 zero_amount_fix_height: 0,
                                 apy_fix_height: 0,
@@ -117,6 +124,8 @@ impl CheckPointConfig {
                                 evm_substate_height: 1802500,
                                 disable_evm_block_height: 1483286,
                                 enable_frc20_height: 1501000,
+                                tx_revert_on_error_height: 1700000,
+                                tx_index_migration_height: 1700000,
                                 evm_first_block_height: 0,
                                 zero_amount_fix_height: 1200000,
                                 apy_fix_height: 1177000,

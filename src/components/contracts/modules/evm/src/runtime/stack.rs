@@ -35,8 +35,6 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
     }
 
     pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
-        self.ctx.state.write().stack_push();
-
         let mut entering = Self {
             ctx: self.ctx,
             metadata: self.metadata.spit_child(gas_limit, is_static),
@@ -47,6 +45,14 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         mem::swap(&mut entering, self);
 
         self.parent = Some(Box::new(entering));
+
+        if self.ctx.header.height < CFG.checkpoint.tx_revert_on_error_height {
+            // early-stage EVM simply commit session
+            self.ctx.state.write().commit_session();
+        } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
+            // substate was introduced later
+            self.ctx.state.write().stack_push();
+        }
     }
 
     pub fn exit_commit(&mut self) -> Result<(), ExitError> {
@@ -57,7 +63,13 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         self.logs.append(&mut exited.logs);
         self.deletes.append(&mut exited.deletes);
 
-        self.ctx.state.write().stack_commit();
+        if self.ctx.header.height < CFG.checkpoint.tx_revert_on_error_height {
+            // early-stage EVM simply commit session
+            self.ctx.state.write().commit_session();
+        } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
+            // substate was introduced later
+            self.ctx.state.write().stack_commit();
+        }
 
         Ok(())
     }
@@ -67,7 +79,11 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         mem::swap(&mut exited, self);
         self.metadata.swallow_revert(exited.metadata)?;
 
-        if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
+        if self.ctx.header.height < CFG.checkpoint.tx_revert_on_error_height {
+            // early-stage EVM simply discard session
+            self.ctx.state.write().discard_session();
+        } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
+            // substate was introduced later
             self.ctx.state.write().stack_discard();
         } else {
             info!(target: "evm", "EVM stack exit_revert(), height: {:?}", self.ctx.header.height);
@@ -81,7 +97,11 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         mem::swap(&mut exited, self);
         self.metadata.swallow_discard(exited.metadata)?;
 
-        if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
+        if self.ctx.header.height < CFG.checkpoint.tx_revert_on_error_height {
+            // early-stage EVM simply discard session
+            self.ctx.state.write().discard_session();
+        } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
+            // substate was introduced later
             self.ctx.state.write().stack_discard();
         } else {
             info!(target: "evm", "EVM stack exit_discard(), height: {:?}", self.ctx.header.height);

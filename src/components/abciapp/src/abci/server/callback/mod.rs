@@ -157,7 +157,7 @@ pub fn begin_block(
 ) -> ResponseBeginBlock {
     let header = pnk!(req.header.as_ref());
     // 1483286, 1501000
-    // if header.height >= 1502000 {
+    // if header.height >= 1540001 {
     //     std::process::exit(0);
     // }
     if IS_EXITING.load(Ordering::Acquire) {
@@ -386,6 +386,9 @@ pub fn end_block(
             la.cache_transaction(tx).unwrap();
         }
     }
+    if td_height == 1535470 {
+        println!("end block is going to crash");
+    }
 
     if !la.all_commited() && la.block_txn_count() != 0 {
         pnk!(la.end_block());
@@ -459,20 +462,19 @@ fn app_hash(
     // append ONLY non-empty EVM chain state hash
     let la_hash_cp = la_hash.clone();
     let cs_hash_cp = cs_hash.clone();
-    let hash;
-    if !cs_hash.is_empty() {
+    let hash = if !cs_hash.is_empty() {
         la_hash.append(&mut cs_hash);
-        hash = Sha256::hash(la_hash.as_slice()).to_vec();
+        Sha256::hash(la_hash.as_slice()).to_vec()
     } else {
-        hash = la_hash;
-    }
+        la_hash
+    };
 
     log::info!(target: "abciapp",
         "{}: {} <--- {}_{}, height: {}",
         when,
         hex::encode(hash.clone()).to_uppercase(),
         hex::encode(la_hash_cp).to_uppercase(),
-        hex::encode(cs_hash_cp.clone()).to_uppercase(),
+        hex::encode(cs_hash_cp).to_uppercase(),
         height
     );
 
