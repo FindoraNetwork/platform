@@ -433,13 +433,17 @@ fn run() -> Result<()> {
 
         let ops = if let Some(sm) = m.subcommand_matches("create") {
             if let Some(name) = sm.value_of("env_name") {
-                envcfg.name = name.to_owned();
+                envcfg.name = name.into();
             }
             if let Some(id) = sm.value_of("evm_chain_id") {
                 envcfg.evm_chain_id = id.parse::<u64>().c(d!())?;
             }
             if let Some(itv) = sm.value_of("block_itv_secs") {
-                envcfg.block_itv_secs = itv.parse::<u8>().c(d!())?;
+                envcfg.block_itv_secs = itv
+                    .parse::<u8>()
+                    .map(|i| i as f32)
+                    .c(d!())
+                    .or_else(|_| itv.parse::<f32>().c(d!()))?;
             }
             if let Some(num) = sm.value_of("validator_num") {
                 envcfg.initial_validator_num = num.parse::<u8>().c(d!())?;
@@ -473,38 +477,38 @@ fn run() -> Result<()> {
             Ops::Create
         } else if let Some(sm) = m.subcommand_matches("destroy") {
             if let Some(name) = sm.value_of("env_name") {
-                envcfg.name = name.to_owned();
+                envcfg.name = name.into();
             }
             Ops::Destroy
         } else if m.subcommand_matches("destroy-all").is_some() {
             Ops::DestroyAll
         } else if let Some(sm) = m.subcommand_matches("start") {
             if let Some(name) = sm.value_of("env_name") {
-                envcfg.name = name.to_owned();
+                envcfg.name = name.into();
             }
             Ops::Start
         } else if m.subcommand_matches("start-all").is_some() {
             Ops::StartAll
         } else if let Some(sm) = m.subcommand_matches("stop") {
             if let Some(name) = sm.value_of("env_name") {
-                envcfg.name = name.to_owned();
+                envcfg.name = name.into();
             }
             Ops::Stop
         } else if m.subcommand_matches("stop-all").is_some() {
             Ops::StopAll
         } else if let Some(sm) = m.subcommand_matches("push-node") {
             if let Some(name) = sm.value_of("env_name") {
-                envcfg.name = name.to_owned();
+                envcfg.name = name.into();
             }
             Ops::PushNode
         } else if let Some(sm) = m.subcommand_matches("pop-node") {
             if let Some(name) = sm.value_of("env_name") {
-                envcfg.name = name.to_owned();
+                envcfg.name = name.into();
             }
             Ops::PopNode
         } else if let Some(sm) = m.subcommand_matches("show") {
             if let Some(name) = sm.value_of("env_name") {
-                envcfg.name = name.to_owned();
+                envcfg.name = name.into();
             }
             Ops::Show
         } else if m.subcommand_matches("show-all").is_some() {
@@ -513,20 +517,20 @@ fn run() -> Result<()> {
             Ops::List
         } else if let Some(sm) = m.subcommand_matches("init") {
             if let Some(name) = sm.value_of("env_name") {
-                envcfg.name = name.to_owned();
+                envcfg.name = name.into();
             }
             Ops::Init
         } else if m.subcommand_matches("init-all").is_some() {
             Ops::InitAll
         } else {
             if let Some(name) = m.value_of("env_name") {
-                envcfg.name = name.to_owned();
+                envcfg.name = name.into();
             }
             Ops::default()
         };
 
         envcfg.ops = ops;
-        envcfg.exec().c(d!())?;
+        envcfg.exec().map_err(|e| eg!(e))?;
     } else {
         println!("{}", matches.usage());
     }
