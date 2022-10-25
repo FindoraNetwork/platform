@@ -17,7 +17,6 @@ parking_lot = "0.12"
 rand = "0.8"
 rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
 rand_chacha = "0.3"
-ruc = "1.0"
 serde_json = "1.0.40"
 serde = { version = "1.0.124", features = ["derive"] }
 sha2 = "0.10"
@@ -29,8 +28,10 @@ getrandom = "0.2"
 noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
 noah-crypto = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
 noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
+
+ruc = "1.0"
+rucv3 = { package = "ruc", version = "3.0" }
 nix = "0.25"
-toml_edit = "0.15"
 
 ledger = { path = "../../ledger", default-features = false }
 globutils = { path = "../../libs/globutils" }
@@ -43,6 +44,9 @@ fp-types = { path = "../contracts/primitives/types" }
 
 tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0c" }
 tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", features = ["http-client", "websocket-client"], optional = true, tag = "v0.19.0c" }
+
+# chaindev = { path = "../../../../chaindev" }
+chaindev = { git = "https://github.com/rust-util-collections/chaindev", rev = "61fb7ae957ac4246982ed059f6071b737f146d46" }
 
 [dev-dependencies]
 
