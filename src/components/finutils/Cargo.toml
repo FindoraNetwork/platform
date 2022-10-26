@@ -55,7 +55,6 @@ std = [
 abci_mock = ["ledger/abci_mock"]
 debug_env = ["ledger/debug_env"]
 genstx = []
-web3_service = ["module-evm/web3_service", "module-account/web3_service", "module-ethereum/web3_service"]
 
 [[bin]]
 name = "fn"
