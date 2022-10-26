@@ -4,6 +4,8 @@ This is a distributed version of [`fn dev`](../dev/README.md).
 
 ## User guide
 
+#### Quick start
+
 Through a `fn ddev -h` we can see:
 
 ```
@@ -41,6 +43,61 @@ SUBCOMMANDS:
     stop                 Stop an existing env
     stop-all             Stop all existing ENVs
 ```
+
+Compile binaries on your local machine:
+```shell
+# get the source code
+git clone https://github.com/FindoraNetwork/platform.git
+cd platform
+
+# toolchains of 'rust' and 'go'('make', 'perl', 'jq' ... are also recommended),
+# should be installed first if they are not ready;
+make
+```
+
+Set the ssh public key(eg `~/.ssh/id_rsa.pub`) of your localhost to the correct path(eg `~/.ssh/authorized_keys`) on every remote host, and then compile binaries on all remote hosts:
+```shell
+# This is just an example,
+# please `export` according to your actual remote hosts
+export FN_DDEV_HOSTS='10.0.0.3#ubuntu,10.0.0.4#ubuntu,10.0.0.5#ubuntu'
+fn ddev host-exec --cmd \
+    'git clone https://github.com/FindoraNetwork/platform.git && cd platform && make'
+```
+
+The above command may fail if the remote host lacks some necessary dependencies, if this is the case, it is also possible to batch process remote hosts on your local machine using `fn ddev host-exec`:
+```shell
+# This is just an example,
+# please install according to your actual missing dependencies
+fn ddev host-exec --cmd \
+    "sudo su -c 'apt install -y make perl jq libssl-dev && snap install go --classic'"
+```
+
+> NOTE: If you don't like the batch mode of  `fn ddev host-exec`, you can of course install all the dependencies manually on a host-by-host basis.
+
+Assume your have 3 remote hosts,
+and you have set the ssh public key of your local machine on each of them:
+- `10.0.0.2#alice`
+- `10.0.0.3#bob`
+- `10.0.0.4#jack`
+
+Create and start a distributed cluster:
+```shell
+# this distributed cluster has 4 validator nodes and 1 seed node
+fn ddev create --hosts '10.0.0.2#alice,10.0.0.3#bob,10.0.0.4#jack'
+```
+
+If all the user names are same as the user name of your local machine, the above can be simplified to:
+```shell
+fn ddev create --hosts '10.0.0.2,10.0.0.3,10.0.0.4'
+```
+
+Web3 endpoints:
+- `http://${web3_host}:${http_port}'`
+    - `web3_host=$(fn ddev | jq '.meta.validator_or_full_nodes."1".host."addr"')`
+    - `http_port=$(fn ddev | jq '.meta.validator_or_full_nodes."1".ports."web3_http_service")`
+- `http://${web3_host}:${ws_port}'`
+    - `web3_host=$(fn ddev | jq '.meta.validator_or_full_nodes."1".host."addr"')`
+    - `ws_port=$(fn ddev | jq '.meta.validator_or_full_nodes."1".ports."web3_websocket_service")`
 
 #### Management of 'a single cluster/multiple clusters'
 
@@ -80,6 +137,9 @@ Also, there are additional 4 options:
 - `${FN_DDEV_HOSTS}`
     - if defined, you need not to set the `--hosts` option
     - if you set the `--hosts` at the same time, the value of this VAR will be ignored
+- `${CHAIN_DEV_GLOBAL_BASE_DIR}`
+    - if defined, the base dir of all ENVs will be the value of this VAR
+        - instead of the default value of `/tmp/__CHAIN_DEV__/$(hostname)/${USER}`
 
 #### Internal organization of data and logs
 
