@@ -1,4 +1,4 @@
-use super::{Env, InitialValidator, StakingValidator, BANK_ACCOUNT_SECKEY, FRA};
+use super::{BankAccount, Env, InitialValidator, StakingValidator, FRA};
 use crate::{
     common::{self, utils::gen_transfer_op_xx},
     txn_builder::TransactionBuilder,
@@ -38,9 +38,9 @@ struct TmPubKey {
     value: String,
 }
 
-pub fn init(env: &mut Env) -> Result<()> {
+pub(super) fn init(env: &mut Env) -> Result<()> {
     let tmrpc = env.nodes.values().next().c(d!())?.ports.tm_rpc;
-    let page_size = env.initial_validator_num;
+    let page_size = env.custom_data.initial_validator_num;
     let tmrpc_endpoint = format!(
         "http://{}:{}/validators?per_page={}",
         &env.host_ip, tmrpc, page_size
@@ -64,7 +64,7 @@ pub fn init(env: &mut Env) -> Result<()> {
             xfr_mnemonic: xfr_key.1,
             xfr_wallet_addr: xfr_key.0,
         };
-        env.initial_validators.push(iv);
+        env.custom_data.initial_validators.push(iv);
     });
 
     setup_initial_validators(env).c(d!())?;
@@ -72,15 +72,18 @@ pub fn init(env: &mut Env) -> Result<()> {
     macro_rules! sleep_n_block {
         ($n_block: expr) => {{
             let n = $n_block as f64;
-            let itv = env.block_itv_secs as f64;
+            let mut itv = f64::from(env.block_itv_secs);
+            alt!(itv < 2.0, itv = 2.0);
             sleep_ms!((n * itv * 1000.0) as u64);
         }};
     }
 
-    let root_kp =
-        serde_json::from_str::<XfrSecretKey>(&format!("\"{}\"", BANK_ACCOUNT_SECKEY))
-            .c(d!())?
-            .into_keypair();
+    let root_kp = serde_json::from_str::<XfrSecretKey>(&format!(
+        "\"{}\"",
+        BankAccount::BANK_ACCOUNT_SECKEY
+    ))
+    .c(d!())?
+    .into_keypair();
     println!(
         "[ {} ] >>> Block interval: {} seconds",
         &env.name, env.block_itv_secs
@@ -93,6 +96,7 @@ pub fn init(env: &mut Env) -> Result<()> {
     sleep_n_block!(2);
 
     let target_list = env
+        .custom_data
         .initial_validators
         .iter()
         .map(|v| (v.xfr_keypair.get_pk_ref(), 500_0000 * FRA))
@@ -105,7 +109,7 @@ pub fn init(env: &mut Env) -> Result<()> {
     sleep_n_block!(2);
 
     println!("[ {} ] >>> Propose self-delegations ...", &env.name);
-    for (i, v) in env.initial_validators.iter().enumerate() {
+    for (i, v) in env.custom_data.initial_validators.iter().enumerate() {
         let mut builder = new_tx_builder(env).c(d!())?;
         let am = (400_0000 + i as u64 * 1_0000) * FRA;
         gen_transfer_op_xx(
@@ -139,11 +143,13 @@ pub fn init(env: &mut Env) -> Result<()> {
 fn setup_initial_validators(env: &Env) -> Result<()> {
     let mut builder = new_tx_builder(env).c(d!())?;
 
-    env.initial_validators
+    let vs = env
+        .custom_data
+        .initial_validators
         .iter()
-        .map(|iv| StakingValidator::try_from(iv).c(d!()))
-        .collect::<Result<Vec<_>>>()
-        .and_then(|vs| builder.add_operation_update_validator(&[], 1, vs).c(d!()))?;
+        .map(StakingValidator::from)
+        .collect::<Vec<_>>();
+    builder.add_operation_update_validator(&[], 1, vs).c(d!())?;
 
     send_tx(env, &builder.take_transaction()).c(d!())
 }

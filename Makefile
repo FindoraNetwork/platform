@@ -51,9 +51,9 @@ install: stop_all build_release_goleveldb
 	bash -x tools/systemd_services/install.sh $(EXTERNAL_ADDRESS)
 
 stop_all:
-	- pkill abcid
-	- pkill tendermint
-	- pkill findorad
+	- pkill -9 abcid
+	- pkill -9 tendermint
+	- pkill -9 findorad
 
 # Build for cleveldb
 build: tendermint_cleveldb
