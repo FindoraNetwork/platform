@@ -72,7 +72,8 @@ pub(super) fn init(env: &mut Env) -> Result<()> {
     macro_rules! sleep_n_block {
         ($n_block: expr) => {{
             let n = $n_block as f64;
-            let itv = f64::from(env.block_itv_secs);
+            let mut itv = f64::from(env.block_itv_secs);
+            alt!(itv < 2.0, itv = 2.0);
             sleep_ms!((n * itv * 1000.0) as u64);
         }};
     }
