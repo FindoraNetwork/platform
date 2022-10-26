@@ -45,6 +45,7 @@ fp-types = { path = "../contracts/primitives/types" }
 tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0c" }
 tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", features = ["http-client", "websocket-client"], optional = true, tag = "v0.19.0c" }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # chaindev = { path = "../../../../chaindev" }
 chaindev = { git = "https://github.com/rust-util-collections/chaindev", rev = "61fb7ae957ac4246982ed059f6071b737f146d46" }
 
