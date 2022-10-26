@@ -661,3 +661,282 @@ subcommands:
                   required: false
         - init-all:
             about: Apply the `init` operation to all existing ENVs
+  - ddev:
+      about: Manage development clusters on remote hosts
+      args:
+        - env_name:
+            help: The name of the target env
+            short: e
+            long: env-name
+            takes_value: true
+            value_name: ENV NAME
+            required: false
+      subcommands:
+        - create:
+            about: Create a new env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+              - block_itv_secs:
+                  help: Block interval in seconds
+                  short: i
+                  long: block-itv-secs
+                  takes_value: true
+                  value_name: BLOCK INTERVAL
+                  required: false
+              - validator_num:
+                  help: How many initial validators should be created
+                  short: N
+                  long: validator-num
+                  takes_value: true
+                  value_name: VALIDATOR NUMBER
+                  required: false
+              - evm_chain_id:
+                  help: The chain id in the scope of evm logic
+                  short: I
+                  long: evm-chain-id
+                  takes_value: true
+                  value_name: EVM CHAIN ID
+                  required: false
+              - checkpoint_file:
+                  help: The file path of the checkpoint file
+                  short: c
+                  long: checkpoint-file
+                  takes_value: true
+                  value_name: CHECKPOINT FILE
+                  required: false
+              - hosts:
+                  short: M
+                  long: hosts
+                  takes_value: true
+                  value_name: HOSTS
+                  required: false
+              - abcid_bin_path:
+                  help: The path of your custom abcid binary
+                  short: d
+                  long: abcid-bin-path
+                  takes_value: true
+                  value_name: ABCID BIN PATH
+                  required: false
+              - tendermint_bin_path:
+                  help: The path of your custom tendermint binary
+                  short: D
+                  long: tendermint-bin-path
+                  takes_value: true
+                  value_name: TENDERMINT BIN PATH
+                  required: false
+              - abcid_extra_flags:
+                  help: A pair of quotes should be used when specifying extra flags
+                  short: x
+                  long: abcid-extra-flags
+                  takes_value: true
+                  value_name: ABCID EXTRA FLAGS
+                  allow_hyphen_values: true
+                  required: false
+              - tendermint_extra_flags:
+                  help: A pair of quotes should be used when specifying extra flags
+                  short: X
+                  long: tendermint-extra-flags
+                  takes_value: true
+                  value_name: TENDERMINT EXTRA FLAGS
+                  allow_hyphen_values: true
+                  required: false
+              - force:
+                  help: destroy the target ENV and create a new one
+                  short: f
+                  long: force
+                  takes_value: false
+                  required: false
+        - destroy:
+            about: Destroy an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - destroy-all:
+            about: Destroy all existing ENVs
+        - start:
+            about: Start an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - start-all:
+            about: Start all existing ENVs
+        - stop:
+            about: Stop an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - stop-all:
+            about: Stop all existing ENVs
+        - push-node:
+            about: Attach a new node to an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - pop-node:
+            about: Pop a node from an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - show:
+            about: Default operation, show the information of an existing env
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - show-all:
+            about: Show the details of all existing ENVs
+        - list:
+            about: List the names of all existing ENVs
+        - init:
+            about: Config the initial settings(POS,FRA issuance...)
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+        - init-all:
+            about: Apply the `init` operation to all existing ENVs
+        - host-put-file:
+            about: Put a local file to all remote hosts
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+              - local_path:
+                  short: l
+                  long: local-path
+                  takes_value: true
+                  value_name: LOCAL PATH
+                  required: true
+              - remote_path:
+                  help: Optional, will use the value of `local_path` if missing
+                  short: r
+                  long: remote-path
+                  takes_value: true
+                  value_name: REMOTE PATH
+                  required: false
+              - hosts:
+                  short: M
+                  long: hosts
+                  takes_value: true
+                  value_name: HOSTS
+                  required: false
+        - host-get-file:
+            about: Get a remote file from all remote hosts
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+              - local_base_dir:
+                  help: Optional, will use `/tmp` if missing, all remote files will be collected into this directory, `local file name` will be `remote file name` prefixed with its `host address`
+                  short: l
+                  long: local-base-dir
+                  takes_value: true
+                  value_name: LOCAL BASE DIR
+                  required: false
+              - remote_path:
+                  help: Optional, will use the value of `local_path` if missing
+                  short: r
+                  long: remote-path
+                  takes_value: true
+                  value_name: REMOTE PATH
+                  required: true
+              - hosts:
+                  short: M
+                  long: hosts
+                  takes_value: true
+                  value_name: HOSTS
+                  required: false
+        - host-exec:
+            about: Execute commands on all remote hosts
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+              - cmd:
+                  help: Raw commands to be executed
+                  short: c
+                  long: cmd
+                  takes_value: true
+                  value_name: CMD
+                  required: false
+              - script_path:
+                  help: The path of a shell script, will be ignored if the `cmd` field has value
+                  short: s
+                  long: script-path
+                  takes_value: true
+                  value_name: SCRIPT PATH
+                  required: false
+              - hosts:
+                  short: M
+                  long: hosts
+                  takes_value: true
+                  value_name: HOSTS
+                  required: false
+        - node-collect-logs:
+            about: Collect all node logs from remote hosts to local host
+            args:
+              - env_name:
+                  help: The name of the target env
+                  short: e
+                  long: env-name
+                  takes_value: true
+                  value_name: ENV NAME
+                  required: false
+              - local_base_dir:
+                  help: Optional, will use `/tmp` if missing, all remote files will be collected into this directory, `local file name` will be `remote file name` prefixed with its `host address` and `node id`
+                  short: l
+                  long: local-base-dir
+                  takes_value: true
+                  value_name: LOCAL BASE DIR
+                  required: false
