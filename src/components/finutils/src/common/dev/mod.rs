@@ -163,16 +163,16 @@ struct Ports {
     web3_http: u16,
     #[serde(rename = "web3_websocket_service")]
     web3_ws: u16,
+    #[serde(rename = "abcid_ledger_query_service")]
+    app_8668: u16,
+    #[serde(rename = "abcid_submission_service")]
+    app_8669: u16,
     #[serde(rename = "tendermint_p2p_service")]
     tm_p2p: u16,
     #[serde(rename = "tendermint_rpc_service")]
     tm_rpc: u16,
     #[serde(rename = "abcid_abci_service")]
     app_abci: u16,
-    #[serde(rename = "abcid_ledger_query_service")]
-    app_8668: u16,
-    #[serde(rename = "abcid_submission_service")]
-    app_8669: u16,
 }
 
 impl NodePorts for Ports {
@@ -186,22 +186,22 @@ impl NodePorts for Ports {
         Ok(Self {
             web3_http: ports[0],
             web3_ws: ports[1],
-            tm_p2p: ports[2],
-            tm_rpc: ports[3],
-            app_abci: ports[4],
-            app_8668: ports[5],
-            app_8669: ports[6],
+            app_8668: ports[2],
+            app_8669: ports[3],
+            tm_p2p: ports[4],
+            tm_rpc: ports[5],
+            app_abci: ports[6],
         })
     }
     fn get_port_list(&self) -> Vec<u16> {
         vec![
             self.web3_http,
             self.web3_ws,
+            self.app_8668,
+            self.app_8669,
             self.tm_p2p,
             self.tm_rpc,
             self.app_abci,
-            self.app_8668,
-            self.app_8669,
         ]
     }
     fn get_sys_p2p(&self) -> u16 {
