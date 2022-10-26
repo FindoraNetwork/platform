@@ -47,7 +47,7 @@ tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", feat
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # chaindev = { path = "../../../../chaindev" }
-chaindev = { git = "https://github.com/rust-util-collections/chaindev", rev = "61fb7ae957ac4246982ed059f6071b737f146d46" }
+chaindev = { git = "https://github.com/rust-util-collections/chaindev", rev = "c375665c34d4a040a1f09dc51e8a5d3bb04fc9b4" }
 
 [dev-dependencies]
 
