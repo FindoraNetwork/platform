@@ -43,7 +43,7 @@ overflow-checks = true
 
 [profile.release]
 incremental = false
-overflow-checks = false
+overflow-checks = true
 
 [profile.bench]
 codegen-units = 1

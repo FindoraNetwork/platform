@@ -6,7 +6,9 @@
 //! This module is the library part of FN.
 //!
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod dev;
+
 pub mod evm;
 pub mod utils;
 
