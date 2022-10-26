@@ -32,8 +32,8 @@ pub fn forward_txn_with_mode(
     txn: Transaction,
     async_mode: bool,
 ) -> Result<()> {
-    const SYNC_API: &str = "broadcast_tx_sync";
-    const ASYNC_API: &str = "broadcast_tx_async";
+    const SYNC_API: &'static str = "broadcast_tx_sync";
+    const ASYNC_API: &'static str = "broadcast_tx_async";
 
     let txn_json = serde_json::to_string(&txn).c(d!())?;
     let txn_b64 = base64::encode_config(&txn_json.as_str(), base64::URL_SAFE);

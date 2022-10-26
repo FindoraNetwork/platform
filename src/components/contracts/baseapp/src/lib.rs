@@ -45,9 +45,9 @@ lazy_static! {
         |id| id.as_str().parse::<u64>().unwrap()).unwrap_or(2152);
 }
 
-const APP_NAME: &str = "findora";
-const CHAIN_STATE_PATH: &str = "state.db";
-const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
+const APP_NAME: &'static str = "findora";
+const CHAIN_STATE_PATH: &'static str = "state.db";
+const CHAIN_HISTORY_DATA_PATH: &'static str = "history.db";
 const CHAIN_STATE_MIN_VERSIONS: u64 = 4 * 60 * 24 * 90;
 
 #[derive(Clone)]

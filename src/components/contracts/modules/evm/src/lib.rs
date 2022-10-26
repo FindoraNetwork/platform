@@ -46,7 +46,7 @@ use system_contracts::SystemContracts;
 
 pub use runtime::*;
 
-pub const MODULE_NAME: &str = "evm";
+pub const MODULE_NAME: &'static str = "evm";
 
 pub trait Config {
     /// Account module interface to read/write account assets.

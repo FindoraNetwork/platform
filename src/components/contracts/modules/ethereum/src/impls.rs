@@ -24,7 +24,7 @@ use fp_utils::{proposer_converter, timestamp_converter};
 use log::{debug, info};
 use ruc::*;
 use sha3::{Digest, Keccak256};
-const BLOCK_MIGRATE: &str = "block_migrate";
+const BLOCK_MIGRATE: &'static str = "block_migrate";
 
 impl<C: Config> App<C> {
     pub fn recover_signer_fast(

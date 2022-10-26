@@ -14,7 +14,7 @@ use crate::{runner::ActionRunner, system_contracts::SystemContracts, Config};
 pub fn deploy_contract<C: Config>(
     ctx: &Context,
     contracts: &SystemContracts,
-    bytecode_str: &str,
+    bytecode_str: &'static str,
 ) -> Result<()> {
     // Deploy Bridge here.
     let bytecode = hex::decode(&bytecode_str[2..].trim()).c(d!())?;

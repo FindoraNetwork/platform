@@ -525,7 +525,7 @@ pub mod global_cfg {
     #[cfg(not(test))]
     #[cfg(target_os = "linux")]
     fn check_rollback(m: &ArgMatches, cfg: &BtmCfg) -> Result<()> {
-        const HINTS: &str = r#"    NOTE:
+        const HINTS: &'static str = r#"    NOTE:
             before executing the rollback,
             all related processes must be exited,
             such as findorad, abcid, tendermint, etc.
