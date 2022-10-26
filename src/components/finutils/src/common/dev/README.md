@@ -469,7 +469,9 @@ Also, there are some subcommands designed specifically for multi-cluster managem
 
 #### Environment variable definitions
 
-Currently no environment variables are defined inside `fn dev`.
+- `${CHAIN_DEV_GLOBAL_BASE_DIR}`
+    - if defined, the base dir of all ENVs will be the value of this VAR
+        - instead of the default value of `/tmp/__CHAIN_DEV__/$(hostname)/${USER}`
 
 #### Internal organization of data and logs
 
