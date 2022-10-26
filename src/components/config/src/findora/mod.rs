@@ -4,12 +4,9 @@ pub mod init {
         std::{fs, str},
     };
 
-    const QA01_GENESIS_URL: &str =
-        "https://dev-qa01.dev.findora.org:26657/genesis";
-    const QA02_GENESIS_URL: &str =
-        "https://dev-qa02.dev.findora.org:26657/genesis";
-    const QA03_GENESIS_URL: &str =
-        "https://dev-qa03.dev.findora.org:26657/genesis";
+    const QA01_GENESIS_URL: &str = "https://dev-qa01.dev.findora.org:26657/genesis";
+    const QA02_GENESIS_URL: &str = "https://dev-qa02.dev.findora.org:26657/genesis";
+    const QA03_GENESIS_URL: &str = "https://dev-qa03.dev.findora.org:26657/genesis";
     const TESTNET_GENESIS_URL: &str =
         "https://prod-testnet.prod.findora.org:26657/genesis";
     const MAINNET_GENESIS_URL: &str =
