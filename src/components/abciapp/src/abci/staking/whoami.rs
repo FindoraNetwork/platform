@@ -22,7 +22,7 @@ fn from_env() -> Result<Vec<u8>> {
 
 fn from_config_file() -> Result<Vec<u8>> {
     // the config path in the abci container
-    const CFG_PATH_FF: &'static str = "/root/.tendermint/config/priv_validator_key.json";
+    const CFG_PATH_FF: &str = "/root/.tendermint/config/priv_validator_key.json";
     lazy_static! {
         static ref CFG_PATH: &'static str = CFG
             .tendermint_node_key_config_path

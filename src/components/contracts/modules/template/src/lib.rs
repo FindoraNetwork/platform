@@ -16,7 +16,7 @@ use fp_types::{actions::template::Action, crypto::Address};
 use ruc::Result;
 use std::marker::PhantomData;
 
-pub const MODULE_NAME: &'static str = "template";
+pub const MODULE_NAME: &str = "template";
 
 pub trait Config {}
 

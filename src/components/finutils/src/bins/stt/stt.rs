@@ -39,7 +39,7 @@ lazy_static! {
         pnk!(wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC));
 }
 
-const ROOT_MNEMONIC: &'static str = "zoo nerve assault talk depend approve mercy surge bicycle ridge dismiss satoshi boring opera next fat cinnamon valley office actor above spray alcohol giant";
+const ROOT_MNEMONIC: &str = "zoo nerve assault talk depend approve mercy surge bicycle ridge dismiss satoshi boring opera next fat cinnamon valley office actor above spray alcohol giant";
 
 type Name = String;
 type NameRef<'a> = &'a str;

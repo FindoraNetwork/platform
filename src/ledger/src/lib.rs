@@ -18,7 +18,7 @@ pub mod store;
 pub use fbnc;
 
 use ruc::*;
-const LSSED_VAR: &'static str = "LEDGER_STATE_SNAPSHOT_ENTRIES_DIR";
+const LSSED_VAR: &str = "LEDGER_STATE_SNAPSHOT_ENTRIES_DIR";
 lazy_static::lazy_static! {
     static ref SNAPSHOT_ENTRIES_DIR: String = pnk!(std::env::var(LSSED_VAR));
 }

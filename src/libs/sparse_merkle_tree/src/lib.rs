@@ -24,7 +24,7 @@ pub fn digest(value: impl AsRef<[u8]>) -> Digest {
 
 const NODE_PREFIX: &[u8] = b"node";
 const HASH_PREFIX: &[u8] = b"hash";
-const SMT256_DB: &'static str = "smt256-db";
+const SMT256_DB: &str = "smt256-db";
 const ZERO_256: [u8; DIGESTBYTES] = [0; DIGESTBYTES];
 pub const ZERO_DIGEST: Digest = Digest(ZERO_256);
 

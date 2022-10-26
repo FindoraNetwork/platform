@@ -16,7 +16,7 @@ use fp_traits::{
 use fp_types::crypto::Address;
 use std::marker::PhantomData;
 
-pub const MODULE_NAME: &'static str = "account";
+pub const MODULE_NAME: &str = "account";
 
 pub trait Config {
     type FeeCalculator: FeeCalculator;

@@ -16,7 +16,7 @@ pub use std::ops::{Deref, DerefMut};
 pub use std::sync::Arc;
 pub use storage::store::traits::StatelessStore;
 
-const DB_SEPARATOR: &'static str = "_";
+const DB_SEPARATOR: &str = "_";
 
 /// An instance of a storage in a module.
 pub trait StorageInstance {

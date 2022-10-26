@@ -25,7 +25,7 @@ use fp_types::{actions::ethereum::Action, crypto::Address};
 use ruc::*;
 use std::marker::PhantomData;
 
-pub const MODULE_NAME: &'static str = "ethereum";
+pub const MODULE_NAME: &str = "ethereum";
 
 static ISTANBUL_CONFIG: EvmConfig = EvmConfig::istanbul();
 

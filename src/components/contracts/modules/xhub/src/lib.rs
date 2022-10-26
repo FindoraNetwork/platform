@@ -14,7 +14,7 @@ use fp_types::{actions::xhub::Action, crypto::Address};
 use ruc::*;
 use std::marker::PhantomData;
 
-pub const MODULE_NAME: &'static str = "xhub";
+pub const MODULE_NAME: &str = "xhub";
 
 pub trait Config {
     /// Account module interface to read/write account assets.
