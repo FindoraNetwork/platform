@@ -27,16 +27,12 @@
 
 use {
     clap::{crate_authors, load_yaml, App},
-    finutils::common::{
-        self,
-        dev::{EnvCfg, Ops},
-        evm::*,
-    },
+    finutils::common::{self, evm::*},
     fp_utils::ecdsa::SecpPair,
     globutils::wallet,
     ledger::{
         data_model::{AssetTypeCode, FRA_DECIMALS},
-        staking::StakerMemo,
+        staking::{StakerMemo, VALIDATORS_MIN},
     },
     ruc::*,
     std::{fmt, fs},
@@ -429,108 +425,345 @@ fn run() -> Result<()> {
         // };
         common::replace_staker(target, None)?;
     } else if let Some(m) = matches.subcommand_matches("dev") {
-        let mut envcfg = EnvCfg::default();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use finutils::common::dev;
 
-        let ops = if let Some(sm) = m.subcommand_matches("create") {
-            if let Some(name) = sm.value_of("env_name") {
-                envcfg.name = name.into();
-            }
-            if let Some(id) = sm.value_of("evm_chain_id") {
-                envcfg.evm_chain_id = id.parse::<u64>().c(d!())?;
-            }
-            if let Some(itv) = sm.value_of("block_itv_secs") {
-                envcfg.block_itv_secs = itv
-                    .parse::<u8>()
-                    .map(|i| i as f32)
-                    .c(d!())
-                    .or_else(|_| itv.parse::<f32>().c(d!()))?;
-            }
-            if let Some(num) = sm.value_of("validator_num") {
-                envcfg.initial_validator_num = num.parse::<u8>().c(d!())?;
-                if 64 < envcfg.initial_validator_num {
-                    return Err(eg!(
-                        "The number of initial validators should not exceed 64!"
-                    ));
+            let mut envcfg = dev::EnvCfg::default();
+
+            let ops = if let Some(sm) = m.subcommand_matches("create") {
+                let mut block_itv_secs = 3.0;
+                let mut initial_validator_num = VALIDATORS_MIN as u8;
+                let mut host_ip = None;
+                let mut abcid_bin = None;
+                let mut tendermint_bin = None;
+                let mut abcid_extra_flags = None;
+                let mut tendermint_extra_flags = None;
+                let mut force_create = false;
+                let mut evm_chain_id = 2152;
+                let mut checkpoint_file = None;
+
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
                 }
-            }
-            if let Some(file) = sm.value_of("checkpoint_file") {
-                envcfg.checkpoint_file = Some(file.to_owned());
-            }
-            if let Some(ip) = sm.value_of("host_ip") {
-                envcfg.host_ip = Some(ip.to_owned());
-            }
-            if let Some(abcid_bin) = sm.value_of("abcid_bin_path") {
-                envcfg.abcid_bin = Some(abcid_bin.to_owned());
-            }
-            if let Some(tm_bin) = sm.value_of("tendermint_bin_path") {
-                envcfg.tendermint_bin = Some(tm_bin.to_owned());
-            }
-            if let Some(flags) = sm.value_of("abcid_extra_flags") {
-                envcfg.abcid_extra_flags = Some(flags.to_owned());
-            }
-            if let Some(flags) = sm.value_of("tendermint_extra_flags") {
-                envcfg.tendermint_extra_flags = Some(flags.to_owned());
-            }
-            if sm.is_present("force") {
-                envcfg.force_create = true;
-            }
-            Ops::Create
-        } else if let Some(sm) = m.subcommand_matches("destroy") {
-            if let Some(name) = sm.value_of("env_name") {
-                envcfg.name = name.into();
-            }
-            Ops::Destroy
-        } else if m.subcommand_matches("destroy-all").is_some() {
-            Ops::DestroyAll
-        } else if let Some(sm) = m.subcommand_matches("start") {
-            if let Some(name) = sm.value_of("env_name") {
-                envcfg.name = name.into();
-            }
-            Ops::Start
-        } else if m.subcommand_matches("start-all").is_some() {
-            Ops::StartAll
-        } else if let Some(sm) = m.subcommand_matches("stop") {
-            if let Some(name) = sm.value_of("env_name") {
-                envcfg.name = name.into();
-            }
-            Ops::Stop
-        } else if m.subcommand_matches("stop-all").is_some() {
-            Ops::StopAll
-        } else if let Some(sm) = m.subcommand_matches("push-node") {
-            if let Some(name) = sm.value_of("env_name") {
-                envcfg.name = name.into();
-            }
-            Ops::PushNode
-        } else if let Some(sm) = m.subcommand_matches("pop-node") {
-            if let Some(name) = sm.value_of("env_name") {
-                envcfg.name = name.into();
-            }
-            Ops::PopNode
-        } else if let Some(sm) = m.subcommand_matches("show") {
-            if let Some(name) = sm.value_of("env_name") {
-                envcfg.name = name.into();
-            }
-            Ops::Show
-        } else if m.subcommand_matches("show-all").is_some() {
-            Ops::ShowAll
-        } else if m.subcommand_matches("list").is_some() {
-            Ops::List
-        } else if let Some(sm) = m.subcommand_matches("init") {
-            if let Some(name) = sm.value_of("env_name") {
-                envcfg.name = name.into();
-            }
-            Ops::Init
-        } else if m.subcommand_matches("init-all").is_some() {
-            Ops::InitAll
-        } else {
-            if let Some(name) = m.value_of("env_name") {
-                envcfg.name = name.into();
-            }
-            Ops::default()
-        };
+                if let Some(id) = sm.value_of("evm_chain_id") {
+                    evm_chain_id = id.parse::<u64>().c(d!())?;
+                }
+                if let Some(itv) = sm.value_of("block_itv_secs") {
+                    block_itv_secs = itv
+                        .parse::<u8>()
+                        .map(|i| i as f32)
+                        .c(d!())
+                        .or_else(|_| itv.parse::<f32>().c(d!()))?;
+                }
+                if let Some(num) = sm.value_of("validator_num") {
+                    initial_validator_num = num.parse::<u8>().c(d!())?;
+                    if (VALIDATORS_MIN as u8) > initial_validator_num {
+                        return Err(eg!(
+                            "The number of initial validators should not less than {}!",
+                            VALIDATORS_MIN
+                        ));
+                    }
+                    if 64 < initial_validator_num {
+                        return Err(eg!(
+                            "The number of initial validators should not exceed 64!"
+                        ));
+                    }
+                }
+                if let Some(file) = sm.value_of("checkpoint_file") {
+                    checkpoint_file = Some(file.to_owned());
+                }
+                if let Some(ip) = sm.value_of("host_ip") {
+                    host_ip = Some(ip.to_owned());
+                }
+                if let Some(app_bin) = sm.value_of("abcid_bin_path") {
+                    abcid_bin = Some(app_bin.to_owned());
+                }
+                if let Some(tm_bin) = sm.value_of("tendermint_bin_path") {
+                    tendermint_bin = Some(tm_bin.to_owned());
+                }
+                if let Some(flags) = sm.value_of("abcid_extra_flags") {
+                    abcid_extra_flags = Some(flags.to_owned());
+                }
+                if let Some(flags) = sm.value_of("tendermint_extra_flags") {
+                    tendermint_extra_flags = Some(flags.to_owned());
+                }
+                if sm.is_present("force") {
+                    force_create = true;
+                }
+                dev::Ops::Create {
+                    block_itv_secs,
+                    initial_validator_num,
+                    host_ip,
+                    abcid_bin,
+                    tendermint_bin,
+                    abcid_extra_flags,
+                    tendermint_extra_flags,
+                    force_create,
+                    evm_chain_id,
+                    checkpoint_file,
+                }
+            } else if let Some(sm) = m.subcommand_matches("destroy") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                dev::Ops::Destroy
+            } else if m.subcommand_matches("destroy-all").is_some() {
+                dev::Ops::DestroyAll
+            } else if let Some(sm) = m.subcommand_matches("start") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                dev::Ops::Start
+            } else if m.subcommand_matches("start-all").is_some() {
+                dev::Ops::StartAll
+            } else if let Some(sm) = m.subcommand_matches("stop") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                dev::Ops::Stop
+            } else if m.subcommand_matches("stop-all").is_some() {
+                dev::Ops::StopAll
+            } else if let Some(sm) = m.subcommand_matches("push-node") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                dev::Ops::PushNode
+            } else if let Some(sm) = m.subcommand_matches("pop-node") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                dev::Ops::PopNode
+            } else if let Some(sm) = m.subcommand_matches("show") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                dev::Ops::Show
+            } else if m.subcommand_matches("show-all").is_some() {
+                dev::Ops::ShowAll
+            } else if m.subcommand_matches("list").is_some() {
+                dev::Ops::List
+            } else if let Some(sm) = m.subcommand_matches("init") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                dev::Ops::Init
+            } else if m.subcommand_matches("init-all").is_some() {
+                dev::Ops::InitAll
+            } else {
+                if let Some(name) = m.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                dev::Ops::default()
+            };
 
-        envcfg.ops = ops;
-        envcfg.exec().map_err(|e| eg!(e))?;
+            envcfg.ops = ops;
+            envcfg.exec().map_err(|e| eg!(e))?;
+        }
+        let _ = m;
+    } else if let Some(m) = matches.subcommand_matches("ddev") {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use finutils::common::ddev;
+
+            let mut envcfg = ddev::EnvCfg::default();
+
+            let ops = if let Some(sm) = m.subcommand_matches("create") {
+                let mut block_itv_secs = 3.0;
+                let mut initial_validator_num = VALIDATORS_MIN as u8;
+                let mut hosts = None;
+                let mut abcid_bin = None;
+                let mut tendermint_bin = None;
+                let mut abcid_extra_flags = None;
+                let mut tendermint_extra_flags = None;
+                let mut force_create = false;
+                let mut evm_chain_id = 2152;
+                let mut checkpoint_file = None;
+
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                if let Some(id) = sm.value_of("evm_chain_id") {
+                    evm_chain_id = id.parse::<u64>().c(d!())?;
+                }
+                if let Some(itv) = sm.value_of("block_itv_secs") {
+                    block_itv_secs = itv
+                        .parse::<u8>()
+                        .map(|i| i as f32)
+                        .c(d!())
+                        .or_else(|_| itv.parse::<f32>().c(d!()))?;
+                }
+                if let Some(num) = sm.value_of("validator_num") {
+                    initial_validator_num = num.parse::<u8>().c(d!())?;
+                    if (VALIDATORS_MIN as u8) > initial_validator_num {
+                        return Err(eg!(
+                            "The number of initial validators should not less than {}!",
+                            VALIDATORS_MIN
+                        ));
+                    }
+                    if 64 < initial_validator_num {
+                        return Err(eg!(
+                            "The number of initial validators should not exceed 64!"
+                        ));
+                    }
+                }
+                if let Some(file) = sm.value_of("checkpoint_file") {
+                    checkpoint_file = Some(file.to_owned());
+                }
+                if let Some(hs) = sm.value_of("hosts") {
+                    hosts = Some(hs.to_owned());
+                }
+                if let Some(app_bin) = sm.value_of("abcid_bin_path") {
+                    abcid_bin = Some(app_bin.to_owned());
+                }
+                if let Some(tm_bin) = sm.value_of("tendermint_bin_path") {
+                    tendermint_bin = Some(tm_bin.to_owned());
+                }
+                if let Some(flags) = sm.value_of("abcid_extra_flags") {
+                    abcid_extra_flags = Some(flags.to_owned());
+                }
+                if let Some(flags) = sm.value_of("tendermint_extra_flags") {
+                    tendermint_extra_flags = Some(flags.to_owned());
+                }
+                if sm.is_present("force") {
+                    force_create = true;
+                }
+                ddev::Ops::Create {
+                    block_itv_secs,
+                    initial_validator_num,
+                    hosts,
+                    abcid_bin,
+                    tendermint_bin,
+                    abcid_extra_flags,
+                    tendermint_extra_flags,
+                    force_create,
+                    evm_chain_id,
+                    checkpoint_file,
+                }
+            } else if let Some(sm) = m.subcommand_matches("destroy") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                ddev::Ops::Destroy
+            } else if m.subcommand_matches("destroy-all").is_some() {
+                ddev::Ops::DestroyAll
+            } else if let Some(sm) = m.subcommand_matches("start") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                ddev::Ops::Start
+            } else if m.subcommand_matches("start-all").is_some() {
+                ddev::Ops::StartAll
+            } else if let Some(sm) = m.subcommand_matches("stop") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                ddev::Ops::Stop
+            } else if m.subcommand_matches("stop-all").is_some() {
+                ddev::Ops::StopAll
+            } else if let Some(sm) = m.subcommand_matches("push-node") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                ddev::Ops::PushNode
+            } else if let Some(sm) = m.subcommand_matches("pop-node") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                ddev::Ops::PopNode
+            } else if let Some(sm) = m.subcommand_matches("show") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                ddev::Ops::Show
+            } else if m.subcommand_matches("show-all").is_some() {
+                ddev::Ops::ShowAll
+            } else if m.subcommand_matches("list").is_some() {
+                ddev::Ops::List
+            } else if let Some(sm) = m.subcommand_matches("init") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                ddev::Ops::Init
+            } else if m.subcommand_matches("init-all").is_some() {
+                ddev::Ops::InitAll
+            } else if let Some(sm) = m.subcommand_matches("host-put-file") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                let local_path = sm.value_of("local_path").c(d!())?.to_owned();
+                let mut remote_path = None;
+                if let Some(rp) = sm.value_of("remote_path") {
+                    remote_path = Some(rp.to_owned());
+                }
+                let mut hosts = None;
+                if let Some(hs) = sm.value_of("hosts") {
+                    hosts = Some(hs.to_owned());
+                }
+                ddev::Ops::HostPutFile {
+                    local_path,
+                    remote_path,
+                    hosts,
+                }
+            } else if let Some(sm) = m.subcommand_matches("host-get-file") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                let remote_path = sm.value_of("remote_path").c(d!())?.to_owned();
+                let mut local_base_dir = None;
+                if let Some(l) = sm.value_of("local_base_dir") {
+                    local_base_dir = Some(l.to_owned());
+                }
+                let mut hosts = None;
+                if let Some(hs) = sm.value_of("hosts") {
+                    hosts = Some(hs.to_owned());
+                }
+                ddev::Ops::HostGetFile {
+                    remote_path,
+                    local_base_dir,
+                    hosts,
+                }
+            } else if let Some(sm) = m.subcommand_matches("host-exec") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                let mut cmd = None;
+                if let Some(c) = sm.value_of("cmd") {
+                    cmd = Some(c.to_owned());
+                }
+                let mut script_path = None;
+                if let Some(sp) = sm.value_of("script_path") {
+                    script_path = Some(sp.to_owned());
+                }
+                let mut hosts = None;
+                if let Some(hs) = sm.value_of("hosts") {
+                    hosts = Some(hs.to_owned());
+                }
+                ddev::Ops::HostExec {
+                    cmd,
+                    script_path,
+                    hosts,
+                }
+            } else if let Some(sm) = m.subcommand_matches("node-collect-logs") {
+                if let Some(name) = sm.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                let mut local_base_dir = None;
+                if let Some(l) = sm.value_of("local_base_dir") {
+                    local_base_dir = Some(l.to_owned());
+                }
+                ddev::Ops::NodeCollectLogs { local_base_dir }
+            } else {
+                if let Some(name) = m.value_of("env_name") {
+                    envcfg.name = name.into();
+                }
+                ddev::Ops::default()
+            };
+
+            envcfg.ops = ops;
+            envcfg.exec().map_err(|e| eg!(e))?;
+        }
+        let _ = m;
     } else {
         println!("{}", matches.usage());
     }

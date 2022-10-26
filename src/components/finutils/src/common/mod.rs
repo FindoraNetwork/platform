@@ -9,6 +9,9 @@
 #[cfg(not(target_arch = "wasm32"))]
 pub mod dev;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub mod ddev;
+
 pub mod evm;
 pub mod utils;
 
