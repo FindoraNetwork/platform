@@ -9,18 +9,23 @@
 
 mod init;
 
-use chaindev::tm_dev::{
+use chaindev::tm_ddev::{
     self, CustomOp, EnvMeta, EnvName, EnvOpts, Node, NodeOptsGenerator, NodePorts, Op,
 };
+use lazy_static::lazy_static;
 use ledger::staking::{
-    td_addr_to_bytes, Validator as StakingValidator, ValidatorKind, FRA, VALIDATORS_MIN,
+    td_addr_to_bytes, Validator as StakingValidator, ValidatorKind, FRA,
 };
 use noah::xfr::sig::XfrKeyPair;
 use rucv3::*;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Write, thread};
+use std::{env, fmt::Write, thread};
 
-#[derive(Debug)]
+lazy_static! {
+    static ref DDEV_HOSTS: Option<String> = env::var("FN_DDEV_HOSTS").ok();
+}
+
+#[derive(Debug, Default)]
 pub struct EnvCfg {
     // the name of this env
     pub name: EnvName,
@@ -28,66 +33,15 @@ pub struct EnvCfg {
     // which operation to trigger,
     // default value: `Ops::Show`
     pub ops: Ops,
-
-    // seconds between two blocks,
-    // default value: 3
-    pub block_itv_secs: f32,
-
-    // how many initial validators should be created
-    pub initial_validator_num: u8,
-
-    // initialized once in `Ops::Create`,
-    // default value: "127.0.0.1"
-    pub host_ip: Option<String>,
-
-    // specify this option if you want to use a custom version of abcid
-    pub abcid_bin: Option<String>,
-
-    // specify this option if you want to use a custom version of tendermint
-    pub tendermint_bin: Option<String>,
-
-    // only used in `Ops::Create`
-    pub abcid_extra_flags: Option<String>,
-
-    // only used in `Ops::Create`
-    pub tendermint_extra_flags: Option<String>,
-
-    pub force_create: bool,
-
-    // default value: 2152
-    pub evm_chain_id: u64,
-
-    // only used in `Ops::Create`
-    // used in `Ops::Create`
-    pub checkpoint_file: Option<String>,
 }
 
-impl Default for EnvCfg {
-    fn default() -> Self {
-        Self {
-            name: EnvName::default(),
-            ops: Ops::default(),
-            block_itv_secs: 3.0,
-            initial_validator_num: VALIDATORS_MIN as u8,
-            host_ip: None,
-            abcid_bin: None,
-            tendermint_bin: None,
-            abcid_extra_flags: None,
-            tendermint_extra_flags: None,
-            force_create: false,
-            evm_chain_id: 2152,
-            checkpoint_file: None,
-        }
-    }
-}
-
-impl From<EnvCfg> for tm_dev::EnvCfg<(), CustomData, Ports, InitOps> {
+impl From<EnvCfg> for tm_ddev::EnvCfg<(), CustomData, Ports, InitOps> {
     fn from(cfg: EnvCfg) -> Self {
         let op = match cfg.ops {
             Ops::Create {
                 block_itv_secs,
                 initial_validator_num,
-                host_ip,
+                hosts,
                 abcid_bin,
                 tendermint_bin,
                 abcid_extra_flags,
@@ -97,7 +51,11 @@ impl From<EnvCfg> for tm_dev::EnvCfg<(), CustomData, Ports, InitOps> {
                 checkpoint_file,
             } => {
                 let opts = EnvOpts {
-                    host_ip: host_ip.unwrap_or_else(|| "127.0.0.1".to_owned()),
+                    hosts: pnk!(
+                        hosts.or_else(|| DDEV_HOSTS.clone()),
+                        "No hosts registered! Use `--hosts` or $FN_DDEV_HOSTS to set."
+                    )
+                    .into(),
                     block_itv_secs: block_itv_secs.into(),
                     initial_validator_num,
                     app_bin_path: abcid_bin.unwrap_or_else(|| "abcid".to_owned()),
@@ -130,6 +88,36 @@ impl From<EnvCfg> for tm_dev::EnvCfg<(), CustomData, Ports, InitOps> {
             Ops::Show => Op::Show,
             Ops::ShowAll => Op::ShowAll,
             Ops::List => Op::List,
+            Ops::HostPutFile {
+                local_path,
+                remote_path,
+                hosts,
+            } => Op::HostPutFile {
+                local_path,
+                remote_path,
+                hosts: hosts.or_else(|| DDEV_HOSTS.clone()).map(|hs| hs.into()),
+            },
+            Ops::HostGetFile {
+                remote_path,
+                local_base_dir,
+                hosts,
+            } => Op::HostGetFile {
+                remote_path,
+                local_base_dir,
+                hosts: hosts.or_else(|| DDEV_HOSTS.clone()).map(|hs| hs.into()),
+            },
+            Ops::HostExec {
+                cmd,
+                script_path,
+                hosts,
+            } => Op::HostExec {
+                cmd,
+                script_path,
+                hosts: hosts.or_else(|| DDEV_HOSTS.clone()).map(|hs| hs.into()),
+            },
+            Ops::NodeCollectLogs { local_base_dir } => {
+                Op::NodeCollectLogs { local_base_dir }
+            }
         };
         Self { name: cfg.name, op }
     }
@@ -137,7 +125,7 @@ impl From<EnvCfg> for tm_dev::EnvCfg<(), CustomData, Ports, InitOps> {
 
 impl EnvCfg {
     pub fn exec(self) -> Result<()> {
-        tm_dev::EnvCfg::from(self).exec(OptsGenerator).c(d!())
+        tm_ddev::EnvCfg::from(self).exec(OptsGenerator).c(d!())
     }
 }
 
@@ -152,7 +140,7 @@ pub enum Ops {
         initial_validator_num: u8,
 
         // initialized once in `Ops::Create`,
-        host_ip: Option<String>,
+        hosts: Option<String>,
 
         // specify this option if you want to use a custom version of abcid
         abcid_bin: Option<String>,
@@ -188,6 +176,24 @@ pub enum Ops {
     Show,
     ShowAll,
     List,
+    HostPutFile {
+        local_path: String,
+        remote_path: Option<String>,
+        hosts: Option<String>,
+    },
+    HostGetFile {
+        remote_path: String,
+        local_base_dir: Option<String>,
+        hosts: Option<String>,
+    },
+    HostExec {
+        cmd: Option<String>,
+        script_path: Option<String>,
+        hosts: Option<String>,
+    },
+    NodeCollectLogs {
+        local_base_dir: Option<String>,
+    },
 }
 
 impl Default for Ops {
@@ -282,7 +288,7 @@ impl NodeOptsGenerator<Node<Ports>, EnvMeta<CustomData, Node<Ports>>> for OptsGe
             --ledger-dir {7}/__findora__ \
             --tendermint-node-key-config-path {7}/config/priv_validator_key.json \
             ",
-            &m.host_ip,
+            &n.host.addr,
             n.ports.tm_rpc,
             n.ports.app_abci,
             n.ports.app_8669,
@@ -334,7 +340,7 @@ impl CustomOp for InitOps {
 // 1. get validator list by ':26657/validators'
 // 2. generate coresponding Xfr keypairs by `common::gen_key()`
 // 3. send out the initial staking transaction
-fn init(mut env: tm_dev::Env<CustomData, Ports, OptsGenerator>) -> Result<()> {
+fn init(mut env: tm_ddev::Env<CustomData, Ports, OptsGenerator>) -> Result<()> {
     if !env.meta.custom_data.initial_validators.is_empty() {
         eprintln!(
             "[ {} ] \x1b[31;01mAlready initialized!\x1b[00m",
