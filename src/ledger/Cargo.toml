@@ -30,10 +30,12 @@ config = { path = "../components/config" }
 fp-types = { path = "../components/contracts/primitives/types" }
 
 ruc = "1.0"
+rucv3 = { package = "ruc", version = "3.0" }
 zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 bulletproofs = { package = "bulletproofs", git = "https://github.com/FindoraNetwork/bp", rev = "57633a", features = ["yoloproofs"] }
-fbnc = { version = "0.2.9", default-features = false}
+
+vsdb = "0.47.3"
 
 num-bigint = "0.4.3"
 
@@ -46,7 +48,6 @@ sliding_set = { path = "../libs/sliding_set" }
 
 [features]
 default = []
-diskcache = ["fbnc/diskcache"]
 debug_env = ["config/debug_env"]
 abci_mock = []
 

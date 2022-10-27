@@ -312,6 +312,7 @@ pub mod config {
                 env::var("LEDGER_DIR")
                     .unwrap_or_else(|_| format!("{}/__findora__", &tdir))
             });
+        vsdb::vsdb_set_base_dir(format!("{}/__vsdb__", &ld)).map_err(|e| eg!(e))?;
         let cpf = m
             .value_of("checkpoint-file")
             .map(|v| v.to_owned())
