@@ -217,6 +217,14 @@ pub(crate) struct Ports {
     pub(crate) app_abci: u16,
 }
 
+pub(crate) const IDX_WEB3_HTTP_PORT: usize = 0;
+pub(crate) const IDX_WEB3_WS_PORT: usize = 1;
+pub(crate) const IDX_APP_8668: usize = 2;
+pub(crate) const IDX_APP_8669: usize = 3;
+pub(crate) const IDX_TM_P2P: usize = 4;
+pub(crate) const IDX_TM_RPC: usize = 5;
+pub(crate) const IDX_APP_ABCI: usize = 6;
+
 impl NodePorts for Ports {
     fn app_reserved() -> Vec<u16> {
         vec![8545, 8546, 8668, 8669]
@@ -226,13 +234,13 @@ impl NodePorts for Ports {
             return Err(eg!("invalid length"));
         }
         Ok(Self {
-            web3_http: ports[0],
-            web3_ws: ports[1],
-            app_8668: ports[2],
-            app_8669: ports[3],
-            tm_p2p: ports[4],
-            tm_rpc: ports[5],
-            app_abci: ports[6],
+            web3_http: ports[IDX_WEB3_HTTP_PORT],
+            web3_ws: ports[IDX_WEB3_WS_PORT],
+            app_8668: ports[IDX_APP_8668],
+            app_8669: ports[IDX_APP_8669],
+            tm_p2p: ports[IDX_TM_P2P],
+            tm_rpc: ports[IDX_TM_RPC],
+            app_abci: ports[IDX_APP_ABCI],
         })
     }
     fn get_port_list(&self) -> Vec<u16> {
