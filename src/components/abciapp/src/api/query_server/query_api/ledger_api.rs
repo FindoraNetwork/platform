@@ -296,9 +296,7 @@ pub async fn get_delegation_reward(
     alt!(req_h > h, req_h = h);
 
     Ok(web::Json(
-        hdr.get_closest_smaller(&req_h)
-            .map(|(_, r)| vec![r])
-            .unwrap_or_default(),
+        hdr.get_le(&req_h).map(|(_, r)| vec![r]).unwrap_or_default(),
     ))
 }
 
@@ -382,7 +380,7 @@ pub async fn get_validator_delegation_history(
         .filter_map(|hi| {
             if c1.range(..=hi).next().is_none() {
                 c1.clear();
-                if let Some((h, v)) = staking_global_rate_hist.get_closest_smaller(&hi) {
+                if let Some((h, v)) = staking_global_rate_hist.get_le(&hi) {
                     c1.insert(h, Some(v));
                 } else {
                     c1.insert(0, None);
@@ -394,7 +392,7 @@ pub async fn get_validator_delegation_history(
                     c2.clear();
                     if let Some((h, v)) = delegation_amount_hist
                         .as_ref()
-                        .and_then(|dah| dah.get_closest_smaller(&hi))
+                        .and_then(|dah| dah.get_le(&hi))
                     {
                         c2.insert(h, Some(v));
                     } else {
@@ -406,7 +404,7 @@ pub async fn get_validator_delegation_history(
                     c3.clear();
                     if let Some((h, v)) = self_delegation_amount_hist
                         .as_ref()
-                        .and_then(|sdah| sdah.get_closest_smaller(&hi))
+                        .and_then(|sdah| sdah.get_le(&hi))
                     {
                         c3.insert(h, Some(v));
                     } else {

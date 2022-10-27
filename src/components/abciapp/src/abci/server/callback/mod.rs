@@ -22,12 +22,8 @@ use {
     fp_storage::hash::{Sha256, StorageHasher},
     lazy_static::lazy_static,
     ledger::{
-        converter::is_convert_account,
-        staking::KEEP_HIST,
-        store::{
-            api_cache,
-            fbnc::{new_mapx, Mapx},
-        },
+        converter::is_convert_account, staking::KEEP_HIST, store::api_cache, vsdb,
+        vsdb::Mapx,
     },
     parking_lot::{Mutex, RwLock},
     protobuf::RepeatedField,
@@ -55,7 +51,7 @@ lazy_static! {
         Arc::new(Mutex::new(RequestBeginBlock::new()));
     // avoid on-chain-existing transactions to be stored again
     static ref TX_HISTORY: Arc<RwLock<Mapx<Vec<u8>, bool>>> =
-        Arc::new(RwLock::new(new_mapx!("tx_history")));
+        Arc::new(RwLock::new(Mapx::new()));
 }
 
 // #[cfg(feature = "debug_env")]
@@ -175,7 +171,7 @@ pub fn begin_block(
     #[cfg(target_os = "linux")]
     {
         // snapshot the last block
-        ledger::store::fbnc::flush_data();
+        vsdb::vsdb_flush();
         let last_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
         info_omit!(CFG.btmcfg.snapshot(last_height as u64));
     }
@@ -236,7 +232,7 @@ pub fn deliver_tx(
             if let Ok(tx) = convert_tx(req.get_tx()) {
                 let txhash = tx.hash_tm_rawbytes();
                 POOL.spawn_ok(async move {
-                    TX_HISTORY.write().set_value(txhash, Default::default());
+                    TX_HISTORY.write().set_value(&txhash, &false);
                 });
 
                 if tx.valid_in_abci() {

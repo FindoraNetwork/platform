@@ -14,11 +14,10 @@ use {
         },
         store::LedgerState,
     },
-    fbnc::{new_mapx, new_mapxnk, Mapx, Mapxnk},
-    globutils::wallet,
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
+    vsdb::{Mapx, MapxOrd},
     zei::xfr::{sig::XfrPublicKey, structs::OwnerMemo},
 };
 
@@ -29,41 +28,41 @@ type Issuances = Vec<(TxOutput, Option<OwnerMemo>)>;
 pub struct ApiCache {
     pub(crate) prefix: String,
     /// Set of transactions related to a ledger address
-    pub related_transactions: Mapx<XfrAddress, Mapxnk<TxnSID, bool>>,
+    pub related_transactions: Mapx<XfrAddress, MapxOrd<TxnSID, bool>>,
     /// Set of transfer transactions related to an asset code
-    pub related_transfers: Mapx<AssetTypeCode, Mapxnk<TxnSID, bool>>,
+    pub related_transfers: Mapx<AssetTypeCode, MapxOrd<TxnSID, bool>>,
     /// List of claim transactions related to a ledger address
-    pub claim_hist_txns: Mapx<XfrAddress, Mapxnk<TxnSID, bool>>,
+    pub claim_hist_txns: Mapx<XfrAddress, MapxOrd<TxnSID, bool>>,
     /// Payments from coinbase
-    pub coinbase_oper_hist: Mapx<XfrAddress, Mapxnk<BlockHeight, MintEntry>>,
+    pub coinbase_oper_hist: Mapx<XfrAddress, MapxOrd<BlockHeight, MintEntry>>,
     /// Created assets
-    pub created_assets: Mapx<IssuerPublicKey, Mapxnk<AssetTypeCode, DefineAsset>>,
+    pub created_assets: Mapx<IssuerPublicKey, MapxOrd<AssetTypeCode, DefineAsset>>,
     /// issuance mapped by public key
     pub issuances: Mapx<IssuerPublicKey, Issuances>,
     /// issuance mapped by token code
     pub token_code_issuances: Mapx<AssetTypeCode, Issuances>,
     /// used in confidential tx
-    pub owner_memos: Mapxnk<TxoSID, OwnerMemo>,
+    pub owner_memos: MapxOrd<TxoSID, OwnerMemo>,
     /// ownship of txo
-    pub utxos_to_map_index: Mapxnk<TxoSID, XfrAddress>,
+    pub utxos_to_map_index: MapxOrd<TxoSID, XfrAddress>,
     /// txo(spent, unspent) to authenticated txn (sid, hash)
-    pub txo_to_txnid: Mapxnk<TxoSID, TxnIDHash>,
+    pub txo_to_txnid: MapxOrd<TxoSID, TxnIDHash>,
     /// txn sid to txn hash
-    pub txn_sid_to_hash: Mapxnk<TxnSID, String>,
+    pub txn_sid_to_hash: MapxOrd<TxnSID, String>,
     /// txn hash to txn sid
     pub txn_hash_to_sid: Mapx<String, TxnSID>,
     /// global rate history
-    pub staking_global_rate_hist: Mapxnk<BlockHeight, [u128; 2]>,
+    pub staking_global_rate_hist: MapxOrd<BlockHeight, [u128; 2]>,
     /// - self-delegation amount history
     ///   - `NonConfidential` FRAs amount
     ///   - only valid for validators
-    pub staking_self_delegation_hist: Mapx<XfrPublicKey, Mapxnk<BlockHeight, Amount>>,
+    pub staking_self_delegation_hist: Mapx<XfrPublicKey, MapxOrd<BlockHeight, Amount>>,
     /// - delegation amount per block height
     /// - only valid for a validator
-    pub staking_delegation_amount_hist: Mapx<XfrPublicKey, Mapxnk<BlockHeight, Amount>>,
+    pub staking_delegation_amount_hist: Mapx<XfrPublicKey, MapxOrd<BlockHeight, Amount>>,
     /// rewards history, used on some pulic nodes, such as fullnode
     pub staking_delegation_rwd_hist:
-        Mapx<XfrPublicKey, Mapxnk<BlockHeight, DelegationRwdDetail>>,
+        Mapx<XfrPublicKey, MapxOrd<BlockHeight, DelegationRwdDetail>>,
     /// there are no transactions lost before last_sid
     pub last_sid: Mapx<String, u64>,
 }
@@ -72,68 +71,34 @@ impl ApiCache {
     pub(crate) fn new(prefix: &str) -> Self {
         ApiCache {
             prefix: prefix.to_owned(),
-            related_transactions: new_mapx!(format!(
-                "api_cache/{}related_transactions",
-                prefix
-            )),
-            related_transfers: new_mapx!(format!(
-                "api_cache/{}related_transfers",
-                prefix
-            )),
-            claim_hist_txns: new_mapx!(format!("api_cache/{}claim_hist_txns", prefix)),
-            coinbase_oper_hist: new_mapx!(format!(
-                "api_cache/{}coinbase_oper_hist",
-                prefix
-            )),
-            created_assets: new_mapx!(format!("api_cache/{}created_assets", prefix)),
-            issuances: new_mapx!(format!("api_cache/{}issuances", prefix)),
-            token_code_issuances: new_mapx!(format!(
-                "api_cache/{}token_code_issuances",
-                prefix
-            )),
-            owner_memos: new_mapxnk!(format!("api_cache/{}owner_memos", prefix)),
-            utxos_to_map_index: new_mapxnk!(format!(
-                "api_cache/{}utxos_to_map_index",
-                prefix
-            )),
-            txo_to_txnid: new_mapxnk!(format!("api_cache/{}txo_to_txnid", prefix)),
-            txn_sid_to_hash: new_mapxnk!(format!("api_cache/{}txn_sid_to_hash", prefix)),
-            txn_hash_to_sid: new_mapx!(format!("api_cache/{}txn_hash_to_sid", prefix)),
-            staking_global_rate_hist: new_mapxnk!(format!(
-                "api_cache/{}staking_global_rate_hist",
-                prefix
-            )),
-            staking_self_delegation_hist: new_mapx!(format!(
-                "api_cache/{}staking_self_delegation_hist",
-                prefix
-            )),
-            staking_delegation_amount_hist: new_mapx!(format!(
-                "api_cache/{}staking_delegation_amount_hist",
-                prefix
-            )),
-            staking_delegation_rwd_hist: new_mapx!(format!(
-                "api_cache/{}staking_delegation_rwd_hist",
-                prefix
-            )),
-            last_sid: new_mapx!(format!("api_cache/{}last_sid", prefix)),
+            related_transactions: Mapx::new(),
+            related_transfers: Mapx::new(),
+            claim_hist_txns: Mapx::new(),
+            coinbase_oper_hist: Mapx::new(),
+            created_assets: Mapx::new(),
+            issuances: Mapx::new(),
+            token_code_issuances: Mapx::new(),
+            owner_memos: MapxOrd::new(),
+            utxos_to_map_index: MapxOrd::new(),
+            txo_to_txnid: MapxOrd::new(),
+            txn_sid_to_hash: MapxOrd::new(),
+            txn_hash_to_sid: Mapx::new(),
+            staking_global_rate_hist: MapxOrd::new(),
+            staking_self_delegation_hist: Mapx::new(),
+            staking_delegation_amount_hist: Mapx::new(),
+            staking_delegation_rwd_hist: Mapx::new(),
+            last_sid: Mapx::new(),
         }
     }
 
     /// Add created asset
     #[inline(always)]
     pub fn add_created_asset(&mut self, creation: &DefineAsset) {
-        let prefix = self.prefix.clone();
         let issuer = creation.pubkey;
         self.created_assets
-            .entry(issuer)
-            .or_insert_with(|| {
-                new_mapxnk!(format!(
-                    "api_cache/{}created_assets/{}",
-                    prefix,
-                    issuer.to_base64()
-                ))
-            })
-            .insert(creation.body.asset.code, creation.clone());
+            .entry(&issuer)
+            .or_insert(&MapxOrd::new())
+            .insert(&creation.body.asset.code, creation);
     }
 
     /// Cache issuance records
@@ -143,7 +108,7 @@ impl ApiCache {
         macro_rules! save_issuance {
             ($maps: tt, $key: tt) => {
                 #[allow(unused_mut)]
-                let mut records = $maps.entry($key).or_insert_with(Vec::new);
+                let mut records = $maps.entry(&$key).or_insert(&Vec::new());
                 records.extend_from_slice(&new_records);
             };
         }
@@ -162,7 +127,7 @@ impl ApiCache {
     /// Note: This function's data will migrate to findora scanner.
     pub fn cache_hist_data(&mut self) {
         CHAN_GLOB_RATE_HIST.1.lock().try_iter().for_each(|(h, r)| {
-            self.staking_global_rate_hist.insert(h, r);
+            self.staking_global_rate_hist.insert(&h, &r);
         });
 
         CHAN_V_SELF_D_HIST
@@ -171,12 +136,9 @@ impl ApiCache {
             .try_iter()
             .for_each(|(pk, h, r)| {
                 self.staking_self_delegation_hist
-                    .entry(pk)
-                    .or_insert(new_mapxnk!(format!(
-                        "staking_self_delegation_hist_subdata/{}",
-                        wallet::public_key_to_base64(&pk)
-                    )))
-                    .insert(h, r);
+                    .entry(&pk)
+                    .or_insert(&MapxOrd::new())
+                    .insert(&h, &r);
             });
 
         CHAN_D_AMOUNT_HIST
@@ -185,12 +147,9 @@ impl ApiCache {
             .try_iter()
             .for_each(|(pk, h, r)| {
                 self.staking_delegation_amount_hist
-                    .entry(pk)
-                    .or_insert(new_mapxnk!(format!(
-                        "staking_delegation_amount_hist_subdata/{}",
-                        wallet::public_key_to_base64(&pk)
-                    )))
-                    .insert(h, r);
+                    .entry(&pk)
+                    .or_insert(&MapxOrd::new())
+                    .insert(&h, &r);
             });
 
         //         CHAN_D_RWD_HIST.1.lock().try_iter().for_each(|(pk, h, r)| {
@@ -198,10 +157,7 @@ impl ApiCache {
         // let mut dd =
         //     self.staking_delegation_rwd_hist
         //         .entry(pk)
-        //         .or_insert(new_mapxnk!(format!(
-        //             "staking_delegation_rwd_hist_subdata/{}",
-        //             wallet::public_key_to_base64(&pk)
-        //         )));
+        //         .or_insert_with(MapxOrd::new);
         // let mut dd = dd.entry(h).or_insert_with(DelegationRwdDetail::default);
         //
         // dd.block_height = r.block_height;
@@ -344,14 +300,14 @@ pub fn check_lost_data(ledger: &mut LedgerState) -> Result<()> {
                     .as_mut()
                     .unwrap()
                     .txn_sid_to_hash
-                    .insert(TxnSID(index), hash.clone());
+                    .insert(&TxnSID(index), &hash);
 
                 ledger
                     .api_cache
                     .as_mut()
                     .unwrap()
                     .txn_hash_to_sid
-                    .insert(hash.clone(), TxnSID(index));
+                    .insert(&hash, &TxnSID(index));
             }
 
             // update the last txn sid
@@ -360,7 +316,7 @@ pub fn check_lost_data(ledger: &mut LedgerState) -> Result<()> {
                 .as_mut()
                 .unwrap()
                 .last_sid
-                .insert("last_txn_sid".to_string(), index as u64);
+                .insert(&"last_txn_sid".to_owned(), &(index as u64));
         }
     }
 
@@ -422,7 +378,7 @@ pub fn check_lost_data(ledger: &mut LedgerState) -> Result<()> {
                                 .as_mut()
                                 .unwrap()
                                 .utxos_to_map_index
-                                .insert(*txo_sid, *address);
+                                .insert(txo_sid, address);
 
                             if let Some(memo) = owner_memo {
                                 ledger
@@ -430,7 +386,7 @@ pub fn check_lost_data(ledger: &mut LedgerState) -> Result<()> {
                                     .as_mut()
                                     .unwrap()
                                     .owner_memos
-                                    .insert(*txo_sid, (*memo).clone());
+                                    .insert(txo_sid, memo);
                             }
 
                             ledger
@@ -438,7 +394,7 @@ pub fn check_lost_data(ledger: &mut LedgerState) -> Result<()> {
                                 .as_mut()
                                 .unwrap()
                                 .txo_to_txnid
-                                .insert(*txo_sid, (ftx.tx_id, tx_hash.clone()));
+                                .insert(txo_sid, &(ftx.tx_id, tx_hash.clone()));
                         }
                     }
                 } else {
@@ -452,7 +408,7 @@ pub fn check_lost_data(ledger: &mut LedgerState) -> Result<()> {
                 .as_mut()
                 .unwrap()
                 .last_sid
-                .insert("last_txo_sid".to_string(), index);
+                .insert(&"last_txo_sid".to_owned(), &index);
         }
     }
     Ok(())
@@ -473,8 +429,6 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
     } else {
         return Ok(());
     };
-
-    let prefix = ledger.api_cache.as_mut().unwrap().prefix.clone();
 
     // Update ownership status
     for (txn_sid, txo_sids) in block.txns.iter().map(|v| (v.tx_id, v.txo_ids.as_slice()))
@@ -512,15 +466,9 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
                         .as_mut()
                         .unwrap()
                         .claim_hist_txns
-                        .entry(key)
-                        .or_insert_with(|| {
-                            new_mapxnk!(format!(
-                                "api_cache/{}claim_hist_txns/{}",
-                                prefix,
-                                key.to_base64()
-                            ))
-                        })
-                        .set_value(txn_sid, Default::default());
+                        .entry(&key)
+                        .or_insert(&MapxOrd::new())
+                        .set_value(&txn_sid, &false);
                 }
                 Operation::MintFra(i) => i.entries.iter().for_each(|me| {
                     let key = XfrAddress {
@@ -532,15 +480,9 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
                         .as_mut()
                         .unwrap()
                         .coinbase_oper_hist
-                        .entry(key)
-                        .or_insert_with(|| {
-                            new_mapxnk!(format!(
-                                "api_cache/{}coinbase_oper_hist/{}",
-                                prefix,
-                                key.to_base64()
-                            ))
-                        });
-                    hist.insert(i.height, me.clone());
+                        .entry(&key)
+                        .or_insert(&MapxOrd::new());
+                    hist.insert(&i.height, me);
                 }),
                 _ => { /* filter more operations before this line */ }
             };
@@ -555,15 +497,9 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
                 .as_mut()
                 .unwrap()
                 .related_transactions
-                .entry(*address)
-                .or_insert_with(|| {
-                    new_mapxnk!(format!(
-                        "api_cache/{}related_transactions/{}",
-                        prefix,
-                        address.to_base64()
-                    ))
-                })
-                .insert(txn_sid, Default::default());
+                .entry(address)
+                .or_insert(&MapxOrd::new())
+                .insert(&txn_sid, &false);
         }
 
         // Update transferred nonconfidential assets
@@ -574,15 +510,9 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
                 .as_mut()
                 .unwrap()
                 .related_transfers
-                .entry(*asset)
-                .or_insert_with(|| {
-                    new_mapxnk!(format!(
-                        "api_cache/{}related_transfers/{}",
-                        &prefix,
-                        asset.to_base64()
-                    ))
-                })
-                .insert(txn_sid, Default::default());
+                .entry(asset)
+                .or_insert(&MapxOrd::new())
+                .insert(&txn_sid, &false);
         }
 
         // Add created asset
@@ -616,33 +546,33 @@ pub fn update_api_cache(ledger: &mut LedgerState) -> Result<()> {
                 .as_mut()
                 .unwrap()
                 .utxos_to_map_index
-                .insert(*txo_sid, *address);
+                .insert(txo_sid, address);
             let hash = curr_txn.hash_tm().hex().to_uppercase();
             ledger
                 .api_cache
                 .as_mut()
                 .unwrap()
                 .txo_to_txnid
-                .insert(*txo_sid, (txn_sid, hash.clone()));
+                .insert(txo_sid, &(txn_sid, hash.clone()));
             ledger
                 .api_cache
                 .as_mut()
                 .unwrap()
                 .txn_sid_to_hash
-                .insert(txn_sid, hash.clone());
+                .insert(&txn_sid, &hash);
             ledger
                 .api_cache
                 .as_mut()
                 .unwrap()
                 .txn_hash_to_sid
-                .insert(hash.clone(), txn_sid);
+                .insert(&hash, &txn_sid);
             if let Some(owner_memo) = owner_memo {
                 ledger
                     .api_cache
                     .as_mut()
                     .unwrap()
                     .owner_memos
-                    .insert(*txo_sid, (*owner_memo).clone());
+                    .insert(txo_sid, owner_memo);
             }
         }
     }

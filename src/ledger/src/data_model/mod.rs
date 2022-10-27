@@ -26,7 +26,6 @@ use {
     __trash__::{Policy, PolicyGlobals, TxnPolicyData},
     bitmap::SparseMap,
     cryptohash::{sha256::Digest as BitDigest, HashValue},
-    fbnc::NumKey,
     globutils::wallet::public_key_to_base64,
     globutils::{HashOf, ProofOf, Serialized, SignatureOf},
     lazy_static::lazy_static,
@@ -45,6 +44,7 @@ use {
         result::Result as StdResult,
     },
     unicode_normalization::UnicodeNormalization,
+    vsdb::KeyEnDeOrdered,
     zei::{
         serialization::ZeiFromToBytes,
         xfr::{
@@ -94,16 +94,17 @@ pub struct AssetTypeCode {
     pub val: ZeiAssetType,
 }
 
-impl NumKey for AssetTypeCode {
+impl KeyEnDeOrdered for AssetTypeCode {
     fn to_bytes(&self) -> Vec<u8> {
         self.val.0.to_vec()
     }
-    fn from_bytes(b: &[u8]) -> Result<Self> {
+    fn from_slice(b: &[u8]) -> rucv3::Result<Self> {
         let mut b = b.to_owned();
         b.resize(ASSET_TYPE_LENGTH, 0u8);
         Ok(Self {
             val: ZeiAssetType(
-                <[u8; ASSET_TYPE_LENGTH]>::try_from(b.as_slice()).c(d!())?,
+                <[u8; ASSET_TYPE_LENGTH]>::try_from(b.as_slice())
+                    .map_err(|e| rucv3::eg!(e))?,
             ),
         })
     }
@@ -393,17 +394,6 @@ pub struct XfrAddress {
     pub key: XfrPublicKey,
 }
 
-impl XfrAddress {
-    #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) fn to_base64(self) -> String {
-        b64enc(&self.key.as_bytes())
-    }
-
-    // pub(crate) fn to_bytes(self) -> Vec<u8> {
-    //     self.key.as_bytes().to_vec()
-    // }
-}
-
 #[allow(clippy::derive_hash_xor_eq)]
 impl Hash for XfrAddress {
     #[inline(always)]
@@ -418,17 +408,6 @@ impl Hash for XfrAddress {
 )]
 pub struct IssuerPublicKey {
     pub key: XfrPublicKey,
-}
-
-impl IssuerPublicKey {
-    #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) fn to_base64(self) -> String {
-        b64enc(self.key.as_bytes())
-    }
-
-    // pub(crate) fn to_bytes(&self) -> Vec<u8> {
-    //     self.key.as_bytes().to_vec()
-    // }
 }
 
 #[allow(clippy::derive_hash_xor_eq)]
@@ -697,13 +676,13 @@ pub struct CredentialProof {
 #[allow(missing_docs)]
 pub struct TxoSID(pub u64);
 
-impl NumKey for TxoSID {
+impl KeyEnDeOrdered for TxoSID {
     fn to_bytes(&self) -> Vec<u8> {
         self.0.to_ne_bytes().to_vec()
     }
-    fn from_bytes(b: &[u8]) -> Result<Self> {
+    fn from_slice(b: &[u8]) -> rucv3::Result<Self> {
         <[u8; mem::size_of::<u64>()]>::try_from(b)
-            .c(d!())
+            .map_err(|e| rucv3::eg!(e))
             .map(u64::from_ne_bytes)
             .map(TxoSID)
     }
@@ -739,13 +718,13 @@ impl fmt::Display for TxoSID {
     }
 }
 
-impl NumKey for TxnSID {
+impl KeyEnDeOrdered for TxnSID {
     fn to_bytes(&self) -> Vec<u8> {
         self.0.to_ne_bytes().to_vec()
     }
-    fn from_bytes(b: &[u8]) -> Result<Self> {
+    fn from_slice(b: &[u8]) -> rucv3::Result<Self> {
         <[u8; mem::size_of::<usize>()]>::try_from(b)
-            .c(d!())
+            .map_err(|e| rucv3::eg!(e))
             .map(usize::from_ne_bytes)
             .map(TxnSID)
     }
