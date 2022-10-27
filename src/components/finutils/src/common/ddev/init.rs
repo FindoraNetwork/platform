@@ -1,4 +1,4 @@
-use super::{BankAccount, Env, InitialValidator, StakingValidator, FRA};
+use super::Env;
 use crate::{
     common::{self, utils::gen_transfer_op_xx},
     txn_builder::TransactionBuilder,
@@ -8,10 +8,11 @@ use ledger::{
     data_model::{
         AssetTypeCode, StateCommitmentData, Transaction, BLACK_HOLE_PUBKEY_STAKING,
     },
+    staking::{td_addr_to_bytes, Validator as StakingValidator, ValidatorKind, FRA},
     store::utils::fra_gen_initial_tx,
 };
 use ruc::*;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use zei::xfr::{
     asset_record::AssetRecordType,
     sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
@@ -43,7 +44,7 @@ pub(super) fn init(env: &mut Env) -> Result<()> {
     let page_size = env.custom_data.initial_validator_num;
     let tmrpc_endpoint = format!(
         "http://{}:{}/validators?per_page={}",
-        &env.get_any_host().meta.addr,
+        &env.get_host_addr(),
         tmrpc,
         page_size
     );
@@ -160,7 +161,7 @@ fn send_tx(env: &Env, tx: &Transaction) -> Result<()> {
     let port = env.nodes.values().next().c(d!())?.ports.app_8669;
     let rpc_endpoint = format!(
         "http://{}:{}/submit_transaction",
-        &env.get_any_host().meta.addr,
+        &env.get_host_addr(),
         port
     );
     attohttpc::post(&rpc_endpoint)
@@ -223,11 +224,63 @@ fn new_tx_builder(env: &Env) -> Result<TransactionBuilder> {
 }
 
 fn gen_8668_endpoint(env: &Env) -> Result<String> {
-    env.nodes.values().next().c(d!()).map(|n| {
-        format!(
-            "http://{}:{}",
-            &env.get_any_host().meta.addr,
-            n.ports.app_8668
-        )
-    })
+    env.nodes
+        .values()
+        .next()
+        .c(d!())
+        .map(|n| format!("http://{}:{}", &env.get_host_addr(), n.ports.app_8668))
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub(crate) struct InitialValidator {
+    tendermint_addr: String,
+    tendermint_pubkey: String,
+
+    xfr_keypair: XfrKeyPair,
+    xfr_mnemonic: String,
+    xfr_wallet_addr: String,
+}
+
+impl From<&InitialValidator> for StakingValidator {
+    fn from(v: &InitialValidator) -> StakingValidator {
+        StakingValidator {
+            td_pubkey: base64::decode(&v.tendermint_pubkey).unwrap(),
+            td_addr: td_addr_to_bytes(&v.tendermint_addr).unwrap(),
+            td_power: 400_0000 * FRA,
+            commission_rate: [1, 100],
+            id: v.xfr_keypair.get_pk(),
+            memo: Default::default(),
+            kind: ValidatorKind::Initiator,
+            signed_last_block: false,
+            signed_cnt: 0,
+            delegators: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub(crate) struct BankAccount {
+    wallet_address: String,
+    public_key: String,
+    secret_key: String,
+    mnemonic_words: String,
+}
+
+impl BankAccount {
+    const BANK_ACCOUNT_ADDR: &str =
+        "fra18xkez3fum44jq0zhvwq380rfme7u624cccn3z56fjeex6uuhpq6qv9e4g5";
+    const BANK_ACCOUNT_PUBKEY: &str = "Oa2RRTzdayA8V2OBE7xp3n3NKrjGJxFTSZZybXOXCDQ=";
+    const BANK_ACCOUNT_SECKEY: &str = "Ew9fMaryTL44ZXnEhcF7hQ-AB-fxgaC8vyCH-hCGtzg=";
+    const BANK_ACCOUNT_MNEMONIC: &str = "field ranch pencil chest effort coyote april move injury illegal forest amount bid sound mixture use second pet embrace twice total essay valve loan";
+}
+
+impl Default for BankAccount {
+    fn default() -> Self {
+        Self {
+            wallet_address: Self::BANK_ACCOUNT_ADDR.to_owned(),
+            public_key: Self::BANK_ACCOUNT_PUBKEY.to_owned(),
+            secret_key: Self::BANK_ACCOUNT_SECKEY.to_owned(),
+            mnemonic_words: Self::BANK_ACCOUNT_MNEMONIC.to_owned(),
+        }
+    }
 }
