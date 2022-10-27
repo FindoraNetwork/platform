@@ -6,7 +6,7 @@ build = "build.rs"
 edition = "2021"
 
 [dependencies]
-attohttpc = { version = "0.18", default-features = false, features = ["compress", "json", "tls-rustls"] }
+attohttpc = { version = "0.23", default-features = false, features = ["compress", "json", "tls-rustls"] }
 base64 = "0.13"
 clap = { version = "2.33.3", features = ["yaml"] }
 curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek", tag = "v3.2.0-f" }
@@ -22,7 +22,7 @@ serde = { version = "1.0.124", features = ["derive"] }
 sha2 = "0.10"
 tokio = "1.10.1"
 
-wasm-bindgen = { version = "0.2.50", features = ["serde-serialize"] }
+wasm-bindgen = { version = "0.2.83", features = ["serde-serialize"] }
 getrandom = "0.2"
 
 noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }

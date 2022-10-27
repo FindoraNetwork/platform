@@ -129,7 +129,8 @@ impl ModuleManager {
         tx: &FindoraTransaction,
         hash: H256,
     ) -> Result<()> {
-        let (from, owner, amount, asset, lowlevel) = check_convert_account(tx)?;
+        let (from, owner, amount, asset, lowlevel) =
+            check_convert_account(tx, ctx.header.height)?;
 
         if CFG.checkpoint.prismxx_inital_height < ctx.header.height {
             let from = Address::from(from);
