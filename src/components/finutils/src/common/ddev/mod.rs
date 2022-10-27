@@ -10,16 +10,13 @@
 mod init;
 
 use chaindev::tm_ddev::{
-    self, CustomOp, EnvMeta, EnvName, EnvOpts, Node, NodeOptsGenerator, NodePorts, Op,
+    self, CustomOps, EnvMeta, EnvName, EnvOpts, Node, NodeOptsGenerator, NodePorts, Op,
 };
+use init::{BankAccount, InitialValidator};
 use lazy_static::lazy_static;
-use ledger::staking::{
-    td_addr_to_bytes, Validator as StakingValidator, ValidatorKind, FRA,
-};
 use rucv3::*;
 use serde::{Deserialize, Serialize};
 use std::{env, fmt::Write, thread};
-use zei::xfr::sig::XfrKeyPair;
 
 lazy_static! {
     static ref DDEV_HOSTS: Option<String> = env::var("FN_DDEV_HOSTS").ok();
@@ -203,21 +200,21 @@ impl Default for Ops {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-struct Ports {
+pub(crate) struct Ports {
     #[serde(rename = "web3_http_service")]
-    web3_http: u16,
+    pub(crate) web3_http: u16,
     #[serde(rename = "web3_websocket_service")]
-    web3_ws: u16,
+    pub(crate) web3_ws: u16,
     #[serde(rename = "abcid_ledger_query_service")]
-    app_8668: u16,
+    pub(crate) app_8668: u16,
     #[serde(rename = "abcid_submission_service")]
-    app_8669: u16,
+    pub(crate) app_8669: u16,
     #[serde(rename = "tendermint_p2p_service")]
-    tm_p2p: u16,
+    pub(crate) tm_p2p: u16,
     #[serde(rename = "tendermint_rpc_service")]
-    tm_rpc: u16,
+    pub(crate) tm_rpc: u16,
     #[serde(rename = "abcid_abci_service")]
-    app_abci: u16,
+    pub(crate) app_abci: u16,
 }
 
 impl NodePorts for Ports {
@@ -325,7 +322,7 @@ enum InitOps {
 
 type Env = EnvMeta<CustomData, Node<Ports>>;
 
-impl CustomOp for InitOps {
+impl CustomOps for InitOps {
     fn exec(&self, env_name: &EnvName) -> Result<()> {
         match self {
             InitOps::Init => Env::load_env_by_name(env_name)
@@ -382,58 +379,4 @@ struct CustomData {
 
     #[serde(rename = "initial_pos_settings")]
     initial_validators: Vec<InitialValidator>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-struct BankAccount {
-    wallet_address: String,
-    public_key: String,
-    secret_key: String,
-    mnemonic_words: String,
-}
-
-impl BankAccount {
-    const BANK_ACCOUNT_ADDR: &str =
-        "fra18xkez3fum44jq0zhvwq380rfme7u624cccn3z56fjeex6uuhpq6qv9e4g5";
-    const BANK_ACCOUNT_PUBKEY: &str = "Oa2RRTzdayA8V2OBE7xp3n3NKrjGJxFTSZZybXOXCDQ=";
-    const BANK_ACCOUNT_SECKEY: &str = "Ew9fMaryTL44ZXnEhcF7hQ-AB-fxgaC8vyCH-hCGtzg=";
-    const BANK_ACCOUNT_MNEMONIC: &str = "field ranch pencil chest effort coyote april move injury illegal forest amount bid sound mixture use second pet embrace twice total essay valve loan";
-}
-
-impl Default for BankAccount {
-    fn default() -> Self {
-        Self {
-            wallet_address: Self::BANK_ACCOUNT_ADDR.to_owned(),
-            public_key: Self::BANK_ACCOUNT_PUBKEY.to_owned(),
-            secret_key: Self::BANK_ACCOUNT_SECKEY.to_owned(),
-            mnemonic_words: Self::BANK_ACCOUNT_MNEMONIC.to_owned(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-struct InitialValidator {
-    tendermint_addr: String,
-    tendermint_pubkey: String,
-
-    xfr_keypair: XfrKeyPair,
-    xfr_mnemonic: String,
-    xfr_wallet_addr: String,
-}
-
-impl From<&InitialValidator> for StakingValidator {
-    fn from(v: &InitialValidator) -> StakingValidator {
-        StakingValidator {
-            td_pubkey: base64::decode(&v.tendermint_pubkey).unwrap(),
-            td_addr: td_addr_to_bytes(&v.tendermint_addr).unwrap(),
-            td_power: 400_0000 * FRA,
-            commission_rate: [1, 100],
-            id: v.xfr_keypair.get_pk(),
-            memo: Default::default(),
-            kind: ValidatorKind::Initiator,
-            signed_last_block: false,
-            signed_cnt: 0,
-            delegators: Default::default(),
-        }
-    }
 }
