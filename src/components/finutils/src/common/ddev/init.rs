@@ -1,6 +1,10 @@
 use super::Env;
 use crate::{
-    common::{self, utils::gen_transfer_op_xx},
+    common::{
+        self,
+        ddev::{IDX_APP_8668, IDX_APP_8669, IDX_TM_RPC},
+        utils::gen_transfer_op_xx,
+    },
     txn_builder::TransactionBuilder,
 };
 use globutils::{HashOf, SignatureOf};
@@ -40,14 +44,11 @@ struct TmPubKey {
 }
 
 pub(super) fn init(env: &mut Env) -> Result<()> {
-    let tmrpc = env.nodes.values().next().c(d!())?.ports.tm_rpc;
+    let (addr, ports) = env.get_addrports_any_node();
+    let port = ports[IDX_TM_RPC];
     let page_size = env.custom_data.initial_validator_num;
-    let tmrpc_endpoint = format!(
-        "http://{}:{}/validators?per_page={}",
-        &env.get_host_addr(),
-        tmrpc,
-        page_size
-    );
+    let tmrpc_endpoint =
+        format!("http://{}:{}/validators?per_page={}", addr, port, page_size);
 
     let tm_validators = attohttpc::get(&tmrpc_endpoint)
         .send()
@@ -116,7 +117,7 @@ pub(super) fn init(env: &mut Env) -> Result<()> {
         let mut builder = new_tx_builder(env).c(d!())?;
         let am = (400_0000 + i as u64 * 1_0000) * FRA;
         gen_transfer_op_xx(
-            Some(&gen_8668_endpoint(env).c(d!())?),
+            Some(&gen_8668_endpoint(env)),
             &v.xfr_keypair,
             vec![(&BLACK_HOLE_PUBKEY_STAKING, am)],
             None,
@@ -165,12 +166,9 @@ fn setup_initial_validators(env: &Env) -> Result<()> {
 }
 
 fn send_tx(env: &Env, tx: &Transaction) -> Result<()> {
-    let port = env.nodes.values().next().c(d!())?.ports.app_8669;
-    let rpc_endpoint = format!(
-        "http://{}:{}/submit_transaction",
-        &env.get_host_addr(),
-        port
-    );
+    let (addr, ports) = env.get_addrports_any_node();
+    let port = ports[IDX_APP_8669];
+    let rpc_endpoint = format!("http://{}:{}/submit_transaction", addr, port);
     attohttpc::post(&rpc_endpoint)
         .header(attohttpc::header::CONTENT_TYPE, "application/json")
         .bytes(&serde_json::to_vec(tx).c(d!())?)
@@ -191,7 +189,7 @@ fn transfer_batch(
 ) -> Result<()> {
     let mut builder = new_tx_builder(env).c(d!())?;
     let op = gen_transfer_op_xx(
-        Some(&gen_8668_endpoint(env).c(d!())?),
+        Some(&gen_8668_endpoint(env)),
         owner_kp,
         target_list,
         token_code,
@@ -219,7 +217,7 @@ fn new_tx_builder(env: &Env) -> Result<TransactionBuilder> {
         SignatureOf<(HashOf<Option<StateCommitmentData>>, u64)>,
     );
 
-    let rpc_endpoint = format!("{}/global_state", gen_8668_endpoint(env).c(d!())?);
+    let rpc_endpoint = format!("{}/global_state", gen_8668_endpoint(env));
 
     attohttpc::get(&rpc_endpoint)
         .send()
@@ -233,12 +231,10 @@ fn new_tx_builder(env: &Env) -> Result<TransactionBuilder> {
         .map(TransactionBuilder::from_seq_id)
 }
 
-fn gen_8668_endpoint(env: &Env) -> Result<String> {
-    env.nodes
-        .values()
-        .next()
-        .c(d!())
-        .map(|n| format!("http://{}:{}", &env.get_host_addr(), n.ports.app_8668))
+fn gen_8668_endpoint(env: &Env) -> String {
+    let (addr, ports) = env.get_addrports_any_node();
+    let port = ports[IDX_APP_8668];
+    format!("http://{}:{}", addr, port)
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
