@@ -21,7 +21,10 @@ use {
     config::abci::global_cfg::CFG,
     fp_storage::hash::{Sha256, StorageHasher},
     lazy_static::lazy_static,
-    ledger::{converter::is_convert_account, staking::KEEP_HIST, store::api_cache},
+    ledger::{
+        converter::is_convert_account, staking::KEEP_HIST, store::api_cache, vsdb,
+        vsdb::Mapx,
+    },
     parking_lot::{Mutex, RwLock},
     protobuf::RepeatedField,
     ruc::*,
@@ -33,7 +36,6 @@ use {
             Arc,
         },
     },
-    vsdb::Mapx,
 };
 
 pub(crate) static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
