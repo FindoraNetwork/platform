@@ -33,7 +33,7 @@ ruc = "1.0"
 rucv3 = { package = "ruc", version = "3.0" }
 nix = "0.25"
 
-ledger = { path = "../../ledger", default-features = false }
+ledger = { path = "../../ledger" }
 globutils = { path = "../../libs/globutils" }
 credentials = { path = "../../libs/credentials" }
 
