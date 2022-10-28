@@ -35,7 +35,8 @@ zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 zeiutils = { package = "utils", git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 bulletproofs = { package = "bulletproofs", git = "https://github.com/FindoraNetwork/bp", rev = "57633a", features = ["yoloproofs"] }
 
-vsdb = "0.47.3"
+vsdb = "0.48.0"
+# vsdb = { path = "../../../vsdb/wrappers" }
 
 num-bigint = "0.4.3"
 
