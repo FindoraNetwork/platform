@@ -1,4 +1,4 @@
-FROM rust:1.64.0-slim
+FROM rust:1.56.0-slim
 ENV WORK_DIR /platform
 ENV WASM_DIR /tmp/wasm-js-bindings
 
