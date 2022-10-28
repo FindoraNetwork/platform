@@ -385,6 +385,11 @@ impl TransactionBuilder {
     }
 
     #[allow(missing_docs)]
+    pub fn take_transaction(self) -> Transaction {
+        self.txn
+    }
+
+    #[allow(missing_docs)]
     pub fn build_and_take_transaction(&mut self) -> Result<Transaction> {
         self.build()?;
         Ok(self.txn.clone())

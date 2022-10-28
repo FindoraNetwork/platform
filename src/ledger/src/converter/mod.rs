@@ -81,7 +81,7 @@ pub fn check_convert_account(
                 "TransferUTXOsToEVM error: nonce mismatch no_replay_token"
             ));
         }
-        if height > CFG.checkpoint.utxo_checktx_height {
+        if CFG.checkpoint.utxo_checktx_height > height {
             if tx.check_has_signature(&ca.signer).is_err() {
                 return Err(eg!("TransferUTXOsToEVM error: invalid signature"));
             }
