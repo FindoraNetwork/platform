@@ -6,6 +6,9 @@
 ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/FindoraNetwork/platform)
 
 
+
+
+
 # Findora Platform
 
 - [**Wiki**](https://wiki.findora.org/)
