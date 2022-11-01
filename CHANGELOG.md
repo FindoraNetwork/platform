@@ -10,6 +10,11 @@
 
 ## Change log
 
+#### v0.3.30-release
+
+- Performance optimization for EVM storage layer
+- Improved robustness and optimization in EVM
+
 #### v0.3.20-release
 
 - Reduce log to single line.
