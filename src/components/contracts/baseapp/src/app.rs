@@ -95,7 +95,7 @@ impl crate::BaseApp {
                                 if let Ok(mut code_map) = PENDING_CODE_MAP.lock() {
                                     replace(&mut *code_map, HashMap::new())
                                 } else {
-                                    log::error!("{}", "");
+                                    tracing::error!("{}", "");
                                     Default::default()
                                 };
                             let state_list = if let Ok(mut state_list) =
@@ -103,7 +103,7 @@ impl crate::BaseApp {
                             {
                                 replace(&mut *state_list, vec![])
                             } else {
-                                log::error!("{}", "");
+                                tracing::error!("{}", "");
                                 Default::default()
                             };
                             if 0 == ar.code {
@@ -115,12 +115,12 @@ impl crate::BaseApp {
                                         .expect("connection redis failed");
                                     setter
                                         .set_pending_tx(tx)
-                                        .map_err(|e| log::error!("{:?}", e))
+                                        .map_err(|e| tracing::error!("{:?}", e))
                                         .unwrap_or(());
                                     for (addr, code) in code_map.iter() {
                                         setter
                                             .set_pending_code(*addr, code.clone())
-                                            .map_err(|e| log::error!("{:?}", e))
+                                            .map_err(|e| tracing::error!("{:?}", e))
                                             .unwrap_or(());
                                     }
                                     for state in state_list.iter() {
@@ -130,7 +130,7 @@ impl crate::BaseApp {
                                                 state.index.clone(),
                                                 state.value.clone(),
                                             )
-                                            .map_err(|e| log::error!("{:?}", e))
+                                            .map_err(|e| tracing::error!("{:?}", e))
                                             .unwrap_or(());
                                     }
                                 }
@@ -223,7 +223,7 @@ impl crate::BaseApp {
                                 let map = replace(m, vec![]);
                                 map.clone()
                             } else {
-                                log::error!("{}", "");
+                                tracing::error!("{}", "");
                                 Default::default()
                             };
                         let state_list = if let Ok(mut state_list) =
@@ -233,7 +233,7 @@ impl crate::BaseApp {
                             let v2 = replace(v, vec![]);
                             v2.clone()
                         } else {
-                            log::error!("{}", "");
+                            tracing::error!("{}", "");
                             Default::default()
                         };
                         if 0 == ar.code {
@@ -245,13 +245,13 @@ impl crate::BaseApp {
                                     .expect("connection redis failed");
                                 setter
                                     .remove_pending_tx(tx)
-                                    .map_err(|e| log::error!("{:?}", e))
+                                    .map_err(|e| tracing::error!("{:?}", e))
                                     .unwrap_or(());
 
                                 for addr in code_map.iter() {
                                     setter
                                         .remove_pending_code(*addr)
-                                        .map_err(|e| log::error!("{:?}", e))
+                                        .map_err(|e| tracing::error!("{:?}", e))
                                         .unwrap_or(());
                                 }
 
@@ -261,7 +261,7 @@ impl crate::BaseApp {
                                             address.clone(),
                                             index.clone(),
                                         )
-                                        .map_err(|e| log::error!("{:?}", e))
+                                        .map_err(|e| tracing::error!("{:?}", e))
                                         .unwrap_or(());
                                 }
                             }

@@ -342,7 +342,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                             value,
                         });
                     } else {
-                        log::error!(
+                        tracing::error!(
                             target: "evm",
                             "Failed push state update to STATE_UPDATE_LIST for {:?} [index: {:?}, value: {:?}]",
                             address,

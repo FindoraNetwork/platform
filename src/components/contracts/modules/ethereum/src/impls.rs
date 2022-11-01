@@ -26,9 +26,6 @@ use sha3::{Digest, Keccak256};
 use tracing::{debug, info};
 const BLOCK_MIGRATE: &str = "block_migrate";
 
-#[cfg(feature = "web3_service")]
-use enterprise_web3::{TxState, BLOCK, RECEIPTS, TXS, WEB3_SERVICE_START_HEIGHT};
-
 impl<C: Config> App<C> {
     pub fn recover_signer_fast(
         ctx: &Context,
@@ -168,6 +165,10 @@ impl<C: Config> App<C> {
 
             #[cfg(feature = "web3_service")]
             {
+                use enterprise_web3::{
+                    TxState, BLOCK, RECEIPTS, TXS, WEB3_SERVICE_START_HEIGHT,
+                };
+
                 use ethereum::{BlockAny, FrontierReceiptData, ReceiptAny};
 
                 if block_number.as_u64() > *WEB3_SERVICE_START_HEIGHT {
@@ -176,7 +177,7 @@ impl<C: Config> App<C> {
                             let block = BlockAny::from(block);
                             b.replace(block);
                         } else {
-                            log::error!("the block is not none");
+                            tracing::error!("the block is not none");
                         }
                     }
                     if let Ok(mut txs) = TXS.lock() {
