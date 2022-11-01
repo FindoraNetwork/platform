@@ -1,5 +1,6 @@
 use crate::hash::StorageHasher;
 use crate::*;
+use config::abci::global_cfg::CFG;
 use ruc::*;
 use std::str::FromStr;
 use storage::db::MerkleDB;
@@ -140,7 +141,11 @@ where
 
     /// Remove the value under a key.
     pub fn remove<D: MerkleDB>(state: &mut State<D>, key: &Key) {
-        Instance::delete(state, Self::build_key_for(key).as_slice()).unwrap()
+        if state.height().unwrap() >= CFG.checkpoint.evm_substate_v2_height as u64 {
+            Instance::delete(state, Self::build_key_for(key).as_slice()).unwrap()
+        } else {
+            Instance::delete_v0(state, Self::build_key_for(key).as_slice()).unwrap()
+        }
     }
 
     /// Iter over all value of the storage.

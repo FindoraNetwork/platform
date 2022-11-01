@@ -323,15 +323,13 @@ impl<C: Config> App<C> {
                 pending_txs.push((transaction, status, receipt));
             }
 
-            if ctx.header.height < CFG.checkpoint.tx_index_migration_height {
-                info!(target: "ethereum", "TransactionIndex::insert, state, height: {}", ctx.header.height);
+            if ctx.header.height < CFG.checkpoint.tx_revert_on_error_height {
                 TransactionIndex::insert(
                     ctx.state.write().borrow_mut(),
                     &HA256::new(transaction_hash),
                     &(ctx.header.height.into(), transaction_index),
                 )?;
             } else {
-                info!(target: "ethereum", "TransactionIndex::insert, db, height: {}", ctx.header.height);
                 TransactionIndex::insert(
                     ctx.db.write().borrow_mut(),
                     &HA256::new(transaction_hash),

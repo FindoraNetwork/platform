@@ -30,8 +30,6 @@ pub struct CheckPointConfig {
     // https://github.com/FindoraNetwork/platform/pull/191
     pub tx_revert_on_error_height: i64,
 
-    pub tx_index_migration_height: i64,
-
     // Commit: d449b7c97850b225cf26c72c8b19ed284d6d7101
     pub evm_first_block_height: i64,
 
@@ -85,6 +83,9 @@ pub struct CheckPointConfig {
     // Fix the amount in the delegators that staking did not modify when it punished the validator.
     pub fix_delegators_am_height: u64,
     pub validators_limit_v2_height: u64,
+
+    // Enable evm substate v2
+    pub evm_substate_v2_height: i64,
 }
 
 impl CheckPointConfig {
@@ -102,7 +103,6 @@ impl CheckPointConfig {
                                 disable_evm_block_height: 0,
                                 enable_frc20_height: 0,
                                 tx_revert_on_error_height: 0,
-                                tx_index_migration_height: 0,
                                 evm_first_block_height: 0,
                                 zero_amount_fix_height: 0,
                                 apy_fix_height: 0,
@@ -118,14 +118,14 @@ impl CheckPointConfig {
                                 utxo_checktx_height: 0,
                                 fix_delegators_am_height: 0,
                                 validators_limit_v2_height: 0,
+                                evm_substate_v2_height: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
                                 evm_substate_height: 1802500,
                                 disable_evm_block_height: 1483286,
                                 enable_frc20_height: 1501000,
-                                tx_revert_on_error_height: 1700000,
-                                tx_index_migration_height: 1700000,
+                                tx_revert_on_error_height: 1624077,
                                 evm_first_block_height: 0,
                                 zero_amount_fix_height: 1200000,
                                 apy_fix_height: 1177000,
@@ -141,6 +141,7 @@ impl CheckPointConfig {
                                 utxo_checktx_height: 30000000,
                                 fix_delegators_am_height: 30000000,
                                 validators_limit_v2_height: 30000000,
+                                evm_substate_v2_height: 30000000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();

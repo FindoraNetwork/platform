@@ -6,9 +6,10 @@ use evm::{
     executor::stack::{Accessed, StackState, StackSubstateMetadata},
     ExitError, Transfer,
 };
+use fin_db::FinDB;
 use fp_core::{context::Context, macros::Get};
 use fp_evm::{Log, Vicinity};
-use fp_storage::BorrowMut;
+use fp_storage::{BorrowMut, DerefMut};
 use fp_traits::{
     account::AccountAsset,
     evm::{BlockHashMapping, FeeCalculator},
@@ -16,6 +17,7 @@ use fp_traits::{
 use fp_utils::timestamp_converter;
 use log::info;
 use std::{collections::btree_set::BTreeSet, marker::PhantomData, mem};
+use storage::state::State;
 
 pub struct FindoraStackSubstate<'context, 'config> {
     pub ctx: &'context Context,
@@ -23,6 +25,7 @@ pub struct FindoraStackSubstate<'context, 'config> {
     pub deletes: BTreeSet<H160>,
     pub logs: Vec<Log>,
     pub parent: Option<Box<FindoraStackSubstate<'context, 'config>>>,
+    pub substate: Option<State<FinDB>>,
 }
 
 impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
@@ -35,24 +38,30 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
     }
 
     pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
+        let mut substate = None;
+        if self.ctx.header.height < CFG.checkpoint.tx_revert_on_error_height {
+            self.ctx.state.write().commit_session(); // before substate
+        } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_v2_height {
+            info!(target: "evm", "EVM enter stack_push(), v2, height: {:?}", self.ctx.header.height);
+            self.ctx.state.write().stack_push(); // substate v2
+        } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
+            info!(target: "evm", "EVM enter substate, v1, height: {:?}", self.ctx.header.height);
+            substate = Some((*self.ctx.state.read()).substate()); // substate v1
+        } else {
+            // else does nothing
+        }
+
         let mut entering = Self {
             ctx: self.ctx,
             metadata: self.metadata.spit_child(gas_limit, is_static),
             parent: None,
             deletes: BTreeSet::new(),
             logs: Vec::new(),
+            substate,
         };
         mem::swap(&mut entering, self);
 
         self.parent = Some(Box::new(entering));
-
-        if self.ctx.header.height < CFG.checkpoint.tx_revert_on_error_height {
-            // early-stage EVM simply commit session
-            self.ctx.state.write().commit_session();
-        } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
-            // substate was introduced later
-            self.ctx.state.write().stack_push();
-        }
     }
 
     pub fn exit_commit(&mut self) -> Result<(), ExitError> {
@@ -64,11 +73,13 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         self.deletes.append(&mut exited.deletes);
 
         if self.ctx.header.height < CFG.checkpoint.tx_revert_on_error_height {
-            // early-stage EVM simply commit session
-            self.ctx.state.write().commit_session();
-        } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
-            // substate was introduced later
-            self.ctx.state.write().stack_commit();
+            self.ctx.state.write().commit_session(); // before substate
+        } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_v2_height {
+            info!(target: "evm", "EVM exit_commit stack_commit(), v2, height: {:?}", self.ctx.header.height);
+            self.ctx.state.write().stack_commit(); // substate v2
+        } else {
+            // substate v1 and else do nothing
+            info!(target: "evm", "EVM exit_commit substate, v1, height: {:?}", self.ctx.header.height);
         }
 
         Ok(())
@@ -80,11 +91,14 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         self.metadata.swallow_revert(exited.metadata)?;
 
         if self.ctx.header.height < CFG.checkpoint.tx_revert_on_error_height {
-            // early-stage EVM simply discard session
-            self.ctx.state.write().discard_session();
+            self.ctx.state.write().discard_session(); // before substate
+        } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_v2_height {
+            self.ctx.state.write().stack_discard(); // substate v2
         } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
-            // substate was introduced later
-            self.ctx.state.write().stack_discard();
+            let _ = mem::replace(
+                self.ctx.state.write().deref_mut(),
+                exited.substate.unwrap(),
+            ); // substate v1
         } else {
             info!(target: "evm", "EVM stack exit_revert(), height: {:?}", self.ctx.header.height);
         }
@@ -98,11 +112,16 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         self.metadata.swallow_discard(exited.metadata)?;
 
         if self.ctx.header.height < CFG.checkpoint.tx_revert_on_error_height {
-            // early-stage EVM simply discard session
-            self.ctx.state.write().discard_session();
+            self.ctx.state.write().discard_session(); // before substate
+        } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_v2_height {
+            info!(target: "evm", "EVM exit_discard stack_discard(), v2, height: {:?}", self.ctx.header.height);
+            self.ctx.state.write().stack_discard(); // substate v2
         } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
-            // substate was introduced later
-            self.ctx.state.write().stack_discard();
+            info!(target: "evm", "EVM exit_discard substate, v1, height: {:?}", self.ctx.header.height);
+            let _ = mem::replace(
+                self.ctx.state.write().deref_mut(),
+                exited.substate.unwrap(),
+            ); // substate v1
         } else {
             info!(target: "evm", "EVM stack exit_discard(), height: {:?}", self.ctx.header.height);
         }
@@ -165,6 +184,14 @@ impl<'context, 'vicinity, 'config, C: Config>
         vicinity: &'vicinity Vicinity,
         metadata: StackSubstateMetadata<'config>,
     ) -> Self {
+        // two versions of EVM substate implementation
+        let mut substate = None;
+        if ctx.header.height >= CFG.checkpoint.evm_substate_height
+            && ctx.header.height < CFG.checkpoint.evm_substate_v2_height
+        {
+            substate = Some((*ctx.state.read()).substate());
+        }
+
         Self {
             ctx,
             vicinity,
@@ -174,6 +201,7 @@ impl<'context, 'vicinity, 'config, C: Config>
                 deletes: BTreeSet::new(),
                 logs: Vec::new(),
                 parent: None,
+                substate,
             },
             _marker: PhantomData,
         }

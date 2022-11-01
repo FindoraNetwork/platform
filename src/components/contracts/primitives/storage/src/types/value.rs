@@ -1,5 +1,6 @@
 use crate::hash::*;
 use crate::*;
+use config::abci::global_cfg::CFG;
 use storage::db::MerkleDB;
 use storage::state::State;
 use storage::store::Prefix;
@@ -98,7 +99,12 @@ where
 
     /// Take a value from storage, removing it afterwards.
     pub fn delete<D: MerkleDB>(state: &mut State<D>) {
-        Instance::delete(state, <Self as StoragePrefixKey>::store_key().as_ref())
-            .unwrap()
+        if state.height().unwrap() >= CFG.checkpoint.evm_substate_v2_height as u64 {
+            Instance::delete(state, <Self as StoragePrefixKey>::store_key().as_ref())
+                .unwrap()
+        } else {
+            Instance::delete_v0(state, <Self as StoragePrefixKey>::store_key().as_ref())
+                .unwrap()
+        }
     }
 }

@@ -441,7 +441,6 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     if CFG.checkpoint.disable_evm_block_height < td_height
         && td_height < CFG.checkpoint.enable_frc20_height
     {
-        log::info!(target: "abciapp", "Commit ledger ONLY, height: {}", td_height);
         r.set_data(app_hash("commit", td_height, la_hash, Vec::new()));
     } else {
         r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
