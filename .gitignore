@@ -3,6 +3,7 @@ release/
 binary/
 
 target/
+target
 
 **/*.rs.bk
 .DS_Store
