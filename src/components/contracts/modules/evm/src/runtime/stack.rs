@@ -76,7 +76,6 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
             self.ctx.state.write().stack_commit(); // substate v2
         } else {
             // substate v1 and else do nothing
-            info!(target: "evm", "EVM exit_commit substate, v1, height: {:?}", self.ctx.header.height);
         }
 
         Ok(())
