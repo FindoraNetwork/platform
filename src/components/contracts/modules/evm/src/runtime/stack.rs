@@ -42,10 +42,8 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         if self.ctx.header.height < CFG.checkpoint.tx_revert_on_error_height {
             self.ctx.state.write().commit_session(); // before substate
         } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_v2_height {
-            info!(target: "evm", "EVM enter stack_push(), v2, height: {:?}", self.ctx.header.height);
             self.ctx.state.write().stack_push(); // substate v2
         } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
-            info!(target: "evm", "EVM enter substate, v1, height: {:?}", self.ctx.header.height);
             substate = Some((*self.ctx.state.read()).substate()); // substate v1
         } else {
             // else does nothing
@@ -75,7 +73,6 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         if self.ctx.header.height < CFG.checkpoint.tx_revert_on_error_height {
             self.ctx.state.write().commit_session(); // before substate
         } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_v2_height {
-            info!(target: "evm", "EVM exit_commit stack_commit(), v2, height: {:?}", self.ctx.header.height);
             self.ctx.state.write().stack_commit(); // substate v2
         } else {
             // substate v1 and else do nothing
@@ -114,10 +111,8 @@ impl<'context, 'config> FindoraStackSubstate<'context, 'config> {
         if self.ctx.header.height < CFG.checkpoint.tx_revert_on_error_height {
             self.ctx.state.write().discard_session(); // before substate
         } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_v2_height {
-            info!(target: "evm", "EVM exit_discard stack_discard(), v2, height: {:?}", self.ctx.header.height);
             self.ctx.state.write().stack_discard(); // substate v2
         } else if self.ctx.header.height >= CFG.checkpoint.evm_substate_height {
-            info!(target: "evm", "EVM exit_discard substate, v1, height: {:?}", self.ctx.header.height);
             let _ = mem::replace(
                 self.ctx.state.write().deref_mut(),
                 exited.substate.unwrap(),
