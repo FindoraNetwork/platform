@@ -24,7 +24,10 @@ use {
     ledger::{
         converter::is_convert_account,
         staking::KEEP_HIST,
-        store::fbnc::{new_mapx, Mapx},
+        store::{
+            api_cache,
+            fbnc::{new_mapx, Mapx},
+        },
     },
     parking_lot::{Mutex, RwLock},
     protobuf::RepeatedField,
@@ -155,11 +158,6 @@ pub fn begin_block(
     s: &mut ABCISubmissionServer,
     req: &RequestBeginBlock,
 ) -> ResponseBeginBlock {
-    let header = pnk!(req.header.as_ref());
-    // 1483286, 1501000
-    // if header.height >= 1540001 {
-    //     std::process::exit(0);
-    // }
     if IS_EXITING.load(Ordering::Acquire) {
         //beacuse ResponseBeginBlock doesn't define the code,
         //we can't tell tendermint that begin block is impossibled,
@@ -189,7 +187,7 @@ pub fn begin_block(
         BLOCK_CREATED.1.notify_one();
     }
 
-    //let header = pnk!(req.header.as_ref());
+    let header = pnk!(req.header.as_ref());
     TENDERMINT_BLOCK_HEIGHT.swap(header.height, Ordering::Relaxed);
 
     *REQ_BEGIN_BLOCK.lock() = req.clone();
@@ -386,9 +384,6 @@ pub fn end_block(
             la.cache_transaction(tx).unwrap();
         }
     }
-    if td_height == 1535470 {
-        println!("end block is going to crash");
-    }
 
     if !la.all_commited() && la.block_txn_count() != 0 {
         pnk!(la.end_block());
@@ -426,7 +421,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     state.set_tendermint_height(td_height as u64);
 
     // cache last block for QueryServer
-    //pnk!(api_cache::update_api_cache(&mut state));
+    pnk!(api_cache::update_api_cache(&mut state));
 
     // snapshot them finally
     let path = format!("{}/{}", &CFG.ledger_dir, &state.get_status().snapshot_file);
@@ -441,7 +436,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     if CFG.checkpoint.disable_evm_block_height < td_height
         && td_height < CFG.checkpoint.enable_frc20_height
     {
-        r.set_data(app_hash("commit", td_height, la_hash, Vec::new()));
+        r.set_data(la_hash);
     } else {
         r.set_data(app_hash("commit", td_height, la_hash, cs_hash));
     }
@@ -458,24 +453,19 @@ fn app_hash(
     mut la_hash: Vec<u8>,
     mut cs_hash: Vec<u8>,
 ) -> Vec<u8> {
+    log::info!(target: "abciapp",
+        "app_hash_{}: {}_{}, height: {}",
+        when,
+        hex::encode(la_hash.clone()),
+        hex::encode(cs_hash.clone()),
+        height
+    );
+
     // append ONLY non-empty EVM chain state hash
-    let la_hash_cp = la_hash.clone();
-    let cs_hash_cp = cs_hash.clone();
-    let hash = if !cs_hash.is_empty() {
+    if !cs_hash.is_empty() {
         la_hash.append(&mut cs_hash);
         Sha256::hash(la_hash.as_slice()).to_vec()
     } else {
         la_hash
-    };
-
-    log::info!(target: "abciapp",
-        "{}: {} <--- {}_{}, height: {}",
-        when,
-        hex::encode(hash.clone()).to_uppercase(),
-        hex::encode(la_hash_cp).to_uppercase(),
-        hex::encode(cs_hash_cp).to_uppercase(),
-        height
-    );
-
-    hash
+    }
 }

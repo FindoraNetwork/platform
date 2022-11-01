@@ -45,7 +45,7 @@ lazy_static! {
 
     static ref CHAIN_STATE_MIN_VERSIONS: u64 = BLOCKS_IN_DAY * std::env::var("CHAIN_STATE_VERSIONS").map(
         |ver|ver.as_str().parse::<u64>().expect("chainstate versions should be a valid integer")
-    ).unwrap_or(3600);
+    ).unwrap_or(90);
 }
 
 const APP_NAME: &str = "findora";
