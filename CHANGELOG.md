@@ -12,8 +12,8 @@
 
 #### v0.3.30-release
 
-- Performance optimization for EVM storage layer
-- Improved robustness and optimization in EVM
+- EVM upgrading and optimization in TPS.
+- Optimization and compatibility fixes in historical transactions replay.
 
 #### v0.3.20-release
 
