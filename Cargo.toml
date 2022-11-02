@@ -68,9 +68,9 @@ curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek",
 ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek", tag = "v1.0.1-f" }
 bulletproofs = { git = "https://github.com/FindoraNetwork/bp", tag = "v1.0.1-f" }
 
-noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
-noah-accumulators = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
-noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
-noah-crypto = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
-noah-plonk = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
+noah = { git = "https://github.com/FindoraNetwork/noah", branch = "develop" }
+noah-accumulators = { git = "https://github.com/FindoraNetwork/noah", branch = "develop" }
+noah-algebra = { git = "https://github.com/FindoraNetwork/noah", branch = "develop" }
+noah-crypto = { git = "https://github.com/FindoraNetwork/noah", branch = "develop" }
+noah-plonk = { git = "https://github.com/FindoraNetwork/noah", branch = "develop" }
 
