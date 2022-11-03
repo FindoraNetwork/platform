@@ -1,7 +1,7 @@
 use crate::context::{Context, RunTxMode};
 use abci::Event;
 use config::abci::global_cfg::CFG;
-use fp_types::transaction::CheckedTransaction;
+use fp_types::{crypto::Address, transaction::CheckedTransaction};
 use impl_trait_for_tuples::impl_for_tuples;
 use ruc::*;
 use std::fmt::Debug;
@@ -167,12 +167,9 @@ where
                     res.log = String::from("ctx state is not good to commit");
 
                     ctx.state.write().discard_session();
-                } else if res.code == 0 {
-                    Extra::post_execute(ctx, pre, &res)?;
-
-                    ctx.state.write().commit_session();
                 } else {
-                    ctx.state.write().discard_session();
+                    Extra::post_execute(ctx, pre, &res)?;
+                    ctx.state.write().commit_session();
                 }
 
                 ctx.db.write().commit_session();
@@ -198,6 +195,8 @@ pub struct ActionResult {
     /// 4 - EVM ExitReason::Fatal
     /// 0xff - context state maybe messed up
     pub code: u32,
+    /// Record the source address
+    pub source: Option<Address>,
     /// Data is any data returned from message or handler execution.
     pub data: Vec<u8>,
     /// Log contains the log information from message or handler execution.
