@@ -31,6 +31,8 @@ fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
 config = { path = "../../../config"}
+enterprise-web3 = {  path = "../../primitives/enterprise-web3", optional = true }
+
 [dev-dependencies]
 baseapp = { path = "../../baseapp" }
 fp-mocks = { path = "../../primitives/mocks" }
@@ -41,3 +43,4 @@ fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0"
 [features]
 default = []
 debug_env = []
+web3_service = ["enterprise-web3"]

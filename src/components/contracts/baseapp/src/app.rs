@@ -74,6 +74,8 @@ impl crate::BaseApp {
         };
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
+            #[cfg(feature = "enterprise-web3")]
+            let tmp_tx = tx.clone();
             let check_fn = |mode: RunTxMode| {
                 let ctx = {
                     let mut ctx = self.check_state.clone();
@@ -83,6 +85,57 @@ impl crate::BaseApp {
                 let result = self.modules.process_tx::<SignedExtra>(ctx, tx);
                 match result {
                     Ok(ar) => {
+                        #[cfg(feature = "enterprise-web3")]
+                        {
+                            use enterprise_web3::{
+                                PENDING_CODE_MAP, PENDING_STATE_UPDATE_LIST,
+                            };
+                            use std::{collections::HashMap, mem::replace};
+                            let code_map =
+                                if let Ok(mut code_map) = PENDING_CODE_MAP.lock() {
+                                    replace(&mut *code_map, HashMap::new())
+                                } else {
+                                    log::error!("{}", "");
+                                    Default::default()
+                                };
+                            let state_list = if let Ok(mut state_list) =
+                                PENDING_STATE_UPDATE_LIST.lock()
+                            {
+                                replace(&mut *state_list, vec![])
+                            } else {
+                                log::error!("{}", "");
+                                Default::default()
+                            };
+                            if 0 == ar.code {
+                                if let fp_types::actions::Action::Ethereum(
+                                    fp_types::actions::ethereum::Action::Transact(tx),
+                                ) = tmp_tx.function
+                                {
+                                    let mut setter = enterprise_web3::setter()
+                                        .expect("connection redis failed");
+                                    setter
+                                        .set_pending_tx(tx)
+                                        .map_err(|e| log::error!("{:?}", e))
+                                        .unwrap_or(());
+                                    for (addr, code) in code_map.iter() {
+                                        setter
+                                            .set_pending_code(*addr, code.clone())
+                                            .map_err(|e| log::error!("{:?}", e))
+                                            .unwrap_or(());
+                                    }
+                                    for state in state_list.iter() {
+                                        setter
+                                            .set_pending_state(
+                                                state.address.clone(),
+                                                state.index.clone(),
+                                                state.value.clone(),
+                                            )
+                                            .map_err(|e| log::error!("{:?}", e))
+                                            .unwrap_or(());
+                                    }
+                                }
+                            }
+                        }
                         resp.code = ar.code;
                         if ar.code != 0 {
                             info!(target: "baseapp", "Transaction check error, action result {:?}", ar);
@@ -153,10 +206,68 @@ impl crate::BaseApp {
 
         if let Ok(tx) = convert_unchecked_transaction::<SignedExtra>(raw_tx) {
             let ctx = self.retrieve_context(RunTxMode::Deliver).clone();
-
+            #[cfg(feature = "enterprise-web3")]
+            let tmp_tx = tx.clone();
             let ret = self.modules.process_tx::<SignedExtra>(ctx, tx);
             match ret {
                 Ok(ar) => {
+                    #[cfg(feature = "enterprise-web3")]
+                    {
+                        use enterprise_web3::{
+                            REMOVE_PENDING_CODE_MAP, REMOVE_PENDING_STATE_UPDATE_LIST,
+                        };
+                        use std::{mem::replace, ops::DerefMut};
+                        let code_map =
+                            if let Ok(mut code_map) = REMOVE_PENDING_CODE_MAP.lock() {
+                                let m = code_map.deref_mut();
+                                let map = replace(m, vec![]);
+                                map.clone()
+                            } else {
+                                log::error!("{}", "");
+                                Default::default()
+                            };
+                        let state_list = if let Ok(mut state_list) =
+                            REMOVE_PENDING_STATE_UPDATE_LIST.lock()
+                        {
+                            let v = state_list.deref_mut();
+                            let v2 = replace(v, vec![]);
+                            v2.clone()
+                        } else {
+                            log::error!("{}", "");
+                            Default::default()
+                        };
+                        if 0 == ar.code {
+                            if let fp_types::actions::Action::Ethereum(
+                                fp_types::actions::ethereum::Action::Transact(tx),
+                            ) = tmp_tx.function
+                            {
+                                let mut setter = enterprise_web3::setter()
+                                    .expect("connection redis failed");
+                                setter
+                                    .remove_pending_tx(tx)
+                                    .map_err(|e| log::error!("{:?}", e))
+                                    .unwrap_or(());
+
+                                for addr in code_map.iter() {
+                                    setter
+                                        .remove_pending_code(*addr)
+                                        .map_err(|e| log::error!("{:?}", e))
+                                        .unwrap_or(());
+                                }
+
+                                for (address, index) in state_list.iter() {
+                                    setter
+                                        .remove_pending_state(
+                                            address.clone(),
+                                            index.clone(),
+                                        )
+                                        .map_err(|e| log::error!("{:?}", e))
+                                        .unwrap_or(());
+                                }
+                            }
+                        }
+                    }
+
                     if ar.code != 0 {
                         info!(target: "baseapp", "deliver tx with result: {:?}", ar);
                     } else {

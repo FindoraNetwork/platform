@@ -268,7 +268,18 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
 
     fn inc_nonce(&mut self, address: H160) {
         let account_id = C::AddressMapping::convert_to_account_id(address);
-        let _ = C::AccountAsset::inc_nonce(self.ctx, &account_id);
+        let _nonce = C::AccountAsset::inc_nonce(self.ctx, &account_id);
+
+        #[cfg(feature = "enterprise-web3")]
+        {
+            use enterprise_web3::{NONCE_MAP, WEB3_SERVICE_START_HEIGHT};
+            if self.ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
+                let mut nonce_map = NONCE_MAP.lock().expect("get nonce map error");
+                if let Ok(nonce) = _nonce {
+                    nonce_map.insert(address, nonce);
+                }
+            }
+        }
     }
 
     fn set_storage(&mut self, address: H160, index: H256, value: H256) {
@@ -308,6 +319,49 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                 );
             }
         }
+
+        #[cfg(feature = "enterprise-web3")]
+        {
+            use enterprise_web3::{
+                State, PENDING_STATE_UPDATE_LIST, REMOVE_PENDING_STATE_UPDATE_LIST,
+                STATE_UPDATE_LIST, WEB3_SERVICE_START_HEIGHT,
+            };
+            use fp_core::context::RunTxMode;
+            if self.ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
+                if RunTxMode::Deliver == self.ctx.run_mode {
+                    let mut remove_pending_state_list = REMOVE_PENDING_STATE_UPDATE_LIST
+                        .lock()
+                        .expect("get code map fail");
+                    remove_pending_state_list.push((address, index));
+
+                    if let Ok(mut state_list) = STATE_UPDATE_LIST.lock() {
+                        state_list.push(State {
+                            height: self.ctx.header.height as u32,
+                            address,
+                            index,
+                            value,
+                        });
+                    } else {
+                        log::error!(
+                            target: "evm",
+                            "Failed push state update to STATE_UPDATE_LIST for {:?} [index: {:?}, value: {:?}]",
+                            address,
+                            index,
+                            value,
+                        )
+                    }
+                } else {
+                    let mut state_list =
+                        PENDING_STATE_UPDATE_LIST.lock().expect("get code map fail");
+                    state_list.push(State {
+                        height: 0,
+                        address,
+                        index,
+                        value,
+                    });
+                }
+            }
+        }
     }
 
     fn reset_storage(&mut self, address: H160) {
@@ -333,7 +387,12 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
            code_len,
             address
         );
-        if let Err(e) = App::<C>::create_account(self.ctx, address.into(), code) {
+        #[cfg(feature = "enterprise-web3")]
+        let code_clone = code.clone();
+
+        let result = App::<C>::create_account(self.ctx, address.into(), code);
+
+        if let Err(e) = result {
             log::error!(
                 target: "evm",
                 "Failed inserting code ({} bytes) at {:?}, error: {:?}",
@@ -341,6 +400,28 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                 address,
                     e
             );
+        } else {
+            #[cfg(feature = "enterprise-web3")]
+            {
+                use enterprise_web3::{
+                    CODE_MAP, PENDING_CODE_MAP, REMOVE_PENDING_CODE_MAP,
+                    WEB3_SERVICE_START_HEIGHT,
+                };
+                use fp_core::context::RunTxMode;
+                if self.ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
+                    if RunTxMode::Deliver == self.ctx.run_mode {
+                        let mut code_map = CODE_MAP.lock().expect("get code map fail");
+                        code_map.insert(address, code_clone.clone());
+                        let mut remove_pending_code_map =
+                            REMOVE_PENDING_CODE_MAP.lock().expect("get code map fail");
+                        remove_pending_code_map.push(address);
+                    } else {
+                        let mut code_map =
+                            PENDING_CODE_MAP.lock().expect("get code map fail");
+                        code_map.insert(address, code_clone);
+                    }
+                }
+            }
         }
     }
 

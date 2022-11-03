@@ -56,6 +56,10 @@ fc-rpc = { path = "../contracts/rpc" }
 fp-storage = { path = "../contracts/primitives/storage" }
 fp-utils = { path = "../contracts/primitives/utils" }
 
+
+enterprise-web3 = { path = "../contracts/primitives/enterprise-web3", optional = true  }
+
+
 [target.'cfg(target_os= "linux")'.dependencies]
 btm = "0.1.6"
 
@@ -67,4 +71,5 @@ vergen = "=3.1.0"
 [features]
 default = ["diskcache"]
 diskcache = ["ledger/diskcache"]
-debug_env = ["ledger/debug_env"]
+debug_env = ["ledger/debug_env", "config/debug_env"]
+web3_service = ["enterprise-web3", "baseapp/web3_service"]
