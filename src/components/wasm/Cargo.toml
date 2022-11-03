@@ -36,9 +36,9 @@ ruc = "1.0"
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
 
-noah  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
-noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
-noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.2.7" }
+noah  = { git = "https://github.com/FindoraNetwork/noah", branch = "develop" }
+noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", branch = "develop" }
+noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", branch = "develop" }
 
 finutils = { path = "../finutils", default-features = false }
 globutils = { path = "../../libs/globutils" }
