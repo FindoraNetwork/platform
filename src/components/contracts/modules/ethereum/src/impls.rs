@@ -16,6 +16,7 @@ use fp_core::{
 use fp_events::Event;
 use fp_evm::{BlockId, CallOrCreateInfo, Runner, TransactionStatus};
 use fp_storage::{Borrow, BorrowMut};
+use fp_types::crypto::Address;
 use fp_types::{
     actions::evm as EvmAction,
     crypto::{secp256k1_ecdsa_recover, HA256},
@@ -418,6 +419,7 @@ impl<C: Config> App<C> {
 
         Ok(ActionResult {
             code,
+            source: Some(Address::from(source)),
             data: info
                 .and_then(|i| serde_json::to_vec(&i).ok())
                 .unwrap_or_default(),

@@ -24,6 +24,7 @@ use fp_traits::{
 use fp_types::{actions::ethereum::Action, crypto::Address};
 use ruc::*;
 use std::marker::PhantomData;
+use tracing::debug;
 
 pub const MODULE_NAME: &str = "ethereum";
 
@@ -232,6 +233,43 @@ impl<C: Config> ValidateUnsigned for App<C> {
             )));
         }
 
+        Ok(())
+    }
+
+    fn post_execute(ctx: &Context, result: &ActionResult) -> Result<()> {
+        if ctx.header.height >= CFG.checkpoint.evm_checktx_nonce && result.code != 0 {
+            let prev = result
+                .source
+                .as_ref()
+                .map(|who| C::AccountAsset::nonce(ctx, who))
+                .unwrap_or_default();
+
+            ctx.state.write().discard_session();
+
+            // If EVM transaction fails, state change gets reverted/discarded except nonce.
+            let current = result
+                .source
+                .as_ref()
+                .map(|who| C::AccountAsset::nonce(ctx, who))
+                .unwrap_or_default();
+
+            if prev.gt(&current) {
+                if let Some(who) = result.source.as_ref() {
+                    debug!(
+                        target:
+                        "baseapp",
+                        "In post_execute: source {} {} {}",
+                        who,
+                        prev,
+                        current
+                    );
+                    // Keep it same with `pre_execute`
+                    let _ = C::AccountAsset::inc_nonce(ctx, who);
+                } else {
+                    unreachable!();
+                }
+            }
+        }
         Ok(())
     }
 }
