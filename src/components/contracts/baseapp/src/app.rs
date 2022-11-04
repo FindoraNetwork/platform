@@ -227,7 +227,7 @@ impl crate::BaseApp {
                 panic!("Failed to commit chain db at height: {}", block_height)
             });
 
-        // Reset the deliver state
+        // Reset the deliver state, but keep the ethereum cache
         Self::update_state(&mut self.deliver_state, Default::default(), vec![]);
 
         pnk!(self

@@ -138,6 +138,9 @@ pub fn transfer_batch(
     let mut tx = builder.build_and_take_transaction()?;
     tx.sign(owner_kp);
 
+    // let mut tx = builder.take_transaction();
+    tx.sign_to_map(owner_kp);
+
     send_tx(&tx).c(d!())
 }
 

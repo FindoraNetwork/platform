@@ -33,8 +33,10 @@ tmp_file
 **/.wasm.sh
 
 tools/tendermint
+tools/tendermint.zip
 seq_id.str
 utxo.map
+checkpoint.toml
 
 *.tmp
 checkpoint.toml

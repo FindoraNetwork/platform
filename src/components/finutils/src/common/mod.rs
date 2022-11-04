@@ -113,6 +113,9 @@ pub fn staker_update(
     let mut tx = builder.build_and_take_transaction()?;
     tx.sign(&kp);
 
+    // let mut tx = builder.take_transaction();
+    tx.sign_to_map(&kp);
+
     utils::send_tx(&tx).c(d!())
 }
 
@@ -180,6 +183,9 @@ pub fn stake(
     let mut tx = builder.build_and_take_transaction()?;
     tx.sign(&kp);
 
+    // let mut tx = builder.take_transaction();
+    tx.sign_to_map(&kp);
+
     utils::send_tx(&tx).c(d!())
 }
 
@@ -219,6 +225,10 @@ pub fn stake_append(
 
     let mut tx = builder.build_and_take_transaction()?;
     tx.sign(&kp);
+
+    // let mut tx = builder.take_transaction();
+    tx.sign_to_map(&kp);
+
     utils::send_tx(&tx).c(d!())
 }
 
@@ -270,6 +280,9 @@ pub fn unstake(
     let mut tx = builder.build_and_take_transaction()?;
     tx.sign(&kp);
 
+    // let mut tx = builder.take_transaction();
+    tx.sign_to_map(&kp);
+
     utils::send_tx(&tx).c(d!())
 }
 
@@ -296,6 +309,9 @@ pub fn claim(
 
     let mut tx = builder.build_and_take_transaction()?;
     tx.sign(&kp);
+
+    // let mut tx = builder.take_transaction();
+    tx.sign_to_map(&kp);
 
     utils::send_tx(&tx).c(d!())
 }
@@ -738,6 +754,9 @@ fn gen_undelegate_tx(
     let mut tx = builder.build_and_take_transaction()?;
     tx.sign(owner_kp);
 
+    // let mut tx = builder.take_transaction();
+    tx.sign_to_map(owner_kp);
+
     Ok(tx)
 }
 
@@ -764,6 +783,9 @@ fn gen_delegate_tx(
 
     let mut tx = builder.build_and_take_transaction()?;
     tx.sign(owner_kp);
+
+    // let mut tx = builder.take_transaction();
+    tx.sign_to_map(owner_kp);
 
     Ok(tx)
 }
@@ -823,6 +845,9 @@ pub fn create_asset_x(
     let mut tx = builder.build_and_take_transaction()?;
     tx.sign(kp);
 
+    // let mut tx = builder.take_transaction();
+    tx.sign_to_map(kp);
+
     utils::send_tx(&tx).map(|_| AssetTypeCode {
         val: AssetType(keccak_256(&asset_code)),
     })
@@ -866,6 +891,9 @@ pub fn issue_asset_x(
 
     let mut tx = builder.build_and_take_transaction()?;
     tx.sign(kp);
+
+    // let mut tx = builder.take_transaction();
+    tx.sign_to_map(kp);
 
     utils::send_tx(&tx)
 }
@@ -1500,8 +1528,12 @@ pub fn replace_staker(
     })?;
 
     builder.add_operation_replace_staker(&keypair, target_pubkey, new_td_addr_pk)?;
+
     let mut tx = builder.build_and_take_transaction()?;
     tx.sign(&keypair);
+
+    // let mut tx = builder.take_transaction();
+    tx.sign_to_map(&keypair);
 
     utils::send_tx(&tx).c(d!())?;
     Ok(())

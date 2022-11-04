@@ -43,12 +43,16 @@ lazy_static! {
     /// An identifier that distinguishes different EVM chains.
     static ref EVM_CAHIN_ID: u64 = std::env::var("EVM_CHAIN_ID").map(
         |id| id.as_str().parse::<u64>().unwrap()).unwrap_or(2152);
+
+    static ref CHAIN_STATE_MIN_VERSIONS: u64 = BLOCKS_IN_DAY * std::env::var("CHAIN_STATE_VERSIONS").map(
+        |ver|ver.as_str().parse::<u64>().expect("chainstate versions should be a valid integer")
+    ).unwrap_or(90);
 }
 
 const APP_NAME: &str = "findora";
 const CHAIN_STATE_PATH: &str = "state.db";
 const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
-const CHAIN_STATE_MIN_VERSIONS: u64 = 4 * 60 * 24 * 90;
+const BLOCKS_IN_DAY: u64 = 4 * 60 * 24;
 
 #[derive(Clone)]
 pub struct BaseApp {
@@ -158,13 +162,20 @@ impl module_xhub::Config for BaseApp {
 
 impl BaseApp {
     pub fn new(basedir: &Path, empty_block: bool) -> Result<Self> {
+        log::info!(
+            "create new baseapp with basedir {:?}, empty_block {}, history {} blocks",
+            basedir,
+            empty_block,
+            *CHAIN_STATE_MIN_VERSIONS
+        );
+
         // Creates a fresh chain state db and history db
         let fdb_path = basedir.join(CHAIN_STATE_PATH);
         let fdb = FinDB::open(fdb_path.as_path())?;
         let chain_state = Arc::new(RwLock::new(ChainState::new(
             fdb,
             "findora_db".to_owned(),
-            CHAIN_STATE_MIN_VERSIONS,
+            *CHAIN_STATE_MIN_VERSIONS,
         )));
 
         let rdb_path = basedir.join(CHAIN_HISTORY_DATA_PATH);
