@@ -89,7 +89,7 @@ fn restore_secp_keypair_from_mnemonic(
                 p.coin, p.account, p.change, p.address
             );
             bip32::XPrv::derive_from_path(
-                &seed,
+                seed,
                 &dp.parse::<bip32::DerivationPath>().c(d!())?,
             )
             .c(d!())

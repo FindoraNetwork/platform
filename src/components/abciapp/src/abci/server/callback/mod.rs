@@ -378,8 +378,8 @@ pub fn deliver_tx(
                     let mut la = s.la.write();
                     let mut laa = la.get_committed_state().write();
                     if let Some(tx) = staking::system_prism_mint_pay(
-                        &mut *laa,
-                        &mut *s.account_base_app.write(),
+                        &mut laa,
+                        &mut s.account_base_app.write(),
                         td_height,
                     ) {
                         drop(laa);
@@ -437,8 +437,8 @@ pub fn end_block(
         let mut laa = la.get_committed_state().write();
         if let Some(tx) = staking::system_mint_pay(
             td_height,
-            &mut *laa,
-            &mut *s.account_base_app.write(),
+            &mut laa,
+            &mut s.account_base_app.write(),
         ) {
             drop(laa);
             // this unwrap should be safe
@@ -458,7 +458,7 @@ pub fn end_block(
     }
 
     staking::system_ops(
-        &mut *la.get_committed_state().write(),
+        &mut la.get_committed_state().write(),
         &header,
         begin_block_req.last_commit_info.as_ref(),
         &begin_block_req.byzantine_validators.as_slice(),

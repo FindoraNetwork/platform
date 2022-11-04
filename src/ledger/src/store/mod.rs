@@ -1769,7 +1769,7 @@ impl LedgerStatus {
         // Apply memo updates
         for (code, memo) in block.memo_updates.drain() {
             let mut asset = self.asset_types.get_mut(&code).unwrap();
-            (*asset).properties.memo = memo;
+            asset.properties.memo = memo;
         }
 
         for (code, amount) in block.issuance_amounts.drain() {
@@ -1883,9 +1883,11 @@ fn build_mt_leaf_info_from_proof(proof: Proof, uid: u64) -> MTLeafInfo {
                 .nodes
                 .iter()
                 .map(|e| MTNode {
-                    siblings1: e.siblings1,
-                    siblings2: e.siblings2,
+                    left: e.left,
+                    mid: e.mid,
+                    right: e.right,
                     is_left_child: (e.path == TreePath::Left) as u8,
+                    is_mid_child: (e.path == TreePath::Middle) as u8,
                     is_right_child: (e.path == TreePath::Right) as u8,
                 })
                 .collect(),

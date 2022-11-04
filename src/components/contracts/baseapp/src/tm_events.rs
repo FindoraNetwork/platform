@@ -40,7 +40,7 @@ fn get_pending_hash() -> Result<Vec<H256>, attohttpc::Error> {
     );
     let mut pending_hash = vec![];
 
-    attohttpc::post(&url)
+    attohttpc::post(url)
         .header(attohttpc::header::CONTENT_TYPE, "application/json")
         .text(json)
         .send()
@@ -122,7 +122,7 @@ fn get_status() -> Result<bool, attohttpc::Error> {
     let json = String::from(
         "{\"jsonrpc\":\"2.0\",\"id\":\"anything\",\"method\":\"status\",\"params\":{}}",
     );
-    attohttpc::post(&url)
+    attohttpc::post(url)
         .header(attohttpc::header::CONTENT_TYPE, "application/json")
         .text(json)
         .send()

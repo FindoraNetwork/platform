@@ -67,7 +67,7 @@ where
     let contract_arg =
         format!("/contracts/{}", contract_file.as_ref().to_str().unwrap());
     let output = Command::new("docker")
-        .args(&[
+        .args([
             "run",
             "-v",
             &source_mount_arg,
