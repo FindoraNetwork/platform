@@ -374,7 +374,7 @@ pub fn check_merkle_proof(
         };
     }
 
-    iter.next() == None && hash == *merkle_root
+    iter.next().is_none() && hash == *merkle_root
 }
 
 pub mod helpers {

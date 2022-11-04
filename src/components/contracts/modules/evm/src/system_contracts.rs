@@ -31,7 +31,7 @@ impl SystemContracts {
             // Driect use this bytecode, beacuse we will remove on mainnet
             let bytecode_str = include_str!("../contracts/PrismXXProxy.bytecode");
 
-            let bytecode = hex::decode(&bytecode_str[2..].trim()).c(d!())?;
+            let bytecode = hex::decode(bytecode_str[2..].trim()).c(d!())?;
 
             let code_hash = keccak_256(&bytecode);
 
