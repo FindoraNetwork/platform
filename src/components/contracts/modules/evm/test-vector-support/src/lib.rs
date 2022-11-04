@@ -37,7 +37,7 @@ pub fn test_precompile_test_vectors<P: Precompile>(
 ) -> std::result::Result<(), String> {
     use std::fs;
 
-    let data = fs::read_to_string(&filepath).expect("Failed to read blake2F.json");
+    let data = fs::read_to_string(filepath).expect("Failed to read blake2F.json");
 
     let tests: Vec<EthConsensusTest> =
         serde_json::from_str(&data).expect("expected json array");

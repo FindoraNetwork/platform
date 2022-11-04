@@ -125,14 +125,14 @@ fn test_block() {
 #[test]
 fn test_basic_bitmap() {
     let path = "basic_bitmap";
-    let _ = fs::remove_file(&path);
+    let _ = fs::remove_file(path);
 
     // Create a new bitmap.
     let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create_new(true)
-        .open(&path)
+        .open(path)
         .unwrap();
 
     let mut bitmap = BitMap::create(file).unwrap();
@@ -158,7 +158,7 @@ fn test_basic_bitmap() {
     let file = OpenOptions::new()
         .read(true)
         .write(true)
-        .open(&path)
+        .open(path)
         .unwrap();
 
     let mut bitmap = BitMap::open(file).unwrap();
@@ -297,7 +297,7 @@ fn test_basic_bitmap() {
     let file = OpenOptions::new()
         .read(true)
         .write(true)
-        .open(&path)
+        .open(path)
         .unwrap();
 
     let mut bitmap = BitMap::open(file).unwrap();
@@ -358,7 +358,7 @@ fn test_basic_bitmap() {
 
     drop(bitmap);
 
-    let _ = fs::remove_file(&path);
+    let _ = fs::remove_file(path);
 }
 
 #[test]

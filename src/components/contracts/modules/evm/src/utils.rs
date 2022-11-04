@@ -17,7 +17,7 @@ pub fn deploy_contract<C: Config>(
     bytecode_str: &str,
 ) -> Result<()> {
     // Deploy Bridge here.
-    let bytecode = hex::decode(&bytecode_str[2..].trim()).c(d!())?;
+    let bytecode = hex::decode(bytecode_str[2..].trim()).c(d!())?;
 
     ActionRunner::<C>::inital_system_contract(
         ctx,
@@ -129,7 +129,7 @@ fn parse_truple_result(tuple: Vec<Token>) -> Result<NonConfidentialOutput> {
 
 pub fn compute_create2(caller: H160, salt: H256, code_hash: H256) -> H160 {
     let mut hasher = Keccak256::new();
-    hasher.update(&[0xff]);
+    hasher.update([0xff]);
     hasher.update(&caller[..]);
     hasher.update(&salt[..]);
     hasher.update(&code_hash[..]);
