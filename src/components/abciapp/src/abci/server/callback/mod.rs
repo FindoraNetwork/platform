@@ -377,7 +377,7 @@ pub fn end_block(
     {
         let laa = la.get_committed_state().read();
         if let Some(tx) =
-            staking::system_mint_pay(&*laa, &mut *s.account_base_app.write(), td_height)
+            staking::system_mint_pay(&laa, &mut s.account_base_app.write(), td_height)
         {
             drop(laa);
             // this unwrap should be safe
@@ -397,7 +397,7 @@ pub fn end_block(
     }
 
     staking::system_ops(
-        &mut *la.get_committed_state().write(),
+        &mut la.get_committed_state().write(),
         &header,
         begin_block_req.last_commit_info.as_ref(),
         &begin_block_req.byzantine_validators.as_slice(),
