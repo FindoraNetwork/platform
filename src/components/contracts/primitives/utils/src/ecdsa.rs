@@ -323,7 +323,7 @@ impl SecpPair {
             .map_err(|_| eg!("InvalidPhrase"))?;
         let bs = mnemonic.to_seed(password.unwrap_or(""));
         let ext = XPrv::derive_from_path(
-            &bs,
+            bs,
             &DerivationPath::from_str("m/44'/60'/0'/0/0")
                 .map_err(|_| eg!("InvalidDerivationPath"))?,
         )
