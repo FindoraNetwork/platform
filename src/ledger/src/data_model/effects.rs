@@ -132,6 +132,8 @@ impl TxnEffect {
         let mut te = TxnEffect::default();
         let mut txo_count: usize = 0;
 
+        super::debug_logger::add_log("Compute effect has started.".into());
+
         for op in txn.body.operations.iter() {
             macro_rules! check_nonce {
                 ($i: expr) => {

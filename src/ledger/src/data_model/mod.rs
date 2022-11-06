@@ -10,6 +10,9 @@ mod effects;
 pub use effects::{BlockEffect, TxnEffect};
 mod test;
 
+/// the debugger
+pub mod debug_logger;
+
 use {
     crate::{
         converter::ConvertAccount,
