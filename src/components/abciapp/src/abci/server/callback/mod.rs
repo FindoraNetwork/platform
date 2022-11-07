@@ -413,24 +413,27 @@ pub fn end_block(
 }
 
 pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseCommit {
-    let la = s.la.write();
-    let mut state = la.get_committed_state().write();
+    let state = s.la.read().borrowable_ledger_state();
 
     // will change `struct LedgerStatus`
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
-    state.set_tendermint_height(td_height as u64);
+    state.write().set_tendermint_height(td_height as u64);
 
     // cache last block for QueryServer
-    pnk!(api_cache::update_api_cache(&mut state));
+    pnk!(api_cache::update_api_cache(state.clone()));
 
     // snapshot them finally
-    let path = format!("{}/{}", &CFG.ledger_dir, &state.get_status().snapshot_file);
-    pnk!(serde_json::to_vec(&state.get_status())
+    let path = format!(
+        "{}/{}",
+        &CFG.ledger_dir,
+        &state.read().get_status().snapshot_file
+    );
+    pnk!(serde_json::to_vec(&state.read().get_status())
         .c(d!())
         .and_then(|s| fs::write(&path, s).c(d!(path))));
 
     let mut r = ResponseCommit::new();
-    let la_hash = state.get_state_commitment().0.as_ref().to_vec();
+    let la_hash = state.read().get_state_commitment().0.as_ref().to_vec();
     let cs_hash = s.account_base_app.write().commit(req).data;
 
     if CFG.checkpoint.disable_evm_block_height < td_height
