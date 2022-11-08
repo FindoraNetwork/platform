@@ -256,6 +256,7 @@ pub fn convert_tx(tx: &[u8]) -> Result<Transaction> {
 }
 
 /// Tx Catalog
+#[derive(Debug)]
 pub enum TxCatalog {
     /// findora tx
     FindoraTx,
@@ -269,19 +270,18 @@ pub enum TxCatalog {
 
 /// Check Tx Catalog
 pub fn try_tx_catalog(tx: &[u8], log: bool) -> TxCatalog {
+    let len = EVM_TX_TAG.len();
+    let tag = if tx.len() <= len {
+        TxCatalog::Unknown
+    } else if EVM_TX_TAG.eq(&tx[..len]) {
+        TxCatalog::EvmTx
+    } else {
+        TxCatalog::FindoraTx
+    };
+
     // print tx
     if log {
-        log::info!(target: "abciapp", "try_tx_catalog: {:?}", base64::encode(tx));
+        log::info!(target: "abciapp", "try_tx_catalog {:?}: {:?}", tag, base64::encode(tx));
     }
-
-    let len = EVM_TX_TAG.len();
-    if tx.len() <= len {
-        return TxCatalog::Unknown;
-    }
-
-    if EVM_TX_TAG.eq(&tx[..len]) {
-        return TxCatalog::EvmTx;
-    }
-
-    TxCatalog::FindoraTx
+    tag
 }

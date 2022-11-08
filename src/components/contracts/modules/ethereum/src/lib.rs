@@ -167,7 +167,8 @@ impl<C: Config> ValidateUnsigned for App<C> {
             let origin = Self::recover_signer_fast(ctx, transaction)
                 .ok_or_else(|| eg!("ExecuteTransaction: InvalidSignature"))?;
             let account_id = C::AddressMapping::convert_to_account_id(origin);
-            C::AccountAsset::inc_nonce(ctx, &account_id)?;
+            let nonce = C::AccountAsset::inc_nonce(ctx, &account_id)?;
+            log::debug!(target: "ethereum", "At height {} origin {} inc_nonce to {}", ctx.header.height, origin, nonce);
         }
 
         Ok(())
