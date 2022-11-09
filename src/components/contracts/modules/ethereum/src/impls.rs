@@ -323,7 +323,7 @@ impl<C: Config> App<C> {
             ));
         }
 
-        let (code, message) = match reason {
+        let (mut code, message) = match reason {
             ExitReason::Succeed(_) => (0, String::new()),
             // code 1 indicates `Failed to execute evm function`, see above
             ExitReason::Error(_) => (2, "EVM error".to_string()),
@@ -348,6 +348,10 @@ impl<C: Config> App<C> {
             info!(target: "ethereum", "evm execute result: reason {:?} status {:?} used_gas {}", reason, status, used_gas);
         }
 
+        if ctx.header.height < CFG.checkpoint.tx_revert_on_error_height {
+            code = 0;
+        }
+
         let receipt = ethereum::ReceiptV0 {
             state_root: match reason {
                 ExitReason::Succeed(_) => H256::from_low_u64_be(1),
@@ -366,11 +370,19 @@ impl<C: Config> App<C> {
                 pending_txs.push((transaction, status, receipt));
             }
 
-            TransactionIndex::insert(
-                ctx.db.write().borrow_mut(),
-                &HA256::new(transaction_hash),
-                &(ctx.header.height.into(), transaction_index),
-            )?;
+            if ctx.header.height < CFG.checkpoint.tx_revert_on_error_height {
+                TransactionIndex::insert(
+                    ctx.state.write().borrow_mut(),
+                    &HA256::new(transaction_hash),
+                    &(ctx.header.height.into(), transaction_index),
+                )?;
+            } else {
+                TransactionIndex::insert(
+                    ctx.db.write().borrow_mut(),
+                    &HA256::new(transaction_hash),
+                    &(ctx.header.height.into(), transaction_index),
+                )?;
+            }
         }
 
         events.push(Event::emit_event(
