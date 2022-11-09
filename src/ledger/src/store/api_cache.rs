@@ -3,7 +3,7 @@
 //!
 
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     Arc,
 };
 use {
@@ -30,6 +30,7 @@ use {
 
 lazy_static! {
     static ref CHECK_LOST_DATA: AtomicBool = AtomicBool::new(false);
+    static ref UPDATE_API_CACHE_COUNTER: AtomicU64 = AtomicU64::new(0);
 }
 
 type Issuances = Vec<(TxOutput, Option<OwnerMemo>)>;
@@ -480,9 +481,9 @@ pub fn update_api_cache(arc_ledger: Arc<RwLock<LedgerState>>) -> Result<()> {
         return Ok(());
     }
 
-    let is_checking = CHECK_LOST_DATA.load(Ordering::Acquire);
+    let c = UPDATE_API_CACHE_COUNTER.fetch_add(1, Ordering::Acquire);
 
-    if !is_checking {
+    if !CHECK_LOST_DATA.load(Ordering::Acquire) && c % 32 == 0 {
         CHECK_LOST_DATA.store(true, Ordering::Release);
         let ledger_cloned = arc_ledger.clone();
         std::thread::spawn(move || {
