@@ -85,7 +85,7 @@ pub async fn query_asset_issuance_num(
 ) -> actix_web::Result<web::Json<u64>> {
     let qs = data.read();
     let ledger = &qs.ledger_cloned;
-    if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
+    if let Ok(token_code) = AssetTypeCode::new_from_base64(&info) {
         if let Some(iss_num) = ledger.get_issuance_num(&token_code) {
             Ok(web::Json(iss_num))
         } else {
@@ -132,7 +132,7 @@ pub async fn query_asset(
 ) -> actix_web::Result<web::Json<AssetType>> {
     let qs = data.read();
     let ledger = &qs.ledger_cloned;
-    if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
+    if let Ok(token_code) = AssetTypeCode::new_from_base64(&info) {
         if let Some(asset) = ledger.get_asset_type(&token_code) {
             Ok(web::Json(asset))
         } else {

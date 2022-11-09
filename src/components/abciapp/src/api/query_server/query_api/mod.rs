@@ -197,7 +197,7 @@ pub async fn get_issued_records_by_code(
 ) -> actix_web::Result<web::Json<Vec<(TxOutput, Option<OwnerMemo>)>>> {
     let server = data.read();
 
-    match AssetTypeCode::new_from_base64(&*info).c(d!()) {
+    match AssetTypeCode::new_from_base64(&info).c(d!()) {
         Ok(token_code) => {
             if let Some(records) = server.get_issued_records_by_code(&token_code) {
                 Ok(web::Json(records))
@@ -406,7 +406,7 @@ pub async fn get_related_xfrs(
     info: web::Path<String>,
 ) -> actix_web::Result<web::Json<HashSet<TxnSID>>> {
     let server = data.read();
-    if let Ok(token_code) = AssetTypeCode::new_from_base64(&*info) {
+    if let Ok(token_code) = AssetTypeCode::new_from_base64(&info) {
         if let Some(records) = server.get_related_transfers(&token_code) {
             Ok(web::Json(records))
         } else {
