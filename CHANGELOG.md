@@ -10,6 +10,11 @@
 
 ## Change log
 
+#### v0.3.30-release
+
+- EVM upgrading and optimization in TPS.
+- Optimization and compatibility fixes in historical transactions replay.
+
 #### v0.3.20-release
 
 - Reduce log to single line.
