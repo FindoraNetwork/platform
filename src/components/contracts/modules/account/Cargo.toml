@@ -9,7 +9,7 @@ description = "Findora module supporting smart account function"
 readme = "README.md"
 
 [dependencies]
-abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
+abci = "0.7.2"
 log = "0.4"
 primitive-types = { version = "0.11.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
 ruc = "1.0"

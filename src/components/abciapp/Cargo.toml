@@ -47,7 +47,7 @@ ethereum-types = { version = "0.13.1", default-features = false }
 noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
 noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
 
-abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
+abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.5" }
 config = { path = "../config"}
 ledger = { path = "../../ledger" }
 cryptohash = { path = "../../libs/cryptohash" }
