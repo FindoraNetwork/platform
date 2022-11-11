@@ -2,7 +2,7 @@ use baseapp::BaseApp;
 use fp_rpc_core::types::PeerCount;
 use fp_rpc_core::NetApi;
 use jsonrpc_core::{BoxFuture, Result};
-use log::warn;
+use tracing::warn;
 
 pub struct NetApiImpl;
 

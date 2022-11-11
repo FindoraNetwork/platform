@@ -32,7 +32,6 @@ use fp_utils::tx::EvmRawTxWrapper;
 use hex_literal::hex;
 use jsonrpc_core::{futures::future, BoxFuture, Result};
 use lazy_static::lazy_static;
-use log::{debug, warn};
 use parking_lot::RwLock;
 use ruc::eg;
 use sha3::{Digest, Keccak256};
@@ -44,6 +43,7 @@ use tendermint::abci::Code;
 use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::Runtime;
 use tokio::task::spawn_blocking;
+use tracing::{debug, warn};
 
 lazy_static! {
     static ref RT: Runtime =
@@ -827,7 +827,7 @@ impl EthApi for EthApiImpl {
                     }
                     let allowance = available / gas_price;
                     if highest < allowance {
-                        log::warn!(
+                        tracing::warn!(
                         "Gas estimation capped by limited funds original {} balance {} sent {} feecap {} fundable {}",
                         highest,
                         balance,

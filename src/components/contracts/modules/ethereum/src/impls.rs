@@ -21,9 +21,9 @@ use fp_types::{
     crypto::{secp256k1_ecdsa_recover, HA256},
 };
 use fp_utils::{proposer_converter, timestamp_converter};
-use log::{debug, info};
 use ruc::*;
 use sha3::{Digest, Keccak256};
+use tracing::{debug, info};
 const BLOCK_MIGRATE: &str = "block_migrate";
 
 impl<C: Config> App<C> {

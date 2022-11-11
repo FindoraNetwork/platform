@@ -15,7 +15,7 @@ ethereum-types = { version = "0.13.1", default-features = false }
 futures = "0.3.16"
 lazy_static = "1.4.0"
 ledger = {path = "../../../ledger"}
-log = "0.4"
+tracing = "0.1"
 parking_lot = "0.12"
 primitive-types = { version = "0.11.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
 protobuf = "2.16"

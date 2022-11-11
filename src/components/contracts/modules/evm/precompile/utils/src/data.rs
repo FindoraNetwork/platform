@@ -91,7 +91,7 @@ impl<'a> EvmDataReader<'a> {
                 .map_err(|_| error("tried to parse selector out of bounds"))?,
         );
         T::try_from_primitive(u32::from_be_bytes(buffer)).map_err(|_| {
-            log::trace!(
+            tracing::trace!(
                 target: "precompile",
                 "Failed to match function selector for {}",
                 type_name::<T>()

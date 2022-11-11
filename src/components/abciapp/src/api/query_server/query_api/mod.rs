@@ -24,7 +24,6 @@ use {
         },
     },
     ledger_api::*,
-    log::info,
     noah::{
         anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
         xfr::{sig::XfrPublicKey, structs::OwnerMemo},
@@ -38,6 +37,7 @@ use {
         collections::{BTreeMap, HashMap, HashSet},
         sync::Arc,
     },
+    tracing::info,
 };
 
 /// Returns the git commit hash and commit date of this build

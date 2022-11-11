@@ -98,7 +98,7 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
 
     drop(state);
 
-    log::info!(target: "abciapp", "======== Last committed height: {} ========", td_height);
+    tracing::info!(target: "abciapp", "======== Last committed height: {} ========", td_height);
 
     if la.all_commited() {
         la.begin_block();
@@ -248,7 +248,7 @@ pub fn deliver_tx(
                 if txn.valid_in_abci() {
                     // Log print for monitor purpose
                     if td_height < EVM_FIRST_BLOCK_HEIGHT {
-                        log::info!(target: "abciapp",
+                        tracing::info!(target: "abciapp",
                             "EVM transaction(FindoraTx) detected at early height {}: {:?}",
                             td_height, txn
                         );
@@ -277,7 +277,7 @@ pub fn deliver_tx(
                         if let Err(err) =
                             s.account_base_app.write().deliver_findora_tx(&txn, &hash.0)
                         {
-                            log::error!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
+                            tracing::error!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
 
                             resp.code = 1;
                             resp.log =
@@ -319,7 +319,7 @@ pub fn deliver_tx(
                     } else if is_tm_transaction(&txn)
                         && td_height < CFG.checkpoint.enable_triple_masking_height
                     {
-                        log::info!(target: "abciapp",
+                        tracing::info!(target: "abciapp",
                             "Triple Masking transaction(FindoraTx) detected at early height {}: {:?}",
                             td_height, txn
                         );
@@ -364,7 +364,7 @@ pub fn deliver_tx(
             } else {
                 // Log print for monitor purpose
                 if td_height < EVM_FIRST_BLOCK_HEIGHT {
-                    log::info!(
+                    tracing::info!(
                         target:
                         "abciapp",
                         "EVM transaction(EvmTx) detected at early height {}: {:?}",
@@ -511,7 +511,7 @@ fn app_hash(
     mut la_hash: Vec<u8>,
     mut cs_hash: Vec<u8>,
 ) -> Vec<u8> {
-    log::info!(target: "abciapp",
+    tracing::info!(target: "abciapp",
         "app_hash_{}: {}_{}, height: {}",
         when,
         hex::encode(la_hash.clone()),
@@ -537,7 +537,7 @@ fn app_hash_v2(
     mut cs_hash: Vec<u8>,
     mut tm_hash: Vec<u8>,
 ) -> Vec<u8> {
-    log::info!(target: "abciapp",
+    tracing::info!(target: "abciapp",
         "app_hash_{}: {}_{}_{}, height: {}",
         when,
         hex::encode(la_hash.clone()),
