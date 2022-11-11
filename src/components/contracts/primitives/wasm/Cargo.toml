@@ -22,7 +22,7 @@ rlp = "0.5"
 ruc = "1.0"
 sha3 = "0.10"
 serde_json = "1.0"
-wasm-bindgen = { version = "0.2.83", features = ["serde-serialize"] }
+wasm-bindgen = { version = "=0.2.73", features = ["serde-serialize"] }
 
 # Must enable the "js"-feature,
 # OR the compiling will fail.
