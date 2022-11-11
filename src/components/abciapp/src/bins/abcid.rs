@@ -12,7 +12,10 @@ use {
 };
 
 fn main() {
-    globutils::logging::init_logging(None);
+    // globutils::logging::init_logging(None);
+    
+    env_logger::init();
+
     log::info!(concat!(
         "Build: ",
         env!("VERGEN_SHA"),
