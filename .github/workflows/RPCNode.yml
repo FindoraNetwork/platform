@@ -1,4 +1,4 @@
-name: NpcNode
+name: RpcNode
 on:
   push:
     tags:
@@ -50,7 +50,7 @@ jobs:
         export IMAGE_TAG="${TAGV:-main}"
         export VERGEN_SHA_EXTERN="${IMAGE_TAG}"
         echo "Image tag: ${IMAGE_TAG}"
-        make ci_build_release_web3_goleveldb
+        make ci_build_release_web3_binary_image
 
     - name: Build images
       env:
