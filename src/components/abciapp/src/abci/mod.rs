@@ -37,6 +37,8 @@ lazy_static! {
 
 /// Starting findorad
 pub fn run() -> Result<()> {
+    env_logger::init();
+
     let basedir = {
         fs::create_dir_all(&CFG.ledger_dir).c(d!())?;
         Some(CFG.ledger_dir.as_str())
