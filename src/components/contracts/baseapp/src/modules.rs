@@ -133,9 +133,6 @@ impl ModuleManager {
             check_convert_account(tx, ctx.header.height)?;
 
         if CFG.checkpoint.prismxx_inital_height < ctx.header.height {
-            let from = Address::from(from);
-            let owner = Address::from(owner);
-
             let mut pending_txs = DELIVER_PENDING_TRANSACTIONS.lock().c(d!())?;
             // if let Some(pending_txs)
             // let transaction_index = pending_txs.as_ref().unwrap_or_default().len() as u32;

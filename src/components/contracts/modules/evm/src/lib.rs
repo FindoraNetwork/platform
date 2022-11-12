@@ -38,6 +38,8 @@ use fp_types::{
     actions::{evm::Action, xhub::NonConfidentialOutput},
     crypto::{Address, HA160},
 };
+use noah::xfr::sig::XfrPublicKey;
+use noah_algebra::serialization::NoahFromToBytes;
 use precompile::PrecompileSet;
 use ruc::*;
 use runtime::runner::ActionRunner;
@@ -100,8 +102,8 @@ impl<C: Config> App<C> {
         &self,
         ctx: &Context,
         _asset: [u8; 32],
-        _from: &Address,
-        _to: &Address,
+        from: &XfrPublicKey,
+        to: &H160,
         _value: U256,
         _lowlevel: Vec<u8>,
         transaction_index: u32,
@@ -111,17 +113,13 @@ impl<C: Config> App<C> {
 
         let asset = Token::FixedBytes(Vec::from(_asset));
 
-        let bytes: &[u8] = _from.as_ref();
-        let from = Token::FixedBytes(bytes.to_vec());
+        let from = Token::Bytes(from.noah_to_bytes());
 
-        let bytes: &[u8] = _to.as_ref();
-        let to = Token::Address(H160::from_slice(&bytes[4..24]));
+        let to = Token::Address(to.clone());
 
         let value = Token::Uint(_value);
 
         let lowlevel = Token::Bytes(_lowlevel);
-
-        // println!("{}, {}, {}, {}, {}", asset, from, to, value, lowlevel);
 
         let input = function
             .encode_input(&[asset, from, to, value, lowlevel])
@@ -161,8 +159,8 @@ impl<C: Config> App<C> {
     pub fn withdraw_fra(
         &self,
         ctx: &Context,
-        _from: &Address,
-        _to: &Address,
+        from: &XfrPublicKey,
+        to: &H160,
         _value: U256,
         _lowlevel: Vec<u8>,
         transaction_index: u32,
@@ -170,12 +168,10 @@ impl<C: Config> App<C> {
     ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
         let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
 
-        let bytes: &[u8] = _from.as_ref();
-        let from = Token::FixedBytes(bytes.to_vec());
+        let from = Token::Bytes(from.noah_to_bytes());
 
-        let bytes: &[u8] = _to.as_ref();
-
-        let to = Token::Address(H160::from_slice(&bytes[4..24]));
+        // let to = Token::Address(H160::from_slice(&bytes[4..24]));
+        let to = Token::Address(to.clone());
         let value = Token::Uint(_value);
         let lowlevel = Token::Bytes(_lowlevel);
 
