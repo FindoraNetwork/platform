@@ -60,6 +60,6 @@ curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek",
 x25519-dalek = { git = "https://github.com/FindoraNetwork/x25519-dalek", rev = "53bb1a" }
 
 [patch."https://github.com/FindoraNetwork/storage"]
-fin_db = { git = "https:///github.com/FindoraNetwork//storage", branch = "FO-1160" }
-temp_db = { git = "https:///github.com/FindoraNetwork//storage", branch = "FO-1160" }
-storage = { git = "https:///github.com/FindoraNetwork//storage", branch = "FO-1160" } 
+fin_db = { git = "https:///github.com/FindoraNetwork//storage", branch = "FO-996-v2" }
+temp_db = { git = "https:///github.com/FindoraNetwork//storage", branch = "FO-996-v2" }
+storage = { git = "https:///github.com/FindoraNetwork//storage", branch = "FO-996-v2" }

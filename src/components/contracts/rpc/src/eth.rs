@@ -319,7 +319,7 @@ impl EthApi for EthApiImpl {
         request: CallRequest,
         block_number: Option<BlockNumber>,
     ) -> BoxFuture<Result<Bytes>> {
-        debug!(target: "eth_rpc", "call, request:{:?}", request);
+        debug!(target: "eth_rpc", "call, height {:?}, request:{:?}", block_number, request);
 
         let account_base_app = self.account_base_app.clone();
 
@@ -812,7 +812,7 @@ impl EthApi for EthApiImpl {
                     }
                     let allowance = available / gas_price;
                     if highest < allowance {
-                        log::warn!(
+                        warn!(
                         "Gas estimation capped by limited funds original {} balance {} sent {} feecap {} fundable {}",
                         highest,
                         balance,
