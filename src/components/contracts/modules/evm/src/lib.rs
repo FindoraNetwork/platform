@@ -225,7 +225,7 @@ impl<C: Config> App<C> {
             if let Err(e) =
                 utils::fetch_mint::<C>(ctx, &self.contracts, &mut pending_outputs)
             {
-                log::error!("Collect mint ops error: {:?}", e);
+                tracing::error!("Collect mint ops error: {:?}", e);
             }
         }
 

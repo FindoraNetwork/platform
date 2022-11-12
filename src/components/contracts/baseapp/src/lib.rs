@@ -162,7 +162,7 @@ impl module_xhub::Config for BaseApp {
 
 impl BaseApp {
     pub fn new(basedir: &Path, empty_block: bool) -> Result<Self> {
-        log::info!(
+        tracing::info!(
             "create new baseapp with basedir {:?}, empty_block {}, history {} blocks",
             basedir,
             empty_block,
@@ -366,7 +366,7 @@ impl BaseApp {
                         &address,
                         amount,
                     ) {
-                        log::error!("Error when burn account: {:?}", e);
+                        tracing::error!("Error when burn account: {:?}", e);
                     }
                 }
             }

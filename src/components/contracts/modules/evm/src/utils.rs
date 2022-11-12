@@ -59,7 +59,7 @@ pub fn fetch_mint<C: Config>(
                 if let Token::Tuple(tuple) = token {
                     let output = parse_truple_result(tuple)?;
 
-                    log::info!("Got issue output: {:?}", output);
+                    tracing::info!("Got issue output: {:?}", output);
 
                     outputs.push(output);
                 }

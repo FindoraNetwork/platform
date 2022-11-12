@@ -13,7 +13,8 @@ use {
 
 fn main() {
     globutils::logging::init_logging(None);
-    log::info!(concat!(
+
+    tracing::info!(concat!(
         "Build: ",
         env!("VERGEN_SHA"),
         " ",

@@ -5,8 +5,8 @@ use eth_pairings::public_interface::{perform_operation, ApiError, OperationType}
 use evm::executor::stack::{PrecompileFailure, PrecompileOutput};
 use evm::{Context, ExitError, ExitSucceed};
 use evm_precompile_utils::{EvmDataReader, EvmDataWriter, EvmResult, Gasometer};
-use log::debug;
 use module_evm::precompile::{FinState, Precompile, PrecompileId, PrecompileResult};
+use tracing::debug;
 
 const GAS_EXECUTION: u64 = 3437;
 
