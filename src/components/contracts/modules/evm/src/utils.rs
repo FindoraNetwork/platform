@@ -83,7 +83,7 @@ fn parse_truple_result(tuple: Vec<Token>) -> Result<NonConfidentialOutput> {
         return Err(eg!("Asset Must be FixedBytes"));
     };
 
-    let target = if let Token::FixedBytes(bytes) =
+    let target = if let Token::Bytes(bytes) =
         tuple.get(1).ok_or(eg!("Target must be FixedBytes"))?
     {
         XfrPublicKey::noah_from_bytes(bytes)?
@@ -113,7 +113,7 @@ fn parse_truple_result(tuple: Vec<Token>) -> Result<NonConfidentialOutput> {
 
     let max_supply =
         if let Token::Uint(num) = tuple.get(4).ok_or(eg!("No asset in index 4"))? {
-            EthereumDecimalsMapping::convert_to_native_token(*num).as_u64()
+            num.as_u64()
         } else {
             return Err(eg!("Max supply must be uint"));
         };

@@ -380,7 +380,6 @@ pub fn deliver_tx(
                     if let Some(tx) = staking::system_prism_mint_pay(
                         &mut laa,
                         &mut s.account_base_app.write(),
-                        td_height,
                     ) {
                         drop(laa);
                         if la.cache_transaction(tx).is_ok() {
