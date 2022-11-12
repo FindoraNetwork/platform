@@ -15,9 +15,9 @@ use fp_traits::{
     evm::{BlockHashMapping, FeeCalculator},
 };
 use fp_utils::timestamp_converter;
-use log::info;
 use std::{collections::btree_set::BTreeSet, marker::PhantomData, mem};
 use storage::state::State;
+use tracing::{debug, error, info};
 
 pub struct FindoraStackSubstate<'context, 'config> {
     pub ctx: &'context Context,
@@ -326,7 +326,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
 
     fn set_storage(&mut self, address: H160, index: H256, value: H256) {
         if value == H256::default() {
-            log::debug!(
+            debug!(
                 target: "evm",
                 "Removing storage for {:?} [index: {:?}]",
                 address,
@@ -338,7 +338,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                 &index.into(),
             );
         } else {
-            log::debug!(
+            debug!(
                 target: "evm",
                 "Updating storage for {:?} [index: {:?}, value: {:?}]",
                 address,
@@ -351,7 +351,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                 &index.into(),
                 &value,
             ) {
-                log::error!(
+                error!(
                     target: "evm",
                     "Failed updating storage for {:?} [index: {:?}, value: {:?}], error: {:?}",
                     address,
@@ -384,7 +384,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                             value,
                         });
                     } else {
-                        log::error!(
+                        error!(
                             target: "evm",
                             "Failed push state update to STATE_UPDATE_LIST for {:?} [index: {:?}, value: {:?}]",
                             address,
@@ -407,6 +407,11 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
     }
 
     fn reset_storage(&mut self, address: H160) {
+        debug!(
+            target: "evm",
+            "Removing storage with prefix {:?}",
+            address,
+        );
         AccountStorages::remove_prefix(
             self.ctx.state.write().borrow_mut(),
             &address.into(),
@@ -423,7 +428,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
 
     fn set_code(&mut self, address: H160, code: Vec<u8>) {
         let code_len = code.len();
-        log::debug!(
+        debug!(
             target: "evm",
             "Inserting code ({} bytes) at {:?}",
            code_len,
@@ -435,7 +440,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
         let result = App::<C>::create_account(self.ctx, address.into(), code);
 
         if let Err(e) = result {
-            log::error!(
+            error!(
                 target: "evm",
                 "Failed inserting code ({} bytes) at {:?}, error: {:?}",
                 code_len,

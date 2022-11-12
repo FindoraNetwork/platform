@@ -40,6 +40,7 @@ use {
             Arc,
         },
     },
+    tracing::info,
 };
 
 #[cfg(feature = "web3_service")]
@@ -95,7 +96,7 @@ pub fn info(s: &mut ABCISubmissionServer, req: &RequestInfo) -> ResponseInfo {
 
     drop(state);
 
-    log::info!(target: "abciapp", "======== Last committed height: {} ========", h);
+    info!(target: "abciapp", "======== Last committed height: {} ========", h);
 
     if la.all_commited() {
         la.begin_block();
@@ -242,7 +243,7 @@ pub fn deliver_tx(
                 if tx.valid_in_abci() {
                     // Log print for monitor purpose
                     if td_height < EVM_FIRST_BLOCK_HEIGHT {
-                        log::info!(target: "abciapp",
+                        info!(target: "abciapp",
                             "EVM transaction(FindoraTx) detected at early height {}: {:?}",
                             td_height, tx
                         );
@@ -271,7 +272,7 @@ pub fn deliver_tx(
                         if let Err(err) =
                             s.account_base_app.write().deliver_findora_tx(&tx)
                         {
-                            log::info!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
+                            info!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
 
                             resp.code = 1;
                             resp.log =
@@ -345,7 +346,7 @@ pub fn deliver_tx(
             } else {
                 // Log print for monitor purpose
                 if td_height < EVM_FIRST_BLOCK_HEIGHT {
-                    log::info!(
+                    info!(
                         target:
                         "abciapp",
                         "EVM transaction(EvmTx) detected at early height {}: {:?}",
@@ -453,6 +454,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
         use enterprise_web3::WEB3_SERVICE_START_HEIGHT;
         use std::collections::HashMap;
         use std::mem::replace;
+        use tracing::error;
 
         let height = state.get_tendermint_height() as u32;
         if height as u64 > *WEB3_SERVICE_START_HEIGHT {
@@ -461,28 +463,28 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
             let nonce_map = if let Ok(mut nonce_map) = NONCE_MAP.lock() {
                 replace(&mut *nonce_map, HashMap::new())
             } else {
-                log::error!("{}", "");
+                error!("{}", "");
                 Default::default()
             };
 
             let code_map = if let Ok(mut code_map) = CODE_MAP.lock() {
                 replace(&mut *code_map, HashMap::new())
             } else {
-                log::error!("{}", "");
+                error!("{}", "");
                 Default::default()
             };
 
             let balance_map = if let Ok(mut balance_map) = BALANCE_MAP.lock() {
                 replace(&mut *balance_map, HashMap::new())
             } else {
-                log::error!("{}", "");
+                error!("{}", "");
                 Default::default()
             };
 
             let state_list = if let Ok(mut state_list) = STATE_UPDATE_LIST.lock() {
                 replace(&mut *state_list, vec![])
             } else {
-                log::error!("{}", "");
+                error!("{}", "");
                 Default::default()
             };
 
@@ -495,14 +497,14 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
             let txs = if let Ok(mut txs) = TXS.lock() {
                 replace(&mut *txs, vec![])
             } else {
-                log::error!("{}", "");
+                error!("{}", "");
                 Default::default()
             };
 
             let receipts = if let Ok(mut receipts) = RECEIPTS.lock() {
                 replace(&mut *receipts, vec![])
             } else {
-                log::error!("{}", "");
+                error!("{}", "");
                 Default::default()
             };
 
@@ -516,27 +518,27 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
             {
                 setter
                     .set_height(height)
-                    .map_err(|e| log::error!("{:?}", e))
+                    .map_err(|e| error!("{:?}", e))
                     .unwrap_or(());
 
                 for (addr, code) in code_map.iter() {
                     setter
                         .set_byte_code(height, *addr, code.clone())
-                        .map_err(|e| log::error!("{:?}", e))
+                        .map_err(|e| error!("{:?}", e))
                         .unwrap_or(());
                 }
 
                 for (addr, nonce) in nonce_map.iter() {
                     setter
                         .set_nonce(height, *addr, *nonce)
-                        .map_err(|e| log::error!("{:?}", e))
+                        .map_err(|e| error!("{:?}", e))
                         .unwrap_or(());
                 }
 
                 for (addr, balance) in balance_map.iter() {
                     setter
                         .set_balance(height, *addr, *balance)
-                        .map_err(|e| log::error!("{:?}", e))
+                        .map_err(|e| error!("{:?}", e))
                         .unwrap_or(());
                 }
 
@@ -548,14 +550,14 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
                             state.index.clone(),
                             state.value.clone(),
                         )
-                        .map_err(|e| log::error!("{:?}", e))
+                        .map_err(|e| error!("{:?}", e))
                         .unwrap_or(());
                 }
 
                 if let Some(block) = block {
                     setter
                         .set_block_info(block, receipts, txs)
-                        .map_err(|e| log::error!("{:?}", e))
+                        .map_err(|e| error!("{:?}", e))
                         .unwrap_or(());
                 }
             }
@@ -573,7 +575,7 @@ fn app_hash(
     mut la_hash: Vec<u8>,
     mut cs_hash: Vec<u8>,
 ) -> Vec<u8> {
-    log::info!(target: "abciapp",
+    info!(target: "abciapp",
         "app_hash_{}: {}_{}, height: {}",
         when,
         hex::encode(la_hash.clone()),

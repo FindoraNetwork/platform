@@ -21,9 +21,9 @@ use fp_types::{
     crypto::{secp256k1_ecdsa_recover, HA256},
 };
 use fp_utils::{proposer_converter, timestamp_converter};
-use log::{debug, info};
 use ruc::*;
 use sha3::{Digest, Keccak256};
+use tracing::{debug, info};
 
 #[cfg(feature = "web3_service")]
 use enterprise_web3::{TxState, BLOCK, RECEIPTS, TXS, WEB3_SERVICE_START_HEIGHT};
@@ -171,7 +171,7 @@ impl<C: Config> App<C> {
                             let block = BlockAny::from(block);
                             b.replace(block);
                         } else {
-                            log::error!("the block is not none");
+                            error!("the block is not none");
                         }
                     }
                     if let Ok(mut txs) = TXS.lock() {

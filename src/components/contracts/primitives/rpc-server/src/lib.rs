@@ -23,9 +23,9 @@
 mod middleware;
 
 use jsonrpc_core::{IoHandlerExtension, MetaIoHandler};
-use log::error;
 use pubsub::PubSubMetadata;
 use std::io;
+use tracing::error;
 
 const MEGABYTE: usize = 1024 * 1024;
 
