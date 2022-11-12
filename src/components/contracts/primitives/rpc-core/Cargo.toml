@@ -9,7 +9,7 @@ description = "RPC traits of Ethereum."
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 
 [dependencies]
-ethereum-types = "0.13.1"
+ethereum-types = "0.14.0"
 futures = "0.3.16"
 jsonrpc-core = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-core" }
 jsonrpc-core-client = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-core-client" }
