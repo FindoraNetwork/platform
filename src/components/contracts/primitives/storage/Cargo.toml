@@ -21,4 +21,4 @@ storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0
 fp-core = { path = "../core" }
 
 [dev-dependencies]
-temp_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
+temp_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.1" }
