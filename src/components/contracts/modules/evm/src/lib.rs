@@ -115,7 +115,7 @@ impl<C: Config> App<C> {
 
         let from = Token::Bytes(from.noah_to_bytes());
 
-        let to = Token::Address(to.clone());
+        let to = Token::Address(*to);
 
         let value = Token::Uint(_value);
 
@@ -171,7 +171,7 @@ impl<C: Config> App<C> {
         let from = Token::Bytes(from.noah_to_bytes());
 
         // let to = Token::Address(H160::from_slice(&bytes[4..24]));
-        let to = Token::Address(to.clone());
+        let to = Token::Address(*to);
         let value = Token::Uint(_value);
         let lowlevel = Token::Bytes(_lowlevel);
 
