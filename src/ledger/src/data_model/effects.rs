@@ -1,4 +1,3 @@
-use noah::xfr::XfrNotePolicies;
 use {
     crate::{
         data_model::{
