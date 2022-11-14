@@ -376,7 +376,7 @@ impl TxnEffect {
         }
 
         // Refuse any transfer with policies for now
-        if trn.body.policies.valid == true {
+        if trn.body.policies.valid {
             return Err(eg!());
         }
 
