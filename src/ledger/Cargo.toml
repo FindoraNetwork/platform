@@ -26,7 +26,7 @@ unicode-normalization = "0.1.13"
 time = "0.3"
 tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a-fk" }
 indexmap = { version = "1.6.2", features = ["serde"] }
-config = { path = "../components/config" }
+conf = { path = "../components/conf" }
 fp-types = { path = "../components/contracts/primitives/types" }
 
 ruc = "1.0"
@@ -47,7 +47,7 @@ sliding_set = { path = "../libs/sliding_set" }
 [features]
 default = []
 diskcache = ["fbnc/diskcache"]
-debug_env = ["config/debug_env"]
+debug_env = ["conf/debug_env"]
 abci_mock = []
 
 [dev-dependencies]

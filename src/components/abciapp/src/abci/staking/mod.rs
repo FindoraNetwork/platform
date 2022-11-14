@@ -13,7 +13,7 @@ use {
     crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
     abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate},
     baseapp::BaseApp as AccountBaseApp,
-    config::abci::global_cfg::CFG,
+    conf::abci::global_cfg::CFG,
     lazy_static::lazy_static,
     ledger::{
         data_model::{Operation, Transaction, ASSET_TYPE_FRA},

@@ -1,4 +1,5 @@
 use {
+    config,
     global_cfg::CFG,
     ruc::*,
     serde::{Deserialize, Serialize},
@@ -6,7 +7,7 @@ use {
         convert::TryFrom,
         env,
         fs::{self, File},
-        io::{ErrorKind, Read, Write},
+        io::{ErrorKind, Write},
         path::Path,
     },
     toml,
@@ -91,7 +92,7 @@ pub struct CheckPointConfig {
 impl CheckPointConfig {
     /// load configuration of checkpoints from file.
     pub fn from_file(file_path: &str) -> Option<CheckPointConfig> {
-        let mut f = match File::open(file_path) {
+        match File::open(file_path) {
             Ok(file) => file,
             Err(error) => {
                 if error.kind() == ErrorKind::NotFound {
@@ -157,12 +158,14 @@ impl CheckPointConfig {
             }
         };
 
-        let mut content = String::new();
-        f.read_to_string(&mut content).unwrap();
-        let config: CheckPointConfig = toml::from_str(content.as_str())
-            .or_else(|_| serde_json::from_str(content.as_str()))
+        let checkpoint = config::Config::builder()
+            .add_source(config::File::with_name(file_path))
+            .build()
+            .unwrap()
+            .try_deserialize()
             .unwrap();
-        Some(config)
+
+        Some(checkpoint)
     }
 }
 

@@ -3,7 +3,7 @@
 use crate::data_model::{
     NoReplayToken, Operation, Transaction, ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING,
 };
-use config::abci::global_cfg::CFG;
+use conf::abci::global_cfg::CFG;
 use fp_types::crypto::MultiSigner;
 use ruc::*;
 use serde::{Deserialize, Serialize};

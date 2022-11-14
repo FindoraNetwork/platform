@@ -31,7 +31,7 @@ fp-storage = { path = "../../primitives/storage" }
 fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
 fp-utils = { path = "../../primitives/utils" }
-config = { path = "../../../config"}
+conf = { path = "../../../conf"}
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
 enterprise-web3 = { path = "../../primitives/enterprise-web3", optional = true  }

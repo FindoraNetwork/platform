@@ -5,7 +5,7 @@ mod basic;
 mod impls;
 
 use abci::{RequestEndBlock, ResponseEndBlock};
-use config::abci::global_cfg::CFG;
+use conf::abci::global_cfg::CFG;
 use ethereum_types::{H160, H256, U256};
 use evm::Config as EvmConfig;
 use fp_core::context::RunTxMode;

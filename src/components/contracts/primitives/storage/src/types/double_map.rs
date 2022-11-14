@@ -1,6 +1,6 @@
 use crate::hash::StorageHasher;
 use crate::*;
-use config::abci::global_cfg::CFG;
+use conf::abci::global_cfg::CFG;
 use ruc::*;
 use std::str::FromStr;
 use storage::db::MerkleDB;

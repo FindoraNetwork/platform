@@ -27,7 +27,7 @@ use {
     },
     api_cache::ApiCache,
     bitmap::{BitMap, SparseMap},
-    config::abci::global_cfg::CFG,
+    conf::abci::global_cfg::CFG,
     cryptohash::sha256::Digest as BitDigest,
     fbnc::{new_mapx, new_mapxnk, new_vecx, Mapx, Mapxnk, Vecx},
     globutils::{HashOf, ProofOf},

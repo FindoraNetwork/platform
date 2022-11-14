@@ -12,7 +12,7 @@ use {
     crate::api::{
         query_server::query_api, submission_server::submission_api::SubmissionApi,
     },
-    config::abci::{global_cfg::CFG, ABCIConfig},
+    conf::abci::{global_cfg::CFG, ABCIConfig},
     futures::executor::ThreadPool,
     lazy_static::lazy_static,
     ruc::*,

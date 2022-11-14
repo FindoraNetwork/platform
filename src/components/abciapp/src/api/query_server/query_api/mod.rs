@@ -11,7 +11,7 @@ pub mod service;
 use {
     actix_cors::Cors,
     actix_web::{error, middleware, web, App, HttpServer},
-    config::abci::{global_cfg::CFG, CheckPointConfig},
+    conf::abci::{global_cfg::CFG, CheckPointConfig},
     finutils::api::NetworkRoute,
     globutils::wallet,
     ledger::{

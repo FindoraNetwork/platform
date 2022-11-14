@@ -1,6 +1,6 @@
 use crate::hash::*;
 use crate::*;
-use config::abci::global_cfg::CFG;
+use conf::abci::global_cfg::CFG;
 use storage::db::MerkleDB;
 use storage::state::State;
 use storage::store::Prefix;

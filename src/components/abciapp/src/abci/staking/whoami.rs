@@ -5,7 +5,7 @@
 //!
 
 use {
-    config::abci::global_cfg::CFG, lazy_static::lazy_static,
+    conf::abci::global_cfg::CFG, lazy_static::lazy_static,
     ledger::staking::td_addr_to_bytes, ruc::*, serde::Deserialize, std::fs,
 };
 

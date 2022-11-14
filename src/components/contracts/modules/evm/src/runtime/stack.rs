@@ -1,5 +1,5 @@
 use crate::{storage::*, AddressMapping, App, Config};
-use config::abci::global_cfg::CFG;
+use conf::abci::global_cfg::CFG;
 use ethereum_types::{H160, H256, U256};
 use evm::{
     backend::Backend,

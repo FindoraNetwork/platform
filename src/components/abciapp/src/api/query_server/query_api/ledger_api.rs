@@ -5,7 +5,7 @@
 use {
     super::server::QueryServer,
     actix_web::{error, web},
-    config::abci::global_cfg::CFG,
+    conf::abci::global_cfg::CFG,
     finutils::api::{
         DelegationInfo, DelegatorInfo, DelegatorList, NetworkRoute, Validator,
         ValidatorDetail, ValidatorList,

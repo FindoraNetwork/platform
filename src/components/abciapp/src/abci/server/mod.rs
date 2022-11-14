@@ -14,7 +14,7 @@ use {
         ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
     },
     baseapp::BaseApp as AccountBaseAPP,
-    config::abci::global_cfg::CFG,
+    conf::abci::global_cfg::CFG,
     ledger::store::LedgerState,
     parking_lot::RwLock,
     rand_chacha::ChaChaRng,

@@ -9,7 +9,7 @@ members = [
     "src/libs/sliding_set",
     "src/components/finutils",
     "src/components/abciapp",
-    "src/components/config",
+    "src/components/conf",
     "src/components/wasm",
     "src/components/contracts/baseapp",
     "src/components/contracts/modules/account",

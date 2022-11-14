@@ -18,7 +18,7 @@ use {
         ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
         ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
     },
-    config::abci::global_cfg::CFG,
+    conf::abci::global_cfg::CFG,
     fp_storage::hash::{Sha256, StorageHasher},
     lazy_static::lazy_static,
     ledger::{

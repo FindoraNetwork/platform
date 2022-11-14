@@ -1,5 +1,5 @@
 [package]
-name = "config"
+name = "conf"
 version = "0.1.0"
 edition = "2021"
 
@@ -15,7 +15,7 @@ serde_derive = "1.0"
 serde_json = "1.0"
 serde-strz = "1.1.1"
 toml = "0.5.8"
-
+config = "0.13.1"
 globutils = { path = "../../libs/globutils" }
 
 [target.'cfg(target_os= "linux")'.dependencies]

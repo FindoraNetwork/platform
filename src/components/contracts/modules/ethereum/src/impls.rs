@@ -1,6 +1,6 @@
 use crate::storage::*;
 use crate::{App, Config, ContractLog, TransactionExecuted};
-use config::abci::global_cfg::CFG;
+use conf::abci::global_cfg::CFG;
 use ethereum::{
     BlockV0 as Block, LegacyTransactionMessage, ReceiptV0 as Receipt,
     TransactionV0 as Transaction,

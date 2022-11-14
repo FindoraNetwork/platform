@@ -26,7 +26,7 @@ use {
         },
         SNAPSHOT_ENTRIES_DIR,
     },
-    config::abci::global_cfg::CFG,
+    conf::abci::global_cfg::CFG,
     cosig::CoSigRule,
     cryptohash::sha256::{self, Digest},
     fbnc::{new_mapx, Mapx},

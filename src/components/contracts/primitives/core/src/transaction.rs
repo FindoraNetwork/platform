@@ -1,6 +1,6 @@
 use crate::context::{Context, RunTxMode};
 use abci::Event;
-use config::abci::global_cfg::CFG;
+use conf::abci::global_cfg::CFG;
 use fp_types::transaction::CheckedTransaction;
 use impl_trait_for_tuples::impl_for_tuples;
 use ruc::*;
