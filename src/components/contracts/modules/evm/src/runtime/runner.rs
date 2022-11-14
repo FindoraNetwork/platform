@@ -96,7 +96,7 @@ impl<C: Config> ActionRunner<C> {
 
         let used_gas = U256::from(executor.used_gas());
         let actual_fee = executor.fee(gas_price);
-        log::debug!(
+        tracing::debug!(
             target: "evm",
             "Execution {:?} [source: {:?}, value: {}, gas_price {}, gas_limit: {}, actual_fee: {}]",
             reason,
@@ -115,7 +115,7 @@ impl<C: Config> ActionRunner<C> {
         let state = executor.into_state();
 
         for address in state.substate.deletes {
-            log::debug!(
+            tracing::debug!(
                 target: "evm",
                 "Deleting account at {:?}",
                 address
@@ -124,7 +124,7 @@ impl<C: Config> ActionRunner<C> {
         }
 
         for log in &state.substate.logs {
-            log::trace!(
+            tracing::trace!(
                 target: "evm",
                 "Inserting log for {:?}, topics ({}) {:?}, data ({}): {:?}]",
                 log.address,
@@ -176,7 +176,7 @@ impl<C: Config> ActionRunner<C> {
         let state = executor.into_state();
 
         for address in state.substate.deletes {
-            log::debug!(
+            tracing::debug!(
                 target: "evm",
                 "Deleting account at {:?}",
                 address
@@ -185,7 +185,7 @@ impl<C: Config> ActionRunner<C> {
         }
 
         for log in &state.substate.logs {
-            log::trace!(
+            tracing::trace!(
                 target: "evm",
                 "Inserting log for {:?}, topics ({}) {:?}, data ({}): {:?}]",
                 log.address,
@@ -232,7 +232,7 @@ impl<C: Config> ActionRunner<C> {
         let state = executor.into_state();
 
         for address in state.substate.deletes {
-            log::debug!(
+            tracing::debug!(
                 target: "evm",
                 "Deleting account at {:?}",
                 address
@@ -241,7 +241,7 @@ impl<C: Config> ActionRunner<C> {
         }
 
         for log in &state.substate.logs {
-            log::trace!(
+            tracing::trace!(
                 target: "evm",
                 "Inserting log for {:?}, topics ({}) {:?}, data ({}): {:?}]",
                 log.address,

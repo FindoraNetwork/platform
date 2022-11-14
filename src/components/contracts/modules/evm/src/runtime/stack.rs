@@ -14,8 +14,8 @@ use fp_traits::{
     evm::{BlockHashMapping, FeeCalculator},
 };
 use fp_utils::timestamp_converter;
-use log::info;
 use std::{collections::btree_set::BTreeSet, marker::PhantomData, mem};
+use tracing::info;
 
 pub struct FindoraStackSubstate<'context, 'config> {
     pub ctx: &'context Context,
@@ -273,7 +273,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
 
     fn set_storage(&mut self, address: H160, index: H256, value: H256) {
         if value == H256::default() {
-            log::debug!(
+            tracing::debug!(
                 target: "evm",
                 "Removing storage for {:?} [index: {:?}]",
                 address,
@@ -285,7 +285,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                 &index.into(),
             );
         } else {
-            log::debug!(
+            tracing::debug!(
                 target: "evm",
                 "Updating storage for {:?} [index: {:?}, value: {:?}]",
                 address,
@@ -298,7 +298,7 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
                 &index.into(),
                 &value,
             ) {
-                log::error!(
+                tracing::error!(
                     target: "evm",
                     "Failed updating storage for {:?} [index: {:?}, value: {:?}], error: {:?}",
                     address,
@@ -327,14 +327,14 @@ impl<'context, 'vicinity, 'config, C: Config> StackState<'config>
 
     fn set_code(&mut self, address: H160, code: Vec<u8>) {
         let code_len = code.len();
-        log::debug!(
+        tracing::debug!(
             target: "evm",
             "Inserting code ({} bytes) at {:?}",
            code_len,
             address
         );
         if let Err(e) = App::<C>::create_account(self.ctx, address.into(), code) {
-            log::error!(
+            tracing::error!(
                 target: "evm",
                 "Failed inserting code ({} bytes) at {:?}, error: {:?}",
                 code_len,

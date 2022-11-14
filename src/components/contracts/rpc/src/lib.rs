@@ -18,11 +18,11 @@ use fp_rpc_core::{
 use fp_rpc_server::{rpc_handler, start_http, start_ws, RpcHandler, RpcMiddleware};
 use fp_utils::ecdsa::SecpPair;
 use jsonrpc_core::types::error::{Error, ErrorCode};
-use log::error;
 use parking_lot::RwLock;
 use rustc_hex::ToHex;
 use serde_json::Value;
 use std::sync::Arc;
+use tracing::error;
 
 const MAX_PAST_LOGS: u32 = 10000;
 const MAX_STORED_FILTERS: usize = 500;
@@ -99,7 +99,7 @@ pub fn start_web3_service(
 
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
 mod waiting {
-    use log::debug;
+    use tracing::debug;
 
     pub struct HttpServer(pub Option<fp_rpc_server::HttpServer>);
     impl Drop for HttpServer {

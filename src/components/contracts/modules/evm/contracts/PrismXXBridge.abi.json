@@ -21,9 +21,9 @@
       },
       {
         "indexed": false,
-        "internalType": "bytes32",
+        "internalType": "bytes",
         "name": "_to",
-        "type": "bytes32"
+        "type": "bytes"
       },
       {
         "indexed": false,
@@ -52,9 +52,9 @@
       },
       {
         "indexed": false,
-        "internalType": "bytes32",
+        "internalType": "bytes",
         "name": "_to",
-        "type": "bytes32"
+        "type": "bytes"
       },
       {
         "indexed": false,
@@ -89,9 +89,9 @@
       },
       {
         "indexed": false,
-        "internalType": "bytes32",
+        "internalType": "bytes",
         "name": "_to",
-        "type": "bytes32"
+        "type": "bytes"
       },
       {
         "indexed": false,
@@ -120,9 +120,9 @@
       },
       {
         "indexed": false,
-        "internalType": "bytes32",
+        "internalType": "bytes",
         "name": "_to",
-        "type": "bytes32"
+        "type": "bytes"
       },
       {
         "indexed": false,
@@ -158,9 +158,9 @@
     "inputs": [
       {
         "indexed": false,
-        "internalType": "bytes32",
+        "internalType": "bytes",
         "name": "_from",
-        "type": "bytes32"
+        "type": "bytes"
       },
       {
         "indexed": false,
@@ -189,9 +189,9 @@
       },
       {
         "indexed": false,
-        "internalType": "bytes32",
+        "internalType": "bytes",
         "name": "_from",
-        "type": "bytes32"
+        "type": "bytes"
       },
       {
         "indexed": false,
@@ -226,9 +226,9 @@
       },
       {
         "indexed": false,
-        "internalType": "bytes32",
+        "internalType": "bytes",
         "name": "_from",
-        "type": "bytes32"
+        "type": "bytes"
       },
       {
         "indexed": false,
@@ -257,9 +257,9 @@
       },
       {
         "indexed": false,
-        "internalType": "bytes32",
+        "internalType": "bytes",
         "name": "_from",
-        "type": "bytes32"
+        "type": "bytes"
       },
       {
         "indexed": false,
@@ -279,6 +279,19 @@
   },
   {
     "inputs": [],
+    "name": "__self",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "_consumeMint",
     "outputs": [
       {
@@ -289,9 +302,9 @@
             "type": "bytes32"
           },
           {
-            "internalType": "bytes32",
+            "internalType": "bytes",
             "name": "receiver",
-            "type": "bytes32"
+            "type": "bytes"
           },
           {
             "internalType": "uint256",
@@ -325,9 +338,9 @@
         "type": "bytes32"
       },
       {
-        "internalType": "bytes32",
+        "internalType": "bytes",
         "name": "_from",
-        "type": "bytes32"
+        "type": "bytes"
       },
       {
         "internalType": "address",
@@ -413,6 +426,49 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "addr",
+        "type": "address"
+      }
+    ],
+    "name": "computeERC20AssetType",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "addr",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "tokenId",
+        "type": "uint256"
+      }
+    ],
+    "name": "computeNFTAssetType",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "consumeMint",
     "outputs": [
@@ -424,9 +480,9 @@
             "type": "bytes32"
           },
           {
-            "internalType": "bytes32",
+            "internalType": "bytes",
             "name": "receiver",
-            "type": "bytes32"
+            "type": "bytes"
           },
           {
             "internalType": "uint256",
@@ -455,9 +511,9 @@
   {
     "inputs": [
       {
-        "internalType": "bytes32",
+        "internalType": "bytes",
         "name": "_to",
-        "type": "bytes32"
+        "type": "bytes"
       }
     ],
     "name": "depositFRA",
@@ -473,9 +529,9 @@
         "type": "address"
       },
       {
-        "internalType": "bytes32",
+        "internalType": "bytes",
         "name": "_to",
-        "type": "bytes32"
+        "type": "bytes"
       },
       {
         "internalType": "uint256",
@@ -501,9 +557,9 @@
         "type": "address"
       },
       {
-        "internalType": "bytes32",
+        "internalType": "bytes",
         "name": "_to",
-        "type": "bytes32"
+        "type": "bytes"
       },
       {
         "internalType": "uint256",
@@ -524,9 +580,9 @@
         "type": "address"
       },
       {
-        "internalType": "bytes32",
+        "internalType": "bytes",
         "name": "_to",
-        "type": "bytes32"
+        "type": "bytes"
       },
       {
         "internalType": "uint256",
@@ -568,9 +624,9 @@
         "type": "bytes32"
       },
       {
-        "internalType": "bytes32",
+        "internalType": "bytes",
         "name": "receiver",
-        "type": "bytes32"
+        "type": "bytes"
       },
       {
         "internalType": "uint256",
@@ -645,9 +701,9 @@
         "type": "bytes32"
       },
       {
-        "internalType": "bytes32",
+        "internalType": "bytes",
         "name": "_from",
-        "type": "bytes32"
+        "type": "bytes"
       },
       {
         "internalType": "address",
@@ -673,9 +729,9 @@
   {
     "inputs": [
       {
-        "internalType": "bytes32",
+        "internalType": "bytes",
         "name": "_from",
-        "type": "bytes32"
+        "type": "bytes"
       },
       {
         "internalType": "address payable",

@@ -4,9 +4,9 @@ use fp_core::context::RunTxMode;
 use fp_evm::BlockId;
 use fp_types::assemble::convert_unchecked_transaction;
 use fp_utils::tx::EvmRawTxWrapper;
-use log::{debug, error, info};
 use primitive_types::U256;
 use ruc::*;
+use tracing::{debug, error, info};
 
 impl crate::BaseApp {
     /// info implements the ABCI interface.

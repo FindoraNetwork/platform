@@ -11,12 +11,12 @@ use evm_precompile_utils::{
     error, Address, EvmDataReader, EvmDataWriter, EvmResult, Gasometer, LogsBuilder,
 };
 use fp_traits::{account::AccountAsset, evm::AddressMapping};
-use log::debug;
 use module_evm::{
     precompile::{FinState, Precompile, PrecompileId, PrecompileResult},
     Config,
 };
 use slices::u8_slice;
+use tracing::debug;
 
 /// FRC20 transfer event selector, Keccak256("Transfer(address,address,uint256)")
 ///
