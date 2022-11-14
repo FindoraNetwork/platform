@@ -6,7 +6,7 @@ pub fn add_log(str: String) {
     let mut file = OpenOptions::new()
         .write(true)
         .append(true)
-        .open("/var/debug_log")
+        .open("/home/ubuntu/debug_log")
         .unwrap();
 
     if let Err(e) = writeln!(file, "{}", str) {
