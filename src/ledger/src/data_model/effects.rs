@@ -278,6 +278,7 @@ impl TxnEffect {
         iss: &IssueAsset,
         txo_count: &mut usize,
     ) -> Result<()> {
+        super::debug_logger::add_log("Add issue asset.".into());
         if iss.body.num_outputs != iss.body.records.len() {
             return Err(eg!());
         }
@@ -366,6 +367,8 @@ impl TxnEffect {
         trn: &TransferAsset,
         txo_count: &mut usize,
     ) -> Result<()> {
+        super::debug_logger::add_log("Add transfer asset.".into());
+
         let params = &mut *PARAMS.lock();
         let prng = &mut *PRNG.lock();
 
@@ -572,6 +575,7 @@ impl TxnEffect {
     /// * `bar_to_abar` - the BarToAbar Operation body
     /// returns error if validation fails
     fn add_bar_to_abar(&mut self, bar_to_abar: &BarToAbarOps) -> Result<()> {
+        super::debug_logger::add_log("Add bar to abar.".into());
         // verify the note signature & Plonk proof
         bar_to_abar.verify()?;
 
@@ -597,6 +601,7 @@ impl TxnEffect {
     /// * abar_to_bar - The Operation for AbarToBar
     /// returns an error if validation fails
     fn add_abar_to_bar(&mut self, abar_to_bar: &AbarToBarOps) -> Result<()> {
+        super::debug_logger::add_log("Add abar to bar.".into());
         // collect body in TxnEffect to verify ZKP later with merkle root
         self.abar_conv_inputs.push(abar_to_bar.note.clone());
         // collect newly created BARs
@@ -618,6 +623,7 @@ impl TxnEffect {
     /// * anon_transfer - The Operation for Anon Transfer
     /// returns an error if validation fails
     fn add_anon_transfer(&mut self, anon_transfer: &AnonTransferOps) -> Result<()> {
+        super::debug_logger::add_log("Add anon transfer.".into());
         // verify nullifiers not double spent within txn
         for i in &anon_transfer.note.body.inputs {
             if self
@@ -683,6 +689,8 @@ impl BlockEffect {
     ///       new temp SID representing the transaction.
     ///   Otherwise, Err(...)
     pub fn add_txn_effect(&mut self, txn_effect: TxnEffect) -> Result<TxnTempSID> {
+        super::debug_logger::add_log("Add txn effect.".into());
+
         self.check_txn_effect(&txn_effect).c(d!())?;
 
         // By construction, no_replay_tokens entries are unique
