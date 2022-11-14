@@ -391,10 +391,6 @@ impl TxnEffect {
             }
         }
 
-
-        // prevent compilation
-        jiahgiodfhaioghsdoiahfosahfso
-
         // Simplify (4)
         if !trn.body.lien_assignments.is_empty()
             || trn.body.transfer_type != TransferType::Standard

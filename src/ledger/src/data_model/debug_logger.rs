@@ -12,6 +12,4 @@ pub fn add_log(str: String) {
     if let Err(e) = writeln!(file, "{}", str) {
         eprintln!("Couldn't write to file: {}", e);
     }
-
-    panic!("stop the instance")
 }
