@@ -1,3 +1,4 @@
+use noah::xfr::structs::TracingPolicy;
 use {
     crate::{
         data_model::{
@@ -375,7 +376,79 @@ impl TxnEffect {
         }
 
         // Refuse any transfer with policies for now
-        if trn.body.policies.valid {
+        if trn
+            .body
+            .policies
+            .inputs_tracing_policies
+            .iter()
+            .any(|x| !x.is_empty())
+        {
+            return Err(eg!());
+        }
+        if trn
+            .body
+            .policies
+            .outputs_tracing_policies
+            .iter()
+            .any(|x| !x.is_empty())
+        {
+            return Err(eg!());
+        }
+        if trn
+            .body
+            .policies
+            .inputs_sig_commitments
+            .iter()
+            .any(|x| !x.is_none())
+        {
+            return Err(eg!());
+        }
+        if trn
+            .body
+            .policies
+            .outputs_sig_commitments
+            .iter()
+            .any(|x| !x.is_none())
+        {
+            return Err(eg!());
+        }
+        if trn
+            .body
+            .transfer
+            .asset_tracing_memos
+            .iter()
+            .any(|x| !x.is_empty())
+        {
+            return Err(eg!());
+        }
+        if !trn
+            .body
+            .transfer
+            .proofs
+            .asset_tracing_proof
+            .inputs_identity_proofs
+            .is_empty()
+        {
+            return Err(eg!());
+        }
+        if !trn
+            .body
+            .transfer
+            .proofs
+            .asset_tracing_proof
+            .outputs_identity_proofs
+            .is_empty()
+        {
+            return Err(eg!());
+        }
+        if !trn
+            .body
+            .transfer
+            .proofs
+            .asset_tracing_proof
+            .asset_type_and_amount_proofs
+            .is_empty()
+        {
             return Err(eg!());
         }
 
