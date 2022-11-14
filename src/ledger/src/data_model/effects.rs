@@ -1,3 +1,4 @@
+use noah::xfr::XfrNotePolicies;
 use {
     crate::{
         data_model::{
@@ -371,6 +372,11 @@ impl TxnEffect {
             return Err(eg!());
         }
         if trn.body.outputs.len() != trn.body.transfer.outputs.len() {
+            return Err(eg!());
+        }
+
+        // Refuse any transfer with policies for now
+        if trn.body.policies.valid == true {
             return Err(eg!());
         }
 
