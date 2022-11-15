@@ -8,6 +8,7 @@ mod test;
 
 use fbnc::NumKey;
 
+use crate::data_model::debug_logger::add_log;
 use {
     crate::{
         data_model::{
@@ -1486,6 +1487,8 @@ impl LedgerStatus {
             }
         }
 
+        add_log(format!("seq id = {:?}", seq_id));
+
         // 1. Each input must be unspent and correspond to the claimed record
         // 2. Inputs with transfer restrictions can only be owned by the asset issuer
         for (inp_sid, inp_record) in txn_effect.input_txos.iter() {
@@ -1665,6 +1668,7 @@ impl LedgerStatus {
         // An axfr_body requires versioned merkle root hash for verification.
         // here with LedgerStatus available.
         for axfr_note in txn_effect.axfr_bodies.iter() {
+            add_log(format!("anon_xfr: root = {:?}", axfr_note.body.merkle_root));
             for input in &axfr_note.body.inputs {
                 if self.spent_abars.get(&input).is_some() {
                     return Err(eg!("Input abar must be unspent"));
@@ -1689,10 +1693,17 @@ impl LedgerStatus {
                 hasher.clone(),
             )
             .c(d!("Anon Transfer proof verification failed"))?;
+
+            add_log(format!(
+                "anon_xfr approved: root = {:?}",
+                axfr_note.body.merkle_root
+            ));
         }
 
         // An axfr_abar_conv requires versioned merkle root hash for verification.
         for abar_conv in &txn_effect.abar_conv_inputs {
+            add_log(format!("abar to bar/bar to abar: {:?}", abar_conv.digest()));
+
             if self.spent_abars.get(&abar_conv.get_input()).is_some() {
                 return Err(eg!("Input abar must be unspent"));
             }
@@ -1707,6 +1718,10 @@ impl LedgerStatus {
 
             // verify zk proof with merkle root
             abar_conv.verify(version_root, hasher.clone())?;
+            add_log(format!(
+                "abar to bar/bar to abar approved: {:?}",
+                abar_conv.digest()
+            ));
         }
 
         Ok(())
