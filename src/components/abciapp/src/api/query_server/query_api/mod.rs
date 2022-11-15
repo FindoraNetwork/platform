@@ -598,7 +598,8 @@ pub async fn get_checkpoint(
     let mut checkpoint = CFG.checkpoint.clone();
 
     if let Ok(sc) = module_evm::system_contracts::SystemContracts::new() {
-        checkpoint.prism_bridge_address = format!("{:?}", sc.bridge_address)
+        checkpoint.prism_bridge_address = format!("{:?}", sc.bridge_address);
+        checkpoint.evm_staking_address = format!("{:?}", sc.staking_address);
     }
 
     Ok(web::Json(checkpoint))

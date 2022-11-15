@@ -88,6 +88,10 @@ pub struct CheckPointConfig {
     // Fix the amount in the delegators that staking did not modify when it punished the validator.
     pub fix_delegators_am_height: u64,
     pub validators_limit_v2_height: u64,
+
+    // Enable evm staking
+    pub evm_staking: u64,
+    pub evm_staking_address: String,
 }
 
 impl CheckPointConfig {
@@ -127,6 +131,8 @@ impl CheckPointConfig {
                                 proper_gas_set_height: 0,
                                 fix_delegators_am_height: 0,
                                 validators_limit_v2_height: 0,
+                                evm_staking: 0,
+                                evm_staking_address: String::new(),
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -156,6 +162,8 @@ impl CheckPointConfig {
                                 fix_undelegation_missing_reward_height: 3000000,
                                 fix_delegators_am_height: 30000000,
                                 validators_limit_v2_height: 30000000,
+                                evm_staking: 30000000,
+                                evm_staking_address: String::new(),
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
