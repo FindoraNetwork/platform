@@ -1489,6 +1489,7 @@ impl LedgerStatus {
 
         add_log(format!("seq id = {:?}", seq_id));
 
+        add_log(format!("number of input txos: {}", txn_effect.input_txos.len()));
         // 1. Each input must be unspent and correspond to the claimed record
         // 2. Inputs with transfer restrictions can only be owned by the asset issuer
         for (inp_sid, inp_record) in txn_effect.input_txos.iter() {
@@ -1525,6 +1526,7 @@ impl LedgerStatus {
         }
 
         // Internally spend inputs with transfer restrictions can only be owned by the asset issuer
+        add_log(format!("number of internally spent txos: {}", txn_effect.internally_spent_txos.len()));
         for record in txn_effect.internally_spent_txos.iter() {
             if let Some(code) = record
                 .record
@@ -1667,6 +1669,7 @@ impl LedgerStatus {
 
         // An axfr_body requires versioned merkle root hash for verification.
         // here with LedgerStatus available.
+        add_log(format!("number of axfr bodies: {}", txn_effect.axfr_bodies.len()));
         for axfr_note in txn_effect.axfr_bodies.iter() {
             add_log(format!("anon_xfr: root = {:?}", axfr_note.body.merkle_root));
             for input in &axfr_note.body.inputs {
@@ -1700,6 +1703,7 @@ impl LedgerStatus {
             ));
         }
 
+        add_log(format!("number of axfr bodies: {}", txn_effect.abar_conv_inputs.len()));
         // An axfr_abar_conv requires versioned merkle root hash for verification.
         for abar_conv in &txn_effect.abar_conv_inputs {
             add_log(format!("abar to bar/bar to abar: {:?}", abar_conv.digest()));

@@ -1,4 +1,3 @@
-use crate::data_model::debug_logger::add_log;
 use {
     crate::{
         data_model::{
@@ -571,7 +570,6 @@ impl TxnEffect {
     /// * `bar_to_abar` - the BarToAbar Operation body
     /// returns error if validation fails
     fn add_bar_to_abar(&mut self, bar_to_abar: &BarToAbarOps) -> Result<()> {
-        add_log(format!("bar to abar: {}", bar_to_abar.txo_sid));
         // verify the note signature & Plonk proof
         bar_to_abar.verify()?;
 
@@ -586,7 +584,6 @@ impl TxnEffect {
         );
         // push new ABAR created
         self.bar_conv_abars.push(bar_to_abar.output_record());
-        add_log(format!("bar to abar approved: {}", bar_to_abar.txo_sid));
         Ok(())
     }
 
