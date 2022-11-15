@@ -47,7 +47,8 @@ impl SystemContracts {
 
         let staking_address = if CFG.checkpoint.evm_staking_address.is_empty() {
             // Driect use this bytecode, beacuse we will remove on mainnet
-            let bytecode_str = include_str!("../contracts/EVMStakingSystemProxy.bytecode");
+            let bytecode_str =
+                include_str!("../contracts/EVMStakingSystemProxy.bytecode");
 
             let bytecode = hex::decode(bytecode_str[2..].trim()).c(d!())?;
 
@@ -57,7 +58,6 @@ impl SystemContracts {
         } else {
             H160::from_str(&CFG.checkpoint.evm_staking_address).c(d!())?
         };
-
 
         Ok(Self {
             bridge,

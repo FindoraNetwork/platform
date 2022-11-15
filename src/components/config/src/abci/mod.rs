@@ -90,7 +90,7 @@ pub struct CheckPointConfig {
     pub validators_limit_v2_height: u64,
 
     // Enable evm staking
-    pub evm_staking: u64,
+    pub evm_staking: i64,
     pub evm_staking_address: String,
 }
 
