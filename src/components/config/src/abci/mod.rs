@@ -136,12 +136,12 @@ impl CheckPointConfig {
                                 nonconfidential_balance_fix_height: 1210000,
                                 unbond_block_cnt: 3600 * 24 * 21 / 16,
                                 fix_unpaid_delegation_height: 2261885,
-                                fix_undelegation_missing_reward_height: 3212500,
-                                evm_checktx_nonce: 3212500,
-                                utxo_checktx_height: 3212500,
-                                fix_delegators_am_height: 3212500,
-                                validators_limit_v2_height: 3212500,
-                                evm_substate_v2_height: 3212500,
+                                fix_undelegation_missing_reward_height: 3230200,
+                                evm_checktx_nonce: 3230200,
+                                utxo_checktx_height: 3230200,
+                                fix_delegators_am_height: 3230200,
+                                validators_limit_v2_height: 3230200,
+                                evm_substate_v2_height: 3230200,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
