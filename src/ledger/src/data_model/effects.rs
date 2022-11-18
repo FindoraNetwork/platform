@@ -715,7 +715,6 @@ impl BlockEffect {
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn compute_txns_in_block_hash(&self) -> HashOf<Vec<Transaction>> {
-
         let height = self.staking_simulator.cur_height();
 
         println!("Current height is: {}", height);
