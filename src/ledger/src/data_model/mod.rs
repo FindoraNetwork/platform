@@ -1315,7 +1315,7 @@ pub struct Transaction {
     #[serde(skip_serializing_if = "is_default")]
     pub signatures: Vec<SignatureOf<TransactionBody>>,
     #[serde(default)]
-    #[serde(skip_serializing_if = "is_default")]
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub pubkey_sign_map: HashMap<XfrPublicKey, SignatureOf<TransactionBody>>,
 }
 
