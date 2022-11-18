@@ -185,18 +185,27 @@ impl LedgerState {
     fn update_state(&mut self, mut block: BlockEffect, tsm: &TmpSidMap) -> Result<()> {
         let mut tx_block = Vec::new();
 
+        let height = block.staking_simulator.cur_height();
+
         // Update the transaction Merkle tree
         // Store the location of each utxo so we can create authenticated utxo proofs
         let mut txn_merkle = self.txn_merkle.write();
         for (tmp_sid, txn) in block.temp_sids.iter().zip(block.txns.iter()) {
-            let txn = txn.clone();
             let txo_sid_map = tsm.get(&tmp_sid).c(d!())?;
             let txn_sid = txo_sid_map.0;
             let txo_sids = &txo_sid_map.1;
 
-            let merkle_id = txn_merkle
-                .append_hash(&txn.hash(txn_sid).0.hash.into())
-                .c(d!())?;
+            let merkle_id = {
+                let mut txn = txn.clone();
+
+                if (CFG.checkpoint.utxo_checktx_height as u64) > height {
+                    txn.pubkey_sign_map = Default::default();
+                }
+
+                let hash = HashOf::new(&(txn_sid, txn)).0.hash;
+
+                txn_merkle.append_hash(&hash.into()).c(d!())?
+            };
 
             tx_block.push(FinalizedTransaction {
                 txn: txn.clone(),

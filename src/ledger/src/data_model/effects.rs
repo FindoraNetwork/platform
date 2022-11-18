@@ -1,3 +1,5 @@
+use config::abci::global_cfg::CFG;
+
 use {
     crate::{
         data_model::{
@@ -713,7 +715,25 @@ impl BlockEffect {
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn compute_txns_in_block_hash(&self) -> HashOf<Vec<Transaction>> {
-        HashOf::new(&self.txns)
+        let height = self.staking_simulator.cur_height();
+
+        println!("Current height is: {}", height);
+
+        if (CFG.checkpoint.utxo_checktx_height as u64) < height {
+            HashOf::new(&self.txns)
+        } else {
+            let txns: Vec<Transaction> = self
+                .txns
+                .iter()
+                .map(|tx| {
+                    let mut tx = tx.clone();
+                    tx.pubkey_sign_map = Default::default();
+                    tx
+                })
+                .collect();
+
+            HashOf::new(&txns)
+        }
     }
 
     #[inline(always)]
