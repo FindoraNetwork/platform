@@ -1,6 +1,8 @@
 #![deny(warnings)]
 #![allow(missing_docs)]
 
+extern crate core;
+
 mod basic;
 mod impls;
 
