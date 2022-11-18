@@ -713,7 +713,17 @@ impl BlockEffect {
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn compute_txns_in_block_hash(&self) -> HashOf<Vec<Transaction>> {
-        HashOf::new(&self.txns)
+        let txns: Vec<Transaction> = self
+            .txns
+            .iter()
+            .map(|tx| {
+                let mut tx = tx.clone();
+                tx.pubkey_sign_map = Default::default();
+                tx
+            })
+            .collect();
+
+        HashOf::new(&txns)
     }
 
     #[inline(always)]
