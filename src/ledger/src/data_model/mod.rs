@@ -2024,7 +2024,7 @@ impl Transaction {
                                 }
                             }
                         }
-                        log::error!("Txn failed in check_fee {:?}", self);
+                        tracing::error!("Txn failed in check_fee {:?}", self);
                         false
                     });
                 } else if let Operation::DefineAsset(ref x) = ops {
@@ -2044,7 +2044,7 @@ impl Transaction {
                 } else if matches!(ops, Operation::UpdateValidator(_)) {
                     return true;
                 }
-                log::error!("Txn failed in check_fee {:?}", self);
+                tracing::error!("Txn failed in check_fee {:?}", self);
                 false
             })
     }

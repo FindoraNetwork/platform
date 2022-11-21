@@ -13,7 +13,7 @@ readme = "README.md"
 futures = "0.3.16"
 jsonrpc-core = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-core" }
 pubsub = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-pubsub" }
-log = "0.4.8"
+tracing = "0.1"
 serde_json = "1.0.41"
 
 http = { git = "https://github.com/FindoraNetwork/jsonrpc.git", package = "jsonrpc-http-server" }

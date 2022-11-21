@@ -8,12 +8,12 @@ use {
     actix_web::{error, middleware, web, App, HttpServer},
     finutils::api::NetworkRoute,
     ledger::data_model::Transaction,
-    log::info,
     parking_lot::RwLock,
     rand_core::{CryptoRng, RngCore},
     ruc::*,
     std::result::Result as StdResult,
     std::sync::Arc,
+    tracing::info,
 };
 
 /// Ping route to check for liveness of API

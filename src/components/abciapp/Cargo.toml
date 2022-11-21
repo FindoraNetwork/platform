@@ -17,7 +17,7 @@ path = "src/bins/abcid.rs"
 parking_lot = "0.12"
 base64 = "0.13"
 bincode = "1.3.1"
-log = "0.4.8"
+tracing = "0.1"
 rand = "0.8"
 rand_chacha = "0.3"
 rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
@@ -47,7 +47,7 @@ ethereum-types = { version = "0.13.1", default-features = false }
 noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
 noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
 
-abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
+abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.5" }
 config = { path = "../config"}
 ledger = { path = "../../ledger" }
 cryptohash = { path = "../../libs/cryptohash" }
@@ -59,6 +59,10 @@ baseapp = { path = "../contracts/baseapp" }
 fc-rpc = { path = "../contracts/rpc" }
 fp-storage = { path = "../contracts/primitives/storage" }
 fp-utils = { path = "../contracts/primitives/utils" }
+
+
+enterprise-web3 = { path = "../contracts/primitives/enterprise-web3", optional = true  }
+
 
 [target.'cfg(target_os= "linux")'.dependencies]
 btm = "0.1.6"
@@ -72,4 +76,4 @@ vergen = "=3.1.0"
 default = ["diskcache"]
 diskcache = ["ledger/diskcache"]
 debug_env = ["ledger/debug_env", "config/debug_env"]
-
+web3_service = ["enterprise-web3", "baseapp/web3_service"]

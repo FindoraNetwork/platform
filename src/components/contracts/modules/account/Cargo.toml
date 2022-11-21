@@ -9,8 +9,8 @@ description = "Findora module supporting smart account function"
 readme = "README.md"
 
 [dependencies]
-abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
-log = "0.4"
+abci = "0.7.2"
+tracing = "0.1"
 primitive-types = { version = "0.11.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
 ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
@@ -22,7 +22,7 @@ fp-core = { path = "../../primitives/core" }
 fp-storage = { path = "../../primitives/storage" }
 fp-traits = { path = "../../primitives/traits" }
 fp-types = { path = "../../primitives/types" }
-
+enterprise-web3 = { path = "../../primitives/enterprise-web3", optional = true  }
 config = {path = "../../../config"}
 
 [dev-dependencies]
@@ -31,3 +31,6 @@ rand_chacha = "0.3"
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
 noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
+
+[features]
+web3_service = ["enterprise-web3"]

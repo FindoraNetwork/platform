@@ -859,7 +859,7 @@ impl LedgerState {
                     let authenticated_spent_status = match self.get_utxo_status(id) {
                         Ok(s) => s,
                         Err(e) => {
-                            log::error!("{}", e);
+                            tracing::error!("{}", e);
                             return None;
                         }
                     };
@@ -906,7 +906,7 @@ impl LedgerState {
                     let authenticated_spent_status = match self.get_utxo_status(addr) {
                         Ok(s) => s,
                         Err(e) => {
-                            log::error!("{}", e);
+                            tracing::error!("{}", e);
                             return None;
                         }
                     };
@@ -972,7 +972,7 @@ impl LedgerState {
                                 utxos.push(Some(auth_utxo));
                             }
                             Err(e) => {
-                                log::error!("{}", e);
+                                tracing::error!("{}", e);
                                 utxos.push(None);
                             }
                         };

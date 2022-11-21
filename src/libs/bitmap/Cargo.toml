@@ -11,7 +11,7 @@ parking_lot = "0.12"
 arrayref = "0.3.5"
 cryptohash = { path = "../cryptohash" }
 itertools = "0.10.5"
-log = "0.4.8"
+tracing = "0.1"
 rand = "0.8"
 rand_chacha = "0.3"
 serde = "1.0.124"

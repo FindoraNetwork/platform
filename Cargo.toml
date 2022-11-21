@@ -37,6 +37,7 @@ members = [
     "src/components/contracts/primitives/rpc-server",
     "src/components/contracts/primitives/utils",
     "src/components/contracts/primitives/wasm",
+    "src/components/contracts/primitives/enterprise-web3",
     "src/components/contracts/rpc",
 ]
 
@@ -66,3 +67,4 @@ ark-ed-on-bls12-381 = { git = "https://github.com/FindoraNetwork/ark-curves", ta
 ark-algebra-test-templates = { git = "https://github.com/FindoraNetwork/ark-algebra", tag = "stable-2022" }
 curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek", tag = "v3.2.0-f" }
 ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek", tag = "v1.0.1-f" }
+abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.5" }

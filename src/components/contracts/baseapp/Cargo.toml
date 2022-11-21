@@ -9,13 +9,13 @@ repository = "https://github.com/findoranetwork/platform/"
 version = "0.1.0"
 
 [dependencies]
-abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
+abci = "0.7.2"
 ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
 ethereum-types = { version = "0.13.1", default-features = false }
 futures = "0.3.16"
 lazy_static = "1.4.0"
 ledger = {path = "../../../ledger"}
-log = "0.4"
+tracing = "0.1"
 parking_lot = "0.12"
 primitive-types = { version = "0.11.1", default-features = false, features = ["rlp", "byteorder", "serde"] }
 protobuf = "2.16"
@@ -27,6 +27,7 @@ base64 = "0.13"
 once_cell = "1.10.0"
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
+sha3 = "0.8"
 
 config = { path = "../../config"}
 
@@ -36,6 +37,7 @@ fp-evm = {path = "../primitives/evm"}
 fp-traits = {path = "../primitives/traits"}
 fp-types = {path = "../primitives/types"}
 fp-utils = {path = "../primitives/utils"}
+enterprise-web3 = { path = "../primitives/enterprise-web3", optional = true  }
 
 # modules
 module-account = {path = "../modules/account"}
@@ -54,3 +56,4 @@ evm-precompile = {path = "../modules/evm/precompile"}
 
 [features]
 abci_mock = []
+web3_service = ["enterprise-web3", "module-account/web3_service", "module-ethereum/web3_service", "module-evm/web3_service"]

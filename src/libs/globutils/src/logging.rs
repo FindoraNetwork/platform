@@ -21,6 +21,7 @@ pub fn init_logging(verbose: Option<&str>) {
     }
 
     if let Ok(rust_log) = env::var("RUST_LOG") {
+        println!("{}", rust_log);
         if !rust_log.is_empty() {
             for directive in rust_log.split(',').filter_map(|s| match s.parse() {
                 Ok(directive) => Some(directive),

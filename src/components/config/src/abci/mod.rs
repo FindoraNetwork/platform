@@ -84,9 +84,6 @@ pub struct CheckPointConfig {
     pub nonce_bug_fix_height: u64,
     pub proper_gas_set_height: u64,
 
-    // Note: This field only used to qa02.
-    pub qa02_prismxx_asset: i64,
-
     // https://github.com/FindoraNetwork/platform/pull/434
     // Fix the amount in the delegators that staking did not modify when it punished the validator.
     pub fix_delegators_am_height: u64,
@@ -130,7 +127,6 @@ impl CheckPointConfig {
                                 proper_gas_set_height: 0,
                                 fix_delegators_am_height: 0,
                                 validators_limit_v2_height: 0,
-                                qa02_prismxx_asset: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -160,7 +156,6 @@ impl CheckPointConfig {
                                 fix_undelegation_missing_reward_height: 3000000,
                                 fix_delegators_am_height: 30000000,
                                 validators_limit_v2_height: 30000000,
-                                qa02_prismxx_asset: 30000000,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
