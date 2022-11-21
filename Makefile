@@ -298,14 +298,14 @@ ci_build_release_web3_binary_image:
 	docker build -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-enterprise-web3 .
 
 ci_build_image_web3:
-	ci_build_image:
 	@ if [ -d "./binary" ]; then \
 		rm -rf ./binary || true; \
 	fi
 	@ docker run --rm -d --name findorad-binary findorad-binary-image:$(IMAGE_TAG)
 	@ docker cp findorad-binary:/binary ./binary
 	@ docker rm -f findorad-binary
-	@ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-cleveldb .
+	@ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb .
+
 ifeq ($(ENV),release)
 	docker tag $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
 endif
