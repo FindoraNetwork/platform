@@ -580,7 +580,7 @@ pub fn gen_key_and_print() {
 
 fn restore_keypair_from_str_with_default(sk_str: Option<&str>) -> Result<XfrKeyPair> {
     if let Some(sk) = sk_str {
-        serde_json::from_str::<XfrSecretKey>(&format!("\"{}\"", sk))
+        serde_json::from_str::<XfrSecretKey>(&format!("\"{}\"", sk.trim()))
             .map(|sk| sk.into_keypair())
             .c(d!("Invalid secret key"))
     } else {
