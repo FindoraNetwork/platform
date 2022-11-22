@@ -36,23 +36,21 @@ use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
 use ruc::{eg, Result};
 use std::{borrow::BorrowMut, path::Path, sync::Arc};
-use storage::state::{ChainStateOpts, ChainState};
-use tracing::{error, info};
+use storage::state::{ChainState, ChainStateOpts};
+use tracing::info;
 
 lazy_static! {
     /// An identifier that distinguishes different EVM chains.
     static ref EVM_CAHIN_ID: u64 = std::env::var("EVM_CHAIN_ID").map(
         |id| id.as_str().parse::<u64>().unwrap()).unwrap_or(2152);
 
-    static ref CHAIN_STATE_MIN_VERSIONS: u64 = BLOCKS_IN_DAY * std::env::var("CHAIN_STATE_VERSIONS").map(
-        |ver|ver.as_str().parse::<u64>().expect("chainstate versions should be a valid integer")
-    ).unwrap_or(90);
 }
 
 const APP_NAME: &str = "findora";
 const CHAIN_STATE_PATH: &str = "state.db";
 const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
 const BLOCKS_IN_DAY: u64 = 4 * 60 * 24;
+const SNAPSHOT_INTERVAL: u64 = 10 * 24;
 
 #[derive(Clone)]
 pub struct BaseApp {
@@ -164,8 +162,8 @@ impl BaseApp {
     ) -> Result<Self> {
         info!(
             target: "baseapp",
-            "create new baseapp with basedir {:?}, empty_block {}, history {} blocks",
-            basedir, empty_block, *CHAIN_STATE_MIN_VERSIONS
+            "create new baseapp with basedir {:?}, empty_block {}, history {} days, is_fresh {}",
+            basedir, empty_block, trace, is_fresh
         );
 
         // Creates a fresh chain state db and history db
@@ -174,8 +172,9 @@ impl BaseApp {
 
         let opts = ChainStateOpts {
             name: Some("findora_db".to_owned()),
-            ver_window: 4 * 60 * 24 * trace as u64,
+            ver_window: BLOCKS_IN_DAY * trace as u64,
             cleanup_aux: is_fresh,
+            interval: SNAPSHOT_INTERVAL * trace as u64,
             ..Default::default()
         };
         let chain_state = Arc::new(RwLock::new(ChainState::create_with_opts(fdb, opts)));

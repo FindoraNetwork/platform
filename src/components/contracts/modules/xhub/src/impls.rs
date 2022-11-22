@@ -6,7 +6,7 @@ use fp_traits::{account::AccountAsset, evm::DecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialTransfer;
 use fp_types::{actions::xhub::NonConfidentialOutput, crypto::Address};
 use ledger::data_model::ASSET_TYPE_FRA;
-use log::debug;
+use tracing::debug;
 use primitive_types::U256;
 use ruc::*;
 

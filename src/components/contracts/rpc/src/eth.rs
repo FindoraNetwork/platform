@@ -30,7 +30,7 @@ use fp_utils::tx::EvmRawTxWrapper;
 use hex_literal::hex;
 use jsonrpc_core::{futures::future, BoxFuture, Result};
 use lazy_static::lazy_static;
-use log::{debug, warn};
+use tracing::{debug, warn};
 use parking_lot::RwLock;
 use sha3::{Digest, Keccak256};
 use std::collections::BTreeMap;
