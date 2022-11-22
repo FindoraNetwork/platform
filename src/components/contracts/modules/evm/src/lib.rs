@@ -23,7 +23,6 @@ use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
 };
-use tracing::error;
 use fp_types::{
     actions::evm::Action,
     crypto::{Address, HA160},
