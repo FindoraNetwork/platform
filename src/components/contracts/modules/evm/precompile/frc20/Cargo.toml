@@ -13,7 +13,7 @@ ethereum-types = { version = "0.13.1", default-features = false }
 evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
 evm-precompile-utils = { path = "../utils"}
 fp-traits = { path = "../../../../primitives/traits" }
-log = "0.4"
+tracing = "0.1"
 module-evm = { path = "../../../../modules/evm"}
 num_enum = { version = "0.5.4", default-features = false }
 slices = "0.2.0"

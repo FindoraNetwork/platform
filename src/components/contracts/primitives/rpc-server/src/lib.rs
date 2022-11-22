@@ -23,7 +23,7 @@
 mod middleware;
 
 use jsonrpc_core::{IoHandlerExtension, MetaIoHandler};
-use log::error;
+use tracing::error;
 use pubsub::PubSubMetadata;
 use std::io;
 

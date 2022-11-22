@@ -8,7 +8,7 @@ use {
     actix_web::{error, middleware, web, App, HttpServer},
     finutils::api::NetworkRoute,
     ledger::data_model::Transaction,
-    log::info,
+    tracing::info,
     parking_lot::RwLock,
     rand_core::{CryptoRng, RngCore},
     ruc::*,

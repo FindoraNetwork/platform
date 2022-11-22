@@ -11,7 +11,7 @@ use evm_precompile_utils::{
     error, Address, EvmDataReader, EvmDataWriter, EvmResult, Gasometer, LogsBuilder,
 };
 use fp_traits::{account::AccountAsset, evm::AddressMapping};
-use log::debug;
+use tracing::debug;
 use module_evm::{
     precompile::{FinState, Precompile, PrecompileId, PrecompileResult},
     Config,
