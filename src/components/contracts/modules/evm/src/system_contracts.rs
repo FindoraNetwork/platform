@@ -13,6 +13,8 @@ use crate::utils;
 pub struct SystemContracts {
     pub bridge: Contract,
     pub bridge_address: H160,
+    pub staking: Contract,
+    pub staking_address: H160,
     pub owner: H160,
     pub salt: H256,
 }
@@ -40,9 +42,28 @@ impl SystemContracts {
             H160::from_str(&CFG.checkpoint.prism_bridge_address).c(d!())?
         };
 
+        let abi_str = include_str!("../contracts/EVMStakingSystemProxy.abi");
+        let staking = Contract::load(abi_str.as_bytes()).c(d!())?;
+
+        let staking_address = if CFG.checkpoint.evm_staking_address.is_empty() {
+            // Driect use this bytecode, beacuse we will remove on mainnet
+            let bytecode_str =
+                include_str!("../contracts/EVMStakingSystemProxy.bytecode");
+
+            let bytecode = hex::decode(bytecode_str[2..].trim()).c(d!())?;
+
+            let code_hash = keccak_256(&bytecode);
+
+            utils::compute_create2(owner, salt, H256::from_slice(&code_hash))
+        } else {
+            H160::from_str(&CFG.checkpoint.evm_staking_address).c(d!())?
+        };
+
         Ok(Self {
             bridge,
             bridge_address,
+            staking,
+            staking_address,
             owner,
             salt,
         })

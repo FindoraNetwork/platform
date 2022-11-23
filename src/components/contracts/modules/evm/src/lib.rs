@@ -340,6 +340,37 @@ impl<C: Config> AppModule for App<C> {
                 ctx.state.write().commit_session();
             }
         }
+
+        if ctx.header.height == CFG.checkpoint.evm_staking {
+            let bytecode_str =
+                include_str!("../contracts/EVMStakingSystemProxy.bytecode");
+
+            if let Err(e) =
+                utils::deploy_contract::<C>(ctx, &self.contracts, bytecode_str)
+            {
+                pd!(e);
+                return;
+            }
+            println!(
+                "EVMStaking system contract address: {:?}",
+                self.contracts.bridge_address
+            );
+
+            if !ctx.state.write().cache_mut().good2_commit() {
+                ctx.state.write().discard_session();
+                pd!(eg!("ctx state commit no good"));
+            } else {
+                ctx.state.write().commit_session();
+            }
+        }
+    }
+
+    fn end_block(
+        &mut self,
+        _ctx: &mut Context,
+        _req: &abci::RequestEndBlock,
+    ) -> abci::ResponseEndBlock {
+        Default::default()
     }
 }
 
