@@ -18,30 +18,30 @@ impl Staking {
         let mut delegation_bond = HashMap::new();
         let mut delegation_unbond = HashMap::new();
 
-        let mut others = vec![];
-
-        while let Some((pk, d)) = self
+        let keys: Vec<_> = self
             .delegation_info
             .global_delegation_records_map
-            .pop_first()
-        {
-            {
-                if d.state == DelegationState::Bond {
-                    if d.end_height == BLOCK_HEIGHT_MAX {
-                        delegation_bond.insert(pk, d);
-                    } else {
-                        delegation_unbond.insert(pk, d);
-                    }
-                } else {
-                    others.push((pk, d));
-                }
-            }
-        }
+            .keys()
+            .map(|k| *k)
+            .collect();
 
-        for (pk, d) in others.into_iter() {
-            self.delegation_info
+        for pk in keys.into_iter() {
+            let d = self
+                .delegation_info
                 .global_delegation_records_map
-                .insert(pk, d);
+                .remove(&pk)
+                .unwrap();
+            if d.state == DelegationState::Bond {
+                if d.end_height == BLOCK_HEIGHT_MAX {
+                    delegation_bond.insert(pk, d);
+                } else {
+                    delegation_unbond.insert(pk, d);
+                }
+            } else {
+                self.delegation_info
+                    .global_delegation_records_map
+                    .insert(pk, d);
+            }
         }
 
         let height_last = *self.validator_info.keys().rev().next().c(d!())?;
