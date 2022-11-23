@@ -2,7 +2,7 @@
 
 use super::{Delegation, DelegationState, StakerMemo, Staking, BLOCK_HEIGHT_MAX};
 use ruc::{d, Result, RucResult};
-use zei::xfr::sig::XfrPublicKey;
+use noah::xfr::sig::XfrPublicKey;
 
 use std::collections::HashMap;
 
