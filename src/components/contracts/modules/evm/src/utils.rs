@@ -135,3 +135,9 @@ pub fn compute_create2(caller: H160, salt: H256, code_hash: H256) -> H160 {
     hasher.update(&code_hash[..]);
     H256::from_slice(hasher.finalize().as_slice()).into()
 }
+
+pub fn address_mapping(pk: &XfrPublicKey) -> H160 {
+    let mut hasher = Keccak256::new();
+    hasher.update(pk.to_bytes());
+    return H160::from_slice(&hasher.finalize().as_slice()[..20]);
+}
