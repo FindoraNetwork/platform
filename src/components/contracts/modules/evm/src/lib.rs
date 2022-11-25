@@ -2,6 +2,8 @@
 #![allow(missing_docs)]
 #![allow(clippy::too_many_arguments)]
 
+extern crate core;
+
 mod basic;
 pub mod impls;
 pub mod precompile;
@@ -226,6 +228,220 @@ impl<C: Config> App<C> {
         }
 
         pending_outputs
+    }
+
+    pub fn admin_stake(
+        &self,
+        ctx: &Context,
+        validator: H160,
+        public_key: Vec<u8>,
+        staker: H160,
+        memo: String,
+        rate: U256,
+    ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
+        let function = self.contracts.staking.function("adminStake").c(d!())?;
+
+        let validator = Token::Address(validator);
+        let public_key = Token::Bytes(public_key);
+        let staker = Token::Address(staker);
+        let memo = Token::String(memo);
+        let rate = Token::Uint(rate);
+
+        let input = function
+            .encode_input(&[validator, public_key, staker, memo, rate])
+            .c(d!())?;
+
+        let from = H160::zero();
+        let value = U256::zero();
+        let gas_limit = 9999999;
+
+        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input.clone(),
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        let action = TransactionAction::Call(self.contracts.staking_address);
+        let gas_price = U256::one();
+        let transaction_index: u32 = 0;
+        let transaction_hash: H256 = H256::zero();
+
+        Ok(Self::system_transaction(
+            transaction_hash,
+            input,
+            value,
+            action,
+            U256::from(gas_limit),
+            gas_price,
+            used_gas,
+            transaction_index,
+            from,
+            self.contracts.staking_address,
+            logs,
+        ))
+    }
+
+    pub fn system_set_delegation(
+        &self,
+        ctx: &Context,
+        validator: H160,
+        delegator: H160,
+        amount: U256,
+    ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
+        let function = self
+            .contracts
+            .staking
+            .function("systemSetDelegation")
+            .c(d!())?;
+
+        let validator = Token::Address(validator);
+        let delegator = Token::Address(delegator);
+        let amount = Token::Uint(amount);
+
+        let input = function
+            .encode_input(&[validator, delegator, amount])
+            .c(d!())?;
+
+        let from = H160::zero();
+        let value = U256::zero();
+        let gas_limit = 9999999;
+
+        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input.clone(),
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        let action = TransactionAction::Call(self.contracts.staking_address);
+        let gas_price = U256::one();
+        let transaction_index: u32 = 0;
+        let transaction_hash: H256 = H256::zero();
+
+        Ok(Self::system_transaction(
+            transaction_hash,
+            input,
+            value,
+            action,
+            U256::from(gas_limit),
+            gas_price,
+            used_gas,
+            transaction_index,
+            from,
+            self.contracts.staking_address,
+            logs,
+        ))
+    }
+
+    pub fn system_set_delegation_unbound(
+        &self,
+        ctx: &Context,
+        validator: H160,
+        delegator: H160,
+        amount: U256,
+        target_height: U256,
+    ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
+        let function = self
+            .contracts
+            .staking
+            .function("systemSetDelegationUnbound")
+            .c(d!())?;
+
+        let validator = Token::Address(validator);
+        let delegator = Token::Address(delegator);
+        let amount = Token::Uint(amount);
+        let target_height = Token::Uint(target_height);
+
+        let input = function
+            .encode_input(&[validator, delegator, amount, target_height])
+            .c(d!())?;
+
+        let from = H160::zero();
+        let value = U256::zero();
+        let gas_limit = 9999999;
+
+        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input.clone(),
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        let action = TransactionAction::Call(self.contracts.staking_address);
+        let gas_price = U256::one();
+        let transaction_index: u32 = 0;
+        let transaction_hash: H256 = H256::zero();
+
+        Ok(Self::system_transaction(
+            transaction_hash,
+            input,
+            value,
+            action,
+            U256::from(gas_limit),
+            gas_price,
+            used_gas,
+            transaction_index,
+            from,
+            self.contracts.staking_address,
+            logs,
+        ))
+    }
+
+    pub fn system_set_rewards(
+        &self,
+        ctx: &Context,
+        delegator: &H160,
+        amount: U256,
+    ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
+        let function = self
+            .contracts
+            .staking
+            .function("systemSetRewards")
+            .c(d!())?;
+
+        let delegator = Token::Address(*delegator);
+        let amount = Token::Uint(amount);
+
+        let input = function.encode_input(&[delegator, amount]).c(d!())?;
+
+        let from = H160::zero();
+        let value = U256::zero();
+        let gas_limit = 9999999;
+
+        let (_, logs, used_gas) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input.clone(),
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        let action = TransactionAction::Call(self.contracts.staking_address);
+        let gas_price = U256::one();
+        let transaction_index: u32 = 0;
+        let transaction_hash: H256 = H256::zero();
+
+        Ok(Self::system_transaction(
+            transaction_hash,
+            input,
+            value,
+            action,
+            U256::from(gas_limit),
+            gas_price,
+            used_gas,
+            transaction_index,
+            from,
+            self.contracts.staking_address,
+            logs,
+        ))
     }
 
     fn logs_bloom(logs: &[ethereum::Log], bloom: &mut Bloom) {

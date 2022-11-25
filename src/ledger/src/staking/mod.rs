@@ -18,6 +18,7 @@ use {num_bigint::BigUint, std::convert::TryFrom};
 pub mod cosig;
 pub mod init;
 pub mod ops;
+pub mod transfer_staking;
 
 use {
     crate::{

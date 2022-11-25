@@ -23,19 +23,23 @@ use fp_core::{
     ensure, parameter_types,
     transaction::{ActionResult, Executable, ValidateUnsigned},
 };
+
 use fp_evm::BlockId;
 use fp_traits::{
     account::{AccountAsset, FeeCalculator},
     base::BaseProvider,
     evm::{DecimalsMapping, EthereumAddressMapping, EthereumDecimalsMapping},
 };
+
 use fp_types::{actions::xhub::NonConfidentialOutput, actions::Action, crypto::Address};
 use lazy_static::lazy_static;
 use ledger::data_model::{Transaction as FindoraTransaction, ASSET_TYPE_FRA};
+use ledger::store::LedgerState;
+use module_evm::utils::address_mapping;
 use notify::*;
 use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
-use ruc::{eg, Result};
+use ruc::{d, eg, Result, RucResult};
 use std::{borrow::BorrowMut, path::Path, sync::Arc};
 use storage::state::ChainState;
 
@@ -349,6 +353,57 @@ impl BaseApp {
     ) -> Result<()> {
         self.modules
             .process_findora_tx(&self.deliver_state, tx, H256::from_slice(hash))
+    }
+
+    pub fn init_staking_from_ledger(
+        &self,
+        ledger: Arc<RwLock<LedgerState>>,
+    ) -> Result<()> {
+        let (staking, delegation_bonds, delegation_unbond) = ledger
+            .write()
+            .get_staking_mut()
+            .make_transfer_data()
+            .c(d!())?;
+
+        for (td_addr, td_public_key, staker, _power, memo, rate) in staking.into_iter() {
+            self.modules
+                .evm_module
+                .admin_stake(
+                    &self.deliver_state,
+                    H160::from_slice(&td_addr[..20]),
+                    td_public_key,
+                    address_mapping(&staker),
+                    serde_json::to_string(&memo).unwrap(),
+                    U256::from(rate),
+                )
+                .c(d!())?;
+        }
+        for (delegator, validator, amount) in delegation_bonds {
+            self.modules
+                .evm_module
+                .system_set_delegation(
+                    &self.deliver_state,
+                    address_mapping(&validator),
+                    address_mapping(&delegator),
+                    U256::from(amount),
+                )
+                .c(d!())?;
+        }
+
+        for (delegator, validator, amount, target_height) in delegation_unbond {
+            self.modules
+                .evm_module
+                .system_set_delegation_unbound(
+                    &self.deliver_state,
+                    address_mapping(&validator),
+                    address_mapping(&delegator),
+                    U256::from(amount),
+                    U256::from(target_height),
+                )
+                .c(d!())?;
+        }
+
+        Ok(())
     }
 
     pub fn consume_mint(&self) -> Option<Vec<NonConfidentialOutput>> {
