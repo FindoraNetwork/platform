@@ -37,8 +37,8 @@ enterprise-web3 = {  path = "../../primitives/enterprise-web3", optional = true 
 baseapp = { path = "../../baseapp" }
 fp-mocks = { path = "../../primitives/mocks" }
 module-account = { path = "../account" }
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.2" }
-fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.2" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4" }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4" }
 
 [features]
 default = []
