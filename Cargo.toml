@@ -70,6 +70,6 @@ ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek", tag =
 abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.5" }
 
 [patch."https://github.com/FindoraNetwork/storage"]
-fin_db = { git = "https:///github.com/FindoraNetwork//storage", branch = "FO-996-v2" }
-temp_db = { git = "https:///github.com/FindoraNetwork//storage", branch = "FO-996-v2" }
-storage = { git = "https:///github.com/FindoraNetwork//storage", branch = "FO-996-v2" } 
+fin_db = { git = "https:///github.com/FindoraNetwork//storage", tag = "v1.1.4" }
+temp_db = { git = "https:///github.com/FindoraNetwork//storage", tag = "v1.1.4" }
+storage = { git = "https:///github.com/FindoraNetwork//storage", tag = "v1.1.4" }
