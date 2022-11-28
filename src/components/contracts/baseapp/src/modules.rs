@@ -82,12 +82,17 @@ impl ModuleManager {
         let mut resp: ResponseEndBlock = Default::default();
         // Note: adding new modules need to be updated.
         self.account_module.end_block(ctx, req);
-        self.evm_module.end_block(ctx, req);
-        self.xhub_module.end_block(ctx, req);
-        let resp_template = self.template_module.end_block(ctx, req);
-        if !resp_template.validator_updates.is_empty() {
-            resp.validator_updates = resp_template.validator_updates;
+        let mresp = self.evm_module.end_block(ctx, req);
+
+        if !mresp.validator_updates.is_empty() {
+            resp.validator_updates = mresp.validator_updates;
         }
+
+        self.xhub_module.end_block(ctx, req);
+        self.template_module.end_block(ctx, req);
+        // if !resp_template.validator_updates.is_empty() {
+        // resp.validator_updates = resp_template.validator_updates;
+        // }
         resp
     }
 

@@ -26,6 +26,7 @@ hex = "0.4.2"
 ethabi = "17.1.0"
 noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
 noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
+protobuf = "2.16"
 
 # primitives, don't depend on any modules
 fp-core = { path = "../../primitives/core" }

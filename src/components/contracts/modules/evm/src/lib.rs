@@ -41,6 +41,7 @@ use fp_types::{
 use noah::xfr::sig::XfrPublicKey;
 use noah_algebra::serialization::NoahFromToBytes;
 use precompile::PrecompileSet;
+use protobuf::RepeatedField;
 use ruc::*;
 use runtime::runner::ActionRunner;
 use std::marker::PhantomData;
@@ -86,6 +87,7 @@ pub mod storage {
 pub struct App<C> {
     phantom: PhantomData<C>,
     pub contracts: SystemContracts,
+    pub abci_begin_block: abci::RequestBeginBlock,
 }
 
 impl<C: Config> Default for App<C> {
@@ -93,6 +95,7 @@ impl<C: Config> Default for App<C> {
         App {
             phantom: Default::default(),
             contracts: pnk!(SystemContracts::new()),
+            abci_begin_block: Default::default(),
         }
     }
 }
@@ -212,6 +215,48 @@ impl<C: Config> App<C> {
         ))
     }
 
+    fn execute_staking_contract(
+        &self,
+        ctx: &Context,
+        req: &abci::RequestBeginBlock,
+    ) -> Result<()> {
+        let input = utils::build_evm_staking_input(&self.contracts, req)?;
+
+        let gas_limit = 9999999;
+        let value = U256::zero();
+        let from = H160::zero();
+
+        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.bridge_address,
+            value,
+        )?;
+
+        Ok(())
+    }
+
+    fn get_validator_list(&self, ctx: &Context) -> Result<Vec<abci::ValidatorUpdate>> {
+        let input = Vec::new();
+
+        let gas_limit = 9999999;
+        let value = U256::zero();
+        let from = H160::zero();
+
+        let (data, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.bridge_address,
+            value,
+        )?;
+
+        utils::build_validator_updates(&self.contracts, &data)
+    }
+
     pub fn consume_mint(&self, ctx: &Context) -> Vec<NonConfidentialOutput> {
         let height = CFG.checkpoint.prismxx_inital_height;
 
@@ -314,7 +359,7 @@ impl<C: Config> AppModule for App<C> {
         }
     }
 
-    fn begin_block(&mut self, ctx: &mut Context, _req: &abci::RequestBeginBlock) {
+    fn begin_block(&mut self, ctx: &mut Context, req: &abci::RequestBeginBlock) {
         let height = CFG.checkpoint.prismxx_inital_height;
 
         if ctx.header.height == height {
@@ -361,14 +406,37 @@ impl<C: Config> AppModule for App<C> {
                 ctx.state.write().commit_session();
             }
         }
+
+        if ctx.header.height > CFG.checkpoint.evm_staking {
+            self.abci_begin_block = req.clone();
+        }
     }
 
     fn end_block(
         &mut self,
-        _ctx: &mut Context,
+        ctx: &mut Context,
         _req: &abci::RequestEndBlock,
     ) -> abci::ResponseEndBlock {
-        Default::default()
+        let mut resp = abci::ResponseEndBlock::default();
+
+        if ctx.header.height > CFG.checkpoint.evm_staking {
+            if let Err(e) = self.execute_staking_contract(ctx, &self.abci_begin_block) {
+                tracing::error!("Error on evm staking trigger, {}", e);
+            }
+
+            match self.get_validator_list(ctx) {
+                Ok(r) => {
+                    if !r.is_empty() {
+                        resp.set_validator_updates(RepeatedField::from_vec(r));
+                    }
+                }
+                Err(e) => tracing::error!("Error on get validator list, {}", e),
+            }
+
+            // TODO: Mint amount to some one.
+        }
+
+        resp
     }
 }
 

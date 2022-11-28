@@ -428,7 +428,11 @@ pub fn end_block(
     if td_height <= CFG.checkpoint.disable_evm_block_height
         || td_height >= CFG.checkpoint.enable_frc20_height
     {
-        let _ = s.account_base_app.write().end_block(req);
+        let evm_resp = s.account_base_app.write().end_block(req);
+
+        if td_height > CFG.checkpoint.evm_staking {
+            resp.validator_updates = evm_resp.validator_updates;
+        }
     }
 
     // mint coinbase, cache system transactions to ledger
@@ -449,19 +453,21 @@ pub fn end_block(
         pnk!(la.end_block());
     }
 
-    if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
-        la.get_committed_state().read().get_staking().deref(),
-        begin_block_req.last_commit_info.as_ref()
-    )) {
-        resp.set_validator_updates(RepeatedField::from_vec(vs));
-    }
+    if td_height < CFG.checkpoint.evm_staking {
+        if let Ok(Some(vs)) = ruc::info!(staking::get_validators(
+            la.get_committed_state().read().get_staking().deref(),
+            begin_block_req.last_commit_info.as_ref()
+        )) {
+            resp.set_validator_updates(RepeatedField::from_vec(vs));
+        }
 
-    staking::system_ops(
-        &mut la.get_committed_state().write(),
-        &header,
-        begin_block_req.last_commit_info.as_ref(),
-        &begin_block_req.byzantine_validators.as_slice(),
-    );
+        staking::system_ops(
+            &mut la.get_committed_state().write(),
+            &header,
+            begin_block_req.last_commit_info.as_ref(),
+            &begin_block_req.byzantine_validators.as_slice(),
+        );
+    }
 
     resp
 }
