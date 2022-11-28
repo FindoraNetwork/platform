@@ -131,7 +131,7 @@ impl CheckPointConfig {
                                 proper_gas_set_height: 0,
                                 fix_delegators_am_height: 0,
                                 validators_limit_v2_height: 0,
-                                evm_staking: 0,
+                                evm_staking: 1,
                                 evm_staking_address: String::new(),
                             };
                             #[cfg(not(feature = "debug_env"))]
