@@ -378,7 +378,7 @@ impl<C: Config> AppModule for App<C> {
                 pd!(e);
                 return;
             }
-            println!(
+            tracing::info!(
                 "Bridge contract address: {:?}",
                 self.contracts.bridge_address
             );
@@ -401,7 +401,7 @@ impl<C: Config> AppModule for App<C> {
                 pd!(e);
                 return;
             }
-            println!(
+            tracing::info!(
                 "EVMStaking system contract address: {:?}",
                 self.contracts.bridge_address
             );
