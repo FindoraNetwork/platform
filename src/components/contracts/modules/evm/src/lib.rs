@@ -259,8 +259,6 @@ impl<C: Config> App<C> {
             value,
         )?;
 
-        println!("{:?}", data);
-
         utils::build_validator_updates(&self.contracts, &data)
     }
 
