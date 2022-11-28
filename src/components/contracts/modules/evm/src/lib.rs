@@ -231,7 +231,7 @@ impl<C: Config> App<C> {
             input,
             from,
             gas_limit,
-            self.contracts.bridge_address,
+            self.contracts.staking_address,
             value,
         )?;
 
@@ -239,9 +239,14 @@ impl<C: Config> App<C> {
     }
 
     fn get_validator_list(&self, ctx: &Context) -> Result<Vec<abci::ValidatorUpdate>> {
-        let input = Vec::new();
+        let func = self
+            .contracts
+            .staking
+            .function("getValidatorsList")
+            .c(d!())?;
+        let input = func.encode_input(&[]).c(d!())?;
 
-        let gas_limit = 9999999;
+        let gas_limit = 99999999999;
         let value = U256::zero();
         let from = H160::zero();
 
@@ -250,7 +255,7 @@ impl<C: Config> App<C> {
             input,
             from,
             gas_limit,
-            self.contracts.bridge_address,
+            self.contracts.staking_address,
             value,
         )?;
 
@@ -421,7 +426,7 @@ impl<C: Config> AppModule for App<C> {
 
         if ctx.header.height > CFG.checkpoint.evm_staking {
             if let Err(e) = self.execute_staking_contract(ctx, &self.abci_begin_block) {
-                tracing::error!("Error on evm staking trigger, {}", e);
+                tracing::error!("Error on evm staking trigger: {}", e);
             }
 
             match self.get_validator_list(ctx) {
@@ -430,7 +435,7 @@ impl<C: Config> AppModule for App<C> {
                         resp.set_validator_updates(RepeatedField::from_vec(r));
                     }
                 }
-                Err(e) => tracing::error!("Error on get validator list, {}", e),
+                Err(e) => tracing::error!("Error on get validator list: {}", e),
             }
 
             // TODO: Mint amount to some one.
