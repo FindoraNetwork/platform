@@ -88,6 +88,7 @@ pub struct App<C> {
     phantom: PhantomData<C>,
     pub contracts: SystemContracts,
     pub abci_begin_block: abci::RequestBeginBlock,
+    pub mint_ops: Vec<(H160, U256)>,
 }
 
 impl<C: Config> Default for App<C> {
@@ -96,6 +97,7 @@ impl<C: Config> Default for App<C> {
             phantom: Default::default(),
             contracts: pnk!(SystemContracts::new()),
             abci_begin_block: Default::default(),
+            mint_ops: Default::default(),
         }
     }
 }
@@ -260,6 +262,26 @@ impl<C: Config> App<C> {
         )?;
 
         utils::build_validator_updates(&self.contracts, &data)
+    }
+
+    fn get_claim_ops(&self, ctx: &Context) -> Result<Vec<(H160, U256)>> {
+        let func = self.contracts.staking.function("getClaimOps").c(d!())?;
+        let input = func.encode_input(&[]).c(d!())?;
+
+        let gas_limit = 99999999999;
+        let value = U256::zero();
+        let from = H160::zero();
+
+        let (data, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        utils::build_claim_ops(&self.contracts, &data)
     }
 
     pub fn consume_mint(&self, ctx: &Context) -> Vec<NonConfidentialOutput> {
@@ -438,7 +460,12 @@ impl<C: Config> AppModule for App<C> {
                 Err(e) => tracing::error!("Error on get validator list: {}", e),
             }
 
-            // TODO: Mint amount to some one.
+            match self.get_claim_ops(ctx) {
+                Ok(r) => {
+                    self.mint_ops = r;
+                }
+                Err(e) => tracing::error!("Error on get validator list: {}", e),
+            }
         }
 
         resp

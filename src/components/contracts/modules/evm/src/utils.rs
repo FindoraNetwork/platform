@@ -261,3 +261,47 @@ pub fn build_validator_updates(
         Err(eg!("Parse staking contract abi error"))
     }
 }
+
+fn build_claim_info(tk: &Token) -> Result<(H160, U256)> {
+    if let Token::Tuple(v) = tk {
+        let addr = if let Token::Address(addr) =
+            v.get(0).ok_or(eg!("update info 0 must bytes"))?
+        {
+            *addr
+        } else {
+            return Err(eg!("Error type of public key"));
+        };
+
+        let amount = if let Token::Uint(amount) =
+            v.get(1).ok_or(eg!("update info 1 must int"))?
+        {
+            *amount
+        } else {
+            return Err(eg!("Error type of public key type"));
+        };
+
+        Ok((addr, amount))
+    } else {
+        Err(eg!(
+            "Parse staking contract abi error: Update info must be a truple"
+        ))
+    }
+}
+
+pub fn build_claim_ops(sc: &SystemContracts, data: &[u8]) -> Result<Vec<(H160, U256)>> {
+    let func = sc.staking.function("getClaimOps").c(d!())?;
+    let dp = func.decode_output(data).c(d!())?;
+
+    if let Token::Array(output) = dp.get(0).c(d!())? {
+        let mut res = Vec::with_capacity(output.len());
+
+        for o in output {
+            let r = build_claim_info(o)?;
+            res.push(r);
+        }
+
+        Ok(res)
+    } else {
+        Err(eg!("Parse staking contract abi error"))
+    }
+}
