@@ -323,7 +323,7 @@ pub fn public_key_to_human(key: &XfrPublicKey) -> String {
         }
         XfrPublicKeyInner::Address(bytes) => {
             // checksum encode
-            let hex = hex::encode(&bytes);
+            let hex = hex::encode(bytes);
             let mut res = String::from("0x");
             for byte in hex[..40].chars() {
                 if byte.to_digit(16).unwrap() > 7 {
@@ -333,7 +333,7 @@ pub fn public_key_to_human(key: &XfrPublicKey) -> String {
                 }
             }
             res
-        },
+        }
     }
 }
 
