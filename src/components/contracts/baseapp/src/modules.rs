@@ -104,11 +104,8 @@ impl ModuleManager {
         let ops = self.evm_module.get_claim_ops(ctx)?;
 
         for (addr, amount) in ops {
-            let amount =
-                EthereumDecimalsMapping::from_native_token(U256::from(amount))
-                    .ok_or_else(|| {
-                        eg!("The transfer to account amount is too large")
-                    })?;
+            let amount = EthereumDecimalsMapping::from_native_token(amount)
+                .ok_or_else(|| eg!("The transfer to account amount is too large"))?;
             let addr = Address::from(addr);
 
             module_account::App::<BaseApp>::mint(ctx, &addr, amount)?;
