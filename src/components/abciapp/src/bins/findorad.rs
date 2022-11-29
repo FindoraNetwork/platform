@@ -49,6 +49,13 @@ fn node_command() -> Result<()> {
         .checkpoint_file
         .clone()
         .unwrap_or_else(|| String::from("./checkpoint.toml"));
+    let arc_history_arg = {
+        if let Some(interval) = CFG.arc_history.1 {
+            format!("{},{}", CFG.arc_history.0, interval)
+        } else {
+            format!("{}", CFG.arc_history.0)
+        }
+    };
 
     abcid
         .arg("--submission-service-port")
@@ -59,8 +66,8 @@ fn node_command() -> Result<()> {
         .arg(&checkpoint_file)
         .arg("--ledger-dir")
         .arg(&CFG.ledger_dir)
-        .arg("--trace")
-        .arg(&CFG.trace.to_string());
+        .arg("--arc-history")
+        .arg(&arc_history_arg);
 
     for (condition, action) in [
         (CFG.enable_query_service, "--enable-query-service"),
@@ -69,7 +76,7 @@ fn node_command() -> Result<()> {
         (CFG.enable_snapshot, "--enable-snapshot"),
         (CFG.snapshot_list, "--snapshot-list"),
         (CFG.snapshot_rollback, "--snapshot-rollback"),
-        (CFG.fresh, "--fresh"),
+        (CFG.arc_fresh, "--arc-fresh"),
     ] {
         if condition {
             abcid.arg(action);

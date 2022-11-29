@@ -151,8 +151,8 @@ pub mod config {
     pub struct Config {
         pub tendermint_host: String,
         pub tendermint_port: u16,
-        pub trace: u16,
-        pub fresh: bool,
+        pub arc_history: (u16, Option<u16>),
+        pub arc_fresh: bool,
         pub submission_service_port: u16,
         pub ledger_service_port: u16,
         pub enable_query_service: bool,
@@ -184,8 +184,8 @@ pub mod config {
             let node = SubCommand::with_name("node")
                 .about("Start findora node.")
                 .arg_from_usage("-c, --config=[FILE] 'Path to $TMHOM/config/config.toml'")
-                .arg_from_usage("--trace=[EVM Tracing Period, in days]")
-                .arg_from_usage("--fresh=[EVM Tracing from fresh]")
+                .arg_from_usage("--arc-history=[EVM archive node tracing history, format \"PERIOD,INTERVAL\" in days]")
+                .arg_from_usage("--arc-fresh 'EVM archive node with fresh tracing history'")
                 .arg_from_usage("-H, --tendermint-host=[Tendermint Node IP]")
                 .arg_from_usage("-P, --tendermint-port=[Tendermint Node Port]")
                 .arg_from_usage("--submission-service-port=[Submission Service Port]")
@@ -280,20 +280,39 @@ pub mod config {
             .unwrap_or_else(|| "26657".to_owned())
             .parse::<u16>()
             .c(d!())?;
-        let tc = m
-            .value_of("trace")
-            .map(|v| v.to_owned())
-            .or_else(|| env::var("TRACE").ok())
-            .unwrap_or_else(|| "90".to_owned())
-            .parse::<u16>()
-            .c(d!("Invalid `trace`."))?;
-        let fr = m
-            .value_of("fresh")
-            .map(|v| v.to_owned())
-            .or_else(|| env::var("FRESH").ok())
-            .unwrap_or_else(|| "false".to_owned())
-            .parse::<bool>()
-            .c(d!("Invalid `fresh`."))?;
+        let arh = {
+            let trace = m
+                .value_of("arc-history")
+                .map(|v| v.to_owned())
+                .or_else(|| env::var("ARC-HISTORY").ok())
+                .unwrap_or_else(|| "90,10".to_string())
+                .trim()
+                .to_owned();
+            if trace.is_empty() {
+                return Err(eg!("empty trace"));
+            }
+            if trace.contains(',') {
+                let t = trace.split(',').collect::<Vec<_>>();
+                let trace = t
+                    .first()
+                    .expect("missing trace period")
+                    .parse::<u16>()
+                    .c(d!("invalid trace period"))?;
+                let interval = Some(
+                    t.get(1)
+                        .expect("missing trace interval")
+                        .parse::<u16>()
+                        .c(d!("invalid trace interval"))?,
+                );
+                (trace, interval)
+            } else if !trace.is_empty() {
+                let trace = trace.parse::<u16>().c(d!("invalid trace period"))?;
+                (trace, None)
+            } else {
+                return Err(eg!("invalid trace"));
+            }
+        };
+        let arf = m.is_present("arc-fresh");
         let ssp = m
             .value_of("submission-service-port")
             .map(|v| v.to_owned())
@@ -354,8 +373,8 @@ pub mod config {
         let res = Config {
             tendermint_host: th,
             tendermint_port: tp,
-            trace: tc,
-            fresh: fr,
+            arc_history: arh,
+            arc_fresh: arf,
             submission_service_port: ssp,
             ledger_service_port: lsp,
             enable_query_service: eqs,

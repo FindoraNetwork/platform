@@ -309,8 +309,8 @@ pub mod global_cfg {
     pub struct Config {
         pub abci_host: String,
         pub abci_port: u16,
-        pub trace: u16,
-        pub fresh: bool,
+        pub arc_history: (u16, Option<u16>),
+        pub arc_fresh: bool,
         pub tendermint_host: String,
         pub tendermint_port: u16,
         pub submission_service_port: u16,
@@ -344,8 +344,8 @@ pub mod global_cfg {
             .about("An ABCI node implementation of FindoraNetwork.")
             .arg_from_usage("--abcid-host=[ABCId IP]")
             .arg_from_usage("--abcid-port=[ABCId Port]")
-            .arg_from_usage("--trace=[EVM Tracing Period, in days]")
-            .arg_from_usage("--fresh=[EVM Tracing from fresh]")
+            .arg_from_usage("--arc-history=[EVM archive node tracing history, format \"PERIOD,INTERVAL\" in days]")
+            .arg_from_usage("--arc-fresh 'EVM archive node with fresh tracing history'")
             .arg_from_usage("--tendermint-host=[Tendermint IP]")
             .arg_from_usage("--tendermint-port=[Tendermint Port]")
             .arg_from_usage("--submission-service-port=[Submission Service Port]")
@@ -389,27 +389,39 @@ pub mod global_cfg {
             .unwrap_or_else(|| "26658".to_owned())
             .parse::<u16>()
             .c(d!("Invalid `abcid-port`."))?;
-        let tc = m
-            .value_of("trace")
-            .map(|v| v.to_owned())
-            .or_else(|| env::var("TRACE").ok())
-            .unwrap_or_else(|| "90".to_owned())
-            .parse::<u16>()
-            .c(d!("Invalid `trace`."))
-            .and_then(|v| {
-                if v > 366 {
-                    Err(eg!("Invalid `trace`."))
-                } else {
-                    Ok(v)
-                }
-            })?;
-        let fr = m
-            .value_of("fresh")
-            .map(|v| v.to_owned())
-            .or_else(|| env::var("FRESH").ok())
-            .unwrap_or_else(|| "false".to_owned())
-            .parse::<bool>()
-            .c(d!("Invalid `fresh`."))?;
+        let arh = {
+            let trace = m
+                .value_of("arc-history")
+                .map(|v| v.to_owned())
+                .or_else(|| env::var("ARC-HISTORY").ok())
+                .unwrap_or_else(|| "90,10".to_string())
+                .trim()
+                .to_owned();
+            if trace.is_empty() {
+                return Err(eg!("empty trace"));
+            }
+            if trace.contains(',') {
+                let t = trace.split(',').collect::<Vec<_>>();
+                let trace = t
+                    .first()
+                    .expect("missing trace period")
+                    .parse::<u16>()
+                    .c(d!("invalid trace period"))?;
+                let interval = Some(
+                    t.get(1)
+                        .expect("missing trace interval")
+                        .parse::<u16>()
+                        .c(d!("invalid trace interval"))?,
+                );
+                (trace, interval)
+            } else if !trace.is_empty() {
+                let trace = trace.parse::<u16>().c(d!("invalid trace period"))?;
+                (trace, None)
+            } else {
+                return Err(eg!("invalid trace"));
+            }
+        };
+        let arf = m.is_present("arc-fresh");
         let th = m
             .value_of("tendermint-host")
             .map(|v| v.to_owned())
@@ -481,8 +493,8 @@ pub mod global_cfg {
         let res = Config {
             abci_host: ah,
             abci_port: ap,
-            trace: tc,
-            fresh: fr,
+            arc_history: arh,
+            arc_fresh: arf,
             tendermint_host: th,
             tendermint_port: tp,
             submission_service_port: ssp,
