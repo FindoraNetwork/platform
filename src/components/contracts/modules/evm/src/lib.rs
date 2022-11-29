@@ -266,7 +266,7 @@ impl<C: Config> App<C> {
         utils::build_validator_updates(&self.contracts, &data)
     }
 
-    fn get_claim_ops(&self, ctx: &Context) -> Result<Vec<(H160, U256)>> {
+    pub fn get_claim_ops(&self, ctx: &Context) -> Result<Vec<(H160, U256)>> {
         let func = self.contracts.staking.function("getClaimOps").c(d!())?;
         let input = func.encode_input(&[]).c(d!())?;
 
@@ -458,13 +458,6 @@ impl<C: Config> AppModule for App<C> {
                     if !r.is_empty() {
                         resp.set_validator_updates(RepeatedField::from_vec(r));
                     }
-                }
-                Err(e) => tracing::error!("Error on get validator list: {}", e),
-            }
-
-            match self.get_claim_ops(ctx) {
-                Ok(r) => {
-                    self.mint_ops = r;
                 }
                 Err(e) => tracing::error!("Error on get validator list: {}", e),
             }

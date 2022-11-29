@@ -88,12 +88,33 @@ impl ModuleManager {
             resp.validator_updates = mresp.validator_updates;
         }
 
+        if let Err(e) = self.mint_evm_staking(ctx) {
+            tracing::error!("Error on mint amount from staking: {}", e);
+        }
+
         self.xhub_module.end_block(ctx, req);
         self.template_module.end_block(ctx, req);
         // if !resp_template.validator_updates.is_empty() {
         // resp.validator_updates = resp_template.validator_updates;
         // }
         resp
+    }
+
+    pub fn mint_evm_staking(&mut self, ctx: &Context) -> Result<()> {
+        let ops = self.evm_module.get_claim_ops(ctx)?;
+
+        for (addr, amount) in ops {
+            let amount =
+                EthereumDecimalsMapping::from_native_token(U256::from(amount))
+                    .ok_or_else(|| {
+                        eg!("The transfer to account amount is too large")
+                    })?;
+            let addr = Address::from(addr);
+
+            module_account::App::<BaseApp>::mint(ctx, &addr, amount)?;
+        }
+
+        Ok(())
     }
 
     pub fn commit(
@@ -215,7 +236,11 @@ impl ModuleManager {
         origin_tx.validate::<Module>(ctx)?;
 
         if RunTxMode::Deliver == ctx.run_mode {
-            return origin_tx.apply::<Module>(ctx);
+            let res = origin_tx.apply::<Module>(ctx)?;
+
+            // let mint_ops = se
+
+            return Ok(res);
         }
         Ok(ActionResult::default())
     }
