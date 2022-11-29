@@ -157,13 +157,13 @@ impl BaseApp {
     pub fn new(
         basedir: &Path,
         empty_block: bool,
-        trace: u16,
+        arc_history: (u16, Option<u16>),
         is_fresh: bool,
     ) -> Result<Self> {
         info!(
             target: "baseapp",
-            "create new baseapp with basedir {:?}, empty_block {}, history {} days, is_fresh {}",
-            basedir, empty_block, trace, is_fresh
+            "create new baseapp with basedir {:?}, empty_block {}, trace history {:?} days, is_fresh {}",
+            basedir, empty_block, arc_history, is_fresh
         );
 
         // Creates a fresh chain state db and history db
@@ -172,10 +172,13 @@ impl BaseApp {
 
         let opts = ChainStateOpts {
             name: Some("findora_db".to_owned()),
-            ver_window: BLOCKS_IN_DAY * trace as u64,
+            ver_window: BLOCKS_IN_DAY * arc_history.0 as u64,
             cleanup_aux: is_fresh,
-            interval: SNAPSHOT_INTERVAL * trace as u64,
-            ..Default::default()
+            interval: arc_history
+                .1
+                .map_or(SNAPSHOT_INTERVAL * arc_history.0 as u64, |v| {
+                    BLOCKS_IN_DAY * v as u64
+                }),
         };
         let chain_state = Arc::new(RwLock::new(ChainState::create_with_opts(fdb, opts)));
 

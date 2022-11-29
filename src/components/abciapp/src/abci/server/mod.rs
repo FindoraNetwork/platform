@@ -57,16 +57,16 @@ impl ABCISubmissionServer {
                 pnk!(AccountBaseAPP::new(
                     tempfile::tempdir().unwrap().path(),
                     CFG.disable_eth_empty_blocks,
-                    CFG.trace,
-                    CFG.fresh
+                    CFG.arc_history,
+                    CFG.arc_fresh
                 ))
             }
             Some(basedir) => {
                 pnk!(AccountBaseAPP::new(
                     Path::new(basedir),
                     CFG.disable_eth_empty_blocks,
-                    CFG.trace,
-                    CFG.fresh
+                    CFG.arc_history,
+                    CFG.arc_fresh
                 ))
             }
         };
