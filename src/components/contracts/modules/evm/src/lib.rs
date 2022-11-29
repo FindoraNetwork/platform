@@ -26,7 +26,6 @@ use fp_traits::{
     account::AccountAsset,
     evm::{AddressMapping, BlockHashMapping, DecimalsMapping, FeeCalculator},
 };
-use tracing::error;
 
 use fp_evm::TransactionStatus;
 

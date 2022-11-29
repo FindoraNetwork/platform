@@ -38,7 +38,7 @@ use primitive_types::{H160, H256, U256};
 use ruc::{eg, Result};
 use std::{borrow::BorrowMut, path::Path, sync::Arc};
 use storage::state::{ChainState, ChainStateOpts};
-use tracing::{error, info};
+use tracing::info;
 
 lazy_static! {
     /// An identifier that distinguishes different EVM chains.
