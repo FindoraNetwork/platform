@@ -75,7 +75,7 @@ use {
                 open_blind_asset_record as open_bar, AssetRecordType,
                 AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
             },
-            sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+            sig::{KeyType, XfrKeyPair, XfrPublicKey, XfrSecretKey},
             structs::{
                 AssetRecordTemplate, AssetType as NoahAssetType, XfrBody,
                 ASSET_TYPE_LENGTH,
@@ -1827,6 +1827,12 @@ use std::num::NonZeroU32;
 use std::str;
 
 #[wasm_bindgen]
+/// Returns human-readable encoded representation of an XfrPublicKey.
+pub fn public_key_to_human(key: &XfrPublicKey) -> String {
+    wallet::public_key_to_human(key)
+}
+
+#[wasm_bindgen]
 /// Returns bech32 encoded representation of an XfrPublicKey.
 pub fn public_key_to_bech32(key: &XfrPublicKey) -> String {
     wallet::public_key_to_bech32(key)
@@ -1934,6 +1940,20 @@ pub fn decryption_pbkdf2_aes256gcm(enc_key_pair: Vec<u8>, password: String) -> S
 #[allow(missing_docs)]
 pub fn create_keypair_from_secret(sk_str: String) -> Result<XfrKeyPair, JsValue> {
     let sk = serde_json::from_str::<XfrSecretKey>(&sk_str)
+        .c(d!())
+        .map_err(error_to_jsvalue)?;
+
+    Ok(sk.into_keypair())
+}
+
+#[wasm_bindgen]
+#[allow(missing_docs)]
+pub fn create_keypair_from_secret_secp256k1(
+    sk_str: String,
+) -> Result<XfrKeyPair, JsValue> {
+    let mut bytes = vec![KeyType::Secp256k1.to_byte()];
+    bytes.extend(hex::decode(&sk_str).c(d!()).map_err(error_to_jsvalue)?);
+    let sk = XfrSecretKey::noah_from_bytes(&bytes)
         .c(d!())
         .map_err(error_to_jsvalue)?;
 
