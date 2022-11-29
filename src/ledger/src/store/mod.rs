@@ -1389,7 +1389,8 @@ impl LedgerStatus {
                             .nonconfidential_balances
                             .entry(utxo.0.record.public_key)
                             .or_insert(0);
-                        *e = e.saturating_add(utxo.get_nonconfidential_balance());
+                        *e.deref_mut() =
+                            e.saturating_add(utxo.get_nonconfidential_balance());
                         self.utxos.insert(TxoSID(txo_sid), utxo);
                         txn_utxo_sids.push(TxoSID(txo_sid));
                     }
