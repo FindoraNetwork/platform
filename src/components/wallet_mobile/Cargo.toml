@@ -67,4 +67,4 @@ safer-ffi = "0.0.10"
 
 [build-dependencies]
 cbindgen = "0.24"
-vergen = "3.1.0"
+vergen = "7.4.3"
