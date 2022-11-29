@@ -24,7 +24,7 @@ use zei::xfr::sig::XfrKeyPair;
 
 lazy_static! {
     pub static ref BASE_APP: Mutex<BaseApp> = Mutex::new(
-        BaseApp::new(create_temp_db_path().as_path(), false, 0, false).unwrap()
+        BaseApp::new(create_temp_db_path().as_path(), false, (0, None), false).unwrap()
     );
     pub static ref ALICE_ECDSA: KeyPair = generate_address(1);
     pub static ref BOB_ECDSA: KeyPair = generate_address(2);
