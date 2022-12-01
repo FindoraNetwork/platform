@@ -37,7 +37,6 @@ members = [
     "src/components/contracts/primitives/rpc-server",
     "src/components/contracts/primitives/utils",
     "src/components/contracts/primitives/wasm",
-    "src/components/contracts/primitives/enterprise-web3",
     "src/components/contracts/rpc",
 ]
 

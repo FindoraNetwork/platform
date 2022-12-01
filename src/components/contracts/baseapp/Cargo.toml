@@ -27,7 +27,6 @@ base64 = "0.13"
 once_cell = "1.10.0"
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
-sha3 = "0.8"
 
 config = { path = "../../config"}
 
@@ -37,7 +36,6 @@ fp-evm = {path = "../primitives/evm"}
 fp-traits = {path = "../primitives/traits"}
 fp-types = {path = "../primitives/types"}
 fp-utils = {path = "../primitives/utils"}
-enterprise-web3 = { path = "../primitives/enterprise-web3", optional = true  }
 
 # modules
 module-account = {path = "../modules/account"}
@@ -56,4 +54,3 @@ evm-precompile = {path = "../modules/evm/precompile"}
 
 [features]
 abci_mock = []
-web3_service = ["enterprise-web3", "module-account/web3_service", "module-ethereum/web3_service", "module-evm/web3_service"]

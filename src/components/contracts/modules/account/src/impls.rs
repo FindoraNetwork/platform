@@ -74,27 +74,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
             .checked_add(balance)
             .c(d!("balance overflow"))?;
         AccountStore::insert(ctx.state.write().borrow_mut(), sender, &from_account)?;
-        AccountStore::insert(ctx.state.write().borrow_mut(), dest, &to_account)?;
-
-        #[cfg(feature = "web3_service")]
-        {
-            use enterprise_web3::{BALANCE_MAP, WEB3_SERVICE_START_HEIGHT};
-            use primitive_types::H160;
-
-            if ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
-                let mut balance_map = BALANCE_MAP.lock().c(d!())?;
-                let sender_slice: &[u8] = sender.as_ref();
-                let sender_h160 = H160::from_slice(&sender_slice[4..24]);
-
-                let to_slice: &[u8] = dest.as_ref();
-                let to_h160 = H160::from_slice(&to_slice[4..24]);
-
-                balance_map.insert(sender_h160, from_account.balance);
-                balance_map.insert(to_h160, to_account.balance);
-            }
-        }
-
-        Ok(())
+        AccountStore::insert(ctx.state.write().borrow_mut(), dest, &to_account)
     }
 
     fn mint(ctx: &Context, target: &Address, balance: U256) -> Result<()> {
@@ -113,23 +93,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         let issuance = Self::total_issuance(ctx)
             .checked_add(balance)
             .c(d!("issuance overflow"))?;
-        TotalIssuance::put(ctx.state.write().borrow_mut(), &issuance)?;
-
-        #[cfg(feature = "web3_service")]
-        {
-            use enterprise_web3::{BALANCE_MAP, WEB3_SERVICE_START_HEIGHT};
-            use primitive_types::H160;
-
-            if ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
-                let mut balance_map = BALANCE_MAP.lock().c(d!())?;
-                let target_slice: &[u8] = target.as_ref();
-                let target_h160 = H160::from_slice(&target_slice[4..24]);
-
-                balance_map.insert(target_h160, target_account.balance);
-            }
-        }
-
-        Ok(())
+        TotalIssuance::put(ctx.state.write().borrow_mut(), &issuance)
     }
 
     fn burn(ctx: &Context, target: &Address, balance: U256) -> Result<()> {
@@ -149,22 +113,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
         let issuance = Self::total_issuance(ctx)
             .checked_sub(balance)
             .c(d!("insufficient issuance"))?;
-        TotalIssuance::put(ctx.state.write().borrow_mut(), &issuance)?;
-
-        #[cfg(feature = "web3_service")]
-        {
-            use enterprise_web3::{BALANCE_MAP, WEB3_SERVICE_START_HEIGHT};
-            use primitive_types::H160;
-            if ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
-                let mut balance_map = BALANCE_MAP.lock().c(d!())?;
-                let target_slice: &[u8] = target.as_ref();
-                let target_h160 = H160::from_slice(&target_slice[4..24]);
-
-                balance_map.insert(target_h160, target_account.balance);
-            }
-        }
-
-        Ok(())
+        TotalIssuance::put(ctx.state.write().borrow_mut(), &issuance)
     }
 
     fn withdraw(ctx: &Context, who: &Address, value: U256) -> Result<()> {
@@ -182,23 +131,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
             .checked_add(value)
             .c(d!("reserved balance overflow"))?;
 
-        AccountStore::insert(ctx.state.write().borrow_mut(), who, &sa)?;
-
-        #[cfg(feature = "web3_service")]
-        {
-            use enterprise_web3::{BALANCE_MAP, WEB3_SERVICE_START_HEIGHT};
-            use primitive_types::H160;
-
-            if ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
-                let mut balance_map = BALANCE_MAP.lock().c(d!())?;
-                let target_slice: &[u8] = who.as_ref();
-                let target_h160 = H160::from_slice(&target_slice[4..24]);
-
-                balance_map.insert(target_h160, sa.balance);
-            }
-        }
-
-        Ok(())
+        AccountStore::insert(ctx.state.write().borrow_mut(), who, &sa)
     }
 
     fn refund(ctx: &Context, who: &Address, value: U256) -> Result<()> {
@@ -212,22 +145,7 @@ impl<C: Config> AccountAsset<Address> for App<C> {
             .checked_sub(value)
             .c(d!("insufficient reserved balance"))?;
         sa.balance = sa.balance.checked_add(value).c(d!("balance overflow"))?;
-        AccountStore::insert(ctx.state.write().borrow_mut(), who, &sa)?;
-
-        #[cfg(feature = "web3_service")]
-        {
-            use enterprise_web3::{BALANCE_MAP, WEB3_SERVICE_START_HEIGHT};
-            use primitive_types::H160;
-            if ctx.header.height as u64 > *WEB3_SERVICE_START_HEIGHT {
-                let mut balance_map = BALANCE_MAP.lock().c(d!())?;
-                let target_slice: &[u8] = who.as_ref();
-                let target_h160 = H160::from_slice(&target_slice[4..24]);
-
-                balance_map.insert(target_h160, sa.balance);
-            }
-        }
-
-        Ok(())
+        AccountStore::insert(ctx.state.write().borrow_mut(), who, &sa)
     }
 
     fn allowance(ctx: &Context, owner: &Address, spender: &Address) -> U256 {

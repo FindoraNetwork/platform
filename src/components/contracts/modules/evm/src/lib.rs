@@ -2,8 +2,6 @@
 #![allow(missing_docs)]
 #![allow(clippy::too_many_arguments)]
 
-extern crate core;
-
 mod basic;
 pub mod impls;
 pub mod precompile;
