@@ -31,22 +31,23 @@ indexmap = { version = "1.6.2", features = ["serde"] }
 config = { path = "../components/config" }
 fp-types = { path = "../components/contracts/primitives/types" }
 fp-utils = { path = "../components/contracts/primitives/utils" }
+once_cell = "1"
 itertools = "0.10"
 ruc = "1.0"
 
-noah  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
-noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
-noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
+noah = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
+noah-crypto = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
+noah-algebra = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
 bulletproofs = { git = "https://github.com/FindoraNetwork/bulletproofs", tag = "v1.0.1-f" }
 
-fbnc = { version = "0.2.9", default-features = false}
+fbnc = { version = "0.2.9", default-features = false }
 
 num-bigint = "0.4.3"
 
 globutils = { path = "../libs/globutils" }
 bitmap = { path = "../libs/bitmap" }
 cryptohash = { path = "../libs/cryptohash" }
-credentials = { path = "../libs/credentials"}
+credentials = { path = "../libs/credentials" }
 merkle_tree = { path = "../libs/merkle_tree" }
 sliding_set = { path = "../libs/sliding_set" }
 
@@ -72,6 +73,7 @@ storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.2
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v0.2.2", optional = true }
 sparse_merkle_tree = { path = "../libs/sparse_merkle_tree" }
 noah-accumulators = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.0" }
+
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 parking_lot = { version = "0.11", features = ["wasm-bindgen"] }

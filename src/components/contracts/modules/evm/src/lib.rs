@@ -242,6 +242,137 @@ impl<C: Config> App<C> {
         Ok(())
     }
 
+    pub fn stake(
+        &self,
+        ctx: &Context,
+        from: H160,
+        value: U256,
+        validator: H160,
+        td_pubkey: Vec<u8>,
+        staker: H160,
+        memo: String,
+        rate: U256,
+    ) -> Result<()> {
+        println!(
+            "Stake: from {:x} to {:x}, amount: {}",
+            &staker, &validator, &value
+        );
+
+        let function = self.contracts.staking.function("adminStake").c(d!())?;
+
+        let validator = Token::Address(validator);
+        let td_pubkey = Token::Bytes(td_pubkey);
+        let staker = Token::Address(staker);
+        let memo = Token::String(memo);
+        let rate = Token::Uint(rate);
+
+        let input = function
+            .encode_input(&[validator, td_pubkey, staker, memo, rate])
+            .c(d!())?;
+
+        let gas_limit = 99999999999;
+
+        let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        println!("Logs: {:?}", logs);
+
+        Ok(())
+    }
+
+    pub fn delegate(
+        &self,
+        ctx: &Context,
+        from: H160,
+        validator: H160,
+        delegator: H160,
+        amount: U256,
+    ) -> Result<()> {
+        println!(
+            "Delegate from {:X} to {:X}, amount:{}",
+            &delegator, &validator, &amount
+        );
+
+        let function = self.contracts.staking.function("adminDelegate").c(d!())?;
+        let validator = Token::Address(validator);
+        let delegator = Token::Address(delegator);
+        let input = function.encode_input(&[validator, delegator]).c(d!())?;
+
+        let gas_limit = 99999999999;
+
+        let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            amount,
+        )?;
+
+        println!("Delegate logs: {:?}", logs);
+
+        Ok(())
+    }
+
+    pub fn undelegate(
+        &self,
+        ctx: &Context,
+        from: H160,
+        validator: H160,
+        delegator: H160,
+        amount: U256,
+    ) -> Result<()> {
+        let function = self.contracts.staking.function("adminUndelegate").c(d!())?;
+
+        let validator = Token::Address(validator);
+        let delegator = Token::Address(delegator);
+        let amount = Token::Uint(amount);
+        let input = function
+            .encode_input(&[validator, delegator, amount])
+            .c(d!())?;
+
+        let gas_limit = 99999999999;
+        let value = U256::zero();
+
+        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn claim(&self, ctx: &Context, from: H160, amount: U256) -> Result<()> {
+        let function = self.contracts.staking.function("claim").c(d!())?;
+
+        let amount = Token::Uint(amount);
+        let input = function.encode_input(&[amount]).c(d!())?;
+
+        let gas_limit = 99999999999;
+        let value = U256::zero();
+
+        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        Ok(())
+    }
+
     fn get_validator_list(&self, ctx: &Context) -> Result<Vec<abci::ValidatorUpdate>> {
         let func = self
             .contracts

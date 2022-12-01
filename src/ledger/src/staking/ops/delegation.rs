@@ -4,6 +4,10 @@
 //! Data representation required when users propose a delegation.
 //!
 
+use config::abci::global_cfg::CFG;
+
+use crate::staking::td_addr_to_bytes;
+
 use {
     crate::{
         data_model::{
@@ -11,8 +15,8 @@ use {
             BLACK_HOLE_PUBKEY_STAKING,
         },
         staking::{
-            deny_relative_inputs, td_addr_to_string, Amount, Staking, TendermintAddr,
-            Validator, STAKING_VALIDATOR_MIN_POWER,
+            deny_relative_inputs, evm::EVM_STAKING, td_addr_to_string, Amount, Staking,
+            TendermintAddr, Validator, STAKING_VALIDATOR_MIN_POWER,
         },
     },
     ed25519_dalek::Signer,
@@ -48,14 +52,39 @@ impl DelegationOps {
 
     /// Apply new delegation to the target `Staking` instance.
     pub fn apply(&self, staking: &mut Staking, tx: &Transaction) -> Result<()> {
-        self.verify()
-            .c(d!())
-            .and_then(|_| self.check_set_context(staking, tx).c(d!()))
-            .and_then(|am| {
-                staking
-                    .delegate(self.pubkey, &self.body.validator, am)
-                    .c(d!())
-            })
+        let cur_height = staking.cur_height() as i64;
+        if cur_height < CFG.checkpoint.evm_staking {
+            self.verify()
+                .c(d!())
+                .and_then(|_| self.check_set_context(staking, tx).c(d!()))
+                .and_then(|am| {
+                    staking
+                        .delegate(self.pubkey, &self.body.validator, am)
+                        .c(d!())
+                })
+        } else {
+            self.verify()?;
+            let am = check_delegation_context(tx).c(d!())?;
+            if let Some(new_validator) = self.body.new_validator.as_ref() {
+                let memo = serde_json::to_string(&new_validator.memo).c(d!())?;
+                EVM_STAKING.get().c(d!())?.write().stake(
+                    &self.pubkey,
+                    am,
+                    &new_validator.td_addr,
+                    new_validator.td_pubkey.to_owned(),
+                    memo,
+                    new_validator.commission_rate,
+                )?;
+            } else {
+                EVM_STAKING.get().c(d!())?.write().delegate(
+                    &self.pubkey,
+                    am,
+                    &td_addr_to_bytes(&self.body.validator)?,
+                )?;
+            }
+
+            Ok(())
+        }
     }
 
     /// Verify signature.

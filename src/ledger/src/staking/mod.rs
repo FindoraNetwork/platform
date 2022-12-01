@@ -16,6 +16,7 @@
 use {num_bigint::BigUint, std::convert::TryFrom};
 
 pub mod cosig;
+pub mod evm;
 pub mod init;
 pub mod ops;
 

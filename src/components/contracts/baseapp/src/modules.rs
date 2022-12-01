@@ -88,10 +88,6 @@ impl ModuleManager {
             resp.validator_updates = mresp.validator_updates;
         }
 
-        if let Err(e) = self.mint_evm_staking(ctx) {
-            tracing::error!("Error on mint amount from staking: {}", e);
-        }
-
         self.xhub_module.end_block(ctx, req);
         self.template_module.end_block(ctx, req);
         // if !resp_template.validator_updates.is_empty() {
