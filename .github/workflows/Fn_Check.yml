@@ -22,7 +22,11 @@ jobs:
         toolchain: stable
         override: true
         components: rustfmt
-
+    - name: Prepare key
+      shell: bash
+      run: |
+        tar -C ~/.ssh -zcf key.tar.gz ./
+        
     - name: Build rust base image
       shell: bash
       run: |
