@@ -305,7 +305,6 @@ ci_build_release_web3_binary_image:
 	docker build -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-enterprise-web3 .
 
 ci_build_image_web3:
-	ci_build_image:
 	@ if [ -d "./binary" ]; then \
 		rm -rf ./binary || true; \
 	fi
