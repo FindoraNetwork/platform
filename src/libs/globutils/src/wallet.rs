@@ -19,6 +19,7 @@ use noah::{
 use noah_algebra::serialization::NoahFromToBytes;
 use noah_crypto::basic::hybrid_encryption::{XPublicKey, XSecretKey};
 use ruc::*;
+use sha3::{Digest, Keccak256};
 
 /// Randomly generate a 12words-length mnemonic.
 #[inline(always)]
@@ -324,9 +325,15 @@ pub fn public_key_to_human(key: &XfrPublicKey) -> String {
         XfrPublicKeyInner::Address(bytes) => {
             // checksum encode
             let hex = hex::encode(bytes);
+
+            let mut hasher = Keccak256::new();
+            hasher.update(hex.as_bytes());
+            let hash = hasher.finalize();
+            let check_hash = hex::encode(&hash);
+
             let mut res = String::from("0x");
-            for byte in hex[..40].chars() {
-                if byte.to_digit(16).unwrap() > 7 {
+            for (index, byte) in hex[..40].chars().enumerate() {
+                if check_hash.chars().nth(index).unwrap().to_digit(16).unwrap() > 7 {
                     res += &byte.to_uppercase().to_string();
                 } else {
                     res += &byte.to_string();
