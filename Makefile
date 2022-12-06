@@ -84,10 +84,6 @@ build_release_debug: tendermint_goleveldb
 	cargo build --features="debug_env" --release --bins -p abciapp -p finutils
 	$(call pack,release)
 
-build_release_web3_goleveldb: tendermint_goleveldb
-	cargo build --features="web3_service debug_env" --release --bins -p abciapp -p finutils
-	$(call pack,release)
-
 build_release_web3: tendermint_cleveldb
 	cargo build --features="web3_service debug_env" --release --bins -p abciapp -p finutils
 	$(call pack,release)
@@ -220,10 +216,6 @@ ci_build_dev_binary_image:
 	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-dev
 	docker build -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-binary-image-dev .
 
-ci_build_release_binary_image:
-	sed -i "s/^ENV VERGEN_SHA_EXTERN .*/ENV VERGEN_SHA_EXTERN ${VERGEN_SHA_EXTERN}/g" container/Dockerfile-binary-image-release
-	docker build -t findorad-binary-image:$(IMAGE_TAG) -f container/Dockerfile-binary-image-release .
-
 ci_build_image:
 	@ if [ -d "./binary" ]; then \
 		rm -rf ./binary || true; \
@@ -311,7 +303,8 @@ ci_build_image_web3:
 	@ docker run --rm -d --name findorad-binary findorad-binary-image:$(IMAGE_TAG)
 	@ docker cp findorad-binary:/binary ./binary
 	@ docker rm -f findorad-binary
-	@ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-cleveldb .
+	@ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb .
+
 ifeq ($(ENV),release)
 	docker tag $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
 endif
@@ -328,18 +321,6 @@ clean_image:
 	docker rmi $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG)
 ifeq ($(ENV),release)
 	docker rmi $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
-endif
-
-ci_build_image_dockerhub:
-	@ if [ -d "./binary" ]; then \
-		rm -rf ./binary || true; \
-	fi
-	@ docker run --rm -d --name findorad-binary findorad-binary-image:$(IMAGE_TAG)
-	@ docker cp findorad-binary:/binary ./binary
-	@ docker rm -f findorad-binary
-	@ docker build -t $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb .
-ifeq ($(ENV),release)
-	docker tag $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) $(DOCKERHUB_URL)/findorad:latest
 endif
 
 ci_push_image_dockerhub:
