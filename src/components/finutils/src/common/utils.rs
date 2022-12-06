@@ -2,7 +2,10 @@
 //! Some handful function and data structure for findora cli tools
 //!
 
-use ledger::data_model::ABARData;
+use ledger::{
+    data_model::ABARData,
+    staking::{init::get_inital_validators_with_mnemonics, Validator},
+};
 use {
     crate::{
         api::{DelegationInfo, ValidatorDetail},
@@ -69,13 +72,30 @@ pub fn send_tx(tx: &Transaction) -> Result<()> {
 
 /// Fee is needless in a `UpdateValidator` operation
 #[inline(always)]
-pub fn set_initial_validators(staking_info_file: Option<&str>) -> Result<()> {
+pub fn set_initial_validators() -> Result<()> {
     let mut builder = new_tx_builder().c(d!())?;
 
-    let vs = get_inital_validators(staking_info_file).c(d!())?;
+    let vs = get_inital_validators().c(d!())?;
     builder.add_operation_update_validator(&[], 1, vs).c(d!())?;
 
     send_tx(&builder.build_and_take_transaction()?).c(d!())
+}
+
+/// Fee is needless in a `UpdateValidator` operation
+#[inline(always)]
+pub fn set_initial_validators_with_mnemonics(
+    staking_mnemonic_list: &[u8],
+) -> Result<(Vec<Validator>, Vec<XfrKeyPair>)> {
+    let mut builder = new_tx_builder().c(d!())?;
+
+    let (vs, kps) =
+        get_inital_validators_with_mnemonics(staking_mnemonic_list).c(d!())?;
+    builder
+        .add_operation_update_validator(&[], 1, vs.clone())
+        .c(d!())?;
+
+    send_tx(&builder.build_and_take_transaction()?).c(d!())?;
+    Ok((vs, kps))
 }
 
 ///load the tendermint key from the `priv_validator_key.json` file.

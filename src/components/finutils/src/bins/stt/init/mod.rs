@@ -10,45 +10,100 @@ use {
     super::*,
     finutils::common::{transfer_asset_batch_x, utils::get_balance},
     ledger::data_model::TX_FEE_MIN,
+    ledger::staking::td_addr_to_string,
 };
 
 pub fn init(
     mut interval: u64,
     is_mainnet: bool,
     skip_validator: bool,
-    staking_info_file: Option<&str>,
-    only_init: bool,
+    staking_mnemonics: Option<&str>,
 ) -> Result<()> {
     if 0 == interval {
         interval = *BLOCK_INTERVAL;
     }
 
+    println!(">>> Block interval: {} seconds", interval);
+
+    let mut validators = vec![];
+    let mut key_pairs = vec![];
     if !skip_validator {
-        if staking_info_file.is_some() {
+        if let Some(path) = staking_mnemonics {
             println!(">>> Set initial validator set (Customed) ...");
+            (validators, key_pairs) =
+                common::set_initial_validators_with_mnemonics(path).c(d!())?;
         } else {
             println!(">>> Set initial validator set ...");
-        }
-        common::set_initial_validators(staking_info_file).c(d!())?;
-        if only_init {
-            return Ok(());
+            common::set_initial_validators().c(d!())?;
         }
     }
 
     if is_mainnet {
         Ok(())
     } else {
+        println!(">>> Wait 1 block ...");
+        sleep_n_block!(1, interval);
+
         let root_kp =
             wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC).c(d!())?;
-        println!(">>> Block interval: {} seconds", interval);
 
         println!(">>> Define and issue FRA ...");
         common::utils::send_tx(&fra_gen_initial_tx(&root_kp)).c(d!())?;
 
-        println!(">>> Wait 1.2 block ...");
-        sleep_n_block!(1.2, interval);
+        println!(">>> Wait 1.6 block ...");
+        sleep_n_block!(1.6, interval);
 
         if skip_validator {
+            println!(">>> DONE !");
+            return Ok(());
+        }
+
+        if staking_mnemonics.is_some() {
+            let target_list = key_pairs
+                .iter()
+                .map(|kp| (kp.get_pk_ref(), FRA_PRE_ISSUE_AMOUNT / 2_000))
+                .collect::<Vec<_>>();
+
+            println!(">>> Transfer FRAs to validators ...");
+            common::utils::transfer_batch(&root_kp, target_list, None, false, false)
+                .c(d!())?;
+
+            println!(">>> Wait 1.6 block ...");
+            sleep_n_block!(1.6, interval);
+
+            println!(">>> Propose self-delegations ...");
+            for (_i, (owner_kp, validator)) in
+                key_pairs.into_iter().zip(validators).enumerate()
+            {
+                let amount = validator.td_power;
+
+                let mut builder = common::utils::new_tx_builder().c(d!())?;
+
+                let principal_op = common::utils::gen_transfer_op(
+                    &owner_kp,
+                    vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
+                    None,
+                    false,
+                    false,
+                    Some(
+                        noah::xfr::asset_record::AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
+                    ),
+                )
+                .c(d!())?;
+
+                let mut tx = builder
+                    .add_operation(principal_op)
+                    .add_operation_delegation(
+                        &owner_kp,
+                        amount,
+                        td_addr_to_string(&validator.td_addr),
+                    )
+                    .build_and_take_transaction()?;
+
+                tx.sign(&owner_kp);
+                common::utils::send_tx(&tx).c(d!())?;
+            }
+
             println!(">>> DONE !");
             return Ok(());
         }
@@ -77,10 +132,6 @@ pub fn init(
 
         println!(">>> Wait 1.2 block ...");
         sleep_n_block!(1.2);
-
-        if staking_info_file.is_some() {
-            return Ok(());
-        }
 
         println!(">>> Re-distribution ...");
         println!(">>> Wait 2.4 block ...");

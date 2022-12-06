@@ -12,7 +12,7 @@ fn main() {
 fn gen() -> Result<()> {
     let cfg_path = init::get_cfg_path().c(d!())?;
     let secret_info_path = format!("{}.keys", &cfg_path);
-    let mut cfg_template = init::get_cfg_data(None).c(d!())?;
+    let mut cfg_template = init::get_cfg_data().c(d!())?;
 
     let mnemonics = (0..cfg_template.valiators.len())
         .map(|_| {

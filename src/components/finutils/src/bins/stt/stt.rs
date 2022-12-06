@@ -66,18 +66,11 @@ fn run() -> Result<()> {
         .arg_from_usage("-i, --interval=[Interval] 'block interval'")
         .arg_from_usage("-s, --skip-validator 'skip validator initialization'")
         .arg(
-            Arg::with_name("staking-info-file")
-                .long("staking-info-file")
+            Arg::with_name("staking-mnemonics-file")
+                .long("staking-mnemonics-file")
                 .takes_value(true)
                 .required(false)
-                .help("Json file that contains a list of tendermint address, public key and id(Xfr public key)."),
-        )
-        .arg(
-            Arg::with_name("only-init")
-            .long("only-init")
-            .takes_value(false)
-            .required(false)
-            .help("If this flag is set, only initiate the validators and do nothing.")
+                .help("Json file that contains a list of tendermint address, public key and mnemonic."),
         );
     let subcmd_test = SubCommand::with_name("test");
     let subcmd_issue = SubCommand::with_name("issue").about("issue FRA on demand");
@@ -128,17 +121,10 @@ fn run() -> Result<()> {
 
         let is_mainnet = m.is_present("mainnet");
         let skip_validator = m.is_present("skip-validator");
-        let staking_info_file = m.value_of("staking-info-file");
-        let only_init = m.is_present("only-init");
+        let staking_mnemonics_file = m.value_of("staking-mnemonics-file");
 
-        init::init(
-            interval,
-            is_mainnet,
-            skip_validator,
-            staking_info_file,
-            only_init,
-        )
-        .c(d!())?;
+        init::init(interval, is_mainnet, skip_validator, staking_mnemonics_file)
+            .c(d!())?;
     } else if matches.is_present("test") {
         init::i_testing::run_all().c(d!())?;
     } else if matches.is_present("issue") {
