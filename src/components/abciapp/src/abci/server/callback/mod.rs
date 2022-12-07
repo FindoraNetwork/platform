@@ -42,11 +42,6 @@ use {
     },
 };
 
-#[cfg(feature = "web3_service")]
-use enterprise_web3::{
-    BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS, STATE_UPDATE_LIST, TXS,
-};
-
 pub(crate) static TENDERMINT_BLOCK_HEIGHT: AtomicI64 = AtomicI64::new(0);
 
 lazy_static! {
@@ -450,13 +445,17 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
 
     #[cfg(feature = "web3_service")]
     {
-        use enterprise_web3::{Setter, REDIS_CLIENT, WEB3_SERVICE_START_HEIGHT};
+        use enterprise_web3::{
+            Setter, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS, REDIS_POOL,
+            SAVE_HISTORY_NUM, STATE_UPDATE_LIST, TXS, WEB3_SERVICE_START_HEIGHT,
+        };
+        use ethereum_types::U256;
         use std::collections::HashMap;
         use std::mem::replace;
 
         let height = state.get_tendermint_height() as u32;
         if height as u64 > *WEB3_SERVICE_START_HEIGHT {
-            let redis_pool = REDIS_CLIENT.lock().expect("REDIS_CLIENT error");
+            let redis_pool = REDIS_POOL.clone();
             let mut conn = redis_pool.get().expect("get redis connect");
             let mut setter = Setter::new(&mut *conn, "evm".to_string());
 
@@ -516,6 +515,11 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
                 || !receipts.is_empty()
                 || block.is_some()
             {
+                let del_height = if *SAVE_HISTORY_NUM > height {
+                    Some(height - (*SAVE_HISTORY_NUM))
+                } else {
+                    None
+                };
                 setter
                     .set_height(height)
                     .map_err(|e| log::error!("{:?}", e))
@@ -526,6 +530,12 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
                         .set_byte_code(height, *addr, code.clone())
                         .map_err(|e| log::error!("{:?}", e))
                         .unwrap_or(());
+                    if let Some(h) = del_height {
+                        setter
+                            .remove_byte_code(h, *addr)
+                            .map_err(|e| log::error!("{:?}", e))
+                            .unwrap_or(());
+                    }
                 }
 
                 for (addr, nonce) in nonce_map.iter() {
@@ -533,6 +543,12 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
                         .set_nonce(height, *addr, *nonce)
                         .map_err(|e| log::error!("{:?}", e))
                         .unwrap_or(());
+                    if let Some(h) = del_height {
+                        setter
+                            .remove_nonce(h, *addr)
+                            .map_err(|e| log::error!("{:?}", e))
+                            .unwrap_or(());
+                    }
                 }
 
                 for (addr, balance) in balance_map.iter() {
@@ -540,6 +556,12 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
                         .set_balance(height, *addr, *balance)
                         .map_err(|e| log::error!("{:?}", e))
                         .unwrap_or(());
+                    if let Some(h) = del_height {
+                        setter
+                            .remove_balance(h, *addr)
+                            .map_err(|e| log::error!("{:?}", e))
+                            .unwrap_or(());
+                    }
                 }
 
                 for state in state_list.iter() {
@@ -552,6 +574,13 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
                         )
                         .map_err(|e| log::error!("{:?}", e))
                         .unwrap_or(());
+
+                    if let Some(h) = del_height {
+                        setter
+                            .remove_state(h, state.address.clone(), state.index.clone())
+                            .map_err(|e| log::error!("{:?}", e))
+                            .unwrap_or(());
+                    }
                 }
 
                 if let Some(block) = block {
@@ -559,6 +588,14 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
                         .set_block_info(block, receipts, txs)
                         .map_err(|e| log::error!("{:?}", e))
                         .unwrap_or(());
+                    if let Some(h) = del_height {
+                        for del_h in 0..h {
+                            setter
+                                .remove_block_info(U256::from(del_h))
+                                .map_err(|e| log::error!("{:?}", e))
+                                .unwrap_or(());
+                        }
+                    }
                 }
             }
         }

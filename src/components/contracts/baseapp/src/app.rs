@@ -89,7 +89,7 @@ impl crate::BaseApp {
                         {
                             use enterprise_web3::{
                                 Setter, PENDING_CODE_MAP, PENDING_STATE_UPDATE_LIST,
-                                REDIS_CLIENT,
+                                REDIS_POOL,
                             };
                             use std::{collections::HashMap, mem::replace};
                             let code_map =
@@ -112,8 +112,7 @@ impl crate::BaseApp {
                                     fp_types::actions::ethereum::Action::Transact(tx),
                                 ) = tmp_tx.function
                                 {
-                                    let redis_pool =
-                                        REDIS_CLIENT.lock().expect("REDIS_CLIENT error");
+                                    let redis_pool = REDIS_POOL.clone();
                                     let mut conn =
                                         redis_pool.get().expect("get redis connect");
                                     let mut setter =
@@ -220,7 +219,7 @@ impl crate::BaseApp {
                     #[cfg(feature = "enterprise-web3")]
                     {
                         use enterprise_web3::{
-                            Setter, REDIS_CLIENT, REMOVE_PENDING_CODE_MAP,
+                            Setter, REDIS_POOL, REMOVE_PENDING_CODE_MAP,
                             REMOVE_PENDING_STATE_UPDATE_LIST,
                         };
                         use std::{mem::replace, ops::DerefMut};
@@ -248,8 +247,7 @@ impl crate::BaseApp {
                                 fp_types::actions::ethereum::Action::Transact(tx),
                             ) = tmp_tx.function
                             {
-                                let redis_pool =
-                                    REDIS_CLIENT.lock().expect("REDIS_CLIENT error");
+                                let redis_pool = REDIS_POOL.clone();
                                 let mut conn =
                                     redis_pool.get().expect("get redis connect");
                                 let mut setter =
