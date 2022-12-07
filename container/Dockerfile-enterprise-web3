@@ -15,13 +15,14 @@ RUN rustup toolchain install stable && \
 RUN mkdir /binary
 RUN mkdir -p /binary/cleveldb && mkdir -p /binary/goleveldb
 
-RUN make fmt
-RUN make lint
-RUN make test
 
-RUN mkdir -p /root/.cargo/bin/ && \
-    make build_release_web3 && \
-    if [ -d /platform/release/bin ] ; then mv /platform/release/bin/* /binary/cleveldb ; rm -rf /platform/release/; else mv /platform/debug/bin/* /binary/cleveldb ; rm -rf /platform/debug/ ;fi
+# RUN make fmt
+# RUN make lint
+# RUN make test
+
+# RUN mkdir -p /root/.cargo/bin/ && \
+#     make build_release_web3 && \
+#     if [ -d /platform/release/bin ] ; then mv /platform/release/bin/* /binary/cleveldb ; rm -rf /platform/release/; else mv /platform/debug/bin/* /binary/cleveldb ; rm -rf /platform/debug/ ;fi
 
 RUN mkdir -p /root/.cargo/bin/ && \
     make build_release_web3_goleveldb && \
