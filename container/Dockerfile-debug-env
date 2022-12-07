@@ -7,7 +7,7 @@ ENV PATH=$PATH:/root/.cargo/bin/
 COPY . $WORK_DIR
 WORKDIR $WORK_DIR
 
-RUN ALL_PROXY=http://10.10.11.251:7890 apt-get install -y procps
+RUN apt-get install -y procps
 
 RUN rustup toolchain install stable && \
     rustup component add clippy --toolchain stable && \
