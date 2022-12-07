@@ -329,7 +329,7 @@ pub fn public_key_to_human(key: &XfrPublicKey) -> String {
             let mut hasher = Keccak256::new();
             hasher.update(hex.as_bytes());
             let hash = hasher.finalize();
-            let check_hash = hex::encode(&hash);
+            let check_hash = hex::encode(hash);
 
             let mut res = String::from("0x");
             for (index, byte) in hex[..40].chars().enumerate() {
