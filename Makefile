@@ -360,7 +360,7 @@ ci_build_wasm_js_bindings:
 
 reset:
 	@./tools/devnet/stopnodes.sh
-	@./tools/devnet/resetnodes.sh 1 1
+	@./tools/devnet/resetnodes.sh 3 3
 
 snapshot:
 	@./tools/devnet/snapshot.sh

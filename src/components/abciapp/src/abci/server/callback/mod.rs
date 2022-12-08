@@ -4,6 +4,7 @@
 
 mod utils;
 
+use protobuf::Message;
 use {
     crate::{
         abci::{server::ABCISubmissionServer, staking, IN_SAFE_ITV, IS_EXITING, POOL},
@@ -126,10 +127,16 @@ pub fn check_tx(s: &mut ABCISubmissionServer, req: &RequestCheckTx) -> ResponseC
 
     let td_height = TENDERMINT_BLOCK_HEIGHT.load(Ordering::Relaxed);
 
+    println!(
+        "~~~~~~~~~~~~~~ check_tx {:?} {}",
+        req.get_field_type(),
+        req.get_cached_size()
+    );
     match tx_catalog {
         TxCatalog::FindoraTx => {
             if matches!(req.field_type, CheckTxType::New) {
                 if let Ok(txn) = convert_tx(req.get_tx()) {
+                    println!("~~~~~~~~~~~~~~~ check_tx txn handle {}", txn.handle());
                     if !txn.valid_in_abci() {
                         resp.log = "Should not appear in ABCI".to_owned();
                         resp.code = 1;
@@ -240,6 +247,7 @@ pub fn deliver_tx(
     match tx_catalog {
         TxCatalog::FindoraTx => {
             if let Ok(txn) = convert_tx(req.get_tx()) {
+                println!("~~~~~~~~~~~~~~~ deliver_tx txn handle {}", txn.handle());
                 let txhash = txn.hash_tm_rawbytes();
                 POOL.spawn_ok(async move {
                     TX_HISTORY.write().set_value(txhash, Default::default());

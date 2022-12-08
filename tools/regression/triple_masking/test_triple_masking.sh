@@ -46,9 +46,11 @@ echo
 # test fra to eth
 echo -e "\n ***** Test transfer from fra to eth prefix address *****"
 $BIN/fn transfer --amount 210000000 --asset FRA -f ./$FILE_FRA_KEY -T $FRA_ADDRESS
+TZ=GMT0 date -j
 sleep $BLOCK_INTERVAL
 
 echo "\n ***** Verifying balances ***** "
+TZ=GMT0 date -j
 python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $ED_SEC_KEY --amount 0
 if [ $? != 0 ];
 then

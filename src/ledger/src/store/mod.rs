@@ -1099,12 +1099,14 @@ impl LedgerState {
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn get_asset_type(&self, code: &AssetTypeCode) -> Option<AssetType> {
+        println!("-------------------------------------------------------------- get_asset_type {}", code.to_base64());
         self.status.get_asset_type(code)
     }
 
     #[inline(always)]
     #[allow(missing_docs)]
     pub fn insert_asset_type(&mut self, code: AssetTypeCode, at: AssetType) {
+        println!("------------------------------------------------------------------------------ insert_asset_type {}", code.to_base64());
         self.status.asset_types.insert(code, at);
     }
 
@@ -1376,6 +1378,7 @@ impl LedgerStatus {
     #[inline(always)]
     #[allow(missing_docs)]
     fn get_asset_type(&self, code: &AssetTypeCode) -> Option<AssetType> {
+        println!("-------------------------------------------------------------- get_asset_type {}", code.to_base64());
         self.asset_types.get(code)
     }
 
@@ -1832,6 +1835,7 @@ impl LedgerStatus {
         for (code, asset_type) in block.new_asset_codes.drain() {
             let code = handle_asset_type_code(code);
 
+            println!("-------------------------------------------------------------- apply_block_effects {}", code.to_base64());
             self.asset_types.insert(code, asset_type.clone());
         }
 

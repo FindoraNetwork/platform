@@ -63,6 +63,7 @@ fp-utils = { path = "../contracts/primitives/utils" }
 
 enterprise-web3 = { path = "../contracts/primitives/enterprise-web3", optional = true  }
 
+chrono = "0.4.23"
 
 [target.'cfg(target_os= "linux")'.dependencies]
 btm = "0.1.6"

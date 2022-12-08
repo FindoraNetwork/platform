@@ -1573,6 +1573,30 @@ pub enum Operation {
     ReplaceStaker(ReplaceStakerOps),
 }
 
+impl fmt::Display for Operation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Operation::TransferAsset(_) => write!(f, "TransferAsset"),
+            Operation::IssueAsset(_) => write!(f, "IssueAsset"),
+            Operation::DefineAsset(_) => write!(f, "DefineAsset"),
+            Operation::UpdateMemo(_) => write!(f, "UpdateMemo"),
+            Operation::UpdateStaker(_) => write!(f, "UpdateStaker"),
+            Operation::Delegation(_) => write!(f, "Delegation"),
+            Operation::UnDelegation(_) => write!(f, "UnDelegation"),
+            Operation::Claim(_) => write!(f, "Claim"),
+            Operation::UpdateValidator(_) => write!(f, "UpdateValidator"),
+            Operation::Governance(_) => write!(f, "Governance"),
+            Operation::FraDistribution(_) => write!(f, "FraDistribution"),
+            Operation::MintFra(_) => write!(f, "MintFra"),
+            Operation::ConvertAccount(_) => write!(f, "ConvertAccount"),
+            Operation::BarToAbar(_) => write!(f, "BarToAbar"),
+            Operation::AbarToBar(_) => write!(f, "AbarToBar"),
+            Operation::TransferAnonAsset(_) => write!(f, "TransferAnonAsset"),
+            Operation::ReplaceStaker(_) => write!(f, "ReplaceStaker"),
+        }
+    }
+}
+
 impl Operation {
     /// get serialized bytes for signature and prove.
     pub fn digest(&self) -> Vec<u8> {

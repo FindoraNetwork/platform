@@ -95,31 +95,95 @@ impl abci::Application for ABCISubmissionServer {
 
     #[inline(always)]
     fn check_tx(&mut self, req: &RequestCheckTx) -> ResponseCheckTx {
-        callback::check_tx(self, req)
+        let start = chrono::Utc::now();
+        let res = callback::check_tx(self, req);
+        let end = chrono::Utc::now();
+        let duration = end.timestamp_millis() - start.timestamp_millis();
+        println!(
+            "~~~~~~~~~~~~~~~~~~~~~ check_tx       {}-{}  duration:{}",
+            start.to_rfc3339(),
+            end.to_rfc3339(),
+            duration
+        );
+        res
     }
 
     #[inline(always)]
     fn init_chain(&mut self, req: &RequestInitChain) -> ResponseInitChain {
-        callback::init_chain(self, req)
+        let start = chrono::Utc::now();
+        let res = callback::init_chain(self, req);
+        let end = chrono::Utc::now();
+        let duration = end.timestamp_millis() - start.timestamp_millis();
+        println!(
+            "~~~~~~~~~~~~~~~~~~~~~ init_chain     {}-{}  duration:{}",
+            start.to_rfc3339(),
+            end.to_rfc3339(),
+            duration
+        );
+        res
     }
 
     #[inline(always)]
     fn begin_block(&mut self, req: &RequestBeginBlock) -> ResponseBeginBlock {
-        callback::begin_block(self, req)
+        let start = chrono::Utc::now();
+        let res = callback::begin_block(self, req);
+        let end = chrono::Utc::now();
+        let duration = end.timestamp_millis() - start.timestamp_millis();
+        println!(
+            "~~~~~~~~~~~~~~~~~~~~~ begin_block    {}-{}  duration:{}",
+            start.to_rfc3339(),
+            end.to_rfc3339(),
+            duration
+        );
+        res
     }
 
     #[inline(always)]
     fn deliver_tx(&mut self, req: &RequestDeliverTx) -> ResponseDeliverTx {
-        callback::deliver_tx(self, req)
+        let start = chrono::Utc::now();
+        let res = callback::deliver_tx(self, req);
+        let end = chrono::Utc::now();
+        let duration = end.timestamp_millis() - start.timestamp_millis();
+        println!(
+            "~~~~~~~~~~~~~~~~~~~~~ deliver_tx     {}-{}  duration:{}",
+            start.to_rfc3339(),
+            end.to_rfc3339(),
+            duration
+        );
+        res
     }
 
     #[inline(always)]
     fn end_block(&mut self, req: &RequestEndBlock) -> ResponseEndBlock {
-        callback::end_block(self, req)
+        let start = chrono::Utc::now();
+        let res = callback::end_block(self, req);
+        let end = chrono::Utc::now();
+        let duration = end.timestamp_millis() - start.timestamp_millis();
+        println!(
+            "~~~~~~~~~~~~~~~~~~~~~ end_block      {}-{}  duration:{}",
+            start.to_rfc3339(),
+            end.to_rfc3339(),
+            duration
+        );
+        res
     }
 
     #[inline(always)]
     fn commit(&mut self, req: &RequestCommit) -> ResponseCommit {
-        callback::commit(self, req)
+        let start = chrono::Utc::now();
+        let res = callback::commit(self, req);
+        let end = chrono::Utc::now();
+        let duration = end.timestamp_millis() - start.timestamp_millis();
+        println!(
+            "~~~~~~~~~~~~~~~~~~~~~ commit         {}-{}  duration:{}",
+            start.to_rfc3339(),
+            end.to_rfc3339(),
+            duration
+        );
+        println!("~~~~~~~~~~~~~~~~~~~~~`");
+        println!("~~~~~~~~~~~~~~~~~~~~~`");
+        println!("~~~~~~~~~~~~~~~~~~~~~`");
+        println!("~~~~~~~~~~~~~~~~~~~~~`");
+        res
     }
 }

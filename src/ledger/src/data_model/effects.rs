@@ -140,6 +140,7 @@ impl TxnEffect {
                     }
                 };
             }
+            println!("~~~~~~~~~~~~~~~~~~~~~ compute_effect {}", op);
 
             match op {
                 Operation::MintFra(i) => {
