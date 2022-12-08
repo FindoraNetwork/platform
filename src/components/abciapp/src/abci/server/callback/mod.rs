@@ -503,15 +503,17 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     #[cfg(feature = "web3_service")]
     {
         use enterprise_web3::{
-            BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS, STATE_UPDATE_LIST, TXS,
-            WEB3_SERVICE_START_HEIGHT,
+            Setter, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS, REDIS_CLIENT,
+            STATE_UPDATE_LIST, TXS, WEB3_SERVICE_START_HEIGHT,
         };
         use std::collections::HashMap;
         use std::mem::replace;
 
         let height = state.get_tendermint_height() as u32;
         if height as u64 > *WEB3_SERVICE_START_HEIGHT {
-            let mut setter = enterprise_web3::setter().expect("connection redis failed");
+            let redis_pool = REDIS_CLIENT.lock().expect("REDIS_CLIENT error");
+            let mut conn = redis_pool.get().expect("get redis connect");
+            let mut setter = Setter::new(&mut *conn, "evm".to_string());
 
             let nonce_map = if let Ok(mut nonce_map) = NONCE_MAP.lock() {
                 replace(&mut *nonce_map, HashMap::new())
