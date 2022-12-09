@@ -586,6 +586,7 @@ fn get_owned_utxos_x(
         rpc_endpoint.unwrap_or(default_endpoint.as_str()),
         wallet::public_key_to_base64(addr)
     );
+    println!("~~~~~~~~~~~~~~~~~~~ get_owned_utxos_x {}", url);
 
     attohttpc::get(&url)
         .send()
