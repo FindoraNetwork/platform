@@ -88,7 +88,8 @@ impl crate::BaseApp {
                         #[cfg(feature = "enterprise-web3")]
                         {
                             use enterprise_web3::{
-                                PENDING_CODE_MAP, PENDING_STATE_UPDATE_LIST,
+                                Setter, PENDING_CODE_MAP, PENDING_STATE_UPDATE_LIST,
+                                REDIS_CLIENT,
                             };
                             use std::{collections::HashMap, mem::replace};
                             let code_map =
@@ -111,8 +112,13 @@ impl crate::BaseApp {
                                     fp_types::actions::ethereum::Action::Transact(tx),
                                 ) = tmp_tx.function
                                 {
-                                    let mut setter = enterprise_web3::setter()
-                                        .expect("connection redis failed");
+                                    let redis_pool =
+                                        REDIS_CLIENT.lock().expect("REDIS_CLIENT error");
+                                    let mut conn =
+                                        redis_pool.get().expect("get redis connect");
+                                    let mut setter =
+                                        Setter::new(&mut *conn, "evm".to_string());
+
                                     setter
                                         .set_pending_tx(tx)
                                         .map_err(|e| log::error!("{:?}", e))
@@ -214,7 +220,8 @@ impl crate::BaseApp {
                     #[cfg(feature = "enterprise-web3")]
                     {
                         use enterprise_web3::{
-                            REMOVE_PENDING_CODE_MAP, REMOVE_PENDING_STATE_UPDATE_LIST,
+                            Setter, REDIS_CLIENT, REMOVE_PENDING_CODE_MAP,
+                            REMOVE_PENDING_STATE_UPDATE_LIST,
                         };
                         use std::{mem::replace, ops::DerefMut};
                         let code_map =
@@ -241,8 +248,13 @@ impl crate::BaseApp {
                                 fp_types::actions::ethereum::Action::Transact(tx),
                             ) = tmp_tx.function
                             {
-                                let mut setter = enterprise_web3::setter()
-                                    .expect("connection redis failed");
+                                let redis_pool =
+                                    REDIS_CLIENT.lock().expect("REDIS_CLIENT error");
+                                let mut conn =
+                                    redis_pool.get().expect("get redis connect");
+                                let mut setter =
+                                    Setter::new(&mut *conn, "evm".to_string());
+
                                 setter
                                     .remove_pending_tx(tx)
                                     .map_err(|e| log::error!("{:?}", e))
