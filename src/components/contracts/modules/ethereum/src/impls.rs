@@ -1,10 +1,7 @@
 use crate::storage::*;
 use crate::{App, Config, ContractLog, TransactionExecuted};
 use config::abci::global_cfg::CFG;
-use ethereum::{
-    BlockV0 as Block, LegacyTransactionMessage, ReceiptV0 as Receipt,
-    TransactionV0 as Transaction,
-};
+use ethereum::{BlockV2 as Block, ReceiptV0 as Receipt, TransactionV2 as Transaction};
 use ethereum_types::{Bloom, BloomInput, H160, H256, H64, U256};
 use evm::{ExitFatal, ExitReason};
 use fp_core::{
@@ -16,10 +13,8 @@ use fp_core::{
 use fp_events::Event;
 use fp_evm::{BlockId, CallOrCreateInfo, Runner, TransactionStatus};
 use fp_storage::{Borrow, BorrowMut};
-use fp_types::{
-    actions::evm as EvmAction,
-    crypto::{secp256k1_ecdsa_recover, HA256},
-};
+// use fp_types::crypto::secp256k1_ecdsa_recover;
+use fp_types::{actions::evm as EvmAction, crypto::HA256};
 use fp_utils::{proposer_converter, timestamp_converter};
 use ruc::*;
 use sha3::{Digest, Keccak256};
@@ -63,14 +58,28 @@ impl<C: Config> App<C> {
     pub fn recover_signer(transaction: &Transaction) -> Option<H160> {
         let mut sig = [0u8; 65];
         let mut msg = [0u8; 32];
-        sig[0..32].copy_from_slice(&transaction.signature.r()[..]);
-        sig[32..64].copy_from_slice(&transaction.signature.s()[..]);
-        sig[64] = transaction.signature.standard_v();
-        msg.copy_from_slice(
-            &LegacyTransactionMessage::from(transaction.clone()).hash()[..],
-        );
-
-        let pubkey = secp256k1_ecdsa_recover(&sig, &msg).ok()?;
+        match transaction {
+            Transaction::Legacy(t) => {
+                sig[0..32].copy_from_slice(&t.signature.r()[..]);
+                sig[32..64].copy_from_slice(&t.signature.s()[..]);
+                sig[64] = t.signature.standard_v();
+                msg.copy_from_slice(
+                    &ethereum::LegacyTransactionMessage::from(t.clone()).hash()[..],
+                );
+            }
+            Transaction::EIP1559(t) => {
+                sig[0..32].copy_from_slice(&t.r[..]);
+                sig[32..64].copy_from_slice(&t.s[..]);
+                sig[64] = t.odd_y_parity as u8;
+                msg.copy_from_slice(
+                    &ethereum::EIP1559TransactionMessage::from(t.clone()).hash()[..],
+                );
+            }
+            _ => {
+                return None;
+            }
+        }
+        let pubkey = fp_types::crypto::secp256k1_ecdsa_recover(&sig, &msg).ok()?;
         Some(H160::from(H256::from_slice(
             Keccak256::digest(pubkey).as_slice(),
         )))
@@ -225,8 +234,7 @@ impl<C: Config> App<C> {
         let source = Self::recover_signer_fast(ctx, &transaction)
             .ok_or_else(|| eg!("ExecuteTransaction: InvalidSignature"))?;
 
-        let transaction_hash =
-            H256::from_slice(Keccak256::digest(&rlp::encode(&transaction)).as_slice());
+        let transaction_hash = transaction.hash();
 
         let transaction_index = if just_check {
             0
@@ -236,22 +244,66 @@ impl<C: Config> App<C> {
             txns.len() as u32
         };
 
-        let gas_limit = transaction.gas_limit;
+        let (
+            nonce,
+            gas_price,
+            gas_limit,
+            action,
+            value,
+            input,
+            _max_priority_fee_per_gas,
+            _max_fee_per_gas,
+            _chain_id,
+            _access_list,
+        ) = match &transaction {
+            Transaction::Legacy(transaction) => (
+                transaction.nonce,
+                transaction.gas_price,
+                transaction.gas_limit,
+                transaction.action,
+                transaction.value,
+                transaction.input.clone(),
+                transaction.gas_price,
+                U256::from(0),
+                match transaction.signature.chain_id() {
+                    Some(chain_id) => chain_id,
+                    None => return Err(eg!("Must provide chainId")),
+                },
+                vec![],
+            ),
+            Transaction::EIP1559(transaction) => (
+                transaction.nonce,
+                transaction.max_fee_per_gas,
+                transaction.gas_limit,
+                transaction.action,
+                transaction.value,
+                transaction.input.clone(),
+                transaction.max_fee_per_gas,
+                transaction.max_priority_fee_per_gas,
+                transaction.chain_id,
+                transaction.access_list.clone(),
+            ),
+            _ => {
+                return Err(eg!("Unsupported Transaction Type"));
+            }
+        };
 
         let execute_ret = Self::execute_transaction(
             ctx,
             source,
-            transaction.input.clone(),
-            transaction.value,
-            transaction.gas_limit,
-            Some(transaction.gas_price),
-            Some(transaction.nonce),
-            transaction.action,
+            input,
+            value,
+            gas_limit,
+            Some(gas_price),
+            None,
+            None,
+            Some(nonce),
+            action,
         );
 
         if let Err(e) = execute_ret {
             let mut to = Default::default();
-            if let ethereum::TransactionAction::Call(target) = transaction.action {
+            if let ethereum::TransactionAction::Call(target) = action {
                 to = target;
             }
             events.push(Event::emit_event(
@@ -410,6 +462,8 @@ impl<C: Config> App<C> {
         value: U256,
         gas_limit: U256,
         gas_price: Option<U256>,
+        max_fee_per_gas: Option<U256>,
+        max_priority_fee_per_gas: Option<U256>,
         nonce: Option<U256>,
         action: ethereum::TransactionAction,
     ) -> Result<(Option<H160>, Option<H160>, CallOrCreateInfo)> {
@@ -424,6 +478,8 @@ impl<C: Config> App<C> {
                         value,
                         gas_limit: gas_limit.low_u64(),
                         gas_price,
+                        max_fee_per_gas,
+                        max_priority_fee_per_gas,
                         nonce,
                     },
                     C::config(),
@@ -440,6 +496,8 @@ impl<C: Config> App<C> {
                         value,
                         gas_limit: gas_limit.low_u64(),
                         gas_price,
+                        max_fee_per_gas,
+                        max_priority_fee_per_gas,
                         nonce,
                     },
                     C::config(),

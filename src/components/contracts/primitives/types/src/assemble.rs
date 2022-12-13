@@ -2,7 +2,7 @@ use crate::actions::ethereum::Action as EtherAction;
 use crate::actions::Action;
 use crate::crypto::{Address, Signature};
 use crate::transaction;
-use ethereum::TransactionV0 as Transaction;
+use ethereum::TransactionV2 as Transaction;
 use primitive_types::U256;
 use ruc::*;
 use serde::{Deserialize, Serialize};

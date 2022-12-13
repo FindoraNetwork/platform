@@ -13,3 +13,4 @@ tracing = "0.1"
 num_enum = { version = "0.5.3", default-features = false }
 precompile-utils-macro = { path = "macro" }
 sha3 = { version = "0.10", default-features = false }
+module-evm = { path = "../../../../modules/evm"}

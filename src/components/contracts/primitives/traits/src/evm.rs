@@ -81,4 +81,7 @@ pub trait OnChargeEVMTransaction {
         corrected_fee: U256,
         already_withdrawn: U256,
     ) -> Result<()>;
+
+    /// Introduced in EIP1559 to handle the priority tip payment to the block Author.
+    fn pay_priority_fee(ctx: &Context, tip: U256) -> Result<()>;
 }
