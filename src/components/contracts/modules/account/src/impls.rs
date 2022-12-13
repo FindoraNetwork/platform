@@ -242,4 +242,14 @@ impl<C: Config> AccountAsset<Address> for App<C> {
     ) -> Result<()> {
         Allowances::insert(ctx.state.write().borrow_mut(), owner, spender, &amount)
     }
+
+    fn income(ctx: &Context, who: &Address, value: U256) -> Result<()> {
+        if value.is_zero() {
+            return Ok(());
+        }
+
+        let mut sa = Self::account_of(ctx, who, None).c(d!("account does not exist"))?;
+        sa.balance = sa.balance.checked_add(value).c(d!("balance overflow"))?;
+        AccountStore::insert(ctx.state.write().borrow_mut(), who, &sa)
+    }
 }

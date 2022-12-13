@@ -1,6 +1,6 @@
 use baseapp::tm_events::{get_pendingtx, get_sync_status};
 use baseapp::BaseApp;
-use ethereum::{BlockV0 as EthereumBlock, ReceiptV0 as Receipt};
+use ethereum::{BlockV2 as EthereumBlock, ReceiptV0 as Receipt};
 use ethereum_types::{H256, U256};
 use fp_evm::BlockId;
 use fp_rpc_core::types::pubsub::PubSubSyncStatus;

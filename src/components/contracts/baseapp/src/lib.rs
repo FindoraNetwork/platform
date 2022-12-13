@@ -13,7 +13,7 @@ pub mod tm_events;
 
 use crate::modules::ModuleManager;
 use abci::Header;
-use ethereum::BlockV0 as Block;
+use ethereum::BlockV2 as Block;
 use evm_precompile::{self, FindoraPrecompiles};
 use fin_db::{FinDB, RocksDB};
 use fp_core::context::Context as Context2;
@@ -24,6 +24,7 @@ use fp_core::{
     transaction::{ActionResult, Executable, ValidateUnsigned},
 };
 use fp_evm::BlockId;
+use fp_traits::evm::FeeCalculator as FeeCalculator2;
 use fp_traits::{
     account::{AccountAsset, FeeCalculator},
     base::BaseProvider,
@@ -53,6 +54,23 @@ const APP_NAME: &str = "findora";
 const CHAIN_STATE_PATH: &str = "state.db";
 const CHAIN_HISTORY_DATA_PATH: &str = "history.db";
 const BLOCKS_IN_DAY: u64 = 4 * 60 * 24;
+
+const INITIAL_BASE_FEE: u64 = 1000000000;
+const ELASTICITY_MULTIPLIER: u64 = 2;
+const BASE_FEE_MAX_CHANGE_DENOMINATOR: u64 = 8;
+
+#[inline(always)]
+pub fn get_initial_base_fee() -> U256 {
+    U256::from(INITIAL_BASE_FEE)
+}
+#[inline(always)]
+pub fn get_elasticity_multiplier() -> U256 {
+    U256::from(ELASTICITY_MULTIPLIER)
+}
+#[inline(always)]
+pub fn get_base_fee_max_change_denominator() -> U256 {
+    U256::from(BASE_FEE_MAX_CHANGE_DENOMINATOR)
+}
 
 #[derive(Clone)]
 pub struct BaseApp {
@@ -466,5 +484,16 @@ impl BaseProvider for BaseApp {
         } else {
             None
         }
+    }
+
+    /// Return the base fee at the given height.
+    #[allow(clippy::comparison_chain, clippy::question_mark)]
+    fn base_fee(&self, id: Option<BlockId>) -> Option<U256> {
+        let _ = id;
+        Some(
+            <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(
+                self.current_block_number()?.as_u64(),
+            ),
+        )
     }
 }

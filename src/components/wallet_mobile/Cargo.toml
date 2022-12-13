@@ -60,7 +60,7 @@ features = [
 jni = "0.20"
 
 [target.'cfg(target_arch="wasm32")'.dependencies]
-wasm-bindgen = { version = "=0.2.73", features = ["serde-serialize"] }
+wasm-bindgen = { version = "0.2.83", features = ["serde-serialize"] }
 
 [target.'cfg(not(target_arch="wasm32"))'.dependencies]
 safer-ffi = "0.0.10"

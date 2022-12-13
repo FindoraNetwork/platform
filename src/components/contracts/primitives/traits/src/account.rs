@@ -56,6 +56,8 @@ pub trait AccountAsset<Address> {
         spender: &Address,
         amount: U256,
     ) -> Result<()>;
+
+    fn income(ctx: &Context, who: &Address, value: U256) -> Result<()>;
 }
 
 /// Outputs the current transaction fee.

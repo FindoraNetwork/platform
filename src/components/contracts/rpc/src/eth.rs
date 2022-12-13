@@ -7,16 +7,17 @@ use crate::{error_on_execution_failure, internal_err};
 use baseapp::{extensions::SignedExtra, BaseApp};
 use config::abci::global_cfg::CFG;
 use ethereum::{
-    BlockV0 as EthereumBlock, LegacyTransactionMessage as EthereumTransactionMessage,
-    TransactionV0 as EthereumTransaction,
+    BlockV2 as EthereumBlock,
+    // LegacyTransactionMessage as EthereumTransactionMessage,
+    TransactionV2 as EthereumTransaction,
 };
 use ethereum_types::{BigEndianHash, Bloom, H160, H256, H512, H64, U256, U64};
 use evm::{ExitError, ExitReason};
 use fp_evm::{BlockId, Runner, TransactionStatus};
 use fp_rpc_core::types::{
     Block, BlockNumber, BlockTransactions, Bytes, CallRequest, Filter, FilteredParams,
-    Index, Log, Receipt, Rich, RichBlock, SyncStatus, Transaction, TransactionRequest,
-    Work,
+    Index, Log, Receipt, Rich, RichBlock, SyncStatus, Transaction, TransactionMessage,
+    TransactionRequest, Work,
 };
 use fp_rpc_core::EthApi;
 use fp_traits::{
@@ -25,7 +26,7 @@ use fp_traits::{
 };
 use fp_types::{
     actions,
-    actions::evm::{Call, Create},
+    actions::evm::{Call, CallEip1559, Create, CreateEip1559},
     assemble::UncheckedTransaction,
 };
 use fp_utils::ecdsa::SecpPair;
@@ -256,30 +257,63 @@ impl EthApi for EthApiImpl {
         };
 
         let chain_id = match self.chain_id() {
-            Ok(chain_id) => chain_id,
+            Ok(Some(chain_id)) => chain_id.as_u64(),
+            Ok(None) => {
+                return Box::pin(future::err(internal_err("chain id not available")))
+            }
             Err(e) => return Box::pin(future::err(e)),
         };
 
+        // let hash = self.client.info().best_hash;
         let curr_height = match self.block_number() {
             Ok(h) => h.as_u64(),
             Err(e) => return Box::pin(future::err(e)),
         };
 
-        let message = EthereumTransactionMessage {
-            nonce,
-            gas_price: request.gas_price.unwrap_or_else(|| {
-                <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(
-                    curr_height,
-                )
-            }),
-            gas_limit: request.gas.unwrap_or_else(U256::max_value),
-            value: request.value.unwrap_or_else(U256::zero),
-            input: request.data.map(|s| s.into_vec()).unwrap_or_default(),
-            action: match request.to {
-                Some(to) => ethereum::TransactionAction::Call(to),
-                None => ethereum::TransactionAction::Create,
-            },
-            chain_id: chain_id.map(|s| s.as_u64()),
+        let gas_price = request.gas_price.unwrap_or_else(|| {
+            <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(curr_height)
+        });
+        let block = self.account_base_app.read().current_block(None);
+        let gas_limit = match request.gas {
+            Some(gas_limit) => gas_limit,
+            None => {
+                if let Some(block) = block {
+                    block.header.gas_limit
+                } else {
+                    <BaseApp as module_evm::Config>::BlockGasLimit::get()
+                }
+            }
+        };
+
+        let max_fee_per_gas = request.max_fee_per_gas;
+
+        let message: Option<TransactionMessage> = request.into();
+        let message = match message {
+            Some(TransactionMessage::Legacy(mut m)) => {
+                m.nonce = nonce;
+                m.chain_id = Some(chain_id);
+                m.gas_limit = gas_limit;
+                m.gas_price = gas_price;
+                TransactionMessage::Legacy(m)
+            }
+            Some(TransactionMessage::EIP1559(mut m)) => {
+                if CFG.checkpoint.enable_eip1559_height > curr_height {
+                    return Box::pin(future::err(internal_err(format!(
+                        "eip1559 not enabled at height: {:?}",
+                        curr_height
+                    ))));
+                }
+                m.nonce = nonce;
+                m.chain_id = chain_id;
+                m.gas_limit = gas_limit;
+                if max_fee_per_gas.is_none() {
+                    m.max_fee_per_gas = self.gas_price().unwrap_or_default();
+                }
+                TransactionMessage::EIP1559(m)
+            }
+            _ => {
+                return Box::pin(future::err(internal_err("Transaction Type Error")));
+            }
         };
 
         let mut transaction = None;
@@ -301,8 +335,8 @@ impl EthApi for EthApiImpl {
                 return Box::pin(future::err(internal_err("no signer available")));
             }
         };
-        let transaction_hash =
-            H256::from_slice(Keccak256::digest(&rlp::encode(&transaction)).as_slice());
+        let transaction_hash = transaction.hash();
+
         let function =
             actions::Action::Ethereum(actions::ethereum::Action::Transact(transaction));
         let txn = serde_json::to_vec(
@@ -352,11 +386,28 @@ impl EthApi for EthApiImpl {
                 from,
                 to,
                 gas_price,
+                max_fee_per_gas,
+                max_priority_fee_per_gas,
                 gas,
                 value,
                 data,
                 nonce,
             } = request;
+
+            let is_eip1559 = max_fee_per_gas.is_some()
+                && max_priority_fee_per_gas.is_some()
+                && max_fee_per_gas.unwrap() > U256::from(0)
+                && max_priority_fee_per_gas.unwrap() > U256::from(0);
+
+            let (gas_price, max_fee_per_gas, max_priority_fee_per_gas) = {
+                let details =
+                    fee_details(gas_price, max_fee_per_gas, max_priority_fee_per_gas)?;
+                (
+                    details.gas_price,
+                    details.max_fee_per_gas,
+                    details.max_priority_fee_per_gas,
+                )
+            };
 
             let block = account_base_app.read().current_block(None);
             // use given gas limit or query current block's limit
@@ -390,51 +441,105 @@ impl EthApi for EthApiImpl {
                     Vec::from(block.header.beneficiary.as_bytes())
             }
 
-            match to {
-                Some(to) => {
-                    let call = Call {
-                        source: from.unwrap_or_default(),
-                        target: to,
-                        input: data,
-                        value: value.unwrap_or_default(),
-                        gas_limit: gas_limit.as_u64(),
-                        gas_price,
-                        nonce,
-                    };
+            if !is_eip1559 {
+                match to {
+                    Some(to) => {
+                        let call = Call {
+                            source: from.unwrap_or_default(),
+                            target: to,
+                            input: data,
+                            value: value.unwrap_or_default(),
+                            gas_limit: gas_limit.as_u64(),
+                            gas_price,
+                            nonce,
+                        };
 
-                    let info = <BaseApp as module_ethereum::Config>::Runner::call(
-                        &ctx, call, &config,
-                    )
-                    .map_err(|err| {
-                        internal_err(format!("evm runner call error: {:?}", err))
-                    })?;
-                    debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
+                        let info = <BaseApp as module_ethereum::Config>::Runner::call(
+                            &ctx, call, &config,
+                        )
+                        .map_err(|err| {
+                            internal_err(format!("evm runner call error: {:?}", err))
+                        })?;
+                        debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
 
-                    error_on_execution_failure(&info.exit_reason, &info.value)?;
+                        error_on_execution_failure(&info.exit_reason, &info.value)?;
 
-                    Ok(Bytes(info.value))
+                        Ok(Bytes(info.value))
+                    }
+                    None => {
+                        let create = Create {
+                            source: from.unwrap_or_default(),
+                            init: data,
+                            value: value.unwrap_or_default(),
+                            gas_limit: gas_limit.as_u64(),
+                            gas_price,
+                            nonce,
+                        };
+
+                        let info = <BaseApp as module_ethereum::Config>::Runner::create(
+                            &ctx, create, &config,
+                        )
+                        .map_err(|err| {
+                            internal_err(format!("evm runner create error: {:?}", err))
+                        })?;
+                        debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
+
+                        error_on_execution_failure(&info.exit_reason, &[])?;
+
+                        Ok(Bytes(info.value[..].to_vec()))
+                    }
                 }
-                None => {
-                    let create = Create {
-                        source: from.unwrap_or_default(),
-                        init: data,
-                        value: value.unwrap_or_default(),
-                        gas_limit: gas_limit.as_u64(),
-                        gas_price,
-                        nonce,
-                    };
+            } else {
+                match to {
+                    Some(to) => {
+                        let call = CallEip1559 {
+                            source: from.unwrap_or_default(),
+                            target: to,
+                            input: data,
+                            value: value.unwrap_or_default(),
+                            gas_limit: gas_limit.as_u64(),
+                            max_fee_per_gas,
+                            max_priority_fee_per_gas,
+                            nonce,
+                        };
 
-                    let info = <BaseApp as module_ethereum::Config>::Runner::create(
-                        &ctx, create, &config,
-                    )
-                    .map_err(|err| {
-                        internal_err(format!("evm runner create error: {:?}", err))
-                    })?;
-                    debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
+                        let info =
+                            <BaseApp as module_ethereum::Config>::Runner::call_eip1559(
+                                &ctx, call, &config,
+                            )
+                            .map_err(|err| {
+                                internal_err(format!("evm runner call error: {:?}", err))
+                            })?;
+                        debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
 
-                    error_on_execution_failure(&info.exit_reason, &[])?;
+                        error_on_execution_failure(&info.exit_reason, &info.value)?;
 
-                    Ok(Bytes(info.value[..].to_vec()))
+                        Ok(Bytes(info.value))
+                    }
+                    None => {
+                        let create = CreateEip1559 {
+                            source: from.unwrap_or_default(),
+                            init: data,
+                            value: value.unwrap_or_default(),
+                            gas_limit: gas_limit.as_u64(),
+                            max_fee_per_gas,
+                            max_priority_fee_per_gas,
+                            nonce,
+                        };
+
+                        let info =
+                            <BaseApp as module_ethereum::Config>::Runner::create_eip1559(
+                                &ctx, create, &config,
+                            )
+                            .map_err(|err| {
+                                internal_err(format!("evm runner create error: {:?}", err))
+                            })?;
+                        debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
+
+                        error_on_execution_failure(&info.exit_reason, &[])?;
+
+                        Ok(Bytes(info.value[..].to_vec()))
+                    }
                 }
             }
         });
@@ -538,12 +643,15 @@ impl EthApi for EthApiImpl {
                 .read()
                 .current_transaction_statuses(Some(BlockId::Hash(hash)));
 
+            let base_fee = account_base_app.read().base_fee(Some(BlockId::Hash(hash)));
+
             match (block, statuses) {
                 (Some(block), Some(statuses)) => Ok(Some(rich_block_build(
                     block,
                     statuses.into_iter().map(Some).collect(),
                     Some(hash),
                     full,
+                    base_fee,
                 ))),
                 _ => Ok(None),
             }
@@ -580,7 +688,11 @@ impl EthApi for EthApiImpl {
 
             let id = native_block_id(Some(number));
             let block = account_base_app.read().current_block(id.clone());
-            let statuses = account_base_app.read().current_transaction_statuses(id);
+            let statuses = account_base_app
+                .read()
+                .current_transaction_statuses(id.clone());
+
+            let base_fee = account_base_app.read().base_fee(id);
 
             match (block, statuses) {
                 (Some(block), Some(statuses)) => {
@@ -591,9 +703,18 @@ impl EthApi for EthApiImpl {
                         statuses.into_iter().map(Some).collect(),
                         Some(hash),
                         full,
+                        base_fee,
                     )))
                 }
-                _ => Ok(None),
+                _ => Ok(if let Some(h) = height {
+                    if 0 < h && h < *EVM_FIRST_BLOCK_HEIGHT {
+                        Some(dummy_block(h, full))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }),
             }
         });
 
@@ -717,16 +838,54 @@ impl EthApi for EthApiImpl {
     }
 
     fn send_raw_transaction(&self, bytes: Bytes) -> BoxFuture<Result<H256>> {
-        let transaction = match rlp::decode::<EthereumTransaction>(&bytes.0[..]) {
-            Ok(transaction) => transaction,
-            Err(_) => {
-                return Box::pin(future::err(internal_err("decode transaction failed")));
+        let slice = &bytes.0[..];
+        if slice.is_empty() {
+            return Box::pin(future::err(internal_err("transaction data is empty")));
+        }
+        // let first = slice.get(0).unwrap();
+        let first = slice.first().unwrap();
+        let transaction = if first > &0x7f {
+            // Legacy transaction. Decode and wrap in envelope.
+            match rlp::decode::<ethereum::TransactionV0>(slice) {
+                Ok(transaction) => ethereum::TransactionV2::Legacy(transaction),
+                Err(_) => {
+                    return Box::pin(future::err(internal_err(
+                        "decode transaction failed",
+                    )));
+                }
+            }
+        } else {
+            let curr_height = match self.block_number() {
+                Ok(h) => h.as_u64(),
+                Err(e) => return Box::pin(future::err(e)),
+            };
+
+            if CFG.checkpoint.enable_eip1559_height > curr_height {
+                return Box::pin(future::err(internal_err(format!(
+                    "eip1559 not enabled at height: {:?}",
+                    curr_height
+                ))));
+            }
+            // Typed Transaction.
+            // `ethereum` crate decode implementation for `TransactionV2` expects a valid rlp input,
+            // and EIP-1559 breaks that assumption by prepending a version byte.
+            // We re-encode the payload input to get a valid rlp, and the decode implementation will strip
+            // them to check the transaction version byte.
+            let extend = rlp::encode(&slice);
+            match rlp::decode::<ethereum::TransactionV2>(&extend[..]) {
+                Ok(transaction) => transaction,
+                Err(_) => {
+                    return Box::pin(future::err(internal_err(
+                        "decode transaction failed",
+                    )))
+                }
             }
         };
+
         debug!(target: "eth_rpc", "send_raw_transaction :{:?}", transaction);
 
-        let transaction_hash =
-            H256::from_slice(Keccak256::digest(&rlp::encode(&transaction)).as_slice());
+        let transaction_hash = transaction.hash();
+
         let function =
             actions::Action::Ethereum(actions::ethereum::Action::Transact(transaction));
         let txn = serde_json::to_vec(
@@ -763,6 +922,29 @@ impl EthApi for EthApiImpl {
         number: Option<BlockNumber>,
     ) -> BoxFuture<Result<U256>> {
         debug!(target: "eth_rpc", "estimate_gas, block number {:?} request:{:?}", number, request);
+
+        let is_eip1559 = request.max_fee_per_gas.is_some()
+            && request.max_priority_fee_per_gas.is_some()
+            && request.max_fee_per_gas.unwrap() > U256::from(0)
+            && request.max_priority_fee_per_gas.unwrap() > U256::from(0);
+
+        let (gas_price, max_fee_per_gas, max_priority_fee_per_gas) = {
+            if let Ok(details) = fee_details(
+                request.gas_price,
+                request.max_fee_per_gas,
+                request.max_priority_fee_per_gas,
+            ) {
+                (
+                    details.gas_price,
+                    details.max_fee_per_gas,
+                    details.max_priority_fee_per_gas,
+                )
+            } else {
+                return Box::pin(async move {
+                    Err(internal_err("estimate_gas fee_details err!!!".to_string()))
+                });
+            }
+        };
 
         let account_base_app = self.account_base_app.clone();
 
@@ -860,7 +1042,9 @@ impl EthApi for EthApiImpl {
                 let CallRequest {
                     from,
                     to,
-                    gas_price,
+                    gas_price: _,
+                    max_fee_per_gas: _,
+                    max_priority_fee_per_gas: _,
                     gas,
                     value,
                     data,
@@ -875,55 +1059,123 @@ impl EthApi for EthApiImpl {
                 let mut config = <BaseApp as module_ethereum::Config>::config().clone();
                 config.estimate = true;
 
-                match to {
-                    Some(to) => {
-                        let call = Call {
-                            source: from.unwrap_or_default(),
-                            target: to,
-                            input: data.map(|d| d.0).unwrap_or_default(),
-                            value: value.unwrap_or_default(),
-                            gas_limit,
-                            gas_price,
-                            nonce,
-                        };
+                if !is_eip1559 {
+                    match to {
+                        Some(to) => {
+                            let call = Call {
+                                source: from.unwrap_or_default(),
+                                target: to,
+                                input: data.map(|d| d.0).unwrap_or_default(),
+                                value: value.unwrap_or_default(),
+                                gas_limit,
+                                gas_price,
+                                nonce,
+                            };
 
-                        let info = <BaseApp as module_ethereum::Config>::Runner::call(
-                            &ctx, call, &config,
-                        )
-                        .map_err(|err| {
-                            internal_err(format!("evm runner call error: {:?}", err))
-                        })?;
-                        debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
+                            let info =
+                                <BaseApp as module_ethereum::Config>::Runner::call(
+                                    &ctx, call, &config,
+                                )
+                                .map_err(|err| {
+                                    internal_err(format!(
+                                        "evm runner call error: {:?}",
+                                        err
+                                    ))
+                                })?;
+                            debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
 
-                        Ok(ExecuteResult {
-                            data: info.value,
-                            exit_reason: info.exit_reason,
-                            used_gas: info.used_gas,
-                        })
+                            Ok(ExecuteResult {
+                                data: info.value,
+                                exit_reason: info.exit_reason,
+                                used_gas: info.used_gas,
+                            })
+                        }
+                        None => {
+                            let create = Create {
+                                source: from.unwrap_or_default(),
+                                init: data.map(|d| d.0).unwrap_or_default(),
+                                value: value.unwrap_or_default(),
+                                gas_limit,
+                                gas_price,
+                                nonce,
+                            };
+
+                            let info =
+                                <BaseApp as module_ethereum::Config>::Runner::create(
+                                    &ctx, create, &config,
+                                )
+                                .map_err(|err| {
+                                    internal_err(format!(
+                                        "evm runner create error: {:?}",
+                                        err
+                                    ))
+                                })?;
+                            debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
+
+                            Ok(ExecuteResult {
+                                data: vec![],
+                                exit_reason: info.exit_reason,
+                                used_gas: info.used_gas,
+                            })
+                        }
                     }
-                    None => {
-                        let create = Create {
-                            source: from.unwrap_or_default(),
-                            init: data.map(|d| d.0).unwrap_or_default(),
-                            value: value.unwrap_or_default(),
-                            gas_limit,
-                            gas_price,
-                            nonce,
-                        };
+                } else {
+                    match to {
+                        Some(to) => {
+                            let call = CallEip1559 {
+                                source: from.unwrap_or_default(),
+                                target: to,
+                                input: data.map(|d| d.0).unwrap_or_default(),
+                                value: value.unwrap_or_default(),
+                                gas_limit,
+                                max_fee_per_gas,
+                                max_priority_fee_per_gas,
+                                nonce,
+                            };
 
-                        let info = <BaseApp as module_ethereum::Config>::Runner::create(
-                            &ctx, create, &config,
-                        )
-                        .map_err(|err| {
-                            internal_err(format!("evm runner create error: {:?}", err))
-                        })?;
-                        debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
+                            let info =
+                            <BaseApp as module_ethereum::Config>::Runner::call_eip1559(
+                                &ctx, call, &config,
+                            )
+                            .map_err(|err| {
+                                internal_err(format!("evm runner call error: {:?}", err))
+                            })?;
+                            debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
 
-                        Ok(ExecuteResult {
-                            data: vec![],
-                            exit_reason: info.exit_reason,
-                            used_gas: info.used_gas,
-                        })
+                            Ok(ExecuteResult {
+                                data: info.value,
+                                exit_reason: info.exit_reason,
+                                used_gas: info.used_gas,
+                            })
+                        }
+                        None => {
+                            let create = CreateEip1559 {
+                                source: from.unwrap_or_default(),
+                                init: data.map(|d| d.0).unwrap_or_default(),
+                                value: value.unwrap_or_default(),
+                                gas_limit,
+                                max_fee_per_gas,
+                                max_priority_fee_per_gas,
+                                nonce,
+                            };
+
+                            let info = <BaseApp as module_ethereum::Config>::Runner::create_eip1559(
+                                &ctx, create, &config,
+                            )
+                            .map_err(|err| {
+                                internal_err(format!(
+                                    "evm runner create error: {:?}", 
+                                    err
+                                ))
+                            })?;
+                            debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
+
+                            Ok(ExecuteResult {
+                                data: vec![],
+                                exit_reason: info.exit_reason,
+                                used_gas: info.used_gas,
+                            })
+                        }
                     }
                 }
             };
@@ -1005,10 +1257,23 @@ impl EthApi for EthApiImpl {
                         }
                     }
 
+                    let is_eip1559 = !matches!(
+                        &block.transactions[index],
+                        EthereumTransaction::Legacy(_)
+                    );
+                    // match &block.transactions[index] {
+                    //     EthereumTransaction::Legacy(_) => false,
+                    //     _ => true,
+                    // };
+
+                    let base_fee = account_base_app.read().base_fee(id);
+
                     Ok(Some(transaction_build(
                         block.transactions[index].clone(),
                         Some(block),
                         Some(statuses[index].clone()),
+                        is_eip1559,
+                        base_fee,
                     )))
                 }
                 _ => Ok(None),
@@ -1040,16 +1305,30 @@ impl EthApi for EthApiImpl {
                 .read()
                 .current_transaction_statuses(Some(BlockId::Hash(hash)));
 
+            // match &block.transactions[index] {
+            //     EthereumTransaction::Legacy(_) => false,
+            //     _ => true,
+            // };
+
+            let base_fee = account_base_app.read().base_fee(Some(BlockId::Hash(hash)));
+
             match (block, statuses) {
                 (Some(block), Some(statuses)) => {
                     if index >= block.transactions.len() {
                         return Ok(None);
                     }
 
+                    let is_eip1559 = !matches!(
+                        &block.transactions[index],
+                        EthereumTransaction::Legacy(_)
+                    );
+
                     Ok(Some(transaction_build(
                         block.transactions[index].clone(),
                         Some(block),
                         Some(statuses[index].clone()),
+                        is_eip1559,
+                        base_fee,
                     )))
                 }
                 _ => Ok(None),
@@ -1076,7 +1355,9 @@ impl EthApi for EthApiImpl {
             let id = native_block_id(Some(number));
             let index = index.value();
             let block = account_base_app.read().current_block(id.clone());
-            let statuses = account_base_app.read().current_transaction_statuses(id);
+            let statuses = account_base_app
+                .read()
+                .current_transaction_statuses(id.clone());
 
             match (block, statuses) {
                 (Some(block), Some(statuses)) => {
@@ -1084,10 +1365,23 @@ impl EthApi for EthApiImpl {
                         return Ok(None);
                     }
 
+                    let is_eip1559 = !matches!(
+                        &block.transactions[index],
+                        EthereumTransaction::Legacy(_)
+                    );
+                    // match &block.transactions[index] {
+                    //     EthereumTransaction::Legacy(_) => true,
+                    //     _ => false,
+                    // };
+
+                    let base_fee = account_base_app.read().base_fee(id);
+
                     Ok(Some(transaction_build(
                         block.transactions[index].clone(),
                         Some(block),
                         Some(statuses[index].clone()),
+                        is_eip1559,
+                        base_fee,
                     )))
                 }
                 _ => Ok(None),
@@ -1121,8 +1415,10 @@ impl EthApi for EthApiImpl {
                 .current_transaction_statuses(id.clone());
             let receipts = account_base_app.read().current_receipts(id.clone());
 
-            match (block, statuses, receipts) {
-                (Some(block), Some(statuses), Some(receipts)) => {
+            let base_fee = account_base_app.read().base_fee(id.clone());
+
+            match (block, statuses, receipts, base_fee) {
+                (Some(block), Some(statuses), Some(receipts), Some(base_fee)) => {
                     if id.is_none() {
                         if let Some(idx) =
                             statuses.iter().position(|t| t.transaction_hash == hash)
@@ -1142,6 +1438,15 @@ impl EthApi for EthApiImpl {
                     let mut cumulative_receipts = receipts;
                     cumulative_receipts
                         .truncate((status.transaction_index + 1) as usize);
+
+                    let transaction = block.transactions[index].clone();
+                    let effective_gas_price = match transaction {
+                        EthereumTransaction::Legacy(t) => t.gas_price,
+                        EthereumTransaction::EIP1559(t) => base_fee
+                            .checked_add(t.max_priority_fee_per_gas)
+                            .unwrap_or_else(U256::max_value),
+                        EthereumTransaction::EIP2930(t) => t.gas_price,
+                    };
 
                     return Ok(Some(Receipt {
                         transaction_hash: Some(status.transaction_hash),
@@ -1196,6 +1501,7 @@ impl EthApi for EthApiImpl {
                         status_code: Some(U64::from(receipt.state_root.to_low_u64_be())),
                         logs_bloom: receipt.logs_bloom,
                         state_root: None,
+                        effective_gas_price,
                     }));
                 }
                 _ => Ok(None),
@@ -1307,33 +1613,62 @@ impl EthApi for EthApiImpl {
 }
 
 pub fn sign_transaction_message(
-    message: EthereumTransactionMessage,
+    message: TransactionMessage,
     private_key: &H256,
 ) -> ruc::Result<EthereumTransaction> {
-    let signing_message = libsecp256k1::Message::parse_slice(&message.hash()[..])
-        .map_err(|_| eg!("invalid signing message"))?;
-    let secret = &libsecp256k1::SecretKey::parse_slice(&private_key[..])
-        .map_err(|_| eg!("invalid secret"))?;
-    let (signature, recid) = libsecp256k1::sign(&signing_message, secret);
+    match message {
+        TransactionMessage::Legacy(m) => {
+            let signing_message = libsecp256k1::Message::parse_slice(&m.hash()[..])
+                .map_err(|_| eg!("invalid signing message"))?;
+            let secret = &libsecp256k1::SecretKey::parse_slice(&private_key[..])
+                .map_err(|_| eg!("invalid secret"))?;
+            let (signature, recid) = libsecp256k1::sign(&signing_message, secret);
 
-    let v = match message.chain_id {
-        None => 27 + recid.serialize() as u64,
-        Some(chain_id) => 2 * chain_id + 35 + recid.serialize() as u64,
-    };
-    let rs = signature.serialize();
-    let r = H256::from_slice(&rs[0..32]);
-    let s = H256::from_slice(&rs[32..64]);
+            let v = match m.chain_id {
+                None => 27 + recid.serialize() as u64,
+                Some(chain_id) => 2 * chain_id + 35 + recid.serialize() as u64,
+            };
+            let rs = signature.serialize();
+            let r = H256::from_slice(&rs[0..32]);
+            let s = H256::from_slice(&rs[32..64]);
 
-    Ok(EthereumTransaction {
-        nonce: message.nonce,
-        gas_price: message.gas_price,
-        gas_limit: message.gas_limit,
-        action: message.action,
-        value: message.value,
-        input: message.input,
-        signature: ethereum::TransactionSignature::new(v, r, s)
-            .ok_or(eg!("signer generated invalid signature"))?,
-    })
+            Ok(EthereumTransaction::Legacy(ethereum::LegacyTransaction {
+                nonce: m.nonce,
+                gas_price: m.gas_price,
+                gas_limit: m.gas_limit,
+                action: m.action,
+                value: m.value,
+                input: m.input,
+                signature: ethereum::TransactionSignature::new(v, r, s)
+                    .ok_or(eg!("signer generated invalid signature"))?,
+            }))
+        }
+        TransactionMessage::EIP1559(m) => {
+            let signing_message = libsecp256k1::Message::parse_slice(&m.hash()[..])
+                .map_err(|_| eg!("invalid signing message"))?;
+            let secret = &libsecp256k1::SecretKey::parse_slice(&private_key[..])
+                .map_err(|_| eg!("invalid secret"))?;
+            let (signature, recid) = libsecp256k1::sign(&signing_message, secret);
+            let rs = signature.serialize();
+            let r = H256::from_slice(&rs[0..32]);
+            let s = H256::from_slice(&rs[32..64]);
+
+            Ok(EthereumTransaction::EIP1559(ethereum::EIP1559Transaction {
+                chain_id: m.chain_id,
+                nonce: m.nonce,
+                max_priority_fee_per_gas: m.max_priority_fee_per_gas,
+                max_fee_per_gas: m.max_fee_per_gas,
+                gas_limit: m.gas_limit,
+                action: m.action,
+                value: m.value,
+                input: m.input.clone(),
+                access_list: m.access_list,
+                odd_y_parity: recid.serialize() != 0,
+                r,
+                s,
+            }))
+        }
+    }
 }
 
 fn rich_block_build(
@@ -1341,6 +1676,7 @@ fn rich_block_build(
     statuses: Vec<Option<TransactionStatus>>,
     hash: Option<H256>,
     full_transactions: bool,
+    base_fee: Option<U256>,
 ) -> RichBlock {
     Rich {
         inner: Block {
@@ -1377,10 +1713,21 @@ fn rich_block_build(
                             .iter()
                             .enumerate()
                             .map(|(index, transaction)| {
+                                let is_eip1559 = !matches!(
+                                    &block.transactions[index],
+                                    EthereumTransaction::Legacy(_)
+                                );
+                                // match &transaction {
+                                //     EthereumTransaction::Legacy(_) => true,
+                                //     _ => false,
+                                // };
+
                                 transaction_build(
                                     transaction.clone(),
                                     Some(block.clone()),
                                     Some(statuses[index].clone().unwrap_or_default()),
+                                    is_eip1559,
+                                    base_fee,
                                 )
                             })
                             .collect(),
@@ -1403,82 +1750,166 @@ fn rich_block_build(
                 }
             },
             size: Some(U256::from(rlp::encode(&block).len() as u32)),
+            base_fee_per_gas: base_fee,
         },
         extra_info: BTreeMap::new(),
     }
 }
 
 fn transaction_build(
-    transaction: EthereumTransaction,
-    block: Option<EthereumBlock>,
+    ethereum_transaction: EthereumTransaction,
+    block: Option<ethereum::Block<EthereumTransaction>>,
     status: Option<TransactionStatus>,
+    is_eip1559: bool,
+    base_fee: Option<U256>,
 ) -> Transaction {
-    let pubkey = match public_key(&transaction) {
+    let mut transaction: Transaction = ethereum_transaction.clone().into();
+
+    if let EthereumTransaction::EIP1559(_) = ethereum_transaction {
+        if block.is_none() && status.is_none() {
+            transaction.gas_price = transaction.max_fee_per_gas;
+        } else {
+            let base_fee = base_fee.unwrap_or(U256::zero());
+            let max_priority_fee_per_gas =
+                transaction.max_priority_fee_per_gas.unwrap_or(U256::zero());
+            transaction.gas_price = Some(
+                base_fee
+                    .checked_add(max_priority_fee_per_gas)
+                    .unwrap_or_else(U256::max_value),
+            );
+        }
+    } else if !is_eip1559 {
+        transaction.max_fee_per_gas = None;
+        transaction.max_priority_fee_per_gas = None;
+    }
+
+    let pubkey = match public_key(&ethereum_transaction) {
         Ok(p) => Some(p),
         Err(_e) => None,
     };
 
-    let hash = if let Some(status) = &status {
+    // Block hash.
+    // transaction.block_hash = block.as_ref().map_or(None, |block| {
+    //     Some(H256::from_slice(
+    //         Keccak256::digest(&rlp::encode(&block.header)).as_slice(),
+    //     ))
+    // });
+    transaction.block_hash = block.as_ref().map(|block| {
+        H256::from_slice(Keccak256::digest(&rlp::encode(&block.header)).as_slice())
+    });
+
+    // Block number.
+    transaction.block_number = block.as_ref().map(|block| block.header.number);
+    // Transaction index.
+
+    transaction.transaction_index = status
+        .as_ref()
+        .map(|status| U256::from(status.transaction_index));
+
+    transaction.from = status.as_ref().map_or(
+        {
+            match pubkey {
+                Some(pk) => {
+                    H160::from(H256::from_slice(Keccak256::digest(pk).as_slice()))
+                }
+                _ => H160::default(),
+            }
+        },
+        |status| status.from,
+    );
+    // To.
+    transaction.to = status.as_ref().map_or(
+        {
+            let action = match ethereum_transaction.clone() {
+                EthereumTransaction::Legacy(t) => t.action,
+                EthereumTransaction::EIP1559(t) => t.action,
+                EthereumTransaction::EIP2930(t) => t.action,
+            };
+            match action {
+                ethereum::TransactionAction::Call(to) => Some(to),
+                _ => None,
+            }
+        },
+        |status| status.to,
+    );
+    // Creates.
+    // transaction.creates = status
+    //     .as_ref()
+    //     .map_or(None, |status| status.contract_address);
+    transaction.creates = status.as_ref().and_then(|status| status.contract_address);
+
+    // Public key.
+    transaction.public_key = pubkey.as_ref().map(H512::from);
+
+    transaction.hash = if let Some(status) = &status {
         status.transaction_hash
     } else {
-        H256::from_slice(Keccak256::digest(&rlp::encode(&transaction)).as_slice())
+        match ethereum_transaction {
+            EthereumTransaction::Legacy(t) => {
+                H256::from_slice(Keccak256::digest(&rlp::encode(&t)).as_slice())
+            }
+            EthereumTransaction::EIP1559(t) => {
+                H256::from_slice(Keccak256::digest(&rlp::encode(&t)).as_slice())
+            }
+            EthereumTransaction::EIP2930(t) => {
+                H256::from_slice(Keccak256::digest(&rlp::encode(&t)).as_slice())
+            }
+        }
     };
 
-    Transaction {
-        hash,
-        nonce: transaction.nonce,
-        block_hash: block.as_ref().map(|block| {
-            H256::from_slice(Keccak256::digest(&rlp::encode(&block.header)).as_slice())
-        }),
-        block_number: block.as_ref().map(|block| block.header.number),
-        transaction_index: status
-            .as_ref()
-            .map(|status| U256::from(status.transaction_index)),
-        from: status.as_ref().map_or(
-            {
-                match pubkey {
-                    Some(pk) => {
-                        H160::from(H256::from_slice(Keccak256::digest(pk).as_slice()))
-                    }
-                    _ => H160::default(),
-                }
-            },
-            |status| status.from,
-        ),
-        to: status.as_ref().map_or(
-            {
-                match transaction.action {
-                    ethereum::TransactionAction::Call(to) => Some(to),
-                    _ => None,
-                }
-            },
-            |status| status.to,
-        ),
-        value: transaction.value,
-        gas_price: transaction.gas_price,
-        gas: transaction.gas_limit,
-        input: Bytes(transaction.clone().input),
-        creates: status.as_ref().and_then(|status| status.contract_address),
-        raw: Bytes(rlp::encode(&transaction).to_vec()),
-        public_key: pubkey.as_ref().map(H512::from),
-        chain_id: transaction.signature.chain_id().map(U64::from),
-        standard_v: U256::from(transaction.signature.standard_v()),
-        v: U256::from(transaction.signature.v()),
-        r: U256::from(transaction.signature.r().as_bytes()),
-        s: U256::from(transaction.signature.s().as_bytes()),
-    }
+    // // Block hash.
+    // transaction.block_hash = ;
+    // // Block number.
+    // transaction.block_number = ;
+    // // Transaction index.
+    // transaction.transaction_index = ;
+    // // From.
+    // transaction.from;
+    // // To.
+    // transaction.to;
+    // // Creates.
+    // transaction.creates;
+    // // Public key.
+    // transaction.public_key;
+
+    transaction
 }
 
 pub fn public_key(transaction: &EthereumTransaction) -> ruc::Result<[u8; 64]> {
+    // let mut sig = [0u8; 65];
+    // let mut msg = [0u8; 32];
+    // sig[0..32].copy_from_slice(&transaction.signature.r()[..]);
+    // sig[32..64].copy_from_slice(&transaction.signature.s()[..]);
+    // sig[64] = transaction.signature.standard_v();
+    // msg.copy_from_slice(
+    //     &EthereumTransactionMessage::from(transaction.clone()).hash()[..],
+    // );
+
+    // fp_types::crypto::secp256k1_ecdsa_recover(&sig, &msg)
+
     let mut sig = [0u8; 65];
     let mut msg = [0u8; 32];
-    sig[0..32].copy_from_slice(&transaction.signature.r()[..]);
-    sig[32..64].copy_from_slice(&transaction.signature.s()[..]);
-    sig[64] = transaction.signature.standard_v();
-    msg.copy_from_slice(
-        &EthereumTransactionMessage::from(transaction.clone()).hash()[..],
-    );
-
+    match transaction {
+        EthereumTransaction::Legacy(t) => {
+            sig[0..32].copy_from_slice(&t.signature.r()[..]);
+            sig[32..64].copy_from_slice(&t.signature.s()[..]);
+            sig[64] = t.signature.standard_v();
+            msg.copy_from_slice(
+                &ethereum::LegacyTransactionMessage::from(t.clone()).hash()[..],
+            );
+        }
+        EthereumTransaction::EIP1559(t) => {
+            sig[0..32].copy_from_slice(&t.r[..]);
+            sig[32..64].copy_from_slice(&t.s[..]);
+            sig[64] = t.odd_y_parity as u8;
+            msg.copy_from_slice(
+                &ethereum::EIP1559TransactionMessage::from(t.clone()).hash()[..],
+            );
+        }
+        _ => {
+            return Err(eg!("Transaction Type Error"));
+        }
+    }
     fp_types::crypto::secp256k1_ecdsa_recover(&sig, &msg)
 }
 
@@ -1610,6 +2041,45 @@ fn native_block_id(number: Option<BlockNumber>) -> Option<BlockId> {
     }
 }
 
+struct FeeDetails {
+    gas_price: Option<U256>,
+    max_fee_per_gas: Option<U256>,
+    max_priority_fee_per_gas: Option<U256>,
+}
+
+fn fee_details(
+    request_gas_price: Option<U256>,
+    request_max_fee: Option<U256>,
+    request_priority: Option<U256>,
+) -> Result<FeeDetails> {
+    match (request_gas_price, request_max_fee, request_priority) {
+        (gas_price, None, None) => {
+            // Legacy request, all default to gas price.
+            Ok(FeeDetails {
+                gas_price,
+                max_fee_per_gas: gas_price,
+                max_priority_fee_per_gas: gas_price,
+            })
+        }
+        (_, max_fee, max_priority) => {
+            // eip-1559
+            // Ensure `max_priority_fee_per_gas` is less or equal to `max_fee_per_gas`.
+            if let Some(max_priority) = max_priority {
+                let max_fee = max_fee.unwrap_or_default();
+                if max_priority > max_fee {
+                    return Err(internal_err(
+						"Invalid input: `max_priority_fee_per_gas` greater than `max_fee_per_gas`"
+					));
+                }
+            }
+            Ok(FeeDetails {
+                gas_price: max_fee,
+                max_fee_per_gas: max_fee,
+                max_priority_fee_per_gas: max_priority,
+            })
+        }
+    }
+}
 fn dummy_block(height: u64, full: bool) -> Rich<Block> {
     let hash = if height == *EVM_FIRST_BLOCK_HEIGHT - 1 {
         H256([0; 32])
@@ -1625,6 +2095,9 @@ fn dummy_block(height: u64, full: bool) -> Rich<Block> {
     } else {
         BlockTransactions::Hashes(vec![])
     };
+
+    let gas_price =
+        <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(height);
 
     let inner = Block {
         hash: Some(hash),
@@ -1661,6 +2134,7 @@ fn dummy_block(height: u64, full: bool) -> Rich<Block> {
         uncles: vec![],
         transactions,
         size: Some(U256::from(0x1_u32)),
+        base_fee_per_gas: Some(gas_price),
     };
 
     Rich {

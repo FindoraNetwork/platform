@@ -5,6 +5,7 @@ mod basic;
 mod impls;
 
 use config::abci::global_cfg::CFG;
+use ethereum::TransactionV2 as Transaction;
 use ethereum_types::{H160, H256, U256};
 use evm::Config as EvmConfig;
 use fp_core::context::RunTxMode;
@@ -54,7 +55,7 @@ pub trait Config {
 
 pub mod storage {
     use ethereum::{
-        BlockV0 as Block, ReceiptV0 as Receipt, TransactionV0 as Transaction,
+        BlockV2 as Block, ReceiptV0 as Receipt, TransactionV2 as Transaction,
     };
     use ethereum_types::U256;
     use fp_evm::TransactionStatus;
@@ -176,60 +177,112 @@ impl<C: Config> ValidateUnsigned for App<C> {
 
     fn validate_unsigned(ctx: &Context, call: &Self::Call) -> Result<()> {
         let Action::Transact(transaction) = call;
-        if let Some(chain_id) = transaction.signature.chain_id() {
-            if chain_id != C::ChainId::get() {
-                return Err(eg!(format!(
-                    "InvalidChainId, got {}, but expected {}",
-                    chain_id,
-                    C::ChainId::get()
-                )));
+
+        let (
+            nonce,
+            gas_price,
+            gas_limit,
+            value,
+            chain_id,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            is_eip1559,
+        );
+
+        match transaction {
+            Transaction::Legacy(t) => {
+                nonce = t.nonce;
+                gas_price = t.gas_price;
+                gas_limit = t.gas_limit;
+                value = t.value;
+                chain_id = match t.signature.chain_id() {
+                    Some(chain_id) => chain_id,
+                    None => return Err(eg!("Must provide chainId")),
+                };
+                is_eip1559 = false;
+
+                max_fee_per_gas = U256::zero();
+                max_priority_fee_per_gas = U256::zero();
             }
-        } else {
-            return Err(eg!("Must provide chainId".to_string()));
+            Transaction::EIP1559(t) => {
+                nonce = t.nonce;
+                gas_limit = t.gas_limit;
+                max_fee_per_gas = t.max_fee_per_gas;
+                max_priority_fee_per_gas = t.max_priority_fee_per_gas;
+                value = t.value;
+                chain_id = t.chain_id;
+                is_eip1559 = true;
+
+                gas_price = U256::zero();
+            }
+            _ => {
+                return Err(eg!("Transaction Type Error"));
+            }
+        }
+
+        if chain_id != C::ChainId::get() {
+            return Err(eg!(format!(
+                "InvalidChainId, got {}, but expected {}",
+                chain_id,
+                C::ChainId::get()
+            )));
         }
 
         let origin = Self::recover_signer_fast(ctx, transaction)
             .ok_or_else(|| eg!("ExecuteTransaction: InvalidSignature"))?;
 
         // Same as go ethereum, Min gas limit is 21000.
-        if transaction.gas_limit < U256::from(21000)
-            || transaction.gas_limit > C::BlockGasLimit::get()
-        {
+        if gas_limit < U256::from(21000) || gas_limit > C::BlockGasLimit::get() {
             return Err(eg!(format!(
                 "InvalidGasLimit: got {}, the gas limit must be in range [21000, {}]",
-                transaction.gas_limit,
+                gas_limit,
                 C::BlockGasLimit::get()
             )));
         }
 
-        let min_gas_price = C::FeeCalculator::min_gas_price(ctx.header.height as u64);
+        if !is_eip1559 {
+            let min_gas_price =
+                C::FeeCalculator::min_gas_price(ctx.header.height as u64);
 
-        if transaction.gas_price < min_gas_price {
-            return Err(eg!(format!(
-                "InvalidGasPrice: got {}, but the minimum gas price is {}",
-                transaction.gas_price, min_gas_price
-            )));
+            if gas_price < min_gas_price {
+                return Err(eg!(format!(
+                    "InvalidGasPrice: got {}, but the minimum gas price is {}",
+                    gas_price, min_gas_price
+                )));
+            }
         }
 
         let account_id = C::AddressMapping::convert_to_account_id(origin);
         let account =
             C::AccountAsset::account_of(ctx, &account_id, None).unwrap_or_default();
-        let nonce = account.nonce;
-        let balance = account.balance;
 
-        if transaction.nonce < nonce {
+        if nonce < account.nonce {
             return Err(eg!(format!(
                 "InvalidNonce: origin: {:?}, got {}, but expected {}",
-                origin, transaction.nonce, nonce
+                origin, nonce, account.nonce
             )));
         }
 
-        let fee = transaction.gas_price.saturating_mul(transaction.gas_limit);
-        let total_payment = transaction.value.saturating_add(fee);
-        if balance < total_payment {
+        let fee = if !is_eip1559 {
+            gas_price.saturating_mul(gas_limit)
+        } else {
+            let max_base_fee = max_fee_per_gas
+                .checked_mul(gas_limit)
+                .ok_or(eg!("FeeOverflow"))?;
+            let max_priority_fee = max_priority_fee_per_gas
+                .checked_mul(gas_limit)
+                .ok_or(eg!("FeeOverflow"))?;
+            max_base_fee
+                .checked_add(max_priority_fee)
+                .ok_or(eg!("FeeOverflow"))?
+        };
+
+        let total_payment = value.saturating_add(fee);
+
+        if account.balance < total_payment {
             return Err(eg!(format!(
                 "InsufficientBalance, origin: {:?}, actual balance {}, but expected payment {}",
-                origin, balance, total_payment
+                origin, account.balance, total_payment
             )));
         }
 
