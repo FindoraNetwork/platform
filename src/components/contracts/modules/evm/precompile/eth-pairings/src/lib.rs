@@ -8,8 +8,6 @@ use evm_precompile_utils::{EvmDataReader, EvmDataWriter, EvmResult, Gasometer};
 use module_evm::precompile::{FinState, Precompile, PrecompileId, PrecompileResult};
 use tracing::debug;
 
-const GAS_EXECUTION: u64 = 3437;
-
 /// The Verifier precompile.
 pub struct EthPairing;
 
@@ -50,20 +48,35 @@ impl Precompile for EthPairing {
 }
 
 impl EthPairing {
-    fn call_public_api_on_vector(data: &[u8]) -> Result<Vec<u8>, ApiError> {
+    fn get_operation(data: &[u8]) -> Result<(OperationType, &[u8]), ApiError> {
         if data.is_empty() {
             return Err(ApiError::InputError("input is zero length".to_owned()));
         }
         let op = OperationType::from_u8(data[0]).ok_or(ApiError::MissingValue)?;
-        perform_operation(op, &data[0..])
+        Ok((op, &data[1..]))
+    }
+
+    fn call_public_api_on_vector(data: &[u8]) -> Result<Vec<u8>, ApiError> {
+        let (op, input) = Self::get_operation(data)?;
+        perform_operation(op, input)
+    }
+
+    fn calculate_gas_for_operation(data: &[u8]) -> Result<u64, ApiError> {
+        let (op, input) = Self::get_operation(data)?;
+        eth_pairings::gas_meter::meter_operation(op, input)
     }
 
     fn execute_operation(
         mut input: EvmDataReader,
         target_gas: Option<u64>,
     ) -> EvmResult<PrecompileOutput> {
+        //Calculate and record required gas for operation
         let mut gasometer = Gasometer::new(target_gas);
-        gasometer.record_cost(GAS_EXECUTION)?;
+        let gas = match Self::calculate_gas_for_operation(input.get_slice()) {
+            Ok(res) => res,
+            Err(api_err) => return Err(ExitError::Other(api_err.to_string().into())),
+        };
+        gasometer.record_cost(gas)?;
 
         debug!(target: "evm", "EthPairing#executingOp");
         let result = match Self::call_public_api_on_vector(input.get_slice()) {
