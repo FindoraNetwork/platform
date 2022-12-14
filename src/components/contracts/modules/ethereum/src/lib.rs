@@ -216,6 +216,7 @@ impl<C: Config> ValidateUnsigned for App<C> {
         let balance = account.balance;
 
         if transaction.nonce < nonce {
+            #[cfg(not(feature = "benchmark"))]
             return Err(eg!(format!(
                 "InvalidNonce: origin: {:?}, got {}, but expected {}",
                 origin, transaction.nonce, nonce

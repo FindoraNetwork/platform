@@ -32,9 +32,9 @@ use zei::xfr::{asset_record::AssetRecordType, sig::XfrKeyPair};
 
 /// transfer utxo assets to account(ed25519 or ecdsa address) balance.
 pub fn transfer_to_account(amount: u64, address: Option<&str>) -> Result<()> {
-    let mut builder = utils::new_tx_builder()?;
+    let mut builder = utils::new_tx_builder().c(d!())?;
 
-    let kp = get_keypair()?;
+    let kp = get_keypair().c(d!())?;
     let transfer_op = utils::gen_transfer_op(
         &kp,
         vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
@@ -42,7 +42,8 @@ pub fn transfer_to_account(amount: u64, address: Option<&str>) -> Result<()> {
         false,
         false,
         Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
-    )?;
+    )
+    .c(d!())?;
     let target_address = match address {
         Some(s) => MultiSigner::from_str(s).c(d!())?,
         None => MultiSigner::Xfr(kp.get_pk()),
@@ -50,14 +51,14 @@ pub fn transfer_to_account(amount: u64, address: Option<&str>) -> Result<()> {
 
     builder
         .add_operation(transfer_op)
-        .add_operation_convert_account(&kp, target_address, amount)?
+        .add_operation_convert_account(&kp, target_address, amount)
+        .c(d!())?
         .sign(&kp);
 
     let mut tx = builder.take_transaction();
     tx.sign_to_map(&kp);
 
-    utils::send_tx(&tx)?;
-    Ok(())
+    utils::send_tx(&tx).c(d!())
 }
 
 #[allow(missing_docs)]

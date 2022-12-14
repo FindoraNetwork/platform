@@ -50,3 +50,4 @@ evm-precompile-sha3fips = {path = "../modules/evm/precompile/sha3fips"}
 [features]
 abci_mock = []
 web3_service = ["enterprise-web3", "module-account/web3_service", "module-ethereum/web3_service", "module-evm/web3_service"]
+benchmark = ["module-evm/benchmark","module-ethereum/benchmark"]
