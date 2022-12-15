@@ -70,7 +70,7 @@ impl EthPairing {
         mut input: EvmDataReader,
         target_gas: Option<u64>,
     ) -> EvmResult<PrecompileOutput> {
-        //Calculate and record required gas for operation
+        // Calculate and record required gas for operation
         let mut gasometer = Gasometer::new(target_gas);
         let gas = match Self::calculate_gas_for_operation(input.get_slice()) {
             Ok(res) => res,
