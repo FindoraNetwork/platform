@@ -9,7 +9,33 @@
 >
 > Typography: 6 nodes(5 full nodes, 1 seed node) running on the same machine
 
-`make bench_100k`:
+**==>>** `make bench_50k`:
+
+```
+[##  Log  ##] Deploying ERC20 contract ...
+
+[##  Log  ##] Transfering native token ...
+
+[##  Log  ##] BlockNumber before sending: 21
+[** Debug **] Start sending ...
+[##  Log  ##] Timestamp before sending: 1671111093
+[##  Log  ##] Timestamp after sending: 1671111150
+[##  Log  ##] BlockNumber after sending: 74
+[##  Log  ##] Total number of on-chain transactions: 50000
+[##  Log  ##] TPS(transaction per second): 877
+
+[##  Log  ##] Transfering erc20 token ...
+
+[##  Log  ##] BlockNumber before sending: 75
+[** Debug **] Start sending ...
+[##  Log  ##] Timestamp before sending: 1671111182
+[##  Log  ##] Timestamp after sending: 1671111218
+[##  Log  ##] BlockNumber after sending: 112
+[##  Log  ##] Total number of on-chain transactions: 50000
+[##  Log  ##] TPS(transaction per second): 1388
+```
+
+**==>>** `make bench_100k`:
 
 ```
 [##  Log  ##] Deploying ERC20 contract ...
@@ -33,6 +59,32 @@
 [##  Log  ##] BlockNumber after sending: 182
 [##  Log  ##] Total number of on-chain transactions: 100000
 [##  Log  ##] TPS(transaction per second): 1388
+```
+
+**==>>** `make bench_200k`:
+
+```
+[##  Log  ##] Deploying ERC20 contract ...
+
+[##  Log  ##] Transfering native token ...
+
+[##  Log  ##] BlockNumber before sending: 25
+[** Debug **] Start sending ...
+[##  Log  ##] Timestamp before sending: 1671111665
+[##  Log  ##] Timestamp after sending: 1671111859
+[##  Log  ##] BlockNumber after sending: 144
+[##  Log  ##] Total number of on-chain transactions: 200000
+[##  Log  ##] TPS(transaction per second): 1030
+
+[##  Log  ##] Transfering erc20 token ...
+
+[##  Log  ##] BlockNumber before sending: 146
+[** Debug **] Start sending ...
+[##  Log  ##] Timestamp before sending: 1671111966
+[##  Log  ##] Timestamp after sending: 1671112113
+[##  Log  ##] BlockNumber after sending: 284
+[##  Log  ##] Total number of on-chain transactions: 200000
+[##  Log  ##] TPS(transaction per second): 1360
 ```
 
 #### Test results on a AWS virtual machine

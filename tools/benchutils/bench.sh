@@ -28,8 +28,11 @@ ROOT_PHRASE="$(cat static/root.phrase)"
 
 which gsc >/dev/null 2>&1
 if [[ 0 -ne $? ]]; then
-    git clone git@github.com:FindoraNetwork/gsc.git /tmp/__gsc__
-    cargo install --path /tmp/__gsc__ --bin gsc
+    codebase=/tmp/__gsc_${RANDOM}_${RANDOM}__
+    rm -rf $codebase 2>/dev/null
+    git clone --depth 1 git@github.com:FindoraNetwork/gsc.git $codebase
+    cargo install --path $codebase --bin gsc
+    rm -rf $codebase
     export PATH=~/.cargo/bin:$PATH
 fi
 
@@ -138,13 +141,14 @@ if [[ "" == ${is_dbench} ]]; then
     block_itv=$(fn dev | jq '.meta.block_interval_in_seconds')
 
     fn dev init || exit 1
-    for i in $(seq 0 6); do
+    for i in {0..6}; do
         sleep $block_itv
     done
 
     fn contract-deposit --addr $(cat static/root.addr) --amount 1000000000000000 || exit 1
-    sleep $block_itv
-    sleep $block_itv # 2 blocks
+    for i in {0..4}; do
+        sleep $block_itv
+    done
 
     web3_port=$(fn dev | jq '.meta.validator_or_full_nodes."1"."ports"."web3_http_service"')
     export SERV="http://localhost:${web3_port}"
@@ -165,17 +169,18 @@ else
     block_itv=$(fn ddev | jq '.meta.block_interval_in_seconds')
 
     fn ddev init || exit 1
-    for i in $(seq 0 6); do
+    for i in {0..6}; do
         sleep $block_itv
     done
 
     fn contract-deposit --addr $(cat static/root.addr) --amount 1000000000000000 || exit 1
-    sleep $block_itv
-    sleep $block_itv # 2 blocks
+    for i in {0..4}; do
+        sleep $block_itv
+    done
 
     serv=""
     # 3 nodes will be created at least
-    for i in $(seq 1 3); do
+    for i in {1..3}; do
         addr=$(fn ddev | jq ".meta.validator_or_full_nodes.\"${i}\".host.\"addr\"" | sed 's/"//g')
         port=$(fn ddev | jq ".meta.validator_or_full_nodes.\"${i}\".ports.web3_http_service" | sed 's/"//g')
         serv="http://${addr}:${port},${serv}"
@@ -190,7 +195,7 @@ prepare_run
 
 log "Deploying ERC20 contract ..."
 contract_addr=$(gsc cli deploy-erc20 -x $SERV -O "${ROOT_PHRASE}")
-for i in {0..3}; do
+for i in {0..4}; do
     sleep $block_itv
 done
 
