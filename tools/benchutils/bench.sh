@@ -17,20 +17,8 @@ cd $EXEC_PATH || die "$0 Line $LINENO"
 
 source "utils.sh"
 
-TOOLS_DIR=$(dirname ${EXEC_PATH})
-ROOT_DIR=$(dirname ${TOOLS_DIR})
-
 cnt=$1
-serv=$2
-
-DEFAULT_SERV="http://localhost:8545"
-if [[ "" != ${serv} ]]; then
-    SERV="${serv}"
-elif [[ "" != ${GSC_BENCH_SERV} ]]; then
-    SERV=${GSC_BENCH_SERV}
-else
-    SERV="${DEFAULT_SERV}"
-fi
+is_dbench=$2 # is dbench or not
 
 addr_file="/tmp/gsc_bench.addr.list"
 phrase_file="/tmp/gsc_bench.phrase.list"
@@ -122,10 +110,8 @@ function run() {
 }
 
 check_cnt
-gen_accounts
-prepare_run
 
-if [[ ${SERV} == ${DEFAULT_SERV} ]]; then
+if [[ "" == ${is_dbench} ]]; then
     fn dev create -i 1 -f || die "$0 Line $LINENO"
     log "Waiting RPC-server, sleep 6 seconds"
     sleep 6
@@ -150,8 +136,45 @@ if [[ ${SERV} == ${DEFAULT_SERV} ]]; then
 
     web3_port=$(fn dev | jq '.meta.validator_or_full_nodes."1"."ports"."web3_http_service"')
     export SERV="http://localhost:${web3_port}"
-    log "RPC Server endpoints: ${SERV}"
+
+else
+
+    fn ddev create -i 1 -f || die "$0 Line $LINENO"
+    log "Waiting RPC-server, sleep 10 seconds"
+    sleep 10
+
+    phrase_path=/tmp/fn_dbench_root.phrase
+    fn ddev \
+        | jq '.meta.custom_data.bank_account.mnemonic_words' \
+        | sed 's/"//g' > $phrase_path || exit 1
+    fn setup -O $phrase_path || exit 1
+    fn setup -S "http://localhost" || exit 1 # useless, but must set a value
+
+    itv=$(fn ddev | jq '.meta.block_interval_in_seconds')
+
+    fn ddev init || exit 1
+    for i in $(seq 0 6); do
+        sleep $itv
+    done
+
+    fn contract-deposit --addr $(cat static/root.addr) --amount 1000000000000000 || exit 1
+    sleep $itv
+    sleep $itv # 2 blocks
+
+    serv=""
+    # 3 nodes will be created at least
+    for i in $(seq 1 3); do
+        addr=$(fn ddev | jq ".meta.validator_or_full_nodes.\"${i}\".host.\"addr\"" | sed 's/"//g')
+        port=$(fn ddev | jq ".meta.validator_or_full_nodes.\"${i}\".ports.web3_http_service" | sed 's/"//g')
+        serv="http://${addr}:${port},${serv}"
+    done
+    export SERV=$serv
 fi
+
+log "RPC Server endpoints: ${SERV}"
+
+gen_accounts
+prepare_run
 
 log "\n\nTransfering native token...\n\n"
 

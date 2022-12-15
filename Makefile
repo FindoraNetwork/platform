@@ -126,15 +126,25 @@ staking_cfg_debug:
 bench:
 	cargo bench --workspace
 
-bench_evm_100k: build_bench_release
+bench_10k: build_bench_release
+	bash tools/benchutils/bench.sh 10000
+
+bench_100k: build_bench_release
 	bash tools/benchutils/bench.sh 100000
 
-dbench_evm_100k: build_bench_release
+dbench_10k: build_bench_release
 ifeq ($(FN_DDEV_HOSTS),)
 	@ echo '$$FN_DDEV_HOSTS not set!'
 	@ exit 1
 endif
-	bash tools/benchutils/bench.sh 100000 $(shell bash tools/benchutils/prepare_dbench.sh >/dev/null && cat /tmp/fn_dbench_rpc_endpoint)
+	bash tools/benchutils/bench.sh 10000 y
+
+dbench_100k: build_bench_release
+ifeq ($(FN_DDEV_HOSTS),)
+	@ echo '$$FN_DDEV_HOSTS not set!'
+	@ exit 1
+endif
+	bash tools/benchutils/bench.sh 100000 y
 
 lint:
 	cargo clippy --workspace
