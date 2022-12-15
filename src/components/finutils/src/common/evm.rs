@@ -39,9 +39,9 @@ pub fn transfer_to_account(
     lowlevel_data: Option<&str>,
     is_address_fra: bool,
 ) -> Result<()> {
-    let mut builder = utils::new_tx_builder()?;
+    let mut builder = utils::new_tx_builder().c(d!())?;
 
-    let kp = get_keypair(is_address_fra)?;
+    let kp = get_keypair(is_address_fra).c(d!())?;
 
     let asset = if let Some(asset) = asset {
         let asset = AssetTypeCode::new_from_base64(asset)?;
@@ -64,8 +64,8 @@ pub fn transfer_to_account(
         false,
         false,
         Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
-    )?;
-
+    )
+    .c(d!())?;
     let target_address = match address {
         Some(s) => MultiSigner::from_str(s).c(d!())?,
         None => MultiSigner::Xfr(kp.get_pk()),
@@ -73,13 +73,8 @@ pub fn transfer_to_account(
 
     builder
         .add_operation(transfer_op)
-        .add_operation_convert_account(
-            &kp,
-            target_address,
-            asset,
-            amount,
-            lowlevel_data,
-        )?
+        .add_operation_convert_account(&kp, target_address, asset, amount, lowlevel_data)
+        .c(d!())?
         .sign(&kp);
 
     let mut tx = builder.build_and_take_transaction()?;
@@ -88,8 +83,7 @@ pub fn transfer_to_account(
     // let mut tx = builder.take_transaction();
     tx.sign_to_map(&kp);
 
-    utils::send_tx(&tx)?;
-    Ok(())
+    utils::send_tx(&tx).c(d!())
 }
 
 #[allow(missing_docs)]

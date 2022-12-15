@@ -445,7 +445,8 @@ fn run() -> Result<()> {
             address,
             lowlevel_data,
             is_address_fra,
-        )?
+        )
+        .c(d!())?
     } else if let Some(m) = matches.subcommand_matches("contract-withdraw") {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");
@@ -456,7 +457,8 @@ fn run() -> Result<()> {
             address,
             eth_key,
             is_address_fra,
-        )?
+        )
+        .c(d!())?
     } else if let Some(m) = matches.subcommand_matches("convert-bar-to-abar") {
         // sender Xfr secret key
         let f = read_file_path(m.value_of("from-seckey")).c(d!())?;
@@ -1136,7 +1138,7 @@ fn tip_fail(e: impl fmt::Display) {
 }
 
 fn tip_success() {
-    println!(
+    eprintln!(
         "\x1b[35;01mNote\x1b[01m:\n\tYour operations has been executed without local error,\n\tbut the final result may need an asynchronous query.\x1b[00m"
     );
 }

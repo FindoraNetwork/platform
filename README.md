@@ -9,7 +9,11 @@
 # Findora Platform
 
 - [**Wiki**](https://wiki.findora.org/)
-- [**Change Log**](docs/CHANGELOG.md)
+- [**Change log**](CHANGELOG.md)
+- [**Benchmarks**](docs/benchmarks)
+  - [**EVM Benchmarks**](docs/benchmarks/evm.md)
+  - [**UTXO Benchmarks**](docs/benchmarks/utxo.md)
+  - ...
 
 ### Licensing
 
