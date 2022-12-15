@@ -1,6 +1,6 @@
 use crate::context::Context;
-use abci::*;
 use ruc::Result;
+use tendermint_proto::abci::*;
 
 /// AppModuleBasic is the standard form for basic non-dependant elements of an application module.
 pub trait AppModuleBasic {

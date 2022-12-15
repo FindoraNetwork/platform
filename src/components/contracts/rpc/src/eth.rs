@@ -727,7 +727,7 @@ impl EthApi for EthApiImpl {
         let txn_with_tag = EvmRawTxWrapper::wrap(&txn.unwrap());
 
         Box::pin(async move {
-            let resp = client.broadcast_tx_sync(txn_with_tag.into()).await;
+            let resp = client.broadcast_tx_sync(txn_with_tag).await;
 
             match resp {
                 Ok(resp) => {

@@ -9,7 +9,7 @@ description = "UTXO and Account state transit hub"
 readme = "README.md"
 
 [dependencies]
-abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
+abci = { package = "tendermint-abci", version = "0.28" }
 lazy_static = "1.4.0"
 ledger = { path = "../../../../ledger" }
 tracing = "0.1"

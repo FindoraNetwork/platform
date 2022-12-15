@@ -1,11 +1,10 @@
 #![allow(clippy::field_reassign_with_default)]
 
 use {
-    abci::{Event, Pair},
     ledger::data_model::{Operation, Transaction, TxnSID},
-    protobuf::RepeatedField,
     serde::Serialize,
     std::time::SystemTime,
+    tendermint_proto::abci::{Event, EventAttribute},
     zei::xfr::structs::{XfrAmount, XfrAssetType},
 };
 
@@ -15,61 +14,66 @@ use {
 ///   - "addr.to" => "Json<TagAttr>"
 ///   - "addr.from.<addr>" => "y"
 ///   - "addr.to.<addr>" => "y"
-pub fn gen_tendermint_attr(tx: &Transaction) -> RepeatedField<Event> {
+pub fn gen_tendermint_attr(tx: &Transaction) -> Vec<Event> {
     let mut res = vec![];
 
-    // index txs without block info
-    let mut ev = Event::new();
-    ev.set_field_type("tx".to_owned());
-
-    let mut kv = vec![Pair::new(), Pair::new()];
-    kv[0].set_key("prehash".as_bytes().to_vec());
-    kv[0].set_value(hex::encode(tx.hash(TxnSID(0))).into_bytes());
-    kv[1].set_key("timestamp".as_bytes().to_vec());
-    kv[1].set_value(
-        SystemTime::now()
+    let attr_prehash = EventAttribute {
+        key: "prehash".as_bytes().into(),
+        value: hex::encode(tx.hash(TxnSID(0))).into_bytes().into(),
+        index: true,
+    };
+    let attr_timestamp = EventAttribute {
+        key: "timestamp".as_bytes().into(),
+        value: SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs()
             .to_string()
-            .into_bytes(),
-    );
+            .into_bytes()
+            .into(),
+        index: true,
+    };
 
-    ev.set_attributes(RepeatedField::from_vec(kv));
-    res.push(ev);
+    res.push(Event {
+        r#type: "tx".to_owned(),
+        attributes: vec![attr_prehash, attr_timestamp],
+    });
 
     let (from, to) = gen_tendermint_attr_addr(tx);
 
     if !from.is_empty() || !to.is_empty() {
-        let mut ev = Event::new();
-        ev.set_field_type("addr".to_owned());
+        let attr_from = EventAttribute {
+            key: "from".as_bytes().into(),
+            value: serde_json::to_vec(&from).unwrap().into(),
+            index: true,
+        };
+        let attr_to = EventAttribute {
+            key: "to".as_bytes().into(),
+            value: serde_json::to_vec(&to).unwrap().into(),
+            index: true,
+        };
 
-        let mut kv = vec![Pair::new(), Pair::new()];
-        kv[0].set_key("from".as_bytes().to_vec());
-        kv[0].set_value(serde_json::to_vec(&from).unwrap());
-        kv[1].set_key("to".as_bytes().to_vec());
-        kv[1].set_value(serde_json::to_vec(&to).unwrap());
-
-        ev.set_attributes(RepeatedField::from_vec(kv));
-        res.push(ev);
+        res.push(Event {
+            r#type: "addr".into(),
+            attributes: vec![attr_from, attr_to],
+        });
 
         macro_rules! index_addr {
             ($attr: expr, $ty: expr) => {
                 let kv = $attr
                     .into_iter()
-                    .map(|i| {
-                        let mut p = Pair::new();
-                        p.set_key(i.addr.into_bytes());
-                        p.set_value("y".as_bytes().to_vec());
-                        p
+                    .map(|i| EventAttribute {
+                        key: i.addr.into_bytes().into(),
+                        value: "y".as_bytes().into(),
+                        index: true,
                     })
                     .collect::<Vec<_>>();
 
                 if !kv.is_empty() {
-                    let mut ev = Event::new();
-                    ev.set_field_type($ty.to_owned());
-                    ev.set_attributes(RepeatedField::from_vec(kv));
-                    res.push(ev);
+                    res.push(Event {
+                        r#type: $ty.into(),
+                        attributes: kv,
+                    });
                 }
             };
         }
@@ -78,7 +82,7 @@ pub fn gen_tendermint_attr(tx: &Transaction) -> RepeatedField<Event> {
         index_addr!(to, "addr.to");
     }
 
-    RepeatedField::from_vec(res)
+    res
 }
 
 // collect informations of inputs and outputs

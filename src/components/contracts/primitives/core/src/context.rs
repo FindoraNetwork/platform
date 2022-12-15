@@ -1,8 +1,8 @@
-use abci::Header;
 use fin_db::{FinDB, RocksDB};
 use primitive_types::{H160, H256};
 use std::{collections::HashMap, sync::Arc};
 use storage::state::{ChainState, State};
+use tendermint_proto::types::Header;
 
 pub use parking_lot::RwLock;
 

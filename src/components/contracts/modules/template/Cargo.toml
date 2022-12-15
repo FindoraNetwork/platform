@@ -9,7 +9,9 @@ description = "Findora template module for value store"
 readme = "README.md"
 
 [dependencies]
-abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
+abci = { package = "tendermint-abci", version = "0.28" }
+tendermint-proto = "0.28"
+
 ruc = "1.0"
 serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0"

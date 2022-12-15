@@ -8,7 +8,6 @@ pub mod impls;
 pub mod precompile;
 pub mod runtime;
 
-use abci::{RequestQuery, ResponseQuery};
 use ethereum_types::U256;
 use evm::executor::stack::PrecompileSet as EvmPrecompileSet;
 use fp_core::{
@@ -30,6 +29,7 @@ use fp_types::{
 use precompile::PrecompileSet;
 use ruc::*;
 use std::marker::PhantomData;
+use tendermint_proto::abci::{RequestQuery, ResponseQuery};
 
 pub use runtime::*;
 
@@ -97,7 +97,9 @@ impl<C: Config> AppModule for App<C> {
             "contract-number" => {
                 let contracts: Vec<(HA160, Vec<u8>)> =
                     storage::AccountCodes::iterate(ctx.state.read().borrow());
-                resp.value = serde_json::to_vec(&contracts.len()).unwrap_or_default();
+                resp.value = serde_json::to_vec(&contracts.len())
+                    .unwrap_or_default()
+                    .into();
                 resp
             }
             _ => resp,

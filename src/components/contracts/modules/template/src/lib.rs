@@ -10,11 +10,11 @@ use fp_core::{
     transaction::{ActionResult, Executable},
 };
 // use fp_storage::{hash::StoragePrefixKey, Deref, StatelessStore};
-use abci::{RequestQuery, ResponseQuery};
 use fp_storage::{Borrow, BorrowMut};
 use fp_types::{actions::template::Action, crypto::Address};
 use ruc::Result;
 use std::marker::PhantomData;
+use tendermint_proto::abci::{RequestQuery, ResponseQuery};
 
 pub const MODULE_NAME: &str = "template";
 
@@ -65,7 +65,7 @@ impl<C: Config> AppModule for App<C> {
         // .unwrap()
         // .unwrap_or_default();
 
-        resp.value = serde_json::to_vec(&value).unwrap_or_default();
+        resp.value = serde_json::to_vec(&value).unwrap_or_default().into();
         resp
     }
 }

@@ -1,5 +1,4 @@
 use super::*;
-use abci::*;
 use fp_core::{
     context::Context,
     module::AppModule,
@@ -18,6 +17,7 @@ use ledger::{
 };
 use ruc::*;
 use serde::Serialize;
+use tendermint_proto::abci::*;
 
 #[derive(Default, Clone)]
 pub struct ModuleManager {

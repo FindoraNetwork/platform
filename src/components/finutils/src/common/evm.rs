@@ -146,7 +146,7 @@ pub fn transfer_from_account(
 
     Runtime::new()
         .unwrap()
-        .block_on(tm_client.broadcast_tx_sync(txn_with_tag.into()))
+        .block_on(tm_client.broadcast_tx_sync(txn_with_tag))
         .c(d!())?;
 
     Ok(())
@@ -162,7 +162,7 @@ fn one_shot_abci_query(
     let path = if path.is_empty() {
         None
     } else {
-        Some(tendermint::abci::Path::from_str(path).unwrap())
+        Some(path.to_owned())
     };
 
     let query_ret = Runtime::new()

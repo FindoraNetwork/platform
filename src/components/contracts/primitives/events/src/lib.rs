@@ -1,13 +1,13 @@
 #![deny(warnings)]
 #![allow(missing_docs)]
 
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;
 
-pub use abci::{Event as AbciEvent, Pair as AbciPair};
 pub use fp_event_derive::Event;
 pub use protobuf::RepeatedField;
 pub use serde_json::to_vec;
+pub use tendermint_proto::abci::{Event as AbciEvent, EventAttribute as AbciEventAttr};
 
 pub trait Event {
     /// Generates `Event` where value types are all casted to strings.

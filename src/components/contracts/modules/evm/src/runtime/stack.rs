@@ -14,7 +14,6 @@ use fp_traits::{
     account::AccountAsset,
     evm::{BlockHashMapping, FeeCalculator},
 };
-use fp_utils::timestamp_converter;
 use std::{collections::btree_set::BTreeSet, marker::PhantomData, mem};
 use storage::state::State;
 use tracing::{debug, error, info};
@@ -227,7 +226,7 @@ impl<'context, 'vicinity, 'config, C: Config> Backend
 
     fn block_timestamp(&self) -> U256 {
         let block_timestamp = self.ctx.header.time.clone().unwrap_or_default();
-        U256::from(timestamp_converter(block_timestamp))
+        U256::from(block_timestamp.seconds)
     }
 
     fn block_difficulty(&self) -> U256 {

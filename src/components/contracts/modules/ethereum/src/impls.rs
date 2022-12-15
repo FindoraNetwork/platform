@@ -20,8 +20,8 @@ use fp_types::{
     actions::evm as EvmAction,
     crypto::{secp256k1_ecdsa_recover, HA256},
 };
-use fp_utils::{proposer_converter, timestamp_converter};
 use tracing::{debug, info};
+use fp_utils::proposer_converter;
 use ruc::*;
 use sha3::{Digest, Keccak256};
 
@@ -112,7 +112,7 @@ impl<C: Config> App<C> {
         let ommers = Vec::<ethereum::Header>::new();
         let receipts_root =
             ethereum::util::ordered_trie_root(receipts.iter().map(rlp::encode));
-        let block_timestamp = ctx.header.time.clone().unwrap_or_default();
+        let block_timestamp = ctx.header.time.clone().unwrap_or_default().seconds as u64;
 
         let mut state_root = H256::default();
         let root_hash = ctx.state.read().root_hash();
@@ -138,7 +138,7 @@ impl<C: Config> App<C> {
                 .clone()
                 .into_iter()
                 .fold(U256::zero(), |acc, r| acc + r.used_gas),
-            timestamp: timestamp_converter(block_timestamp),
+            timestamp: block_timestamp,
             extra_data: Vec::new(),
             mix_hash: H256::default(),
             nonce: H64::default(),

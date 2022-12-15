@@ -28,7 +28,6 @@ lazy_static = "1.4.0"
 futures = { version = "0.3.16", features = ["thread-pool"] }
 hex = "0.4.2"
 ctrlc = { version = "3.0", features = ["termination"] }
-protobuf = "2.16"
 toml = "0.5.8"
 
 clap = "2.33.3"
@@ -43,7 +42,12 @@ nix = "0.22.1"
 
 zei = { git = "https://github.com/FindoraNetwork/zei", branch = "stable-main" }
 ruc = { version = "1.0.5", default-features = false, features = ["compact"] }
-abci = { git = "https://github.com/FindoraNetwork/tendermint-abci", tag = "0.7.4" }
+
+tendermint = "0.28"
+abci = { package = "tendermint-abci", version = "0.28" }
+tendermint-proto = "0.28"
+tendermint-rpc = "0.28"
+
 config = { path = "../config"}
 ledger = { path = "../../ledger" }
 cryptohash = { path = "../../libs/cryptohash" }

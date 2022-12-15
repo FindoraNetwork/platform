@@ -163,7 +163,7 @@ checkpoint_cleanup:
 lint:
 	cargo clippy --workspace
 	cargo clippy --workspace --no-default-features
-	cargo clippy --workspace --tests
+	cargo check --workspace --tests
 
 update:
 	git submodule update --recursive --init

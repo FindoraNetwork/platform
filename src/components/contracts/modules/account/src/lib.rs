@@ -9,7 +9,6 @@ mod impls;
 #[cfg(test)]
 mod tests;
 
-use abci::{RequestQuery, ResponseQuery};
 use fp_core::{context::Context, module::AppModule};
 use fp_traits::{
     account::{AccountAsset, FeeCalculator},
@@ -17,6 +16,7 @@ use fp_traits::{
 };
 use fp_types::crypto::Address;
 use std::marker::PhantomData;
+use tendermint_proto::abci::{RequestQuery, ResponseQuery};
 
 pub const MODULE_NAME: &str = "account";
 
@@ -72,7 +72,7 @@ impl<C: Config> AppModule for App<C> {
         }
         match path[0] {
             "info" => {
-                let data = serde_json::from_slice::<Address>(req.data.as_slice());
+                let data = serde_json::from_slice::<Address>(&req.data[..]);
                 if data.is_err() {
                     resp.code = 1;
                     resp.log = String::from("account: query nonce with invalid params");
@@ -86,7 +86,7 @@ impl<C: Config> AppModule for App<C> {
                     EthereumDecimalsMapping::convert_to_native_token(info.reserved);
 
                 if let Ok(value) = serde_json::to_vec(&info) {
-                    resp.value = value;
+                    resp.value = value.into();
                 } else {
                     resp.code = 1;
                     resp.log = String::from("account: failed to serialize account data");
@@ -95,7 +95,7 @@ impl<C: Config> AppModule for App<C> {
                 resp
             }
             "nonce" => {
-                let data = serde_json::from_slice::<Address>(req.data.as_slice());
+                let data = serde_json::from_slice::<Address>(&req.data[..]);
                 if data.is_err() {
                     resp.code = 1;
                     resp.log = String::from("account: query nonce with invalid params");
@@ -104,7 +104,7 @@ impl<C: Config> AppModule for App<C> {
                 let nonce = Self::nonce(&ctx, &data.unwrap());
 
                 if let Ok(value) = serde_json::to_vec(&nonce) {
-                    resp.value = value;
+                    resp.value = value.into();
                 } else {
                     resp.code = 1;
                     resp.log = String::from("account: failed to serialize account data");
