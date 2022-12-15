@@ -140,8 +140,8 @@ if [[ "" == ${is_dbench} ]]; then
 else
 
     fn ddev create -i 1 -f || die "$0 Line $LINENO"
-    log "Waiting RPC-server, sleep 10 seconds"
-    sleep 10
+    log "Waiting RPC-server, sleep 12 seconds"
+    sleep 12
 
     phrase_path=/tmp/fn_dbench_root.phrase
     fn ddev \

@@ -10,6 +10,10 @@
 
 - [**Wiki**](https://wiki.findora.org/)
 - [**Change log**](CHANGELOG.md)
+- [**Benchmarks**](docs/benchmarks)
+  - [**EVM Benchmarks**](docs/benchmarks/evm.md)
+  - [**UTXO Benchmarks**](docs/benchmarks/utxo.md)
+  - ...
 
 ### Licensing
 
