@@ -107,10 +107,8 @@ tendermint_goleveldb:
 	bash tools/download_tendermint.sh 'tools/tendermint'
 	cd tools/tendermint && $(MAKE) install
 
-test:
-	- find src -name "checkpoint.toml" | xargs rm -f
+test: checkpoint_cleanup
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
-	- find src -name "checkpoint.toml" | xargs rm -f
 
 coverage:
 	cargo tarpaulin --timeout=900 --branch --workspace --release \
@@ -126,25 +124,41 @@ staking_cfg_debug:
 bench:
 	cargo bench --workspace
 
-bench_10k: build_bench_release
-	bash tools/benchutils/bench.sh 10000
+bench_50k: checkpoint_cleanup build_bench_release
+	bash tools/benchutils/bench.sh 50000
 
-bench_100k: build_bench_release
+bench_100k: checkpoint_cleanup build_bench_release
 	bash tools/benchutils/bench.sh 100000
 
-dbench_10k: build_bench_release
+bench_200k: checkpoint_cleanup build_bench_release
+	bash tools/benchutils/bench.sh 200000
+
+dbench_50k: checkpoint_cleanup build_bench_release
 ifeq ($(FN_DDEV_HOSTS),)
 	@ echo '$$FN_DDEV_HOSTS not set!'
 	@ exit 1
 endif
-	bash tools/benchutils/bench.sh 10000 y
+	bash tools/benchutils/bench.sh 50000 y
 
-dbench_100k: build_bench_release
+dbench_100k: checkpoint_cleanup build_bench_release
 ifeq ($(FN_DDEV_HOSTS),)
 	@ echo '$$FN_DDEV_HOSTS not set!'
 	@ exit 1
 endif
 	bash tools/benchutils/bench.sh 100000 y
+
+dbench_200k: checkpoint_cleanup build_bench_release
+ifeq ($(FN_DDEV_HOSTS),)
+	@ echo '$$FN_DDEV_HOSTS not set!'
+	@ exit 1
+endif
+	bash tools/benchutils/bench.sh 200000 y
+
+checkpoint_cleanup:
+	- find src -name "checkpoint.toml" | xargs rm -f
+	- find src -name "checkpoint.json" | xargs rm -f
+	- find tools -name "checkpoint.toml" | xargs rm -f
+	- find tools -name "checkpoint.json" | xargs rm -f
 
 lint:
 	cargo clippy --workspace
