@@ -24,7 +24,19 @@ addr_file="/tmp/gsc_bench.addr.list"
 phrase_file="/tmp/gsc_bench.phrase.list"
 target_file="/tmp/gsc_target_list.json"
 
-root_phrase="$(cat static/root.phrase)"
+ROOT_PHRASE="$(cat static/root.phrase)"
+
+which gsc >/dev/null 2>&1
+if [[ 0 -ne $? ]]; then
+    git clone git@github.com:FindoraNetwork/gsc.git /tmp/__gsc__
+    cargo install --path /tmp/__gsc__ --bin gsc
+    export PATH=~/.cargo/bin:$PATH
+fi
+
+which gsc >/dev/null 2>&1
+if [[ 0 -ne $? ]]; then
+    die "$0 Line $LINENO: gsc binary not found!"
+fi
 
 function check_cnt() {
     x=$[$cnt + 1]
@@ -80,7 +92,7 @@ function prepare_run() {
         for ((k=0;k<${unit};k++)); do
             local addr_idx=$[$k + $i * ${unit}]
             local addr=${target_addr_set[${addr_idx}]}
-            printf "[\"${root_phrase}\",\"${addr}\",\"${amount}\"]," >> ${target_file}${i}
+            printf "[\"${ROOT_PHRASE}\",\"${addr}\",\"${amount}\"]," >> ${target_file}${i}
         done
         perl -pi -e 's/,$//' ${target_file}${i} || die "$0 Line $LINENO"
         printf "]" >> ${target_file}${i}
@@ -123,16 +135,16 @@ if [[ "" == ${is_dbench} ]]; then
     fn setup -O $phrase_path || exit 1
     fn setup -S "http://localhost" || exit 1 # useless, but must set a value
 
-    itv=$(fn dev | jq '.meta.block_interval_in_seconds')
+    block_itv=$(fn dev | jq '.meta.block_interval_in_seconds')
 
     fn dev init || exit 1
     for i in $(seq 0 6); do
-        sleep $itv
+        sleep $block_itv
     done
 
     fn contract-deposit --addr $(cat static/root.addr) --amount 1000000000000000 || exit 1
-    sleep $itv
-    sleep $itv # 2 blocks
+    sleep $block_itv
+    sleep $block_itv # 2 blocks
 
     web3_port=$(fn dev | jq '.meta.validator_or_full_nodes."1"."ports"."web3_http_service"')
     export SERV="http://localhost:${web3_port}"
@@ -150,16 +162,16 @@ else
     fn setup -O $phrase_path || exit 1
     fn setup -S "http://localhost" || exit 1 # useless, but must set a value
 
-    itv=$(fn ddev | jq '.meta.block_interval_in_seconds')
+    block_itv=$(fn ddev | jq '.meta.block_interval_in_seconds')
 
     fn ddev init || exit 1
     for i in $(seq 0 6); do
-        sleep $itv
+        sleep $block_itv
     done
 
     fn contract-deposit --addr $(cat static/root.addr) --amount 1000000000000000 || exit 1
-    sleep $itv
-    sleep $itv # 2 blocks
+    sleep $block_itv
+    sleep $block_itv # 2 blocks
 
     serv=""
     # 3 nodes will be created at least
@@ -176,7 +188,11 @@ log "RPC Server endpoints: ${SERV}"
 gen_accounts
 prepare_run
 
-log "\n\nTransfering native token...\n\n"
+log "Deploying ERC20 contract ..."
+contract_addr=$(gsc cli deploy-erc20 -x $SERV -O "${ROOT_PHRASE}")
+for i in {0..3}; do
+    sleep $block_itv
+done
 
 first_serv=$(echo $SERV | sed 's/,.*//')
 
@@ -187,48 +203,70 @@ curl_post() {
     curl_post_ret=$(curl $first_serv -H 'Content-Type: application/json' -X POST --data "{\"jsonrpc\":\"2.0\",\"method\":\"${method}\",\"params\":[${params}],\"id\":1}" 2>/dev/null)
 }
 
-curl_post eth_blockNumber
-echo $curl_post_ret
-BlockNumber=$(echo $curl_post_ret | jq -c ".result"| sed 's/"//g' | sed 's/0x//')
-BlockNumber=$(printf "%d" "0x${BlockNumber}" || die "$0 Line $LINENO ${BlockNumber}")
-log "BlockNumber before sending: ${BlockNumber}"
+function start_cnter() {
+    curl_post eth_blockNumber
+    # echo $curl_post_ret
+    BlockNumber=$(echo $curl_post_ret | jq -c ".result"| sed 's/"//g' | sed 's/0x//')
+    BlockNumber=$(printf "%d" "0x${BlockNumber}" || die "$0 Line $LINENO ${BlockNumber}")
+    log "BlockNumber before sending: ${BlockNumber}"
+}
 
+function get_results() {
+    let cnter=6
+    while :; do
+        curl_post eth_getBlockTransactionCountByNumber \"latest\"
+        n=$(echo $curl_post_ret | jq -c ".result"| sed 's/"//g' | sed 's/0x//')
+        n=$(printf "%d" "0x${n}")
+        if [[ 0 -ne $? ]]; then
+            break
+        elif [[ 0 -eq $n ]]; then
+            if [[ 0 == $cnter ]]; then
+                break;
+            else
+                let cnter-=1;
+                sleep $block_itv
+            fi
+        else
+            let cnter=6
+            sleep $block_itv
+        fi
+    done
+
+    ts=$(cat /tmp/gsc_cli_batch.start.timestamp)
+    ts=$[2 + $ts]
+    log "Timestamp before sending: ${ts}"
+    ts2=$[$(date +%s) - 2]
+    log "Timestamp after sending: ${ts2}"
+
+    curl_post eth_blockNumber
+    BlockNumber2=$(echo $curl_post_ret | jq -c ".result"| sed 's/"//g' | sed 's/0x//')
+    BlockNumber2=$(printf "%d" "0x${BlockNumber2}")
+    log "BlockNumber after sending: ${BlockNumber2}"
+
+    let tx_total=0
+    for bn in $(seq ${BlockNumber} ${BlockNumber2}); do
+        curl_post eth_getBlockTransactionCountByNumber \"${bn}\"
+        n=$(echo $curl_post_ret | jq -c ".result"| sed 's/"//g' | sed 's/0x//')
+        n=$(printf "%d" "0x${n}")
+        let tx_total+=${n}
+    done
+
+    log "Total number of on-chain transactions: ${tx_total}"
+    log "TPS(transaction per second): $[${tx_total} / (${ts2} - ${ts})]"
+}
+
+echo
+log "Transfering native token ..."
+echo
+
+start_cnter
 run
+get_results
 
-sleep 2
+echo
+log "Transfering erc20 token ..."
+echo
 
-let cnter=4;
-while :; do
-    curl_post eth_getBlockTransactionCountByNumber \"latest\"
-    n=$(echo $curl_post_ret | jq -c ".result"| sed 's/"//g' | sed 's/0x//')
-    n=$(printf "%d" "0x${n}")
-    if [[ 0 -ne $? ]]; then
-        break
-    elif [[ 0 -eq $n ]]; then
-        if [[ 0 == $cnter ]]; then break; else let cnter-=1; fi
-    else
-        sleep 0.5
-    fi
-done
-
-ts=$(cat /tmp/gsc_cli_batch.start.timestamp)
-ts=$[2 + $ts]
-log "Timestamp before sending: ${ts}"
-ts2=$[$(date +%s) - 2]
-log "Timestamp after sending: ${ts2}"
-
-curl_post eth_blockNumber
-BlockNumber2=$(echo $curl_post_ret | jq -c ".result"| sed 's/"//g' | sed 's/0x//')
-BlockNumber2=$(printf "%d" "0x${BlockNumber2}")
-log "BlockNumber after sending: ${BlockNumber2}"
-
-let tx_total=0
-for bn in $(seq ${BlockNumber} ${BlockNumber2}); do
-    curl_post eth_getBlockTransactionCountByNumber \"${bn}\"
-    n=$(echo $curl_post_ret | jq -c ".result"| sed 's/"//g' | sed 's/0x//')
-    n=$(printf "%d" "0x${n}")
-    let tx_total+=${n}
-done
-
-log "Total number of on-chain transactions: ${tx_total}"
-log "TPS(transaction per second): $[${tx_total} / (${ts2} - ${ts})]"
+start_cnter
+run $contract_addr
+get_results
