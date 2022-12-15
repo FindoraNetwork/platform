@@ -5,6 +5,8 @@
 all: build_release_goleveldb
 
 export CARGO_NET_GIT_FETCH_WITH_CLI = true
+export STATIC_CHAIN_DEV_BASE_DIR_SUFFIX = findora
+
 export PROTOC = $(shell which protoc)
 
 export STAKING_INITIAL_VALIDATOR_CONFIG = $(shell pwd)/src/ledger/src/staking/init/staking_config.json
@@ -88,6 +90,10 @@ build_release_web3: tendermint_cleveldb
 	cargo build --features="web3_service debug_env" --release --bins -p abciapp -p finutils
 	$(call pack,release)
 
+build_bench_release: tendermint_goleveldb
+	cargo build --features="debug_env benchmark" --release --bins -p abciapp -p finutils
+	$(call pack,release)
+
 tendermint_cleveldb:
 	- rm -f $(shell which tendermint)
 	bash tools/download_tendermint.sh 'tools/tendermint'
@@ -119,6 +125,26 @@ staking_cfg_debug:
 
 bench:
 	cargo bench --workspace
+
+bench_10k: build_bench_release
+	bash tools/benchutils/bench.sh 10000
+
+bench_100k: build_bench_release
+	bash tools/benchutils/bench.sh 100000
+
+dbench_10k: build_bench_release
+ifeq ($(FN_DDEV_HOSTS),)
+	@ echo '$$FN_DDEV_HOSTS not set!'
+	@ exit 1
+endif
+	bash tools/benchutils/bench.sh 10000 y
+
+dbench_100k: build_bench_release
+ifeq ($(FN_DDEV_HOSTS),)
+	@ echo '$$FN_DDEV_HOSTS not set!'
+	@ exit 1
+endif
+	bash tools/benchutils/bench.sh 100000 y
 
 lint:
 	cargo clippy --workspace

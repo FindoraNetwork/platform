@@ -73,6 +73,7 @@ impl<C: Config> ActionRunner<C> {
         let source_account = App::<C>::account_basic(ctx, &source);
 
         if let Some(nonce) = nonce {
+            #[cfg(not(feature = "benchmark"))]
             ensure!(
                 source_account.nonce == nonce,
                 format!(
@@ -80,6 +81,7 @@ impl<C: Config> ActionRunner<C> {
                     source_account.nonce, nonce
                 )
             );
+            let _ = nonce;
         }
 
         if !config.estimate {

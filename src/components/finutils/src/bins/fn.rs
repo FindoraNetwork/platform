@@ -390,12 +390,13 @@ fn run() -> Result<()> {
     } else if let Some(m) = matches.subcommand_matches("contract-deposit") {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");
-        transfer_to_account(amount.parse::<u64>().c(d!())?, address)?
+        transfer_to_account(amount.parse::<u64>().c(d!())?, address).c(d!())?
     } else if let Some(m) = matches.subcommand_matches("contract-withdraw") {
         let amount = m.value_of("amount").c(d!())?;
         let address = m.value_of("addr");
         let eth_key = m.value_of("eth-key");
-        transfer_from_account(amount.parse::<u64>().c(d!())?, address, eth_key)?
+        transfer_from_account(amount.parse::<u64>().c(d!())?, address, eth_key)
+            .c(d!())?
     } else if let Some(m) = matches.subcommand_matches("replace_staker") {
         let target = m
             .value_of("target")
@@ -780,7 +781,7 @@ fn tip_fail(e: impl fmt::Display) {
 }
 
 fn tip_success() {
-    println!(
+    eprintln!(
         "\x1b[35;01mNote\x1b[01m:\n\tYour operations has been executed without local error,\n\tbut the final result may need an asynchronous query.\x1b[00m"
     );
 }

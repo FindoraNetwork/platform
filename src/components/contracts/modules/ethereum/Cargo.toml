@@ -44,3 +44,4 @@ fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0"
 default = []
 debug_env = []
 web3_service = ["enterprise-web3"]
+benchmark = []

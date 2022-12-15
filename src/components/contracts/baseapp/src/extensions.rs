@@ -27,24 +27,29 @@ impl SignedExtension for CheckNonce {
 
     fn validate(&self, ctx: &Context, who: &Self::AccountId) -> Result<()> {
         let nonce = module_account::App::<BaseApp>::nonce(ctx, who);
-        if self.0 < nonce {
-            Err(eg!(format!(
-                "InvalidNonce, expected: {}, actual: {}",
-                nonce, self.0
-            )))
-        } else {
-            Ok(())
-        }
-    }
 
-    fn pre_execute(self, ctx: &Context, who: &Self::AccountId) -> Result<Self::Pre> {
-        let nonce = module_account::App::<BaseApp>::nonce(ctx, who);
-        if self.0 != nonce {
+        if self.0 < nonce {
+            #[cfg(not(feature = "benchmark"))]
             return Err(eg!(format!(
                 "InvalidNonce, expected: {}, actual: {}",
                 nonce, self.0
             )));
         }
+
+        Ok(())
+    }
+
+    fn pre_execute(self, ctx: &Context, who: &Self::AccountId) -> Result<Self::Pre> {
+        let nonce = module_account::App::<BaseApp>::nonce(ctx, who);
+
+        if self.0 != nonce {
+            #[cfg(not(feature = "benchmark"))]
+            return Err(eg!(format!(
+                "InvalidNonce, expected: {}, actual: {}",
+                nonce, self.0
+            )));
+        }
+
         module_account::App::<BaseApp>::inc_nonce(ctx, who)?;
         Ok(())
     }
