@@ -89,8 +89,8 @@ function prepare_run() {
 
     dbg "Length of 'target_addr_set': ${#target_addr_set[@]}"
 
-    local unit=$[${upper} / 4]
-    for i in {0..3}; do
+    local unit=$[${upper} / 32]
+    for i in {0..31}; do
         printf "[" > ${target_file}${i} || die "$0 Line $LINENO"
         for ((k=0;k<${unit};k++)); do
             local addr_idx=$[$k + $i * ${unit}]
@@ -107,8 +107,8 @@ function run() {
 
     dbg "Start sending ..."
 
-    # 3 async tasks
-    for i in {1..3}; do
+    # 31 async tasks
+    for i in {1..31}; do
         if [[ "" == ${contract} ]]; then
             gsc cli transfer -x "${SERV}" -b -D -f ${target_file}${i} 2>/dev/null 1>&2 &
         else
@@ -269,6 +269,7 @@ run
 get_results
 
 echo
+sleep 10 # avoid data tail
 log "Transfering erc20 token ..."
 echo
 

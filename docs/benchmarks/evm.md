@@ -102,7 +102,7 @@ TODO
 >
 > Typography: 6 nodes(5 full nodes, 1 seed node) running on 3 different machines
 
-`make dbench_100k`:
+`make dbench_50k`:
 
 ```
 [##  Log  ##] Deploying ERC20 contract ...
@@ -111,21 +111,73 @@ TODO
 
 [##  Log  ##] BlockNumber before sending: 24
 [** Debug **] Start sending ...
-[##  Log  ##] Timestamp before sending: 1671098291
-[##  Log  ##] Timestamp after sending: 1671098576
-[##  Log  ##] BlockNumber after sending: 258
-[##  Log  ##] Total number of on-chain transactions: 100000
-[##  Log  ##] TPS(transaction per second): 350
+[##  Log  ##] Timestamp before sending: 1671198037
+[##  Log  ##] Timestamp after sending: 1671198078
+[##  Log  ##] BlockNumber after sending: 56
+[##  Log  ##] Total number of on-chain transactions: 49984
+[##  Log  ##] TPS(transaction per second): 1219
 
 [##  Log  ##] Transfering erc20 token ...
 
-[##  Log  ##] BlockNumber before sending: 260
+[##  Log  ##] BlockNumber before sending: 61
 [** Debug **] Start sending ...
-[##  Log  ##] Timestamp before sending: 1671098638
-[##  Log  ##] Timestamp after sending: 1671098928
-[##  Log  ##] BlockNumber after sending: 501
+[##  Log  ##] Timestamp before sending: 1671198097
+[##  Log  ##] Timestamp after sending: 1671198139
+[##  Log  ##] BlockNumber after sending: 94
+[##  Log  ##] Total number of on-chain transactions: 49984
+[##  Log  ##] TPS(transaction per second): 1190
+```
+
+`make dbench_100k`:
+
+```
+[##  Log  ##] Deploying ERC20 contract ...
+
+[##  Log  ##] Transfering native token ...
+
+[##  Log  ##] BlockNumber before sending: 26
+[** Debug **] Start sending ...
+[##  Log  ##] Timestamp before sending: 1671198325
+[##  Log  ##] Timestamp after sending: 1671198405
+[##  Log  ##] BlockNumber after sending: 89
 [##  Log  ##] Total number of on-chain transactions: 100000
-[##  Log  ##] TPS(transaction per second): 344
+[##  Log  ##] TPS(transaction per second): 1250
+
+[##  Log  ##] Transfering erc20 token ...
+
+[##  Log  ##] BlockNumber before sending: 94
+[** Debug **] Start sending ...
+[##  Log  ##] Timestamp before sending: 1671198427
+[##  Log  ##] Timestamp after sending: 1671198507
+[##  Log  ##] BlockNumber after sending: 154
+[##  Log  ##] Total number of on-chain transactions: 100000
+[##  Log  ##] TPS(transaction per second): 1250
+```
+
+`make dbench_200k`:
+
+```
+[##  Log  ##] Deploying ERC20 contract ...
+
+[##  Log  ##] Transfering native token ...
+
+[##  Log  ##] BlockNumber before sending: 29
+[** Debug **] Start sending ...
+[##  Log  ##] Timestamp before sending: 1671198783
+[##  Log  ##] Timestamp after sending: 1671198940
+[##  Log  ##] BlockNumber after sending: 148
+[##  Log  ##] Total number of on-chain transactions: 200000
+[##  Log  ##] TPS(transaction per second): 1273
+
+[##  Log  ##] Transfering erc20 token ...
+
+[##  Log  ##] BlockNumber before sending: 154
+[** Debug **] Start sending ...
+[##  Log  ##] Timestamp before sending: 1671198970
+[##  Log  ##] Timestamp after sending: 1671199122
+[##  Log  ##] BlockNumber after sending: 269
+[##  Log  ##] Total number of on-chain transactions: 197802
+[##  Log  ##] TPS(transaction per second): 1301
 ```
 
 #### Test results on AWS virtual machines
