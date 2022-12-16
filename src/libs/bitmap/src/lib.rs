@@ -566,7 +566,7 @@ fn count_byte(mask: usize) -> u8 {
     let mut result = 0;
 
     for i in 0..8 {
-        result += (mask & (1 << i) != 0) as u8;
+        result += u8::from(mask & (1 << i) != 0);
     }
 
     result

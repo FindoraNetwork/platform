@@ -63,7 +63,7 @@ pub fn recover_signer(transaction: &Transaction) -> Option<H160> {
     }
     let pubkey = fp_types::crypto::secp256k1_ecdsa_recover(&sig, &msg).ok()?;
     Some(H160::from(H256::from_slice(
-        Keccak256::digest(&pubkey).as_slice(),
+        Keccak256::digest(pubkey).as_slice(),
     )))
 }
 
@@ -139,7 +139,7 @@ mod test {
         }
 
         let raw_tx = String::from("ZXZtOnsiRXRoZXJldW0iOnsiVHJhbnNhY3QiOnsiRUlQMTU1OSI6eyJjaGFpbl9pZCI6MjE1Miwibm9uY2UiOiIweDEiLCJtYXhfcHJpb3JpdHlfZmVlX3Blcl9nYXMiOiIweDI3MTAiLCJtYXhfZmVlX3Blcl9nYXMiOiIweDI3MTAiLCJnYXNfbGltaXQiOiIweDI3MTAiLCJhY3Rpb24iOnsiQ2FsbCI6IjB4MmFkMzI4NDZjNmRkMmZmZDNlZGFkYmU1MWNkNWFlMDRhYTVlNTc1ZSJ9LCJ2YWx1ZSI6IjB4MjcxMCIsImlucHV0IjpbXSwiYWNjZXNzX2xpc3QiOltdLCJvZGRfeV9wYXJpdHkiOmZhbHNlLCJyIjoiMHhmOGFlZjdmODA1M2Q4OWZlZTM5NTBjNGQ3MDIwODBiZjNhODA3MmJlZDVkODRhM2FmMTlhMzYwMDgxYjYzNmEyIiwicyI6IjB4Mjk2Mjk5YThmMjQzMGI4NmZkM2ViOTc2ZWFiYzczMGFjMWNmYmJiZTM2ZWI2OWVhZTMzOGNmZjMzYzRhOThjMSJ9fX19");
-        let tx_bytes = base64::decode_config(&raw_tx, base64::URL_SAFE).unwrap();
+        let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE).unwrap();
         let evm_tx = EvmRawTxWrapper::unwrap(&tx_bytes).unwrap();
         let action: Action = serde_json::from_slice(evm_tx).unwrap();
         if let Action::Ethereum(EthAction::Transact(tx)) = action {
