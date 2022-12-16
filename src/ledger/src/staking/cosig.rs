@@ -263,7 +263,7 @@ mod test {
         vd.cosig_rule = pnk!(CoSigRule::new([75, 100]));
 
         assert!(CoSigRule::new([200, 100]).is_err());
-        assert!(CoSigRule::new([200, 1 + MAX_TOTAL_POWER as u64]).is_err());
+        assert!(CoSigRule::new([200, 1 + MAX_TOTAL_POWER]).is_err());
 
         let mut data = CoSigOp::create(Data::default(), no_replay_token());
         pnk!(data.batch_sign(&kps.iter().skip(10).collect::<Vec<_>>()));

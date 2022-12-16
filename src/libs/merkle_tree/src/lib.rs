@@ -2875,7 +2875,7 @@ mod tests {
         };
 
         for i in 0..transactions {
-            test_append(&mut tree, i as u64, false);
+            test_append(&mut tree, i, false);
 
             if i == 1
                 || i == 2
