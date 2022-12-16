@@ -374,80 +374,66 @@ impl TxnEffect {
             return Err(eg!());
         }
 
+        println!("{:?}", trn);
+
+        println!("1");
         // Refuse any transfer with policies for now
-        if trn
+        let c1 = trn
             .body
             .policies
             .inputs_tracing_policies
             .iter()
-            .any(|x| !x.is_empty())
-        {
-            return Err(eg!());
-        }
-        if trn
+            .any(|x| !x.is_empty());
+        let c2 = trn
             .body
             .policies
             .outputs_tracing_policies
             .iter()
-            .any(|x| !x.is_empty())
-        {
-            return Err(eg!());
-        }
-        if trn
+            .any(|x| !x.is_empty());
+        let c3 = trn
             .body
             .policies
             .inputs_sig_commitments
             .iter()
-            .any(|x| !x.is_none())
-        {
-            return Err(eg!());
-        }
-        if trn
+            .any(|x| !x.is_none());
+        let c4 = trn
             .body
             .policies
             .outputs_sig_commitments
             .iter()
-            .any(|x| !x.is_none())
-        {
-            return Err(eg!());
-        }
-        if trn
+            .any(|x| !x.is_none());
+        let c5 = trn
             .body
             .transfer
             .asset_tracing_memos
             .iter()
-            .any(|x| !x.is_empty())
-        {
-            return Err(eg!());
-        }
-        if !trn
+            .any(|x| !x.is_empty());
+        let c6 = trn
             .body
             .transfer
             .proofs
             .asset_tracing_proof
             .inputs_identity_proofs
-            .is_empty()
-        {
-            return Err(eg!());
-        }
-        if !trn
+            .iter()
+            .any(|x| !x.is_empty());
+        let c7 = trn
             .body
             .transfer
             .proofs
             .asset_tracing_proof
             .outputs_identity_proofs
-            .is_empty()
-        {
-            return Err(eg!());
-        }
-        if !trn
+            .iter()
+            .any(|x| !x.is_empty());
+        let c8 = !trn
             .body
             .transfer
             .proofs
             .asset_tracing_proof
             .asset_type_and_amount_proofs
-            .is_empty()
-        {
+            .is_empty();
+
+        println!("{} {} {} {} {} {} {} {}", c1, c2, c3, c4, c5, c6, c7, c8);
+        if c1 || c2 || c3 || c4 || c5 || c6 || c7 || c8 {
             return Err(eg!());
         }
 
