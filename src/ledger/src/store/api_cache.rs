@@ -452,7 +452,7 @@ pub fn check_lost_data(ledger: &mut LedgerState) -> Result<()> {
                 .as_mut()
                 .unwrap()
                 .last_sid
-                .insert("last_txo_sid".to_string(), index as u64);
+                .insert("last_txo_sid".to_string(), index);
         }
     }
     Ok(())

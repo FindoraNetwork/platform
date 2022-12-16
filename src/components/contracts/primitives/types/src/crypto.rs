@@ -411,7 +411,7 @@ pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> ruc::Result<[u
         .map_err(|_| eg!("Ecdsa signature verify error: bad RS"))?;
     let v =
         libsecp256k1::RecoveryId::parse(
-            if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8,
+            if sig[64] > 26 { sig[64] - 27 } else { sig[64] }
         )
         .map_err(|_| eg!("Ecdsa signature verify error: bad V"))?;
     let pubkey = libsecp256k1::recover(&libsecp256k1::Message::parse(msg), &rs, &v)

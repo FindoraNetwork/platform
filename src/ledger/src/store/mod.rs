@@ -1130,7 +1130,7 @@ impl LedgerStatus {
         );
         if seq_id > self.block_commit_count {
             return Err(eg!(("Transaction seq_id ahead of block_count")));
-        } else if seq_id + (TRANSACTION_WINDOW_WIDTH as u64) < self.block_commit_count {
+        } else if seq_id + TRANSACTION_WINDOW_WIDTH < self.block_commit_count {
             return Err(eg!(("Transaction seq_id too far behind block_count")));
         } else {
             // Check to see that this nrpt has not been seen before
