@@ -227,10 +227,8 @@ impl SubscriptionResult {
         for (receipt_index, receipt) in receipts.into_iter().enumerate() {
             let transaction_hash: Option<H256> = if !receipt.logs.is_empty() {
                 Some(H256::from_slice(
-                    Keccak256::digest(&rlp::encode(
-                        &block.transactions[receipt_index as usize],
-                    ))
-                    .as_slice(),
+                    Keccak256::digest(&rlp::encode(&block.transactions[receipt_index]))
+                        .as_slice(),
                 ))
             } else {
                 None

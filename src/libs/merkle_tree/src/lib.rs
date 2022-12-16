@@ -1952,7 +1952,7 @@ impl AppendOnlyMerkle {
                     self.check_lower(block, lower_list, lower_index).c(d!())?;
                 }
 
-                leaf_count += block.valid_leaves() as u64;
+                leaf_count += block.valid_leaves();
             }
 
             if leaf_count != leaves_at_this_level {
@@ -2875,7 +2875,7 @@ mod tests {
         };
 
         for i in 0..transactions {
-            test_append(&mut tree, i as u64, false);
+            test_append(&mut tree, i, false);
 
             if i == 1
                 || i == 2

@@ -64,7 +64,7 @@ fn check_block_rewards_rate() -> Result<()> {
 
         {
             let rate = ledger.staking_get_block_rewards_rate();
-            let rate = [rate[0] as u128, rate[1] as u128];
+            let rate = [rate[0], rate[1]];
             // max value: 105%
             assert!(rate[0] * 100 <= rate[1] * 105);
             // min value: 2%
