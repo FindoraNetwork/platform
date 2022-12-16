@@ -374,9 +374,6 @@ impl TxnEffect {
             return Err(eg!());
         }
 
-        println!("{:?}", trn);
-
-        println!("1");
         // Refuse any transfer with policies for now
         let c1 = trn
             .body
@@ -431,8 +428,6 @@ impl TxnEffect {
             .asset_tracing_proof
             .asset_type_and_amount_proofs
             .is_empty();
-
-        println!("{} {} {} {} {} {} {} {}", c1, c2, c3, c4, c5, c6, c7, c8);
         if c1 || c2 || c3 || c4 || c5 || c6 || c7 || c8 {
             return Err(eg!());
         }
