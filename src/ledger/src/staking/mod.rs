@@ -20,16 +20,12 @@ pub mod init;
 pub mod ops;
 
 use {
-    crate::{
-        data_model::{
-            ConsensusRng, Operation, Transaction, TransferAsset, TxoRef, FRA_DECIMALS,
-        },
-        SNAPSHOT_ENTRIES_DIR,
+    crate::data_model::{
+        ConsensusRng, Operation, Transaction, TransferAsset, TxoRef, FRA_DECIMALS,
     },
     config::abci::global_cfg::CFG,
     cosig::CoSigRule,
     cryptohash::sha256::{self, Digest},
-    fbnc::{new_mapx, Mapx},
     globutils::wallet,
     indexmap::IndexMap,
     lazy_static::lazy_static,
@@ -50,6 +46,7 @@ use {
             Arc,
         },
     },
+    vsdb::Mapx,
     zei::xfr::sig::{XfrKeyPair, XfrPublicKey},
 };
 
@@ -378,7 +375,7 @@ impl Staking {
     ) -> Result<Vec<Validator>> {
         self.validator_info
             .remove(&h)
-            .map(|v| v.body.into_iter().map(|(_, v)| v).collect())
+            .map(|v| v.body.into_values().collect())
             .c(d!("not exists"))
     }
 
@@ -1499,7 +1496,7 @@ impl Staking {
         }
 
         // Update fra distribution history first.
-        self.coinbase.distribution_hist.insert(h, false);
+        self.coinbase.distribution_hist.insert(&h, &false);
 
         let mut v;
         for (k, am) in ops.data.alloc_table.into_iter() {
@@ -2393,10 +2390,7 @@ impl Default for CoinBase {
 impl CoinBase {
     fn gen() -> Self {
         CoinBase {
-            distribution_hist: new_mapx!(&format!(
-                "{}/staking/coinbase/distribution_hist",
-                SNAPSHOT_ENTRIES_DIR.as_str()
-            )),
+            distribution_hist: Mapx::new(),
             distribution_plan: BTreeMap::new(),
             balance: ops::mint_fra::MINT_AMOUNT_LIMIT,
             principal_balance: 0,

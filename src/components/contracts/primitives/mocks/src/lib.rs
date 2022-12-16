@@ -90,7 +90,7 @@ pub struct KeyPair {
 }
 
 pub fn generate_address(seed: u8) -> KeyPair {
-    let private_key = H256::from_slice(&[(seed + 1) as u8; 32]);
+    let private_key = H256::from_slice(&[(seed + 1); 32]);
     let secret_key = libsecp256k1::SecretKey::parse_slice(&private_key[..]).unwrap();
     let public_key =
         &libsecp256k1::PublicKey::from_secret_key(&secret_key).serialize()[1..65];

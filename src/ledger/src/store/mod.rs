@@ -7,8 +7,6 @@ pub mod helpers;
 mod test;
 pub mod utils;
 
-pub use fbnc;
-
 use {
     crate::{
         data_model::{
@@ -23,13 +21,12 @@ use {
             Amount, Power, Staking, TendermintAddrRef, FF_PK_EXTRA_120_0000, FF_PK_LIST,
             FRA_TOTAL_AMOUNT, KEEP_HIST,
         },
-        LSSED_VAR, SNAPSHOT_ENTRIES_DIR,
+        LSSED_VAR,
     },
     api_cache::ApiCache,
     bitmap::{BitMap, SparseMap},
     config::abci::global_cfg::CFG,
     cryptohash::sha256::Digest as BitDigest,
-    fbnc::{new_mapx, new_mapxnk, new_vecx, Mapx, Mapxnk, Vecx},
     globutils::{HashOf, ProofOf},
     merkle_tree::AppendOnlyMerkle,
     parking_lot::RwLock,
@@ -47,6 +44,7 @@ use {
         ops::{Deref, DerefMut},
         sync::Arc,
     },
+    vsdb::{Mapx, MapxOrd, Vecx},
     zei::xfr::{
         lib::XfrNotePolicies,
         sig::XfrPublicKey,
@@ -68,7 +66,7 @@ pub struct LedgerState {
     /// `merkle` representing its hash.
     pub blocks: Vecx<FinalizedBlock>,
     /// <tx id> => [<block id>, <tx idx in block>]
-    pub tx_to_block_location: Mapxnk<TxnSID, [usize; 2]>,
+    pub tx_to_block_location: MapxOrd<TxnSID, [usize; 2]>,
     /// cache used in APIs
     pub api_cache: Option<ApiCache>,
 
@@ -217,7 +215,7 @@ impl LedgerState {
             for (position, sid) in txo_sids.iter().enumerate() {
                 self.status
                     .txo_to_txn_location
-                    .insert(*sid, (txn_sid, OutputPosition(position)));
+                    .insert(sid, &(txn_sid, OutputPosition(position)));
             }
         }
         drop(txn_merkle);
@@ -230,10 +228,10 @@ impl LedgerState {
         let block_idx = self.blocks.len();
         tx_block.iter().enumerate().for_each(|(tx_idx, tx)| {
             self.tx_to_block_location
-                .insert(tx.tx_id, [block_idx, tx_idx]);
+                .insert(&tx.tx_id, &[block_idx, tx_idx]);
         });
 
-        self.blocks.push(FinalizedBlock {
+        self.blocks.push(&FinalizedBlock {
             txns: tx_block,
             merkle_id: block_merkle_id,
             state: self.status.state_commitment_data.clone().c(d!())?,
@@ -307,7 +305,6 @@ impl LedgerState {
 
     /// create a tmp ledger for testing purpose
     pub fn tmp_ledger() -> LedgerState {
-        fbnc::clear();
         let tmp_dir = globutils::fresh_tmp_dir().to_string_lossy().into_owned();
         LedgerState::new(&tmp_dir, Some("test")).unwrap()
     }
@@ -356,7 +353,7 @@ impl LedgerState {
 
         self.status
             .state_commitment_versions
-            .push(state_commitment_data.compute_commitment());
+            .push(&state_commitment_data.compute_commitment());
         self.status.state_commitment_data = Some(state_commitment_data);
         self.status.incr_block_commit_count();
     }
@@ -401,9 +398,6 @@ impl LedgerState {
         let snapshot_entries_dir = prefix.clone() + "ledger_status_subdata";
         env::set_var(LSSED_VAR, &snapshot_entries_dir);
 
-        let blocks_path = prefix.clone() + "blocks";
-        let tx_to_block_location_path = prefix.clone() + "tx_to_block_location";
-
         let mut ledger = LedgerState {
             status: LedgerStatus::new(&basedir, &snapshot_file).c(d!())?,
             block_merkle: Arc::new(RwLock::new(
@@ -412,8 +406,8 @@ impl LedgerState {
             txn_merkle: Arc::new(RwLock::new(
                 LedgerState::init_merkle_log(&txn_merkle_path).c(d!())?,
             )),
-            blocks: new_vecx!(&blocks_path),
-            tx_to_block_location: new_mapxnk!(&tx_to_block_location_path),
+            blocks: Vecx::new(),
+            tx_to_block_location: MapxOrd::new(),
             utxo_map: Arc::new(RwLock::new(
                 LedgerState::init_utxo_map(&utxo_map_path).c(d!())?,
             )),
@@ -436,7 +430,7 @@ impl LedgerState {
         omit!(ledger.utxo_map.write().compute_checksum());
         ledger.fast_invariant_check().c(d!())?;
 
-        flush_data();
+        vsdb::vsdb_flush();
 
         // api_cache::check_lost_data(&mut ledger);
 
@@ -960,13 +954,13 @@ pub struct LedgerStatus {
     /// the file path of the snapshot
     pub snapshot_file: String,
     // all currently-unspent TXOs
-    utxos: Mapxnk<TxoSID, Utxo>,
+    utxos: MapxOrd<TxoSID, Utxo>,
     nonconfidential_balances: Mapx<XfrPublicKey, u64>,
     owned_utxos: Mapx<XfrPublicKey, HashSet<TxoSID>>,
     /// all spent TXOs
-    pub spent_utxos: Mapxnk<TxoSID, Utxo>,
+    pub spent_utxos: MapxOrd<TxoSID, Utxo>,
     // Map a TXO to its output position in a transaction
-    txo_to_txn_location: Mapxnk<TxoSID, (TxnSID, OutputPosition)>,
+    txo_to_txn_location: MapxOrd<TxoSID, (TxnSID, OutputPosition)>,
     // State commitment history.
     // The BitDigest at index i is the state commitment of the ledger at block height  i + 1.
     state_commitment_versions: Vecx<HashOf<Option<StateCommitmentData>>>,
@@ -1068,33 +1062,19 @@ impl LedgerStatus {
     }
 
     fn create(snapshot_file: &str) -> Result<LedgerStatus> {
-        let utxos_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/utxo";
-        let nonconfidential_balances_path =
-            SNAPSHOT_ENTRIES_DIR.to_owned() + "/nonconfidential_balances";
-        let spent_utxos_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/spent_utxos";
-        let txo_to_txn_location_path =
-            SNAPSHOT_ENTRIES_DIR.to_owned() + "/txo_to_txn_location";
-        let issuance_amounts_path =
-            SNAPSHOT_ENTRIES_DIR.to_owned() + "/issuance_amounts";
-        let state_commitment_versions_path =
-            SNAPSHOT_ENTRIES_DIR.to_owned() + "/state_commitment_versions";
-        let asset_types_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/asset_types";
-        let issuance_num_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/issuance_num";
-        let owned_utxos_path = SNAPSHOT_ENTRIES_DIR.to_owned() + "/owned_utxos";
-
         let ledger = LedgerStatus {
             snapshot_file: snapshot_file.to_owned(),
             sliding_set: SlidingSet::<[u8; 8]>::new(TRANSACTION_WINDOW_WIDTH as usize),
-            utxos: new_mapxnk!(utxos_path.as_str()),
-            nonconfidential_balances: new_mapx!(nonconfidential_balances_path.as_str()),
-            owned_utxos: new_mapx!(owned_utxos_path.as_str()),
-            spent_utxos: new_mapxnk!(spent_utxos_path.as_str()),
-            txo_to_txn_location: new_mapxnk!(txo_to_txn_location_path.as_str()),
-            issuance_amounts: new_mapx!(issuance_amounts_path.as_str()),
-            state_commitment_versions: new_vecx!(state_commitment_versions_path.as_str()),
-            asset_types: new_mapx!(asset_types_path.as_str()),
+            utxos: MapxOrd::new(),
+            nonconfidential_balances: Mapx::new(),
+            owned_utxos: Mapx::new(),
+            spent_utxos: MapxOrd::new(),
+            txo_to_txn_location: MapxOrd::new(),
+            issuance_amounts: Mapx::new(),
+            state_commitment_versions: Vecx::new(),
+            asset_types: Mapx::new(),
             tracing_policies: map! {},
-            issuance_num: new_mapx!(issuance_num_path.as_str()),
+            issuance_num: Mapx::new(),
             next_txn: TxnSID(0),
             next_txo: TxoSID(0),
             txns_in_block_hash: None,
@@ -1130,7 +1110,7 @@ impl LedgerStatus {
         );
         if seq_id > self.block_commit_count {
             return Err(eg!(("Transaction seq_id ahead of block_count")));
-        } else if seq_id + (TRANSACTION_WINDOW_WIDTH as u64) < self.block_commit_count {
+        } else if seq_id + TRANSACTION_WINDOW_WIDTH < self.block_commit_count {
             return Err(eg!(("Transaction seq_id too far behind block_count")));
         } else {
             // Check to see that this nrpt has not been seen before
@@ -1346,7 +1326,7 @@ impl LedgerStatus {
                 {
                     *bl -= v.get_nonconfidential_balance();
                 }
-                self.spent_utxos.insert(inp_sid, v);
+                self.spent_utxos.insert(&inp_sid, &v);
             }
         }
 
@@ -1357,7 +1337,7 @@ impl LedgerStatus {
         }
 
         for (code, amount) in block.issuance_amounts.drain() {
-            let mut amt = self.issuance_amounts.entry(code).or_insert(0);
+            let mut amt = self.issuance_amounts.entry(&code).or_insert(&0);
             *amt.deref_mut() += amount;
         }
 
@@ -1381,15 +1361,15 @@ impl LedgerStatus {
                     next_txo += 1;
                     if let Some(tx_output) = txo {
                         self.owned_utxos
-                            .entry(tx_output.record.public_key)
-                            .or_insert_with(HashSet::new)
+                            .entry(&tx_output.record.public_key)
+                            .or_insert(&HashSet::new())
                             .insert(TxoSID(txo_sid));
                         let utxo = Utxo(tx_output);
                         *self
                             .nonconfidential_balances
-                            .entry(utxo.0.record.public_key)
-                            .or_insert(0) += utxo.get_nonconfidential_balance();
-                        self.utxos.insert(TxoSID(txo_sid), utxo);
+                            .entry(&utxo.0.record.public_key)
+                            .or_insert(&0) += utxo.get_nonconfidential_balance();
+                        self.utxos.insert(&TxoSID(txo_sid), &utxo);
                         txn_utxo_sids.push(TxoSID(txo_sid));
                     }
                 }
@@ -1404,12 +1384,12 @@ impl LedgerStatus {
         for (code, seq_nums) in block.new_issuance_nums.drain() {
             // One more than the greatest sequence number, or 0
             let new_max_seq_num = seq_nums.last().map(|x| x + 1).unwrap_or(0);
-            self.issuance_num.insert(code, new_max_seq_num);
+            self.issuance_num.insert(&code, &new_max_seq_num);
         }
 
         // Register new asset types
         for (code, asset_type) in block.new_asset_codes.drain() {
-            self.asset_types.insert(code, asset_type.clone());
+            self.asset_types.insert(&code, &asset_type);
         }
 
         // issuance_keys should already have been checked
@@ -1434,8 +1414,8 @@ impl LedgerStatus {
                 .for_each(|(_, txo)| {
                     *self
                         .nonconfidential_balances
-                        .entry(txo.0.record.public_key)
-                        .or_insert(0) += txo.get_nonconfidential_balance();
+                        .entry(&txo.0.record.public_key)
+                        .or_insert(&0) += txo.get_nonconfidential_balance();
                 });
         }
     }
@@ -1446,9 +1426,4 @@ impl LedgerStatus {
 pub struct LoggedBlock {
     pub block: Vec<Transaction>,
     pub state: StateCommitmentData,
-}
-
-/// Flush data to disk
-pub fn flush_data() {
-    fbnc::flush_data();
 }

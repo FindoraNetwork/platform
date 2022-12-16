@@ -15,6 +15,7 @@ use {
     config::abci::{global_cfg::CFG, ABCIConfig},
     futures::executor::ThreadPool,
     lazy_static::lazy_static,
+    ledger::vsdb,
     ruc::*,
     std::{
         env, fs,
@@ -36,6 +37,8 @@ lazy_static! {
 
 /// Starting findorad
 pub fn run() -> Result<()> {
+    vsdb::vsdb_set_base_dir(format!("{}/__vsdb__", &CFG.ledger_dir)).unwrap();
+
     let basedir = {
         fs::create_dir_all(&CFG.ledger_dir).c(d!())?;
         Some(CFG.ledger_dir.as_str())
