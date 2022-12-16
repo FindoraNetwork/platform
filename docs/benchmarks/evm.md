@@ -18,21 +18,21 @@
 
 [##  Log  ##] BlockNumber before sending: 21
 [** Debug **] Start sending ...
-[##  Log  ##] Timestamp before sending: 1671111093
-[##  Log  ##] Timestamp after sending: 1671111150
-[##  Log  ##] BlockNumber after sending: 74
+[##  Log  ##] Timestamp before sending: 1671170226
+[##  Log  ##] Timestamp after sending: 1671170266
+[##  Log  ##] BlockNumber after sending: 63
 [##  Log  ##] Total number of on-chain transactions: 50000
-[##  Log  ##] TPS(transaction per second): 877
+[##  Log  ##] TPS(transaction per second): 1250
 
 [##  Log  ##] Transfering erc20 token ...
 
-[##  Log  ##] BlockNumber before sending: 75
+[##  Log  ##] BlockNumber before sending: 64
 [** Debug **] Start sending ...
-[##  Log  ##] Timestamp before sending: 1671111182
-[##  Log  ##] Timestamp after sending: 1671111218
-[##  Log  ##] BlockNumber after sending: 112
+[##  Log  ##] Timestamp before sending: 1671170296
+[##  Log  ##] Timestamp after sending: 1671170338
+[##  Log  ##] BlockNumber after sending: 102
 [##  Log  ##] Total number of on-chain transactions: 50000
-[##  Log  ##] TPS(transaction per second): 1388
+[##  Log  ##] TPS(transaction per second): 1190
 ```
 
 **==>>** `make bench_100k`:
@@ -42,23 +42,23 @@
 
 [##  Log  ##] Transfering native token ...
 
-[##  Log  ##] BlockNumber before sending: 21
+[##  Log  ##] BlockNumber before sending: 23
 [** Debug **] Start sending ...
-[##  Log  ##] Timestamp before sending: 1671097783
-[##  Log  ##] Timestamp after sending: 1671097877
-[##  Log  ##] BlockNumber after sending: 110
+[##  Log  ##] Timestamp before sending: 1671171065
+[##  Log  ##] Timestamp after sending: 1671171143
+[##  Log  ##] BlockNumber after sending: 103
 [##  Log  ##] Total number of on-chain transactions: 100000
-[##  Log  ##] TPS(transaction per second): 1063
+[##  Log  ##] TPS(transaction per second): 1282
 
 [##  Log  ##] Transfering erc20 token ...
 
-[##  Log  ##] BlockNumber before sending: 112
+[##  Log  ##] BlockNumber before sending: 105
 [** Debug **] Start sending ...
-[##  Log  ##] Timestamp before sending: 1671097936
-[##  Log  ##] Timestamp after sending: 1671098008
-[##  Log  ##] BlockNumber after sending: 182
+[##  Log  ##] Timestamp before sending: 1671171200
+[##  Log  ##] Timestamp after sending: 1671171280
+[##  Log  ##] BlockNumber after sending: 180
 [##  Log  ##] Total number of on-chain transactions: 100000
-[##  Log  ##] TPS(transaction per second): 1388
+[##  Log  ##] TPS(transaction per second): 1250
 ```
 
 **==>>** `make bench_200k`:
@@ -68,23 +68,23 @@
 
 [##  Log  ##] Transfering native token ...
 
-[##  Log  ##] BlockNumber before sending: 25
+[##  Log  ##] BlockNumber before sending: 26
 [** Debug **] Start sending ...
-[##  Log  ##] Timestamp before sending: 1671111665
-[##  Log  ##] Timestamp after sending: 1671111859
-[##  Log  ##] BlockNumber after sending: 144
+[##  Log  ##] Timestamp before sending: 1671171465
+[##  Log  ##] Timestamp after sending: 1671171627
+[##  Log  ##] BlockNumber after sending: 192
 [##  Log  ##] Total number of on-chain transactions: 200000
-[##  Log  ##] TPS(transaction per second): 1030
+[##  Log  ##] TPS(transaction per second): 1234
 
 [##  Log  ##] Transfering erc20 token ...
 
-[##  Log  ##] BlockNumber before sending: 146
+[##  Log  ##] BlockNumber before sending: 195
 [** Debug **] Start sending ...
-[##  Log  ##] Timestamp before sending: 1671111966
-[##  Log  ##] Timestamp after sending: 1671112113
-[##  Log  ##] BlockNumber after sending: 284
+[##  Log  ##] Timestamp before sending: 1671171732
+[##  Log  ##] Timestamp after sending: 1671171890
+[##  Log  ##] BlockNumber after sending: 344
 [##  Log  ##] Total number of on-chain transactions: 200000
-[##  Log  ##] TPS(transaction per second): 1360
+[##  Log  ##] TPS(transaction per second): 1265
 ```
 
 #### Test results on a AWS virtual machine
@@ -111,21 +111,21 @@ TODO
 
 [##  Log  ##] BlockNumber before sending: 24
 [** Debug **] Start sending ...
-[##  Log  ##] Timestamp before sending: 1671198037
-[##  Log  ##] Timestamp after sending: 1671198078
-[##  Log  ##] BlockNumber after sending: 56
+[##  Log  ##] Timestamp before sending: 1671193192
+[##  Log  ##] Timestamp after sending: 1671193238
+[##  Log  ##] BlockNumber after sending: 46
 [##  Log  ##] Total number of on-chain transactions: 49984
-[##  Log  ##] TPS(transaction per second): 1219
+[##  Log  ##] TPS(transaction per second): 1086
 
 [##  Log  ##] Transfering erc20 token ...
 
-[##  Log  ##] BlockNumber before sending: 61
+[##  Log  ##] BlockNumber before sending: 47
 [** Debug **] Start sending ...
-[##  Log  ##] Timestamp before sending: 1671198097
-[##  Log  ##] Timestamp after sending: 1671198139
-[##  Log  ##] BlockNumber after sending: 94
+[##  Log  ##] Timestamp before sending: 1671193248
+[##  Log  ##] Timestamp after sending: 1671193284
+[##  Log  ##] BlockNumber after sending: 76
 [##  Log  ##] Total number of on-chain transactions: 49984
-[##  Log  ##] TPS(transaction per second): 1190
+[##  Log  ##] TPS(transaction per second): 1388
 ```
 
 `make dbench_100k`:
@@ -137,21 +137,21 @@ TODO
 
 [##  Log  ##] BlockNumber before sending: 26
 [** Debug **] Start sending ...
-[##  Log  ##] Timestamp before sending: 1671198325
-[##  Log  ##] Timestamp after sending: 1671198405
-[##  Log  ##] BlockNumber after sending: 89
+[##  Log  ##] Timestamp before sending: 1671194925
+[##  Log  ##] Timestamp after sending: 1671195002
+[##  Log  ##] BlockNumber after sending: 77
 [##  Log  ##] Total number of on-chain transactions: 100000
-[##  Log  ##] TPS(transaction per second): 1250
+[##  Log  ##] TPS(transaction per second): 1298
 
 [##  Log  ##] Transfering erc20 token ...
 
-[##  Log  ##] BlockNumber before sending: 94
+[##  Log  ##] BlockNumber before sending: 82
 [** Debug **] Start sending ...
-[##  Log  ##] Timestamp before sending: 1671198427
-[##  Log  ##] Timestamp after sending: 1671198507
-[##  Log  ##] BlockNumber after sending: 154
+[##  Log  ##] Timestamp before sending: 1671195027
+[##  Log  ##] Timestamp after sending: 1671195091
+[##  Log  ##] BlockNumber after sending: 129
 [##  Log  ##] Total number of on-chain transactions: 100000
-[##  Log  ##] TPS(transaction per second): 1250
+[##  Log  ##] TPS(transaction per second): 1562
 ```
 
 `make dbench_200k`:
@@ -163,21 +163,21 @@ TODO
 
 [##  Log  ##] BlockNumber before sending: 29
 [** Debug **] Start sending ...
-[##  Log  ##] Timestamp before sending: 1671198783
-[##  Log  ##] Timestamp after sending: 1671198940
-[##  Log  ##] BlockNumber after sending: 148
+[##  Log  ##] Timestamp before sending: 1671194228
+[##  Log  ##] Timestamp after sending: 1671194451
+[##  Log  ##] BlockNumber after sending: 76
 [##  Log  ##] Total number of on-chain transactions: 200000
-[##  Log  ##] TPS(transaction per second): 1273
+[##  Log  ##] TPS(transaction per second): 896
 
 [##  Log  ##] Transfering erc20 token ...
 
-[##  Log  ##] BlockNumber before sending: 154
+[##  Log  ##] BlockNumber before sending: 77
 [** Debug **] Start sending ...
-[##  Log  ##] Timestamp before sending: 1671198970
-[##  Log  ##] Timestamp after sending: 1671199122
-[##  Log  ##] BlockNumber after sending: 269
-[##  Log  ##] Total number of on-chain transactions: 197802
-[##  Log  ##] TPS(transaction per second): 1301
+[##  Log  ##] Timestamp before sending: 1671194472
+[##  Log  ##] Timestamp after sending: 1671194603
+[##  Log  ##] BlockNumber after sending: 172
+[##  Log  ##] Total number of on-chain transactions: 200000
+[##  Log  ##] TPS(transaction per second): 1526
 ```
 
 #### Test results on AWS virtual machines
