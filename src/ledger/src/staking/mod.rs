@@ -378,7 +378,7 @@ impl Staking {
     ) -> Result<Vec<Validator>> {
         self.validator_info
             .remove(&h)
-            .map(|v| v.body.into_iter().map(|(_, v)| v).collect())
+            .map(|v| v.body.into_values().collect())
             .c(d!("not exists"))
     }
 

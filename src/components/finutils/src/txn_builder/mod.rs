@@ -1872,7 +1872,7 @@ impl AnonTransferOperationBuilder {
                 };
             }
 
-            let remainder = sum_input - sum_output - (fees as u64);
+            let remainder = sum_input - sum_output - fees;
             if remainder > 0 {
                 let oabar_money_back = OpenAnonAssetRecordBuilder::new()
                     .amount(remainder)

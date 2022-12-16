@@ -218,7 +218,7 @@ fn gen_sample_tx() -> Transaction {
     let issuance_operation = Operation::IssueAsset(asset_issuance.clone());
 
     // Instantiate an DefineAsset operation
-    let mut asset = Box::new(Asset::default());
+    let mut asset = Box::<Asset>::default();
     asset.code = AssetTypeCode::gen_random();
 
     let asset_creation = DefineAsset::new(
