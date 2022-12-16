@@ -1952,7 +1952,7 @@ impl AppendOnlyMerkle {
                     self.check_lower(block, lower_list, lower_index).c(d!())?;
                 }
 
-                leaf_count += block.valid_leaves() as u64;
+                leaf_count += block.valid_leaves();
             }
 
             if leaf_count != leaves_at_this_level {

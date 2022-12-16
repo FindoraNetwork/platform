@@ -170,7 +170,7 @@ pub struct CoSigRule {
 impl CoSigRule {
     #[allow(missing_docs)]
     pub fn new(threshold: [u64; 2]) -> Result<Self> {
-        if threshold[0] > threshold[1] || threshold[1] > MAX_TOTAL_POWER as u64 {
+        if threshold[0] > threshold[1] || threshold[1] > MAX_TOTAL_POWER {
             return Err(eg!("invalid threshold"));
         }
 

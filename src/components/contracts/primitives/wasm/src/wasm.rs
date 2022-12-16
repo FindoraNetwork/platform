@@ -35,7 +35,7 @@ pub fn recover_signer(transaction: &Transaction) -> Option<H160> {
 
 #[wasm_bindgen]
 pub fn recover_tx_signer(raw_tx: String) -> Result<String, JsValue> {
-    let tx_bytes = base64::decode_config(&raw_tx, base64::URL_SAFE)
+    let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE)
         .c(d!())
         .map_err(error_to_jsvalue)?;
     let raw_tx = EvmRawTxWrapper::unwrap(&tx_bytes)
@@ -55,7 +55,7 @@ pub fn recover_tx_signer(raw_tx: String) -> Result<String, JsValue> {
 
 #[wasm_bindgen]
 pub fn evm_tx_hash(raw_tx: String) -> Result<String, JsValue> {
-    let tx_bytes = base64::decode_config(&raw_tx, base64::URL_SAFE)
+    let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE)
         .c(d!())
         .map_err(error_to_jsvalue)?;
     let raw_tx = EvmRawTxWrapper::unwrap(&tx_bytes)

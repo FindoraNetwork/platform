@@ -208,13 +208,13 @@ fn check_lang(lang: &str) -> Result<Language> {
 /// Convert a XfrPublicKey to base64 human-readable address
 #[inline(always)]
 pub fn public_key_to_base64(key: &XfrPublicKey) -> String {
-    base64::encode_config(&NoahFromToBytes::noah_to_bytes(key), base64::URL_SAFE)
+    base64::encode_config(NoahFromToBytes::noah_to_bytes(key), base64::URL_SAFE)
 }
 
 /// Convert publickey to hex.
 #[inline(always)]
 pub fn public_key_to_hex(key: &XfrPublicKey) -> String {
-    let s = hex::encode(&NoahFromToBytes::noah_to_bytes(key));
+    let s = hex::encode(NoahFromToBytes::noah_to_bytes(key));
 
     String::from("0x") + &s
 }
@@ -238,7 +238,7 @@ pub fn anon_public_key_from_base64(pk: &str) -> Result<AXfrPubKey> {
 #[inline(always)]
 /// Convert an anon public key to base64
 pub fn anon_public_key_to_base64(key: &AXfrPubKey) -> String {
-    base64::encode_config(&AXfrPubKey::noah_to_bytes(key), base64::URL_SAFE)
+    base64::encode_config(AXfrPubKey::noah_to_bytes(key), base64::URL_SAFE)
 }
 
 #[inline(always)]
@@ -252,7 +252,7 @@ pub fn x_public_key_from_base64(pk: &str) -> Result<XPublicKey> {
 #[inline(always)]
 /// Convert a x public key to base64
 pub fn x_public_key_to_base64(key: &XPublicKey) -> String {
-    base64::encode_config(&XPublicKey::noah_to_bytes(key), base64::URL_SAFE)
+    base64::encode_config(XPublicKey::noah_to_bytes(key), base64::URL_SAFE)
 }
 
 #[inline(always)]
@@ -266,7 +266,7 @@ pub fn anon_secret_key_from_base64(sk: &str) -> Result<AXfrKeyPair> {
 #[inline(always)]
 /// Convert an anon secret key to base64
 pub fn anon_secret_key_to_base64(key: &AXfrKeyPair) -> String {
-    base64::encode_config(&AXfrKeyPair::noah_to_bytes(key), base64::URL_SAFE)
+    base64::encode_config(AXfrKeyPair::noah_to_bytes(key), base64::URL_SAFE)
 }
 
 #[inline(always)]
@@ -280,7 +280,7 @@ pub fn x_secret_key_from_base64(sk: &str) -> Result<XSecretKey> {
 #[inline(always)]
 /// Convert an anon public key to base64
 pub fn x_secret_key_to_base64(key: &XSecretKey) -> String {
-    base64::encode_config(&XSecretKey::noah_to_bytes(key), base64::URL_SAFE)
+    base64::encode_config(XSecretKey::noah_to_bytes(key), base64::URL_SAFE)
 }
 
 #[inline(always)]
