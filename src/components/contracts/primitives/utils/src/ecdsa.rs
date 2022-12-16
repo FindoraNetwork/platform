@@ -72,7 +72,7 @@ impl<'de> Deserialize<'de> for Public {
         D: Deserializer<'de>,
     {
         let pk =
-            base64::decode_config(&String::deserialize(deserializer)?, base64::URL_SAFE)
+            base64::decode_config(String::deserialize(deserializer)?, base64::URL_SAFE)
                 .map_err(|e| de::Error::custom(format!("{:?}", e)))?;
         Public::try_from(pk.as_slice())
             .map_err(|e| de::Error::custom(format!("{:?}", e)))
@@ -173,7 +173,7 @@ impl<'de> Deserialize<'de> for Signature {
     where
         D: Deserializer<'de>,
     {
-        let signature_hex = hex::decode(&String::deserialize(deserializer)?)
+        let signature_hex = hex::decode(String::deserialize(deserializer)?)
             .map_err(|e| de::Error::custom(format!("{:?}", e)))?;
         Signature::try_from(signature_hex.as_ref())
             .map_err(|e| de::Error::custom(format!("{:?}", e)))
