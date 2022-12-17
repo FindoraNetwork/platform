@@ -86,6 +86,8 @@ pub struct CheckPointConfig {
 
     // Enable evm substate v2
     pub evm_substate_v2_height: i64,
+
+    pub disable_frc20: i64,
 }
 
 impl CheckPointConfig {
@@ -119,6 +121,7 @@ impl CheckPointConfig {
                                 fix_delegators_am_height: 0,
                                 validators_limit_v2_height: 0,
                                 evm_substate_v2_height: 0,
+                                disable_frc20: 0,
                             };
                             #[cfg(not(feature = "debug_env"))]
                             let config = CheckPointConfig {
@@ -142,6 +145,7 @@ impl CheckPointConfig {
                                 fix_delegators_am_height: 3351349,
                                 validators_limit_v2_height: 3351349,
                                 evm_substate_v2_height: 3351349,
+                                disable_frc20: 3351549,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();

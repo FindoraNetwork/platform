@@ -18,3 +18,4 @@ evm-precompile-sha3fips = {path = "./sha3fips"}
 fp-core = {path = "../../../primitives/core"}
 module-evm = {path = "../../../modules/evm"}
 parking_lot = "0.12"
+config = { path = "../../../../config" }
