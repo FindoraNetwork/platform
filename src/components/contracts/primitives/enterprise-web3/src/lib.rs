@@ -1,6 +1,6 @@
 use {
     evm_exporter::{
-        Block as EnterpriseBlock, Getter, Receipt as EnterpriseReceipt,
+        Block as EnterpriseBlock, Receipt as EnterpriseReceipt,
         State as EnterpriseState, TransactionStatus as EnterpriseTxState,
     },
     futures::executor::ThreadPool,
@@ -12,7 +12,7 @@ use {
     std::sync::{Arc, Mutex},
 };
 
-pub use evm_exporter::Setter;
+pub use evm_exporter::{Getter, Setter};
 
 pub type State = EnterpriseState;
 pub type Block = EnterpriseBlock;

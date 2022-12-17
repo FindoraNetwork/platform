@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 lazy_static = "1.4.0"
-evm-exporter = { package = "evm-exporter", git = "https://github.com/FindoraNetwork/enterprise-web3.git",  tag = "1.1.1"}
+evm-exporter = { package = "evm-exporter", git = "https://github.com/FindoraNetwork/enterprise-web3.git",  tag = "1.1.2"}
 ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
 primitive-types = "0.11.1"
 redis = { version = "0.21", default-features = false, features = [ "tls", "r2d2" ] }

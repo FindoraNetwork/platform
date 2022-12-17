@@ -446,8 +446,9 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     #[cfg(feature = "web3_service")]
     {
         use enterprise_web3::{
-            Setter, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS, REDIS_POOL,
-            SAVE_HISTORY_NUM, STATE_UPDATE_LIST, TXS, WEB3_SERVICE_START_HEIGHT,
+            Getter, Setter, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS,
+            REDIS_POOL, SAVE_HISTORY_NUM, STATE_UPDATE_LIST, TXS,
+            WEB3_SERVICE_START_HEIGHT,
         };
         use ethereum_types::U256;
         use std::collections::HashMap;
@@ -458,6 +459,8 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
             let redis_pool = REDIS_POOL.clone();
             let mut conn = redis_pool.get().expect("get redis connect");
             let mut setter = Setter::new(&mut *conn, "evm".to_string());
+            let mut conn = redis_pool.get().expect("get redis connect");
+            let mut getter = Getter::new(&mut *conn, "evm".to_string());
 
             let nonce_map = if let Ok(mut nonce_map) = NONCE_MAP.lock() {
                 replace(&mut *nonce_map, HashMap::new())
@@ -520,11 +523,6 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
                 } else {
                     None
                 };
-                setter
-                    .set_height(height)
-                    .map_err(|e| log::error!("{:?}", e))
-                    .unwrap_or(());
-
                 for (addr, code) in code_map.iter() {
                     setter
                         .set_byte_code(height, *addr, code.clone())
@@ -589,7 +587,8 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
                         .map_err(|e| log::error!("{:?}", e))
                         .unwrap_or(());
                     if let Some(h) = del_height {
-                        for del_h in 0..h {
+                        let low = getter.lowest_height().unwrap_or(0);
+                        for del_h in low..h {
                             setter
                                 .remove_block_info(U256::from(del_h))
                                 .map_err(|e| log::error!("{:?}", e))
@@ -597,6 +596,10 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
                         }
                     }
                 }
+                setter
+                    .set_height(height)
+                    .map_err(|e| log::error!("{:?}", e))
+                    .unwrap_or(());
             }
         }
     }
