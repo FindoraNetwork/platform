@@ -1,4 +1,3 @@
-use config::abci::global_cfg::CFG;
 use ethereum_types::H160;
 use evm::executor::stack::PrecompileSet;
 use evm::Context;
@@ -72,11 +71,7 @@ where
                 Some(Sha3FIPS512::execute(input, target_gas, context, ctx))
             }
             a if a == H160::from_low_u64_be(FRC20::<C>::contract_id()) => {
-                if CFG.checkpoint.disable_frc20 < ctx.header.height {
-                    None
-                } else {
-                    Some(FRC20::<C>::execute(input, target_gas, context, ctx))
-                }
+                Some(FRC20::<C>::execute(input, target_gas, context, ctx))
             }
             _ => None,
         }
