@@ -395,7 +395,7 @@ struct TmValidator {
 
 fn get_26657_validators(sa: &str) -> Result<TmValidatorsBody> {
     let url = format!("{}:26657/validators", sa);
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
