@@ -589,6 +589,7 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
                     if let Some(h) = del_height {
                         let low = getter.lowest_height().unwrap_or(0);
                         for del_h in low..h {
+                            setter.set_lowest_height(del_h).unwrap_or(());
                             setter
                                 .remove_block_info(U256::from(del_h))
                                 .map_err(|e| log::error!("{:?}", e))
