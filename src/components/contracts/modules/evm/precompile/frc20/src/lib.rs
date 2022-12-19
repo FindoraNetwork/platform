@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests;
 
+use config::abci::global_cfg::CFG;
 use core::marker::PhantomData;
 use ethereum_types::{H160, U256};
 use evm::{
@@ -87,6 +88,16 @@ impl<C: Config> Precompile for FRC20<C> {
         context: &Context,
         state: &FinState,
     ) -> PrecompileResult {
+        if CFG.checkpoint.disable_delegate_frc20 < state.header.height {
+            let addr = context.address;
+
+            if addr != H160::from_low_u64_be(Self::contract_id()) {
+                return Err(PrecompileFailure::Error {
+                    exit_status: error("No delegatecall support"),
+                });
+            }
+        }
+
         let mut input = EvmDataReader::new(input);
         let selector = match input.read_selector::<Call>() {
             Ok(v) => v,
