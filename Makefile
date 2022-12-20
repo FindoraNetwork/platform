@@ -224,9 +224,6 @@ ci_build_image:
 	@ docker cp findorad-binary:/binary ./binary
 	@ docker rm -f findorad-binary
 	@ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-cleveldb .
-ifeq ($(ENV),release)
-	docker tag $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
-endif
 
 
 # ========================== dev ARM64/v8 ===========================
@@ -244,10 +241,6 @@ ci_build_image_arm:
 	@ docker rm -f findorad-binary
 	# @ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb .
 	@ docker buildx build --platform linux/arm64/v8 --output=type=docker -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb-arm .
-
-ifeq ($(ENV),release)
-	docker tag $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
-endif
 
 # ========================== release AMD64 ===========================
 
@@ -283,9 +276,6 @@ ci_build_image_dockerhub_arm:
 	@ docker rm -f findorad-binary
 	@ docker run --rm --privileged tonistiigi/binfmt:latest --install all
 	@ docker buildx build --platform linux/arm64/v8 -t $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb-arm . --push
-# ifeq ($(ENV),release)
-# 	# docker tag $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG) $(DOCKERHUB_URL)/findorad:latest
-# endif
 
 # ========================== build RPC node===========================
 
@@ -306,23 +296,14 @@ ci_build_image_web3:
 	@ docker rm -f findorad-binary
 	@ docker build -t $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) -f container/Dockerfile-goleveldb .
 
-ifeq ($(ENV),release)
-	docker tag $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG) $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
-endif
 
 # ========================== push image and clean up===========================
 
 ci_push_image:
 	docker push $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG)
-ifeq ($(ENV),release)
-	docker push $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
-endif
 
 clean_image:
 	docker rmi $(PUBLIC_ECR_URL)/$(ENV)/findorad:$(IMAGE_TAG)
-ifeq ($(ENV),release)
-	docker rmi $(PUBLIC_ECR_URL)/$(ENV)/findorad:latest
-endif
 
 ci_build_image_dockerhub:
 	@ if [ -d "./binary" ]; then \
@@ -339,15 +320,10 @@ endif
 
 ci_push_image_dockerhub:
 	docker push $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG)
-ifeq ($(ENV),release)
-	docker push $(DOCKERHUB_URL)/findorad:latest
-endif
 
 clean_image_dockerhub:
 	docker rmi $(DOCKERHUB_URL)/findorad:$(IMAGE_TAG)
-ifeq ($(ENV),release)
-	docker rmi $(DOCKERHUB_URL)/findorad:latest
-endif
+
 
 clean_binary_dockerhub:
 	docker rmi findorad-binary-image:$(IMAGE_TAG)
