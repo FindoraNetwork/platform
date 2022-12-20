@@ -96,6 +96,7 @@ build_bench_release: tendermint_goleveldb
 
 tendermint_cleveldb:
 	- rm -f $(shell which tendermint)
+	@- apt install -y libleveldb-dev
 	bash tools/download_tendermint.sh 'tools/tendermint'
 	mkdir -p $(shell go env GOPATH)/bin
 	cd tools/tendermint \
