@@ -293,6 +293,9 @@ pub fn deliver_tx(
                                 .write()
                                 .commit_session();
                             return resp;
+                        } else if td_height > CFG.checkpoint.fix_exec_code {
+                            resp.code = 1;
+                            resp.log = "cache_transaction failed".to_owned();
                         }
 
                         s.account_base_app
