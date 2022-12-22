@@ -52,7 +52,7 @@ chaindev = { git = "https://github.com/rust-util-collections/chaindev", tag = "t
 [dev-dependencies]
 
 [build-dependencies]
-vergen = "=3.1.0"
+vergen = "=7.4.4"
 
 [features]
 default = ["std"]

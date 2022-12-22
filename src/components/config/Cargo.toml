@@ -22,7 +22,7 @@ globutils = { path = "../../libs/globutils" }
 btm = "0.1.6"
 
 [build-dependencies]
-vergen = "=3.1.0"
+vergen = "=7.4.4"
 
 [features]
 debug_env = []
