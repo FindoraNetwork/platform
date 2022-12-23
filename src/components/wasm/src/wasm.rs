@@ -946,6 +946,25 @@ pub fn get_priv_key_str(key_pair: &XfrKeyPair) -> String {
 }
 
 #[wasm_bindgen]
+/// Extracts the public key as a string from a transfer key pair.
+pub fn get_pub_key_str_old(key_pair: &XfrKeyPair) -> String {
+    if let XfrPublicKeyInner::Ed25519(pk) = key_pair.get_pk().inner() {
+        format!("\"{}\"", base64::encode(&pk.to_bytes()))
+    } else {
+        String::from("key type error")
+    }
+}
+
+#[wasm_bindgen]
+/// Extracts the private key as a string from a transfer key pair.
+pub fn get_priv_key_str_old(key_pair: &XfrKeyPair) -> String {
+    if let XfrSecretKey::Ed25519(sk) = key_pair.get_sk_ref() {
+        format!("\"{}\"", base64::encode(&sk.to_bytes()))
+    } else {
+        String::from("key type error")
+    }
+}
+#[wasm_bindgen]
 /// Creates a new transfer key pair.
 pub fn new_keypair() -> XfrKeyPair {
     gen_random_keypair()
