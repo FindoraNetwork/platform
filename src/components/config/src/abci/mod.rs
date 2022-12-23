@@ -148,8 +148,8 @@ impl CheckPointConfig {
                                 fix_delegators_am_height: 3351349,
                                 validators_limit_v2_height: 3351349,
                                 evm_substate_v2_height: 3351349,
-                                disable_delegate_frc20: 3412250,
-                                fix_exec_code: 3412250,
+                                disable_delegate_frc20: 3401450,
+                                fix_exec_code: 3401450,
                             };
                             let content = toml::to_string(&config).unwrap();
                             file.write_all(content.as_bytes()).unwrap();
