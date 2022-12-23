@@ -9,12 +9,16 @@ source $TRIPLE_MASKING_SCRIPTS_PATH/env.sh
 # declare sleep intervals
 let TM_SLEEP=($BLOCK_INTERVAL + 5) # If breaking, increase the sleep time
 
+echo "BLOCK_INTERVAL=${BLOCK_INTERVAL}s, sleep time=${TM_SLEEP}s"
+
 # generate keys and create test bars
 source $TRIPLE_MASKING_SCRIPTS_PATH/gen_keys_test-bars.sh
 
-
 # Run Tests
 echo -e "${YEL}Run test cases and verifying results${NC}"
+
+echo "Sleep ${TM_SLEEP}"
+sleep ${TM_SLEEP}
 
 echo "\n ***** Verifying balances ***** "
 python3 "$REGRESSION_PATH"/evm.py verify-balance --sec-key $BAR_SEC_KEY --amount 840000000
@@ -27,7 +31,7 @@ echo
 # test eth to fra
 echo -e "\n ***** Test transfer from eth to fra prefix address *****"
 $BIN/fn transfer --amount 209990000 --asset FRA -T $ED_ADDRESS
-sleep $BLOCK_INTERVAL
+sleep $TM_SLEEP
 
 echo "\n ***** Verifying balances ***** "
 python3 $REGRESSION_PATH/evm.py verify-balance --sec-key $ED_SEC_KEY --amount 210010000
