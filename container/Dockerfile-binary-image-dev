@@ -19,7 +19,7 @@ RUN make lint
 RUN make test
 
 RUN mkdir -p /root/.cargo/bin/ && \
-    make build_release && \
+    make build_release_debug && \
     if [ -d /platform/release/bin ] ; then mv /platform/release/bin/* /binary/cleveldb ; rm -rf /platform/release/; else mv /platform/debug/bin/* /binary/cleveldb ; rm -rf /platform/debug/ ;fi
 
 CMD ["sleep", "999999"]
