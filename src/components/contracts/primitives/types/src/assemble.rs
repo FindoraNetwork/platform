@@ -1,5 +1,5 @@
 use crate::actions::ethereum::Action as EtherAction;
-use crate::actions::{Action, LegacyAction};
+use crate::actions::Action;
 use crate::crypto::{Address, Signature};
 use crate::transaction;
 use ethereum::TransactionV2 as Transaction;
@@ -27,9 +27,6 @@ impl CheckFee {
         CheckFee(fee)
     }
 }
-
-pub type LegacyUncheckedTransaction<Extra> =
-    transaction::UncheckedTransaction<Address, LegacyAction, Signature, Extra>;
 
 /// Unchecked transaction type as expected by this application.
 pub type UncheckedTransaction<Extra> =

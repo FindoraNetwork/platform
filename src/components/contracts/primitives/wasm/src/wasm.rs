@@ -22,21 +22,6 @@ pub(crate) fn error_to_jsvalue<T: Display>(e: T) -> JsValue {
 }
 
 #[inline(always)]
-pub fn legacy_recover_signer(transaction: &LegacyTransaction) -> Option<H160> {
-    let mut sig = [0u8; 65];
-    let mut msg = [0u8; 32];
-    sig[0..32].copy_from_slice(&transaction.signature.r()[..]);
-    sig[32..64].copy_from_slice(&transaction.signature.s()[..]);
-    sig[64] = transaction.signature.standard_v();
-    msg.copy_from_slice(&LegacyTransactionMessage::from(transaction.clone()).hash()[..]);
-
-    let pubkey = secp256k1_ecdsa_recover(&sig, &msg).ok()?;
-    Some(H160::from(H256::from_slice(
-        Keccak256::digest(pubkey).as_slice(),
-    )))
-}
-
-#[inline(always)]
 pub fn recover_signer(transaction: &Transaction) -> Option<H160> {
     let mut sig = [0u8; 65];
     let mut msg = [0u8; 32];
@@ -112,32 +97,12 @@ pub fn evm_tx_hash(raw_tx: String) -> Result<String, JsValue> {
 mod test {
     use super::*;
     use fp_types::{
-        actions::{
-            ethereum::Action as EthAction, ethereum::LegacyAction as LegacyEthAction,
-            Action, LegacyAction,
-        },
+        actions::{ethereum::Action as EthAction, Action},
         assemble::LegacyUncheckedTransaction,
     };
 
     #[test]
     fn recover_signer_works() {
-        let raw_tx = String::from("ZXZtOnsic2lnbmF0dXJlIjpudWxsLCJmdW5jdGlvbiI6eyJFdGhlcmV1bSI6eyJUcmFuc2FjdCI6eyJub25jZSI6IjB4MSIsImdhc19wcmljZSI6IjB4MTc0ODc2ZTgwMCIsImdhc19saW1pdCI6IjB4NTIwOCIsImFjdGlvbiI6eyJDYWxsIjoiMHgyYWQzMjg0NmM2ZGQyZmZkM2VkYWRiZTUxY2Q1YWUwNGFhNWU1NzVlIn0sInZhbHVlIjoiMHg1NmJjNzVlMmQ2MzEwMDAwMCIsImlucHV0IjpbXSwic2lnbmF0dXJlIjp7InYiOjEwODIsInIiOiIweGY4YWVmN2Y4MDUzZDg5ZmVlMzk1MGM0ZDcwMjA4MGJmM2E4MDcyYmVkNWQ4NGEzYWYxOWEzNjAwODFiNjM2YTIiLCJzIjoiMHgyOTYyOTlhOGYyNDMwYjg2ZmQzZWI5NzZlYWJjNzMwYWMxY2ZiYmJlMzZlYjY5ZWFlMzM4Y2ZmMzNjNGE5OGMxIn19fX19");
-        let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE).unwrap();
-        let evm_tx = EvmRawTxWrapper::unwrap(&tx_bytes).unwrap();
-        let unchecked_tx: LegacyUncheckedTransaction<()> =
-            serde_json::from_slice(evm_tx).unwrap();
-        if let LegacyAction::Ethereum(LegacyEthAction::Transact(tx)) =
-            unchecked_tx.function
-        {
-            let signer = legacy_recover_signer(&tx).unwrap();
-            assert_eq!(
-                format!("{:?}", signer),
-                "0xa5225cbee5052100ec2d2d94aa6d258558073757"
-            );
-        } else {
-            panic!()
-        }
-
         let raw_tx = String::from("ZXZtOnsiRXRoZXJldW0iOnsiVHJhbnNhY3QiOnsiRUlQMTU1OSI6eyJjaGFpbl9pZCI6MjE1Miwibm9uY2UiOiIweDEiLCJtYXhfcHJpb3JpdHlfZmVlX3Blcl9nYXMiOiIweDI3MTAiLCJtYXhfZmVlX3Blcl9nYXMiOiIweDI3MTAiLCJnYXNfbGltaXQiOiIweDI3MTAiLCJhY3Rpb24iOnsiQ2FsbCI6IjB4MmFkMzI4NDZjNmRkMmZmZDNlZGFkYmU1MWNkNWFlMDRhYTVlNTc1ZSJ9LCJ2YWx1ZSI6IjB4MjcxMCIsImlucHV0IjpbXSwiYWNjZXNzX2xpc3QiOltdLCJvZGRfeV9wYXJpdHkiOmZhbHNlLCJyIjoiMHhmOGFlZjdmODA1M2Q4OWZlZTM5NTBjNGQ3MDIwODBiZjNhODA3MmJlZDVkODRhM2FmMTlhMzYwMDgxYjYzNmEyIiwicyI6IjB4Mjk2Mjk5YThmMjQzMGI4NmZkM2ViOTc2ZWFiYzczMGFjMWNmYmJiZTM2ZWI2OWVhZTMzOGNmZjMzYzRhOThjMSJ9fX19");
         let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE).unwrap();
         let evm_tx = EvmRawTxWrapper::unwrap(&tx_bytes).unwrap();

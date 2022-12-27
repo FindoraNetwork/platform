@@ -12,11 +12,3 @@ pub enum Action {
     XHub(xhub::Action),
     Template(template::Action),
 }
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LegacyAction {
-    Ethereum(ethereum::LegacyAction),
-    Evm(evm::Action),
-    XHub(xhub::Action),
-    Template(template::Action),
-}
