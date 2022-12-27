@@ -113,7 +113,7 @@ mod test {
 
     #[test]
     fn evm_tx_hash_works() {
-        let raw_tx = String::from("eyJzaWduYXR1cmUiOm51bGwsImZ1bmN0aW9uIjp7IkV0aGVyZXVtIjp7IlRyYW5zYWN0Ijp7Im5vbmNlIjoiMHg5IiwiZ2FzX3ByaWNlIjoiMHhlOGQ0YTUxMDAwIiwiZ2FzX2xpbWl0IjoiMHg1MjA4IiwiYWN0aW9uIjp7IkNhbGwiOiIweGE1MjI1Y2JlZTUwNTIxMDBlYzJkMmQ5NGFhNmQyNTg1NTgwNzM3NTcifSwidmFsdWUiOiIweDk4YTdkOWI4MzE0YzAwMDAiLCJpbnB1dCI6W10sInNpZ25hdHVyZSI6eyJ2IjoxMDgyLCJyIjoiMHg4MDBjZjQ5ZTAzMmJhYzY4MjY3MzdhZGJhZDEzN2Y0MTk5OTRjNjgxZWE1ZDUyYjliMGJhZDJmNDAyYjMwMTI0IiwicyI6IjB4Mjk1Mjc3ZWY2NTYzNDAwY2VkNjFiODhkM2ZiNGM3YjMyY2NkNTcwYThiOWJiOGNiYmUyNTkyMTRhYjdkZTI1YSJ9fX19fQ==");
+        let raw_tx = String::from("eyJzaWduYXR1cmUiOm51bGwsImZ1bmN0aW9uIjp7IkV0aGVyZXVtIjp7IlRyYW5zYWN0Ijp7IkxlZ2FjeSI6eyJub25jZSI6IjB4MCIsImdhc19wcmljZSI6IjB4MjU0MGJlNDAwIiwiZ2FzX2xpbWl0IjoiMHgxMDAwMDAiLCJhY3Rpb24iOnsiQ2FsbCI6IjB4MzMyNWE3ODQyNWYxN2E3ZTQ4N2ViNTY2NmIyYmZkOTNhYmIwNmM3MCJ9LCJ2YWx1ZSI6IjB4YSIsImlucHV0IjpbXSwic2lnbmF0dXJlIjp7InYiOjQzNDAsInIiOiIweDZiMjBjNzIzNTEzOTk4ZThmYTQ4NWM1MmI4ZjlhZTRmZDdiMWUwYmQwZGZiNzk4NTIzMThiMGMxMDBlOTFmNWUiLCJzIjoiMHg0ZDRjOGMxZjJlMTdjMDJjNGE4OTZlMjYyMTI3YjhiZDZlYmZkNWY1YTc1NWEzZTkyMjBjZmM2OGI4YzY5ZDVkIn19fX19fQ==");
         let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE).unwrap();
         let unchecked_tx: UncheckedTransaction<()> =
             serde_json::from_slice(tx_bytes.as_slice()).unwrap();
@@ -121,7 +121,7 @@ mod test {
             let hash = H256::from_slice(Keccak256::digest(&rlp::encode(&tx)).as_slice());
             assert_eq!(
                 format!("{:?}", hash),
-                "0x0eeb0ff455b1b57b821634cf853e7247e584a675610f13097cc49c2022505df3"
+                "0x83901d025accca27ee53fdf1ee354f4437418731e0995ee031beb99499405d26"
             );
         } else {
             panic!()
