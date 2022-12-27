@@ -24,11 +24,12 @@ use fp_core::{
     transaction::{ActionResult, Executable, ValidateUnsigned},
 };
 use fp_evm::BlockId;
-use fp_traits::evm::FeeCalculator as FeeCalculator2;
 use fp_traits::{
-    account::{AccountAsset, FeeCalculator},
+    account::AccountAsset,
     base::BaseProvider,
-    evm::{DecimalsMapping, EthereumAddressMapping, EthereumDecimalsMapping},
+    evm::{
+        DecimalsMapping, EthereumAddressMapping, EthereumDecimalsMapping, FeeCalculator,
+    },
 };
 use fp_types::{actions::xhub::NonConfidentialOutput, actions::Action, crypto::Address};
 use lazy_static::lazy_static;
@@ -99,17 +100,8 @@ pub struct BaseApp {
 
 impl module_template::Config for BaseApp {}
 
-pub struct StableTxFee;
-
-impl FeeCalculator for StableTxFee {
-    fn min_fee() -> U256 {
-        // TX_FEE_MIN
-        U256::from(1_0000_0000_0000_0000_u64)
-    }
-}
-
 impl module_account::Config for BaseApp {
-    type FeeCalculator = StableTxFee;
+    type FeeCalculator = ();
 }
 
 parameter_types! {

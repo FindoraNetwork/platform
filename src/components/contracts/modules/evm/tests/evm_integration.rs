@@ -287,6 +287,8 @@ fn test_balance_of_with_eth_call(contract: ERC20, who: H160) -> U256 {
         value: U256::zero(),
         gas_limit: DEFAULT_GAS_LIMIT,
         gas_price: None,
+        max_fee_per_gas: None,
+        max_priority_fee_per_gas: None,
         nonce: None,
     };
 

@@ -1,15 +1,11 @@
 #![allow(clippy::unused_unit)]
 
 use core::fmt::Display;
-use ethereum::{
-    LegacyTransactionMessage, TransactionV0 as LegacyTransaction,
-    TransactionV2 as Transaction,
-};
+use ethereum::TransactionV2 as Transaction;
 use ethereum_types::{H160, H256};
 use fp_types::{
     actions::{ethereum::Action as EthAction, Action},
     assemble::UncheckedTransaction,
-    crypto::secp256k1_ecdsa_recover,
 };
 use fp_utils::tx::EvmRawTxWrapper;
 use ruc::{d, err::RucResult};
@@ -96,10 +92,7 @@ pub fn evm_tx_hash(raw_tx: String) -> Result<String, JsValue> {
 #[allow(missing_docs)]
 mod test {
     use super::*;
-    use fp_types::{
-        actions::{ethereum::Action as EthAction, Action},
-        assemble::LegacyUncheckedTransaction,
-    };
+    use fp_types::actions::{ethereum::Action as EthAction, Action};
 
     #[test]
     fn recover_signer_works() {
@@ -122,11 +115,9 @@ mod test {
     fn evm_tx_hash_works() {
         let raw_tx = String::from("eyJzaWduYXR1cmUiOm51bGwsImZ1bmN0aW9uIjp7IkV0aGVyZXVtIjp7IlRyYW5zYWN0Ijp7Im5vbmNlIjoiMHg5IiwiZ2FzX3ByaWNlIjoiMHhlOGQ0YTUxMDAwIiwiZ2FzX2xpbWl0IjoiMHg1MjA4IiwiYWN0aW9uIjp7IkNhbGwiOiIweGE1MjI1Y2JlZTUwNTIxMDBlYzJkMmQ5NGFhNmQyNTg1NTgwNzM3NTcifSwidmFsdWUiOiIweDk4YTdkOWI4MzE0YzAwMDAiLCJpbnB1dCI6W10sInNpZ25hdHVyZSI6eyJ2IjoxMDgyLCJyIjoiMHg4MDBjZjQ5ZTAzMmJhYzY4MjY3MzdhZGJhZDEzN2Y0MTk5OTRjNjgxZWE1ZDUyYjliMGJhZDJmNDAyYjMwMTI0IiwicyI6IjB4Mjk1Mjc3ZWY2NTYzNDAwY2VkNjFiODhkM2ZiNGM3YjMyY2NkNTcwYThiOWJiOGNiYmUyNTkyMTRhYjdkZTI1YSJ9fX19fQ==");
         let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE).unwrap();
-        let unchecked_tx: LegacyUncheckedTransaction<()> =
+        let unchecked_tx: UncheckedTransaction<()> =
             serde_json::from_slice(tx_bytes.as_slice()).unwrap();
-        if let LegacyAction::Ethereum(LegacyEthAction::Transact(tx)) =
-            unchecked_tx.function
-        {
+        if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
             let hash = H256::from_slice(Keccak256::digest(&rlp::encode(&tx)).as_slice());
             assert_eq!(
                 format!("{:?}", hash),

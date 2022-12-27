@@ -12,8 +12,8 @@ mod tests;
 use abci::{RequestQuery, ResponseQuery};
 use fp_core::{context::Context, module::AppModule};
 use fp_traits::{
-    account::{AccountAsset, FeeCalculator},
-    evm::{DecimalsMapping, EthereumDecimalsMapping},
+    account::AccountAsset,
+    evm::{DecimalsMapping, EthereumDecimalsMapping, FeeCalculator},
 };
 use fp_types::crypto::Address;
 use std::marker::PhantomData;

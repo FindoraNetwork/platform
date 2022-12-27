@@ -4,7 +4,7 @@ use fp_core::{
     context::Context,
     transaction::{ActionResult, SignedExtension},
 };
-use fp_traits::account::{AccountAsset, FeeCalculator};
+use fp_traits::{account::AccountAsset, evm::FeeCalculator};
 use fp_types::crypto::Address;
 use primitive_types::U256;
 use ruc::*;
@@ -64,7 +64,9 @@ impl SignedExtension for CheckFee {
     type Pre = (Address, U256);
 
     fn validate(&self, ctx: &Context, who: &Self::AccountId) -> Result<()> {
-        let min_fee = <BaseApp as module_account::Config>::FeeCalculator::min_fee();
+        let min_fee = <BaseApp as module_account::Config>::FeeCalculator::min_gas_price(
+            ctx.header.height as u64,
+        );
         let tx_fee = match self.0 {
             None => min_fee,
             Some(fee) => {
@@ -85,7 +87,9 @@ impl SignedExtension for CheckFee {
     }
 
     fn pre_execute(self, ctx: &Context, who: &Self::AccountId) -> Result<Self::Pre> {
-        let min_fee = <BaseApp as module_account::Config>::FeeCalculator::min_fee();
+        let min_fee = <BaseApp as module_account::Config>::FeeCalculator::min_gas_price(
+            ctx.header.height as u64,
+        );
         let tx_fee = match self.0 {
             None => min_fee,
             Some(fee) => {

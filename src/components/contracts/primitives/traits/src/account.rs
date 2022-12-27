@@ -59,14 +59,3 @@ pub trait AccountAsset<Address> {
 
     fn income(ctx: &Context, who: &Address, value: U256) -> Result<()>;
 }
-
-/// Outputs the current transaction fee.
-pub trait FeeCalculator {
-    fn min_fee() -> U256;
-}
-
-impl FeeCalculator for () {
-    fn min_fee() -> U256 {
-        U256::zero()
-    }
-}
