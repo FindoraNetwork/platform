@@ -126,6 +126,24 @@ pub fn restore_keypair_from_mnemonic_default(phrase: &str) -> Result<XfrKeyPair>
     restore_secp_keypair_from_mnemonic(phrase, "en", &BipPath::new(ETH, 0, 0, 0)).c(d!())
 }
 
+/// Restore the XfrKeyPair from a mnemonic with a default bip44-path,
+/// that is "m/44'/60'/0'/0/0" ("m/44'/coin'/account'/change/address").
+#[inline(always)]
+pub fn restore_keypair_from_mnemonic_cus(
+    phrase: &str,
+    account: u32,
+    change: u32,
+    address: u32,
+) -> Result<XfrKeyPair> {
+    const ETH: u32 = 60;
+    restore_secp_keypair_from_mnemonic(
+        phrase,
+        "en",
+        &BipPath::new(ETH, account, change, address),
+    )
+    .c(d!())
+}
+
 /// Restore the ed25519 XfrKeyPair from a mnemonic with a default bip44-path,
 /// that is "m/44'/917'/0'/0/0" ("m/44'/coin'/account'/change/address").
 #[inline(always)]
