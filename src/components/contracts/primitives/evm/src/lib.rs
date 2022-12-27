@@ -5,7 +5,7 @@ use ethereum_types::{Bloom, H160, H256, U256};
 use evm::ExitReason;
 use fp_core::context::Context;
 use fp_types::actions::evm::{
-    Call, CallEip1559, Create, Create2, Create2Eip1559, CreateEip1559,
+    Call, Create, Create2,
 };
 use ruc::*;
 use serde::{Deserialize, Serialize};
@@ -57,24 +57,6 @@ pub trait Runner {
 
     fn create2(ctx: &Context, args: Create2, config: &evm::Config)
         -> Result<CreateInfo>;
-
-    fn call_eip1559(
-        ctx: &Context,
-        args: CallEip1559,
-        config: &evm::Config,
-    ) -> Result<CallInfo>;
-
-    fn create_eip1559(
-        ctx: &Context,
-        args: CreateEip1559,
-        config: &evm::Config,
-    ) -> Result<CreateInfo>;
-
-    fn create2_eip1559(
-        ctx: &Context,
-        args: Create2Eip1559,
-        config: &evm::Config,
-    ) -> Result<CreateInfo>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -30,125 +30,6 @@ impl<C: Config> ActionRunner<C> {
         source: H160,
         value: U256,
         gas_limit: u64,
-        gas_price: Option<U256>,
-        nonce: Option<U256>,
-        config: &'config evm::Config,
-        precompiles: &'precompiles C::PrecompilesType,
-        f: F,
-    ) -> Result<ExecutionInfo<R>>
-    where
-        F: FnOnce(
-            &mut StackExecutor<
-                'config,
-                'precompiles,
-                FindoraStackState<'_, '_, 'config, C>,
-                C::PrecompilesType,
-            >,
-        ) -> (ExitReason, R),
-    {
-        let min_gas_price = C::FeeCalculator::min_gas_price(ctx.header.height as u64);
-
-        // Gas price check is skipped when performing a gas estimation.
-        let gas_price = match gas_price {
-            Some(gas_price) => {
-                ensure!(gas_price >= min_gas_price, "GasPriceTooLow");
-                gas_price
-            }
-            None => Default::default(),
-        };
-
-        let vicinity = Vicinity {
-            gas_price,
-            origin: source,
-        };
-
-        let metadata = StackSubstateMetadata::new(gas_limit, config);
-        let state = FindoraStackState::new(ctx, &vicinity, metadata);
-        let mut executor =
-            StackExecutor::new_with_precompiles(state, config, precompiles);
-
-        let total_fee = gas_price
-            .checked_mul(U256::from(gas_limit))
-            .ok_or(eg!("FeeOverflow"))?;
-        let total_payment =
-            value.checked_add(total_fee).ok_or(eg!("PaymentOverflow"))?;
-        let source_account = App::<C>::account_basic(ctx, &source);
-
-        if let Some(nonce) = nonce {
-            ensure!(
-                source_account.nonce == nonce,
-                format!(
-                    "InvalidNonce, expected: {}, actual: {}",
-                    source_account.nonce, nonce
-                )
-            );
-        }
-
-        if !config.estimate {
-            ensure!(source_account.balance >= total_payment, "BalanceLow");
-
-            // Deduct fee from the `source` account.
-            App::<C>::withdraw_fee(ctx, &source, total_fee)?;
-        }
-
-        // Execute the EVM call.
-        let (reason, retv) = f(&mut executor);
-
-        let used_gas = U256::from(executor.used_gas());
-        let actual_fee = executor.fee(gas_price);
-        tracing::debug!(
-            target: "evm",
-            "Execution {:?} [source: {:?}, value: {}, gas_price {}, gas_limit: {}, actual_fee: {}]",
-            reason,
-            source,
-            value,
-            gas_price,
-            gas_limit,
-            actual_fee
-        );
-
-        if !config.estimate {
-            // Refund fees to the `source` account if deducted more before,
-            App::<C>::correct_and_deposit_fee(ctx, &source, actual_fee, total_fee)?;
-        }
-
-        let state = executor.into_state();
-
-        for address in state.substate.deletes {
-            tracing::debug!(
-                target: "evm",
-                "Deleting account at {:?}",
-                address
-            );
-            App::<C>::remove_account(ctx, &address.into())
-        }
-
-        for log in &state.substate.logs {
-            tracing::trace!(
-                target: "evm",
-                "Inserting log for {:?}, topics ({}) {:?}, data ({}): {:?}]",
-                log.address,
-                log.topics.len(),
-                log.topics,
-                log.data.len(),
-                log.data
-            );
-        }
-
-        Ok(ExecutionInfo {
-            value: retv,
-            exit_reason: reason,
-            used_gas,
-            logs: state.substate.logs,
-        })
-    }
-
-    // eip1559 support
-    pub fn execute_eip1559<'config, 'precompiles, F, R>(
-        ctx: &Context,
-        source: H160,
-        value: U256,
-        gas_limit: u64,
         max_fee_per_gas: Option<U256>,
         max_priority_fee_per_gas: Option<U256>,
         nonce: Option<U256>,
@@ -167,6 +48,7 @@ impl<C: Config> ActionRunner<C> {
         ) -> (ExitReason, R),
     {
         let base_fee = C::FeeCalculator::min_gas_price(ctx.header.height as u64);
+
         // Gas price check is skipped when performing a gas estimation.
         let max_fee_per_gas = match max_fee_per_gas {
             Some(max_fee_per_gas) => {
@@ -433,13 +315,13 @@ impl<C: Config> Runner for ActionRunner<C> {
     fn call(ctx: &Context, args: Call, config: &evm::Config) -> Result<CallInfo> {
         let precompiles = C::PrecompilesValue::get(ctx.clone());
         let access_list = Vec::new();
-
         Self::execute(
             ctx,
             args.source,
             args.value,
             args.gas_limit,
-            args.gas_price,
+            args.max_fee_per_gas,
+            args.max_priority_fee_per_gas,
             args.nonce,
             config,
             &precompiles,
@@ -459,13 +341,13 @@ impl<C: Config> Runner for ActionRunner<C> {
     fn create(ctx: &Context, args: Create, config: &evm::Config) -> Result<CreateInfo> {
         let precompiles = C::PrecompilesValue::get(ctx.clone());
         let access_list = Vec::new();
-
         Self::execute(
             ctx,
             args.source,
             args.value,
             args.gas_limit,
-            args.gas_price,
+            args.max_fee_per_gas,
+            args.max_priority_fee_per_gas,
             args.nonce,
             config,
             &precompiles,
@@ -473,7 +355,6 @@ impl<C: Config> Runner for ActionRunner<C> {
                 let address = executor.create_address(evm::CreateScheme::Legacy {
                     caller: args.source,
                 });
-
                 (
                     executor
                         .transact_create(
@@ -498,115 +379,7 @@ impl<C: Config> Runner for ActionRunner<C> {
         let code_hash = H256::from_slice(Keccak256::digest(&args.init).as_slice());
         let precompiles = C::PrecompilesValue::get(ctx.clone());
         let access_list = Vec::new();
-
         Self::execute(
-            ctx,
-            args.source,
-            args.value,
-            args.gas_limit,
-            args.gas_price,
-            args.nonce,
-            config,
-            &precompiles,
-            |executor| {
-                let address = executor.create_address(evm::CreateScheme::Create2 {
-                    caller: args.source,
-                    code_hash,
-                    salt: args.salt,
-                });
-                (
-                    executor
-                        .transact_create2(
-                            args.source,
-                            args.value,
-                            args.init,
-                            args.salt,
-                            args.gas_limit,
-                            access_list,
-                        )
-                        .0,
-                    address,
-                )
-            },
-        )
-    }
-
-    fn call_eip1559(
-        ctx: &Context,
-        args: CallEip1559,
-        config: &evm::Config,
-    ) -> Result<CallInfo> {
-        let precompiles = C::PrecompilesValue::get(ctx.clone());
-        let access_list = Vec::new();
-        Self::execute_eip1559(
-            ctx,
-            args.source,
-            args.value,
-            args.gas_limit,
-            args.max_fee_per_gas,
-            args.max_priority_fee_per_gas,
-            args.nonce,
-            config,
-            &precompiles,
-            |executor| {
-                executor.transact_call(
-                    args.source,
-                    args.target,
-                    args.value,
-                    args.input,
-                    args.gas_limit,
-                    access_list,
-                )
-            },
-        )
-    }
-
-    fn create_eip1559(
-        ctx: &Context,
-        args: CreateEip1559,
-        config: &evm::Config,
-    ) -> Result<CreateInfo> {
-        let precompiles = C::PrecompilesValue::get(ctx.clone());
-        let access_list = Vec::new();
-        Self::execute_eip1559(
-            ctx,
-            args.source,
-            args.value,
-            args.gas_limit,
-            args.max_fee_per_gas,
-            args.max_priority_fee_per_gas,
-            args.nonce,
-            config,
-            &precompiles,
-            |executor| {
-                let address = executor.create_address(evm::CreateScheme::Legacy {
-                    caller: args.source,
-                });
-                (
-                    executor
-                        .transact_create(
-                            args.source,
-                            args.value,
-                            args.init,
-                            args.gas_limit,
-                            access_list,
-                        )
-                        .0,
-                    address,
-                )
-            },
-        )
-    }
-
-    fn create2_eip1559(
-        ctx: &Context,
-        args: Create2Eip1559,
-        config: &evm::Config,
-    ) -> Result<CreateInfo> {
-        let code_hash = H256::from_slice(Keccak256::digest(&args.init).as_slice());
-        let precompiles = C::PrecompilesValue::get(ctx.clone());
-        let access_list = Vec::new();
-        Self::execute_eip1559(
             ctx,
             args.source,
             args.value,

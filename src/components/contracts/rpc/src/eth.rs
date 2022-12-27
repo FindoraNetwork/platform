@@ -26,7 +26,7 @@ use fp_traits::{
 };
 use fp_types::{
     actions,
-    actions::evm::{Call, CallEip1559, Create, CreateEip1559},
+    actions::evm::{Call, Create},
     assemble::UncheckedTransaction,
 };
 use fp_utils::ecdsa::SecpPair;
@@ -394,7 +394,7 @@ impl EthApi for EthApiImpl {
                 nonce,
             } = request;
 
-            let is_eip1559 = max_fee_per_gas.is_some()
+            let _is_eip1559 = max_fee_per_gas.is_some()
                 && max_priority_fee_per_gas.is_some()
                 && max_fee_per_gas.unwrap() > U256::from(0)
                 && max_priority_fee_per_gas.unwrap() > U256::from(0);
@@ -441,105 +441,55 @@ impl EthApi for EthApiImpl {
                     Vec::from(block.header.beneficiary.as_bytes())
             }
 
-            if !is_eip1559 {
-                match to {
-                    Some(to) => {
-                        let call = Call {
-                            source: from.unwrap_or_default(),
-                            target: to,
-                            input: data,
-                            value: value.unwrap_or_default(),
-                            gas_limit: gas_limit.as_u64(),
-                            gas_price,
-                            nonce,
-                        };
+            match to {
+                Some(to) => {
+                    let call = Call {
+                        source: from.unwrap_or_default(),
+                        target: to,
+                        input: data,
+                        value: value.unwrap_or_default(),
+                        gas_limit: gas_limit.as_u64(),
+                        gas_price,
+                        max_fee_per_gas,
+                        max_priority_fee_per_gas,
+                        nonce,
+                    };
 
-                        let info = <BaseApp as module_ethereum::Config>::Runner::call(
-                            &ctx, call, &config,
-                        )
-                        .map_err(|err| {
-                            internal_err(format!("evm runner call error: {:?}", err))
-                        })?;
-                        debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
+                    let info = <BaseApp as module_ethereum::Config>::Runner::call(
+                        &ctx, call, &config,
+                    )
+                    .map_err(|err| {
+                        internal_err(format!("evm runner call error: {:?}", err))
+                    })?;
+                    debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
 
-                        error_on_execution_failure(&info.exit_reason, &info.value)?;
+                    error_on_execution_failure(&info.exit_reason, &info.value)?;
 
-                        Ok(Bytes(info.value))
-                    }
-                    None => {
-                        let create = Create {
-                            source: from.unwrap_or_default(),
-                            init: data,
-                            value: value.unwrap_or_default(),
-                            gas_limit: gas_limit.as_u64(),
-                            gas_price,
-                            nonce,
-                        };
-
-                        let info = <BaseApp as module_ethereum::Config>::Runner::create(
-                            &ctx, create, &config,
-                        )
-                        .map_err(|err| {
-                            internal_err(format!("evm runner create error: {:?}", err))
-                        })?;
-                        debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
-
-                        error_on_execution_failure(&info.exit_reason, &[])?;
-
-                        Ok(Bytes(info.value[..].to_vec()))
-                    }
+                    Ok(Bytes(info.value))
                 }
-            } else {
-                match to {
-                    Some(to) => {
-                        let call = CallEip1559 {
-                            source: from.unwrap_or_default(),
-                            target: to,
-                            input: data,
-                            value: value.unwrap_or_default(),
-                            gas_limit: gas_limit.as_u64(),
-                            max_fee_per_gas,
-                            max_priority_fee_per_gas,
-                            nonce,
-                        };
+                None => {
+                    let create = Create {
+                        source: from.unwrap_or_default(),
+                        init: data,
+                        value: value.unwrap_or_default(),
+                        gas_limit: gas_limit.as_u64(),
+                        gas_price,
+                        max_fee_per_gas,
+                        max_priority_fee_per_gas,
+                        nonce,
+                    };
 
-                        let info =
-                            <BaseApp as module_ethereum::Config>::Runner::call_eip1559(
-                                &ctx, call, &config,
-                            )
-                            .map_err(|err| {
-                                internal_err(format!("evm runner call error: {:?}", err))
-                            })?;
-                        debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
+                    let info = <BaseApp as module_ethereum::Config>::Runner::create(
+                        &ctx, create, &config,
+                    )
+                    .map_err(|err| {
+                        internal_err(format!("evm runner create error: {:?}", err))
+                    })?;
+                    debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
 
-                        error_on_execution_failure(&info.exit_reason, &info.value)?;
+                    error_on_execution_failure(&info.exit_reason, &[])?;
 
-                        Ok(Bytes(info.value))
-                    }
-                    None => {
-                        let create = CreateEip1559 {
-                            source: from.unwrap_or_default(),
-                            init: data,
-                            value: value.unwrap_or_default(),
-                            gas_limit: gas_limit.as_u64(),
-                            max_fee_per_gas,
-                            max_priority_fee_per_gas,
-                            nonce,
-                        };
-
-                        let info =
-                            <BaseApp as module_ethereum::Config>::Runner::create_eip1559(
-                                &ctx, create, &config,
-                            )
-                            .map_err(|err| {
-                                internal_err(format!("evm runner create error: {:?}", err))
-                            })?;
-                        debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
-
-                        error_on_execution_failure(&info.exit_reason, &[])?;
-
-                        Ok(Bytes(info.value[..].to_vec()))
-                    }
+                    Ok(Bytes(info.value[..].to_vec()))
                 }
             }
         });
@@ -923,7 +873,7 @@ impl EthApi for EthApiImpl {
     ) -> BoxFuture<Result<U256>> {
         debug!(target: "eth_rpc", "estimate_gas, block number {:?} request:{:?}", number, request);
 
-        let is_eip1559 = request.max_fee_per_gas.is_some()
+        let _is_eip1559 = request.max_fee_per_gas.is_some()
             && request.max_priority_fee_per_gas.is_some()
             && request.max_fee_per_gas.unwrap() > U256::from(0)
             && request.max_priority_fee_per_gas.unwrap() > U256::from(0);
@@ -1059,123 +1009,59 @@ impl EthApi for EthApiImpl {
                 let mut config = <BaseApp as module_ethereum::Config>::config().clone();
                 config.estimate = true;
 
-                if !is_eip1559 {
-                    match to {
-                        Some(to) => {
-                            let call = Call {
-                                source: from.unwrap_or_default(),
-                                target: to,
-                                input: data.map(|d| d.0).unwrap_or_default(),
-                                value: value.unwrap_or_default(),
-                                gas_limit,
-                                gas_price,
-                                nonce,
-                            };
+                match to {
+                    Some(to) => {
+                        let call = Call {
+                            source: from.unwrap_or_default(),
+                            target: to,
+                            input: data.map(|d| d.0).unwrap_or_default(),
+                            value: value.unwrap_or_default(),
+                            gas_limit,
+                            gas_price,
+                            max_fee_per_gas,
+                            max_priority_fee_per_gas,
+                            nonce,
+                        };
 
-                            let info =
-                                <BaseApp as module_ethereum::Config>::Runner::call(
-                                    &ctx, call, &config,
-                                )
-                                .map_err(|err| {
-                                    internal_err(format!(
-                                        "evm runner call error: {:?}",
-                                        err
-                                    ))
-                                })?;
-                            debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
+                        let info = <BaseApp as module_ethereum::Config>::Runner::call(
+                            &ctx, call, &config,
+                        )
+                        .map_err(|err| {
+                            internal_err(format!("evm runner call error: {:?}", err))
+                        })?;
+                        debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
 
-                            Ok(ExecuteResult {
-                                data: info.value,
-                                exit_reason: info.exit_reason,
-                                used_gas: info.used_gas,
-                            })
-                        }
-                        None => {
-                            let create = Create {
-                                source: from.unwrap_or_default(),
-                                init: data.map(|d| d.0).unwrap_or_default(),
-                                value: value.unwrap_or_default(),
-                                gas_limit,
-                                gas_price,
-                                nonce,
-                            };
-
-                            let info =
-                                <BaseApp as module_ethereum::Config>::Runner::create(
-                                    &ctx, create, &config,
-                                )
-                                .map_err(|err| {
-                                    internal_err(format!(
-                                        "evm runner create error: {:?}",
-                                        err
-                                    ))
-                                })?;
-                            debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
-
-                            Ok(ExecuteResult {
-                                data: vec![],
-                                exit_reason: info.exit_reason,
-                                used_gas: info.used_gas,
-                            })
-                        }
+                        Ok(ExecuteResult {
+                            data: info.value,
+                            exit_reason: info.exit_reason,
+                            used_gas: info.used_gas,
+                        })
                     }
-                } else {
-                    match to {
-                        Some(to) => {
-                            let call = CallEip1559 {
-                                source: from.unwrap_or_default(),
-                                target: to,
-                                input: data.map(|d| d.0).unwrap_or_default(),
-                                value: value.unwrap_or_default(),
-                                gas_limit,
-                                max_fee_per_gas,
-                                max_priority_fee_per_gas,
-                                nonce,
-                            };
+                    None => {
+                        let create = Create {
+                            source: from.unwrap_or_default(),
+                            init: data.map(|d| d.0).unwrap_or_default(),
+                            value: value.unwrap_or_default(),
+                            gas_limit,
+                            gas_price,
+                            max_fee_per_gas,
+                            max_priority_fee_per_gas,
+                            nonce,
+                        };
 
-                            let info =
-                            <BaseApp as module_ethereum::Config>::Runner::call_eip1559(
-                                &ctx, call, &config,
-                            )
-                            .map_err(|err| {
-                                internal_err(format!("evm runner call error: {:?}", err))
-                            })?;
-                            debug!(target: "eth_rpc", "evm runner call result: {:?}", info);
+                        let info = <BaseApp as module_ethereum::Config>::Runner::create(
+                            &ctx, create, &config,
+                        )
+                        .map_err(|err| {
+                            internal_err(format!("evm runner create error: {:?}", err))
+                        })?;
+                        debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
 
-                            Ok(ExecuteResult {
-                                data: info.value,
-                                exit_reason: info.exit_reason,
-                                used_gas: info.used_gas,
-                            })
-                        }
-                        None => {
-                            let create = CreateEip1559 {
-                                source: from.unwrap_or_default(),
-                                init: data.map(|d| d.0).unwrap_or_default(),
-                                value: value.unwrap_or_default(),
-                                gas_limit,
-                                max_fee_per_gas,
-                                max_priority_fee_per_gas,
-                                nonce,
-                            };
-
-                            let info = <BaseApp as module_ethereum::Config>::Runner::create_eip1559(
-                                &ctx, create, &config,
-                            )
-                            .map_err(|err| {
-                                internal_err(format!(
-                                    "evm runner create error: {:?}", 
-                                    err
-                                ))
-                            })?;
-                            debug!(target: "eth_rpc", "evm runner create result: {:?}", info);
-
-                            Ok(ExecuteResult {
-                                data: vec![],
-                                exit_reason: info.exit_reason,
-                                used_gas: info.used_gas,
-                            })
-                        }
+                        Ok(ExecuteResult {
+                            data: vec![],
+                            exit_reason: info.exit_reason,
+                            used_gas: info.used_gas,
+                        })
                     }
                 }
             };

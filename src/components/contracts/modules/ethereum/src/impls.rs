@@ -255,7 +255,7 @@ impl<C: Config> App<C> {
         let _chain_id;
         let mut _access_list = vec![];
 
-        let is_eip1559 = match &transaction {
+        match &transaction {
             Transaction::Legacy(legacy_transaction_transaction) => {
                 let transaction = legacy_transaction_transaction;
                 nonce = transaction.nonce;
@@ -270,8 +270,6 @@ impl<C: Config> App<C> {
                     Some(chain_id) => chain_id,
                     None => return Err(eg!("Must provide chainId")),
                 };
-
-                false
             }
             Transaction::EIP1559(eip1559_transaction_transaction) => {
                 let transaction = eip1559_transaction_transaction;
@@ -285,15 +283,11 @@ impl<C: Config> App<C> {
                 gas_price = transaction.max_fee_per_gas;
                 _chain_id = transaction.chain_id;
                 _access_list = transaction.access_list.clone();
-
-                true
             }
             _ => {
-                return Err(eg!("Transaction Type Error"));
+                return Err(eg!("Unsupported Transaction Type"));
             }
         };
-
-        // let gas_limit = transaction.gas_limit;
 
         let execute_ret = Self::execute_transaction(
             ctx,
@@ -306,7 +300,6 @@ impl<C: Config> App<C> {
             Some(max_priority_fee_per_gas),
             Some(nonce),
             action,
-            is_eip1559,
         );
 
         if let Err(e) = execute_ret {
@@ -474,81 +467,44 @@ impl<C: Config> App<C> {
         max_priority_fee_per_gas: Option<U256>,
         nonce: Option<U256>,
         action: ethereum::TransactionAction,
-        is_eip1559: bool,
     ) -> Result<(Option<H160>, Option<H160>, CallOrCreateInfo)> {
-        if is_eip1559 {
-            match action {
-                ethereum::TransactionAction::Call(target) => {
-                    let res = C::Runner::call_eip1559(
-                        ctx,
-                        EvmAction::CallEip1559 {
-                            source: from,
-                            target,
-                            input,
-                            value,
-                            gas_limit: gas_limit.low_u64(),
-                            max_fee_per_gas,
-                            max_priority_fee_per_gas,
-                            nonce,
-                        },
-                        C::config(),
-                    )?;
+        match action {
+            ethereum::TransactionAction::Call(target) => {
+                let res = C::Runner::call(
+                    ctx,
+                    EvmAction::Call {
+                        source: from,
+                        target,
+                        input,
+                        value,
+                        gas_limit: gas_limit.low_u64(),
+                        gas_price,
+                        max_fee_per_gas,
+                        max_priority_fee_per_gas,
+                        nonce,
+                    },
+                    C::config(),
+                )?;
 
-                    Ok((Some(target), None, CallOrCreateInfo::Call(res)))
-                }
-                ethereum::TransactionAction::Create => {
-                    let res = C::Runner::create_eip1559(
-                        ctx,
-                        EvmAction::CreateEip1559 {
-                            source: from,
-                            init: input,
-                            value,
-                            gas_limit: gas_limit.low_u64(),
-                            max_fee_per_gas,
-                            max_priority_fee_per_gas,
-                            nonce,
-                        },
-                        C::config(),
-                    )?;
-
-                    Ok((None, Some(res.value), CallOrCreateInfo::Create(res)))
-                }
+                Ok((Some(target), None, CallOrCreateInfo::Call(res)))
             }
-        } else {
-            match action {
-                ethereum::TransactionAction::Call(target) => {
-                    let res = C::Runner::call(
-                        ctx,
-                        EvmAction::Call {
-                            source: from,
-                            target,
-                            input,
-                            value,
-                            gas_limit: gas_limit.low_u64(),
-                            gas_price,
-                            nonce,
-                        },
-                        C::config(),
-                    )?;
+            ethereum::TransactionAction::Create => {
+                let res = C::Runner::create(
+                    ctx,
+                    EvmAction::Create {
+                        source: from,
+                        init: input,
+                        value,
+                        gas_limit: gas_limit.low_u64(),
+                        gas_price,
+                        max_fee_per_gas,
+                        max_priority_fee_per_gas,
+                        nonce,
+                    },
+                    C::config(),
+                )?;
 
-                    Ok((Some(target), None, CallOrCreateInfo::Call(res)))
-                }
-                ethereum::TransactionAction::Create => {
-                    let res = C::Runner::create(
-                        ctx,
-                        EvmAction::Create {
-                            source: from,
-                            init: input,
-                            value,
-                            gas_limit: gas_limit.low_u64(),
-                            gas_price,
-                            nonce,
-                        },
-                        C::config(),
-                    )?;
-
-                    Ok((None, Some(res.value), CallOrCreateInfo::Create(res)))
-                }
+                Ok((None, Some(res.value), CallOrCreateInfo::Create(res)))
             }
         }
     }
@@ -645,7 +601,7 @@ impl<C: Config> App<C> {
     //Find the first block with a non zero state_root.
     //Create range between the first non zero state_root to the latest block
     //Loop in descending order from latest block to the first block with non-zero state_root
-    //Replace state root of block x with state root from block x + 1
+    //Replace state root of block x with state rout from block x + 1
     fn migrate_block_data(ctx: &mut Context) -> Result<()> {
         // 1. Find range of blocks that require adjustments
         let mut first_block = U256::from(CFG.checkpoint.evm_first_block_height);
