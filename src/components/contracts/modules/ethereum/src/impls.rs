@@ -256,8 +256,7 @@ impl<C: Config> App<C> {
         let mut _access_list = vec![];
 
         match &transaction {
-            Transaction::Legacy(legacy_transaction_transaction) => {
-                let transaction = legacy_transaction_transaction;
+            Transaction::Legacy(transaction) => {
                 nonce = transaction.nonce;
                 gas_price = transaction.gas_price;
                 max_fee_per_gas = transaction.gas_price;
@@ -271,8 +270,7 @@ impl<C: Config> App<C> {
                     None => return Err(eg!("Must provide chainId")),
                 };
             }
-            Transaction::EIP1559(eip1559_transaction_transaction) => {
-                let transaction = eip1559_transaction_transaction;
+            Transaction::EIP1559(transaction) => {
                 nonce = transaction.nonce;
                 gas_limit = transaction.gas_limit;
                 action = transaction.action;
@@ -601,7 +599,7 @@ impl<C: Config> App<C> {
     //Find the first block with a non zero state_root.
     //Create range between the first non zero state_root to the latest block
     //Loop in descending order from latest block to the first block with non-zero state_root
-    //Replace state root of block x with state rout from block x + 1
+    //Replace state root of block x with state root from block x + 1
     fn migrate_block_data(ctx: &mut Context) -> Result<()> {
         // 1. Find range of blocks that require adjustments
         let mut first_block = U256::from(CFG.checkpoint.evm_first_block_height);

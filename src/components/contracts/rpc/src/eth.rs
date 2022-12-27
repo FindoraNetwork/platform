@@ -399,9 +399,8 @@ impl EthApi for EthApiImpl {
                 && max_fee_per_gas.unwrap() > U256::from(0)
                 && max_priority_fee_per_gas.unwrap() > U256::from(0);
 
-            let (gas_price, max_fee_per_gas, max_priority_fee_per_gas) = {
-                let details =
-                    fee_details(gas_price, max_fee_per_gas, max_priority_fee_per_gas)?;
+            let (gas_price, _max_fee_per_gas, _max_priority_fee_per_gas) = {
+                let details = fee_details(gas_price, None, None)?;
                 (
                     details.gas_price,
                     details.max_fee_per_gas,
@@ -450,8 +449,8 @@ impl EthApi for EthApiImpl {
                         value: value.unwrap_or_default(),
                         gas_limit: gas_limit.as_u64(),
                         gas_price,
-                        max_fee_per_gas,
-                        max_priority_fee_per_gas,
+                        max_fee_per_gas: None,
+                        max_priority_fee_per_gas: None,
                         nonce,
                     };
 
@@ -474,8 +473,8 @@ impl EthApi for EthApiImpl {
                         value: value.unwrap_or_default(),
                         gas_limit: gas_limit.as_u64(),
                         gas_price,
-                        max_fee_per_gas,
-                        max_priority_fee_per_gas,
+                        max_fee_per_gas: None,
+                        max_priority_fee_per_gas: None,
                         nonce,
                     };
 
@@ -878,12 +877,8 @@ impl EthApi for EthApiImpl {
             && request.max_fee_per_gas.unwrap() > U256::from(0)
             && request.max_priority_fee_per_gas.unwrap() > U256::from(0);
 
-        let (gas_price, max_fee_per_gas, max_priority_fee_per_gas) = {
-            if let Ok(details) = fee_details(
-                request.gas_price,
-                request.max_fee_per_gas,
-                request.max_priority_fee_per_gas,
-            ) {
+        let (gas_price, _max_fee_per_gas, _max_priority_fee_per_gas) = {
+            if let Ok(details) = fee_details(request.gas_price, None, None) {
                 (
                     details.gas_price,
                     details.max_fee_per_gas,
@@ -1018,8 +1013,8 @@ impl EthApi for EthApiImpl {
                             value: value.unwrap_or_default(),
                             gas_limit,
                             gas_price,
-                            max_fee_per_gas,
-                            max_priority_fee_per_gas,
+                            max_fee_per_gas: None,
+                            max_priority_fee_per_gas: None,
                             nonce,
                         };
 
@@ -1044,8 +1039,8 @@ impl EthApi for EthApiImpl {
                             value: value.unwrap_or_default(),
                             gas_limit,
                             gas_price,
-                            max_fee_per_gas,
-                            max_priority_fee_per_gas,
+                            max_fee_per_gas: None,
+                            max_priority_fee_per_gas: None,
                             nonce,
                         };
 
@@ -1143,24 +1138,14 @@ impl EthApi for EthApiImpl {
                         }
                     }
 
-                    let is_eip1559 = !matches!(
-                        &block.transactions[index],
-                        EthereumTransaction::Legacy(_)
-                    );
-                    // match &block.transactions[index] {
-                    //     EthereumTransaction::Legacy(_) => false,
-                    //     _ => true,
-                    // };
-
                     let base_fee = account_base_app.read().base_fee(id);
 
-                    Ok(Some(transaction_build(
+                    Ok(transaction_build(
                         block.transactions[index].clone(),
                         Some(block),
                         Some(statuses[index].clone()),
-                        is_eip1559,
                         base_fee,
-                    )))
+                    ))
                 }
                 _ => Ok(None),
             }
@@ -1204,18 +1189,12 @@ impl EthApi for EthApiImpl {
                         return Ok(None);
                     }
 
-                    let is_eip1559 = !matches!(
-                        &block.transactions[index],
-                        EthereumTransaction::Legacy(_)
-                    );
-
-                    Ok(Some(transaction_build(
+                    Ok(transaction_build(
                         block.transactions[index].clone(),
                         Some(block),
                         Some(statuses[index].clone()),
-                        is_eip1559,
                         base_fee,
-                    )))
+                    ))
                 }
                 _ => Ok(None),
             }
@@ -1251,24 +1230,14 @@ impl EthApi for EthApiImpl {
                         return Ok(None);
                     }
 
-                    let is_eip1559 = !matches!(
-                        &block.transactions[index],
-                        EthereumTransaction::Legacy(_)
-                    );
-                    // match &block.transactions[index] {
-                    //     EthereumTransaction::Legacy(_) => true,
-                    //     _ => false,
-                    // };
-
                     let base_fee = account_base_app.read().base_fee(id);
 
-                    Ok(Some(transaction_build(
+                    Ok(transaction_build(
                         block.transactions[index].clone(),
                         Some(block),
                         Some(statuses[index].clone()),
-                        is_eip1559,
                         base_fee,
-                    )))
+                    ))
                 }
                 _ => Ok(None),
             }
@@ -1598,21 +1567,11 @@ fn rich_block_build(
                             .transactions
                             .iter()
                             .enumerate()
-                            .map(|(index, transaction)| {
-                                let is_eip1559 = !matches!(
-                                    &block.transactions[index],
-                                    EthereumTransaction::Legacy(_)
-                                );
-                                // match &transaction {
-                                //     EthereumTransaction::Legacy(_) => true,
-                                //     _ => false,
-                                // };
-
+                            .filter_map(|(index, transaction)| {
                                 transaction_build(
                                     transaction.clone(),
                                     Some(block.clone()),
                                     Some(statuses[index].clone().unwrap_or_default()),
-                                    is_eip1559,
                                     base_fee,
                                 )
                             })
@@ -1646,27 +1605,30 @@ fn transaction_build(
     ethereum_transaction: EthereumTransaction,
     block: Option<ethereum::Block<EthereumTransaction>>,
     status: Option<TransactionStatus>,
-    is_eip1559: bool,
     base_fee: Option<U256>,
-) -> Transaction {
+) -> Option<Transaction> {
     let mut transaction: Transaction = ethereum_transaction.clone().into();
 
-    if let EthereumTransaction::EIP1559(_) = ethereum_transaction {
-        if block.is_none() && status.is_none() {
-            transaction.gas_price = transaction.max_fee_per_gas;
-        } else {
-            let base_fee = base_fee.unwrap_or(U256::zero());
-            let max_priority_fee_per_gas =
-                transaction.max_priority_fee_per_gas.unwrap_or(U256::zero());
-            transaction.gas_price = Some(
-                base_fee
-                    .checked_add(max_priority_fee_per_gas)
-                    .unwrap_or_else(U256::max_value),
-            );
+    match &ethereum_transaction {
+        EthereumTransaction::EIP1559(_) => {
+            if block.is_none() && status.is_none() {
+                transaction.gas_price = transaction.max_fee_per_gas;
+            } else {
+                let base_fee = base_fee.unwrap_or(U256::zero());
+                let max_priority_fee_per_gas =
+                    transaction.max_priority_fee_per_gas.unwrap_or(U256::zero());
+                transaction.gas_price = Some(
+                    base_fee
+                        .checked_add(max_priority_fee_per_gas)
+                        .unwrap_or_else(U256::max_value),
+                );
+            }
         }
-    } else if !is_eip1559 {
-        transaction.max_fee_per_gas = None;
-        transaction.max_priority_fee_per_gas = None;
+        EthereumTransaction::Legacy(_) => {
+            transaction.max_fee_per_gas = None;
+            transaction.max_priority_fee_per_gas = None;
+        }
+        _ => return None,
     }
 
     let pubkey = match public_key(&ethereum_transaction) {
@@ -1737,42 +1699,14 @@ fn transaction_build(
             EthereumTransaction::EIP1559(t) => {
                 H256::from_slice(Keccak256::digest(&rlp::encode(&t)).as_slice())
             }
-            EthereumTransaction::EIP2930(t) => {
-                H256::from_slice(Keccak256::digest(&rlp::encode(&t)).as_slice())
-            }
+            EthereumTransaction::EIP2930(_) => return None,
         }
     };
 
-    // // Block hash.
-    // transaction.block_hash = ;
-    // // Block number.
-    // transaction.block_number = ;
-    // // Transaction index.
-    // transaction.transaction_index = ;
-    // // From.
-    // transaction.from;
-    // // To.
-    // transaction.to;
-    // // Creates.
-    // transaction.creates;
-    // // Public key.
-    // transaction.public_key;
-
-    transaction
+    Some(transaction)
 }
 
 pub fn public_key(transaction: &EthereumTransaction) -> ruc::Result<[u8; 64]> {
-    // let mut sig = [0u8; 65];
-    // let mut msg = [0u8; 32];
-    // sig[0..32].copy_from_slice(&transaction.signature.r()[..]);
-    // sig[32..64].copy_from_slice(&transaction.signature.s()[..]);
-    // sig[64] = transaction.signature.standard_v();
-    // msg.copy_from_slice(
-    //     &EthereumTransactionMessage::from(transaction.clone()).hash()[..],
-    // );
-
-    // fp_types::crypto::secp256k1_ecdsa_recover(&sig, &msg)
-
     let mut sig = [0u8; 65];
     let mut msg = [0u8; 32];
     match transaction {

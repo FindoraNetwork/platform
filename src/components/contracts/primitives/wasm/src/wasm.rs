@@ -112,6 +112,7 @@ mod test {
     }
 
     #[test]
+    // LegacyTransaction
     fn evm_tx_hash_works() {
         let raw_tx = String::from("eyJzaWduYXR1cmUiOm51bGwsImZ1bmN0aW9uIjp7IkV0aGVyZXVtIjp7IlRyYW5zYWN0Ijp7IkxlZ2FjeSI6eyJub25jZSI6IjB4MCIsImdhc19wcmljZSI6IjB4MjU0MGJlNDAwIiwiZ2FzX2xpbWl0IjoiMHgxMDAwMDAiLCJhY3Rpb24iOnsiQ2FsbCI6IjB4MzMyNWE3ODQyNWYxN2E3ZTQ4N2ViNTY2NmIyYmZkOTNhYmIwNmM3MCJ9LCJ2YWx1ZSI6IjB4YSIsImlucHV0IjpbXSwic2lnbmF0dXJlIjp7InYiOjQzNDAsInIiOiIweDZiMjBjNzIzNTEzOTk4ZThmYTQ4NWM1MmI4ZjlhZTRmZDdiMWUwYmQwZGZiNzk4NTIzMThiMGMxMDBlOTFmNWUiLCJzIjoiMHg0ZDRjOGMxZjJlMTdjMDJjNGE4OTZlMjYyMTI3YjhiZDZlYmZkNWY1YTc1NWEzZTkyMjBjZmM2OGI4YzY5ZDVkIn19fX19fQ==");
         let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE).unwrap();

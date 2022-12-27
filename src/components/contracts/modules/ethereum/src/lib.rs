@@ -184,41 +184,37 @@ impl<C: Config> ValidateUnsigned for App<C> {
             gas_limit,
             value,
             chain_id,
-            max_fee_per_gas,
-            max_priority_fee_per_gas,
-            is_eip1559,
-        );
-
-        match transaction {
-            Transaction::Legacy(t) => {
-                nonce = t.nonce;
-                gas_price = t.gas_price;
-                gas_limit = t.gas_limit;
-                value = t.value;
-                chain_id = match t.signature.chain_id() {
+            _max_fee_per_gas,
+            _max_priority_fee_per_gas,
+            _is_eip1559,
+        ) = match transaction {
+            Transaction::Legacy(t) => (
+                t.nonce,
+                t.gas_price,
+                t.gas_limit,
+                t.value,
+                match t.signature.chain_id() {
                     Some(chain_id) => chain_id,
                     None => return Err(eg!("Must provide chainId")),
-                };
-                is_eip1559 = false;
-
-                max_fee_per_gas = U256::zero();
-                max_priority_fee_per_gas = U256::zero();
-            }
-            Transaction::EIP1559(t) => {
-                nonce = t.nonce;
-                gas_limit = t.gas_limit;
-                max_fee_per_gas = t.max_fee_per_gas;
-                max_priority_fee_per_gas = t.max_priority_fee_per_gas;
-                value = t.value;
-                chain_id = t.chain_id;
-                is_eip1559 = true;
-
-                gas_price = U256::zero();
-            }
+                },
+                U256::zero(),
+                U256::zero(),
+                false,
+            ),
+            Transaction::EIP1559(t) => (
+                t.nonce,
+                U256::zero(),
+                t.gas_limit,
+                t.value,
+                t.chain_id,
+                t.max_fee_per_gas,
+                t.max_priority_fee_per_gas,
+                true,
+            ),
             _ => {
                 return Err(eg!("Transaction Type Error"));
             }
-        }
+        };
 
         if chain_id != C::ChainId::get() {
             return Err(eg!(format!(
@@ -240,16 +236,13 @@ impl<C: Config> ValidateUnsigned for App<C> {
             )));
         }
 
-        if !is_eip1559 {
-            let min_gas_price =
-                C::FeeCalculator::min_gas_price(ctx.header.height as u64);
+        let min_gas_price = C::FeeCalculator::min_gas_price(ctx.header.height as u64);
 
-            if gas_price < min_gas_price {
-                return Err(eg!(format!(
-                    "InvalidGasPrice: got {}, but the minimum gas price is {}",
-                    gas_price, min_gas_price
-                )));
-            }
+        if gas_price < min_gas_price {
+            return Err(eg!(format!(
+                "InvalidGasPrice: got {}, but the minimum gas price is {}",
+                gas_price, min_gas_price
+            )));
         }
 
         let account_id = C::AddressMapping::convert_to_account_id(origin);
@@ -263,20 +256,7 @@ impl<C: Config> ValidateUnsigned for App<C> {
             )));
         }
 
-        let fee = if !is_eip1559 {
-            gas_price.saturating_mul(gas_limit)
-        } else {
-            let max_base_fee = max_fee_per_gas
-                .checked_mul(gas_limit)
-                .ok_or(eg!("FeeOverflow"))?;
-            let max_priority_fee = max_priority_fee_per_gas
-                .checked_mul(gas_limit)
-                .ok_or(eg!("FeeOverflow"))?;
-            max_base_fee
-                .checked_add(max_priority_fee)
-                .ok_or(eg!("FeeOverflow"))?
-        };
-
+        let fee = gas_price.saturating_mul(gas_limit);
         let total_payment = value.saturating_add(fee);
 
         if account.balance < total_payment {
