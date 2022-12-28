@@ -1561,16 +1561,6 @@ pub fn get_address_by_public_key(hex_pub_key: &str) -> Result<String, JsValue> {
 }
 
 #[wasm_bindgen]
-/// Extracts the public key as a string from a transfer key pair.
-pub fn get_pub_key_str_old(key_pair: &XfrKeyPair) -> String {
-    if let XfrPublicKeyInner::Ed25519(pk) = key_pair.get_pk().inner() {
-        format!("\"{}\"", base64::encode(&pk.to_bytes()))
-    } else {
-        String::from("key type error")
-    }
-}
-
-#[wasm_bindgen]
 /// Extracts the private key as a string from a transfer key pair.
 pub fn get_priv_key_str_old(key_pair: &XfrKeyPair) -> String {
     if let XfrSecretKey::Ed25519(sk) = key_pair.get_sk_ref() {
