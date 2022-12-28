@@ -1527,14 +1527,18 @@ pub fn get_priv_key_hex_str_by_mnemonic(
 
 #[wasm_bindgen]
 ///
-pub fn get_pub_key_hex_str_by_priv_key(hex_priv_key: &str) -> Result<String, JsValue> {
+pub fn get_keypair_by_pri_key(hex_priv_key: &str) -> Result<XfrKeyPair, JsValue> {
     let data = if hex_priv_key.starts_with("0x") {
         hex::decode(&hex_priv_key[2..]).map_err(error_to_jsvalue)?
     } else {
         hex::decode(hex_priv_key).map_err(error_to_jsvalue)?
     };
-    let key_pair =
-        XfrKeyPair::generate_secp256k1_from_bytes(&data).map_err(error_to_jsvalue)?;
+    XfrKeyPair::generate_secp256k1_from_bytes(&data).map_err(error_to_jsvalue)
+}
+#[wasm_bindgen]
+///
+pub fn get_pub_key_hex_str_by_priv_key(hex_priv_key: &str) -> Result<String, JsValue> {
+    let key_pair = get_keypair_by_pri_key(hex_priv_key)?;
     let data = key_pair.get_pk_ref().to_bytes();
     Ok(format!("0x{}", hex::encode(&data[1..])))
 }
