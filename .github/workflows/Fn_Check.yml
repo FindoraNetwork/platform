@@ -1,0 +1,46 @@
+name: FN_CHECK
+on:
+  push:
+    branches:
+      - main
+      - add-fn-ckeck
+  pull_request:
+    branches:
+      - main
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  build:
+    strategy:
+      matrix:
+        platform: [scalable]
+    runs-on: ${{ matrix.platform }}
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+        components: rustfmt
+    - name: Prepare key
+      shell: bash
+      run: |
+        tar -C ~/.ssh -zcf key.tar.gz ./
+        
+    - name: Build rust base image
+      shell: bash
+      run: |
+        make ci_build_binary_rust_base
+
+    - name: Build debug_env image and Start
+      shell: bash
+      run: |
+        docker build -t findorad:debug_env -f container/Dockerfile-debug-env .
+        docker run -d --rm --network host --name findorad-debug-env findorad:debug_env
+        sleep 120
+
+    - name: Run fn_check
+      shell: bash
+      run: |
+        docker exec findorad-debug-env /platform/tools/fn_check.sh
+        docker rm -f findorad-debug-env
