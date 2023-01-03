@@ -54,3 +54,5 @@ fp-evm = { path = "../primitives/evm" }
 fp-traits = { path = "../primitives/traits" }
 fp-types = { path = "../primitives/types" }
 fp-utils = { path = "../primitives/utils" }
+
+config = { path = "../../config"}

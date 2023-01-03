@@ -132,7 +132,7 @@ impl CheckPointConfig {
                                 disable_evm_block_height: 1483286,
                                 enable_frc20_height: 1501000,
                                 tx_revert_on_error_height: 1624077,
-                                evm_first_block_height: 0,
+                                evm_first_block_height: 1425000,
                                 zero_amount_fix_height: 1200000,
                                 apy_fix_height: 1177000,
                                 overflow_fix_height: 1247000,

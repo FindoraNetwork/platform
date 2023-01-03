@@ -3,6 +3,7 @@ use crate::utils::{
 };
 use crate::{error_on_execution_failure, internal_err};
 use baseapp::{extensions::SignedExtra, BaseApp};
+use config::abci::CheckPointConfig;
 use ethereum::{
     BlockV0 as EthereumBlock, LegacyTransactionMessage as EthereumTransactionMessage,
     TransactionV0 as EthereumTransaction,
@@ -45,15 +46,15 @@ use tokio::task::spawn_blocking;
 lazy_static! {
     static ref RT: Runtime =
         Runtime::new().expect("Failed to create thread pool executor");
-    static ref EVM_FIRST_BLOCK_HEIGHT: u64 = {
-        let h: u64 = std::env::var("EVM_FIRST_BLOCK_HEIGHT")
-            .map(|h| {
-                h.parse()
-                    .expect("`EVM_FIRST_BLOCK_HEIGHT` is not set correctly.")
-            })
-            .unwrap_or(1424654);
-        h
-    };
+    // static ref EVM_FIRST_BLOCK_HEIGHT: u64 = {
+    //     let h: u64 = std::env::var("EVM_FIRST_BLOCK_HEIGHT")
+    //         .map(|h| {
+    //             h.parse()
+    //                 .expect("`EVM_FIRST_BLOCK_HEIGHT` is not set correctly.")
+    //         })
+    //         .unwrap_or(1424654);
+    //     h
+    // };
 }
 
 pub struct EthApiImpl {
@@ -61,6 +62,7 @@ pub struct EthApiImpl {
     signers: Vec<SecpPair>,
     tm_client: Arc<HttpClient>,
     max_past_logs: u32,
+    checkpoint: CheckPointConfig,
 }
 
 impl EthApiImpl {
@@ -69,12 +71,14 @@ impl EthApiImpl {
         account_base_app: Arc<RwLock<BaseApp>>,
         signers: Vec<SecpPair>,
         max_past_logs: u32,
+        checkpoint: CheckPointConfig,
     ) -> Self {
         Self {
             account_base_app,
             signers,
             tm_client: Arc::new(HttpClient::new(url.as_str()).unwrap()),
             max_past_logs,
+            checkpoint,
         }
     }
 
@@ -546,7 +550,8 @@ impl EthApi for EthApiImpl {
         number: BlockNumber,
         full: bool,
     ) -> BoxFuture<Result<Option<RichBlock>>> {
-        debug!(target: "eth_rpc", "block_by_number, number:{:?}, full:{:?}", number, full);
+        let evm_height = self.checkpoint.evm_first_block_height as u64;
+        debug!(target: "eth_rpc", "block_by_number, number:{:?}, full:{:?}, evm_first_block_height:{:?}", number, full, evm_height);
 
         let account_base_app = self.account_base_app.clone();
         //check if height exits.
@@ -557,8 +562,8 @@ impl EthApi for EthApiImpl {
 
         let task = spawn_blocking(move || -> Result<Option<RichBlock>> {
             if let Some(h) = height {
-                if 0 < h && h < *EVM_FIRST_BLOCK_HEIGHT {
-                    return Ok(Some(dummy_block(h, full)));
+                if 0 < h && h < evm_height {
+                    return Ok(Some(dummy_block(h, evm_height, full)));
                 }
             }
 
@@ -1595,8 +1600,8 @@ fn native_block_id(number: Option<BlockNumber>) -> Option<BlockId> {
     }
 }
 
-fn dummy_block(height: u64, full: bool) -> Rich<Block> {
-    let hash = if height == *EVM_FIRST_BLOCK_HEIGHT - 1 {
+fn dummy_block(height: u64, evm_height: u64, full: bool) -> Rich<Block> {
+    let hash = if height == evm_height - 1 {
         H256([0; 32])
     } else {
         H256::from_slice(&sha3::Keccak256::digest(&height.to_le_bytes()))

@@ -9,6 +9,7 @@ mod utils;
 mod web3;
 
 use baseapp::BaseApp;
+use config::abci::global_cfg::CFG;
 use eth::filter_block_logs;
 use evm::{ExitError, ExitReason};
 use fp_rpc_core::types::pubsub::Metadata;
@@ -48,6 +49,7 @@ pub fn start_web3_service(
                     app.clone(),
                     signers.clone(),
                     MAX_PAST_LOGS,
+                    CFG.checkpoint.clone(),
                 )
                 .to_delegate(),
                 eth_filter::EthFilterApiImpl::new(
