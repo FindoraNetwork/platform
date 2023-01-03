@@ -15,15 +15,15 @@ ethereum-types = {version = "0.13.1", default-features = false}
 futures = "0.3.16"
 lazy_static = "1.4.0"
 ledger = {path = "../../../ledger"}
-log = "0.4"
+tracing = "0.1"
 parking_lot = "0.12"
 primitive-types = {version = "0.11.1", default-features = false, features = ["rlp", "byteorder", "serde"]}
 protobuf = "2.16"
 ruc = "1.0"
 serde = {version = "1.0.124", features = ["derive"]}
 serde_json = "1.0.40"
-storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
-fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.0.0" }
+storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4" }
+fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4" }
 sha3 = "0.8"
 
 # primitives
@@ -50,3 +50,4 @@ evm-precompile-sha3fips = {path = "../modules/evm/precompile/sha3fips"}
 [features]
 abci_mock = []
 web3_service = ["enterprise-web3", "module-account/web3_service", "module-ethereum/web3_service", "module-evm/web3_service"]
+benchmark = ["module-evm/benchmark","module-ethereum/benchmark"]

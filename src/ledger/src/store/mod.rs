@@ -1130,7 +1130,7 @@ impl LedgerStatus {
         );
         if seq_id > self.block_commit_count {
             return Err(eg!(("Transaction seq_id ahead of block_count")));
-        } else if seq_id + (TRANSACTION_WINDOW_WIDTH as u64) < self.block_commit_count {
+        } else if seq_id + TRANSACTION_WINDOW_WIDTH < self.block_commit_count {
             return Err(eg!(("Transaction seq_id too far behind block_count")));
         } else {
             // Check to see that this nrpt has not been seen before
@@ -1385,10 +1385,12 @@ impl LedgerStatus {
                             .or_insert_with(HashSet::new)
                             .insert(TxoSID(txo_sid));
                         let utxo = Utxo(tx_output);
-                        *self
+                        let mut e = self
                             .nonconfidential_balances
                             .entry(utxo.0.record.public_key)
-                            .or_insert(0) += utxo.get_nonconfidential_balance();
+                            .or_insert(0);
+                        *e.deref_mut() =
+                            e.saturating_add(utxo.get_nonconfidential_balance());
                         self.utxos.insert(TxoSID(txo_sid), utxo);
                         txn_utxo_sids.push(TxoSID(txo_sid));
                     }

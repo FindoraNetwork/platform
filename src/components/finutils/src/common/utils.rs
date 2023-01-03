@@ -42,7 +42,7 @@ pub fn new_tx_builder() -> Result<TransactionBuilder> {
 #[allow(missing_docs)]
 pub fn send_tx(tx: &Transaction) -> Result<()> {
     let url = format!("{}:8669/submit_transaction", get_serv_addr().c(d!())?);
-    attohttpc::post(&url)
+    attohttpc::post(url)
         .header(attohttpc::header::CONTENT_TYPE, "application/json")
         .bytes(&serde_json::to_vec(tx).c(d!())?)
         .send()
@@ -372,7 +372,7 @@ struct TmStatus {
 fn get_network_status(addr: &str) -> Result<TmStatus> {
     let url = format!("{}:26657/status", addr);
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -403,7 +403,7 @@ pub fn get_local_block_height() -> u64 {
 pub fn get_asset_type(code: &str) -> Result<AssetType> {
     let url = format!("{}:8668/asset_token/{}", get_serv_addr().c(d!())?, code);
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -421,7 +421,7 @@ pub fn get_created_assets(addr: &XfrPublicKey) -> Result<Vec<DefineAsset>> {
         wallet::public_key_to_base64(addr)
     );
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -474,7 +474,7 @@ fn get_owned_utxos_x(
         wallet::public_key_to_base64(addr)
     );
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -497,7 +497,7 @@ fn get_seq_id() -> Result<u64> {
 
     let url = format!("{}:8668/global_state", get_serv_addr().c(d!())?);
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -522,7 +522,7 @@ pub fn get_owner_memo_batch(ids: &[TxoSID]) -> Result<Vec<Option<OwnerMemo>>> {
         ids
     );
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -540,7 +540,7 @@ pub fn get_delegation_info(pk: &XfrPublicKey) -> Result<DelegationInfo> {
         wallet::public_key_to_base64(pk)
     );
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()
@@ -558,7 +558,7 @@ pub fn get_validator_detail(td_addr: TendermintAddrRef) -> Result<ValidatorDetai
         td_addr
     );
 
-    attohttpc::get(&url)
+    attohttpc::get(url)
         .send()
         .c(d!())?
         .error_for_status()

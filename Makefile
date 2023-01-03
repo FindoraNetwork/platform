@@ -5,6 +5,8 @@
 all: build_release_goleveldb
 
 export CARGO_NET_GIT_FETCH_WITH_CLI = true
+export STATIC_CHAIN_DEV_BASE_DIR_SUFFIX = findora
+
 export PROTOC = $(shell which protoc)
 
 export STAKING_INITIAL_VALIDATOR_CONFIG = $(shell pwd)/src/ledger/src/staking/init/staking_config.json
@@ -88,6 +90,10 @@ build_release_web3: tendermint_cleveldb
 	cargo build --features="web3_service debug_env" --release --bins -p abciapp -p finutils
 	$(call pack,release)
 
+build_bench_release: tendermint_goleveldb
+	cargo build --features="debug_env benchmark" --release --bins -p abciapp -p finutils
+	$(call pack,release)
+
 tendermint_cleveldb:
 	- rm -f $(shell which tendermint)
 	bash tools/download_tendermint.sh 'tools/tendermint'
@@ -101,10 +107,8 @@ tendermint_goleveldb:
 	bash tools/download_tendermint.sh 'tools/tendermint'
 	cd tools/tendermint && $(MAKE) install
 
-test:
-	- find src -name "checkpoint.toml" | xargs rm -f
+test: checkpoint_cleanup
 	cargo test --release --workspace -- --test-threads=1 # --nocapture
-	- find src -name "checkpoint.toml" | xargs rm -f
 
 coverage:
 	cargo tarpaulin --timeout=900 --branch --workspace --release \
@@ -119,6 +123,42 @@ staking_cfg_debug:
 
 bench:
 	cargo bench --workspace
+
+bench_50k: checkpoint_cleanup build_bench_release
+	bash tools/benchutils/bench.sh 50000
+
+bench_100k: checkpoint_cleanup build_bench_release
+	bash tools/benchutils/bench.sh 100000
+
+bench_200k: checkpoint_cleanup build_bench_release
+	bash tools/benchutils/bench.sh 200000
+
+dbench_50k: checkpoint_cleanup build_bench_release
+ifeq ($(FN_DDEV_HOSTS),)
+	@ echo '$$FN_DDEV_HOSTS not set!'
+	@ exit 1
+endif
+	bash tools/benchutils/bench.sh 50000 y
+
+dbench_100k: checkpoint_cleanup build_bench_release
+ifeq ($(FN_DDEV_HOSTS),)
+	@ echo '$$FN_DDEV_HOSTS not set!'
+	@ exit 1
+endif
+	bash tools/benchutils/bench.sh 100000 y
+
+dbench_200k: checkpoint_cleanup build_bench_release
+ifeq ($(FN_DDEV_HOSTS),)
+	@ echo '$$FN_DDEV_HOSTS not set!'
+	@ exit 1
+endif
+	bash tools/benchutils/bench.sh 200000 y
+
+checkpoint_cleanup:
+	- find src -name "checkpoint.toml" | xargs rm -f
+	- find src -name "checkpoint.json" | xargs rm -f
+	- find tools -name "checkpoint.toml" | xargs rm -f
+	- find tools -name "checkpoint.json" | xargs rm -f
 
 lint:
 	cargo clippy --workspace

@@ -2,7 +2,8 @@ name: Wasm Building And Pushing
 on: 
   push:
     branches:
-      - '**'
+      - main
+      - develop
     tags:
       - '*-release'
 

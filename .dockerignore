@@ -7,3 +7,4 @@ Jenkinsfile
 target
 hooks
 **/target
+checkpoint.toml
