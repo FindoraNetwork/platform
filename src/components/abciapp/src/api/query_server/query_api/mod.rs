@@ -24,7 +24,7 @@ use {
         },
     },
     ledger_api::*,
-    log::info,
+    tracing::info,
     parking_lot::RwLock,
     ruc::*,
     serde::{Deserialize, Serialize},

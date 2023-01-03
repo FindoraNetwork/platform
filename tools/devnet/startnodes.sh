@@ -20,6 +20,7 @@ if [ -z "$Node" ] || ([ ! -z "$Node" ] && [ "$Node" = "$node" ]); then
         LEDGER_DIR=$DEVNET/$node/abci \
         ENABLE_QUERY_SERVICE=true \
         ENABLE_ETH_API_SERVICE=true \
+        ARC_HISTORY=4,2 \
         abcid $DEVNET/$node >> $DEVNET/$node/abcid.log 2>&1  &
 fi
 done

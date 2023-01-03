@@ -18,7 +18,7 @@ use futures::{
 use jsonrpc_core::Result as JsonRpcResult;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use lazy_static::lazy_static;
-use log::{debug, warn};
+use tracing::{debug, warn};
 use parking_lot::RwLock;
 use sha3::{Digest, Keccak256};
 use std::collections::BTreeMap;
