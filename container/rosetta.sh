@@ -1,9 +1,6 @@
 #!/bin/bash
-set -e
+cd /root/
 
-exec findorad "$@"
-
-# Rosetta
 export PORT=8080
 export RPCURL=http://127.0.0.1:8545
 export NETWORK=PRINET

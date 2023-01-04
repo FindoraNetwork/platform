@@ -4,6 +4,13 @@ ENV WASM_DIR /tmp/wasm-js-bindings
 
 RUN apt update && apt install -y libleveldb-dev=1.22-3 && rm -rf /var/lib/apt/lists/*
 COPY binary/goleveldb/findorad /usr/local/sbin/findorad
+COPY binary/findora-rosetta /usr/local/sbin/findora-rosetta
 COPY container/docker-entrypoint-findorad.sh /docker-entrypoint.sh
+
+# Rosetta
+ENV PORT=8080
+ENV RPCURL=http://127.0.0.1:8545
+ENV NETWORK=PRINET
+
 WORKDIR /
 ENTRYPOINT ["/docker-entrypoint.sh"]
