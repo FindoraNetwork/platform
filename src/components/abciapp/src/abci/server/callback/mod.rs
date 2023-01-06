@@ -33,13 +33,13 @@ use {
             Arc,
         },
     },
-    tracing::info
     tendermint_proto::abci::{
         CheckTxType, RequestBeginBlock, RequestCheckTx, RequestDeliverTx,
         RequestEndBlock, RequestInfo, RequestInitChain, RequestQuery,
         ResponseBeginBlock, ResponseCheckTx, ResponseCommit, ResponseDeliverTx,
         ResponseEndBlock, ResponseInfo, ResponseInitChain, ResponseQuery,
     },
+    tracing::info,
 };
 
 #[cfg(feature = "web3_service")]

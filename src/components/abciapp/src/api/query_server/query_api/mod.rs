@@ -24,7 +24,6 @@ use {
         },
     },
     ledger_api::*,
-    tracing::info,
     parking_lot::RwLock,
     ruc::*,
     serde::{Deserialize, Serialize},
@@ -33,6 +32,7 @@ use {
         collections::{BTreeMap, HashSet},
         sync::Arc,
     },
+    tracing::info,
     zei::{
         serialization::ZeiFromToBytes,
         xfr::{sig::XfrPublicKey, structs::OwnerMemo},

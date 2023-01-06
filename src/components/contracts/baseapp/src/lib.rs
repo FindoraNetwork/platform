@@ -35,9 +35,9 @@ use parking_lot::RwLock;
 use primitive_types::{H160, H256, U256};
 use ruc::{eg, Result};
 use std::{borrow::BorrowMut, path::Path, sync::Arc};
-use tracing::info;
 use storage::state::{ChainState, ChainStateOpts};
 use tendermint_proto::types::Header;
+use tracing::info;
 
 lazy_static! {
     /// An identifier that distinguishes different EVM chains.
