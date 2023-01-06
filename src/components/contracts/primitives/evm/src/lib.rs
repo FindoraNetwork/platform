@@ -4,9 +4,7 @@
 use ethereum_types::{Bloom, H160, H256, U256};
 use evm::ExitReason;
 use fp_core::context::Context;
-use fp_types::actions::evm::{
-    Call, Create, Create2,
-};
+use fp_types::actions::evm::{Call, Create, Create2};
 use ruc::*;
 use serde::{Deserialize, Serialize};
 

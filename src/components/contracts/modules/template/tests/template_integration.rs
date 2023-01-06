@@ -3,7 +3,7 @@
 //! Template module integration tests.
 use abci::*;
 use fp_mocks::*;
-use fp_traits::{account::AccountAsset, evm::FeeCalculator};
+use fp_traits::account::{AccountAsset, FeeCalculator};
 use fp_types::{actions::template::Action as TemplateAction, actions::Action, U256};
 use fp_utils::tx::EvmRawTxWrapper;
 use module_template::ValueStore;
@@ -149,9 +149,7 @@ fn test_abci_commit() {
             &ALICE_XFR.pub_key.into()
         ),
         U256::from(100_0000_0000_0000_0000_u64).saturating_sub(
-            <BaseApp as module_account::Config>::FeeCalculator::min_gas_price(
-                BASE_APP.lock().unwrap().deliver_state.header.height as u64,
-            )
+            <BaseApp as module_account::Config>::FeeCalculator::min_fee()
         )
     );
 }

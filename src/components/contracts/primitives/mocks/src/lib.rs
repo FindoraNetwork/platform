@@ -7,7 +7,7 @@ pub use baseapp::{
 };
 pub use fp_types::{actions::Action, assemble::UncheckedTransaction};
 
-use ethereum::{TransactionAction, TransactionSignature, TransactionV2 as Transaction};
+use ethereum::{TransactionAction, TransactionSignature, TransactionV0 as Transaction};
 use fp_traits::account::AccountAsset;
 use fp_traits::evm::{AddressMapping, EthereumAddressMapping};
 use fp_types::crypto::{Address, MultiSignature};
@@ -148,7 +148,7 @@ impl UnsignedTransaction {
         )
         .unwrap();
 
-        Transaction::Legacy(ethereum::LegacyTransaction {
+        Transaction {
             nonce: self.nonce,
             gas_price: self.gas_price,
             gas_limit: self.gas_limit,
@@ -156,6 +156,6 @@ impl UnsignedTransaction {
             value: self.value,
             input: self.input.clone(),
             signature: sig,
-        })
+        }
     }
 }

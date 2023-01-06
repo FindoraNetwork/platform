@@ -9,8 +9,6 @@ description = "Findora Primitive utility functions"
 readme = "README.md"
 
 [dependencies]
-ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
-ethereum-types = { version = "0.13.1", default-features = false }
 futures = "0.3.16"
 base64 = "0.13"
 bip0039 = "0.8.0"

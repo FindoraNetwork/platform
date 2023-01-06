@@ -108,11 +108,4 @@ impl<C: Config> OnChargeEVMTransaction for App<C> {
         C::AccountAsset::refund(ctx, &account_id, already_withdrawn)?;
         C::AccountAsset::burn(ctx, &account_id, corrected_fee)
     }
-
-    fn pay_priority_fee(ctx: &Context, tip: U256) -> Result<()> {
-        let author = App::<C>::find_proposer(ctx);
-        let account_id = C::AddressMapping::convert_to_account_id(author);
-
-        C::AccountAsset::income(ctx, &account_id, tip)
-    }
 }

@@ -1,11 +1,12 @@
 #![allow(clippy::unused_unit)]
 
 use core::fmt::Display;
-use ethereum::TransactionV2 as Transaction;
+use ethereum::{LegacyTransactionMessage, TransactionV0 as Transaction};
 use ethereum_types::{H160, H256};
 use fp_types::{
     actions::{ethereum::Action as EthAction, Action},
     assemble::UncheckedTransaction,
+    crypto::secp256k1_ecdsa_recover,
 };
 use fp_utils::tx::EvmRawTxWrapper;
 use ruc::{d, err::RucResult};
@@ -21,28 +22,12 @@ pub(crate) fn error_to_jsvalue<T: Display>(e: T) -> JsValue {
 pub fn recover_signer(transaction: &Transaction) -> Option<H160> {
     let mut sig = [0u8; 65];
     let mut msg = [0u8; 32];
-    match transaction {
-        Transaction::Legacy(t) => {
-            sig[0..32].copy_from_slice(&t.signature.r()[..]);
-            sig[32..64].copy_from_slice(&t.signature.s()[..]);
-            sig[64] = t.signature.standard_v();
-            msg.copy_from_slice(
-                &ethereum::LegacyTransactionMessage::from(t.clone()).hash()[..],
-            );
-        }
-        Transaction::EIP1559(t) => {
-            sig[0..32].copy_from_slice(&t.r[..]);
-            sig[32..64].copy_from_slice(&t.s[..]);
-            sig[64] = t.odd_y_parity as u8;
-            msg.copy_from_slice(
-                &ethereum::EIP1559TransactionMessage::from(t.clone()).hash()[..],
-            );
-        }
-        _ => {
-            return None;
-        }
-    }
-    let pubkey = fp_types::crypto::secp256k1_ecdsa_recover(&sig, &msg).ok()?;
+    sig[0..32].copy_from_slice(&transaction.signature.r()[..]);
+    sig[32..64].copy_from_slice(&transaction.signature.s()[..]);
+    sig[64] = transaction.signature.standard_v();
+    msg.copy_from_slice(&LegacyTransactionMessage::from(transaction.clone()).hash()[..]);
+
+    let pubkey = secp256k1_ecdsa_recover(&sig, &msg).ok()?;
     Some(H160::from(H256::from_slice(
         Keccak256::digest(pubkey).as_slice(),
     )))
@@ -92,19 +77,20 @@ pub fn evm_tx_hash(raw_tx: String) -> Result<String, JsValue> {
 #[allow(missing_docs)]
 mod test {
     use super::*;
-    use fp_types::actions::{ethereum::Action as EthAction, Action};
+    use fp_types::actions::Action;
 
     #[test]
     fn recover_signer_works() {
-        let raw_tx = String::from("ZXZtOnsiRXRoZXJldW0iOnsiVHJhbnNhY3QiOnsiRUlQMTU1OSI6eyJjaGFpbl9pZCI6MjE1Miwibm9uY2UiOiIweDEiLCJtYXhfcHJpb3JpdHlfZmVlX3Blcl9nYXMiOiIweDI3MTAiLCJtYXhfZmVlX3Blcl9nYXMiOiIweDI3MTAiLCJnYXNfbGltaXQiOiIweDI3MTAiLCJhY3Rpb24iOnsiQ2FsbCI6IjB4MmFkMzI4NDZjNmRkMmZmZDNlZGFkYmU1MWNkNWFlMDRhYTVlNTc1ZSJ9LCJ2YWx1ZSI6IjB4MjcxMCIsImlucHV0IjpbXSwiYWNjZXNzX2xpc3QiOltdLCJvZGRfeV9wYXJpdHkiOmZhbHNlLCJyIjoiMHhmOGFlZjdmODA1M2Q4OWZlZTM5NTBjNGQ3MDIwODBiZjNhODA3MmJlZDVkODRhM2FmMTlhMzYwMDgxYjYzNmEyIiwicyI6IjB4Mjk2Mjk5YThmMjQzMGI4NmZkM2ViOTc2ZWFiYzczMGFjMWNmYmJiZTM2ZWI2OWVhZTMzOGNmZjMzYzRhOThjMSJ9fX19");
+        let raw_tx = String::from("ZXZtOnsic2lnbmF0dXJlIjpudWxsLCJmdW5jdGlvbiI6eyJFdGhlcmV1bSI6eyJUcmFuc2FjdCI6eyJub25jZSI6IjB4MSIsImdhc19wcmljZSI6IjB4MTc0ODc2ZTgwMCIsImdhc19saW1pdCI6IjB4NTIwOCIsImFjdGlvbiI6eyJDYWxsIjoiMHgyYWQzMjg0NmM2ZGQyZmZkM2VkYWRiZTUxY2Q1YWUwNGFhNWU1NzVlIn0sInZhbHVlIjoiMHg1NmJjNzVlMmQ2MzEwMDAwMCIsImlucHV0IjpbXSwic2lnbmF0dXJlIjp7InYiOjEwODIsInIiOiIweGY4YWVmN2Y4MDUzZDg5ZmVlMzk1MGM0ZDcwMjA4MGJmM2E4MDcyYmVkNWQ4NGEzYWYxOWEzNjAwODFiNjM2YTIiLCJzIjoiMHgyOTYyOTlhOGYyNDMwYjg2ZmQzZWI5NzZlYWJjNzMwYWMxY2ZiYmJlMzZlYjY5ZWFlMzM4Y2ZmMzNjNGE5OGMxIn19fX19");
         let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE).unwrap();
         let evm_tx = EvmRawTxWrapper::unwrap(&tx_bytes).unwrap();
-        let action: Action = serde_json::from_slice(evm_tx).unwrap();
-        if let Action::Ethereum(EthAction::Transact(tx)) = action {
+        let unchecked_tx: UncheckedTransaction<()> =
+            serde_json::from_slice(evm_tx).unwrap();
+        if let Action::Ethereum(EthAction::Transact(tx)) = unchecked_tx.function {
             let signer = recover_signer(&tx).unwrap();
             assert_eq!(
                 format!("{:?}", signer),
-                "0x7bc371bb41545d62117591e5051be3d2c6296f3e"
+                "0xa5225cbee5052100ec2d2d94aa6d258558073757"
             );
         } else {
             panic!()
@@ -112,9 +98,8 @@ mod test {
     }
 
     #[test]
-    // LegacyTransaction
     fn evm_tx_hash_works() {
-        let raw_tx = String::from("eyJzaWduYXR1cmUiOm51bGwsImZ1bmN0aW9uIjp7IkV0aGVyZXVtIjp7IlRyYW5zYWN0Ijp7IkxlZ2FjeSI6eyJub25jZSI6IjB4MCIsImdhc19wcmljZSI6IjB4MjU0MGJlNDAwIiwiZ2FzX2xpbWl0IjoiMHgxMDAwMDAiLCJhY3Rpb24iOnsiQ2FsbCI6IjB4MzMyNWE3ODQyNWYxN2E3ZTQ4N2ViNTY2NmIyYmZkOTNhYmIwNmM3MCJ9LCJ2YWx1ZSI6IjB4YSIsImlucHV0IjpbXSwic2lnbmF0dXJlIjp7InYiOjQzNDAsInIiOiIweDZiMjBjNzIzNTEzOTk4ZThmYTQ4NWM1MmI4ZjlhZTRmZDdiMWUwYmQwZGZiNzk4NTIzMThiMGMxMDBlOTFmNWUiLCJzIjoiMHg0ZDRjOGMxZjJlMTdjMDJjNGE4OTZlMjYyMTI3YjhiZDZlYmZkNWY1YTc1NWEzZTkyMjBjZmM2OGI4YzY5ZDVkIn19fX19fQ==");
+        let raw_tx = String::from("eyJzaWduYXR1cmUiOm51bGwsImZ1bmN0aW9uIjp7IkV0aGVyZXVtIjp7IlRyYW5zYWN0Ijp7Im5vbmNlIjoiMHg5IiwiZ2FzX3ByaWNlIjoiMHhlOGQ0YTUxMDAwIiwiZ2FzX2xpbWl0IjoiMHg1MjA4IiwiYWN0aW9uIjp7IkNhbGwiOiIweGE1MjI1Y2JlZTUwNTIxMDBlYzJkMmQ5NGFhNmQyNTg1NTgwNzM3NTcifSwidmFsdWUiOiIweDk4YTdkOWI4MzE0YzAwMDAiLCJpbnB1dCI6W10sInNpZ25hdHVyZSI6eyJ2IjoxMDgyLCJyIjoiMHg4MDBjZjQ5ZTAzMmJhYzY4MjY3MzdhZGJhZDEzN2Y0MTk5OTRjNjgxZWE1ZDUyYjliMGJhZDJmNDAyYjMwMTI0IiwicyI6IjB4Mjk1Mjc3ZWY2NTYzNDAwY2VkNjFiODhkM2ZiNGM3YjMyY2NkNTcwYThiOWJiOGNiYmUyNTkyMTRhYjdkZTI1YSJ9fX19fQ==");
         let tx_bytes = base64::decode_config(raw_tx, base64::URL_SAFE).unwrap();
         let unchecked_tx: UncheckedTransaction<()> =
             serde_json::from_slice(tx_bytes.as_slice()).unwrap();
@@ -122,7 +107,7 @@ mod test {
             let hash = H256::from_slice(Keccak256::digest(&rlp::encode(&tx)).as_slice());
             assert_eq!(
                 format!("{:?}", hash),
-                "0x83901d025accca27ee53fdf1ee354f4437418731e0995ee031beb99499405d26"
+                "0x0eeb0ff455b1b57b821634cf853e7247e584a675610f13097cc49c2022505df3"
             );
         } else {
             panic!()

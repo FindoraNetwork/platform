@@ -56,5 +56,5 @@ pub use self::transaction::{
     LocalTransactionStatus, PendingTransaction, PendingTransactions, RichRawTransaction,
     Transaction,
 };
-pub use self::transaction_request::{TransactionMessage, TransactionRequest};
+pub use self::transaction_request::TransactionRequest;
 pub use self::work::Work;

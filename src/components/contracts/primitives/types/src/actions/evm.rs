@@ -16,8 +16,6 @@ pub struct Call {
     pub value: U256,
     pub gas_limit: u64,
     pub gas_price: Option<U256>,
-    pub max_fee_per_gas: Option<U256>,
-    pub max_priority_fee_per_gas: Option<U256>,
     pub nonce: Option<U256>,
 }
 
@@ -28,8 +26,6 @@ pub struct Create {
     pub value: U256,
     pub gas_limit: u64,
     pub gas_price: Option<U256>,
-    pub max_fee_per_gas: Option<U256>,
-    pub max_priority_fee_per_gas: Option<U256>,
     pub nonce: Option<U256>,
 }
 
@@ -41,7 +37,5 @@ pub struct Create2 {
     pub value: U256,
     pub gas_limit: u64,
     pub gas_price: Option<U256>,
-    pub max_fee_per_gas: Option<U256>,
-    pub max_priority_fee_per_gas: Option<U256>,
     pub nonce: Option<U256>,
 }

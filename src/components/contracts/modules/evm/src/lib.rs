@@ -33,7 +33,7 @@ use fp_evm::TransactionStatus;
 use evm::executor::stack::PrecompileSet as EvmPrecompileSet;
 
 use ethereum::{
-    Log, ReceiptV0 as Receipt, TransactionAction, TransactionSignature, TransactionV2,
+    Log, ReceiptV0 as Receipt, TransactionAction, TransactionSignature, TransactionV0,
 };
 
 use fp_types::{
@@ -110,7 +110,7 @@ impl<C: Config> App<C> {
         _lowlevel: Vec<u8>,
         transaction_index: u32,
         transaction_hash: H256,
-    ) -> Result<(TransactionV2, TransactionStatus, Receipt)> {
+    ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
         let function = self.contracts.bridge.function("withdrawAsset").c(d!())?;
 
         let asset = Token::FixedBytes(Vec::from(_asset));
@@ -167,7 +167,7 @@ impl<C: Config> App<C> {
         _lowlevel: Vec<u8>,
         transaction_index: u32,
         transaction_hash: H256,
-    ) -> Result<(TransactionV2, TransactionStatus, Receipt)> {
+    ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
         let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
 
         let from = Token::Bytes(from.noah_to_bytes());
@@ -251,13 +251,13 @@ impl<C: Config> App<C> {
         from: H160,
         to: H160,
         logs: Vec<Log>,
-    ) -> (TransactionV2, TransactionStatus, Receipt) {
+    ) -> (TransactionV0, TransactionStatus, Receipt) {
         let signature_fake = H256([
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
         ]);
-        let tx = TransactionV2::Legacy(ethereum::LegacyTransaction {
+        let tx = TransactionV0 {
             nonce: U256::zero(),
             gas_price,
             gas_limit,
@@ -266,7 +266,7 @@ impl<C: Config> App<C> {
                 .unwrap(),
             input,
             action,
-        });
+        };
 
         let mut logs_bloom = Bloom::default();
         Self::logs_bloom(&logs, &mut logs_bloom);

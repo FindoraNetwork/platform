@@ -1,4 +1,4 @@
-use ethereum::{BlockV2 as Block, ReceiptV0 as Receipt};
+use ethereum::{BlockV0 as Block, ReceiptV0 as Receipt};
 use fp_core::account::SmartAccount;
 use fp_evm::BlockId;
 use fp_types::crypto::Address;
