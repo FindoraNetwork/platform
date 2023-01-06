@@ -19,11 +19,12 @@
 //! `TransactionRequest` type
 
 use crate::types::Bytes;
+use ethereum::AccessListItem;
 use ethereum_types::{H160, U256};
 use serde::{Deserialize, Serialize};
 
 /// Transaction request coming from RPC
-#[derive(Debug, Clone, Default, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionRequest {
@@ -32,7 +33,14 @@ pub struct TransactionRequest {
     /// Recipient
     pub to: Option<H160>,
     /// Gas Price
+    #[serde(default)]
     pub gas_price: Option<U256>,
+    /// Max BaseFeePerGas the user is willing to pay.
+    #[serde(default)]
+    pub max_fee_per_gas: Option<U256>,
+    /// The miner's tip.
+    #[serde(default)]
+    pub max_priority_fee_per_gas: Option<U256>,
     /// Gas
     pub gas: Option<U256>,
     /// Value of transaction in wei
@@ -41,4 +49,7 @@ pub struct TransactionRequest {
     pub data: Option<Bytes>,
     /// Transaction's nonce
     pub nonce: Option<U256>,
+    /// Pre-pay to warm storage access.
+    #[serde(default)]
+    pub access_list: Option<Vec<AccessListItem>>,
 }

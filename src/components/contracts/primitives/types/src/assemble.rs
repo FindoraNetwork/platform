@@ -1,5 +1,5 @@
 use crate::actions::ethereum::Action as EtherAction;
-use crate::actions::Action;
+use crate::actions::{Action, Action2};
 use crate::crypto::{Address, Signature};
 use crate::transaction;
 use ethereum::TransactionV0 as Transaction;
@@ -31,6 +31,9 @@ impl CheckFee {
 /// Unchecked transaction type as expected by this application.
 pub type UncheckedTransaction<Extra> =
     transaction::UncheckedTransaction<Address, Action, Signature, Extra>;
+
+pub type UncheckedTransaction2<Extra> =
+    transaction::UncheckedTransaction<Address, Action2, Signature, Extra>;
 
 /// Transaction type that has already been checked.
 pub type CheckedTransaction<Extra> =

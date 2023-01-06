@@ -8,7 +8,7 @@ use baseapp::{extensions::SignedExtra, BaseApp};
 use config::abci::global_cfg::CFG;
 use ethereum::{
     BlockV0 as EthereumBlock, LegacyTransactionMessage as EthereumTransactionMessage,
-    TransactionV0 as EthereumTransaction,
+    TransactionSignature, TransactionV0 as EthereumTransaction,
 };
 use ethereum_types::{BigEndianHash, Bloom, H160, H256, H512, H64, U256, U64};
 use evm::{ExitError, ExitReason};
@@ -228,6 +228,37 @@ impl EthApi for EthApiImpl {
     fn send_transaction(&self, request: TransactionRequest) -> BoxFuture<Result<H256>> {
         debug!(target: "eth_rpc", "send_transaction, request:{:?}", request);
 
+        let mut request = request;
+        let curr_height = match self.block_number() {
+            Ok(h) => h.as_u64(),
+            Err(e) => return Box::pin(future::err(e)),
+        };
+        let min_gas_price =
+            <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(curr_height);
+
+        let min_gas_price_eip1559 =
+            <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(0);
+
+        if request.gas_price.is_none()
+            && request.max_fee_per_gas.is_some()
+            && request.max_priority_fee_per_gas.is_some()
+        {
+            if CFG.checkpoint.enable_eip1559_height > curr_height {
+                return Box::pin(future::err(internal_err(format!(
+                    "eip1559 not enabled at height: {:?}",
+                    curr_height
+                ))));
+            }
+
+            if request.max_fee_per_gas.unwrap() < min_gas_price {
+                return Box::pin(future::err(internal_err(
+                    "eip1559 transaction max_fee_per_gas less than min_gas_price",
+                )));
+            }
+
+            request.gas_price = Some(min_gas_price_eip1559);
+        }
+
         let from = match request.from {
             Some(from) => from,
             None => {
@@ -260,18 +291,9 @@ impl EthApi for EthApiImpl {
             Err(e) => return Box::pin(future::err(e)),
         };
 
-        let curr_height = match self.block_number() {
-            Ok(h) => h.as_u64(),
-            Err(e) => return Box::pin(future::err(e)),
-        };
-
         let message = EthereumTransactionMessage {
             nonce,
-            gas_price: request.gas_price.unwrap_or_else(|| {
-                <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(
-                    curr_height,
-                )
-            }),
+            gas_price: request.gas_price.unwrap_or(min_gas_price),
             gas_limit: request.gas.unwrap_or_else(U256::max_value),
             value: request.value.unwrap_or_else(U256::zero),
             input: request.data.map(|s| s.into_vec()).unwrap_or_default(),
@@ -345,6 +367,40 @@ impl EthApi for EthApiImpl {
     ) -> BoxFuture<Result<Bytes>> {
         debug!(target: "eth_rpc", "call, request:{:?}", request);
 
+        let mut request = request;
+        let curr_height = match self.block_number() {
+            Ok(v) => v,
+            Err(e) => {
+                return Box::pin(async move { Err(e) });
+            }
+        }
+        .as_u64();
+
+        let min_gas_price =
+            <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(curr_height);
+        let min_gas_price_eip1559 =
+            <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(0);
+
+        if request.gas_price.is_none()
+            && request.max_fee_per_gas.is_some()
+            && request.max_priority_fee_per_gas.is_some()
+        {
+            if CFG.checkpoint.enable_eip1559_height > curr_height {
+                return Box::pin(future::err(internal_err(format!(
+                    "eip1559 not enabled at height: {:?}",
+                    curr_height
+                ))));
+            }
+
+            if request.max_fee_per_gas.unwrap() < min_gas_price {
+                return Box::pin(future::err(internal_err(
+                    "eip1559 transaction max_fee_per_gas less than min_gas_price",
+                )));
+            }
+
+            request.gas_price = Some(min_gas_price_eip1559);
+        }
+
         let account_base_app = self.account_base_app.clone();
 
         let task = spawn_blocking(move || -> Result<Bytes> {
@@ -352,6 +408,8 @@ impl EthApi for EthApiImpl {
                 from,
                 to,
                 gas_price,
+                max_fee_per_gas: _max_fee_per_gas,
+                max_priority_fee_per_gas: _max_priority_fee_per_gas,
                 gas,
                 value,
                 data,
@@ -717,13 +775,94 @@ impl EthApi for EthApiImpl {
     }
 
     fn send_raw_transaction(&self, bytes: Bytes) -> BoxFuture<Result<H256>> {
-        let transaction = match rlp::decode::<EthereumTransaction>(&bytes.0[..]) {
-            Ok(transaction) => transaction,
-            Err(_) => {
-                return Box::pin(future::err(internal_err("decode transaction failed")));
+        let slice = &bytes.0[..];
+        if slice.is_empty() {
+            return Box::pin(future::err(internal_err("transaction data is empty")));
+        }
+        // let first = slice.get(0).unwrap();
+        let first = slice.first().unwrap();
+        let curr_height = match self.block_number() {
+            Ok(h) => h.as_u64(),
+            Err(e) => return Box::pin(future::err(e)),
+        };
+        let min_gas_price =
+            <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(curr_height);
+        let min_gas_price_eip1559 =
+            <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(0);
+
+        let transaction = if first > &0x7f {
+            // Legacy transaction. Decode and wrap in envelope.
+            match rlp::decode::<ethereum::TransactionV0>(slice) {
+                Ok(transaction) => ethereum::TransactionV2::Legacy(transaction),
+                Err(_) => {
+                    return Box::pin(future::err(internal_err(
+                        "decode transaction failed",
+                    )));
+                }
+            }
+        } else {
+            if CFG.checkpoint.enable_eip1559_height > curr_height {
+                return Box::pin(future::err(internal_err(format!(
+                    "eip1559 not enabled at height: {:?}",
+                    curr_height
+                ))));
+            }
+            // Typed Transaction.
+            // `ethereum` crate decode implementation for `TransactionV2` expects a valid rlp input,
+            // and EIP-1559 breaks that assumption by prepending a version byte.
+            // We re-encode the payload input to get a valid rlp, and the decode implementation will strip
+            // them to check the transaction version byte.
+            let extend = rlp::encode(&slice);
+            match rlp::decode::<ethereum::TransactionV2>(&extend[..]) {
+                Ok(transaction) => transaction,
+                Err(_) => {
+                    return Box::pin(future::err(internal_err(
+                        "decode transaction failed",
+                    )))
+                }
             }
         };
-        debug!(target: "eth_rpc", "send_raw_transaction :{:?}", transaction);
+
+        let transaction: ethereum::TransactionV0 = match transaction {
+            ethereum::TransactionV2::Legacy(tx) => tx,
+            ethereum::TransactionV2::EIP1559(tx) => {
+                if tx.max_fee_per_gas < min_gas_price {
+                    return Box::pin(future::err(internal_err(
+                        "eip1559 transaction max_fee_per_gas less than min_gas_price",
+                    )));
+                }
+
+                let chain_id: u64 = <BaseApp as module_evm::Config>::ChainId::get();
+                let v: u64 = if tx.odd_y_parity {
+                    chain_id * 2 + 36
+                } else {
+                    chain_id * 2 + 35
+                };
+                let signature = match TransactionSignature::new(v, tx.r, tx.s) {
+                    Some(sig) => sig,
+                    None => {
+                        return Box::pin(future::err(internal_err(
+                            "eip1559 signature input error!!",
+                        )))
+                    }
+                };
+
+                ethereum::TransactionV0 {
+                    nonce: tx.nonce,
+                    gas_price: min_gas_price_eip1559,
+                    gas_limit: tx.gas_limit,
+                    action: tx.action,
+                    value: tx.value,
+                    input: tx.input,
+                    signature,
+                }
+            }
+            _ => {
+                return Box::pin(future::err(internal_err(
+                    "do't support other transaction format!!!",
+                )))
+            }
+        };
 
         let transaction_hash =
             H256::from_slice(Keccak256::digest(&rlp::encode(&transaction)).as_slice());
@@ -763,6 +902,39 @@ impl EthApi for EthApiImpl {
         number: Option<BlockNumber>,
     ) -> BoxFuture<Result<U256>> {
         debug!(target: "eth_rpc", "estimate_gas, block number {:?} request:{:?}", number, request);
+
+        let mut request = request;
+        let curr_height = match self.block_number() {
+            Ok(v) => v,
+            Err(e) => {
+                return Box::pin(async move { Err(e) });
+            }
+        }
+        .as_u64();
+        let min_gas_price =
+            <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(curr_height);
+        let min_gas_price_eip1559 =
+            <BaseApp as module_evm::Config>::FeeCalculator::min_gas_price(0);
+
+        if request.gas_price.is_none()
+            && request.max_fee_per_gas.is_some()
+            && request.max_priority_fee_per_gas.is_some()
+        {
+            if CFG.checkpoint.enable_eip1559_height > curr_height {
+                return Box::pin(future::err(internal_err(format!(
+                    "eip1559 not enabled at height: {:?}",
+                    curr_height
+                ))));
+            }
+
+            if request.max_fee_per_gas.unwrap() < min_gas_price {
+                return Box::pin(future::err(internal_err(
+                    "eip1559 transaction max_fee_per_gas less than min_gas_price",
+                )));
+            }
+
+            request.gas_price = Some(min_gas_price_eip1559);
+        }
 
         let account_base_app = self.account_base_app.clone();
 
@@ -861,6 +1033,8 @@ impl EthApi for EthApiImpl {
                     from,
                     to,
                     gas_price,
+                    max_fee_per_gas: _max_fee_per_gas,
+                    max_priority_fee_per_gas: _max_priority_fee_per_gas,
                     gas,
                     value,
                     data,
@@ -1139,6 +1313,8 @@ impl EthApi for EthApiImpl {
                     );
                     let receipt = receipts[index].clone();
                     let status = statuses[index].clone();
+                    let transaction = block.transactions[index].clone();
+
                     let mut cumulative_receipts = receipts;
                     cumulative_receipts
                         .truncate((status.transaction_index + 1) as usize);
@@ -1196,6 +1372,7 @@ impl EthApi for EthApiImpl {
                         status_code: Some(U64::from(receipt.state_root.to_low_u64_be())),
                         logs_bloom: receipt.logs_bloom,
                         state_root: None,
+                        effective_gas_price: transaction.gas_price,
                     }));
                 }
                 _ => Ok(None),
@@ -1403,6 +1580,7 @@ fn rich_block_build(
                 }
             },
             size: Some(U256::from(rlp::encode(&block).len() as u32)),
+            base_fee_per_gas: None,
         },
         extra_info: BTreeMap::new(),
     }
@@ -1455,7 +1633,9 @@ fn transaction_build(
             |status| status.to,
         ),
         value: transaction.value,
-        gas_price: transaction.gas_price,
+        gas_price: Some(transaction.gas_price),
+        max_fee_per_gas: None,
+        max_priority_fee_per_gas: None,
         gas: transaction.gas_limit,
         input: Bytes(transaction.clone().input),
         creates: status.as_ref().and_then(|status| status.contract_address),
@@ -1466,6 +1646,7 @@ fn transaction_build(
         v: U256::from(transaction.signature.v()),
         r: U256::from(transaction.signature.r().as_bytes()),
         s: U256::from(transaction.signature.s().as_bytes()),
+        access_list: None,
     }
 }
 
@@ -1661,6 +1842,7 @@ fn dummy_block(height: u64, full: bool) -> Rich<Block> {
         uncles: vec![],
         transactions,
         size: Some(U256::from(0x1_u32)),
+        base_fee_per_gas: None,
     };
 
     Rich {

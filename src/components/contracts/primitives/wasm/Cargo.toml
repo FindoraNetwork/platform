@@ -27,6 +27,9 @@ wasm-bindgen = { version = "=0.2.73", features = ["serde-serialize"] }
 # Must enable the "js"-feature,
 # OR the compiling will fail.
 getrandom = { version = "0.2", features = ["js"] }
+baseapp = { path = "../../../contracts/baseapp" }
+module-ethereum = { path = "../../modules/ethereum"}
+fp-traits = { path = "../../primitives/traits" }
 
 [lib]
 crate-type = ["cdylib", "rlib"]
