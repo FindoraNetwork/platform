@@ -1597,6 +1597,11 @@ pub fn new_keypair() -> XfrKeyPair {
 }
 
 #[wasm_bindgen]
+/// Creates a new transfer key pair.
+pub fn new_keypair_old() -> XfrKeyPair {
+    XfrKeyPair::generate_ed25519(&mut ChaChaRng::from_entropy())
+}
+#[wasm_bindgen]
 /// Generates a new keypair deterministically from a seed string and an optional name.
 pub fn new_keypair_from_seed(seed_str: String, name: Option<String>) -> XfrKeyPair {
     let seed_str = seed_str + &name.unwrap_or_default();
