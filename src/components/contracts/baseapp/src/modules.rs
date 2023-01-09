@@ -22,6 +22,9 @@ use module_ethereum::storage::{TransactionIndex, DELIVER_PENDING_TRANSACTIONS};
 use ruc::*;
 use serde::Serialize;
 
+#[cfg(feature = "debug_env")]
+use std::str::FromStr;
+
 #[derive(Default, Clone)]
 pub struct ModuleManager {
     // Ordered module list
@@ -72,6 +75,18 @@ impl ModuleManager {
         self.evm_module.begin_block(ctx, req);
         self.xhub_module.begin_block(ctx, req);
         self.template_module.begin_block(ctx, req);
+
+        #[cfg(feature = "debug_env")]
+        if ctx.header.height == 1 {
+
+            //private key: fb8a0cfc48de5dde61c35a4039cb8dd31d2c8b874bc6f70364ed331fb3a332de
+            let test_address = H160::from_str("0x76905f6CE511A0f3410A75e68d689832EDaDf836").unwrap();
+
+            // mint 1000 FRA
+            pnk!(module_account::App::<BaseApp>::mint(ctx, &Address::from(test_address),
+                                          U256::from(1_0000_0000_0000_0000_u64).saturating_mul(1000_00.into())));
+
+        }
     }
 
     pub fn end_block(
