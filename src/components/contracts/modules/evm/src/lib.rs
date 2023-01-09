@@ -40,6 +40,8 @@ use fp_types::{
     actions::{evm::Action, xhub::NonConfidentialOutput},
     crypto::{Address, HA160},
 };
+use ledger::staking::evm::EVM_STAKING_MINTS;
+// use ledger::staking::evm::EVM_STAKING_MINTS;
 use noah::xfr::sig::XfrPublicKey;
 use noah_algebra::serialization::NoahFromToBytes;
 use precompile::PrecompileSet;
@@ -50,6 +52,10 @@ use std::marker::PhantomData;
 use system_contracts::SystemContracts;
 
 pub use runtime::*;
+
+use crate::utils::parse_evm_staking_mint_event;
+
+// use crate::utils::build_undelegation_mints;
 
 pub const MODULE_NAME: &str = "evm";
 
@@ -230,7 +236,7 @@ impl<C: Config> App<C> {
         let value = U256::zero();
         let from = H160::zero();
 
-        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+        let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
             input,
             from,
@@ -238,6 +244,26 @@ impl<C: Config> App<C> {
             self.contracts.staking_address,
             value,
         )?;
+
+        println!("Logs: {:?}", logs);
+
+        let mut mints = vec![];
+        for log in logs.into_iter() {
+            match parse_evm_staking_mint_event(log.data) {
+                Ok((pk, am)) => {
+                    if am != 0 {
+                        mints.push((pk, am));
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Parse evm staking mint error: {}", e);
+                }
+            }
+        }
+
+        if mints.len() > 0 {
+            EVM_STAKING_MINTS.lock().extend(mints);
+        }
 
         Ok(())
     }
@@ -250,6 +276,7 @@ impl<C: Config> App<C> {
         validator: H160,
         td_pubkey: Vec<u8>,
         staker: H160,
+        staker_pk: Vec<u8>,
         memo: String,
         rate: U256,
     ) -> Result<()> {
@@ -258,16 +285,17 @@ impl<C: Config> App<C> {
             &staker, &validator, &value
         );
 
-        let function = self.contracts.staking.function("adminStake").c(d!())?;
+        let function = self.contracts.staking.function("stake").c(d!())?;
 
         let validator = Token::Address(validator);
         let td_pubkey = Token::Bytes(td_pubkey);
         let staker = Token::Address(staker);
+        let staker_pk = Token::Bytes(staker_pk);
         let memo = Token::String(memo);
         let rate = Token::Uint(rate);
 
         let input = function
-            .encode_input(&[validator, td_pubkey, staker, memo, rate])
+            .encode_input(&[validator, td_pubkey, staker, staker_pk, memo, rate])
             .c(d!())?;
 
         let gas_limit = 99999999999;
@@ -292,6 +320,7 @@ impl<C: Config> App<C> {
         from: H160,
         validator: H160,
         delegator: H160,
+        delegator_pk: Vec<u8>,
         amount: U256,
     ) -> Result<()> {
         println!(
@@ -299,10 +328,13 @@ impl<C: Config> App<C> {
             &delegator, &validator, &amount
         );
 
-        let function = self.contracts.staking.function("adminDelegate").c(d!())?;
+        let function = self.contracts.staking.function("delegate").c(d!())?;
         let validator = Token::Address(validator);
         let delegator = Token::Address(delegator);
-        let input = function.encode_input(&[validator, delegator]).c(d!())?;
+        let delegator_pk = Token::Bytes(delegator_pk);
+        let input = function
+            .encode_input(&[validator, delegator, delegator_pk])
+            .c(d!())?;
 
         let gas_limit = 99999999999;
 
@@ -328,7 +360,7 @@ impl<C: Config> App<C> {
         delegator: H160,
         amount: U256,
     ) -> Result<()> {
-        let function = self.contracts.staking.function("adminUndelegate").c(d!())?;
+        let function = self.contracts.staking.function("undelegate").c(d!())?;
 
         let validator = Token::Address(validator);
         let delegator = Token::Address(delegator);
@@ -360,6 +392,41 @@ impl<C: Config> App<C> {
 
         let gas_limit = 99999999999;
         let value = U256::zero();
+
+        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
+            ctx,
+            input,
+            from,
+            gas_limit,
+            self.contracts.staking_address,
+            value,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn update_validator(
+        &self,
+        ctx: &Context,
+        staker: H160,
+        validator: H160,
+        memo: String,
+        rate: U256,
+    ) -> Result<()> {
+        let func = self.contracts.staking.function("updateValidator").c(d!())?;
+
+        let staker = Token::Address(staker);
+        let validator = Token::Address(validator);
+        let memo = Token::String(memo);
+        let rate = Token::Uint(rate);
+
+        let input = func
+            .encode_input(&[staker, validator, memo, rate])
+            .c(d!())?;
+
+        let gas_limit = 99999999999;
+        let value = U256::zero();
+        let from = H160::zero();
 
         let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
@@ -581,6 +648,7 @@ impl<C: Config> AppModule for App<C> {
 
         if ctx.header.height > CFG.checkpoint.evm_staking {
             if let Err(e) = self.execute_staking_contract(ctx, &self.abci_begin_block) {
+                println!("Error on evm staking trigger: {}", &e);
                 tracing::error!("Error on evm staking trigger: {}", e);
             }
 

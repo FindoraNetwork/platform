@@ -12,6 +12,8 @@ use {
     toml,
 };
 
+pub mod bridge;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[allow(missing_docs)]
 pub struct CheckPointConfig {

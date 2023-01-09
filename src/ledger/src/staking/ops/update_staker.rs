@@ -7,8 +7,11 @@
 use {
     crate::{
         data_model::{NoReplayToken, Transaction},
-        staking::{td_addr_to_string, Staking, TendermintAddr, Validator},
+        staking::{
+            evm::EVM_STAKING, td_addr_to_string, Staking, TendermintAddr, Validator,
+        },
     },
+    config::abci::global_cfg::CFG,
     ed25519_dalek::Signer,
     noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
     ruc::*,
@@ -37,10 +40,23 @@ impl UpdateStakerOps {
     }
 
     fn apply(&self, staking: &mut Staking, _tx: &Transaction) -> Result<()> {
-        self.verify()
-            .c(d!())
-            .and_then(|_| self.check_update_context(staking).c(d!()))
-            .and_then(|_| staking.update_staker(&self.body.new_validator).c(d!()))
+        let cur_height = staking.cur_height() as i64;
+        if cur_height < CFG.checkpoint.evm_staking {
+            self.verify()
+                .c(d!())
+                .and_then(|_| self.check_update_context(staking).c(d!()))
+                .and_then(|_| staking.update_staker(&self.body.new_validator).c(d!()))
+        } else {
+            self.pubkey
+                .verify(&self.body.to_bytes(), &self.signature)
+                .c(d!())?;
+            EVM_STAKING.get().c(d!())?.write().update_validator(
+                &self.pubkey,
+                &self.body.new_validator.td_addr,
+                serde_json::to_string(&self.body.new_validator.memo).c(d!())?,
+                self.body.new_validator.commission_rate,
+            )
+        }
     }
 
     /// verify signature

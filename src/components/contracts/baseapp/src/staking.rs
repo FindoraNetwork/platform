@@ -18,7 +18,9 @@ impl EVMStaking for BaseApp {
         memo: String,
         rate: [u64; 2],
     ) -> Result<()> {
-        let staker = mapping_address(staker);
+        let staker_pk = staker.to_bytes().to_vec();
+        let staker_address = mapping_address(staker);
+
         let amount =
             EthereumDecimalsMapping::from_native_token(U256::from(amount)).c(d!())?;
 
@@ -36,7 +38,8 @@ impl EVMStaking for BaseApp {
             amount,
             H160::from_slice(td_addr),
             td_pubkey,
-            staker,
+            staker_address,
+            staker_pk,
             memo,
             mapping_rate(rate),
         ) {
@@ -56,7 +59,9 @@ impl EVMStaking for BaseApp {
         amount: u64,
         td_addr: &[u8],
     ) -> Result<()> {
-        let delegator = mapping_address(delegator);
+        let delegator_pk = delegator.to_bytes().to_vec();
+        let delegator_address = mapping_address(delegator);
+
         let amount =
             EthereumDecimalsMapping::from_native_token(U256::from(amount)).c(d!())?;
 
@@ -72,7 +77,8 @@ impl EVMStaking for BaseApp {
             &self.deliver_state,
             from,
             H160::from_slice(td_addr),
-            delegator,
+            delegator_address,
+            delegator_pk,
             amount,
         ) {
             self.deliver_state.state.write().discard_session();
@@ -92,7 +98,8 @@ impl EVMStaking for BaseApp {
         td_addr: &[u8],
         amount: u64,
     ) -> Result<()> {
-        let delegator = mapping_address(delegator);
+        println!("Undelegate: 0x{}", hex::encode(&delegator.to_bytes()));
+        let delegator_address = mapping_address(delegator);
 
         let from = H160::zero();
 
@@ -103,7 +110,7 @@ impl EVMStaking for BaseApp {
             &self.deliver_state,
             from,
             H160::from_slice(td_addr),
-            delegator,
+            delegator_address,
             amount,
         ) {
             self.deliver_state.state.write().discard_session();
@@ -114,6 +121,34 @@ impl EVMStaking for BaseApp {
         self.deliver_state.state.write().commit_session();
         self.deliver_state.db.write().commit_session();
 
+        Ok(())
+    }
+
+    fn update_validator(
+        &self,
+        staker: &XfrPublicKey,
+        td_address: &[u8],
+        memo: String,
+        rate: [u64; 2],
+    ) -> Result<()> {
+        let staker_address = mapping_address(staker);
+        let rate = mapping_rate(rate);
+        let validator = H160::from_slice(td_address);
+
+        if let Err(e) = self.modules.evm_module.update_validator(
+            &self.deliver_state,
+            staker_address,
+            validator,
+            memo,
+            rate,
+        ) {
+            self.deliver_state.state.write().discard_session();
+            self.deliver_state.db.write().discard_session();
+            return Err(e);
+        }
+
+        self.deliver_state.state.write().commit_session();
+        self.deliver_state.db.write().commit_session();
         Ok(())
     }
 

@@ -1,4 +1,4 @@
-use ethabi::Token;
+use ethabi::{Event, EventParam, ParamType, RawLog, Token};
 use ethereum_types::{H160, H256, U256};
 use fp_core::context::Context;
 use fp_traits::evm::{DecimalsMapping, EthereumDecimalsMapping};
@@ -236,7 +236,7 @@ fn build_update_info(tk: &Token) -> Result<abci::ValidatorUpdate> {
         Ok(update)
     } else {
         Err(eg!(
-            "Parse staking contract abi error: Update info must be a truple"
+            "Parse staking contract abi error: Update info must be a tuple"
         ))
     }
 }
@@ -251,11 +251,78 @@ pub fn build_validator_updates(
     if let Token::Array(output) = dp.get(0).c(d!())? {
         let mut res = Vec::with_capacity(output.len());
 
-        for o in output {
+        for o in output.iter() {
             let r = build_update_info(o)?;
             res.push(r);
         }
 
+        Ok(res)
+    } else {
+        Err(eg!("Parse staking contract abi error"))
+    }
+}
+
+pub fn evm_staking_min_event() -> Event {
+    Event {
+        name: "MintOps".to_owned(),
+        inputs: vec![
+            EventParam {
+                name: "public_key".to_owned(),
+                kind: ParamType::Bytes,
+                indexed: false,
+            },
+            EventParam {
+                name: "amount".to_owned(),
+                kind: ParamType::Uint(256),
+                indexed: false,
+            },
+        ],
+        anonymous: false,
+    }
+}
+
+pub fn parse_evm_staking_mint_event(data: Vec<u8>) -> Result<(XfrPublicKey, u64)> {
+    let event = evm_staking_min_event();
+    let log = RawLog {
+        topics: vec![event.signature()],
+        data,
+    };
+
+    let result = event.parse_log(log).c(d!())?;
+
+    let public_key_bytes = result.params[0]
+        .value
+        .clone()
+        .into_bytes()
+        .unwrap_or_default();
+
+    let public_key = XfrPublicKey::noah_from_bytes(public_key_bytes.as_slice())?;
+
+    let amount = result.params[1]
+        .value
+        .clone()
+        .into_uint()
+        .unwrap_or_default()
+        .as_u64();
+
+    Ok((public_key, amount))
+}
+
+pub fn build_undelegation_mints(
+    sc: &SystemContracts,
+    data: &[u8],
+) -> Result<Vec<(XfrPublicKey, u64)>> {
+    let trigger = sc.staking.function("trigger").c(d!())?;
+    let dp = trigger.decode_output(data).c(d!())?;
+
+    if let Token::Array(output) = dp.get(0).c(d!())? {
+        let mut res = Vec::with_capacity(output.len());
+
+        for o in output.iter() {
+            if let Some(r) = build_mints_pairs(o)? {
+                res.push(r);
+            }
+        }
         Ok(res)
     } else {
         Err(eg!("Parse staking contract abi error"))
@@ -295,7 +362,7 @@ pub fn build_claim_ops(sc: &SystemContracts, data: &[u8]) -> Result<Vec<(H160, U
     if let Token::Array(output) = dp.get(0).c(d!())? {
         let mut res = Vec::with_capacity(output.len());
 
-        for o in output {
+        for o in output.iter() {
             let r = build_claim_info(o)?;
             res.push(r);
         }
@@ -303,5 +370,31 @@ pub fn build_claim_ops(sc: &SystemContracts, data: &[u8]) -> Result<Vec<(H160, U
         Ok(res)
     } else {
         Err(eg!("Parse staking contract abi error"))
+    }
+}
+
+fn build_mints_pairs(tk: &Token) -> Result<Option<(XfrPublicKey, u64)>> {
+    if let Token::Tuple(v) = tk {
+        let amount: u64;
+        if let Token::Uint(am) = v.get(1).ok_or(eg!("parameters 1 must uint256."))? {
+            amount = am.as_u64();
+        } else {
+            return Err(eg!("Error type of uint256."));
+        }
+        if amount == 0 {
+            return Ok(None);
+        }
+        let pub_key: XfrPublicKey;
+        if let Token::Bytes(pk) = v.get(0).ok_or(eg!("parameters 0 must bytes."))? {
+            pub_key = XfrPublicKey::from_bytes(pk)?;
+        } else {
+            return Err(eg!("Error type of public key"));
+        };
+
+        Ok(Some((pub_key, amount)))
+    } else {
+        Err(eg!(
+            "Parse staking contract abi error: Update info must be a tuple."
+        ))
     }
 }
