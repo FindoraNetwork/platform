@@ -8,7 +8,13 @@ if [ ! -n "$MODE" ]; then
     export MODE=ONLINE
 fi
 
-nohup findora-rosetta run > /dev/null &
+if [ ! -z $ROSETTA ]; then 
+    if [ $ROSETTA == true ]; then
+        nohup findora-rosetta run > /dev/null &
+    fi
+fi
+
+
 set -e
 
 exec findorad "$@"
