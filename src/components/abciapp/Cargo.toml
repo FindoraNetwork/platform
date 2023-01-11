@@ -58,7 +58,8 @@ tempfile = "3.1.0"
 baseapp = { path = "../contracts/baseapp" }
 fc-rpc = { path = "../contracts/rpc" }
 fp-storage = { path = "../contracts/primitives/storage" }
-fp-utils = { path = "../contracts/primitives/utils" }
+fp-types = {path = "../contracts/primitives/types"}
+fp-utils = {path = "../contracts/primitives/utils" }
 
 
 enterprise-web3 = { path = "../contracts/primitives/enterprise-web3", optional = true  }

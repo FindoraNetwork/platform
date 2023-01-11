@@ -78,14 +78,16 @@ impl ModuleManager {
 
         #[cfg(feature = "debug_env")]
         if ctx.header.height == 1 {
-
-            //private key: fb8a0cfc48de5dde61c35a4039cb8dd31d2c8b874bc6f70364ed331fb3a332de
-            let test_address = H160::from_str("0x76905f6CE511A0f3410A75e68d689832EDaDf836").unwrap();
+            //private key: 4d05b965f821ea900ddd995dfa1b6caa834eaaa1ebe100a9760baf9331aae567
+            let test_address =
+                H160::from_str("0x72488bAa718F52B76118C79168E55c209056A2E6").unwrap();
 
             // mint 1000 FRA
-            pnk!(module_account::App::<BaseApp>::mint(ctx, &Address::from(test_address),
-                                          U256::from(1_0000_0000_0000_0000_u64).saturating_mul(1000_00.into())));
-
+            pnk!(module_account::App::<BaseApp>::mint(
+                ctx,
+                &Address::from(test_address),
+                U256::from(1_0000_0000_0000_0000_u64).saturating_mul(1000_00.into())
+            ));
         }
     }
 
