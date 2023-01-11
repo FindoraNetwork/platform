@@ -19,7 +19,7 @@ impl SystemContracts {
         let abi_str = include_str!("../contracts/PrismXXBridge.abi.json");
         let bridge = Contract::load(abi_str.as_bytes()).c(d!())?;
         let bridge_address =
-            H160::from_str(&CFG.checkpoint.prism_bridge_address).c(d!())?;
+            H160::from_str(&CFG.checkpoint.prism_bridge_address).unwrap_or_default();
 
         Ok(Self {
             bridge,
