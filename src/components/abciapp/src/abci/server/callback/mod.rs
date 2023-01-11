@@ -276,7 +276,7 @@ pub fn deliver_tx(
                     } else if is_convert_account(&txn) {
                         let hash = sha256::hash(req.get_tx());
                         if let Err(err) =
-                        s.account_base_app.write().deliver_findora_tx(&txn, &hash.0)
+                            s.account_base_app.write().deliver_findora_tx(&txn, &hash.0)
                         {
                             tracing::error!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
 
@@ -377,7 +377,7 @@ pub fn deliver_tx(
 
                 if td_height > CFG.checkpoint.prismxx_inital_height && 0 == resp.code {
                     let deposit_asset_topic = deposit_asset_event_topic_str();
-                    
+
                     for evt in resp.events.iter() {
                         if evt.field_type == *"ethereum_ContractLog" {
                             let mut bridge_contract_found = false;
@@ -391,9 +391,9 @@ pub fn deliver_tx(
                                         .unwrap_or_default();
                                     if addr
                                         == CFG
-                                        .checkpoint
-                                        .prism_bridge_address
-                                        .to_lowercase()
+                                            .checkpoint
+                                            .prism_bridge_address
+                                            .to_lowercase()
                                     {
                                         bridge_contract_found = true
                                     }
@@ -423,9 +423,9 @@ pub fn deliver_tx(
                                             let mut laa =
                                                 la.get_committed_state().write();
                                             if let Some(tx) =
-                                            staking::system_prism_mint_pay(
-                                                &mut laa, deposit,
-                                            )
+                                                staking::system_prism_mint_pay(
+                                                    &mut laa, deposit,
+                                                )
                                             {
                                                 drop(laa);
                                                 if la.cache_transaction(tx).is_ok() {
@@ -553,123 +553,123 @@ pub fn commit(s: &mut ABCISubmissionServer, req: &RequestCommit) -> ResponseComm
     IN_SAFE_ITV.store(false, Ordering::Release);
 
     #[cfg(feature = "web3_service")]
-        {
-            use enterprise_web3::{
-                Setter, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS, REDIS_CLIENT,
-                STATE_UPDATE_LIST, TXS, WEB3_SERVICE_START_HEIGHT,
+    {
+        use enterprise_web3::{
+            Setter, BALANCE_MAP, BLOCK, CODE_MAP, NONCE_MAP, RECEIPTS, REDIS_CLIENT,
+            STATE_UPDATE_LIST, TXS, WEB3_SERVICE_START_HEIGHT,
+        };
+        use std::collections::HashMap;
+        use std::mem::replace;
+
+        let height = state.get_tendermint_height() as u32;
+        if height as u64 > *WEB3_SERVICE_START_HEIGHT {
+            let redis_pool = REDIS_CLIENT.lock().expect("REDIS_CLIENT error");
+            let mut conn = redis_pool.get().expect("get redis connect");
+            let mut setter = Setter::new(&mut *conn, "evm".to_string());
+
+            let nonce_map = if let Ok(mut nonce_map) = NONCE_MAP.lock() {
+                replace(&mut *nonce_map, HashMap::new())
+            } else {
+                tracing::error!("{}", "");
+                Default::default()
             };
-            use std::collections::HashMap;
-            use std::mem::replace;
 
-            let height = state.get_tendermint_height() as u32;
-            if height as u64 > *WEB3_SERVICE_START_HEIGHT {
-                let redis_pool = REDIS_CLIENT.lock().expect("REDIS_CLIENT error");
-                let mut conn = redis_pool.get().expect("get redis connect");
-                let mut setter = Setter::new(&mut *conn, "evm".to_string());
+            let code_map = if let Ok(mut code_map) = CODE_MAP.lock() {
+                replace(&mut *code_map, HashMap::new())
+            } else {
+                tracing::error!("{}", "");
+                Default::default()
+            };
 
-                let nonce_map = if let Ok(mut nonce_map) = NONCE_MAP.lock() {
-                    replace(&mut *nonce_map, HashMap::new())
-                } else {
-                    tracing::error!("{}", "");
-                    Default::default()
-                };
+            let balance_map = if let Ok(mut balance_map) = BALANCE_MAP.lock() {
+                replace(&mut *balance_map, HashMap::new())
+            } else {
+                tracing::error!("{}", "");
+                Default::default()
+            };
 
-                let code_map = if let Ok(mut code_map) = CODE_MAP.lock() {
-                    replace(&mut *code_map, HashMap::new())
-                } else {
-                    tracing::error!("{}", "");
-                    Default::default()
-                };
+            let state_list = if let Ok(mut state_list) = STATE_UPDATE_LIST.lock() {
+                replace(&mut *state_list, vec![])
+            } else {
+                tracing::error!("{}", "");
+                Default::default()
+            };
 
-                let balance_map = if let Ok(mut balance_map) = BALANCE_MAP.lock() {
-                    replace(&mut *balance_map, HashMap::new())
-                } else {
-                    tracing::error!("{}", "");
-                    Default::default()
-                };
+            let block = if let Ok(mut block) = BLOCK.lock() {
+                block.take()
+            } else {
+                None
+            };
 
-                let state_list = if let Ok(mut state_list) = STATE_UPDATE_LIST.lock() {
-                    replace(&mut *state_list, vec![])
-                } else {
-                    tracing::error!("{}", "");
-                    Default::default()
-                };
+            let txs = if let Ok(mut txs) = TXS.lock() {
+                replace(&mut *txs, vec![])
+            } else {
+                tracing::error!("{}", "");
+                Default::default()
+            };
 
-                let block = if let Ok(mut block) = BLOCK.lock() {
-                    block.take()
-                } else {
-                    None
-                };
+            let receipts = if let Ok(mut receipts) = RECEIPTS.lock() {
+                replace(&mut *receipts, vec![])
+            } else {
+                tracing::error!("{}", "");
+                Default::default()
+            };
 
-                let txs = if let Ok(mut txs) = TXS.lock() {
-                    replace(&mut *txs, vec![])
-                } else {
-                    tracing::error!("{}", "");
-                    Default::default()
-                };
+            if !code_map.is_empty()
+                || !nonce_map.is_empty()
+                || !balance_map.is_empty()
+                || !state_list.is_empty()
+                || !txs.is_empty()
+                || !receipts.is_empty()
+                || block.is_some()
+            {
+                setter
+                    .set_height(height)
+                    .map_err(|e| tracing::error!("{:?}", e))
+                    .unwrap_or(());
 
-                let receipts = if let Ok(mut receipts) = RECEIPTS.lock() {
-                    replace(&mut *receipts, vec![])
-                } else {
-                    tracing::error!("{}", "");
-                    Default::default()
-                };
-
-                if !code_map.is_empty()
-                    || !nonce_map.is_empty()
-                    || !balance_map.is_empty()
-                    || !state_list.is_empty()
-                    || !txs.is_empty()
-                    || !receipts.is_empty()
-                    || block.is_some()
-                {
+                for (addr, code) in code_map.iter() {
                     setter
-                        .set_height(height)
+                        .set_byte_code(height, *addr, code.clone())
                         .map_err(|e| tracing::error!("{:?}", e))
                         .unwrap_or(());
+                }
 
-                    for (addr, code) in code_map.iter() {
-                        setter
-                            .set_byte_code(height, *addr, code.clone())
-                            .map_err(|e| tracing::error!("{:?}", e))
-                            .unwrap_or(());
-                    }
+                for (addr, nonce) in nonce_map.iter() {
+                    setter
+                        .set_nonce(height, *addr, *nonce)
+                        .map_err(|e| tracing::error!("{:?}", e))
+                        .unwrap_or(());
+                }
 
-                    for (addr, nonce) in nonce_map.iter() {
-                        setter
-                            .set_nonce(height, *addr, *nonce)
-                            .map_err(|e| tracing::error!("{:?}", e))
-                            .unwrap_or(());
-                    }
+                for (addr, balance) in balance_map.iter() {
+                    setter
+                        .set_balance(height, *addr, *balance)
+                        .map_err(|e| tracing::error!("{:?}", e))
+                        .unwrap_or(());
+                }
 
-                    for (addr, balance) in balance_map.iter() {
-                        setter
-                            .set_balance(height, *addr, *balance)
-                            .map_err(|e| tracing::error!("{:?}", e))
-                            .unwrap_or(());
-                    }
+                for state in state_list.iter() {
+                    setter
+                        .set_state(
+                            height,
+                            state.address.clone(),
+                            state.index.clone(),
+                            state.value.clone(),
+                        )
+                        .map_err(|e| tracing::error!("{:?}", e))
+                        .unwrap_or(());
+                }
 
-                    for state in state_list.iter() {
-                        setter
-                            .set_state(
-                                height,
-                                state.address.clone(),
-                                state.index.clone(),
-                                state.value.clone(),
-                            )
-                            .map_err(|e| tracing::error!("{:?}", e))
-                            .unwrap_or(());
-                    }
-
-                    if let Some(block) = block {
-                        setter
-                            .set_block_info(block, receipts, txs)
-                            .map_err(|e| tracing::error!("{:?}", e))
-                            .unwrap_or(());
-                    }
+                if let Some(block) = block {
+                    setter
+                        .set_block_info(block, receipts, txs)
+                        .map_err(|e| tracing::error!("{:?}", e))
+                        .unwrap_or(());
                 }
             }
         }
+    }
 
     r
 }
