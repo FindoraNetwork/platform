@@ -62,6 +62,7 @@ fn run() -> Result<()> {
     let subcmd_init = SubCommand::with_name("init")
         .arg_from_usage("--mainnet")
         .arg_from_usage("-i, --interval=[Interval] 'block interval'")
+        .arg_from_usage("-t, --integration-test 'perform integration test'")
         .arg_from_usage("-s, --skip-validator 'skip validator initialization'");
     let subcmd_test = SubCommand::with_name("test");
     let subcmd_issue = SubCommand::with_name("issue").about("issue FRA on demand");
@@ -111,7 +112,8 @@ fn run() -> Result<()> {
             .c(d!())?;
         let is_mainnet = m.is_present("mainnet");
         let skip_validator = m.is_present("skip-validator");
-        init::init(interval, is_mainnet, skip_validator).c(d!())?;
+        let integration_test = m.is_present("integration-test");
+        init::init(interval, is_mainnet, skip_validator, integration_test).c(d!())?;
     } else if matches.is_present("test") {
         init::i_testing::run_all().c(d!())?;
     } else if matches.is_present("issue") {

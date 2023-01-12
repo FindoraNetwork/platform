@@ -12,7 +12,12 @@ use {
     ledger::data_model::TX_FEE_MIN,
 };
 
-pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result<()> {
+pub fn init(
+    mut interval: u64,
+    is_mainnet: bool,
+    skip_validator: bool,
+    integration_test: bool,
+) -> Result<()> {
     if 0 == interval {
         interval = *BLOCK_INTERVAL;
     }
@@ -23,23 +28,20 @@ pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result
     }
 
     if is_mainnet {
-        Ok(())
-    } else {
-        let root_kp =
-            wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC).c(d!())?;
-        println!(">>> Block interval: {} seconds", interval);
+        return Ok(());
+    }
 
-        println!(">>> Define and issue FRA ...");
-        common::utils::send_tx(&fra_gen_initial_tx(&root_kp)).c(d!())?;
+    let root_kp =
+        wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC).c(d!())?;
+    println!(">>> Block interval: {} seconds", interval);
 
-        println!(">>> Wait 1.2 block ...");
-        sleep_n_block!(1.2, interval);
+    println!(">>> Define and issue FRA ...");
+    common::utils::send_tx(&fra_gen_initial_tx(&root_kp)).c(d!())?;
 
-        if skip_validator {
-            println!(">>> DONE !");
-            return Ok(());
-        }
+    println!(">>> Wait 1.2 block ...");
+    sleep_n_block!(1.2, interval);
 
+    if !skip_validator {
         let mut target_list = USER_LIST
             .values()
             .map(|u| &u.pubkey)
@@ -78,13 +80,16 @@ pub fn init(mut interval: u64, is_mainnet: bool, skip_validator: bool) -> Result
 
         println!(">>> Wait 5 block ...");
         sleep_n_block!(5);
-
-        println!(">>> Init work done !");
-
-        println!(">>> Start running integration tests ...");
-
-        i_testing::run_all().c(d!())
     }
+
+    println!(">>> Init work done !");
+
+    if integration_test {
+        println!(">>> Start running integration tests ...");
+        return i_testing::run_all().c(d!());
+    }
+
+    Ok(())
 }
 
 // 1. transfer all balances of validator[1..19] to validator[0]
