@@ -1,5 +1,7 @@
 use ethabi::{Event, EventParam, ParamType, RawLog};
+use fp_traits::evm::{DecimalsMapping, EthereumDecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialOutput;
+use ledger::data_model::ASSET_TYPE_FRA;
 use noah::xfr::structs::ASSET_TYPE_LENGTH;
 use noah::xfr::{sig::XfrPublicKey, structs::AssetType};
 use noah_algebra::serialization::NoahFromToBytes;
@@ -74,6 +76,13 @@ pub fn parse_deposit_asset_event(data: Vec<u8>) -> Result<NonConfidentialOutput>
         .clone()
         .into_uint()
         .unwrap_or_default();
+
+    let amount = if asset_type == ASSET_TYPE_FRA {
+        EthereumDecimalsMapping::convert_to_native_token(amount).as_u64()
+    } else {
+        amount.as_u64()
+    };
+
     let decimal = result.params[3]
         .value
         .clone()
@@ -87,7 +96,7 @@ pub fn parse_deposit_asset_event(data: Vec<u8>) -> Result<NonConfidentialOutput>
 
     Ok(NonConfidentialOutput {
         asset: asset_type,
-        amount: amount.as_u64(),
+        amount,
         target,
         decimal: decimal.as_u64() as u8,
         max_supply: max_supply.as_u64(),

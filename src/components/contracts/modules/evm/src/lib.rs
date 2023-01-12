@@ -161,7 +161,7 @@ impl<C: Config> App<C> {
     pub fn withdraw_fra(
         &self,
         ctx: &Context,
-        from: &XfrPublicKey,
+        _from: &XfrPublicKey,
         to: &H160,
         _value: U256,
         _lowlevel: Vec<u8>,
@@ -170,18 +170,14 @@ impl<C: Config> App<C> {
     ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
         let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
 
-        let from = Token::Bytes(from.noah_to_bytes());
-
         // let to = Token::Address(H160::from_slice(&bytes[4..24]));
         let to = Token::Address(*to);
         let value = Token::Uint(_value);
         let lowlevel = Token::Bytes(_lowlevel);
 
-        // println!("{:?}, {:?}, {:?}, {:?}", from, to, value, lowlevel);
+        //println!("{:?}, {:?}, {:?}, {:?}", from, to, value, lowlevel);
 
-        let input = function
-            .encode_input(&[from, to, value, lowlevel])
-            .c(d!())?;
+        let input = function.encode_input(&[to, value, lowlevel]).c(d!())?;
 
         let gas_limit = 9999999;
         let value = U256::zero();
