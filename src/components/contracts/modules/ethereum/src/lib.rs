@@ -237,7 +237,9 @@ impl<C: Config> ValidateUnsigned for App<C> {
     }
 
     fn post_execute(ctx: &Context, result: &ActionResult) -> Result<()> {
-        if ctx.header.height >= CFG.checkpoint.evm_checktx_nonce && result.code != 0 {
+        if result.code != 0
+            && ctx.header.height >= CFG.checkpoint.fix_deliver_tx_revert_nonce_height
+        {
             let prev = result
                 .source
                 .as_ref()
