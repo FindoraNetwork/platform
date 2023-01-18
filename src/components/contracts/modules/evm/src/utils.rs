@@ -4,12 +4,13 @@ use fp_core::context::Context;
 use fp_traits::evm::{DecimalsMapping, EthereumDecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialOutput;
 use ledger::data_model::ASSET_TYPE_FRA;
+use noah::xfr::structs::ASSET_TYPE_LENGTH;
 use noah::xfr::{sig::XfrPublicKey, structs::AssetType};
 use noah_algebra::serialization::NoahFromToBytes;
 use ruc::*;
-use sha3::{Digest, Keccak256};
 
 use crate::{runner::ActionRunner, system_contracts::SystemContracts, Config};
+use sha3::{Digest, Keccak256};
 
 pub fn deploy_contract<C: Config>(
     ctx: &Context,
@@ -30,100 +31,99 @@ pub fn deploy_contract<C: Config>(
     Ok(())
 }
 
-pub fn fetch_mint<C: Config>(
-    ctx: &Context,
-    contracts: &SystemContracts,
-    outputs: &mut Vec<NonConfidentialOutput>,
-) -> Result<()> {
-    let function = contracts.bridge.function("consumeMint").c(d!())?;
-    let input = function.encode_input(&[]).c(d!())?;
-
-    let source = H160::zero();
-    let target = contracts.bridge_address;
-
-    let (ret, _, _) = ActionRunner::<C>::execute_systemc_contract(
-        ctx,
-        input,
-        source,
-        99999999,
-        target,
-        U256::zero(),
-    )
-    .c(d!())?;
-
-    let result = function.decode_output(&ret).c(d!())?;
-
-    for v1 in result {
-        if let Token::Array(tokens) = v1 {
-            for token in tokens {
-                if let Token::Tuple(tuple) = token {
-                    let output = parse_truple_result(tuple)?;
-
-                    tracing::info!("Got issue output: {:?}", output);
-
-                    outputs.push(output);
-                }
-            }
-        }
+pub fn deposit_asset_event() -> Event {
+    Event {
+        name: "DepositAsset".to_owned(),
+        inputs: vec![
+            EventParam {
+                name: "asset".to_owned(),
+                kind: ParamType::FixedBytes(32),
+                indexed: false,
+            },
+            EventParam {
+                name: "receiver".to_owned(),
+                kind: ParamType::Bytes,
+                indexed: false,
+            },
+            EventParam {
+                name: "amount".to_owned(),
+                kind: ParamType::Uint(256),
+                indexed: false,
+            },
+            EventParam {
+                name: "decimal".to_owned(),
+                kind: ParamType::Uint(8),
+                indexed: false,
+            },
+            EventParam {
+                name: "max_supply".to_owned(),
+                kind: ParamType::Uint(256),
+                indexed: false,
+            },
+        ],
+        anonymous: false,
     }
-
-    Ok(())
 }
 
-fn parse_truple_result(tuple: Vec<Token>) -> Result<NonConfidentialOutput> {
-    let asset = if let Token::FixedBytes(bytes) =
-        tuple.get(0).ok_or(eg!("Asset Must be FixedBytes"))?
-    {
-        let mut inner = [0u8; 32];
+pub fn deposit_asset_event_topic_str() -> String {
+    let topic = deposit_asset_event().signature();
+    let temp = hex::encode(topic.as_bytes());
+    "[0x".to_owned() + &*temp + &*"]".to_owned()
+}
 
-        inner.copy_from_slice(bytes);
-
-        AssetType(inner)
-    } else {
-        return Err(eg!("Asset Must be FixedBytes"));
+pub fn parse_deposit_asset_event(data: Vec<u8>) -> Result<NonConfidentialOutput> {
+    let event = deposit_asset_event();
+    let log = RawLog {
+        topics: vec![event.signature()],
+        data,
     };
+    let result = event.parse_log(log).c(d!())?;
 
-    let target = if let Token::Bytes(bytes) =
-        tuple.get(1).ok_or(eg!("Target must be FixedBytes"))?
-    {
-        XfrPublicKey::noah_from_bytes(bytes)?
-    } else {
-        return Err(eg!("Asset Must be FixedBytes"));
-    };
+    let asset = result.params[0]
+        .value
+        .clone()
+        .into_fixed_bytes()
+        .unwrap_or_default();
+    let mut temp = [0u8; ASSET_TYPE_LENGTH];
+    temp.copy_from_slice(asset.as_slice());
+    let asset_type = AssetType(temp);
 
-    let amount =
-        if let Token::Uint(i) = tuple.get(2).ok_or(eg!("No asset in index 2"))? {
-            i
-        } else {
-            return Err(eg!("Amount must be uint"));
-        };
+    let receiver = result.params[1]
+        .value
+        .clone()
+        .into_bytes()
+        .unwrap_or_default();
+    let target = XfrPublicKey::noah_from_bytes(receiver.as_slice()).unwrap_or_default();
 
-    let amount = if asset == ASSET_TYPE_FRA {
-        EthereumDecimalsMapping::convert_to_native_token(*amount).as_u64()
+    let amount = result.params[2]
+        .value
+        .clone()
+        .into_uint()
+        .unwrap_or_default();
+
+    let amount = if asset_type == ASSET_TYPE_FRA {
+        EthereumDecimalsMapping::convert_to_native_token(amount).as_u64()
     } else {
         amount.as_u64()
     };
 
-    let decimal =
-        if let Token::Uint(decimal) = tuple.get(3).ok_or(eg!("No asset in index 3"))? {
-            decimal.as_u64() as u8
-        } else {
-            return Err(eg!("Decimal must be uint"));
-        };
-
-    let max_supply =
-        if let Token::Uint(num) = tuple.get(4).ok_or(eg!("No asset in index 4"))? {
-            num.as_u64()
-        } else {
-            return Err(eg!("Max supply must be uint"));
-        };
+    let decimal = result.params[3]
+        .value
+        .clone()
+        .into_uint()
+        .unwrap_or_default();
+    let max_supply = result.params[4]
+        .value
+        .clone()
+        .into_uint()
+        .unwrap_or_default();
 
     Ok(NonConfidentialOutput {
-        asset,
+        asset: asset_type,
         amount,
         target,
-        decimal,
-        max_supply,
+        decimal: decimal.as_u64() as u8,
+        max_supply: max_supply.as_u64(),
     })
 }
 
@@ -308,27 +308,6 @@ pub fn parse_evm_staking_mint_event(data: Vec<u8>) -> Result<(XfrPublicKey, u64)
     Ok((public_key, amount))
 }
 
-pub fn build_undelegation_mints(
-    sc: &SystemContracts,
-    data: &[u8],
-) -> Result<Vec<(XfrPublicKey, u64)>> {
-    let trigger = sc.staking.function("trigger").c(d!())?;
-    let dp = trigger.decode_output(data).c(d!())?;
-
-    if let Token::Array(output) = dp.get(0).c(d!())? {
-        let mut res = Vec::with_capacity(output.len());
-
-        for o in output.iter() {
-            if let Some(r) = build_mints_pairs(o)? {
-                res.push(r);
-            }
-        }
-        Ok(res)
-    } else {
-        Err(eg!("Parse staking contract abi error"))
-    }
-}
-
 fn build_claim_info(tk: &Token) -> Result<(H160, U256)> {
     if let Token::Tuple(v) = tk {
         let addr = if let Token::Address(addr) =
@@ -370,31 +349,5 @@ pub fn build_claim_ops(sc: &SystemContracts, data: &[u8]) -> Result<Vec<(H160, U
         Ok(res)
     } else {
         Err(eg!("Parse staking contract abi error"))
-    }
-}
-
-fn build_mints_pairs(tk: &Token) -> Result<Option<(XfrPublicKey, u64)>> {
-    if let Token::Tuple(v) = tk {
-        let amount: u64;
-        if let Token::Uint(am) = v.get(1).ok_or(eg!("parameters 1 must uint256."))? {
-            amount = am.as_u64();
-        } else {
-            return Err(eg!("Error type of uint256."));
-        }
-        if amount == 0 {
-            return Ok(None);
-        }
-        let pub_key: XfrPublicKey;
-        if let Token::Bytes(pk) = v.get(0).ok_or(eg!("parameters 0 must bytes."))? {
-            pub_key = XfrPublicKey::from_bytes(pk)?;
-        } else {
-            return Err(eg!("Error type of public key"));
-        };
-
-        Ok(Some((pub_key, amount)))
-    } else {
-        Err(eg!(
-            "Parse staking contract abi error: Update info must be a tuple."
-        ))
     }
 }

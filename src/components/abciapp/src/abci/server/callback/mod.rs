@@ -29,6 +29,7 @@ use {
         staking::KEEP_HIST,
         store::api_cache,
     },
+    module_evm::utils::{deposit_asset_event_topic_str, parse_deposit_asset_event},
     parking_lot::{Mutex, RwLock},
     protobuf::RepeatedField,
     ruc::*,
@@ -374,30 +375,85 @@ pub fn deliver_tx(
                 }
                 let mut resp = s.account_base_app.write().deliver_tx(req);
 
-                if td_height > CFG.checkpoint.fix_prism_mint_pay && 0 == resp.code {
-                    let mut la = s.la.write();
-                    let mut laa = la.get_committed_state().write();
-                    if let Some(tx) = staking::system_prism_mint_pay(
-                        &mut laa,
-                        &mut s.account_base_app.write(),
-                    ) {
-                        drop(laa);
-                        if la.cache_transaction(tx).is_ok() {
-                            return resp;
+                if td_height > CFG.checkpoint.prismxx_inital_height && 0 == resp.code {
+                    let deposit_asset_topic = deposit_asset_event_topic_str();
+
+                    for evt in resp.events.iter() {
+                        if evt.field_type == *"ethereum_ContractLog" {
+                            let mut bridge_contract_found = false;
+                            let mut deposit_asset_foud = false;
+
+                            for pair in evt.attributes.iter() {
+                                let key = String::from_utf8(pair.key.clone())
+                                    .unwrap_or_default();
+                                if key == *"address" {
+                                    let addr = String::from_utf8(pair.value.clone())
+                                        .unwrap_or_default();
+                                    if addr
+                                        == CFG
+                                            .checkpoint
+                                            .prism_bridge_address
+                                            .to_lowercase()
+                                    {
+                                        bridge_contract_found = true
+                                    }
+                                }
+                                if key == *"topics" {
+                                    let topic = String::from_utf8(pair.value.clone())
+                                        .unwrap_or_default();
+                                    if topic == deposit_asset_topic {
+                                        deposit_asset_foud = true
+                                    }
+                                }
+                                if key == *"data"
+                                    && bridge_contract_found
+                                    && deposit_asset_foud
+                                {
+                                    let data = String::from_utf8(pair.value.clone())
+                                        .unwrap_or_default();
+
+                                    let data_vec = serde_json::from_str(&data).unwrap();
+
+                                    let deposit_asset =
+                                        parse_deposit_asset_event(data_vec);
+
+                                    match deposit_asset {
+                                        Ok(deposit) => {
+                                            let mut la = s.la.write();
+                                            let mut laa =
+                                                la.get_committed_state().write();
+                                            if let Some(tx) =
+                                                staking::system_prism_mint_pay(
+                                                    &mut laa, deposit,
+                                                )
+                                            {
+                                                drop(laa);
+                                                if la.cache_transaction(tx).is_ok() {
+                                                    return resp;
+                                                }
+                                                resp.code = 1;
+                                                s.account_base_app
+                                                    .read()
+                                                    .deliver_state
+                                                    .state
+                                                    .write()
+                                                    .discard_session();
+                                                s.account_base_app
+                                                    .read()
+                                                    .deliver_state
+                                                    .db
+                                                    .write()
+                                                    .discard_session();
+                                            }
+                                        }
+                                        Err(e) => {
+                                            resp.code = 1;
+                                            resp.log = e.to_string();
+                                        }
+                                    }
+                                }
+                            }
                         }
-                        resp.code = 1;
-                        s.account_base_app
-                            .read()
-                            .deliver_state
-                            .state
-                            .write()
-                            .discard_session();
-                        s.account_base_app
-                            .read()
-                            .deliver_state
-                            .db
-                            .write()
-                            .discard_session();
                     }
                 }
                 resp
@@ -438,11 +494,7 @@ pub fn end_block(
     // mint coinbase, cache system transactions to ledger
     {
         let mut laa = la.get_committed_state().write();
-        if let Some(tx) = staking::system_mint_pay(
-            td_height,
-            &mut laa,
-            &mut s.account_base_app.write(),
-        ) {
+        if let Some(tx) = staking::system_mint_pay(td_height, &mut laa) {
             drop(laa);
             // this unwrap should be safe
             la.cache_transaction(tx).unwrap();

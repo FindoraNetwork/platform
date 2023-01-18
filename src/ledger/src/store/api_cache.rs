@@ -462,9 +462,7 @@ pub fn check_lost_data(ledger: &mut LedgerState) -> Result<()> {
             }
 
             // update the last txo sid
-            api_cache
-                .last_sid
-                .insert("last_txo_sid".to_string(), index as u64);
+            api_cache.last_sid.insert("last_txo_sid".to_string(), index);
         }
     }
 
