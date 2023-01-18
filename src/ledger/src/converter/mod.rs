@@ -5,10 +5,8 @@ use crate::data_model::{
 };
 use config::abci::global_cfg::CFG;
 use fp_types::{crypto::MultiSigner, H160};
-use noah::xfr::{
-    sig::XfrPublicKey,
-    structs::{AssetType, XfrAmount, XfrAssetType},
-};
+use noah::keys::PublicKey as XfrPublicKey;
+use noah::xfr::structs::{AssetType, XfrAmount, XfrAssetType};
 use ruc::*;
 use serde::{Deserialize, Serialize};
 

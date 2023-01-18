@@ -26,7 +26,7 @@ use {
         },
         utils::fra_gen_initial_tx,
     },
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
+    noah::keys::{KeyPair as XfrKeyPair, PublicKey as XfrPublicKey},
     ruc::*,
     serde::Serialize,
     std::{collections::BTreeMap, env},
@@ -36,7 +36,7 @@ lazy_static! {
     static ref USER_LIST: BTreeMap<Name, User> = gen_user_list();
     static ref VALIDATOR_LIST: BTreeMap<Name, Validator> = gen_valiator_list();
     static ref ROOT_KP: XfrKeyPair =
-        pnk!(wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC));
+        pnk!(wallet::restore_keypair_from_mnemonic_ed25519(ROOT_MNEMONIC));
 }
 
 const ROOT_MNEMONIC: &str = "zoo nerve assault talk depend approve mercy surge bicycle ridge dismiss satoshi boring opera next fat cinnamon valley office actor above spray alcohol giant";
@@ -239,7 +239,7 @@ mod issue {
             asset_record::{build_blind_asset_record, AssetRecordType},
             structs::AssetRecordTemplate,
         },
-        noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+        noah_algebra::ristretto::PedersenCommitmentRistretto,
         rand_chacha::rand_core::SeedableRng,
         rand_chacha::ChaChaRng,
     };
@@ -252,7 +252,7 @@ mod issue {
 
     fn gen_issue_tx() -> Result<Transaction> {
         let root_kp =
-            wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC).c(d!())?;
+            wallet::restore_keypair_from_mnemonic_ed25519(ROOT_MNEMONIC).c(d!())?;
 
         let mut builder = common::utils::new_tx_builder().c(d!())?;
 
@@ -396,7 +396,7 @@ fn print_info(
     user: Option<NameRef>,
 ) -> Result<()> {
     if show_root_mnemonic {
-        let kp = wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC).c(d!())?;
+        let kp = wallet::restore_keypair_from_mnemonic_ed25519(ROOT_MNEMONIC).c(d!())?;
         println!(
             "\x1b[31;01mROOT MNEMONIC:\x1b[00m\n{}\nKeys: {}",
             ROOT_MNEMONIC,
@@ -461,7 +461,7 @@ fn gen_user_list() -> BTreeMap<Name, User> {
 
     (0..MNEMONIC_LIST.len())
         .map(|i| {
-            let keypair = pnk!(wallet::restore_keypair_from_mnemonic_default(
+            let keypair = pnk!(wallet::restore_keypair_from_mnemonic_ed25519(
                 MNEMONIC_LIST[i]
             ));
             let pubkey = keypair.get_pk();
@@ -500,7 +500,7 @@ fn gen_valiator_list() -> BTreeMap<Name, Validator> {
     (0..NUM)
         .map(|i| {
             let td_addr = TD_ADDR_LIST[i].to_owned();
-            let keypair = pnk!(wallet::restore_keypair_from_mnemonic_default(
+            let keypair = pnk!(wallet::restore_keypair_from_mnemonic_ed25519(
                 MNEMONIC_LIST[i]
             ));
             let pubkey = keypair.get_pk();

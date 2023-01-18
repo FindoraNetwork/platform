@@ -6,7 +6,9 @@
 
 use {
     crate::{data_model::NoReplayToken, staking::Staking},
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
+    noah::keys::{
+        KeyPair as XfrKeyPair, PublicKey as XfrPublicKey, Signature as XfrSignature,
+    },
     ruc::*,
     serde::{Deserialize, Serialize},
 };

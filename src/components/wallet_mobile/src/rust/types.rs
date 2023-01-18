@@ -4,7 +4,7 @@ use credentials::{
     CredUserPublicKey as PlatformCredUserPublicKey,
     CredUserSecretKey as PlatformCredUserSecretKey,
 };
-use noah::xfr::sig::{XfrKeyPair as NoahXfrKeyPair, XfrPublicKey as NoahXfrPublicKey};
+use noah::keys::{KeyPair as NoahXfrKeyPair, PublicKey as NoahXfrPublicKey};
 use noah::xfr::structs::OpenAssetRecord as NoahOpenAssetRecord;
 use std::ops::{Deref, DerefMut};
 

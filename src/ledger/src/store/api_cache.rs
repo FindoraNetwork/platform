@@ -22,10 +22,8 @@ use {
     globutils::{wallet, HashOf},
     noah::{
         anon_xfr::structs::AxfrOwnerMemo,
-        xfr::{
-            sig::XfrPublicKey,
-            structs::{AssetType, OwnerMemo},
-        },
+        keys::PublicKey as XfrPublicKey,
+        xfr::structs::{AssetType, OwnerMemo},
     },
     ruc::*,
     serde::{Deserialize, Serialize},

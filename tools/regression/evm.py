@@ -22,7 +22,7 @@ def get_fra_balance(sec_key):
 
 def get_fra_anon_balance(anon_keys_path, commitments):
     out_str = subprocess.check_output(
-        [bin_path + '/fn', 'anon-balance', '--anon-keys', anon_keys_path, '--commitments', commitments])
+        [bin_path + '/fn', 'anon-balance', '--from-seckey', anon_keys_path, '--commitments', commitments])
     parsed = out_str.split()
     return int(parsed[1])
 
@@ -35,7 +35,7 @@ def get_asset_balance(sec_key, asset):
 
 def get_asset_anon_balance(anon_keys_path, commitments, asset):
     out_str = subprocess.check_output(
-        [bin_path + '/fn', 'anon-balance', '--anon-keys', anon_keys_path, '--commitments', commitments,
+        [bin_path + '/fn', 'anon-balance', '--from-seckey', anon_keys_path, '--commitments', commitments,
          '--asset', asset])
     parsed = out_str.split()
     return int(parsed[1])
@@ -67,15 +67,15 @@ def get_balance(arguments):
 
 
 def get_anon_balance(arguments):
-    anon_keys_path = arguments['anon_keys']
+    from_seckey = arguments['from_seckey']
     commitments = arguments['commitments']
     asset = arguments['asset']
 
     balance = ""
     if asset is not None:
-        balance = get_asset_anon_balance(anon_keys_path, commitments, asset)
+        balance = get_asset_anon_balance(from_seckey, commitments, asset)
     else:
-        balance = get_fra_anon_balance(anon_keys_path, commitments)
+        balance = get_fra_anon_balance(from_seckey, commitments)
     print('{}balance is {} {}'.format(OKBLUE, balance, ENDC))
     return balance
 
@@ -152,7 +152,7 @@ if __name__ == "__main__":
     # Initialize Verify-Balance Parser
     parser_verify_anon_balance = subparsers.add_parser('verify-anon-balance', help='verify anon balance of a anon key '
                                                                                    'and commitment')
-    parser_verify_anon_balance.add_argument('--anon-keys', help='path of anon key JSON file')
+    parser_verify_anon_balance.add_argument('--from-seckey', help='path of anon key JSON file')
     parser_verify_anon_balance.add_argument('--commitments', help='comma separated list of commitments')
     parser_verify_anon_balance.add_argument('--amount', default='0', help='expected balance for given address')
     parser_verify_anon_balance.add_argument('--asset', help='asset to query balance of')

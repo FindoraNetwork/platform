@@ -11,7 +11,7 @@
 use {
     crate::data_model::AssetTypeCode,
     fixed::types::I20F12,
-    noah::xfr::sig::XfrPublicKey,
+    noah::keys::PublicKey as XfrPublicKey,
     noah::xfr::structs::AssetType,
     serde::{Deserialize, Serialize},
 };

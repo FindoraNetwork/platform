@@ -12,7 +12,7 @@ use fp_traits::account::AccountAsset;
 use fp_traits::evm::{AddressMapping, EthereumAddressMapping};
 use fp_types::crypto::{Address, MultiSignature};
 use lazy_static::lazy_static;
-use noah::xfr::sig::XfrKeyPair;
+use noah::keys::KeyPair as XfrKeyPair;
 use primitive_types::{H160, H256, U256};
 use rand_chacha::{rand_core::SeedableRng, ChaChaRng};
 use rlp::*;
@@ -29,9 +29,9 @@ lazy_static! {
     pub static ref ALICE_ECDSA: KeyPair = generate_address(1);
     pub static ref BOB_ECDSA: KeyPair = generate_address(2);
     pub static ref ALICE_XFR: XfrKeyPair =
-        XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+        XfrKeyPair::generate_ed25519(&mut ChaChaRng::from_entropy());
     pub static ref BOB_XFR: XfrKeyPair =
-        XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+        XfrKeyPair::generate_ed25519(&mut ChaChaRng::from_entropy());
 }
 
 pub fn test_mint_balance(who: &Address, balance: U256, height: u64) {

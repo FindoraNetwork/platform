@@ -15,7 +15,7 @@ fn run_all_tests() {
     test_abci_info();
     test_abci_init_chain();
     test_mint_balance(
-        &ALICE_XFR.pub_key.into(),
+        &ALICE_XFR.get_pk().into(),
         100_0000_0000_0000_0000_u64.into(),
         0,
     );
@@ -79,7 +79,7 @@ fn test_abci_check_tx() {
     assert_eq!(
         module_account::App::<BaseApp>::balance(
             &BASE_APP.lock().unwrap().check_state,
-            &ALICE_XFR.pub_key.into()
+            &ALICE_XFR.get_pk().into()
         ),
         U256::from(100_0000_0000_0000_0000_u64)
     );
@@ -146,7 +146,7 @@ fn test_abci_commit() {
     assert_eq!(
         module_account::App::<BaseApp>::balance(
             &BASE_APP.lock().unwrap().deliver_state,
-            &ALICE_XFR.pub_key.into()
+            &ALICE_XFR.get_pk().into()
         ),
         U256::from(100_0000_0000_0000_0000_u64).saturating_sub(
             <BaseApp as module_account::Config>::FeeCalculator::min_fee()

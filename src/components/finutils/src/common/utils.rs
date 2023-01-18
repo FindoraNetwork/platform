@@ -18,15 +18,12 @@ use {
         },
         staking::{init::get_inital_validators, TendermintAddrRef, FRA_TOTAL_AMOUNT},
     },
-    noah::anon_xfr::{
-        keys::{AXfrKeyPair, AXfrPubKey},
-        structs::{
-            AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, OpenAnonAssetRecord,
-        },
+    noah::anon_xfr::structs::{
+        AnonAssetRecord, AxfrOwnerMemo, Commitment, MTLeafInfo, OpenAnonAssetRecord,
     },
+    noah::keys::{KeyPair as XfrKeyPair, PublicKey as XfrPublicKey},
     noah::xfr::{
         asset_record::{open_blind_asset_record, AssetRecordType},
-        sig::{XfrKeyPair, XfrPublicKey},
         structs::{AssetRecordTemplate, BlindAssetRecord, OpenAssetRecord, OwnerMemo},
     },
     ruc::*,
@@ -367,7 +364,7 @@ pub fn gen_fee_bar_to_abar(
                             i_am - op_fee,
                             ASSET_TYPE_FRA,
                             AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
-                            owner_kp.pub_key,
+                            owner_kp.get_pk(),
                         ),
                         None,
                         None,
@@ -780,13 +777,13 @@ pub fn parse_td_validator_keys(key_data: &str) -> Result<ValidatorKey> {
 /// Generates a BarToAbar Operation and an accompanying FeeOP and sends it to the network and return the Randomizer
 /// # Arguments
 /// * `auth_key_pair`       -  XfrKeyPair of the owner BAR for conversion
-/// * `abar_pub_key`        -  AXfrPubKey of the receiver ABAR after conversion
+/// * `abar_pub_key`        -  XfrPublicKey of the receiver ABAR after conversion
 /// * `txo_sid`             -  TxoSID of the BAR to convert
 /// * `input_record`        -  OpenAssetRecord of the BAR to convert
 /// * `is_bar_transparent`  -  if transparent bar (ar)
 pub fn generate_bar2abar_op(
     auth_key_pair: &XfrKeyPair,
-    abar_pub_key: &AXfrPubKey,
+    abar_pub_key: &XfrPublicKey,
     txo_sid: TxoSID,
     input_record: &OpenAssetRecord,
     is_bar_transparent: bool,
@@ -832,12 +829,12 @@ pub fn generate_bar2abar_op(
 /// * oabar_in      - Abar to convert in open form
 /// * fee_oabar     - Abar to pay anon fee in open form
 /// * out_fee_oabar - Abar to get balance back after paying fee
-/// * from          - AXfrKeyPair of person converting ABAR
+/// * from          - XfrKeyPair of person converting ABAR
 /// * to            - XfrPublicKey of person receiving new BAR
 /// * art           - AssetRecordType of the new BAR
 pub fn generate_abar2bar_op(
     oabar_in: &OpenAnonAssetRecord,
-    from: &AXfrKeyPair,
+    from: &XfrKeyPair,
     to: &XfrPublicKey,
     art: AssetRecordType,
 ) -> Result<()> {

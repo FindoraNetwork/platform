@@ -2,8 +2,8 @@ use ethabi::{Event, EventParam, ParamType, RawLog};
 use fp_traits::evm::{DecimalsMapping, EthereumDecimalsMapping};
 use fp_types::actions::xhub::NonConfidentialOutput;
 use ledger::data_model::ASSET_TYPE_FRA;
-use noah::xfr::structs::ASSET_TYPE_LENGTH;
-use noah::xfr::{sig::XfrPublicKey, structs::AssetType};
+use noah::keys::PublicKey as XfrPublicKey;
+use noah::xfr::structs::{AssetType, ASSET_TYPE_LENGTH};
 use noah_algebra::serialization::NoahFromToBytes;
 use ruc::*;
 
@@ -69,7 +69,8 @@ pub fn parse_deposit_asset_event(data: Vec<u8>) -> Result<NonConfidentialOutput>
         .clone()
         .into_bytes()
         .unwrap_or_default();
-    let target = XfrPublicKey::noah_from_bytes(receiver.as_slice()).unwrap_or_default();
+    let target = XfrPublicKey::noah_from_bytes(receiver.as_slice())
+        .unwrap_or_else(|_| XfrPublicKey::default_ed25519());
 
     let amount = result.params[2]
         .value

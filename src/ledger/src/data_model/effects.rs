@@ -23,9 +23,9 @@ use {
             abar_to_abar::AXfrNote,
             structs::{AnonAssetRecord, Nullifier},
         },
+        keys::PublicKey as XfrPublicKey,
         setup::BulletproofParams,
         xfr::{
-            sig::XfrPublicKey,
             structs::{XfrAmount, XfrAssetType},
             verify_xfr_body,
         },

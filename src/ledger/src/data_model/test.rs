@@ -164,7 +164,7 @@ fn gen_sample_tx() -> Transaction {
 
     let mut prng = rand_chacha::ChaChaRng::from_entropy();
 
-    let keypair = XfrKeyPair::generate(&mut prng);
+    let keypair = XfrKeyPair::generate_ed25519(&mut prng);
 
     let xfr_note = XfrBody {
         inputs: Vec::new(),

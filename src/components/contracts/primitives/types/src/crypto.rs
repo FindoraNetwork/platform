@@ -1,3 +1,4 @@
+use noah::keys::PublicKey;
 use {
     bech32::{FromBase32, ToBase32},
     core::convert::TryFrom,
@@ -7,7 +8,10 @@ use {
     globutils::wallet,
     hex::FromHex,
     libsecp256k1::{recover, Message},
-    noah::xfr::sig::{KeyType, XfrPublicKey, XfrPublicKeyInner, XfrSignature},
+    noah::keys::{
+        KeyType, PublicKey as XfrPublicKey, PublicKeyInner as XfrPublicKeyInner,
+        Signature as XfrSignature,
+    },
     noah_algebra::serialization::NoahFromToBytes,
     primitive_types::{H160, H256},
     ruc::{d, eg, RucResult},
@@ -94,7 +98,7 @@ impl From<XfrPublicKey> for Address32 {
             XfrPublicKeyInner::Secp256k1(pk) => {
                 bytes.copy_from_slice(&keccak_256(&pk.serialize_compressed()));
             }
-            XfrPublicKeyInner::Address(pk) => {
+            XfrPublicKeyInner::EthAddress(pk) => {
                 bytes[0..20].copy_from_slice(pk);
             }
         }
@@ -275,16 +279,6 @@ impl Verify for MultiSignature {
                         _ => false,
                     }
                 }
-                XfrSignature::Address(..) => {
-                    let mut bytes = [0u8; 34];
-                    bytes[0] = KeyType::Address.to_byte();
-                    let signer_bytes: &[u8; 32] = signer.as_ref();
-                    bytes[1..21].copy_from_slice(&signer_bytes[0..20]);
-                    match XfrPublicKey::noah_from_bytes(&bytes) {
-                        Ok(who) => sig.verify(msg, &who),
-                        _ => false,
-                    }
-                }
                 XfrSignature::Secp256k1(sign, rec) => {
                     let msg_hashed = keccak_256(msg);
                     let message = Message::parse(&msg_hashed);
@@ -332,7 +326,7 @@ pub enum MultiSigner {
 
 impl Default for MultiSigner {
     fn default() -> Self {
-        Self::Xfr(Default::default())
+        Self::Xfr(PublicKey::default_ed25519())
     }
 }
 
@@ -473,14 +467,14 @@ pub type Address = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId
 #[cfg(test)]
 mod tests {
     use super::*;
-    use noah::xfr::sig::XfrKeyPair;
+    use noah::keys::KeyPair as XfrKeyPair;
     use rand_chacha::rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
 
     #[test]
     fn xfr_sign_verify_work() {
         let mut prng = ChaChaRng::from_entropy();
-        let alice = XfrKeyPair::generate(&mut prng);
+        let alice = XfrKeyPair::generate_ed25519(&mut prng);
         let sig = alice.get_sk_ref().sign(b"hello").unwrap();
         let signer = MultiSigner::from(alice.get_pk());
         let sig = MultiSignature::from(sig);
@@ -505,8 +499,8 @@ mod tests {
     #[test]
     fn test_address_32() {
         let mut prng = ChaChaRng::from_entropy();
-        let keypair = XfrKeyPair::generate(&mut prng);
-        let pubkey = keypair.pub_key;
+        let keypair = XfrKeyPair::generate_ed25519(&mut prng);
+        let pubkey = keypair.get_pk();
 
         let address_32 = Address32::from(pubkey);
         let address_str = address_32.to_string();

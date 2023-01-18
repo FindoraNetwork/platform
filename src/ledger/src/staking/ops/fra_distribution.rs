@@ -11,7 +11,7 @@ use {
         data_model::{NoReplayToken, Operation, Transaction},
         staking::{cosig::CoSigOp, Staking},
     },
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
+    noah::keys::{KeyPair as XfrKeyPair, PublicKey as XfrPublicKey},
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::BTreeMap,

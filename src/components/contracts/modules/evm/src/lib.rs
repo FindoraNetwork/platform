@@ -39,7 +39,7 @@ use fp_types::{
     actions::evm::Action,
     crypto::{Address, HA160},
 };
-use noah::xfr::sig::XfrPublicKey;
+use noah::keys::PublicKey as XfrPublicKey;
 use noah_algebra::serialization::NoahFromToBytes;
 use precompile::PrecompileSet;
 use ruc::*;

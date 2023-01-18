@@ -12,13 +12,13 @@ use {
     fbnc::NumKey,
     fp_utils::hashing::keccak_256,
     globutils::SignatureOf,
+    noah::keys::{KeyPair as XfrKeyPair, PublicKey as XfrPublicKey},
     noah::xfr::{
         asset_record::AssetRecordType,
         asset_record::{build_blind_asset_record, open_blind_asset_record},
-        sig::{XfrKeyPair, XfrPublicKey},
         structs::{AssetRecord, AssetRecordTemplate, AssetType},
     },
-    noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+    noah_algebra::ristretto::PedersenCommitmentRistretto,
     rand_core::{CryptoRng, RngCore},
     ruc::*,
     std::fmt::Debug,
@@ -27,7 +27,7 @@ use {
 #[inline(always)]
 #[allow(missing_docs)]
 pub fn build_keys<R: CryptoRng + RngCore>(prng: &mut R) -> XfrKeyPair {
-    XfrKeyPair::generate(prng)
+    XfrKeyPair::generate_ed25519(prng)
 }
 
 #[allow(missing_docs)]

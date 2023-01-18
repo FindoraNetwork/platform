@@ -11,17 +11,19 @@ use {
     },
     crate::utils::{self, *},
     noah::{
-        anon_xfr::{keys::AXfrKeyPair, structs::OpenAnonAssetRecordBuilder},
+        anon_xfr::structs::OpenAnonAssetRecordBuilder,
+        keys::KeyPair as XfrKeyPair,
         xfr::{
             asset_record::{
                 build_blind_asset_record, open_blind_asset_record, AssetRecordType,
             },
-            sig::XfrKeyPair,
             structs::{AssetRecord, AssetRecordTemplate},
         },
     },
-    noah_algebra::prelude::{One, Zero},
-    noah_crypto::basic::pedersen_comm::PedersenCommitmentRistretto,
+    noah_algebra::{
+        prelude::{One, Zero},
+        ristretto::PedersenCommitmentRistretto,
+    },
     rand_core::SeedableRng,
 };
 
@@ -155,8 +157,8 @@ fn test_asset_transfer() {
 
     let code = AssetTypeCode::gen_random();
     let mut prng = ChaChaRng::from_entropy();
-    let key_pair = XfrKeyPair::generate(&mut prng);
-    let key_pair_adversary = XfrKeyPair::generate(&mut ledger.get_prng());
+    let key_pair = XfrKeyPair::generate_ed25519(&mut prng);
+    let key_pair_adversary = XfrKeyPair::generate_ed25519(&mut ledger.get_prng());
 
     let (tx, mut new_code) = create_definition_transaction(
         &code,
@@ -487,9 +489,9 @@ fn asset_issued() {
 #[test]
 pub fn test_transferable() {
     let mut ledger = LedgerState::tmp_ledger();
-    let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
-    let alice = XfrKeyPair::generate(&mut ledger.get_prng());
-    let bob = XfrKeyPair::generate(&mut ledger.get_prng());
+    let issuer = XfrKeyPair::generate_ed25519(&mut ledger.get_prng());
+    let alice = XfrKeyPair::generate_ed25519(&mut ledger.get_prng());
+    let bob = XfrKeyPair::generate_ed25519(&mut ledger.get_prng());
 
     // Define fiat token
     let code = AssetTypeCode::gen_random();
@@ -641,7 +643,7 @@ pub fn test_transferable() {
 pub fn test_max_units() {
     let mut ledger = LedgerState::tmp_ledger();
 
-    let issuer = XfrKeyPair::generate(&mut ledger.get_prng());
+    let issuer = XfrKeyPair::generate_ed25519(&mut ledger.get_prng());
 
     // Define fiat token
     let code = AssetTypeCode::gen_random();
@@ -775,7 +777,7 @@ fn gen_fee_operation(
 #[test]
 fn test_check_fee_with_ledger() {
     let mut ledger = LedgerState::tmp_ledger();
-    let fra_owner_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    let fra_owner_kp = XfrKeyPair::generate_ed25519(&mut ChaChaRng::from_entropy());
 
     let tx = utils::fra_gen_initial_tx(&fra_owner_kp);
     assert!(tx.check_fee());
@@ -818,7 +820,7 @@ fn test_update_anon_stores() {
         Nullifier::one() as Nullifier,
     ];
 
-    let pub_key = AXfrKeyPair::generate(&mut prng).get_public_key();
+    let pub_key = XfrKeyPair::generate_ed25519(&mut prng).get_pk();
     let oabar = OpenAnonAssetRecordBuilder::new()
         .amount(123)
         .asset_type(noah::xfr::structs::AssetType([39u8; 32]))

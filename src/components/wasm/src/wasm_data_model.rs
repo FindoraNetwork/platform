@@ -16,14 +16,12 @@ use {
         AnonAssetRecord, AxfrOwnerMemo as NoahAxfrOwnerMemo,
         MTLeafInfo as NoahMTLeafInfo,
     },
-    noah::xfr::{
-        sig::XfrPublicKey,
-        structs::{
-            AssetTracerDecKeys, AssetTracerEncKeys,
-            AssetTracerKeyPair as NoahAssetTracerKeyPair, BlindAssetRecord,
-            IdentityRevealPolicy, OwnerMemo as NoahOwnerMemo,
-            TracingPolicies as NoahTracingPolicies, TracingPolicy as NoahTracingPolicy,
-        },
+    noah::keys::PublicKey as XfrPublicKey,
+    noah::xfr::structs::{
+        AssetTracerDecKeys, AssetTracerEncKeys,
+        AssetTracerKeyPair as NoahAssetTracerKeyPair, BlindAssetRecord,
+        IdentityRevealPolicy, OwnerMemo as NoahOwnerMemo,
+        TracingPolicies as NoahTracingPolicies, TracingPolicy as NoahTracingPolicy,
     },
     noah_algebra::bls12_381::BLSScalar,
     rand_chacha::ChaChaRng,
@@ -836,50 +834,5 @@ impl AmountAssetType {
     #[wasm_bindgen(getter)]
     pub fn asset_type(&self) -> String {
         self.asset_type.clone()
-    }
-}
-
-/// AnonKeys is used to store keys for Anon proofs
-#[wasm_bindgen]
-#[derive(Serialize, Deserialize)]
-pub struct AnonKeys {
-    pub(crate) secret_key: String,
-    pub(crate) pub_key: String,
-}
-
-/// AnonKeys is a struct to store keys required for anon transfer
-#[wasm_bindgen]
-#[allow(missing_docs)]
-impl AnonKeys {
-    pub fn from_json(json: &JsValue) -> Result<AnonKeys, JsValue> {
-        let anon_keys: AnonKeys = json.into_serde().c(d!()).map_err(error_to_jsvalue)?;
-        Ok(anon_keys)
-    }
-
-    pub fn to_json(&self) -> Result<JsValue, JsValue> {
-        serde_json::to_string(&self)
-            .map(|s| JsValue::from_str(&s))
-            .c(d!())
-            .map_err(error_to_jsvalue)
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn secret_key(&self) -> String {
-        self.secret_key.clone()
-    }
-
-    #[wasm_bindgen(setter)]
-    pub fn set_secret_key(&mut self, secret_key: String) {
-        self.secret_key = secret_key;
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn pub_key(&self) -> String {
-        self.pub_key.clone()
-    }
-
-    #[wasm_bindgen(setter)]
-    pub fn set_pub_key(&mut self, pub_key: String) {
-        self.pub_key = pub_key;
     }
 }

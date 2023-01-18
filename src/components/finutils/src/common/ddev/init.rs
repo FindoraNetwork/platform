@@ -15,10 +15,10 @@ use ledger::{
     staking::{td_addr_to_bytes, Validator as StakingValidator, ValidatorKind, FRA},
     utils::fra_gen_initial_tx,
 };
-use noah::xfr::{
-    asset_record::AssetRecordType,
-    sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
+use noah::keys::{
+    KeyPair as XfrKeyPair, PublicKey as XfrPublicKey, SecretKey as XfrSecretKey,
 };
+use noah::xfr::asset_record::AssetRecordType;
 use ruc::*;
 use serde::{Deserialize, Serialize};
 

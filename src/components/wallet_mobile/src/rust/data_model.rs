@@ -14,7 +14,7 @@ use ledger::data_model::{
     SignatureRules as PlatformSignatureRules, TxOutput, TxoRef as PlatformTxoRef,
     TxoSID,
 };
-use noah::xfr::sig::XfrPublicKey;
+use noah::keys::PublicKey as XfrPublicKey;
 use noah::xfr::structs::{
     AssetTracerDecKeys, AssetTracerEncKeys,
     AssetTracerKeyPair as NoahAssetTracerKeyPair, BlindAssetRecord,

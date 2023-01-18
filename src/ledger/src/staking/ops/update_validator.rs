@@ -13,7 +13,7 @@ use {
             COSIG_THRESHOLD_DEFAULT, VALIDATORS_MIN,
         },
     },
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
+    noah::keys::{KeyPair as XfrKeyPair, PublicKey as XfrPublicKey},
     ruc::*,
 };
 

@@ -10,7 +10,9 @@ use {
         staking::{td_addr_to_string, Staking, TendermintAddr, Validator},
     },
     ed25519_dalek::Signer,
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
+    noah::keys::{
+        KeyPair as XfrKeyPair, PublicKey as XfrPublicKey, Signature as XfrSignature,
+    },
     ruc::*,
     serde::{Deserialize, Serialize},
     tendermint::{signature::Ed25519Signature, PrivateKey, PublicKey, Signature},

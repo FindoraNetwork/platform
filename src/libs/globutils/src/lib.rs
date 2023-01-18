@@ -15,7 +15,9 @@ use {
         sha256::{self, Digest},
         Proof,
     },
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
+    noah::keys::{
+        KeyPair as XfrKeyPair, PublicKey as XfrPublicKey, Signature as XfrSignature,
+    },
     ruc::*,
     serde::{Deserialize, Deserializer, Serialize, Serializer},
     std::{fs, marker::PhantomData, path::PathBuf, result::Result as StdResult},

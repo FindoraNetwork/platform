@@ -11,7 +11,9 @@ use {
         staking::{Staking, ValidatorData},
     },
     cryptohash::sha256::{self, Digest},
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
+    noah::keys::{
+        KeyPair as XfrKeyPair, PublicKey as XfrPublicKey, Signature as XfrSignature,
+    },
     ruc::*,
     serde::{Deserialize, Serialize},
     std::{
@@ -232,7 +234,9 @@ mod test {
 
     fn gen_keypairs(n: u8) -> Vec<XfrKeyPair> {
         let mut prng = ChaChaRng::from_entropy();
-        (0..n).map(|_| XfrKeyPair::generate(&mut prng)).collect()
+        (0..n)
+            .map(|_| XfrKeyPair::generate_ed25519(&mut prng))
+            .collect()
     }
 
     fn no_replay_token() -> NoReplayToken {

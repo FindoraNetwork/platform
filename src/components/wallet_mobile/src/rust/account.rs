@@ -1,6 +1,6 @@
 use core::str::FromStr;
 use ledger::data_model::ASSET_TYPE_FRA;
-use noah::xfr::sig::{XfrKeyPair, XfrPublicKey};
+use noah::keys::{KeyPair as XfrKeyPair, PublicKey as XfrPublicKey};
 use ruc::{d, Result, RucResult};
 
 use super::transaction::TransactionBuilder;

@@ -66,7 +66,7 @@ echo
 echo -e "\n ***** Bar To Abar Conversion *****"
 TXO_SID=$($BIN/fn owned-utxos | head -4 | tail -1 |  awk -F ' ' '{print $1}')
 sleep 1
-$BIN/fn convert-bar-to-abar --anon-keys ./$FILE_ANON_KEYS  --txo-sid $TXO_SID
+$BIN/fn convert-bar-to-abar --to-address $ANON_PK_1  --txo-sid $TXO_SID
 sleep $TM_SLEEP
 
 echo "\n ***** Verifying balances ***** "
@@ -77,7 +77,8 @@ then
 fi
 echo
 commitment1=$(tail -n 1 owned_commitments)
-python3 $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS --commitments $commitment1 --amount 210000000
+printf $ANON_SK_1 > temp
+python3 $REGRESSION_PATH/evm.py verify-anon-balance --from-seckey ./temp --commitments $commitment1 --amount 210000000
 if [ $? != 0 ];
 then
     exit 1
@@ -85,20 +86,24 @@ fi
 
 # test anonymous transfers
 echo -e "\n ***** Anonymous Transfer from Sender1 to Receiver1 ***** "
-$BIN/fn anon-transfer --amount 189990000 --anon-keys ./$FILE_ANON_KEYS --to-axfr-public-key $ANON_PK_2 --commitment $commitment1 > /dev/null
+printf $ANON_SK_1 > temp
+$BIN/fn anon-transfer --amount 189990000 --from-seckey ./temp --to-address $ANON_PK_2 --commitment $commitment1 > /dev/null
 sleep $TM_SLEEP
 
 commitment2=$(tail -n 1 sent_commitments)
 echo -e "\n ***** Owned Abars for Receiver1 after Anon Transfer 1 ***** "
-$BIN/fn owned-abars --commitments $commitment2 --anon-keys ./$FILE_ANON_KEYS_2
+printf $ANON_SK_2 > temp
+$BIN/fn owned-abars --commitments $commitment2 --from-seckey ./temp
 
 echo -e "\n ***** Verifying balances ***** "
-python3 "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS --commitments $commitment1 --amount 0
+printf $ANON_SK_1 > temp
+python3 "$REGRESSION_PATH"/evm.py verify-anon-balance --from-seckey ./temp --commitments $commitment1 --amount 0
 if [ $? != 0 ];
 then
     exit 1
 fi
-python3 "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments $commitment2 --amount 189990000
+printf $ANON_SK_2 > temp
+python3 "$REGRESSION_PATH"/evm.py verify-anon-balance --from-seckey ./temp --commitments $commitment2 --amount 189990000
 if [ $? != 0 ];
 then
     exit 1
@@ -106,20 +111,24 @@ fi
 
 
 echo -e "\n ***** Anonymous Transfer from Receiver1 (Sender2) to Receiver2 ***** "
-$BIN/fn anon-transfer --amount 169990000 --anon-keys ./$FILE_ANON_KEYS_2 --to-axfr-public-key $ANON_PK_3 --commitment $commitment2 > /dev/null
+printf $ANON_SK_2 > temp
+$BIN/fn anon-transfer --amount 169990000 --from-seckey ./temp --to-address $ANON_PK_3 --commitment $commitment2 > /dev/null
 sleep $TM_SLEEP
 
 commitment3=$(tail -n 1 sent_commitments)
 echo -e "\n ***** Owned Abars for Receiver2 after Anon Transfer 2 ***** "
-$BIN/fn owned-abars --commitments $commitment3 --anon-keys ./$FILE_ANON_KEYS_3
+printf $ANON_SK_3 > temp
+$BIN/fn owned-abars --commitments $commitment3 --from-seckey ./temp
 
 echo -e "\n ***** Verifying balances ***** "
-python3 $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_2 --commitments $commitment2 --amount 0
+printf $ANON_SK_2 > temp
+python3 $REGRESSION_PATH/evm.py verify-anon-balance --from-seckey ./temp --commitments $commitment2 --amount 0
 if [ $? != 0 ];
 then
     exit 1
 fi
-python3 $REGRESSION_PATH/evm.py verify-anon-balance --anon-keys ./$FILE_ANON_KEYS_3 --commitments $commitment3 --amount 169990000
+printf $ANON_SK_3 > temp
+python3 $REGRESSION_PATH/evm.py verify-anon-balance --from-seckey ./temp --commitments $commitment3 --amount 169990000
 if [ $? != 0 ];
 then
     exit 1
@@ -136,12 +145,14 @@ $BIN/fn owned-utxos
 echo -e "\n ***** Bar To Abar Conversion ***** "
 TXO_SID=$($BIN/fn owned-utxos | sed \$d | sed \$d | sed \$d |sort -k 1 -n | head -4 | tail -1 |  awk -F ' ' '{print $1}')
 sleep 1
-$BIN/fn convert-bar-to-abar --anon-keys ./"$FILE_ANON_KEYS"  --txo-sid "$TXO_SID"
+printf $ANON_SK_1 > temp
+$BIN/fn convert-bar-to-abar --txo-sid "$TXO_SID" --to-address $ANON_PK_1
 sleep $TM_SLEEP
 
 commitment4=$(tail -n 1 owned_commitments)
 echo -e "\n Owned Abars after Bar to Abar conversion"
-$BIN/fn owned-abars --commitments "$commitment4" --anon-keys ./"$FILE_ANON_KEYS"
+printf $ANON_SK_1 > temp
+$BIN/fn owned-abars --commitments "$commitment4" --from-seckey ./temp
 
 echo -e "\n ***** Verifying balances ***** "
 python3 "$REGRESSION_PATH"/evm.py verify-balance --sec-key "$BAR_SEC_KEY" --amount 419960000
@@ -149,7 +160,8 @@ if [ $? != 0 ];
 then
     exit 1
 fi
-python3 "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./"$FILE_ANON_KEYS" --commitments "$commitment4" --amount 210000000
+printf $ANON_SK_1 > temp
+python3 "$REGRESSION_PATH"/evm.py verify-anon-balance --from-seckey ./temp --commitments "$commitment4" --amount 210000000
 if [ $? != 0 ];
 then
     exit 1
@@ -157,7 +169,8 @@ fi
 
 
 echo -e "\n ***** Abar To Bar Conversion ***** "
-$BIN/fn convert-abar-to-bar --anon-keys ./"$FILE_ANON_KEYS" -c "$commitment4" --to-wallet-address $FRA_ADDRESS > /dev/null
+printf $ANON_SK_1 > temp
+$BIN/fn convert-abar-to-bar --from-seckey ./temp -c "$commitment4" --to-wallet-address $FRA_ADDRESS > /dev/null
 sleep $TM_SLEEP
 
 echo -e "\n ***** Verifying balances ***** "
@@ -166,7 +179,8 @@ if [ $? != 0 ];
 then
     exit 1
 fi
-python3 "$REGRESSION_PATH"/evm.py verify-anon-balance --anon-keys ./"$FILE_ANON_KEYS" --commitments "$commitment4" --amount 0
+printf $ANON_SK_1 > temp
+python3 "$REGRESSION_PATH"/evm.py verify-anon-balance --from-seckey ./temp --commitments "$commitment4" --amount 0
 if [ $? != 0 ];
 then
     exit 1

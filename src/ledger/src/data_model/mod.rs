@@ -7,7 +7,9 @@
 
 mod __trash__;
 mod effects;
+
 pub use effects::{BlockEffect, TxnEffect};
+use noah::keys::PublicKey;
 mod test;
 
 use {
@@ -40,13 +42,12 @@ use {
             ar_to_abar::{verify_ar_to_abar_note, ArToAbarNote},
             bar_to_abar::{verify_bar_to_abar_note, BarToAbarNote},
             commit,
-            keys::AXfrPubKey,
             structs::{AnonAssetRecord, AxfrOwnerMemo, Nullifier, OpenAnonAssetRecord},
         },
+        keys::{KeyPair as XfrKeyPair, PublicKey as XfrPublicKey},
         setup::VerifierParams,
         xfr::{
             gen_xfr_body,
-            sig::{XfrKeyPair, XfrPublicKey},
             structs::{
                 AssetRecord, AssetType as NoahAssetType, BlindAssetRecord, OwnerMemo,
                 TracingPolicies, TracingPolicy, XfrAmount, XfrAssetType, XfrBody,
@@ -397,17 +398,23 @@ pub struct ConfidentialMemo;
 pub struct Commitment([u8; 32]);
 
 #[allow(missing_docs)]
-#[derive(
-    Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize,
-)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct XfrAddress {
     pub key: XfrPublicKey,
+}
+
+impl Default for XfrAddress {
+    fn default() -> Self {
+        XfrAddress {
+            key: PublicKey::default_ed25519(),
+        }
+    }
 }
 
 impl XfrAddress {
     #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn to_base64(self) -> String {
-        b64enc(&self.key.to_bytes())
+        b64enc(&self.key.noah_to_bytes())
     }
 
     // pub(crate) fn to_bytes(self) -> Vec<u8> {
@@ -419,36 +426,28 @@ impl XfrAddress {
 impl Hash for XfrAddress {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.key.to_bytes().hash(state);
-    }
-}
-
-#[allow(missing_docs)]
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
-pub struct AXfrAddress {
-    pub key: AXfrPubKey,
-}
-
-#[allow(clippy::derive_hash_xor_eq)]
-impl Hash for AXfrAddress {
-    #[inline(always)]
-    fn hash<H: Hasher>(&self, state: &mut H) {
         self.key.noah_to_bytes().hash(state);
     }
 }
 
 #[allow(missing_docs)]
-#[derive(
-    Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Ord, PartialOrd, Serialize,
-)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 pub struct IssuerPublicKey {
     pub key: XfrPublicKey,
+}
+
+impl Default for IssuerPublicKey {
+    fn default() -> Self {
+        IssuerPublicKey {
+            key: PublicKey::default_ed25519(),
+        }
+    }
 }
 
 impl IssuerPublicKey {
     #[cfg(all(not(target_arch = "wasm32"), feature = "fin_storage"))]
     pub(crate) fn to_base64(self) -> String {
-        b64enc(&self.key.to_bytes())
+        b64enc(&self.key.noah_to_bytes())
     }
 
     // pub(crate) fn to_bytes(&self) -> Vec<u8> {
@@ -460,7 +459,7 @@ impl IssuerPublicKey {
 impl Hash for IssuerPublicKey {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.key.to_bytes().hash(state);
+        self.key.noah_to_bytes().hash(state);
     }
 }
 
@@ -478,9 +477,17 @@ pub struct IssuerKeyPair<'a> {
     pub keypair: &'a XfrKeyPair,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 struct AccountAddress {
     pub key: XfrPublicKey,
+}
+
+impl Default for AccountAddress {
+    fn default() -> Self {
+        AccountAddress {
+            key: PublicKey::default_ed25519(),
+        }
+    }
 }
 
 #[allow(missing_docs)]
@@ -523,7 +530,7 @@ impl SignatureRules {
         let mut weight_map = HashMap::new();
         // Convert to map
         for (key, weight) in self.weights.iter() {
-            weight_map.insert(key.to_bytes(), *weight);
+            weight_map.insert(key.noah_to_bytes(), *weight);
         }
         // Calculate weighted sum
         for key in keyset.iter() {
@@ -2123,7 +2130,7 @@ impl Transaction {
     #[allow(missing_docs)]
     pub fn sign_to_map(&mut self, keypair: &XfrKeyPair) {
         self.pubkey_sign_map
-            .insert(keypair.pub_key, SignatureOf::new(keypair, &self.body));
+            .insert(keypair.get_pk(), SignatureOf::new(keypair, &self.body));
     }
 
     #[inline(always)]
@@ -2354,7 +2361,7 @@ impl RngCore for ConsensusRng {
 #[inline(always)]
 #[allow(missing_docs)]
 pub fn gen_random_keypair() -> XfrKeyPair {
-    XfrKeyPair::generate(&mut ChaChaRng::from_entropy())
+    XfrKeyPair::generate_ed25519(&mut ChaChaRng::from_entropy())
 }
 
 #[inline(always)]

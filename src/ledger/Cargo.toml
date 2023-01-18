@@ -10,7 +10,7 @@ base64 = "0.13"
 bs58 = "0.4"
 bincode = "1.3.1"
 byteorder = "1.0.0"
-curve25519-dalek = { git = "https://github.com/FindoraNetwork/curve25519-dalek", tag = "v3.2.0-f" }
+curve25519-dalek = { package = "noah-curve25519-dalek", version = "4.0.0", default-features = false, features = ['serde'] }
 digest = '0.10'
 ed25519-dalek = { git = "https://github.com/FindoraNetwork/ed25519-dalek", tag = "v1.0.1-f" }
 hex = "0.4.2"
@@ -34,10 +34,10 @@ fp-utils = { path = "../components/contracts/primitives/utils" }
 itertools = "0.10"
 ruc = "1.0"
 
-noah  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
-noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
-noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
-bulletproofs = { git = "https://github.com/FindoraNetwork/bulletproofs", tag = "v1.0.1-f" }
+noah  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.2" }
+noah-crypto  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.2" }
+noah-algebra  = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.2" }
+bulletproofs = { package = "noah-bulletproofs", version = "4.0.0" }
 
 fbnc = { version = "0.2.9", default-features = false}
 
@@ -71,10 +71,10 @@ fs2 = "0.4"
 storage = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4", optional = true }
 fin_db = { git = "https://github.com/FindoraNetwork/storage.git", tag = "v1.1.4", optional = true }
 sparse_merkle_tree = { path = "../libs/sparse_merkle_tree" }
-noah-accumulators = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.3.2" }
+noah-accumulators = { git = "https://github.com/FindoraNetwork/noah", tag = "v0.4.2" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-parking_lot = { version = "0.11", features = ["wasm-bindgen"] }
+parking_lot = { version = "0.11", fetiatures = ["wasm-bindgen"] }
 
 [build-dependencies]
 vergen = "=3.1.0"

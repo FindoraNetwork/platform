@@ -20,8 +20,10 @@ use ledger::{
     },
     staking::{MAX_DELEGATION_AMOUNT, MIN_DELEGATION_AMOUNT},
 };
+use noah::keys::{
+    KeyPair as XfrKeyPair, PublicKey as XfrPublicKey, SecretKey as XfrSecretKey,
+};
 use noah::xfr::asset_record::open_blind_asset_record as open_bar;
-use noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey};
 use noah::xfr::structs::{
     AssetType as NoahAssetType, OpenAssetRecord, XfrBody, ASSET_TYPE_LENGTH,
 };
@@ -104,7 +106,7 @@ pub fn get_priv_key_str(key_pair: &XfrKeyPair) -> String {
 /// Creates a new transfer key pair.
 pub fn new_keypair() -> XfrKeyPair {
     let mut prng = ChaChaRng::from_entropy();
-    XfrKeyPair::generate(&mut prng)
+    XfrKeyPair::generate_ed25519(&mut prng)
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -113,7 +115,7 @@ pub fn new_keypair_from_seed(seed_str: String, name: Option<String>) -> XfrKeyPa
     let seed_str = seed_str + &name.unwrap_or_default();
     let hash = sha256::hash(seed_str.as_bytes());
     let mut prng = ChaChaRng::from_seed(hash.0);
-    XfrKeyPair::generate(&mut prng)
+    XfrKeyPair::generate_ed25519(&mut prng)
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -167,7 +169,7 @@ pub fn rs_wasm_credential_verify_commitment(
         issuer_pub_key,
         commitment.get_ref(),
         pok.get_ref(),
-        &xfr_pk.to_bytes(),
+        &xfr_pk.noah_to_bytes(),
     )
 }
 
@@ -248,7 +250,7 @@ pub fn rs_wasm_credential_commit(
         &mut prng,
         user_secret_key,
         credential.get_cred_ref(),
-        &user_public_key.to_bytes(),
+        &user_public_key.noah_to_bytes(),
     )?;
     Ok(CredentialCommitmentData {
         commitment: CredentialCommitment { commitment },
@@ -432,7 +434,7 @@ impl From<&BipPath> for wallet::BipPath {
 /// Restore the XfrKeyPair from a mnemonic with a default bip44-path,
 /// that is "m/44'/917'/0'/0/0" ("m/44'/coin'/account'/change/address").
 pub fn rs_restore_keypair_from_mnemonic_default(phrase: &str) -> Result<XfrKeyPair> {
-    wallet::restore_keypair_from_mnemonic_default(phrase)
+    wallet::restore_keypair_from_mnemonic_secp256k1(phrase)
 }
 
 /// Restore the XfrKeyPair from a mnemonic with custom params,

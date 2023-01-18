@@ -6,7 +6,7 @@ use fp_storage::{Borrow, BorrowMut};
 use fp_traits::account::AccountAsset;
 use fp_types::crypto::Address;
 use fp_types::U256;
-use noah::xfr::sig::XfrKeyPair;
+use noah::keys::KeyPair as XfrKeyPair;
 use parking_lot::RwLock;
 use rand_chacha::rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -48,8 +48,8 @@ fn test_accounts_set_get() {
 
     //Generate Address
     let mut prng = ChaChaRng::from_entropy();
-    let key = XfrKeyPair::generate(&mut prng);
-    let address = Address::from(key.pub_key);
+    let key = XfrKeyPair::generate_ed25519(&mut prng);
+    let address = Address::from(key.get_pk());
 
     //Generate SmartAccount
     let account = SmartAccount {
@@ -79,8 +79,8 @@ fn test_account_of() {
 
     //Generate Address
     let mut prng = ChaChaRng::from_entropy();
-    let key = XfrKeyPair::generate(&mut prng);
-    let addr = Address::from(key.pub_key);
+    let key = XfrKeyPair::generate_ed25519(&mut prng);
+    let addr = Address::from(key.get_pk());
 
     //Generate SmartAccount
     let sa1 = SmartAccount {
@@ -154,8 +154,8 @@ fn test_account_balance() {
 
     //Generate Address
     let mut prng = ChaChaRng::from_entropy();
-    let key = XfrKeyPair::generate(&mut prng);
-    let address = Address::from(key.pub_key);
+    let key = XfrKeyPair::generate_ed25519(&mut prng);
+    let address = Address::from(key.get_pk());
 
     //Generate SmartAccount
     let account = SmartAccount {
@@ -179,8 +179,8 @@ fn test_account_nonce() {
 
     //Generate Address
     let mut prng = ChaChaRng::from_entropy();
-    let key = XfrKeyPair::generate(&mut prng);
-    let address = Address::from(key.pub_key);
+    let key = XfrKeyPair::generate_ed25519(&mut prng);
+    let address = Address::from(key.get_pk());
 
     //Generate SmartAccount
     let account = SmartAccount {
@@ -204,8 +204,8 @@ fn test_account_inc_nonce() {
 
     //Generate Address
     let mut prng = ChaChaRng::from_entropy();
-    let key = XfrKeyPair::generate(&mut prng);
-    let address = Address::from(key.pub_key);
+    let key = XfrKeyPair::generate_ed25519(&mut prng);
+    let address = Address::from(key.get_pk());
 
     //Generate SmartAccount
     let account = SmartAccount {
@@ -232,10 +232,10 @@ fn test_account_transfer() {
 
     //Generate Addresses
     let mut prng = ChaChaRng::from_entropy();
-    let key1 = XfrKeyPair::generate(&mut prng);
-    let key2 = XfrKeyPair::generate(&mut prng);
-    let address1 = Address::from(key1.pub_key);
-    let address2 = Address::from(key2.pub_key);
+    let key1 = XfrKeyPair::generate_ed25519(&mut prng);
+    let key2 = XfrKeyPair::generate_ed25519(&mut prng);
+    let address1 = Address::from(key1.get_pk());
+    let address2 = Address::from(key2.get_pk());
 
     //Generate accounts with different amounts
     let mut acct1 = SmartAccount::default();
@@ -272,8 +272,8 @@ fn test_account_mint() {
 
     //Generate Address
     let mut prng = ChaChaRng::from_entropy();
-    let key = XfrKeyPair::generate(&mut prng);
-    let address = Address::from(key.pub_key);
+    let key = XfrKeyPair::generate_ed25519(&mut prng);
+    let address = Address::from(key.get_pk());
 
     //Generate SmartAccount
     let account = SmartAccount {
@@ -298,8 +298,8 @@ fn test_account_burn() {
 
     //Generate Address
     let mut prng = ChaChaRng::from_entropy();
-    let key = XfrKeyPair::generate(&mut prng);
-    let address = Address::from(key.pub_key);
+    let key = XfrKeyPair::generate_ed25519(&mut prng);
+    let address = Address::from(key.get_pk());
 
     //Generate SmartAccount
     let account = SmartAccount {
@@ -325,8 +325,8 @@ fn test_account_withdraw() {
 
     //Generate Address
     let mut prng = ChaChaRng::from_entropy();
-    let key = XfrKeyPair::generate(&mut prng);
-    let address = Address::from(key.pub_key);
+    let key = XfrKeyPair::generate_ed25519(&mut prng);
+    let address = Address::from(key.get_pk());
 
     //Generate SmartAccount
     let account = SmartAccount {
@@ -354,8 +354,8 @@ fn test_account_refund() {
 
     //Generate Address
     let mut prng = ChaChaRng::from_entropy();
-    let key = XfrKeyPair::generate(&mut prng);
-    let address = Address::from(key.pub_key);
+    let key = XfrKeyPair::generate_ed25519(&mut prng);
+    let address = Address::from(key.get_pk());
 
     //Generate SmartAccount
     let account = SmartAccount {

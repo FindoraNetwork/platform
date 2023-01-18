@@ -16,10 +16,10 @@ use {
         },
     },
     ed25519_dalek::Signer,
-    noah::xfr::{
-        sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
-        structs::{XfrAmount, XfrAssetType},
+    noah::keys::{
+        KeyPair as XfrKeyPair, PublicKey as XfrPublicKey, Signature as XfrSignature,
     },
+    noah::xfr::structs::{XfrAmount, XfrAssetType},
     ruc::*,
     serde::{Deserialize, Serialize},
     std::collections::HashSet,

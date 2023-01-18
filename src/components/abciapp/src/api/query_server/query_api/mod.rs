@@ -26,7 +26,8 @@ use {
     ledger_api::*,
     noah::{
         anon_xfr::structs::{AxfrOwnerMemo, Commitment, MTLeafInfo},
-        xfr::{sig::XfrPublicKey, structs::OwnerMemo},
+        keys::PublicKey as XfrPublicKey,
+        xfr::structs::OwnerMemo,
     },
     noah_algebra::serialization::NoahFromToBytes,
     parking_lot::RwLock,

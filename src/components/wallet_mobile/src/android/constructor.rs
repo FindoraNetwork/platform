@@ -17,7 +17,7 @@ pub unsafe extern "system" fn Java_com_findora_JniApi_xfrKeyPairNew(
     let mut buf = [0u8; ASSET_TYPE_LENGTH];
     buf.copy_from_slice(input.as_ref());
     let mut prng = ChaChaRng::from_seed(buf);
-    let val = types::XfrKeyPair::from(RawXfrKeyPair::generate(&mut prng));
+    let val = types::XfrKeyPair::from(RawXfrKeyPair::generate_ed25519(&mut prng));
     Box::into_raw(Box::new(val)) as jlong
 }
 

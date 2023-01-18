@@ -11,10 +11,12 @@ use {
         store::LedgerState,
         utils::fra_gen_initial_tx,
     },
-    noah::xfr::{
-        asset_record::{open_blind_asset_record, AssetRecordType},
-        sig::{XfrKeyPair, XfrPublicKey},
-        structs::{AssetRecordTemplate, XfrAmount},
+    noah::{
+        keys::{KeyPair as XfrKeyPair, PublicKey as XfrPublicKey},
+        xfr::{
+            asset_record::{open_blind_asset_record, AssetRecordType},
+            structs::{AssetRecordTemplate, XfrAmount},
+        },
     },
     rand::random,
     rand_chacha::ChaChaRng,
@@ -33,7 +35,7 @@ fn staking_block_rewards_rate() {
 // 4. check if the block rewards rate is correct per loop
 fn check_block_rewards_rate() -> Result<()> {
     let mut ledger = LedgerState::tmp_ledger();
-    let root_kp = XfrKeyPair::generate(&mut ChaChaRng::from_entropy());
+    let root_kp = XfrKeyPair::generate_ed25519(&mut ChaChaRng::from_entropy());
 
     let tx = fra_gen_initial_tx(&root_kp);
 

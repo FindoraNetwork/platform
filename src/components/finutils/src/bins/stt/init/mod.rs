@@ -39,8 +39,8 @@ pub fn init(
         Ok(())
     } else {
         let root_kp =
-            wallet::restore_keypair_from_mnemonic_default(ROOT_MNEMONIC).c(d!())?;
-        println!(">>> Block interval: {interval} seconds",);
+            wallet::restore_keypair_from_mnemonic_ed25519(ROOT_MNEMONIC).c(d!())?;
+        println!(">>> Block interval: {interval} seconds");
 
         println!(">>> Define and issue FRA ...");
         common::utils::send_tx(&fra_gen_initial_tx(&root_kp)).c(d!())?;

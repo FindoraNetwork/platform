@@ -9,7 +9,9 @@ use {
         data_model::{NoReplayToken, Operation, Transaction},
         staking::{PartialUnDelegation, Staking},
     },
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey, XfrSignature},
+    noah::keys::{
+        KeyPair as XfrKeyPair, PublicKey as XfrPublicKey, Signature as XfrSignature,
+    },
     ruc::*,
     serde::{Deserialize, Serialize},
 };

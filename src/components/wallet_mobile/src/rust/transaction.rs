@@ -15,8 +15,8 @@ use ledger::{
     },
     staking::{td_addr_to_bytes, PartialUnDelegation, TendermintAddr},
 };
+use noah::keys::{KeyPair as XfrKeyPair, PublicKey as XfrPublicKey};
 use noah::xfr::asset_record::{open_blind_asset_record as open_bar, AssetRecordType};
-use noah::xfr::sig::{XfrKeyPair, XfrPublicKey};
 use noah::xfr::structs::AssetRecordTemplate;
 use ruc::{eg, Result as RucResult};
 use serde_json::Result;

@@ -19,7 +19,7 @@ fn gen() -> Result<()> {
             wallet::generate_mnemonic_custom(24, "en")
                 .c(d!())
                 .and_then(|m| {
-                    wallet::restore_keypair_from_mnemonic_default(&m)
+                    wallet::restore_keypair_from_mnemonic_ed25519(&m)
                         .c(d!())
                         .map(|k| (m, wallet::public_key_to_bech32(k.get_pk_ref()), k))
                 })

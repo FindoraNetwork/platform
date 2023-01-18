@@ -44,9 +44,9 @@ use {
             },
             TREE_DEPTH as MERKLE_TREE_DEPTH,
         },
+        keys::PublicKey as XfrPublicKey,
         setup::VerifierParams,
         xfr::{
-            sig::XfrPublicKey,
             structs::{OwnerMemo, TracingPolicies, TracingPolicy},
             XfrNotePolicies,
         },

@@ -33,7 +33,7 @@ use {
     globutils::wallet,
     indexmap::IndexMap,
     lazy_static::lazy_static,
-    noah::xfr::sig::{XfrKeyPair, XfrPublicKey},
+    noah::keys::{KeyPair as XfrKeyPair, PublicKey as XfrPublicKey},
     ops::{
         fra_distribution::FraDistributionOps,
         mint_fra::{MintKind, MINT_AMOUNT_LIMIT},
@@ -250,7 +250,7 @@ impl Staking {
 
     #[inline(always)]
     fn gen_consensus_tmp_pubkey(cr: &mut ConsensusRng) -> XfrPublicKey {
-        XfrKeyPair::generate(cr).get_pk()
+        XfrKeyPair::generate_ed25519(cr).get_pk()
     }
 
     #[inline(always)]

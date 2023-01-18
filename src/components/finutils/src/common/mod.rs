@@ -37,18 +37,19 @@ use {
     },
     noah::{
         anon_xfr::{
-            keys::{AXfrKeyPair, AXfrPubKey},
             nullify,
             structs::{
                 AnonAssetRecord, Commitment, MTLeafInfo, OpenAnonAssetRecordBuilder,
             },
+        },
+        keys::{
+            KeyPair as XfrKeyPair, PublicKey as XfrPublicKey, SecretKey as XfrSecretKey,
         },
         xfr::{
             asset_record::{
                 AssetRecordType,
                 AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType,
             },
-            sig::{XfrKeyPair, XfrPublicKey, XfrSecretKey},
             structs::{AssetType, XfrAmount, XfrAssetType},
         },
     },
@@ -82,7 +83,7 @@ lazy_static! {
 pub fn staker_update(
     cr: Option<&str>,
     memo: Option<StakerMemo>,
-    is_address_fra: bool,
+    is_address_eth: bool,
 ) -> Result<()> {
     let addr = get_td_pubkey().map(|i| td_pubkey_to_td_addr(&i)).c(d!())?;
     let vd = get_validator_detail(&addr).c(d!())?;
@@ -98,7 +99,7 @@ pub fn staker_update(
 
     let td_pubkey = get_td_pubkey().c(d!())?;
 
-    let kp = get_keypair(is_address_fra).c(d!())?;
+    let kp = get_keypair(is_address_eth).c(d!())?;
     let vkp = get_td_privkey().c(d!())?;
 
     let mut builder = utils::new_tx_builder().c(d!())?;
@@ -126,7 +127,7 @@ pub fn stake(
     commission_rate: &str,
     memo: Option<&str>,
     force: bool,
-    is_address_fra: bool,
+    is_address_eth: bool,
 ) -> Result<()> {
     let am = amount.parse::<u64>().c(d!("'amount' must be an integer"))?;
     check_delegation_amount(am, false).c(d!())?;
@@ -136,7 +137,7 @@ pub fn stake(
         .and_then(|cr| convert_commission_rate(cr).c(d!()))?;
     let td_pubkey = get_td_pubkey().c(d!())?;
 
-    let kp = get_keypair(is_address_fra).c(d!())?;
+    let kp = get_keypair(is_address_eth).c(d!())?;
     let vkp = get_td_privkey().c(d!())?;
 
     macro_rules! diff {
@@ -193,7 +194,7 @@ pub fn stake_append(
     amount: &str,
     staker: Option<&str>,
     td_addr: Option<TendermintAddrRef>,
-    is_address_fra: bool,
+    is_address_eth: bool,
 ) -> Result<()> {
     let am = amount.parse::<u64>().c(d!("'amount' must be an integer"))?;
     check_delegation_amount(am, true).c(d!())?;
@@ -206,8 +207,8 @@ pub fn stake_append(
 
     let kp = staker
         .c(d!())
-        .and_then(|sk| wallet::restore_keypair_from_mnemonic_default(sk).c(d!()))
-        .or_else(|_| get_keypair(is_address_fra).c(d!()))?;
+        .and_then(|sk| wallet::restore_keypair_from_mnemonic_ed25519(sk).c(d!()))
+        .or_else(|_| get_keypair(is_address_eth).c(d!()))?;
 
     let mut builder = utils::new_tx_builder().c(d!())?;
     builder.add_operation_delegation(&kp, am, td_addr);
@@ -236,7 +237,7 @@ pub fn unstake(
     am: Option<&str>,
     staker: Option<&str>,
     td_addr: Option<TendermintAddrRef>,
-    is_address_fra: bool,
+    is_address_eth: bool,
 ) -> Result<()> {
     let am = if let Some(i) = am {
         Some(i.parse::<u64>().c(d!("'amount' must be an integer"))?)
@@ -246,8 +247,8 @@ pub fn unstake(
 
     let kp = staker
         .c(d!())
-        .and_then(|sk| wallet::restore_keypair_from_mnemonic_default(sk).c(d!()))
-        .or_else(|_| get_keypair(is_address_fra).c(d!()))?;
+        .and_then(|sk| wallet::restore_keypair_from_mnemonic_ed25519(sk).c(d!()))
+        .or_else(|_| get_keypair(is_address_eth).c(d!()))?;
     let td_addr_bytes = td_addr
         .c(d!())
         .and_then(|ta| td_addr_to_bytes(ta).c(d!()))
@@ -289,7 +290,7 @@ pub fn unstake(
 pub fn claim(
     am: Option<&str>,
     sk_str: Option<&str>,
-    is_address_fra: bool,
+    is_address_eth: bool,
 ) -> Result<()> {
     let am = if let Some(i) = am {
         Some(i.parse::<u64>().c(d!("'amount' must be an integer"))?)
@@ -297,7 +298,7 @@ pub fn claim(
         None
     };
 
-    let kp = restore_keypair_from_str_with_default(sk_str, is_address_fra)?;
+    let kp = restore_keypair_from_str_with_default(sk_str, is_address_eth)?;
 
     let mut builder = utils::new_tx_builder().c(d!())?;
 
@@ -324,14 +325,14 @@ pub fn claim(
 ///     Delegation Information
 ///     Validator Detail (if already staked)
 ///
-pub fn show(basic: bool, is_address_fra: bool) -> Result<()> {
-    let kp = get_keypair(is_address_fra).c(d!())?;
+pub fn show(basic: bool, is_address_eth: bool) -> Result<()> {
+    let kp = get_keypair(is_address_eth).c(d!())?;
 
     let serv_addr = ruc::info!(get_serv_addr()).map(|i| {
         println!("\x1b[31;01mServer URL:\x1b[00m\n{i}\n",);
     });
 
-    let xfr_account = ruc::info!(get_keypair(is_address_fra)).map(|i| {
+    let xfr_account = ruc::info!(get_keypair(is_address_eth)).map(|i| {
         println!(
             "\x1b[31;01mFindora Address:\x1b[00m\n{}\n",
             wallet::public_key_to_bech32(&i.get_pk())
@@ -455,7 +456,7 @@ pub fn transfer_asset(
     am: &str,
     confidential_am: bool,
     confidential_ty: bool,
-    is_address_fra: bool,
+    is_address_eth: bool,
 ) -> Result<()> {
     transfer_asset_batch(
         owner_sk,
@@ -464,7 +465,7 @@ pub fn transfer_asset(
         am,
         confidential_am,
         confidential_ty,
-        is_address_fra,
+        is_address_eth,
     )
     .c(d!())
 }
@@ -497,9 +498,9 @@ pub fn transfer_asset_batch(
     am: &str,
     confidential_am: bool,
     confidential_ty: bool,
-    is_address_fra: bool,
+    is_address_eth: bool,
 ) -> Result<()> {
-    let from = restore_keypair_from_str_with_default(owner_sk, is_address_fra)?;
+    let from = restore_keypair_from_str_with_default(owner_sk, is_address_eth)?;
     let am = am.parse::<u64>().c(d!("'amount' must be an integer"))?;
 
     transfer_asset_batch_x(
@@ -548,20 +549,20 @@ pub fn get_serv_addr() -> Result<&'static str> {
 }
 
 /// Get keypair from config file
-pub fn get_keypair(is_address_fra: bool) -> Result<XfrKeyPair> {
+pub fn get_keypair(is_address_eth: bool) -> Result<XfrKeyPair> {
     if let Some(m_path) = MNEMONIC.as_ref() {
         fs::read_to_string(m_path)
             .c(d!("can not read mnemonic from 'owner-mnemonic-path'"))
             .and_then(|m| {
                 let k = m.trim();
-                if is_address_fra {
-                    wallet::restore_keypair_from_mnemonic_ed25519(k)
+                if is_address_eth {
+                    wallet::restore_keypair_from_mnemonic_secp256k1(k)
                         .c(d!("invalid 'owner-mnemonic'"))
                         .or_else(|e| {
                             wallet::restore_keypair_from_seckey_base64(k).c(d!(e))
                         })
                 } else {
-                    wallet::restore_keypair_from_mnemonic_default(k)
+                    wallet::restore_keypair_from_mnemonic_ed25519(k)
                         .c(d!("invalid 'owner-mnemonic'"))
                         .or_else(|e| {
                             wallet::restore_keypair_from_seckey_base64(k).c(d!(e))
@@ -613,13 +614,13 @@ pub fn convert_commission_rate(cr: f64) -> Result<[u64; 2]> {
 }
 
 #[allow(missing_docs)]
-pub fn gen_key(is_fra_address: bool) -> (String, String, String, XfrKeyPair) {
+pub fn gen_key(is_address_eth: bool) -> (String, String, String, XfrKeyPair) {
     let (mnemonic, key, kp) = loop {
         let mnemonic = pnk!(wallet::generate_mnemonic_custom(24, "en"));
-        let kp: XfrKeyPair = if is_fra_address {
-            pnk!(wallet::restore_keypair_from_mnemonic_ed25519(&mnemonic))
+        let kp: XfrKeyPair = if is_address_eth {
+            pnk!(wallet::restore_keypair_from_mnemonic_secp256k1(&mnemonic))
         } else {
-            pnk!(wallet::restore_keypair_from_mnemonic_default(&mnemonic))
+            pnk!(wallet::restore_keypair_from_mnemonic_ed25519(&mnemonic))
         };
         if let Some(key) = serde_json::to_string_pretty(&kp)
             .ok()
@@ -635,8 +636,8 @@ pub fn gen_key(is_fra_address: bool) -> (String, String, String, XfrKeyPair) {
 }
 
 #[allow(missing_docs)]
-pub fn gen_key_and_print(is_fra_address: bool) {
-    let (wallet_addr, mnemonic, key, _) = gen_key(is_fra_address);
+pub fn gen_key_and_print(is_address_eth: bool) {
+    let (wallet_addr, mnemonic, key, _) = gen_key(is_address_eth);
     println!(
         "\n\x1b[31;01mWallet Address:\x1b[00m {wallet_addr}\n\x1b[31;01mMnemonic:\x1b[00m {mnemonic}\n\x1b[31;01mKey:\x1b[00m {key}\n",
     );
@@ -644,14 +645,14 @@ pub fn gen_key_and_print(is_fra_address: bool) {
 
 fn restore_keypair_from_str_with_default(
     sk_str: Option<&str>,
-    is_fra_address: bool,
+    is_address_eth: bool,
 ) -> Result<XfrKeyPair> {
     if let Some(sk) = sk_str {
         serde_json::from_str::<XfrSecretKey>(&format!("\"{sk}\"",))
             .map(|sk| sk.into_keypair())
             .c(d!("Invalid secret key"))
     } else {
-        get_keypair(is_fra_address).c(d!())
+        get_keypair(is_address_eth).c(d!())
     }
 }
 
@@ -659,9 +660,9 @@ fn restore_keypair_from_str_with_default(
 pub fn show_account(
     sk_str: Option<&str>,
     asset: Option<&str>,
-    is_address_fra: bool,
+    is_address_eth: bool,
 ) -> Result<()> {
-    let kp = restore_keypair_from_str_with_default(sk_str, is_address_fra)?;
+    let kp = restore_keypair_from_str_with_default(sk_str, is_address_eth)?;
     let token_code = asset
         .map(|asset| AssetTypeCode::new_from_base64(asset).c(d!("Invalid asset code")))
         .transpose()?;
@@ -677,9 +678,9 @@ pub fn delegate(
     sk_str: Option<&str>,
     amount: u64,
     validator: &str,
-    is_address_fra: bool,
+    is_address_eth: bool,
 ) -> Result<()> {
-    restore_keypair_from_str_with_default(sk_str, is_address_fra)
+    restore_keypair_from_str_with_default(sk_str, is_address_eth)
         .c(d!())
         .and_then(|kp| delegate_x(&kp, amount, validator).c(d!()))
 }
@@ -697,9 +698,9 @@ pub fn delegate_x(kp: &XfrKeyPair, amount: u64, validator: &str) -> Result<()> {
 pub fn undelegate(
     sk_str: Option<&str>,
     param: Option<(u64, &str)>,
-    is_address_fra: bool,
+    is_address_eth: bool,
 ) -> Result<()> {
-    restore_keypair_from_str_with_default(sk_str, is_address_fra)
+    restore_keypair_from_str_with_default(sk_str, is_address_eth)
         .c(d!())
         .and_then(|kp| undelegate_x(&kp, param).c(d!()))
 }
@@ -713,8 +714,8 @@ pub fn undelegate_x(kp: &XfrKeyPair, param: Option<(u64, &str)>) -> Result<()> {
 }
 
 /// Display delegation information of a findora account
-pub fn show_delegations(sk_str: Option<&str>, is_address_fra: bool) -> Result<()> {
-    let pk = restore_keypair_from_str_with_default(sk_str, is_address_fra)?.get_pk();
+pub fn show_delegations(sk_str: Option<&str>, is_address_eth: bool) -> Result<()> {
+    let pk = restore_keypair_from_str_with_default(sk_str, is_address_eth)?.get_pk();
 
     println!(
         "{}",
@@ -795,9 +796,9 @@ pub fn create_asset(
     max_units: Option<u64>,
     transferable: bool,
     token_code: Option<&str>,
-    is_address_fra: bool,
+    is_address_eth: bool,
 ) -> Result<()> {
-    let kp = get_keypair(is_address_fra).c(d!())?;
+    let kp = get_keypair(is_address_eth).c(d!())?;
 
     let code = if token_code.is_none() {
         AssetTypeCode::gen_random()
@@ -857,9 +858,9 @@ pub fn issue_asset(
     asset: &str,
     amount: u64,
     hidden: bool,
-    is_address_fra: bool,
+    is_address_eth: bool,
 ) -> Result<()> {
-    let kp = restore_keypair_from_str_with_default(sk_str, is_address_fra)?;
+    let kp = restore_keypair_from_str_with_default(sk_str, is_address_eth)?;
     let code = AssetTypeCode::new_from_base64(asset).c(d!())?;
     issue_asset_x(&kp, &code, amount, hidden).c(d!())
 }
@@ -915,23 +916,21 @@ pub fn show_asset(addr: &str) -> Result<()> {
 /// * target_addr - ABAR receiving AXfr pub key after conversion in base64
 /// * TxoSID - sid of BAR to convert
 pub fn convert_bar2abar(
-    owner_sk: Option<&String>,
-    target_addr: String,
+    owner_sk: Option<String>,
+    target_addr: &str,
     txo_sid: &str,
-    is_address_fra: bool,
+    is_address_eth: bool,
 ) -> Result<Commitment> {
     // parse sender XfrSecretKey or generate from Mnemonic setup with wallet
     let from = match owner_sk {
-        Some(str) => {
-            ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!("\"{str}\"",)))
-                .c(d!())?
-                .into_keypair()
-        }
-        None => get_keypair(is_address_fra).c(d!())?,
+        Some(str) => ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!("\"{str}\"")))
+        .c(d!())?
+        .into_keypair(),
+        None => get_keypair(is_address_eth).c(d!())?,
     };
     // parse receiver AxfrPubKey
-    let to = wallet::anon_public_key_from_base64(target_addr.as_str())
-        .c(d!("invalid 'target-addr'"))?;
+    let to =
+        wallet::public_key_from_bech32(target_addr).c(d!("invalid 'target-addr'"))?;
     let sid = txo_sid.parse::<u64>().c(d!("error parsing TxoSID"))?;
 
     // Get OpenAssetRecord from given Owner XfrKeyPair and TxoSID
@@ -962,15 +961,23 @@ pub fn convert_bar2abar(
 /// * confidential_am - if the output BAR should have confidential amount
 /// * confidential_ty - if the output BAR should have confidential type
 pub fn convert_abar2bar(
-    axfr_secret_key: String,
+    owner_sk: Option<String>,
     com: &str,
     to: &XfrPublicKey,
     confidential_am: bool,
     confidential_ty: bool,
+    is_address_eth: bool,
 ) -> Result<()> {
-    // parse anon keys
-    let from = wallet::anon_secret_key_from_base64(axfr_secret_key.as_str())
-        .c(d!("invalid 'from-axfr-secret-key'"))?;
+    // parse sender XfrSecretKey or generate from Mnemonic setup with wallet
+    let from = match owner_sk {
+        Some(str) => ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!(
+            "\"{}\"",
+            str
+        )))
+        .c(d!())?
+        .into_keypair(),
+        None => get_keypair(is_address_eth).c(d!())?,
+    };
 
     // Get the owned ABAR from pub_key and commitment
     let com = wallet::commitment_from_base58(com).c(d!())?;
@@ -1026,26 +1033,34 @@ pub fn convert_abar2bar(
 
 /// Generate OABAR and add anonymous transfer operation
 /// # Arguments
-/// * axfr_secret_key - AXfrKeyPair in base64 form
+/// * axfr_secret_key - XfrKeyPair in base64 form
 /// * com             - Commitment in base64 form
 /// * com_fra         - Commitment for paying fee
 /// * amount          - amount to transfer
-/// * to_axfr_public_key - AXfrPublicKey in base64 form
+/// * to_axfr_public_key - XfrPublicKey in base64 form
 pub fn gen_anon_transfer_op(
-    axfr_secret_key: String,
+    owner_sk: Option<String>,
     com: &str,
     com_fra: Option<&str>,
     amount: &str,
-    to_axfr_public_key: &str,
+    to_address: &str,
+    is_address_eth: bool,
 ) -> Result<()> {
-    // parse sender keys
-    let from = wallet::anon_secret_key_from_base64(axfr_secret_key.as_str())
-        .c(d!("invalid 'from-axfr-secret-key'"))?;
+    // parse sender XfrSecretKey or generate from Mnemonic setup with wallet
+    let from = match owner_sk {
+        Some(str) => ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!(
+            "\"{}\"",
+            str
+        )))
+        .c(d!())?
+        .into_keypair(),
+        None => get_keypair(is_address_eth).c(d!())?,
+    };
 
     let axfr_amount = amount.parse::<u64>().c(d!("error parsing amount"))?;
 
-    let to = wallet::anon_public_key_from_base64(to_axfr_public_key)
-        .c(d!("invalid 'to-axfr-public-key'"))?;
+    let to = wallet::public_key_from_bech32(to_address)
+        .c(d!("invalid 'to-xfr-public-key'"))?;
 
     let mut commitments = vec![com];
     if let Some(fra) = com_fra {
@@ -1172,12 +1187,24 @@ pub fn gen_anon_transfer_op(
 /// * assets              - List of receiver Asset Types
 /// returns an error if Operation build fails
 pub fn gen_oabar_add_op_x(
-    axfr_secret_key: AXfrKeyPair,
-    to_axfr_public_keys: Vec<AXfrPubKey>,
+    owner_sk: Option<String>,
+    to_axfr_public_keys: Vec<XfrPublicKey>,
     commitments: Vec<String>,
     amounts: Vec<String>,
     assets: Vec<AssetTypeCode>,
+    is_address_eth: bool,
 ) -> Result<()> {
+    // parse sender XfrSecretKey or generate from Mnemonic setup with wallet
+    let from = match owner_sk {
+        Some(str) => ruc::info!(serde_json::from_str::<XfrSecretKey>(&format!(
+            "\"{}\"",
+            str
+        )))
+        .c(d!())?
+        .into_keypair(),
+        None => get_keypair(is_address_eth).c(d!())?,
+    };
+
     let receiver_count = to_axfr_public_keys.len();
 
     // check if input counts tally
@@ -1190,7 +1217,6 @@ pub fn gen_oabar_add_op_x(
     // Create Input Open Abars with input keys, radomizers and Owner memos
     let mut oabars_in = Vec::new();
     for comm in commitments {
-        let from = &axfr_secret_key;
         let c = wallet::commitment_from_base58(comm.as_str()).c(d!())?;
 
         // Get OwnerMemo
@@ -1202,7 +1228,7 @@ pub fn gen_oabar_add_op_x(
 
         // Build Abar
         let oabar_in =
-            OpenAnonAssetRecordBuilder::from_abar(&axtxo_abar.1, owner_memo, from)
+            OpenAnonAssetRecordBuilder::from_abar(&axtxo_abar.1, owner_memo, &from)
                 .unwrap()
                 .mt_leaf_info(mt_leaf_info)
                 .build()
@@ -1210,7 +1236,7 @@ pub fn gen_oabar_add_op_x(
 
         // check oabar is unspent.
         let n = nullify(
-            from,
+            &from,
             oabar_in.get_amount(),
             oabar_in.get_asset_type().as_scalar(),
             mt_leaf_uid,
@@ -1256,7 +1282,7 @@ pub fn gen_oabar_add_op_x(
         .add_operation_anon_transfer_fees_remainder(
             &oabars_in[..],
             &oabars_out[..],
-            &axfr_secret_key,
+            &from,
         )
         .c(d!())?;
 
@@ -1318,10 +1344,10 @@ pub fn get_mtleaf_info(atxo_sid: &str) -> Result<MTLeafInfo> {
 /// Fetches list of owned TxoSIDs from LedgerStatus
 pub fn get_owned_utxos(
     asset: Option<&str>,
-    is_address_fra: bool,
+    is_address_eth: bool,
 ) -> Result<Vec<(TxoSID, XfrAmount, XfrAssetType)>> {
     // get KeyPair from current setup wallet
-    let kp = get_keypair(is_address_fra).c(d!())?;
+    let kp = get_keypair(is_address_eth).c(d!())?;
 
     // Parse Asset Type for filtering if provided
     let mut asset_type = ASSET_TYPE_FRA;
@@ -1334,7 +1360,7 @@ pub fn get_owned_utxos(
     }
 
     let list: Vec<(TxoSID, XfrAmount, XfrAssetType)> =
-        utils::get_owned_utxos(&kp.pub_key)?
+        utils::get_owned_utxos(&kp.get_pk())?
             .iter()
             .filter(|a| {
                 // Filter by asset type if given or read all
@@ -1358,7 +1384,7 @@ pub fn get_owned_utxos(
 
 /// Check the spending status of an ABAR from AnonKeys and commitment
 pub fn check_abar_status(
-    from: AXfrKeyPair,
+    from: XfrKeyPair,
     axtxo_abar: (ATxoSID, AnonAssetRecord),
 ) -> Result<()> {
     let owner_memo = utils::get_abar_memo(&axtxo_abar.0).c(d!())?.unwrap();
@@ -1391,7 +1417,7 @@ pub fn check_abar_status(
 /// Prints a dainty list of Abar info with spent status for a given AxfrKeyPair and a list of
 /// commitments.
 pub fn get_owned_abars(
-    axfr_secret_key: AXfrKeyPair,
+    axfr_secret_key: XfrKeyPair,
     commitments_list: &str,
 ) -> Result<()> {
     println!("Abar data for commitments: {commitments_list}",);
@@ -1443,7 +1469,7 @@ pub fn get_owned_abars(
 /// Prints a dainty list of Abar info with spent status for a given AxfrKeyPair and a list of
 /// commitments.
 pub fn anon_balance(
-    axfr_secret_key: AXfrKeyPair,
+    axfr_secret_key: XfrKeyPair,
     commitments_list: &str,
     asset: Option<&str>,
 ) -> Result<()> {
@@ -1514,9 +1540,9 @@ pub fn version() -> &'static str {
 pub fn replace_staker(
     target_pubkey: XfrPublicKey,
     new_td_addr_pk: Option<(Vec<u8>, Vec<u8>)>,
-    is_address_fra: bool,
+    is_address_eth: bool,
 ) -> Result<()> {
-    let keypair = get_keypair(is_address_fra)?;
+    let keypair = get_keypair(is_address_eth)?;
 
     let mut builder = utils::new_tx_builder().c(d!())?;
 
