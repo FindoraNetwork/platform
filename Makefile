@@ -173,25 +173,25 @@ debug_env: stop_debug_env build_release_debug
 debug_env_evm_staking: debug_env
 	sleep 7
 	stt init -s
-	sleep 5
-	fn contract-deposit --addr 0x72488bAa718F52B76118C79168E55c209056A2E6 -n 10000000000000000
+
 	sleep 14
+	echo "cd ../prismxx && rm -rf .openzeppelin && npx hardhat run scripts/deploy.js --network localhost" > ../prismxx/cmd.sh
+	chmod +x ../prismxx/cmd.sh
+	source ../prismxx/cmd.sh
+	rm ../prismxx/cmd.sh
 
-	# echo "cd ../prismxx && rm -rf .openzeppelin && npx hardhat run scripts/deploy.js --network localhost" > ../prismxx/cmd.sh
-	# chmod +x ../prismxx/cmd.sh
-	# source ../prismxx/cmd.sh
-
+	sleep 14
+	fn contract-deposit --addr 0x72488bAa718F52B76118C79168E55c209056A2E6 -n 10000000000000000
+	
+	sleep 14
 	echo "cd ../evm-staking && rm -rf .openzeppelin && npx hardhat run scripts/deploy.js --network localhost && npx hardhat run scripts/init_validator.js --network localhost" > ../evm-staking/cmd.sh
 	chmod +x ../evm-staking/cmd.sh
 	source ../evm-staking/cmd.sh
-
 	rm ../evm-staking/cmd.sh
 
 	sleep 7
-
 	fn delegate -n 1000000000 --validator 611C922247C3BE7EA13455B191B6EFD909F10196
 
-	sleep 7
 
 run_staking_demo: stop_debug_env
 	bash tools/staking/demo.sh

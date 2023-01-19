@@ -182,12 +182,9 @@ impl<C: Config> App<C> {
     ) -> Result<(TransactionV0, TransactionStatus, Receipt)> {
         let function = self.contracts.bridge.function("withdrawFRA").c(d!())?;
 
-        // let to = Token::Address(H160::from_slice(&bytes[4..24]));
         let to = Token::Address(*to);
         let value = Token::Uint(_value);
         let lowlevel = Token::Bytes(_lowlevel);
-
-        //println!("{:?}, {:?}, {:?}, {:?}", from, to, value, lowlevel);
 
         let input = function.encode_input(&[to, value, lowlevel]).c(d!())?;
 
@@ -242,8 +239,6 @@ impl<C: Config> App<C> {
             value,
         )?;
 
-        println!("Logs: {:?}", logs);
-
         let mut mints = vec![];
         for log in logs.into_iter() {
             match parse_evm_staking_mint_event(log.data) {
@@ -258,7 +253,7 @@ impl<C: Config> App<C> {
             }
         }
 
-        if mints.len() > 0 {
+        if !mints.is_empty() {
             EVM_STAKING_MINTS.lock().extend(mints);
         }
 
@@ -297,7 +292,7 @@ impl<C: Config> App<C> {
 
         let gas_limit = 99999999999;
 
-        let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
+        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
             input,
             from,
@@ -305,8 +300,6 @@ impl<C: Config> App<C> {
             self.contracts.staking_address,
             value,
         )?;
-
-        println!("Logs: {:?}", logs);
 
         Ok(())
     }
@@ -335,7 +328,7 @@ impl<C: Config> App<C> {
 
         let gas_limit = 99999999999;
 
-        let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
+        let (_, _, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
             input,
             from,
@@ -343,9 +336,6 @@ impl<C: Config> App<C> {
             self.contracts.staking_address,
             amount,
         )?;
-
-        println!("Delegate logs: {:?}", logs);
-
         Ok(())
     }
 

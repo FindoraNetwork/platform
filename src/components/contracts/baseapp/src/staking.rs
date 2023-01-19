@@ -98,7 +98,7 @@ impl EVMStaking for BaseApp {
         td_addr: &[u8],
         amount: u64,
     ) -> Result<()> {
-        println!("Undelegate: 0x{}", hex::encode(&delegator.to_bytes()));
+        println!("Undelegate: 0x{}", hex::encode(td_addr));
         let delegator_address = mapping_address(delegator);
 
         let from = H160::zero();

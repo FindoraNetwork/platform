@@ -4,9 +4,6 @@
 //! Data representation required when users propose a delegation.
 //!
 
-
-
-
 use {
     crate::{
         data_model::{
@@ -14,8 +11,8 @@ use {
             BLACK_HOLE_PUBKEY_STAKING,
         },
         staking::{
-            deny_relative_inputs, evm::EVM_STAKING, td_addr_to_bytes, td_addr_to_string, Amount, Staking,
-            TendermintAddr, Validator, STAKING_VALIDATOR_MIN_POWER,
+            deny_relative_inputs, evm::EVM_STAKING, td_addr_to_bytes, td_addr_to_string,
+            Amount, Staking, TendermintAddr, Validator, STAKING_VALIDATOR_MIN_POWER,
         },
     },
     config::abci::global_cfg::CFG,
