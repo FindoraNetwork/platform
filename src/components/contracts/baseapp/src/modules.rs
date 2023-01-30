@@ -113,8 +113,8 @@ impl ModuleManager {
         resp
     }
 
-    pub fn mint_evm_staking(&mut self, ctx: &Context) -> Result<()> {
-        let ops = self.evm_module.get_claim_ops(ctx)?;
+    pub fn mint_evm_staking_claims_to_account(&mut self, ctx: &Context) -> Result<()> {
+        let ops = self.evm_module.mint_claims(ctx)?;
 
         for (addr, amount) in ops {
             let amount = EthereumDecimalsMapping::from_native_token(amount)

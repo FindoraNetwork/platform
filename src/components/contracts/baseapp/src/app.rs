@@ -216,7 +216,7 @@ impl crate::BaseApp {
             let tmp_tx = tx.clone();
             let ret = self.modules.process_tx::<SignedExtra>(ctx, tx);
 
-            if let Err(e) = self.modules.mint_evm_staking(&self.deliver_state) {
+            if let Err(e) = self.modules.mint_evm_staking_claims_to_account(&self.deliver_state) {
                 tracing::error!("Error on mint amount from staking: {}", e);
             }
 

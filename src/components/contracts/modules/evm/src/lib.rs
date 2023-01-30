@@ -481,15 +481,15 @@ impl<C: Config> App<C> {
         utils::build_validator_updates(&self.contracts, &data)
     }
 
-    pub fn get_claim_ops(&self, ctx: &Context) -> Result<Vec<(H160, U256)>> {
-        let func = self.contracts.staking.function("getClaimOps").c(d!())?;
+    pub fn mint_claims(&self, ctx: &Context) -> Result<Vec<(H160, U256)>> {
+        let func = self.contracts.staking.function("mintClaims").c(d!())?;
         let input = func.encode_input(&[]).c(d!())?;
 
         let gas_limit = 99999999999;
         let value = U256::zero();
         let from = H160::zero();
 
-        let (data, _, _) = ActionRunner::<C>::execute_systemc_contract(
+        let (_, logs, _) = ActionRunner::<C>::execute_systemc_contract(
             ctx,
             input,
             from,
@@ -498,7 +498,19 @@ impl<C: Config> App<C> {
             value,
         )?;
 
-        utils::build_claim_ops(&self.contracts, &data)
+        let mut mints = Vec::new();
+        for log in logs.into_iter() {
+            match parse_evm_staking_mint_claim_event(log.data) {
+                Ok((delegator, amount)) => {
+                    mints.push((delegator, U256::from(amount)));
+                }
+                Err(e) => {
+                    tracing::warn!("Parse claim mint error: {}", e);
+                }
+            }
+        }
+
+        Ok(mints)
     }
 
     fn logs_bloom(logs: &[ethereum::Log], bloom: &mut Bloom) {
