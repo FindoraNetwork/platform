@@ -48,7 +48,7 @@ pub fn fresh_tmp_dir() -> PathBuf {
 // Convert a u64 into a string with commas.
 fn commas_u64(input: u64) -> String {
     if input < 10000 {
-        return format!("{}", input);
+        return format!("{input}",);
     }
 
     let mut value = input;
@@ -62,7 +62,7 @@ fn commas_u64(input: u64) -> String {
     if value == 1000 {
         result = "1,000".to_owned() + &result;
     } else {
-        result = format!("{}", value) + &result;
+        result = format!("{value}",) + &result;
     }
 
     result

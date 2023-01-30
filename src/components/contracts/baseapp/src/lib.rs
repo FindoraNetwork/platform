@@ -310,7 +310,7 @@ impl BaseApp {
     }
 
     fn validate_height(&self, height: i64) -> Result<()> {
-        ensure!(height >= 1, format!("invalid height: {}", height));
+        ensure!(height >= 1, format!("invalid height: {height}",));
         let mut expected_height =
             self.chain_state.read().height().unwrap_or_default() as i64;
         if expected_height == 0 {
@@ -320,7 +320,7 @@ impl BaseApp {
         }
         ensure!(
             height == expected_height,
-            format!("invalid height: {}; expected: {}", height, expected_height)
+            format!("invalid height: {height}; expected: {expected_height}")
         );
         Ok(())
     }
@@ -356,7 +356,7 @@ impl BaseProvider for BaseApp {
     fn account_of(&self, who: &Address, height: Option<u64>) -> Result<SmartAccount> {
         let ctx = self.create_query_context(height, false)?;
         module_account::App::<Self>::account_of(&ctx, who, height)
-            .ok_or(eg!(format!("account does not exist: {}", who)))
+            .ok_or(eg!(format!("account does not exist: {who}",)))
     }
 
     fn current_block(&self, id: Option<BlockId>) -> Option<Block> {

@@ -278,11 +278,11 @@ pub fn deliver_tx(
                         if let Err(err) =
                             s.account_base_app.write().deliver_findora_tx(&txn, &hash.0)
                         {
-                            tracing::error!(target: "abciapp", "deliver convert account tx failed: {:?}", err);
+                            tracing::error!(target: "abciapp", "deliver convert account tx failed: {err:?}", );
 
                             resp.code = 1;
                             resp.log =
-                                format!("deliver convert account tx failed: {:?}", err);
+                                format!("deliver convert account tx failed: {err:?}",);
                             return resp;
                         }
 

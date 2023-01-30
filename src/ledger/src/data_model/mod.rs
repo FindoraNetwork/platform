@@ -254,10 +254,7 @@ impl AssetTypeCode {
                     val: NoahAssetType(buf),
                 })
             }
-            Err(e) => Err(eg!((format!(
-                "Failed to deserialize base64 '{}': {}",
-                b64, e
-            )))),
+            Err(e) => Err(eg!((format!("Failed to deserialize base64 '{b64}': {e}",)))),
         }
     }
 
@@ -1037,7 +1034,7 @@ impl AssetTypePrefix {
             AssetTypePrefix::NFT => "02",
         };
 
-        hex::decode(format!("{:0>64}", code)).unwrap()
+        hex::decode(format!("{code:0>64}",)).unwrap()
     }
 }
 
