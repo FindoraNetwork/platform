@@ -2,7 +2,7 @@
 mod tests;
 
 use eth_pairings::public_interface::{perform_operation, ApiError, OperationType};
-use evm::executor::stack::{PrecompileFailure,  PrecompileOutput};
+use evm::executor::stack::{PrecompileFailure, PrecompileHandle, PrecompileOutput};
 use evm::{
     // Context,
     ExitError,

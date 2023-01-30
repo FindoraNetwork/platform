@@ -9,7 +9,11 @@ repository = "https://github.com/findoranetwork/platform/"
 version = "0.1.0"
 
 [dependencies]
+<<<<<<< HEAD
 evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
+=======
+evm = { version = "0.37.0", default-features = false, features = ["with-serde"] }
+>>>>>>> upgrade evm 0.36.0
 ethereum-types = "0.13.1"
 evm-precompile-basic = {path = "./basic"}
 evm-precompile-frc20 = {path = "./frc20"}
