@@ -5,11 +5,17 @@ use config::abci::global_cfg::CFG;
 use core::marker::PhantomData;
 use ethereum_types::{H160, U256};
 use evm::{
-    executor::stack::{PrecompileFailure, PrecompileOutput},
+    executor::stack::{PrecompileFailure, PrecompileHandle, PrecompileOutput},
     Context, ExitSucceed,
 };
 use evm_precompile_utils::{
-    error, Address, EvmDataReader, EvmDataWriter, EvmResult, Gasometer, LogsBuilder,
+    error,
+    Address,
+    EvmDataReader,
+    EvmDataWriter,
+    EvmResult,
+    Gasometer,
+    // LogsBuilder,
 };
 use fp_traits::{account::AccountAsset, evm::AddressMapping};
 use module_evm::{
@@ -83,12 +89,11 @@ pub enum Call {
 
 impl<C: Config> Precompile for FRC20<C> {
     fn execute(
-        input: &[u8],
-        target_gas: Option<u64>,
-        context: &Context,
+        handle: &mut impl PrecompileHandle,
         state: &FinState,
     ) -> PrecompileResult {
         if CFG.checkpoint.disable_delegate_frc20 < state.header.height {
+            let context = handle.context();
             let addr = context.address;
 
             if addr != H160::from_low_u64_be(Self::contract_id()) {
@@ -97,6 +102,9 @@ impl<C: Config> Precompile for FRC20<C> {
                 });
             }
         }
+        let input = handle.input();
+        let target_gas = handle.gas_limit();
+        let context = handle.context();
 
         let mut input = EvmDataReader::new(input);
         let selector = match input.read_selector::<Call>() {
@@ -164,9 +172,9 @@ impl<C: Config> FRC20<C> {
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
-            cost: gasometer.used_gas(),
+            // cost: gasometer.used_gas(),
             output: EvmDataWriter::new().write_raw_bytes(FRC20_NAME).build(),
-            logs: vec![],
+            // logs: vec![],
         })
     }
 
@@ -184,9 +192,9 @@ impl<C: Config> FRC20<C> {
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
-            cost: gasometer.used_gas(),
+            // cost: gasometer.used_gas(),
             output: EvmDataWriter::new().write_raw_bytes(FRC20_SYMBOL).build(),
-            logs: vec![],
+            // logs: vec![],
         })
     }
 
@@ -205,9 +213,9 @@ impl<C: Config> FRC20<C> {
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
-            cost: gasometer.used_gas(),
+            // cost: gasometer.used_gas(),
             output: EvmDataWriter::new().write(18_u8).build(),
-            logs: vec![],
+            // logs: vec![],
         })
     }
 
@@ -227,9 +235,9 @@ impl<C: Config> FRC20<C> {
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
-            cost: gasometer.used_gas(),
+            // cost: gasometer.used_gas(),
             output: EvmDataWriter::new().write(amount).build(),
-            logs: vec![],
+            // logs: vec![],
         })
     }
 
@@ -251,9 +259,9 @@ impl<C: Config> FRC20<C> {
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
-            cost: gasometer.used_gas(),
+            // cost: gasometer.used_gas(),
             output: EvmDataWriter::new().write(amount).build(),
-            logs: vec![],
+            // logs: vec![],
         })
     }
 
@@ -281,9 +289,9 @@ impl<C: Config> FRC20<C> {
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
-            cost: gasometer.used_gas(),
+            // cost: gasometer.used_gas(),
             output: EvmDataWriter::new().write(amount).build(),
-            logs: vec![],
+            // logs: vec![],
         })
     }
 
@@ -319,16 +327,16 @@ impl<C: Config> FRC20<C> {
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
-            cost: gasometer.used_gas(),
+            // cost: gasometer.used_gas(),
             output: EvmDataWriter::new().write(true).build(),
-            logs: LogsBuilder::new(context.address)
-                .log3(
-                    APPROVAL_EVENT_SELECTOR,
-                    context.caller,
-                    spender,
-                    EvmDataWriter::new().write(amount).build(),
-                )
-                .build(),
+            // logs: LogsBuilder::new(context.address)
+            //     .log3(
+            //         APPROVAL_EVENT_SELECTOR,
+            //         context.caller,
+            //         spender,
+            //         EvmDataWriter::new().write(amount).build(),
+            //     )
+            //     .build(),
         })
     }
 
@@ -364,16 +372,16 @@ impl<C: Config> FRC20<C> {
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
-            cost: gasometer.used_gas(),
+            // cost: gasometer.used_gas(),
             output: EvmDataWriter::new().write(true).build(),
-            logs: LogsBuilder::new(context.address)
-                .log3(
-                    TRANSFER_EVENT_SELECTOR,
-                    context.caller,
-                    recipient,
-                    EvmDataWriter::new().write(amount).build(),
-                )
-                .build(),
+            // logs: LogsBuilder::new(context.address)
+            //     .log3(
+            //         TRANSFER_EVENT_SELECTOR,
+            //         context.caller,
+            //         recipient,
+            //         EvmDataWriter::new().write(amount).build(),
+            //     )
+            //     .build(),
         })
     }
 
@@ -428,24 +436,24 @@ impl<C: Config> FRC20<C> {
 
         Ok(PrecompileOutput {
             exit_status: ExitSucceed::Returned,
-            cost: gasometer.used_gas(),
+            // cost: gasometer.used_gas(),
             output: EvmDataWriter::new().write(true).build(),
-            logs: LogsBuilder::new(context.address)
-                .log3(
-                    TRANSFER_EVENT_SELECTOR,
-                    from,
-                    recipient,
-                    EvmDataWriter::new().write(amount).build(),
-                )
-                .log3(
-                    APPROVAL_EVENT_SELECTOR,
-                    from,
-                    context.caller,
-                    EvmDataWriter::new()
-                        .write(allowance.saturating_sub(amount))
-                        .build(),
-                )
-                .build(),
+            // logs: LogsBuilder::new(context.address)
+            //     .log3(
+            //         TRANSFER_EVENT_SELECTOR,
+            //         from,
+            //         recipient,
+            //         EvmDataWriter::new().write(amount).build(),
+            //     )
+            //     .log3(
+            //         APPROVAL_EVENT_SELECTOR,
+            //         from,
+            //         context.caller,
+            //         EvmDataWriter::new()
+            //             .write(allowance.saturating_sub(amount))
+            //             .build(),
+            //     )
+            //     .build(),
         })
     }
 }

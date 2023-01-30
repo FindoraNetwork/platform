@@ -15,7 +15,7 @@ baseapp = { path = "../baseapp" }
 base64 = "0.12"
 ethereum = { version = "0.12.0", default-features = false, features = ["with-serde"] }
 ethereum-types = { version = "0.13.1", default-features = false }
-evm = { version = "0.35.0", default-features = false, features = ["with-serde"] }
+evm = { version = "0.36.0", default-features = false, features = ["with-serde"] }
 fp-rpc-core = { path = "../primitives/rpc-core" }
 fp-rpc-server = { path = "../primitives/rpc-server" }
 futures = { version = "0.3.16", features = ["compat", "thread-pool"] }
@@ -41,7 +41,7 @@ sha3 = "0.8"
 tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a-fk" }
 tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", features = ["http-client", "websocket-client"], tag = "v0.19.0a-fk" }
 tokio = { version = "1.10.1", features = ["full"] }
-lru = "0.7.0"
+lru = "0.7"
 num_cpus = "1.13"
 
 # modules
