@@ -57,3 +57,4 @@ evm-precompile = {path = "../modules/evm/precompile"}
 [features]
 abci_mock = []
 web3_service = ["enterprise-web3", "module-account/web3_service", "module-ethereum/web3_service", "module-evm/web3_service"]
+debug_env = []

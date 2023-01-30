@@ -25,7 +25,7 @@ impl<T> SlidingSet<T> {
     /// Create a new sliding window start with 0
     #[inline(always)]
     pub fn new(width: usize) -> Self {
-        let mut map = Vec::with_capacity(width as usize);
+        let mut map = Vec::with_capacity(width);
         for _ in 0..width {
             map.push(Vec::new());
         }

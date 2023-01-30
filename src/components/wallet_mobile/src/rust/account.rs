@@ -112,7 +112,7 @@ impl EVMTransactionBuilder {
         };
 
         let txn_with_tag = EvmRawTxWrapper::wrap(&txn);
-        base64::encode(&txn_with_tag)
+        base64::encode(txn_with_tag)
     }
 
     pub fn into_ptr(self) -> *mut Self {

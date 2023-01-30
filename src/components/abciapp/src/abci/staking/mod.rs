@@ -12,8 +12,8 @@ mod test;
 use {
     crate::abci::server::callback::TENDERMINT_BLOCK_HEIGHT,
     abci::{Evidence, Header, LastCommitInfo, PubKey, ValidatorUpdate},
-    baseapp::BaseApp as AccountBaseApp,
     config::abci::global_cfg::CFG,
+    fp_types::actions::xhub::NonConfidentialOutput,
     lazy_static::lazy_static,
     ledger::{
         data_model::{
@@ -285,119 +285,56 @@ fn system_governance(staking: &mut Staking, bz: &ByzantineInfo) -> Result<()> {
 /// Pay for freed 'Delegations' and 'FraDistributions'.
 pub fn system_prism_mint_pay(
     la: &mut LedgerState,
-    account_base_app: &mut AccountBaseApp,
+    mint: NonConfidentialOutput,
 ) -> Option<Transaction> {
     let mut mints = Vec::new();
 
-    if let Some(account_mint) = account_base_app.consume_mint() {
-        for mint in account_mint {
-            if mint.asset != ASSET_TYPE_FRA {
-                let atc = AssetTypeCode { val: mint.asset };
-                let at = if let Some(mut at) = la.get_asset_type(&atc) {
-                    at.properties.issuer = IssuerPublicKey {
-                        key: *BLACK_HOLE_PUBKEY_STAKING,
-                    };
-                    if mint.max_supply != 0 {
-                        at.properties.asset_rules.max_units = Some(mint.max_supply);
-                    }
-                    at.properties.asset_rules.decimals = mint.decimal;
-                    at
-                } else {
-                    let mut at = AssetType::default();
-                    at.properties.issuer = IssuerPublicKey {
-                        key: *BLACK_HOLE_PUBKEY_STAKING,
-                    };
-
-                    if mint.max_supply != 0 {
-                        at.properties.asset_rules.max_units = Some(mint.max_supply);
-                    }
-                    at.properties.asset_rules.decimals = mint.decimal;
-
-                    at.properties.code = AssetTypeCode { val: mint.asset };
-
-                    at
-                };
-
-                la.insert_asset_type(atc, at);
+    if mint.asset != ASSET_TYPE_FRA {
+        let atc = AssetTypeCode { val: mint.asset };
+        let at = if let Some(mut at) = la.get_asset_type(&atc) {
+            at.properties.issuer = IssuerPublicKey {
+                key: *BLACK_HOLE_PUBKEY_STAKING,
+            };
+            if mint.max_supply != 0 {
+                at.properties.asset_rules.max_units = Some(mint.max_supply);
             }
+            at.properties.asset_rules.decimals = mint.decimal;
+            at
+        } else {
+            let mut at = AssetType::default();
+            at.properties.issuer = IssuerPublicKey {
+                key: *BLACK_HOLE_PUBKEY_STAKING,
+            };
 
-            let mint_entry = MintEntry::new(
-                MintKind::Other,
-                mint.target,
-                None,
-                mint.amount,
-                mint.asset,
-            );
+            if mint.max_supply != 0 {
+                at.properties.asset_rules.max_units = Some(mint.max_supply);
+            }
+            at.properties.asset_rules.decimals = mint.decimal;
 
-            mints.push(mint_entry);
-        }
+            at.properties.code = AssetTypeCode { val: mint.asset };
+
+            at
+        };
+
+        la.insert_asset_type(atc, at);
     }
 
-    if mints.is_empty() {
-        None
-    } else {
-        let mint_ops =
-            Operation::MintFra(MintFraOps::new(la.get_staking().cur_height(), mints));
-        Some(Transaction::from_operation_coinbase_mint(
-            mint_ops,
-            la.get_state_commitment().1,
-        ))
-    }
+    let mint_entry =
+        MintEntry::new(MintKind::Other, mint.target, None, mint.amount, mint.asset);
+
+    mints.push(mint_entry);
+
+    let mint_ops =
+        Operation::MintFra(MintFraOps::new(la.get_staking().cur_height(), mints));
+    Some(Transaction::from_operation_coinbase_mint(
+        mint_ops,
+        la.get_state_commitment().1,
+    ))
 }
 
 /// Pay for freed 'Delegations' and 'FraDistributions'.
-pub fn system_mint_pay(
-    td_height: i64,
-    la: &mut LedgerState,
-    account_base_app: &mut AccountBaseApp,
-) -> Option<Transaction> {
+pub fn system_mint_pay(td_height: i64, la: &mut LedgerState) -> Option<Transaction> {
     let mut mints = Vec::new();
-
-    if td_height <= CFG.checkpoint.fix_prism_mint_pay {
-        if let Some(account_mint) = account_base_app.consume_mint() {
-            for mint in account_mint {
-                if mint.asset != ASSET_TYPE_FRA {
-                    let atc = AssetTypeCode { val: mint.asset };
-                    let at = if let Some(mut at) = la.get_asset_type(&atc) {
-                        at.properties.issuer = IssuerPublicKey {
-                            key: *BLACK_HOLE_PUBKEY_STAKING,
-                        };
-
-                        if mint.max_supply != 0 {
-                            at.properties.asset_rules.max_units = Some(mint.max_supply);
-                        }
-
-                        at
-                    } else {
-                        let mut at = AssetType::default();
-                        at.properties.issuer = IssuerPublicKey {
-                            key: *BLACK_HOLE_PUBKEY_STAKING,
-                        };
-
-                        if mint.max_supply != 0 {
-                            at.properties.asset_rules.max_units = Some(mint.max_supply);
-                        }
-
-                        at.properties.code = AssetTypeCode { val: mint.asset };
-
-                        at
-                    };
-
-                    la.insert_asset_type(atc, at);
-                }
-
-                let mint_entry = MintEntry::new(
-                    MintKind::Other,
-                    mint.target,
-                    None,
-                    mint.amount,
-                    mint.asset,
-                );
-
-                mints.push(mint_entry);
-            }
-        }
-    }
 
     let staking = la.get_staking();
     let mut limit = staking.coinbase_balance() as i128;

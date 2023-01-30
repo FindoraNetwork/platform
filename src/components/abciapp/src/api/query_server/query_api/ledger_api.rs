@@ -254,7 +254,7 @@ pub async fn query_validators(
             })
             .collect();
         return Ok(web::Json(ValidatorList::new(
-            staking.cur_height() as u64,
+            staking.cur_height(),
             validators_list,
         )));
     };

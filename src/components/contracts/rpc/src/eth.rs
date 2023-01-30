@@ -5,6 +5,7 @@ use crate::utils::{
 };
 use crate::{error_on_execution_failure, internal_err};
 use baseapp::{extensions::SignedExtra, BaseApp};
+use config::abci::global_cfg::CFG;
 use ethereum::{
     BlockV0 as EthereumBlock, LegacyTransactionMessage as EthereumTransactionMessage,
     TransactionV0 as EthereumTransaction,
@@ -572,7 +573,7 @@ impl EthApi for EthApiImpl {
 
         let task = spawn_blocking(move || -> Result<Option<RichBlock>> {
             if let Some(h) = height {
-                if 0 < h && h < *EVM_FIRST_BLOCK_HEIGHT {
+                if 0 < h && h < CFG.checkpoint.evm_first_block_height as u64 {
                     return Ok(Some(dummy_block(h, full)));
                 }
             }
