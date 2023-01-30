@@ -2449,7 +2449,7 @@ mod tests {
             oabars_out.push(oabar_out);
         }
 
-        // nullifier is created twice in the same transaction builder and in the same operation
+        // 1. nullifier is created twice in the same transaction builder and in the same operation
         {
             let vec_inputs = vec![oabars_in[0].clone(), oabars_in[0].clone()];
             let vec_outputs = vec![oabars_out[0].clone(), oabars_out[1].clone()];
@@ -2470,7 +2470,7 @@ mod tests {
             assert!(ledger_result.is_err());
         }
 
-        // nullifier is created twice in the same transaction builder, but in different operations
+        // 2. nullifier is created twice in the same transaction builder, but in different operations
         {
             let vec_inputs1 = vec![oabars_in[0].clone()];
             let vec_outputs1 = vec![oabars_out[0].clone()];
@@ -2494,7 +2494,7 @@ mod tests {
             assert!(compute_effect.is_err());
         }
 
-        // the previous error caused this error
+        // 3. the error in test 1 caused this error
         {
             let vec_inputs = vec![oabars_in[0].clone()];
             let vec_outputs = vec![oabars_out[0].clone()];
@@ -2515,7 +2515,7 @@ mod tests {
             assert!(ledger_result.is_err());
         }
 
-        // nullifier is created twice in different transaction builders and added to the same block
+        // 4. nullifier is created twice in different transaction builders and added to the same block
         {
             let vec_inputs1 = vec![oabars_in[0].clone()];
             let vec_outputs1 = vec![oabars_out[0].clone()];
@@ -2560,7 +2560,7 @@ mod tests {
             }
         }
 
-        // nullifier is created twice in different transaction builders and added to different blocks
+        // 5. nullifier is created twice in different transaction builders and added to different blocks
         {
             let vec_inputs1 = vec![oabars_in[1].clone()];
             let vec_outputs1 = vec![oabars_out[1].clone()];
@@ -2622,7 +2622,7 @@ mod tests {
 
         let to = XfrKeyPair::generate(&mut prng);
 
-        // nullifier is created twice in different transaction builders and added to the same block
+        // 1. nullifier is created twice in different transaction builders and added to the same block
         {
             let mut builder1 = TransactionBuilder::from_seq_id(1);
             let _ = builder1.add_operation_abar_to_bar(
@@ -2665,7 +2665,7 @@ mod tests {
             }
         }
 
-        // nullifier is created twice in different transaction builders and added to different blocks
+        // 2. nullifier is created twice in different transaction builders and added to different blocks
         {
             let mut builder1 = TransactionBuilder::from_seq_id(1);
             let _ = builder1.add_operation_abar_to_bar(
@@ -2740,7 +2740,7 @@ mod tests {
 
         let to = XfrKeyPair::generate(&mut prng);
 
-        // nullifier is created twice in the same transaction builder, but in different operations
+        // 1. nullifier is created twice in the same transaction builder, but in different operations
         {
             let vec_inputs = vec![oabars_in[0].clone()];
             let vec_outputs = vec![oabars_out[0].clone()];
@@ -2769,7 +2769,7 @@ mod tests {
             assert!(ledger_result.is_err());
         }
 
-        // nullifier is created twice in different transaction builders and added to the same block
+        // 2. nullifier is created twice in different transaction builders and added to the same block
         {
             let vec_inputs = vec![oabars_in[0].clone()];
             let vec_outputs = vec![oabars_out[0].clone()];
@@ -2801,7 +2801,7 @@ mod tests {
             assert!(block_result.is_err());
         }
 
-        // nullifier is created twice in different transaction builders and added to different blocks
+        // 3. nullifier is created twice in different transaction builders and added to different blocks
         {
             let vec_inputs = vec![oabars_in[1].clone()];
             let vec_outputs = vec![oabars_out[1].clone()];
