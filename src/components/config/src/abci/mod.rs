@@ -122,7 +122,7 @@ impl CheckPointConfig {
                                 utxo_asset_prefix_height: 0,
                                 nonce_bug_fix_height: 0,
                                 prism_bridge_address:
-                                    "0xfcfe4ff1006a7721cee870b56ee2b5c250aec13b"
+                                    "0x5f9552fEd754F20B636C996DaDB32806554Bb995"
                                         .to_owned(),
                                 proper_gas_set_height: 0,
                                 fix_delegators_am_height: 0,
